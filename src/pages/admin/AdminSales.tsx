@@ -415,10 +415,10 @@ export default function AdminSales() {
         )}
 
         {/* ── PROSPECTION (base nationale) ── */}
-        {tab === 'prospection' && <ProspectionEtab onAjouter={charger} />}
+        {tab === 'prospection' && (<><EnvoiMasseBar cible="ETABLISSEMENT" /><ProspectionEtab onAjouter={charger} /></>)}
 
         {/* ── PROSPECTION SOIGNANTS (Annuaire Santé CNAM, libéraux + tél cabinet) ── */}
-        {tab === 'prospection_soignants' && <ProspectionSoignants onAjouter={charger} />}
+        {tab === 'prospection_soignants' && (<><EnvoiMasseBar cible="SOIGNANT" /><ProspectionSoignants onAjouter={charger} /></>)}
 
         {/* ── ÉTABLISSEMENTS JOLENE (inscrits) ── */}
         {tab === 'etab_jolene' && <EtablissementsJolene />}
@@ -907,6 +907,71 @@ function ProspectionEtab({ onAjouter }: { onAjouter: () => void }) {
 
       {/* Envoi email via Jolene */}
       {outreach && <OutreachModal prospect={outreach} template={tpl} onClose={() => { setOutreach(null); rechercher(page); onAjouter(); }} />}
+    </div>
+  );
+}
+
+/* ── Envoi EN MASSE du template aux prospects avec email jamais contactés ──
+   Les bases officielles (FINESS, CNAM) fournissent les téléphones mais aucun
+   email : le flux = appel → email saisi sur la carte → ce bouton envoie le
+   template à tous ceux qui en ont un, sans repasser un par un. Garde
+   anti-doublon : email_envoye_le. 100 max par clic (limite Resend). */
+function EnvoiMasseBar({ cible }: { cible: 'ETABLISSEMENT' | 'SOIGNANT' }) {
+  const [aEnvoyer, setAEnvoyer] = useState<number | null>(null);
+  const [template, setTemplate] = useState<{ sujet: string; contenu: string } | null>(null);
+  const [envoi, setEnvoi] = useState(false);
+
+  const table = cible === 'ETABLISSEMENT' ? 'prospects_etablissements' : 'prospects_soignants';
+
+  const chargerEtat = async () => {
+    const [{ count }, { data: tpl }] = await Promise.all([
+      supabase.from(table as any).select('email', { count: 'exact', head: true })
+        .not('email', 'is', null).neq('email', '').is('email_envoye_le', null),
+      cible === 'ETABLISSEMENT'
+        ? supabase.from('sales_templates' as any).select('sujet, contenu').eq('nom', TEMPLATE_PROSPECTION_NOM).maybeSingle()
+        : supabase.from('sales_templates' as any).select('sujet, contenu').eq('cible', 'SOIGNANT').limit(1).maybeSingle(),
+    ]);
+    setAEnvoyer(count ?? 0);
+    setTemplate((tpl as any) || null);
+  };
+
+  useEffect(() => { chargerEtat(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [cible]);
+
+  const envoyerTous = async () => {
+    if (!template) return;
+    if (!window.confirm(`Envoyer le template officiel aux ${Math.min(aEnvoyer ?? 0, 100)} prospect(s) avec email jamais contactés ? (max 100 par clic — recliquez pour la tranche suivante)`)) return;
+    setEnvoi(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('sales-outreach-batch', {
+        body: { cible, sujet: template.sujet, corps: template.contenu },
+      });
+      if (error || (data as any)?.error) { toast.error((data as any)?.error || 'Envoi en masse impossible.'); return; }
+      const d = data as any;
+      toast.success(`✉️ ${d.envoyes} email(s) envoyé(s)${d.echecs ? `, ${d.echecs} échec(s)` : ''}${d.restants ? ` — ${d.restants} restant(s), recliquez pour continuer` : ' — tous les prospects avec email sont contactés ✓'}`);
+      chargerEtat();
+    } finally {
+      setEnvoi(false);
+    }
+  };
+
+  if (aEnvoyer === null) return null;
+  return (
+    <div className="rounded-xl border border-primary/30 bg-primary/5 p-3 mb-4 flex flex-col sm:flex-row sm:items-center gap-2">
+      <p className="text-xs text-muted-foreground flex-1">
+        ✉️ <strong className="text-foreground">{aEnvoyer}</strong> prospect(s) avec email jamais contacté(s).
+        {aEnvoyer === 0 && ' Saisissez les emails pendant vos appels (bouton + Email sur chaque carte) — ils apparaîtront ici.'}
+        {!template && ' ⚠️ Aucun template trouvé (onglet Modèles).'}
+      </p>
+      <BoutonY2K
+        size="sm"
+        onClick={envoyerTous}
+        disabled={envoi || aEnvoyer === 0 || !template}
+        loading={envoi}
+        iconeGauche={envoi ? undefined : <Send className="h-4 w-4" />}
+        className="whitespace-nowrap"
+      >
+        Envoyer le template à tous
+      </BoutonY2K>
     </div>
   );
 }
