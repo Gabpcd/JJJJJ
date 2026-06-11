@@ -150,6 +150,13 @@ export default function AdminGroupes() {
         }
       }
 
+      // File de travail (Session D) : cliniques avec impayés en tête (montant
+      // décroissant), puis par activité en cours — l'alphabétique noyait les relances.
+      cliniques.sort((a, b) =>
+        (b.ca_impayees - a.ca_impayees)
+        || (b.nb_missions_en_cours - a.nb_missions_en_cours)
+        || a.nom.localeCompare(b.nom));
+
       enriched.push({
         ...g,
         remise_groupe_pourcent: Number(g.remise_groupe_pourcent) || 0,
@@ -165,6 +172,11 @@ export default function AdminGroupes() {
         },
       });
     }
+
+    // Même logique au niveau groupe : CA impayé décroissant d'abord.
+    enriched.sort((a, b) =>
+      (b.totals.ca_commissions_impayees - a.totals.ca_commissions_impayees)
+      || a.nom.localeCompare(b.nom));
 
     setGroupes(enriched);
     setLoading(false);
