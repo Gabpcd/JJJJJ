@@ -60,6 +60,17 @@ jobs:
             echo "::error::SUPABASE_SERVICE_ROLE_KEY invalide (REST → HTTP $code). Mettre à jour le secret GitHub avec la clé secrète du Dashboard Supabase (Settings → API keys)."
             exit 1
           fi
+          # 1bis) Anti-confusion anon/service : seul un vrai service_role passe
+          # l'endpoint admin GoTrue (une clé anon répond 401/403 mais donne
+          # quand même 200 sur le REST public → le check 1 ne suffit pas).
+          code=$(curl -s -o /dev/null -w '%{http_code}' \
+            "$E2E_SUPABASE_URL/auth/v1/admin/users?per_page=1" \
+            -H "apikey: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}")
+          if [ "$code" != "200" ]; then
+            echo "::error::Le secret SUPABASE_SERVICE_ROLE_KEY n'est PAS une clé service_role (admin GoTrue → HTTP $code) — c'est probablement la clé anon/publishable. Remplacer le secret GitHub par la « secret key » (sb_secret_…) du Dashboard Supabase → Settings → API keys."
+            exit 1
+          fi
           echo "service_role OK"
           # 2) Login compte test (publishable key + mot de passe fixe)
           code=$(curl -s -o /dev/null -w '%{http_code}' \
