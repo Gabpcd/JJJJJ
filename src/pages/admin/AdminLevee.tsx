@@ -8,7 +8,7 @@ import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { BadgeY2K } from '@/components/y2k/BadgeY2K';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Rocket, Plus, Save, X, FileText, ExternalLink, Trash2, Calculator } from 'lucide-react';
+import { Plus, Save, X, FileText, ExternalLink, Trash2, Calculator } from 'lucide-react';
 import { toast } from 'sonner';
 import { SimulateurLevee } from '@/components/admin/SimulateurLevee';
 
@@ -29,6 +29,19 @@ const STATUTS: { value: Statut; label: string; variant: 'info' | 'warning' | 'su
 
 function statutInfo(s: string) {
   return STATUTS.find(st => st.value === s) || STATUTS[0];
+}
+
+const CATEGORIES_DOC: { value: string; label: string }[] = [
+  { value: 'NOTE', label: 'Note' },
+  { value: 'BUSINESS_PLAN', label: 'Business plan' },
+  { value: 'DECK', label: 'Deck' },
+  { value: 'FINANCIER', label: 'Financier' },
+  { value: 'LEGAL', label: 'Juridique' },
+  { value: 'AUTRE', label: 'Autre' },
+];
+
+function categorieLabel(c: string) {
+  return CATEGORIES_DOC.find(cat => cat.value === c)?.label || c;
 }
 
 interface Investisseur {
@@ -86,11 +99,8 @@ export default function AdminLevee() {
   useEffect(() => { charger(); }, []);
 
   const stats = useMemo(() => {
-    const actifs = investisseurs.filter(i => !['DECLINE', 'SIGNE'].includes(i.statut));
     return {
       total: investisseurs.length,
-      actifs: actifs.length,
-      montantVise: investisseurs.reduce((s, i) => s + (Number(i.montant_vise) || 0), 0),
       signes: investisseurs.filter(i => i.statut === 'SIGNE').length,
       montantSigne: investisseurs.filter(i => i.statut === 'SIGNE').reduce((s, i) => s + (Number(i.montant_vise) || 0), 0),
       parStatut: STATUTS.map(st => ({ ...st, count: investisseurs.filter(i => i.statut === st.value).length })),
@@ -118,14 +128,14 @@ export default function AdminLevee() {
       ({ error: err } = await supabase.from('investisseurs_pipeline' as any).insert(payload as any));
     }
     setSaving(false);
-    if (err) { toast.error(err.message); return; }
+    if (err) { toast.error("Impossible d'enregistrer l'investisseur. Veuillez réessayer."); return; }
     toast.success(editItem.id ? 'Investisseur mis à jour.' : 'Investisseur ajouté.');
     setShowForm(false); setEditItem(null); charger();
   };
 
   const supprimerInvestisseur = async (id: string) => {
     const { error } = await supabase.from('investisseurs_pipeline' as any).delete().eq('id', id);
-    if (error) { toast.error(error.message); return; }
+    if (error) { toast.error('Impossible de supprimer cet investisseur. Veuillez réessayer.'); return; }
     toast.success('Supprimé.'); charger();
   };
 
@@ -146,14 +156,14 @@ export default function AdminLevee() {
       ({ error: err } = await supabase.from('fondateur_documents' as any).insert(payload as any));
     }
     setSaving(false);
-    if (err) { toast.error(err.message); return; }
+    if (err) { toast.error("Impossible d'enregistrer le document. Veuillez réessayer."); return; }
     toast.success(editDoc.id ? 'Document mis à jour.' : 'Document ajouté.');
     setShowDocForm(false); setEditDoc(null); charger();
   };
 
   const supprimerDoc = async (id: string) => {
     const { error } = await supabase.from('fondateur_documents' as any).delete().eq('id', id);
-    if (error) { toast.error(error.message); return; }
+    if (error) { toast.error('Impossible de supprimer ce document. Veuillez réessayer.'); return; }
     toast.success('Supprimé.'); charger();
   };
 
@@ -249,7 +259,7 @@ export default function AdminLevee() {
                       <div className="flex items-center gap-2 flex-wrap">
                         <FileText className="h-4 w-4 text-primary" />
                         <p className="font-semibold text-foreground">{doc.titre}</p>
-                        <BadgeY2K variant="info">{doc.categorie}</BadgeY2K>
+                        <BadgeY2K variant="info">{categorieLabel(doc.categorie)}</BadgeY2K>
                       </div>
                       {doc.url_externe && (
                         <a href={doc.url_externe} target="_blank" rel="noopener noreferrer" className="text-xs text-primary inline-flex items-center gap-1 mt-1">
@@ -347,7 +357,7 @@ export default function AdminLevee() {
                 <div>
                   <Label>Catégorie</Label>
                   <select value={editDoc.categorie || 'NOTE'} onChange={e => setEditDoc({ ...editDoc, categorie: e.target.value })} className="input-base w-full">
-                    {['NOTE', 'BUSINESS_PLAN', 'DECK', 'FINANCIER', 'LEGAL', 'AUTRE'].map(c => <option key={c} value={c}>{c.replace('_', ' ')}</option>)}
+                    {CATEGORIES_DOC.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
                   </select>
                 </div>
                 <div>

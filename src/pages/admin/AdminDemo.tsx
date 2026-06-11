@@ -31,7 +31,7 @@ export default function AdminDemo() {
     if (error) {
       toast.error('Une erreur est survenue. Veuillez réessayer.');
     } else {
-      toast.success('Données de démo chargées — 4 établissements, 12 soignants, 35 missions');
+      toast.success("Données de démo chargées — L'état de la base a été actualisé");
       chargerKpi();
     }
   };

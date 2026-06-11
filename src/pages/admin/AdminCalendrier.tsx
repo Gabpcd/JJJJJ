@@ -12,6 +12,7 @@ import {
 } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { useNavigate } from 'react-router-dom';
+import { BADGES_STATUT } from '@/lib/constantes';
 
 const JOURS_SEMAINE = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
 
@@ -41,7 +42,7 @@ function getStatutStyle(m: MissionCal): { bg: string; text: string; label: strin
     case 'TERMINEE': return { bg: 'bg-muted-foreground/40', text: 'text-foreground', label: 'Terminée' };
     case 'ANNULEE_PAR_ETABLISSEMENT':
     case 'ANNULEE_PAR_SOIGNANT': return { bg: 'bg-destructive/60', text: 'text-destructive-foreground', label: 'Annulée' };
-    default: return { bg: 'bg-muted', text: 'text-muted-foreground', label: m.statut };
+    default: return { bg: 'bg-muted', text: 'text-muted-foreground', label: BADGES_STATUT[m.statut]?.label || 'Autre' };
   }
 }
 

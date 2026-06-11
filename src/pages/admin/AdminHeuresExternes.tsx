@@ -265,7 +265,7 @@ function ModaleDecisionHeures({ heure, onFermer, onTraitee }: {
 
         <label className="block">
           <span className="text-xs font-medium mb-1 block">
-            {decision === 'REJETE' ? 'Motif du rejet * (min 5 chars, visible par le soignant)' : 'Commentaire (optionnel)'}
+            {decision === 'REJETE' ? 'Motif du rejet * (min 5 caractères, visible par le soignant)' : 'Commentaire (optionnel)'}
           </span>
           <textarea value={commentaire} onChange={e => setCommentaire(e.target.value)} className="input-base" rows={3}
             placeholder={decision === 'REJETE' ? 'Ex: attestation ne mentionne pas le volume d\'heures...' : 'Ex: vérifié auprès de l\'établissement.'} />

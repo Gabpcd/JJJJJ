@@ -36,6 +36,61 @@ const EVENEMENTS_ANTITRICHE = [
   'ALERTE_POINTAGE_TRAITEE',
 ];
 
+// Libellés français pour l'affichage — les valeurs techniques envoyées aux requêtes restent inchangées
+const ACTIONS_LIBELLES: Record<string, string> = {
+  'RGPD_SUPPRESSION_COMPTE': 'Suppression de compte (RGPD)',
+  'RGPD_EXPORT_DONNEES': 'Export de données (RGPD)',
+  'DOCUMENT_VERIFICATION_AUTO': 'Vérification automatique de document',
+  'GPS_CONSENTEMENT_ACTIVE': 'Consentement GPS activé',
+  'GPS_CONSENTEMENT_RETIRE': 'Consentement GPS retiré',
+  'SMS_CONSENTEMENT_ACTIVE': 'Consentement SMS activé',
+  'SMS_CONSENTEMENT_RETIRE': 'Consentement SMS retiré',
+  'DONNEES_PERSO_MODIFICATION': 'Modification de données personnelles',
+  'DONNEES_PERSO_CONSULTATION': 'Consultation de données personnelles',
+  'POINTAGE': 'Pointage',
+  'ADMIN_ACTION': 'Action administrateur',
+};
+
+const ACTEURS_LIBELLES: Record<string, string> = {
+  'SOIGNANT': 'Soignant',
+  'ADMIN_ETABLISSEMENT': 'Admin établissement',
+  'ADMIN_PLATEFORME': 'Admin plateforme',
+  'SYSTEME': 'Système',
+};
+
+const EVENEMENTS_LIBELLES: Record<string, string> = {
+  'TELEPORTATION_DETECTED': 'Téléportation détectée',
+  'POINTAGE_INCOHERENT': 'Pointage incohérent',
+  'QR_SCAN_GPS_ELOIGNE': 'Scan QR avec GPS éloigné',
+  'GPS_SPOOFING_DETECTED': 'Falsification GPS détectée',
+  'MOCK_GPS_DETECTED': 'GPS simulé détecté',
+  'ALERTE_POINTAGE_TRAITEE': 'Alerte de pointage traitée',
+};
+
+const RESSOURCES_LIBELLES: Record<string, string> = {
+  'bulletin_paie': 'Bulletin de paie',
+  'candidature': 'Candidature',
+  'etablissement': 'Établissement',
+  'facture': 'Facture',
+  'facture_honoraire': 'Facture d\'honoraires',
+  'filtre_sauvegarde': 'Filtre sauvegardé',
+  'litige': 'Litige',
+  'mandat_facturation': 'Mandat de facturation',
+  'mission': 'Mission',
+  'notation': 'Notation',
+  'parrainage': 'Parrainage',
+  'parrainage_etab': 'Parrainage établissement',
+  'preferences': 'Préférences',
+  'prevoyance_liste_attente': 'Liste d\'attente prévoyance',
+  'signalement': 'Signalement',
+  'soignant': 'Soignant',
+};
+
+const libelleAction = (action: string) => ACTIONS_LIBELLES[action] ?? action;
+const libelleActeur = (type: string) => ACTEURS_LIBELLES[type] ?? type;
+const libelleEvenement = (evenement: string) => EVENEMENTS_LIBELLES[evenement] ?? evenement;
+const libelleRessource = (type: string) => RESSOURCES_LIBELLES[type] ?? type;
+
 const PAGE_SIZE = 50;
 
 export default function AdminAuditLogs() {
@@ -81,7 +136,7 @@ export default function AdminAuditLogs() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6 gap-3">
         <div>
           <h1 className="text-xl font-bold text-foreground flex items-center gap-2"><Shield className="h-5 w-5 text-primary" /> Journaux d'audit</h1>
-          <p className="text-sm text-muted-foreground">Traçabilité RGPD — conservation 5 ans</p>
+          <p className="text-sm text-muted-foreground">Traçabilité RGPD des actions sensibles</p>
         </div>
         <BoutonY2K variant="ghost" size="sm" onClick={() => { setPage(0); charger(); }} aria-label="Rafraîchir">
           <RefreshCw className="h-4 w-4" />
@@ -104,15 +159,15 @@ export default function AdminAuditLogs() {
         </div>
         <select value={filterAction} onChange={e => { setFilterAction(e.target.value); setPage(0); }} className="input-base w-auto">
           <option value="">Toutes les actions</option>
-          {actions.map(a => <option key={a} value={a}>{a}</option>)}
+          {actions.map(a => <option key={a} value={a}>{libelleAction(a)}</option>)}
         </select>
         <select value={filterType} onChange={e => { setFilterType(e.target.value); setPage(0); }} className="input-base w-auto">
           <option value="">Tous les acteurs</option>
-          {types.map(t => <option key={t} value={t}>{t}</option>)}
+          {types.map(t => <option key={t} value={t}>{libelleActeur(t)}</option>)}
         </select>
         <select value={filterEvenement} onChange={e => { setFilterEvenement(e.target.value); setPage(0); }} className="input-base w-auto" aria-label="Filtrer par événement anti-triche">
           <option value="">Tous les événements</option>
-          {EVENEMENTS_ANTITRICHE.map(e => <option key={e} value={e}>{e}</option>)}
+          {EVENEMENTS_ANTITRICHE.map(e => <option key={e} value={e}>{libelleEvenement(e)}</option>)}
         </select>
       </div>
 
@@ -128,14 +183,14 @@ export default function AdminAuditLogs() {
             ];
             const actionBadgeVariant = (action: string): 'success' | 'warning' | 'error' | 'info' => {
               const cls = ACTIONS_COLORS[action] || '';
-              if (cls.includes('destructive') || cls.includes('red')) return 'error';
+              if (cls.includes('destructive')) return 'error';
               if (cls.includes('success')) return 'success';
               if (cls.includes('warning')) return 'warning';
               return 'info';
             };
             const actionBadge = (log: any) => (
               <BadgeY2K variant={actionBadgeVariant(log.action)} size="sm">
-                {log.action}
+                {libelleAction(log.action)}
               </BadgeY2K>
             );
             const dateFormatted = (log: any) => log.cree_le ? format(new Date(log.cree_le), 'dd/MM/yy HH:mm', { locale: fr }) : '—';
@@ -154,7 +209,7 @@ export default function AdminAuditLogs() {
                 colonnes={colonnes}
                 donnees={logs}
                 getId={(log: any) => log.id}
-                etatVide={<EmptyState titre="Aucun log trouvé" description="Aucun événement audit ne correspond aux filtres." />}
+                etatVide={<EmptyState titre="Aucun événement trouvé" description="Aucun événement audit ne correspond aux filtres." />}
                 renduCellule={(log: any, col) => {
                   switch (col.cle) {
                     case 'date':
@@ -167,7 +222,7 @@ export default function AdminAuditLogs() {
                     case 'acteur':
                       return (
                         <div>
-                          <span className="text-xs font-mono text-muted-foreground">{log.type_acteur}</span>
+                          <span className="text-xs font-mono text-muted-foreground">{libelleActeur(log.type_acteur)}</span>
                           <p className="text-[10px] text-muted-foreground/60 font-mono truncate max-w-[120px]">{log.acteur_id?.slice(0, 8)}...</p>
                         </div>
                       );
@@ -176,7 +231,7 @@ export default function AdminAuditLogs() {
                     case 'ressource':
                       return (
                         <div className="text-muted-foreground">
-                          <span className="text-xs">{log.type_ressource}</span>
+                          <span className="text-xs">{libelleRessource(log.type_ressource)}</span>
                           {log.id_ressource && <p className="text-[10px] text-muted-foreground/60 font-mono truncate max-w-[120px]">{log.id_ressource?.slice(0, 8)}...</p>}
                         </div>
                       );
@@ -196,8 +251,8 @@ export default function AdminAuditLogs() {
                       </div>
                     </div>
                     <div className="text-xs text-muted-foreground space-y-0.5">
-                      <p>👤 <span className="font-mono">{log.type_acteur}</span> · {log.acteur_id?.slice(0, 8)}…</p>
-                      <p>📦 <span className="font-mono">{log.type_ressource}</span>{log.id_ressource && <> · {log.id_ressource?.slice(0, 8)}…</>}</p>
+                      <p>👤 <span className="font-mono">{libelleActeur(log.type_acteur)}</span> · {log.acteur_id?.slice(0, 8)}…</p>
+                      <p>📦 <span className="font-mono">{libelleRessource(log.type_ressource)}</span>{log.id_ressource && <> · {log.id_ressource?.slice(0, 8)}…</>}</p>
                     </div>
                     {log.details && <div className="pt-1 border-t border-border">{detailsContent(log)}</div>}
                   </div>

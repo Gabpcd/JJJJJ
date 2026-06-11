@@ -59,7 +59,7 @@ export default function AdminAcquisition() {
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div>
             <h1 className="text-xl font-bold text-foreground">Acquisition par canal</h1>
-            <p className="text-sm text-muted-foreground">D'où viennent tes inscrits — {periode} derniers jours</p>
+            <p className="text-sm text-muted-foreground">D'où viennent vos inscrits — {periode} derniers jours</p>
           </div>
           <div className="flex gap-2">
             {[30, 90, 180, 365].map(j => (
@@ -86,7 +86,7 @@ export default function AdminAcquisition() {
                 <p className="text-sm text-muted-foreground">Aucune inscription sur la période.</p>
                 <p className="text-xs text-muted-foreground mt-1">
                   Dès le lancement, chaque inscription sera attribuée à son canal (UTM, parrainage, réseaux, SEO…).
-                  Partage tes liens avec des paramètres <code>?utm_source=…&utm_campaign=…</code> pour suivre tes campagnes.
+                  Partagez vos liens avec des paramètres de suivi pour identifier vos campagnes.
                 </p>
               </div>
             </CardY2KContent>
@@ -136,7 +136,7 @@ export default function AdminAcquisition() {
               <CardY2KHeader>
                 <CardY2KTitle className="text-sm flex items-center gap-2">
                   <TrendingUp className="h-4 w-4" /> Détail + CAC par canal
-                  <span title="Saisis la dépense pub d'un canal pour calculer son coût d'acquisition réel"><Info className="h-3 w-3 text-muted-foreground" /></span>
+                  <span title="Saisissez la dépense pub d'un canal pour calculer son coût d'acquisition réel"><Info className="h-3 w-3 text-muted-foreground" /></span>
                 </CardY2KTitle>
               </CardY2KHeader>
               <CardY2KContent>
@@ -194,7 +194,7 @@ export default function AdminAcquisition() {
             {/* Campagnes */}
             {campagnes.length > 0 && (
               <CardY2K hoverLift={false}>
-                <CardY2KHeader><CardY2KTitle className="text-sm">Top campagnes (UTM)</CardY2KTitle></CardY2KHeader>
+                <CardY2KHeader><CardY2KTitle className="text-sm">Meilleures campagnes</CardY2KTitle></CardY2KHeader>
                 <CardY2KContent>
                   <div className="space-y-2">
                     {campagnes.slice(0, 10).map((c, i) => (

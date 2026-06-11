@@ -90,7 +90,7 @@ export default function AdminReclamations() {
   return (
     <LayoutAdmin>
       <div className="mb-6">
-        <h1 className="text-xl font-bold text-foreground">Réclamations</h1>
+        <h1 className="text-xl font-bold text-foreground">Traiter les réclamations</h1>
         <p className="text-sm text-muted-foreground mt-0.5">
           Demandes générales des utilisateurs — les contestations de score sont sur{' '}
           <a href="/admin/reclamations-score" className="text-primary hover:underline">Réclamations score</a>.
