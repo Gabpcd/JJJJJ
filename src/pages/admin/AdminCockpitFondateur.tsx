@@ -96,7 +96,7 @@ export default function AdminCockpitFondateur() {
           </BoutonY2K>
         </div>
 
-        {/* KPIs headline */}
+        {/* KPIs headline — chaque carte est cliquable vers la page de détail */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           <CarteKPIY2K
             icone={<Users className="h-4 w-4" />}
@@ -104,6 +104,7 @@ export default function AdminCockpitFondateur() {
             label="Soignants"
             contexte={`+${data.soignants_7j ?? 0} /7j · +${data.soignants_30j ?? 0} /30j`}
             variant="holographic"
+            onClick={() => navigate('/admin/utilisateurs')}
           />
           <CarteKPIY2K
             icone={<Building2 className="h-4 w-4" />}
@@ -111,6 +112,7 @@ export default function AdminCockpitFondateur() {
             label="Établissements"
             contexte={`+${data.etabs_7j ?? 0} /7j · +${data.etabs_30j ?? 0} /30j`}
             variant="default"
+            onClick={() => navigate('/admin/utilisateurs')}
           />
           <CarteKPIY2K
             icone={<DollarSign className="h-4 w-4" />}
@@ -118,6 +120,7 @@ export default function AdminCockpitFondateur() {
             label="MRR"
             contexte={runway ? `ARR ${fmt(runway.arr)}` : ''}
             variant="holographic"
+            onClick={() => navigate('/admin/finances')}
           />
           <CarteKPIY2K
             icone={<Zap className="h-4 w-4" />}
@@ -125,6 +128,7 @@ export default function AdminCockpitFondateur() {
             label="Missions terminées"
             contexte={`${data.missions_mois ?? 0} ce mois`}
             variant="default"
+            onClick={() => navigate('/admin/missions?statut=TERMINEE')}
           />
         </div>
 
@@ -136,6 +140,7 @@ export default function AdminCockpitFondateur() {
             label="Activation soignants"
             contexte="≥1 candidature"
             variant="default"
+            onClick={() => navigate('/admin/utilisateurs')}
           />
           <CarteKPIY2K
             icone={<Percent className="h-4 w-4" />}
@@ -143,18 +148,21 @@ export default function AdminCockpitFondateur() {
             label="Activation étab."
             contexte="≥1 mission publiée"
             variant="default"
+            onClick={() => navigate('/admin/missions')}
           />
           <CarteKPIY2K
             icone={<TrendingUp className="h-4 w-4" />}
             valeur={fmt(data.gmv_total ?? 0)}
             label="GMV totale"
             variant="default"
+            onClick={() => navigate('/admin/finances')}
           />
           <CarteKPIY2K
             icone={<Target className="h-4 w-4" />}
             valeur={fmt(data.revenue_total ?? 0)}
             label="Revenue total (commissions)"
             variant="default"
+            onClick={() => navigate('/admin/facturation')}
           />
         </div>
 
