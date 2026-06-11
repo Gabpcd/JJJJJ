@@ -14,7 +14,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { CardY2K, CardY2KContent } from '@/components/y2k/CardY2K';
 import { toast } from 'sonner';
 import { Loader2, Search, Zap, Download, FileText, ChevronDown, ChevronRight, ExternalLink, CheckCircle, XCircle, CreditCard } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import jsPDF from 'jspdf';
 import { BoutonsBulkFactures } from '@/components/admin/BoutonsBulkFactures';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -283,7 +283,9 @@ export default function AdminFacturation() {
   const [generating, setGenerating] = useState(false);
   const [actionId, setActionId] = useState<string | null>(null);
   const [filtreStatut, setFiltreStatut] = useState('TOUS');
-  const [recherche, setRecherche] = useState('');
+  // ?q= : pré-remplissage depuis la recherche globale ⌘K (Session D-2)
+  const [searchParams] = useSearchParams();
+  const [recherche, setRecherche] = useState(searchParams.get('q') ?? '');
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
