@@ -29,6 +29,33 @@ import {
   type FiltresLitiges,
   type LitigeEnrichi,
 } from '@/components/admin/litiges/types';
+import { TYPES_DOCUMENTS } from '@/lib/documents';
+
+// Libellés français affichés à l'écran — les valeurs envoyées aux RPCs restent inchangées.
+const LABELS_TYPE_LITIGE_FORCE: Record<string, string> = {
+  PAIEMENT: 'Paiement',
+  ABSENCE: 'Absence',
+  QUALITE: 'Qualité',
+  CONTRAT: 'Contrat',
+  AUTRE: 'Autre',
+};
+
+const LABELS_PERIMETRE_GEL: Record<string, string> = {
+  MISSION_ENTIERE: 'Mission entière (toutes les factures de la mission)',
+  FACTURE_UNIQUE: 'Facture unique (uniquement la facture liée)',
+  PERIODE_LITIGIEUSE: 'Période litigieuse (factures de la période concernée)',
+  AUCUN: 'Aucun gel',
+};
+
+const LABELS_TYPE_DOCUMENT: Record<string, string> = {
+  ...TYPES_DOCUMENTS,
+  CARTE_ORDRE: "Carte de l'Ordre",
+  ATTESTATION_CPAM: 'Attestation CPAM',
+  NOTE_HONORAIRES: "Note d'honoraires",
+  ATTESTATION_3200H: 'Attestation 3200 heures',
+  ARRET_MALADIE: 'Arrêt maladie',
+};
+const libelleTypeDocument = (type: string) => LABELS_TYPE_DOCUMENT[type] ?? type;
 
 const formatDate = (d?: string | null) =>
   d
@@ -263,7 +290,7 @@ export default function AdminModeration() {
   // Task 8 — modifier gel scope litige
   const modifierGelScope = async () => {
     if (!gelScopeLitigeId) return;
-    if (!gelScopeNouveauScope.trim()) { toast.error('Nouveau scope requis.'); return; }
+    if (!gelScopeNouveauScope.trim()) { toast.error('Veuillez sélectionner un périmètre de gel.'); return; }
     if (!gelScopeRaison.trim()) { toast.error('Raison obligatoire (RGPD audit).'); return; }
     setGelScopeLoading(true);
     const { data, error } = await supabase.rpc('fn_admin_modifier_gel_scope_litige' as any, {
@@ -273,7 +300,7 @@ export default function AdminModeration() {
     });
     setGelScopeLoading(false);
     if (error || (data as any)?.error) { toast.error((data as any)?.error || error?.message || 'Erreur.'); return; }
-    toast.success('Gel scope mis à jour');
+    toast.success('Périmètre de gel mis à jour');
     setGelScopeLitigeId(null);
     setGelScopeNouveauScope('');
     setGelScopeRaison('');
@@ -309,7 +336,7 @@ export default function AdminModeration() {
               <TabsTrigger value="litiges" className="gap-1.5"><MessageSquare className="h-4 w-4" />Litiges ({litiges.length})</TabsTrigger>
               <TabsTrigger value="avoirs" className="gap-1.5"><Receipt className="h-4 w-4" />Avoirs</TabsTrigger>
               <TabsTrigger value="legacy" className="gap-1.5">
-                <Tag className="h-4 w-4" />Legacy{legacyCount > 0 ? ` (${legacyCount})` : ''}
+                <Tag className="h-4 w-4" />À recatégoriser{legacyCount > 0 ? ` (${legacyCount})` : ''}
               </TabsTrigger>
               <TabsTrigger value="evaluations" className="gap-1.5"><Eye className="h-4 w-4" />Évaluations ({evaluations.length})</TabsTrigger>
               <TabsTrigger value="documents" className="gap-1.5"><FileCheck className="h-4 w-4" />Documents ({documents.length})</TabsTrigger>
@@ -459,7 +486,7 @@ export default function AdminModeration() {
                   {documents.map((d) => (
                     <TableRow key={d.id}>
                       <TableCell className="max-w-[200px] truncate font-medium">{d.nom_fichier}</TableCell>
-                      <TableCell><BadgeY2K variant="info" size="sm">{d.type_document}</BadgeY2K></TableCell>
+                      <TableCell><BadgeY2K variant="info" size="sm">{libelleTypeDocument(d.type_document)}</BadgeY2K></TableCell>
                       <TableCell className="text-xs text-muted-foreground">{d.televerse_le ? formatDate(d.televerse_le) : '—'}</TableCell>
                       <TableCell className="space-x-1 text-right">
                         <BoutonY2K size="sm" variant="secondary" onClick={() => validerDocument(d.id)} iconeGauche={<Check className="h-3.5 w-3.5" />}>Valider</BoutonY2K>
@@ -480,7 +507,7 @@ export default function AdminModeration() {
                 <div key={d.id} className="rounded-xl border border-border bg-card p-3 space-y-2">
                   <div className="flex items-start justify-between gap-2">
                     <p className="font-medium text-sm break-words flex-1 min-w-0">{d.nom_fichier}</p>
-                    <BadgeY2K variant="info" size="sm" className="shrink-0">{d.type_document}</BadgeY2K>
+                    <BadgeY2K variant="info" size="sm" className="shrink-0">{libelleTypeDocument(d.type_document)}</BadgeY2K>
                   </div>
                   <p className="text-[11px] text-muted-foreground">{d.televerse_le ? `Téléversé le ${formatDate(d.televerse_le)}` : 'Date inconnue'}</p>
                   <div className="grid grid-cols-2 gap-2">
@@ -639,16 +666,14 @@ export default function AdminModeration() {
             <p className="text-xs text-muted-foreground">Crée un litige sans validation normale. Raison de bypass tracée RGPD.</p>
             <label className="block">
               <span className="text-xs font-medium text-foreground mb-1 block">ID de mission *</span>
-              <Input value={creerLitigeMissionId} onChange={(e) => setCreerLitigeMissionId(e.target.value)} placeholder="UUID de la mission" disabled={creerLitigeLoading} />
+              <Input value={creerLitigeMissionId} onChange={(e) => setCreerLitigeMissionId(e.target.value)} placeholder="Identifiant de la mission" disabled={creerLitigeLoading} />
             </label>
             <label className="block">
               <span className="text-xs font-medium text-foreground mb-1 block">Type de litige *</span>
               <select value={creerLitigeType} onChange={(e) => setCreerLitigeType(e.target.value)} className="input-base" disabled={creerLitigeLoading}>
-                <option value="PAIEMENT">PAIEMENT</option>
-                <option value="ABSENCE">ABSENCE</option>
-                <option value="QUALITE">QUALITE</option>
-                <option value="CONTRAT">CONTRAT</option>
-                <option value="AUTRE">AUTRE</option>
+                {Object.entries(LABELS_TYPE_LITIGE_FORCE).map(([valeur, libelle]) => (
+                  <option key={valeur} value={valeur}>{libelle}</option>
+                ))}
               </select>
             </label>
             <label className="block">
@@ -671,11 +696,16 @@ export default function AdminModeration() {
       {gelScopeLitigeId && (
         <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={() => setGelScopeLitigeId(null)}>
           <div className="bg-card border border-border rounded-2xl max-w-md w-full p-6 space-y-4 max-h-[90dvh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <h2 className="text-lg font-bold text-foreground inline-flex items-center gap-2"><GitBranch className="h-5 w-5" />Modifier le gel scope</h2>
+            <h2 className="text-lg font-bold text-foreground inline-flex items-center gap-2"><GitBranch className="h-5 w-5" />Modifier le périmètre de gel</h2>
             <p className="text-xs text-muted-foreground">Modifie le périmètre de gel du litige. Action tracée RGPD.</p>
             <label className="block">
-              <span className="text-xs font-medium text-foreground mb-1 block">Nouveau scope *</span>
-              <Input value={gelScopeNouveauScope} onChange={(e) => setGelScopeNouveauScope(e.target.value)} placeholder="ex: MONTANT_PARTIEL, TOTAL, AUCUN…" disabled={gelScopeLoading} />
+              <span className="text-xs font-medium text-foreground mb-1 block">Nouveau périmètre de gel *</span>
+              <select value={gelScopeNouveauScope} onChange={(e) => setGelScopeNouveauScope(e.target.value)} className="input-base" disabled={gelScopeLoading}>
+                <option value="">— Sélectionner —</option>
+                {Object.entries(LABELS_PERIMETRE_GEL).map(([valeur, libelle]) => (
+                  <option key={valeur} value={valeur}>{libelle}</option>
+                ))}
+              </select>
             </label>
             <label className="block">
               <span className="text-xs font-medium text-foreground mb-1 block">Raison * (RGPD audit)</span>

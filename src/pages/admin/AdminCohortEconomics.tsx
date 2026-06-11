@@ -64,7 +64,7 @@ export default function AdminCohortEconomics() {
           { label: 'Établissements', value: totals.total_etabs, icon: Building2, color: 'text-info' },
           { label: 'Missions terminées', value: totals.total_missions_terminees, icon: Zap, color: 'text-success' },
           { label: 'GMV totale', value: fmt(totals.gmv_total), icon: TrendingUp, color: 'text-primary', raw: true },
-          { label: 'Revenue (commissions)', value: fmt(totals.revenue_total), icon: DollarSign, color: 'text-success', raw: true },
+          { label: 'Revenus (commissions)', value: fmt(totals.revenue_total), icon: DollarSign, color: 'text-success', raw: true },
         ].map((kpi, i) => (
           <CardY2K key={i} className="text-center p-4" hoverLift={false}>
             <kpi.icon className={`h-5 w-5 ${kpi.color} mx-auto mb-1`} />
@@ -81,11 +81,11 @@ export default function AdminCohortEconomics() {
           {[
             { label: 'ARPU / Établissement', value: fmt(ue.arpu_etab), sub: 'Commission moyenne par établissement' },
             { label: 'Rev / Soignant actif', value: fmt(ue.rev_per_soignant), sub: 'GMV par soignant' },
-            { label: 'Commission / Mission', value: fmt(ue.commission_par_mission), sub: 'Take rate par transaction' },
+            { label: 'Commission / Mission', value: fmt(ue.commission_par_mission), sub: 'Commission moyenne par transaction' },
             { label: 'Commission / Heure', value: fmt(ue.commission_par_heure), sub: 'Marge horaire' },
             { label: 'GMV / Heure', value: fmt(ue.gmv_par_heure), sub: 'Volume horaire brut' },
-            { label: 'Taux complétion', value: `${ue.taux_completion ?? 0}%`, sub: 'Missions terminées / total' },
-            { label: 'Taux annulation', value: `${ue.taux_annulation ?? 0}%`, sub: 'Missions annulées / total' },
+            { label: 'Taux complétion', value: ue.taux_completion != null ? `${ue.taux_completion}%` : '—', sub: 'Missions terminées / total' },
+            { label: 'Taux annulation', value: ue.taux_annulation != null ? `${ue.taux_annulation}%` : '—', sub: 'Missions annulées / total' },
           ].map((m, i) => (
             <div key={i} className="bg-muted/30 rounded-xl p-3">
               <p className="text-lg font-bold text-foreground">{m.value}</p>

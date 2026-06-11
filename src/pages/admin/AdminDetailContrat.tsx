@@ -262,7 +262,7 @@ export default function AdminDetailContrat() {
       <CardY2K hoverLift={false}>
         <div className="flex items-center gap-2 mb-3">
           <Clock className="h-5 w-5 text-primary" />
-          <h2 className="text-sm font-bold text-foreground">Audit trail ({auditTrail.length})</h2>
+          <h2 className="text-sm font-bold text-foreground">Historique des actions ({auditTrail.length})</h2>
         </div>
         {auditTrail.length === 0 ? (
           <p className="text-xs text-muted-foreground italic">Aucune action enregistrée.</p>
@@ -276,8 +276,11 @@ export default function AdminDetailContrat() {
                   <span className="text-muted-foreground"> · {format(new Date(a.cree_le), 'dd MMM HH:mm:ss', { locale: fr })}</span>
                 </p>
                 {a.details && Object.keys(a.details).length > 0 && (
-                  <p className="text-[10px] font-mono text-muted-foreground truncate">
-                    {JSON.stringify(a.details).slice(0, 200)}
+                  <p className="text-[10px] text-muted-foreground truncate">
+                    {Object.entries(a.details as Record<string, unknown>)
+                      .map(([cle, valeur]) => `${cle.replace(/_/g, ' ')} : ${valeur !== null && typeof valeur === 'object' ? JSON.stringify(valeur) : String(valeur)}`)
+                      .join(' · ')
+                      .slice(0, 200)}
                   </p>
                 )}
               </li>

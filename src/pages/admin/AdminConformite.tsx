@@ -8,7 +8,22 @@ import { supabase } from '@/integrations/supabase/client';
 import { CardY2K, CardY2KContent } from '@/components/y2k/CardY2K';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { BadgeY2K } from '@/components/y2k/BadgeY2K';
+import { BADGES_STATUT } from '@/lib/constantes';
 import { ShieldAlert, Clock, FileWarning, FileQuestion, Repeat, UserX, FileX, ChevronDown, Loader2, ExternalLink } from 'lucide-react';
+
+/** Libellés français des résultats de contrôle (table conformite_travail). */
+const LIBELLES_RESULTAT_CONTROLE: Record<string, string> = {
+  'CONFORME': 'Conforme',
+  'VIOLATION_BLOQUEE': 'Violation bloquée',
+};
+
+function libelleResultat(valeur?: string): string {
+  if (!valeur) return '—';
+  const libelle = LIBELLES_RESULTAT_CONTROLE[valeur];
+  if (libelle) return libelle;
+  const texte = valeur.replace(/_/g, ' ').toLowerCase();
+  return texte.charAt(0).toUpperCase() + texte.slice(1);
+}
 
 interface Champ {
   /** Titre de colonne (desktop) / label (mobile) */
@@ -67,7 +82,7 @@ const INDICATEURS: Indicateur[] = [
       { titre: 'Soignant', primary: true, render: (i) => <LienSoignant id={i.soignant_id} nom={i.soignant_nom} /> },
       { titre: 'Mission', render: (i) => <LienMission id={i.mission_id} intitule={i.mission_intitule} /> },
       { titre: 'Établissement', render: (i) => <LienEtablissement id={i.etablissement_id} nom={i.etablissement_nom} /> },
-      { titre: 'Résultat', render: (i) => <BadgeY2K variant="error" size="sm">{i.resultat}</BadgeY2K> },
+      { titre: 'Résultat', render: (i) => <BadgeY2K variant="error" size="sm">{libelleResultat(i.resultat)}</BadgeY2K> },
       { titre: 'Date', render: (i) => <span className="text-muted-foreground">{formatDate(i.controle_le)}</span> },
     ],
   },
@@ -151,7 +166,7 @@ const INDICATEURS: Indicateur[] = [
       { titre: 'Mission', primary: true, render: (i) => <LienMission id={i.mission_id ?? i.id} intitule={i.intitule} /> },
       { titre: 'Établissement', render: (i) => <LienEtablissement id={i.etablissement_id} nom={i.etablissement_nom} /> },
       { titre: 'Soignant', render: (i) => <LienSoignant id={i.soignant_id} nom={i.soignant_nom} /> },
-      { titre: 'Statut', render: (i) => <BadgeY2K variant="info" size="sm">{i.statut}</BadgeY2K> },
+      { titre: 'Statut', render: (i) => <BadgeY2K variant="info" size="sm">{BADGES_STATUT[i.statut]?.label || i.statut}</BadgeY2K> },
       { titre: 'Début', render: (i) => <span className="text-muted-foreground">{formatDate(i.debut_le)}</span> },
     ],
   },
