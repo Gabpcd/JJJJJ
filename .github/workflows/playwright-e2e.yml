@@ -15,6 +15,15 @@ on:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+  # Valeurs PUBLIQUES hardcodées (présentes dans le bundle client / le code du
+  # repo) : on ne dépend plus de secrets GitHub potentiellement désynchronisés.
+  # Diagnostic 11/06 : le secret PLAYWRIGHT_TEST_PASSWORD ne correspondait pas
+  # au mot de passe réel des comptes test (vérifié bcrypt en DB) → 119 fails.
+  # Seul SUPABASE_SERVICE_ROLE_KEY reste un secret (sensible), validé par le
+  # step « Préflight credentials ».
+  E2E_SUPABASE_URL: 'https://flripxtsyegjshnhzjkz.supabase.co'
+  E2E_PUBLISHABLE_KEY: 'sb_publishable_wrR-KGZqiovTPBym6mjXPw_V8l4ae-C'
+  E2E_TEST_PASSWORD: 'Playwright!Test2026'
 
 jobs:
   # PR — chromium only (job rapide pour feedback)
@@ -22,6 +31,13 @@ jobs:
     name: Playwright E2E (PR — Chromium)
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
+    # Conteneur officiel Playwright : navigateurs + dépendances système
+    # préinstallés. Indispensable : `npx playwright install --with-deps`
+    # hangait indéfiniment sur la phase apt des runners (job tué à 25 min).
+    # Le tag DOIT matcher la version résolue du lockfile (1.58.2).
+    container:
+      image: mcr.microsoft.com/playwright:v1.58.2-noble
+      options: --user 1001
     continue-on-error: true
     timeout-minutes: 25
     steps:
@@ -32,28 +48,65 @@ jobs:
           cache: 'npm'
       - name: Install dependencies
         run: npm ci
-      - name: Install Playwright browsers
-        run: npx playwright install --with-deps chromium
+      - name: Préflight credentials (diagnostic clair si secret invalide)
+        run: |
+          set -e
+          # 1) Clé service_role (seul vrai secret) : un GET REST doit répondre 200
+          code=$(curl -s -o /dev/null -w '%{http_code}' \
+            "$E2E_SUPABASE_URL/rest/v1/missions?select=id&limit=1" \
+            -H "apikey: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}")
+          if [ "$code" != "200" ]; then
+            echo "::error::SUPABASE_SERVICE_ROLE_KEY invalide (REST → HTTP $code). Mettre à jour le secret GitHub avec la clé secrète du Dashboard Supabase (Settings → API keys)."
+            exit 1
+          fi
+          # 1bis) Anti-confusion anon/service : seul un vrai service_role passe
+          # l'endpoint admin GoTrue (une clé anon répond 401/403 mais donne
+          # quand même 200 sur le REST public → le check 1 ne suffit pas).
+          code=$(curl -s -o /dev/null -w '%{http_code}' \
+            "$E2E_SUPABASE_URL/auth/v1/admin/users?per_page=1" \
+            -H "apikey: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}")
+          if [ "$code" != "200" ]; then
+            # Warning (pas exit 1) : on laisse tourner les tests qui ne
+            # dépendent pas du service_role (a11y, navigation, UI publiques).
+            echo "::warning::Le secret SUPABASE_SERVICE_ROLE_KEY n'est PAS une clé service_role (admin GoTrue → HTTP $code) — c'est probablement la clé anon/publishable. ~60 tests backend échoueront. Remplacer le secret GitHub par la « secret key » (sb_secret_…) du Dashboard Supabase → Settings → API keys."
+          else
+            echo "service_role OK (admin GoTrue 200)"
+          fi
+          # 2) Login compte test (publishable key + mot de passe fixe)
+          code=$(curl -s -o /dev/null -w '%{http_code}' \
+            "$E2E_SUPABASE_URL/auth/v1/token?grant_type=password" \
+            -H "apikey: $E2E_PUBLISHABLE_KEY" -H "Content-Type: application/json" \
+            -d "{\"email\":\"playwright-soignant@jolene.app\",\"password\":\"$E2E_TEST_PASSWORD\"}")
+          if [ "$code" != "200" ]; then
+            echo "::error::Login compte test playwright-soignant impossible (HTTP $code) — mot de passe DB désynchronisé."
+            exit 1
+          fi
+          echo "login compte test OK"
       - name: Build app
         run: npm run build
         env:
-          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
-          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
+          VITE_SUPABASE_URL: ${{ env.E2E_SUPABASE_URL }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ env.E2E_PUBLISHABLE_KEY }}
       - name: Start preview server
         run: |
           npx vite preview --port 4173 --host 0.0.0.0 &
           npx wait-on http://127.0.0.1:4173 -t 30000 || true
-        env:
-          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
-          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
       - name: Run Playwright tests (chromium)
         run: npx playwright test --project=chromium
         env:
           PLAYWRIGHT_BASE_URL: http://127.0.0.1:4173
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_URL: ${{ env.E2E_SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
-          PLAYWRIGHT_TEST_PASSWORD: ${{ secrets.PLAYWRIGHT_TEST_PASSWORD }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ env.E2E_PUBLISHABLE_KEY }}
+          PLAYWRIGHT_TEST_PASSWORD: ${{ env.E2E_TEST_PASSWORD }}
+          CI: 'true'
+      - name: Détail a11y si échec (rapport court en fin de log)
+        if: failure()
+        run: npx playwright test e2e/a11y.spec.ts --project=chromium --reporter=line --retries=0 || true
+        env:
+          PLAYWRIGHT_BASE_URL: http://127.0.0.1:4173
           CI: 'true'
       - name: Upload report
         if: ${{ !cancelled() }}
@@ -68,6 +121,11 @@ jobs:
     name: Playwright E2E (${{ matrix.project }})
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
+    # Conteneur officiel Playwright (chromium + firefox + webkit préinstallés,
+    # toutes deps système incluses). Tag = version résolue lockfile (1.58.2).
+    container:
+      image: mcr.microsoft.com/playwright:v1.58.2-noble
+      options: --user 1001
     timeout-minutes: 30
     strategy:
       fail-fast: false
@@ -86,37 +144,23 @@ jobs:
           cache: 'npm'
       - name: Install dependencies
         run: npm ci
-      - name: Install Playwright browsers
-        # Mapping projet → moteur browser :
-        #   chromium / mobile-pixel / tablet-ipad → Chromium
-        #   firefox → Firefox
-        #   webkit / mobile-iphone → WebKit (iPhone simulé utilise Safari)
-        run: |
-          case "${{ matrix.project }}" in
-            firefox) npx playwright install --with-deps firefox ;;
-            webkit|mobile-iphone) npx playwright install --with-deps webkit ;;
-            *) npx playwright install --with-deps chromium ;;
-          esac
       - name: Build app
         run: npm run build
         env:
-          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
-          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
+          VITE_SUPABASE_URL: ${{ env.E2E_SUPABASE_URL }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ env.E2E_PUBLISHABLE_KEY }}
       - name: Start preview server
         run: |
           npx vite preview --port 4173 --host 0.0.0.0 &
           npx wait-on http://127.0.0.1:4173 -t 30000 || true
-        env:
-          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
-          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
       - name: Run Playwright tests (${{ matrix.project }})
         run: npx playwright test --project=${{ matrix.project }}
         env:
           PLAYWRIGHT_BASE_URL: http://127.0.0.1:4173
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_URL: ${{ env.E2E_SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
-          PLAYWRIGHT_TEST_PASSWORD: ${{ secrets.PLAYWRIGHT_TEST_PASSWORD }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ env.E2E_PUBLISHABLE_KEY }}
+          PLAYWRIGHT_TEST_PASSWORD: ${{ env.E2E_TEST_PASSWORD }}
           CI: 'true'
       - name: Upload report
         if: ${{ !cancelled() }}

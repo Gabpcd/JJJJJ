@@ -44,19 +44,19 @@ test.describe('Matrice documents requis par profession + exercice', () => {
     expect(rows.length).toBeGreaterThan(0);
   });
 
-  test('AS salariée → uniquement CARTE_IDENTITE + DIPLOME', () => {
+  test('AS salariée → CARTE_IDENTITE + DIPLOME (+ autorisation exercice optionnelle)', () => {
     const docs = docsVisibles(rows, 'AS', 'SALARIE');
-    expect(docs).toEqual(['CARTE_IDENTITE', 'DIPLOME']);
+    expect(docs).toEqual(['AUTORISATION_EXERCICE', 'CARTE_IDENTITE', 'DIPLOME']);
   });
 
-  test('AES salariée → uniquement CARTE_IDENTITE + DIPLOME', () => {
+  test('AES salariée → CARTE_IDENTITE + DIPLOME (+ autorisation exercice optionnelle)', () => {
     const docs = docsVisibles(rows, 'AES', 'SALARIE');
-    expect(docs).toEqual(['CARTE_IDENTITE', 'DIPLOME']);
+    expect(docs).toEqual(['AUTORISATION_EXERCICE', 'CARTE_IDENTITE', 'DIPLOME']);
   });
 
   test('IDE salariée → CARTE_IDENTITE + DIPLOME + RPPS_ADELI (pas de RCP/RIB/URSSAF)', () => {
     const docs = docsVisibles(rows, 'IDE', 'SALARIE');
-    expect(docs).toEqual(['CARTE_IDENTITE', 'DIPLOME', 'RPPS_ADELI']);
+    expect(docs).toEqual(['AUTORISATION_EXERCICE', 'CARTE_IDENTITE', 'DIPLOME', 'RPPS_ADELI']);
     expect(docs).not.toContain('RCP_ASSURANCE');
     expect(docs).not.toContain('RIB');
     expect(docs).not.toContain('ATTESTATION_URSSAF');
@@ -65,7 +65,7 @@ test.describe('Matrice documents requis par profession + exercice', () => {
   test('IDE libérale → CARTE_IDENTITE + DIPLOME + RPPS + RCP + RIB + URSSAF', () => {
     const docs = docsVisibles(rows, 'IDE', 'LIBERAL');
     expect(docs).toEqual([
-      'ATTESTATION_URSSAF', 'CARTE_IDENTITE', 'DIPLOME', 'RCP_ASSURANCE', 'RIB', 'RPPS_ADELI',
+      'ATTESTATION_URSSAF', 'AUTORISATION_EXERCICE', 'CARTE_IDENTITE', 'DIPLOME', 'RCP_ASSURANCE', 'RIB', 'RPPS_ADELI',
     ]);
   });
 
@@ -78,7 +78,7 @@ test.describe('Matrice documents requis par profession + exercice', () => {
 
   test('PHARMACIEN → RPPS mais jamais RCP/RIB/URSSAF (salarié only)', () => {
     const salarie = docsVisibles(rows, 'PHARMACIEN', 'SALARIE');
-    expect(salarie).toEqual(['CARTE_IDENTITE', 'DIPLOME', 'RPPS_ADELI']);
+    expect(salarie).toEqual(['AUTORISATION_EXERCICE', 'CARTE_IDENTITE', 'DIPLOME', 'RPPS_ADELI']);
     // Même en simulant libéral, pas de RCP/RIB/URSSAF (non seedés pour pharmacien)
     const liberal = docsVisibles(rows, 'PHARMACIEN', 'LIBERAL');
     expect(liberal).not.toContain('RCP_ASSURANCE');
@@ -87,18 +87,18 @@ test.describe('Matrice documents requis par profession + exercice', () => {
 
   test('MANIPULATEUR_RADIO → ADELI (RPPS_ADELI) mais pas RCP/RIB/URSSAF', () => {
     const docs = docsVisibles(rows, 'MANIPULATEUR_RADIO', 'SALARIE');
-    expect(docs).toEqual(['CARTE_IDENTITE', 'DIPLOME', 'RPPS_ADELI']);
+    expect(docs).toEqual(['AUTORISATION_EXERCICE', 'CARTE_IDENTITE', 'DIPLOME', 'RPPS_ADELI']);
   });
 
   test('PREPARATEUR_PHARMA → uniquement CARTE_IDENTITE + DIPLOME', () => {
     const docs = docsVisibles(rows, 'PREPARATEUR_PHARMA', 'SALARIE');
-    expect(docs).toEqual(['CARTE_IDENTITE', 'DIPLOME']);
+    expect(docs).toEqual(['AUTORISATION_EXERCICE', 'CARTE_IDENTITE', 'DIPLOME']);
   });
 
   test('ORTHOPHONISTE libérale → ADELI + RCP + RIB + URSSAF', () => {
     const docs = docsVisibles(rows, 'ORTHOPHONISTE', 'LIBERAL');
     expect(docs).toEqual([
-      'ATTESTATION_URSSAF', 'CARTE_IDENTITE', 'DIPLOME', 'RCP_ASSURANCE', 'RIB', 'RPPS_ADELI',
+      'ATTESTATION_URSSAF', 'AUTORISATION_EXERCICE', 'CARTE_IDENTITE', 'DIPLOME', 'RCP_ASSURANCE', 'RIB', 'RPPS_ADELI',
     ]);
   });
 
@@ -107,7 +107,11 @@ test.describe('Matrice documents requis par profession + exercice', () => {
     expect(kbis).toHaveLength(0);
   });
 
-  test('Tous les documents de la matrice sont est_critique=true', () => {
-    expect(rows.every((d) => d.est_critique === true)).toBe(true);
+  test('Critique partout sauf AUTORISATION_EXERCICE (optionnelle by design)', () => {
+    const critiques = rows.filter((d) => d.type_document !== 'AUTORISATION_EXERCICE');
+    expect(critiques.every((d) => d.est_critique === true)).toBe(true);
+    const autorisations = rows.filter((d) => d.type_document === 'AUTORISATION_EXERCICE');
+    expect(autorisations.length).toBeGreaterThan(0);
+    expect(autorisations.every((d) => d.est_critique === false)).toBe(true);
   });
 });

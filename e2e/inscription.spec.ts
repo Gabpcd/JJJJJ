@@ -69,7 +69,8 @@ test.describe('Inscription établissement', () => {
   test('charge le wizard étab étape 1', async ({ page }) => {
     await page.goto('/inscription/etablissement');
     // Le SIRET est demandé à l'étape 2 du wizard. À l'étape 1 on a email/password.
-    await expect(page.getByText('Étape 1', { exact: false })).toBeVisible({ timeout: 8_000 });
+    // .first() : « Étape 1 » apparaît 2× sur la page étab (stepper + titre de section)
+    await expect(page.getByText('Étape 1', { exact: false }).first()).toBeVisible({ timeout: 8_000 });
     await expect(page.locator('input[type="email"]')).toBeVisible();
   });
 });
