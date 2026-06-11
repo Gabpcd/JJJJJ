@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(*)",
+      "mcp__github__*",
+      "mcp__65ed87b7-47a8-49ec-8fe7-4c9878ff07fa__*",
+      "mcp__39d1a2e0-75ba-4df9-94e8-4d8cc9c0448c__*",
+      "mcp__db89e77a-515c-43f8-b6a2-3815996ca538__*",
+      "mcp__6cdf8bb5-a2e9-40fd-82f8-fb7f5c8bf9a5__*",
+      "mcp__ea5e40e6-801d-45cc-a22b-2e9eaf9ec4b6__*"
+    ]
+  }
+}
