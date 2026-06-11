@@ -920,6 +920,25 @@ function EnvoiMasseBar({ cible }: { cible: 'ETABLISSEMENT' | 'SOIGNANT' }) {
   const [aEnvoyer, setAEnvoyer] = useState<number | null>(null);
   const [template, setTemplate] = useState<{ sujet: string; contenu: string } | null>(null);
   const [envoi, setEnvoi] = useState(false);
+  const [enrichissement, setEnrichissement] = useState(false);
+
+  // Enrichissement Annuaire Santé (FHIR ANS) : remplit email/telephone depuis
+  // le registre officiel — étabs par FINESS (exact), soignants par nom+prénom
+  // (match non ambigu uniquement). 40 fiches par clic, relançable.
+  const enrichir = async () => {
+    setEnrichissement(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('enrich-prospects-annuaire', {
+        body: { cible },
+      });
+      if (error || (data as any)?.error) { toast.error((data as any)?.error || 'Enrichissement impossible.'); return; }
+      const d = data as any;
+      toast.success(`🔎 ${d.traites} fiche(s) passée(s) à l'Annuaire Santé : ${d.emails} email(s) + ${d.telephones} téléphone(s) trouvés${d.ambigus ? ` · ${d.ambigus} homonyme(s) ignoré(s) par sécurité` : ''}${d.restants ? ` — ${d.restants.toLocaleString('fr-FR')} restantes, recliquez pour continuer` : ''}`);
+      chargerEtat();
+    } finally {
+      setEnrichissement(false);
+    }
+  };
 
   const table = cible === 'ETABLISSEMENT' ? 'prospects_etablissements' : 'prospects_soignants';
 
@@ -962,6 +981,16 @@ function EnvoiMasseBar({ cible }: { cible: 'ETABLISSEMENT' | 'SOIGNANT' }) {
         {aEnvoyer === 0 && ' Saisissez les emails pendant vos appels (bouton + Email sur chaque carte) — ils apparaîtront ici.'}
         {!template && ' ⚠️ Aucun template trouvé (onglet Modèles).'}
       </p>
+      <BoutonY2K
+        size="sm"
+        variant="secondary"
+        onClick={enrichir}
+        disabled={enrichissement}
+        loading={enrichissement}
+        className="whitespace-nowrap"
+      >
+        🔎 Enrichir (Annuaire Santé)
+      </BoutonY2K>
       <BoutonY2K
         size="sm"
         onClick={envoyerTous}
