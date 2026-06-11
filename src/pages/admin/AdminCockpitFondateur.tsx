@@ -8,11 +8,39 @@ import { CarteKPIY2K } from '@/components/y2k/CarteKPIY2K';
 import { CardY2K, CardY2KHeader, CardY2KTitle, CardY2KContent } from '@/components/y2k/CardY2K';
 import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { BadgeY2K } from '@/components/y2k/BadgeY2K';
-import { Users, Building2, TrendingUp, DollarSign, Target, Zap, Rocket, Calculator, RefreshCw, UserPlus, Percent } from 'lucide-react';
+import { Users, Building2, TrendingUp, DollarSign, Target, Zap, Rocket, Calculator, RefreshCw, UserPlus, Percent, X, Loader2, ChevronRight } from 'lucide-react';
 import { BarChart, Bar, LineChart, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 
 const fmt = (v: number) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(v);
 const fmtK = (v: number) => v >= 1000 ? `${(v / 1000).toFixed(1)}k` : String(v);
+
+/** Bornes [début, fin) d'un mois 'YYYY-MM' pour les requêtes de drill-down. */
+function bornesMois(mois: string): { debut: string; fin: string } {
+  const [a, m] = mois.split('-').map(Number);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const fin = m === 12 ? `${a + 1}-01` : `${a}-${pad(m + 1)}`;
+  return { debut: `${mois}-01`, fin: `${fin}-01` };
+}
+
+const fmtMoisLong = (mois: string) => {
+  const [a, m] = mois.split('-').map(Number);
+  return new Intl.DateTimeFormat('fr-FR', { month: 'long', year: 'numeric' }).format(new Date(a, m - 1, 1));
+};
+
+type Drill =
+  | { type: 'acquisition'; mois: string }
+  | { type: 'revenue'; mois: string };
+
+interface DrillAcquisition {
+  soignants: { id: string; prenom: string | null; nom: string | null; profession: string | null }[];
+  etablissements: { id: string; nom: string; type: string | null }[];
+}
+interface DrillRevenueLigne {
+  etablissement_id: string;
+  nom: string;
+  nbMissions: number;
+  totalHT: number;
+}
 
 const CHARGES_FIXES_MENSUELLES = [
   { label: 'Supabase', montant: 25 },
@@ -29,6 +57,62 @@ export default function AdminCockpitFondateur() {
   const [data, setData] = useState<any>(null);
   const [equipe, setEquipe] = useState<any[]>([]);
   const [pipeline, setPipeline] = useState<any[]>([]);
+
+  // Drill-down par graphique (Session D) : clic sur un mois → détail sous le graphe
+  const [drill, setDrill] = useState<Drill | null>(null);
+  const [drillLoading, setDrillLoading] = useState(false);
+  const [drillAcq, setDrillAcq] = useState<DrillAcquisition | null>(null);
+  const [drillRev, setDrillRev] = useState<DrillRevenueLigne[] | null>(null);
+
+  const ouvrirDrill = async (d: Drill) => {
+    if (drill && drill.type === d.type && drill.mois === d.mois) { setDrill(null); return; }
+    setDrill(d);
+    setDrillLoading(true);
+    setDrillAcq(null);
+    setDrillRev(null);
+    const { debut, fin } = bornesMois(d.mois);
+
+    if (d.type === 'acquisition') {
+      const [resSg, resEt] = await Promise.all([
+        supabase.from('soignants')
+          .select('id, prenom, nom, profession')
+          .gte('cree_le', debut).lt('cree_le', fin)
+          .order('cree_le', { ascending: false })
+          .limit(50),
+        supabase.from('etablissements')
+          .select('id, nom, type')
+          .gte('cree_le', debut).lt('cree_le', fin)
+          .is('supprime_le', null)
+          .order('cree_le', { ascending: false })
+          .limit(50),
+      ]);
+      setDrillAcq({
+        soignants: (resSg.data as any[]) ?? [],
+        etablissements: (resEt.data as any[]) ?? [],
+      });
+    } else {
+      const { data: missions } = await supabase.from('missions')
+        .select('etablissement_id, montant_commission_ht, etablissements(nom)')
+        .eq('statut', 'TERMINEE')
+        .not('montant_commission_ht', 'is', null)
+        .gte('debut_le', debut).lt('debut_le', fin)
+        .limit(1000);
+      const parEtab = new Map<string, DrillRevenueLigne>();
+      for (const m of (missions as any[]) ?? []) {
+        const ligne = parEtab.get(m.etablissement_id) ?? {
+          etablissement_id: m.etablissement_id,
+          nom: m.etablissements?.nom ?? '—',
+          nbMissions: 0,
+          totalHT: 0,
+        };
+        ligne.nbMissions += 1;
+        ligne.totalHT += Number(m.montant_commission_ht) || 0;
+        parEtab.set(m.etablissement_id, ligne);
+      }
+      setDrillRev([...parEtab.values()].sort((a, b) => b.totalHT - a.totalHT));
+    }
+    setDrillLoading(false);
+  };
 
   const charger = async () => {
     setLoading(true);
@@ -172,10 +256,14 @@ export default function AdminCockpitFondateur() {
           <CardY2K hoverLift={false}>
             <CardY2KHeader>
               <CardY2KTitle className="text-sm">Acquisition mensuelle</CardY2KTitle>
+              <p className="text-[11px] text-muted-foreground">Cliquez sur un mois pour voir qui s'est inscrit</p>
             </CardY2KHeader>
             <CardY2KContent>
-              <ResponsiveContainer width="100%" height={220}>
-                <BarChart data={acqData}>
+              <ResponsiveContainer width="100%" height={220} className="cursor-pointer">
+                <BarChart
+                  data={acqData}
+                  onClick={(state: any) => { if (state?.activeLabel) ouvrirDrill({ type: 'acquisition', mois: state.activeLabel }); }}
+                >
                   <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
                   <XAxis dataKey="mois" tick={{ fontSize: 11 }} />
                   <YAxis tick={{ fontSize: 11 }} />
@@ -185,6 +273,54 @@ export default function AdminCockpitFondateur() {
                   <Bar dataKey="etablissements" name="Établissements" fill="hsl(var(--jolene-mauve-500, 270 60% 55%))" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
+              {drill?.type === 'acquisition' && (
+                <div className="mt-3 rounded-lg border border-primary/20 bg-primary/5 p-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-xs font-semibold text-foreground">Inscriptions de {fmtMoisLong(drill.mois)}</p>
+                    <button onClick={() => setDrill(null)} aria-label="Fermer le détail" className="p-1 text-muted-foreground hover:text-foreground">
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                  {drillLoading ? (
+                    <div className="flex justify-center py-4"><Loader2 className="h-4 w-4 animate-spin text-primary" /></div>
+                  ) : drillAcq && (drillAcq.soignants.length > 0 || drillAcq.etablissements.length > 0) ? (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-56 overflow-y-auto">
+                      <div>
+                        <p className="text-[11px] font-medium text-muted-foreground mb-1">Soignants ({drillAcq.soignants.length})</p>
+                        <ul className="space-y-0.5">
+                          {drillAcq.soignants.map(s => (
+                            <li key={s.id}>
+                              <button
+                                onClick={() => navigate(`/admin/utilisateurs/${s.id}`)}
+                                className="text-xs text-primary hover:underline inline-flex items-center gap-0.5 text-left"
+                              >
+                                {s.prenom} {s.nom}{s.profession ? ` — ${s.profession}` : ''} <ChevronRight className="h-3 w-3 shrink-0" />
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                      <div>
+                        <p className="text-[11px] font-medium text-muted-foreground mb-1">Établissements ({drillAcq.etablissements.length})</p>
+                        <ul className="space-y-0.5">
+                          {drillAcq.etablissements.map(e => (
+                            <li key={e.id}>
+                              <button
+                                onClick={() => navigate(`/admin/utilisateurs/${e.id}`)}
+                                className="text-xs text-primary hover:underline inline-flex items-center gap-0.5 text-left"
+                              >
+                                {e.nom}{e.type ? ` — ${e.type}` : ''} <ChevronRight className="h-3 w-3 shrink-0" />
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-muted-foreground py-2">Aucune inscription ce mois-ci.</p>
+                  )}
+                </div>
+              )}
             </CardY2KContent>
           </CardY2K>
 
@@ -192,10 +328,14 @@ export default function AdminCockpitFondateur() {
           <CardY2K hoverLift={false}>
             <CardY2KHeader>
               <CardY2KTitle className="text-sm">Revenue mensuel (commissions HT)</CardY2KTitle>
+              <p className="text-[11px] text-muted-foreground">Cliquez sur un mois pour voir le détail par établissement</p>
             </CardY2KHeader>
             <CardY2KContent>
-              <ResponsiveContainer width="100%" height={220}>
-                <AreaChart data={revData}>
+              <ResponsiveContainer width="100%" height={220} className="cursor-pointer">
+                <AreaChart
+                  data={revData}
+                  onClick={(state: any) => { if (state?.activeLabel) ouvrirDrill({ type: 'revenue', mois: state.activeLabel }); }}
+                >
                   <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
                   <XAxis dataKey="mois" tick={{ fontSize: 11 }} />
                   <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => fmtK(v)} />
@@ -203,6 +343,37 @@ export default function AdminCockpitFondateur() {
                   <Area dataKey="revenue_ht" name="Revenue HT" fill="hsl(var(--primary))" fillOpacity={0.3} stroke="hsl(var(--primary))" />
                 </AreaChart>
               </ResponsiveContainer>
+              {drill?.type === 'revenue' && (
+                <div className="mt-3 rounded-lg border border-primary/20 bg-primary/5 p-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-xs font-semibold text-foreground">Commissions de {fmtMoisLong(drill.mois)} par établissement</p>
+                    <button onClick={() => setDrill(null)} aria-label="Fermer le détail" className="p-1 text-muted-foreground hover:text-foreground">
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                  {drillLoading ? (
+                    <div className="flex justify-center py-4"><Loader2 className="h-4 w-4 animate-spin text-primary" /></div>
+                  ) : drillRev && drillRev.length > 0 ? (
+                    <ul className="space-y-1 max-h-56 overflow-y-auto">
+                      {drillRev.map(l => (
+                        <li key={l.etablissement_id} className="flex items-center justify-between gap-2">
+                          <button
+                            onClick={() => navigate(`/admin/utilisateurs/${l.etablissement_id}`)}
+                            className="text-xs text-primary hover:underline inline-flex items-center gap-0.5 text-left min-w-0 truncate"
+                          >
+                            {l.nom} <ChevronRight className="h-3 w-3 shrink-0" />
+                          </button>
+                          <span className="text-xs text-foreground font-medium whitespace-nowrap">
+                            {fmt(l.totalHT)} <span className="text-muted-foreground font-normal">· {l.nbMissions} mission{l.nbMissions > 1 ? 's' : ''}</span>
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="text-xs text-muted-foreground py-2">Aucune commission ce mois-ci.</p>
+                  )}
+                </div>
+              )}
             </CardY2KContent>
           </CardY2K>
         </div>
