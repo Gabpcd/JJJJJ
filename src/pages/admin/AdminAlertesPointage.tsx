@@ -35,9 +35,20 @@ const PAR_PAGE = 50;
 const DECISIONS = [
   { value: 'LEGITIME', label: '✅ Légitime (faux positif)', description: 'Pas de fraude, alerte fermée sans sanction' },
   { value: 'FRAUDE_AVERTISSEMENT', label: '⚠️ Fraude — avertissement', description: 'Note la fraude, avertit le soignant, pas de suspension' },
-  { value: 'FRAUDE_SUSPENSION_PROPOSEE', label: '🚫 Fraude — proposer suspension', description: 'Création task admin pour suspension manuelle' },
+  { value: 'FRAUDE_SUSPENSION_PROPOSEE', label: '🚫 Fraude — proposer suspension', description: 'Une tâche est créée pour que l\'équipe procède à la suspension manuellement' },
   { value: 'IGNORER', label: '🗑️ Ignorer', description: 'Faible importance, alerte fermée' },
 ];
+
+const LIBELLES_SEVERITE: Record<string, string> = {
+  CRITICAL: 'Critique',
+  WARNING: 'Avertissement',
+  INFO: 'Information',
+};
+
+const LIBELLES_TYPE_ALERTE: Record<string, string> = {
+  TELEPORTATION_DETECTED: 'Téléportation',
+  POINTAGE_INCOHERENT: 'Pointage incohérent',
+};
 
 export default function AdminAlertesPointage() {
   usePageTitle('Admin · Alertes pointage');
@@ -87,7 +98,7 @@ export default function AdminAlertesPointage() {
           <AlertTriangle className="h-6 w-6 text-warning" /> Alertes pointage anti-triche
         </h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Détections Sprint 4.5 : téléportation, mock GPS, cohérence temporelle. Décision admin manuelle.
+          Alertes détectées automatiquement : téléportation, position GPS falsifiée, incohérence temporelle. Chaque alerte nécessite votre décision.
         </p>
       </div>
 
@@ -166,25 +177,22 @@ export default function AdminAlertesPointage() {
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2 mb-1">
                   <BadgeY2K variant={a.severite === 'CRITICAL' ? 'error' : a.severite === 'WARNING' ? 'warning' : 'info'} size="sm">
-                    {a.severite}
+                    {LIBELLES_SEVERITE[a.severite] ?? a.severite}
                   </BadgeY2K>
-                  <span className="text-xs font-mono text-muted-foreground">{a.type_alerte}</span>
+                  <span className="text-xs text-muted-foreground">{LIBELLES_TYPE_ALERTE[a.type_alerte] ?? a.type_alerte}</span>
                   {a.resolu_le && <span className="text-[11px] text-success">✓ Résolue</span>}
                 </div>
                 <p className="text-sm text-foreground">{a.message}</p>
                 <p className="text-[11px] text-muted-foreground mt-1">
                   {format(new Date(a.cree_le), 'dd MMM yyyy HH:mm:ss', { locale: fr })}
-                  {' · '}
-                  source : <code className="text-[10px]">{a.source}</code>
                 </p>
-                {a.details && (
-                  <details className="mt-2">
-                    <summary className="text-[11px] cursor-pointer text-primary hover:underline">Détails techniques</summary>
-                    <pre className="text-[10px] font-mono bg-muted/30 p-2 rounded-lg mt-1 overflow-x-auto">
-                      {JSON.stringify(a.details, null, 2)}
-                    </pre>
-                  </details>
-                )}
+                <details className="mt-2">
+                  <summary className="text-[11px] cursor-pointer text-primary hover:underline">Détails techniques</summary>
+                  <pre className="text-[10px] font-mono bg-muted/30 p-2 rounded-lg mt-1 overflow-x-auto">
+                    {`source : ${a.source}`}
+                    {a.details ? `\n${JSON.stringify(a.details, null, 2)}` : ''}
+                  </pre>
+                </details>
               </div>
               {!a.resolu_le && (
                 <BoutonY2K variant="primary" size="sm" onClick={() => setAlerteATraiter(a)} className="shrink-0">
@@ -303,7 +311,7 @@ function ModaleTraiterAlerte({ alerte, onFermer, onTraitee }: { alerte: Alerte; 
             onChange={(e) => setMotif(e.target.value)}
             className="input-base"
             rows={3}
-            placeholder="Justification de la décision (audit trail)…"
+            placeholder="Justification de la décision (conservée pour traçabilité)…"
             disabled={loading}
           />
           <span className="text-[10px] text-muted-foreground">{motif.length} / 10+</span>

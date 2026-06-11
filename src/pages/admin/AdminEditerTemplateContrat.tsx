@@ -21,6 +21,29 @@ interface Template {
   modifie_le: string;
 }
 
+/** Libellés français des types de contrat de template (la valeur brute reste celle envoyée aux RPCs). */
+const LIBELLES_TYPE_CONTRAT: Record<string, string> = {
+  REMPLACEMENT_LIBERAL: 'Remplacement libéral',
+  LIBERAL: 'Libéral',
+  CDD: 'CDD',
+  CDDU: "CDD d'usage",
+  CDDU_USAGE: "CDD d'usage",
+  VACATION: 'Vacation',
+  SALARIE: 'Salarié',
+  LIBERAL_MEDECIN_CLINIQUE: 'Libéral — médecin en clinique',
+  LIBERAL_MEDECIN_EHPAD: 'Libéral — médecin en EHPAD',
+  LIBERAL_MEDECIN_CABINET: 'Libéral — médecin en cabinet',
+  LIBERAL_SAGE_FEMME_CLINIQUE: 'Libéral — sage-femme en clinique',
+  LIBERAL_KINE_CLINIQUE: 'Libéral — kinésithérapeute en clinique',
+  LIBERAL_ORTHOPHONISTE_CABINET: 'Libéral — orthophoniste en cabinet',
+  LIBERAL_ERGOTHERAPEUTE_CABINET: 'Libéral — ergothérapeute en cabinet',
+  LIBERAL_PSYCHOMOTRICIEN_CABINET: 'Libéral — psychomotricien en cabinet',
+};
+
+function libelleTypeContrat(type: string): string {
+  return LIBELLES_TYPE_CONTRAT[type] || type.replace(/_/g, ' ').toLowerCase();
+}
+
 const VARIABLES_DISPONIBLES = [
   '{{soignant_nom}}',
   '{{soignant_prenom}}',
@@ -113,7 +136,7 @@ export default function AdminEditerTemplateContrat() {
         <div>
           <h1 className="text-2xl font-bold text-foreground">Éditer le template</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Type <code>{template.type_contrat}</code> · Version actuelle <strong>v{template.version}</strong>
+            Type <strong>{libelleTypeContrat(template.type_contrat)}</strong> · Version actuelle <strong>v{template.version}</strong>
           </p>
         </div>
         <BoutonY2K

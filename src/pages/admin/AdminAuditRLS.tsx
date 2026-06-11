@@ -46,17 +46,6 @@ type AuditRLSResult = {
   executed_at: string;
 };
 
-function libelleProbleme(type: string): string {
-  switch (type) {
-    case 'RLS_DESACTIVEE':
-      return 'RLS désactivée';
-    case 'RLS_ACTIVE_SANS_POLICY':
-      return 'RLS active sans policy';
-    default:
-      return type;
-  }
-}
-
 function badgeProbleme(type: string) {
   switch (type) {
     case 'RLS_DESACTIVEE':
@@ -126,7 +115,7 @@ export default function AdminAuditRLS() {
             </h1>
             <p className="text-sm text-muted-foreground mt-1">
               Vérification automatique de la sécurité Row-Level Security sur toutes les
-              tables publiques. Sprint 3 — <code>fn_audit_rls_strict</code>.
+              tables publiques.
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -137,7 +126,7 @@ export default function AdminAuditRLS() {
               disabled={refreshing || isLoading}
               iconeGauche={<RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />}
             >
-              Rerun audit
+              Relancer l'audit
             </BoutonY2K>
             <BoutonY2K
               variant="secondary"
@@ -157,7 +146,7 @@ export default function AdminAuditRLS() {
             <AlertTriangle className="h-4 w-4" />
             <AlertTitle>Impossible d'exécuter l'audit</AlertTitle>
             <AlertDescription>
-              {(error as Error)?.message ?? 'Erreur inconnue côté RPC.'}
+              {(error as Error)?.message ?? "Erreur inconnue lors de l'exécution de l'audit."}
             </AlertDescription>
           </Alert>
         )}
@@ -329,9 +318,8 @@ export default function AdminAuditRLS() {
           <ShieldCheck className="h-4 w-4" />
           <AlertTitle>À propos de cet audit</AlertTitle>
           <AlertDescription className="text-xs leading-relaxed">
-            La RPC <code>fn_audit_rls_strict</code> est exécutée côté serveur avec
-            les droits ADMIN_PLATEFORME. Elle parcourt toutes les tables du schéma{' '}
-            <code>public</code> et signale :
+            L'audit est exécuté côté serveur avec les droits ADMIN_PLATEFORME. Il
+            parcourt toutes les tables du schéma <code>public</code> et signale :
             <ul className="list-disc ml-5 mt-1 space-y-0.5">
               <li>
                 <strong>RLS désactivée</strong> : la table accepte des lectures /

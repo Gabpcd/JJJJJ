@@ -34,6 +34,28 @@ const EXPORT_LIMIT = 500;
 
 const ACTIONS_RGPD = ['RGPD_SUPPRESSION_COMPTE', 'RGPD_EXPORT_DONNEES'];
 
+// Libellés français pour l'affichage uniquement — les valeurs brutes restent
+// utilisées dans les requêtes et l'export JSON.
+const LIBELLES_ACTION: Record<string, string> = {
+  RGPD_SUPPRESSION_COMPTE: 'Suppression de compte',
+  RGPD_EXPORT_DONNEES: 'Export de données',
+};
+
+const LIBELLES_TYPE_ACTEUR: Record<string, string> = {
+  SOIGNANT: 'Soignant',
+  ADMIN_ETABLISSEMENT: 'Admin établissement',
+  ADMIN_PLATEFORME: 'Admin plateforme',
+  SYSTEME: 'Système',
+};
+
+const LIBELLES_TYPE_RESSOURCE: Record<string, string> = {
+  soignant: 'Soignant',
+  etablissement: 'Établissement',
+};
+
+const libelle = (map: Record<string, string>, valeur: string | null | undefined) =>
+  valeur ? (map[valeur] ?? valeur) : '—';
+
 export default function AdminRGPDTools() {
   usePageTitle('Outils RGPD');
 
@@ -117,14 +139,15 @@ export default function AdminRGPDTools() {
         },
       );
       if (error) {
-        // Cas attendu si la RPC n'est pas encore déployée
+        console.error('Erreur fn_admin_force_supprimer_compte :', error);
+        // Cas attendu si la fonction n'est pas encore déployée
         if (error.message?.toLowerCase().includes('does not exist') ||
             error.code === '42883' || error.code === 'PGRST202') {
           toast.error(
-            'RPC fn_admin_force_supprimer_compte non déployée. À créer Sprint 8.',
+            'La suppression forcée de compte n\'est pas encore disponible. Aucun compte n\'a été supprimé.',
           );
         } else {
-          toast.error(`Erreur RPC : ${error.message}`);
+          toast.error('La suppression a échoué. Aucun compte n\'a été supprimé. Veuillez réessayer.');
         }
         return;
       }
@@ -221,17 +244,17 @@ export default function AdminRGPDTools() {
                             variant={d.action === 'RGPD_SUPPRESSION_COMPTE' ? 'error' : 'info'}
                             size="sm"
                           >
-                            {d.action}
+                            {libelle(LIBELLES_ACTION, d.action)}
                           </BadgeY2K>
                         </td>
                         <td className="py-2 px-3 text-xs text-muted-foreground">
-                          <span className="font-mono">{d.type_acteur}</span>
+                          <span>{libelle(LIBELLES_TYPE_ACTEUR, d.type_acteur)}</span>
                           <p className="text-[10px] text-muted-foreground/60 font-mono truncate max-w-[140px]">
                             {d.acteur_id?.slice(0, 8)}…
                           </p>
                         </td>
                         <td className="py-2 px-3 text-xs text-muted-foreground">
-                          <span>{d.type_ressource}</span>
+                          <span>{libelle(LIBELLES_TYPE_RESSOURCE, d.type_ressource)}</span>
                           {d.id_ressource && (
                             <p className="text-[10px] text-muted-foreground/60 font-mono truncate max-w-[140px]">
                               {d.id_ressource?.slice(0, 8)}…
@@ -254,7 +277,7 @@ export default function AdminRGPDTools() {
                         size="sm"
                         className="shrink-0"
                       >
-                        {d.action}
+                        {libelle(LIBELLES_ACTION, d.action)}
                       </BadgeY2K>
                       <span className="text-[10px] text-muted-foreground whitespace-nowrap">
                         {d.cree_le ? format(new Date(d.cree_le), 'dd/MM/yy HH:mm', { locale: fr }) : '—'}
@@ -263,12 +286,12 @@ export default function AdminRGPDTools() {
                     <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
                       <div>
                         <p className="text-muted-foreground">Acteur</p>
-                        <p className="font-mono text-foreground">{d.type_acteur}</p>
+                        <p className="text-foreground">{libelle(LIBELLES_TYPE_ACTEUR, d.type_acteur)}</p>
                         <p className="text-[10px] text-muted-foreground/60 font-mono">{d.acteur_id?.slice(0, 8)}…</p>
                       </div>
                       <div>
                         <p className="text-muted-foreground">Ressource</p>
-                        <p className="text-foreground">{d.type_ressource}</p>
+                        <p className="text-foreground">{libelle(LIBELLES_TYPE_RESSOURCE, d.type_ressource)}</p>
                         {d.id_ressource && (
                           <p className="text-[10px] text-muted-foreground/60 font-mono">{d.id_ressource?.slice(0, 8)}…</p>
                         )}
@@ -384,8 +407,8 @@ export default function AdminRGPDTools() {
             </BoutonY2K>
 
             <p className="text-[11px] text-muted-foreground">
-              Note : la RPC <code>fn_admin_force_supprimer_compte</code> sera créée Sprint 8 si nécessaire. En attendant,
-              cette action renvoie une erreur explicite.
+              Note : si la suppression forcée n'est pas encore disponible sur la plateforme, cette action affiche
+              une erreur explicite et aucun compte n'est supprimé.
             </p>
           </div>
         </CardY2K>

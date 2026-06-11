@@ -29,6 +29,44 @@ interface Reclamation {
   jours_attente: number;
 }
 
+/** Libellés français des types de profil concernés (valeurs techniques inchangées côté RPC). */
+const LIBELLES_EVENEMENT_TYPE: Record<Reclamation['evenement_type'], string> = {
+  SOIGNANT: 'Soignant',
+  ETAB: 'Établissement',
+};
+
+/** Libellés français des types d'événement score (cf. CHECK en base). */
+const LIBELLES_TYPE_EVENEMENT: Record<string, string> = {
+  // Événements soignant
+  ANNULATION_12_24H: 'Annulation entre 12h et 24h avant la mission',
+  ANNULATION_1_12H: 'Annulation entre 1h et 12h avant la mission',
+  ASAP_ANNULEE_APRES_FENETRE: 'Mission urgente annulée hors délai',
+  NO_SHOW: 'Absence non signalée',
+  LITIGE_TORT_RECONNU: 'Litige avec tort reconnu',
+  NOTE_BASSE_RECUE: 'Note basse reçue',
+  EVALUATION_NEGATIVE: 'Évaluation négative',
+  BONUS_AMBASSADEUR: 'Bonus ambassadeur',
+  BONUS_FIDELITE: 'Bonus fidélité',
+  // Événements établissement
+  ANNULATION_AVANT_CONTRAT: 'Annulation avant signature du contrat',
+  ANNULATION_CDD_SIGNE: 'Annulation après CDD signé',
+  ANNULATION_LIBERAL_SIGNE: 'Annulation après contrat libéral signé',
+  ANNULATION_APRES_POINTAGE: 'Annulation après pointage',
+  PAIEMENT_RETARD: 'Paiement en retard',
+  AUTRE: 'Autre',
+};
+
+function libelleTypeEvenement(type: string): string {
+  return LIBELLES_TYPE_EVENEMENT[type] ?? type;
+}
+
+/** Libellés français des décisions admin affichées en badge. */
+const LIBELLES_DECISION: Record<NonNullable<Reclamation['decision_admin']>, string> = {
+  MAINTENIR: 'Pénalité maintenue',
+  REDUIRE: 'Pénalité réduite',
+  ANNULER: 'Pénalité annulée',
+};
+
 /**
  * Page admin /admin/reclamations-score (PR 8 Sprint 3.5).
  *
@@ -93,8 +131,8 @@ export default function AdminReclamationsScore() {
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-xs font-mono bg-muted px-1.5 py-0.5 rounded">{r.evenement_type}</span>
-                      <span className="font-semibold text-foreground">{r.event_type_evenement}</span>
+                      <span className="text-xs font-mono bg-muted px-1.5 py-0.5 rounded">{LIBELLES_EVENEMENT_TYPE[r.evenement_type] ?? r.evenement_type}</span>
+                      <span className="font-semibold text-foreground">{libelleTypeEvenement(r.event_type_evenement)}</span>
                       <span className="font-mono text-destructive">{r.event_points} pts</span>
                       {r.statut === 'PENDING' && (
                         <BadgeY2K variant={r.jours_attente > 7 ? 'error' : 'warning'} size="sm">
@@ -106,12 +144,12 @@ export default function AdminReclamationsScore() {
                           variant={r.decision_admin === 'ANNULER' ? 'success' : r.decision_admin === 'REDUIRE' ? 'info' : 'info'}
                           size="sm"
                         >
-                          {r.decision_admin}
+                          {LIBELLES_DECISION[r.decision_admin]}
                         </BadgeY2K>
                       )}
                     </div>
                     <p className="text-xs text-muted-foreground mt-1">
-                      <strong>Event :</strong> {r.event_motif}
+                      <strong>Événement :</strong> {r.event_motif}
                     </p>
                     <p className="text-xs text-muted-foreground mt-1">
                       <strong>Motif réclamation :</strong> {r.motif_categorie}
@@ -233,7 +271,7 @@ function ModaleDecision({ reclamation, onFermer, onTraitee }: {
         )}
 
         <label className="block">
-          <span className="text-xs font-medium mb-1 block">Motif admin * (min 10 chars, visible par l'user)</span>
+          <span className="text-xs font-medium mb-1 block">Motif admin * (minimum 10 caractères, visible par l'utilisateur)</span>
           <textarea value={motifAdmin} onChange={e => setMotifAdmin(e.target.value)} className="input-base" rows={3}
             placeholder="Ex: Certif médical fourni est conforme, justification valide..." />
         </label>

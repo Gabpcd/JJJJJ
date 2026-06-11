@@ -119,8 +119,12 @@ export default function AdminEquipe() {
       err = rpcErr;
     }
     setSaving(false);
-    if (err) { toast.error(`Erreur : ${err.message}`); return; }
-    toast.success(editMembre.id ? 'Membre mis à jour.' : 'Compte employé créé (auth + accès).');
+    if (err) {
+      console.error('Erreur sauvegarde membre équipe :', err);
+      toast.error("Une erreur est survenue lors de l'enregistrement. Veuillez réessayer.");
+      return;
+    }
+    toast.success(editMembre.id ? 'Membre mis à jour.' : 'Compte et accès créés.');
     setShowForm(false);
     setEditMembre(null);
     charger();
@@ -128,7 +132,11 @@ export default function AdminEquipe() {
 
   const desactiver = async (id: string) => {
     const { error } = await supabase.from('equipe_admin' as any).update({ actif: false, maj_le: new Date().toISOString() } as any).eq('id', id);
-    if (error) { toast.error(error.message); return; }
+    if (error) {
+      console.error('Erreur désactivation membre équipe :', error);
+      toast.error('Une erreur est survenue lors de la désactivation. Veuillez réessayer.');
+      return;
+    }
     toast.success('Membre désactivé.');
     charger();
   };

@@ -31,6 +31,26 @@ const DONNEES_FICTIVES: Record<string, Record<string, string>> = {
 
 const TEMPLATES = Object.keys(DONNEES_FICTIVES);
 
+// Libellés français affichés à côté des identifiants techniques de templates
+const LIBELLES_TEMPLATES: Record<string, string> = {
+  BIENVENUE_SOIGNANT: 'Bienvenue soignant',
+  BIENVENUE_ETABLISSEMENT: 'Bienvenue établissement',
+  MISSION_ACCEPTEE_SOIGNANT: 'Mission acceptée (soignant)',
+  MISSION_ACCEPTEE_ETABLISSEMENT: 'Mission acceptée (établissement)',
+  MISSION_ANNULEE_SOIGNANT: 'Mission annulée (soignant)',
+  MISSION_ANNULEE_ETABLISSEMENT: 'Mission annulée (établissement)',
+  CONTRAT_SIGNE: 'Contrat signé',
+  RAPPEL_POINTAGE: 'Rappel de pointage',
+  FACTURE_EMISE: 'Facture émise',
+  PAIEMENT_RECU: 'Paiement reçu',
+  DOCUMENT_EXPIRE: 'Document expiré',
+  EVALUATION_RECUE: 'Évaluation reçue',
+  RAPPEL_DPAE: 'Rappel DPAE',
+  LITIGE_OUVERT: 'Litige ouvert',
+};
+
+const libelleTemplate = (type: string) => LIBELLES_TEMPLATES[type] || type;
+
 function genererHtmlPreview(type: string, data: Record<string, string>): string {
   const vars = Object.entries(data).map(([k, v]) => `<tr><td style="padding:6px 14px;color:#64748b;font-size:13px">${k}</td><td style="padding:6px 14px;font-size:13px;color:#333">${v}</td></tr>`).join('');
   return `<!DOCTYPE html><html><head><meta charset="utf-8"/><style>
@@ -135,7 +155,12 @@ export default function AdminEmails() {
               renduCellule={(t, col) => {
                 switch (col.cle) {
                   case 'template':
-                    return <span className="font-mono text-sm">{t}</span>;
+                    return (
+                      <div>
+                        <p className="text-sm font-medium text-foreground">{libelleTemplate(t)}</p>
+                        <p className="font-mono text-xs text-muted-foreground">{t}</p>
+                      </div>
+                    );
                   case 'preview':
                     return (
                       <BoutonY2K
@@ -170,7 +195,10 @@ export default function AdminEmails() {
               }}
               renduCarte={(t) => (
                 <div className="space-y-3">
-                  <p className="font-mono text-sm break-all">{t}</p>
+                  <div>
+                    <p className="text-sm font-medium text-foreground">{libelleTemplate(t)}</p>
+                    <p className="font-mono text-xs text-muted-foreground break-all">{t}</p>
+                  </div>
                   <div className="grid grid-cols-2 gap-2">
                     <BoutonY2K
                       variant={previewType === t ? 'primary' : 'secondary'}
@@ -203,7 +231,7 @@ export default function AdminEmails() {
         {previewType && (
           <div className="space-y-2">
             <h2 className="text-lg font-semibold text-foreground">
-              Aperçu : <span className="font-mono text-primary">{previewType}</span>
+              Aperçu : {libelleTemplate(previewType)} <span className="font-mono text-sm text-primary">({previewType})</span>
             </h2>
             <div className="rounded-lg border border-border overflow-hidden bg-muted">
               <iframe
@@ -248,7 +276,12 @@ export default function AdminEmails() {
                     case 'date':
                       return <span className="text-sm">{formatDate(e.cree_le)}</span>;
                     case 'type':
-                      return <span className="font-mono text-xs">{e.type}</span>;
+                      return (
+                        <div>
+                          <p className="text-sm">{libelleTemplate(e.type)}</p>
+                          {LIBELLES_TEMPLATES[e.type] && <p className="font-mono text-[10px] text-muted-foreground">{e.type}</p>}
+                        </div>
+                      );
                     case 'destinataire':
                       return <span className="text-sm">{e.destinataire_email}</span>;
                     case 'statut':
@@ -260,7 +293,10 @@ export default function AdminEmails() {
                 renduCarte={(e: any) => (
                   <div className="space-y-2">
                     <div className="flex items-start justify-between gap-2">
-                      <span className="font-mono text-xs text-foreground break-all">{e.type}</span>
+                      <div className="min-w-0">
+                        <p className="text-sm text-foreground">{libelleTemplate(e.type)}</p>
+                        {LIBELLES_TEMPLATES[e.type] && <p className="font-mono text-[10px] text-muted-foreground break-all">{e.type}</p>}
+                      </div>
                       {statutBadge(e)}
                     </div>
                     <div className="text-xs text-muted-foreground space-y-0.5">

@@ -11,12 +11,13 @@ import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { logger } from '@/lib/logger';
 import { toast } from 'sonner';
+const SUPABASE_FUNCTIONS_URL = import.meta.env.VITE_SUPABASE_URL ? `${import.meta.env.VITE_SUPABASE_URL}/functions/v1` : '—';
 
 const ENDPOINTS = [
-  { method: 'GET', path: '/api-v1/missions', desc: 'Lister les missions de l\'établissement', example: '{ "data": [{ "id": "uuid", "intitule": "IDE Nuit", "debut_le": "2026-03-15T20:00:00Z", "statut": "OUVERTE" }] }' },
-  { method: 'POST', path: '/api-v1/missions', desc: 'Créer une nouvelle mission', example: '{ "data": { "id": "uuid", "intitule": "IDE Jour", "statut": "OUVERTE" } }' },
-  { method: 'GET', path: '/api-v1/presences', desc: 'Lister les pointages validés', example: '{ "data": [{ "id": "uuid", "mission_id": "uuid", "heure_arrivee": "07:00", "validee": true }] }' },
-  { method: 'GET', path: '/api-v1/factures', desc: 'Lister les factures émises', example: '{ "data": [{ "id": "uuid", "numero_facture": "SD-2026-001", "montant_ttc": 150.00, "statut": "PAYEE" }] }' },
+  { method: 'GET', path: '/api-v1/missions', desc: 'Lister les missions de l\'établissement', example: '{ "missions": [{ "id": "uuid", "intitule": "IDE Nuit", "debut_le": "2026-03-15T20:00:00Z", "statut": "OUVERTE" }], "count": 1 }' },
+  { method: 'POST', path: '/api-v1/missions', desc: 'Créer une nouvelle mission', example: '{ "mission": { "id": "uuid", "intitule": "IDE Jour", "statut": "OUVERTE" } }' },
+  { method: 'GET', path: '/api-v1/presences', desc: 'Lister les pointages validés', example: '{ "presences": [{ "id": "uuid", "mission_id": "uuid", "pointage_arrivee_le": "2026-03-15T07:00:00Z", "validee_par_etablissement": true }], "count": 1 }' },
+  { method: 'GET', path: '/api-v1/factures', desc: 'Lister les factures émises', example: '{ "factures": [{ "id": "uuid", "numero_facture": "SD-2026-001", "montant_ttc": 150.00, "statut": "PAYEE" }], "count": 1 }' },
 ];
 
 const PERMISSIONS = [
@@ -133,7 +134,7 @@ export default function AdminAPI() {
       {/* Documentation */}
       <CardY2K hoverLift={false} className="mb-6">
         <h2 className="font-bold text-foreground mb-4">📖 Endpoints disponibles</h2>
-        <p className="text-xs text-muted-foreground mb-4">Base URL : <code className="bg-muted px-2 py-0.5 rounded text-foreground">https://api.jolene.app/v1</code></p>
+        <p className="text-xs text-muted-foreground mb-4">Base URL : <code className="bg-muted px-2 py-0.5 rounded text-foreground">{SUPABASE_FUNCTIONS_URL}</code></p>
         <div className="space-y-4">
           {ENDPOINTS.map((ep, i) => (
             <div key={i} className="border border-border rounded-lg p-4">
