@@ -1,0 +1,27 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx tsc *)",
+      "Bash(npx vite *)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git push *)",
+      "Bash(git fetch *)",
+      "Bash(git checkout *)",
+      "Bash(git stash *)",
+      "Bash(npm install *)",
+      "Bash(until *)",
+      "Bash(sed -i *)",
+      "Bash(sed -n *)",
+      "Bash(wc -l *)",
+      "mcp__github__pull_request_read",
+      "mcp__github__create_pull_request",
+      "mcp__github__merge_pull_request",
+      "mcp__github__actions_list",
+      "mcp__github__actions_get",
+      "mcp__65ed87b7-47a8-49ec-8fe7-4c9878ff07fa__execute_sql",
+      "mcp__65ed87b7-47a8-49ec-8fe7-4c9878ff07fa__apply_migration",
+      "mcp__65ed87b7-47a8-49ec-8fe7-4c9878ff07fa__list_migrations"
+    ]
+  }
+}
