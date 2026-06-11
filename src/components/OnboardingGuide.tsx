@@ -37,7 +37,7 @@ const ETAPES_ETABLISSEMENT: Etape[] = [
   { id: 'candidatures', titre: 'Gérez les candidatures', description: 'Consultez les profils des soignants intéressés, leur score qualité, leurs notations. Acceptez en un clic, paiement Stripe Connect.', icone: Users },
   { id: 'contrat', titre: 'Signature contrat & DPAE', description: 'Une fois la candidature acceptée, le contrat se génère automatiquement. Signature OTP par SMS. DPAE pré-remplie pour copier sur net-entreprises.fr.', icone: FileSignature },
   { id: 'pointage', titre: 'Affichage QR pointage', description: 'Imprimez ou affichez le QR mission. Le soignant le scanne pour pointer. Vous suivez les pointages en temps réel et les alertes anti-triche.', icone: QrCode, lien: '/etablissement/presences', labelLien: 'Voir le pointage' },
-  { id: 'facturation', titre: 'Facturation & obligations', description: 'À la fin de chaque mission, validation des heures. Facturation automatique CDD ou libéral. Suivi des obligations financières.', icone: CreditCard, lien: '/etablissement/obligations', labelLien: 'Mes obligations' },
+  { id: 'facturation', titre: 'Facturation & obligations', description: 'À la fin de chaque mission, validation des heures. Facturation automatique CDD ou libéral. Suivi des obligations financières.', icone: CreditCard, lien: '/etablissement/facturation?tab=obligations', labelLien: 'Mes obligations' },
 ];
 
 const STORAGE_KEY = 'onboarding_complete';
