@@ -22,6 +22,13 @@ jobs:
     name: Playwright E2E (PR — Chromium)
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
+    # Conteneur officiel Playwright : navigateurs + dépendances système
+    # préinstallés. Indispensable : `npx playwright install --with-deps`
+    # hangait indéfiniment sur la phase apt des runners (job tué à 25 min).
+    # Le tag DOIT matcher la version résolue du lockfile (1.58.2).
+    container:
+      image: mcr.microsoft.com/playwright:v1.58.2-noble
+      options: --user 1001
     continue-on-error: true
     timeout-minutes: 25
     steps:
@@ -32,8 +39,6 @@ jobs:
           cache: 'npm'
       - name: Install dependencies
         run: npm ci
-      - name: Install Playwright browsers
-        run: npx playwright install --with-deps chromium
       - name: Build app
         run: npm run build
         env:
@@ -68,6 +73,11 @@ jobs:
     name: Playwright E2E (${{ matrix.project }})
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
+    # Conteneur officiel Playwright (chromium + firefox + webkit préinstallés,
+    # toutes deps système incluses). Tag = version résolue lockfile (1.58.2).
+    container:
+      image: mcr.microsoft.com/playwright:v1.58.2-noble
+      options: --user 1001
     timeout-minutes: 30
     strategy:
       fail-fast: false
@@ -86,17 +96,6 @@ jobs:
           cache: 'npm'
       - name: Install dependencies
         run: npm ci
-      - name: Install Playwright browsers
-        # Mapping projet → moteur browser :
-        #   chromium / mobile-pixel / tablet-ipad → Chromium
-        #   firefox → Firefox
-        #   webkit / mobile-iphone → WebKit (iPhone simulé utilise Safari)
-        run: |
-          case "${{ matrix.project }}" in
-            firefox) npx playwright install --with-deps firefox ;;
-            webkit|mobile-iphone) npx playwright install --with-deps webkit ;;
-            *) npx playwright install --with-deps chromium ;;
-          esac
       - name: Build app
         run: npm run build
         env:
