@@ -313,8 +313,8 @@ export default function PageAccueil() {
             </span>
           </h1>
           <p className="text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto mb-8 leading-relaxed">
-            Les établissements publient, les soignants choisissent. Contrat signé en ligne,
-            pointage GPS, paiement suivi — sans téléphone, sans paperasse.
+            Établissements et soignants connectés en direct. Contrat signé
+            en ligne, pointage GPS, paiement suivi — zéro paperasse.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <button
@@ -339,7 +339,7 @@ export default function PageAccueil() {
             <span className="inline-flex items-center gap-1.5"><CheckCircle className="h-3.5 w-3.5 text-primary" /> 0 € pour les soignants</span>
             <span className="inline-flex items-center gap-1.5"><CheckCircle className="h-3.5 w-3.5 text-primary" /> Diplômes vérifiés par IA</span>
             <span className="inline-flex items-center gap-1.5"><CheckCircle className="h-3.5 w-3.5 text-primary" /> Contrats signés en ligne</span>
-            <span className="inline-flex items-center gap-1.5"><CheckCircle className="h-3.5 w-3.5 text-primary" /> 15 professions, salariat &amp; libéral</span>
+            <span className="inline-flex items-center gap-1.5"><CheckCircle className="h-3.5 w-3.5 text-primary" /> Toutes professions de santé, salariat &amp; libéral</span>
           </div>
         </div>
       </section>
