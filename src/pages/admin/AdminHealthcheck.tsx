@@ -116,20 +116,18 @@ export default function AdminHealthcheck() {
     // 9. Chorus Pro / PISTE (warm ping test-piste-credentials)
     const pisteStart = Date.now();
     try {
-      const res = await fetch(`${SUPABASE_URL}/functions/v1/test-piste-credentials`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ warm: true }),
-      });
-      const data = await res.json().catch(() => ({}));
-      const oauthOk = data?.diagnostics?.some((d: any) => d.step?.includes('OAuth') && d.status === 'OK');
-      const apiOk = data?.success === true;
+      // invoke() envoie le JWT admin — un fetch nu renvoyait 401 (« Bearer
+      // manquant ») et affichait à tort « Credentials PISTE manquants ».
+      const { data, error: pisteErr } = await supabase.functions.invoke('test-piste-credentials', { body: {} });
+      if (pisteErr) throw pisteErr;
+      const oauthOk = (data as any)?.diagnostics?.some((d: any) => d.step?.includes('OAuth') && d.status === 'OK');
+      const apiOk = (data as any)?.success === true;
       results.push({
         name: 'Chorus Pro (PISTE)',
         icon: Landmark,
         status: apiOk ? 'ok' : oauthOk ? 'degraded' : 'error',
         latency: Date.now() - pisteStart,
-        detail: apiOk ? 'OAuth + API factures opérationnels' : oauthOk ? 'OAuth OK, API en attente déblocage AIFE' : 'Credentials PISTE manquants',
+        detail: apiOk ? 'OAuth + API factures opérationnels' : oauthOk ? 'OAuth OK, API métier en erreur — voir Chorus Pro → Vérifier connexion' : 'Vérification impossible — voir Chorus Pro → Vérifier connexion',
       });
     } catch (e: any) {
       results.push({ name: 'Chorus Pro (PISTE)', icon: Landmark, status: 'error', latency: Date.now() - pisteStart, detail: e.message });
