@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { LucideIcon, BarChart3, Users, Shield, CreditCard, LogOut, HeartPulse, ShieldCheck, Mail, Code2, Building2, CalendarDays, Flame, ClipboardList, MessageCircle, Menu, X, Home, Coins, AlertTriangle, FileCheck, Zap, TrendingUp, ChevronDown, FileStack, Scale, Star, FileSignature, Activity, Flag, Rocket, UserPlus, Megaphone, Settings, Search } from 'lucide-react';
+import { LucideIcon, Gift, BarChart3, Users, Shield, CreditCard, LogOut, HeartPulse, ShieldCheck, Mail, Code2, Building2, CalendarDays, Flame, ClipboardList, MessageCircle, Menu, X, Home, Coins, AlertTriangle, FileCheck, Zap, TrendingUp, ChevronDown, FileStack, Scale, Star, FileSignature, Activity, Flag, Rocket, UserPlus, Megaphone, Settings, Search } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { FooterLegal } from '@/components/FooterLegal';
 import { ThemeToggle } from '@/components/ThemeToggle';
@@ -78,6 +78,7 @@ const NAV_ADMIN_GROUPED: SidebarEntry[] = [
       { icone: Zap, label: 'Affacturage', route: '/admin/affacturage', acces: ACCES.FINANCES },
       { icone: FileStack, label: 'Chorus Pro', route: '/admin/chorus-pro', acces: ACCES.FINANCES },
       { icone: Coins, label: 'Taux commission', route: '/admin/taux-commission', acces: ACCES.FINANCES },
+      { icone: Gift, label: 'Paliers BFA', route: '/admin/bfa', acces: ACCES.FINANCES },
     ],
   },
   {

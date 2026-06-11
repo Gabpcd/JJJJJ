@@ -228,6 +228,29 @@ export default function AdminGroupes() {
     charger();
   };
 
+  const [editingRemise, setEditingRemise] = useState<{ groupeId: string; remise: string } | null>(null);
+  const [savingRemise, setSavingRemise] = useState(false);
+
+  const modifierRemise = async (groupeId: string) => {
+    if (!editingRemise) return;
+    const remise = parseFloat(editingRemise.remise);
+    if (isNaN(remise) || remise < 0 || remise > 100) {
+      toast.error('La remise doit être entre 0 % et 100 %');
+      return;
+    }
+    setSavingRemise(true);
+    const { data, error } = await supabase.rpc('fn_admin_modifier_remise_groupe' as any, {
+      p_groupe_id: groupeId,
+      p_remise: remise,
+      p_raison: 'Modification depuis interface admin',
+    });
+    setSavingRemise(false);
+    if (error || (data as any)?.error) { toast.error((data as any)?.error || 'Erreur mise à jour remise'); return; }
+    toast.success(`Remise groupe : ${remise} %`);
+    setEditingRemise(null);
+    charger();
+  };
+
   const envoyerEmail = async (destinataires: string[], groupeNom: string) => {
     if (!emailSubject.trim() || !emailBody.trim()) {
       toast.error('Sujet et contenu requis');
@@ -279,7 +302,28 @@ export default function AdminGroupes() {
                   <div className="flex flex-wrap gap-3 text-xs text-muted-foreground mt-1">
                     {g.siren && <span>SIREN: {g.siren}</span>}
                     <span>Formule: <strong className="text-foreground">{g.formule_abonnement || '—'}</strong></span>
-                    <span>Remise groupe: <strong className="text-foreground">{fmtPct(g.remise_groupe_pourcent)}</strong></span>
+                    {editingRemise?.groupeId === g.id ? (
+                      <span className="inline-flex items-center gap-1">
+                        Remise groupe:
+                        <Input
+                          type="number" step="0.5" min="0" max="100"
+                          value={editingRemise.remise}
+                          onChange={e => setEditingRemise({ ...editingRemise, remise: e.target.value })}
+                          className="w-16 h-6 text-xs text-center inline-block"
+                        />%
+                        <button onClick={() => modifierRemise(g.id)} disabled={savingRemise} className="text-primary font-semibold hover:underline disabled:opacity-50">{savingRemise ? '…' : 'OK'}</button>
+                        <button onClick={() => setEditingRemise(null)} className="text-muted-foreground hover:underline">Annuler</button>
+                      </span>
+                    ) : (
+                      <span>
+                        Remise groupe: <strong className="text-foreground">{fmtPct(g.remise_groupe_pourcent)}</strong>
+                        <button
+                          onClick={() => setEditingRemise({ groupeId: g.id, remise: String(g.remise_groupe_pourcent ?? 0) })}
+                          className="ml-1 text-primary hover:underline"
+                          title="Modifier la remise du groupe"
+                        >✏️</button>
+                      </span>
+                    )}
                     <span>{g.cliniques.length} clinique{g.cliniques.length > 1 ? 's' : ''}</span>
                   </div>
                 </div>
