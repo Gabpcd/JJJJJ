@@ -6,14 +6,16 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
-import { FileStack, RefreshCw, Search, Settings, Wifi } from 'lucide-react';
+import { CheckCircle2, ChevronDown, FileStack, History, RefreshCw, Search, Settings, Wifi } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
-import { getChorusStatutBadge } from '@/lib/chorus-helpers';
+import { getChorusStatutBadge, type ChorusBadgeConfig } from '@/lib/chorus-helpers';
 import { ChorusSubmissionDetailDialog } from '@/components/admin/ChorusSubmissionDetailDialog';
 import { ChorusConfigEtabDialog } from '@/components/admin/ChorusConfigEtabDialog';
+import { FileDeTravail } from '@/components/admin/FileDeTravail';
+import { EmptyState } from '@/components/ui/EmptyState';
 
 interface Stats {
   total_submissions: number;
@@ -58,6 +60,21 @@ function fmtDate(d: string | null | undefined): string {
   if (!d) return '—';
   try { return format(new Date(d), "d MMM 'à' HH:mm", { locale: fr }); } catch { return d; }
 }
+
+/** Statuts qui demandent une action admin (pattern « file de travail », Session D). */
+const STATUTS_A_TRAITER = ['pending_credentials', 'rejected', 'error'];
+
+function estATraiter(status: string): boolean {
+  return STATUTS_A_TRAITER.includes(status);
+}
+
+/** Badge statut en français (surcharge locale du libellé anglicisé du helper partagé). */
+function badgeStatut(status: string): ChorusBadgeConfig {
+  const b = getChorusStatutBadge(status);
+  return status === 'pending_credentials' ? { ...b, label: 'Identifiants manquants' } : b;
+}
+
+const SELECT_SUBMISSIONS = `*, facture:factures_honoraires!invoice_id(numero_facture, montant_ttc, soignant:soignants(prenom, nom), etablissement:etablissements(nom))`;
 
 export default function AdminChorusPro() {
   usePageTitle('Chorus Pro — Admin');
@@ -121,8 +138,8 @@ export default function AdminChorusPro() {
 
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList className="mb-4">
-          <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
-          <TabsTrigger value="submissions">Submissions</TabsTrigger>
+          <TabsTrigger value="dashboard">Tableau de bord</TabsTrigger>
+          <TabsTrigger value="submissions">Soumissions</TabsTrigger>
           <TabsTrigger value="config">Config établissements</TabsTrigger>
         </TabsList>
 
@@ -134,10 +151,75 @@ export default function AdminChorusPro() {
   );
 }
 
+/* ── Liste compacte de soumissions (tableau de bord) ── */
+function ListeSubmissionsCompacte({ items, onDetail }: { items: Submission[]; onDetail: (s: Submission) => void }) {
+  return (
+    <>
+      {/* Desktop : table */}
+      <div className="hidden md:block card-base overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="text-left text-muted-foreground border-b">
+              <th className="py-2 pr-2">Créée</th>
+              <th className="py-2 pr-2">Facture</th>
+              <th className="py-2 pr-2">Étab</th>
+              <th className="py-2 pr-2">Type</th>
+              <th className="py-2 pr-2">Statut</th>
+              <th className="py-2">Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {items.map(s => {
+              const b = badgeStatut(s.status);
+              return (
+                <tr key={s.id} className="border-b hover:bg-muted/30">
+                  <td className="py-2 pr-2 text-xs text-muted-foreground">{fmtDate(s.created_at)}</td>
+                  <td className="py-2 pr-2">{s.facture?.numero_facture ?? s.invoice_id.slice(0, 8)}</td>
+                  <td className="py-2 pr-2">{s.facture?.etablissement?.nom ?? '—'}</td>
+                  <td className="py-2 pr-2">{s.type_document ?? '—'}</td>
+                  <td className="py-2 pr-2"><span className={`badge-base text-[10px] ${b.classes}`}>{b.label}</span></td>
+                  <td className="py-2">
+                    <BoutonY2K variant="ghost" size="sm" onClick={() => onDetail(s)}>Détail</BoutonY2K>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Mobile : cards */}
+      <div className="md:hidden space-y-2">
+        {items.map(s => {
+          const b = badgeStatut(s.status);
+          return (
+            <div key={s.id} className="rounded-lg border border-border p-2.5 space-y-1.5">
+              <div className="flex items-start justify-between gap-2">
+                <p className="text-sm font-medium truncate">{s.facture?.numero_facture ?? s.invoice_id.slice(0, 8)}</p>
+                <span className={`badge-base text-[10px] shrink-0 ${b.classes}`}>{b.label}</span>
+              </div>
+              <p className="text-xs text-foreground truncate">{s.facture?.etablissement?.nom ?? '—'}</p>
+              <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+                <span>{s.type_document ?? '—'}</span>
+                <span>{fmtDate(s.created_at)}</span>
+              </div>
+              <BoutonY2K variant="secondary" size="sm" className="w-full min-h-[36px]" onClick={() => onDetail(s)}>
+                Voir le détail
+              </BoutonY2K>
+            </div>
+          );
+        })}
+      </div>
+    </>
+  );
+}
+
 /* ── Dashboard ── */
 function DashboardChorus() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [recent, setRecent] = useState<Submission[]>([]);
+  const [problemes, setProblemes] = useState<Submission[]>([]);
+  const [detail, setDetail] = useState<Submission | null>(null);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -145,10 +227,16 @@ function DashboardChorus() {
     Promise.all([
       supabase.rpc('fn_admin_chorus_stats' as any),
       supabase.from('chorus_submissions' as any)
-        .select(`*, facture:factures_honoraires!invoice_id(numero_facture, montant_ttc, soignant:soignants(prenom, nom), etablissement:etablissements(nom))`)
+        .select(SELECT_SUBMISSIONS)
         .order('created_at', { ascending: false })
         .limit(10),
-    ]).then(([sRes, rRes]) => {
+      // À traiter : rejets, erreurs, identifiants manquants — plus anciennes d'abord
+      supabase.from('chorus_submissions' as any)
+        .select(SELECT_SUBMISSIONS)
+        .in('status', STATUTS_A_TRAITER)
+        .order('created_at', { ascending: true })
+        .limit(20),
+    ]).then(([sRes, rRes, pRes]) => {
       if (sRes.error) {
         setErrorMsg(`Erreur RPC fn_admin_chorus_stats : ${sRes.error.message}`);
       } else if (sRes.data && (sRes.data as any).error) {
@@ -157,6 +245,7 @@ function DashboardChorus() {
         setStats(sRes.data as Stats);
       }
       if (rRes.data) setRecent(rRes.data as unknown as Submission[]);
+      if (pRes.data) setProblemes(pRes.data as unknown as Submission[]);
       setLoading(false);
     }).catch((err) => {
       setErrorMsg(`Erreur chargement : ${err?.message || 'inconnue'}`);
@@ -177,76 +266,38 @@ function DashboardChorus() {
   const enCours = (stats.par_statut.pending ?? 0) + (stats.par_statut.submitted ?? 0);
   const acceptees = stats.par_statut.accepted ?? 0;
   const rejetees = (stats.par_statut.rejected ?? 0) + (stats.par_statut.error ?? 0);
+  // Flux OK relégué : les 10 dernières, hors soumissions déjà listées en « À traiter »
+  const fluxOk = recent.filter(s => !estATraiter(s.status));
 
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-        <KpiCard label="Total submissions" value={stats.total_submissions} />
+        <KpiCard label="Total soumissions" value={stats.total_submissions} />
         <KpiCard label="En cours" value={enCours} color="text-warning" />
         <KpiCard label="Acceptées" value={acceptees} color="text-success" />
-        <KpiCard label="Rejetées/Err" value={rejetees} color="text-destructive" />
+        <KpiCard label="Rejetées/Erreurs" value={rejetees} color="text-destructive" />
         <KpiCard label="Erreurs 7j" value={stats.erreurs_7j} color="text-destructive" />
-        <KpiCard label="Étabs configs" value={`${stats.etabs_configures_actifs}/${stats.etabs_secteur_public_total}`} />
+        <KpiCard label="Étabs configurés" value={`${stats.etabs_configures_actifs}/${stats.etabs_secteur_public_total}`} />
       </div>
       <p className="text-xs text-muted-foreground">Dernière sync : {fmtDate(stats.derniere_sync)}</p>
 
-      <section className="card-base">
-        <h2 className="font-semibold text-foreground mb-3">10 dernières submissions</h2>
-        {recent.length === 0 ? (
-          <p className="text-sm text-muted-foreground">Aucune soumission.</p>
-        ) : (
-          <>
-            {/* Desktop : table */}
-            <div className="hidden md:block overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-left text-muted-foreground border-b">
-                    <th className="py-2 pr-2">Créée</th>
-                    <th className="py-2 pr-2">Facture</th>
-                    <th className="py-2 pr-2">Étab</th>
-                    <th className="py-2 pr-2">Type</th>
-                    <th className="py-2">Statut</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {recent.map(s => {
-                    const b = getChorusStatutBadge(s.status);
-                    return (
-                      <tr key={s.id} className="border-b hover:bg-muted/30">
-                        <td className="py-2 pr-2 text-xs text-muted-foreground">{fmtDate(s.created_at)}</td>
-                        <td className="py-2 pr-2">{s.facture?.numero_facture ?? s.invoice_id.slice(0, 8)}</td>
-                        <td className="py-2 pr-2">{s.facture?.etablissement?.nom ?? '—'}</td>
-                        <td className="py-2 pr-2">{s.type_document ?? '—'}</td>
-                        <td className="py-2"><span className={`badge-base text-[10px] ${b.classes}`}>{b.label}</span></td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+      <FileDeTravail
+        nbATraiter={problemes.length}
+        aTraiter={<ListeSubmissionsCompacte items={problemes} onDetail={setDetail} />}
+        nbHistorique={fluxOk.length}
+        historique={<ListeSubmissionsCompacte items={fluxOk} onDetail={setDetail} />}
+        labelATraiter="À traiter (rejets, erreurs, identifiants manquants)"
+        labelHistorique="Dernières soumissions sans incident"
+        titreVide="Aucune soumission en difficulté"
+        descriptionVide="Toutes les soumissions Chorus Pro suivent leur cours."
+        iconeVide={<FileStack />}
+      />
 
-            {/* Mobile : cards */}
-            <div className="md:hidden space-y-2">
-              {recent.map(s => {
-                const b = getChorusStatutBadge(s.status);
-                return (
-                  <div key={s.id} className="rounded-lg border border-border p-2.5 space-y-1.5">
-                    <div className="flex items-start justify-between gap-2">
-                      <p className="text-sm font-medium truncate">{s.facture?.numero_facture ?? s.invoice_id.slice(0, 8)}</p>
-                      <span className={`badge-base text-[10px] shrink-0 ${b.classes}`}>{b.label}</span>
-                    </div>
-                    <p className="text-xs text-foreground truncate">{s.facture?.etablissement?.nom ?? '—'}</p>
-                    <div className="flex items-center justify-between text-[10px] text-muted-foreground">
-                      <span>{s.type_document ?? '—'}</span>
-                      <span>{fmtDate(s.created_at)}</span>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </>
-        )}
-      </section>
+      <ChorusSubmissionDetailDialog
+        submission={detail}
+        open={!!detail}
+        onClose={() => setDetail(null)}
+      />
     </div>
   );
 }
@@ -268,11 +319,13 @@ function SubmissionsChorus() {
   const [statusFilter, setStatusFilter] = useState('');
   const [detail, setDetail] = useState<Submission | null>(null);
   const [resubmitLoading, setResubmitLoading] = useState(false);
+  // Structure « file de travail » répliquée (état conservé malgré le rechargement plein écran après resubmit)
+  const [historiqueOuvert, setHistoriqueOuvert] = useState(false);
 
   const charger = async () => {
     setLoading(true);
     const { data } = await supabase.from('chorus_submissions' as any)
-      .select(`*, facture:factures_honoraires!invoice_id(numero_facture, montant_ttc, soignant:soignants(prenom, nom), etablissement:etablissements(nom))`)
+      .select(SELECT_SUBMISSIONS)
       .order('created_at', { ascending: false })
       .limit(200);
     if (data) setSubs(data as unknown as Submission[]);
@@ -280,6 +333,11 @@ function SubmissionsChorus() {
   };
 
   useEffect(() => { charger(); }, []);
+
+  // Une recherche ou un filtre actif porte souvent sur l'historique : on l'ouvre automatiquement.
+  useEffect(() => {
+    if (search || statusFilter) setHistoriqueOuvert(true);
+  }, [search, statusFilter]);
 
   const filtered = useMemo(() => subs.filter(s => {
     if (statusFilter && s.status !== statusFilter) return false;
@@ -295,8 +353,14 @@ function SubmissionsChorus() {
     return true;
   }), [subs, statusFilter, search]);
 
+  // À traiter : rejets, erreurs, identifiants manquants — plus anciennes d'abord. Le reste en historique.
+  const { aTraiter, historique } = useMemo(() => ({
+    aTraiter: filtered.filter(s => estATraiter(s.status)).sort((a, b) => a.created_at.localeCompare(b.created_at)),
+    historique: filtered.filter(s => !estATraiter(s.status)),
+  }), [filtered]);
+
   const resubmit = async (factureId: string) => {
-    if (!confirm('Reset de l\'idempotence + re-soumettre cette facture à Chorus Pro ?')) return;
+    if (!confirm('Soumettre à nouveau cette facture à Chorus Pro ? La soumission précédente sera réinitialisée.')) return;
     setResubmitLoading(true);
     try {
       const { data: resetRes, error: resetErr } = await supabase.rpc('fn_admin_chorus_submission_reset' as any, { p_facture_honoraire_id: factureId });
@@ -311,17 +375,94 @@ function SubmissionsChorus() {
       if (subErr) throw subErr;
       const d: any = subRes;
       if (d.success || d.accepted) {
-        toast.success(`Resubmit OK : ${d.message ?? 'traité'}`);
+        toast.success(`Nouvelle soumission envoyée : ${d.message ?? 'traité'}`);
         setDetail(null);
         await charger();
       } else {
-        toast.error(`Resubmit erreur : ${d.error ?? 'voir logs'}`);
+        toast.error(`Échec de la nouvelle soumission : ${d.error ?? 'voir le détail'}`);
       }
     } catch (err: any) {
       toast.error(`Erreur : ${err.message ?? 'inconnu'}`);
     }
     setResubmitLoading(false);
   };
+
+  const renduListe = (items: Submission[]) => (
+    <>
+      {/* Desktop : table 8 cols */}
+      <div className="hidden md:block card-base overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="text-left text-muted-foreground border-b">
+              <th className="py-2 pr-2">Créée</th>
+              <th className="py-2 pr-2">Facture</th>
+              <th className="py-2 pr-2">Étab</th>
+              <th className="py-2 pr-2">Soignant</th>
+              <th className="py-2 pr-2">Type</th>
+              <th className="py-2 pr-2">Statut</th>
+              <th className="py-2 pr-2">Sync</th>
+              <th className="py-2">Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {items.map(s => {
+              const b = badgeStatut(s.status);
+              return (
+                <tr key={s.id} className="border-b hover:bg-muted/30">
+                  <td className="py-2 pr-2 text-xs text-muted-foreground">{fmtDate(s.created_at)}</td>
+                  <td className="py-2 pr-2 font-medium">{s.facture?.numero_facture ?? s.invoice_id.slice(0, 8)}</td>
+                  <td className="py-2 pr-2">{s.facture?.etablissement?.nom ?? '—'}</td>
+                  <td className="py-2 pr-2">{s.facture?.soignant ? `${s.facture.soignant.prenom} ${s.facture.soignant.nom}` : '—'}</td>
+                  <td className="py-2 pr-2 text-xs">{s.type_document ?? '—'}</td>
+                  <td className="py-2 pr-2"><span className={`badge-base text-[10px] ${b.classes}`}>{b.label}</span></td>
+                  <td className="py-2 pr-2 text-xs text-muted-foreground">{fmtDate(s.last_checked_at)}</td>
+                  <td className="py-2">
+                    <BoutonY2K variant="ghost" size="sm" onClick={() => setDetail(s)}>Détail</BoutonY2K>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Mobile : cards */}
+      <div className="md:hidden space-y-3">
+        {items.map(s => {
+          const b = badgeStatut(s.status);
+          return (
+            <div key={s.id} className="rounded-xl border border-border bg-card p-3 space-y-2">
+              <div className="flex items-start justify-between gap-2">
+                <p className="text-sm font-semibold truncate">{s.facture?.numero_facture ?? s.invoice_id.slice(0, 8)}</p>
+                <span className={`badge-base text-[10px] shrink-0 ${b.classes}`}>{b.label}</span>
+              </div>
+              <div className="grid grid-cols-1 gap-1 text-xs">
+                <div className="flex items-start justify-between gap-2">
+                  <span className="text-muted-foreground shrink-0">Étab</span>
+                  <span className="text-foreground text-right truncate">{s.facture?.etablissement?.nom ?? '—'}</span>
+                </div>
+                <div className="flex items-start justify-between gap-2">
+                  <span className="text-muted-foreground shrink-0">Soignant</span>
+                  <span className="text-foreground text-right truncate">{s.facture?.soignant ? `${s.facture.soignant.prenom} ${s.facture.soignant.nom}` : '—'}</span>
+                </div>
+                <div className="flex items-start justify-between gap-2">
+                  <span className="text-muted-foreground shrink-0">Type</span>
+                  <span className="text-foreground text-right">{s.type_document ?? '—'}</span>
+                </div>
+              </div>
+              <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+                <span>Créée {fmtDate(s.created_at)}</span>
+                {s.last_checked_at && <span>Sync {fmtDate(s.last_checked_at)}</span>}
+              </div>
+              <BoutonY2K variant="secondary" size="sm" className="w-full min-h-[36px]" onClick={() => setDetail(s)}>
+                Voir le détail
+              </BoutonY2K>
+            </div>
+          );
+        })}
+      </div>
+    </>
+  );
 
   return (
     <div className="space-y-3">
@@ -336,7 +477,7 @@ function SubmissionsChorus() {
           className="input-base sm:w-48"
         >
           <option value="">Tous les statuts</option>
-          <option value="pending_credentials">Credentials manquants</option>
+          <option value="pending_credentials">Identifiants manquants</option>
           <option value="pending">En attente</option>
           <option value="submitted">Déposée</option>
           <option value="accepted">Acceptée</option>
@@ -348,82 +489,54 @@ function SubmissionsChorus() {
       {loading ? (
         <p className="text-sm text-muted-foreground text-center py-8">Chargement…</p>
       ) : filtered.length === 0 ? (
-        <p className="text-sm text-muted-foreground text-center py-8">Aucune soumission.</p>
+        <p className="text-sm text-muted-foreground text-center py-8">Aucune soumission{search || statusFilter ? ' ne correspond à vos critères' : ''}.</p>
       ) : (
-        <>
-          {/* Desktop : table 8 cols */}
-          <div className="hidden md:block card-base overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-left text-muted-foreground border-b">
-                  <th className="py-2 pr-2">Créée</th>
-                  <th className="py-2 pr-2">Facture</th>
-                  <th className="py-2 pr-2">Étab</th>
-                  <th className="py-2 pr-2">Soignant</th>
-                  <th className="py-2 pr-2">Type</th>
-                  <th className="py-2 pr-2">Statut</th>
-                  <th className="py-2 pr-2">Sync</th>
-                  <th className="py-2">Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map(s => {
-                  const b = getChorusStatutBadge(s.status);
-                  return (
-                    <tr key={s.id} className="border-b hover:bg-muted/30">
-                      <td className="py-2 pr-2 text-xs text-muted-foreground">{fmtDate(s.created_at)}</td>
-                      <td className="py-2 pr-2 font-medium">{s.facture?.numero_facture ?? s.invoice_id.slice(0, 8)}</td>
-                      <td className="py-2 pr-2">{s.facture?.etablissement?.nom ?? '—'}</td>
-                      <td className="py-2 pr-2">{s.facture?.soignant ? `${s.facture.soignant.prenom} ${s.facture.soignant.nom}` : '—'}</td>
-                      <td className="py-2 pr-2 text-xs">{s.type_document ?? '—'}</td>
-                      <td className="py-2 pr-2"><span className={`badge-base text-[10px] ${b.classes}`}>{b.label}</span></td>
-                      <td className="py-2 pr-2 text-xs text-muted-foreground">{fmtDate(s.last_checked_at)}</td>
-                      <td className="py-2">
-                        <BoutonY2K variant="ghost" size="sm" onClick={() => setDetail(s)}>Détail</BoutonY2K>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+        <div className="space-y-6">
+          {/* ── À traiter : toujours visible, en tête ── */}
+          <section aria-label="À traiter">
+            <h2 className="flex items-center gap-2 text-sm font-bold text-foreground mb-3">
+              {aTraiter.length > 0 ? (
+                <span className="inline-flex items-center justify-center min-w-5 h-5 px-1.5 rounded-full bg-destructive text-destructive-foreground text-[11px] font-bold">
+                  {aTraiter.length}
+                </span>
+              ) : (
+                <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+              )}
+              À traiter (rejets, erreurs, identifiants manquants)
+            </h2>
+            {aTraiter.length === 0 ? (
+              <EmptyState
+                icone={<CheckCircle2 />}
+                titre="Aucune soumission à traiter"
+                description="Toutes les soumissions Chorus Pro suivent leur cours."
+                variant="success"
+                compact
+              />
+            ) : renduListe(aTraiter)}
+          </section>
 
-          {/* Mobile : cards */}
-          <div className="md:hidden space-y-3">
-            {filtered.map(s => {
-              const b = getChorusStatutBadge(s.status);
-              return (
-                <div key={s.id} className="rounded-xl border border-border bg-card p-3 space-y-2">
-                  <div className="flex items-start justify-between gap-2">
-                    <p className="text-sm font-semibold truncate">{s.facture?.numero_facture ?? s.invoice_id.slice(0, 8)}</p>
-                    <span className={`badge-base text-[10px] shrink-0 ${b.classes}`}>{b.label}</span>
-                  </div>
-                  <div className="grid grid-cols-1 gap-1 text-xs">
-                    <div className="flex items-start justify-between gap-2">
-                      <span className="text-muted-foreground shrink-0">Étab</span>
-                      <span className="text-foreground text-right truncate">{s.facture?.etablissement?.nom ?? '—'}</span>
-                    </div>
-                    <div className="flex items-start justify-between gap-2">
-                      <span className="text-muted-foreground shrink-0">Soignant</span>
-                      <span className="text-foreground text-right truncate">{s.facture?.soignant ? `${s.facture.soignant.prenom} ${s.facture.soignant.nom}` : '—'}</span>
-                    </div>
-                    <div className="flex items-start justify-between gap-2">
-                      <span className="text-muted-foreground shrink-0">Type</span>
-                      <span className="text-foreground text-right">{s.type_document ?? '—'}</span>
-                    </div>
-                  </div>
-                  <div className="flex items-center justify-between text-[10px] text-muted-foreground">
-                    <span>Créée {fmtDate(s.created_at)}</span>
-                    {s.last_checked_at && <span>Sync {fmtDate(s.last_checked_at)}</span>}
-                  </div>
-                  <BoutonY2K variant="secondary" size="sm" className="w-full min-h-[36px]" onClick={() => setDetail(s)}>
-                    Voir le détail
-                  </BoutonY2K>
-                </div>
-              );
-            })}
-          </div>
-        </>
+          {/* ── Historique : replié par défaut ── */}
+          <section aria-label="Historique">
+            <button
+              type="button"
+              onClick={() => setHistoriqueOuvert(o => !o)}
+              aria-expanded={historiqueOuvert}
+              className="flex items-center gap-2 text-sm font-semibold text-muted-foreground hover:text-foreground transition-colors mb-3"
+            >
+              <History className="h-4 w-4" />
+              Historique
+              <span className="inline-flex items-center justify-center min-w-5 h-5 px-1.5 rounded-full bg-muted text-muted-foreground text-[11px] font-semibold">
+                {historique.length}
+              </span>
+              <ChevronDown className={`h-4 w-4 transition-transform ${historiqueOuvert ? 'rotate-180' : ''}`} />
+            </button>
+            {historiqueOuvert && (
+              historique.length === 0
+                ? <p className="text-sm text-muted-foreground">Aucune soumission dans l'historique.</p>
+                : renduListe(historique)
+            )}
+          </section>
+        </div>
       )}
 
       <ChorusSubmissionDetailDialog
@@ -478,13 +591,12 @@ function ConfigEtabsChorus() {
     await charger();
   };
 
-  if (loading) return <p className="text-sm text-muted-foreground text-center py-8">Chargement…</p>;
-  if (etabs.length === 0) return <p className="text-sm text-muted-foreground text-center py-8">Aucun établissement secteur public.</p>;
+  // En tête : étabs sans configuration ou inactifs (ils bloquent l'envoi de factures). Tri alphabétique conservé dans chaque section.
+  const aConfigurer = etabs.filter(e => !e.chorus_pro_config?.[0]?.actif);
+  const actifs = etabs.filter(e => !!e.chorus_pro_config?.[0]?.actif);
 
-  return (
-    <div className="space-y-3">
-      <p className="text-sm text-muted-foreground">{etabs.length} établissements secteur public. Activez Chorus Pro et configurez le numéro de structure pour chaque étab destinataire.</p>
-
+  const renduListe = (liste: Etab[]) => (
+    <>
       {/* Desktop : table 6 cols */}
       <div className="hidden md:block card-base overflow-x-auto">
         <table className="w-full text-sm">
@@ -499,7 +611,7 @@ function ConfigEtabsChorus() {
             </tr>
           </thead>
           <tbody>
-            {etabs.map(e => {
+            {liste.map(e => {
               const cfg = e.chorus_pro_config?.[0];
               return (
                 <tr key={e.id} className="border-b hover:bg-muted/30">
@@ -524,7 +636,7 @@ function ConfigEtabsChorus() {
 
       {/* Mobile : cards */}
       <div className="md:hidden space-y-3">
-        {etabs.map(e => {
+        {liste.map(e => {
           const cfg = e.chorus_pro_config?.[0];
           return (
             <div key={e.id} className="rounded-xl border border-border bg-card p-3 space-y-2">
@@ -555,6 +667,53 @@ function ConfigEtabsChorus() {
           );
         })}
       </div>
+    </>
+  );
+
+  if (loading) return <p className="text-sm text-muted-foreground text-center py-8">Chargement…</p>;
+  if (etabs.length === 0) return <p className="text-sm text-muted-foreground text-center py-8">Aucun établissement secteur public.</p>;
+
+  return (
+    <div className="space-y-6">
+      <p className="text-sm text-muted-foreground">{etabs.length} établissements secteur public. Activez Chorus Pro et configurez le numéro de structure pour chaque étab destinataire.</p>
+
+      {/* ── À configurer : sans configuration ou inactifs, en tête ── */}
+      <section aria-label="À configurer">
+        <h2 className="flex items-center gap-2 text-sm font-bold text-foreground mb-1">
+          {aConfigurer.length > 0 ? (
+            <span className="inline-flex items-center justify-center min-w-5 h-5 px-1.5 rounded-full bg-destructive text-destructive-foreground text-[11px] font-bold">
+              {aConfigurer.length}
+            </span>
+          ) : (
+            <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+          )}
+          À configurer
+        </h2>
+        <p className="text-xs text-muted-foreground mb-3">Ces établissements n'ont pas de configuration Chorus Pro active : l'envoi de leurs factures est bloqué.</p>
+        {aConfigurer.length === 0 ? (
+          <EmptyState
+            icone={<CheckCircle2 />}
+            titre="Tous les établissements sont configurés"
+            description="Chorus Pro est actif pour tous les établissements secteur public."
+            variant="success"
+            compact
+          />
+        ) : renduListe(aConfigurer)}
+      </section>
+
+      {/* ── Configurés et actifs : visibles en dessous (le switch doit rester accessible) ── */}
+      {actifs.length > 0 && (
+        <section aria-label="Configurés et actifs">
+          <h2 className="flex items-center gap-2 text-sm font-semibold text-muted-foreground mb-3">
+            <CheckCircle2 className="h-4 w-4 text-success" />
+            Configurés et actifs
+            <span className="inline-flex items-center justify-center min-w-5 h-5 px-1.5 rounded-full bg-muted text-muted-foreground text-[11px] font-semibold">
+              {actifs.length}
+            </span>
+          </h2>
+          {renduListe(actifs)}
+        </section>
+      )}
 
       {editing && (
         <ChorusConfigEtabDialog

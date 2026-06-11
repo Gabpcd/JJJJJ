@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { Building2, Layers, Loader2, Pencil, Save, X } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { Building2, Layers, Loader2, Pencil, Save, Search, X } from 'lucide-react';
 import { LayoutAdmin } from '@/components/LayoutAdmin';
 import { BreadcrumbAdmin } from '@/components/BreadcrumbAdmin';
 import { usePageTitle } from '@/hooks/usePageTitle';
@@ -50,6 +50,25 @@ export default function AdminTauxCommission() {
   const [nouveauTaux, setNouveauTaux] = useState<string>('');
   const [raison, setRaison] = useState<string>('');
   const [saving, setSaving] = useState(false);
+  const [recherche, setRecherche] = useState<string>('');
+
+  // Pattern « file de travail » léger : les entités jamais négociées (défaut 15 %) remontent en tête.
+  const groupesTries = useMemo(
+    () => [...groupes].sort((a, b) =>
+      (a.taux_commission_negocie == null ? 0 : 1) - (b.taux_commission_negocie == null ? 0 : 1)
+    ),
+    [groupes]
+  );
+
+  const normaliser = (s: string) => s.toLowerCase().normalize('NFD').replace(/\p{Diacritic}/gu, '');
+
+  const etabsAffiches = useMemo(() => {
+    const terme = normaliser(recherche.trim());
+    const filtres = terme ? etabs.filter(e => normaliser(e.nom).includes(terme)) : etabs;
+    return [...filtres].sort((a, b) =>
+      (a.taux_resolu_source === 'defaut_15' ? 0 : 1) - (b.taux_resolu_source === 'defaut_15' ? 0 : 1)
+    );
+  }, [etabs, recherche]);
 
   const charger = async () => {
     setLoading(true);
@@ -141,7 +160,7 @@ export default function AdminTauxCommission() {
             <p className="text-sm text-muted-foreground card-base">Aucun groupe</p>
           ) : (
             <div className="card-base divide-y divide-border">
-              {groupes.map(g => (
+              {groupesTries.map(g => (
                 <div key={g.id} className="py-3 flex items-center justify-between gap-3">
                   <div className="flex-1">
                     <p className="font-medium text-foreground">{g.nom}</p>
@@ -152,6 +171,11 @@ export default function AdminTauxCommission() {
                   </div>
                   <div className="text-right">
                     <p className="text-lg font-bold text-foreground">{fmtTaux(g.taux_commission_negocie)}</p>
+                    {g.taux_commission_negocie == null && (
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
+                        Défaut 15%
+                      </span>
+                    )}
                   </div>
                   <BoutonY2K size="sm" variant="secondary" onClick={() => ouvrirEdition('groupe', g.id, g.nom, g.taux_commission_negocie)} className="gap-1" iconeGauche={<Pencil className="h-3.5 w-3.5" />}>
                     Modifier
@@ -167,32 +191,49 @@ export default function AdminTauxCommission() {
           <h2 className="text-base font-bold text-foreground mb-3 flex items-center gap-2">
             <Building2 className="h-4 w-4" /> Établissements ({etabs.length})
           </h2>
-          <div className="card-base divide-y divide-border">
-            {etabs.map(e => (
-              <div key={e.id} className="py-3 flex items-center justify-between gap-3">
-                <div className="flex-1">
-                  <p className="font-medium text-foreground">{e.nom}</p>
-                  <p className="text-xs text-muted-foreground">
-                    SIRET {e.siret || '—'}
-                    {e.groupe_nom && <> · Groupe : <span className="text-foreground">{e.groupe_nom}</span></>}
-                  </p>
-                  <p className="text-[10px] text-muted-foreground mt-0.5">
-                    Étab : {fmtTaux(e.taux_commission_negocie)}
-                    {e.groupe_nom && ` · Groupe : ${fmtTaux(e.taux_groupe)}`}
-                  </p>
-                </div>
-                <div className="text-right">
-                  <p className="text-lg font-bold text-foreground">{fmtTaux(e.taux_resolu)}</p>
-                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${SOURCE_COLOR[e.taux_resolu_source]}`}>
-                    {SOURCE_LABEL[e.taux_resolu_source]}
-                  </span>
-                </div>
-                <BoutonY2K size="sm" variant="secondary" onClick={() => ouvrirEdition('etab', e.id, e.nom, e.taux_commission_negocie)} className="gap-1" iconeGauche={<Pencil className="h-3.5 w-3.5" />}>
-                  Modifier
-                </BoutonY2K>
-              </div>
-            ))}
+          <div className="relative mb-3">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+            <input
+              type="search"
+              value={recherche}
+              onChange={e => setRecherche(e.target.value)}
+              placeholder="Rechercher un établissement par nom…"
+              aria-label="Rechercher un établissement par nom"
+              className="input-base pl-9"
+            />
           </div>
+          {etabsAffiches.length === 0 ? (
+            <p className="text-sm text-muted-foreground card-base">
+              {etabs.length === 0 ? 'Aucun établissement' : 'Aucun établissement ne correspond à votre recherche.'}
+            </p>
+          ) : (
+            <div className="card-base divide-y divide-border">
+              {etabsAffiches.map(e => (
+                <div key={e.id} className="py-3 flex items-center justify-between gap-3">
+                  <div className="flex-1">
+                    <p className="font-medium text-foreground">{e.nom}</p>
+                    <p className="text-xs text-muted-foreground">
+                      SIRET {e.siret || '—'}
+                      {e.groupe_nom && <> · Groupe : <span className="text-foreground">{e.groupe_nom}</span></>}
+                    </p>
+                    <p className="text-[10px] text-muted-foreground mt-0.5">
+                      Étab : {fmtTaux(e.taux_commission_negocie)}
+                      {e.groupe_nom && ` · Groupe : ${fmtTaux(e.taux_groupe)}`}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-lg font-bold text-foreground">{fmtTaux(e.taux_resolu)}</p>
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${SOURCE_COLOR[e.taux_resolu_source]}`}>
+                      {SOURCE_LABEL[e.taux_resolu_source]}
+                    </span>
+                  </div>
+                  <BoutonY2K size="sm" variant="secondary" onClick={() => ouvrirEdition('etab', e.id, e.nom, e.taux_commission_negocie)} className="gap-1" iconeGauche={<Pencil className="h-3.5 w-3.5" />}>
+                    Modifier
+                  </BoutonY2K>
+                </div>
+              ))}
+            </div>
+          )}
         </section>
       </div>
 
