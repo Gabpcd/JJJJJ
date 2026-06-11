@@ -13,9 +13,18 @@ import { toast } from 'sonner';
 
 const fmt = (v: number) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(v);
 
-const GROUPES_NAV = [
-  'Dashboard', 'Utilisateurs', 'Missions', 'Litiges & contrats',
-  'Finances', 'Messagerie', 'Conformité & Technique', 'Fondateur',
+// Périmètres d'accès RBAC : clés historiques stockées dans equipe_admin.acces_groupes.
+// La sidebar (5 groupes depuis la Session D) mappe chaque page vers un de ces
+// périmètres — ne pas renommer sans migrer les données existantes.
+const PERIMETRES_ACCES: { cle: string; description: string }[] = [
+  { cle: 'Dashboard', description: 'Dashboard admin' },
+  { cle: 'Utilisateurs', description: 'Utilisateurs, modération, signalements, scores' },
+  { cle: 'Missions', description: 'Missions, pool urgence, plannings, pointage' },
+  { cle: 'Litiges & contrats', description: 'Litiges, contrats, templates' },
+  { cle: 'Finances', description: 'Facturation, impayées, affacturage, commissions' },
+  { cle: 'Messagerie', description: 'Messagerie admin' },
+  { cle: 'Conformité & Technique', description: 'Système : conformité, audits, emails, API' },
+  { cle: 'Fondateur', description: 'Pilotage : cockpit, acquisition, équipe, levée' },
 ];
 
 const COEFF_CHARGES_PATRONALES = 1.45;
@@ -256,17 +265,20 @@ export default function AdminEquipe() {
                   <Input type="date" value={editMembre.date_embauche || ''} onChange={e => setEditMembre({ ...editMembre, date_embauche: e.target.value })} />
                 </div>
                 <div>
-                  <Label>Accès (cocher les sections admin visibles)</Label>
-                  <div className="grid grid-cols-2 gap-2 mt-2">
-                    {GROUPES_NAV.map(g => (
-                      <label key={g} className="flex items-center gap-2 text-sm cursor-pointer">
+                  <Label>Périmètres d'accès (pages admin visibles)</Label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2">
+                    {PERIMETRES_ACCES.map(({ cle, description }) => (
+                      <label key={cle} className="flex items-start gap-2 text-sm cursor-pointer">
                         <input
                           type="checkbox"
-                          checked={(editMembre.acces_groupes || []).includes(g)}
-                          onChange={() => toggleAcces(g)}
-                          className="rounded border-border"
+                          checked={(editMembre.acces_groupes || []).includes(cle)}
+                          onChange={() => toggleAcces(cle)}
+                          className="rounded border-border mt-0.5"
                         />
-                        {g}
+                        <span>
+                          {cle}
+                          <span className="block text-xs text-muted-foreground">{description}</span>
+                        </span>
                       </label>
                     ))}
                   </div>

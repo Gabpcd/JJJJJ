@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { LucideIcon, BarChart3, Users, Shield, CreditCard, LogOut, HeartPulse, ShieldCheck, Mail, Code2, Building2, CalendarDays, Flame, ClipboardList, MessageCircle, Menu, X, Home, Coins, AlertTriangle, FileCheck, Zap, TrendingUp, ChevronDown, FileStack, Scale, Star, FileSignature, Activity, Flag, Rocket, UserPlus, Megaphone } from 'lucide-react';
+import { LucideIcon, BarChart3, Users, Shield, CreditCard, LogOut, HeartPulse, ShieldCheck, Mail, Code2, Building2, CalendarDays, Flame, ClipboardList, MessageCircle, Menu, X, Home, Coins, AlertTriangle, FileCheck, Zap, TrendingUp, ChevronDown, FileStack, Scale, Star, FileSignature, Activity, Flag, Rocket, UserPlus, Megaphone, Settings } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { FooterLegal } from '@/components/FooterLegal';
 import { ThemeToggle } from '@/components/ThemeToggle';
@@ -10,89 +10,100 @@ import { useAccesAdmin } from '@/hooks/useAccesAdmin';
 import { cn } from '@/lib/utils';
 
 /* ── Types ── */
-interface NavItem { icone: LucideIcon; label: string; route: string; }
+// `acces` = périmètre RBAC historique (clé stockée dans equipe_admin.acces_groupes,
+// gérée sur /admin/fondateur/equipe). La structure visuelle de la sidebar est
+// découplée de ces périmètres : regrouper des pages ne change pas les droits.
+interface NavItem { icone: LucideIcon; label: string; route: string; acces: string; }
 interface NavGroup { icone: LucideIcon; label: string; items: NavItem[]; }
 type SidebarEntry = NavItem | NavGroup;
 
 function isGroup(e: SidebarEntry): e is NavGroup { return 'items' in e; }
 
-/* ── Sidebar groupée (même pattern que soignant/etab) ── */
+/* ── Périmètres RBAC historiques (ne pas renommer sans migrer equipe_admin) ── */
+const ACCES = {
+  DASHBOARD: 'Dashboard',
+  UTILISATEURS: 'Utilisateurs',
+  MISSIONS: 'Missions',
+  LITIGES: 'Litiges & contrats',
+  FINANCES: 'Finances',
+  MESSAGERIE: 'Messagerie',
+  FONDATEUR: 'Fondateur',
+  TECHNIQUE: 'Conformité & Technique',
+} as const;
+
+/* ── Sidebar 5 groupes (Session D) : Pilotage, Utilisateurs, Opérations, Finances, Système ── */
 const NAV_ADMIN_GROUPED: SidebarEntry[] = [
-  { icone: BarChart3, label: 'Dashboard', route: '/admin' },
+  {
+    icone: BarChart3, label: 'Pilotage', items: [
+      { icone: Home, label: 'Dashboard', route: '/admin', acces: ACCES.DASHBOARD },
+      { icone: Rocket, label: 'Cockpit fondateur', route: '/admin/fondateur', acces: ACCES.FONDATEUR },
+      { icone: Megaphone, label: 'Acquisition', route: '/admin/fondateur/acquisition', acces: ACCES.FONDATEUR },
+      { icone: MessageCircle, label: 'Sales / Sourcing', route: '/admin/fondateur/sales', acces: ACCES.FONDATEUR },
+      { icone: UserPlus, label: 'Équipe', route: '/admin/fondateur/equipe', acces: ACCES.FONDATEUR },
+      { icone: TrendingUp, label: 'Cohortes & economics', route: '/admin/cohort', acces: ACCES.FONDATEUR },
+      { icone: Rocket, label: 'Levée & documents', route: '/admin/fondateur/levee', acces: ACCES.FONDATEUR },
+    ],
+  },
   {
     icone: Users, label: 'Utilisateurs', items: [
-      { icone: Users, label: 'Tous les utilisateurs', route: '/admin/utilisateurs' },
-      { icone: Shield, label: 'Modération', route: '/admin/moderation' },
-      { icone: Flag, label: 'Signalements', route: '/admin/signalements' },
-      { icone: ShieldCheck, label: 'Vérif. établissements', route: '/admin/verification-etablissements' },
-      { icone: FileCheck, label: 'Heures externes (3200h)', route: '/admin/heures-externes' },
-      { icone: MessageCircle, label: 'Réclamations', route: '/admin/reclamations' },
-      { icone: Star, label: 'Réclamations score', route: '/admin/reclamations-score' },
-      { icone: ShieldCheck, label: 'Triage des scores', route: '/admin/scores' },
-      { icone: Building2, label: 'Groupes santé', route: '/admin/groupes' },
+      { icone: Users, label: 'Tous les utilisateurs', route: '/admin/utilisateurs', acces: ACCES.UTILISATEURS },
+      { icone: Shield, label: 'Modération', route: '/admin/moderation', acces: ACCES.UTILISATEURS },
+      { icone: Flag, label: 'Signalements', route: '/admin/signalements', acces: ACCES.UTILISATEURS },
+      { icone: ShieldCheck, label: 'Vérif. établissements', route: '/admin/verification-etablissements', acces: ACCES.UTILISATEURS },
+      { icone: FileCheck, label: 'Heures externes (3200h)', route: '/admin/heures-externes', acces: ACCES.UTILISATEURS },
+      { icone: MessageCircle, label: 'Réclamations', route: '/admin/reclamations', acces: ACCES.UTILISATEURS },
+      { icone: Star, label: 'Réclamations score', route: '/admin/reclamations-score', acces: ACCES.UTILISATEURS },
+      { icone: ShieldCheck, label: 'Triage des scores', route: '/admin/scores', acces: ACCES.UTILISATEURS },
+      { icone: Building2, label: 'Groupes santé', route: '/admin/groupes', acces: ACCES.UTILISATEURS },
     ],
   },
   {
-    icone: ClipboardList, label: 'Missions', items: [
-      { icone: ClipboardList, label: 'Toutes les missions', route: '/admin/missions' },
-      { icone: Flame, label: 'Pool urgence', route: '/admin/pool-urgence' },
-      { icone: CalendarDays, label: 'Calendrier', route: '/admin/calendrier' },
-      { icone: CalendarDays, label: 'Planning global', route: '/admin/planning-global' },
-      { icone: AlertTriangle, label: 'Alertes pointage', route: '/admin/alertes-pointage' },
-    ],
-  },
-  {
-    icone: Scale, label: 'Litiges & contrats', items: [
-      { icone: Scale, label: 'Litiges', route: '/admin/litiges' },
-      { icone: FileSignature, label: 'Contrats', route: '/admin/contrats' },
-      { icone: FileStack, label: 'Templates contrats', route: '/admin/templates-contrats' },
+    icone: ClipboardList, label: 'Opérations', items: [
+      { icone: ClipboardList, label: 'Toutes les missions', route: '/admin/missions', acces: ACCES.MISSIONS },
+      { icone: Flame, label: 'Pool urgence', route: '/admin/pool-urgence', acces: ACCES.MISSIONS },
+      { icone: CalendarDays, label: 'Calendrier', route: '/admin/calendrier', acces: ACCES.MISSIONS },
+      { icone: CalendarDays, label: 'Planning global', route: '/admin/planning-global', acces: ACCES.MISSIONS },
+      { icone: AlertTriangle, label: 'Alertes pointage', route: '/admin/alertes-pointage', acces: ACCES.MISSIONS },
+      { icone: Scale, label: 'Litiges', route: '/admin/litiges', acces: ACCES.LITIGES },
+      { icone: FileSignature, label: 'Contrats', route: '/admin/contrats', acces: ACCES.LITIGES },
+      { icone: FileStack, label: 'Templates contrats', route: '/admin/templates-contrats', acces: ACCES.LITIGES },
+      { icone: MessageCircle, label: 'Messagerie', route: '/admin/messagerie', acces: ACCES.MESSAGERIE },
     ],
   },
   {
     icone: Coins, label: 'Finances', items: [
-      { icone: Coins, label: 'Vue d\'ensemble', route: '/admin/finances' },
-      { icone: CreditCard, label: 'Facturation', route: '/admin/facturation' },
-      { icone: AlertTriangle, label: 'Impayées', route: '/admin/impayees' },
-      { icone: FileCheck, label: 'Mandats facturation', route: '/admin/mandats-facturation' },
-      { icone: Zap, label: 'Affacturage', route: '/admin/affacturage' },
-      { icone: FileStack, label: 'Chorus Pro', route: '/admin/chorus-pro' },
-      { icone: Coins, label: 'Taux commission', route: '/admin/taux-commission' },
-    ],
-  },
-  { icone: MessageCircle, label: 'Messagerie', route: '/admin/messagerie' },
-  {
-    icone: Rocket, label: 'Fondateur', items: [
-      { icone: BarChart3, label: 'Cockpit', route: '/admin/fondateur' },
-      { icone: Megaphone, label: 'Acquisition', route: '/admin/fondateur/acquisition' },
-      { icone: MessageCircle, label: 'Sales / Sourcing', route: '/admin/fondateur/sales' },
-      { icone: UserPlus, label: 'Équipe', route: '/admin/fondateur/equipe' },
-      { icone: Rocket, label: 'Levée & Documents', route: '/admin/fondateur/levee' },
-      { icone: TrendingUp, label: 'Cohort & Economics', route: '/admin/cohort' },
+      { icone: Coins, label: 'Vue d\'ensemble', route: '/admin/finances', acces: ACCES.FINANCES },
+      { icone: CreditCard, label: 'Facturation', route: '/admin/facturation', acces: ACCES.FINANCES },
+      { icone: AlertTriangle, label: 'Impayées', route: '/admin/impayees', acces: ACCES.FINANCES },
+      { icone: FileCheck, label: 'Mandats facturation', route: '/admin/mandats-facturation', acces: ACCES.FINANCES },
+      { icone: Zap, label: 'Affacturage', route: '/admin/affacturage', acces: ACCES.FINANCES },
+      { icone: FileStack, label: 'Chorus Pro', route: '/admin/chorus-pro', acces: ACCES.FINANCES },
+      { icone: Coins, label: 'Taux commission', route: '/admin/taux-commission', acces: ACCES.FINANCES },
     ],
   },
   {
-    icone: ShieldCheck, label: 'Conformité & Technique', items: [
-      { icone: ShieldCheck, label: 'Conformité', route: '/admin/conformite' },
-      { icone: Shield, label: 'Audit Logs', route: '/admin/audit' },
-      { icone: Shield, label: 'Audit RLS', route: '/admin/audit-rls' },
-      { icone: FileCheck, label: 'DPIA', route: '/admin/dpia' },
-      { icone: Shield, label: 'Outils RGPD', route: '/admin/rgpd-tools' },
-      { icone: Zap, label: 'Externalisations', route: '/admin/externalisations-actions' },
-      { icone: Activity, label: 'Statut système', route: '/admin/status' },
-      { icone: Mail, label: 'Emails', route: '/admin/emails' },
-      { icone: Code2, label: 'API', route: '/admin/api' },
-      { icone: HeartPulse, label: 'Healthcheck', route: '/admin/healthcheck' },
-      { icone: Code2, label: 'Démo', route: '/admin/demo' },
+    icone: Settings, label: 'Système', items: [
+      { icone: ShieldCheck, label: 'Conformité', route: '/admin/conformite', acces: ACCES.TECHNIQUE },
+      { icone: Shield, label: 'Audit logs', route: '/admin/audit', acces: ACCES.TECHNIQUE },
+      { icone: Shield, label: 'Audit RLS', route: '/admin/audit-rls', acces: ACCES.TECHNIQUE },
+      { icone: FileCheck, label: 'DPIA', route: '/admin/dpia', acces: ACCES.TECHNIQUE },
+      { icone: Shield, label: 'Outils RGPD', route: '/admin/rgpd-tools', acces: ACCES.TECHNIQUE },
+      { icone: Zap, label: 'Externalisations', route: '/admin/externalisations-actions', acces: ACCES.TECHNIQUE },
+      { icone: Activity, label: 'Statut système', route: '/admin/status', acces: ACCES.TECHNIQUE },
+      { icone: Mail, label: 'Emails', route: '/admin/emails', acces: ACCES.TECHNIQUE },
+      { icone: Code2, label: 'API', route: '/admin/api', acces: ACCES.TECHNIQUE },
+      { icone: HeartPulse, label: 'Healthcheck', route: '/admin/healthcheck', acces: ACCES.TECHNIQUE },
+      { icone: Code2, label: 'Démo', route: '/admin/demo', acces: ACCES.TECHNIQUE },
     ],
   },
 ];
 
-/* ── Mobile bottom bar (5 items) ── */
+/* ── Mobile bottom bar (4 items + Plus) ── */
 const NAV_ADMIN_MOBILE_MAIN: NavItem[] = [
-  { icone: Home, label: 'Accueil', route: '/admin' },
-  { icone: Users, label: 'Utilisateurs', route: '/admin/utilisateurs' },
-  { icone: ClipboardList, label: 'Missions', route: '/admin/missions' },
-  { icone: MessageCircle, label: 'Messages', route: '/admin/messagerie' },
+  { icone: Home, label: 'Accueil', route: '/admin', acces: ACCES.DASHBOARD },
+  { icone: Users, label: 'Utilisateurs', route: '/admin/utilisateurs', acces: ACCES.UTILISATEURS },
+  { icone: ClipboardList, label: 'Missions', route: '/admin/missions', acces: ACCES.MISSIONS },
+  { icone: MessageCircle, label: 'Messages', route: '/admin/messagerie', acces: ACCES.MESSAGERIE },
 ];
 
 /* ── All flat items for mobile "Plus" overlay ── */
@@ -170,20 +181,23 @@ export function LayoutAdmin({ children }: { children: React.ReactNode }) {
   const isActive = (route: string) =>
     route === '/admin' ? location.pathname === '/admin' : location.pathname.startsWith(route);
 
-  // RBAC : filtre la nav selon les groupes autorisés (backend-driven)
+  // RBAC : filtre item par item selon les périmètres autorisés (backend-driven).
+  // Les périmètres restent les 8 clés historiques d'equipe_admin ; un groupe
+  // visuel sans aucun item accessible disparaît entièrement.
   const navFiltered = useMemo(() => {
     if (accesTotal) return NAV_ADMIN_GROUPED;
-    return NAV_ADMIN_GROUPED.filter(entry => {
-      if (isGroup(entry)) return aAcces(entry.label);
-      if (entry.route === '/admin') return aAcces('Dashboard');
-      if (entry.route === '/admin/messagerie') return aAcces('Messagerie');
-      return true;
-    });
+    return NAV_ADMIN_GROUPED
+      .map(entry => (isGroup(entry) ? { ...entry, items: entry.items.filter(i => aAcces(i.acces)) } : entry))
+      .filter(entry => (isGroup(entry) ? entry.items.length > 0 : aAcces(entry.acces)));
   }, [accesTotal, aAcces]);
 
   const allFlatItems = flattenEntries(navFiltered);
+  const mobileMainItems = useMemo(
+    () => (accesTotal ? NAV_ADMIN_MOBILE_MAIN : NAV_ADMIN_MOBILE_MAIN.filter(m => aAcces(m.acces))),
+    [accesTotal, aAcces],
+  );
   const mobileExtraItems = allFlatItems.filter(
-    item => !NAV_ADMIN_MOBILE_MAIN.some(m => m.route === item.route)
+    item => !mobileMainItems.some(m => m.route === item.route)
   );
 
   return (
@@ -249,7 +263,7 @@ export function LayoutAdmin({ children }: { children: React.ReactNode }) {
         role="navigation"
         aria-label="Navigation mobile admin"
       >
-        {NAV_ADMIN_MOBILE_MAIN.map((item) => {
+        {mobileMainItems.map((item) => {
           const actif = isActive(item.route);
           return (
             <button
