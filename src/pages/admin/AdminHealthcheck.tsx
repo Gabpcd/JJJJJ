@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { LayoutAdmin } from '@/components/LayoutAdmin';
 import { supabase, SUPABASE_URL } from '@/integrations/supabase/client';
-import { CheckCircle, XCircle, Clock, RefreshCw, Server, Database, Mail, CreditCard, Shield, Smartphone, Globe, KeyRound, Loader2, MessageSquare, Send, ShieldCheck, Landmark } from 'lucide-react';
+import { CheckCircle, XCircle, Clock, RefreshCw, Server, Database, Mail, CreditCard, Shield, Smartphone, Globe, KeyRound, MessageSquare, Send, ShieldCheck, Landmark } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
 import { BoutonY2K } from '@/components/y2k/BoutonY2K';
@@ -17,7 +17,7 @@ interface ServiceStatus {
 }
 
 export default function AdminHealthcheck() {
-  usePageTitle('Healthcheck Services');
+  usePageTitle('Vérifier la santé des services');
   const { user } = useAuth();
   const [services, setServices] = useState<ServiceStatus[]>([]);
   const [checking, setChecking] = useState(false);
@@ -91,8 +91,8 @@ export default function AdminHealthcheck() {
     // 7. Email (send-email warm)
     const emailStart = Date.now();
     try {
-      await supabase.functions.invoke('send-email', { body: { warm: true } });
-      results.push({ name: 'Resend Email', icon: Mail, status: 'ok', latency: Date.now() - emailStart, detail: 'Warm ping OK' });
+      const { error } = await supabase.functions.invoke('send-email', { body: { warm: true } });
+      results.push({ name: 'Resend Email', icon: Mail, status: error ? 'error' : 'ok', latency: Date.now() - emailStart, detail: error ? error.message : 'Warm ping OK' });
     } catch (e: any) {
       results.push({ name: 'Resend Email', icon: Mail, status: 'error', latency: Date.now() - emailStart, detail: e.message });
     }
@@ -269,7 +269,7 @@ export default function AdminHealthcheck() {
     <LayoutAdmin>
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6 gap-3">
         <div>
-          <h1 className="text-xl font-bold text-foreground flex items-center gap-2"><Server className="h-5 w-5 text-primary" /> Healthcheck Services</h1>
+          <h1 className="text-xl font-bold text-foreground flex items-center gap-2"><Server className="h-5 w-5 text-primary" /> Vérifier la santé des services</h1>
           <p className="text-sm text-muted-foreground">
             {totalCount > 0 ? `${okCount}/${totalCount} services opérationnels` : 'Vérification en cours...'}
             {lastCheck && ` — dernière vérification ${lastCheck.toLocaleTimeString('fr-FR')}`}
@@ -385,7 +385,7 @@ export default function AdminHealthcheck() {
               SMS Twilio
             </h2>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Envoi d'un SMS de test au numéro indiqué (préchargé depuis votre profil si admin = soignant). Coût ~0.045€.
+              Envoi d'un SMS de test au numéro indiqué (préchargé depuis votre profil si admin = soignant). Chaque envoi est facturé au tarif SMS Twilio en vigueur.
             </p>
           </div>
         </div>

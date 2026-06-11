@@ -21,6 +21,7 @@ import { toast } from 'sonner';
 import { logger } from '@/lib/logger';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { TYPES_DOCUMENTS, STATUTS_VERIFICATION } from '@/lib/documents';
+import { BADGES_STATUT, getLabelProfession } from '@/lib/constantes';
 import { ModalConfirmation } from '@/components/ModalConfirmation';
 import { Textarea } from '@/components/ui/textarea';
 import { AdminMissionChatPanel } from '@/components/admin/AdminMissionChatPanel';
@@ -233,7 +234,7 @@ export default function AdminDetailUtilisateur() {
   };
 
   const supprimerCompte = async () => {
-    toast.error('La suppression définitive nécessite une action manuelle dans le dashboard Supabase pour des raisons de sécurité.');
+    toast.error('Pour des raisons de sécurité, la suppression définitive ne peut pas être effectuée depuis cette interface. Elle requiert une intervention technique.');
   };
 
   const reinitialiserMdp = async () => {
@@ -381,7 +382,7 @@ export default function AdminDetailUtilisateur() {
                   <InfoRow icon={Mail} label="Email" value={soignant.email} />
                   <InfoRow icon={Phone} label="Téléphone" value={soignant.telephone || '—'} />
                   <InfoRow icon={Calendar} label="Date de naissance" value={soignant.date_naissance ? new Date(soignant.date_naissance).toLocaleDateString('fr-FR') : '—'} />
-                  <InfoRow icon={Shield} label="Profession" value={soignant.profession} />
+                  <InfoRow icon={Shield} label="Profession" value={soignant.profession ? getLabelProfession(soignant.profession) : '—'} />
                   <InfoRow icon={FileText} label="RPPS" value={soignant.numero_rpps || '—'} />
                   <InfoRow icon={FileText} label="ADELI" value={soignant.numero_adeli || '—'} />
                   <InfoRow icon={MapPin} label="Coordonnées GPS" value={soignant.adresse_lat ? `${soignant.adresse_lat}, ${soignant.adresse_lng}` : '—'} />
@@ -514,7 +515,7 @@ export default function AdminDetailUtilisateur() {
                             <TableCell className="text-xs">{new Date(m.debut_le).toLocaleDateString('fr-FR')}</TableCell>
                             <TableCell className="text-xs">{m.duree_heures ? `${m.duree_heures}h` : '—'}</TableCell>
                             <TableCell>
-                              <BadgeY2K variant="info" size="sm">{m.statut === "OUVERTE" ? "Ouverte" : m.statut === "ASSIGNEE" ? "Assignée" : m.statut === "EN_COURS" ? "En cours" : m.statut === "TERMINEE" ? "Terminée" : m.statut}</BadgeY2K>
+                              <BadgeY2K variant="info" size="sm">{BADGES_STATUT[m.statut]?.label || m.statut}</BadgeY2K>
                             </TableCell>
                             {type === 'soignant' && <TableCell className="text-xs font-mono">{m.net_a_payer ? `${Number(m.net_a_payer).toFixed(2)} €` : '—'}</TableCell>}
                           </TableRow>
@@ -526,7 +527,7 @@ export default function AdminDetailUtilisateur() {
                   {/* Mobile : cards */}
                   <div className="md:hidden space-y-3">
                     {missions.map((m: any) => {
-                      const statutLabel = m.statut === "OUVERTE" ? "Ouverte" : m.statut === "ASSIGNEE" ? "Assignée" : m.statut === "EN_COURS" ? "En cours" : m.statut === "TERMINEE" ? "Terminée" : m.statut;
+                      const statutLabel = BADGES_STATUT[m.statut]?.label || m.statut;
                       const contrepartie = type === 'soignant'
                         ? ((m.etablissements as any)?.nom || '—')
                         : ((m.soignants as any) ? `${(m.soignants as any).prenom} ${(m.soignants as any).nom}` : '—');
@@ -631,11 +632,11 @@ export default function AdminDetailUtilisateur() {
               <CardY2K noPadding>
                 <CardY2KHeader><CardY2KTitle className="text-sm">Professionnel</CardY2KTitle></CardY2KHeader>
                 <CardY2KContent className="space-y-2">
-                  <ProfileRow label="Profession" value={soignant.profession} />
+                  <ProfileRow label="Profession" value={soignant.profession ? getLabelProfession(soignant.profession) : '—'} />
                   <ProfileRow label="Type de contrat" value={soignant.type_contrat || '—'} />
                   <ProfileRow label="RPPS" value={soignant.numero_rpps || '—'} />
                   <ProfileRow label="ADELI" value={soignant.numero_adeli || '—'} />
-                  <ProfileRow label="Rayon déplacement" value={`${soignant.rayon_deplacement_km || 30} km`} />
+                  <ProfileRow label="Rayon déplacement" value={soignant.rayon_deplacement_km != null ? `${soignant.rayon_deplacement_km} km` : '—'} />
                 </CardY2KContent>
               </CardY2K>
               <CardY2K noPadding>
@@ -645,7 +646,7 @@ export default function AdminDetailUtilisateur() {
                   <VerifRow label="Diplôme vérifié" ok={soignant.diplome_verifie} />
                   <VerifRow label="RPPS vérifié" ok={soignant.rpps_verifie} />
                   <VerifRow label="Tous documents valides" ok={soignant.tous_documents_valides} />
-                  <ProfileRow label="Statut vérification ARIA" value={soignant.statut_verification_aria || '—'} />
+                  <ProfileRow label="Statut vérification ARIA" value={soignant.statut_verification_aria ? (STATUTS_VERIFICATION[soignant.statut_verification_aria]?.label || soignant.statut_verification_aria) : '—'} />
                 </CardY2KContent>
               </CardY2K>
               <CardY2K noPadding>
@@ -802,15 +803,87 @@ export default function AdminDetailUtilisateur() {
         onFermer={() => setModalSupprimer(false)}
         onConfirmer={supprimerCompte}
         titre="Supprimer définitivement"
-        message={`Attention : la suppression définitive de ${nom} est irréversible. Cette action nécessite une intervention manuelle dans Supabase.`}
+        message={`Attention : la suppression définitive de ${nom} est irréversible. Pour des raisons de sécurité, elle requiert une intervention technique en dehors de cette interface.`}
         labelConfirmer="Supprimer"
         variante="danger"
+      />
+
+      <ModalActionAvecRaison
+        ouvert={modalLeverSuspension}
+        onFermer={() => setModalLeverSuspension(false)}
+        onConfirmer={leverSuspension}
+        titre="Lever la suspension"
+        message={`Voulez-vous lever la suspension de ${nom} ? Merci d'indiquer la raison de cette décision : elle sera conservée dans le journal d'audit.`}
+        raison={raisonLeverSuspension}
+        onChangeRaison={setRaisonLeverSuspension}
+        placeholder="Raison de la levée de suspension (obligatoire)"
+        labelConfirmer="Lever la suspension"
+      />
+
+      <ModalActionAvecRaison
+        ouvert={modalForceRib}
+        onFermer={() => setModalForceRib(false)}
+        onConfirmer={forcerReuploadRib}
+        titre="Demander un nouveau RIB"
+        message={`Le RIB actuel de ${nom} sera invalidé et un nouveau téléversement sera demandé à l'établissement. Merci d'indiquer la raison de cette action.`}
+        raison={raisonForceRib}
+        onChangeRaison={setRaisonForceRib}
+        placeholder="Raison de la demande (obligatoire)"
+        labelConfirmer="Confirmer"
       />
     </LayoutAdmin>
   );
 }
 
 /* ── Small helper components ── */
+
+function ModalActionAvecRaison({ ouvert, onFermer, onConfirmer, titre, message, raison, onChangeRaison, placeholder, labelConfirmer }: {
+  ouvert: boolean;
+  onFermer: () => void;
+  onConfirmer: () => void;
+  titre: string;
+  message: string;
+  raison: string;
+  onChangeRaison: (valeur: string) => void;
+  placeholder: string;
+  labelConfirmer: string;
+}) {
+  const titleId = React.useId();
+  const descId = React.useId();
+
+  if (!ouvert) return null;
+
+  return (
+    <div
+      className="fixed inset-0 z-[9999] flex items-center justify-center"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby={titleId}
+      aria-describedby={descId}
+    >
+      <div className="fixed inset-0 bg-foreground/50 backdrop-blur-sm" onClick={onFermer} aria-hidden="true" />
+      <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-card rounded-2xl shadow-xl p-6 mx-4 max-w-md w-[calc(100%-2rem)]">
+        <h3 id={titleId} className="text-lg font-bold text-foreground mb-2">{titre}</h3>
+        <p id={descId} className="text-sm text-muted-foreground mb-4">{message}</p>
+        <Textarea
+          value={raison}
+          onChange={(e) => onChangeRaison(e.target.value)}
+          placeholder={placeholder}
+          rows={3}
+          className="mb-4"
+        />
+        <div className="flex gap-3 justify-end">
+          <button onClick={onFermer} className="btn-secondary text-sm px-4 py-2" type="button">
+            Annuler
+          </button>
+          <button onClick={onConfirmer} className="btn-primary text-sm px-4 py-2" type="button">
+            {labelConfirmer}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function ProfileRow({ label, value }: { label: string; value: string | number }) {
   return (

@@ -30,7 +30,6 @@ interface LigneScore {
   email: string;
   score: number;
   niveau: 'BRONZE' | 'ARGENT' | 'OR' | 'PLATINE';
-  derniere_maj: string | null;
 }
 
 function niveauDepuisScore(score: number): LigneScore['niveau'] {
@@ -83,15 +82,15 @@ export default function AdminScoreTriage() {
             email: l.email ?? '',
             score,
             niveau: niveauDepuisScore(score),
-            derniere_maj: null,
           };
         });
 
         setLignes(mapped.sort((a, b) => a.score - b.score));
       } catch (err: any) {
+        console.error('Erreur chargement triage scores :', err);
         afficherNotification({
           type: 'erreur',
-          message: `Erreur de chargement : ${err?.message ?? 'Impossible de charger les scores.'}`,
+          message: 'Impossible de charger les scores. Veuillez réessayer plus tard.',
         });
       } finally {
         setLoading(false);
@@ -161,7 +160,7 @@ export default function AdminScoreTriage() {
               className="border rounded-md px-3 py-2 text-sm"
               aria-label="Filtre niveau"
             >
-              <option value="WARNING">Warnings (&lt;50)</option>
+              <option value="WARNING">À risque (&lt;50)</option>
               <option value="TOUS">Tous niveaux</option>
               <option value="BRONZE">Bronze</option>
               <option value="ARGENT">Argent</option>

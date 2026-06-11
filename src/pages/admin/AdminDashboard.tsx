@@ -15,6 +15,7 @@ import {
   CardY2KContent,
 } from '@/components/y2k/CardY2K';
 import { BadgeY2K } from '@/components/y2k/BadgeY2K';
+import { getLabelProfession, getLabelTypeEtablissement } from '@/lib/constantes';
 import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
 import { Separator } from '@/components/ui/separator';
@@ -23,6 +24,14 @@ import { BandeauAlertesAntiTricheAdmin } from '@/components/admin/BandeauAlertes
 const formatEur = (v: number) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(v);
 const formatEurPrecis = (v: number) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 2 }).format(v);
 const formatDate = (d: string) => new Date(d).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' });
+
+// Libellés humains des statuts de litige affichés (alignés sur FilDiscussionLitige)
+const STATUTS_LITIGE_LABELS: Record<string, string> = {
+  OUVERT: 'Ouvert',
+  EN_DISCUSSION: 'En discussion',
+  EN_MEDIATION: 'Médiation Jolene',
+  CONTESTEE: 'Contesté',
+};
 
 // Monthly fixed costs in EUR — update when subscription plans change
 const CHARGES_FIXES = [
@@ -78,7 +87,6 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     async function charger() {
-      const today = new Date().toISOString().split('T')[0];
       const [resKpi, resGraph, resSoignants, resEtabs, resLitiges, resFactures, resRentabilite, resEncaisse, resTransactions] = await Promise.all([
         supabase.rpc('fn_admin_kpi' as any),
         supabase.rpc('fn_admin_graphiques' as any),
@@ -194,7 +202,7 @@ export default function AdminDashboard() {
   return (
     <LayoutAdmin>
       <div className="space-y-6">
-        <h1 className="text-2xl font-bold text-foreground">Dashboard Admin</h1>
+        <h1 className="text-2xl font-bold text-foreground">Tableau de bord</h1>
 
         <BandeauAlertesAntiTricheAdmin />
 
@@ -265,8 +273,8 @@ export default function AdminDashboard() {
 
         {/* CA */}
         <div className="rounded-lg bg-muted/30 border border-border px-3 py-2 text-xs text-muted-foreground">
-          <strong className="text-foreground">Commission Jolene</strong> = ce que tu gardes (commission facturée aux établissements).
-          <strong className="text-foreground"> GMV</strong> = volume brut des missions (argent qui passe par la plateforme mais va aux soignants — tu ne le touches pas).
+          <strong className="text-foreground">Commission Jolene</strong> = ce que vous gardez (commission facturée aux établissements).
+          <strong className="text-foreground"> GMV</strong> = volume brut des missions (argent qui passe par la plateforme mais va aux soignants — vous ne le touchez pas).
         </div>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           <CarteKPIY2K
@@ -553,7 +561,7 @@ export default function AdminDashboard() {
                 <div key={s.id} className="flex justify-between items-center text-sm">
                   <div>
                     <span className="font-medium text-foreground">{s.prenom} {s.nom}</span>
-                    <BadgeY2K variant="info" size="sm" className="ml-2">{s.profession}</BadgeY2K>
+                    <BadgeY2K variant="info" size="sm" className="ml-2">{getLabelProfession(s.profession)}</BadgeY2K>
                   </div>
                   <span className="text-muted-foreground text-xs">{formatDate(s.cree_le)}</span>
                 </div>
@@ -564,7 +572,7 @@ export default function AdminDashboard() {
                 <div key={e.id} className="flex justify-between items-center text-sm">
                   <div>
                     <span className="font-medium text-foreground">{e.nom}</span>
-                    <BadgeY2K variant="info" size="sm" className="ml-2">{e.type}</BadgeY2K>
+                    <BadgeY2K variant="info" size="sm" className="ml-2">{getLabelTypeEtablissement(e.type)}</BadgeY2K>
                   </div>
                   <span className="text-muted-foreground text-xs">{formatDate(e.cree_le)}</span>
                 </div>
@@ -580,7 +588,7 @@ export default function AdminDashboard() {
                 <div key={l.id} className="text-sm cursor-pointer hover:bg-muted/50 rounded p-1.5 -mx-1.5" onClick={() => navigate('/admin/moderation')}>
                   <p className="font-medium text-foreground line-clamp-1">{l.motif}</p>
                   <div className="flex gap-2 mt-1">
-                    <BadgeY2K variant={l.statut === 'OUVERT' ? 'error' : 'info'} size="sm">{l.statut}</BadgeY2K>
+                    <BadgeY2K variant={l.statut === 'OUVERT' ? 'error' : 'info'} size="sm">{STATUTS_LITIGE_LABELS[l.statut] ?? l.statut}</BadgeY2K>
                     <span className="text-muted-foreground text-xs">{formatDate(l.cree_le)}</span>
                   </div>
                 </div>

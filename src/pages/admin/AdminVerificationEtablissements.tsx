@@ -97,7 +97,7 @@ export default function AdminVerificationEtablissements() {
   };
 
   const valider = async (etab: EtabAVerifier) => {
-    if (!confirm(`Valider « ${etab.nom} » ? L'établissement pourra publier des missions (rattachement ADMIN).`)) return;
+    if (!confirm(`Valider « ${etab.nom} » ? L'établissement pourra publier des missions (rattachement par décision admin).`)) return;
     setActionId(etab.id);
     try {
       const { data, error } = await supabase.rpc('fn_admin_valider_etablissement' as any, { p_etablissement_id: etab.id });
@@ -243,7 +243,7 @@ export default function AdminVerificationEtablissements() {
                       className="gap-1.5"
                     >
                       {actionId === etab.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
-                      Valider (rattachement ADMIN)
+                      Valider (rattachement par décision admin)
                     </BoutonY2K>
                     <BoutonY2K
                       size="sm"

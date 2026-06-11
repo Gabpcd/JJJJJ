@@ -54,7 +54,7 @@ type HealthData = {
 };
 
 export default function AdminStatus() {
-  usePageTitle('Status système');
+  usePageTitle('État du système');
   const [data, setData] = useState<HealthData | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -95,19 +95,25 @@ export default function AdminStatus() {
     : s === 'WARNING' ? 'warning'
     : 'info';
 
+  const severiteLabel: Record<AlerteInfo['severite'], string> = {
+    CRITICAL: 'Critique',
+    WARNING: 'Avertissement',
+    INFO: 'Info',
+  };
+
   return (
     <LayoutAdmin>
       <div className="flex items-start justify-between mb-6">
         <div>
           <h1 className="text-xl font-bold flex items-center gap-2">
-            <Activity className="h-6 w-6 text-primary" /> Status système
+            <Activity className="h-6 w-6 text-primary" /> État du système
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
             Dernière vérification : {format(new Date(data.timestamp), 'd MMM yyyy HH:mm:ss', { locale: fr })}
           </p>
         </div>
         <BoutonY2K onClick={charger} disabled={refreshing} variant="secondary" size="sm" className="gap-1.5" iconeGauche={<RefreshCw className={`h-3.5 w-3.5 ${refreshing ? 'animate-spin' : ''}`} />}>
-          Refresh
+          Actualiser
         </BoutonY2K>
       </div>
 
@@ -122,7 +128,7 @@ export default function AdminStatus() {
           <CardY2KContent className="space-y-2">
             {data.alertes_actives.map(a => (
               <div key={a.id} className="flex items-start gap-2 p-2 rounded-lg bg-muted/30">
-                <BadgeY2K variant={severiteVariant(a.severite)} size="sm">{a.severite}</BadgeY2K>
+                <BadgeY2K variant={severiteVariant(a.severite)} size="sm">{severiteLabel[a.severite]}</BadgeY2K>
                 <div className="flex-1 min-w-0">
                   <p className="text-xs font-semibold">{a.type} — {a.source}</p>
                   <p className="text-xs text-muted-foreground line-clamp-2">{a.message}</p>
@@ -201,7 +207,7 @@ export default function AdminStatus() {
 
       {/* Crons détail */}
       <CardY2K noPadding className="mb-4">
-        <CardY2KHeader className="pb-2"><CardY2KTitle className="text-base">Crons (17 actifs)</CardY2KTitle></CardY2KHeader>
+        <CardY2KHeader className="pb-2"><CardY2KTitle className="text-base">Crons ({data.crons.crons.length} actifs)</CardY2KTitle></CardY2KHeader>
         <CardY2KContent>
           {/* Desktop table */}
           <div className="hidden md:block overflow-x-auto">
@@ -308,7 +314,6 @@ export default function AdminStatus() {
           </div>
           <p className="text-[11px] text-muted-foreground italic">
             ℹ️ Si la VITE_SENTRY_DSN n'est pas configurée côté Vercel, ce bouton est inactif silencieusement.
-            Voir <code>docs/sentry-setup.md</code> pour activer Sentry.
           </p>
         </CardY2KContent>
       </CardY2K>

@@ -7,15 +7,13 @@ import { supabase } from '@/integrations/supabase/client';
 import { CardY2K, CardY2KContent } from '@/components/y2k/CardY2K';
 import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { Badge } from '@/components/ui/badge';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 import { format, differenceInDays } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import {
   AlertTriangle, ChevronDown, ChevronUp, Mail, Phone, Send, Clock,
-  CreditCard, Building2, Calendar, User, FileText, Loader2, ExternalLink,
-  MessageCircle, Euro, Ban,
+  Building2,
 } from 'lucide-react';
 
 const fmt = (v: number) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(v);
@@ -74,7 +72,6 @@ export default function AdminImpayees() {
 
   const charger = async () => {
     setLoading(true);
-    const today = new Date().toISOString().split('T')[0];
 
     const { data: rawFactures } = await supabase
       .from('factures')
@@ -233,7 +230,7 @@ export default function AdminImpayees() {
       toast.error((data as any)?.error || 'Erreur lors de la mise à jour du statut');
       return;
     }
-    toast.success('Statut mis à jour : EN_RETARD');
+    toast.success('Facture marquée en retard');
     charger();
   };
 
@@ -472,7 +469,7 @@ export default function AdminImpayees() {
                             </BoutonY2K>
                             {f.statut === 'EMISE' && f.joursRetard > 0 && (
                               <BoutonY2K size="sm" variant="secondary" className="gap-1 text-xs" onClick={() => marquerEnRetard(f.id)} iconeGauche={<Clock className="h-3 w-3" />}>
-                                Marquer EN_RETARD
+                                Marquer en retard
                               </BoutonY2K>
                             )}
                             <BoutonY2K size="sm" variant="secondary" className="gap-1 text-xs" onClick={() => navigate(`/admin/utilisateurs/${f.etablissement_id}`)} iconeGauche={<Building2 className="h-3 w-3" />}>

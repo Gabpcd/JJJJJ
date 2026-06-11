@@ -42,6 +42,7 @@ interface DrillRevenueLigne {
   totalHT: number;
 }
 
+// Estimations maintenues manuellement — affichées comme « estimation » à l'écran, pas comme coûts réels.
 const CHARGES_FIXES_MENSUELLES = [
   { label: 'Supabase', montant: 25 },
   { label: 'Resend', montant: 20 },
@@ -139,8 +140,6 @@ export default function AdminCockpitFondateur() {
     const mrrAnnualise = revenuMensuel * 12;
     const arr = mrrAnnualise;
     const ltv = revenuMensuel > 0 && data.total_etabs > 0 ? (revenuMensuel / data.total_etabs) * 24 : 0;
-    const cac = data.total_etabs > 0 ? 0 : 0; // CAC = 0 car acquisition organique pour l'instant
-    const ltvCacRatio = cac > 0 ? ltv / cac : Infinity;
 
     return {
       mrr: revenuMensuel,
@@ -149,8 +148,6 @@ export default function AdminCockpitFondateur() {
       totalCharges,
       stripeFees,
       ltv,
-      cac,
-      ltvCacRatio,
     };
   }, [data]);
 
@@ -161,10 +158,8 @@ export default function AdminCockpitFondateur() {
   const revData = data.revenue_mensuel || [];
 
   const pipelineStats = {
-    total: pipeline.length,
     actifs: pipeline.filter((i: any) => !['DECLINE', 'SIGNE'].includes(i.statut)).length,
     montantVise: pipeline.reduce((s: number, i: any) => s + (Number(i.montant_vise) || 0), 0),
-    signes: pipeline.filter((i: any) => i.statut === 'SIGNE').length,
   };
 
   return (
@@ -244,7 +239,7 @@ export default function AdminCockpitFondateur() {
           <CarteKPIY2K
             icone={<Target className="h-4 w-4" />}
             valeur={fmt(data.revenue_total ?? 0)}
-            label="Revenue total (commissions)"
+            label="Revenus totaux (commissions)"
             variant="default"
             onClick={() => navigate('/admin/facturation')}
           />
@@ -327,7 +322,7 @@ export default function AdminCockpitFondateur() {
           {/* Revenue */}
           <CardY2K hoverLift={false}>
             <CardY2KHeader>
-              <CardY2KTitle className="text-sm">Revenue mensuel (commissions HT)</CardY2KTitle>
+              <CardY2KTitle className="text-sm">Revenus mensuels (commissions HT)</CardY2KTitle>
               <p className="text-[11px] text-muted-foreground">Cliquez sur un mois pour voir le détail par établissement</p>
             </CardY2KHeader>
             <CardY2KContent>
@@ -340,7 +335,7 @@ export default function AdminCockpitFondateur() {
                   <XAxis dataKey="mois" tick={{ fontSize: 11 }} />
                   <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => fmtK(v)} />
                   <Tooltip formatter={(v: number) => fmt(v)} />
-                  <Area dataKey="revenue_ht" name="Revenue HT" fill="hsl(var(--primary))" fillOpacity={0.3} stroke="hsl(var(--primary))" />
+                  <Area dataKey="revenue_ht" name="Revenus HT" fill="hsl(var(--primary))" fillOpacity={0.3} stroke="hsl(var(--primary))" />
                 </AreaChart>
               </ResponsiveContainer>
               {drill?.type === 'revenue' && (
@@ -393,9 +388,9 @@ export default function AdminCockpitFondateur() {
                   <p className="text-lg font-bold text-foreground">{fmt(runway.burnMensuel)}</p>
                 </div>
                 <div className="rounded-lg border p-3">
-                  <p className="text-xs text-muted-foreground">Charges totales /mois</p>
+                  <p className="text-xs text-muted-foreground">Charges totales /mois (estimation)</p>
                   <p className="text-lg font-bold text-foreground">{fmt(runway.totalCharges)}</p>
-                  <p className="text-[10px] text-muted-foreground">fixes {fmt(TOTAL_FIXES)} + Stripe {fmt(runway.stripeFees)} + équipe {fmt(data.charges_equipe_mensuel || 0)}</p>
+                  <p className="text-[10px] text-muted-foreground">fixes estimées {fmt(TOTAL_FIXES)} + Stripe estimé {fmt(runway.stripeFees)} + équipe {fmt(data.charges_equipe_mensuel || 0)}</p>
                 </div>
                 <div className="rounded-lg border p-3">
                   <p className="text-xs text-muted-foreground">LTV (étab, 24 mois)</p>
@@ -403,8 +398,8 @@ export default function AdminCockpitFondateur() {
                 </div>
                 <div className="rounded-lg border p-3">
                   <p className="text-xs text-muted-foreground">CAC</p>
-                  <p className="text-lg font-bold text-foreground">{runway.cac > 0 ? fmt(runway.cac) : '0 € (organique)'}</p>
-                  <p className="text-[10px] text-muted-foreground">LTV/CAC : {runway.cac > 0 ? `${runway.ltvCacRatio.toFixed(1)}x` : '∞'}</p>
+                  <p className="text-lg font-bold text-foreground">—</p>
+                  <p className="text-[10px] text-muted-foreground">Non mesuré — acquisition organique</p>
                 </div>
               </div>
             </CardY2KContent>

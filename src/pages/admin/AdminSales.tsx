@@ -35,6 +35,14 @@ const AUDIENCES = [
 ];
 const STATUTS_GROUPE = ['ACTIF', 'A_VERIFIER', 'INACTIF'];
 const STATUTS_CONTACT = ['PROSPECT', 'CONTACTE', 'RELANCE', 'INSCRIT', 'PERDU'];
+/** Libellés français des statuts contact (les valeurs envoyées en base restent inchangées). */
+const LABELS_STATUT_CONTACT: Record<string, string> = {
+  PROSPECT: 'Prospect',
+  CONTACTE: 'Contacté',
+  RELANCE: 'Relancé',
+  INSCRIT: 'Inscrit',
+  PERDU: 'Perdu',
+};
 
 function badgeStatutGroupe(s: string): 'success' | 'warning' | 'error' {
   return s === 'ACTIF' ? 'success' : s === 'INACTIF' ? 'error' : 'warning';
@@ -103,7 +111,7 @@ function useTemplateProspection(): TemplateProspection {
 }
 
 export default function AdminSales() {
-  usePageTitle('Sales / Sourcing');
+  usePageTitle('Recruter des soignants et des établissements');
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<'groupes' | 'soignants' | 'etablissements' | 'prospection' | 'prospection_soignants' | 'etab_jolene' | 'templates' | 'posts'>('groupes');
 
@@ -269,18 +277,12 @@ export default function AdminSales() {
       .update({ sujet: editTemplate.sujet?.trim() || null, contenu: editTemplate.contenu } as any)
       .eq('id', editTemplate.id);
     if (error) { toast.error(error.message); return; }
-    toast.success('Template enregistré — utilisé par tous les boutons email.');
+    toast.success('Modèle enregistré — utilisé par tous les boutons email.');
     setEditTemplate(null); charger();
   };
 
   const majStatutContact = async (id: string, statut: string) => {
     const { error } = await supabase.from('sales_contacts' as any).update({ statut, maj_le: new Date().toISOString() } as any).eq('id', id);
-    if (error) { toast.error(error.message); return; }
-    charger();
-  };
-
-  const supprimerContact = async (id: string) => {
-    const { error } = await supabase.from('sales_contacts' as any).delete().eq('id', id);
     if (error) { toast.error(error.message); return; }
     charger();
   };
@@ -292,7 +294,7 @@ export default function AdminSales() {
       <div className="space-y-5">
         <div>
           <h1 className="text-xl font-bold text-foreground flex items-center gap-2">
-            <Megaphone className="h-5 w-5 text-primary" /> Sales / Sourcing
+            <Megaphone className="h-5 w-5 text-primary" /> Recruter des soignants et des établissements
           </h1>
           <p className="text-sm text-muted-foreground">
             Groupes de recrutement (WhatsApp, Facebook, LinkedIn…), contacts sourcés & publication assistée.
@@ -307,7 +309,7 @@ export default function AdminSales() {
           <BoutonY2K variant={tab === 'prospection' ? 'primary' : 'secondary'} size="sm" onClick={() => setTab('prospection')} iconeGauche={<Search className="h-4 w-4" />}>Prospection étab.</BoutonY2K>
           <BoutonY2K variant={tab === 'prospection_soignants' ? 'primary' : 'secondary'} size="sm" onClick={() => setTab('prospection_soignants')} iconeGauche={<Users className="h-4 w-4" />}>Prospection soignants</BoutonY2K>
           <BoutonY2K variant={tab === 'etab_jolene' ? 'primary' : 'secondary'} size="sm" onClick={() => setTab('etab_jolene')} iconeGauche={<Building2 className="h-4 w-4" />}>Étab. Jolene</BoutonY2K>
-          <BoutonY2K variant={tab === 'templates' ? 'primary' : 'secondary'} size="sm" onClick={() => setTab('templates')} iconeGauche={<FileText className="h-4 w-4" />}>Templates ({templates.length})</BoutonY2K>
+          <BoutonY2K variant={tab === 'templates' ? 'primary' : 'secondary'} size="sm" onClick={() => setTab('templates')} iconeGauche={<FileText className="h-4 w-4" />}>Modèles ({templates.length})</BoutonY2K>
           <BoutonY2K variant={tab === 'posts' ? 'primary' : 'secondary'} size="sm" onClick={() => setTab('posts')} iconeGauche={<Send className="h-4 w-4" />}>Posts de la semaine</BoutonY2K>
         </div>
 
@@ -432,7 +434,7 @@ export default function AdminSales() {
                 <CardY2KContent>
                   <div className="flex items-center justify-between gap-2 mb-2">
                     <span className="font-semibold text-foreground">{t.nom}</span>
-                    <BadgeY2K variant="info">{t.cible === 'GROUPE' ? 'Post groupe' : t.cible === 'SOIGNANT' ? 'DM soignant' : 'DM établissement'}</BadgeY2K>
+                    <BadgeY2K variant="info">{t.cible === 'GROUPE' ? 'Post groupe' : t.cible === 'SOIGNANT' ? 'Message privé soignant' : 'Message privé établissement'}</BadgeY2K>
                   </div>
                   {t.sujet && (
                     <p className="text-xs text-foreground mb-1.5"><span className="text-muted-foreground">Sujet :</span> <strong>{t.sujet}</strong></p>
@@ -527,7 +529,7 @@ export default function AdminSales() {
             </Champ>
             <Champ label="Statut">
               <select value={editContact.statut} onChange={e => setEditContact({ ...editContact, statut: e.target.value })} className="input-base h-9 w-full">
-                {STATUTS_CONTACT.map(s => <option key={s} value={s}>{s}</option>)}
+                {STATUTS_CONTACT.map(s => <option key={s} value={s}>{LABELS_STATUT_CONTACT[s] || s}</option>)}
               </select>
             </Champ>
           </div>
@@ -540,7 +542,7 @@ export default function AdminSales() {
         <FormPanel titre={`Modifier « ${editTemplate.nom} »`} onClose={() => setEditTemplate(null)} onSave={sauverTemplate}>
           <p className="text-xs text-muted-foreground mb-2">
             Placeholders disponibles : <code>{'{{nom}}'}</code> (nom de l'établissement) et <code>{'{{ville}}'}</code> —
-            remplacés automatiquement à l'envoi et dans le mailto.
+            remplacés automatiquement à l'envoi, que l'email parte de Jolene ou de votre boîte mail.
           </p>
           <Champ label="Sujet de l'email">
             <Input value={editTemplate.sujet || ''} onChange={e => setEditTemplate({ ...editTemplate, sujet: e.target.value })} />
@@ -600,7 +602,7 @@ function ListeContacts({ type, contacts, voirArchives, onToggleArchives, onAdd, 
                   </div>
                   <div className="flex items-center gap-1.5">
                     {c.archive && <BadgeY2K variant="warning">Archivé</BadgeY2K>}
-                    <BadgeY2K variant={badgeStatutContact(c.statut)}>{c.statut}</BadgeY2K>
+                    <BadgeY2K variant={badgeStatutContact(c.statut)}>{LABELS_STATUT_CONTACT[c.statut] || c.statut}</BadgeY2K>
                   </div>
                 </div>
                 {/* Contacter */}
@@ -620,7 +622,7 @@ function ListeContacts({ type, contacts, voirArchives, onToggleArchives, onAdd, 
                 {/* Pipeline + édition */}
                 <div className="flex gap-2 mt-2 items-center flex-wrap">
                   <select value={c.statut} onChange={e => onStatut(c.id, e.target.value)} className="input-base h-8 text-xs">
-                    {STATUTS_CONTACT.map(s => <option key={s} value={s}>{s}</option>)}
+                    {STATUTS_CONTACT.map(s => <option key={s} value={s}>{LABELS_STATUT_CONTACT[s] || s}</option>)}
                   </select>
                   <BoutonY2K size="sm" variant="ghost" onClick={() => onEdit(c)}>Éditer</BoutonY2K>
                   {c.archive ? (
@@ -934,7 +936,7 @@ function OutreachModal({ prospect, template, onClose }: { prospect: any; templat
           <h2 className="font-bold text-foreground">Email à {prospect.nom}</h2>
           <button onClick={onClose} className="text-muted-foreground hover:text-foreground"><X className="h-5 w-5" /></button>
         </div>
-        <p className="text-xs text-muted-foreground">À : {prospect.email} · De : Gabrielle de Jolene (réponses → ta boîte perso)</p>
+        <p className="text-xs text-muted-foreground">À : {prospect.email} · De : Gabrielle de Jolene (réponses → votre boîte perso)</p>
         <Champ label="Sujet"><Input value={sujet} onChange={e => setSujet(e.target.value)} /></Champ>
         <Champ label="Message"><Textarea value={corps} onChange={e => setCorps(e.target.value)} rows={9} /></Champ>
         <div className="flex gap-2 pt-1">
@@ -1038,7 +1040,7 @@ function PostsGenerateur() {
     <div className="space-y-4">
       <p className="text-xs text-muted-foreground">
         Textes générés depuis les missions réellement ouvertes — copiez-les dans vos groupes Facebook/WhatsApp/LinkedIn
-        (onglet Groupes). Les liens sont tracés (utm_campaign=post-hebdo) : l'impact est visible dans Acquisition.
+        (onglet Groupes). Les liens incluent un suivi automatique : l'impact est visible dans Acquisition.
       </p>
 
       {/* Config lien avis Google (utilisé par l'email post-mission automatique) */}
@@ -1164,9 +1166,16 @@ function ProspectionSoignants({ onAjouter }: { onAjouter: () => void }) {
     const { error } = await supabase.from('prospects_soignants' as any)
       .update({ email: valeur || null } as any).eq('cle', emailEdit.cle);
     if (error) { toast.error(error.message); return; }
-    toast.success('Email enregistré.');
+    const prospect = emailEdit.prospect;
     setEmailEdit(null);
     rechercher(page);
+    // Enchaîne directement sur l'envoi : email saisi → brouillon pré-rempli dans la boîte mail.
+    if (valeur && prospect) {
+      toast.success('Email enregistré — message prêt dans votre boîte mail.');
+      mailtoSoignant({ ...prospect, email: valeur });
+    } else {
+      toast.success('Email enregistré.');
+    }
   };
 
   const ajouterAuPipeline = async (pr: any) => {
