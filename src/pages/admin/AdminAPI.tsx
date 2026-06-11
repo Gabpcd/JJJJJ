@@ -11,7 +11,9 @@ import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { logger } from '@/lib/logger';
 import { toast } from 'sonner';
-const SUPABASE_FUNCTIONS_URL = import.meta.env.VITE_SUPABASE_URL ? `${import.meta.env.VITE_SUPABASE_URL}/functions/v1` : '—';
+import { SUPABASE_URL } from '@/integrations/supabase/client';
+
+const SUPABASE_FUNCTIONS_URL = `${SUPABASE_URL}/functions/v1`;
 
 const ENDPOINTS = [
   { method: 'GET', path: '/api-v1/missions', desc: 'Lister les missions de l\'établissement', example: '{ "missions": [{ "id": "uuid", "intitule": "IDE Nuit", "debut_le": "2026-03-15T20:00:00Z", "statut": "OUVERTE" }], "count": 1 }' },
