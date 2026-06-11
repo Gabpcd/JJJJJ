@@ -68,10 +68,12 @@ jobs:
             -H "apikey: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
             -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}")
           if [ "$code" != "200" ]; then
-            echo "::error::Le secret SUPABASE_SERVICE_ROLE_KEY n'est PAS une clé service_role (admin GoTrue → HTTP $code) — c'est probablement la clé anon/publishable. Remplacer le secret GitHub par la « secret key » (sb_secret_…) du Dashboard Supabase → Settings → API keys."
-            exit 1
+            # Warning (pas exit 1) : on laisse tourner les tests qui ne
+            # dépendent pas du service_role (a11y, navigation, UI publiques).
+            echo "::warning::Le secret SUPABASE_SERVICE_ROLE_KEY n'est PAS une clé service_role (admin GoTrue → HTTP $code) — c'est probablement la clé anon/publishable. ~60 tests backend échoueront. Remplacer le secret GitHub par la « secret key » (sb_secret_…) du Dashboard Supabase → Settings → API keys."
+          else
+            echo "service_role OK (admin GoTrue 200)"
           fi
-          echo "service_role OK"
           # 2) Login compte test (publishable key + mot de passe fixe)
           code=$(curl -s -o /dev/null -w '%{http_code}' \
             "$E2E_SUPABASE_URL/auth/v1/token?grant_type=password" \
