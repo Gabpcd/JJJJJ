@@ -221,7 +221,8 @@ export default function DashboardSoignant() {
         </div>
       )}
 
-      {/* Sprint 9-C PR 3 — Header Y2K avec mascotte cœur + "Hiii" accueil */}
+      {/* Sprint 9-C PR 3 — Header Y2K avec mascotte cœur + "Hiii" accueil
+          Session B — hero compact : chips gamification cliquables sous le titre */}
       <div className="mb-6 flex items-start gap-4">
         <Mascotte
           etat={soignantWithCounts.tous_documents_valides ? 'happy' : 'thinking'}
@@ -240,6 +241,32 @@ export default function DashboardSoignant() {
           ) : (
             <p className="text-sm text-muted-foreground mt-1">Voici votre activité</p>
           )}
+          <div className="flex items-center gap-2 flex-wrap mt-2">
+            {hasEvaluations && score != null && (
+              <button
+                onClick={() => navigate('/soignant/score')}
+                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-primary/10 text-primary text-xs font-semibold hover:bg-primary/20 transition-colors"
+              >
+                ⭐ {score}/100
+              </button>
+            )}
+            {missionsTerminees > 0 && (
+              <button
+                onClick={() => navigate('/soignant/historique-missions')}
+                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-jolene-mauve-100 dark:bg-jolene-mauve-900/30 text-jolene-mauve-700 dark:text-jolene-mauve-300 text-xs font-semibold hover:opacity-80 transition-opacity"
+              >
+                🏅 {missionsTerminees} mission{missionsTerminees > 1 ? 's' : ''}
+              </button>
+            )}
+            {heures > 0 && (
+              <button
+                onClick={() => navigate(seuilHeures ? '/soignant/passer-en-liberal' : '/soignant/planning?tab=historique')}
+                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-muted text-muted-foreground text-xs font-semibold hover:bg-muted/70 transition-colors"
+              >
+                ⏱ {heures}h{seuilHeures ? ` / ${seuilHeures.toLocaleString('fr-FR')}h` : ''}
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -358,15 +385,27 @@ export default function DashboardSoignant() {
           <SectionErrorBoundary section="accueil">
           <BannerEncourageNotation role="SOIGNANT" />
 
-          {/* Quick actions */}
+          {/* Quick actions — le swipe (différenciateur) à 1 tap du dashboard */}
           <div className="flex gap-3 mb-6 overflow-x-auto pb-1">
-            <BoutonY2K variant="secondary" size="sm" onClick={() => navigate('/soignant/planning')} className="whitespace-nowrap" iconeGauche={<CalendarDays className="h-4 w-4" />}>
-              📅 Voir mon planning
+            <BoutonY2K variant="primary" size="sm" onClick={() => navigate('/soignant/swipe-missions')} className="whitespace-nowrap">
+              🔥 Swiper les missions
             </BoutonY2K>
             <BoutonY2K variant="secondary" size="sm" onClick={() => navigate('/soignant/missions')} className="whitespace-nowrap" iconeGauche={<Search className="h-4 w-4" />}>
-              Chercher des missions
+              Chercher
+            </BoutonY2K>
+            <BoutonY2K variant="secondary" size="sm" onClick={() => navigate('/soignant/planning')} className="whitespace-nowrap" iconeGauche={<CalendarDays className="h-4 w-4" />}>
+              Mon planning
             </BoutonY2K>
           </div>
+
+          {/* Prochain badge à débloquer — gamification visible dès l'accueil */}
+          {badgeStats && (
+            <div className="mb-6">
+              <FadeInView>
+                <ProchainBadgeWidget stats={badgeStats} />
+              </FadeInView>
+            </div>
+          )}
 
           <SuggestionsMissions />
 
@@ -470,6 +509,23 @@ export default function DashboardSoignant() {
             </FadeInView>
           </div>
 
+          {/* Teaser classement — concours amical, découverte de la page */}
+          {missionsTerminees > 0 && (
+            <div
+              onClick={() => navigate('/soignant/classement')}
+              className="card-base mb-6 cursor-pointer hover:shadow-md transition-all flex items-center gap-3"
+            >
+              <div className="rounded-xl p-2.5 bg-gradient-to-br from-jolene-rose-100 to-jolene-mauve-100 dark:from-jolene-rose-900/30 dark:to-jolene-mauve-900/30">
+                <span className="text-xl">🏆</span>
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-foreground">Classement des soignants</p>
+                <p className="text-xs text-muted-foreground">Où en êtes-vous parmi les soignants Jolene cette semaine ?</p>
+              </div>
+              <span className="text-xs text-primary font-medium shrink-0">Voir →</span>
+            </div>
+          )}
+
           </SectionErrorBoundary>
         </TabsContent>
 
@@ -488,21 +544,12 @@ export default function DashboardSoignant() {
             <CompteurHebdomadaire />
           </div>
 
-          {/* Progression 3200h — IDE/IBODE/IADE uniquement */}
+          {/* Progression 3200h — IDE/IBODE/IADE uniquement
+              (ProchainBadgeWidget remonté sur l'onglet Accueil — Session B) */}
           {regleInstallation?.categorie === 'AVEC_HEURES_IDE' && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-6">
+            <div className="mb-6">
               <FadeInView delay={0}>
                 <ProgressionCirculaire3200h heures={heures} />
-              </FadeInView>
-              <FadeInView delay={100}>
-                {badgeStats && <ProchainBadgeWidget stats={badgeStats} />}
-              </FadeInView>
-            </div>
-          )}
-          {regleInstallation?.categorie !== 'AVEC_HEURES_IDE' && badgeStats && (
-            <div className="mb-6">
-              <FadeInView delay={100}>
-                <ProchainBadgeWidget stats={badgeStats} />
               </FadeInView>
             </div>
           )}

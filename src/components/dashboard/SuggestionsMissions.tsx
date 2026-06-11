@@ -31,7 +31,7 @@ export function SuggestionsMissions() {
 
   const charger = async () => {
     setLoading(true);
-    const { data } = await supabase.rpc('fn_suggestions_missions_pour_soignant' as any, { p_limit: 5 });
+    const { data } = await supabase.rpc('fn_suggestions_missions_pour_soignant' as any, { p_limit: 3 });
     setItems(((data as any) ?? []) as Suggestion[]);
     setLoading(false);
   };
