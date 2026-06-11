@@ -5,6 +5,7 @@ import { SEOHead } from '@/components/SEOHead';
 import { ClipboardList, Users, CheckCircle, MapPin, FileText, Navigation, TrendingUp, UserCheck, PercentCircle, Scale, Receipt, ShieldCheck, HeartPulse, ArrowRight, Search, Loader2 } from 'lucide-react';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { SelectProfession } from '@/components/SelectProfession';
+import { Mascotte } from '@/components/mascotte/Mascotte';
 import { useDebounce } from '@/hooks/useDebounce';
 import { publicSupabase } from '@/integrations/supabase/public-client';
 import { supabase } from '@/integrations/supabase/client';
@@ -267,8 +268,7 @@ export default function PageAccueil() {
           "applicationCategory": "HealthApplication",
           "operatingSystem": "Web, iOS, Android",
           "offers": { "@type": "Offer", "price": "0", "priceCurrency": "EUR", "description": "Inscription gratuite pour les soignants" },
-          "creator": { "@type": "Organization", "name": "Jolene SASU", "url": "https://jolene.app", "address": { "@type": "PostalAddress", "streetAddress": "103 rue de Vaugirard", "addressLocality": "Paris", "postalCode": "75006", "addressCountry": "FR" } },
-          "aggregateRating": { "@type": "AggregateRating", "ratingValue": "4.8", "ratingCount": "150", "bestRating": "5" }
+          "creator": { "@type": "Organization", "name": "Jolene SASU", "url": "https://jolene.app", "address": { "@type": "PostalAddress", "streetAddress": "103 rue de Vaugirard", "addressLocality": "Paris", "postalCode": "75006", "addressCountry": "FR" } }
         }}
       />
     <div className="min-h-[100dvh] bg-background text-foreground overflow-x-hidden">
@@ -299,18 +299,22 @@ export default function PageAccueil() {
         <div className="absolute bottom-10 left-[10%] w-56 h-56 rounded-full opacity-[0.06]" style={{ background: 'radial-gradient(circle, hsl(215 80% 55%), transparent 70%)' }} />
         <div className="absolute top-1/3 left-1/2 w-96 h-96 rounded-full opacity-[0.04]" style={{ background: 'radial-gradient(circle, hsl(270 60% 50%), transparent 70%)' }} />
 
-        <div className={`relative max-w-3xl mx-auto px-4 pt-20 pb-24 md:pt-28 md:pb-32 text-center transition-all duration-1000 ease-out ${heroVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-6'}`}>
+        <div className={`relative max-w-3xl mx-auto px-4 pt-14 pb-20 md:pt-20 md:pb-28 text-center transition-all duration-1000 ease-out ${heroVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-6'}`}>
+          <div className="flex justify-center mb-4">
+            <Mascotte etat="happy" taille="md" />
+          </div>
           <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 text-primary text-sm font-semibold mb-6">
-            ✨ La plateforme qui change tout
+            ✨ Missions, contrats, paie : tout-en-un
           </div>
           <h1 className="text-4xl md:text-6xl font-extrabold leading-[1.1] tracking-tight mb-6">
-            Trouvez le bon soignant.{' '}
+            Le remplacement santé,{' '}
             <span className="bg-clip-text text-transparent" style={{ backgroundImage: 'linear-gradient(135deg, hsl(330 85% 55%), hsl(270 60% 50%), hsl(215 80% 55%))' }}>
-              En quelques clics.
+              enfin simple.
             </span>
           </h1>
-          <p className="text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto mb-10 leading-relaxed">
-            Établissements et soignants connectés pour des missions de remplacement simples, rapides et fiables.
+          <p className="text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto mb-8 leading-relaxed">
+            Les établissements publient, les soignants choisissent. Contrat signé en ligne,
+            pointage GPS, paiement suivi — sans téléphone, sans paperasse.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <button
@@ -330,24 +334,96 @@ export default function PageAccueil() {
               🏥 Je suis un établissement <ArrowRight className="h-4 w-4" />
             </button>
           </div>
+          {/* Micro-preuves : que des faits produit, pas de chiffres inventés */}
+          <div className="flex flex-wrap justify-center gap-x-5 gap-y-2 mt-7 text-xs sm:text-sm text-muted-foreground">
+            <span className="inline-flex items-center gap-1.5"><CheckCircle className="h-3.5 w-3.5 text-primary" /> 0 € pour les soignants</span>
+            <span className="inline-flex items-center gap-1.5"><CheckCircle className="h-3.5 w-3.5 text-primary" /> Diplômes vérifiés par IA</span>
+            <span className="inline-flex items-center gap-1.5"><CheckCircle className="h-3.5 w-3.5 text-primary" /> Contrats signés en ligne</span>
+            <span className="inline-flex items-center gap-1.5"><CheckCircle className="h-3.5 w-3.5 text-primary" /> 15 professions, salariat &amp; libéral</span>
+          </div>
         </div>
       </section>
 
       {/* ═══ Section 1b — Recherche missions publique ═══ */}
       <RechercheMissionsPublique navigate={navigate} />
 
-      {/* ═══ Section 2 — Comment ça marche ═══ */}
+      {/* ═══ Section 2 — Double proposition de valeur (remontée : le visiteur
+          s'identifie d'abord, le « comment » vient ensuite) ═══ */}
+      <section className="py-20 md:py-28 bg-background">
+        <div className="max-w-5xl mx-auto px-4">
+          <RevealOnScroll>
+            <h2 className="text-2xl md:text-4xl font-bold text-center mb-14">Une plateforme, deux expériences 🤝</h2>
+          </RevealOnScroll>
+          <div className="grid md:grid-cols-2 gap-6 md:gap-8">
+            {/* Soignants */}
+            <RevealOnScroll delay={0}>
+              <div className="rounded-2xl p-8 md:p-10 h-full border-0 shadow-lg" style={{ background: 'linear-gradient(135deg, hsl(330 85% 60% / 0.08), hsl(270 60% 50% / 0.05))' }}>
+                <h3 className="text-xl font-bold text-foreground mb-6">🩺 Pour les soignants</h3>
+                <ul className="space-y-4">
+                  {[
+                    { emoji: '📍', text: 'Missions près de chez vous, en liste ou en swipe' },
+                    { emoji: '💶', text: 'Rémunération affichée avant de postuler, paiement suivi' },
+                    { emoji: '📄', text: 'Contrats générés et signés en ligne' },
+                    { emoji: '🚀', text: 'Parcours accompagné vers le libéral (3 200 h)' },
+                  ].map((item, i) => (
+                    <li key={i} className="flex items-start gap-3">
+                      <span className="text-xl mt-0.5">{item.emoji}</span>
+                      <span className="text-foreground font-medium">{item.text}</span>
+                    </li>
+                  ))}
+                </ul>
+                <button
+                  onClick={() => navigate('/inscription/soignant')}
+                  className="mt-8 inline-flex items-center gap-2 text-white font-semibold text-sm rounded-xl px-6 py-3 transition-all hover:-translate-y-0.5 shadow-md"
+                  style={{ background: 'linear-gradient(135deg, hsl(330 85% 55%), hsl(270 60% 50%))' }}
+                >
+                  Créer mon profil gratuit ✨ <ArrowRight className="h-4 w-4" />
+                </button>
+              </div>
+            </RevealOnScroll>
+
+            {/* Établissements */}
+            <RevealOnScroll delay={150}>
+              <div className="rounded-2xl p-8 md:p-10 h-full border-0 shadow-lg" style={{ background: 'linear-gradient(135deg, hsl(215 80% 55% / 0.08), hsl(174 72% 48% / 0.05))' }}>
+                <h3 className="text-xl font-bold text-foreground mb-6">🏥 Pour les établissements</h3>
+                <ul className="space-y-4">
+                  {[
+                    { emoji: '✅', text: 'Soignants vérifiés : identité, diplôme, RPPS, RCP' },
+                    { emoji: '⚡', text: 'Remplaçant trouvé en urgence, garantie no-show' },
+                    { emoji: '⚖️', text: 'DPAE, loi Rist, Code du travail : conformité intégrée' },
+                    { emoji: '🧾', text: 'Facturation automatisée, Chorus Pro inclus' },
+                  ].map((item, i) => (
+                    <li key={i} className="flex items-start gap-3">
+                      <span className="text-xl mt-0.5">{item.emoji}</span>
+                      <span className="text-foreground font-medium">{item.text}</span>
+                    </li>
+                  ))}
+                </ul>
+                <button
+                  onClick={() => navigate('/inscription/etablissement')}
+                  className="mt-8 inline-flex items-center gap-2 text-white font-semibold text-sm rounded-xl px-6 py-3 transition-all hover:-translate-y-0.5 shadow-md"
+                  style={{ background: 'linear-gradient(135deg, hsl(215 80% 55%), hsl(174 72% 48%))' }}
+                >
+                  Publier ma première mission 🎯 <ArrowRight className="h-4 w-4" />
+                </button>
+              </div>
+            </RevealOnScroll>
+          </div>
+        </div>
+      </section>
+
+      {/* ═══ Section 3 — Comment ça marche ═══ */}
       <section className="py-20 md:py-28 bg-card">
         <div className="max-w-5xl mx-auto px-4">
           <RevealOnScroll>
             <h2 className="text-2xl md:text-4xl font-bold text-center mb-4">Comment ça marche 🚀</h2>
-            <p className="text-muted-foreground text-center mb-14 max-w-lg mx-auto">Trois étapes ultra-simples pour trouver votre mission de rêve ☀️</p>
+            <p className="text-muted-foreground text-center mb-14 max-w-lg mx-auto">Trois étapes, côté soignant comme côté établissement</p>
           </RevealOnScroll>
           <div className="grid md:grid-cols-3 gap-8 md:gap-12">
             {[
-              { icon: ClipboardList, num: '1', emoji: '📝', titre: 'Publiez une mission', desc: 'Décrivez le poste, les horaires et le taux. La mission est visible instantanément !' },
-              { icon: Users, num: '2', emoji: '🙋‍♀️', titre: 'Recevez des candidatures', desc: 'Les soignants qualifiés postulent. Consultez leurs profils vérifiés et choisissez.' },
-              { icon: CheckCircle, num: '3', emoji: '🎉', titre: 'Gérez tout en ligne', desc: 'Contrat, pointage, facturation : tout est automatisé et conforme.' },
+              { icon: ClipboardList, num: '1', emoji: '📝', titre: 'Publiez ou postulez', desc: 'L\'établissement publie sa mission avec horaires et taux. Le soignant postule ou accepte en 1 clic.' },
+              { icon: Users, num: '2', emoji: '✍️', titre: 'Le contrat se signe en ligne', desc: 'Contrat conforme généré automatiquement, signé électroniquement par les deux parties.' },
+              { icon: CheckCircle, num: '3', emoji: '🎉', titre: 'Tout le reste est automatique', desc: 'Pointage GPS, facture, paiement, déclarations : zéro paperasse pour les deux côtés.' },
             ].map((step, i) => (
               <RevealOnScroll key={i} delay={i * 150}>
                 <div className="flex flex-col items-center text-center group">
@@ -385,70 +461,6 @@ export default function PageAccueil() {
                 </div>
               </RevealOnScroll>
             ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ═══ Section 4 — Double proposition de valeur ═══ */}
-      <section className="py-20 md:py-28 bg-card">
-        <div className="max-w-5xl mx-auto px-4">
-          <RevealOnScroll>
-            <h2 className="text-2xl md:text-4xl font-bold text-center mb-14">Une plateforme, deux expériences 🤝</h2>
-          </RevealOnScroll>
-          <div className="grid md:grid-cols-2 gap-6 md:gap-8">
-            {/* Soignants */}
-            <RevealOnScroll delay={0}>
-              <div className="rounded-2xl p-8 md:p-10 h-full border-0 shadow-lg" style={{ background: 'linear-gradient(135deg, hsl(330 85% 60% / 0.08), hsl(270 60% 50% / 0.05))' }}>
-                <h3 className="text-xl font-bold text-foreground mb-6">🩺 Pour les soignants</h3>
-                <ul className="space-y-4">
-                  {[
-                    { emoji: '📍', text: 'Missions près de chez vous' },
-                    { emoji: '📄', text: 'Contrats générés automatiquement' },
-                    { emoji: '📲', text: 'Pointage GPS sécurisé' },
-                    { emoji: '🚀', text: 'Parcours vers le libéral' },
-                  ].map((item, i) => (
-                    <li key={i} className="flex items-start gap-3">
-                      <span className="text-xl mt-0.5">{item.emoji}</span>
-                      <span className="text-foreground font-medium">{item.text}</span>
-                    </li>
-                  ))}
-                </ul>
-                <button
-                  onClick={() => navigate('/inscription/soignant')}
-                  className="mt-8 inline-flex items-center gap-2 text-white font-semibold text-sm rounded-xl px-6 py-3 transition-all hover:-translate-y-0.5 shadow-md"
-                  style={{ background: 'linear-gradient(135deg, hsl(330 85% 55%), hsl(270 60% 50%))' }}
-                >
-                  Créer mon profil ✨ <ArrowRight className="h-4 w-4" />
-                </button>
-              </div>
-            </RevealOnScroll>
-
-            {/* Établissements */}
-            <RevealOnScroll delay={150}>
-              <div className="rounded-2xl p-8 md:p-10 h-full border-0 shadow-lg" style={{ background: 'linear-gradient(135deg, hsl(215 80% 55% / 0.08), hsl(174 72% 48% / 0.05))' }}>
-                <h3 className="text-xl font-bold text-foreground mb-6">🏥 Pour les établissements</h3>
-                <ul className="space-y-4">
-                  {[
-                    { emoji: '✅', text: 'Soignants vérifiés (RPPS)' },
-                    { emoji: '💰', text: 'Commission dégressive' },
-                    { emoji: '⚖️', text: 'Conformité Code du travail' },
-                    { emoji: '🧾', text: 'Facturation automatisée' },
-                  ].map((item, i) => (
-                    <li key={i} className="flex items-start gap-3">
-                      <span className="text-xl mt-0.5">{item.emoji}</span>
-                      <span className="text-foreground font-medium">{item.text}</span>
-                    </li>
-                  ))}
-                </ul>
-                <button
-                  onClick={() => navigate('/inscription/etablissement')}
-                  className="mt-8 inline-flex items-center gap-2 text-white font-semibold text-sm rounded-xl px-6 py-3 transition-all hover:-translate-y-0.5 shadow-md"
-                  style={{ background: 'linear-gradient(135deg, hsl(215 80% 55%), hsl(174 72% 48%))' }}
-                >
-                  Publier une mission 🎯 <ArrowRight className="h-4 w-4" />
-                </button>
-              </div>
-            </RevealOnScroll>
           </div>
         </div>
       </section>
@@ -524,8 +536,8 @@ export default function PageAccueil() {
         <div className="absolute inset-0" style={{ background: 'linear-gradient(135deg, hsl(330 85% 60% / 0.08) 0%, hsl(270 60% 50% / 0.06) 50%, hsl(215 80% 55% / 0.04) 100%)' }} />
         <div className="relative max-w-3xl mx-auto px-4 text-center">
           <RevealOnScroll>
-            <h2 className="text-2xl md:text-4xl font-bold mb-4">Prêt à simplifier votre staffing ? 🎉</h2>
-            <p className="text-muted-foreground mb-10 max-w-lg mx-auto">Rejoignez des centaines d'établissements et de soignants qui utilisent Jolene au quotidien 🩷</p>
+            <h2 className="text-2xl md:text-4xl font-bold mb-4">Prêt à simplifier vos remplacements ? 🎉</h2>
+            <p className="text-muted-foreground mb-10 max-w-lg mx-auto">Inscription gratuite en 2 minutes — première mission possible dès aujourd'hui 🩷</p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <button
                 onClick={() => navigate('/inscription/soignant')}
@@ -594,7 +606,7 @@ export default function PageAccueil() {
             </div>
           </div>
           <div className="border-t border-border mt-10 pt-6 text-center">
-            <p className="text-xs text-muted-foreground">© 2026 Jolene SAS — Tous droits réservés</p>
+            <p className="text-xs text-muted-foreground">© 2026 Jolene SASU — Tous droits réservés</p>
           </div>
         </div>
       </footer>
