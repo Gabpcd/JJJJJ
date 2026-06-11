@@ -93,7 +93,7 @@ export default function DetailMissionSoignant() {
           soignant_assigne_id, etablissement_id, cree_le, modifie_le,
           type_contrat_recherche, type_contrat_applique, type_paiement_soignant, mode_paiement_soignant, choix_contrat_soignant,
           numero_note_honoraires,
-          mode_attribution, boostee_le, presence_confirmee_le, garantie_remplacement, est_arret_maladie, mode_remuneration, retrocession_pct
+          mode_attribution, boostee_le, presence_confirmee_le, garantie_remplacement, est_arret_maladie, mode_remuneration, retrocession_pct, montant_honoraires_bruts, honoraires_confirmes_le
         `).eq('id', id).single(),
         supabase.rpc('fn_mon_profil_soignant_complet' as any),
       ]);
@@ -501,6 +501,35 @@ export default function DetailMissionSoignant() {
                 });
               }}
             />
+          ) : (mission as any).mode_remuneration === 'RETROCESSION' && (mission as any).montant_honoraires_bruts && !(mission as any).honoraires_confirmes_le && mission.soignant_assigne_id === user?.id ? (
+            <div className="card-base border-warning/40 bg-warning/5 space-y-2">
+              <p className="text-sm font-semibold text-foreground">💶 Relevé d'honoraires à confirmer</p>
+              <p className="text-xs text-muted-foreground">
+                Le cabinet déclare <strong>{Number((mission as any).montant_honoraires_bruts).toLocaleString('fr-FR')} €</strong> d'honoraires
+                (justificatif joint à la mission) — votre rétrocession ({(mission as any).retrocession_pct}%) :
+                <strong> {Number(mission.net_a_payer ?? 0).toLocaleString('fr-FR')} €</strong>.
+                Sans action de votre part, validation automatique sous 48h.
+              </p>
+              <div className="flex gap-2">
+                <button
+                  onClick={async () => {
+                    const { data, error } = await supabase.rpc('fn_confirmer_honoraires_retrocession' as any, { p_mission_id: mission.id });
+                    if (error || (data as any)?.error) { toast.error((data as any)?.error || 'Confirmation impossible.'); return; }
+                    toast.success('Relevé confirmé — votre note d\'honoraires est générée, le cabinet est notifié.');
+                    setMission((prev: any) => ({ ...prev, honoraires_confirmes_le: new Date().toISOString() }));
+                  }}
+                  className="btn-primary flex-1 text-sm py-2.5"
+                >
+                  ✓ Je confirme le relevé
+                </button>
+                <button
+                  onClick={() => navigate('/soignant/litiges')}
+                  className="flex-1 text-sm py-2.5 rounded-xl border border-destructive/40 text-destructive hover:bg-destructive/5"
+                >
+                  Contester (litige)
+                </button>
+              </div>
+            </div>
           ) : (mission as any).mode_remuneration === 'RETROCESSION' ? (
             <div className="card-base border-primary/20">
               <p className="text-sm font-semibold text-foreground mb-1">🤝 Remplacement de cabinet — rétrocession d'honoraires</p>
@@ -511,6 +540,9 @@ export default function DetailMissionSoignant() {
                 (contrat de remplacement conforme au modèle de l'Ordre, généré à l'acceptation).
                 RCP obligatoire.
               </p>
+              {(mission as any).honoraires_confirmes_le && (
+                <p className="text-xs text-success mt-2">✓ Relevé confirmé — rétrocession de {Number(mission.net_a_payer ?? 0).toLocaleString('fr-FR')} € validée</p>
+              )}
             </div>
           ) : (
             <DecompositionFinanciere mission={mission} role="SOIGNANT" />

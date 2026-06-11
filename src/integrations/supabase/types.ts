@@ -4397,8 +4397,10 @@ export type Database = {
           heures_dimanche: number | null
           heures_ferie: number | null
           heures_nuit: number | null
+          honoraires_confirmes_le: string | null
           id: string
           intitule: string
+          justificatif_honoraires_cle: string | null
           mode_attribution: string | null
           mode_paiement_soignant: string | null
           mode_remuneration: string
@@ -4491,8 +4493,10 @@ export type Database = {
           heures_dimanche?: number | null
           heures_ferie?: number | null
           heures_nuit?: number | null
+          honoraires_confirmes_le?: string | null
           id?: string
           intitule: string
+          justificatif_honoraires_cle?: string | null
           mode_attribution?: string | null
           mode_paiement_soignant?: string | null
           mode_remuneration?: string
@@ -4585,8 +4589,10 @@ export type Database = {
           heures_dimanche?: number | null
           heures_ferie?: number | null
           heures_nuit?: number | null
+          honoraires_confirmes_le?: string | null
           id?: string
           intitule?: string
+          justificatif_honoraires_cle?: string | null
           mode_attribution?: string | null
           mode_paiement_soignant?: string | null
           mode_remuneration?: string
@@ -8555,6 +8561,7 @@ export type Database = {
       }
       fn_audit_connexion: { Args: { p_action: string }; Returns: Json }
       fn_audit_rls_strict: { Args: never; Returns: Json }
+      fn_auto_confirmer_honoraires: { Args: never; Returns: Json }
       fn_auto_creation_litiges_presence: { Args: never; Returns: Json }
       fn_auto_facturation_mensuelle: { Args: never; Returns: Json }
       fn_auto_terminer_missions: { Args: never; Returns: Json }
@@ -8741,6 +8748,10 @@ export type Database = {
         Returns: Json
       }
       fn_confirmer_email_etab: { Args: { p_token: string }; Returns: Json }
+      fn_confirmer_honoraires_retrocession: {
+        Args: { p_mission_id: string }
+        Returns: Json
+      }
       fn_confirmer_paiement_soignant: {
         Args: { p_paiement_id: string }
         Returns: Json
@@ -8887,7 +8898,11 @@ export type Database = {
         Returns: Json
       }
       fn_declarer_honoraires_retrocession: {
-        Args: { p_mission_id: string; p_montant_honoraires: number }
+        Args: {
+          p_justificatif_cle?: string
+          p_mission_id: string
+          p_montant_honoraires: number
+        }
         Returns: Json
       }
       fn_declarer_paiement_soignant: {

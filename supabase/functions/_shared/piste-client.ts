@@ -464,25 +464,33 @@ export async function rechercherStructure(
   token: string,
   identifiant: string,
 ): Promise<{ ok: boolean; found: boolean; structure?: any; data: any }> {
-  const result = await chorusProApiCall(
+  // Chemin vérifié en prod le 11/06/2026 : /cpro/structures/v1/rechercher répond
+  // (l'ancien /cpro/transverses/v1/rechercherStructure → 403 route inconnue).
+  // Deux formats de corps tentés (nouveau puis legacy) — l'API renvoie 400 sur
+  // le mauvais format, pas d'effet de bord (lecture seule).
+  let result = await chorusProApiCall(
     config, token,
-    '/cpro/transverses/v1/rechercherStructure',
+    '/cpro/structures/v1/rechercher',
     'POST',
     {
-      idUtilisateurCourant: 0,
-      parametres: {
-        nbResultatsMaxParPage: 5,
-        numeroPagePourRechercher: 1,
-        triSurChamp: 'Identifiant',
-        triSensTri: 'Ascendant',
-      },
-      restreindreStructures: {
+      structure: {
         identifiantStructure: identifiant,
-        structureActive: true,
+        typeIdentifiantStructure: 'SIRET',
       },
-      typeRecherche: 'ACTIF',
     },
   );
+  if (!result.ok) {
+    result = await chorusProApiCall(
+      config, token,
+      '/cpro/structures/v1/rechercher',
+      'POST',
+      {
+        parametres: { nbResultatsMaxParPage: 5, numeroPagePourRechercher: 1 },
+        restreindreStructures: { identifiantStructure: identifiant, structureActive: true },
+        typeRecherche: 'ACTIF',
+      },
+    );
+  }
   const structures = result.data?.listeStructures ?? [];
   return {
     ok: result.ok,
