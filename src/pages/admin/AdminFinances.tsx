@@ -171,6 +171,13 @@ export default function AdminFinances() {
     return Array.from(map.values()).map(e => ({ ...e, nb_soignants: e.soignants.size }));
   }, [missions, factures]);
 
+  // Pattern « file de travail » (Session D, version légère) : établissements avec impayés,
+  // montant décroissant — la vraie file de traitement vit dans /admin/impayees.
+  const etabsImpayes = useMemo(
+    () => etabData.filter(e => e.impayes > 0).sort((a, b) => b.impayes - a.impayes),
+    [etabData],
+  );
+
   const sortedEtab = useMemo(() => {
     return [...etabData].sort((a, b) => {
       const va = (a as any)[sortKey];
@@ -342,7 +349,7 @@ export default function AdminFinances() {
           </CardY2KHeader>
           <CardY2KContent>
             {!diagResult && !diagLoading && (
-              <p className="text-sm text-muted-foreground">Lance l'analyse de cohérence entre missions, factures et transferts Stripe.</p>
+              <p className="text-sm text-muted-foreground">Lancez l'analyse de cohérence entre missions, factures et transferts Stripe.</p>
             )}
             {diagResult && (
               <div className="space-y-4">
@@ -444,6 +451,50 @@ export default function AdminFinances() {
             </div>
           </CardY2KHeader>
           <CardY2KContent className="p-0">
+            {/* Bandeau compact « À traiter » : établissements avec impayés (max 5, montant décroissant) */}
+            {etabsImpayes.length > 0 && (
+              <div className="mx-4 my-3 rounded-xl border border-destructive/30 bg-destructive/5 p-3 space-y-2">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <p className="flex items-center gap-2 text-sm font-bold text-foreground">
+                    <span className="inline-flex items-center justify-center min-w-5 h-5 px-1.5 rounded-full bg-destructive text-destructive-foreground text-[11px] font-bold">
+                      {etabsImpayes.length}
+                    </span>
+                    À traiter — {etabsImpayes.length > 1 ? 'établissements' : 'établissement'} avec impayés
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => navigate('/admin/impayees')}
+                    className="text-xs font-medium text-destructive hover:underline inline-flex items-center gap-1"
+                  >
+                    Traiter les factures impayées
+                    <ExternalLink className="h-3 w-3 shrink-0" />
+                  </button>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {etabsImpayes.slice(0, 5).map(e => (
+                    <button
+                      key={e.id}
+                      type="button"
+                      onClick={() => navigate('/admin/impayees')}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-destructive/30 bg-card px-2.5 py-1.5 text-xs hover:bg-destructive/10 transition-colors min-h-[32px]"
+                    >
+                      <AlertTriangle className="h-3 w-3 text-destructive shrink-0" />
+                      <span className="font-medium text-foreground truncate max-w-[160px]">{e.nom}</span>
+                      <span className="font-bold text-destructive">{formatEur(e.impayes)}</span>
+                    </button>
+                  ))}
+                  {etabsImpayes.length > 5 && (
+                    <button
+                      type="button"
+                      onClick={() => navigate('/admin/impayees')}
+                      className="inline-flex items-center rounded-lg px-2.5 py-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors min-h-[32px]"
+                    >
+                      +{etabsImpayes.length - 5} {etabsImpayes.length - 5 > 1 ? 'autres' : 'autre'}
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
             <TableOuCartes
               colonnes={[
                 { cle: 'nom', titre: 'Établissement' },

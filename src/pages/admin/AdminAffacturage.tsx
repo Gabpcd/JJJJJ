@@ -28,6 +28,27 @@ const STATUT_BADGE: Record<string, string> = {
   ANNULEE: 'bg-muted text-muted-foreground',
 };
 
+const STATUT_LIBELLE: Record<string, string> = {
+  DEMANDEE: 'Demandée',
+  EN_ANALYSE: 'En analyse',
+  APPROUVEE: 'Approuvée',
+  FINANCEE: 'Financée',
+  RECOUVREE: 'Recouvrée',
+  REJETEE: 'Rejetée',
+  IMPAYEE: 'Impayée',
+  ANNULEE: 'Annulée',
+};
+
+const libelleStatut = (statut: string) => STATUT_LIBELLE[statut] || statut.replace('_', ' ');
+
+// Priorité d'affichage : les statuts demandant l'attention en premier, le reste ensuite (par date décroissante)
+const STATUT_PRIORITE: Record<string, number> = {
+  IMPAYEE: 0,
+  DEMANDEE: 1,
+  EN_ANALYSE: 2,
+  APPROUVEE: 3,
+};
+
 export default function AdminAffacturage() {
   usePageTitle('Affacturage');
   const navigate = useNavigate();
@@ -54,7 +75,13 @@ export default function AdminAffacturage() {
       });
   }, []);
 
-  const filtered = filtre === 'TOUS' ? advances : advances.filter(a => a.statut === filtre);
+  const triees = [...advances].sort((a, b) => {
+    const pa = STATUT_PRIORITE[a.statut] ?? 4;
+    const pb = STATUT_PRIORITE[b.statut] ?? 4;
+    if (pa !== pb) return pa - pb;
+    return new Date(b.cree_le || 0).getTime() - new Date(a.cree_le || 0).getTime();
+  });
+  const filtered = filtre === 'TOUS' ? triees : triees.filter(a => a.statut === filtre);
 
   if (loading) return <LayoutAdmin><ChargementPage /></LayoutAdmin>;
 
@@ -67,7 +94,7 @@ export default function AdminAffacturage() {
             <Zap className="h-6 w-6 text-primary" /> Affacturage
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Suivi des demandes d'avance via affactureur (Defacto). Marge Jolene par opération configurable via le secret FACTOR_MARGE_JOLENE.
+            Suivi des demandes d'avance via affactureur (Defacto). Une marge Jolene est appliquée à chaque opération.
           </p>
         </div>
 
@@ -115,7 +142,7 @@ export default function AdminAffacturage() {
                 filtre === s ? 'border-primary bg-primary/10 text-primary' : 'border-border text-muted-foreground hover:border-primary/30'
               }`}
             >
-              {s === 'TOUS' ? 'Tous' : s.replace('_', ' ')}
+              {s === 'TOUS' ? 'Tous' : libelleStatut(s)}
             </button>
           ))}
         </div>
@@ -175,7 +202,7 @@ export default function AdminAffacturage() {
                             <td className="p-3 text-right font-bold text-success">{a.montant_net_soignant ? fmt(a.montant_net_soignant) : '—'}</td>
                             <td className="p-3">
                               <Badge className={`text-[10px] ${STATUT_BADGE[a.statut] || 'bg-muted'}`}>
-                                {a.statut.replace('_', ' ')}
+                                {libelleStatut(a.statut)}
                               </Badge>
                               {a.motif_rejet && <p className="text-[10px] text-destructive mt-0.5">{a.motif_rejet}</p>}
                             </td>
@@ -204,7 +231,7 @@ export default function AdminAffacturage() {
                             {mission?.intitule && <p className="text-[10px] text-muted-foreground truncate">{mission.intitule}</p>}
                           </div>
                           <Badge className={`text-[10px] shrink-0 ${STATUT_BADGE[a.statut] || 'bg-muted'}`}>
-                            {a.statut.replace('_', ' ')}
+                            {libelleStatut(a.statut)}
                           </Badge>
                         </div>
                         <div className="text-xs text-muted-foreground space-y-0.5">

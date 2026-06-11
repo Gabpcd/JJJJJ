@@ -7,7 +7,9 @@ import { supabase } from '@/integrations/supabase/client';
 import { CardY2K, CardY2KContent } from '@/components/y2k/CardY2K';
 import { Input } from '@/components/ui/input';
 import { BadgeY2K } from '@/components/y2k/BadgeY2K';
-import { FileCheck, FileText, Search, CheckCircle, AlertCircle } from 'lucide-react';
+import { FileDeTravail } from '@/components/admin/FileDeTravail';
+import { getLabelProfession } from '@/lib/constantes';
+import { FileCheck, Search, CheckCircle, AlertCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -42,21 +44,146 @@ export default function AdminMandatsFacturation() {
       });
   }, []);
 
+  const matchRecherche = (s: any) => {
+    if (!recherche) return true;
+    const q = recherche.toLowerCase();
+    return `${s.prenom} ${s.nom} ${s.email}`.toLowerCase().includes(q);
+  };
+
   const filteredSoignants = soignants.filter((s) => {
     if (filtre === 'SIGNE' && !s.mandat_facturation_signe) return false;
     if (filtre === 'NON_SIGNE' && s.mandat_facturation_signe) return false;
-    if (recherche) {
-      const q = recherche.toLowerCase();
-      return `${s.prenom} ${s.nom} ${s.email}`.toLowerCase().includes(q);
-    }
-    return true;
+    return matchRecherche(s);
   });
+
+  // File de travail (vue « Tous ») : les mandats non signés demandent une
+  // relance admin → en tête, plus anciens inscrits d'abord. Les signés
+  // partent dans l'historique replié.
+  const nonSignes = soignants
+    .filter((s) => !s.mandat_facturation_signe && matchRecherche(s))
+    .sort((a, b) => new Date(a.cree_le || 0).getTime() - new Date(b.cree_le || 0).getTime());
+  const signes = soignants.filter((s) => s.mandat_facturation_signe && matchRecherche(s));
 
   if (loading) return <LayoutAdmin><ChargementPage /></LayoutAdmin>;
 
   const tauxSignature = stats?.total_soignants > 0
     ? Math.round((stats.mandat_signe / stats.total_soignants) * 100)
     : 0;
+
+  const renderListe = (liste: any[]) => (
+    <CardY2K noPadding>
+      <CardY2KContent className="p-0">
+        {liste.length === 0 ? (
+          <p className="p-6 text-center text-muted-foreground">Aucun soignant trouvé</p>
+        ) : (
+          <>
+            {/* Desktop table */}
+            <div className="hidden md:block overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border text-left text-xs text-muted-foreground">
+                    <th className="p-3 font-medium">Soignant</th>
+                    <th className="p-3 font-medium">Profession</th>
+                    <th className="p-3 font-medium">Mandat</th>
+                    <th className="p-3 font-medium">Signé le</th>
+                    <th className="p-3 font-medium">Version</th>
+                    <th className="p-3 font-medium">Inscrit le</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {liste.map((s) => (
+                    <tr key={s.id} className="border-b border-border/50 hover:bg-muted/30">
+                      <td className="p-3">
+                        <button
+                          onClick={() => navigate(`/admin/utilisateurs/${s.id}`)}
+                          className="text-primary hover:underline font-medium text-left"
+                        >
+                          {s.prenom} {s.nom}
+                        </button>
+                        <p className="text-xs text-muted-foreground">{s.email}</p>
+                      </td>
+                      <td className="p-3">
+                        <BadgeY2K variant="info" size="sm">{getLabelProfession(s.profession)}</BadgeY2K>
+                      </td>
+                      <td className="p-3">
+                        {s.mandat_facturation_signe ? (
+                          <span className="inline-flex items-center gap-1 text-xs font-medium text-success">
+                            <CheckCircle className="h-3.5 w-3.5" /> Signé
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 text-xs font-medium text-warning">
+                            <AlertCircle className="h-3.5 w-3.5" /> Non signé
+                          </span>
+                        )}
+                      </td>
+                      <td className="p-3 text-xs text-muted-foreground">
+                        {s.mandat_facturation_signe_le ? format(new Date(s.mandat_facturation_signe_le), 'dd/MM/yyyy HH:mm', { locale: fr }) : '—'}
+                      </td>
+                      <td className="p-3 text-xs text-muted-foreground">
+                        {s.mandat_facturation_version || '—'}
+                      </td>
+                      <td className="p-3 text-xs text-muted-foreground">
+                        {s.cree_le ? format(new Date(s.cree_le), 'dd/MM/yyyy', { locale: fr }) : '—'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile cards */}
+            <div className="md:hidden space-y-3 p-3">
+              {liste.map((s) => (
+                <div key={s.id} className="card-base space-y-2">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <button
+                        onClick={() => navigate(`/admin/utilisateurs/${s.id}`)}
+                        className="text-primary hover:underline font-semibold text-sm text-left"
+                      >
+                        {s.prenom} {s.nom}
+                      </button>
+                      <p className="text-xs text-muted-foreground truncate">{s.email}</p>
+                    </div>
+                    {s.mandat_facturation_signe ? (
+                      <span className="inline-flex items-center gap-1 text-xs font-medium text-success shrink-0">
+                        <CheckCircle className="h-3.5 w-3.5" /> Signé
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 text-xs font-medium text-warning shrink-0">
+                        <AlertCircle className="h-3.5 w-3.5" /> Non signé
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <BadgeY2K variant="info" size="sm">{getLabelProfession(s.profession)}</BadgeY2K>
+                  </div>
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs pt-1 border-t border-border/50">
+                    <div>
+                      <p className="text-muted-foreground">Signé le</p>
+                      <p className="text-foreground">
+                        {s.mandat_facturation_signe_le ? format(new Date(s.mandat_facturation_signe_le), 'dd/MM/yyyy HH:mm', { locale: fr }) : '—'}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">Version</p>
+                      <p className="text-foreground">{s.mandat_facturation_version || '—'}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">Inscrit le</p>
+                      <p className="text-foreground">
+                        {s.cree_le ? format(new Date(s.cree_le), 'dd/MM/yyyy', { locale: fr }) : '—'}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+      </CardY2KContent>
+    </CardY2K>
+  );
 
   return (
     <LayoutAdmin>
@@ -129,119 +256,24 @@ export default function AdminMandatsFacturation() {
           </div>
         </div>
 
-        {/* Tableau */}
-        <CardY2K noPadding>
-          <CardY2KContent className="p-0">
-            {filteredSoignants.length === 0 ? (
-              <p className="p-6 text-center text-muted-foreground">Aucun soignant trouvé</p>
-            ) : (
-              <>
-                {/* Desktop table */}
-                <div className="hidden md:block overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-border text-left text-xs text-muted-foreground">
-                        <th className="p-3 font-medium">Soignant</th>
-                        <th className="p-3 font-medium">Profession</th>
-                        <th className="p-3 font-medium">Mandat</th>
-                        <th className="p-3 font-medium">Signé le</th>
-                        <th className="p-3 font-medium">Version</th>
-                        <th className="p-3 font-medium">Inscrit le</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filteredSoignants.map((s) => (
-                        <tr key={s.id} className="border-b border-border/50 hover:bg-muted/30">
-                          <td className="p-3">
-                            <button
-                              onClick={() => navigate(`/admin/utilisateurs/${s.id}`)}
-                              className="text-primary hover:underline font-medium text-left"
-                            >
-                              {s.prenom} {s.nom}
-                            </button>
-                            <p className="text-xs text-muted-foreground">{s.email}</p>
-                          </td>
-                          <td className="p-3">
-                            <BadgeY2K variant="info" size="sm">{s.profession}</BadgeY2K>
-                          </td>
-                          <td className="p-3">
-                            {s.mandat_facturation_signe ? (
-                              <span className="inline-flex items-center gap-1 text-xs font-medium text-success">
-                                <CheckCircle className="h-3.5 w-3.5" /> Signé
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center gap-1 text-xs font-medium text-warning">
-                                <AlertCircle className="h-3.5 w-3.5" /> Non signé
-                              </span>
-                            )}
-                          </td>
-                          <td className="p-3 text-xs text-muted-foreground">
-                            {s.mandat_facturation_signe_le ? format(new Date(s.mandat_facturation_signe_le), 'dd/MM/yyyy HH:mm', { locale: fr }) : '—'}
-                          </td>
-                          <td className="p-3 text-xs text-muted-foreground">
-                            {s.mandat_facturation_version || '—'}
-                          </td>
-                          <td className="p-3 text-xs text-muted-foreground">
-                            {s.cree_le ? format(new Date(s.cree_le), 'dd/MM/yyyy', { locale: fr }) : '—'}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-
-                {/* Mobile cards */}
-                <div className="md:hidden space-y-3 p-3">
-                  {filteredSoignants.map((s) => (
-                    <div key={s.id} className="card-base space-y-2">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0">
-                          <button
-                            onClick={() => navigate(`/admin/utilisateurs/${s.id}`)}
-                            className="text-primary hover:underline font-semibold text-sm text-left"
-                          >
-                            {s.prenom} {s.nom}
-                          </button>
-                          <p className="text-xs text-muted-foreground truncate">{s.email}</p>
-                        </div>
-                        {s.mandat_facturation_signe ? (
-                          <span className="inline-flex items-center gap-1 text-xs font-medium text-success shrink-0">
-                            <CheckCircle className="h-3.5 w-3.5" /> Signé
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 text-xs font-medium text-warning shrink-0">
-                            <AlertCircle className="h-3.5 w-3.5" /> Non signé
-                          </span>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <BadgeY2K variant="info" size="sm">{s.profession}</BadgeY2K>
-                      </div>
-                      <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs pt-1 border-t border-border/50">
-                        <div>
-                          <p className="text-muted-foreground">Signé le</p>
-                          <p className="text-foreground">
-                            {s.mandat_facturation_signe_le ? format(new Date(s.mandat_facturation_signe_le), 'dd/MM/yyyy HH:mm', { locale: fr }) : '—'}
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-muted-foreground">Version</p>
-                          <p className="text-foreground">{s.mandat_facturation_version || '—'}</p>
-                        </div>
-                        <div>
-                          <p className="text-muted-foreground">Inscrit le</p>
-                          <p className="text-foreground">
-                            {s.cree_le ? format(new Date(s.cree_le), 'dd/MM/yyyy', { locale: fr }) : '—'}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </>
-            )}
-          </CardY2KContent>
-        </CardY2K>
+        {/* File de travail (vue « Tous ») ou liste plate filtrée */}
+        {filtre === 'TOUS' ? (
+          <FileDeTravail
+            nbATraiter={nonSignes.length}
+            aTraiter={renderListe(nonSignes)}
+            nbHistorique={signes.length}
+            historique={renderListe(signes)}
+            labelATraiter="À traiter (mandats non signés)"
+            labelHistorique="Historique (mandats signés)"
+            titreVide={recherche ? 'Aucun soignant trouvé' : 'Tous les mandats sont signés'}
+            descriptionVide={recherche
+              ? 'Aucun mandat non signé ne correspond à votre recherche.'
+              : 'Tous les soignants inscrits ont signé leur mandat de facturation.'}
+            iconeVide={<FileCheck />}
+          />
+        ) : (
+          renderListe(filteredSoignants)
+        )}
       </div>
     </LayoutAdmin>
   );

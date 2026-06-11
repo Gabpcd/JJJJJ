@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { CardY2K, CardY2KContent } from '@/components/y2k/CardY2K';
 import { toast } from 'sonner';
-import { Loader2, Search, Zap, Download, FileText, ChevronDown, ChevronRight, ExternalLink, CheckCircle, XCircle, CreditCard } from 'lucide-react';
+import { Loader2, Search, Zap, Download, FileText, ChevronDown, ChevronRight, ExternalLink, CheckCircle, CheckCircle2, XCircle, CreditCard, History } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import jsPDF from 'jspdf';
 import { BoutonsBulkFactures } from '@/components/admin/BoutonsBulkFactures';
@@ -24,7 +24,11 @@ const formatEur = (v: number) => new Intl.NumberFormat('fr-FR', { style: 'curren
 const formatDate = (d: string) => new Date(d).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' });
 const formatDateTime = (d: string) => new Date(d).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
 
-const STATUTS = ['TOUS', 'BROUILLON', 'EMISE', 'VIREMENT_DECLARE', 'PAYEE', 'EN_RETARD', 'ANNULEE'];
+// Statuts demandant une action admin → section « À traiter » en tête de page.
+// Le reste est relégué dans l'historique replié (pattern « file de travail », Session D).
+const STATUTS_A_TRAITER = ['VIREMENT_DECLARE', 'EN_RETARD'];
+// Statuts proposés dans le filtre de l'historique (les statuts actionnables sont toujours visibles au-dessus).
+const STATUTS_HISTORIQUE = ['TOUS', 'BROUILLON', 'EMISE', 'PAYEE', 'ANNULEE'];
 const statutColor: Record<string, 'success' | 'warning' | 'error' | 'info' | 'premium'> = {
   BROUILLON: 'info',
   EMISE: 'info',
@@ -209,6 +213,24 @@ function FactureDetailMobile({ factureId }: { factureId: string }) {
   );
 }
 
+/**
+ * Détail responsive pour les cartes « À traiter » (affichées à toutes les largeurs) :
+ * un seul fetch, rendu desktop sur md+ et rendu mobile en dessous.
+ */
+function FactureDetailATraiter({ factureId }: { factureId: string }) {
+  const { missions, loading } = useMissionsFacture(factureId);
+  return (
+    <div className="bg-muted/30 rounded-lg">
+      <div className="hidden md:block">
+        <FactureDetailContenu missions={missions} loading={loading} mode="desktop" />
+      </div>
+      <div className="md:hidden p-3">
+        <FactureDetailContenu missions={missions} loading={loading} mode="mobile" />
+      </div>
+    </div>
+  );
+}
+
 // Jolene brand teal — used in PDF generation where CSS vars are unavailable
 const PDF_BRAND_COLOR = { r: 23, g: 162, b: 184 } as const;
 
@@ -288,6 +310,11 @@ export default function AdminFacturation() {
   const [recherche, setRecherche] = useState(searchParams.get('q') ?? '');
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  // Historique replié par défaut (pattern « file de travail »), mais ouvert d'emblée
+  // si on arrive depuis la recherche globale ⌘K (?q=) pour que le résultat cherché
+  // soit immédiatement visible. État au niveau page : il survit aux refetchs
+  // (ChargementPage plein écran) contrairement à l'état interne de <FileDeTravail />.
+  const [historiqueOuvert, setHistoriqueOuvert] = useState(() => Boolean(searchParams.get('q')));
 
   const navigate = useNavigate();
 
@@ -305,6 +332,20 @@ export default function AdminFacturation() {
 
   useEffect(() => { charger(); }, []);
 
+  // Section « À traiter » : toujours visible, indépendante des filtres de l'historique.
+  // Virements déclarés d'abord (plus anciens en premier), puis factures en retard.
+  const aTraiter = useMemo(() => {
+    const ts = (f: any) => (f.date_emission ? new Date(f.date_emission).getTime() : 0);
+    return factures
+      .filter((f: any) => STATUTS_A_TRAITER.includes(f.statut))
+      .sort((a: any, b: any) => {
+        if (a.statut !== b.statut) return a.statut === 'VIREMENT_DECLARE' ? -1 : 1;
+        return ts(a) - ts(b);
+      });
+  }, [factures]);
+
+  // Filtres statut + recherche sur l'ensemble (sert aux totaux et au rapport PDF,
+  // comportement inchangé), puis l'historique en exclut les statuts « à traiter ».
   const filtered = useMemo(() => {
     let f = factures;
     if (filtreStatut !== 'TOUS') f = f.filter(x => x.statut === filtreStatut);
@@ -315,10 +356,61 @@ export default function AdminFacturation() {
     return f;
   }, [factures, filtreStatut, recherche]);
 
+  const historique = useMemo(
+    () => filtered.filter((f: any) => !STATUTS_A_TRAITER.includes(f.statut)),
+    [filtered]
+  );
+
   const totaux = useMemo(() => ({
     ht: filtered.reduce((s, f) => s + (f.montant_ht || 0), 0),
     ttc: filtered.reduce((s, f) => s + (f.montant_ttc || 0), 0),
   }), [filtered]);
+
+  // Sélection bulk : factures cochées parmi celles actuellement visibles
+  // (cartes « À traiter » + liste historique filtrée).
+  const selectionBulk = useMemo(() =>
+    [...aTraiter, ...historique]
+      .filter((f: any) => selectedIds.has(f.id))
+      .map((f: any) => ({
+        id: f.id,
+        numero: f.numero_facture,
+        montant_ttc: f.montant_ttc,
+        statut: f.statut,
+        date_emission: f.date_emission,
+        etablissement_nom: (f.etablissements as any)?.nom ?? null,
+      })),
+  [aTraiter, historique, selectedIds]);
+
+  const toggleSelection = (factureId: string, checked: boolean | 'indeterminate') => {
+    const next = new Set(selectedIds);
+    if (checked) next.add(factureId);
+    else next.delete(factureId);
+    setSelectedIds(next);
+  };
+
+  const confirmerVirement = async (f: any) => {
+    setActionId(f.id);
+    const { data, error } = await supabase.rpc('fn_confirmer_virement_admin' as any, { p_facture_id: f.id });
+    if (error || (data as any)?.error) {
+      toast.error('Erreur lors de la confirmation du virement.');
+    } else {
+      toast.success('Virement confirmé ✅');
+      charger();
+    }
+    setActionId(null);
+  };
+
+  const rejeterVirement = async (f: any) => {
+    setActionId(f.id);
+    const { data, error } = await supabase.rpc('fn_rejeter_virement_admin' as any, { p_facture_id: f.id });
+    if (error || (data as any)?.error) {
+      toast.error('Erreur lors du rejet du virement.');
+    } else {
+      toast.success('Virement rejeté — facture remise en Émise');
+      charger();
+    }
+    setActionId(null);
+  };
 
   const genererFactures = async () => {
     setGenerating(true);
@@ -429,241 +521,50 @@ export default function AdminFacturation() {
           <CardY2K noPadding><CardY2KContent className="pt-4"><p className="text-xs text-muted-foreground">Total TTC</p><p className="text-xl font-bold text-foreground">{formatEur(totaux.ttc)}</p></CardY2KContent></CardY2K>
         </div>
 
-        <div className="flex flex-col sm:flex-row gap-3">
-          <div className="relative max-w-xs flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input placeholder="Rechercher…" value={recherche} onChange={(e) => setRecherche(e.target.value)} className="pl-10" />
-          </div>
-          <Select value={filtreStatut} onValueChange={setFiltreStatut}>
-            <SelectTrigger className="w-full sm:w-[160px]"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              {STATUTS.map(s => <SelectItem key={s} value={s}>{s === 'TOUS' ? 'Tous statuts' : s}</SelectItem>)}
-            </SelectContent>
-          </Select>
-        </div>
-
-        <BoutonsBulkFactures
-          selection={filtered.filter((f: any) => selectedIds.has(f.id)).map((f: any) => ({
-            id: f.id,
-            numero: f.numero_facture,
-            montant_ttc: f.montant_ttc,
-            statut: f.statut,
-            date_emission: f.date_emission,
-            etablissement_nom: (f.etablissements as any)?.nom ?? null,
-          }))}
-          onActionTerminee={() => {
-            setSelectedIds(new Set());
-            charger();
-          }}
-        />
-
-        {/* Desktop : table 10 colonnes */}
-        <div className="hidden md:block rounded-lg border overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-8">
-                  <Checkbox
-                    aria-label="Tout sélectionner"
-                    checked={filtered.length > 0 && filtered.every((f: any) => selectedIds.has(f.id))}
-                    onCheckedChange={(checked) => {
-                      if (checked) setSelectedIds(new Set(filtered.map((f: any) => f.id)));
-                      else setSelectedIds(new Set());
-                    }}
-                  />
-                </TableHead>
-                <TableHead className="w-8"></TableHead>
-                <TableHead>N° Facture</TableHead>
-                <TableHead>Établissement</TableHead>
-                <TableHead>HT</TableHead>
-                <TableHead>TTC</TableHead>
-                <TableHead>Missions</TableHead>
-                <TableHead>Émise le</TableHead>
-                <TableHead>Statut</TableHead>
-                <TableHead className="w-10"></TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filtered.map((f: any) => {
-                const isExpanded = expandedId === f.id;
-                return (
-                  <React.Fragment key={f.id}>
-                    <TableRow
-                      className="cursor-pointer hover:bg-muted/50 transition-colors"
-                      onClick={() => setExpandedId(isExpanded ? null : f.id)}
-                    >
-                      <TableCell className="w-8 pr-0" onClick={(e) => e.stopPropagation()}>
-                        <Checkbox
-                          aria-label={`Sélectionner facture ${f.numero_facture ?? f.id}`}
-                          checked={selectedIds.has(f.id)}
-                          onCheckedChange={(checked) => {
-                            const next = new Set(selectedIds);
-                            if (checked) next.add(f.id);
-                            else next.delete(f.id);
-                            setSelectedIds(next);
-                          }}
-                        />
-                      </TableCell>
-                      <TableCell className="w-8 pr-0">
-                        {isExpanded ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
-                      </TableCell>
-                      <TableCell className="font-mono text-xs font-medium">{f.numero_facture}</TableCell>
-                      <TableCell>
-                        <button
-                          onClick={(e) => { e.stopPropagation(); navigate(`/admin/utilisateurs/${f.etablissement_id}`); }}
-                          className="text-primary hover:underline inline-flex items-center gap-1"
-                        >
-                          {(f.etablissements as any)?.nom ?? '—'}
-                          <ExternalLink className="h-3 w-3 shrink-0" />
-                        </button>
-                      </TableCell>
-                      <TableCell>{formatEur(f.montant_ht)}</TableCell>
-                      <TableCell className="font-medium">{formatEur(f.montant_ttc)}</TableCell>
-                      <TableCell>{f.nombre_missions}</TableCell>
-                      <TableCell className="text-xs text-muted-foreground">{f.date_emission ? formatDate(f.date_emission) : '—'}</TableCell>
-                      <TableCell>
-                        <BadgeY2K variant={statutColor[f.statut] || 'info'} size="sm">
-                          {statutLabel[f.statut] ?? f.statut}
-                        </BadgeY2K>
-                        {f.statut === 'VIREMENT_DECLARE' && f.virement_reference && (
-                          <p className="text-[10px] text-muted-foreground mt-0.5">Réf: {f.virement_reference}</p>
-                        )}
-                      </TableCell>
-                      <TableCell className="w-auto pr-2">
-                        <div className="flex items-center gap-1">
-                          {f.statut === 'VIREMENT_DECLARE' && (
-                            <>
-                              <BoutonY2K
-                                variant="primary"
-                                size="sm"
-                                className="h-7 text-xs gap-1"
-                                disabled={actionId === f.id}
-                                iconeGauche={<CheckCircle className="h-3.5 w-3.5" />}
-                                onClick={async (e) => {
-                                  e.stopPropagation();
-                                  setActionId(f.id);
-                                  const { data, error } = await supabase.rpc('fn_confirmer_virement_admin' as any, { p_facture_id: f.id });
-                                  if (error || (data as any)?.error) {
-                                    toast.error('Erreur lors de la confirmation du virement.');
-                                  } else {
-                                    toast.success('Virement confirmé ✅');
-                                    charger();
-                                  }
-                                  setActionId(null);
-                                }}
-                              >
-                                Confirmer
-                              </BoutonY2K>
-                              <BoutonY2K
-                                variant="destructive"
-                                size="sm"
-                                className="h-7 text-xs gap-1"
-                                disabled={actionId === f.id}
-                                iconeGauche={<XCircle className="h-3.5 w-3.5" />}
-                                onClick={async (e) => {
-                                  e.stopPropagation();
-                                  setActionId(f.id);
-                                  const { data, error } = await supabase.rpc('fn_rejeter_virement_admin' as any, { p_facture_id: f.id });
-                                  if (error || (data as any)?.error) {
-                                    toast.error('Erreur lors du rejet du virement.');
-                                  } else {
-                                    toast.success('Virement rejeté — facture remise en Émise');
-                                    charger();
-                                  }
-                                  setActionId(null);
-                                }}
-                              >
-                                Rejeter
-                              </BoutonY2K>
-                            </>
-                          )}
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8"
-                            title="Télécharger la facture PDF"
-                            onClick={(e) => { e.stopPropagation(); genererFacturePDF(f); }}
-                          >
-                            <Download className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                    {isExpanded && <FactureDetailRow factureId={f.id} />}
-                  </React.Fragment>
-                );
-              })}
-              {filtered.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={10} className="p-0">
-                    <EmptyState
-                      icone={<FileText />}
-                      mascotte="empty"
-                      titre="Aucune facture"
-                      description="Aucune facture ne correspond aux filtres sélectionnés."
-                      compact
-                    />
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </div>
-
-        {/* Mobile : cards */}
-        <div className="md:hidden space-y-3">
-          {filtered.length === 0 ? (
+        {/* ── Section « À traiter » : virements déclarés puis factures en retard ── */}
+        <section aria-label="À traiter">
+          <h2 className="flex items-center gap-2 text-sm font-bold text-foreground mb-1">
+            {aTraiter.length > 0 ? (
+              <span className="inline-flex items-center justify-center min-w-5 h-5 px-1.5 rounded-full bg-destructive text-destructive-foreground text-[11px] font-bold">
+                {aTraiter.length}
+              </span>
+            ) : (
+              <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+            )}
+            À traiter
+          </h2>
+          <p className="text-xs text-muted-foreground mb-3">
+            Virements déclarés à vérifier en premier, puis factures en retard.
+          </p>
+          {aTraiter.length === 0 ? (
             <EmptyState
-              icone={<FileText />}
-              mascotte="empty"
-              titre="Aucune facture"
-              description="Aucune facture ne correspond aux filtres sélectionnés."
-              compact
+              icone={<CheckCircle2 />}
+              titre="Tout est traité"
+              description="Aucun virement à vérifier et aucune facture en retard."
+              variant="success"
             />
           ) : (
-            <>
-              {/* Sélection globale mobile */}
-              <div className="rounded-lg border border-border bg-card p-2 flex items-center justify-between text-xs">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <Checkbox
-                    aria-label="Tout sélectionner"
-                    checked={filtered.length > 0 && filtered.every((f: any) => selectedIds.has(f.id))}
-                    onCheckedChange={(checked) => {
-                      if (checked) setSelectedIds(new Set(filtered.map((f: any) => f.id)));
-                      else setSelectedIds(new Set());
-                    }}
-                  />
-                  <span className="font-medium">Tout sélectionner</span>
-                </label>
-                {selectedIds.size > 0 && (
-                  <span className="text-primary font-semibold">{selectedIds.size} sélectionné{selectedIds.size > 1 ? 's' : ''}</span>
-                )}
-              </div>
-
-              {filtered.map((f: any) => {
+            <div className="space-y-3">
+              {aTraiter.map((f: any) => {
                 const isExpanded = expandedId === f.id;
                 const isSelected = selectedIds.has(f.id);
+                const enRetard = f.statut === 'EN_RETARD';
                 return (
                   <div
                     key={f.id}
-                    className={`rounded-xl border bg-card p-3 space-y-2 ${isSelected ? 'border-primary/50 bg-primary/5' : 'border-border'}`}
+                    className={`rounded-xl border bg-card p-3 space-y-2 ${isSelected ? 'border-primary/50 bg-primary/5' : enRetard ? 'border-destructive/40' : 'border-warning/40'}`}
                   >
                     <div className="flex items-start gap-2">
                       <Checkbox
                         aria-label={`Sélectionner facture ${f.numero_facture ?? f.id}`}
                         checked={isSelected}
-                        onCheckedChange={(checked) => {
-                          const next = new Set(selectedIds);
-                          if (checked) next.add(f.id);
-                          else next.delete(f.id);
-                          setSelectedIds(next);
-                        }}
+                        onCheckedChange={(checked) => toggleSelection(f.id, checked)}
                         className="mt-0.5"
                       />
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-start justify-between gap-2">
-                          <p className="font-mono text-xs font-semibold truncate">{f.numero_facture}</p>
-                          <BadgeY2K variant={statutColor[f.statut] || 'info'} size="sm" className="shrink-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="font-mono text-xs font-semibold">{f.numero_facture}</p>
+                          <BadgeY2K variant={statutColor[f.statut] || 'info'} size="sm">
                             {statutLabel[f.statut] ?? f.statut}
                           </BadgeY2K>
                         </div>
@@ -676,81 +577,51 @@ export default function AdminFacturation() {
                           <ExternalLink className="h-3 w-3 shrink-0" />
                         </button>
                       </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-2 text-xs pl-7">
-                      <div>
-                        <p className="text-muted-foreground">HT</p>
-                        <p className="font-medium">{formatEur(f.montant_ht)}</p>
-                      </div>
-                      <div>
-                        <p className="text-muted-foreground">TTC</p>
-                        <p className="font-semibold">{formatEur(f.montant_ttc)}</p>
-                      </div>
-                      <div>
-                        <p className="text-muted-foreground">Missions</p>
-                        <p className="font-medium">{f.nombre_missions}</p>
-                      </div>
-                      <div>
-                        <p className="text-muted-foreground">Émise le</p>
-                        <p className="font-medium">{f.date_emission ? formatDate(f.date_emission) : '—'}</p>
+                      <div className="text-right shrink-0">
+                        <p className="font-semibold text-sm">{formatEur(f.montant_ttc)}</p>
+                        <p className="text-[10px] text-muted-foreground">TTC</p>
                       </div>
                     </div>
 
-                    {f.statut === 'VIREMENT_DECLARE' && f.virement_reference && (
-                      <p className="text-[10px] text-muted-foreground pl-7">Réf: {f.virement_reference}</p>
-                    )}
+                    <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground pl-7">
+                      <span>HT : <span className="text-foreground font-medium">{formatEur(f.montant_ht)}</span></span>
+                      <span>Missions : <span className="text-foreground font-medium">{f.nombre_missions}</span></span>
+                      <span>Émise le : <span className="text-foreground font-medium">{f.date_emission ? formatDate(f.date_emission) : '—'}</span></span>
+                      <span>Échéance : <span className={enRetard ? 'text-destructive font-semibold' : 'text-foreground font-medium'}>{f.date_echeance ? formatDate(f.date_echeance) : '—'}</span></span>
+                      {f.statut === 'VIREMENT_DECLARE' && f.virement_reference && (
+                        <span>Réf. virement : <span className="text-foreground font-medium">{f.virement_reference}</span></span>
+                      )}
+                    </div>
 
-                    {f.statut === 'VIREMENT_DECLARE' && (
-                      <div className="grid grid-cols-2 gap-2 pl-7">
-                        <BoutonY2K
-                          variant="primary"
-                          size="sm"
-                          className="min-h-[36px] text-xs gap-1"
-                          disabled={actionId === f.id}
-                          iconeGauche={<CheckCircle className="h-3.5 w-3.5" />}
-                          onClick={async () => {
-                            setActionId(f.id);
-                            const { data, error } = await supabase.rpc('fn_confirmer_virement_admin' as any, { p_facture_id: f.id });
-                            if (error || (data as any)?.error) {
-                              toast.error('Erreur lors de la confirmation du virement.');
-                            } else {
-                              toast.success('Virement confirmé ✅');
-                              charger();
-                            }
-                            setActionId(null);
-                          }}
-                        >
-                          Confirmer
-                        </BoutonY2K>
-                        <BoutonY2K
-                          variant="destructive"
-                          size="sm"
-                          className="min-h-[36px] text-xs gap-1"
-                          disabled={actionId === f.id}
-                          iconeGauche={<XCircle className="h-3.5 w-3.5" />}
-                          onClick={async () => {
-                            setActionId(f.id);
-                            const { data, error } = await supabase.rpc('fn_rejeter_virement_admin' as any, { p_facture_id: f.id });
-                            if (error || (data as any)?.error) {
-                              toast.error('Erreur lors du rejet du virement.');
-                            } else {
-                              toast.success('Virement rejeté — facture remise en Émise');
-                              charger();
-                            }
-                            setActionId(null);
-                          }}
-                        >
-                          Rejeter
-                        </BoutonY2K>
-                      </div>
-                    )}
-
-                    <div className="flex items-center gap-2 pl-7">
+                    <div className="flex flex-wrap items-center gap-2 pl-7">
+                      {f.statut === 'VIREMENT_DECLARE' && (
+                        <>
+                          <BoutonY2K
+                            variant="primary"
+                            size="sm"
+                            className="min-h-[36px] text-xs gap-1"
+                            disabled={actionId === f.id}
+                            iconeGauche={<CheckCircle className="h-3.5 w-3.5" />}
+                            onClick={() => confirmerVirement(f)}
+                          >
+                            Confirmer
+                          </BoutonY2K>
+                          <BoutonY2K
+                            variant="destructive"
+                            size="sm"
+                            className="min-h-[36px] text-xs gap-1"
+                            disabled={actionId === f.id}
+                            iconeGauche={<XCircle className="h-3.5 w-3.5" />}
+                            onClick={() => rejeterVirement(f)}
+                          >
+                            Rejeter
+                          </BoutonY2K>
+                        </>
+                      )}
                       <BoutonY2K
                         variant="secondary"
                         size="sm"
-                        className="flex-1 min-h-[36px] text-xs gap-1"
+                        className="min-h-[36px] text-xs gap-1"
                         onClick={() => setExpandedId(isExpanded ? null : f.id)}
                         iconeGauche={isExpanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
                       >
@@ -770,15 +641,271 @@ export default function AdminFacturation() {
 
                     {isExpanded && (
                       <div className="pl-7 pt-1">
-                        <FactureDetailMobile factureId={f.id} />
+                        <FactureDetailATraiter factureId={f.id} />
                       </div>
                     )}
                   </div>
                 );
               })}
-            </>
+            </div>
           )}
-        </div>
+        </section>
+
+        {/* Toolbar bulk : toujours visible (sert aux cases « À traiter » comme à l'historique) */}
+        <BoutonsBulkFactures
+          selection={selectionBulk}
+          onActionTerminee={() => {
+            setSelectedIds(new Set());
+            charger();
+          }}
+        />
+
+        {/* ── Section « Historique » : repliée par défaut, filtres + recherche + bulk + expand intacts ── */}
+        <section aria-label="Historique des factures">
+          <button
+            type="button"
+            onClick={() => setHistoriqueOuvert(o => !o)}
+            aria-expanded={historiqueOuvert}
+            className="flex items-center gap-2 text-sm font-semibold text-muted-foreground hover:text-foreground transition-colors mb-3"
+          >
+            <History className="h-4 w-4" />
+            Historique des factures
+            <span className="inline-flex items-center justify-center min-w-5 h-5 px-1.5 rounded-full bg-muted text-muted-foreground text-[11px] font-semibold">
+              {historique.length}
+            </span>
+            <ChevronDown className={`h-4 w-4 transition-transform ${historiqueOuvert ? 'rotate-180' : ''}`} />
+          </button>
+
+          {historiqueOuvert && (
+            <div className="space-y-4">
+              <div className="flex flex-col sm:flex-row gap-3">
+                <div className="relative max-w-xs flex-1">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input placeholder="Rechercher…" value={recherche} onChange={(e) => setRecherche(e.target.value)} className="pl-10" />
+                </div>
+                <Select value={filtreStatut} onValueChange={setFiltreStatut}>
+                  <SelectTrigger className="w-full sm:w-[160px]"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {STATUTS_HISTORIQUE.map(s => <SelectItem key={s} value={s}>{s === 'TOUS' ? 'Tous statuts' : statutLabel[s] ?? s}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Desktop : table 10 colonnes */}
+              <div className="hidden md:block rounded-lg border overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-8">
+                        <Checkbox
+                          aria-label="Tout sélectionner"
+                          checked={historique.length > 0 && historique.every((f: any) => selectedIds.has(f.id))}
+                          onCheckedChange={(checked) => {
+                            if (checked) setSelectedIds(new Set(historique.map((f: any) => f.id)));
+                            else setSelectedIds(new Set());
+                          }}
+                        />
+                      </TableHead>
+                      <TableHead className="w-8"></TableHead>
+                      <TableHead>N° Facture</TableHead>
+                      <TableHead>Établissement</TableHead>
+                      <TableHead>HT</TableHead>
+                      <TableHead>TTC</TableHead>
+                      <TableHead>Missions</TableHead>
+                      <TableHead>Émise le</TableHead>
+                      <TableHead>Statut</TableHead>
+                      <TableHead className="w-10"></TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {historique.map((f: any) => {
+                      const isExpanded = expandedId === f.id;
+                      return (
+                        <React.Fragment key={f.id}>
+                          <TableRow
+                            className="cursor-pointer hover:bg-muted/50 transition-colors"
+                            onClick={() => setExpandedId(isExpanded ? null : f.id)}
+                          >
+                            <TableCell className="w-8 pr-0" onClick={(e) => e.stopPropagation()}>
+                              <Checkbox
+                                aria-label={`Sélectionner facture ${f.numero_facture ?? f.id}`}
+                                checked={selectedIds.has(f.id)}
+                                onCheckedChange={(checked) => toggleSelection(f.id, checked)}
+                              />
+                            </TableCell>
+                            <TableCell className="w-8 pr-0">
+                              {isExpanded ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
+                            </TableCell>
+                            <TableCell className="font-mono text-xs font-medium">{f.numero_facture}</TableCell>
+                            <TableCell>
+                              <button
+                                onClick={(e) => { e.stopPropagation(); navigate(`/admin/utilisateurs/${f.etablissement_id}`); }}
+                                className="text-primary hover:underline inline-flex items-center gap-1"
+                              >
+                                {(f.etablissements as any)?.nom ?? '—'}
+                                <ExternalLink className="h-3 w-3 shrink-0" />
+                              </button>
+                            </TableCell>
+                            <TableCell>{formatEur(f.montant_ht)}</TableCell>
+                            <TableCell className="font-medium">{formatEur(f.montant_ttc)}</TableCell>
+                            <TableCell>{f.nombre_missions}</TableCell>
+                            <TableCell className="text-xs text-muted-foreground">{f.date_emission ? formatDate(f.date_emission) : '—'}</TableCell>
+                            <TableCell>
+                              <BadgeY2K variant={statutColor[f.statut] || 'info'} size="sm">
+                                {statutLabel[f.statut] ?? f.statut}
+                              </BadgeY2K>
+                            </TableCell>
+                            <TableCell className="w-auto pr-2">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8"
+                                title="Télécharger la facture PDF"
+                                onClick={(e) => { e.stopPropagation(); genererFacturePDF(f); }}
+                              >
+                                <Download className="h-4 w-4" />
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                          {isExpanded && <FactureDetailRow factureId={f.id} />}
+                        </React.Fragment>
+                      );
+                    })}
+                    {historique.length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={10} className="p-0">
+                          <EmptyState
+                            icone={<FileText />}
+                            mascotte="empty"
+                            titre="Aucune facture"
+                            description="Aucune facture ne correspond aux filtres sélectionnés."
+                            compact
+                          />
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+
+              {/* Mobile : cards */}
+              <div className="md:hidden space-y-3">
+                {historique.length === 0 ? (
+                  <EmptyState
+                    icone={<FileText />}
+                    mascotte="empty"
+                    titre="Aucune facture"
+                    description="Aucune facture ne correspond aux filtres sélectionnés."
+                    compact
+                  />
+                ) : (
+                  <>
+                    {/* Sélection globale mobile */}
+                    <div className="rounded-lg border border-border bg-card p-2 flex items-center justify-between text-xs">
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <Checkbox
+                          aria-label="Tout sélectionner"
+                          checked={historique.length > 0 && historique.every((f: any) => selectedIds.has(f.id))}
+                          onCheckedChange={(checked) => {
+                            if (checked) setSelectedIds(new Set(historique.map((f: any) => f.id)));
+                            else setSelectedIds(new Set());
+                          }}
+                        />
+                        <span className="font-medium">Tout sélectionner</span>
+                      </label>
+                      {selectedIds.size > 0 && (
+                        <span className="text-primary font-semibold">{selectedIds.size} sélectionné{selectedIds.size > 1 ? 's' : ''}</span>
+                      )}
+                    </div>
+
+                    {historique.map((f: any) => {
+                      const isExpanded = expandedId === f.id;
+                      const isSelected = selectedIds.has(f.id);
+                      return (
+                        <div
+                          key={f.id}
+                          className={`rounded-xl border bg-card p-3 space-y-2 ${isSelected ? 'border-primary/50 bg-primary/5' : 'border-border'}`}
+                        >
+                          <div className="flex items-start gap-2">
+                            <Checkbox
+                              aria-label={`Sélectionner facture ${f.numero_facture ?? f.id}`}
+                              checked={isSelected}
+                              onCheckedChange={(checked) => toggleSelection(f.id, checked)}
+                              className="mt-0.5"
+                            />
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-start justify-between gap-2">
+                                <p className="font-mono text-xs font-semibold truncate">{f.numero_facture}</p>
+                                <BadgeY2K variant={statutColor[f.statut] || 'info'} size="sm" className="shrink-0">
+                                  {statutLabel[f.statut] ?? f.statut}
+                                </BadgeY2K>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => navigate(`/admin/utilisateurs/${f.etablissement_id}`)}
+                                className="text-primary hover:underline inline-flex items-center gap-1 text-sm font-medium mt-0.5"
+                              >
+                                {(f.etablissements as any)?.nom ?? '—'}
+                                <ExternalLink className="h-3 w-3 shrink-0" />
+                              </button>
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-2 text-xs pl-7">
+                            <div>
+                              <p className="text-muted-foreground">HT</p>
+                              <p className="font-medium">{formatEur(f.montant_ht)}</p>
+                            </div>
+                            <div>
+                              <p className="text-muted-foreground">TTC</p>
+                              <p className="font-semibold">{formatEur(f.montant_ttc)}</p>
+                            </div>
+                            <div>
+                              <p className="text-muted-foreground">Missions</p>
+                              <p className="font-medium">{f.nombre_missions}</p>
+                            </div>
+                            <div>
+                              <p className="text-muted-foreground">Émise le</p>
+                              <p className="font-medium">{f.date_emission ? formatDate(f.date_emission) : '—'}</p>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2 pl-7">
+                            <BoutonY2K
+                              variant="secondary"
+                              size="sm"
+                              className="flex-1 min-h-[36px] text-xs gap-1"
+                              onClick={() => setExpandedId(isExpanded ? null : f.id)}
+                              iconeGauche={isExpanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+                            >
+                              {isExpanded ? 'Masquer missions' : 'Voir missions'}
+                            </BoutonY2K>
+                            <BoutonY2K
+                              variant="ghost"
+                              size="sm"
+                              className="min-h-[36px] px-3"
+                              title="Télécharger la facture PDF"
+                              aria-label="Télécharger la facture PDF"
+                              onClick={() => genererFacturePDF(f)}
+                            >
+                              <Download className="h-4 w-4" />
+                            </BoutonY2K>
+                          </div>
+
+                          {isExpanded && (
+                            <div className="pl-7 pt-1">
+                              <FactureDetailMobile factureId={f.id} />
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </>
+                )}
+              </div>
+            </div>
+          )}
+        </section>
       </div>
     </LayoutAdmin>
   );
