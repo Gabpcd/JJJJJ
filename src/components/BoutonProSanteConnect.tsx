@@ -99,7 +99,9 @@ export function BoutonProSanteConnect({ intention = 'login', fullWidth = true, o
         ].join(' ')}
         style={{
           borderColor: '#0078D7',
-          color: '#0078D7',
+          // #0066CC (au lieu de #0078D7) : contraste 5.2:1 sur blanc — le bleu
+          // PSC officiel est à 4.49:1, sous le seuil WCAG AA 4.5:1 (axe serious)
+          color: '#0066CC',
         }}
         onMouseEnter={(e) => {
           if (!loading) e.currentTarget.style.backgroundColor = '#F0F7FD';

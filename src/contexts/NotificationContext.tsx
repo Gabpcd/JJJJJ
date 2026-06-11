@@ -103,6 +103,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
         - Desktop : top-right (top-4 right-4)
       */}
       <div
+        role="region"
         className="fixed z-[100] flex flex-col gap-2 inset-x-4 bottom-20 md:bottom-auto md:top-4 md:right-4 md:left-auto md:w-96"
         aria-live="polite"
         aria-label="Notifications"
