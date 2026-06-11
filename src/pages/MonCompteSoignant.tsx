@@ -15,7 +15,7 @@ import {
 } from 'lucide-react';
 
 export default function MonCompteSoignant() {
-  usePageTitle('Menu');
+  usePageTitle('Mon profil');
   const { user, deconnexion } = useAuth();
   const [profil, setProfil] = useState<{
     prenom: string; nom: string; avatar_url: string | null;

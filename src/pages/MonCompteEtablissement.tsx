@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 
 export default function MonCompteEtablissement() {
-  usePageTitle('Menu');
+  usePageTitle('Mon profil');
   const { user, deconnexion } = useAuth();
   const [etab, setEtab] = useState<{ nom: string; logo_url: string | null; type: string | null } | null>(null);
 
