@@ -4,13 +4,6 @@ import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import {
   Table,
   TableBody,
   TableCell,
@@ -26,9 +19,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { HandCoins } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { logger } from '@/lib/logger';
+import { FileDeTravail } from '@/components/admin/FileDeTravail';
 
 export const STATUTS_AVOIR = [
   'BROUILLON',
@@ -109,7 +104,6 @@ type Props = {
 export function AvoirsList({ onChanged }: Props) {
   const [avoirs, setAvoirs] = useState<AvoirEnrichi[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filtreStatut, setFiltreStatut] = useState<StatutAvoir | 'TOUS'>('TOUS');
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [avoirCible, setAvoirCible] = useState<AvoirEnrichi | null>(null);
@@ -172,10 +166,20 @@ export function AvoirsList({ onChanged }: Props) {
     charger();
   }, [charger]);
 
-  const visibles = useMemo(
-    () => filtrerAvoirs(avoirs, filtreStatut),
-    [avoirs, filtreStatut],
-  );
+  // File de travail : avoirs EMISE à rembourser (virement manuel en premier,
+  // plus anciens d'abord) ; le reste (remboursés, annulés, brouillons) en historique.
+  const { aRembourser, historique } = useMemo(() => {
+    const emis = avoirs
+      .filter((a) => a.statut === 'EMISE')
+      .sort((a, b) => {
+        const ma = a.mode_remboursement === 'VIREMENT_MANUEL' ? 0 : 1;
+        const mb = b.mode_remboursement === 'VIREMENT_MANUEL' ? 0 : 1;
+        if (ma !== mb) return ma - mb;
+        return (a.date_emission ?? '').localeCompare(b.date_emission ?? '');
+      });
+    const autres = avoirs.filter((a) => a.statut !== 'EMISE');
+    return { aRembourser: emis, historique: autres };
+  }, [avoirs]);
 
   const ouvrirDialogConfirmation = (a: AvoirEnrichi) => {
     setAvoirCible(a);
@@ -217,116 +221,104 @@ export function AvoirsList({ onChanged }: Props) {
     onChanged?.();
   };
 
+  const tableAvoirs = (rows: AvoirEnrichi[], emptyTestId?: string) => (
+    <div className="overflow-x-auto rounded-lg border">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>N° avoir</TableHead>
+            <TableHead>Soignant</TableHead>
+            <TableHead>Établissement</TableHead>
+            <TableHead className="text-right">Montant HT</TableHead>
+            <TableHead>Mode remboursement</TableHead>
+            <TableHead>Statut</TableHead>
+            <TableHead>Émission</TableHead>
+            <TableHead className="text-right">Action</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {rows.length === 0 && (
+            <TableRow>
+              <TableCell
+                colSpan={8}
+                className="py-6 text-center text-muted-foreground"
+                data-testid={emptyTestId}
+              >
+                Aucun avoir.
+              </TableCell>
+            </TableRow>
+          )}
+          {rows.map((a) => {
+            const remboursable =
+              a.statut === 'EMISE' && a.mode_remboursement === 'VIREMENT_MANUEL';
+            return (
+              <TableRow key={a.id} data-testid="avoir-row" data-avoir-id={a.id}>
+                <TableCell className="font-mono text-xs">
+                  {a.numero_facture ?? '—'}
+                </TableCell>
+                <TableCell>{a.soignant_nom ?? '—'}</TableCell>
+                <TableCell>{a.etablissement_nom ?? '—'}</TableCell>
+                <TableCell className="text-right font-mono">
+                  {formatMontant(a.montant_ht)}
+                </TableCell>
+                <TableCell>
+                  <BadgeY2K variant="info" size="sm">
+                    {LABELS_MODE_REMB[
+                      a.mode_remboursement as ModeRemboursement
+                    ] ?? a.mode_remboursement ?? '—'}
+                  </BadgeY2K>
+                </TableCell>
+                <TableCell>
+                  <BadgeY2K variant={badgeStatut(a.statut)}>
+                    {LABELS_STATUT_AVOIR[a.statut as StatutAvoir] ?? a.statut}
+                  </BadgeY2K>
+                </TableCell>
+                <TableCell className="text-xs text-muted-foreground">
+                  {formatDate(a.date_emission)}
+                </TableCell>
+                <TableCell className="text-right">
+                  {remboursable ? (
+                    <BoutonY2K
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => ouvrirDialogConfirmation(a)}
+                      aria-label={`Confirmer remboursement avoir ${a.numero_facture ?? a.id}`}
+                    >
+                      Confirmer remboursement
+                    </BoutonY2K>
+                  ) : (
+                    <span className="text-xs text-muted-foreground">—</span>
+                  )}
+                </TableCell>
+              </TableRow>
+            );
+          })}
+        </TableBody>
+      </Table>
+    </div>
+  );
+
+  if (loading) {
+    return (
+      <div className="py-6 text-center text-muted-foreground" data-testid="avoirs-list">
+        Chargement…
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4" data-testid="avoirs-list">
-      <div className="flex flex-wrap items-end gap-3">
-        <div className="min-w-[220px]">
-          <Label className="mb-1.5 block text-xs">Statut</Label>
-          <Select
-            value={filtreStatut}
-            onValueChange={(v) => setFiltreStatut(v as StatutAvoir | 'TOUS')}
-          >
-            <SelectTrigger aria-label="Filtre statut avoir">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="TOUS">Tous</SelectItem>
-              {STATUTS_AVOIR.map((s) => (
-                <SelectItem key={s} value={s}>
-                  {LABELS_STATUT_AVOIR[s]}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="ml-auto text-xs text-muted-foreground">
-          {visibles.length} avoir{visibles.length > 1 ? 's' : ''} affiché
-          {visibles.length > 1 ? 's' : ''}
-        </div>
-      </div>
-
-      <div className="overflow-x-auto rounded-lg border">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>N° avoir</TableHead>
-              <TableHead>Soignant</TableHead>
-              <TableHead>Établissement</TableHead>
-              <TableHead className="text-right">Montant HT</TableHead>
-              <TableHead>Mode remboursement</TableHead>
-              <TableHead>Statut</TableHead>
-              <TableHead>Émission</TableHead>
-              <TableHead className="text-right">Action</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {loading && (
-              <TableRow>
-                <TableCell colSpan={8} className="py-6 text-center text-muted-foreground">
-                  Chargement…
-                </TableCell>
-              </TableRow>
-            )}
-            {!loading && visibles.length === 0 && (
-              <TableRow>
-                <TableCell
-                  colSpan={8}
-                  className="py-6 text-center text-muted-foreground"
-                  data-testid="avoirs-empty"
-                >
-                  Aucun avoir pour ce filtre.
-                </TableCell>
-              </TableRow>
-            )}
-            {!loading &&
-              visibles.map((a) => {
-                const remboursable =
-                  a.statut === 'EMISE' && a.mode_remboursement === 'VIREMENT_MANUEL';
-                return (
-                  <TableRow key={a.id} data-testid="avoir-row" data-avoir-id={a.id}>
-                    <TableCell className="font-mono text-xs">
-                      {a.numero_facture ?? '—'}
-                    </TableCell>
-                    <TableCell>{a.soignant_nom ?? '—'}</TableCell>
-                    <TableCell>{a.etablissement_nom ?? '—'}</TableCell>
-                    <TableCell className="text-right font-mono">
-                      {formatMontant(a.montant_ht)}
-                    </TableCell>
-                    <TableCell>
-                      <BadgeY2K variant="info" size="sm">
-                        {LABELS_MODE_REMB[
-                          a.mode_remboursement as ModeRemboursement
-                        ] ?? a.mode_remboursement ?? '—'}
-                      </BadgeY2K>
-                    </TableCell>
-                    <TableCell>
-                      <BadgeY2K variant={badgeStatut(a.statut)}>
-                        {LABELS_STATUT_AVOIR[a.statut as StatutAvoir] ?? a.statut}
-                      </BadgeY2K>
-                    </TableCell>
-                    <TableCell className="text-xs text-muted-foreground">
-                      {formatDate(a.date_emission)}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      {remboursable ? (
-                        <BoutonY2K
-                          size="sm"
-                          variant="secondary"
-                          onClick={() => ouvrirDialogConfirmation(a)}
-                          aria-label={`Confirmer remboursement avoir ${a.numero_facture ?? a.id}`}
-                        >
-                          Confirmer remboursement
-                        </BoutonY2K>
-                      ) : (
-                        <span className="text-xs text-muted-foreground">—</span>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-          </TableBody>
-        </Table>
-      </div>
+      <FileDeTravail
+        nbATraiter={aRembourser.length}
+        aTraiter={tableAvoirs(aRembourser, 'avoirs-empty')}
+        nbHistorique={historique.length}
+        historique={tableAvoirs(historique)}
+        labelATraiter="À rembourser"
+        labelHistorique="Historique (remboursés, annulés, brouillons)"
+        titreVide="Aucun avoir à rembourser"
+        descriptionVide="Tous les avoirs émis ont été remboursés."
+        iconeVide={<HandCoins />}
+      />
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent>

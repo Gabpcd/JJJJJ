@@ -1,10 +1,10 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { Flag, Loader2, ChevronRight } from 'lucide-react';
 import { LayoutAdmin } from '@/components/LayoutAdmin';
 import { supabase } from '@/integrations/supabase/client';
 import { useNotification } from '@/contexts/NotificationContext';
 import { usePageTitle } from '@/hooks/usePageTitle';
-import { EmptyState } from '@/components/ui/EmptyState';
+import { FileDeTravail } from '@/components/admin/FileDeTravail';
 import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { BadgeY2K } from '@/components/y2k/BadgeY2K';
 import { useNavigate } from 'react-router-dom';
@@ -30,13 +30,12 @@ const CAT_LABEL: Record<string, string> = {
   AUTRE: 'Autre',
 };
 
-const STATUTS = [
-  { value: '', label: 'Tous' },
-  { value: 'OUVERT', label: 'Ouverts' },
-  { value: 'EN_COURS', label: 'En cours' },
-  { value: 'TRAITE', label: 'Traités' },
-  { value: 'REJETE', label: 'Rejetés' },
-];
+const STATUT_LABEL: Record<string, string> = {
+  OUVERT: 'Ouvert',
+  EN_COURS: 'En cours',
+  TRAITE: 'Traité',
+  REJETE: 'Rejeté',
+};
 
 function statutBadge(s: string): 'warning' | 'info' | 'success' | 'error' {
   if (s === 'OUVERT') return 'warning';
@@ -51,18 +50,31 @@ export default function AdminSignalements() {
   const navigate = useNavigate();
   const [items, setItems] = useState<Signalement[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filtre, setFiltre] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
 
   const charger = useCallback(async () => {
     setLoading(true);
-    const { data, error } = await supabase.rpc('fn_admin_lister_signalements' as any, { p_statut: filtre || null });
+    const { data, error } = await supabase.rpc('fn_admin_lister_signalements' as any, { p_statut: null });
     if (error) afficherNotification({ type: 'erreur', message: 'Erreur de chargement des signalements.' });
     setItems((data as any) || []);
     setLoading(false);
-  }, [filtre, afficherNotification]);
+  }, [afficherNotification]);
 
   useEffect(() => { charger(); }, [charger]);
+
+  // File de travail : OUVERT puis EN_COURS, plus anciens en premier (ordre de purge).
+  // Historique : TRAITE/REJETE, plus récents en premier.
+  const { aTraiter, historique } = useMemo(() => {
+    const actionnables = items
+      .filter(s => s.statut === 'OUVERT' || s.statut === 'EN_COURS')
+      .sort((a, b) => (a.statut === b.statut
+        ? a.cree_le.localeCompare(b.cree_le)
+        : a.statut === 'OUVERT' ? -1 : 1));
+    const clos = items
+      .filter(s => s.statut === 'TRAITE' || s.statut === 'REJETE')
+      .sort((a, b) => (b.traite_le || b.cree_le).localeCompare(a.traite_le || a.cree_le));
+    return { aTraiter: actionnables, historique: clos };
+  }, [items]);
 
   async function traiter(id: string, statut: string, resolution?: string) {
     setBusy(id);
@@ -76,6 +88,39 @@ export default function AdminSignalements() {
     charger();
   }
 
+  const carte = (s: Signalement) => (
+    <div key={s.id} className="card-base">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <BadgeY2K variant={statutBadge(s.statut)}>{STATUT_LABEL[s.statut] || s.statut}</BadgeY2K>
+            <span className="text-sm font-semibold text-foreground">{CAT_LABEL[s.categorie] || s.categorie}</span>
+          </div>
+          <p className="text-sm text-foreground mt-1">
+            <span className="text-muted-foreground">{s.signaleur_nom || s.signaleur_type}</span>
+            {' → '}
+            <button onClick={() => navigate(`/admin/utilisateurs/${s.cible_id}`)}
+              className="font-medium text-primary hover:underline inline-flex items-center gap-0.5">
+              {s.cible_nom || s.cible_type} <ChevronRight className="h-3 w-3" />
+            </button>
+          </p>
+          <p className="text-sm text-foreground/80 mt-2 whitespace-pre-wrap">{s.motif}</p>
+          <p className="text-xs text-muted-foreground mt-2">{format(new Date(s.cree_le), 'dd/MM/yyyy HH:mm', { locale: fr })}</p>
+        </div>
+      </div>
+      {s.statut !== 'TRAITE' && s.statut !== 'REJETE' && (
+        <div className="flex flex-wrap gap-2 mt-3 pt-3 border-t border-border">
+          {s.statut === 'OUVERT' && (
+            <BoutonY2K size="sm" variant="secondary" disabled={busy === s.id} onClick={() => traiter(s.id, 'EN_COURS')}>Prendre en charge</BoutonY2K>
+          )}
+          <BoutonY2K size="sm" disabled={busy === s.id} onClick={() => traiter(s.id, 'TRAITE', 'Traité par l\'administration')}>Marquer traité</BoutonY2K>
+          <button disabled={busy === s.id} onClick={() => traiter(s.id, 'REJETE', 'Rejeté (sans suite)')}
+            className="text-sm text-muted-foreground hover:text-destructive px-3 py-1.5">Rejeter</button>
+        </div>
+      )}
+    </div>
+  );
+
   return (
     <LayoutAdmin>
       <div className="mb-6">
@@ -83,54 +128,19 @@ export default function AdminSignalements() {
         <p className="text-sm text-muted-foreground mt-1">Signalements d'utilisateurs transmis par les soignants et les établissements.</p>
       </div>
 
-      <div className="flex flex-wrap gap-2 mb-4">
-        {STATUTS.map((s) => (
-          <button key={s.value} onClick={() => setFiltre(s.value)}
-            className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${filtre === s.value ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-muted/70'}`}>
-            {s.label}
-          </button>
-        ))}
-      </div>
-
       {loading ? (
         <div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>
-      ) : items.length === 0 ? (
-        <EmptyState icone={<Flag />} mascotte="happy" titre="Aucun signalement" description="Aucun signalement à traiter pour ce filtre." />
       ) : (
-        <div className="space-y-3">
-          {items.map((s) => (
-            <div key={s.id} className="card-base">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <BadgeY2K variant={statutBadge(s.statut)}>{s.statut}</BadgeY2K>
-                    <span className="text-sm font-semibold text-foreground">{CAT_LABEL[s.categorie] || s.categorie}</span>
-                  </div>
-                  <p className="text-sm text-foreground mt-1">
-                    <span className="text-muted-foreground">{s.signaleur_nom || s.signaleur_type}</span>
-                    {' → '}
-                    <button onClick={() => navigate(s.cible_type === 'SOIGNANT' ? `/admin/utilisateurs/${s.cible_id}` : `/admin/utilisateurs/${s.cible_id}`)}
-                      className="font-medium text-primary hover:underline inline-flex items-center gap-0.5">
-                      {s.cible_nom || s.cible_type} <ChevronRight className="h-3 w-3" />
-                    </button>
-                  </p>
-                  <p className="text-sm text-foreground/80 mt-2 whitespace-pre-wrap">{s.motif}</p>
-                  <p className="text-xs text-muted-foreground mt-2">{format(new Date(s.cree_le), 'dd/MM/yyyy HH:mm', { locale: fr })}</p>
-                </div>
-              </div>
-              {s.statut !== 'TRAITE' && s.statut !== 'REJETE' && (
-                <div className="flex flex-wrap gap-2 mt-3 pt-3 border-t border-border">
-                  {s.statut === 'OUVERT' && (
-                    <BoutonY2K size="sm" variant="secondary" disabled={busy === s.id} onClick={() => traiter(s.id, 'EN_COURS')}>Prendre en charge</BoutonY2K>
-                  )}
-                  <BoutonY2K size="sm" disabled={busy === s.id} onClick={() => traiter(s.id, 'TRAITE', 'Traité par l\'administration')}>Marquer traité</BoutonY2K>
-                  <button disabled={busy === s.id} onClick={() => traiter(s.id, 'REJETE', 'Rejeté (sans suite)')}
-                    className="text-sm text-muted-foreground hover:text-destructive px-3 py-1.5">Rejeter</button>
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
+        <FileDeTravail
+          nbATraiter={aTraiter.length}
+          aTraiter={<div className="space-y-3">{aTraiter.map(carte)}</div>}
+          nbHistorique={historique.length}
+          historique={<div className="space-y-3">{historique.map(carte)}</div>}
+          labelHistorique="Historique (traités et rejetés)"
+          titreVide="Aucun signalement à traiter"
+          descriptionVide="Tous les signalements ont été pris en charge."
+          iconeVide={<Flag />}
+        />
       )}
     </LayoutAdmin>
   );

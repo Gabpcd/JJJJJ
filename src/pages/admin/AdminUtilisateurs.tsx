@@ -52,7 +52,15 @@ export default function AdminUtilisateurs() {
     ]);
 
     if (resSoignants.data) setSoignants(resSoignants.data);
-    if (resEtabs.data) setEtabs(resEtabs.data);
+    // File de travail (Session D) : les établissements en attente de vérification
+    // passent en tête de l'onglet, le reste garde l'ordre anté-chronologique.
+    if (resEtabs.data) {
+      setEtabs([...resEtabs.data].sort((a, b) => {
+        const pa = a.statut_verification === 'EN_ATTENTE' && !a.supprime_le ? 0 : 1;
+        const pb = b.statut_verification === 'EN_ATTENTE' && !b.supprime_le ? 0 : 1;
+        return pa - pb;
+      }));
+    }
     setLoading(false);
   };
 
