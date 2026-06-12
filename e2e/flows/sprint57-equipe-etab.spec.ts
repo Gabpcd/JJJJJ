@@ -21,13 +21,13 @@ test.describe('Sprint 5.7 — Équipe étab', () => {
   test('Tables membres_etablissement + invitations_etablissement existent', async () => {
     const { error: errMembres } = await adminClient()
       .from('membres_etablissement' as any)
-      .select('id, role, statut')
+      .select('id, role, actif')
       .limit(1);
     expect(errMembres?.message).toBeFalsy();
 
     const { error: errInv } = await adminClient()
       .from('invitations_etablissement' as any)
-      .select('id, role, statut, token')
+      .select('id, role_propose, statut, token')
       .limit(1);
     expect(errInv?.message).toBeFalsy();
   });
@@ -48,13 +48,13 @@ test.describe('Sprint 5.7 — Équipe étab', () => {
 
     const { data: membre } = await adminClient()
       .from('membres_etablissement' as any)
-      .select('role, statut')
+      .select('role, actif')
       .eq('etablissement_id', (etabRow as any).id)
       .eq('user_id', etabUserId)
       .maybeSingle();
     expect(membre).toBeTruthy();
     expect((membre as any).role).toBe('PROPRIETAIRE');
-    expect((membre as any).statut).toBe('ACTIF');
+    expect((membre as any).actif).toBe(true);
   });
 
   test('fn_mes_permissions_etab : anonymous (sans auth.uid) renvoie role NULL', async () => {

@@ -25,6 +25,9 @@ env:
   # deploy-supabase, prouvé fonctionnel). Cf. step « Résoudre la clé ».
   E2E_SUPABASE_URL: 'https://flripxtsyegjshnhzjkz.supabase.co'
   E2E_PUBLISHABLE_KEY: 'sb_publishable_wrR-KGZqiovTPBym6mjXPw_V8l4ae-C'
+  # Clé anon legacy (publique, présente dans tout bundle client historique) :
+  # verify-rpps compare le Bearer à SUPABASE_ANON_KEY pour exempter de captcha.
+  E2E_ANON_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZscmlweHRzeWVnanNobmh6amt6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMyMTk2OTYsImV4cCI6MjA4ODc5NTY5Nn0.ywor0oGht7aYi8J1YwNRo_rfmJtQ6GBodmCp1kAB3UY'
   E2E_TEST_PASSWORD: 'Playwright!Test2026'
   SUPABASE_PROJECT_REF: 'flripxtsyegjshnhzjkz'
 
@@ -117,6 +120,7 @@ jobs:
           PLAYWRIGHT_BASE_URL: http://127.0.0.1:4173
           SUPABASE_URL: ${{ env.E2E_SUPABASE_URL }}
           SUPABASE_PUBLISHABLE_KEY: ${{ env.E2E_PUBLISHABLE_KEY }}
+          SUPABASE_ANON_KEY: ${{ env.E2E_ANON_KEY }}
           PLAYWRIGHT_TEST_PASSWORD: ${{ env.E2E_TEST_PASSWORD }}
           CI: 'true'
       - name: Détail a11y si échec (rapport court en fin de log)
@@ -202,6 +206,7 @@ jobs:
           PLAYWRIGHT_BASE_URL: http://127.0.0.1:4173
           SUPABASE_URL: ${{ env.E2E_SUPABASE_URL }}
           SUPABASE_PUBLISHABLE_KEY: ${{ env.E2E_PUBLISHABLE_KEY }}
+          SUPABASE_ANON_KEY: ${{ env.E2E_ANON_KEY }}
           PLAYWRIGHT_TEST_PASSWORD: ${{ env.E2E_TEST_PASSWORD }}
           CI: 'true'
       - name: Upload report
