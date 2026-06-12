@@ -8,7 +8,10 @@
  * - BoutonsActionSwipe (LIKE / DISLIKE / SUPER_LIKE) avec quota
  * - Trigger fn_enregistrer_swipe + invocation edge function notif-match si SUPER_LIKE
  * - Confettis sur SUPER_LIKE
- * - EmptyState avec Mascotte quand stack vide
+ * - EmptyState avec Mascotte quand stack vide (Session E-5 : CTA alerte 1-tap
+ *   vers /soignant/recherche-missions?alerte=1, message distinct si 0 mission
+ *   sur le marché vs tout swipé)
+ * - ModalDetailMissionSwipe branché : tap sur la card + bouton « Voir le détail »
  */
 import { useState, useCallback, useEffect, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -20,6 +23,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { CardMissionSwipe, type MissionSwipePayload } from '@/components/swipe/CardMissionSwipe';
 import { StackCards, type SwipeDirection } from '@/components/swipe/StackCards';
 import { BoutonsActionSwipe } from '@/components/swipe/BoutonsActionSwipe';
+import { ModalDetailMissionSwipe } from '@/components/swipe/ModalDetailMissionSwipe';
 import { ConfettiSwipe } from '@/components/swipe/ConfettiSwipe';
 import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { supabase } from '@/integrations/supabase/client';
@@ -50,8 +54,12 @@ export default function SwipeMissions() {
   const { afficherNotification } = useNotification();
   const [confettiKey, setConfettiKey] = useState<number | null>(null);
 
+  // Modal détail mission (tap sur la card ou bouton « Voir le détail »)
+  const [detailMission, setDetailMission] = useState<MissionSwipePayload | null>(null);
+  const [detailOpen, setDetailOpen] = useState(false);
+
   // Fetch missions swipe
-  const { data, isLoading, refetch } = useQuery({
+  const { data, isLoading } = useQuery({
     queryKey: ['swipe-missions'],
     queryFn: async () => {
       const { data, error } = await supabase.rpc('fn_obtenir_missions_swipe' as any, { p_limit: 20 });
@@ -132,20 +140,16 @@ export default function SwipeMissions() {
     },
   });
 
-  // "Recharger" : force un vrai refetch (bypass staleTime via invalidate) +
-  // feedback. fn_obtenir_missions_swipe exclut les missions déjà swipées
-  // côté serveur ; on re-fetch pour récupérer celles publiées entre-temps.
-  const handleRecharger = useCallback(async () => {
-    await qc.invalidateQueries({ queryKey: ['swipe-missions'] });
-    const res = await refetch();
-    const nb = res.data?.length ?? 0;
-    afficherNotification({
-      type: nb > 0 ? 'succes' : 'info',
-      message: nb > 0
-        ? `${nb} mission${nb > 1 ? 's' : ''} à découvrir !`
-        : "Aucune nouvelle mission pour l'instant. Revenez plus tard ou élargissez vos critères.",
-    });
-  }, [qc, refetch, afficherNotification]);
+  // Session E-5 : l'état vide recrute — crée une alerte 1-tap côté liste
+  // (RechercheMissions ouvre le flux « créer une alerte » via ?alerte=1).
+  const allerCreerAlerte = useCallback(() => {
+    navigate('/soignant/recherche-missions?alerte=1');
+  }, [navigate]);
+
+  const ouvrirDetail = useCallback((m: MissionSwipePayload) => {
+    setDetailMission(m);
+    setDetailOpen(true);
+  }, []);
 
   const handleSwipe = useCallback((dir: SwipeDirEnum, missionId: string) => {
     setLocalStack((prev) => prev.filter((m) => m.mission_id !== missionId));
@@ -160,9 +164,9 @@ export default function SwipeMissions() {
     () =>
       localStack.map((m) => ({
         key: m.mission_id,
-        content: <CardMissionSwipe mission={m} />,
+        content: <CardMissionSwipe mission={m} onTap={() => ouvrirDetail(m)} />,
       })),
-    [localStack],
+    [localStack, ouvrirDetail],
   );
 
   const topMission = localStack[0];
@@ -222,35 +226,76 @@ export default function SwipeMissions() {
               <span className="text-sm">Calcul de votre matching...</span>
             </div>
           ) : localStack.length === 0 ? (
-            <EmptyState
-              mascotte="happy"
-              variant="success"
-              titre="Vous avez tout vu pour aujourd'hui !"
-              description="Revenez plus tard ou élargissez vos critères pour découvrir plus de missions."
-              cta={{
-                label: 'Recharger',
-                onClick: handleRecharger,
-              }}
-              ctaSecondaire={{
-                label: 'Voir en liste',
-                onClick: switchToListe,
-              }}
-            />
+            (data?.length ?? 0) > 0 ? (
+              /* Le soignant a swipé toute la pile du jour */
+              <EmptyState
+                mascotte="happy"
+                variant="success"
+                titre="Vous avez tout vu pour aujourd'hui"
+                description="Créez une alerte : vous recevrez un email dès qu'une nouvelle mission correspondant à votre profil est publiée."
+                cta={{
+                  label: '🔔 Me prévenir des prochaines missions',
+                  onClick: allerCreerAlerte,
+                }}
+                ctaSecondaire={{
+                  label: 'Voir les missions en liste',
+                  onClick: switchToListe,
+                }}
+              />
+            ) : (
+              /* Cas réel pré-traction : 0 mission sur le marché — l'état vide recrute */
+              <EmptyState
+                mascotte="thinking"
+                titre="Aucune mission près de chez vous pour l'instant"
+                description="Créez une alerte : vous recevrez un email dès qu'une mission correspondant à votre profil est publiée."
+                cta={{
+                  label: "🔔 Me prévenir dès qu'une mission arrive",
+                  onClick: allerCreerAlerte,
+                }}
+                ctaSecondaire={{
+                  label: 'Voir la recherche en liste',
+                  onClick: switchToListe,
+                }}
+              />
+            )
           ) : (
             <StackCards items={stackItems} onSwipe={handleGestureSwipe} />
           )}
         </div>
 
         {topMission && (
-          <BoutonsActionSwipe
-            onDislike={() => handleSwipe('DISLIKE', topMission.mission_id)}
-            onLike={() => handleSwipe('LIKE', topMission.mission_id)}
-            onSuperLike={() => handleSwipe('SUPER_LIKE', topMission.mission_id)}
-            quotaSuperLikeRestant={quotaSuperLike ?? null}
-            disabled={swipeMut.isPending}
-          />
+          <div>
+            {/* Accès fiable au détail (le tap sur la card peut être absorbé par le
+                pointer capture du geste de swipe selon le navigateur) */}
+            <div className="flex justify-center">
+              <BoutonY2K variant="ghost" size="sm" onClick={() => ouvrirDetail(topMission)}>
+                Voir le détail de la mission
+              </BoutonY2K>
+            </div>
+            <BoutonsActionSwipe
+              onDislike={() => handleSwipe('DISLIKE', topMission.mission_id)}
+              onLike={() => handleSwipe('LIKE', topMission.mission_id)}
+              onSuperLike={() => handleSwipe('SUPER_LIKE', topMission.mission_id)}
+              quotaSuperLikeRestant={quotaSuperLike ?? null}
+              disabled={swipeMut.isPending}
+            />
+          </div>
         )}
       </div>
+
+      <ModalDetailMissionSwipe
+        mission={detailMission}
+        open={detailOpen}
+        onOpenChange={setDetailOpen}
+        onPostuler={() => {
+          setDetailOpen(false);
+          if (detailMission) handleSwipe('LIKE', detailMission.mission_id);
+        }}
+        onSuivant={() => {
+          setDetailOpen(false);
+          if (detailMission) handleSwipe('DISLIKE', detailMission.mission_id);
+        }}
+      />
 
       {confettiKey != null && (
         <ConfettiSwipe key={confettiKey} onComplete={() => setConfettiKey(null)} />

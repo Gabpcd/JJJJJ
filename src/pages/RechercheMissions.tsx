@@ -4,7 +4,7 @@ import { useDebounce } from '@/hooks/useDebounce';
 import { logger } from '@/lib/logger';
 import { handleErrorSilent } from '@/lib/handleError';
 import { toast } from 'sonner';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { SearchX, MapPin, List, Map as MapIcon, SlidersHorizontal } from 'lucide-react';
 import { LayoutApp } from '@/components/LayoutApp';
 import { ChargementPage } from '@/components/ChargementPage';
@@ -19,6 +19,9 @@ import { calculerDistanceKm } from '@/lib/geo';
 import { PROFESSIONS, getLabelProfession, extraireContratPreference, missionCompatibleContrat, getTypesContratSoignant, peutExercerLiberal } from '@/lib/constantes';
 import { getMissionsCompatiblesFilter } from '@/lib/profession-hierarchy';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
+} from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
@@ -29,6 +32,7 @@ import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { FiltresSauvegardes } from '@/components/FiltresSauvegardes';
+import type { Json } from '@/integrations/supabase/types';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
@@ -86,6 +90,12 @@ export default function RechercheMissions() {
   const [showFilters, setShowFilters] = useState(true);
   const [villeRecherche, setVilleRecherche] = useState('');
   const debouncedVille = useDebounce(villeRecherche, 300);
+  // Alerte 1-tap (Session E-5) : flux « créer une alerte » ouvert via ?alerte=1
+  // (deep link depuis SwipeMissions) ou via le CTA de l'état vide.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [alerteOpen, setAlerteOpen] = useState(false);
+  const [alerteEnCours, setAlerteEnCours] = useState(false);
+  const [filtresVersion, setFiltresVersion] = useState(0);
   // Map
   const mapRef = useRef<HTMLDivElement>(null);
   const leafletMap = useRef<L.Map | null>(null);
@@ -110,6 +120,65 @@ export default function RechercheMissions() {
       if (parsed.nom_source) toast.success(`Filtres « ${parsed.nom_source} » appliqués`);
     } catch (_e) { /* ignore */ }
   }, []);
+
+  // ?alerte=1 → ouvre directement le flux « créer une alerte » (1 confirmation)
+  useEffect(() => {
+    if (searchParams.get('alerte') === '1') {
+      setAlerteOpen(true);
+      const next = new URLSearchParams(searchParams);
+      next.delete('alerte');
+      setSearchParams(next, { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Crée (ou réactive) un filtre sauvegardé « alerte » via le module existant
+  // filtres_sauvegardes : profession du soignant + rayon actuel, alerte email
+  // IMMEDIATE. Idempotent : si une alerte du même nom existe déjà, on la
+  // réactive au lieu de créer un doublon.
+  const creerAlerteRapide = async () => {
+    setAlerteEnCours(true);
+    try {
+      const prof = profession || soignant?.profession || '';
+      const nomAlerte = prof ? `Alerte missions ${getLabelProfession(prof)}` : 'Alerte missions';
+
+      const { data: existants } = await supabase.rpc('fn_lister_mes_filtres_sauvegardes', {
+        p_audience: 'SOIGNANT_RECHERCHE_MISSIONS',
+      });
+      const deja = (((existants as any) || []) as Array<{ id: string; nom: string; alerte_active: boolean }>)
+        .find((f) => f?.nom === nomAlerte);
+
+      if (deja) {
+        if (!deja.alerte_active) {
+          const { data: upd, error: errUpd } = await supabase.rpc('fn_modifier_filtre_sauvegarde', {
+            p_id: deja.id, p_alerte_active: true, p_frequence_alerte: 'IMMEDIATE',
+          });
+          if (errUpd || (upd as any)?.error) {
+            toast.error((upd as any)?.error || "Impossible d'activer l'alerte");
+            return;
+          }
+        }
+        toast.success("Votre alerte est active : vous recevrez un email dès qu'une nouvelle mission correspond.");
+      } else {
+        const { data, error } = await supabase.rpc('fn_creer_filtre_sauvegarde', {
+          p_nom: nomAlerte,
+          p_audience: 'SOIGNANT_RECHERCHE_MISSIONS',
+          p_filtres: { profession: prof, rayonKm } as Json,
+          p_alerte_active: true,
+          p_frequence_alerte: 'IMMEDIATE',
+        });
+        if (error || (data as any)?.error) {
+          toast.error((data as any)?.error || "Impossible de créer l'alerte");
+          return;
+        }
+        toast.success("Alerte créée : vous recevrez un email dès qu'une nouvelle mission correspond.");
+      }
+      setAlerteOpen(false);
+      setFiltresVersion((v) => v + 1); // rafraîchit la liste « Mes recherches sauvegardées »
+    } finally {
+      setAlerteEnCours(false);
+    }
+  };
 
   useEffect(() => {
     if (!user) return;
@@ -216,8 +285,12 @@ export default function RechercheMissions() {
           const cp = (m.etablissements?.adresse_code_postal || '').toLowerCase();
           if (!ville.includes(villeSearch) && !cp.startsWith(villeSearch)) return false;
         }
-        // Distance filter only when searching by ville
-        if (villeSearch && m.distance_km !== null && m.distance_km > rayonKm) return false;
+        // Session E-5 : le rayon s'applique dès que la distance est calculable
+        // (position du soignant + position de l'établissement connues). Avant,
+        // le slider était inerte sans ville saisie — contrôle mort + libellé
+        // « dans un rayon de X km » mensonger. Les missions sans coordonnées
+        // restent affichées (distance inconnue ≠ hors rayon).
+        if (m.distance_km !== null && m.distance_km > rayonKm) return false;
         // Contract type compatibility: use soignant's accepted types
         const mType = m.type_contrat_recherche || extraireContratPreference(m.description);
         const typesAcceptes = getTypesContratSoignant(soignant);
@@ -301,6 +374,10 @@ export default function RechercheMissions() {
 
   // No blocking guard — render even without soignant profile
 
+  const professionAlerteLabel = (profession || soignant?.profession)
+    ? getLabelProfession(profession || soignant?.profession || '')
+    : null;
+
   return (
     <LayoutApp role="SOIGNANT">
       {(!soignant || !soignant.profession) && <BandeauProfilIncomplet />}
@@ -343,8 +420,10 @@ export default function RechercheMissions() {
 
         <BandeauDocumentsManquants tousDocumentsValides={!!soignant?.tous_documents_valides} rcpExpiree={rcpExpiree} rcpExpireLe={rcpExpireLe} />
 
-        {/* Mes recherches sauvegardées (J2.3.C) */}
+        {/* Mes recherches sauvegardées (J2.3.C) — key : remount après création
+            d'une alerte 1-tap pour rafraîchir la liste */}
         <FiltresSauvegardes
+          key={filtresVersion}
           audience="SOIGNANT_RECHERCHE_MISSIONS"
           filtresCourants={{
             profession,
@@ -457,7 +536,10 @@ export default function RechercheMissions() {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <BadgeY2K variant="info">{filtered.length} mission{filtered.length > 1 ? 's' : ''}</BadgeY2K>
-              <span>dans un rayon de {rayonKm} km</span>
+              {/* Le rayon n'est annoncé que s'il est réellement appliqué (position connue) */}
+              {soignant?.adresse_lat != null && soignant?.adresse_lng != null && (
+                <span>dans un rayon de {rayonKm} km</span>
+              )}
             </div>
             <BoutonY2K
               variant="ghost"
@@ -523,7 +605,19 @@ export default function RechercheMissions() {
                 icone={<SearchX />}
                 mascotte="thinking"
                 titre="Aucune mission trouvée"
-                description="Essayez d'élargir vos filtres ou d'augmenter le rayon de recherche."
+                description="Créez une alerte : vous recevrez un email dès qu'une nouvelle mission correspondant à vos critères est publiée."
+                cta={{
+                  label: '🔔 Me prévenir des prochaines missions',
+                  onClick: () => setAlerteOpen(true),
+                }}
+                ctaSecondaire={
+                  rayonKm < 100
+                    ? {
+                        label: 'Élargir le rayon (+20 km)',
+                        onClick: () => setRayonKm((r) => Math.min(100, r + 20)),
+                      }
+                    : undefined
+                }
               />
             )}
           </TabsContent>
@@ -540,6 +634,39 @@ export default function RechercheMissions() {
           </TabsContent>
         </Tabs>
       </div>
+
+      {/* Confirmation 1-tap : création d'alerte missions (Session E-5) */}
+      <Dialog open={alerteOpen} onOpenChange={(o) => { if (!alerteEnCours) setAlerteOpen(o); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>🔔 Créer une alerte missions</DialogTitle>
+            <DialogDescription>
+              {professionAlerteLabel ? (
+                <>
+                  Vous recevrez un email dès qu'une nouvelle mission{' '}
+                  <strong>{professionAlerteLabel}</strong> correspondant à vos critères
+                  (rayon {rayonKm} km) est publiée.
+                </>
+              ) : (
+                <>
+                  Vous recevrez un email dès qu'une nouvelle mission correspondant à vos
+                  critères (rayon {rayonKm} km) est publiée.
+                </>
+              )}{' '}
+              Vous pourrez modifier ou désactiver cette alerte à tout moment depuis
+              « Mes recherches sauvegardées ».
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <BoutonY2K variant="secondary" onClick={() => setAlerteOpen(false)} disabled={alerteEnCours}>
+              Annuler
+            </BoutonY2K>
+            <BoutonY2K onClick={creerAlerteRapide} loading={alerteEnCours} disabled={alerteEnCours}>
+              Activer l'alerte
+            </BoutonY2K>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </LayoutApp>
   );
 }

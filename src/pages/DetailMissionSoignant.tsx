@@ -5,7 +5,7 @@ import { usePageTitle } from '@/hooks/usePageTitle';
 import { handleErrorSilent } from '@/lib/handleError';
 import { hapticNotification } from '@/lib/haptics';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Phone, Mail, Building2, MessageCircle } from 'lucide-react';
+import { ArrowLeft, Phone, Mail, Building2, MessageCircle, MoreHorizontal } from 'lucide-react';
 import { ChoixContratDialog } from '@/components/ChoixContratDialog';
 import { BoutonNoterMission } from '@/components/BoutonNoterMission';
 import { BadgeScoreEtabPublic } from '@/components/BadgeScoreEtabPublic';
@@ -33,7 +33,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { calculerDistanceKm } from '@/lib/geo';
 import { getLabelProfession, getLabelTypeEtablissement } from '@/lib/constantes';
 import { extraireMessageErreur, estBlocageCodeTravail } from '@/lib/erreurs';
-import { calculerCompletionProfil } from '@/lib/profil-soignant';
+import { calculerCompletionProfil, getMotifProfilIncomplet } from '@/lib/profil-soignant';
+import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { toast } from 'sonner';
@@ -79,6 +80,10 @@ export default function DetailMissionSoignant() {
   // Sprint 5.5 PR 1 : annulation candidature avec fenêtre rétractation 30 min
   const [candidatureRec, setCandidatureRec] = useState<{ id: string; acceptee_a: string | null } | null>(null);
   const [modalAnnulationCandidature, setModalAnnulationCandidature] = useState(false);
+
+  // Session E-6 : actions secondaires (exclure/signaler) repliées derrière un
+  // menu « ⋯ » sur mission ouverte — elles ne concurrencent plus le CTA Postuler.
+  const [actionsSecondairesOuvertes, setActionsSecondairesOuvertes] = useState(false);
 
   useEffect(() => {
     if (!user || !id) return;
@@ -182,6 +187,13 @@ export default function DetailMissionSoignant() {
   const duree = mission.duree_heures ?? ((new Date(mission.fin_le).getTime() - new Date(mission.debut_le).getTime()) / 3600000);
   const estModeCandidature = mission.mode_attribution === 'CANDIDATURE';
 
+  // Session E-6 : net estimé de la mission (même source que la liste,
+  // cf. CarteMissionSoignant) pour la barre sticky mobile.
+  const netEstimeMission: number | null = (mission.net_estime ?? mission.net_a_payer ?? null) as number | null;
+  const fmtEuroEntier = (v: number) =>
+    new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(v);
+  const champsManquants = resumeCompletion.items_obligatoires_manquants;
+
   /* Hiérarchisation : LA prochaine action attendue du soignant (la plus
      prioritaire seulement, et uniquement si l'état chargé la rend certaine —
      jamais de rappel pour une action peut-être déjà faite). */
@@ -205,6 +217,20 @@ export default function DetailMissionSoignant() {
         description: 'La mission démarre bientôt — 1 clic pour rassurer l\'établissement.',
         cta: 'Confirmer',
         cibleId: 'bloc-presence',
+        variante: 'warning',
+      };
+    }
+    // Session E-6 : profil incomplet = la complétion EST l'action n°1 de l'écran
+    // (jamais de dead-end — standard onboarding Uber).
+    if (estOuverte && !peutPostuler && !candidatureEnvoyee) {
+      const n = champsManquants.length;
+      return {
+        titre: n > 0
+          ? `Complétez votre profil pour postuler (${n} champ${n > 1 ? 's' : ''})`
+          : 'Complétez votre profil pour postuler',
+        description: getMotifProfilIncomplet(resumeCompletion) ?? undefined,
+        cta: 'Compléter mon profil',
+        onClick: () => navigate('/soignant/profil'),
         variante: 'warning',
       };
     }
@@ -449,7 +475,9 @@ export default function DetailMissionSoignant() {
                 </p>
                 <div className="mt-1 flex items-center gap-2 flex-wrap">
                   <BadgeDistance distanceKm={distance} />
-                  {etablissement?.adresse_lat && etablissement?.adresse_lng && (
+                  {/* Session E-6 : liens de navigation utiles à J-1 de la mission,
+                      bruit au moment de candidater → visibles seulement si assigné. */}
+                  {estAssigne && etablissement?.adresse_lat && etablissement?.adresse_lng && (
                     <>
                       <button
                         onClick={() => ouvrirNavigation(etablissement.adresse_lat, etablissement.adresse_lng, etablissement.nom).plans()}
@@ -495,12 +523,34 @@ export default function DetailMissionSoignant() {
                 <p className="text-[10px] text-muted-foreground/60 mt-1">
                   Cet établissement a publié {countMissions} mission{countMissions > 1 ? 's' : ''} sur Jolene
                 </p>
-                {/* E2: Blacklist côté soignant */}
+                {/* E2: Blacklist côté soignant.
+                    Session E-6 : sur mission ouverte (pas encore de relation),
+                    exclure/signaler sont repliés derrière « ⋯ » (pattern Airbnb)
+                    pour ne pas concurrencer le CTA Postuler. */}
                 {mission.etablissement_id && (
-                  <div className="mt-2 pt-2 border-t border-border flex items-center gap-3">
-                    <BoutonExclusion excluId={mission.etablissement_id} typeExcluPar="SOIGNANT" />
-                    <SignalerUtilisateur cibleId={mission.etablissement_id} cibleType="ETABLISSEMENT" missionId={mission.id} />
-                  </div>
+                  estOuverte && !estAssigne ? (
+                    <div className="mt-2 pt-2 border-t border-border">
+                      <button
+                        type="button"
+                        onClick={() => setActionsSecondairesOuvertes(v => !v)}
+                        aria-expanded={actionsSecondairesOuvertes}
+                        className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                      >
+                        <MoreHorizontal className="h-4 w-4" /> Autres actions
+                      </button>
+                      {actionsSecondairesOuvertes && (
+                        <div className="mt-2 flex items-center gap-3">
+                          <BoutonExclusion excluId={mission.etablissement_id} typeExcluPar="SOIGNANT" />
+                          <SignalerUtilisateur cibleId={mission.etablissement_id} cibleType="ETABLISSEMENT" missionId={mission.id} />
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="mt-2 pt-2 border-t border-border flex items-center gap-3">
+                      <BoutonExclusion excluId={mission.etablissement_id} typeExcluPar="SOIGNANT" />
+                      <SignalerUtilisateur cibleId={mission.etablissement_id} cibleType="ETABLISSEMENT" missionId={mission.id} />
+                    </div>
+                  )
                 )}
               </div>
             </div>
@@ -640,6 +690,29 @@ export default function DetailMissionSoignant() {
                     <p className="text-xs text-warning/80 mt-1">Vous ne pouvez pas accepter deux missions qui se chevauchent.</p>
                   </div>
                 )}
+                {/* Session E-6 : profil incomplet → la complétion devient l'action
+                    primaire de l'écran (pas de dead-end), avec les champs nommés. */}
+                {!peutPostuler && !candidatureEnvoyee && (
+                  <div className="space-y-3">
+                    {champsManquants.length > 0 && (
+                      <div className="bg-muted/40 rounded-xl p-3">
+                        <p className="text-xs font-semibold text-foreground mb-1.5">
+                          Il manque {champsManquants.length} information{champsManquants.length > 1 ? 's' : ''} pour pouvoir postuler :
+                        </p>
+                        <ul className="space-y-1">
+                          {champsManquants.map((item) => (
+                            <li key={item.cle} className="text-xs text-muted-foreground flex items-center gap-1.5">
+                              <span className="text-warning" aria-hidden="true">•</span> {item.label}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                    <BoutonY2K size="lg" className="w-full" onClick={() => navigate('/soignant/profil')}>
+                      Compléter mon profil pour postuler
+                    </BoutonY2K>
+                  </div>
+                )}
                 {peutPostuler && !candidatureEnvoyee && (
                   <>
                     {estModeCandidature ? (
@@ -690,9 +763,22 @@ export default function DetailMissionSoignant() {
                   </>
                 )}
                 {candidatureEnvoyee && estOuverte && (
-                  <div className="bg-success/5 border border-success/20 rounded-xl p-3 text-center">
+                  <div className="bg-success/5 border border-success/20 rounded-xl p-3 text-center space-y-2">
                     <p className="text-sm font-semibold text-success">✅ Candidature envoyée — En attente de réponse</p>
-                    <p className="text-xs text-muted-foreground mt-1">L'établissement examinera votre profil et reviendra vers vous.</p>
+                    {/* Session E-6 : prochaine étape persistante (pas seulement un
+                        toast de 8 s) — documents requis pour pouvoir être accepté. */}
+                    {!soignant.tous_documents_valides ? (
+                      <>
+                        <p className="text-xs text-muted-foreground">
+                          Prochaine étape : validez vos documents pour que l'établissement puisse vous accepter.
+                        </p>
+                        <BoutonY2K className="w-full" onClick={() => navigate('/soignant/mes-documents')}>
+                          📄 Valider mes documents (2 min)
+                        </BoutonY2K>
+                      </>
+                    ) : (
+                      <p className="text-xs text-muted-foreground">L'établissement examinera votre profil et reviendra vers vous.</p>
+                    )}
                   </div>
                 )}
               </>
@@ -877,6 +963,46 @@ export default function DetailMissionSoignant() {
           )}
         </div>
       </div>
+
+      {/* Session E-6 : barre sticky mobile « checkout » (pattern réservation
+          Airbnb / RDV Doctolib) — net estimé + CTA toujours visibles, mêmes
+          conditions et même action que le CTA du bloc-actions. Positionnée
+          au-dessus de la bottom nav mobile (4rem + safe-area). */}
+      {estOuverte && peutPostuler && !candidatureEnvoyee && (
+        <>
+          {/* Espace pour que la barre ne masque pas le bas de page */}
+          <div className="h-16 md:hidden" aria-hidden="true" />
+          <div
+            className="md:hidden fixed left-0 right-0 z-40 border-t border-border bg-card/95 backdrop-blur-xl supports-[backdrop-filter]:bg-card/85 px-4 py-2.5 flex items-center justify-between gap-3 shadow-[0_-4px_16px_-4px_rgba(0,0,0,0.12)]"
+            style={{ bottom: 'calc(4rem + env(safe-area-inset-bottom))' }}
+          >
+            <div className="min-w-0">
+              {(mission as any).mode_remuneration === 'RETROCESSION' ? (
+                <p className="text-base font-bold text-primary leading-tight">
+                  🤝 Rétrocession {(mission as any).retrocession_pct ?? '—'}%
+                </p>
+              ) : netEstimeMission != null && netEstimeMission > 0 ? (
+                <>
+                  <p className="text-base font-bold text-foreground leading-tight">~{fmtEuroEntier(netEstimeMission)} net</p>
+                  <p className="text-[10px] text-muted-foreground leading-tight">estimé, figé à l'acceptation</p>
+                </>
+              ) : (
+                <p className="text-base font-bold text-foreground leading-tight">
+                  {(mission.taux_rist_plafonne || mission.taux_horaire_base)?.toFixed(2)} €/h
+                </p>
+              )}
+            </div>
+            <BoutonY2K
+              className="shrink-0"
+              loading={postulationEnCours || acceptationEnCours}
+              disabled={!conformiteOk || chevauchement}
+              onClick={() => (estModeCandidature ? postulerMission() : setModalConfirm(true))}
+            >
+              {estModeCandidature ? '📨 Postuler' : '★ Accepter'}
+            </BoutonY2K>
+          </div>
+        </>
+      )}
 
       {/* Modals */}
       <ModalConfirmation
