@@ -2,11 +2,8 @@ import { useState, useRef, useCallback } from 'react';
 import { X, Upload, Camera } from 'lucide-react';
 import { TYPES_DOCUMENTS } from '@/lib/documents';
 import { isNative } from '@/lib/platform';
+import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { toast } from 'sonner';
-
-// Types de documents sans dates de validité
-const TYPES_SANS_DATES = ['RIB', 'KBIS'];
-const TYPES_SANS_EXPIRATION = ['RIB', 'KBIS', 'DIPLOME', 'CASIER_JUDICIAIRE'];
 
 // Placeholders adaptés par type de document
 const PLACEHOLDERS_LIBELLE: Record<string, string> = {
@@ -28,23 +25,20 @@ const PLACEHOLDERS_LIBELLE: Record<string, string> = {
 
 interface ModalTeleversementProps {
   typeDocument: string;
-  onConfirmer: (fichier: File, libelle: string, valideDepuis: string, valideJusqua: string) => Promise<void>;
+  /* Session E : plus de saisie manuelle des dates de validité — elles sont
+     extraites automatiquement par la vérification IA (verify-document). */
+  onConfirmer: (fichier: File, libelle: string) => Promise<void>;
   onFermer: () => void;
-  aExpiration?: boolean;
 }
 
-export function ModalTeleversement({ typeDocument, onConfirmer, onFermer, aExpiration }: ModalTeleversementProps) {
+export function ModalTeleversement({ typeDocument, onConfirmer, onFermer }: ModalTeleversementProps) {
   const [fichier, setFichier] = useState<File | null>(null);
   const [libelle, setLibelle] = useState('');
-  const [valideDepuis, setValideDepuis] = useState('');
-  const [valideJusqua, setValideJusqua] = useState('');
 
   // Reset state à la fermeture pour éviter de réouvrir avec un fichier précédent
   const fermerEtReinitialiser = () => {
     setFichier(null);
     setLibelle('');
-    setValideDepuis('');
-    setValideJusqua('');
     onFermer();
   };
   const [envoi, setEnvoi] = useState(false);
@@ -53,18 +47,16 @@ export function ModalTeleversement({ typeDocument, onConfirmer, onFermer, aExpir
   const cameraRef = useRef<HTMLInputElement>(null);
   const isMobile = typeof window !== 'undefined' && ('ontouchstart' in window || isNative());
 
-  const sansDate = TYPES_SANS_DATES.includes(typeDocument);
-  const sansExpiration = TYPES_SANS_EXPIRATION.includes(typeDocument) || aExpiration === false;
   const placeholder = PLACEHOLDERS_LIBELLE[typeDocument] || 'Ex : Description du document';
 
   const handleFile = (f: File) => {
     const estSupporte = f.type === 'application/pdf' || f.type.startsWith('image/') || /\.(pdf|png|jpe?g|webp|heic|heif)$/i.test(f.name);
     if (!estSupporte) {
-      alert('Format non pris en charge. Utilisez un PDF ou une image.');
+      toast.error('Format non pris en charge. Utilisez un PDF ou une image.');
       return;
     }
     if (f.size > 10 * 1024 * 1024) {
-      alert('Le fichier ne doit pas dépasser 10 Mo.');
+      toast.error('Le fichier ne doit pas dépasser 10 Mo.');
       return;
     }
     setFichier(f);
@@ -80,9 +72,28 @@ export function ModalTeleversement({ typeDocument, onConfirmer, onFermer, aExpir
     if (!fichier) return;
     setEnvoi(true);
     try {
-      await onConfirmer(fichier, libelle, valideDepuis, valideJusqua);
+      await onConfirmer(fichier, libelle);
     } finally {
       setEnvoi(false);
+    }
+  };
+
+  const prendrePhoto = async () => {
+    if (isNative()) {
+      try {
+        const { prendrePhoto: capturer } = await import('@/lib/platform');
+        const result = await capturer();
+        if (result?.dataUrl) {
+          const res = await fetch(result.dataUrl);
+          const blob = await res.blob();
+          const file = new File([blob], `photo_${Date.now()}.jpg`, { type: blob.type || 'image/jpeg' });
+          handleFile(file);
+        }
+      } catch {
+        toast.error("Impossible d'accéder à la caméra.");
+      }
+    } else {
+      cameraRef.current?.click();
     }
   };
 
@@ -95,60 +106,24 @@ export function ModalTeleversement({ typeDocument, onConfirmer, onFermer, aExpir
         </button>
 
         <h3 className="text-lg font-bold text-foreground mb-1">📤 Téléverser</h3>
-        <p className="text-sm text-muted-foreground mb-4">{TYPES_DOCUMENTS[typeDocument] || typeDocument}</p>
+        <p className="text-sm text-muted-foreground mb-1">{TYPES_DOCUMENTS[typeDocument] || typeDocument}</p>
+        <p className="text-xs text-muted-foreground mb-4">
+          Une photo nette suffit — les dates de validité sont lues automatiquement sur votre document.
+        </p>
 
-        {/* Drop zone */}
-        <div
-          onDragOver={e => { e.preventDefault(); setDragActive(true); }}
-          onDragLeave={() => setDragActive(false)}
-          onDrop={handleDrop}
-          onClick={() => inputRef.current?.click()}
-          className={`border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-colors
-            ${dragActive ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/50'}
-            ${fichier ? 'bg-success/5 border-success/30' : ''}`}
-        >
-          <input ref={inputRef} type="file" accept="application/pdf,image/*,.heic,.heif" className="hidden" onChange={e => e.target.files?.[0] && handleFile(e.target.files[0])} />
-          {fichier ? (
-            <div>
-              <p className="text-sm font-medium text-foreground">📎 {fichier.name}</p>
-              <p className="text-xs text-muted-foreground mt-1">{(fichier.size / 1024).toFixed(0)} Ko</p>
-            </div>
-          ) : (
-            <>
-              <Upload className="h-8 w-8 text-muted-foreground/40 mx-auto mb-2" />
-              <p className="text-sm text-muted-foreground">Glissez votre fichier ici ou cliquez</p>
-              <p className="text-xs text-muted-foreground/60 mt-1">PDF ou image · 20 Mo max</p>
-            </>
-          )}
-        </div>
-
-        {/* Camera / gallery buttons - mobile only */}
+        {/* Mobile : prendre une photo = action n°1, visuellement dominante */}
         {isMobile && (
-          <div className="mt-3 flex gap-2">
+          <div className="mb-3 space-y-2">
             <input ref={cameraRef} type="file" accept="image/*,.heic,.heif" capture="environment" className="hidden" onChange={e => e.target.files?.[0] && handleFile(e.target.files[0])} />
-            <button
-              onClick={async () => {
-                if (isNative()) {
-                  try {
-                    const { prendrePhoto } = await import('@/lib/platform');
-                    const result = await prendrePhoto();
-                    if (result?.dataUrl) {
-                      const res = await fetch(result.dataUrl);
-                      const blob = await res.blob();
-                      const file = new File([blob], `photo_${Date.now()}.jpg`, { type: blob.type || 'image/jpeg' });
-                      handleFile(file);
-                    }
-                  } catch {
-                    toast.error("Impossible d'accéder à la caméra.");
-                  }
-                } else {
-                  cameraRef.current?.click();
-                }
-              }}
-              className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-primary/5 border-2 border-dashed border-primary/30 rounded-xl text-primary font-semibold hover:bg-primary/10 transition min-h-[44px]"
+            <BoutonY2K
+              variant="primary"
+              size="lg"
+              className="w-full"
+              iconeGauche={<Camera className="h-5 w-5" />}
+              onClick={prendrePhoto}
             >
-              <Camera className="h-5 w-5" /> Prendre une photo
-            </button>
+              Prendre une photo
+            </BoutonY2K>
             {isNative() && (
               <button
                 onClick={async () => {
@@ -169,34 +144,44 @@ export function ModalTeleversement({ typeDocument, onConfirmer, onFermer, aExpir
                     toast.error("Impossible d'accéder à la galerie.");
                   }
                 }}
-                className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-secondary/50 border-2 border-dashed border-border rounded-xl text-foreground font-semibold hover:bg-secondary/80 transition min-h-[44px]"
+                className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-secondary/50 border-2 border-dashed border-border rounded-xl text-foreground font-semibold hover:bg-secondary/80 transition min-h-[44px]"
               >
-                <Upload className="h-5 w-5" /> Galerie
+                <Upload className="h-5 w-5" /> Choisir dans la galerie
               </button>
             )}
           </div>
         )}
 
-        {/* Metadata fields */}
-        <div className="mt-4 space-y-3">
-          <div>
-            <label htmlFor="televersement-libelle" className="text-xs text-muted-foreground">Libellé (optionnel)</label>
-            <input id="televersement-libelle" value={libelle} onChange={e => setLibelle(e.target.value)} className="input-base text-sm mt-1" placeholder={placeholder} />
-          </div>
-          {!sansDate && (
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label htmlFor="televersement-valide-depuis" className="text-xs text-muted-foreground">Valide depuis</label>
-                <input id="televersement-valide-depuis" type="date" value={valideDepuis} onChange={e => setValideDepuis(e.target.value)} className="input-base text-sm mt-1" />
-              </div>
-              {!sansExpiration && (
-                <div>
-                  <label htmlFor="televersement-valide-jusqua" className="text-xs text-muted-foreground">Valide jusqu'au</label>
-                  <input id="televersement-valide-jusqua" type="date" value={valideJusqua} onChange={e => setValideJusqua(e.target.value)} className="input-base text-sm mt-1" />
-                </div>
-              )}
+        {/* Drop zone : primaire desktop, secondaire mobile */}
+        <div
+          onDragOver={e => { e.preventDefault(); setDragActive(true); }}
+          onDragLeave={() => setDragActive(false)}
+          onDrop={handleDrop}
+          onClick={() => inputRef.current?.click()}
+          className={`border-2 border-dashed rounded-xl text-center cursor-pointer transition-colors
+            ${isMobile ? 'p-4' : 'p-6'}
+            ${dragActive ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/50'}
+            ${fichier ? 'bg-success/5 border-success/30' : ''}`}
+        >
+          <input ref={inputRef} type="file" accept="application/pdf,image/*,.heic,.heif" className="hidden" onChange={e => e.target.files?.[0] && handleFile(e.target.files[0])} />
+          {fichier ? (
+            <div>
+              <p className="text-sm font-medium text-foreground">📎 {fichier.name}</p>
+              <p className="text-xs text-muted-foreground mt-1">{(fichier.size / 1024).toFixed(0)} Ko</p>
             </div>
+          ) : (
+            <>
+              {!isMobile && <Upload className="h-8 w-8 text-muted-foreground/40 mx-auto mb-2" />}
+              <p className="text-sm text-muted-foreground">{isMobile ? 'ou choisissez un fichier' : 'Glissez votre fichier ici ou cliquez'}</p>
+              <p className="text-xs text-muted-foreground/60 mt-1">PDF ou image · 10 Mo max</p>
+            </>
           )}
+        </div>
+
+        {/* Libellé optionnel (les dates de validité sont extraites par l'IA) */}
+        <div className="mt-4">
+          <label htmlFor="televersement-libelle" className="text-xs text-muted-foreground">Libellé (optionnel)</label>
+          <input id="televersement-libelle" value={libelle} onChange={e => setLibelle(e.target.value)} className="input-base text-sm mt-1" placeholder={placeholder} />
         </div>
 
         <div className="flex gap-3 mt-6">

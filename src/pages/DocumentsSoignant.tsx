@@ -2,16 +2,19 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { handleErrorSilent } from '@/lib/handleError';
 import { useNavigate } from 'react-router-dom';
-import { FolderOpen, AlertCircle, Clock, CheckCircle2, RefreshCw, Loader2 } from 'lucide-react';
+import { AlertCircle, Camera, Clock, CheckCircle2, RefreshCw, Loader2 } from 'lucide-react';
 import { LayoutApp } from '@/components/LayoutApp';
 import { ChargementPage } from '@/components/ChargementPage';
 import { JaugeProgression } from '@/components/JaugeProgression';
 import { ModalTeleversement } from '@/components/ModalTeleversement';
 import { ModalConfirmation } from '@/components/ModalConfirmation';
 import { BadgeY2K } from '@/components/y2k/BadgeY2K';
+import { BoutonY2K } from '@/components/y2k/BoutonY2K';
+import { Mascotte } from '@/components/mascotte/Mascotte';
+import { ConfettiMini } from '@/components/ConfettiMini';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
-import { TYPES_DOCUMENTS, STATUTS_VERIFICATION, TYPES_DOCUMENTS_EXCLUS_UPLOAD } from '@/lib/documents';
+import { TYPES_DOCUMENTS, TYPES_DOCUMENTS_EXCLUS_UPLOAD } from '@/lib/documents';
 import { extraireMessageErreur } from '@/lib/erreurs';
 import { format, differenceInDays } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -148,8 +151,12 @@ export function DocumentsSoignantContent() {
 
   // Modal state
   const [televersementType, setTeleversementType] = useState<string | null>(null);
-  const [televersementExpiration, setTeleversementExpiration] = useState<boolean>(true);
   const [suppDocId, setSuppDocId] = useState<string | null>(null);
+
+  // Verdict IA inline : ids des documents fraîchement téléversés dont la
+  // vérification automatique est en cours (spinner sur la carte + polling léger).
+  const [docsEnVerification, setDocsEnVerification] = useState<string[]>([]);
+  const [confettiActif, setConfettiActif] = useState(false);
 
   const charger = async () => {
     if (!user) return;
@@ -197,7 +204,46 @@ export function DocumentsSoignantContent() {
     )
   ), [docsRequis, mesDocuments]);
 
-  const completionDocs = docsRequis.length > 0 ? Math.round((docsValides.length / docsRequis.length) * 100) : (soignant?.profession ? 100 : 0);
+  const docsManquants = docsRequis.length - docsValides.length;
+  // Prochaine étape de la checklist : premier document obligatoire sans version valide
+  const prochainDocRequis = useMemo(
+    () => docsRequis.find(r => !docsValides.some(v => v.type_document === r.type_document)) ?? null,
+    [docsRequis, docsValides]
+  );
+
+  // Polling léger pendant la vérification IA : recharge toutes les 5 s, 60 s max.
+  const verificationActive = docsEnVerification.length > 0;
+  useEffect(() => {
+    if (!verificationActive) return;
+    const interval = window.setInterval(() => { charger(); }, 5000);
+    const timeout = window.setTimeout(() => setDocsEnVerification([]), 60000);
+    return () => { window.clearInterval(interval); window.clearTimeout(timeout); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [verificationActive]);
+
+  // Verdict IA inline : dès qu'un document suivi quitte EN_ATTENTE, on arrête son
+  // suivi puis on enchaîne sur l'étape suivante (checklist) ou on célèbre le 100 %.
+  useEffect(() => {
+    if (docsEnVerification.length === 0) return;
+    const termines = mesDocuments.filter(d => docsEnVerification.includes(d.id) && d.statut_verification !== 'EN_ATTENTE');
+    if (termines.length === 0) return;
+    setDocsEnVerification(prev => prev.filter(id => !termines.some(t => t.id === id)));
+    if (termines.some(t => t.statut_verification === 'VERIFIE')) {
+      const prochain = docsRequis.find(r => !mesDocuments.some(d =>
+        d.type_document === r.type_document &&
+        d.statut_verification === 'VERIFIE' &&
+        (!d.valide_jusqua || new Date(d.valide_jusqua) > new Date())
+      ));
+      if (!prochain) {
+        // Tous les documents obligatoires sont validés : confetti léger
+        setConfettiActif(true);
+        window.setTimeout(() => setConfettiActif(false), 2500);
+      } else {
+        // Enchaînement automatique sur le document suivant (si aucune modal ouverte)
+        setTeleversementType(prev => prev ?? prochain.type_document);
+      }
+    }
+  }, [mesDocuments, docsEnVerification, docsRequis]);
 
   const documentsExpirantBientot = useMemo(() => mesDocuments.filter(d =>
     d.valide_jusqua && d.statut_verification === 'VERIFIE' &&
@@ -253,7 +299,7 @@ export function DocumentsSoignantContent() {
     }
   };
 
-  const televerser = async (fichierOriginal: File, libelle: string, valideDepuis: string, valideJusqua: string) => {
+  const televerser = async (fichierOriginal: File, libelle: string) => {
     if (!user || !televersementType) return;
 
     if (fichierOriginal.size > 10 * 1024 * 1024) {
@@ -300,8 +346,10 @@ export function DocumentsSoignantContent() {
       nom_fichier: fichier.name,
       type_mime: fichier.type,
       taille_octets: fichier.size,
-      valide_depuis: valideDepuis || null,
-      valide_jusqua: valideJusqua || null,
+      // Dates de validité extraites automatiquement par l'IA (verify-document) —
+      // plus de saisie manuelle (colonnes nullables).
+      valide_depuis: null,
+      valide_jusqua: null,
       est_critique: docReqData?.est_critique || false,
       statut_verification: 'EN_ATTENTE',
       verifie_par: null,
@@ -327,30 +375,25 @@ export function DocumentsSoignantContent() {
     });
     if (auditError) handleErrorSilent(auditError, 'Audit téléversement document');
 
+    // Verdict affiché inline sur la carte du document (spinner → Vérifié/Rejeté)
+    setDocsEnVerification(prev => [...prev, docId]);
+
     supabase.functions.invoke('verify-document', {
       body: { document_id: docId },
-    }).then(({ data: verifyData, error: verifyError }) => {
+    }).then(({ error: verifyError }) => {
       if (verifyError) {
         handleErrorSilent(verifyError, 'Vérification automatique document');
+        setDocsEnVerification(prev => prev.filter(id => id !== docId));
         toast.info('Document téléversé. Vérification manuelle en attente.');
-        charger();
-        return;
-      }
-
-      if (verifyData?.verdict === 'VERIFIE') {
-        toast.success('✅ Document vérifié automatiquement !');
-      } else if (verifyData?.verdict === 'REJETE') {
-        toast.error(`❌ Document rejeté : ${verifyData?.analysis?.motif_rejet || 'Non conforme'}`);
-      } else {
-        toast.info('🔄 Document en cours de vérification...');
       }
       charger();
     }).then(undefined, (err: any) => {
       handleErrorSilent(err, 'Vérification automatique document');
+      setDocsEnVerification(prev => prev.filter(id => id !== docId));
       toast.info('Document téléversé. Vérification manuelle en attente.');
     });
 
-    toast.success('Document téléversé avec succès !');
+    toast.success('Document téléversé — vérification en cours (~30 s).');
     setTeleversementType(null);
     charger();
   };
@@ -409,11 +452,6 @@ export function DocumentsSoignantContent() {
 
   return (
     <>
-      <h2 className="text-lg font-bold text-foreground mb-1">Mes documents professionnels</h2>
-      <p className="text-sm text-muted-foreground mb-4">
-        Téléversez et gérez vos documents. Les documents marqués ★ sont obligatoires pour postuler aux missions.
-      </p>
-
       {/* Bandeau profil incomplet — pas de docs requis si profession inconnue */}
       {!soignant?.profession && (
         <div className="rounded-xl border border-info/30 bg-info/5 p-3 mb-4 flex items-start gap-3">
@@ -423,12 +461,50 @@ export function DocumentsSoignantContent() {
             <p className="text-xs text-muted-foreground mt-0.5">
               Vérifiez votre RPPS dans votre profil pour voir les documents requis pour votre profession.
             </p>
+            <BoutonY2K variant="secondary" size="sm" className="mt-2" onClick={() => navigate('/soignant/profil')}>
+              Vérifier mon RPPS →
+            </BoutonY2K>
           </div>
         </div>
       )}
 
-      {/* Attestation sur l'honneur */}
-      {user && <AttestationSante userId={user.id} />}
+      {/* Hero checklist — l'action suivante d'abord (Session E activation) */}
+      {soignant?.profession && (docsManquants > 0 ? (
+        <div className="rounded-2xl border border-jolene-rose-200/60 bg-gradient-soft p-4 mb-4">
+          <h2 className="text-base font-bold text-foreground">
+            Il vous reste {docsManquants} document{docsManquants > 1 ? 's' : ''} — ~3 min, une photo suffit
+          </h2>
+          {prochainDocRequis && (
+            <>
+              <p className="text-sm text-muted-foreground mt-1">
+                Prochaine étape : <span className="font-semibold text-foreground">{TYPES_DOCUMENTS[prochainDocRequis.type_document] || prochainDocRequis.type_document}</span>
+              </p>
+              <BoutonY2K
+                variant="primary"
+                size="md"
+                className="w-full mt-3"
+                iconeGauche={<Camera className="h-4 w-4" />}
+                onClick={() => setTeleversementType(prochainDocRequis.type_document)}
+              >
+                Téléverser — {TYPES_DOCUMENTS[prochainDocRequis.type_document] || prochainDocRequis.type_document}
+              </BoutonY2K>
+            </>
+          )}
+          <div className="mt-3">
+            <JaugeProgression valeur={docsValides.length} max={docsRequis.length} />
+          </div>
+          <p className="text-xs text-muted-foreground mt-2">
+            Vous pouvez postuler dès maintenant — validez vos documents pour être accepté par les établissements.
+          </p>
+        </div>
+      ) : (
+        <div className="relative overflow-hidden rounded-2xl bg-emerald-50 border border-emerald-200 p-4 mb-4 text-center">
+          <ConfettiMini active={confettiActif} count={14} />
+          <Mascotte etat="celebrating" taille="sm" className="mx-auto" />
+          <p className="text-sm font-semibold text-emerald-700 mt-1">Tous vos documents obligatoires sont à jour 🎉</p>
+          <p className="text-xs text-emerald-700/80 mt-1">Vous pouvez postuler et être accepté sur toutes les missions.</p>
+        </div>
+      ))}
 
       {/* Alertes expiration */}
       {documentsExpirantBientot.map(d => (
@@ -436,7 +512,7 @@ export function DocumentsSoignantContent() {
           <Clock className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
           <p className="text-xs text-destructive">
             ⏰ Votre {TYPES_DOCUMENTS[d.type_document] || d.type_document} expire dans {differenceInDays(new Date(d.valide_jusqua), new Date())} jours ({format(new Date(d.valide_jusqua), 'd MMM yyyy', { locale: fr })}).{' '}
-            <button onClick={() => { setTeleversementType(d.type_document); setTeleversementExpiration(true); }} className="text-primary font-medium hover:underline">Mettre à jour →</button>
+            <button onClick={() => setTeleversementType(d.type_document)} className="text-primary font-medium hover:underline">Mettre à jour →</button>
           </p>
         </div>
       ))}
@@ -472,21 +548,6 @@ export function DocumentsSoignantContent() {
         return null;
       })()}
 
-      {/* Jauge globale */}
-      {completionDocs >= 100 && soignant?.profession ? (
-        <div className="rounded-2xl bg-emerald-50 border border-emerald-200 p-4 mb-4 text-center">
-          <p className="text-sm font-semibold text-emerald-700">Tous vos documents obligatoires sont a jour</p>
-        </div>
-      ) : (
-        <div className="rounded-2xl bg-amber-50 border border-amber-200 p-4 mb-4">
-          <div className="flex items-center justify-between mb-2">
-            <p className="text-sm font-semibold text-foreground">{docsRequis.length - docsValides.length} document(s) manquant(s) ou expiré(s)</p>
-            <span className="text-xs text-amber-700 font-medium">⚠️ Vous ne pouvez pas postuler</span>
-          </div>
-          <JaugeProgression valeur={docsValides.length} max={docsRequis.length} couleurBarre="bg-amber-500" couleurFond="bg-amber-100" />
-        </div>
-      )}
-
       {/* Cross-validation banner */}
       {incoherenceMessage && (
         <div className="bg-amber-50 border border-amber-300 rounded-xl p-3 mb-4 flex items-start gap-2">
@@ -502,14 +563,14 @@ export function DocumentsSoignantContent() {
         {typesOrdonnes.map((requis, idx) => {
           const isCritique = requis.est_critique;
           const doc = mesDocuments.find(d => d.type_document === requis.type_document);
-          const statut = doc ? STATUTS_VERIFICATION[doc.statut_verification] : null;
           const estRejete = doc?.statut_verification === 'REJETE';
           // REJETE prime sur EXPIRE : un document rejeté reste rejeté même si
           // l'IA a extrait une date_expiration passée du mauvais fichier.
           const estExpire = !estRejete && doc?.valide_jusqua && new Date(doc.valide_jusqua) < new Date();
+          const enVerification = !!doc && (docsEnVerification.includes(doc.id) || reverifyingId === doc.id);
 
-          // Divider avant les optionnels
-          if (idx > 0 && !isCritique && documentsRequis[idx - 1]?.est_critique) {
+          // Divider avant les optionnels (fix : index sur typesOrdonnes, pas documentsRequis)
+          if (idx > 0 && !isCritique && typesOrdonnes[idx - 1]?.est_critique) {
             return (
               <React.Fragment key={requis.type_document}>
                 <div className="border-t border-border my-4" />
@@ -544,7 +605,7 @@ export function DocumentsSoignantContent() {
                     )}
                     {doc.statut_verification === 'EN_ATTENTE' && (
                       <span className="inline-flex items-center gap-1 badge-base bg-amber-100 text-amber-700 text-[10px] mt-1">
-                        <Loader2 className="h-3 w-3 animate-spin" /> En attente de vérification ⏳
+                        <Loader2 className="h-3 w-3 animate-spin" /> {enVerification ? 'Vérification en cours (~30 s)' : 'En attente de vérification ⏳'}
                       </span>
                     )}
                     {doc.statut_verification === 'REVUE_MANUELLE_REQUISE' && (
@@ -575,17 +636,26 @@ export function DocumentsSoignantContent() {
                           Revérifier
                         </button>
                       )}
-                      <button onClick={() => { setTeleversementType(requis.type_document); setTeleversementExpiration(!!requis.a_expiration); }} className="text-xs text-primary font-medium hover:underline">Remplacer</button>
+                      <button onClick={() => setTeleversementType(requis.type_document)} className="text-xs text-primary font-medium hover:underline">Remplacer</button>
                       <button onClick={() => setSuppDocId(doc.id)} className="text-xs text-destructive font-medium hover:underline">Supprimer</button>
                     </div>
                   </div>
                 ) : estRejete ? (
                   <div className="mt-2">
-                    <p className="text-xs text-destructive">
-                      Document non valide{doc.motif_rejet && ` — ${doc.motif_rejet}`}. Veuillez en téléverser un correct.
-                    </p>
-                    <BadgeY2K variant="error" size="sm" className="mt-1">Rejeté</BadgeY2K>
-                    <div className="flex gap-2 mt-2">
+                    {enVerification ? (
+                      <span className="inline-flex items-center gap-1 badge-base bg-amber-100 text-amber-700 text-[10px]">
+                        <Loader2 className="h-3 w-3 animate-spin" /> Vérification en cours (~30 s)
+                      </span>
+                    ) : (
+                      <>
+                        <p className="text-xs text-destructive">
+                          Document non valide{doc.motif_rejet && ` — ${doc.motif_rejet}`}. Veuillez en téléverser un correct.
+                        </p>
+                        <BadgeY2K variant="error" size="sm" className="mt-1">Rejeté</BadgeY2K>
+                      </>
+                    )}
+                    <div className="flex items-center gap-3 mt-2">
+                      <button onClick={() => setTeleversementType(requis.type_document)} className="btn-primary text-xs px-3 py-1.5">Réessayer</button>
                       <button
                         onClick={() => reverifier(doc.id)}
                         disabled={reverifyingId === doc.id}
@@ -594,22 +664,29 @@ export function DocumentsSoignantContent() {
                         {reverifyingId === doc.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
                         Revérifier
                       </button>
-                      <button onClick={() => { setTeleversementType(requis.type_document); setTeleversementExpiration(!!requis.a_expiration); }} className="text-xs text-primary font-medium hover:underline">Téléverser un nouveau document</button>
                     </div>
                   </div>
                 ) : estExpire ? (
                   <div className="mt-2">
                     <p className="text-xs text-amber-600">Document expiré depuis le {format(new Date(doc.valide_jusqua), 'd MMM yyyy', { locale: fr })}. Veuillez en téléverser un récent.</p>
                     <BadgeY2K variant="warning" size="sm" className="mt-1">Expiré</BadgeY2K>
-                    <div className="flex gap-2 mt-2">
-                      <button onClick={() => { setTeleversementType(requis.type_document); setTeleversementExpiration(!!requis.a_expiration); }} className="text-xs text-primary font-medium hover:underline">Téléverser un nouveau document</button>
+                    <div className="flex items-center gap-3 mt-2">
+                      <button onClick={() => setTeleversementType(requis.type_document)} className="btn-primary text-xs px-3 py-1.5">Téléverser un nouveau document</button>
+                      <button
+                        onClick={() => reverifier(doc.id)}
+                        disabled={reverifyingId === doc.id}
+                        className="inline-flex items-center gap-1 text-xs text-primary font-medium hover:underline disabled:opacity-50"
+                      >
+                        {reverifyingId === doc.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
+                        Revérifier
+                      </button>
                     </div>
                   </div>
                 ) : (
                   <div className="mt-2">
-                    <p className="text-xs text-amber-600">⚠️ Document non téléversé</p>
+                    <p className="text-xs text-amber-600">Document à téléverser — une photo suffit</p>
                     <div className="flex gap-2 mt-2">
-                      <button onClick={() => { setTeleversementType(requis.type_document); setTeleversementExpiration(!!requis.a_expiration); }} className="btn-primary text-xs px-3 py-1.5">+ Téléverser</button>
+                      <button onClick={() => setTeleversementType(requis.type_document)} className="btn-primary text-xs px-3 py-1.5">+ Téléverser</button>
                     </div>
                   </div>
                 )}
@@ -619,11 +696,18 @@ export function DocumentsSoignantContent() {
         })}
       </div>
 
+      {/* Attestation sur l'honneur — fin de parcours, après les téléversements */}
+      {user && (
+        <div className="mt-6">
+          <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wide mb-2">Dernière étape</p>
+          <AttestationSante userId={user.id} />
+        </div>
+      )}
+
       {/* Modal televersement */}
       {televersementType && (
         <ModalTeleversement
           typeDocument={televersementType}
-          aExpiration={televersementExpiration}
           onConfirmer={televerser}
           onFermer={() => setTeleversementType(null)}
         />

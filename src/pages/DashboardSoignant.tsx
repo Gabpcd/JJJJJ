@@ -21,7 +21,8 @@ import { BandeauEvaluationsEnAttente } from '@/components/BandeauEvaluationsEnAt
 import { CarteKPIY2K } from '@/components/y2k/CarteKPIY2K';
 import { EmptyState, IllustrationTirelire } from '@/components/ui/EmptyState';
 import { JaugeProgression } from '@/components/JaugeProgression';
-import { OnboardingGuide } from '@/components/OnboardingGuide';
+import { ChecklistActivation, useActivationSoignant } from '@/components/dashboard/ChecklistActivation';
+import type { SoignantActivation, DocumentActivation } from '@/components/dashboard/ChecklistActivation';
 import { BandeauCompletionProfil } from '@/components/profil-soignant/BandeauCompletionProfil';
 import { BadgeStatut } from '@/components/BadgeStatut';
 import { CompteurHebdomadaire } from '@/components/CompteurHebdomadaire';
@@ -157,6 +158,14 @@ export default function DashboardSoignant() {
     heures_cumulees: heuresCumuleesTotal,
   }) as SoignantData, [soignant, missionsTermineesCount, heuresCumuleesTotal]);
 
+  // Session E-3 — checklist d'activation unique (remplace OnboardingGuide +
+  // bandeaux concurrents tant que l'activation n'est pas complète).
+  const activation = useActivationSoignant({
+    soignant: soignant as unknown as SoignantActivation | null,
+    documents: (dashboard?.documents ?? []) as DocumentActivation[],
+    missionsActives: mesMissions.length,
+  });
+
   if (isLoading) return <LayoutApp role="SOIGNANT"><SkeletonDashboard /></LayoutApp>;
 
   const missionsTerminees = soignantWithCounts?.total_missions_terminees ?? 0;
@@ -172,7 +181,13 @@ export default function DashboardSoignant() {
 
   return (
     <LayoutApp role="SOIGNANT">
-      {soignant && (
+      {/* Session E-3 — checklist d'activation : LA rampe unique en tête de dashboard.
+          Tant qu'elle est visible, elle absorbe BandeauGraceDocuments,
+          BandeauCompletionProfil et l'encart « Documents requis ».
+          L'OnboardingGuide modal 7 étapes est retiré : la checklist le remplace. */}
+      <ChecklistActivation state={activation} className="mb-4" />
+
+      {!activation.visible && soignant && (
         <div className="mb-4">
           <BandeauGraceDocuments
             premiereMissionLe={(soignant as any).premiere_mission_le}
@@ -180,12 +195,13 @@ export default function DashboardSoignant() {
           />
         </div>
       )}
-      <BandeauCompletionProfil soignant={soignant as any} variant="compact" className="mb-4" />
+      {!activation.visible && (
+        <BandeauCompletionProfil soignant={soignant as any} variant="compact" className="mb-4" />
+      )}
       <BandeauEvaluationsEnAttente role="SOIGNANT" />
-      <OnboardingGuide role="SOIGNANT" userId={user!.id} />
 
-      {/* Raccourci centre documents si non validés */}
-      {soignant && !aDocuments && (
+      {/* Raccourci centre documents si non validés — absorbé par la checklist */}
+      {!activation.visible && soignant && !aDocuments && (
         <div
           onClick={() => navigate('/soignant/mes-documents')}
           className="rounded-xl border border-warning/30 bg-warning/5 p-4 mb-4 flex items-start gap-3 cursor-pointer hover:border-warning/50 transition-colors"
@@ -436,33 +452,17 @@ export default function DashboardSoignant() {
                 ))}
               </div>
             ) : (
-              <EmptyState icone={<Search />} mascotte="thinking" titre="Aucune mission disponible" description="De nouvelles missions sont publiées chaque jour. Revenez bientôt !" />
+              <EmptyState
+                mascotte="thinking"
+                titre="Aucune mission disponible pour le moment"
+                description="Créez une alerte : on vous prévient dès qu'une mission est publiée dans votre zone."
+                cta={{ label: '🔔 Créer une alerte', onClick: () => navigate('/soignant/recherche-missions?alerte=1') }}
+              />
             )}
           </div>
 
-          {/* Mes missions en cours */}
-          {mesMissions.length > 0 && (
-            <div className="mb-6">
-              <div className="flex items-center justify-between mb-3">
-                <h2 className="text-lg font-bold text-foreground">Mes missions en cours</h2>
-                <button onClick={() => navigate('/soignant/missions')} className="text-sm text-primary font-medium hover:underline">Voir tout →</button>
-              </div>
-              <div className="space-y-3">
-                {mesMissions.map((m: any) => (
-                  <div key={m.id} onClick={() => navigate(`/soignant/missions/${m.id}`)} className="card-base hover:shadow-md cursor-pointer transition-all">
-                    <div className="flex items-center justify-between mb-1">
-                      <BadgeStatut statut={m.statut} />
-                    </div>
-                    <h3 className="font-semibold text-sm text-foreground">{m.intitule}</h3>
-                    <p className="text-xs text-muted-foreground mt-1">🏥 {m.etablissements?.nom} · {m.etablissements?.adresse_ville}</p>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      📅 {format(new Date(m.debut_le), "EEE d MMM · HH'h'mm", { locale: fr })} → {format(new Date(m.fin_le), "HH'h'mm", { locale: fr })}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+          {/* « Mes missions en cours » supprimé (Session E-3) — doublon de
+              « Mes prochaines missions » affiché avant les onglets. */}
 
           {/* Chiffres clés — secondaires, placés sous les missions/planning */}
           <h2 className="text-base font-bold text-foreground mb-3">Mes chiffres</h2>

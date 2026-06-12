@@ -107,8 +107,33 @@ export function DecompositionFinanciere({ mission, role = 'ETAB' }: Decompositio
     );
   }
 
-  // Placeholder : type_contrat non encore figé
+  // Placeholder : type_contrat non encore figé.
+  // Côté SOIGNANT, on affiche quand même le net estimé (déjà calculé sur la
+  // mission et déjà montré en liste, cf. CarteMissionSoignant) : le soignant
+  // doit voir ce qu'il gagne AVANT de décider, comme en liste (standard Uber).
   if (!typeContrat) {
+    const netEstime = (m.net_estime ?? m.net_a_payer ?? null) as number | null;
+    const fmtEntier = (v: number) =>
+      new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(v);
+
+    if (role === 'SOIGNANT' && netEstime != null && netEstime > 0) {
+      return (
+        <div className="bg-muted/30 border border-border rounded-2xl p-5">
+          <h3 className="text-lg font-bold text-foreground mb-3">💰 Décomposition financière</h3>
+          <p className="text-3xl font-bold text-primary leading-tight">
+            ~{fmtEntier(netEstime)}{' '}
+            <span className="text-base font-semibold text-foreground">net estimé</span>
+          </p>
+          <p className="text-xs text-muted-foreground mt-1.5">
+            Montant estimé — figé à l'acceptation, selon le contrat retenu (salarié ou libéral).
+          </p>
+          <p className="text-xs text-muted-foreground border-t border-border pt-2 mt-3">
+            Taux horaire : <span className="font-medium text-foreground">{tauxEffectif?.toFixed(2)} €/h</span> · Durée : <span className="font-medium text-foreground">{duree.toFixed(1)} h</span>
+          </p>
+        </div>
+      );
+    }
+
     return (
       <div className="bg-muted/30 border border-border rounded-2xl p-5">
         <h3 className="text-lg font-bold text-foreground mb-3">💰 Décomposition financière</h3>
