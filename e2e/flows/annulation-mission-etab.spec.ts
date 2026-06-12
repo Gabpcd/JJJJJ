@@ -44,18 +44,8 @@ test.describe('Sprint 5.5 PR 4 — Annulation mission étab', () => {
     expect(result?.base_calcul).toContain('1.10');
   });
 
-  test('Helper : CDDU signé → idem CDD', async () => {
-    const { data } = await adminClient().rpc('fn_calculer_indemnite_annulation_etab' as any, {
-      p_type_contrat: 'CDDU',
-      p_montant_total: 100,
-      p_duree_heures: 4,
-      p_taux_horaire: 30,
-      p_delta_mission: '12 hours',
-    });
-    const result = data as any;
-    expect(result?.montant).toBeCloseTo(132, 1); // 4 × 30 × 1.10
-    expect(result?.motif).toBe('INDEMNITE_CDD_SIGNE_L1243_8');
-  });
+  // (Le type CDDU a été retiré au Sprint 1 — refactoré en CDD, cf.
+  //  constantes.test.ts « should NOT include CDDU ». Test supprimé.)
 
   test('Helper : SALARIE → idem CDD', async () => {
     const { data } = await adminClient().rpc('fn_calculer_indemnite_annulation_etab' as any, {

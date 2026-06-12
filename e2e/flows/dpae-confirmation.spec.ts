@@ -25,28 +25,11 @@ test.describe('DPAE — confirmation par établissement', () => {
     test.skip(!TEST_REQS, 'SUPABASE_SERVICE_ROLE_KEY requis');
   });
 
-  // ─── fn_confirmer_dpae (étab confirme la DPAE) ──────────────────────────
-  test('fn_confirmer_dpae : NON_AUTHENTIFIE sans auth utilisateur', async () => {
-    const { data } = await adminClient().rpc('fn_confirmer_dpae' as any, {
-      p_contrat_id: '00000000-0000-0000-0000-000000000000',
-    });
-    const result = data as any;
-    // service_role bypasse RLS mais auth.uid() = NULL → fn rejette
-    expect(result?.success).toBe(false);
-    expect(['NON_AUTHENTIFIE', 'NON_AUTORISE', 'CONTRAT_INTROUVABLE']).toContain(
-      result?.error_code || result?.error || '',
-    );
-  });
-
-  test('fn_confirmer_dpae : contrat_id UUID malformé → erreur SQL côté Supabase', async () => {
-    // UUID malformé doit être rejeté par la couche PostgreSQL avant atteindre la fn
-    const { data, error } = await adminClient().rpc('fn_confirmer_dpae' as any, {
-      p_contrat_id: 'not-a-uuid',
-    });
-    // Soit error explicite, soit data.success === false
-    const fail = !!error || (data && (data as any).success === false);
-    expect(fail).toBe(true);
-  });
+  // (fn_confirmer_dpae a été SUPPRIMÉE au Sprint 15 — retrait du « Flow B DPAE »
+  //  sans preuve, cf. docs/SPRINT_15.md PR #341 « DROP RPC fn_confirmer_dpae ».
+  //  Les 2 tests qui l'appelaient sont supprimés. Le flux DPAE conforme passe
+  //  désormais par fn_enregistrer_numero_dpae, couvert par d'autres specs.
+  //  On garde ci-dessous les tests de STRUCTURE de contrats_mission, valides.)
 
   // ─── Structure DB : colonne dpae_effectuee_le ────────────────────────────
   test('Table contrats_mission a colonnes DPAE (effectuee_le)', async () => {
