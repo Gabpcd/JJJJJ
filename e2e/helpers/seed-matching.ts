@@ -38,9 +38,8 @@ export async function seedMissionMatching(opts: {
   const duree = opts.dureeHeures || 8;
   const fin = new Date(debut.getTime() + duree * 3600000);
 
-  const { data, error } = await adminClient()
-    .from('missions' as any)
-    .insert({
+  const { data: missionId, error } = await adminClient().rpc('fn_test_seed_mission' as any, {
+    p_data: {
       etablissement_id: etabId,
       intitule: opts.intitule || `[playwright-test] Match ${Date.now()}`,
       description: 'Mission seed matching swipe',
@@ -53,15 +52,14 @@ export async function seedMissionMatching(opts: {
       est_urgente: opts.estUrgente ?? false,
       statut: 'OUVERTE',
       mode_attribution: 'CANDIDATURE',
-    })
-    .select('id, etablissement_id')
-    .single();
+    },
+  });
 
   if (error) {
     console.error('[seed-matching] seedMissionMatching failed:', error.message);
     return null;
   }
-  return data as { id: string; etablissement_id: string };
+  return { id: missionId as string, etablissement_id: etabId };
 }
 
 /**
