@@ -9,7 +9,7 @@ const avantages = [
   { icon: Euro, titre: 'Rémunération transparente', desc: 'Taux horaire affiché avant de postuler, zéro frais cachés pour le soignant.' },
   { icon: Clock, titre: 'Flexibilité totale', desc: 'Choisissez vos missions, vos horaires et vos établissements. Vous êtes libre.' },
   { icon: ShieldCheck, titre: 'Conformité garantie', desc: 'Contrats générés automatiquement, conformes au Code du Travail et signés électroniquement.' },
-  { icon: TrendingUp, titre: 'Parcours vers le libéral', desc: 'Pour les professions autorisées à exercer en libéral : cumulez vos 3 200 heures et bénéficiez du programme Free Transition.' },
+  { icon: TrendingUp, titre: 'Parcours vers le libéral', desc: 'Pour les professions autorisées à exercer en libéral : cumulez vos 3 200 heures, suivies heure par heure sur votre tableau de bord.' },
 ];
 
 const etapes = [

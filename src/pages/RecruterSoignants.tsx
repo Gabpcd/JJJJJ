@@ -6,8 +6,8 @@ import { ShieldCheck, Scale, PercentCircle, Receipt, PlusCircle, UserCheck, File
 
 const garanties = [
   { icon: ShieldCheck, titre: 'RPPS vérifié', desc: 'Chaque soignant est vérifié via le Répertoire Partagé des Professionnels de Santé. Diplômes et assurance RCP contrôlés.' },
-  { icon: Scale, titre: 'Conformité Code du Travail', desc: 'Contrats CDD d\'usage générés automatiquement, durées maximales respectées, repos obligatoires vérifiés.' },
-  { icon: PercentCircle, titre: 'Commission dégressive', desc: 'Plus vous publiez de missions, plus votre taux de commission baisse. Jusqu\'à -40% pour les grands volumes.' },
+  { icon: Scale, titre: 'Conformité Code du Travail', desc: 'Contrats CDD ou vacation générés automatiquement, durées maximales respectées, repos obligatoires vérifiés.' },
+  { icon: PercentCircle, titre: 'Tarification transparente', desc: 'Commission unique de 15 % sur le montant de la mission. Aucun abonnement, aucun frais caché.' },
   { icon: Receipt, titre: 'Facturation automatique', desc: 'Factures mensuelles consolidées, compatibles Chorus Pro pour le secteur public. Paiement par carte ou virement.' },
 ];
 
@@ -24,11 +24,11 @@ export default function RecruterSoignants() {
     <>
       <SEOHead
         title="Recruter des soignants qualifiés | Jolene"
-        description="Publiez vos missions de remplacement médical et recevez des candidatures de soignants vérifiés en quelques heures. Commission dégressive, facturation automatique."
+        description="Publiez vos missions de remplacement médical et recevez des candidatures de soignants vérifiés. Commission de 15 %, facturation automatique."
         url="https://jolene.app/recruter-soignants"
       />
       <SEOPageLayout
-        heroTitle="Recrutez des soignants qualifiés en quelques heures"
+        heroTitle="Recrutez des soignants qualifiés, sans intermédiaire"
         heroSubtitle="Fini les appels aux agences d'intérim. Publiez vos missions et recevez des candidatures de professionnels vérifiés, en toute conformité."
         ctaText="Créer mon espace établissement"
         ctaHref="/inscription/etablissement"
@@ -50,8 +50,8 @@ export default function RecruterSoignants() {
               <div className="bg-primary/5 border border-primary/20 rounded-xl p-6">
                 <h3 className="font-semibold text-primary mb-3">✅ La solution Jolene</h3>
                 <ul className="space-y-2 text-sm text-muted-foreground">
-                  <li>• Commission dégressive à partir de 8%</li>
-                  <li>• Candidatures en quelques heures</li>
+                  <li>• Commission unique de 15 %, sans abonnement</li>
+                  <li>• Candidatures de soignants vérifiés dès la publication</li>
                   <li>• Contrats et pointage automatisés</li>
                   <li>• Soignants RPPS vérifiés</li>
                 </ul>
@@ -101,7 +101,7 @@ export default function RecruterSoignants() {
           <div className="max-w-3xl mx-auto px-4 text-center">
             <h2 className="text-2xl md:text-3xl font-bold text-foreground mb-4">Tarification transparente</h2>
             <p className="text-muted-foreground mb-8">
-              Une commission dégressive qui récompense votre fidélité. Plus vous publiez de missions, moins vous payez. Aucun abonnement, aucun frais cachés.
+              Une commission unique de 15 % sur le montant de la mission — taux négocié possible pour les groupes. Aucun abonnement, aucun frais caché.
             </p>
             <button
               onClick={() => navigate('/tarifs')}
