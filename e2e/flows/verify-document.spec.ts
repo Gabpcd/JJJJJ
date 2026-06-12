@@ -13,6 +13,9 @@ import { adminClient, userIdByEmail } from '../helpers/db';
 import { TEST_ACCOUNTS } from '../helpers/auth';
 
 const TEST_REQS = !!process.env.SUPABASE_SERVICE_ROLE_KEY;
+// Les tests qui appellent l'API Anthropic sont skippés en CI (pas de crédits Anthropic).
+// Forcer le skip via ANTHROPIC_API_KEY absent ou variable CI explicite.
+const HAS_ANTHROPIC = !!process.env.ANTHROPIC_API_KEY && !process.env.CI;
 const VERIFY_TIMEOUT_MS = 30_000;
 
 function makeMinimalPdf(): Uint8Array {
@@ -130,6 +133,7 @@ test.describe('Vérification documents — pipeline bout-en-bout', () => {
 
   test.beforeAll(async () => {
     test.skip(!TEST_REQS, 'SUPABASE_SERVICE_ROLE_KEY requis');
+    test.skip(!HAS_ANTHROPIC, 'ANTHROPIC_API_KEY absent ou CI=true — skip tests IA (crédits Anthropic requis)');
     const id = await userIdByEmail(TEST_ACCOUNTS.soignant.email);
     test.skip(!id, 'Compte playwright-soignant non seedé');
     soignantId = id!;

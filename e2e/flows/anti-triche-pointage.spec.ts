@@ -38,7 +38,7 @@ test.describe('Anti-triche pointage Sprint 4.5', () => {
         soignant_assigne_id: soignantId,
         intitule: `[playwright-test] AntiTriche ${Date.now()}`,
         description: 'Mission test anti-triche',
-        profession_requise: 'INFIRMIER',
+        profession_requise: 'IDE',
         service: 'Test',
         debut_le: debut.toISOString(),
         fin_le: fin.toISOString(),
@@ -107,7 +107,7 @@ test.describe('Anti-triche pointage Sprint 4.5', () => {
         etablissement_id: otherEtab,
         intitule: '[playwright-test] AntiTriche OTHER',
         description: 'Autre',
-        profession_requise: 'INFIRMIER',
+        profession_requise: 'IDE',
         service: 'X',
         debut_le: new Date().toISOString(),
         fin_le: new Date(Date.now() + 3600000).toISOString(),
@@ -141,14 +141,18 @@ test.describe('Anti-triche pointage Sprint 4.5', () => {
     const { data } = await adminClient().rpc('fn_vitesse_entre_pointages' as any, {
       p_lat1: 48.8566,
       p_lng1: 2.3522, // Paris
-      p_t1: new Date('2026-05-13T10:00:00Z').toISOString(),
+      p_ts1: new Date('2026-05-13T10:00:00Z').toISOString(),
       p_lat2: 43.2965,
       p_lng2: 5.3698, // Marseille
-      p_t2: new Date('2026-05-13T10:30:00Z').toISOString(),
+      p_ts2: new Date('2026-05-13T10:30:00Z').toISOString(),
     });
     // Paris-Marseille 660 km en 30 min = 1320 km/h → téléportation évidente
-    expect(typeof data).toBe('number');
-    expect(data as unknown as number).toBeGreaterThan(1000);
+    // fn_vitesse_entre_pointages retourne jsonb {calculable, distance_m, duree_h, vitesse_kmh, teleportation}
+    const result = data as any;
+    expect(result?.calculable).toBe(true);
+    expect(typeof result?.vitesse_kmh).toBe('number');
+    expect(result?.vitesse_kmh).toBeGreaterThan(1000);
+    expect(result?.teleportation).toBe(true);
   });
 
   // ─── 5. Code secours : génération bcrypt + validation ──────────────────

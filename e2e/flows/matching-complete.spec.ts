@@ -43,7 +43,7 @@ test.describe('Sprint 14 — Flow complet matching (réels)', () => {
   });
 
   test('Trigger trg_award_badges_swipe : 1er swipe → badge PREMIER_SWIPE', async () => {
-    const mission = await seedMissionMatching({ profession: 'INFIRMIER' });
+    const mission = await seedMissionMatching({ profession: 'IDE' });
     expect(mission).toBeTruthy();
 
     await seedSwipe(soignantId!, mission!.id, 'LIKE');
@@ -53,7 +53,7 @@ test.describe('Sprint 14 — Flow complet matching (réels)', () => {
   });
 
   test('Trigger trg_award_badges_swipe : 1er SUPER_LIKE → badge PREMIER_SUPER_LIKE', async () => {
-    const mission = await seedMissionMatching({ profession: 'INFIRMIER' });
+    const mission = await seedMissionMatching({ profession: 'IDE' });
     expect(mission).toBeTruthy();
 
     await seedSwipe(soignantId!, mission!.id, 'SUPER_LIKE');
@@ -74,7 +74,7 @@ test.describe('Sprint 14 — Flow complet matching (réels)', () => {
       etablissement_id: etabId,
       intitule: `[playwright-test] explorateur ${i} ${Date.now()}`,
       description: 'Mission seed EXPLORATEUR',
-      profession_requise: 'INFIRMIER',
+      profession_requise: 'IDE',
       service: 'Test',
       debut_le: new Date(baseDate.getTime() + i * 3600000).toISOString(),
       fin_le: new Date(baseDate.getTime() + (i + 8) * 3600000).toISOString(),
@@ -106,7 +106,7 @@ test.describe('Sprint 14 — Flow complet matching (réels)', () => {
   });
 
   test('Trigger trg_update_streak_on_swipe : 1er swipe → streak=1 + last_activity_date=today', async () => {
-    const mission = await seedMissionMatching({ profession: 'INFIRMIER' });
+    const mission = await seedMissionMatching({ profession: 'IDE' });
     expect(mission).toBeTruthy();
 
     await seedSwipe(soignantId!, mission!.id, 'LIKE');
@@ -128,7 +128,7 @@ test.describe('Sprint 14 — Flow complet matching (réels)', () => {
 
   test('Trigger trg_award_badges_match : candidature ASSIGNEE issue swipe → badge PREMIER_MATCH', async () => {
     const admin = adminClient();
-    const mission = await seedMissionMatching({ profession: 'INFIRMIER' });
+    const mission = await seedMissionMatching({ profession: 'IDE' });
     expect(mission).toBeTruthy();
 
     // 1. Le soignant a swipé LIKE

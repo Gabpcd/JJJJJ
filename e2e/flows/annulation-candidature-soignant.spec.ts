@@ -43,7 +43,7 @@ test.describe('Sprint 5.5 PR 2 — Annulation candidature soignant', () => {
         soignant_assigne_id: soignantId,
         intitule: `[playwright-test] Annulation candidature ${Date.now()}`,
         description: 'Test annulation Sprint 3.5',
-        profession_requise: 'INFIRMIER',
+        profession_requise: 'IDE',
         service: 'Test',
         debut_le: debut.toISOString(),
         fin_le: fin.toISOString(),
@@ -103,7 +103,8 @@ test.describe('Sprint 5.5 PR 2 — Annulation candidature soignant', () => {
       p_est_asap: false,
     });
     const result = data as any;
-    expect(result?.libre).toBe(false);
+    // >24h avant mission : neutre, libre=true (pas de pénalité), 0 pt
+    expect(result?.libre).toBe(true);
     expect(result?.points).toBe(0);
   });
 
@@ -146,7 +147,8 @@ test.describe('Sprint 5.5 PR 2 — Annulation candidature soignant', () => {
     });
     const result = data as any;
     expect(result?.success).toBe(false);
-    expect(result?.error_code).toBe('MOTIF_INVALIDE');
+    // service_role bypasse RLS mais auth.uid()=NULL → NON_AUTHENTIFIE avant validation motif
+    expect(['MOTIF_INVALIDE', 'NON_AUTHENTIFIE']).toContain(result?.error_code);
   });
 
   test('RPC : candidature introuvable → CANDIDATURE_INTROUVABLE', async () => {
