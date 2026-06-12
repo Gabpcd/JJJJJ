@@ -8,6 +8,7 @@ interface EncartInvitationProps {
 
 export function EncartInvitation({ codeParrainage }: EncartInvitationProps) {
   const [copied, setCopied] = useState(false);
+  if (!codeParrainage) return null;
   const lienRef = `https://jolene.app/inscription/soignant?ref=${codeParrainage}`;
   const messageWhatsApp = encodeURIComponent(
     `Rejoignez Jolene, la plateforme de staffing médical ! Inscrivez-vous avec mon lien et gagnez 50€ de prime de parrainage : ${lienRef}`
@@ -30,14 +31,16 @@ export function EncartInvitation({ codeParrainage }: EncartInvitationProps) {
 
       <div className="flex flex-col sm:flex-row gap-4 items-center">
         {/* QR Code — generated locally, no third-party service (RGPD compliant) */}
-        <div className="shrink-0 bg-background p-2 rounded-lg">
+        {/* QR toujours sombre-sur-blanc : en mode sombre, un QR clair sur fond
+            sombre est un QR « inversé » que l'appareil photo iOS refuse souvent
+            de scanner. Plaque blanche explicite + encre fixe. */}
+        <div className="shrink-0 bg-white p-2 rounded-lg border border-border">
           <QRCodeSVG
             value={lienRef}
             size={120}
             level="M"
-            bgColor="transparent"
-            fgColor="currentColor"
-            className="text-foreground"
+            bgColor="#FFFFFF"
+            fgColor="#1A1A2E"
           />
         </div>
 
