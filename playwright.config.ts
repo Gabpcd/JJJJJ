@@ -30,7 +30,14 @@ export default defineConfig({
   fullyParallel: true,
   forbidOnly: IS_CI,
   retries: IS_CI ? 2 : 0,
-  workers: IS_CI ? 2 : undefined,
+  // 1 worker en CI : il n'existe qu'UN couple de comptes test
+  // (playwright-soignant / playwright-etab) partagé par tous les fichiers —
+  // avec 2 workers, les afterEach d'un fichier purgent l'état (quota
+  // super-likes, swipes, missions) pendant qu'un autre fichier teste dessus
+  // (flaky systémique : super_swipes_quota effacé entre l'upsert et la RPC,
+  // missions matching supprimées en plein swipe). Sérialiser coûte ~2 min de
+  // wall-time par navigateur et supprime toute la classe de courses.
+  workers: IS_CI ? 1 : undefined,
   reporter: IS_CI
     ? [['html', { open: 'never' }], ['github'], ['list']]
     : [['html', { open: 'on-failure' }], ['list']],
