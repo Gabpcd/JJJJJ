@@ -531,3 +531,22 @@ Correctifs DB (migrations `20260530284000` → `296000`, appliquées prod + enre
 DOIT être suivi d'un `INSERT INTO supabase_migrations.schema_migrations`. 4 migrations
 (`260000-272000`) appliquées mais non enregistrées auraient fait virer `deploy-supabase` au
 rouge (out-of-order `db push`). Toujours vérifier `schema_migrations` vs fichiers repo avant merge.
+
+### Sessions UX D & E — refonte admin + activation soignant (11-12/06/2026)
+
+- **Session D** (7 PRs #531→#542) : sidebar admin 5 groupes (RBAC découplé par
+  clé `acces`, périmètres equipe_admin inchangés), recherche globale ⌘K
+  (`fn_admin_recherche_globale`), pattern « file de travail » sur toutes les
+  listes admin (composant `FileDeTravail`), drill-down cockpit, audit 43 pages
+  + 116 corrections copy. Cf. docs/SESSION_D.md + docs/AUDIT_ADMIN_SESSION_D.md.
+- **Stratégie produit/acquisition** : docs/STRATEGIE_PRODUIT_ACQUISITION.md
+  (verdict UX 12 lots, roadmap Sessions E/F/G, plan d'acquisition phasé,
+  4 métriques North Star).
+- **Session E** (3 PRs code #559/#560/#561 + doc) : activation soignant —
+  déblocage RPPS, valeur avant l'effort (`fn_apercu_marche_profession`, GRANT
+  anon), `ChecklistActivation` dashboard (remplace OnboardingGuide 7 slides),
+  états vides recruteurs (alerte 1-tap via filtres sauvegardés IMMEDIATE),
+  documents caméra-first verdict IA inline, checkout net estimé + sticky mobile.
+  Cf. docs/SESSION_E.md.
+- **Sessions F (activation étab + matching) et G (consolidation nav)** : à
+  lancer — périmètres détaillés dans la stratégie.
