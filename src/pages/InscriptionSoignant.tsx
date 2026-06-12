@@ -2,7 +2,7 @@ import { usePageTitle } from '@/hooks/usePageTitle';
 import React, { useState, useEffect, useCallback } from 'react';
 import * as Sentry from '@sentry/react';
 import { useNavigate } from 'react-router-dom';
-import { HeartPulse, Eye, EyeOff, Check, Loader2, ShieldCheck, ShieldAlert } from 'lucide-react';
+import { HeartPulse, Eye, EyeOff, Check, Loader2, ShieldCheck, ShieldAlert, MapPin } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTypesExerciceAutorises } from '@/hooks/useTypesExerciceAutorises';
 import { getLabelProfession } from '@/lib/constantes';
@@ -21,18 +21,53 @@ import { logger } from '@/lib/logger';
 import { BoutonProSanteConnect } from '@/components/BoutonProSanteConnect';
 
 
-function GeoAutoRequest({ onResult, onRefused }: { onResult: (lat: number, lng: number) => void; onRefused?: () => void }) {
-  const [asked, setAsked] = useState(false);
-  useEffect(() => {
-    if (asked) return;
-    setAsked(true);
-    if (!navigator.geolocation) return;
-    navigator.geolocation.getCurrentPosition(
-      (pos) => onResult(pos.coords.latitude, pos.coords.longitude),
-      () => { onRefused?.(); }
+/**
+ * Géolocalisation opt-in avec bénéfice affiché (Session E-1).
+ * Remplace l'ancienne demande automatique au montage : la popup navigateur
+ * hors contexte maximisait les refus et privait l'app de son meilleur
+ * argument (« missions près de chez vous »).
+ */
+function GeoOptIn({ onResult }: { onResult: (lat: number, lng: number) => void }) {
+  const [statut, setStatut] = useState<'inactif' | 'demande' | 'accordee' | 'refusee'>('inactif');
+
+  if (!('geolocation' in navigator)) return null;
+
+  if (statut === 'accordee') {
+    return (
+      <div className="p-3 bg-success/5 border border-success/30 rounded-xl flex items-center gap-2 text-sm text-foreground">
+        <MapPin className="h-4 w-4 text-success shrink-0" />
+        Localisation activée — vous verrez les missions près de chez vous.
+      </div>
     );
-  }, [asked, onResult, onRefused]);
-  return null;
+  }
+
+  return (
+    <div className="p-3 bg-primary/5 border border-primary/20 rounded-xl flex items-center justify-between gap-3">
+      <div className="flex items-start gap-2 min-w-0">
+        <MapPin className="h-4 w-4 text-primary shrink-0 mt-0.5" />
+        <p className="text-xs text-foreground">
+          Activez la localisation pour voir les missions <strong>près de chez vous</strong>.
+          {statut === 'refusee' && <span className="block text-muted-foreground mt-0.5">Refusée — vous pourrez l'activer plus tard depuis votre profil.</span>}
+        </p>
+      </div>
+      {statut !== 'refusee' && (
+        <button
+          type="button"
+          disabled={statut === 'demande'}
+          onClick={() => {
+            setStatut('demande');
+            navigator.geolocation.getCurrentPosition(
+              (pos) => { onResult(pos.coords.latitude, pos.coords.longitude); setStatut('accordee'); },
+              () => setStatut('refusee'),
+            );
+          }}
+          className="shrink-0 text-xs font-semibold text-primary border border-primary/40 rounded-lg px-3 py-1.5 hover:bg-primary/10 transition-colors disabled:opacity-50"
+        >
+          {statut === 'demande' ? 'Activation…' : 'Activer'}
+        </button>
+      )}
+    </div>
+  );
 }
 
 function JaugeForce({ motDePasse }: { motDePasse: string }) {
@@ -128,6 +163,11 @@ export default function InscriptionSoignant() {
   const [rppsVerifiant, setRppsVerifiant] = useState(false);
   const [rppsResultat, setRppsResultat] = useState<{ trouve: boolean; nom_affiche?: string; specialite_code?: string | null; specialite_label?: string | null; fhir_indisponible?: boolean; profession_api?: string } | null>(null);
   const [rppsPreRempli, setRppsPreRempli] = useState(false);
+  // Session E-1 : un RPPS non trouvé dans l'annuaire ne doit plus éjecter le
+  // soignant du funnel — il peut continuer avec une vérification manuelle sous
+  // 24 h (même traitement backend que fhir_indisponible : compte créé avec
+  // rpps_verifie=false, revue via Admin → Modération → Identité).
+  const [rppsVerifManuelle, setRppsVerifManuelle] = useState(false);
 
   const normaliser = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().trim();
 
@@ -188,7 +228,7 @@ export default function InscriptionSoignant() {
   })();
   const rppsRequis = form.profession && !PROFESSIONS_SANS_RPPS.includes(form.profession);
   const rppsMatch = rppsCorrespond();
-  const rppsBloquant = rppsRequis && form.rpps.length === 11 && rppsResultat && !rppsResultat.fhir_indisponible && (!rppsResultat.trouve || rppsMatch === false);
+  const rppsBloquant = rppsRequis && form.rpps.length === 11 && rppsResultat && !rppsResultat.fhir_indisponible && (!rppsResultat.trouve || rppsMatch === false) && !rppsVerifManuelle;
   const etape2Valide = form.prenom && form.nom && form.profession && form.typesContrat.length > 0 && !rppsBloquant && !dateNaissanceRequise && dateNaissanceMajeur && (!TURNSTILE_REQUIRED || !!turnstileToken);
 
   // Verify RPPS when 11 digits entered
@@ -196,6 +236,7 @@ export default function InscriptionSoignant() {
     if (form.rpps.length !== 11 || !form.prenom || !form.nom) {
       setRppsResultat(null);
       setRppsPreRempli(false);
+      setRppsVerifManuelle(false);
       return;
     }
     const controller = new AbortController();
@@ -334,13 +375,27 @@ export default function InscriptionSoignant() {
         </div>
         <h1 className="text-xl font-bold text-foreground text-center mb-2">Inscription Soignant</h1>
 
-        {/* Stepper */}
+        {/* Stepper honnête : le parcours réel a 4 étapes (Session E-1 — le
+            stepper à 2 ronds laissait croire que tout s'arrêtait au compte,
+            puis le mur documentaire surprenait après coup). Même langage
+            visuel que le flow Pro Santé Connect. */}
         <div className="flex items-center justify-center gap-0 mb-8">
-          <div className={`h-9 w-9 rounded-full flex items-center justify-center text-sm font-bold ${etape >= 1 ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}>
-            {etape > 1 ? <Check className="h-4 w-4" /> : '1'}
-          </div>
-          <div className={`h-1 w-16 mx-1 rounded-full ${etape > 1 ? 'bg-primary' : 'bg-muted'}`} />
-          <div className={`h-9 w-9 rounded-full flex items-center justify-center text-sm font-bold ${etape >= 2 ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}>2</div>
+          {[
+            { num: 1, label: 'Compte' },
+            { num: 2, label: 'Profil' },
+            { num: 3, label: 'Documents' },
+            { num: 4, label: 'Vérifié' },
+          ].map((s, i) => (
+            <React.Fragment key={s.num}>
+              {i > 0 && <div className={`h-1 w-8 sm:w-10 mx-1 rounded-full ${etape > s.num - 1 ? 'bg-primary' : 'bg-muted'}`} />}
+              <div className="flex flex-col items-center gap-1">
+                <div className={`h-9 w-9 rounded-full flex items-center justify-center text-sm font-bold ${etape > s.num ? 'bg-success text-success-foreground' : etape === s.num ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}>
+                  {etape > s.num ? <Check className="h-4 w-4" /> : s.num}
+                </div>
+                <span className={`text-[10px] font-semibold ${etape >= s.num ? 'text-primary' : 'text-muted-foreground'}`}>{s.label}</span>
+              </div>
+            </React.Fragment>
+          ))}
         </div>
 
         {/* Pro Santé Connect — inscription rapide avec carte CPS/e-CPS */}
@@ -410,11 +465,8 @@ export default function InscriptionSoignant() {
 
           {etape === 2 && (
             <div className="space-y-4">
-              <GeoAutoRequest
-                onResult={(lat, lng) => { maj('lat', lat); maj('lng', lng); }}
-                onRefused={() => afficherNotification({ type: 'info', message: 'Géolocalisation refusée — vous pourrez la réactiver depuis votre profil pour voir les missions près de chez vous.' })}
-              />
               <p className="text-sm font-medium text-muted-foreground mb-4">Étape 2 — Votre profil professionnel</p>
+              <GeoOptIn onResult={(lat, lng) => { maj('lat', lat); maj('lng', lng); }} />
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <label className="block">
                   <span className="text-sm font-medium text-foreground mb-1.5 block">Prénom *{rppsPreRempli && <span className="text-xs text-emerald-600 ml-1.5 font-normal">Vérifié via RPPS</span>}</span>
@@ -479,16 +531,34 @@ export default function InscriptionSoignant() {
                       )}
                     </div>
                   )}
-                  {rppsResultat && rppsResultat.trouve && rppsMatch === false && form.rpps.length === 11 && (
+                  {rppsResultat && rppsResultat.trouve && rppsMatch === false && form.rpps.length === 11 && !rppsVerifManuelle && (
                     <div className="mt-1.5 flex items-center gap-1.5 text-xs bg-destructive/5 text-destructive rounded-lg px-2 py-1.5">
                       <ShieldAlert className="h-3.5 w-3.5" />
                       ❌ Ce RPPS ne correspond pas à votre identité
                     </div>
                   )}
-                  {rppsResultat && !rppsResultat.trouve && !rppsResultat.fhir_indisponible && form.rpps.length === 11 && (
-                    <div className="mt-1.5 flex items-center gap-1.5 text-xs bg-destructive/5 text-destructive rounded-lg px-2 py-1.5" role="alert">
-                      <ShieldAlert className="h-3.5 w-3.5" />
-                      ❌ RPPS non trouvé dans l'annuaire
+                  {rppsResultat && !rppsResultat.trouve && !rppsResultat.fhir_indisponible && form.rpps.length === 11 && !rppsVerifManuelle && (
+                    <div className="mt-1.5 space-y-1.5" role="alert">
+                      <div className="flex items-center gap-1.5 text-xs bg-destructive/5 text-destructive rounded-lg px-2 py-1.5">
+                        <ShieldAlert className="h-3.5 w-3.5" />
+                        ❌ RPPS non trouvé dans l'annuaire
+                      </div>
+                      <p className="text-[11px] text-muted-foreground">
+                        Vérifiez le numéro. Si votre RPPS est récent ou mal indexé dans l'annuaire public, vous pouvez tout de même continuer :
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => setRppsVerifManuelle(true)}
+                        className="text-xs font-semibold text-primary border border-primary/40 rounded-lg px-3 py-1.5 hover:bg-primary/10 transition-colors"
+                      >
+                        Continuer — vérification manuelle sous 24 h
+                      </button>
+                    </div>
+                  )}
+                  {rppsVerifManuelle && form.rpps.length === 11 && (
+                    <div className="mt-1.5 flex items-center gap-1.5 text-xs bg-amber-50 text-amber-700 rounded-lg px-2 py-1.5">
+                      <ShieldCheck className="h-3.5 w-3.5" />
+                      Votre RPPS sera vérifié manuellement sous 24 h — vous pouvez terminer votre inscription.
                     </div>
                   )}
                   {rppsResultat && rppsResultat.fhir_indisponible && form.rpps.length === 11 && (

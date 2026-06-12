@@ -6,7 +6,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
 import { extraireMessageErreur } from '@/lib/erreurs';
 import { supabase } from '@/integrations/supabase/client';
-import { CONTRATS } from '@/lib/constantes';
+import { CONTRATS, PROFESSIONS_NON_LIBERAL } from '@/lib/constantes';
 import { Checkbox } from '@/components/ui/checkbox';
 import { FooterLegal } from '@/components/FooterLegal';
 import { logger } from '@/lib/logger';
@@ -128,11 +128,18 @@ export default function InscriptionSoignantCompletion() {
     });
   };
 
+  // Session E-1 : téléphone optionnel (harmonisé avec le flow email — il est
+  // redemandé au bon moment, p.ex. à l'activation des alertes SMS pool urgence).
   const formValide =
-    form.telephone.trim().length >= 8 &&
+    (form.telephone.trim() === '' || form.telephone.trim().length >= 8) &&
     form.typesContrat.length > 0 &&
     form.cgu &&
     (form.motDePasse === '' || form.motDePasse.length >= 8);
+
+  // Harmonisé avec le flow email : pas de contrat libéral/vacation pour les
+  // professions salariées-only (AS, AES, préparateur en pharmacie…).
+  const peutEtreLiberal = !!identite?.profession && !PROFESSIONS_NON_LIBERAL.includes(identite.profession);
+  const contratsAffiches = CONTRATS.filter(c => peutEtreLiberal || (c.valeur !== 'LIBERAL' && c.valeur !== 'VACATION'));
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -143,7 +150,7 @@ export default function InscriptionSoignantCompletion() {
       const { error: updErr } = await supabase
         .from('soignants')
         .update({
-          telephone: form.telephone.trim(),
+          ...(form.telephone.trim() ? { telephone: form.telephone.trim() } : {}),
           types_contrat_acceptes: form.typesContrat.join(','),
           rayon_deplacement_km: form.rayonKm,
           ...(form.villeRecherche.trim() ? { ville_recherche: form.villeRecherche.trim() } : {}),
@@ -210,9 +217,7 @@ export default function InscriptionSoignantCompletion() {
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="text-sm font-medium text-foreground mb-1.5 block">
-                Téléphone mobile <span className="text-destructive">*</span>
-              </label>
+              <label className="text-sm font-medium text-foreground mb-1.5 block">Téléphone mobile</label>
               <input
                 type="tel"
                 inputMode="tel"
@@ -222,9 +227,8 @@ export default function InscriptionSoignantCompletion() {
                 placeholder="+33 6 ..."
                 className="input-base"
                 pattern="[\+]?[0-9\s]{8,15}"
-                required
               />
-              <p className="text-[10px] text-muted-foreground mt-1">Pour les notifications de missions et l'authentification forte.</p>
+              <p className="text-[10px] text-muted-foreground mt-1">Optionnel — utile pour être alerté·e en premier des missions urgentes.</p>
             </div>
 
             <div>
@@ -232,7 +236,7 @@ export default function InscriptionSoignantCompletion() {
                 Types de contrat acceptés <span className="text-destructive">*</span>
               </label>
               <div className="grid grid-cols-2 gap-2">
-                {CONTRATS.map(c => (
+                {contratsAffiches.map(c => (
                   <label key={c.valeur} className={`flex items-center gap-2 p-2.5 rounded-xl border cursor-pointer text-sm ${form.typesContrat.includes(c.valeur) ? 'border-primary bg-primary/5' : 'border-input'}`}>
                     <Checkbox
                       checked={form.typesContrat.includes(c.valeur)}
@@ -242,6 +246,11 @@ export default function InscriptionSoignantCompletion() {
                   </label>
                 ))}
               </div>
+              {identite?.profession && !peutEtreLiberal && (
+                <p className="text-[10px] text-muted-foreground mt-1.5">
+                  Votre profession ne peut pas exercer en libéral. Seuls CDD et Salarié sont disponibles.
+                </p>
+              )}
             </div>
 
             <div>
@@ -257,15 +266,22 @@ export default function InscriptionSoignantCompletion() {
             </div>
 
             <div>
-              <label className="text-sm font-medium text-foreground mb-1.5 block">Rayon de déplacement (km)</label>
+              <label className="text-sm font-medium text-foreground mb-1.5 block">
+                Rayon de déplacement : <span className="text-primary font-bold">{form.rayonKm} km</span>
+              </label>
               <input
-                type="number"
+                type="range"
                 min={5}
-                max={300}
-                value={form.rayonKm}
-                onChange={e => maj('rayonKm', Number(e.target.value) || 30)}
-                className="input-base"
+                max={100}
+                value={Math.min(form.rayonKm, 100)}
+                onChange={e => maj('rayonKm', Number(e.target.value))}
+                className="w-full h-2 bg-primary/20 rounded-full appearance-none cursor-pointer accent-primary"
+                aria-valuemin={5}
+                aria-valuemax={100}
+                aria-valuenow={form.rayonKm}
+                aria-label="Rayon de déplacement en kilomètres"
               />
+              <div className="flex justify-between text-[10px] text-muted-foreground"><span>5 km</span><span>100 km</span></div>
             </div>
 
             <div>
