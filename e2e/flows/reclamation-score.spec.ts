@@ -103,7 +103,7 @@ test.describe('Sprint 3.5 — Réclamation score (user creation + admin traiteme
   test('Table reclamations_score existe avec colonnes attendues', async () => {
     const { error } = await adminClient()
       .from('reclamations_score' as any)
-      .select('id, evenement_id, evenement_type, motif_categorie, statut, cree_le')
+      .select('id, evenement_soignant_id, evenement_etab_id, evenement_type, motif_categorie, statut, cree_le')
       .limit(1);
     expect(error?.message).toBeFalsy();
   });

@@ -75,7 +75,7 @@ test.describe('Sprint 5.7 — Admin RPCs sécurité', () => {
   test('14 templates Sprint 2 existent en DB', async () => {
     const { data, error } = await adminClient()
       .from('templates_contrat' as any)
-      .select('id, type_contrat, profession, type_etablissement', { count: 'exact' });
+      .select('id, type_contrat, nom, version', { count: 'exact' });
     expect(error?.message).toBeFalsy();
     expect(Array.isArray(data)).toBeTruthy();
     expect((data as any[]).length).toBeGreaterThanOrEqual(14);
