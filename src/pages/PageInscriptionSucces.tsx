@@ -1,15 +1,14 @@
 /**
- * PageInscriptionSucces — page intermédiaire post-inscription qui :
- *   - confirme la création du compte
- *   - prévient les utilisateurs Outlook/Hotmail/Live que les emails
- *     peuvent atterrir en spam (réputation domaine récente)
- *   - donne les actions concrètes pour ne pas rater nos emails
- *   - permet de continuer vers le dashboard
+ * PageInscriptionSucces — page intermédiaire post-inscription.
  *
- * Affichée après inscription soignant ET établissement. Le redirect se fait
- * vers /inscription/succes?role=soignant|etab&email=…
+ * Session E-2 (« la valeur avant l'effort ») : le moment de célébration n'est
+ * plus consommé par l'avertissement délivrabilité — celui-ci n'apparaît que
+ * pour les domaines Microsoft (Outlook/Hotmail/Live/MSN), seuls réellement
+ * concernés. À la place : l'aperçu du marché (missions / établissements de la
+ * zone) et un CTA qui nomme la prochaine étape de valeur.
  *
- * J2.3.C — UX warmup délivrabilité Outlook.
+ * Affichée après inscription soignant ET établissement
+ * (/inscription/succes?role=soignant|etab, email en sessionStorage).
  */
 
 import React from 'react';
@@ -17,22 +16,30 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { CheckCircle2, AlertTriangle, Mail, ArrowRight } from 'lucide-react';
 import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { usePageTitle } from '@/hooks/usePageTitle';
+import { ApercuMarche } from '@/components/inscription/ApercuMarche';
 
 export default function PageInscriptionSucces() {
   usePageTitle('Inscription réussie');
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const role = params.get('role') === 'etab' ? 'etab' : 'soignant';
-  // Email récupéré depuis sessionStorage (PII hors URL pour éviter leak via historique navigateur)
+  // PII hors URL : email + profession récupérés depuis sessionStorage
   let email = '';
+  let profession = '';
   try {
     email = sessionStorage.getItem('inscription_email') || '';
+    profession = sessionStorage.getItem('inscription_profession') || '';
   } catch { /* sessionStorage indisponible */ }
   const isOutlook = /outlook\.com$|hotmail\.com$|live\.[a-z]{2,3}$|msn\.com$/i.test(email);
 
-  // Cleanup au démontage : ne garder l'email que pour cette navigation
+  // Cleanup au démontage : ne garder ces infos que pour cette navigation
   React.useEffect(() => {
-    return () => { try { sessionStorage.removeItem('inscription_email'); } catch { /* noop */ } };
+    return () => {
+      try {
+        sessionStorage.removeItem('inscription_email');
+        sessionStorage.removeItem('inscription_profession');
+      } catch { /* noop */ }
+    };
   }, []);
 
   const target = role === 'etab' ? '/etablissement/tableau-de-bord' : '/soignant/tableau-de-bord';
@@ -52,6 +59,9 @@ export default function PageInscriptionSucces() {
             </p>
           </div>
 
+          {/* La valeur d'abord : ce qui attend l'utilisateur de l'autre côté */}
+          {role === 'soignant' && <ApercuMarche profession={profession || null} />}
+
           {/* Email confirmation */}
           {email && (
             <div className="border rounded-lg p-4 bg-blue-50 flex items-start gap-3">
@@ -60,45 +70,36 @@ export default function PageInscriptionSucces() {
                 <p className="font-medium text-blue-900">Email de bienvenue envoyé</p>
                 <p className="text-blue-800 mt-1">
                   Vous allez recevoir un email à <strong>{email}</strong> dans quelques instants.
+                  {!isOutlook && <span className="text-blue-700"> S'il n'arrive pas, pensez à vérifier vos courriers indésirables.</span>}
                 </p>
               </div>
             </div>
           )}
 
-          {/* Avertissement Outlook : ciblé si email finit en .outlook/.hotmail, mais affiché à tous (peut servir pour Gmail aussi) */}
-          <div className={`border rounded-lg p-4 ${isOutlook ? 'bg-amber-50 border-amber-200' : 'bg-gray-50'}`}>
-            <div className="flex items-start gap-3">
-              <AlertTriangle className={`h-5 w-5 shrink-0 mt-0.5 ${isOutlook ? 'text-amber-600' : 'text-gray-500'}`} />
-              <div className="text-sm space-y-2">
-                <p className={`font-medium ${isOutlook ? 'text-amber-900' : 'text-gray-900'}`}>
-                  {isOutlook
-                    ? 'Vérifiez votre dossier "Courrier indésirable"'
-                    : 'Astuce : ne ratez pas nos emails'}
-                </p>
-                <p className={isOutlook ? 'text-amber-800' : 'text-gray-700'}>
-                  Notre domaine <code className="px-1 bg-white/50 rounded">jolene.app</code> est récent (avril 2026)
-                  {isOutlook
-                    ? '. Outlook met souvent les nouveaux domaines en spam. C\'est temporaire — la situation s\'améliore au fur et à mesure que des destinataires interagissent avec nos emails.'
-                    : ', donc certains filtres anti-spam peuvent encore le considérer comme inconnu.'}
-                </p>
-                <div className="space-y-1.5 mt-3">
-                  <p className="font-medium">Pour ne plus rater nos emails :</p>
-                  <ol className="list-decimal pl-5 space-y-1">
-                    <li>Ouvrez votre dossier <strong>Courrier indésirable</strong> (ou Spam)</li>
-                    <li>Si vous y trouvez notre email, marquez-le <strong>Pas un courrier indésirable</strong></li>
-                    <li>Ajoutez <code className="px-1 bg-white/50 rounded">bonjour@jolene.app</code> à vos contacts</li>
-                  </ol>
+          {/* Avertissement délivrabilité — uniquement pour les domaines Microsoft,
+              seuls réellement concernés par la mise en spam des domaines récents */}
+          {isOutlook && (
+            <div className="border rounded-lg p-4 bg-amber-50 border-amber-200">
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="h-5 w-5 shrink-0 mt-0.5 text-amber-600" />
+                <div className="text-sm space-y-2">
+                  <p className="font-medium text-amber-900">Vérifiez votre dossier « Courrier indésirable »</p>
+                  <p className="text-amber-800">
+                    Outlook met souvent les nouveaux expéditeurs en spam. Si notre email s'y trouve,
+                    marquez-le <strong>Pas un courrier indésirable</strong> et ajoutez{' '}
+                    <code className="px-1 bg-white/50 rounded">bonjour@jolene.app</code> à vos contacts.
+                  </p>
+                  <p className="text-xs italic">
+                    Plus de détails dans notre{' '}
+                    <a href="/aide/je-n-ai-pas-recu-d-email" className="underline">centre d'aide</a>.
+                  </p>
                 </div>
-                <p className="text-xs mt-2 italic">
-                  Plus de détails dans notre{' '}
-                  <a href="/aide/je-n-ai-pas-recu-d-email" className="underline">centre d'aide</a>.
-                </p>
               </div>
             </div>
-          </div>
+          )}
 
           <BoutonY2K onClick={() => navigate(target)} className="w-full" iconeDroite={<ArrowRight className="h-4 w-4" />}>
-            Continuer vers mon tableau de bord
+            {role === 'etab' ? 'Publier ma première mission' : 'Compléter mon profil — 2 minutes'}
           </BoutonY2K>
         </div>
       </div>
