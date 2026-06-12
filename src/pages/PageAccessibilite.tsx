@@ -9,13 +9,16 @@ export default function PageAccessibilite() {
   return (
     <div className="min-h-[100dvh] flex flex-col bg-background">
       <main id="main-content" tabIndex={-1} className="flex-1 max-w-3xl w-full mx-auto px-4 py-8">
-        <Link to="/" className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline mb-6">
+        {/* a11y page-scoped : text-jolene-rose-800 (7,05:1 light / ~11,8:1 dark, var thème-aware)
+            au lieu de text-primary (5,08:1) — marge AA confortable + underline permanent (lien
+            distinguable autrement que par la couleur, WCAG 1.4.1). */}
+        <Link to="/" className="inline-flex items-center gap-1.5 text-sm text-jolene-rose-800 underline mb-6">
           <ArrowLeft className="h-4 w-4" aria-hidden="true" /> Retour à l'accueil
         </Link>
 
         <header className="mb-8">
           <div className="flex items-center gap-3 mb-3">
-            <Accessibility className="h-8 w-8 text-primary" aria-hidden="true" />
+            <Accessibility className="h-8 w-8 text-jolene-rose-800" aria-hidden="true" />
             <h1 className="text-2xl font-bold text-foreground">Déclaration d'accessibilité</h1>
           </div>
           <p className="text-sm text-muted-foreground">
@@ -85,7 +88,7 @@ export default function PageAccessibilite() {
           </p>
           <a
             href="mailto:support@jolene.app?subject=Signalement%20accessibilit%C3%A9"
-            className="inline-flex items-center gap-2 text-primary hover:underline font-medium"
+            className="inline-flex items-center gap-2 text-jolene-rose-800 underline font-medium"
           >
             <Mail className="h-4 w-4" aria-hidden="true" />
             support@jolene.app
@@ -96,7 +99,7 @@ export default function PageAccessibilite() {
           <ul className="list-disc list-inside text-sm text-foreground space-y-1.5 ml-2">
             <li>
               Écrire au Défenseur des droits :
-              <a href="https://www.defenseurdesdroits.fr/saisir/" target="_blank" rel="noopener noreferrer" className="text-primary underline ml-1 font-medium">
+              <a href="https://www.defenseurdesdroits.fr/saisir/" target="_blank" rel="noopener noreferrer" className="text-jolene-rose-800 underline ml-1 font-medium">
                 defenseurdesdroits.fr/saisir
               </a>
             </li>
@@ -117,11 +120,11 @@ export default function PageAccessibilite() {
           <p>Date de la dernière mise à jour : 3 mai 2026</p>
           <p className="mt-2">
             Liens utiles :
-            <a href="https://accessibilite.numerique.gouv.fr/" target="_blank" rel="noopener noreferrer" className="text-primary underline ml-1 font-medium">
+            <a href="https://accessibilite.numerique.gouv.fr/" target="_blank" rel="noopener noreferrer" className="text-jolene-rose-800 underline ml-1 font-medium">
               référentiel RGAA
             </a>
             ·
-            <a href="https://www.w3.org/Translations/WCAG21-fr/" target="_blank" rel="noopener noreferrer" className="text-primary underline ml-1 font-medium">
+            <a href="https://www.w3.org/Translations/WCAG21-fr/" target="_blank" rel="noopener noreferrer" className="text-jolene-rose-800 underline ml-1 font-medium">
               WCAG 2.1
             </a>
           </p>

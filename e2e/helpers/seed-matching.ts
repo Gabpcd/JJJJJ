@@ -17,6 +17,19 @@ import { TEST_ACCOUNTS } from './auth';
 export type SwipeDirEnum = 'LIKE' | 'DISLIKE' | 'SUPER_LIKE';
 
 /**
+ * Préfixe intitule des missions seedées matching.
+ *
+ * VOLONTAIREMENT distinct de '[playwright-test]' : cleanupSeedData
+ * (helpers/seed.ts, appelé en afterEach par candidature.spec.ts +
+ * notation.spec.ts) purge les missions de l'étab test en LIKE
+ * '[playwright-test]%'. Avec fullyParallel + 2 workers CI, cette purge
+ * supprimait les missions matching fraîchement seedées par l'AUTRE worker
+ * → FK swipes_mission_id_fkey 23503 (run CI 27418384516). Le préfixe
+ * immune reste identifiable comme donnée de test mais échappe au LIKE.
+ */
+export const PREFIX_MISSION_MATCHING = '[pw-test:match]';
+
+/**
  * Crée une mission OUVERTE attribuée au compte étab test.
  * Retourne {id, etablissement_id} ou null si seed échoue.
  */
@@ -41,7 +54,7 @@ export async function seedMissionMatching(opts: {
   const { data: missionId, error } = await adminClient().rpc('fn_test_seed_mission' as any, {
     p_data: {
       etablissement_id: etabId,
-      intitule: opts.intitule || `[playwright-test] Match ${Date.now()}`,
+      intitule: opts.intitule || `${PREFIX_MISSION_MATCHING} Match ${Date.now()}`,
       description: 'Mission seed matching swipe',
       profession_requise: opts.profession || 'IDE',
       service: 'Test',
@@ -138,10 +151,19 @@ export async function cleanupMatchingForSoignant(soignantId: string): Promise<vo
   await admin.from('badges_soignant' as any).delete().eq('soignant_id', soignantId);
 }
 
-/** Purge missions test (intitule LIKE '[playwright-test]%'). */
+/**
+ * Purge missions test (anciens seeds '[playwright-test]%' + seeds immunes
+ * '[pw-test:%').
+ *
+ * ATTENTION : purge GLOBALE — ne JAMAIS appeler en afterEach d'une spec
+ * fullyParallel (supprime les missions fraîchement seedées par l'autre
+ * worker → FK flaky, cf. en-têtes matching-backend/matching-complete).
+ * Réservé à un nettoyage manuel hors exécution parallèle.
+ */
 export async function cleanupMissionsTest(): Promise<void> {
   const admin = adminClient();
   await admin.from('missions' as any).delete().like('intitule', '[playwright-test]%');
+  await admin.from('missions' as any).delete().like('intitule', '[pw-test:%');
 }
 
 /** Récupère le streak actuel d'un soignant via RPC (côté admin). */
