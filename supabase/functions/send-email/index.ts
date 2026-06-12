@@ -1790,6 +1790,18 @@ Deno.serve(async (req) => {
       }
     }
 
+    // Comptes de test E2E : ne JAMAIS envoyer de vrai email (les tests
+    // Playwright déroulent les flux réels contre la prod — 200+ notifications
+    // le 12/06 ont épuisé le quota Resend quotidien et bombardé des boîtes
+    // inexistantes = bounces qui dégradent la réputation du domaine).
+    // Succès silencieux : les flux appelants ne doivent pas échouer.
+    if (/^playwright-[a-z0-9.-]*@jolene\.app$/i.test(resolvedEmail)) {
+      console.log(`[send-email] compte de test E2E (${resolvedEmail}) — envoi ignoré`);
+      return new Response(JSON.stringify({ success: true, skipped: true, reason: 'compte_test_e2e' }), {
+        headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
+      });
+    }
+
     const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY');
     if (!RESEND_API_KEY) {
       console.log('RESEND_API_KEY not configured — email skipped');
