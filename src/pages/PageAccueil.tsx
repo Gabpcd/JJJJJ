@@ -53,16 +53,23 @@ function CompteurAnime({ cible, suffixe, prefix }: { cible: number; suffixe?: st
 /* ─── Scroll reveal wrapper ─── */
 function RevealOnScroll({ children, className = '', delay = 0 }: { children: React.ReactNode; className?: string; delay?: number }) {
   const ref = useRef<HTMLDivElement>(null);
-  const [visible, setVisible] = useState(false);
+  // prefers-reduced-motion : pas d'animation d'apparition — le contenu est
+  // visible immédiatement (sinon le texte sous la ligne de flottaison reste à
+  // opacité 0 tant qu'on ne scrolle pas : illisible pour ces utilisateurs, et
+  // axe-core le signalait à juste titre en color-contrast).
+  const [visible, setVisible] = useState(() =>
+    typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  );
 
   useEffect(() => {
+    if (visible) return;
     const observer = new IntersectionObserver(
       ([entry]) => { if (entry.isIntersecting) setVisible(true); },
       { threshold: 0.15 }
     );
     if (ref.current) observer.observe(ref.current);
     return () => observer.disconnect();
-  }, []);
+  }, [visible]);
 
   return (
     <div
@@ -247,11 +254,21 @@ function RechercheMissionsPublique({ navigate }: { navigate: ReturnType<typeof u
 export default function PageAccueil() {
   usePageTitle('Jolene');
   const navigate = useNavigate();
-  const [heroVisible, setHeroVisible] = useState(false);
+  // prefers-reduced-motion : le hero est visible immédiatement (pas de fondu
+  // d'opacité 1 s). Sinon, sous ce réglage, le sous-titre et les badges en
+  // text-muted-foreground sont scannés par axe-core EN PLEIN fondu (opacité
+  // intermédiaire → contraste effectif réduit → color-contrast SERIOUS).
+  // La media-query globale (index.css) ne neutralise que des classes nommées,
+  // pas l'utilitaire Tailwind `transition-all` posé inline ici — d'où le besoin
+  // de gérer le cas en JS, comme RevealOnScroll.
+  const [heroVisible, setHeroVisible] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches,
+  );
 
   useEffect(() => {
+    if (heroVisible) return;
     requestAnimationFrame(() => setHeroVisible(true));
-  }, []);
+  }, [heroVisible]);
 
   return (
     <>

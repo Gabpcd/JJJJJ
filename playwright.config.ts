@@ -25,6 +25,7 @@ export default defineConfig({
   // (workflow_dispatch) qui génère les baselines puis crée une PR auto.
   // Pour run en local manuellement : `npx playwright test e2e/visual --project=chromium`.
   testIgnore: process.env.PLAYWRIGHT_INCLUDE_VISUAL === 'true' ? [] : ['**/visual.spec.ts'],
+  globalSetup: './e2e/global-setup.ts',
   timeout: 30_000,
   expect: { timeout: 10_000 },
   fullyParallel: true,
