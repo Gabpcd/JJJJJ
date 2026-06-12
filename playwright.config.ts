@@ -51,6 +51,15 @@ export default defineConfig({
     navigationTimeout: 15_000,
     locale: 'fr-FR',
     timezoneId: 'Europe/Paris',
+    // prefers-reduced-motion : l'app désactive TOUTES ses transitions sous ce
+    // réglage (media query globale index.css:850 — page-enter/exit, fade-in,
+    // holographic…). Sans lui, axe-core scanne parfois EN PLEIN fondu
+    // d'opacité PageTransition et calcule le contraste sur du texte
+    // semi-transparent → color-contrast SERIOUS fantôme (observé sur
+    // landing/chromium, /accessibilite/webkit, pages aléatoires selon le
+    // timing). C'est aussi un réglage d'utilisateur réel : on teste le mode
+    // accessibilité que l'app prétend supporter.
+    reducedMotion: 'reduce',
     // Bloquer le service worker en E2E pour éviter le banner "Nouvelle version
     // disponible" qui intercepte les clics + viole les contrastes a11y.
     serviceWorkers: 'block',
