@@ -53,16 +53,23 @@ function CompteurAnime({ cible, suffixe, prefix }: { cible: number; suffixe?: st
 /* ─── Scroll reveal wrapper ─── */
 function RevealOnScroll({ children, className = '', delay = 0 }: { children: React.ReactNode; className?: string; delay?: number }) {
   const ref = useRef<HTMLDivElement>(null);
-  const [visible, setVisible] = useState(false);
+  // prefers-reduced-motion : pas d'animation d'apparition — le contenu est
+  // visible immédiatement (sinon le texte sous la ligne de flottaison reste à
+  // opacité 0 tant qu'on ne scrolle pas : illisible pour ces utilisateurs, et
+  // axe-core le signalait à juste titre en color-contrast).
+  const [visible, setVisible] = useState(() =>
+    typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  );
 
   useEffect(() => {
+    if (visible) return;
     const observer = new IntersectionObserver(
       ([entry]) => { if (entry.isIntersecting) setVisible(true); },
       { threshold: 0.15 }
     );
     if (ref.current) observer.observe(ref.current);
     return () => observer.disconnect();
-  }, []);
+  }, [visible]);
 
   return (
     <div
