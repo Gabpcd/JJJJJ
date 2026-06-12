@@ -14,12 +14,28 @@ import { expect } from '@playwright/test';
  */
 
 export async function runAxe(page: Page, opts: { include?: string; tags?: string[] } = {}) {
-  // Attendre la fin des animations CSS (PageTransition fait un fondu
-  // d'opacité) : axe calcule le contraste sur la couleur EFFECTIVE — un scan
-  // pendant le fade voit du texte semi-transparent et lève color-contrast à
-  // tort (flake observé : webkit sur /accessibilite, firefox sur la landing,
-  // jamais chromium — pure question de timing). Borné à 3 s pour ne jamais
-  // bloquer sur une animation infinie (spinners).
+  // Scan a11y DÉTERMINISTE : axe calcule le contraste sur la couleur EFFECTIVE.
+  // Un scan pendant un fondu d'opacité (PageTransition, reveal-on-scroll, hero
+  // fade-in…) voit du texte semi-transparent et lève color-contrast à tort.
+  // Plutôt que de courir après le timing, on FIGE l'état final avant de
+  // scanner : injection d'une feuille de style qui annule toutes les
+  // transitions/animations (les états React déjà basculés — heroVisible,
+  // RevealOnScroll — sautent instantanément à leur opacité cible), puis on
+  // laisse passer le recalcul de style. C'est l'état que voit un utilisateur
+  // en `prefers-reduced-motion`, soit exactement le mode accessibilité que
+  // l'app prétend supporter.
+  await page
+    .addStyleTag({
+      content:
+        '*,*::before,*::after{transition:none!important;animation:none!important;animation-duration:0s!important;transition-duration:0s!important;}',
+    })
+    .catch(() => { /* CSP stricte : addStyleTag peut échouer, on continue */ });
+
+  // Laisse React/rAF basculer les états de reveal puis le style se recalculer.
+  await page.waitForTimeout(150);
+
+  // Filet de sécurité : attendre la fin des animations encore en vol (borné 3 s
+  // pour ne jamais bloquer sur une boucle infinie type spinner/holographic).
   await page
     .evaluate(() =>
       Promise.race([

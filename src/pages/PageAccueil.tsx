@@ -254,11 +254,21 @@ function RechercheMissionsPublique({ navigate }: { navigate: ReturnType<typeof u
 export default function PageAccueil() {
   usePageTitle('Jolene');
   const navigate = useNavigate();
-  const [heroVisible, setHeroVisible] = useState(false);
+  // prefers-reduced-motion : le hero est visible immédiatement (pas de fondu
+  // d'opacité 1 s). Sinon, sous ce réglage, le sous-titre et les badges en
+  // text-muted-foreground sont scannés par axe-core EN PLEIN fondu (opacité
+  // intermédiaire → contraste effectif réduit → color-contrast SERIOUS).
+  // La media-query globale (index.css) ne neutralise que des classes nommées,
+  // pas l'utilitaire Tailwind `transition-all` posé inline ici — d'où le besoin
+  // de gérer le cas en JS, comme RevealOnScroll.
+  const [heroVisible, setHeroVisible] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches,
+  );
 
   useEffect(() => {
+    if (heroVisible) return;
     requestAnimationFrame(() => setHeroVisible(true));
-  }, []);
+  }, [heroVisible]);
 
   return (
     <>
