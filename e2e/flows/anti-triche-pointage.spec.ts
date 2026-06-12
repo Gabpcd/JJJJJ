@@ -21,6 +21,14 @@
  * - Le trigger dec_refuser_mission_passee rejette tout INSERT avec
  *   debut_le < NOW() - 1h → les missions de test démarrent à now + 30 min
  *   (fenêtre de scan QR valide : debut - 1h ≤ now ≤ fin + 2h).
+ * - Intitulés en préfixe '[pw-test:antitriche]' (PAS '[playwright-test]') :
+ *   la purge globale cleanupSeedData (helpers/seed.ts — afterEach de
+ *   candidature.spec.ts et notation.spec.ts) supprime en LIKE
+ *   '[playwright-test]%' les missions de l'étab test partagé. En fullyParallel
+ *   2 workers, elle effaçait nos missions mid-test : codes_secours_mission est
+ *   en FK ON DELETE CASCADE → liste de hashes vide et some() silencieusement
+ *   false (run CI 27418384516, test bcrypt). Le préfixe immune échappe au
+ *   LIKE ; le cleanup ciblé par mission_id reste la voie de purge.
  *
  * Skipped si SUPABASE_SERVICE_ROLE_KEY absent (env CI hors prod).
  */
@@ -78,7 +86,7 @@ test.describe('Anti-triche pointage Sprint 4.5', () => {
     const { data: missionId, error } = await adminClient().rpc('fn_test_seed_mission' as any, {
       p_data: {
         etablissement_id: etabId,
-        intitule: opts.intitule || `[playwright-test] AntiTriche ${Date.now()}`,
+        intitule: opts.intitule || `[pw-test:antitriche] AntiTriche ${Date.now()}`,
         description: 'Mission test anti-triche',
         profession_requise: 'IDE',
         service: 'Test',
@@ -206,7 +214,7 @@ test.describe('Anti-triche pointage Sprint 4.5', () => {
     // comparaison SQL `soignant_assigne_id != auth.uid()` n'est jamais TRUE
     // sur NULL) — il faut une mission réellement assignée à quelqu'un d'autre.
     const m = await seedMissionOuverte({
-      intitule: `[playwright-test] AntiTriche OTHER ${Date.now()}`,
+      intitule: `[pw-test:antitriche] AntiTriche OTHER ${Date.now()}`,
     });
     expect(m).toBeTruthy();
     try {
@@ -258,20 +266,27 @@ test.describe('Anti-triche pointage Sprint 4.5', () => {
       // Génération par l'étab de la mission (RPC exige est_admin() OU
       // mon_etablissement_id() = etablissement de la mission).
       const etab = await etabClient();
-      const { data: gen } = await etab.rpc('fn_generer_code_secours_mission' as any, {
+      const { data: gen, error: genErr } = await etab.rpc('fn_generer_code_secours_mission' as any, {
         p_mission_id: m!.mission_id,
         p_type: 'UNIVERSEL',
       });
-      expect((gen as any)?.success).toBe(true);
+      expect(genErr).toBeFalsy();
+      expect((gen as any)?.success, `fn_generer_code_secours_mission → ${JSON.stringify(gen)}`).toBe(true);
       expect((gen as any)?.code).toMatch(/^\d{6}$/);
       const codeClair: string = (gen as any).code;
 
-      // Vérifie qu'en DB on a un hash bcrypt et PAS le code en clair
-      const { data: rows } = await adminClient()
+      // Vérifie qu'en DB on a un hash bcrypt et PAS le code en clair.
+      // fn_generer_code_secours_mission écrit dans codes_secours_mission.code_hash
+      // (migration 20260514110000) — FK mission_id ON DELETE CASCADE : on asserte
+      // rows non vide AVANT les checks de hash, sinon une mission supprimée entre
+      // génération et lecture fait passer les some() en silence (cf. en-tête).
+      const { data: rows, error: rowsErr } = await adminClient()
         .from('codes_secours_mission' as any)
         .select('code_hash')
         .eq('mission_id', m!.mission_id);
+      expect(rowsErr).toBeFalsy();
       expect(Array.isArray(rows)).toBeTruthy();
+      expect((rows as any[]).length, 'codes_secours_mission doit contenir le code généré').toBeGreaterThan(0);
       const allHashes = (rows as any[]).map((r) => r.code_hash);
       expect(allHashes.some((h) => h === codeClair)).toBe(false);
       expect(allHashes.some((h) => h.startsWith('$2'))).toBe(true);

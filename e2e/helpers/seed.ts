@@ -71,7 +71,18 @@ export async function seedCandidature(missionId: string): Promise<{ id: string }
   return data as { id: string };
 }
 
-/** Marque une mission comme TERMINEE (pour tester flow notation). */
+/**
+ * Marque une mission comme TERMINEE (pour tester flow notation).
+ *
+ * @deprecated Neutralisé par le durcissement prod post-Sprint 17 :
+ * fn_valider_transition_statut_mission rejette OUVERTE → TERMINEE direct,
+ * dec_proteger_mission_soignant reverte soignant_assigne_id pour un caller
+ * service_role (auth.uid() NULL) et fn_creer_notification raise
+ * « Non authentifié ». Utiliser le cycle de vie réel à la place :
+ * seedCandidature + fn_traiter_candidature ACCEPTEE via userClient étab,
+ * puis transitions ASSIGNEE → EN_COURS → TERMINEE par l'étab
+ * (cf. e2e/flows/pointage.spec.ts et notation.spec.ts).
+ */
 export async function markMissionTerminee(missionId: string): Promise<boolean> {
   const soignantId = await userIdByEmail('playwright-soignant@jolene.app');
   if (!soignantId) return false;
@@ -82,6 +93,35 @@ export async function markMissionTerminee(missionId: string): Promise<boolean> {
   });
 
   return !error;
+}
+
+/**
+ * Purge ordonnée d'une mission seedée et de ses enfants en FK NO ACTION vers
+ * missions (bulletin de paie, cotisations, conformité, contrats,
+ * conversation…) créés par fn_traiter_candidature / la clôture TERMINEE.
+ * Sans cette purge préalable, le DELETE missions échoue en silence
+ * (pattern pointage.spec.ts / anti-triche-pointage.spec.ts).
+ * Chaque DELETE est tolérant aux erreurs (table absente, ligne déjà purgée).
+ */
+export async function cleanupMissionCascade(missionId?: string | null): Promise<void> {
+  if (!missionId) return;
+  const admin = adminClient();
+  const enfants = [
+    'conformite_travail',
+    'cotisations_sociales',
+    'bulletins_paie',
+    'contrats_travail_missions',
+    'contrats_mission',
+    'presences',
+    'scans_pointage',
+    'messages_mission',
+    'conversations',
+    'candidatures',
+  ];
+  for (const table of enfants) {
+    await admin.from(table as any).delete().eq('mission_id', missionId).then(() => {}, () => {});
+  }
+  await admin.from('missions' as any).delete().eq('id', missionId).then(() => {}, () => {});
 }
 
 /** Supprime toutes les données seedées par les helpers (cleanup test) */

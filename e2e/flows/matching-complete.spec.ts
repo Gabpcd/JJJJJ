@@ -14,6 +14,13 @@
  * Cleanup missions CIBLÉ par IDs trackés (PAS cleanupMissionsTest global : avec
  * fullyParallel + 2 workers CI, le DELETE LIKE '[playwright-test]%' supprimait
  * les missions fraîchement seedées par l'autre worker → FK flaky).
+ * Intitulés en préfixe '[pw-test:match]' (PAS '[playwright-test]') : la purge
+ * globale cleanupSeedData (helpers/seed.ts — afterEach de candidature.spec.ts
+ * et notation.spec.ts) supprime en LIKE '[playwright-test]%' les missions de
+ * l'étab test partagé. En fullyParallel 2 workers, elle effaçait nos missions
+ * entre le seed et l'INSERT swipes → FK 23503 swipes_mission_id_fkey (run CI
+ * 27418384516). Le préfixe immune échappe au LIKE ; la purge ciblée par IDs
+ * trackés reste la voie de cleanup.
  *
  * Skips honnêtes :
  * - Streak quotidien J+1/J+2 : nécessite clock mock (pg_set_local) trop intrusif
@@ -32,7 +39,16 @@ import {
   cleanupMatchingForSoignant,
   getBadges,
   getStreakInfo,
+  PREFIX_MISSION_MATCHING,
 } from '../helpers/seed-matching';
+
+// Les tests partagent le compte soignant test et l'afterEach purge TOUTES ses
+// données matching (swipes/badges/streaks) : en fullyParallel 2 workers, deux
+// tests de CE fichier exécutés en concurrence se voleraient leurs données
+// (badge attendu supprimé par l'afterEach de l'autre). mode 'default' =
+// exécution séquentielle dans un seul worker, sans le skip-on-failure du mode
+// 'serial' (même pattern que anti-triche-pointage.spec.ts).
+test.describe.configure({ mode: 'default' });
 
 test.describe('Sprint 14 — Flow complet matching (réels)', () => {
   let soignantId: string | null = null;
@@ -98,7 +114,7 @@ test.describe('Sprint 14 — Flow complet matching (réels)', () => {
           const i = start + j;
           return seedMission({
             profession: 'IDE',
-            intitule: `[playwright-test] explorateur ${i} ${Date.now()}`,
+            intitule: `${PREFIX_MISSION_MATCHING} explorateur ${i} ${Date.now()}`,
             debut: new Date(baseDate.getTime() + i * 3600000),
           });
         }),

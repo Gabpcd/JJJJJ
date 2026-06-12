@@ -9,37 +9,85 @@
  *  - ASAP < 2h : -25 pts
  *  - No-show : -30 pts + signalement admin
  *
+ * Mise à jour durcissement prod (post-Sprint 17) : le seed direct en ASSIGNEE
+ * + soignant_assigne_id via fn_test_seed_mission est neutralisé par la stack
+ * de triggers (dec_proteger_mission_soignant reverte l'assignation,
+ * dec_notifier_changement_mission → fn_creer_notification raise
+ * « Non authentifié » quand auth.uid() est NULL en service_role). Le seed suit
+ * donc le cycle de vie réel (pattern pointage.spec.ts /
+ * anti-triche-pointage.spec.ts) :
+ *   mission OUVERTE (service_role) → candidature EN_ATTENTE →
+ *   fn_traiter_candidature ACCEPTEE par l'établissement authentifié
+ *   (→ ASSIGNEE + acceptee_a = NOW()) → acceptee_a recalé à l'offset voulu
+ *   (update service_role ciblé, aucun trigger candidatures ne réagit hors
+ *   changement de statut).
+ *
  * Tests UI exclus (modale + timer testés manuellement sur preview Vercel).
  * Skip auto si SUPABASE_SERVICE_ROLE_KEY absent.
  */
 
 import { test, expect } from '@playwright/test';
-import { adminClient, userIdByEmail } from '../helpers/db';
+import type { SupabaseClient } from '@supabase/supabase-js';
+import { adminClient, userClient, userIdByEmail } from '../helpers/db';
+import { cleanupMissionCascade } from '../helpers/seed';
+import { TEST_ACCOUNTS } from '../helpers/auth';
 
 const TEST_REQS = !!process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+// Les 3 tests E2E assignent au soignant test des missions sur la MÊME fenêtre
+// horaire (J+2 → J+2+8h) : en fullyParallel 2 workers, deux acceptations
+// concurrentes déclencheraient dec_refuser_chevauchement_soignant / repos 11h.
+// mode 'default' = exécution séquentielle dans un seul worker.
+test.describe.configure({ mode: 'default' });
 
 test.describe('Sprint 5.5 PR 2 — Annulation candidature soignant', () => {
   test.beforeEach(() => {
     test.skip(!TEST_REQS, 'SUPABASE_SERVICE_ROLE_KEY requis');
   });
 
+  // Client étab authentifié mémoïsé (1 signInWithPassword pour la suite).
+  let _etab: SupabaseClient | null = null;
+  async function etabClient(): Promise<SupabaseClient> {
+    if (!_etab) _etab = await userClient(TEST_ACCOUNTS.etab.email, TEST_ACCOUNTS.etab.password);
+    return _etab;
+  }
+
+  /**
+   * Seed une candidature ACCEPTEE via le cycle de vie réel (cf. en-tête).
+   * Toute erreur REMONTE (throw) avec le message DB réel — plus de retour
+   * null silencieux — après purge du seed partiel.
+   *
+   * Fenêtre J+2 : disjointe d'anti-triche-pointage (now+30min) et de
+   * pointage (J+8) qui assignent le même soignant test en parallèle.
+   * Mission < 7 jours → fn_traiter_candidature exige tous_documents_valides :
+   * on force le flag (idempotent, compte test fixe, pattern anti-triche).
+   */
   async function seedMissionAcceptee(opts: {
     debutOffsetHours: number;
     accepteeOffsetMinutes: number;
     estAsap?: boolean;
-  }): Promise<{ candidatureId: string; missionId: string } | null> {
+  }): Promise<{ candidatureId: string; missionId: string }> {
+    const admin = adminClient();
     const etabId = await userIdByEmail('playwright-etab@jolene.app');
     const soignantId = await userIdByEmail('playwright-soignant@jolene.app');
-    if (!etabId || !soignantId) return null;
+    if (!etabId || !soignantId) {
+      throw new Error('[seed] comptes test playwright-etab/-soignant introuvables');
+    }
 
+    await admin
+      .from('soignants' as any)
+      .update({ tous_documents_valides: true })
+      .eq('id', soignantId);
+
+    // debut_le FUTUR obligatoire : le trigger prod dec_refuser_mission_passee
+    // rejette tout INSERT avec debut_le < NOW() - 1h.
     const debut = new Date(Date.now() + opts.debutOffsetHours * 3600 * 1000);
     const fin = new Date(debut.getTime() + 8 * 3600 * 1000);
     const acceptee = new Date(Date.now() - opts.accepteeOffsetMinutes * 60 * 1000);
 
-    const { data: missionId, error: mErr } = await adminClient().rpc('fn_test_seed_mission' as any, {
+    const { data: missionId, error: mErr } = await admin.rpc('fn_test_seed_mission' as any, {
       p_data: {
         etablissement_id: etabId,
-        soignant_assigne_id: soignantId,
         intitule: `[playwright-test] Annulation candidature ${Date.now()}`,
         description: 'Test annulation Sprint 3.5',
         profession_requise: 'IDE',
@@ -48,40 +96,57 @@ test.describe('Sprint 5.5 PR 2 — Annulation candidature soignant', () => {
         fin_le: fin.toISOString(),
         duree_heures: 8,
         taux_horaire_base: 25,
-        statut: 'ASSIGNEE',
+        statut: 'OUVERTE',
         mode_attribution: 'CANDIDATURE',
         est_asap: opts.estAsap ?? false,
       },
     });
-    const m = missionId ? { id: missionId as string } : null;
-    if (mErr || !m) {
-      console.error('[seed]', mErr?.message);
-      return null;
+    if (mErr || !missionId) {
+      throw new Error(`[seed] fn_test_seed_mission: ${mErr?.message || 'aucun id retourné'}`);
     }
 
-    const { data: c, error: cErr } = await adminClient()
-      .from('candidatures' as any)
-      .insert({
-        mission_id: (m as any).id,
-        soignant_id: soignantId,
-        statut: 'ACCEPTEE',
-        acceptee_a: acceptee.toISOString(),
-      })
-      .select('id')
-      .single();
-    if (cErr || !c) {
-      console.error('[seed cand]', cErr?.message);
-      await adminClient().from('missions' as any).delete().eq('id', (m as any).id);
-      return null;
+    try {
+      const { data: cand, error: cErr } = await admin
+        .from('candidatures' as any)
+        .insert({ mission_id: missionId, soignant_id: soignantId, statut: 'EN_ATTENTE' })
+        .select('id')
+        .single();
+      if (cErr || !cand) {
+        throw new Error(`[seed] insert candidature: ${cErr?.message || 'aucune ligne retournée'}`);
+      }
+
+      const etab = await etabClient();
+      const { data: accept, error: aErr } = await etab.rpc('fn_traiter_candidature' as any, {
+        p_candidature_id: (cand as any).id,
+        p_decision: 'ACCEPTEE',
+      });
+      if (aErr || (accept as any)?.success !== true) {
+        throw new Error(
+          `[seed] fn_traiter_candidature: ${aErr?.message || (accept as any)?.error || JSON.stringify(accept)}`,
+        );
+      }
+
+      // Recale acceptee_a à l'offset voulu : la grille de pénalité et
+      // fn_dans_fenetre_retractation lisent cette colonne.
+      const { error: uErr } = await admin
+        .from('candidatures' as any)
+        .update({ acceptee_a: acceptee.toISOString() })
+        .eq('id', (cand as any).id);
+      if (uErr) {
+        throw new Error(`[seed] update acceptee_a: ${uErr.message}`);
+      }
+
+      return { candidatureId: (cand as any).id, missionId: missionId as string };
+    } catch (e) {
+      await cleanupMissionCascade(missionId as string).catch(() => {});
+      throw e;
     }
-    return { candidatureId: (c as any).id, missionId: (m as any).id };
   }
 
+  // L'acceptation crée des enfants en FK NO ACTION vers missions
+  // (contrats_mission, conversation…) → purge ordonnée partagée.
   async function cleanup(missionId?: string) {
-    if (missionId) {
-      await adminClient().from('candidatures' as any).delete().eq('mission_id', missionId);
-      await adminClient().from('missions' as any).delete().eq('id', missionId);
-    }
+    await cleanupMissionCascade(missionId);
   }
 
   // ─── Helper IMMUTABLE : test direct sans seed mission ───────────────────

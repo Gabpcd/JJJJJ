@@ -14,13 +14,21 @@ import { TEST_ACCOUNTS } from '../helpers/auth';
 
 const admin = () => adminClient();
 
-// verify-rpps exempte de captcha Turnstile les appels dont le Bearer est la
-// clé anon LEGACY (token === Deno SUPABASE_ANON_KEY → isAnonKey, sans
-// soignant_id). La clé service_role résolue par le workflow (sb_secret_* v2)
-// ne matche plus l'env legacy de l'edge runtime → captchaRequis=true → 403
-// CAPTCHA_FAILED avant la validation de format. Le workflow playwright-e2e.yml
-// fournit E2E_ANON_KEY → SUPABASE_ANON_KEY précisément pour ce cas.
-const ANON_BEARER = process.env.SUPABASE_ANON_KEY || '';
+// verify-rpps (deployé v657, identique au repo) exempte de captcha Turnstile
+// les appels SANS soignant_id dont le Bearer === Deno.env SUPABASE_ANON_KEY
+// (→ isAnonKey). Depuis la migration du projet vers les clés API v2, le
+// runtime edge injecte SUPABASE_ANON_KEY = clé PUBLISHABLE (sb_publishable_*),
+// PAS le JWT anon legacy : le Bearer legacy tenté en passe 1 donnait donc
+// captchaRequis=true → 403 CAPTCHA_FAILED avant la validation de format.
+// Vérifié en direct sur prod (12/06/2026) : Bearer sb_publishable_* →
+// HTTP 400 ADELI_FORMAT_INVALID / RPPS_FORMAT_INVALID. Le workflow
+// playwright-e2e.yml fournit SUPABASE_PUBLISHABLE_KEY (= E2E_PUBLISHABLE_KEY,
+// même chaîne de résolution que helpers/db.ts userClient).
+const ANON_BEARER =
+  process.env.SUPABASE_PUBLISHABLE_KEY ||
+  process.env.VITE_SUPABASE_PUBLISHABLE_KEY ||
+  process.env.SUPABASE_ANON_KEY ||
+  '';
 
 test.describe('Format ADELI/RPPS invalide → rejeté', () => {
   test('ADELI avec moins de 9 chiffres → ADELI_FORMAT_INVALID', async ({ request }) => {
