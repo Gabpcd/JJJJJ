@@ -19,11 +19,14 @@ env:
   # repo) : on ne dépend plus de secrets GitHub potentiellement désynchronisés.
   # Diagnostic 11/06 : le secret PLAYWRIGHT_TEST_PASSWORD ne correspondait pas
   # au mot de passe réel des comptes test (vérifié bcrypt en DB) → 119 fails.
-  # Seul SUPABASE_SERVICE_ROLE_KEY reste un secret (sensible), validé par le
-  # step « Préflight credentials ».
+  # La clé service_role n'est PLUS lue depuis le secret GitHub (qui contenait
+  # en réalité la clé anon → 79 fails) : elle est résolue à chaque run via
+  # l'API Management Supabase avec SUPABASE_ACCESS_TOKEN (le même token que
+  # deploy-supabase, prouvé fonctionnel). Cf. step « Résoudre la clé ».
   E2E_SUPABASE_URL: 'https://flripxtsyegjshnhzjkz.supabase.co'
   E2E_PUBLISHABLE_KEY: 'sb_publishable_wrR-KGZqiovTPBym6mjXPw_V8l4ae-C'
   E2E_TEST_PASSWORD: 'Playwright!Test2026'
+  SUPABASE_PROJECT_REF: 'flripxtsyegjshnhzjkz'
 
 jobs:
   # PR — chromium only (job rapide pour feedback)
@@ -48,32 +51,45 @@ jobs:
           cache: 'npm'
       - name: Install dependencies
         run: npm ci
-      - name: Préflight credentials (diagnostic clair si secret invalide)
+      - name: Résoudre la clé service_role (Management API — autonome)
+        # Le secret GitHub SUPABASE_SERVICE_ROLE_KEY contenait la clé anon
+        # (79 tests backend en échec, « permission denied for table … »).
+        # Plutôt que de dépendre d'un secret manuel désynchronisable, on
+        # demande la vraie clé à l'API Management avec SUPABASE_ACCESS_TOKEN
+        # (token déjà utilisé par deploy-supabase, donc valide). La clé est
+        # masquée des logs puis injectée via GITHUB_ENV pour les steps suivants.
+        env:
+          SB_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          FALLBACK_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
           set -e
-          # 1) Clé service_role (seul vrai secret) : un GET REST doit répondre 200
-          code=$(curl -s -o /dev/null -w '%{http_code}' \
-            "$E2E_SUPABASE_URL/rest/v1/missions?select=id&limit=1" \
-            -H "apikey: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
-            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}")
-          if [ "$code" != "200" ]; then
-            echo "::error::SUPABASE_SERVICE_ROLE_KEY invalide (REST → HTTP $code). Mettre à jour le secret GitHub avec la clé secrète du Dashboard Supabase (Settings → API keys)."
-            exit 1
+          RESP=$(curl -s --max-time 20 \
+            "https://api.supabase.com/v1/projects/$SUPABASE_PROJECT_REF/api-keys?reveal=true" \
+            -H "Authorization: Bearer $SB_ACCESS_TOKEN" || true)
+          KEY=$(printf '%s' "$RESP" | node -e 'let d="";process.stdin.on("data",c=>d+=c).on("end",()=>{try{const a=JSON.parse(d);const k=a.find(x=>x.name==="service_role"&&x.api_key)||a.find(x=>x.type==="secret"&&!x.disabled&&x.api_key);process.stdout.write(k&&k.api_key?k.api_key:"")}catch(e){}})')
+          if [ -n "$KEY" ]; then
+            echo "::add-mask::$KEY"
+            echo "SUPABASE_SERVICE_ROLE_KEY=$KEY" >> "$GITHUB_ENV"
+            echo "Clé service_role résolue via Management API ✓"
+          else
+            echo "::warning::Management API injoignable — fallback sur le secret GitHub SUPABASE_SERVICE_ROLE_KEY"
+            echo "SUPABASE_SERVICE_ROLE_KEY=$FALLBACK_KEY" >> "$GITHUB_ENV"
           fi
-          # 1bis) Anti-confusion anon/service : seul un vrai service_role passe
-          # l'endpoint admin GoTrue (une clé anon répond 401/403 mais donne
-          # quand même 200 sur le REST public → le check 1 ne suffit pas).
+      - name: Préflight credentials (échec immédiat si credential invalide)
+        run: |
+          set -e
+          # 1) La clé résolue doit être un VRAI service_role : seul lui passe
+          # l'endpoint admin GoTrue (une clé anon répond 401/403 ici alors
+          # qu'elle répond 200 sur le REST public).
           code=$(curl -s -o /dev/null -w '%{http_code}' \
             "$E2E_SUPABASE_URL/auth/v1/admin/users?per_page=1" \
-            -H "apikey: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
-            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}")
+            -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
+            -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY")
           if [ "$code" != "200" ]; then
-            # Warning (pas exit 1) : on laisse tourner les tests qui ne
-            # dépendent pas du service_role (a11y, navigation, UI publiques).
-            echo "::warning::Le secret SUPABASE_SERVICE_ROLE_KEY n'est PAS une clé service_role (admin GoTrue → HTTP $code) — c'est probablement la clé anon/publishable. ~60 tests backend échoueront. Remplacer le secret GitHub par la « secret key » (sb_secret_…) du Dashboard Supabase → Settings → API keys."
-          else
-            echo "service_role OK (admin GoTrue 200)"
+            echo "::error::La clé service_role résolue est invalide (admin GoTrue → HTTP $code). Vérifier SUPABASE_ACCESS_TOKEN (Dashboard → Account → Access Tokens) ou le secret SUPABASE_SERVICE_ROLE_KEY de fallback."
+            exit 1
           fi
+          echo "service_role OK (admin GoTrue 200)"
           # 2) Login compte test (publishable key + mot de passe fixe)
           code=$(curl -s -o /dev/null -w '%{http_code}' \
             "$E2E_SUPABASE_URL/auth/v1/token?grant_type=password" \
@@ -94,11 +110,12 @@ jobs:
           npx vite preview --port 4173 --host 0.0.0.0 &
           npx wait-on http://127.0.0.1:4173 -t 30000 || true
       - name: Run Playwright tests (chromium)
+        # SUPABASE_SERVICE_ROLE_KEY arrive via GITHUB_ENV (step « Résoudre la
+        # clé ») — ne PAS la remapper ici depuis secrets (valeur fausse).
         run: npx playwright test --project=chromium
         env:
           PLAYWRIGHT_BASE_URL: http://127.0.0.1:4173
           SUPABASE_URL: ${{ env.E2E_SUPABASE_URL }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           SUPABASE_PUBLISHABLE_KEY: ${{ env.E2E_PUBLISHABLE_KEY }}
           PLAYWRIGHT_TEST_PASSWORD: ${{ env.E2E_TEST_PASSWORD }}
           CI: 'true'
@@ -129,6 +146,10 @@ jobs:
     timeout-minutes: 30
     strategy:
       fail-fast: false
+      # 1 projet à la fois : les 5 browsers partagent la même DB prod et les
+      # mêmes comptes test — en parallèle, les seed/cleanup d'un job écrasent
+      # les données d'un autre (flakiness aléatoire garantie).
+      max-parallel: 1
       matrix:
         project:
           - chromium
@@ -144,6 +165,26 @@ jobs:
           cache: 'npm'
       - name: Install dependencies
         run: npm ci
+      - name: Résoudre la clé service_role (Management API — autonome)
+        # Même mécanique que le job PR : la vraie clé service_role est
+        # récupérée via l'API Management (le secret GitHub homonyme est faux).
+        env:
+          SB_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          FALLBACK_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          set -e
+          RESP=$(curl -s --max-time 20 \
+            "https://api.supabase.com/v1/projects/$SUPABASE_PROJECT_REF/api-keys?reveal=true" \
+            -H "Authorization: Bearer $SB_ACCESS_TOKEN" || true)
+          KEY=$(printf '%s' "$RESP" | node -e 'let d="";process.stdin.on("data",c=>d+=c).on("end",()=>{try{const a=JSON.parse(d);const k=a.find(x=>x.name==="service_role"&&x.api_key)||a.find(x=>x.type==="secret"&&!x.disabled&&x.api_key);process.stdout.write(k&&k.api_key?k.api_key:"")}catch(e){}})')
+          if [ -n "$KEY" ]; then
+            echo "::add-mask::$KEY"
+            echo "SUPABASE_SERVICE_ROLE_KEY=$KEY" >> "$GITHUB_ENV"
+            echo "Clé service_role résolue via Management API ✓"
+          else
+            echo "::warning::Management API injoignable — fallback sur le secret GitHub SUPABASE_SERVICE_ROLE_KEY"
+            echo "SUPABASE_SERVICE_ROLE_KEY=$FALLBACK_KEY" >> "$GITHUB_ENV"
+          fi
       - name: Build app
         run: npm run build
         env:
@@ -154,11 +195,12 @@ jobs:
           npx vite preview --port 4173 --host 0.0.0.0 &
           npx wait-on http://127.0.0.1:4173 -t 30000 || true
       - name: Run Playwright tests (${{ matrix.project }})
+        # SUPABASE_SERVICE_ROLE_KEY arrive via GITHUB_ENV (step « Résoudre la
+        # clé ») — ne PAS la remapper ici depuis secrets (valeur fausse).
         run: npx playwright test --project=${{ matrix.project }}
         env:
           PLAYWRIGHT_BASE_URL: http://127.0.0.1:4173
           SUPABASE_URL: ${{ env.E2E_SUPABASE_URL }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           SUPABASE_PUBLISHABLE_KEY: ${{ env.E2E_PUBLISHABLE_KEY }}
           PLAYWRIGHT_TEST_PASSWORD: ${{ env.E2E_TEST_PASSWORD }}
           CI: 'true'
