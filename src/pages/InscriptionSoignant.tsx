@@ -19,6 +19,7 @@ import { CONTRATS, PROFESSIONS_SANS_RPPS, PROFESSIONS_NON_LIBERAL } from '@/lib/
 import { Checkbox } from '@/components/ui/checkbox';
 import { logger } from '@/lib/logger';
 import { BoutonProSanteConnect } from '@/components/BoutonProSanteConnect';
+import { ApercuMarche } from '@/components/inscription/ApercuMarche';
 
 
 /**
@@ -322,7 +323,11 @@ export default function InscriptionSoignant() {
     try {
       await inscriptionSoignant({ ...form, turnstileToken });
       // PII (email) hors URL : sessionStorage évite leak via historique/referer
-      try { sessionStorage.setItem('inscription_email', form.email); } catch { /* sessionStorage indisponible */ }
+      // + profession pour l'aperçu marché de la page succès (Session E-2)
+      try {
+        sessionStorage.setItem('inscription_email', form.email);
+        sessionStorage.setItem('inscription_profession', form.profession);
+      } catch { /* sessionStorage indisponible */ }
       navigate('/inscription/succes?role=soignant');
     } catch (err) {
       if (gererErreurSupabase(err, () => handleSubmit(e))) {
@@ -467,6 +472,11 @@ export default function InscriptionSoignant() {
             <div className="space-y-4">
               <p className="text-sm font-medium text-muted-foreground mb-4">Étape 2 — Votre profil professionnel</p>
               <GeoOptIn onResult={(lat, lng) => { maj('lat', lat); maj('lng', lng); }} />
+              {/* La valeur avant l'effort (Session E-2) : dès la profession choisie,
+                  montrer le marché réel — missions et taux, ou établissements inscrits. */}
+              {form.profession && (
+                <ApercuMarche profession={form.profession} lat={form.lat} lng={form.lng} rayonKm={form.rayon} />
+              )}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <label className="block">
                   <span className="text-sm font-medium text-foreground mb-1.5 block">Prénom *{rppsPreRempli && <span className="text-xs text-emerald-600 ml-1.5 font-normal">Vérifié via RPPS</span>}</span>
