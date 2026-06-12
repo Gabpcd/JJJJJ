@@ -31,7 +31,7 @@ function AnimatedCounter({ target, suffix = '' }: { target: number; suffix?: str
 
 const etapes = [
   { num: '1', titre: 'Inscrivez-vous gratuitement', desc: 'Créez votre compte en 2 minutes. Renseignez votre profession et votre zone géographique.' },
-  { num: '2', titre: 'Validez votre profil', desc: 'Téléversez vos documents (diplôme, RPPS, RCP). Vérification sous 24h par notre équipe.' },
+  { num: '2', titre: 'Validez votre profil', desc: 'Téléversez vos documents (diplôme, RPPS, RCP). Vérification automatique, en général en quelques minutes.' },
   { num: '3', titre: 'Acceptez vos missions', desc: 'Recevez des propositions de missions près de chez vous et postulez en un clic.' },
 ];
 

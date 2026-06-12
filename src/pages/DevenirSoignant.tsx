@@ -2,27 +2,25 @@ import React from 'react';
 import { SEOHead } from '@/components/SEOHead';
 import { SEOPageLayout } from '@/components/SEOPageLayout';
 import { Badge } from '@/components/ui/badge';
-import { Clock, Euro, ShieldCheck, TrendingUp, UserPlus, ClipboardList, Rocket, Quote } from 'lucide-react';
+import { Clock, Euro, ShieldCheck, TrendingUp, UserPlus, ClipboardList, Rocket } from 'lucide-react';
+import { PROFESSIONS } from '@/lib/constantes';
 
 const avantages = [
   { icon: Euro, titre: 'Rémunération transparente', desc: 'Taux horaire affiché avant de postuler, zéro frais cachés pour le soignant.' },
   { icon: Clock, titre: 'Flexibilité totale', desc: 'Choisissez vos missions, vos horaires et vos établissements. Vous êtes libre.' },
   { icon: ShieldCheck, titre: 'Conformité garantie', desc: 'Contrats générés automatiquement, conformes au Code du Travail et signés électroniquement.' },
-  { icon: TrendingUp, titre: 'Parcours vers le libéral', desc: 'Cumulez vos 3 200 heures et bénéficiez de notre programme Free Transition.' },
+  { icon: TrendingUp, titre: 'Parcours vers le libéral', desc: 'Pour les professions autorisées à exercer en libéral : cumulez vos 3 200 heures et bénéficiez du programme Free Transition.' },
 ];
 
 const etapes = [
-  { num: '1', titre: 'Créez votre compte', desc: 'Inscription gratuite en 2 minutes. Renseignez votre profession et votre numéro RPPS.' },
-  { num: '2', titre: 'Complétez votre profil', desc: 'Téléversez vos documents (diplôme, RCP, pièce d\'identité). Vérification sous 24h.' },
+  { num: '1', titre: 'Créez votre compte', desc: 'Inscription gratuite en 2 minutes, par email ou avec votre carte CPS via Pro Santé Connect. Le numéro RPPS n\'est demandé que si votre profession en possède un.' },
+  { num: '2', titre: 'Complétez votre profil', desc: 'Téléversez vos documents (diplôme, pièce d\'identité — assurance RCP pour les libéraux). Vérification automatique, en général en quelques minutes.' },
   { num: '3', titre: 'Postulez aux missions', desc: 'Parcourez les missions disponibles près de chez vous et postulez en un clic.' },
 ];
 
-const professions = [
-  'Infirmier(ère) diplômé(e) d\'État', 'Aide-soignant(e)', 'Pharmacien(ne)', 'Préparateur(trice) en pharmacie',
-  'Masseur-kinésithérapeute', 'Sage-femme', 'Ergothérapeute', 'Psychomotricien(ne)',
-  'Orthophoniste', 'Manipulateur(trice) radio', 'Diététicien(ne)', 'Technicien(ne) de laboratoire',
-  'Auxiliaire de puériculture', 'Ambulancier(ère)', 'Opticien(ne)-lunetier(ère)',
-];
+// Dérivée des constantes produit (source de vérité) — la liste codée en dur
+// omettait notamment chirurgien-dentiste, médecin, IADE, IBODE et AES.
+const professions = PROFESSIONS.map((p) => p.label);
 
 export default function DevenirSoignant() {
   return (
@@ -87,17 +85,6 @@ export default function DevenirSoignant() {
           </div>
         </section>
 
-        {/* Témoignage */}
-        <section className="py-16 md:py-20 bg-muted/50">
-          <div className="max-w-3xl mx-auto px-4 text-center">
-            <Quote className="h-10 w-10 text-primary/30 mx-auto mb-6" />
-            <blockquote className="text-lg md:text-xl text-foreground italic leading-relaxed mb-6">
-              « Grâce à Jolene, j'ai pu choisir mes missions librement tout en cumulant mes heures vers le libéral. L'inscription a pris 5 minutes et ma première mission était validée le lendemain. Je recommande à tous mes collègues ! »
-            </blockquote>
-            <p className="font-semibold text-foreground">Marie D.</p>
-            <p className="text-sm text-muted-foreground">Infirmière diplômée d'État — Île-de-France</p>
-          </div>
-        </section>
       </SEOPageLayout>
     </>
   );
