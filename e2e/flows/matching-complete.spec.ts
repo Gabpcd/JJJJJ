@@ -5,7 +5,7 @@
  * les triggers + workflows end-to-end :
  * - Trigger trg_award_badges_swipe : PREMIER_SWIPE, PREMIER_SUPER_LIKE, EXPLORATEUR
  * - Trigger trg_update_streak_on_swipe : streak_count + last_activity_date
- * - Trigger trg_award_badges_match : PREMIER_MATCH sur UPDATE candidature ASSIGNEE
+ * - Trigger trg_award_badges_match : PREMIER_MATCH sur UPDATE candidature ACCEPTEE
  *
  * Pattern : seed via fn_test_seed_mission (RPC service_role, GUC bypass anti-seed
  * financier — l'INSERT direct dans missions est rejeté par le trigger anti-seed
@@ -25,9 +25,6 @@
  * Skips honnêtes :
  * - Streak quotidien J+1/J+2 : nécessite clock mock (pg_set_local) trop intrusif
  * - Flow complet UI multi-comptes étab-accepte : couvert backend par PREMIER_MATCH test
- * - PREMIER_MATCH : inatteignable en l'état — fn_award_badges_match n'écoute que
- *   candidatures.statut='ASSIGNEE', valeur interdite par candidatures_statut_check
- *   (bug produit DB, voir le test pour le détail)
  */
 
 import { test, expect } from '@playwright/test';
@@ -169,18 +166,7 @@ test.describe('Sprint 14 — Flow complet matching (réels)', () => {
     expect((row as any).last_activity_date).toBe(today);
   });
 
-  test('Trigger trg_award_badges_match : candidature ASSIGNEE issue swipe → badge PREMIER_MATCH', async () => {
-    test.skip(
-      true,
-      "Inatteignable en l'état : fn_award_badges_match (migration 20260515140000) ne s'exécute " +
-        "que quand candidatures.statut passe à 'ASSIGNEE', or candidatures_statut_check " +
-        "(migration 20260429300000) n'autorise que EN_ATTENTE/EN_ATTENTE_VALIDATION_ETAB/" +
-        "ACCEPTEE/REFUSEE/ANNULEE/PROPOSEE/EXPIREE ('ASSIGNEE' est un statut de MISSION). " +
-        "L'UPDATE viole la contrainte CHECK → état impossible à seeder. Bug produit DB : " +
-        'les badges PREMIER_MATCH/MATCH_KING_QUEEN sont inattribuables en prod tant que le ' +
-        "trigger n'écoute pas 'ACCEPTEE' (fix migration requis, hors périmètre tests E2E).",
-    );
-
+  test('Trigger trg_award_badges_match : candidature ACCEPTEE issue swipe → badge PREMIER_MATCH', async () => {
     const admin = adminClient();
     const mission = await seedMission({ profession: 'IDE' });
     expect(mission).toBeTruthy();
@@ -202,17 +188,20 @@ test.describe('Sprint 14 — Flow complet matching (réels)', () => {
     const candidatureId = (cand as { id: string }).id;
 
     try {
-      // 3. Étab accepte → UPDATE statut=ASSIGNEE → trigger doit award PREMIER_MATCH
+      // 3. Étab accepte → UPDATE statut=ACCEPTEE → trigger doit award PREMIER_MATCH
       const { error: updErr } = await admin
         .from('candidatures' as any)
-        .update({ statut: 'ASSIGNEE' })
+        .update({ statut: 'ACCEPTEE' })
         .eq('id', candidatureId);
       expect(updErr).toBeFalsy();
 
       const badges = await getBadges(soignantId!);
       expect(badges).toContain('PREMIER_MATCH');
     } finally {
-      // Cleanup candidature (sinon contraintes FK rejouent)
+      // Cleanup : le passage à ACCEPTEE déclenche aussi trg_candidature_acceptee_chat
+      // (ouvre une conversation liée à la mission) → la purger d'abord, sinon la FK
+      // conversations.mission_id bloque le DELETE missions de l'afterEach.
+      await admin.from('conversations' as any).delete().eq('mission_id', mission!.id);
       await admin.from('candidatures' as any).delete().eq('id', candidatureId);
     }
   });
