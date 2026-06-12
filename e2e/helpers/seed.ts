@@ -32,7 +32,7 @@ export async function seedMission(opts: {
       etablissement_id: etabId,
       intitule: opts.intitule || `[playwright-test] Mission ${Date.now()}`,
       description: 'Mission générée par les tests Playwright',
-      profession_requise: opts.profession || 'INFIRMIER',
+      profession_requise: opts.profession || 'IDE',
       service: 'Test',
       debut_le: debut.toISOString(),
       fin_le: fin.toISOString(),

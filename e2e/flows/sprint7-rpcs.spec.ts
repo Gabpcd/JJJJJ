@@ -60,7 +60,7 @@ test.describe('Sprint 7 — RPCs sécurité + structure', () => {
 
     const { error: e2 } = await adminClient()
       .from('membres_etablissement' as any)
-      .select('id, role, statut, etablissement_id')
+      .select('id, role, actif, etablissement_id')
       .limit(1);
     expect(e2?.message).toBeFalsy();
   });

@@ -56,7 +56,7 @@ test.describe('Sprint 5.7 — Admin RPCs sécurité', () => {
       'fn_admin_modifier_template_contrat' as any,
       {
         p_template_id: '00000000-0000-0000-0000-000000000000',
-        p_contenu: 'a'.repeat(100),
+        p_contenu_html: 'a'.repeat(100),
       },
     );
     expect((data as any)?.success).toBe(false);

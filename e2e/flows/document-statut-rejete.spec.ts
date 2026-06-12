@@ -16,6 +16,8 @@ import { TEST_ACCOUNTS } from '../helpers/auth';
 
 const TEST_REQS = !!process.env.SUPABASE_SERVICE_ROLE_KEY;
 const VERIFY_TIMEOUT_MS = 30_000;
+// Les tests qui appellent l'API Anthropic sont skippés en CI (pas de crédits Anthropic).
+const HAS_ANTHROPIC = !!process.env.ANTHROPIC_API_KEY && !process.env.CI;
 
 function makeMinimalPdf(): Uint8Array {
   const content = `%PDF-1.4
@@ -36,6 +38,7 @@ test.describe('Statut REJETE — ne bascule pas en Expiré', () => {
 
   test.beforeAll(async () => {
     test.skip(!TEST_REQS, 'SUPABASE_SERVICE_ROLE_KEY requis');
+    test.skip(!HAS_ANTHROPIC, 'ANTHROPIC_API_KEY absent ou CI=true — skip tests IA (crédits Anthropic requis)');
     const id = await userIdByEmail(TEST_ACCOUNTS.soignant.email);
     test.skip(!id, 'Compte playwright-soignant non seedé');
     soignantId = id!;

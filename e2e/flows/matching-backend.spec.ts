@@ -46,7 +46,7 @@ test.describe('Sprint 14 — Backend matching (réels)', () => {
       .select('profession')
       .eq('id', soignantId!)
       .maybeSingle();
-    const profession = (soignant as any)?.profession || 'INFIRMIER';
+    const profession = (soignant as any)?.profession || 'IDE';
 
     const mission = await seedMissionMatching({ profession, tauxHoraire: 35 });
     expect(mission, 'seedMissionMatching').toBeTruthy();
@@ -81,9 +81,9 @@ test.describe('Sprint 14 — Backend matching (réels)', () => {
       .select('profession')
       .eq('id', soignantId!)
       .maybeSingle();
-    const professionSoignant = (soignant as any)?.profession || 'INFIRMIER';
+    const professionSoignant = (soignant as any)?.profession || 'IDE';
     // Choisir une profession qui diffère
-    const professionIncompatible = professionSoignant === 'KINESITHERAPEUTE' ? 'INFIRMIER' : 'KINESITHERAPEUTE';
+    const professionIncompatible = professionSoignant === 'KINESITHERAPEUTE' ? 'AS' : 'KINESITHERAPEUTE';
 
     const mission = await seedMissionMatching({ profession: professionIncompatible });
     expect(mission).toBeTruthy();
@@ -98,7 +98,7 @@ test.describe('Sprint 14 — Backend matching (réels)', () => {
   });
 
   test('fn_enregistrer_swipe : LIKE → ok:true + INSERT swipes', async () => {
-    const mission = await seedMissionMatching({ profession: 'INFIRMIER' });
+    const mission = await seedMissionMatching({ profession: 'IDE' });
     expect(mission).toBeTruthy();
 
     const client = await userClient(TEST_ACCOUNTS.soignant.email, TEST_ACCOUNTS.soignant.password);
@@ -133,7 +133,7 @@ test.describe('Sprint 14 — Backend matching (réels)', () => {
 
     expect(await getSuperLikesRestant(soignantId!)).toBe(0);
 
-    const mission = await seedMissionMatching({ profession: 'INFIRMIER' });
+    const mission = await seedMissionMatching({ profession: 'IDE' });
     expect(mission).toBeTruthy();
 
     const client = await userClient(TEST_ACCOUNTS.soignant.email, TEST_ACCOUNTS.soignant.password);
@@ -156,7 +156,7 @@ test.describe('Sprint 14 — Backend matching (réels)', () => {
   });
 
   test('fn_enregistrer_swipe : re-swipe même mission → mission_deja_swipee', async () => {
-    const mission = await seedMissionMatching({ profession: 'INFIRMIER' });
+    const mission = await seedMissionMatching({ profession: 'IDE' });
     expect(mission).toBeTruthy();
 
     // 1er swipe LIKE (via INSERT direct pour bypass auth)
@@ -174,8 +174,8 @@ test.describe('Sprint 14 — Backend matching (réels)', () => {
   });
 
   test('fn_obtenir_missions_swipe : exclut les missions déjà swipées', async () => {
-    const m1 = await seedMissionMatching({ profession: 'INFIRMIER', intitule: '[playwright-test] m1' });
-    const m2 = await seedMissionMatching({ profession: 'INFIRMIER', intitule: '[playwright-test] m2' });
+    const m1 = await seedMissionMatching({ profession: 'IDE', intitule: '[playwright-test] m1' });
+    const m2 = await seedMissionMatching({ profession: 'IDE', intitule: '[playwright-test] m2' });
     expect(m1 && m2).toBeTruthy();
 
     // Soignant a déjà swipé m1
@@ -192,8 +192,8 @@ test.describe('Sprint 14 — Backend matching (réels)', () => {
   });
 
   test('fn_obtenir_missions_swipe : tri par score DESC', async () => {
-    const m1 = await seedMissionMatching({ profession: 'INFIRMIER', intitule: '[playwright-test] low' });
-    const m2 = await seedMissionMatching({ profession: 'INFIRMIER', intitule: '[playwright-test] high' });
+    const m1 = await seedMissionMatching({ profession: 'IDE', intitule: '[playwright-test] low' });
+    const m2 = await seedMissionMatching({ profession: 'IDE', intitule: '[playwright-test] high' });
     expect(m1 && m2).toBeTruthy();
 
     // Forcer scores : m1=30, m2=85
@@ -214,7 +214,7 @@ test.describe('Sprint 14 — Backend matching (réels)', () => {
   });
 
   test('RLS swipes : un compte étab ne voit pas les swipes d\'un soignant', async () => {
-    const mission = await seedMissionMatching({ profession: 'INFIRMIER' });
+    const mission = await seedMissionMatching({ profession: 'IDE' });
     expect(mission).toBeTruthy();
     await seedSwipe(soignantId!, mission!.id, 'LIKE');
 
