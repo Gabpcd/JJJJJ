@@ -25,6 +25,7 @@ import {
   seedMatchingScore,
   cleanupMatchingForSoignant,
   getSuperLikesRestant,
+  PREFIX_MISSION_MATCHING,
 } from '../helpers/seed-matching';
 
 test.describe('Sprint 14 — Backend matching (réels)', () => {
@@ -192,8 +193,8 @@ test.describe('Sprint 14 — Backend matching (réels)', () => {
   });
 
   test('fn_obtenir_missions_swipe : exclut les missions déjà swipées', async () => {
-    const m1 = await seedMission({ profession: 'IDE', intitule: '[playwright-test] m1' });
-    const m2 = await seedMission({ profession: 'IDE', intitule: '[playwright-test] m2' });
+    const m1 = await seedMission({ profession: 'IDE', intitule: `${PREFIX_MISSION_MATCHING} m1` });
+    const m2 = await seedMission({ profession: 'IDE', intitule: `${PREFIX_MISSION_MATCHING} m2` });
     expect(m1 && m2).toBeTruthy();
 
     // Soignant a déjà swipé m1
@@ -210,8 +211,8 @@ test.describe('Sprint 14 — Backend matching (réels)', () => {
   });
 
   test('fn_obtenir_missions_swipe : tri par score DESC', async () => {
-    const m1 = await seedMission({ profession: 'IDE', intitule: '[playwright-test] low' });
-    const m2 = await seedMission({ profession: 'IDE', intitule: '[playwright-test] high' });
+    const m1 = await seedMission({ profession: 'IDE', intitule: `${PREFIX_MISSION_MATCHING} low` });
+    const m2 = await seedMission({ profession: 'IDE', intitule: `${PREFIX_MISSION_MATCHING} high` });
     expect(m1 && m2).toBeTruthy();
 
     // Forcer scores : m1=30, m2=85

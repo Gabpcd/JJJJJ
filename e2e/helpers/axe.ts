@@ -14,6 +14,21 @@ import { expect } from '@playwright/test';
  */
 
 export async function runAxe(page: Page, opts: { include?: string; tags?: string[] } = {}) {
+  // Attendre la fin des animations CSS (PageTransition fait un fondu
+  // d'opacité) : axe calcule le contraste sur la couleur EFFECTIVE — un scan
+  // pendant le fade voit du texte semi-transparent et lève color-contrast à
+  // tort (flake observé : webkit sur /accessibilite, firefox sur la landing,
+  // jamais chromium — pure question de timing). Borné à 3 s pour ne jamais
+  // bloquer sur une animation infinie (spinners).
+  await page
+    .evaluate(() =>
+      Promise.race([
+        Promise.allSettled(document.getAnimations().map((a) => a.finished)),
+        new Promise((resolve) => setTimeout(resolve, 3000)),
+      ]),
+    )
+    .catch(() => { /* getAnimations indisponible : on scanne quand même */ });
+
   let builder = new AxeBuilder({ page });
 
   // Tags WCAG 2.1 AA par défaut
