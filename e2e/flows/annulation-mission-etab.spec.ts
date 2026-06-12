@@ -164,25 +164,27 @@ test.describe('Sprint 5.5 PR 4 — Annulation mission étab', () => {
     const debut = new Date(Date.now() + opts.debutOffsetHours * 3600_000);
     const fin = new Date(debut.getTime() + 8 * 3600_000);
 
-    const { data, error } = await adminClient().from('missions' as any).insert({
-      etablissement_id: etabId,
-      intitule: `[playwright-test] AnnulationEtab ${Date.now()}`,
-      description: 'Test annulation Sprint 3.5',
-      profession_requise: 'IDE',
-      service: 'Test',
-      debut_le: debut.toISOString(),
-      fin_le: fin.toISOString(),
-      duree_heures: 8,
-      taux_horaire_base: 25,
-      statut: opts.statut,
-      mode_attribution: 'CANDIDATURE',
-    }).select('id').single();
+    const { data: missionId, error } = await adminClient().rpc('fn_test_seed_mission' as any, {
+      p_data: {
+        etablissement_id: etabId,
+        intitule: `[playwright-test] AnnulationEtab ${Date.now()}`,
+        description: 'Test annulation Sprint 3.5',
+        profession_requise: 'IDE',
+        service: 'Test',
+        debut_le: debut.toISOString(),
+        fin_le: fin.toISOString(),
+        duree_heures: 8,
+        taux_horaire_base: 25,
+        statut: opts.statut,
+        mode_attribution: 'CANDIDATURE',
+      },
+    });
 
-    if (error || !data) {
+    if (error || !missionId) {
       console.error('[seed]', error?.message);
       return null;
     }
-    return { missionId: (data as any).id, etabId };
+    return { missionId: missionId as string, etabId };
   }
 
   async function cleanup(missionId?: string) {

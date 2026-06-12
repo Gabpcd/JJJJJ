@@ -31,9 +31,8 @@ test.describe('Anti-triche pointage Sprint 4.5', () => {
     const debut = opts.debut || new Date(Date.now() - 60 * 60 * 1000); // -1h (en cours)
     const fin = opts.fin || new Date(debut.getTime() + 8 * 3600 * 1000);
 
-    const { data, error } = await adminClient()
-      .from('missions' as any)
-      .insert({
+    const { data: missionId, error } = await adminClient().rpc('fn_test_seed_mission' as any, {
+      p_data: {
         etablissement_id: etabId,
         soignant_assigne_id: soignantId,
         intitule: `[playwright-test] AntiTriche ${Date.now()}`,
@@ -42,19 +41,19 @@ test.describe('Anti-triche pointage Sprint 4.5', () => {
         service: 'Test',
         debut_le: debut.toISOString(),
         fin_le: fin.toISOString(),
+        duree_heures: 8,
         taux_horaire_base: 25,
         statut: 'ASSIGNEE',
         mode_attribution: 'CANDIDATURE',
-      })
-      .select('id, etablissement_id')
-      .single();
-    if (error || !data) {
+      },
+    });
+    if (error || !missionId) {
       console.error('[seed antitriche]', error?.message);
       return null;
     }
     return {
-      mission_id: (data as any).id,
-      etab_id: (data as any).etablissement_id,
+      mission_id: missionId as string,
+      etab_id: etabId,
       soignant_id: soignantId,
     };
   }
@@ -103,18 +102,22 @@ test.describe('Anti-triche pointage Sprint 4.5', () => {
     try {
       // Génère QR pour une AUTRE mission (créée à la volée mais non assignée au soignant test)
       const otherEtab = await userIdByEmail('playwright-etab@jolene.app');
-      const { data: otherMission } = await adminClient().from('missions' as any).insert({
-        etablissement_id: otherEtab,
-        intitule: '[playwright-test] AntiTriche OTHER',
-        description: 'Autre',
-        profession_requise: 'IDE',
-        service: 'X',
-        debut_le: new Date().toISOString(),
-        fin_le: new Date(Date.now() + 3600000).toISOString(),
-        taux_horaire_base: 25,
-        statut: 'OUVERTE',
-        mode_attribution: 'CANDIDATURE',
-      }).select('id').single();
+      const { data: otherMissionId } = await adminClient().rpc('fn_test_seed_mission' as any, {
+        p_data: {
+          etablissement_id: otherEtab,
+          intitule: '[playwright-test] AntiTriche OTHER',
+          description: 'Autre',
+          profession_requise: 'IDE',
+          service: 'X',
+          debut_le: new Date().toISOString(),
+          fin_le: new Date(Date.now() + 3600000).toISOString(),
+          duree_heures: 8,
+          taux_horaire_base: 25,
+          statut: 'OUVERTE',
+          mode_attribution: 'CANDIDATURE',
+        },
+      });
+      const otherMission = { id: otherMissionId as string };
 
       const { data: gen } = await adminClient().rpc('fn_generer_qr_mission' as any, {
         p_mission_id: (otherMission as any).id,

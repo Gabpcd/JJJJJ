@@ -21,7 +21,7 @@ test.describe('Format ADELI/RPPS invalide → rejeté', () => {
       {
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${process.env.E2E_ANON_KEY || process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_PUBLISHABLE_KEY || ''}`,
+          'Authorization': `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY || ''}`,
         },
         data: { numero_adeli: '12345', prenom: 'Test', nom: 'Test' },
       },
@@ -37,7 +37,7 @@ test.describe('Format ADELI/RPPS invalide → rejeté', () => {
       {
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${process.env.E2E_ANON_KEY || process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_PUBLISHABLE_KEY || ''}`,
+          'Authorization': `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY || ''}`,
         },
         data: { numero_adeli: 'ABCDEFGHI', prenom: 'Test', nom: 'Test' },
       },
@@ -53,7 +53,7 @@ test.describe('Format ADELI/RPPS invalide → rejeté', () => {
       {
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${process.env.E2E_ANON_KEY || process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_PUBLISHABLE_KEY || ''}`,
+          'Authorization': `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY || ''}`,
         },
         data: { numero_rpps: '12345', prenom: 'Test', nom: 'Test' },
       },
@@ -69,7 +69,7 @@ test.describe('Format ADELI/RPPS invalide → rejeté', () => {
       {
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${process.env.E2E_ANON_KEY || process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_PUBLISHABLE_KEY || ''}`,
+          'Authorization': `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY || ''}`,
         },
         data: { numero_rpps: 'ABCDEFGHIJK', prenom: 'Test', nom: 'Test' },
       },

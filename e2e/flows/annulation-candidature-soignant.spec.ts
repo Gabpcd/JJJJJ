@@ -36,9 +36,8 @@ test.describe('Sprint 5.5 PR 2 — Annulation candidature soignant', () => {
     const fin = new Date(debut.getTime() + 8 * 3600 * 1000);
     const acceptee = new Date(Date.now() - opts.accepteeOffsetMinutes * 60 * 1000);
 
-    const { data: m, error: mErr } = await adminClient()
-      .from('missions' as any)
-      .insert({
+    const { data: missionId, error: mErr } = await adminClient().rpc('fn_test_seed_mission' as any, {
+      p_data: {
         etablissement_id: etabId,
         soignant_assigne_id: soignantId,
         intitule: `[playwright-test] Annulation candidature ${Date.now()}`,
@@ -47,13 +46,14 @@ test.describe('Sprint 5.5 PR 2 — Annulation candidature soignant', () => {
         service: 'Test',
         debut_le: debut.toISOString(),
         fin_le: fin.toISOString(),
+        duree_heures: 8,
         taux_horaire_base: 25,
         statut: 'ASSIGNEE',
         mode_attribution: 'CANDIDATURE',
         est_asap: opts.estAsap ?? false,
-      })
-      .select('id')
-      .single();
+      },
+    });
+    const m = missionId ? { id: missionId as string } : null;
     if (mErr || !m) {
       console.error('[seed]', mErr?.message);
       return null;

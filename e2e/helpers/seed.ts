@@ -26,9 +26,8 @@ export async function seedMission(opts: {
   const debut = opts.debut || new Date(Date.now() + 7 * 86400000); // J+7
   const fin = opts.fin || new Date(debut.getTime() + 8 * 3600000); // 8h plus tard
 
-  const { data, error } = await adminClient()
-    .from('missions' as any)
-    .insert({
+  const { data: missionId, error } = await adminClient().rpc('fn_test_seed_mission' as any, {
+    p_data: {
       etablissement_id: etabId,
       intitule: opts.intitule || `[playwright-test] Mission ${Date.now()}`,
       description: 'Mission générée par les tests Playwright',
@@ -36,18 +35,18 @@ export async function seedMission(opts: {
       service: 'Test',
       debut_le: debut.toISOString(),
       fin_le: fin.toISOString(),
+      duree_heures: 8,
       taux_horaire_base: opts.tauxHoraire || 25,
       statut: 'OUVERTE',
       mode_attribution: 'CANDIDATURE',
-    })
-    .select('id, etablissement_id')
-    .single();
+    },
+  });
 
   if (error) {
     console.error('[seed] seedMission failed:', error.message);
     return null;
   }
-  return data as { id: string; etablissement_id: string };
+  return { id: missionId as string, etablissement_id: etabId };
 }
 
 /** Crée une candidature pour le compte soignant test sur la mission donnée. */
@@ -77,10 +76,10 @@ export async function markMissionTerminee(missionId: string): Promise<boolean> {
   const soignantId = await userIdByEmail('playwright-soignant@jolene.app');
   if (!soignantId) return false;
 
-  const { error } = await adminClient()
-    .from('missions' as any)
-    .update({ statut: 'TERMINEE', soignant_assigne_id: soignantId })
-    .eq('id', missionId);
+  const { error } = await adminClient().rpc('fn_test_update_mission' as any, {
+    p_mission_id: missionId,
+    p_data: { statut: 'TERMINEE', soignant_assigne_id: soignantId },
+  });
 
   return !error;
 }
