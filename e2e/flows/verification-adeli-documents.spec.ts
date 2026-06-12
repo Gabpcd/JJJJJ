@@ -14,6 +14,14 @@ import { TEST_ACCOUNTS } from '../helpers/auth';
 
 const admin = () => adminClient();
 
+// verify-rpps exempte de captcha Turnstile les appels dont le Bearer est la
+// clé anon LEGACY (token === Deno SUPABASE_ANON_KEY → isAnonKey, sans
+// soignant_id). La clé service_role résolue par le workflow (sb_secret_* v2)
+// ne matche plus l'env legacy de l'edge runtime → captchaRequis=true → 403
+// CAPTCHA_FAILED avant la validation de format. Le workflow playwright-e2e.yml
+// fournit E2E_ANON_KEY → SUPABASE_ANON_KEY précisément pour ce cas.
+const ANON_BEARER = process.env.SUPABASE_ANON_KEY || '';
+
 test.describe('Format ADELI/RPPS invalide → rejeté', () => {
   test('ADELI avec moins de 9 chiffres → ADELI_FORMAT_INVALID', async ({ request }) => {
     const res = await request.post(
@@ -21,7 +29,7 @@ test.describe('Format ADELI/RPPS invalide → rejeté', () => {
       {
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY || ''}`,
+          'Authorization': `Bearer ${ANON_BEARER}`,
         },
         data: { numero_adeli: '12345', prenom: 'Test', nom: 'Test' },
       },
@@ -37,7 +45,7 @@ test.describe('Format ADELI/RPPS invalide → rejeté', () => {
       {
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY || ''}`,
+          'Authorization': `Bearer ${ANON_BEARER}`,
         },
         data: { numero_adeli: 'ABCDEFGHI', prenom: 'Test', nom: 'Test' },
       },
@@ -53,7 +61,7 @@ test.describe('Format ADELI/RPPS invalide → rejeté', () => {
       {
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY || ''}`,
+          'Authorization': `Bearer ${ANON_BEARER}`,
         },
         data: { numero_rpps: '12345', prenom: 'Test', nom: 'Test' },
       },
@@ -69,7 +77,7 @@ test.describe('Format ADELI/RPPS invalide → rejeté', () => {
       {
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY || ''}`,
+          'Authorization': `Bearer ${ANON_BEARER}`,
         },
         data: { numero_rpps: 'ABCDEFGHIJK', prenom: 'Test', nom: 'Test' },
       },
