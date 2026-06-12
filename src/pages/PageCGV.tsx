@@ -5,7 +5,7 @@ import LayoutLegal from '@/components/LayoutLegal';
 const TOC = [
   { id: 'art1', label: 'Article 1 — Objet' },
   { id: 'art2', label: 'Article 2 — Nature des frais de service' },
-  { id: 'art3', label: 'Article 3 — Grille tarifaire dégressive' },
+  { id: 'art3', label: 'Article 3 — Tarification' },
   { id: 'art4', label: 'Article 4 — Bonus de Fidélité Annuel (BFA)' },
   { id: 'art5', label: 'Article 5 — Facturation et paiement' },
   { id: 'art6', label: 'Article 6 — Programme Free Transition' },
@@ -20,7 +20,7 @@ export default function PageCGV() {
       titre="Conditions Générales de Vente"
       dateMaj="12 mars 2026"
       toc={TOC}
-      seoDescription="Conditions Générales de Vente de Jolene. Frais de service, grille tarifaire dégressive, Bonus de Fidélité Annuel, facturation et conditions de paiement."
+      seoDescription="Conditions Générales de Vente de Jolene. Frais de service, tarification, Bonus de Fidélité Annuel, facturation et conditions de paiement."
     >
       {/* Article 1 */}
       <section id="art1">
@@ -43,45 +43,10 @@ export default function PageCGV() {
 
       {/* Article 3 */}
       <section id="art3">
-        <h2 className="text-xl sm:text-2xl font-bold text-foreground mb-4">Article 3 — Grille tarifaire dégressive</h2>
-        <p className="mb-4">Le taux de commission applicable dépend du volume de missions réalisées par l'Établissement au cours du mois calendaire précédent. Il est recalculé automatiquement le 1er de chaque mois :</p>
-
-        <div className="overflow-x-auto mb-4">
-          <table className="w-full border-collapse text-sm">
-            <thead>
-              <tr className="bg-primary text-primary-foreground">
-                <th scope="col" className="px-4 py-3 text-left font-semibold rounded-tl-xl">Palier</th>
-                <th scope="col" className="px-4 py-3 text-left font-semibold">Missions / mois</th>
-                <th scope="col" className="px-4 py-3 text-left font-semibold rounded-tr-xl">Taux de commission</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr className="border-b border-border bg-card">
-                <td className="px-4 py-3 font-medium">🚀 Découverte</td>
-                <td className="px-4 py-3">1 à 9</td>
-                <td className="px-4 py-3 font-semibold">15 %</td>
-              </tr>
-              <tr className="border-b border-border bg-muted/30">
-                <td className="px-4 py-3 font-medium">⭐ Fidèle</td>
-                <td className="px-4 py-3">10 à 29</td>
-                <td className="px-4 py-3 font-semibold">12,5 %</td>
-              </tr>
-              <tr className="border-b border-border bg-card">
-                <td className="px-4 py-3 font-medium">💎 Premium</td>
-                <td className="px-4 py-3">30 à 59</td>
-                <td className="px-4 py-3 font-semibold">10 %</td>
-              </tr>
-              <tr className="bg-muted/30">
-                <td className="px-4 py-3 font-medium rounded-bl-xl">🏆 Partenaire</td>
-                <td className="px-4 py-3">60+</td>
-                <td className="px-4 py-3 font-semibold rounded-br-xl">8 %</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-
-        <p className="mb-3">Le taux applicable est déterminé automatiquement par la Plateforme. En cas de négociation commerciale, un taux fixe peut être convenu contractuellement entre l'Éditeur et l'Établissement.</p>
-        <p>Les Établissements membres d'un Groupe bénéficient du calcul consolidé : le volume de missions est cumulé sur l'ensemble des établissements du Groupe.</p>
+        <h2 className="text-xl sm:text-2xl font-bold text-foreground mb-4">Article 3 — Tarification</h2>
+        <p className="mb-4">L'utilisation de la Plateforme donne lieu à une commission de <strong>15 % (HT)</strong> du montant brut de chaque mission réalisée, facturée à l'Établissement. Aucun abonnement ni frais d'inscription n'est dû.</p>
+        <p className="mb-4">En cas de négociation commerciale, un taux différent peut être convenu contractuellement entre l'Éditeur et l'Établissement (notamment pour les groupes d'établissements) ; il est alors précisé dans les conditions particulières.</p>
+        <p>Aucun frais n'est facturé au Soignant, quel que soit le type de contrat.</p>
       </section>
 
       {/* Article 4 */}
@@ -145,13 +110,13 @@ export default function PageCGV() {
       <section id="art6">
         <h2 className="text-xl sm:text-2xl font-bold text-foreground mb-4">Article 6 — Programme Free Transition</h2>
         <p className="mb-3">Le programme Free Transition permet aux Soignants ayant atteint 3 200 heures cumulées de bénéficier d'un accompagnement vers l'exercice libéral.</p>
-        <p className="mb-3">La prise en charge par Jolene comprend :</p>
+        <p className="mb-3">L'accompagnement comprend :</p>
         <ul className="list-disc pl-6 space-y-2 mb-3">
-          <li>Génération automatique d'un guide personnalisé (démarches URSSAF, ARS, Ordre professionnel)</li>
-          <li>Accès aux outils partenaires à tarif préférentiel (comptabilité Indy, banque Qonto, assurance MACSF)</li>
-          <li>Prise en charge partielle des frais d'installation, sous conditions d'éligibilité</li>
+          <li>Le suivi en temps réel du compteur d'heures (missions réalisées via la Plateforme et heures externes déclarées sur justificatifs)</li>
+          <li>La génération d'un guide personnalisé des démarches (URSSAF, ARS, Ordre professionnel, CPAM)</li>
+          <li>Une attestation récapitulative des heures effectuées via la Plateforme</li>
         </ul>
-        <p>Le montant et le taux de prise en charge sont définis par l'Éditeur et communiqués au Soignant au moment de l'activation du programme. Ce programme est proposé à titre gracieux et peut être modifié ou interrompu à tout moment.</p>
+        <p>Ce programme est proposé à titre gracieux et peut être modifié ou interrompu à tout moment. Il ne comporte aucun engagement de prise en charge financière de l'Éditeur.</p>
       </section>
 
       {/* Article 7 */}

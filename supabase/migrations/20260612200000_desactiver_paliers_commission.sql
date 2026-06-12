@@ -1,0 +1,12 @@
+-- Décision produit (Gabrielle, 12/06/2026) : le modèle de commission
+-- dégressive par paliers de volume est ABANDONNÉ — commission unique de
+-- 15 % (taux négocié possible par établissement/groupe).
+--
+-- La facturation n'a JAMAIS dépendu des paliers : toutes les fonctions
+-- résolvent COALESCE(taux_commission_negocie, 15) (vérifié sur les
+-- définitions prod du 12/06). Les paliers n'étaient utilisés que pour
+-- l'affichage (page Tarifs, badge dashboard étab, encart formulaire
+-- mission) — affichages retirés dans la même PR.
+--
+-- Désactivation réversible (les lignes sont conservées, est_actif=false).
+UPDATE public.paliers_commission SET est_actif = false;

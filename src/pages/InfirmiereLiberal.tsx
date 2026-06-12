@@ -4,27 +4,31 @@ import { SEOPageLayout } from '@/components/SEOPageLayout';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { CheckCircle, Gift } from 'lucide-react';
 
-const paliers = [
-  { heures: '800h', taux: '25%', desc: 'Prise en charge de 25% des frais d\'installation (RCP, comptabilité).' },
-  { heures: '1 600h', taux: '50%', desc: 'Prise en charge de 50% incluant les frais bancaires professionnels.' },
-  { heures: '2 400h', taux: '75%', desc: 'Prise en charge de 75% avec accompagnement personnalisé.' },
-  { heures: '3 200h', taux: '100%', desc: 'Prise en charge totale. Transition gratuite vers le libéral.' },
+// Jalons du compteur 3 200 h — ce que Jolene fait réellement à chaque étape.
+// Les promesses de prise en charge financière « Free Transition » (25/50/75/
+// 100 % des frais) ont été retirées : aucun programme de ce type n'est
+// implémenté dans le produit.
+const jalons = [
+  { heures: '800 h', titre: 'Premier quart du parcours', desc: 'Votre compteur progresse à chaque mission validée — suivi heure par heure depuis votre tableau de bord.' },
+  { heures: '1 600 h', titre: 'Mi-parcours', desc: "Vous pouvez déclarer vos heures effectuées hors Jolene (justificatifs à l'appui) pour compléter votre compteur." },
+  { heures: '2 400 h', titre: 'Dernière ligne droite', desc: 'Préparez vos démarches : Ordre, CPAM, URSSAF, assurance RCP, compte professionnel — guidées étape par étape.' },
+  { heures: '3 200 h', titre: 'Éligibilité atteinte', desc: 'Vous justifiez des heures requises par la convention nationale — attestation de vos heures Jolene disponible.' },
 ];
 
 const etapesInstallation = [
   { titre: 'Inscription à l\'Ordre Infirmier', desc: 'Demande d\'inscription au tableau de l\'Ordre National des Infirmiers de votre département.' },
   { titre: 'Enregistrement CPAM', desc: 'Obtention de votre numéro de facturation auprès de la Caisse Primaire d\'Assurance Maladie.' },
   { titre: 'Immatriculation URSSAF', desc: 'Création de votre statut professionnel libéral et obtention de votre numéro SIRET.' },
-  { titre: 'Assurance RCP', desc: 'Souscription d\'une assurance Responsabilité Civile Professionnelle obligatoire (partenaire MACSF).' },
-  { titre: 'Compte bancaire professionnel', desc: 'Ouverture d\'un compte dédié à votre activité libérale (partenaire Qonto).' },
+  { titre: 'Assurance RCP', desc: 'Souscription d\'une assurance Responsabilité Civile Professionnelle obligatoire.' },
+  { titre: 'Compte bancaire professionnel', desc: 'Ouverture d\'un compte dédié à votre activité libérale.' },
 ];
 
 const faq = [
   { q: 'Combien de temps faut-il pour atteindre 3 200 heures ?', a: 'En effectuant des remplacements réguliers via Jolene, vous pouvez atteindre 3 200 heures en 18 à 24 mois. Notre tableau de bord vous permet de suivre votre progression en temps réel.' },
-  { q: 'Les heures effectuées en dehors de Jolene comptent-elles ?', a: 'Oui. Vous pouvez déclarer vos heures externes en fournissant les justificatifs (attestations employeur, bulletins de paie). Elles sont validées par notre équipe sous 48h.' },
-  { q: 'Qu\'est-ce que le programme Free Transition ?', a: 'Free Transition est notre programme exclusif qui prend en charge progressivement vos frais d\'installation en libéral (comptabilité, assurance, banque) en fonction de vos heures cumulées sur la plateforme.' },
+  { q: 'Les heures effectuées en dehors de Jolene comptent-elles ?', a: 'Oui. Vous pouvez déclarer vos heures externes en fournissant les justificatifs (attestations employeur, bulletins de paie). Elles sont vérifiées sur justificatifs avant d\'être ajoutées à votre compteur.' },
+  { q: "Comment Jolene m'aide-t-il à passer en libéral ?", a: "Jolene suit votre compteur 3 200 heures en temps réel (missions Jolene + heures externes déclarées), vous fournit une attestation de vos heures et vous guide pas à pas dans les démarches d'installation (Ordre, CPAM, URSSAF, RCP, banque)." },
   { q: 'Faut-il un diplôme spécifique pour s\'installer en libéral ?', a: 'Vous devez être titulaire du Diplôme d\'État d\'Infirmier (DEI) et justifier de 3 200 heures d\'exercice en tant que salarié sur les 6 dernières années (ou 2 400h sur 4 ans dans certains cas).' },
-  { q: 'Jolene m\'accompagne-t-il après l\'installation ?', a: 'Oui. Nos partenaires Indy (comptabilité), MACSF (assurance) et Qonto (banque) proposent des offres préférentielles aux soignants Jolene, avec un accompagnement dédié.' },
+  { q: "Jolene m'accompagne-t-il après l'installation ?", a: "Oui. Une fois installé·e en libéral, vous continuez d'accéder aux missions Jolene ouvertes à l'exercice libéral, avec la facturation de vos honoraires gérée par la plateforme." },
 ];
 
 export default function InfirmiereLiberal() {
@@ -32,12 +36,12 @@ export default function InfirmiereLiberal() {
     <>
       <SEOHead
         title="Devenir infirmière libérale | Guide complet"
-        description="Découvrez comment passer infirmière libérale avec Jolene : parcours 3200h, programme Free Transition, étapes d'installation CPAM, Ordre, URSSAF. Guide complet."
+        description="Découvrez comment passer infirmière libérale avec Jolene : parcours 3 200 h suivi heure par heure, étapes d'installation CPAM, Ordre, URSSAF. Guide complet."
         url="https://jolene.app/infirmiere-liberale"
       />
       <SEOPageLayout
         heroTitle="Passer infirmière libérale avec Jolene"
-        heroSubtitle="Cumulez vos 3 200 heures, bénéficiez de notre programme Free Transition et installez-vous en libéral en toute sérénité."
+        heroSubtitle="Cumulez vos 3 200 heures, suivez votre progression heure par heure et installez-vous en libéral en toute sérénité."
         ctaText="Commencer mon parcours"
         ctaHref="/inscription/soignant"
       >
@@ -52,11 +56,11 @@ export default function InfirmiereLiberal() {
               <div className="relative">
                 <div className="absolute left-5 top-0 bottom-0 w-0.5 bg-border" />
                 <div className="space-y-8">
-                  {paliers.map((p, i) => (
+                  {jalons.map((p, i) => (
                     <div key={p.heures} className="flex gap-5 relative">
-                      <div className="w-10 h-10 rounded-full bg-primary text-primary-foreground flex items-center justify-center font-bold text-sm shrink-0 z-10">{p.heures}</div>
+                      <div className="w-10 h-10 rounded-full bg-primary text-primary-foreground flex items-center justify-center font-bold text-base shrink-0 z-10">{i + 1}</div>
                       <div>
-                        <h3 className="font-semibold text-foreground">Palier {i + 1} — {p.taux} pris en charge</h3>
+                        <h3 className="font-semibold text-foreground">{p.heures} — {p.titre}</h3>
                         <p className="text-sm text-muted-foreground mt-1">{p.desc}</p>
                       </div>
                     </div>
@@ -67,24 +71,23 @@ export default function InfirmiereLiberal() {
           </div>
         </section>
 
-        {/* Free Transition */}
+        {/* Accompagnement Jolene */}
         <section className="py-16 md:py-20 bg-muted/50">
           <div className="max-w-4xl mx-auto px-4">
-            <div className="flex items-center justify-center gap-3 mb-8">
-              <Gift className="h-8 w-8 text-primary" />
-              <h2 className="text-2xl md:text-3xl font-bold text-foreground">Free Transition</h2>
-            </div>
-            <p className="text-center text-muted-foreground max-w-2xl mx-auto mb-10">
-              Notre programme exclusif prend en charge progressivement vos frais d'installation en libéral : comptabilité, assurance RCP, compte bancaire professionnel et accompagnement administratif.
-            </p>
-            <div className="grid md:grid-cols-4 gap-4">
-              {paliers.map((p, i) => (
-                <div key={p.heures} className="bg-card border border-border rounded-xl p-5 text-center">
-                  <p className="text-2xl font-extrabold text-primary mb-1">{p.taux}</p>
-                  <p className="text-sm font-semibold text-foreground mb-2">à {p.heures}</p>
-                  <p className="text-xs text-muted-foreground">{p.desc}</p>
-                </div>
-              ))}
+            <h2 className="text-2xl md:text-3xl font-bold text-foreground text-center mb-8">Comment Jolene vous accompagne</h2>
+            <div className="grid md:grid-cols-3 gap-4">
+              <div className="bg-card border border-border rounded-xl p-5 text-center">
+                <p className="text-sm font-semibold text-foreground mb-2">Compteur en temps réel</p>
+                <p className="text-xs text-muted-foreground">Chaque mission validée alimente votre compteur 3 200 h, visible heure par heure depuis votre tableau de bord.</p>
+              </div>
+              <div className="bg-card border border-border rounded-xl p-5 text-center">
+                <p className="text-sm font-semibold text-foreground mb-2">Heures externes comptabilisées</p>
+                <p className="text-xs text-muted-foreground">Déclarez vos heures effectuées hors Jolene avec vos justificatifs (attestations employeur, bulletins de paie).</p>
+              </div>
+              <div className="bg-card border border-border rounded-xl p-5 text-center">
+                <p className="text-sm font-semibold text-foreground mb-2">Guide des démarches</p>
+                <p className="text-xs text-muted-foreground">Ordre, CPAM, URSSAF, assurance RCP, compte professionnel : les étapes détaillées, dans le bon ordre.</p>
+              </div>
             </div>
           </div>
         </section>

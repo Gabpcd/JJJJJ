@@ -11,7 +11,7 @@ const avantages = [
   { icon: Euro, titre: 'Rémunération transparente', desc: 'Taux horaire affiché avant candidature. Zéro frais cachés, paiement garanti sous 7 jours.' },
   { icon: Clock, titre: 'Flexibilité des horaires', desc: 'Choisissez vos missions, vos jours et vos créneaux. Vous gardez le contrôle de votre emploi du temps.' },
   { icon: ShieldCheck, titre: 'Contrats conformes', desc: 'CDD ou vacation générés automatiquement, conformes au Code du Travail et signés électroniquement.' },
-  { icon: TrendingUp, titre: 'Évolution de carrière', desc: 'Missions variées et, pour les professions autorisées en libéral, cumul de vos heures avec le programme Free Transition.' },
+  { icon: TrendingUp, titre: 'Évolution de carrière', desc: 'Missions variées et, pour les professions autorisées en libéral, cumul de vos heures suivi heure par heure vers les 3 200 h.' },
 ];
 
 const faqParProfession: Record<string, { q: string; a: string }[]> = {

@@ -1,23 +1,23 @@
-import { Tag, TrendingDown } from 'lucide-react';
+import { Tag } from 'lucide-react';
 
 interface EncartCommissionDegressifProps {
   netEstime: number;
   tauxActuel: number;
-  palierNom: string;
+  /** Conservé pour compatibilité d'appel — n'est plus affiché (modèle par paliers abandonné). */
+  palierNom?: string;
 }
 
-export function EncartCommissionDegressif({ netEstime, tauxActuel, palierNom }: EncartCommissionDegressifProps) {
+/**
+ * Encart commission : taux unique de 15 % (ou taux négocié de l'établissement).
+ * Le modèle « paliers dégressifs par volume » a été abandonné (décision
+ * produit 12/06/2026) — la facturation applique COALESCE(taux_negocie, 15).
+ */
+export function EncartCommissionDegressif({ netEstime, tauxActuel }: EncartCommissionDegressifProps) {
   if (netEstime <= 0) return null;
 
   const commissionHT = netEstime * (tauxActuel / 100);
   const tva = commissionHT * 0.20;
   const commissionTTC = commissionHT + tva;
-
-  // Comparaison avec taux Découverte (15%)
-  const tauxDecouv = 15;
-  const commissionDecouv = netEstime * (tauxDecouv / 100) * 1.20;
-  const economie = commissionDecouv - commissionTTC;
-  const aEconomie = tauxActuel < tauxDecouv;
 
   return (
     <div className="bg-gradient-to-r from-accent/5 to-primary/5 border border-accent/20 rounded-2xl p-5">
@@ -27,7 +27,8 @@ export function EncartCommissionDegressif({ netEstime, tauxActuel, palierNom }: 
       </div>
 
       <p className="text-sm text-muted-foreground mb-3">
-        Votre palier actuel : <span className="font-semibold text-foreground">{palierNom} ({tauxActuel}%)</span>
+        Taux appliqué : <span className="font-semibold text-foreground">{tauxActuel}%</span>
+        {tauxActuel !== 15 && <span className="text-xs"> (taux négocié)</span>}
       </p>
 
       <div className="space-y-1.5 text-sm">
@@ -48,19 +49,6 @@ export function EncartCommissionDegressif({ netEstime, tauxActuel, palierNom }: 
           <span className="font-bold text-primary">~{commissionTTC.toFixed(2)} €</span>
         </div>
       </div>
-
-      {aEconomie && economie > 0 && (
-        <div className="mt-3 flex items-start gap-2 bg-success/10 border border-success/20 rounded-xl p-3">
-          <TrendingDown className="h-4 w-4 text-success mt-0.5 shrink-0" />
-          <p className="text-xs text-success">
-            Avec le palier Découverte ({tauxDecouv}%), cette commission aurait été de{' '}
-            <span className="font-bold">{commissionDecouv.toFixed(2)} €</span> — vous économisez{' '}
-            <span className="font-bold">{economie.toFixed(2)} €</span> !
-          </p>
-        </div>
-      )}
-
-      <p className="text-[10px] text-muted-foreground italic mt-2">Simulation à titre indicatif.</p>
     </div>
   );
 }

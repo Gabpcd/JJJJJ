@@ -52,7 +52,7 @@ export default function PharmacieRemplacement() {
             <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
               {[
                 { icon: UserCheck, titre: 'Pharmaciens vérifiés', desc: 'Diplôme, inscription à l\'Ordre et assurance RCP contrôlés.' },
-                { icon: Clock, titre: 'Disponibilité rapide', desc: 'Candidatures en quelques heures, même pour les urgences.' },
+                { icon: Clock, titre: 'Disponibilité rapide', desc: 'Recevez les candidatures dès la publication, même en urgence.' },
                 { icon: Building2, titre: 'Partenaire Leader Santé', desc: 'Tarifs préférentiels pour les groupements et réseaux de pharmacies.' },
                 { icon: ShieldCheck, titre: 'Contrats conformes', desc: 'CDD de remplacement générés automatiquement et signés en ligne.' },
               ].map((item) => (

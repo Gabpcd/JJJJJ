@@ -68,7 +68,7 @@ Jolene est partenaire de **Qonto**, qui propose une offre spéciale pour les pro
 
 ## En résumé
 
-Le passage en libéral demande de la préparation, mais les démarches sont bien balisées. Avec le programme **Free Transition** de Jolene, vos frais d'installation peuvent être pris en charge jusqu'à 100% en fonction de vos heures cumulées sur la plateforme. N'hésitez pas à consulter notre page dédiée pour en savoir plus.`,
+Le passage en libéral demande de la préparation, mais les démarches sont bien balisées. Jolene suit votre compteur 3 200 heures en temps réel et vous guide pas à pas dans les étapes d'installation (Ordre, CPAM, URSSAF, assurance, banque). N'hésitez pas à consulter notre page dédiée pour en savoir plus.`,
   },
   {
     slug: 'loi-rist-2025-expliquee',
@@ -224,59 +224,6 @@ Notre plateforme automatise l'intégralité du processus :
 - Signature électronique sécurisée
 
 Le CDD est l'outil contractuel idéal pour le staffing médical. Jolene le rend accessible et conforme, sans paperasse.`,
-  },
-  {
-    slug: 'free-transition-liberal',
-    titre: 'Free Transition : Jolene finance votre passage en libéral',
-    extrait: 'Découvrez comment Jolene prend en charge jusqu\'à 100% de vos frais d\'installation en libéral grâce au programme Free Transition.',
-    date: '2025-11-28',
-    tempsLecture: 5,
-    tag: 'Libéral',
-    contenu: `## Le passage en libéral : un investissement
-
-S'installer en libéral représente un coût non négligeable. Entre l'assurance RCP, la comptabilité, le compte bancaire professionnel, les frais d'inscription à l'Ordre et l'équipement de départ, la facture peut rapidement atteindre **2 000 à 5 000 €**. C'est un frein majeur pour de nombreux soignants qui hésitent à franchir le pas.
-
-C'est pourquoi nous avons créé **Free Transition**, un programme unique qui prend en charge progressivement vos frais d'installation.
-
-## Les 4 paliers de prise en charge
-
-Free Transition fonctionne sur un système de paliers basé sur vos heures cumulées sur Jolene :
-
-### Palier 1 — 800 heures : 25% pris en charge
-Dès 800 heures cumulées, Jolene prend en charge **25% de vos frais d'installation**. Cela couvre typiquement une partie de votre assurance RCP et de votre premier bilan comptable.
-
-### Palier 2 — 1 600 heures : 50% pris en charge
-À mi-parcours, la prise en charge monte à **50%**. Vous bénéficiez en plus des frais bancaires professionnels offerts pendant 6 mois grâce à notre partenariat avec Qonto.
-
-### Palier 3 — 2 400 heures : 75% pris en charge
-Les trois quarts de vos frais sont couverts. Vous accédez également à un **accompagnement personnalisé** avec un conseiller dédié qui vous guide dans vos démarches administratives (CPAM, Ordre, URSSAF).
-
-### Palier 4 — 3 200 heures : 100% pris en charge
-**Transition gratuite.** L'intégralité de vos frais d'installation est prise en charge par Jolene. Vous n'avez plus qu'à exercer.
-
-## Quels frais sont couverts ?
-
-Le programme Free Transition couvre les postes de dépenses suivants :
-
-- **Assurance RCP** : via notre partenaire MACSF, avec des tarifs négociés (100-300 €/an)
-- **Comptabilité** : abonnement Indy (anciennement Georges) pour la comptabilité en ligne (20-30 €/mois)
-- **Compte bancaire professionnel** : offre Qonto dédiée aux professionnels de santé
-- **Inscription à l'Ordre** : frais d'inscription au tableau (environ 75 €)
-- **Accompagnement administratif** : aide à la constitution des dossiers CPAM et URSSAF
-
-## Témoignage : Sophie, IDE passée en libéral
-
-*« J'ai découvert Jolene en cherchant des remplacements pour valider mes 3 200 heures. En 20 mois de missions régulières, j'ai atteint le palier 4. Le programme Free Transition a couvert tous mes frais d'installation : RCP, comptabilité, compte bancaire. Mon conseiller Jolene m'a même aidée à remplir mon dossier CPAM. Aujourd'hui, je suis installée en libéral dans le Val-de-Marne et je n'ai pas déboursé un centime pour ma transition. »*
-
-**— Sophie M., IDEL, Val-de-Marne**
-
-## Comment en bénéficier ?
-
-C'est simple : il suffit de **créer votre compte soignant sur Jolene** et de commencer à effectuer des missions. Votre compteur d'heures se met à jour automatiquement. Dès que vous atteignez un palier, vous êtes notifié et la prise en charge s'active.
-
-Vous pouvez suivre votre progression en temps réel dans la section **Parcours 3 200h** de votre tableau de bord. Et si vous avez déjà effectué des heures en dehors de Jolene, vous pouvez les déclarer et les faire valider.
-
-Le libéral n'a jamais été aussi accessible. Lancez-vous.`,
   },
   {
     slug: 'aide-soignante-interim-guide',
@@ -482,7 +429,6 @@ const articleGradients: Record<string, string> = {
   'loi-rist-2025-expliquee': 'from-indigo-500 via-purple-500 to-pink-400',
   'remplacement-pharmacie-guide': 'from-emerald-400 via-teal-400 to-cyan-300',
   'cdd-contrat-usage-sante': 'from-violet-500 via-fuchsia-500 to-pink-400',
-  'free-transition-liberal': 'from-amber-400 via-orange-400 to-rose-400',
   'aide-soignante-interim-guide': 'from-cyan-400 via-sky-400 to-blue-400',
   'taux-horaire-infirmier-2026': 'from-teal-500 via-emerald-400 to-green-400',
   'ehpad-recrutement-soignants': 'from-rose-400 via-pink-400 to-fuchsia-400',
@@ -493,7 +439,6 @@ const articleIcons: Record<string, string> = {
   'loi-rist-2025-expliquee': 'Scale',
   'remplacement-pharmacie-guide': 'Pill',
   'cdd-contrat-usage-sante': 'FileText',
-  'free-transition-liberal': 'Rocket',
   'aide-soignante-interim-guide': 'HeartHandshake',
   'taux-horaire-infirmier-2026': 'Euro',
   'ehpad-recrutement-soignants': 'Building2',

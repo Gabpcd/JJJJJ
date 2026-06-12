@@ -1,71 +1,76 @@
-import { usePageTitle } from '@/hooks/usePageTitle';
-import React, { useEffect, useState } from 'react';
-import { SEOHead } from '@/components/SEOHead';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft } from 'lucide-react';
-import { GrilleTarifaire } from '@/components/GrilleTarifaire';
-import { ChargementPage } from '@/components/ChargementPage';
-import { supabase } from '@/integrations/supabase/client';
+import { ArrowLeft, Check } from 'lucide-react';
+import { SEOHead } from '@/components/SEOHead';
+import { usePageTitle } from '@/hooks/usePageTitle';
+
+const INCLUS = [
+  'Publication de missions illimitée',
+  'Soignants vérifiés (identité, diplômes, RPPS, RCP)',
+  'Contrats générés et signés électroniquement',
+  'Pointage GPS et suivi des présences',
+  'Facturation automatique (Chorus Pro pour le secteur public)',
+  'Aucun abonnement, aucun frais caché',
+];
 
 export default function Tarifs() {
   usePageTitle('Tarifs');
   const navigate = useNavigate();
-  const [paliers, setPaliers] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    supabase
-      .from('paliers_commission')
-      .select('id, nom, taux_commission, missions_min, missions_max, ordre')
-      .eq('est_actif', true)
-      .order('ordre', { ascending: true })
-      .then(({ data, error }) => {
-        if (!error) setPaliers(data ?? []);
-        setLoading(false);
-      });
-  }, []);
-
-  if (loading) return <ChargementPage />;
 
   return (
     <>
       <SEOHead
-        title="Tarifs Jolene | Commission dégressive"
-        description="Découvrez la grille tarifaire Jolene : commission dégressive à partir de 15%, facturation transparente, pas de frais cachés."
+        title="Tarifs Jolene | Commission unique de 15 %"
+        description="Une commission unique de 15 % sur le montant de la mission, sans abonnement ni frais caché. Taux négocié possible pour les groupes."
         url="https://jolene.app/tarifs"
       />
-    <div className="min-h-[100dvh] bg-background">
-      {/* Header */}
-      <header className="border-b border-border bg-card py-4 px-4">
-        <div className="max-w-6xl mx-auto flex items-center justify-between">
-          <button onClick={() => navigate('/')} className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors">
-            <ArrowLeft className="h-4 w-4" /> Retour
-          </button>
-          <button onClick={() => navigate('/inscription/etablissement')} className="btn-primary text-sm">
-            S'inscrire gratuitement
-          </button>
-        </div>
-      </header>
+      <div className="min-h-[100dvh] bg-background flex flex-col">
+        <header className="py-4 px-4 border-b border-border bg-card">
+          <div className="max-w-6xl mx-auto flex items-center justify-between">
+            <button onClick={() => navigate('/')} className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors">
+              <ArrowLeft className="h-4 w-4" /> Retour
+            </button>
+            <button onClick={() => navigate('/inscription/etablissement')} className="btn-primary text-sm">
+              S'inscrire gratuitement
+            </button>
+          </div>
+        </header>
 
-      {/* Content */}
-      <main className="max-w-6xl mx-auto px-4 py-16">
-        <div className="text-center mb-12">
-          <h1 className="text-3xl md:text-4xl font-black text-foreground mb-3">
-            Nos tarifs — Transparence totale
-          </h1>
-          <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-            Une commission dégressive qui récompense votre fidélité. Plus vous publiez, moins vous payez.
+        <main className="flex-1 max-w-3xl mx-auto px-4 py-16 w-full">
+          <div className="text-center mb-12">
+            <h1 className="text-3xl md:text-4xl font-black text-foreground mb-3">
+              Nos tarifs — Transparence totale
+            </h1>
+            <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
+              Une commission unique sur le montant de la mission. Pas d'abonnement, pas de frais caché, pas de surprise.
+            </p>
+          </div>
+
+          <div className="card-base text-center p-8 md:p-10">
+            <p className="text-sm font-semibold uppercase tracking-widest text-muted-foreground mb-2">Commission Jolene</p>
+            <p className="text-6xl font-black text-primary mb-2">15 %</p>
+            <p className="text-sm text-muted-foreground mb-8">
+              du montant brut de la mission, facturée à l'établissement.
+              <br />Taux négocié possible pour les groupes — <a href="mailto:bonjour@jolene.app" className="text-primary underline">contactez-nous</a>.
+            </p>
+            <ul className="text-left max-w-md mx-auto space-y-2.5">
+              {INCLUS.map((item) => (
+                <li key={item} className="flex items-start gap-2.5 text-sm text-foreground">
+                  <Check className="h-4 w-4 text-success shrink-0 mt-0.5" />
+                  {item}
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          <p className="text-center text-xs text-muted-foreground mt-6">
+            Aucun frais pour les soignants, quel que soit le contrat.
           </p>
-        </div>
+        </main>
 
-        <GrilleTarifaire paliers={paliers} />
-      </main>
-
-      {/* Footer */}
-      <footer className="py-8 text-center text-sm text-muted-foreground border-t border-border bg-card">
-        <p>© 2026 Jolene SAS — Conforme RGPD · Code du Travail</p>
-      </footer>
-    </div>
+        <footer className="py-8 text-center text-sm text-muted-foreground border-t border-border bg-card">
+          <p>© 2026 Jolene SAS — Conforme RGPD · Code du Travail</p>
+        </footer>
+      </div>
     </>
   );
 }
