@@ -12,6 +12,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { FooterLegal } from '@/components/FooterLegal';
 import { AuthLayout } from '@/components/AuthLayout';
 import { CaptchaTurnstile } from '@/components/CaptchaTurnstile';
+import { SwitchTypeInscription } from '@/components/inscription/SwitchTypeInscription';
 
 function GeoAutoEtab({ onResult }: { onResult: (lat: number, lng: number) => void }) {
   const [asked, setAsked] = useState(false);
@@ -156,6 +157,7 @@ export default function InscriptionEtablissement() {
           <span className="text-xl font-bold text-rose">Jolene</span>
         </div>
         <h1 className="text-xl font-bold text-foreground text-center mb-2">Inscription Établissement</h1>
+        <SwitchTypeInscription actif="etablissement" />
 
         <div className="flex items-center justify-center gap-0 mb-2">
           {[1, 2, 3].map((n) => (

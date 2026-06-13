@@ -20,6 +20,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { logger } from '@/lib/logger';
 import { BoutonProSanteConnect } from '@/components/BoutonProSanteConnect';
 import { ApercuMarche } from '@/components/inscription/ApercuMarche';
+import { SwitchTypeInscription } from '@/components/inscription/SwitchTypeInscription';
 
 
 /**
@@ -379,6 +380,7 @@ export default function InscriptionSoignant() {
           <span className="text-xl font-bold text-rose">Jolene</span>
         </div>
         <h1 className="text-xl font-bold text-foreground text-center mb-2">Inscription Soignant</h1>
+        <SwitchTypeInscription actif="soignant" />
 
         {/* Stepper honnête : le parcours réel a 4 étapes (Session E-1 — le
             stepper à 2 ronds laissait croire que tout s'arrêtait au compte,

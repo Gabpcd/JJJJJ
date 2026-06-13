@@ -73,8 +73,8 @@ export default function PageMentionsLegales() {
       <section id="contact">
         <h2 className="text-xl sm:text-2xl font-bold text-foreground mb-4">5. Contact</h2>
         <div className="bg-muted/50 border border-border rounded-xl p-5 space-y-2">
-          <p><strong className="text-foreground">Contact général :</strong> <a href="mailto:contact@jolene.app" className="text-primary underline">contact@jolene.app</a></p>
-          <p><strong className="text-foreground">Délégué à la protection des données (DPO) :</strong> <a href="mailto:dpo@jolene.app" className="text-primary underline">dpo@jolene.app</a></p>
+          <p><strong className="text-foreground">Contact général :</strong> <a href="mailto:support@jolene.app" className="text-primary underline">support@jolene.app</a></p>
+          <p><strong className="text-foreground">Délégué à la protection des données (DPO) :</strong> <a href="mailto:support@jolene.app" className="text-primary underline">support@jolene.app</a></p>
         </div>
         <p className="mt-4 text-muted-foreground">Pour toute question relative au fonctionnement de la Plateforme, à la protection de vos données personnelles ou à l'exercice de vos droits, n'hésitez pas à nous contacter aux adresses ci-dessus.</p>
       </section>
