@@ -38,8 +38,6 @@ const Tarifs = lazy(() => import("./pages/Tarifs"));
 const DevenirSoignant = lazy(() => import("./pages/DevenirSoignant"));
 const RecruterSoignants = lazy(() => import("./pages/RecruterSoignants"));
 const InfirmiereLiberal = lazy(() => import("./pages/InfirmiereLiberal"));
-const BlogListe = lazy(() => import("./pages/BlogListe"));
-const BlogArticle = lazy(() => import("./pages/BlogArticle"));
 const VilleLanding = lazy(() => import("./pages/VilleLanding"));
 const ProfessionLanding = lazy(() => import("./pages/ProfessionLanding"));
 const MissionPublique = lazy(() => import("./pages/MissionPublique"));
@@ -201,8 +199,6 @@ function AppRoutes() {
           <Route path="/devenir-soignant" element={<DevenirSoignant />} />
           <Route path="/recruter-soignants" element={<RecruterSoignants />} />
           <Route path="/infirmiere-liberale" element={<InfirmiereLiberal />} />
-          <Route path="/blog" element={<BlogListe />} />
-          <Route path="/blog/:slug" element={<BlogArticle />} />
           <Route path="/emploi-soignant/:ville" element={<VilleLanding />} />
           <Route path="/metier/:profession" element={<ProfessionLanding />} />
           <Route path="/mission/:id" element={<MissionPublique />} />
