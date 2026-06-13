@@ -93,7 +93,6 @@ export function SEOPageLayout({ children, heroTitle, heroSubtitle, ctaText, ctaH
                 <li><a href="/devenir-soignant" className="hover:text-foreground transition-colors">Devenir soignant</a></li>
                 <li><a href="/recruter-soignants" className="hover:text-foreground transition-colors">Recruter des soignants</a></li>
                 <li><a href="/infirmiere-liberale" className="hover:text-foreground transition-colors">Passer en libéral</a></li>
-                <li><a href="/pharmacie-remplacement" className="hover:text-foreground transition-colors">Remplacement pharmacie</a></li>
                 <li><a href="/blog" className="hover:text-foreground transition-colors">Blog</a></li>
               </ul>
             </div>

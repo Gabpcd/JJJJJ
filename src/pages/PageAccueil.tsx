@@ -482,37 +482,9 @@ export default function PageAccueil() {
         </div>
       </section>
 
-      {/* ═══ Section 5 — Confiance ═══ */}
+      {/* ═══ Section 5 — Conformité ═══ */}
       <section className="py-16 md:py-20 bg-background">
         <div className="max-w-5xl mx-auto px-4">
-          <RevealOnScroll>
-            <p className="text-sm font-semibold text-muted-foreground uppercase tracking-widest text-center mb-8">Ils nous font confiance</p>
-          </RevealOnScroll>
-          <RevealOnScroll delay={100}>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-2xl mx-auto mb-10">
-              {/* Carte GLS */}
-              <div className="flex items-center gap-4 rounded-xl border border-border bg-card p-5">
-                <div className="w-14 h-14 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
-                  <span className="text-lg font-extrabold text-primary tracking-tight">GLS</span>
-                </div>
-                <div>
-                  <p className="font-bold text-foreground text-sm">Groupe Leader Santé</p>
-                  <p className="text-xs text-muted-foreground">Réseau de 600+ pharmacies d'officine</p>
-                </div>
-              </div>
-              {/* Carte CB */}
-              <div className="flex items-center gap-4 rounded-xl border border-border bg-card p-5">
-                <div className="w-14 h-14 rounded-xl bg-rose/10 flex items-center justify-center shrink-0">
-                  <span className="text-lg font-extrabold text-rose tracking-tight">CB</span>
-                </div>
-                <div>
-                  <p className="font-bold text-foreground text-sm">Clinique des Bluets</p>
-                  <p className="text-xs text-muted-foreground">Maternité et chirurgie — Paris</p>
-                </div>
-              </div>
-            </div>
-            <p className="text-xs text-muted-foreground text-center mb-10">Lettre d'intention signée</p>
-          </RevealOnScroll>
           <RevealOnScroll delay={200}>
             <div className="flex flex-wrap justify-center gap-4">
               {['Conforme RGPD', 'Conforme Code du Travail', 'Signature électronique eIDAS'].map((badge) => (
@@ -607,7 +579,6 @@ export default function PageAccueil() {
                 <li><a href="/devenir-soignant" className="hover:text-foreground transition-colors">Devenir soignant</a></li>
                 <li><a href="/recruter-soignants" className="hover:text-foreground transition-colors">Recruter des soignants</a></li>
                 <li><a href="/infirmiere-liberale" className="hover:text-foreground transition-colors">Passer en libéral</a></li>
-                <li><a href="/pharmacie-remplacement" className="hover:text-foreground transition-colors">Remplacement pharmacie</a></li>
                 <li><a href="/blog" className="hover:text-foreground transition-colors">Blog</a></li>
               </ul>
             </div>
