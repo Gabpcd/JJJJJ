@@ -896,8 +896,8 @@ function ProspectionEtab({ onAjouter }: { onAjouter: () => void }) {
       {emailEdit && (
         <FormPanel titre="Email de l'établissement" onClose={() => setEmailEdit(null)} onSave={sauverEmail}>
           <p className="text-xs text-muted-foreground mb-2">
-            La base officielle FINESS ne fournit pas les emails. Demandez-le pendant l'appel —
-            une fois saisi, l'envoi de l'email de prospection se fait en 1 clic.
+            L'enrichissement Annuaire Santé remplit automatiquement les emails trouvables (en fond, en continu).
+            Pour ceux qu'il ne trouve pas, demandez-le à l'appel — une fois saisi, l'envoi se fait en 1 clic.
           </p>
           <Champ label="Adresse email">
             <Input type="email" value={emailEdit.valeur} onChange={e => setEmailEdit({ ...emailEdit, valeur: e.target.value })} placeholder="ex : direction@nom-etablissement.fr" />
@@ -977,8 +977,9 @@ function EnvoiMasseBar({ cible }: { cible: 'ETABLISSEMENT' | 'SOIGNANT' }) {
   return (
     <div className="rounded-xl border border-primary/30 bg-primary/5 p-3 mb-4 flex flex-col sm:flex-row sm:items-center gap-2">
       <p className="text-xs text-muted-foreground flex-1">
-        ✉️ <strong className="text-foreground">{aEnvoyer}</strong> prospect(s) avec email jamais contacté(s).
-        {aEnvoyer === 0 && ' Saisissez les emails pendant vos appels (bouton + Email sur chaque carte) — ils apparaîtront ici.'}
+        ✉️ <strong className="text-foreground">{aEnvoyer}</strong> prospect(s) <strong>avec un email collecté</strong>, jamais contacté(s) — prêts pour l'envoi groupé.
+        {' '}<span className="text-muted-foreground/80">(Ce compteur ne montre QUE ceux qui ont déjà un email, pas le total de la base. L'enrichissement Annuaire Santé tourne automatiquement en fond et le fera monter.)</span>
+        {aEnvoyer === 0 && ' Pour l’instant aucun email collecté : l’enrichissement auto les remplit progressivement, ou saisissez-les via « + Email » sur chaque carte.'}
         {!template && ' ⚠️ Aucun template trouvé (onglet Modèles).'}
       </p>
       <BoutonY2K
@@ -1379,7 +1380,8 @@ function ProspectionSoignants({ onAjouter }: { onAjouter: () => void }) {
       {emailEdit && (
         <FormPanel titre="Email du soignant" onClose={() => setEmailEdit(null)} onSave={sauverEmail}>
           <p className="text-xs text-muted-foreground mb-2">
-            La base CNAM ne fournit pas les emails — demandez-le à l'appel, puis tout devient 1-clic.
+            L'enrichissement Annuaire Santé remplit en fond les emails trouvables (faible taux pour les
+            soignants : homonymes ignorés par sécurité). Sinon, demandez-le à l'appel — puis tout devient 1-clic.
           </p>
           <Champ label="Adresse email">
             <Input type="email" value={emailEdit.valeur} onChange={e => setEmailEdit({ ...emailEdit, valeur: e.target.value })} placeholder="ex : prenom.nom@gmail.com" />
