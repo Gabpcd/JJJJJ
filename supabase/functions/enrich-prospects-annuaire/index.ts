@@ -74,7 +74,10 @@ Deno.serve(async (req) => {
     const pk = cible === "ETABLISSEMENT" ? "finess" : "cle";
     const max = Math.min(Number(limite) || 40, 60);
 
-    let q = admin.from(table).select("*").is("enrichi_le", null).limit(max);
+    // Ordre alphabétique par nom : l'enrichissement suit l'ordre de navigation
+    // de l'admin (la liste prospection est triée par nom) → la page 1 se remplit
+    // en premier, l'admin voit les emails apparaître là où il regarde.
+    let q = admin.from(table).select("*").is("enrichi_le", null).order("nom", { ascending: true }).limit(max);
     if (departement) q = q.eq("departement", String(departement).toUpperCase());
     const { data: prospects, error: qErr } = await q;
     if (qErr) return new Response(JSON.stringify({ error: qErr.message }), { status: 500, headers: cors(req) });
