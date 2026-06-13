@@ -74,7 +74,7 @@ Je suis Gabrielle, fondatrice de Jolene (jolene.app), la plateforme qui met en r
 Concrètement pour {{nom}} :
 • Publiez un besoin en 2 minutes, recevez des candidatures de soignants notés et vérifiés
 • Contrats et déclarations générés automatiquement
-• 15 % de commission tout compris — et pour nos premiers partenaires : 0 % sur vos 5 premières missions
+• 15 % de commission tout compris, sans abonnement ni engagement
 
 Auriez-vous 10 minutes cette semaine pour en parler ? Vous pouvez répondre directement à cet email.
 
