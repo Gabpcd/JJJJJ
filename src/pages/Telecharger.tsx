@@ -1,62 +1,11 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
+import { QRCodeSVG } from 'qrcode.react';
 import { SEOHead } from '@/components/SEOHead';
 import { SEOPageLayout } from '@/components/SEOPageLayout';
 import { Zap, FileText, MapPin, Bell, ArrowRight, Smartphone } from 'lucide-react';
 import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-
-/* ─── Inline QR Code SVG for https://jolene.app ─── */
-function QRCode() {
-  // Simplified QR-like pattern representing a URL
-  const modules = [
-    [1,1,1,1,1,1,1,0,1,0,1,0,1,0,1,1,1,1,1,1,1],
-    [1,0,0,0,0,0,1,0,0,1,0,1,0,0,1,0,0,0,0,0,1],
-    [1,0,1,1,1,0,1,0,1,0,1,0,1,0,1,0,1,1,1,0,1],
-    [1,0,1,1,1,0,1,0,0,1,1,0,0,0,1,0,1,1,1,0,1],
-    [1,0,1,1,1,0,1,0,1,1,0,1,1,0,1,0,1,1,1,0,1],
-    [1,0,0,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0,0,0,1],
-    [1,1,1,1,1,1,1,0,1,0,1,0,1,0,1,1,1,1,1,1,1],
-    [0,0,0,0,0,0,0,0,1,1,0,1,1,0,0,0,0,0,0,0,0],
-    [1,0,1,1,0,1,1,1,0,0,1,0,0,1,1,0,1,0,1,1,0],
-    [0,1,0,0,1,0,0,1,1,0,1,1,0,0,1,0,0,1,0,0,1],
-    [1,0,1,0,1,1,1,0,0,1,0,0,1,1,0,1,1,0,1,0,1],
-    [0,1,0,1,0,0,0,1,1,0,1,0,0,1,0,0,1,1,0,1,0],
-    [1,1,0,0,1,1,1,0,1,1,0,1,1,0,1,0,0,1,1,0,1],
-    [0,0,0,0,0,0,0,0,1,0,0,1,0,1,0,1,0,1,0,0,0],
-    [1,1,1,1,1,1,1,0,0,1,1,0,1,0,1,0,1,0,1,1,1],
-    [1,0,0,0,0,0,1,0,1,0,0,1,0,1,0,1,0,0,1,0,0],
-    [1,0,1,1,1,0,1,0,1,1,1,0,1,0,1,1,0,1,0,1,1],
-    [1,0,1,1,1,0,1,0,0,0,1,1,0,1,1,0,1,1,1,0,0],
-    [1,0,1,1,1,0,1,0,1,0,0,1,1,0,0,1,0,0,1,1,1],
-    [1,0,0,0,0,0,1,0,0,1,1,0,0,1,0,1,1,0,0,0,0],
-    [1,1,1,1,1,1,1,0,1,0,1,1,1,0,1,0,0,1,1,1,1],
-  ];
-
-  const size = 21;
-  const cellSize = 6;
-  const svgSize = size * cellSize;
-
-  return (
-    <svg width={svgSize} height={svgSize} viewBox={`0 0 ${svgSize} ${svgSize}`} className="mx-auto">
-      <rect width={svgSize} height={svgSize} fill="white" rx="4" />
-      {modules.map((row, y) =>
-        row.map((cell, x) =>
-          cell ? (
-            <rect
-              key={`${x}-${y}`}
-              x={x * cellSize}
-              y={y * cellSize}
-              width={cellSize}
-              height={cellSize}
-              className="fill-foreground"
-            />
-          ) : null
-        )
-      )}
-    </svg>
-  );
-}
 
 /* ─── Phone mockup SVG ─── */
 function PhoneMockup() {
@@ -209,7 +158,7 @@ export default function Telecharger() {
           <div className="max-w-md mx-auto px-4 text-center">
             <h2 className="text-xl font-bold text-foreground mb-6">Scannez pour accéder à Jolene</h2>
             <div className="bg-card p-6 rounded-2xl inline-block shadow-sm border border-border">
-              <QRCode />
+              <QRCodeSVG value="https://jolene.app" size={180} level="M" />
             </div>
             <p className="text-sm text-muted-foreground mt-4">Ouvrez l'appareil photo de votre téléphone et scannez ce code</p>
           </div>
