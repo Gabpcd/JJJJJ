@@ -92,7 +92,7 @@ export default function APropos() {
             <h2 className="text-2xl md:text-3xl font-bold text-foreground mb-4">Presse & Contact</h2>
             <p className="text-muted-foreground mb-8">
               Vous êtes journaliste ou partenaire potentiel ? Contactez-nous à{' '}
-              <a href="mailto:contact@jolene.app" className="text-primary hover:underline font-medium">contact@jolene.app</a>.
+              <a href="mailto:support@jolene.app" className="text-primary hover:underline font-medium">support@jolene.app</a>.
             </p>
             <BoutonY2K variant="secondary" disabled iconeGauche={<Download className="h-4 w-4" />}>
               Télécharger le dossier de presse
@@ -106,7 +106,7 @@ export default function APropos() {
           <div className="max-w-2xl mx-auto px-4 text-center">
             <p className="text-sm text-muted-foreground">
               Jolene prépare sa levée de fonds seed. Si vous êtes investisseur, contactez-nous à{' '}
-              <a href="mailto:contact@jolene.app" className="text-primary hover:underline font-medium">contact@jolene.app</a>.
+              <a href="mailto:support@jolene.app" className="text-primary hover:underline font-medium">support@jolene.app</a>.
             </p>
           </div>
         </section>

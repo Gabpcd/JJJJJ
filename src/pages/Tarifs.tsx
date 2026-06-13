@@ -50,7 +50,7 @@ export default function Tarifs() {
             <p className="text-6xl font-black text-primary mb-2">15 %</p>
             <p className="text-sm text-muted-foreground mb-8">
               du montant brut de la mission, facturée à l'établissement.
-              <br />Taux négocié possible pour les groupes — <a href="mailto:bonjour@jolene.app" className="text-primary underline">contactez-nous</a>.
+              <br />Taux négocié possible pour les groupes — <a href="mailto:support@jolene.app" className="text-primary underline">contactez-nous</a>.
             </p>
             <ul className="text-left max-w-md mx-auto space-y-2.5">
               {INCLUS.map((item) => (

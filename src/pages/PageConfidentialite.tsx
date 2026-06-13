@@ -30,7 +30,7 @@ export default function PageConfidentialite() {
           <p className="text-muted-foreground">SIRET : {ENTREPRISE.siret}</p>
           <p className="text-muted-foreground">Siège social : {ENTREPRISE.adresse}</p>
           <p className="text-muted-foreground">E-mail : {ENTREPRISE.email}</p>
-          <p className="text-muted-foreground mt-2">Délégué à la protection des données (DPO) : <a href="mailto:dpo@jolene.app" className="text-primary underline">dpo@jolene.app</a></p>
+          <p className="text-muted-foreground mt-2">Délégué à la protection des données (DPO) : <a href="mailto:support@jolene.app" className="text-primary underline">support@jolene.app</a></p>
         </div>
         <p>Le traitement des données est réalisé conformément au Règlement (UE) 2016/679 du 27 avril 2016 (RGPD) et à la loi n° 78-17 du 6 janvier 1978 modifiée (loi Informatique et Libertés).</p>
       </section>
@@ -180,7 +180,7 @@ export default function PageConfidentialite() {
         <h3 className="text-lg font-semibold text-foreground mt-6 mb-2">6.2 — Traitement par intelligence artificielle</h3>
         <p className="mb-3">Certains documents téléversés (pièce d'identité, diplômes, attestations RCP) sont analysés par un système d'intelligence artificielle (Anthropic Claude) pour vérifier leur authenticité et leur concordance avec les informations déclarées. Ce traitement est fondé sur l'intérêt légitime de l'Éditeur (sécurité de la plateforme et protection des Établissements). Les documents sont transmis via une connexion chiffrée (TLS 1.3) et ne sont pas conservés par le prestataire d'IA au-delà du temps de traitement.</p>
 
-        <p className="mb-3">Pour exercer vos droits, adressez votre demande à : <a href="mailto:dpo@jolene.app" className="text-primary underline font-medium">dpo@jolene.app</a></p>
+        <p className="mb-3">Pour exercer vos droits, adressez votre demande à : <a href="mailto:support@jolene.app" className="text-primary underline font-medium">support@jolene.app</a></p>
         <p className="mb-3">L'Éditeur s'engage à répondre dans un délai d'un mois. Ce délai peut être prolongé de deux mois en cas de complexité ou de nombre élevé de demandes.</p>
         <p>En cas de difficulté dans l'exercice de vos droits, vous pouvez introduire une réclamation auprès de la Commission Nationale de l'Informatique et des Libertés (CNIL) : <a href="https://www.cnil.fr" target="_blank" rel="noopener noreferrer" className="text-primary underline font-medium">www.cnil.fr</a></p>
       </section>
