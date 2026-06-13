@@ -3,7 +3,7 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { SEOHead } from '@/components/SEOHead';
 import { SEOPageLayout } from '@/components/SEOPageLayout';
-import { Linkedin, Download, ShieldCheck, Stethoscope, Scale, DatabaseZap, Building2 } from 'lucide-react';
+import { Linkedin, Download, ShieldCheck, Stethoscope, Scale, DatabaseZap } from 'lucide-react';
 import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 
 const chiffres = [
@@ -35,7 +35,7 @@ export default function APropos() {
           <div className="max-w-3xl mx-auto px-4 text-center">
             <h2 className="text-2xl md:text-3xl font-bold text-foreground mb-6">Notre mission</h2>
             <p className="text-muted-foreground leading-relaxed text-lg">
-              Nous connectons les établissements de santé avec des soignants qualifiés et vérifiés, en automatisant tout ce qui peut l'être : contrats, conformité, pointage, facturation. Notre objectif : que chaque établissement trouve le bon soignant en moins d'une heure.
+              Nous connectons les établissements de santé avec des soignants qualifiés et vérifiés, en automatisant tout ce qui peut l'être : contrats, conformité, pointage, facturation. Notre objectif : que chaque établissement trouve le bon soignant, sans passer des heures au téléphone.
             </p>
           </div>
         </section>
@@ -63,39 +63,6 @@ export default function APropos() {
                 >
                   <Linkedin className="h-4 w-4" /> LinkedIn
                 </a>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* Partenaires */}
-        <section className="py-16 md:py-20">
-          <div className="max-w-4xl mx-auto px-4">
-            <h2 className="text-2xl md:text-3xl font-bold text-foreground text-center mb-12">Nos partenaires</h2>
-            <div className="grid md:grid-cols-2 gap-6">
-              <div className="bg-card border border-border rounded-xl p-6">
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                    <Building2 className="h-5 w-5 text-primary" />
-                  </div>
-                  <div>
-                    <h3 className="font-semibold text-foreground">Groupe Leader Santé</h3>
-                    <p className="text-xs text-muted-foreground">Partenaire pilote</p>
-                  </div>
-                </div>
-                <p className="text-sm text-muted-foreground">Réseau de 600+ pharmacies d'officine en France. Premier partenaire de Jolene pour le déploiement du remplacement en pharmacie.</p>
-              </div>
-              <div className="bg-card border border-border rounded-xl p-6">
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                    <Building2 className="h-5 w-5 text-primary" />
-                  </div>
-                  <div>
-                    <h3 className="font-semibold text-foreground">Clinique des Bluets</h3>
-                    <p className="text-xs text-muted-foreground">Lettre d'intention signée</p>
-                  </div>
-                </div>
-                <p className="text-sm text-muted-foreground">Maternité et chirurgie — Paris. Établissement pilote pour le staffing infirmier et aide-soignant via Jolene.</p>
               </div>
             </div>
           </div>
