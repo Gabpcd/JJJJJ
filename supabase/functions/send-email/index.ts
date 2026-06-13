@@ -66,7 +66,7 @@ const WRAPPER = (content: string, opts?: { hasAttachment?: boolean }) => `
       <p style="margin:0;font-size:10px;color:#CBD5E1;">
         <a href="${APP_URL}/cgu" style="color:#CBD5E1;text-decoration:none;">CGU</a> ·
         <a href="${APP_URL}/confidentialite" style="color:#CBD5E1;text-decoration:none;">Confidentialité</a> ·
-        <a href="mailto:dpo@jolene.app" style="color:#CBD5E1;text-decoration:none;">Contact DPO</a>
+        <a href="mailto:support@jolene.app" style="color:#CBD5E1;text-decoration:none;">Contact DPO</a>
       </p>
       ${opts?.hasAttachment
         ? `<p style="margin:8px 0 0;font-size:10px;color:#CBD5E1;">📎 Le document est joint à cet email.</p>`
@@ -1173,7 +1173,7 @@ function renderTemplate(type: string, rawData: Record<string, unknown>): Templat
             <strong style="color:#0F172A;">Si vous bloquez quelque part, on est là :</strong><br/>
             • Centre d'aide <a href="${APP_URL}/aide" style="color:#9333EA;">jolene.app/aide</a> — 22 articles répondent aux questions courantes<br/>
             • Support : <a href="mailto:support@jolene.app" style="color:#9333EA;">support@jolene.app</a> (réponse sous 48h ouvrées)<br/>
-            • DPO (questions RGPD) : <a href="mailto:dpo@jolene.app" style="color:#9333EA;">dpo@jolene.app</a>
+            • DPO (questions RGPD) : <a href="mailto:support@jolene.app" style="color:#9333EA;">support@jolene.app</a>
           `)}
           <p style="color:#334155;"><strong>Quelques articles utiles :</strong></p>
           <ul style="color:#334155;line-height:1.6;">
@@ -1376,7 +1376,7 @@ function renderTemplate(type: string, rawData: Record<string, unknown>): Templat
           <p style="color:#334155;">Votre compte Jolene a été <strong>suspendu</strong>. Raison : ${data.raison === 'absences_sans_prevenir' ? `${data.nb_absences || 3} absences sans prévenir sur les 6 derniers mois` : (data.raison || 'décision admin')}.</p>
           <p style="color:#334155;">Pendant la suspension, vous ne pouvez plus candidater à de nouvelles missions. Les missions déjà acceptées restent valides.</p>
           ${INFO_BOX(`
-            <strong>Pour faire un recours</strong>, écrivez à <a href="mailto:bonjour@jolene.app" style="color:#6366f1;">bonjour@jolene.app</a> en précisant votre nom + raison du recours.<br/>
+            <strong>Pour faire un recours</strong>, écrivez à <a href="mailto:support@jolene.app" style="color:#6366f1;">support@jolene.app</a> en précisant votre nom + raison du recours.<br/>
             L'équipe examinera votre dossier sous 72h ouvrées.
           `)}
         `),
