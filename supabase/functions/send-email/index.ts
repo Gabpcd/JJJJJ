@@ -1812,6 +1812,9 @@ Deno.serve(async (req) => {
 
     const emailPayload: Record<string, unknown> = {
       from: 'Jolene <bonjour@jolene.app>',
+      // bonjour@ n'a pas de boîte de réception (expéditeur Resend uniquement) :
+      // les réponses sont routées vers une boîte réelle et relevée.
+      reply_to: 'gabrielle@jolene.app',
       to: [resolvedEmail],
       subject,
       html,
