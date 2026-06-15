@@ -15,6 +15,28 @@ function cors(req: Request) {
   return { "Access-Control-Allow-Origin": getCorsOrigin(req), "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type", "Content-Type": "application/json" };
 }
 
+/** Enrobe le corps texte dans un email HTML chaleureux : bandeau marque dégradé,
+ *  liens https cliquables soulignés, footer légal/STOP. Inline-CSS only. */
+function emailHtmlProspection(corps: string): string {
+  const esc = String(corps).replace(/&/g, "&amp;").replace(/</g, "&lt;");
+  const lie = esc.replace(/(https?:\/\/[^\s<]+)/g,
+    '<a href="$1" style="color:#E84393;font-weight:600;text-decoration:underline">$1</a>');
+  const body = lie.replace(/\n/g, "<br/>");
+  return `<div style="margin:0;padding:24px 12px;background:#f5f3f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif">
+  <div style="max-width:560px;margin:0 auto;background:#ffffff;border-radius:18px;overflow:hidden;border:1px solid #efe9f5">
+    <div style="background:#FF6BBE;background:linear-gradient(135deg,#FF6BBE 0%,#A66BFF 60%,#6BC5FF 100%);padding:22px 28px">
+      <span style="color:#ffffff;font-size:24px;font-weight:800;letter-spacing:-.5px">Jolene</span>
+      <span style="color:rgba(255,255,255,.88);font-size:13px;margin-left:8px">soignants vérifiés, sur demande</span>
+    </div>
+    <div style="padding:26px 28px;color:#1E293B;font-size:15px;line-height:1.65">${body}</div>
+    <div style="padding:16px 28px;border-top:1px solid #f0ecf6;color:#9aa0ad;font-size:11px;line-height:1.5">
+      Jolene SASU · <a href="https://jolene.app" style="color:#9aa0ad;text-decoration:underline">jolene.app</a><br/>
+      Pour ne plus recevoir nos messages, répondez simplement « STOP » à cet email.
+    </div>
+  </div>
+</div>`;
+}
+
 function remplir(tpl: string, p: Record<string, unknown>): string {
   return tpl
     .replace(/\{\{\s*nom\s*\}\}/gi, String(p.nom ?? ""))
@@ -72,7 +94,6 @@ Deno.serve(async (req) => {
       if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(dest)) { echecs++; continue; }
       const sujetFinal = remplir(String(sujet), p).slice(0, 150);
       const corpsFinal = remplir(String(corps), p);
-      const corpsHtml = corpsFinal.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/\n/g, "<br/>");
       const r = await fetch("https://api.resend.com/emails", {
         method: "POST",
         headers: { "Authorization": `Bearer ${RESEND}`, "Content-Type": "application/json" },
@@ -81,8 +102,7 @@ Deno.serve(async (req) => {
           to: [dest],
           reply_to: "gabrielle@jolene.app",
           subject: sujetFinal,
-          html: `<div style="font-family:sans-serif;max-width:560px;margin:auto;line-height:1.5">${corpsHtml}
-            <p style="color:#999;font-size:11px;margin-top:24px">Jolene SASU — jolene.app · Pour ne plus recevoir nos messages, répondez « STOP ».</p></div>`,
+          html: emailHtmlProspection(corpsFinal),
         }),
       });
       if (r.ok) {
@@ -92,8 +112,14 @@ Deno.serve(async (req) => {
           await admin.from("sales_contacts").upsert({
             type: "ETABLISSEMENT", nom: p.nom, ville: p.ville,
             telephone: p.telephone, email: dest, finess: p.finess,
-            statut: "CONTACTE", notes: `Email template envoyé en masse · FINESS ${p.finess}`,
+            statut: "CONTACTE", notes: `Sourcé automatiquement : email template envoyé en masse · FINESS ${p.finess}`,
           } as any, { onConflict: "finess", ignoreDuplicates: false });
+        } else {
+          await admin.from("sales_contacts").insert({
+            type: "SOIGNANT", nom: `${p.prenom || ""} ${p.nom || ""}`.trim() || dest, ville: p.ville,
+            telephone: p.telephone, email: dest, profession: p.profession,
+            statut: "CONTACTE", notes: `Sourcé automatiquement : email template envoyé en masse`,
+          } as any);
         }
       } else {
         echecs++;
