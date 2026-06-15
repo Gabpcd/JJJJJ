@@ -1,4 +1,5 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap&text=&font-display=swap');
+/* Police Inter chargée via <link rel="stylesheet"> + preconnect dans index.html
+   (plus rapide qu'un @import CSS render-blocking). */
 
 @tailwind base;
 @tailwind components;

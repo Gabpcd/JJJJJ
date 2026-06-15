@@ -29,7 +29,7 @@ export function FooterLegal() {
           <span className="text-primary/30" aria-hidden="true">•</span>
           <Link to="/accessibilite" className="hover:text-primary hover:underline transition-colors">♿ Accessibilité</Link>
           <span className="text-primary/30" aria-hidden="true">•</span>
-          <a href="mailto:contact@jolene.app" className="hover:text-primary hover:underline transition-colors">✉️ Contact</a>
+          <a href="mailto:support@jolene.app" className="hover:text-primary hover:underline transition-colors">✉️ Contact</a>
         </div>
         <p className="text-xs text-muted-foreground mt-2">© {new Date().getFullYear()} Jolene SASU — Tous droits réservés 🩷</p>
       </div>
