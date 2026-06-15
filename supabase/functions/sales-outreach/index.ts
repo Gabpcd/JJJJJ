@@ -51,7 +51,7 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ error: "Accès admin requis" }), { status: 403, headers: cors(req) });
     }
 
-    const { email, sujet, corps, contact_id, finess, cle, nom, ville, telephone, profession } = await req.json().catch(() => ({}));
+    const { email, sujet, corps, contact_id, finess, cle, nom, ville, telephone, profession, departement } = await req.json().catch(() => ({}));
     if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
       return new Response(JSON.stringify({ error: "Email destinataire invalide." }), { status: 400, headers: cors(req) });
     }
@@ -90,6 +90,7 @@ Deno.serve(async (req) => {
         await admin.from("sales_contacts").upsert({
           type: "ETABLISSEMENT", nom: (p as any).nom, ville: (p as any).ville,
           telephone: (p as any).telephone, email, finess,
+          departement: (p as any).departement, type_etab: (p as any).type_jolene,
           statut: "CONTACTE", notes: `Sourcé automatiquement : email envoyé via Jolene le ${horodatage.slice(0, 10)} · FINESS ${finess}`,
         } as any, { onConflict: "finess", ignoreDuplicates: false });
       }
@@ -97,7 +98,7 @@ Deno.serve(async (req) => {
     } else if (cle) {
       await admin.from("sales_contacts").insert({
         type: "SOIGNANT", nom: nom || email, ville: ville || null,
-        telephone: telephone || null, email, profession: profession || null,
+        telephone: telephone || null, email, profession: profession || null, departement: departement || null,
         statut: "CONTACTE", notes: `Sourcé automatiquement : email envoyé via Jolene le ${horodatage.slice(0, 10)}`,
       } as any);
       await admin.from("prospects_soignants").update({ email_envoye_le: horodatage }).eq("cle", cle);
