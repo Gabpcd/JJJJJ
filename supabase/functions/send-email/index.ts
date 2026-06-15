@@ -55,6 +55,11 @@ const WRAPPER = (content: string, opts?: { hasAttachment?: boolean }) => `
       ${content}
     </div>
     <div style="border-top:1px solid #E2E8F0;padding:20px 24px;text-align:center;font-size:11px;color:#94A3B8;line-height:1.6;">
+      <p style="margin:0 0 14px;font-size:13px;color:#475569;line-height:1.5;">
+        <strong style="color:#1E293B;">Gabrielle Picard</strong><br/>
+        Fondatrice — Jolene<br/>
+        <span style="color:#94A3B8;">La plateforme qui connecte établissements de santé et soignants vérifiés.</span>
+      </p>
       <p style="margin:0 0 6px;">Vous recevez cet email parce que vous êtes inscrit sur <a href="${APP_URL}" style="color:#E04590;text-decoration:none;">jolene.app</a>.</p>
       <p style="margin:0 0 8px;">
         <a href="${APP_URL}/soignant/parametres/notifications" style="color:#94A3B8;">Préférences notifications (soignant)</a> ·
