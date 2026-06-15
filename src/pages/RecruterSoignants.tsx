@@ -4,6 +4,25 @@ import { SEOHead } from '@/components/SEOHead';
 import { SEOPageLayout } from '@/components/SEOPageLayout';
 import { ShieldCheck, Scale, PercentCircle, Receipt, PlusCircle, UserCheck, FileText, ArrowRight } from 'lucide-react';
 
+const FAQ = [
+  { q: "Jolene Santé est-elle une agence d'intérim ?", r: "Non. Jolene Santé est une plateforme de mise en relation directe : vous publiez votre besoin, des soignants vérifiés candidatent, et vous contractualisez directement avec eux. Pas de marge d'agence." },
+  { q: "Combien coûte le service ?", r: "15 % de commission tout compris sur le montant de la mission, sans abonnement ni frais d'entrée. Vous ne payez que lorsque vous recrutez." },
+  { q: "Comment les soignants sont-ils vérifiés ?", r: "Chaque soignant fournit son diplôme, son numéro RPPS et son assurance responsabilité civile professionnelle, contrôlés avant toute mise en relation." },
+  { q: "Quels types de contrats sont possibles ?", r: "Selon le profil et votre besoin : CDD, vacation, ou contrat avec un soignant libéral. Les contrats sont générés automatiquement et les démarches administratives facilitées." },
+  { q: "Quelles professions puis-je recruter ?", r: "Infirmiers (IDE), aides-soignants (AS et AES), kinésithérapeutes, pharmaciens, préparateurs en pharmacie, sages-femmes et d'autres professions de santé." },
+  { q: "Suis-je engagé sur la durée ?", r: "Non, aucun engagement ni abonnement. Vous publiez un besoin uniquement lorsque vous en avez un." },
+];
+
+const faqJsonLd = {
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  mainEntity: FAQ.map((f) => ({
+    "@type": "Question",
+    name: f.q,
+    acceptedAnswer: { "@type": "Answer", text: f.r },
+  })),
+};
+
 const garanties = [
   { icon: ShieldCheck, titre: 'RPPS vérifié', desc: 'Chaque soignant est vérifié via le Répertoire Partagé des Professionnels de Santé. Diplômes et assurance RCP contrôlés.' },
   { icon: Scale, titre: 'Conformité Code du Travail', desc: 'Contrats CDD ou vacation générés automatiquement, durées maximales respectées, repos obligatoires vérifiés.' },
@@ -26,6 +45,7 @@ export default function RecruterSoignants() {
         title="Recruter des soignants qualifiés | Jolene Santé"
         description="Recrutez infirmiers, aides-soignants et professionnels de santé vérifiés RPPS pour vos remplacements. Commission 15 %, contrats et facturation automatiques."
         url="https://jolene.app/recruter-soignants"
+        jsonLd={faqJsonLd}
       />
       <SEOPageLayout
         heroTitle="Recrutez des soignants qualifiés, sans intermédiaire"
@@ -109,6 +129,24 @@ export default function RecruterSoignants() {
             >
               Voir nos tarifs <ArrowRight className="h-4 w-4" />
             </button>
+          </div>
+        </section>
+
+        {/* FAQ */}
+        <section className="py-16 bg-card">
+          <div className="max-w-3xl mx-auto px-4">
+            <h2 className="text-2xl md:text-3xl font-bold text-foreground text-center mb-10">Questions fréquentes</h2>
+            <div className="space-y-4">
+              {FAQ.map((item, i) => (
+                <details key={i} className="group rounded-xl border border-border bg-background p-5">
+                  <summary className="cursor-pointer list-none font-semibold text-foreground flex items-center justify-between gap-2">
+                    {item.q}
+                    <span className="text-primary transition-transform group-open:rotate-45 text-xl leading-none">+</span>
+                  </summary>
+                  <p className="mt-3 text-muted-foreground leading-relaxed">{item.r}</p>
+                </details>
+              ))}
+            </div>
           </div>
         </section>
       </SEOPageLayout>
