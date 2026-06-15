@@ -10,6 +10,15 @@
     <meta name="theme-color" content="#E04590" />
     <meta name="color-scheme" content="light dark" />
 
+    <!-- Perf : preconnect aux origines critiques (fonts + API Supabase) pour
+         ouvrir les connexions TLS au plus tôt → LCP/FCP plus rapides.
+         Police chargée ici en <link> (pas via @import CSS, render-blocking). -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="preconnect" href="https://flripxtsyegjshnhzjkz.supabase.co" crossorigin />
+    <link rel="dns-prefetch" href="https://flripxtsyegjshnhzjkz.supabase.co" />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" />
+
     <!-- Smart App Banner iOS : bannière native "Ouvrir dans l'app" sur Safari.
          À activer après publication App Store en remplaçant APP_STORE_ID par
          l'identifiant numérique attribué par Apple (App Store Connect).

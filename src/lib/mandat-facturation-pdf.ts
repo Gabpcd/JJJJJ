@@ -113,7 +113,7 @@ export function genererMandatFacturationPdf(
     doc.setPage(i);
     createFooter(doc, {
       companyLine: `Mandat de facturation Jolene SAS - art. 289 I-2 CGI - page ${i}/${total}`,
-      contactLine: 'jolene.app | contact@jolene.app',
+      contactLine: 'jolene.app | support@jolene.app',
     });
   }
 

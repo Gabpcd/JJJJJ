@@ -95,11 +95,17 @@ function remplirTemplate(txt: string, p: { nom?: string | null; ville?: string |
     .split('{{ville}}').join(p.ville || '');
 }
 
-/** Ouvre le client mail avec destinataire + sujet + corps pré-remplis (1 clic, zéro copier-coller). */
-function ouvrirMailto(email: string, tpl: TemplateProspection, p: { nom?: string | null; ville?: string | null }) {
-  const sujet = encodeURIComponent(remplirTemplate(tpl.sujet, p));
-  const corps = encodeURIComponent(remplirTemplate(tpl.contenu, p));
-  window.location.href = `mailto:${email}?subject=${sujet}&body=${corps}`;
+/** Ouvre Gmail web (mail.google.com) avec destinataire + sujet + corps pré-remplis,
+ *  dans un nouvel onglet — envoie depuis le compte Google connecté (gabrielle@jolene.app),
+ *  pas l'app Mail du Mac. Meilleure délivrabilité que Resend pour la prospection à froid. */
+function composerGmail(email: string, sujet: string, corps: string) {
+  const url = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(email)}&su=${encodeURIComponent(sujet)}&body=${encodeURIComponent(corps)}`;
+  window.open(url, '_blank', 'noopener');
+}
+/** Ouvre Gmail pré-rempli avec le template (1 clic, zéro copier-coller). */
+function ouvrirMailto(email: string, tpl: TemplateProspection, p: { nom?: string | null; ville?: string | null; prenom?: string | null }) {
+  const nomAffiche = p.prenom ? `${p.prenom} ${p.nom || ''}`.trim() : (p.nom || undefined);
+  composerGmail(email, remplirTemplate(tpl.sujet, { ...p, nom: nomAffiche }), remplirTemplate(tpl.contenu, { ...p, nom: nomAffiche }));
 }
 
 /** Charge le template de prospection depuis sales_templates (fallback : constantes). */
@@ -622,6 +628,7 @@ function ListeContacts({ type, contacts, voirArchives, onToggleArchives, onAdd, 
   onArchive: (c: any, archive: boolean) => void;
 }) {
   const tpl = useTemplateProspection();
+  const tplSoignant = useTemplateProspectionSoignant();
   const [fStatut, setFStatut] = useState('');
   const [fReponse, setFReponse] = useState('');
   const [fARappeler, setFARappeler] = useState(false);
@@ -739,8 +746,8 @@ function ListeContacts({ type, contacts, voirArchives, onToggleArchives, onAdd, 
                   )}
                   {c.email && (
                     <BoutonY2K size="sm" variant="secondary"
-                      onClick={() => type === 'ETABLISSEMENT' ? ouvrirMailto(c.email, tpl, c) : (window.location.href = `mailto:${c.email}`)}
-                      iconeGauche={<Mail className="h-4 w-4" />}>Email</BoutonY2K>
+                      onClick={() => ouvrirMailto(c.email, type === 'ETABLISSEMENT' ? tpl : tplSoignant, c)}
+                      iconeGauche={<Mail className="h-4 w-4" />}>Gmail</BoutonY2K>
                   )}
                 </div>
                 {(c.telephone || c.email) && (
@@ -1035,7 +1042,7 @@ function ProspectionEtab({ onAjouter }: { onAjouter: () => void }) {
                     {pr.email ? (
                       <>
                         <BoutonY2K size="sm" onClick={() => setOutreach(pr)} iconeGauche={<Send className="h-4 w-4" />}>Envoyer via Jolene</BoutonY2K>
-                        <BoutonY2K size="sm" variant="secondary" onClick={() => ouvrirMailto(pr.email, tpl, pr)} iconeGauche={<Mail className="h-4 w-4" />}>Ma boîte mail</BoutonY2K>
+                        <BoutonY2K size="sm" variant="secondary" onClick={() => ouvrirMailto(pr.email, tpl, pr)} iconeGauche={<Mail className="h-4 w-4" />}>Gmail</BoutonY2K>
                       </>
                     ) : (
                       <BoutonY2K size="sm" variant="ghost" onClick={() => setEmailEdit({ finess: pr.finess, valeur: '', prospect: pr })} iconeGauche={<Pencil className="h-4 w-4" />}>+ Email</BoutonY2K>
@@ -1516,9 +1523,7 @@ function ProspectionSoignants({ onAjouter }: { onAjouter: () => void }) {
 
   const mailtoSoignant = (pr: any) => {
     const nomAffiche = `${pr.prenom || ''} ${pr.nom || ''}`.trim();
-    const sujet = encodeURIComponent(remplirTemplate(tpl.sujet, { ...pr, nom: nomAffiche }));
-    const corps = encodeURIComponent(remplirTemplate(tpl.contenu, { ...pr, nom: nomAffiche }));
-    window.location.href = `mailto:${pr.email}?subject=${sujet}&body=${corps}`;
+    composerGmail(pr.email, remplirTemplate(tpl.sujet, { ...pr, nom: nomAffiche }), remplirTemplate(tpl.contenu, { ...pr, nom: nomAffiche }));
   };
 
   const total = data?.total ?? 0;
@@ -1594,7 +1599,7 @@ function ProspectionSoignants({ onAjouter }: { onAjouter: () => void }) {
                     {pr.email ? (
                       <>
                         <BoutonY2K size="sm" onClick={() => setOutreach(pr)} iconeGauche={<Send className="h-4 w-4" />}>Envoyer via Jolene</BoutonY2K>
-                        <BoutonY2K size="sm" variant="secondary" onClick={() => mailtoSoignant(pr)} iconeGauche={<Mail className="h-4 w-4" />}>Ma boîte mail</BoutonY2K>
+                        <BoutonY2K size="sm" variant="secondary" onClick={() => mailtoSoignant(pr)} iconeGauche={<Mail className="h-4 w-4" />}>Gmail</BoutonY2K>
                       </>
                     ) : (
                       <BoutonY2K size="sm" variant="ghost" onClick={() => setEmailEdit({ cle: pr.cle, valeur: '', prospect: pr })} iconeGauche={<Pencil className="h-4 w-4" />}>+ Email</BoutonY2K>

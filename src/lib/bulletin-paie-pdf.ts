@@ -330,7 +330,7 @@ export function genererBulletinPaiePdf(
     doc.setPage(i);
     createFooter(doc, {
       companyLine: `Bulletin de paie Jolene SAS, mandataire de paie - art. R3243-1 CTW - page ${i}/${total}`,
-      contactLine: 'jolene.app | contact@jolene.app',
+      contactLine: 'jolene.app | support@jolene.app',
     });
   }
 
