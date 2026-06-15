@@ -112,12 +112,13 @@ Deno.serve(async (req) => {
           await admin.from("sales_contacts").upsert({
             type: "ETABLISSEMENT", nom: p.nom, ville: p.ville,
             telephone: p.telephone, email: dest, finess: p.finess,
+            departement: p.departement, type_etab: p.type_jolene,
             statut: "CONTACTE", notes: `Sourcé automatiquement : email template envoyé en masse · FINESS ${p.finess}`,
           } as any, { onConflict: "finess", ignoreDuplicates: false });
         } else {
           await admin.from("sales_contacts").insert({
             type: "SOIGNANT", nom: `${p.prenom || ""} ${p.nom || ""}`.trim() || dest, ville: p.ville,
-            telephone: p.telephone, email: dest, profession: p.profession,
+            telephone: p.telephone, email: dest, profession: p.profession, departement: p.departement,
             statut: "CONTACTE", notes: `Sourcé automatiquement : email template envoyé en masse`,
           } as any);
         }
