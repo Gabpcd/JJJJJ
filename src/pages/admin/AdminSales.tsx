@@ -66,21 +66,26 @@ function lienWhatsApp(tel: string): string {
 /* ── Template de prospection email (éditable dans l'onglet Templates) ──
    Utilisé partout : mailto pré-rempli (sujet + corps) ET envoi direct Resend. */
 const TEMPLATE_PROSPECTION_NOM = 'Email prospection établissement';
-const SUJET_PROSPECTION_DEFAUT = 'Renfort soignant sous 48h pour {{nom}} — sans engagement';
+const SUJET_PROSPECTION_DEFAUT = 'Des renforts soignants vérifiés pour {{nom}}';
 const CORPS_PROSPECTION_DEFAUT = `Bonjour,
 
-Je suis Gabrielle, fondatrice de Jolene (jolene.app), la plateforme qui met en relation les établissements de santé avec des soignants vérifiés — diplômes, RPPS et assurances contrôlés.
+Je suis Gabrielle, la fondatrice de Jolene. J'ai créé une plateforme pour aider les établissements comme {{nom}} à trouver des renforts soignants fiables, sans la lourdeur ni les marges des agences d'intérim.
 
-Concrètement pour {{nom}} :
-• Publiez un besoin en 2 minutes, recevez des candidatures de soignants notés et vérifiés
-• Contrats et déclarations générés automatiquement
+Chaque soignant est vérifié par nos soins : diplôme, RPPS et assurance contrôlés avant la moindre mission.
+
+Concrètement, pour vous :
+• Vous publiez un besoin en 2 minutes et recevez des candidatures de soignants notés
+• Les contrats et déclarations sont générés automatiquement
 • 15 % de commission tout compris, sans abonnement ni engagement
 
-Auriez-vous 10 minutes cette semaine pour en parler ? Vous pouvez répondre directement à cet email.
+Si cela peut vous être utile, je serais ravie d'échanger quelques minutes — répondez simplement à cet email, je vous réponds personnellement.
 
-Bien cordialement,
-Gabrielle — Fondatrice de Jolene
-jolene.app`;
+Voir comment ça marche : https://jolene.app
+
+Bien à vous,
+Gabrielle Picard
+Fondatrice de Jolene
+gabrielle@jolene.app`;
 
 interface TemplateProspection { sujet: string; contenu: string }
 
@@ -105,6 +110,19 @@ function useTemplateProspection(): TemplateProspection {
       .then(({ data }) => {
         const d = data as any;
         if (d?.contenu) setTpl({ sujet: d.sujet || SUJET_PROSPECTION_DEFAUT, contenu: d.contenu });
+      });
+  }, []);
+  return tpl;
+}
+
+/** Charge le template de prospection SOIGNANT (cible=SOIGNANT) — fallback constantes. */
+function useTemplateProspectionSoignant(): TemplateProspection {
+  const [tpl, setTpl] = useState<TemplateProspection>({ sujet: SUJET_PROSPECTION_SOIGNANT, contenu: CORPS_PROSPECTION_SOIGNANT });
+  useEffect(() => {
+    supabase.from('sales_templates' as any).select('sujet, contenu').eq('cible', 'SOIGNANT').limit(1).maybeSingle()
+      .then(({ data }) => {
+        const d = data as any;
+        if (d?.contenu) setTpl({ sujet: d.sujet || SUJET_PROSPECTION_SOIGNANT, contenu: d.contenu });
       });
   }, []);
   return tpl;
@@ -740,6 +758,8 @@ function ProspectionEtab({ onAjouter }: { onAjouter: () => void }) {
   const [departement, setDepartement] = useState('');
   const [q, setQ] = useState('');
   const [favoris, setFavoris] = useState(false);
+  const [avecEmail, setAvecEmail] = useState(false);
+  const [avecTel, setAvecTel] = useState(false);
   const [page, setPage] = useState(1);
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
@@ -755,14 +775,16 @@ function ProspectionEtab({ onAjouter }: { onAjouter: () => void }) {
       p_q: q.trim() || null,
       p_favoris: favoris,
       p_page: p,
+      p_avec_email: avecEmail,
+      p_avec_tel: avecTel,
     });
     setLoading(false);
     if (error) { toast.error(error.message); return; }
     setData(res);
     setPage(p);
-  }, [type, departement, q, favoris]);
+  }, [type, departement, q, favoris, avecEmail, avecTel]);
 
-  useEffect(() => { rechercher(1); }, [type, departement, favoris]); // recherche live (q via bouton/Enter)
+  useEffect(() => { rechercher(1); }, [type, departement, favoris, avecEmail, avecTel]); // recherche live (q via bouton/Enter)
 
   const toggleFavori = async (pr: any) => {
     const { error } = await supabase.from('prospects_etablissements' as any)
@@ -825,6 +847,8 @@ function ProspectionEtab({ onAjouter }: { onAjouter: () => void }) {
               <Label className="text-xs">Nom ou ville</Label>
               <Input value={q} onChange={e => setQ(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') rechercher(1); }} placeholder="Korian, Marseille…" className="h-9" />
             </div>
+            <BoutonY2K size="sm" variant={avecEmail ? 'primary' : 'secondary'} onClick={() => setAvecEmail(!avecEmail)} iconeGauche={<Mail className="h-4 w-4" />}>Avec email</BoutonY2K>
+            <BoutonY2K size="sm" variant={avecTel ? 'primary' : 'secondary'} onClick={() => setAvecTel(!avecTel)} iconeGauche={<Phone className="h-4 w-4" />}>Avec tél.</BoutonY2K>
             <BoutonY2K size="sm" variant={favoris ? 'primary' : 'secondary'} onClick={() => setFavoris(!favoris)} iconeGauche={<Star className="h-4 w-4" />}>Favoris</BoutonY2K>
             <BoutonY2K size="sm" onClick={() => rechercher(1)} disabled={loading} iconeGauche={<Search className="h-4 w-4" />}>
               {loading ? 'Recherche…' : 'Rechercher'}
@@ -860,15 +884,18 @@ function ProspectionEtab({ onAjouter }: { onAjouter: () => void }) {
 
                   <div className="flex gap-2 mt-3 flex-wrap">
                     {pr.telephone ? (
-                      <BoutonY2K size="sm" onClick={() => { window.location.href = `tel:${pr.telephone}`; }} iconeGauche={<Phone className="h-4 w-4" />}>
-                        Appeler
-                      </BoutonY2K>
+                      <>
+                        <BoutonY2K size="sm" onClick={() => { window.location.href = `tel:${pr.telephone}`; }} iconeGauche={<Phone className="h-4 w-4" />}>
+                          Appeler
+                        </BoutonY2K>
+                        <BoutonY2K size="sm" variant="secondary" onClick={() => window.open(lienWhatsApp(pr.telephone), '_blank', 'noopener')} iconeGauche={<MessageCircle className="h-4 w-4" />}>WhatsApp</BoutonY2K>
+                      </>
                     ) : (
                       <BadgeY2K variant="warning">Tél. non renseigné</BadgeY2K>
                     )}
                     {pr.email ? (
                       <>
-                        <BoutonY2K size="sm" onClick={() => setOutreach(pr)} iconeGauche={<Send className="h-4 w-4" />}>Envoyer l'email</BoutonY2K>
+                        <BoutonY2K size="sm" onClick={() => setOutreach(pr)} iconeGauche={<Send className="h-4 w-4" />}>Envoyer via Jolene</BoutonY2K>
                         <BoutonY2K size="sm" variant="secondary" onClick={() => ouvrirMailto(pr.email, tpl, pr)} iconeGauche={<Mail className="h-4 w-4" />}>Ma boîte mail</BoutonY2K>
                       </>
                     ) : (
@@ -876,7 +903,12 @@ function ProspectionEtab({ onAjouter }: { onAjouter: () => void }) {
                     )}
                     <BoutonY2K size="sm" variant="ghost" onClick={() => ajouterAuPipeline(pr)} iconeGauche={<Plus className="h-4 w-4" />}>Pipeline</BoutonY2K>
                   </div>
-                  {pr.telephone && <p className="text-[11px] text-muted-foreground mt-1.5">{pr.telephone}{pr.email ? ` · ${pr.email}` : ''}</p>}
+                  {(pr.telephone || pr.email) && (
+                    <p className="text-[11px] mt-1.5 flex flex-wrap gap-x-2">
+                      {pr.telephone && <a href={`tel:${pr.telephone}`} className="text-primary font-medium hover:underline">{pr.telephone}</a>}
+                      {pr.email && <a href={`mailto:${pr.email}`} className="text-primary font-medium hover:underline break-all">{pr.email}</a>}
+                    </p>
+                  )}
                 </CardY2KContent>
               </CardY2K>
             ))}
@@ -1009,18 +1041,25 @@ function EnvoiMasseBar({ cible }: { cible: 'ETABLISSEMENT' | 'SOIGNANT' }) {
 /* ── Modal d'envoi email 1-clic via Jolene (Resend) ──
    Pré-remplie avec le template officiel (onglet Templates) — modifiable avant envoi. */
 function OutreachModal({ prospect, template, onClose }: { prospect: any; template: TemplateProspection; onClose: () => void }) {
-  const [sujet, setSujet] = useState(remplirTemplate(template.sujet, prospect));
-  const [corps, setCorps] = useState(remplirTemplate(template.contenu, prospect));
+  // Nom d'affichage : étab = nom ; soignant = prénom + nom.
+  const nomAffiche = prospect.prenom ? `${prospect.prenom} ${prospect.nom}`.trim() : prospect.nom;
+  const [sujet, setSujet] = useState(remplirTemplate(template.sujet, { ...prospect, nom: nomAffiche }));
+  const [corps, setCorps] = useState(remplirTemplate(template.contenu, { ...prospect, nom: nomAffiche }));
   const [envoi, setEnvoi] = useState(false);
 
   const envoyer = async () => {
     setEnvoi(true);
     const { data, error } = await supabase.functions.invoke('sales-outreach', {
-      body: { email: prospect.email, sujet, corps, finess: prospect.finess },
+      body: {
+        email: prospect.email, sujet, corps,
+        finess: prospect.finess, cle: prospect.cle,
+        nom: nomAffiche, ville: prospect.ville,
+        telephone: prospect.telephone, profession: prospect.profession,
+      },
     });
     setEnvoi(false);
     if (error || (data as any)?.error) { toast.error((data as any)?.error || 'Envoi impossible.'); return; }
-    toast.success(`Email envoyé à ${prospect.email} — prospect passé en CONTACTÉ.`);
+    toast.success(`Email envoyé à ${prospect.email} — prospect sourcé (CONTACTÉ).`);
     onClose();
   };
 
@@ -1028,7 +1067,7 @@ function OutreachModal({ prospect, template, onClose }: { prospect: any; templat
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-foreground/40 p-0 sm:p-4" onClick={onClose}>
       <div className="bg-card w-full sm:max-w-lg rounded-t-2xl sm:rounded-2xl p-5 max-h-[90vh] overflow-y-auto space-y-3" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between">
-          <h2 className="font-bold text-foreground">Email à {prospect.nom}</h2>
+          <h2 className="font-bold text-foreground">Email à {nomAffiche}</h2>
           <button onClick={onClose} className="text-muted-foreground hover:text-foreground"><X className="h-5 w-5" /></button>
         </div>
         <p className="text-xs text-muted-foreground">À : {prospect.email} · De : Gabrielle de Jolene (réponses → votre boîte perso)</p>
@@ -1207,29 +1246,35 @@ const PROFESSIONS_PROSPECTION_SOIGNANTS = [
   { v: 'ORTHOPHONISTE', label: 'Orthophonistes' },
   { v: 'PEDICURE_PODOLOGUE', label: 'Pédicures-podologues' },
 ];
-const SUJET_PROSPECTION_SOIGNANT = 'Des missions près de chez vous — inscription gratuite';
+const SUJET_PROSPECTION_SOIGNANT = 'Des missions de soignant près de chez vous';
 const CORPS_PROSPECTION_SOIGNANT = `Bonjour,
 
-Je suis Gabrielle, fondatrice de Jolene (jolene.app). Des établissements de santé près de chez vous cherchent des renforts ponctuels — vous choisissez vos missions, vos dates et votre taux.
+Je suis Gabrielle, la fondatrice de Jolene. Des établissements de santé près de chez vous cherchent des renforts ponctuels — et sur Jolene, c'est vous qui choisissez vos missions, vos dates et votre taux.
 
 • Inscription gratuite en 2 minutes, zéro commission pour les soignants
-• Contrats et démarches gérés automatiquement
-• Paiement garanti et rapide
+• Contrats et démarches administratives gérés automatiquement
+• Paiement garanti et rapide après chaque mission
 
-Découvrez les missions ouvertes : https://jolene.app/inscription/soignant?utm_source=prospection&utm_medium=email
+Découvrez les missions ouvertes : https://jolene.app/inscription/soignant
 
-Bien cordialement,
-Gabrielle — Fondatrice de Jolene`;
+Bien à vous,
+Gabrielle Picard
+Fondatrice de Jolene
+gabrielle@jolene.app`;
 
 function ProspectionSoignants({ onAjouter }: { onAjouter: () => void }) {
   const [profession, setProfessionP] = useState('');
   const [departement, setDepartement] = useState('');
   const [q, setQ] = useState('');
   const [favoris, setFavoris] = useState(false);
+  const [avecEmail, setAvecEmail] = useState(false);
+  const [avecTel, setAvecTel] = useState(false);
   const [page, setPage] = useState(1);
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [emailEdit, setEmailEdit] = useState<{ cle: string; valeur: string; prospect?: any } | null>(null);
+  const [outreach, setOutreach] = useState<any | null>(null);
+  const tpl = useTemplateProspectionSoignant();
 
   const rechercher = useCallback(async (p = 1) => {
     setLoading(true);
@@ -1239,14 +1284,16 @@ function ProspectionSoignants({ onAjouter }: { onAjouter: () => void }) {
       p_q: q.trim() || null,
       p_favoris: favoris,
       p_page: p,
+      p_avec_email: avecEmail,
+      p_avec_tel: avecTel,
     });
     setLoading(false);
     if (error) { toast.error(error.message); return; }
     setData(res);
     setPage(p);
-  }, [profession, departement, q, favoris]);
+  }, [profession, departement, q, favoris, avecEmail, avecTel]);
 
-  useEffect(() => { rechercher(1); }, [profession, departement, favoris]); // q via Enter/bouton
+  useEffect(() => { rechercher(1); }, [profession, departement, favoris, avecEmail, avecTel]); // q via Enter/bouton
 
   const toggleFavori = async (pr: any) => {
     const { error } = await supabase.from('prospects_soignants' as any)
@@ -1285,8 +1332,9 @@ function ProspectionSoignants({ onAjouter }: { onAjouter: () => void }) {
   };
 
   const mailtoSoignant = (pr: any) => {
-    const sujet = encodeURIComponent(SUJET_PROSPECTION_SOIGNANT);
-    const corps = encodeURIComponent(CORPS_PROSPECTION_SOIGNANT);
+    const nomAffiche = `${pr.prenom || ''} ${pr.nom || ''}`.trim();
+    const sujet = encodeURIComponent(remplirTemplate(tpl.sujet, { ...pr, nom: nomAffiche }));
+    const corps = encodeURIComponent(remplirTemplate(tpl.contenu, { ...pr, nom: nomAffiche }));
     window.location.href = `mailto:${pr.email}?subject=${sujet}&body=${corps}`;
   };
 
@@ -1316,6 +1364,8 @@ function ProspectionSoignants({ onAjouter }: { onAjouter: () => void }) {
               <Label className="text-xs">Nom, ville ou cabinet</Label>
               <Input value={q} onChange={e => setQ(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') rechercher(1); }} placeholder="Dupont, Lorient…" className="h-9" />
             </div>
+            <BoutonY2K size="sm" variant={avecEmail ? 'primary' : 'secondary'} onClick={() => setAvecEmail(!avecEmail)} iconeGauche={<Mail className="h-4 w-4" />}>Avec email</BoutonY2K>
+            <BoutonY2K size="sm" variant={avecTel ? 'primary' : 'secondary'} onClick={() => setAvecTel(!avecTel)} iconeGauche={<Phone className="h-4 w-4" />}>Avec tél.</BoutonY2K>
             <BoutonY2K size="sm" variant={favoris ? 'primary' : 'secondary'} onClick={() => setFavoris(!favoris)} iconeGauche={<Star className="h-4 w-4" />}>Favoris</BoutonY2K>
             <BoutonY2K size="sm" onClick={() => rechercher(1)} disabled={loading} iconeGauche={<Search className="h-4 w-4" />}>
               {loading ? 'Recherche…' : 'Rechercher'}
@@ -1349,20 +1399,31 @@ function ProspectionSoignants({ onAjouter }: { onAjouter: () => void }) {
                   </div>
                   <div className="flex gap-2 mt-3 flex-wrap">
                     {pr.telephone ? (
-                      <BoutonY2K size="sm" onClick={() => { window.location.href = `tel:${pr.telephone}`; }} iconeGauche={<Phone className="h-4 w-4" />}>
-                        Appeler
-                      </BoutonY2K>
+                      <>
+                        <BoutonY2K size="sm" onClick={() => { window.location.href = `tel:${pr.telephone}`; }} iconeGauche={<Phone className="h-4 w-4" />}>
+                          Appeler
+                        </BoutonY2K>
+                        <BoutonY2K size="sm" variant="secondary" onClick={() => window.open(lienWhatsApp(pr.telephone), '_blank', 'noopener')} iconeGauche={<MessageCircle className="h-4 w-4" />}>WhatsApp</BoutonY2K>
+                      </>
                     ) : (
                       <BadgeY2K variant="warning">Tél. non renseigné</BadgeY2K>
                     )}
                     {pr.email ? (
-                      <BoutonY2K size="sm" variant="secondary" onClick={() => mailtoSoignant(pr)} iconeGauche={<Mail className="h-4 w-4" />}>Email</BoutonY2K>
+                      <>
+                        <BoutonY2K size="sm" onClick={() => setOutreach(pr)} iconeGauche={<Send className="h-4 w-4" />}>Envoyer via Jolene</BoutonY2K>
+                        <BoutonY2K size="sm" variant="secondary" onClick={() => mailtoSoignant(pr)} iconeGauche={<Mail className="h-4 w-4" />}>Ma boîte mail</BoutonY2K>
+                      </>
                     ) : (
                       <BoutonY2K size="sm" variant="ghost" onClick={() => setEmailEdit({ cle: pr.cle, valeur: '', prospect: pr })} iconeGauche={<Pencil className="h-4 w-4" />}>+ Email</BoutonY2K>
                     )}
                     <BoutonY2K size="sm" variant="ghost" onClick={() => ajouterAuPipeline(pr)} iconeGauche={<Plus className="h-4 w-4" />}>Pipeline</BoutonY2K>
                   </div>
-                  {pr.telephone && <p className="text-[11px] text-muted-foreground mt-1.5">{pr.telephone}{pr.email ? ` · ${pr.email}` : ''}</p>}
+                  {(pr.telephone || pr.email) && (
+                    <p className="text-[11px] mt-1.5 flex flex-wrap gap-x-2">
+                      {pr.telephone && <a href={`tel:${pr.telephone}`} className="text-primary font-medium hover:underline">{pr.telephone}</a>}
+                      {pr.email && <a href={`mailto:${pr.email}`} className="text-primary font-medium hover:underline break-all">{pr.email}</a>}
+                    </p>
+                  )}
                 </CardY2KContent>
               </CardY2K>
             ))}
@@ -1388,6 +1449,9 @@ function ProspectionSoignants({ onAjouter }: { onAjouter: () => void }) {
           </Champ>
         </FormPanel>
       )}
+
+      {/* Envoi email via Jolene (Resend) — parité avec les établissements */}
+      {outreach && <OutreachModal prospect={outreach} template={tpl} onClose={() => { setOutreach(null); rechercher(page); onAjouter(); }} />}
     </div>
   );
 }

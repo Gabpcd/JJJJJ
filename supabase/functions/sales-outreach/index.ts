@@ -12,6 +12,30 @@ function cors(req: Request) {
   return { "Access-Control-Allow-Origin": getCorsOrigin(req), "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type", "Content-Type": "application/json" };
 }
 
+/** Enrobe le corps texte dans un email HTML chaleureux : bandeau marque dégradé,
+ *  liens https auto-transformés en liens cliquables soulignés, footer légal/STOP.
+ *  Inline-CSS uniquement (compatible Gmail/Outlook/Apple Mail), fallback couleur
+ *  unie sous le dégradé pour les clients qui ignorent linear-gradient. */
+function emailHtmlProspection(corps: string): string {
+  const esc = String(corps).replace(/&/g, "&amp;").replace(/</g, "&lt;");
+  const lie = esc.replace(/(https?:\/\/[^\s<]+)/g,
+    '<a href="$1" style="color:#E84393;font-weight:600;text-decoration:underline">$1</a>');
+  const body = lie.replace(/\n/g, "<br/>");
+  return `<div style="margin:0;padding:24px 12px;background:#f5f3f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif">
+  <div style="max-width:560px;margin:0 auto;background:#ffffff;border-radius:18px;overflow:hidden;border:1px solid #efe9f5">
+    <div style="background:#FF6BBE;background:linear-gradient(135deg,#FF6BBE 0%,#A66BFF 60%,#6BC5FF 100%);padding:22px 28px">
+      <span style="color:#ffffff;font-size:24px;font-weight:800;letter-spacing:-.5px">Jolene</span>
+      <span style="color:rgba(255,255,255,.88);font-size:13px;margin-left:8px">soignants vérifiés, sur demande</span>
+    </div>
+    <div style="padding:26px 28px;color:#1E293B;font-size:15px;line-height:1.65">${body}</div>
+    <div style="padding:16px 28px;border-top:1px solid #f0ecf6;color:#9aa0ad;font-size:11px;line-height:1.5">
+      Jolene SASU · <a href="https://jolene.app" style="color:#9aa0ad;text-decoration:underline">jolene.app</a><br/>
+      Pour ne plus recevoir nos messages, répondez simplement « STOP » à cet email.
+    </div>
+  </div>
+</div>`;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: cors(req) });
   try {
@@ -27,7 +51,7 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ error: "Accès admin requis" }), { status: 403, headers: cors(req) });
     }
 
-    const { email, sujet, corps, contact_id, finess } = await req.json().catch(() => ({}));
+    const { email, sujet, corps, contact_id, finess, cle, nom, ville, telephone, profession } = await req.json().catch(() => ({}));
     if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
       return new Response(JSON.stringify({ error: "Email destinataire invalide." }), { status: 400, headers: cors(req) });
     }
@@ -38,7 +62,6 @@ Deno.serve(async (req) => {
     const RESEND = Deno.env.get("RESEND_API_KEY");
     if (!RESEND) return new Response(JSON.stringify({ error: "RESEND_API_KEY non configurée." }), { status: 500, headers: cors(req) });
 
-    const corpsHtml = String(corps).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/\n/g, "<br/>");
     const r = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: { "Authorization": `Bearer ${RESEND}`, "Content-Type": "application/json" },
@@ -47,8 +70,7 @@ Deno.serve(async (req) => {
         to: [email],
         reply_to: "gabrielle@jolene.app",
         subject: String(sujet).slice(0, 150),
-        html: `<div style="font-family:sans-serif;max-width:560px;margin:auto;line-height:1.5">${corpsHtml}
-          <p style="color:#999;font-size:11px;margin-top:24px">Jolene SASU — jolene.app · Pour ne plus recevoir nos messages, répondez « STOP ».</p></div>`,
+        html: emailHtmlProspection(corps),
       }),
     });
     if (!r.ok) {
@@ -57,17 +79,28 @@ Deno.serve(async (req) => {
     }
 
     // Suivi pipeline : contact existant → CONTACTE ; sinon création depuis le prospect
+    // (étab via finess, soignant via cle). Le contact passe automatiquement en
+    // « sourcé / CONTACTÉ » avec une note explicite (anti double-relance).
+    const horodatage = new Date().toISOString();
     if (contact_id) {
-      await admin.from("sales_contacts").update({ statut: "CONTACTE", maj_le: new Date().toISOString() }).eq("id", contact_id);
+      await admin.from("sales_contacts").update({ statut: "CONTACTE", maj_le: horodatage }).eq("id", contact_id);
     } else if (finess) {
       const { data: p } = await admin.from("prospects_etablissements").select("*").eq("finess", finess).maybeSingle();
       if (p) {
         await admin.from("sales_contacts").upsert({
           type: "ETABLISSEMENT", nom: (p as any).nom, ville: (p as any).ville,
           telephone: (p as any).telephone, email, finess,
-          statut: "CONTACTE", notes: `Email envoyé via Jolene · FINESS ${finess}`,
+          statut: "CONTACTE", notes: `Sourcé automatiquement : email envoyé via Jolene le ${horodatage.slice(0, 10)} · FINESS ${finess}`,
         } as any, { onConflict: "finess", ignoreDuplicates: false });
       }
+      await admin.from("prospects_etablissements").update({ email_envoye_le: horodatage }).eq("finess", finess);
+    } else if (cle) {
+      await admin.from("sales_contacts").insert({
+        type: "SOIGNANT", nom: nom || email, ville: ville || null,
+        telephone: telephone || null, email, profession: profession || null,
+        statut: "CONTACTE", notes: `Sourcé automatiquement : email envoyé via Jolene le ${horodatage.slice(0, 10)}`,
+      } as any);
+      await admin.from("prospects_soignants").update({ email_envoye_le: horodatage }).eq("cle", cle);
     }
 
     return new Response(JSON.stringify({ success: true }), { headers: cors(req) });
