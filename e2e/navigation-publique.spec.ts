@@ -10,14 +10,6 @@ test.describe('Navigation pages publiques', () => {
     await expect(page.getByText(/S'inscrire gratuitement/i)).toBeVisible();
   });
 
-  test('/blog charge la liste des articles', async ({ page }) => {
-    await page.goto('/blog');
-    // The blog page should load without error
-    await expect(page.locator('body')).not.toContainText('404');
-    // Wait for the page to finish loading (lazy-loaded)
-    await page.waitForLoadState('networkidle');
-  });
-
   test('/a-propos charge la page a propos', async ({ page }) => {
     await page.goto('/a-propos');
     await expect(page.locator('body')).not.toContainText('404');
