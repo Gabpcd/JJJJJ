@@ -51,7 +51,7 @@ export function SEOHead({ title, description, url, image, jsonLd }: SEOHeadProps
     }
 
     return () => {
-      document.title = 'Jolene — Staffing médical simplifié';
+      document.title = 'Jolene Santé — Missions soignants & remplacements vérifiés';
       if (ldScript) ldScript.remove();
     };
   }, [title, description, url, image, jsonLd]);
