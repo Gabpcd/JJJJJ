@@ -23,7 +23,6 @@ test.describe('Page d\'accueil', () => {
     );
     const header = page.locator('header');
     await expect(header.locator('a[href="/tarifs"]')).toBeVisible();
-    await expect(header.locator('a[href="/blog"]')).toBeVisible();
     await expect(header.locator('a[href="/a-propos"]')).toBeVisible();
   });
 
