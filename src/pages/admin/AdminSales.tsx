@@ -305,6 +305,27 @@ export default function AdminSales() {
     charger();
   };
 
+  // Réponse du prospect au contact : POSITIVE (intéressé) → passe aussi en INSCRIT,
+  // NEGATIVE (pas intéressé) → PERDU, EN_ATTENTE → on garde le statut courant.
+  const majReponseContact = async (c: any, reponse: string | null) => {
+    const patch: any = { reponse, maj_le: new Date().toISOString(), a_rappeler: false };
+    if (reponse === 'POSITIVE') patch.statut = 'INSCRIT';
+    else if (reponse === 'NEGATIVE') patch.statut = 'PERDU';
+    const { error } = await supabase.from('sales_contacts' as any).update(patch).eq('id', c.id);
+    if (error) { toast.error(error.message); return; }
+    toast.success(reponse === 'POSITIVE' ? 'Marqué intéressé ✓' : reponse === 'NEGATIVE' ? 'Marqué pas intéressé.' : 'Réponse mise à jour.');
+    charger();
+  };
+
+  // « À rappeler » : appelé sans réponse → file de rappel (anti-oubli).
+  const toggleARappeler = async (c: any) => {
+    const { error } = await supabase.from('sales_contacts' as any)
+      .update({ a_rappeler: !c.a_rappeler, dernier_contact_le: new Date().toISOString(), maj_le: new Date().toISOString() } as any)
+      .eq('id', c.id);
+    if (error) { toast.error(error.message); return; }
+    charger();
+  };
+
   if (loading) return <LayoutAdmin><ChargementPage /></LayoutAdmin>;
 
   return (
@@ -427,6 +448,8 @@ export default function AdminSales() {
             onImport={() => setImportCible('CONTACTS')}
             onEdit={c => setEditContact({ ...c })}
             onStatut={majStatutContact}
+            onReponse={majReponseContact}
+            onARappeler={toggleARappeler}
             onFavori={toggleFavoriContact}
             onArchive={archiverContact}
           />
@@ -573,8 +596,18 @@ export default function AdminSales() {
     </LayoutAdmin>
   );
 }
-/* ── Sous-composant liste contacts ── */
-function ListeContacts({ type, contacts, voirArchives, onToggleArchives, onAdd, onImport, onEdit, onStatut, onFavori, onArchive }: {
+/* ── Réponses au contact (suivi sourcing) ── */
+const REPONSES_FILTRE = [
+  { v: '', label: 'Toutes réponses' },
+  { v: 'EN_ATTENTE', label: 'En attente' },
+  { v: 'POSITIVE', label: 'Intéressé(e)' },
+  { v: 'NEGATIVE', label: 'Pas intéressé(e)' },
+];
+function badgeReponse(r: string): 'success' | 'error' | 'warning' { return r === 'POSITIVE' ? 'success' : r === 'NEGATIVE' ? 'error' : 'warning'; }
+function labelReponse(r: string): string { return r === 'POSITIVE' ? 'Intéressé(e)' : r === 'NEGATIVE' ? 'Pas intéressé(e)' : 'Réponse en attente'; }
+
+/* ── Sous-composant liste contacts sourcés (CRM) ── */
+function ListeContacts({ type, contacts, voirArchives, onToggleArchives, onAdd, onImport, onEdit, onStatut, onReponse, onARappeler, onFavori, onArchive }: {
   type: 'SOIGNANT' | 'ETABLISSEMENT';
   contacts: any[];
   voirArchives: boolean;
@@ -583,13 +616,43 @@ function ListeContacts({ type, contacts, voirArchives, onToggleArchives, onAdd, 
   onImport: () => void;
   onEdit: (c: any) => void;
   onStatut: (id: string, s: string) => void;
+  onReponse: (c: any, reponse: string | null) => void;
+  onARappeler: (c: any) => void;
   onFavori: (c: any) => void;
   onArchive: (c: any, archive: boolean) => void;
 }) {
   const tpl = useTemplateProspection();
+  const [fStatut, setFStatut] = useState('');
+  const [fReponse, setFReponse] = useState('');
+  const [fARappeler, setFARappeler] = useState(false);
+  const [fProfType, setFProfType] = useState('');
+  const [fDept, setFDept] = useState('');
+  const [tri, setTri] = useState('recent');
+
+  const nbRappels = useMemo(() => contacts.filter(c => c.a_rappeler).length, [contacts]);
+
+  const liste = useMemo(() => {
+    const l = contacts.filter(c =>
+      (!fStatut || c.statut === fStatut) &&
+      (!fReponse || c.reponse === fReponse) &&
+      (!fARappeler || c.a_rappeler) &&
+      (!fProfType || (type === 'SOIGNANT' ? c.profession === fProfType : c.type_etab === fProfType)) &&
+      (!fDept || (c.departement || '').toUpperCase() === fDept.trim().toUpperCase()),
+    );
+    return [...l].sort((a, b) => {
+      if (tri === 'nom') return (a.nom || '').localeCompare(b.nom || '');
+      if (tri === 'statut') return (a.statut || '').localeCompare(b.statut || '');
+      return new Date(b.maj_le || b.cree_le || 0).getTime() - new Date(a.maj_le || a.cree_le || 0).getTime();
+    });
+  }, [contacts, fStatut, fReponse, fARappeler, fProfType, fDept, tri, type]);
+
   return (
     <div className="space-y-3">
-      <div className="flex justify-end gap-2">
+      {/* Barre d'actions */}
+      <div className="flex justify-end gap-2 flex-wrap">
+        <BoutonY2K size="sm" variant={fARappeler ? 'primary' : 'secondary'} onClick={() => setFARappeler(!fARappeler)} iconeGauche={<RotateCcw className="h-4 w-4" />}>
+          À rappeler{nbRappels ? ` (${nbRappels})` : ''}
+        </BoutonY2K>
         <BoutonY2K size="sm" variant={voirArchives ? 'primary' : 'secondary'} onClick={onToggleArchives} iconeGauche={<Archive className="h-4 w-4" />}>
           {voirArchives ? 'Masquer les archivés' : 'Voir les archivés'}
         </BoutonY2K>
@@ -598,11 +661,52 @@ function ListeContacts({ type, contacts, voirArchives, onToggleArchives, onAdd, 
           Ajouter {type === 'SOIGNANT' ? 'un soignant' : 'un établissement'}
         </BoutonY2K>
       </div>
-      {contacts.length === 0 ? (
-        <CardY2K hoverLift={false}><CardY2KContent><p className="text-sm text-muted-foreground text-center py-6">Aucun contact sourcé pour l'instant.</p></CardY2KContent></CardY2K>
+
+      {/* Filtres / tri */}
+      <div className="flex gap-2 flex-wrap items-end">
+        <div>
+          <Label className="text-xs">Statut</Label>
+          <select value={fStatut} onChange={e => setFStatut(e.target.value)} className="input-base h-8 text-xs">
+            <option value="">Tous</option>
+            {STATUTS_CONTACT.map(s => <option key={s} value={s}>{LABELS_STATUT_CONTACT[s] || s}</option>)}
+          </select>
+        </div>
+        <div>
+          <Label className="text-xs">Réponse</Label>
+          <select value={fReponse} onChange={e => setFReponse(e.target.value)} className="input-base h-8 text-xs">
+            {REPONSES_FILTRE.map(r => <option key={r.v} value={r.v}>{r.label}</option>)}
+          </select>
+        </div>
+        <div>
+          <Label className="text-xs">{type === 'SOIGNANT' ? 'Profession' : "Type d'étab."}</Label>
+          <select value={fProfType} onChange={e => setFProfType(e.target.value)} className="input-base h-8 text-xs">
+            <option value="">{type === 'SOIGNANT' ? 'Toutes' : 'Tous'}</option>
+            {type === 'SOIGNANT'
+              ? PROFESSIONS.map(p => <option key={p.valeur} value={p.valeur}>{p.label}</option>)
+              : TYPES_PROSPECTION.filter(t => t.v).map(t => <option key={t.v} value={t.v}>{t.label}</option>)}
+          </select>
+        </div>
+        <div>
+          <Label className="text-xs">Dépt.</Label>
+          <Input value={fDept} onChange={e => setFDept(e.target.value)} placeholder="ex : 75" className="h-8 w-20 text-xs" />
+        </div>
+        <div>
+          <Label className="text-xs">Tri</Label>
+          <select value={tri} onChange={e => setTri(e.target.value)} className="input-base h-8 text-xs">
+            <option value="recent">Plus récent</option>
+            <option value="nom">Nom (A→Z)</option>
+            <option value="statut">Statut</option>
+          </select>
+        </div>
+      </div>
+
+      <p className="text-xs text-muted-foreground">{liste.length} contact(s) affiché(s){fARappeler ? ' · file « à rappeler »' : ''}</p>
+
+      {liste.length === 0 ? (
+        <CardY2K hoverLift={false}><CardY2KContent><p className="text-sm text-muted-foreground text-center py-6">Aucun contact pour ces filtres.</p></CardY2KContent></CardY2K>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          {contacts.map(c => (
+          {liste.map(c => (
             <CardY2K key={c.id} hoverLift={false} className={c.archive ? 'opacity-60' : ''}>
               <CardY2KContent>
                 <div className="flex items-start justify-between gap-2">
@@ -614,11 +718,13 @@ function ListeContacts({ type, contacts, voirArchives, onToggleArchives, onAdd, 
                       <span className="font-semibold text-foreground">{c.nom}</span>
                       <p className="text-xs text-muted-foreground mt-0.5">
                         {c.profession ? getLabelProfession(c.profession) : type === 'ETABLISSEMENT' ? 'Établissement' : ''}
-                        {c.ville ? ` · ${c.ville}` : ''}
+                        {c.ville ? ` · ${c.ville}` : ''}{c.departement ? ` (${c.departement})` : ''}
                       </p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                    {c.a_rappeler && <BadgeY2K variant="warning">À rappeler</BadgeY2K>}
+                    {c.reponse && <BadgeY2K variant={badgeReponse(c.reponse)}>{labelReponse(c.reponse)}</BadgeY2K>}
                     {c.archive && <BadgeY2K variant="warning">Archivé</BadgeY2K>}
                     <BadgeY2K variant={badgeStatutContact(c.statut)}>{LABELS_STATUT_CONTACT[c.statut] || c.statut}</BadgeY2K>
                   </div>
@@ -637,19 +743,33 @@ function ListeContacts({ type, contacts, voirArchives, onToggleArchives, onAdd, 
                       iconeGauche={<Mail className="h-4 w-4" />}>Email</BoutonY2K>
                   )}
                 </div>
+                {(c.telephone || c.email) && (
+                  <p className="text-[11px] mt-1.5 flex flex-wrap gap-x-2">
+                    {c.telephone && <a href={`tel:${c.telephone}`} className="text-primary font-medium hover:underline">{c.telephone}</a>}
+                    {c.email && <a href={`mailto:${c.email}`} className="text-primary font-medium hover:underline break-all">{c.email}</a>}
+                  </p>
+                )}
+                {/* Suivi : réponse + à rappeler */}
+                <div className="flex gap-1.5 mt-2 flex-wrap items-center">
+                  <BoutonY2K size="sm" variant={c.reponse === 'POSITIVE' ? 'primary' : 'secondary'} onClick={() => onReponse(c, 'POSITIVE')}>👍 Intéressé(e)</BoutonY2K>
+                  <BoutonY2K size="sm" variant="ghost" onClick={() => onReponse(c, 'NEGATIVE')}>👎 Non</BoutonY2K>
+                  <BoutonY2K size="sm" variant={c.a_rappeler ? 'primary' : 'ghost'} onClick={() => onARappeler(c)} iconeGauche={<RotateCcw className="h-4 w-4" />}>
+                    {c.a_rappeler ? 'Rappel programmé' : 'À rappeler'}
+                  </BoutonY2K>
+                </div>
                 {/* Pipeline + édition */}
                 <div className="flex gap-2 mt-2 items-center flex-wrap">
                   <select value={c.statut} onChange={e => onStatut(c.id, e.target.value)} className="input-base h-8 text-xs">
                     {STATUTS_CONTACT.map(s => <option key={s} value={s}>{LABELS_STATUT_CONTACT[s] || s}</option>)}
                   </select>
-                  <BoutonY2K size="sm" variant="ghost" onClick={() => onEdit(c)}>Éditer</BoutonY2K>
+                  <BoutonY2K size="sm" variant="ghost" onClick={() => onEdit(c)}>Éditer / note</BoutonY2K>
                   {c.archive ? (
                     <BoutonY2K size="sm" variant="ghost" onClick={() => onArchive(c, false)} iconeGauche={<RotateCcw className="h-4 w-4" />}>Restaurer</BoutonY2K>
                   ) : (
                     <BoutonY2K size="sm" variant="ghost" onClick={() => onArchive(c, true)} iconeGauche={<Archive className="h-4 w-4" />}>Retirer</BoutonY2K>
                   )}
                 </div>
-                {c.notes && <p className="text-[11px] text-muted-foreground mt-2">{c.notes}</p>}
+                {c.notes && <p className="text-[11px] text-muted-foreground mt-2 whitespace-pre-wrap">{c.notes}</p>}
               </CardY2KContent>
             </CardY2K>
           ))}
@@ -765,6 +885,7 @@ function ProspectionEtab({ onAjouter }: { onAjouter: () => void }) {
   const [loading, setLoading] = useState(false);
   const [emailEdit, setEmailEdit] = useState<{ finess: string; valeur: string; prospect?: any } | null>(null);
   const [outreach, setOutreach] = useState<any | null>(null);
+  const [appel, setAppel] = useState<any | null>(null);
   const tpl = useTemplateProspection();
 
   const rechercher = useCallback(async (p = 1) => {
@@ -815,10 +936,28 @@ function ProspectionEtab({ onAjouter }: { onAjouter: () => void }) {
     const { error } = await supabase.from('sales_contacts' as any).upsert({
       type: 'ETABLISSEMENT', nom: pr.nom, ville: pr.ville || null,
       telephone: pr.telephone || null, email: pr.email || null, finess: pr.finess,
+      departement: pr.departement || null, type_etab: pr.type_jolene || null,
       statut: 'PROSPECT', notes: `Prospection FINESS ${pr.finess}${pr.siret ? ` · SIRET ${pr.siret}` : ''}`,
     } as any, { onConflict: 'finess' });
     if (error) { toast.error(error.message); return; }
     toast.success('Ajouté aux établissements sourcés.');
+    onAjouter();
+  };
+
+  // « Appelé » → a décroché ? Oui = sourcé (réponse en attente) / Non = à rappeler.
+  const enregistrerAppel = async (pr: any, aDecroche: boolean) => {
+    const jour = new Date().toISOString().slice(0, 10);
+    const { error } = await supabase.from('sales_contacts' as any).upsert({
+      type: 'ETABLISSEMENT', nom: pr.nom, ville: pr.ville || null,
+      telephone: pr.telephone || null, email: pr.email || null, finess: pr.finess,
+      departement: pr.departement || null, type_etab: pr.type_jolene || null,
+      statut: 'CONTACTE', reponse: aDecroche ? 'EN_ATTENTE' : null, a_rappeler: !aDecroche,
+      dernier_contact_le: new Date().toISOString(),
+      notes: aDecroche ? `Appelé le ${jour} — a décroché` : `Appelé le ${jour} — pas de réponse, à rappeler`,
+    } as any, { onConflict: 'finess' });
+    if (error) { toast.error(error.message); return; }
+    setAppel(null);
+    toast.success(aDecroche ? 'Sourcé — à suivre.' : 'Ajouté à « À rappeler ».');
     onAjouter();
   };
 
@@ -901,6 +1040,7 @@ function ProspectionEtab({ onAjouter }: { onAjouter: () => void }) {
                     ) : (
                       <BoutonY2K size="sm" variant="ghost" onClick={() => setEmailEdit({ finess: pr.finess, valeur: '', prospect: pr })} iconeGauche={<Pencil className="h-4 w-4" />}>+ Email</BoutonY2K>
                     )}
+                    {pr.telephone && <BoutonY2K size="sm" variant="ghost" onClick={() => setAppel(pr)} iconeGauche={<Phone className="h-4 w-4" />}>Appelé</BoutonY2K>}
                     <BoutonY2K size="sm" variant="ghost" onClick={() => ajouterAuPipeline(pr)} iconeGauche={<Plus className="h-4 w-4" />}>Pipeline</BoutonY2K>
                   </div>
                   {(pr.telephone || pr.email) && (
@@ -939,6 +1079,9 @@ function ProspectionEtab({ onAjouter }: { onAjouter: () => void }) {
 
       {/* Envoi email via Jolene */}
       {outreach && <OutreachModal prospect={outreach} template={tpl} onClose={() => { setOutreach(null); rechercher(page); onAjouter(); }} />}
+
+      {/* Suivi d'appel : a décroché ? */}
+      {appel && <AppelModal prospect={appel} onChoix={(aDecroche) => enregistrerAppel(appel, aDecroche)} onClose={() => setAppel(null)} />}
     </div>
   );
 }
@@ -1053,7 +1196,7 @@ function OutreachModal({ prospect, template, onClose }: { prospect: any; templat
       body: {
         email: prospect.email, sujet, corps,
         finess: prospect.finess, cle: prospect.cle,
-        nom: nomAffiche, ville: prospect.ville,
+        nom: nomAffiche, ville: prospect.ville, departement: prospect.departement,
         telephone: prospect.telephone, profession: prospect.profession,
       },
     });
@@ -1079,6 +1222,27 @@ function OutreachModal({ prospect, template, onClose }: { prospect: any; templat
           </BoutonY2K>
           <BoutonY2K variant="secondary" onClick={onClose}>Annuler</BoutonY2K>
         </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── Modal suivi d'appel : a décroché ? ── */
+function AppelModal({ prospect, onChoix, onClose }: { prospect: any; onChoix: (aDecroche: boolean) => void; onClose: () => void }) {
+  const nom = prospect.prenom ? `${prospect.prenom} ${prospect.nom}`.trim() : prospect.nom;
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-foreground/40 p-0 sm:p-4" onClick={onClose}>
+      <div className="bg-card w-full sm:max-w-sm rounded-t-2xl sm:rounded-2xl p-5 space-y-4" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between">
+          <h2 className="font-bold text-foreground">Appel à {nom}</h2>
+          <button onClick={onClose} className="text-muted-foreground hover:text-foreground"><X className="h-5 w-5" /></button>
+        </div>
+        <p className="text-sm text-muted-foreground">Cette personne a-t-elle décroché ?</p>
+        <div className="flex gap-2">
+          <BoutonY2K onClick={() => onChoix(true)} className="flex-1">Oui, a décroché</BoutonY2K>
+          <BoutonY2K variant="secondary" onClick={() => onChoix(false)} className="flex-1" iconeGauche={<RotateCcw className="h-4 w-4" />}>Non — à rappeler</BoutonY2K>
+        </div>
+        <p className="text-[11px] text-muted-foreground">« Oui » source le contact (réponse à suivre). « Non » l'ajoute à la file « À rappeler ».</p>
       </div>
     </div>
   );
@@ -1274,6 +1438,7 @@ function ProspectionSoignants({ onAjouter }: { onAjouter: () => void }) {
   const [loading, setLoading] = useState(false);
   const [emailEdit, setEmailEdit] = useState<{ cle: string; valeur: string; prospect?: any } | null>(null);
   const [outreach, setOutreach] = useState<any | null>(null);
+  const [appel, setAppel] = useState<any | null>(null);
   const tpl = useTemplateProspectionSoignant();
 
   const rechercher = useCallback(async (p = 1) => {
@@ -1324,10 +1489,28 @@ function ProspectionSoignants({ onAjouter }: { onAjouter: () => void }) {
     const { error } = await supabase.from('sales_contacts' as any).insert({
       type: 'SOIGNANT', nom: `${pr.prenom || ''} ${pr.nom}`.trim(), ville: pr.ville || null,
       telephone: pr.telephone || null, email: pr.email || null, profession: pr.profession,
+      departement: pr.departement || null,
       statut: 'PROSPECT', notes: `Prospection Annuaire Santé CNAM${pr.enseigne ? ` · ${pr.enseigne}` : ''}`,
     } as any);
     if (error) { toast.error(error.message); return; }
     toast.success('Ajouté aux soignants sourcés.');
+    onAjouter();
+  };
+
+  // « Appelé » → a décroché ? Oui = sourcé (réponse en attente) / Non = à rappeler.
+  const enregistrerAppel = async (pr: any, aDecroche: boolean) => {
+    const jour = new Date().toISOString().slice(0, 10);
+    const { error } = await supabase.from('sales_contacts' as any).insert({
+      type: 'SOIGNANT', nom: `${pr.prenom || ''} ${pr.nom}`.trim(), ville: pr.ville || null,
+      telephone: pr.telephone || null, email: pr.email || null, profession: pr.profession,
+      departement: pr.departement || null,
+      statut: 'CONTACTE', reponse: aDecroche ? 'EN_ATTENTE' : null, a_rappeler: !aDecroche,
+      dernier_contact_le: new Date().toISOString(),
+      notes: aDecroche ? `Appelé le ${jour} — a décroché` : `Appelé le ${jour} — pas de réponse, à rappeler`,
+    } as any);
+    if (error) { toast.error(error.message); return; }
+    setAppel(null);
+    toast.success(aDecroche ? 'Sourcé — à suivre.' : 'Ajouté à « À rappeler ».');
     onAjouter();
   };
 
@@ -1416,6 +1599,7 @@ function ProspectionSoignants({ onAjouter }: { onAjouter: () => void }) {
                     ) : (
                       <BoutonY2K size="sm" variant="ghost" onClick={() => setEmailEdit({ cle: pr.cle, valeur: '', prospect: pr })} iconeGauche={<Pencil className="h-4 w-4" />}>+ Email</BoutonY2K>
                     )}
+                    {pr.telephone && <BoutonY2K size="sm" variant="ghost" onClick={() => setAppel(pr)} iconeGauche={<Phone className="h-4 w-4" />}>Appelé</BoutonY2K>}
                     <BoutonY2K size="sm" variant="ghost" onClick={() => ajouterAuPipeline(pr)} iconeGauche={<Plus className="h-4 w-4" />}>Pipeline</BoutonY2K>
                   </div>
                   {(pr.telephone || pr.email) && (
@@ -1452,6 +1636,9 @@ function ProspectionSoignants({ onAjouter }: { onAjouter: () => void }) {
 
       {/* Envoi email via Jolene (Resend) — parité avec les établissements */}
       {outreach && <OutreachModal prospect={outreach} template={tpl} onClose={() => { setOutreach(null); rechercher(page); onAjouter(); }} />}
+
+      {/* Suivi d'appel : a décroché ? */}
+      {appel && <AppelModal prospect={appel} onChoix={(aDecroche) => enregistrerAppel(appel, aDecroche)} onClose={() => setAppel(null)} />}
     </div>
   );
 }
