@@ -23,13 +23,13 @@ export default function RecruterSoignants() {
   return (
     <>
       <SEOHead
-        title="Recruter des soignants qualifiés | Jolene"
-        description="Publiez vos missions de remplacement médical et recevez des candidatures de soignants vérifiés. Commission de 15 %, facturation automatique."
+        title="Recruter des soignants qualifiés | Jolene Santé"
+        description="Recrutez infirmiers, aides-soignants et professionnels de santé vérifiés RPPS pour vos remplacements. Commission 15 %, contrats et facturation automatiques."
         url="https://jolene.app/recruter-soignants"
       />
       <SEOPageLayout
         heroTitle="Recrutez des soignants qualifiés, sans intermédiaire"
-        heroSubtitle="Fini les appels aux agences d'intérim. Publiez vos missions et recevez des candidatures de professionnels vérifiés, en toute conformité."
+        heroSubtitle="Fini les agences de remplacement coûteuses. Publiez vos missions et recevez des candidatures de professionnels vérifiés, en toute conformité."
         ctaText="Créer mon espace établissement"
         ctaHref="/inscription/etablissement"
       >
@@ -41,7 +41,7 @@ export default function RecruterSoignants() {
               <div className="bg-destructive/5 border border-destructive/20 rounded-xl p-6">
                 <h3 className="font-semibold text-destructive mb-3">😤 Le problème</h3>
                 <ul className="space-y-2 text-sm text-muted-foreground">
-                  <li>• Agences d'intérim coûteuses (20-30% de marge)</li>
+                  <li>• Agences de remplacement coûteuses (20-30% de marge)</li>
                   <li>• Délais de recrutement de plusieurs jours</li>
                   <li>• Paperasse administrative chronophage</li>
                   <li>• Aucune garantie sur les qualifications</li>
