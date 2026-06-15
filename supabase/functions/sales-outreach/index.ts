@@ -45,7 +45,7 @@ Deno.serve(async (req) => {
       body: JSON.stringify({
         from: "Gabrielle de Jolene <bonjour@jolene.app>",
         to: [email],
-        reply_to: "gabrielle.pcd@outlook.com",
+        reply_to: "gabrielle@jolene.app",
         subject: String(sujet).slice(0, 150),
         html: `<div style="font-family:sans-serif;max-width:560px;margin:auto;line-height:1.5">${corpsHtml}
           <p style="color:#999;font-size:11px;margin-top:24px">Jolene SASU — jolene.app · Pour ne plus recevoir nos messages, répondez « STOP ».</p></div>`,
