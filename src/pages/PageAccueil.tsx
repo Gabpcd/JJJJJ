@@ -273,8 +273,8 @@ export default function PageAccueil() {
   return (
     <>
       <SEOHead
-        title="Jolene — Staffing médical simplifié"
-        description="Plateforme de mise en relation entre établissements de santé et soignants qualifiés. Publiez des missions, signez vos contrats et pointez en ligne."
+        title="Jolene Santé — Missions soignants & remplacements vérifiés"
+        description="Jolene Santé connecte établissements de santé et soignants vérifiés (diplôme, RPPS, assurance) pour des missions et remplacements ponctuels. Inscription gratuite, contrats automatisés."
         url="https://jolene.app/"
         jsonLd={{
           "@context": "https://schema.org",
