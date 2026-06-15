@@ -5,6 +5,25 @@ import { Badge } from '@/components/ui/badge';
 import { Clock, Euro, ShieldCheck, TrendingUp, UserPlus, ClipboardList, Rocket } from 'lucide-react';
 import { PROFESSIONS } from '@/lib/constantes';
 
+const FAQ = [
+  { q: "L'inscription est-elle vraiment gratuite ?", r: "Oui, l'inscription est entièrement gratuite pour les soignants, sans aucune commission prélevée sur votre rémunération." },
+  { q: "Comment suis-je payé ?", r: "Le paiement de vos missions est garanti par Jolene Santé et versé après chaque mission, sans avoir à relancer l'établissement." },
+  { q: "Quelles professions peuvent s'inscrire ?", r: "Infirmiers, aides-soignants, AES, kinésithérapeutes, pharmaciens, préparateurs en pharmacie, sages-femmes et d'autres professions de santé." },
+  { q: "Quels documents dois-je fournir ?", r: "Selon votre profession : pièce d'identité, diplôme, et le cas échéant numéro RPPS et assurance. Tout est vérifié pour rassurer les établissements." },
+  { q: "Suis-je obligé d'accepter des missions ?", r: "Non. Vous choisissez librement vos missions, vos dates et votre taux horaire, sans aucune obligation." },
+  { q: "Puis-je cumuler avec mon emploi actuel ?", r: "Oui, de nombreux soignants complètent leur planning avec des missions ponctuelles selon leurs disponibilités." },
+];
+
+const faqJsonLd = {
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  mainEntity: FAQ.map((f) => ({
+    "@type": "Question",
+    name: f.q,
+    acceptedAnswer: { "@type": "Answer", text: f.r },
+  })),
+};
+
 const avantages = [
   { icon: Euro, titre: 'Rémunération transparente', desc: 'Taux horaire affiché avant de postuler, zéro frais cachés pour le soignant.' },
   { icon: Clock, titre: 'Flexibilité totale', desc: 'Choisissez vos missions, vos horaires et vos établissements. Vous êtes libre.' },
@@ -29,6 +48,7 @@ export default function DevenirSoignant() {
         title="Devenir soignant remplaçant | Jolene Santé"
         description="Missions de remplacement santé pour infirmiers, aides-soignants, pharmaciens et 15+ professions. Inscription gratuite, rémunération transparente, parcours libéral suivi."
         url="https://jolene.app/devenir-soignant"
+        jsonLd={faqJsonLd}
       />
       <SEOPageLayout
         heroTitle="Devenir soignant sur Jolene"
@@ -80,6 +100,24 @@ export default function DevenirSoignant() {
             <div className="flex flex-wrap justify-center gap-3">
               {professions.map((p) => (
                 <Badge key={p} variant="secondary" className="text-sm py-1.5 px-3">{p}</Badge>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* FAQ */}
+        <section className="py-16 bg-card">
+          <div className="max-w-3xl mx-auto px-4">
+            <h2 className="text-2xl md:text-3xl font-bold text-foreground text-center mb-10">Questions fréquentes</h2>
+            <div className="space-y-4">
+              {FAQ.map((item, i) => (
+                <details key={i} className="group rounded-xl border border-border bg-background p-5">
+                  <summary className="cursor-pointer list-none font-semibold text-foreground flex items-center justify-between gap-2">
+                    {item.q}
+                    <span className="text-primary transition-transform group-open:rotate-45 text-xl leading-none">+</span>
+                  </summary>
+                  <p className="mt-3 text-muted-foreground leading-relaxed">{item.r}</p>
+                </details>
               ))}
             </div>
           </div>

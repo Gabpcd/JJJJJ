@@ -5,7 +5,7 @@ interface SEOHeadProps {
   description: string;
   url?: string;
   image?: string;
-  jsonLd?: Record<string, any>;
+  jsonLd?: Record<string, any> | Record<string, any>[];
 }
 
 const DEFAULT_OG_IMAGE = 'https://jolene.app/og-default.png';
