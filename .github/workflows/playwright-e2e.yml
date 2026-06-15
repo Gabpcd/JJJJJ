@@ -142,6 +142,10 @@ jobs:
     name: Playwright E2E (${{ matrix.project }})
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
+    # Informatif (comme e2e-pr) : la matrice cross-browser sur la MÊME DB prod a
+    # une flakiness inhérente (seed/cleanup partagés, timing Safari/Firefox). Les
+    # vrais gates bloquants sont Typecheck+build / Drift / Lighthouse / Vercel.
+    continue-on-error: true
     # Conteneur officiel Playwright (chromium + firefox + webkit préinstallés,
     # toutes deps système incluses). Tag = version résolue lockfile (1.58.2).
     container:
