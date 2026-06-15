@@ -243,7 +243,7 @@ Deno.serve(async (req) => {
     // ─── Configuration VAPID Web Push ──────────────────────────
     const vapidPublicKey = Deno.env.get("VAPID_PUBLIC_KEY");
     const vapidPrivateKey = Deno.env.get("VAPID_PRIVATE_KEY");
-    const vapidSubject = Deno.env.get("VAPID_SUBJECT") || "mailto:contact@jolene.app";
+    const vapidSubject = Deno.env.get("VAPID_SUBJECT") || "mailto:support@jolene.app";
     const vapidConfigured = Boolean(vapidPublicKey && vapidPrivateKey);
     if (vapidConfigured) {
       webpush.setVapidDetails(vapidSubject, vapidPublicKey!, vapidPrivateKey!);
