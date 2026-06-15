@@ -137,7 +137,7 @@ function useTemplateProspectionSoignant(): TemplateProspection {
 export default function AdminSales() {
   usePageTitle('Recruter des soignants et des établissements');
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<'groupes' | 'soignants' | 'etablissements' | 'prospection' | 'prospection_soignants' | 'etab_jolene' | 'templates' | 'posts'>('groupes');
+  const [tab, setTab] = useState<'groupes' | 'soignants' | 'etablissements' | 'prospection' | 'prospection_soignants' | 'etab_jolene' | 'templates' | 'posts' | 'backlinks'>('groupes');
 
   const [groupes, setGroupes] = useState<any[]>([]);
   const [contacts, setContacts] = useState<any[]>([]);
@@ -356,6 +356,7 @@ export default function AdminSales() {
           <BoutonY2K variant={tab === 'etab_jolene' ? 'primary' : 'secondary'} size="sm" onClick={() => setTab('etab_jolene')} iconeGauche={<Building2 className="h-4 w-4" />}>Étab. Jolene</BoutonY2K>
           <BoutonY2K variant={tab === 'templates' ? 'primary' : 'secondary'} size="sm" onClick={() => setTab('templates')} iconeGauche={<FileText className="h-4 w-4" />}>Modèles ({templates.length})</BoutonY2K>
           <BoutonY2K variant={tab === 'posts' ? 'primary' : 'secondary'} size="sm" onClick={() => setTab('posts')} iconeGauche={<Send className="h-4 w-4" />}>Posts de la semaine</BoutonY2K>
+          <BoutonY2K variant={tab === 'backlinks' ? 'primary' : 'secondary'} size="sm" onClick={() => setTab('backlinks')} iconeGauche={<ExternalLink className="h-4 w-4" />}>Backlinks / Annuaires</BoutonY2K>
         </div>
 
         {/* ── GROUPES ── */}
@@ -499,6 +500,9 @@ export default function AdminSales() {
 
         {/* ── POSTS DE LA SEMAINE (générés depuis les missions réelles) ── */}
         {tab === 'posts' && <PostsGenerateur />}
+
+        {/* ── BACKLINKS / ANNUAIRES ── */}
+        {tab === 'backlinks' && <BacklinksAnnuaires />}
       </div>
 
       {/* ── Import CSV ── */}
@@ -1644,6 +1648,136 @@ function ProspectionSoignants({ onAjouter }: { onAjouter: () => void }) {
 
       {/* Suivi d'appel : a décroché ? */}
       {appel && <AppelModal prospect={appel} onChoix={(aDecroche) => enregistrerAppel(appel, aDecroche)} onClose={() => setAppel(null)} />}
+    </div>
+  );
+}
+
+/* ── Backlinks / Annuaires : liste suivie pour soumettre Jolene Santé ── */
+const CATEGORIES_ANNUAIRE = [
+  { v: '', label: 'Toutes catégories' },
+  { v: 'SAAS', label: 'Logiciels / SaaS' },
+  { v: 'STARTUP', label: 'Startups' },
+  { v: 'B2B', label: 'B2B / entreprises' },
+  { v: 'EMPLOI', label: 'Emploi / recrutement' },
+  { v: 'SANTE', label: 'Santé' },
+  { v: 'GENERAL', label: 'Généraliste' },
+];
+const STATUTS_ANNUAIRE = ['A_SOUMETTRE', 'SOUMIS', 'PUBLIE', 'REFUSE'];
+const LABELS_STATUT_ANNUAIRE: Record<string, string> = { A_SOUMETTRE: 'À soumettre', SOUMIS: 'Soumis', PUBLIE: 'Publié', REFUSE: 'Refusé' };
+function badgeStatutAnnuaire(s: string): 'success' | 'warning' | 'error' | 'info' {
+  if (s === 'PUBLIE') return 'success';
+  if (s === 'REFUSE') return 'error';
+  if (s === 'SOUMIS') return 'info';
+  return 'warning';
+}
+function badgeAutorite(a: string): 'success' | 'warning' | 'info' {
+  return a === 'ELEVEE' ? 'success' : a === 'FAIBLE' ? 'warning' : 'info';
+}
+
+function BacklinksAnnuaires() {
+  const [annuaires, setAnnuaires] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [fStatut, setFStatut] = useState('');
+  const [fCategorie, setFCategorie] = useState('');
+  const [edit, setEdit] = useState<any | null>(null);
+
+  const charger = useCallback(async () => {
+    setLoading(true);
+    const { data } = await supabase.from('sales_annuaires' as any).select('*')
+      .order('favori', { ascending: false }).order('autorite').order('nom');
+    setAnnuaires((data as any[]) || []);
+    setLoading(false);
+  }, []);
+  useEffect(() => { charger(); }, [charger]);
+
+  const maj = async (id: string, patch: any) => {
+    const { error } = await supabase.from('sales_annuaires' as any).update({ ...patch, maj_le: new Date().toISOString() } as any).eq('id', id);
+    if (error) { toast.error(error.message); return; }
+    charger();
+  };
+  const copier = async (txt: string) => {
+    try { await navigator.clipboard.writeText(txt); toast.success('Texte copié — collez-le dans l\'annuaire.'); }
+    catch { toast.error('Copie impossible.'); }
+  };
+
+  const liste = useMemo(() => annuaires.filter(a =>
+    (!fStatut || a.statut === fStatut) && (!fCategorie || a.categorie === fCategorie),
+  ), [annuaires, fStatut, fCategorie]);
+  const stats = useMemo(() => ({
+    aSoumettre: annuaires.filter(a => a.statut === 'A_SOUMETTRE').length,
+    publies: annuaires.filter(a => a.statut === 'PUBLIE').length,
+  }), [annuaires]);
+
+  if (loading) return <ChargementPage />;
+  return (
+    <div className="space-y-4">
+      <CardY2K hoverLift={false}><CardY2KContent>
+        <p className="text-xs text-muted-foreground">
+          Annuaires où soumettre Jolene Santé pour obtenir des <strong>backlinks</strong> (liens entrants = confiance Google).
+          Le texte est déjà rédigé : <strong>« Copier le texte »</strong>, ouvrez l'annuaire, collez, puis passez la fiche en « Soumis ».
+          {' '}<strong className="text-foreground">{stats.aSoumettre}</strong> à soumettre · <strong className="text-foreground">{stats.publies}</strong> publié(s).
+        </p>
+      </CardY2KContent></CardY2K>
+
+      <div className="flex gap-2 flex-wrap items-end">
+        <div>
+          <Label className="text-xs">Statut</Label>
+          <select value={fStatut} onChange={e => setFStatut(e.target.value)} className="input-base h-8 text-xs">
+            <option value="">Tous</option>
+            {STATUTS_ANNUAIRE.map(s => <option key={s} value={s}>{LABELS_STATUT_ANNUAIRE[s]}</option>)}
+          </select>
+        </div>
+        <div>
+          <Label className="text-xs">Catégorie</Label>
+          <select value={fCategorie} onChange={e => setFCategorie(e.target.value)} className="input-base h-8 text-xs">
+            {CATEGORIES_ANNUAIRE.map(c => <option key={c.v} value={c.v}>{c.label}</option>)}
+          </select>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        {liste.map(a => (
+          <CardY2K key={a.id} hoverLift={false}>
+            <CardY2KContent>
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0 flex items-start gap-1.5">
+                  <button onClick={() => maj(a.id, { favori: !a.favori })} className="mt-0.5 shrink-0" title="Favori">
+                    <Star className={`h-4 w-4 ${a.favori ? 'fill-yellow-400 text-yellow-400' : 'text-muted-foreground'}`} />
+                  </button>
+                  <div className="min-w-0">
+                    <a href={a.url} target="_blank" rel="noopener noreferrer" className="font-semibold text-primary hover:underline inline-flex items-center gap-1">{a.nom}<ExternalLink className="h-3.5 w-3.5 shrink-0" /></a>
+                    <p className="text-[11px] text-muted-foreground mt-0.5">{CATEGORIES_ANNUAIRE.find(c => c.v === a.categorie)?.label || a.categorie}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                  <BadgeY2K variant={badgeAutorite(a.autorite)}>{a.autorite === 'ELEVEE' ? 'Autorité élevée' : a.autorite === 'FAIBLE' ? 'Autorité faible' : 'Autorité moyenne'}</BadgeY2K>
+                  {a.gratuit && <BadgeY2K variant="info">Gratuit</BadgeY2K>}
+                  <BadgeY2K variant={badgeStatutAnnuaire(a.statut)}>{LABELS_STATUT_ANNUAIRE[a.statut]}</BadgeY2K>
+                </div>
+              </div>
+              {a.comment_soumettre && <p className="text-[11px] text-muted-foreground mt-2">📍 {a.comment_soumettre}</p>}
+              {a.texte_a_soumettre && <pre className="text-[11px] text-muted-foreground whitespace-pre-wrap font-sans bg-muted/40 rounded-lg p-2.5 mt-2">{a.texte_a_soumettre}</pre>}
+              <div className="flex gap-2 mt-2 flex-wrap items-center">
+                <BoutonY2K size="sm" onClick={() => copier(a.texte_a_soumettre || '')} iconeGauche={<Copy className="h-4 w-4" />}>Copier le texte</BoutonY2K>
+                <BoutonY2K size="sm" variant="secondary" onClick={() => window.open(a.url, '_blank', 'noopener')} iconeGauche={<ExternalLink className="h-4 w-4" />}>Ouvrir l'annuaire</BoutonY2K>
+                <select value={a.statut} onChange={e => maj(a.id, { statut: e.target.value })} className="input-base h-8 text-xs">
+                  {STATUTS_ANNUAIRE.map(s => <option key={s} value={s}>{LABELS_STATUT_ANNUAIRE[s]}</option>)}
+                </select>
+                <BoutonY2K size="sm" variant="ghost" onClick={() => setEdit({ ...a })} iconeGauche={<Pencil className="h-4 w-4" />}>Note / lien</BoutonY2K>
+              </div>
+              {a.lien_obtenu && <p className="text-[11px] mt-1.5"><a href={a.lien_obtenu} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline break-all">🔗 {a.lien_obtenu}</a></p>}
+              {a.notes && <p className="text-[11px] text-muted-foreground mt-1">{a.notes}</p>}
+            </CardY2KContent>
+          </CardY2K>
+        ))}
+      </div>
+
+      {edit && (
+        <FormPanel titre={`Fiche — ${edit.nom}`} onClose={() => setEdit(null)} onSave={async () => { await maj(edit.id, { lien_obtenu: edit.lien_obtenu || null, notes: edit.notes || null }); setEdit(null); }}>
+          <Champ label="Lien obtenu (URL du backlink une fois publié)"><Input value={edit.lien_obtenu || ''} onChange={e => setEdit({ ...edit, lien_obtenu: e.target.value })} placeholder="https://…" /></Champ>
+          <Champ label="Notes"><Textarea value={edit.notes || ''} onChange={e => setEdit({ ...edit, notes: e.target.value })} rows={3} /></Champ>
+        </FormPanel>
+      )}
     </div>
   );
 }
