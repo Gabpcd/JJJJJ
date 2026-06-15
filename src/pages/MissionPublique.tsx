@@ -39,6 +39,7 @@ export default function MissionPublique() {
       hiringOrganization: {
         '@type': 'Organization',
         name: mission.etablissement_nom,
+        sameAs: 'https://jolene.app',
       },
       jobLocation: {
         '@type': 'Place',
@@ -58,7 +59,9 @@ export default function MissionPublique() {
           unitText: 'HOUR',
         },
       },
-      directApply: false,
+      directApply: true,
+      applicantLocationRequirements: { '@type': 'Country', name: 'France' },
+      jobBenefits: 'Paiement garanti, horaires flexibles, contrats automatisés',
     } as Record<string, any>;
   }, [mission]);
 
@@ -68,8 +71,8 @@ export default function MissionPublique() {
     <div className="min-h-[100dvh] bg-background text-foreground flex flex-col">
       {mission && (
         <SEOHead
-          title={`${mission.intitule} — ${mission.ville} | Jolene`}
-          description={`Mission ${getLabelProfession(mission.profession_requise) || ''} à ${mission.ville} : ${Number(mission.taux_horaire_base).toFixed(0)} €/h. Établissement vérifié, paiement garanti. Postulez gratuitement sur Jolene.`}
+          title={`${mission.intitule} — ${mission.ville} | Jolene Santé`}
+          description={`Mission ${getLabelProfession(mission.profession_requise) || ''} à ${mission.ville} : ${Number(mission.taux_horaire_base).toFixed(0)} €/h. Soignants vérifiés, paiement garanti. Postulez gratuitement sur Jolene Santé.`}
           url={`https://jolene.app/mission/${id}`}
           jsonLd={jsonLd}
         />

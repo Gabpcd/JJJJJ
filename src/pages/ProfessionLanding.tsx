@@ -47,7 +47,7 @@ export default function ProfessionLanding() {
   const profession = professionSlug ? getProfessionBySlug(professionSlug) : undefined;
 
   const professionLabel = profession?.label || (professionSlug ? professionSlug.replace(/-/g, ' ') : 'Profession');
-  const professionDesc = profession?.description || 'Trouvez des missions intérimaires adaptées à votre profession sur Jolene.';
+  const professionDesc = profession?.description || 'Trouvez des missions adaptées à votre profession sur Jolene Santé.';
   const salaire = profession?.salaire_moyen || '20-40\u20AC/h';
 
   const faq = (professionSlug && faqParProfession[professionSlug]) ? faqParProfession[professionSlug] : defaultFaq;
@@ -55,8 +55,8 @@ export default function ProfessionLanding() {
   return (
     <>
       <SEOHead
-        title={`Missions ${professionLabel} intérimaires | Jolene`}
-        description={`${professionDesc} Taux horaire moyen : ${salaire}. Inscrivez-vous gratuitement et accédez à des centaines de missions.`}
+        title={`Missions ${professionLabel} — remplacement & vacations | Jolene Santé`}
+        description={`${professionDesc} Taux horaire moyen : ${salaire}. Inscription gratuite, soignants vérifiés, paiement garanti.`}
         url={`https://jolene.app/metier/${professionSlug}`}
       />
       <SEOPageLayout
