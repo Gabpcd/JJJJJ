@@ -35,8 +35,8 @@ export default function InfirmiereLiberal() {
   return (
     <>
       <SEOHead
-        title="Devenir infirmière libérale | Guide complet"
-        description="Découvrez comment passer infirmière libérale avec Jolene : parcours 3 200 h suivi heure par heure, étapes d'installation CPAM, Ordre, URSSAF. Guide complet."
+        title="Devenir infirmière libérale | Jolene Santé"
+        description="Passez infirmière libérale avec Jolene Santé : parcours 3 200 h suivi heure par heure, missions de remplacement, étapes installation CPAM, Ordre, URSSAF."
         url="https://jolene.app/infirmiere-liberale"
       />
       <SEOPageLayout
