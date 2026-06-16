@@ -35,6 +35,17 @@ const formatDate = (d: string) => new Date(d).toLocaleDateString('fr-FR', { day:
 type SortKey = 'nom' | 'type' | 'nb_missions' | 'commissions_ht' | 'commissions_ttc' | 'impayes' | 'taux_com';
 type SortDir = 'asc' | 'desc';
 
+type Periode = 'mois' | 'mois_precedent' | 'trimestre' | 'annee' | 'tout' | 'perso';
+
+const LIBELLES_PERIODE: Record<Periode, string> = {
+  mois: 'Ce mois',
+  mois_precedent: 'Mois dernier',
+  trimestre: '3 derniers mois',
+  annee: 'Cette année',
+  tout: 'Tout',
+  perso: 'Période personnalisée',
+};
+
 export default function AdminFinances() {
   usePageTitle('Finances Jolene');
   const navigate = useNavigate();
@@ -43,6 +54,11 @@ export default function AdminFinances() {
   const [missions, setMissions] = useState<any[]>([]);
   const [sortKey, setSortKey] = useState<SortKey>('commissions_ht');
   const [sortDir, setSortDir] = useState<SortDir>('desc');
+
+  // Filtre temporel du récap « sur la période » + détail par établissement.
+  const [periode, setPeriode] = useState<Periode>('tout');
+  const [dateDebut, setDateDebut] = useState<string>('');
+  const [dateFin, setDateFin] = useState<string>('');
 
   // Task 12
   const [diagResult, setDiagResult] = useState<DiagResult | null>(null);
@@ -87,6 +103,50 @@ export default function AdminFinances() {
     return d.getMonth() === moisPrecedent && d.getFullYear() === anneePrecedente;
   }), [factures, moisPrecedent, anneePrecedente]);
 
+  // Prédicat de période réutilisable (factures via date_emission, missions via debut_le).
+  const dansLaPeriode = useMemo(() => {
+    const debutMois = new Date(anneeCourante, moisCourant, 1);
+    const debutMoisPrec = new Date(anneePrecedente, moisPrecedent, 1);
+    const finMoisPrec = new Date(anneeCourante, moisCourant, 1); // exclusif
+    const debutTrimestre = new Date(anneeCourante, moisCourant - 2, 1); // 3 mois glissants
+    const debutAnnee = new Date(anneeCourante, 0, 1);
+    // Bornes perso (inclusives, bornes vides ignorées).
+    const bornePersoDebut = dateDebut ? new Date(dateDebut + 'T00:00:00') : null;
+    const bornePersoFin = dateFin ? new Date(dateFin + 'T23:59:59.999') : null;
+
+    return (dateStr: string | null | undefined): boolean => {
+      if (periode === 'tout') return true;
+      if (!dateStr) return false;
+      const d = new Date(dateStr);
+      if (Number.isNaN(d.getTime())) return false;
+      switch (periode) {
+        case 'mois':
+          return d >= debutMois;
+        case 'mois_precedent':
+          return d >= debutMoisPrec && d < finMoisPrec;
+        case 'trimestre':
+          return d >= debutTrimestre;
+        case 'annee':
+          return d >= debutAnnee;
+        case 'perso':
+          if (bornePersoDebut && d < bornePersoDebut) return false;
+          if (bornePersoFin && d > bornePersoFin) return false;
+          return true;
+        default:
+          return true;
+      }
+    };
+  }, [periode, dateDebut, dateFin, moisCourant, anneeCourante, moisPrecedent, anneePrecedente]);
+
+  const facturesFiltrees = useMemo(
+    () => factures.filter(f => dansLaPeriode(f.date_emission)),
+    [factures, dansLaPeriode],
+  );
+  const missionsFiltrees = useMemo(
+    () => missions.filter(m => dansLaPeriode(m.debut_le)),
+    [missions, dansLaPeriode],
+  );
+
   const commHTMois = facturesMoisCourant.reduce((s, f) => s + (f.montant_ht || 0), 0);
   const commTTCMois = facturesMoisCourant.reduce((s, f) => s + (f.montant_ttc || 0), 0);
   const tvaMois = facturesMoisCourant.reduce((s, f) => s + (f.montant_tva || 0), 0);
@@ -99,14 +159,15 @@ export default function AdminFinances() {
   const nbImpayees = impayees.length;
   const montantImpayees = impayees.reduce((s, f) => s + (f.montant_ttc || 0), 0);
 
-  // Recap all-time
-  const totalHT = factures.reduce((s, f) => s + (f.montant_ht || 0), 0);
-  const totalTVA = factures.reduce((s, f) => s + (f.montant_tva || 0), 0);
-  const totalTTC = factures.reduce((s, f) => s + (f.montant_ttc || 0), 0);
-  const payesTTC = factures.filter(f => f.statut === 'PAYEE').reduce((s, f) => s + (f.montant_ttc || 0), 0);
-  const volumeBrut = missions.reduce((s, m) => s + (m.total_brut || 0), 0);
+  // Recap « sur la période » (rewiré sur les données filtrées par période)
+  const totalHT = facturesFiltrees.reduce((s, f) => s + (f.montant_ht || 0), 0);
+  const totalTVA = facturesFiltrees.reduce((s, f) => s + (f.montant_tva || 0), 0);
+  const totalTTC = facturesFiltrees.reduce((s, f) => s + (f.montant_ttc || 0), 0);
+  const payesTTC = facturesFiltrees.filter(f => f.statut === 'PAYEE').reduce((s, f) => s + (f.montant_ttc || 0), 0);
+  const volumeBrut = missionsFiltrees.reduce((s, m) => s + (m.total_brut || 0), 0);
 
   // Taux commission moyen = moyenne des taux de chaque établissement (pas HT/volume)
+  // Global (sur tous les établissements actifs) — indicateur structurel, non scopé période.
   const tauxParEtab = useMemo(() => {
     const map = new Map<string, number>();
     missions.forEach((m: any) => {
@@ -139,13 +200,13 @@ export default function AdminFinances() {
     return months;
   }, [factures, moisCourant, anneeCourante]);
 
-  // Per-establishment table
+  // Per-establishment table — scopé sur la période sélectionnée (missions + impayés filtrés).
   const etabData = useMemo(() => {
     const map = new Map<string, {
       id: string; nom: string; type: string; nb_missions: number; soignants: Set<string>;
       commissions_ht: number; commissions_ttc: number; impayes: number; taux_com: number; derniere_mission: string;
     }>();
-    missions.forEach((m: any) => {
+    missionsFiltrees.forEach((m: any) => {
       const eid = m.etablissement_id;
       if (!eid) return;
       const existing = map.get(eid) || {
@@ -163,13 +224,13 @@ export default function AdminFinances() {
       if (!existing.derniere_mission || (m.debut_le && m.debut_le > existing.derniere_mission)) existing.derniere_mission = m.debut_le;
       map.set(eid, existing);
     });
-    factures.filter(f => f.statut === 'EMISE' || f.statut === 'EN_RETARD').forEach(f => {
+    facturesFiltrees.filter(f => f.statut === 'EMISE' || f.statut === 'EN_RETARD').forEach(f => {
       const eid = f.etablissement_id;
       if (!eid || !map.has(eid)) return;
       map.get(eid)!.impayes += f.montant_ttc || 0;
     });
     return Array.from(map.values()).map(e => ({ ...e, nb_soignants: e.soignants.size }));
-  }, [missions, factures]);
+  }, [missionsFiltrees, facturesFiltrees]);
 
   // Pattern « file de travail » (Session D, version légère) : établissements avec impayés,
   // montant décroissant — la vraie file de traitement vit dans /admin/impayees.
@@ -195,7 +256,7 @@ export default function AdminFinances() {
   const exporterCSV = () => {
     const headers = ['Date émission', 'N° Facture', 'Établissement', 'Type', 'Montant HT', 'TVA', 'Montant TTC', 'Statut'];
     const escapeCSV = (v: string) => `"${v.replace(/"/g, '""')}"`;
-    const rows = factures.map(f => [
+    const rows = facturesFiltrees.map(f => [
       escapeCSV(f.date_emission ? formatDate(f.date_emission) : ''),
       escapeCSV(f.numero_facture || ''),
       escapeCSV((f.etablissements as any)?.nom || ''),
@@ -231,7 +292,9 @@ export default function AdminFinances() {
 
   if (loading) return <LayoutAdmin><ChargementPage /></LayoutAdmin>;
 
-  const nbSoignantsTotal = new Set(missions.map((m: any) => m.soignant_assigne_id).filter(Boolean)).size;
+  // Scopé période (cohérent avec « Volume brut soignants » du même bloc récap).
+  const nbSoignantsTotal = new Set(missionsFiltrees.map((m: any) => m.soignant_assigne_id).filter(Boolean)).size;
+  const libellePeriode = LIBELLES_PERIODE[periode];
 
   return (
     <LayoutAdmin>
@@ -296,12 +359,61 @@ export default function AdminFinances() {
           </CardY2K>
         </div>
 
-        {/* Récap tout temps */}
+        {/* Sélecteur de période — pilote le récap « sur la période » + le détail par établissement */}
+        <div className="space-y-2">
+          <div className="flex flex-wrap items-center gap-2">
+            {(['mois', 'mois_precedent', 'trimestre', 'annee', 'tout', 'perso'] as Periode[]).map(p => (
+              <BoutonY2K
+                key={p}
+                size="sm"
+                variant={periode === p ? 'primary' : 'secondary'}
+                onClick={() => setPeriode(p)}
+                aria-pressed={periode === p}
+              >
+                {p === 'mois' ? 'Ce mois'
+                  : p === 'mois_precedent' ? 'Mois dernier'
+                  : p === 'trimestre' ? '3 mois'
+                  : p === 'annee' ? 'Cette année'
+                  : p === 'tout' ? 'Tout'
+                  : 'Période…'}
+              </BoutonY2K>
+            ))}
+          </div>
+          {periode === 'perso' && (
+            <div className="flex flex-wrap items-end gap-3 rounded-xl border border-border bg-card p-3">
+              <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+                Du
+                <input
+                  type="date"
+                  value={dateDebut}
+                  max={dateFin || undefined}
+                  onChange={(e) => setDateDebut(e.target.value)}
+                  className="rounded-lg border border-border bg-background px-2 py-1.5 text-base md:text-sm text-foreground"
+                />
+              </label>
+              <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+                Au
+                <input
+                  type="date"
+                  value={dateFin}
+                  min={dateDebut || undefined}
+                  onChange={(e) => setDateFin(e.target.value)}
+                  className="rounded-lg border border-border bg-background px-2 py-1.5 text-base md:text-sm text-foreground"
+                />
+              </label>
+            </div>
+          )}
+          <p className="text-xs text-muted-foreground">
+            {facturesFiltrees.length} facture{facturesFiltrees.length > 1 ? 's' : ''} sur la période
+          </p>
+        </div>
+
+        {/* Récap « sur la période » (rewiré sur la période sélectionnée) */}
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
           {[
-            { label: 'CA HT total', value: formatEur(totalHT), click: () => navigate('/admin/facturation') },
-            { label: 'TVA total', value: formatEur(totalTVA) },
-            { label: 'CA TTC total', value: formatEur(totalTTC) },
+            { label: 'CA HT sur la période', value: formatEur(totalHT), click: () => navigate('/admin/facturation') },
+            { label: 'TVA sur la période', value: formatEur(totalTVA) },
+            { label: 'CA TTC sur la période', value: formatEur(totalTTC) },
             { label: 'Encaissé TTC', value: formatEur(payesTTC), color: 'text-success' },
             { label: 'Volume brut soignants', value: formatEur(volumeBrut) },
             { label: 'Soignants mobilisés', value: String(nbSoignantsTotal) },
@@ -424,7 +536,7 @@ export default function AdminFinances() {
         {/* Table par établissement */}
         <CardY2K noPadding>
           <CardY2KHeader>
-            <CardY2KTitle className="text-base">Détail par établissement</CardY2KTitle>
+            <CardY2KTitle className="text-base">Détail par établissement — {libellePeriode}</CardY2KTitle>
             {/* Mobile : tri visible via select */}
             <div className="md:hidden flex items-center gap-2 mt-2">
               <label className="text-xs text-muted-foreground">Trier par</label>
