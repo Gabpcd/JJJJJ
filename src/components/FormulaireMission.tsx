@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, lazy, Suspense } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { Loader2, AlertTriangle } from 'lucide-react';
-import { extraireContratPreference, injecterContratTag, peutExercerLiberal, type ContratPreference } from '@/lib/constantes';
+import { extraireContratPreference, injecterContratTag, peutExercerLiberal, getLabelProfession, type ContratPreference } from '@/lib/constantes';
 import { SelectProfession } from '@/components/SelectProfession';
 import { SelectSpecialiteMedicale } from '@/components/SelectSpecialiteMedicale';
 import { WarningRist } from '@/components/WarningRist';
@@ -28,6 +28,34 @@ import { fr } from 'date-fns/locale';
 interface FormulaireMissionProps {
   missionSource?: any;
   modeEdition?: boolean;
+}
+
+// Session F (F5) — Grille indicative de taux horaire brut conseillé par profession,
+// fourchettes représentatives du marché du remplacement en France (€/h brut).
+// Purement informatif : n'impose jamais la valeur, sert de repère à l'établissement.
+const TAUX_CONSEILLE: Record<string, [number, number]> = {
+  IDE: [25, 38],
+  AS: [18, 26],
+  AES: [18, 26],
+  AUXILIAIRE_PUERICULTURE: [19, 27],
+  IBODE: [30, 45],
+  IADE: [35, 55],
+  SAGE_FEMME: [28, 40],
+  KINE: [30, 45],
+  MEDECIN: [60, 110],
+  DENTISTE: [60, 110],
+  PHARMACIEN: [30, 45],
+  MANIPULATEUR_RADIO: [24, 36],
+  PREPARATEUR_PHARMA: [18, 26],
+  DIETETICIEN: [22, 34],
+  ERGOTHERAPEUTE: [24, 38],
+  PSYCHOMOTRICIEN: [24, 38],
+  ORTHOPHONISTE: [28, 42],
+};
+
+/** Fourchette de taux conseillé pour une profession (fallback générique 20–40 €/h). */
+function getTauxConseille(profession: string): [number, number] {
+  return TAUX_CONSEILLE[profession] ?? [20, 40];
 }
 
 export function FormulaireMission({ missionSource, modeEdition }: FormulaireMissionProps) {
@@ -124,6 +152,14 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
 
     const dupId = searchParams.get('dupliquer');
     if (dupId && !missionSource) {
+      // Session F (F3) — « Republier » : si des nouvelles dates sont passées en query
+      // params (?debut=<iso>&fin=<iso>), on préremplit les horaires. Format attendu
+      // pour <input datetime-local> : "YYYY-MM-DDTHH:mm" (slice ISO à 16 caractères).
+      const debutParam = searchParams.get('debut');
+      const finParam = searchParams.get('fin');
+      if (debutParam) setDebutLe(debutParam.slice(0, 16));
+      if (finParam) setFinLe(finParam.slice(0, 16));
+
       supabase.from('missions').select('intitule, description, profession_requise, service, taux_horaire_base, est_urgente, niveau_urgence, type_contrat_recherche, specialite_medicale_requise, accepte_non_specialises').eq('id', dupId).single().then(({ data, error }) => {
         if (error) {
           console.warn('FormulaireMission: mission duplication fetch error', error);
@@ -687,6 +723,12 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
               className={`input-base pr-12 ${modeEdition && missionSource?.statut !== 'OUVERTE' ? 'bg-muted cursor-not-allowed' : ''}`} />
             <span aria-hidden="true" className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">€/h</span>
           </div>
+          {/* Session F (F5) — Taux conseillé indicatif par profession (n'impose rien) */}
+          {profession && (
+            <p className="text-xs text-muted-foreground mt-1">
+              💡 Taux conseillé pour {getLabelProfession(profession)} : {getTauxConseille(profession)[0]}–{getTauxConseille(profession)[1]} €/h brut
+            </p>
+          )}
           {modeEdition && missionSource?.statut !== 'OUVERTE' && (
             <p className="text-[10px] text-muted-foreground mt-1">🔒 Ces champs ne sont plus modifiables après acceptation.</p>
           )}

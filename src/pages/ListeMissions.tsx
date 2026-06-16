@@ -93,10 +93,34 @@ export default function ListeMissions() {
 
       const litigesMissionIds = new Set((litigesData || []).map((l: any) => l.mission_id));
 
+      // Session F (F4) — candidatures en attente par mission OUVERTE.
+      // Pas de count par mission dans le fetch missions : on agrège ici à la volée
+      // (count + dernière candidature) à partir de la table `candidatures`, restreint
+      // aux missions OUVERTE de la page courante (requête légère, pas de N+1).
+      const missionsOuvertesIds = (data || [])
+        .filter((m: any) => m.statut === 'OUVERTE')
+        .map((m: any) => m.id);
+      const candidaturesParMission: Record<string, { count: number; derniere: string | null }> = {};
+      if (missionsOuvertesIds.length > 0) {
+        const { data: candData } = await supabase
+          .from('candidatures')
+          .select('mission_id, cree_le')
+          .in('mission_id', missionsOuvertesIds)
+          .eq('statut', 'EN_ATTENTE');
+        for (const c of candData || []) {
+          const cur = candidaturesParMission[c.mission_id] || { count: 0, derniere: null };
+          cur.count += 1;
+          if (!cur.derniere || new Date(c.cree_le) > new Date(cur.derniere)) cur.derniere = c.cree_le;
+          candidaturesParMission[c.mission_id] = cur;
+        }
+      }
+
       const missions = (data || []).map((m: any) => ({
         ...m,
         soignants: m.soignant_assigne_id ? sgMap[m.soignant_assigne_id] || null : null,
         has_litige: litigesMissionIds.has(m.id),
+        nb_candidatures_attente: candidaturesParMission[m.id]?.count ?? 0,
+        derniere_candidature_le: candidaturesParMission[m.id]?.derniere ?? null,
       }));
 
       // M2: Single count query with status grouping instead of 7 parallel queries
@@ -137,6 +161,13 @@ export default function ListeMissions() {
         singles.push(m);
       }
     }
+
+    // Session F (F4) — « candidates-first » : les missions OUVERTE avec des
+    // candidatures en attente remontent en tête. Tri stable (Array.prototype.sort
+    // est stable depuis ES2019) : l'ordre relatif `debut_le DESC` est préservé
+    // entre missions de même priorité.
+    const aDesCandidatures = (m: any) => m.statut === 'OUVERTE' && (m.nb_candidatures_attente ?? 0) > 0;
+    singles.sort((a, b) => Number(aDesCandidatures(b)) - Number(aDesCandidatures(a)));
 
     const result: GroupeMission[] = [];
     // Series first
@@ -226,7 +257,13 @@ export default function ListeMissions() {
                     mission={g.mission}
                     onDupliquer={(m) => setModalDupliquer(m)}
                     onAnnuler={(m) => setModalAnnuler(m)}
-                    onRepublier={(m) => navigate(`/etablissement/missions/creer?dupliquer=${m.id}`)}
+                    onRepublier={(m, dates) => {
+                      // Session F (F3) — republier avec nouvelles dates optionnelles.
+                      const params = new URLSearchParams({ dupliquer: m.id });
+                      if (dates?.debut) params.set('debut', dates.debut);
+                      if (dates?.fin) params.set('fin', dates.fin);
+                      navigate(`/etablissement/missions/creer?${params.toString()}`);
+                    }}
                   />
                 </FadeInView>
               );

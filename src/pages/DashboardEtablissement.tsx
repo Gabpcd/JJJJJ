@@ -629,7 +629,13 @@ export default function DashboardEtablissement() {
                 <CarteMission mission={m}
                   onDupliquer={(m) => setModalDupliquer(m)}
                   onAnnuler={(m) => setModalAnnuler(m)}
-                  onRepublier={(m) => navigate(`/etablissement/missions/creer?dupliquer=${m.id}`)}
+                  onRepublier={(m, dates) => {
+                    // Session F (F3) — republier avec nouvelles dates optionnelles.
+                    const params = new URLSearchParams({ dupliquer: m.id });
+                    if (dates?.debut) params.set('debut', dates.debut);
+                    if (dates?.fin) params.set('fin', dates.fin);
+                    navigate(`/etablissement/missions/creer?${params.toString()}`);
+                  }}
                 />
               </FadeInView>
             ))}
