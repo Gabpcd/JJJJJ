@@ -6,7 +6,7 @@ import { logger } from '@/lib/logger';
 import { SkeletonDashboard } from '@/components/SkeletonCard';
 import { FadeInView } from '@/components/FadeInView';
 import { useNavigate } from 'react-router-dom';
-import { Briefcase, PlayCircle, CheckCircle, ClipboardList, FileText, Users, Star, ClipboardCheck, ShieldAlert, MessageCircle, CreditCard } from 'lucide-react';
+import { Briefcase, PlayCircle, CheckCircle, ClipboardList, FileText, Users, Star, ClipboardCheck, ShieldAlert, CreditCard } from 'lucide-react';
 import { LayoutApp } from '@/components/LayoutApp';
 import { CarteKPIY2K } from '@/components/y2k/CarteKPIY2K';
 import { CarteMission } from '@/components/CarteMission';
@@ -17,12 +17,12 @@ const ModaleAnnulationMissionEtab = lazy(() =>
     default: m.ModaleAnnulationMissionEtab,
   })),
 );
-import { EmptyState } from '@/components/ui/EmptyState';
 import { BandeauEvaluationsEnAttente } from '@/components/BandeauEvaluationsEnAttente';
 import { BandeauBlocageAuto } from '@/components/BandeauBlocageAuto';
 
 import { BadgePalier } from '@/components/BadgePalier';
 import { BoutonY2K } from '@/components/y2k/BoutonY2K';
+import { CardY2K } from '@/components/y2k/CardY2K';
 import { Mascotte } from '@/components/mascotte/Mascotte';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
@@ -33,9 +33,6 @@ import { useEtablissementScope } from '@/hooks/useEtablissementScope';
 
 import { TopSoignants } from '@/components/dashboard/TopSoignants';
 import { SectionPlanning } from '@/components/dashboard/SectionPlanning';
-import { BannerCandidaturesPoolUrgence } from '@/components/dashboard/BannerCandidaturesPoolUrgence';
-import { BannerAlertesDashboardEtab } from '@/components/dashboard/BannerAlertesDashboardEtab';
-import { BannerEncourageNotation } from '@/components/BannerEncourageNotation';
 import { GraphiqueEvolutionMissions } from '@/components/dashboard/GraphiqueEvolutionMissions';
 import { IndicateursAvancesEtab } from '@/components/dashboard/IndicateursAvancesEtab';
 import { CardScoreQualiteEtab } from '@/components/dashboard/CardScoreQualiteEtab';
@@ -287,12 +284,137 @@ export default function DashboardEtablissement() {
 
   if (loading) return <LayoutApp role="ADMIN_ETABLISSEMENT"><SkeletonDashboard /></LayoutApp>;
 
+  // F1 — Mode « première mission » : l'établissement n'a jamais publié de mission.
+  // aDejaPublie peut valoir null si le fetch a échoué → on ne bascule en mode hero
+  // QUE si on est sûr qu'il n'y a aucune mission (=== false), pour ne pas masquer
+  // le dashboard complet sur un simple incident réseau.
+  const premiereMission = aDejaPublie === false;
+
+  // Blocage dur : compte bloqué automatiquement OU vérification requise.
+  // Doit rester visible y compris en mode « première mission » (jamais masqué
+  // derrière le hero).
+  const blocageBanner = etab?.bloque_auto_le ? (
+    <BandeauBlocageAuto
+      raisons={etab.bloque_auto_raisons}
+      bloque_le={etab.bloque_auto_le}
+    />
+  ) : etab && !etab.peut_publier_missions ? (
+    <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-300 dark:border-amber-700 rounded-xl p-4 mb-4 flex items-start gap-3">
+      <ShieldAlert className="h-5 w-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+      <div className="flex-1">
+        <p className="text-sm font-medium text-amber-800 dark:text-amber-300">⏳ Votre compte est en cours de vérification</p>
+        <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">Vérifiez votre établissement (FINESS + rattachement du représentant) pour pouvoir publier des missions. À défaut, l'équipe Jolene valide votre dossier.</p>
+        <BoutonY2K size="sm" variant="secondary" className="mt-3" onClick={() => navigate('/etablissement/verification')}>
+          Vérifier mon établissement
+        </BoutonY2K>
+      </div>
+    </div>
+  ) : null;
+
+  // F1 — Mode « première mission » : une seule section hero focalisée.
+  if (premiereMission) {
+    const etabVerifie = !!etab && etab.peut_publier_missions !== false && !etab.bloque_auto_le;
+    return (
+      <LayoutApp role="ADMIN_ETABLISSEMENT">
+        {/* Blocage dur conservé EN PREMIER même en mode hero (jamais masqué) */}
+        {blocageBanner}
+        {erreurPartielle && (
+          <div className="bg-warning/10 border border-warning/30 rounded-xl p-3 mb-4 text-sm text-warning">
+            ⚠️ Certaines données n'ont pas pu être chargées.
+          </div>
+        )}
+
+        <FadeInView delay={0}>
+          <CardY2K variant="default" className="mb-6">
+            <div className="flex flex-col items-center text-center gap-4 py-4">
+              <Mascotte etat="thinking" taille="lg" />
+              <div>
+                <h1 className="text-2xl font-bold text-foreground">
+                  Publiez votre <span className="text-gradient-hero">première mission</span>
+                </h1>
+                <p className="text-sm text-muted-foreground mt-2 max-w-md mx-auto">
+                  2 minutes, et vous recevez des candidatures de soignants vérifiés.
+                </p>
+              </div>
+
+              {/* Checklist d'activation */}
+              <div className="w-full max-w-sm space-y-2 text-left mt-2">
+                <div className="flex items-center gap-3 rounded-xl border border-border bg-card/50 p-3">
+                  {etabVerifie ? (
+                    <CheckCircle className="h-5 w-5 text-success flex-shrink-0" />
+                  ) : (
+                    <ShieldAlert className="h-5 w-5 text-amber-500 flex-shrink-0" />
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-foreground">Établissement vérifié</p>
+                    <p className="text-xs text-muted-foreground">
+                      {etabVerifie ? 'Validé' : 'Vérification en cours'}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 rounded-xl border border-border bg-card/50 p-3">
+                  <ClipboardList className="h-5 w-5 text-muted-foreground flex-shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-foreground">Première mission publiée</p>
+                    <p className="text-xs text-muted-foreground">À faire</p>
+                  </div>
+                </div>
+              </div>
+
+              <BoutonY2K
+                variant="primary"
+                onClick={() => navigate('/etablissement/missions/creer')}
+                iconeGauche={<FileText className="h-4 w-4" />}
+                className="mt-2"
+              >
+                Publier une mission
+              </BoutonY2K>
+            </div>
+          </CardY2K>
+        </FadeInView>
+      </LayoutApp>
+    );
+  }
+
+  // F6 — « À faire maintenant » : on consolide les ~6 bannières concurrentes en
+  // une seule carte qui ne surface QUE les 1-2 actions prioritaires.
+  // Ordre de priorité : blocage compte/vérif > candidatures > litiges > évaluations > messages.
+  interface ActionAFaire { cle: string; emoji: string; label: string; cta: string; onClick: () => void; }
+  const actionsAFaire: ActionAFaire[] = [];
+  if (stats.candidatures_en_attente > 0) {
+    actionsAFaire.push({
+      cle: 'candidatures',
+      emoji: '🔔',
+      label: `${stats.candidatures_en_attente} candidature${stats.candidatures_en_attente > 1 ? 's' : ''} à traiter`,
+      cta: 'Traiter',
+      onClick: () => navigate('/etablissement/missions?statut=OUVERTE'),
+    });
+  }
+  if (stats.litiges_ouverts > 0) {
+    actionsAFaire.push({
+      cle: 'litiges',
+      emoji: '⚖️',
+      label: `${stats.litiges_ouverts} litige${stats.litiges_ouverts > 1 ? 's' : ''} en cours`,
+      cta: 'Gérer',
+      onClick: () => navigate('/etablissement/litiges'),
+    });
+  }
+  if (stats.messages_non_lus > 0) {
+    actionsAFaire.push({
+      cle: 'messages',
+      emoji: '💬',
+      label: `${stats.messages_non_lus} message${stats.messages_non_lus > 1 ? 's' : ''} non lu${stats.messages_non_lus > 1 ? 's' : ''}`,
+      cta: 'Ouvrir',
+      onClick: () => navigate('/etablissement/messagerie'),
+    });
+  }
+  // On n'affiche que les 2 actions les plus prioritaires.
+  const actionsTop = actionsAFaire.slice(0, 2);
+
   return (
     <LayoutApp role="ADMIN_ETABLISSEMENT">
+      {/* F6 — bannière évaluations conservée mais discrète (composant existant) */}
       <BandeauEvaluationsEnAttente role="ETABLISSEMENT" />
-      {etablissementId && <BannerCandidaturesPoolUrgence etablissementId={etablissementId} />}
-      <BannerAlertesDashboardEtab />
-      <BannerEncourageNotation role="ETAB" />
       <CardScoreQualiteEtab />
       <OnboardingGuide role="ADMIN_ETABLISSEMENT" userId={user!.id} />
       {erreurPartielle && (
@@ -329,81 +451,34 @@ export default function DashboardEtablissement() {
         </div>
       )}
 
-      {/* 🔔 Candidatures en attente */}
-      {stats.candidatures_en_attente > 0 && (
+      {/* F6 — Blocage dur conservé en premier (jamais masqué) */}
+      {blocageBanner}
+
+      {/* F6 — « À faire maintenant » : carte unique consolidant les bannières concurrentes */}
+      {actionsTop.length > 0 && (
         <FadeInView delay={0}>
-          <div className="card-base border-warning/30 bg-warning/5 mb-4">
-            <p className="text-sm font-semibold text-warning flex items-center gap-2 mb-2">
-              🔔 {stats.candidatures_en_attente} candidature{stats.candidatures_en_attente > 1 ? 's' : ''} en attente
-            </p>
-            <div className="space-y-1.5">
-              {stats.candidatures_recentes.slice(0, 5).map((c: any) => (
-                <button key={c.candidature_id} onClick={() => navigate(`/etablissement/missions/${c.mission_id}`)}
-                  className="w-full flex items-center justify-between text-sm p-1.5 rounded-lg hover:bg-muted/50 transition-colors text-left">
-                  <span className="text-foreground">
-                    👤 {c.soignant_nom} · <span className="text-muted-foreground">{c.mission_intitule}</span>
+          <CardY2K className="mb-4">
+            <p className="text-sm font-bold text-foreground mb-3">À faire maintenant</p>
+            <div className="space-y-2">
+              {actionsTop.map((a) => (
+                <button
+                  key={a.cle}
+                  onClick={a.onClick}
+                  className="w-full flex items-center justify-between gap-3 p-2.5 rounded-xl bg-muted/40 hover:bg-muted/70 transition-colors text-left"
+                >
+                  <span className="text-sm font-medium text-foreground flex items-center gap-2 min-w-0">
+                    <span aria-hidden="true">{a.emoji}</span>
+                    <span className="truncate">{a.label}</span>
                   </span>
-                  <span className="text-xs text-primary shrink-0">Voir →</span>
+                  <span className="text-xs font-semibold text-primary shrink-0">{a.cta} →</span>
                 </button>
               ))}
             </div>
-          </div>
+          </CardY2K>
         </FadeInView>
       )}
 
-      {/* ✅ Missions confirmées */}
-      {stats.missions_assignees_detail.length > 0 && (
-        <FadeInView delay={50}>
-          <div className="card-base border-success/30 bg-success/5 mb-4">
-            <p className="text-sm font-semibold text-success flex items-center gap-2 mb-2">
-              ✅ {stats.missions_assignees_detail.length} mission{stats.missions_assignees_detail.length > 1 ? 's' : ''} confirmée{stats.missions_assignees_detail.length > 1 ? 's' : ''}
-            </p>
-            <div className="space-y-1.5">
-              {stats.missions_assignees_detail.slice(0, 5).map((m: any) => (
-                <button key={m.mission_id} onClick={() => navigate(`/etablissement/missions/${m.mission_id}`)}
-                  className="w-full flex items-center justify-between text-sm p-1.5 rounded-lg hover:bg-muted/50 transition-colors text-left">
-                  <span className="text-foreground">
-                    {m.intitule} · <span className="text-muted-foreground">{m.soignant_nom}</span>
-                    {m.debut_le && <span className="text-muted-foreground"> · {new Date(m.debut_le).toLocaleDateString('fr-FR')}</span>}
-                  </span>
-                  <span className="text-xs text-primary shrink-0">Voir →</span>
-                </button>
-              ))}
-            </div>
-          </div>
-        </FadeInView>
-      )}
-
-      {/* ⚖️ Litiges ouverts */}
-      {stats.litiges_ouverts > 0 && (
-        <FadeInView delay={80}>
-          <button
-            className="w-full card-base border-warning/30 bg-warning/5 mb-4 hover:bg-warning/10 transition-colors text-left"
-            onClick={() => navigate('/etablissement/litiges')}
-          >
-            <p className="text-sm font-semibold text-warning flex items-center gap-2">
-              ⚖️ {stats.litiges_ouverts} litige{stats.litiges_ouverts > 1 ? 's' : ''} en cours — Cliquez pour gérer
-            </p>
-          </button>
-        </FadeInView>
-      )}
-
-      {/* 💬 Messages non lus */}
-      {stats.messages_non_lus > 0 && (
-        <FadeInView delay={75}>
-          <button
-            className="w-full card-base border-primary/30 bg-primary/5 mb-4 hover:bg-primary/10 transition-colors text-left"
-            onClick={() => navigate('/etablissement/messagerie')}
-          >
-            <p className="text-sm font-semibold text-primary flex items-center gap-2">
-              <MessageCircle className="h-4 w-4" />
-              💬 {stats.messages_non_lus} message{stats.messages_non_lus > 1 ? 's' : ''} non lu{stats.messages_non_lus > 1 ? 's' : ''}
-            </p>
-            <p className="text-xs text-muted-foreground mt-1">Cliquez pour ouvrir la messagerie</p>
-          </button>
-        </FadeInView>
-      )}
-
+      {/* Action principale : publier une mission, toujours accessible en haut */}
       <div className="flex gap-3 mb-6 overflow-x-auto pb-1">
         <BoutonY2K variant="primary" size="sm" onClick={() => navigate('/etablissement/missions/creer')} className="whitespace-nowrap" iconeGauche={<FileText className="h-4 w-4" />}>
           Publier une mission
@@ -417,24 +492,6 @@ export default function DashboardEtablissement() {
           </BoutonY2K>
         )}
       </div>
-
-      {etab?.bloque_auto_le ? (
-        <BandeauBlocageAuto
-          raisons={etab.bloque_auto_raisons}
-          bloque_le={etab.bloque_auto_le}
-        />
-      ) : etab && !etab.peut_publier_missions ? (
-        <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-300 dark:border-amber-700 rounded-xl p-4 mb-4 flex items-start gap-3">
-          <ShieldAlert className="h-5 w-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
-          <div className="flex-1">
-            <p className="text-sm font-medium text-amber-800 dark:text-amber-300">⏳ Votre compte est en cours de vérification</p>
-            <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">Vérifiez votre établissement (FINESS + rattachement du représentant) pour pouvoir publier des missions. À défaut, l'équipe Jolene valide votre dossier sous 24-48h.</p>
-            <BoutonY2K size="sm" variant="secondary" className="mt-3" onClick={() => navigate('/etablissement/verification')}>
-              Vérifier mon établissement
-            </BoutonY2K>
-          </div>
-        </div>
-      ) : null}
 
       {/* KPI row 1 — All from RPC */}
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 mb-4">
@@ -577,9 +634,9 @@ export default function DashboardEtablissement() {
               </FadeInView>
             ))}
           </div>
-        ) : aDejaPublie === false ? (
-          <EmptyState icone={<ClipboardList />} mascotte="thinking" titre="Publiez votre première mission" description="Les soignants qualifiés de votre zone seront notifiés immédiatement" cta={{ label: 'Publier une mission', onClick: () => navigate('/etablissement/missions/creer') }} />
         ) : (
+          /* Mode « première mission » géré en amont (hero) → ici on a déjà publié
+             mais aucune mission récente dans les 5 dernières remontées. */
           <p className="text-sm text-muted-foreground text-center py-6">Aucune mission récente.</p>
         )}
       </div>
