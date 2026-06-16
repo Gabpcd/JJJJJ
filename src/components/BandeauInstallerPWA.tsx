@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { X, Share, Plus, Download } from 'lucide-react';
 import { isIOSBrowser, isAndroidBrowser, isStandalonePWA, isNative } from '@/lib/platform';
+import { estSessionRecurrente } from '@/lib/session-count';
 
 const DISMISS_KEY = 'pwa_install_dismissed';
 const DISMISS_DURATION_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
@@ -26,6 +27,10 @@ export function BandeauInstallerPWA() {
   useEffect(() => {
     // Skip if already running as app or on desktop
     if (isNative() || isStandalonePWA()) return;
+
+    // Session G5 — ne pas proposer l'installation dès la 1re visite : on attend
+    // la 2e session (intention d'usage avérée).
+    if (!estSessionRecurrente()) return;
 
     // Skip if recently dismissed
     const dismissedAt = localStorage.getItem(DISMISS_KEY);

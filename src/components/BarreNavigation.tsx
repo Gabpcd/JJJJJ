@@ -78,6 +78,9 @@ function getSoignantSidebar(isLiberal: boolean, showLiberalPath: boolean): Sideb
   }
 
   entries.push({ icone: Gift, label: 'Parrainage', route: '/soignant/parrainage' });
+  // Session G3 — hub compte unique. « Mon compte » = réglages/finances/documents
+  // (page MonCompteSoignant), « Mon profil » = identité publique éditable.
+  entries.push({ icone: Settings, label: 'Mon compte', route: '/soignant/mon-compte' });
   entries.push({ icone: User, label: 'Mon profil', route: '/soignant/profil' });
 
   return entries;
