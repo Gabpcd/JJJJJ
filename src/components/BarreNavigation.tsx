@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { LucideIcon, Home, Search, FileText, CalendarDays, User, PlusCircle, List, ClipboardCheck, Settings, HeartPulse, LogOut, MapPin, Banknote, Clock, CreditCard, FileSpreadsheet, Rocket, Bell, MapPinned, BarChart3, Flame, MessageCircle, ClipboardList, Building2, Users, Scale, ChevronDown, Activity, Shield, Menu, X, Star, Gift, ShieldCheck, ArrowLeft } from 'lucide-react';
+import { LucideIcon, Home, Search, FileText, CalendarDays, User, PlusCircle, List, ClipboardCheck, Settings, HeartPulse, LogOut, MapPin, Banknote, CreditCard, FileSpreadsheet, Rocket, Bell, MapPinned, BarChart3, Flame, MessageCircle, ClipboardList, Building2, Users, Scale, ChevronDown, Activity, Shield, Menu, X, Star, Gift, ShieldCheck, ArrowLeft } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { UserRole } from '@/lib/types';
 import { estEligibleLiberal } from '@/lib/regles-installation-liberal';
@@ -81,6 +81,7 @@ function getSoignantSidebar(isLiberal: boolean, showLiberalPath: boolean): Sideb
 function getEtablissementSidebar(): SidebarEntry[] {
   return [
     { icone: Home, label: 'Accueil', route: '/etablissement/tableau-de-bord' },
+    { icone: PlusCircle, label: 'Publier une mission', route: '/etablissement/missions/creer' },
     {
       icone: ClipboardList, label: 'Missions', items: [
         { icone: PlusCircle, label: 'Publier une mission', route: '/etablissement/missions/creer' },
@@ -97,7 +98,6 @@ function getEtablissementSidebar(): SidebarEntry[] {
         { icone: Scale, label: 'Litiges & contestations', route: '/etablissement/litiges' },
         { icone: FileSpreadsheet, label: 'Export Paie', route: '/etablissement/export-paie' },
         { icone: BarChart3, label: 'Tableau RH', route: '/etablissement/rh' },
-        { icone: Clock, label: 'Planning équipes', route: '/etablissement/shifts' },
       ],
     },
     {
