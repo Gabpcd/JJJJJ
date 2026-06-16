@@ -5,7 +5,7 @@ import { logger } from '@/lib/logger';
 import { handleErrorSilent } from '@/lib/handleError';
 import { toast } from 'sonner';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { SearchX, MapPin, List, Map as MapIcon, SlidersHorizontal } from 'lucide-react';
+import { SearchX, MapPin, List, Map as MapIcon, SlidersHorizontal, LayoutGrid, Sparkles } from 'lucide-react';
 import { LayoutApp } from '@/components/LayoutApp';
 import { ChargementPage } from '@/components/ChargementPage';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -32,6 +32,7 @@ import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { FiltresSauvegardes } from '@/components/FiltresSauvegardes';
+import { VueSwipeMissions } from '@/components/swipe/VueSwipeMissions';
 import type { Json } from '@/integrations/supabase/types';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -70,10 +71,24 @@ function isWeekend(debut: string): boolean {
   return day === 0 || day === 6;
 }
 
+const VIEW_PREF_KEY = 'jolene_missions_view_pref'; // 'swipe' | 'liste'
+
 export default function RechercheMissions() {
-  usePageTitle('Recherche missions');
+  usePageTitle('Trouver une mission');
   const navigate = useNavigate();
   const { user } = useAuth();
+  // Session G1 : vue Liste/Swipe consolidée DANS cette page canonique
+  // « Trouver une mission ». Le toggle bascule la vue sans navigation
+  // cross-page (l'ancienne route /soignant/swipe-missions redirige ici).
+  const [vue, setVue] = useState<'liste' | 'swipe'>(() => {
+    try {
+      return localStorage.getItem(VIEW_PREF_KEY) === 'swipe' ? 'swipe' : 'liste';
+    } catch { return 'liste'; }
+  });
+  const basculerVue = (v: 'liste' | 'swipe') => {
+    try { localStorage.setItem(VIEW_PREF_KEY, v); } catch { /* ignore */ }
+    setVue(v);
+  };
   const [soignant, setSoignant] = useState<SoignantData | null>(null);
   const [missions, setMissions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -383,43 +398,50 @@ export default function RechercheMissions() {
       {(!soignant || !soignant.profession) && <BandeauProfilIncomplet />}
       <div className="space-y-4">
         <div className="flex items-center justify-between gap-2">
-          <h1 className="text-xl font-bold text-foreground">Recherche avancée</h1>
+          <h1 className="text-xl font-bold text-foreground">Trouver une mission</h1>
           <div className="flex items-center gap-2">
-            {/* Sprint 13-D PR 1 : toggle Swipe/Liste */}
+            {/* Session G1 : toggle Swipe/Liste in-page (bascule la vue, sans navigation) */}
             <div className="inline-flex rounded-2xl bg-jolene-cloud border border-jolene-rose-200 p-1" role="tablist" aria-label="Vue Swipe ou Liste">
               <button
                 type="button"
                 role="tab"
-                aria-selected="false"
-                className="inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold text-jolene-bubblegum hover:text-jolene-rose-700 transition-snap"
-                onClick={() => {
-                  try { localStorage.setItem('jolene_missions_view_pref', 'swipe'); } catch { /* ignore */ }
-                  navigate('/soignant/swipe-missions');
-                }}
+                aria-selected={vue === 'swipe'}
+                className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold transition-snap ${vue === 'swipe' ? 'bg-gradient-hero text-white shadow-md' : 'text-jolene-bubblegum hover:text-jolene-rose-700'}`}
+                onClick={() => basculerVue('swipe')}
               >
+                <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
                 Swipe
               </button>
               <button
                 type="button"
                 role="tab"
-                aria-selected="true"
-                className="inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold bg-gradient-hero text-white shadow-md transition-snap"
-                onClick={() => {
-                  try { localStorage.setItem('jolene_missions_view_pref', 'liste'); } catch { /* ignore */ }
-                }}
+                aria-selected={vue === 'liste'}
+                className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold transition-snap ${vue === 'liste' ? 'bg-gradient-hero text-white shadow-md' : 'text-jolene-bubblegum hover:text-jolene-rose-700'}`}
+                onClick={() => basculerVue('liste')}
               >
+                <LayoutGrid className="h-3.5 w-3.5" aria-hidden="true" />
                 Liste
               </button>
             </div>
-            <BoutonY2K variant="secondary" size="sm" onClick={() => setShowFilters(!showFilters)} className="gap-1.5 md:hidden">
-              <SlidersHorizontal className="h-4 w-4" />
-              Filtres
-            </BoutonY2K>
+            {vue === 'liste' && (
+              <BoutonY2K variant="secondary" size="sm" onClick={() => setShowFilters(!showFilters)} className="gap-1.5 md:hidden">
+                <SlidersHorizontal className="h-4 w-4" />
+                Filtres
+              </BoutonY2K>
+            )}
           </div>
         </div>
 
         <BandeauDocumentsManquants tousDocumentsValides={!!soignant?.tous_documents_valides} rcpExpiree={rcpExpiree} rcpExpireLe={rcpExpireLe} />
 
+        {/* Session G1 : vue Swipe consolidée dans la page canonique */}
+        {vue === 'swipe' ? (
+          <VueSwipeMissions
+            onBasculerListe={() => basculerVue('liste')}
+            onCreerAlerte={() => setAlerteOpen(true)}
+          />
+        ) : (
+        <>
         {/* Mes recherches sauvegardées (J2.3.C) — key : remount après création
             d'une alerte 1-tap pour rafraîchir la liste */}
         <FiltresSauvegardes
@@ -633,6 +655,8 @@ export default function RechercheMissions() {
             )}
           </TabsContent>
         </Tabs>
+        </>
+        )}
       </div>
 
       {/* Confirmation 1-tap : création d'alerte missions (Session E-5) */}
