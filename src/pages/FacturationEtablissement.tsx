@@ -46,7 +46,6 @@ import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { toast } from 'sonner';
 import { useEtablissementScope } from '@/hooks/useEtablissementScope';
-import { ObligationsFinancieresContent } from '@/pages/ObligationsFinancieresEtab';
 
 const fmt = (v: number | null | undefined) =>
   v != null ? new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(v) : '—';
@@ -102,12 +101,11 @@ export default function FacturationEtablissement() {
   const { afficherNotification } = useNotification();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  // Onglet de page : 'obligations' = vue consolidée des dettes (ex-page dédiée).
-  // Les autres valeurs de ?tab= (commissions, missions-a-payer…) ciblent des
-  // sections de l'onglet facturation et ne changent pas d'onglet.
-  const [ongletPage, setOngletPage] = useState<'facturation' | 'obligations'>(
-    searchParams.get('tab') === 'obligations' ? 'obligations' : 'facturation'
-  );
+  // Session F (F7) : l'onglet « Obligations » a été retiré car il dupliquait à
+  // l'identique le contenu de cette page (même RPC fn_obligations_financieres,
+  // mêmes missions à payer / commissions, actions renvoyant vers ces sections).
+  // Les anciens deep-links ?tab=obligations / ?tab=commissions / ?tab=missions-a-payer
+  // ouvrent et défilent désormais vers la section correspondante (cf. effet plus bas).
 
   // ── Data ──
   const [loading, setLoading] = useState(true);
@@ -161,6 +159,28 @@ export default function FacturationEtablissement() {
       });
     }
   }, []);
+
+  // Deep-link ?tab= vers une section de l'onglet facturation : ouvre la section
+  // ciblée puis scroll smooth (une fois les données chargées, sinon scrollIntoView
+  // calcule une position incorrecte sur une section repliée). 'obligations' change
+  // d'onglet (géré au-dessus) ; les autres valeurs ciblent une section.
+  useEffect(() => {
+    if (loading) return;
+    const tab = searchParams.get('tab');
+    const cibleSection: Record<string, string> = {
+      'missions-a-payer': SECTIONS.payer,
+      soignants: SECTIONS.payer,
+      attente: SECTIONS.attente,
+      commissions: SECTIONS.commissions,
+      historique: SECTIONS.historique,
+      exports: SECTIONS.exports,
+    };
+    const sectionId = tab ? cibleSection[tab] : undefined;
+    if (!sectionId) return;
+    setSectionsOpen(prev => ({ ...prev, [sectionId]: true }));
+    const t = setTimeout(() => scrollTo(sectionId), 100);
+    return () => clearTimeout(t);
+  }, [loading, searchParams]);
 
   // ── Data loading ──
   const charger = async () => {
@@ -413,27 +433,8 @@ export default function FacturationEtablissement() {
         </div>
       </div>
 
-      {/* ── Onglets Facturation | Obligations (Session C : fusion de l'ancienne
-          page /etablissement/obligations, redirigée vers ?tab=obligations) ── */}
-      <div className="flex gap-1 mb-6 bg-muted/50 rounded-xl p-1 w-fit">
-        {([
-          { id: 'facturation', label: '💳 Facturation' },
-          { id: 'obligations', label: '📋 Obligations' },
-        ] as const).map((t) => (
-          <button
-            key={t.id}
-            onClick={() => setOngletPage(t.id)}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${ongletPage === t.id ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
-
-      {ongletPage === 'obligations' ? (
-        <ObligationsFinancieresContent />
-      ) : (
-      <>
+      {/* Session F (F7) : onglet « Obligations » retiré — cette page consolide déjà
+          toutes les obligations financières (missions à payer, commissions, historique). */}
       {/* ── SECTION 0 : État vide si rien à payer ── */}
       {data && data.total_du === 0 && missionsNonPayees.length === 0 && facturesImpayees.length === 0 && (
         <FadeInView>
@@ -946,18 +947,44 @@ export default function FacturationEtablissement() {
                 </div>
               )}
 
-              {/* 4.4.b — IBAN Jolene (pour virements classiques) */}
+              {/* 4.4.b — Prélèvement automatique SEPA + IBAN Jolene (virements classiques) */}
               {etab?.mode_paiement_commission !== 'SEPA_DEBIT' && (
-                <div className="rounded-lg border bg-muted/20 p-3">
-                  <p className="text-sm font-semibold text-foreground flex items-center gap-2 mb-2">
-                    <Building2 className="h-4 w-4 text-primary" /> Coordonnées bancaires Jolene
-                  </p>
-                  <div className="text-xs text-muted-foreground space-y-1 font-mono">
-                    <p>IBAN : {ENTREPRISE.iban}</p>
-                    <p>BIC : {ENTREPRISE.bic}</p>
-                    <p className="text-[10px] text-muted-foreground/70 font-sans italic">
-                      Référence obligatoire : numéro de la facture commission (ex: FACT-2026-04-0001)
+                <div className="space-y-3">
+                  {/* CTA prélèvement automatique — pointe vers le mandat SEPA existant
+                      (sélection « Prélèvement SEPA » dans Paramètres → Profil, qui affiche
+                      SepaSetupSection → edge function setup-sepa). */}
+                  <div className="rounded-lg border border-primary/30 bg-primary/5 p-4">
+                    <div className="flex items-start gap-2 mb-3">
+                      <Landmark className="h-5 w-5 text-primary shrink-0 mt-0.5" />
+                      <div>
+                        <p className="text-sm font-semibold text-foreground">Activez le prélèvement automatique</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          Plus de virement à effectuer manuellement : la commission est prélevée
+                          automatiquement sur votre compte après chaque mission terminée.
+                        </p>
+                      </div>
+                    </div>
+                    <BoutonY2K
+                      size="sm"
+                      className="w-full sm:w-auto"
+                      onClick={() => navigate('/etablissement/parametres?tab=profil')}
+                    >
+                      <Landmark className="w-4 h-4 mr-2" /> Activer le prélèvement automatique
+                    </BoutonY2K>
+                  </div>
+
+                  {/* IBAN Jolene (virement manuel) */}
+                  <div className="rounded-lg border bg-muted/20 p-3">
+                    <p className="text-sm font-semibold text-foreground flex items-center gap-2 mb-2">
+                      <Building2 className="h-4 w-4 text-primary" /> Virement manuel — coordonnées bancaires Jolene
                     </p>
+                    <div className="text-xs text-muted-foreground space-y-1 font-mono">
+                      <p>IBAN : {ENTREPRISE.iban}</p>
+                      <p>BIC : {ENTREPRISE.bic}</p>
+                      <p className="text-[10px] text-muted-foreground/70 font-sans italic">
+                        Référence obligatoire : numéro de la facture commission (ex: FACT-2026-04-0001)
+                      </p>
+                    </div>
                   </div>
                 </div>
               )}
@@ -1341,8 +1368,6 @@ export default function FacturationEtablissement() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
-      )}
-      </>
       )}
     </LayoutApp>
   );
