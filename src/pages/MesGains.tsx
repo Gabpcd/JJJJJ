@@ -1,8 +1,12 @@
 import { useState, useEffect, useMemo, lazy, Suspense } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { usePageTitle } from '@/hooks/usePageTitle';
-import { Banknote, Clock, Download, TrendingUp, ChevronRight, Calculator, FileText, Search, CheckCircle, AlertTriangle, Scale } from 'lucide-react';
+import { Banknote, Clock, Download, TrendingUp, ChevronRight, Calculator, FileText, Search, CheckCircle, AlertTriangle, Scale, Receipt, Zap } from 'lucide-react';
 import { LayoutApp } from '@/components/LayoutApp';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { MesFacturesHonorairesContent } from './MesFacturesHonoraires';
+import { BulletinsPaieContent } from './BulletinsPaie';
+import { MesAvancesContent } from './MesAvances';
 import { CarteKPIY2K } from '@/components/y2k/CarteKPIY2K';
 import { ChargementPage } from '@/components/ChargementPage';
 import { EmptyState, IllustrationTirelire } from '@/components/ui/EmptyState';
@@ -31,8 +35,7 @@ function netEstime(m: any): number | null {
   return m.net_estime ?? (m.net_a_payer != null ? m.net_a_payer * 0.78 : (m.total_brut != null ? m.total_brut * 0.78 : null));
 }
 
-export default function MesGains() {
-  usePageTitle('Mes gains');
+export function MesGainsApercuContent() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [allMissions, setAllMissions] = useState<any[]>([]);
@@ -121,6 +124,25 @@ export default function MesGains() {
 
   const isLiberal = soignant?.type_exercice === 'LIBERAL' || soignant?.statut_liberal === 'ACTIF';
 
+  // Prochain paiement attendu : missions terminées non encore confirmées payées.
+  // Dérivé des données existantes (allMissions + paiementsMap) — aucune requête en plus.
+  const prochainPaiement = useMemo(() => {
+    const enAttente = allMissions.filter(m => {
+      const p = paiementsMap[m.id];
+      // Pas encore payé/confirmé → en attente de règlement
+      return !p || (p.statut !== 'CONFIRME' && p.statut !== 'RESOLU');
+    });
+    if (enAttente.length === 0) return null;
+    const montant = enAttente.reduce((s, m) => s + (netEstime(m) ?? 0), 0);
+    if (montant <= 0) return null;
+    // Date de la mission la plus ancienne en attente (point de départ du règlement)
+    const dates = enAttente
+      .map(m => (typeof m.fin_le === 'string' ? new Date(m.fin_le) : null))
+      .filter((d): d is Date => d != null && !isNaN(d.getTime()))
+      .sort((a, b) => a.getTime() - b.getTime());
+    return { montant, nbMissions: enAttente.length, prochaineDate: dates[0] ?? null };
+  }, [allMissions, paiementsMap]);
+
   const exporterCSV = () => {
     const header = 'Date,Mission,Service,Établissement,Heures,Taux horaire,Brut,Net estimé\n';
     const rows = missions.map(m => {
@@ -133,16 +155,29 @@ export default function MesGains() {
     void telechargerOuPartager(header + rows, nom, 'text/csv');
   };
 
-  if (loading) return <LayoutApp role="SOIGNANT"><ChargementPage /></LayoutApp>;
+  if (loading) return <ChargementPage />;
 
   return (
-    <LayoutApp role="SOIGNANT">
-      <div className="mb-6">
-        <h1 className="text-xl font-bold text-foreground">💰 Mes gains</h1>
-        <p className="text-sm text-muted-foreground mt-1">Visualisez vos revenus en un coup d'œil</p>
-      </div>
-
+    <>
       <BandeauPaiementDeclare />
+
+      {/* Prochain paiement attendu — synthèse en tête (Session G2) */}
+      {prochainPaiement && (
+        <div className="rounded-2xl border border-jolene-rose-200/60 bg-gradient-soft p-4 mb-6">
+          <div className="flex items-center gap-2 mb-1">
+            <Clock className="h-4 w-4 text-primary" />
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Prochain paiement attendu</p>
+          </div>
+          <p className="text-2xl font-bold text-foreground">{fmt(prochainPaiement.montant)}</p>
+          <p className="text-sm text-muted-foreground mt-0.5">
+            {prochainPaiement.nbMissions} mission{prochainPaiement.nbMissions > 1 ? 's' : ''} en attente de règlement
+            {prochainPaiement.prochaineDate && ` · à partir du ${format(prochainPaiement.prochaineDate, 'd MMMM yyyy', { locale: fr })}`}
+          </p>
+          <p className="text-[10px] text-muted-foreground italic mt-1">
+            Montant net estimé. Le règlement intervient après validation des présences par l'établissement.
+          </p>
+        </div>
+      )}
 
       {/* Parrainage au moment de la satisfaction (gains affichés) — levier viral */}
       <button
@@ -162,14 +197,14 @@ export default function MesGains() {
           valeur={fmt(totalNetFiltre)}
           label={`Net estimé* · ${labelPeriode}`}
           variant="holographic"
-          onClick={() => navigate('/soignant/mes-factures-honoraires')}
+          onClick={() => navigate('/soignant/mes-gains?tab=factures')}
         />
         <CarteKPIY2K
           icone={<TrendingUp className="h-4 w-4" />}
           valeur={fmt(totalBrutFiltre)}
           label={`Brut · ${labelPeriode}`}
           variant="default"
-          onClick={() => navigate('/soignant/mes-factures-honoraires')}
+          onClick={() => navigate('/soignant/mes-gains?tab=factures')}
         />
         <CarteKPIY2K
           icone={<Clock className="h-4 w-4" />}
@@ -183,7 +218,7 @@ export default function MesGains() {
           valeur={fmt(totalNetToutTemps)}
           label="Total tout temps"
           variant="soft"
-          onClick={() => navigate('/soignant/mes-factures-honoraires')}
+          onClick={() => navigate('/soignant/mes-gains?tab=factures')}
         />
       </div>
 
@@ -340,6 +375,119 @@ export default function MesGains() {
 
       <ModalAttestation open={modalAttestation} onClose={() => setModalAttestation(false)} />
       <ModalCotisations missionId={cotisationsMissionId} open={!!cotisationsMissionId} onClose={() => setCotisationsMissionId(null)} />
+    </>
+  );
+}
+
+/* ── Session G2 : hub « Mes finances » ──
+   Consolide en un seul écran les 4 anciennes pages argent du soignant :
+   Aperçu (gains), Factures d'honoraires (libéral), Bulletins de paie (salarié),
+   Avances (paiement rapide, libéral/mixte). Les onglets sont synchronisés via
+   ?tab= pour préserver les liens profonds. Aucune logique métier / PDF / RPC
+   n'est réécrite : chaque onglet compose le `Content` extrait de l'ancienne page. */
+const TABS_FINANCES = ['apercu', 'factures', 'bulletins', 'avances'] as const;
+type TabFinance = typeof TABS_FINANCES[number];
+
+export default function MesGains() {
+  usePageTitle('Mes finances');
+  const { user } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [exercice, setExercice] = useState<{ type: string | null; liberalActif: boolean } | null>(null);
+
+  useEffect(() => {
+    if (!user) return;
+    supabase.from('soignants').select('type_exercice, statut_liberal').eq('id', user.id).maybeSingle()
+      .then(({ data }) => {
+        setExercice({
+          type: (data as any)?.type_exercice ?? null,
+          liberalActif: (data as any)?.statut_liberal === 'ACTIF',
+        });
+      }, (err) => { handleErrorSilent(err, 'MesGains.hub.exercice'); setExercice({ type: null, liberalActif: false }); });
+  }, [user]);
+
+  // Tant que le statut n'est pas chargé (exercice == null), on reste permissif et
+  // on affiche tous les onglets : un lien profond ?tab=factures fonctionne dès le
+  // premier rendu. Une fois le type connu, on masque les onglets non pertinents
+  // (ex. Bulletins pour un libéral pur, Factures/Avances pour un salarié pur).
+  const type = exercice?.type ?? null;
+  const estLiberal = type === 'LIBERAL' || type === 'MIXTE' || exercice?.liberalActif === true;
+  const estSalarie = type === 'SALARIE' || type === 'MIXTE' || (type == null ? false : !estLiberal);
+  // Si le type est inconnu (null) on reste permissif : on garde l'onglet ciblé par
+  // ?tab= accessible afin de ne jamais casser un lien profond.
+  const showFactures = estLiberal || (exercice == null);
+  const showBulletins = estSalarie || (type == null && exercice != null) || (exercice == null);
+  const showAvances = estLiberal || (exercice == null);
+
+  const tabParam = searchParams.get('tab');
+  const wanted = TABS_FINANCES.includes(tabParam as TabFinance) ? (tabParam as TabFinance) : 'apercu';
+  // Si l'onglet demandé est masqué pour ce profil, on retombe sur l'Aperçu.
+  const visible: Record<TabFinance, boolean> = {
+    apercu: true,
+    factures: showFactures,
+    bulletins: showBulletins,
+    avances: showAvances,
+  };
+  const currentTab: TabFinance = visible[wanted] ? wanted : 'apercu';
+
+  const nbTabs = 1 + Number(showFactures) + Number(showBulletins) + Number(showAvances);
+  // Classes statiques (JIT Tailwind ne purge pas une interpolation dynamique).
+  const gridColsClass = nbTabs === 4 ? 'grid-cols-4' : nbTabs === 3 ? 'grid-cols-3' : nbTabs === 2 ? 'grid-cols-2' : 'grid-cols-1';
+
+  return (
+    <LayoutApp role="SOIGNANT">
+      <div className="mb-4">
+        <h1 className="text-xl font-bold text-foreground">💰 Mes finances</h1>
+        <p className="text-sm text-muted-foreground mt-1">Vos gains, factures, bulletins et avances au même endroit</p>
+      </div>
+
+      <Tabs value={currentTab} onValueChange={(v) => setSearchParams({ tab: v }, { replace: true })}>
+        <TabsList className={`grid w-full mb-4 ${gridColsClass}`}>
+          <TabsTrigger value="apercu" className="flex items-center gap-1.5 text-xs sm:text-sm">
+            <Banknote className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+            <span>Aperçu</span>
+          </TabsTrigger>
+          {showFactures && (
+            <TabsTrigger value="factures" className="flex items-center gap-1.5 text-xs sm:text-sm">
+              <FileText className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+              <span>Factures</span>
+            </TabsTrigger>
+          )}
+          {showBulletins && (
+            <TabsTrigger value="bulletins" className="flex items-center gap-1.5 text-xs sm:text-sm">
+              <Receipt className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+              <span>Bulletins</span>
+            </TabsTrigger>
+          )}
+          {showAvances && (
+            <TabsTrigger value="avances" className="flex items-center gap-1.5 text-xs sm:text-sm">
+              <Zap className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+              <span>Avances</span>
+            </TabsTrigger>
+          )}
+        </TabsList>
+
+        <TabsContent value="apercu" className="mt-0">
+          <MesGainsApercuContent />
+        </TabsContent>
+
+        {showFactures && (
+          <TabsContent value="factures" className="mt-0">
+            <MesFacturesHonorairesContent />
+          </TabsContent>
+        )}
+
+        {showBulletins && (
+          <TabsContent value="bulletins" className="mt-0">
+            <BulletinsPaieContent />
+          </TabsContent>
+        )}
+
+        {showAvances && (
+          <TabsContent value="avances" className="mt-0">
+            <MesAvancesContent />
+          </TabsContent>
+        )}
+      </Tabs>
     </LayoutApp>
   );
 }

@@ -1,11 +1,10 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Zap, ArrowLeft, Loader2, CheckCircle, Clock, AlertTriangle, XCircle, TrendingUp } from 'lucide-react';
+import { Zap, Loader2, CheckCircle, Clock, AlertTriangle, XCircle, TrendingUp } from 'lucide-react';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { LayoutApp } from '@/components/LayoutApp';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
-import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -25,6 +24,14 @@ const STATUT_CONFIG: Record<string, { label: string; icon: JSX.Element; color: s
 
 export default function MesAvances() {
   usePageTitle('Mes avances');
+  return (
+    <LayoutApp role="SOIGNANT">
+      <MesAvancesContent />
+    </LayoutApp>
+  );
+}
+
+export function MesAvancesContent() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
@@ -46,28 +53,23 @@ export default function MesAvances() {
 
   if (loading) {
     return (
-      <LayoutApp role="SOIGNANT">
-        <div className="flex items-center justify-center py-20">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        </div>
-      </LayoutApp>
+      <div className="flex items-center justify-center py-20">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
     );
   }
 
   // Salarié pur → pas d'affacturage (pas de créances libérales à céder)
   if (!loading && typeExercice && typeExercice !== 'LIBERAL' && typeExercice !== 'MIXTE') {
     return (
-      <LayoutApp role="SOIGNANT">
-        <div className="max-w-lg mx-auto py-12 text-center space-y-4">
-          <Zap className="h-12 w-12 text-muted-foreground mx-auto" />
-          <h1 className="text-xl font-bold text-foreground">Avances non disponibles</h1>
-          <p className="text-sm text-muted-foreground">
-            Le paiement rapide (affacturage) est réservé aux soignants en libéral ou mixte.
-            En tant que salarié(e), vos paiements sont gérés par l'établissement.
-          </p>
-          <Button variant="outline" onClick={() => navigate(-1)}>Retour</Button>
-        </div>
-      </LayoutApp>
+      <div className="max-w-lg mx-auto py-12 text-center space-y-4">
+        <Zap className="h-12 w-12 text-muted-foreground mx-auto" />
+        <h2 className="text-lg font-bold text-foreground">Avances non disponibles</h2>
+        <p className="text-sm text-muted-foreground">
+          Le paiement rapide (affacturage) est réservé aux soignants en libéral ou mixte.
+          En tant que salarié(e), vos paiements sont gérés par l'établissement.
+        </p>
+      </div>
     );
   }
 
@@ -75,19 +77,8 @@ export default function MesAvances() {
   const enAttente = avances.filter(a => ['DEMANDEE', 'EN_ANALYSE', 'APPROUVEE'].includes(a.statut)).length;
 
   return (
-    <LayoutApp role="SOIGNANT">
-      <div className="space-y-5">
-        <div className="flex items-center gap-3">
-          <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
-          <div>
-            <h1 className="text-xl font-bold text-foreground flex items-center gap-2">
-              <Zap className="h-5 w-5 text-primary" /> Mes avances (paiement rapide)
-            </h1>
-            <p className="text-xs text-muted-foreground">Historique de vos demandes d'affacturage Defacto</p>
-          </div>
-        </div>
+    <div className="space-y-5">
+        <p className="text-xs text-muted-foreground">Historique de vos demandes d'affacturage Defacto</p>
 
         {/* KPIs */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -121,7 +112,7 @@ export default function MesAvances() {
             description="Demandez le paiement rapide depuis vos factures d'honoraires."
             cta={{
               label: 'Voir mes factures',
-              onClick: () => navigate('/soignant/mes-factures-honoraires'),
+              onClick: () => navigate('/soignant/mes-gains?tab=factures'),
             }}
           />
         ) : (
@@ -167,7 +158,6 @@ export default function MesAvances() {
             })}
           </div>
         )}
-      </div>
-    </LayoutApp>
+    </div>
   );
 }

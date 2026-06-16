@@ -26,9 +26,9 @@ const MandatFacturation = lazy(() => import("./pages/MandatFacturation"));
 // redirigent vers /etablissement/activer.
 const ActiverEtablissement = lazy(() => import("./pages/ActiverEtablissement"));
 const VerificationEmailEtab = lazy(() => import("./pages/VerificationEmailEtab"));
-const MesFacturesHonoraires = lazy(() => import("./pages/MesFacturesHonoraires"));
-const MesAvances = lazy(() => import("./pages/MesAvances"));
-const BulletinsPaie = lazy(() => import("./pages/BulletinsPaie"));
+/* Session G2 : MesFacturesHonoraires / MesAvances / BulletinsPaie ne sont plus
+   routés directement — leurs `Content` sont composés dans le hub « Mes finances »
+   (MesGains). Les anciennes URLs redirigent vers /soignant/mes-gains?tab=…. */
 const AdminMandatsFacturation = lazy(() => import("./pages/admin/AdminMandatsFacturation"));
 const AdminBFA = lazy(() => import("./pages/admin/AdminBFA"));
 const AdminAffacturage = lazy(() => import("./pages/admin/AdminAffacturage"));
@@ -262,9 +262,10 @@ function AppRoutes() {
           <Route path="/soignant/presences/mission/:id" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><DetailPresencesMission role="SOIGNANT" /></RouteProtegee>} />
           <Route path="/soignant/mes-gains" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><MesGains /></RouteProtegee>} />
           <Route path="/soignant/mandat-facturation" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><MandatFacturation /></RouteProtegee>} />
-          <Route path="/soignant/mes-factures-honoraires" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><MesFacturesHonoraires /></RouteProtegee>} />
-          <Route path="/soignant/mes-avances" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><MesAvances /></RouteProtegee>} />
-          <Route path="/soignant/bulletins-paie" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><BulletinsPaie /></RouteProtegee>} />
+          {/* Session G2 : pages argent consolidées dans le hub « Mes finances » (/soignant/mes-gains). */}
+          <Route path="/soignant/mes-factures-honoraires" element={<Navigate to="/soignant/mes-gains?tab=factures" replace />} />
+          <Route path="/soignant/mes-avances" element={<Navigate to="/soignant/mes-gains?tab=avances" replace />} />
+          <Route path="/soignant/bulletins-paie" element={<Navigate to="/soignant/mes-gains?tab=bulletins" replace />} />
           <Route path="/soignant/historique-missions" element={<Navigate to="/soignant/planning?tab=historique" replace />} />
           <Route path="/soignant/fiabilite" element={<Navigate to="/soignant/score" replace />} />
           <Route path="/soignant/score" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><PageScoreSoignant /></RouteProtegee>} />

@@ -57,17 +57,19 @@ function getSoignantSidebar(isLiberal: boolean, showLiberalPath: boolean): Sideb
         { icone: Scale, label: 'Litiges & contestations', route: '/soignant/litiges' },
       ],
     },
+    // Session G2 : entrées argent (gains / factures / bulletins / avances)
+    // fusionnées dans le hub unique « Mes finances » → /soignant/mes-gains.
+    // Pour le libéral, Stripe Connect + Mandat facturation restent à part
+    // (hors hub : configuration de paiement, pas un historique financier).
     isLiberal
       ? {
-          icone: Banknote, label: 'Paiements', items: [
-            { icone: Banknote, label: 'Mes gains', route: '/soignant/mes-gains' },
-            { icone: FileText, label: 'Factures honoraires', route: '/soignant/mes-factures-honoraires' },
+          icone: Banknote, label: 'Finances', items: [
+            { icone: Banknote, label: 'Mes finances', route: '/soignant/mes-gains' },
             { icone: CreditCard, label: 'Stripe Connect', route: '/soignant/stripe-connect' },
             { icone: FileText, label: 'Mandat facturation', route: '/soignant/mandat-facturation' },
-            { icone: Banknote, label: 'Avances (paiement rapide)', route: '/soignant/mes-avances' },
           ],
         }
-      : { icone: Banknote, label: 'Mes gains', route: '/soignant/mes-gains' },
+      : { icone: Banknote, label: 'Mes finances', route: '/soignant/mes-gains' },
     { icone: MessageCircle, label: 'Messagerie', route: '/soignant/messagerie' },
   ];
 

@@ -1,11 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FileText, Download, ArrowLeft, Loader2, CheckCircle, Clock, AlertTriangle, Info, Zap, X } from 'lucide-react';
+import { FileText, Download, Loader2, CheckCircle, Clock, AlertTriangle, Info, Zap, X } from 'lucide-react';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { LayoutApp } from '@/components/LayoutApp';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
-import { Button } from '@/components/ui/button';
 import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { TableOuCartes, type ColonneTableau } from '@/components/ui/TableOuCartes';
@@ -27,6 +26,14 @@ const STATUT_CONFIG: Record<string, { label: string; icon: JSX.Element; color: s
 
 export default function MesFacturesHonoraires() {
   usePageTitle('Mes factures d\'honoraires');
+  return (
+    <LayoutApp role="SOIGNANT">
+      <MesFacturesHonorairesContent />
+    </LayoutApp>
+  );
+}
+
+export function MesFacturesHonorairesContent() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
@@ -88,18 +95,16 @@ export default function MesFacturesHonoraires() {
   };
 
   const onCessionSuccess = () => {
-    navigate('/soignant/mes-avances');
+    navigate('/soignant/mes-gains?tab=avances');
   };
 
   const telechargerFacturePDF = telechargerFactureHonorairesPDF;
 
   if (loading) {
     return (
-      <LayoutApp role="SOIGNANT">
-        <div className="flex items-center justify-center py-20">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        </div>
-      </LayoutApp>
+      <div className="flex items-center justify-center py-20">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
     );
   }
 
@@ -108,21 +113,8 @@ export default function MesFacturesHonoraires() {
   const totalAttente = facturesFiltrees.filter(f => f.statut === 'EMISE' || f.statut === 'EN_RETARD').reduce((s, f) => s + Number(f.montant_ttc || 0), 0);
 
   return (
-    <LayoutApp role="SOIGNANT">
+    <>
       <div className="space-y-5">
-        <div className="flex items-center gap-3">
-          {/* Sprint 12-B : conservé shadcn Button — size="icon" non supporté par BoutonY2K */}
-          <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
-          <div>
-            <h1 className="text-xl font-bold text-foreground flex items-center gap-2">
-              <FileText className="h-5 w-5 text-primary" /> Mes factures d'honoraires
-            </h1>
-            <p className="text-xs text-muted-foreground">Factures émises en votre nom par Jolene (mandataire)</p>
-          </div>
-        </div>
-
         {!mandatSigne && (
           <div className="rounded-xl border-2 border-warning/30 bg-warning/5 p-4 flex items-start gap-3">
             <Info className="h-5 w-5 text-warning shrink-0 mt-0.5" />
@@ -356,6 +348,6 @@ export default function MesFacturesHonoraires() {
           onSuccess={onCessionSuccess}
         />
       )}
-    </LayoutApp>
+    </>
   );
 }
