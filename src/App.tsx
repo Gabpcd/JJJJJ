@@ -298,7 +298,11 @@ function AppRoutes() {
           {/* Anciennes routes conservées en redirections pour ne pas casser les deep links (e-mails, articles d'aide, gates DB). */}
           <Route path="/etablissement/finaliser-inscription" element={<Navigate to="/etablissement/activer" replace />} />
           <Route path="/etablissement/verification" element={<Navigate to="/etablissement/activer" replace />} />
-          <Route path="/soignant/parametres" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><PageParametresSoignant /></RouteProtegee>} />
+          {/* Session G3 — hub compte unique : l'index Paramètres redirige vers
+              « Mon compte » (les réglages compte/mot de passe/GPS y sont foldés).
+              ⚠️ Les SOUS-routes /parametres/notifications et
+              /parametres/recherches-sauvegardees restent intactes ci-dessous. */}
+          <Route path="/soignant/parametres" element={<Navigate to="/soignant/mon-compte" replace />} />
           <Route path="/soignant/parametres/notifications" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><PageParametresNotifications /></RouteProtegee>} />
           <Route path="/etablissement/parametres/notifications" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><PageParametresNotifications /></RouteProtegee>} />
           <Route path="/soignant/parametres/recherches-sauvegardees" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><PageRecherchesSauvegardees role="SOIGNANT" /></RouteProtegee>} />
@@ -331,7 +335,10 @@ function AppRoutes() {
           <Route path="/soignant/mes-favoris" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><MesFavorisSoignant /></RouteProtegee>} />
           <Route path="/etablissement/mes-favoris" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><MesFavorisEtablissement /></RouteProtegee>} />
           <Route path="/etablissement/parrainage" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><PageParrainageEtablissement /></RouteProtegee>} />
-          <Route path="/etablissement/dashboard" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><DashboardEtablissement /></RouteProtegee>} />
+          {/* Session G4 — déduplication : /etablissement/dashboard rendait le même
+              DashboardEtablissement que /etablissement/tableau-de-bord (canonique).
+              Redirection pour ne garder qu'une seule URL. */}
+          <Route path="/etablissement/dashboard" element={<Navigate to="/etablissement/tableau-de-bord" replace />} />
           <Route path="/etablissement/contrat-plateforme" element={<Navigate to="/etablissement/parametres?tab=contrats" replace />} />
           <Route path="/etablissement/obligations" element={<Navigate to="/etablissement/facturation" replace />} />
           <Route path="/etablissement/equipe" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><EquipeEtablissement /></RouteProtegee>} />

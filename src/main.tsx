@@ -364,6 +364,12 @@ initNativePlugins();
 import { configurerClavier } from './lib/platform';
 configurerClavier();
 
+// Session G5 — incrémente le compteur de sessions AVANT le premier rendu, pour
+// que les prompts non urgents (push, installation PWA) lisent une valeur à jour
+// (les effets enfants s'exécutent avant ceux du parent en React).
+import { incrementerSession } from './lib/session-count';
+incrementerSession();
+
 createRoot(document.getElementById("root")!).render(
   <Sentry.ErrorBoundary fallback={({ resetError }) => <SentryErrorFallback resetError={resetError} />}>
     <App />

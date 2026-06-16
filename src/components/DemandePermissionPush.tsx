@@ -4,6 +4,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { useNotification } from '@/contexts/NotificationContext';
 import { Capacitor } from '@capacitor/core';
+import { estSessionRecurrente } from '@/lib/session-count';
 import {
   Dialog,
   DialogContent,
@@ -22,6 +23,11 @@ export function DemandePermissionPush() {
   useEffect(() => {
     if (!user) return;
     if (localStorage.getItem(STORAGE_KEY)) return;
+
+    // Session G5 — ne pas harceler à la 1re session : on réserve le prompt à
+    // partir de la 2e session (intention d'usage avérée). Le flag one-time
+    // « déjà demandé/refusé » ci-dessus reste prioritaire.
+    if (!estSessionRecurrente()) return;
 
     // On native, push is handled via initNativePush after login
     if (Capacitor.isNativePlatform()) return;
