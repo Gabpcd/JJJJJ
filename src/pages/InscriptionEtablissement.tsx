@@ -14,20 +14,6 @@ import { AuthLayout } from '@/components/AuthLayout';
 import { CaptchaTurnstile } from '@/components/CaptchaTurnstile';
 import { SwitchTypeInscription } from '@/components/inscription/SwitchTypeInscription';
 
-function GeoAutoEtab({ onResult }: { onResult: (lat: number, lng: number) => void }) {
-  const [asked, setAsked] = useState(false);
-  useEffect(() => {
-    if (asked) return;
-    setAsked(true);
-    if (!navigator.geolocation) return;
-    navigator.geolocation.getCurrentPosition(
-      (pos) => onResult(pos.coords.latitude, pos.coords.longitude),
-      () => { /* géolocalisation refusée — silencieux */ }
-    );
-  }, [asked, onResult]);
-  return null;
-}
-
 interface SiretInseeResult {
   statut: 'VERIFIE' | 'ALERTE' | 'INTROUVABLE';
   raison_sociale: string | null;
@@ -79,10 +65,13 @@ export default function InscriptionEtablissement() {
   const maj = (champ: string, valeur: any) => setForm(prev => ({ ...prev, [champ]: valeur }));
   const etape1Valide = form.email && form.motDePasse.length >= 8 && form.motDePasse === form.confirmMdp && cgu && cgv;
   const siretEstValide = siretValidation?.valide === true;
-  // Session C : étape 2 = identité établissement, étape 3 = coordonnées (10 champs
-  // d'un bloc → 2 écrans courts, moins d'abandon mi-parcours)
-  const etape2Valide = form.nom && siretEstValide && form.type;
-  const etape3Valide = !!form.ville;
+  // Funnel 2 étapes : étape 2 = identité établissement fusionnée (les anciennes
+  // « Votre établissement » + « Coordonnées » réunies en un seul écran court).
+  // N'exige que les 4 champs réellement requis par register-etablissement :
+  // nom, SIRET (Luhn), type et ville. Rue / code postal / département / email
+  // de contact / téléphone / géolocalisation sont déférés au tableau de bord
+  // (le backend les accepte vides ; email_contact retombe sur l'email du compte).
+  const etape2Valide = !!(form.nom && siretEstValide && form.type && form.ville);
 
   const verifierSiretInsee = useCallback(async (siret: string) => {
     if (siret.length !== 14) return;
@@ -160,7 +149,7 @@ export default function InscriptionEtablissement() {
         <SwitchTypeInscription actif="etablissement" />
 
         <div className="flex items-center justify-center gap-0 mb-2">
-          {[1, 2, 3].map((n) => (
+          {[1, 2].map((n) => (
             <React.Fragment key={n}>
               {n > 1 && <div className={`h-1 w-12 mx-1 rounded-full ${etape >= n ? 'bg-primary' : 'bg-muted'}`} />}
               <div className={`h-9 w-9 rounded-full flex items-center justify-center text-sm font-bold ${etape >= n ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}>
@@ -170,7 +159,7 @@ export default function InscriptionEtablissement() {
           ))}
         </div>
         <p className="text-center text-xs text-muted-foreground mb-6">
-          Étape {etape}/3 — {etape === 1 ? 'Identifiants' : etape === 2 ? 'Votre établissement' : 'Coordonnées'} · environ 2 minutes
+          Étape {etape}/2 — {etape === 1 ? 'Identifiants' : 'Votre établissement'} · ≈ 2 minutes
         </p>
 
         <form onSubmit={handleSubmit}>
@@ -264,41 +253,25 @@ export default function InscriptionEtablissement() {
               {form.type !== 'PHARMACIE_OFFICINE' && (
                 <p className="text-xs text-muted-foreground">ℹ️ Le plafond Loi Rist s'applique aux taux horaires en CDD.</p>
               )}
-              <div className="flex gap-3 pt-2">
-                <button type="button" onClick={() => setEtape(1)} className="btn-secondary flex-1">Retour</button>
-                <button type="button" onClick={() => setEtape(3)} disabled={!etape2Valide} className="btn-primary flex-1 disabled:opacity-50 disabled:cursor-not-allowed">Continuer</button>
-              </div>
-            </div>
-          )}
-
-          {etape === 3 && (
-            <>
-            <GeoAutoEtab onResult={(lat, lng) => { maj('lat', lat); maj('lng', lng); }} />
-            <div className="space-y-4">
-              <p className="text-sm font-medium text-muted-foreground mb-4">Étape 3 — Coordonnées</p>
+              {/* Seule la ville est requise ici. L'adresse complète (rue / code
+                  postal / département), l'email et le téléphone de contact ainsi
+                  que la géolocalisation sont déférés au tableau de bord pour
+                  alléger le funnel. register-etablissement accepte ces champs
+                  vides (rue → « Non renseigné », CP → « 00000 », email_contact →
+                  email du compte). */}
               <div>
-                <label className="text-sm font-medium text-foreground mb-1.5 block">Adresse</label>
-                <input value={form.rue} onChange={e => maj('rue', e.target.value)} placeholder="Rue" className="input-base mb-2" />
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                  <input value={form.ville} onChange={e => maj('ville', e.target.value)} placeholder="Ville *" className="input-base" required />
-                  <input value={form.codePostal} onChange={e => maj('codePostal', e.target.value.replace(/\D/g, '').slice(0, 5))} placeholder="Code postal" className="input-base" />
-                  <input value={form.departement} onChange={e => maj('departement', e.target.value)} placeholder="Dép." className="input-base" />
-                </div>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div><label className="text-sm font-medium text-foreground mb-1.5 block">Email contact</label><input type="email" value={form.emailContact} onChange={e => maj('emailContact', e.target.value)} className="input-base" /></div>
-                <div><label className="text-sm font-medium text-foreground mb-1.5 block">Téléphone</label><input value={form.telephoneContact} onChange={e => maj('telephoneContact', e.target.value)} className="input-base" /></div>
+                <label className="text-sm font-medium text-foreground mb-1.5 block">Ville *</label>
+                <input value={form.ville} onChange={e => maj('ville', e.target.value)} placeholder="Ville" className="input-base" autoComplete="address-level2" required />
               </div>
               <CaptchaTurnstile className="flex justify-center pt-2" onVerify={setTurnstileToken} onExpire={() => setTurnstileToken(null)} onError={() => setTurnstileToken(null)} />
               <div className="flex gap-3 pt-2">
-                <button type="button" onClick={() => setEtape(2)} className="btn-secondary flex-1">Retour</button>
-                <button type="submit" disabled={!etape3Valide || submitting} className="btn-primary flex-1 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2">
+                <button type="button" onClick={() => setEtape(1)} className="btn-secondary flex-1">Retour</button>
+                <button type="submit" disabled={!etape2Valide || submitting} className="btn-primary flex-1 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2">
                   {submitting && <Loader2 className="h-4 w-4 animate-spin" />}
                   {submitting ? 'Création…' : 'Créer le compte'}
                 </button>
               </div>
             </div>
-            </>
           )}
         </form>
 
