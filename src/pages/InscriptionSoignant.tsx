@@ -2,7 +2,7 @@ import { usePageTitle } from '@/hooks/usePageTitle';
 import React, { useState, useEffect, useCallback } from 'react';
 import * as Sentry from '@sentry/react';
 import { useNavigate } from 'react-router-dom';
-import { HeartPulse, Eye, EyeOff, Check, Loader2, ShieldCheck, ShieldAlert, MapPin } from 'lucide-react';
+import { HeartPulse, Eye, EyeOff, Check, Loader2, ShieldCheck, ShieldAlert } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTypesExerciceAutorises } from '@/hooks/useTypesExerciceAutorises';
 import { getLabelProfession } from '@/lib/constantes';
@@ -22,55 +22,6 @@ import { BoutonProSanteConnect } from '@/components/BoutonProSanteConnect';
 import { ApercuMarche } from '@/components/inscription/ApercuMarche';
 import { SwitchTypeInscription } from '@/components/inscription/SwitchTypeInscription';
 
-
-/**
- * Géolocalisation opt-in avec bénéfice affiché (Session E-1).
- * Remplace l'ancienne demande automatique au montage : la popup navigateur
- * hors contexte maximisait les refus et privait l'app de son meilleur
- * argument (« missions près de chez vous »).
- */
-function GeoOptIn({ onResult }: { onResult: (lat: number, lng: number) => void }) {
-  const [statut, setStatut] = useState<'inactif' | 'demande' | 'accordee' | 'refusee'>('inactif');
-
-  if (!('geolocation' in navigator)) return null;
-
-  if (statut === 'accordee') {
-    return (
-      <div className="p-3 bg-success/5 border border-success/30 rounded-xl flex items-center gap-2 text-sm text-foreground">
-        <MapPin className="h-4 w-4 text-success shrink-0" />
-        Localisation activée — vous verrez les missions près de chez vous.
-      </div>
-    );
-  }
-
-  return (
-    <div className="p-3 bg-primary/5 border border-primary/20 rounded-xl flex items-center justify-between gap-3">
-      <div className="flex items-start gap-2 min-w-0">
-        <MapPin className="h-4 w-4 text-primary shrink-0 mt-0.5" />
-        <p className="text-xs text-foreground">
-          Activez la localisation pour voir les missions <strong>près de chez vous</strong>.
-          {statut === 'refusee' && <span className="block text-muted-foreground mt-0.5">Refusée — vous pourrez l'activer plus tard depuis votre profil.</span>}
-        </p>
-      </div>
-      {statut !== 'refusee' && (
-        <button
-          type="button"
-          disabled={statut === 'demande'}
-          onClick={() => {
-            setStatut('demande');
-            navigator.geolocation.getCurrentPosition(
-              (pos) => { onResult(pos.coords.latitude, pos.coords.longitude); setStatut('accordee'); },
-              () => setStatut('refusee'),
-            );
-          }}
-          className="shrink-0 text-xs font-semibold text-primary border border-primary/40 rounded-lg px-3 py-1.5 hover:bg-primary/10 transition-colors disabled:opacity-50"
-        >
-          {statut === 'demande' ? 'Activation…' : 'Activer'}
-        </button>
-      )}
-    </div>
-  );
-}
 
 function JaugeForce({ motDePasse }: { motDePasse: string }) {
   let force = 0;
@@ -382,16 +333,17 @@ export default function InscriptionSoignant() {
         <h1 className="text-xl font-bold text-foreground text-center mb-2">Inscription Soignant</h1>
         <SwitchTypeInscription actif="soignant" />
 
-        {/* Stepper honnête : le parcours réel a 4 étapes (Session E-1 — le
-            stepper à 2 ronds laissait croire que tout s'arrêtait au compte,
-            puis le mur documentaire surprenait après coup). Même langage
-            visuel que le flow Pro Santé Connect. */}
-        <div className="flex items-center justify-center gap-0 mb-8">
+        {/* Stepper honnête : la création du compte se termine à l'étape Profil.
+            Les documents et la vérification sont des tâches post-inscription,
+            réalisées tranquillement depuis le tableau de bord
+            (ChecklistActivation) — ce ne sont PAS des étapes d'inscription.
+            Afficher « Documents » / « Vérifié » alourdissait inutilement le
+            funnel et surprenait le soignant (mur documentaire perçu comme
+            obligatoire à l'inscription). */}
+        <div className="flex items-center justify-center gap-0 mb-2">
           {[
             { num: 1, label: 'Compte' },
             { num: 2, label: 'Profil' },
-            { num: 3, label: 'Documents' },
-            { num: 4, label: 'Vérifié' },
           ].map((s, i) => (
             <React.Fragment key={s.num}>
               {i > 0 && <div className={`h-1 w-8 sm:w-10 mx-1 rounded-full ${etape > s.num - 1 ? 'bg-primary' : 'bg-muted'}`} />}
@@ -404,6 +356,9 @@ export default function InscriptionSoignant() {
             </React.Fragment>
           ))}
         </div>
+        <p className="text-center text-xs text-muted-foreground mb-8 px-2">
+          ≈ 2 minutes. Vos documents et la vérification se font ensuite, tranquillement, depuis votre espace — pas maintenant.
+        </p>
 
         {/* Pro Santé Connect — inscription rapide avec carte CPS/e-CPS */}
         {etape === 1 && (
@@ -473,11 +428,20 @@ export default function InscriptionSoignant() {
           {etape === 2 && (
             <div className="space-y-4">
               <p className="text-sm font-medium text-muted-foreground mb-4">Étape 2 — Votre profil professionnel</p>
-              <GeoOptIn onResult={(lat, lng) => { maj('lat', lat); maj('lng', lng); }} />
               {/* La valeur avant l'effort (Session E-2) : dès la profession choisie,
-                  montrer le marché réel — missions et taux, ou établissements inscrits. */}
+                  montrer le marché réel — missions et taux, ou établissements inscrits.
+                  Rendu prominent (carte mise en avant) : c'est la motivation à finir.
+                  La géolocalisation et le rayon sont déférés à l'espace personnel
+                  (tâche post-inscription) pour alléger le funnel — l'aperçu reste
+                  national tant que la position n'est pas renseignée. */}
               {form.profession && (
-                <ApercuMarche profession={form.profession} lat={form.lat} lng={form.lng} rayonKm={form.rayon} />
+                <ApercuMarche
+                  profession={form.profession}
+                  lat={form.lat}
+                  lng={form.lng}
+                  rayonKm={form.rayon}
+                  className="ring-1 ring-primary/20 rounded-2xl"
+                />
               )}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <label className="block">
@@ -589,11 +553,11 @@ export default function InscriptionSoignant() {
               )}
               {/* Question salarié établissement */}
               <ExerciceTypeSection profession={form.profession} estSalarieEtablissement={form.estSalarieEtablissement} onChangeSalarie={(v) => maj('estSalarieEtablissement', v)} />
-              <label className="block">
-                <span className="text-sm font-medium text-foreground mb-1.5 block">Rayon de déplacement : <span className="text-primary font-bold">{form.rayon} km</span></span>
-                <input type="range" min={5} max={100} value={form.rayon} onChange={e => maj('rayon', Number(e.target.value))} className="w-full h-2 bg-primary/20 rounded-full appearance-none cursor-pointer accent-primary" aria-valuemin={5} aria-valuemax={100} aria-valuenow={form.rayon} aria-label="Rayon de déplacement en kilomètres" />
-                <div className="flex justify-between text-[10px] text-muted-foreground"><span>5 km</span><span>100 km</span></div>
-              </label>
+              {/* Rayon de déplacement + géolocalisation déférés à l'espace
+                  personnel (tâche post-inscription) pour alléger le funnel. Un
+                  rayon par défaut de 30 km est conservé silencieusement dans le
+                  state du formulaire et transmis au backend, qui l'accepte
+                  (register-soignant: rayon par défaut = 30 si non numérique). */}
               <CaptchaTurnstile className="flex justify-center pt-2" onVerify={setTurnstileToken} onExpire={() => setTurnstileToken(null)} onError={() => setTurnstileToken(null)} />
               {erreurInscription && etape === 2 && !champsAHighlighter.has('email') && !champsAHighlighter.has('motDePasse') && (
                 <ErreurInscription
