@@ -3,6 +3,9 @@ project_id = "flripxtsyegjshnhzjkz"
 [functions.set-user-claims]
 verify_jwt = false
 
+[functions.contact-form]
+verify_jwt = false
+
 [functions.create-invoice-payment]
 verify_jwt = false
 

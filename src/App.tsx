@@ -45,6 +45,7 @@ const VilleLanding = lazy(() => import("./pages/VilleLanding"));
 const ProfessionLanding = lazy(() => import("./pages/ProfessionLanding"));
 const MissionPublique = lazy(() => import("./pages/MissionPublique"));
 const APropos = lazy(() => import("./pages/APropos"));
+const PageContact = lazy(() => import("./pages/PageContact"));
 const PageCGU = lazy(() => import("./pages/PageCGU"));
 const PageCGV = lazy(() => import("./pages/PageCGV"));
 const PageConfidentialite = lazy(() => import("./pages/PageConfidentialite"));
@@ -215,6 +216,7 @@ function AppRoutes() {
           <Route path="/metier/:profession" element={<ProfessionLanding />} />
           <Route path="/mission/:id" element={<MissionPublique />} />
           <Route path="/a-propos" element={<APropos />} />
+          <Route path="/contact" element={<PageContact />} />
           <Route path="/telecharger" element={<Telecharger />} />
           <Route path="/connexion" element={<PageConnexion />} />
           <Route path="/reset-password" element={<PageResetPassword />} />
