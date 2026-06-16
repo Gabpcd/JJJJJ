@@ -67,7 +67,7 @@ export default function VerificationEmailEtab() {
           </div>
 
           <BoutonY2K
-            onClick={() => navigate(contenu.ok ? '/etablissement/tableau-de-bord' : '/etablissement/verification')}
+            onClick={() => navigate(contenu.ok ? '/etablissement/tableau-de-bord' : '/etablissement/activer')}
             className="w-full"
             iconeDroite={<ArrowRight className="h-4 w-4" />}
           >

@@ -14,7 +14,7 @@ export function BandeauOnboardingEtab() {
 
   useEffect(() => {
     if (!user) return;
-    if (location.pathname === '/etablissement/finaliser-inscription') return;
+    if (location.pathname === '/etablissement/activer') return;
     (async () => {
       const { data } = await supabase
         .from('etablissements')
@@ -48,7 +48,7 @@ export function BandeauOnboardingEtab() {
         <span className="text-muted-foreground hidden sm:inline">{detail}</span>
       </div>
       <button
-        onClick={() => navigate('/etablissement/finaliser-inscription')}
+        onClick={() => navigate('/etablissement/activer')}
         className="shrink-0 text-sm font-semibold text-primary hover:text-primary/80 transition-colors"
       >
         Compléter maintenant

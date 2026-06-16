@@ -304,7 +304,7 @@ export default function DashboardEtablissement() {
       <div className="flex-1">
         <p className="text-sm font-medium text-amber-800 dark:text-amber-300">⏳ Votre compte est en cours de vérification</p>
         <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">Vérifiez votre établissement (FINESS + rattachement du représentant) pour pouvoir publier des missions. À défaut, l'équipe Jolene valide votre dossier.</p>
-        <BoutonY2K size="sm" variant="secondary" className="mt-3" onClick={() => navigate('/etablissement/verification')}>
+        <BoutonY2K size="sm" variant="secondary" className="mt-3" onClick={() => navigate('/etablissement/activer')}>
           Vérifier mon établissement
         </BoutonY2K>
       </div>
