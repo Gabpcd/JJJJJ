@@ -83,6 +83,7 @@ export function SEOPageLayout({ children, heroTitle, heroSubtitle, ctaText, ctaH
                 <li><a href="/inscription/etablissement" className="hover:text-foreground transition-colors">Établissements</a></li>
                 <li><a href="/tarifs" className="hover:text-foreground transition-colors">Tarifs</a></li>
                 <li><a href="/a-propos" className="hover:text-foreground transition-colors">À propos</a></li>
+                <li><a href="/contact" className="hover:text-foreground transition-colors">Contact</a></li>
                 <li><a href="/telecharger" className="hover:text-foreground transition-colors">Télécharger</a></li>
               </ul>
             </div>
