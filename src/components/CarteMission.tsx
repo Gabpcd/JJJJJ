@@ -1,18 +1,40 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Calendar, Clock, Banknote, User, Copy, XCircle, RotateCcw } from 'lucide-react';
+import { Calendar, Clock, Banknote, User, Copy, XCircle, RotateCcw, Bell } from 'lucide-react';
 import { AvatarDisplay } from '@/components/AvatarUpload';
 import { BadgeStatut } from '@/components/BadgeStatut';
+import { BadgeY2K } from '@/components/y2k/BadgeY2K';
+import { BoutonY2K } from '@/components/y2k/BoutonY2K';
+import {
+  DialogResponsive,
+  DialogResponsiveContent,
+  DialogResponsiveHeader,
+  DialogResponsiveTitle,
+  DialogResponsiveDescription,
+  DialogResponsiveBody,
+  DialogResponsiveFooter,
+} from '@/components/ui/DialogResponsive';
 import { getLabelProfession, extraireContratPreference, getContratBadge } from '@/lib/constantes';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
+
+/** Nouvelles dates choisies lors d'une republication (F3). */
+export interface RepublierDates {
+  debut: string;
+  fin: string;
+}
 
 interface CarteMissionProps {
   mission: any;
   afficherEtablissement?: boolean;
   onDupliquer?: (mission: any) => void;
   onAnnuler?: (mission: any) => void;
-  onRepublier?: (mission: any) => void;
+  /**
+   * Republier la mission. Le second argument `dates` (optionnel) porte les nouvelles
+   * dates choisies dans la bottom-sheet « Republier » (Session F — F3). Les appelants
+   * historiques qui ignorent ce paramètre restent compatibles.
+   */
+  onRepublier?: (mission: any, dates?: RepublierDates) => void;
 }
 
 function formatMontant(v: number | null | undefined): string {
@@ -47,10 +69,46 @@ export const CarteMission = React.memo(function CarteMission({ mission, afficher
   const dateFormatee = format(debut, 'EEEE d MMMM yyyy', { locale: fr });
   const tempsInfo = m.statut === 'OUVERTE' ? tempsDepuis(m.cree_le) : null;
   const estAnnulee = m.statut === 'ANNULEE_PAR_ETABLISSEMENT' || m.statut === 'ANNULEE_PAR_SOIGNANT';
+  const estTerminee = m.statut === 'TERMINEE';
+  // F3 — « Republier » disponible sur les missions passées : annulées ET terminées.
+  const peutRepublier = !!onRepublier && (estAnnulee || estTerminee);
   const contratPref = extraireContratPreference(m.description);
   const contratBadge = getContratBadge(contratPref);
 
+  // F4 — candidatures en attente à traiter (count agrégé côté ListeMissions).
+  const nbCandidatures: number = m.nb_candidatures_attente ?? 0;
+  const afficheCandidatures = m.statut === 'OUVERTE' && nbCandidatures > 0;
+  const derniereCandidatureLe: string | null = m.derniere_candidature_le ?? null;
+  const tempsCandidature = afficheCandidatures && derniereCandidatureLe ? tempsDepuis(derniereCandidatureLe) : null;
+
   const couleurTheme = m.etablissements?.couleur_theme || m.couleur_theme;
+
+  // F3 — bottom-sheet « Republier cette mission » avec nouvelles dates.
+  const [republierOuvert, setRepublierOuvert] = useState(false);
+  const [republierDebut, setRepublierDebut] = useState('');
+  const [republierFin, setRepublierFin] = useState('');
+
+  const ouvrirRepublier = () => {
+    setRepublierDebut('');
+    setRepublierFin('');
+    setRepublierOuvert(true);
+  };
+
+  const datesRepublierValides = !!republierDebut && !!republierFin && new Date(republierFin) > new Date(republierDebut);
+
+  const confirmerRepublier = () => {
+    if (!onRepublier) return;
+    if (republierDebut && republierFin && datesRepublierValides) {
+      onRepublier(m, {
+        debut: new Date(republierDebut).toISOString(),
+        fin: new Date(republierFin).toISOString(),
+      });
+    } else {
+      // Aucune nouvelle date saisie : republication simple (l'établissement ajuste après).
+      onRepublier(m);
+    }
+    setRepublierOuvert(false);
+  };
 
   return (
     <div
@@ -69,6 +127,12 @@ export const CarteMission = React.memo(function CarteMission({ mission, afficher
           {m.has_litige && (
             <span className="badge-base bg-warning/10 text-warning text-[10px]">⚠️ Litige</span>
           )}
+          {/* F4 — candidatures en attente à traiter */}
+          {afficheCandidatures && (
+            <BadgeY2K variant="warning" size="sm" icone={<Bell className="h-3 w-3" />}>
+              {nbCandidatures} candidature{nbCandidatures > 1 ? 's' : ''} à traiter
+            </BadgeY2K>
+          )}
           {tempsInfo && (
             <span className={`text-[10px] font-medium ${tempsInfo.couleur}`}>{tempsInfo.texte}</span>
           )}
@@ -80,6 +144,13 @@ export const CarteMission = React.memo(function CarteMission({ mission, afficher
         {m.service && `${m.service} · `}{getLabelProfession(m.profession_requise)}
         <span className={`badge-base text-[10px] ml-2 ${contratBadge.classes}`}>{contratBadge.label}</span>
       </p>
+
+      {/* F4 — ancienneté de la dernière candidature reçue */}
+      {tempsCandidature && (
+        <p className={`text-[10px] font-medium mb-2 ${tempsCandidature.couleur}`}>
+          Dernière candidature reçue {tempsCandidature.texte.toLowerCase()}
+        </p>
+      )}
 
       <div className="flex items-center gap-4 text-xs text-muted-foreground mb-2">
         <span className="flex items-center gap-1"><Calendar className="h-3.5 w-3.5" />{dateFormatee}</span>
@@ -129,7 +200,7 @@ export const CarteMission = React.memo(function CarteMission({ mission, afficher
         )}
       </div>
 
-      <div className="flex gap-2 mt-2" onClick={(e) => e.stopPropagation()}>
+      <div className="flex gap-2 mt-2 flex-wrap" onClick={(e) => e.stopPropagation()}>
         <button
           onClick={() => navigate(`/etablissement/missions/${m.id}`)}
           className="text-xs font-medium text-primary hover:underline"
@@ -146,12 +217,98 @@ export const CarteMission = React.memo(function CarteMission({ mission, afficher
             <XCircle className="h-3 w-3" /> Annuler
           </button>
         )}
-        {onRepublier && estAnnulee && (
-          <button onClick={() => onRepublier(m)} className="text-xs font-medium text-primary hover:underline flex items-center gap-1">
+        {peutRepublier && (
+          <button onClick={ouvrirRepublier} className="text-xs font-medium text-primary hover:underline flex items-center gap-1">
             <RotateCcw className="h-3 w-3" /> Republier
           </button>
         )}
       </div>
+
+      {/* F3 — bottom-sheet « Republier cette mission » */}
+      {peutRepublier && (
+        <DialogResponsive open={republierOuvert} onOpenChange={setRepublierOuvert}>
+          <DialogResponsiveContent
+            maxWidth="md"
+            onClick={(e) => e.stopPropagation()}
+            onOpenAutoFocus={(e) => e.preventDefault()}
+          >
+            <DialogResponsiveHeader>
+              <DialogResponsiveTitle>Republier cette mission</DialogResponsiveTitle>
+              <DialogResponsiveDescription>
+                Une nouvelle mission sera créée à partir de « {m.intitule} ». Choisissez de nouvelles dates.
+              </DialogResponsiveDescription>
+            </DialogResponsiveHeader>
+
+            <DialogResponsiveBody className="space-y-4">
+              {/* Récapitulatif (lecture seule) des paramètres conservés */}
+              <div className="rounded-2xl border border-border bg-muted/30 p-3 text-sm space-y-1.5">
+                <p className="font-semibold text-foreground">{m.intitule}</p>
+                <p className="text-muted-foreground">
+                  {m.service && `${m.service} · `}{getLabelProfession(m.profession_requise)}
+                </p>
+                <p className="text-muted-foreground flex items-center gap-1">
+                  <Banknote className="h-3.5 w-3.5 text-primary" />
+                  {m.taux_horaire_base?.toFixed(2)} €/h brut
+                </p>
+                <p className="text-muted-foreground flex items-center gap-1">
+                  <Clock className="h-3.5 w-3.5" />
+                  Durée d'origine : {Math.round(duree * 10) / 10}h
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label htmlFor={`republier-debut-${m.id}`} className="text-xs text-muted-foreground mb-1 block">
+                    Nouvelle date et heure de début *
+                  </label>
+                  <input
+                    id={`republier-debut-${m.id}`}
+                    type="datetime-local"
+                    value={republierDebut}
+                    min={new Date().toISOString().slice(0, 16)}
+                    onChange={(e) => setRepublierDebut(e.target.value)}
+                    className="input-base"
+                  />
+                </div>
+                <div>
+                  <label htmlFor={`republier-fin-${m.id}`} className="text-xs text-muted-foreground mb-1 block">
+                    Nouvelle date et heure de fin *
+                  </label>
+                  <input
+                    id={`republier-fin-${m.id}`}
+                    type="datetime-local"
+                    value={republierFin}
+                    min={republierDebut || new Date().toISOString().slice(0, 16)}
+                    onChange={(e) => setRepublierFin(e.target.value)}
+                    className="input-base"
+                  />
+                </div>
+              </div>
+
+              {republierDebut && republierFin && !datesRepublierValides && (
+                <p className="text-xs text-destructive font-medium">La fin doit être après le début.</p>
+              )}
+              <p className="text-[10px] text-muted-foreground">
+                Vous pourrez ajuster tous les détails sur la page de création avant de publier.
+              </p>
+            </DialogResponsiveBody>
+
+            <DialogResponsiveFooter>
+              <BoutonY2K variant="secondary" onClick={() => setRepublierOuvert(false)}>
+                Annuler
+              </BoutonY2K>
+              <BoutonY2K
+                variant="primary"
+                onClick={confirmerRepublier}
+                disabled={!!republierDebut && !!republierFin && !datesRepublierValides}
+                iconeGauche={<RotateCcw className="h-4 w-4" />}
+              >
+                Republier
+              </BoutonY2K>
+            </DialogResponsiveFooter>
+          </DialogResponsiveContent>
+        </DialogResponsive>
+      )}
     </div>
   );
 });
