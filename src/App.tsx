@@ -320,7 +320,7 @@ function AppRoutes() {
           <Route path="/etablissement/parrainage" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><PageParrainageEtablissement /></RouteProtegee>} />
           <Route path="/etablissement/dashboard" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><DashboardEtablissement /></RouteProtegee>} />
           <Route path="/etablissement/contrat-plateforme" element={<Navigate to="/etablissement/parametres?tab=contrats" replace />} />
-          <Route path="/etablissement/obligations" element={<Navigate to="/etablissement/facturation?tab=obligations" replace />} />
+          <Route path="/etablissement/obligations" element={<Navigate to="/etablissement/facturation" replace />} />
           <Route path="/etablissement/equipe" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><EquipeEtablissement /></RouteProtegee>} />
           <Route path="/etablissement/evaluations-a-faire" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><EvaluationsAFaireEtab /></RouteProtegee>} />
           <Route path="/etab/invitation/:token" element={<AccepterInvitationEtab />} />
