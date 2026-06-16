@@ -111,7 +111,8 @@ const ModifierMission = lazy(() => import("./pages/ModifierMission"));
 const PresencesEtablissement = lazy(() => import("./pages/PresencesEtablissement"));
 const FacturationEtablissement = lazy(() => import("./pages/FacturationEtablissement"));
 const AnalyticsEtablissement = lazy(() => import("./pages/AnalyticsEtablissement"));
-const GestionShifts = lazy(() => import("./pages/GestionShifts"));
+// Session F7/G4 : « Planning équipes » (GestionShifts) pointait sur une table
+// DEPRECATED — retiré de la nav (F7) puis de la route (code mort). Fichier conservé.
 const DetailFacture = lazy(() => import("./pages/DetailFacture"));
 const ExportPaie = lazy(() => import("./pages/ExportPaie"));
 const DashboardRH = lazy(() => import("./pages/DashboardRH"));
@@ -322,7 +323,6 @@ function AppRoutes() {
           <Route path="/etablissement/facturation" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><FacturationEtablissement /></RouteProtegee>} />
           <Route path="/etablissement/facturation/:id" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><DetailFacture /></RouteProtegee>} />
           <Route path="/etablissement/analytics" element={<Navigate to="/etablissement/rh?tab=analytics" replace />} />
-          <Route path="/etablissement/shifts" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><GestionShifts /></RouteProtegee>} />
           <Route path="/etablissement/assurance" element={<Navigate to="/etablissement/parametres?tab=contrats" replace />} />
           <Route path="/etablissement/export-paie" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><ExportPaie /></RouteProtegee>} />
           <Route path="/etablissement/rh" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><DashboardRH /></RouteProtegee>} />
