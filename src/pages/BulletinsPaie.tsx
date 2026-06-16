@@ -1,9 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, FileText, Download, Loader2, Receipt, X } from 'lucide-react';
+import { FileText, Download, Loader2, X } from 'lucide-react';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { LayoutApp } from '@/components/LayoutApp';
-import { Button } from '@/components/ui/button';
 import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { TableOuCartes, type ColonneTableau } from '@/components/ui/TableOuCartes';
@@ -42,7 +40,14 @@ interface BulletinRow {
 
 export default function BulletinsPaie() {
   usePageTitle('Mes bulletins de paie');
-  const navigate = useNavigate();
+  return (
+    <LayoutApp role="SOIGNANT">
+      <BulletinsPaieContent />
+    </LayoutApp>
+  );
+}
+
+export function BulletinsPaieContent() {
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [bulletins, setBulletins] = useState<BulletinRow[]>([]);
@@ -96,31 +101,17 @@ export default function BulletinsPaie() {
 
   if (loading) {
     return (
-      <LayoutApp role="SOIGNANT">
-        <div className="flex items-center justify-center py-20">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        </div>
-      </LayoutApp>
+      <div className="flex items-center justify-center py-20">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
     );
   }
 
   return (
-    <LayoutApp role="SOIGNANT">
-      <div className="space-y-5">
-        <div className="flex items-center gap-3">
-          {/* Sprint 12-B : conservé shadcn Button — size="icon" non supporté par BoutonY2K */}
-          <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
-          <div>
-            <h1 className="text-xl font-bold text-foreground flex items-center gap-2">
-              <Receipt className="h-5 w-5 text-primary" /> Mes bulletins de paie
-            </h1>
-            <p className="text-xs text-muted-foreground">
-              Bulletins émis automatiquement à chaque mission terminée — conformes art. R3243-1 CTW
-            </p>
-          </div>
-        </div>
+    <div className="space-y-5">
+        <p className="text-xs text-muted-foreground">
+          Bulletins émis automatiquement à chaque mission terminée — conformes art. R3243-1 CTW
+        </p>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div className="card-base">
@@ -291,7 +282,6 @@ export default function BulletinsPaie() {
             sans limitation de durée (preuve d'activité pour la retraite).
           </p>
         </div>
-      </div>
-    </LayoutApp>
+    </div>
   );
 }

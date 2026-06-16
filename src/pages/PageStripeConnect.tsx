@@ -312,14 +312,14 @@ export default function PageStripeConnect() {
                       valeur={formatEur(revenus.total)}
                       label="Total reçu"
                       variant="soft"
-                      onClick={() => navigate('/soignant/mes-factures-honoraires')}
+                      onClick={() => navigate('/soignant/mes-gains?tab=factures')}
                     />
                     <CarteKPIY2K
                       icone={<Clock className="h-4 w-4" />}
                       valeur={formatEur(revenus.en_attente)}
                       label="En attente"
                       variant="default"
-                      onClick={() => navigate('/soignant/mes-avances')}
+                      onClick={() => navigate('/soignant/mes-gains?tab=avances')}
                     />
                   </div>
                 )}
