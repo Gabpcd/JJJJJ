@@ -50,3 +50,6 @@ tests/load/results/
 android/app/google-services.json
 ios/App/App/GoogleService-Info.plist
 **/AuthKey_*.p8
+
+# Worktrees temporaires créées par les agents (jamais committées).
+.claude/worktrees/
