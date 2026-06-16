@@ -19,7 +19,7 @@ export default function PageCGU() {
   return (
     <LayoutLegal
       titre="Conditions Générales d'Utilisation"
-      dateMaj="12 mars 2026"
+      dateMaj="16 juin 2026"
       toc={TOC}
       seoDescription="Conditions Générales d'Utilisation de Jolene, plateforme de staffing médical. Inscription, vérification, pointage, score de fiabilité et résiliation."
     >
@@ -28,8 +28,8 @@ export default function PageCGU() {
         <h2 className="text-xl sm:text-2xl font-bold text-foreground mb-4">Article 1 — Définitions</h2>
         <p className="mb-3">Dans les présentes Conditions Générales d'Utilisation (ci-après « CGU »), les termes suivants ont la signification qui leur est attribuée ci-dessous :</p>
         <ul className="list-disc pl-6 space-y-2">
-          <li><strong>« Plateforme »</strong> : le site web et l'application mobile Jolene, édités par Jolene SAS, permettant la mise en relation entre Établissements de santé et Soignants pour des missions de remplacement paramédical.</li>
-          <li><strong>« Éditeur »</strong> : Jolene SAS, société par actions simplifiée, dont le siège social est situé à Paris (75006).</li>
+          <li><strong>« Plateforme »</strong> : le site web et l'application mobile Jolene, édités par Jolene SASU, permettant la mise en relation entre Établissements de santé et Soignants pour des missions de remplacement paramédical.</li>
+          <li><strong>« Éditeur »</strong> : Jolene SASU, société par actions simplifiée, dont le siège social est situé à Paris (75006).</li>
           <li><strong>« Soignant »</strong> : toute personne physique exerçant une profession paramédicale (aide-soignant·e, infirmier·ère, kinésithérapeute, sage-femme, manipulateur·rice en électroradiologie, préparateur·rice en pharmacie) inscrite sur la Plateforme.</li>
           <li><strong>« Établissement »</strong> : tout établissement de santé public ou privé (hôpital, clinique, EHPAD, centre de soins) inscrit sur la Plateforme en vue de publier des missions.</li>
           <li><strong>« Mission »</strong> : une offre de travail temporaire publiée par un Établissement et pouvant être acceptée par un Soignant via la Plateforme.</li>
@@ -131,7 +131,7 @@ export default function PageCGU() {
       {/* Article 6 */}
       <section id="art6">
         <h2 className="text-xl sm:text-2xl font-bold text-foreground mb-4">Article 6 — Propriété intellectuelle</h2>
-        <p className="mb-3">L'ensemble des éléments constitutifs de la Plateforme (textes, graphismes, logiciels, bases de données, marques, logos, algorithmes) est la propriété exclusive de Jolene SAS ou de ses concédants de licence.</p>
+        <p className="mb-3">L'ensemble des éléments constitutifs de la Plateforme (textes, graphismes, logiciels, bases de données, marques, logos, algorithmes) est la propriété exclusive de Jolene SASU ou de ses concédants de licence.</p>
         <p className="mb-3">La marque « Jolene » est déposée auprès de l'Institut National de la Propriété Industrielle (INPI) sous le numéro 5186614. Toute reproduction, représentation ou exploitation non autorisée constituerait une contrefaçon sanctionnée par les articles L.335-2 et suivants du Code de la propriété intellectuelle.</p>
         <p>Les utilisateurs s'interdisent de copier, extraire, décompiler ou procéder à toute ingénierie inverse de la Plateforme.</p>
       </section>
@@ -151,7 +151,7 @@ export default function PageCGU() {
         <p className="mb-3">Le score est indicatif et ne constitue pas une notation au sens du droit du travail. Il est visible par le Soignant et par les Établissements consultants son profil.</p>
 
         <h3 className="text-lg font-semibold text-foreground mt-6 mb-2">7.2 — Parcours 3 200 heures et passage en libéral</h3>
-        <p className="mb-3">Les Soignants ayant cumulé au moins 3 200 heures de missions (sur la Plateforme et/ou justifiées par des attestations d'employeurs antérieurs) peuvent initier une demande de passage en exercice libéral via le programme « Free Transition ».</p>
+        <p className="mb-3">Les Soignants ayant cumulé au moins 3 200 heures de missions (sur la Plateforme et/ou justifiées par des attestations d'employeurs antérieurs) peuvent initier une demande de passage en exercice libéral via le programme « Accompagnement vers l'exercice libéral ».</p>
         <p>Ce programme propose un accompagnement administratif (guide personnalisé, outils partenaires) et une prise en charge partielle des frais d'installation, selon les conditions définies dans les CGV.</p>
       </section>
 
