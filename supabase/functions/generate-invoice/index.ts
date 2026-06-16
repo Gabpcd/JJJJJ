@@ -819,7 +819,12 @@ Deno.serve(async (req) => {
     const amountTtc = amountHt + amountTva;
 
     const issueDate = new Date().toISOString().split('T')[0];
-    const dueDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    // Échéance configurable (Config système) : privé 30 j / public 50 j (Code commande publique L.2192-10).
+    const cleDelai = etab.est_secteur_public ? 'delai_paiement_public_j' : 'delai_paiement_prive_j';
+    const defautDelai = etab.est_secteur_public ? 50 : 30;
+    const { data: delaiParam } = await supabaseAdmin.rpc('fn_param_num', { p_cle: cleDelai, p_defaut: defautDelai });
+    const delaiJours = Number(delaiParam) || defautDelai;
+    const dueDate = new Date(Date.now() + delaiJours * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
     // 7. Check factor
     let factorData: any = null;
