@@ -3,7 +3,7 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { SEOHead } from '@/components/SEOHead';
 import { SEOPageLayout } from '@/components/SEOPageLayout';
-import { Linkedin, Download, ShieldCheck, Stethoscope, Scale, DatabaseZap } from 'lucide-react';
+import { Download, ShieldCheck, Stethoscope, Scale, DatabaseZap } from 'lucide-react';
 import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 
 const chiffres = [
@@ -52,17 +52,9 @@ export default function APropos() {
               <div>
                 <h3 className="font-bold text-foreground text-xl mb-1">Gabrielle Picard</h3>
                 <p className="text-sm text-muted-foreground mb-4">Fondatrice & CEO</p>
-                <p className="text-muted-foreground leading-relaxed mb-4">
+                <p className="text-muted-foreground leading-relaxed">
                   Passionnée par l'innovation dans la santé, Gabrielle a fondé Jolene pour répondre à la pénurie de soignants qui touche des milliers d'établissements en France. Son ambition : devenir la référence du staffing médical digital.
                 </p>
-                <a
-                  href="https://linkedin.com"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2 text-sm text-primary hover:text-primary/80 transition-colors font-medium"
-                >
-                  <Linkedin className="h-4 w-4" /> LinkedIn
-                </a>
               </div>
             </div>
           </div>
@@ -91,8 +83,8 @@ export default function APropos() {
           <div className="max-w-3xl mx-auto px-4 text-center">
             <h2 className="text-2xl md:text-3xl font-bold text-foreground mb-4">Presse & Contact</h2>
             <p className="text-muted-foreground mb-8">
-              Vous êtes journaliste ou partenaire potentiel ? Contactez-nous à{' '}
-              <a href="mailto:support@jolene.app" className="text-primary hover:underline font-medium">support@jolene.app</a>.
+              Vous êtes journaliste ou partenaire potentiel ? Écrivez directement à Gabrielle à{' '}
+              <a href="mailto:gabrielle@jolene.app" className="text-primary hover:underline font-medium">gabrielle@jolene.app</a>.
             </p>
             <BoutonY2K variant="secondary" disabled iconeGauche={<Download className="h-4 w-4" />}>
               Télécharger le dossier de presse
@@ -105,8 +97,8 @@ export default function APropos() {
         <section className="py-12 md:py-16">
           <div className="max-w-2xl mx-auto px-4 text-center">
             <p className="text-sm text-muted-foreground">
-              Jolene prépare sa levée de fonds seed. Si vous êtes investisseur, contactez-nous à{' '}
-              <a href="mailto:support@jolene.app" className="text-primary hover:underline font-medium">support@jolene.app</a>.
+              Jolene prépare sa levée de fonds seed. Si vous êtes investisseur, écrivez directement à Gabrielle à{' '}
+              <a href="mailto:gabrielle@jolene.app" className="text-primary hover:underline font-medium">gabrielle@jolene.app</a>.
             </p>
           </div>
         </section>
