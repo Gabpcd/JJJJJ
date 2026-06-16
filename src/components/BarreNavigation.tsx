@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { LucideIcon, Home, Search, FileText, CalendarDays, User, PlusCircle, List, ClipboardCheck, Settings, HeartPulse, LogOut, MapPin, Banknote, CreditCard, FileSpreadsheet, Rocket, Bell, MapPinned, BarChart3, Flame, MessageCircle, ClipboardList, Building2, Users, Scale, ChevronDown, Activity, Shield, Menu, X, Star, Gift, ShieldCheck, ArrowLeft } from 'lucide-react';
+import { LucideIcon, Home, Search, FileText, CalendarDays, User, PlusCircle, List, ClipboardCheck, Settings, HeartPulse, LogOut, MapPin, Banknote, CreditCard, FileSpreadsheet, Rocket, Bell, BarChart3, Flame, MessageCircle, ClipboardList, Building2, Users, Scale, ChevronDown, Activity, Shield, Menu, X, Star, Gift, ShieldCheck, ArrowLeft } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { UserRole } from '@/lib/types';
 import { estEligibleLiberal } from '@/lib/regles-installation-liberal';
@@ -19,7 +19,8 @@ function isGroup(e: SidebarEntry): e is NavGroup { return 'items' in e; }
 /* ── Mobile bottom bars (5 items max) ── */
 const NAV_SOIGNANT_MOBILE: NavItem[] = [
   { icone: Home, label: 'Accueil', route: '/soignant/tableau-de-bord' },
-  { icone: Search, label: 'Missions', route: '/soignant/missions' },
+  // Session G1 : onglet « Missions » mobile → page canonique « Trouver une mission ».
+  { icone: Search, label: 'Missions', route: '/soignant/recherche-missions' },
   { icone: CalendarDays, label: 'Planning', route: '/soignant/planning' },
   { icone: MessageCircle, label: 'Messages', route: '/soignant/messagerie' },
   { icone: User, label: 'Profil', route: '/soignant/mon-compte' },
@@ -39,8 +40,10 @@ function getSoignantSidebar(isLiberal: boolean, showLiberalPath: boolean): Sideb
     { icone: Home, label: 'Accueil', route: '/soignant/tableau-de-bord' },
     {
       icone: Search, label: 'Missions', items: [
-        { icone: Search, label: 'Disponibles', route: '/soignant/missions' },
-        { icone: MapPinned, label: 'Recherche avancée', route: '/soignant/recherche-missions' },
+        // Session G1 : découverte consolidée — une seule entrée « Trouver une mission »
+        // vers la page canonique (liste + filtres + toggle swipe + carte + alertes).
+        { icone: Search, label: 'Trouver une mission', route: '/soignant/recherche-missions' },
+        { icone: ClipboardList, label: 'Mes missions', route: '/soignant/missions?onglet=mes_missions' },
         { icone: Flame, label: 'Pool urgence', route: '/soignant/pool-urgence' },
         { icone: Star, label: 'Mes favoris', route: '/soignant/mes-favoris' },
         { icone: CalendarDays, label: 'Planning', route: '/soignant/planning' },

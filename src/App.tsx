@@ -72,7 +72,8 @@ const RechercheSoignantsEtab = lazy(() => import("./pages/RechercheSoignantsEtab
 const MissionsSoignant = lazy(() => import("./pages/MissionsSoignant"));
 const RechercheMissions = lazy(() => import("./pages/RechercheMissions"));
 const DetailMissionSoignant = lazy(() => import("./pages/DetailMissionSoignant"));
-const SwipeMissions = lazy(() => import("./pages/SwipeMissions"));
+// Session G1 : SwipeMissions n'est plus routé (consolidé dans RechercheMissions via toggle).
+// Le fichier source reste en place ; la route /soignant/swipe-missions redirige.
 const MesMatches = lazy(() => import("./pages/MesMatches"));
 const DetailSerieSoignant = lazy(() => import("./pages/DetailSerieSoignant"));
 const DocumentsSoignant = lazy(() => import("./pages/DocumentsSoignant"));
@@ -190,6 +191,14 @@ function CaptureAttribution() {
   return null;
 }
 
+// Session G1 : ancienne route /soignant/swipe-missions → page canonique
+// « Trouver une mission ». On force la préférence de vue sur « swipe » pour que
+// la page s'ouvre directement sur le mode swipe (préserve les deep links).
+function RedirectionSwipeMissions() {
+  try { localStorage.setItem('jolene_missions_view_pref', 'swipe'); } catch { /* ignore */ }
+  return <Navigate to="/soignant/recherche-missions" replace />;
+}
+
 function AppRoutes() {
   return (
     <PageTransition>
@@ -237,7 +246,10 @@ function AppRoutes() {
           <Route path="/soignant/mon-compte" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><MonCompteSoignant /></RouteProtegee>} />
           <Route path="/soignant/missions" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><MissionsSoignant /></RouteProtegee>} />
           <Route path="/soignant/recherche-missions" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><RechercheMissions /></RouteProtegee>} />
-          <Route path="/soignant/swipe-missions" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><SwipeMissions /></RouteProtegee>} />
+          {/* Session G1 : la découverte par swipe est consolidée dans la page canonique
+              « Trouver une mission » (vue Swipe via toggle). On force la préférence puis on
+              redirige pour que la page s'ouvre directement sur la vue swipe. */}
+          <Route path="/soignant/swipe-missions" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><RedirectionSwipeMissions /></RouteProtegee>} />
           <Route path="/soignant/mes-matches" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><MesMatches /></RouteProtegee>} />
           <Route path="/soignant/missions/serie/:serieId" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><DetailSerieSoignant /></RouteProtegee>} />
           <Route path="/soignant/missions/:id" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><DetailMissionSoignant /></RouteProtegee>} />
