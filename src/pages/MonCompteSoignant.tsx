@@ -39,19 +39,21 @@ export default function MonCompteSoignant() {
   // Profession éligible au libéral (pour Passer en libéral + Attestation 3200h)
   const eligibleLiberal = !!(profil?.profession && estEligibleLiberal(profil.profession));
 
-  // Section Paiements : adaptée au statut (libéral = outils complets, salarié = gains seuls)
+  // Section Paiements : adaptée au statut. Session G2 — gains / factures /
+  // bulletins / avances fusionnés dans le hub « Mes finances » (deep-links ?tab=).
+  // Stripe Connect, Mandat et Charges restent à part (config / fiscal, hors hub).
   const lignesPaiements = estLiberal
     ? [
-        { icone: Banknote, label: 'Mes gains', route: '/soignant/mes-gains' },
-        { icone: Receipt, label: 'Factures d\'honoraires', route: '/soignant/mes-factures-honoraires' },
+        { icone: Banknote, label: 'Mes finances', route: '/soignant/mes-gains' },
+        { icone: Receipt, label: 'Factures d\'honoraires', route: '/soignant/mes-gains?tab=factures' },
+        { icone: Zap, label: 'Avances (paiement rapide)', route: '/soignant/mes-gains?tab=avances' },
         { icone: CreditCard, label: 'Stripe Connect', route: '/soignant/stripe-connect' },
         { icone: FileSignature, label: 'Mandat de facturation', route: '/soignant/mandat-facturation' },
-        { icone: Zap, label: 'Avances (paiement rapide)', route: '/soignant/mes-avances' },
         { icone: Landmark, label: 'Charges sociales (URSSAF)', route: '/soignant/charges' },
       ]
     : [
-        { icone: Banknote, label: 'Mes gains', route: '/soignant/mes-gains' },
-        { icone: Receipt, label: 'Bulletins de paie', route: '/soignant/bulletins-paie' },
+        { icone: Banknote, label: 'Mes finances', route: '/soignant/mes-gains' },
+        { icone: Receipt, label: 'Bulletins de paie', route: '/soignant/mes-gains?tab=bulletins' },
       ];
 
   const sections: SectionReglages[] = [

@@ -523,7 +523,7 @@ function BlocPaieFacturation({ typeExercice, userId }: { typeExercice: string; u
           {peutSalarie && (
             <button
               type="button"
-              onClick={() => navigate('/soignant/bulletins-paie')}
+              onClick={() => navigate('/soignant/mes-gains?tab=bulletins')}
               className="text-left rounded-xl border border-border hover:border-primary/40 bg-muted/30 hover:bg-muted/50 p-3 transition-colors"
             >
               <p className="text-xs font-bold text-primary mb-0.5">Mes bulletins de paie</p>
@@ -536,7 +536,7 @@ function BlocPaieFacturation({ typeExercice, userId }: { typeExercice: string; u
           {peutLiberal && (
             <button
               type="button"
-              onClick={() => navigate('/soignant/mes-factures-honoraires')}
+              onClick={() => navigate('/soignant/mes-gains?tab=factures')}
               className="text-left rounded-xl border border-border hover:border-primary/40 bg-muted/30 hover:bg-muted/50 p-3 transition-colors"
             >
               <p className="text-xs font-bold text-primary mb-0.5">Mes factures d'honoraires</p>
