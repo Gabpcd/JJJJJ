@@ -20,8 +20,11 @@ const PageConnexion = lazy(() => import("./pages/PageConnexion"));
 const PageResetPassword = lazy(() => import("./pages/PageResetPassword"));
 const PscCallback = lazy(() => import("./pages/PscCallback"));
 const MandatFacturation = lazy(() => import("./pages/MandatFacturation"));
-const FinaliserInscriptionEtab = lazy(() => import("./pages/FinaliserInscriptionEtab"));
-const VerificationEtablissement = lazy(() => import("./pages/VerificationEtablissement"));
+// Session F (F2) — les anciennes pages FinaliserInscriptionEtab + VerificationEtablissement
+// sont fusionnées dans ActiverEtablissement. Les fichiers sources restent en place
+// (référencés dans la doc/migrations) mais ne sont plus routés ; les anciennes routes
+// redirigent vers /etablissement/activer.
+const ActiverEtablissement = lazy(() => import("./pages/ActiverEtablissement"));
 const VerificationEmailEtab = lazy(() => import("./pages/VerificationEmailEtab"));
 const MesFacturesHonoraires = lazy(() => import("./pages/MesFacturesHonoraires"));
 const MesAvances = lazy(() => import("./pages/MesAvances"));
@@ -277,8 +280,11 @@ function AppRoutes() {
           {/* Établissement */}
           <Route path="/etablissement/tableau-de-bord" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><DashboardEtablissement /></RouteProtegee>} />
           <Route path="/etablissement/mon-compte" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><MonCompteEtablissement /></RouteProtegee>} />
-          <Route path="/etablissement/finaliser-inscription" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><FinaliserInscriptionEtab /></RouteProtegee>} />
-          <Route path="/etablissement/verification" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><VerificationEtablissement /></RouteProtegee>} />
+          {/* Session F (F2) — page unique « Activer mon établissement » (fusion contrat + vérification + RIB différé) */}
+          <Route path="/etablissement/activer" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><ActiverEtablissement /></RouteProtegee>} />
+          {/* Anciennes routes conservées en redirections pour ne pas casser les deep links (e-mails, articles d'aide, gates DB). */}
+          <Route path="/etablissement/finaliser-inscription" element={<Navigate to="/etablissement/activer" replace />} />
+          <Route path="/etablissement/verification" element={<Navigate to="/etablissement/activer" replace />} />
           <Route path="/soignant/parametres" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><PageParametresSoignant /></RouteProtegee>} />
           <Route path="/soignant/parametres/notifications" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><PageParametresNotifications /></RouteProtegee>} />
           <Route path="/etablissement/parametres/notifications" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><PageParametresNotifications /></RouteProtegee>} />
