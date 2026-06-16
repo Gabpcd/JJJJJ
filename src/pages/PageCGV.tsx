@@ -8,7 +8,7 @@ const TOC = [
   { id: 'art3', label: 'Article 3 — Tarification' },
   { id: 'art4', label: 'Article 4 — Bonus de Fidélité Annuel (BFA)' },
   { id: 'art5', label: 'Article 5 — Facturation et paiement' },
-  { id: 'art6', label: 'Article 6 — Programme Free Transition' },
+  { id: 'art6', label: 'Article 6 — Accompagnement vers l\'exercice libéral' },
   { id: 'art7', label: 'Article 7 — Secteur public et affacturage' },
   { id: 'art8', label: 'Article 8 — Non-sollicitation' },
 ];
@@ -18,7 +18,7 @@ export default function PageCGV() {
   return (
     <LayoutLegal
       titre="Conditions Générales de Vente"
-      dateMaj="12 mars 2026"
+      dateMaj="16 juin 2026"
       toc={TOC}
       seoDescription="Conditions Générales de Vente de Jolene. Frais de service, tarification, Bonus de Fidélité Annuel, facturation et conditions de paiement."
     >
@@ -52,38 +52,7 @@ export default function PageCGV() {
       {/* Article 4 */}
       <section id="art4">
         <h2 className="text-xl sm:text-2xl font-bold text-foreground mb-4">Article 4 — Bonus de Fidélité Annuel (BFA)</h2>
-        <p className="mb-4">Les Établissements ayant réalisé un volume significatif de missions sur l'année civile bénéficient d'un Bonus de Fidélité Annuel (BFA), versé sous forme d'avoir sur les factures de janvier de l'année suivante :</p>
-
-        <div className="overflow-x-auto mb-4">
-          <table className="w-full border-collapse text-sm">
-            <thead>
-              <tr className="bg-primary text-primary-foreground">
-                <th scope="col" className="px-4 py-3 text-left font-semibold rounded-tl-xl">Palier BFA</th>
-                <th scope="col" className="px-4 py-3 text-left font-semibold">Missions / an</th>
-                <th scope="col" className="px-4 py-3 text-left font-semibold rounded-tr-xl">Taux BFA</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr className="border-b border-border bg-card">
-                <td className="px-4 py-3 font-medium">🥉 Bronze</td>
-                <td className="px-4 py-3">120 à 359</td>
-                <td className="px-4 py-3 font-semibold">2 %</td>
-              </tr>
-              <tr className="border-b border-border bg-muted/30">
-                <td className="px-4 py-3 font-medium">🥈 Argent</td>
-                <td className="px-4 py-3">360 à 719</td>
-                <td className="px-4 py-3 font-semibold">3,5 %</td>
-              </tr>
-              <tr className="bg-card">
-                <td className="px-4 py-3 font-medium rounded-bl-xl">🥇 Or</td>
-                <td className="px-4 py-3">720+</td>
-                <td className="px-4 py-3 font-semibold rounded-br-xl">5 %</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-
-        <p>Le BFA est calculé sur le montant total HT des commissions facturées durant l'année civile. Il est automatiquement crédité en janvier N+1.</p>
+        <p>Le Bonus de Fidélité Annuel (BFA) est réservé aux groupes d'établissements et établissements ayant signé un contrat BFA spécifique avec Jolene. Son taux est négocié au cas par cas et précisé dans les conditions particulières. Il est calculé sur le montant total HT des commissions facturées par Jolene au titre des missions terminées durant l'année civile, et versé par virement bancaire après validation, en début d'année suivante.</p>
       </section>
 
       {/* Article 5 */}
@@ -97,7 +66,7 @@ export default function PageCGV() {
         <p className="mb-3">Trois modes de paiement sont disponibles :</p>
         <ul className="list-disc pl-6 space-y-2 mb-3">
           <li><strong>Paiement par carte bancaire (Stripe)</strong> : paiement en ligne sécurisé, traitement immédiat. Mode par défaut pour les établissements privés.</li>
-          <li><strong>Paiement par virement bancaire</strong> : l'Établissement effectue un virement sur le compte de Jolene SAS en indiquant le numéro de facture en référence. Délai de traitement : 2 à 5 jours ouvrés.</li>
+          <li><strong>Paiement par virement bancaire</strong> : l'Établissement effectue un virement sur le compte de Jolene SASU en indiquant le numéro de facture en référence. Délai de traitement : 2 à 5 jours ouvrés.</li>
           <li><strong>Dépôt sur Chorus Pro</strong> : pour les établissements publics soumis à l'obligation de facturation électronique (ordonnance n° 2014-697 du 26 juin 2014). La facture est déposée automatiquement sur Chorus Pro.</li>
         </ul>
 
@@ -108,8 +77,8 @@ export default function PageCGV() {
 
       {/* Article 6 */}
       <section id="art6">
-        <h2 className="text-xl sm:text-2xl font-bold text-foreground mb-4">Article 6 — Programme Free Transition</h2>
-        <p className="mb-3">Le programme Free Transition permet aux Soignants ayant atteint 3 200 heures cumulées de bénéficier d'un accompagnement vers l'exercice libéral.</p>
+        <h2 className="text-xl sm:text-2xl font-bold text-foreground mb-4">Article 6 — Accompagnement vers l'exercice libéral</h2>
+        <p className="mb-3">Le programme d'accompagnement vers l'exercice libéral permet aux Soignants ayant atteint 3 200 heures cumulées de bénéficier d'un accompagnement vers l'exercice libéral.</p>
         <p className="mb-3">L'accompagnement comprend :</p>
         <ul className="list-disc pl-6 space-y-2 mb-3">
           <li>Le suivi en temps réel du compteur d'heures (missions réalisées via la Plateforme et heures externes déclarées sur justificatifs)</li>
