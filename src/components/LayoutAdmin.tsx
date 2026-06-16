@@ -83,6 +83,7 @@ const NAV_ADMIN_GROUPED: SidebarEntry[] = [
   },
   {
     icone: Settings, label: 'Système', items: [
+      { icone: Settings, label: 'Configuration', route: '/admin/config', acces: ACCES.TECHNIQUE },
       { icone: ShieldCheck, label: 'Conformité', route: '/admin/conformite', acces: ACCES.TECHNIQUE },
       { icone: Shield, label: 'Audit logs', route: '/admin/audit', acces: ACCES.TECHNIQUE },
       { icone: Shield, label: 'Audit RLS', route: '/admin/audit-rls', acces: ACCES.TECHNIQUE },
