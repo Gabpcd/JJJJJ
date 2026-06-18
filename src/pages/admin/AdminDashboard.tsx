@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { usePageTitle } from '@/hooks/usePageTitle';
-import { Users, Building2, CheckCircle, Clock, Banknote, TrendingUp, Target, Star, AlertTriangle, FileText, UserPlus, CreditCard, ExternalLink } from 'lucide-react';
+import { Users, Building2, CheckCircle, Clock, Banknote, TrendingUp, Target, Star, AlertTriangle, FileText, UserPlus, CreditCard, ExternalLink, ShieldCheck } from 'lucide-react';
 import { LayoutAdmin } from '@/components/LayoutAdmin';
 import { CarteKPIY2K } from '@/components/y2k/CarteKPIY2K';
 import { ChargementPage } from '@/components/ChargementPage';
@@ -77,6 +77,14 @@ export default function AdminDashboard() {
   const [stripeMoisCapture, setStripeMoisCapture] = useState(0);
   const [stripeMoisAttente, setStripeMoisAttente] = useState(0);
   const [connectStats, setConnectStats] = useState<any>(null);
+  const [nbEtabsAVerifier, setNbEtabsAVerifier] = useState(0);
+
+  // B4 : nombre d'établissements en attente de validation (file de travail admin).
+  useEffect(() => {
+    supabase.rpc('fn_admin_lister_etablissements_a_verifier' as any, { p_limit: 200 }).then(({ data }) => {
+      if ((data as any)?.success) setNbEtabsAVerifier(((data as any).etablissements || []).length);
+    });
+  }, []);
 
   const [caCommissionsHT, setCaCommissionsHT] = useState(0);
   const [caEncaisse, setCaEncaisse] = useState(0);
@@ -243,6 +251,15 @@ export default function AdminDashboard() {
 
         {/* Alertes et actions urgentes */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {nbEtabsAVerifier > 0 && (
+            <div className="rounded-xl border-2 border-primary/40 bg-primary/5 p-4 cursor-pointer hover:border-primary/60 transition-colors" onClick={() => navigate('/admin/verification-etablissements')}>
+              <div className="flex items-center gap-2 mb-2">
+                <ShieldCheck className="h-5 w-5 text-primary" />
+                <span className="font-bold text-foreground">{nbEtabsAVerifier} établissement{nbEtabsAVerifier > 1 ? 's' : ''} à valider</span>
+              </div>
+              <p className="text-xs text-muted-foreground">Vérification rattachement / cohérence →</p>
+            </div>
+          )}
           {litiges.length > 0 && (
             <div className="rounded-xl border-2 border-warning/40 bg-warning/5 p-4 cursor-pointer hover:border-warning/60 transition-colors" onClick={() => navigate('/admin/moderation')}>
 
