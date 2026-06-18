@@ -480,7 +480,7 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
       {contratNonValide && (
         <div className="bg-warning/10 border border-warning/30 rounded-xl p-3 mb-4 flex items-center gap-2 text-sm">
           <AlertTriangle className="h-4 w-4 text-warning shrink-0" />
-          <span>Votre contrat de service n'est pas encore validé. <Link to="/etablissement/profil" className="text-primary hover:underline font-medium">Téléverser le contrat →</Link></span>
+          <span>Votre contrat de service n'est pas encore validé. <Link to="/etablissement/parametres?tab=contrats" className="text-primary hover:underline font-medium">Téléverser le contrat →</Link></span>
         </div>
       )}
 
