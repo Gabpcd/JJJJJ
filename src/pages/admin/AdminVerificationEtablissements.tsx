@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import {
-  Loader2, Building2, UserCheck, Mail, CheckCircle2, XCircle, FileText, ExternalLink, ShieldCheck,
+  Loader2, Building2, UserCheck, Mail, Phone, MapPin, CheckCircle2, XCircle, AlertTriangle,
+  FileText, ExternalLink, ShieldCheck, ScanLine,
 } from 'lucide-react';
 import { LayoutAdmin } from '@/components/LayoutAdmin';
 import { supabase } from '@/integrations/supabase/client';
@@ -21,17 +22,28 @@ interface EtabAVerifier {
   nom: string | null;
   siret: string | null;
   siret_verifie: boolean | null;
+  siret_raison_sociale: string | null;
+  siret_categorie_juridique: string | null;
+  siret_code_naf: string | null;
+  siret_est_actif: boolean | null;
   finess: string | null;
   finess_verifie: boolean | null;
   finess_raison_sociale: string | null;
   finess_categorie: string | null;
   finess_secteur: string | null;
   finess_est_public: boolean | null;
+  adresse_rue: string | null;
+  adresse_code_postal: string | null;
+  adresse_ville: string | null;
+  adresse_departement: string | null;
+  telephone_contact: string | null;
+  telephone_verifie: boolean | null;
   representant_nom: string | null;
   representant_prenom: string | null;
   representant_identite_verifiee: boolean | null;
   representant_piece_s3_key: string | null;
   representant_piece_type_document: string | null;
+  representant_identite_resultat_ia: any | null;
   dirigeants: Dirigeant[] | null;
   email_contact: string | null;
   email_contact_verifie: boolean | null;
@@ -43,11 +55,53 @@ interface EtabAVerifier {
   cree_le: string | null;
 }
 
-function Badge({ ok, label }: { ok: boolean | null | undefined; label: string }) {
+// ── Comparaison de noms (cohérence nom déclaré / SIRET / FINESS) ──────────
+function normaliserNom(s: string | null | undefined): string {
+  if (!s) return '';
+  return s
+    .toLowerCase()
+    .normalize('NFD').replace(/[̀-ͯ]/g, '') // accents
+    .replace(/\b(sas|sasu|sarl|sa|eurl|sci|scp|selarl|selas|snc|gie|association|asso|groupe|clinique|centre|hopital|ehpad|cabinet|pharmacie|ste|societe)\b/g, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
+type Verdict = 'match' | 'partiel' | 'different' | 'absent';
+
+function comparerNoms(a: string | null | undefined, b: string | null | undefined): Verdict {
+  const na = normaliserNom(a);
+  const nb = normaliserNom(b);
+  if (!na || !nb) return 'absent';
+  if (na === nb) return 'match';
+  if (na.includes(nb) || nb.includes(na)) return 'partiel';
+  // chevauchement de mots significatifs
+  const setA = new Set(na.split(' ').filter(w => w.length >= 3));
+  const setB = new Set(nb.split(' ').filter(w => w.length >= 3));
+  const communs = [...setA].filter(w => setB.has(w));
+  if (communs.length > 0) return 'partiel';
+  return 'different';
+}
+
+const VERDICT_STYLE: Record<Verdict, { cls: string; label: string; icon: typeof CheckCircle2 }> = {
+  match: { cls: 'text-emerald-700', label: 'Concordent', icon: CheckCircle2 },
+  partiel: { cls: 'text-amber-700', label: 'Concordance partielle', icon: AlertTriangle },
+  different: { cls: 'text-red-700', label: 'NE CONCORDENT PAS', icon: XCircle },
+  absent: { cls: 'text-muted-foreground', label: 'Donnée manquante', icon: AlertTriangle },
+};
+
+// ── Badge à 3 états : vérifié / renseigné non vérifié / manquant ──────────
+function BadgeVerif({ present, verifie, label }: { present: boolean; verifie: boolean | null | undefined; label: string }) {
+  let cls: string; let icon: JSX.Element; let txt: string;
+  if (!present) {
+    cls = 'bg-muted text-muted-foreground'; icon = <XCircle className="h-3 w-3" />; txt = `${label} manquant`;
+  } else if (verifie) {
+    cls = 'bg-emerald-100 text-emerald-700'; icon = <CheckCircle2 className="h-3 w-3" />; txt = `${label} vérifié`;
+  } else {
+    cls = 'bg-amber-100 text-amber-700'; icon = <AlertTriangle className="h-3 w-3" />; txt = `${label} non vérifié`;
+  }
   return (
-    <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${ok ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
-      {ok ? <CheckCircle2 className="h-3 w-3" /> : <XCircle className="h-3 w-3" />}
-      {label}
+    <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${cls}`}>
+      {icon}{txt}
     </span>
   );
 }
@@ -55,9 +109,8 @@ function Badge({ ok, label }: { ok: boolean | null | undefined; label: string })
 /**
  * Page admin /admin/verification-etablissements — file d'attente de revue manuelle
  * des établissements non encore rattachés (fallback ADMIN). L'admin examine le
- * dossier (FINESS, représentant + pièce d'identité, dirigeants INSEE, e-mail) et
- * valide (fn_admin_valider_etablissement → rattachement ADMIN + droit de publier)
- * ou rejette (fn_admin_rejeter_etablissement).
+ * dossier complet (cohérence SIRET/FINESS/nom, représentant + pièce d'identité +
+ * verdict IA, dirigeants INSEE, contact) et valide ou rejette.
  */
 export default function AdminVerificationEtablissements() {
   usePageTitle('Vérification établissements');
@@ -139,7 +192,8 @@ export default function AdminVerificationEtablissements() {
             <ShieldCheck className="h-6 w-6 text-primary" /> Vérification des établissements
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            File d'attente des établissements non encore rattachés. Examinez le dossier puis validez (rattachement par décision admin) ou rejetez.
+            File d'attente des établissements non encore rattachés. Vérifiez la cohérence
+            <strong> SIRET / FINESS / nom</strong>, l'identité du représentant, contactez si besoin, puis validez ou rejetez.
           </p>
         </div>
 
@@ -160,6 +214,13 @@ export default function AdminVerificationEtablissements() {
               const dirigeantsPhysiques = (etab.dirigeants || []).filter(
                 d => (d.type_dirigeant || '').toLowerCase().includes('physique'),
               );
+              const adresse = [etab.adresse_rue, etab.adresse_code_postal, etab.adresse_ville].filter(Boolean).join(', ');
+              // Cohérence : on compare le nom déclaré aux raisons sociales officielles.
+              const vSiret = comparerNoms(etab.nom, etab.siret_raison_sociale);
+              const vFiness = etab.finess ? comparerNoms(etab.nom, etab.finess_raison_sociale) : 'absent';
+              const vCroise = (etab.siret_raison_sociale && etab.finess_raison_sociale)
+                ? comparerNoms(etab.siret_raison_sociale, etab.finess_raison_sociale) : 'absent';
+              const iaRep = etab.representant_identite_resultat_ia as any;
               return (
                 <div key={etab.id} className="rounded-xl border border-border bg-card p-4 space-y-3">
                   {/* En-tête */}
@@ -171,35 +232,83 @@ export default function AdminVerificationEtablissements() {
                       </p>
                     </div>
                     <div className="flex flex-wrap gap-1.5">
-                      <Badge ok={etab.siret_verifie} label="SIRET" />
-                      <Badge ok={etab.finess_verifie} label="FINESS" />
-                      <Badge ok={etab.representant_identite_verifiee} label="Identité" />
-                      <Badge ok={etab.email_contact_verifie} label="E-mail" />
-                      <Badge ok={etab.contrat_valide} label="Contrat" />
+                      <BadgeVerif present={!!etab.siret} verifie={etab.siret_verifie} label="SIRET" />
+                      <BadgeVerif present={!!etab.finess} verifie={etab.finess_verifie} label="FINESS" />
+                      <BadgeVerif present={!!etab.representant_piece_s3_key} verifie={etab.representant_identite_verifiee} label="Identité" />
+                      <BadgeVerif present={!!etab.email_contact} verifie={etab.email_contact_verifie} label="E-mail" />
+                      <BadgeVerif present={!!etab.telephone_contact} verifie={etab.telephone_verifie} label="Tél." />
+                      <BadgeVerif present={etab.contrat_valide != null} verifie={etab.contrat_valide} label="Contrat" />
                     </div>
                   </div>
 
-                  {/* FINESS */}
-                  <div className="rounded-lg bg-muted/20 p-3 text-sm">
+                  {/* Cohérence SIRET / FINESS / nom — le point clé de la revue */}
+                  <div className="rounded-lg bg-muted/20 p-3 text-sm space-y-2">
                     <p className="font-medium text-foreground flex items-center gap-1.5">
-                      <Building2 className="h-4 w-4 text-primary" /> Structure (FINESS)
+                      <Building2 className="h-4 w-4 text-primary" /> Cohérence des identités
                     </p>
-                    <p className="text-muted-foreground mt-1">
-                      {etab.finess ? (
-                        <>FINESS {etab.finess} — {etab.finess_raison_sociale || '?'}{etab.finess_categorie ? ` · ${etab.finess_categorie}` : ''}{etab.finess_est_public ? ' · Public' : ''}</>
-                      ) : 'Aucun FINESS renseigné.'}
-                    </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                      <div>
+                        <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Nom déclaré</p>
+                        <p className="text-foreground">{etab.nom || '—'}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Raison sociale SIRET (INSEE)</p>
+                        <p className="text-foreground">{etab.siret_raison_sociale || '—'}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Raison sociale FINESS</p>
+                        <p className="text-foreground">{etab.finess_raison_sociale || (etab.finess ? '?' : '— (non renseigné)')}</p>
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap gap-3 pt-1">
+                      {([['Nom ↔ SIRET', vSiret], ['Nom ↔ FINESS', vFiness], ['SIRET ↔ FINESS', vCroise]] as [string, Verdict][]).map(([lbl, v]) => {
+                        const st = VERDICT_STYLE[v];
+                        return (
+                          <span key={lbl} className={`inline-flex items-center gap-1 text-xs font-medium ${st.cls}`}>
+                            <st.icon className="h-3.5 w-3.5" /> {lbl} : {st.label}
+                          </span>
+                        );
+                      })}
+                    </div>
+                    {(vSiret === 'different' || vFiness === 'different' || vCroise === 'different') && (
+                      <p className="text-xs text-red-700 bg-red-50 border border-red-200 rounded p-2">
+                        ⚠️ Incohérence détectée : le nom déclaré et/ou les raisons sociales officielles ne correspondent pas.
+                        Vérifiez qu'il ne s'agit pas d'une usurpation avant de valider.
+                      </p>
+                    )}
+                    {etab.siret_categorie_juridique && (
+                      <p className="text-xs text-muted-foreground">
+                        Cat. juridique : {etab.siret_categorie_juridique}{etab.siret_code_naf ? ` · NAF ${etab.siret_code_naf}` : ''}
+                        {etab.siret_est_actif === false ? ' · ⚠️ SIRET INACTIF' : etab.siret_est_actif ? ' · actif' : ''}
+                      </p>
+                    )}
+                    {adresse && (
+                      <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+                        <MapPin className="h-3.5 w-3.5" /> {adresse}
+                      </p>
+                    )}
                   </div>
 
-                  {/* Représentant + pièce + dirigeants */}
+                  {/* Représentant + pièce + verdict IA + dirigeants */}
                   <div className="rounded-lg bg-muted/20 p-3 text-sm space-y-1.5">
                     <p className="font-medium text-foreground flex items-center gap-1.5">
-                      <UserCheck className="h-4 w-4 text-primary" /> Représentant
+                      <UserCheck className="h-4 w-4 text-primary" /> Représentant (personne physique rattachée)
                     </p>
                     <p className="text-muted-foreground">
                       {etab.representant_prenom || ''} {etab.representant_nom || '—'}
                       {etab.representant_piece_type_document ? ` · ${etab.representant_piece_type_document}` : ''}
                     </p>
+                    {iaRep && (iaRep.verdict || iaRep.nom_detecte || iaRep.confiance != null) && (
+                      <p className="text-xs flex items-start gap-1.5 text-muted-foreground">
+                        <ScanLine className="h-3.5 w-3.5 shrink-0 mt-0.5 text-primary" />
+                        <span>
+                          Vérif IA : {iaRep.verdict ? <strong>{String(iaRep.verdict)}</strong> : '—'}
+                          {iaRep.nom_detecte ? ` · nom détecté : ${iaRep.nom_detecte}` : ''}
+                          {iaRep.confiance != null ? ` · confiance ${iaRep.confiance}` : ''}
+                          {iaRep.motif ? ` · ${iaRep.motif}` : ''}
+                        </span>
+                      </p>
+                    )}
                     {etab.representant_piece_s3_key && (
                       <BoutonY2K
                         size="sm"
@@ -224,14 +333,34 @@ export default function AdminVerificationEtablissements() {
                     )}
                   </div>
 
-                  {/* E-mail */}
-                  <div className="rounded-lg bg-muted/20 p-3 text-sm">
+                  {/* Contact direct */}
+                  <div className="rounded-lg bg-muted/20 p-3 text-sm space-y-2">
                     <p className="font-medium text-foreground flex items-center gap-1.5">
-                      <Mail className="h-4 w-4 text-primary" /> E-mail de contact
+                      <Mail className="h-4 w-4 text-primary" /> Contacter l'établissement
                     </p>
-                    <p className="text-muted-foreground mt-1">
-                      {etab.email_contact || '—'} {etab.email_contact_verifie ? '(confirmé)' : '(non confirmé)'}
-                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {etab.email_contact ? (
+                        <a
+                          href={`mailto:${etab.email_contact}?subject=${encodeURIComponent('Vérification de votre compte Jolene')}`}
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-primary/30 bg-primary/5 px-3 py-1.5 text-xs font-medium text-primary hover:bg-primary/10"
+                        >
+                          <Mail className="h-3.5 w-3.5" /> {etab.email_contact}
+                          {!etab.email_contact_verifie && <span className="text-amber-600">(non confirmé)</span>}
+                        </a>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">Aucun e-mail renseigné</span>
+                      )}
+                      {etab.telephone_contact ? (
+                        <a
+                          href={`tel:${etab.telephone_contact.replace(/\s/g, '')}`}
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-primary/30 bg-primary/5 px-3 py-1.5 text-xs font-medium text-primary hover:bg-primary/10"
+                        >
+                          <Phone className="h-3.5 w-3.5" /> {etab.telephone_contact}
+                        </a>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">Aucun téléphone renseigné</span>
+                      )}
+                    </div>
                   </div>
 
                   {/* Actions */}
