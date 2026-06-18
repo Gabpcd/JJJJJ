@@ -22,8 +22,8 @@ interface Props {
  * via mount/unmount conditionnel.
  */
 export function ErreurInscription({ erreur, onRetry, onSeConnecter }: Props) {
-  const aideRppsLink = erreur.code === 'RPPS_NOT_FOUND'
-    ? <a href="/aide" className="text-primary underline font-medium ml-1">Comment trouver mon RPPS ?</a>
+  const aideRppsLink = ['RPPS_NOT_FOUND', 'RPPS_FORMAT_INVALID', 'RPPS_TRAITS_MISMATCH'].includes(erreur.code)
+    ? <a href="/aide/comment-verifier-mon-rpps" className="text-primary underline font-medium ml-1">Comment vérifier mon RPPS ?</a>
     : null;
 
   return (
