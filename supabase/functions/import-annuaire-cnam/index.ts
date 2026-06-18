@@ -79,13 +79,15 @@ Deno.serve(async (req) => {
 
       const vus = new Set<string>();
       const rows: Record<string, unknown>[] = [];
+      // CSV sur-échappé ("""LE REGENT""") : retire les guillemets parasites + normalise les espaces.
+      const nettoie = (s: string) => (s || "").replace(/"/g, "").replace(/\s+/g, " ").trim();
       for (const ligne of bloc.split("\n")) {
         const f = ligne.split(";");
         if (f.length < 15) continue;
         const profession = mapEff[(f[10] || "").trim()];
         if (!profession) continue;
-        const nom = (f[1] || "").trim();
-        const prenom = (f[2] || "").trim();
+        const nom = nettoie(f[1]);
+        const prenom = nettoie(f[2]);
         const cp = (f[7] || "").trim();
         if (!nom || !/^\d{5}$/.test(cp)) continue;
         const cle = (nom + "|" + prenom + "|" + cp + "|" + profession).toLowerCase().slice(0, 220);
@@ -94,10 +96,10 @@ Deno.serve(async (req) => {
         const tel = (f[9] || "").replace(/\D/g, "");
         rows.push({
           cle, nom, prenom, profession,
-          enseigne: ((f[3] || "").trim() || (f[4] || "").trim()) || null,
+          enseigne: (nettoie(f[3]) || nettoie(f[4])) || null,
           telephone: tel.length >= 9 ? tel : null,
-          adresse: [f[4], f[5], f[6]].map((s) => (s || "").trim()).filter(Boolean).join(" ") || null,
-          code_postal: cp, ville: (f[8] || "").trim() || null,
+          adresse: [f[4], f[5], f[6]].map((s) => nettoie(s)).filter(Boolean).join(" ") || null,
+          code_postal: cp, ville: nettoie(f[8]) || null,
           departement: cp.slice(0, 2),
         });
       }
