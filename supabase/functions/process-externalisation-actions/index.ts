@@ -282,13 +282,17 @@ async function dispatchRecompenseParrainage(admin: any, action: ActionRow): Prom
     return { ok: false, erreur: "parrainage_id + parrain_id + filleul_id requis" };
   }
 
+  // Prime configurable depuis /admin/config (parametres_systeme).
+  const { data: primeParam } = await admin.rpc("fn_param_num", { p_cle: "prime_parrainage_eur", p_defaut: 50 });
+  const primeDefaut = Number(primeParam) || 50;
+
   const stripeKey = Deno.env.get("STRIPE_SECRET_KEY") || "";
   const results: Record<string, string> = {};
   let allPaid = true;
 
   for (const [role, userId, montant] of [
-    ["parrain", parrain_id, montant_parrain || 50],
-    ["filleul", filleul_id, montant_filleul || 50],
+    ["parrain", parrain_id, montant_parrain || primeDefaut],
+    ["filleul", filleul_id, montant_filleul || primeDefaut],
   ] as const) {
     const { data: soignant } = await admin.from("soignants")
       .select("stripe_account_id, iban_virement, iban_titulaire, prenom, nom, email")
@@ -344,8 +348,8 @@ async function dispatchRecompenseParrainage(admin: any, action: ActionRow): Prom
       destinataire_id: userId,
       type_destinataire: "SOIGNANT",
       type: "PARRAINAGE_PRIME_VERSEE",
-      titre: "50€ de prime en attente !",
-      corps: "Votre prime de parrainage de 50€ est prête. Renseignez votre IBAN dans Profil > Paiements pour la recevoir.",
+      titre: `${montant}€ de prime en attente !`,
+      corps: `Votre prime de parrainage de ${montant}€ est prête. Renseignez votre IBAN dans Profil > Paiements pour la recevoir.`,
       lien: "/soignant/profil?tab=paiements",
     });
     // Admin awareness : prime bloquée faute d'IBAN/Stripe → l'admin peut relancer.
