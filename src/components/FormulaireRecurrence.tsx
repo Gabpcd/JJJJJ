@@ -50,6 +50,61 @@ function parseDateLocale(str: string): Date {
   return new Date(y, m - 1, d);
 }
 
+function fmtDateLocale(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+// Jours ISO (1=lundi … 7=dimanche) présents dans la plage [debut, fin].
+function joursISODansPlage(debut: string, fin: string): Set<number> {
+  const set = new Set<number>();
+  if (!debut || !fin) return set;
+  const d = parseDateLocale(debut);
+  const f = parseDateLocale(fin);
+  if (f < d) return set;
+  const cur = new Date(d);
+  let guard = 0;
+  while (cur <= f && guard < 400) {
+    const raw = cur.getDay();
+    set.add(raw === 0 ? 7 : raw);
+    cur.setDate(cur.getDate() + 1);
+    guard++;
+  }
+  return set;
+}
+
+// Plage réellement travaillée : 1ère et dernière date dont le jour est actif,
+// dans [debut, fin]. Sert à recaler les dates quand on (dé)coche un jour.
+function plageEffectiveJours(debut: string, fin: string, actifsISO: Set<number>): [string, string] | null {
+  if (!debut || !fin || actifsISO.size === 0) return null;
+  const d = parseDateLocale(debut);
+  const f = parseDateLocale(fin);
+  if (f < d) return null;
+  let first: Date | null = null;
+  let last: Date | null = null;
+  const cur = new Date(d);
+  let guard = 0;
+  while (cur <= f && guard < 400) {
+    const raw = cur.getDay();
+    const iso = raw === 0 ? 7 : raw;
+    if (actifsISO.has(iso)) {
+      if (!first) first = new Date(cur);
+      last = new Date(cur);
+    }
+    cur.setDate(cur.getDate() + 1);
+    guard++;
+  }
+  if (!first || !last) return null;
+  return [fmtDateLocale(first), fmtDateLocale(last)];
+}
+
+function formatDateFr(str: string): string {
+  if (!str) return '';
+  return format(parseDateLocale(str), 'EEEE d MMMM', { locale: fr });
+}
+
 export function genererCreneauxFlex(
   dateDebut: string, dateFin: string, horairesParJour: HorairesJour[]
 ): CreneauFlex[] {
@@ -161,6 +216,8 @@ interface FormulaireRecurrenceProps {
 export function FormulaireRecurrence({ onChange }: FormulaireRecurrenceProps) {
   const [dateDebut, setDateDebut] = useState('');
   const [dateFin, setDateFin] = useState('');
+  // Avertissement affiché quand un (dé)cochage de jour recale les dates.
+  const [avertissementDates, setAvertissementDates] = useState<string | null>(null);
   const [horairesParJour, setHorairesParJour] = useState<HorairesJour[]>(
     JOURS_SEMAINE_DEF.map(j => ({
       ...j,
@@ -170,6 +227,28 @@ export function FormulaireRecurrence({ onChange }: FormulaireRecurrenceProps) {
       actif: [1, 2, 3, 4, 5].includes(j.jourISO),
     }))
   );
+
+  // Choisir une plage de dates coche AUTOMATIQUEMENT les jours présents dans
+  // cette plage (ex : du vendredi au lundi → ven/sam/dim/lun cochés), au lieu
+  // d'un défaut figé lun-ven qui effacerait l'intention de l'utilisateur.
+  const appliquerJoursSelonPlage = useCallback((debut: string, fin: string) => {
+    if (!debut || !fin) return;
+    const presents = joursISODansPlage(debut, fin);
+    if (presents.size === 0) return;
+    setHorairesParJour(prev => prev.map(j => ({ ...j, actif: presents.has(j.jourISO) })));
+  }, []);
+
+  const handleDateDebut = useCallback((val: string) => {
+    setDateDebut(val);
+    setAvertissementDates(null);
+    appliquerJoursSelonPlage(val, dateFin);
+  }, [dateFin, appliquerJoursSelonPlage]);
+
+  const handleDateFin = useCallback((val: string) => {
+    setDateFin(val);
+    setAvertissementDates(null);
+    appliquerJoursSelonPlage(dateDebut, val);
+  }, [dateDebut, appliquerJoursSelonPlage]);
 
   const joursActifs = useMemo(() => horairesParJour.filter(j => j.actif), [horairesParJour]);
 
@@ -214,7 +293,20 @@ export function FormulaireRecurrence({ onChange }: FormulaireRecurrenceProps) {
     setHorairesParJour(prev =>
       prev.map(j => j.jourISO === iso ? { ...j, actif: !j.actif } : j)
     );
-  }, []);
+    // Changer les jours recale automatiquement les dates sur la 1ère/dernière
+    // journée réellement travaillée, et le signale.
+    const actifsApres = new Set(
+      horairesParJour.filter(j => (j.jourISO === iso ? !j.actif : j.actif)).map(j => j.jourISO)
+    );
+    const eff = plageEffectiveJours(dateDebut, dateFin, actifsApres);
+    if (eff && (eff[0] !== dateDebut || eff[1] !== dateFin)) {
+      setDateDebut(eff[0]);
+      setDateFin(eff[1]);
+      setAvertissementDates(`Vos dates ont été ajustées : du ${formatDateFr(eff[0])} au ${formatDateFr(eff[1])}.`);
+    } else {
+      setAvertissementDates(null);
+    }
+  }, [horairesParJour, dateDebut, dateFin]);
 
   const updateHoraire = useCallback((jourISO: number, heureDebut: string, heureFin: string) => {
     setHorairesParJour(prev =>
@@ -261,13 +353,20 @@ export function FormulaireRecurrence({ onChange }: FormulaireRecurrenceProps) {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div>
             <label className="text-xs text-muted-foreground mb-1 block">Du *</label>
-            <input type="date" value={dateDebut} onChange={e => setDateDebut(e.target.value)} className="input-base" required />
+            <input type="date" value={dateDebut} onChange={e => handleDateDebut(e.target.value)} className="input-base" required />
           </div>
           <div>
             <label className="text-xs text-muted-foreground mb-1 block">Au *</label>
-            <input type="date" value={dateFin} onChange={e => setDateFin(e.target.value)} className="input-base" required />
+            <input type="date" value={dateFin} onChange={e => handleDateFin(e.target.value)} className="input-base" required />
           </div>
         </div>
+
+        {avertissementDates && (
+          <div className="flex items-start gap-2 text-xs text-warning bg-warning/10 border border-warning/30 rounded-lg p-2">
+            <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+            <span>{avertissementDates}</span>
+          </div>
+        )}
 
         {/* Jours */}
         <div>
