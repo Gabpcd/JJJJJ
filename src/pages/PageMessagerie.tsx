@@ -33,6 +33,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { sanitizeText } from '@/lib/sanitize';
 import { AvatarDisplay } from '@/components/AvatarUpload';
 import { LayoutApp } from '@/components/LayoutApp';
+import { LayoutAdmin } from '@/components/LayoutAdmin';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { logger } from '@/lib/logger';
 import { handleErrorSilent } from '@/lib/handleError';
@@ -397,9 +398,8 @@ export default function PageMessagerie({ role }: PageMessagerieProps) {
 
   const layoutRole = role === 'ADMIN_PLATEFORME' ? 'ADMIN_PLATEFORME' : role === 'ADMIN_ETABLISSEMENT' ? 'ADMIN_ETABLISSEMENT' : 'SOIGNANT';
 
-  return (
-    <LayoutApp role={layoutRole}>
-      <div className="flex flex-col h-[calc(100dvh-14rem)] md:h-[calc(100dvh-8rem)]">
+  const contenu = (
+    <div className="flex flex-col h-[calc(100dvh-14rem)] md:h-[calc(100dvh-8rem)]">
         <div className="flex flex-1 rounded-2xl border border-jolene-rose-200/40 overflow-hidden bg-card min-h-0 shadow-sm">
           {/* ── Conversation list ── */}
           <div className={`w-full md:w-[380px] md:border-r border-border flex flex-col bg-jolene-lavender-50/30 ${showMobileChat ? 'hidden md:flex' : 'flex'}`}>
@@ -676,7 +676,12 @@ export default function PageMessagerie({ role }: PageMessagerieProps) {
             </div>
           </DialogContent>
         </Dialog>
-      </div>
-    </LayoutApp>
+    </div>
   );
+
+  // Admin plateforme : conserver la sidebar admin (LayoutAdmin) au lieu de la
+  // barre de navigation soignant/étab (LayoutApp), pour pouvoir naviguer.
+  return isAdminPlateforme
+    ? <LayoutAdmin>{contenu}</LayoutAdmin>
+    : <LayoutApp role={layoutRole}>{contenu}</LayoutApp>;
 }
