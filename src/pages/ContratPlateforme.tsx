@@ -97,7 +97,7 @@ export function ContratPlateformeContent() {
         body: { etablissement_id: etablissementId },
       }).catch(() => { /* best-effort, l'admin valide aussi manuellement */ });
 
-      toast.success('Contrat téléversé — en cours de vérification par notre équipe.');
+      toast.success('Contrat téléversé — vérification automatique en cours.');
       await charger();
     } catch (err) {
       capturerErreurSentry(err, 'ContratPlateforme', 'upload');
@@ -213,7 +213,7 @@ export function ContratPlateformeContent() {
                   ? format(new Date(contrat.contrat_uploade_le), 'dd MMMM yyyy', { locale: fr })
                   : '—'}
               </span>.
-              Il est en cours de vérification par notre équipe. Vous serez notifié dès qu'il sera validé.
+              Il est en cours de vérification automatique (IA : conformité, SIRET, signataire). Vous serez notifié dès qu'il sera validé.
             </p>
             <div className="flex gap-2">
               <BoutonY2K variant="secondary" onClick={telechargerContrat} className="gap-2">
