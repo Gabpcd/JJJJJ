@@ -21,6 +21,9 @@ verify_jwt = false
 [functions.verify-piece-identite-etab]
 verify_jwt = true
 
+[functions.verify-justificatif-fonction]
+verify_jwt = true
+
 [functions.send-email]
 verify_jwt = false
 

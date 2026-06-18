@@ -15,7 +15,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Shield, CheckCircle2, Building2, UserCheck, Mail, Upload, Loader2,
-  ArrowLeft, AlertTriangle, Clock,
+  ArrowLeft, AlertTriangle, Clock, FileText,
 } from 'lucide-react';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { LayoutApp } from '@/components/LayoutApp';
@@ -34,6 +34,7 @@ type EtabVerif = {
   representant_nom: string | null;
   representant_prenom: string | null;
   representant_identite_verifiee: boolean | null;
+  justificatif_fonction_verifie: boolean | null;
   email_contact: string | null;
   email_contact_verifie: boolean | null;
   rattachement_methode: string | null;
@@ -42,6 +43,7 @@ type EtabVerif = {
 
 const LIBELLE_METHODE: Record<string, string> = {
   AUTO_DIRIGEANT: 'Dirigeant vérifié (INSEE)',
+  JUSTIFICATIF: 'Justificatif de fonction vérifié',
   EMAIL_PRO: 'E-mail professionnel confirmé',
   ADMIN: 'Validation par un administrateur Jolene',
 };
@@ -68,6 +70,12 @@ export default function VerificationEtablissement() {
   const [pieceLoading, setPieceLoading] = useState(false);
   const pieceLockRef = useRef(false);
 
+  // Justificatif de fonction (non-dirigeants : RH, chef de service, délégataire)
+  const [justifType, setJustifType] = useState<'ATTESTATION_EMPLOYEUR' | 'DELEGATION_SIGNATURE' | 'FICHE_POSTE' | 'CONTRAT_TRAVAIL' | 'DECISION_NOMINATION'>('ATTESTATION_EMPLOYEUR');
+  const [justifFile, setJustifFile] = useState<File | null>(null);
+  const [justifLoading, setJustifLoading] = useState(false);
+  const justifLockRef = useRef(false);
+
   // E-mail pro
   const [emailInput, setEmailInput] = useState('');
   const [emailLoading, setEmailLoading] = useState(false);
@@ -76,7 +84,7 @@ export default function VerificationEtablissement() {
     if (!user) return;
     const { data } = await supabase
       .from('etablissements')
-      .select('nom, finess, finess_verifie, finess_raison_sociale, representant_nom, representant_prenom, representant_identite_verifiee, email_contact, email_contact_verifie, rattachement_methode, rattachement_verifie')
+      .select('nom, finess, finess_verifie, finess_raison_sociale, representant_nom, representant_prenom, representant_identite_verifiee, justificatif_fonction_verifie, email_contact, email_contact_verifie, rattachement_methode, rattachement_verifie')
       .eq('id', user.id)
       .maybeSingle();
     if (data) {
@@ -193,6 +201,65 @@ export default function VerificationEtablissement() {
     }
   };
 
+  // ── Justificatif de fonction (non-dirigeant) ──────────────────────────────
+  const verifierJustificatif = async () => {
+    if (!user || !justifFile) return;
+    if (justifLockRef.current) return;
+    const ext = justifFile.name.split('.').pop()?.toLowerCase() || '';
+    if (!ALLOWED_EXT.includes(ext)) {
+      toast.error('Format accepté : PDF, JPG ou PNG.');
+      return;
+    }
+    if (justifFile.size > 10 * 1024 * 1024) {
+      toast.error('Fichier trop volumineux (max 10 Mo).');
+      return;
+    }
+    justifLockRef.current = true;
+    setJustifLoading(true);
+    try {
+      const mime = ext === 'pdf' ? 'application/pdf' : `image/${ext === 'jpg' ? 'jpeg' : ext}`;
+      const path = `${user.id}/justificatif-fonction-${Date.now()}.${ext}`;
+      const { error: upErr } = await supabase.storage
+        .from('jolene-documents')
+        .upload(path, justifFile, { upsert: true, contentType: mime });
+      if (upErr) throw upErr;
+
+      const { error: updErr } = await supabase
+        .from('etablissements')
+        .update({
+          justificatif_fonction_s3_key: path,
+          justificatif_fonction_type_mime: mime,
+          justificatif_fonction_type: justifType,
+        } as Record<string, unknown>)
+        .eq('id', user.id);
+      if (updErr) throw updErr;
+
+      const { data, error } = await supabase.functions.invoke('verify-justificatif-fonction', {
+        body: { etablissement_id: user.id },
+      });
+      if (error) throw error;
+
+      if (data?.justificatif_verifie) {
+        toast.success('Justificatif de fonction validé — rattachement confirmé.');
+      } else if (data?.verdict === 'REJETE') {
+        toast.error(data?.motif || "Le document n'a pas pu être validé comme justificatif de fonction.");
+      } else if (data?.etablissement_correspond === false) {
+        toast.error("Le document ne mentionne pas clairement votre établissement.");
+      } else if (data?.nom_correspond === false) {
+        toast.error("Le document ne mentionne pas la personne déclarée comme représentant.");
+      } else {
+        toast('Document reçu. Vérification en cours.');
+      }
+      setJustifFile(null);
+      await recharger();
+    } catch (e: unknown) {
+      toast.error((e as Error)?.message || 'Erreur lors de la vérification du justificatif.');
+    } finally {
+      justifLockRef.current = false;
+      setJustifLoading(false);
+    }
+  };
+
   // ── E-mail professionnel ──────────────────────────────────────────────────
   const envoyerLienEmail = async () => {
     if (!user) return;
@@ -232,6 +299,8 @@ export default function VerificationEtablissement() {
 
   const finessOk = !!etab?.finess_verifie;
   const identiteOk = !!etab?.representant_identite_verifiee;
+  const justifOk = !!etab?.justificatif_fonction_verifie;
+  const estDirigeant = etab?.rattachement_methode === 'AUTO_DIRIGEANT';
   const emailOk = !!etab?.email_contact_verifie;
   const rattachOk = !!etab?.rattachement_verifie;
 
@@ -262,7 +331,7 @@ export default function VerificationEtablissement() {
             <p className="text-sm text-muted-foreground mt-1">
               {rattachOk
                 ? `Rattachement validé — ${LIBELLE_METHODE[etab?.rattachement_methode || 'ADMIN'] || 'validé'}. Vous pouvez publier des missions.`
-                : "Complétez la vérification FINESS et au moins une preuve de rattachement (représentant ou e-mail professionnel)."}
+                : "Vérifiez l'identité du représentant. S'il est le dirigeant déclaré, le rattachement est automatique ; sinon, ajoutez un justificatif de fonction."}
             </p>
           </div>
         </div>
@@ -364,10 +433,70 @@ export default function VerificationEtablissement() {
           )}
         </section>
 
-        {/* 3. E-mail professionnel */}
+        {/* 3. Justificatif de fonction (non-dirigeant) */}
         <section className="rounded-xl border border-border bg-card p-4 space-y-3">
           <p className="text-sm font-semibold text-foreground flex items-center gap-2">
-            <Mail className="h-4 w-4 text-primary" /> 3. E-mail professionnel
+            <FileText className="h-4 w-4 text-primary" /> 3. Justificatif de fonction
+            {(justifOk || estDirigeant) && <CheckCircle2 className="h-4 w-4 text-success" />}
+          </p>
+          {estDirigeant ? (
+            <p className="text-sm text-muted-foreground">
+              Vous êtes le dirigeant déclaré (INSEE) — rattachement automatique. Aucun justificatif nécessaire.
+            </p>
+          ) : justifOk ? (
+            <p className="text-sm text-muted-foreground">
+              Justificatif de fonction vérifié — rattachement confirmé.
+            </p>
+          ) : (
+            <>
+              <p className="text-xs text-muted-foreground">
+                Si vous n'êtes pas le dirigeant déclaré (RH, chef de service, délégataire), téléversez un justificatif qui vous rattache à l'établissement. Il est vérifié automatiquement par IA (votre nom + l'établissement + l'authenticité du document).
+              </p>
+              <div>
+                <Label htmlFor="justif-type">Type de justificatif</Label>
+                <select
+                  id="justif-type"
+                  value={justifType}
+                  onChange={e => setJustifType(e.target.value as typeof justifType)}
+                  className="block w-full mt-1 rounded-lg border border-border bg-background px-3 py-2 text-sm"
+                >
+                  <option value="ATTESTATION_EMPLOYEUR">Attestation employeur</option>
+                  <option value="DELEGATION_SIGNATURE">Délégation de signature / pouvoir</option>
+                  <option value="FICHE_POSTE">Fiche de poste</option>
+                  <option value="CONTRAT_TRAVAIL">Contrat de travail</option>
+                  <option value="DECISION_NOMINATION">Décision de nomination</option>
+                </select>
+              </div>
+              <div>
+                <Label htmlFor="justif-file" className="sr-only">Justificatif de fonction</Label>
+                <input
+                  id="justif-file"
+                  type="file"
+                  accept=".pdf,.jpg,.jpeg,.png"
+                  onChange={e => setJustifFile(e.target.files?.[0] || null)}
+                  className="block w-full text-sm text-foreground file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-primary/10 file:text-primary hover:file:bg-primary/20 cursor-pointer"
+                />
+                {justifFile && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {justifFile.name} ({(justifFile.size / 1024).toFixed(0)} Ko)
+                  </p>
+                )}
+              </div>
+              <BoutonY2K onClick={verifierJustificatif} disabled={!justifFile || justifLoading} className="gap-2">
+                {justifLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                Vérifier le justificatif
+              </BoutonY2K>
+              {!identiteOk && (
+                <p className="text-xs text-amber-600">Vérifiez d'abord la pièce d'identité du représentant (étape 2).</p>
+              )}
+            </>
+          )}
+        </section>
+
+        {/* 4. E-mail de contact (optionnel) */}
+        <section className="rounded-xl border border-border bg-card p-4 space-y-3">
+          <p className="text-sm font-semibold text-foreground flex items-center gap-2">
+            <Mail className="h-4 w-4 text-primary" /> 4. E-mail de contact
             {emailOk && <CheckCircle2 className="h-4 w-4 text-success" />}
           </p>
           {emailOk ? (
@@ -377,7 +506,7 @@ export default function VerificationEtablissement() {
           ) : (
             <>
               <p className="text-xs text-muted-foreground">
-                Alternative pour les grands établissements (CHU, groupes) : confirmez une adresse e-mail au domaine professionnel de la structure. Un lien de validation (valable 24h) vous sera envoyé.
+                Confirmez l'e-mail de contact de l'établissement (recommandé pour recevoir les notifications). Un lien de validation (valable 24h) vous sera envoyé.
               </p>
               <div className="flex flex-col sm:flex-row gap-2">
                 <div className="flex-1">
