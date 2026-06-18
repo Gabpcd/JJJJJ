@@ -81,6 +81,9 @@ Deno.serve(async (req) => {
 
       const lignes = bloc.split("\n");
       const rows: Record<string, unknown>[] = [];
+      // Le CSV FINESS contient des champs sur-échappés ("""LE PLA""") : on retire
+      // les guillemets parasites et on normalise les espaces sur tout champ texte.
+      const nettoie = (s: string) => (s || "").replace(/"/g, "").replace(/\s+/g, " ").trim();
       for (const ligne of lignes) {
         if (!ligne.startsWith("structureet;")) continue;
         const f = ligne.split(";");
@@ -91,14 +94,14 @@ Deno.serve(async (req) => {
         if (!/^\d{2}/.test(finess)) continue;   // saute l'en-tête / lignes invalides
         const achemine = (f[15] || "").trim();          // "75014 PARIS"
         const cp = achemine.slice(0, 5);
-        const ville = achemine.slice(6).trim();
-        const adresse = [f[7], f[8], f[9]].map(s => (s || "").trim()).filter(Boolean).join(" ");
+        const ville = nettoie(achemine.slice(6));
+        const adresse = [f[7], f[8], f[9]].map(s => nettoie(s)).filter(Boolean).join(" ");
         rows.push({
           finess,
           siret: (f[22] || "").trim() || null,
-          nom: ((f[4] || f[3]) || "").trim() || "—",
+          nom: nettoie((f[4] || f[3])) || "—",
           type_jolene: type,
-          categorie_lib: (f[19] || "").trim() || null,
+          categorie_lib: nettoie(f[19]) || null,
           telephone: (f[16] || "").trim() || null,
           adresse: adresse || null,
           code_postal: /^\d{5}$/.test(cp) ? cp : null,
