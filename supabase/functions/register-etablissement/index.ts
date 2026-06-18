@@ -71,7 +71,6 @@ async function queryFinessInscription(finess: string, apiKey: string): Promise<{
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
-  if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders(req) });
   }
 
@@ -210,11 +209,11 @@ Deno.serve(async (req) => {
       compareNoms(nom, siretVerification?.raison_sociale),
       finessRs ? compareNoms(nom, finessRs) : null,
       (siretVerification?.raison_sociale && finessRs) ? compareNoms(siretVerification.raison_sociale, finessRs) : null,
-    ].filter((v): v is 'OK' | 'PARTIEL' | 'INCOHERENT' => v !== null);
+    ];
     const coherenceIdentite: 'OK' | 'PARTIEL' | 'INCOHERENT' | null =
       cohParts.includes('INCOHERENT') ? 'INCOHERENT'
       : cohParts.includes('PARTIEL') ? 'PARTIEL'
-      : cohParts.length > 0 ? 'OK' : null;
+      : cohParts.some((v) => v === 'OK') ? 'OK' : null;
 
     // Auto-vérifié uniquement si SIRET actif + secteur santé + identités cohérentes
     // (nom ↔ SIRET ↔ FINESS). Toute incohérence → EN_ATTENTE + revue admin.
