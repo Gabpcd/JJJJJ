@@ -41,7 +41,36 @@ function checkRateLimit(ip: string): boolean {
   return true;
 }
 
+// Vérification FINESS via FHIR Annuaire Santé (même source que verify-finess) —
+// inline ici pour pouvoir croiser raison sociale FINESS ↔ SIRET ↔ nom AVANT l'insert.
+const FINESS_GATEWAY = 'https://gateway.api.esante.gouv.fr/fhir/v2/Organization';
+const FINESS_SYSTEM = 'https://finess.esante.gouv.fr';
+async function queryFinessInscription(finess: string, apiKey: string): Promise<{ trouve: boolean; raison_sociale?: string | null; actif?: boolean; categorie?: string | null; secteur?: string | null; est_public?: boolean } | null> {
+  try {
+    const identifier = `${FINESS_SYSTEM}|${finess}`;
+    const url = `${FINESS_GATEWAY}?identifier=${encodeURIComponent(identifier)}`;
+    const controller = new AbortController();
+    const t = setTimeout(() => controller.abort(), 9000);
+    const r = await fetch(url, { headers: { 'Accept': 'application/fhir+json', 'ESANTE-API-KEY': apiKey }, signal: controller.signal });
+    clearTimeout(t);
+    if (!r.ok) return null;
+    const bundle = await r.json();
+    if (!bundle.entry || bundle.entry.length === 0) return { trouve: false };
+    const org = bundle.entry[0].resource;
+    let categorie: string | null = null, secteur: string | null = null;
+    for (const ty of org.type || []) {
+      for (const c of ty.coding || []) {
+        const sys = String(c.system || '');
+        if (sys.includes('TRE_R66-CategorieEtablissement') && !categorie) categorie = c.display;
+        if (sys.includes('TRE_R02-SecteurActivite') && !secteur) secteur = c.display;
+      }
+    }
+    return { trouve: true, raison_sociale: org.name || null, actif: org.active !== false, categorie, secteur, est_public: /public/i.test(secteur || '') };
+  } catch { return null; }
+}
+
 Deno.serve(async (req) => {
+  if (req.method === 'OPTIONS') {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders(req) });
   }
@@ -167,10 +196,28 @@ Deno.serve(async (req) => {
       if ([...sa].some((w) => sb.has(w))) return 'PARTIEL';
       return 'INCOHERENT';
     };
-    const coherenceIdentite = compareNoms(nom, siretVerification?.raison_sociale);
+    // Vérification FINESS (si fourni) via l'Annuaire Santé + croisement
+    // nom ↔ raison sociale SIRET ↔ raison sociale FINESS.
+    let finessResult: Awaited<ReturnType<typeof queryFinessInscription>> = null;
+    const finessApiKey = Deno.env.get('ESANTE_FHIR_API_KEY') || '';
+    if (finess && /^\d{9}$/.test(finess) && finessApiKey) {
+      finessResult = await queryFinessInscription(finess, finessApiKey);
+    }
+    const finessRs = finessResult?.trouve ? (finessResult.raison_sociale ?? null) : null;
+    const finessVerifie = !!(finessResult?.trouve && finessResult.actif);
 
-    // Auto-vérifié uniquement si SIRET actif + secteur santé + nom cohérent.
-    // Un nom incohérent → EN_ATTENTE + revue admin (ne peut pas publier).
+    const cohParts = [
+      compareNoms(nom, siretVerification?.raison_sociale),
+      finessRs ? compareNoms(nom, finessRs) : null,
+      (siretVerification?.raison_sociale && finessRs) ? compareNoms(siretVerification.raison_sociale, finessRs) : null,
+    ].filter((v): v is 'OK' | 'PARTIEL' | 'INCOHERENT' => v !== null);
+    const coherenceIdentite: 'OK' | 'PARTIEL' | 'INCOHERENT' | null =
+      cohParts.includes('INCOHERENT') ? 'INCOHERENT'
+      : cohParts.includes('PARTIEL') ? 'PARTIEL'
+      : cohParts.length > 0 ? 'OK' : null;
+
+    // Auto-vérifié uniquement si SIRET actif + secteur santé + identités cohérentes
+    // (nom ↔ SIRET ↔ FINESS). Toute incohérence → EN_ATTENTE + revue admin.
     const autoVerifie = siretVerification?.est_actif && siretVerification?.est_sante
       && coherenceIdentite !== 'INCOHERENT';
     const statutVerification = autoVerifie ? 'VERIFIE' : 'EN_ATTENTE';
@@ -181,6 +228,12 @@ Deno.serve(async (req) => {
       nom,
       siret,
       finess: finess || null,
+      finess_verifie: finessVerifie || false,
+      finess_verifie_le: finessVerifie ? new Date().toISOString() : null,
+      finess_raison_sociale: finessRs,
+      finess_categorie: finessResult?.categorie ?? null,
+      finess_secteur: finessResult?.secteur ?? null,
+      finess_est_public: finessResult?.est_public ?? null,
       type,
       adresse_rue: adresse_rue || 'Non renseigné',
       adresse_ville,
