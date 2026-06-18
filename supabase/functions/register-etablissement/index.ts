@@ -151,8 +151,28 @@ Deno.serve(async (req) => {
       console.warn('SIRET verification failed (non-blocking):', verifyErr);
     }
 
-    // Determine auto-verification status
-    const autoVerifie = siretVerification?.est_actif && siretVerification?.est_sante;
+    // Cohérence nom déclaré ↔ raison sociale SIRET (anti-usurpation : on refuse
+    // qu'un SIRET sans rapport avec l'établissement passe en auto-vérifié).
+    const normNom = (s: string | null | undefined) => (s || '')
+      .toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+      .replace(/\b(sas|sasu|sarl|sa|eurl|sci|scp|selarl|selas|snc|gie|association|asso|groupe|clinique|centre|hopital|ehpad|cabinet|pharmacie|ste|societe)\b/g, '')
+      .replace(/[^a-z0-9]+/g, ' ').trim();
+    const compareNoms = (a: string | null | undefined, b: string | null | undefined): 'OK' | 'PARTIEL' | 'INCOHERENT' | null => {
+      const na = normNom(a), nb = normNom(b);
+      if (!na || !nb) return null;
+      if (na === nb) return 'OK';
+      if (na.includes(nb) || nb.includes(na)) return 'PARTIEL';
+      const sa = new Set(na.split(' ').filter((w) => w.length >= 3));
+      const sb = new Set(nb.split(' ').filter((w) => w.length >= 3));
+      if ([...sa].some((w) => sb.has(w))) return 'PARTIEL';
+      return 'INCOHERENT';
+    };
+    const coherenceIdentite = compareNoms(nom, siretVerification?.raison_sociale);
+
+    // Auto-vérifié uniquement si SIRET actif + secteur santé + nom cohérent.
+    // Un nom incohérent → EN_ATTENTE + revue admin (ne peut pas publier).
+    const autoVerifie = siretVerification?.est_actif && siretVerification?.est_sante
+      && coherenceIdentite !== 'INCOHERENT';
     const statutVerification = autoVerifie ? 'VERIFIE' : 'EN_ATTENTE';
 
     // 2. Insert into etablissements table
@@ -178,6 +198,7 @@ Deno.serve(async (req) => {
       siret_categorie_juridique: siretVerification?.categorie_juridique ?? null,
       dirigeants: siretVerification?.dirigeants ?? null,
       est_secteur_public: siretVerification?.est_public ?? false,
+      coherence_identite: coherenceIdentite,
       statut_verification: statutVerification,
       peut_publier_missions: autoVerifie || false,
       ...colonnesAttribution(body.attribution, req),
@@ -267,7 +288,7 @@ Deno.serve(async (req) => {
       console.warn('[register-etablissement] Planification série onboarding échouée (best-effort):', serieErr);
     }
 
-    return new Response(JSON.stringify({ ok: true, success: true, etablissement_id: user.id, auto_verifie: autoVerifie, statut_verification: statutVerification }), {
+    return new Response(JSON.stringify({ ok: true, success: true, etablissement_id: user.id, auto_verifie: autoVerifie, statut_verification: statutVerification, coherence_identite: coherenceIdentite, siret_raison_sociale: siretVerification?.raison_sociale ?? null }), {
       status: 200,
       headers: { ...cors, 'Content-Type': 'application/json' },
     });
