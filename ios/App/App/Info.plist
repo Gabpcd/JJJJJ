@@ -58,6 +58,8 @@
 	<string>Jolene vous envoie des rappels pour vos missions (début, pointage, paiement).</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>Jolene enregistre vos justificatifs téléchargés (avoirs, certificats) dans votre photothèque.</string>
+	<key>NSFaceIDUsageDescription</key>
+	<string>Jolene utilise Face ID ou Touch ID pour sécuriser la connexion à votre compte.</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>remote-notification</string>
