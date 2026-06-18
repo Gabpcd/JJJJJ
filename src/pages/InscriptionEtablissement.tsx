@@ -1,5 +1,5 @@
 import { usePageTitle } from '@/hooks/usePageTitle';
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { HeartPulse, Eye, EyeOff, Check, AlertCircle, CheckCircle2, Loader2, ShieldCheck, ShieldAlert, ShieldX } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
@@ -72,6 +72,24 @@ export default function InscriptionEtablissement() {
   // de contact / téléphone / géolocalisation sont déférés au tableau de bord
   // (le backend les accepte vides ; email_contact retombe sur l'email du compte).
   const etape2Valide = !!(form.nom && siretEstValide && form.type && form.ville);
+
+  // Cohérence live : le nom saisi correspond-il à la raison sociale officielle
+  // du SIRET (INSEE) ? Sinon on avertit pour que l'utilisateur corrige avant de
+  // valider (le backend bloquera sinon en validation manuelle).
+  const coherenceNom = useMemo<null | 'OK' | 'PARTIEL' | 'INCOHERENT'>(() => {
+    const rs = inseeCheck?.raison_sociale;
+    if (!rs || !form.nom) return null;
+    const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+      .replace(/\b(sas|sasu|sarl|sa|eurl|sci|scp|selarl|selas|snc|gie|association|asso|groupe|clinique|centre|hopital|ehpad|cabinet|pharmacie|ste|societe)\b/g, '')
+      .replace(/[^a-z0-9]+/g, ' ').trim();
+    const na = norm(form.nom), nb = norm(rs);
+    if (!na || !nb) return null;
+    if (na === nb || na.includes(nb) || nb.includes(na)) return 'OK';
+    const sa = new Set(na.split(' ').filter(w => w.length >= 3));
+    const sb = new Set(nb.split(' ').filter(w => w.length >= 3));
+    if ([...sa].some(w => sb.has(w))) return 'PARTIEL';
+    return 'INCOHERENT';
+  }, [form.nom, inseeCheck?.raison_sociale]);
 
   const verifierSiretInsee = useCallback(async (siret: string) => {
     if (siret.length !== 14) return;
@@ -205,7 +223,19 @@ export default function InscriptionEtablissement() {
           {etape === 2 && (
             <div className="space-y-4">
               <p className="text-sm font-medium text-muted-foreground mb-4">Étape 2 — Votre établissement</p>
-              <div><label className="text-sm font-medium text-foreground mb-1.5 block">Nom de l'établissement *</label><input value={form.nom} onChange={e => maj('nom', e.target.value)} className="input-base" required /></div>
+              <div>
+                <label className="text-sm font-medium text-foreground mb-1.5 block">Nom de l'établissement *</label>
+                <input value={form.nom} onChange={e => maj('nom', e.target.value)} className={`input-base ${coherenceNom === 'INCOHERENT' ? 'border-amber-500' : ''}`} required />
+                {coherenceNom === 'INCOHERENT' && inseeCheck?.raison_sociale && (
+                  <div className="mt-1.5 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2">
+                    <p>⚠️ Ce nom ne correspond pas à la raison sociale officielle du SIRET : <strong>{inseeCheck.raison_sociale}</strong>.</p>
+                    <p className="mt-0.5">Corrigez-le, ou utilisez le nom officiel. Sinon votre compte passera en validation manuelle (24-48 h).</p>
+                    <button type="button" onClick={() => maj('nom', inseeCheck!.raison_sociale!)} className="mt-1 text-primary underline font-medium">
+                      Utiliser « {inseeCheck.raison_sociale} »
+                    </button>
+                  </div>
+                )}
+              </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="text-sm font-medium text-foreground mb-1.5 block">SIRET * (14 chiffres)</label>
