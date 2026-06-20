@@ -129,31 +129,13 @@ Deno.serve(async (req) => {
   }
 
   try {
-    // Auth: verify JWT user or service_role
-    const authHeader = req.headers.get('Authorization');
-    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    if (!authHeader?.startsWith('Bearer ')) {
-      return new Response(JSON.stringify({ ok: false, code: 'UNAUTHORIZED', error: 'Non autorisé' }), {
-        status: 401,
-        headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
-      });
-    }
-    const tokenVal = authHeader.replace('Bearer ', '');
-    const isServiceRole = tokenVal === serviceRoleKey;
-    if (!isServiceRole) {
-      const supabaseAuth = createClient(
-        Deno.env.get('SUPABASE_URL')!,
-        Deno.env.get('SUPABASE_ANON_KEY')!,
-      );
-      const { data: { user }, error: authErr } = await supabaseAuth.auth.getUser(tokenVal);
-      if (authErr || !user) {
-        return new Response(JSON.stringify({ ok: false, code: 'INVALID_TOKEN', error: 'Token invalide' }), {
-          status: 401,
-          headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
-        });
-      }
-    }
-
+    // Lecture publique : la recherche SIRET interroge le registre ouvert
+    // recherche-entreprises.api.gouv.fr (données publiques), exactement comme
+    // verify-finess. Aucune session n'est requise — la page d'inscription appelle
+    // cette fonction AVANT que le compte n'existe (avec la clé anon). On ne gate
+    // donc PAS la lecture : seule l'écriture en base (plus bas) exige une
+    // autorisation (service-role ou membre PROPRIETAIRE/ADMIN_GROUPE). La fonction
+    // est protégée contre l'abus par le rate-limit IP (20/min) défini au-dessus.
     const { siret, etablissement_id } = await req.json();
     if (!siret || !/^\d{14}$/.test(siret)) {
       return new Response(JSON.stringify({ ok: false, code: 'SIRET_INVALID', error: 'SIRET invalide' }), {
@@ -185,28 +167,59 @@ Deno.serve(async (req) => {
       };
     }
 
-    // If SIRET verified and etablissement_id provided, update the record
+    // Écriture en base : UNIQUEMENT si SIRET vérifié + etablissement_id fourni
+    // + appelant autorisé. Autorisé = service-role (inscription server-side, crons)
+    // OU membre PROPRIETAIRE/ADMIN_GROUPE de cet établissement (UI de vérification).
+    // À l'inscription publique il n'y a PAS d'etablissement_id → on ne fait que lire,
+    // donc la vérification anti-usurpation côté serveur reste intacte.
     if (result.statut === 'VERIFIE' && etablissement_id) {
-      try {
-        const supabaseAdmin = createClient(
-          Deno.env.get('SUPABASE_URL')!,
-          Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
-          { auth: { persistSession: false } }
-        );
-        await supabaseAdmin.from('etablissements').update({
-          siret_verifie: true,
-          siret_verifie_le: new Date().toISOString(),
-          siret_est_actif: result.est_actif,
-          siret_code_naf: result.code_naf,
-          siret_raison_sociale: result.raison_sociale,
-          siret_categorie_juridique: result.categorie_juridique,
-          dirigeants: result.dirigeants ?? null,
-          est_secteur_public: result.est_public,
-          statut_verification: 'VERIFIE',
-        }).eq('id', etablissement_id).eq('siret', siret);
-        console.log(`SIRET vérifié → etablissement ${etablissement_id} mis à jour`);
-      } catch (updateErr) {
-        console.error('Erreur update etablissement après vérification SIRET:', updateErr);
+      const authHeader = req.headers.get('Authorization') || '';
+      const tokenVal = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
+      const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+      const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+
+      let autorise = false;
+      if (tokenVal && serviceRoleKey && tokenVal === serviceRoleKey) {
+        autorise = true; // service-role
+      } else if (tokenVal) {
+        try {
+          const userClient = createClient(supabaseUrl, Deno.env.get('SUPABASE_ANON_KEY')!, {
+            global: { headers: { Authorization: authHeader } },
+          });
+          const { data: { user } } = await userClient.auth.getUser();
+          if (user) {
+            const adminCheck = createClient(supabaseUrl, serviceRoleKey);
+            const { data: membre } = await adminCheck.from('membres_etablissement')
+              .select('role').eq('etablissement_id', etablissement_id).eq('user_id', user.id)
+              .eq('actif', true).maybeSingle();
+            autorise = (!!membre && ['PROPRIETAIRE', 'ADMIN_GROUPE'].includes((membre as Record<string, string>).role))
+              || user.id === etablissement_id;
+          }
+        } catch { /* non autorisé → on se contente de renvoyer la lecture */ }
+      }
+
+      if (autorise) {
+        try {
+          const supabaseAdmin = createClient(
+            supabaseUrl,
+            serviceRoleKey,
+            { auth: { persistSession: false } }
+          );
+          await supabaseAdmin.from('etablissements').update({
+            siret_verifie: true,
+            siret_verifie_le: new Date().toISOString(),
+            siret_est_actif: result.est_actif,
+            siret_code_naf: result.code_naf,
+            siret_raison_sociale: result.raison_sociale,
+            siret_categorie_juridique: result.categorie_juridique,
+            dirigeants: result.dirigeants ?? null,
+            est_secteur_public: result.est_public,
+            statut_verification: 'VERIFIE',
+          }).eq('id', etablissement_id).eq('siret', siret);
+          console.log(`SIRET vérifié → etablissement ${etablissement_id} mis à jour`);
+        } catch (updateErr) {
+          console.error('Erreur update etablissement après vérification SIRET:', updateErr);
+        }
       }
     }
 

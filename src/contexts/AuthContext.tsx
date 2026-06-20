@@ -283,7 +283,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
     if (authError) {
       logger.error('Inscription établissement auth échouée', authError);
-      throw new Error('Erreur lors de la création du compte.');
+      // Ne PAS masquer la cause réelle : on propage le message + code Supabase
+      // pour que la page affiche un message précis (e-mail déjà utilisé, mot de
+      // passe trop faible, captcha, rate-limit) via mapperErreurInscription.
+      const erreur = new Error(authError.message || 'Erreur lors de la création du compte.');
+      (erreur as any).code = (authError as any).code;
+      (erreur as any).status = (authError as any).status;
+      throw erreur;
     }
 
     const { data: result, error: fnError } = await supabase.functions.invoke('register-etablissement', {

@@ -6,6 +6,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
 import { handleErrorSilent } from '@/lib/handleError';
 import { gererErreurSupabase } from '@/lib/supabaseErrorHandler';
+import { mapperErreurInscription } from '@/lib/erreurs';
 import { toast } from 'sonner';
 import { SelectTypeEtablissement } from '@/components/SelectTypeEtablissement';
 import { validerSiret } from '@/lib/luhn';
@@ -153,14 +154,16 @@ export default function InscriptionEtablissement() {
     } catch (err) {
       if (!gererErreurSupabase(err, () => handleSubmit(e))) {
         // Message précis et VISIBLE (avant : toast shadcn non rendu → erreur invisible).
-        const code = (err as any)?.code;
-        const msg = code === 'SIRET_ALREADY_REGISTERED'
-          ? 'Ce SIRET est déjà enregistré : un compte existe déjà pour cet établissement. Connectez-vous ou utilisez un autre SIRET.'
-          : code === 'EMAIL_RATE_LIMIT' || code === 'RATE_LIMITED'
-            ? 'Trop de tentatives. Réessayez dans quelques minutes.'
-            : (err instanceof Error && err.message ? err.message : 'Une erreur est survenue. Veuillez réessayer.');
-        setErreurInscription(msg);
-        toast.error(msg);
+        // mapperErreurInscription couvre tous les cas : SIRET déjà enregistré,
+        // e-mail déjà utilisé, mot de passe trop faible, captcha, rate-limit, réseau…
+        const mappee = mapperErreurInscription(err);
+        setErreurInscription(mappee.message);
+        toast.error(mappee.message);
+        // Si l'erreur concerne les identifiants (e-mail / mot de passe / captcha),
+        // revenir à l'étape 1 où se trouvent ces champs, pour que la correction soit
+        // possible (le bouton de soumission est sur l'étape 2).
+        const codesEtape1 = ['USER_ALREADY_REGISTERED', 'WEAK_PASSWORD', 'INVALID_EMAIL', 'CAPTCHA_FAILED', 'EMAIL_RATE_LIMIT'];
+        if (codesEtape1.includes(mappee.code)) setEtape(1);
         handleErrorSilent(err, 'inscription établissement');
       }
     } finally {
