@@ -4,8 +4,9 @@ import { useNavigate } from 'react-router-dom';
 import { HeartPulse, Eye, EyeOff, Check, AlertCircle, CheckCircle2, Loader2, ShieldCheck, ShieldAlert, ShieldX } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
-import { handleError } from '@/lib/handleError';
+import { handleErrorSilent } from '@/lib/handleError';
 import { gererErreurSupabase } from '@/lib/supabaseErrorHandler';
+import { toast } from 'sonner';
 import { SelectTypeEtablissement } from '@/components/SelectTypeEtablissement';
 import { validerSiret } from '@/lib/luhn';
 import { supabase } from '@/integrations/supabase/client';
@@ -47,6 +48,7 @@ export default function InscriptionEtablissement() {
   const [cgu, setCgu] = useState(false);
   const [cgv, setCgv] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [erreurInscription, setErreurInscription] = useState<string | null>(null);
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
 
   const [form, setForm] = useState({
@@ -141,6 +143,7 @@ export default function InscriptionEtablissement() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setErreurInscription(null);
     setSubmitting(true);
     try {
       await inscriptionEtablissement({ ...form, turnstileToken });
@@ -149,7 +152,16 @@ export default function InscriptionEtablissement() {
       navigate('/inscription/succes?role=etab');
     } catch (err) {
       if (!gererErreurSupabase(err, () => handleSubmit(e))) {
-        handleError(err, 'inscription établissement');
+        // Message précis et VISIBLE (avant : toast shadcn non rendu → erreur invisible).
+        const code = (err as any)?.code;
+        const msg = code === 'SIRET_ALREADY_REGISTERED'
+          ? 'Ce SIRET est déjà enregistré : un compte existe déjà pour cet établissement. Connectez-vous ou utilisez un autre SIRET.'
+          : code === 'EMAIL_RATE_LIMIT' || code === 'RATE_LIMITED'
+            ? 'Trop de tentatives. Réessayez dans quelques minutes.'
+            : (err instanceof Error && err.message ? err.message : 'Une erreur est survenue. Veuillez réessayer.');
+        setErreurInscription(msg);
+        toast.error(msg);
+        handleErrorSilent(err, 'inscription établissement');
       }
     } finally {
       setSubmitting(false);
@@ -293,6 +305,12 @@ export default function InscriptionEtablissement() {
                 <label className="text-sm font-medium text-foreground mb-1.5 block">Ville *</label>
                 <input value={form.ville} onChange={e => maj('ville', e.target.value)} placeholder="Ville" className="input-base" autoComplete="address-level2" required />
               </div>
+              {erreurInscription && (
+                <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 flex items-start gap-2" role="alert">
+                  <AlertCircle className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
+                  <p className="text-sm text-destructive">{erreurInscription}</p>
+                </div>
+              )}
               <CaptchaTurnstile className="flex justify-center pt-2" onVerify={setTurnstileToken} onExpire={() => setTurnstileToken(null)} onError={() => setTurnstileToken(null)} />
               <div className="flex gap-3 pt-2">
                 <button type="button" onClick={() => setEtape(1)} className="btn-secondary flex-1">Retour</button>
