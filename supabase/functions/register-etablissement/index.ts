@@ -263,15 +263,18 @@ Deno.serve(async (req) => {
     if (insertError) {
       console.error('INSERT etablissements échoué', insertError.code || safeStringifyError(insertError));
       const msg = insertError.message || '';
-      if (msg.includes('duplicate key') && msg.includes('siret')) {
-        return errorResponse(cors, 409, 'SIRET_ALREADY_REGISTERED', 'Ce numéro SIRET est déjà enregistré.');
-      }
-      // Compensation : nettoyer le user Auth pour qu'un retry ne se heurte pas
-      // à "User already registered".
+      const estSiretDuplique = msg.includes('duplicate key') && msg.includes('siret');
+      // Compensation : on supprime TOUJOURS le user Auth fraîchement créé — y compris
+      // sur SIRET déjà enregistré (409). Sinon il reste orphelin et un nouvel essai
+      // avec le MÊME e-mail échoue en "User already registered" : l'utilisateur ne
+      // peut alors plus corriger son SIRET sans changer d'adresse e-mail.
       try {
         await supabaseAdmin.auth.admin.deleteUser(user.id);
       } catch (cleanupErr) {
         console.error('[register-etablissement] Cleanup Auth user échoué:', safeStringifyError(cleanupErr));
+      }
+      if (estSiretDuplique) {
+        return errorResponse(cors, 409, 'SIRET_ALREADY_REGISTERED', 'Ce numéro SIRET est déjà enregistré. S\'il s\'agit de votre établissement, connectez-vous ; sinon vérifiez le numéro saisi.');
       }
       return errorResponse(cors, 500, 'INTERNAL_ERROR', 'Erreur lors de la création du profil établissement. Réessayez dans quelques minutes.');
     }
