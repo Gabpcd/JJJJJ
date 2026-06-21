@@ -176,6 +176,29 @@ function estCodeConnu(code: string): boolean {
   return CODES_CONNUS.has(code);
 }
 
+/**
+ * Codes d'erreur d'inscription correspondant à un REFUS MÉTIER ATTENDU (saisie
+ * utilisateur invalide), PAS à un bug applicatif. L'utilisateur voit déjà un
+ * message clair côté UI ; ces cas ne doivent donc PAS créer d'issue d'erreur
+ * dans Sentry (sinon le feed se remplit de faux positifs : RPPS introuvable,
+ * SIRET déjà pris, captcha oublié, mot de passe trop faible…).
+ *
+ * Exclus volontairement (= on continue à les remonter, ce sont de vraies
+ * anomalies infra/serveur) : RPPS_API_UNAVAILABLE, UNAUTHORIZED, INVALID_TOKEN,
+ * NETWORK_ERROR, INTERNAL_ERROR.
+ */
+export const CODES_REFUS_ATTENDU_INSCRIPTION = new Set<string>([
+  'USER_ALREADY_REGISTERED', 'EMAIL_RATE_LIMIT', 'INVALID_EMAIL', 'WEAK_PASSWORD',
+  'RPPS_FORMAT_INVALID', 'RPPS_NOT_FOUND', 'RPPS_TRAITS_MISMATCH',
+  'SIRET_FORMAT_INVALID', 'SIRET_CHECKSUM_INVALID', 'SIRET_ALREADY_REGISTERED',
+  'MISSING_REQUIRED_FIELDS', 'UNDERAGE', 'CAPTCHA_FAILED', 'RATE_LIMITED',
+]);
+
+/** True si le code est un refus métier attendu (pas un bug → pas d'issue Sentry). */
+export function estRefusInscriptionAttendu(code: unknown): boolean {
+  return typeof code === 'string' && CODES_REFUS_ATTENDU_INSCRIPTION.has(code);
+}
+
 function enrichirParCode(
   code: CodeErreurInscription,
   messageBackend: string | undefined,

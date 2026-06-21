@@ -1,5 +1,4 @@
 import React from "react";
-import { logger } from "@/lib/logger";
 import * as Sentry from "@sentry/react";
 
 interface Props {
@@ -23,9 +22,13 @@ export class ErrorBoundary extends React.Component<Props, State> {
   }
 
   componentDidCatch(error: Error, info: React.ErrorInfo) {
-    logger.error("ErrorBoundary a intercepté une erreur", error);
-    logger.error("Component stack:", info.componentStack);
-    // Toujours capturer dans Sentry pour pouvoir diagnostiquer en prod
+    // Console uniquement (PAS via logger) : on capture l'exception UNE SEULE
+    // fois ci-dessous, avec le component stack en CONTEXTE. Avant, les deux
+    // logger.error créaient des issues Sentry parasites en doublon
+    // ("ErrorBoundary a intercepté…" + "Component stack:: <route>") en plus de
+    // la vraie exception → 1 bug = jusqu'à 3 entrées dans le feed.
+    console.error("[ErrorBoundary]", error, info.componentStack);
+    // Capture unique avec le component stack attaché en contexte React.
     try {
       Sentry.captureException(error, {
         contexts: { react: { componentStack: info.componentStack } },

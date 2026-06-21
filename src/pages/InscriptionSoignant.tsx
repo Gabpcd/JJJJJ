@@ -222,12 +222,19 @@ export default function InscriptionSoignant() {
         logger.debug('RPPS response:', data);
 
         if (!response.ok) {
-          // Erreur réelle (4xx/5xx) — tagger Sentry avec le code retourné
-          // par l'edge function structurée pour pouvoir regrouper.
           const codeBackend = (data && typeof data === 'object' && 'code' in data) ? String(data.code) : 'RPPS_API_UNAVAILABLE';
-          Sentry.captureException(new Error(`verify-rpps ${response.status}: ${data?.message || data?.error || 'unknown'}`), {
-            tags: { type: 'verify_rpps_temps_reel', code: codeBackend, http_status: String(response.status) },
-          });
+          // Refus ATTENDU (captcha manquant 403, RPPS introuvable / format invalide
+          // = saisie utilisateur) → breadcrumb seulement, pas d'issue Sentry.
+          // On ne capture QUE les vraies anomalies (5xx, RPPS_API_UNAVAILABLE…).
+          const refusAttendu = response.status === 403 ||
+            ['RPPS_NOT_FOUND', 'RPPS_FORMAT_INVALID', 'RPPS_TRAITS_MISMATCH'].includes(codeBackend);
+          if (refusAttendu) {
+            Sentry.addBreadcrumb({ level: 'info', category: 'verify-rpps', message: `verify-rpps ${response.status} ${codeBackend} (refus attendu)` });
+          } else {
+            Sentry.captureException(new Error(`verify-rpps ${response.status}: ${data?.message || data?.error || 'unknown'}`), {
+              tags: { type: 'verify_rpps_temps_reel', code: codeBackend, http_status: String(response.status) },
+            });
+          }
           setRppsResultat(data?.trouve === false ? { trouve: false } : null);
         } else if (data) {
           const nomAffiche = data.nom_api || data.nom || '';
