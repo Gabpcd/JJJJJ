@@ -6,7 +6,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
 import { handleErrorSilent } from '@/lib/handleError';
 import { gererErreurSupabase } from '@/lib/supabaseErrorHandler';
-import { mapperErreurInscription } from '@/lib/erreurs';
+import { mapperErreurInscription, estRefusInscriptionAttendu } from '@/lib/erreurs';
 import { toast } from 'sonner';
 import { SelectTypeEtablissement } from '@/components/SelectTypeEtablissement';
 import { validerSiret } from '@/lib/luhn';
@@ -164,7 +164,12 @@ export default function InscriptionEtablissement() {
         // possible (le bouton de soumission est sur l'étape 2).
         const codesEtape1 = ['USER_ALREADY_REGISTERED', 'WEAK_PASSWORD', 'INVALID_EMAIL', 'CAPTCHA_FAILED', 'EMAIL_RATE_LIMIT'];
         if (codesEtape1.includes(mappee.code)) setEtape(1);
-        handleErrorSilent(err, 'inscription établissement');
+        // Refus métier attendu (SIRET déjà pris, e-mail déjà utilisé, captcha…) :
+        // déjà affiché à l'utilisateur → pas d'issue Sentry. On ne capture que les
+        // vraies anomalies (INTERNAL_ERROR, réseau, edge non-2xx inattendu…).
+        if (!estRefusInscriptionAttendu(mappee.code)) {
+          handleErrorSilent(err, 'inscription établissement');
+        }
       }
     } finally {
       setSubmitting(false);
