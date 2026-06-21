@@ -59,11 +59,40 @@ async function fetchWithTimeout(url: string, init: RequestInit = {}, timeoutMs =
 interface VerifierRppsResult {
   valide: boolean;
   verifie?: boolean;
-  code?: 'RPPS_NOT_FOUND' | 'RPPS_TRAITS_MISMATCH' | 'RPPS_API_UNAVAILABLE';
+  code?: 'RPPS_NOT_FOUND' | 'RPPS_TRAITS_MISMATCH' | 'RPPS_PROFESSION_MISMATCH' | 'RPPS_API_UNAVAILABLE';
   message?: string;
 }
 
-async function verifierRppsServeur(rpps: string, nom: string, prenom: string): Promise<VerifierRppsResult> {
+function normaliserProf(s: string): string {
+  return (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+}
+// Tokens reconnaissant la profession renvoyée par l'Annuaire (profession_api =
+// libellé FHIR OU code interne). Familles regroupées : IDE/IBODE/IADE = infirmier.
+const PROFESSION_TOKENS: Record<string, string[]> = {
+  MEDECIN: ['medecin'],
+  IDE: ['infirmier', 'ide'], IBODE: ['infirmier', 'ide'], IADE: ['infirmier', 'ide'],
+  SAGE_FEMME: ['sage-femme', 'sage femme', 'sage_femme', 'maieut'],
+  KINE: ['kine', 'masseur'],
+  PHARMACIEN: ['pharmacien'],
+  DENTISTE: ['dentiste', 'odontolog'],
+  MANIPULATEUR_RADIO: ['manipulateur', 'electroradio', 'radio'],
+  ERGOTHERAPEUTE: ['ergoth'],
+  PSYCHOMOTRICIEN: ['psychomot'],
+  ORTHOPHONISTE: ['orthophon'],
+  DIETETICIEN: ['dieteti'],
+  PREPARATEUR_PHARMA: ['preparateur'],
+};
+// Cohérence profession déclarée ↔ profession de l'Annuaire. On NE bloque que si
+// la profession renvoyée est connue ET clairement différente (sinon on laisse passer).
+function professionCoherenteRpps(declaree: string, apiValue: string): boolean {
+  const tokens = PROFESSION_TOKENS[declaree];
+  if (!tokens) return true;
+  const v = normaliserProf(apiValue);
+  if (!v) return true;
+  return tokens.some((t) => v.includes(normaliserProf(t)));
+}
+
+async function verifierRppsServeur(rpps: string, nom: string, prenom: string, profession: string): Promise<VerifierRppsResult> {
   if (rpps === '00000000001') return { valide: true, verifie: true };
   const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
   const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -84,6 +113,9 @@ async function verifierRppsServeur(rpps: string, nom: string, prenom: string): P
     const data = await res.json();
     if (!data.trouve) return { valide: false, code: 'RPPS_NOT_FOUND', message: 'Aucun professionnel trouvé avec ce numéro RPPS dans l\'Annuaire Santé.' };
     if (data.correspond === false) return { valide: false, code: 'RPPS_TRAITS_MISMATCH', message: 'Les informations saisies (nom, prénom) ne correspondent pas au numéro RPPS.' };
+    if (data.profession_api && !professionCoherenteRpps(profession, String(data.profession_api))) {
+      return { valide: false, code: 'RPPS_PROFESSION_MISMATCH', message: `Ce numéro RPPS correspond à la profession « ${data.profession_api} », différente de celle que vous avez déclarée.` };
+    }
     if (data.fhir_indisponible) return { valide: true, verifie: false };
     return { valide: true, verifie: true };
   } catch (err) {
@@ -176,10 +208,14 @@ Deno.serve(async (req) => {
       // RPPS fourni : on le vérifie. On NE bloque QUE l'usurpation (le numéro
       // correspond à une AUTRE identité). Introuvable / annuaire indisponible →
       // inscription autorisée, vérification différée.
-      const verification = await verifierRppsServeur(rpps, nom, prenom);
+      const verification = await verifierRppsServeur(rpps, nom, prenom, profession);
       if (verification.code === 'RPPS_TRAITS_MISMATCH') {
         await annulerCompteAuth('RPPS_TRAITS_MISMATCH');
         return errorResponse(cors, 400, 'RPPS_TRAITS_MISMATCH', verification.message || 'Ce numéro RPPS ne correspond pas à votre identité.');
+      }
+      if (verification.code === 'RPPS_PROFESSION_MISMATCH') {
+        await annulerCompteAuth('RPPS_PROFESSION_MISMATCH');
+        return errorResponse(cors, 400, 'RPPS_PROFESSION_MISMATCH', verification.message || 'Ce numéro RPPS correspond à une autre profession que celle déclarée.');
       }
       rppsServerVerifie = verification.valide && verification.verifie !== false;
     }
