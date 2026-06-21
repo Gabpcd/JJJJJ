@@ -221,6 +221,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       rayon: data.rayon,
       lat: data.lat || null,
       lng: data.lng || null,
+      est_etudiant: data.est_etudiant ?? false,
+      etudiant_details: data.etudiant_details || null,
       navigateur: navigator.userAgent,
       turnstileToken: data.turnstileToken || null,
       attribution: getAttribution(),
