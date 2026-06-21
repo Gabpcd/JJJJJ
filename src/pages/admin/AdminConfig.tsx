@@ -8,6 +8,7 @@ import { usePageTitle } from '@/hooks/usePageTitle';
 import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { EditeurEquivalencesScolarite } from '@/components/admin/EditeurEquivalencesScolarite';
 
 interface Parametre {
   cle: string;
@@ -193,6 +194,8 @@ export default function AdminConfig() {
             </section>
           );
         })}
+
+        <EditeurEquivalencesScolarite />
       </div>
     </LayoutAdmin>
   );
