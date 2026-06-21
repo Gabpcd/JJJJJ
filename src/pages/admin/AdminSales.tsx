@@ -1451,6 +1451,7 @@ function ProspectionSoignants({ onAjouter }: { onAjouter: () => void }) {
   const [outreach, setOutreach] = useState<any | null>(null);
   const [appel, setAppel] = useState<any | null>(null);
   const tpl = useTemplateProspectionSoignant();
+  const [etudiants, setEtudiants] = useState(false);
 
   const rechercher = useCallback(async (p = 1) => {
     setLoading(true);
@@ -1462,14 +1463,15 @@ function ProspectionSoignants({ onAjouter }: { onAjouter: () => void }) {
       p_page: p,
       p_avec_email: avecEmail,
       p_avec_tel: avecTel,
+      p_etudiants: etudiants,
     });
     setLoading(false);
     if (error) { toast.error(error.message); return; }
     setData(res);
     setPage(p);
-  }, [profession, departement, q, favoris, avecEmail, avecTel]);
+  }, [profession, departement, q, favoris, avecEmail, avecTel, etudiants]);
 
-  useEffect(() => { rechercher(1); }, [profession, departement, favoris, avecEmail, avecTel]); // q via Enter/bouton
+  useEffect(() => { rechercher(1); }, [profession, departement, favoris, avecEmail, avecTel, etudiants]); // q via Enter/bouton
 
   const toggleFavori = async (pr: any) => {
     const { error } = await supabase.from('prospects_soignants' as any)
@@ -1559,6 +1561,7 @@ function ProspectionSoignants({ onAjouter }: { onAjouter: () => void }) {
             <BoutonY2K size="sm" variant={avecEmail ? 'primary' : 'secondary'} onClick={() => setAvecEmail(!avecEmail)} iconeGauche={<Mail className="h-4 w-4" />}>Avec email</BoutonY2K>
             <BoutonY2K size="sm" variant={avecTel ? 'primary' : 'secondary'} onClick={() => setAvecTel(!avecTel)} iconeGauche={<Phone className="h-4 w-4" />}>Avec tél.</BoutonY2K>
             <BoutonY2K size="sm" variant={favoris ? 'primary' : 'secondary'} onClick={() => setFavoris(!favoris)} iconeGauche={<Star className="h-4 w-4" />}>Favoris</BoutonY2K>
+            <BoutonY2K size="sm" variant={etudiants ? 'primary' : 'secondary'} onClick={() => setEtudiants(!etudiants)}>🎓 Étudiants</BoutonY2K>
             <BoutonY2K size="sm" onClick={() => rechercher(1)} disabled={loading} iconeGauche={<Search className="h-4 w-4" />}>
               {loading ? 'Recherche…' : 'Rechercher'}
             </BoutonY2K>
