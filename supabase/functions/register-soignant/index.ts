@@ -155,18 +155,24 @@ Deno.serve(async (req) => {
         return errorResponse(cors, 400, 'UNDERAGE', 'Vous devez avoir au moins 18 ans pour vous inscrire.');
       }
     }
-    const rppsObligatoire = !PROFESSIONS_SANS_RPPS.includes(profession);
+    // RPPS EXIGÉ uniquement pour les professions « Ordre historique » (médecin,
+    // dentiste, sage-femme, pharmacien) qui connaissent/utilisent leur numéro.
+    // Pour les autres (IDE + paramédicaux récemment migrés au RPPS), il est
+    // OPTIONNEL : le diplôme sert de preuve, vérification différée (rpps_verifie
+    // = false). AS/AES/aux. puériculture : pas de RPPS du tout.
+    const PROFESSIONS_RPPS_REQUIS = ['MEDECIN', 'DENTISTE', 'SAGE_FEMME', 'PHARMACIEN'];
+    const rppsRequis = PROFESSIONS_RPPS_REQUIS.includes(profession);
     let rppsServerVerifie = false;
-    // RPPS OPTIONNEL à l'inscription : beaucoup d'IDE ne connaissent pas leur
-    // numéro par cœur. On autorise l'inscription sans RPPS (vérification différée,
-    // rpps_verifie=false → revue manuelle / à compléter plus tard), ce qui aligne
-    // le backend sur le formulaire (qui laisse déjà continuer sans RPPS).
     if (rpps && !/^[0-9]{11}$/.test(rpps)) {
       // Si un numéro est saisi, il doit être bien formé (erreur client claire).
       await annulerCompteAuth('RPPS_FORMAT_INVALID');
       return errorResponse(cors, 400, 'RPPS_FORMAT_INVALID', 'Numéro RPPS invalide (11 chiffres attendus).');
     }
-    if (rppsObligatoire && rpps) {
+    if (rppsRequis && !rpps) {
+      await annulerCompteAuth('RPPS_REQUIS');
+      return errorResponse(cors, 400, 'RPPS_FORMAT_INVALID', 'Le numéro RPPS est obligatoire pour votre profession (11 chiffres).');
+    }
+    if (rpps) {
       // RPPS fourni : on le vérifie. On NE bloque QUE l'usurpation (le numéro
       // correspond à une AUTRE identité). Introuvable / annuaire indisponible →
       // inscription autorisée, vérification différée.
@@ -191,7 +197,7 @@ Deno.serve(async (req) => {
       date_naissance: dateNaissance || null, profession,
       type_contrat: contrats[0], types_contrat_acceptes: JSON.stringify(contrats),
       numero_rpps: rpps || null,
-      rpps_verifie: rppsObligatoire && !!rpps && rppsServerVerifie,
+      rpps_verifie: !!rpps && rppsServerVerifie,
       rayon_deplacement_km: rayonKm,
       adresse_lat: typeof lat === 'number' ? lat : null,
       adresse_lng: typeof lng === 'number' ? lng : null,
@@ -252,7 +258,7 @@ Deno.serve(async (req) => {
     await supabaseAdmin.from('journaux_audit').insert({
       acteur_id: user.id, type_acteur: 'SOIGNANT', action: 'INSCRIPTION',
       type_ressource: 'soignant', id_ressource: user.id,
-      details: { evenement: 'inscription', profession, rpps_verifie: rppsObligatoire && !!rpps && rppsServerVerifie },
+      details: { evenement: 'inscription', profession, rpps_verifie: !!rpps && rppsServerVerifie },
       navigateur_acteur: body.navigateur || null,
     });
     await supabaseAdmin.from('journaux_audit').insert({

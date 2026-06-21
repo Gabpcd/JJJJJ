@@ -110,6 +110,12 @@ export function typesEtablissementCompatiblesLiberal(profession: string): string
 // AUXILIAIRE_PUERICULTURE : DEAP, exercice sous supervision, non inscrite au RPPS.
 export const PROFESSIONS_SANS_RPPS = ['AS', 'AES', 'AUXILIAIRE_PUERICULTURE'];
 
+// RPPS EXIGÉ à l'inscription : professions « Ordre historique » dont le RPPS est
+// ancien et connu/utilisé au quotidien (prescriptions). Pour les AUTRES professions
+// à RPPS (IDE + paramédicaux migrés vers le RPPS seulement en 2021-2024), le numéro
+// est souvent inconnu → RPPS optionnel, le DIPLÔME sert de preuve (vérif différée).
+export const PROFESSIONS_RPPS_REQUIS = ['MEDECIN', 'DENTISTE', 'SAGE_FEMME', 'PHARMACIEN'];
+
 // Professions limitées pour pharmacies
 export const PROFESSIONS_PHARMACIE = ['PHARMACIEN', 'PREPARATEUR_PHARMA'];
 
