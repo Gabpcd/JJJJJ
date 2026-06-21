@@ -696,13 +696,15 @@ export function DocumentsSoignantContent() {
         })}
       </div>
 
-      {/* Documents complémentaires — attestation de scolarité (étudiant faisant fonction) */}
+      {/* Documents complémentaires — étudiant / interne faisant fonction */}
       {user && (() => {
         const docScol = mesDocuments.find((d) => d.type_document === 'ATTESTATION_SCOLARITE');
-        const stat = docScol ? STATUTS_VERIFICATION[docScol.statut_verification as string] : null;
+        const statScol = docScol ? STATUTS_VERIFICATION[docScol.statut_verification as string] : null;
+        const docLic = mesDocuments.find((d) => d.type_document === 'LICENCE_REMPLACEMENT');
+        const statLic = docLic ? STATUTS_VERIFICATION[docLic.statut_verification as string] : null;
         return (
-          <div className="mt-6">
-            <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wide mb-2">Étudiant en santé</p>
+          <div className="mt-6 space-y-2">
+            <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wide mb-2">Étudiant / interne en santé</p>
             <div className="card-base flex items-center justify-between gap-3">
               <div className="min-w-0">
                 <p className="text-sm font-medium text-foreground">🎓 Attestation de scolarité / passage en année supérieure</p>
@@ -710,15 +712,27 @@ export function DocumentsSoignantContent() {
                   Étudiant ? L'IA vérifie votre niveau et débloque l'exercice « faisant fonction »
                   correspondant (ex : étudiant infirmier année 1 validée → aide-soignant).
                 </p>
-                {docScol && stat && (
-                  <span className={`inline-block mt-1.5 text-[11px] px-2 py-0.5 rounded-full ${stat.couleur}`}>{stat.label}</span>
+                {docScol && statScol && (
+                  <span className={`inline-block mt-1.5 text-[11px] px-2 py-0.5 rounded-full ${statScol.couleur}`}>{statScol.label}</span>
                 )}
               </div>
-              <button
-                onClick={() => setTeleversementType('ATTESTATION_SCOLARITE')}
-                className="btn-primary text-xs px-3 py-1.5 shrink-0"
-              >
+              <button onClick={() => setTeleversementType('ATTESTATION_SCOLARITE')} className="btn-primary text-xs px-3 py-1.5 shrink-0">
                 {docScol ? 'Remplacer' : '+ Téléverser'}
+              </button>
+            </div>
+            <div className="card-base flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-foreground">🩺 Licence de remplacement (interne en médecine)</p>
+                <p className="text-xs text-muted-foreground">
+                  Interne ? Téléversez votre licence de remplacement (Conseil de l'Ordre) :
+                  l'IA la vérifie et débloque les remplacements de médecin.
+                </p>
+                {docLic && statLic && (
+                  <span className={`inline-block mt-1.5 text-[11px] px-2 py-0.5 rounded-full ${statLic.couleur}`}>{statLic.label}</span>
+                )}
+              </div>
+              <button onClick={() => setTeleversementType('LICENCE_REMPLACEMENT')} className="btn-primary text-xs px-3 py-1.5 shrink-0">
+                {docLic ? 'Remplacer' : '+ Téléverser'}
               </button>
             </div>
           </div>
