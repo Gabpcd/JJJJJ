@@ -6,7 +6,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Building2 } from 'lucide-react';
 import {
-  CreditCard, FileStack, FileText, FileSpreadsheet, BarChart3, Clock, Scale,
+  CreditCard, FileStack, FileText, FileSpreadsheet, BarChart3, Scale,
   Flame, Users, Gift, Settings, LogOut, ClipboardCheck,
   User, TrendingUp, Star, Ban, Landmark, ShieldCheck, MessageSquare, Code2,
 } from 'lucide-react';
@@ -31,7 +31,6 @@ export default function MonCompteEtablissement() {
         { icone: User, label: 'Profil de l\'établissement', route: '/etablissement/profil' },
         { icone: ClipboardCheck, label: 'Présences à valider', route: '/etablissement/presences' },
         { icone: FileText, label: 'Contrats', route: '/etablissement/contrats' },
-        { icone: Clock, label: 'Shifts', route: '/etablissement/shifts' },
         { icone: Star, label: 'Évaluations à faire', route: '/etablissement/evaluations-a-faire' },
         { icone: Scale, label: 'Litiges & contestations', route: '/etablissement/litiges' },
         { icone: MessageSquare, label: 'Mes réclamations', route: '/etablissement/mes-reclamations' },
