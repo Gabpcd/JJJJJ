@@ -4,6 +4,7 @@ export const TYPES_DOCUMENTS: Record<string, string> = {
   'TITRE_SEJOUR': 'Titre de séjour',
   'DIPLOME': 'Diplôme d\'État',
   'ATTESTATION_SCOLARITE': 'Attestation de scolarité / passage en année supérieure (étudiant)',
+  'LICENCE_REMPLACEMENT': 'Licence de remplacement (interne en médecine — Ordre des médecins)',
   'RPPS_ADELI': 'Attestation RPPS / ADELI',
   'RCP_ASSURANCE': 'Assurance RCP',
   'VACCINATIONS': 'Carnet de vaccination',
