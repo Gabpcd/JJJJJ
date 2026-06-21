@@ -513,19 +513,31 @@ export default function ProfilSoignant() {
 }
 
 
-/* ── Statut étudiant en santé (IFSI 2e année = apte AS, pharma 3e année, interne…)
-   Affiché aux établissements (badge 🎓 sur les candidatures) — autodéclaré,
-   le certificat de scolarité se téléverse dans Mes documents. ── */
+/* ── Statut étudiant en santé (exercice « faisant fonction », arrêté du 03/02/2022).
+   Autodéclaré + niveau VÉRIFIÉ par l'IA via l'attestation de scolarité
+   (type ATTESTATION_SCOLARITE) → profession autorisée calculée par la table
+   d'équivalence. Affiché aux établissements (badge 🎓 sur les candidatures). ── */
 function BlocStatutEtudiant({ userId }: { userId: string }) {
+  const navigate = useNavigate();
   const [estEtudiant, setEstEtudiant] = useState(false);
   const [details, setDetails] = useState('');
+  const [scol, setScol] = useState<{ verifiee: boolean; annee: number | null; profession: string | null } | null>(null);
   const [charge, setCharge] = useState(false);
 
   useEffect(() => {
-    supabase.from('soignants').select('est_etudiant, etudiant_details').eq('id', userId).maybeSingle()
-      .then(({ data }) => {
-        const d = data as any;
-        if (d) { setEstEtudiant(!!d.est_etudiant); setDetails(d.etudiant_details || ''); }
+    (supabase.from('soignants') as any)
+      .select('est_etudiant, etudiant_details, scolarite_verifiee, scolarite_annee_validee, scolarite_profession_autorisee')
+      .eq('id', userId).maybeSingle()
+      .then(({ data }: { data: any }) => {
+        if (data) {
+          setEstEtudiant(!!data.est_etudiant);
+          setDetails(data.etudiant_details || '');
+          setScol({
+            verifiee: !!data.scolarite_verifiee,
+            annee: data.scolarite_annee_validee ?? null,
+            profession: data.scolarite_profession_autorisee ?? null,
+          });
+        }
         setCharge(true);
       });
   }, [userId]);
@@ -544,8 +556,8 @@ function BlocStatutEtudiant({ userId }: { userId: string }) {
         <div>
           <p className="text-sm font-semibold text-foreground">🎓 Je suis étudiant(e) en santé</p>
           <p className="text-xs text-muted-foreground">
-            Visible par les établissements. Ex : IFSI 2e année (apte aide-soignant, arrêté du 03/02/2022),
-            pharmacie 3e année, interne avec licence de remplacement.
+            Visible par les établissements. Un étudiant peut exercer « faisant fonction » selon
+            son niveau (ex : étudiant infirmier ayant validé l'année 1 → aide-soignant, arrêté du 03/02/2022).
           </p>
         </div>
         <button type="button"
@@ -554,19 +566,33 @@ function BlocStatutEtudiant({ userId }: { userId: string }) {
           <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-card shadow transition-transform ${estEtudiant ? 'translate-x-6' : 'translate-x-0.5'}`} />
         </button>
       </div>
-      {estEtudiant && (
-        <input
-          value={details}
-          onChange={(e) => setDetails(e.target.value.slice(0, 80))}
-          onBlur={() => sauver(true, details)}
-          placeholder="Ex : IFSI 2e année — UE AS validées"
-          className="input-base text-sm"
-        />
+
+      {estEtudiant && scol?.verifiee && scol.profession && (
+        <div className="rounded-lg border border-emerald-200 bg-emerald-50 dark:bg-emerald-950/20 dark:border-emerald-800 p-2.5">
+          <p className="text-xs font-semibold text-emerald-800 dark:text-emerald-300">
+            ✅ Niveau vérifié{scol.annee ? ` (année ${scol.annee} validée)` : ''} — vous pouvez exercer comme {getLabelProfession(scol.profession)}
+          </p>
+          <p className="text-[11px] text-emerald-700/80 dark:text-emerald-400/80 mt-0.5">
+            Vérifié par l'IA à partir de votre attestation de scolarité.
+          </p>
+        </div>
       )}
-      {estEtudiant && (
-        <p className="text-[11px] text-muted-foreground">
-          Téléversez votre certificat de scolarité dans <strong>Mes documents</strong> pour accélérer les acceptations.
-        </p>
+
+      {estEtudiant && !scol?.verifiee && (
+        <>
+          <input
+            value={details}
+            onChange={(e) => setDetails(e.target.value.slice(0, 80))}
+            onBlur={() => sauver(true, details)}
+            placeholder="Ex : IFSI 2e année — UE AS validées"
+            className="input-base text-sm"
+          />
+          <button type="button"
+            onClick={() => navigate('/soignant/mes-documents?tab=justificatifs')}
+            className="text-xs font-medium text-primary underline">
+            Téléverser mon attestation de scolarité pour vérification IA →
+          </button>
+        </>
       )}
     </div>
   );

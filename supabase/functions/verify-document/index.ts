@@ -189,8 +189,8 @@ Deno.serve(async (req) => {
   "indices_falsification": ["liste des indices de falsification/retouche détectés"] ou [],
   "diplome_etranger": true/false/null,
   "pays_diplome": "string (pays de délivrance du diplôme)" ou null,
-  "scolarite_formation": "IFSI" ou "IFAS" ou "PHARMACIE" ou "AUTRE" ou null,
-  "scolarite_annee_validee": entier (numéro de l'année d'études LA PLUS HAUTE déjà VALIDÉE/RÉUSSIE) ou null,
+  "scolarite_formation": "IFSI" ou "IFAS" ou "MEDECINE_DFGSM" ou "MEDECINE_DFASM" ou "PHARMACIE" ou "AUTRE" ou null,
+  "scolarite_annee_validee": entier (année LA PLUS HAUTE déjà VALIDÉE, comptée DANS LE CURSUS indiqué par scolarite_formation) ou null,
   "motif_rejet": null ou "string expliquant le problème",
   "verdict": "VERIFIE"/"EN_ATTENTE"/"REJETE"
 }
@@ -210,7 +210,7 @@ Règles:
 - Pour une assurance RCP: extrais la date de fin de validité
 - IMPORTANT: Si le document déclaré est un "Diplôme d'État" mais que le fichier est clairement une carte d'identité, passeport ou tout autre document non-diplôme, verdict = "REJETE" avec motif "Le document fourni n'est pas un diplôme"
 - DIPLÔME ÉTRANGER : pour un diplôme, indique "diplome_etranger" = true si le diplôme est délivré par un établissement HORS France (pays/langue/intitulé étranger) et renseigne "pays_diplome". Un diplôme étranger N'EST PAS rejeté automatiquement : il nécessite une autorisation d'exercice (procédure PAE) et une revue par l'administration → verdict = "EN_ATTENTE" avec motif "Diplôme étranger — vérification de l'autorisation d'exercice par l'administration".
-- ATTESTATION DE SCOLARITÉ / CERTIFICAT DE PASSAGE : si le document déclaré est une attestation de scolarité ou un certificat de passage en année supérieure, vérifie que c'est bien un document d'une ÉCOLE / INSTITUT DE FORMATION en santé (verdict REJETE sinon avec motif "Le document n'est pas une attestation de scolarité d'une école de santé"). Renseigne "scolarite_formation" : "IFSI" pour les soins infirmiers (étudiant infirmier / ESI), "IFAS" pour aide-soignant, "PHARMACIE" pour les études de pharmacie, sinon "AUTRE". Renseigne "scolarite_annee_validee" = le numéro de l'année d'études LA PLUS HAUTE DÉJÀ VALIDÉE (ex : "inscrit en 2e année" ou "admis en 2e année" signifie que la 1re année est VALIDÉE → 1 ; "année 2 validée / passage en 3e année" → 2). Si l'année validée n'est pas clairement établie, mets null et verdict = "EN_ATTENTE".`;
+- ATTESTATION DE SCOLARITÉ / CERTIFICAT DE PASSAGE : si le document déclaré est une attestation de scolarité ou un certificat de passage en année supérieure, vérifie que c'est bien un document d'une ÉCOLE / INSTITUT DE FORMATION en santé (verdict REJETE sinon avec motif "Le document n'est pas une attestation de scolarité d'une école de santé"). Renseigne "scolarite_formation" : "IFSI" pour les soins infirmiers (étudiant infirmier / ESI), "IFAS" pour aide-soignant, "MEDECINE_DFGSM" pour la médecine 1er cycle (DFGSM, années 1-3), "MEDECINE_DFASM" pour la médecine 2e cycle (DFASM / externat), "PHARMACIE" pour les études de pharmacie, sinon "AUTRE". Renseigne "scolarite_annee_validee" = le numéro de l'année LA PLUS HAUTE DÉJÀ VALIDÉE, COMPTÉE DANS CE CURSUS (ex IFSI : "admis en 2e année" → 1re année validée → 1 ; "année 2 validée" → 2. MEDECINE_DFGSM : "DFGSM2 validé" → 2. MEDECINE_DFASM : "DFASM2 validé / admis en DFASM3" → 2. PHARMACIE : "5e année validée" → 5). Si l'année validée n'est pas clairement établie, mets null et verdict = "EN_ATTENTE".`;
 
     const userMessage = `Document déclaré comme: "${typeLabel}"
 Nom du soignant: "${nomComplet}"
@@ -420,7 +420,10 @@ Analyse ce document et vérifie sa conformité.`;
           const liste: string[] = Array.isArray(profs)
             ? (profs as any[]).map((r) => typeof r === "string" ? r : (r?.fn_professions_autorisees_scolarite ?? Object.values(r ?? {})[0])).filter(Boolean)
             : [];
-          professionAutorisee = liste[0] ?? null;
+          // On retient la profession LA PLUS QUALIFIANTE de l'ensemble autorisé
+          // (ex : DFASM2 → {AS, IDE} → IDE).
+          const priorite = ["MEDECIN", "SAGE_FEMME", "PHARMACIEN", "IADE", "IBODE", "IDE", "DENTISTE", "KINE", "AS", "AES", "AUXILIAIRE_PUERICULTURE"];
+          professionAutorisee = priorite.find((p) => liste.includes(p)) ?? liste[0] ?? null;
         } catch (e) { console.error("fn_professions_autorisees_scolarite échoué:", safeStringifyError(e)); }
       }
       await supabase.from("soignants").update({
