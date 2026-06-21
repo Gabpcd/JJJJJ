@@ -6,7 +6,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Building2 } from 'lucide-react';
 import {
-  CreditCard, FileText, BarChart3, Scale,
+  CreditCard, FileText, BarChart3, Scale, ClipboardCheck,
   Users, Gift, Settings, LogOut,
   User, TrendingUp, Star, Landmark,
 } from 'lucide-react';
@@ -33,6 +33,7 @@ export default function MonCompteEtablissement() {
       lignes: [
         { icone: User, label: 'Profil', route: '/etablissement/profil' },
         { icone: FileText, label: 'Contrats', route: '/etablissement/contrats' },
+        { icone: ClipboardCheck, label: 'Présences à valider', route: '/etablissement/presences' },
         { icone: Users, label: 'Annuaire soignants', route: '/etablissement/soignants' },
         { icone: Users, label: 'Mon équipe', route: '/etablissement/equipe' },
       ],
