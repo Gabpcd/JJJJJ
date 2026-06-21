@@ -23,7 +23,9 @@ const NAV_SOIGNANT_MOBILE: NavItem[] = [
   { icone: Search, label: 'Missions', route: '/soignant/recherche-missions' },
   { icone: CalendarDays, label: 'Planning', route: '/soignant/planning' },
   { icone: MessageCircle, label: 'Messages', route: '/soignant/messagerie' },
-  { icone: User, label: 'Profil', route: '/soignant/mon-compte' },
+  // L'onglet ouvre le hub « Mon compte » (profil + documents + finances + réglages),
+  // pas seulement le profil → libellé « Menu » + icône hamburger pour cohérence.
+  { icone: Menu, label: 'Menu', route: '/soignant/mon-compte' },
 ];
 
 const NAV_ETABLISSEMENT_MOBILE: NavItem[] = [
@@ -31,7 +33,7 @@ const NAV_ETABLISSEMENT_MOBILE: NavItem[] = [
   { icone: ClipboardList, label: 'Missions', route: '/etablissement/missions' },
   { icone: ClipboardCheck, label: 'Présences', route: '/etablissement/presences' },
   { icone: MessageCircle, label: 'Messages', route: '/etablissement/messagerie' },
-  { icone: User, label: 'Profil', route: '/etablissement/mon-compte' },
+  { icone: Menu, label: 'Menu', route: '/etablissement/mon-compte' },
 ];
 
 /* ── Desktop sidebars (grouped) ── */
