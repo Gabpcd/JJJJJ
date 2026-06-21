@@ -31,7 +31,7 @@ export default function ClassementSoignants() {
   );
 }
 
-function ClassementContent() {
+export function ClassementContent() {
   const { afficherNotification } = useNotification();
   const [loading, setLoading] = useState(true);
   const [soignants, setSoignants] = useState<TopSoignant[]>([]);

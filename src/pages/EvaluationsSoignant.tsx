@@ -63,7 +63,7 @@ export default function EvaluationsSoignant() {
   );
 }
 
-function EvaluationsContent() {
+export function EvaluationsContent() {
   const { afficherNotification } = useNotification();
   const [loading, setLoading] = useState(true);
   const [notations, setNotations] = useState<Notation[]>([]);

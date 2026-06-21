@@ -76,12 +76,9 @@ export default function MonCompteSoignant() {
     {
       titre: 'Suivi & qualité',
       lignes: [
-        { icone: ShieldCheck, label: 'Mon score de fiabilité', route: '/soignant/score' },
-        { icone: Star, label: 'Mes évaluations', route: '/soignant/evaluations' },
-        { icone: Trophy, label: 'Classement des soignants', route: '/soignant/classement' },
-        { icone: BadgeCheck, label: 'Conformité', route: '/soignant/conformite' },
-        { icone: Scale, label: 'Litiges & contestations', route: '/soignant/litiges' },
-        { icone: MessageSquare, label: 'Mes réclamations', route: '/soignant/reclamations' },
+        // Regroupement fort : Score · Évaluations · Classement · Conformité ·
+        // Litiges · Réclamations sont désormais des onglets du hub « Ma réputation ».
+        { icone: ShieldCheck, label: 'Ma réputation', route: '/soignant/reputation' },
       ],
     },
     {

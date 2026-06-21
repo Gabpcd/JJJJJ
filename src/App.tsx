@@ -81,6 +81,7 @@ const DetailSerieSoignant = lazy(() => import("./pages/DetailSerieSoignant"));
 const DocumentsSoignant = lazy(() => import("./pages/DocumentsSoignant"));
 const PlanningSoignant = lazy(() => import("./pages/PlanningSoignant"));
 const ConformiteSoignant = lazy(() => import("./pages/ConformiteSoignant"));
+const ReputationSoignant = lazy(() => import("./pages/ReputationSoignant"));
 const PresencesSoignant = lazy(() => import("./pages/PresencesSoignant"));
 const SyncCalendrier = lazy(() => import("./pages/SyncCalendrier"));
 const MesGains = lazy(() => import("./pages/MesGains"));
@@ -263,6 +264,7 @@ function AppRoutes() {
           <Route path="/soignant/planning" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><PlanningSoignant /></RouteProtegee>} />
           <Route path="/soignant/calendrier-sync" element={<Navigate to="/soignant/planning" replace />} />
           <Route path="/soignant/conformite" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><ConformiteSoignant /></RouteProtegee>} />
+          <Route path="/soignant/reputation" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><ReputationSoignant /></RouteProtegee>} />
           <Route path="/soignant/presences" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><PresencesSoignant /></RouteProtegee>} />
           <Route path="/soignant/presences/mission/:id" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><DetailPresencesMission role="SOIGNANT" /></RouteProtegee>} />
           <Route path="/soignant/mes-gains" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><MesGains /></RouteProtegee>} />
