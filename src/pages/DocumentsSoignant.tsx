@@ -14,7 +14,7 @@ import { Mascotte } from '@/components/mascotte/Mascotte';
 import { ConfettiMini } from '@/components/ConfettiMini';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
-import { TYPES_DOCUMENTS, TYPES_DOCUMENTS_EXCLUS_UPLOAD } from '@/lib/documents';
+import { TYPES_DOCUMENTS, TYPES_DOCUMENTS_EXCLUS_UPLOAD, STATUTS_VERIFICATION } from '@/lib/documents';
 import { extraireMessageErreur } from '@/lib/erreurs';
 import { format, differenceInDays } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -695,6 +695,35 @@ export function DocumentsSoignantContent() {
           }
         })}
       </div>
+
+      {/* Documents complémentaires — attestation de scolarité (étudiant faisant fonction) */}
+      {user && (() => {
+        const docScol = mesDocuments.find((d) => d.type_document === 'ATTESTATION_SCOLARITE');
+        const stat = docScol ? STATUTS_VERIFICATION[docScol.statut_verification as string] : null;
+        return (
+          <div className="mt-6">
+            <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wide mb-2">Étudiant en santé</p>
+            <div className="card-base flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-foreground">🎓 Attestation de scolarité / passage en année supérieure</p>
+                <p className="text-xs text-muted-foreground">
+                  Étudiant ? L'IA vérifie votre niveau et débloque l'exercice « faisant fonction »
+                  correspondant (ex : étudiant infirmier année 1 validée → aide-soignant).
+                </p>
+                {docScol && stat && (
+                  <span className={`inline-block mt-1.5 text-[11px] px-2 py-0.5 rounded-full ${stat.couleur}`}>{stat.label}</span>
+                )}
+              </div>
+              <button
+                onClick={() => setTeleversementType('ATTESTATION_SCOLARITE')}
+                className="btn-primary text-xs px-3 py-1.5 shrink-0"
+              >
+                {docScol ? 'Remplacer' : '+ Téléverser'}
+              </button>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Attestation sur l'honneur — fin de parcours, après les téléversements */}
       {user && (
