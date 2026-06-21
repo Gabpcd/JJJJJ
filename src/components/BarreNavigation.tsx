@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { LucideIcon, Home, Search, FileText, CalendarDays, User, PlusCircle, List, ClipboardCheck, Settings, HeartPulse, LogOut, MapPin, Banknote, CreditCard, FileSpreadsheet, Rocket, Bell, BarChart3, Flame, MessageCircle, ClipboardList, Building2, Users, Scale, ChevronDown, Activity, Shield, Menu, X, Star, Gift, ShieldCheck, ArrowLeft } from 'lucide-react';
+import { LucideIcon, Home, Search, FileText, CalendarDays, User, PlusCircle, List, ClipboardCheck, Settings, HeartPulse, LogOut, MapPin, Banknote, CreditCard, FileSpreadsheet, Rocket, Bell, BarChart3, Flame, MessageCircle, ClipboardList, Building2, Users, Scale, ChevronDown, Activity, Shield, Menu, X, Star, Gift, ShieldCheck, ArrowLeft, Sparkles } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { UserRole } from '@/lib/types';
 import { estEligibleLiberal } from '@/lib/regles-installation-liberal';
@@ -21,7 +21,9 @@ const NAV_SOIGNANT_MOBILE: NavItem[] = [
   { icone: Home, label: 'Accueil', route: '/soignant/tableau-de-bord' },
   // Session G1 : onglet « Missions » mobile → page canonique « Trouver une mission ».
   { icone: Search, label: 'Missions', route: '/soignant/recherche-missions' },
-  { icone: CalendarDays, label: 'Planning', route: '/soignant/planning' },
+  // Boucle de vente : le matching (swipe Hinge-style) est le hook d'engagement →
+  // remonté du menu vers la barre du bas. Le Planning passe dans Accueil + Menu.
+  { icone: Sparkles, label: 'Matchs', route: '/soignant/mes-matches' },
   { icone: MessageCircle, label: 'Messages', route: '/soignant/messagerie' },
   // L'onglet ouvre le hub « Mon compte » (profil + documents + finances + réglages),
   // pas seulement le profil → libellé « Menu » + icône hamburger pour cohérence.
