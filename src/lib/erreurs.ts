@@ -10,6 +10,7 @@ export type CodeErreurInscription =
   | 'RPPS_FORMAT_INVALID'
   | 'RPPS_NOT_FOUND'
   | 'RPPS_TRAITS_MISMATCH'
+  | 'RPPS_ALREADY_REGISTERED'
   | 'RPPS_API_UNAVAILABLE'
   | 'SIRET_FORMAT_INVALID'
   | 'SIRET_CHECKSUM_INVALID'
@@ -167,6 +168,7 @@ export function mapperErreurInscription(err: any): ErreurInscriptionMappee {
 const CODES_CONNUS = new Set<string>([
   'USER_ALREADY_REGISTERED', 'EMAIL_RATE_LIMIT', 'INVALID_EMAIL', 'WEAK_PASSWORD',
   'RPPS_FORMAT_INVALID', 'RPPS_NOT_FOUND', 'RPPS_TRAITS_MISMATCH', 'RPPS_API_UNAVAILABLE',
+  'RPPS_ALREADY_REGISTERED',
   'SIRET_FORMAT_INVALID', 'SIRET_CHECKSUM_INVALID', 'SIRET_ALREADY_REGISTERED',
   'MISSING_REQUIRED_FIELDS', 'UNDERAGE', 'CAPTCHA_FAILED', 'RATE_LIMITED',
   'UNAUTHORIZED', 'INVALID_TOKEN', 'NETWORK_ERROR', 'INTERNAL_ERROR',
@@ -190,6 +192,7 @@ function estCodeConnu(code: string): boolean {
 export const CODES_REFUS_ATTENDU_INSCRIPTION = new Set<string>([
   'USER_ALREADY_REGISTERED', 'EMAIL_RATE_LIMIT', 'INVALID_EMAIL', 'WEAK_PASSWORD',
   'RPPS_FORMAT_INVALID', 'RPPS_NOT_FOUND', 'RPPS_TRAITS_MISMATCH',
+  'RPPS_ALREADY_REGISTERED',
   'SIRET_FORMAT_INVALID', 'SIRET_CHECKSUM_INVALID', 'SIRET_ALREADY_REGISTERED',
   'MISSING_REQUIRED_FIELDS', 'UNDERAGE', 'CAPTCHA_FAILED', 'RATE_LIMITED',
 ]);
@@ -253,6 +256,13 @@ function enrichirParCode(
         message: messageBackend || 'Les informations saisies ne correspondent pas au numéro RPPS. Vérifiez votre nom, prénom et date de naissance.',
         action: 'highlight_traits',
         champs_highlight: ['nom', 'prenom', 'dateNaissance'],
+      };
+    case 'RPPS_ALREADY_REGISTERED':
+      return {
+        code,
+        message: messageBackend || 'Ce numéro RPPS est déjà associé à un compte Jolene. Connectez-vous à ce compte, ou contactez le support si ce n\'est pas vous.',
+        action: 'reconnexion',
+        champs_highlight: ['rpps'],
       };
     case 'RPPS_API_UNAVAILABLE':
       return {
