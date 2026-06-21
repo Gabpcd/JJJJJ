@@ -33,7 +33,9 @@ const NAV_SOIGNANT_MOBILE: NavItem[] = [
 const NAV_ETABLISSEMENT_MOBILE: NavItem[] = [
   { icone: Home, label: 'Accueil', route: '/etablissement/tableau-de-bord' },
   { icone: ClipboardList, label: 'Missions', route: '/etablissement/missions' },
-  { icone: ClipboardCheck, label: 'Présences', route: '/etablissement/presences' },
+  // CTA central : publier une mission = l'action #1 de l'étab (revenu Jolene).
+  // Présences passe dans le Menu (même traitement que Planning soignant).
+  { icone: PlusCircle, label: 'Publier', route: '/etablissement/missions/creer' },
   { icone: MessageCircle, label: 'Messages', route: '/etablissement/messagerie' },
   { icone: Menu, label: 'Menu', route: '/etablissement/mon-compte' },
 ];
