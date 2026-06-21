@@ -43,21 +43,19 @@ export default function MonCompteSoignant() {
   // Profession éligible au libéral (pour Passer en libéral + Attestation 3200h)
   const eligibleLiberal = !!(profil?.profession && estEligibleLiberal(profil.profession));
 
-  // Section Paiements : adaptée au statut. Session G2 — gains / factures /
-  // bulletins / avances fusionnés dans le hub « Mes finances » (deep-links ?tab=).
-  // Stripe Connect, Mandat et Charges restent à part (config / fiscal, hors hub).
+  // Section Paiements : « Mes finances » est un hub à onglets (aperçu /
+  // factures / bulletins / avances dans MesGains) → une seule entrée ici, plus
+  // de deep-links redondants. Stripe Connect, Mandat et Charges restent à part
+  // (configuration de paiement / fiscal, propres au libéral).
   const lignesPaiements = estLiberal
     ? [
         { icone: Banknote, label: 'Mes finances', route: '/soignant/mes-gains' },
-        { icone: Receipt, label: 'Factures d\'honoraires', route: '/soignant/mes-gains?tab=factures' },
-        { icone: Zap, label: 'Avances (paiement rapide)', route: '/soignant/mes-gains?tab=avances' },
         { icone: CreditCard, label: 'Stripe Connect', route: '/soignant/stripe-connect' },
         { icone: FileSignature, label: 'Mandat de facturation', route: '/soignant/mandat-facturation' },
         { icone: Landmark, label: 'Charges sociales (URSSAF)', route: '/soignant/charges' },
       ]
     : [
         { icone: Banknote, label: 'Mes finances', route: '/soignant/mes-gains' },
-        { icone: Receipt, label: 'Bulletins de paie', route: '/soignant/mes-gains?tab=bulletins' },
       ];
 
   const sections: SectionReglages[] = [
@@ -68,6 +66,9 @@ export default function MonCompteSoignant() {
         { icone: FileText, label: 'Mes documents', route: '/soignant/mes-documents' },
         { icone: ScrollText, label: 'Mes contrats', route: '/soignant/contrats' },
         { icone: ClipboardCheck, label: 'Mes DPAE', route: '/soignant/mes-documents?tab=dpae' },
+        // Pointage / présences : seule façon non-contextuelle d'y accéder sur
+        // mobile (le widget Accueil n'apparaît qu'à l'approche d'une mission).
+        { icone: MapPin, label: 'Mes présences', route: '/soignant/presences' },
         // « Mes matchs » est désormais un onglet de la barre du bas. Ici on garde
         // le planning, qui a quitté la barre du bas.
         { icone: CalendarDays, label: 'Mon planning', route: '/soignant/planning' },
