@@ -64,6 +64,8 @@ export default function InscriptionEtablissement() {
   const [siretValidation, setSiretValidation] = useState<{ valide: boolean; message: string } | null>(null);
   const [inseeCheck, setInseeCheck] = useState<SiretInseeResult | null>(null);
   const [inseeLoading, setInseeLoading] = useState(false);
+  const [finessCheck, setFinessCheck] = useState<{ trouve: boolean; raison_sociale?: string; verifie?: boolean } | null>(null);
+  const [finessLoading, setFinessLoading] = useState(false);
 
   const maj = (champ: string, valeur: any) => setForm(prev => ({ ...prev, [champ]: valeur }));
   const etape1Valide = form.email && form.motDePasse.length >= 8 && form.motDePasse === form.confirmMdp && cgu && cgv;
@@ -128,6 +130,21 @@ export default function InscriptionEtablissement() {
       setInseeLoading(false);
     }
   }, [form.nom]);
+
+  const verifierFinessLive = useCallback(async (finess: string) => {
+    if (finess.length !== 9) return;
+    setFinessLoading(true);
+    setFinessCheck(null);
+    try {
+      const { data, error } = await supabase.functions.invoke('verify-finess', { body: { finess } });
+      if (error) throw error;
+      setFinessCheck(data as any);
+    } catch {
+      setFinessCheck(null);
+    } finally {
+      setFinessLoading(false);
+    }
+  }, []);
 
   const handleSiretBlur = () => {
     if (form.siret.length > 0) {
@@ -267,7 +284,23 @@ export default function InscriptionEtablissement() {
                   </div>
                   {siretValidation && !siretValidation.valide && <p className="text-xs text-destructive mt-1">{siretValidation.message}</p>}
                 </div>
-                <div><label className="text-sm font-medium text-foreground mb-1.5 block">{form.type === 'PHARMACIE_OFFICINE' ? 'N° Licence' : 'FINESS (9 chiffres)'}</label><input value={form.type === 'PHARMACIE_OFFICINE' ? form.numeroLicence : form.finess} onChange={e => form.type === 'PHARMACIE_OFFICINE' ? maj('numeroLicence', e.target.value) : maj('finess', e.target.value.replace(/\D/g, '').slice(0, 9))} className="input-base" /></div>
+                <div>
+                  <label className="text-sm font-medium text-foreground mb-1.5 block">{form.type === 'PHARMACIE_OFFICINE' ? 'N° Licence' : 'FINESS (9 chiffres)'}</label>
+                  <div className="relative">
+                    <input value={form.type === 'PHARMACIE_OFFICINE' ? form.numeroLicence : form.finess}
+                      onChange={e => form.type === 'PHARMACIE_OFFICINE' ? maj('numeroLicence', e.target.value) : maj('finess', e.target.value.replace(/\D/g, '').slice(0, 9))}
+                      onBlur={() => { if (form.type !== 'PHARMACIE_OFFICINE' && form.finess.length === 9) verifierFinessLive(form.finess); }}
+                      className="input-base" />
+                    {finessLoading && <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-primary" />}
+                  </div>
+                  {finessCheck && form.type !== 'PHARMACIE_OFFICINE' && (
+                    <div className={`mt-1.5 flex items-center gap-1.5 text-xs rounded-lg px-2 py-1.5 ${finessCheck.trouve && finessCheck.verifie ? 'bg-emerald-50 text-emerald-700' : finessCheck.trouve ? 'bg-amber-50 text-amber-700' : 'bg-red-50 text-red-700'}`}>
+                      {finessCheck.trouve && finessCheck.verifie && <><ShieldCheck className="h-3.5 w-3.5" /> ✅ FINESS vérifié{finessCheck.raison_sociale ? ` — ${finessCheck.raison_sociale}` : ''}</>}
+                      {finessCheck.trouve && !finessCheck.verifie && <><ShieldAlert className="h-3.5 w-3.5" /> ⚠️ FINESS trouvé mais structure inactive</>}
+                      {!finessCheck.trouve && <><ShieldX className="h-3.5 w-3.5" /> ❌ FINESS introuvable dans l'Annuaire Santé</>}
+                    </div>
+                  )}
+                </div>
               </div>
 
               {/* Résultat vérification INSEE */}
