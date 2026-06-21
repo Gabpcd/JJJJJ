@@ -33,6 +33,19 @@ export class ErrorBoundary extends React.Component<Props, State> {
       });
     } catch { /* noop */ }
     this.setState({ errorInfo: info });
+
+    // Chunk load failure après déploiement : auto-reload UNE fois.
+    const msg = (error?.message || '').toLowerCase();
+    if (
+      (msg.includes('importing a module script failed') ||
+       msg.includes('failed to fetch dynamically imported module') ||
+       msg.includes('loading chunk') ||
+       msg.includes('loading css chunk')) &&
+      sessionStorage.getItem('chunk-boundary-retry') !== '1'
+    ) {
+      sessionStorage.setItem('chunk-boundary-retry', '1');
+      window.location.reload();
+    }
   }
 
   render() {
