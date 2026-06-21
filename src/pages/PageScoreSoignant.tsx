@@ -27,6 +27,14 @@ interface EvenementScore {
 }
 
 export default function PageScoreSoignant() {
+  return (
+    <LayoutApp role="SOIGNANT">
+      <ScoreContent />
+    </LayoutApp>
+  );
+}
+
+export function ScoreContent() {
   usePageTitle('Mon score');
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -84,7 +92,7 @@ export default function PageScoreSoignant() {
   }, [user]);
 
   if (loading || !breakdown) {
-    return <LayoutApp role="SOIGNANT"><ChargementPage /></LayoutApp>;
+    return <ChargementPage />;
   }
 
   const score = Math.round(Number(breakdown.score_total));
@@ -92,7 +100,7 @@ export default function PageScoreSoignant() {
   const nonNote = totalMissions < 3;
 
   return (
-    <LayoutApp role="SOIGNANT">
+    <>
       <button onClick={() => navigate(-1)} className="flex items-center gap-1 text-sm text-primary hover:underline mb-2">
         <ArrowLeft className="h-4 w-4" /> Retour
       </button>
@@ -242,6 +250,6 @@ export default function PageScoreSoignant() {
           }}
         />
       )}
-    </LayoutApp>
+    </>
   );
 }

@@ -14,6 +14,14 @@ import { fr } from 'date-fns/locale';
 import { toast } from 'sonner';
 
 export default function ConformiteSoignant() {
+  return (
+    <LayoutApp role="SOIGNANT">
+      <ConformiteContent />
+    </LayoutApp>
+  );
+}
+
+export function ConformiteContent() {
   usePageTitle('Conformité');
   const { user } = useAuth();
   const [controles, setControles] = useState<any[]>([]);
@@ -52,7 +60,7 @@ export default function ConformiteSoignant() {
       }, (err) => handleErrorSilent(err, 'ConformiteSoignant.controles'));
   }, [user]);
 
-  if (loading) return <LayoutApp role="SOIGNANT"><ChargementPage /></LayoutApp>;
+  if (loading) return <ChargementPage />;
 
   const total = controles.length;
   const conformes = controles.filter(c => c.resultat === 'CONFORME').length;
@@ -83,7 +91,7 @@ export default function ConformiteSoignant() {
   };
 
   return (
-    <LayoutApp role="SOIGNANT">
+    <>
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-xl font-bold text-foreground">📊 Historique de conformité</h1>
         <button onClick={exporterHistorique} className="btn-secondary text-xs px-3 py-2 flex items-center gap-1.5">
@@ -132,6 +140,6 @@ export default function ConformiteSoignant() {
           ))}
         </div>
       )}
-    </LayoutApp>
+    </>
   );
 }
