@@ -536,6 +536,21 @@ export default function InscriptionSoignant() {
                           Spécialité récupérée automatiquement : <span className="font-medium">{rppsResultat.specialite_label}</span>
                         </div>
                       )}
+                      {rppsResultat.profession_api && form.profession && (() => {
+                        const profApi = (rppsResultat.profession_api || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+                        const profLabel = getLabelProfession(form.profession).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+                        const familleIde = ['infirmier', 'ide'];
+                        const estFamilleIde = familleIde.some(t => profApi.includes(t));
+                        const declFamilleIde = ['IDE', 'IBODE', 'IADE'].includes(form.profession);
+                        const coherent = (estFamilleIde && declFamilleIde) || profApi.includes(profLabel.slice(0, 5)) || profLabel.includes(profApi.slice(0, 5));
+                        if (coherent) return null;
+                        return (
+                          <div className="flex items-center gap-1.5 text-xs bg-amber-50 text-amber-700 rounded-lg px-2 py-1.5">
+                            <ShieldAlert className="h-3.5 w-3.5" />
+                            ⚠️ Ce RPPS correspond à la profession « {rppsResultat.profession_api} » — vérifiez que la profession choisie est correcte.
+                          </div>
+                        );
+                      })()}
                     </div>
                   )}
                   {rppsResultat && rppsResultat.trouve && rppsMatch === false && form.rpps.length === 11 && !rppsVerifManuelle && (
