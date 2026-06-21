@@ -481,19 +481,19 @@ export default function DetailMissionSoignant() {
                     <>
                       <button
                         onClick={() => ouvrirNavigation(etablissement.adresse_lat, etablissement.adresse_lng, etablissement.nom).plans()}
-                        className="text-[10px] text-primary hover:underline"
+                        className="inline-flex items-center gap-1 rounded-full bg-primary/10 text-primary text-xs font-medium px-2.5 py-1.5 hover:bg-primary/20 transition-colors"
                       >
                         📍 Plans
                       </button>
                       <button
                         onClick={() => ouvrirNavigation(etablissement.adresse_lat, etablissement.adresse_lng, etablissement.nom).googleMaps()}
-                        className="text-[10px] text-primary hover:underline"
+                        className="inline-flex items-center gap-1 rounded-full bg-primary/10 text-primary text-xs font-medium px-2.5 py-1.5 hover:bg-primary/20 transition-colors"
                       >
-                        🗺️ Google Maps
+                        🗺️ Maps
                       </button>
                       <button
                         onClick={() => ouvrirNavigation(etablissement.adresse_lat, etablissement.adresse_lng, etablissement.nom).waze()}
-                        className="text-[10px] text-primary hover:underline"
+                        className="inline-flex items-center gap-1 rounded-full bg-primary/10 text-primary text-xs font-medium px-2.5 py-1.5 hover:bg-primary/20 transition-colors"
                       >
                         🚗 Waze
                       </button>
