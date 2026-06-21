@@ -157,24 +157,25 @@ Deno.serve(async (req) => {
     }
     const rppsObligatoire = !PROFESSIONS_SANS_RPPS.includes(profession);
     let rppsServerVerifie = false;
-    if (rppsObligatoire) {
-      if (!rpps || !/^[0-9]{11}$/.test(rpps)) {
-        await annulerCompteAuth('RPPS_FORMAT_INVALID');
-        return errorResponse(cors, 400, 'RPPS_FORMAT_INVALID', 'Le numéro RPPS est obligatoire pour votre profession (11 chiffres).');
-      }
+    // RPPS OPTIONNEL à l'inscription : beaucoup d'IDE ne connaissent pas leur
+    // numéro par cœur. On autorise l'inscription sans RPPS (vérification différée,
+    // rpps_verifie=false → revue manuelle / à compléter plus tard), ce qui aligne
+    // le backend sur le formulaire (qui laisse déjà continuer sans RPPS).
+    if (rpps && !/^[0-9]{11}$/.test(rpps)) {
+      // Si un numéro est saisi, il doit être bien formé (erreur client claire).
+      await annulerCompteAuth('RPPS_FORMAT_INVALID');
+      return errorResponse(cors, 400, 'RPPS_FORMAT_INVALID', 'Numéro RPPS invalide (11 chiffres attendus).');
+    }
+    if (rppsObligatoire && rpps) {
+      // RPPS fourni : on le vérifie. On NE bloque QUE l'usurpation (le numéro
+      // correspond à une AUTRE identité). Introuvable / annuaire indisponible →
+      // inscription autorisée, vérification différée.
       const verification = await verifierRppsServeur(rpps, nom, prenom);
-      if (!verification.valide) {
-        const code = verification.code || 'RPPS_NOT_FOUND';
-        const message = verification.message || 'Numéro RPPS invalide.';
-        await annulerCompteAuth(code);
-        return errorResponse(cors, 400, code, message);
+      if (verification.code === 'RPPS_TRAITS_MISMATCH') {
+        await annulerCompteAuth('RPPS_TRAITS_MISMATCH');
+        return errorResponse(cors, 400, 'RPPS_TRAITS_MISMATCH', verification.message || 'Ce numéro RPPS ne correspond pas à votre identité.');
       }
-      rppsServerVerifie = verification.verifie !== false;
-    } else {
-      if (rpps && !/^[0-9]{11}$/.test(rpps)) {
-        await annulerCompteAuth('RPPS_FORMAT_INVALID');
-        return errorResponse(cors, 400, 'RPPS_FORMAT_INVALID', 'Numéro RPPS invalide. Vérifiez qu\'il contient bien 11 chiffres.');
-      }
+      rppsServerVerifie = verification.valide && verification.verifie !== false;
     }
     const rayonKm = typeof rayon === 'number' ? Math.min(Math.max(rayon, 5), 100) : 30;
     const validContrats = ['CDDU', 'VACATION', 'LIBERAL', 'SALARIE'];
