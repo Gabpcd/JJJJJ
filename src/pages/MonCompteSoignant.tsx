@@ -13,7 +13,7 @@ import { ConsentementPingGps } from '@/components/soignant/ConsentementPingGps';
 import {
   User, FileText, Banknote, CreditCard, FileSignature, Zap, ShieldCheck,
   Scale, Gift, Rocket, Bell, Search, LogOut, GraduationCap, Receipt,
-  Landmark, FileCheck2, ScrollText, ClipboardCheck, Star, Sparkles, BadgeCheck,
+  Landmark, FileCheck2, ScrollText, ClipboardCheck, Star, CalendarDays, BadgeCheck,
   MessageSquare, Ban, Trophy, Mail, Phone, MapPin, KeyRound,
 } from 'lucide-react';
 
@@ -68,7 +68,9 @@ export default function MonCompteSoignant() {
         { icone: FileText, label: 'Mes documents', route: '/soignant/mes-documents' },
         { icone: ScrollText, label: 'Mes contrats', route: '/soignant/contrats' },
         { icone: ClipboardCheck, label: 'Mes DPAE', route: '/soignant/mes-documents?tab=dpae' },
-        { icone: Sparkles, label: 'Mes matchs', route: '/soignant/mes-matches' },
+        // « Mes matchs » est désormais un onglet de la barre du bas. Ici on garde
+        // le planning, qui a quitté la barre du bas.
+        { icone: CalendarDays, label: 'Mon planning', route: '/soignant/planning' },
       ],
     },
     {
