@@ -33,7 +33,9 @@ test.describe('Recherche missions soignant', () => {
     await page.goto('/soignant/recherche-missions');
     await page.waitForLoadState('networkidle');
 
-    // Heading "Recherche avancée" présent (cf. RechercheMissions.tsx)
-    await expect(page.getByRole('heading', { name: /Recherche avancée/i })).toBeVisible({ timeout: 10_000 });
+    // Session G1 : la page canonique a pour titre « Trouver une mission »
+    // (cf. RechercheMissions.tsx:401) + le toggle Swipe/Liste consolidé.
+    await expect(page.getByRole('heading', { name: /Trouver une mission/i, level: 1 })).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole('tablist', { name: /Vue Swipe ou Liste/i })).toBeVisible();
   });
 });

@@ -15,41 +15,45 @@ import { test, expect } from '@playwright/test';
 import { loginAs } from '../helpers/auth';
 
 test.describe('Sprint 14 — UI swipe matching (réels)', () => {
-  test('Route /soignant/swipe-missions accessible (SOIGNANT)', async ({ page }) => {
-    await loginAs(page, 'soignant');
-    // Nettoyer la préférence pour éviter redirection vers /recherche-missions
-    await page.evaluate(() => localStorage.removeItem('jolene_missions_view_pref'));
-    await page.goto('/soignant/swipe-missions');
-    await page.waitForLoadState('networkidle');
+  // Session G1 : le swipe est consolidé DANS /soignant/recherche-missions via un
+  // toggle in-page (sans navigation). L'ancienne route /soignant/swipe-missions
+  // redirige vers la page canonique. Tests alignés sur cette architecture.
 
-    await expect(page.getByRole('heading', { name: 'Découvrir', level: 1 })).toBeVisible();
-    // Toggle Swipe/Liste présent
-    await expect(page.getByRole('tablist', { name: /Swipe.*Liste/i })).toBeVisible();
-  });
-
-  test('Toggle Liste depuis SwipeMissions → navigation + localStorage', async ({ page }) => {
+  test('/soignant/swipe-missions redirige vers la page canonique + toggle présent', async ({ page }) => {
     await loginAs(page, 'soignant');
     await page.evaluate(() => localStorage.removeItem('jolene_missions_view_pref'));
     await page.goto('/soignant/swipe-missions');
-    await page.waitForLoadState('networkidle');
-
-    await page.getByRole('tab', { name: /Liste/i }).click();
     await expect(page).toHaveURL(/\/soignant\/recherche-missions/, { timeout: 10_000 });
 
+    await expect(page.getByRole('heading', { name: /Trouver une mission/i, level: 1 })).toBeVisible();
+    await expect(page.getByRole('tablist', { name: /Vue Swipe ou Liste/i })).toBeVisible();
+  });
+
+  test('Toggle Liste : bascule in-page (pas de navigation) + localStorage', async ({ page }) => {
+    await loginAs(page, 'soignant');
+    await page.evaluate(() => localStorage.setItem('jolene_missions_view_pref', 'swipe'));
+    await page.goto('/soignant/recherche-missions');
+    await page.waitForLoadState('networkidle');
+
+    const toggle = page.getByRole('tablist', { name: /Vue Swipe ou Liste/i });
+    await toggle.getByRole('tab', { name: 'Liste', exact: true }).click();
+
+    // Toggle in-page : l'URL ne change pas, seule la préférence est mémorisée.
+    await expect(page).toHaveURL(/\/soignant\/recherche-missions/);
     const pref = await page.evaluate(() => localStorage.getItem('jolene_missions_view_pref'));
     expect(pref).toBe('liste');
   });
 
-  test('Toggle Swipe depuis RechercheMissions → navigation + localStorage', async ({ page }) => {
+  test('Toggle Swipe : bascule in-page (pas de navigation) + localStorage', async ({ page }) => {
     await loginAs(page, 'soignant');
-    // Force pref liste pour éviter rebound automatique vers swipe
     await page.evaluate(() => localStorage.setItem('jolene_missions_view_pref', 'liste'));
     await page.goto('/soignant/recherche-missions');
     await page.waitForLoadState('networkidle');
 
-    await page.getByRole('tab', { name: /Swipe/i }).click();
-    await expect(page).toHaveURL(/\/soignant\/swipe-missions/, { timeout: 10_000 });
+    const toggle = page.getByRole('tablist', { name: /Vue Swipe ou Liste/i });
+    await toggle.getByRole('tab', { name: 'Swipe', exact: true }).click();
 
+    await expect(page).toHaveURL(/\/soignant\/recherche-missions/);
     const pref = await page.evaluate(() => localStorage.getItem('jolene_missions_view_pref'));
     expect(pref).toBe('swipe');
   });
