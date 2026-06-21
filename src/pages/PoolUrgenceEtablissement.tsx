@@ -14,7 +14,13 @@ import { Slider } from '@/components/ui/slider';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { BadgeY2K } from '@/components/y2k/BadgeY2K';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+  DialogResponsive,
+  DialogResponsiveContent,
+  DialogResponsiveHeader,
+  DialogResponsiveTitle,
+  DialogResponsiveBody,
+} from '@/components/ui/DialogResponsive';
 import { Flame, Users, UserCheck, Trophy, Bell, BellRing, Send, MapPin, Clock, MessageCircle, Plus, ChevronDown } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -735,14 +741,14 @@ export default function PoolUrgenceEtablissement({ isAdmin = false }: { isAdmin?
       />
 
       {/* Modal proposer mission */}
-      <Dialog open={proposerModalOpen} onOpenChange={setProposerModalOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>
+      <DialogResponsive open={proposerModalOpen} onOpenChange={setProposerModalOpen}>
+        <DialogResponsiveContent maxWidth="md">
+          <DialogResponsiveHeader>
+            <DialogResponsiveTitle>
               Proposer une mission à {proposerSoignant?.prenom} {proposerSoignant?.nom}
-            </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-3">
+            </DialogResponsiveTitle>
+          </DialogResponsiveHeader>
+          <DialogResponsiveBody className="space-y-3">
             {loadingMissions ? (
               <p className="text-sm text-muted-foreground text-center py-4">Chargement des missions…</p>
             ) : missionsOuvertes.length === 0 ? (
@@ -795,9 +801,9 @@ export default function PoolUrgenceEtablissement({ isAdmin = false }: { isAdmin?
                 </div>
               </>
             )}
-          </div>
-        </DialogContent>
-      </Dialog>
+          </DialogResponsiveBody>
+        </DialogResponsiveContent>
+      </DialogResponsive>
     </Layout>
   );
 }

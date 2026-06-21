@@ -10,7 +10,14 @@ import { Scale, PlusCircle, MessageCircle } from 'lucide-react';
 import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+  DialogResponsive,
+  DialogResponsiveContent,
+  DialogResponsiveHeader,
+  DialogResponsiveTitle,
+  DialogResponsiveBody,
+  DialogResponsiveFooter,
+} from '@/components/ui/DialogResponsive';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { format } from 'date-fns';
@@ -232,12 +239,12 @@ export default function LitigesEtablissement() {
       </Tabs>
 
       {/* Modal nouveau litige */}
-      <Dialog open={showNew} onOpenChange={setShowNew}>
-        <DialogContent className="max-w-[calc(100%-1rem)] sm:max-w-lg max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Ouvrir un nouveau litige</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 mt-2">
+      <DialogResponsive open={showNew} onOpenChange={setShowNew}>
+        <DialogResponsiveContent>
+          <DialogResponsiveHeader>
+            <DialogResponsiveTitle>Ouvrir un nouveau litige</DialogResponsiveTitle>
+          </DialogResponsiveHeader>
+          <DialogResponsiveBody className="space-y-4">
             <div>
               <label className="text-sm font-medium text-foreground mb-1.5 block">Mission concernée</label>
               {missionsTerminees.length === 0 ? (
@@ -259,15 +266,15 @@ export default function LitigesEtablissement() {
               <label className="text-sm font-medium text-foreground mb-1.5 block">Motif du litige</label>
               <Textarea value={newMotif} onChange={e => setNewMotif(e.target.value)} placeholder="Décrivez le problème rencontré..." rows={4} />
             </div>
-            <div className="flex justify-end gap-2">
-              <BoutonY2K variant="ghost" onClick={() => setShowNew(false)}>Annuler</BoutonY2K>
-              <BoutonY2K onClick={creerLitige} disabled={creating || !selectedMissionId || !newMotif.trim()}>
-                {creating ? 'Création…' : '⚠️ Ouvrir le litige'}
-              </BoutonY2K>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+          </DialogResponsiveBody>
+          <DialogResponsiveFooter>
+            <BoutonY2K variant="ghost" onClick={() => setShowNew(false)}>Annuler</BoutonY2K>
+            <BoutonY2K onClick={creerLitige} disabled={creating || !selectedMissionId || !newMotif.trim()}>
+              {creating ? 'Création…' : '⚠️ Ouvrir le litige'}
+            </BoutonY2K>
+          </DialogResponsiveFooter>
+        </DialogResponsiveContent>
+      </DialogResponsive>
     </LayoutApp>
   );
 }

@@ -5,7 +5,14 @@ import { ChargementPage } from '@/components/ChargementPage';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Key, Copy, Plus, Eye, EyeOff, Code2, CheckCircle, Ban, Trash2 } from 'lucide-react';
-import { Dialog, DialogContent } from '@/components/ui/dialog';
+import {
+  DialogResponsive,
+  DialogResponsiveContent,
+  DialogResponsiveHeader,
+  DialogResponsiveTitle,
+  DialogResponsiveBody,
+  DialogResponsiveFooter,
+} from '@/components/ui/DialogResponsive';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { toast } from 'sonner';
@@ -180,8 +187,9 @@ export function APIContent() {
       </div>
 
       {/* Modal */}
-      <Dialog open={showModal} onOpenChange={setShowModal}>
-        <DialogContent>
+      <DialogResponsive open={showModal} onOpenChange={setShowModal}>
+        <DialogResponsiveContent>
+          <DialogResponsiveBody>
           {generatedKey ? (
             <>
               <div className="flex items-center gap-2 mb-4"><CheckCircle className="h-5 w-5 text-success" /><h3 className="font-bold text-foreground">Clé générée !</h3></div>
@@ -222,8 +230,9 @@ export function APIContent() {
               </div>
             </>
           )}
-        </DialogContent>
-      </Dialog>
+          </DialogResponsiveBody>
+        </DialogResponsiveContent>
+      </DialogResponsive>
     </>
   );
 }
