@@ -89,6 +89,9 @@ export default function RechercheMissions() {
     try { localStorage.setItem(VIEW_PREF_KEY, v); } catch { /* ignore */ }
     setVue(v);
   };
+  // Affichage Liste ↔ Carte dans la vue « liste » : simple bascule (pas un 2e
+  // jeu d'onglets, pour éviter l'onglet-dans-onglet avec le toggle Swipe/Liste).
+  const [afficheCarte, setAfficheCarte] = useState(false);
   const [soignant, setSoignant] = useState<SoignantData | null>(null);
   const [missions, setMissions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -594,15 +597,23 @@ export default function RechercheMissions() {
           </div>
         )}
 
-        {/* Tabs Liste / Carte */}
-        <Tabs defaultValue="liste" onValueChange={initMap}>
-          <TabsList className="w-full max-w-xs">
-            <TabsTrigger value="liste" className="gap-1.5 flex-1"><List className="h-4 w-4" />Liste</TabsTrigger>
-            <TabsTrigger value="carte" className="gap-1.5 flex-1"><MapIcon className="h-4 w-4" />Carte</TabsTrigger>
-          </TabsList>
+        {/* Affichage Liste / Carte — simple bascule bouton (pas un 2e jeu
+            d'onglets → zéro onglet-dans-onglet avec le toggle Swipe/Liste). */}
+        <div className="flex justify-end mb-3">
+          <div className="inline-flex rounded-xl border border-border bg-card p-0.5" role="group" aria-label="Affichage liste ou carte">
+            <button type="button" onClick={() => setAfficheCarte(false)} aria-pressed={!afficheCarte}
+              className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${!afficheCarte ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
+              <List className="h-4 w-4" />Liste
+            </button>
+            <button type="button" onClick={() => { setAfficheCarte(true); initMap('carte'); }} aria-pressed={afficheCarte}
+              className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${afficheCarte ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
+              <MapIcon className="h-4 w-4" />Carte
+            </button>
+          </div>
+        </div>
 
-          <TabsContent value="liste">
-            {loading ? <ChargementPage /> : filtered.length > 0 ? (
+        {!afficheCarte ? (
+          loading ? <ChargementPage /> : filtered.length > 0 ? (
               <>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   {filtered.slice(0, nbAffiche).map(m => (
@@ -641,10 +652,9 @@ export default function RechercheMissions() {
                     : undefined
                 }
               />
-            )}
-          </TabsContent>
-
-          <TabsContent value="carte">
+            )
+        ) : (
+          <>
             <div
               ref={mapRef}
               className="w-full rounded-xl border border-border overflow-hidden"
@@ -653,8 +663,8 @@ export default function RechercheMissions() {
             {filtered.length === 0 && !loading && (
               <p className="text-sm text-muted-foreground text-center mt-3">Aucune mission à afficher sur la carte.</p>
             )}
-          </TabsContent>
-        </Tabs>
+          </>
+        )}
         </>
         )}
       </div>
