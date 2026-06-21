@@ -40,7 +40,11 @@ function checkRateLimit(ip: string): boolean {
   return true;
 }
 
-const PROFESSIONS_SANS_RPPS = ['AS', 'AES'];
+// Professions SANS RPPS (pas dans l'Annuaire Santé) — DOIT rester synchronisé
+// avec src/lib/constantes.ts PROFESSIONS_SANS_RPPS. AUXILIAIRE_PUERICULTURE
+// (DEAP, ajouté Sprint 17) n'a pas de RPPS : l'oublier ici bloquait son
+// inscription (RPPS_FORMAT_INVALID à tort).
+const PROFESSIONS_SANS_RPPS = ['AS', 'AES', 'AUXILIAIRE_PUERICULTURE'];
 
 async function fetchWithTimeout(url: string, init: RequestInit = {}, timeoutMs = 8000): Promise<Response> {
   const controller = new AbortController();
@@ -109,16 +113,34 @@ Deno.serve(async (req) => {
     return errorResponse(cors, 401, 'INVALID_TOKEN', 'Session invalide. Reconnectez-vous et réessayez.');
   }
   try {
+    // Compensation anti-« e-mail consommé » : le compte Auth a déjà été créé
+    // (signUp côté client) AVANT cet appel. Si une validation échoue ici, on
+    // supprime ce compte pour que l'e-mail ne reste PAS réservé par une simple
+    // tentative interrompue. L'e-mail n'est définitivement pris qu'une fois le
+    // profil soignant réellement inséré (succès complet de l'inscription).
+    const adminCleanup = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false } });
+    const annulerCompteAuth = async (raison: string) => {
+      try {
+        await adminCleanup.auth.admin.deleteUser(user.id);
+        console.log(`[register-soignant] Compte Auth ${user.id} supprimé (échec avant création du profil: ${raison})`);
+      } catch (e) {
+        console.error('[register-soignant] Cleanup Auth échoué:', safeStringifyError(e));
+      }
+    };
+
     const body = await req.json();
     const { prenom, nom, telephone, dateNaissance, profession, typesContrat, rpps, rayon, lat, lng, turnstileToken } = body;
     const captcha = await verifyTurnstileToken(turnstileToken, clientIp);
     if (!captcha.success) {
+      await annulerCompteAuth('CAPTCHA_FAILED');
       return errorResponse(cors, 403, 'CAPTCHA_FAILED', captcha.error || 'Vérification anti-bot échouée. Rafraîchissez la page.');
     }
     if (!prenom || !nom || !profession) {
+      await annulerCompteAuth('MISSING_REQUIRED_FIELDS');
       return errorResponse(cors, 400, 'MISSING_REQUIRED_FIELDS', 'Champs obligatoires manquants (prénom, nom, profession).', { champs_manquants: [!prenom && 'prenom', !nom && 'nom', !profession && 'profession'].filter(Boolean) });
     }
     if (!dateNaissance) {
+      await annulerCompteAuth('MISSING_DATE_NAISSANCE');
       return errorResponse(cors, 400, 'MISSING_REQUIRED_FIELDS', 'Date de naissance requise.', { champs_manquants: ['dateNaissance'] });
     }
     {
@@ -129,6 +151,7 @@ Deno.serve(async (req) => {
       const dayDiff = today.getDate() - birth.getDate();
       const actualAge = monthDiff < 0 || (monthDiff === 0 && dayDiff < 0) ? age - 1 : age;
       if (actualAge < 18) {
+        await annulerCompteAuth('UNDERAGE');
         return errorResponse(cors, 400, 'UNDERAGE', 'Vous devez avoir au moins 18 ans pour vous inscrire.');
       }
     }
@@ -136,17 +159,20 @@ Deno.serve(async (req) => {
     let rppsServerVerifie = false;
     if (rppsObligatoire) {
       if (!rpps || !/^[0-9]{11}$/.test(rpps)) {
+        await annulerCompteAuth('RPPS_FORMAT_INVALID');
         return errorResponse(cors, 400, 'RPPS_FORMAT_INVALID', 'Le numéro RPPS est obligatoire pour votre profession (11 chiffres).');
       }
       const verification = await verifierRppsServeur(rpps, nom, prenom);
       if (!verification.valide) {
         const code = verification.code || 'RPPS_NOT_FOUND';
         const message = verification.message || 'Numéro RPPS invalide.';
+        await annulerCompteAuth(code);
         return errorResponse(cors, 400, code, message);
       }
       rppsServerVerifie = verification.verifie !== false;
     } else {
       if (rpps && !/^[0-9]{11}$/.test(rpps)) {
+        await annulerCompteAuth('RPPS_FORMAT_INVALID');
         return errorResponse(cors, 400, 'RPPS_FORMAT_INVALID', 'Numéro RPPS invalide. Vérifiez qu\'il contient bien 11 chiffres.');
       }
     }
