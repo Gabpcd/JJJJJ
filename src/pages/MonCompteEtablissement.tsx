@@ -6,9 +6,9 @@ import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Building2 } from 'lucide-react';
 import {
-  CreditCard, FileStack, FileText, FileSpreadsheet, BarChart3, Scale,
-  Flame, Users, Gift, Settings, LogOut, ClipboardCheck,
-  User, TrendingUp, Star, Ban, Landmark, MessageSquare, Code2, CalendarDays,
+  CreditCard, FileText, BarChart3, Scale,
+  Users, Gift, Settings, LogOut,
+  User, TrendingUp, Star, Landmark,
 } from 'lucide-react';
 
 export default function MonCompteEtablissement() {
@@ -24,58 +24,40 @@ export default function MonCompteEtablissement() {
       .then(({ data }) => { if (data) setEtab(data as any); });
   }, [user]);
 
+  // Menu réduit au strict nécessaire. Présences + Missions + Messages = déjà
+  // dans la bottom nav. Pool urgence = accessible depuis Missions. Parrainage +
+  // API = rangés dans Paramètres. Planning = accessible depuis l'Accueil.
   const sections: SectionReglages[] = [
     {
-      titre: 'Activité',
+      titre: 'Mon établissement',
       lignes: [
-        { icone: User, label: 'Profil de l\'établissement', route: '/etablissement/profil' },
-        { icone: ClipboardCheck, label: 'Présences à valider', route: '/etablissement/presences' },
+        { icone: User, label: 'Profil', route: '/etablissement/profil' },
         { icone: FileText, label: 'Contrats', route: '/etablissement/contrats' },
-        { icone: CalendarDays, label: 'Planning', route: '/etablissement/planning' },
-        { icone: Flame, label: 'Pool urgence', route: '/etablissement/pool-urgence' },
+        { icone: Users, label: 'Annuaire soignants', route: '/etablissement/soignants' },
+        { icone: Users, label: 'Mon équipe', route: '/etablissement/equipe' },
       ],
     },
     {
-      titre: 'Qualité & litiges',
+      titre: 'Qualité',
       lignes: [
         { icone: Star, label: 'Évaluations à faire', route: '/etablissement/evaluations-a-faire' },
         { icone: Scale, label: 'Litiges & contestations', route: '/etablissement/litiges' },
-        { icone: MessageSquare, label: 'Mes réclamations', route: '/etablissement/mes-reclamations' },
-      ],
-    },
-    {
-      titre: 'Analyse',
-      lignes: [
-        { icone: BarChart3, label: 'Tableau RH', route: '/etablissement/rh' },
-        { icone: TrendingUp, label: 'Analytics', route: '/etablissement/analytics' },
         { icone: Landmark, label: 'Score établissement', route: '/etablissement/score' },
       ],
     },
     {
-      titre: 'Finances',
+      titre: 'Finances & analyse',
       lignes: [
-        // « Facturation » et « Obligations financières » pointaient la même route.
-        // Dédoublonné : 1 entrée « Facturation » (la page a déjà tout).
         { icone: CreditCard, label: 'Facturation', route: '/etablissement/facturation' },
-        { icone: FileSpreadsheet, label: 'Export paie', route: '/etablissement/export-paie' },
-        { icone: FileStack, label: 'Chorus Pro', route: '/etablissement/chorus-config' },
-      ],
-    },
-    {
-      titre: 'Soignants & équipe',
-      lignes: [
-        { icone: Users, label: 'Annuaire des soignants', route: '/etablissement/soignants' },
-        { icone: Ban, label: 'Soignants exclus', route: '/etablissement/exclusions' },
-        { icone: Users, label: 'Mon équipe', route: '/etablissement/equipe' },
-        { icone: Building2, label: 'Mon groupe', route: '/etablissement/mon-groupe' },
-        { icone: Gift, label: 'Parrainage', route: '/etablissement/parrainage' },
+        { icone: BarChart3, label: 'Tableau RH', route: '/etablissement/rh' },
+        { icone: TrendingUp, label: 'Analytics', route: '/etablissement/analytics' },
       ],
     },
     {
       titre: 'Paramètres',
       lignes: [
         { icone: Settings, label: 'Paramètres', route: '/etablissement/parametres' },
-        { icone: Code2, label: 'API', route: '/etablissement/api' },
+        { icone: Gift, label: 'Parrainage', route: '/etablissement/parrainage' },
         { icone: LogOut, label: 'Se déconnecter', onClick: () => deconnexion(), variante: 'danger' as const, sansChevron: true },
       ],
     },
