@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { handleErrorSilent } from '@/lib/handleError';
 import { useNavigate } from 'react-router-dom';
-import { AlertCircle, Camera, Clock, CheckCircle2, RefreshCw, Loader2 } from 'lucide-react';
+import { AlertCircle, Camera, Clock, CheckCircle2, RefreshCw, Loader2, Landmark } from 'lucide-react';
 import { LayoutApp } from '@/components/LayoutApp';
 import { ChargementPage } from '@/components/ChargementPage';
 import { JaugeProgression } from '@/components/JaugeProgression';
@@ -695,6 +695,43 @@ export function DocumentsSoignantContent() {
           }
         })}
       </div>
+
+      {/* Coordonnées bancaires (RIB) — le RIB n'est jamais un fichier à téléverser ici.
+          - Libéral / mixte : honoraires versés via Stripe Connect (RIB saisi côté Stripe).
+          - IBAN « primes de parrainage » : Profil → Paiements (jamais partagé avec l'étab).
+          - Missions salariées : l'établissement est l'employeur légal et établit la paie. */}
+      {soignant?.profession && (() => {
+        const isLiberalOrMixte = soignant?.type_exercice === 'LIBERAL' || soignant?.type_exercice === 'MIXTE';
+        return (
+          <div className="mt-6 rounded-2xl border border-jolene-rose-200/60 bg-card p-4">
+            <div className="flex items-start gap-3">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                <Landmark className="h-5 w-5" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-semibold text-foreground">Coordonnées bancaires (RIB)</p>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Le RIB ne se téléverse pas comme un document.
+                </p>
+                {isLiberalOrMixte ? (
+                  <>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      Pour vos <span className="font-medium text-foreground">honoraires libéraux</span>, le RIB est saisi de façon sécurisée lors de la configuration de votre compte de versement.
+                    </p>
+                    <BoutonY2K variant="secondary" size="sm" className="mt-3" onClick={() => navigate('/soignant/stripe-connect')}>
+                      Configurer mes versements →
+                    </BoutonY2K>
+                  </>
+                ) : (
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Pour les <span className="font-medium text-foreground">missions salariées</span>, l'établissement est votre employeur et établit votre bulletin de paie. Votre IBAN pour les primes Jolene se renseigne dans <span className="font-medium text-foreground">Profil → Paiements</span>.
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Documents complémentaires — étudiant / interne faisant fonction */}
       {user && (() => {
