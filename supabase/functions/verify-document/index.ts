@@ -163,6 +163,7 @@ Deno.serve(async (req) => {
       AUTORISATION_EXERCICE: "Autorisation d'exercice",
       FORMATION_OBLIGATOIRE: "Certificat de formation obligatoire",
       ARRET_MALADIE: "Avis d'arrêt de travail (certificat médical d'arrêt maladie, formulaire Cerfa Assurance Maladie)",
+      ATTESTATION_SCOLARITE: "Attestation de scolarité ou certificat de passage en année supérieure d'une école de santé (IFSI/soins infirmiers, IFAS/aide-soignant, faculté de pharmacie, etc.)",
     };
 
     const typeLabel = typeLabels[doc.type_document] || doc.type_document;
@@ -188,6 +189,8 @@ Deno.serve(async (req) => {
   "indices_falsification": ["liste des indices de falsification/retouche détectés"] ou [],
   "diplome_etranger": true/false/null,
   "pays_diplome": "string (pays de délivrance du diplôme)" ou null,
+  "scolarite_formation": "IFSI" ou "IFAS" ou "PHARMACIE" ou "AUTRE" ou null,
+  "scolarite_annee_validee": entier (numéro de l'année d'études LA PLUS HAUTE déjà VALIDÉE/RÉUSSIE) ou null,
   "motif_rejet": null ou "string expliquant le problème",
   "verdict": "VERIFIE"/"EN_ATTENTE"/"REJETE"
 }
@@ -206,7 +209,8 @@ Règles:
 - Pour une CNI/Passeport: extrais la date d'expiration si visible, ainsi que la date de naissance (date_naissance_extraite), le sexe (sexe_extrait: "M" ou "F"), et la commune de naissance (lieu_naissance_extrait) si lisibles sur le document. Ces informations servent à pré-remplir le profil DPAE du soignant
 - Pour une assurance RCP: extrais la date de fin de validité
 - IMPORTANT: Si le document déclaré est un "Diplôme d'État" mais que le fichier est clairement une carte d'identité, passeport ou tout autre document non-diplôme, verdict = "REJETE" avec motif "Le document fourni n'est pas un diplôme"
-- DIPLÔME ÉTRANGER : pour un diplôme, indique "diplome_etranger" = true si le diplôme est délivré par un établissement HORS France (pays/langue/intitulé étranger) et renseigne "pays_diplome". Un diplôme étranger N'EST PAS rejeté automatiquement : il nécessite une autorisation d'exercice (procédure PAE) et une revue par l'administration → verdict = "EN_ATTENTE" avec motif "Diplôme étranger — vérification de l'autorisation d'exercice par l'administration".`;
+- DIPLÔME ÉTRANGER : pour un diplôme, indique "diplome_etranger" = true si le diplôme est délivré par un établissement HORS France (pays/langue/intitulé étranger) et renseigne "pays_diplome". Un diplôme étranger N'EST PAS rejeté automatiquement : il nécessite une autorisation d'exercice (procédure PAE) et une revue par l'administration → verdict = "EN_ATTENTE" avec motif "Diplôme étranger — vérification de l'autorisation d'exercice par l'administration".
+- ATTESTATION DE SCOLARITÉ / CERTIFICAT DE PASSAGE : si le document déclaré est une attestation de scolarité ou un certificat de passage en année supérieure, vérifie que c'est bien un document d'une ÉCOLE / INSTITUT DE FORMATION en santé (verdict REJETE sinon avec motif "Le document n'est pas une attestation de scolarité d'une école de santé"). Renseigne "scolarite_formation" : "IFSI" pour les soins infirmiers (étudiant infirmier / ESI), "IFAS" pour aide-soignant, "PHARMACIE" pour les études de pharmacie, sinon "AUTRE". Renseigne "scolarite_annee_validee" = le numéro de l'année d'études LA PLUS HAUTE DÉJÀ VALIDÉE (ex : "inscrit en 2e année" ou "admis en 2e année" signifie que la 1re année est VALIDÉE → 1 ; "année 2 validée / passage en 3e année" → 2). Si l'année validée n'est pas clairement établie, mets null et verdict = "EN_ATTENTE".`;
 
     const userMessage = `Document déclaré comme: "${typeLabel}"
 Nom du soignant: "${nomComplet}"
@@ -398,6 +402,36 @@ Analyse ce document et vérifie sa conformité.`;
           await supabase.from("soignants").update({ ...finalUpdates, modifie_le: new Date().toISOString() } as any).eq("id", doc.soignant_id);
         }
       }
+    }
+
+    // Attestation de scolarité VERIFIE → on stocke le niveau vérifié + on calcule
+    // la profession autorisée (faisant fonction) via la table d'équivalence admin.
+    // Marque aussi est_etudiant. L'application de l'équivalence (blocage de la
+    // profession trop haute + suggestion) se fait côté inscription/profil.
+    if (doc.type_document === "ATTESTATION_SCOLARITE" && verdictFinal === "VERIFIE" && doc.soignant_id) {
+      const formation = typeof analysis.scolarite_formation === "string" ? analysis.scolarite_formation : null;
+      const anneeValidee = typeof analysis.scolarite_annee_validee === "number" ? analysis.scolarite_annee_validee : null;
+      let professionAutorisee: string | null = null;
+      if (formation && anneeValidee != null) {
+        try {
+          const { data: profs } = await supabase.rpc("fn_professions_autorisees_scolarite" as any, {
+            p_formation: formation, p_annee_validee: anneeValidee,
+          });
+          const liste: string[] = Array.isArray(profs)
+            ? (profs as any[]).map((r) => typeof r === "string" ? r : (r?.fn_professions_autorisees_scolarite ?? Object.values(r ?? {})[0])).filter(Boolean)
+            : [];
+          professionAutorisee = liste[0] ?? null;
+        } catch (e) { console.error("fn_professions_autorisees_scolarite échoué:", safeStringifyError(e)); }
+      }
+      await supabase.from("soignants").update({
+        scolarite_formation: formation,
+        scolarite_annee_validee: anneeValidee,
+        scolarite_profession_autorisee: professionAutorisee,
+        scolarite_verifiee: true,
+        scolarite_verifiee_le: new Date().toISOString(),
+        est_etudiant: true,
+        modifie_le: new Date().toISOString(),
+      } as any).eq("id", doc.soignant_id);
     }
 
     await supabase.rpc("fn_ecrire_audit_safe" as any, {
