@@ -13,6 +13,7 @@ import { ErreurInscription } from '@/components/inscription/ErreurInscription';
 import { SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from '@/integrations/supabase/client';
 import { CaptchaTurnstile, TURNSTILE_REQUIRED } from '@/components/CaptchaTurnstile';
 import { SelectProfession } from '@/components/SelectProfession';
+import { DeclarationEtudiant, FORMATIONS_ETUDIANT } from '@/components/inscription/DeclarationEtudiant';
 import { FooterLegal } from '@/components/FooterLegal';
 import { AuthLayout } from '@/components/AuthLayout';
 import { CONTRATS, PROFESSIONS_SANS_RPPS, PROFESSIONS_NON_LIBERAL } from '@/lib/constantes';
@@ -110,6 +111,7 @@ export default function InscriptionSoignant() {
     profession: '', typesContrat: [] as string[], rpps: '', rayon: 30,
     lat: null as number | null, lng: null as number | null,
     estSalarieEtablissement: null as boolean | null,
+    estEtudiant: false, scolariteFormation: '', scolariteAnnee: '',
   });
 
   // RPPS verification state
@@ -280,7 +282,11 @@ export default function InscriptionSoignant() {
     setSubmitting(true);
     setErreurInscription(null);
     try {
-      await inscriptionSoignant({ ...form, turnstileToken });
+      const formationLabel = FORMATIONS_ETUDIANT.find(f => f.valeur === form.scolariteFormation)?.label || form.scolariteFormation;
+      const etudiantDetails = form.estEtudiant && form.scolariteFormation && form.scolariteAnnee
+        ? `${formationLabel} — année ${form.scolariteAnnee} validée`
+        : null;
+      await inscriptionSoignant({ ...form, turnstileToken, est_etudiant: form.estEtudiant, etudiant_details: etudiantDetails });
       // PII (email) hors URL : sessionStorage évite leak via historique/referer
       // + profession pour l'aperçu marché de la page succès (Session E-2)
       try {
@@ -469,6 +475,16 @@ export default function InscriptionSoignant() {
                 <label htmlFor="profession-select" className="text-sm font-medium text-foreground mb-1.5 block">Profession *</label>
                 <SelectProfession value={form.profession} onChange={v => maj('profession', v)} triggerId="profession-select" />
               </div>
+              <DeclarationEtudiant
+                estEtudiant={form.estEtudiant}
+                formation={form.scolariteFormation}
+                annee={form.scolariteAnnee}
+                professionDeclaree={form.profession}
+                onToggle={(v) => maj('estEtudiant', v)}
+                onChangeFormation={(v) => maj('scolariteFormation', v)}
+                onChangeAnnee={(v) => maj('scolariteAnnee', v)}
+                onSuggererProfession={(p) => maj('profession', p)}
+              />
               <fieldset className="border-0 p-0 m-0">
                 <legend className="text-sm font-medium text-foreground mb-1.5">Types de contrat acceptés * <span className="text-xs text-muted-foreground font-normal">(au moins 1)</span></legend>
                 <div className="grid grid-cols-2 gap-2 mt-1" role="group" aria-label="Types de contrat acceptés">

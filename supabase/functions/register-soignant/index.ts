@@ -129,7 +129,7 @@ Deno.serve(async (req) => {
     };
 
     const body = await req.json();
-    const { prenom, nom, telephone, dateNaissance, profession, typesContrat, rpps, rayon, lat, lng, turnstileToken } = body;
+    const { prenom, nom, telephone, dateNaissance, profession, typesContrat, rpps, rayon, lat, lng, turnstileToken, est_etudiant, etudiant_details } = body;
     const captcha = await verifyTurnstileToken(turnstileToken, clientIp);
     if (!captcha.success) {
       await annulerCompteAuth('CAPTCHA_FAILED');
@@ -195,6 +195,8 @@ Deno.serve(async (req) => {
       rayon_deplacement_km: rayonKm,
       adresse_lat: typeof lat === 'number' ? lat : null,
       adresse_lng: typeof lng === 'number' ? lng : null,
+      est_etudiant: est_etudiant === true,
+      etudiant_details: (typeof etudiant_details === 'string' && etudiant_details.trim()) ? etudiant_details.trim().slice(0, 120) : null,
       ...colonnesAttribution(body.attribution, req),
     };
     const { error: insertError } = await supabaseAdmin.from('soignants').insert(insertPayload);
