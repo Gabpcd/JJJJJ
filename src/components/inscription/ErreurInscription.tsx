@@ -84,6 +84,8 @@ function titrePourCode(code: string): string {
     case 'RPPS_NOT_FOUND':
     case 'RPPS_TRAITS_MISMATCH':
       return 'Numéro RPPS — vérification';
+    case 'RPPS_ALREADY_REGISTERED':
+      return 'Numéro RPPS déjà utilisé';
     case 'RPPS_API_UNAVAILABLE':
       return 'Annuaire Santé indisponible';
     case 'SIRET_FORMAT_INVALID':

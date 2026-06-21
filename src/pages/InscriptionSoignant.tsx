@@ -7,7 +7,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useTypesExerciceAutorises } from '@/hooks/useTypesExerciceAutorises';
 import { getLabelProfession } from '@/lib/constantes';
 import { useNotification } from '@/contexts/NotificationContext';
-import { mapperErreurInscription, type ErreurInscriptionMappee } from '@/lib/erreurs';
+import { mapperErreurInscription, estRefusInscriptionAttendu, type ErreurInscriptionMappee } from '@/lib/erreurs';
 import { gererErreurSupabase } from '@/lib/supabaseErrorHandler';
 import { ErreurInscription } from '@/components/inscription/ErreurInscription';
 import { SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from '@/integrations/supabase/client';
@@ -296,16 +296,16 @@ export default function InscriptionSoignant() {
       // Affichage inline avec code + action proposée.
       const erreurMappee = mapperErreurInscription(err);
       setErreurInscription(erreurMappee);
-      // Sentry : tag avec le type d'événement et le code mappé pour permettre
-      // le regroupement par catégorie dans le dashboard (vs un seul gros
-      // bucket "inscription_soignant"). On laisse Sentry stringifier err
-      // proprement (les Error objects ont leur message/stack lisibles ;
-      // les objets bruts seraient capturés tels quels grâce au mapper amont
-      // qui les a déjà transformés en Error ou en objet structuré).
-      Sentry.captureException(err, {
-        tags: { type: 'inscription_soignant', code: erreurMappee.code },
-        extra: { champs_highlight: erreurMappee.champs_highlight },
-      });
+      // Sentry UNIQUEMENT pour les vraies anomalies. Un refus métier attendu
+      // (e-mail/RPPS déjà utilisé, captcha, mot de passe faible…) est déjà
+      // affiché clairement à l'utilisateur → pas d'issue Sentry (sinon le feed
+      // se remplit de faux positifs).
+      if (!estRefusInscriptionAttendu(erreurMappee.code)) {
+        Sentry.captureException(err, {
+          tags: { type: 'inscription_soignant', code: erreurMappee.code },
+          extra: { champs_highlight: erreurMappee.champs_highlight },
+        });
+      }
       // Si l'erreur cible un champ d'étape 1 mais on est en étape 2,
       // remonter à l'étape 1 pour rendre le champ visible.
       if (erreurMappee.champs_highlight?.some(c => c === 'email' || c === 'motDePasse') && etape !== 1) {

@@ -175,11 +175,24 @@ Deno.serve(async (req) => {
       console.error('INSERT soignants echoue', insertError.code || safeStringifyError(insertError));
       const msg = insertError.message || '';
       if (msg.includes('duplicate key')) {
-        // [P1 — fix compte zombie] Le user Supabase Auth existe déjà mais
-        // l'INSERT soignants est bloqué par contrainte unique. Cas typique :
-        // utilisateur réessaye après une 1re tentative interrompue. On retourne
-        // 409 sans toucher au compte Auth — il est légitime puisqu'un autre
-        // soignant utilise déjà cet identifiant.
+        const m = msg.toLowerCase();
+        // On différencie la contrainte unique violée pour renvoyer un message
+        // JUSTE (avant : "email déjà utilisé" pour TOUTE collision, même quand
+        // c'était le RPPS — message trompeur).
+        if (m.includes('numero_rpps') || m.includes('numero_adeli')) {
+          // Le RPPS/ADELI appartient à un AUTRE compte. Le compte Auth qu'on
+          // vient de créer (e-mail neuf) est désormais orphelin → on le nettoie
+          // pour que l'utilisateur puisse réessayer avec le même e-mail (même
+          // logique anti-orphelin que register-etablissement).
+          try {
+            await supabaseAdmin.auth.admin.deleteUser(user.id);
+          } catch (cleanupErr) {
+            console.error('[register-soignant] Cleanup orphan (rpps dup) échoué:', safeStringifyError(cleanupErr));
+          }
+          return errorResponse(cors, 409, 'RPPS_ALREADY_REGISTERED', 'Ce numéro RPPS est déjà associé à un compte Jolene. Connectez-vous à ce compte, ou contactez le support si ce n\'est pas vous.');
+        }
+        // email / clé primaire (id) / autre contrainte : le compte existe déjà
+        // légitimement (même personne) → on NE supprime PAS le compte Auth.
         return errorResponse(cors, 409, 'USER_ALREADY_REGISTERED', 'Un compte existe déjà avec cet email. Connectez-vous ou utilisez une autre adresse.');
       }
       // [P1 — fix compte zombie] L'INSERT a échoué pour une autre raison
