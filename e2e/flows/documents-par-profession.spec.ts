@@ -54,11 +54,13 @@ test.describe('Matrice documents requis par profession + exercice', () => {
     expect(docs).toEqual(['AUTORISATION_EXERCICE', 'CARTE_IDENTITE', 'DIPLOME']);
   });
 
-  test('IDE salariée → CARTE_IDENTITE + DIPLOME + RPPS_ADELI (pas de RCP/RIB/URSSAF)', () => {
+  test('IDE salariée → CARTE_IDENTITE + DIPLOME + RPPS_ADELI + RIB (pas de RCP/URSSAF)', () => {
+    // Le RIB est requis pour TOUS les exercices (migration rib_visible_tous_exercices) :
+    // l'établissement employeur consulte le RIB du salarié pour verser le salaire
+    // (fn_consulter_rib_soignant). Seuls RCP + URSSAF restent libéraux uniquement.
     const docs = docsVisibles(rows, 'IDE', 'SALARIE');
-    expect(docs).toEqual(['AUTORISATION_EXERCICE', 'CARTE_IDENTITE', 'DIPLOME', 'RPPS_ADELI']);
+    expect(docs).toEqual(['AUTORISATION_EXERCICE', 'CARTE_IDENTITE', 'DIPLOME', 'RIB', 'RPPS_ADELI']);
     expect(docs).not.toContain('RCP_ASSURANCE');
-    expect(docs).not.toContain('RIB');
     expect(docs).not.toContain('ATTESTATION_URSSAF');
   });
 
