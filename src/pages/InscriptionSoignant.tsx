@@ -494,9 +494,12 @@ export default function InscriptionSoignant() {
               </fieldset>
               {rppsRequis ? (
                 <label className="block">
-                  <span className="text-sm font-medium text-foreground mb-1.5 block">Numéro RPPS *</span>
+                  <span className="text-sm font-medium text-foreground mb-1.5 block">Numéro RPPS</span>
+                  <p className="text-[11px] text-muted-foreground mb-1.5">
+                    Vous ne le connaissez pas par cœur ? Vous pouvez laisser vide et le compléter plus tard — la vérification se fera à ce moment-là.
+                  </p>
                   <div className="relative">
-                    <input value={form.rpps} onChange={e => maj('rpps', e.target.value.replace(/\D/g, '').slice(0, 11))} placeholder="11 chiffres" className={`input-base pr-10 ${classeChampErreur('rpps')}`} inputMode="numeric" autoComplete="off" aria-describedby={rppsVerifiant ? 'rpps-status' : undefined} />
+                    <input value={form.rpps} onChange={e => maj('rpps', e.target.value.replace(/\D/g, '').slice(0, 11))} placeholder="11 chiffres (optionnel)" className={`input-base pr-10 ${classeChampErreur('rpps')}`} inputMode="numeric" autoComplete="off" aria-describedby={rppsVerifiant ? 'rpps-status' : undefined} />
                     {rppsVerifiant && <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-primary" aria-hidden="true" />}
                   </div>
                   {rppsVerifiant && <p id="rpps-status" className="text-xs text-primary mt-1" role="status">Vérification en cours...</p>}
