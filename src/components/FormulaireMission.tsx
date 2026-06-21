@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useMemo, lazy, Suspense } from 'react';
+import React, { useState, useEffect, useMemo, Suspense } from 'react';
+import { lazyRetry as lazy } from '@/lib/lazyRetry';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { Loader2, AlertTriangle } from 'lucide-react';
 import { extraireContratPreference, injecterContratTag, peutExercerLiberal, getLabelProfession, type ContratPreference } from '@/lib/constantes';
