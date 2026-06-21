@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { handleErrorSilent } from '@/lib/handleError';
 import { useNavigate } from 'react-router-dom';
-import { AlertCircle, Camera, Clock, CheckCircle2, RefreshCw, Loader2 } from 'lucide-react';
+import { AlertCircle, Camera, Clock, CheckCircle2, RefreshCw, Loader2, Landmark } from 'lucide-react';
 import { LayoutApp } from '@/components/LayoutApp';
 import { ChargementPage } from '@/components/ChargementPage';
 import { JaugeProgression } from '@/components/JaugeProgression';
@@ -695,6 +695,40 @@ export function DocumentsSoignantContent() {
           }
         })}
       </div>
+
+      {/* Coordonnées bancaires (RIB) — explique pourquoi le RIB n'apparaît pas
+          dans la liste : il n'est jamais un fichier à téléverser ici.
+          - Libéral / mixte : versé en honoraires via Stripe Connect.
+          - Salarié : transmis à l'établissement pour la paie (bulletin), pas à Jolene. */}
+      {soignant?.profession && (() => {
+        const isLiberalOrMixte = soignant?.type_exercice === 'LIBERAL' || soignant?.type_exercice === 'MIXTE';
+        return (
+          <div className="mt-6 rounded-2xl border border-jolene-rose-200/60 bg-card p-4">
+            <div className="flex items-start gap-3">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                <Landmark className="h-5 w-5" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-semibold text-foreground">Coordonnées bancaires (RIB)</p>
+                {isLiberalOrMixte ? (
+                  <>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      Votre RIB ne se téléverse pas ici : vos honoraires sont versés via votre compte de paiement sécurisé. Renseignez-le en quelques minutes.
+                    </p>
+                    <BoutonY2K variant="secondary" size="sm" className="mt-3" onClick={() => navigate('/soignant/stripe-connect')}>
+                      Configurer mes versements →
+                    </BoutonY2K>
+                  </>
+                ) : (
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Pour les missions <span className="font-medium text-foreground">salariées</span>, votre RIB est transmis directement à l'établissement employeur pour votre bulletin de paie — vous n'avez rien à téléverser ici.
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Documents complémentaires — étudiant / interne faisant fonction */}
       {user && (() => {

@@ -28,8 +28,14 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
-} from '@/components/ui/dialog';
+  DialogResponsive,
+  DialogResponsiveContent,
+  DialogResponsiveHeader,
+  DialogResponsiveTitle,
+  DialogResponsiveDescription,
+  DialogResponsiveBody,
+  DialogResponsiveFooter,
+} from '@/components/ui/DialogResponsive';
 import { logger } from '@/lib/logger';
 import type { FiltreSauvegarde, FrequenceAlerte } from '@/components/FiltresSauvegardes';
 import { usePageTitle } from '@/hooks/usePageTitle';
@@ -247,17 +253,17 @@ function ModalEditPage({
   };
 
   return (
-    <Dialog open={!!filtre} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Modifier la recherche</DialogTitle>
-          <DialogDescription>
+    <DialogResponsive open={!!filtre} onOpenChange={onOpenChange}>
+      <DialogResponsiveContent>
+        <DialogResponsiveHeader>
+          <DialogResponsiveTitle>Modifier la recherche</DialogResponsiveTitle>
+          <DialogResponsiveDescription>
             Renommer + changer les préférences d'alertes. Pour modifier les
             critères de recherche, supprimez celle-ci et créez-en une nouvelle
             depuis la page de recherche.
-          </DialogDescription>
-        </DialogHeader>
-        <div className="space-y-4 py-2">
+          </DialogResponsiveDescription>
+        </DialogResponsiveHeader>
+        <DialogResponsiveBody className="space-y-4">
           <div>
             <Label htmlFor="nom-edit">Nom</Label>
             <Input id="nom-edit" maxLength={100} value={nom} onChange={(e) => setNom(e.target.value)} />
@@ -279,14 +285,14 @@ function ModalEditPage({
               </Select>
             </div>
           )}
-        </div>
-        <DialogFooter>
+        </DialogResponsiveBody>
+        <DialogResponsiveFooter>
           <BoutonY2K variant="secondary" onClick={() => onOpenChange(false)} disabled={submitting}>Annuler</BoutonY2K>
           <BoutonY2K onClick={submit} disabled={submitting}>
             {submitting ? 'Enregistrement…' : 'Enregistrer'}
           </BoutonY2K>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </DialogResponsiveFooter>
+      </DialogResponsiveContent>
+    </DialogResponsive>
   );
 }

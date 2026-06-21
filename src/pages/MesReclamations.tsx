@@ -10,7 +10,14 @@ import { fr } from 'date-fns/locale';
 import { MessageCircle, Plus, Clock, CheckCircle, AlertCircle, Loader2, Send } from 'lucide-react';
 import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { Input } from '@/components/ui/input';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+  DialogResponsive,
+  DialogResponsiveContent,
+  DialogResponsiveHeader,
+  DialogResponsiveTitle,
+  DialogResponsiveBody,
+  DialogResponsiveFooter,
+} from '@/components/ui/DialogResponsive';
 
 const CATEGORIES = [
   { value: 'MISSION', label: 'Mission (annulation, litige, problème)' },
@@ -167,12 +174,12 @@ export function ReclamationsContent({ role: _role }: { role: 'SOIGNANT' | 'ADMIN
       </div>
 
       {/* ── Modal nouvelle réclamation ── */}
-      <Dialog open={showForm} onOpenChange={setShowForm}>
-        <DialogContent className="sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Nouvelle réclamation</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
+      <DialogResponsive open={showForm} onOpenChange={setShowForm}>
+        <DialogResponsiveContent>
+          <DialogResponsiveHeader>
+            <DialogResponsiveTitle>Nouvelle réclamation</DialogResponsiveTitle>
+          </DialogResponsiveHeader>
+          <DialogResponsiveBody className="space-y-4">
             <div>
               <label className="text-sm font-medium text-foreground">Catégorie</label>
               <select
@@ -204,16 +211,16 @@ export function ReclamationsContent({ role: _role }: { role: 'SOIGNANT' | 'ADMIN
                 className="input-base w-full mt-1 resize-none"
               />
             </div>
-            <div className="flex gap-2 justify-end pt-2">
-              <BoutonY2K variant="secondary" onClick={() => setShowForm(false)}>Annuler</BoutonY2K>
-              <BoutonY2K onClick={soumettre} disabled={submitting || !sujet.trim() || !details.trim()} className="gap-2">
-                {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                Envoyer
-              </BoutonY2K>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+          </DialogResponsiveBody>
+          <DialogResponsiveFooter>
+            <BoutonY2K variant="secondary" onClick={() => setShowForm(false)}>Annuler</BoutonY2K>
+            <BoutonY2K onClick={soumettre} disabled={submitting || !sujet.trim() || !details.trim()} className="gap-2">
+              {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+              Envoyer
+            </BoutonY2K>
+          </DialogResponsiveFooter>
+        </DialogResponsiveContent>
+      </DialogResponsive>
     </>
   );
 }

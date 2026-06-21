@@ -306,12 +306,14 @@ export default function ProfilSoignant() {
 
       <div className="max-w-2xl">
         <Tabs defaultValue="principal" className="w-full">
-          <TabsList className="grid grid-cols-4 w-full mb-4">
-            <TabsTrigger value="principal">Profil principal</TabsTrigger>
-            <TabsTrigger value="paiements">Paiements</TabsTrigger>
-            <TabsTrigger value="preferences">Préférences</TabsTrigger>
-            <TabsTrigger value="confidentialite">Confidentialité</TabsTrigger>
-          </TabsList>
+          <div className="overflow-x-auto -mx-1 px-1 mb-4">
+            <TabsList className="w-max">
+              <TabsTrigger value="principal">Profil principal</TabsTrigger>
+              <TabsTrigger value="paiements">Paiements</TabsTrigger>
+              <TabsTrigger value="preferences">Préférences</TabsTrigger>
+              <TabsTrigger value="confidentialite">Confidentialité</TabsTrigger>
+            </TabsList>
+          </div>
 
           <TabsContent value="principal">
             <SectionProfilPrincipal
