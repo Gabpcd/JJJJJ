@@ -6,6 +6,7 @@ import { logger } from '@/lib/logger';
 import { getAttribution } from '@/lib/attribution';
 import { gererErreurSupabase } from '@/lib/supabaseErrorHandler';
 import { viderCacheHorsLigne } from '@/lib/cacheHorsLigne';
+import { estRefusInscriptionAttendu } from '@/lib/erreurs';
 
 interface AppUser {
   id: string;
@@ -243,7 +244,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       logger.debug('[INSCRIPTION] 6. register-soignant réponse:', result);
 
       if (!response.ok || result?.ok === false || result?.error) {
-        logger.error('[INSCRIPTION] ERREUR register-soignant', result);
+        // Refus métier attendu (RPPS introuvable, captcha, mot de passe faible…) :
+        // l'utilisateur voit un message clair → on n'en fait PAS une issue Sentry.
+        if (estRefusInscriptionAttendu(result?.code)) {
+          logger.warn('[INSCRIPTION] register-soignant refus attendu', result?.code);
+        } else {
+          logger.error('[INSCRIPTION] ERREUR register-soignant', result);
+        }
         try { await supabase.auth.signOut(); } catch { /* ignore */ }
         // [BUG 2 fix] Propage le code machine-readable + détails du backend
         // sur l'Error throwée, pour que mapperErreurInscription() côté
@@ -259,8 +266,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       logger.debug('[INSCRIPTION] 7. register-soignant OK ✅');
     } catch (err) {
-      logger.error('[INSCRIPTION] register-soignant EXCEPTION', err);
-      Sentry.captureException(err, { tags: { composant: 'AuthContext', action: 'inscription_soignant' } });
+      // Idem côté catch : un refus métier attendu remonté via l'Error (err.code)
+      // reste un breadcrumb, pas une issue Sentry.
+      if (estRefusInscriptionAttendu((err as any)?.code)) {
+        logger.warn('[INSCRIPTION] register-soignant refus attendu (catch)', (err as any)?.code);
+      } else {
+        logger.error('[INSCRIPTION] register-soignant EXCEPTION', err);
+        Sentry.captureException(err, { tags: { composant: 'AuthContext', action: 'inscription_soignant' } });
+      }
       try { await supabase.auth.signOut(); } catch { /* ignore */ }
       // Re-throw en préservant code/details si déjà attachés (vrai pour
       // notre Error construite ci-dessus, false pour les exceptions natives
