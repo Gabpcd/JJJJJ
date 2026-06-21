@@ -8,6 +8,12 @@ export const FORMATIONS_ETUDIANT = [
   { valeur: 'IFAS', label: 'Aide-soignant (IFAS)' },
   { valeur: 'MEDECINE_DFGSM', label: 'Médecine — 1er cycle (DFGSM)' },
   { valeur: 'MEDECINE_DFASM', label: 'Médecine — 2e cycle (DFASM / externat)' },
+  { valeur: 'MAIEUTIQUE', label: 'Maïeutique (sage-femme)' },
+  { valeur: 'ODONTOLOGIE', label: 'Odontologie (chirurgie dentaire)' },
+  { valeur: 'KINE', label: 'Masso-kinésithérapie (IFMK)' },
+  { valeur: 'ERGOTHERAPIE', label: 'Ergothérapie' },
+  { valeur: 'PSYCHOMOTRICITE', label: 'Psychomotricité' },
+  { valeur: 'MANIP_RADIO', label: 'Manipulateur radio (MERM)' },
   { valeur: 'PHARMACIE', label: 'Pharmacie' },
 ] as const;
 
