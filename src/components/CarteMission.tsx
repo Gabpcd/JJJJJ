@@ -200,7 +200,17 @@ export const CarteMission = React.memo(function CarteMission({ mission, afficher
         )}
       </div>
 
-      <div className="flex gap-2 mt-2 flex-wrap" onClick={(e) => e.stopPropagation()}>
+      {/* Mission passée : « Republier » devient l'action primaire proéminente
+          (re-pourvoir un besoin récurrent = nouvelle mission en 1 tap). */}
+      {peutRepublier && (
+        <div className="mt-3" onClick={(e) => e.stopPropagation()}>
+          <BoutonY2K variant="primary" size="sm" onClick={ouvrirRepublier} iconeGauche={<RotateCcw className="h-4 w-4" />} className="w-full sm:w-auto">
+            Republier cette mission
+          </BoutonY2K>
+        </div>
+      )}
+
+      <div className="flex gap-3 mt-2 flex-wrap items-center" onClick={(e) => e.stopPropagation()}>
         <button
           onClick={() => navigate(`/etablissement/missions/${m.id}`)}
           className="text-xs font-medium text-primary hover:underline"
@@ -215,11 +225,6 @@ export const CarteMission = React.memo(function CarteMission({ mission, afficher
         {onAnnuler && (m.statut === 'OUVERTE' || m.statut === 'ASSIGNEE') && (
           <button onClick={() => onAnnuler(m)} className="text-xs font-medium text-destructive hover:underline flex items-center gap-1">
             <XCircle className="h-3 w-3" /> Annuler
-          </button>
-        )}
-        {peutRepublier && (
-          <button onClick={ouvrirRepublier} className="text-xs font-medium text-primary hover:underline flex items-center gap-1">
-            <RotateCcw className="h-3 w-3" /> Republier
           </button>
         )}
       </div>

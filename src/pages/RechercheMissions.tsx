@@ -472,6 +472,31 @@ export default function RechercheMissions() {
           }}
         />
 
+        {/* Filtres rapides 1-tap — branchés sur les états existants, toujours
+            visibles (pas besoin d'ouvrir le panneau détaillé). Facilité d'usage. */}
+        <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
+          {[
+            { actif: urgentesOnly, label: '🔥 Urgentes', toggle: () => setUrgentesOnly(v => !v) },
+            { actif: horaire === 'WEEKEND', label: '📅 Ce weekend', toggle: () => setHoraire(h => h === 'WEEKEND' ? 'TOUS' : 'WEEKEND') },
+            { actif: horaire === 'NUIT', label: '🌙 Nuit', toggle: () => setHoraire(h => h === 'NUIT' ? 'TOUS' : 'NUIT') },
+            { actif: horaire === 'JOUR', label: '☀️ Jour', toggle: () => setHoraire(h => h === 'JOUR' ? 'TOUS' : 'JOUR') },
+          ].map((chip) => (
+            <button
+              key={chip.label}
+              type="button"
+              onClick={chip.toggle}
+              aria-pressed={chip.actif}
+              className={`shrink-0 inline-flex items-center rounded-full px-3.5 py-1.5 text-xs font-semibold transition-snap border ${
+                chip.actif
+                  ? 'bg-gradient-hero text-white border-transparent shadow-md'
+                  : 'bg-card text-jolene-bubblegum border-jolene-rose-200 hover:border-jolene-rose-300'
+              }`}
+            >
+              {chip.label}
+            </button>
+          ))}
+        </div>
+
         {/* Filters */}
         <div className={`${showFilters ? 'block' : 'hidden md:block'} card-base space-y-4`}>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -644,7 +669,15 @@ export default function RechercheMissions() {
                   onClick: () => setAlerteOpen(true),
                 }}
                 ctaSecondaire={
-                  rayonKm < 100
+                  /* Cause la plus probable d'un résultat vide : un filtre rapide
+                     actif (urgentes/weekend/nuit). On propose d'abord de les
+                     effacer, sinon d'élargir le rayon. */
+                  (urgentesOnly || horaire !== 'TOUS')
+                    ? {
+                        label: 'Effacer les filtres rapides',
+                        onClick: () => { setUrgentesOnly(false); setHoraire('TOUS'); },
+                      }
+                    : rayonKm < 100
                     ? {
                         label: 'Élargir le rayon (+20 km)',
                         onClick: () => setRayonKm((r) => Math.min(100, r + 20)),
