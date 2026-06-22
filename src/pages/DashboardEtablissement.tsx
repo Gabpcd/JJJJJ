@@ -7,7 +7,7 @@ import { logger } from '@/lib/logger';
 import { SkeletonDashboard } from '@/components/SkeletonCard';
 import { FadeInView } from '@/components/FadeInView';
 import { useNavigate } from 'react-router-dom';
-import { Briefcase, PlayCircle, CheckCircle, ClipboardList, FileText, Users, Star, ClipboardCheck, ShieldAlert, CreditCard } from 'lucide-react';
+import { Briefcase, PlayCircle, CheckCircle, ClipboardList, FileText, Users, Star, ClipboardCheck, ShieldAlert, CreditCard, BarChart3, ChevronDown } from 'lucide-react';
 import { LayoutApp } from '@/components/LayoutApp';
 import { CarteKPIY2K } from '@/components/y2k/CarteKPIY2K';
 import { CarteMission } from '@/components/CarteMission';
@@ -94,6 +94,9 @@ export default function DashboardEtablissement() {
 
   const [modalDupliquer, setModalDupliquer] = useState<MissionSummary | null>(null);
   const [modalAnnuler, setModalAnnuler] = useState<MissionSummary | null>(null);
+  // Densité dashboard : les stats détaillées (analytics) sont repliées par
+  // défaut pour garder la vue par défaut focalisée sur l'action.
+  const [statsOuvertes, setStatsOuvertes] = useState(false);
 
   const { data: dashData, isLoading: loading } = useQuery({
     queryKey: ['dashboard-etablissement', user?.id, etablissementId],
@@ -580,17 +583,34 @@ export default function DashboardEtablissement() {
         <SectionPlanning missions={prochaines} />
       </FadeInView>
 
-      {/* Indicateurs avancés (J5.B.2) — turnover, taux remplissage, coût moyen */}
-      <IndicateursAvancesEtab soignantsCeMois={Number(stats.soignants_ce_mois) || 0} />
-
-      {/* Évolution missions 6 mois */}
-      <GraphiqueEvolutionMissions />
-
-      {/* Top soignants */}
+      {/* Statistiques détaillées — repliées par défaut (densité). Le manager
+          voit d'abord action + pipeline + planning ; il déplie les analytics
+          (turnover, évolution 6 mois, top soignants) à la demande. */}
       <div className="mb-6">
-        <FadeInView delay={650}>
-          <TopSoignants soignants={topSoignants} etablissementId={etablissementId!} onSelectSoignant={(soignantId) => navigate(`/etablissement/soignants/${soignantId}`)} />
-        </FadeInView>
+        <button
+          type="button"
+          onClick={() => setStatsOuvertes((v) => !v)}
+          aria-expanded={statsOuvertes}
+          className="w-full flex items-center justify-between gap-2 rounded-2xl border border-border bg-card px-4 py-3 hover:border-jolene-rose-200 transition-colors"
+        >
+          <span className="inline-flex items-center gap-2 text-sm font-bold text-foreground">
+            <BarChart3 className="h-4 w-4 text-primary" /> Statistiques détaillées
+          </span>
+          <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${statsOuvertes ? 'rotate-180' : ''}`} />
+        </button>
+
+        {statsOuvertes && (
+          <div className="mt-4 space-y-6">
+            {/* Indicateurs avancés (J5.B.2) — turnover, taux remplissage, coût moyen */}
+            <IndicateursAvancesEtab soignantsCeMois={Number(stats.soignants_ce_mois) || 0} />
+
+            {/* Évolution missions 6 mois */}
+            <GraphiqueEvolutionMissions />
+
+            {/* Top soignants */}
+            <TopSoignants soignants={topSoignants} etablissementId={etablissementId!} onSelectSoignant={(soignantId) => navigate(`/etablissement/soignants/${soignantId}`)} />
+          </div>
+        )}
       </div>
 
       {/* Commission Jolene — carte compacte */}
