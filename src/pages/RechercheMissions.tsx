@@ -82,6 +82,9 @@ export default function RechercheMissions() {
   // cross-page (l'ancienne route /soignant/swipe-missions redirige ici).
   const [vue, setVue] = useState<'liste' | 'swipe'>(() => {
     try {
+      // Deep-link ?vue=swipe (ex. nudge streak du dashboard) prioritaire sur la préférence.
+      const urlVue = new URLSearchParams(window.location.search).get('vue');
+      if (urlVue === 'swipe' || urlVue === 'liste') return urlVue;
       return localStorage.getItem(VIEW_PREF_KEY) === 'swipe' ? 'swipe' : 'liste';
     } catch { return 'liste'; }
   });

@@ -82,6 +82,19 @@ export default function DashboardSoignant() {
     enabled: !!user,
   });
 
+  // Streak quotidien (mécanique d'engagement swipe) — surfacée sur l'accueil
+  // pour pousser l'habitude quotidienne : plus de swipes = plus de candidatures.
+  const { data: streak } = useQuery({
+    queryKey: ['ma-streak', user?.id],
+    queryFn: async () => {
+      const { data } = await supabase.rpc('fn_ma_streak' as any);
+      const row = Array.isArray(data) ? data[0] : data;
+      return (row?.streak_count as number) ?? 0;
+    },
+    staleTime: 60_000,
+    enabled: !!user,
+  });
+
   // Keep propositions in local state so they can be removed on action
   const dashboardPropositions = dashboard?.propositions;
   useEffect(() => {
@@ -212,7 +225,7 @@ export default function DashboardSoignant() {
       </div>
 
       {/* CTA principal : la boucle de vente, en haut, pas dans un onglet */}
-      <div className="flex gap-3 mb-6 overflow-x-auto pb-1">
+      <div className="flex gap-3 mb-3 overflow-x-auto pb-1">
         <BoutonY2K variant="primary" size="sm" onClick={() => navigate('/soignant/recherche-missions')} className="whitespace-nowrap flex-1">
           🔥 Trouver une mission
         </BoutonY2K>
@@ -220,6 +233,20 @@ export default function DashboardSoignant() {
           Mes matchs
         </BoutonY2K>
       </div>
+
+      {/* Nudge streak : pousse le swipe quotidien (habit loop). Cliquable vers
+          la vue swipe pour entretenir/relancer la série. */}
+      <button
+        onClick={() => navigate('/soignant/recherche-missions?vue=swipe')}
+        className="w-full mb-6 flex items-center justify-between gap-2 rounded-2xl border border-jolene-rose-200/60 bg-gradient-soft px-4 py-2.5 text-left hover:border-jolene-rose-300 transition-colors"
+      >
+        <span className="text-sm font-semibold text-foreground">
+          {(streak ?? 0) > 0
+            ? `🔥 ${streak} jour${(streak ?? 0) > 1 ? 's' : ''} d'affilée — gardez votre série !`
+            : '🔥 Démarrez votre série — swipez aujourd\'hui'}
+        </span>
+        <span className="text-xs font-semibold text-primary shrink-0">Swiper →</span>
+      </button>
 
       {/* ═══ ZONE 2 : CONTEXTE IMMÉDIAT (missions en cours / pointage) ═══ */}
 
