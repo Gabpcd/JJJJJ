@@ -40,23 +40,40 @@ Les anciens modèles (`fn_creer_serie`, colonne `serie_id`, regroupement par
 Basculer **tout le pointage sur le système ②** et brancher la paie sur les
 créneaux `EFFECTIF`, puis retirer ①.
 
-## Plan par étapes (PRs)
+## ⚠️ Ce qui était DÉJÀ construit (ne pas refaire)
 
-- **PR 1 (cette PR)** — *fondation* : initialiser `code_pointage_actif` à la
-  création (trigger) + backfill missions actives. Additif, zéro régression.
-- **PR 2** — *soignant* : écran de pointage appelle `fn_scanner_code_pointage`
-  (un seul bouton « Pointer » qui alterne ouverture/fermeture selon
-  `prochain_type_scan`), gère le code rotatif renvoyé, affiche « segment en cours ».
-- **PR 3** — *établissement* : affichage du **code rotatif courant**
-  (`code_pointage_actif`) avec rafraîchissement temps réel (Realtime) + QR ;
-  liste des scans/segments par jour ; validation des scans `validation_etab_requise`.
-- **PR 4** — *paie* : calcul des heures depuis les créneaux `EFFECTIF`
-  (somme des segments) au lieu de `presences.arrivee/depart`.
-- **PR 5** — *nettoyage* : retrait du système ① (fonctions + appels frontend) et
-  du legacy série (`serie_id` / `extraireSerieId`). Migration des écrans présences.
+Audit du backend (2026-06-22) : le système ② était quasi complet. Seuls le
+branchement frontend et l'init du code manquaient. **Déjà en place** :
+
+- `fn_scanner_code_pointage` — scan rotatif complet (codes régénérés, OUVERTURE/
+  FERMETURE, pauses, créneaux EFFECTIF, anti-rejeu 2 min, GPS, validation flag).
+- **Paie/facturation sur EFFECTIF** : `fn_calculer_montant_periode` calcule les
+  heures via `GREATEST(somme PREVISIONNEL, somme EFFECTIF)`. `fn_lister_missions_a_facturer`,
+  `fn_detail_facture`, `dec_calculer_finance_mission` s'appuient dessus.
+  → **La paie lit déjà les segments EFFECTIF. Rien à refaire ici.**
+- `fn_declarer_fin_retroactive` — fallback de saisie rétroactive (« pas de téléphone »).
+- `fn_sync_mission_creneaux` — synchro créneaux.
+
+## Plan par étapes (PRs) — état réel
+
+- **PR 1** ✅ *(mergée + déployée)* — fondation : init `code_pointage_actif` au
+  trigger + backfill. Additif, zéro régression.
+- **PR 2/3** ✅ *(mergée + déployée, #664)* — branchement frontend de la boucle :
+  RPC `fn_etat_pointage_mission` + `AffichageCodeRotatifEtab` (code rotatif temps
+  réel par polling 5 s + QR + segments) + `PointageRotatifSoignant` (saisie/scan
+  → `fn_scanner_code_pointage`). Remplace `CartePointage` dans les onglets actifs.
+- **PR 4** ~~paie~~ — **DÉJÀ FAIT** (cf. ci-dessus). Reste seulement à *vérifier*
+  end-to-end qu'un cycle scan → EFFECTIF → facture sort le bon montant.
+- **PR 3-bis (vrai trou restant)** — *validation étab des scans* : aucune fonction
+  ne pose `scans_pointage.valide_par_etab` aujourd'hui. À ajouter pour les scans
+  `validation_etab_requise = true` (anomalies : en avance / >24h). **Non bloquant
+  pour la paie** (qui lit EFFECTIF quelle que soit la validation) — c'est de
+  l'anti-fraude/litige. + brancher l'UI du fallback `fn_declarer_fin_retroactive`.
+- **PR 5** — *nettoyage* : retrait du système ① (`presences` / `fn_pointer_*` /
+  `CartePointage` / `fn_valider_scan_qr` / `fn_codes_pointage_mission`) et du legacy
+  série (`serie_id` / `extraireSerieId`), une fois ② vérifié de bout en bout.
 
 ## Notes de prudence
-- Cœur **paie + légal** : on avance par PRs réversibles, on ne retire ① qu'en
-  dernier (PR 5), une fois ② validé de bout en bout.
+- Cœur **paie + légal** : on ne retire ① qu'en dernier (PR 5), une fois ② vérifié.
 - Pré-lancement (0 mission multi-jours, 0 présence en prod) → moment idéal pour
   converger sans migration de données lourde.
