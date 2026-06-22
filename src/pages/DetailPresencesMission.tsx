@@ -2,14 +2,14 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { format, differenceInMinutes } from 'date-fns';
 import { fr } from 'date-fns/locale';
-import { ArrowLeft, Clock, MapPin, Radio, AlertTriangle, QrCode, Keyboard, Wifi, CheckCircle, XCircle } from 'lucide-react';
-import { QRCodeSVG } from 'qrcode.react';
+import { ArrowLeft, Clock, MapPin, Radio, AlertTriangle, Keyboard, Wifi, CheckCircle, XCircle } from 'lucide-react';
 import { LayoutApp } from '@/components/LayoutApp';
 import { ChargementPage } from '@/components/ChargementPage';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { BadgeY2K } from '@/components/y2k/BadgeY2K';
+import { AffichageCodeRotatifEtab } from '@/components/pointage/AffichageCodeRotatifEtab';
 
 function fmt(v: number) {
   return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(v);
@@ -64,7 +64,6 @@ export default function DetailPresencesMission({ role = 'ADMIN_ETABLISSEMENT' }:
   const [mission, setMission] = useState<any>(null);
   const [presences, setPresences] = useState<any[]>([]);
   const [soignant, setSoignant] = useState<any>(null);
-  const [codes, setCodes] = useState<{ code_arrivee: string; code_depart: string } | null>(null);
 
   const layoutRole = role === 'ADMIN_PLATEFORME' ? 'ADMIN_PLATEFORME' : role === 'SOIGNANT' ? 'SOIGNANT' : 'ADMIN_ETABLISSEMENT';
 
@@ -88,13 +87,6 @@ export default function DetailPresencesMission({ role = 'ADMIN_ETABLISSEMENT' }:
       // Store detail data for enhanced display
       const detailData = detailRes.data as any;
 
-      // Only fetch codes for établissement/admin (not soignant)
-      let codesData: any = null;
-      if (role !== 'SOIGNANT') {
-        const codesRes = await supabase.rpc('fn_codes_pointage_mission' as any, { p_mission_id: missionId });
-        if (codesRes.data) codesData = codesRes.data;
-      }
-
       if (missionData) {
         setMission({ ...missionData, _detail: detailData });
         if (missionData.soignant_assigne_id) {
@@ -108,7 +100,6 @@ export default function DetailPresencesMission({ role = 'ADMIN_ETABLISSEMENT' }:
       }
 
       setPresences(presData || []);
-      setCodes(codesData);
       setLoading(false);
     };
     load();
@@ -230,30 +221,10 @@ export default function DetailPresencesMission({ role = 'ADMIN_ETABLISSEMENT' }:
         );
       })()}
 
-      {/* Codes de pointage — only for établissement/admin */}
-      {codes && (
-        <div className="card-base mb-6">
-          <h2 className="font-semibold text-foreground flex items-center gap-2 mb-3">
-            <QrCode className="h-5 w-5 text-primary" /> Codes de pointage utilisés
-          </h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="border border-primary/20 bg-primary/5 rounded-xl p-4 text-center">
-              <p className="text-xs font-semibold text-primary uppercase tracking-wide mb-2">Code arrivée</p>
-              <p className="text-2xl font-mono font-black text-foreground tracking-[0.3em] mb-3">
-                {codes.code_arrivee.slice(0, 3)} {codes.code_arrivee.slice(3)}
-              </p>
-              <QRCodeSVG value={codes.code_arrivee} size={100} level="M" />
-            </div>
-            <div className="border border-muted-foreground/20 bg-muted/30 rounded-xl p-4 text-center">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Code départ</p>
-              <p className="text-2xl font-mono font-black text-foreground tracking-[0.3em] mb-3">
-                {codes.code_depart.slice(0, 3)} {codes.code_depart.slice(3)}
-              </p>
-              <QRCodeSVG value={codes.code_depart} size={100} level="M" />
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Code de pointage rotatif (système ②) — l'ancien affichage statique est retiré. */}
+      <div className="mb-6">
+        <AffichageCodeRotatifEtab missionId={missionId} />
+      </div>
 
       {/* Détail des pointages par jour */}
       <h2 className="text-base font-bold text-foreground mb-3 flex items-center gap-2">
