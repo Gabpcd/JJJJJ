@@ -215,7 +215,7 @@ export function ObligationsFinancieresContent() {
                     case 'mission':
                       return (
                         <div>
-                          <p className="font-medium text-foreground line-clamp-1">{m.intitule}</p>
+                          <p className="font-medium text-foreground line-clamp-1" title={m.intitule}>{m.intitule}</p>
                           {m.a_paiement_conteste && (
                             <span className="text-[10px] text-destructive inline-flex items-center gap-0.5">
                               <AlertTriangle className="h-3 w-3" /> Paiement contesté
@@ -282,7 +282,7 @@ export function ObligationsFinancieresContent() {
                 renduCellule={(p, col) => {
                   switch (col.cle) {
                     case 'mission':
-                      return <span className="font-medium text-foreground line-clamp-1">{p.mission_intitule}</span>;
+                      return <span className="font-medium text-foreground line-clamp-1" title={p.mission_intitule}>{p.mission_intitule}</span>;
                     case 'soignant':
                       return <span className="text-sm">{p.soignant_nom}{p.soignant_profession ? ` · ${p.soignant_profession}` : ''}</span>;
                     case 'date':
@@ -305,7 +305,7 @@ export function ObligationsFinancieresContent() {
                   <div className="space-y-2">
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0 flex-1">
-                        <p className="text-sm font-medium text-foreground line-clamp-1">{p.mission_intitule}</p>
+                        <p className="text-sm font-medium text-foreground line-clamp-1" title={p.mission_intitule}>{p.mission_intitule}</p>
                         <p className="text-xs text-muted-foreground">{p.soignant_nom}{p.soignant_profession ? ` · ${p.soignant_profession}` : ''}</p>
                         {p.date_paiement && (
                           <p className="text-[11px] text-muted-foreground">

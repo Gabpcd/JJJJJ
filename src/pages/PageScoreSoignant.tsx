@@ -172,7 +172,7 @@ export function ScoreContent() {
                   <div key={ev.id} className="card-base flex flex-col sm:flex-row sm:items-center justify-between gap-3 py-3">
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-foreground">{ev.type_evenement}</p>
-                      {ev.motif && <p className="text-xs text-muted-foreground truncate">{ev.motif}</p>}
+                      {ev.motif && <p className="text-xs text-muted-foreground truncate" title={ev.motif}>{ev.motif}</p>}
                       <p className="text-[11px] text-muted-foreground mt-0.5">
                         {format(new Date(ev.cree_le), "d MMMM yyyy 'à' HH:mm", { locale: fr })}
                       </p>

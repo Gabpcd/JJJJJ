@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Scale, Clock, CheckCircle2, FileText } from 'lucide-react';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { LayoutApp } from '@/components/LayoutApp';
@@ -48,6 +49,7 @@ export default function MesReclamationsEtab() {
 }
 
 function MesReclamationsContent() {
+  const navigate = useNavigate();
   const { afficherNotification } = useNotification();
   const [loading, setLoading] = useState(true);
   const [reclamations, setReclamations] = useState<Reclamation[]>([]);
@@ -123,6 +125,7 @@ function MesReclamationsContent() {
           mascotte="empty"
           titre="Aucune réclamation"
           description="Contestez un événement de score depuis la page « Mon score »."
+          cta={{ label: 'Aller à Mon score', onClick: () => navigate('/etablissement/score') }}
         />
       ) : (
         <ul className="space-y-3">
