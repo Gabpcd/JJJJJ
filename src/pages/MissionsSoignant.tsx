@@ -43,8 +43,11 @@ export default function MissionsSoignant() {
   const [searchParams] = useSearchParams();
   const { user } = useAuth();
   const ongletParam = searchParams.get('onglet');
+  // Unification recherche (Session) : l'onglet « Disponibles » dupliquait
+  // /recherche-missions → retiré. Cette page = « Mes missions » (à venir + historique).
+  // La recherche de missions disponibles vit uniquement dans /recherche-missions.
   const [onglet, setOnglet] = useState<Onglet>(
-    ongletParam === 'mes_missions' || ongletParam === 'historique' ? ongletParam : 'disponibles'
+    ongletParam === 'historique' ? 'historique' : 'mes_missions'
   );
   const [soignant, setSoignant] = useState<SoignantData | null>(null);
   const [missions, setMissions] = useState<any[]>([]);
@@ -212,16 +215,15 @@ export default function MissionsSoignant() {
   }, [missionsAvecDistance, onglet]);
 
   const onglets: { id: Onglet; label: string; count?: number }[] = [
-    { id: 'disponibles', label: 'Disponibles' },
-    { id: 'mes_missions', label: 'Mes missions' },
+    { id: 'mes_missions', label: 'À venir' },
     { id: 'historique', label: 'Historique' },
   ];
 
   return (
     <LayoutApp role="SOIGNANT">
-      <h1 className="text-xl font-bold text-foreground mb-4">Missions</h1>
+      <h1 className="text-xl font-bold text-foreground mb-4">Mes missions</h1>
 
-      {/* Accès rapide aux 2 modes de découverte (toujours visibles) */}
+      {/* Accès rapide à la recherche de nouvelles missions (canonique) */}
       <div className="grid grid-cols-2 gap-3 mb-4">
         <button
           onClick={() => navigate('/soignant/swipe-missions')}
