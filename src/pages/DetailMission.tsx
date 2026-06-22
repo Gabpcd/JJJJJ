@@ -14,7 +14,7 @@ import { ChatConversation } from '@/components/ChatConversation';
 import { DecompositionFinanciere } from '@/components/DecompositionFinanciere';
 import { FactureHonorairesCard } from '@/components/FactureHonorairesCard';
 import { BlocContratTravailMission } from '@/components/BlocContratTravailMission';
-import { CodesPointageMission } from '@/components/CodesPointageMission';
+import { AffichageCodeRotatifEtab } from '@/components/pointage/AffichageCodeRotatifEtab';
 import { StripeEmbeddedCheckout } from '@/components/StripeEmbeddedCheckout';
 import { ModalConfirmation } from '@/components/ModalConfirmation';
 // Sprint 8 ter-G PR 1 — modales chargées à la demande (code splitting)
@@ -894,7 +894,7 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
                 )
               )}
               {(m.statut === 'ASSIGNEE' || m.statut === 'EN_COURS') && (
-                <CodesPointageMission missionId={m.id} />
+                <AffichageCodeRotatifEtab missionId={m.id} />
               )}
               {isAdmin && (
                 <button

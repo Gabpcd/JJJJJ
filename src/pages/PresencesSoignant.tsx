@@ -5,7 +5,7 @@ import { usePageTitle } from '@/hooks/usePageTitle';
 import { useNavigate } from 'react-router-dom';
 import { LayoutApp } from '@/components/LayoutApp';
 import { ChargementPage } from '@/components/ChargementPage';
-import { CartePointage } from '@/components/CartePointage';
+import { PointageRotatifSoignant } from '@/components/pointage/PointageRotatifSoignant';
 import { SaisieCodePointage } from '@/components/SaisieCodePointage';
 import { BandeauHorsLigne } from '@/components/BandeauHorsLigne';
 import { PanneauContestation } from '@/components/PanneauContestation';
@@ -463,14 +463,15 @@ export default function PresencesSoignant() {
               {missionsEnCours.map((m: any) => {
                 const presence = m.presences?.[0] || null;
                 return (
-                  <CartePointage
-                    key={m.id}
-                    mission={m}
-                    presence={presence}
-                    onPointerArrivee={() => pointerArrivee(m.id)}
-                    onPointerDepart={() => presence ? pointerDepart(presence.id, m.id) : Promise.resolve()}
-                    onRecharger={charger}
-                  />
+                  <div key={m.id} className="space-y-2">
+                    <div className="card-base">
+                      <h3 className="font-semibold text-sm text-foreground truncate" title={m.intitule}>{m.intitule}</h3>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        🏥 {m.etablissements?.nom}{m.debut_le ? ` · ${format(new Date(m.debut_le), "EEE d MMM HH'h'mm", { locale: fr })}` : ''}
+                      </p>
+                    </div>
+                    <PointageRotatifSoignant missionId={m.id} />
+                  </div>
                 );
               })}
             </div>
@@ -519,14 +520,15 @@ export default function PresencesSoignant() {
                 }
 
                 return (
-                  <CartePointage
-                    key={m.id}
-                    mission={m}
-                    presence={presence}
-                    onPointerArrivee={() => pointerArrivee(m.id)}
-                    onPointerDepart={() => presence ? pointerDepart(presence.id, m.id) : Promise.resolve()}
-                    onRecharger={charger}
-                  />
+                  <div key={m.id} className="space-y-2">
+                    <div className="card-base">
+                      <h3 className="font-semibold text-sm text-foreground truncate" title={m.intitule}>{m.intitule}</h3>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        🏥 {m.etablissements?.nom}{m.debut_le ? ` · ${format(new Date(m.debut_le), "EEE d MMM HH'h'mm", { locale: fr })}` : ''}
+                      </p>
+                    </div>
+                    <PointageRotatifSoignant missionId={m.id} />
+                  </div>
                 );
               })}
             </div>
