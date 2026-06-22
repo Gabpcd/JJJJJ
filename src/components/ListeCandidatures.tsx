@@ -193,7 +193,7 @@ export function ListeCandidatures({ missionId, missionProfession, missionSpecial
           <p className="text-sm font-semibold text-foreground">En attente ({enAttente.length})</p>
           {enAttente.map((c: any) => (
             <div key={c.id} className="card-base border-primary/20">
-              <div className="flex items-start justify-between gap-3">
+              <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
                 <div className="flex-1 min-w-0">
                   <p className="font-semibold text-sm text-foreground flex items-center gap-1.5 flex-wrap">
                     👤 {c.soignant?.prenom} {c.soignant?.nom}
@@ -265,11 +265,11 @@ export function ListeCandidatures({ missionId, missionProfession, missionSpecial
                     </div>
                   )}
                 </div>
-                <div className="flex gap-2 shrink-0">
+                <div className="flex gap-2 shrink-0 w-full sm:w-auto">
                   <button
                     onClick={() => traiterCandidature(c.id, 'ACCEPTEE')}
                     disabled={traitement === c.id}
-                    className="btn-primary text-sm py-2.5 px-4 min-h-[44px] flex items-center gap-1 disabled:opacity-50"
+                    className="btn-primary text-sm py-2.5 px-4 min-h-[44px] flex items-center justify-center gap-1 disabled:opacity-50 flex-1 sm:flex-none"
                     aria-label="Accepter cette candidature"
                   >
                     <CheckCircle className="h-4 w-4" />
@@ -278,7 +278,7 @@ export function ListeCandidatures({ missionId, missionProfession, missionSpecial
                   <button
                     onClick={() => traiterCandidature(c.id, 'REFUSEE')}
                     disabled={traitement === c.id}
-                    className="btn-danger text-sm py-2.5 px-4 min-h-[44px] flex items-center gap-1 disabled:opacity-50"
+                    className="btn-danger text-sm py-2.5 px-4 min-h-[44px] flex items-center justify-center gap-1 disabled:opacity-50 flex-1 sm:flex-none"
                     aria-label="Refuser cette candidature"
                   >
                     <XCircle className="h-4 w-4" />

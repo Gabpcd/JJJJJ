@@ -182,6 +182,11 @@ export default function DashboardSoignant() {
 
   return (
     <LayoutApp role="SOIGNANT">
+      {/* Checklist d'activation EN PREMIER pour un profil incomplet (elle se
+          masque seule — return null — quand le profil est complet, donc aucun
+          coût pour un soignant activé qui voit alors directement le CTA). */}
+      <ChecklistActivation state={activation} className="mb-4" />
+
       {/* ═══ ZONE 1 : HERO + CTA (ce que le soignant voit en premier) ═══ */}
 
       {/* Header Y2K compact : mascotte + nom + chips gamification */}
@@ -286,9 +291,6 @@ export default function DashboardSoignant() {
       </SectionErrorBoundary>
 
       {/* ═══ ZONE 3 : ALERTES & ADMIN (repoussées sous le contenu utile) ═══ */}
-
-      {/* Checklist d'activation (absorbe les docs/profil) */}
-      <ChecklistActivation state={activation} className="mb-4" />
 
       {!activation.visible && soignant && (
         <div className="mb-4">

@@ -7,6 +7,7 @@
 import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
+import { useOuvrirConversation } from '@/hooks/useOuvrirConversation';
 import { Calendar, Euro, MessageCircle, Sparkles, TrendingUp } from 'lucide-react';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { LayoutApp } from '@/components/LayoutApp';
@@ -58,6 +59,7 @@ function formatDate(iso: string | null): string {
 export default function MesMatches() {
   usePageTitle('Mes matches');
   const navigate = useNavigate();
+  const ouvrirConversation = useOuvrirConversation('/soignant/messagerie');
   const [filtre, setFiltre] = useState<StatutFilter>('tous');
 
   const { data, isLoading } = useQuery({
@@ -215,7 +217,9 @@ export default function MesMatches() {
                       <BoutonY2K
                         size="sm"
                         variant="ghost"
-                        onClick={() => navigate('/soignant/messagerie')}
+                        onClick={() => m.etablissement_id
+                          ? ouvrirConversation(m.etablissement_id, m.mission_id, true)
+                          : navigate('/soignant/messagerie')}
                         iconeGauche={<MessageCircle className="h-4 w-4" />}
                       >
                         Conversation
