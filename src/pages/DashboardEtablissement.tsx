@@ -7,7 +7,7 @@ import { logger } from '@/lib/logger';
 import { SkeletonDashboard } from '@/components/SkeletonCard';
 import { FadeInView } from '@/components/FadeInView';
 import { useNavigate } from 'react-router-dom';
-import { Briefcase, PlayCircle, CheckCircle, ClipboardList, FileText, Users, Star, ClipboardCheck, ShieldAlert, CreditCard, BarChart3, ChevronDown } from 'lucide-react';
+import { Briefcase, PlayCircle, CheckCircle, ClipboardList, FileText, Users, ClipboardCheck, ShieldAlert, CreditCard, BarChart3, ChevronDown } from 'lucide-react';
 import { LayoutApp } from '@/components/LayoutApp';
 import { CarteKPIY2K } from '@/components/y2k/CarteKPIY2K';
 import { CarteMission } from '@/components/CarteMission';
@@ -535,17 +535,10 @@ export default function DashboardEtablissement() {
         </FadeInView>
       </div>
 
-      {/* KPI row 2 — Candidatures, Soignants ce mois, Impayés global */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-6">
-        <FadeInView delay={200}>
-          <CarteKPIY2K
-            icone={<Star className="h-4 w-4" />}
-            valeur={stats.candidatures_en_attente}
-            label="Candidatures en attente"
-            variant="default"
-            onClick={() => navigate('/etablissement/missions?statut=OUVERTE')}
-          />
-        </FadeInView>
+      {/* KPI row 2 — Soignants ce mois + Impayés. « Candidatures en attente »
+          retirée : doublon (même destination que « Missions ouvertes » et déjà
+          surfacée dans la carte « À faire maintenant »). */}
+      <div className="grid grid-cols-2 gap-3 mb-6">
         <FadeInView delay={250}>
           <CarteKPIY2K
             icone={<Users className="h-4 w-4" />}
