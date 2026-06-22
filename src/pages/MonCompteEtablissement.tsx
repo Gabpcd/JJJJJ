@@ -6,9 +6,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Building2 } from 'lucide-react';
 import {
-  CreditCard, FileText, BarChart3, Scale, ClipboardCheck,
-  Users, Gift, Settings, LogOut,
-  User, TrendingUp, Star, Landmark,
+  CreditCard, Scale, Settings, LogOut, User, Star,
 } from 'lucide-react';
 
 export default function MonCompteEtablissement() {
@@ -24,41 +22,17 @@ export default function MonCompteEtablissement() {
       .then(({ data }) => { if (data) setEtab(data as any); });
   }, [user]);
 
-  // Menu réduit au strict nécessaire. Présences + Missions + Messages = déjà
-  // dans la bottom nav. Pool urgence = accessible depuis Missions. Parrainage +
-  // API = rangés dans Paramètres. Planning = accessible depuis l'Accueil.
+  // Menu = ton COMPTE. Tout le reste est contextuel (barre du bas, dashboard,
+  // fiche mission). Missions + Présences + Messages = bottom nav. Contrats /
+  // annuaire / pool urgence = depuis la fiche mission ou la liste missions.
   const sections: SectionReglages[] = [
     {
-      titre: 'Mon établissement',
+      titre: '',
       lignes: [
-        { icone: User, label: 'Profil', route: '/etablissement/profil' },
-        { icone: FileText, label: 'Contrats', route: '/etablissement/contrats' },
-        { icone: ClipboardCheck, label: 'Présences à valider', route: '/etablissement/presences' },
-        { icone: Users, label: 'Annuaire soignants', route: '/etablissement/soignants' },
-        { icone: Users, label: 'Mon équipe', route: '/etablissement/equipe' },
-      ],
-    },
-    {
-      titre: 'Qualité',
-      lignes: [
-        { icone: Star, label: 'Évaluations à faire', route: '/etablissement/evaluations-a-faire' },
-        { icone: Scale, label: 'Litiges & contestations', route: '/etablissement/litiges' },
-        { icone: Landmark, label: 'Score établissement', route: '/etablissement/score' },
-      ],
-    },
-    {
-      titre: 'Finances & analyse',
-      lignes: [
+        { icone: User, label: 'Mon établissement', route: '/etablissement/profil' },
         { icone: CreditCard, label: 'Facturation', route: '/etablissement/facturation' },
-        { icone: BarChart3, label: 'Tableau RH', route: '/etablissement/rh' },
-        { icone: TrendingUp, label: 'Analytics', route: '/etablissement/analytics' },
-      ],
-    },
-    {
-      titre: 'Paramètres',
-      lignes: [
+        { icone: Star, label: 'Qualité', route: '/etablissement/evaluations-a-faire' },
         { icone: Settings, label: 'Paramètres', route: '/etablissement/parametres' },
-        { icone: Gift, label: 'Parrainage', route: '/etablissement/parrainage' },
         { icone: LogOut, label: 'Se déconnecter', onClick: () => deconnexion(), variante: 'danger' as const, sansChevron: true },
       ],
     },
