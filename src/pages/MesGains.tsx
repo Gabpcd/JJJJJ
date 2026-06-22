@@ -290,6 +290,7 @@ export function MesGainsApercuContent() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <input
             type="text"
+            aria-label="Rechercher une mission ou un établissement"
             value={recherche}
             onChange={e => setRecherche(e.target.value)}
             placeholder="Rechercher une mission, un établissement..."
@@ -329,7 +330,7 @@ export function MesGainsApercuContent() {
                   </div>
                   {/* Mission info */}
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-foreground truncate">{m.intitule}</p>
+                    <p className="text-sm font-medium text-foreground truncate" title={m.intitule}>{m.intitule}</p>
                     <p className="text-xs text-muted-foreground">
                       🏥 {m.etablissements?.nom || '—'}
                       {m.service && ` · ${m.service}`}

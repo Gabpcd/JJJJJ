@@ -146,7 +146,7 @@ export function ReclamationsContent({ role: _role }: { role: 'SOIGNANT' | 'ADMIN
                 <div key={r.id} className="card-base p-4 space-y-2">
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex-1 min-w-0">
-                      <p className="font-semibold text-foreground truncate">{r.sujet}</p>
+                      <p className="font-semibold text-foreground truncate" title={r.sujet}>{r.sujet}</p>
                       <p className="text-xs text-muted-foreground">{catLabel} · {format(new Date(r.cree_le), "d MMM yyyy 'à' HH:mm", { locale: fr })}</p>
                     </div>
                     <div className={`flex items-center gap-1 text-xs font-medium ${statut.color} whitespace-nowrap`}>
