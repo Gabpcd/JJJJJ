@@ -382,14 +382,19 @@ export default function DashboardEtablissement() {
   // F6 — « À faire maintenant » : on consolide les ~6 bannières concurrentes en
   // une seule carte qui ne surface QUE les 1-2 actions prioritaires.
   // Ordre de priorité : blocage compte/vérif > candidatures > litiges > évaluations > messages.
-  interface ActionAFaire { cle: string; emoji: string; label: string; cta: string; onClick: () => void; }
+  interface ActionAFaire { cle: string; emoji: string; label: string; sousTexte?: string; urgent?: boolean; cta: string; onClick: () => void; }
   const actionsAFaire: ActionAFaire[] = [];
   if (stats.candidatures_en_attente > 0) {
+    const n = stats.candidatures_en_attente;
     actionsAFaire.push({
       cle: 'candidatures',
-      emoji: '🔔',
-      label: `${stats.candidatures_en_attente} candidature${stats.candidatures_en_attente > 1 ? 's' : ''} à traiter`,
-      cta: 'Traiter',
+      emoji: '⏱️',
+      // Loss-aversion : un soignant non répondu peut accepter une autre mission
+      // → la mission ne se remplit pas. On pousse à répondre vite.
+      label: `${n} soignant${n > 1 ? 's' : ''} attend${n > 1 ? 'ent' : ''} votre réponse`,
+      sousTexte: 'Répondez vite — ils peuvent accepter ailleurs',
+      urgent: true,
+      cta: 'Répondre',
       onClick: () => navigate('/etablissement/missions?statut=OUVERTE'),
     });
   }
@@ -466,11 +471,18 @@ export default function DashboardEtablissement() {
                 <button
                   key={a.cle}
                   onClick={a.onClick}
-                  className="w-full flex items-center justify-between gap-3 p-2.5 rounded-xl bg-muted/40 hover:bg-muted/70 transition-colors text-left"
+                  className={`w-full flex items-center justify-between gap-3 p-2.5 rounded-xl transition-colors text-left ${
+                    a.urgent
+                      ? 'bg-primary/10 hover:bg-primary/15 border border-primary/30'
+                      : 'bg-muted/40 hover:bg-muted/70'
+                  }`}
                 >
-                  <span className="text-sm font-medium text-foreground flex items-center gap-2 min-w-0">
-                    <span aria-hidden="true">{a.emoji}</span>
-                    <span className="truncate">{a.label}</span>
+                  <span className="flex items-center gap-2 min-w-0">
+                    <span aria-hidden="true" className="shrink-0">{a.emoji}</span>
+                    <span className="min-w-0">
+                      <span className="block text-sm font-medium text-foreground truncate">{a.label}</span>
+                      {a.sousTexte && <span className="block text-[11px] text-muted-foreground truncate">{a.sousTexte}</span>}
+                    </span>
                   </span>
                   <span className="text-xs font-semibold text-primary shrink-0">{a.cta} →</span>
                 </button>
