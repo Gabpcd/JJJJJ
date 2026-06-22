@@ -28,7 +28,8 @@ export default function Parametres() {
         onValueChange={(v) => setSearchParams({ tab: v }, { replace: true })}
         className="w-full"
       >
-        <TabsList className="grid grid-cols-5 w-full mb-6">
+        <div className="overflow-x-auto -mx-1 px-1 mb-6">
+        <TabsList className="w-max">
           <TabsTrigger value="profil" className="flex items-center gap-1.5 text-xs sm:text-sm">
             <User className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
             <span className="hidden sm:inline">Profil</span>
@@ -50,6 +51,7 @@ export default function Parametres() {
             <span className="hidden sm:inline">Exclusions</span>
           </TabsTrigger>
         </TabsList>
+        </div>
 
         <TabsContent value="profil" className="mt-0">
           <ProfilEtablissementContent />
