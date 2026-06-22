@@ -480,6 +480,7 @@ export default function PresencesSoignant() {
               mascotte="empty"
               titre="Aucune mission en cours"
               description="Les missions avec une arrivée pointée apparaîtront ici."
+              cta={{ label: 'Trouver une mission', onClick: () => navigate('/soignant/recherche-missions') }}
             />
           )}
         </TabsContent>
@@ -535,6 +536,7 @@ export default function PresencesSoignant() {
               mascotte="empty"
               titre="Aucune mission aujourd'hui"
               description="Vos missions assignées apparaîtront ici le jour J pour le pointage."
+              cta={{ label: 'Voir mon planning', onClick: () => navigate('/soignant/planning') }}
             />
           )}
 
@@ -648,7 +650,7 @@ export default function PresencesSoignant() {
               })}
             </div>
           ) : (
-            <EmptyState icone={<History />} mascotte="empty" titre="Aucune présence enregistrée" description="Votre historique de pointages apparaîtra ici." />
+            <EmptyState icone={<History />} mascotte="empty" titre="Aucune présence enregistrée" description="Votre historique de pointages apparaîtra ici." cta={{ label: 'Trouver une mission', onClick: () => navigate('/soignant/recherche-missions') }} />
           )}
         </TabsContent>
       </Tabs>

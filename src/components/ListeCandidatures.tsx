@@ -6,6 +6,7 @@ import { ModalPaiementCommission } from '@/components/ModalPaiementCommission';
 import { PopoverScoreSoignant } from '@/components/score/PopoverScoreSoignant';
 import { getLabelProfession } from '@/lib/constantes';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 
 function scoreBadge(score: number) {
   if (score >= 70) return 'bg-success/10 text-success';
@@ -266,24 +267,29 @@ export function ListeCandidatures({ missionId, missionProfession, missionSpecial
                   )}
                 </div>
                 <div className="flex gap-2 shrink-0 w-full sm:w-auto">
-                  <button
+                  <BoutonY2K
+                    size="sm"
+                    variant="primary"
                     onClick={() => traiterCandidature(c.id, 'ACCEPTEE')}
                     disabled={traitement === c.id}
-                    className="btn-primary text-sm py-2.5 px-4 min-h-[44px] flex items-center justify-center gap-1 disabled:opacity-50 flex-1 sm:flex-none"
+                    loading={traitement === c.id}
+                    iconeGauche={<CheckCircle className="h-4 w-4" />}
+                    className="flex-1 sm:flex-none"
                     aria-label="Accepter cette candidature"
                   >
-                    <CheckCircle className="h-4 w-4" />
                     Accepter
-                  </button>
-                  <button
+                  </BoutonY2K>
+                  <BoutonY2K
+                    size="sm"
+                    variant="destructive"
                     onClick={() => traiterCandidature(c.id, 'REFUSEE')}
                     disabled={traitement === c.id}
-                    className="btn-danger text-sm py-2.5 px-4 min-h-[44px] flex items-center justify-center gap-1 disabled:opacity-50 flex-1 sm:flex-none"
+                    iconeGauche={<XCircle className="h-4 w-4" />}
+                    className="flex-1 sm:flex-none"
                     aria-label="Refuser cette candidature"
                   >
-                    <XCircle className="h-4 w-4" />
                     Refuser
-                  </button>
+                  </BoutonY2K>
                 </div>
               </div>
             </div>

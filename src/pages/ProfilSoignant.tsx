@@ -258,6 +258,8 @@ export default function ProfilSoignant() {
 
   if (loading) return <LayoutApp role="SOIGNANT"><ChargementPage /></LayoutApp>;
 
+  const profilComplet = resumeCompletion.peut_candidater;
+
   return (
     <LayoutApp role="SOIGNANT">
       <div className="flex items-center gap-4 mb-6">
@@ -278,7 +280,17 @@ export default function ProfilSoignant() {
         </div>
       </div>
 
-      {noteMoyenne && noteMoyenne.total > 0 && (
+      {!profilComplet && (
+        <div className="rounded-xl border-2 border-primary/30 bg-primary/5 p-4 mb-6 flex items-start gap-3">
+          <span className="text-xl shrink-0">🎯</span>
+          <div>
+            <p className="font-semibold text-foreground">Complétez votre profil pour postuler</p>
+            <p className="text-sm text-muted-foreground">Remplissez les champs ci-dessous — 2 minutes suffisent.</p>
+          </div>
+        </div>
+      )}
+
+      {profilComplet && noteMoyenne && noteMoyenne.total > 0 && (
         <div className="card-base mb-6">
           <h2 className="text-base font-semibold text-foreground mb-2">Évaluations reçues</h2>
           <p className="text-lg font-bold text-foreground">⭐ {noteMoyenne.moyenne.toFixed(1)}/5 — {noteMoyenne.total} évaluation{noteMoyenne.total > 1 ? 's' : ''}</p>
@@ -298,7 +310,7 @@ export default function ProfilSoignant() {
         </div>
       )}
 
-      {badgeStats && (
+      {profilComplet && badgeStats && (
         <div className="max-w-2xl mb-6">
           <BadgesGamification stats={badgeStats} />
         </div>

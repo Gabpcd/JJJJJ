@@ -569,7 +569,7 @@ export default function DashboardSoignant() {
               </Suspense>
             ) : (
               <div className="mb-6">
-                <EmptyState illustration={<IllustrationTirelire />} titre="Pas encore de gains" description="Vos gains apparaîtront ici après votre première mission terminée." />
+                <EmptyState illustration={<IllustrationTirelire />} titre="Pas encore de gains" description="Vos gains apparaîtront ici après votre première mission terminée." cta={{ label: 'Trouver une mission', onClick: () => navigate('/soignant/recherche-missions') }} />
               </div>
             )}
           </FadeInView>

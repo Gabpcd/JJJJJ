@@ -362,7 +362,8 @@ export default function MissionsSoignant() {
               </>
             ) : (
               <EmptyState icone={<History />} mascotte="empty" titre="Aucune mission dans l'historique"
-                description="Vos missions terminées et annulées apparaîtront ici." />
+                description="Vos missions terminées et annulées apparaîtront ici."
+                cta={{ label: 'Trouver une mission', onClick: () => navigate('/soignant/recherche-missions') }} />
             )
           )}
 

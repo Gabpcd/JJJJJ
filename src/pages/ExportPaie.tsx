@@ -286,7 +286,7 @@ export default function ExportPaie() {
           <p className="text-xs text-muted-foreground px-3 py-2">{missions.length} missions salariées · cliquez sur une ligne pour voir le détail des pointages</p>
         </div>
       ) : (
-        <EmptyState icone={<FileSpreadsheet />} mascotte="empty" titre="Aucune mission salariée terminée" description={`Aucune mission avec bulletin de paie en ${moisLabel}.`} />
+        <EmptyState icone={<FileSpreadsheet />} mascotte="empty" titre="Aucune mission salariée terminée" description={`Aucune mission avec bulletin de paie en ${moisLabel}.`} cta={{ label: 'Trouver une mission', onClick: () => navigate('/soignant/recherche-missions') }} />
       )}
 
       <p className="text-xs text-muted-foreground italic mt-4">

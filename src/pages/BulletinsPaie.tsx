@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { FileText, Download, Loader2, X } from 'lucide-react';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { LayoutApp } from '@/components/LayoutApp';
@@ -48,6 +49,7 @@ export default function BulletinsPaie() {
 }
 
 export function BulletinsPaieContent() {
+  const navigate = useNavigate();
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [bulletins, setBulletins] = useState<BulletinRow[]>([]);
@@ -166,7 +168,7 @@ export function BulletinsPaieContent() {
 
         {(() => {
           const etatVide = bulletins.length === 0
-            ? <EmptyState icone={<FileText />} mascotte="empty" titre="Aucun bulletin de paie pour le moment" description="Les bulletins apparaîtront ici dès que vos missions salariées seront terminées." />
+            ? <EmptyState icone={<FileText />} mascotte="empty" titre="Aucun bulletin de paie pour le moment" description="Les bulletins apparaîtront ici dès que vos missions salariées seront terminées." cta={{ label: 'Trouver une mission', onClick: () => navigate('/soignant/recherche-missions') }} />
             : <EmptyState icone={<FileText />} mascotte="thinking" titre="Aucun bulletin ne correspond aux filtres" cta={{ label: 'Réinitialiser les filtres', onClick: reinitialiserFiltres, variant: 'secondary' }} compact />;
 
           const colonnes: ColonneTableau<BulletinRow>[] = [
