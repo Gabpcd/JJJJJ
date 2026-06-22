@@ -819,7 +819,8 @@ export default function FacturationEtablissement() {
                   </button>
                   {historiqueOuvert && (
                     <div className="mt-2">
-                      <div className="overflow-x-auto scroll-hint">
+                      {/* Desktop table */}
+                      <div className="hidden md:block overflow-x-auto">
                         <table className="w-full text-sm">
                           <thead>
                             <tr className="border-b text-left text-muted-foreground">
@@ -887,6 +888,44 @@ export default function FacturationEtablissement() {
                           </tbody>
                         </table>
                       </div>
+                      {/* Mobile cards */}
+                      <div className="md:hidden space-y-2">
+                        {facturesCommissionHistorique.map((f: any) => (
+                          <div
+                            key={f.facture_id}
+                            onClick={() => navigate(`/etablissement/facturation/${f.facture_id}`)}
+                            className="rounded-lg border bg-card p-3 cursor-pointer active:bg-muted/40 transition-colors"
+                          >
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="text-sm font-medium text-primary">{f.numero_facture}</span>
+                              {f.statut === 'PAYEE' ? (
+                                <BadgeY2K variant="success">Payée</BadgeY2K>
+                              ) : (
+                                <BadgeY2K variant="info" className="bg-muted text-muted-foreground border-muted">{f.statut}</BadgeY2K>
+                              )}
+                            </div>
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="text-lg font-semibold">{fmt(f.montant_ttc)}</span>
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                className="h-9 w-9"
+                                title="Télécharger la facture PDF"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  telechargerFactureCommissionPDF(f.facture_id);
+                                }}
+                              >
+                                <Download className="h-4 w-4 text-muted-foreground" />
+                              </Button>
+                            </div>
+                            <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                              <span>{f.date_emission && new Date(f.date_emission).toLocaleDateString('fr-FR')}</span>
+                              <span>{f.nombre_missions ?? '—'} mission{(f.nombre_missions ?? 0) > 1 ? 's' : ''}</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
                       <p className="text-xs text-muted-foreground mt-3">
                         Affiche les 10 dernières factures payées.
                       </p>
@@ -912,7 +951,8 @@ export default function FacturationEtablissement() {
                       {generatingFacture ? 'Génération…' : 'Générer la facture du mois'}
                     </BoutonY2K>
                   </div>
-                  <div className="overflow-x-auto scroll-hint">
+                  {/* Desktop table */}
+                  <div className="hidden md:block overflow-x-auto">
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="border-b text-left text-muted-foreground">
@@ -935,6 +975,24 @@ export default function FacturationEtablissement() {
                         ))}
                       </tbody>
                     </table>
+                  </div>
+                  {/* Mobile cards */}
+                  <div className="md:hidden space-y-2">
+                    {missionsNonFacturees.map((m: any) => (
+                      <div
+                        key={m.id}
+                        onClick={() => navigate(`/etablissement/missions/${m.id}`)}
+                        className="rounded-lg border bg-card p-3 cursor-pointer active:bg-muted/40 transition-colors"
+                      >
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-sm font-medium text-primary">{m.intitule}</span>
+                          <span className="text-sm font-semibold">{fmt(m.montant_commission_ht)}</span>
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          Fin : {m.fin_le && new Date(m.fin_le).toLocaleDateString('fr-FR')}
+                        </p>
+                      </div>
+                    ))}
                   </div>
                   <p className="text-xs text-muted-foreground mt-2">
                     Commissions non encore facturées à votre établissement. Le bouton génère une facture mensuelle groupée
@@ -1021,7 +1079,8 @@ export default function FacturationEtablissement() {
                     <Banknote className="h-4 w-4 text-info" />
                     Historique des prélèvements ({prelevements.length})
                   </h3>
-                  <div className="overflow-x-auto scroll-hint">
+                  {/* Desktop table */}
+                  <div className="hidden md:block overflow-x-auto">
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="border-b text-left text-muted-foreground">
@@ -1052,6 +1111,29 @@ export default function FacturationEtablissement() {
                         ))}
                       </tbody>
                     </table>
+                  </div>
+                  {/* Mobile cards */}
+                  <div className="md:hidden space-y-2">
+                    {prelevements.map((p: any) => (
+                      <div
+                        key={p.id}
+                        onClick={() => p.mission_id ? navigate(`/etablissement/missions/${p.mission_id}`) : undefined}
+                        className={`rounded-lg border bg-card p-3 transition-colors ${p.mission_id ? 'cursor-pointer active:bg-muted/40' : 'cursor-default'}`}
+                      >
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-sm font-medium text-primary">{(p.missions as any)?.intitule || '—'}</span>
+                          {p.statut === 'PRELEVE' ? (
+                            <BadgeY2K variant="success">Prélevé</BadgeY2K>
+                          ) : (
+                            <BadgeY2K variant="info" className="bg-muted text-muted-foreground border-muted">{p.statut}</BadgeY2K>
+                          )}
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs text-muted-foreground">{p.capture_le && new Date(p.capture_le).toLocaleDateString('fr-FR')}</span>
+                          <span className="text-sm font-semibold">{fmt(p.montant_ttc)}</span>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
               )}
@@ -1087,7 +1169,8 @@ export default function FacturationEtablissement() {
               ) : (
                 <CardY2K noPadding>
                   <CardY2KContent className="pt-4">
-                    <div className="overflow-x-auto scroll-hint">
+                    {/* Desktop table */}
+                    <div className="hidden md:block overflow-x-auto">
                       <table className="w-full text-sm">
                         <thead>
                           <tr className="border-b text-left text-muted-foreground">
@@ -1136,6 +1219,47 @@ export default function FacturationEtablissement() {
                           ))}
                         </tbody>
                       </table>
+                    </div>
+                    {/* Mobile cards */}
+                    <div className="md:hidden space-y-2">
+                      {paiementsConfirmes.map((p: any) => (
+                        <div
+                          key={p.paiement_id}
+                          onClick={() => p.mission_id && navigate(`/etablissement/missions/${p.mission_id}`)}
+                          className="rounded-lg border bg-card p-3 cursor-pointer active:bg-muted/40 transition-colors"
+                        >
+                          <div className="flex items-center justify-between mb-1">
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium truncate">{p.soignant_nom}</p>
+                              <p className="text-xs text-primary truncate">{p.mission_intitule}</p>
+                            </div>
+                            <div className="flex items-center gap-2 shrink-0 ml-2">
+                              <span className="text-sm font-semibold">{fmt(p.montant_net)}</span>
+                              <BadgeY2K variant="success">✅</BadgeY2K>
+                            </div>
+                          </div>
+                          <div className="flex items-center justify-between text-xs text-muted-foreground">
+                            <div className="flex items-center gap-2">
+                              <span>{p.confirme_par_soignant_le && new Date(p.confirme_par_soignant_le).toLocaleDateString('fr-FR')}</span>
+                              {p.reference_virement && <span>{p.reference_virement}</span>}
+                            </div>
+                            {p.facture_honoraires_id && (
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                className="h-8 w-8"
+                                title="Télécharger la facture honoraires PDF"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  telechargerFactureHonorairesPDF(p.facture_honoraires_id);
+                                }}
+                              >
+                                <Download className="h-4 w-4 text-muted-foreground" />
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      ))}
                     </div>
                     <p className="text-[11px] text-muted-foreground mt-3">
                       Les 10 derniers paiements confirmés par le soignant. Cliquez sur une ligne pour voir le détail mission.
