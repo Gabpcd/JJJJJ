@@ -502,8 +502,9 @@ export default function RechercheMissions() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {/* Ville / Code postal */}
             <div className="space-y-1.5">
-              <Label className="text-xs font-medium text-muted-foreground">📍 Ville ou code postal</Label>
+              <Label htmlFor="recherche-ville" className="text-xs font-medium text-muted-foreground">📍 Ville ou code postal</Label>
               <Input
+                id="recherche-ville"
                 value={villeRecherche}
                 onChange={(e) => setVilleRecherche(e.target.value)}
                 placeholder="Ex : Paris, 75001..."
@@ -538,8 +539,9 @@ export default function RechercheMissions() {
 
             {/* Taux horaire min */}
             <div className="space-y-1.5">
-              <Label className="text-xs font-medium text-muted-foreground">Taux horaire minimum (€/h)</Label>
+              <Label htmlFor="recherche-taux-min" className="text-xs font-medium text-muted-foreground">Taux horaire minimum (€/h)</Label>
               <Input
+                id="recherche-taux-min"
                 type="number"
                 min={0}
                 step={1}

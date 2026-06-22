@@ -82,25 +82,25 @@ export default function Telecharger() {
               <div className="flex flex-wrap gap-4 justify-center md:justify-start">
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <a href="#" onClick={(e) => e.preventDefault()} className="inline-block">
+                    <button type="button" aria-label="App Store — bientôt disponible" className="inline-block cursor-default">
                       <svg width="150" height="50" viewBox="0 0 150 50" className="rounded-lg">
                         <rect width="150" height="50" rx="8" className="fill-foreground" />
                         <text x="75" y="18" textAnchor="middle" className="fill-background" fontSize="8" fontFamily="system-ui">Télécharger sur l'</text>
                         <text x="75" y="35" textAnchor="middle" className="fill-background" fontSize="16" fontWeight="600" fontFamily="system-ui">App Store</text>
                       </svg>
-                    </a>
+                    </button>
                   </TooltipTrigger>
                   <TooltipContent>Bientôt disponible</TooltipContent>
                 </Tooltip>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <a href="#" onClick={(e) => e.preventDefault()} className="inline-block">
+                    <button type="button" aria-label="Google Play — bientôt disponible" className="inline-block cursor-default">
                       <svg width="170" height="50" viewBox="0 0 170 50" className="rounded-lg">
                         <rect width="170" height="50" rx="8" className="fill-foreground" />
                         <text x="85" y="18" textAnchor="middle" className="fill-background" fontSize="8" fontFamily="system-ui">Disponible sur</text>
                         <text x="85" y="35" textAnchor="middle" className="fill-background" fontSize="16" fontWeight="600" fontFamily="system-ui">Google Play</text>
                       </svg>
-                    </a>
+                    </button>
                   </TooltipTrigger>
                   <TooltipContent>Bientôt disponible</TooltipContent>
                 </Tooltip>

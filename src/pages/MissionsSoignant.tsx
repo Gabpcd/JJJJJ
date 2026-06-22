@@ -318,7 +318,7 @@ export default function MissionsSoignant() {
                           <BadgeStatut statut={m.statut} />
                           {m.est_urgente && <span className="badge-base bg-destructive/10 text-destructive text-[10px]" aria-label="Urgent">🔥 Urgent</span>}
                         </div>
-                        <h3 className="font-semibold text-sm text-foreground truncate">{m.intitule}</h3>
+                        <h3 className="font-semibold text-sm text-foreground truncate" title={m.intitule}>{m.intitule}</h3>
                         <p className="text-xs text-muted-foreground mt-0.5">
                           🏥 {m.etablissements?.nom}{m.etablissements?.adresse_ville ? ` · ${m.etablissements.adresse_ville}` : ''}
                         </p>

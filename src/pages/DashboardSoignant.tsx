@@ -272,7 +272,7 @@ export default function DashboardSoignant() {
                     <BadgeStatut statut={m.statut} />
                     {m.est_urgente && <span className="badge-base bg-destructive/10 text-destructive text-[10px]">🔥 Urgent</span>}
                   </div>
-                  <h3 className="font-semibold text-sm text-foreground truncate">{m.intitule}</h3>
+                  <h3 className="font-semibold text-sm text-foreground truncate" title={m.intitule}>{m.intitule}</h3>
                   <p className="text-xs text-muted-foreground mt-0.5">
                     🏥 {m.etablissements?.nom}{m.etablissements?.adresse_ville ? ` · ${m.etablissements.adresse_ville}` : ''}
                   </p>
@@ -410,7 +410,7 @@ export default function DashboardSoignant() {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
                           {m.est_urgente && <span className="badge-base bg-destructive text-destructive-foreground text-[10px]">🔥 URGENT</span>}
-                          <h3 className="font-semibold text-sm text-foreground truncate">{m.intitule}</h3>
+                          <h3 className="font-semibold text-sm text-foreground truncate" title={m.intitule}>{m.intitule}</h3>
                         </div>
                         <p className="text-xs text-muted-foreground mt-1">{m.etablissements?.nom} · {m.etablissements?.adresse_ville}</p>
                       </div>
@@ -541,7 +541,7 @@ export default function DashboardSoignant() {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
                           {m.est_urgente && <span className="badge-base bg-destructive text-destructive-foreground text-[10px]">🔥 URGENT</span>}
-                          <h3 className="font-semibold text-sm text-foreground truncate">{m.intitule}</h3>
+                          <h3 className="font-semibold text-sm text-foreground truncate" title={m.intitule}>{m.intitule}</h3>
                         </div>
                         <p className="text-xs text-muted-foreground mt-1">{m.etablissements?.nom} · {m.etablissements?.adresse_ville}</p>
                       </div>

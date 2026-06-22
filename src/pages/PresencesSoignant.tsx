@@ -434,7 +434,7 @@ export default function PresencesSoignant() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <BadgeStatut statut={m.statut} />
-                    <h3 className="font-semibold text-sm text-foreground truncate mt-1">{m.intitule}</h3>
+                    <h3 className="font-semibold text-sm text-foreground truncate mt-1" title={m.intitule}>{m.intitule}</h3>
                     <p className="text-xs text-muted-foreground mt-0.5">
                       🏥 {m.etablissements?.nom}{m.etablissements?.adresse_ville ? ` · ${m.etablissements.adresse_ville}` : ''}
                     </p>

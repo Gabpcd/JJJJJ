@@ -230,7 +230,7 @@ export default function PresencesEtablissement() {
           </div>
         );
       case 'mission':
-        return <span className="text-sm text-muted-foreground line-clamp-1">{p.missions?.intitule || '—'}</span>;
+        return <span className="text-sm text-muted-foreground line-clamp-1" title={p.missions?.intitule || undefined}>{p.missions?.intitule || '—'}</span>;
       case 'date':
         return (
           <span className="text-xs whitespace-nowrap">
