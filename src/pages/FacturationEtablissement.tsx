@@ -811,7 +811,7 @@ export default function FacturationEtablissement() {
                   </button>
                   {historiqueOuvert && (
                     <div className="mt-2">
-                      <div className="overflow-x-auto">
+                      <div className="overflow-x-auto scroll-hint">
                         <table className="w-full text-sm">
                           <thead>
                             <tr className="border-b text-left text-muted-foreground">
