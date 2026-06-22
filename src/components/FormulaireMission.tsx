@@ -304,7 +304,7 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
         p_ip: null, p_navigateur: navigator.userAgent,
       });
 
-      afficherNotification({ type: 'succes', message: 'Mission publiée avec succès !' });
+      afficherNotification({ type: 'succes', message: 'Mission publiée ! Les soignants à proximité sont prévenus 🔔' });
       navigate('/etablissement/missions');
     } finally {
       setPublicationEnCours(false);
@@ -433,7 +433,7 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
           p_ip: null, p_navigateur: navigator.userAgent,
         });
 
-        afficherNotification({ type: 'succes', message: 'Mission publiée avec succès !' });
+        afficherNotification({ type: 'succes', message: 'Mission publiée ! Les soignants à proximité sont prévenus 🔔' });
         setModalRecapOuvert(false);
         navigate('/etablissement/missions');
       }
