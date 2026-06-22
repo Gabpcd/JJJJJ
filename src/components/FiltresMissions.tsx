@@ -34,27 +34,31 @@ export function FiltresMissions({ rayonDefaut, onFiltreChange }: FiltresMissions
 
   return (
     <div className="mb-4">
-      <button
-        onClick={() => setOuvert(!ouvert)}
-        className="flex items-center gap-1 text-xs text-primary font-medium mb-2"
-      >
-        Filtres {ouvert ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-      </button>
+      {/* Filtre rapide toujours visible : « Urgentes » en 1 tap, sans ouvrir le
+          panneau détaillé (parité avec la recherche avancée). */}
+      <div className="flex items-center gap-2 mb-2">
+        <button
+          type="button"
+          onClick={() => maj({ urgentesD_abord: !filtres.urgentesD_abord })}
+          aria-pressed={filtres.urgentesD_abord}
+          className={`shrink-0 inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-semibold transition-snap border ${
+            filtres.urgentesD_abord
+              ? 'bg-gradient-hero text-white border-transparent shadow-md'
+              : 'bg-card text-jolene-bubblegum border-jolene-rose-200 hover:border-jolene-rose-300'
+          }`}
+        >
+          <Flame className="h-3.5 w-3.5" /> Urgentes d'abord
+        </button>
+        <button
+          onClick={() => setOuvert(!ouvert)}
+          className="flex items-center gap-1 text-xs text-primary font-medium ml-auto"
+        >
+          Filtres {ouvert ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+        </button>
+      </div>
 
       {ouvert && (
         <div className="card-base p-3 space-y-3">
-          {/* Urgence toggle */}
-          <label className="flex items-center gap-2 text-sm cursor-pointer">
-            <input
-              type="checkbox"
-              checked={filtres.urgentesD_abord}
-              onChange={e => maj({ urgentesD_abord: e.target.checked })}
-              className="rounded"
-            />
-            <Flame className="h-4 w-4 text-destructive" />
-            <span className="text-foreground">Urgentes d'abord</span>
-          </label>
-
           {/* Date range */}
           <div className="grid grid-cols-2 gap-2">
             <div>
