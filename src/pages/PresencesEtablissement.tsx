@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { LayoutApp } from '@/components/LayoutApp';
 import { ChargementPage } from '@/components/ChargementPage';
@@ -23,6 +24,7 @@ export default function PresencesEtablissement() {
   usePageTitle('Présences');
   const { user, etablissementId } = useEtablissementScope();
   const { afficherNotification } = useNotification();
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [presences, setPresences] = useState<any[]>([]);
   const [litiges, setLitiges] = useState<Record<string, any>>({});
@@ -336,7 +338,7 @@ export default function PresencesEtablissement() {
             colonnes={colonnesPresences}
             donnees={enCours}
             getId={(p: any) => p.id}
-            etatVide={<EmptyState icone={<Clock />} mascotte="empty" titre="Aucune mission en cours" description="Les soignants actuellement en mission apparaîtront ici." />}
+            etatVide={<EmptyState icone={<Clock />} mascotte="empty" titre="Aucune mission en cours" description="Les soignants actuellement en mission apparaîtront ici." cta={{ label: 'Publier une mission', onClick: () => navigate('/etablissement/missions/creer') }} />}
             renduCellule={renduCellulePresence}
             renduCarte={renduCartePresence}
           />
