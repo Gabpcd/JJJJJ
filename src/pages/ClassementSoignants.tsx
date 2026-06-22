@@ -112,6 +112,7 @@ export function ClassementContent() {
           mascotte="empty"
           titre="Aucun résultat"
           description="Aucun soignant trouvé pour ce filtre."
+          cta={{ label: 'Toutes les professions', onClick: () => setProfession(''), variant: 'secondary' }}
         />
       ) : (
         <div className="space-y-2">

@@ -27,7 +27,6 @@ import { CardY2K } from '@/components/y2k/CardY2K';
 import { Mascotte } from '@/components/mascotte/Mascotte';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
-import { OnboardingGuide } from '@/components/OnboardingGuide';
 import { supabase } from '@/integrations/supabase/client';
 import { extraireMessageErreur } from '@/lib/erreurs';
 import { useEtablissementScope } from '@/hooks/useEtablissementScope';
@@ -417,7 +416,6 @@ export default function DashboardEtablissement() {
       {/* F6 — bannière évaluations conservée mais discrète (composant existant) */}
       <BandeauEvaluationsEnAttente role="ETABLISSEMENT" />
       <CardScoreQualiteEtab />
-      <OnboardingGuide role="ADMIN_ETABLISSEMENT" userId={user!.id} />
       {erreurPartielle && (
         <div className="bg-warning/10 border border-warning/30 rounded-xl p-3 mb-4 text-sm text-warning">
           ⚠️ Certaines données n'ont pas pu être chargées.

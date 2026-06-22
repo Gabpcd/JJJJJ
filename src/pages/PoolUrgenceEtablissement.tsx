@@ -527,7 +527,8 @@ export default function PoolUrgenceEtablissement({ isAdmin = false }: { isAdmin?
             icone={<Flame />}
             mascotte="empty"
             titre="Aucun soignant dans le pool"
-            description="Aucun soignant n'a activé le pool d'urgence correspondant à vos critères."
+            description="Publiez une mission urgente et les soignants du pool seront notifiés."
+            cta={{ label: 'Publier une mission urgente', onClick: () => navigate('/etablissement/missions/creer') }}
           />
         ) : (
           <div className="card-base p-0 overflow-hidden">
