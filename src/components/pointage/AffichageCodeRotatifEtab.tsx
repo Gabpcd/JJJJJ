@@ -1,9 +1,20 @@
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { QRCodeSVG } from 'qrcode.react';
 import { Hash, RefreshCw, Clock } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
+import { BoutonY2K } from '@/components/y2k/BoutonY2K';
+import { extraireMessageErreur } from '@/lib/erreurs';
+import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
+
+/** Valeur "datetime-local" (heure locale) pour le défaut "maintenant". */
+function nowLocalInput(): string {
+  const d = new Date();
+  d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+  return d.toISOString().slice(0, 16);
+}
 
 /**
  * Pointage rotatif (PR 2/3) — affichage côté ÉTABLISSEMENT.
@@ -34,7 +45,7 @@ function dureeSegment(debut: string, fin: string | null): string {
 }
 
 export function AffichageCodeRotatifEtab({ missionId }: { missionId: string }) {
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, refetch } = useQuery({
     queryKey: ['etat-pointage-rotatif', missionId],
     queryFn: async () => {
       const { data, error } = await supabase.rpc('fn_etat_pointage_mission' as any, { p_mission_id: missionId });
@@ -44,6 +55,26 @@ export function AffichageCodeRotatifEtab({ missionId }: { missionId: string }) {
     refetchInterval: 5000,
     staleTime: 0,
   });
+
+  const [fallbackOuvert, setFallbackOuvert] = useState(false);
+  const [heureFin, setHeureFin] = useState('');
+  const [envoiFallback, setEnvoiFallback] = useState(false);
+
+  const cloturerRetroactif = async () => {
+    if (!heureFin || envoiFallback) return;
+    setEnvoiFallback(true);
+    const { error } = await supabase.rpc('fn_declarer_fin_retroactive' as any, {
+      p_mission_id: missionId,
+      p_heure_fin: new Date(heureFin).toISOString(),
+      p_raison: "Clôture par l'établissement (oubli de scan / sans téléphone)",
+    });
+    setEnvoiFallback(false);
+    if (error) { toast.error(extraireMessageErreur(error)); return; }
+    toast.success('Segment clôturé.');
+    setFallbackOuvert(false);
+    setHeureFin('');
+    refetch();
+  };
 
   if (isLoading || !data || data.error) return null;
   if (!['ASSIGNEE', 'EN_COURS'].includes(data.statut)) return null;
@@ -97,6 +128,42 @@ export function AffichageCodeRotatifEtab({ missionId }: { missionId: string }) {
               <span className="font-semibold">{dureeSegment(s.debut, s.fin)}</span>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Fallback « oubli de scan / sans téléphone » : l'étab clôture le segment
+          ouvert en saisissant l'heure de fin réelle (fn_declarer_fin_retroactive). */}
+      {data.segment_ouvert && (
+        <div className="mt-4 pt-3 border-t border-border">
+          {!fallbackOuvert ? (
+            <button
+              onClick={() => { setFallbackOuvert(true); setHeureFin(nowLocalInput()); }}
+              className="text-xs font-medium text-primary hover:underline"
+            >
+              Le soignant n'a pas pu scanner sa sortie ? Clôturer le segment →
+            </button>
+          ) : (
+            <div className="space-y-2">
+              <p className="text-xs text-muted-foreground">
+                Saisissez l'heure de fin réelle. La saisie est tracée (oubli de scan).
+              </p>
+              <input
+                type="datetime-local"
+                aria-label="Heure de fin réelle"
+                value={heureFin}
+                onChange={(e) => setHeureFin(e.target.value)}
+                className="input-base text-sm w-full"
+              />
+              <div className="flex gap-2">
+                <BoutonY2K size="sm" variant="primary" onClick={cloturerRetroactif} loading={envoiFallback} disabled={!heureFin || envoiFallback}>
+                  Clôturer le segment
+                </BoutonY2K>
+                <BoutonY2K size="sm" variant="ghost" onClick={() => setFallbackOuvert(false)} disabled={envoiFallback}>
+                  Annuler
+                </BoutonY2K>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
