@@ -1230,8 +1230,8 @@ export default function FacturationEtablissement() {
                         >
                           <div className="flex items-center justify-between mb-1">
                             <div className="min-w-0">
-                              <p className="text-sm font-medium truncate">{p.soignant_nom}</p>
-                              <p className="text-xs text-primary truncate">{p.mission_intitule}</p>
+                              <p className="text-sm font-medium truncate" title={p.soignant_nom}>{p.soignant_nom}</p>
+                              <p className="text-xs text-primary truncate" title={p.mission_intitule}>{p.mission_intitule}</p>
                             </div>
                             <div className="flex items-center gap-2 shrink-0 ml-2">
                               <span className="text-sm font-semibold">{fmt(p.montant_net)}</span>

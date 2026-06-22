@@ -35,6 +35,7 @@ export default function ProfilSoignant() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [deconnexionEnCours, setDeconnexionEnCours] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
 
   // Soignant raw row (for completion helper)
@@ -465,6 +466,7 @@ export default function ProfilSoignant() {
             <p className="text-sm text-muted-foreground mb-2">Vous avez un code parrainage ?</p>
             <div className="flex gap-2">
               <input
+                aria-label="Code de parrainage"
                 value={codeRecu}
                 onChange={(e) => setCodeRecu(e.target.value.toUpperCase())}
                 placeholder="Ex: JO-5B4945"
@@ -516,10 +518,11 @@ export default function ProfilSoignant() {
       {/* Déconnexion mobile */}
       <div className="md:hidden mt-6 pt-6 border-t border-border max-w-2xl">
         <button
-          onClick={async () => { await deconnexion(); navigate('/'); }}
-          className="btn-secondary w-full flex items-center justify-center gap-2 text-destructive border-destructive/30 hover:bg-destructive/5"
+          disabled={deconnexionEnCours}
+          onClick={async () => { setDeconnexionEnCours(true); try { await deconnexion(); navigate('/'); } catch { setDeconnexionEnCours(false); } }}
+          className="btn-secondary w-full flex items-center justify-center gap-2 text-destructive border-destructive/30 hover:bg-destructive/5 disabled:opacity-50"
         >
-          <LogOut className="h-4 w-4" /> Se déconnecter
+          <LogOut className="h-4 w-4" /> {deconnexionEnCours ? 'Déconnexion…' : 'Se déconnecter'}
         </button>
       </div>
     </LayoutApp>
@@ -595,6 +598,7 @@ function BlocStatutEtudiant({ userId }: { userId: string }) {
       {estEtudiant && !scol?.verifiee && (
         <>
           <input
+            aria-label="Détails de scolarité"
             value={details}
             onChange={(e) => setDetails(e.target.value.slice(0, 80))}
             onBlur={() => sauver(true, details)}
