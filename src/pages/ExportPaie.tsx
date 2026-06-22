@@ -234,7 +234,7 @@ export default function ExportPaie() {
       {/* Preview table */}
       <h2 className="text-base font-bold text-foreground mb-3">Aperçu — {moisLabel}</h2>
       {missions.length > 0 ? (
-        <div className="overflow-x-auto border border-border rounded-xl">
+        <div className="overflow-x-auto scroll-hint border border-border rounded-xl">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border bg-muted/30">

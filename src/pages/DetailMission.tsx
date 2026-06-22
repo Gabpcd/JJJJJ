@@ -931,7 +931,7 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
                 <p className="text-sm text-muted-foreground py-8 text-center">Analyse en cours…</p>
               ) : recommandations.length > 0 ? (
                 <TooltipProvider>
-                <div className="overflow-x-auto">
+                <div className="overflow-x-auto scroll-hint">
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b border-border text-left">

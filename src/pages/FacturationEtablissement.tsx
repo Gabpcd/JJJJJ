@@ -912,7 +912,7 @@ export default function FacturationEtablissement() {
                       {generatingFacture ? 'Génération…' : 'Générer la facture du mois'}
                     </BoutonY2K>
                   </div>
-                  <div className="overflow-x-auto">
+                  <div className="overflow-x-auto scroll-hint">
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="border-b text-left text-muted-foreground">
@@ -1021,7 +1021,7 @@ export default function FacturationEtablissement() {
                     <Banknote className="h-4 w-4 text-info" />
                     Historique des prélèvements ({prelevements.length})
                   </h3>
-                  <div className="overflow-x-auto">
+                  <div className="overflow-x-auto scroll-hint">
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="border-b text-left text-muted-foreground">
@@ -1087,7 +1087,7 @@ export default function FacturationEtablissement() {
               ) : (
                 <CardY2K noPadding>
                   <CardY2KContent className="pt-4">
-                    <div className="overflow-x-auto">
+                    <div className="overflow-x-auto scroll-hint">
                       <table className="w-full text-sm">
                         <thead>
                           <tr className="border-b text-left text-muted-foreground">
