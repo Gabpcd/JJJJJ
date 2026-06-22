@@ -5,7 +5,7 @@ import { usePageTitle } from '@/hooks/usePageTitle';
 import { useNavigate } from 'react-router-dom';
 import { SkeletonDashboard } from '@/components/SkeletonCard';
 import { FadeInView } from '@/components/FadeInView';
-import { CheckCircle, Star, Clock, ShieldCheck, ShieldAlert, Search, Info, X, AlertCircle, Banknote, Rocket, MapPin, Bell, TrendingUp, Activity, GraduationCap, Home, CalendarDays, CreditCard, FileText } from 'lucide-react';
+import { CheckCircle, Star, Clock, ShieldCheck, ShieldAlert, Search, Info, X, AlertCircle, Banknote, Rocket, MapPin, Bell, TrendingUp, Activity, GraduationCap, Home, CalendarDays, CreditCard, FileText, Sparkles } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { CarteProposition } from '@/components/CarteProposition';
 import { estEligibleLiberal, getRegleInstallation } from '@/lib/regles-installation-liberal';
@@ -182,65 +182,10 @@ export default function DashboardSoignant() {
 
   return (
     <LayoutApp role="SOIGNANT">
-      {/* Session E-3 — checklist d'activation : LA rampe unique en tête de dashboard.
-          Tant qu'elle est visible, elle absorbe BandeauGraceDocuments,
-          BandeauCompletionProfil et l'encart « Documents requis ».
-          L'OnboardingGuide modal 7 étapes est retiré : la checklist le remplace. */}
-      <ChecklistActivation state={activation} className="mb-4" />
+      {/* ═══ ZONE 1 : HERO + CTA (ce que le soignant voit en premier) ═══ */}
 
-      {!activation.visible && soignant && (
-        <div className="mb-4">
-          <BandeauGraceDocuments
-            premiereMissionLe={(soignant as any).premiere_mission_le}
-            tousDocumentsValides={soignant.tous_documents_valides}
-          />
-        </div>
-      )}
-      {!activation.visible && (
-        <BandeauCompletionProfil soignant={soignant as any} variant="compact" className="mb-4" />
-      )}
-      <BandeauEvaluationsEnAttente role="SOIGNANT" />
-
-      {/* Raccourci centre documents si non validés — absorbé par la checklist */}
-      {!activation.visible && soignant && !aDocuments && (
-        <div
-          onClick={() => navigate('/soignant/mes-documents')}
-          className="rounded-xl border border-warning/30 bg-warning/5 p-4 mb-4 flex items-start gap-3 cursor-pointer hover:border-warning/50 transition-colors"
-        >
-          <FileText className="h-5 w-5 text-warning shrink-0 mt-0.5" />
-          <div className="flex-1">
-            <p className="font-semibold text-foreground">Documents requis</p>
-            <p className="text-sm text-muted-foreground">
-              Téléversez vos documents (CNI, diplôme, RC Pro) pour pouvoir candidater à toutes les missions.
-            </p>
-          </div>
-          <span className="text-sm text-primary font-medium shrink-0">Aller au centre →</span>
-        </div>
-      )}
-
-      {/* Bannières d'action urgentes */}
-      {!hasStripeConnect && (soignantWithCounts as any)?.type_exercice !== 'SALARIE' && (
-        <div className="rounded-xl border-2 border-primary/30 bg-primary/5 p-4 mb-4 flex items-start gap-3 cursor-pointer hover:border-primary/50 transition-colors" onClick={() => navigate('/soignant/stripe-connect')}>
-          <CreditCard className="h-5 w-5 text-primary shrink-0 mt-0.5" />
-          <div>
-            <p className="font-semibold text-foreground">Activez votre compte de paiement</p>
-            <p className="text-sm text-muted-foreground">Liez votre compte Stripe Connect pour recevoir vos paiements directement. Cela prend 5 minutes.</p>
-          </div>
-        </div>
-      )}
-      {((soignantWithCounts as any).type_exercice === 'LIBERAL' || (soignantWithCounts as any).type_exercice === 'MIXTE') && !hasMandatFacturation && (
-        <div className="rounded-xl border-2 border-warning/30 bg-warning/5 p-4 mb-4 flex items-start gap-3 cursor-pointer hover:border-warning/50 transition-colors" onClick={() => navigate('/soignant/mandat-facturation')}>
-          <FileText className="h-5 w-5 text-warning shrink-0 mt-0.5" />
-          <div>
-            <p className="font-semibold text-foreground">Signez votre mandat de facturation</p>
-            <p className="text-sm text-muted-foreground">Jolene pourra générer automatiquement vos factures d'honoraires et vous donner accès au paiement rapide (24-48h).</p>
-          </div>
-        </div>
-      )}
-
-      {/* Sprint 9-C PR 3 — Header Y2K avec mascotte cœur + "Hiii" accueil
-          Session B — hero compact : chips gamification cliquables sous le titre */}
-      <div className="mb-6 flex items-start gap-4">
+      {/* Header Y2K compact : mascotte + nom + chips gamification */}
+      <div className="mb-4 flex items-start gap-4">
         <Mascotte
           etat={soignantWithCounts.tous_documents_valides ? 'happy' : 'thinking'}
           taille="md"
@@ -254,38 +199,50 @@ export default function DashboardSoignant() {
             <BadgeRPPS rppsVerifie={(soignantWithCounts as any).rpps_verifie} rpps={(soignantWithCounts as any).numero_rpps} profession={soignantWithCounts.profession} />
           </div>
           {!soignantWithCounts.tous_documents_valides ? (
-            <p className="text-sm text-warning mt-1">⚠️ Complétez votre profil pour postuler aux missions</p>
+            <p className="text-sm text-warning mt-1">Complétez votre profil pour postuler</p>
           ) : (
-            <p className="text-sm text-muted-foreground mt-1">Voici votre activité</p>
+            <p className="text-sm text-muted-foreground mt-1">Prête à trouver votre prochaine mission ?</p>
           )}
-          <div className="flex items-center gap-2 flex-wrap mt-2">
-            {hasEvaluations && score != null && (
-              <button
-                onClick={() => navigate('/soignant/score')}
-                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-primary/10 text-primary text-xs font-semibold hover:bg-primary/20 transition-colors"
-              >
-                ⭐ {score}/100
-              </button>
-            )}
-            {missionsTerminees > 0 && (
-              <button
-                onClick={() => navigate('/soignant/historique-missions')}
-                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-jolene-mauve-100 dark:bg-jolene-mauve-900/30 text-jolene-mauve-700 dark:text-jolene-mauve-300 text-xs font-semibold hover:opacity-80 transition-opacity"
-              >
-                🏅 {missionsTerminees} mission{missionsTerminees > 1 ? 's' : ''}
-              </button>
-            )}
-            {heures > 0 && (
-              <button
-                onClick={() => navigate(seuilHeures ? '/soignant/passer-en-liberal' : '/soignant/planning?tab=historique')}
-                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-muted text-muted-foreground text-xs font-semibold hover:bg-muted/70 transition-colors"
-              >
-                ⏱ {heures}h{seuilHeures ? ` / ${seuilHeures.toLocaleString('fr-FR')}h` : ''}
-              </button>
-            )}
-          </div>
         </div>
       </div>
+
+      {/* CTA principal : la boucle de vente, en haut, pas dans un onglet */}
+      <div className="flex gap-3 mb-6 overflow-x-auto pb-1">
+        <BoutonY2K variant="primary" size="sm" onClick={() => navigate('/soignant/recherche-missions')} className="whitespace-nowrap flex-1">
+          🔥 Trouver une mission
+        </BoutonY2K>
+        <BoutonY2K variant="secondary" size="sm" onClick={() => navigate('/soignant/mes-matches')} className="whitespace-nowrap flex-1" iconeGauche={<Sparkles className="h-4 w-4" />}>
+          Mes matchs
+        </BoutonY2K>
+      </div>
+
+      {/* ═══ ZONE 2 : CONTEXTE IMMÉDIAT (missions en cours / pointage) ═══ */}
+
+      {missionsOubliDepart.map(m => (
+        <BandeauOubliDepart key={m.id} mission={m} onPointer={() => navigate('/soignant/presences')} />
+      ))}
+
+      {missionProchaine && <WidgetAllerPointer mission={missionProchaine} />}
+
+      {/* Missions proposées depuis le pool — opportunités urgentes */}
+      <SectionErrorBoundary section="propositions">
+      {propositions.length > 0 && (
+        <div className="mb-6 rounded-xl border-2 border-orange-400 bg-orange-50/50 dark:bg-orange-950/10 dark:border-orange-600 p-4">
+          <h2 className="text-base font-bold text-foreground flex items-center gap-2 mb-3">
+            <Bell className="h-5 w-5 text-orange-500" /> 🚨 Missions proposées
+          </h2>
+          <div className="space-y-3">
+            {propositions.map((p: any) => (
+              <CarteProposition
+                key={p.id}
+                proposition={p}
+                onTraitee={(id) => setPropositions(prev => prev.filter(x => x.id !== id))}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+      </SectionErrorBoundary>
 
       {/* Missions à venir (planning) */}
       <SectionErrorBoundary section="missions-a-venir">
@@ -328,10 +285,61 @@ export default function DashboardSoignant() {
       )}
       </SectionErrorBoundary>
 
-      {/* 48h banner: hidden for LIBERAL, shown for SALARIE & MIXTE */}
+      {/* ═══ ZONE 3 : ALERTES & ADMIN (repoussées sous le contenu utile) ═══ */}
+
+      {/* Checklist d'activation (absorbe les docs/profil) */}
+      <ChecklistActivation state={activation} className="mb-4" />
+
+      {!activation.visible && soignant && (
+        <div className="mb-4">
+          <BandeauGraceDocuments
+            premiereMissionLe={(soignant as any).premiere_mission_le}
+            tousDocumentsValides={soignant.tous_documents_valides}
+          />
+        </div>
+      )}
+      {!activation.visible && (
+        <BandeauCompletionProfil soignant={soignant as any} variant="compact" className="mb-4" />
+      )}
+      <BandeauEvaluationsEnAttente role="SOIGNANT" />
+
+      {!activation.visible && soignant && !aDocuments && (
+        <div
+          onClick={() => navigate('/soignant/mes-documents')}
+          className="rounded-xl border border-warning/30 bg-warning/5 p-4 mb-4 flex items-start gap-3 cursor-pointer hover:border-warning/50 transition-colors"
+        >
+          <FileText className="h-5 w-5 text-warning shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <p className="font-semibold text-foreground">Documents requis</p>
+            <p className="text-sm text-muted-foreground">
+              Téléversez vos documents (CNI, diplôme, RC Pro) pour pouvoir candidater à toutes les missions.
+            </p>
+          </div>
+          <span className="text-sm text-primary font-medium shrink-0">Aller au centre →</span>
+        </div>
+      )}
+
+      {!hasStripeConnect && (soignantWithCounts as any)?.type_exercice !== 'SALARIE' && (
+        <div className="rounded-xl border-2 border-primary/30 bg-primary/5 p-4 mb-4 flex items-start gap-3 cursor-pointer hover:border-primary/50 transition-colors" onClick={() => navigate('/soignant/stripe-connect')}>
+          <CreditCard className="h-5 w-5 text-primary shrink-0 mt-0.5" />
+          <div>
+            <p className="font-semibold text-foreground">Activez votre compte de paiement</p>
+            <p className="text-sm text-muted-foreground">Liez votre compte Stripe Connect pour recevoir vos paiements directement. Cela prend 5 minutes.</p>
+          </div>
+        </div>
+      )}
+      {((soignantWithCounts as any).type_exercice === 'LIBERAL' || (soignantWithCounts as any).type_exercice === 'MIXTE') && !hasMandatFacturation && (
+        <div className="rounded-xl border-2 border-warning/30 bg-warning/5 p-4 mb-4 flex items-start gap-3 cursor-pointer hover:border-warning/50 transition-colors" onClick={() => navigate('/soignant/mandat-facturation')}>
+          <FileText className="h-5 w-5 text-warning shrink-0 mt-0.5" />
+          <div>
+            <p className="font-semibold text-foreground">Signez votre mandat de facturation</p>
+            <p className="text-sm text-muted-foreground">Jolene pourra générer automatiquement vos factures d'honoraires et vous donner accès au paiement rapide (24-48h).</p>
+          </div>
+        </div>
+      )}
+
       {soignantWithCounts.type_exercice !== 'LIBERAL' && <BandeauAlerte48h heuresSemaine={heuresSemaine} />}
 
-      {/* Cumul d'activité warning for MIXTE — hidden once attestation signed */}
       {soignantWithCounts.type_exercice === 'MIXTE' && !(soignantWithCounts as any).attestation_cumul_activite && (
         <div className="bg-warning/5 border-l-4 border-warning p-4 rounded-r-xl mb-4">
           <p className="text-sm text-warning font-medium mb-2">
@@ -346,32 +354,6 @@ export default function DashboardSoignant() {
         </div>
       )}
 
-      {/* Missions proposées depuis le pool */}
-      <SectionErrorBoundary section="propositions">
-      {propositions.length > 0 && (
-        <div className="mb-6 rounded-xl border-2 border-orange-400 bg-orange-50/50 dark:bg-orange-950/10 dark:border-orange-600 p-4">
-          <h2 className="text-base font-bold text-foreground flex items-center gap-2 mb-3">
-            <Bell className="h-5 w-5 text-orange-500" /> 🚨 Missions proposées
-          </h2>
-          <div className="space-y-3">
-            {propositions.map((p: any) => (
-              <CarteProposition
-                key={p.id}
-                proposition={p}
-                onTraitee={(id) => setPropositions(prev => prev.filter(x => x.id !== id))}
-              />
-            ))}
-          </div>
-        </div>
-      )}
-      </SectionErrorBoundary>
-
-      {missionsOubliDepart.map(m => (
-        <BandeauOubliDepart key={m.id} mission={m} onPointer={() => navigate('/soignant/presences')} />
-      ))}
-
-      {missionProchaine && <WidgetAllerPointer mission={missionProchaine} />}
-
       <BandeauGoalGradient heures={heures} />
       <CelebrationJalonManager heures={heures} />
 
@@ -385,8 +367,7 @@ export default function DashboardSoignant() {
         </div>
       ))}
 
-
-      {/* Tabs */}
+      {/* ═══ ZONE 4 : ONGLETS DÉTAILLÉS (chiffres, activité, gains) ═══ */}
       <Tabs defaultValue="accueil" className="mb-6">
         <TabsList className={`w-full grid ${afficheParcours ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-3'} mb-4`}>
           <TabsTrigger value="accueil" className="text-xs gap-1"><Home className="h-3.5 w-3.5 hidden sm:block" />Accueil</TabsTrigger>
@@ -401,19 +382,6 @@ export default function DashboardSoignant() {
         <TabsContent value="accueil">
           <SectionErrorBoundary section="accueil">
           <BannerEncourageNotation role="SOIGNANT" />
-
-          {/* Quick actions — le swipe (différenciateur) à 1 tap du dashboard */}
-          <div className="flex gap-3 mb-6 overflow-x-auto pb-1">
-            <BoutonY2K variant="primary" size="sm" onClick={() => navigate('/soignant/swipe-missions')} className="whitespace-nowrap">
-              🔥 Swiper les missions
-            </BoutonY2K>
-            <BoutonY2K variant="secondary" size="sm" onClick={() => navigate('/soignant/missions')} className="whitespace-nowrap" iconeGauche={<Search className="h-4 w-4" />}>
-              Chercher
-            </BoutonY2K>
-            <BoutonY2K variant="secondary" size="sm" onClick={() => navigate('/soignant/planning')} className="whitespace-nowrap" iconeGauche={<CalendarDays className="h-4 w-4" />}>
-              Mon planning
-            </BoutonY2K>
-          </div>
 
           {/* Prochain badge à débloquer — gamification visible dès l'accueil */}
           {badgeStats && (
