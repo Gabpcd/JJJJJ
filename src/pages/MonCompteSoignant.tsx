@@ -11,10 +11,8 @@ import { estEligibleLiberal } from '@/lib/regles-installation-liberal';
 import { ChangementMotDePasse } from '@/components/soignant/ChangementMotDePasse';
 import { ConsentementPingGps } from '@/components/soignant/ConsentementPingGps';
 import {
-  User, FileText, Banknote, CreditCard, FileSignature, Zap, ShieldCheck,
-  Scale, Gift, Rocket, Bell, Search, LogOut, GraduationCap, Receipt,
-  Landmark, FileCheck2, ScrollText, ClipboardCheck, Star, CalendarDays, BadgeCheck,
-  MessageSquare, Ban, Trophy, Mail, Phone, MapPin, KeyRound,
+  User, Banknote, ShieldCheck, Settings, LogOut,
+  Mail, Phone, MapPin, KeyRound,
 } from 'lucide-react';
 
 export default function MonCompteSoignant() {
@@ -43,68 +41,16 @@ export default function MonCompteSoignant() {
   // Profession éligible au libéral (pour Passer en libéral + Attestation 3200h)
   const eligibleLiberal = !!(profil?.profession && estEligibleLiberal(profil.profession));
 
-  // Section Paiements : « Mes finances » est un hub à onglets (aperçu /
-  // factures / bulletins / avances dans MesGains) → une seule entrée ici, plus
-  // de deep-links redondants. Stripe Connect, Mandat et Charges restent à part
-  // (configuration de paiement / fiscal, propres au libéral).
-  const lignesPaiements = estLiberal
-    ? [
-        { icone: Banknote, label: 'Mes finances', route: '/soignant/mes-gains' },
-        { icone: CreditCard, label: 'Stripe Connect', route: '/soignant/stripe-connect' },
-        { icone: FileSignature, label: 'Mandat de facturation', route: '/soignant/mandat-facturation' },
-        { icone: Landmark, label: 'Charges sociales (URSSAF)', route: '/soignant/charges' },
-      ]
-    : [
-        { icone: Banknote, label: 'Mes finances', route: '/soignant/mes-gains' },
-      ];
-
+  // Menu = ton COMPTE (qui tu es, combien tu gagnes, ta réputation, tes réglages).
+  // Tout le reste = contextuel (dashboard, fiche mission, flow inscription).
   const sections: SectionReglages[] = [
     {
-      titre: 'Profil & activité',
+      titre: '',
       lignes: [
         { icone: User, label: 'Mon profil', route: '/soignant/profil' },
-        { icone: FileText, label: 'Mes documents', route: '/soignant/mes-documents' },
-        { icone: ScrollText, label: 'Mes contrats', route: '/soignant/contrats' },
-        { icone: ClipboardCheck, label: 'Mes DPAE', route: '/soignant/mes-documents?tab=dpae' },
-        // Pointage / présences : seule façon non-contextuelle d'y accéder sur
-        // mobile (le widget Accueil n'apparaît qu'à l'approche d'une mission).
-        { icone: MapPin, label: 'Mes présences', route: '/soignant/presences' },
-        // « Mes matchs » est désormais un onglet de la barre du bas. Ici on garde
-        // le planning, qui a quitté la barre du bas.
-        { icone: CalendarDays, label: 'Mon planning', route: '/soignant/planning' },
-      ],
-    },
-    {
-      titre: 'Suivi & qualité',
-      lignes: [
-        // Regroupement fort : Score · Évaluations · Classement · Conformité ·
-        // Litiges · Réclamations sont désormais des onglets du hub « Ma réputation ».
+        { icone: Banknote, label: 'Mes finances', route: '/soignant/mes-gains' },
         { icone: ShieldCheck, label: 'Ma réputation', route: '/soignant/reputation' },
-      ],
-    },
-    {
-      titre: 'Paiements',
-      lignes: lignesPaiements,
-    },
-    {
-      titre: 'Développement',
-      lignes: [
-        ...(eligibleLiberal && !estLiberal
-          ? [{ icone: Rocket, label: 'Passer en libéral', route: '/soignant/passer-en-liberal' }]
-          : []),
-        ...(eligibleLiberal
-          ? [{ icone: FileCheck2, label: 'Attestation d\'heures (3200h)', route: '/soignant/attestation-heures' }]
-          : []),
-        { icone: GraduationCap, label: 'Prévoyance', route: '/soignant/prevoyance' },
-        { icone: Gift, label: 'Parrainage', route: '/soignant/parrainage' },
-      ],
-    },
-    {
-      titre: 'Paramètres',
-      lignes: [
-        { icone: Bell, label: 'Notifications', route: '/soignant/parametres/notifications' },
-        { icone: Search, label: 'Recherches sauvegardées', route: '/soignant/parametres/recherches-sauvegardees' },
-        { icone: Ban, label: 'Établissements exclus', route: '/soignant/exclusions' },
+        { icone: Settings, label: 'Paramètres', route: '/soignant/parametres-complet' },
         { icone: LogOut, label: 'Se déconnecter', onClick: () => deconnexion(), variante: 'danger' as const, sansChevron: true },
       ],
     },
