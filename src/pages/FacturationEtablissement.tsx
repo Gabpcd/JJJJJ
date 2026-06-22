@@ -19,6 +19,15 @@ import { StripeEmbeddedCheckout } from '@/components/StripeEmbeddedCheckout';
 import { EmbeddedCheckoutProvider, EmbeddedCheckout } from '@stripe/react-stripe-js';
 import { stripePromise } from '@/lib/stripe';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+  DialogResponsive,
+  DialogResponsiveContent,
+  DialogResponsiveHeader,
+  DialogResponsiveTitle,
+  DialogResponsiveDescription,
+  DialogResponsiveBody,
+  DialogResponsiveFooter,
+} from '@/components/ui/DialogResponsive';
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible';
 import { BadgeY2K } from '@/components/y2k/BadgeY2K';
 import { Button } from '@/components/ui/button';
@@ -33,7 +42,6 @@ import {
   CardY2KContent,
 } from '@/components/y2k/CardY2K';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { DialogFooter } from '@/components/ui/dialog';
 import { ENTREPRISE } from '@/constantes/entreprise';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
@@ -1256,16 +1264,16 @@ export default function FacturationEtablissement() {
 
       {/* Dialog Déclaration paiement soignant (form complet OF-11, fullscreen mobile) */}
       {declarerDialogMission && (
-        <Dialog open={!!declarerDialogMission} onOpenChange={(open) => { if (!open) fermerDialogDeclarer(); }}>
-          <DialogContent className="max-w-[calc(100%-1rem)] sm:max-w-lg max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>Déclarer un paiement au soignant</DialogTitle>
-              <DialogDescription>
+        <DialogResponsive open={!!declarerDialogMission} onOpenChange={(open) => { if (!open) fermerDialogDeclarer(); }}>
+          <DialogResponsiveContent>
+            <DialogResponsiveHeader>
+              <DialogResponsiveTitle>Déclarer un paiement au soignant</DialogResponsiveTitle>
+              <DialogResponsiveDescription>
                 {declarerDialogMission.intitule || 'Mission'} — {declarerDialogMission.soignant_nom || ''}
-              </DialogDescription>
-            </DialogHeader>
+              </DialogResponsiveDescription>
+            </DialogResponsiveHeader>
 
-            <div className="space-y-4 py-2">
+            <DialogResponsiveBody className="space-y-4">
               <div>
                 <Label htmlFor="declarer-montant">Montant payé (€ net)</Label>
                 <Input
@@ -1347,9 +1355,9 @@ export default function FacturationEtablissement() {
                   </Label>
                 </div>
               </div>
-            </div>
+            </DialogResponsiveBody>
 
-            <DialogFooter className="gap-2">
+            <DialogResponsiveFooter className="gap-2">
               <BoutonY2K variant="secondary" onClick={fermerDialogDeclarer}>
                 Annuler
               </BoutonY2K>
@@ -1365,9 +1373,9 @@ export default function FacturationEtablissement() {
               >
                 {declaringId === declarerDialogMission.mission_id ? 'Envoi…' : 'Valider la déclaration'}
               </BoutonY2K>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+            </DialogResponsiveFooter>
+          </DialogResponsiveContent>
+        </DialogResponsive>
       )}
     </LayoutApp>
   );

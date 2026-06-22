@@ -41,7 +41,13 @@ import { Mascotte } from '@/components/mascotte/Mascotte';
 import { formatDistanceToNowStrict, format, isToday, isYesterday, differenceInDays } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { toast } from 'sonner';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+  DialogResponsive,
+  DialogResponsiveContent,
+  DialogResponsiveHeader,
+  DialogResponsiveTitle,
+  DialogResponsiveBody,
+} from '@/components/ui/DialogResponsive';
 import { Input } from '@/components/ui/input';
 import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 
@@ -632,12 +638,12 @@ export default function PageMessagerie({ role }: PageMessagerieProps) {
         </div>
 
         {/* ── New conversation modal (admin) ── */}
-        <Dialog open={showNewConvModal} onOpenChange={setShowNewConvModal}>
-          <DialogContent className="sm:max-w-md">
-            <DialogHeader>
-              <DialogTitle>Nouvelle conversation</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-3">
+        <DialogResponsive open={showNewConvModal} onOpenChange={setShowNewConvModal}>
+          <DialogResponsiveContent maxWidth="md">
+            <DialogResponsiveHeader>
+              <DialogResponsiveTitle>Nouvelle conversation</DialogResponsiveTitle>
+            </DialogResponsiveHeader>
+            <DialogResponsiveBody className="space-y-3">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
@@ -673,9 +679,9 @@ export default function PageMessagerie({ role }: PageMessagerieProps) {
                   </button>
                 ))}
               </div>
-            </div>
-          </DialogContent>
-        </Dialog>
+            </DialogResponsiveBody>
+          </DialogResponsiveContent>
+        </DialogResponsive>
     </div>
   );
 
