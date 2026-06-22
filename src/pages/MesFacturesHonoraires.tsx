@@ -247,8 +247,8 @@ export function MesFacturesHonorairesContent() {
                   case 'mission':
                     return (
                       <div>
-                        <p className="font-medium text-foreground line-clamp-1">{f.mission_intitule || '—'}</p>
-                        <p className="text-xs text-muted-foreground line-clamp-1">{f.etablissement_nom}</p>
+                        <p className="font-medium text-foreground line-clamp-1" title={f.mission_intitule || undefined}>{f.mission_intitule || '—'}</p>
+                        <p className="text-xs text-muted-foreground line-clamp-1" title={f.etablissement_nom}>{f.etablissement_nom}</p>
                       </div>
                     );
                   case 'date':
@@ -297,8 +297,8 @@ export function MesFacturesHonorairesContent() {
                             <span className="text-[9px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground" title="Facture générée avec l'ancien template (avant Factur-X)">Format historique</span>
                           )}
                         </div>
-                        <p className="text-sm text-foreground font-medium line-clamp-1">{f.mission_intitule || '—'}</p>
-                        <p className="text-xs text-muted-foreground line-clamp-1">{f.etablissement_nom}</p>
+                        <p className="text-sm text-foreground font-medium line-clamp-1" title={f.mission_intitule || undefined}>{f.mission_intitule || '—'}</p>
+                        <p className="text-xs text-muted-foreground line-clamp-1" title={f.etablissement_nom}>{f.etablissement_nom}</p>
                         <p className="text-[10px] text-muted-foreground mt-1">
                           Émise le {f.date_emission ? format(new Date(f.date_emission), 'dd/MM/yyyy', { locale: fr }) : '—'}
                           {f.date_echeance && ` · Échéance ${format(new Date(f.date_echeance), 'dd/MM/yyyy', { locale: fr })}`}

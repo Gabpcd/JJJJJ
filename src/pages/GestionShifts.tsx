@@ -23,6 +23,9 @@ export default function GestionShifts() {
   const [semaine, setSemaine] = useState(startOfWeek(new Date(), { weekStartsOn: 1 }));
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [creatingEquipe, setCreatingEquipe] = useState(false);
+  const [deletingEquipeId, setDeletingEquipeId] = useState<string | null>(null);
+  const [deletingShiftId, setDeletingShiftId] = useState<string | null>(null);
   const [newEquipeNom, setNewEquipeNom] = useState('');
   const [form, setForm] = useState({
     intitule: '', service: '', jour: format(new Date(), 'yyyy-MM-dd'),
@@ -52,16 +55,21 @@ export default function GestionShifts() {
   useEffect(() => { charger(); }, [user, semaine]);
 
   const creerEquipe = async () => {
-    if (!newEquipeNom.trim() || !user) return;
+    if (!newEquipeNom.trim() || !user || creatingEquipe) return;
+    setCreatingEquipe(true);
     const { error } = await supabase.from('equipes').insert({ etablissement_id: user.id, nom: newEquipeNom.trim() } as any);
     if (error) afficherNotification({ type: 'erreur', message: extraireMessageErreur(error) });
     else { setNewEquipeNom(''); charger(); afficherNotification({ type: 'succes', message: 'Équipe créée.' }); }
+    setCreatingEquipe(false);
   };
 
   const supprimerEquipe = async (id: string) => {
+    if (deletingEquipeId) return;
+    setDeletingEquipeId(id);
     const { error } = await supabase.from('equipes').update({ supprime_le: new Date().toISOString() } as any).eq('id', id);
     if (error) afficherNotification({ type: 'erreur', message: extraireMessageErreur(error) });
     else charger();
+    setDeletingEquipeId(null);
   };
 
   const creerShift = async (e: React.FormEvent) => {
@@ -85,8 +93,11 @@ export default function GestionShifts() {
   };
 
   const supprimerShift = async (id: string) => {
+    if (deletingShiftId) return;
+    setDeletingShiftId(id);
     await supabase.from('shifts').delete().eq('id', id);
     charger();
+    setDeletingShiftId(null);
   };
 
   if (loading) return <LayoutApp role="ADMIN_ETABLISSEMENT"><ChargementPage /></LayoutApp>;
@@ -112,14 +123,14 @@ export default function GestionShifts() {
               <div className="h-3 w-3 rounded-full" style={{ backgroundColor: eq.couleur }} />
               <span className="text-sm font-medium text-foreground">{eq.nom}</span>
               {eq.service && <span className="text-xs text-muted-foreground">({eq.service})</span>}
-              <button onClick={() => supprimerEquipe(eq.id)} className="text-muted-foreground hover:text-destructive ml-1"><Trash2 className="h-3 w-3" /></button>
+              <button onClick={() => supprimerEquipe(eq.id)} disabled={deletingEquipeId === eq.id} aria-label={`Supprimer l'équipe ${eq.nom}`} className="text-muted-foreground hover:text-destructive ml-1 disabled:opacity-40"><Trash2 className="h-3 w-3" /></button>
             </div>
           ))}
           {equipes.length === 0 && <p className="text-sm text-muted-foreground">Aucune équipe. Créez-en une ci-dessous.</p>}
         </div>
         <div className="flex gap-2">
-          <input value={newEquipeNom} onChange={e => setNewEquipeNom(e.target.value)} placeholder="Nom de l'équipe (ex: Nuit A, Jour B...)" className="input-base flex-1" onKeyDown={e => e.key === 'Enter' && creerEquipe()} />
-          <button onClick={creerEquipe} disabled={!newEquipeNom.trim()} className="btn-primary px-4 disabled:opacity-50">Créer</button>
+          <input aria-label="Nom de l'équipe" value={newEquipeNom} onChange={e => setNewEquipeNom(e.target.value)} placeholder="Nom de l'équipe (ex: Nuit A, Jour B...)" className="input-base flex-1" onKeyDown={e => e.key === 'Enter' && creerEquipe()} />
+          <button onClick={creerEquipe} disabled={!newEquipeNom.trim() || creatingEquipe} className="btn-primary px-4 disabled:opacity-50">{creatingEquipe ? 'Création…' : 'Créer'}</button>
         </div>
       </div>
 
@@ -181,7 +192,7 @@ export default function GestionShifts() {
                       </div>
                       <p className="text-muted-foreground">{s.heure_debut?.slice(0, 5)} — {s.heure_fin?.slice(0, 5)}</p>
                       <p className="text-muted-foreground">{s.nb_pourvus}/{s.nb_postes} pourvu{s.nb_postes > 1 ? 's' : ''}</p>
-                      <button onClick={() => supprimerShift(s.id)} className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition text-muted-foreground hover:text-destructive">
+                      <button onClick={() => supprimerShift(s.id)} disabled={deletingShiftId === s.id} aria-label="Supprimer le shift" className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition text-muted-foreground hover:text-destructive disabled:opacity-40">
                         <Trash2 className="h-3 w-3" />
                       </button>
                     </div>

@@ -188,6 +188,7 @@ export function ProfilEtablissementContent() {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const [deleting, setDeleting] = useState(false);
+  const [exportingRgpd, setExportingRgpd] = useState(false);
   const [siret, setSiret] = useState('');
   const [type, setType] = useState('');
   const [conventionCollective, setConventionCollective] = useState('');
@@ -404,11 +405,11 @@ export function ProfilEtablissementContent() {
         <div className="card-base">
           <h2 className="text-base font-semibold text-foreground mb-4">Adresse</h2>
           <div className="space-y-3">
-            <input value={form.rue} onChange={e => maj('rue', e.target.value)} placeholder="Rue" className="input-base" />
+            <input aria-label="Rue" value={form.rue} onChange={e => maj('rue', e.target.value)} placeholder="Rue" className="input-base" />
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-              <input value={form.ville} onChange={e => maj('ville', e.target.value)} placeholder="Ville" className="input-base" />
-              <input value={form.codePostal} onChange={e => maj('codePostal', e.target.value)} placeholder="Code postal" className="input-base" />
-              <input value={form.departement} onChange={e => maj('departement', e.target.value)} placeholder="Département" className="input-base" />
+              <input aria-label="Ville" value={form.ville} onChange={e => maj('ville', e.target.value)} placeholder="Ville" className="input-base" />
+              <input aria-label="Code postal" value={form.codePostal} onChange={e => maj('codePostal', e.target.value)} placeholder="Code postal" className="input-base" />
+              <input aria-label="Département" value={form.departement} onChange={e => maj('departement', e.target.value)} placeholder="Département" className="input-base" />
             </div>
           </div>
         </div>
@@ -666,7 +667,10 @@ export function ProfilEtablissementContent() {
       <div className="max-w-2xl mt-12 space-y-4">
         <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Données personnelles (RGPD)</h2>
         <button
+          disabled={exportingRgpd}
           onClick={async () => {
+            if (exportingRgpd) return;
+            setExportingRgpd(true);
             try {
               const { data, error } = await supabase.rpc('fn_exporter_rgpd_etablissement' as any);
               if (error) throw error;
@@ -687,11 +691,13 @@ export function ProfilEtablissementContent() {
             } catch (err: any) {
               capturerErreurSentry(err, 'ProfilEtablissement', 'export_rgpd');
               afficherNotification({ type: 'erreur', message: extraireMessageErreur(err) });
+            } finally {
+              setExportingRgpd(false);
             }
           }}
-          className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition"
+          className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition disabled:opacity-50"
         >
-          <Download className="h-4 w-4" /> 📥 Télécharger mes données (RGPD)
+          <Download className="h-4 w-4" /> {exportingRgpd ? 'Export en cours…' : '📥 Télécharger mes données (RGPD)'}
         </button>
         <button
           onClick={() => setShowDeleteModal(true)}

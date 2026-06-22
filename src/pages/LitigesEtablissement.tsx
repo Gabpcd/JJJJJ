@@ -186,11 +186,11 @@ export default function LitigesEtablissement() {
                       👤 {l.soignant_nom} · {l.soignant_profession}
                       {l.mission_debut && ` · ${format(new Date(l.mission_debut), 'd MMM yyyy', { locale: fr })}`}
                     </p>
-                    <p className="text-xs text-muted-foreground mt-1 truncate">
+                    <p className="text-xs text-muted-foreground mt-1 truncate" title={l.motif}>
                       <span className="font-medium">Motif :</span> {l.motif}
                     </p>
                     {l.dernier_message && (
-                      <p className="text-xs text-muted-foreground mt-1 truncate flex items-center gap-1">
+                      <p className="text-xs text-muted-foreground mt-1 truncate flex items-center gap-1" title={l.dernier_message}>
                         <MessageCircle className="h-3 w-3" />
                         {l.dernier_message}
                       </p>
