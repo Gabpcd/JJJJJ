@@ -669,7 +669,15 @@ export default function RechercheMissions() {
                   onClick: () => setAlerteOpen(true),
                 }}
                 ctaSecondaire={
-                  rayonKm < 100
+                  /* Cause la plus probable d'un résultat vide : un filtre rapide
+                     actif (urgentes/weekend/nuit). On propose d'abord de les
+                     effacer, sinon d'élargir le rayon. */
+                  (urgentesOnly || horaire !== 'TOUS')
+                    ? {
+                        label: 'Effacer les filtres rapides',
+                        onClick: () => { setUrgentesOnly(false); setHoraire('TOUS'); },
+                      }
+                    : rayonKm < 100
                     ? {
                         label: 'Élargir le rayon (+20 km)',
                         onClick: () => setRayonKm((r) => Math.min(100, r + 20)),
