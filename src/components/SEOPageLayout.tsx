@@ -2,6 +2,7 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { HeartPulse, ArrowRight } from 'lucide-react';
 import { FooterLegal } from '@/components/FooterLegal';
+import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 
 interface SEOPageLayoutProps {
   children: React.ReactNode;
@@ -37,7 +38,12 @@ export function SEOPageLayout({ children, heroTitle, heroSubtitle, ctaText, ctaH
       <section className="relative bg-gradient-to-br from-primary/10 via-background to-primary/5 py-16 md:py-24">
         <div className="max-w-4xl mx-auto px-4 text-center">
           <h1 className="text-3xl md:text-5xl font-extrabold text-foreground leading-tight mb-4">{heroTitle}</h1>
-          <p className="text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto">{heroSubtitle}</p>
+          <p className="text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto mb-8">{heroSubtitle}</p>
+          {/* CTA ciblé above-the-fold : le visiteur organique agit sans scroller
+              jusqu'au bas de page (ctaText/ctaHref étaient ignorés auparavant) */}
+          <BoutonY2K variant="primary" onClick={() => navigate(ctaHref)} iconeDroite={<ArrowRight className="h-4 w-4" />}>
+            {ctaText}
+          </BoutonY2K>
         </div>
       </section>
 

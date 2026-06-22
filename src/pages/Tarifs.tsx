@@ -2,6 +2,7 @@ import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Check } from 'lucide-react';
 import { SEOHead } from '@/components/SEOHead';
 import { usePageTitle } from '@/hooks/usePageTitle';
+import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 
 const INCLUS = [
   'Publication de missions illimitée',
@@ -60,6 +61,15 @@ export default function Tarifs() {
                 </li>
               ))}
             </ul>
+
+            {/* CTA en bas de carte : l'étab vient de lire toute la valeur,
+                il peut agir immédiatement sans remonter au header */}
+            <div className="mt-8 flex flex-col items-center gap-2">
+              <BoutonY2K variant="primary" onClick={() => navigate('/inscription/etablissement')}>
+                S'inscrire gratuitement
+              </BoutonY2K>
+              <p className="text-xs text-muted-foreground">Sans engagement · 2 minutes</p>
+            </div>
           </div>
 
           <p className="text-center text-xs text-muted-foreground mt-6">
