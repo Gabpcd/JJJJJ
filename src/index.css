@@ -496,6 +496,25 @@
 }
 
 @layer components {
+  .scroll-hint {
+    position: relative;
+  }
+  .scroll-hint::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 24px;
+    background: linear-gradient(to right, transparent, hsl(var(--card)));
+    pointer-events: none;
+    opacity: 1;
+    transition: opacity 0.2s;
+  }
+  @media (min-width: 768px) {
+    .scroll-hint::after { display: none; }
+  }
+
   .btn-primary {
     @apply bg-primary hover:bg-primary-dark active:scale-[0.97] text-primary-foreground rounded-xl px-4 py-2.5 md:px-6 md:py-3 font-semibold transition-all duration-150;
     min-height: 44px;
