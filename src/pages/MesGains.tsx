@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, Suspense } from 'react';
 import { lazyRetry as lazy } from '@/lib/lazyRetry';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { usePageTitle } from '@/hooks/usePageTitle';
-import { Banknote, Clock, Download, TrendingUp, ChevronRight, Calculator, FileText, Search, CheckCircle, AlertTriangle, Scale, Receipt, Zap } from 'lucide-react';
+import { Banknote, Clock, Download, TrendingUp, ChevronRight, Calculator, FileText, Search, CheckCircle, AlertTriangle, Scale, Receipt, Zap, CreditCard } from 'lucide-react';
 import { LayoutApp } from '@/components/LayoutApp';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { MesFacturesHonorairesContent } from './MesFacturesHonoraires';
@@ -249,6 +249,17 @@ export function MesGainsApercuContent() {
         {isLiberal && (
           <BoutonY2K variant="secondary" size="sm" onClick={() => navigate('/soignant/charges')} className="gap-1.5">
             <Calculator className="h-4 w-4" /> Mes charges
+          </BoutonY2K>
+        )}
+        {/* Liens de confort vers les pages setup paiement (sinon seulement dans la nav). */}
+        {soignant?.type_exercice !== 'SALARIE' && (
+          <BoutonY2K variant="secondary" size="sm" onClick={() => navigate('/soignant/stripe-connect')} className="gap-1.5">
+            <CreditCard className="h-4 w-4" /> Compte de paiement
+          </BoutonY2K>
+        )}
+        {(soignant?.type_exercice === 'LIBERAL' || soignant?.type_exercice === 'MIXTE') && (
+          <BoutonY2K variant="secondary" size="sm" onClick={() => navigate('/soignant/mandat-facturation')} className="gap-1.5">
+            <FileText className="h-4 w-4" /> Mandat de facturation
           </BoutonY2K>
         )}
       </div>
