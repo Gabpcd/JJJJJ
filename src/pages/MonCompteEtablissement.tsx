@@ -29,10 +29,10 @@ export default function MonCompteEtablissement() {
     {
       titre: '',
       lignes: [
-        { icone: User, label: 'Mon établissement', route: '/etablissement/profil' },
+        { icone: User, label: 'Mon établissement', route: '/etablissement/parametres?tab=profil' },
         { icone: CreditCard, label: 'Facturation', route: '/etablissement/facturation' },
-        { icone: Star, label: 'Qualité', route: '/etablissement/evaluations-a-faire' },
-        { icone: Settings, label: 'Paramètres', route: '/etablissement/parametres' },
+        { icone: Star, label: 'Qualité', route: '/etablissement/litiges' },
+        { icone: Settings, label: 'Paramètres', route: '/etablissement/parametres?tab=config' },
         { icone: LogOut, label: 'Se déconnecter', onClick: () => deconnexion(), variante: 'danger' as const, sansChevron: true },
       ],
     },
