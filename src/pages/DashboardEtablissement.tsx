@@ -34,6 +34,7 @@ import { useEtablissementScope } from '@/hooks/useEtablissementScope';
 import { TopSoignants } from '@/components/dashboard/TopSoignants';
 import { SectionPlanning } from '@/components/dashboard/SectionPlanning';
 import { GraphiqueEvolutionMissions } from '@/components/dashboard/GraphiqueEvolutionMissions';
+import { CarteBFAInfo } from '@/components/dashboard/CarteBFAInfo';
 import { IndicateursAvancesEtab } from '@/components/dashboard/IndicateursAvancesEtab';
 import { CardScoreQualiteEtab } from '@/components/dashboard/CardScoreQualiteEtab';
 
@@ -639,6 +640,10 @@ export default function DashboardEtablissement() {
           </div>
         </div>
       )}
+
+      {/* Bonus fidélité annuel (BFA) — s'auto-masque si l'étab n'est pas éligible.
+          Levier de rétention : « publie plus → gagne un bonus ». */}
+      {etablissementId && <CarteBFAInfo etablissementId={etablissementId} />}
 
       <div>
         <div className="flex items-center justify-between mb-3">
