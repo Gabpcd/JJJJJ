@@ -189,20 +189,40 @@ Deno.serve(async (req) => {
     if (!authHeader?.startsWith("Bearer ")) {
       return new Response(JSON.stringify({ error: "Non autorisé" }), { status: 401, headers: corsHeaders });
     }
+    const token = authHeader.replace("Bearer ", "");
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseAuth = createClient(supabaseUrl, Deno.env.get("SUPABASE_ANON_KEY")!);
-    const { data: { user }, error: authError } = await supabaseAuth.auth.getUser(authHeader.replace("Bearer ", ""));
-    if (authError || !user) {
-      return new Response(JSON.stringify({ error: "Token invalide" }), { status: 401, headers: corsHeaders });
+    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
+
+    // Appel server-to-server : les triggers DB / crons (match, mission assignée,
+    // candidature, pointage…) appellent send-push avec la clé service_role ou le
+    // secret vault sb_secret_*. Ces appels sont de confiance — on saute la
+    // validation user (sinon auth.getUser(service_key) échoue → 401, ce qui
+    // cassait TOUTES les notifications push déclenchées par le backend).
+    // Pattern : _shared/admin-auth.ts.
+    const secretKey = Deno.env.get("SUPABASE_SECRET_KEY") || Deno.env.get("SB_SECRET_KEY") || "";
+    let estAppelService = (token === serviceRoleKey) || (!!secretKey && token === secretKey);
+    if (!estAppelService) {
+      try {
+        const { data: vaultSecret } = await supabaseAdmin.rpc("fn_lire_secret_cron" as any);
+        if (vaultSecret && typeof vaultSecret === "string" && token === vaultSecret) estAppelService = true;
+      } catch { /* ignore — fallback sur validation user */ }
+    }
+
+    if (!estAppelService) {
+      // Appel frontend : valider le token utilisateur.
+      const supabaseAuth = createClient(supabaseUrl, Deno.env.get("SUPABASE_ANON_KEY")!);
+      const { data: { user }, error: authError } = await supabaseAuth.auth.getUser(token);
+      if (authError || !user) {
+        return new Response(JSON.stringify({ error: "Token invalide" }), { status: 401, headers: corsHeaders });
+      }
     }
 
     const { destinataire_id, titre, corps, lien, type_evenement, channel_id } = await req.json();
     if (!destinataire_id || !titre) {
       return new Response(JSON.stringify({ error: "destinataire_id et titre requis" }), { status: 400, headers: corsHeaders });
     }
-
-    const supabaseAdmin = createClient(supabaseUrl, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
     // Préférences notifications canal PUSH
     if (type_evenement) {
