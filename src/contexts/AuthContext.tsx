@@ -6,7 +6,7 @@ import { logger } from '@/lib/logger';
 import { getAttribution } from '@/lib/attribution';
 import { gererErreurSupabase } from '@/lib/supabaseErrorHandler';
 import { viderCacheHorsLigne } from '@/lib/cacheHorsLigne';
-import { estRefusInscriptionAttendu } from '@/lib/erreurs';
+import { estRefusInscriptionAttendu, extraireErreurEdgeFn } from '@/lib/erreurs';
 
 interface AppUser {
   id: string;
@@ -328,19 +328,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       },
     });
 
-    if (fnError || result?.ok === false || result?.error) {
-      Sentry.captureException(fnError || new Error(result?.message || result?.error), { tags: { composant: 'AuthContext', action: 'inscription_etablissement' } });
-      logger.error('register-etablissement échoué', fnError || result);
+    // Quand l'edge function renvoie un status non-2xx, le SDK met data=null
+    // et le body JSON réel est dans fnError.context. On l'extrait ici pour
+    // propager code/message/details vers mapperErreurInscription côté page.
+    const resolvedResult = result ?? (fnError ? await extraireErreurEdgeFn(null, fnError) : null);
+
+    if (fnError || resolvedResult?.ok === false || resolvedResult?.error) {
+      Sentry.captureException(fnError || new Error(resolvedResult?.message || resolvedResult?.error), { tags: { composant: 'AuthContext', action: 'inscription_etablissement' } });
+      logger.error('register-etablissement échoué', fnError || resolvedResult);
       try {
         await supabase.auth.signOut();
       } catch { /* ignore */ }
       // [BUG 2 fix] Propage code/details du backend pour que mapperErreur
       // côté page puisse afficher un message précis (SIRET déjà enregistré,
       // SIRET checksum invalide, etc.).
-      const erreur = new Error(result?.message || result?.error || 'Erreur lors de la création du profil établissement. Veuillez réessayer.');
-      (erreur as any).code = result?.code;
-      (erreur as any).details = result?.details;
-      (erreur as any).body = result;
+      const erreur = new Error(resolvedResult?.message || resolvedResult?.error || 'Erreur lors de la création du profil établissement. Veuillez réessayer.');
+      (erreur as any).code = resolvedResult?.code;
+      (erreur as any).details = resolvedResult?.details;
+      (erreur as any).body = resolvedResult;
       throw erreur;
     }
 

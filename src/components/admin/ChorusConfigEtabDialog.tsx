@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { supabase } from '@/integrations/supabase/client';
+import { messageErreurEdgeFn } from '@/lib/erreurs';
 import { toast } from 'sonner';
 import { CheckCircle, XCircle, Search, ChevronDown } from 'lucide-react';
 
@@ -71,7 +72,8 @@ export function ChorusConfigEtabDialog({ etabId, etabNom, config, open, onClose,
         setVerify({ status: 'not_found', error: data.error || 'Structure introuvable' });
       }
     } catch (err: any) {
-      setVerify({ status: 'error', error: err.message || 'Erreur de vérification' });
+      const msg = await messageErreurEdgeFn(err, 'Erreur lors de la vérification Chorus Pro.');
+      setVerify({ status: 'error', error: msg });
     }
   };
 

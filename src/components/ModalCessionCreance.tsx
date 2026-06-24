@@ -4,6 +4,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { Checkbox } from '@/components/ui/checkbox';
 import { supabase } from '@/integrations/supabase/client';
+import { messageErreurEdgeFn } from '@/lib/erreurs';
 import { toast } from 'sonner';
 import {
   CESSION_CREANCE_VERSION,
@@ -107,7 +108,8 @@ export function ModalCessionCreance({ open, onClose, factureId, numeroFacture, m
         body: { facture_honoraire_id: factureId },
       });
       if (error) {
-        toast.error(data?.error || error.message || 'Erreur');
+        const msg = await messageErreurEdgeFn(error, 'Erreur lors de la demande d\'affacturage.');
+        toast.error(msg);
         return;
       }
       if (data?.configured === false) {
