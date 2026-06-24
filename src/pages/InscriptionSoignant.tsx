@@ -116,7 +116,7 @@ export default function InscriptionSoignant() {
 
   // RPPS verification state
   const [rppsVerifiant, setRppsVerifiant] = useState(false);
-  const [rppsResultat, setRppsResultat] = useState<{ trouve: boolean; nom_affiche?: string; specialite_code?: string | null; specialite_label?: string | null; fhir_indisponible?: boolean; profession_api?: string } | null>(null);
+  const [rppsResultat, setRppsResultat] = useState<{ trouve: boolean; nom_affiche?: string; specialite_code?: string | null; specialite_label?: string | null; fhir_indisponible?: boolean; profession_api?: string; profession_correspond?: boolean | null } | null>(null);
   const [rppsPreRempli, setRppsPreRempli] = useState(false);
   // Session E-1 : un RPPS non trouvé dans l'annuaire ne doit plus éjecter le
   // soignant du funnel — il peut continuer avec une vérification manuelle sous
@@ -186,7 +186,9 @@ export default function InscriptionSoignant() {
   // historique » ; pour les autres à RPPS, il reste optionnel (diplôme à la place).
   const rppsObligatoireInscription = !!form.profession && PROFESSIONS_RPPS_REQUIS.includes(form.profession);
   const rppsMatch = rppsCorrespond();
-  const rppsBloquant = rppsRequis && form.rpps.length === 11 && rppsResultat && !rppsResultat.fhir_indisponible && (!rppsResultat.trouve || rppsMatch === false) && !rppsVerifManuelle;
+  // Mismatch de profession (RPPS d'une autre profession) = bloquant, au même titre que nom/prénom.
+  const rppsProfessionMismatch = !!rppsResultat?.trouve && rppsResultat?.profession_correspond === false;
+  const rppsBloquant = rppsRequis && form.rpps.length === 11 && rppsResultat && !rppsResultat.fhir_indisponible && (!rppsResultat.trouve || rppsMatch === false || rppsProfessionMismatch) && !rppsVerifManuelle;
   const etape2Valide = form.prenom && form.nom && form.profession && form.typesContrat.length > 0 && !rppsBloquant && !dateNaissanceRequise && dateNaissanceMajeur && (!TURNSTILE_REQUIRED || !!turnstileToken) && (!rppsObligatoireInscription || form.rpps.length === 11);
 
   // Verify RPPS when 11 digits entered
@@ -216,6 +218,7 @@ export default function InscriptionSoignant() {
               numero_rpps: rppsValue,
               prenom: form.prenom,
               nom: form.nom,
+              profession: form.profession,
               turnstileToken,
             }),
             signal: controller.signal,
@@ -252,6 +255,7 @@ export default function InscriptionSoignant() {
             specialite_label: data.specialite_label ?? null,
             fhir_indisponible: !!data.fhir_indisponible,
             profession_api: data.profession_api ?? undefined,
+            profession_correspond: data.profession_correspond ?? null,
           };
           setRppsResultat(resultat);
           if (data.trouve && !data.fhir_indisponible && (nomAffiche || prenomAffiche)) {
@@ -536,21 +540,12 @@ export default function InscriptionSoignant() {
                           Spécialité récupérée automatiquement : <span className="font-medium">{rppsResultat.specialite_label}</span>
                         </div>
                       )}
-                      {rppsResultat.profession_api && form.profession && (() => {
-                        const profApi = (rppsResultat.profession_api || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
-                        const profLabel = getLabelProfession(form.profession).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
-                        const familleIde = ['infirmier', 'ide'];
-                        const estFamilleIde = familleIde.some(t => profApi.includes(t));
-                        const declFamilleIde = ['IDE', 'IBODE', 'IADE'].includes(form.profession);
-                        const coherent = (estFamilleIde && declFamilleIde) || profApi.includes(profLabel.slice(0, 5)) || profLabel.includes(profApi.slice(0, 5));
-                        if (coherent) return null;
-                        return (
-                          <div className="flex items-center gap-1.5 text-xs bg-amber-50 text-amber-700 rounded-lg px-2 py-1.5">
-                            <ShieldAlert className="h-3.5 w-3.5" />
-                            ⚠️ Ce RPPS correspond à la profession « {rppsResultat.profession_api} » — vérifiez que la profession choisie est correcte.
-                          </div>
-                        );
-                      })()}
+                      {rppsResultat.profession_api && form.profession && rppsResultat.profession_correspond === false && (
+                        <div className="flex items-center gap-1.5 text-xs bg-destructive/5 text-destructive rounded-lg px-2 py-1.5" role="alert">
+                          <ShieldAlert className="h-3.5 w-3.5" />
+                          ❌ Ce RPPS correspond à la profession « {rppsResultat.profession_api} », pas à « {getLabelProfession(form.profession)} ». Vérifiez votre numéro ou votre profession.
+                        </div>
+                      )}
                     </div>
                   )}
                   {rppsResultat && rppsResultat.trouve && rppsMatch === false && form.rpps.length === 11 && !rppsVerifManuelle && (
