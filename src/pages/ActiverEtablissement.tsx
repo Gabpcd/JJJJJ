@@ -19,6 +19,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { messageErreurEdgeFn } from '@/lib/erreurs';
 import {
   FileText, CheckCircle, CheckCircle2, Loader2, ArrowLeft, Shield, Upload,
   Building2, UserCheck, Mail, AlertTriangle, Clock, CreditCard, ChevronRight,
@@ -262,7 +263,7 @@ export default function ActiverEtablissement() {
       const { data, error } = await supabase.functions.invoke('verify-finess', {
         body: { finess, etablissement_id: user.id },
       });
-      if (error) throw error;
+      if (error) { toast.error(await messageErreurEdgeFn(error, 'Erreur lors de la vérification FINESS. Réessayez.')); return; }
       if (data?.fhir_indisponible) {
         toast.error('Annuaire Santé momentanément indisponible. Réessayez dans un instant.');
       } else if (data?.trouve === false) {
@@ -322,7 +323,7 @@ export default function ActiverEtablissement() {
       const { data, error } = await supabase.functions.invoke('verify-piece-identite-etab', {
         body: { etablissement_id: user.id },
       });
-      if (error) throw error;
+      if (error) { toast.error(await messageErreurEdgeFn(error, "Le document n'a pas pu être vérifié. Vérifiez qu'il s'agit bien d'une pièce d'identité officielle (CNI, passeport, titre de séjour), lisible et complète.")); return; }
 
       if (data?.identite_verifiee) {
         toast.success('Identité du représentant vérifiée.');
