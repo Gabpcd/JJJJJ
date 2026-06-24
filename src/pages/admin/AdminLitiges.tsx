@@ -4,14 +4,16 @@ import { ChargementPage } from '@/components/ChargementPage';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { supabase } from '@/integrations/supabase/client';
 import { usePageTitle } from '@/hooks/usePageTitle';
-import { Scale, ChevronRight, Calendar } from 'lucide-react';
+import { Scale, ChevronRight, Calendar, Gavel } from 'lucide-react';
 import { BadgeY2K } from '@/components/y2k/BadgeY2K';
+import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { toast } from 'sonner';
 import { TimelineLitige } from '@/components/litige/TimelineLitige';
-import { BoutonsActionLitige } from '@/components/litige/BoutonsActionLitige';
 import { FilDiscussionLitige } from '@/components/FilDiscussionLitige';
+import { LitigeResolutionModal } from '@/components/admin/litiges/LitigeResolutionModal';
+import type { LitigeEnrichi } from '@/components/admin/litiges/types';
 import { statutBadgeV2, type StatutLitige } from '@/lib/statutLitige';
 
 type FiltreStatut = 'REVUE_ADMIN' | 'MEDIATION_EN_COURS' | 'TOUS_OUVERTS';
@@ -22,6 +24,8 @@ export default function AdminLitiges() {
   const [loading, setLoading] = useState(true);
   const [filtre, setFiltre] = useState<FiltreStatut>('REVUE_ADMIN');
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [resolutionLitige, setResolutionLitige] = useState<LitigeEnrichi | null>(null);
+  const [resolutionOpen, setResolutionOpen] = useState(false);
 
   const charger = async () => {
     setLoading(true);
@@ -31,12 +35,12 @@ export default function AdminLitiges() {
     const { data, error } = await supabase
       .from('litiges')
       .select(`
-        id, motif, statut, cree_le, soignant_id, etablissement_id, mission_id, initie_par,
+        id, motif, reponse, statut, cree_le, soignant_id, etablissement_id, mission_id, initie_par,
         accord_soignant, accord_etablissement, accord_soignant_le, accord_etablissement_le,
-        resolution, resolu_le,
-        missions(id, intitule, debut_le, fin_le),
-        soignants:soignant_id(id, prenom, nom, profession),
-        etablissements:etablissement_id(id, nom)
+        resolution, resolu_le, facture_id, type_litige, categorie_litige,
+        missions(id, intitule, debut_le, fin_le, profession_requise, service, statut),
+        soignants:soignant_id(id, prenom, nom, profession, email, telephone),
+        etablissements:etablissement_id(id, nom, email_contact, telephone_contact, type)
       `)
       .in('statut', statutsOuverts)
       .order('cree_le', { ascending: true });
@@ -181,7 +185,44 @@ export default function AdminLitiges() {
                 {isExpanded && (
                   <div className="border-t border-border mt-3 pt-3 space-y-3">
                     <TimelineLitige statut={l.statut} />
-                    <BoutonsActionLitige litige={l} role="ADMIN_PLATEFORME" onUpdate={charger} />
+                    <BoutonY2K
+                      variant="primary"
+                      size="sm"
+                      iconeGauche={<Gavel className="h-4 w-4" />}
+                      onClick={() => {
+                        const enrichi: LitigeEnrichi = {
+                          id: l.id, motif: l.motif, reponse: l.reponse ?? null,
+                          statut: l.statut, cree_le: l.cree_le,
+                          soignant_id: l.soignant_id, etablissement_id: l.etablissement_id,
+                          mission_id: l.mission_id, initie_par: l.initie_par,
+                          resolution: l.resolution, resolu_le: l.resolu_le,
+                          type_litige: l.type_litige ?? null, categorie_litige: l.categorie_litige ?? null,
+                          facture_id: l.facture_id ?? null,
+                          soignant: l.soignants ? {
+                            id: l.soignants.id, prenom: l.soignants.prenom, nom: l.soignants.nom,
+                            email: l.soignants.email ?? null, telephone: l.soignants.telephone ?? null,
+                            profession: l.soignants.profession ?? null,
+                          } : null,
+                          etablissement: l.etablissements ? {
+                            id: l.etablissements.id, nom: l.etablissements.nom,
+                            email_contact: l.etablissements.email_contact ?? null,
+                            telephone_contact: l.etablissements.telephone_contact ?? null,
+                            type: l.etablissements.type ?? null,
+                          } : null,
+                          mission: l.missions ? {
+                            id: l.missions.id, intitule: l.missions.intitule,
+                            profession_requise: l.missions.profession_requise ?? '',
+                            service: l.missions.service ?? null,
+                            debut_le: l.missions.debut_le, fin_le: l.missions.fin_le,
+                            statut: l.missions.statut ?? null,
+                          } : null,
+                        };
+                        setResolutionLitige(enrichi);
+                        setResolutionOpen(true);
+                      }}
+                    >
+                      Résoudre (financier + statut)
+                    </BoutonY2K>
                     <FilDiscussionLitige
                       litige={{
                         id: l.id,
@@ -204,6 +245,15 @@ export default function AdminLitiges() {
           })}
         </div>
       )}
+      <LitigeResolutionModal
+        litige={resolutionLitige}
+        open={resolutionOpen}
+        onOpenChange={(o) => {
+          setResolutionOpen(o);
+          if (!o) setResolutionLitige(null);
+        }}
+        onResolved={charger}
+      />
     </LayoutAdmin>
   );
 }
