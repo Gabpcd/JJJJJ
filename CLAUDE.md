@@ -89,6 +89,27 @@ async function getVaultCronSecret(sb: any): Promise<string> {
 - **Pas de `scrollIntoView({behavior:'smooth'})` au focus input** : Safari iOS scroll nativement vers le champ focusé. Le JS smooth + setTimeout crée un saut. Valable uniquement pour scroll vers section/message (FilDiscussionLitige, DashboardRH, etc.), PAS au focus champ.
 - **Note Capacitor (Sprint 18)** : `@capacitor/keyboard` déjà préparé dans `lib/platform.ts:170-175` (resize mode + listener `keyboardWillShow`). Ajouter `user-scalable=no` dans viewport meta WKWebView pour bloquer le zoom au cas où. Cf. docs/HOTFIX_UX_SAFARI_MOBILE.md.
 
+## Règle de rémunération / facturation — heures facturées
+
+**Règle officielle (explicite)** : les heures facturées (et payées au soignant) =
+
+```
+heures_facturees = GREATEST(prévisionnel hors pause, effectif hors pause)
+```
+
+- **Plancher prévisionnel garanti** : si le soignant travaille MOINS que prévu, il
+  touche quand même le planifié. S'il travaille PLUS (pointage effectif > prévu), il
+  touche le réel.
+- **Pauses toujours exclues** (`est_pause = true` ne compte jamais).
+- Appliqué de façon cohérente sur `duree_heures` (→ bulletin de paie), `net_a_payer` /
+  `total_brut` (→ commission + facture honoraires finale), et l'hebdo
+  (`fn_calculer_montant_periode` utilise déjà `GREATEST`).
+- Fonctions : `fn_sync_mission_creneaux` (`duree_heures`), `dec_calculer_finance_mission`
+  (`net_a_payer`/majorations, choisit le jeu de créneaux EFFECTIF vs PREVISIONNEL le plus
+  élevé). Migrations `20260624160000` (exclusion pauses) + `20260624170000` (plancher).
+- **À surfacer côté produit** (CGU / carte mission / contrat) : « vous êtes rémunéré au
+  minimum sur les heures planifiées ». Non encore affiché dans l'UI — à décider.
+
 ## Pièges vérification documents (verify-document)
 
 - **HEIC iPhone** → conversion JPEG côté browser (OffscreenCanvas) avant upload, l'API Anthropic Vision n'accepte pas HEIC.
