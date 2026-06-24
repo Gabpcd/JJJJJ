@@ -463,7 +463,7 @@ export async function rechercherStructure(
   config: PisteConfig,
   token: string,
   identifiant: string,
-): Promise<{ ok: boolean; found: boolean; structure?: any; data: any }> {
+): Promise<{ ok: boolean; found: boolean; structure?: any; data: any; status: number }> {
   // Chemin vérifié en prod le 11/06/2026 : /cpro/structures/v1/rechercher répond
   // (l'ancien /cpro/transverses/v1/rechercherStructure → 403 route inconnue).
   // Deux formats de corps tentés (nouveau puis legacy) — l'API renvoie 400 sur
@@ -497,5 +497,6 @@ export async function rechercherStructure(
     found: structures.length > 0,
     structure: structures[0] ?? undefined,
     data: result.data,
+    status: result.status,
   };
 }
