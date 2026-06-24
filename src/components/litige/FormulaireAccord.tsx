@@ -113,6 +113,8 @@ export function FormulaireAccord({ litigeId, propositionExistante, roleUtilisate
       }
       if (result.statut === 'RESOLU') {
         afficherNotification({ type: 'succes', message: 'Litige résolu ✅ Modifications appliquées.' });
+      } else if (result.statut === 'EN_ATTENTE_VALIDATION_ADMIN') {
+        afficherNotification({ type: 'succes', message: 'Accord conclu ✅ Le mouvement financier sera exécuté après validation de l\'administrateur.' });
       } else {
         afficherNotification({ type: 'succes', message: 'Proposition envoyée. En attente de l\'autre partie.' });
       }
@@ -139,7 +141,12 @@ export function FormulaireAccord({ litigeId, propositionExistante, roleUtilisate
         afficherNotification({ type: 'erreur', message: result?.error || 'Erreur' });
         return;
       }
-      afficherNotification({ type: 'succes', message: 'Accord conclu ✅ Modifications appliquées automatiquement.' });
+      afficherNotification({
+        type: 'succes',
+        message: result.statut === 'EN_ATTENTE_VALIDATION_ADMIN'
+          ? 'Accord conclu ✅ Le mouvement financier sera exécuté après validation de l\'administrateur.'
+          : 'Accord conclu ✅ Modifications appliquées.',
+      });
       onResolu?.();
     } catch (err: any) {
       afficherNotification({ type: 'erreur', message: err?.message || 'Erreur réseau' });
