@@ -467,6 +467,24 @@ export async function extraireErreurEdgeFn(data: any, error: any): Promise<Recor
   return null;
 }
 
+/**
+ * Message d'erreur LISIBLE pour un appel supabase.functions.invoke.
+ * Le SDK renvoie un message générique « Edge Function returned a non-2xx status
+ * code » quand la fonction répond en 4xx/5xx — le vrai message est dans
+ * `error.context` (le body). Ce helper l'extrait et retombe sur un fallback clair.
+ * À utiliser partout où on téléverse/vérifie un document.
+ */
+export async function messageErreurEdgeFn(
+  error: any,
+  fallback = 'Une erreur est survenue. Veuillez réessayer.',
+): Promise<string> {
+  const body = await extraireErreurEdgeFn(null, error);
+  const msg = body?.error || body?.message || body?.motif;
+  if (msg && typeof msg === 'string') return msg;
+  const raw = (error as any)?.message || '';
+  return raw && !raw.includes('non-2xx') ? raw : fallback;
+}
+
 export function estBlocageCodeTravail(error: any): boolean {
   const msg = error?.message || '';
   return msg.includes('[CODE DU TRAVAIL]');

@@ -13,6 +13,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { messageErreurEdgeFn } from '@/lib/erreurs';
 import {
   Shield, CheckCircle2, Building2, UserCheck, Mail, Upload, Loader2,
   ArrowLeft, AlertTriangle, Clock, FileText,
@@ -118,7 +119,7 @@ export default function VerificationEtablissement() {
       const { data, error } = await supabase.functions.invoke('verify-finess', {
         body: { finess, etablissement_id: user.id },
       });
-      if (error) throw error;
+      if (error) { toast.error(await messageErreurEdgeFn(error, 'Erreur lors de la vérification FINESS. Réessayez.')); return; }
       if (data?.fhir_indisponible) {
         toast.error('Annuaire Santé momentanément indisponible. Réessayez dans un instant.');
       } else if (data?.trouve === false) {
@@ -178,7 +179,7 @@ export default function VerificationEtablissement() {
       const { data, error } = await supabase.functions.invoke('verify-piece-identite-etab', {
         body: { etablissement_id: user.id },
       });
-      if (error) throw error;
+      if (error) { toast.error(await messageErreurEdgeFn(error, "Le document n'a pas pu être vérifié. Vérifiez qu'il s'agit bien d'une pièce d'identité officielle (CNI, passeport, titre de séjour), lisible et complète.")); return; }
 
       if (data?.identite_verifiee) {
         toast.success('Identité du représentant vérifiée.');
@@ -237,7 +238,7 @@ export default function VerificationEtablissement() {
       const { data, error } = await supabase.functions.invoke('verify-justificatif-fonction', {
         body: { etablissement_id: user.id },
       });
-      if (error) throw error;
+      if (error) { toast.error(await messageErreurEdgeFn(error, "Le justificatif n'a pas pu être vérifié. Vérifiez qu'il mentionne bien votre nom et votre établissement, et qu'il est lisible.")); return; }
 
       if (data?.justificatif_verifie) {
         toast.success('Justificatif de fonction validé — rattachement confirmé.');

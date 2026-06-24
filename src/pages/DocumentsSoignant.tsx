@@ -15,7 +15,7 @@ import { ConfettiMini } from '@/components/ConfettiMini';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { TYPES_DOCUMENTS, TYPES_DOCUMENTS_EXCLUS_UPLOAD, STATUTS_VERIFICATION } from '@/lib/documents';
-import { extraireMessageErreur } from '@/lib/erreurs';
+import { extraireMessageErreur, messageErreurEdgeFn } from '@/lib/erreurs';
 import { format, differenceInDays } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { toast } from 'sonner';
@@ -281,7 +281,7 @@ export function DocumentsSoignantContent() {
         body: { document_id: docId },
       });
       if (verifyError) {
-        toast.error('Erreur lors de la revérification.');
+        toast.error(await messageErreurEdgeFn(verifyError, 'Le document n\'a pas pu être vérifié. Vérifiez le type de document et sa lisibilité.'));
         handleErrorSilent(verifyError, 'Revérification document');
       } else if (verifyData?.verdict === 'VERIFIE') {
         toast.success('✅ Document vérifié automatiquement !');
