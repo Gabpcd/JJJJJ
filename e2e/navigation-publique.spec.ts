@@ -6,8 +6,9 @@ test.describe('Navigation pages publiques', () => {
     await expect(page).toHaveTitle(/Tarifs/i);
     // The page should contain pricing-related content
     await expect(page.getByText(/commission/i).first()).toBeVisible();
-    // The "S'inscrire gratuitement" CTA should be visible
-    await expect(page.getByText(/S'inscrire gratuitement/i)).toBeVisible();
+    // The "S'inscrire gratuitement" CTA should be visible (présent dans le header
+    // ET dans le corps de la page → strict mode violation sans .first()).
+    await expect(page.getByText(/S'inscrire gratuitement/i).first()).toBeVisible();
   });
 
   test('/a-propos charge la page a propos', async ({ page }) => {
