@@ -329,7 +329,7 @@ function AppRoutes() {
           <Route path="/etablissement/facturation" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><FacturationEtablissement /></RouteProtegee>} />
           <Route path="/etablissement/facturation/:id" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><DetailFacture /></RouteProtegee>} />
           <Route path="/etablissement/analytics" element={<Navigate to="/etablissement/rh?tab=analytics" replace />} />
-          <Route path="/etablissement/assurance" element={<Navigate to="/etablissement/parametres?tab=contrats" replace />} />
+          <Route path="/etablissement/assurance" element={<Navigate to="/etablissement/contrats" replace />} />
           <Route path="/etablissement/export-paie" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><ExportPaie /></RouteProtegee>} />
           <Route path="/etablissement/rh" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><DashboardRH /></RouteProtegee>} />
           <Route path="/etablissement/mon-groupe" element={<Navigate to="/etablissement/parametres?tab=groupe" replace />} />
@@ -347,7 +347,7 @@ function AppRoutes() {
               DashboardEtablissement que /etablissement/tableau-de-bord (canonique).
               Redirection pour ne garder qu'une seule URL. */}
           <Route path="/etablissement/dashboard" element={<Navigate to="/etablissement/tableau-de-bord" replace />} />
-          <Route path="/etablissement/contrat-plateforme" element={<Navigate to="/etablissement/parametres?tab=contrats" replace />} />
+          <Route path="/etablissement/contrat-plateforme" element={<Navigate to="/etablissement/contrats" replace />} />
           <Route path="/etablissement/obligations" element={<Navigate to="/etablissement/facturation" replace />} />
           <Route path="/etablissement/equipe" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><EquipeEtablissement /></RouteProtegee>} />
           <Route path="/etablissement/evaluations-a-faire" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><EvaluationsAFaireEtab /></RouteProtegee>} />
