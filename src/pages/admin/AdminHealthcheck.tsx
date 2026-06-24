@@ -4,6 +4,7 @@ import { LayoutAdmin } from '@/components/LayoutAdmin';
 import { supabase, SUPABASE_URL } from '@/integrations/supabase/client';
 import { CheckCircle, XCircle, Clock, RefreshCw, Server, Database, Mail, CreditCard, Shield, Smartphone, Globe, KeyRound, MessageSquare, Send, ShieldCheck, Landmark } from 'lucide-react';
 import { toast } from 'sonner';
+import { messageErreurEdgeFn } from '@/lib/erreurs';
 import { useAuth } from '@/contexts/AuthContext';
 import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { CardY2K } from '@/components/y2k/CardY2K';
@@ -71,7 +72,8 @@ export default function AdminHealthcheck() {
       const { data } = await supabase.functions.invoke('send-sms', { body: { warm: true } });
       results.push({ name: 'Twilio SMS', icon: Smartphone, status: 'ok', latency: Date.now() - smsStart, detail: data?.warm ? 'Warm ping OK' : 'Réponse inattendue' });
     } catch (e: any) {
-      results.push({ name: 'Twilio SMS', icon: Smartphone, status: 'error', latency: Date.now() - smsStart, detail: e.message });
+      const msg = await messageErreurEdgeFn(e, 'Erreur SMS');
+      results.push({ name: 'Twilio SMS', icon: Smartphone, status: 'error', latency: Date.now() - smsStart, detail: msg });
     }
 
     // 6. Document AI (verify-document warm ping)
@@ -92,9 +94,11 @@ export default function AdminHealthcheck() {
     const emailStart = Date.now();
     try {
       const { error } = await supabase.functions.invoke('send-email', { body: { warm: true } });
-      results.push({ name: 'Resend Email', icon: Mail, status: error ? 'error' : 'ok', latency: Date.now() - emailStart, detail: error ? error.message : 'Warm ping OK' });
+      const emailDetail = error ? await messageErreurEdgeFn(error, 'Erreur email') : 'Warm ping OK';
+      results.push({ name: 'Resend Email', icon: Mail, status: error ? 'error' : 'ok', latency: Date.now() - emailStart, detail: emailDetail });
     } catch (e: any) {
-      results.push({ name: 'Resend Email', icon: Mail, status: 'error', latency: Date.now() - emailStart, detail: e.message });
+      const msg = await messageErreurEdgeFn(e, 'Erreur email');
+      results.push({ name: 'Resend Email', icon: Mail, status: 'error', latency: Date.now() - emailStart, detail: msg });
     }
 
     // 8. Pro Santé Connect (warm ping psc-authorize)
@@ -110,7 +114,8 @@ export default function AdminHealthcheck() {
         detail: configured ? 'Credentials ANS configurés' : 'En attente credentials ANS (PSC_CLIENT_ID/SECRET)',
       });
     } catch (e: any) {
-      results.push({ name: 'Pro Santé Connect', icon: ShieldCheck, status: 'error', latency: Date.now() - pscStart, detail: e.message });
+      const msg = await messageErreurEdgeFn(e, 'Erreur Pro Santé Connect');
+      results.push({ name: 'Pro Santé Connect', icon: ShieldCheck, status: 'error', latency: Date.now() - pscStart, detail: msg });
     }
 
     // 9. Chorus Pro / PISTE (warm ping test-piste-credentials)
@@ -130,7 +135,8 @@ export default function AdminHealthcheck() {
         detail: apiOk ? 'OAuth + API factures opérationnels' : oauthOk ? 'OAuth OK, API métier en erreur — voir Chorus Pro → Vérifier connexion' : 'Vérification impossible — voir Chorus Pro → Vérifier connexion',
       });
     } catch (e: any) {
-      results.push({ name: 'Chorus Pro (PISTE)', icon: Landmark, status: 'error', latency: Date.now() - pisteStart, detail: e.message });
+      const msg = await messageErreurEdgeFn(e, 'Erreur Chorus Pro');
+      results.push({ name: 'Chorus Pro (PISTE)', icon: Landmark, status: 'error', latency: Date.now() - pisteStart, detail: msg });
     }
 
     // 10. Annuaire Santé FHIR (warm ping verify-rpps)
@@ -148,7 +154,8 @@ export default function AdminHealthcheck() {
           : 'ESANTE_FHIR_API_KEY manquante (vérification différée à 24h)',
       });
     } catch (e: any) {
-      results.push({ name: 'Annuaire Santé (RPPS)', icon: ShieldCheck, status: 'error', latency: Date.now() - rppsStart, detail: e.message });
+      const msg = await messageErreurEdgeFn(e, 'Erreur Annuaire Santé');
+      results.push({ name: 'Annuaire Santé (RPPS)', icon: ShieldCheck, status: 'error', latency: Date.now() - rppsStart, detail: msg });
     }
 
     // 11. Sentry — masqué si DSN non configurée (activation à venir côté Vercel).
@@ -204,8 +211,9 @@ export default function AdminHealthcheck() {
         },
       });
       if (error) {
-        setSmsResult({ ok: false, detail: error.message || 'Erreur invocation' });
-        toast.error(`Échec : ${error.message || 'Erreur'}`);
+        const msg = await messageErreurEdgeFn(error, 'Erreur lors de l\'envoi du SMS de test.');
+        setSmsResult({ ok: false, detail: msg });
+        toast.error(`Échec : ${msg}`);
       } else if (data?.success === false) {
         setSmsResult({ ok: false, detail: data.error || 'Twilio rejected' });
         toast.error(`Twilio rejette : ${data.error || 'Erreur'}`);
@@ -242,7 +250,8 @@ export default function AdminHealthcheck() {
         toast.error('PSC : configuration incomplète — voir détail ci-dessous');
       }
     } catch (e: any) {
-      toast.error(`PSC : erreur — ${e?.message || e}`);
+      const msg = await messageErreurEdgeFn(e, 'Erreur lors de la vérification Pro Santé Connect.');
+      toast.error(`PSC : erreur — ${msg}`);
       setPscResult({
         env: 'inconnu',
         secrets_ok: false,
@@ -250,7 +259,7 @@ export default function AdminHealthcheck() {
         discovery_ok: false,
         discovery_status: null,
         endpoints_match: false,
-        endpoints_diff: [`Exception : ${e?.message || e}`],
+        endpoints_diff: [`Exception : ${msg}`],
         duration_ms: 0,
       });
     } finally {

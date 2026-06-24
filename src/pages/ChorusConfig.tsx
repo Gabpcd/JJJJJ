@@ -8,6 +8,7 @@ import { Landmark, Loader2, Save, CheckCircle, Edit2, Search, XCircle } from 'lu
 import { FadeInView } from '@/components/FadeInView';
 import { Input } from '@/components/ui/input';
 import { BoutonY2K } from '@/components/y2k/BoutonY2K';
+import { messageErreurEdgeFn } from '@/lib/erreurs';
 import { capturerErreurSentry } from '@/lib/sentry';
 
 interface VerifyResult {
@@ -73,7 +74,8 @@ export default function ChorusConfig() {
         setVerify({ status: 'not_found', error: data.error || 'Structure introuvable sur Chorus Pro' });
       }
     } catch (err: any) {
-      setVerify({ status: 'error', error: err.message || 'Erreur de vérification' });
+      const msg = await messageErreurEdgeFn(err, 'Erreur lors de la vérification Chorus Pro.');
+      setVerify({ status: 'error', error: msg });
     }
   };
 

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { CheckCircle, XCircle, Clock, Send, Loader2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
-import { extraireMessageErreur } from '@/lib/erreurs';
+import { extraireMessageErreur, messageErreurEdgeFn } from '@/lib/erreurs';
 import { ModalPaiementCommission } from '@/components/ModalPaiementCommission';
 import { PopoverScoreSoignant } from '@/components/score/PopoverScoreSoignant';
 import { getLabelProfession } from '@/lib/constantes';
@@ -111,7 +111,12 @@ export function ListeCandidatures({ missionId, missionProfession, missionSpecial
         const { data, error } = await supabase.functions.invoke('create-mission-payment', {
           body: { mission_id: missionId },
         });
-        if (error) throw error;
+        if (error) {
+          const msg = await messageErreurEdgeFn(error, 'Erreur lors de la création du paiement de la mission.');
+          onError(msg);
+          setTraitement(null);
+          return;
+        }
         if (data?.client_secret) {
           // Need card input
           setPaiementModal({ clientSecret: data.client_secret, montant: data.amount, candidatureId });

@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { CheckCircle2, ChevronDown, FileStack, History, RefreshCw, Search, Settings, Wifi } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
+import { messageErreurEdgeFn } from '@/lib/erreurs';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -96,7 +97,8 @@ export default function AdminChorusPro() {
         toast.error(`Connexion Chorus Pro — échecs : ${fails || d.summary}`);
       }
     } catch (err: any) {
-      toast.error(`Vérification connexion : ${err.message ?? 'erreur inconnue'}`);
+      const msg = await messageErreurEdgeFn(err, 'Erreur lors de la vérification de la connexion Chorus Pro.');
+      toast.error(`Vérification connexion : ${msg}`);
     }
     setTesting(false);
   };
@@ -113,7 +115,8 @@ export default function AdminChorusPro() {
         toast.success(`Sync OK : ${d.synced ?? 0} vérifiées, ${d.updates ?? 0} mises à jour, ${d.notifs_emitted ?? 0} notifs`);
       }
     } catch (err: any) {
-      toast.error(`Erreur sync : ${err.message ?? 'inconnu'}`);
+      const msg = await messageErreurEdgeFn(err, 'Erreur lors de la synchronisation Chorus Pro.');
+      toast.error(`Erreur sync : ${msg}`);
     }
     setSyncing(false);
   };
@@ -382,7 +385,8 @@ function SubmissionsChorus() {
         toast.error(`Échec de la nouvelle soumission : ${d.error ?? 'voir le détail'}`);
       }
     } catch (err: any) {
-      toast.error(`Erreur : ${err.message ?? 'inconnu'}`);
+      const msg = await messageErreurEdgeFn(err, 'Erreur lors de la soumission Chorus Pro.');
+      toast.error(`Erreur : ${msg}`);
     }
     setResubmitLoading(false);
   };
