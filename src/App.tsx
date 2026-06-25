@@ -50,6 +50,7 @@ const PageContact = lazy(() => import("./pages/PageContact"));
 const PageCGU = lazy(() => import("./pages/PageCGU"));
 const PageCGV = lazy(() => import("./pages/PageCGV"));
 const PageConfidentialite = lazy(() => import("./pages/PageConfidentialite"));
+const PageSuppressionCompte = lazy(() => import("./pages/PageSuppressionCompte"));
 const PageMentionsLegales = lazy(() => import("./pages/PageMentionsLegales"));
 const PageAccessibilite = lazy(() => import("./pages/PageAccessibilite"));
 const PageAide = lazy(() => import("./pages/PageAide"));
@@ -238,6 +239,7 @@ function AppRoutes() {
           <Route path="/cgv" element={<PageCGV />} />
           <Route path="/confidentialite" element={<PageConfidentialite />} />
           <Route path="/politique-confidentialite" element={<PageConfidentialite />} />
+          <Route path="/supprimer-mon-compte" element={<PageSuppressionCompte />} />
           <Route path="/mentions-legales" element={<PageMentionsLegales />} />
           <Route path="/accessibilite" element={<PageAccessibilite />} />
           <Route path="/aide" element={<PageAide />} />
