@@ -152,6 +152,13 @@ export function ModalDetailMissionSwipe({ mission, open, onOpenChange, onPostule
                 </dd>
               </div>
             </dl>
+            {mission.net_estime != null && mission.net_estime > 0 && (
+              <div className="mt-3 rounded-2xl bg-gradient-hero p-4 text-center">
+                <p className="text-xs font-semibold text-white/80 uppercase tracking-wider mb-1">Gain net estimé*</p>
+                <p className="text-2xl font-extrabold text-white">~{Math.round(mission.net_estime)} €</p>
+                <p className="text-[10px] text-white/60 mt-1">*estimation, le net réel dépend des cotisations applicables</p>
+              </div>
+            )}
           </section>
 
           {/* Dates */}

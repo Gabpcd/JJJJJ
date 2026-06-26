@@ -22,6 +22,7 @@ export interface MissionSwipePayload {
   etablissement_ville: string | null;
   etablissement_score: number | null;
   taux_horaire_base: number | null;
+  net_estime: number | null;
   duree_heures: number | null;
   debut_le: string | null;
   fin_le: string | null;
@@ -168,10 +169,21 @@ export function CardMissionSwipe({ mission, onTap, className }: Props) {
             </div>
             <div className="flex flex-col items-center justify-center bg-jolene-cyan-50 rounded-xl p-2.5">
               <Euro className="h-4 w-4 text-jolene-cyan-700 mb-1" aria-hidden="true" />
-              <span className="font-semibold text-jolene-midnight">
-                {mission.taux_horaire_base ? `${mission.taux_horaire_base}€/h` : '—'}
-              </span>
-              <span className="text-[10px] text-jolene-bubblegum">Tarif</span>
+              {mission.net_estime ? (
+                <>
+                  <span className="font-bold text-jolene-midnight">
+                    ~{Math.round(mission.net_estime)}€
+                  </span>
+                  <span className="text-[10px] text-jolene-bubblegum">Net estimé*</span>
+                </>
+              ) : (
+                <>
+                  <span className="font-semibold text-jolene-midnight">
+                    {mission.taux_horaire_base ? `${mission.taux_horaire_base}€/h` : '—'}
+                  </span>
+                  <span className="text-[10px] text-jolene-bubblegum">Tarif</span>
+                </>
+              )}
             </div>
           </div>
 
