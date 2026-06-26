@@ -220,7 +220,7 @@ function RechercheMissionsPublique({ navigate }: { navigate: ReturnType<typeof u
                           <span className="font-bold text-primary">{Number(m.taux_horaire_base).toFixed(0)}€/h</span>
                         </div>
                         {m.est_urgente && (
-                          <span className="mt-2 inline-block text-xs font-bold uppercase tracking-wider text-destructive bg-destructive/15 rounded-full px-2 py-0.5">Urgent</span>
+                          <span className="mt-2 inline-block text-xs font-bold uppercase tracking-wider text-destructive-foreground bg-destructive rounded-full px-2 py-0.5">Urgent</span>
                         )}
                       </div>
                     ))}
