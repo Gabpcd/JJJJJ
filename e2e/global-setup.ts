@@ -23,6 +23,7 @@ const ENFANTS_MISSION = [
   'bulletins_paie',
   'contrats_travail_missions',
   'contrats_mission',
+  'rappels_contrat_travail',
   'scans_pointage',
   'presences',
   'codes_secours_mission',
@@ -57,6 +58,18 @@ export default async function globalSetup() {
   }
   const ids = (missions ?? []).map((m: { id: string }) => m.id);
   if (ids.length > 0) {
+    // messages_chat est enfant de conversations (FK conversation_id, pas de
+    // mission_id direct). Il DOIT être purgé avant conversations, sinon le DELETE
+    // conversations échoue (FK) et bloque en cascade la suppression des missions
+    // → missions orphelines EN_COURS qui rebloquent les runs suivants (chevauchement).
+    const { data: convs } = await admin.from('conversations').select('id').in('mission_id', ids);
+    const convIds = (convs ?? []).map((c: { id: string }) => c.id);
+    if (convIds.length > 0) {
+      const { error: eMc } = await admin.from('messages_chat').delete().in('conversation_id', convIds);
+      if (eMc && !/relation .* does not exist/.test(eMc.message)) {
+        console.warn('[global-setup] purge messages_chat :', eMc.message);
+      }
+    }
     for (const table of ENFANTS_MISSION) {
       const { error: e } = await admin.from(table).delete().in('mission_id', ids);
       if (e && !/relation .* does not exist/.test(e.message)) {
