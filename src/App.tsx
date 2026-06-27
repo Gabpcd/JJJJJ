@@ -170,6 +170,7 @@ const AdminFinances = lazy(() => import("./pages/admin/AdminFinances"));
 const AdminTauxCommission = lazy(() => import("./pages/admin/AdminTauxCommission"));
 const AdminConfig = lazy(() => import("./pages/admin/AdminConfig"));
 const AdminAuditLogs = lazy(() => import("./pages/admin/AdminAuditLogs"));
+const AdminMessagesContact = lazy(() => import("./pages/admin/AdminMessagesContact"));
 const AdminDPIA = lazy(() => import("./pages/admin/AdminDPIA"));
 const AdminHealthcheck = lazy(() => import("./pages/admin/AdminHealthcheck"));
 const AdminCohortEconomics = lazy(() => import("./pages/admin/AdminCohortEconomics"));
@@ -375,6 +376,7 @@ function AppRoutes() {
           <Route path="/admin/signalements" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminSignalements /></RouteProtegee>} />
           <Route path="/admin/verification-etablissements" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminVerificationEtablissements /></RouteProtegee>} />
           <Route path="/admin/litiges" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminLitiges /></RouteProtegee>} />
+          <Route path="/admin/messages-contact" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminMessagesContact /></RouteProtegee>} />
           <Route path="/admin/templates-contrats" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminTemplatesContrats /></RouteProtegee>} />
           <Route path="/admin/templates-contrats/:id" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminEditerTemplateContrat /></RouteProtegee>} />
           <Route path="/admin/contrats" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminContrats /></RouteProtegee>} />
