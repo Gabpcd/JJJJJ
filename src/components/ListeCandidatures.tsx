@@ -189,7 +189,12 @@ export function ListeCandidatures({ missionId, missionProfession, missionSpecial
     );
   }
 
-  const enAttente = candidatures.filter(c => c.statut === 'EN_ATTENTE');
+  // Une candidature issue d'un super-like porte ce message système.
+  const estSuperLike = (c: any) => (c.message || '').includes('super-like');
+  const enAttente = candidatures
+    .filter(c => c.statut === 'EN_ATTENTE')
+    // Super-likes en tête (tri stable : conserve l'ordre cree_le au sein de chaque groupe)
+    .sort((a, b) => (estSuperLike(b) ? 1 : 0) - (estSuperLike(a) ? 1 : 0));
   const traitees = candidatures.filter(c => c.statut !== 'EN_ATTENTE');
 
   return (
@@ -198,11 +203,16 @@ export function ListeCandidatures({ missionId, missionProfession, missionSpecial
         <div className="space-y-3">
           <p className="text-sm font-semibold text-foreground">En attente ({enAttente.length})</p>
           {enAttente.map((c: any) => (
-            <div key={c.id} className="card-base border-primary/20">
+            <div key={c.id} className={`card-base ${estSuperLike(c) ? 'border-2 border-amber-400 bg-amber-50/30 dark:bg-amber-950/10' : 'border-primary/20'}`}>
               <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
                 <div className="flex-1 min-w-0">
                   <p className="font-semibold text-sm text-foreground flex items-center gap-1.5 flex-wrap">
                     👤 {c.soignant?.prenom} {c.soignant?.nom}
+                    {estSuperLike(c) && (
+                      <span className="badge-base text-[10px] bg-gradient-celebrate text-white font-bold" title="Ce soignant a montré un fort intérêt (super-like)">
+                        ⭐ Super-like
+                      </span>
+                    )}
                     {c.soignant?.profession && (
                       <span className="badge-base text-[10px] bg-muted text-muted-foreground" title="Profession du candidat">
                         {getLabelProfession(c.soignant.profession)}
