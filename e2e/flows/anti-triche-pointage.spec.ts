@@ -144,27 +144,14 @@ test.describe('Anti-triche pointage Sprint 4.5', () => {
   }
 
   // Cleanup : l'acceptation crée des enfants en FK NO ACTION vers missions
-  // (conformite_travail, contrats_mission, conversations…) → purge ordonnée
-  // avant la mission (le DELETE direct échouerait en silence sinon).
+  // (contrats_mission, rappels_contrat_travail, conversations/messages_chat…).
+  // fn_test_purge_mission supprime dynamiquement TOUS les enfants FK + la mission
+  // côté serveur. L'ancienne liste statique oubliait rappels_contrat_travail /
+  // messages_chat → le DELETE missions échouait en silence → mission laissée
+  // ASSIGNÉE → test suivant en échec par chevauchement (soignant de test partagé).
   async function cleanup(missionId?: string) {
     if (!missionId) return;
-    const admin = adminClient();
-    const enfants = [
-      'conformite_travail',
-      'cotisations_sociales',
-      'bulletins_paie',
-      'contrats_travail_missions',
-      'contrats_mission',
-      'presences',
-      'scans_pointage',
-      'messages_mission',
-      'conversations',
-      'candidatures',
-    ];
-    for (const table of enfants) {
-      await admin.from(table as any).delete().eq('mission_id', missionId);
-    }
-    await admin.from('missions' as any).delete().eq('id', missionId);
+    await adminClient().rpc('fn_test_purge_mission' as any, { p_mission_id: missionId });
   }
 
   // ─── 1. Génération + scan QR valide ────────────────────────────────────

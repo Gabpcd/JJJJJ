@@ -105,23 +105,14 @@ export async function markMissionTerminee(missionId: string): Promise<boolean> {
  */
 export async function cleanupMissionCascade(missionId?: string | null): Promise<void> {
   if (!missionId) return;
-  const admin = adminClient();
-  const enfants = [
-    'conformite_travail',
-    'cotisations_sociales',
-    'bulletins_paie',
-    'contrats_travail_missions',
-    'contrats_mission',
-    'presences',
-    'scans_pointage',
-    'messages_mission',
-    'conversations',
-    'candidatures',
-  ];
-  for (const table of enfants) {
-    await admin.from(table as any).delete().eq('mission_id', missionId).then(() => {}, () => {});
-  }
-  await admin.from('missions' as any).delete().eq('id', missionId).then(() => {}, () => {});
+  // fn_test_purge_mission supprime dynamiquement TOUS les enfants FK (y compris
+  // rappels_contrat_travail et messages_chat, que l'ancienne liste statique
+  // oubliait) puis la mission, côté serveur. Sans ça le DELETE missions échouait
+  // en silence → mission laissée ASSIGNÉE → test suivant en échec par chevauchement
+  // sur le soignant de test partagé (run CI à 1 worker, donc en série).
+  await adminClient()
+    .rpc('fn_test_purge_mission' as any, { p_mission_id: missionId })
+    .then(() => {}, () => {});
 }
 
 /** Supprime toutes les données seedées par les helpers (cleanup test) */
