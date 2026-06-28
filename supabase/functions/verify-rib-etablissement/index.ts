@@ -108,7 +108,7 @@ Règles:
     const aiTimeout = setTimeout(() => aiController.abort(), 20000);
     let aiResponse: Response;
     try {
-      aiResponse = await fetch("https://api.anthropic.com/v1/messages", { method: "POST", headers: { "x-api-key": anthropicKey, "anthropic-version": "2023-06-01", "Content-Type": "application/json" }, body: JSON.stringify({ model: "claude-sonnet-4-20250514", max_tokens: 900, system: systemPrompt, messages: [{ role: "user", content }] }), signal: aiController.signal });
+      aiResponse = await fetch("https://api.anthropic.com/v1/messages", { method: "POST", headers: { "x-api-key": anthropicKey, "anthropic-version": "2023-06-01", "Content-Type": "application/json" }, body: JSON.stringify({ model: "claude-sonnet-4-6", max_tokens: 900, system: systemPrompt, messages: [{ role: "user", content }] }), signal: aiController.signal });
     } catch (e) {
       clearTimeout(aiTimeout);
       const estTimeout = (e as any)?.name === "AbortError";

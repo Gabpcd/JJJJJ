@@ -169,7 +169,7 @@ Vérifie que le document est bien un contrat et que ces informations concordent.
         method: "POST",
         headers: { "x-api-key": anthropicKey, "anthropic-version": "2023-06-01", "Content-Type": "application/json" },
         body: JSON.stringify({
-          model: "claude-sonnet-4-20250514",
+          model: "claude-sonnet-4-6",
           max_tokens: 1200,
           system: systemPrompt,
           messages: [{ role: "user", content: [
