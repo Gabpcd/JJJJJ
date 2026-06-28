@@ -699,10 +699,11 @@ export function DocumentsSoignantContent() {
         })}
       </div>
 
-      {/* Coordonnées bancaires (RIB) — le RIB n'est jamais un fichier à téléverser ici.
-          - Libéral / mixte : honoraires versés via Stripe Connect (RIB saisi côté Stripe).
-          - IBAN « primes de parrainage » : Profil → Paiements (jamais partagé avec l'étab).
-          - Missions salariées : l'établissement est l'employeur légal et établit la paie. */}
+      {/* Encart « à quoi sert le RIB » — le RIB est bien un document obligatoire (TOUS),
+          téléversé dans la liste ci-dessus. Cet encart explique son usage :
+          - Salarié : RIB transmis à l'établissement (employeur légal) pour la paie ;
+            primes Jolene via l'IBAN de Profil → Paiements.
+          - Libéral / mixte : honoraires versés via Stripe Connect (compte de versement). */}
       {soignant?.profession && (() => {
         const isLiberalOrMixte = soignant?.type_exercice === 'LIBERAL' || soignant?.type_exercice === 'MIXTE';
         return (
@@ -712,14 +713,11 @@ export function DocumentsSoignantContent() {
                 <Landmark className="h-5 w-5" />
               </span>
               <div className="min-w-0 flex-1">
-                <p className="text-sm font-semibold text-foreground">Coordonnées bancaires (RIB)</p>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Le RIB ne se téléverse pas comme un document.
-                </p>
+                <p className="text-sm font-semibold text-foreground">À quoi sert votre RIB ?</p>
                 {isLiberalOrMixte ? (
                   <>
                     <p className="text-sm text-muted-foreground mt-1">
-                      Pour vos <span className="font-medium text-foreground">honoraires libéraux</span>, le RIB est saisi de façon sécurisée lors de la configuration de votre compte de versement.
+                      Pour vos <span className="font-medium text-foreground">honoraires libéraux</span>, configurez aussi votre compte de versement sécurisé (le RIB y est saisi côté Stripe).
                     </p>
                     <BoutonY2K variant="secondary" size="sm" className="mt-3" onClick={() => navigate('/soignant/stripe-connect')}>
                       Configurer mes versements →
@@ -727,7 +725,7 @@ export function DocumentsSoignantContent() {
                   </>
                 ) : (
                   <p className="text-sm text-muted-foreground mt-1">
-                    Pour les <span className="font-medium text-foreground">missions salariées</span>, l'établissement est votre employeur et établit votre bulletin de paie. Votre IBAN pour les primes Jolene se renseigne dans <span className="font-medium text-foreground">Profil → Paiements</span>.
+                    Pour les <span className="font-medium text-foreground">missions salariées</span>, votre RIB est transmis à l'établissement (votre employeur), qui établit votre bulletin de paie. Vos primes Jolene utilisent l'IBAN renseigné dans <span className="font-medium text-foreground">Profil → Paiements</span>.
                   </p>
                 )}
               </div>
