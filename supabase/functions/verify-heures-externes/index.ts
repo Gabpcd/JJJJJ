@@ -1,5 +1,6 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { applyRateLimit, getClientIp } from "../_shared/rate-limit.ts";
+import { appelerAnthropic } from "../_shared/anthropic.ts";
 
 // Vérification IA d'une attestation d'heures externes (parcours 3200h libéral).
 // Lit le document téléversé via Anthropic Vision, extrait le nombre d'heures +
@@ -231,21 +232,13 @@ Lis le document, extrais le nombre réel d'heures travaillées, l'établissement
 
     const aiController = new AbortController();
     const aiTimeout = setTimeout(() => aiController.abort(), 20_000);
-    let aiResponse: Response;
+    let ai;
     try {
-      aiResponse = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: {
-          "x-api-key": anthropicKey,
-          "anthropic-version": "2023-06-01",
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: "claude-sonnet-4-6",
-          max_tokens: 1000,
-          system: systemPrompt,
-          messages: [{ role: "user", content: anthropicContent }],
-        }),
+      ai = await appelerAnthropic({
+        apiKey: anthropicKey,
+        system: systemPrompt,
+        content: anthropicContent,
+        maxTokens: 1000,
         signal: aiController.signal,
       });
     } catch (e) {
@@ -261,12 +254,12 @@ Lis le document, extrais le nombre réel d'heures travaillées, l'établissement
     }
     clearTimeout(aiTimeout);
 
-    if (!aiResponse.ok) {
-      const errText = await aiResponse.text();
-      console.error("Anthropic API failed:", aiResponse.status, errText);
+    if (!ai.ok) {
+      const errText = ai.body;
+      console.error("Anthropic API failed:", ai.status, errText);
       await supabase.from("heures_externes_soignants").update({
         resultat_ia: {
-          erreur_anthropic: { status: aiResponse.status, body_excerpt: errText.slice(0, 1500), at: new Date().toISOString() },
+          erreur_anthropic: { status: ai.status, body_excerpt: errText.slice(0, 1500), at: new Date().toISOString() },
         },
       } as any).eq("id", heure_externe_id);
       return new Response(JSON.stringify({ success: true, verdict: "EN_ATTENTE", reason: "AI unavailable" }), {
@@ -274,7 +267,7 @@ Lis le document, extrais le nombre réel d'heures travaillées, l'établissement
       });
     }
 
-    const aiData = await aiResponse.json();
+    const aiData = ai.data;
     const rawContent = aiData.content?.[0]?.text || "";
 
     let analysis: any;

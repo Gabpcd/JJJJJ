@@ -1,5 +1,6 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { applyRateLimit, getClientIp } from "../_shared/rate-limit.ts";
+import { appelerAnthropic } from "../_shared/anthropic.ts";
 
 // Vérification IA du contrat de service d'un établissement.
 // Lit le PDF téléversé via Anthropic, vérifie que c'est bien un contrat, extrait le
@@ -163,20 +164,16 @@ Vérifie que le document est bien un contrat et que ces informations concordent.
 
     const aiController = new AbortController();
     const aiTimeout = setTimeout(() => aiController.abort(), 25_000);
-    let aiResponse: Response;
+    let ai: Awaited<ReturnType<typeof appelerAnthropic>>;
     try {
-      aiResponse = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: { "x-api-key": anthropicKey, "anthropic-version": "2023-06-01", "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model: "claude-sonnet-4-6",
-          max_tokens: 1200,
-          system: systemPrompt,
-          messages: [{ role: "user", content: [
-            { type: "text", text: userMessage },
-            { type: "document", source: { type: "base64", media_type: "application/pdf", data: base64 } },
-          ] }],
-        }),
+      ai = await appelerAnthropic({
+        apiKey: anthropicKey,
+        system: systemPrompt,
+        content: [
+          { type: "text", text: userMessage },
+          { type: "document", source: { type: "base64", media_type: "application/pdf", data: base64 } },
+        ],
+        maxTokens: 1200,
         signal: aiController.signal,
       });
     } catch (e) {
@@ -191,17 +188,16 @@ Vérifie que le document est bien un contrat et que ces informations concordent.
     }
     clearTimeout(aiTimeout);
 
-    if (!aiResponse.ok) {
-      const errText = await aiResponse.text();
+    if (!ai.ok) {
       await supabase.from("etablissements").update({
-        contrat_ia_resultat: { erreur_anthropic: { status: aiResponse.status, body_excerpt: errText.slice(0, 1500), at: new Date().toISOString() } },
+        contrat_ia_resultat: { erreur_anthropic: { status: ai.status, body_excerpt: ai.body.slice(0, 1500), at: new Date().toISOString() } },
       } as any).eq("id", etablissement_id);
       return new Response(JSON.stringify({ success: true, coherent: null, reason: "AI unavailable" }), {
         headers: { ...corsHeaders(req), "Content-Type": "application/json" },
       });
     }
 
-    const aiData = await aiResponse.json();
+    const aiData = ai.data;
     const rawContent = aiData.content?.[0]?.text || "";
     let analysis: any;
     try {
