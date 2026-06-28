@@ -22,6 +22,17 @@ cassait **tous les crons** appelant la fonction (`relance-candidatures-en-attent
 échouait chaque jour à 09:00). `anon` n'ayant pas le GRANT EXECUTE, ce garde ne
 protégeait contre aucun appelant non fiable → aligné sur le même pattern.
 
+**Anti faux-positifs** (`20260628170000`) : le monitoring émettait des
+`CRON_RETARD « jamais »` pour des crons mensuels/annuels n'ayant pas encore atteint
+leur première échéance (auto-facturation-mensuelle, recalculer-paliers-commission,
+calculer-bfa-annuel) → bruit qui noie les vraies alertes. Désormais un cron jamais
+exécuté n'alerte que si son intervalle attendu est ≤ 2 jours (assez fréquent pour
+avoir déjà dû tourner). Un échec réel reste capté dès la 1ʳᵉ exécution.
+
+> Note : `auto-facturation-mensuelle` (`0 2 1 * *`, fix auth `20260624140000`) fera
+> sa première exécution le 1er du mois et traite **toutes** les missions `TERMINEE`
+> non facturées → rattrape automatiquement le backlog, pas de perte.
+
 ## B. Contrat front ↔ back (CI anti-raccord mort)
 
 `scripts/check-contrat-frontend-backend.mjs` (job CI `Contrat front ↔ back` dans
