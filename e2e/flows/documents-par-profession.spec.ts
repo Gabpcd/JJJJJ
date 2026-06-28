@@ -46,12 +46,12 @@ test.describe('Matrice documents requis par profession + exercice', () => {
 
   test('AS salariée → CARTE_IDENTITE + DIPLOME (+ autorisation exercice optionnelle)', () => {
     const docs = docsVisibles(rows, 'AS', 'SALARIE');
-    expect(docs).toEqual(['AUTORISATION_EXERCICE', 'CARTE_IDENTITE', 'DIPLOME']);
+    expect(docs).toEqual(['AUTORISATION_EXERCICE', 'CARTE_IDENTITE', 'DIPLOME', 'TITRE_SEJOUR']);
   });
 
   test('AES salariée → CARTE_IDENTITE + DIPLOME (+ autorisation exercice optionnelle)', () => {
     const docs = docsVisibles(rows, 'AES', 'SALARIE');
-    expect(docs).toEqual(['AUTORISATION_EXERCICE', 'CARTE_IDENTITE', 'DIPLOME']);
+    expect(docs).toEqual(['AUTORISATION_EXERCICE', 'CARTE_IDENTITE', 'DIPLOME', 'TITRE_SEJOUR']);
   });
 
   test('IDE salariée → CARTE_IDENTITE + DIPLOME + RPPS_ADELI + RIB (pas de RCP/URSSAF)', () => {
@@ -59,7 +59,7 @@ test.describe('Matrice documents requis par profession + exercice', () => {
     // l'établissement employeur consulte le RIB du salarié pour verser le salaire
     // (fn_consulter_rib_soignant). Seuls RCP + URSSAF restent libéraux uniquement.
     const docs = docsVisibles(rows, 'IDE', 'SALARIE');
-    expect(docs).toEqual(['AUTORISATION_EXERCICE', 'CARTE_IDENTITE', 'DIPLOME', 'RIB', 'RPPS_ADELI']);
+    expect(docs).toEqual(['AUTORISATION_EXERCICE', 'CARTE_IDENTITE', 'DIPLOME', 'RIB', 'RPPS_ADELI', 'TITRE_SEJOUR']);
     expect(docs).not.toContain('RCP_ASSURANCE');
     expect(docs).not.toContain('ATTESTATION_URSSAF');
   });
@@ -67,7 +67,7 @@ test.describe('Matrice documents requis par profession + exercice', () => {
   test('IDE libérale → CARTE_IDENTITE + DIPLOME + RPPS + RCP + RIB + URSSAF', () => {
     const docs = docsVisibles(rows, 'IDE', 'LIBERAL');
     expect(docs).toEqual([
-      'ATTESTATION_URSSAF', 'AUTORISATION_EXERCICE', 'CARTE_IDENTITE', 'DIPLOME', 'RCP_ASSURANCE', 'RIB', 'RPPS_ADELI',
+      'ATTESTATION_URSSAF', 'AUTORISATION_EXERCICE', 'CARTE_IDENTITE', 'DIPLOME', 'RCP_ASSURANCE', 'RIB', 'RPPS_ADELI', 'TITRE_SEJOUR',
     ]);
   });
 
@@ -80,7 +80,7 @@ test.describe('Matrice documents requis par profession + exercice', () => {
 
   test('PHARMACIEN → RPPS mais jamais RCP/RIB/URSSAF (salarié only)', () => {
     const salarie = docsVisibles(rows, 'PHARMACIEN', 'SALARIE');
-    expect(salarie).toEqual(['AUTORISATION_EXERCICE', 'CARTE_IDENTITE', 'DIPLOME', 'RPPS_ADELI']);
+    expect(salarie).toEqual(['AUTORISATION_EXERCICE', 'CARTE_IDENTITE', 'DIPLOME', 'RPPS_ADELI', 'TITRE_SEJOUR']);
     // Même en simulant libéral, pas de RCP/RIB/URSSAF (non seedés pour pharmacien)
     const liberal = docsVisibles(rows, 'PHARMACIEN', 'LIBERAL');
     expect(liberal).not.toContain('RCP_ASSURANCE');
@@ -89,18 +89,18 @@ test.describe('Matrice documents requis par profession + exercice', () => {
 
   test('MANIPULATEUR_RADIO → ADELI (RPPS_ADELI) mais pas RCP/RIB/URSSAF', () => {
     const docs = docsVisibles(rows, 'MANIPULATEUR_RADIO', 'SALARIE');
-    expect(docs).toEqual(['AUTORISATION_EXERCICE', 'CARTE_IDENTITE', 'DIPLOME', 'RPPS_ADELI']);
+    expect(docs).toEqual(['AUTORISATION_EXERCICE', 'CARTE_IDENTITE', 'DIPLOME', 'RPPS_ADELI', 'TITRE_SEJOUR']);
   });
 
   test('PREPARATEUR_PHARMA → uniquement CARTE_IDENTITE + DIPLOME', () => {
     const docs = docsVisibles(rows, 'PREPARATEUR_PHARMA', 'SALARIE');
-    expect(docs).toEqual(['AUTORISATION_EXERCICE', 'CARTE_IDENTITE', 'DIPLOME']);
+    expect(docs).toEqual(['AUTORISATION_EXERCICE', 'CARTE_IDENTITE', 'DIPLOME', 'TITRE_SEJOUR']);
   });
 
   test('ORTHOPHONISTE libérale → ADELI + RCP + RIB + URSSAF', () => {
     const docs = docsVisibles(rows, 'ORTHOPHONISTE', 'LIBERAL');
     expect(docs).toEqual([
-      'ATTESTATION_URSSAF', 'AUTORISATION_EXERCICE', 'CARTE_IDENTITE', 'DIPLOME', 'RCP_ASSURANCE', 'RIB', 'RPPS_ADELI',
+      'ATTESTATION_URSSAF', 'AUTORISATION_EXERCICE', 'CARTE_IDENTITE', 'DIPLOME', 'RCP_ASSURANCE', 'RIB', 'RPPS_ADELI', 'TITRE_SEJOUR',
     ]);
   });
 
@@ -109,11 +109,12 @@ test.describe('Matrice documents requis par profession + exercice', () => {
     expect(kbis).toHaveLength(0);
   });
 
-  test('Critique partout sauf AUTORISATION_EXERCICE (optionnelle by design)', () => {
-    const critiques = rows.filter((d) => d.type_document !== 'AUTORISATION_EXERCICE');
+  test('Critique partout sauf AUTORISATION_EXERCICE + TITRE_SEJOUR (optionnels by design)', () => {
+    const OPTIONNELS = ['AUTORISATION_EXERCICE', 'TITRE_SEJOUR'];
+    const critiques = rows.filter((d) => !OPTIONNELS.includes(d.type_document));
     expect(critiques.every((d) => d.est_critique === true)).toBe(true);
-    const autorisations = rows.filter((d) => d.type_document === 'AUTORISATION_EXERCICE');
-    expect(autorisations.length).toBeGreaterThan(0);
-    expect(autorisations.every((d) => d.est_critique === false)).toBe(true);
+    const optionnels = rows.filter((d) => OPTIONNELS.includes(d.type_document));
+    expect(optionnels.length).toBeGreaterThan(0);
+    expect(optionnels.every((d) => d.est_critique === false)).toBe(true);
   });
 });
