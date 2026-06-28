@@ -112,7 +112,7 @@ Règles:
     const aiTimeout = setTimeout(() => aiController.abort(), 25000);
     let aiResponse: Response;
     try {
-      aiResponse = await fetch("https://api.anthropic.com/v1/messages", { method: "POST", headers: { "x-api-key": anthropicKey, "anthropic-version": "2023-06-01", "Content-Type": "application/json" }, body: JSON.stringify({ model: "claude-sonnet-4-20250514", max_tokens: 1000, system: systemPrompt, messages: [{ role: "user", content: [{ type: "text", text: userMessage }, { type: "document", source: { type: "base64", media_type: "application/pdf", data: base64 } }] }] }), signal: aiController.signal });
+      aiResponse = await fetch("https://api.anthropic.com/v1/messages", { method: "POST", headers: { "x-api-key": anthropicKey, "anthropic-version": "2023-06-01", "Content-Type": "application/json" }, body: JSON.stringify({ model: "claude-sonnet-4-6", max_tokens: 1000, system: systemPrompt, messages: [{ role: "user", content: [{ type: "text", text: userMessage }, { type: "document", source: { type: "base64", media_type: "application/pdf", data: base64 } }] }] }), signal: aiController.signal });
     } catch (e) {
       clearTimeout(aiTimeout);
       const estTimeout = (e as any)?.name === "AbortError";
