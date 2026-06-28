@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { LucideIcon, Home, Search, FileText, CalendarDays, User, PlusCircle, List, ClipboardCheck, Settings, HeartPulse, LogOut, MapPin, Banknote, CreditCard, FileSpreadsheet, Rocket, Bell, BarChart3, Flame, MessageCircle, ClipboardList, Building2, Users, Scale, ChevronDown, Activity, Shield, Menu, X, Star, Gift, ShieldCheck, ArrowLeft, Sparkles } from 'lucide-react';
+import { LucideIcon, Home, Search, FileText, CalendarDays, User, PlusCircle, List, ClipboardCheck, Settings, HeartPulse, LogOut, MapPin, Banknote, CreditCard, Rocket, Bell, Flame, MessageCircle, ClipboardList, Users, Scale, ChevronDown, Activity, Shield, Menu, X, Star, Gift, ShieldCheck, ArrowLeft, Sparkles } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { UserRole } from '@/lib/types';
 import { estEligibleLiberal } from '@/lib/regles-installation-liberal';
@@ -96,11 +96,10 @@ function getEtablissementSidebar(): SidebarEntry[] {
   return [
     { icone: Home, label: 'Accueil', route: '/etablissement/tableau-de-bord' },
     { icone: PlusCircle, label: 'Publier une mission', route: '/etablissement/missions/creer' },
+    { icone: ClipboardList, label: 'Missions', route: '/etablissement/missions' },
     {
-      icone: ClipboardList, label: 'Missions', items: [
-        { icone: PlusCircle, label: 'Publier une mission', route: '/etablissement/missions/creer' },
-        { icone: List, label: 'Liste des missions', route: '/etablissement/missions' },
-        { icone: Users, label: 'Annuaire soignants', route: '/etablissement/soignants' },
+      icone: Users, label: 'Soignants', items: [
+        { icone: Users, label: 'Annuaire', route: '/etablissement/soignants' },
         { icone: Star, label: 'Mes favoris', route: '/etablissement/mes-favoris' },
         { icone: Flame, label: 'Pool urgence', route: '/etablissement/pool-urgence' },
       ],
@@ -109,19 +108,11 @@ function getEtablissementSidebar(): SidebarEntry[] {
       icone: ClipboardCheck, label: 'Gestion', items: [
         { icone: ClipboardCheck, label: 'Présences', route: '/etablissement/presences' },
         { icone: FileText, label: 'Contrats', route: '/etablissement/contrats' },
-        { icone: Scale, label: 'Litiges & contestations', route: '/etablissement/litiges' },
-        { icone: FileSpreadsheet, label: 'Export Paie', route: '/etablissement/export-paie' },
-        { icone: BarChart3, label: 'Tableau RH', route: '/etablissement/rh' },
+        { icone: Scale, label: 'Litiges', route: '/etablissement/litiges' },
       ],
     },
-    {
-      icone: Banknote, label: 'Finances', items: [
-        { icone: CreditCard, label: 'Facturation', route: '/etablissement/facturation' },
-        { icone: Building2, label: 'Chorus Pro', route: '/etablissement/chorus-config' },
-      ],
-    },
+    { icone: CreditCard, label: 'Facturation', route: '/etablissement/facturation' },
     { icone: MessageCircle, label: 'Messagerie', route: '/etablissement/messagerie' },
-    { icone: Gift, label: 'Parrainage', route: '/etablissement/parrainage' },
     { icone: Settings, label: 'Paramètres', route: '/etablissement/parametres' },
   ];
 }
@@ -142,14 +133,13 @@ function getMobileNavItems(role: UserRole): NavItem[] {
 }
 
 /* ── Collapsible sidebar group ── */
-function SidebarGroup({ group, location, navigate, openGroups, toggleGroup, messagesNonLus, contratNonValide }: {
+function SidebarGroup({ group, location, navigate, openGroups, toggleGroup, messagesNonLus }: {
   group: NavGroup;
   location: ReturnType<typeof useLocation>;
   navigate: ReturnType<typeof useNavigate>;
   openGroups: Set<string>;
   toggleGroup: (label: string) => void;
   messagesNonLus: number;
-  contratNonValide: boolean;
 }) {
   const isOpen = openGroups.has(group.label);
   const hasActiveChild = group.items.some(i => location.pathname === i.route);
@@ -171,7 +161,6 @@ function SidebarGroup({ group, location, navigate, openGroups, toggleGroup, mess
           {group.items.map(item => {
             const actif = location.pathname === item.route;
             const isMsg = item.label === 'Messagerie';
-            const isContrat = item.route === '/etablissement/contrat-plateforme';
             return (
               <button
                 key={item.route}
@@ -185,9 +174,6 @@ function SidebarGroup({ group, location, navigate, openGroups, toggleGroup, mess
                   <span className="h-5 min-w-[20px] flex items-center justify-center rounded-full bg-destructive text-destructive-foreground text-[11px] font-bold px-1">
                     {messagesNonLus > 9 ? '9+' : messagesNonLus}
                   </span>
-                )}
-                {isContrat && contratNonValide && (
-                  <span className="h-5 min-w-[20px] flex items-center justify-center rounded-full bg-warning text-warning-foreground text-[11px] font-bold px-1">!</span>
                 )}
               </button>
             );
@@ -214,7 +200,6 @@ export function BarreNavigation({ role }: { role: UserRole }) {
   const [isLiberal, setIsLiberal] = useState(false);
   const [showLiberalPath, setShowLiberalPath] = useState(false);
   const [userInfo, setUserInfo] = useState<{ prenom?: string; nom?: string; avatarUrl?: string } | null>(null);
-  const [contratNonValide, setContratNonValide] = useState(false);
   const { count: messagesNonLus } = useMessagesNonLus();
   const [openGroups, setOpenGroups] = useState<Set<string>>(new Set());
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -263,11 +248,10 @@ export function BarreNavigation({ role }: { role: UserRole }) {
           }
         });
     } else if (role === 'ADMIN_ETABLISSEMENT') {
-      supabase.from('etablissements').select('nom, logo_url, contrat_valide').eq('id', user.id).single()
+      supabase.from('etablissements').select('nom, logo_url').eq('id', user.id).single()
         .then(({ data }) => {
           if (data) {
             setUserInfo({ prenom: data.nom, nom: '', avatarUrl: (data as any).logo_url });
-            setContratNonValide(!(data as any).contrat_valide);
           }
         });
     }
@@ -373,7 +357,6 @@ export function BarreNavigation({ role }: { role: UserRole }) {
                       openGroups={openGroups}
                       toggleGroup={toggleGroup}
                       messagesNonLus={messagesNonLus}
-                      contratNonValide={contratNonValide}
                     />
                   );
                 }
@@ -479,7 +462,6 @@ export function BarreNavigation({ role }: { role: UserRole }) {
                   openGroups={openGroups}
                   toggleGroup={toggleGroup}
                   messagesNonLus={messagesNonLus}
-                  contratNonValide={contratNonValide}
                 />
               );
             }

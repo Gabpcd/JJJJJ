@@ -102,7 +102,7 @@ async function verifierRppsServeur(rpps: string, nom: string, prenom: string, pr
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${serviceRoleKey}` },
-        body: JSON.stringify({ rpps, nom, prenom }),
+        body: JSON.stringify({ rpps, nom, prenom, profession }),
       },
       10000
     );
@@ -112,8 +112,10 @@ async function verifierRppsServeur(rpps: string, nom: string, prenom: string, pr
     }
     const data = await res.json();
     if (!data.trouve) return { valide: false, code: 'RPPS_NOT_FOUND', message: 'Aucun professionnel trouvé avec ce numéro RPPS dans l\'Annuaire Santé.' };
-    if (data.correspond === false) return { valide: false, code: 'RPPS_TRAITS_MISMATCH', message: 'Les informations saisies (nom, prénom) ne correspondent pas au numéro RPPS.' };
-    if (data.profession_api && !professionCoherenteRpps(profession, String(data.profession_api))) {
+    // correspond_traits = nom/prénom seul (verify-rpps replie désormais la profession dans `correspond`).
+    const traitsMismatch = (data.correspond_traits ?? data.correspond) === false;
+    if (traitsMismatch) return { valide: false, code: 'RPPS_TRAITS_MISMATCH', message: 'Les informations saisies (nom, prénom) ne correspondent pas au numéro RPPS.' };
+    if (data.code === 'RPPS_PROFESSION_MISMATCH' || (data.profession_api && !professionCoherenteRpps(profession, String(data.profession_api)))) {
       return { valide: false, code: 'RPPS_PROFESSION_MISMATCH', message: `Ce numéro RPPS correspond à la profession « ${data.profession_api} », différente de celle que vous avez déclarée.` };
     }
     if (data.fhir_indisponible) return { valide: true, verifie: false };
@@ -220,9 +222,9 @@ Deno.serve(async (req) => {
       rppsServerVerifie = verification.valide && verification.verifie !== false;
     }
     const rayonKm = typeof rayon === 'number' ? Math.min(Math.max(rayon, 5), 100) : 30;
-    const validContrats = ['CDDU', 'VACATION', 'LIBERAL', 'SALARIE'];
-    const contrats: string[] = Array.isArray(typesContrat) ? typesContrat.filter((c: string) => validContrats.includes(c)) : ['CDDU'];
-    if (contrats.length === 0) contrats.push('CDDU');
+    const validContrats = ['CDD', 'VACATION', 'LIBERAL', 'SALARIE'];
+    const contrats: string[] = Array.isArray(typesContrat) ? typesContrat.filter((c: string) => validContrats.includes(c)) : ['CDD'];
+    if (contrats.length === 0) contrats.push('CDD');
     const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey, {
       auth: { autoRefreshToken: false, persistSession: false },
       db: { schema: 'public' },

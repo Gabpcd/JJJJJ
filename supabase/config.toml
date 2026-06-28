@@ -27,6 +27,9 @@ verify_jwt = true
 [functions.send-email]
 verify_jwt = false
 
+[functions.notify-support]
+verify_jwt = false
+
 [functions.health-check]
 verify_jwt = false
 

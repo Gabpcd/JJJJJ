@@ -50,6 +50,7 @@ const PageContact = lazy(() => import("./pages/PageContact"));
 const PageCGU = lazy(() => import("./pages/PageCGU"));
 const PageCGV = lazy(() => import("./pages/PageCGV"));
 const PageConfidentialite = lazy(() => import("./pages/PageConfidentialite"));
+const PageSuppressionCompte = lazy(() => import("./pages/PageSuppressionCompte"));
 const PageMentionsLegales = lazy(() => import("./pages/PageMentionsLegales"));
 const PageAccessibilite = lazy(() => import("./pages/PageAccessibilite"));
 const PageAide = lazy(() => import("./pages/PageAide"));
@@ -169,6 +170,7 @@ const AdminFinances = lazy(() => import("./pages/admin/AdminFinances"));
 const AdminTauxCommission = lazy(() => import("./pages/admin/AdminTauxCommission"));
 const AdminConfig = lazy(() => import("./pages/admin/AdminConfig"));
 const AdminAuditLogs = lazy(() => import("./pages/admin/AdminAuditLogs"));
+const AdminMessagesContact = lazy(() => import("./pages/admin/AdminMessagesContact"));
 const AdminDPIA = lazy(() => import("./pages/admin/AdminDPIA"));
 const AdminHealthcheck = lazy(() => import("./pages/admin/AdminHealthcheck"));
 const AdminCohortEconomics = lazy(() => import("./pages/admin/AdminCohortEconomics"));
@@ -238,6 +240,7 @@ function AppRoutes() {
           <Route path="/cgv" element={<PageCGV />} />
           <Route path="/confidentialite" element={<PageConfidentialite />} />
           <Route path="/politique-confidentialite" element={<PageConfidentialite />} />
+          <Route path="/supprimer-mon-compte" element={<PageSuppressionCompte />} />
           <Route path="/mentions-legales" element={<PageMentionsLegales />} />
           <Route path="/accessibilite" element={<PageAccessibilite />} />
           <Route path="/aide" element={<PageAide />} />
@@ -329,7 +332,7 @@ function AppRoutes() {
           <Route path="/etablissement/facturation" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><FacturationEtablissement /></RouteProtegee>} />
           <Route path="/etablissement/facturation/:id" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><DetailFacture /></RouteProtegee>} />
           <Route path="/etablissement/analytics" element={<Navigate to="/etablissement/rh?tab=analytics" replace />} />
-          <Route path="/etablissement/assurance" element={<Navigate to="/etablissement/parametres?tab=contrats" replace />} />
+          <Route path="/etablissement/assurance" element={<Navigate to="/etablissement/contrats" replace />} />
           <Route path="/etablissement/export-paie" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><ExportPaie /></RouteProtegee>} />
           <Route path="/etablissement/rh" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><DashboardRH /></RouteProtegee>} />
           <Route path="/etablissement/mon-groupe" element={<Navigate to="/etablissement/parametres?tab=groupe" replace />} />
@@ -347,7 +350,7 @@ function AppRoutes() {
               DashboardEtablissement que /etablissement/tableau-de-bord (canonique).
               Redirection pour ne garder qu'une seule URL. */}
           <Route path="/etablissement/dashboard" element={<Navigate to="/etablissement/tableau-de-bord" replace />} />
-          <Route path="/etablissement/contrat-plateforme" element={<Navigate to="/etablissement/parametres?tab=contrats" replace />} />
+          <Route path="/etablissement/contrat-plateforme" element={<Navigate to="/etablissement/contrats" replace />} />
           <Route path="/etablissement/obligations" element={<Navigate to="/etablissement/facturation" replace />} />
           <Route path="/etablissement/equipe" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><EquipeEtablissement /></RouteProtegee>} />
           <Route path="/etablissement/evaluations-a-faire" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><EvaluationsAFaireEtab /></RouteProtegee>} />
@@ -373,6 +376,7 @@ function AppRoutes() {
           <Route path="/admin/signalements" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminSignalements /></RouteProtegee>} />
           <Route path="/admin/verification-etablissements" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminVerificationEtablissements /></RouteProtegee>} />
           <Route path="/admin/litiges" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminLitiges /></RouteProtegee>} />
+          <Route path="/admin/messages-contact" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminMessagesContact /></RouteProtegee>} />
           <Route path="/admin/templates-contrats" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminTemplatesContrats /></RouteProtegee>} />
           <Route path="/admin/templates-contrats/:id" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminEditerTemplateContrat /></RouteProtegee>} />
           <Route path="/admin/contrats" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminContrats /></RouteProtegee>} />

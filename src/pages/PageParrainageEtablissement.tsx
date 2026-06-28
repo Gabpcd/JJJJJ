@@ -37,8 +37,8 @@ interface CreditsState {
 }
 
 const CAP_PARRAINAGES = 10;
-const SEUIL_SUPER_AMBASSADEUR = 5;
-const RECOMPENSE_EUR = 100;
+const SEUIL_AMBASSADEUR = 3;
+const RECOMPENSE_EUR = 50;
 
 export default function PageParrainageEtab() {
   usePageTitle('Parrainage — Établissement');
@@ -61,7 +61,7 @@ export default function PageParrainageEtab() {
 
   const lienRef = `https://jolene.app/inscription/etablissement?ref=${code}`;
   const filleulsValides = filleuls.filter(f => f.statut === 'VALIDATED').length;
-  const superAmbassadeur = filleulsValides >= SEUIL_SUPER_AMBASSADEUR;
+  const badgeAmbassadeur = filleulsValides >= SEUIL_AMBASSADEUR;
   const capAtteint = filleulsValides >= CAP_PARRAINAGES;
 
   const charger = async () => {
@@ -130,14 +130,14 @@ export default function PageParrainageEtab() {
 
   return (
     <LayoutApp role="ADMIN_ETABLISSEMENT">
-      <SEOHead title="Parrainage Établissement — Jolene" description="Parrainez d'autres établissements et obtenez 100€ de crédit Jolene par filleul validé." />
+      <SEOHead title="Parrainage Établissement — Jolene" description="Parrainez d'autres établissements : 50€ de crédit commission pour vous + 50€ pour votre filleul, par filleul validé." />
       <div className="max-w-3xl mx-auto px-4 py-8 space-y-8">
         <div>
           <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
             <Gift className="h-6 w-6 text-primary" /> Parrainage entre établissements
           </h1>
           <p className="text-muted-foreground mt-1">
-            Recommandez Jolene à un confrère et gagnez <strong className="text-primary">{RECOMPENSE_EUR}€ de crédit</strong> sur votre prochaine facture commission par filleul validé.
+            Recommandez Jolene à un confrère : <strong className="text-primary">{RECOMPENSE_EUR}€ de crédit</strong> pour vous <strong className="text-primary">+ {RECOMPENSE_EUR}€ pour votre filleul</strong>, déduits de vos factures commission, par filleul validé.
           </p>
         </div>
 
@@ -152,7 +152,7 @@ export default function PageParrainageEtab() {
               <div className="card-base border-l-4 border-l-primary bg-primary/5">
                 <h2 className="font-semibold text-foreground mb-2">Avez-vous reçu un code parrainage ?</h2>
                 <p className="text-xs text-muted-foreground mb-3">
-                  Un autre établissement vous a recommandé Jolene ? Saisissez son code (format <code className="bg-muted px-1 rounded">ETB-XXXXXX</code>) pour qu'il reçoive sa récompense dès votre 1ère mission active.
+                  Un autre établissement vous a recommandé Jolene ? Saisissez son code (format <code className="bg-muted px-1 rounded">ETB-XXXXXX</code>). Dès que Jolene aura encaissé 100€ de commission sur vos missions, vous et votre parrain recevrez chacun 50€ de crédit commission.
                 </p>
                 <label htmlFor="code-parrainage-recu" className="sr-only">Code parrainage reçu</label>
                 <div className="flex gap-2">
@@ -195,15 +195,15 @@ export default function PageParrainageEtab() {
               </div>
             </div>
 
-            {/* Badge Super Ambassadeur */}
-            {superAmbassadeur && (
+            {/* Badge Ambassadeur (3 filleuls validés) */}
+            {badgeAmbassadeur && (
               <div className="rounded-2xl border-2 border-amber-400 bg-amber-50/50 dark:bg-amber-950/10 p-6 flex items-center gap-4">
                 <div className="h-14 w-14 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center">
                   <Trophy className="h-8 w-8" />
                 </div>
                 <div>
-                  <h2 className="text-lg font-bold text-foreground">🏆 Super Ambassadeur</h2>
-                  <p className="text-sm text-muted-foreground">Vous avez parrainé {filleulsValides} établissements ! Merci pour votre confiance.</p>
+                  <h2 className="text-lg font-bold text-foreground">🏆 Ambassadeur</h2>
+                  <p className="text-sm text-muted-foreground">Vous avez parrainé {filleulsValides} établissements validés ! Merci pour votre confiance.</p>
                 </div>
               </div>
             )}
@@ -274,8 +274,9 @@ export default function PageParrainageEtab() {
               <ol className="text-sm text-muted-foreground leading-relaxed space-y-2 list-decimal list-inside">
                 <li>Partagez votre code ou lien avec un autre établissement de santé</li>
                 <li>Il s'inscrit, signe son contrat de service Jolene et applique votre code</li>
-                <li>Dès qu'il publie sa 1ère mission qui passe à <strong>ASSIGNEE</strong> ou <strong>TERMINEE</strong>, le parrainage est validé</li>
-                <li>Vous recevez automatiquement <strong className="text-primary">{RECOMPENSE_EUR}€ de crédit</strong> qui sera déduit de votre prochaine facture commission Jolene</li>
+                <li>Dès qu'il publie ses missions et que Jolene encaisse <strong>100€ de commission</strong>, le parrainage est validé</li>
+                <li><strong className="text-primary">{RECOMPENSE_EUR}€ de crédit</strong> pour vous <strong className="text-primary">+ {RECOMPENSE_EUR}€ pour votre filleul</strong>, déduits de vos prochaines factures commission Jolene</li>
+                <li>Après <strong>{SEUIL_AMBASSADEUR} filleuls validés</strong>, vous obtenez le badge <span className="text-primary font-semibold">Ambassadeur</span></li>
               </ol>
               <div className="mt-3 p-2 rounded-lg bg-muted text-xs text-muted-foreground">
                 ℹ️ Limite : {CAP_PARRAINAGES} parrainages validés maximum par établissement. Un même SIRET ne peut bénéficier que d'un seul parrainage validé.

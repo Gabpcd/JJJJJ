@@ -9,8 +9,6 @@ export function BandeauOnboardingEtab() {
   const navigate = useNavigate();
   const location = useLocation();
   const [show, setShow] = useState(false);
-  const [manqueContrat, setManqueContrat] = useState(false);
-  const [manqueRib, setManqueRib] = useState(false);
 
   useEffect(() => {
     if (!user) return;
@@ -18,27 +16,19 @@ export function BandeauOnboardingEtab() {
     (async () => {
       const { data } = await supabase
         .from('etablissements')
-        .select('contrat_service_signe, rib_s3_key')
+        .select('contrat_service_signe')
         .eq('id', user.id)
         .maybeSingle();
       if (!data) return;
-      const contratOk = !!(data as any).contrat_service_signe;
-      const ribOk = !!((data as any).rib_s3_key && (data as any).rib_s3_key !== 'legacy/auto-backfill');
-      setManqueContrat(!contratOk);
-      setManqueRib(!ribOk);
-      setShow(!contratOk || !ribOk);
+      // Le RIB n'est plus exigé pour publier (demandé plus tard, au 1er paiement/prélèvement).
+      // Seul le contrat de service signé est nécessaire ici.
+      setShow(!(data as any).contrat_service_signe);
     })();
   }, [user, location.pathname]);
 
   if (!show) return null;
 
-  // Texte ciblé : n'évoquer que ce qui manque réellement (évite « signez le contrat »
-  // alors qu'il est déjà signé et que seul le RIB manque).
-  const detail = manqueContrat && manqueRib
-    ? 'Signez le contrat de service et fournissez un RIB pour publier des missions.'
-    : manqueContrat
-      ? 'Signez le contrat de service pour publier des missions.'
-      : 'Fournissez un RIB pour publier des missions.';
+  const detail = 'Signez le contrat de service pour publier des missions.';
 
   return (
     <div className="bg-warning/10 border-b border-warning/30 px-4 py-3 flex items-center justify-between gap-3">

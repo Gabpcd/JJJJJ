@@ -16,34 +16,40 @@ import { LitigeResolutionModal } from '@/components/admin/litiges/LitigeResoluti
 import type { LitigeEnrichi } from '@/components/admin/litiges/types';
 import { statutBadgeV2, type StatutLitige } from '@/lib/statutLitige';
 
-type FiltreStatut = 'REVUE_ADMIN' | 'MEDIATION_EN_COURS' | 'TOUS_OUVERTS';
+type FiltreStatut = 'ACCORDS_A_VALIDER' | 'REVUE_ADMIN' | 'OUVERTS' | 'RESOLUS' | 'TOUS';
+
+const STATUTS_RESOLUS = ['RESOLU', 'RESOLU_SOIGNANT', 'RESOLU_ETABLISSEMENT', 'RESOLU_ADMIN', 'RESOLU_ACCORD_PARTIES', 'RESOLU_FAVEUR_SOIGNANT', 'RESOLU_FAVEUR_ETAB', 'RESOLU_PARTAGE', 'FERME', 'CLOTURE'];
+
+// Un accord financier proposé par les parties, en attente de validation admin.
+const estAccordAValider = (l: any) =>
+  !!l.payload_modifications && !l.modifications_executees
+  && (l.payload_modifications?.type && l.payload_modifications.type !== 'ACCORD_SANS_MODIFICATION');
 
 export default function AdminLitiges() {
-  usePageTitle('Litiges — Revue admin');
+  usePageTitle('Litiges — Supervision admin');
   const [litiges, setLitiges] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filtre, setFiltre] = useState<FiltreStatut>('REVUE_ADMIN');
+  const [filtre, setFiltre] = useState<FiltreStatut>('ACCORDS_A_VALIDER');
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [resolutionLitige, setResolutionLitige] = useState<LitigeEnrichi | null>(null);
   const [resolutionOpen, setResolutionOpen] = useState(false);
+  const [validating, setValidating] = useState<string | null>(null);
 
   const charger = async () => {
     setLoading(true);
-    const statutsOuverts: StatutLitige[] = [
-      'OUVERT', 'EN_DISCUSSION', 'EN_MEDIATION', 'MEDIATION_EN_COURS', 'REVUE_ADMIN',
-    ];
+    // Admin voit TOUS les litiges (même non escaladés / résolus entre parties).
     const { data, error } = await supabase
       .from('litiges')
       .select(`
         id, motif, reponse, statut, cree_le, soignant_id, etablissement_id, mission_id, initie_par,
         accord_soignant, accord_etablissement, accord_soignant_le, accord_etablissement_le,
         resolution, resolu_le, facture_id, type_litige, categorie_litige,
+        payload_modifications, modifications_executees,
         missions(id, intitule, debut_le, fin_le, profession_requise, service, statut),
         soignants:soignant_id(id, prenom, nom, profession, email, telephone),
         etablissements:etablissement_id(id, nom, email_contact, telephone_contact, type)
       `)
-      .in('statut', statutsOuverts)
-      .order('cree_le', { ascending: true });
+      .order('cree_le', { ascending: false });
 
     if (error) {
       toast.error('Impossible de charger les litiges.');
@@ -56,15 +62,35 @@ export default function AdminLitiges() {
 
   useEffect(() => { charger(); }, []);
 
+  // Valider l'accord financier proposé par les parties (exécute le mouvement financier).
+  const validerAccord = async (litigeId: string) => {
+    setValidating(litigeId);
+    const { data, error } = await supabase.rpc('fn_admin_valider_accord_litige' as any, { p_litige_id: litigeId });
+    setValidating(null);
+    if (error || (data as any)?.success === false) {
+      toast.error((data as any)?.error || error?.message || 'Erreur lors de la validation.');
+      return;
+    }
+    toast.success('Accord validé — mouvement financier exécuté.');
+    charger();
+  };
+
   const counts = useMemo(() => ({
+    accords: litiges.filter(estAccordAValider).length,
     revueAdmin: litiges.filter(l => l.statut === 'REVUE_ADMIN').length,
-    mediation: litiges.filter(l => l.statut === 'MEDIATION_EN_COURS').length,
+    ouverts: litiges.filter(l => !STATUTS_RESOLUS.includes(l.statut)).length,
+    resolus: litiges.filter(l => STATUTS_RESOLUS.includes(l.statut)).length,
     total: litiges.length,
   }), [litiges]);
 
   const filtered = useMemo(() => {
-    if (filtre === 'TOUS_OUVERTS') return litiges;
-    return litiges.filter(l => l.statut === filtre);
+    switch (filtre) {
+      case 'ACCORDS_A_VALIDER': return litiges.filter(estAccordAValider);
+      case 'REVUE_ADMIN': return litiges.filter(l => l.statut === 'REVUE_ADMIN');
+      case 'OUVERTS': return litiges.filter(l => !STATUTS_RESOLUS.includes(l.statut));
+      case 'RESOLUS': return litiges.filter(l => STATUTS_RESOLUS.includes(l.statut));
+      default: return litiges;
+    }
   }, [litiges, filtre]);
 
   if (loading) return <LayoutAdmin><ChargementPage /></LayoutAdmin>;
@@ -73,19 +99,22 @@ export default function AdminLitiges() {
     <LayoutAdmin>
       <div className="mb-6">
         <h1 className="text-xl font-bold text-foreground flex items-center gap-2">
-          <Scale className="h-6 w-6 text-primary" /> Litiges — Revue admin
+          <Scale className="h-6 w-6 text-primary" /> Litiges — Supervision admin
         </h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Trancher les litiges en revue admin (médiation 7j expirée sans accord)
+          Tous les litiges sont visibles. Les mouvements financiers (avoir, remboursement,
+          ajustement de montant) sont autorisés par l'admin, y compris sur accord des parties.
         </p>
       </div>
 
       {/* Filters */}
       <div className="flex gap-2 mb-4 overflow-x-auto pb-1">
         {[
+          { id: 'ACCORDS_A_VALIDER' as FiltreStatut, label: 'Accords à valider', count: counts.accords, urgent: counts.accords > 0 },
           { id: 'REVUE_ADMIN' as FiltreStatut, label: 'À trancher', count: counts.revueAdmin, urgent: counts.revueAdmin > 0 },
-          { id: 'MEDIATION_EN_COURS' as FiltreStatut, label: 'En médiation', count: counts.mediation },
-          { id: 'TOUS_OUVERTS' as FiltreStatut, label: 'Tous ouverts', count: counts.total },
+          { id: 'OUVERTS' as FiltreStatut, label: 'Ouverts', count: counts.ouverts },
+          { id: 'RESOLUS' as FiltreStatut, label: 'Résolus', count: counts.resolus },
+          { id: 'TOUS' as FiltreStatut, label: 'Tous', count: counts.total },
         ].map(f => (
           <button
             key={f.id}
@@ -110,12 +139,12 @@ export default function AdminLitiges() {
       {filtered.length === 0 ? (
         <EmptyState
           icone={<Scale />}
-          mascotte={filtre === 'REVUE_ADMIN' ? 'happy' : 'empty'}
-          titre={filtre === 'REVUE_ADMIN' ? 'Aucun litige à trancher' : 'Aucun litige'}
-          description={filtre === 'REVUE_ADMIN'
-            ? 'Tous les litiges sont en cours de discussion ou résolus.'
+          mascotte={filtre === 'ACCORDS_A_VALIDER' || filtre === 'REVUE_ADMIN' ? 'happy' : 'empty'}
+          titre={filtre === 'ACCORDS_A_VALIDER' ? 'Aucun accord en attente' : filtre === 'REVUE_ADMIN' ? 'Aucun litige à trancher' : 'Aucun litige'}
+          description={filtre === 'ACCORDS_A_VALIDER'
+            ? 'Aucun mouvement financier en attente de validation admin.'
             : 'Aucun litige correspondant à ce filtre.'}
-          variant={filtre === 'REVUE_ADMIN' ? 'success' : 'info'}
+          variant={filtre === 'ACCORDS_A_VALIDER' || filtre === 'REVUE_ADMIN' ? 'success' : 'info'}
         />
       ) : (
         <div className="space-y-3">
@@ -185,6 +214,36 @@ export default function AdminLitiges() {
                 {isExpanded && (
                   <div className="border-t border-border mt-3 pt-3 space-y-3">
                     <TimelineLitige statut={l.statut} />
+
+                    {estAccordAValider(l) && (
+                      <div className="rounded-xl border border-amber-300/60 bg-amber-50 p-3 space-y-2">
+                        <p className="text-xs font-semibold text-amber-900">
+                          ⚖️ Accord financier proposé par les parties — validation requise
+                        </p>
+                        <p className="text-[11px] text-amber-800">
+                          Type : <span className="font-mono">{l.payload_modifications?.type}</span>
+                          {l.payload_modifications?.modifications?.montant_total_corrige &&
+                            ` · Montant corrigé : ${l.payload_modifications.modifications.montant_total_corrige} €`}
+                          {l.payload_modifications?.modifications?.pourcentage_compensation != null &&
+                            ` · Compensation : ${l.payload_modifications.modifications.pourcentage_compensation} %`}
+                        </p>
+                        {l.payload_modifications?.justification && (
+                          <p className="text-[11px] text-amber-800 italic">« {l.payload_modifications.justification} »</p>
+                        )}
+                        <BoutonY2K
+                          variant="primary"
+                          size="sm"
+                          loading={validating === l.id}
+                          onClick={() => validerAccord(l.id)}
+                        >
+                          Valider l'accord et exécuter
+                        </BoutonY2K>
+                        <p className="text-[10px] text-amber-700">
+                          Ou ajustez à un autre montant via « Résoudre » ci-dessous.
+                        </p>
+                      </div>
+                    )}
+
                     <BoutonY2K
                       variant="primary"
                       size="sm"

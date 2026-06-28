@@ -9,6 +9,7 @@
 // si VERIFIE + nom concordant, puis évalue le rattachement adaptatif.
 
 import { createClient } from 'npm:@supabase/supabase-js@2';
+import { appelerAnthropic } from "../_shared/anthropic.ts";
 
 function corsHeaders(req: Request): Record<string, string> {
   const origin = req.headers.get('origin') || '';
@@ -145,33 +146,32 @@ Analyse ce document et vérifie sa conformité + la concordance du nom.`;
 
     const aiController = new AbortController();
     const aiTimeout = setTimeout(() => aiController.abort(), 20_000);
-    let aiResponse: Response;
-    try {
-      aiResponse = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: { 'x-api-key': anthropicKey, 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model: 'claude-sonnet-4-20250514', max_tokens: 1000, system: systemPrompt, messages: [{ role: 'user', content }] }),
-        signal: aiController.signal,
-      });
-    } catch (err) {
-      clearTimeout(aiTimeout);
-      const estTimeout = (err as any)?.name === 'AbortError';
+    const ai = await appelerAnthropic({
+      apiKey: anthropicKey,
+      system: systemPrompt,
+      content,
+      maxTokens: 1000,
+      signal: aiController.signal,
+    });
+    clearTimeout(aiTimeout);
+
+    // status 0 = erreur réseau / abort (timeout) interceptée par le module partagé.
+    if (ai.status === 0) {
+      const estTimeout = aiController.signal.aborted;
       await admin.from('etablissements').update({
         representant_identite_resultat_ia: { erreur_anthropic: { status: estTimeout ? 'timeout' : 'network', at: new Date().toISOString() } },
       }).eq('id', etablissementId);
       return json(200, { ok: true, verdict: 'EN_ATTENTE', reason: estTimeout ? 'AI timeout' : 'AI network error' });
     }
-    clearTimeout(aiTimeout);
 
-    if (!aiResponse.ok) {
-      const errText = await aiResponse.text();
+    if (!ai.ok) {
       await admin.from('etablissements').update({
-        representant_identite_resultat_ia: { erreur_anthropic: { status: aiResponse.status, body_excerpt: errText.slice(0, 1000), at: new Date().toISOString() } },
+        representant_identite_resultat_ia: { erreur_anthropic: { status: ai.status, body_excerpt: ai.body.slice(0, 1000), at: new Date().toISOString() } },
       }).eq('id', etablissementId);
-      return json(200, { ok: false, verdict: 'EN_ATTENTE', error: `Anthropic ${aiResponse.status}` });
+      return json(200, { ok: false, verdict: 'EN_ATTENTE', error: `Anthropic ${ai.status}` });
     }
 
-    const aiJson = await aiResponse.json();
+    const aiJson = ai.data;
     const text = (aiJson?.content || []).map((c: any) => c?.text || '').join('\n');
     const result = parseJsonFromText(text) || {};
     // GATE FALSIFICATION : tout indice de retouche → revue humaine (jamais VERIFIE auto).

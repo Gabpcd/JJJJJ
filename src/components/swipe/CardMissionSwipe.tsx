@@ -9,7 +9,7 @@
  *
  * Stylé pour ~80vh mobile, photo cover établissement, gradient rose-mauve overlay.
  */
-import { CalendarDays, Clock, Euro, MapPin, Sparkles, Star } from 'lucide-react';
+import { CalendarDays, Clock, Euro, MapPin, Sparkles, Star, HeartPulse } from 'lucide-react';
 import { BadgeY2K } from '@/components/y2k/BadgeY2K';
 import { cn } from '@/lib/utils';
 
@@ -22,6 +22,7 @@ export interface MissionSwipePayload {
   etablissement_ville: string | null;
   etablissement_score: number | null;
   taux_horaire_base: number | null;
+  net_estime: number | null;
   duree_heures: number | null;
   debut_le: string | null;
   fin_le: string | null;
@@ -103,6 +104,24 @@ export function CardMissionSwipe({ mission, onTap, className }: Props) {
         )}
       </div>
 
+      {/* Hero central : remplit l'espace haut (pas de photo établissement) avec un
+          watermark + la profession en grand, pour une carte vivante et lisible. */}
+      <div className="absolute inset-x-0 top-[14%] flex flex-col items-center text-center px-6 z-[5] pointer-events-none">
+        <HeartPulse
+          className="h-20 w-20 text-white/70 drop-shadow-[0_4px_12px_rgba(0,0,0,0.15)] mb-3"
+          strokeWidth={1.5}
+          aria-hidden="true"
+        />
+        <p className="text-3xl font-extrabold text-white drop-shadow-[0_2px_8px_rgba(0,0,0,0.25)] tracking-tight">
+          {mission.profession_requise || 'Mission'}
+        </p>
+        {mission.service && (
+          <p className="text-sm font-semibold text-white/90 drop-shadow-[0_1px_4px_rgba(0,0,0,0.25)] mt-1 uppercase tracking-wider">
+            {mission.service}
+          </p>
+        )}
+      </div>
+
       {/* Body : infos principales */}
       <div className="absolute bottom-0 left-0 right-0 p-6 z-10">
         <div className="bg-jolene-cloud/85 backdrop-blur-xl rounded-2xl p-5 shadow-holographic border border-white/40">
@@ -150,10 +169,21 @@ export function CardMissionSwipe({ mission, onTap, className }: Props) {
             </div>
             <div className="flex flex-col items-center justify-center bg-jolene-cyan-50 rounded-xl p-2.5">
               <Euro className="h-4 w-4 text-jolene-cyan-700 mb-1" aria-hidden="true" />
-              <span className="font-semibold text-jolene-midnight">
-                {mission.taux_horaire_base ? `${mission.taux_horaire_base}€/h` : '—'}
-              </span>
-              <span className="text-[10px] text-jolene-bubblegum">Tarif</span>
+              {mission.net_estime ? (
+                <>
+                  <span className="font-bold text-jolene-midnight">
+                    ~{Math.round(mission.net_estime)}€
+                  </span>
+                  <span className="text-[10px] text-jolene-bubblegum">Net estimé*</span>
+                </>
+              ) : (
+                <>
+                  <span className="font-semibold text-jolene-midnight">
+                    {mission.taux_horaire_base ? `${mission.taux_horaire_base}€/h` : '—'}
+                  </span>
+                  <span className="text-[10px] text-jolene-bubblegum">Tarif</span>
+                </>
+              )}
             </div>
           </div>
 

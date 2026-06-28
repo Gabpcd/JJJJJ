@@ -15,7 +15,7 @@ import { ConfettiMini } from '@/components/ConfettiMini';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { TYPES_DOCUMENTS, TYPES_DOCUMENTS_EXCLUS_UPLOAD, STATUTS_VERIFICATION } from '@/lib/documents';
-import { extraireMessageErreur } from '@/lib/erreurs';
+import { extraireMessageErreur, messageErreurEdgeFn } from '@/lib/erreurs';
 import { format, differenceInDays } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { toast } from 'sonner';
@@ -182,6 +182,9 @@ export function DocumentsSoignantContent() {
           if (TYPES_DOCUMENTS_EXCLUS_UPLOAD.includes(d.type_document)) return false;
           if (identiteVerifiee && d.type_document === 'DIPLOME') return false;
           if (identiteVerifiee && d.type_document === 'RPPS_ADELI') return false;
+          // RPPS/ADELI vérifié = profession française reconnue → l'autorisation
+          // d'exercice (diplôme étranger / PAE) n'a plus lieu d'être, comme le diplôme.
+          if (identiteVerifiee && d.type_document === 'AUTORISATION_EXERCICE') return false;
           const exReq = d.type_exercice_requis || 'TOUS';
           if (exReq === 'LIBERAL_ONLY') return estLiberal;
           if (exReq === 'SALARIE_ONLY') return estSalarie;
@@ -281,7 +284,7 @@ export function DocumentsSoignantContent() {
         body: { document_id: docId },
       });
       if (verifyError) {
-        toast.error('Erreur lors de la revérification.');
+        toast.error(await messageErreurEdgeFn(verifyError, 'Le document n\'a pas pu être vérifié. Vérifiez le type de document et sa lisibilité.'));
         handleErrorSilent(verifyError, 'Revérification document');
       } else if (verifyData?.verdict === 'VERIFIE') {
         toast.success('✅ Document vérifié automatiquement !');
@@ -696,10 +699,11 @@ export function DocumentsSoignantContent() {
         })}
       </div>
 
-      {/* Coordonnées bancaires (RIB) — le RIB n'est jamais un fichier à téléverser ici.
-          - Libéral / mixte : honoraires versés via Stripe Connect (RIB saisi côté Stripe).
-          - IBAN « primes de parrainage » : Profil → Paiements (jamais partagé avec l'étab).
-          - Missions salariées : l'établissement est l'employeur légal et établit la paie. */}
+      {/* Encart « à quoi sert le RIB » — le RIB est bien un document obligatoire (TOUS),
+          téléversé dans la liste ci-dessus. Cet encart explique son usage :
+          - Salarié : RIB transmis à l'établissement (employeur légal) pour la paie ;
+            primes Jolene via l'IBAN de Profil → Paiements.
+          - Libéral / mixte : honoraires versés via Stripe Connect (compte de versement). */}
       {soignant?.profession && (() => {
         const isLiberalOrMixte = soignant?.type_exercice === 'LIBERAL' || soignant?.type_exercice === 'MIXTE';
         return (
@@ -709,14 +713,11 @@ export function DocumentsSoignantContent() {
                 <Landmark className="h-5 w-5" />
               </span>
               <div className="min-w-0 flex-1">
-                <p className="text-sm font-semibold text-foreground">Coordonnées bancaires (RIB)</p>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Le RIB ne se téléverse pas comme un document.
-                </p>
+                <p className="text-sm font-semibold text-foreground">À quoi sert votre RIB ?</p>
                 {isLiberalOrMixte ? (
                   <>
                     <p className="text-sm text-muted-foreground mt-1">
-                      Pour vos <span className="font-medium text-foreground">honoraires libéraux</span>, le RIB est saisi de façon sécurisée lors de la configuration de votre compte de versement.
+                      Pour vos <span className="font-medium text-foreground">honoraires libéraux</span>, configurez aussi votre compte de versement sécurisé (le RIB y est saisi côté Stripe).
                     </p>
                     <BoutonY2K variant="secondary" size="sm" className="mt-3" onClick={() => navigate('/soignant/stripe-connect')}>
                       Configurer mes versements →
@@ -724,7 +725,7 @@ export function DocumentsSoignantContent() {
                   </>
                 ) : (
                   <p className="text-sm text-muted-foreground mt-1">
-                    Pour les <span className="font-medium text-foreground">missions salariées</span>, l'établissement est votre employeur et établit votre bulletin de paie. Votre IBAN pour les primes Jolene se renseigne dans <span className="font-medium text-foreground">Profil → Paiements</span>.
+                    Pour les <span className="font-medium text-foreground">missions salariées</span>, votre RIB est transmis à l'établissement (votre employeur), qui établit votre bulletin de paie. Vos primes Jolene utilisent l'IBAN renseigné dans <span className="font-medium text-foreground">Profil → Paiements</span>.
                   </p>
                 )}
               </div>
@@ -733,8 +734,11 @@ export function DocumentsSoignantContent() {
         );
       })()}
 
-      {/* Documents complémentaires — étudiant / interne faisant fonction */}
-      {user && (() => {
+      {/* Documents complémentaires — étudiant / interne faisant fonction.
+          Masqué si RPPS/ADELI vérifié : profession déjà reconnue, le « faisant
+          fonction » étudiant / la licence de remplacement n'ont plus lieu d'être
+          (cohérent avec le masquage du diplôme et de l'autorisation d'exercice). */}
+      {user && !(soignant?.rpps_verifie || soignant?.adeli_verifie) && (() => {
         const docScol = mesDocuments.find((d) => d.type_document === 'ATTESTATION_SCOLARITE');
         const statScol = docScol ? STATUTS_VERIFICATION[docScol.statut_verification as string] : null;
         const docLic = mesDocuments.find((d) => d.type_document === 'LICENCE_REMPLACEMENT');

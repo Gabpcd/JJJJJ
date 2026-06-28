@@ -9,6 +9,7 @@
 // justificatif_fonction_verifie = true puis ré-évalue le rattachement (→ JUSTIFICATIF).
 
 import { createClient } from 'npm:@supabase/supabase-js@2';
+import { appelerAnthropic } from "../_shared/anthropic.ts";
 
 function corsHeaders(req: Request): Record<string, string> {
   const origin = req.headers.get('origin') || '';
@@ -142,12 +143,13 @@ Analyse ce document : est-ce un justificatif de fonction valide, qui rattache bi
 
     const aiController = new AbortController();
     const aiTimeout = setTimeout(() => aiController.abort(), 20_000);
-    let aiResponse: Response;
+    let ai;
     try {
-      aiResponse = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: { 'x-api-key': anthropicKey, 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model: 'claude-sonnet-4-20250514', max_tokens: 1000, system: systemPrompt, messages: [{ role: 'user', content }] }),
+      ai = await appelerAnthropic({
+        apiKey: anthropicKey,
+        system: systemPrompt,
+        content,
+        maxTokens: 1000,
         signal: aiController.signal,
       });
     } catch (err) {
@@ -160,15 +162,14 @@ Analyse ce document : est-ce un justificatif de fonction valide, qui rattache bi
     }
     clearTimeout(aiTimeout);
 
-    if (!aiResponse.ok) {
-      const errText = await aiResponse.text();
+    if (!ai.ok) {
       await admin.from('etablissements').update({
-        justificatif_fonction_resultat_ia: { erreur_anthropic: { status: aiResponse.status, body_excerpt: errText.slice(0, 1000), at: new Date().toISOString() } },
+        justificatif_fonction_resultat_ia: { erreur_anthropic: { status: ai.status, body_excerpt: ai.body.slice(0, 1000), at: new Date().toISOString() } },
       }).eq('id', etablissementId);
-      return json(200, { ok: false, verdict: 'EN_ATTENTE', error: `Anthropic ${aiResponse.status}` });
+      return json(200, { ok: false, verdict: 'EN_ATTENTE', error: `Anthropic ${ai.status}` });
     }
 
-    const aiJson = await aiResponse.json();
+    const aiJson = ai.data;
     const text = (aiJson?.content || []).map((c: any) => c?.text || '').join('\n');
     const result = parseJsonFromText(text) || {};
     // GATE FALSIFICATION : tout indice de retouche → revue humaine (jamais VERIFIE auto).

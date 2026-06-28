@@ -60,6 +60,34 @@ function mapProfessionCode(code: string | undefined): string {
   return mapping[code || ''] || code || '';
 }
 
+// Cohérence profession déclarée ↔ profession de l'Annuaire. Familles regroupées
+// (IDE/IBODE/IADE = infirmier). On ne peut juger QUE si la profession déclarée est
+// connue ET la valeur API non vide ; sinon on ne tranche pas (null).
+const PROFESSION_TOKENS: Record<string, string[]> = {
+  MEDECIN: ['medecin'],
+  IDE: ['infirmier', 'ide'], IBODE: ['infirmier', 'ide'], IADE: ['infirmier', 'ide'],
+  SAGE_FEMME: ['sage-femme', 'sage femme', 'sage_femme', 'maieut'],
+  KINE: ['kine', 'masseur'],
+  PHARMACIEN: ['pharmacien'],
+  DENTISTE: ['dentiste', 'odontolog', 'chirurgien-dentiste'],
+  MANIPULATEUR_RADIO: ['manipulateur', 'electroradio', 'radio'],
+  ERGOTHERAPEUTE: ['ergoth'],
+  PSYCHOMOTRICIEN: ['psychomot'],
+  ORTHOPHONISTE: ['orthophon'],
+  DIETETICIEN: ['dieteti'],
+  PREPARATEUR_PHARMA: ['preparateur'],
+  PEDICURE: ['pedicure', 'podolog'],
+  AUDIOPROTHESISTE: ['audio'],
+  OPTICIEN: ['opticien', 'lunet'],
+};
+// Retourne true (cohérent), false (mismatch clair), ou null (indéterminable).
+function professionCorrespondRpps(declaree: string, apiValue: string | undefined): boolean | null {
+  const tokens = PROFESSION_TOKENS[(declaree || '').toUpperCase().trim()];
+  const v = normalize(apiValue || '');
+  if (!tokens || !v) return null;
+  return tokens.some((t) => v.includes(normalize(t)));
+}
+
 type IdentifierType = 'RPPS' | 'ADELI';
 
 function buildFhirIdentifierQuery(numero: string, type: IdentifierType): string {
@@ -238,7 +266,9 @@ Deno.serve(async (req) => {
       const prenomFourni = normalize(prenom || '');
       const nomCorrespond = !nomFourni || nomNorm.includes(nomFourni) || nomFourni.includes(nomNorm);
       const prenomCorrespond = !prenomFourni || prenomNorm.slice(0, 3) === prenomFourni.slice(0, 3);
-      const correspond = nomCorrespond && prenomCorrespond;
+      const correspondTraits = nomCorrespond && prenomCorrespond;
+      const professionApi = result.professionLabel || mapProfessionCode(result.professionCode);
+
       let callerUid: string | null = null;
       if (token && !isServiceRole && !isAnonKey) {
         try {
@@ -250,13 +280,30 @@ Deno.serve(async (req) => {
         } catch { /* ignore */ }
       }
       const canWriteDb = isServiceRole || (!!callerUid && callerUid === soignant_id);
+
+      // Profession déclarée : du body (inscription) OU récupérée sur le soignant (re-vérif profil).
+      let professionDeclaree = String(body.profession || '').trim();
+      if (!professionDeclaree && soignant_id && canWriteDb) {
+        try {
+          const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+          const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+          const sbA = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
+          const { data: sg } = await sbA.from('soignants').select('profession').eq('id', soignant_id).maybeSingle();
+          if (sg?.profession) professionDeclaree = String(sg.profession);
+        } catch { /* ignore */ }
+      }
+      // Contrôle profession AU MÊME TITRE que nom/prénom : tout mismatch clair bloque.
+      const profCheck = professionCorrespondRpps(professionDeclaree, professionApi); // true|false|null
+      const professionMismatch = profCheck === false;
+      const correspond = correspondTraits && !professionMismatch;
+
+      // On n'écrit rpps_verifie=true QUE si traits ET profession concordent.
       if (soignant_id && correspond && canWriteDb) {
         try {
           const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
           const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
           const supabaseAdmin = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
           const now = new Date().toISOString();
-          const professionApi = result.professionLabel || mapProfessionCode(result.professionCode);
           const updateFields: Record<string, unknown> = isAdeliRequest ? {
             adeli_verifie: true, adeli_verifie_le: now,
             adeli_nom_api: result.nom, adeli_prenom_api: result.prenom,
@@ -277,13 +324,20 @@ Deno.serve(async (req) => {
         } catch (dbErr) { console.error('Erreur sauvegarde RPPS sur soignant:', safeStringifyError(dbErr)); }
       }
       const codePrefix = isAdeliRequest ? 'ADELI' : 'RPPS';
+      // Priorité du verdict : mismatch traits (nom/prénom) puis mismatch profession.
+      const code = !correspondTraits
+        ? `${codePrefix}_TRAITS_MISMATCH`
+        : (professionMismatch ? `${codePrefix}_PROFESSION_MISMATCH` : `${codePrefix}_OK`);
       return new Response(JSON.stringify({
         ok: true,
-        code: correspond ? `${codePrefix}_OK` : `${codePrefix}_TRAITS_MISMATCH`,
+        code,
         type: idType,
         trouve: true, correspond,
+        correspond_traits: correspondTraits,
+        profession_correspond: profCheck,
+        profession_declaree: professionDeclaree || null,
         nom_api: result.nom, prenom_api: result.prenom,
-        profession_api: result.professionLabel || mapProfessionCode(result.professionCode),
+        profession_api: professionApi,
         specialite_code: result.specialiteCode ?? null, specialite_label: result.specialiteLabel ?? null,
         actif: result.actif, source: 'FHIR Annuaire Sante v2',
       }), { headers: { ...cors, 'Content-Type': 'application/json' } });

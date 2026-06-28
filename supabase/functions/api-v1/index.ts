@@ -15,11 +15,16 @@ Deno.serve(async (req) => {
     if (!key) return new Response(JSON.stringify({ error: "Clé API invalide" }), { status: 403, headers: corsHeaders });
     if (key.expire_le && new Date(key.expire_le) < new Date()) return new Response(JSON.stringify({ error: "Clé API expirée" }), { status: 403, headers: corsHeaders });
 
+    // Isolation multi-tenant stricte : une clé DOIT être rattachée à un établissement.
+    // Sans ce garde, une clé non scopée (etablissement_id NULL) accède en lecture/écriture
+    // à TOUTES les données de TOUS les établissements (missions, présences/PII, factures).
+    const etabId = key.etablissement_id;
+    if (!etabId) return new Response(JSON.stringify({ error: "Clé API non rattachée à un établissement" }), { status: 403, headers: corsHeaders });
+
     await supabase.from("api_keys").update({ derniere_utilisation: new Date().toISOString() }).eq("id", key.id);
 
     const url = new URL(req.url);
     const path = url.pathname.replace(/.*\/api-v1/, "");
-    const etabId = key.etablissement_id;
 
     // GET /missions
     if (req.method === "GET" && path === "/missions") {
@@ -37,7 +42,7 @@ Deno.serve(async (req) => {
       if (!key.permissions.includes("missions:write")) return new Response(JSON.stringify({ error: "Permission refusée" }), { status: 403, headers: corsHeaders });
       const body = await req.json();
       const { data, error } = await supabase.from("missions").insert({
-        etablissement_id: etabId || body.etablissement_id,
+        etablissement_id: etabId,  // toujours l'étab de la clé — jamais le body (anti cross-tenant)
         intitule: body.intitule,
         profession_requise: body.profession_requise,
         service: body.service,

@@ -1,5 +1,6 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { applyRateLimit, getClientIp } from "../_shared/rate-limit.ts";
+import { appelerAnthropic } from "../_shared/anthropic.ts";
 
 // Vérification IA du contrat de travail d'une mission salariée.
 // Confirme que le PDF est bien un contrat de travail (CDD/CDI) et que les parties
@@ -110,9 +111,9 @@ Règles:
 
     const aiController = new AbortController();
     const aiTimeout = setTimeout(() => aiController.abort(), 25000);
-    let aiResponse: Response;
+    let ai;
     try {
-      aiResponse = await fetch("https://api.anthropic.com/v1/messages", { method: "POST", headers: { "x-api-key": anthropicKey, "anthropic-version": "2023-06-01", "Content-Type": "application/json" }, body: JSON.stringify({ model: "claude-sonnet-4-20250514", max_tokens: 1000, system: systemPrompt, messages: [{ role: "user", content: [{ type: "text", text: userMessage }, { type: "document", source: { type: "base64", media_type: "application/pdf", data: base64 } }] }] }), signal: aiController.signal });
+      ai = await appelerAnthropic({ apiKey: anthropicKey, system: systemPrompt, content: [{ type: "text", text: userMessage }, { type: "document", source: { type: "base64", media_type: "application/pdf", data: base64 } }], maxTokens: 1000, signal: aiController.signal });
     } catch (e) {
       clearTimeout(aiTimeout);
       const estTimeout = (e as any)?.name === "AbortError";
@@ -120,12 +121,11 @@ Règles:
       return new Response(JSON.stringify({ success: true, coherent: null, reason: estTimeout ? "AI timeout" : "AI network error" }), { headers: { ...corsHeaders(req), "Content-Type": "application/json" } });
     }
     clearTimeout(aiTimeout);
-    if (!aiResponse.ok) {
-      const errText = await aiResponse.text();
-      await supabase.from("contrats_travail_missions").update({ ia_resultat: { erreur_anthropic: { status: aiResponse.status, body_excerpt: errText.slice(0, 1500), at: new Date().toISOString() } } } as any).eq("id", (ct as any).id);
+    if (!ai.ok) {
+      await supabase.from("contrats_travail_missions").update({ ia_resultat: { erreur_anthropic: { status: ai.status, body_excerpt: ai.body.slice(0, 1500), at: new Date().toISOString() } } } as any).eq("id", (ct as any).id);
       return new Response(JSON.stringify({ success: true, coherent: null, reason: "AI unavailable" }), { headers: { ...corsHeaders(req), "Content-Type": "application/json" } });
     }
-    const aiData = await aiResponse.json();
+    const aiData = ai.data;
     const rawContent = aiData.content?.[0]?.text || "";
     let analysis: any;
     try { const m = rawContent.match(/\{[\s\S]*\}/); analysis = m ? JSON.parse(m[0]) : null; } catch { analysis = null; }

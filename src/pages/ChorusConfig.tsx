@@ -8,7 +8,14 @@ import { Landmark, Loader2, Save, CheckCircle, Edit2, Search, XCircle } from 'lu
 import { FadeInView } from '@/components/FadeInView';
 import { Input } from '@/components/ui/input';
 import { BoutonY2K } from '@/components/y2k/BoutonY2K';
+import { messageErreurEdgeFn } from '@/lib/erreurs';
 import { capturerErreurSentry } from '@/lib/sentry';
+
+interface DiagnosticChorus {
+  env?: string;
+  oauth_ok?: boolean;
+  piste_http_status?: number;
+}
 
 interface VerifyResult {
   status: 'idle' | 'loading' | 'found' | 'not_found' | 'error';
@@ -16,6 +23,7 @@ interface VerifyResult {
   error?: string;
   codeServiceObligatoire?: boolean;
   services?: Array<{ code: string; nom: string; actif: boolean }>;
+  diagnostic?: DiagnosticChorus;
 }
 
 export default function ChorusConfig() {
@@ -52,8 +60,13 @@ export default function ChorusConfig() {
   }, [user]);
 
   const verifyStructure = async () => {
-    const id = numeroStructure.trim();
+    // Chorus attend un identifiant sans espaces (SIRET = 14 chiffres collés).
+    // Un SIRET saisi/collé avec des espaces ("818 613 663 00017") rendait la
+    // structure systématiquement "introuvable". On normalise avant l'appel et on
+    // réaffiche la valeur nettoyée.
+    const id = numeroStructure.replace(/\s/g, '');
     if (!id) return;
+    if (id !== numeroStructure) setNumeroStructure(id);
     setVerify({ status: 'loading' });
     try {
       const { data, error } = await supabase.functions.invoke('chorus-pro-verify', {
@@ -61,19 +74,25 @@ export default function ChorusConfig() {
       });
       if (error) throw error;
       if (data.simulation) {
-        setVerify({ status: 'error', error: 'Vérification indisponible temporairement' });
+        setVerify({ status: 'error', error: 'Connexion Chorus Pro indisponible : identifiants PISTE non configurés côté serveur.', diagnostic: data.diagnostic });
+      } else if (data.apiError) {
+        // Erreur technique / habilitation PISTE — surtout PAS "introuvable",
+        // qui ferait croire à un mauvais SIRET.
+        setVerify({ status: 'error', error: data.error || 'La connexion à Chorus Pro a échoué (habilitation PISTE ou indisponibilité).', diagnostic: data.diagnostic });
       } else if (data.found) {
         setVerify({
           status: 'found',
           designation: data.structure?.designationStructure || 'Structure trouvée',
           codeServiceObligatoire: data.parametrage?.codeServiceObligatoire,
           services: data.services ?? [],
+          diagnostic: data.diagnostic,
         });
       } else {
-        setVerify({ status: 'not_found', error: data.error || 'Structure introuvable sur Chorus Pro' });
+        setVerify({ status: 'not_found', error: data.error || 'Structure introuvable sur Chorus Pro', diagnostic: data.diagnostic });
       }
     } catch (err: any) {
-      setVerify({ status: 'error', error: err.message || 'Erreur de vérification' });
+      const msg = await messageErreurEdgeFn(err, 'Erreur lors de la vérification Chorus Pro.');
+      setVerify({ status: 'error', error: msg });
     }
   };
 
@@ -215,7 +234,15 @@ export default function ChorusConfig() {
                 </p>
               )}
               {verify.status === 'idle' && (
-                <p className="text-xs text-muted-foreground mt-1">Identifiant unique de votre structure sur Chorus Pro (SIRET ou n° structure).</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  SIRET (14 chiffres, sans espaces) ou n° de structure du <strong>client du secteur public</strong> que vous facturez. Seuls les organismes publics sont enregistrés sur Chorus Pro.
+                </p>
+              )}
+              {verify.diagnostic && (verify.status === 'not_found' || verify.status === 'error' || verify.status === 'found') && (
+                <p className="text-[11px] text-muted-foreground mt-1 font-mono">
+                  diagnostic : env={verify.diagnostic.env ?? '—'} · OAuth PISTE={verify.diagnostic.oauth_ok ? 'OK' : 'KO'}
+                  {verify.diagnostic.piste_http_status != null && <> · Chorus HTTP {verify.diagnostic.piste_http_status}</>}
+                </p>
               )}
             </div>
 
@@ -280,13 +307,24 @@ export default function ChorusConfig() {
               </div>
             )}
 
-            <div className="p-3 rounded-lg bg-success/5 border border-success/20">
-              <p className="text-xs text-success">
-                <strong>Intégration API active</strong> — Vos factures secteur public sont déposées
-                et suivies automatiquement via l'API Chorus Pro (PISTE). Le statut est synchronisé
-                toutes les 2 heures.
-              </p>
-            </div>
+            {configId || verify.status === 'found' ? (
+              <div className="p-3 rounded-lg bg-success/5 border border-success/20">
+                <p className="text-xs text-success">
+                  <strong>Intégration Chorus Pro configurée</strong> — vos factures secteur public
+                  seront déposées et suivies automatiquement via l'API Chorus Pro (PISTE), avec une
+                  synchronisation du statut toutes les 2 heures.
+                </p>
+              </div>
+            ) : (
+              <div className="p-3 rounded-lg bg-muted/50 border border-border">
+                <p className="text-xs text-muted-foreground">
+                  L'intégration Chorus Pro (API PISTE) est <strong>disponible pour facturer vos clients
+                  du secteur public</strong>. Renseignez le n° de structure du client public, cliquez
+                  « Vérifier », puis enregistrez. Le dépôt et le suivi des factures deviennent alors
+                  automatiques.
+                </p>
+              </div>
+            )}
           </div>
         </div>
       </FadeInView>

@@ -2,17 +2,15 @@ import { useSearchParams } from 'react-router-dom';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { LayoutApp } from '@/components/LayoutApp';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { User, Building2, FileText, Bell, Ban } from 'lucide-react';
+import { User, Building2, Bell, Ban } from 'lucide-react';
 import { ProfilEtablissementContent } from './ProfilEtablissement';
 import { MonGroupeContent } from './MonGroupe';
-import { ContratPlateformeContent } from './ContratPlateforme';
-import { AssuranceMissionContent } from './AssuranceMission';
 import { NotificationsContent } from './PageNotifications';
 import { APIContent } from './APIEtablissement';
 import { ExclusionsContent } from './ExclusionsEtablissement';
 import { TolerancePointageGps } from '@/components/etablissement/TolerancePointageGps';
 
-const TABS = ['profil', 'groupe', 'contrats', 'config', 'exclusions'] as const;
+const TABS = ['profil', 'groupe', 'config', 'exclusions'] as const;
 type Tab = typeof TABS[number];
 
 export default function Parametres() {
@@ -38,10 +36,6 @@ export default function Parametres() {
             <Building2 className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
             <span className="hidden sm:inline">Groupe</span>
           </TabsTrigger>
-          <TabsTrigger value="contrats" className="flex items-center gap-1.5 text-xs sm:text-sm">
-            <FileText className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-            <span className="hidden sm:inline">Contrats</span>
-          </TabsTrigger>
           <TabsTrigger value="config" className="flex items-center gap-1.5 text-xs sm:text-sm">
             <Bell className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
             <span className="hidden sm:inline">Config</span>
@@ -59,11 +53,6 @@ export default function Parametres() {
 
         <TabsContent value="groupe" className="mt-0">
           <MonGroupeContent />
-        </TabsContent>
-
-        <TabsContent value="contrats" className="mt-0 space-y-8">
-          <ContratPlateformeContent />
-          <AssuranceMissionContent />
         </TabsContent>
 
         <TabsContent value="config" className="mt-0 space-y-8">

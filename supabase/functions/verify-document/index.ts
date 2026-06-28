@@ -1,5 +1,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { applyRateLimit, getClientIp } from "../_shared/rate-limit.ts";
+import { appelerAnthropic } from "../_shared/anthropic.ts";
+import { safeStringifyError } from "../_shared/errors.ts";
 
 function getCorsOrigin(req: Request): string {
   const origin = req.headers.get("origin") || "";
@@ -240,21 +242,13 @@ Analyse ce document et vérifie sa conformité.`;
     // "vérification en cours" indéfiniment si l'API met trop longtemps.
     const aiController = new AbortController();
     const aiTimeout = setTimeout(() => aiController.abort(), 20_000);
-    let aiResponse: Response;
+    let ai;
     try {
-      aiResponse = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: {
-          "x-api-key": anthropicKey,
-          "anthropic-version": "2023-06-01",
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: "claude-sonnet-4-20250514",
-          max_tokens: 1000,
-          system: systemPrompt,
-          messages: [{ role: "user", content: anthropicContent }],
-        }),
+      ai = await appelerAnthropic({
+        apiKey: anthropicKey,
+        system: systemPrompt,
+        content: anthropicContent,
+        maxTokens: 1000,
         signal: aiController.signal,
       });
     } catch (e) {
@@ -273,16 +267,15 @@ Analyse ce document et vérifie sa conformité.`;
     }
     clearTimeout(aiTimeout);
 
-    if (!aiResponse.ok) {
-      const errText = await aiResponse.text();
-      console.error("Anthropic API failed:", aiResponse.status, errText);
+    if (!ai.ok) {
+      console.error("Anthropic API failed:", ai.status, ai.body);
       // Persiste l'erreur Anthropic dans resultat_ia pour diagnostic
       // sans avoir à déployer une version debug.
       await supabase.from("documents_soignants").update({
         resultat_ia: {
           erreur_anthropic: {
-            status: aiResponse.status,
-            body_excerpt: errText.slice(0, 1500),
+            status: ai.status,
+            body_excerpt: ai.body.slice(0, 1500),
             at: new Date().toISOString(),
           },
         },
@@ -295,7 +288,7 @@ Analyse ce document et vérifie sa conformité.`;
       });
     }
 
-    const aiData = await aiResponse.json();
+    const aiData = ai.data;
     const rawContent = aiData.content?.[0]?.text || "";
 
     let analysis: any;

@@ -5,6 +5,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { FooterLegal } from '@/components/FooterLegal';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { RechercheGlobaleAdmin } from '@/components/admin/RechercheGlobaleAdmin';
+import { GardeMfaAdmin } from '@/components/admin/GardeMfaAdmin';
 import { useScrollDirection } from '@/hooks/useScrollDirection';
 
 import { useAccesAdmin } from '@/hooks/useAccesAdmin';
@@ -360,7 +361,10 @@ export function LayoutAdmin({ children }: { children: React.ReactNode }) {
         className="flex-1 md:ml-[240px] mt-14 md:mt-0 overflow-x-hidden"
       >
         <div className="max-w-7xl mx-auto px-4 py-6 pb-24 md:pb-6">
-          {children}
+          {/* 2FA admin par email imposée à TOUTES les pages admin (un seul point
+              d'ancrage). GardeMfaAdmin existait mais n'était branché nulle part
+              → la double vérification n'était pas réellement appliquée. */}
+          <GardeMfaAdmin>{children}</GardeMfaAdmin>
         </div>
         <FooterLegal />
       </main>
