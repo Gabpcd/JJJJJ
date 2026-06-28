@@ -45,7 +45,7 @@ export async function telechargerFactureHonorairesPDF(factureId: string) {
     // Si un PDF pré-généré existe dans Storage, on l'ouvre directement
     if ((f as any).pdf_s3_key) {
       const { data: urlData } = await supabase.storage
-        .from('factures-honoraires')
+        .from('jolene-documents')
         .createSignedUrl((f as any).pdf_s3_key, 300);
       if (urlData?.signedUrl) {
         window.open(urlData.signedUrl, '_blank');
