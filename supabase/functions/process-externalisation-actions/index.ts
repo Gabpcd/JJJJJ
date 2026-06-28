@@ -655,8 +655,8 @@ h1{color:#d6336c}.box{background:#fef3f7;padding:16px;border-radius:8px;margin:1
   const hash = Array.from(new Uint8Array(hashBuf)).map(b => b.toString(16).padStart(2, "0")).join("");
 
   // Upload Storage bucket avoirs (si existe)
-  const path = `${mission_id}/${numero}.html`;
-  const { error: uploadErr } = await admin.storage.from("avoirs")
+  const path = `avoirs/${mission_id}/${numero}.html`;
+  const { error: uploadErr } = await admin.storage.from("jolene-documents")
     .upload(path, new Blob([html], { type: "text/html" }), { upsert: false });
   if (uploadErr && !uploadErr.message?.includes("Bucket not found")) {
     // Si bucket existe mais erreur autre, on log mais continue
