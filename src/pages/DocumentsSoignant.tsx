@@ -182,6 +182,9 @@ export function DocumentsSoignantContent() {
           if (TYPES_DOCUMENTS_EXCLUS_UPLOAD.includes(d.type_document)) return false;
           if (identiteVerifiee && d.type_document === 'DIPLOME') return false;
           if (identiteVerifiee && d.type_document === 'RPPS_ADELI') return false;
+          // RPPS/ADELI vérifié = profession française reconnue → l'autorisation
+          // d'exercice (diplôme étranger / PAE) n'a plus lieu d'être, comme le diplôme.
+          if (identiteVerifiee && d.type_document === 'AUTORISATION_EXERCICE') return false;
           const exReq = d.type_exercice_requis || 'TOUS';
           if (exReq === 'LIBERAL_ONLY') return estLiberal;
           if (exReq === 'SALARIE_ONLY') return estSalarie;
@@ -733,8 +736,11 @@ export function DocumentsSoignantContent() {
         );
       })()}
 
-      {/* Documents complémentaires — étudiant / interne faisant fonction */}
-      {user && (() => {
+      {/* Documents complémentaires — étudiant / interne faisant fonction.
+          Masqué si RPPS/ADELI vérifié : profession déjà reconnue, le « faisant
+          fonction » étudiant / la licence de remplacement n'ont plus lieu d'être
+          (cohérent avec le masquage du diplôme et de l'autorisation d'exercice). */}
+      {user && !(soignant?.rpps_verifie || soignant?.adeli_verifie) && (() => {
         const docScol = mesDocuments.find((d) => d.type_document === 'ATTESTATION_SCOLARITE');
         const statScol = docScol ? STATUTS_VERIFICATION[docScol.statut_verification as string] : null;
         const docLic = mesDocuments.find((d) => d.type_document === 'LICENCE_REMPLACEMENT');
