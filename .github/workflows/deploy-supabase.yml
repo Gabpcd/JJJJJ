@@ -150,20 +150,51 @@ jobs:
           version: 2.98.0
 
       - name: Deploy every function listed in supabase/config.toml
+        # Retry par fonction (3 essais, backoff) : l'API de déploiement Supabase
+        # renvoie parfois un 502 transitoire (souvent un faux échec — le déploiement
+        # aboutit côté serveur). Sans retry, un seul 502 sur l'une des ~60 fonctions
+        # faisait échouer TOUT le job alors que prod était saine (incident run #440,
+        # merge go-2 : 502 sur verify-document → re-run manuel nécessaire).
+        # On continue la boucle même si une fonction échoue définitivement, puis on
+        # fait échouer le job à la fin si besoin → un vrai problème de code reste
+        # détecté (les 3 essais échouent), mais un 502 isolé ne bloque plus rien.
         run: |
-          set -euo pipefail
+          set -uo pipefail
           cd supabase/functions
-          # Filtrer les répertoires qui contiennent un index.ts
+
+          deploy_with_retry() {
+            local fn="$1" attempt=1 max=3
+            while [ "$attempt" -le "$max" ]; do
+              if supabase functions deploy "$fn" \
+                   --project-ref "$SUPABASE_PROJECT_REF" \
+                   --use-api; then
+                return 0
+              fi
+              echo "::warning::Déploiement de $fn échoué (tentative $attempt/$max) — nouvel essai dans $((attempt * 5))s…"
+              sleep $((attempt * 5))
+              attempt=$((attempt + 1))
+            done
+            echo "::error::Déploiement de $fn échoué après $max tentatives"
+            return 1
+          }
+
+          failed_fns=""
           for dir in */; do
             fn="${dir%/}"
             if [ -f "$fn/index.ts" ]; then
               echo "::group::Deploying $fn"
-              supabase functions deploy "$fn" \
-                --project-ref "$SUPABASE_PROJECT_REF" \
-                --use-api
+              if ! deploy_with_retry "$fn"; then
+                failed_fns="$failed_fns $fn"
+              fi
               echo "::endgroup::"
             fi
           done
+
+          if [ -n "$failed_fns" ]; then
+            echo "::error::Edge functions non déployées après retries :$failed_fns"
+            exit 1
+          fi
+          echo "Toutes les edge functions déployées."
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
