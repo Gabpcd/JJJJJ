@@ -25,13 +25,11 @@
 import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { CheckCircle2, Circle } from 'lucide-react';
+import { ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { TYPES_DOCUMENTS_EXCLUS_UPLOAD } from '@/lib/documents';
-import { CardY2K } from '@/components/y2k/CardY2K';
-import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { Mascotte } from '@/components/mascotte/Mascotte';
 import { JaugeProgression } from '@/components/JaugeProgression';
 
@@ -224,70 +222,38 @@ export function ChecklistActivation({ state, className }: ChecklistActivationPro
   const prochaineEtape = state.prochaineEtape;
   if (!state.visible || !prochaineEtape) return null;
 
-  const { etapes, nbFaites } = state;
-  const restantes = etapes.length - nbFaites;
+  const { nbFaites } = state;
 
+  // Bandeau COMPACT (1 ligne) : la rampe d'activation ne doit pas manger l'écran
+  // ni repousser les missions sous la ligne de flottaison. Mascotte + prochaine
+  // action + progression + chevron, le tout cliquable vers l'étape à faire.
   return (
-    <CardY2K hoverLift={false} className={cn('mb-6', className)} data-testid="checklist-activation">
-      <div className="flex items-start gap-3 mb-4">
-        <Mascotte etat={nbFaites >= 2 ? 'happy' : 'thinking'} taille="sm" className="shrink-0" />
-        <div className="flex-1 min-w-0">
-          <h2 className="text-base font-bold text-foreground">À faire maintenant</h2>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            {restantes === 1
-              ? 'Plus qu’une étape avant vos premières missions'
-              : `Encore ${restantes} étapes avant vos premières missions`}
-          </p>
+    <button
+      type="button"
+      onClick={() => navigate(state.ctaDestination)}
+      aria-label={state.ctaLabel}
+      data-testid="checklist-activation"
+      className={cn(
+        'w-full text-left flex items-center gap-3 rounded-2xl px-3.5 py-2.5',
+        'border border-jolene-rose-200/60 bg-gradient-soft hover:border-jolene-rose-300 transition-colors',
+        className,
+      )}
+    >
+      <Mascotte etat={nbFaites >= 2 ? 'happy' : 'thinking'} taille="sm" className="shrink-0" />
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-sm font-semibold text-foreground truncate">{state.ctaLabel}</p>
+          <span className="text-xs font-semibold text-primary shrink-0 tabular-nums">{nbFaites}/3</span>
         </div>
-        <span className="text-xs font-semibold text-primary shrink-0 tabular-nums">{nbFaites}/3</span>
+        {prochaineEtape.detail && (
+          <p className="text-xs text-muted-foreground truncate mt-0.5">{prochaineEtape.detail}</p>
+        )}
+        <div className="mt-1.5">
+          <JaugeProgression valeur={nbFaites} max={3} />
+        </div>
       </div>
-
-      <JaugeProgression valeur={nbFaites} max={3} />
-
-      <ol className="mt-4 space-y-3" aria-label="Étapes d'activation">
-        {etapes.map((etape) => (
-          <li key={etape.id} className="flex items-start gap-2.5">
-            {etape.faite ? (
-              <CheckCircle2 className="h-5 w-5 text-success shrink-0" aria-hidden="true" />
-            ) : (
-              <Circle
-                className={cn(
-                  'h-5 w-5 shrink-0',
-                  etape.id === prochaineEtape.id ? 'text-primary' : 'text-muted-foreground/40',
-                )}
-                aria-hidden="true"
-              />
-            )}
-            <div className="min-w-0">
-              <p
-                className={cn(
-                  'text-sm leading-5',
-                  etape.faite
-                    ? 'text-muted-foreground line-through'
-                    : etape.id === prochaineEtape.id
-                      ? 'font-semibold text-foreground'
-                      : 'text-foreground',
-                )}
-              >
-                {etape.numero === 1 ? '①' : etape.numero === 2 ? '②' : '③'} {etape.label}
-              </p>
-              {!etape.faite && etape.detail && (
-                <p className="text-xs text-muted-foreground mt-0.5">{etape.detail}</p>
-              )}
-            </div>
-          </li>
-        ))}
-      </ol>
-
-      <BoutonY2K
-        variant="primary"
-        size="md"
-        className="mt-5 w-full sm:w-auto"
-        onClick={() => navigate(state.ctaDestination)}
-      >
-        {state.ctaLabel}
-      </BoutonY2K>
-    </CardY2K>
+      <ChevronRight className="h-5 w-5 text-primary shrink-0" aria-hidden="true" />
+    </button>
   );
 }
 
