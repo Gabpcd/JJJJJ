@@ -400,6 +400,30 @@ Analyse ce document et vérifie sa conformité.`;
       }
     }
 
+    // IDENTITÉ CLAIREMENT INCOHÉRENTE → REJETE (actionnable) plutôt que EN_ATTENTE
+    // (limbo silencieux qui ne se résout jamais sans intervention admin).
+    // On exige une CONVERGENCE forte pour éviter de rejeter à tort un cas ambigu
+    // (nom de jeune fille, accents…) : l'IA dit nom_correspond=false, ET notre
+    // recoupement chaîne de caractères dit coherenceNom=false, ET confiance haute,
+    // ET document lisible. Dans ce cas le titulaire est une AUTRE personne →
+    // l'utilisateur doit téléverser SON document (critique pour un RIB : on ne
+    // verse pas la rémunération sur le compte d'un tiers). Les cas réellement
+    // ambigus (un seul signal, confiance moyenne) restent EN_ATTENTE (revue admin).
+    const confianceHaute = analysis.confiance === "HAUTE"
+      || (typeof scoreConfianceIa === "number" && scoreConfianceIa >= 85);
+    if (
+      verdictFinal === "EN_ATTENTE" &&
+      analysis.nom_correspond === false &&
+      coherenceNom === false &&
+      confianceHaute &&
+      analysis.document_lisible === true &&
+      indicesFalsif.length === 0
+    ) {
+      verdictFinal = "REJETE";
+      motifRejet = motifRejet
+        || "Le titulaire du document ne correspond pas à votre identité. Téléversez votre propre document.";
+    }
+
     // Si REJETE : ne PAS écrire valide_depuis/valide_jusqua (dates du mauvais document).
     const estRejeteFinal = verdictFinal === "REJETE";
     await supabase.rpc("fn_update_document_verification", {
