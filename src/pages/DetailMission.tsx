@@ -40,7 +40,7 @@ import { ListeCandidatures } from '@/components/ListeCandidatures';
 import { FilDiscussionLitige } from '@/components/FilDiscussionLitige';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase, SUPABASE_URL } from '@/integrations/supabase/client';
 import { getLabelProfession } from '@/lib/constantes';
 import { extraireMessageErreur } from '@/lib/erreurs';
 import { payerMissionStripeConnectAvecGenerationAuto } from '@/lib/stripeMissionPay';
@@ -93,7 +93,7 @@ function AlerterPoolUrgence({ missionId, mission, user, afficherNotification }: 
       const fin = new Date(mission.fin_le);
 
       // Send notification + email to all soignants in parallel
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const supabaseUrl = SUPABASE_URL;
       const results = await Promise.allSettled(
         (soignants as any[]).map(async (s) => {
           await supabase.rpc('fn_creer_notification', {

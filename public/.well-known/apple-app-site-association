@@ -4,7 +4,7 @@
     "details": [
       {
         "appIDs": [
-          "TEAM_ID.app.jolene.mobile"
+          "5D9L5FQQ86.app.jolene"
         ],
         "paths": [
           "/soignant/*",
@@ -20,7 +20,7 @@
   },
   "webcredentials": {
     "apps": [
-      "TEAM_ID.app.jolene.mobile"
+      "5D9L5FQQ86.app.jolene"
     ]
   }
 }

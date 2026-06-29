@@ -2,15 +2,15 @@ import { describe, it, expect } from 'vitest';
 import { VILLES_SEO, PROFESSIONS_SEO, getVilleBySlug, getProfessionBySlug } from '../seo-data';
 
 describe('VILLES_SEO', () => {
-  it('should have 20 cities', () => {
-    expect(VILLES_SEO).toHaveLength(20);
+  it('should have 100 cities', () => {
+    expect(VILLES_SEO).toHaveLength(100);
   });
 
   it('each city should have slug, nom, departement', () => {
     for (const v of VILLES_SEO) {
       expect(v.slug).toBeTruthy();
       expect(v.nom).toBeTruthy();
-      expect(v.departement).toMatch(/^\d{2,3}$/);
+      expect(v.departement).toMatch(/^(\d{2,3}|2A|2B)$/);
     }
   });
 
