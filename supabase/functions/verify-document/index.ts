@@ -153,7 +153,7 @@ Deno.serve(async (req) => {
     const isPdf = doc.type_mime === "application/pdf";
 
     const typeLabels: Record<string, string> = {
-      CARTE_IDENTITE: "Carte d'identité ou Passeport",
+      CARTE_IDENTITE: "Pièce d'identité (carte nationale d'identité, passeport OU titre de séjour)",
       PASSEPORT: "Passeport",
       TITRE_SEJOUR: "Titre de séjour",
       DIPLOME: "Diplôme d'État",
@@ -211,7 +211,7 @@ Règles:
   le moindre indice sérieux de falsification, verdict = "EN_ATTENTE" (revue humaine) et
   motif_rejet = "Indices de falsification détectés — vérification manuelle requise"
 - Pour un RIB: pas de date d'expiration. Extrais le nom du TITULAIRE du compte dans "nom_extrait"/"prenom_extrait" et vérifie qu'il correspond au nom du soignant (nom_correspond=false si le titulaire est une autre personne)
-- Pour une CNI/Passeport: extrais la date d'expiration si visible, ainsi que la date de naissance (date_naissance_extraite), le sexe (sexe_extrait: "M" ou "F"), et la commune de naissance (lieu_naissance_extrait) si lisibles sur le document. Ces informations servent à pré-remplir le profil DPAE du soignant
+- PIÈCE D'IDENTITÉ (type "Pièce d'identité" / CARTE_IDENTITE) : accepte INDIFFÉREMMENT une carte nationale d'identité, un passeport OU un titre de séjour — ce sont tous des documents officiels d'identité avec photo. type_correspond=true pour l'un quelconque de ces trois. Extrais la date d'expiration si visible, ainsi que la date de naissance (date_naissance_extraite), le sexe (sexe_extrait: "M" ou "F"), et la commune de naissance (lieu_naissance_extrait) si lisibles. Ces informations servent à pré-remplir le profil DPAE du soignant
 - Pour une assurance RCP: extrais la date de fin de validité
 - IMPORTANT: Si le document déclaré est un "Diplôme d'État" mais que le fichier est clairement une carte d'identité, passeport ou tout autre document non-diplôme, verdict = "REJETE" avec motif "Le document fourni n'est pas un diplôme"
 - PROFESSION CERTIFIÉE PAR LE DIPLÔME (crucial) : pour TOUT diplôme, extrais dans "profession_certifiee" la profession de santé que ce diplôme certifie. Exemples : "Diplôme d'État d'infirmier" → "IDE" ; "Diplôme d'État d'aide-soignant" / "DEAS" → "AS" ; "Diplôme d'État d'accompagnant éducatif et social" / "DEAES" → "AES" ; "Diplôme d'État de sage-femme" → "SAGE_FEMME" ; "Diplôme d'État de masseur-kinésithérapeute" / "DEMK" → "KINE" ; "Diplôme d'État de docteur en médecine" → "MEDECIN" ; "Diplôme d'État de docteur en pharmacie" → "PHARMACIEN" ; "Diplôme d'État d'infirmier de bloc opératoire" → "IBODE" ; "Diplôme d'État d'infirmier anesthésiste" → "IADE" ; "Diplôme d'État d'auxiliaire de puériculture" / "DEAP" → "AUXILIAIRE_PUERICULTURE" ; "Diplôme de préparateur en pharmacie hospitalière" → "PREPARATEUR_PHARMA" ; "Diplôme de chirurgien-dentiste" → "DENTISTE" ; "Diplôme de manipulateur en électroradiologie médicale" / "DEMERM" → "MANIPULATEUR_RADIO" ; "Diplôme d'État d'ergothérapeute" → "ERGOTHERAPEUTE" ; "Diplôme d'État de psychomotricien" → "PSYCHOMOTRICIEN". Si le diplôme ne correspond à aucune de ces professions, mets null. Cette information est utilisée côté serveur pour vérifier la concordance avec la profession déclarée par le soignant.
@@ -398,6 +398,30 @@ Analyse ce document et vérifie sa conformité.`;
         verdictFinal = "EN_ATTENTE";
         motifRejet = `Le diplôme certifie la profession "${analysis.profession_certifiee}" mais le profil déclare "${soignant.profession}" — vérification manuelle requise.`;
       }
+    }
+
+    // IDENTITÉ CLAIREMENT INCOHÉRENTE → REJETE (actionnable) plutôt que EN_ATTENTE
+    // (limbo silencieux qui ne se résout jamais sans intervention admin).
+    // On exige une CONVERGENCE forte pour éviter de rejeter à tort un cas ambigu
+    // (nom de jeune fille, accents…) : l'IA dit nom_correspond=false, ET notre
+    // recoupement chaîne de caractères dit coherenceNom=false, ET confiance haute,
+    // ET document lisible. Dans ce cas le titulaire est une AUTRE personne →
+    // l'utilisateur doit téléverser SON document (critique pour un RIB : on ne
+    // verse pas la rémunération sur le compte d'un tiers). Les cas réellement
+    // ambigus (un seul signal, confiance moyenne) restent EN_ATTENTE (revue admin).
+    const confianceHaute = analysis.confiance === "HAUTE"
+      || (typeof scoreConfianceIa === "number" && scoreConfianceIa >= 85);
+    if (
+      verdictFinal === "EN_ATTENTE" &&
+      analysis.nom_correspond === false &&
+      coherenceNom === false &&
+      confianceHaute &&
+      analysis.document_lisible === true &&
+      indicesFalsif.length === 0
+    ) {
+      verdictFinal = "REJETE";
+      motifRejet = motifRejet
+        || "Le titulaire du document ne correspond pas à votre identité. Téléversez votre propre document.";
     }
 
     // Si REJETE : ne PAS écrire valide_depuis/valide_jusqua (dates du mauvais document).

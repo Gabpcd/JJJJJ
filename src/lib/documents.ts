@@ -1,5 +1,5 @@
 export const TYPES_DOCUMENTS: Record<string, string> = {
-  'CARTE_IDENTITE': 'Carte d\'identité / Passeport',
+  'CARTE_IDENTITE': 'Pièce d\'identité',
   'PASSEPORT': 'Passeport',
   'TITRE_SEJOUR': 'Titre de séjour',
   'DIPLOME': 'Diplôme d\'État',
