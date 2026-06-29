@@ -22,7 +22,15 @@ export interface MissionSwipePayload {
   etablissement_ville: string | null;
   etablissement_score: number | null;
   taux_horaire_base: number | null;
+  total_brut: number | null;
+  net_a_payer: number | null;
   net_estime: number | null;
+  montant_ifm: number | null;
+  montant_icp: number | null;
+  montant_majoration_nuit: number | null;
+  montant_majoration_dimanche: number | null;
+  montant_majoration_ferie: number | null;
+  type_contrat_applique: string | null;
   duree_heures: number | null;
   debut_le: string | null;
   fin_le: string | null;

@@ -22,7 +22,7 @@ import {
   DialogResponsiveBody,
 } from '@/components/ui/DialogResponsive';
 import { Flame, Users, UserCheck, Trophy, Bell, BellRing, Send, MapPin, Clock, MessageCircle, Plus, ChevronDown } from 'lucide-react';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase, SUPABASE_URL } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
@@ -322,7 +322,7 @@ export default function PoolUrgenceEtablissement({ isAdmin = false }: { isAdmin?
       const { data: session } = await supabase.auth.getSession();
       const token = session?.session?.access_token;
       if (token) {
-        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+        const supabaseUrl = SUPABASE_URL;
         fetch(`${supabaseUrl}/functions/v1/send-email`, {
           method: 'POST',
           headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },

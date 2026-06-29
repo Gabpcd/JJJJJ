@@ -6,7 +6,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Building2 } from 'lucide-react';
 import {
-  CreditCard, Scale, Settings, LogOut, User, Star,
+  CreditCard, Scale, Settings, LogOut, User, Star, ShieldCheck, FileText, Trash2,
 } from 'lucide-react';
 
 export default function MonCompteEtablissement() {
@@ -34,6 +34,16 @@ export default function MonCompteEtablissement() {
         { icone: Star, label: 'Qualité', route: '/etablissement/litiges' },
         { icone: Settings, label: 'Paramètres', route: '/etablissement/parametres?tab=config' },
         { icone: LogOut, label: 'Se déconnecter', onClick: () => deconnexion(), variante: 'danger' as const, sansChevron: true },
+      ],
+    },
+    {
+      titre: 'Légal',
+      lignes: [
+        { icone: ShieldCheck, label: 'Confidentialité', route: '/confidentialite' },
+        { icone: Scale, label: 'CGU', route: '/cgu' },
+        { icone: CreditCard, label: 'CGV', route: '/cgv' },
+        { icone: FileText, label: 'Mentions légales', route: '/mentions-legales' },
+        { icone: Trash2, label: 'Supprimer mon compte', route: '/supprimer-mon-compte' },
       ],
     },
   ];

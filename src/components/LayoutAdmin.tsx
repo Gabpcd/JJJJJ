@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { LucideIcon, Gift, BarChart3, Users, Shield, CreditCard, LogOut, HeartPulse, ShieldCheck, Mail, Code2, Building2, CalendarDays, Flame, ClipboardList, MessageCircle, Menu, X, Home, Coins, AlertTriangle, FileCheck, Zap, TrendingUp, ChevronDown, FileStack, Scale, Star, FileSignature, Activity, Flag, Rocket, UserPlus, Megaphone, Settings, Search } from 'lucide-react';
+import { LucideIcon, Gift, BarChart3, Users, Shield, CreditCard, LogOut, HeartPulse, ShieldCheck, Mail, Code2, Building2, CalendarDays, Flame, ClipboardList, MessageCircle, Menu, X, Home, Coins, AlertTriangle, FileCheck, Zap, TrendingUp, ChevronDown, FileStack, Scale, Star, FileSignature, Activity, Flag, Rocket, UserPlus, Megaphone, Settings, Search, Trash2 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { FooterLegal } from '@/components/FooterLegal';
 import { ThemeToggle } from '@/components/ThemeToggle';
@@ -18,6 +18,7 @@ import { cn } from '@/lib/utils';
 interface NavItem { icone: LucideIcon; label: string; route: string; acces: string; }
 interface NavGroup { icone: LucideIcon; label: string; items: NavItem[]; }
 type SidebarEntry = NavItem | NavGroup;
+type LegalItem = Pick<NavItem, 'icone' | 'label' | 'route'>;
 
 function isGroup(e: SidebarEntry): e is NavGroup { return 'items' in e; }
 
@@ -106,6 +107,13 @@ const NAV_ADMIN_MOBILE_MAIN: NavItem[] = [
   { icone: Users, label: 'Utilisateurs', route: '/admin/utilisateurs', acces: ACCES.UTILISATEURS },
   { icone: ClipboardList, label: 'Missions', route: '/admin/missions', acces: ACCES.MISSIONS },
   { icone: MessageCircle, label: 'Messages', route: '/admin/messagerie', acces: ACCES.MESSAGERIE },
+];
+
+const NAV_LEGAL: LegalItem[] = [
+  { icone: ShieldCheck, label: 'Confidentialité', route: '/confidentialite' },
+  { icone: Scale, label: 'CGU', route: '/cgu' },
+  { icone: FileStack, label: 'Mentions légales', route: '/mentions-legales' },
+  { icone: Trash2, label: 'Suppression compte', route: '/supprimer-mon-compte' },
 ];
 
 /* ── All flat items for mobile "Plus" overlay ── */
@@ -253,6 +261,18 @@ export function LayoutAdmin({ children }: { children: React.ReactNode }) {
           )}
         </nav>
         <div className="p-3 border-t border-sidebar-border">
+          <div className="mb-2 grid grid-cols-2 gap-1">
+            {NAV_LEGAL.map((item) => (
+              <button
+                key={item.route}
+                onClick={() => navigate(item.route)}
+                className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-[11px] text-sidebar-foreground/50 hover:bg-sidebar-accent hover:text-sidebar-foreground transition-colors"
+              >
+                <item.icone className="h-3.5 w-3.5" />
+                <span className="truncate">{item.label}</span>
+              </button>
+            ))}
+          </div>
           <button onClick={handleDeconnexion} className="sidebar-item w-full text-left text-sidebar-foreground/50 hover:text-destructive hover:bg-sidebar-accent">
             <LogOut className="h-5 w-5" /><span>Déconnexion</span>
           </button>
@@ -337,6 +357,20 @@ export function LayoutAdmin({ children }: { children: React.ReactNode }) {
             onClick={(e) => e.stopPropagation()}
           >
             {mobileExtraItems.map((item) => {
+              const actif = isActive(item.route);
+              return (
+                <button
+                  key={item.route}
+                  onClick={() => { setMenuOuvert(false); navigate(item.route); }}
+                  className={`flex flex-col items-center gap-1 p-3 rounded-xl transition-colors ${actif ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted'}`}
+                  style={{ minHeight: 44 }}
+                >
+                  <item.icone className="h-5 w-5" />
+                  <span className="text-[10px] leading-tight text-center">{item.label}</span>
+                </button>
+              );
+            })}
+            {NAV_LEGAL.map((item) => {
               const actif = isActive(item.route);
               return (
                 <button

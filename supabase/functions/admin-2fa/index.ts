@@ -71,33 +71,70 @@ Deno.serve(async (req) => {
     if (action === "request") {
       const c = String(Math.floor(100000 + Math.random() * 900000));
       const hash = await sha256(c);
-      await admin.from("admin_2fa_codes").upsert({
+      const RESEND = Deno.env.get("RESEND_API_KEY");
+      if (!RESEND || !email) {
+        console.error("[admin-2fa] RESEND_API_KEY ou email destinataire manquant");
+        return new Response(JSON.stringify({
+          success: false,
+          error: "Envoi du code 2FA indisponible. Vérifiez la configuration email admin.",
+        }), { status: 503, headers: corsHeaders(req) });
+      }
+
+      const { error: upsertErr } = await admin.from("admin_2fa_codes").upsert({
         admin_id: user.id,
         code_hash: hash,
         expire_le: new Date(Date.now() + CODE_TTL_MIN * 60_000).toISOString(),
         tentatives: 0,
       } as any, { onConflict: "admin_id" });
+      if (upsertErr) {
+        console.error("[admin-2fa] stockage code impossible", upsertErr);
+        return new Response(JSON.stringify({
+          success: false,
+          error: "Impossible de préparer le code 2FA.",
+        }), { status: 500, headers: corsHeaders(req) });
+      }
 
-      const RESEND = Deno.env.get("RESEND_API_KEY");
-      if (RESEND && email) {
-        try {
-          await fetch("https://api.resend.com/emails", {
-            method: "POST",
-            headers: { "Authorization": `Bearer ${RESEND}`, "Content-Type": "application/json" },
-            body: JSON.stringify({
-              from: "Jolene Sécurité <bonjour@jolene.app>",
-              to: [email],
-              reply_to: "support@jolene.app",
-              subject: `Jolene — code de connexion admin : ${c}`,
-              html: `<div style="font-family:sans-serif;max-width:480px;margin:auto">
-                <h2 style="color:#E91E8C">Connexion administration Jolene</h2>
-                <p>Votre code de vérification à usage unique :</p>
-                <p style="font-size:32px;font-weight:bold;letter-spacing:8px;color:#111">${c}</p>
-                <p style="color:#666;font-size:13px">Ce code expire dans ${CODE_TTL_MIN} minutes. Si vous n'êtes pas à l'origine de cette connexion, changez votre mot de passe immédiatement.</p>
-              </div>`,
-            }),
-          });
-        } catch (_) { /* l'email peut échouer côté provider ; on ne divulgue rien */ }
+      try {
+        const resendResp = await fetch("https://api.resend.com/emails", {
+          method: "POST",
+          headers: { "Authorization": `Bearer ${RESEND}`, "Content-Type": "application/json" },
+          body: JSON.stringify({
+            from: "Jolene Sécurité <bonjour@jolene.app>",
+            to: [email],
+            reply_to: "support@jolene.app",
+            subject: `Jolene — code de connexion admin : ${c}`,
+            html: `<div style="font-family:sans-serif;max-width:480px;margin:auto">
+              <h2 style="color:#E91E8C">Connexion administration Jolene</h2>
+              <p>Votre code de vérification à usage unique :</p>
+              <p style="font-size:32px;font-weight:bold;letter-spacing:8px;color:#111">${c}</p>
+              <p style="color:#666;font-size:13px">Ce code expire dans ${CODE_TTL_MIN} minutes. Si vous n'êtes pas à l'origine de cette connexion, changez votre mot de passe immédiatement.</p>
+            </div>`,
+          }),
+        });
+        if (!resendResp.ok) {
+          const body = await resendResp.text().catch(() => "");
+          console.error("[admin-2fa] envoi Resend refusé", resendResp.status, body.slice(0, 500));
+          await admin.from("admin_2fa_codes").update({
+            code_hash: null,
+            expire_le: new Date().toISOString(),
+            tentatives: 0,
+          } as any).eq("admin_id", user.id);
+          return new Response(JSON.stringify({
+            success: false,
+            error: "Le code 2FA n'a pas pu être envoyé. Vérifiez Resend avant de continuer.",
+          }), { status: 502, headers: corsHeaders(req) });
+        }
+      } catch (e) {
+        console.error("[admin-2fa] erreur envoi Resend", e);
+        await admin.from("admin_2fa_codes").update({
+          code_hash: null,
+          expire_le: new Date().toISOString(),
+          tentatives: 0,
+        } as any).eq("admin_id", user.id);
+        return new Response(JSON.stringify({
+          success: false,
+          error: "Le code 2FA n'a pas pu être envoyé.",
+        }), { status: 502, headers: corsHeaders(req) });
       }
       return new Response(JSON.stringify({ success: true, email_masque: email.replace(/^(.).*(@.*)$/, "$1•••$2") }), { headers: corsHeaders(req) });
     }

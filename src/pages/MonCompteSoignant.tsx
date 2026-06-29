@@ -12,7 +12,7 @@ import { ChangementMotDePasse } from '@/components/soignant/ChangementMotDePasse
 import { ConsentementPingGps } from '@/components/soignant/ConsentementPingGps';
 import {
   User, Banknote, ShieldCheck, Settings, LogOut,
-  Mail, Phone, MapPin, KeyRound,
+  Mail, Phone, MapPin, KeyRound, FileText, Scale, Trash2,
 } from 'lucide-react';
 
 export default function MonCompteSoignant() {
@@ -52,6 +52,15 @@ export default function MonCompteSoignant() {
         { icone: ShieldCheck, label: 'Ma réputation', route: '/soignant/reputation' },
         { icone: Settings, label: 'Paramètres', route: '/soignant/parametres-complet' },
         { icone: LogOut, label: 'Se déconnecter', onClick: () => deconnexion(), variante: 'danger' as const, sansChevron: true },
+      ],
+    },
+    {
+      titre: 'Légal',
+      lignes: [
+        { icone: ShieldCheck, label: 'Confidentialité', route: '/confidentialite' },
+        { icone: Scale, label: 'Conditions générales', route: '/cgu' },
+        { icone: FileText, label: 'Mentions légales', route: '/mentions-legales' },
+        { icone: Trash2, label: 'Supprimer mon compte', route: '/supprimer-mon-compte' },
       ],
     },
   ];

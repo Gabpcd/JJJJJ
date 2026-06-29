@@ -51,6 +51,15 @@ function formatHeure(iso: string | null): string {
   }
 }
 
+function formatMontant(v: number | null | undefined): string {
+  if (v == null || !Number.isFinite(Number(v))) return '—';
+  return new Intl.NumberFormat('fr-FR', {
+    style: 'currency',
+    currency: 'EUR',
+    maximumFractionDigits: 0,
+  }).format(Number(v));
+}
+
 export function ModalDetailMissionSwipe({ mission, open, onOpenChange, onPostuler, onSuivant }: Props) {
   const [posting, setPosting] = useState(false);
   if (!mission) return null;
@@ -66,6 +75,17 @@ export function ModalDetailMissionSwipe({ mission, open, onOpenChange, onPostule
   const heureDebut = formatHeure(mission.debut_le);
   const heureFin = formatHeure(mission.fin_le);
   const breakdown = mission.breakdown as Record<string, number | undefined> | undefined;
+  const totalMajorations =
+    (mission.montant_majoration_nuit || 0) +
+    (mission.montant_majoration_dimanche || 0) +
+    (mission.montant_majoration_ferie || 0);
+  const totalBrut = mission.total_brut ?? null;
+  const brutBase = totalBrut != null ? Math.max(0, totalBrut - totalMajorations) : null;
+  const ifm = mission.montant_ifm || 0;
+  const icp = mission.montant_icp || 0;
+  const totalAvantCharges = mission.net_a_payer ?? (totalBrut != null ? totalBrut + ifm + icp : null);
+  const netEstime = mission.net_estime ?? (totalAvantCharges != null ? totalAvantCharges * 0.78 : null);
+  const afficherFinance = totalBrut != null || totalAvantCharges != null || netEstime != null;
 
   return (
     <DialogResponsive open={open} onOpenChange={onOpenChange}>
@@ -152,11 +172,53 @@ export function ModalDetailMissionSwipe({ mission, open, onOpenChange, onPostule
                 </dd>
               </div>
             </dl>
-            {mission.net_estime != null && mission.net_estime > 0 && (
-              <div className="mt-3 rounded-2xl bg-gradient-hero p-4 text-center">
-                <p className="text-xs font-semibold text-white/80 uppercase tracking-wider mb-1">Gain net estimé*</p>
-                <p className="text-2xl font-extrabold text-white">~{Math.round(mission.net_estime)} €</p>
-                <p className="text-[10px] text-white/60 mt-1">*estimation, le net réel dépend des cotisations applicables</p>
+            {afficherFinance && (
+              <div className="mt-3 rounded-2xl bg-jolene-cloud border border-jolene-rose-100 p-4 space-y-2">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-xs font-semibold text-jolene-bubblegum uppercase tracking-wider">
+                    Gain net estimé
+                  </p>
+                  {netEstime != null && netEstime > 0 && (
+                    <p className="text-2xl font-extrabold text-jolene-midnight">
+                      ~{formatMontant(netEstime)}
+                    </p>
+                  )}
+                </div>
+                <dl className="space-y-1.5 text-sm">
+                  <div className="flex justify-between gap-3">
+                    <dt className="text-jolene-bubblegum">Brut de base</dt>
+                    <dd className="font-semibold text-jolene-midnight">{formatMontant(brutBase)}</dd>
+                  </div>
+                  <div className="flex justify-between gap-3">
+                    <dt className="text-jolene-bubblegum">Majorations nuit/dimanche/férié</dt>
+                    <dd className="font-semibold text-jolene-midnight">
+                      {totalMajorations > 0 ? `+${formatMontant(totalMajorations)}` : formatMontant(0)}
+                    </dd>
+                  </div>
+                  {totalBrut != null && (
+                    <div className="flex justify-between gap-3 border-t border-jolene-rose-100 pt-1.5">
+                      <dt className="text-jolene-bubblegum">Total brut</dt>
+                      <dd className="font-semibold text-jolene-midnight">{formatMontant(totalBrut)}</dd>
+                    </div>
+                  )}
+                  <div className="flex justify-between gap-3">
+                    <dt className="text-jolene-bubblegum">IFM + ICP</dt>
+                    <dd className="font-semibold text-jolene-midnight">
+                      {ifm + icp > 0 ? `+${formatMontant(ifm + icp)}` : formatMontant(0)}
+                    </dd>
+                  </div>
+                  {totalAvantCharges != null && (
+                    <div className="flex justify-between gap-3 border-t border-jolene-rose-100 pt-1.5">
+                      <dt className="text-jolene-bubblegum">Total avant cotisations</dt>
+                      <dd className="font-bold text-jolene-midnight">{formatMontant(totalAvantCharges)}</dd>
+                    </div>
+                  )}
+                </dl>
+                {totalAvantCharges != null && netEstime != null && (
+                  <p className="text-[11px] text-jolene-bubblegum">
+                    Net estimé = {formatMontant(totalAvantCharges)} x 0,78. Le montant final dépend des cotisations applicables.
+                  </p>
+                )}
               </div>
             )}
           </section>

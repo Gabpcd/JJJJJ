@@ -24,7 +24,10 @@ export function GardeMfaAdmin({ children }: { children: React.ReactNode }) {
     setBusy(true);
     const { data, error } = await supabase.functions.invoke('admin-2fa', { body: { action: 'request' } });
     setBusy(false);
-    if (error) { toast.error("Impossible d'envoyer le code par email."); return; }
+    if (error || !(data as any)?.success) {
+      toast.error((data as any)?.error || "Impossible d'envoyer le code par email.");
+      return;
+    }
     setEmailMasque((data as any)?.email_masque || null);
     setEnvoiInitial(true);
     toast.success('Code envoyé par email.');
@@ -74,7 +77,12 @@ export function GardeMfaAdmin({ children }: { children: React.ReactNode }) {
         </div>
         <p className="text-sm text-muted-foreground">
           Pour des raisons de sécurité, l'accès administrateur exige une double vérification.
-          Un code à 6 chiffres a été envoyé par email{emailMasque ? ` à ${emailMasque}` : ''}. Saisissez-le ci-dessous.
+          {envoiInitial
+            ? ` Un code à 6 chiffres a été envoyé par email${emailMasque ? ` à ${emailMasque}` : ''}. Saisissez-le ci-dessous.`
+            : ' Demandez un code email pour continuer.'}
+        </p>
+        <p className="text-xs text-muted-foreground">
+          Si aucun email n'arrive, vérifiez la configuration Resend avant de réessayer.
         </p>
         <input
           value={code}

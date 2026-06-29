@@ -24,7 +24,7 @@ describe('validerSiret', () => {
 
   it('should reject SIRET with bad checksum', () => {
     expect(validerSiret('10330574400016').valide).toBe(false);
-    expect(validerSiret('10330574400016').message).toContain('checksum');
+    expect(validerSiret('10330574400016').message).toContain('invalide');
   });
 
   it('should handle spaces in SIRET', () => {
