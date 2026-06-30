@@ -217,11 +217,17 @@ export default function PageParametresNotifications() {
               Recevoir un SMS pour les missions urgentes et le rappel mission J-1.
               Coût supporté par Jolene. Vous pouvez désactiver à tout moment.
             </p>
+            {!global.canal_sms && (
+              <p className="text-xs text-warning">
+                Le canal « SMS » est désactivé dans les canaux globaux ci-dessous : active-le pour recevoir ces alertes.
+              </p>
+            )}
             <ToggleCanal
               icone={<MessageSquare className="h-4 w-4" />}
               label="Recevoir les alertes par SMS"
               actif={smsAlertesActives}
               onChange={setSmsAlertesActives}
+              disabled={!global.canal_sms}
             />
           </section>
         )}
@@ -263,16 +269,22 @@ export default function PageParametresNotifications() {
                       <p className="font-medium text-foreground">{e.label}</p>
                       <p className="text-xs text-muted-foreground">{e.description}</p>
                     </td>
-                    {(['EMAIL','PUSH','SMS'] as Canal[]).map(c => (
+                    {(['EMAIL','PUSH','SMS'] as Canal[]).map(c => {
+                      // Le canal global coupe TOUT : si OFF, on grise le sous-toggle
+                      // (il n'aurait aucun effet) plutôt que de laisser croire qu'il agit.
+                      const canalGlobalActif = c === 'EMAIL' ? global.canal_email : c === 'PUSH' ? global.canal_push : global.canal_sms;
+                      return (
                       <td key={c} className="text-center px-2">
                         {e.canaux.includes(c) ? (
                           <button
                             type="button"
                             role="switch"
                             aria-checked={isEnabled(e.type, c)}
-                            onClick={() => toggle(e.type, c)}
-                            className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${isEnabled(e.type, c) ? 'bg-primary' : 'bg-muted-foreground/30'}`}
-                            aria-label={`${c} pour ${e.label} : ${isEnabled(e.type, c) ? 'activé' : 'désactivé'}`}
+                            disabled={!canalGlobalActif}
+                            onClick={() => canalGlobalActif && toggle(e.type, c)}
+                            className={`relative inline-flex h-5 w-9 shrink-0 rounded-full border-2 border-transparent transition-colors ${!canalGlobalActif ? 'cursor-not-allowed opacity-40' : 'cursor-pointer'} ${isEnabled(e.type, c) ? 'bg-primary' : 'bg-muted-foreground/30'}`}
+                            title={!canalGlobalActif ? `Canal ${c} désactivé dans les canaux globaux` : undefined}
+                            aria-label={`${c} pour ${e.label} : ${!canalGlobalActif ? 'canal global désactivé' : isEnabled(e.type, c) ? 'activé' : 'désactivé'}`}
                           >
                             <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${isEnabled(e.type, c) ? 'translate-x-4' : 'translate-x-0'}`} />
                           </button>
@@ -280,7 +292,8 @@ export default function PageParametresNotifications() {
                           <span className="text-xs text-muted-foreground/50">—</span>
                         )}
                       </td>
-                    ))}
+                      );
+                    })}
                   </tr>
                 ))}
               </tbody>
@@ -303,16 +316,17 @@ export default function PageParametresNotifications() {
   );
 }
 
-function ToggleCanal({ icone, label, actif, onChange }: { icone: JSX.Element; label: string; actif: boolean; onChange: (v: boolean) => void }) {
+function ToggleCanal({ icone, label, actif, onChange, disabled }: { icone: JSX.Element; label: string; actif: boolean; onChange: (v: boolean) => void; disabled?: boolean }) {
   return (
-    <div className="flex items-center justify-between gap-3 rounded-lg border border-border p-3">
+    <div className={`flex items-center justify-between gap-3 rounded-lg border border-border p-3 ${disabled ? 'opacity-50' : ''}`}>
       <div className="flex items-center gap-2">
         <span className="text-primary">{icone}</span>
         <span className="text-sm text-foreground">{label}</span>
       </div>
       <button
-        onClick={() => onChange(!actif)}
-        className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${actif ? 'bg-primary' : 'bg-muted-foreground/30'}`}
+        onClick={() => !disabled && onChange(!actif)}
+        disabled={disabled}
+        className={`relative inline-flex h-6 w-11 shrink-0 rounded-full border-2 border-transparent transition-colors ${disabled ? 'cursor-not-allowed' : 'cursor-pointer'} ${actif ? 'bg-primary' : 'bg-muted-foreground/30'}`}
       >
         <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${actif ? 'translate-x-5' : 'translate-x-0'}`} />
       </button>

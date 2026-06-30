@@ -124,7 +124,7 @@ export function ReclamationsContent({ role: _role }: { role: 'SOIGNANT' | 'ADMIN
             </div>
           </div>
           <BoutonY2K onClick={() => setShowForm(true)} className="gap-2">
-            <Plus className="h-4 w-4" /> Nouvelle réclamation
+            <Plus className="h-4 w-4" /> Signaler un problème
           </BoutonY2K>
         </div>
 
@@ -177,7 +177,7 @@ export function ReclamationsContent({ role: _role }: { role: 'SOIGNANT' | 'ADMIN
       <DialogResponsive open={showForm} onOpenChange={setShowForm}>
         <DialogResponsiveContent>
           <DialogResponsiveHeader>
-            <DialogResponsiveTitle>Nouvelle réclamation</DialogResponsiveTitle>
+            <DialogResponsiveTitle>Signaler un problème</DialogResponsiveTitle>
           </DialogResponsiveHeader>
           <DialogResponsiveBody className="space-y-4">
             <div>
