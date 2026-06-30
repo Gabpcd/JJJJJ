@@ -8,10 +8,10 @@ export function BandeauProfilIncomplet() {
       <AlertCircle className="h-5 w-5 text-info shrink-0 mt-0.5" />
       <div className="flex-1">
         <p className="text-sm font-medium text-foreground">
-          Profil incomplet — vous voyez toutes les missions
+          Profil incomplet — tu vois toutes les missions
         </p>
         <p className="text-xs text-muted-foreground mt-0.5">
-          Vérifiez votre numéro RPPS pour voir uniquement les missions qui correspondent à votre profession et candidater aux offres.
+          Vérifie ton numéro RPPS pour voir uniquement les missions qui correspondent à ta profession et candidater aux offres.
         </p>
       </div>
       <button

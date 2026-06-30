@@ -132,7 +132,7 @@ export function SectionDpaeIdentite({ soignantId, typeExercice }: Props) {
           <h3 className="font-semibold text-foreground">Informations DPAE</h3>
           <p className="text-xs text-muted-foreground mt-1">
             Ces informations sont requises par l'URSSAF pour la Déclaration Préalable à l'Embauche
-            de vos contrats CDD. Plus votre profil est complet, plus la déclaration est rapide
+            de tes contrats CDD. Plus ton profil est complet, plus la déclaration est rapide
             côté établissement.
           </p>
         </div>
@@ -155,7 +155,7 @@ export function SectionDpaeIdentite({ soignantId, typeExercice }: Props) {
             onChange={e => setSexe(e.target.value)}
             className="input-base"
           >
-            <option value="">— Sélectionnez —</option>
+            <option value="">— Sélectionne —</option>
             <option value="M">Masculin</option>
             <option value="F">Féminin</option>
           </select>
@@ -233,7 +233,7 @@ export function SectionDpaeIdentite({ soignantId, typeExercice }: Props) {
             autoComplete="off"
           />
           <p className="text-[10px] text-muted-foreground mt-1">
-            Sur votre carte vitale, 13 ou 15 chiffres. Stocké chiffré, transmis uniquement à l'établissement pour la DPAE URSSAF.
+            Sur ta carte vitale, 13 ou 15 chiffres. Stocké chiffré, transmis uniquement à l'établissement pour la DPAE URSSAF.
           </p>
         </label>
       </div>

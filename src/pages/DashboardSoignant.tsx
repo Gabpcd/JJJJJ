@@ -229,8 +229,8 @@ export default function DashboardSoignant() {
         <BoutonY2K variant="primary" size="sm" onClick={() => navigate('/soignant/recherche-missions')} className="whitespace-nowrap flex-1">
           🔥 Trouver une mission
         </BoutonY2K>
-        <BoutonY2K variant="secondary" size="sm" onClick={() => navigate('/soignant/mes-matches')} className="whitespace-nowrap flex-1" iconeGauche={<Sparkles className="h-4 w-4" />}>
-          Mes matchs
+        <BoutonY2K variant="secondary" size="sm" onClick={() => navigate('/soignant/missions')} className="whitespace-nowrap flex-1" iconeGauche={<Sparkles className="h-4 w-4" />}>
+          Mes missions
         </BoutonY2K>
       </div>
 
@@ -242,8 +242,8 @@ export default function DashboardSoignant() {
       >
         <span className="text-sm font-semibold text-foreground">
           {(streak ?? 0) > 0
-            ? `🔥 ${streak} jour${(streak ?? 0) > 1 ? 's' : ''} d'affilée — gardez votre série !`
-            : '🔥 Démarrez votre série — swipez aujourd\'hui'}
+            ? `🔥 ${streak} jour${(streak ?? 0) > 1 ? 's' : ''} d'affilée — garde ta série !`
+            : '🔥 Démarre ta série — swipe aujourd\'hui'}
         </span>
         <span className="text-xs font-semibold text-primary shrink-0">Swiper →</span>
       </button>
@@ -341,7 +341,7 @@ export default function DashboardSoignant() {
           <div className="flex-1">
             <p className="font-semibold text-foreground">Documents requis</p>
             <p className="text-sm text-muted-foreground">
-              Téléversez vos documents (CNI, diplôme, RC Pro) pour pouvoir candidater à toutes les missions.
+              Téléverse tes documents (CNI, diplôme, RC Pro) pour pouvoir candidater à toutes les missions.
             </p>
           </div>
           <span className="text-sm text-primary font-medium shrink-0">Aller au centre →</span>
@@ -352,8 +352,8 @@ export default function DashboardSoignant() {
         <div className="rounded-xl border-2 border-primary/30 bg-primary/5 p-4 mb-4 flex items-start gap-3 cursor-pointer hover:border-primary/50 transition-colors" onClick={() => navigate('/soignant/stripe-connect')}>
           <CreditCard className="h-5 w-5 text-primary shrink-0 mt-0.5" />
           <div>
-            <p className="font-semibold text-foreground">Activez votre compte de paiement</p>
-            <p className="text-sm text-muted-foreground">Liez votre compte Stripe Connect pour recevoir vos paiements directement. Cela prend 5 minutes.</p>
+            <p className="font-semibold text-foreground">Active ton compte de paiement</p>
+            <p className="text-sm text-muted-foreground">Lie ton compte Stripe Connect pour recevoir tes paiements directement. Ça prend 5 minutes.</p>
           </div>
         </div>
       )}
@@ -361,8 +361,8 @@ export default function DashboardSoignant() {
         <div className="rounded-xl border-2 border-warning/30 bg-warning/5 p-4 mb-4 flex items-start gap-3 cursor-pointer hover:border-warning/50 transition-colors" onClick={() => navigate('/soignant/mandat-facturation')}>
           <FileText className="h-5 w-5 text-warning shrink-0 mt-0.5" />
           <div>
-            <p className="font-semibold text-foreground">Signez votre mandat de facturation</p>
-            <p className="text-sm text-muted-foreground">Jolene pourra générer automatiquement vos factures d'honoraires et vous donner accès au paiement rapide (24-48h).</p>
+            <p className="font-semibold text-foreground">Signe ton mandat de facturation</p>
+            <p className="text-sm text-muted-foreground">Jolene pourra générer automatiquement tes factures d'honoraires et te donner accès au paiement rapide (24-48h).</p>
           </div>
         </div>
       )}
@@ -372,7 +372,7 @@ export default function DashboardSoignant() {
       {soignantWithCounts.type_exercice === 'MIXTE' && !(soignantWithCounts as any).attestation_cumul_activite && (
         <div className="bg-warning/5 border-l-4 border-warning p-4 rounded-r-xl mb-4">
           <p className="text-sm text-warning font-medium mb-2">
-            ⚠️ Cumul d'activité : vos heures sur Jolene doivent être compatibles avec votre contrat salarié.
+            ⚠️ Cumul d'activité : tes heures sur Jolene doivent être compatibles avec ton contrat salarié.
           </p>
           <button
             onClick={() => navigate('/soignant/profil')}
@@ -453,7 +453,7 @@ export default function DashboardSoignant() {
               <EmptyState
                 mascotte="thinking"
                 titre="Aucune mission disponible pour le moment"
-                description="Créez une alerte : on vous prévient dès qu'une mission est publiée dans votre zone."
+                description="Crée une alerte : on te prévient dès qu'une mission est publiée dans ta zone."
                 cta={{ label: '🔔 Créer une alerte', onClick: () => navigate('/soignant/recherche-missions?alerte=1') }}
               />
             )}
@@ -481,7 +481,7 @@ export default function DashboardSoignant() {
                 <div className="card-kpi flex flex-col items-center justify-center text-center cursor-pointer" onClick={() => navigate('/soignant/fiabilite')}>
                   <Star className="h-6 w-6 text-muted-foreground/40 mb-1" />
                   <p className="text-xs font-semibold text-muted-foreground">Pas encore d'évaluation</p>
-                  <p className="text-[10px] text-muted-foreground/60 mt-0.5">Complétez votre 1ère mission</p>
+                  <p className="text-[10px] text-muted-foreground/60 mt-0.5">Complète ta 1ère mission</p>
                 </div>
               )}
             </FadeInView>
@@ -579,7 +579,7 @@ export default function DashboardSoignant() {
               </Suspense>
             ) : (
               <div className="mb-6">
-                <EmptyState illustration={<IllustrationTirelire />} titre="Pas encore de gains" description="Vos gains apparaîtront ici après votre première mission terminée." cta={{ label: 'Trouver une mission', onClick: () => navigate('/soignant/recherche-missions') }} />
+                <EmptyState illustration={<IllustrationTirelire />} titre="Pas encore de gains" description="Tes gains apparaîtront ici après ta première mission terminée." cta={{ label: 'Trouver une mission', onClick: () => navigate('/soignant/recherche-missions') }} />
               </div>
             )}
           </FadeInView>
@@ -618,7 +618,7 @@ export default function DashboardSoignant() {
                 </div>
               </div>
               <h2 className="text-base font-bold text-foreground mb-1">Vous exercez déjà en libéral</h2>
-              <p className="text-sm text-muted-foreground">Votre statut libéral est actif. Bénéficiez de tous les avantages de votre indépendance professionnelle.</p>
+              <p className="text-sm text-muted-foreground">Ton statut libéral est actif. Profite de tous les avantages de ton indépendance professionnelle.</p>
               <button onClick={() => navigate('/soignant/profil')} className="mt-4 text-sm text-primary font-semibold hover:underline">
                 Gérer mon profil libéral →
               </button>
@@ -660,7 +660,7 @@ export default function DashboardSoignant() {
               {/* Prévoyance CTA */}
               {!(soignantWithCounts as any).prevoyance_inscrit && (
                 <div className="rounded-2xl bg-gradient-to-r from-rose-light to-rose/5 dark:from-rose/10 dark:to-rose/5 border border-rose/20 p-4 cursor-pointer" onClick={() => navigate('/soignant/prevoyance')}>
-                  <h3 className="text-sm font-bold text-foreground mb-1">🛡️ Protégez-vous avec la Prévoyance Jolene</h3>
+                  <h3 className="text-sm font-bold text-foreground mb-1">🛡️ Protège-toi avec la Prévoyance Jolene</h3>
                   <p className="text-xs text-muted-foreground mb-2">Assurance santé subventionnée jusqu'à 30%. Bonus : +3 points de fiabilité.</p>
                   <span className="text-xs text-primary font-medium">Découvrir les plans →</span>
                 </div>
@@ -675,7 +675,7 @@ export default function DashboardSoignant() {
           ) : (
             <div className="card-base text-center py-8">
               <p className="text-sm text-muted-foreground">
-                Vérifiez votre RPPS pour débloquer votre parcours professionnel.
+                Vérifie ton RPPS pour débloquer ton parcours professionnel.
               </p>
               <BoutonY2K variant="primary" size="sm" onClick={() => navigate('/soignant/profil')} className="mt-3">
                 Compléter mon profil

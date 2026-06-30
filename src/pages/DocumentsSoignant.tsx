@@ -125,7 +125,7 @@ function AttestationSante({ userId }: { userId: string }) {
       )}
 
       <p className="text-[11px] text-muted-foreground mt-3 leading-relaxed">
-        Les documents originaux (carnet de vaccination, attestation de médecine du travail) sont vérifiés par l'établissement lors de votre première mission. Jolene ne stocke aucune donnée de santé.
+        Les documents originaux (carnet de vaccination, attestation de médecine du travail) sont vérifiés par l'établissement lors de ta première mission. Jolene ne stocke aucune donnée de santé.
       </p>
     </div>
   );
@@ -262,7 +262,7 @@ export function DocumentsSoignantContent() {
     const issues: string[] = [];
     const rcpDoc = mesDocuments.find(d => d.type_document === 'RCP_ASSURANCE' && d.statut_verification === 'VERIFIE');
     if (rcpDoc?.valide_jusqua && new Date(rcpDoc.valide_jusqua) < new Date()) {
-      issues.push('Votre assurance RCP est expirée');
+      issues.push('Ton assurance RCP est expirée');
     }
     // Check AI name coherence via RPC
     (supabase.rpc('fn_verifier_coherence_documents' as any) as any).then(({ data }: any) => {
@@ -284,7 +284,7 @@ export function DocumentsSoignantContent() {
         body: { document_id: docId },
       });
       if (verifyError) {
-        toast.error(await messageErreurEdgeFn(verifyError, 'Le document n\'a pas pu être vérifié. Vérifiez le type de document et sa lisibilité.'));
+        toast.error(await messageErreurEdgeFn(verifyError, 'Le document n\'a pas pu être vérifié. Vérifie le type de document et sa lisibilité.'));
         handleErrorSilent(verifyError, 'Revérification document');
       } else if (verifyData?.verdict === 'VERIFIE') {
         toast.success('✅ Document vérifié automatiquement !');
@@ -462,7 +462,7 @@ export function DocumentsSoignantContent() {
           <div>
             <p className="text-sm font-medium text-foreground">Profession non définie</p>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Vérifiez votre RPPS dans votre profil pour voir les documents requis pour votre profession.
+              Vérifie ton RPPS dans ton profil pour voir les documents requis pour ta profession.
             </p>
             <BoutonY2K variant="secondary" size="sm" className="mt-2" onClick={() => navigate('/soignant/profil')}>
               Vérifier mon RPPS →
@@ -475,7 +475,7 @@ export function DocumentsSoignantContent() {
       {soignant?.profession && (docsManquants > 0 ? (
         <div className="rounded-2xl border border-jolene-rose-200/60 bg-gradient-soft p-4 mb-4">
           <h2 className="text-base font-bold text-foreground">
-            Il vous reste {docsManquants} document{docsManquants > 1 ? 's' : ''} — ~3 min, une photo suffit
+            Il te reste {docsManquants} document{docsManquants > 1 ? 's' : ''} — ~3 min, une photo suffit
           </h2>
           {prochainDocRequis && (
             <>
@@ -497,15 +497,15 @@ export function DocumentsSoignantContent() {
             <JaugeProgression valeur={docsValides.length} max={docsRequis.length} />
           </div>
           <p className="text-xs text-muted-foreground mt-2">
-            Vous pouvez postuler dès maintenant — validez vos documents pour être accepté par les établissements.
+            Tu peux postuler dès maintenant — valide tes documents pour être accepté par les établissements.
           </p>
         </div>
       ) : (
         <div className="relative overflow-hidden rounded-2xl bg-emerald-50 border border-emerald-200 p-4 mb-4 text-center">
           <ConfettiMini active={confettiActif} count={14} />
           <Mascotte etat="celebrating" taille="sm" className="mx-auto" />
-          <p className="text-sm font-semibold text-emerald-700 mt-1">Tous vos documents obligatoires sont à jour 🎉</p>
-          <p className="text-xs text-emerald-700/80 mt-1">Vous pouvez postuler et être accepté sur toutes les missions.</p>
+          <p className="text-sm font-semibold text-emerald-700 mt-1">Tous tes documents obligatoires sont à jour 🎉</p>
+          <p className="text-xs text-emerald-700/80 mt-1">Tu peux postuler et être accepté sur toutes les missions.</p>
         </div>
       ))}
 
@@ -514,7 +514,7 @@ export function DocumentsSoignantContent() {
         <div key={d.id} className="bg-destructive/5 border border-destructive/20 rounded-xl p-3 mb-3 flex items-start gap-2">
           <Clock className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
           <p className="text-xs text-destructive">
-            ⏰ Votre {TYPES_DOCUMENTS[d.type_document] || d.type_document} expire dans {differenceInDays(new Date(d.valide_jusqua), new Date())} jours ({format(new Date(d.valide_jusqua), 'd MMM yyyy', { locale: fr })}).{' '}
+            ⏰ Ton {TYPES_DOCUMENTS[d.type_document] || d.type_document} expire dans {differenceInDays(new Date(d.valide_jusqua), new Date())} jours ({format(new Date(d.valide_jusqua), 'd MMM yyyy', { locale: fr })}).{' '}
             <button onClick={() => setTeleversementType(d.type_document)} className="text-primary font-medium hover:underline">Mettre à jour →</button>
           </p>
         </div>
@@ -532,8 +532,8 @@ export function DocumentsSoignantContent() {
             <div className="bg-destructive/5 border border-destructive/20 rounded-xl p-3 mb-4 flex items-start gap-2">
               <AlertCircle className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
               <div>
-                <p className="text-xs text-destructive font-medium">Votre assurance RCP est expirée. Veuillez la renouveler.</p>
-                <p className="text-xs text-destructive mt-0.5">Vous ne pouvez pas postuler aux missions libérales tant que votre RCP n'est pas à jour.</p>
+                <p className="text-xs text-destructive font-medium">Ton assurance RCP est expirée. Pense à la renouveler.</p>
+                <p className="text-xs text-destructive mt-0.5">Tu ne peux pas postuler aux missions libérales tant que ta RCP n'est pas à jour.</p>
               </div>
             </div>
           );
@@ -543,7 +543,7 @@ export function DocumentsSoignantContent() {
             <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 mb-4 flex items-start gap-2">
               <AlertCircle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
               <p className="text-xs text-amber-700">
-                L'assurance RCP est obligatoire pour l'exercice libéral et mixte. Veuillez téléverser votre attestation RCP.
+                L'assurance RCP est obligatoire pour l'exercice libéral et mixte. Téléverse ton attestation RCP.
               </p>
             </div>
           );
@@ -556,7 +556,7 @@ export function DocumentsSoignantContent() {
         <div className="bg-amber-50 border border-amber-300 rounded-xl p-3 mb-4 flex items-start gap-2">
           <AlertCircle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
           <p className="text-xs text-amber-700">
-            ⚠️ Incohérence détectée entre vos documents : {incoherenceMessage} Veuillez vérifier que tous vos documents sont à jour et au même nom.
+            ⚠️ Incohérence détectée entre tes documents : {incoherenceMessage} Vérifie que tous tes documents sont à jour et au même nom.
           </p>
         </div>
       )}
@@ -713,11 +713,11 @@ export function DocumentsSoignantContent() {
                 <Landmark className="h-5 w-5" />
               </span>
               <div className="min-w-0 flex-1">
-                <p className="text-sm font-semibold text-foreground">À quoi sert votre RIB ?</p>
+                <p className="text-sm font-semibold text-foreground">À quoi sert ton RIB ?</p>
                 {isLiberalOrMixte ? (
                   <>
                     <p className="text-sm text-muted-foreground mt-1">
-                      Pour vos <span className="font-medium text-foreground">honoraires libéraux</span>, configurez aussi votre compte de versement sécurisé (le RIB y est saisi côté Stripe).
+                      Pour tes <span className="font-medium text-foreground">honoraires libéraux</span>, configure aussi ton compte de versement sécurisé (le RIB y est saisi côté Stripe).
                     </p>
                     <BoutonY2K variant="secondary" size="sm" className="mt-3" onClick={() => navigate('/soignant/stripe-connect')}>
                       Configurer mes versements →
@@ -725,7 +725,7 @@ export function DocumentsSoignantContent() {
                   </>
                 ) : (
                   <p className="text-sm text-muted-foreground mt-1">
-                    Pour les <span className="font-medium text-foreground">missions salariées</span>, votre RIB est transmis à l'établissement (votre employeur), qui établit votre bulletin de paie. Vos primes Jolene utilisent l'IBAN renseigné dans <span className="font-medium text-foreground">Profil → Paiements</span>.
+                    Pour les <span className="font-medium text-foreground">missions salariées</span>, ton RIB est transmis à l'établissement (ton employeur), qui établit ton bulletin de paie. Tes primes Jolene utilisent l'IBAN renseigné dans <span className="font-medium text-foreground">Profil → Paiements</span>.
                   </p>
                 )}
               </div>
@@ -750,7 +750,7 @@ export function DocumentsSoignantContent() {
               <div className="min-w-0">
                 <p className="text-sm font-medium text-foreground">🎓 Attestation de scolarité / passage en année supérieure</p>
                 <p className="text-xs text-muted-foreground">
-                  Étudiant ? L'IA vérifie votre niveau et débloque l'exercice « faisant fonction »
+                  Étudiant ? L'IA vérifie ton niveau et débloque l'exercice « faisant fonction »
                   correspondant (ex : étudiant infirmier année 1 validée → aide-soignant).
                 </p>
                 {docScol && statScol && (
@@ -765,7 +765,7 @@ export function DocumentsSoignantContent() {
               <div className="min-w-0">
                 <p className="text-sm font-medium text-foreground">🩺 Licence de remplacement (interne en médecine)</p>
                 <p className="text-xs text-muted-foreground">
-                  Interne ? Téléversez votre licence de remplacement (Conseil de l'Ordre) :
+                  Interne ? Téléverse ta licence de remplacement (Conseil de l'Ordre) :
                   l'IA la vérifie et débloque les remplacements de médecin.
                 </p>
                 {docLic && statLic && (
@@ -803,7 +803,7 @@ export function DocumentsSoignantContent() {
         onFermer={() => setSuppDocId(null)}
         onConfirmer={supprimerDocument}
         titre="Supprimer ce document ?"
-        message="Le document sera archivé. Vous pourrez en téléverser un nouveau."
+        message="Le document sera archivé. Tu pourras en téléverser un nouveau."
         labelConfirmer="Supprimer"
         variante="danger"
       />

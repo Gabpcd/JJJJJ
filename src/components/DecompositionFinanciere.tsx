@@ -251,7 +251,7 @@ export function DecompositionFinanciere({ mission, role = 'ETAB' }: Decompositio
                 {fmt(commissionHt)} HT + TVA 20 %
               </p>
               <p className="text-[11px] text-muted-foreground mt-1">
-                <span className="font-medium">Calcul : </span>{tauxCommission}% × {fmt(totalBrut)} honoraires bruts (selon contrat Jolene)
+                <span className="font-medium">Calcul : </span>{tauxCommission}% × {fmt(totalBrut)} honoraires bruts (taux de commission applicable)
               </p>
               <p className="text-[11px] text-primary mt-2">
                 ℹ️ Facturée séparément à l'établissement, sur facture Jolene distincte — à ne pas ajouter au virement honoraires soignant.

@@ -26,7 +26,7 @@ export default function PremiumSoignant() {
     const { data: { user } } = await supabase.auth.getUser();
     const { error } = await (supabase.from('liste_attente_premium' as any) as any).insert({ email: trimmed, type_offre: 'PREMIUM', utilisateur_id: user?.id });
     setSubmitting(false);
-    if (error) { toast.error('Erreur lors de l\'inscription. Veuillez réessayer.'); return; }
+    if (error) { toast.error('Erreur lors de l\'inscription. Réessaie.'); return; }
     toast.success('Inscrit(e) à la liste d\'attente !');
     setEmail('');
   };
@@ -40,15 +40,15 @@ export default function PremiumSoignant() {
         <h1 className="text-2xl font-bold text-foreground">Jolene est 100% gratuit pour les soignants</h1>
         <p className="text-muted-foreground text-sm">
           Missions, contrats, paiements, parcours libéral : tout est inclus, sans frais ni commission
-          pour vous. Une offre Premium (outils comptables libéral, statistiques avancées) arrivera
-          plus tard — laissez votre email pour être prévenu(e) en premier.
+          pour toi. Une offre Premium (outils comptables libéral, statistiques avancées) arrivera
+          plus tard — laisse ton email pour être prévenu(e) en premier.
         </p>
         <CardY2K hoverLift={false}>
           <CardY2KContent>
             <div className="flex flex-col sm:flex-row gap-2">
               <Input
                 type="email"
-                placeholder="votre@email.fr"
+                placeholder="ton@email.fr"
                 value={email}
                 onChange={e => setEmail(e.target.value)}
                 className="flex-1"

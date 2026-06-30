@@ -179,7 +179,7 @@ export default function RechercheMissions() {
             return;
           }
         }
-        toast.success("Votre alerte est active : vous recevrez un email dès qu'une nouvelle mission correspond.");
+        toast.success("Ton alerte est active : tu recevras un email dès qu'une nouvelle mission correspond.");
       } else {
         const { data, error } = await supabase.rpc('fn_creer_filtre_sauvegarde', {
           p_nom: nomAlerte,
@@ -192,7 +192,7 @@ export default function RechercheMissions() {
           toast.error((data as any)?.error || "Impossible de créer l'alerte");
           return;
         }
-        toast.success("Alerte créée : vous recevrez un email dès qu'une nouvelle mission correspond.");
+        toast.success("Alerte créée : tu recevras un email dès qu'une nouvelle mission correspond.");
       }
       setAlerteOpen(false);
       setFiltresVersion((v) => v + 1); // rafraîchit la liste « Mes recherches sauvegardées »
@@ -287,7 +287,7 @@ export default function RechercheMissions() {
       const { data, error } = await query;
       if (error) {
         logger.warn('[RechercheMissions] Erreur requête missions:', error.message);
-        toast.error('Impossible de charger les missions. Vérifiez votre connexion.');
+        toast.error('Impossible de charger les missions. Vérifie ta connexion.');
       }
       const enriched = data ? await enrichirEtablissements(data as any) : [];
       setMissions(enriched);
@@ -368,7 +368,7 @@ export default function RechercheMissions() {
           });
           L.marker([soignant.adresse_lat, soignant.adresse_lng], { icon: homeIcon })
             .addTo(leafletMap.current)
-            .bindPopup('<strong>Votre position</strong>');
+            .bindPopup('<strong>Ta position</strong>');
         }
       } else {
         leafletMap.current.invalidateSize();
@@ -522,7 +522,7 @@ export default function RechercheMissions() {
                 onChange={(e) => setVilleRecherche(e.target.value)}
                 placeholder="Ex : Paris, 75001..."
               />
-              <p className="text-[10px] text-muted-foreground">Laissez vide pour utiliser votre position</p>
+              <p className="text-[10px] text-muted-foreground">Laisse vide pour utiliser ta position</p>
             </div>
             {/* Profession */}
             <div className="space-y-1.5">
@@ -678,7 +678,7 @@ export default function RechercheMissions() {
                 icone={<SearchX />}
                 mascotte="thinking"
                 titre="Aucune mission trouvée"
-                description="Créez une alerte : vous recevrez un email dès qu'une nouvelle mission correspondant à vos critères est publiée."
+                description="Crée une alerte : tu recevras un email dès qu'une nouvelle mission correspondant à tes critères est publiée."
                 cta={{
                   label: '🔔 Me prévenir des prochaines missions',
                   onClick: () => setAlerteOpen(true),
@@ -725,17 +725,17 @@ export default function RechercheMissions() {
             <DialogDescription>
               {professionAlerteLabel ? (
                 <>
-                  Vous recevrez un email dès qu'une nouvelle mission{' '}
-                  <strong>{professionAlerteLabel}</strong> correspondant à vos critères
+                  Tu recevras un email dès qu'une nouvelle mission{' '}
+                  <strong>{professionAlerteLabel}</strong> correspondant à tes critères
                   (rayon {rayonKm} km) est publiée.
                 </>
               ) : (
                 <>
-                  Vous recevrez un email dès qu'une nouvelle mission correspondant à vos
+                  Tu recevras un email dès qu'une nouvelle mission correspondant à tes
                   critères (rayon {rayonKm} km) est publiée.
                 </>
               )}{' '}
-              Vous pourrez modifier ou désactiver cette alerte à tout moment depuis
+              Tu pourras modifier ou désactiver cette alerte à tout moment depuis
               « Mes recherches sauvegardées ».
             </DialogDescription>
           </DialogHeader>

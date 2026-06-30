@@ -67,7 +67,7 @@ export function ModaleReclamationScore({
 
   async function soumettre() {
     if (!motif) {
-      afficherNotification({ type: 'erreur', message: 'Sélectionnez un motif.' });
+      afficherNotification({ type: 'erreur', message: 'Sélectionne un motif.' });
       return;
     }
     if (texte.trim().length < 20) {
@@ -114,7 +114,7 @@ export function ModaleReclamationScore({
         <label className="block">
           <span className="text-xs font-medium text-foreground mb-1 block">Motif de la contestation *</span>
           <select value={motif} onChange={e => setMotif(e.target.value)} className="input-base">
-            <option value="">— Sélectionnez —</option>
+            <option value="">— Sélectionne —</option>
             {MOTIFS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
           </select>
         </label>
@@ -126,7 +126,7 @@ export function ModaleReclamationScore({
             onChange={e => setTexte(e.target.value)}
             className="input-base"
             rows={5}
-            placeholder="Expliquez précisément la situation : que s'est-il passé, pourquoi cet événement ne devrait pas vous pénaliser..."
+            placeholder="Explique précisément la situation : que s'est-il passé, pourquoi cet événement ne devrait pas te pénaliser..."
           />
           <span className="text-[10px] text-muted-foreground">{texte.length} / 20+</span>
         </label>
@@ -152,7 +152,7 @@ export function ModaleReclamationScore({
 
         <div className="rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 p-3 text-xs text-amber-800 dark:text-amber-300 flex gap-2">
           <AlertCircle className="h-4 w-4 shrink-0" />
-          <p>Votre réclamation sera examinée par un administrateur Jolene. La décision (annulation, réduction ou maintien) sera notifiée par email + push.</p>
+          <p>Ta réclamation sera examinée par un administrateur Jolene. La décision (annulation, réduction ou maintien) sera notifiée par email + push.</p>
         </div>
 
         <div className="flex gap-2">

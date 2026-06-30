@@ -18,8 +18,8 @@ export function BandeauOubliDepart({ mission, onPointer }: BandeauOubliDepartPro
         <div className="flex-1">
           <p className="text-sm font-semibold text-foreground">⚠️ Oubli de pointage ?</p>
           <p className="text-sm text-muted-foreground mt-1">
-            Votre mission « {mission.intitule} » devait se terminer à {finPrevue}.
-            N'oubliez pas de valider votre départ.
+            Ta mission « {mission.intitule} » devait se terminer à {finPrevue}.
+            N'oublie pas de valider ton départ.
           </p>
           <button
             onClick={onPointer}

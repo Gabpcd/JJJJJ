@@ -32,7 +32,7 @@ export function BandeauCompletionProfil({ soignant, variant = 'detaille', masque
         <div className="flex-1">
           <p className="text-sm font-semibold text-foreground">Bienvenue sur Jolene</p>
           <p className="text-xs text-muted-foreground mt-1">
-            Finalisez votre inscription pour accéder à toutes les fonctionnalités et candidater aux missions.
+            Finalise ton inscription pour accéder à toutes les fonctionnalités et candidater aux missions.
           </p>
           <button
             onClick={() => navigate('/soignant/profil')}
@@ -101,13 +101,13 @@ export function BandeauCompletionProfil({ soignant, variant = 'detaille', masque
         </p>
       ) : (
         <p className="text-xs mb-2 text-success font-medium">
-          ✅ Informations requises complétées — vous pouvez candidater.
+          ✅ Informations requises complétées — tu peux candidater.
         </p>
       )}
       {/* Recommandé (non bloquant) — améliore la visibilité / accès */}
       {resume.items_recommandes_manquants.length > 0 && (
         <p className="text-xs mb-3 text-muted-foreground">
-          Recommandé (améliore votre visibilité) : {resume.items_recommandes_manquants.map((i) => i.label).join(', ')}.
+          Recommandé (améliore ta visibilité) : {resume.items_recommandes_manquants.map((i) => i.label).join(', ')}.
         </p>
       )}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 mb-3">

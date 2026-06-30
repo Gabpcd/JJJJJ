@@ -271,7 +271,7 @@ export default function PresencesSoignant() {
       try {
         position = await obtenirPosition();
       } catch {
-        afficherNotification({ type: 'erreur', message: 'Impossible d\'obtenir votre position. Vérifiez que la géolocalisation est activée.' });
+        afficherNotification({ type: 'erreur', message: 'Impossible d\'obtenir ta position. Vérifie que la géolocalisation est activée.' });
         return;
       }
     }
@@ -307,9 +307,9 @@ export default function PresencesSoignant() {
     if (!consentementGPS) {
       afficherNotification({ type: 'avertissement', message: '⚠️ Arrivée pointée sans GPS. Vérification manuelle requise.' });
     } else if (perimetreOk) {
-      afficherNotification({ type: 'succes', message: `✅ Arrivée pointée ! Vous êtes à ${Math.round(distanceM || 0)}m de l'établissement.` });
+      afficherNotification({ type: 'succes', message: `✅ Arrivée pointée ! Tu es à ${Math.round(distanceM || 0)}m de l'établissement.` });
     } else {
-      afficherNotification({ type: 'avertissement', message: `⚠️ Arrivée pointée, mais vous êtes à ${Math.round(distanceM || 0)}m (périmètre : 500m).` });
+      afficherNotification({ type: 'avertissement', message: `⚠️ Arrivée pointée, mais tu es à ${Math.round(distanceM || 0)}m (périmètre : 500m).` });
     }
 
     if (alerteTeleportation) {
@@ -411,7 +411,7 @@ export default function PresencesSoignant() {
         <h1 className="text-xl font-bold text-foreground flex items-center gap-2">
           <Clock className="h-5 w-5 text-primary" /> Mes présences
         </h1>
-        <p className="text-sm text-muted-foreground mt-1">Pointez vos arrivées et départs pour chaque mission</p>
+        <p className="text-sm text-muted-foreground mt-1">Pointe tes arrivées et départs pour chaque mission</p>
       </div>
 
       <Tabs defaultValue="avenir">
@@ -451,7 +451,7 @@ export default function PresencesSoignant() {
               icone={<CalendarDays />}
               mascotte="thinking"
               titre="Aucune mission à venir"
-              description="Vos prochaines missions assignées apparaîtront ici."
+              description="Tes prochaines missions assignées apparaîtront ici."
               cta={{ label: 'Chercher des missions', onClick: () => navigate('/soignant/missions') }}
             />
           )}
@@ -537,7 +537,7 @@ export default function PresencesSoignant() {
               icone={<CalendarDays />}
               mascotte="empty"
               titre="Aucune mission aujourd'hui"
-              description="Vos missions assignées apparaîtront ici le jour J pour le pointage."
+              description="Tes missions assignées apparaîtront ici le jour J pour le pointage."
               cta={{ label: 'Voir mon planning', onClick: () => navigate('/soignant/planning') }}
             />
           )}
@@ -652,7 +652,7 @@ export default function PresencesSoignant() {
               })}
             </div>
           ) : (
-            <EmptyState icone={<History />} mascotte="empty" titre="Aucune présence enregistrée" description="Votre historique de pointages apparaîtra ici." cta={{ label: 'Trouver une mission', onClick: () => navigate('/soignant/recherche-missions') }} />
+            <EmptyState icone={<History />} mascotte="empty" titre="Aucune présence enregistrée" description="Ton historique de pointages apparaîtra ici." cta={{ label: 'Trouver une mission', onClick: () => navigate('/soignant/recherche-missions') }} />
           )}
         </TabsContent>
       </Tabs>

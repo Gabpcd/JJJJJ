@@ -129,7 +129,7 @@ export default function PageStripeConnect() {
         <h1 className="text-xl font-bold text-foreground flex items-center gap-2">
           <CreditCard className="h-6 w-6 text-primary" /> Paiements
         </h1>
-        <p className="text-sm text-muted-foreground mt-1">Gérez la réception de vos paiements</p>
+        <p className="text-sm text-muted-foreground mt-1">Gère la réception de tes paiements</p>
       </div>
 
       <div className="max-w-2xl space-y-6">
@@ -143,7 +143,7 @@ export default function PageStripeConnect() {
                 <div>
                   <h2 className="font-bold text-foreground">Mode salarié</h2>
                   <p className="text-sm text-muted-foreground mt-1">
-                    En tant que salarié(e), vos paiements sont gérés directement par l'établissement employeur via bulletin de paie ou virement.
+                    En tant que salarié(e), tes paiements sont gérés directement par l'établissement employeur via bulletin de paie ou virement.
                   </p>
                 </div>
               </div>
@@ -153,15 +153,15 @@ export default function PageStripeConnect() {
                 <div className="space-y-2 text-sm text-muted-foreground">
                   <div className="flex items-start gap-2">
                     <CheckCircle className="h-4 w-4 text-success shrink-0 mt-0.5" />
-                    <span>Vous effectuez votre mission et pointez vos présences</span>
+                    <span>Tu effectues ta mission et pointes tes présences</span>
                   </div>
                   <div className="flex items-start gap-2">
                     <CheckCircle className="h-4 w-4 text-success shrink-0 mt-0.5" />
-                    <span>L'établissement valide vos heures et déclare le paiement</span>
+                    <span>L'établissement valide tes heures et déclare le paiement</span>
                   </div>
                   <div className="flex items-start gap-2">
                     <CheckCircle className="h-4 w-4 text-success shrink-0 mt-0.5" />
-                    <span>Vous confirmez la réception dans <strong>Mes gains</strong></span>
+                    <span>Tu confirmes la réception dans <strong>Mes gains</strong></span>
                   </div>
                   <div className="flex items-start gap-2">
                     <CheckCircle className="h-4 w-4 text-success shrink-0 mt-0.5" />
@@ -180,7 +180,7 @@ export default function PageStripeConnect() {
                 <Banknote className="h-5 w-5 text-primary shrink-0" />
                 <div className="flex-1">
                   <p className="text-sm font-semibold text-foreground">Mes gains</p>
-                  <p className="text-xs text-muted-foreground">Voir le détail de vos revenus</p>
+                  <p className="text-xs text-muted-foreground">Voir le détail de tes revenus</p>
                 </div>
                 <ArrowRight className="h-4 w-4 text-muted-foreground" />
               </div>
@@ -213,7 +213,7 @@ export default function PageStripeConnect() {
                 <Shield className="h-5 w-5 text-purple-600 shrink-0" />
                 <div className="flex-1">
                   <p className="text-sm font-semibold text-foreground">Passer en libéral</p>
-                  <p className="text-xs text-muted-foreground">Recevez vos paiements directement</p>
+                  <p className="text-xs text-muted-foreground">Reçois tes paiements directement</p>
                 </div>
                 <ArrowRight className="h-4 w-4 text-muted-foreground" />
               </div>
@@ -225,7 +225,7 @@ export default function PageStripeConnect() {
                 <p className="text-sm font-medium text-foreground">Paiement direct via Stripe Connect</p>
                 <p className="text-xs text-muted-foreground mt-1">
                   Les soignants en exercice libéral peuvent recevoir leurs honoraires directement sur leur compte bancaire via Stripe Connect.
-                  Passez en libéral pour débloquer cette fonctionnalité.
+                  Passe en libéral pour débloquer cette fonctionnalité.
                 </p>
               </div>
             </div>
@@ -239,9 +239,9 @@ export default function PageStripeConnect() {
             {statut === 'NON_DEMANDE' && (
               <div className="card-base text-center space-y-4 py-8">
                 <CreditCard className="h-12 w-12 text-primary mx-auto" />
-                <h2 className="text-lg font-bold text-foreground">Recevez vos honoraires directement</h2>
+                <h2 className="text-lg font-bold text-foreground">Reçois tes honoraires directement</h2>
                 <p className="text-sm text-muted-foreground max-w-md mx-auto">
-                  Connectez votre compte bancaire via Stripe pour recevoir vos paiements de missions directement, sans délai.
+                  Connecte ton compte bancaire via Stripe pour recevoir tes paiements de missions directement, sans délai.
                 </p>
                 <div className="bg-muted/30 rounded-xl p-3 max-w-sm mx-auto space-y-1.5 text-left">
                   <p className="text-xs text-muted-foreground flex items-center gap-2"><CheckCircle className="h-3.5 w-3.5 text-success" /> Virements automatiques après chaque mission</p>
@@ -263,7 +263,7 @@ export default function PageStripeConnect() {
                   <div>
                     <p className="font-semibold text-foreground">Inscription en cours</p>
                     <p className="text-sm text-muted-foreground mt-1">
-                      Complétez votre profil Stripe pour activer les paiements directs. C'est rapide et sécurisé.
+                      Complète ton profil Stripe pour activer les paiements directs. C'est rapide et sécurisé.
                     </p>
                   </div>
                 </div>
@@ -354,7 +354,7 @@ export default function PageStripeConnect() {
                   <div>
                     <p className="font-semibold text-destructive">Compte suspendu</p>
                     <p className="text-sm text-muted-foreground mt-1">
-                      Des informations sont requises pour réactiver votre compte. Complétez votre profil Stripe ci-dessous.
+                      Des informations sont requises pour réactiver ton compte. Complète ton profil Stripe ci-dessous.
                     </p>
                   </div>
                 </div>
@@ -372,8 +372,8 @@ export default function PageStripeConnect() {
                   <div>
                     <p className="font-semibold text-destructive">Compte Stripe supprimé</p>
                     <p className="text-sm text-muted-foreground mt-1">
-                      Votre compte Stripe Connect a été supprimé (clôture manuelle, fraude détectée par Stripe,
-                      ou décision admin plateforme). Vous ne pouvez plus recevoir de paiements Connect jusqu'à
+                      Ton compte Stripe Connect a été supprimé (clôture manuelle, fraude détectée par Stripe,
+                      ou décision admin plateforme). Tu ne peux plus recevoir de paiements Connect jusqu'à
                       la création d'un nouveau compte.
                     </p>
                   </div>

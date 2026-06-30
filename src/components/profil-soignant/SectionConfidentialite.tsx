@@ -100,7 +100,7 @@ export function SectionConfidentialite({ userId }: Props) {
           <Shield className="h-4 w-4 text-primary" /> Mes données (RGPD)
         </h2>
         <p className="text-xs text-muted-foreground mb-4">
-          Téléchargez l'intégralité de vos données personnelles dans le format de votre choix.
+          Télécharge l'intégralité de tes données personnelles dans le format de ton choix.
         </p>
         <div className="flex flex-wrap gap-3">
           <button
@@ -127,7 +127,7 @@ export function SectionConfidentialite({ userId }: Props) {
           <UserX className="h-4 w-4 text-muted-foreground" /> Exclusions établissements
         </h2>
         <p className="text-xs text-muted-foreground mb-3">
-          Liste des établissements vous ayant exclu de leurs missions.
+          Liste des établissements t'ayant exclu de leurs missions.
         </p>
         <button
           onClick={() => navigate('/soignant/exclusions')}
@@ -142,7 +142,7 @@ export function SectionConfidentialite({ userId }: Props) {
           Suppression de compte
         </h2>
         <p className="text-xs text-muted-foreground mb-3">
-          La suppression de votre compte est irréversible. Vos données seront anonymisées conformément au RGPD.
+          La suppression de ton compte est irréversible. Tes données seront anonymisées conformément au RGPD.
         </p>
         <button
           onClick={() => setShowDeleteModal(true)}
@@ -158,12 +158,12 @@ export function SectionConfidentialite({ userId }: Props) {
           <div className="relative bg-card rounded-2xl shadow-xl p-6 mx-4 max-w-md w-full">
             <h3 className="text-lg font-bold text-destructive mb-2">🗑️ Supprimer mon compte</h3>
             <p className="text-sm text-muted-foreground mb-4">
-              Cette action est irréversible. Vos données seront anonymisées conformément au RGPD. Tapez <strong>SUPPRIMER</strong> pour confirmer.
+              Cette action est irréversible. Tes données seront anonymisées conformément au RGPD. Tape <strong>SUPPRIMER</strong> pour confirmer.
             </p>
             <input
               value={deleteConfirmText}
               onChange={(e) => setDeleteConfirmText(e.target.value)}
-              placeholder="Tapez SUPPRIMER"
+              placeholder="Tape SUPPRIMER"
               className="input-base mb-4"
             />
             <div className="flex gap-3 justify-end">

@@ -65,7 +65,7 @@ export default function PoolUrgenceSoignant() {
   useEffect(() => { charger(); }, []);
 
   const accepter = async (mission: MissionUrgente) => {
-    if (!confirm(`Accepter cette mission urgente "${mission.intitule}" ?\n\nL'établissement validera ou refusera votre acceptation sous 1h.`)) return;
+    if (!confirm(`Accepter cette mission urgente "${mission.intitule}" ?\n\nL'établissement validera ou refusera ton acceptation sous 1h.`)) return;
     setAccepting(mission.id);
     const { data, error } = await supabase.rpc('fn_accepter_mission_urgence' as any, { p_mission_id: mission.id });
     setAccepting(null);
@@ -94,7 +94,7 @@ export default function PoolUrgenceSoignant() {
           <Flame className="h-6 w-6 text-destructive" /> Pool urgence
         </h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Missions de remplacement de dernière minute correspondant à votre profil. Acceptation 1-clic, validation étab sous 1h.
+          Missions de remplacement de dernière minute correspondant à ton profil. Acceptation 1-clic, validation étab sous 1h.
         </p>
       </div>
 
@@ -118,7 +118,7 @@ export default function PoolUrgenceSoignant() {
               <AlertCircle className="h-10 w-10 text-warning mx-auto mb-3" />
               <p className="text-sm text-foreground font-medium">Pool urgence désactivé</p>
               <p className="text-xs text-muted-foreground mt-1">
-                Activez le toggle à gauche pour recevoir les alertes urgentes et voir les missions disponibles.
+                Active le toggle à gauche pour recevoir les alertes urgentes et voir les missions disponibles.
               </p>
             </div>
           ) : missions.length === 0 ? (
@@ -126,13 +126,13 @@ export default function PoolUrgenceSoignant() {
               <CheckCircle2 className="h-10 w-10 text-success mx-auto mb-3" />
               <p className="text-sm text-foreground font-medium">Aucune mission urgente pour le moment</p>
               <p className="text-xs text-muted-foreground mt-1">
-                Vous serez notifié dès qu'une mission urgente correspondra à votre profil dans votre rayon ({meta.rayon_km} km).
+                Tu seras notifié dès qu'une mission urgente correspondra à ton profil dans ton rayon ({meta.rayon_km} km).
               </p>
             </div>
           ) : (
             <div className="space-y-3">
               <p className="text-sm text-muted-foreground">
-                <strong className="text-foreground">{missions.length}</strong> mission{missions.length > 1 ? 's' : ''} urgente{missions.length > 1 ? 's' : ''} dans votre rayon · triée{missions.length > 1 ? 's' : ''} par distance
+                <strong className="text-foreground">{missions.length}</strong> mission{missions.length > 1 ? 's' : ''} urgente{missions.length > 1 ? 's' : ''} dans ton rayon · triée{missions.length > 1 ? 's' : ''} par distance
               </p>
               {missions.map((m) => (
                 <article key={m.id} className="card-base border-l-4 border-l-destructive">
@@ -178,7 +178,7 @@ export default function PoolUrgenceSoignant() {
                           <span className="text-destructive">Refusée par étab</span>
                         )}
                         {(!m.statut_candidature || m.statut_candidature === 'EN_ATTENTE') && (
-                          <span className="text-muted-foreground">Vous avez déjà candidaté</span>
+                          <span className="text-muted-foreground">Tu as déjà candidaté</span>
                         )}
                       </span>
                       <button

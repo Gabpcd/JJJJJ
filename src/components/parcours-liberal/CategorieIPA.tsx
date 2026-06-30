@@ -28,14 +28,14 @@ const ETAPES_IPA_DEMARCHES: Etape[] = [
   {
     cle: 'inscription_ordre_ipa',
     label: "Déclaration IPA auprès de l'Ordre des Infirmiers",
-    description: "Mise à jour de votre inscription à l'Ordre avec mention IPA.",
+    description: "Mise à jour de ton inscription à l'Ordre avec mention IPA.",
     lienExterne: 'https://www.ordre-infirmiers.fr',
     lienLabel: 'Ordre des Infirmiers',
   },
   {
     cle: 'inscription_cpam_ipa',
     label: "Enregistrement IPA auprès de la CPAM",
-    description: "Transmission du diplôme IPA + N° Ordre + adresse lieu d'exercice. Vous bénéficiez d'une aide conventionnelle au démarrage.",
+    description: "Transmission du diplôme IPA + N° Ordre + adresse lieu d'exercice. Tu bénéficies d'une aide conventionnelle au démarrage.",
     lienExterne: 'https://www.ameli.fr/infirmier/exercice-liberal/vie-cabinet/installation-liberal/exercice-des-infirmiers-en-pratique-avancee',
     lienLabel: 'Ameli IPA',
   },
@@ -56,7 +56,7 @@ const ETAPES_IPA_DEMARCHES: Etape[] = [
   {
     cle: 'souscription_rcp',
     label: 'Souscription RC Pro adaptée IPA',
-    description: 'Vérifiez que votre contrat couvre bien l\'exercice en pratique avancée.',
+    description: 'Vérifie que ton contrat couvre bien l\'exercice en pratique avancée.',
   },
   {
     cle: 'exercice_coordonne',
@@ -80,7 +80,7 @@ export function CategorieIPA({ parcours, majEtape }: Props) {
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-xl font-bold text-foreground">Votre parcours IPA libéral</h1>
+        <h1 className="text-xl font-bold text-foreground">Ton parcours IPA libéral</h1>
         <p className="text-sm text-muted-foreground mt-1">
           Infirmier en Pratique Avancée — exercice exclusif non soumis au zonage sur-dotée.
         </p>

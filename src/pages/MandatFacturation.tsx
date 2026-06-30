@@ -151,7 +151,7 @@ export default function MandatFacturation() {
 
   const signer = async () => {
     if (!accepted) {
-      toast.error('Vous devez accepter le mandat pour continuer');
+      toast.error('Tu dois accepter le mandat pour continuer');
       return;
     }
     setSigning(true);
@@ -204,7 +204,7 @@ export default function MandatFacturation() {
       if (error) throw error;
       if ((data as any)?.success === false) throw new Error((data as any)?.error || 'Erreur révocation');
 
-      toast.success('Mandat révoqué. Aucune facture ne sera plus émise tant que vous ne signez pas un nouveau mandat.');
+      toast.success('Mandat révoqué. Aucune facture ne sera plus émise tant que tu ne signes pas un nouveau mandat.');
       setAlreadySigned(false);
       setSignatureDate(null);
       setSignatureVersion(null);
@@ -238,7 +238,7 @@ export default function MandatFacturation() {
           <h1 className="text-xl font-bold text-foreground">Mandat non applicable</h1>
           <p className="text-sm text-muted-foreground">
             Le mandat de facturation concerne uniquement les soignants exerçant en libéral ou mixte.
-            En tant que salarié(e), vos paiements sont gérés par l'établissement employeur.
+            En tant que salarié(e), tes paiements sont gérés par l'établissement employeur.
           </p>
           <Button variant="outline" onClick={() => navigate(-1)}>Retour</Button>
         </div>
@@ -267,9 +267,9 @@ export default function MandatFacturation() {
             <div className="flex-1">
               <p className="font-semibold text-foreground">Mandat mis à jour — re-signature requise</p>
               <p className="text-sm text-muted-foreground mt-1">
-                Votre mandat actuel (version {signatureVersion}) n'est plus à jour.
+                Ton mandat actuel (version {signatureVersion}) n'est plus à jour.
                 La version {MANDAT_FACTURATION_VERSION} intègre la facturation hebdomadaire pour les missions longues.
-                Veuillez lire et accepter le nouveau mandat ci-dessous pour continuer à recevoir vos factures.
+                Lis et accepte le nouveau mandat ci-dessous pour continuer à recevoir tes factures.
               </p>
             </div>
           </div>
@@ -281,12 +281,12 @@ export default function MandatFacturation() {
             <div className="flex-1">
               <p className="font-semibold text-foreground">Mandat signé et actif</p>
               <p className="text-sm text-muted-foreground mt-0.5">
-                Vous avez accepté le mandat de facturation version {signatureVersion} le{' '}
+                Tu as accepté le mandat de facturation version {signatureVersion} le{' '}
                 {signatureDate && format(new Date(signatureDate), "dd MMMM yyyy 'à' HH:mm", { locale: fr })}.
               </p>
               <p className="text-xs text-muted-foreground mt-2">
-                Jolene peut désormais émettre des factures d'honoraires en votre nom à chaque mission terminée.
-                Vous pouvez révoquer ce mandat à tout moment depuis cette page : aucune nouvelle facture ne
+                Jolene peut désormais émettre des factures d'honoraires en ton nom à chaque mission terminée.
+                Tu peux révoquer ce mandat à tout moment depuis cette page : aucune nouvelle facture ne
                 sera émise après révocation. Les factures déjà émises restent valides et exigibles.
               </p>
               <div className="flex flex-wrap gap-2 mt-3">
@@ -322,10 +322,10 @@ export default function MandatFacturation() {
               <div className="flex-1 space-y-2">
                 <p className="font-semibold text-foreground">Pourquoi signer ce mandat ?</p>
                 <ul className="text-sm text-muted-foreground space-y-1 ml-4 list-disc">
-                  <li>Jolene pourra produire et envoyer vos factures d'honoraires automatiquement à chaque mission terminée</li>
-                  <li>Vos factures sont conservées centralement et accessibles à tout moment</li>
+                  <li>Jolene pourra produire et envoyer tes factures d'honoraires automatiquement à chaque mission terminée</li>
+                  <li>Tes factures sont conservées centralement et accessibles à tout moment</li>
                   <li>Préparation au paiement rapide (avance sous 48h) — disponible prochainement</li>
-                  <li>Vous restez libéral indépendant : aucun lien de subordination, aucun changement de statut</li>
+                  <li>Tu restes libéral indépendant : aucun lien de subordination, aucun changement de statut</li>
                 </ul>
               </div>
             </div>
@@ -344,7 +344,7 @@ export default function MandatFacturation() {
             <div className="p-5 space-y-4 bg-muted/20 shrink-0">
               {!hasScrolledToBottom && (
                 <p className="text-xs text-warning italic text-center font-medium" role="status">
-                  ⚠️ Faites défiler le document jusqu'en bas pour pouvoir l'accepter
+                  ⚠️ Fais défiler le document jusqu'en bas pour pouvoir l'accepter
                 </p>
               )}
 
@@ -372,7 +372,7 @@ export default function MandatFacturation() {
               </BoutonY2K>
 
               <p className="text-[10px] text-muted-foreground text-center">
-                Votre signature sera horodatée et archivée comme preuve légale (Articles 1366 et 1367 du Code civil).
+                Ta signature sera horodatée et archivée comme preuve légale (Articles 1366 et 1367 du Code civil).
               </p>
             </div>
           )}
@@ -388,11 +388,11 @@ export default function MandatFacturation() {
                 <h2 className="text-lg font-bold text-foreground">Révoquer le mandat de facturation ?</h2>
                 <p className="text-sm text-muted-foreground mt-1">
                   Cette action est immédiate. Aucune nouvelle facture d'honoraires ne pourra plus
-                  être émise par Jolene en votre nom à partir de maintenant.
+                  être émise par Jolene en ton nom à partir de maintenant.
                 </p>
                 <p className="text-xs text-muted-foreground mt-2">
                   Les factures déjà émises restent valides et exigibles : la révocation n'a pas
-                  d'effet rétroactif (cohérent avec l'art. 289 I-2 CGI). Vous pourrez signer un
+                  d'effet rétroactif (cohérent avec l'art. 289 I-2 CGI). Tu pourras signer un
                   nouveau mandat à tout moment.
                 </p>
               </div>

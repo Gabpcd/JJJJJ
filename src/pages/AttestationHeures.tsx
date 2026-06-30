@@ -148,7 +148,7 @@ export default function AttestationHeures() {
               <h1 className="text-xl font-bold text-foreground flex items-center gap-2">
                 <FileText className="h-5 w-5 text-primary" /> Attestation d'heures travaillées
               </h1>
-              <p className="text-xs text-muted-foreground">Sélectionnez la période à couvrir</p>
+              <p className="text-xs text-muted-foreground">Sélectionne la période à couvrir</p>
             </div>
           </div>
 
@@ -309,7 +309,7 @@ export default function AttestationHeures() {
           <p>Généré le : {format(new Date(), 'dd/MM/yyyy')} · Identifiant : {identifiant}</p>
           <p className="font-medium">{ENTREPRISE.nom} — SIRET {ENTREPRISE.siret} · {ENTREPRISE.adresse}</p>
           <p>Hébergement HDS : {ENTREPRISE.hebergeur} · Conforme RGPD</p>
-          <p className="italic mt-2">Les montants financiers ne figurent pas sur cette attestation. Pour les justificatifs de rémunération, consultez vos bulletins de paie.</p>
+          <p className="italic mt-2">Les montants financiers ne figurent pas sur cette attestation. Pour les justificatifs de rémunération, consulte tes bulletins de paie.</p>
         </div>
       </div>
     </div>

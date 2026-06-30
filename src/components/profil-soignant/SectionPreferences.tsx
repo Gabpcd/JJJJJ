@@ -61,7 +61,7 @@ export function SectionPreferences(props: Props) {
 
       <div className="card-base">
         <h2 className="text-base font-semibold text-foreground mb-2">Types de contrat acceptés</h2>
-        <p className="text-xs text-muted-foreground mb-3">Cochez tous les types de contrat que vous acceptez.</p>
+        <p className="text-xs text-muted-foreground mb-3">Coche tous les types de contrat que tu acceptes.</p>
         <div className="space-y-2">
           {CONTRATS.map((c) => (
             <label key={c.valeur} className="flex items-center gap-3 cursor-pointer group">
@@ -76,13 +76,13 @@ export function SectionPreferences(props: Props) {
           ))}
         </div>
         {typesContrat.length === 0 && (
-          <p className="text-xs text-destructive mt-1">Sélectionnez au moins un type de contrat</p>
+          <p className="text-xs text-destructive mt-1">Sélectionne au moins un type de contrat</p>
         )}
       </div>
 
       <div className="card-base">
         <h2 className="text-base font-semibold text-foreground mb-2">💰 Taux horaire minimum accepté</h2>
-        <p className="text-xs text-muted-foreground mb-3">Les missions en dessous de ce taux seront grisées dans vos résultats.</p>
+        <p className="text-xs text-muted-foreground mb-3">Les missions en dessous de ce taux seront grisées dans tes résultats.</p>
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <span className="text-sm text-foreground font-medium">
@@ -141,8 +141,8 @@ export function SectionPreferences(props: Props) {
             <p className="text-sm text-foreground font-medium">Autoriser la géolocalisation lors des pointages</p>
             <p className="text-xs text-muted-foreground mt-1">
               {consentementGPS
-                ? 'Votre position sera capturée uniquement au moment de l\'arrivée et du départ.'
-                : '⚠️ Sans GPS, vos pointages nécessiteront une vérification manuelle par l\'établissement.'}
+                ? 'Ta position sera capturée uniquement au moment de l\'arrivée et du départ.'
+                : '⚠️ Sans GPS, tes pointages nécessiteront une vérification manuelle par l\'établissement.'}
             </p>
           </div>
           <Switch
@@ -182,8 +182,8 @@ export function SectionPreferences(props: Props) {
             <p className="text-sm text-foreground font-medium">Recevoir les alertes par SMS</p>
             <p className="text-xs text-muted-foreground mt-1">
               {consentementSMS
-                ? 'Vous recevrez un SMS pour les missions urgentes et les annulations tardives.'
-                : 'Activez pour recevoir les notifications critiques par SMS (missions urgentes, annulations).'}
+                ? 'Tu recevras un SMS pour les missions urgentes et les annulations tardives.'
+                : 'Active pour recevoir les notifications critiques par SMS (missions urgentes, annulations).'}
             </p>
           </div>
           <Switch
@@ -234,11 +234,11 @@ export function SectionPreferences(props: Props) {
                 if (perm === 'granted') {
                   afficherNotification({ type: 'succes', message: 'Notifications push activées.' });
                 } else {
-                  afficherNotification({ type: 'avertissement', message: 'Notifications refusées par le navigateur. Vérifiez les paramètres.' });
+                  afficherNotification({ type: 'avertissement', message: 'Notifications refusées par le navigateur. Vérifie les paramètres.' });
                 }
               } else {
                 await supabase.from('tokens_push').delete().eq('utilisateur_id', userId);
-                afficherNotification({ type: 'avertissement', message: 'Notifications push désactivées. Vos tokens ont été supprimés.' });
+                afficherNotification({ type: 'avertissement', message: 'Notifications push désactivées. Tes tokens ont été supprimés.' });
               }
             }}
           />

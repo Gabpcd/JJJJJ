@@ -17,7 +17,7 @@ const ETAPES_MEDECIN: Etape[] = [
   {
     cle: 'inscription_ordre_medecins',
     label: "Inscription au Conseil Départemental de l'Ordre des Médecins",
-    description: 'Demande à adresser au président du Conseil Départemental de votre résidence professionnelle.',
+    description: 'Demande à adresser au président du Conseil Départemental de ta résidence professionnelle.',
     lienExterne: 'https://www.conseil-national.medecin.fr',
     lienLabel: 'Ordre des Médecins',
   },
@@ -30,7 +30,7 @@ const ETAPES_MEDECIN: Etape[] = [
   {
     cle: 'inscription_cpam',
     label: 'Enregistrement à la CPAM',
-    description: 'La CPAM vous remet la convention médicale à signer selon le secteur choisi.',
+    description: 'La CPAM te remet la convention médicale à signer selon le secteur choisi.',
     lienExterne: 'https://www.ameli.fr/medecin',
     lienLabel: 'Ameli médecin',
   },
@@ -226,7 +226,7 @@ export function CategorieSansHeuresCPAM({ parcours, majEtape, soignantProfession
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-xl font-bold text-foreground">Votre parcours libéral</h1>
+        <h1 className="text-xl font-bold text-foreground">Ton parcours libéral</h1>
         <p className="text-sm text-muted-foreground mt-1">
           Profession conventionnée — installation directe, pas d'expérience requise.
         </p>
@@ -244,7 +244,7 @@ export function CategorieSansHeuresCPAM({ parcours, majEtape, soignantProfession
         <div>
           <p className="text-sm font-semibold text-foreground">Parcours libéral conventionné</p>
           <p className="text-xs text-muted-foreground mt-1">
-            Votre profession ne requiert pas d'expérience préalable pour s'installer en libéral. Vous pouvez démarrer dès l'obtention de votre diplôme. Votre profession est conventionnée avec l'Assurance Maladie, vos patients seront remboursés selon les tarifs de la convention.
+            Ta profession ne requiert pas d'expérience préalable pour s'installer en libéral. Tu peux démarrer dès l'obtention de ton diplôme. Ta profession est conventionnée avec l'Assurance Maladie, tes patients seront remboursés selon les tarifs de la convention.
           </p>
         </div>
       </div>
@@ -254,7 +254,7 @@ export function CategorieSansHeuresCPAM({ parcours, majEtape, soignantProfession
       <div className="card-base">
         <h3 className="text-base font-bold text-foreground mb-3">Démarches d'installation</h3>
         {etapes.length === 0 ? (
-          <p className="text-sm text-muted-foreground">Les étapes pour votre profession seront bientôt disponibles.</p>
+          <p className="text-sm text-muted-foreground">Les étapes pour ta profession seront bientôt disponibles.</p>
         ) : (
           <ChecklistEtapes
             etapes={etapes}
@@ -267,10 +267,10 @@ export function CategorieSansHeuresCPAM({ parcours, majEtape, soignantProfession
       <div className="card-base space-y-3">
         <h3 className="text-base font-bold text-foreground flex items-center gap-2">
           <MapPin className="h-5 w-5 text-primary" />
-          Vérifier votre zone d'installation
+          Vérifier ta zone d'installation
         </h3>
         <p className="text-sm text-muted-foreground">
-          Certaines zones sur-dotées ont un accès restreint au conventionnement. Consultez votre zone avant de vous installer.
+          Certaines zones sur-dotées ont un accès restreint au conventionnement. Consulte ta zone avant de t'installer.
         </p>
         <a
           href="https://cartosante.atlasante.fr"
@@ -289,7 +289,7 @@ export function CategorieSansHeuresCPAM({ parcours, majEtape, soignantProfession
           <div>
             <p className="text-sm font-semibold text-foreground">Contrats incitatifs</p>
             <p className="text-xs text-muted-foreground mt-1">
-              En zone sous-dense, vous pouvez adhérer à un des 3 contrats : CAIOP (aide à l'installation), CAPIOP (aide à la 1ère installation), CAMOP (aide au maintien). Durée 3 ou 5 ans avec primes forfaitaires.
+              En zone sous-dense, tu peux adhérer à un des 3 contrats : CAIOP (aide à l'installation), CAPIOP (aide à la 1ère installation), CAMOP (aide au maintien). Durée 3 ou 5 ans avec primes forfaitaires.
             </p>
           </div>
         </div>

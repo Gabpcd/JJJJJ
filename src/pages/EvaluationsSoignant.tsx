@@ -117,7 +117,7 @@ export function EvaluationsContent() {
           Mes évaluations reçues
         </h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Notes laissées par les établissements après vos missions.
+          Notes laissées par les établissements après tes missions.
         </p>
       </div>
 
@@ -483,8 +483,8 @@ function ModaleSignaler({ notation, onFermer, onSignale }: { notation: Notation;
           <p className="text-muted-foreground">Note moyenne : {notation.note_moyenne.toFixed(1)}/5</p>
         </div>
         <p className="text-xs text-muted-foreground">
-          Si cette évaluation est abusive, inappropriée ou injuste, signalez-la.
-          Un administrateur Jolene examinera votre signalement et pourra masquer la notation si justifié.
+          Si cette évaluation est abusive, inappropriée ou injuste, signale-la.
+          Un administrateur Jolene examinera ton signalement et pourra masquer la notation si justifié.
         </p>
         <label className="block">
           <span className="text-xs font-medium text-foreground mb-1 block">Motif * (min 10 caractères)</span>
@@ -493,7 +493,7 @@ function ModaleSignaler({ notation, onFermer, onSignale }: { notation: Notation;
             onChange={(e) => setMotif(e.target.value)}
             className="input-base"
             rows={4}
-            placeholder="Expliquez pourquoi cette évaluation vous paraît abusive…"
+            placeholder="Explique pourquoi cette évaluation te paraît abusive…"
             disabled={loading}
           />
           <span className="text-[10px] text-muted-foreground">{motif.length} / 10+</span>

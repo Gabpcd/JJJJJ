@@ -48,7 +48,7 @@ export default function MonCompteSoignant() {
       titre: '',
       lignes: [
         { icone: User, label: 'Mon profil', route: '/soignant/profil' },
-        { icone: Banknote, label: 'Mes finances', route: '/soignant/mes-gains' },
+        { icone: Banknote, label: 'Revenus', route: '/soignant/mes-gains' },
         { icone: ShieldCheck, label: 'Ma réputation', route: '/soignant/reputation' },
         { icone: Settings, label: 'Paramètres', route: '/soignant/parametres-complet' },
         { icone: LogOut, label: 'Se déconnecter', onClick: () => deconnexion(), variante: 'danger' as const, sansChevron: true },
@@ -123,8 +123,8 @@ export default function MonCompteSoignant() {
             <p className="text-xs text-muted-foreground mb-3 flex items-start gap-2">
               <MapPin className="h-4 w-4 text-primary shrink-0 mt-0.5" />
               <span>
-                Option facultative : si activée, votre position GPS est enregistrée pendant la
-                durée de vos missions, pour renforcer la fiabilité du pointage et faciliter la
+                Option facultative : si activée, ta position GPS est enregistrée pendant la
+                durée de tes missions, pour renforcer la fiabilité du pointage et faciliter la
                 résolution de litiges. Données conservées 30 jours puis supprimées.
               </span>
             </p>

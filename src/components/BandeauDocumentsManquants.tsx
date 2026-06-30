@@ -19,10 +19,10 @@ export function BandeauDocumentsManquants({ tousDocumentsValides, rcpExpiree, rc
         <div className="bg-destructive/5 border border-destructive/30 rounded-xl p-3 flex items-start gap-3">
           <ShieldAlert className="h-5 w-5 text-destructive shrink-0 mt-0.5" />
           <div>
-            <p className="text-sm font-semibold text-destructive">⚠️ Votre assurance RCP est expirée ou manquante</p>
+            <p className="text-sm font-semibold text-destructive">⚠️ Ton assurance RCP est expirée ou manquante</p>
             <p className="text-xs text-muted-foreground mt-1">
               L'assurance Responsabilité Civile Professionnelle est obligatoire pour candidater en libéral.
-              Mettez-la à jour pour débloquer ces candidatures (vous pouvez toujours candidater en salarié).
+              Mets-la à jour pour débloquer ces candidatures (tu peux toujours candidater en salarié).
             </p>
             <button onClick={() => navigate('/soignant/documents')} className="text-xs text-primary font-medium mt-2 hover:underline">
               Mettre à jour mes documents →
@@ -35,10 +35,10 @@ export function BandeauDocumentsManquants({ tousDocumentsValides, rcpExpiree, rc
           <CalendarClock className="h-5 w-5 text-warning shrink-0 mt-0.5" />
           <div>
             <p className="text-sm font-semibold text-foreground">
-              ⏳ Votre RCP expire le {new Date(rcpExpireLe).toLocaleDateString('fr-FR')}
+              ⏳ Ta RCP expire le {new Date(rcpExpireLe).toLocaleDateString('fr-FR')}
             </p>
             <p className="text-xs text-muted-foreground mt-1">
-              Renouvelez-la dès maintenant pour ne pas être bloqué(e) sur les missions libérales le moment venu.
+              Renouvelle-la dès maintenant pour ne pas être bloqué(e) sur les missions libérales le moment venu.
             </p>
             <button onClick={() => navigate('/soignant/documents')} className="text-xs text-primary font-medium mt-2 hover:underline">
               Téléverser ma nouvelle RCP →
@@ -50,9 +50,9 @@ export function BandeauDocumentsManquants({ tousDocumentsValides, rcpExpiree, rc
         <div className="bg-warning/5 border border-warning/30 rounded-xl p-3 flex items-start gap-3">
           <FileText className="h-5 w-5 text-warning shrink-0 mt-0.5" />
           <div>
-            <p className="text-sm font-semibold text-foreground">📄 Validez vos documents pour pouvoir être accepté(e)</p>
+            <p className="text-sm font-semibold text-foreground">📄 Valide tes documents pour pouvoir être accepté(e)</p>
             <p className="text-xs text-muted-foreground mt-1">
-              Vous pouvez postuler dès maintenant — mais les établissements ne peuvent accepter que les
+              Tu peux postuler dès maintenant — mais les établissements ne peuvent accepter que les
               profils aux documents validés (vérification automatique en quelques minutes).
             </p>
             <button onClick={() => navigate('/soignant/documents')} className="text-xs text-primary font-medium mt-2 hover:underline">

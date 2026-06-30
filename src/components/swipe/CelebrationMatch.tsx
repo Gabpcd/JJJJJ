@@ -81,11 +81,11 @@ export function CelebrationMatch({
           </p>
 
           <h2 id="celebration-match-title" className="text-3xl font-extrabold mt-2 leading-tight">
-            Bravo, vous êtes pris·e !
+            Bravo, tu es pris·e !
           </h2>
 
           <p className="mt-3 text-white/95">
-            <strong className="font-semibold">{etablissementNom}</strong> a accepté votre
+            <strong className="font-semibold">{etablissementNom}</strong> a accepté ta
             candidature pour
           </p>
           <p className="mt-1 font-semibold text-lg">{missionTitre}</p>

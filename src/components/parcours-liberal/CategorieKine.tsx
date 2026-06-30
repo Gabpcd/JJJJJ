@@ -32,7 +32,7 @@ const ETAPES_KINE_COMMUNES: Etape[] = [
   {
     cle: 'inscription_ordre',
     label: "Inscription à l'Ordre des Masseurs-Kinésithérapeutes",
-    description: 'Obtenez votre numéro RPPS et votre carte CPS.',
+    description: 'Obtiens ton numéro RPPS et ta carte CPS.',
     lienExterne: 'https://www.ordremk.fr',
     lienLabel: 'Ordre MK',
   },
@@ -68,7 +68,7 @@ const ETAPES_KINE_ZONE: Etape[] = [
   {
     cle: 'zone_verifiee',
     label: 'Zone sous-dotée vérifiée sur CartoSanté',
-    description: "Validez avec votre CPAM que la zone ciblée est bien sous-dotée selon le dernier arrêté ARS.",
+    description: "Valide avec ta CPAM que la zone ciblée est bien sous-dotée selon le dernier arrêté ARS.",
     lienExterne: 'https://cartosante.atlasante.fr',
     lienLabel: 'CartoSanté',
   },
@@ -155,7 +155,7 @@ export function CategorieKine({
     return (
       <div className="space-y-4">
         <div>
-          <h1 className="text-xl font-bold text-foreground">Votre parcours kiné libéral</h1>
+          <h1 className="text-xl font-bold text-foreground">Ton parcours kiné libéral</h1>
           <p className="text-sm text-muted-foreground mt-1">
             La convention kiné (avenant 7, 2023) propose 2 voies d'accès au conventionnement.
           </p>
@@ -188,7 +188,7 @@ export function CategorieKine({
     <div className="space-y-4">
       <div className="flex items-start justify-between gap-2 flex-wrap">
         <div>
-          <h1 className="text-xl font-bold text-foreground">Votre parcours kiné libéral</h1>
+          <h1 className="text-xl font-bold text-foreground">Ton parcours kiné libéral</h1>
           <p className="text-sm text-muted-foreground mt-1">
             {estParcoursHeures
               ? 'Voie des heures d\'expérience (2 240h en 2 ans)'
@@ -215,7 +215,7 @@ export function CategorieKine({
             heuresExternesValidees={compteurHeures?.heures_externes_validees ?? 0}
             heuresExternesEnAttente={compteurHeures?.heures_externes_en_attente ?? 0}
             seuilRequis={2240}
-            titre="Votre expérience professionnelle kiné"
+            titre="Ton expérience professionnelle kiné"
             legendeJolene="Heures via Jolene (comptées automatiquement)"
             legendeExternes="Heures externes déclarées (attestations fournies)"
           />
@@ -230,7 +230,7 @@ export function CategorieKine({
               )}
             </div>
             <p className="text-sm text-muted-foreground mb-3">
-              Si vous avez déjà travaillé en établissement hors Jolene, déclarez ces heures avec l'attestation de votre employeur.
+              Si tu as déjà travaillé en établissement hors Jolene, déclare ces heures avec l'attestation de ton employeur.
             </p>
 
             <ListeHeuresExternes heures={heuresExternes} onSupprimer={supprimerHeuresExternes as (id: string) => Promise<void>} />
@@ -251,10 +251,10 @@ export function CategorieKine({
         <div className="card-base space-y-3">
           <h3 className="text-base font-bold text-foreground flex items-center gap-2">
             <MapPin className="h-5 w-5 text-primary" />
-            Votre engagement en zone sous-dotée
+            Ton engagement en zone sous-dotée
           </h3>
           <p className="text-sm text-muted-foreground">
-            Vous vous engagez à exercer pendant <strong>2 ans minimum</strong> dans une zone identifiée sous-dotée par l'ARS. Consultez le zonage kiné en ligne.
+            Tu t'engages à exercer pendant <strong>2 ans minimum</strong> dans une zone identifiée sous-dotée par l'ARS. Consulte le zonage kiné en ligne.
           </p>
           <a
             href="https://cartosante.atlasante.fr"
@@ -269,7 +269,7 @@ export function CategorieKine({
       )}
 
       <div className="card-base">
-        <h3 className="text-base font-bold text-foreground mb-3">Vos démarches d'installation</h3>
+        <h3 className="text-base font-bold text-foreground mb-3">Tes démarches d'installation</h3>
         <ChecklistEtapes
           etapes={etapesActives}
           etapesValidees={parcours.etapes}
@@ -292,7 +292,7 @@ export function CategorieKine({
           <AlertDialogHeader>
             <AlertDialogTitle>Changer de parcours ?</AlertDialogTitle>
             <AlertDialogDescription>
-              Votre progression sera conservée mais vous serez renvoyé à l'écran de choix. Vous pourrez sélectionner l'autre voie.
+              Ta progression sera conservée mais tu seras renvoyé à l'écran de choix. Tu pourras sélectionner l'autre voie.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

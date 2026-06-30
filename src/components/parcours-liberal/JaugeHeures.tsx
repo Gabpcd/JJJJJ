@@ -47,7 +47,7 @@ export function JaugeHeures({
       const rythme = total / moisEcoules;
       if (rythme >= 5) {
         const dateCible = new Date(Date.now() + ((seuilRequis - total) / rythme) * 30.44 * 86400000);
-        projection = `📅 À ce rythme (~${Math.round(rythme)}h/mois), objectif atteint vers ${dateCible.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })}. Ajoutez vos heures externes pour avancer la date.`;
+        projection = `📅 À ce rythme (~${Math.round(rythme)}h/mois), objectif atteint vers ${dateCible.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })}. Ajoute tes heures externes pour avancer la date.`;
       }
     }
   }
@@ -97,7 +97,7 @@ export function JaugeHeures({
           <div>
             <p className="text-sm font-semibold text-primary">Free Transition RC Pro disponible</p>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Vos 3 200h sont faites chez Jolene — votre RC Pro est offerte la première année.
+              Tes 3 200h sont faites chez Jolene — ta RC Pro est offerte la première année.
             </p>
           </div>
         </div>
@@ -105,7 +105,7 @@ export function JaugeHeures({
 
       {atteintViaExternes && (
         <div className="mt-4 rounded-xl border border-border bg-muted/40 p-3">
-          <p className="text-sm font-medium text-foreground">Vos {seuilRequis}h sont atteintes, bravo.</p>
+          <p className="text-sm font-medium text-foreground">Tes {seuilRequis}h sont atteintes, bravo.</p>
           <p className="text-xs text-muted-foreground mt-0.5">
             L'offre Free Transition RC Pro est réservée aux heures réalisées chez Jolene.
           </p>
@@ -114,7 +114,7 @@ export function JaugeHeures({
 
       {!atteint && restant > 0 && (
         <p className="text-xs text-muted-foreground mt-3">
-          Il vous reste <strong className="text-foreground">{restant.toLocaleString('fr-FR')}h</strong> à effectuer pour atteindre le seuil.
+          Il te reste <strong className="text-foreground">{restant.toLocaleString('fr-FR')}h</strong> à effectuer pour atteindre le seuil.
         </p>
       )}
     </div>

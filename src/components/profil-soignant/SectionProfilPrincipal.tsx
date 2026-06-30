@@ -138,7 +138,7 @@ function RppsVerifierInline(props: {
       if (errSave) {
         afficherNotification({
           type: 'erreur',
-          message: `Impossible d'enregistrer vos informations : ${extraireMessageErreur(errSave)}`,
+          message: `Impossible d'enregistrer tes informations : ${extraireMessageErreur(errSave)}`,
         });
         setVerifying(false);
         return;
@@ -195,7 +195,7 @@ function RppsVerifierInline(props: {
         <ShieldCheck className="h-4 w-4 text-primary" /> Vérification RPPS
       </h2>
       <p className="text-xs text-muted-foreground mb-4">
-        Saisissez votre numéro RPPS, prénom et nom tels qu'ils apparaissent dans l'Annuaire Santé.
+        Saisis ton numéro RPPS, prénom et nom tels qu'ils apparaissent dans l'Annuaire Santé.
       </p>
       <div className="space-y-3">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -243,7 +243,7 @@ function RppsVerifierInline(props: {
             </p>
           )}
           <p className="text-[10px] text-muted-foreground mt-1">
-            Numéro à 11 chiffres délivré par l'ARS et inscrit sur votre carte CPS. La validation se fait via l'Annuaire Santé (ANS).
+            Numéro à 11 chiffres délivré par l'ARS et inscrit sur ta carte CPS. La validation se fait via l'Annuaire Santé (ANS).
           </p>
         </div>
 
@@ -273,7 +273,7 @@ function RppsVerifierInline(props: {
           <div className="p-3 rounded-xl border border-destructive/30 bg-destructive/5">
             <p className="text-sm font-semibold text-destructive">Les données ne correspondent pas</p>
             <p className="text-xs text-muted-foreground mt-1">
-              API : <strong>{resultat.prenom_api} {resultat.nom_api}</strong>. Vérifiez l'orthographe.
+              API : <strong>{resultat.prenom_api} {resultat.nom_api}</strong>. Vérifie l'orthographe.
             </p>
           </div>
         )}
@@ -281,7 +281,7 @@ function RppsVerifierInline(props: {
           <div className="p-3 rounded-xl border border-destructive/30 bg-destructive/5">
             <p className="text-sm font-semibold text-destructive">RPPS introuvable</p>
             <p className="text-xs text-muted-foreground mt-1">
-              Le numéro saisi n'est pas dans l'Annuaire Santé. Vérifiez les chiffres.
+              Le numéro saisi n'est pas dans l'Annuaire Santé. Vérifie les chiffres.
             </p>
           </div>
         )}
@@ -320,15 +320,15 @@ function ChoixProfessionInline(props: { onChosen: () => void }) {
   return (
     <div className="card-base">
       <h2 className="text-base font-semibold text-foreground mb-2 flex items-center gap-2">
-        <UserCog className="h-4 w-4 text-primary" /> Choisissez votre profession
+        <UserCog className="h-4 w-4 text-primary" /> Choisis ta profession
       </h2>
       <p className="text-sm text-muted-foreground mb-4">
-        Pour finaliser votre profil et accéder aux missions, sélectionnez votre profession.
+        Pour finaliser ton profil et accéder aux missions, sélectionne ta profession.
         Le formulaire s'adaptera ensuite (vérification RPPS pour les professions à numéro,
         ou identification par diplôme pour les aides-soignants).
       </p>
       <div className="space-y-3">
-        <SelectProfession value={profession} onChange={setProfessionLocal} placeholder="Sélectionnez votre profession" />
+        <SelectProfession value={profession} onChange={setProfessionLocal} placeholder="Sélectionne ta profession" />
         <button
           type="button"
           onClick={enregistrer}
@@ -367,7 +367,7 @@ function BoutonModifierProfession({ rppsVerifie, tousDocumentsValides, onChanged
       setShowConfirm(false);
       return;
     }
-    afficherNotification({ type: 'succes', message: 'Profession réinitialisée. Choisissez votre profession.' });
+    afficherNotification({ type: 'succes', message: 'Profession réinitialisée. Choisis ta profession.' });
     setResetting(false);
     setShowConfirm(false);
     onChanged();
@@ -388,7 +388,7 @@ function BoutonModifierProfession({ rppsVerifie, tousDocumentsValides, onChanged
           <div className="relative bg-card rounded-2xl shadow-xl p-6 mx-4 max-w-md w-full">
             <h3 className="text-base font-bold text-foreground mb-2">Changer de profession ?</h3>
             <p className="text-sm text-muted-foreground mb-4">
-              Vous allez réinitialiser votre profession et revenir au sélecteur. Vous pourrez choisir une nouvelle profession.
+              Tu vas réinitialiser ta profession et revenir au sélecteur. Tu pourras choisir une nouvelle profession.
             </p>
             <div className="flex gap-3 justify-end">
               <button
@@ -502,7 +502,7 @@ function BlocPaieFacturation({ typeExercice, userId }: { typeExercice: string; u
           </div>
           <p className="text-[10px] text-muted-foreground mt-1">
             Mention obligatoire art. R3243-1 CTW. Donnée chiffrée et accessible
-            uniquement à vous + l'admin Jolene. 13 chiffres (sans clé) ou 15 (avec clé).
+            uniquement à toi + l'admin Jolene. 13 chiffres (sans clé) ou 15 (avec clé).
           </p>
         </div>
 
@@ -515,7 +515,7 @@ function BlocPaieFacturation({ typeExercice, userId }: { typeExercice: string; u
             >
               <p className="text-xs font-bold text-primary mb-0.5">Mandat de facturation</p>
               <p className="text-xs text-muted-foreground">
-                Signez ou révoquez votre mandat (LIBERAL — art. 289 I-2 CGI).
+                Signe ou révoque ton mandat (LIBERAL — art. 289 I-2 CGI).
               </p>
               <span className="text-[11px] text-primary font-medium mt-1.5 inline-block">Ouvrir →</span>
             </button>
@@ -541,7 +541,7 @@ function BlocPaieFacturation({ typeExercice, userId }: { typeExercice: string; u
             >
               <p className="text-xs font-bold text-primary mb-0.5">Mes factures d'honoraires</p>
               <p className="text-xs text-muted-foreground">
-                Factures émises par Jolene en votre nom (LIBERAL).
+                Factures émises par Jolene en ton nom (LIBERAL).
               </p>
               <span className="text-[11px] text-primary font-medium mt-1.5 inline-block">Ouvrir →</span>
             </button>
@@ -556,7 +556,7 @@ function BlocPaieFacturation({ typeExercice, userId }: { typeExercice: string; u
                 <p className="text-[10px] text-muted-foreground">
                   {defactoOptIn
                     ? 'Activé — chaque facture émise est automatiquement cédée pour paiement sous 48h (frais ~1-3 %).'
-                    : 'Désactivé — vos factures sont payées par l\'établissement selon ses délais habituels (30-60 jours).'}
+                    : 'Désactivé — tes factures sont payées par l\'établissement selon ses délais habituels (30-60 jours).'}
                 </p>
               </div>
               <button
@@ -601,7 +601,7 @@ export function SectionProfilPrincipal(props: Props) {
 
   const demanderGeolocalisation = () => {
     if (!navigator.geolocation) {
-      afficherNotification({ type: 'erreur', message: 'La géolocalisation n\'est pas supportée par votre navigateur.' });
+      afficherNotification({ type: 'erreur', message: 'La géolocalisation n\'est pas supportée par ton navigateur.' });
       return;
     }
     setGeoLoading(true);
@@ -621,7 +621,7 @@ export function SectionProfilPrincipal(props: Props) {
       },
       () => {
         setGeoLoading(false);
-        afficherNotification({ type: 'erreur', message: 'Localisation refusée. Vous pouvez saisir votre adresse manuellement.' });
+        afficherNotification({ type: 'erreur', message: 'Localisation refusée. Tu peux saisir ton adresse manuellement.' });
       },
     );
   };
@@ -641,7 +641,7 @@ export function SectionProfilPrincipal(props: Props) {
             <ShieldCheck className="h-4 w-4 text-primary" /> Identification professionnelle
           </h2>
           <p className="text-sm text-foreground mb-3">
-            Votre profession (<strong>{getLabelProfession(profession)}</strong>) ne nécessite pas de numéro RPPS. Votre identification professionnelle se fait par votre diplôme et votre carte d'identité.
+            Ta profession (<strong>{getLabelProfession(profession)}</strong>) ne nécessite pas de numéro RPPS. Ton identification professionnelle se fait par ton diplôme et ta carte d'identité.
           </p>
           <button
             type="button"
@@ -732,7 +732,7 @@ export function SectionProfilPrincipal(props: Props) {
                   onChange={setSpecialiteMedicale}
                   professionParent={profession === 'IDE' ? 'IDE' : 'MEDECIN'}
                   disabled={specialiteVerifiee && specialiteSource === 'RPPS'}
-                  placeholder={profession === 'IDE' ? 'IPA uniquement (optionnel)' : 'Sélectionnez votre spécialité'}
+                  placeholder={profession === 'IDE' ? 'IPA uniquement (optionnel)' : 'Sélectionne ta spécialité'}
                 />
                 {!specialiteVerifiee && specialiteMedicale && (
                   <p className="text-xs text-muted-foreground mt-1">
@@ -834,13 +834,13 @@ export function SectionProfilPrincipal(props: Props) {
           </button>
           <p className="text-xs text-muted-foreground mt-2">
             {lat && lng
-              ? <>📍 Position enregistrée — votre ville est renseignée ci-dessous. <span className="opacity-60">(coordonnées techniques : {Number(lat).toFixed(4)}, {Number(lng).toFixed(4)})</span></>
-              : "Utilisez votre position pour renseigner automatiquement votre ville."}
+              ? <>📍 Position enregistrée — ta ville est renseignée ci-dessous. <span className="opacity-60">(coordonnées techniques : {Number(lat).toFixed(4)}, {Number(lng).toFixed(4)})</span></>
+              : "Utilise ta position pour renseigner automatiquement ta ville."}
           </p>
           <div className="pt-2 border-t border-border">
             <label className="text-sm font-medium text-foreground mb-1.5 block">🏙️ Ville de recherche</label>
             <p className="text-xs text-muted-foreground mb-2">
-              Indiquez la ville où vous cherchez des missions. Utile si vous êtes en déplacement ou en vacances.
+              Indique la ville où tu cherches des missions. Utile si tu es en déplacement ou en vacances.
             </p>
             <input
               value={villeRecherche}
@@ -859,7 +859,7 @@ export function SectionProfilPrincipal(props: Props) {
           {uniqueType ? (
             <div className="p-3 bg-primary/5 border border-primary/20 rounded-xl">
               <p className="text-sm text-foreground">
-                En tant que <strong>{getLabelProfession(profession)}</strong>, votre type d'exercice est automatiquement défini comme{' '}
+                En tant que <strong>{getLabelProfession(profession)}</strong>, ton type d'exercice est automatiquement défini comme{' '}
                 <strong>
                   {uniqueType === 'SALARIE' ? 'salarié' : uniqueType === 'LIBERAL' ? 'libéral' : 'mixte'}
                 </strong>
@@ -898,7 +898,7 @@ export function SectionProfilPrincipal(props: Props) {
                     <p className="text-xs text-muted-foreground mt-0.5">J'exerce en libéral</p>
                     {statutLiberal !== 'ACTIF' && (
                       <p className="text-xs text-destructive mt-1">
-                        ⚠️ Vous devez d'abord finaliser votre passage en libéral.{' '}
+                        ⚠️ Tu dois d'abord finaliser ton passage en libéral.{' '}
                         <button
                           type="button"
                           onClick={() => navigate('/soignant/passer-en-liberal')}

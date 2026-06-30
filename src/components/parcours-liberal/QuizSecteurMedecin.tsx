@@ -7,9 +7,9 @@ interface Props {
 }
 
 const QUESTIONS = [
-  "Êtes-vous ou avez-vous été ancien chef de clinique des universités — assistant des hôpitaux ?",
-  "Êtes-vous ou avez-vous été ancien assistant hospitalier universitaire ?",
-  "Êtes-vous ou avez-vous été praticien hospitalier (PH), ancien assistant des hôpitaux, médecin des armées, ou ancien chef de clinique de médecine générale ?",
+  "Es-tu ou as-tu été ancien chef de clinique des universités — assistant des hôpitaux ?",
+  "Es-tu ou as-tu été ancien assistant hospitalier universitaire ?",
+  "Es-tu ou as-tu été praticien hospitalier (PH), ancien assistant des hôpitaux, médecin des armées, ou ancien chef de clinique de médecine générale ?",
 ] as const;
 
 export function QuizSecteurMedecin({ onComplete }: Props) {
@@ -41,9 +41,9 @@ export function QuizSecteurMedecin({ onComplete }: Props) {
       <div className="flex items-start gap-2 mb-3">
         <HelpCircle className="h-5 w-5 text-primary shrink-0 mt-0.5" />
         <div>
-          <h3 className="text-base font-bold text-foreground">Êtes-vous éligible au secteur 2 ?</h3>
+          <h3 className="text-base font-bold text-foreground">Es-tu éligible au secteur 2 ?</h3>
           <p className="text-xs text-muted-foreground mt-1">
-            Le secteur détermine vos tarifs. Ce choix est majeur et partiellement irréversible. Ce quiz vous aide à voir votre éligibilité.
+            Le secteur détermine tes tarifs. Ce choix est majeur et partiellement irréversible. Ce quiz t'aide à voir ton éligibilité.
           </p>
         </div>
       </div>
@@ -77,9 +77,9 @@ export function QuizSecteurMedecin({ onComplete }: Props) {
             <div className="rounded-xl border-2 border-success/40 bg-success/5 p-3 flex items-start gap-2">
               <CheckCircle2 className="h-5 w-5 text-success shrink-0 mt-0.5" />
               <div>
-                <p className="text-sm font-semibold text-success">Vous êtes ÉLIGIBLE au secteur 2</p>
+                <p className="text-sm font-semibold text-success">Tu es ÉLIGIBLE au secteur 2</p>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Vous pouvez choisir entre le secteur 1 (honoraires opposables) ou le secteur 2 (honoraires libres avec tact et mesure). Attention : ce choix se fait à la 1ère installation et le secteur 1 est irrévocable.
+                  Tu peux choisir entre le secteur 1 (honoraires opposables) ou le secteur 2 (honoraires libres avec tact et mesure). Attention : ce choix se fait à la 1ère installation et le secteur 1 est irrévocable.
                 </p>
               </div>
             </div>
@@ -89,7 +89,7 @@ export function QuizSecteurMedecin({ onComplete }: Props) {
               <div>
                 <p className="text-sm font-semibold text-warning">Éligible uniquement au secteur 1</p>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Vous êtes éligible UNIQUEMENT au secteur 1 (honoraires opposables selon la convention médicale). Le secteur 2 nécessite des titres hospitaliers spécifiques que vous ne détenez pas selon ce quiz. Le secteur 3 (non conventionné) reste possible mais vos patients seront très faiblement remboursés.
+                  Tu es éligible UNIQUEMENT au secteur 1 (honoraires opposables selon la convention médicale). Le secteur 2 nécessite des titres hospitaliers spécifiques que tu ne détiens pas selon ce quiz. Le secteur 3 (non conventionné) reste possible mais tes patients seront très faiblement remboursés.
                 </p>
               </div>
             </div>

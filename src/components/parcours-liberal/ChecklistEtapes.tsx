@@ -29,9 +29,9 @@ const DOCS_FOURNIS_PAR_JOLENE: Record<string, { route: string; action: string }>
   'Diplôme': { route: '/soignant/mes-documents', action: 'déjà dans Mes documents' },
   'RIB': { route: '/soignant/mes-documents', action: 'déjà dans Mes documents' },
   'RIB professionnel': { route: '/soignant/mes-documents', action: 'déjà dans Mes documents' },
-  'N° RPPS + carte CPS': { route: '/soignant/profil', action: 'RPPS vérifié sur votre profil' },
-  'N° RPPS': { route: '/soignant/profil', action: 'RPPS vérifié sur votre profil' },
-  "Justificatifs des heures (attestations employeurs — vos attestations Jolene comptent)": { route: '/soignant/attestation-heures', action: 'Jolene génère votre attestation d\'heures' },
+  'N° RPPS + carte CPS': { route: '/soignant/profil', action: 'RPPS vérifié sur ton profil'},
+  'N° RPPS': { route: '/soignant/profil', action: 'RPPS vérifié sur ton profil'},
+  "Justificatifs des heures (attestations employeurs — tes attestations Jolene comptent)": { route: '/soignant/attestation-heures', action: 'Jolene génère ton attestation d\'heures' },
 };
 
 const DOCS_PAR_ETAPE: Record<string, string[]> = {
@@ -40,7 +40,7 @@ const DOCS_PAR_ETAPE: Record<string, string[]> = {
   inscription_ordre_medecins: ["Pièce d'identité", 'Diplôme + qualification', 'CV', 'Casier judiciaire B2 (demandé par l\'Ordre)'],
   inscription_ordre_sages_femmes: ["Pièce d'identité", 'Diplôme d\'État', 'Justificatif de domicile'],
   inscription_onpp: ["Pièce d'identité", 'Diplôme d\'État', 'Justificatif de domicile'],
-  inscription_cpam: ['N° RPPS + carte CPS', 'RIB professionnel', 'Attestation d\'inscription à l\'Ordre', 'Justificatifs des heures (attestations employeurs — vos attestations Jolene comptent)'],
+  inscription_cpam: ['N° RPPS + carte CPS', 'RIB professionnel', 'Attestation d\'inscription à l\'Ordre', 'Justificatifs des heures (attestations employeurs — tes attestations Jolene comptent)'],
   inscription_cpam_ipa: ['N° RPPS + carte CPS', 'RIB professionnel', 'Diplôme IPA'],
   inscription_ars: ["Pièce d'identité", 'Diplôme', 'N° RPPS'],
   inscription_ars_ortho: ["Pièce d'identité", 'Diplôme', 'N° RPPS'],
@@ -49,7 +49,7 @@ const DOCS_PAR_ETAPE: Record<string, string[]> = {
   affiliation_carmf: ['N° SIRET', 'Attestation URSSAF', 'Copie du diplôme', 'RIB'],
   affiliation_carcdsf: ['N° SIRET', 'Attestation URSSAF', 'Copie du diplôme', 'RIB'],
   affiliation_cipav: ['N° SIRET', 'Attestation URSSAF', 'RIB'],
-  souscription_rcp: ['N° RPPS', 'Attestation de conventionnement CPAM', 'Descriptif de votre activité'],
+  souscription_rcp: ['N° RPPS', 'Attestation de conventionnement CPAM', 'Descriptif de ton activité'],
   local_professionnel: ['Bail professionnel ou attestation de domiciliation', 'Registre public d\'accessibilité (PMR)'],
   local_fixe_obligatoire: ['Bail professionnel', 'Registre public d\'accessibilité (PMR)'],
   prevoyance_complementaire: ['RIB', 'Relevé CARPIMKO/caisse de retraite'],
