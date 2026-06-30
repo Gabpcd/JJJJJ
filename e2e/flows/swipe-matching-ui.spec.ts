@@ -80,4 +80,17 @@ test.describe('Sprint 14 — UI swipe matching (réels)', () => {
     await page.goto('/soignant/planning');
     await expect(page).toHaveURL(/\/soignant\/missions/, { timeout: 10_000 });
   });
+
+  // PR-B : onglet « Candidatures » (candidatures EN_ATTENTE) dans Mes missions.
+  test('Mes missions : onglet Candidatures rendu (cartes ou état vide)', async ({ page }) => {
+    await loginAs(page, 'soignant');
+    await page.goto('/soignant/missions?tab=candidatures');
+    await page.waitForLoadState('networkidle');
+    await expect(page.getByRole('heading', { name: 'Mes missions', level: 1 })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Candidatures', exact: true })).toBeVisible();
+    // Soit des cartes de candidature, soit l'état vide « élan » — jamais d'erreur.
+    const etatVide = page.getByText('Pas encore de candidature en attente');
+    const enAttente = page.getByText('En attente de réponse').first();
+    await expect(etatVide.or(enAttente)).toBeVisible({ timeout: 10_000 });
+  });
 });

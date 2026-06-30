@@ -22,7 +22,7 @@ import { format, startOfWeek, endOfWeek } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { handleErrorSilent } from '@/lib/handleError';
 
-type Onglet = 'disponibles' | 'mes_missions' | 'historique';
+type Onglet = 'candidatures' | 'disponibles' | 'mes_missions' | 'historique';
 
 interface SoignantData {
   profession: string;
@@ -46,13 +46,16 @@ export default function MissionsSoignant() {
   // legacy `?onglet=mes_missions|historique`.
   const tabParam = searchParams.get('tab');
   const ongletParam = searchParams.get('onglet');
-  // Cette page = « Mes missions » (à venir + passées). La recherche de missions
-  // disponibles vit uniquement dans /recherche-missions.
+  // Cette page = « Mes missions » : Candidatures (en attente) · À venir · Passées.
+  // La recherche de missions disponibles vit uniquement dans /recherche-missions.
   const [onglet, setOnglet] = useState<Onglet>(
-    tabParam === 'passees' || ongletParam === 'historique' ? 'historique' : 'mes_missions'
+    tabParam === 'candidatures' ? 'candidatures'
+      : tabParam === 'passees' || ongletParam === 'historique' ? 'historique'
+        : 'mes_missions'
   );
   const [soignant, setSoignant] = useState<SoignantData | null>(null);
   const [missions, setMissions] = useState<any[]>([]);
+  const [candidatures, setCandidatures] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(0);
   const PAGE_SIZE = 50;
@@ -83,10 +86,24 @@ export default function MissionsSoignant() {
 
   useEffect(() => {
     if (!user) return;
-    if (!soignant && onglet !== 'disponibles') { setLoading(false); setMissions([]); return; }
+    if (!soignant && onglet !== 'disponibles' && onglet !== 'candidatures') { setLoading(false); setMissions([]); return; }
     setLoading(true);
     const fetchMissions = async () => {
       const maintenantIso = new Date().toISOString();
+
+      // Onglet Candidatures : candidatures en attente de réponse de l'établissement.
+      if (onglet === 'candidatures') {
+        const { data } = await supabase
+          .from('candidatures')
+          .select('id, statut, message, type_contrat_choisi, cree_le, missions(id, intitule, debut_le, fin_le, taux_horaire_base, net_estime, etablissements(nom, adresse_ville))')
+          .eq('soignant_id', user.id)
+          .in('statut', ['EN_ATTENTE', 'EN_ATTENTE_VALIDATION_ETAB'])
+          .order('cree_le', { ascending: false });
+        setCandidatures((data ?? []).filter((c: any) => c.missions));
+        setLoading(false);
+        return;
+      }
+
       let query = supabase.from('missions').select(`
         id, intitule, description, service, profession_requise,
         specialite_medicale_requise, accepte_non_specialises,
@@ -194,6 +211,7 @@ export default function MissionsSoignant() {
   }, [missionsAvecDistance, onglet]);
 
   const onglets: { id: Onglet; label: string; count?: number }[] = [
+    { id: 'candidatures', label: 'Candidatures' },
     { id: 'mes_missions', label: 'À venir' },
     { id: 'historique', label: 'Passées' },
   ];
@@ -246,7 +264,47 @@ export default function MissionsSoignant() {
 
       {loading ? <SkeletonList count={4} /> : (
         <>
-          <p className="text-sm text-muted-foreground mb-3">{missionsAvecDistance.length} mission{missionsAvecDistance.length !== 1 ? 's' : ''} trouvée{missionsAvecDistance.length !== 1 ? 's' : ''}</p>
+          {onglet === 'disponibles' && (
+            <p className="text-sm text-muted-foreground mb-3">{missionsAvecDistance.length} mission{missionsAvecDistance.length !== 1 ? 's' : ''} trouvée{missionsAvecDistance.length !== 1 ? 's' : ''}</p>
+          )}
+          {onglet === 'candidatures' && (
+            candidatures.length > 0 ? (
+              <div className="space-y-2">
+                {candidatures.map((c: any) => {
+                  const m = c.missions;
+                  const estSuperLike = (c.message || '').toLowerCase().includes('super-like');
+                  return (
+                    <div key={c.id} onClick={() => navigate(`/soignant/missions/${m.id}`)} className="card-base hover:shadow-md cursor-pointer transition-all flex items-center gap-3 py-3">
+                      <div className="flex flex-col items-center justify-center rounded-xl bg-primary/10 px-3 py-1.5 min-w-[52px]">
+                        <span className="text-[10px] font-semibold text-primary uppercase">{format(new Date(m.debut_le), 'EEE', { locale: fr })}</span>
+                        <span className="text-lg font-bold text-primary leading-tight">{format(new Date(m.debut_le), 'd')}</span>
+                        <span className="text-[10px] text-primary">{format(new Date(m.debut_le), 'MMM', { locale: fr })}</span>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
+                          <span className="badge-base bg-amber-100 text-amber-700 text-[10px]">⏳ En attente de réponse</span>
+                          {estSuperLike && <span className="badge-base bg-jolene-butter-100 text-jolene-midnight border border-jolene-butter-300 text-[10px]">★ Super-like envoyé</span>}
+                          {c.type_contrat_choisi && <span className="badge-base bg-muted text-muted-foreground text-[10px]">{c.type_contrat_choisi === 'LIBERAL' ? 'Libéral' : 'Salarié'}</span>}
+                        </div>
+                        <h3 className="font-semibold text-sm text-foreground truncate" title={m.intitule}>{m.intitule}</h3>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          🏥 {m.etablissements?.nom}{m.etablissements?.adresse_ville ? ` · ${m.etablissements.adresse_ville}` : ''}
+                        </p>
+                        <div className="flex items-center gap-3 mt-0.5 text-xs text-muted-foreground">
+                          <span>🕐 {format(new Date(m.debut_le), "d MMM", { locale: fr })} · {format(new Date(m.debut_le), "HH'h'mm", { locale: fr })}</span>
+                          {m.taux_horaire_base && <span className="text-primary font-semibold">{m.taux_horaire_base} €/h</span>}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <EmptyState mascotte="thinking" titre="Pas encore de candidature en attente"
+                description="Swipe à droite ou postule à une mission : tes candidatures en attente de réponse apparaîtront ici."
+                cta={{ label: 'Trouver une mission 🔥', onClick: () => navigate('/soignant/recherche-missions') }} />
+            )
+          )}
           {onglet === 'disponibles' && (
             groupes.length > 0 ? (
               <>
@@ -342,7 +400,7 @@ export default function MissionsSoignant() {
               </>
             ) : (
               <EmptyState icone={<History />} mascotte="empty" titre="Aucune mission dans l'historique"
-                description="Vos missions terminées et annulées apparaîtront ici."
+                description="Tes missions terminées et annulées apparaîtront ici."
                 cta={{ label: 'Trouver une mission', onClick: () => navigate('/soignant/recherche-missions') }} />
             )
           )}
