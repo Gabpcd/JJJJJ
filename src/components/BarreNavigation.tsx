@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { LucideIcon, Home, Search, FileText, CalendarDays, User, PlusCircle, List, ClipboardCheck, Settings, HeartPulse, LogOut, MapPin, Banknote, CreditCard, Rocket, Bell, Flame, MessageCircle, ClipboardList, Users, Scale, ChevronDown, Activity, Shield, Menu, X, Star, Gift, ShieldCheck, ArrowLeft } from 'lucide-react';
+import { LucideIcon, Home, Search, FileText, User, PlusCircle, List, ClipboardCheck, Settings, HeartPulse, LogOut, MapPin, Banknote, CreditCard, Rocket, Bell, Flame, MessageCircle, ClipboardList, Users, Scale, ChevronDown, Activity, Shield, Menu, X, Star, Gift, ShieldCheck, ArrowLeft } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { UserRole } from '@/lib/types';
 import { estEligibleLiberal } from '@/lib/regles-installation-liberal';
@@ -49,10 +49,9 @@ function getSoignantSidebar(isLiberal: boolean, showLiberalPath: boolean): Sideb
         // Session G1 : découverte consolidée — une seule entrée « Trouver une mission »
         // vers la page canonique (liste + filtres + toggle swipe + carte + alertes).
         { icone: Search, label: 'Trouver une mission', route: '/soignant/recherche-missions' },
-        { icone: ClipboardList, label: 'Mes missions', route: '/soignant/missions?onglet=mes_missions' },
+        { icone: ClipboardList, label: 'Mes missions', route: '/soignant/missions' },
         { icone: Flame, label: 'Pool urgence', route: '/soignant/pool-urgence' },
         { icone: Star, label: 'Mes favoris', route: '/soignant/mes-favoris' },
-        { icone: CalendarDays, label: 'Planning', route: '/soignant/planning' },
       ],
     },
     {
@@ -70,12 +69,12 @@ function getSoignantSidebar(isLiberal: boolean, showLiberalPath: boolean): Sideb
     isLiberal
       ? {
           icone: Banknote, label: 'Finances', items: [
-            { icone: Banknote, label: 'Mes finances', route: '/soignant/mes-gains' },
+            { icone: Banknote, label: 'Revenus', route: '/soignant/mes-gains' },
             { icone: CreditCard, label: 'Stripe Connect', route: '/soignant/stripe-connect' },
             { icone: FileText, label: 'Mandat facturation', route: '/soignant/mandat-facturation' },
           ],
         }
-      : { icone: Banknote, label: 'Mes finances', route: '/soignant/mes-gains' },
+      : { icone: Banknote, label: 'Revenus', route: '/soignant/mes-gains' },
     { icone: MessageCircle, label: 'Messagerie', route: '/soignant/messagerie' },
   ];
 

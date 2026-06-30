@@ -13,10 +13,11 @@ import { ConsentementPingGps } from '@/components/soignant/ConsentementPingGps';
 import {
   User, Banknote, ShieldCheck, Settings, LogOut,
   Mail, Phone, MapPin, KeyRound, FileText, Scale, Trash2,
+  CreditCard, Gift, Rocket, Umbrella, GraduationCap, Bell,
 } from 'lucide-react';
 
 export default function MonCompteSoignant() {
-  usePageTitle('Mon profil');
+  usePageTitle('Mon compte');
   const { user, deconnexion } = useAuth();
   const navigate = useNavigate();
   const [profil, setProfil] = useState<{
@@ -48,19 +49,56 @@ export default function MonCompteSoignant() {
       titre: '',
       lignes: [
         { icone: User, label: 'Mon profil', route: '/soignant/profil' },
-        { icone: Banknote, label: 'Revenus', route: '/soignant/mes-gains' },
-        { icone: ShieldCheck, label: 'Ma réputation', route: '/soignant/reputation' },
-        { icone: Settings, label: 'Paramètres', route: '/soignant/parametres-complet' },
-        { icone: LogOut, label: 'Se déconnecter', onClick: () => deconnexion(), variante: 'danger' as const, sansChevron: true },
       ],
     },
     {
-      titre: 'Légal',
+      titre: 'Paiements & facturation',
+      lignes: [
+        { icone: Banknote, label: 'Revenus', route: '/soignant/mes-gains' },
+        ...(estLiberal ? [
+          { icone: CreditCard, label: 'Compte de paiement (Stripe)', route: '/soignant/stripe-connect' },
+          { icone: FileText, label: 'Mandat de facturation', route: '/soignant/mandat-facturation' },
+          { icone: Banknote, label: 'Charges sociales', route: '/soignant/charges' },
+        ] : []),
+      ],
+    },
+    {
+      titre: 'Réputation',
+      lignes: [
+        { icone: ShieldCheck, label: 'Ma réputation', route: '/soignant/reputation' },
+      ],
+    },
+    {
+      titre: 'Avantages',
+      lignes: [
+        { icone: Umbrella, label: 'Prévoyance', route: '/soignant/prevoyance' },
+        { icone: Gift, label: 'Parrainage', route: '/soignant/parrainage' },
+        ...(eligibleLiberal && !estLiberal
+          ? [{ icone: Rocket, label: 'Passer en libéral', route: '/soignant/passer-en-liberal' }] : []),
+        ...(estLiberal || eligibleLiberal
+          ? [{ icone: GraduationCap, label: 'Attestation 3200 h', route: '/soignant/attestation-heures' }] : []),
+      ],
+    },
+    {
+      titre: 'Réglages',
+      lignes: [
+        { icone: Bell, label: 'Notifications', route: '/soignant/parametres/notifications' },
+        { icone: Settings, label: 'Tous les paramètres', route: '/soignant/parametres-complet' },
+      ],
+    },
+    {
+      titre: 'Aide & légal',
       lignes: [
         { icone: ShieldCheck, label: 'Confidentialité', route: '/confidentialite' },
         { icone: Scale, label: 'Conditions générales', route: '/cgu' },
         { icone: FileText, label: 'Mentions légales', route: '/mentions-legales' },
         { icone: Trash2, label: 'Supprimer mon compte', route: '/supprimer-mon-compte' },
+      ],
+    },
+    {
+      titre: '',
+      lignes: [
+        { icone: LogOut, label: 'Se déconnecter', onClick: () => deconnexion(), variante: 'danger' as const, sansChevron: true },
       ],
     },
   ];
@@ -84,7 +122,7 @@ export default function MonCompteSoignant() {
       <div className="mt-8 space-y-6">
         <section>
           <h2 className="px-4 mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            Mon compte
+            Connexion & sécurité
           </h2>
           <div className="rounded-2xl border border-border bg-card p-4 space-y-4">
             <div className="space-y-2">
@@ -117,7 +155,7 @@ export default function MonCompteSoignant() {
 
         <section>
           <h2 className="px-4 mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            Suivi GPS pendant les missions
+            Confidentialité & données
           </h2>
           <div className="rounded-2xl border border-border bg-card p-4">
             <p className="text-xs text-muted-foreground mb-3 flex items-start gap-2">
