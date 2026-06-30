@@ -115,7 +115,7 @@ export function CardMissionSwipe({ mission, onTap, className }: Props) {
       type="button"
       onClick={onTap}
       className={cn(
-        'relative w-full h-[80vh] max-h-[640px] rounded-3xl overflow-hidden flex flex-col',
+        'relative w-full h-full rounded-3xl overflow-hidden flex flex-col',
         'border-2 border-jolene-rose-200 shadow-holographic bg-jolene-cloud',
         'transition-bouncy text-left',
         'focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-jolene-rose-400',
@@ -126,7 +126,7 @@ export function CardMissionSwipe({ mission, onTap, className }: Props) {
       }, score ${mission.score} sur 100. Toucher pour le détail.`}
     >
       {/* ── Visuel établissement (haut) ─────────────────────────────────── */}
-      <div className="relative h-[42%] shrink-0 bg-gradient-to-br from-jolene-rose-300 via-jolene-mauve-300 to-jolene-cyan-200 flex items-center justify-center overflow-hidden">
+      <div className="relative h-[140px] shrink-0 bg-gradient-to-br from-jolene-rose-300 via-jolene-mauve-300 to-jolene-cyan-200 flex items-center justify-center overflow-hidden">
         {mission.etablissement_logo_url ? (
           <>
             {/* Fond flouté du logo pour remplir, logo net contenu au centre */}
@@ -139,12 +139,12 @@ export function CardMissionSwipe({ mission, onTap, className }: Props) {
             <img
               src={mission.etablissement_logo_url}
               alt={mission.etablissement_nom}
-              className="relative h-24 w-24 object-contain rounded-2xl bg-white/90 p-2 shadow-lg"
+              className="relative h-16 w-16 object-contain rounded-2xl bg-white/90 p-1.5 shadow-lg"
             />
           </>
         ) : (
           <span
-            className="text-7xl font-black text-white/90 drop-shadow-[0_4px_12px_rgba(0,0,0,0.2)] select-none"
+            className="text-5xl font-black text-white/90 drop-shadow-[0_4px_12px_rgba(0,0,0,0.2)] select-none"
             aria-hidden="true"
           >
             {initiale}

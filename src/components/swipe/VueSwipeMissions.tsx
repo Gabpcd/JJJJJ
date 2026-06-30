@@ -27,7 +27,6 @@ import { BoutonsActionSwipe } from '@/components/swipe/BoutonsActionSwipe';
 import { ModalDetailMissionSwipe } from '@/components/swipe/ModalDetailMissionSwipe';
 import { ConfettiSwipe } from '@/components/swipe/ConfettiSwipe';
 import { ChoixContratDialog } from '@/components/ChoixContratDialog';
-import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { supabase } from '@/integrations/supabase/client';
 import { useNotification } from '@/contexts/NotificationContext';
 
@@ -214,18 +213,20 @@ export function VueSwipeMissions({ onBasculerListe, onCreerAlerte }: VueSwipeMis
   const topMission = localStack[0];
 
   return (
-    <div className="max-w-md mx-auto w-full flex flex-col">
-      {/* Pas de bannière au-dessus de la carte : c'est elle qui vend. Un simple
-          rappel discret du geste, le reste (quota super-likes) vit sur le bouton. */}
-      <div className="min-h-[60vh] flex flex-col">
-        <div className="flex-1 flex items-center justify-center py-2">
+    <div className="max-w-md mx-auto w-full flex flex-col flex-1 min-h-0">
+      {/* Plein écran sans scroll : la zone carte prend tout l'espace (flex-1) et
+          la barre d'action reste collée en bas du viewport (shrink-0), toujours
+          visible. Pas de bannière au-dessus : la carte vend. */}
+      <div className="flex-1 min-h-0 flex flex-col">
+        <div className="flex-1 min-h-0 flex flex-col py-2">
           {isLoading ? (
-            <div className="flex flex-col items-center gap-3 text-jolene-bubblegum">
+            <div className="m-auto flex flex-col items-center gap-3 text-jolene-bubblegum">
               <Loader2 className="h-8 w-8 animate-spin" />
               <span className="text-sm">Calcul de ton matching...</span>
             </div>
           ) : localStack.length === 0 ? (
-            (data?.length ?? 0) > 0 ? (
+            <div className="m-auto w-full">
+            {(data?.length ?? 0) > 0 ? (
               /* Le soignant a swipé toute la pile du jour */
               <EmptyState
                 mascotte="happy"
@@ -256,21 +257,15 @@ export function VueSwipeMissions({ onBasculerListe, onCreerAlerte }: VueSwipeMis
                   onClick: onBasculerListe,
                 }}
               />
-            )
+            )}
+            </div>
           ) : (
-            <StackCards items={stackItems} onSwipe={handleGestureSwipe} />
+            <StackCards className="flex-1 min-h-0" items={stackItems} onSwipe={handleGestureSwipe} />
           )}
         </div>
 
         {topMission && (
-          <div>
-            {/* Accès fiable au détail (le tap sur la card peut être absorbé par le
-                pointer capture du geste de swipe selon le navigateur) */}
-            <div className="flex justify-center">
-              <BoutonY2K variant="ghost" size="sm" onClick={() => ouvrirDetail(topMission)}>
-                Voir le détail de la mission
-              </BoutonY2K>
-            </div>
+          <div className="shrink-0">
             <BoutonsActionSwipe
               onDislike={() => handleSwipe('DISLIKE', topMission.mission_id)}
               onLike={() => handleSwipe('LIKE', topMission.mission_id)}
