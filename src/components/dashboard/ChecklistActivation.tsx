@@ -1,26 +1,21 @@
 /**
- * ChecklistActivation — Session E-3 « activation soignant »
+ * ChecklistActivation — rampe d'activation soignant (refonte Accueil PR-E)
  *
- * Carte persistante en tête de dashboard : LA rampe d'activation unique
- * (standard Doctolib pro / Airbnb host onboarding — une seule rampe de
- * progression, jamais 5 bannières concurrentes).
+ * Carte persistante en tête de dashboard : LA rampe d'activation unique, tant
+ * que le soignant n'est pas « prêt à postuler ».
  *
- * 3 étapes :
- *  ① Identité vérifiée   (identite_verifiee / rpps_verifie)
- *  ② Documents validés   (tous_documents_valides + compte des documents restants)
- *  ③ Première candidature (candidature envoyée, mission assignée ou terminée)
+ * 2 étapes seulement (le paiement est sorti de la rampe : il devient un nudge
+ * contextuel just-in-time, déclenché après la 1ʳᵉ mission terminée — cf.
+ * DashboardSoignant) :
+ *  ① Tes documents      (tous_documents_valides — pour être accepté·e)
+ *  ② Ta présentation    (bio renseignée — +chances d'être sélectionné·e)
  *
  * UN SEUL CTA primaire = la prochaine étape non faite.
- * Quand les 3 étapes sont faites, le composant ne rend RIEN.
- *
- * Données : profil + documents déjà chargés par fn_dashboard_soignant_complet
- * (passés en props via le hook), complétées par un fetch léger
- * (documents_requis_par_profession + count candidatures + adeli_verifie).
+ * Quand les 2 étapes sont faites, le composant ne rend RIEN.
  *
  * Usage (DashboardSoignant) :
- *   const activation = useActivationSoignant({ soignant, documents, missionsActives });
+ *   const activation = useActivationSoignant({ soignant, documents });
  *   <ChecklistActivation state={activation} />
- *   {!activation.visible && <BandeauGraceDocuments ... />}  // bannières absorbées
  */
 import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -39,10 +34,8 @@ import { JaugeProgression } from '@/components/JaugeProgression';
 export interface SoignantActivation {
   profession: string | null;
   type_exercice: string | null;
-  identite_verifiee: boolean | null;
   rpps_verifie?: boolean | null;
   tous_documents_valides: boolean | null;
-  total_missions_terminees: number | null;
 }
 
 /** Sous-ensemble des documents retournés par fn_dashboard_soignant_complet. */
@@ -53,8 +46,8 @@ export interface DocumentActivation {
 }
 
 export interface EtapeActivation {
-  id: 'identite' | 'documents' | 'candidature';
-  numero: 1 | 2 | 3;
+  id: 'documents' | 'presentation';
+  numero: 1 | 2;
   label: string;
   /** Sous-texte affiché sous le label quand l'étape n'est pas faite. */
   detail?: string;
@@ -76,40 +69,30 @@ export interface ActivationState {
 interface UseActivationParams {
   soignant: SoignantActivation | null;
   documents: DocumentActivation[];
-  /** Missions ASSIGNEE/EN_COURS connues du dashboard (mes_missions.length). */
-  missionsActives: number;
 }
 
-export function useActivationSoignant({ soignant, documents, missionsActives }: UseActivationParams): ActivationState {
+/** Longueur minimale d'une bio considérée « renseignée ». */
+const BIO_MIN = 30;
+
+export function useActivationSoignant({ soignant, documents }: UseActivationParams): ActivationState {
   const { user } = useAuth();
 
-  const etape1Faite = !!(soignant?.identite_verifiee || soignant?.rpps_verifie);
-  const etape2Faite = !!soignant?.tous_documents_valides;
-  // Étape 3 déjà déductible des données dashboard : mission assignée/en cours ou terminée.
-  const etape3Connue = missionsActives > 0 || (soignant?.total_missions_terminees ?? 0) > 0;
-
-  const besoinFetch = !!soignant && !!user && (!etape2Faite || !etape3Connue);
+  const docsFaits = !!soignant?.tous_documents_valides;
+  const besoinFetch = !!soignant && !!user;
 
   const { data: extra } = useQuery({
     queryKey: ['activation-soignant', user?.id],
     queryFn: async () => {
-      const [drRes, candRes, sgRes] = await Promise.all([
+      const [drRes, sgRes] = await Promise.all([
         supabase
           .from('documents_requis_par_profession')
           .select('profession, type_document, est_critique, type_exercice_requis'),
-        // Candidatures initiées (ou acceptées) par le soignant — on exclut les
-        // propositions système du pool d'urgence (statut PROPOSEE).
-        supabase
-          .from('candidatures')
-          .select('id', { count: 'exact', head: true })
-          .eq('soignant_id', user!.id)
-          .neq('statut', 'PROPOSEE'),
-        supabase.from('soignants').select('adeli_verifie').eq('id', user!.id).maybeSingle(),
+        supabase.from('soignants').select('adeli_verifie, bio').eq('id', user!.id).maybeSingle(),
       ]);
       return {
         docsRequisRows: (drRes.data ?? []) as any[],
-        aPostule: (candRes.count ?? 0) > 0,
         adeliVerifie: !!(sgRes.data as any)?.adeli_verifie,
+        bio: ((sgRes.data as any)?.bio ?? '') as string,
       };
     },
     enabled: besoinFetch,
@@ -118,7 +101,7 @@ export function useActivationSoignant({ soignant, documents, missionsActives }: 
 
   // Nombre de documents critiques encore manquants (même filtrage que DocumentsSoignant).
   const docsRestants = useMemo<number | null>(() => {
-    if (!soignant?.profession || etape2Faite || !extra) return null;
+    if (!soignant?.profession || docsFaits || !extra) return null;
     const estLiberal = soignant.type_exercice === 'LIBERAL' || soignant.type_exercice === 'MIXTE';
     const estSalarie = soignant.type_exercice !== 'LIBERAL';
     const identiteVerifiee = !!(soignant.rpps_verifie || extra.adeliVerifie);
@@ -142,13 +125,13 @@ export function useActivationSoignant({ soignant, documents, missionsActives }: 
         ),
     );
     return manquants.length;
-  }, [soignant, documents, extra, etape2Faite]);
+  }, [soignant, documents, extra, docsFaits]);
 
   return useMemo<ActivationState>(() => {
-    const etape3Faite = etape3Connue || !!extra?.aPostule;
+    const presentationFaite = (extra?.bio?.trim().length ?? 0) >= BIO_MIN;
 
     let detailDocuments: string | undefined;
-    if (!etape2Faite) {
+    if (!docsFaits) {
       if (docsRestants != null && docsRestants > 0) {
         detailDocuments = `Il te reste ${docsRestants} document${docsRestants > 1 ? 's' : ''} — ~3 min, une photo suffit`;
       } else if (docsRestants === 0) {
@@ -160,25 +143,18 @@ export function useActivationSoignant({ soignant, documents, missionsActives }: 
 
     const etapes: EtapeActivation[] = [
       {
-        id: 'identite',
-        numero: 1,
-        label: 'Identité vérifiée',
-        detail: etape1Faite ? undefined : 'Ta pièce d’identité ou ton n° RPPS suffit',
-        faite: etape1Faite,
-      },
-      {
         id: 'documents',
-        numero: 2,
-        label: 'Documents validés',
-        detail: detailDocuments,
-        faite: etape2Faite,
+        numero: 1,
+        label: 'Tes documents',
+        detail: docsFaits ? undefined : detailDocuments,
+        faite: docsFaits,
       },
       {
-        id: 'candidature',
-        numero: 3,
-        label: 'Première candidature',
-        detail: etape3Faite ? undefined : 'Postule en un clic, sans engagement — sans documents validés aussi',
-        faite: etape3Faite,
+        id: 'presentation',
+        numero: 2,
+        label: 'Ta présentation',
+        detail: presentationFaite ? undefined : 'Une bio = jusqu’à 3× plus de chances d’être sélectionné·e',
+        faite: presentationFaite,
       },
     ];
 
@@ -186,27 +162,24 @@ export function useActivationSoignant({ soignant, documents, missionsActives }: 
     const prochaineEtape = etapes.find((e) => !e.faite) ?? null;
 
     let ctaLabel = '';
-    let ctaDestination = '/soignant/recherche-missions';
-    if (prochaineEtape?.id === 'identite') {
-      ctaLabel = 'Vérifier mon identité — 2 min';
+    let ctaDestination = '/soignant/mes-documents';
+    if (prochaineEtape?.id === 'documents') {
+      ctaLabel = 'Téléverse tes documents — ~3 min';
       ctaDestination = '/soignant/mes-documents';
-    } else if (prochaineEtape?.id === 'documents') {
-      ctaLabel = 'Téléverser mes documents — ~3 min';
-      ctaDestination = '/soignant/mes-documents';
-    } else if (prochaineEtape?.id === 'candidature') {
-      ctaLabel = 'Voir les missions';
-      ctaDestination = '/soignant/recherche-missions';
+    } else if (prochaineEtape?.id === 'presentation') {
+      ctaLabel = 'Ajoute ta présentation — ~1 min';
+      ctaDestination = '/soignant/profil';
     }
 
-    // Anti-flash : si seules les 2 premières étapes sont faites et que le statut
-    // candidature n'est pas encore chargé, on attend la réponse avant d'afficher
-    // (évite d'afficher puis cacher la carte pour un soignant déjà activé).
-    const etape3Resolue = etape3Connue || !besoinFetch || extra !== undefined;
+    // Anti-flash : l'étape « présentation » dépend du fetch (bio). Tant qu'il
+    // n'est pas résolu, on n'affiche la carte que si l'étape documents suffit
+    // déjà à la rendre visible (évite d'afficher puis cacher pour un profil prêt).
+    const extraResolu = extra !== undefined || !besoinFetch;
     const visible =
-      !!soignant && prochaineEtape !== null && (etape3Resolue || !etape1Faite || !etape2Faite);
+      !!soignant && prochaineEtape !== null && (extraResolu || !docsFaits);
 
     return { visible, etapes, nbFaites, prochaineEtape, ctaLabel, ctaDestination };
-  }, [soignant, etape1Faite, etape2Faite, etape3Connue, extra, docsRestants, besoinFetch]);
+  }, [soignant, docsFaits, extra, docsRestants, besoinFetch]);
 }
 
 /* ─── Composant ──────────────────────────────────────────────────────────── */
@@ -225,8 +198,7 @@ export function ChecklistActivation({ state, className }: ChecklistActivationPro
   const { nbFaites } = state;
 
   // Bandeau COMPACT (1 ligne) : la rampe d'activation ne doit pas manger l'écran
-  // ni repousser les missions sous la ligne de flottaison. Mascotte + prochaine
-  // action + progression + chevron, le tout cliquable vers l'étape à faire.
+  // ni repousser les missions sous la ligne de flottaison.
   return (
     <button
       type="button"
@@ -239,17 +211,17 @@ export function ChecklistActivation({ state, className }: ChecklistActivationPro
         className,
       )}
     >
-      <Mascotte etat={nbFaites >= 2 ? 'happy' : 'thinking'} taille="sm" className="shrink-0" />
+      <Mascotte etat={nbFaites >= 1 ? 'happy' : 'thinking'} taille="sm" className="shrink-0" />
       <div className="flex-1 min-w-0">
         <div className="flex items-center justify-between gap-2">
           <p className="text-sm font-semibold text-foreground truncate">{state.ctaLabel}</p>
-          <span className="text-xs font-semibold text-primary shrink-0 tabular-nums">{nbFaites}/3</span>
+          <span className="text-xs font-semibold text-primary shrink-0 tabular-nums">{nbFaites}/2</span>
         </div>
         {prochaineEtape.detail && (
           <p className="text-xs text-muted-foreground truncate mt-0.5">{prochaineEtape.detail}</p>
         )}
         <div className="mt-1.5">
-          <JaugeProgression valeur={nbFaites} max={3} />
+          <JaugeProgression valeur={nbFaites} max={2} />
         </div>
       </div>
       <ChevronRight className="h-5 w-5 text-primary shrink-0" aria-hidden="true" />
