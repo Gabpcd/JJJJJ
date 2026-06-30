@@ -57,7 +57,7 @@ export function BoutonsActionSwipe({
   };
 
   return (
-    <div className="flex items-center justify-center gap-4 sm:gap-6 px-4 py-5">
+    <div className="flex items-center justify-center gap-4 sm:gap-6 px-4 py-3">
       {/* DISLIKE */}
       <button
         type="button"

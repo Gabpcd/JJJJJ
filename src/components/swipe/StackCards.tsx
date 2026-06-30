@@ -104,7 +104,7 @@ export function StackCards({ items, onSwipe, thresholdRatio = 0.3, className }: 
   }
 
   return (
-    <div ref={containerRef} className={cn('relative w-full', className)}>
+    <div ref={containerRef} className={cn('relative w-full h-full', className)}>
       {/* Background cards (sous la card top) — scale + opacity parallax */}
       {bgCards.map((item, idx) => {
         const offset = idx + 1;
@@ -130,7 +130,7 @@ export function StackCards({ items, onSwipe, thresholdRatio = 0.3, className }: 
       {/* Card top : drag-enabled */}
       <div
         className={cn(
-          'relative touch-none select-none',
+          'relative h-full touch-none select-none',
           !isDragging && 'transition-bouncy',
         )}
         style={{

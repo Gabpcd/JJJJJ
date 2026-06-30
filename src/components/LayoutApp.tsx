@@ -14,6 +14,12 @@ import { toast } from 'sonner';
 interface LayoutAppProps {
   role: UserRole;
   children: React.ReactNode;
+  /**
+   * Mode plein écran sans scroll (deck de swipe) : fige la hauteur à 100dvh,
+   * retire le padding de contenu et le footer légal, pour qu'une vue
+   * (carte + barre d'action) tienne dans un viewport sans scroll.
+   */
+  pleinEcran?: boolean;
 }
 
 /**
@@ -21,7 +27,7 @@ interface LayoutAppProps {
  * Same structure, same safe-area insets, same height handling.
  * The only difference is the presence of Safari's browser chrome on web.
  */
-export function LayoutApp({ role, children }: LayoutAppProps) {
+export function LayoutApp({ role, children, pleinEcran = false }: LayoutAppProps) {
   useEffect(() => {
     let mounted = true;
     let cleanup: (() => void) | undefined;
@@ -40,28 +46,39 @@ export function LayoutApp({ role, children }: LayoutAppProps) {
   }, []);
 
   return (
-    <div className="flex flex-col bg-background" style={{ minHeight: '100dvh' }}>
+    <div
+      className="flex flex-col bg-background"
+      style={pleinEcran ? { height: '100dvh', overflow: 'hidden' } : { minHeight: '100dvh' }}
+    >
       <a href="#main-content" className="skip-to-main">Aller au contenu principal</a>
       <BarreNavigation role={role} />
       {/* Bandeaux + main décalés à droite de la sidebar desktop (260px).
           Bandeaux placés ICI (pas en flex-column root) pour ne PAS être
           recouverts par la sidebar fixed left-0 top-0 z-40. */}
-      <div className="flex-1 md:ml-[260px] flex flex-col min-w-0">
+      <div className="flex-1 md:ml-[260px] flex flex-col min-w-0 min-h-0">
         <BandeauHorsLigne />
         <SyncHorsLigne />
         {role === 'ADMIN_ETABLISSEMENT' && <BandeauOnboardingEtab />}
         <main
           id="main-content"
           role="main"
-          className="flex-1 min-w-0"
+          className={`flex-1 min-w-0${pleinEcran ? ' flex flex-col min-h-0 overflow-hidden' : ''}`}
           style={{
-            paddingBottom: 'calc(5rem + env(safe-area-inset-bottom))',
+            paddingBottom: pleinEcran
+              ? 'calc(4rem + env(safe-area-inset-bottom))'
+              : 'calc(5rem + env(safe-area-inset-bottom))',
           }}
         >
-          <div className="max-w-6xl mx-auto px-4 py-6 md:pb-6 min-w-0">
-            {children}
-          </div>
-          <FooterLegal />
+          {pleinEcran ? (
+            <div className="flex-1 min-h-0 min-w-0 flex flex-col px-3 pt-2">
+              {children}
+            </div>
+          ) : (
+            <div className="max-w-6xl mx-auto px-4 py-6 md:pb-6 min-w-0">
+              {children}
+            </div>
+          )}
+          {!pleinEcran && <FooterLegal />}
         </main>
       </div>
       <DemandePermissionPush />

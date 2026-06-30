@@ -405,10 +405,10 @@ export default function RechercheMissions() {
     : null;
 
   return (
-    <LayoutApp role="SOIGNANT">
+    <LayoutApp role="SOIGNANT" pleinEcran={vue === 'swipe'}>
       {(!soignant || !soignant.profession) && <BandeauProfilIncomplet />}
-      <div className="space-y-4">
-        <div className="flex items-center justify-between gap-2">
+      <div className={vue === 'swipe' ? 'flex flex-col flex-1 min-h-0 gap-2' : 'space-y-4'}>
+        <div className="flex items-center justify-between gap-2 shrink-0">
           <h1 className="text-xl font-bold text-foreground">Trouver une mission</h1>
           <div className="flex items-center gap-2">
             {/* Session G1 : toggle Swipe/Liste in-page (bascule la vue, sans navigation) */}
@@ -450,12 +450,16 @@ export default function RechercheMissions() {
           <BandeauDocumentsManquants tousDocumentsValides={!!soignant?.tous_documents_valides} rcpExpiree={rcpExpiree} rcpExpireLe={rcpExpireLe} />
         )}
 
-        {/* Session G1 : vue Swipe consolidée dans la page canonique */}
+        {/* Session G1 : vue Swipe consolidée dans la page canonique.
+            En mode swipe : conteneur plein écran (flex-1) → carte + barre
+            d'action tiennent dans le viewport, sans scroll. */}
         {vue === 'swipe' ? (
-          <VueSwipeMissions
-            onBasculerListe={() => basculerVue('liste')}
-            onCreerAlerte={() => setAlerteOpen(true)}
-          />
+          <div className="flex-1 min-h-0 flex flex-col">
+            <VueSwipeMissions
+              onBasculerListe={() => basculerVue('liste')}
+              onCreerAlerte={() => setAlerteOpen(true)}
+            />
+          </div>
         ) : (
         <>
         {/* Mes recherches sauvegardées (J2.3.C) — key : remount après création
