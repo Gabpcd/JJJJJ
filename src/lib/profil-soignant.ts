@@ -110,10 +110,14 @@ export function calculerCompletionProfil(
       action_route: '/soignant/profil',
     },
     {
+      // L'adresse sert au matching/distance, PAS à candidater : le backend
+      // (fn_postuler_mission) ne l'exige jamais. On la sort donc du gate
+      // `peut_candidater` (recommandée, pas obligatoire) → nudge post-inscription
+      // « ajoute ton adresse pour voir les missions près de chez toi ».
       cle: 'adresse',
       label: 'Adresse géolocalisée',
       rempli: !!soignant.adresse_lat && !!soignant.adresse_lng,
-      obligatoire: true,
+      obligatoire: false,
       ordre: 7,
       action_route: '/soignant/profil',
     },
