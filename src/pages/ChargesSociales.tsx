@@ -79,6 +79,10 @@ export default function ChargesSociales() {
           .select('id, intitule, debut_le, fin_le, duree_heures, taux_horaire_base, total_brut, etablissement_id, service')
           .eq('soignant_assigne_id', user.id)
           .eq('statut', 'TERMINEE')
+          // Charges sociales = libéral uniquement. On ne compte QUE les missions
+          // dont le régime appliqué est LIBERAL (un soignant Mixte ne voit pas ses
+          // missions salariées gonfler son CA/charges). NULL = non déterminé → exclu.
+          .eq('type_contrat_applique', 'LIBERAL')
           .gte('fin_le', debutAnnee)
           .order('debut_le', { ascending: false }),
         supabase
@@ -150,6 +154,34 @@ export default function ChargesSociales() {
           <button onClick={() => navigate('/soignant/tableau-de-bord')} className="btn-primary mt-4 text-sm">
             Retour au dashboard
           </button>
+        </div>
+      </LayoutApp>
+    );
+  }
+
+  // État vide assumé : libéral sans aucune mission libérale terminée cette année.
+  // On affiche un message clair plutôt qu'un échéancier à 0 € qui ferait croire à un bug.
+  if (missions.length === 0) {
+    return (
+      <LayoutApp role="SOIGNANT">
+        <div className="mb-6">
+          <button onClick={() => navigate('/soignant/mes-gains')} className="flex items-center gap-1 text-sm text-primary hover:underline mb-2">
+            <ArrowLeft className="h-4 w-4" /> Retour aux gains
+          </button>
+          <h1 className="text-xl font-bold text-foreground flex items-center gap-2">
+            <Calculator className="h-6 w-6 text-primary" /> Mes charges sociales
+          </h1>
+        </div>
+        <div className="card-base text-center py-12">
+          <Calculator className="h-10 w-10 text-primary/40 mx-auto mb-3" />
+          <p className="text-lg font-bold text-foreground mb-2">Tes charges apparaîtront ici</p>
+          <p className="text-sm text-muted-foreground max-w-md mx-auto">
+            On les estime automatiquement (URSSAF, CARPIMKO, RCP) après ta première mission
+            libérale terminée. Tu n'as pas encore de mission libérale finalisée cette année.
+          </p>
+          <BoutonY2K onClick={() => navigate('/soignant/recherche-missions')} className="mt-5">
+            Trouver une mission
+          </BoutonY2K>
         </div>
       </LayoutApp>
     );
