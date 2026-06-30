@@ -443,7 +443,12 @@ export default function RechercheMissions() {
           </div>
         </div>
 
-        <BandeauDocumentsManquants tousDocumentsValides={!!soignant?.tous_documents_valides} rcpExpiree={rcpExpiree} rcpExpireLe={rcpExpireLe} />
+        {/* La bannière documents ne s'affiche pas au-dessus du swipe (la carte doit
+            vendre, sans bannière) — uniquement en vue Liste. Le rappel « documents »
+            est porté par le parcours d'activation sur l'Accueil. */}
+        {vue === 'liste' && (
+          <BandeauDocumentsManquants tousDocumentsValides={!!soignant?.tous_documents_valides} rcpExpiree={rcpExpiree} rcpExpireLe={rcpExpireLe} />
+        )}
 
         {/* Session G1 : vue Swipe consolidée dans la page canonique */}
         {vue === 'swipe' ? (
