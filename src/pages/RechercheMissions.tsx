@@ -204,7 +204,7 @@ export default function RechercheMissions() {
   useEffect(() => {
     if (!user) return;
     supabase.from('soignants')
-      .select('profession, adresse_lat, adresse_lng, rayon_deplacement_km, tous_documents_valides, type_contrat, types_contrat_acceptes, type_exercice')
+      .select('profession, adresse_lat, adresse_lng, rayon_deplacement_km, tous_documents_valides, type_contrat, types_contrat_acceptes, type_exercice, taux_horaire_minimum')
       .eq('id', user.id).maybeSingle()
       .then(({ data }) => {
         if (data) {
@@ -212,6 +212,11 @@ export default function RechercheMissions() {
           setSoignant(s);
           setProfession(s.profession);
           setRayonKm(s.rayon_deplacement_km || 50);
+          // Plancher tarif horaire = préférence de profil persistante. On l'applique
+          // par défaut, sans écraser un filtre déjà appliqué (filtre sauvegardé).
+          if (s.taux_horaire_minimum != null) {
+            setTauxMin((cur) => (cur > 0 ? cur : Number(s.taux_horaire_minimum)));
+          }
         }
       }).then(undefined, (err) => handleErrorSilent(err, 'RechercheMissions.soignant'));
 

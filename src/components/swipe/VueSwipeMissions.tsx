@@ -26,11 +26,21 @@ import { StackCards, type SwipeDirection } from '@/components/swipe/StackCards';
 import { BoutonsActionSwipe } from '@/components/swipe/BoutonsActionSwipe';
 import { ModalDetailMissionSwipe } from '@/components/swipe/ModalDetailMissionSwipe';
 import { ConfettiSwipe } from '@/components/swipe/ConfettiSwipe';
+import { ChoixContratDialog } from '@/components/ChoixContratDialog';
 import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { supabase } from '@/integrations/supabase/client';
 import { useNotification } from '@/contexts/NotificationContext';
 
 type SwipeDirEnum = 'LIKE' | 'DISLIKE' | 'SUPER_LIKE';
+
+interface ContratOption { value: string; label: string; }
+interface SwipeRpcResult {
+  ok: boolean;
+  error?: string;
+  choix_requis?: boolean;
+  options?: ContratOption[];
+  quota_restant?: number;
+}
 
 interface VueSwipeMissionsProps {
   /** Bascule vers la vue Liste (gérée par le parent, pas de navigation). */
@@ -47,6 +57,15 @@ export function VueSwipeMissions({ onBasculerListe, onCreerAlerte }: VueSwipeMis
   // Modal détail mission (tap sur la card ou bouton « Voir le détail »)
   const [detailMission, setDetailMission] = useState<MissionSwipePayload | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
+
+  // Choix de contrat (soignant MIXTE + mission acceptant salarié ET libéral) :
+  // le backend renvoie { choix_requis:true, options } sans enregistrer le swipe.
+  const [choixContrat, setChoixContrat] = useState<{
+    options: ContratOption[];
+    missionId: string;
+    direction: SwipeDirEnum;
+    mission: MissionSwipePayload;
+  } | null>(null);
 
   // Fetch missions swipe
   const { data, isLoading } = useQuery({
@@ -93,25 +112,56 @@ export function VueSwipeMissions({ onBasculerListe, onCreerAlerte }: VueSwipeMis
   }, [data]);
 
   const swipeMut = useMutation({
-    mutationFn: async ({ missionId, direction }: { missionId: string; direction: SwipeDirEnum }) => {
+    mutationFn: async ({
+      missionId,
+      direction,
+      choixContrat,
+    }: {
+      missionId: string;
+      direction: SwipeDirEnum;
+      mission: MissionSwipePayload;
+      choixContrat?: string;
+    }) => {
       const { data, error } = await supabase.rpc('fn_enregistrer_swipe' as any, {
         p_mission_id: missionId,
         p_direction: direction,
+        ...(choixContrat ? { p_choix_contrat: choixContrat } : {}),
       });
       if (error) throw error;
-      return data as { ok: boolean; error?: string; quota_restant?: number };
+      return data as SwipeRpcResult;
     },
     onSuccess: (result, vars) => {
       if (!result.ok) {
+        // Mission acceptant salarié ET libéral, soignant mixte sans préférence :
+        // on remet la card dans la pile (le swipe n'a PAS été enregistré) et on
+        // ouvre le choix de contrat. Le swipe sera rejoué avec p_choix_contrat.
+        if (result.choix_requis) {
+          setLocalStack((prev) =>
+            prev.some((m) => m.mission_id === vars.missionId) ? prev : [vars.mission, ...prev],
+          );
+          setChoixContrat({
+            options: result.options ?? [
+              { value: 'SALARIE', label: 'Salarié (CDD)' },
+              { value: 'LIBERAL', label: 'Libéral (note d’honoraires)' },
+            ],
+            missionId: vars.missionId,
+            direction: vars.direction,
+            mission: vars.mission,
+          });
+          return;
+        }
         afficherNotification({
           type: 'erreur',
           message:
             result.error === 'quota_super_like_atteint'
               ? "Quota super-like atteint pour aujourd'hui (5/jour)"
-              : 'Action impossible',
+              : result.error || 'Action impossible',
         });
         return;
       }
+      // Succès : on referme le dialog éventuel et on retire la card (idempotent).
+      setChoixContrat(null);
+      setLocalStack((prev) => prev.filter((m) => m.mission_id !== vars.missionId));
       if (vars.direction === 'SUPER_LIKE') {
         setConfettiKey(Date.now());
         afficherNotification({
@@ -136,8 +186,27 @@ export function VueSwipeMissions({ onBasculerListe, onCreerAlerte }: VueSwipeMis
   }, []);
 
   const handleSwipe = useCallback((dir: SwipeDirEnum, missionId: string) => {
+    const mission = localStack.find((m) => m.mission_id === missionId);
+    if (!mission) return;
     setLocalStack((prev) => prev.filter((m) => m.mission_id !== missionId));
-    swipeMut.mutate({ missionId, direction: dir });
+    swipeMut.mutate({ missionId, direction: dir, mission });
+  }, [swipeMut, localStack]);
+
+  // Confirmation du choix de contrat (rejoue le swipe avec p_choix_contrat).
+  // On NE retire pas la card ici : elle disparaît au succès (sinon un choix
+  // libéral sans RCP la ferait disparaître à tort).
+  const confirmerChoixContrat = useCallback((value: string) => {
+    setChoixContrat((cur) => {
+      if (cur) {
+        swipeMut.mutate({
+          missionId: cur.missionId,
+          direction: cur.direction,
+          mission: cur.mission,
+          choixContrat: value,
+        });
+      }
+      return cur;
+    });
   }, [swipeMut]);
 
   const handleGestureSwipe = useCallback((direction: SwipeDirection, itemKey: string) => {
@@ -249,6 +318,15 @@ export function VueSwipeMissions({ onBasculerListe, onCreerAlerte }: VueSwipeMis
           setDetailOpen(false);
           if (detailMission) handleSwipe('DISLIKE', detailMission.mission_id);
         }}
+      />
+
+      <ChoixContratDialog
+        open={choixContrat !== null}
+        options={choixContrat?.options ?? []}
+        loading={swipeMut.isPending}
+        proposerMemorisation
+        onChoose={confirmerChoixContrat}
+        onClose={() => setChoixContrat(null)}
       />
 
       {confettiKey != null && (
