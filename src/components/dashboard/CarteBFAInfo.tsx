@@ -137,7 +137,7 @@ export function CarteBFAInfo({ etablissementId }: { etablissementId: string }) {
 
       {/* Explication dynamique */}
       <p className="text-[10px] text-muted-foreground italic">
-        {info.explication || 'Calculé en fin d\'année civile sur la base de vos commissions cumulées.'}
+        {info.explication || 'Calculé en fin d\'année civile sur la base de tes commissions cumulées.'}
       </p>
     </div>
   );

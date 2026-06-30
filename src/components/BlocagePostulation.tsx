@@ -24,10 +24,10 @@ export function BlocagePostulation({ completionProfil, documentsValides, mission
     return (
       <div className="space-y-2 mb-4">
         <div className="flex items-center gap-2 text-sm text-success">
-          <CheckCircle className="h-4 w-4" /> Votre profil est complet
+          <CheckCircle className="h-4 w-4" /> Ton profil est complet
         </div>
         <div className="flex items-center gap-2 text-sm text-success">
-          <CheckCircle className="h-4 w-4" /> Vos documents sont à jour
+          <CheckCircle className="h-4 w-4" /> Tes documents sont à jour
         </div>
       </div>
     );
@@ -42,7 +42,7 @@ export function BlocagePostulation({ completionProfil, documentsValides, mission
             <div>
               <p className="text-sm font-semibold text-foreground">Profil incomplet ({completionProfil}%)</p>
               <p className="text-xs text-muted-foreground mt-1">
-                Complétez vos informations essentielles (identité, téléphone, adresse) pour pouvoir postuler.
+                Complète tes informations essentielles (identité, téléphone, adresse) pour pouvoir postuler.
               </p>
               <button onClick={() => navigate('/soignant/profil')} className="text-xs text-primary font-medium mt-2 hover:underline">
                 Compléter mon profil →
@@ -57,12 +57,12 @@ export function BlocagePostulation({ completionProfil, documentsValides, mission
             <FileText className="h-5 w-5 text-warning shrink-0 mt-0.5" />
             <div>
               <p className="text-sm font-semibold text-foreground">
-                Documents en cours — vous pouvez postuler dès maintenant
+                Documents en cours — tu peux postuler dès maintenant
               </p>
               <p className="text-xs text-muted-foreground mt-1">
                 {missionSous7Jours
-                  ? 'Cette mission démarre bientôt : l\'établissement ne pourra vous accepter qu\'une fois vos documents validés (vérification automatique en quelques minutes). Prenez 2 minutes maintenant.'
-                  : 'Votre candidature partira normalement. Validez vos documents pour pouvoir être accepté (vérification automatique en quelques minutes).'}
+                  ? 'Cette mission démarre bientôt : l\'établissement ne pourra t\'accepter qu\'une fois tes documents validés (vérification automatique en quelques minutes). Prends 2 minutes maintenant.'
+                  : 'Ta candidature partira normalement. Valide tes documents pour pouvoir être accepté (vérification automatique en quelques minutes).'}
               </p>
               <button onClick={() => navigate('/soignant/mes-documents')} className="text-xs text-primary font-medium mt-2 hover:underline">
                 Valider mes documents →

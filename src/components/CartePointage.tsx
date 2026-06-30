@@ -238,7 +238,7 @@ function IndicateurFileOffline({ taille }: { taille: number }) {
     <div className="flex items-center gap-2 rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-warning">
       <WifiOff className="h-4 w-4 shrink-0" />
       <span>
-        {taille} pointage{taille > 1 ? 's' : ''} en attente de synchronisation. Reconnectez-vous à Internet.
+        {taille} pointage{taille > 1 ? 's' : ''} en attente de synchronisation. Reconnecte-toi à Internet.
       </span>
     </div>
   );

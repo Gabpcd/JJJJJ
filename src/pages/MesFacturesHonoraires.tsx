@@ -121,8 +121,8 @@ export function MesFacturesHonorairesContent() {
             <div className="flex-1">
               <p className="font-semibold text-foreground">Mandat de facturation non signé</p>
               <p className="text-sm text-muted-foreground mt-0.5">
-                Pour que Jolene puisse produire automatiquement vos factures d'honoraires et préparer l'accès au paiement rapide,
-                vous devez d'abord signer le mandat de facturation.
+                Pour que Jolene puisse produire automatiquement tes factures d'honoraires et préparer l'accès au paiement rapide,
+                tu dois d'abord signer le mandat de facturation.
               </p>
               <BoutonY2K onClick={() => navigate('/soignant/mandat-facturation')} className="mt-3 gap-2" size="sm">
                 Signer le mandat
@@ -212,8 +212,8 @@ export function MesFacturesHonorairesContent() {
                 mascotte={mandatSigne ? 'empty' : 'thinking'}
                 titre="Aucune facture d'honoraires pour le moment"
                 description={mandatSigne
-                  ? 'Les factures apparaîtront dès que vos missions seront terminées et validées.'
-                  : "Signez d'abord le mandat de facturation pour commencer à recevoir des factures automatiques."}
+                  ? 'Les factures apparaîtront dès que tes missions seront terminées et validées.'
+                  : "Signe d'abord le mandat de facturation pour commencer à recevoir des factures automatiques."}
                 variant={mandatSigne ? 'info' : 'warning'}
               />
             : <EmptyState

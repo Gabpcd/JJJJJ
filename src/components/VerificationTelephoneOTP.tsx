@@ -33,7 +33,7 @@ export function VerificationTelephoneOTP({ telephoneInitial = '', onVerifie, com
 
   async function envoyerOtp() {
     if (!telephone.trim()) {
-      afficherNotification({ type: 'erreur', message: 'Saisissez un numéro de téléphone.' });
+      afficherNotification({ type: 'erreur', message: 'Saisis un numéro de téléphone.' });
       return;
     }
     setLoading(true);
@@ -45,14 +45,14 @@ export function VerificationTelephoneOTP({ telephoneInitial = '', onVerifie, com
     if (error || !result?.success) {
       const code = result?.error_code;
       const msg = code === 'RATE_LIMIT'
-        ? "Trop d'envois SMS (3/24h max). Réessayez demain."
+        ? "Trop d'envois SMS (3/24h max). Réessaie demain."
         : code === 'TELEPHONE_INVALIDE'
           ? "Téléphone invalide. Format attendu : +33 6 12 34 56 78"
           : error?.message || result?.error || 'Erreur envoi SMS.';
       afficherNotification({ type: 'erreur', message: msg });
       return;
     }
-    afficherNotification({ type: 'succes', message: 'Code SMS envoyé. Vérifiez votre téléphone.' });
+    afficherNotification({ type: 'succes', message: 'Code SMS envoyé. Vérifie ton téléphone.' });
     setEtape('verification');
   }
 
@@ -73,9 +73,9 @@ export function VerificationTelephoneOTP({ telephoneInitial = '', onVerifie, com
       if (errCode === 'CODE_INCORRECT') {
         msg = `Code incorrect. ${result.tentatives_restantes ?? 0} tentative(s) restante(s).`;
       } else if (errCode === 'OTP_INEXISTANT_OU_EXPIRE') {
-        msg = 'Code expiré (10 min). Demandez un nouveau code.';
+        msg = 'Code expiré (10 min). Demande un nouveau code.';
       } else if (errCode === 'TROP_TENTATIVES') {
-        msg = 'Trop de tentatives. Demandez un nouveau code SMS.';
+        msg = 'Trop de tentatives. Demande un nouveau code SMS.';
       } else if (error?.message) {
         msg = error.message;
       }

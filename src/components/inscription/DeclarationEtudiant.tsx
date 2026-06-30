@@ -73,7 +73,7 @@ export function DeclarationEtudiant({
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0">
           <p className="text-sm font-medium text-foreground">🎓 Je suis étudiant(e) en santé</p>
-          <p className="text-[11px] text-muted-foreground">Exercice « faisant fonction » selon votre niveau (arrêté du 03/02/2022).</p>
+          <p className="text-[11px] text-muted-foreground">Exercice « faisant fonction » selon ton niveau (arrêté du 03/02/2022).</p>
         </div>
         <button type="button" onClick={() => onToggle(!estEtudiant)}
           aria-pressed={estEtudiant} aria-label="Je suis étudiant en santé"
@@ -101,13 +101,13 @@ export function DeclarationEtudiant({
 
           {meilleure && !incoherent && (
             <p className="text-[11px] text-emerald-700 dark:text-emerald-400">
-              ✅ Ce niveau permet d'exercer comme <strong>{getLabelProfession(meilleure)}</strong> (à confirmer par votre attestation après inscription).
+              ✅ Ce niveau permet d'exercer comme <strong>{getLabelProfession(meilleure)}</strong> (à confirmer par ton attestation après inscription).
             </p>
           )}
 
           {incoherent && meilleure && (
             <div className="rounded-lg bg-amber-50 border border-amber-200 dark:bg-amber-950/20 dark:border-amber-800 p-2 text-xs text-amber-800 dark:text-amber-300">
-              <p>⚠️ Avec ce niveau, vous ne pouvez pas encore exercer comme {getLabelProfession(professionDeclaree)}, mais vous pouvez exercer comme <strong>{getLabelProfession(meilleure)}</strong>.</p>
+              <p>⚠️ Avec ce niveau, tu ne peux pas encore exercer comme {getLabelProfession(professionDeclaree)}, mais tu peux exercer comme <strong>{getLabelProfession(meilleure)}</strong>.</p>
               <button type="button" onClick={() => onSuggererProfession(meilleure)} className="mt-1 font-semibold text-primary underline">
                 M'inscrire comme {getLabelProfession(meilleure)}
               </button>
@@ -116,12 +116,12 @@ export function DeclarationEtudiant({
 
           {niveauRenseigne && professionsAutorisees && professionsAutorisees.length === 0 && (
             <p className="text-[11px] text-amber-700 dark:text-amber-400">
-              ⚠️ Ce niveau ne permet pas encore d'exercer « faisant fonction » selon nos règles. Vous pourrez préciser via votre attestation de scolarité.
+              ⚠️ Ce niveau ne permet pas encore d'exercer « faisant fonction » selon nos règles. Tu pourras préciser via ton attestation de scolarité.
             </p>
           )}
 
           <p className="text-[11px] text-muted-foreground">
-            Après inscription, téléversez votre attestation de scolarité : l'IA confirmera votre niveau.
+            Après inscription, téléverse ton attestation de scolarité : l'IA confirmera ton niveau.
           </p>
         </>
       )}

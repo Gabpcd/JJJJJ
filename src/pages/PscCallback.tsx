@@ -48,7 +48,7 @@ export default function PscCallback() {
 
       setStatus('success');
       setMessage(isNewUser
-        ? 'Bienvenue sur Jolene ! Votre compte a été créé via Pro Santé Connect.'
+        ? 'Bienvenue sur Jolene ! Ton compte a été créé via Pro Santé Connect.'
         : 'Connexion réussie via Pro Santé Connect');
 
       // Vérifier le rôle et rediriger
@@ -112,7 +112,7 @@ export default function PscCallback() {
             <div>
               <p className="text-lg font-semibold text-foreground">Connexion réussie</p>
               <p className="text-sm text-muted-foreground mt-1">{message}</p>
-              <p className="text-xs text-muted-foreground mt-3">Redirection vers votre tableau de bord…</p>
+              <p className="text-xs text-muted-foreground mt-3">Redirection vers ton tableau de bord…</p>
             </div>
           </>
         )}
@@ -128,10 +128,10 @@ export default function PscCallback() {
                 Cela peut arriver dans plusieurs cas :
               </p>
               <ul className="text-sm text-muted-foreground text-left list-disc list-inside space-y-1 mx-auto max-w-xs">
-                <li>Vous n'avez pas encore activé votre e-CPS sur votre téléphone</li>
-                <li>Votre carte CPS n'a pas été reconnue par votre lecteur</li>
-                <li>Vous avez annulé la procédure d'authentification</li>
-                <li>Votre e-CPS ou votre carte CPS est expirée</li>
+                <li>Tu n'as pas encore activé ta e-CPS sur ton téléphone</li>
+                <li>Ta carte CPS n'a pas été reconnue par ton lecteur</li>
+                <li>Tu as annulé la procédure d'authentification</li>
+                <li>Ta e-CPS ou ta carte CPS est expirée</li>
               </ul>
               {message && (
                 <p className="text-xs text-muted-foreground/80 italic pt-1">
