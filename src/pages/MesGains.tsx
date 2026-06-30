@@ -8,6 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { MesFacturesHonorairesContent } from './MesFacturesHonoraires';
 import { BulletinsPaieContent } from './BulletinsPaie';
 import { MesAvancesContent } from './MesAvances';
+import { RappelsFiscaux } from '@/components/RappelsFiscaux';
 import { CarteKPIY2K } from '@/components/y2k/CarteKPIY2K';
 import { ChargementPage } from '@/components/ChargementPage';
 import { EmptyState, IllustrationTirelire } from '@/components/ui/EmptyState';
@@ -180,12 +181,20 @@ export function MesGainsApercuContent() {
         </div>
       )}
 
+      {/* Rappels fiscaux libéral — remontés ici (Aperçu) depuis l'ancien onglet
+          Gains du Dashboard : c'est leur place, près des revenus. */}
+      {isLiberal && (
+        <div className="mb-6">
+          <RappelsFiscaux />
+        </div>
+      )}
+
       {/* Parrainage au moment de la satisfaction (gains affichés) — levier viral */}
       <button
         onClick={() => { window.location.href = '/soignant/parrainage'; }}
         className="w-full mb-6 rounded-2xl border border-jolene-rose-200/60 bg-gradient-soft p-4 text-left hover:shadow-md transition-shadow"
       >
-        <p className="font-semibold text-foreground">🎁 Vous aimez Jolene ? Parrainez un collègue</p>
+        <p className="font-semibold text-foreground">🎁 Tu aimes Jolene ? Parraine un collègue</p>
         <p className="text-sm text-muted-foreground mt-0.5">
           Une prime pour toi, une prime pour lui dès sa première mission terminée. Ton lien est prêt — partage-le en 1 clic.
         </p>
