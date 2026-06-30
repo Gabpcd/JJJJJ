@@ -40,3 +40,8 @@ BEGIN
     ORDER BY f.murgente DESC, f.mcree DESC;
 END;
 $function$;
+
+-- CRITIQUE : ré-octroyer EXECUTE à anon. Un CREATE OR REPLACE déclenche l'event-trigger
+-- fn_auto_revoke_anon_execute qui retire le droit anon → la page publique (déconnectée)
+-- recevait « permission denied » et n'affichait AUCUNE mission. (Régression réparée.)
+GRANT EXECUTE ON FUNCTION public.fn_missions_publiques_recherche(text, text) TO anon, authenticated, service_role;
