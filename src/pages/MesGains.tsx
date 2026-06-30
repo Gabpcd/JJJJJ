@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, Suspense } from 'react';
 import { lazyRetry as lazy } from '@/lib/lazyRetry';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { usePageTitle } from '@/hooks/usePageTitle';
+import { useAffacturageActif } from '@/hooks/useAffacturageActif';
 import { Banknote, Clock, Download, TrendingUp, ChevronRight, Calculator, FileText, Search, CheckCircle, AlertTriangle, Scale, Receipt, Zap, CreditCard } from 'lucide-react';
 import { LayoutApp } from '@/components/LayoutApp';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -415,6 +416,9 @@ export default function MesGains() {
   const { user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const [exercice, setExercice] = useState<{ type: string | null; liberalActif: boolean } | null>(null);
+  // Affacturage Defacto pas en prod → onglet « Avances » masqué tant que le flag
+  // affacturage_actif est off (défaut). Flippable à chaud côté param système.
+  const affacturageActif = useAffacturageActif();
 
   useEffect(() => {
     if (!user) return;
@@ -438,7 +442,8 @@ export default function MesGains() {
   // ?tab= accessible afin de ne jamais casser un lien profond.
   const showFactures = estLiberal || (exercice == null);
   const showBulletins = estSalarie || (type == null && exercice != null) || (exercice == null);
-  const showAvances = estLiberal || (exercice == null);
+  // Avances = affacturage Defacto → uniquement si le flag est actif.
+  const showAvances = (estLiberal || (exercice == null)) && affacturageActif;
 
   const tabParam = searchParams.get('tab');
   const wanted = TABS_FINANCES.includes(tabParam as TabFinance) ? (tabParam as TabFinance) : 'apercu';
@@ -459,7 +464,7 @@ export default function MesGains() {
     <LayoutApp role="SOIGNANT">
       <div className="mb-4">
         <h1 className="text-xl font-bold text-foreground">💰 Revenus</h1>
-        <p className="text-sm text-muted-foreground mt-1">Tes gains, factures, bulletins et avances au même endroit</p>
+        <p className="text-sm text-muted-foreground mt-1">{affacturageActif ? 'Tes gains, factures, bulletins et avances au même endroit' : 'Tes gains, factures et bulletins au même endroit'}</p>
       </div>
 
       <Tabs value={currentTab} onValueChange={(v) => setSearchParams({ tab: v }, { replace: true })}>
