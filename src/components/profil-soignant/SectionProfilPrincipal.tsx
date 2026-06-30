@@ -11,6 +11,7 @@ import { reverseGeocode } from '@/lib/geocodage';
 import { CaptchaTurnstile } from '@/components/CaptchaTurnstile';
 import { getLabelProfession, PROFESSIONS_SANS_RPPS } from '@/lib/constantes';
 import { useTypesExerciceAutorises } from '@/hooks/useTypesExerciceAutorises';
+import { useAffacturageActif } from '@/hooks/useAffacturageActif';
 import { estEligibleLiberal, getRegleInstallation } from '@/lib/regles-installation-liberal';
 import { useNotification } from '@/contexts/NotificationContext';
 import { extraireMessageErreur } from '@/lib/erreurs';
@@ -421,6 +422,8 @@ function BlocPaieFacturation({ typeExercice, userId }: { typeExercice: string; u
   const [savingNir, setSavingNir] = useState(false);
   const [defactoOptIn, setDefactoOptIn] = useState(false);
   const [savingOptIn, setSavingOptIn] = useState(false);
+  // Toggle Defacto masqué tant que l'affacturage n'est pas activé (feature flag).
+  const affacturageActif = useAffacturageActif();
 
   useEffect(() => {
     let cancelled = false;
@@ -548,7 +551,7 @@ function BlocPaieFacturation({ typeExercice, userId }: { typeExercice: string; u
           )}
         </div>
 
-        {peutLiberal && (
+        {peutLiberal && affacturageActif && (
           <div className="pt-3 border-t border-border mt-3">
             <div className="flex items-center justify-between gap-3">
               <div>

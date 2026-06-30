@@ -11,6 +11,7 @@ import { TableOuCartes, type ColonneTableau } from '@/components/ui/TableOuCarte
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { ModalCessionCreance } from '@/components/ModalCessionCreance';
+import { useAffacturageActif } from '@/hooks/useAffacturageActif';
 import { telechargerFactureHonorairesPDF } from '@/lib/facture-honoraires-pdf';
 
 const fmt = (v: number) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(Number(v) || 0);
@@ -55,6 +56,8 @@ export function MesFacturesHonorairesContent() {
 
   const [cessionModal, setCessionModal] = useState<{ id: string; numero: string; montant: number } | null>(null);
   const [filtreStatut, setFiltreStatut] = useState<string>('tous');
+  // Cession de créance / avance Defacto masquée tant que l'affacturage est off.
+  const affacturageActif = useAffacturageActif();
   const [filtreAnnee, setFiltreAnnee] = useState<string>('toutes');
   const [filtreMois, setFiltreMois] = useState<string>('tous');
 
@@ -121,7 +124,7 @@ export function MesFacturesHonorairesContent() {
             <div className="flex-1">
               <p className="font-semibold text-foreground">Mandat de facturation non signé</p>
               <p className="text-sm text-muted-foreground mt-0.5">
-                Pour que Jolene puisse produire automatiquement tes factures d'honoraires et préparer l'accès au paiement rapide,
+                Pour que Jolene puisse produire automatiquement tes factures d'honoraires,
                 tu dois d'abord signer le mandat de facturation.
               </p>
               <BoutonY2K onClick={() => navigate('/soignant/mandat-facturation')} className="mt-3 gap-2" size="sm">
@@ -271,7 +274,7 @@ export function MesFacturesHonorairesContent() {
                         <BoutonY2K size="sm" variant="secondary" className="h-8 gap-1 text-xs" onClick={(e) => { e.stopPropagation(); telechargerFacturePDF(f.id); }}>
                           <Download className="h-3.5 w-3.5" /> PDF
                         </BoutonY2K>
-                        {(f.statut === 'EMISE' || f.statut === 'EN_RETARD') && (
+                        {affacturageActif && (f.statut === 'EMISE' || f.statut === 'EN_RETARD') && (
                           <BoutonY2K size="sm" className="h-8 gap-1 text-xs" onClick={(e) => { e.stopPropagation(); ouvrirCession(f); }}>
                             <Zap className="h-3 w-3" /> Avance
                           </BoutonY2K>
@@ -319,7 +322,7 @@ export function MesFacturesHonorairesContent() {
                       >
                         <Download className="h-4 w-4" /> Télécharger Factur-X
                       </BoutonY2K>
-                      {(f.statut === 'EMISE' || f.statut === 'EN_RETARD') && (
+                      {affacturageActif && (f.statut === 'EMISE' || f.statut === 'EN_RETARD') && (
                         <BoutonY2K
                           size="sm"
                           variant="secondary"
