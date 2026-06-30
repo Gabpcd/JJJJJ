@@ -25,6 +25,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { TYPES_DOCUMENTS } from '@/lib/documents';
 import { format, differenceInDays } from 'date-fns';
 import { fr } from 'date-fns/locale';
+import { toast } from 'sonner';
 interface SoignantData {
   prenom: string; nom: string; telephone: string | null;
   date_naissance: string | null; profession: string; type_contrat: string | null;
@@ -41,6 +42,9 @@ export default function DashboardSoignant() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [propositions, setPropositions] = useState<any[]>([]);
+  // Postuler 1-tap depuis l'accueil : mission_id → candidature_id (pour l'undo).
+  const [candidatingId, setCandidatingId] = useState<string | null>(null);
+  const [postulees, setPostulees] = useState<Record<string, string>>({});
 
   const { data: dashboard, isLoading } = useQuery({
     queryKey: ['dashboard-soignant', user?.id],
@@ -135,6 +139,48 @@ export default function DashboardSoignant() {
   const moyenPaiementPret = estLiberalPaie
     ? (hasStripeConnect || aRib) && hasMandatFacturation
     : aRib;
+
+  // Postuler directement depuis la carte d'accueil (funnel candidature). Feedback
+  // inline immédiat + annulation « dans la foulée » (fn_retirer_candidature) sans
+  // page de confirmation. Si la mission exige un choix de contrat → on bascule sur
+  // le détail (le dialogue de choix y vit déjà).
+  const retirerCandidature = async (missionId: string, candidatureId: string) => {
+    const { data, error } = await supabase.rpc('fn_retirer_candidature' as any, { p_candidature_id: candidatureId });
+    if (error || !(data as any)?.success) {
+      toast.error((data as any)?.error ?? error?.message ?? 'Retrait impossible');
+      return;
+    }
+    setPostulees(prev => { const n = { ...prev }; delete n[missionId]; return n; });
+    toast.success('Candidature retirée');
+  };
+
+  const postulerDepuisAccueil = async (m: any) => {
+    if (candidatingId) return;
+    setCandidatingId(m.id);
+    const { data, error } = await supabase.rpc('fn_postuler_mission_rate_limited' as any, {
+      p_mission_id: m.id,
+      p_message: "Candidature rapide depuis l'accueil",
+      p_choix_contrat: null,
+    });
+    setCandidatingId(null);
+    if (error) { toast.error(error.message); return; }
+    const r = data as any;
+    if (r?.choix_contrat_requis) {
+      toast('Choisis ton type de contrat pour postuler');
+      navigate(`/soignant/missions/${m.id}`);
+      return;
+    }
+    if (r?.success || r?.candidature_id) {
+      const candId = (r.candidature_id as string | undefined) ?? '';
+      setPostulees(prev => ({ ...prev, [m.id]: candId }));
+      toast.success('Candidature envoyée ✓', candId ? {
+        action: { label: 'Annuler', onClick: () => retirerCandidature(m.id, candId) },
+        duration: 8000,
+      } : undefined);
+    } else {
+      toast.error(r?.error ?? 'Candidature impossible');
+    }
+  };
 
   if (isLoading) return <LayoutApp role="SOIGNANT"><SkeletonDashboard /></LayoutApp>;
 
@@ -231,9 +277,18 @@ export default function DashboardSoignant() {
                       {brutEstime && <span>~{brutEstime} € brut</span>}
                     </div>
                   </div>
-                  <BoutonY2K size="sm" variant="primary" className="shrink-0" onClick={(e: React.MouseEvent) => { e.stopPropagation(); navigate(`/soignant/missions/${m.id}`); }}>
-                    Postuler
-                  </BoutonY2K>
+                  {m.id in postulees ? (
+                    <div className="shrink-0 flex flex-col items-end gap-0.5" onClick={(e) => e.stopPropagation()}>
+                      <span className="text-xs font-semibold text-success inline-flex items-center gap-1">✓ Envoyée</span>
+                      {postulees[m.id] && (
+                        <button onClick={() => retirerCandidature(m.id, postulees[m.id])} className="text-[10px] text-muted-foreground hover:text-destructive hover:underline">Annuler</button>
+                      )}
+                    </div>
+                  ) : (
+                    <BoutonY2K size="sm" variant="primary" className="shrink-0" loading={candidatingId === m.id} disabled={candidatingId === m.id} onClick={(e: React.MouseEvent) => { e.stopPropagation(); postulerDepuisAccueil(m); }}>
+                      Postuler
+                    </BoutonY2K>
+                  )}
                 </div>
               );
             })}

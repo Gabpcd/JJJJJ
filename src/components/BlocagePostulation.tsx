@@ -6,6 +6,9 @@ interface BlocagePostulationProps {
   documentsValides: boolean;
   premiereMissionLe?: string | null;
   missionDebutLe?: string | null;
+  /** Labels des champs obligatoires réellement manquants (ne jamais réclamer un
+   *  champ déjà rempli). Si absent/vide, repli sur un message générique. */
+  champsManquants?: string[];
 }
 
 const SEPT_JOURS_MS = 7 * 24 * 60 * 60 * 1000;
@@ -15,7 +18,7 @@ const SEPT_JOURS_MS = 7 * 24 * 60 * 60 * 1000;
  * possible — seule l'ACCEPTATION par l'établissement exige les documents validés
  * pour les missions démarrant sous 7 jours. Ce composant informe, il ne bloque plus.
  */
-export function BlocagePostulation({ completionProfil, documentsValides, missionDebutLe }: BlocagePostulationProps) {
+export function BlocagePostulation({ completionProfil, documentsValides, missionDebutLe, champsManquants }: BlocagePostulationProps) {
   const navigate = useNavigate();
 
   const missionSous7Jours = !!missionDebutLe && (new Date(missionDebutLe).getTime() - Date.now() < SEPT_JOURS_MS);
@@ -42,7 +45,9 @@ export function BlocagePostulation({ completionProfil, documentsValides, mission
             <div>
               <p className="text-sm font-semibold text-foreground">Profil incomplet ({completionProfil}%)</p>
               <p className="text-xs text-muted-foreground mt-1">
-                Complète tes informations essentielles (identité, téléphone, adresse) pour pouvoir postuler.
+                {champsManquants && champsManquants.length > 0
+                  ? `Il te reste à compléter : ${champsManquants.join(', ')}.`
+                  : 'Complète tes informations essentielles pour pouvoir postuler.'}
               </p>
               <button onClick={() => navigate('/soignant/profil')} className="text-xs text-primary font-medium mt-2 hover:underline">
                 Compléter mon profil →
