@@ -16,11 +16,11 @@ export function BandeauAlerte48h({ heuresSemaine }: BandeauAlerte48hProps) {
     return (
       <div className="bg-destructive/5 border-l-4 border-destructive p-4 rounded-r-xl mb-4">
         <p className="text-sm text-destructive font-medium">
-          🛑 Plafond de 48h atteint cette semaine. Vous ne pouvez plus accepter de missions
+          🛑 Plafond de 48h atteint cette semaine. Tu ne peux plus accepter de missions
           avant la semaine prochaine (lundi {format(lundiProchain, 'd MMMM', { locale: fr })}).
         </p>
         <p className="text-xs text-destructive/80 mt-1">
-          Vous pouvez toutefois candidater dès maintenant pour les missions débutant à partir du {format(lundiProchain, 'd MMMM', { locale: fr })}.
+          Tu peux toutefois candidater dès maintenant pour les missions débutant à partir du {format(lundiProchain, 'd MMMM', { locale: fr })}.
         </p>
       </div>
     );
@@ -29,11 +29,11 @@ export function BandeauAlerte48h({ heuresSemaine }: BandeauAlerte48hProps) {
     return (
       <div className="bg-warning/5 border-l-4 border-warning p-4 rounded-r-xl mb-4">
         <p className="text-sm text-warning font-medium">
-          🚨 Attention : vous approchez du plafond de 48h cette semaine ({heuresSemaine.toFixed(0)}h planifiées).
-          Vous ne pourrez plus accepter que {restant.toFixed(0)}h de missions.
+          🚨 Attention : tu approches du plafond de 48h cette semaine ({heuresSemaine.toFixed(0)}h planifiées).
+          Tu ne pourras plus accepter que {restant.toFixed(0)}h de missions.
         </p>
         <p className="text-xs text-warning/80 mt-1">
-          Vous pouvez candidater librement pour les missions de la semaine prochaine.
+          Tu peux candidater librement pour les missions de la semaine prochaine.
         </p>
       </div>
   );

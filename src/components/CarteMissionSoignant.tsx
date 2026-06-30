@@ -58,7 +58,7 @@ export const CarteMissionSoignant = React.memo(function CarteMissionSoignant({ m
     <div onClick={onClick} className={`card-base hover:shadow-md transition-all cursor-pointer active:scale-[0.99] overflow-hidden ${m.est_urgente ? 'ring-2 ring-destructive/50' : ''} ${sousMinimum ? 'opacity-50 grayscale-[30%]' : ''}`}>
       {sousMinimum && (
         <div className="mb-2">
-          <span className="badge-base bg-muted text-muted-foreground text-[10px]">💸 Sous votre minimum ({tauxMin} €/h)</span>
+          <span className="badge-base bg-muted text-muted-foreground text-[10px]">💸 Sous ton minimum ({tauxMin} €/h)</span>
         </div>
       )}
       {m.est_urgente && (

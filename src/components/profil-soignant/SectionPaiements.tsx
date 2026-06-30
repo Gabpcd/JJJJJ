@@ -68,7 +68,7 @@ function StripeConnectStatus({ userId }: { userId: string }) {
         <CheckCircle className="h-5 w-5 text-success shrink-0" />
         <div>
           <p className="text-sm font-semibold text-success">Stripe Connect actif</p>
-          <p className="text-xs text-muted-foreground">Vos honoraires sont versés automatiquement.</p>
+          <p className="text-xs text-muted-foreground">Tes honoraires sont versés automatiquement.</p>
         </div>
       </div>
     );
@@ -81,7 +81,7 @@ function StripeConnectStatus({ userId }: { userId: string }) {
           <AlertTriangle className="h-5 w-5 text-warning shrink-0 mt-0.5" />
           <div>
             <p className="text-sm font-semibold text-warning">Compte Stripe Connect non finalisé</p>
-            <p className="text-xs text-muted-foreground mt-0.5">Finalisez-le pour recevoir vos honoraires automatiquement.</p>
+            <p className="text-xs text-muted-foreground mt-0.5">Finalise-le pour recevoir tes honoraires automatiquement.</p>
           </div>
         </div>
         <BoutonY2K size="sm" variant="secondary" onClick={lancerOnboarding} disabled={actionLoading} loading={actionLoading} className="gap-2" iconeGauche={actionLoading ? undefined : <ExternalLink className="h-3.5 w-3.5" />}>
@@ -98,7 +98,7 @@ function StripeConnectStatus({ userId }: { userId: string }) {
           <AlertTriangle className="h-5 w-5 text-destructive shrink-0 mt-0.5" />
           <div>
             <p className="text-sm font-semibold text-destructive">Compte Stripe supprimé</p>
-            <p className="text-xs text-muted-foreground mt-0.5">Recommencez l'onboarding pour recevoir vos paiements.</p>
+            <p className="text-xs text-muted-foreground mt-0.5">Recommence l'onboarding pour recevoir tes paiements.</p>
           </div>
         </div>
         <BoutonY2K size="sm" variant="destructive" onClick={lancerOnboarding} disabled={actionLoading} loading={actionLoading} className="gap-2" iconeGauche={actionLoading ? undefined : <ExternalLink className="h-3.5 w-3.5" />}>
@@ -113,9 +113,9 @@ function StripeConnectStatus({ userId }: { userId: string }) {
       <div className="flex items-start gap-3">
         <CreditCard className="h-5 w-5 text-primary shrink-0 mt-0.5" />
         <div>
-          <p className="text-sm font-semibold text-foreground">Activez Stripe Connect</p>
+          <p className="text-sm font-semibold text-foreground">Active Stripe Connect</p>
           <p className="text-xs text-muted-foreground mt-0.5">
-            Pour recevoir vos honoraires automatiquement. Sans Stripe Connect, les établissements vous paieront par virement.
+            Pour recevoir tes honoraires automatiquement. Sans Stripe Connect, les établissements te paieront par virement.
           </p>
         </div>
       </div>
@@ -138,7 +138,7 @@ export function SectionPaiements({ userId, typeExercice, mandatFacturationSigne,
           <div>
             <h2 className="text-base font-semibold text-foreground mb-1">Type d'exercice à définir</h2>
             <p className="text-sm text-muted-foreground">
-              Veuillez d'abord définir votre type d'exercice dans l'onglet <strong>Profil principal</strong>.
+              Définis d'abord ton type d'exercice dans l'onglet <strong>Profil principal</strong>.
             </p>
           </div>
         </div>
@@ -155,7 +155,7 @@ export function SectionPaiements({ userId, typeExercice, mandatFacturationSigne,
               <CreditCard className="h-4 w-4 text-primary" /> Stripe Connect
             </h2>
             <p className="text-xs text-muted-foreground mb-3">
-              Reçoit vos honoraires libéraux directement sur votre compte bancaire.
+              Reçois tes honoraires libéraux directement sur ton compte bancaire.
             </p>
             <StripeConnectStatus userId={userId} />
           </div>
@@ -178,7 +178,7 @@ export function SectionPaiements({ userId, typeExercice, mandatFacturationSigne,
             ) : (
               <div className="space-y-2">
                 <p className="text-sm text-muted-foreground">
-                  Le mandat de facturation autorise Jolene à émettre les factures à votre nom.
+                  Le mandat de facturation autorise Jolene à émettre les factures à ton nom.
                 </p>
                 <button
                   onClick={() => navigate('/soignant/mandat-facturation')}
@@ -252,7 +252,7 @@ function SectionIbanPrime() {
         <Landmark className="h-4 w-4 text-primary" /> Coordonnées bancaires
       </h2>
       <p className="text-xs text-muted-foreground mb-4">
-        Votre IBAN est utilisé pour le versement de vos primes de parrainage. Il n'est jamais partagé avec l'établissement.
+        Ton IBAN est utilisé pour le versement de tes primes de parrainage. Il n'est jamais partagé avec l'établissement.
       </p>
 
       {loading ? (

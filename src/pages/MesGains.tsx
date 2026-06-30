@@ -187,7 +187,7 @@ export function MesGainsApercuContent() {
       >
         <p className="font-semibold text-foreground">🎁 Vous aimez Jolene ? Parrainez un collègue</p>
         <p className="text-sm text-muted-foreground mt-0.5">
-          Une prime pour vous, une prime pour lui dès sa première mission terminée. Votre lien est prêt — partagez-le en 1 clic.
+          Une prime pour toi, une prime pour lui dès sa première mission terminée. Ton lien est prêt — partage-le en 1 clic.
         </p>
       </button>
 
@@ -383,7 +383,7 @@ export function MesGainsApercuContent() {
           )}
         </div>
       ) : (
-        <EmptyState illustration={<IllustrationTirelire />} titre="Pas encore de gains" description="Vos gains apparaîtront ici après votre première mission terminée." cta={{ label: 'Trouver une mission', onClick: () => navigate('/soignant/recherche-missions') }} />
+        <EmptyState illustration={<IllustrationTirelire />} titre="Pas encore de gains" description="Tes gains apparaîtront ici après ta première mission terminée." cta={{ label: 'Trouver une mission', onClick: () => navigate('/soignant/recherche-missions') }} />
       )}
 
       <ModalAttestation open={modalAttestation} onClose={() => setModalAttestation(false)} />
@@ -402,7 +402,7 @@ const TABS_FINANCES = ['apercu', 'factures', 'bulletins', 'avances'] as const;
 type TabFinance = typeof TABS_FINANCES[number];
 
 export default function MesGains() {
-  usePageTitle('Mes finances');
+  usePageTitle('Revenus');
   const { user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const [exercice, setExercice] = useState<{ type: string | null; liberalActif: boolean } | null>(null);
@@ -449,8 +449,8 @@ export default function MesGains() {
   return (
     <LayoutApp role="SOIGNANT">
       <div className="mb-4">
-        <h1 className="text-xl font-bold text-foreground">💰 Mes finances</h1>
-        <p className="text-sm text-muted-foreground mt-1">Vos gains, factures, bulletins et avances au même endroit</p>
+        <h1 className="text-xl font-bold text-foreground">💰 Revenus</h1>
+        <p className="text-sm text-muted-foreground mt-1">Tes gains, factures, bulletins et avances au même endroit</p>
       </div>
 
       <Tabs value={currentTab} onValueChange={(v) => setSearchParams({ tab: v }, { replace: true })}>

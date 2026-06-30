@@ -30,7 +30,7 @@ const ETAPES_IDE: Etape[] = [
   {
     cle: 'inscription_ordre',
     label: "Inscription à l'Ordre des Infirmiers",
-    description: 'Obtenez votre numéro RPPS et votre carte CPS.',
+    description: 'Obtiens ton numéro RPPS et ta carte CPS.',
     lienExterne: 'https://www.ordre-infirmiers.fr',
     lienLabel: "Ordre des Infirmiers",
   },
@@ -99,7 +99,7 @@ export function CategorieIDE({
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-xl font-bold text-foreground">Votre parcours libéral IDE</h1>
+        <h1 className="text-xl font-bold text-foreground">Ton parcours libéral IDE</h1>
         <p className="text-sm text-muted-foreground mt-1">
           Convention IDE 2007 — 3 200h d'expérience sur 24 mois dans les 6 dernières années.
         </p>
@@ -119,7 +119,7 @@ export function CategorieIDE({
         heuresExternesEnAttente={compteurHeures?.heures_externes_en_attente ?? 0}
         seuilRequis={3200}
         eligibleFreeTransition={compteurHeures?.eligible_free_transition}
-        titre="Votre expérience professionnelle IDE"
+        titre="Ton expérience professionnelle IDE"
         legendeJolene="Heures via Jolene (comptées automatiquement)"
         legendeExternes="Heures externes déclarées (attestations fournies)"
       />
@@ -134,7 +134,7 @@ export function CategorieIDE({
           )}
         </div>
         <p className="text-sm text-muted-foreground mb-3">
-          Si vous avez déjà travaillé en établissement hors Jolene, déclarez ces heures avec l'attestation de votre employeur pour les faire compter.
+          Si tu as déjà travaillé en établissement hors Jolene, déclare ces heures avec l'attestation de ton employeur pour les faire compter.
         </p>
 
         <ListeHeuresExternes heures={heuresExternes} onSupprimer={handleSupprimer} />
@@ -150,7 +150,7 @@ export function CategorieIDE({
       </div>
 
       <div className="card-base">
-        <h3 className="text-base font-bold text-foreground mb-3">Vos démarches d'installation</h3>
+        <h3 className="text-base font-bold text-foreground mb-3">Tes démarches d'installation</h3>
         <ChecklistEtapes
           etapes={ETAPES_IDE}
           etapesValidees={parcours.etapes}
@@ -161,10 +161,10 @@ export function CategorieIDE({
       <div className="card-base space-y-3">
         <h3 className="text-base font-bold text-foreground flex items-center gap-2">
           <MapPin className="h-5 w-5 text-primary" />
-          Vérifier votre zone d'installation
+          Vérifier ta zone d'installation
         </h3>
         <p className="text-sm text-muted-foreground">
-          Les zones sur-dotées ont un accès restreint au conventionnement (règle du 1 pour 1). Consultez votre zone avant de vous installer.
+          Les zones sur-dotées ont un accès restreint au conventionnement (règle du 1 pour 1). Consulte ta zone avant de t'installer.
         </p>
         <a
           href="https://cartosante.atlasante.fr"
@@ -192,7 +192,7 @@ export function CategorieIDE({
           <div>
             <p className="text-sm font-semibold text-foreground">Dérogations possibles</p>
             <p className="text-xs text-muted-foreground mt-1">
-              En cas de carence démographique ou situation personnelle particulière, la CPAM peut accorder une dérogation (article 7.3.3). Contactez votre CPAM.
+              En cas de carence démographique ou situation personnelle particulière, la CPAM peut accorder une dérogation (article 7.3.3). Contacte ta CPAM.
             </p>
           </div>
         </div>

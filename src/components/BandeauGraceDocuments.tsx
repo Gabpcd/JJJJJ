@@ -29,10 +29,10 @@ export function BandeauGraceDocuments({ premiereMissionLe, tousDocumentsValides,
       <AlertTriangle className="h-5 w-5 text-warning shrink-0 mt-0.5" />
       <div className="flex-1">
         <p className="text-sm font-semibold text-warning">
-          ⚠️ Vous avez {joursRestants} jour{joursRestants > 1 ? 's' : ''} pour compléter votre dossier
+          ⚠️ Tu as {joursRestants} jour{joursRestants > 1 ? 's' : ''} pour compléter ton dossier
         </p>
         <p className="text-xs text-warning/80 mt-1">
-          Documents manquants : {listeManquants}. Passé ce délai, vos futures missions seront bloquées.
+          Documents manquants : {listeManquants}. Passé ce délai, tes futures missions seront bloquées.
         </p>
         <button
           onClick={() => navigate('/soignant/documents')}

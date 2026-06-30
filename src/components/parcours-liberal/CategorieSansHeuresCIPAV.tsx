@@ -21,14 +21,14 @@ const ETAPES_CIPAV_COMMUNES: Etape[] = [
   {
     cle: 'immatriculation_urssaf',
     label: 'Immatriculation via guichet unique INPI',
-    description: "Dans les 8 jours suivant le début d'activité. Vous serez rattaché au régime général de la Sécurité Sociale.",
+    description: "Dans les 8 jours suivant le début d'activité. Tu seras rattaché au régime général de la Sécurité Sociale.",
     lienExterne: 'https://formalites.entreprises.gouv.fr',
     lienLabel: 'Guichet unique',
   },
   {
     cle: 'affiliation_cipav',
     label: 'Affiliation CIPAV (automatique)',
-    description: "Rattachement automatique via votre code APE lors de l'immatriculation INPI. Vous recevrez un courrier d'accès à l'espace personnel.",
+    description: "Rattachement automatique via ton code APE lors de l'immatriculation INPI. Tu recevras un courrier d'accès à l'espace personnel.",
     lienExterne: 'https://www.lacipav.fr',
     lienLabel: 'CIPAV',
   },
@@ -81,7 +81,7 @@ export function CategorieSansHeuresCIPAV({ parcours, majEtape, soignantProfessio
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-xl font-bold text-foreground">Votre parcours libéral</h1>
+        <h1 className="text-xl font-bold text-foreground">Ton parcours libéral</h1>
         <p className="text-sm text-muted-foreground mt-1">
           Profession libérale non conventionnée — affiliation CIPAV.
         </p>
@@ -99,7 +99,7 @@ export function CategorieSansHeuresCIPAV({ parcours, majEtape, soignantProfessio
         <div>
           <p className="text-sm font-semibold text-foreground">Profession non conventionnée CPAM</p>
           <p className="text-xs text-muted-foreground mt-1">
-            Attention : votre profession n'est pas conventionnée avec l'Assurance Maladie. Vos séances en libéral ne sont généralement PAS remboursées par la CPAM (sauf structures spécifiques comme CAMSP, CMPP, hospitalisation à domicile). Vos patients peuvent être remboursés par leur mutuelle selon le contrat.
+            Attention : ta profession n'est pas conventionnée avec l'Assurance Maladie. Tes séances en libéral ne sont généralement PAS remboursées par la CPAM (sauf structures spécifiques comme CAMSP, CMPP, hospitalisation à domicile). Tes patients peuvent être remboursés par leur mutuelle selon le contrat.
           </p>
         </div>
       </div>
@@ -107,7 +107,7 @@ export function CategorieSansHeuresCIPAV({ parcours, majEtape, soignantProfessio
       <div className="card-base">
         <h3 className="text-base font-bold text-foreground mb-3">Démarches d'installation</h3>
         {etapes.length === 0 ? (
-          <p className="text-sm text-muted-foreground">Les étapes pour votre profession seront bientôt disponibles.</p>
+          <p className="text-sm text-muted-foreground">Les étapes pour ta profession seront bientôt disponibles.</p>
         ) : (
           <ChecklistEtapes
             etapes={etapes}
@@ -120,9 +120,9 @@ export function CategorieSansHeuresCIPAV({ parcours, majEtape, soignantProfessio
       <div className="rounded-xl border border-info/30 bg-info/5 p-3 flex gap-2">
         <Shield className="h-5 w-5 text-info shrink-0 mt-0.5" />
         <div>
-          <p className="text-sm font-semibold text-foreground">Votre protection sociale</p>
+          <p className="text-sm font-semibold text-foreground">Ta protection sociale</p>
           <p className="text-xs text-muted-foreground mt-1">
-            En tant que profession libérale non conventionnée, vous êtes affilié à la <strong>CIPAV</strong> pour votre retraite et au <strong>régime général</strong> de la Sécurité Sociale pour votre assurance maladie. Indemnités journalières possibles depuis juillet 2021 (après 1 an d'affiliation). Protection limitée — prévoyance complémentaire vivement recommandée.
+            En tant que profession libérale non conventionnée, tu es affilié à la <strong>CIPAV</strong> pour ta retraite et au <strong>régime général</strong> de la Sécurité Sociale pour ton assurance maladie. Indemnités journalières possibles depuis juillet 2021 (après 1 an d'affiliation). Protection limitée — prévoyance complémentaire vivement recommandée.
           </p>
         </div>
       </div>
@@ -132,7 +132,7 @@ export function CategorieSansHeuresCIPAV({ parcours, majEtape, soignantProfessio
         <div>
           <p className="text-sm font-semibold text-foreground">Honoraires libres</p>
           <p className="text-xs text-muted-foreground mt-1">
-            Vous fixez librement vos tarifs. Transparence recommandée : affichez vos tarifs en salle d'attente. Pensez à communiquer aux patients le montant avant la séance.
+            Tu fixes librement tes tarifs. Transparence recommandée : affiche tes tarifs en salle d'attente. Pense à communiquer aux patients le montant avant la séance.
           </p>
         </div>
       </div>

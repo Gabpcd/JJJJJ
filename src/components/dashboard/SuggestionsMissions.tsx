@@ -65,7 +65,7 @@ export function SuggestionsMissions() {
     <div className="mb-6">
       <div className="flex items-center justify-between mb-3">
         <h2 className="text-base font-bold text-foreground inline-flex items-center gap-2">
-          <Sparkles className="h-4 w-4 text-primary" /> Suggestions pour vous
+          <Sparkles className="h-4 w-4 text-primary" /> Suggestions pour toi
         </h2>
         <button
           type="button"

@@ -176,7 +176,7 @@ export default function DetailSerieSoignant() {
       } else if (data?.choix_requis) {
         // Series don't support contract choice dialog — direct user to mission detail
         toast.error('Choix de contrat requis', {
-          description: `La mission "${mission.intitule}" accepte salarié ou libéral : ouvrez son détail pour choisir votre mode de contrat avant d'accepter.`,
+          description: `La mission "${mission.intitule}" accepte salarié ou libéral : ouvre son détail pour choisir ton mode de contrat avant d'accepter.`,
           duration: 8000,
         });
         echouees++;
@@ -245,8 +245,8 @@ export default function DetailSerieSoignant() {
           <div className="space-y-1">
             <p className="text-xs text-success flex items-center gap-1"><CheckCircle2 className="h-3.5 w-3.5" /> Repos 11h respecté entre chaque créneau</p>
             <p className="text-xs text-success flex items-center gap-1"><CheckCircle2 className="h-3.5 w-3.5" /> Plafond 48h respecté chaque semaine</p>
-            <p className="text-xs text-success flex items-center gap-1"><CheckCircle2 className="h-3.5 w-3.5" /> Aucun chevauchement avec vos missions existantes</p>
-            <p className="text-xs text-success font-medium mt-2">→ Vous pouvez accepter l'ensemble du pack.</p>
+            <p className="text-xs text-success flex items-center gap-1"><CheckCircle2 className="h-3.5 w-3.5" /> Aucun chevauchement avec tes missions existantes</p>
+            <p className="text-xs text-success font-medium mt-2">→ Tu peux accepter l'ensemble du pack.</p>
           </div>
         ) : (
           <div className="space-y-2">
@@ -269,7 +269,7 @@ export default function DetailSerieSoignant() {
               </div>
             ))}
             {conflits.length > 5 && <p className="text-[10px] text-muted-foreground ml-4">... et {conflits.length - 5} autre(s)</p>}
-            <p className="text-xs text-muted-foreground mt-2">💡 Vous pouvez accepter les créneaux compatibles individuellement.</p>
+            <p className="text-xs text-muted-foreground mt-2">💡 Tu peux accepter les créneaux compatibles individuellement.</p>
           </div>
         )}
       </div>
@@ -351,7 +351,7 @@ export default function DetailSerieSoignant() {
         ) : ouvertes.length > 0 ? (
           <>
             <button disabled className="w-full py-3 rounded-xl bg-destructive/10 text-destructive text-sm font-medium cursor-not-allowed">
-              ⛔ Tout accepter — Incompatible avec votre planning
+              ⛔ Tout accepter — Incompatible avec ton planning
             </button>
             {selectablesCompatibles.length > 0 && (
               <button
@@ -376,7 +376,7 @@ export default function DetailSerieSoignant() {
         onFermer={() => setModalConfirm(false)}
         onConfirmer={accepterSerie}
         titre={`Accepter ${selectedIds.size} mission${selectedIds.size > 1 ? 's' : ''} ?`}
-        message={`Vous vous engagez sur ${selectedIds.size} créneau${selectedIds.size > 1 ? 'x' : ''}.`}
+        message={`Tu t'engages sur ${selectedIds.size} créneau${selectedIds.size > 1 ? 'x' : ''}.`}
         labelConfirmer="Oui, tout accepter"
         labelAnnuler="Annuler"
       />

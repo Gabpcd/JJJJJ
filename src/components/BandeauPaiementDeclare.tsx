@@ -40,7 +40,7 @@ function MotifContestationModal({ onConfirm, onCancel }: { onConfirm: (motif: st
       <textarea
         value={motif}
         onChange={e => setMotif(e.target.value)}
-        placeholder="Décrivez pourquoi vous contestez ce paiement..."
+        placeholder="Décris pourquoi tu contestes ce paiement..."
         className="input-base text-sm py-2"
         rows={2}
         maxLength={500}
@@ -179,7 +179,7 @@ export function BandeauPaiementDeclare() {
                 <Banknote className="h-5 w-5 text-primary shrink-0 mt-0.5" />
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold text-foreground">
-                    💰 {p.etablissement_nom} déclare vous avoir payé{' '}
+                    💰 {p.etablissement_nom} déclare t'avoir payé{' '}
                     <span className="text-primary">{fmt(p.montant)}</span>
                   </p>
                   {p.mission?.intitule && (

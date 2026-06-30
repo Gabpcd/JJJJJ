@@ -178,7 +178,7 @@ export function ScoreContent() {
         {evenements.length > 0 && (
           <section>
             <h2 className="text-lg font-bold text-foreground mb-3 inline-flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5 text-warning" /> Événements impactant votre score (12 derniers mois)
+              <AlertTriangle className="h-5 w-5 text-warning" /> Événements impactant ton score (12 derniers mois)
             </h2>
             <div className="space-y-2">
               {evenements.map((ev) => {
@@ -228,10 +228,10 @@ export function ScoreContent() {
         {evenements.length === 0 && (
           <div className="card-base">
             <h3 className="text-sm font-semibold text-foreground mb-2 flex items-center gap-2">
-              <AlertTriangle className="h-4 w-4 text-warning" /> Vous pensez qu'une pénalité est injuste ?
+              <AlertTriangle className="h-4 w-4 text-warning" /> Tu penses qu'une pénalité est injuste ?
             </h3>
             <p className="text-xs text-muted-foreground">
-              Aucun événement impactant votre score n'a été enregistré sur les 12 derniers mois. Si vous constatez une erreur, contactez le support Jolene.
+              Aucun événement impactant ton score n'a été enregistré sur les 12 derniers mois. Si tu constates une erreur, contacte le support Jolene.
             </p>
           </div>
         )}

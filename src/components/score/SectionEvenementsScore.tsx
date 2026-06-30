@@ -60,8 +60,8 @@ export function SectionEvenementsScore({ type, limit = 20 }: Props) {
           <AlertTriangle className="h-4 w-4 text-warning" /> Aucun événement récent
         </h3>
         <p className="text-xs text-muted-foreground">
-          Les événements impactant votre score (annulations, retards de paiement, évaluations exceptionnelles) apparaîtront ici.
-          Vous pourrez contester toute pénalité contestable.
+          Les événements impactant ton score (annulations, retards de paiement, évaluations exceptionnelles) apparaîtront ici.
+          Tu pourras contester toute pénalité contestable.
         </p>
       </div>
     );
@@ -71,7 +71,7 @@ export function SectionEvenementsScore({ type, limit = 20 }: Props) {
     <>
       <section>
         <h2 className="text-lg font-bold text-foreground mb-3 inline-flex items-center gap-2">
-          <AlertTriangle className="h-5 w-5 text-warning" /> Événements impactant votre score (12 derniers mois)
+          <AlertTriangle className="h-5 w-5 text-warning" /> Événements impactant ton score (12 derniers mois)
         </h2>
         <div className="space-y-2">
           {evenements.map((ev) => {

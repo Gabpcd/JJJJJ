@@ -165,7 +165,7 @@ export default function ChargesSociales() {
         <h1 className="text-xl font-bold text-foreground flex items-center gap-2">
           <Calculator className="h-6 w-6 text-primary" /> Mes charges sociales
         </h1>
-        <p className="text-sm text-muted-foreground mt-1">Estimations basées sur votre CA libéral {new Date().getFullYear()}</p>
+        <p className="text-sm text-muted-foreground mt-1">Estimations basées sur ton CA libéral {new Date().getFullYear()}</p>
       </div>
 
       {/* CA banner — clickable to show missions */}
@@ -364,7 +364,7 @@ export default function ChargesSociales() {
       {/* Disclaimer + links */}
       <div className="bg-muted/30 border border-border rounded-xl p-4 space-y-3">
         <p className="text-sm text-muted-foreground text-center">
-          ⚠️ Estimations indicatives. Consultez votre comptable pour les montants exacts.
+          ⚠️ Estimations indicatives. Consulte ton comptable pour les montants exacts.
         </p>
         <div className="flex flex-wrap gap-2 justify-center">
           <BoutonY2K variant="ghost" size="sm" className="text-xs gap-1" onClick={() => ouvrirLienExterne('https://www.autoentrepreneur.urssaf.fr')}>

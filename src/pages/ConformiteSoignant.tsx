@@ -124,7 +124,7 @@ export function ConformiteContent() {
           icone={<ShieldCheck />}
           mascotte="empty"
           titre="Aucun contrôle de conformité"
-          description="Les contrôles apparaîtront ici lorsque vous accepterez des missions."
+          description="Les contrôles apparaîtront ici lorsque tu accepteras des missions."
         />
       ) : (
         <div className="space-y-6">

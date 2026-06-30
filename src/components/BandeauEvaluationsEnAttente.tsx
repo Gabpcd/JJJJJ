@@ -125,10 +125,10 @@ export function BandeauEvaluationsEnAttente({ role }: Props) {
           <Star className="h-5 w-5 text-amber-500 shrink-0" />
           <div className="flex-1 min-w-0">
             <p className="text-sm font-semibold text-foreground">
-              ⭐ Vous avez {missions.length} mission{missions.length > 1 ? 's' : ''} à évaluer
+              ⭐ Tu as {missions.length} mission{missions.length > 1 ? 's' : ''} à évaluer
             </p>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Cliquez pour noter votre expérience
+              Touche pour noter ton expérience
             </p>
           </div>
         </div>

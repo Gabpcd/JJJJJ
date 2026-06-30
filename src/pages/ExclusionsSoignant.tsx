@@ -133,7 +133,7 @@ export default function ExclusionsSoignant() {
       {onglet === 'envoyees' && (
         <>
           {exclusions.length === 0 ? (
-            <EmptyState illustration={<IllustrationBouclier />} titre="Aucune exclusion" description="Vous n'avez bloqué personne." />
+            <EmptyState illustration={<IllustrationBouclier />} titre="Aucune exclusion" description="Tu n'as bloqué personne." />
           ) : (
             <div className="space-y-3">
               {exclusions.map((e: any) => (
@@ -162,13 +162,13 @@ export default function ExclusionsSoignant() {
             <div className="flex items-start gap-2">
               <ShieldAlert className="h-4 w-4 text-warning mt-0.5 shrink-0" />
               <p className="text-xs text-muted-foreground">
-                Ces établissements ont choisi de ne plus travailler avec vous. Leurs missions ne vous sont plus proposées.
+                Ces établissements ont choisi de ne plus travailler avec toi. Leurs missions ne te sont plus proposées.
               </p>
             </div>
           </div>
 
           {exclusionsRecues.length === 0 ? (
-            <EmptyState illustration={<IllustrationBouclier />} titre="Aucune exclusion reçue" description="Aucun établissement ne vous a exclu." variant="success" />
+            <EmptyState illustration={<IllustrationBouclier />} titre="Aucune exclusion reçue" description="Aucun établissement ne t'a exclu." variant="success" />
           ) : (
             <div className="space-y-3">
               {exclusionsRecues.map((e) => (
@@ -190,7 +190,7 @@ export default function ExclusionsSoignant() {
         onFermer={() => setSuppressionExcluId(null)}
         onConfirmer={supprimerExclusion}
         titre="Supprimer cette exclusion ?"
-        message="L'établissement pourra à nouveau vous proposer des missions."
+        message="L'établissement pourra à nouveau te proposer des missions."
         labelConfirmer="Supprimer"
         variante="danger"
       />

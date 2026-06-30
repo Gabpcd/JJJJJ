@@ -210,7 +210,7 @@ export default function ProfilSoignant() {
       return;
     }
     if ((typeExercice === 'MIXTE' || typeExercice === 'LIBERAL') && !attestationCumul) {
-      afficherNotification({ type: 'erreur', message: 'Vous devez attester la conformité de votre cumul d\'activités (article L1222-5).' });
+      afficherNotification({ type: 'erreur', message: 'Tu dois attester la conformité de ton cumul d\'activités (article L1222-5).' });
       return;
     }
     setSaving(true);
@@ -444,7 +444,7 @@ export default function ProfilSoignant() {
 
           {codeParrainage && (
             <div className="mb-4">
-              <p className="text-sm text-muted-foreground mb-2">Votre code parrainage :</p>
+              <p className="text-sm text-muted-foreground mb-2">Ton code parrainage :</p>
               <div className="flex items-center gap-2">
                 <code className="bg-muted px-4 py-2 rounded-xl font-mono text-lg font-bold text-foreground">{codeParrainage}</code>
                 <button
@@ -458,12 +458,12 @@ export default function ProfilSoignant() {
                   {codeCopied ? <><CheckCircle className="h-3.5 w-3.5" /> Copié !</> : <><Copy className="h-3.5 w-3.5" /> Copier</>}
                 </button>
               </div>
-              <p className="text-xs text-muted-foreground mt-2">Parrainez 3 collègues pour obtenir le badge Ambassadeur et un accès prioritaire aux missions urgentes.</p>
+              <p className="text-xs text-muted-foreground mt-2">Parraine 3 collègues pour obtenir le badge Ambassadeur et un accès prioritaire aux missions urgentes.</p>
             </div>
           )}
 
           <div className="border-t border-border pt-4">
-            <p className="text-sm text-muted-foreground mb-2">Vous avez un code parrainage ?</p>
+            <p className="text-sm text-muted-foreground mb-2">Tu as un code parrainage ?</p>
             <div className="flex gap-2">
               <input
                 aria-label="Code de parrainage"
@@ -501,7 +501,7 @@ export default function ProfilSoignant() {
 
           {filleuls.length > 0 && (
             <div className="border-t border-border pt-4 mt-4">
-              <p className="text-sm font-medium text-foreground mb-2">Vos filleuls ({filleuls.length})</p>
+              <p className="text-sm font-medium text-foreground mb-2">Tes filleuls ({filleuls.length})</p>
               <div className="space-y-1">
                 {filleuls.map((f: any, i: number) => (
                   <div key={i} className="text-sm text-muted-foreground flex items-center gap-2">
@@ -587,10 +587,10 @@ function BlocStatutEtudiant({ userId }: { userId: string }) {
       {estEtudiant && scol?.verifiee && scol.profession && (
         <div className="rounded-lg border border-emerald-200 bg-emerald-50 dark:bg-emerald-950/20 dark:border-emerald-800 p-2.5">
           <p className="text-xs font-semibold text-emerald-800 dark:text-emerald-300">
-            ✅ Niveau vérifié{scol.annee ? ` (année ${scol.annee} validée)` : ''} — vous pouvez exercer comme {getLabelProfession(scol.profession)}
+            ✅ Niveau vérifié{scol.annee ? ` (année ${scol.annee} validée)` : ''} — tu peux exercer comme {getLabelProfession(scol.profession)}
           </p>
           <p className="text-[11px] text-emerald-700/80 dark:text-emerald-400/80 mt-0.5">
-            Vérifié par l'IA à partir de votre attestation de scolarité.
+            Vérifié par l'IA à partir de ton attestation de scolarité.
           </p>
         </div>
       )}

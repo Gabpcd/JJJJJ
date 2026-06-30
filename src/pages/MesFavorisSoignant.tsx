@@ -41,7 +41,7 @@ export default function MesFavorisSoignant() {
   useEffect(() => { charger(); }, []);
 
   const retirer = async (etab_id: string) => {
-    if (!confirm('Retirer cet établissement de vos favoris ?')) return;
+    if (!confirm('Retirer cet établissement de tes favoris ?')) return;
     const { error } = await supabase.rpc('fn_toggle_favori_etablissement' as any, {
       p_etablissement_id: etab_id, p_actif: false,
     });
@@ -57,7 +57,7 @@ export default function MesFavorisSoignant() {
           <Star className="h-6 w-6 text-warning fill-warning" /> Mes établissements favoris
         </h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Vous serez notifié dès que ces établissements publient une nouvelle mission compatible avec votre profil.
+          Tu seras notifié dès que ces établissements publient une nouvelle mission compatible avec ton profil.
         </p>
       </div>
 
@@ -68,7 +68,7 @@ export default function MesFavorisSoignant() {
           <Star className="h-10 w-10 text-muted-foreground/30 mx-auto mb-3" />
           <p className="text-sm font-medium text-foreground">Aucun établissement favori</p>
           <p className="text-xs text-muted-foreground mt-1">
-            Cliquez sur l'étoile ⭐ d'une mission pour ajouter l'établissement à vos favoris.
+            Clique sur l'étoile ⭐ d'une mission pour ajouter l'établissement à tes favoris.
           </p>
         </div>
       ) : (

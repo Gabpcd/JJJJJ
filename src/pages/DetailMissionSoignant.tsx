@@ -201,8 +201,8 @@ export default function DetailMissionSoignant() {
     if (estAssigne && (mission as any).mode_remuneration === 'RETROCESSION'
       && (mission as any).montant_honoraires_bruts && !(mission as any).honoraires_confirmes_le) {
       return {
-        titre: "Confirmez votre relevé d'honoraires",
-        description: `Le cabinet déclare ${Number((mission as any).montant_honoraires_bruts).toLocaleString('fr-FR')} € — validez ou contestez sous 48h.`,
+        titre: "Confirme ton relevé d'honoraires",
+        description: `Le cabinet déclare ${Number((mission as any).montant_honoraires_bruts).toLocaleString('fr-FR')} € — valide ou conteste sous 48h.`,
         cta: 'Voir le relevé',
         cibleId: 'bloc-retro-confirm',
         variante: 'warning',
@@ -213,7 +213,7 @@ export default function DetailMissionSoignant() {
       && new Date(mission.debut_le).getTime() > Date.now()
       && !(mission as any).presence_confirmee_le) {
       return {
-        titre: 'Confirmez votre présence',
+        titre: 'Confirme ta présence',
         description: 'La mission démarre bientôt — 1 clic pour rassurer l\'établissement.',
         cta: 'Confirmer',
         cibleId: 'bloc-presence',
@@ -226,8 +226,8 @@ export default function DetailMissionSoignant() {
       const n = champsManquants.length;
       return {
         titre: n > 0
-          ? `Complétez votre profil pour postuler (${n} champ${n > 1 ? 's' : ''})`
-          : 'Complétez votre profil pour postuler',
+          ? `Complète ton profil pour postuler (${n} champ${n > 1 ? 's' : ''})`
+          : 'Complète ton profil pour postuler',
         description: getMotifProfilIncomplet(resumeCompletion) ?? undefined,
         cta: 'Compléter mon profil',
         onClick: () => navigate('/soignant/profil'),
@@ -236,9 +236,9 @@ export default function DetailMissionSoignant() {
     }
     if (estOuverte && peutPostuler && !candidatureEnvoyee && !chevauchement) {
       return {
-        titre: estModeCandidature ? 'Postulez à cette mission' : 'Acceptez cette mission',
+        titre: estModeCandidature ? 'Postule à cette mission' : 'Accepte cette mission',
         description: estModeCandidature
-          ? 'L\'établissement examinera votre profil et vous répondra.'
+          ? 'L\'établissement examinera ton profil et te répondra.'
           : 'Premier arrivé, premier servi — la mission part vite.',
         cta: estModeCandidature ? 'Postuler' : 'Accepter',
         cibleId: 'bloc-actions',
@@ -263,12 +263,12 @@ export default function DetailMissionSoignant() {
       if (data?.error) { toast.error(data.error); return; }
       setCandidatureEnvoyee(true);
       if (data?.docs_a_completer) {
-        toast.success('Candidature envoyée ! Validez vos documents pour pouvoir être accepté.', {
+        toast.success('Candidature envoyée ! Valide tes documents pour pouvoir être accepté.', {
           action: { label: 'Mes documents', onClick: () => navigate('/soignant/mes-documents') },
           duration: 8000,
         });
       } else {
-        toast.success('Candidature envoyée ! L\'établissement examinera votre profil.');
+        toast.success('Candidature envoyée ! L\'établissement examinera ton profil.');
       }
     } catch (err: any) {
       capturerErreurSentry(err, 'DetailMissionSoignant', 'candidature');
@@ -400,7 +400,7 @@ export default function DetailMissionSoignant() {
     });
     if (auditError) handleErrorSilent(auditError, 'Audit annulation participation');
 
-    toast.warning('Participation annulée. Votre score sera mis à jour.');
+    toast.warning('Participation annulée. Ton score sera mis à jour.');
     navigate('/soignant/missions');
   };
 
@@ -598,16 +598,16 @@ export default function DetailMissionSoignant() {
               <p className="text-sm font-semibold text-foreground">💶 Relevé d'honoraires à confirmer</p>
               <p className="text-xs text-muted-foreground">
                 Le cabinet déclare <strong>{Number((mission as any).montant_honoraires_bruts).toLocaleString('fr-FR')} €</strong> d'honoraires
-                (justificatif joint à la mission) — votre rétrocession ({(mission as any).retrocession_pct}%) :
+                (justificatif joint à la mission) — ta rétrocession ({(mission as any).retrocession_pct}%) :
                 <strong> {Number(mission.net_a_payer ?? 0).toLocaleString('fr-FR')} €</strong>.
-                Sans action de votre part, validation automatique sous 48h.
+                Sans action de ta part, validation automatique sous 48h.
               </p>
               <div className="flex gap-2">
                 <button
                   onClick={async () => {
                     const { data, error } = await supabase.rpc('fn_confirmer_honoraires_retrocession' as any, { p_mission_id: mission.id });
                     if (error || (data as any)?.error) { toast.error((data as any)?.error || 'Confirmation impossible.'); return; }
-                    toast.success('Relevé confirmé — votre note d\'honoraires est générée, le cabinet est notifié.');
+                    toast.success('Relevé confirmé — ta note d\'honoraires est générée, le cabinet est notifié.');
                     setMission((prev: any) => ({ ...prev, honoraires_confirmes_le: new Date().toISOString() }));
                   }}
                   className="btn-primary flex-1 text-sm py-2.5"
@@ -627,8 +627,8 @@ export default function DetailMissionSoignant() {
               <p className="text-sm font-semibold text-foreground mb-1">🤝 Remplacement de cabinet — rétrocession d'honoraires</p>
               <p className="text-3xl font-extrabold text-primary mb-2">{(mission as any).retrocession_pct ?? '—'}%</p>
               <p className="text-xs text-muted-foreground">
-                Vous exercez sous les feuilles de soins du titulaire : il encaisse les honoraires
-                puis vous rétrocède {(mission as any).retrocession_pct ?? '—'}% des actes réalisés
+                Tu exerces sous les feuilles de soins du titulaire : il encaisse les honoraires
+                puis te rétrocède {(mission as any).retrocession_pct ?? '—'}% des actes réalisés
                 (contrat de remplacement conforme au modèle de l'Ordre, généré à l'acceptation).
                 RCP obligatoire.
               </p>
@@ -654,9 +654,9 @@ export default function DetailMissionSoignant() {
             <div className="card-base">
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <h3 className="font-semibold text-foreground">Notez l'établissement</h3>
+                  <h3 className="font-semibold text-foreground">Note l'établissement</h3>
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    Votre notation aide la communauté + améliore votre score (composante "Notation par soignant").
+                    Ta notation aide la communauté + améliore ton score (composante "Notation par soignant").
                   </p>
                 </div>
                 <BoutonNoterMission missionId={mission.id} sens="SOIGNANT_VERS_ETAB" missionIntitule={mission.intitule} variant="primary" />
@@ -686,8 +686,8 @@ export default function DetailMissionSoignant() {
                 <BlocagePostulation completionProfil={completionProfil} documentsValides={!!soignant.tous_documents_valides} premiereMissionLe={premiereMissionLe} missionDebutLe={mission.debut_le} />
                 {chevauchement && (
                   <div className="bg-warning/10 border border-warning/30 rounded-xl p-3 mb-3 text-center">
-                    <p className="text-sm font-semibold text-warning">⚠️ Vous avez déjà une mission sur ce créneau</p>
-                    <p className="text-xs text-warning/80 mt-1">Vous ne pouvez pas accepter deux missions qui se chevauchent.</p>
+                    <p className="text-sm font-semibold text-warning">⚠️ Tu as déjà une mission sur ce créneau</p>
+                    <p className="text-xs text-warning/80 mt-1">Tu ne peux pas accepter deux missions qui se chevauchent.</p>
                   </div>
                 )}
                 {/* Session E-6 : profil incomplet → la complétion devient l'action
@@ -722,7 +722,7 @@ export default function DetailMissionSoignant() {
                           <textarea
                             value={messageCandidature}
                             onChange={e => setMessageCandidature(e.target.value.slice(0, 300))}
-                            placeholder="Présentez-vous brièvement…"
+                            placeholder="Présente-toi brièvement…"
                             rows={3}
                             className="input-base resize-none text-sm"
                             maxLength={300}
@@ -737,7 +737,7 @@ export default function DetailMissionSoignant() {
                           {postulationEnCours ? 'Envoi en cours…' : '📨 Postuler à cette mission'}
                         </button>
                         <p className="text-[10px] text-muted-foreground text-center mt-2">
-                          L'établissement examinera votre candidature. Vous serez notifié(e) de sa décision.
+                          L'établissement examinera ta candidature. Tu seras notifié(e) de sa décision.
                         </p>
                       </>
                     ) : (
@@ -746,18 +746,18 @@ export default function DetailMissionSoignant() {
                           onClick={() => setModalConfirm(true)}
                           disabled={acceptationEnCours || !conformiteOk || chevauchement}
                           className="btn-primary w-full text-base py-3.5 disabled:opacity-50 active:scale-[0.97] transition-transform"
-                          title={chevauchement ? 'Mission chevauchante détectée' : !conformiteOk ? 'Résolvez les conflits ci-dessus pour accepter' : undefined}
+                          title={chevauchement ? 'Mission chevauchante détectée' : !conformiteOk ? 'Résous les conflits ci-dessus pour accepter' : undefined}
                         >
                           {acceptationEnCours ? 'Acceptation en cours…' : '★ Accepter cette mission'}
                         </button>
                         <p className="text-[10px] text-muted-foreground text-center mt-2">
-                          En acceptant, vous vous engagez à être présent(e) aux dates et horaires indiqués.
+                          En acceptant, tu t'engages à être présent(e) aux dates et horaires indiqués.
                         </p>
                       </>
                     )}
                     {!conformiteOk && (
                       <p className="text-[10px] text-destructive text-center mt-2">
-                        ⛔ Résolvez les conflits de conformité ci-dessus pour pouvoir accepter.
+                        ⛔ Résous les conflits de conformité ci-dessus pour pouvoir accepter.
                       </p>
                     )}
                   </>
@@ -770,14 +770,14 @@ export default function DetailMissionSoignant() {
                     {!soignant.tous_documents_valides ? (
                       <>
                         <p className="text-xs text-muted-foreground">
-                          Prochaine étape : validez vos documents pour que l'établissement puisse vous accepter.
+                          Prochaine étape : valide tes documents pour que l'établissement puisse t'accepter.
                         </p>
                         <BoutonY2K className="w-full" onClick={() => navigate('/soignant/mes-documents')}>
                           📄 Valider mes documents (2 min)
                         </BoutonY2K>
                       </>
                     ) : (
-                      <p className="text-xs text-muted-foreground">L'établissement examinera votre profil et reviendra vers vous.</p>
+                      <p className="text-xs text-muted-foreground">L'établissement examinera ton profil et reviendra vers toi.</p>
                     )}
                   </div>
                 )}
@@ -787,7 +787,7 @@ export default function DetailMissionSoignant() {
             {estAssigne && (
               <>
                 <div className="bg-success/5 border border-success/20 rounded-xl p-3 mb-4 text-center">
-                  <p className="text-sm font-semibold text-success">✅ Vous êtes assigné(e) à cette mission</p>
+                  <p className="text-sm font-semibold text-success">✅ Tu es assigné(e) à cette mission</p>
                 </div>
 
                 {/* Confirmation de présence (J-2 → début) : rassure l'établissement,
@@ -797,9 +797,9 @@ export default function DetailMissionSoignant() {
                   && new Date(mission.debut_le).getTime() > Date.now()
                   && !(mission as any).presence_confirmee_le && (
                   <div id="bloc-presence" className="bg-warning/5 border border-warning/30 rounded-xl p-3 mb-4">
-                    <p className="text-sm font-semibold text-foreground">Confirmez votre présence</p>
+                    <p className="text-sm font-semibold text-foreground">Confirme ta présence</p>
                     <p className="text-xs text-muted-foreground mt-1 mb-2">
-                      La mission démarre bientôt — confirmez en 1 clic pour rassurer l'établissement.
+                      La mission démarre bientôt — confirme en 1 clic pour rassurer l'établissement.
                     </p>
                     <button
                       onClick={async () => {
@@ -825,10 +825,10 @@ export default function DetailMissionSoignant() {
                 {(mission.statut === 'ASSIGNEE' || mission.statut === 'EN_COURS') && !(mission as any).est_arret_maladie && (
                   <button
                     onClick={async () => {
-                      if (!window.confirm('Déclarer un arrêt maladie sur cette mission ? L\'établissement sera prévenu immédiatement et vous devrez fournir un certificat médical sous 48h. Aucune pénalité de score avec justificatif.')) return;
+                      if (!window.confirm('Déclarer un arrêt maladie sur cette mission ? L\'établissement sera prévenu immédiatement et tu devras fournir un certificat médical sous 48h. Aucune pénalité de score avec justificatif.')) return;
                       const { data, error } = await supabase.rpc('fn_declarer_arret_maladie' as any, { p_mission_id: mission.id });
                       if (error || (data as any)?.error) { toast.error((data as any)?.error || 'Déclaration impossible.'); return; }
-                      toast.success('Arrêt maladie déclaré — pensez au certificat médical sous 48h. Bon rétablissement.');
+                      toast.success('Arrêt maladie déclaré — pense au certificat médical sous 48h. Bon rétablissement.');
                       setMission((prev: any) => ({ ...prev, est_arret_maladie: true }));
                     }}
                     className="w-full text-xs text-muted-foreground hover:text-foreground underline mb-4"
@@ -1010,7 +1010,7 @@ export default function DetailMissionSoignant() {
         onFermer={() => setModalConfirm(false)}
         onConfirmer={() => accepterMission()}
         titre="Accepter cette mission ?"
-        message={`Vous vous engagez à être présent(e) le ${format(new Date(mission.debut_le), 'EEEE d MMMM', { locale: fr })} de ${format(new Date(mission.debut_le), "HH'h'mm", { locale: fr })} à ${format(new Date(mission.fin_le), "HH'h'mm", { locale: fr })}. Une annulation tardive impactera votre score de fiabilité.`}
+        message={`Tu t'engages à être présent(e) le ${format(new Date(mission.debut_le), 'EEEE d MMMM', { locale: fr })} de ${format(new Date(mission.debut_le), "HH'h'mm", { locale: fr })} à ${format(new Date(mission.fin_le), "HH'h'mm", { locale: fr })}. Une annulation tardive impactera ton score de fiabilité.`}
         labelConfirmer="Oui, j'accepte"
         labelAnnuler="Annuler"
       />
@@ -1019,14 +1019,14 @@ export default function DetailMissionSoignant() {
         ouvert={modalAnnuler}
         onFermer={() => setModalAnnuler(false)}
         onConfirmer={annulerParticipation}
-        titre="⚠️ Annuler votre participation ?"
+        titre="⚠️ Annuler ta participation ?"
         message={(() => {
           const debut = new Date(mission.debut_le);
           const maintenant = new Date();
           const heuresAvant = (debut.getTime() - maintenant.getTime()) / 3600000;
-          if (heuresAvant < 4) return 'Annulation à moins de 4h du début : pénalité de -25 points sur votre score de fiabilité. Cette action est irréversible.';
-          if (heuresAvant < 24) return 'Annulation à moins de 24h du début : pénalité de -15 points sur votre score de fiabilité. Cette action est irréversible.';
-          return 'Pénalité de -8 points sur votre score de fiabilité. Cette action est irréversible.';
+          if (heuresAvant < 4) return 'Annulation à moins de 4h du début : pénalité de -25 points sur ton score de fiabilité. Cette action est irréversible.';
+          if (heuresAvant < 24) return 'Annulation à moins de 24h du début : pénalité de -15 points sur ton score de fiabilité. Cette action est irréversible.';
+          return 'Pénalité de -8 points sur ton score de fiabilité. Cette action est irréversible.';
         })()}
         labelConfirmer="Oui, annuler"
         labelAnnuler="Non, garder"

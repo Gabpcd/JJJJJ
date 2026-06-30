@@ -86,7 +86,7 @@ export function ReclamationsContent({ role: _role }: { role: 'SOIGNANT' | 'ADMIN
 
   const soumettre = async () => {
     if (!sujet.trim() || !details.trim()) {
-      toast.error('Veuillez remplir le sujet et les détails');
+      toast.error('Remplis le sujet et les détails');
       return;
     }
     setSubmitting(true);
@@ -98,7 +98,7 @@ export function ReclamationsContent({ role: _role }: { role: 'SOIGNANT' | 'ADMIN
     if (error || (data as any)?.error) {
       toast.error((data as any)?.error || 'Erreur lors de la soumission');
     } else {
-      toast.success('Réclamation envoyée — nous reviendrons vers vous rapidement');
+      toast.success('Réclamation envoyée — nous reviendrons vers toi rapidement');
       setShowForm(false);
       setSujet('');
       setDetails('');
@@ -120,7 +120,7 @@ export function ReclamationsContent({ role: _role }: { role: 'SOIGNANT' | 'ADMIN
             </div>
             <div>
               <h1 className="text-xl font-bold text-foreground">Mes réclamations</h1>
-              <p className="text-sm text-muted-foreground">Signalez un problème ou suivez vos demandes</p>
+              <p className="text-sm text-muted-foreground">Signale un problème ou suis tes demandes</p>
             </div>
           </div>
           <BoutonY2K onClick={() => setShowForm(true)} className="gap-2">
@@ -197,7 +197,7 @@ export function ReclamationsContent({ role: _role }: { role: 'SOIGNANT' | 'ADMIN
               <Input
                 value={sujet}
                 onChange={(e) => setSujet(e.target.value)}
-                placeholder="Décrivez brièvement le problème"
+                placeholder="Décris brièvement le problème"
                 className="mt-1"
               />
             </div>
@@ -206,7 +206,7 @@ export function ReclamationsContent({ role: _role }: { role: 'SOIGNANT' | 'ADMIN
               <textarea
                 value={details}
                 onChange={(e) => setDetails(e.target.value)}
-                placeholder="Expliquez la situation en détail : dates, montants, personnes concernées..."
+                placeholder="Explique la situation en détail : dates, montants, personnes concernées..."
                 rows={5}
                 className="input-base w-full mt-1 resize-none"
               />

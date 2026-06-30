@@ -108,7 +108,7 @@ export function LitigesSoignantContent() {
 
   const creerLitige = async () => {
     if (!selectedMissionId || !newMotif.trim()) {
-      toast.error('Veuillez sélectionner une mission et saisir un motif.');
+      toast.error('Sélectionne une mission et saisis un motif.');
       return;
     }
     if (newMotif.trim().length < 10) {
@@ -121,7 +121,7 @@ export function LitigesSoignantContent() {
       p_motif: newMotif.trim(),
     });
     setCreating(false);
-    if (error) { toast.error('Une erreur est survenue. Veuillez réessayer.'); return; }
+    if (error) { toast.error('Une erreur est survenue. Réessaie.'); return; }
     if ((data as any)?.error) { toast.error((data as any).error); return; }
     toast.success('Litige ouvert avec succès.');
     setShowNew(false);
@@ -137,7 +137,7 @@ export function LitigesSoignantContent() {
           <h1 className="text-xl font-bold text-foreground flex items-center gap-2">
             <Scale className="h-6 w-6 text-primary" /> Mes litiges
           </h1>
-          <p className="text-sm text-muted-foreground mt-1">Suivez vos contestations de missions</p>
+          <p className="text-sm text-muted-foreground mt-1">Suis tes contestations de missions</p>
         </div>
         <BoutonY2K onClick={openNewLitige} className="gap-1.5">
           <PlusCircle className="h-4 w-4" /> Ouvrir un litige
@@ -175,7 +175,7 @@ export function LitigesSoignantContent() {
 
       {/* Litiges list */}
       {filteredLitiges.length === 0 ? (
-        <EmptyState icone={<Scale />} mascotte="happy" titre={filtre === 'TOUS' ? 'Aucun litige' : `Aucun litige ${filtre.toLowerCase()}`} description="Vous n'avez aucun litige en cours." variant="success" />
+        <EmptyState icone={<Scale />} mascotte="happy" titre={filtre === 'TOUS' ? 'Aucun litige' : `Aucun litige ${filtre.toLowerCase()}`} description="Tu n'as aucun litige en cours." variant="success" />
       ) : (
         <div className="space-y-3">
           {filteredLitiges.map(l => {
@@ -249,7 +249,7 @@ export function LitigesSoignantContent() {
           <DialogResponsiveBody className="space-y-4">
             <div className="rounded-xl bg-warning/5 border border-warning/20 p-3">
               <p className="text-xs text-warning font-medium">
-                ⚠️ Un litige déclenche une procédure de résolution entre vous et l'établissement. Privilégiez d'abord la messagerie pour résoudre le problème.
+                ⚠️ Un litige déclenche une procédure de résolution entre toi et l'établissement. Privilégie d'abord la messagerie pour résoudre le problème.
               </p>
             </div>
             <div>
@@ -271,7 +271,7 @@ export function LitigesSoignantContent() {
             </div>
             <div>
               <label className="text-sm font-medium text-foreground mb-1.5 block">Motif du litige</label>
-              <Textarea value={newMotif} onChange={e => setNewMotif(e.target.value)} placeholder="Décrivez le problème rencontré (minimum 10 caractères)..." rows={4} maxLength={1000} />
+              <Textarea value={newMotif} onChange={e => setNewMotif(e.target.value)} placeholder="Décris le problème rencontré (minimum 10 caractères)..." rows={4} maxLength={1000} />
               <p className="text-[10px] text-muted-foreground mt-1 text-right">{newMotif.length}/1000</p>
             </div>
           </DialogResponsiveBody>

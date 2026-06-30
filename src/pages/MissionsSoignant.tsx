@@ -10,7 +10,6 @@ import { CarteMissionSoignant } from '@/components/CarteMissionSoignant';
 import { CarteSerie, extraireSerieId } from '@/components/CarteSerie';
 import { FiltresMissions, type FiltresMissionsState } from '@/components/FiltresMissions';
 import { BandeauAlerte48h } from '@/components/BandeauAlerte48h';
-import { BandeauDocumentsManquants } from '@/components/BandeauDocumentsManquants';
 import { BandeauProfilIncomplet } from '@/components/BandeauProfilIncomplet';
 import { BadgeStatut } from '@/components/BadgeStatut';
 import { useAuth } from '@/contexts/AuthContext';
@@ -59,7 +58,6 @@ export default function MissionsSoignant() {
   const PAGE_SIZE = 50;
   const [filtres, setFiltres] = useState<FiltresMissionsState | null>(null);
   const [heuresSemaine, setHeuresSemaine] = useState(0);
-  const [rcpExpiree, setRcpExpiree] = useState(false);
   const [nbAffiche, setNbAffiche] = useState(20);
 
   useEffect(() => {
@@ -68,28 +66,6 @@ export default function MissionsSoignant() {
       .select('profession, adresse_lat, adresse_lng, rayon_deplacement_km, tous_documents_valides, type_contrat, types_contrat_acceptes, type_exercice')
       .eq('id', user.id).maybeSingle()
       .then(({ data }) => { if (data) setSoignant(data as any); }).then(undefined, (err) => handleErrorSilent(err, 'MissionsSoignant.soignant'));
-
-    // RCP check only for LIBERAL/MIXTE
-    supabase.from('soignants').select('type_exercice').eq('id', user.id).maybeSingle()
-      .then(({ data: sg }) => {
-        const isLiberalOrMixte = sg?.type_exercice === 'LIBERAL' || sg?.type_exercice === 'MIXTE';
-        if (!isLiberalOrMixte) { setRcpExpiree(false); return; }
-        supabase.from('documents_soignants')
-          .select('statut_verification, valide_jusqua')
-          .eq('soignant_id', user.id)
-          .eq('type_document', 'RCP_ASSURANCE')
-          .order('televerse_le', { ascending: false })
-          .limit(1)
-          .then(({ data }) => {
-            if (!data || data.length === 0) {
-              setRcpExpiree(true);
-            } else {
-              const doc = data[0];
-              const expire = doc.valide_jusqua ? new Date(doc.valide_jusqua) < new Date() : false;
-              setRcpExpiree(doc.statut_verification === 'REJETE' || doc.statut_verification === 'EXPIRE' || expire);
-            }
-          });
-      }).then(undefined, (err) => handleErrorSilent(err, 'MissionsSoignant.rcp'));
 
     const lundi = startOfWeek(new Date(), { weekStartsOn: 1 });
     const dimanche = endOfWeek(new Date(), { weekStartsOn: 1 });
@@ -251,7 +227,6 @@ export default function MissionsSoignant() {
       </div>
 
       {(!soignant || !soignant.profession) && <BandeauProfilIncomplet />}
-      {soignant && <BandeauDocumentsManquants tousDocumentsValides={!!soignant.tous_documents_valides} rcpExpiree={rcpExpiree} />}
       <div className="flex border-b border-border mb-4 overflow-x-auto">
         {onglets.map(o => (
           <button key={o.id} onClick={() => setOnglet(o.id)}
@@ -300,7 +275,7 @@ export default function MissionsSoignant() {
               <EmptyState
                 illustration={<IllustrationBoussole />}
                 titre="Aucune mission pour le moment"
-                description="Les missions apparaîtront ici dès qu'un établissement en publiera une correspondant à votre profil."
+                description="Les missions apparaîtront ici dès qu'un établissement en publiera une correspondant à ton profil."
                 cta={{ label: 'Rechercher des missions →', onClick: () => navigate('/soignant/recherche-missions') }}
               />
             )
@@ -337,7 +312,7 @@ export default function MissionsSoignant() {
                 })}
               </div>
             ) : (
-              <EmptyState icone={<Briefcase />} mascotte="thinking" titre="Vous n'avez pas encore de mission en cours" description="Consultez les missions disponibles et postulez !" cta={{ label: 'Voir les missions disponibles', onClick: () => setOnglet('disponibles') }} />
+              <EmptyState icone={<Briefcase />} mascotte="thinking" titre="Tu n'as pas encore de mission en cours" description="Découvre les missions disponibles et postule !" cta={{ label: 'Voir les missions disponibles', onClick: () => navigate('/soignant/recherche-missions') }} />
             )
           )}
 

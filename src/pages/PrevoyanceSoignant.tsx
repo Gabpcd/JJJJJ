@@ -100,12 +100,12 @@ export default function PrevoyanceSoignant() {
         <div className="card-base">
           <h2 className="font-semibold text-foreground mb-3">Qu'est-ce que la prévoyance Madelin ?</h2>
           <p className="text-sm text-muted-foreground leading-relaxed mb-3">
-            La <strong>prévoyance Madelin</strong> est une assurance dédiée aux travailleurs indépendants (loi Madelin de 1994) qui couvre les <strong>arrêts de travail, l'invalidité et le décès</strong>. En cas de maladie ou d'accident, vous percevez un revenu de remplacement chaque mois pendant la durée de l'arrêt.
+            La <strong>prévoyance Madelin</strong> est une assurance dédiée aux travailleurs indépendants (loi Madelin de 1994) qui couvre les <strong>arrêts de travail, l'invalidité et le décès</strong>. En cas de maladie ou d'accident, tu perçois un revenu de remplacement chaque mois pendant la durée de l'arrêt.
           </p>
           <div className="rounded-xl bg-primary/5 border border-primary/20 p-3 text-sm">
             <p className="font-semibold text-primary mb-1">💡 Avantage fiscal majeur</p>
             <p className="text-muted-foreground text-xs">
-              Les cotisations Madelin sont <strong>déductibles de votre revenu imposable BNC</strong> dans la limite d'un plafond annuel (≈ 3,75 % du PASS + 7 % du revenu, plafonné). Concrètement, l'État rembourse une partie de votre cotisation via une réduction d'impôts.
+              Les cotisations Madelin sont <strong>déductibles de ton revenu imposable BNC</strong> dans la limite d'un plafond annuel (≈ 3,75 % du PASS + 7 % du revenu, plafonné). Concrètement, l'État rembourse une partie de ta cotisation via une réduction d'impôts.
             </p>
           </div>
         </div>
@@ -116,12 +116,12 @@ export default function PrevoyanceSoignant() {
             <Calculator className="h-4 w-4 text-primary" /> Calculateur revenu remplacé en cas d'arrêt
           </h2>
           <p className="text-xs text-muted-foreground mb-4">
-            Estimez ce que vous toucheriez par mois en cas d'arrêt de travail prolongé selon le niveau de couverture choisi. Calcul indicatif basé sur votre revenu mensuel libéral.
+            Estime ce que tu toucherais par mois en cas d'arrêt de travail prolongé selon le niveau de couverture choisi. Calcul indicatif basé sur ton revenu mensuel libéral.
           </p>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
             <div>
-              <label className="text-xs font-medium text-foreground mb-1 block">Votre revenu mensuel net (€)</label>
+              <label className="text-xs font-medium text-foreground mb-1 block">Ton revenu mensuel net (€)</label>
               <input
                 type="number" min={500} max={20000} step={100}
                 value={revenuMensuel}
@@ -153,7 +153,7 @@ export default function PrevoyanceSoignant() {
               <p className="text-xl font-extrabold text-success mt-1">{fmtEur(couvertureCalc)}</p>
             </div>
             <div className="rounded-xl border border-border bg-card p-3 text-center">
-              <p className="text-[10px] uppercase font-semibold text-muted-foreground">Reste à votre charge</p>
+              <p className="text-[10px] uppercase font-semibold text-muted-foreground">Reste à ta charge</p>
               <p className="text-xl font-extrabold text-foreground mt-1">{fmtEur(resteCharge)}</p>
             </div>
           </div>
@@ -163,10 +163,10 @@ export default function PrevoyanceSoignant() {
         {dejaInscrit ? (
           <div className="card-base border-l-4 border-l-success bg-success/5">
             <h2 className="font-semibold text-foreground inline-flex items-center gap-2 mb-2">
-              <CheckCircle2 className="h-5 w-5 text-success" /> Vous êtes sur la liste d'attente
+              <CheckCircle2 className="h-5 w-5 text-success" /> Tu es sur la liste d'attente
             </h2>
             <p className="text-sm text-muted-foreground">
-              Vous serez prévenu·e par email à <strong>{emailUser || emailInput}</strong> dès le lancement du programme prévoyance Jolene.
+              Tu seras prévenu·e par email à <strong>{emailUser || emailInput}</strong> dès le lancement du programme prévoyance Jolene.
               {niveauActuel && niveauActuel !== 'INDIFFERENT' && (
                 <> Niveau préféré : <strong>{NIVEAUX.find(n => n.valeur === niveauActuel)?.label}</strong>.</>
               )}
@@ -182,10 +182,10 @@ export default function PrevoyanceSoignant() {
         ) : (
           <div className="card-base border-l-4 border-l-primary bg-primary/5">
             <h2 className="font-semibold text-foreground inline-flex items-center gap-2 mb-2">
-              <Sparkles className="h-5 w-5 text-primary" /> Inscrivez-vous à la liste d'attente
+              <Sparkles className="h-5 w-5 text-primary" /> Inscris-toi à la liste d'attente
             </h2>
             <p className="text-xs text-muted-foreground mb-4">
-              Soyez prévenu·e en avant-première dès que les contrats prévoyance Jolene seront disponibles. Aucune obligation, vous pouvez vous désinscrire à tout moment.
+              Sois prévenu·e en avant-première dès que les contrats prévoyance Jolene seront disponibles. Aucune obligation, tu peux te désinscrire à tout moment.
             </p>
 
             <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-2 mb-3">
@@ -195,7 +195,7 @@ export default function PrevoyanceSoignant() {
                   type="email"
                   value={emailInput}
                   onChange={(e) => setEmailInput(e.target.value)}
-                  placeholder="votre.email@exemple.fr"
+                  placeholder="ton.email@exemple.fr"
                   className="w-full pl-8 pr-3 py-2 text-sm rounded-lg border border-border bg-background"
                 />
               </div>
@@ -226,10 +226,10 @@ export default function PrevoyanceSoignant() {
         <div className="text-xs text-muted-foreground bg-muted/30 rounded-xl p-4 border border-border">
           <p className="font-semibold text-foreground mb-1">Informations</p>
           <ul className="list-disc list-inside space-y-1">
-            <li>Votre email reste confidentiel et ne sera utilisé que pour vous prévenir du lancement du programme prévoyance.</li>
+            <li>Ton email reste confidentiel et ne sera utilisé que pour te prévenir du lancement du programme prévoyance.</li>
             <li>Aucune cotisation n'est prélevée pour l'inscription à la liste d'attente.</li>
             <li>Les niveaux Bronze/Argent/Or sont indicatifs ; les contrats finaux pourront différer selon le partenaire retenu.</li>
-            <li>Vous pouvez consulter et exporter vos données via votre Centre RGPD.</li>
+            <li>Tu peux consulter et exporter tes données via ton Centre RGPD.</li>
           </ul>
         </div>
       </div>

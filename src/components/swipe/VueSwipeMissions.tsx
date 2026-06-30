@@ -222,7 +222,7 @@ export function VueSwipeMissions({ onBasculerListe, onCreerAlerte }: VueSwipeMis
           {isLoading ? (
             <div className="flex flex-col items-center gap-3 text-jolene-bubblegum">
               <Loader2 className="h-8 w-8 animate-spin" />
-              <span className="text-sm">Calcul de votre matching...</span>
+              <span className="text-sm">Calcul de ton matching...</span>
             </div>
           ) : localStack.length === 0 ? (
             (data?.length ?? 0) > 0 ? (
@@ -230,8 +230,8 @@ export function VueSwipeMissions({ onBasculerListe, onCreerAlerte }: VueSwipeMis
               <EmptyState
                 mascotte="happy"
                 variant="success"
-                titre="Vous avez tout vu pour aujourd'hui"
-                description="Créez une alerte : vous recevrez un email dès qu'une nouvelle mission correspondant à votre profil est publiée."
+                titre="Tu as tout vu pour aujourd'hui"
+                description="Crée une alerte : tu recevras un email dès qu'une nouvelle mission correspondant à ton profil est publiée."
                 cta={{
                   label: '🔔 Me prévenir des prochaines missions',
                   onClick: onCreerAlerte,
@@ -245,8 +245,8 @@ export function VueSwipeMissions({ onBasculerListe, onCreerAlerte }: VueSwipeMis
               /* Cas réel pré-traction : 0 mission sur le marché — l'état vide recrute */
               <EmptyState
                 mascotte="thinking"
-                titre="Aucune mission près de chez vous pour l'instant"
-                description="Créez une alerte : vous recevrez un email dès qu'une mission correspondant à votre profil est publiée."
+                titre="Aucune mission près de chez toi pour l'instant"
+                description="Crée une alerte : tu recevras un email dès qu'une mission correspondant à ton profil est publiée."
                 cta={{
                   label: "🔔 Me prévenir dès qu'une mission arrive",
                   onClick: onCreerAlerte,

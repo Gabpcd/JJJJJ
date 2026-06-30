@@ -78,13 +78,13 @@ export default function PageParrainage() {
 
   return (
     <LayoutApp role="SOIGNANT">
-      <SEOHead title="Parrainage — Jolene" description="Invitez vos collègues soignants et obtenez le badge Ambassadeur sur Jolene." />
+      <SEOHead title="Parrainage — Jolene" description="Invite tes collègues soignants et obtiens le badge Ambassadeur sur Jolene." />
       <div className="max-w-3xl mx-auto px-4 py-8 space-y-8">
         <div>
           <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
             <Gift className="h-6 w-6 text-primary" /> Parrainage
           </h1>
-          <p className="text-muted-foreground mt-1">Recommandez Jolene à vos collègues et débloquez des avantages exclusifs.</p>
+          <p className="text-muted-foreground mt-1">Recommande Jolene à tes collègues et débloque des avantages exclusifs.</p>
         </div>
 
         {/* Badge Ambassadeur */}
@@ -108,7 +108,7 @@ export default function PageParrainage() {
               <div className="h-3 bg-muted rounded-full overflow-hidden">
                 <div className="h-full bg-primary rounded-full transition-all" style={{ width: `${(progressAmbassadeur / 3) * 100}%` }} />
               </div>
-              <p className="text-xs text-muted-foreground mt-2">Parrainez 3 collègues qui terminent leur 1ère mission pour obtenir le badge.</p>
+              <p className="text-xs text-muted-foreground mt-2">Parraine 3 collègues qui terminent leur 1ère mission pour obtenir le badge.</p>
             </div>
           )}
 
@@ -116,14 +116,14 @@ export default function PageParrainage() {
             <Landmark className="h-4 w-4 text-primary mt-0.5 flex-shrink-0" />
             <div className="text-sm text-foreground">
               <p className="font-semibold">Prime de 50€ parrain + 50€ filleul</p>
-              <p className="text-xs text-muted-foreground mt-0.5">Versée par virement après la 1ère mission terminée de votre filleul et 100€ de commission encaissée par Jolene. Renseignez votre IBAN dans <strong>Profil → Paiements</strong>.</p>
+              <p className="text-xs text-muted-foreground mt-0.5">Versée par virement après la 1ère mission terminée de ton filleul et 100€ de commission encaissée par Jolene. Renseigne ton IBAN dans <strong>Profil → Paiements</strong>.</p>
             </div>
           </div>
           <div className="flex items-start gap-2 p-3 rounded-xl bg-primary/5 border border-primary/20">
             <Shield className="h-4 w-4 text-primary mt-0.5 flex-shrink-0" />
             <div className="text-sm text-foreground">
               <p className="font-semibold">Badge Ambassadeur visible</p>
-              <p className="text-xs text-muted-foreground mt-0.5">Une fois débloqué, le badge Ambassadeur apparaît sur votre profil côté établissements (annuaire, recherches, candidatures).</p>
+              <p className="text-xs text-muted-foreground mt-0.5">Une fois débloqué, le badge Ambassadeur apparaît sur ton profil côté établissements (annuaire, recherches, candidatures).</p>
             </div>
           </div>
         </div>
@@ -131,7 +131,7 @@ export default function PageParrainage() {
         {/* Code & Lien */}
         <div className="rounded-2xl border border-primary/20 bg-gradient-to-br from-primary/5 to-primary/10 p-6 space-y-5">
           <div className="text-center">
-            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1">Votre code parrainage</p>
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1">Ton code parrainage</p>
             <div className="flex items-center justify-center gap-3">
               <span className="text-xl sm:text-3xl font-extrabold text-primary tracking-widest">{codeParrainage || '...'}</span>
               <button
@@ -147,7 +147,7 @@ export default function PageParrainage() {
 
           <div className="flex flex-col sm:flex-row gap-5 items-center">
             <div className="shrink-0 bg-background p-3 rounded-xl">
-              <QRCodeSVG value={lienRef} size={140} level="M" bgColor="#FFFFFF" fgColor="#1A1A2E" className="rounded bg-white p-1" aria-label="QR code de votre lien de parrainage" role="img" />
+              <QRCodeSVG value={lienRef} size={140} level="M" bgColor="#FFFFFF" fgColor="#1A1A2E" className="rounded bg-white p-1" aria-label="QR code de ton lien de parrainage" role="img" />
             </div>
             <div className="flex-1 space-y-3 w-full">
               <div className="bg-background rounded-lg px-3 py-2.5 text-xs font-mono text-muted-foreground break-all border border-border">
@@ -200,10 +200,10 @@ export default function PageParrainage() {
             <Gift className="h-4 w-4 text-primary" /> Comment ça marche ?
           </h3>
           <ol className="text-sm text-muted-foreground leading-relaxed space-y-2 list-decimal list-inside">
-            <li>Partagez votre code ou lien avec vos collègues soignants</li>
-            <li>Votre filleul applique votre code à l'inscription</li>
-            <li>Quand il termine sa 1ère mission et que 100€ de commission sont encaissés par Jolene : <strong>50€ versés</strong> au parrain + <strong>50€ au filleul</strong> (par virement sur votre IBAN)</li>
-            <li>Après <strong>3 filleuls validés</strong>, vous obtenez le badge <span className="text-primary font-semibold">Ambassadeur</span></li>
+            <li>Partage ton code ou lien avec tes collègues soignants</li>
+            <li>Ton filleul applique ton code à l'inscription</li>
+            <li>Quand il termine sa 1ère mission et que 100€ de commission sont encaissés par Jolene : <strong>50€ versés</strong> au parrain + <strong>50€ au filleul</strong> (par virement sur ton IBAN)</li>
+            <li>Après <strong>3 filleuls validés</strong>, tu obtiens le badge <span className="text-primary font-semibold">Ambassadeur</span></li>
           </ol>
         </div>
 
@@ -214,7 +214,7 @@ export default function PageParrainage() {
           </h3>
           {filleuls.length === 0 ? (
             <div className="rounded-xl border border-dashed border-border bg-muted/30 p-8 text-center">
-              <p className="text-muted-foreground text-sm">Aucun filleul pour le moment. Partagez votre lien !</p>
+              <p className="text-muted-foreground text-sm">Aucun filleul pour le moment. Partage ton lien !</p>
             </div>
           ) : (
             <div className="rounded-xl border border-border overflow-x-auto">
