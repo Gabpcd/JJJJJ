@@ -507,23 +507,6 @@ export default function DashboardSoignant() {
             </FadeInView>
           </div>
 
-          {/* Teaser classement — concours amical, découverte de la page */}
-          {missionsTerminees > 0 && (
-            <div
-              onClick={() => navigate('/soignant/classement')}
-              className="card-base mb-6 cursor-pointer hover:shadow-md transition-all flex items-center gap-3"
-            >
-              <div className="rounded-xl p-2.5 bg-gradient-to-br from-jolene-rose-100 to-jolene-mauve-100 dark:from-jolene-rose-900/30 dark:to-jolene-mauve-900/30">
-                <span className="text-xl">🏆</span>
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-foreground">Classement des soignants</p>
-                <p className="text-xs text-muted-foreground">Où en êtes-vous parmi les soignants Jolene cette semaine ?</p>
-              </div>
-              <span className="text-xs text-primary font-medium shrink-0">Voir →</span>
-            </div>
-          )}
-
           </SectionErrorBoundary>
         </TabsContent>
 
