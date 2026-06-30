@@ -185,11 +185,14 @@ export default function InscriptionSoignant() {
   // RPPS OBLIGATOIRE (saisie requise) seulement pour les professions « Ordre
   // historique » ; pour les autres à RPPS, il reste optionnel (diplôme à la place).
   const rppsObligatoireInscription = !!form.profession && PROFESSIONS_RPPS_REQUIS.includes(form.profession);
+  // Téléphone OBLIGATOIRE à l'inscription : donnée opérationnelle critique (un étab
+  // doit pouvoir joindre le soignant pour une mission urgente). Même pattern que l'input.
+  const telephoneValide = /^[+]?[0-9\s]{8,15}$/.test(form.telephone.trim());
   const rppsMatch = rppsCorrespond();
   // Mismatch de profession (RPPS d'une autre profession) = bloquant, au même titre que nom/prénom.
   const rppsProfessionMismatch = !!rppsResultat?.trouve && rppsResultat?.profession_correspond === false;
   const rppsBloquant = rppsRequis && form.rpps.length === 11 && rppsResultat && !rppsResultat.fhir_indisponible && (!rppsResultat.trouve || rppsMatch === false || rppsProfessionMismatch) && !rppsVerifManuelle;
-  const etape2Valide = form.prenom && form.nom && form.profession && form.typesContrat.length > 0 && !rppsBloquant && !dateNaissanceRequise && dateNaissanceMajeur && (!TURNSTILE_REQUIRED || !!turnstileToken) && (!rppsObligatoireInscription || form.rpps.length === 11);
+  const etape2Valide = form.prenom && form.nom && form.profession && form.typesContrat.length > 0 && !rppsBloquant && !dateNaissanceRequise && dateNaissanceMajeur && telephoneValide && (!TURNSTILE_REQUIRED || !!turnstileToken) && (!rppsObligatoireInscription || form.rpps.length === 11);
 
   // Verify RPPS when 11 digits entered
   useEffect(() => {
@@ -473,7 +476,10 @@ export default function InscriptionSoignant() {
                   <input value={form.nom} onChange={e => { if (!rppsPreRempli) maj('nom', e.target.value); }} readOnly={rppsPreRempli} className={`input-base ${rppsPreRempli ? 'bg-emerald-50/50 cursor-not-allowed' : ''} ${classeChampErreur('nom')}`} required autoComplete="family-name" />
                 </label>
               </div>
-              <label className="block"><span className="text-sm font-medium text-foreground mb-1.5 block">Téléphone</span><input value={form.telephone} onChange={e => maj('telephone', e.target.value)} type="tel" inputMode="tel" autoComplete="tel" placeholder="+33 6 ..." className="input-base" pattern="[\\+]?[0-9\\s]{8,15}" /></label>
+              <label className="block"><span className="text-sm font-medium text-foreground mb-1.5 block">Téléphone *</span><input value={form.telephone} onChange={e => maj('telephone', e.target.value)} type="tel" inputMode="tel" autoComplete="tel" placeholder="+33 6 ..." className={`input-base ${classeChampErreur('telephone')}`} pattern="[\\+]?[0-9\\s]{8,15}" required aria-invalid={form.telephone.length > 0 && !telephoneValide} />
+                {form.telephone.length > 0 && !telephoneValide && <p className="text-xs text-destructive mt-1 break-words" role="alert">Numéro de téléphone invalide</p>}
+                <p className="text-[11px] text-muted-foreground mt-1">Nécessaire pour qu'un établissement puisse te joindre (missions urgentes).</p>
+              </label>
               <label className="block"><span className="text-sm font-medium text-foreground mb-1.5 block">Date de naissance *</span><input type="date" value={form.dateNaissance} onChange={e => maj('dateNaissance', e.target.value)} className={`input-base ${classeChampErreur('dateNaissance')}`} max={new Date(new Date().setFullYear(new Date().getFullYear() - 18)).toISOString().split('T')[0]} required aria-invalid={!!form.dateNaissance && !dateNaissanceMajeur} aria-describedby={form.dateNaissance && !dateNaissanceMajeur ? 'date-err' : undefined} />
                 {dateNaissanceRequise && <p className="text-xs text-destructive mt-1 break-words">La date de naissance est obligatoire</p>}
                 {form.dateNaissance && !dateNaissanceMajeur && <p id="date-err" className="text-xs text-destructive mt-1 break-words" role="alert">Tu dois avoir 18 ans révolus pour t'inscrire</p>}
