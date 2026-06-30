@@ -82,19 +82,6 @@ export default function DashboardSoignant() {
     enabled: !!user,
   });
 
-  // Streak quotidien (mécanique d'engagement swipe) — surfacée sur l'accueil
-  // pour pousser l'habitude quotidienne : plus de swipes = plus de candidatures.
-  const { data: streak } = useQuery({
-    queryKey: ['ma-streak', user?.id],
-    queryFn: async () => {
-      const { data } = await supabase.rpc('fn_ma_streak' as any);
-      const row = Array.isArray(data) ? data[0] : data;
-      return (row?.streak_count as number) ?? 0;
-    },
-    staleTime: 60_000,
-    enabled: !!user,
-  });
-
   // Keep propositions in local state so they can be removed on action
   const dashboardPropositions = dashboard?.propositions;
   useEffect(() => {
@@ -177,8 +164,18 @@ export default function DashboardSoignant() {
   const activation = useActivationSoignant({
     soignant: soignant as unknown as SoignantActivation | null,
     documents: (dashboard?.documents ?? []) as DocumentActivation[],
-    missionsActives: mesMissions.length,
   });
+
+  // Moyen de paiement prêt ? (pour le nudge paiement just-in-time, après la 1ʳᵉ
+  // mission terminée). Libéral : Stripe OU RIB + mandat ; salarié : RIB.
+  const aRib = (dashboard?.documents ?? []).some(
+    (d: any) => d.type_document === 'RIB' && d.statut_verification !== 'REJETE',
+  );
+  const estLiberalPaie =
+    (soignant as any)?.type_exercice === 'LIBERAL' || (soignant as any)?.type_exercice === 'MIXTE';
+  const moyenPaiementPret = estLiberalPaie
+    ? (hasStripeConnect || aRib) && hasMandatFacturation
+    : aRib;
 
   if (isLoading) return <LayoutApp role="SOIGNANT"><SkeletonDashboard /></LayoutApp>;
 
@@ -191,7 +188,6 @@ export default function DashboardSoignant() {
   // Onglet "Parcours" (vers le libéral) : seulement pour les professions éligibles.
   const afficheParcours = !!(soignantWithCounts.profession && estEligibleLiberal(soignantWithCounts.profession));
 
-  const aDocuments = !!(soignantWithCounts as any).tous_documents_valides;
 
   return (
     <LayoutApp role="SOIGNANT">
@@ -233,20 +229,6 @@ export default function DashboardSoignant() {
           Mes missions
         </BoutonY2K>
       </div>
-
-      {/* Nudge streak : pousse le swipe quotidien (habit loop). Cliquable vers
-          la vue swipe pour entretenir/relancer la série. */}
-      <button
-        onClick={() => navigate('/soignant/recherche-missions?vue=swipe')}
-        className="w-full mb-6 flex items-center justify-between gap-2 rounded-2xl border border-jolene-rose-200/60 bg-gradient-soft px-4 py-2.5 text-left hover:border-jolene-rose-300 transition-colors"
-      >
-        <span className="text-sm font-semibold text-foreground">
-          {(streak ?? 0) > 0
-            ? `🔥 ${streak} jour${(streak ?? 0) > 1 ? 's' : ''} d'affilée — garde ta série !`
-            : '🔥 Démarre ta série — swipe aujourd\'hui'}
-        </span>
-        <span className="text-xs font-semibold text-primary shrink-0">Swiper →</span>
-      </button>
 
       {/* ═══ ZONE 2 : CONTEXTE IMMÉDIAT (missions en cours / pointage) ═══ */}
 
@@ -332,39 +314,40 @@ export default function DashboardSoignant() {
       )}
       <BandeauEvaluationsEnAttente role="SOIGNANT" />
 
-      {!activation.visible && soignant && !aDocuments && (
-        <div
-          onClick={() => navigate('/soignant/mes-documents')}
-          className="rounded-xl border border-warning/30 bg-warning/5 p-4 mb-4 flex items-start gap-3 cursor-pointer hover:border-warning/50 transition-colors"
-        >
-          <FileText className="h-5 w-5 text-warning shrink-0 mt-0.5" />
-          <div className="flex-1">
-            <p className="font-semibold text-foreground">Documents requis</p>
-            <p className="text-sm text-muted-foreground">
-              Téléverse tes documents (CNI, diplôme, RC Pro) pour pouvoir candidater à toutes les missions.
-            </p>
+      {/* Nudge paiement JUST-IN-TIME : seulement après la 1ʳᵉ mission terminée et
+          si le moyen de paiement n'est pas prêt — pour que les fonds soient
+          libérables sans attente. Avant la 1ʳᵉ mission terminée : aucun nudge. */}
+      {missionsTerminees >= 1 && !moyenPaiementPret && (
+        estLiberalPaie ? (
+          !hasMandatFacturation ? (
+            <div className="rounded-xl border-2 border-warning/30 bg-warning/5 p-4 mb-4 flex items-start gap-3 cursor-pointer hover:border-warning/50 transition-colors" onClick={() => navigate('/soignant/mandat-facturation')}>
+              <FileText className="h-5 w-5 text-warning shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <p className="font-semibold text-foreground">Signe ton mandat de facturation</p>
+                <p className="text-sm text-muted-foreground">Indispensable pour que Jolene émette tes factures d'honoraires et débloque ton paiement (24-48 h).</p>
+              </div>
+              <span className="text-sm text-primary font-medium shrink-0">Signer →</span>
+            </div>
+          ) : (
+            <div className="rounded-xl border-2 border-primary/30 bg-primary/5 p-4 mb-4 flex items-start gap-3 cursor-pointer hover:border-primary/50 transition-colors" onClick={() => navigate('/soignant/stripe-connect')}>
+              <CreditCard className="h-5 w-5 text-primary shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <p className="font-semibold text-foreground">Reçois ton paiement</p>
+                <p className="text-sm text-muted-foreground">Connecte Stripe pour être payé·e en 24-48 h (recommandé), ou ajoute un RIB pour un virement de l'établissement.</p>
+              </div>
+              <span className="text-sm text-primary font-medium shrink-0">Activer →</span>
+            </div>
+          )
+        ) : (
+          <div className="rounded-xl border-2 border-primary/30 bg-primary/5 p-4 mb-4 flex items-start gap-3 cursor-pointer hover:border-primary/50 transition-colors" onClick={() => navigate('/soignant/mes-documents')}>
+            <Banknote className="h-5 w-5 text-primary shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <p className="font-semibold text-foreground">Ajoute ton RIB</p>
+              <p className="text-sm text-muted-foreground">Pour que l'établissement puisse te verser ta rémunération. Une photo suffit.</p>
+            </div>
+            <span className="text-sm text-primary font-medium shrink-0">Ajouter →</span>
           </div>
-          <span className="text-sm text-primary font-medium shrink-0">Aller au centre →</span>
-        </div>
-      )}
-
-      {!hasStripeConnect && (soignantWithCounts as any)?.type_exercice !== 'SALARIE' && (
-        <div className="rounded-xl border-2 border-primary/30 bg-primary/5 p-4 mb-4 flex items-start gap-3 cursor-pointer hover:border-primary/50 transition-colors" onClick={() => navigate('/soignant/stripe-connect')}>
-          <CreditCard className="h-5 w-5 text-primary shrink-0 mt-0.5" />
-          <div>
-            <p className="font-semibold text-foreground">Active ton compte de paiement</p>
-            <p className="text-sm text-muted-foreground">Lie ton compte Stripe Connect pour recevoir tes paiements directement. Ça prend 5 minutes.</p>
-          </div>
-        </div>
-      )}
-      {((soignantWithCounts as any).type_exercice === 'LIBERAL' || (soignantWithCounts as any).type_exercice === 'MIXTE') && !hasMandatFacturation && (
-        <div className="rounded-xl border-2 border-warning/30 bg-warning/5 p-4 mb-4 flex items-start gap-3 cursor-pointer hover:border-warning/50 transition-colors" onClick={() => navigate('/soignant/mandat-facturation')}>
-          <FileText className="h-5 w-5 text-warning shrink-0 mt-0.5" />
-          <div>
-            <p className="font-semibold text-foreground">Signe ton mandat de facturation</p>
-            <p className="text-sm text-muted-foreground">Jolene pourra générer automatiquement tes factures d'honoraires et te donner accès au paiement rapide (24-48h).</p>
-          </div>
-        </div>
+        )
       )}
 
       {soignantWithCounts.type_exercice !== 'LIBERAL' && <BandeauAlerte48h heuresSemaine={heuresSemaine} />}
