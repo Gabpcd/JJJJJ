@@ -47,14 +47,14 @@ test.describe('Matrice documents requis par profession + exercice', () => {
     expect(rows.length).toBeGreaterThan(0);
   });
 
-  test('AS salariée → CARTE_IDENTITE + DIPLOME (+ autorisation exercice optionnelle)', () => {
+  test('AS salariée → CARTE_IDENTITE + DIPLOME + RIB (+ autorisation optionnelle)', () => {
     const docs = docsVisibles(rows, 'AS', 'SALARIE');
-    expect(docs).toEqual(['AUTORISATION_EXERCICE', 'CARTE_IDENTITE', 'DIPLOME']);
+    expect(docs).toEqual(['AUTORISATION_EXERCICE', 'CARTE_IDENTITE', 'DIPLOME', 'RIB']);
   });
 
-  test('AES salariée → CARTE_IDENTITE + DIPLOME (+ autorisation exercice optionnelle)', () => {
+  test('AES salariée → CARTE_IDENTITE + DIPLOME + RIB (+ autorisation optionnelle)', () => {
     const docs = docsVisibles(rows, 'AES', 'SALARIE');
-    expect(docs).toEqual(['AUTORISATION_EXERCICE', 'CARTE_IDENTITE', 'DIPLOME']);
+    expect(docs).toEqual(['AUTORISATION_EXERCICE', 'CARTE_IDENTITE', 'DIPLOME', 'RIB']);
   });
 
   test('IDE salariée → CARTE_IDENTITE + DIPLOME + RPPS_ADELI + RIB (pas de RCP/URSSAF)', () => {
@@ -81,23 +81,24 @@ test.describe('Matrice documents requis par profession + exercice', () => {
     expect(docs).toContain('ATTESTATION_URSSAF');
   });
 
-  test('PHARMACIEN → RPPS mais jamais RCP/RIB/URSSAF (salarié only)', () => {
+  test('PHARMACIEN → RPPS + RIB, jamais RCP/URSSAF (salarié only)', () => {
     const salarie = docsVisibles(rows, 'PHARMACIEN', 'SALARIE');
-    expect(salarie).toEqual(['AUTORISATION_EXERCICE', 'CARTE_IDENTITE', 'DIPLOME', 'RPPS_ADELI']);
-    // Même en simulant libéral, pas de RCP/RIB/URSSAF (non seedés pour pharmacien)
+    expect(salarie).toEqual(['AUTORISATION_EXERCICE', 'CARTE_IDENTITE', 'DIPLOME', 'RIB', 'RPPS_ADELI']);
+    // RIB requis pour tous (versement rémunération) ; RCP/URSSAF restent libéraux only,
+    // non seedés pour pharmacien → jamais affichés même en simulant libéral.
     const liberal = docsVisibles(rows, 'PHARMACIEN', 'LIBERAL');
     expect(liberal).not.toContain('RCP_ASSURANCE');
-    expect(liberal).not.toContain('RIB');
+    expect(liberal).not.toContain('ATTESTATION_URSSAF');
   });
 
-  test('MANIPULATEUR_RADIO → ADELI (RPPS_ADELI) mais pas RCP/RIB/URSSAF', () => {
+  test('MANIPULATEUR_RADIO → ADELI + RIB mais pas RCP/URSSAF', () => {
     const docs = docsVisibles(rows, 'MANIPULATEUR_RADIO', 'SALARIE');
-    expect(docs).toEqual(['AUTORISATION_EXERCICE', 'CARTE_IDENTITE', 'DIPLOME', 'RPPS_ADELI']);
+    expect(docs).toEqual(['AUTORISATION_EXERCICE', 'CARTE_IDENTITE', 'DIPLOME', 'RIB', 'RPPS_ADELI']);
   });
 
-  test('PREPARATEUR_PHARMA → uniquement CARTE_IDENTITE + DIPLOME', () => {
+  test('PREPARATEUR_PHARMA → CARTE_IDENTITE + DIPLOME + RIB', () => {
     const docs = docsVisibles(rows, 'PREPARATEUR_PHARMA', 'SALARIE');
-    expect(docs).toEqual(['AUTORISATION_EXERCICE', 'CARTE_IDENTITE', 'DIPLOME']);
+    expect(docs).toEqual(['AUTORISATION_EXERCICE', 'CARTE_IDENTITE', 'DIPLOME', 'RIB']);
   });
 
   test('ORTHOPHONISTE libérale → ADELI + RCP + RIB + URSSAF', () => {
