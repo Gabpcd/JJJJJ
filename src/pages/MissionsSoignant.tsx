@@ -3,7 +3,7 @@ import { usePageTitle } from '@/hooks/usePageTitle';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { SkeletonList } from '@/components/SkeletonCard';
 import { FadeInView } from '@/components/FadeInView';
-import { Briefcase, History, Sparkles, SlidersHorizontal } from 'lucide-react';
+import { Briefcase, History } from 'lucide-react';
 import { LayoutApp } from '@/components/LayoutApp';
 import { EmptyState, IllustrationBoussole } from '@/components/ui/EmptyState';
 import { CarteMissionSoignant } from '@/components/CarteMissionSoignant';
@@ -220,29 +220,10 @@ export default function MissionsSoignant() {
     <LayoutApp role="SOIGNANT">
       <h1 className="text-xl font-bold text-foreground mb-4">Mes missions</h1>
 
-      {/* Accès rapide à la recherche de nouvelles missions (canonique) */}
-      <div className="grid grid-cols-2 gap-3 mb-4">
-        <button
-          onClick={() => navigate('/soignant/swipe-missions')}
-          className="flex items-center gap-2 rounded-2xl border border-primary/30 bg-primary/5 px-4 py-3 text-left transition-colors hover:bg-primary/10 active:scale-[0.98]"
-        >
-          <Sparkles className="h-5 w-5 text-primary shrink-0" />
-          <div className="min-w-0">
-            <p className="text-sm font-semibold text-foreground">Découvrir</p>
-            <p className="text-xs text-muted-foreground">Mode swipe</p>
-          </div>
-        </button>
-        <button
-          onClick={() => navigate('/soignant/recherche-missions')}
-          className="flex items-center gap-2 rounded-2xl border border-border bg-card px-4 py-3 text-left transition-colors hover:bg-muted/50 active:scale-[0.98]"
-        >
-          <SlidersHorizontal className="h-5 w-5 text-primary shrink-0" />
-          <div className="min-w-0">
-            <p className="text-sm font-semibold text-foreground">Recherche</p>
-            <p className="text-xs text-muted-foreground">Avancée + carte</p>
-          </div>
-        </button>
-      </div>
+      {/* Doublon « Découvrir / Recherche » retiré : la découverte de missions vit
+          dans l'onglet « Missions » de la barre du bas (swipe + recherche). Cette
+          page = candidatures / à venir / passées. Les états vides renvoient déjà
+          vers /recherche-missions pour la conversion. */}
 
       {(!soignant || !soignant.profession) && <BandeauProfilIncomplet />}
       <div className="flex border-b border-border mb-4 overflow-x-auto">
