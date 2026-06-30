@@ -78,10 +78,10 @@ const RechercheMissions = lazy(() => import("./pages/RechercheMissions"));
 const DetailMissionSoignant = lazy(() => import("./pages/DetailMissionSoignant"));
 // Session G1 : SwipeMissions n'est plus routé (consolidé dans RechercheMissions via toggle).
 // Le fichier source reste en place ; la route /soignant/swipe-missions redirige.
-const MesMatches = lazy(() => import("./pages/MesMatches"));
+// Refonte nav : MesMatches et PlanningSoignant ne sont plus routés (redirects
+// vers /soignant/missions). Fichiers conservés pour réintégration (vue calendrier).
 const DetailSerieSoignant = lazy(() => import("./pages/DetailSerieSoignant"));
 const DocumentsSoignant = lazy(() => import("./pages/DocumentsSoignant"));
-const PlanningSoignant = lazy(() => import("./pages/PlanningSoignant"));
 const ConformiteSoignant = lazy(() => import("./pages/ConformiteSoignant"));
 const ReputationSoignant = lazy(() => import("./pages/ReputationSoignant"));
 const PresencesSoignant = lazy(() => import("./pages/PresencesSoignant"));
@@ -260,13 +260,17 @@ function AppRoutes() {
               « Trouver une mission » (vue Swipe via toggle). On force la préférence puis on
               redirige pour que la page s'ouvre directement sur la vue swipe. */}
           <Route path="/soignant/swipe-missions" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><RedirectionSwipeMissions /></RouteProtegee>} />
-          <Route path="/soignant/mes-matches" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><MesMatches /></RouteProtegee>} />
+          {/* Refonte nav : « Matchs » absorbé par « Mes missions › À venir ». */}
+          <Route path="/soignant/mes-matches" element={<Navigate to="/soignant/missions" replace />} />
           <Route path="/soignant/missions/serie/:serieId" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><DetailSerieSoignant /></RouteProtegee>} />
           <Route path="/soignant/missions/:id" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><DetailMissionSoignant /></RouteProtegee>} />
           <Route path="/soignant/mes-documents" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><MesDocuments /></RouteProtegee>} />
           <Route path="/soignant/documents" element={<Navigate to="/soignant/mes-documents?tab=justificatifs" replace />} />
-          <Route path="/soignant/planning" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><PlanningSoignant /></RouteProtegee>} />
-          <Route path="/soignant/calendrier-sync" element={<Navigate to="/soignant/planning" replace />} />
+          {/* Refonte nav : le planning devient l'onglet « À venir » de Mes missions.
+              La vue calendrier (mois) sera réintégrée comme toggle de cet onglet
+              (PR dédiée) en réutilisant PlanningSoignant. */}
+          <Route path="/soignant/planning" element={<Navigate to="/soignant/missions?tab=a-venir" replace />} />
+          <Route path="/soignant/calendrier-sync" element={<Navigate to="/soignant/missions?tab=a-venir" replace />} />
           <Route path="/soignant/conformite" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><ConformiteSoignant /></RouteProtegee>} />
           <Route path="/soignant/reputation" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><ReputationSoignant /></RouteProtegee>} />
           <Route path="/soignant/presences" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><PresencesSoignant /></RouteProtegee>} />
@@ -277,7 +281,7 @@ function AppRoutes() {
           <Route path="/soignant/mes-factures-honoraires" element={<Navigate to="/soignant/mes-gains?tab=factures" replace />} />
           <Route path="/soignant/mes-avances" element={<Navigate to="/soignant/mes-gains?tab=avances" replace />} />
           <Route path="/soignant/bulletins-paie" element={<Navigate to="/soignant/mes-gains?tab=bulletins" replace />} />
-          <Route path="/soignant/historique-missions" element={<Navigate to="/soignant/planning?tab=historique" replace />} />
+          <Route path="/soignant/historique-missions" element={<Navigate to="/soignant/missions?tab=passees" replace />} />
           <Route path="/soignant/fiabilite" element={<Navigate to="/soignant/score" replace />} />
           <Route path="/soignant/score" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><PageScoreSoignant /></RouteProtegee>} />
           <Route path="/soignant/evaluations" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><EvaluationsSoignant /></RouteProtegee>} />

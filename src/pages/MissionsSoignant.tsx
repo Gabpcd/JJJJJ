@@ -42,12 +42,15 @@ export default function MissionsSoignant() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { user } = useAuth();
+  // Refonte nav : on accepte `?tab=a-venir|passees` (cible des redirects
+  // mes-matches → /missions et planning → /missions?tab=a-venir) en plus du
+  // legacy `?onglet=mes_missions|historique`.
+  const tabParam = searchParams.get('tab');
   const ongletParam = searchParams.get('onglet');
-  // Unification recherche (Session) : l'onglet « Disponibles » dupliquait
-  // /recherche-missions → retiré. Cette page = « Mes missions » (à venir + historique).
-  // La recherche de missions disponibles vit uniquement dans /recherche-missions.
+  // Cette page = « Mes missions » (à venir + passées). La recherche de missions
+  // disponibles vit uniquement dans /recherche-missions.
   const [onglet, setOnglet] = useState<Onglet>(
-    ongletParam === 'historique' ? 'historique' : 'mes_missions'
+    tabParam === 'passees' || ongletParam === 'historique' ? 'historique' : 'mes_missions'
   );
   const [soignant, setSoignant] = useState<SoignantData | null>(null);
   const [missions, setMissions] = useState<any[]>([]);
@@ -216,7 +219,7 @@ export default function MissionsSoignant() {
 
   const onglets: { id: Onglet; label: string; count?: number }[] = [
     { id: 'mes_missions', label: 'À venir' },
-    { id: 'historique', label: 'Historique' },
+    { id: 'historique', label: 'Passées' },
   ];
 
   return (

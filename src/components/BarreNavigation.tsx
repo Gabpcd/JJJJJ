@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { LucideIcon, Home, Search, FileText, CalendarDays, User, PlusCircle, List, ClipboardCheck, Settings, HeartPulse, LogOut, MapPin, Banknote, CreditCard, Rocket, Bell, Flame, MessageCircle, ClipboardList, Users, Scale, ChevronDown, Activity, Shield, Menu, X, Star, Gift, ShieldCheck, ArrowLeft, Sparkles } from 'lucide-react';
+import { LucideIcon, Home, Search, FileText, CalendarDays, User, PlusCircle, List, ClipboardCheck, Settings, HeartPulse, LogOut, MapPin, Banknote, CreditCard, Rocket, Bell, Flame, MessageCircle, ClipboardList, Users, Scale, ChevronDown, Activity, Shield, Menu, X, Star, Gift, ShieldCheck, ArrowLeft } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { UserRole } from '@/lib/types';
 import { estEligibleLiberal } from '@/lib/regles-installation-liberal';
@@ -17,17 +17,17 @@ type SidebarEntry = NavItem | NavGroup;
 function isGroup(e: SidebarEntry): e is NavGroup { return 'items' in e; }
 
 /* ── Mobile bottom bars (5 items max) ── */
+// Refonte nav (PR-A) : barre orientée « vente puis travail puis argent ».
+// Accueil · Missions (swipe) · Mes missions (candidatures/à venir/passées) ·
+// Revenus (finances) · Compte. Messages quitte la barre → icône dans le header
+// (la messagerie est toujours liée à une mission). « Matchs » est absorbé par
+// « Mes missions › À venir » ; le Planning aussi (redirect → ?tab=a-venir).
 const NAV_SOIGNANT_MOBILE: NavItem[] = [
   { icone: Home, label: 'Accueil', route: '/soignant/tableau-de-bord' },
-  // Session G1 : onglet « Missions » mobile → page canonique « Trouver une mission ».
   { icone: Search, label: 'Missions', route: '/soignant/recherche-missions' },
-  // Boucle de vente : le matching (swipe Hinge-style) est le hook d'engagement →
-  // remonté du menu vers la barre du bas. Le Planning passe dans Accueil + Menu.
-  { icone: Sparkles, label: 'Matchs', route: '/soignant/mes-matches' },
-  { icone: MessageCircle, label: 'Messages', route: '/soignant/messagerie' },
-  // L'onglet ouvre le hub « Mon compte » (profil + documents + finances + réglages),
-  // pas seulement le profil → libellé « Menu » + icône hamburger pour cohérence.
-  { icone: Menu, label: 'Menu', route: '/soignant/mon-compte' },
+  { icone: ClipboardList, label: 'Mes missions', route: '/soignant/missions' },
+  { icone: Banknote, label: 'Revenus', route: '/soignant/mes-gains' },
+  { icone: User, label: 'Compte', route: '/soignant/mon-compte' },
 ];
 
 const NAV_ETABLISSEMENT_MOBILE: NavItem[] = [
@@ -258,6 +258,15 @@ export function BarreNavigation({ role }: { role: UserRole }) {
   }, [role, user]);
 
   const mobileItems = getMobileNavItems(role);
+  // Messages dans le header (mobile) quand la messagerie n'est PAS dans la barre
+  // du bas (cas SOIGNANT depuis la refonte nav) — la messagerie est liée à une
+  // mission, elle n'a pas à occuper un slot de la barre principale.
+  const messagerieRoute = role === 'SOIGNANT'
+    ? '/soignant/messagerie'
+    : role === 'ADMIN_ETABLISSEMENT'
+      ? '/etablissement/messagerie'
+      : null;
+  const afficherMessagesHeader = !!messagerieRoute && !mobileItems.some((i) => i.route === messagerieRoute);
   const sidebarEntries = role === 'SOIGNANT'
     ? getSoignantSidebar(isLiberal, showLiberalPath)
     : role === 'ADMIN_ETABLISSEMENT'
@@ -304,6 +313,20 @@ export function BarreNavigation({ role }: { role: UserRole }) {
           </button>
         </div>
         <div className="flex items-center gap-1">
+          {afficherMessagesHeader && (
+            <button
+              onClick={() => navigate(messagerieRoute!)}
+              aria-label="Messages"
+              className="relative p-2 rounded-lg text-foreground hover:bg-muted transition"
+            >
+              <MessageCircle className="h-5 w-5" />
+              {messagesNonLus > 0 && (
+                <span className="absolute top-0.5 right-0.5 h-4 min-w-[16px] flex items-center justify-center rounded-full bg-destructive text-destructive-foreground text-[10px] font-bold px-1">
+                  {messagesNonLus > 9 ? '9+' : messagesNonLus}
+                </span>
+              )}
+            </button>
+          )}
           <BadgeNotification />
           <ThemeToggle className="text-foreground hover:bg-muted" />
           {/* Déconnexion : masquée pour SOIGNANT (dans "Mon compte"). */}

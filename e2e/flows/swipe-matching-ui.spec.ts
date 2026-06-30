@@ -4,7 +4,7 @@
  * Remplace les 10 stubs Sprint 13-D par 6 tests fonctionnels qui valident :
  * - Route /soignant/swipe-missions accessible + page rendue
  * - Toggle Swipe/Liste : persistance localStorage + navigation
- * - Page MesMatches : route accessible + stats KPIs + filtres
+ * - Routes legacy (mes-matches, planning) → redirect vers Mes missions (refonte nav)
  *
  * Pattern : login via UI (formulaire /connexion), navigation, assertion DOM.
  * Pas de dispatch Pointer Events (gesture swipe testé manuellement — flaky
@@ -66,31 +66,18 @@ test.describe('Sprint 14 — UI swipe matching (réels)', () => {
     await expect(page).toHaveURL(/\/soignant\/recherche-missions/, { timeout: 10_000 });
   });
 
-  test('Route /soignant/mes-matches accessible + stats engagement rendues', async ({ page }) => {
+  // Refonte nav : « Matchs » est absorbé par « Mes missions › À venir », et le
+  // planning aussi. Les anciennes routes redirigent vers /soignant/missions.
+  test('Route /soignant/mes-matches redirige vers Mes missions', async ({ page }) => {
     await loginAs(page, 'soignant');
     await page.goto('/soignant/mes-matches');
-    await page.waitForLoadState('networkidle');
-
-    await expect(page.getByRole('heading', { name: 'Mes matches', level: 1 })).toBeVisible();
-
-    // Soit la section stats (chargée), soit le spinner pendant fetch
-    const stats = page.getByRole('region', { name: /Statistiques engagement/i });
-    const spinner = page.locator('.animate-spin').first();
-    await expect(stats.or(spinner)).toBeVisible({ timeout: 10_000 });
+    await expect(page).toHaveURL(/\/soignant\/missions/, { timeout: 10_000 });
+    await expect(page.getByRole('heading', { name: 'Mes missions', level: 1 })).toBeVisible();
   });
 
-  test('Page MesMatches : 3 filtres BoutonY2K (Tous / En cours / Terminées)', async ({ page }) => {
+  test('Route /soignant/planning redirige vers Mes missions › À venir', async ({ page }) => {
     await loginAs(page, 'soignant');
-    await page.goto('/soignant/mes-matches');
-    await page.waitForLoadState('networkidle');
-
-    await expect(page.getByRole('button', { name: 'Tous', exact: true })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'En cours', exact: true })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Terminées', exact: true })).toBeVisible();
-
-    // Click "En cours" → ne crash pas, filtre activé
-    await page.getByRole('button', { name: 'En cours', exact: true }).click();
-    // Le filtre actif ne déclenche pas de navigation, juste un re-render local
-    await expect(page).toHaveURL(/\/soignant\/mes-matches/);
+    await page.goto('/soignant/planning');
+    await expect(page).toHaveURL(/\/soignant\/missions/, { timeout: 10_000 });
   });
 });
