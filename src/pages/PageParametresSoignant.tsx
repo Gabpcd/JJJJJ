@@ -20,7 +20,7 @@ const SECTIONS: Array<{ key: SectionKey; titre: string; icon: typeof User; descr
     key: 'identite',
     titre: 'Identité et documents',
     icon: FileText,
-    description: 'Vos données identité, RPPS, CNI, RIB, attestations et DPAE.',
+    description: 'Tes données identité, RPPS, CNI, RIB, attestations et DPAE.',
     cta: { label: 'Aller à mon profil', path: '/soignant/profil' },
   },
   {
@@ -80,7 +80,7 @@ export default function PageParametresSoignant() {
           <Sliders className="h-6 w-6 text-primary" /> Paramètres
         </h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Gérez votre compte, vos préférences et vos données personnelles depuis un seul endroit.
+          Gère ton compte, tes préférences et tes données personnelles depuis un seul endroit.
         </p>
       </div>
 
@@ -206,7 +206,7 @@ function PlaceholderPreferences({ onNavigate }: { onNavigate: () => void }) {
   return (
     <div className="space-y-5 text-sm">
       <div className="space-y-3 text-muted-foreground">
-        <p>Configurez vos professions, votre rayon de déplacement, vos types de contrat acceptés, votre taux minimum, et activez ou non le pool urgence.</p>
+        <p>Configure tes professions, ton rayon de déplacement, tes types de contrat acceptés, ton taux minimum, et active ou non le pool urgence.</p>
         <button onClick={onNavigate} className="btn-secondary text-sm">
           Éditer mes préférences pro
         </button>
@@ -218,7 +218,7 @@ function PlaceholderPreferences({ onNavigate }: { onNavigate: () => void }) {
           Suivi GPS pendant les missions
         </h3>
         <p className="text-xs text-muted-foreground mb-3">
-          Option facultative Sprint 4.5 : si activée, votre position GPS est enregistrée toutes les minutes pendant la durée de vos missions, pour renforcer la fiabilité du pointage et faciliter la résolution de litiges. Données conservées 30 jours puis supprimées.
+          Option facultative Sprint 4.5 : si activée, ta position GPS est enregistrée toutes les minutes pendant la durée de tes missions, pour renforcer la fiabilité du pointage et faciliter la résolution de litiges. Données conservées 30 jours puis supprimées.
         </p>
         <div className="rounded-lg border border-border bg-background p-0 overflow-hidden">
           <ConsentementPingGps />
@@ -231,7 +231,7 @@ function PlaceholderPreferences({ onNavigate }: { onNavigate: () => void }) {
 function PlaceholderIdentite({ onNavigate }: { onNavigate: () => void }) {
   return (
     <div className="space-y-3 text-sm text-muted-foreground">
-      <p>Vos pièces justificatives (CNI, RPPS, RIB), attestations, DPAE et données identité sont centralisées dans votre profil.</p>
+      <p>Tes pièces justificatives (CNI, RPPS, RIB), attestations, DPAE et données identité sont centralisées dans ton profil.</p>
       <button onClick={onNavigate} className="btn-secondary text-sm">
         Aller à mon profil
       </button>
@@ -242,7 +242,7 @@ function PlaceholderIdentite({ onNavigate }: { onNavigate: () => void }) {
 function PlaceholderDispos({ onNavigate }: { onNavigate: (path: string) => void }) {
   return (
     <div className="space-y-3 text-sm text-muted-foreground">
-      <p>Synchronisez votre calendrier externe et configurez vos disponibilités.</p>
+      <p>Synchronise ton calendrier externe et configure tes disponibilités.</p>
       <div className="flex flex-wrap gap-2">
         <button onClick={() => onNavigate('/soignant/planning')} className="btn-secondary text-sm">
           Mon planning
@@ -259,7 +259,7 @@ function PlaceholderRgpd({ onNavigate }: { onNavigate: () => void }) {
   return (
     <div className="space-y-3 text-sm text-muted-foreground">
       <p>
-        Vous pouvez à tout moment exporter vos données personnelles (JSON ou CSV) ou supprimer définitivement votre compte. Ces actions sont protégées par confirmation et audit RGPD.
+        Tu peux à tout moment exporter tes données personnelles (JSON ou CSV) ou supprimer définitivement ton compte. Ces actions sont protégées par confirmation et audit RGPD.
       </p>
       <button onClick={onNavigate} className="btn-secondary text-sm">
         Confidentialité (profil)
