@@ -81,7 +81,7 @@ export function FinaliserInstallationLiberal() {
       });
       const v2 = verifData as { ok?: boolean; statut?: string; raison_sociale?: string; est_actif?: boolean; message?: string } | null;
       if (v2?.statut === 'INTROUVABLE') {
-        toast.error(v2.message || 'SIRET introuvable dans le registre INSEE. Vérifiez votre numéro.');
+        toast.error(v2.message || 'SIRET introuvable dans le registre INSEE. Vérifie ton numéro.');
       } else if (v2?.statut === 'ALERTE') {
         toast.warning(v2.message || 'SIRET valide mais activité non-santé — vérification manuelle requise.');
       } else if (v2?.statut === 'VERIFIE') {
@@ -95,7 +95,7 @@ export function FinaliserInstallationLiberal() {
 
   const enregistrerTva = async () => {
     if (assujettiTva && !numeroTva.trim()) {
-      toast.error('Numéro de TVA intracommunautaire requis si vous êtes assujetti');
+      toast.error('Numéro de TVA intracommunautaire requis si tu es assujetti');
       return;
     }
     setSavingTva(true);
@@ -122,7 +122,7 @@ export function FinaliserInstallationLiberal() {
       toast.error(res?.error || error?.message || "Activation impossible");
       return;
     }
-    toast.success('Votre statut libéral est activé sur Jolene 🎉');
+    toast.success('Ton statut libéral est activé sur Jolene 🎉');
     await charger();
   };
 
@@ -141,8 +141,8 @@ export function FinaliserInstallationLiberal() {
         <h3 className="text-base font-bold text-foreground">Finaliser mon installation sur Jolene</h3>
       </div>
       <p className="text-xs text-muted-foreground -mt-2">
-        Une fois immatriculé à l'URSSAF (guichet unique), renseignez votre SIRET et votre statut TVA.
-        Ces informations figureront sur vos notes d'honoraires.
+        Une fois immatriculé à l'URSSAF (guichet unique), renseigne ton SIRET et ton statut TVA.
+        Ces informations figureront sur tes notes d'honoraires.
       </p>
 
       {actif && (
@@ -151,7 +151,7 @@ export function FinaliserInstallationLiberal() {
           <div>
             <p className="text-sm font-semibold text-foreground">Statut libéral actif</p>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Vous facturez désormais en honoraires. Vous pouvez encore mettre à jour votre statut TVA ci-dessous.
+              Tu factures désormais en honoraires. Tu peux encore mettre à jour ton statut TVA ci-dessous.
             </p>
           </div>
         </div>
@@ -186,7 +186,7 @@ export function FinaliserInstallationLiberal() {
               </BoutonY2K>
             </div>
             {siretEnregistre && (
-              <p className="text-xs text-success">SIRET enregistré — vous pouvez activer votre statut libéral.</p>
+              <p className="text-xs text-success">SIRET enregistré — tu peux activer ton statut libéral.</p>
             )}
           </>
         )}
@@ -200,7 +200,7 @@ export function FinaliserInstallationLiberal() {
               <Receipt className="h-4 w-4 text-muted-foreground" /> Assujetti à la TVA
             </Label>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Par défaut non (franchise en base). À activer si vous dépassez le seuil légal.
+              Par défaut non (franchise en base). À activer si tu dépasses le seuil légal.
             </p>
           </div>
           <Switch id="tva-switch" checked={assujettiTva} onCheckedChange={setAssujettiTva} />
@@ -223,7 +223,7 @@ export function FinaliserInstallationLiberal() {
       {!actif && (
         <div className="border-t border-border pt-4 space-y-2">
           <p className="text-xs text-muted-foreground">
-            Dernière étape : activez votre statut libéral sur Jolene. Vous basculez alors sur la facturation
+            Dernière étape : active ton statut libéral sur Jolene. Tu bascules alors sur la facturation
             en honoraires (notes d'honoraires au lieu de bulletins de paie).
           </p>
           <BoutonY2K
@@ -236,7 +236,7 @@ export function FinaliserInstallationLiberal() {
             Activer mon statut libéral
           </BoutonY2K>
           {!siretEnregistre && (
-            <p className="text-xs text-muted-foreground text-center">Renseignez d'abord votre SIRET.</p>
+            <p className="text-xs text-muted-foreground text-center">Renseigne d'abord ton SIRET.</p>
           )}
         </div>
       )}
