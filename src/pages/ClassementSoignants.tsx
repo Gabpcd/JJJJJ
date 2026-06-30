@@ -14,7 +14,7 @@ interface TopSoignant {
   profession: string;
   note_moyenne: number;
   score_fiabilite: number;
-  total_missions: number;
+  total_missions_terminees: number;
 }
 
 const labelProfession = (valeur: string) =>
@@ -45,11 +45,15 @@ export function ClassementContent() {
       p_limit: limit,
     });
     if (error) {
-      afficherNotification({ type: 'erreur', message: error.message || 'Erreur chargement classement.' });
+      // Ne jamais exposer le message Postgres brut à l'utilisateur.
+      afficherNotification({ type: 'erreur', message: 'Le classement est momentanément indisponible. Réessayez plus tard.' });
+      setSoignants([]);
       setLoading(false);
       return;
     }
-    setSoignants((data as TopSoignant[]) || []);
+    // Le rang n'est pas renvoyé par la fonction : on le dérive de l'ordre (déjà trié).
+    const classes = ((data as Omit<TopSoignant, 'rang'>[]) || []).map((s, i) => ({ ...s, rang: i + 1 }));
+    setSoignants(classes);
     setLoading(false);
   }
 
@@ -149,7 +153,7 @@ export function ClassementContent() {
                 </div>
                 <div className="flex items-center gap-1" title="Missions terminées">
                   <Briefcase className="h-3.5 w-3.5 text-muted-foreground" />
-                  <span className="tabular-nums">{s.total_missions}</span>
+                  <span className="tabular-nums">{s.total_missions_terminees}</span>
                 </div>
               </div>
 
@@ -160,7 +164,7 @@ export function ClassementContent() {
                   {Number(s.note_moyenne).toFixed(1)}
                 </span>
                 <span className="text-muted-foreground">{s.score_fiabilite}/100</span>
-                <span className="text-muted-foreground">{s.total_missions} missions</span>
+                <span className="text-muted-foreground">{s.total_missions_terminees} missions</span>
               </div>
             </div>
           ))}
