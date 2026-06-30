@@ -168,7 +168,7 @@ export function BulletinsPaieContent() {
 
         {(() => {
           const etatVide = bulletins.length === 0
-            ? <EmptyState icone={<FileText />} mascotte="empty" titre="Aucun bulletin de paie pour le moment" description="Les bulletins apparaîtront ici dès que vos missions salariées seront terminées." cta={{ label: 'Trouver une mission', onClick: () => navigate('/soignant/recherche-missions') }} />
+            ? <EmptyState icone={<FileText />} mascotte="empty" titre="Aucun bulletin de paie pour le moment" description="Les bulletins apparaîtront ici dès que tes missions salariées seront terminées." cta={{ label: 'Trouver une mission', onClick: () => navigate('/soignant/recherche-missions') }} />
             : <EmptyState icone={<FileText />} mascotte="thinking" titre="Aucun bulletin ne correspond aux filtres" cta={{ label: 'Réinitialiser les filtres', onClick: reinitialiserFiltres, variant: 'secondary' }} compact />;
 
           const colonnes: ColonneTableau<BulletinRow>[] = [
@@ -279,7 +279,7 @@ export function BulletinsPaieContent() {
         <div className="card-base bg-muted/30 text-xs text-muted-foreground">
           <p>
             <strong className="text-foreground">Conservation :</strong> les bulletins sont conservés
-            indéfiniment dans votre espace Jolene. Conformément à l'art. L3243-4 du Code du travail,
+            indéfiniment dans ton espace Jolene. Conformément à l'art. L3243-4 du Code du travail,
             l'employeur doit conserver son double 5 ans minimum. Le salarié doit conserver les siens
             sans limitation de durée (preuve d'activité pour la retraite).
           </p>

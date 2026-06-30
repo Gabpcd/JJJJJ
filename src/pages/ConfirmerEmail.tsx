@@ -17,15 +17,15 @@ export default function ConfirmerEmail() {
 
         <Mail className="h-16 w-16 text-primary mx-auto mb-4" />
 
-        <h1 className="text-xl font-bold text-foreground mb-3">Vérifiez votre adresse email</h1>
+        <h1 className="text-xl font-bold text-foreground mb-3">Vérifie ton adresse email</h1>
 
         <p className="text-sm text-muted-foreground mb-6">
-          Un email de confirmation vous a été envoyé. Cliquez sur le lien dans cet email pour activer votre compte et accéder à l'application.
+          Un email de confirmation t'a été envoyé. Clique sur le lien dans cet email pour activer ton compte et accéder à l'application.
         </p>
 
         <div className="bg-primary/5 border border-primary/20 rounded-xl p-4 mb-6">
           <p className="text-xs text-muted-foreground">
-            💡 Si vous ne trouvez pas l'email, vérifiez votre dossier spam. Le lien expire après 24 heures.
+            💡 Si tu ne trouves pas l'email, vérifie ton dossier spam. Le lien expire après 24 heures.
           </p>
         </div>
 

@@ -62,7 +62,7 @@ export function ApercuMarche({
         <p className="text-sm text-foreground">
           <strong>{apercu.nb_missions} mission{apercu.nb_missions > 1 ? 's' : ''}</strong>
           {labelProf ? <> {labelProf}</> : null}{' '}
-          {apercu.zone === 'rayon' ? 'dans votre rayon' : 'ouvertes en ce moment'}
+          {apercu.zone === 'rayon' ? 'dans ton rayon' : 'ouvertes en ce moment'}
           {apercu.taux_max != null && apercu.taux_max > 0 && (
             <> · jusqu'à <strong>{fmtTaux(Number(apercu.taux_max))} €/h</strong></>
           )}
@@ -77,7 +77,7 @@ export function ApercuMarche({
         <Building2 className="h-4 w-4 text-primary shrink-0 mt-0.5" />
         <p className="text-sm text-foreground">
           <strong>{apercu.nb_etablissements} établissement{apercu.nb_etablissements > 1 ? 's' : ''} de santé</strong>{' '}
-          {apercu.zone === 'rayon' ? 'près de chez vous' : 'déjà inscrits'} — complétez votre profil
+          {apercu.zone === 'rayon' ? 'près de chez toi' : 'déjà inscrits'} — complète ton profil
           pour être prévenu·e en premier dès qu'une mission est publiée.
         </p>
       </div>

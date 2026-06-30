@@ -45,7 +45,7 @@ export function CarteCommissionJolene({ etablissementId }: { etablissementId: st
         <div className="rounded-xl p-2 bg-primary/10">
           <Tag className="h-5 w-5 text-primary" />
         </div>
-        <h3 className="font-bold text-foreground">Votre commission Jolene</h3>
+        <h3 className="font-bold text-foreground">Ta commission Jolene</h3>
       </div>
 
       {/* Taux actuel en gros */}
@@ -103,11 +103,11 @@ export function CarteCommissionJolene({ etablissementId }: { etablissementId: st
       )}
 
       {!info.prochain_palier_nom && (
-        <p className="text-xs text-success font-medium mb-3">🎉 Vous bénéficiez du meilleur taux !</p>
+        <p className="text-xs text-success font-medium mb-3">🎉 Tu bénéficies du meilleur taux !</p>
       )}
 
       <p className="text-[10px] text-muted-foreground italic">
-        Recalculée chaque 1er du mois selon votre volume.
+        Recalculée chaque 1er du mois selon ton volume.
       </p>
     </div>
   );

@@ -75,7 +75,7 @@ export function MesDPAEContent() {
   return (
     <div>
       <p className="text-sm text-muted-foreground mb-4">
-        Déclarations Préalables à l'Embauche (DPAE) générées par vos établissements pour vos contrats CDD signés.
+        Déclarations Préalables à l'Embauche (DPAE) générées par tes établissements pour tes contrats CDD signés.
       </p>
 
       {/* KPIs */}
@@ -197,8 +197,8 @@ export function MesDPAEContent() {
         <p className="font-semibold text-foreground mb-1">À propos des DPAE</p>
         <ul className="list-disc list-inside space-y-1">
           <li>La DPAE (Déclaration Préalable à l'Embauche) est obligatoire pour tout contrat CDD/SALARIE. L'établissement la transmet à l'URSSAF dans les 8 jours avant le début de mission.</li>
-          <li>Vous devez avoir complété votre <strong>profil DPAE</strong> (sexe, lieu de naissance, nationalité, NIR) pour que l'établissement puisse générer la déclaration.</li>
-          <li>Une fois transmise, l'établissement saisit le numéro URSSAF retour. Vous le retrouvez ici.</li>
+          <li>Tu dois avoir complété ton <strong>profil DPAE</strong> (sexe, lieu de naissance, nationalité, NIR) pour que l'établissement puisse générer la déclaration.</li>
+          <li>Une fois transmise, l'établissement saisit le numéro URSSAF retour. Tu le retrouves ici.</li>
         </ul>
         <button
           onClick={() => navigate('/soignant/profil')}
@@ -251,7 +251,7 @@ function DpaeCardContent({ dpae, onVoirContrat, onVoirMission }: {
         <div className="rounded-lg bg-background/50 border border-warning/20 p-2 text-xs flex items-start gap-2">
           <AlertCircle className="h-4 w-4 shrink-0 text-warning mt-0.5" />
           <p className="text-muted-foreground">
-            L'établissement n'a pas encore transmis la DPAE à l'URSSAF ou n'a pas saisi le numéro de retour. Contactez l'établissement si le début de mission approche.
+            L'établissement n'a pas encore transmis la DPAE à l'URSSAF ou n'a pas saisi le numéro de retour. Contacte l'établissement si le début de mission approche.
           </p>
         </div>
       )}

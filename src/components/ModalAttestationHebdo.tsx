@@ -25,11 +25,11 @@ export function ModalAttestationHebdo({ semaineISO, heuresJoleneSemaine, onValid
   const handleValider = async () => {
     if (!atteste) return;
     if (!employeur.trim() && heures > 0) {
-      setErreur("Veuillez renseigner le nom de votre employeur.");
+      setErreur("Renseigne le nom de ton employeur.");
       return;
     }
     if (depasse48h) {
-      setErreur(`Vous dépasseriez le plafond de 48h/semaine (${heuresJoleneSemaine}h Jolene + ${heures}h ailleurs = ${totalSemaine}h).`);
+      setErreur(`Tu dépasserais le plafond de 48h/semaine (${heuresJoleneSemaine}h Jolene + ${heures}h ailleurs = ${totalSemaine}h).`);
       return;
     }
 
@@ -63,12 +63,12 @@ export function ModalAttestationHebdo({ semaineISO, heuresJoleneSemaine, onValid
       <div className="relative bg-card rounded-2xl shadow-xl p-6 mx-4 max-w-md w-full space-y-4">
         <h3 className="text-lg font-bold text-foreground">📋 Déclaration hebdomadaire</h3>
         <p className="text-sm text-muted-foreground">
-          Déclarez vos heures travaillées ailleurs cette semaine avant d'accepter cette mission.
+          Déclare tes heures travaillées ailleurs cette semaine avant d'accepter cette mission.
         </p>
 
         <div>
           <label className="text-sm font-medium text-foreground mb-1.5 block">
-            Heures chez votre employeur principal cette semaine
+            Heures chez ton employeur principal cette semaine
           </label>
           <input
             type="number"
@@ -94,7 +94,7 @@ export function ModalAttestationHebdo({ semaineISO, heuresJoleneSemaine, onValid
         {depasse48h && (
           <div className="rounded-xl bg-destructive/10 border border-destructive/20 p-3">
             <p className="text-sm text-destructive font-medium">
-              ⛔ Vous dépasseriez le plafond de 48h/semaine ({heuresJoleneSemaine}h Jolene + {heures}h ailleurs = {totalSemaine}h).
+              ⛔ Tu dépasserais le plafond de 48h/semaine ({heuresJoleneSemaine}h Jolene + {heures}h ailleurs = {totalSemaine}h).
             </p>
           </div>
         )}

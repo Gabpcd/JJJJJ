@@ -62,7 +62,7 @@ export function BannerEncourageNotation({ role, liensMissionsRoute }: Props) {
           </p>
           <p className="text-xs text-muted-foreground mt-0.5">
             {role === 'SOIGNANT'
-              ? 'Vos notations aident les autres soignants à choisir leurs missions et améliorent votre propre score (composante "Notation par soignant").'
+              ? 'Tes notations aident les autres soignants à choisir leurs missions et améliorent ton propre score (composante "Notation par soignant").'
               : 'Vos notations enrichissent les profils soignants et alimentent leur score de fiabilité.'}
           </p>
           <button

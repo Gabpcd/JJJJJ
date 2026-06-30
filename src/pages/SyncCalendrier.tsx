@@ -25,17 +25,17 @@ const PROVIDERS: Record<string, { label: string; color: string; instructions: st
   google: {
     label: 'Google Calendar',
     color: 'text-red-500',
-    instructions: 'Cliquez pour ajouter le calendrier Jolene à votre Google Calendar. Les missions se mettent à jour automatiquement.',
+    instructions: 'Clique pour ajouter le calendrier Jolene à ton Google Calendar. Les missions se mettent à jour automatiquement.',
   },
   outlook: {
     label: 'Outlook',
     color: 'text-blue-600',
-    instructions: 'Cliquez pour ouvrir Outlook Web et ajouter le calendrier Jolene. Compatible Outlook.com et Outlook desktop.',
+    instructions: 'Clique pour ouvrir Outlook Web et ajouter le calendrier Jolene. Compatible Outlook.com et Outlook desktop.',
   },
   apple: {
     label: 'Apple Calendar',
     color: 'text-gray-700',
-    instructions: 'Cliquez pour ouvrir Apple Calendar avec un abonnement à vos missions. Fonctionne sur Mac, iPhone et iPad.',
+    instructions: 'Clique pour ouvrir Apple Calendar avec un abonnement à tes missions. Fonctionne sur Mac, iPhone et iPad.',
   },
 };
 
@@ -207,7 +207,7 @@ export default function SyncCalendrier() {
           <div>
             <h1 className="text-xl font-bold text-foreground">Synchronisation Calendrier</h1>
             <p className="text-sm text-muted-foreground">
-              Synchronisez vos missions Jolene avec votre calendrier personnel
+              Synchronise tes missions Jolene avec ton calendrier personnel
             </p>
           </div>
         </div>
@@ -219,7 +219,7 @@ export default function SyncCalendrier() {
             <h2 className="text-base font-semibold text-foreground">S'abonner au calendrier Jolene</h2>
           </div>
           <p className="text-sm text-muted-foreground">
-            Cliquez sur votre calendrier pour y ajouter vos missions. Le calendrier se met à jour automatiquement — vos nouvelles missions apparaissent sans rien faire.
+            Clique sur ton calendrier pour y ajouter tes missions. Le calendrier se met à jour automatiquement — tes nouvelles missions apparaissent sans rien faire.
           </p>
 
           {hasToken ? (
@@ -270,7 +270,7 @@ export default function SyncCalendrier() {
           ) : (
             <div className="p-4 rounded-xl bg-muted/30 border border-border text-center">
               <p className="text-sm text-muted-foreground">
-                Aucun token calendrier trouvé. Accédez à votre planning pour en générer un automatiquement.
+                Aucun token calendrier trouvé. Accède à ton planning pour en générer un automatiquement.
               </p>
             </div>
           )}
@@ -284,7 +284,7 @@ export default function SyncCalendrier() {
               <h2 className="text-base font-semibold text-foreground">Lien iCal (avancé)</h2>
             </div>
             <p className="text-sm text-muted-foreground">
-              Pour les autres applications de calendrier, copiez ce lien et ajoutez-le comme "abonnement à un calendrier" ou "calendrier internet".
+              Pour les autres applications de calendrier, copie ce lien et ajoute-le comme "abonnement à un calendrier" ou "calendrier internet".
             </p>
 
             <div className="flex items-center gap-2">
