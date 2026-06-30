@@ -105,7 +105,7 @@ export default function PrevoyanceSoignant() {
           <div className="rounded-xl bg-primary/5 border border-primary/20 p-3 text-sm">
             <p className="font-semibold text-primary mb-1">💡 Avantage fiscal majeur</p>
             <p className="text-muted-foreground text-xs">
-              Les cotisations Madelin sont <strong>déductibles de ton revenu imposable BNC</strong> dans la limite d'un plafond annuel (≈ 3,75 % du PASS + 7 % du revenu, plafonné). Concrètement, l'État rembourse une partie de ta cotisation via une réduction d'impôts.
+              Les cotisations Madelin sont <strong>déductibles de ton revenu imposable BNC</strong> dans la limite d'un plafond annuel (≈ 3,75 % de ton revenu professionnel + 7 % du PASS, plafonné). Concrètement, l'État rembourse une partie de ta cotisation via une réduction d'impôts.
             </p>
           </div>
         </div>
@@ -173,7 +173,7 @@ export default function PrevoyanceSoignant() {
             </p>
             <button
               type="button"
-              onClick={() => setDejaInscrit(false)}
+              onClick={() => { setNiveau(niveauActuel ?? 'INDIFFERENT'); setDejaInscrit(false); }}
               className="text-xs text-primary hover:underline mt-2"
             >
               Modifier mon niveau préféré
