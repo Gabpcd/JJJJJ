@@ -285,8 +285,8 @@ export default function ProfilSoignant() {
         <div className="rounded-xl border-2 border-primary/30 bg-primary/5 p-4 mb-6 flex items-start gap-3">
           <span className="text-xl shrink-0">🎯</span>
           <div>
-            <p className="font-semibold text-foreground">Complétez votre profil pour postuler</p>
-            <p className="text-sm text-muted-foreground">Remplissez les champs ci-dessous — 2 minutes suffisent.</p>
+            <p className="font-semibold text-foreground">Complète ton profil pour postuler</p>
+            <p className="text-sm text-muted-foreground">Renseigne les champs ci-dessous — 2 minutes suffisent. (Tes documents, eux, débloquent l'acceptation par les établissements.)</p>
           </div>
         </div>
       )}

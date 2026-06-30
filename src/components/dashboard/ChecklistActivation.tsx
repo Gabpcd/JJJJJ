@@ -150,7 +150,7 @@ export function useActivationSoignant({ soignant, documents, missionsActives }: 
     let detailDocuments: string | undefined;
     if (!etape2Faite) {
       if (docsRestants != null && docsRestants > 0) {
-        detailDocuments = `Il vous reste ${docsRestants} document${docsRestants > 1 ? 's' : ''} — ~3 min, une photo suffit`;
+        detailDocuments = `Il te reste ${docsRestants} document${docsRestants > 1 ? 's' : ''} — ~3 min, une photo suffit`;
       } else if (docsRestants === 0) {
         detailDocuments = 'Tout est téléversé — vérification en cours';
       } else {
@@ -163,7 +163,7 @@ export function useActivationSoignant({ soignant, documents, missionsActives }: 
         id: 'identite',
         numero: 1,
         label: 'Identité vérifiée',
-        detail: etape1Faite ? undefined : 'Votre pièce d’identité ou votre n° RPPS suffit',
+        detail: etape1Faite ? undefined : 'Ta pièce d’identité ou ton n° RPPS suffit',
         faite: etape1Faite,
       },
       {
@@ -177,7 +177,7 @@ export function useActivationSoignant({ soignant, documents, missionsActives }: 
         id: 'candidature',
         numero: 3,
         label: 'Première candidature',
-        detail: etape3Faite ? undefined : 'Postulez en un clic, sans engagement',
+        detail: etape3Faite ? undefined : 'Postule en un clic, sans engagement — sans documents validés aussi',
         faite: etape3Faite,
       },
     ];
