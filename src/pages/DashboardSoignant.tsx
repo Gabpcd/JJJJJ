@@ -217,9 +217,9 @@ export default function DashboardSoignant() {
             <BadgeRPPS rppsVerifie={(soignantWithCounts as any).rpps_verifie} rpps={(soignantWithCounts as any).numero_rpps} profession={soignantWithCounts.profession} />
           </div>
           {!soignantWithCounts.tous_documents_valides ? (
-            <p className="text-sm text-warning mt-1">Complétez votre profil pour postuler</p>
+            <p className="text-sm text-muted-foreground mt-1">Tu peux déjà postuler — tes documents validés débloquent l'acceptation.</p>
           ) : (
-            <p className="text-sm text-muted-foreground mt-1">Prête à trouver votre prochaine mission ?</p>
+            <p className="text-sm text-muted-foreground mt-1">On trouve ta prochaine mission ? 🔥</p>
           )}
         </div>
       </div>
