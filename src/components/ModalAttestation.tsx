@@ -98,7 +98,7 @@ export function ModalAttestation({ open, onClose }: ModalAttestationProps) {
               <p className="text-sm text-muted-foreground">Chargement...</p>
             ) : (
               <p className="text-sm font-medium text-foreground">
-                Missions incluses : <span className="text-primary font-bold">{preview.nb} missions</span> · <span className="text-primary font-bold">{Math.round(preview.heures)}h</span>
+                Missions incluses : <span className="text-primary font-bold">{preview.nb} mission{preview.nb > 1 ? 's' : ''}</span> · <span className="text-primary font-bold">{Math.round(preview.heures)}h</span>
               </p>
             )}
           </div>

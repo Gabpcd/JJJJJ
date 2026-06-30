@@ -679,7 +679,7 @@ function ConfigEtabsChorus() {
 
   return (
     <div className="space-y-6">
-      <p className="text-sm text-muted-foreground">{etabs.length} établissements secteur public. Activez Chorus Pro et configurez le numéro de structure pour chaque étab destinataire.</p>
+      <p className="text-sm text-muted-foreground">{etabs.length} établissement{etabs.length > 1 ? 's' : ''} secteur public. Activez Chorus Pro et configurez le numéro de structure pour chaque étab destinataire.</p>
 
       {/* ── À configurer : sans configuration ou inactifs, en tête ── */}
       <section aria-label="À configurer">

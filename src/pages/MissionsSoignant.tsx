@@ -305,7 +305,7 @@ export default function MissionsSoignant() {
                 {nbAffiche < groupes.length && (
                   <div className="flex justify-center mt-6">
                     <button onClick={() => setNbAffiche(n => n + 20)} className="btn-secondary text-sm px-6">
-                      Voir plus ({groupes.length - nbAffiche} restantes)
+                      Voir plus ({groupes.length - nbAffiche} restante{groupes.length - nbAffiche > 1 ? 's' : ''})
                     </button>
                   </div>
                 )}
@@ -374,7 +374,7 @@ export default function MissionsSoignant() {
                 {nbAffiche < missionsAvecDistance.length && (
                   <div className="flex justify-center mt-6">
                     <button onClick={() => setNbAffiche(n => n + 20)} className="btn-secondary text-sm px-6">
-                      Voir plus ({missionsAvecDistance.length - nbAffiche} restantes)
+                      Voir plus ({missionsAvecDistance.length - nbAffiche} restante{missionsAvecDistance.length - nbAffiche > 1 ? 's' : ''})
                     </button>
                   </div>
                 )}

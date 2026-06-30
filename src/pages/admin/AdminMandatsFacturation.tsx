@@ -66,7 +66,7 @@ export default function AdminMandatsFacturation() {
   };
 
   const relancerTous = async (liste: any[]) => {
-    if (!window.confirm(`Relancer les ${liste.length} soignants sans mandat signé ? Chacun recevra une notification + un email.`)) return;
+    if (!window.confirm(`Relancer les ${liste.length} soignant${liste.length > 1 ? 's' : ''} sans mandat signé ? Chacun recevra une notification + un email.`)) return;
     setRelanceGroupee(true);
     let ok = 0; let ko = 0;
     try {

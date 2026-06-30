@@ -272,7 +272,7 @@ export default function ListeMissions() {
           {nbAffiche < groupes.length && (
             <div className="flex justify-center mt-6">
               <button onClick={() => setNbAffiche(n => n + 20)} className="btn-secondary text-sm px-6">
-                Voir plus ({groupes.length - nbAffiche} restantes)
+                Voir plus ({groupes.length - nbAffiche} restante{groupes.length - nbAffiche > 1 ? 's' : ''})
               </button>
             </div>
           )}

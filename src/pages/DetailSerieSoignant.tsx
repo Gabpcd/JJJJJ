@@ -385,7 +385,7 @@ export default function DetailSerieSoignant() {
 
       {animationSucces && (
         <AnimationSuccesMission
-          mission={{ ...first, _message: `${resultatsAcceptation?.reussies || selectedIds.size} missions acceptées !` }}
+          mission={{ ...first, _message: `${resultatsAcceptation?.reussies || selectedIds.size} mission${(resultatsAcceptation?.reussies || selectedIds.size) > 1 ? 's' : ''} acceptée${(resultatsAcceptation?.reussies || selectedIds.size) > 1 ? 's' : ''} !` }}
           onTermine={() => { setAnimationSucces(false); navigate('/soignant/missions'); }}
         />
       )}

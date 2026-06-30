@@ -263,7 +263,7 @@ export default function AdminAuditLogs() {
 
           {/* Pagination */}
           <div className="flex items-center justify-between mt-4">
-            <p className="text-xs text-muted-foreground">{logs.length} résultats — page {page + 1}</p>
+            <p className="text-xs text-muted-foreground">{logs.length} résultat{logs.length > 1 ? 's' : ''} — page {page + 1}</p>
             <div className="flex gap-2">
               <BoutonY2K variant="ghost" size="sm" onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0} aria-label="Page précédente">
                 <ChevronLeft className="h-4 w-4" />

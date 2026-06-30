@@ -75,7 +75,7 @@ export function BandeauGoalGradient({ heures }: BandeauGoalGradientProps) {
     <div className="bg-gradient-to-r from-amber-50 to-orange-50 border-2 border-amber-300 rounded-2xl p-5 mb-6 animate-pulse-once">
       <p className="text-base font-bold text-foreground mb-1">🔥 Plus que {Math.round(heuresRestantes)}h avant le jalon {prochainJalon.label} !</p>
       <p className="text-sm text-muted-foreground mb-2">🎁 Avantage à débloquer : {prochainJalon.avantage}</p>
-      <p className="text-sm text-muted-foreground mb-3">Encore ~{Math.ceil(heuresRestantes / 12)} missions de 12h pour y arriver !</p>
+      <p className="text-sm text-muted-foreground mb-3">Encore ~{Math.ceil(heuresRestantes / 12)} mission{Math.ceil(heuresRestantes / 12) > 1 ? 's' : ''} de 12h pour y arriver !</p>
       <button onClick={() => navigate('/soignant/missions')} className="text-sm text-primary font-semibold hover:underline">
         Voir les missions disponibles →
       </button>

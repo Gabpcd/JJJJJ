@@ -382,7 +382,7 @@ export default function AdminUtilisateurs() {
                     {s.score_fiabilite != null && s.total_missions_terminees > 0 && (
                       <BadgeY2K variant="info" size="sm">Score {s.score_fiabilite}/100</BadgeY2K>
                     )}
-                    <BadgeY2K variant="info" size="sm">{s.total_missions_terminees} missions</BadgeY2K>
+                    <BadgeY2K variant="info" size="sm">{s.total_missions_terminees} mission{s.total_missions_terminees > 1 ? 's' : ''}</BadgeY2K>
                   </div>
                   <div className="grid grid-cols-2 gap-2 pt-2 border-t border-border">
                     {s.email && (

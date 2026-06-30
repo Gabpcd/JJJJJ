@@ -163,7 +163,7 @@ export default function ExportPaie() {
     });
 
     setExporting(null);
-    afficherNotification({ type: 'succes', message: `✅ Export ${fmt} généré — ${missions.length} missions` });
+    afficherNotification({ type: 'succes', message: `✅ Export ${fmt} généré — ${missions.length} mission${missions.length > 1 ? 's' : ''}` });
   };
 
   if (loading) return <LayoutApp role="ADMIN_ETABLISSEMENT"><ChargementPage /></LayoutApp>;
@@ -283,7 +283,7 @@ export default function ExportPaie() {
               })}
             </tbody>
           </table>
-          <p className="text-xs text-muted-foreground px-3 py-2">{missions.length} missions salariées · cliquez sur une ligne pour voir le détail des pointages</p>
+          <p className="text-xs text-muted-foreground px-3 py-2">{missions.length} mission{missions.length > 1 ? 's' : ''} salariée{missions.length > 1 ? 's' : ''} · cliquez sur une ligne pour voir le détail des pointages</p>
         </div>
       ) : (
         <EmptyState icone={<FileSpreadsheet />} mascotte="empty" titre="Aucune mission salariée terminée" description={`Aucune mission avec bulletin de paie en ${moisLabel}.`} cta={{ label: 'Trouver une mission', onClick: () => navigate('/soignant/recherche-missions') }} />

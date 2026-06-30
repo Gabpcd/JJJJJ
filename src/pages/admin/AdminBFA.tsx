@@ -429,7 +429,7 @@ function LigneBeneficiaire({
 
         {/* Stats */}
         <div className="flex items-center gap-4 text-xs text-muted-foreground shrink-0">
-          <span>{b.nb_missions} missions</span>
+          <span>{b.nb_missions} mission{b.nb_missions > 1 ? 's' : ''}</span>
           <span>{EUR(b.commissions)} commissions</span>
         </div>
 

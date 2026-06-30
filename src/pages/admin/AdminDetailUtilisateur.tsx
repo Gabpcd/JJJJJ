@@ -452,7 +452,7 @@ export default function AdminDetailUtilisateur() {
                   <InfoRow icon={Clock} label="Inscrit le" value={new Date(etablissement.cree_le).toLocaleDateString('fr-FR')} />
                   <InfoRow icon={FileText} label="Formule" value={etablissement.formule_abonnement || '—'} />
                   <InfoRow icon={FileText} label="Taux commission" value={`${etablissement.taux_commission_negocie}%`} />
-                  <InfoRow icon={FileText} label="Délai paiement" value={`${etablissement.delai_paiement_jours} jours`} />
+                  <InfoRow icon={FileText} label="Délai paiement" value={`${etablissement.delai_paiement_jours} jour${etablissement.delai_paiement_jours > 1 ? 's' : ''}`} />
                 </div>
               )}
             </CardY2KContent>
@@ -801,7 +801,7 @@ export default function AdminDetailUtilisateur() {
                   <ProfileRow label="Taux commission" value={`${etablissement.taux_commission_negocie}%`} />
                   <ProfileRow label="Mode facturation" value={etablissement.mode_facturation || '—'} />
                   <ProfileRow label="Mode paiement" value={etablissement.mode_paiement_commission || '—'} />
-                  <ProfileRow label="Délai paiement" value={`${etablissement.delai_paiement_jours} jours`} />
+                  <ProfileRow label="Délai paiement" value={`${etablissement.delai_paiement_jours} jour${etablissement.delai_paiement_jours > 1 ? 's' : ''}`} />
                 </CardY2KContent>
               </CardY2K>
               <CardY2K noPadding>
