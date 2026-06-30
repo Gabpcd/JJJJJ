@@ -66,6 +66,8 @@ export default function DashboardSoignant() {
   // Derive all values from the dashboard RPC response
   const soignant = dashboard?.profil as SoignantData | undefined ?? null;
   const mesMissions = (dashboard?.mes_missions ?? []) as any[];
+  // Lot 1 — opportunités à montrer en page d'accueil (valeur avant l'effort).
+  const missionsOuvertes = (dashboard?.missions_ouvertes ?? []) as any[];
   const heuresSemaine = (dashboard?.heures_semaine ?? 0) as number;
   const hasStripeConnect = dashboard?.hasStripeConnect ?? true;
   const hasMandatFacturation = !!(soignant as any)?.mandat_facturation_signe;
@@ -162,9 +164,17 @@ export default function DashboardSoignant() {
             <BadgeRPPS rppsVerifie={(soignantWithCounts as any).rpps_verifie} rpps={(soignantWithCounts as any).numero_rpps} profession={soignantWithCounts.profession} />
           </div>
           {!soignantWithCounts.tous_documents_valides ? (
-            <p className="text-sm text-muted-foreground mt-1">Tu peux déjà postuler — tes documents validés débloquent l'acceptation.</p>
+            <p className="text-sm text-muted-foreground mt-1">
+              {missionsOuvertes.length > 0
+                ? `${missionsOuvertes.length} mission${missionsOuvertes.length > 1 ? 's' : ''} près de chez toi — tu peux déjà postuler.`
+                : "Tu peux déjà postuler — tes documents validés débloquent l'acceptation."}
+            </p>
           ) : (
-            <p className="text-sm text-muted-foreground mt-1">On trouve ta prochaine mission ? 🔥</p>
+            <p className="text-sm text-muted-foreground mt-1">
+              {missionsOuvertes.length > 0
+                ? `${missionsOuvertes.length} mission${missionsOuvertes.length > 1 ? 's' : ''} pour toi aujourd'hui 🔥`
+                : 'On trouve ta prochaine mission ? 🔥'}
+            </p>
           )}
         </div>
       </div>
@@ -186,6 +196,56 @@ export default function DashboardSoignant() {
       ))}
 
       {missionProchaine && <WidgetAllerPointer mission={missionProchaine} />}
+
+      {/* ✦ Missions pour toi — opportunités du pool ouvert (Lot 1). Placé APRÈS les
+          widgets de pointage imminent (pointer prime sur prospecter), mais haut dans
+          la page : la valeur est montrée avant l'effort, profil incomplet inclus.
+          Tap → détail/postuler. Si aucune mission : bloc vendeur, jamais un trou. */}
+      <SectionErrorBoundary section="missions-suggerees">
+      <div className="mb-6">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-base font-bold text-foreground flex items-center gap-2">
+            <Sparkles className="h-4.5 w-4.5 text-primary" /> Missions pour toi
+          </h2>
+          <button onClick={() => navigate('/soignant/recherche-missions')} className="text-xs text-primary font-medium hover:underline">Tout voir →</button>
+        </div>
+        {missionsOuvertes.length > 0 ? (
+          <div className="space-y-2">
+            {missionsOuvertes.slice(0, 2).map((m: any) => {
+              const duree = m.fin_le && m.debut_le ? (new Date(m.fin_le).getTime() - new Date(m.debut_le).getTime()) / 3600000 : 0;
+              const brutEstime = m.taux_horaire_base && duree ? Math.round(m.taux_horaire_base * duree) : null;
+              return (
+                <div key={m.id} onClick={() => navigate(`/soignant/missions/${m.id}`)} className="card-base hover:shadow-md cursor-pointer transition-all flex items-center gap-3 py-3">
+                  <div className="flex flex-col items-center justify-center rounded-xl bg-primary/10 px-3 py-1.5 min-w-[52px]">
+                    <span className="text-[10px] font-semibold text-primary uppercase">{format(new Date(m.debut_le), 'EEE', { locale: fr })}</span>
+                    <span className="text-lg font-bold text-primary leading-tight">{format(new Date(m.debut_le), 'd')}</span>
+                    <span className="text-[10px] text-primary">{format(new Date(m.debut_le), 'MMM', { locale: fr })}</span>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    {m.est_urgente && <span className="badge-base bg-destructive/10 text-destructive text-[10px] mb-0.5 inline-block">🔥 Urgent</span>}
+                    <h3 className="font-semibold text-sm text-foreground truncate" title={m.intitule}>{m.intitule}</h3>
+                    <p className="text-xs text-muted-foreground mt-0.5 truncate">🏥 {m.etab_nom}{m.service ? ` · ${m.service}` : ''}</p>
+                    <div className="flex items-center gap-3 mt-0.5 text-[11px] text-muted-foreground">
+                      <span>🕐 {format(new Date(m.debut_le), "HH'h'mm", { locale: fr })} → {format(new Date(m.fin_le), "HH'h'mm", { locale: fr })}</span>
+                      {m.taux_horaire_base && <span className="font-semibold text-primary">{m.taux_horaire_base} €/h</span>}
+                      {brutEstime && <span>~{brutEstime} € brut</span>}
+                    </div>
+                  </div>
+                  <BoutonY2K size="sm" variant="primary" className="shrink-0" onClick={(e: React.MouseEvent) => { e.stopPropagation(); navigate(`/soignant/missions/${m.id}`); }}>
+                    Postuler
+                  </BoutonY2K>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <button onClick={() => navigate('/soignant/recherche-missions?alerte=1')} className="w-full rounded-2xl border border-jolene-rose-200/60 bg-gradient-soft p-4 text-left hover:shadow-md transition-shadow">
+            <p className="font-semibold text-foreground">De nouvelles missions arrivent 🔔</p>
+            <p className="text-sm text-muted-foreground mt-0.5">Active les alertes pour être prévenu·e dès qu'une mission près de chez toi correspond à ton profil.</p>
+          </button>
+        )}
+      </div>
+      </SectionErrorBoundary>
 
       {/* Missions proposées depuis le pool — opportunités urgentes */}
       <SectionErrorBoundary section="propositions">

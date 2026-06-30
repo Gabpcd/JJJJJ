@@ -3,7 +3,7 @@ import { lazyRetry as lazy } from '@/lib/lazyRetry';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useAffacturageActif } from '@/hooks/useAffacturageActif';
-import { Banknote, Clock, Download, TrendingUp, ChevronRight, Calculator, FileText, Search, CheckCircle, AlertTriangle, Scale, Receipt, Zap, CreditCard } from 'lucide-react';
+import { Banknote, Clock, Download, TrendingUp, ChevronRight, FileText, Search, CheckCircle, AlertTriangle, Scale, Receipt, Zap } from 'lucide-react';
 import { LayoutApp } from '@/components/LayoutApp';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { MesFacturesHonorairesContent } from './MesFacturesHonoraires';
@@ -58,7 +58,7 @@ export function MesGainsApercuContent() {
       const [{ data: ms }, { data: sg }, { data: paiements }] = await Promise.all([
         supabase
           .from('missions')
-          .select('id, intitule, debut_le, fin_le, duree_heures, taux_horaire_base, net_a_payer, net_estime, total_brut, statut, etablissement_id, service')
+          .select('id, intitule, debut_le, fin_le, duree_heures, taux_horaire_base, net_a_payer, net_estime, total_brut, statut, etablissement_id, service, type_contrat_applique')
           .eq('soignant_assigne_id', user.id)
           .eq('statut', 'TERMINEE')
           .order('debut_le', { ascending: false })
@@ -126,6 +126,17 @@ export function MesGainsApercuContent() {
       : format(new Date(moisFiltre + '-01'), 'MMMM yyyy', { locale: fr });
 
   const isLiberal = soignant?.type_exercice === 'LIBERAL' || soignant?.statut_liberal === 'ACTIF';
+
+  // Régime PAR MISSION (jamais par soignant). Un Mixte ne mélange pas honoraires
+  // libéraux (charges URSSAF/CARPIMKO annualisées, PAS prélevées à la transaction)
+  // et net salarié (~−22 % cotisations). type_contrat_applique NULL = non déterminé.
+  const libMissions = useMemo(() => missions.filter(m => m.type_contrat_applique === 'LIBERAL'), [missions]);
+  const salMissions = useMemo(() => missions.filter(m => m.type_contrat_applique === 'SALARIE'), [missions]);
+  const indetCount = useMemo(() => missions.filter(m => !m.type_contrat_applique).length, [missions]);
+  // Libéral : honoraires réellement encaissés (après commission Jolene), PAS ×0,78.
+  const honorairesLib = useMemo(() => libMissions.reduce((s, m) => s + (m.net_estime ?? m.net_a_payer ?? Number(m.total_brut) ?? 0), 0), [libMissions]);
+  // Salarié : net estimé après cotisations salariales (~22 %).
+  const netSal = useMemo(() => salMissions.reduce((s, m) => s + (netEstime(m) ?? 0), 0), [salMissions]);
 
   // Prochain paiement attendu : missions terminées non encore confirmées payées.
   // Dérivé des données existantes (allMissions + paiementsMap) — aucune requête en plus.
@@ -201,15 +212,36 @@ export function MesGainsApercuContent() {
         </p>
       </button>
 
-      {/* KPIs */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-        <CarteKPIY2K
-          icone={<Banknote className="h-4 w-4" />}
-          valeur={fmt(totalNetFiltre)}
-          label={`Net estimé* · ${labelPeriode}`}
-          variant="holographic"
-          onClick={() => navigate('/soignant/mes-gains?tab=factures')}
-        />
+      {/* KPIs — séparés par régime (jamais de sous-bloc à zéro). Honoraires libéraux
+          et net salarié ne sont pas le même concept : on ne les fusionne pas. */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+        {libMissions.length > 0 && (
+          <CarteKPIY2K
+            icone={<Banknote className="h-4 w-4" />}
+            valeur={fmt(honorairesLib)}
+            label={`Honoraires encaissés · ${labelPeriode}`}
+            variant="holographic"
+            onClick={() => navigate('/soignant/mes-gains?tab=factures')}
+          />
+        )}
+        {salMissions.length > 0 && (
+          <CarteKPIY2K
+            icone={<Banknote className="h-4 w-4" />}
+            valeur={fmt(netSal)}
+            label={`Net salarié* · ${labelPeriode}`}
+            variant={libMissions.length > 0 ? 'default' : 'holographic'}
+            onClick={() => navigate('/soignant/mes-gains?tab=bulletins')}
+          />
+        )}
+        {libMissions.length === 0 && salMissions.length === 0 && (
+          <CarteKPIY2K
+            icone={<Banknote className="h-4 w-4" />}
+            valeur={fmt(totalNetFiltre)}
+            label={`Net estimé* · ${labelPeriode}`}
+            variant="holographic"
+            onClick={() => navigate('/soignant/mes-gains?tab=factures')}
+          />
+        )}
         <CarteKPIY2K
           icone={<TrendingUp className="h-4 w-4" />}
           valeur={fmt(totalBrutFiltre)}
@@ -227,11 +259,21 @@ export function MesGainsApercuContent() {
         <CarteKPIY2K
           icone={<TrendingUp className="h-4 w-4" />}
           valeur={fmt(totalNetToutTemps)}
-          label="Total tout temps"
+          label="Total net estimé · tout temps"
           variant="soft"
           onClick={() => navigate('/soignant/mes-gains?tab=factures')}
         />
       </div>
+      {indetCount > 0 && (
+        <p className="text-xs text-muted-foreground mb-6">
+          {indetCount} mission{indetCount > 1 ? 's' : ''} en cours de qualification de régime — non comptée{indetCount > 1 ? 's' : ''} ci-dessus.
+        </p>
+      )}
+      {libMissions.length > 0 && (
+        <p className="text-[11px] text-muted-foreground mb-6">
+          👜 Honoraires libéraux = ce qui est encaissé. Les charges URSSAF/CARPIMKO sont <strong>annualisées</strong> (provisionnées, pas prélevées à chaque mission) — voir <button onClick={() => navigate('/soignant/charges')} className="text-primary hover:underline">Mes charges</button>.
+        </p>
+      )}
 
       {/* Graphique 6 mois */}
       <Suspense fallback={<div className="h-64 animate-pulse bg-muted rounded-lg" />}>
@@ -256,22 +298,9 @@ export function MesGainsApercuContent() {
         <BoutonY2K variant="secondary" size="sm" onClick={() => setModalAttestation(true)} className="gap-1.5">
           <FileText className="h-4 w-4" /> Attestation
         </BoutonY2K>
-        {isLiberal && (
-          <BoutonY2K variant="secondary" size="sm" onClick={() => navigate('/soignant/charges')} className="gap-1.5">
-            <Calculator className="h-4 w-4" /> Mes charges
-          </BoutonY2K>
-        )}
-        {/* Liens de confort vers les pages setup paiement (sinon seulement dans la nav). */}
-        {soignant?.type_exercice !== 'SALARIE' && (
-          <BoutonY2K variant="secondary" size="sm" onClick={() => navigate('/soignant/stripe-connect')} className="gap-1.5">
-            <CreditCard className="h-4 w-4" /> Compte de paiement
-          </BoutonY2K>
-        )}
-        {(soignant?.type_exercice === 'LIBERAL' || soignant?.type_exercice === 'MIXTE') && (
-          <BoutonY2K variant="secondary" size="sm" onClick={() => navigate('/soignant/mandat-facturation')} className="gap-1.5">
-            <FileText className="h-4 w-4" /> Mandat de facturation
-          </BoutonY2K>
-        )}
+        {/* Charges / Compte de paiement / Mandat retirés d'ici : source unique dans
+            Compte (évite le doublon de navigation argent). Lien « Mes charges »
+            conservé via la note honoraires libéraux ci-dessus. */}
       </div>
 
       {/* Récap période */}
@@ -294,7 +323,7 @@ export function MesGainsApercuContent() {
               <p className="font-bold text-foreground">{tauxMoyen.toFixed(2)} €/h</p>
             </div>
             <div>
-              <span className="text-muted-foreground">Cotisations estimées</span>
+              <span className="text-muted-foreground">Prélèvements estimés</span>
               <p className="font-bold text-foreground">~{fmt(totalBrutFiltre - totalNetFiltre)}</p>
             </div>
           </div>
@@ -302,7 +331,10 @@ export function MesGainsApercuContent() {
       )}
 
       <p className="text-[10px] text-muted-foreground italic mb-3">
-        * Estimation après cotisations salariales (~22%). Seuls les montants calculés par le moteur de paie font foi.
+        {salMissions.length > 0 && '* Net salarié estimé après cotisations salariales (~22 %). '}
+        {libMissions.length > 0 && '* Honoraires libéraux hors charges URSSAF/CARPIMKO (annualisées). '}
+        {libMissions.length === 0 && salMissions.length === 0 && '* Estimation après cotisations (~22 %). '}
+        Seuls les montants calculés par le moteur de paie / la facture font foi.
       </p>
 
       {/* Recherche */}

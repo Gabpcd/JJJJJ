@@ -1,4 +1,5 @@
 import { JaugeProgression } from '@/components/JaugeProgression';
+import { useParamBool } from '@/hooks/useParamBool';
 
 interface ProgressionJalons3200hProps {
   heures: number;
@@ -21,6 +22,10 @@ const JALONS = [
 
 export function ProgressionJalons3200h({ heures, suivi, missions, compact }: ProgressionJalons3200hProps) {
   const progression = Math.min(100, (heures / 3200) * 100);
+  // B6 — les avantages par palier (formations, -15 % RCP, kit libéral…) ne sont pas
+  // encore branchés : on gate la PROMESSE derrière un flag (comme l'affacturage).
+  // OFF par défaut → on garde les paliers/heures mais sans promettre un service absent.
+  const recompensesActives = useParamBool('recompenses_3200h_actives', false);
 
   // Estimation de rythme
   let estimation: string | null = null;
@@ -71,16 +76,19 @@ export function ProgressionJalons3200h({ heures, suivi, missions, compact }: Pro
         {JALONS.map(j => {
           const atteint = heures >= j.seuil;
           const restant = Math.max(0, j.seuil - heures);
+          // Sans le flag récompenses : libellé neutre (palier d'heures), pas de
+          // promesse d'avantage concret qui n'existe pas encore.
+          const titre = recompensesActives ? j.titre : `Palier ${j.seuil}h franchi`;
           return (
             <div key={j.seuil} className={`card-base ${atteint ? 'bg-primary/5 border-primary/20' : 'bg-muted/50 border-border opacity-75'}`}>
               <div className="flex items-start gap-3">
-                <span className="text-2xl">{atteint ? j.icone : '🔒'}</span>
+                <span className="text-2xl">{atteint ? (recompensesActives ? j.icone : '✅') : '🔒'}</span>
                 <div className="flex-1">
                   <p className={`font-semibold text-sm ${atteint ? 'text-foreground' : 'text-muted-foreground'}`}>
-                    {atteint ? '✅' : '🔒'} {j.seuil}h — {atteint ? 'Débloqué !' : `Dans ${Math.round(restant)}h`}
+                    {atteint ? '✅' : '🔒'} {j.seuil}h — {atteint ? 'Atteint !' : `Dans ${Math.round(restant)}h`}
                   </p>
-                  <p className="text-sm text-muted-foreground mt-0.5">{j.titre}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">{j.desc}</p>
+                  <p className="text-sm text-muted-foreground mt-0.5">{titre}</p>
+                  {recompensesActives && <p className="text-xs text-muted-foreground mt-0.5">{j.desc}</p>}
                 </div>
               </div>
             </div>
