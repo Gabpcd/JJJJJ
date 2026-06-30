@@ -1,55 +1,30 @@
-import React, { useState, useMemo, useEffect, Suspense } from 'react';
-import { lazyRetry as lazy } from '@/lib/lazyRetry';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useNavigate } from 'react-router-dom';
 import { SkeletonDashboard } from '@/components/SkeletonCard';
-import { FadeInView } from '@/components/FadeInView';
-import { CheckCircle, Star, Clock, ShieldCheck, ShieldAlert, Search, Info, X, AlertCircle, Banknote, Rocket, MapPin, Bell, TrendingUp, Activity, GraduationCap, Home, CalendarDays, CreditCard, FileText, Sparkles } from 'lucide-react';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { AlertCircle, Banknote, Bell, CalendarDays, CreditCard, FileText, Sparkles } from 'lucide-react';
 import { CarteProposition } from '@/components/CarteProposition';
-import { estEligibleLiberal, getRegleInstallation } from '@/lib/regles-installation-liberal';
-import { RappelsFiscaux } from '@/components/RappelsFiscaux';
 import { BadgeRPPS } from '@/components/BadgeRPPS';
 import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { Mascotte } from '@/components/mascotte/Mascotte';
 import { WidgetAllerPointer } from '@/components/WidgetAllerPointer';
 import { BandeauOubliDepart } from '@/components/BandeauOubliDepart';
-import { BadgeNiveau } from '@/components/BadgeNiveau';
-import { BandeauGoalGradient, CelebrationJalonManager } from '@/components/GoalGradient';
 import { LayoutApp } from '@/components/LayoutApp';
 import { BandeauEvaluationsEnAttente } from '@/components/BandeauEvaluationsEnAttente';
-import { CarteKPIY2K } from '@/components/y2k/CarteKPIY2K';
-import { EmptyState, IllustrationTirelire } from '@/components/ui/EmptyState';
-import { JaugeProgression } from '@/components/JaugeProgression';
 import { ChecklistActivation, useActivationSoignant } from '@/components/dashboard/ChecklistActivation';
 import type { SoignantActivation, DocumentActivation } from '@/components/dashboard/ChecklistActivation';
 import { BandeauCompletionProfil } from '@/components/profil-soignant/BandeauCompletionProfil';
 import { BadgeStatut } from '@/components/BadgeStatut';
-import { CompteurHebdomadaire } from '@/components/CompteurHebdomadaire';
 import { BandeauAlerte48h } from '@/components/BandeauAlerte48h';
 import { BandeauGraceDocuments } from '@/components/BandeauGraceDocuments';
-const GraphiqueGains6Mois = lazy(() =>
-  import('@/components/GraphiqueGains6Mois').then(m => ({ default: m.GraphiqueGains6Mois }))
-);
-import { ProgressionCirculaire3200h } from '@/components/ProgressionCirculaire3200h';
-import { ProchainBadgeWidget } from '@/components/ProchainBadgeWidget';
-import { CalendrierMiniSemaine } from '@/components/CalendrierMiniSemaine';
-import { CalendrierTogglable } from '@/components/dashboard/CalendrierTogglable';
-import { BannerEncourageNotation } from '@/components/BannerEncourageNotation';
-import { SuggestionsMissions } from '@/components/dashboard/SuggestionsMissions';
-import { TopEtablissements } from '@/components/dashboard/TopEtablissements';
-import { GraphiqueRepartitionHeures } from '@/components/dashboard/GraphiqueRepartitionHeures';
-import { JaugeSpeedometer } from '@/components/JaugeSpeedometer';
 import { BoutonAjouterCalendrier } from '@/components/SyncCalendrier';
 import { SectionErrorBoundary } from '@/components/SectionErrorBoundary';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { TYPES_DOCUMENTS } from '@/lib/documents';
-import { getLabelProfession } from '@/lib/constantes';
 import { format, differenceInDays } from 'date-fns';
 import { fr } from 'date-fns/locale';
-import type { BadgeStats } from '@/components/BadgesGamification';
 interface SoignantData {
   prenom: string; nom: string; telephone: string | null;
   date_naissance: string | null; profession: string; type_contrat: string | null;
@@ -90,14 +65,10 @@ export default function DashboardSoignant() {
 
   // Derive all values from the dashboard RPC response
   const soignant = dashboard?.profil as SoignantData | undefined ?? null;
-  const missions = (dashboard?.missions_ouvertes ?? []) as any[];
   const mesMissions = (dashboard?.mes_missions ?? []) as any[];
-  const gains6Mois = (dashboard?.gains_6mois ?? []) as { debut_le: string; net_a_payer: number | null }[];
-  const missionsSemaine = (dashboard?.missions_semaine_cal ?? []) as { debut_le: string; statut: string }[];
   const heuresSemaine = (dashboard?.heures_semaine ?? 0) as number;
   const hasStripeConnect = dashboard?.hasStripeConnect ?? true;
   const hasMandatFacturation = !!(soignant as any)?.mandat_facturation_signe;
-  const missionsWeekend = (dashboard?.missions_weekend ?? []) as any[];
 
   const docsExpirant = useMemo(() => {
     const docs = (dashboard?.documents ?? []) as any[];
@@ -137,20 +108,6 @@ export default function DashboardSoignant() {
     };
   }, [dashboard?.heures_totales_terminees, soignant]);
 
-  const badgeStats = useMemo<BadgeStats | null>(() => {
-    return {
-      missionsTerminees: missionsTermineesCount,
-      scoreFiabilite: soignant?.score_fiabilite || 0,
-      heuresCumulees: heuresCumuleesTotal,
-      annulations: 0,
-      missionsNuit: 0,
-      missionsWeekend: 0,
-      maxMissionsMemeEtab: 0,
-      retards: 0,
-      totalMissions: missionsTermineesCount,
-    };
-  }, [soignant, missionsTermineesCount, heuresCumuleesTotal]);
-
   // Override soignant counts with real computed values
   const emptySoignant = { prenom: '', nom: '', telephone: '', profession: null, rpps_verifie: false, adresse_lat: null, adresse_lng: null, tous_documents_valides: false, identite_verifiee: false, score_fiabilite: 0, total_missions_terminees: 0, heures_cumulees: 0, type_exercice: 'SALARIE' } as unknown as SoignantData;
   const soignantWithCounts = useMemo(() => ({
@@ -180,14 +137,6 @@ export default function DashboardSoignant() {
   if (isLoading) return <LayoutApp role="SOIGNANT"><SkeletonDashboard /></LayoutApp>;
 
   const missionsTerminees = soignantWithCounts?.total_missions_terminees ?? 0;
-  const score = soignantWithCounts.score_fiabilite;
-  const hasEvaluations = missionsTerminees > 0;
-  const heures = soignantWithCounts.heures_cumulees ?? 0;
-  const regleInstallation = soignantWithCounts.profession ? getRegleInstallation(soignantWithCounts.profession) : null;
-  const seuilHeures = regleInstallation?.heures_requises ?? null;
-  // Onglet "Parcours" (vers le libéral) : seulement pour les professions éligibles.
-  const afficheParcours = !!(soignantWithCounts.profession && estEligibleLiberal(soignantWithCounts.profession));
-
 
   return (
     <LayoutApp role="SOIGNANT">
@@ -299,6 +248,19 @@ export default function DashboardSoignant() {
       )}
       </SectionErrorBoundary>
 
+      {/* Tes revenus du mois — déplacé hors des onglets (Accueil linéaire) */}
+      {gainsCeMois.nb > 0 && (
+        <div className="card-base mb-6 cursor-pointer hover:shadow-md transition-all" onClick={() => navigate('/soignant/mes-gains')}>
+          <div className="flex items-center gap-3">
+            <div className="rounded-xl p-2.5 bg-primary/10"><Banknote className="h-5 w-5 text-primary" /></div>
+            <div className="flex-1">
+              <p className="text-sm font-semibold text-foreground">💰 Ce mois : {new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(gainsCeMois.net)} net estimé* sur {gainsCeMois.nb} mission{gainsCeMois.nb > 1 ? 's' : ''}</p>
+              <p className="text-xs text-primary mt-0.5">Voir le détail →</p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ═══ ZONE 3 : ALERTES & ADMIN (repoussées sous le contenu utile) ═══ */}
 
       {!activation.visible && soignant && (
@@ -366,9 +328,6 @@ export default function DashboardSoignant() {
         </div>
       )}
 
-      <BandeauGoalGradient heures={heures} />
-      <CelebrationJalonManager heures={heures} />
-
       {docsExpirant.map(d => (
         <div key={d.id} className="bg-destructive/5 border border-destructive/20 rounded-xl p-3 mb-3 flex items-start gap-2">
           <AlertCircle className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
@@ -379,296 +338,6 @@ export default function DashboardSoignant() {
         </div>
       ))}
 
-      {/* ═══ ZONE 4 : ONGLETS DÉTAILLÉS (chiffres, activité, gains) ═══ */}
-      <Tabs defaultValue="accueil" className="mb-6">
-        <TabsList className={`w-full grid ${afficheParcours ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-3'} mb-4`}>
-          <TabsTrigger value="accueil" className="text-xs gap-1"><Home className="h-3.5 w-3.5 hidden sm:block" />Accueil</TabsTrigger>
-          <TabsTrigger value="activite" className="text-xs gap-1"><Activity className="h-3.5 w-3.5 hidden sm:block" />Activité</TabsTrigger>
-          <TabsTrigger value="gains" className="text-xs gap-1"><TrendingUp className="h-3.5 w-3.5 hidden sm:block" />Gains</TabsTrigger>
-          {afficheParcours && (
-            <TabsTrigger value="parcours" className="text-xs gap-1"><GraduationCap className="h-3.5 w-3.5 hidden sm:block" />Parcours</TabsTrigger>
-          )}
-        </TabsList>
-
-        {/* ─── ONGLET ACCUEIL ─── */}
-        <TabsContent value="accueil">
-          <SectionErrorBoundary section="accueil">
-          <BannerEncourageNotation role="SOIGNANT" />
-
-          {/* Prochain badge à débloquer — gamification visible dès l'accueil */}
-          {badgeStats && (
-            <div className="mb-6">
-              <FadeInView>
-                <ProchainBadgeWidget stats={badgeStats} />
-              </FadeInView>
-            </div>
-          )}
-
-          <SuggestionsMissions />
-
-          {/* Missions disponibles */}
-          <div className="mb-6">
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="text-lg font-bold text-foreground">Missions disponibles</h2>
-              <button onClick={() => navigate('/soignant/missions')} className="text-sm text-primary font-medium hover:underline">Voir tout →</button>
-            </div>
-            {missions.length > 0 ? (
-              <div className="space-y-3">
-                {missions.map((m: any) => (
-                  <div key={m.id} onClick={() => navigate(`/soignant/missions/${m.id}`)} className="card-base hover:shadow-md transition-shadow cursor-pointer">
-                    <div className="flex items-start justify-between mb-2">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          {m.est_urgente && <span className="badge-base bg-destructive text-destructive-foreground text-[10px]">🔥 URGENT</span>}
-                          <h3 className="font-semibold text-sm text-foreground truncate" title={m.intitule}>{m.intitule}</h3>
-                        </div>
-                        <p className="text-xs text-muted-foreground mt-1">{m.etablissements?.nom} · {m.etablissements?.adresse_ville}</p>
-                      </div>
-                      <span className="text-primary font-bold text-sm whitespace-nowrap ml-2">{m.taux_horaire_base} €/h</span>
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      {format(new Date(m.debut_le), "EEE d MMM · HH'h'mm", { locale: fr })} → {format(new Date(m.fin_le), "HH'h'mm", { locale: fr })}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <EmptyState
-                mascotte="thinking"
-                titre="Aucune mission disponible pour le moment"
-                description="Crée une alerte : on te prévient dès qu'une mission est publiée dans ta zone."
-                cta={{ label: '🔔 Créer une alerte', onClick: () => navigate('/soignant/recherche-missions?alerte=1') }}
-              />
-            )}
-          </div>
-
-          {/* « Mes missions en cours » supprimé (Session E-3) — doublon de
-              « Mes prochaines missions » affiché avant les onglets. */}
-
-          {/* Chiffres clés — secondaires, placés sous les missions/planning */}
-          <h2 className="text-base font-bold text-foreground mb-3">Mes chiffres</h2>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-            <FadeInView delay={0}>
-              <CarteKPIY2K
-                icone={<CheckCircle className="h-4 w-4" />}
-                valeur={missionsTerminees}
-                label="Missions terminées"
-                variant="holographic"
-                onClick={() => navigate('/soignant/historique-missions')}
-              />
-            </FadeInView>
-            <FadeInView delay={100}>
-              {hasEvaluations ? (
-                <JaugeSpeedometer score={score ?? 50} onClick={() => navigate('/soignant/fiabilite')} />
-              ) : (
-                <div className="card-kpi flex flex-col items-center justify-center text-center cursor-pointer" onClick={() => navigate('/soignant/fiabilite')}>
-                  <Star className="h-6 w-6 text-muted-foreground/40 mb-1" />
-                  <p className="text-xs font-semibold text-muted-foreground">Pas encore d'évaluation</p>
-                  <p className="text-[10px] text-muted-foreground/60 mt-0.5">Complète ta 1ère mission</p>
-                </div>
-              )}
-            </FadeInView>
-            <FadeInView delay={200}>
-              <CarteKPIY2K
-                icone={<Clock className="h-4 w-4" />}
-                valeur={`${heures}h`}
-                label="Heures cumulées"
-                contexte={seuilHeures ? `sur ${seuilHeures.toLocaleString('fr-FR')}h objectif` : undefined}
-                variant="default"
-                onClick={() => navigate(seuilHeures ? '/soignant/passer-en-liberal' : '/soignant/planning?tab=historique')}
-              />
-            </FadeInView>
-            <FadeInView delay={300}>
-              <CarteKPIY2K
-                icone={<CalendarDays className="h-4 w-4" />}
-                valeur={mesMissions.length}
-                label="Planning"
-                contexte="missions à venir"
-                variant="default"
-                onClick={() => navigate('/soignant/planning')}
-              />
-            </FadeInView>
-          </div>
-
-          </SectionErrorBoundary>
-        </TabsContent>
-
-        {/* ─── ONGLET ACTIVITÉ ─── */}
-        <TabsContent value="activite">
-          <SectionErrorBoundary section="activite">
-          {/* Calendrier semaine/mois (toggle persistant) */}
-          <FadeInView>
-            <CalendrierTogglable missionsSemaine={missionsSemaine} />
-          </FadeInView>
-
-          <TopEtablissements />
-
-          {/* Compteur hebdomadaire */}
-          <div className="mb-6">
-            <CompteurHebdomadaire />
-          </div>
-
-          {/* Progression 3200h — IDE/IBODE/IADE uniquement
-              (ProchainBadgeWidget remonté sur l'onglet Accueil — Session B) */}
-          {regleInstallation?.categorie === 'AVEC_HEURES_IDE' && (
-            <div className="mb-6">
-              <FadeInView delay={0}>
-                <ProgressionCirculaire3200h heures={heures} />
-              </FadeInView>
-            </div>
-          )}
-
-          {/* Missions weekend */}
-          {missionsWeekend.length > 0 && (
-            <div className="mb-6">
-              <div className="flex items-center justify-between mb-3">
-                <h2 className="text-lg font-bold text-foreground flex items-center gap-2">
-                  <MapPin className="h-5 w-5 text-primary" /> Missions ce week-end
-                </h2>
-                <button onClick={() => navigate('/soignant/recherche-missions')} className="text-sm text-primary font-medium hover:underline">Voir tout →</button>
-              </div>
-              <div className="space-y-3">
-                {missionsWeekend.map((m: any) => (
-                  <div key={m.id} onClick={() => navigate(`/soignant/missions/${m.id}`)} className="card-base hover:shadow-md transition-shadow cursor-pointer">
-                    <div className="flex items-start justify-between mb-2">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          {m.est_urgente && <span className="badge-base bg-destructive text-destructive-foreground text-[10px]">🔥 URGENT</span>}
-                          <h3 className="font-semibold text-sm text-foreground truncate" title={m.intitule}>{m.intitule}</h3>
-                        </div>
-                        <p className="text-xs text-muted-foreground mt-1">{m.etablissements?.nom} · {m.etablissements?.adresse_ville}</p>
-                      </div>
-                      <span className="text-primary font-bold text-sm whitespace-nowrap ml-2">{m.taux_horaire_base} €/h</span>
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      {format(new Date(m.debut_le), "EEE d MMM · HH'h'mm", { locale: fr })} → {format(new Date(m.fin_le), "HH'h'mm", { locale: fr })}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-          </SectionErrorBoundary>
-        </TabsContent>
-
-        {/* ─── ONGLET GAINS ─── */}
-        <TabsContent value="gains">
-          <SectionErrorBoundary section="gains">
-          {/* Graphique gains 6 mois */}
-          <FadeInView>
-            {gains6Mois.length > 0 ? (
-              <Suspense fallback={<div className="h-64 animate-pulse bg-muted rounded-lg" />}>
-                <GraphiqueGains6Mois missions={gains6Mois} />
-              </Suspense>
-            ) : (
-              <div className="mb-6">
-                <EmptyState illustration={<IllustrationTirelire />} titre="Pas encore de gains" description="Tes gains apparaîtront ici après ta première mission terminée." cta={{ label: 'Trouver une mission', onClick: () => navigate('/soignant/recherche-missions') }} />
-              </div>
-            )}
-          </FadeInView>
-
-          <GraphiqueRepartitionHeures />
-
-          {/* Gains ce mois */}
-          {gainsCeMois.nb > 0 && (
-            <div className="card-base mb-6 cursor-pointer hover:shadow-md transition-all" onClick={() => navigate('/soignant/mes-gains')}>
-              <div className="flex items-center gap-3">
-                <div className="rounded-xl p-2.5 bg-primary/10"><Banknote className="h-5 w-5 text-primary" /></div>
-                <div className="flex-1">
-                  <p className="text-sm font-semibold text-foreground">💰 Ce mois : {new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(gainsCeMois.net)} net estimé* sur {gainsCeMois.nb} mission{gainsCeMois.nb > 1 ? 's' : ''}</p>
-                  <p className="text-xs text-primary mt-0.5">Voir le détail →</p>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Rappels fiscaux libéral (LIBERAL ou MIXTE) */}
-          {((soignantWithCounts as any).type_exercice === 'LIBERAL' || (soignantWithCounts as any).type_exercice === 'MIXTE') && (
-            <RappelsFiscaux />
-          )}
-          </SectionErrorBoundary>
-        </TabsContent>
-
-        {/* ─── ONGLET PARCOURS ─── (professions éligibles libéral uniquement) */}
-        {afficheParcours && (
-        <TabsContent value="parcours">
-          <SectionErrorBoundary section="parcours">
-          {soignantWithCounts.type_exercice === 'LIBERAL' ? (
-            <div className="rounded-2xl bg-success/5 border border-success/20 p-6 text-center">
-              <div className="flex items-center justify-center mb-3">
-                <div className="rounded-full bg-success/10 p-3">
-                  <CheckCircle className="h-8 w-8 text-success" />
-                </div>
-              </div>
-              <h2 className="text-base font-bold text-foreground mb-1">Vous exercez déjà en libéral</h2>
-              <p className="text-sm text-muted-foreground">Ton statut libéral est actif. Profite de tous les avantages de ton indépendance professionnelle.</p>
-              <button onClick={() => navigate('/soignant/profil')} className="mt-4 text-sm text-primary font-semibold hover:underline">
-                Gérer mon profil libéral →
-              </button>
-            </div>
-          ) : soignantWithCounts.profession && estEligibleLiberal(soignantWithCounts.profession) ? (
-            <div className="space-y-4">
-              <div className="rounded-2xl bg-gradient-to-r from-rose-light to-rose/5 dark:from-rose/10 dark:to-rose/5 border border-rose/20 p-4 md:p-6 cursor-pointer" onClick={() => navigate('/soignant/parcours-3200h')}>
-                <div className="flex items-center justify-between mb-1">
-                  <h2 className="text-base font-bold text-foreground">Mon parcours vers le libéral</h2>
-                  <span className="text-xs text-rose font-medium">Détails →</span>
-                </div>
-                <p className="text-xs text-muted-foreground mb-4">Objectif : 3 200 heures d'exercice</p>
-                <JaugeProgression valeur={heures} max={3200} marqueurs={[800, 1600, 2400, 3200]} couleurBarre="bg-gradient-to-r from-rose to-primary" couleurFond="bg-rose/10" />
-                <div className="flex justify-between text-[10px] text-muted-foreground mt-1.5"><span>0h</span><span>800h</span><span>1600h</span><span>2400h</span><span>3200h</span></div>
-                <p className="text-sm font-semibold text-foreground mt-3"><span className="text-rose">{heures}h</span> / 3 200h</p>
-              </div>
-
-              {(() => {
-                if ((soignantWithCounts as any).statut_liberal === 'ACTIF') return null;
-                // Sans heures requises (médecin, sage-femme, orthophoniste...) : toujours afficher
-                // Avec heures requises (IDE 3200, KINE 2240) : afficher dès 25% du seuil
-                const seuil = regleInstallation?.heures_requises;
-                const seuilAtteint = !seuil || heures >= seuil * 0.25;
-                if (!seuilAtteint) return null;
-                return (
-                  <div className="rounded-2xl bg-gradient-to-r from-rose/5 to-rose-light dark:to-rose/10 border border-rose/20 p-4 cursor-pointer hover:shadow-md transition-all" onClick={() => navigate('/soignant/passer-en-liberal')}>
-                    <div className="flex items-center gap-3">
-                      <div className="rounded-xl p-2.5 bg-primary/10"><Rocket className="h-5 w-5 text-primary" /></div>
-                      <div>
-                        <p className="text-sm font-bold text-foreground">🎉 Passer en libéral</p>
-                        <p className="text-xs text-muted-foreground">Vous êtes éligible ! Découvrez le module Free Transition.</p>
-                        <p className="text-xs text-primary mt-0.5">Commencer →</p>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })()}
-
-              {/* Prévoyance CTA */}
-              {!(soignantWithCounts as any).prevoyance_inscrit && (
-                <div className="rounded-2xl bg-gradient-to-r from-rose-light to-rose/5 dark:from-rose/10 dark:to-rose/5 border border-rose/20 p-4 cursor-pointer" onClick={() => navigate('/soignant/prevoyance')}>
-                  <h3 className="text-sm font-bold text-foreground mb-1">🛡️ Protège-toi avec la Prévoyance Jolene</h3>
-                  <p className="text-xs text-muted-foreground mb-2">Assurance santé subventionnée jusqu'à 30%. Bonus : +3 points de fiabilité.</p>
-                  <span className="text-xs text-primary font-medium">Découvrir les plans →</span>
-                </div>
-              )}
-            </div>
-          ) : soignantWithCounts.profession ? (
-            <div className="card-base text-center py-8">
-              <p className="text-sm text-muted-foreground">
-                Votre profession ({getLabelProfession(soignantWithCounts.profession)}) n'est pas éligible à l'exercice libéral via Jolene.
-              </p>
-            </div>
-          ) : (
-            <div className="card-base text-center py-8">
-              <p className="text-sm text-muted-foreground">
-                Vérifie ton RPPS pour débloquer ton parcours professionnel.
-              </p>
-              <BoutonY2K variant="primary" size="sm" onClick={() => navigate('/soignant/profil')} className="mt-3">
-                Compléter mon profil
-              </BoutonY2K>
-            </div>
-          )}
-          </SectionErrorBoundary>
-        </TabsContent>
-        )}
-      </Tabs>
     </LayoutApp>
   );
 }

@@ -51,17 +51,17 @@ export default function MonCompteSoignant() {
         { icone: User, label: 'Mon profil', route: '/soignant/profil' },
       ],
     },
-    {
+    // « Revenus » retiré ici : doublon de l'onglet Revenus de la barre du bas
+    // (même destination /soignant/mes-gains). Cette section ne garde que la
+    // configuration de paiement/facturation (libéral).
+    ...(estLiberal ? [{
       titre: 'Paiements & facturation',
       lignes: [
-        { icone: Banknote, label: 'Revenus', route: '/soignant/mes-gains' },
-        ...(estLiberal ? [
-          { icone: CreditCard, label: 'Compte de paiement (Stripe)', route: '/soignant/stripe-connect' },
-          { icone: FileText, label: 'Mandat de facturation', route: '/soignant/mandat-facturation' },
-          { icone: Banknote, label: 'Charges sociales', route: '/soignant/charges' },
-        ] : []),
+        { icone: CreditCard, label: 'Compte de paiement (Stripe)', route: '/soignant/stripe-connect' },
+        { icone: FileText, label: 'Mandat de facturation', route: '/soignant/mandat-facturation' },
+        { icone: Banknote, label: 'Charges sociales', route: '/soignant/charges' },
       ],
-    },
+    }] : []),
     {
       titre: 'Réputation',
       lignes: [
