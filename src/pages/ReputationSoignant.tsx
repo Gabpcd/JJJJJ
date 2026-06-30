@@ -2,26 +2,25 @@ import { useSearchParams } from 'react-router-dom';
 import { LayoutApp } from '@/components/LayoutApp';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
-import { ShieldCheck, Star, Trophy, BadgeCheck, Scale, MessageSquare } from 'lucide-react';
+import { ShieldCheck, Star, Scale, MessageSquare } from 'lucide-react';
 import { ScoreContent } from './PageScoreSoignant';
 import { EvaluationsContent } from './EvaluationsSoignant';
-import { ClassementContent } from './ClassementSoignants';
-import { ConformiteContent } from './ConformiteSoignant';
 import { LitigesSoignantContent } from './LitigesSoignant';
 import { ReclamationsContent } from './MesReclamations';
 
 /**
  * Hub « Ma réputation » (Session nav — regroupement fort). Une seule page à
- * onglets qui réunit Score · Évaluations · Classement · Conformité · Litiges ·
- * Réclamations. Chaque onglet réutilise le composant de contenu de la page
- * d'origine (routes autonomes conservées pour les liens profonds).
- * Deep-link possible via ?tab=score|evaluations|classement|conformite|litiges|reclamations.
+ * onglets : Score · Évaluations · Litiges · Réclamations.
+ *
+ * Dégonflage réputation (refonte UX) : le « Classement » (mise en concurrence
+ * des soignants — hors-sujet dans le soin) et la « Conformité » (vocabulaire de
+ * surveillance, sans valeur pour le soignant) ont été retirés de la nav. Les
+ * routes autonomes restent pour d'éventuels liens profonds.
+ * Deep-link possible via ?tab=score|evaluations|litiges|reclamations.
  */
 const ONGLETS = [
   { valeur: 'score', label: 'Score', icone: ShieldCheck },
   { valeur: 'evaluations', label: 'Évaluations', icone: Star },
-  { valeur: 'classement', label: 'Classement', icone: Trophy },
-  { valeur: 'conformite', label: 'Conformité', icone: BadgeCheck },
   { valeur: 'litiges', label: 'Litiges', icone: Scale },
   { valeur: 'reclamations', label: 'Réclamations', icone: MessageSquare },
 ] as const;
@@ -49,8 +48,6 @@ export default function ReputationSoignant() {
 
         <TabsContent value="score"><ScoreContent /></TabsContent>
         <TabsContent value="evaluations"><EvaluationsContent /></TabsContent>
-        <TabsContent value="classement"><ClassementContent /></TabsContent>
-        <TabsContent value="conformite"><ConformiteContent /></TabsContent>
         <TabsContent value="litiges"><LitigesSoignantContent /></TabsContent>
         <TabsContent value="reclamations"><ReclamationsContent role="SOIGNANT" /></TabsContent>
       </Tabs>

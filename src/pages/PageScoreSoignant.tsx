@@ -110,7 +110,7 @@ export function ScoreContent() {
           <ShieldCheck className="h-6 w-6 text-primary" /> Mon score de fiabilité
         </h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Score calculé à partir de 6 composantes pondérées sur les 12 derniers mois. Mis à jour automatiquement après chaque nouvelle notation, mission terminée ou litige résolu.
+          Ta fiabilité vue par les établissements. Mise à jour après chaque mission, notation ou litige.
         </p>
       </div>
 
@@ -139,11 +139,27 @@ export function ScoreContent() {
 
       {/* Onglets */}
       <div className="space-y-6">
-        {/* Breakdown détaillé */}
-        <section>
-          <h2 className="text-lg font-bold text-foreground mb-3">Détail par composante</h2>
-          <BreakdownScore breakdown={breakdown} />
-        </section>
+        {/* Détail du calcul — replié par défaut : c'est de l'info « algo », pas
+            l'écran principal du soignant (dégonflage réputation, refonte UX). */}
+        <details className="card-base group">
+          <summary className="cursor-pointer list-none flex items-center justify-between font-semibold text-foreground">
+            <span>Comment mon score est-il calculé&nbsp;?</span>
+            <span className="text-xs text-primary group-open:hidden">Voir le détail</span>
+            <span className="text-xs text-muted-foreground hidden group-open:inline">Masquer</span>
+          </summary>
+          <div className="mt-4 space-y-4">
+            <BreakdownScore breakdown={breakdown} />
+            <div className="rounded-xl bg-muted/30 border border-border p-4 text-xs text-muted-foreground">
+              <ul className="list-disc list-inside space-y-1">
+                <li>6 composantes pondérées : Notation reçue (35%) · Présentéisme (20%) · Ponctualité (15%) · Réactivité (10%) · Ancienneté &amp; volume (10%) · Tu notes les étabs (10%)</li>
+                <li>Malus jusqu'à -20 pts (litiges) et -30 pts (absence sans prévenir)</li>
+                <li>Bonus +5 pts si plus de 50 missions terminées sur 12 mois</li>
+                <li>Composantes inactives (pas assez de données) redistribuées proportionnellement</li>
+                <li>Score borné [0, 100]. Niveau : Bronze (&lt;50) · Argent (50-69) · Or (70-89) · Platine (≥90)</li>
+              </ul>
+            </div>
+          </div>
+        </details>
 
         {/* Évolution 6 mois */}
         <section>
@@ -220,16 +236,6 @@ export function ScoreContent() {
           </div>
         )}
 
-        <div className="rounded-xl bg-muted/30 border border-border p-4 text-xs text-muted-foreground">
-          <p className="font-semibold text-foreground mb-1">À propos du calcul</p>
-          <ul className="list-disc list-inside space-y-1">
-            <li>6 composantes pondérées : Notation reçue (35%) · Présentéisme (20%) · Ponctualité (15%) · Réactivité (10%) · Ancienneté & volume (10%) · Vous notez les étabs (10%)</li>
-            <li>Malus jusqu'à -20 pts (litiges) et -30 pts (absence sans prévenir)</li>
-            <li>Bonus +5 pts si plus de 50 missions terminées sur 12 mois</li>
-            <li>Composantes inactives (pas assez de données) redistribuées proportionnellement</li>
-            <li>Score borné [0, 100]. Niveau : Bronze (&lt;50) · Argent (50-69) · Or (70-89) · Platine (≥90)</li>
-          </ul>
-        </div>
       </div>
 
       {evenementSelectionne && (
