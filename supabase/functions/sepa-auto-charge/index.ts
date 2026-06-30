@@ -48,11 +48,17 @@ Deno.serve(async (req) => {
     }
     const stripe = new Stripe(stripeKey, { apiVersion: "2025-08-27.basil" });
 
-    // Get all EMISE factures for SEPA-enabled establishments
+    // Get all EMISE factures for SEPA-enabled establishments.
+    // Idempotence : on EXCLUT les factures déjà tentées (stripe_payment_intent_id
+    // renseigné) — un prélèvement SEPA reste « processing » plusieurs jours et la
+    // facture demeure EMISE jusqu'au webhook payment_intent.succeeded → PAYEE. Sans
+    // ce garde-fou, une exécution quotidienne re-prélèverait la même facture (double
+    // débit). Un échec passe la facture en EN_RETARD (donc plus EMISE) → pas de retry ici.
     const { data: factures, error: fetchErr } = await supabaseAdmin
       .from("factures")
       .select("id, numero_facture, montant_ttc, etablissement_id, etablissements(nom, stripe_customer_id, stripe_sepa_payment_method_id, mode_paiement_commission)")
-      .eq("statut", "EMISE");
+      .eq("statut", "EMISE")
+      .is("stripe_payment_intent_id", null);
 
     if (fetchErr) {
       return new Response(JSON.stringify({ error: "Erreur chargement factures", details: fetchErr.message }), { status: 500, headers: corsHeaders });

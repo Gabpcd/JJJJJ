@@ -491,8 +491,8 @@ export function ProfilEtablissementContent() {
           <div className="space-y-3">
             {[
               { value: 'STRIPE_RESERVATION', icon: '💳', label: 'Carte bancaire', desc: 'Commission prélevée à chaque mission (autorisée à la réservation, capturée à la fin)' },
-              { value: 'SEPA_DEBIT', icon: '🏦', label: 'Prélèvement SEPA (recommandé)', desc: '', isSEPA: true },
-              { value: 'FACTURE_MENSUELLE', icon: '📄', label: 'Facture mensuelle', desc: 'Paiement à 30 jours par virement ou carte' },
+              { value: 'SEPA_DEBIT', icon: '🏦', label: 'Prélèvement SEPA automatique', desc: '', isSEPA: true },
+              { value: 'FACTURE_MENSUELLE', icon: '📄', label: 'Facture mensuelle par virement', desc: 'Facture de commission émise chaque mois, à régler par virement sous 30 jours' },
               ...(['HOPITAL_PUBLIC', 'CHU', 'CENTRE_SANTE', 'HAD'].includes(type)
                 ? [{ value: 'CHORUS_PRO', icon: '🏛️', label: 'Chorus Pro', desc: 'Dépôt automatique pour les établissements publics' }]
                 : []),
@@ -516,7 +516,7 @@ export function ProfilEtablissementContent() {
                 <div className="flex-1">
                   <p className="text-sm font-medium text-foreground">{opt.icon} {opt.label}</p>
                   {opt.isSEPA ? (
-                    <p className="text-xs text-success mt-0.5">✅ Prélèvement automatique — Plus de factures à payer manuellement. Commission prélevée uniquement après chaque mission terminée.</p>
+                    <p className="text-xs text-success mt-0.5">✅ Prélèvement automatique — votre facture mensuelle de commission est prélevée sans action de votre part. Plus rien à régler manuellement.</p>
                   ) : (
                     <p className="text-xs text-muted-foreground mt-0.5">{opt.desc}</p>
                   )}
