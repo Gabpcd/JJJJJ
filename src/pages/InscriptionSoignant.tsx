@@ -56,7 +56,7 @@ function ExerciceTypeSection({ profession, estSalarieEtablissement, onChangeSala
         <label className="text-sm font-medium text-foreground mb-1.5 block">Type d'exercice</label>
         <div className="p-3 bg-primary/5 border border-primary/20 rounded-xl">
           <p className="text-sm text-foreground">
-            En tant que <strong>{getLabelProfession(profession)}</strong>, votre type d'exercice est automatiquement défini comme <strong>{uniqueType === 'SALARIE' ? 'salarié' : uniqueType === 'LIBERAL' ? 'libéral' : 'mixte'}</strong>.
+            En tant que <strong>{getLabelProfession(profession)}</strong>, ton type d'exercice est automatiquement défini comme <strong>{uniqueType === 'SALARIE' ? 'salarié' : uniqueType === 'LIBERAL' ? 'libéral' : 'mixte'}</strong>.
           </p>
         </div>
       </div>
@@ -65,14 +65,14 @@ function ExerciceTypeSection({ profession, estSalarieEtablissement, onChangeSala
 
   return (
     <div>
-      <label className="text-sm font-medium text-foreground mb-1.5 block">Êtes-vous actuellement salarié(e) d'un établissement de santé ?</label>
+      <label className="text-sm font-medium text-foreground mb-1.5 block">Es-tu actuellement salarié(e) d'un établissement de santé ?</label>
       <div className="flex gap-3 mt-1">
         <button type="button" onClick={() => onChangeSalarie(true)} className={`flex-1 py-2.5 px-4 rounded-xl border text-sm font-medium transition-colors ${estSalarieEtablissement === true ? 'border-primary bg-primary/5 text-primary' : 'border-input text-muted-foreground hover:bg-accent/50'}`}>Oui</button>
         <button type="button" onClick={() => onChangeSalarie(false)} className={`flex-1 py-2.5 px-4 rounded-xl border text-sm font-medium transition-colors ${estSalarieEtablissement === false ? 'border-primary bg-primary/5 text-primary' : 'border-input text-muted-foreground hover:bg-accent/50'}`}>Non</button>
       </div>
       {estSalarieEtablissement === true && (
         <div className="mt-3 p-3 bg-primary/5 border border-primary/20 rounded-xl">
-          <p className="text-xs text-foreground">ℹ️ Vous pourrez effectuer des missions sur Jolene en complément de votre activité salariée. Vérifiez que votre contrat de travail n'inclut pas de clause d'exclusivité.</p>
+          <p className="text-xs text-foreground">ℹ️ Tu pourras effectuer des missions sur Jolene en complément de ton activité salariée. Vérifie que ton contrat de travail n'inclut pas de clause d'exclusivité.</p>
         </div>
       )}
     </div>
@@ -377,7 +377,7 @@ export default function InscriptionSoignant() {
           ))}
         </div>
         <p className="text-center text-xs text-muted-foreground mb-8 px-2">
-          ≈ 2 minutes. Vos documents et la vérification se font ensuite, tranquillement, depuis votre espace — pas maintenant.
+          ≈ 2 minutes. Tes documents et la vérification se font ensuite, tranquillement, depuis ton espace — pas maintenant.
         </p>
 
         {/* Pro Santé Connect — inscription rapide avec carte CPS/e-CPS */}
@@ -392,7 +392,7 @@ export default function InscriptionSoignant() {
               }}
             />
             <p className="text-[10px] text-muted-foreground text-center mt-1.5">
-              Avec une carte CPS/e-CPS, votre inscription est automatique et votre RPPS vérifié instantanément
+              Avec une carte CPS/e-CPS, ton inscription est automatique et ton RPPS vérifié instantanément
             </p>
             <div className="my-4 flex items-center gap-3">
               <div className="flex-1 h-px bg-border" />
@@ -405,7 +405,7 @@ export default function InscriptionSoignant() {
         <form onSubmit={handleSubmit}>
           {etape === 1 && (
             <div className="space-y-4">
-              <p className="text-sm font-medium text-muted-foreground mb-4">Étape 1 — Vos identifiants</p>
+              <p className="text-sm font-medium text-muted-foreground mb-4">Étape 1 — Tes identifiants</p>
               <label className="block">
                 <span className="text-sm font-medium text-foreground mb-1.5 block">Email *</span>
                 <input type="email" autoComplete="email" value={form.email} onChange={e => maj('email', e.target.value)} className={`input-base ${classeChampErreur('email')}`} required aria-invalid={form.email.length > 0 && !emailValide} aria-describedby={form.email.length > 0 && !emailValide ? 'email-err' : undefined} />
@@ -447,7 +447,7 @@ export default function InscriptionSoignant() {
 
           {etape === 2 && (
             <div className="space-y-4">
-              <p className="text-sm font-medium text-muted-foreground mb-4">Étape 2 — Votre profil professionnel</p>
+              <p className="text-sm font-medium text-muted-foreground mb-4">Étape 2 — Ton profil professionnel</p>
               {/* La valeur avant l'effort (Session E-2) : dès la profession choisie,
                   montrer le marché réel — missions et taux, ou établissements inscrits.
                   Rendu prominent (carte mise en avant) : c'est la motivation à finir.
@@ -476,7 +476,7 @@ export default function InscriptionSoignant() {
               <label className="block"><span className="text-sm font-medium text-foreground mb-1.5 block">Téléphone</span><input value={form.telephone} onChange={e => maj('telephone', e.target.value)} type="tel" inputMode="tel" autoComplete="tel" placeholder="+33 6 ..." className="input-base" pattern="[\\+]?[0-9\\s]{8,15}" /></label>
               <label className="block"><span className="text-sm font-medium text-foreground mb-1.5 block">Date de naissance *</span><input type="date" value={form.dateNaissance} onChange={e => maj('dateNaissance', e.target.value)} className={`input-base ${classeChampErreur('dateNaissance')}`} max={new Date(new Date().setFullYear(new Date().getFullYear() - 18)).toISOString().split('T')[0]} required aria-invalid={!!form.dateNaissance && !dateNaissanceMajeur} aria-describedby={form.dateNaissance && !dateNaissanceMajeur ? 'date-err' : undefined} />
                 {dateNaissanceRequise && <p className="text-xs text-destructive mt-1 break-words">La date de naissance est obligatoire</p>}
-                {form.dateNaissance && !dateNaissanceMajeur && <p id="date-err" className="text-xs text-destructive mt-1 break-words" role="alert">Vous devez avoir 18 ans révolus pour vous inscrire</p>}
+                {form.dateNaissance && !dateNaissanceMajeur && <p id="date-err" className="text-xs text-destructive mt-1 break-words" role="alert">Tu dois avoir 18 ans révolus pour t'inscrire</p>}
               </label>
               <div>
                 <label htmlFor="profession-select" className="text-sm font-medium text-foreground mb-1.5 block">Profession *</label>
@@ -508,7 +508,7 @@ export default function InscriptionSoignant() {
                 </div>
                 {form.profession && !peutEtreLiberal && (
                   <p className="text-[10px] text-muted-foreground mt-1.5">
-                    Votre profession ne peut pas exercer en libéral. Seuls CDD et Salarié sont disponibles.
+                    Ta profession ne peut pas exercer en libéral. Seuls CDD et Salarié sont disponibles.
                   </p>
                 )}
                 {form.typesContrat.length === 0 && (
@@ -520,7 +520,7 @@ export default function InscriptionSoignant() {
                   <span className="text-sm font-medium text-foreground mb-1.5 block">Numéro RPPS{rppsObligatoireInscription ? ' *' : ''}</span>
                   {!rppsObligatoireInscription && (
                     <p className="text-[11px] text-muted-foreground mb-1.5">
-                      Vous ne le connaissez pas par cœur ? Vous pouvez laisser vide et le compléter plus tard — la vérification se fera à ce moment-là.
+                      Tu ne le connais pas par cœur ? Tu peux laisser vide et le compléter plus tard — la vérification se fera à ce moment-là.
                     </p>
                   )}
                   <div className="relative">
@@ -543,7 +543,7 @@ export default function InscriptionSoignant() {
                       {rppsResultat.profession_api && form.profession && rppsResultat.profession_correspond === false && (
                         <div className="flex items-center gap-1.5 text-xs bg-destructive/5 text-destructive rounded-lg px-2 py-1.5" role="alert">
                           <ShieldAlert className="h-3.5 w-3.5" />
-                          ❌ Ce RPPS correspond à la profession « {rppsResultat.profession_api} », pas à « {getLabelProfession(form.profession)} ». Vérifiez votre numéro ou votre profession.
+                          ❌ Ce RPPS correspond à la profession « {rppsResultat.profession_api} », pas à « {getLabelProfession(form.profession)} ». Vérifie ton numéro ou ta profession.
                         </div>
                       )}
                     </div>
@@ -551,7 +551,7 @@ export default function InscriptionSoignant() {
                   {rppsResultat && rppsResultat.trouve && rppsMatch === false && form.rpps.length === 11 && !rppsVerifManuelle && (
                     <div className="mt-1.5 flex items-center gap-1.5 text-xs bg-destructive/5 text-destructive rounded-lg px-2 py-1.5">
                       <ShieldAlert className="h-3.5 w-3.5" />
-                      ❌ Ce RPPS ne correspond pas à votre identité
+                      ❌ Ce RPPS ne correspond pas à ton identité
                     </div>
                   )}
                   {rppsResultat && !rppsResultat.trouve && !rppsResultat.fhir_indisponible && form.rpps.length === 11 && !rppsVerifManuelle && (
@@ -561,7 +561,7 @@ export default function InscriptionSoignant() {
                         ❌ RPPS non trouvé dans l'annuaire
                       </div>
                       <p className="text-[11px] text-muted-foreground">
-                        Vérifiez le numéro. Si votre RPPS est récent ou mal indexé dans l'annuaire public, vous pouvez tout de même continuer :
+                        Vérifie le numéro. Si ton RPPS est récent ou mal indexé dans l'annuaire public, tu peux tout de même continuer :
                       </p>
                       <button
                         type="button"
@@ -575,7 +575,7 @@ export default function InscriptionSoignant() {
                   {rppsVerifManuelle && form.rpps.length === 11 && (
                     <div className="mt-1.5 flex items-center gap-1.5 text-xs bg-amber-50 text-amber-700 rounded-lg px-2 py-1.5">
                       <ShieldCheck className="h-3.5 w-3.5" />
-                      Votre RPPS sera vérifié manuellement sous 24 h — vous pouvez terminer votre inscription.
+                      Ton RPPS sera vérifié manuellement sous 24 h — tu peux terminer ton inscription.
                     </div>
                   )}
                   {rppsResultat && rppsResultat.fhir_indisponible && form.rpps.length === 11 && (
@@ -588,7 +588,7 @@ export default function InscriptionSoignant() {
               ) : form.profession && (
                 <div className="p-3 bg-primary/5 border border-primary/20 rounded-xl">
                   <p className="text-xs text-foreground">
-                    ℹ️ Votre profession ne nécessite pas de numéro d'identification professionnelle. Votre diplôme et votre carte d'identité seront vérifiés à la première mission.
+                    ℹ️ Ta profession ne nécessite pas de numéro d'identification professionnelle. Ton diplôme et ta carte d'identité seront vérifiés à la première mission.
                   </p>
                 </div>
               )}
