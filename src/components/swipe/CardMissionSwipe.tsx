@@ -126,7 +126,10 @@ export function CardMissionSwipe({ mission, onTap, className }: Props) {
       }, score ${mission.score} sur 100. Toucher pour le détail.`}
     >
       {/* ── Visuel établissement (haut) ─────────────────────────────────── */}
-      <div className="relative h-[140px] shrink-0 bg-gradient-to-br from-jolene-rose-300 via-jolene-mauve-300 to-jolene-cyan-200 flex items-center justify-center overflow-hidden">
+      {/* pb-14 : le visuel central (logo ou initiale) est centré dans la PARTIE
+          HAUTE, au-dessus de la bande dégradée du nom (B5 : sinon la grosse
+          initiale « C » recouvrait le nom de l'établissement). */}
+      <div className="relative h-[140px] shrink-0 bg-gradient-to-br from-jolene-rose-300 via-jolene-mauve-300 to-jolene-cyan-200 flex items-center justify-center overflow-hidden pb-14">
         {mission.etablissement_logo_url ? (
           <>
             {/* Fond flouté du logo pour remplir, logo net contenu au centre */}
@@ -143,12 +146,14 @@ export function CardMissionSwipe({ mission, onTap, className }: Props) {
             />
           </>
         ) : (
-          <span
-            className="text-5xl font-black text-white/90 drop-shadow-[0_4px_12px_rgba(0,0,0,0.2)] select-none"
+          <div
+            className="relative h-16 w-16 rounded-2xl bg-white/20 backdrop-blur-sm flex items-center justify-center shadow-lg"
             aria-hidden="true"
           >
-            {initiale}
-          </span>
+            <span className="text-3xl font-black text-white/95 drop-shadow-[0_4px_12px_rgba(0,0,0,0.2)] select-none">
+              {initiale}
+            </span>
+          </div>
         )}
 
         {/* Badges overlay */}
