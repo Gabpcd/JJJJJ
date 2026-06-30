@@ -95,17 +95,6 @@ export function VueSwipeMissions({ onBasculerListe, onCreerAlerte }: VueSwipeMis
     staleTime: 30_000,
   });
 
-  // Streak quotidien — affiché en tête (mécanique d'engagement, reset si jour manqué)
-  const { data: streak } = useQuery({
-    queryKey: ['ma-streak'],
-    queryFn: async () => {
-      const { data } = await supabase.rpc('fn_ma_streak' as any);
-      const row = Array.isArray(data) ? data[0] : data;
-      return (row?.streak_count as number) ?? 0;
-    },
-    staleTime: 60_000,
-  });
-
   const [localStack, setLocalStack] = useState<MissionSwipePayload[]>([]);
   useEffect(() => {
     if (data) setLocalStack(data);
@@ -226,21 +215,8 @@ export function VueSwipeMissions({ onBasculerListe, onCreerAlerte }: VueSwipeMis
 
   return (
     <div className="max-w-md mx-auto w-full flex flex-col">
-      {/* Bandeau engagement (streak + quota super-likes) */}
-      <div className="flex items-center gap-2 mb-2 flex-wrap">
-        {(streak ?? 0) > 0 && (
-          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-gradient-hero text-white text-xs font-bold shadow-sm">
-            🔥 {streak} jour{(streak ?? 0) > 1 ? 's' : ''} d'affilée
-          </span>
-        )}
-        {quotaSuperLike != null && (
-          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-jolene-butter-100 text-jolene-midnight text-xs font-semibold border border-jolene-butter-300">
-            ⭐ {quotaSuperLike}/5 super-likes aujourd'hui
-          </span>
-        )}
-      </div>
-      <p className="text-sm text-jolene-bubblegum mb-2">Swipez à droite pour postuler, à gauche pour passer.</p>
-
+      {/* Pas de bannière au-dessus de la carte : c'est elle qui vend. Un simple
+          rappel discret du geste, le reste (quota super-likes) vit sur le bouton. */}
       <div className="min-h-[60vh] flex flex-col">
         <div className="flex-1 flex items-center justify-center py-2">
           {isLoading ? (
