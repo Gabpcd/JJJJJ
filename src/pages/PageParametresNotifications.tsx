@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Bell, Mail, MessageSquare, Smartphone, Loader2, ArrowLeft, Save } from 'lucide-react';
 import { LayoutApp } from '@/components/LayoutApp';
@@ -29,6 +29,9 @@ interface EventDef {
   label: string;
   description: string;
   canaux: Canal[];
+  // Régime auquel l'événement appartient. Un soignant PUREMENT libéral ne reçoit
+  // jamais d'événement salarié (CDD), et inversement. MIXTE (cumul) voit tout.
+  regime?: 'SALARIE' | 'LIBERAL';
 }
 
 const EVENTS_SOIGNANT: EventDef[] = [
@@ -37,13 +40,13 @@ const EVENTS_SOIGNANT: EventDef[] = [
   { type: 'MISSION_ASSIGNEE', label: 'Proposition de mission directe', description: 'Quand un établissement me propose directement une mission', canaux: ['EMAIL','PUSH'] },
   { type: 'RAPPEL_J1_MISSION', label: 'Rappel mission J-1', description: 'Rappel la veille du début de mission', canaux: ['EMAIL','PUSH','SMS'] },
   { type: 'POINTAGE_MANQUANT', label: 'Pointage manquant', description: 'Si j\'ai oublié de pointer mon départ', canaux: ['EMAIL','PUSH'] },
-  { type: 'FACTURE_EMISE', label: 'Facture émise', description: 'Quand Jolene émet une nouvelle facture en mon nom', canaux: ['EMAIL','PUSH'] },
-  { type: 'PAIEMENT_RECU', label: 'Paiement reçu', description: 'Quand un établissement règle ma facture', canaux: ['EMAIL','PUSH'] },
-  { type: 'CONTRAT_TRAVAIL_DEPOSE', label: 'Contrat de travail SALARIE déposé', description: 'Quand mon établissement upload mon contrat CDD', canaux: ['EMAIL','PUSH'] },
+  { type: 'FACTURE_EMISE', label: 'Facture émise', description: 'Quand Jolene émet une nouvelle facture en mon nom', canaux: ['EMAIL','PUSH'], regime: 'LIBERAL' },
+  { type: 'PAIEMENT_RECU', label: 'Paiement reçu', description: 'Quand un établissement règle ma facture', canaux: ['EMAIL','PUSH'], regime: 'LIBERAL' },
+  { type: 'CONTRAT_TRAVAIL_DEPOSE', label: 'Contrat de travail SALARIE déposé', description: 'Quand mon établissement upload mon contrat CDD', canaux: ['EMAIL','PUSH'], regime: 'SALARIE' },
   { type: 'LITIGE_OUVERT', label: 'Litige ouvert', description: 'Notifications sur les litiges en cours', canaux: ['EMAIL','PUSH','SMS'] },
   { type: 'LITIGE_RESOLU', label: 'Litige résolu', description: 'Quand un litige a été clos', canaux: ['EMAIL','PUSH'] },
   { type: 'DOCUMENT_EXPIRANT', label: 'Document expirant bientôt', description: 'RCP, diplôme ou autre document arrivant à expiration', canaux: ['EMAIL','PUSH'] },
-  { type: 'MANDAT_RE_SIGNATURE', label: 'Re-signature du mandat de facturation', description: 'Si une nouvelle version du mandat est publiée', canaux: ['EMAIL','PUSH'] },
+  { type: 'MANDAT_RE_SIGNATURE', label: 'Re-signature du mandat de facturation', description: 'Si une nouvelle version du mandat est publiée', canaux: ['EMAIL','PUSH'], regime: 'LIBERAL' },
   { type: 'SERIE_ONBOARDING', label: 'Série emails de bienvenue (J0-J7)', description: 'Séquence d\'emails d\'accueil pendant la première semaine', canaux: ['EMAIL'] },
 ];
 
@@ -63,7 +66,15 @@ export default function PageParametresNotifications() {
   const navigate = useNavigate();
   const { user, role } = useAuth();
   const isEtab = role === 'ADMIN_ETABLISSEMENT';
-  const events = isEtab ? EVENTS_ETAB : EVENTS_SOIGNANT;
+  const [typeExercice, setTypeExercice] = useState<string | null>(null);
+  // Un soignant purement libéral ne voit pas les événements salarié (CDD) et
+  // inversement. MIXTE ou régime inconnu → on affiche tout (B8 régime per-mission).
+  const events = useMemo(() => {
+    if (isEtab) return EVENTS_ETAB;
+    if (typeExercice === 'LIBERAL') return EVENTS_SOIGNANT.filter(e => e.regime !== 'SALARIE');
+    if (typeExercice === 'SALARIE') return EVENTS_SOIGNANT.filter(e => e.regime !== 'LIBERAL');
+    return EVENTS_SOIGNANT;
+  }, [isEtab, typeExercice]);
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -98,11 +109,14 @@ export default function PageParametresNotifications() {
       if (!isEtab) {
         const { data: soignant } = await supabase
           .from('soignants')
-          .select('sms_alertes_actives')
+          .select('sms_alertes_actives, type_exercice')
           .eq('id', user.id)
           .maybeSingle();
         if (soignant && (soignant as any).sms_alertes_actives !== null) {
           setSmsAlertesActives(!!(soignant as any).sms_alertes_actives);
+        }
+        if (soignant && (soignant as any).type_exercice) {
+          setTypeExercice((soignant as any).type_exercice);
         }
       }
 
