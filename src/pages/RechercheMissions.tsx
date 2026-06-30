@@ -672,7 +672,7 @@ export default function RechercheMissions() {
                 {nbAffiche < filtered.length && (
                   <div className="flex justify-center mt-6">
                     <button onClick={() => setNbAffiche(n => n + 20)} className="btn-secondary text-sm px-6">
-                      Voir plus ({filtered.length - nbAffiche} restantes)
+                      Voir plus ({filtered.length - nbAffiche} restante{filtered.length - nbAffiche > 1 ? 's' : ''})
                     </button>
                   </div>
                 )}

@@ -89,7 +89,7 @@ export default function DashboardRH() {
       doc.text(`Coût moyen/heure : ${fmtEur(stats.cout_moyen_heure, 2)} (secteur : ${COUT_MOYEN_SECTEUR} €)`, 14, 68);
       doc.text(`Taux de remplissage : ${stats.taux_remplissage}%`, 14, 74);
       doc.text(`Soignants mobilisés : ${stats.soignants_total}`, 14, 80);
-      doc.text(`Budget prévisionnel : ${fmtEur(stats.cout_previsionnel_total ?? stats.cout_previsionnel_brut ?? 0, 2)} (${stats.assignees_total} missions à venir)`, 14, 86);
+      doc.text(`Budget prévisionnel : ${fmtEur(stats.cout_previsionnel_total ?? stats.cout_previsionnel_brut ?? 0, 2)} (${stats.assignees_total} mission${stats.assignees_total > 1 ? 's' : ''} à venir)`, 14, 86);
 
       if (stats.top_soignants?.length > 0) {
         doc.setFontSize(14);

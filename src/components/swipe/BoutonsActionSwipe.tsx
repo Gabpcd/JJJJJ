@@ -86,7 +86,7 @@ export function BoutonsActionSwipe({
         aria-label={
           superLikeDisabled
             ? `Super like indisponible (quota épuisé)`
-            : `Super like (${quotaSuperLikeRestant ?? 5} restants aujourd'hui)`
+            : `Super like (${quotaSuperLikeRestant ?? 5} restant${(quotaSuperLikeRestant ?? 5) > 1 ? 's' : ''} aujourd'hui)`
         }
         className={cn(
           'relative h-14 w-14 sm:h-16 sm:w-16 rounded-full transition-bouncy',

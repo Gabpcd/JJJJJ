@@ -734,7 +734,7 @@ export default function PoolUrgenceEtablissement({ isAdmin = false }: { isAdmin?
       <ModalConfirmation
         ouvert={alerterTousOpen}
         titre="Alerter tout le pool d'urgence"
-        message={`Envoyer l'alerte à ${filtered.filter(s => !s.en_mission_maintenant).length} soignants disponibles dans le pool ?`}
+        message={`Envoyer l'alerte à ${filtered.filter(s => !s.en_mission_maintenant).length} soignant${filtered.filter(s => !s.en_mission_maintenant).length > 1 ? 's' : ''} disponible${filtered.filter(s => !s.en_mission_maintenant).length > 1 ? 's' : ''} dans le pool ?`}
         labelConfirmer="Envoyer l'alerte 🚨"
         variante="danger"
         onConfirmer={alerterTous}

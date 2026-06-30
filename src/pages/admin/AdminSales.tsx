@@ -1383,7 +1383,7 @@ function PostsGenerateur() {
             <CardY2KContent>
               <div className="flex items-center justify-between gap-2 mb-2">
                 <span className="font-semibold text-foreground">Post global (toutes professions)</span>
-                <BadgeY2K variant="premium">{totalMissions} missions</BadgeY2K>
+                <BadgeY2K variant="premium">{totalMissions} mission{totalMissions > 1 ? 's' : ''}</BadgeY2K>
               </div>
               <pre className="text-xs text-muted-foreground whitespace-pre-wrap font-sans bg-muted/40 rounded-lg p-3">{postGlobal}</pre>
               <BoutonY2K size="sm" className="mt-2" onClick={() => copier(postGlobal)} iconeGauche={<Copy className="h-4 w-4" />}>Copier</BoutonY2K>

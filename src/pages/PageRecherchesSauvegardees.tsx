@@ -159,7 +159,7 @@ export default function PageRecherchesSauvegardees({ role }: Props) {
                       {f.nb_resultats_dernier_check > 0 && (
                         <>
                           <span>•</span>
-                          <span className="text-blue-600 font-medium">{f.nb_resultats_dernier_check} résultats</span>
+                          <span className="text-blue-600 font-medium">{f.nb_resultats_dernier_check} résultat{f.nb_resultats_dernier_check > 1 ? 's' : ''}</span>
                         </>
                       )}
                     </div>

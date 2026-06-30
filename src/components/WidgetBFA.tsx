@@ -90,7 +90,7 @@ export function WidgetBFA({ etablissementId, groupeId }: WidgetBFAProps) {
       {palierSuivant && missionsRestantes > 0 && (
         <div className="mt-3 bg-amber-100/50 rounded-xl p-3">
           <p className="text-xs text-amber-800">
-            💡 Encore <span className="font-bold">{missionsRestantes} missions</span> pour le palier {palierSuivant.nom} ({palierSuivant.taux}%) !
+            💡 Encore <span className="font-bold">{missionsRestantes} mission{missionsRestantes > 1 ? 's' : ''}</span> pour le palier {palierSuivant.nom} ({palierSuivant.taux}%) !
             {economieSuivante > 0 && <> Économie supplémentaire : <span className="font-bold">+{fmt(economieSuivante)}</span></>}
           </p>
         </div>

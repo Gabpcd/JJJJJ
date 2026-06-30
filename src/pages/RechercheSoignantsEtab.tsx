@@ -368,7 +368,7 @@ export default function RechercheSoignantsEtab() {
                     className="btn-secondary text-sm inline-flex items-center gap-2"
                   >
                     {loadingMore ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                    {loadingMore ? 'Chargement…' : `Voir plus (${countTotal - soignants.length} restants)`}
+                    {loadingMore ? 'Chargement…' : `Voir plus (${countTotal - soignants.length} restant${countTotal - soignants.length > 1 ? 's' : ''})`}
                   </button>
                 </div>
               )}

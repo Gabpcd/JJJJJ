@@ -164,7 +164,7 @@ export function ClassementContent() {
                   {Number(s.note_moyenne).toFixed(1)}
                 </span>
                 <span className="text-muted-foreground">{s.score_fiabilite}/100</span>
-                <span className="text-muted-foreground">{s.total_missions_terminees} missions</span>
+                <span className="text-muted-foreground">{s.total_missions_terminees} mission{s.total_missions_terminees > 1 ? 's' : ''}</span>
               </div>
             </div>
           ))}
