@@ -10,11 +10,12 @@ import { Mascotte } from '@/components/mascotte/Mascotte';
 import { estEligibleLiberal } from '@/lib/regles-installation-liberal';
 import { ChangementMotDePasse } from '@/components/soignant/ChangementMotDePasse';
 import { ConsentementPingGps } from '@/components/soignant/ConsentementPingGps';
+import { ModalContacterJolene } from '@/components/ModalContacterJolene';
 import {
   User, ShieldCheck, LogOut,
   Mail, Phone, MapPin, KeyRound, FileText, Scale, Trash2,
   CreditCard, Gift, Rocket, Umbrella, GraduationCap, Bell,
-  Search, Ban,
+  Search, Ban, BookOpen,
 } from 'lucide-react';
 
 export default function MonCompteSoignant() {
@@ -26,6 +27,7 @@ export default function MonCompteSoignant() {
     type_exercice: string | null; rpps_verifie: boolean; numero_rpps: string | null;
     profession: string | null; statut_liberal: string | null;
   } | null>(null);
+  const [contactOpen, setContactOpen] = useState(false);
 
   useEffect(() => {
     if (!user) return;
@@ -97,6 +99,10 @@ export default function MonCompteSoignant() {
     {
       titre: 'Aide & légal',
       lignes: [
+        // Le FAB « ? » global a été retiré (Lot 6a.4 — il masquait des CTA
+        // critiques) : l'aide et le contact vivent ici, leur place naturelle.
+        { icone: BookOpen, label: 'Centre d\'aide', route: '/aide' },
+        { icone: Mail, label: 'Contacter Jolene', onClick: () => setContactOpen(true), sansChevron: true },
         { icone: ShieldCheck, label: 'Confidentialité', route: '/confidentialite' },
         { icone: Scale, label: 'Conditions générales', route: '/cgu' },
         { icone: FileText, label: 'Mentions légales', route: '/mentions-legales' },
@@ -180,6 +186,8 @@ export default function MonCompteSoignant() {
           </div>
         </section>
       </div>
+
+      <ModalContacterJolene open={contactOpen} onClose={() => setContactOpen(false)} source="compte-soignant" />
     </LayoutApp>
   );
 }

@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { Search, HelpCircle, Loader2, ChevronRight, ArrowLeft } from 'lucide-react';
+import { Search, HelpCircle, Loader2, ChevronRight, ArrowLeft, Mail } from 'lucide-react';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { FooterLegal } from '@/components/FooterLegal';
+import { ModalContacterJolene } from '@/components/ModalContacterJolene';
 import { toast } from 'sonner';
 
 interface ArticleResume {
@@ -28,6 +29,7 @@ export default function PageAide() {
   );
   const [articles, setArticles] = useState<ArticleResume[]>([]);
   const [loading, setLoading] = useState(true);
+  const [contactOpen, setContactOpen] = useState(false);
 
   // Audience par défaut selon rôle utilisateur
   useEffect(() => {
@@ -126,7 +128,10 @@ export default function PageAide() {
               {query.trim() ? `Aucun article ne correspond à "${query}".` : 'Aucun article disponible.'}
             </p>
             <p className="text-xs text-muted-foreground mt-2">
-              Pas trouvé ? Contactez <a href="mailto:support@jolene.app" className="text-primary hover:underline">support@jolene.app</a>
+              Pas trouvé ?{' '}
+              <button onClick={() => setContactOpen(true)} className="text-primary hover:underline">
+                Contactez Jolene
+              </button>
             </p>
           </div>
         ) : (
@@ -158,10 +163,26 @@ export default function PageAide() {
                 </div>
               </section>
             ))}
+
+            {/* Re-homing du contact (le FAB « ? » global a été retiré) :
+                accès permanent au formulaire depuis le centre d'aide. */}
+            <div className="rounded-xl border border-border bg-card p-4 flex items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold text-foreground">Pas trouvé de réponse ?</p>
+                <p className="text-xs text-muted-foreground">Notre équipe répond par email sous 24 h ouvrées.</p>
+              </div>
+              <button
+                onClick={() => setContactOpen(true)}
+                className="btn-primary text-sm shrink-0 inline-flex items-center gap-1.5"
+              >
+                <Mail className="h-4 w-4" /> Contacter Jolene
+              </button>
+            </div>
           </div>
         )}
       </main>
 
+      <ModalContacterJolene open={contactOpen} onClose={() => setContactOpen(false)} source="centre-aide" />
       <FooterLegal />
     </div>
   );

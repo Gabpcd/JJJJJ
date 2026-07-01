@@ -186,7 +186,13 @@ export function MesGainsApercuContent() {
           <p className="text-2xl font-bold text-foreground">{fmt(prochainPaiement.montant)}</p>
           <p className="text-sm text-muted-foreground mt-0.5">
             {prochainPaiement.nbMissions} mission{prochainPaiement.nbMissions > 1 ? 's' : ''} en attente de règlement
-            {prochainPaiement.prochaineDate && ` · à partir du ${format(prochainPaiement.prochaineDate, 'd MMMM yyyy', { locale: fr })}`}
+            {/* Jamais une date passée présentée comme future (Lot 6a.3) : si la
+                fin de mission est derrière nous, afficher l'état réel du flux. */}
+            {prochainPaiement.prochaineDate && (
+              prochainPaiement.prochaineDate.getTime() > Date.now()
+                ? ` · à partir du ${format(prochainPaiement.prochaineDate, 'd MMMM yyyy', { locale: fr })}`
+                : ' · en attente de validation des présences par l\'établissement'
+            )}
           </p>
           <p className="text-[10px] text-muted-foreground italic mt-1">
             Montant net estimé. Le règlement intervient après validation des présences par l'établissement.
