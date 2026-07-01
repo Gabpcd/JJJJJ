@@ -27,6 +27,7 @@ import { TYPES_DOCUMENTS } from '@/lib/documents';
 import { format, differenceInDays } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { toast } from 'sonner';
+import { hapticNotification } from '@/lib/haptics';
 interface SoignantData {
   prenom: string; nom: string; telephone: string | null;
   date_naissance: string | null; profession: string; type_contrat: string | null;
@@ -174,6 +175,7 @@ export default function DashboardSoignant() {
     if (r?.success || r?.candidature_id) {
       const candId = (r.candidature_id as string | undefined) ?? '';
       setPostulees(prev => ({ ...prev, [m.id]: candId }));
+      void hapticNotification('success');
       toast.success('Candidature envoyée ✓', candId ? {
         action: { label: 'Annuler', onClick: () => retirerCandidature(m.id, candId) },
         duration: 8000,

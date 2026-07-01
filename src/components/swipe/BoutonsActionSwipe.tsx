@@ -13,6 +13,7 @@
  */
 import { Heart, Star, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { hapticImpact } from '@/lib/haptics';
 
 interface Props {
   onDislike: () => void;
@@ -42,17 +43,20 @@ export function BoutonsActionSwipe({
 
   const handleDislike = () => {
     vibrate(15);
+    void hapticImpact('light');
     onDislike();
   };
 
   const handleLike = () => {
     vibrate([10, 30, 10]);
+    void hapticImpact('medium');
     onLike();
   };
 
   const handleSuperLike = () => {
     if (superLikeDisabled) return;
     vibrate([20, 40, 20, 40, 60]);
+    void hapticImpact('heavy');
     onSuperLike();
   };
 

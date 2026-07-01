@@ -11,6 +11,7 @@ import { ModalContacterJolene } from '@/components/ModalContacterJolene';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
+import { hapticNotification } from '@/lib/haptics';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { PROFESSIONS } from '@/lib/constantes';
@@ -205,6 +206,7 @@ export default function MandatFacturation() {
       if (error) throw error;
       if ((data as any)?.error) throw new Error((data as any).error);
 
+      void hapticNotification('success');
       const now = new Date().toISOString();
       setAlreadySigned(true);
       setJustSigned(true);
