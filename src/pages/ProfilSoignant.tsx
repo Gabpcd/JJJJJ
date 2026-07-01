@@ -10,9 +10,8 @@ import { extraireMessageErreur } from '@/lib/erreurs';
 import { handleErrorSilent } from '@/lib/handleError';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { Copy, Gift, CheckCircle, LogOut } from 'lucide-react';
+import { LogOut } from 'lucide-react';
 import { BadgeRPPS } from '@/components/BadgeRPPS';
-import { EncartInvitation } from '@/components/EncartInvitation';
 import { BadgesGamification, BadgeStats } from '@/components/BadgesGamification';
 import { AvatarUpload } from '@/components/AvatarUpload';
 import { format } from 'date-fns';
@@ -21,7 +20,6 @@ import { getLabelProfession, getTypesContratSoignant } from '@/lib/constantes';
 import { calculerCompletionProfil } from '@/lib/profil-soignant';
 import type { Database } from '@/integrations/supabase/types';
 import { SectionProfilPrincipal } from '@/components/profil-soignant/SectionProfilPrincipal';
-import { SectionPaiements } from '@/components/profil-soignant/SectionPaiements';
 import { SectionPreferences } from '@/components/profil-soignant/SectionPreferences';
 import { SectionConfidentialite } from '@/components/profil-soignant/SectionConfidentialite';
 import { SectionDpaeIdentite } from '@/components/profil-soignant/SectionDpaeIdentite';
@@ -51,8 +49,6 @@ export default function ProfilSoignant() {
   const [specialiteSource, setSpecialiteSource] = useState<string>('MANUEL');
   const [rppsVerifie, setRppsVerifie] = useState(false);
   const [rppsVerifieLe, setRppsVerifieLe] = useState<string | null>(null);
-  const [mandatFacturationSigne, setMandatFacturationSigne] = useState(false);
-  const [mandatFacturationSigneLe, setMandatFacturationSigneLe] = useState<string | null>(null);
 
   // Form fields
   const [prenom, setPrenom] = useState('');
@@ -80,25 +76,6 @@ export default function ProfilSoignant() {
   const [attestationCumul, setAttestationCumul] = useState(false);
   const [heuresCumulees, setHeuresCumulees] = useState(0);
   const [statutLiberal, setStatutLiberal] = useState('');
-  const [codeParrainage, setCodeParrainage] = useState('');
-  const [codeRecu, setCodeRecu] = useState(() => {
-    // J5.D.1 — auto-fill depuis ?ref=CODE (URL inscription) ou sessionStorage
-    try {
-      const urlParam = new URLSearchParams(window.location.search).get('ref');
-      if (urlParam) {
-        sessionStorage.setItem('jolene.parrainage_code', urlParam.toUpperCase());
-        return urlParam.toUpperCase();
-      }
-      const stored = sessionStorage.getItem('jolene.parrainage_code');
-      return stored ?? '';
-    } catch {
-      return '';
-    }
-  });
-  const [parrainageLoading, setParrainageLoading] = useState(false);
-  const [parrainageSucces, setParrainageSucces] = useState(false);
-  const [filleuls, setFilleuls] = useState<any[]>([]);
-  const [codeCopied, setCodeCopied] = useState(false);
 
   // Évaluations / badges
   const [noteMoyenne, setNoteMoyenne] = useState<{ moyenne: number; total: number } | null>(null);
@@ -133,13 +110,10 @@ export default function ProfilSoignant() {
         setSpecialiteSource(data.specialite_source || 'MANUEL');
         setRppsVerifie(!!data.rpps_verifie);
         setRppsVerifieLe(data.rpps_verifie_le || null);
-        setMandatFacturationSigne(!!data.mandat_facturation_signe);
-        setMandatFacturationSigneLe(data.mandat_facturation_signe_le || null);
         setHeuresCumulees(data.heures_cumulees || 0);
         setStatutLiberal(data.statut_liberal || '');
         setTypeExercice(data.type_exercice || 'SALARIE');
         setAttestationCumul(data.attestation_cumul_activite || false);
-        setCodeParrainage(data.code_parrainage || '');
 
         setPrenom(data.prenom || '');
         setNom(data.nom || '');
@@ -165,10 +139,6 @@ export default function ProfilSoignant() {
       }
       setLoading(false);
     });
-
-    supabase.rpc('fn_mes_filleuls' as any).then(({ data }: any) => {
-      if (Array.isArray(data)) setFilleuls(data);
-    }).then(undefined, (err) => handleErrorSilent(err, 'ProfilSoignant.filleuls'));
 
     supabase.rpc('fn_note_moyenne' as any, { p_user_id: user.id })
       .then(({ data }: any) => {
@@ -366,7 +336,6 @@ export default function ProfilSoignant() {
           <div className="overflow-x-auto -mx-1 px-1 mb-4">
             <TabsList className="w-max">
               <TabsTrigger value="principal">Profil principal</TabsTrigger>
-              <TabsTrigger value="paiements">Paiements</TabsTrigger>
               <TabsTrigger value="preferences">Préférences</TabsTrigger>
               <TabsTrigger value="confidentialite">Confidentialité</TabsTrigger>
             </TabsList>
@@ -417,14 +386,8 @@ export default function ProfilSoignant() {
             </div>
           </TabsContent>
 
-          <TabsContent value="paiements">
-            <SectionPaiements
-              userId={user!.id}
-              typeExercice={typeExercice}
-              mandatFacturationSigne={mandatFacturationSigne}
-              mandatFacturationSigneLe={mandatFacturationSigneLe}
-            />
-          </TabsContent>
+          {/* Onglet « Paiements » retiré : la config Stripe/Mandat est source unique
+              dans Compte (« Paiements & facturation »). */}
 
           <TabsContent value="preferences">
             <SectionPreferences
@@ -472,92 +435,9 @@ export default function ProfilSoignant() {
         </Tabs>
       </div>
 
-      {/* Inviter des collègues */}
-      {codeParrainage && (
-        <div className="max-w-2xl mt-8">
-          <EncartInvitation codeParrainage={codeParrainage} />
-        </div>
-      )}
-
-      {/* Parrainage */}
-      <div className="max-w-2xl mt-8">
-        <div className="card-base">
-          <h2 className="text-base font-semibold text-foreground mb-4 flex items-center gap-2">
-            <Gift className="h-5 w-5 text-primary" /> Parrainage
-          </h2>
-
-          {codeParrainage && (
-            <div className="mb-4">
-              <p className="text-sm text-muted-foreground mb-2">Ton code parrainage :</p>
-              <div className="flex items-center gap-2">
-                <code className="bg-muted px-4 py-2 rounded-xl font-mono text-lg font-bold text-foreground">{codeParrainage}</code>
-                <button
-                  onClick={() => {
-                    navigator.clipboard.writeText(codeParrainage);
-                    setCodeCopied(true);
-                    setTimeout(() => setCodeCopied(false), 2000);
-                  }}
-                  className="btn-secondary text-xs py-2 px-3 flex items-center gap-1"
-                >
-                  {codeCopied ? <><CheckCircle className="h-3.5 w-3.5" /> Copié !</> : <><Copy className="h-3.5 w-3.5" /> Copier</>}
-                </button>
-              </div>
-              <p className="text-xs text-muted-foreground mt-2">Parraine 3 collègues pour obtenir le badge Ambassadeur et un accès prioritaire aux missions urgentes.</p>
-            </div>
-          )}
-
-          <div className="border-t border-border pt-4">
-            <p className="text-sm text-muted-foreground mb-2">Tu as un code parrainage ?</p>
-            <div className="flex gap-2">
-              <input
-                aria-label="Code de parrainage"
-                value={codeRecu}
-                onChange={(e) => setCodeRecu(e.target.value.toUpperCase())}
-                placeholder="Ex: JO-5B4945"
-                className="input-base flex-1"
-                disabled={parrainageSucces}
-              />
-              <button
-                onClick={async () => {
-                  if (!codeRecu.trim()) return;
-                  setParrainageLoading(true);
-                  const { data, error } = await supabase.rpc('fn_appliquer_parrainage' as any, { p_code: codeRecu.trim() });
-                  if (error) {
-                    afficherNotification({ type: 'erreur', message: extraireMessageErreur(error) });
-                  } else if ((data as any)?.error) {
-                    afficherNotification({ type: 'erreur', message: (data as any).error });
-                  } else {
-                    setParrainageSucces(true);
-                    afficherNotification({ type: 'succes', message: 'Parrainage enregistré ! 🎉' });
-                  }
-                  setParrainageLoading(false);
-                }}
-                disabled={parrainageLoading || parrainageSucces || !codeRecu.trim()}
-                className="btn-primary text-sm disabled:opacity-50"
-              >
-                {parrainageLoading ? '…' : parrainageSucces ? '✓ Appliqué' : 'Appliquer'}
-              </button>
-            </div>
-            {parrainageSucces && (
-              <p className="text-sm text-success font-semibold mt-2">🎉 Parrainage enregistré avec succès !</p>
-            )}
-          </div>
-
-          {filleuls.length > 0 && (
-            <div className="border-t border-border pt-4 mt-4">
-              <p className="text-sm font-medium text-foreground mb-2">Tes filleuls ({filleuls.length})</p>
-              <div className="space-y-1">
-                {filleuls.map((f: any, i: number) => (
-                  <div key={i} className="text-sm text-muted-foreground flex items-center gap-2">
-                    <CheckCircle className="h-3.5 w-3.5 text-success" />
-                    {f.prenom} {f.nom} — inscrit le {f.cree_le ? format(new Date(f.cree_le), 'd MMM yyyy', { locale: fr }) : '—'}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
+      {/* Parrainage : bloc inline (code + application + filleuls) et EncartInvitation
+          retirés du Profil — la page dédiée /soignant/parrainage est la source unique
+          (dédup ; accessible depuis Compte). */}
 
       {/* Déconnexion mobile */}
       <div className="md:hidden mt-6 pt-6 border-t border-border max-w-2xl">
