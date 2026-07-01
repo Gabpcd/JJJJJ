@@ -58,7 +58,6 @@ const PageAideArticle = lazy(() => import("./pages/PageAideArticle"));
 const PageAideProSanteConnect = lazy(() => import("./pages/PageAideProSanteConnect"));
 const PageParametresNotifications = lazy(() => import("./pages/PageParametresNotifications"));
 const PageRecherchesSauvegardees = lazy(() => import("./pages/PageRecherchesSauvegardees"));
-const PageParametresSoignant = lazy(() => import("./pages/PageParametresSoignant"));
 const PageInscriptionSucces = lazy(() => import("./pages/PageInscriptionSucces"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const WidgetRecrutement = lazy(() => import("./pages/WidgetRecrutement"));

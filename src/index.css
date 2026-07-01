@@ -295,6 +295,25 @@
     min-height: 100dvh;
   }
 
+  /* ── Zéro scroll horizontal (Lot 6b.2) : un débordement d'un seul écran ne
+     doit jamais faire « flotter » toute l'app latéralement. clip (pas hidden) :
+     ne crée pas de contexte de scroll, position:sticky continue de marcher. ── */
+  html, body {
+    overflow-x: clip;
+  }
+
+  /* ── Scrollbars masquées sur mobile (Lot 6b.2) : rendu app native.
+     Le scroll reste 100 % fonctionnel (tactile). Desktop inchangé. ── */
+  @media (max-width: 768px) {
+    * {
+      scrollbar-width: none;
+    }
+    *::-webkit-scrollbar {
+      width: 0;
+      height: 0;
+    }
+  }
+
   /* ── Allow vertical pull-to-refresh only on the body, prevent on children ── */
   body {
     overscroll-behavior-y: none;
@@ -412,7 +431,8 @@
   [role="dialog"] {
     padding-top: max(16px, env(safe-area-inset-top));
     padding-bottom: max(16px, env(safe-area-inset-bottom));
-    max-height: calc(100vh - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+    max-height: calc(100vh - env(safe-area-inset-top) - env(safe-area-inset-bottom)); /* fallback */
+    max-height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom));
   }
 
   /* Fixed bottom elements: respecter le safe area bottom */
