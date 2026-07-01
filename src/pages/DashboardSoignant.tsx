@@ -75,7 +75,6 @@ export default function DashboardSoignant() {
   const missionsOuvertes = (dashboard?.missions_ouvertes ?? []) as any[];
   const heuresSemaine = (dashboard?.heures_semaine ?? 0) as number;
   const hasStripeConnect = dashboard?.hasStripeConnect ?? true;
-  const hasMandatFacturation = !!(soignant as any)?.mandat_facturation_signe;
 
   const docsExpirant = useMemo(() => {
     const docs = (dashboard?.documents ?? []) as any[];
@@ -123,23 +122,19 @@ export default function DashboardSoignant() {
     heures_cumulees: heuresCumuleesTotal,
   }) as SoignantData, [soignant, missionsTermineesCount, heuresCumuleesTotal]);
 
-  // Session E-3 — checklist d'activation unique (remplace OnboardingGuide +
-  // bandeaux concurrents tant que l'activation n'est pas complète).
-  const activation = useActivationSoignant({
-    soignant: soignant as unknown as SoignantActivation | null,
-    documents: (dashboard?.documents ?? []) as DocumentActivation[],
-  });
-
-  // Moyen de paiement prêt ? (pour le nudge paiement just-in-time, après la 1ʳᵉ
-  // mission terminée). Libéral : Stripe OU RIB + mandat ; salarié : RIB.
   const aRib = (dashboard?.documents ?? []).some(
     (d: any) => d.type_document === 'RIB' && d.statut_verification !== 'REJETE',
   );
-  const estLiberalPaie =
-    (soignant as any)?.type_exercice === 'LIBERAL' || (soignant as any)?.type_exercice === 'MIXTE';
-  const moyenPaiementPret = estLiberalPaie
-    ? (hasStripeConnect || aRib) && hasMandatFacturation
-    : aRib;
+
+  // Lot 6b.4 — checklist d'activation UNIQUE « Active ton compte — X/N »
+  // (RPPS · Documents · Mandat · Paiement, adaptative au régime). Absorbe les
+  // anciens nudges mandat/Stripe/RIB : au plus UNE carte d'action système.
+  const activation = useActivationSoignant({
+    soignant: soignant as unknown as SoignantActivation | null,
+    documents: (dashboard?.documents ?? []) as DocumentActivation[],
+    hasStripeConnect,
+    aRib,
+  });
 
   // Postuler directement depuis la carte d'accueil (funnel candidature). Feedback
   // inline immédiat + annulation « dans la foulée » (fn_retirer_candidature) sans
@@ -185,7 +180,6 @@ export default function DashboardSoignant() {
 
   if (isLoading) return <LayoutApp role="SOIGNANT"><SkeletonDashboard /></LayoutApp>;
 
-  const missionsTerminees = soignantWithCounts?.total_missions_terminees ?? 0;
 
   return (
     <LayoutApp role="SOIGNANT">
@@ -391,43 +385,12 @@ export default function DashboardSoignant() {
       {!activation.visible && (
         <BandeauCompletionProfil soignant={soignant as any} variant="compact" className="mb-4" />
       )}
-      <BandeauEvaluationsEnAttente role="SOIGNANT" />
+      {/* Lot 6b.4 : la carte évaluation remplace la checklist quand celle-ci a
+          disparu — jamais les deux (max UNE carte d'action système). */}
+      {!activation.visible && <BandeauEvaluationsEnAttente role="SOIGNANT" />}
 
-      {/* Nudge paiement JUST-IN-TIME : seulement après la 1ʳᵉ mission terminée et
-          si le moyen de paiement n'est pas prêt — pour que les fonds soient
-          libérables sans attente. Avant la 1ʳᵉ mission terminée : aucun nudge. */}
-      {missionsTerminees >= 1 && !moyenPaiementPret && (
-        estLiberalPaie ? (
-          !hasMandatFacturation ? (
-            <div className="rounded-xl border-2 border-warning/30 bg-warning/5 p-4 mb-4 flex items-start gap-3 cursor-pointer hover:border-warning/50 transition-colors" onClick={() => navigate('/soignant/mandat-facturation')}>
-              <FileText className="h-5 w-5 text-warning shrink-0 mt-0.5" />
-              <div className="flex-1">
-                <p className="font-semibold text-foreground">Signe ton mandat de facturation</p>
-                <p className="text-sm text-muted-foreground">Indispensable pour que Jolene émette tes factures d'honoraires et débloque ton paiement (24-48 h).</p>
-              </div>
-              <span className="text-sm text-primary font-medium shrink-0">Signer →</span>
-            </div>
-          ) : (
-            <div className="rounded-xl border-2 border-primary/30 bg-primary/5 p-4 mb-4 flex items-start gap-3 cursor-pointer hover:border-primary/50 transition-colors" onClick={() => navigate('/soignant/stripe-connect')}>
-              <CreditCard className="h-5 w-5 text-primary shrink-0 mt-0.5" />
-              <div className="flex-1">
-                <p className="font-semibold text-foreground">Reçois ton paiement</p>
-                <p className="text-sm text-muted-foreground">Connecte Stripe pour être payé·e en 24-48 h (recommandé), ou ajoute un RIB pour un virement de l'établissement.</p>
-              </div>
-              <span className="text-sm text-primary font-medium shrink-0">Activer →</span>
-            </div>
-          )
-        ) : (
-          <div className="rounded-xl border-2 border-primary/30 bg-primary/5 p-4 mb-4 flex items-start gap-3 cursor-pointer hover:border-primary/50 transition-colors" onClick={() => navigate('/soignant/mes-documents')}>
-            <Banknote className="h-5 w-5 text-primary shrink-0 mt-0.5" />
-            <div className="flex-1">
-              <p className="font-semibold text-foreground">Ajoute ton RIB</p>
-              <p className="text-sm text-muted-foreground">Pour que l'établissement puisse te verser ta rémunération. Une photo suffit.</p>
-            </div>
-            <span className="text-sm text-primary font-medium shrink-0">Ajouter →</span>
-          </div>
-        )
-      )}
+      {/* Les nudges paiement/mandat/RIB just-in-time sont ABSORBÉS par la
+          checklist d'activation unique (étapes ③ mandat + ④ paiement). */}
 
       {soignantWithCounts.type_exercice !== 'LIBERAL' && <BandeauAlerte48h heuresSemaine={heuresSemaine} />}
 
