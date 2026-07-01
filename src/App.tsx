@@ -83,7 +83,6 @@ const DetailMissionSoignant = lazy(() => import("./pages/DetailMissionSoignant")
 const DetailSerieSoignant = lazy(() => import("./pages/DetailSerieSoignant"));
 const DocumentsSoignant = lazy(() => import("./pages/DocumentsSoignant"));
 const ConformiteSoignant = lazy(() => import("./pages/ConformiteSoignant"));
-const ReputationSoignant = lazy(() => import("./pages/ReputationSoignant"));
 const PresencesSoignant = lazy(() => import("./pages/PresencesSoignant"));
 const SyncCalendrier = lazy(() => import("./pages/SyncCalendrier"));
 const MesGains = lazy(() => import("./pages/MesGains"));
@@ -272,7 +271,8 @@ function AppRoutes() {
           <Route path="/soignant/planning" element={<Navigate to="/soignant/missions?tab=a-venir" replace />} />
           <Route path="/soignant/calendrier-sync" element={<Navigate to="/soignant/missions?tab=a-venir" replace />} />
           <Route path="/soignant/conformite" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><ConformiteSoignant /></RouteProtegee>} />
-          <Route path="/soignant/reputation" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><ReputationSoignant /></RouteProtegee>} />
+          {/* Hub Réputation dissous (modèle Uber) : le score simple vit sur le Profil. */}
+          <Route path="/soignant/reputation" element={<Navigate to="/soignant/profil" replace />} />
           <Route path="/soignant/presences" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><PresencesSoignant /></RouteProtegee>} />
           <Route path="/soignant/presences/mission/:id" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><DetailPresencesMission role="SOIGNANT" /></RouteProtegee>} />
           <Route path="/soignant/mes-gains" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><MesGains /></RouteProtegee>} />

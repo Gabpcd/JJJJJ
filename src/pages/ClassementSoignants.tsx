@@ -144,7 +144,7 @@ export function ClassementContent() {
               <div className="hidden sm:flex items-center gap-4 text-xs text-muted-foreground shrink-0">
                 <div className="flex items-center gap-1" title="Note moyenne">
                   <Star className="h-3.5 w-3.5 fill-yellow-400 text-yellow-400" />
-                  <span className="font-medium text-foreground tabular-nums">{Number(s.note_moyenne).toFixed(1)}</span>
+                  <span className="font-medium text-foreground tabular-nums">{Number(s.note_moyenne) > 0 ? Number(s.note_moyenne).toFixed(1) : '—'}</span>
                 </div>
                 <div className="flex items-center gap-1" title="Score fiabilité">
                   <Award className="h-3.5 w-3.5 text-primary" />
@@ -161,7 +161,7 @@ export function ClassementContent() {
               <div className="flex sm:hidden flex-col items-end gap-0.5 shrink-0 text-[11px]">
                 <span className="flex items-center gap-0.5 font-medium">
                   <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />
-                  {Number(s.note_moyenne).toFixed(1)}
+                  {Number(s.note_moyenne) > 0 ? Number(s.note_moyenne).toFixed(1) : '—'}
                 </span>
                 <span className="text-muted-foreground">{s.score_fiabilite}/100</span>
                 <span className="text-muted-foreground">{s.total_missions_terminees} mission{s.total_missions_terminees > 1 ? 's' : ''}</span>
