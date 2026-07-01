@@ -64,7 +64,10 @@ export async function seedMission(opts: {
   const etabId = await userIdByEmail('playwright-etab@jolene.app');
   if (!etabId) return null;
 
-  const debut = opts.debut || new Date(Date.now() + 7 * 86400000); // J+7
+  // J+7 à heure RONDE (06:00 UTC = 07h/08h Paris selon saison) : une mission
+  // seedée à l'heure de lancement du run (ex. 22h19) est un tueur de
+  // crédibilité si elle fuit en prod (échec de cleanup) — cf. Lot 6a.2.
+  const debut = opts.debut || (() => { const d = new Date(Date.now() + 7 * 86400000); d.setUTCHours(6, 0, 0, 0); return d; })();
   const fin = opts.fin || new Date(debut.getTime() + 8 * 3600000); // 8h plus tard
 
   const { data: missionId, error } = await adminClient().rpc('fn_test_seed_mission' as any, {
