@@ -2,7 +2,6 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { LucideIcon, Gift, BarChart3, Users, Shield, CreditCard, LogOut, HeartPulse, ShieldCheck, Mail, Code2, Building2, CalendarDays, Flame, ClipboardList, MessageCircle, Menu, X, Home, Coins, AlertTriangle, FileCheck, Zap, TrendingUp, ChevronDown, FileStack, Scale, Star, FileSignature, Activity, Flag, Rocket, UserPlus, Megaphone, Settings, Search, Trash2 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
-import { FooterLegal } from '@/components/FooterLegal';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { RechercheGlobaleAdmin } from '@/components/admin/RechercheGlobaleAdmin';
 import { GardeMfaAdmin } from '@/components/admin/GardeMfaAdmin';
@@ -400,7 +399,7 @@ export function LayoutAdmin({ children }: { children: React.ReactNode }) {
               → la double vérification n'était pas réellement appliquée. */}
           <GardeMfaAdmin>{children}</GardeMfaAdmin>
         </div>
-        <FooterLegal />
+        {/* Footer légal retiré des écrans authentifiés (Lot 6b.1). */}
       </main>
     </div>
   );
