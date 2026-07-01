@@ -22,12 +22,14 @@ function isGroup(e: SidebarEntry): e is NavGroup { return 'items' in e; }
 // Revenus (finances) · Compte. Messages quitte la barre → icône dans le header
 // (la messagerie est toujours liée à une mission). « Matchs » est absorbé par
 // « Mes missions › À venir » ; le Planning aussi (redirect → ?tab=a-venir).
+// Lot 6b.1 : « Missions » → « Explorer » (porte le swipe ; « Missions » vs
+// « Mes missions » côte à côte = confusion garantie) ; « Compte » → « Profil ».
 const NAV_SOIGNANT_MOBILE: NavItem[] = [
   { icone: Home, label: 'Accueil', route: '/soignant/tableau-de-bord' },
-  { icone: Search, label: 'Missions', route: '/soignant/recherche-missions' },
+  { icone: Search, label: 'Explorer', route: '/soignant/recherche-missions' },
   { icone: ClipboardList, label: 'Mes missions', route: '/soignant/missions' },
   { icone: Banknote, label: 'Revenus', route: '/soignant/mes-gains' },
-  { icone: User, label: 'Compte', route: '/soignant/mon-compte' },
+  { icone: User, label: 'Profil', route: '/soignant/mon-compte' },
 ];
 
 const NAV_ETABLISSEMENT_MOBILE: NavItem[] = [
@@ -327,7 +329,8 @@ export function BarreNavigation({ role }: { role: UserRole }) {
             </button>
           )}
           <BadgeNotification />
-          <ThemeToggle className="text-foreground hover:bg-muted" />
+          {/* ThemeToggle retiré du header mobile (Lot 6b.1 — header épuré :
+              logo + messages + notifications). Le thème vit dans Profil > Réglages. */}
           {/* Déconnexion : masquée pour SOIGNANT (dans "Mon compte"). */}
           {!aMonCompte && (
             <button onClick={handleDeconnexion} aria-label="Se déconnecter" className="p-2 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition">
