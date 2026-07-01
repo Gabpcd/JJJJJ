@@ -11,6 +11,8 @@ import { ChargementPage } from '@/components/ChargementPage';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { CarteMissionSoignant } from '@/components/CarteMissionSoignant';
 import { NoteNetEstime } from '@/components/NoteNetEstime';
+import { usePullToRefresh } from '@/hooks/usePullToRefresh';
+import { IndicateurPullToRefresh } from '@/components/IndicateurPullToRefresh';
 import { BandeauDocumentsManquants } from '@/components/BandeauDocumentsManquants';
 import { BandeauProfilIncomplet } from '@/components/BandeauProfilIncomplet';
 import { useAuth } from '@/contexts/AuthContext';
@@ -99,6 +101,12 @@ export default function RechercheMissions() {
   const [soignant, setSoignant] = useState<SoignantData | null>(null);
   const [missions, setMissions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  // Pull-to-refresh (Lot 6b.3) : tirer en haut de page relance le fetch.
+  const [refreshTick, setRefreshTick] = useState(0);
+  const { pullDistance, refreshing } = usePullToRefresh(async () => {
+    setRefreshTick(t => t + 1);
+    await new Promise(r => setTimeout(r, 700));
+  });
   const [nbAffiche, setNbAffiche] = useState(20);
   const [rcpExpiree, setRcpExpiree] = useState(false);
   const [rcpExpireLe, setRcpExpireLe] = useState<string | null>(null);
@@ -295,7 +303,7 @@ export default function RechercheMissions() {
       setLoading(false);
     };
     fetchMissions();
-  }, [user, soignant, profession, tauxMin, urgentesOnly]);
+  }, [user, soignant, profession, tauxMin, urgentesOnly, refreshTick]);
 
   const filtered = useMemo(() => {
     const typesContrat = soignant ? getTypesContratSoignant(soignant) : ['CDD', 'VACATION', 'LIBERAL', 'SALARIE'];
@@ -407,6 +415,7 @@ export default function RechercheMissions() {
 
   return (
     <LayoutApp role="SOIGNANT" pleinEcran={vue === 'swipe'}>
+      {vue !== 'swipe' && <IndicateurPullToRefresh distance={pullDistance} refreshing={refreshing} />}
       {(!soignant || !soignant.profession) && <BandeauProfilIncomplet />}
       <div className={vue === 'swipe' ? 'flex flex-col flex-1 min-h-0 gap-2' : 'space-y-4'}>
         <div className="flex items-center justify-between gap-2 shrink-0">
@@ -504,7 +513,7 @@ export default function RechercheMissions() {
               type="button"
               onClick={chip.toggle}
               aria-pressed={chip.actif}
-              className={`shrink-0 inline-flex items-center rounded-full px-3.5 py-1.5 text-xs font-semibold transition-snap border ${
+              className={`shrink-0 inline-flex items-center rounded-full px-4 min-h-[44px] md:min-h-0 md:py-1.5 text-xs font-semibold transition-snap border ${
                 chip.actif
                   ? 'bg-gradient-hero text-white border-transparent shadow-md'
                   : 'bg-card text-jolene-bubblegum border-jolene-rose-200 hover:border-jolene-rose-300'

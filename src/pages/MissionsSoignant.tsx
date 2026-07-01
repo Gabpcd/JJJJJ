@@ -8,6 +8,8 @@ import { LayoutApp } from '@/components/LayoutApp';
 import { EmptyState, IllustrationBoussole } from '@/components/ui/EmptyState';
 import { CarteMissionSoignant } from '@/components/CarteMissionSoignant';
 import { NoteNetEstime } from '@/components/NoteNetEstime';
+import { usePullToRefresh } from '@/hooks/usePullToRefresh';
+import { IndicateurPullToRefresh } from '@/components/IndicateurPullToRefresh';
 import { estMultiJours } from '@/lib/format-mission';
 import { CarteSerie, extraireSerieId } from '@/components/CarteSerie';
 import { FiltresMissions, type FiltresMissionsState } from '@/components/FiltresMissions';
@@ -62,6 +64,12 @@ export default function MissionsSoignant() {
   const [page, setPage] = useState(0);
   const PAGE_SIZE = 50;
   const [filtres, setFiltres] = useState<FiltresMissionsState | null>(null);
+  // Pull-to-refresh (Lot 6b.3) : tirer en haut de page relance le fetch.
+  const [refreshTick, setRefreshTick] = useState(0);
+  const { pullDistance, refreshing } = usePullToRefresh(async () => {
+    setRefreshTick(t => t + 1);
+    await new Promise(r => setTimeout(r, 700));
+  });
   const [heuresSemaine, setHeuresSemaine] = useState(0);
   const [nbAffiche, setNbAffiche] = useState(20);
 
@@ -148,7 +156,7 @@ export default function MissionsSoignant() {
       setLoading(false);
     };
     fetchMissions();
-  }, [user, soignant, onglet, filtres, page]);
+  }, [user, soignant, onglet, filtres, page, refreshTick]);
 
   // Reset pagination when tab/filters change
   useEffect(() => { setNbAffiche(20); setPage(0); }, [onglet, filtres]);
@@ -220,6 +228,7 @@ export default function MissionsSoignant() {
 
   return (
     <LayoutApp role="SOIGNANT">
+      <IndicateurPullToRefresh distance={pullDistance} refreshing={refreshing} />
       <h1 className="text-xl font-bold text-foreground mb-4">Mes missions</h1>
 
       {/* Doublon « Découvrir / Recherche » retiré : la découverte de missions vit
