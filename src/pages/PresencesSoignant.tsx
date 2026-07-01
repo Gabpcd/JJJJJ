@@ -436,7 +436,7 @@ export default function PresencesSoignant() {
                     <BadgeStatut statut={m.statut} />
                     <h3 className="font-semibold text-sm text-foreground truncate mt-1" title={m.intitule}>{m.intitule}</h3>
                     <p className="text-xs text-muted-foreground mt-0.5">
-                      🏥 {m.etablissements?.nom}{m.etablissements?.adresse_ville ? ` · ${m.etablissements.adresse_ville}` : ''}
+                      🏥 {m.etablissements?.nom || 'Établissement'}{m.etablissements?.adresse_ville ? ` · ${m.etablissements.adresse_ville}` : ''}
                     </p>
                     <p className="text-xs text-muted-foreground mt-0.5">
                       🕐 {format(new Date(m.debut_le), "HH'h'mm", { locale: fr })} → {format(new Date(m.fin_le), "HH'h'mm", { locale: fr })}
@@ -467,7 +467,7 @@ export default function PresencesSoignant() {
                     <div className="card-base">
                       <h3 className="font-semibold text-sm text-foreground truncate" title={m.intitule}>{m.intitule}</h3>
                       <p className="text-xs text-muted-foreground mt-0.5">
-                        🏥 {m.etablissements?.nom}{m.debut_le ? ` · ${format(new Date(m.debut_le), "EEE d MMM HH'h'mm", { locale: fr })}` : ''}
+                        🏥 {m.etablissements?.nom || 'Établissement'}{m.debut_le ? ` · ${format(new Date(m.debut_le), "EEE d MMM HH'h'mm", { locale: fr })}` : ''}
                       </p>
                     </div>
                     <PointageRotatifSoignant missionId={m.id} />
@@ -524,7 +524,7 @@ export default function PresencesSoignant() {
                     <div className="card-base">
                       <h3 className="font-semibold text-sm text-foreground truncate" title={m.intitule}>{m.intitule}</h3>
                       <p className="text-xs text-muted-foreground mt-0.5">
-                        🏥 {m.etablissements?.nom}{m.debut_le ? ` · ${format(new Date(m.debut_le), "EEE d MMM HH'h'mm", { locale: fr })}` : ''}
+                        🏥 {m.etablissements?.nom || 'Établissement'}{m.debut_le ? ` · ${format(new Date(m.debut_le), "EEE d MMM HH'h'mm", { locale: fr })}` : ''}
                       </p>
                     </div>
                     <PointageRotatifSoignant missionId={m.id} />
@@ -595,7 +595,7 @@ export default function PresencesSoignant() {
                     <div className="flex items-start justify-between mb-2">
                       <div>
                         <p className="font-semibold text-sm text-foreground">{m?.intitule}</p>
-                        <p className="text-xs text-muted-foreground">🏥 {m?.etablissements?.nom}</p>
+                        <p className="text-xs text-muted-foreground">🏥 {m?.etablissements?.nom || 'Établissement'}</p>
                         <p className="text-xs text-muted-foreground mt-0.5">
                           📅 {m?.debut_le && format(new Date(m.debut_le), 'd MMM yyyy', { locale: fr })}
                         </p>

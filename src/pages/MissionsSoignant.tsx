@@ -8,6 +8,7 @@ import { LayoutApp } from '@/components/LayoutApp';
 import { EmptyState, IllustrationBoussole } from '@/components/ui/EmptyState';
 import { CarteMissionSoignant } from '@/components/CarteMissionSoignant';
 import { NoteNetEstime } from '@/components/NoteNetEstime';
+import { estMultiJours } from '@/lib/format-mission';
 import { CarteSerie, extraireSerieId } from '@/components/CarteSerie';
 import { FiltresMissions, type FiltresMissionsState } from '@/components/FiltresMissions';
 import { BandeauAlerte48h } from '@/components/BandeauAlerte48h';
@@ -270,7 +271,7 @@ export default function MissionsSoignant() {
                         </div>
                         <h3 className="font-semibold text-sm text-foreground truncate" title={m.intitule}>{m.intitule}</h3>
                         <p className="text-xs text-muted-foreground mt-0.5">
-                          🏥 {m.etablissements?.nom}{m.etablissements?.adresse_ville ? ` · ${m.etablissements.adresse_ville}` : ''}
+                          🏥 {m.etablissements?.nom || 'Établissement'}{m.etablissements?.adresse_ville ? ` · ${m.etablissements.adresse_ville}` : ''}
                         </p>
                         <div className="flex items-center gap-3 mt-0.5 text-xs text-muted-foreground">
                           <span>🕐 {format(new Date(m.debut_le), "d MMM", { locale: fr })} · {format(new Date(m.debut_le), "HH'h'mm", { locale: fr })}</span>
@@ -340,7 +341,7 @@ export default function MissionsSoignant() {
                         </div>
                         <h3 className="font-semibold text-sm text-foreground truncate" title={m.intitule}>{m.intitule}</h3>
                         <p className="text-xs text-muted-foreground mt-0.5">
-                          🏥 {m.etablissements?.nom}{m.etablissements?.adresse_ville ? ` · ${m.etablissements.adresse_ville}` : ''}
+                          🏥 {m.etablissements?.nom || 'Établissement'}{m.etablissements?.adresse_ville ? ` · ${m.etablissements.adresse_ville}` : ''}
                         </p>
                         <div className="flex items-center gap-3 mt-0.5 text-xs text-muted-foreground">
                           <span>🕐 {format(new Date(m.debut_le), "HH'h'mm", { locale: fr })} → {format(new Date(m.fin_le), "HH'h'mm", { locale: fr })} ({Math.round(dureeH)}h)</span>
@@ -364,10 +365,14 @@ export default function MissionsSoignant() {
                     <div key={m.id} onClick={() => navigate(`/soignant/missions/${m.id}`)} className="card-base hover:shadow-md cursor-pointer transition-all">
                       <div className="flex items-center justify-between mb-2">
                         <BadgeStatut statut={m.statut} />
-                        <span className="text-xs text-muted-foreground">{format(new Date(m.debut_le), 'd MMM yyyy', { locale: fr })}</span>
+                        <span className="text-xs text-muted-foreground">
+                          {estMultiJours(m)
+                            ? `${format(new Date(m.debut_le), 'd MMM', { locale: fr })} → ${format(new Date(m.fin_le), 'd MMM yyyy', { locale: fr })}`
+                            : format(new Date(m.debut_le), 'd MMM yyyy', { locale: fr })}
+                        </span>
                       </div>
                       <h3 className="font-semibold text-sm text-foreground">{m.intitule}</h3>
-                      <p className="text-xs text-muted-foreground mt-1">🏥 {m.etablissements?.nom}</p>
+                      <p className="text-xs text-muted-foreground mt-1">🏥 {m.etablissements?.nom || 'Établissement'}</p>
                       {(m.net_estime ?? m.net_a_payer ?? 0) > 0 && <p className="text-sm font-bold text-primary mt-1">Net estimé* : {new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(m.net_estime ?? (m.net_a_payer != null ? m.net_a_payer * 0.78 : 0))}</p>}
                     </div>
                   ))}

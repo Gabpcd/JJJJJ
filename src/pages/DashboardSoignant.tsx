@@ -271,7 +271,7 @@ export default function DashboardSoignant() {
                   <div className="flex-1 min-w-0">
                     {m.est_urgente && <span className="badge-base bg-destructive/10 text-destructive text-[10px] mb-0.5 inline-block">🔥 Urgent</span>}
                     <h3 className="font-semibold text-sm text-foreground truncate" title={m.intitule}>{m.intitule}</h3>
-                    <p className="text-xs text-muted-foreground mt-0.5 truncate">🏥 {m.etab_nom}{m.service ? ` · ${m.service}` : ''}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5 truncate">🏥 {m.etab_nom || 'Établissement'}{m.service ? ` · ${m.service}` : ''}</p>
                     <div className="flex items-center gap-3 mt-0.5 text-[11px] text-muted-foreground">
                       <span>🕐 {format(new Date(m.debut_le), "HH'h'mm", { locale: fr })} → {format(new Date(m.fin_le), "HH'h'mm", { locale: fr })}</span>
                       {m.taux_horaire_base && <span className="font-semibold text-primary">{m.taux_horaire_base} €/h</span>}
@@ -348,7 +348,7 @@ export default function DashboardSoignant() {
                   </div>
                   <h3 className="font-semibold text-sm text-foreground truncate" title={m.intitule}>{m.intitule}</h3>
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    🏥 {m.etablissements?.nom}{m.etablissements?.adresse_ville ? ` · ${m.etablissements.adresse_ville}` : ''}
+                    🏥 {m.etablissements?.nom || 'Établissement'}{m.etablissements?.adresse_ville ? ` · ${m.etablissements.adresse_ville}` : ''}
                   </p>
                   <div className="flex items-center gap-3 mt-0.5">
                     <p className="text-xs text-muted-foreground">

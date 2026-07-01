@@ -1,5 +1,5 @@
 import React from 'react';
-import { format, formatDistanceToNow } from 'date-fns';
+import { formatDistanceToNow } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { BadgeDistance } from '@/components/BadgeDistance';
 import { BadgeStatut } from '@/components/BadgeStatut';
@@ -7,6 +7,7 @@ import { BoutonFavoriEtab } from '@/components/BoutonFavoriEtab';
 import { getLabelProfession, getLabelTypeEtablissement, extraireContratPreference, getContratBadge, getTypeContratRechercheBadge } from '@/lib/constantes';
 import { getMissionMatchInfo } from '@/lib/profession-hierarchy';
 import { detecterMajorations, calculerTauxAvecMajorations } from '@/lib/majorationsCCN';
+import { formatDateMission, formatHorairesMission } from '@/lib/format-mission';
 
 interface CarteMissionSoignantProps {
   mission: any;
@@ -38,7 +39,6 @@ export const CarteMissionSoignant = React.memo(function CarteMissionSoignant({ m
   const m = mission;
   const temps = getTempsEcoule(m.cree_le);
   const profilComplet = soignant?.tous_documents_valides;
-  const duree = m.duree_heures ?? ((new Date(m.fin_le).getTime() - new Date(m.debut_le).getTime()) / 3600000);
   const contratBadge = m.type_contrat_recherche
     ? getTypeContratRechercheBadge(m.type_contrat_recherche)
     : getContratBadge(extraireContratPreference(m.description));
@@ -94,7 +94,8 @@ export const CarteMissionSoignant = React.memo(function CarteMissionSoignant({ m
           <img src={m.etablissements.logo_url} alt="" className="h-5 w-5 rounded object-cover shrink-0" />
         )}
         <p className="text-xs text-muted-foreground">
-          🏥 {m.etablissements?.nom} · {m.etablissements?.adresse_ville}
+          🏥 {m.etablissements?.nom || 'Établissement'}
+          {m.etablissements?.adresse_ville && ` · ${m.etablissements.adresse_ville}`}
           {m.etablissements?.adresse_departement && ` (${m.etablissements.adresse_departement})`}
         </p>
       </div>
@@ -102,8 +103,8 @@ export const CarteMissionSoignant = React.memo(function CarteMissionSoignant({ m
       <span className={`badge-base text-[10px] ${contratBadge.classes}`}>{contratBadge.label}</span>
 
       <div className="mt-2 text-xs text-muted-foreground">
-        <p>📅 {format(new Date(m.debut_le), 'EEEE d MMMM yyyy', { locale: fr })}</p>
-        <p>🕐 {format(new Date(m.debut_le), "HH'h'mm", { locale: fr })} → {format(new Date(m.fin_le), "HH'h'mm", { locale: fr })} ({Math.round(duree)}h)</p>
+        <p>📅 {formatDateMission(m)}</p>
+        <p>🕐 {formatHorairesMission(m)}</p>
       </div>
 
       <div className="mt-2 flex items-center justify-between">

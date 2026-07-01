@@ -18,6 +18,7 @@ import {
 } from '@/components/ui/DialogResponsive';
 import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { BadgeY2K } from '@/components/y2k/BadgeY2K';
+import { estMultiJours, formatDureeCompacte, formatHorairesMission } from '@/lib/format-mission';
 import type { MissionSwipePayload } from './CardMissionSwipe';
 
 interface Props {
@@ -168,7 +169,7 @@ export function ModalDetailMissionSwipe({ mission, open, onOpenChange, onPostule
                   <Clock className="h-3.5 w-3.5" aria-hidden="true" /> Durée
                 </dt>
                 <dd className="font-semibold text-jolene-midnight mt-1">
-                  {mission.duree_heures ? `${mission.duree_heures} h` : '—'}
+                  {formatDureeCompacte(mission)}
                 </dd>
               </div>
             </dl>
@@ -233,12 +234,15 @@ export function ModalDetailMissionSwipe({ mission, open, onOpenChange, onPostule
                 <Calendar className="h-5 w-5 text-jolene-mauve-700 shrink-0" aria-hidden="true" />
                 <div className="flex-1">
                   <p className="font-semibold text-jolene-midnight capitalize">
-                    {formatDateFull(mission.debut_le)}
+                    {estMultiJours(mission)
+                      ? `${formatDateFull(mission.debut_le)} → ${formatDateFull(mission.fin_le)}`
+                      : formatDateFull(mission.debut_le)}
                   </p>
                   {heureDebut && (
                     <p className="text-sm text-jolene-bubblegum">
-                      {heureDebut}
-                      {heureFin && ` → ${heureFin}`}
+                      {estMultiJours(mission)
+                        ? formatHorairesMission(mission)
+                        : `${heureDebut}${heureFin ? ` → ${heureFin}` : ''}`}
                     </p>
                   )}
                 </div>
