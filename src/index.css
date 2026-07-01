@@ -1313,6 +1313,19 @@
   img, svg {
     -webkit-touch-callout: none;
   }
+
+  /* ── Feedback :active universel sur tactile (Lot 6b.3) : toute surface
+     tapable réagit au doigt. Opacité (pas transform : évite les conflits avec
+     le drag du swipe et les containing blocks). Les composants qui ont déjà
+     leur active:scale (Y2K, cartes) le cumulent naturellement. ── */
+  @media (hover: none) {
+    button:not(:disabled):active,
+    [role="button"]:not([aria-disabled="true"]):active,
+    a:active {
+      opacity: 0.8;
+    }
+  }
+
   /* Transitions entre écrans (Lot 6b.1) : slide horizontal directionnel
      (avant/arrière dérivé de l'idx d'historique react-router, cf. LayoutApp),
      perception de navigation native — pas de « rechargement sec ».

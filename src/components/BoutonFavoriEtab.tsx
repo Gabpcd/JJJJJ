@@ -80,7 +80,10 @@ export function BoutonFavoriEtab({ etablissementId, mode = 'icon', onChange }: P
       onClick={toggle}
       disabled={loading}
       title={favori ? 'Retirer des favoris' : 'Ajouter aux favoris'}
-      className={`p-1.5 rounded-lg transition-colors disabled:opacity-50 disabled:pointer-events-none ${bouncing ? 'animate-bounce-fav' : ''} ${
+      aria-label={favori ? 'Retirer des favoris' : 'Ajouter aux favoris'}
+      // Cible tactile ≥ 44 pt (Lot 6b.3) : l'étoile visuelle reste petite,
+      // la zone de tap est étendue par marges négatives (pas de décalage layout).
+      className={`min-h-[44px] min-w-[44px] -m-2.5 flex items-center justify-center rounded-lg transition-colors disabled:opacity-50 disabled:pointer-events-none ${bouncing ? 'animate-bounce-fav' : ''} ${
         favori ? 'text-warning' : 'text-muted-foreground hover:text-warning'
       }`}
     >
