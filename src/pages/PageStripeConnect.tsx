@@ -8,7 +8,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { ChargementPage } from '@/components/ChargementPage';
 import { CarteKPIY2K } from '@/components/y2k/CarteKPIY2K';
 import { BoutonY2K } from '@/components/y2k/BoutonY2K';
-import { CreditCard, ExternalLink, RefreshCw, Loader2, CheckCircle, Clock, AlertTriangle, Banknote, Building2, FileText, ArrowRight, Shield, Info } from 'lucide-react';
+import { CreditCard, ExternalLink, RefreshCw, Loader2, CheckCircle, Clock, AlertTriangle, Banknote, Building2, FileText, ArrowRight, Shield, Info, HelpCircle } from 'lucide-react';
+import { ModalContacterJolene } from '@/components/ModalContacterJolene';
 import { toast } from 'sonner';
 
 const formatEur = (v: number) =>
@@ -28,6 +29,7 @@ export default function PageStripeConnect() {
   const [revenus, setRevenus] = useState<{ mois_en_cours: number; total: number; en_attente: number } | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
   const [typeExercice, setTypeExercice] = useState<TypeExercice>(null);
+  const [contactOpen, setContactOpen] = useState(false);
   const [soignantNom, setSoignantNom] = useState('');
 
   const chargerStatut = useCallback(async (forceRefresh = false) => {
@@ -125,11 +127,21 @@ export default function PageStripeConnect() {
 
   return (
     <LayoutApp role="SOIGNANT">
-      <div className="mb-6">
-        <h1 className="text-xl font-bold text-foreground flex items-center gap-2">
-          <CreditCard className="h-6 w-6 text-primary" /> Paiements
-        </h1>
-        <p className="text-sm text-muted-foreground mt-1">Gère la réception de tes paiements</p>
+      <div className="mb-6 flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-bold text-foreground flex items-center gap-2">
+            <CreditCard className="h-6 w-6 text-primary" /> Paiements
+          </h1>
+          <p className="text-sm text-muted-foreground mt-1">Gère la réception de tes paiements</p>
+        </div>
+        {/* Aide contextuelle du flow critique (le FAB global a été retiré — Lot 6a.4) */}
+        <button
+          onClick={() => setContactOpen(true)}
+          aria-label="Besoin d'aide ?"
+          className="h-10 w-10 shrink-0 flex items-center justify-center rounded-full text-muted-foreground hover:text-primary hover:bg-muted active:scale-95 transition-all"
+        >
+          <HelpCircle className="h-5 w-5" />
+        </button>
       </div>
 
       <div className="max-w-2xl space-y-6">
@@ -383,7 +395,7 @@ export default function PageStripeConnect() {
                     Recommencer l'onboarding
                   </BoutonY2K>
                   <BoutonY2K
-                    onClick={() => navigate('/aide')}
+                    onClick={() => setContactOpen(true)}
                     variant="secondary"
                     className="gap-2"
                   >
@@ -396,6 +408,7 @@ export default function PageStripeConnect() {
           </>
         )}
       </div>
+      <ModalContacterJolene open={contactOpen} onClose={() => setContactOpen(false)} source="stripe-connect" />
     </LayoutApp>
   );
 }

@@ -1,11 +1,12 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FileText, CheckCircle, ShieldCheck, Loader2, ArrowLeft, ExternalLink, Download, AlertTriangle } from 'lucide-react';
+import { FileText, CheckCircle, ShieldCheck, Loader2, ArrowLeft, Download, AlertTriangle, X, HelpCircle, ArrowDown } from 'lucide-react';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { LayoutApp } from '@/components/LayoutApp';
 import { Button } from '@/components/ui/button';
 import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { Checkbox } from '@/components/ui/checkbox';
+import { ModalContacterJolene } from '@/components/ModalContacterJolene';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
@@ -67,6 +68,10 @@ function renderMarkdown(texte: string) {
   return elements;
 }
 
+/** Marge de tolérance du gate de scroll : les sous-pixels iOS font échouer
+ *  l'égalité stricte scrollTop + clientHeight === scrollHeight. */
+const SEUIL_FIN_SCROLL = 24;
+
 export default function MandatFacturation() {
   usePageTitle('Mandat de facturation');
   const navigate = useNavigate();
@@ -77,6 +82,7 @@ export default function MandatFacturation() {
   const [signing, setSigning] = useState(false);
   const [accepted, setAccepted] = useState(false);
   const [alreadySigned, setAlreadySigned] = useState(false);
+  const [justSigned, setJustSigned] = useState(false);
   const [signatureDate, setSignatureDate] = useState<string | null>(null);
   const [signatureVersion, setSignatureVersion] = useState<string | null>(null);
   const [hasScrolledToBottom, setHasScrolledToBottom] = useState(false);
@@ -84,6 +90,8 @@ export default function MandatFacturation() {
   const [signatureMeta, setSignatureMeta] = useState<MandatPdfMetadata | null>(null);
   const [showConfirmRevoke, setShowConfirmRevoke] = useState(false);
   const [revoking, setRevoking] = useState(false);
+  const [contactOpen, setContactOpen] = useState(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!user) return;
@@ -142,11 +150,40 @@ export default function MandatFacturation() {
     [soignantInfo],
   );
 
-  const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
-    const el = e.currentTarget;
-    if (el.scrollTop + el.clientHeight >= el.scrollHeight - 50) {
+  const doitSigner = !loading && (!alreadySigned || (signatureVersion !== null && signatureVersion !== MANDAT_FACTURATION_VERSION));
+  const estLiberal = !typeExercice || typeExercice === 'LIBERAL' || typeExercice === 'MIXTE';
+
+  // Gate de scroll : détection tolérante (sous-pixels iOS) + cas « contenu plus
+  // court que le viewport » (desktop large : rien à faire défiler → déverrouillé).
+  const checkFinScroll = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    if (el.scrollTop + el.clientHeight >= el.scrollHeight - SEUIL_FIN_SCROLL) {
       setHasScrolledToBottom(true);
     }
+  }, []);
+
+  useEffect(() => {
+    if (!doitSigner || loading) return;
+    checkFinScroll();
+    window.addEventListener('resize', checkFinScroll);
+    return () => window.removeEventListener('resize', checkFinScroll);
+  }, [doitSigner, loading, mandatTexte, checkFinScroll]);
+
+  // Body scroll lock derrière la sheet : le geste de scroll ne doit JAMAIS
+  // partir en scroll chaining sur la page (cause du gate qui ne se déverrouille
+  // pas sur iOS Safari — le conteneur interne ne recevait pas le scroll).
+  useEffect(() => {
+    if (!doitSigner || justSigned || !estLiberal) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = prev; };
+  }, [doitSigner, justSigned, estLiberal]);
+
+  const allerALaFin = () => {
+    const el = scrollRef.current;
+    if (!el) return;
+    el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
   };
 
   const signer = async () => {
@@ -166,9 +203,9 @@ export default function MandatFacturation() {
       if (error) throw error;
       if ((data as any)?.error) throw new Error((data as any).error);
 
-      toast.success('Mandat signé avec succès');
-      setAlreadySigned(true);
       const now = new Date().toISOString();
+      setAlreadySigned(true);
+      setJustSigned(true);
       setSignatureDate(now);
       setSignatureVersion(MANDAT_FACTURATION_VERSION);
       setSignatureMeta({
@@ -184,6 +221,14 @@ export default function MandatFacturation() {
       setSigning(false);
     }
   };
+
+  // Retour auto après l'écran de confirmation (les nags mandat de l'app
+  // disparaissent d'eux-mêmes : ils lisent mandat_facturation_signe en DB).
+  useEffect(() => {
+    if (!justSigned) return;
+    const t = setTimeout(() => navigate(-1), 3500);
+    return () => clearTimeout(t);
+  }, [justSigned, navigate]);
 
   const telechargerPdf = () => {
     if (!soignantInfo || !signatureMeta) {
@@ -206,6 +251,7 @@ export default function MandatFacturation() {
 
       toast.success('Mandat révoqué. Aucune facture ne sera plus émise tant que tu ne signes pas un nouveau mandat.');
       setAlreadySigned(false);
+      setJustSigned(false);
       setSignatureDate(null);
       setSignatureVersion(null);
       setSignatureMeta(null);
@@ -230,7 +276,7 @@ export default function MandatFacturation() {
   }
 
   // Salarié pur → pas de mandat de facturation (art. 289 I-2 CGI : libéral uniquement)
-  if (!loading && typeExercice && typeExercice !== 'LIBERAL' && typeExercice !== 'MIXTE') {
+  if (!estLiberal) {
     return (
       <LayoutApp role="SOIGNANT">
         <div className="max-w-lg mx-auto py-12 text-center space-y-4">
@@ -246,6 +292,164 @@ export default function MandatFacturation() {
     );
   }
 
+  // ── Écran de confirmation post-signature (horodaté, retour auto) ─────────
+  if (justSigned) {
+    return (
+      <div className="fixed inset-0 z-50 bg-background flex flex-col items-center justify-center px-6 text-center" style={{ height: '100dvh' }}>
+        <div className="h-16 w-16 rounded-full bg-success/10 flex items-center justify-center mb-4">
+          <CheckCircle className="h-9 w-9 text-success" />
+        </div>
+        <h1 className="text-xl font-bold text-foreground">Mandat signé ✓</h1>
+        <p className="text-sm text-muted-foreground mt-2 max-w-sm">
+          Signature horodatée le{' '}
+          <strong className="text-foreground">
+            {signatureDate && format(new Date(signatureDate), "d MMMM yyyy 'à' HH:mm", { locale: fr })}
+          </strong>{' '}
+          et archivée comme preuve légale (art. 1366-1367 du Code civil).
+          Jolene peut désormais émettre tes factures d'honoraires à chaque mission terminée.
+        </p>
+        <div className="flex flex-col gap-2 mt-6 w-full max-w-xs">
+          <BoutonY2K onClick={() => navigate(-1)} className="w-full">
+            Continuer
+          </BoutonY2K>
+          <BoutonY2K variant="ghost" size="sm" onClick={telechargerPdf} className="gap-2">
+            <Download className="h-4 w-4" /> Télécharger mon mandat (PDF)
+          </BoutonY2K>
+        </div>
+        <p className="text-[11px] text-muted-foreground mt-4">Retour automatique dans quelques secondes…</p>
+      </div>
+    );
+  }
+
+  // ── Sheet plein écran dédiée à la signature ───────────────────────────────
+  // Refonte Lot 6a.1 : l'ancien conteneur scrollable imbriqué dans le scroll de
+  // page de LayoutApp ne défilait pas sur iOS Safari (scroll chaining) → le gate
+  // ne se déverrouillait jamais → signature impossible → boucle de paiement morte.
+  if (doitSigner) {
+    return (
+      <div className="fixed inset-0 z-50 bg-background flex flex-col" style={{ height: '100dvh' }}>
+        {/* Header sticky */}
+        <header
+          className="shrink-0 border-b border-border bg-card px-4 py-3 flex items-center gap-3"
+          style={{ paddingTop: 'max(0.75rem, env(safe-area-inset-top))' }}
+        >
+          <button
+            onClick={() => navigate(-1)}
+            aria-label="Fermer"
+            className="h-10 w-10 -ml-2 flex items-center justify-center rounded-full text-muted-foreground hover:text-foreground hover:bg-muted active:scale-95 transition-all"
+          >
+            <X className="h-5 w-5" />
+          </button>
+          <div className="flex-1 min-w-0">
+            <h1 className="text-base font-bold text-foreground flex items-center gap-2 truncate">
+              <FileText className="h-4 w-4 text-primary shrink-0" /> Mandat de facturation
+            </h1>
+            <p className="text-[11px] text-muted-foreground">Version {MANDAT_FACTURATION_VERSION} — Article 289 I-2 CGI</p>
+          </div>
+          {/* Aide contextuelle (le FAB global a été retiré — Lot 6a.4) */}
+          <button
+            onClick={() => setContactOpen(true)}
+            aria-label="Besoin d'aide ?"
+            className="h-10 w-10 -mr-2 flex items-center justify-center rounded-full text-muted-foreground hover:text-primary hover:bg-muted active:scale-95 transition-all"
+          >
+            <HelpCircle className="h-5 w-5" />
+          </button>
+        </header>
+
+        {/* Corps scrollable — SEULE zone de scroll de l'écran */}
+        <div
+          ref={scrollRef}
+          onScroll={checkFinScroll}
+          className="flex-1 min-h-0 overflow-y-auto px-5 py-4"
+          style={{ overscrollBehavior: 'contain', WebkitOverflowScrolling: 'touch' }}
+        >
+          {signatureVersion && signatureVersion !== MANDAT_FACTURATION_VERSION && (
+            <div className="rounded-xl border-2 border-warning/50 bg-warning/10 p-4 flex items-start gap-3 mb-4">
+              <AlertTriangle className="h-5 w-5 text-warning shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <p className="font-semibold text-foreground text-sm">Mandat mis à jour — re-signature requise</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Ton mandat (version {signatureVersion}) n'est plus à jour. Lis et accepte la
+                  version {MANDAT_FACTURATION_VERSION} pour continuer à recevoir tes factures.
+                </p>
+              </div>
+            </div>
+          )}
+
+          <div className="rounded-xl border border-primary/20 bg-primary/5 p-4 mb-5">
+            <div className="flex items-start gap-3">
+              <ShieldCheck className="h-5 w-5 text-primary shrink-0 mt-0.5" />
+              <div className="flex-1 space-y-1.5">
+                <p className="font-semibold text-foreground text-sm">Pourquoi signer ce mandat ?</p>
+                <ul className="text-xs text-muted-foreground space-y-1 ml-4 list-disc">
+                  <li>Jolene produit et envoie tes factures d'honoraires automatiquement à chaque mission terminée</li>
+                  <li>Tes factures sont conservées centralement et accessibles à tout moment</li>
+                  <li>Tu restes libéral indépendant : aucun lien de subordination, aucun changement de statut</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+
+          {renderMarkdown(mandatTexte)}
+          {/* Sentinelle de fin — un peu d'air pour que le dernier paragraphe ne colle pas au footer */}
+          <div className="h-4" aria-hidden="true" />
+        </div>
+
+        {/* Bouton « Aller à la fin » — visible tant que le gate n'est pas déverrouillé */}
+        {!hasScrolledToBottom && (
+          <div className="absolute bottom-40 inset-x-0 flex justify-center pointer-events-none z-10">
+            <button
+              onClick={allerALaFin}
+              className="pointer-events-auto inline-flex items-center gap-1.5 rounded-full bg-foreground text-background text-sm font-medium px-4 py-2.5 shadow-lg active:scale-95 transition-transform"
+            >
+              Aller à la fin <ArrowDown className="h-4 w-4" />
+            </button>
+          </div>
+        )}
+
+        {/* Footer sticky : checkbox + CTA */}
+        <footer
+          className="shrink-0 border-t border-border bg-card px-5 pt-4 space-y-3"
+          style={{ paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }}
+        >
+          {!hasScrolledToBottom && (
+            <p className="text-xs text-muted-foreground text-center" role="status">
+              Fais défiler le document jusqu'en bas pour pouvoir l'accepter
+            </p>
+          )}
+          <div className={`flex items-start gap-3 ${!hasScrolledToBottom ? 'opacity-50' : ''}`}>
+            <Checkbox
+              id="accept-mandat"
+              checked={accepted}
+              onCheckedChange={(v) => setAccepted(v === true)}
+              disabled={!hasScrolledToBottom}
+              aria-disabled={!hasScrolledToBottom}
+              className="mt-0.5"
+            />
+            <label htmlFor="accept-mandat" className={`text-xs text-foreground leading-relaxed ${hasScrolledToBottom ? 'cursor-pointer' : 'cursor-not-allowed'}`}>
+              J'ai lu et j'accepte les termes du mandat. Je donne mandat à Jolene d'émettre des
+              factures en mon nom et pour mon compte (art. 289 I-2 CGI).
+            </label>
+          </div>
+          <BoutonY2K
+            onClick={signer}
+            disabled={!accepted || signing || !hasScrolledToBottom}
+            className="w-full gap-2"
+          >
+            {signing ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />}
+            Signer électroniquement le mandat
+          </BoutonY2K>
+          <p className="text-[10px] text-muted-foreground text-center pb-1">
+            Signature horodatée et archivée comme preuve légale (art. 1366-1367 du Code civil).
+          </p>
+        </footer>
+
+        <ModalContacterJolene open={contactOpen} onClose={() => setContactOpen(false)} source="mandat-facturation" />
+      </div>
+    );
+  }
+
+  // ── Mandat signé et à jour : page de statut classique ────────────────────
   return (
     <LayoutApp role="SOIGNANT">
       <div className="max-w-3xl mx-auto space-y-5">
@@ -261,121 +465,47 @@ export default function MandatFacturation() {
           </div>
         </div>
 
-        {alreadySigned && signatureVersion && signatureVersion !== MANDAT_FACTURATION_VERSION && (
-          <div className="rounded-xl border-2 border-warning/50 bg-warning/10 p-4 flex items-start gap-3">
-            <AlertTriangle className="h-6 w-6 text-warning shrink-0 mt-0.5" />
-            <div className="flex-1">
-              <p className="font-semibold text-foreground">Mandat mis à jour — re-signature requise</p>
-              <p className="text-sm text-muted-foreground mt-1">
-                Ton mandat actuel (version {signatureVersion}) n'est plus à jour.
-                La version {MANDAT_FACTURATION_VERSION} intègre la facturation hebdomadaire pour les missions longues.
-                Lis et accepte le nouveau mandat ci-dessous pour continuer à recevoir tes factures.
-              </p>
-            </div>
-          </div>
-        )}
-
-        {alreadySigned && (!signatureVersion || signatureVersion === MANDAT_FACTURATION_VERSION) && (
-          <div className="rounded-xl border-2 border-success/30 bg-success/5 p-4 flex items-start gap-3">
-            <CheckCircle className="h-6 w-6 text-success shrink-0 mt-0.5" />
-            <div className="flex-1">
-              <p className="font-semibold text-foreground">Mandat signé et actif</p>
-              <p className="text-sm text-muted-foreground mt-0.5">
-                Tu as accepté le mandat de facturation version {signatureVersion} le{' '}
-                {signatureDate && format(new Date(signatureDate), "dd MMMM yyyy 'à' HH:mm", { locale: fr })}.
-              </p>
-              <p className="text-xs text-muted-foreground mt-2">
-                Jolene peut désormais émettre des factures d'honoraires en ton nom à chaque mission terminée.
-                Tu peux révoquer ce mandat à tout moment depuis cette page : aucune nouvelle facture ne
-                sera émise après révocation. Les factures déjà émises restent valides et exigibles.
-              </p>
-              <div className="flex flex-wrap gap-2 mt-3">
-                <BoutonY2K
-                  type="button"
-                  variant="secondary"
-                  size="sm"
-                  onClick={telechargerPdf}
-                  disabled={!signatureMeta}
-                  className="gap-2"
-                >
-                  <Download className="h-4 w-4" />
-                  Télécharger mon mandat (PDF)
-                </BoutonY2K>
-                <BoutonY2K
-                  type="button"
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => setShowConfirmRevoke(true)}
-                  className="gap-2 text-destructive hover:text-destructive border-destructive/30 hover:bg-destructive/5"
-                >
-                  Révoquer mon mandat
-                </BoutonY2K>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {(!alreadySigned || (signatureVersion && signatureVersion !== MANDAT_FACTURATION_VERSION)) && (
-          <div className="rounded-xl border-2 border-primary/30 bg-primary/5 p-4">
-            <div className="flex items-start gap-3">
-              <ShieldCheck className="h-6 w-6 text-primary shrink-0 mt-0.5" />
-              <div className="flex-1 space-y-2">
-                <p className="font-semibold text-foreground">Pourquoi signer ce mandat ?</p>
-                <ul className="text-sm text-muted-foreground space-y-1 ml-4 list-disc">
-                  <li>Jolene pourra produire et envoyer tes factures d'honoraires automatiquement à chaque mission terminée</li>
-                  <li>Tes factures sont conservées centralement et accessibles à tout moment</li>
-                  <li>Préparation au paiement rapide (avance sous 48h) — disponible prochainement</li>
-                  <li>Tu restes libéral indépendant : aucun lien de subordination, aucun changement de statut</li>
-                </ul>
-              </div>
-            </div>
-          </div>
-        )}
-
-        <div className="card-base p-0 overflow-hidden flex flex-col max-h-[calc(100dvh-14rem)] md:max-h-[70vh]">
-          <div
-            className="flex-1 min-h-0 overflow-y-auto px-5 py-4 border-b border-border"
-            onScroll={handleScroll}
-          >
-            {renderMarkdown(mandatTexte)}
-          </div>
-
-          {!alreadySigned && (
-            <div className="p-5 space-y-4 bg-muted/20 shrink-0">
-              {!hasScrolledToBottom && (
-                <p className="text-xs text-warning italic text-center font-medium" role="status">
-                  ⚠️ Fais défiler le document jusqu'en bas pour pouvoir l'accepter
-                </p>
-              )}
-
-              <div className={`flex items-start gap-3 ${!hasScrolledToBottom ? 'opacity-50' : ''}`}>
-                <Checkbox
-                  id="accept-mandat"
-                  checked={accepted}
-                  onCheckedChange={(v) => setAccepted(v === true)}
-                  disabled={!hasScrolledToBottom}
-                  aria-disabled={!hasScrolledToBottom}
-                />
-                <label htmlFor="accept-mandat" className={`text-sm text-foreground leading-relaxed ${hasScrolledToBottom ? 'cursor-pointer' : 'cursor-not-allowed'}`}>
-                  J'ai lu et j'accepte expressément les termes du mandat de facturation ci-dessus. Je confirme donner mandat à Jolene
-                  d'émettre des factures en mon nom et pour mon compte, conformément à l'article 289 I-2 du CGI.
-                </label>
-              </div>
-
+        <div className="rounded-xl border-2 border-success/30 bg-success/5 p-4 flex items-start gap-3">
+          <CheckCircle className="h-6 w-6 text-success shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <p className="font-semibold text-foreground">Mandat signé et actif</p>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              Tu as accepté le mandat de facturation version {signatureVersion} le{' '}
+              {signatureDate && format(new Date(signatureDate), "dd MMMM yyyy 'à' HH:mm", { locale: fr })}.
+            </p>
+            <p className="text-xs text-muted-foreground mt-2">
+              Jolene peut désormais émettre des factures d'honoraires en ton nom à chaque mission terminée.
+              Tu peux révoquer ce mandat à tout moment depuis cette page : aucune nouvelle facture ne
+              sera émise après révocation. Les factures déjà émises restent valides et exigibles.
+            </p>
+            <div className="flex flex-wrap gap-2 mt-3">
               <BoutonY2K
-                onClick={signer}
-                disabled={!accepted || signing || !hasScrolledToBottom}
-                className="w-full gap-2"
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={telechargerPdf}
+                disabled={!signatureMeta}
+                className="gap-2"
               >
-                {signing ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />}
-                Signer électroniquement le mandat
+                <Download className="h-4 w-4" />
+                Télécharger mon mandat (PDF)
               </BoutonY2K>
-
-              <p className="text-[10px] text-muted-foreground text-center">
-                Ta signature sera horodatée et archivée comme preuve légale (Articles 1366 et 1367 du Code civil).
-              </p>
+              <BoutonY2K
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => setShowConfirmRevoke(true)}
+                className="gap-2 text-destructive hover:text-destructive border-destructive/30 hover:bg-destructive/5"
+              >
+                Révoquer mon mandat
+              </BoutonY2K>
             </div>
-          )}
+          </div>
+        </div>
+
+        {/* Texte du mandat en consultation (pas de gate : déjà signé) */}
+        <div className="card-base">
+          {renderMarkdown(mandatTexte)}
         </div>
       </div>
 
