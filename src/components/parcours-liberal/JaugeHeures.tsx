@@ -1,4 +1,5 @@
-import { Sparkles } from 'lucide-react';
+import { Sparkles, FileText } from 'lucide-react';
+import { Link } from 'react-router-dom';
 
 interface Props {
   heuresJolene: number;
@@ -90,6 +91,18 @@ export function JaugeHeures({
           </span>
         )}
       </div>
+
+      {/* Surface le justificatif officiel là où les heures réelles s'affichent :
+          le soignant en doit la preuve à l'URSSAF/CPAM pour son installation. */}
+      {heuresJolene > 0 && (
+        <Link
+          to="/soignant/attestation-heures"
+          className="mt-3 inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:underline"
+        >
+          <FileText className="h-3.5 w-3.5" />
+          Éditer l'attestation officielle de mes {heuresJolene}h Jolene
+        </Link>
+      )}
 
       {eligibleFreeTransition && (
         <div className="mt-4 rounded-xl border-2 border-primary/40 bg-gradient-to-r from-primary/10 to-info/10 p-3 flex items-start gap-2">

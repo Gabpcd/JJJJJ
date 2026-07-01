@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { SkeletonDashboard } from '@/components/SkeletonCard';
 import { AlertCircle, Banknote, Bell, CalendarDays, CreditCard, FileText, Sparkles } from 'lucide-react';
 import { CarteProposition } from '@/components/CarteProposition';
+import { NoteNetEstime } from '@/components/NoteNetEstime';
 import { BadgeRPPS } from '@/components/BadgeRPPS';
 import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { Mascotte } from '@/components/mascotte/Mascotte';
@@ -373,6 +374,7 @@ export default function DashboardSoignant() {
               <p className="text-xs text-primary mt-0.5">Voir le détail →</p>
             </div>
           </div>
+          <NoteNetEstime className="mt-2" />
         </div>
       )}
 

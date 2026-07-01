@@ -7,6 +7,7 @@ import { Briefcase, History } from 'lucide-react';
 import { LayoutApp } from '@/components/LayoutApp';
 import { EmptyState, IllustrationBoussole } from '@/components/ui/EmptyState';
 import { CarteMissionSoignant } from '@/components/CarteMissionSoignant';
+import { NoteNetEstime } from '@/components/NoteNetEstime';
 import { CarteSerie, extraireSerieId } from '@/components/CarteSerie';
 import { FiltresMissions, type FiltresMissionsState } from '@/components/FiltresMissions';
 import { BandeauAlerte48h } from '@/components/BandeauAlerte48h';
@@ -378,6 +379,7 @@ export default function MissionsSoignant() {
                     </button>
                   </div>
                 )}
+                <NoteNetEstime className="mt-4" />
               </>
             ) : (
               <EmptyState icone={<History />} mascotte="empty" titre="Aucune mission dans l'historique"

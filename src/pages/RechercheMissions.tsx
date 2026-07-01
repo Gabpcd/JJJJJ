@@ -10,6 +10,7 @@ import { LayoutApp } from '@/components/LayoutApp';
 import { ChargementPage } from '@/components/ChargementPage';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { CarteMissionSoignant } from '@/components/CarteMissionSoignant';
+import { NoteNetEstime } from '@/components/NoteNetEstime';
 import { BandeauDocumentsManquants } from '@/components/BandeauDocumentsManquants';
 import { BandeauProfilIncomplet } from '@/components/BandeauProfilIncomplet';
 import { useAuth } from '@/contexts/AuthContext';
@@ -676,6 +677,7 @@ export default function RechercheMissions() {
                     </button>
                   </div>
                 )}
+                <NoteNetEstime className="mt-4" />
               </>
             ) : (
               <EmptyState
