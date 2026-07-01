@@ -22,7 +22,7 @@
  */
 
 import { test, expect } from '@playwright/test';
-import { seedMission, seedCandidature } from '../helpers/seed';
+import { seedMission, seedCandidature, seedDocsRequisVerifie } from '../helpers/seed';
 import { adminClient, userClient, userIdByEmail } from '../helpers/db';
 import { TEST_ACCOUNTS } from '../helpers/auth';
 
@@ -68,6 +68,8 @@ test.describe('Flow pointage soignant', () => {
       .from('soignants' as any)
       .update({ tous_documents_valides: true })
       .eq('id', soignantId);
+    // Gate documents per-mission : fournir de vrais docs vérifiés (le flag seul ne suffit plus).
+    await seedDocsRequisVerifie(soignantId);
 
     const debut = new Date(Date.now() + 8 * 86400000);
     const fin = new Date(debut.getTime() + 8 * 3600000);

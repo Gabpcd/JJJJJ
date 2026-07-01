@@ -23,7 +23,7 @@
  */
 
 import { test, expect } from '@playwright/test';
-import { seedMission, seedCandidature, cleanupSeedData, cleanupMissionCascade } from '../helpers/seed';
+import { seedMission, seedCandidature, cleanupSeedData, cleanupMissionCascade, seedDocsRequisVerifie } from '../helpers/seed';
 import { loginAs, TEST_ACCOUNTS } from '../helpers/auth';
 import { adminClient, userClient, userIdByEmail } from '../helpers/db';
 
@@ -51,6 +51,8 @@ test.describe('Flow notation bidirectionnelle', () => {
       .from('soignants' as any)
       .update({ tous_documents_valides: true })
       .eq('id', soignantId);
+    // Gate documents per-mission : fournir de vrais docs vérifiés (le flag seul ne suffit plus).
+    await seedDocsRequisVerifie(soignantId);
 
     // J+9 : hors fenêtre pointage (J+8 + 8h, repos 11h respecté) et au-delà
     // du seuil < 7 jours de fn_traiter_candidature.

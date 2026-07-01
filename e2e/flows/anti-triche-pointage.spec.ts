@@ -37,6 +37,7 @@ import { test, expect } from '@playwright/test';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { adminClient, userClient, userIdByEmail } from '../helpers/db';
 import { TEST_ACCOUNTS } from '../helpers/auth';
+import { seedDocsRequisVerifie } from '../helpers/seed';
 
 const TEST_REQS = !!process.env.SUPABASE_SERVICE_ROLE_KEY;
 
@@ -120,6 +121,8 @@ test.describe('Anti-triche pointage Sprint 4.5', () => {
       .from('soignants' as any)
       .update({ tous_documents_valides: true })
       .eq('id', soignantId);
+    // Gate documents per-mission : fournir de vrais docs vérifiés (le flag seul ne suffit plus).
+    await seedDocsRequisVerifie(soignantId);
 
     const { data: cand, error: candErr } = await admin
       .from('candidatures' as any)
