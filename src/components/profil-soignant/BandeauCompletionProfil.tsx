@@ -13,13 +13,13 @@ interface Props {
 }
 
 function getCouleurs(pourcentage: number, peutCandidater: boolean): { bg: string; border: string; text: string; barre: string; icone: string } {
-  if (pourcentage >= 100) {
+  // Ton encourageant, jamais punitif (orienté conversion) : pas de rouge « échec »
+  // sur un profil en cours. Dès que le soignant peut candidater → positif (vert).
+  // Sinon → couleur de marque (primary) : un nudge vers l'étape suivante, pas une alarme.
+  if (pourcentage >= 100 || peutCandidater) {
     return { bg: 'bg-success/5', border: 'border-success/30', text: 'text-success', barre: 'bg-success', icone: 'text-success' };
   }
-  if (pourcentage >= 50 && peutCandidater) {
-    return { bg: 'bg-warning/5', border: 'border-warning/30', text: 'text-warning', barre: 'bg-warning', icone: 'text-warning' };
-  }
-  return { bg: 'bg-destructive/5', border: 'border-destructive/30', text: 'text-destructive', barre: 'bg-destructive', icone: 'text-destructive' };
+  return { bg: 'bg-primary/5', border: 'border-primary/30', text: 'text-primary', barre: 'bg-primary', icone: 'text-primary' };
 }
 
 export function BandeauCompletionProfil({ soignant, variant = 'detaille', masquerSiComplet = true, className = '' }: Props) {
@@ -116,11 +116,11 @@ export function BandeauCompletionProfil({ soignant, variant = 'detaille', masque
             {item.rempli ? (
               <CheckCircle2 className="h-3.5 w-3.5 text-success shrink-0" />
             ) : (
-              <Circle className={`h-3.5 w-3.5 shrink-0 ${item.obligatoire ? 'text-destructive' : 'text-muted-foreground'}`} />
+              <Circle className={`h-3.5 w-3.5 shrink-0 ${item.obligatoire ? 'text-primary' : 'text-muted-foreground'}`} />
             )}
             <span className={item.rempli ? 'text-muted-foreground' : (item.obligatoire ? 'text-foreground font-medium' : 'text-muted-foreground')}>
               {item.label}
-              {!item.rempli && item.obligatoire && <span className="text-destructive ml-1">*</span>}
+              {!item.rempli && item.obligatoire && <span className="text-primary ml-1">*</span>}
             </span>
           </div>
         ))}

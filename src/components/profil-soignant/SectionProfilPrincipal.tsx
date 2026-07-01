@@ -75,9 +75,11 @@ function BandeauCompletionProfil({ resume }: { resume: ResumeCompletion }) {
   }
   // Audit soignant fix : Tailwind ne compile pas les classes dynamiques.
   // Map statique pour que les classes existent au build.
+  // Ton encourageant, jamais punitif : vert dès que le soignant peut candidater,
+  // sinon couleur de marque (nudge vers l'étape suivante) — pas de rouge « échec ».
   const couleurClasses = resume.peut_candidater
-    ? { card: 'bg-warning/5 border-warning/30', icon: 'text-warning', text: 'text-warning', bar: 'bg-warning' }
-    : { card: 'bg-destructive/5 border-destructive/30', icon: 'text-destructive', text: 'text-destructive', bar: 'bg-destructive' };
+    ? { card: 'bg-success/5 border-success/30', icon: 'text-success', text: 'text-success', bar: 'bg-success' }
+    : { card: 'bg-primary/5 border-primary/30', icon: 'text-primary', text: 'text-primary', bar: 'bg-primary' };
   return (
     <div className={`card-base ${couleurClasses.card}`}>
       <div className="flex items-start justify-between gap-3 mb-3">

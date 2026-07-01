@@ -93,7 +93,7 @@ export function PoolUrgenceToggle({ actif, rayonKm, villeUrgence, smsOptIn, onUp
         <div className="flex-1">
           <p className="text-sm text-foreground font-medium">🚨 Disponible pour les remplacements d'urgence</p>
           <p className="text-xs text-muted-foreground mt-1">
-            Vous serez alerté en priorité quand un soignant annule une mission dans votre rayon.
+            Tu seras alerté(e) en priorité quand un soignant annule une mission dans ton rayon.
           </p>
         </div>
         <Switch
@@ -185,7 +185,7 @@ export function PoolUrgenceToggle({ actif, rayonKm, villeUrgence, smsOptIn, onUp
               <span className="badge-base bg-destructive/10 text-destructive text-[10px] font-bold">
                 Soignant Urgence 🔥
               </span>
-              <span className="text-xs text-muted-foreground">Badge visible sur votre profil</span>
+              <span className="text-xs text-muted-foreground">Badge visible sur ton profil</span>
             </div>
           </div>
 
@@ -207,8 +207,8 @@ export function PoolUrgenceToggle({ actif, rayonKm, villeUrgence, smsOptIn, onUp
 
           <div className="mt-4 bg-muted/50 border border-border rounded-xl p-3">
             <p className="text-xs text-muted-foreground">
-              En activant le pool d'urgence, vous acceptez d'être contacté pour des remplacements de dernière minute dans votre rayon.
-              Vous restez libre de refuser. Chaque mission urgence terminée vous rapporte <strong className="text-foreground">+10 points de fiabilité</strong>.
+              En activant le pool d'urgence, tu acceptes d'être contacté(e) pour des remplacements de dernière minute dans ton rayon.
+              Tu restes libre de refuser. Chaque mission urgence terminée te rapporte <strong className="text-foreground">+10 points de fiabilité</strong>.
             </p>
           </div>
         </>

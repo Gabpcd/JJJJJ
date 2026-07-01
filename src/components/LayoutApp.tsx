@@ -78,7 +78,7 @@ export function LayoutApp({ role, children, pleinEcran = false }: LayoutAppProps
               {children}
             </div>
           )}
-          {!pleinEcran && <FooterLegal />}
+          {!pleinEcran && <FooterLegal variant="restreint" />}
         </main>
       </div>
       <DemandePermissionPush />

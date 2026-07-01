@@ -215,7 +215,7 @@ export default function PageParametresNotifications() {
             </h2>
             <p className="text-xs text-muted-foreground">
               Recevoir un SMS pour les missions urgentes et le rappel mission J-1.
-              Coût supporté par Jolene. Vous pouvez désactiver à tout moment.
+              Coût supporté par Jolene. Tu peux désactiver à tout moment.
             </p>
             {!global.canal_sms && (
               <p className="text-xs text-warning">
