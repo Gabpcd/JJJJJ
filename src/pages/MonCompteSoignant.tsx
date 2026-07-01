@@ -11,16 +11,18 @@ import { estEligibleLiberal } from '@/lib/regles-installation-liberal';
 import { ChangementMotDePasse } from '@/components/soignant/ChangementMotDePasse';
 import { ConsentementPingGps } from '@/components/soignant/ConsentementPingGps';
 import { ModalContacterJolene } from '@/components/ModalContacterJolene';
+import { useTheme } from '@/hooks/useTheme';
 import {
   User, ShieldCheck, LogOut,
   Mail, Phone, MapPin, KeyRound, FileText, Scale, Trash2,
   CreditCard, Gift, Rocket, Umbrella, GraduationCap, Bell,
-  Search, Ban, BookOpen,
+  Search, Ban, BookOpen, Moon, Sun,
 } from 'lucide-react';
 
 export default function MonCompteSoignant() {
   usePageTitle('Mon compte');
   const { user, deconnexion } = useAuth();
+  const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
   const [profil, setProfil] = useState<{
     prenom: string; nom: string; avatar_url: string | null;
@@ -94,6 +96,13 @@ export default function MonCompteSoignant() {
       titre: 'Réglages',
       lignes: [
         { icone: Bell, label: 'Notifications', route: '/soignant/parametres/notifications' },
+        // Toggle thème rapatrié ici depuis le header mobile (Lot 6b.1 — header épuré).
+        {
+          icone: theme === 'dark' ? Sun : Moon,
+          label: theme === 'dark' ? 'Passer en thème clair' : 'Passer en thème sombre',
+          onClick: toggleTheme,
+          sansChevron: true,
+        },
       ],
     },
     {

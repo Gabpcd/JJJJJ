@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { FileText, CheckCircle, ShieldCheck, Loader2, ArrowLeft, Download, AlertTriangle, X, HelpCircle, ArrowDown } from 'lucide-react';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { LayoutApp } from '@/components/LayoutApp';
@@ -76,6 +77,7 @@ export default function MandatFacturation() {
   usePageTitle('Mandat de facturation');
   const navigate = useNavigate();
   const { user } = useAuth();
+  const queryClient = useQueryClient();
 
   const [typeExercice, setTypeExercice] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -215,6 +217,10 @@ export default function MandatFacturation() {
         user_agent: navigator.userAgent,
         contenu_hash: hash,
       });
+      // Le Dashboard cache son RPC (react-query, staleTime 60 s) : sans
+      // invalidation, le bandeau « Signe ton mandat » survivait à la signature
+      // au retour sur l'Accueil. On invalide tout ce qui lit le flag mandat.
+      queryClient.invalidateQueries({ queryKey: ['dashboard-soignant'] });
     } catch (err: any) {
       toast.error(err?.message || 'Erreur lors de la signature');
     } finally {
@@ -250,6 +256,7 @@ export default function MandatFacturation() {
       if ((data as any)?.success === false) throw new Error((data as any)?.error || 'Erreur révocation');
 
       toast.success('Mandat révoqué. Aucune facture ne sera plus émise tant que tu ne signes pas un nouveau mandat.');
+      queryClient.invalidateQueries({ queryKey: ['dashboard-soignant'] });
       setAlreadySigned(false);
       setJustSigned(false);
       setSignatureDate(null);

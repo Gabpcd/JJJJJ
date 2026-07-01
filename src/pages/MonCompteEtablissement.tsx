@@ -10,10 +10,13 @@ import {
   BookOpen, Mail,
 } from 'lucide-react';
 import { ModalContacterJolene } from '@/components/ModalContacterJolene';
+import { useTheme } from '@/hooks/useTheme';
+import { Moon, Sun } from 'lucide-react';
 
 export default function MonCompteEtablissement() {
   usePageTitle('Mon établissement');
   const { user, deconnexion } = useAuth();
+  const { theme, toggleTheme } = useTheme();
   const [etab, setEtab] = useState<{ nom: string; logo_url: string | null; type: string | null } | null>(null);
   const [contactOpen, setContactOpen] = useState(false);
 
@@ -36,6 +39,13 @@ export default function MonCompteEtablissement() {
         { icone: CreditCard, label: 'Facturation', route: '/etablissement/facturation' },
         { icone: Star, label: 'Qualité', route: '/etablissement/litiges' },
         { icone: Settings, label: 'Paramètres', route: '/etablissement/parametres?tab=config' },
+        // Toggle thème rapatrié ici depuis le header mobile (Lot 6b.1 — header épuré).
+        {
+          icone: theme === 'dark' ? Sun : Moon,
+          label: theme === 'dark' ? 'Passer en thème clair' : 'Passer en thème sombre',
+          onClick: toggleTheme,
+          sansChevron: true,
+        },
         { icone: LogOut, label: 'Se déconnecter', onClick: () => deconnexion(), variante: 'danger' as const, sansChevron: true },
       ],
     },
