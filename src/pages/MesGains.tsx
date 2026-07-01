@@ -3,7 +3,7 @@ import { lazyRetry as lazy } from '@/lib/lazyRetry';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useAffacturageActif } from '@/hooks/useAffacturageActif';
-import { Banknote, Clock, Download, TrendingUp, ChevronRight, FileText, Search, CheckCircle, AlertTriangle, Scale, Receipt, Zap } from 'lucide-react';
+import { Banknote, Clock, Download, TrendingUp, ChevronRight, FileText, Search, CheckCircle, AlertTriangle, Scale, Receipt, Zap, Calculator } from 'lucide-react';
 import { LayoutApp } from '@/components/LayoutApp';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { MesFacturesHonorairesContent } from './MesFacturesHonoraires';
@@ -298,9 +298,14 @@ export function MesGainsApercuContent() {
         <BoutonY2K variant="secondary" size="sm" onClick={() => setModalAttestation(true)} className="gap-1.5">
           <FileText className="h-4 w-4" /> Attestation
         </BoutonY2K>
-        {/* Charges / Compte de paiement / Mandat retirés d'ici : source unique dans
-            Compte (évite le doublon de navigation argent). Lien « Mes charges »
-            conservé via la note honoraires libéraux ci-dessus. */}
+        {/* Charges sociales = INFO (charges du libéral) → sa place est ici, dans Revenus,
+            nommée explicitement (retirée de Compte). Compte de paiement / Mandat restent
+            en config dans Compte (source unique). */}
+        {isLiberal && (
+          <BoutonY2K variant="secondary" size="sm" onClick={() => navigate('/soignant/charges')} className="gap-1.5">
+            <Calculator className="h-4 w-4" /> Mes charges
+          </BoutonY2K>
+        )}
       </div>
 
       {/* Récap période */}

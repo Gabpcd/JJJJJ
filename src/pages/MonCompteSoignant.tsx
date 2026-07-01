@@ -11,9 +11,10 @@ import { estEligibleLiberal } from '@/lib/regles-installation-liberal';
 import { ChangementMotDePasse } from '@/components/soignant/ChangementMotDePasse';
 import { ConsentementPingGps } from '@/components/soignant/ConsentementPingGps';
 import {
-  User, Banknote, ShieldCheck, Settings, LogOut,
+  User, ShieldCheck, LogOut,
   Mail, Phone, MapPin, KeyRound, FileText, Scale, Trash2,
   CreditCard, Gift, Rocket, Umbrella, GraduationCap, Bell,
+  Search, Ban,
 } from 'lucide-react';
 
 export default function MonCompteSoignant() {
@@ -51,34 +52,46 @@ export default function MonCompteSoignant() {
         { icone: User, label: 'Mon profil', route: '/soignant/profil' },
       ],
     },
-    // « Revenus » retiré ici : doublon de l'onglet Revenus de la barre du bas
-    // (même destination /soignant/mes-gains). Cette section ne garde que la
-    // configuration de paiement/facturation (libéral).
+    // Config paiement/facturation = CONFIG → Compte (source unique). « Charges sociales »
+    // retirée d'ici : c'est de l'INFO → elle vit dans Revenus (entrée nommée).
     ...(estLiberal ? [{
       titre: 'Paiements & facturation',
       lignes: [
         { icone: CreditCard, label: 'Compte de paiement (Stripe)', route: '/soignant/stripe-connect' },
         { icone: FileText, label: 'Mandat de facturation', route: '/soignant/mandat-facturation' },
-        { icone: Banknote, label: 'Charges sociales', route: '/soignant/charges' },
       ],
     }] : []),
     // « Ma réputation » retiré : hub dissous, le score simple vit désormais sur le Profil.
     {
-      titre: 'Avantages',
+      // Section « Développement » renommée « Documents & protection ».
+      titre: 'Documents & protection',
       lignes: [
-        { icone: Umbrella, label: 'Prévoyance', route: '/soignant/prevoyance' },
-        { icone: Gift, label: 'Parrainage', route: '/soignant/parrainage' },
         ...(eligibleLiberal && !estLiberal
           ? [{ icone: Rocket, label: 'Passer en libéral', route: '/soignant/passer-en-liberal' }] : []),
         ...(estLiberal || eligibleLiberal
-          ? [{ icone: GraduationCap, label: 'Attestation 3200 h', route: '/soignant/attestation-heures' }] : []),
+          ? [{ icone: GraduationCap, label: 'Attestation d\'heures', route: '/soignant/attestation-heures' }] : []),
+        { icone: Umbrella, label: 'Prévoyance', route: '/soignant/prevoyance' },
+      ],
+    },
+    // Écrans prospectifs (recherche/dispo) remontés depuis l'ancien « Tous les
+    // paramètres » ; Exclusions à part (négatif ≠ prospectif).
+    {
+      titre: 'Recherche & disponibilité',
+      lignes: [
+        { icone: Search, label: 'Recherches sauvegardées', route: '/soignant/parametres/recherches-sauvegardees' },
+        { icone: Ban, label: 'Établissements exclus', route: '/soignant/exclusions' },
+      ],
+    },
+    {
+      titre: '',
+      lignes: [
+        { icone: Gift, label: 'Parrainage', route: '/soignant/parrainage' },
       ],
     },
     {
       titre: 'Réglages',
       lignes: [
         { icone: Bell, label: 'Notifications', route: '/soignant/parametres/notifications' },
-        { icone: Settings, label: 'Tous les paramètres', route: '/soignant/parametres-complet' },
       ],
     },
     {
