@@ -144,7 +144,9 @@ const DialogResponsiveBody = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <div
     ref={ref}
-    className={cn('flex-1 overflow-y-auto px-4 py-4 md:px-6 md:py-5', className)}
+    // overscroll-contain (Lot 6b.2) : le scroll interne de la sheet ne doit
+    // jamais partir en scroll chaining sur la page derrière (iOS Safari).
+    className={cn('flex-1 overflow-y-auto overscroll-contain px-4 py-4 md:px-6 md:py-5', className)}
     {...props}
   />
 ));
