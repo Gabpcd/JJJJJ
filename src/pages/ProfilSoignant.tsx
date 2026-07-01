@@ -25,6 +25,8 @@ import { SectionPaiements } from '@/components/profil-soignant/SectionPaiements'
 import { SectionPreferences } from '@/components/profil-soignant/SectionPreferences';
 import { SectionConfidentialite } from '@/components/profil-soignant/SectionConfidentialite';
 import { SectionDpaeIdentite } from '@/components/profil-soignant/SectionDpaeIdentite';
+import { BadgeNiveauV2 } from '@/components/BadgeNiveauV2';
+import { SectionEvenementsScore } from '@/components/score/SectionEvenementsScore';
 
 type SoignantRow = Database['public']['Tables']['soignants']['Row'];
 
@@ -102,6 +104,7 @@ export default function ProfilSoignant() {
   const [noteMoyenne, setNoteMoyenne] = useState<{ moyenne: number; total: number } | null>(null);
   const [evaluations, setEvaluations] = useState<any[]>([]);
   const [badgeStats, setBadgeStats] = useState<BadgeStats | null>(null);
+  const [nbEvenementsScore, setNbEvenementsScore] = useState(0);
 
   const refresh = useCallback(() => setRefreshKey((k) => k + 1), []);
 
@@ -191,6 +194,15 @@ export default function ProfilSoignant() {
         });
       }
     }).then(undefined, (err) => handleErrorSilent(err, 'ProfilSoignant.badgeStats'));
+
+    // Événements de score contestables — le recours « pénalité injuste » n'est
+    // affiché QUE s'il en existe (jamais de bloc vide anxiogène). Shape RPC
+    // défensive : { events } (SectionEvenementsScore) ou { evenements } (legacy).
+    supabase.rpc('fn_mes_evenements_score' as any, { p_limit: 5 }).then(({ data }: any) => {
+      const res = data as any;
+      const evs = res?.events ?? res?.evenements ?? (Array.isArray(res) ? res : []);
+      setNbEvenementsScore(Array.isArray(evs) ? evs.length : 0);
+    }).then(undefined, (err) => handleErrorSilent(err, 'ProfilSoignant.evenementsScore'));
   }, [user, refreshKey, afficherNotification]);
 
   const toggleContrat = (valeur: string) => {
@@ -261,6 +273,15 @@ export default function ProfilSoignant() {
 
   const profilComplet = resumeCompletion.peut_candidater;
 
+  // Score simple sur le Profil (dissolution du hub Réputation, modèle Uber) :
+  // une note + un niveau, sans page algo. Niveau dérivé du score (mêmes seuils
+  // que BadgeNiveauV2), sans fetch supplémentaire. Non noté tant que < 3 missions.
+  const scoreNote = badgeStats?.scoreFiabilite ?? 0;
+  const missionsTerm = badgeStats?.totalMissions ?? 0;
+  const nonNoteScore = missionsTerm < 3;
+  const niveauDerive: 'BRONZE' | 'ARGENT' | 'OR' | 'PLATINE' =
+    scoreNote >= 90 ? 'PLATINE' : scoreNote >= 70 ? 'OR' : scoreNote >= 50 ? 'ARGENT' : 'BRONZE';
+
   return (
     <LayoutApp role="SOIGNANT">
       <div className="flex items-center gap-4 mb-6">
@@ -291,6 +312,22 @@ export default function ProfilSoignant() {
         </div>
       )}
 
+      {profilComplet && badgeStats && (
+        <div className="card-base mb-6">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h2 className="text-base font-semibold text-foreground mb-1">Mon score</h2>
+              {nonNoteScore ? (
+                <p className="text-sm text-muted-foreground">Score disponible après 3 missions terminées ({missionsTerm}/3).</p>
+              ) : (
+                <p className="text-lg font-bold text-foreground tabular-nums">{scoreNote}/100 · {missionsTerm} mission{missionsTerm > 1 ? 's' : ''} terminée{missionsTerm > 1 ? 's' : ''}</p>
+              )}
+            </div>
+            <BadgeNiveauV2 niveau={nonNoteScore ? undefined : niveauDerive} nonNote={nonNoteScore} />
+          </div>
+        </div>
+      )}
+
       {profilComplet && noteMoyenne && noteMoyenne.total > 0 && (
         <div className="card-base mb-6">
           <h2 className="text-base font-semibold text-foreground mb-2">Évaluations reçues</h2>
@@ -308,6 +345,13 @@ export default function ProfilSoignant() {
               ))}
             </div>
           )}
+        </div>
+      )}
+
+      {/* Recours « pénalité injuste » — uniquement s'il y a des événements réels. */}
+      {profilComplet && nbEvenementsScore > 0 && (
+        <div className="max-w-2xl mb-6">
+          <SectionEvenementsScore type="SOIGNANT" limit={5} />
         </div>
       )}
 

@@ -62,12 +62,7 @@ export default function MonCompteSoignant() {
         { icone: Banknote, label: 'Charges sociales', route: '/soignant/charges' },
       ],
     }] : []),
-    {
-      titre: 'Réputation',
-      lignes: [
-        { icone: ShieldCheck, label: 'Ma réputation', route: '/soignant/reputation' },
-      ],
-    },
+    // « Ma réputation » retiré : hub dissous, le score simple vit désormais sur le Profil.
     {
       titre: 'Avantages',
       lignes: [

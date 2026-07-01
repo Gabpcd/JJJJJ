@@ -126,10 +126,14 @@ export function EvaluationsContent() {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
           <div className="rounded-2xl border-2 border-primary/30 bg-primary/5 p-4">
             <p className="text-[10px] uppercase font-semibold text-foreground mb-1">Note moyenne</p>
-            <div className="flex items-baseline gap-1">
-              <p className="text-2xl font-bold text-primary tabular-nums">{stats.note_moyenne_globale.toFixed(1)}</p>
-              <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-            </div>
+            {stats.total_evaluations > 0 ? (
+              <div className="flex items-baseline gap-1">
+                <p className="text-2xl font-bold text-primary tabular-nums">{stats.note_moyenne_globale.toFixed(1)}</p>
+                <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">Pas encore d'évaluation</p>
+            )}
           </div>
           <div className="rounded-2xl border-2 border-info/30 bg-info/5 p-4">
             <p className="text-[10px] uppercase font-semibold text-foreground mb-1">Total évaluations</p>
