@@ -7,12 +7,15 @@ import { supabase } from '@/integrations/supabase/client';
 import { Building2 } from 'lucide-react';
 import {
   CreditCard, Scale, Settings, LogOut, User, Star, ShieldCheck, FileText, Trash2,
+  BookOpen, Mail,
 } from 'lucide-react';
+import { ModalContacterJolene } from '@/components/ModalContacterJolene';
 
 export default function MonCompteEtablissement() {
   usePageTitle('Mon établissement');
   const { user, deconnexion } = useAuth();
   const [etab, setEtab] = useState<{ nom: string; logo_url: string | null; type: string | null } | null>(null);
+  const [contactOpen, setContactOpen] = useState(false);
 
   useEffect(() => {
     if (!user) return;
@@ -37,8 +40,11 @@ export default function MonCompteEtablissement() {
       ],
     },
     {
-      titre: 'Légal',
+      // Le FAB « ? » global a été retiré (Lot 6a.4) : aide + contact vivent ici.
+      titre: 'Aide & légal',
       lignes: [
+        { icone: BookOpen, label: 'Centre d\'aide', route: '/aide' },
+        { icone: Mail, label: 'Contacter Jolene', onClick: () => setContactOpen(true), sansChevron: true },
         { icone: ShieldCheck, label: 'Confidentialité', route: '/confidentialite' },
         { icone: Scale, label: 'CGU', route: '/cgu' },
         { icone: CreditCard, label: 'CGV', route: '/cgv' },
@@ -60,6 +66,7 @@ export default function MonCompteEtablissement() {
         sousTitre={etab?.type || undefined}
       />
       <ListeReglages sections={sections} />
+      <ModalContacterJolene open={contactOpen} onClose={() => setContactOpen(false)} source="compte-etablissement" />
     </LayoutApp>
   );
 }
