@@ -33,6 +33,7 @@ import { calculerDistanceKm } from '@/lib/geo';
 import { getLabelProfession, getLabelTypeEtablissement } from '@/lib/constantes';
 import { extraireMessageErreur, estBlocageCodeTravail } from '@/lib/erreurs';
 import { calculerCompletionProfil, getMotifProfilIncomplet } from '@/lib/profil-soignant';
+import { estMultiJours, formatDateMission, formatHorairesMission } from '@/lib/format-mission';
 import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -183,7 +184,6 @@ export default function DetailMissionSoignant() {
   const estOuverte = mission.statut === 'OUVERTE';
   const estTerminee = mission.statut === 'TERMINEE';
   const estAssigneAutre = !estOuverte && !estAssigne && mission.soignant_assigne_id;
-  const duree = mission.duree_heures ?? ((new Date(mission.fin_le).getTime() - new Date(mission.debut_le).getTime()) / 3600000);
   const estModeCandidature = mission.mode_attribution === 'CANDIDATURE';
 
   // Session E-6 : net estimé de la mission (même source que la liste,
@@ -554,9 +554,9 @@ export default function DetailMissionSoignant() {
           {/* Horaires */}
           <div className="card-base">
             <h3 className="font-semibold text-sm text-foreground mb-2">🕐 Horaires</h3>
-            <p className="text-sm text-foreground">📅 {format(new Date(mission.debut_le), 'EEEE d MMMM yyyy', { locale: fr })}</p>
+            <p className="text-sm text-foreground">📅 {formatDateMission(mission)}</p>
             <p className="text-sm text-foreground">
-              🕐 {format(new Date(mission.debut_le), "HH'h'mm", { locale: fr })} → {format(new Date(mission.fin_le), "HH'h'mm", { locale: fr })} ({Math.round(duree)}h)
+              🕐 {formatHorairesMission(mission)}
             </p>
             <div className="flex flex-wrap gap-2 mt-2">
               {(mission.heures_nuit || 0) > 0 && <span className="badge-base bg-indigo-100 text-indigo-700">🌙 {mission.heures_nuit}h de nuit</span>}
@@ -1005,7 +1005,7 @@ export default function DetailMissionSoignant() {
         onFermer={() => setModalConfirm(false)}
         onConfirmer={() => accepterMission()}
         titre="Accepter cette mission ?"
-        message={`Tu t'engages à être présent(e) le ${format(new Date(mission.debut_le), 'EEEE d MMMM', { locale: fr })} de ${format(new Date(mission.debut_le), "HH'h'mm", { locale: fr })} à ${format(new Date(mission.fin_le), "HH'h'mm", { locale: fr })}. Une annulation tardive impactera ton score de fiabilité.`}
+        message={`Tu t'engages à être présent(e) ${estMultiJours(mission) ? `du ${formatDateMission(mission)}` : `le ${format(new Date(mission.debut_le), 'EEEE d MMMM', { locale: fr })}`} (${formatHorairesMission(mission)}). Une annulation tardive impactera ton score de fiabilité.`}
         labelConfirmer="Oui, j'accepte"
         labelAnnuler="Annuler"
       />

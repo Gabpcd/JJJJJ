@@ -11,6 +11,7 @@
 import { CalendarDays, MapPin, Sparkles, Star } from 'lucide-react';
 import { BadgeY2K } from '@/components/y2k/BadgeY2K';
 import { cn } from '@/lib/utils';
+import { estMissionDeNuit, estMultiJours, formatDureeCompacte } from '@/lib/format-mission';
 
 export interface MissionSwipePayload {
   mission_id: string;
@@ -75,12 +76,15 @@ function formatQuartier(ville: string | null, cp: string | null): string {
   return [ville, cp].filter(Boolean).join(' ') || ville || '';
 }
 
-/** Moment de la mission, dérivé des majorations (le plus « premium » d'abord). */
+/**
+ * Moment de la mission : férié/dimanche via les majorations payées, mais le
+ * jour/nuit est TOUJOURS dérivé des horaires réels (Lot 6a.3 — un montant de
+ * majoration nuit absent ne doit pas afficher « jour » sur une garde de 20h).
+ */
 function momentLabel(m: MissionSwipePayload): string {
   if ((m.montant_majoration_ferie ?? 0) > 0) return '🎉 férié';
   if ((m.montant_majoration_dimanche ?? 0) > 0) return '☀️ dimanche';
-  if ((m.montant_majoration_nuit ?? 0) > 0) return '🌙 nuit';
-  return '☀️ jour';
+  return estMissionDeNuit(m.debut_le) ? '🌙 nuit' : '☀️ jour';
 }
 
 const RAISON_LABELS: Record<string, string> = {
@@ -212,11 +216,17 @@ export function CardMissionSwipe({ mission, onTap, className }: Props) {
           )}
         </div>
         <p className="text-base font-bold text-jolene-rose-700 mt-1">
-          {mission.duree_heures ? `${mission.duree_heures}h` : '—'} · {moment}
+          {formatDureeCompacte(mission)} · {moment}
         </p>
         <div className="flex items-center gap-1.5 text-sm font-medium text-jolene-midnight mt-2">
           <CalendarDays className="h-4 w-4 text-jolene-rose-600 shrink-0" aria-hidden="true" />
-          <span className="capitalize">{formatJour(mission.debut_le)}</span>
+          {estMultiJours(mission) ? (
+            <span className="capitalize">
+              {formatJour(mission.debut_le)} → {formatJour(mission.fin_le)}
+            </span>
+          ) : (
+            <span className="capitalize">{formatJour(mission.debut_le)}</span>
+          )}
           {heureDebut && (
             <span className="text-jolene-bubblegum">
               · {heureDebut}{heureFin && `–${heureFin}`}
