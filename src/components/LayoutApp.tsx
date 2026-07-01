@@ -6,7 +6,6 @@ import { BandeauHorsLigne } from '@/components/BandeauHorsLigne';
 import { SyncHorsLigne } from '@/components/SyncHorsLigne';
 import { BandeauInstallerPWA } from '@/components/BandeauInstallerPWA';
 import { BandeauOnboardingEtab } from '@/components/BandeauOnboardingEtab';
-import { BoutonAideGlobal } from '@/components/BoutonAideGlobal';
 import { FABCreerMission } from '@/components/FABCreerMission';
 import { UserRole } from '@/lib/types';
 import { toast } from 'sonner';
@@ -83,7 +82,8 @@ export function LayoutApp({ role, children, pleinEcran = false }: LayoutAppProps
       </div>
       <DemandePermissionPush />
       <BandeauInstallerPWA />
-      <BoutonAideGlobal />
+      {/* FAB « ? » retiré (Lot 6a.4) : il masquait les CTA critiques (Signer,
+          net estimé, Enregistrer GPS). L'aide vit dans Compte > Aide & légal. */}
       {/* FAB "Publier une mission" : action n°1 étab, toujours visible mobile */}
       {role === 'ADMIN_ETABLISSEMENT' && <FABCreerMission />}
     </div>
