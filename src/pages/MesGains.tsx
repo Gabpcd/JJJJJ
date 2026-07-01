@@ -10,6 +10,7 @@ import { MesFacturesHonorairesContent } from './MesFacturesHonoraires';
 import { BulletinsPaieContent } from './BulletinsPaie';
 import { MesAvancesContent } from './MesAvances';
 import { RappelsFiscaux } from '@/components/RappelsFiscaux';
+import { NoteNetEstime } from '@/components/NoteNetEstime';
 import { CarteKPIY2K } from '@/components/y2k/CarteKPIY2K';
 import { ChargementPage } from '@/components/ChargementPage';
 import { EmptyState, IllustrationTirelire } from '@/components/ui/EmptyState';
@@ -264,6 +265,7 @@ export function MesGainsApercuContent() {
           onClick={() => navigate('/soignant/mes-gains?tab=factures')}
         />
       </div>
+      <NoteNetEstime className="mb-6" />
       {indetCount > 0 && (
         <p className="text-xs text-muted-foreground mb-6">
           {indetCount} mission{indetCount > 1 ? 's' : ''} en cours de qualification de régime — non comptée{indetCount > 1 ? 's' : ''} ci-dessus.
