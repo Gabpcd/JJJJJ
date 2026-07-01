@@ -12,6 +12,47 @@
 
 import { adminClient, userIdByEmail } from './db';
 
+/**
+ * Seed des documents requis VÉRIFIÉS pour le soignant. Depuis le gating
+ * per-mission (fn_documents_ok_pour_mission lit les VRAIS documents_soignants,
+ * plus seulement le flag global tous_documents_valides), les tests doivent
+ * fournir de vrais documents vérifiés — forcer le flag ne suffit plus. Le client
+ * service_role court-circuite les triggers de protection. Couvre tous les régimes
+ * (salarié + libéral, dont RCP/URSSAF) pour que la mission passe quel que soit
+ * son type_contrat.
+ */
+export async function seedDocsRequisVerifie(soignantId: string): Promise<void> {
+  const admin = adminClient();
+  const { data: sg } = await admin
+    .from('soignants' as any)
+    .select('profession')
+    .eq('id', soignantId)
+    .maybeSingle();
+  const profession = (sg as { profession?: string } | null)?.profession;
+  if (!profession) return;
+  const { data: requis } = await admin
+    .from('documents_requis_par_profession' as any)
+    .select('type_document')
+    .eq('profession', profession)
+    .eq('est_critique', true);
+  const types = Array.from(
+    new Set(((requis as { type_document: string }[] | null) ?? []).map((r) => r.type_document)),
+  );
+  if (types.length === 0) return;
+  await admin.from('documents_soignants' as any).delete().eq('soignant_id', soignantId).in('type_document', types);
+  await admin.from('documents_soignants' as any).insert(
+    types.map((t) => ({
+      soignant_id: soignantId,
+      type_document: t,
+      s3_bucket: 'jolene-documents',
+      s3_cle: `${soignantId}/seed/${t}.pdf`,
+      nom_fichier: `${t}.pdf`,
+      statut_verification: 'VERIFIE',
+      valide_jusqua: null,
+    })),
+  );
+}
+
 /** Crée une mission OUVERTE pour le compte étab test. */
 export async function seedMission(opts: {
   intitule?: string;
