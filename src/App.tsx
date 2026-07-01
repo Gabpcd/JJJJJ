@@ -59,7 +59,6 @@ const PageAideProSanteConnect = lazy(() => import("./pages/PageAideProSanteConne
 const PageParametresNotifications = lazy(() => import("./pages/PageParametresNotifications"));
 const PageRecherchesSauvegardees = lazy(() => import("./pages/PageRecherchesSauvegardees"));
 const PageParametresSoignant = lazy(() => import("./pages/PageParametresSoignant"));
-const ParametresCompletSoignant = lazy(() => import("./pages/ParametresCompletSoignant"));
 const PageInscriptionSucces = lazy(() => import("./pages/PageInscriptionSucces"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const WidgetRecrutement = lazy(() => import("./pages/WidgetRecrutement"));
@@ -317,8 +316,10 @@ function AppRoutes() {
               « Mon compte » (les réglages compte/mot de passe/GPS y sont foldés).
               ⚠️ Les SOUS-routes /parametres/notifications et
               /parametres/recherches-sauvegardees restent intactes ci-dessous. */}
-          <Route path="/soignant/parametres-complet" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><ParametresCompletSoignant /></RouteProtegee>} />
-          <Route path="/soignant/parametres" element={<Navigate to="/soignant/parametres-complet" replace />} />
+          {/* « Tous les paramètres » dissous : doublon de Compte. Ses 2 entrées uniques
+              (Recherches sauvegardées, Exclusions) sont remontées dans Compte. */}
+          <Route path="/soignant/parametres-complet" element={<Navigate to="/soignant/mon-compte" replace />} />
+          <Route path="/soignant/parametres" element={<Navigate to="/soignant/mon-compte" replace />} />
           <Route path="/soignant/parametres/notifications" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><PageParametresNotifications /></RouteProtegee>} />
           <Route path="/etablissement/parametres/notifications" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><PageParametresNotifications /></RouteProtegee>} />
           <Route path="/soignant/parametres/recherches-sauvegardees" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><PageRecherchesSauvegardees role="SOIGNANT" /></RouteProtegee>} />
