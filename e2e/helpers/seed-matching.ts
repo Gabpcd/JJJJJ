@@ -47,7 +47,9 @@ export async function seedMissionMatching(opts: {
     return null;
   }
 
-  const debut = opts.debut || new Date(Date.now() + 7 * 86400000);
+  // J+7 à heure RONDE (06:00 UTC = 07h/08h Paris) — jamais l'heure du run,
+  // pour qu'un résidu de seed (cleanup raté) ne trahisse pas une donnée de test.
+  const debut = opts.debut || (() => { const d = new Date(Date.now() + 7 * 86400000); d.setUTCHours(6, 0, 0, 0); return d; })();
   const duree = opts.dureeHeures || 8;
   const fin = new Date(debut.getTime() + duree * 3600000);
 
