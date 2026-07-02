@@ -1,14 +1,14 @@
 /**
- * BoutonsActionSwipe — Sprint 13-B PR 3
+ * BoutonsActionSwipe — barre d'action du deck de swipe.
  *
- * Boutons d'action fixed-bottom : DISLIKE, LIKE, SUPER_LIKE.
+ * Sémantique des gestes (décision produit D1/D2, Lot 6c) :
+ * - ✕  DISLIKE : passer (la mission ne réapparaît pas dans le deck)
+ * - ⭐ FAVORI  : sauvegarder la mission pour y revenir — ILLIMITÉ, aucune
+ *   candidature envoyée. (L'ex super-like « candidature prioritaire 5/jour »
+ *   est reporté v2 : trigger = médiane candidatures/mission > 3 sur 30 j.)
+ * - ❤️ LIKE   : candidature IMMÉDIATE et ferme (undo 5 s côté parent)
  *
- * - LIKE : icône cœur, gradient rose-mauve primaire
- * - DISLIKE : icône X, ghost variant
- * - SUPER_LIKE : icône étoile, gradient celebrate + compteur quota
- * - Haptic feedback mobile (vibration courte API)
- * - Confetti CSS déclenché sur SUPER_LIKE (animation .animate-confetti-pop)
- *
+ * Haptic feedback web (navigator.vibrate) + natif (Capacitor).
  * Touch targets 56px (au-dessus du minimum 44px pour confort tactile).
  */
 import { Heart, Star, X } from 'lucide-react';
@@ -18,8 +18,8 @@ import { hapticImpact } from '@/lib/haptics';
 interface Props {
   onDislike: () => void;
   onLike: () => void;
-  onSuperLike: () => void;
-  quotaSuperLikeRestant: number | null;
+  /** ⭐ Sauvegarder la mission (favoris illimités). */
+  onFavori: () => void;
   disabled?: boolean;
 }
 
@@ -35,12 +35,9 @@ function vibrate(pattern: number | number[]) {
 export function BoutonsActionSwipe({
   onDislike,
   onLike,
-  onSuperLike,
-  quotaSuperLikeRestant,
+  onFavori,
   disabled,
 }: Props) {
-  const superLikeDisabled = disabled || (quotaSuperLikeRestant != null && quotaSuperLikeRestant <= 0);
-
   const handleDislike = () => {
     vibrate(15);
     void hapticImpact('light');
@@ -53,11 +50,10 @@ export function BoutonsActionSwipe({
     onLike();
   };
 
-  const handleSuperLike = () => {
-    if (superLikeDisabled) return;
-    vibrate([20, 40, 20, 40, 60]);
-    void hapticImpact('heavy');
-    onSuperLike();
+  const handleFavori = () => {
+    vibrate(20);
+    void hapticImpact('light');
+    onFavori();
   };
 
   return (
@@ -82,43 +78,32 @@ export function BoutonsActionSwipe({
         <X className="h-7 w-7 sm:h-8 sm:w-8 text-jolene-bubblegum group-hover:text-jolene-rose-700" aria-hidden="true" />
       </button>
 
-      {/* SUPER_LIKE */}
+      {/* FAVORI — sauvegarder pour y revenir (illimité, pas de badge quota) */}
       <button
         type="button"
-        onClick={handleSuperLike}
-        disabled={superLikeDisabled}
-        aria-label={
-          superLikeDisabled
-            ? `Super like indisponible (quota épuisé)`
-            : `Super like (${quotaSuperLikeRestant ?? 5} restant${(quotaSuperLikeRestant ?? 5) > 1 ? 's' : ''} aujourd'hui)`
-        }
+        onClick={handleFavori}
+        disabled={disabled}
+        aria-label="Sauvegarder cette mission pour y revenir"
         className={cn(
-          'relative h-14 w-14 sm:h-16 sm:w-16 rounded-full transition-bouncy',
-          'bg-gradient-celebrate shadow-holographic',
-          'hover:scale-110 active:scale-95',
+          'h-14 w-14 sm:h-16 sm:w-16 rounded-full transition-bouncy',
+          'bg-jolene-cloud border-2 border-jolene-butter-400',
+          'hover:scale-110 hover:border-jolene-butter-600 active:scale-95',
           'motion-reduce:hover:scale-100 motion-reduce:active:scale-100',
+          'shadow-md hover:shadow-lg',
           'focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-jolene-butter-400',
           'disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100',
           'flex items-center justify-center',
         )}
       >
-        <Star className="h-7 w-7 sm:h-8 sm:w-8 text-white fill-white" aria-hidden="true" />
-        {quotaSuperLikeRestant != null && (
-          <span
-            className="absolute -top-1 -right-1 bg-jolene-midnight text-white text-[10px] font-bold rounded-full h-5 w-5 flex items-center justify-center border-2 border-jolene-cloud"
-            aria-hidden="true"
-          >
-            {quotaSuperLikeRestant}
-          </span>
-        )}
+        <Star className="h-7 w-7 sm:h-8 sm:w-8 text-jolene-butter-600 fill-jolene-butter-400" aria-hidden="true" />
       </button>
 
-      {/* LIKE */}
+      {/* LIKE — candidature immédiate */}
       <button
         type="button"
         onClick={handleLike}
         disabled={disabled}
-        aria-label="J'aime cette mission"
+        aria-label="Postuler à cette mission"
         className={cn(
           'group h-16 w-16 sm:h-20 sm:w-20 rounded-full transition-bouncy',
           'bg-gradient-hero shadow-holographic',

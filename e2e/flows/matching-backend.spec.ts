@@ -24,7 +24,6 @@ import {
   seedSwipe,
   seedMatchingScore,
   cleanupMatchingForSoignant,
-  getSuperLikesRestant,
   PREFIX_MISSION_MATCHING,
 } from '../helpers/seed-matching';
 
@@ -141,8 +140,10 @@ test.describe('Sprint 14 — Backend matching (réels)', () => {
     expect((swipes as any)[0].direction).toBe('LIKE');
   });
 
-  test('fn_enregistrer_swipe : 6e SUPER_LIKE de la journée → quota_super_like_atteint', async () => {
-    // Pré-setup : 5 super-likes déjà consommés (via INSERT direct quota)
+  test('fn_enregistrer_swipe : ⭐ = FAVORI illimité (D1) — sauvegarde, aucune candidature, pas de quota', async () => {
+    // D1 (Lot 6c) : le super-like « candidature prioritaire 5/jour » est
+    // remplacé par la sauvegarde illimitée. SUPER_LIKE (anciens bundles)
+    // est traité comme FAVORI — même avec un quota historique consommé.
     await adminClient()
       .from('super_swipes_quota' as any)
       .upsert(
@@ -150,28 +151,49 @@ test.describe('Sprint 14 — Backend matching (réels)', () => {
         { onConflict: 'soignant_id,date' },
       );
 
-    expect(await getSuperLikesRestant(soignantId!)).toBe(0);
-
     const mission = await seedMission({ profession: 'IDE' });
     expect(mission).toBeTruthy();
 
     const client = await userClient(TEST_ACCOUNTS.soignant.email, TEST_ACCOUNTS.soignant.password);
     const { data, error } = await client.rpc('fn_enregistrer_swipe' as any, {
       p_mission_id: mission!.id,
-      p_direction: 'SUPER_LIKE',
+      p_direction: 'SUPER_LIKE', // rétro-compat → FAVORI
     });
     expect(error).toBeFalsy();
-    expect((data as any).ok).toBe(false);
-    expect((data as any).error).toBe('quota_super_like_atteint');
-    expect((data as any).quota_max).toBe(5);
+    expect((data as any).ok).toBe(true);
+    expect((data as any).direction).toBe('FAVORI');
+    expect((data as any).sauvegardee).toBe(true);
 
-    // Vérifier qu'aucun swipe n'a été créé
+    // Le swipe est enregistré en FAVORI + la mission est sauvegardée
     const { data: swipes } = await adminClient()
       .from('swipes' as any)
+      .select('direction')
+      .eq('soignant_id', soignantId!)
+      .eq('mission_id', mission!.id);
+    expect(swipes).toHaveLength(1);
+    expect((swipes as any)[0].direction).toBe('FAVORI');
+
+    const { data: sauvegarde } = await adminClient()
+      .from('missions_sauvegardees' as any)
       .select('id')
       .eq('soignant_id', soignantId!)
       .eq('mission_id', mission!.id);
-    expect(swipes).toHaveLength(0);
+    expect(sauvegarde).toHaveLength(1);
+
+    // AUCUNE candidature créée (un favori n'est pas une candidature)
+    const { data: candidatures } = await adminClient()
+      .from('candidatures')
+      .select('id')
+      .eq('soignant_id', soignantId!)
+      .eq('mission_id', mission!.id);
+    expect(candidatures).toHaveLength(0);
+
+    // Cleanup de la sauvegarde pour l'idempotence du test
+    await adminClient()
+      .from('missions_sauvegardees' as any)
+      .delete()
+      .eq('soignant_id', soignantId!)
+      .eq('mission_id', mission!.id);
   });
 
   test('fn_enregistrer_swipe : re-swipe même mission → mission_deja_swipee', async () => {
