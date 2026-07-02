@@ -119,6 +119,17 @@ export function InputMessage({ conversationId, archived = false, onSent }: Props
         return;
       }
 
+      // 7e-1 (§6.4) : coordonnées MASQUÉES, message envoyé quand même.
+      // Pédagogie la 1ʳᵉ fois seulement ; ensuite un simple toast discret.
+      if ((validateData as any)?.leak_masque) {
+        if (!localStorage.getItem('jolene_antileak_pedagogie_vue')) {
+          localStorage.setItem('jolene_antileak_pedagogie_vue', '1');
+          setModaleAntiLeak((validateData as any).detected_type as DetectedType);
+        } else {
+          toast.info('Coordonnées masquées — elles se partagent automatiquement à la confirmation de la mission.');
+        }
+      }
+
       const contenuSanitized = (validateData as any)?.sanitized_content || contenu;
 
       const { data, error } = await supabase.rpc('fn_envoyer_message', {

@@ -130,3 +130,42 @@ export function sanitizeContent(content: string): string {
   s = s.replace(/on\w+\s*=\s*["'][^"']*["']/gi, "");
   return s.trim();
 }
+
+/**
+ * 7e-1 (Lot 7 v2 §6.4) — MASQUAGE des coordonnées (remplace le blocage dur).
+ * Le message part, les coordonnées sont remplacées : l'UX n'est jamais cassée
+ * par un faux positif, et la tentative est loggée (contact_leak_attempt).
+ * Les mots-clés seuls (« whatsapp », « appelle-moi ») ne sont PAS masqués :
+ * ce sont des signaux de contexte, pas des coordonnées.
+ */
+export function masquerLeaks(content: string): { texte: string; nb: number } {
+  let texte = content;
+  let nb = 0;
+  const remplacer = (re: RegExp, masque: string, garde?: (m: string) => boolean) => {
+    texte = texte.replace(re, (m) => {
+      if (garde && !garde(m)) return m;
+      nb += 1;
+      return masque;
+    });
+  };
+
+  // Téléphones FR (mobile/fixe, espacés/pointés, +33/0033) + spéciaux + intl
+  remplacer(/(?:(?:\+|00)33|0)\s*[1-9](?:[\s.\-]*\d{2}){4}/g, "06 •• •• •• ••");
+  remplacer(/\b(?:08\d{2}|36\d{2}|39\d{2})[\s.\-]?\d{0,6}/g, "•• •• ••");
+  remplacer(/(?:\+|00)\d{1,3}[\s.\-]?\d{6,}/g, "+•• •• •• ••");
+  // « zéro six / zéro sept » en toutes lettres (contournement courant)
+  remplacer(/\bz[ée]ro\s*(?:six|sept)\b[\s\w,]{0,40}/gi, "06 •• •• •• ••");
+  // Emails
+  remplacer(/[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/g, "••••@••••");
+  // URLs hors jolene.app (http, www, domaines nus) + calendly/doctolib nommés
+  remplacer(/https?:\/\/[^\s]+/gi, "[lien masqué]", (m) => !isJoleneUrl(m));
+  remplacer(/www\.[a-z0-9.\-]+\.[a-z]{2,}/gi, "[lien masqué]", (m) => !isJoleneUrl(m));
+  remplacer(/\b(?!jolene\.app\b)[a-z0-9\-]+\.(?:fr|com|net|org|eu|io|app|co|info|biz|pro|me|tv|us|uk|de|es|it|be|ch|ca)\b/gi, "[lien masqué]", (m) => !isJoleneUrl(m));
+  remplacer(/\b(?:mon|via|sur)\s+(?:calendly|doctolib)\b[^\s.,;!?]*/gi, "[lien masqué]");
+  // Handles réseaux sociaux (avec contexte réseau dans le message)
+  if (/instagram|twitter|tiktok|linkedin|facebook|snapchat|insta|snap/i.test(content)) {
+    remplacer(/@[a-zA-Z0-9._]{2,}/g, "[contact masqué]");
+  }
+
+  return { texte, nb };
+}

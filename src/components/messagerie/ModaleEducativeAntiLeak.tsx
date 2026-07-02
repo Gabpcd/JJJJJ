@@ -38,15 +38,17 @@ interface Props {
   detectedType: DetectedType | null;
 }
 
+/* 7e-1 (§6.4) : le message PART, les coordonnées sont masquées — la copy
+   explique le pourquoi sans punir (montrée une seule fois). */
 const DESCRIPTIONS: Record<DetectedType, string> = {
-  TELEPHONE: 'Les numéros de téléphone ne peuvent pas être échangés via la messagerie Jolene.',
-  EMAIL: 'Les adresses email ne peuvent pas être échangées via la messagerie Jolene.',
-  URL: 'Les liens externes ne peuvent pas être partagés via la messagerie Jolene.',
-  HANDLE: "Les noms d'utilisateurs de réseaux sociaux ne peuvent pas être partagés via la messagerie Jolene.",
+  TELEPHONE: 'Votre message a été envoyé — le numéro de téléphone a été masqué.',
+  EMAIL: "Votre message a été envoyé — l'adresse email a été masquée.",
+  URL: 'Votre message a été envoyé — le lien externe a été masqué.',
+  HANDLE: "Votre message a été envoyé — l'identifiant de réseau social a été masqué.",
   KEYWORD: 'Cette mention pourrait suggérer un échange hors plateforme.',
 };
 
-const EXPLICATION = "Toutes les communications doivent rester sur la plateforme pour votre protection mutuelle et le bon fonctionnement de la mission. En cas de besoin pratique, contactez le support Jolene.";
+const EXPLICATION = "Avant la confirmation d'une mission, les coordonnées restent sur la plateforme : c'est ce qui garantit le paiement, la protection en cas de litige et les heures comptées vers vos 3 200 h. Dès la mission confirmée, les coordonnées s'échangent librement.";
 
 export function ModaleEducativeAntiLeak({ ouvert, onFermer, detectedType }: Props) {
   const description = detectedType ? DESCRIPTIONS[detectedType] : DESCRIPTIONS.KEYWORD;

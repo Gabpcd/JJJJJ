@@ -21,7 +21,7 @@
  */
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { applyRateLimit, getClientIp } from "../_shared/rate-limit.ts";
-import { detecterLeak, sanitizeContent } from "../_shared/anti-leak.ts";
+import { detecterLeak, masquerLeaks, sanitizeContent } from "../_shared/anti-leak.ts";
 
 function getCorsOrigin(req: Request): string {
   const origin = req.headers.get("origin") || "";
@@ -135,15 +135,44 @@ Deno.serve(async (req) => {
 
     const sanitized = sanitizeContent(content);
 
-    // Anti-leak detection
+    // Anti-leak detection — 7e-1 (Lot 7 v2 §6.4) : MASQUAGE, plus de blocage.
+    // Le gré à gré est légal ; l'objectif est le GMV net, pas zéro fuite —
+    // et un faux positif ne doit jamais casser l'envoi d'un message.
     const detection = detecterLeak(sanitized);
     if (detection.blocked) {
-      const contentHash = await hashContent(sanitized);
       const supabaseAdmin = createClient(
         Deno.env.get("SUPABASE_URL") || "",
         Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "",
         { auth: { persistSession: false } },
       );
+
+      // Après CONFIRMATION de la mission liée, plus aucun masquage : les
+      // coordonnées s'échangent librement (elles figurent au contrat).
+      const { data: conv } = await supabaseAdmin
+        .from("conversations")
+        .select("mission_id, missions(statut)")
+        .eq("id", conversation_id)
+        .maybeSingle();
+      const statutMission = (conv as any)?.missions?.statut as string | undefined;
+      const missionConfirmee = ["ASSIGNEE", "EN_COURS", "TERMINEE"].includes(statutMission || "");
+
+      if (missionConfirmee) {
+        return new Response(
+          JSON.stringify({ success: true, sanitized_content: sanitized }),
+          { status: 200, headers: corsHeaders(req) },
+        );
+      }
+
+      const contentHash = await hashContent(sanitized);
+      const { texte: masque, nb } = masquerLeaks(sanitized);
+
+      // Récidive = flag (compteur), jamais de blocage (faux positifs ≠ UX cassée).
+      const { count: recidives } = await supabaseAdmin
+        .from("journaux_audit")
+        .select("id", { count: "exact", head: true })
+        .eq("acteur_id", userId)
+        .eq("action", "SYSTEM")
+        .filter("details->>evenement", "eq", "CONTACT_LEAK_ATTEMPT");
 
       await supabaseAdmin.from("journaux_audit").insert({
         acteur_id: userId,
@@ -152,20 +181,26 @@ Deno.serve(async (req) => {
         type_ressource: "conversations",
         id_ressource: conversation_id,
         details: {
-          evenement: "MESSAGERIE_ANTI_LEAK_REFUS",
+          evenement: "CONTACT_LEAK_ATTEMPT",
           detected_type: detection.type,
+          masque: nb > 0,
+          nb_masques: nb,
+          recidive_n: (recidives ?? 0) + 1,
           content_hash: contentHash,
           content_length: sanitized.length,
         },
       });
 
+      // Mots-clés seuls (rien à masquer) : le message part tel quel — le
+      // signal est loggé, l'utilisateur n'est pas puni pour une phrase ambiguë.
       return new Response(
         JSON.stringify({
-          success: false,
-          error: "ANTI_LEAK_REFUSE",
+          success: true,
+          sanitized_content: nb > 0 ? masque : sanitized,
+          leak_masque: nb > 0,
           detected_type: detection.type,
         }),
-        { status: 400, headers: corsHeaders(req) },
+        { status: 200, headers: corsHeaders(req) },
       );
     }
 
