@@ -25,6 +25,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from '@/components/ui/dialog';
+import {
+  DialogResponsive, DialogResponsiveContent, DialogResponsiveHeader,
+  DialogResponsiveTitle, DialogResponsiveDescription, DialogResponsiveBody, DialogResponsiveFooter,
+} from '@/components/ui/DialogResponsive';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
@@ -80,24 +84,25 @@ export default function RechercheMissions() {
   usePageTitle('Trouver une mission');
   const navigate = useNavigate();
   const { user } = useAuth();
-  // Session G1 : vue Liste/Swipe consolidée DANS cette page canonique
-  // « Trouver une mission ». Le toggle bascule la vue sans navigation
-  // cross-page (l'ancienne route /soignant/swipe-missions redirige ici).
-  const [vue, setVue] = useState<'liste' | 'swipe'>(() => {
+  // 6c.1 : UN SEUL switcher segmenté Swipe · Liste · Carte (les deux anciens
+  // toggles — Swipe/Liste en haut + Liste/Carte flottant — coexistaient et se
+  // contredisaient). Explorer = deck de swipe DIRECT par défaut ; la préférence
+  // de vue est mémorisée par utilisateur.
+  const [vue, setVue] = useState<'swipe' | 'liste' | 'carte'>(() => {
     try {
       // Deep-link ?vue=swipe (ex. nudge streak du dashboard) prioritaire sur la préférence.
       const urlVue = new URLSearchParams(window.location.search).get('vue');
-      if (urlVue === 'swipe' || urlVue === 'liste') return urlVue;
-      return localStorage.getItem(VIEW_PREF_KEY) === 'swipe' ? 'swipe' : 'liste';
-    } catch { return 'liste'; }
+      if (urlVue === 'swipe' || urlVue === 'liste' || urlVue === 'carte') return urlVue;
+      const stored = localStorage.getItem(VIEW_PREF_KEY);
+      if (stored === 'swipe' || stored === 'liste' || stored === 'carte') return stored;
+      return 'swipe';
+    } catch { return 'swipe'; }
   });
-  const basculerVue = (v: 'liste' | 'swipe') => {
+  const basculerVue = (v: 'swipe' | 'liste' | 'carte') => {
     try { localStorage.setItem(VIEW_PREF_KEY, v); } catch { /* ignore */ }
     setVue(v);
+    if (v === 'carte') initMap('carte');
   };
-  // Affichage Liste ↔ Carte dans la vue « liste » : simple bascule (pas un 2e
-  // jeu d'onglets, pour éviter l'onglet-dans-onglet avec le toggle Swipe/Liste).
-  const [afficheCarte, setAfficheCarte] = useState(false);
   const [soignant, setSoignant] = useState<SoignantData | null>(null);
   const [missions, setMissions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -117,7 +122,9 @@ export default function RechercheMissions() {
   const [typeContrat, setTypeContrat] = useState<string>('TOUS');
   const [urgentesOnly, setUrgentesOnly] = useState(false);
   const [horaire, setHoraire] = useState<Horaire>('TOUS');
-  const [showFilters, setShowFilters] = useState(true);
+  // 6c.1 : les filtres vivent dans une bottom sheet (le formulaire pleine page
+  // a disparu), ouverte par une icône avec badge du nombre de filtres actifs.
+  const [filtresOpen, setFiltresOpen] = useState(false);
   const [villeRecherche, setVilleRecherche] = useState('');
   const debouncedVille = useDebounce(villeRecherche, 300);
   // Alerte 1-tap (Session E-5) : flux « créer une alerte » ouvert via ?alerte=1
@@ -407,11 +414,27 @@ export default function RechercheMissions() {
     }, 100);
   };
 
+  // Vue carte : resynchronise les marqueurs quand les résultats filtrés changent
+  // (avant, seule la bascule vers la carte redessinait les marqueurs).
+  useEffect(() => {
+    if (vue === 'carte') initMap('carte');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [vue, filtered]);
+
   // No blocking guard — render even without soignant profile
 
   const professionAlerteLabel = (profession || soignant?.profession)
     ? getLabelProfession(profession || soignant?.profession || '')
     : null;
+
+  // Badge du bouton filtres : nombre de critères actifs (hors chips rapides,
+  // qui portent leur propre état visuel au-dessus du deck).
+  const nbFiltresActifs = [
+    !!profession,
+    !!villeRecherche.trim(),
+    tauxMin > 0,
+    typeContrat !== 'TOUS',
+  ].filter(Boolean).length;
 
   return (
     <LayoutApp role="SOIGNANT" pleinEcran={vue === 'swipe'}>
@@ -419,89 +442,47 @@ export default function RechercheMissions() {
       {(!soignant || !soignant.profession) && <BandeauProfilIncomplet />}
       <div className={vue === 'swipe' ? 'flex flex-col flex-1 min-h-0 gap-2' : 'space-y-4'}>
         <div className="flex items-center justify-between gap-2 shrink-0">
-          <h1 className="text-xl font-bold text-foreground">Trouver une mission</h1>
-          <div className="flex items-center gap-2">
-            {/* Session G1 : toggle Swipe/Liste in-page (bascule la vue, sans navigation) */}
-            <div className="inline-flex rounded-2xl bg-jolene-cloud border border-jolene-rose-200 p-1" role="tablist" aria-label="Vue Swipe ou Liste">
-              <button
-                type="button"
-                role="tab"
-                aria-selected={vue === 'swipe'}
-                className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold transition-snap ${vue === 'swipe' ? 'bg-gradient-hero text-white shadow-md' : 'text-jolene-bubblegum hover:text-jolene-rose-700'}`}
-                onClick={() => basculerVue('swipe')}
-              >
-                <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
-                Swipe
-              </button>
-              <button
-                type="button"
-                role="tab"
-                aria-selected={vue === 'liste'}
-                className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold transition-snap ${vue === 'liste' ? 'bg-gradient-hero text-white shadow-md' : 'text-jolene-bubblegum hover:text-jolene-rose-700'}`}
-                onClick={() => basculerVue('liste')}
-              >
-                <LayoutGrid className="h-3.5 w-3.5" aria-hidden="true" />
-                Liste
-              </button>
+          <h1 className="text-xl font-bold text-foreground">Explorer</h1>
+          <div className="flex items-center gap-1.5">
+            {/* 6c.1 : UN SEUL switcher segmenté Swipe · Liste · Carte */}
+            <div className="inline-flex rounded-2xl bg-jolene-cloud border border-jolene-rose-200 p-1" role="tablist" aria-label="Vue Swipe, Liste ou Carte">
+              {([
+                { v: 'swipe' as const, label: 'Swipe', icone: <Sparkles className="h-3.5 w-3.5" aria-hidden="true" /> },
+                { v: 'liste' as const, label: 'Liste', icone: <LayoutGrid className="h-3.5 w-3.5" aria-hidden="true" /> },
+                { v: 'carte' as const, label: 'Carte', icone: <MapIcon className="h-3.5 w-3.5" aria-hidden="true" /> },
+              ]).map(({ v, label, icone }) => (
+                <button
+                  key={v}
+                  type="button"
+                  role="tab"
+                  aria-selected={vue === v}
+                  className={`inline-flex items-center gap-1 rounded-xl px-2.5 py-1.5 text-xs font-semibold transition-snap ${vue === v ? 'bg-gradient-hero text-white shadow-md' : 'text-jolene-bubblegum hover:text-jolene-rose-700'}`}
+                  onClick={() => basculerVue(v)}
+                >
+                  {icone}
+                  {label}
+                </button>
+              ))}
             </div>
-            {vue === 'liste' && (
-              <BoutonY2K variant="secondary" size="sm" onClick={() => setShowFilters(!showFilters)} className="gap-1.5 md:hidden">
-                <SlidersHorizontal className="h-4 w-4" />
-                Filtres
-              </BoutonY2K>
-            )}
+            {/* Filtres = bottom sheet, badge du nombre de filtres actifs */}
+            <button
+              type="button"
+              onClick={() => setFiltresOpen(true)}
+              aria-label={`Filtres${nbFiltresActifs > 0 ? ` (${nbFiltresActifs} actif${nbFiltresActifs > 1 ? 's' : ''})` : ''}`}
+              className="relative h-10 w-10 shrink-0 flex items-center justify-center rounded-xl border border-jolene-rose-200 bg-card text-jolene-bubblegum hover:text-jolene-rose-700 hover:border-jolene-rose-300 transition-colors active:scale-95"
+            >
+              <SlidersHorizontal className="h-4 w-4" aria-hidden="true" />
+              {nbFiltresActifs > 0 && (
+                <span className="absolute -top-1 -right-1 h-4 min-w-[16px] px-0.5 flex items-center justify-center rounded-full bg-primary text-primary-foreground text-[10px] font-bold" aria-hidden="true">
+                  {nbFiltresActifs}
+                </span>
+              )}
+            </button>
           </div>
         </div>
 
-        {/* La bannière documents ne s'affiche pas au-dessus du swipe (la carte doit
-            vendre, sans bannière) — uniquement en vue Liste. Le rappel « documents »
-            est porté par le parcours d'activation sur l'Accueil. */}
-        {vue === 'liste' && (
-          <BandeauDocumentsManquants tousDocumentsValides={!!soignant?.tous_documents_valides} rcpExpiree={rcpExpiree} rcpExpireLe={rcpExpireLe} />
-        )}
-
-        {/* Session G1 : vue Swipe consolidée dans la page canonique.
-            En mode swipe : conteneur plein écran (flex-1) → carte + barre
-            d'action tiennent dans le viewport, sans scroll. */}
-        {vue === 'swipe' ? (
-          <div className="flex-1 min-h-0 flex flex-col">
-            <VueSwipeMissions
-              onBasculerListe={() => basculerVue('liste')}
-              onCreerAlerte={() => setAlerteOpen(true)}
-            />
-          </div>
-        ) : (
-        <>
-        {/* Mes recherches sauvegardées (J2.3.C) — key : remount après création
-            d'une alerte 1-tap pour rafraîchir la liste */}
-        <FiltresSauvegardes
-          key={filtresVersion}
-          audience="SOIGNANT_RECHERCHE_MISSIONS"
-          filtresCourants={{
-            profession,
-            rayonKm,
-            tauxMin,
-            typeContrat,
-            urgentesOnly,
-            horaire,
-            villeRecherche,
-          }}
-          onCharger={(f) => {
-            const obj = f as Record<string, any>;
-            if (typeof obj.profession === 'string') setProfession(obj.profession);
-            if (typeof obj.rayonKm === 'number') setRayonKm(obj.rayonKm);
-            if (typeof obj.tauxMin === 'number') setTauxMin(obj.tauxMin);
-            if (typeof obj.typeContrat === 'string') setTypeContrat(obj.typeContrat);
-            if (typeof obj.urgentesOnly === 'boolean') setUrgentesOnly(obj.urgentesOnly);
-            if (typeof obj.horaire === 'string') setHoraire(obj.horaire as Horaire);
-            if (typeof obj.villeRecherche === 'string') setVilleRecherche(obj.villeRecherche);
-            setShowFilters(true);
-          }}
-        />
-
-        {/* Filtres rapides 1-tap — branchés sur les états existants, toujours
-            visibles (pas besoin d'ouvrir le panneau détaillé). Facilité d'usage. */}
-        <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
+        {/* Chips rapides 1-tap — au-dessus du deck COMME de la liste (6c.1) */}
+        <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 shrink-0">
           {[
             { actif: urgentesOnly, label: '🔥 Urgentes', toggle: () => setUrgentesOnly(v => !v) },
             { actif: horaire === 'WEEKEND', label: '📅 Ce weekend', toggle: () => setHoraire(h => h === 'WEEKEND' ? 'TOUS' : 'WEEKEND') },
@@ -524,8 +505,145 @@ export default function RechercheMissions() {
           ))}
         </div>
 
-        {/* Filters */}
-        <div className={`${showFilters ? 'block' : 'hidden md:block'} card-base space-y-4`}>
+        {/* La bannière documents ne s'affiche pas au-dessus du swipe (la carte doit
+            vendre, sans bannière) — uniquement en vue Liste. Le rappel « documents »
+            est porté par le parcours d'activation sur l'Accueil. */}
+        {vue === 'liste' && (
+          <BandeauDocumentsManquants tousDocumentsValides={!!soignant?.tous_documents_valides} rcpExpiree={rcpExpiree} rcpExpireLe={rcpExpireLe} />
+        )}
+
+        {/* Session G1 : vue Swipe consolidée dans la page canonique.
+            En mode swipe : conteneur plein écran (flex-1) → carte + barre
+            d'action tiennent dans le viewport, sans scroll. */}
+        {vue === 'swipe' ? (
+          <div className="flex-1 min-h-0 flex flex-col">
+            <VueSwipeMissions
+              onBasculerListe={() => basculerVue('liste')}
+              onCreerAlerte={() => setAlerteOpen(true)}
+              onElargirRayon={() => { setRayonKm((r) => Math.min(100, r + 20)); basculerVue('liste'); }}
+              filtreDeck={{ urgentesOnly, horaire }}
+            />
+          </div>
+        ) : (
+        <>
+        {/* Active filter chips — visible even when filters are collapsed on mobile */}
+        {(villeRecherche || tauxMin > 0 || profession || typeContrat !== 'TOUS') && (
+          <div className="flex flex-wrap gap-1.5 md:hidden">
+            <BadgeY2K variant="info" size="sm">{filtered.length} résultat{filtered.length > 1 ? 's' : ''}</BadgeY2K>
+            {villeRecherche && <BadgeY2K variant="info" size="sm">📍 {villeRecherche}</BadgeY2K>}
+            {tauxMin > 0 && <BadgeY2K variant="info" size="sm">≥ {tauxMin} €/h</BadgeY2K>}
+            {urgentesOnly && <BadgeY2K variant="info" size="sm">🔥 Urgentes</BadgeY2K>}
+            {horaire !== 'TOUS' && <BadgeY2K variant="info" size="sm">{horaire === 'NUIT' ? '🌙 Nuit' : horaire === 'WEEKEND' ? '📅 Weekend' : '☀️ Jour'}</BadgeY2K>}
+            {typeContrat !== 'TOUS' && <BadgeY2K variant="info" size="sm">{typeContrat}</BadgeY2K>}
+          </div>
+        )}
+
+        {vue !== 'carte' ? (
+          loading ? <ChargementPage /> : filtered.length > 0 ? (
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {filtered.slice(0, nbAffiche).map(m => (
+                    <CarteMissionSoignant
+                      key={m.id}
+                      mission={m}
+                      soignant={soignant}
+                      onClick={() => navigate(`/soignant/missions/${m.id}`)}
+                    />
+                  ))}
+                </div>
+                {nbAffiche < filtered.length && (
+                  <div className="flex justify-center mt-6">
+                    <button onClick={() => setNbAffiche(n => n + 20)} className="btn-secondary text-sm px-6">
+                      Voir plus ({filtered.length - nbAffiche} restante{filtered.length - nbAffiche > 1 ? 's' : ''})
+                    </button>
+                  </div>
+                )}
+                <NoteNetEstime className="mt-4" />
+              </>
+            ) : (
+              <EmptyState
+                icone={<SearchX />}
+                mascotte="thinking"
+                titre="Aucune mission trouvée"
+                description="Crée une alerte : tu recevras un email dès qu'une nouvelle mission correspondant à tes critères est publiée."
+                cta={{
+                  label: '🔔 Me prévenir des prochaines missions',
+                  onClick: () => setAlerteOpen(true),
+                }}
+                ctaSecondaire={
+                  /* Cause la plus probable d'un résultat vide : un filtre rapide
+                     actif (urgentes/weekend/nuit). On propose d'abord de les
+                     effacer, sinon d'élargir le rayon. */
+                  (urgentesOnly || horaire !== 'TOUS')
+                    ? {
+                        label: 'Effacer les filtres rapides',
+                        onClick: () => { setUrgentesOnly(false); setHoraire('TOUS'); },
+                      }
+                    : rayonKm < 100
+                    ? {
+                        label: 'Élargir le rayon (+20 km)',
+                        onClick: () => setRayonKm((r) => Math.min(100, r + 20)),
+                      }
+                    : undefined
+                }
+              />
+            )
+        ) : (
+          <>
+            <div
+              ref={mapRef}
+              className="w-full rounded-xl border border-border overflow-hidden"
+              style={{ height: 'min(calc(100dvh - 280px), 600px)', minHeight: '250px' }}
+            />
+            {filtered.length === 0 && !loading && (
+              <p className="text-sm text-muted-foreground text-center mt-3">Aucune mission à afficher sur la carte.</p>
+            )}
+          </>
+        )}
+        </>
+        )}
+      </div>
+
+      {/* 6c.1 — Filtres en bottom sheet (mobile) / modale centrée (desktop).
+          Le formulaire pleine page a disparu ; les filtres sont LIVE (pas de
+          bouton Appliquer) : fermer la sheet = voir les résultats. */}
+      <DialogResponsive open={filtresOpen} onOpenChange={setFiltresOpen}>
+        <DialogResponsiveContent maxWidth="lg">
+          <DialogResponsiveHeader>
+            <DialogResponsiveTitle>Filtres</DialogResponsiveTitle>
+            <DialogResponsiveDescription>
+              {filtered.length} mission{filtered.length > 1 ? 's' : ''} avec les critères actuels
+            </DialogResponsiveDescription>
+          </DialogResponsiveHeader>
+          <DialogResponsiveBody>
+            <div className="space-y-4">
+            {/* Mes recherches sauvegardées (J2.3.C) — key : remount après création
+                d'une alerte 1-tap pour rafraîchir la liste */}
+            <FiltresSauvegardes
+              key={filtresVersion}
+              audience="SOIGNANT_RECHERCHE_MISSIONS"
+              filtresCourants={{
+                profession,
+                rayonKm,
+                tauxMin,
+                typeContrat,
+                urgentesOnly,
+                horaire,
+                villeRecherche,
+              }}
+              onCharger={(f) => {
+                const obj = f as Record<string, any>;
+                if (typeof obj.profession === 'string') setProfession(obj.profession);
+                if (typeof obj.rayonKm === 'number') setRayonKm(obj.rayonKm);
+                if (typeof obj.tauxMin === 'number') setTauxMin(obj.tauxMin);
+                if (typeof obj.typeContrat === 'string') setTypeContrat(obj.typeContrat);
+                if (typeof obj.urgentesOnly === 'boolean') setUrgentesOnly(obj.urgentesOnly);
+                if (typeof obj.horaire === 'string') setHoraire(obj.horaire as Horaire);
+                if (typeof obj.villeRecherche === 'string') setVilleRecherche(obj.villeRecherche);
+              }}
+            />
+
+
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {/* Ville / Code postal */}
             <div className="space-y-1.5">
@@ -637,100 +755,16 @@ export default function RechercheMissions() {
               Réinitialiser
             </BoutonY2K>
           </div>
-        </div>
-
-        {/* Active filter chips — visible even when filters are collapsed on mobile */}
-        {!showFilters && (villeRecherche || tauxMin > 0 || urgentesOnly || horaire !== 'TOUS' || typeContrat !== 'TOUS') && (
-          <div className="flex flex-wrap gap-1.5 md:hidden">
-            <BadgeY2K variant="info" size="sm">{filtered.length} résultat{filtered.length > 1 ? 's' : ''}</BadgeY2K>
-            {villeRecherche && <BadgeY2K variant="info" size="sm">📍 {villeRecherche}</BadgeY2K>}
-            {tauxMin > 0 && <BadgeY2K variant="info" size="sm">≥ {tauxMin} €/h</BadgeY2K>}
-            {urgentesOnly && <BadgeY2K variant="info" size="sm">🔥 Urgentes</BadgeY2K>}
-            {horaire !== 'TOUS' && <BadgeY2K variant="info" size="sm">{horaire === 'NUIT' ? '🌙 Nuit' : horaire === 'WEEKEND' ? '📅 Weekend' : '☀️ Jour'}</BadgeY2K>}
-            {typeContrat !== 'TOUS' && <BadgeY2K variant="info" size="sm">{typeContrat}</BadgeY2K>}
-          </div>
-        )}
-
-        {/* Affichage Liste / Carte — simple bascule bouton (pas un 2e jeu
-            d'onglets → zéro onglet-dans-onglet avec le toggle Swipe/Liste). */}
-        <div className="flex justify-end mb-3">
-          <div className="inline-flex rounded-xl border border-border bg-card p-0.5" role="group" aria-label="Affichage liste ou carte">
-            <button type="button" onClick={() => setAfficheCarte(false)} aria-pressed={!afficheCarte}
-              className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${!afficheCarte ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
-              <List className="h-4 w-4" />Liste
-            </button>
-            <button type="button" onClick={() => { setAfficheCarte(true); initMap('carte'); }} aria-pressed={afficheCarte}
-              className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${afficheCarte ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
-              <MapIcon className="h-4 w-4" />Carte
-            </button>
-          </div>
-        </div>
-
-        {!afficheCarte ? (
-          loading ? <ChargementPage /> : filtered.length > 0 ? (
-              <>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {filtered.slice(0, nbAffiche).map(m => (
-                    <CarteMissionSoignant
-                      key={m.id}
-                      mission={m}
-                      soignant={soignant}
-                      onClick={() => navigate(`/soignant/missions/${m.id}`)}
-                    />
-                  ))}
-                </div>
-                {nbAffiche < filtered.length && (
-                  <div className="flex justify-center mt-6">
-                    <button onClick={() => setNbAffiche(n => n + 20)} className="btn-secondary text-sm px-6">
-                      Voir plus ({filtered.length - nbAffiche} restante{filtered.length - nbAffiche > 1 ? 's' : ''})
-                    </button>
-                  </div>
-                )}
-                <NoteNetEstime className="mt-4" />
-              </>
-            ) : (
-              <EmptyState
-                icone={<SearchX />}
-                mascotte="thinking"
-                titre="Aucune mission trouvée"
-                description="Crée une alerte : tu recevras un email dès qu'une nouvelle mission correspondant à tes critères est publiée."
-                cta={{
-                  label: '🔔 Me prévenir des prochaines missions',
-                  onClick: () => setAlerteOpen(true),
-                }}
-                ctaSecondaire={
-                  /* Cause la plus probable d'un résultat vide : un filtre rapide
-                     actif (urgentes/weekend/nuit). On propose d'abord de les
-                     effacer, sinon d'élargir le rayon. */
-                  (urgentesOnly || horaire !== 'TOUS')
-                    ? {
-                        label: 'Effacer les filtres rapides',
-                        onClick: () => { setUrgentesOnly(false); setHoraire('TOUS'); },
-                      }
-                    : rayonKm < 100
-                    ? {
-                        label: 'Élargir le rayon (+20 km)',
-                        onClick: () => setRayonKm((r) => Math.min(100, r + 20)),
-                      }
-                    : undefined
-                }
-              />
-            )
-        ) : (
-          <>
-            <div
-              ref={mapRef}
-              className="w-full rounded-xl border border-border overflow-hidden"
-              style={{ height: 'min(calc(100dvh - 280px), 600px)', minHeight: '250px' }}
-            />
-            {filtered.length === 0 && !loading && (
-              <p className="text-sm text-muted-foreground text-center mt-3">Aucune mission à afficher sur la carte.</p>
-            )}
-          </>
-        )}
-        </>
-        )}
-      </div>
+        
+            </div>
+          </DialogResponsiveBody>
+          <DialogResponsiveFooter>
+            <BoutonY2K className="w-full" onClick={() => setFiltresOpen(false)}>
+              Voir {filtered.length} mission{filtered.length > 1 ? 's' : ''}
+            </BoutonY2K>
+          </DialogResponsiveFooter>
+        </DialogResponsiveContent>
+      </DialogResponsive>
 
       {/* Confirmation 1-tap : création d'alerte missions (Session E-5) */}
       <Dialog open={alerteOpen} onOpenChange={(o) => { if (!alerteEnCours) setAlerteOpen(o); }}>
