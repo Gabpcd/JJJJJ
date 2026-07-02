@@ -102,6 +102,22 @@ export const CarteMissionSoignant = React.memo(function CarteMissionSoignant({ m
       </div>
       <BadgeDistance distanceKm={m.distance_km} />
       <span className={`badge-base text-[10px] ${contratBadge.classes}`}>{contratBadge.label}</span>
+      {/* 7c : ⚡ Paiement rapide — mission LIBERAL + étab éligible (flag serveur
+          via fn_etablissements_safe ; éteint tant que l'escrow n'est pas livré). */}
+      {m.type_contrat_recherche === 'LIBERAL' && m.etablissements?.paiement_rapide && (
+        <span
+          className="badge-base text-[10px] bg-success/10 text-success ml-1"
+          title="Payée sous 24 à 72 h après validation des présences"
+        >
+          ⚡ Paiement rapide
+        </span>
+      )}
+      {/* §2.2 prévisibilité salariée : la date de paie est celle de l'employeur. */}
+      {m.type_contrat_recherche === 'SALARIE' && m.etablissements?.jour_paie_habituel != null && (
+        <p className="text-[10px] text-muted-foreground mt-1">
+          💶 Salaire versé vers le {m.etablissements.jour_paie_habituel} du mois par l'établissement
+        </p>
+      )}
 
       <div className="mt-2 text-xs text-muted-foreground">
         <p>📅 {formatDateMission(m)}</p>

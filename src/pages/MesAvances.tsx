@@ -66,7 +66,7 @@ export function MesAvancesContent() {
         <Zap className="h-12 w-12 text-muted-foreground mx-auto" />
         <h2 className="text-lg font-bold text-foreground">Avances non disponibles</h2>
         <p className="text-sm text-muted-foreground">
-          Le paiement rapide (affacturage) est réservé aux soignants en libéral ou mixte.
+          L'avance de paiement (affacturage) est réservée aux soignants en libéral ou mixte.
           En tant que salarié(e), vos paiements sont gérés par l'établissement.
         </p>
       </div>
@@ -99,7 +99,9 @@ export function MesAvancesContent() {
         <div className="rounded-lg bg-primary/5 border border-primary/20 p-3 flex items-start gap-2">
           <TrendingUp className="h-4 w-4 text-primary shrink-0 mt-0.5" />
           <p className="text-xs text-primary">
-            Le paiement rapide vous permet de recevoir vos honoraires en 24-48h au lieu d'attendre 30-60 jours.
+            {/* 7c : « paiement rapide » est désormais réservé au badge ⚡ (étab
+                préfinancé) — ici c'est une AVANCE (affacturage, frais retenus). */}
+            L'avance de paiement vous permet de recevoir vos honoraires en 24-48h au lieu d'attendre 30-60 jours.
             Des frais d'affacturage (2-3%) sont retenus.
           </p>
         </div>
@@ -109,7 +111,7 @@ export function MesAvancesContent() {
             icone={<Zap />}
             mascotte="thinking"
             titre="Aucune avance pour le moment"
-            description="Demandez le paiement rapide depuis vos factures d'honoraires."
+            description="Demandez une avance de paiement depuis vos factures d'honoraires."
             cta={{
               label: 'Voir mes factures',
               onClick: () => navigate('/soignant/mes-gains?tab=factures'),

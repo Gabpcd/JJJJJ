@@ -29,6 +29,7 @@ import { ModalPerduDeVitesse } from '@/components/ModalPerduDeVitesse';
 import { AnimationSuccesMission } from '@/components/AnimationSuccesMission';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
+import { fetchEtablissementsSafe, type EtablissementSafe } from '@/lib/etablissements';
 import { calculerDistanceKm } from '@/lib/geo';
 import { getLabelProfession, getLabelTypeEtablissement } from '@/lib/constantes';
 import { extraireMessageErreur, estBlocageCodeTravail } from '@/lib/erreurs';
@@ -53,6 +54,8 @@ export default function DetailMissionSoignant() {
   const { user } = useAuth();
   const [mission, setMission] = useState<any>(null);
   const [etablissement, setEtablissement] = useState<any>(null);
+  // 7c : données safe de l'étab (capacité ⚡ paiement rapide + jour de paie).
+  const [etabSafe, setEtabSafe] = useState<EtablissementSafe | null>(null);
   const [soignant, setSoignant] = useState<SoignantData | null>(null);
   const [countMissions, setCountMissions] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -108,6 +111,11 @@ export default function DetailMissionSoignant() {
         // Fetch etablissement via secure RPC (masque champs sensibles)
         const { data: etab } = await supabase.rpc('fn_etablissement_public' as any, { p_etablissement_id: (m as any).etablissement_id });
         if (etab) setEtablissement(Array.isArray(etab) ? etab[0] : etab);
+        // 7c : capacité ⚡ + jour de paie via le fetch safe (flag calculé serveur).
+        try {
+          const safe = await fetchEtablissementsSafe([(m as any).etablissement_id]);
+          setEtabSafe(safe[(m as any).etablissement_id] || null);
+        } catch { /* facultatif — pas de badge si indisponible */ }
         // Count missions from this establishment
         const { count } = await supabase.from('missions').select('id', { count: 'exact', head: true }).eq('etablissement_id', (m as any).etablissement_id);
         setCountMissions(count || 0);
@@ -419,6 +427,12 @@ export default function DetailMissionSoignant() {
             <div className="flex items-center gap-2 flex-wrap mb-2">
               <BadgeStatut statut={mission.statut} />
               {mission.est_urgente && <span className="badge-base bg-destructive text-destructive-foreground text-[10px]">🔥 URGENT</span>}
+              {/* 7c : ⚡ Paiement rapide — mission LIBERAL + étab éligible (flag serveur). */}
+              {mission.type_contrat_recherche === 'LIBERAL' && etabSafe?.paiement_rapide && (
+                <span className="badge-base bg-success/10 text-success text-[10px]" title="Payée sous 24 à 72 h après validation des présences">
+                  ⚡ Paiement rapide
+                </span>
+              )}
             </div>
             <h1 className="text-lg font-bold text-foreground mb-1">{mission.intitule}</h1>
             {mission.description && <p className="text-sm text-muted-foreground mb-2">{mission.description}</p>}
@@ -638,6 +652,24 @@ export default function DetailMissionSoignant() {
           <p className="text-xs text-muted-foreground/60 italic text-center">
             Simulation à titre indicatif. Seuls les montants calculés par le moteur de paie font foi.
           </p>
+          )}
+
+          {/* 7c : quand est-on payé ? Copy différenciée par régime — jamais de
+              promesse que Jolene ne contrôle pas (⚡ gated serveur, escrow requis). */}
+          {(mission as any).mode_remuneration !== 'RETROCESSION' && (
+            mission.type_contrat_recherche === 'LIBERAL' && etabSafe?.paiement_rapide ? (
+              <p className="text-xs font-semibold text-success text-center">
+                ⚡ Payée sous 24 à 72 h après validation des présences.
+              </p>
+            ) : mission.type_contrat_recherche === 'LIBERAL' ? (
+              <p className="text-xs text-muted-foreground text-center">
+                Payée après règlement de l'établissement (~30 à 60 jours).
+              </p>
+            ) : mission.type_contrat_recherche === 'SALARIE' && etabSafe?.jour_paie_habituel != null ? (
+              <p className="text-xs text-muted-foreground text-center">
+                💶 Salaire versé vers le {etabSafe.jour_paie_habituel} du mois par l'établissement employeur.
+              </p>
+            ) : null
           )}
 
           {/* Facture honoraires — visible dès que mission TERMINEE (facture générée) */}

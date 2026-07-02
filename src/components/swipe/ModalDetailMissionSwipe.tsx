@@ -104,8 +104,14 @@ export function ModalDetailMissionSwipe({ mission, open, onOpenChange, onPostule
               >
                 Match {mission.score}/100
               </BadgeY2K>
+              {/* 7c : ⚡ réservé au paiement rapide, urgence en 🔥. */}
               {mission.est_urgente && (
-                <BadgeY2K variant="warning" size="sm">⚡ Urgent</BadgeY2K>
+                <BadgeY2K variant="warning" size="sm">🔥 Urgent</BadgeY2K>
+              )}
+              {mission.paiement_rapide && (
+                <BadgeY2K variant="success" size="sm" title="Payée sous 24 à 72 h après validation des présences">
+                  ⚡ Paiement rapide
+                </BadgeY2K>
               )}
             </span>
           </DialogResponsiveDescription>
@@ -220,6 +226,18 @@ export function ModalDetailMissionSwipe({ mission, open, onOpenChange, onPostule
                     Net estimé = {formatMontant(totalAvantCharges)} x 0,78. Le montant final dépend des cotisations applicables.
                   </p>
                 )}
+                {/* 7c : délai de paiement — copy différenciée ⚡ vs standard,
+                    uniquement sur le libéral (le salarié est payé par la paie
+                    de l'employeur, Jolene ne verse rien). */}
+                {mission.paiement_rapide ? (
+                  <p className="text-[11px] font-semibold text-success">
+                    ⚡ Payée sous 24 à 72 h après validation des présences.
+                  </p>
+                ) : mission.type_contrat_recherche === 'LIBERAL' ? (
+                  <p className="text-[11px] text-jolene-bubblegum">
+                    Payée après règlement de l'établissement (~30 à 60 jours).
+                  </p>
+                ) : null}
               </div>
             )}
           </section>
