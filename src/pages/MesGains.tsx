@@ -127,6 +127,10 @@ export function MesGainsApercuContent() {
       : format(new Date(moisFiltre + '-01'), 'MMMM yyyy', { locale: fr });
 
   const isLiberal = soignant?.type_exercice === 'LIBERAL' || soignant?.statut_liberal === 'ACTIF';
+  // D3 : profil 100 % salarié — le net exact vient du bulletin de paie de
+  // l'établissement employeur, et Jolene ne verse RIEN (placement, pas payeur).
+  // On ne montre donc ni estimation ~22 % ni promesse de versement Jolene.
+  const isSalariePur = !isLiberal && soignant?.type_exercice !== 'MIXTE';
 
   // Régime PAR MISSION (jamais par soignant). Un Mixte ne mélange pas honoraires
   // libéraux (charges URSSAF/CARPIMKO annualisées, PAS prélevées à la transaction)
@@ -148,7 +152,11 @@ export function MesGainsApercuContent() {
       return !p || (p.statut !== 'CONFIRME' && p.statut !== 'RESOLU');
     });
     if (enAttente.length === 0) return null;
-    const montant = enAttente.reduce((s, m) => s + (netEstime(m) ?? 0), 0);
+    // Salarié pur : montant en BRUT (le net exact vient du bulletin de paie de
+    // l'établissement — on n'affiche pas d'estimation ~22 %).
+    const montant = isSalariePur
+      ? enAttente.reduce((s, m) => s + (Number(m.total_brut) || 0), 0)
+      : enAttente.reduce((s, m) => s + (netEstime(m) ?? 0), 0);
     if (montant <= 0) return null;
     // Date de la mission la plus ancienne en attente (point de départ du règlement)
     const dates = enAttente
@@ -156,7 +164,7 @@ export function MesGainsApercuContent() {
       .filter((d): d is Date => d != null && !isNaN(d.getTime()))
       .sort((a, b) => a.getTime() - b.getTime());
     return { montant, nbMissions: enAttente.length, prochaineDate: dates[0] ?? null };
-  }, [allMissions, paiementsMap]);
+  }, [allMissions, paiementsMap, isSalariePur]);
 
   const exporterCSV = () => {
     const header = 'Date,Mission,Service,Établissement,Heures,Taux horaire,Brut,Net estimé\n';
@@ -181,7 +189,9 @@ export function MesGainsApercuContent() {
         <div className="rounded-2xl border border-jolene-rose-200/60 bg-gradient-soft p-4 mb-6">
           <div className="flex items-center gap-2 mb-1">
             <Clock className="h-4 w-4 text-primary" />
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Prochain paiement attendu</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              {isSalariePur ? 'À venir sur ta paie' : 'Prochain paiement attendu'}
+            </p>
           </div>
           <p className="text-2xl font-bold text-foreground">{fmt(prochainPaiement.montant)}</p>
           <p className="text-sm text-muted-foreground mt-0.5">
@@ -195,7 +205,10 @@ export function MesGainsApercuContent() {
             )}
           </p>
           <p className="text-[10px] text-muted-foreground italic mt-1">
-            Montant net estimé. Le règlement intervient après validation des présences par l'établissement.
+            {isSalariePur
+              // D3 : Jolene ne verse rien au salarié — ne jamais laisser croire le contraire.
+              ? 'Montant brut. Le versement est effectué par l\'établissement employeur selon son calendrier de paie — Jolene ne verse pas cette somme.'
+              : 'Montant net estimé. Le règlement intervient après validation des présences par l\'établissement.'}
           </p>
         </div>
       )}
@@ -231,7 +244,9 @@ export function MesGainsApercuContent() {
             onClick={() => navigate('/soignant/mes-gains?tab=factures')}
           />
         )}
-        {salMissions.length > 0 && (
+        {/* D3 : salarié pur → PAS d'estimation ~22 % (le net exact vient du
+            bulletin de paie de l'établissement) ; le Brut devient le KPI primaire. */}
+        {!isSalariePur && salMissions.length > 0 && (
           <CarteKPIY2K
             icone={<Banknote className="h-4 w-4" />}
             valeur={fmt(netSal)}
@@ -240,7 +255,7 @@ export function MesGainsApercuContent() {
             onClick={() => navigate('/soignant/mes-gains?tab=bulletins')}
           />
         )}
-        {libMissions.length === 0 && salMissions.length === 0 && (
+        {!isSalariePur && libMissions.length === 0 && salMissions.length === 0 && (
           <CarteKPIY2K
             icone={<Banknote className="h-4 w-4" />}
             valeur={fmt(totalNetFiltre)}
@@ -253,8 +268,8 @@ export function MesGainsApercuContent() {
           icone={<TrendingUp className="h-4 w-4" />}
           valeur={fmt(totalBrutFiltre)}
           label={`Brut · ${labelPeriode}`}
-          variant="default"
-          onClick={() => navigate('/soignant/mes-gains?tab=factures')}
+          variant={isSalariePur ? 'holographic' : 'default'}
+          onClick={() => navigate(isSalariePur ? '/soignant/mes-gains?tab=bulletins' : '/soignant/mes-gains?tab=factures')}
         />
         <CarteKPIY2K
           icone={<Clock className="h-4 w-4" />}
@@ -263,15 +278,24 @@ export function MesGainsApercuContent() {
           variant="default"
           onClick={() => navigate('/soignant/historique-missions')}
         />
-        <CarteKPIY2K
-          icone={<TrendingUp className="h-4 w-4" />}
-          valeur={fmt(totalNetToutTemps)}
-          label="Total net estimé · tout temps"
-          variant="soft"
-          onClick={() => navigate('/soignant/mes-gains?tab=factures')}
-        />
+        {!isSalariePur && (
+          <CarteKPIY2K
+            icone={<TrendingUp className="h-4 w-4" />}
+            valeur={fmt(totalNetToutTemps)}
+            label="Total net estimé · tout temps"
+            variant="soft"
+            onClick={() => navigate('/soignant/mes-gains?tab=factures')}
+          />
+        )}
       </div>
-      <NoteNetEstime className="mb-6" />
+      {isSalariePur ? (
+        <p className="text-[11px] text-muted-foreground mb-6">
+          💼 Montants bruts. Ton net exact figure sur ton <strong>bulletin de paie, fourni par
+          l'établissement employeur</strong> — le versement suit son calendrier de paie.
+        </p>
+      ) : (
+        <NoteNetEstime className="mb-6" />
+      )}
       {indetCount > 0 && (
         <p className="text-xs text-muted-foreground mb-6">
           {indetCount} mission{indetCount > 1 ? 's' : ''} en cours de qualification de régime — non comptée{indetCount > 1 ? 's' : ''} ci-dessus.
