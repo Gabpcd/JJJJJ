@@ -32,7 +32,8 @@ export function captureAttribution(): void {
   if (typeof window === 'undefined') return;
   try {
     const params = new URLSearchParams(window.location.search);
-    const ref = params.get('ref') || undefined;
+    // 7f : ?parrain= est l'alias utilisé par les emails avis-parrainage.
+    const ref = params.get('ref') || params.get('parrain') || undefined;
 
     // Mirror du code parrainage dans le sessionStorage existant (depuis N'IMPORTE
     // quelle page d'entrée, pas seulement la page d'inscription).
