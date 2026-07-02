@@ -89,7 +89,8 @@ export default function InscriptionSoignant() {
   // pré-remplir le champ "Code parrainage" dans le wizard profil après inscription.
   useEffect(() => {
     try {
-      const ref = new URLSearchParams(window.location.search).get('ref');
+      const q = new URLSearchParams(window.location.search);
+      const ref = q.get('ref') || q.get('parrain');
       if (ref && /^[A-Z0-9-]{4,16}$/i.test(ref)) {
         sessionStorage.setItem('jolene.parrainage_code', ref.toUpperCase());
       }

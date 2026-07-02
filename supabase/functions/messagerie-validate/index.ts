@@ -135,15 +135,40 @@ Deno.serve(async (req) => {
 
     const sanitized = sanitizeContent(content);
 
-    // Anti-leak detection
+    // Anti-leak detection — BLOCAGE DUR (décision produit confirmée 02/07/2026 :
+    // le message contenant des coordonnées n'est PAS envoyé).
     const detection = detecterLeak(sanitized);
     if (detection.blocked) {
-      const contentHash = await hashContent(sanitized);
       const supabaseAdmin = createClient(
         Deno.env.get("SUPABASE_URL") || "",
         Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "",
         { auth: { persistSession: false } },
       );
+
+      // 7e-1 (§6.4) : après CONFIRMATION de la mission liée, plus de blocage —
+      // les coordonnées figurent au contrat, l'échange est légitime.
+      const { data: conv } = await supabaseAdmin
+        .from("conversations")
+        .select("mission_id, missions(statut)")
+        .eq("id", conversation_id)
+        .maybeSingle();
+      const statutMission = (conv as any)?.missions?.statut as string | undefined;
+      if (["ASSIGNEE", "EN_COURS", "TERMINEE"].includes(statutMission || "")) {
+        return new Response(
+          JSON.stringify({ success: true, sanitized_content: sanitized }),
+          { status: 200, headers: corsHeaders(req) },
+        );
+      }
+
+      const contentHash = await hashContent(sanitized);
+
+      // 7e-1 : compteur de récidive (flag analytics — le blocage reste identique).
+      const { count: recidives } = await supabaseAdmin
+        .from("journaux_audit")
+        .select("id", { count: "exact", head: true })
+        .eq("acteur_id", userId)
+        .eq("action", "SYSTEM")
+        .filter("details->>evenement", "eq", "MESSAGERIE_ANTI_LEAK_REFUS");
 
       await supabaseAdmin.from("journaux_audit").insert({
         acteur_id: userId,
@@ -156,6 +181,7 @@ Deno.serve(async (req) => {
           detected_type: detection.type,
           content_hash: contentHash,
           content_length: sanitized.length,
+          recidive_n: (recidives ?? 0) + 1,
         },
       });
 
