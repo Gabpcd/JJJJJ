@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useNavigate } from 'react-router-dom';
 import { SkeletonDashboard } from '@/components/SkeletonCard';
-import { AlertCircle, Banknote, Bell, CalendarDays, CreditCard, FileText, Sparkles } from 'lucide-react';
+import { AlertCircle, Banknote, Bell, CalendarDays, ChevronRight, CreditCard, FileText, Sparkles } from 'lucide-react';
 import { CarteProposition } from '@/components/CarteProposition';
 import { NoteNetEstime } from '@/components/NoteNetEstime';
 import { BadgeRPPS } from '@/components/BadgeRPPS';
@@ -419,6 +419,18 @@ export default function DashboardSoignant() {
           </p>
         </div>
       ))}
+
+      {/* §7.2 Lot 7a — parrainage « présent sans polluer » : carte discrète en
+          BAS d'Accueil (niveau 2 de l'architecture §5). Le banner permanent de
+          Revenus a été retiré — cet écran-là a un seul job, la confiance paiement. */}
+      <button
+        type="button"
+        onClick={() => navigate('/soignant/parrainage')}
+        className="w-full mt-2 mb-4 rounded-xl border border-border/60 bg-card/50 px-4 py-3 flex items-center justify-between gap-3 text-left hover:border-jolene-rose-200 transition-colors min-h-[44px]"
+      >
+        <span className="text-sm text-muted-foreground">🎁 Parraine un collègue — une prime pour chacun</span>
+        <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" aria-hidden="true" />
+      </button>
 
     </LayoutApp>
   );

@@ -65,7 +65,7 @@ export function MesGainsApercuContent() {
           .eq('statut', 'TERMINEE')
           .order('debut_le', { ascending: false })
           .range(0, (page + 1) * PAGE_SIZE - 1),
-        supabase.from('soignants').select('type_exercice, statut_liberal').eq('id', user.id).maybeSingle(),
+        supabase.from('soignants').select('type_exercice, statut_liberal, regime_fiscal, regime_fiscal_confirme' as any).eq('id', user.id).maybeSingle(),
         supabase.from('paiements_soignant' as any)
           .select('mission_id, statut, montant_net, methode, reference_virement, date_paiement')
           .eq('soignant_id', user.id) as any,
@@ -269,20 +269,16 @@ export function MesGainsApercuContent() {
           Gains du Dashboard : c'est leur place, près des revenus. */}
       {isLiberal && (
         <div className="mb-6">
-          <RappelsFiscaux />
+          <RappelsFiscaux
+            regimeFiscal={soignant?.regime_fiscal ?? 'MICRO_BNC'}
+            regimeFiscalConfirme={soignant?.regime_fiscal_confirme === true}
+          />
         </div>
       )}
 
-      {/* Parrainage au moment de la satisfaction (gains affichés) — levier viral */}
-      <button
-        onClick={() => { window.location.href = '/soignant/parrainage'; }}
-        className="w-full mb-6 rounded-2xl border border-jolene-rose-200/60 bg-gradient-soft p-4 text-left hover:shadow-md transition-shadow"
-      >
-        <p className="font-semibold text-foreground">🎁 Tu aimes Jolene ? Parraine un collègue</p>
-        <p className="text-sm text-muted-foreground mt-0.5">
-          Une prime pour toi, une prime pour lui dès sa première mission terminée. Ton lien est prêt — partage-le en 1 clic.
-        </p>
-      </button>
+      {/* §7.2 Lot 7a — banner parrainage permanent RETIRÉ de Revenus : cet écran a
+          un seul job, la confiance paiement. Le parrainage vit dans Compte (entrée
+          dédiée), en bas d'Accueil (carte discrète) et aux pics d'émotion (§5). */}
 
       {/* KPIs — séparés par régime (jamais de sous-bloc à zéro). Honoraires libéraux
           et net salarié ne sont pas le même concept : on ne les fusionne pas. */}
@@ -407,10 +403,19 @@ export function MesGainsApercuContent() {
               <span className="text-muted-foreground">Taux moyen</span>
               <p className="font-bold text-foreground">{tauxMoyen.toFixed(2)} €/h</p>
             </div>
-            <div>
-              <span className="text-muted-foreground">Prélèvements estimés</span>
-              <p className="font-bold text-foreground">~{fmt(totalBrutFiltre - totalNetFiltre)}</p>
-            </div>
+            {/* D3/§7.3 : salarié pur → pas d'estimation de prélèvements (le net
+                exact vient du bulletin de l'employeur) ; on affiche le brut total. */}
+            {isSalariePur ? (
+              <div>
+                <span className="text-muted-foreground">Brut total</span>
+                <p className="font-bold text-foreground">{fmt(totalBrutFiltre)}</p>
+              </div>
+            ) : (
+              <div>
+                <span className="text-muted-foreground">Prélèvements estimés</span>
+                <p className="font-bold text-foreground">~{fmt(totalBrutFiltre - totalNetFiltre)}</p>
+              </div>
+            )}
           </div>
         </div>
       )}

@@ -96,6 +96,30 @@ export function FiltresSauvegardes({ audience, filtresCourants, onCharger }: Pro
     reload();
   };
 
+  // §7.4 Lot 7a — tant qu'il n'y a rien à afficher, pas de carte pleine avec
+  // paragraphe explicatif : une simple ligne compacte (icône + action).
+  if (!loading && list.length === 0) {
+    return (
+      <>
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-xs text-muted-foreground flex items-center gap-1.5 min-w-0">
+            <Search className="h-3.5 w-3.5 shrink-0" /> Recherches sauvegardées
+          </span>
+          <BoutonY2K size="sm" variant="ghost" onClick={() => setSaveOpen(true)} iconeGauche={<Save className="h-4 w-4" />}>
+            Sauvegarder cette recherche
+          </BoutonY2K>
+        </div>
+        <ModalSave
+          open={saveOpen}
+          onOpenChange={setSaveOpen}
+          audience={audience}
+          filtres={filtresCourants}
+          onSaved={reload}
+        />
+      </>
+    );
+  }
+
   return (
     <div className="border rounded-lg p-4 bg-white space-y-3">
       <div className="flex items-center justify-between">
@@ -109,11 +133,6 @@ export function FiltresSauvegardes({ audience, filtresCourants, onCharger }: Pro
 
       {loading ? (
         <p className="text-sm text-gray-500">Chargement…</p>
-      ) : list.length === 0 ? (
-        <p className="text-sm text-gray-500">
-          Aucune recherche sauvegardée. Cliquez sur <strong>Sauvegarder</strong> pour
-          enregistrer vos filtres actuels et activer les alertes.
-        </p>
       ) : (
         <ul className="space-y-2">
           {list.map((f) => (

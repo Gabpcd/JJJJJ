@@ -142,8 +142,10 @@ export const CarteMissionSoignant = React.memo(function CarteMissionSoignant({ m
           <span className="text-xs text-muted-foreground/50">Calculé après assignation</span>
         )}
       </div>
+      {/* §7.1 Lot 7a — côté soignant, le plafond Rist est de la CONFORMITÉ, pas un
+          problème : le taux affiché est le taux réellement payé, conforme au décret. */}
       {m.rist_plafond_applique && (
-        <p className="text-[10px] text-warning font-medium mt-1">⚠️ Taux plafonné Loi Rist</p>
+        <p className="text-[10px] text-success font-medium mt-1">✓ Taux conforme Loi Rist</p>
       )}
 
       <div className="mt-2 flex flex-wrap gap-1.5">
