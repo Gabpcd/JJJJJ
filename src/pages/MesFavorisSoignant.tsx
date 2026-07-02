@@ -164,7 +164,7 @@ export default function MesFavorisSoignant() {
                   <p className="text-xs text-muted-foreground">
                     Favorisé le {format(new Date(e.cree_le), 'd MMM yyyy', { locale: fr })}
                   </p>
-                  <div className="flex items-center gap-2 mt-3">
+                  <div className="flex items-center gap-2 mt-3 flex-wrap">
                     {e.nb_missions_ouvertes > 0 && (
                       <button
                         type="button"
@@ -174,6 +174,22 @@ export default function MesFavorisSoignant() {
                         Voir missions ouvertes <ArrowRight className="h-3 w-3" />
                       </button>
                     )}
+                    {/* 7e-2 (F2) : l'initiative côté soignante — l'étab reçoit une
+                        notification avec « Reproposer en 2 clics » (dédup 7 j et
+                        mission commune requise, gérées par la RPC). */}
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        const { data, error } = await supabase.rpc('fn_demander_a_retravailler' as any, {
+                          p_etablissement_id: e.etablissement_id,
+                        });
+                        if (error || (data as any)?.error) toast.error((data as any)?.error || 'Demande impossible.');
+                        else toast.success('C\'est envoyé — l\'établissement est prévenu que tu veux retravailler avec lui ⭐');
+                      }}
+                      className="text-xs inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-primary/10 text-primary hover:bg-primary/20 transition-colors font-medium"
+                    >
+                      Redemander à travailler ici
+                    </button>
                     <button
                       type="button"
                       onClick={() => retirer(e.etablissement_id)}

@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Briefcase, Phone, ShieldAlert, ShieldCheck, Star } from 'lucide-react';
+import { ArrowLeft, Briefcase, Phone, RotateCcw, ShieldAlert, ShieldCheck, Star } from 'lucide-react';
+import { ModalRebook } from '@/components/dashboard/TopSoignants';
+import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { EtoilesNote } from '@/components/EtoilesNote';
 import { LayoutApp } from '@/components/LayoutApp';
 import { ChargementPage } from '@/components/ChargementPage';
@@ -19,6 +21,8 @@ export default function ProfilSoignantEtablissement() {
   const [soignant, setSoignant] = useState<any>(null);
   const [noteMoyenne, setNoteMoyenne] = useState<{ moyenne: number; total: number } | null>(null);
   const [missions, setMissions] = useState<any[]>([]);
+  // 7e-2 (F2) : re-booking 2 taps depuis le profil (modal pré-remplie).
+  const [rebookOpen, setRebookOpen] = useState(false);
 
   useEffect(() => {
     if (!id || !etablissementId) return;
@@ -102,8 +106,31 @@ export default function ProfilSoignantEtablissement() {
                 <div className="space-y-2">
                   <div className="flex items-start justify-between gap-3">
                     <h1 className="text-2xl font-bold text-foreground">{soignant.prenom} {soignant.nom}</h1>
-                    <SignalerUtilisateur cibleId={soignant.id} cibleType="SOIGNANT" variant="bouton" />
+                    <div className="flex items-center gap-2 shrink-0">
+                      {/* 7e-2 (F2) : reproposer une mission = le chemin de moindre
+                          résistance vs le SMS. Visible dès qu'une mission TERMINEE
+                          commune existe (elle sert de modèle pré-rempli). */}
+                      {missions.some(m => m.statut === 'TERMINEE') && (
+                        <BoutonY2K size="sm" onClick={() => setRebookOpen(true)} iconeGauche={<RotateCcw className="h-4 w-4" />}>
+                          Reproposer une mission
+                        </BoutonY2K>
+                      )}
+                      <SignalerUtilisateur cibleId={soignant.id} cibleType="SOIGNANT" variant="bouton" />
+                    </div>
                   </div>
+                  {rebookOpen && (
+                    <ModalRebook
+                      soignant={{
+                        id: soignant.id,
+                        prenom: soignant.prenom,
+                        nom: soignant.nom,
+                        score_fiabilite: soignant.score_fiabilite ?? 0,
+                        count: missions.length,
+                        derniere_mission_id: missions.find(m => m.statut === 'TERMINEE')?.id ?? null,
+                      }}
+                      onClose={() => setRebookOpen(false)}
+                    />
+                  )}
                   <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
                     <span className="inline-flex items-center gap-1"><Briefcase className="h-4 w-4 text-primary" /> {getLabelProfession(soignant.profession)}</span>
                     {soignant.type_exercice && (
