@@ -1,36 +1,46 @@
 /**
- * VueSwipeMissions — Session G1
+ * VueSwipeMissions — Session G1, sémantique D1/D2 (Lot 6c)
  *
- * Vue swipe Hinge-style EXTRAITE de l'ancienne page SwipeMissions, sans le
- * chrome de page (LayoutApp / <h1>). Conçue pour être montée DANS la page
- * canonique « Trouver une mission » (RechercheMissions) lorsque le toggle
- * Liste/Swipe est sur « swipe ».
+ * Vue swipe Hinge-style montée DANS la page canonique « Trouver une mission ».
  *
- * - Fetch via fn_obtenir_missions_swipe(p_limit=20)
- * - StackCards centrale avec CardMissionSwipe
- * - BoutonsActionSwipe (LIKE / DISLIKE / SUPER_LIKE) avec quota
- * - Trigger fn_enregistrer_swipe + invocation edge function notif-match si SUPER_LIKE
- * - Confettis sur SUPER_LIKE
- * - EmptyState avec Mascotte quand stack vide (Session E-5 : CTA alerte 1-tap)
- * - ModalDetailMissionSwipe branché : tap sur la card + bouton « Voir le détail »
- *
- * La bascule vers la vue Liste est déléguée au parent via onBasculerListe (pas
- * de navigation cross-page : tout se passe sur /soignant/recherche-missions).
+ * Gestes :
+ * - ✕  passer · ⭐ SAUVEGARDER (favoris illimités, aucune candidature)
+ * - ❤️ candidature IMMÉDIATE et ferme : haptic + toast + « Annuler » 5 s.
+ *   Sheet pédagogique à la toute première candidature (une seule fois) :
+ *   l'établissement peut accepter directement → mission confirmée.
+ * - Conflit de planning : blocage backend avec message clair ; missions
+ *   adjacentes < 1 h : warning non bloquant.
+ * - Fin de deck : missions sauvegardées re-surfacées (anti-fuite du favori).
  */
 import { useState, useCallback, useEffect, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Loader2 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Loader2, Star, ChevronRight } from 'lucide-react';
+import { toast } from 'sonner';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { CardMissionSwipe, type MissionSwipePayload } from '@/components/swipe/CardMissionSwipe';
 import { StackCards, type SwipeDirection } from '@/components/swipe/StackCards';
 import { BoutonsActionSwipe } from '@/components/swipe/BoutonsActionSwipe';
 import { ModalDetailMissionSwipe } from '@/components/swipe/ModalDetailMissionSwipe';
-import { ConfettiSwipe } from '@/components/swipe/ConfettiSwipe';
 import { ChoixContratDialog } from '@/components/ChoixContratDialog';
+import { BoutonY2K } from '@/components/y2k/BoutonY2K';
+import {
+  DialogResponsive,
+  DialogResponsiveContent,
+  DialogResponsiveHeader,
+  DialogResponsiveTitle,
+  DialogResponsiveDescription,
+  DialogResponsiveBody,
+  DialogResponsiveFooter,
+} from '@/components/ui/DialogResponsive';
+import { formatDateMission, formatDureeCompacte } from '@/lib/format-mission';
 import { supabase } from '@/integrations/supabase/client';
 import { useNotification } from '@/contexts/NotificationContext';
 
-type SwipeDirEnum = 'LIKE' | 'DISLIKE' | 'SUPER_LIKE';
+type SwipeDirEnum = 'LIKE' | 'DISLIKE' | 'FAVORI';
+
+/** Sheet pédagogique « candidature = engagement ferme » : une seule fois. */
+const CLE_SHEET_PREMIERE_CANDIDATURE = 'jolene_sheet_premiere_candidature_vue';
 
 interface ContratOption { value: string; label: string; }
 interface SwipeRpcResult {
@@ -38,7 +48,10 @@ interface SwipeRpcResult {
   error?: string;
   choix_requis?: boolean;
   options?: ContratOption[];
-  quota_restant?: number;
+  candidature_id?: string;
+  sauvegardee?: boolean;
+  warning?: string;
+  conflit_planning?: boolean;
 }
 
 interface VueSwipeMissionsProps {
@@ -50,15 +63,20 @@ interface VueSwipeMissionsProps {
 
 export function VueSwipeMissions({ onBasculerListe, onCreerAlerte }: VueSwipeMissionsProps) {
   const qc = useQueryClient();
+  const navigate = useNavigate();
   const { afficherNotification } = useNotification();
-  const [confettiKey, setConfettiKey] = useState<number | null>(null);
 
   // Modal détail mission (tap sur la card ou bouton « Voir le détail »)
   const [detailMission, setDetailMission] = useState<MissionSwipePayload | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
 
-  // Choix de contrat (soignant MIXTE + mission acceptant salarié ET libéral) :
-  // le backend renvoie { choix_requis:true, options } sans enregistrer le swipe.
+  // Sheet pédagogique 1ʳᵉ candidature : intercepte le LIKE avant envoi.
+  const [premiereCandidature, setPremiereCandidature] = useState<{
+    missionId: string;
+    mission: MissionSwipePayload;
+  } | null>(null);
+
+  // Choix de contrat (soignant MIXTE + mission acceptant salarié ET libéral)
   const [choixContrat, setChoixContrat] = useState<{
     options: ContratOption[];
     missionId: string;
@@ -78,26 +96,38 @@ export function VueSwipeMissions({ onBasculerListe, onCreerAlerte }: VueSwipeMis
     staleTime: 60_000,
   });
 
-  // Quota super-likes du jour
-  const { data: quotaSuperLike } = useQuery({
-    queryKey: ['super-likes-quota'],
+  // Missions sauvegardées (⭐) — re-surfacées en fin de deck (anti-fuite du favori)
+  const { data: sauvegardees } = useQuery({
+    queryKey: ['missions-sauvegardees'],
     queryFn: async () => {
-      const today = new Date().toISOString().slice(0, 10);
       const { data } = await supabase
-        .from('super_swipes_quota' as any)
-        .select('count')
-        .eq('date', today)
-        .maybeSingle();
-      const used = (data as any)?.count ?? 0;
-      return Math.max(0, 5 - used);
+        .from('missions_sauvegardees' as any)
+        .select('mission_id, missions(id, intitule, debut_le, fin_le, duree_heures, nb_creneaux, taux_horaire_base, net_estime, statut)')
+        .order('cree_le', { ascending: false })
+        .limit(10);
+      return ((data ?? []) as any[])
+        .map((r) => r.missions)
+        .filter((m) => m && m.statut === 'OUVERTE' && new Date(m.debut_le) > new Date());
     },
-    staleTime: 30_000,
+    staleTime: 60_000,
   });
 
   const [localStack, setLocalStack] = useState<MissionSwipePayload[]>([]);
   useEffect(() => {
     if (data) setLocalStack(data);
   }, [data]);
+
+  const retirerCandidature = useCallback(async (candidatureId: string, mission: MissionSwipePayload) => {
+    const { data, error } = await supabase.rpc('fn_retirer_candidature' as any, { p_candidature_id: candidatureId });
+    if (error || (data as any)?.success === false) {
+      toast.error((data as any)?.error ?? 'Retrait impossible — la candidature a peut-être déjà été acceptée.');
+      return;
+    }
+    // La card revient en tête de pile : l'annulation est réversible à l'infini.
+    setLocalStack((prev) =>
+      prev.some((m) => m.mission_id === mission.mission_id) ? prev : [mission, ...prev]);
+    toast.success('Candidature annulée');
+  }, []);
 
   const swipeMut = useMutation({
     mutationFn: async ({
@@ -120,9 +150,8 @@ export function VueSwipeMissions({ onBasculerListe, onCreerAlerte }: VueSwipeMis
     },
     onSuccess: (result, vars) => {
       if (!result.ok) {
-        // Mission acceptant salarié ET libéral, soignant mixte sans préférence :
-        // on remet la card dans la pile (le swipe n'a PAS été enregistré) et on
-        // ouvre le choix de contrat. Le swipe sera rejoué avec p_choix_contrat.
+        // Choix de contrat requis : la card revient dans la pile, le swipe sera
+        // rejoué avec p_choix_contrat.
         if (result.choix_requis) {
           setLocalStack((prev) =>
             prev.some((m) => m.mission_id === vars.missionId) ? prev : [vars.mission, ...prev],
@@ -138,33 +167,52 @@ export function VueSwipeMissions({ onBasculerListe, onCreerAlerte }: VueSwipeMis
           });
           return;
         }
-        afficherNotification({
-          type: 'erreur',
-          message:
-            result.error === 'quota_super_like_atteint'
-              ? "Quota super-like atteint pour aujourd'hui (5/jour)"
-              : result.error || 'Action impossible',
+        // D2 garde-fou : conflit de planning → la card revient dans la pile
+        // (le soignant doit voir pourquoi ; il pourra la passer lui-même).
+        if (result.conflit_planning) {
+          setLocalStack((prev) =>
+            prev.some((m) => m.mission_id === vars.missionId) ? prev : [vars.mission, ...prev],
+          );
+        }
+        afficherNotification({ type: 'erreur', message: result.error || 'Action impossible' });
+        return;
+      }
+
+      setChoixContrat(null);
+      setLocalStack((prev) => prev.filter((m) => m.mission_id !== vars.missionId));
+
+      if (vars.direction === 'FAVORI') {
+        void qc.invalidateQueries({ queryKey: ['missions-sauvegardees'] });
+        toast.success('Mission sauvegardée ⭐', {
+          description: 'Retrouve-la en fin de deck ou dans Mes favoris.',
         });
         return;
       }
-      // Succès : on referme le dialog éventuel et on retire la card (idempotent).
-      setChoixContrat(null);
-      setLocalStack((prev) => prev.filter((m) => m.mission_id !== vars.missionId));
-      if (vars.direction === 'SUPER_LIKE') {
-        setConfettiKey(Date.now());
-        afficherNotification({
-          type: 'succes',
-          message: "Super-like envoyé ! L'établissement est notifié.",
+
+      if (vars.direction === 'LIKE') {
+        // D2 : candidature immédiate FERME + annulation « dans la foulée » (5 s).
+        const candidatureId = result.candidature_id;
+        toast.success('Candidature envoyée ✓', {
+          duration: 5000,
+          ...(candidatureId
+            ? {
+                action: {
+                  label: 'Annuler',
+                  onClick: () => void retirerCandidature(candidatureId, vars.mission),
+                },
+              }
+            : {}),
         });
-        // Best-effort notif-match (l'edge function valide en interne le quota + direction)
-        void supabase.functions.invoke('notif-match', {
-          body: { soignant_id: undefined, mission_id: vars.missionId, direction: 'SUPER_LIKE' },
-        });
+        if (result.warning) {
+          toast.warning(result.warning, { duration: 6000 });
+        }
       }
-      void qc.invalidateQueries({ queryKey: ['super-likes-quota'] });
     },
-    onError: () => {
-      afficherNotification({ type: 'erreur', message: 'Une erreur est survenue, veuillez réessayer.' });
+    onError: (err: any) => {
+      afficherNotification({
+        type: 'erreur',
+        message: err?.message || 'Une erreur est survenue, veuillez réessayer.',
+      });
     },
   });
 
@@ -176,13 +224,34 @@ export function VueSwipeMissions({ onBasculerListe, onCreerAlerte }: VueSwipeMis
   const handleSwipe = useCallback((dir: SwipeDirEnum, missionId: string) => {
     const mission = localStack.find((m) => m.mission_id === missionId);
     if (!mission) return;
+
+    // Sheet pédagogique : à la TOUTE PREMIÈRE candidature uniquement, on
+    // explique l'engagement avant d'envoyer (une candidature n'est pas un like).
+    if (dir === 'LIKE') {
+      let dejaVue = false;
+      try { dejaVue = localStorage.getItem(CLE_SHEET_PREMIERE_CANDIDATURE) === '1'; } catch { dejaVue = true; }
+      if (!dejaVue) {
+        setPremiereCandidature({ missionId, mission });
+        return;
+      }
+    }
+
     setLocalStack((prev) => prev.filter((m) => m.mission_id !== missionId));
     swipeMut.mutate({ missionId, direction: dir, mission });
   }, [swipeMut, localStack]);
 
+  const confirmerPremiereCandidature = useCallback(() => {
+    setPremiereCandidature((cur) => {
+      if (cur) {
+        try { localStorage.setItem(CLE_SHEET_PREMIERE_CANDIDATURE, '1'); } catch { /* ignore */ }
+        setLocalStack((prev) => prev.filter((m) => m.mission_id !== cur.missionId));
+        swipeMut.mutate({ missionId: cur.missionId, direction: 'LIKE', mission: cur.mission });
+      }
+      return null;
+    });
+  }, [swipeMut]);
+
   // Confirmation du choix de contrat (rejoue le swipe avec p_choix_contrat).
-  // On NE retire pas la card ici : elle disparaît au succès (sinon un choix
-  // libéral sans RCP la ferait disparaître à tort).
   const confirmerChoixContrat = useCallback((value: string) => {
     setChoixContrat((cur) => {
       if (cur) {
@@ -211,21 +280,19 @@ export function VueSwipeMissions({ onBasculerListe, onCreerAlerte }: VueSwipeMis
   );
 
   const topMission = localStack[0];
+  const missionsSauvegardees = sauvegardees ?? [];
 
   return (
     <div className="max-w-md mx-auto w-full flex flex-col flex-1 min-h-0">
-      {/* Plein écran sans scroll : la zone carte prend tout l'espace (flex-1) et
-          la barre d'action reste collée en bas du viewport (shrink-0), toujours
-          visible. Pas de bannière au-dessus : la carte vend. */}
       <div className="flex-1 min-h-0 flex flex-col">
-        <div className="flex-1 min-h-0 flex flex-col py-2">
+        <div className="flex-1 min-h-0 flex flex-col py-2 overflow-y-auto">
           {isLoading ? (
             <div className="m-auto flex flex-col items-center gap-3 text-jolene-bubblegum">
               <Loader2 className="h-8 w-8 animate-spin" />
               <span className="text-sm">Calcul de ton matching...</span>
             </div>
           ) : localStack.length === 0 ? (
-            <div className="m-auto w-full">
+            <div className="m-auto w-full space-y-4">
             {(data?.length ?? 0) > 0 ? (
               /* Le soignant a swipé toute la pile du jour */
               <EmptyState
@@ -258,6 +325,35 @@ export function VueSwipeMissions({ onBasculerListe, onCreerAlerte }: VueSwipeMis
                 }}
               />
             )}
+
+            {/* D1 anti-fuite du favori : re-surfacer les missions sauvegardées
+                en fin de deck — « intéressée, mais je vérifie mon planning ». */}
+            {missionsSauvegardees.length > 0 && (
+              <section className="rounded-2xl border border-jolene-butter-400/50 bg-jolene-cloud p-4">
+                <h3 className="text-sm font-bold text-foreground flex items-center gap-1.5 mb-2">
+                  <Star className="h-4 w-4 text-jolene-butter-600 fill-jolene-butter-400" aria-hidden="true" />
+                  Tes missions sauvegardées ({missionsSauvegardees.length})
+                </h3>
+                <div className="space-y-1.5">
+                  {missionsSauvegardees.slice(0, 5).map((m: any) => (
+                    <button
+                      key={m.id}
+                      type="button"
+                      onClick={() => navigate(`/soignant/missions/${m.id}`)}
+                      className="w-full flex items-center gap-2 rounded-xl border border-jolene-rose-100 bg-card px-3 py-2.5 text-left hover:border-jolene-rose-300 transition-colors min-h-[44px]"
+                    >
+                      <span className="flex-1 min-w-0">
+                        <span className="block text-sm font-medium text-foreground truncate">{m.intitule}</span>
+                        <span className="block text-xs text-muted-foreground truncate">
+                          {formatDateMission(m)} · {formatDureeCompacte(m)}
+                        </span>
+                      </span>
+                      <ChevronRight className="h-4 w-4 text-primary shrink-0" aria-hidden="true" />
+                    </button>
+                  ))}
+                </div>
+              </section>
+            )}
             </div>
           ) : (
             <StackCards className="flex-1 min-h-0" items={stackItems} onSwipe={handleGestureSwipe} />
@@ -269,8 +365,7 @@ export function VueSwipeMissions({ onBasculerListe, onCreerAlerte }: VueSwipeMis
             <BoutonsActionSwipe
               onDislike={() => handleSwipe('DISLIKE', topMission.mission_id)}
               onLike={() => handleSwipe('LIKE', topMission.mission_id)}
-              onSuperLike={() => handleSwipe('SUPER_LIKE', topMission.mission_id)}
-              quotaSuperLikeRestant={quotaSuperLike ?? null}
+              onFavori={() => handleSwipe('FAVORI', topMission.mission_id)}
               disabled={swipeMut.isPending}
             />
           </div>
@@ -291,6 +386,41 @@ export function VueSwipeMissions({ onBasculerListe, onCreerAlerte }: VueSwipeMis
         }}
       />
 
+      {/* Sheet pédagogique — une seule fois, à la toute première candidature */}
+      <DialogResponsive
+        open={premiereCandidature !== null}
+        onOpenChange={(o) => { if (!o) setPremiereCandidature(null); }}
+      >
+        <DialogResponsiveContent maxWidth="sm">
+          <DialogResponsiveHeader>
+            <DialogResponsiveTitle>Ta première candidature 🎉</DialogResponsiveTitle>
+            <DialogResponsiveDescription>
+              Ici, candidater est un engagement — pas un simple like.
+            </DialogResponsiveDescription>
+          </DialogResponsiveHeader>
+          <DialogResponsiveBody>
+            <div className="space-y-3 text-sm text-foreground">
+              <p>
+                <strong>L'établissement peut t'accepter directement</strong> — si c'est le cas,
+                la mission est <strong>confirmée</strong> : il compte sur toi auprès de ses patients.
+              </p>
+              <ul className="space-y-1.5 text-muted-foreground text-xs list-disc ml-4">
+                <li>Tu peux retirer ta candidature librement tant qu'elle n'est pas acceptée.</li>
+                <li>Après acceptation, une annulation tardive impacte ton score de fiabilité.</li>
+              </ul>
+            </div>
+          </DialogResponsiveBody>
+          <DialogResponsiveFooter>
+            <BoutonY2K variant="ghost" onClick={() => setPremiereCandidature(null)}>
+              Pas maintenant
+            </BoutonY2K>
+            <BoutonY2K onClick={confirmerPremiereCandidature}>
+              J'ai compris — envoyer ma candidature
+            </BoutonY2K>
+          </DialogResponsiveFooter>
+        </DialogResponsiveContent>
+      </DialogResponsive>
+
       <ChoixContratDialog
         open={choixContrat !== null}
         options={choixContrat?.options ?? []}
@@ -299,10 +429,6 @@ export function VueSwipeMissions({ onBasculerListe, onCreerAlerte }: VueSwipeMis
         onChoose={confirmerChoixContrat}
         onClose={() => setChoixContrat(null)}
       />
-
-      {confettiKey != null && (
-        <ConfettiSwipe key={confettiKey} onComplete={() => setConfettiKey(null)} />
-      )}
     </div>
   );
 }
