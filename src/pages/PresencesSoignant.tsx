@@ -12,6 +12,7 @@ import { PanneauContestation } from '@/components/PanneauContestation';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { BadgeStatut } from '@/components/BadgeStatut';
 import { ConsentementGPS } from '@/components/ConsentementGPS';
+import { SheetNotationRapide } from '@/components/NotationRapide';
 import { BandeauSansGPS } from '@/components/BandeauSansGPS';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
@@ -38,6 +39,8 @@ export default function PresencesSoignant() {
   // GPS consent state
   const [consentementGPS, setConsentementGPS] = useState<boolean | null>(null);
   const [showConsentementGPS, setShowConsentementGPS] = useState(false);
+  // F4 (Lot 7b) : mission à noter juste après le check-out (null = sheet fermée).
+  const [notationMissionId, setNotationMissionId] = useState<string | null>(null);
   const [consentementCharge, setConsentementCharge] = useState(false);
 
   // Load GPS consent on mount
@@ -383,6 +386,14 @@ export default function PresencesSoignant() {
     }
 
     afficherNotification({ type: 'succes', message: '🏁 Départ pointé ! Mission terminée.' });
+
+    // F4 (Lot 7b) : notation 1-tap au check-out — une seule fois par mission,
+    // skippable (le bandeau évaluations rattrape les « Plus tard »).
+    const clePrompt = `jolene_note_checkout_${missionId}`;
+    if (!localStorage.getItem(clePrompt)) {
+      localStorage.setItem(clePrompt, '1');
+      setNotationMissionId(missionId);
+    }
     charger();
   };
 
@@ -404,6 +415,17 @@ export default function PresencesSoignant() {
   return (
     <LayoutApp role="SOIGNANT">
       <BandeauHorsLigne />
+
+      {notationMissionId && (
+        <SheetNotationRapide
+          open={!!notationMissionId}
+          onOpenChange={(o) => { if (!o) setNotationMissionId(null); }}
+          missionId={notationMissionId}
+          sens="SOIGNANT_VERS_ETAB"
+          titre="Mission terminée 🎉 Comment ça s'est passé ?"
+          description="Un tap suffit — ta note aide les autres soignants à choisir leurs missions."
+        />
+      )}
 
       {consentementGPS === false && <BandeauSansGPS />}
 

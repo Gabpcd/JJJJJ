@@ -4,6 +4,11 @@ import { usePageTitle } from '@/hooks/usePageTitle';
 import { LayoutApp } from '@/components/LayoutApp';
 import { ChargementPage } from '@/components/ChargementPage';
 import { CarteValidation } from '@/components/CarteValidation';
+import { envoyerNotationRapide, EtoilesNotation } from '@/components/NotationRapide';
+import {
+  DialogResponsive, DialogResponsiveContent, DialogResponsiveHeader,
+  DialogResponsiveTitle, DialogResponsiveDescription, DialogResponsiveBody,
+} from '@/components/ui/DialogResponsive';
 import { ModalConfirmation } from '@/components/ModalConfirmation';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { TableOuCartes, type ColonneTableau } from '@/components/ui/TableOuCartes';
@@ -110,9 +115,17 @@ export default function PresencesEtablissement() {
     p.perimetre_gps_valide === true && !p.alerte_teleportation
   );
 
-  const validerUne = async (presenceId: string) => {
+  // F4 : présence en cours de notation depuis le bouton « Valider » du tableau.
+  const [presenceANoter, setPresenceANoter] = useState<any | null>(null);
+  const [noteInline, setNoteInline] = useState(0);
+
+  // F4 (Lot 7b) : valider = valider ET noter, un seul geste. La note 1-tap est
+  // portée par CarteValidation (obligatoire) ; critères null = note répliquée
+  // sur les 4 (la moyenne RPC reproduit la note globale).
+  const validerUne = async (presenceId: string, note: number, criteres: [number, number, number, number] | null) => {
     // Optimistic: immediately move presence to "validées"
     const prevPresences = presences;
+    const presence = presences.find(p => p.id === presenceId);
     setPresences(prev =>
       prev.map(p => p.id === presenceId ? { ...p, valide_par_etablissement: true, valide_le: new Date().toISOString() } : p)
     );
@@ -123,17 +136,33 @@ export default function PresencesEtablissement() {
     if (error || (result && !result.success)) {
       setPresences(prevPresences); // Revert on error
       afficherNotification({ type: 'erreur', message: result?.error || extraireMessageErreur(error) });
-    } else {
-      await supabase.rpc('fn_ecrire_audit_safe', {
-        p_acteur_id: user!.id, p_type_acteur: 'ADMIN_ETABLISSEMENT',
-        p_action: 'PRESENCE_VALIDATION', p_type_ressource: 'presence',
-        p_id_ressource: presenceId, p_cle_s3: null,
-        p_details: { type: 'validation_individuelle' },
-        p_ip: null, p_navigateur: navigator.userAgent,
-      });
-      afficherNotification({ type: 'succes', message: '✅ Présence validée !' });
-      charger(); // Refresh from server to ensure consistency
+      return;
     }
+
+    await supabase.rpc('fn_ecrire_audit_safe', {
+      p_acteur_id: user!.id, p_type_acteur: 'ADMIN_ETABLISSEMENT',
+      p_action: 'PRESENCE_VALIDATION', p_type_ressource: 'presence',
+      p_id_ressource: presenceId, p_cle_s3: null,
+      p_details: { type: 'validation_individuelle', note_1_tap: note },
+      p_ip: null, p_navigateur: navigator.userAgent,
+    });
+
+    // Notation couplée — non bloquante : la validation est acquise même si la
+    // note échoue (déjà notée, litige actif…), le flux d'évaluations rattrape.
+    let noteOk = false;
+    if (presence?.mission_id && note >= 1 && note <= 5) {
+      noteOk = await envoyerNotationRapide({
+        missionId: presence.mission_id,
+        sens: 'ETAB_VERS_SOIGNANT',
+        note,
+        criteres,
+      });
+    }
+    afficherNotification({
+      type: 'succes',
+      message: noteOk ? `✅ Présence validée et ${'★'.repeat(note)} envoyée !` : '✅ Présence validée !',
+    });
+    charger(); // Refresh from server to ensure consistency
   };
 
   const contester = async (presenceId: string, motif: string) => {
@@ -252,8 +281,10 @@ export default function PresencesEtablissement() {
         );
       case 'actions':
         if (!p.valide_par_etablissement && p.pointage_depart_le) {
+          // F4 : la validation embarque une note 1-tap → le bouton du tableau
+          // ouvre un mini-dialog étoiles + Valider (pas de validation sans note).
           return (
-            <BoutonY2K size="sm" variant="primary" className="h-8 text-xs" onClick={(e) => { e.stopPropagation(); validerUne(p.id); }} iconeGauche={<CheckCircle className="h-3.5 w-3.5" />}>
+            <BoutonY2K size="sm" variant="primary" className="h-8 text-xs" onClick={(e) => { e.stopPropagation(); setPresenceANoter(p); setNoteInline(0); }} iconeGauche={<CheckCircle className="h-3.5 w-3.5" />}>
               Valider
             </BoutonY2K>
           );
@@ -375,6 +406,40 @@ export default function PresencesEtablissement() {
         message="Seules les présences sans alerte de fraude seront validées."
         labelConfirmer={`Valider ${presencesSansAlerte.length} présences`}
       />
+
+      {/* F4 : mini-dialog note 1-tap pour le bouton « Valider » du tableau
+          (la vue cartes a les étoiles inline dans CarteValidation). */}
+      <DialogResponsive open={!!presenceANoter} onOpenChange={(o) => { if (!o) setPresenceANoter(null); }}>
+        <DialogResponsiveContent maxWidth="sm">
+          <DialogResponsiveHeader>
+            <DialogResponsiveTitle>
+              Noter {presenceANoter?.soignants?.prenom ?? 'le soignant'} pour valider
+            </DialogResponsiveTitle>
+            <DialogResponsiveDescription>
+              Un tap suffit — la note alimente le score de fiabilité.
+            </DialogResponsiveDescription>
+          </DialogResponsiveHeader>
+          <DialogResponsiveBody>
+            <div className="space-y-4">
+              <div className="flex justify-center py-2">
+                <EtoilesNotation taille="lg" valeur={noteInline} onChange={setNoteInline} />
+              </div>
+              <BoutonY2K
+                className="w-full"
+                disabled={noteInline === 0}
+                onClick={async () => {
+                  const p = presenceANoter;
+                  setPresenceANoter(null);
+                  if (p) await validerUne(p.id, noteInline, null);
+                }}
+                iconeGauche={<CheckCircle className="h-4 w-4" />}
+              >
+                Valider et noter
+              </BoutonY2K>
+            </div>
+          </DialogResponsiveBody>
+        </DialogResponsiveContent>
+      </DialogResponsive>
     </LayoutApp>
   );
 }

@@ -72,7 +72,21 @@ export function BandeauEvaluationsEnAttente({ role }: Props) {
         .eq('type_evaluateur', typeEvaluateur)
         .in('mission_id', (ms as any[]).map(m => m.id));
 
-      const evalSet = new Set((evals || []).map((e: any) => e.mission_id));
+      // F4 (Lot 7b) : la notation 1-tap (check-out soignante / validation étab)
+      // écrit dans notations_missions, pas dans evaluations — sans ce croisement,
+      // le bandeau redemanderait une note déjà donnée. RLS : le notateur voit
+      // ses propres notations, exactement le périmètre voulu.
+      const sensNotation = role === 'SOIGNANT' ? 'SOIGNANT_VERS_ETAB' : 'ETAB_VERS_SOIGNANT';
+      const { data: notes } = await supabase
+        .from('notations_missions' as any)
+        .select('mission_id')
+        .eq('sens', sensNotation)
+        .in('mission_id', (ms as any[]).map(m => m.id));
+
+      const evalSet = new Set([
+        ...(evals || []).map((e: any) => e.mission_id),
+        ...((notes || []) as any[]).map((n: any) => n.mission_id),
+      ]);
       const nonEvaluees = (ms as any[]).filter(m => !evalSet.has(m.id));
 
       if (nonEvaluees.length === 0) return;

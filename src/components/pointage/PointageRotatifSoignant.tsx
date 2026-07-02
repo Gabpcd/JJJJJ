@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { QrCode, Loader2, Clock, CheckCircle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
+import { SheetNotationRapide } from '@/components/NotationRapide';
 import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { extraireMessageErreur } from '@/lib/erreurs';
 import { obtenirPosition } from '@/lib/platform';
@@ -28,10 +29,15 @@ interface Etat {
   error?: string;
 }
 
+const CLE_PROMPT_NOTE = (missionId: string) => `jolene_note_checkout_${missionId}`;
+
 export function PointageRotatifSoignant({ missionId }: { missionId: string }) {
   const [code, setCode] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [scanning, setScanning] = useState(false);
+  // F4 (Lot 7b) : notation au check-out — proposée UNE fois, au dernier départ
+  // (fin prévue atteinte). Skippable : le bandeau évaluations rattrape.
+  const [notationOpen, setNotationOpen] = useState(false);
 
   const { data, refetch, isLoading } = useQuery({
     queryKey: ['etat-pointage-soignant', missionId],
@@ -72,6 +78,18 @@ export function PointageRotatifSoignant({ missionId }: { missionId: string }) {
     toast.success(type === 'OUVERTURE' ? '✅ Pointage enregistré — segment ouvert' : '✅ Pointage enregistré — segment fermé');
     setCode('');
     refetch();
+
+    // F4 : au check-out FINAL (fermeture alors que la fin prévue est atteinte),
+    // proposer la note 1-tap — une seule fois par mission.
+    if (type === 'FERMETURE' && !localStorage.getItem(CLE_PROMPT_NOTE(missionId))) {
+      try {
+        const { data: m } = await supabase.from('missions').select('fin_le').eq('id', missionId).maybeSingle();
+        if (m?.fin_le && Date.now() >= new Date(m.fin_le).getTime() - 30 * 60_000) {
+          localStorage.setItem(CLE_PROMPT_NOTE(missionId), '1');
+          setNotationOpen(true);
+        }
+      } catch { /* le prompt de note ne doit jamais gêner le pointage */ }
+    }
   };
 
   const scanner = async () => {
@@ -147,6 +165,15 @@ export function PointageRotatifSoignant({ missionId }: { missionId: string }) {
           ))}
         </div>
       )}
+
+      <SheetNotationRapide
+        open={notationOpen}
+        onOpenChange={setNotationOpen}
+        missionId={missionId}
+        sens="SOIGNANT_VERS_ETAB"
+        titre="Mission terminée 🎉 Comment ça s'est passé ?"
+        description="Un tap suffit — ta note aide les autres soignants à choisir leurs missions."
+      />
     </div>
   );
 }
