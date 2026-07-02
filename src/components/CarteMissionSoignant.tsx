@@ -3,7 +3,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { BadgeDistance } from '@/components/BadgeDistance';
 import { BadgeStatut } from '@/components/BadgeStatut';
-import { BoutonFavoriEtab } from '@/components/BoutonFavoriEtab';
+import { BoutonSauvegarderMission } from '@/components/BoutonSauvegarderMission';
 import { getLabelProfession, getLabelTypeEtablissement, extraireContratPreference, getContratBadge, getTypeContratRechercheBadge } from '@/lib/constantes';
 import { getMissionMatchInfo } from '@/lib/profession-hierarchy';
 import { detecterMajorations, calculerTauxAvecMajorations } from '@/lib/majorationsCCN';
@@ -86,7 +86,8 @@ export const CarteMissionSoignant = React.memo(function CarteMissionSoignant({ m
 
       <div className="flex items-start justify-between gap-2 mb-0.5">
         <h3 className="font-semibold text-sm text-foreground">{m.intitule}</h3>
-        {m.etablissement_id && <BoutonFavoriEtab etablissementId={m.etablissement_id} />}
+        {/* Étoile = sauvegarder la MISSION (même sémantique que le ⭐ du swipe, D1). */}
+        <BoutonSauvegarderMission missionId={m.id} />
       </div>
       {m.service && <p className="text-[10px] text-muted-foreground mb-1">Service : {m.service}</p>}
       <div className="flex items-center gap-2 mb-1">

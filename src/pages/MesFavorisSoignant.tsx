@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Star, Building2, ArrowRight } from 'lucide-react';
+import { Star, Building2, ArrowRight, ChevronRight } from 'lucide-react';
 import { LayoutApp } from '@/components/LayoutApp';
 import { ChargementPage } from '@/components/ChargementPage';
 import { usePageTitle } from '@/hooks/usePageTitle';
@@ -8,6 +8,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { toast } from 'sonner';
+import { formatDateMission, formatDureeCompacte } from '@/lib/format-mission';
 
 interface FavoriEtab {
   etablissement_id: string;
@@ -23,11 +24,25 @@ export default function MesFavorisSoignant() {
   usePageTitle('Mes favoris');
   const navigate = useNavigate();
   const [items, setItems] = useState<FavoriEtab[]>([]);
+  const [missionsSauvegardees, setMissionsSauvegardees] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   const charger = async () => {
     setLoading(true);
-    const { data, error } = await supabase.rpc('fn_mes_favoris_etablissements' as any);
+    // D1 (Lot 6c) : la page regroupe les 2 types de favoris — les MISSIONS
+    // sauvegardées (⭐ du swipe / étoile des cartes) et les ÉTABLISSEMENTS suivis.
+    const [{ data, error }, { data: ms }] = await Promise.all([
+      supabase.rpc('fn_mes_favoris_etablissements' as any),
+      supabase
+        .from('missions_sauvegardees' as any)
+        .select('mission_id, missions(id, intitule, debut_le, fin_le, duree_heures, nb_creneaux, statut, net_estime, taux_horaire_base)')
+        .order('cree_le', { ascending: false }),
+    ]);
+    setMissionsSauvegardees(
+      ((ms ?? []) as any[])
+        .map((r) => r.missions)
+        .filter((m) => m && m.statut === 'OUVERTE' && new Date(m.debut_le) > new Date()),
+    );
     if (error) { toast.error(error.message); setLoading(false); return; }
     const payload = data as any;
     if (Array.isArray(payload)) {
@@ -36,6 +51,16 @@ export default function MesFavorisSoignant() {
       toast.error(payload.error);
     }
     setLoading(false);
+  };
+
+  const retirerMission = async (missionId: string) => {
+    const { error } = await supabase
+      .from('missions_sauvegardees' as any)
+      .delete()
+      .eq('mission_id', missionId);
+    if (error) { toast.error(error.message); return; }
+    toast.success('Mission retirée de tes favoris');
+    charger();
   };
 
   useEffect(() => { charger(); }, []);
@@ -60,6 +85,44 @@ export default function MesFavorisSoignant() {
           Tu seras notifié dès que ces établissements publient une nouvelle mission compatible avec ton profil.
         </p>
       </div>
+
+      {!loading && missionsSauvegardees.length > 0 && (
+        <section className="mb-8">
+          <h2 className="text-base font-bold text-foreground mb-3">
+            ⭐ Missions sauvegardées ({missionsSauvegardees.length})
+          </h2>
+          <div className="space-y-2">
+            {missionsSauvegardees.map((m: any) => (
+              <div key={m.id} className="card-base flex items-center gap-3 hover:shadow-md transition-shadow">
+                <button
+                  type="button"
+                  onClick={() => navigate(`/soignant/missions/${m.id}`)}
+                  className="flex-1 min-w-0 text-left flex items-center gap-2"
+                >
+                  <span className="flex-1 min-w-0">
+                    <span className="block text-sm font-semibold text-foreground truncate">{m.intitule}</span>
+                    <span className="block text-xs text-muted-foreground truncate">
+                      {formatDateMission(m)} · {formatDureeCompacte(m)}
+                    </span>
+                  </span>
+                  <ChevronRight className="h-4 w-4 text-primary shrink-0" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => retirerMission(m.id)}
+                  className="text-xs text-muted-foreground hover:text-destructive hover:underline shrink-0"
+                >
+                  Retirer
+                </button>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {!loading && missionsSauvegardees.length > 0 && (
+        <h2 className="text-base font-bold text-foreground mb-3">🏥 Établissements suivis</h2>
+      )}
 
       {loading ? (
         <ChargementPage />
