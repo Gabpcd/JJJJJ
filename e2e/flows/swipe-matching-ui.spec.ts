@@ -89,8 +89,12 @@ test.describe('Sprint 14 — UI swipe matching (réels)', () => {
     await expect(page.getByRole('heading', { name: 'Mes missions', level: 1 })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Candidatures', exact: true })).toBeVisible();
     // Soit des cartes de candidature, soit l'état vide « élan » — jamais d'erreur.
+    // NB : la description de l'état vide contient aussi « en attente de réponse »
+    // (substring insensible à la casse) → quand l'état vide est rendu, les DEUX
+    // branches du .or() matchent en même temps. .first() évite la violation
+    // strict mode (pattern recommandé Playwright pour or()).
     const etatVide = page.getByText('Pas encore de candidature en attente');
     const enAttente = page.getByText('En attente de réponse').first();
-    await expect(etatVide.or(enAttente)).toBeVisible({ timeout: 10_000 });
+    await expect(etatVide.or(enAttente).first()).toBeVisible({ timeout: 10_000 });
   });
 });
