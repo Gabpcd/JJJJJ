@@ -9,6 +9,7 @@ import { BadgeNotification } from '@/components/PanneauNotifications';
 import { AvatarDisplay } from '@/components/AvatarUpload';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { useMessagesNonLus } from '@/hooks/useMessagesNonLus';
+import { useNouvellesMissionsExplorer } from '@/hooks/useNouvellesMissionsExplorer';
 
 interface NavItem { icone: LucideIcon; label: string; route: string; }
 interface NavGroup { icone: LucideIcon; label: string; items: NavItem[]; }
@@ -202,6 +203,8 @@ export function BarreNavigation({ role }: { role: UserRole }) {
   const [showLiberalPath, setShowLiberalPath] = useState(false);
   const [userInfo, setUserInfo] = useState<{ prenom?: string; nom?: string; avatarUrl?: string } | null>(null);
   const { count: messagesNonLus } = useMessagesNonLus();
+  // 6c.4 : badge « X nouvelles missions » sur l'onglet Explorer (soignant)
+  const nouvellesMissions = useNouvellesMissionsExplorer(role === 'SOIGNANT');
   const [openGroups, setOpenGroups] = useState<Set<string>>(new Set());
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
@@ -447,6 +450,12 @@ export function BarreNavigation({ role }: { role: UserRole }) {
               {isMsg && messagesNonLus > 0 && (
                 <span className="absolute top-1 right-1/2 translate-x-4 h-4 min-w-[16px] flex items-center justify-center rounded-full bg-destructive text-destructive-foreground text-[11px] font-bold px-1">
                   {messagesNonLus > 9 ? '9+' : messagesNonLus}
+                </span>
+              )}
+              {/* 6c.4 : nouvelles missions depuis la dernière visite d'Explorer */}
+              {item.label === 'Explorer' && !actif && nouvellesMissions > 0 && (
+                <span className="absolute top-1 right-1/2 translate-x-4 h-4 min-w-[16px] flex items-center justify-center rounded-full bg-primary text-primary-foreground text-[11px] font-bold px-1">
+                  {nouvellesMissions > 9 ? '9+' : nouvellesMissions}
                 </span>
               )}
               <span className="text-[11px] leading-tight">{item.label}</span>

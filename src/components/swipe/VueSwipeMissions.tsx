@@ -191,18 +191,27 @@ export function VueSwipeMissions({ onBasculerListe, onCreerAlerte }: VueSwipeMis
 
       if (vars.direction === 'LIKE') {
         // D2 : candidature immédiate FERME + annulation « dans la foulée » (5 s).
+        // 6c.4 : compteur discret du jour (« 3ᵉ candidature aujourd'hui »).
         const candidatureId = result.candidature_id;
-        toast.success('Candidature envoyée ✓', {
-          duration: 5000,
-          ...(candidatureId
-            ? {
-                action: {
-                  label: 'Annuler',
-                  onClick: () => void retirerCandidature(candidatureId, vars.mission),
-                },
-              }
-            : {}),
-        });
+        void (async () => {
+          const debutJour = new Date(); debutJour.setHours(0, 0, 0, 0);
+          const { count } = await supabase
+            .from('candidatures')
+            .select('id', { count: 'exact', head: true })
+            .gte('cree_le', debutJour.toISOString());
+          toast.success('Candidature envoyée ✓', {
+            duration: 5000,
+            ...(count && count > 1 ? { description: `${count}ᵉ candidature aujourd'hui 💪` } : {}),
+            ...(candidatureId
+              ? {
+                  action: {
+                    label: 'Annuler',
+                    onClick: () => void retirerCandidature(candidatureId, vars.mission),
+                  },
+                }
+              : {}),
+          });
+        })();
         if (result.warning) {
           toast.warning(result.warning, { duration: 6000 });
         }
