@@ -13,6 +13,7 @@ import { CarteMissionSoignant } from '@/components/CarteMissionSoignant';
 import { NoteNetEstime } from '@/components/NoteNetEstime';
 import { usePullToRefresh } from '@/hooks/usePullToRefresh';
 import { marquerExplorerVisite } from '@/hooks/useNouvellesMissionsExplorer';
+import { QuizPreferencesSwipe, CLE_QUIZ_PREFS, type ReponsesQuiz } from '@/components/swipe/QuizPreferencesSwipe';
 import { IndicateurPullToRefresh } from '@/components/IndicateurPullToRefresh';
 import { BandeauDocumentsManquants } from '@/components/BandeauDocumentsManquants';
 import { BandeauProfilIncomplet } from '@/components/BandeauProfilIncomplet';
@@ -141,6 +142,37 @@ export default function RechercheMissions() {
 
   // 6c.4 : visiter Explorer remet à zéro le badge « X nouvelles missions »
   useEffect(() => { marquerExplorerVisite(); }, []);
+
+  // 7d-4 : cold start — mini-quiz 5 questions au VRAI premier contact avec le
+  // deck : jamais vu (localStorage) ET zéro swipe en base (une utilisatrice
+  // expérimentée qui change d'appareil ne doit pas repasser par le quiz —
+  // ses préférences sont déjà apprises).
+  const [quizOpen, setQuizOpen] = useState(false);
+  useEffect(() => {
+    if (localStorage.getItem(CLE_QUIZ_PREFS) || !user) return;
+    // Comptes E2E : jamais de quiz (même pattern que le filtre missions test).
+    if (user.email?.startsWith('playwright-')) return;
+    let annule = false;
+    supabase
+      .from('swipes' as any)
+      .select('id', { count: 'exact', head: true })
+      .eq('soignant_id', user.id)
+      .then(({ count }) => {
+        if (!annule && (count ?? 0) === 0) setQuizOpen(true);
+        else localStorage.setItem(CLE_QUIZ_PREFS, '1');
+      });
+    return () => { annule = true; };
+  }, [user]);
+  const appliquerQuiz = (r: ReponsesQuiz) => {
+    setRayonKm(r.rayonKm);
+    setTauxMin(r.tauxMin);
+    // Une seule dimension d'horaire dans les filtres : le week-end ne prend le
+    // filtre que si l'horaire jour/nuit est indifférent (le scoring, lui,
+    // reçoit les deux dimensions).
+    if (r.horaire !== 'TOUS') setHoraire(r.horaire);
+    else if (r.rythme === 'WEEKEND') setHoraire('WEEKEND');
+    if (r.dispoUrgence) setUrgentesOnly(false); // le pool notifie déjà — pas besoin de restreindre le deck
+  };
 
   // Auto-apply filtres pré-stockés depuis PageRecherchesSauvegardees
   useEffect(() => {
@@ -607,6 +639,9 @@ export default function RechercheMissions() {
         </>
         )}
       </div>
+
+      {/* 7d-4 — mini-quiz cold start (première visite d'Explorer uniquement) */}
+      <QuizPreferencesSwipe open={quizOpen} onOpenChange={setQuizOpen} onAppliquer={appliquerQuiz} />
 
       {/* 6c.1 — Filtres en bottom sheet (mobile) / modale centrée (desktop).
           Le formulaire pleine page a disparu ; les filtres sont LIVE (pas de
