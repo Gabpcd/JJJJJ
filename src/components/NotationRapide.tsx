@@ -18,6 +18,7 @@ import { Star } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { BoutonY2K } from '@/components/y2k/BoutonY2K';
+import { promptParrainage } from '@/lib/prompt-parrainage';
 import {
   DialogResponsive, DialogResponsiveContent, DialogResponsiveHeader,
   DialogResponsiveTitle, DialogResponsiveDescription, DialogResponsiveBody,
@@ -159,6 +160,11 @@ export function SheetNotationRapide({ open, onOpenChange, missionId, sens, titre
     setEnvoi(false);
     if (ok) {
       toast.success('Merci pour ta note ⭐');
+      // 7f (§5) : pic d'émotion — une bonne expérience vient d'être exprimée,
+      // c'est LE moment de suggérer le parrainage (throttle 30 j global).
+      if (sens === 'SOIGNANT_VERS_ETAB' && note >= 4) {
+        promptParrainage('Contente de ta mission ? Un(e) collègue mérite de connaître Jolene — vous gagnez une prime chacun.');
+      }
       fermer(true);
     }
   };

@@ -13,6 +13,11 @@ interface Filleul {
   cree_le: string;
   premiere_mission_le: string | null;
   statut: string;
+  // 7f — progression vers la prime (fn_obtenir_mes_parrainages v2)
+  prime_versee_le?: string | null;
+  gmv_cumule_filleul?: number;
+  reste_gmv_avant_prime?: number;
+  seuil_gmv?: number;
 }
 
 export default function PageParrainage() {
@@ -115,8 +120,10 @@ export default function PageParrainage() {
           <div className="flex items-start gap-2 p-3 rounded-xl bg-primary/5 border border-primary/20 mb-2">
             <Landmark className="h-4 w-4 text-primary mt-0.5 flex-shrink-0" />
             <div className="text-sm text-foreground">
-              <p className="font-semibold">Prime de 50€ parrain + 50€ filleul</p>
-              <p className="text-xs text-muted-foreground mt-0.5">Versée par virement après la 1ère mission terminée de ton filleul et 100€ de commission encaissée par Jolene. Renseigne ton IBAN dans <strong>Profil → Paiements</strong>.</p>
+              {/* 7f (§5) : 25 € chacun à 500 € de missions ENCAISSÉES du filleul
+                  — jamais « mission terminée » (règle d'or, prime autofinancée). */}
+              <p className="font-semibold">Prime de 25€ pour toi + 25€ pour ton filleul</p>
+              <p className="text-xs text-muted-foreground mt-0.5">Versée par virement quand ton filleul atteint 500€ de missions encaissées (1 à 2 missions en général). Renseigne ton IBAN dans <strong>Profil → Paiements</strong>.</p>
             </div>
           </div>
           <div className="flex items-start gap-2 p-3 rounded-xl bg-primary/5 border border-primary/20">
@@ -202,7 +209,7 @@ export default function PageParrainage() {
           <ol className="text-sm text-muted-foreground leading-relaxed space-y-2 list-decimal list-inside">
             <li>Partage ton code ou lien avec tes collègues soignants</li>
             <li>Ton filleul applique ton code à l'inscription</li>
-            <li>Quand il termine sa 1ère mission et que 100€ de commission sont encaissés par Jolene : <strong>50€ versés</strong> au parrain + <strong>50€ au filleul</strong> (par virement sur ton IBAN)</li>
+            <li>Quand il atteint <strong>500€ de missions encaissées</strong> : <strong>25€ versés</strong> pour toi + <strong>25€ pour lui</strong> (par virement sur ton IBAN)</li>
             <li>Après <strong>3 filleuls validés</strong>, tu obtiens le badge <span className="text-primary font-semibold">Ambassadeur</span></li>
           </ol>
         </div>
@@ -224,12 +231,19 @@ export default function PageParrainage() {
                     <TableHead>Prénom</TableHead>
                     <TableHead>Inscription</TableHead>
                     <TableHead>Statut</TableHead>
+                    <TableHead>Vers la prime</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {filleuls.map((f) => {
                     const aFaitMission = !!f.premiere_mission_le || f.statut === 'VALIDE';
                     const enAttente = !aFaitMission && f.statut === 'EN_ATTENTE';
+                    // 7f (§5) : visibilité du progrès — « plus que X € de missions
+                    // avant vos primes » (gmv exposé par fn_obtenir_mes_parrainages v2).
+                    const primeVersee = f.statut === 'PRIME_VERSEE' || !!f.prime_versee_le;
+                    const resteGmv = Number(f.reste_gmv_avant_prime ?? NaN);
+                    const seuilGmv = Number(f.seuil_gmv ?? 500);
+                    const gmv = Number(f.gmv_cumule_filleul ?? 0);
                     return (
                       <TableRow key={f.id}>
                         <TableCell className="font-medium">{f.prenom}</TableCell>
@@ -247,6 +261,27 @@ export default function PageParrainage() {
                             </span>
                           ) : (
                             <span className="text-xs font-medium text-muted-foreground bg-muted rounded-full px-2 py-0.5 whitespace-nowrap">Inscrit</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="min-w-[150px]">
+                          {primeVersee ? (
+                            <span className="text-xs font-semibold text-success whitespace-nowrap">💰 Primes versées</span>
+                          ) : aFaitMission && Number.isFinite(resteGmv) ? (
+                            <div>
+                              <div className="h-1.5 rounded-full bg-muted overflow-hidden mb-1" aria-hidden="true">
+                                <div
+                                  className="h-full rounded-full bg-primary transition-all"
+                                  style={{ width: `${Math.min(100, Math.round((gmv / seuilGmv) * 100))}%` }}
+                                />
+                              </div>
+                              <p className="text-[11px] text-muted-foreground whitespace-nowrap">
+                                {resteGmv > 0
+                                  ? `Plus que ${Math.ceil(resteGmv)} € de missions avant vos primes`
+                                  : 'Seuil atteint — primes en cours de versement'}
+                              </p>
+                            </div>
+                          ) : (
+                            <span className="text-[11px] text-muted-foreground">—</span>
                           )}
                         </TableCell>
                       </TableRow>

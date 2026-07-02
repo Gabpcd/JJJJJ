@@ -29,6 +29,7 @@ import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { telechargerOuPartager } from '@/lib/telechargement';
+import { promptParrainage } from '@/lib/prompt-parrainage';
 
 function fmt(v: number | null | undefined) {
   if (v == null) return '—';
@@ -188,6 +189,15 @@ export function MesGainsApercuContent() {
     });
     return etapes;
   }, [allMissions, paiementsMap, facturesMap, isSalariePur]);
+
+  // 7f (§5) : pic d'émotion — le PREMIER paiement reçu est le meilleur moment
+  // pour suggérer le parrainage (une seule fois, throttle 30 j global).
+  useEffect(() => {
+    if (loading || pipeline.paye.nb < 1) return;
+    if (localStorage.getItem('jolene_prompt_parrainage_1er_paiement')) return;
+    localStorage.setItem('jolene_prompt_parrainage_1er_paiement', '1');
+    promptParrainage('Premier paiement reçu — félicitations ! Fais découvrir Jolene à un(e) collègue : une prime pour chacun.');
+  }, [loading, pipeline.paye.nb]);
 
   const exporterCSV = () => {
     const header = 'Date,Mission,Service,Établissement,Heures,Taux horaire,Brut,Net estimé\n';
