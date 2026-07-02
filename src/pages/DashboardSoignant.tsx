@@ -28,6 +28,13 @@ import { format, differenceInDays } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { toast } from 'sonner';
 import { hapticNotification } from '@/lib/haptics';
+/** 6c.5 : salutation heure-aware — « Hiii » → Bonjour/Bonsoir selon l'heure. */
+function salutationHeure(): string {
+  const h = new Date().getHours();
+  if (h >= 5 && h < 18) return 'Bonjour';
+  return 'Bonsoir';
+}
+
 interface SoignantData {
   prenom: string; nom: string; telephone: string | null;
   date_naissance: string | null; profession: string; type_contrat: string | null;
@@ -194,15 +201,13 @@ export default function DashboardSoignant() {
 
       {/* Header Y2K compact : mascotte + nom + chips gamification */}
       <div className="mb-4 flex items-start gap-4">
-        <Mascotte
-          etat={soignantWithCounts.tous_documents_valides ? 'happy' : 'thinking'}
-          taille="md"
-          className="shrink-0"
-        />
+        {/* 6c.5 : mascotte neutre/souriante par défaut — la version triste est
+            réservée aux états d'erreur, jamais au message d'accueil. */}
+        <Mascotte etat="happy" taille="md" className="shrink-0" />
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <h1 className="text-xl font-bold text-foreground">
-              Hiii, <span className="text-gradient-hero">{soignantWithCounts.prenom}</span>
+              {salutationHeure()}, <span className="text-gradient-hero">{soignantWithCounts.prenom}</span>
             </h1>
             <BadgeRPPS rppsVerifie={(soignantWithCounts as any).rpps_verifie} rpps={(soignantWithCounts as any).numero_rpps} profession={soignantWithCounts.profession} />
           </div>
@@ -222,15 +227,9 @@ export default function DashboardSoignant() {
         </div>
       </div>
 
-      {/* CTA principal : la boucle de vente, en haut, pas dans un onglet */}
-      <div className="flex gap-3 mb-3 overflow-x-auto pb-1">
-        <BoutonY2K variant="primary" size="sm" onClick={() => navigate('/soignant/recherche-missions')} className="whitespace-nowrap flex-1">
-          🔥 Trouver une mission
-        </BoutonY2K>
-        <BoutonY2K variant="secondary" size="sm" onClick={() => navigate('/soignant/missions')} className="whitespace-nowrap flex-1" iconeGauche={<Sparkles className="h-4 w-4" />}>
-          Mes missions
-        </BoutonY2K>
-      </div>
+      {/* 6c.5 : les boutons « Trouver une mission » / « Mes missions » sont
+          supprimés — ils dupliquaient les onglets Explorer / Mes missions de
+          la bottom nav. */}
 
       {/* ═══ ZONE 2 : CONTEXTE IMMÉDIAT (missions en cours / pointage) ═══ */}
 
@@ -239,6 +238,48 @@ export default function DashboardSoignant() {
       ))}
 
       {missionProchaine && <WidgetAllerPointer mission={missionProchaine} />}
+
+      {/* Missions à venir (planning) */}
+      <SectionErrorBoundary section="missions-a-venir">
+      {mesMissions.length > 0 && (
+        <div className="mb-6">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-base font-bold text-foreground flex items-center gap-2">
+              <CalendarDays className="h-4.5 w-4.5 text-primary" /> Mes prochaines missions
+            </h2>
+            <button onClick={() => navigate('/soignant/missions?onglet=mes_missions')} className="text-xs text-primary font-medium hover:underline">Voir tout →</button>
+          </div>
+          <div className="space-y-2">
+            {mesMissions.map((m: any) => (
+              <div key={m.id} onClick={() => navigate(`/soignant/missions/${m.id}`)} className="card-base hover:shadow-md cursor-pointer transition-all flex items-center gap-3 py-3">
+                <div className="flex flex-col items-center justify-center rounded-xl bg-primary/10 px-3 py-1.5 min-w-[52px]">
+                  <span className="text-[10px] font-semibold text-primary uppercase">{format(new Date(m.debut_le), 'EEE', { locale: fr })}</span>
+                  <span className="text-lg font-bold text-primary leading-tight">{format(new Date(m.debut_le), 'd')}</span>
+                  <span className="text-[10px] text-primary">{format(new Date(m.debut_le), 'MMM', { locale: fr })}</span>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-0.5">
+                    <BadgeStatut statut={m.statut} />
+                    {m.est_urgente && <span className="badge-base bg-destructive/10 text-destructive text-[10px]">🔥 Urgent</span>}
+                  </div>
+                  <h3 className="font-semibold text-sm text-foreground truncate" title={m.intitule}>{m.intitule}</h3>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    🏥 {m.etablissements?.nom || 'Établissement'}{m.etablissements?.adresse_ville ? ` · ${m.etablissements.adresse_ville}` : ''}
+                  </p>
+                  <div className="flex items-center gap-3 mt-0.5">
+                    <p className="text-xs text-muted-foreground">
+                      🕐 {format(new Date(m.debut_le), "HH'h'mm", { locale: fr })} → {format(new Date(m.fin_le), "HH'h'mm", { locale: fr })}
+                    </p>
+                    <BoutonAjouterCalendrier mission={m} />
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      </SectionErrorBoundary>
+
 
       {/* ✦ Missions pour toi — opportunités du pool ouvert (Lot 1). Placé APRÈS les
           widgets de pointage imminent (pointer prime sur prospecter), mais haut dans
@@ -313,47 +354,6 @@ export default function DashboardSoignant() {
                 proposition={p}
                 onTraitee={(id) => setPropositions(prev => prev.filter(x => x.id !== id))}
               />
-            ))}
-          </div>
-        </div>
-      )}
-      </SectionErrorBoundary>
-
-      {/* Missions à venir (planning) */}
-      <SectionErrorBoundary section="missions-a-venir">
-      {mesMissions.length > 0 && (
-        <div className="mb-6">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-base font-bold text-foreground flex items-center gap-2">
-              <CalendarDays className="h-4.5 w-4.5 text-primary" /> Mes prochaines missions
-            </h2>
-            <button onClick={() => navigate('/soignant/missions?onglet=mes_missions')} className="text-xs text-primary font-medium hover:underline">Voir tout →</button>
-          </div>
-          <div className="space-y-2">
-            {mesMissions.map((m: any) => (
-              <div key={m.id} onClick={() => navigate(`/soignant/missions/${m.id}`)} className="card-base hover:shadow-md cursor-pointer transition-all flex items-center gap-3 py-3">
-                <div className="flex flex-col items-center justify-center rounded-xl bg-primary/10 px-3 py-1.5 min-w-[52px]">
-                  <span className="text-[10px] font-semibold text-primary uppercase">{format(new Date(m.debut_le), 'EEE', { locale: fr })}</span>
-                  <span className="text-lg font-bold text-primary leading-tight">{format(new Date(m.debut_le), 'd')}</span>
-                  <span className="text-[10px] text-primary">{format(new Date(m.debut_le), 'MMM', { locale: fr })}</span>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-0.5">
-                    <BadgeStatut statut={m.statut} />
-                    {m.est_urgente && <span className="badge-base bg-destructive/10 text-destructive text-[10px]">🔥 Urgent</span>}
-                  </div>
-                  <h3 className="font-semibold text-sm text-foreground truncate" title={m.intitule}>{m.intitule}</h3>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    🏥 {m.etablissements?.nom || 'Établissement'}{m.etablissements?.adresse_ville ? ` · ${m.etablissements.adresse_ville}` : ''}
-                  </p>
-                  <div className="flex items-center gap-3 mt-0.5">
-                    <p className="text-xs text-muted-foreground">
-                      🕐 {format(new Date(m.debut_le), "HH'h'mm", { locale: fr })} → {format(new Date(m.fin_le), "HH'h'mm", { locale: fr })}
-                    </p>
-                    <BoutonAjouterCalendrier mission={m} />
-                  </div>
-                </div>
-              </div>
             ))}
           </div>
         </div>

@@ -12,6 +12,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { CarteMissionSoignant } from '@/components/CarteMissionSoignant';
 import { NoteNetEstime } from '@/components/NoteNetEstime';
 import { usePullToRefresh } from '@/hooks/usePullToRefresh';
+import { marquerExplorerVisite } from '@/hooks/useNouvellesMissionsExplorer';
 import { IndicateurPullToRefresh } from '@/components/IndicateurPullToRefresh';
 import { BandeauDocumentsManquants } from '@/components/BandeauDocumentsManquants';
 import { BandeauProfilIncomplet } from '@/components/BandeauProfilIncomplet';
@@ -137,6 +138,9 @@ export default function RechercheMissions() {
   const mapRef = useRef<HTMLDivElement>(null);
   const leafletMap = useRef<L.Map | null>(null);
   const markersLayer = useRef<L.LayerGroup | null>(null);
+
+  // 6c.4 : visiter Explorer remet à zéro le badge « X nouvelles missions »
+  useEffect(() => { marquerExplorerVisite(); }, []);
 
   // Auto-apply filtres pré-stockés depuis PageRecherchesSauvegardees
   useEffect(() => {
