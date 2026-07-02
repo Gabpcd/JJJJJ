@@ -14,6 +14,7 @@ import { BandeauOubliDepart } from '@/components/BandeauOubliDepart';
 import { LayoutApp } from '@/components/LayoutApp';
 import { BandeauEvaluationsEnAttente } from '@/components/BandeauEvaluationsEnAttente';
 import { ChecklistActivation, useActivationSoignant } from '@/components/dashboard/ChecklistActivation';
+import { useAppliquerParrainage } from '@/hooks/useAppliquerParrainage';
 import type { SoignantActivation, DocumentActivation } from '@/components/dashboard/ChecklistActivation';
 import { BandeauCompletionProfil } from '@/components/profil-soignant/BandeauCompletionProfil';
 import { BadgeStatut } from '@/components/BadgeStatut';
@@ -50,6 +51,8 @@ export default function DashboardSoignant() {
   usePageTitle('Dashboard');
   const navigate = useNavigate();
   const { user } = useAuth();
+  // 7f : consomme le code parrainage capté (?ref=/?parrain=) à la 1ʳᵉ session.
+  useAppliquerParrainage(user?.id);
   const [propositions, setPropositions] = useState<any[]>([]);
   // Postuler 1-tap depuis l'accueil : mission_id → candidature_id (pour l'undo).
   const [candidatingId, setCandidatingId] = useState<string | null>(null);
