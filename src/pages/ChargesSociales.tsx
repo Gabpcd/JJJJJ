@@ -12,6 +12,7 @@ import { ouvrirLienExterne } from '@/lib/platform';
 import { format, differenceInDays } from 'date-fns';
 import { telechargerOuPartager } from '@/lib/telechargement';
 import { fr } from 'date-fns/locale';
+import { toast } from 'sonner';
 import { PieChart as RechartsPie, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 
 const TAUX_URSSAF = 0.212;
@@ -42,6 +43,14 @@ function getEcheanceCFE(): Date {
   const now = new Date();
   const decCette = new Date(now.getFullYear(), 11, 15);
   return decCette > now ? decCette : new Date(now.getFullYear() + 1, 11, 15);
+}
+
+/** Déclaration contrôlée : dépôt de la 2035 — 15 mai suivant l'année des revenus.
+ *  Micro-BNC : la 2042-C-PRO part avec la déclaration de revenus (≈ fin mai). */
+function getEcheanceImpot(microBnc: boolean): Date {
+  const now = new Date();
+  const d = microBnc ? new Date(now.getFullYear(), 4, 31) : new Date(now.getFullYear(), 4, 15);
+  return d > now ? d : (microBnc ? new Date(now.getFullYear() + 1, 4, 31) : new Date(now.getFullYear() + 1, 4, 15));
 }
 
 function Countdown({ date }: { date: Date }) {
@@ -94,7 +103,7 @@ export default function ChargesSociales() {
           .is('supprime_le', null)
           .order('valide_jusqua', { ascending: false })
           .limit(1),
-        supabase.from('soignants').select('prenom, nom, profession, statut_liberal, assujetti_tva').eq('id', user.id).maybeSingle(),
+        supabase.from('soignants').select('prenom, nom, profession, statut_liberal, assujetti_tva, regime_fiscal, regime_fiscal_confirme' as any).eq('id', user.id).maybeSingle(),
       ]);
 
       const enriched = missionData ? await enrichirEtablissements(missionData as any) : [];
@@ -107,6 +116,73 @@ export default function ChargesSociales() {
     };
     load();
   }, [user]);
+
+  // §7.7 Lot 7a — régime fiscal : défaut micro-BNC « à confirmer » tant que la
+  // question n'a pas été posée. La sélection est immédiate (1 tap) et pilote
+  // l'échéance impôt (2042-C-PRO en micro-BNC, 2035 en déclaration contrôlée).
+  const microBnc = (soignant?.regime_fiscal ?? 'MICRO_BNC') === 'MICRO_BNC';
+  const regimeConfirme = soignant?.regime_fiscal_confirme === true;
+  const [savingRegime, setSavingRegime] = useState(false);
+
+  const choisirRegime = async (regime: 'MICRO_BNC' | 'DECLARATION_CONTROLEE') => {
+    if (!user || savingRegime) return;
+    setSavingRegime(true);
+    const { error } = await supabase
+      .from('soignants')
+      .update({ regime_fiscal: regime, regime_fiscal_confirme: true } as any)
+      .eq('id', user.id);
+    setSavingRegime(false);
+    if (error) {
+      toast.error('Impossible d\'enregistrer ton régime fiscal — réessaie.');
+      return;
+    }
+    setSoignant((s: any) => ({ ...s, regime_fiscal: regime, regime_fiscal_confirme: true }));
+    toast.success(regime === 'MICRO_BNC' ? 'Régime micro-BNC enregistré' : 'Régime déclaration contrôlée enregistré');
+  };
+
+  const carteRegimeFiscal = (
+    <div className="card-base mb-6">
+      <div className="flex items-center justify-between gap-2 mb-1">
+        <h2 className="font-semibold text-foreground">Ton régime fiscal</h2>
+        {!regimeConfirme && (
+          <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-warning/10 text-warning shrink-0">à confirmer</span>
+        )}
+      </div>
+      <p className="text-xs text-muted-foreground mb-3">
+        Il détermine ta déclaration d'impôt. En cas de doute, demande à ton comptable — tu peux le changer ici à tout moment.
+      </p>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        <button
+          type="button"
+          disabled={savingRegime}
+          onClick={() => choisirRegime('MICRO_BNC')}
+          aria-pressed={microBnc}
+          className={`rounded-xl border p-3 text-left transition-colors min-h-[44px] ${
+            microBnc ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/40'
+          }`}
+        >
+          <p className="text-sm font-semibold text-foreground">Micro-BNC {microBnc && '✓'}</p>
+          <p className="text-[11px] text-muted-foreground mt-0.5">
+            Abattement forfaitaire de 34 %, pas de comptabilité complète. Tu déclares avec ta déclaration de revenus (formulaire 2042-C-PRO).
+          </p>
+        </button>
+        <button
+          type="button"
+          disabled={savingRegime}
+          onClick={() => choisirRegime('DECLARATION_CONTROLEE')}
+          aria-pressed={!microBnc}
+          className={`rounded-xl border p-3 text-left transition-colors min-h-[44px] ${
+            !microBnc ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/40'
+          }`}
+        >
+          <p className="text-sm font-semibold text-foreground">Déclaration contrôlée {!microBnc && '✓'}</p>
+          <p className="text-[11px] text-muted-foreground mt-0.5">
+            Déduction des frais réels, comptabilité tenue. Tu déposes une déclaration dédiée (formulaire 2035) chaque 15 mai.
+          </p>
+        </button>
+      </div>
+    </div>
+  );
 
   const urssaf = useMemo(() => caCumule * TAUX_URSSAF, [caCumule]);
   const carpimkoProportionnel = useMemo(() => caCumule * CARPIMKO_PROPORTIONNEL_TAUX, [caCumule]);
@@ -172,6 +248,9 @@ export default function ChargesSociales() {
             <Calculator className="h-6 w-6 text-primary" /> Mes charges sociales
           </h1>
         </div>
+        {/* La question du régime fiscal se pose même sans mission (le tag
+            « à confirmer » des échéances fiscales mène ici). */}
+        {carteRegimeFiscal}
         <div className="card-base text-center py-12">
           <Calculator className="h-10 w-10 text-primary/40 mx-auto mb-3" />
           <p className="text-lg font-bold text-foreground mb-2">Tes charges apparaîtront ici</p>
@@ -199,6 +278,8 @@ export default function ChargesSociales() {
         </h1>
         <p className="text-sm text-muted-foreground mt-1">Estimations basées sur ton CA libéral {new Date().getFullYear()}</p>
       </div>
+
+      {carteRegimeFiscal}
 
       {/* CA banner — clickable to show missions */}
       <div
@@ -254,6 +335,14 @@ export default function ChargesSociales() {
           {[
             { nom: 'URSSAF trimestriel', date: prochainURSSAF, montant: urssaf / 4, lien: 'https://www.autoentrepreneur.urssaf.fr' },
             { nom: 'CARPIMKO annuel', date: echeanceCARPIMKO, montant: carpimkoTotal, lien: 'https://www.carpimko.com' },
+            // §7.7 : action en clair + année des revenus + formulaire entre
+            // parenthèses — jamais « 2035 » seul à côté d'une date.
+            {
+              nom: `Déclaration de tes revenus ${getEcheanceImpot(microBnc).getFullYear() - 1} (formulaire ${microBnc ? '2042-C-PRO' : '2035'})`,
+              date: getEcheanceImpot(microBnc),
+              montant: null,
+              lien: 'https://www.impots.gouv.fr/particulier',
+            },
             { nom: 'CFE', date: echeanceCFE, montant: null, lien: 'https://www.impots.gouv.fr/professionnel' },
           ].map(e => (
             <div key={e.nom} className="flex items-center justify-between py-2 px-3 bg-muted/30 rounded-lg">

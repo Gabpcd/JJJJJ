@@ -148,7 +148,18 @@ export function DecompositionFinanciere({ mission, role = 'ETAB' }: Decompositio
     );
   }
 
-  const rappelPlafondRist = m.rist_plafond_applique && (
+  // §7.1 Lot 7a — deux lectures du même fait selon le rôle : pour l'ÉTAB (et
+  // l'admin), le taux demandé a été raboté → warning légitime. Pour la SOIGNANTE,
+  // le taux affiché est celui réellement payé → c'est de la conformité, pas un
+  // problème (« ⚠️ plafonné » lui faisait croire qu'elle perdait quelque chose).
+  const rappelPlafondRist = m.rist_plafond_applique && (role === 'SOIGNANT' ? (
+    <div className="bg-success/10 border-l-4 border-success p-3 rounded-r-lg">
+      <p className="text-xs font-semibold text-success flex items-center gap-1">✓ Taux conforme Loi Rist</p>
+      <p className="text-xs text-success/80 mt-1">
+        Taux appliqué : {m.taux_rist_plafonne?.toFixed(2)} €/h — conforme au plafond réglementaire (décret 2023-920).
+      </p>
+    </div>
+  ) : (
     <div className="bg-warning/10 border-l-4 border-warning p-3 rounded-r-lg">
       <p className="text-xs font-semibold text-warning flex items-center gap-1"><AlertTriangle className="h-3.5 w-3.5" /> PLAFOND LOI RIST APPLIQUÉ</p>
       <p className="text-xs text-warning/80 mt-1">
@@ -156,7 +167,7 @@ export function DecompositionFinanciere({ mission, role = 'ETAB' }: Decompositio
       </p>
       <p className="text-[10px] text-warning/60 mt-0.5">(Décret 2023-920)</p>
     </div>
-  );
+  ));
 
   const detailHeures = (
     <div className="border-t border-border pt-3">
