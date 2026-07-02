@@ -91,6 +91,10 @@ type EtabState = {
   email_contact_verifie: boolean | null;
   rattachement_methode: string | null;
   rattachement_verifie: boolean | null;
+  // 7c — préfinancement ⚡ (mandat SEPA) + prévisibilité paie
+  mode_paiement_commission?: string | null;
+  stripe_sepa_payment_method_id?: string | null;
+  jour_paie_habituel?: number | null;
 };
 
 const LIBELLE_METHODE: Record<string, string> = {
@@ -130,14 +134,19 @@ export default function ActiverEtablissement() {
   const [emailInput, setEmailInput] = useState('');
   const [emailLoading, setEmailLoading] = useState(false);
 
-  // Étape actuellement dépliée (1 = contrat, 2 = vérif, 3 = RIB différé)
+  // ── Étape 3 : Paiement (7c — SEPA opt-out + jour de paie) ─────────────────
+  const [jourPaie, setJourPaie] = useState('');
+  const [jourPaieSaving, setJourPaieSaving] = useState(false);
+  const [sepaMasque, setSepaMasque] = useState(false);
+
+  // Étape actuellement dépliée (1 = contrat, 2 = vérif, 3 = paiement)
   const [etapeOuverte, setEtapeOuverte] = useState<1 | 2 | 3 | null>(null);
 
   const recharger = async () => {
     if (!user) return;
     const { data } = await supabase
       .from('etablissements')
-      .select('nom, siret, type, adresse_rue, adresse_code_postal, adresse_ville, email_contact, contrat_service_signe, contrat_service_signe_le, finess, finess_verifie, finess_raison_sociale, representant_nom, representant_prenom, representant_identite_verifiee, email_contact_verifie, rattachement_methode, rattachement_verifie')
+      .select('nom, siret, type, adresse_rue, adresse_code_postal, adresse_ville, email_contact, contrat_service_signe, contrat_service_signe_le, finess, finess_verifie, finess_raison_sociale, representant_nom, representant_prenom, representant_identite_verifiee, email_contact_verifie, rattachement_methode, rattachement_verifie, mode_paiement_commission, stripe_sepa_payment_method_id, jour_paie_habituel' as any)
       .eq('id', user.id)
       .maybeSingle();
     if (data) {
@@ -147,6 +156,7 @@ export default function ActiverEtablissement() {
       setNom(d.representant_nom || '');
       setPrenom(d.representant_prenom || '');
       setEmailInput(d.email_contact || '');
+      setJourPaie(d.jour_paie_habituel != null ? String(d.jour_paie_habituel) : '');
     }
   };
 
@@ -707,22 +717,113 @@ export default function ActiverEtablissement() {
           </div>
         </CardY2K>
 
-        {/* ── Étape 3 : Coordonnées bancaires (différé) ─────────────────────── */}
+        {/* ── Étape 3 : Paiement — SEPA en OPT-OUT (7c, décision §11.3) ───────
+            Le mandat SEPA est une étape du chemin normal avec pitch ⚡, mais
+            « passer cette étape » reste possible discrètement : l'étape n'est
+            pas gatante. Le flux SEPA (SetupIntent Stripe) existe déjà dans
+            Paramètres → Profil — on y renvoie, on ne le duplique pas. */}
         <CardY2K id="etape-3" noPadding className="overflow-hidden">
           <div className="p-5 space-y-3">
             <div className="flex items-center gap-3">
               <PuceEtape index={3} icone={<CreditCard className="h-5 w-5" />} />
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-foreground">3. Coordonnées bancaires (RIB)</p>
-                <p className="text-xs text-muted-foreground">À renseigner à la première facturation</p>
+                <p className="text-sm font-semibold text-foreground">3. Paiement des commissions</p>
+                <p className="text-xs text-muted-foreground">
+                  {etab?.mode_paiement_commission === 'SEPA_DEBIT' && etab?.stripe_sepa_payment_method_id
+                    ? 'Prélèvement SEPA actif ✓'
+                    : 'Prélèvement SEPA recommandé — 2 minutes'}
+                </p>
               </div>
               <EnTeteEtape index={3} etat={etatEtape(3)} />
             </div>
-            <div className="rounded-xl border border-border bg-muted/20 p-3 flex items-start gap-3">
-              <Clock className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
-              <p className="text-xs text-muted-foreground">
-                Aucune action requise maintenant. Vos coordonnées bancaires vous seront demandées au moment de votre première facturation, afin de ne pas retarder la publication de vos missions.
+
+            {etab?.mode_paiement_commission === 'SEPA_DEBIT' && etab?.stripe_sepa_payment_method_id ? (
+              <div className="rounded-xl border border-success/30 bg-success/5 p-3 flex items-start gap-3">
+                <CheckCircle className="h-4 w-4 text-success shrink-0 mt-0.5" />
+                <p className="text-xs text-foreground">
+                  Votre mandat de prélèvement SEPA est actif : zéro action par mission,
+                  vos commissions sont prélevées automatiquement à réception de facture.
+                </p>
+              </div>
+            ) : sepaMasque ? (
+              <div className="rounded-xl border border-border bg-muted/20 p-3 flex items-start gap-3">
+                <Clock className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
+                <p className="text-xs text-muted-foreground">
+                  Étape passée. Vous pourrez activer le prélèvement SEPA à tout moment
+                  depuis <button type="button" className="text-primary underline" onClick={() => navigate('/etablissement/parametres?tab=profil')}>Paramètres → Profil</button>.
+                  Vos coordonnées bancaires seront demandées à la première facturation.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <div className="rounded-xl border border-jolene-rose-200/60 bg-gradient-soft p-3">
+                  <p className="text-xs font-semibold text-foreground mb-1">
+                    Signez le mandat SEPA une fois — plus aucune action ensuite.
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Vos factures de commission sont prélevées automatiquement, sans
+                    virement à faire ni relance. C'est aussi le prérequis du futur
+                    « ⚡ Paiement rapide » : les missions des établissements en
+                    prélèvement SEPA seront mises en avant auprès des soignants et
+                    pourvues en premier.
+                  </p>
+                </div>
+                <div className="flex items-center gap-3 flex-wrap">
+                  <BoutonY2K size="sm" onClick={() => navigate('/etablissement/parametres?tab=profil')}>
+                    Activer le prélèvement SEPA (2 min)
+                  </BoutonY2K>
+                  {/* Opt-out discret — l'étape n'est pas gatante. */}
+                  <button
+                    type="button"
+                    onClick={() => setSepaMasque(true)}
+                    className="text-xs text-muted-foreground hover:text-foreground underline"
+                  >
+                    Passer cette étape
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* §2.2 prévisibilité salariée — la date de paie habituelle est
+                affichée aux soignants sur les missions salariées (« Salaire
+                versé vers le X par l'établissement »). */}
+            <div className="rounded-xl border border-border bg-muted/10 p-3 space-y-2">
+              <Label htmlFor="jour-paie" className="text-xs font-medium text-foreground">
+                Jour de paie habituel de vos salariés (optionnel)
+              </Label>
+              <p className="text-[11px] text-muted-foreground">
+                Affiché aux soignants sur vos missions salariées : « Salaire versé vers
+                le {jourPaie || 'X'} du mois ». La prévisibilité fait candidater.
               </p>
+              <div className="flex items-center gap-2">
+                <Input
+                  id="jour-paie"
+                  inputMode="numeric"
+                  className="w-24"
+                  placeholder="ex. 28"
+                  value={jourPaie}
+                  onChange={(e) => setJourPaie(e.target.value.replace(/\D/g, '').slice(0, 2))}
+                />
+                <BoutonY2K
+                  size="sm"
+                  variant="secondary"
+                  disabled={jourPaieSaving || !jourPaie || Number(jourPaie) < 1 || Number(jourPaie) > 31}
+                  loading={jourPaieSaving}
+                  onClick={async () => {
+                    if (!user) return;
+                    setJourPaieSaving(true);
+                    const { error } = await supabase
+                      .from('etablissements')
+                      .update({ jour_paie_habituel: Number(jourPaie) } as any)
+                      .eq('id', user.id);
+                    setJourPaieSaving(false);
+                    if (error) toast.error('Enregistrement impossible — réessayez.');
+                    else toast.success(`Jour de paie enregistré : le ${jourPaie} du mois`);
+                  }}
+                >
+                  Enregistrer
+                </BoutonY2K>
+              </div>
             </div>
           </div>
         </CardY2K>

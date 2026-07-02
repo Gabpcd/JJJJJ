@@ -43,6 +43,9 @@ export interface MissionSwipePayload {
   distance_km: number | null;
   score: number;
   breakdown: Record<string, unknown>;
+  /** 7c — ⚡ Paiement rapide, gating 100 % serveur (feature flag + mission
+   *  LIBERAL + étab SEPA actif). Absent/false = pas de badge. */
+  paiement_rapide?: boolean;
 }
 
 interface Props {
@@ -182,11 +185,25 @@ export function CardMissionSwipe({ mission, onTap, className }: Props) {
           >
             {mission.score}/100
           </BadgeY2K>
-          {mission.est_urgente && (
-            <BadgeY2K variant="warning" size="md" className="shadow-md">
-              ⚡ Urgent
-            </BadgeY2K>
-          )}
+          <div className="flex flex-col items-end gap-1.5">
+            {/* 7c : ⚡ est réservé au paiement rapide — l'urgence passe à 🔥
+                (aligné sur le 🔥 URGENT de DetailMissionSoignant). */}
+            {mission.est_urgente && (
+              <BadgeY2K variant="warning" size="md" className="shadow-md">
+                🔥 Urgent
+              </BadgeY2K>
+            )}
+            {mission.paiement_rapide && (
+              <BadgeY2K
+                variant="success"
+                size="md"
+                className="shadow-md"
+                title="Payée sous 24 à 72 h après validation des présences"
+              >
+                ⚡ Paiement rapide
+              </BadgeY2K>
+            )}
+          </div>
         </div>
 
         {/* Dégradé bas pour lisibilité du nom */}
