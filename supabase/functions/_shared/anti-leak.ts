@@ -46,6 +46,13 @@ export function detecterLeak(content: string): DetectionResult {
     return { blocked: true, type: "TELEPHONE", match: matchIntl[0] };
   }
 
+  // 7e-1 : « zéro six / zéro sept » en toutes lettres (contournement courant)
+  const zeroSix = /\bz[ée]ro\s*(?:six|sept)\b/i;
+  const matchZeroSix = content.match(zeroSix);
+  if (matchZeroSix) {
+    return { blocked: true, type: "TELEPHONE", match: matchZeroSix[0] };
+  }
+
   // ─── 2. EMAILS (RFC 5322 simplifié, TOUS domaines) ──────────────────
   const email = /[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/g;
   const matchEmail = content.match(email);
@@ -104,6 +111,7 @@ export function detecterLeak(content: string): DetectionResult {
     "envoie-moi un sms", "envoie moi un sms", "envoie-moi un mail",
     "tu peux me joindre", "ma ligne directe", "mon perso",
     "hors plateforme", "hors-plateforme", "hors de la plateforme",
+    "calendly", "doctolib",
     "en dehors de jolene", "en privé", "en prive",
   ];
   for (const mot of motsCles) {
