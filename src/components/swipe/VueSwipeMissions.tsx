@@ -33,7 +33,7 @@ import {
   DialogResponsiveBody,
   DialogResponsiveFooter,
 } from '@/components/ui/DialogResponsive';
-import { formatDateMission, formatDureeCompacte } from '@/lib/format-mission';
+import { estMissionDeNuit, formatDateMission, formatDureeCompacte } from '@/lib/format-mission';
 import { supabase } from '@/integrations/supabase/client';
 import { useNotification } from '@/contexts/NotificationContext';
 
@@ -59,9 +59,14 @@ interface VueSwipeMissionsProps {
   onBasculerListe: () => void;
   /** Ouvre le flux « créer une alerte » du parent (RechercheMissions). */
   onCreerAlerte: () => void;
+  /** Fin de deck : élargit le rayon (+20 km) et bascule en liste (6c.3). */
+  onElargirRayon?: () => void;
+  /** Chips rapides du parent appliquées au deck (6c.1) : le deck respecte
+      les mêmes filtres 1-tap que la liste. */
+  filtreDeck?: { urgentesOnly: boolean; horaire: 'TOUS' | 'JOUR' | 'NUIT' | 'WEEKEND' };
 }
 
-export function VueSwipeMissions({ onBasculerListe, onCreerAlerte }: VueSwipeMissionsProps) {
+export function VueSwipeMissions({ onBasculerListe, onCreerAlerte, onElargirRayon, filtreDeck }: VueSwipeMissionsProps) {
   const qc = useQueryClient();
   const navigate = useNavigate();
   const { afficherNotification } = useNotification();
@@ -279,16 +284,31 @@ export function VueSwipeMissions({ onBasculerListe, onCreerAlerte }: VueSwipeMis
     handleSwipe(direction === 'right' ? 'LIKE' : 'DISLIKE', itemKey);
   }, [handleSwipe]);
 
+  // 6c.1 : le deck respecte les chips rapides (urgentes / jour / nuit / weekend).
+  const stackFiltre = useMemo(() => {
+    if (!filtreDeck) return localStack;
+    return localStack.filter((m) => {
+      if (filtreDeck.urgentesOnly && !m.est_urgente) return false;
+      if (filtreDeck.horaire === 'NUIT' && !estMissionDeNuit(m.debut_le)) return false;
+      if (filtreDeck.horaire === 'JOUR' && estMissionDeNuit(m.debut_le)) return false;
+      if (filtreDeck.horaire === 'WEEKEND') {
+        const j = m.debut_le ? new Date(m.debut_le).getDay() : -1;
+        if (j !== 0 && j !== 6) return false;
+      }
+      return true;
+    });
+  }, [localStack, filtreDeck]);
+
   const stackItems = useMemo(
     () =>
-      localStack.map((m) => ({
+      stackFiltre.map((m) => ({
         key: m.mission_id,
         content: <CardMissionSwipe mission={m} onTap={() => ouvrirDetail(m)} />,
       })),
-    [localStack, ouvrirDetail],
+    [stackFiltre, ouvrirDetail],
   );
 
-  const topMission = localStack[0];
+  const topMission = stackFiltre[0];
   const missionsSauvegardees = sauvegardees ?? [];
 
   return (
@@ -300,7 +320,7 @@ export function VueSwipeMissions({ onBasculerListe, onCreerAlerte }: VueSwipeMis
               <Loader2 className="h-8 w-8 animate-spin" />
               <span className="text-sm">Calcul de ton matching...</span>
             </div>
-          ) : localStack.length === 0 ? (
+          ) : stackFiltre.length === 0 ? (
             <div className="m-auto w-full space-y-4">
             {(data?.length ?? 0) > 0 ? (
               /* Le soignant a swipé toute la pile du jour */
@@ -313,10 +333,11 @@ export function VueSwipeMissions({ onBasculerListe, onCreerAlerte }: VueSwipeMis
                   label: '🔔 Me prévenir des prochaines missions',
                   onClick: onCreerAlerte,
                 }}
-                ctaSecondaire={{
-                  label: 'Voir les missions en liste',
-                  onClick: onBasculerListe,
-                }}
+                ctaSecondaire={
+                  onElargirRayon
+                    ? { label: '📍 Élargir le rayon (+20 km)', onClick: onElargirRayon }
+                    : { label: 'Voir les missions en liste', onClick: onBasculerListe }
+                }
               />
             ) : (
               /* Cas réel pré-traction : 0 mission sur le marché — l'état vide recrute */

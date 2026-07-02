@@ -33,6 +33,8 @@ export interface MissionSwipePayload {
   montant_majoration_dimanche: number | null;
   montant_majoration_ferie: number | null;
   type_contrat_applique: string | null;
+  type_contrat_recherche: string | null;
+  nb_creneaux?: number | null;
   duree_heures: number | null;
   debut_le: string | null;
   fin_le: string | null;
@@ -85,6 +87,16 @@ function momentLabel(m: MissionSwipePayload): string {
   if ((m.montant_majoration_ferie ?? 0) > 0) return '🎉 férié';
   if ((m.montant_majoration_dimanche ?? 0) > 0) return '☀️ dimanche';
   return estMissionDeNuit(m.debut_le) ? '🌙 nuit' : '☀️ jour';
+}
+
+/** 6c.2 : libellé du type de contrat recherché — information de régime au
+ *  centre de la carte (type_contrat_applique est NULL tant que non attribuée). */
+function contratLabel(m: MissionSwipePayload): string | null {
+  const t = m.type_contrat_recherche;
+  if (t === 'SALARIE') return 'Salarié (CDD)';
+  if (t === 'LIBERAL') return 'Libéral';
+  if (t === 'TOUS') return 'Salarié ou libéral';
+  return null;
 }
 
 const RAISON_LABELS: Record<string, string> = {
@@ -244,6 +256,11 @@ export function CardMissionSwipe({ mission, onTap, className }: Props) {
           {mission.service && (
             <span className="inline-flex items-center rounded-full bg-jolene-mauve-100 text-jolene-mauve-700 text-xs font-semibold px-2.5 py-1">
               {mission.service}
+            </span>
+          )}
+          {contratLabel(mission) && (
+            <span className="inline-flex items-center rounded-full bg-jolene-cyan-100 text-jolene-cyan-700 text-xs font-semibold px-2.5 py-1">
+              {contratLabel(mission)}
             </span>
           )}
         </div>

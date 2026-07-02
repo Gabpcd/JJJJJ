@@ -25,8 +25,8 @@ test.describe('Sprint 14 — UI swipe matching (réels)', () => {
     await page.goto('/soignant/swipe-missions');
     await expect(page).toHaveURL(/\/soignant\/recherche-missions/, { timeout: 10_000 });
 
-    await expect(page.getByRole('heading', { name: /Trouver une mission/i, level: 1 })).toBeVisible();
-    await expect(page.getByRole('tablist', { name: /Vue Swipe ou Liste/i })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /Explorer/i, level: 1 })).toBeVisible();
+    await expect(page.getByRole('tablist', { name: /Vue Swipe/i })).toBeVisible();
   });
 
   test('Toggle Liste : bascule in-page (pas de navigation) + localStorage', async ({ page }) => {
@@ -35,7 +35,7 @@ test.describe('Sprint 14 — UI swipe matching (réels)', () => {
     await page.goto('/soignant/recherche-missions');
     await page.waitForLoadState('networkidle');
 
-    const toggle = page.getByRole('tablist', { name: /Vue Swipe ou Liste/i });
+    const toggle = page.getByRole('tablist', { name: /Vue Swipe/i });
     await toggle.getByRole('tab', { name: 'Liste', exact: true }).click();
 
     // Toggle in-page : l'URL ne change pas, seule la préférence est mémorisée.
@@ -50,7 +50,7 @@ test.describe('Sprint 14 — UI swipe matching (réels)', () => {
     await page.goto('/soignant/recherche-missions');
     await page.waitForLoadState('networkidle');
 
-    const toggle = page.getByRole('tablist', { name: /Vue Swipe ou Liste/i });
+    const toggle = page.getByRole('tablist', { name: /Vue Swipe/i });
     await toggle.getByRole('tab', { name: 'Swipe', exact: true }).click();
 
     await expect(page).toHaveURL(/\/soignant\/recherche-missions/);
