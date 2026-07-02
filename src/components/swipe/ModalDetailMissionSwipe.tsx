@@ -274,11 +274,14 @@ export function ModalDetailMissionSwipe({ mission, open, onOpenChange, onPostule
               <h3 className="text-sm font-semibold text-jolene-bubblegum uppercase tracking-wider">
                 Pourquoi ce match
               </h3>
+              {/* 7d — barèmes alignés sur le scoring v3 (tarif/20 vs médiane
+                  marché, distance/20, horaire appris/15, étab/15, urgence/10)
+                  + bonus forts affichés quand présents. */}
               <ul className="space-y-1.5 text-sm">
                 {breakdown.tarif != null && (
                   <li className="flex justify-between rounded-xl bg-jolene-cloud border border-jolene-rose-100 px-3 py-2">
-                    <span className="text-jolene-bubblegum">Tarif</span>
-                    <span className="font-semibold text-jolene-midnight">{breakdown.tarif} / 25</span>
+                    <span className="text-jolene-bubblegum">Tarif vs marché local</span>
+                    <span className="font-semibold text-jolene-midnight">{breakdown.tarif} / 20</span>
                   </li>
                 )}
                 {breakdown.distance != null && (
@@ -286,19 +289,37 @@ export function ModalDetailMissionSwipe({ mission, open, onOpenChange, onPostule
                     <span className="text-jolene-bubblegum">
                       Distance{breakdown.distance_km != null ? ` (${breakdown.distance_km} km)` : ''}
                     </span>
-                    <span className="font-semibold text-jolene-midnight">{breakdown.distance} / 25</span>
+                    <span className="font-semibold text-jolene-midnight">{breakdown.distance} / 20</span>
+                  </li>
+                )}
+                {breakdown.horaire != null && (
+                  <li className="flex justify-between rounded-xl bg-jolene-cloud border border-jolene-rose-100 px-3 py-2">
+                    <span className="text-jolene-bubblegum">Tes horaires préférés</span>
+                    <span className="font-semibold text-jolene-midnight">{breakdown.horaire} / 15</span>
                   </li>
                 )}
                 {breakdown.etablissement != null && (
                   <li className="flex justify-between rounded-xl bg-jolene-cloud border border-jolene-rose-100 px-3 py-2">
                     <span className="text-jolene-bubblegum">Qualité établissement</span>
-                    <span className="font-semibold text-jolene-midnight">{breakdown.etablissement} / 20</span>
+                    <span className="font-semibold text-jolene-midnight">{breakdown.etablissement} / 15</span>
                   </li>
                 )}
                 {breakdown.urgence != null && breakdown.urgence > 0 && (
                   <li className="flex justify-between rounded-xl bg-jolene-cloud border border-jolene-rose-100 px-3 py-2">
                     <span className="text-jolene-bubblegum">Urgence (bonus)</span>
-                    <span className="font-semibold text-jolene-midnight">+{breakdown.urgence} / 15</span>
+                    <span className="font-semibold text-jolene-midnight">+{breakdown.urgence} / 10</span>
+                  </li>
+                )}
+                {breakdown.connaissance_etab != null && breakdown.connaissance_etab > 0 && (
+                  <li className="flex justify-between rounded-xl bg-jolene-cloud border border-jolene-rose-100 px-3 py-2">
+                    <span className="text-jolene-bubblegum">Tu connais cet établissement</span>
+                    <span className="font-semibold text-jolene-midnight">+{breakdown.connaissance_etab}</span>
+                  </li>
+                )}
+                {breakdown.paiement_rapide != null && breakdown.paiement_rapide > 0 && (
+                  <li className="flex justify-between rounded-xl bg-jolene-cloud border border-jolene-rose-100 px-3 py-2">
+                    <span className="text-jolene-bubblegum">⚡ Paiement rapide</span>
+                    <span className="font-semibold text-jolene-midnight">+{breakdown.paiement_rapide}</span>
                   </li>
                 )}
               </ul>
