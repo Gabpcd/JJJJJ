@@ -4,7 +4,6 @@ import { LucideIcon, Gift, BarChart3, Users, Shield, CreditCard, LogOut, HeartPu
 import { useAuth } from '@/contexts/AuthContext';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { RechercheGlobaleAdmin } from '@/components/admin/RechercheGlobaleAdmin';
-import { GardeMfaAdmin } from '@/components/admin/GardeMfaAdmin';
 import { useScrollDirection } from '@/hooks/useScrollDirection';
 
 import { useAccesAdmin } from '@/hooks/useAccesAdmin';
@@ -394,10 +393,12 @@ export function LayoutAdmin({ children }: { children: React.ReactNode }) {
         className="flex-1 md:ml-[240px] mt-14 md:mt-0 overflow-x-hidden"
       >
         <div className="max-w-7xl mx-auto px-4 py-6 pb-24 md:pb-6">
-          {/* 2FA admin par email imposée à TOUTES les pages admin (un seul point
-              d'ancrage). GardeMfaAdmin existait mais n'était branché nulle part
-              → la double vérification n'était pas réellement appliquée. */}
-          <GardeMfaAdmin>{children}</GardeMfaAdmin>
+          {/* 2FA email admin retirée : l'adresse de réception n'existait pas,
+              le code n'arrivait jamais → verrouillage total de l'admin.
+              Connexion classique email + mot de passe (l'edge function
+              admin-2fa reste déployée, dormante, si on veut la rebrancher
+              avec une vraie boîte mail un jour). */}
+          {children}
         </div>
         {/* Footer légal retiré des écrans authentifiés (Lot 6b.1). */}
       </main>
