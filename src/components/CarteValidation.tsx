@@ -7,11 +7,14 @@ import { BadgeCertification } from './BadgeCertification';
 import { PanneauContestation } from './PanneauContestation';
 import { FilDiscussionLitige } from './FilDiscussionLitige';
 import { BadgesAntiTrichePresence } from './presence/BadgesAntiTrichePresence';
+import { EtoilesNotation, DetailCriteres } from './NotationRapide';
 
 interface CarteValidationProps {
   presence: any;
   litigeExistant?: any;
-  onValider: (id: string) => Promise<void>;
+  /** F4 (Lot 7b) : la validation embarque la note 1-tap (obligatoire) +
+   *  critères détaillés optionnels (null = note répliquée sur les 4). */
+  onValider: (id: string, note: number, criteres: [number, number, number, number] | null) => Promise<void>;
   onContester: (id: string, motif: string) => Promise<void>;
   onOuvrirLitige?: (presenceId: string, missionId: string, soignantId: string, motif: string) => Promise<void>;
   onUpdate?: () => void;
@@ -24,6 +27,11 @@ export function CarteValidation({ presence, litigeExistant, onValider, onContest
   const [showContact, setShowContact] = useState(false);
   const [showLitige, setShowLitige] = useState(false);
   const [motifLitigeFormel, setMotifLitigeFormel] = useState('');
+  // F4 : note 1-tap obligatoire au moment de valider (0 = pas encore choisie).
+  const [note, setNote] = useState(0);
+  const [detailNote, setDetailNote] = useState(false);
+  const [criteres, setCriteres] = useState<[number, number, number, number] | null>(null);
+  const [validating, setValidating] = useState(false);
 
   const mission = presence.missions;
   const soignant = presence.soignants;
@@ -151,14 +159,45 @@ export function CarteValidation({ presence, litigeExistant, onValider, onContest
         </div>
       )}
 
-      {/* Actions */}
+      {/* Actions — F4 : valider = valider ET noter, un seul geste. La note 1-tap
+          est obligatoire (cold start du système de notation, la donnée coule dès
+          le jour 1) ; le détail 4 critères reste optionnel. */}
       {!presence.valide_par_etablissement && departReel && (
-        <div className="flex flex-wrap gap-2 pt-1">
+        <div className="space-y-2 pt-1">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-xs text-muted-foreground">Note {soignant.prenom} :</span>
+            <EtoilesNotation
+              label={`Note pour ${soignant.prenom} ${soignant.nom}`}
+              valeur={note}
+              onChange={(n) => { setNote(n); if (!detailNote) setCriteres(null); }}
+            />
+            <button
+              type="button"
+              className="text-[11px] text-primary hover:underline"
+              onClick={() => {
+                setDetailNote(v => !v);
+                if (!detailNote) setCriteres([note || 3, note || 3, note || 3, note || 3]);
+                else setCriteres(null);
+              }}
+            >
+              {detailNote ? 'Masquer le détail' : 'Détailler'}
+            </button>
+          </div>
+          {detailNote && criteres && (
+            <DetailCriteres sens="ETAB_VERS_SOIGNANT" criteres={criteres} onChange={setCriteres} />
+          )}
+        <div className="flex flex-wrap gap-2">
           <button
-            onClick={() => onValider(presence.id)}
-            className="flex items-center gap-1.5 bg-success text-success-foreground text-xs font-semibold px-3 py-2 rounded-xl hover:bg-success/90 transition-colors"
+            onClick={async () => {
+              if (note === 0 || validating) return;
+              setValidating(true);
+              try { await onValider(presence.id, note, criteres); } finally { setValidating(false); }
+            }}
+            disabled={note === 0 || validating}
+            title={note === 0 ? 'Choisissez une note pour valider' : undefined}
+            className="flex items-center gap-1.5 bg-success text-success-foreground text-xs font-semibold px-3 py-2 rounded-xl hover:bg-success/90 transition-colors disabled:opacity-50 disabled:pointer-events-none"
           >
-            <CheckCircle className="h-3.5 w-3.5" /> Valider
+            <CheckCircle className="h-3.5 w-3.5" /> {note === 0 ? 'Noter pour valider' : 'Valider et noter'}
           </button>
           <button
             onClick={() => setShowContester(!showContester)}
@@ -172,6 +211,7 @@ export function CarteValidation({ presence, litigeExistant, onValider, onContest
           >
             <Phone className="h-3.5 w-3.5" /> Contacter
           </button>
+        </div>
         </div>
       )}
 
