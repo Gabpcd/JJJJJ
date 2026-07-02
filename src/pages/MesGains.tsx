@@ -51,12 +51,13 @@ export function MesGainsApercuContent() {
   const [cotisationsMissionId, setCotisationsMissionId] = useState<string | null>(null);
   const [soignant, setSoignant] = useState<any>(null);
   const [paiementsMap, setPaiementsMap] = useState<Record<string, any>>({});
+  const [facturesMap, setFacturesMap] = useState<Record<string, any>>({});
   const [recherche, setRecherche] = useState('');
 
   useEffect(() => {
     if (!user) return;
     const load = async () => {
-      const [{ data: ms }, { data: sg }, { data: paiements }] = await Promise.all([
+      const [{ data: ms }, { data: sg }, { data: paiements }, { data: facts }] = await Promise.all([
         supabase
           .from('missions')
           .select('id, intitule, debut_le, fin_le, duree_heures, taux_horaire_base, net_a_payer, net_estime, total_brut, statut, etablissement_id, service, type_contrat_applique')
@@ -68,6 +69,9 @@ export function MesGainsApercuContent() {
         supabase.from('paiements_soignant' as any)
           .select('mission_id, statut, montant_net, methode, reference_virement, date_paiement')
           .eq('soignant_id', user.id) as any,
+        // 6d.1 : MÊME source que l'onglet Factures — l'Aperçu et Factures ne
+        // peuvent plus diverger (l'écart « 234 € en attente » vs « 0 € »).
+        supabase.rpc('fn_mes_factures_honoraires' as any),
       ]);
       const enriched = ms ? await enrichirEtablissements(ms as any) : [];
       if (page === 0) setAllMissions(enriched as any[]);
@@ -78,6 +82,10 @@ export function MesGainsApercuContent() {
       const map: Record<string, any> = {};
       (paiements || []).forEach((p: any) => { if (p.mission_id) map[p.mission_id] = p; });
       setPaiementsMap(map);
+
+      const fmap: Record<string, any> = {};
+      ((facts || []) as any[]).forEach((f: any) => { if (f.mission_id) fmap[f.mission_id] = f; });
+      setFacturesMap(fmap);
 
       setLoading(false);
 
@@ -143,28 +151,43 @@ export function MesGainsApercuContent() {
   // Salarié : net estimé après cotisations salariales (~22 %).
   const netSal = useMemo(() => salMissions.reduce((s, m) => s + (netEstime(m) ?? 0), 0), [salMissions]);
 
-  // Prochain paiement attendu : missions terminées non encore confirmées payées.
-  // Dérivé des données existantes (allMissions + paiementsMap) — aucune requête en plus.
-  const prochainPaiement = useMemo(() => {
-    const enAttente = allMissions.filter(m => {
+  // 6d.1 — Pipeline UNIQUE « À valider → En attente de paiement → Payé ».
+  // Mêmes sources que l'onglet Factures (fn_mes_factures_honoraires) + paiements :
+  // « facture émise » = présences validées côté flux de facturation. La confiance
+  // paiement est LE facteur de conversion — plus jamais deux chiffres divergents.
+  const pipeline = useMemo(() => {
+    const etapes = {
+      aValider: { montant: 0, nb: 0 },
+      enAttente: { montant: 0, nb: 0 },
+      paye: { montant: 0, nb: 0 },
+    };
+    allMissions.forEach(m => {
       const p = paiementsMap[m.id];
-      // Pas encore payé/confirmé → en attente de règlement
-      return !p || (p.statut !== 'CONFIRME' && p.statut !== 'RESOLU');
+      const f = facturesMap[m.id];
+      // Facture remboursée (litige/avoir) : sortie du pipeline, ni due ni payée.
+      if (f && f.statut === 'REMBOURSE') return;
+      const montantDefaut = isSalariePur ? (Number(m.total_brut) || 0) : (netEstime(m) ?? 0);
+      const paye = (p && (p.statut === 'CONFIRME' || p.statut === 'RESOLU'))
+        || (f && (f.statut === 'PAYEE' || f.statut === 'FACTORISEE'));
+      if (paye) {
+        etapes.paye.montant += f ? Number(f.montant_ttc) || montantDefaut : montantDefaut;
+        etapes.paye.nb += 1;
+        return;
+      }
+      // Facture émise (= présences validées, en attente de règlement) OU
+      // paiement déclaré non confirmé → « En attente de paiement ».
+      if ((f && (f.statut === 'EMISE' || f.statut === 'EN_RETARD')) || p) {
+        etapes.enAttente.montant += f ? Number(f.montant_ttc) || montantDefaut : montantDefaut;
+        etapes.enAttente.nb += 1;
+        return;
+      }
+      // Mission terminée, pas de facture, pas de paiement → validation des
+      // présences par l'établissement encore en cours.
+      etapes.aValider.montant += montantDefaut;
+      etapes.aValider.nb += 1;
     });
-    if (enAttente.length === 0) return null;
-    // Salarié pur : montant en BRUT (le net exact vient du bulletin de paie de
-    // l'établissement — on n'affiche pas d'estimation ~22 %).
-    const montant = isSalariePur
-      ? enAttente.reduce((s, m) => s + (Number(m.total_brut) || 0), 0)
-      : enAttente.reduce((s, m) => s + (netEstime(m) ?? 0), 0);
-    if (montant <= 0) return null;
-    // Date de la mission la plus ancienne en attente (point de départ du règlement)
-    const dates = enAttente
-      .map(m => (typeof m.fin_le === 'string' ? new Date(m.fin_le) : null))
-      .filter((d): d is Date => d != null && !isNaN(d.getTime()))
-      .sort((a, b) => a.getTime() - b.getTime());
-    return { montant, nbMissions: enAttente.length, prochaineDate: dates[0] ?? null };
-  }, [allMissions, paiementsMap, isSalariePur]);
+    return etapes;
+  }, [allMissions, paiementsMap, facturesMap, isSalariePur]);
 
   const exporterCSV = () => {
     const header = 'Date,Mission,Service,Établissement,Heures,Taux horaire,Brut,Net estimé\n';
@@ -184,31 +207,60 @@ export function MesGainsApercuContent() {
     <>
       <BandeauPaiementDeclare />
 
-      {/* Prochain paiement attendu — synthèse en tête (Session G2) */}
-      {prochainPaiement && (
+      {/* 6d.1 — Pipeline unique : la SEULE histoire d'argent de l'Aperçu.
+          Chaque étape a un montant ; « En attente » lit exactement les factures
+          de l'onglet Factures (montants TTC identiques, plus de divergence). */}
+      {(pipeline.aValider.nb + pipeline.enAttente.nb + pipeline.paye.nb) > 0 && (
         <div className="rounded-2xl border border-jolene-rose-200/60 bg-gradient-soft p-4 mb-6">
-          <div className="flex items-center gap-2 mb-1">
+          <div className="flex items-center gap-2 mb-3">
             <Clock className="h-4 w-4 text-primary" />
             <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              {isSalariePur ? 'À venir sur ta paie' : 'Prochain paiement attendu'}
+              {isSalariePur ? 'Ta rémunération, étape par étape' : 'Ton paiement, étape par étape'}
             </p>
           </div>
-          <p className="text-2xl font-bold text-foreground">{fmt(prochainPaiement.montant)}</p>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            {prochainPaiement.nbMissions} mission{prochainPaiement.nbMissions > 1 ? 's' : ''} en attente de règlement
-            {/* Jamais une date passée présentée comme future (Lot 6a.3) : si la
-                fin de mission est derrière nous, afficher l'état réel du flux. */}
-            {prochainPaiement.prochaineDate && (
-              prochainPaiement.prochaineDate.getTime() > Date.now()
-                ? ` · à partir du ${format(prochainPaiement.prochaineDate, 'd MMMM yyyy', { locale: fr })}`
-                : ' · en attente de validation des présences par l\'établissement'
-            )}
-          </p>
-          <p className="text-[10px] text-muted-foreground italic mt-1">
+          <div className="grid grid-cols-3 gap-2">
+            {[
+              {
+                label: 'À valider',
+                detail: 'présences côté étab',
+                etape: pipeline.aValider,
+                onClick: () => navigate('/soignant/presences'),
+              },
+              {
+                label: 'En attente de paiement',
+                detail: isSalariePur ? 'sur ta paie établissement' : 'facture émise',
+                etape: pipeline.enAttente,
+                onClick: () => navigate(isSalariePur ? '/soignant/mes-gains?tab=bulletins' : '/soignant/mes-gains?tab=factures'),
+              },
+              {
+                label: 'Payé',
+                detail: 'règlement confirmé',
+                etape: pipeline.paye,
+                onClick: () => navigate(isSalariePur ? '/soignant/mes-gains?tab=bulletins' : '/soignant/mes-gains?tab=factures'),
+              },
+            ].map(({ label, detail, etape, onClick }, i) => (
+              <button
+                key={label}
+                type="button"
+                onClick={onClick}
+                className={`relative rounded-xl border p-2.5 text-left transition-colors min-h-[44px] ${
+                  etape.nb > 0 ? 'border-jolene-rose-200 bg-card hover:border-jolene-rose-300' : 'border-border/60 bg-card/50 opacity-60'
+                }`}
+              >
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground leading-tight">{label}</p>
+                <p className={`text-base font-bold tabular-nums mt-0.5 ${i === 2 ? 'text-success' : 'text-foreground'}`}>
+                  {fmt(etape.montant)}
+                </p>
+                <p className="text-[10px] text-muted-foreground leading-tight">
+                  {etape.nb} mission{etape.nb > 1 ? 's' : ''} · {detail}
+                </p>
+              </button>
+            ))}
+          </div>
+          <p className="text-[10px] text-muted-foreground italic mt-2">
             {isSalariePur
-              // D3 : Jolene ne verse rien au salarié — ne jamais laisser croire le contraire.
-              ? 'Montant brut. Le versement est effectué par l\'établissement employeur selon son calendrier de paie — Jolene ne verse pas cette somme.'
-              : 'Montant net estimé. Le règlement intervient après validation des présences par l\'établissement.'}
+              ? 'Montants bruts. Le versement est effectué par l\'établissement employeur selon son calendrier de paie — Jolene ne verse pas cette somme.'
+              : 'Montants nets estimés (TTC facturé pour les étapes facturées). Le règlement intervient après validation des présences par l\'établissement.'}
           </p>
         </div>
       )}
@@ -278,15 +330,8 @@ export function MesGainsApercuContent() {
           variant="default"
           onClick={() => navigate('/soignant/historique-missions')}
         />
-        {!isSalariePur && (
-          <CarteKPIY2K
-            icone={<TrendingUp className="h-4 w-4" />}
-            valeur={fmt(totalNetToutTemps)}
-            label="Total net estimé · tout temps"
-            variant="soft"
-            onClick={() => navigate('/soignant/mes-gains?tab=factures')}
-          />
-        )}
+        {/* 6d.1 : « Total tout temps » retiré de la grille (redondant avec le
+            pipeline « Payé » et le graphique) — grille 2×2 compacte. */}
       </div>
       {isSalariePur ? (
         <p className="text-[11px] text-muted-foreground mb-6">
@@ -307,10 +352,13 @@ export function MesGainsApercuContent() {
         </p>
       )}
 
-      {/* Graphique 6 mois */}
-      <Suspense fallback={<div className="h-64 animate-pulse bg-muted rounded-lg" />}>
-        <GraphiqueGains6Mois missions={allMissions.map(m => ({ debut_le: m.debut_le, net_a_payer: netEstime(m) }))} />
-      </Suspense>
+      {/* 6d.1 : graphique seulement à partir de 2 mois de données — une barre
+          seule = du bruit, pas une tendance. */}
+      {moisDisponibles.length >= 2 && (
+        <Suspense fallback={<div className="h-64 animate-pulse bg-muted rounded-lg" />}>
+          <GraphiqueGains6Mois missions={allMissions.map(m => ({ debut_le: m.debut_le, net_a_payer: netEstime(m) }))} />
+        </Suspense>
+      )}
 
       {/* Filtre + Actions */}
       <div className="flex items-center gap-2 mb-4 flex-wrap">
@@ -461,8 +509,22 @@ export function MesGainsApercuContent() {
             <button onClick={() => setPage(p => p + 1)} className="btn-secondary w-full mt-4">Charger plus de missions</button>
           )}
         </div>
-      ) : (
+      ) : allMissions.length === 0 ? (
         <EmptyState illustration={<IllustrationTirelire />} titre="Pas encore de gains" description="Tes gains apparaîtront ici après ta première mission terminée." cta={{ label: 'Trouver une mission', onClick: () => navigate('/soignant/recherche-missions') }} />
+      ) : (
+        /* 6d.1 : historique existant mais période vide → message scopé, pas un
+           grand état vide sous un pipeline/graphique qui montrent des gains. */
+        <div className="card-base text-center py-6">
+          <p className="text-sm font-medium text-foreground">
+            Pas encore de gains {moisFiltre === 'CE_MOIS' ? 'ce mois-ci' : `sur ${labelPeriode}`}
+          </p>
+          <button
+            onClick={() => setMoisFiltre('TOUS')}
+            className="text-xs text-primary hover:underline mt-1"
+          >
+            Voir tout l'historique ({allMissions.length} mission{allMissions.length > 1 ? 's' : ''})
+          </button>
+        </div>
       )}
 
       <ModalAttestation open={modalAttestation} onClose={() => setModalAttestation(false)} />
