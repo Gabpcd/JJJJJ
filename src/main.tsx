@@ -149,6 +149,14 @@ window.visualViewport?.addEventListener('scroll', updateViewportMetrics);
 
 // Capacitor keyboard: add/remove class when keyboard opens/closes
 if (Capacitor.isNativePlatform()) {
+  // 6d.2 : blocage du pinch-zoom UNIQUEMENT dans la coquille native (rendu
+  // app). Appliqué au runtime — le HTML garde un viewport zoomable pour le
+  // web (exigence d'accessibilité RGAA, texte agrandissable).
+  document.querySelector('meta[name="viewport"]')?.setAttribute(
+    'content',
+    'viewport-fit=cover, width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no',
+  );
+
   import('@capacitor/keyboard').then(({ Keyboard }) => {
     Keyboard.addListener('keyboardWillShow', () => {
       document.body.classList.add('keyboard-is-open');
