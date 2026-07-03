@@ -10,7 +10,7 @@ const TOC = [
   { id: 'art5', label: 'Article 5 — Facturation et paiement' },
   { id: 'art6', label: 'Article 6 — Accompagnement vers l\'exercice libéral' },
   { id: 'art7', label: 'Article 7 — Secteur public et affacturage' },
-  { id: 'art8', label: 'Article 8 — Non-sollicitation' },
+  { id: 'art8', label: 'Article 8 — Non-contournement et frais de recrutement' },
 ];
 
 export default function PageCGV() {
@@ -102,9 +102,45 @@ export default function PageCGV() {
 
       {/* Article 8 */}
       <section id="art8">
-        <h2 className="text-xl sm:text-2xl font-bold text-foreground mb-4">Article 8 — Non-sollicitation</h2>
-        <p className="mb-3">L'Établissement s'engage à ne pas recruter, embaucher ou solliciter directement, par quelque moyen que ce soit, un Soignant rencontré par l'intermédiaire de la Plateforme, pendant une durée de douze (12) mois suivant la dernière mission réalisée via Jolene.</p>
-        <p>En cas de manquement, l'Établissement sera redevable d'une indemnité forfaitaire de cinq mille (5 000) euros par Soignant sollicité, sans préjudice de dommages et intérêts complémentaires.</p>
+        <h2 className="text-xl sm:text-2xl font-bold text-foreground mb-4">Article 8 — Non-contournement et frais de recrutement</h2>
+
+        <h3 className="text-lg font-semibold text-foreground mt-6 mb-2">8.1 — Définition : « Professionnel mis en relation »</h3>
+        <p className="mb-3">Est réputé « Professionnel mis en relation » tout professionnel de santé dont l'Établissement a, via la Plateforme : (i) reçu communication nominative du profil dans le cadre d'une candidature ou d'une proposition de mission, (ii) échangé avec lui via la messagerie, ou (iii) bénéficié d'au moins une mission réalisée. La simple apparition d'un profil dans des résultats de recherche ne constitue pas une mise en relation.</p>
+
+        <h3 className="text-lg font-semibold text-foreground mt-6 mb-2">8.2 — Non-contournement</h3>
+        <p className="mb-3">Pendant une durée de <strong>douze (12) mois</strong> à compter du dernier des événements suivants — dernière mission réalisée ou dernier échange via la Plateforme avec le Professionnel concerné — l'Établissement s'engage à conclure <strong>exclusivement via la Plateforme</strong> toute nouvelle collaboration avec un Professionnel mis en relation, quelle qu'en soit la forme : mission ponctuelle, vacation, remplacement, contrat à durée déterminée ou indéterminée, ou toute collaboration équivalente, directe ou par personne ou société interposée.</p>
+        <p className="mb-3">À défaut, l'Établissement est redevable de plein droit :</p>
+        <ul className="list-disc pl-6 space-y-2 mb-3">
+          <li>pour toute <strong>mission réalisée hors Plateforme</strong> pendant cette période : la commission qui aurait été due au titre des présentes CGV (15 % des montants versés au Professionnel), calculée sur justificatifs ou, à défaut de communication de ceux-ci sous quinze (15) jours après demande, sur une base forfaitaire égale au tarif journalier moyen constaté sur la Plateforme pour la profession concernée, par jour de mission constaté ;</li>
+          <li>pour toute <strong>embauche</strong> : les frais de recrutement prévus à l'article 8.3.</li>
+        </ul>
+        <p className="mb-3">L'Établissement s'engage à informer Jolene, sous quinze (15) jours, de toute embauche d'un Professionnel mis en relation intervenant pendant la période visée ci-dessus.</p>
+        <p>Le présent article survit à la résiliation des présentes pour toutes les mises en relation antérieures à celle-ci.</p>
+
+        <h3 className="text-lg font-semibold text-foreground mt-6 mb-2">8.3 — Frais de recrutement</h3>
+        <p className="mb-3">En cas d'embauche d'un Professionnel mis en relation (contrat à durée indéterminée, ou contrat à durée déterminée d'une durée initiale ou cumulée supérieure à trois (3) mois) pendant la période de l'article 8.2, l'Établissement est redevable de frais de recrutement calculés sur la <strong>rémunération annuelle brute</strong> prévue au contrat de travail, selon la grille dégressive suivante, appréciée à compter de la première mission réalisée (ou, à défaut de mission, de la première mise en relation) :</p>
+        <div className="overflow-x-auto my-4">
+          <table className="w-full text-sm border-collapse">
+            <thead>
+              <tr className="border-b border-border">
+                <th className="text-left py-2 pr-4 font-semibold text-foreground">Ancienneté de la relation</th>
+                <th className="text-left py-2 font-semibold text-foreground">Frais</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr className="border-b border-border/50"><td className="py-2 pr-4">Moins de 6 mois</td><td className="py-2"><strong>15 %</strong></td></tr>
+              <tr className="border-b border-border/50"><td className="py-2 pr-4">De 6 à 12 mois</td><td className="py-2"><strong>10 %</strong></td></tr>
+              <tr className="border-b border-border/50"><td className="py-2 pr-4">De 12 à 18 mois</td><td className="py-2"><strong>5 %</strong></td></tr>
+              <tr><td className="py-2 pr-4">Au-delà de 18 mois</td><td className="py-2"><strong>0 %</strong> — aucun frais</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p className="mb-3">À défaut de communication du contrat de travail sous quinze (15) jours après demande, l'assiette retenue est la rémunération annuelle brute conventionnelle de référence pour le poste et l'ancienneté concernés. Les frais sont exigibles à la date d'effet du contrat de travail et payables à trente (30) jours.</p>
+        <div className="bg-muted/50 border-l-4 border-primary p-4 rounded-r-xl my-4">
+          <p className="font-semibold text-foreground mb-2">Garantie période d'essai :</p>
+          <p>En cas de rupture de la période d'essai, à l'initiative de l'une ou l'autre partie, dans les deux (2) premiers mois du contrat, Jolene émet un avoir de cinquante pour cent (50 %) des frais, imputable sur de nouveaux frais de recrutement ou sur les commissions de missions à venir.</p>
+        </div>
+        <p>L'Établissement peut à tout moment solliciter la formalisation d'une embauche via la fonctionnalité « Recruter » de la Plateforme ; les frais du présent article valent alors solde de tout compte au titre de la mise en relation du Professionnel concerné.</p>
       </section>
     </LayoutLegal>
   );
