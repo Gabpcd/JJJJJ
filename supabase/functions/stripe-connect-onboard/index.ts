@@ -123,6 +123,14 @@ Deno.serve(async (req) => {
           card_payments: { requested: true },
           transfers: { requested: true },
         },
+        // Escrow 7b-D (PR 1) : payouts pilotés par Jolene. Les fonds attendent
+        // sur le solde connecté du soignant ; le virement bancaire (« release »)
+        // est déclenché par payouts.create après validation des présences —
+        // jamais automatiquement. Les comptes créés AVANT ce changement sont
+        // basculés par scripts/backfill-payouts-manual.ts (drain d'abord, A7).
+        settings: {
+          payouts: { schedule: { interval: "manual" } },
+        },
         metadata: { soignant_id: soignantId },
       });
       accountId = account.id;
