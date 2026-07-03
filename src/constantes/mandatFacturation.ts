@@ -2,7 +2,7 @@
 // Document légal permettant à Jolene d'émettre techniquement des factures au nom et pour le compte du soignant libéral.
 // Le soignant reste le vendeur légal et juridique de la prestation. Jolene agit uniquement en qualité de mandataire technique.
 
-export const MANDAT_FACTURATION_VERSION = '1.2';
+export const MANDAT_FACTURATION_VERSION = '1.3';
 
 // Info soignant à injecter dans le mandat lors du rendu. Les champs manquants
 // sont remplacés par "—" pour ne pas générer un document faussement complet.
@@ -105,6 +105,7 @@ Le Soignant autorise expressément Jolene à :
 3. **Transmettre** électroniquement ces factures aux établissements débiteurs
 4. **Encaisser** pour le compte du Soignant le montant des factures via les services de paiement intégrés (notamment Stripe Connect) et **reverser** ces sommes sur le compte bancaire déclaré par le Soignant, déduction faite de la commission Jolene convenue
 5. **Conserver** une copie légale des factures émises pour la durée prévue par la loi (10 ans minimum)
+6. **Paiement rapide ⚡** — Pour les missions éligibles, le Soignant autorise Jolene à donner instruction au prestataire de services de paiement (Stripe) de conserver les honoraires encaissés sur son compte de paiement jusqu'à la validation des présences par l'Établissement, la libération intervenant au plus tard soixante-douze (72) heures après la fin de la mission ; en cas d'annulation de la mission avant son début, Jolene est autorisée à donner instruction de restitution des sommes à l'Établissement
 
 ---
 

@@ -108,6 +108,9 @@ export default function PageCGU() {
         </div>
         <p className="mb-3">À titre d'assistance technique, la Plateforme génère un brouillon de DPAE pré-rempli (identité du Soignant, SIRET de l'Établissement, dates et horaires de la mission) que l'Établissement peut copier sur le portail officiel <a href="https://www.net-entreprises.fr" target="_blank" rel="noopener noreferrer" className="underline text-primary">net-entreprises.fr</a>. L'Établissement reste libre de saisir directement sa DPAE par tout autre moyen autorisé.</p>
         <p>L'Établissement est invité à saisir, dans la Plateforme, le numéro de récépissé URSSAF retourné par Net-Entreprises afin de bénéficier d'une traçabilité interne. Le Soignant reçoit alors un email de confirmation contenant ce numéro. L'absence de saisie du numéro dans la Plateforme n'a aucun effet sur la validité juridique de la DPAE, qui relève exclusivement de l'Établissement.</p>
+
+        <h3 className="text-lg font-semibold text-foreground mt-6 mb-2">4.6 — Paiement rapide ⚡</h3>
+        <p>Pour les missions éligibles au paiement rapide, tes honoraires sont encaissés sur ton compte de paiement (Stripe) dès la confirmation de la mission, et <strong>libérés vers ton compte bancaire après la validation de tes présences par l'établissement — au plus tard 72 heures après la fin de la mission</strong> (validation automatique en l'absence de réponse de l'établissement). En cas d'annulation de la mission avant son début, les sommes sont restituées à l'établissement.</p>
       </section>
 
       {/* Article 5 */}
