@@ -674,6 +674,80 @@ Deno.serve(async (req) => {
       }
     }
 
+    // ── Escrow 7b-D (PR 3) : débit escrow confirmé → DEBITE ──
+    // Destination charge SEPA (escrow-debit-echeance) : `processing` → `succeeded`
+    // quelques jours après. INITIE → DEBITE. La disponibilité réelle des fonds
+    // (available sur le solde connecté) est vérifiée séparément au release (A3).
+    if (event.type === "payment_intent.succeeded"
+        && (event.data.object as Stripe.PaymentIntent).metadata?.type === "ESCROW_MISSION_PAYMENT") {
+      const pi = event.data.object as Stripe.PaymentIntent;
+      const escrowId = pi.metadata?.paiement_escrow_id;
+      if (escrowId) {
+        const chargeId = pi.latest_charge
+          ? (typeof pi.latest_charge === "string" ? pi.latest_charge : pi.latest_charge.id)
+          : null;
+        // Garde de statut : ne repasse DEBITE que depuis INITIE (idempotent,
+        // n'écrase pas un REMBOURSE/DISPUTE arrivé entre-temps).
+        const { data: updated } = await supabaseAdmin
+          .from("paiements_escrow")
+          .update({
+            statut: "DEBITE",
+            stripe_charge_id: chargeId,
+            debite_le: new Date().toISOString(),
+            erreur: null,
+            modifie_le: new Date().toISOString(),
+          })
+          .eq("id", escrowId)
+          .eq("statut", "INITIE")
+          .select("id, mission_id, etablissement_id")
+          .maybeSingle();
+
+        await supabaseAdmin.rpc("fn_ecrire_audit_safe", {
+          p_acteur_id: "00000000-0000-0000-0000-000000000000",
+          p_type_acteur: "SYSTEME",
+          p_action: "ESCROW_DEBITE",
+          p_type_ressource: "mission",
+          p_id_ressource: pi.metadata?.mission_id ?? null,
+          p_cle_s3: null,
+          p_details: {
+            paiement_escrow_id: escrowId,
+            stripe_payment_intent_id: pi.id,
+            stripe_charge_id: chargeId,
+            deja_traite: !updated,
+          },
+          p_ip: null,
+          p_navigateur: "stripe-webhook",
+        });
+      }
+      await markEventProcessed();
+      return new Response(JSON.stringify({ received: true, escrow: "debite" }), {
+        status: 200,
+        headers: { ...corsHeaders(req), "Content-Type": "application/json" },
+      });
+    }
+
+    // ── Escrow 7b-D (PR 3) : échec de débit → incident (gel ⚡ + relance J+3) ──
+    if (event.type === "payment_intent.payment_failed"
+        && (event.data.object as Stripe.PaymentIntent).metadata?.type === "ESCROW_MISSION_PAYMENT") {
+      const pi = event.data.object as Stripe.PaymentIntent;
+      const escrowId = pi.metadata?.paiement_escrow_id;
+      if (escrowId) {
+        const failMsg = pi.last_payment_error?.message
+          || pi.last_payment_error?.code
+          || "payment_intent.payment_failed";
+        await supabaseAdmin.rpc("fn_escrow_marquer_incident", {
+          p_paiement_escrow_id: escrowId,
+          p_type_incident: "ECHEC",
+          p_detail: String(failMsg).substring(0, 500),
+        });
+      }
+      await markEventProcessed();
+      return new Response(JSON.stringify({ received: true, escrow: "echec" }), {
+        status: 200,
+        headers: { ...corsHeaders(req), "Content-Type": "application/json" },
+      });
+    }
+
     // Handle payment_intent.succeeded (backup reconciliation)
     if (event.type === "payment_intent.succeeded") {
       const paymentIntent = event.data.object as Stripe.PaymentIntent;
@@ -903,6 +977,22 @@ Deno.serve(async (req) => {
     if (event.type === "charge.dispute.created") {
       const dispute = event.data.object as Stripe.Dispute;
       const chargeId = typeof dispute.charge === "string" ? dispute.charge : dispute.charge?.id;
+
+      // Escrow 7b-D (PR 3) : une dispute sur une charge escrow → incident
+      // (gel ⚡ de l'établissement). La dispute SEPA est absorbée par Jolene
+      // sous le plafond A2 (§11.1) ; le circuit contentieux suit son cours.
+      const { data: escrowDispute } = await supabaseAdmin
+        .from("paiements_escrow")
+        .select("id, mission_id")
+        .eq("stripe_charge_id", chargeId)
+        .maybeSingle();
+      if (escrowDispute) {
+        await supabaseAdmin.rpc("fn_escrow_marquer_incident", {
+          p_paiement_escrow_id: escrowDispute.id,
+          p_type_incident: "DISPUTE",
+          p_detail: `dispute ${dispute.id} reason=${dispute.reason}`,
+        });
+      }
 
       const { data: transfer } = await supabaseAdmin
         .from("stripe_transfers")
