@@ -120,6 +120,9 @@ verify_jwt = false
 [functions.sepa-auto-charge]
 verify_jwt = false
 
+[functions.escrow-debit-echeance]
+verify_jwt = false
+
 [functions.send-sms]
 verify_jwt = false
 
