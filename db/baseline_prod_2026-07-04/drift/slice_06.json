@@ -1,0 +1,87 @@
+{
+  "slice": 6,
+  "total": 80,
+  "match": 50,
+  "different": [
+    {
+      "fonction": "fn_litige_push_notification",
+      "derniere_migration": "20260417130500_cp_litiges_5_sms_extension.sql",
+      "resume_ecart": "Écart limité aux commentaires SQL (version live sans les commentaires du repo), code identique."
+    },
+    {
+      "fonction": "fn_litige_preuves_agregees",
+      "derniere_migration": "20260417130717_cp7b1_rpcs_admin.sql",
+      "resume_ecart": "Prod teste `v_presence.id IS NOT NULL` (fix antipattern record-NULL) là où le repo teste `v_presence IS NOT NULL` ; le reste de l'écart = commentaires."
+    },
+    {
+      "fonction": "fn_litiges_escalader_auto",
+      "derniere_migration": "20260417130722_fix_t19_escalade_type_contrat_applique.sql",
+      "resume_ecart": "Écart limité aux commentaires SQL (commentaire [FIX T19] absent en prod), code identique."
+    },
+    {
+      "fonction": "fn_mes_dpae",
+      "derniere_migration": "20260514150000_pr10s55_dpae_soignant_nir_rpc.sql",
+      "resume_ecart": "Prod filtre `type_contrat IN ('CDD','CDD','SALARIE')` (doublon CDD, CDDU absent) alors que le repo a `('CDD','CDDU','SALARIE')`."
+    },
+    {
+      "fonction": "fn_mes_exclusions_recues",
+      "derniere_migration": "20260313161955_3a037783-b29e-4819-be07-4ed20d591063.sql",
+      "resume_ecart": "Corps entièrement réécrit en prod : retour jsonb_agg avec type_exclu_par/etablissement_nom vs simple SELECT de colonnes dans le repo (obsolète)."
+    },
+    {
+      "fonction": "fn_mes_filleuls",
+      "derniere_migration": "20260528131300_parrainage_soignant_rpcs_prime_cash.sql",
+      "resume_ecart": "Écart de mise en forme uniquement (espaces après virgules dans jsonb_build_object), code identique."
+    },
+    {
+      "fonction": "fn_mes_revenus_connect",
+      "derniere_migration": "20260405220000_fix_revenus_connect_include_paiements.sql",
+      "resume_ecart": "Écart limité aux commentaires SQL (prod contient des commentaires absents du repo), code identique."
+    },
+    {
+      "fonction": "fn_messagerie_cleanup_periodique",
+      "derniere_migration": "20260514183200_pr3s10a_typing_presence_realtime.sql",
+      "resume_ecart": "Écart limité aux commentaires SQL (version live sans les commentaires numérotés du repo), code identique."
+    },
+    {
+      "fonction": "fn_mes_matches",
+      "derniere_migration": "20260627140000_fix_coeur_candidatures_matching.sql",
+      "resume_ecart": "Écart limité aux commentaires SQL (prod a un commentaire explicatif supplémentaire sur le fix des statuts candidature), code identique."
+    },
+    {
+      "fonction": "fn_modifier_filtre_sauvegarde",
+      "derniere_migration": "20260429250100_j23c_filtres_sauvegardes_rpcs.sql",
+      "resume_ecart": "Écart limité aux commentaires SQL (commentaire '-- Audit toggle alerte' présent en prod seulement), code identique."
+    },
+    {
+      "fonction": "fn_modifier_mon_etablissement",
+      "derniere_migration": "20260411130100_rgpd_audit_gaps.sql",
+      "resume_ecart": "Écart limité aux commentaires SQL (commentaires 'Validation couleur hex' / 'Audit RGPD' présents en prod seulement), code identique."
+    },
+    {
+      "fonction": "fn_modifier_preferences_notifications",
+      "derniere_migration": "20260429180000_j23a_preferences_notifications.sql",
+      "resume_ecart": "Prod déclare une variable supplémentaire `v_old jsonb` absente du repo ; le reste de l'écart = commentaires et espaces."
+    }
+  ],
+  "absent_du_repo": [
+    "fn_is_valid_uuid",
+    "fn_litige_pour_mission",
+    "fn_maj_activite_soignant",
+    "fn_litiges_etablissement",
+    "fn_mes_evaluations_recues",
+    "fn_marquer_messages_lus",
+    "fn_mes_factures",
+    "fn_messages_non_lus",
+    "fn_mes_soignants_etablissement",
+    "fn_mode_paiement_mission",
+    "fn_modifier_reference_paiement",
+    "fn_mon_bfa",
+    "fn_mon_etab_alerte_cddu",
+    "fn_nettoyer_missions_fantomes",
+    "fn_nettoyer_tokens_push",
+    "fn_nettoyer_partages_rib_expires",
+    "fn_mon_profil_soignant_complet",
+    "fn_nettoyer_psc_sessions_expirees"
+  ]
+}

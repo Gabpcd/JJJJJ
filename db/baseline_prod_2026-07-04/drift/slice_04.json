@@ -1,0 +1,144 @@
+{
+  "slice": 4,
+  "total": 80,
+  "match": 37,
+  "different": [
+    {
+      "fonction": "fn_calculer_financier_mission",
+      "derniere_migration": "20260627160000_commission_liberal_ifm_icp_et_consolidation.sql",
+      "resume_ecart": "Écarts de commentaires uniquement (prod plus documentée sur IFM/ICP libéral et commission 15 %), code identique."
+    },
+    {
+      "fonction": "fn_calculer_indemnite_annulation_etab",
+      "derniere_migration": "20260513230000_pr5s35_annulation_etab_indemnites.sql",
+      "resume_ecart": "Prod a remplacé 'CDDU' par 'CDD' (doublon) dans la liste IN ('CDD','CDD','SALARIE') — le repo garde encore 'CDDU'."
+    },
+    {
+      "fonction": "fn_calculer_remuneration_mission",
+      "derniere_migration": "20260627160000_commission_liberal_ifm_icp_et_consolidation.sql",
+      "resume_ecart": "Écarts de commentaires uniquement (note IFM/ICP libéral reformulée et étendue en prod), code identique."
+    },
+    {
+      "fonction": "fn_calculer_score_etab",
+      "derniere_migration": "20260513240000_pr6s35_scores_revises.sql",
+      "resume_ecart": "Prod lit les notes depuis evaluations (evalue_id, type_evaluateur='SOIGNANT', visible IS NOT FALSE) alors que le repo lit notations (cible_id, cible_type='ETABLISSEMENT', masquee_par_admin)."
+    },
+    {
+      "fonction": "fn_check_crons_health",
+      "derniere_migration": "20260628170000_monitoring_anti_faux_positif_crons_jamais.sql",
+      "resume_ecart": "Écarts de commentaires uniquement (justification anti-faux-positifs étendue en prod), code identique."
+    },
+    {
+      "fonction": "fn_check_stripe_webhook_health",
+      "derniere_migration": "20260624140000_fix_cron_auth_gates.sql",
+      "resume_ecart": "Écarts d'espacement uniquement (parenthèses fn_emettre_alerte_monitoring repliées en prod), code identique."
+    },
+    {
+      "fonction": "fn_check_rate_limit_ip_signature",
+      "derniere_migration": "20260513180000_pr7s3_durcissement_securite.sql",
+      "resume_ecart": "Écarts de commentaires et d'espacement uniquement (commentaires rate-limit du repo absents en prod), code identique."
+    },
+    {
+      "fonction": "fn_calculer_tous_documents_valides",
+      "derniere_migration": "20260630240000_consolider_calcul_tous_documents_valides.sql",
+      "resume_ecart": "Écarts de commentaires et d'espacement uniquement (commentaire dispense RPPS/ADELI + parenthèses repliées en prod), code identique."
+    },
+    {
+      "fonction": "fn_compteur_heures_soignant",
+      "derniere_migration": "20260530190000_compteur_3200h_heures_reelles.sql",
+      "resume_ecart": "Écarts de commentaires uniquement (commentaire heures réelles/repli du repo absent en prod), code identique."
+    },
+    {
+      "fonction": "fn_confirmer_email_etab",
+      "derniere_migration": "20260606130000_phase4_email_pro_confirmation.sql",
+      "resume_ecart": "Écarts de commentaires uniquement (3 commentaires token/confirmation/rattachement du repo absents en prod), code identique."
+    },
+    {
+      "fonction": "fn_contester_presence",
+      "derniere_migration": "20260411140000_rgpd_audit_gaps_phase2.sql",
+      "resume_ecart": "Écart de commentaire uniquement ('CDDU critique' repo vs 'CDD critique' prod), code identique."
+    },
+    {
+      "fonction": "fn_contacter_support",
+      "derniere_migration": "20260609110000_fn_contacter_support.sql",
+      "resume_ecart": "Écart de commentaire uniquement (commentaire compte support du repo absent en prod), code identique."
+    },
+    {
+      "fonction": "fn_conflit_planning_soignant",
+      "derniere_migration": "20260702112405_favoris_missions_garde_fous_candidature.sql",
+      "resume_ecart": "Écarts de commentaires uniquement (commentaires conflit dur/adjacence du repo absents en prod), code identique."
+    },
+    {
+      "fonction": "fn_creer_mission",
+      "derniere_migration": "20260606120000_phase4_verrou_publication_finess_rattachement.sql",
+      "resume_ecart": "Écart de commentaire uniquement (commentaire contrôles de publication du repo absent en prod), code identique."
+    },
+    {
+      "fonction": "fn_creer_bulletin_paie",
+      "derniere_migration": "20260428210000_bulletins_paie_schema.sql",
+      "resume_ecart": "Écarts de commentaires uniquement (CDDU renommé CDD dans les commentaires prod), code identique."
+    },
+    {
+      "fonction": "fn_creer_conversation_si_absente",
+      "derniere_migration": "20260514183100_pr1s10a_trigger_chat_acceptation_candidature.sql",
+      "resume_ecart": "Écarts de commentaires uniquement (6 commentaires propriétaire/idempotence/audit du repo absents en prod), code identique."
+    },
+    {
+      "fonction": "fn_creer_notification",
+      "derniere_migration": "20260628160000_fix_creer_notification_contexte_cron.sql",
+      "resume_ecart": "Écarts de commentaires uniquement (prod ajoute la note sur le fix crons sans session), code identique."
+    },
+    {
+      "fonction": "fn_creer_serie",
+      "derniere_migration": "20260606120000_phase4_verrou_publication_finess_rattachement.sql",
+      "resume_ecart": "Écarts de commentaires uniquement (commentaires verrou publication/validation/max 30 du repo absents en prod), code identique."
+    },
+    {
+      "fonction": "fn_declarer_virement",
+      "derniere_migration": "20260324172130_a48f34c7-8b05-4c3f-a07e-2c11f128ca32.sql",
+      "resume_ecart": "Prod contrôle mon_etablissement_id() (repo : auth.uid()), valide et TRIM la référence (min 3 chars) et renvoie jsonb (repo : json) — migration 2026-03 obsolète."
+    },
+    {
+      "fonction": "fn_declarer_fin_retroactive",
+      "derniere_migration": "20260416190400_cp5b_garde_fous.sql",
+      "resume_ecart": "Écarts de commentaires uniquement (commentaires Step 1-10 du repo absents en prod), code identique."
+    },
+    {
+      "fonction": "fn_declarer_paiement_soignant",
+      "derniere_migration": "20260421180949_fix_f_gardes_type_contrat_paiement_soignant.sql",
+      "resume_ecart": "Prod raccourcit les messages d'erreur des gardes 2/3 et renomme CDDU en CDD ; commentaires Fix F supprimés."
+    },
+    {
+      "fonction": "fn_demander_confirmation_email_etab",
+      "derniere_migration": "20260606130000_phase4_email_pro_confirmation.sql",
+      "resume_ecart": "Écarts de commentaires uniquement (commentaires autorisation/validation/token du repo absents en prod), code identique."
+    },
+    {
+      "fonction": "fn_detail_facture",
+      "derniere_migration": "20260411120100_fn_detail_facture_enriched.sql",
+      "resume_ecart": "Écart de commentaire uniquement ('(lien direct)' du repo absent en prod), code identique."
+    }
+  ],
+  "absent_du_repo": [
+    "fn_calculer_heures_totales",
+    "fn_calculer_bfa_safe",
+    "fn_calculer_cotisations",
+    "fn_calculer_bfa_tous",
+    "fn_calculer_heures_majorees",
+    "fn_calculer_taux_free_transition",
+    "fn_calculer_taux_free_transition_safe",
+    "fn_charger_demo_investisseur",
+    "fn_cession_existe",
+    "fn_commission_info_etablissement",
+    "fn_cloturer_litige",
+    "fn_confirmer_honoraires_retrocession",
+    "fn_consentir_gps",
+    "fn_contester_paiement_soignant",
+    "fn_consulter_rib_soignant",
+    "fn_declarer_arret_maladie",
+    "fn_declarer_honoraires_retrocession",
+    "fn_detecter_teleportation",
+    "fn_deposer_chorus",
+    "fn_diffuser_pool_urgence"
+  ]
+}

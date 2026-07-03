@@ -1,0 +1,99 @@
+{
+  "slice": 2,
+  "total": 80,
+  "match": 54,
+  "different": [
+    {
+      "fonction": "dec_verifier_plafond_48h",
+      "derniere_migration": "20260416190300_cp5b_triggers_effectif_previsionnel.sql",
+      "resume_ecart": "Écarts de commentaires uniquement (commentaires EFFECTIF/PREVISIONNEL du repo absents en prod), code identique."
+    },
+    {
+      "fonction": "dec_verifier_repos_11h",
+      "derniere_migration": "20260416190300_cp5b_triggers_effectif_previsionnel.sql",
+      "resume_ecart": "Écarts de commentaires uniquement (3 commentaires EFFECTIF/PREVISIONNEL du repo absents en prod), code identique."
+    },
+    {
+      "fonction": "est_admin_valide",
+      "derniere_migration": "20260415160000_admin_invocations.sql",
+      "resume_ecart": "Écarts d'espacement uniquement (parenthèses COALESCE(( et false);), code identique."
+    },
+    {
+      "fonction": "fn_accepter_mission",
+      "derniere_migration": "20260630250000_documents_gate_per_mission_acceptation.sql",
+      "resume_ecart": "Écarts de commentaires et d'espacement uniquement (commentaire docs requis + parenthèses INSERT/jsonb repliées en prod), logique identique."
+    },
+    {
+      "fonction": "fn_accepter_mission_urgence",
+      "derniere_migration": "20260630250000_documents_gate_per_mission_acceptation.sql",
+      "resume_ecart": "Écarts d'espacement uniquement (parenthèses multi-lignes repliées en prod), logique identique."
+    },
+    {
+      "fonction": "fn_admin_bfa_calculer",
+      "derniere_migration": "20260613144444_bfa_modele_contrat_par_beneficiaire.sql",
+      "resume_ecart": "Écart de commentaires uniquement (prod contient '-- Groupes éligibles' / '-- Étabs isolés éligibles' absents du repo), code identique."
+    },
+    {
+      "fonction": "fn_admin_chorus_submission_reset",
+      "derniere_migration": "20260421140000_cp_c_5_d_1_rpcs_admin_chorus.sql",
+      "resume_ecart": "Messages retour prod sans tirets cadratins ni accents ('rien a reset', 'Facture reset admin peut...') et commentaires repo absents en prod ; logique identique."
+    },
+    {
+      "fonction": "fn_admin_creer_compte_employe",
+      "derniere_migration": "20260609200000_rbac_admin_backend.sql",
+      "resume_ecart": "Écarts de commentaires uniquement (4 commentaires du repo absents en prod), code identique."
+    },
+    {
+      "fonction": "fn_admin_creer_litige_force",
+      "derniere_migration": "20260417130721_fix_t18_fenetre_financier_facture_lookup.sql",
+      "resume_ecart": "Écarts de commentaires uniquement (commentaires [FIX T18] du repo absents en prod), code identique."
+    },
+    {
+      "fonction": "fn_admin_kpi",
+      "derniere_migration": "20260316125013_a1866917-bff8-43f4-abe2-5695c70ca849.sql",
+      "resume_ecart": "Prod est une version enrichie (garde est_admin, fin_mois, filtres supprime_le, KPIs litiges/GMV/factures_impayees, commissions calculées sur fin_le) — repo nettement obsolète."
+    },
+    {
+      "fonction": "fn_admin_graphiques",
+      "derniere_migration": "20260316093918_9bfd1394-2499-48de-86c6-c92d86db76bf.sql",
+      "resume_ecart": "Prod ajoute la garde est_admin, calcule missions_par_semaine sur cree_le (toutes missions) et ca_par_mois depuis les factures (date_emission/montant_ht) — repo obsolète (modifie_le TERMINEE + commissions missions)."
+    },
+    {
+      "fonction": "fn_admin_invocations_purge",
+      "derniere_migration": "20260415160000_admin_invocations.sql",
+      "resume_ecart": "Écarts mineurs : message d'exception raccourci en prod ('Purge déjà en cours') + commentaires/espacement ; logique de purge identique."
+    },
+    {
+      "fonction": "fn_admin_invocations_append_only",
+      "derniere_migration": "20260415160000_admin_invocations.sql",
+      "resume_ecart": "Prod ajoute la machine à états internal_status (PENDING→INVOKED/CRASHED→COMPLETED, états terminaux) et l'immutabilité de request_id, avec messages sans accents — repo obsolète."
+    },
+    {
+      "fonction": "fn_admin_lister_externalisations",
+      "derniere_migration": "20260513270000_pr2s4_worker_externalisation.sql",
+      "resume_ecart": "Écarts d'espacement uniquement (parenthèses de sous-requête), code identique."
+    },
+    {
+      "fonction": "fn_admin_moderer_evaluation",
+      "derniere_migration": "20260411160000_rpc_drift_fixes_admin_payment_urgence.sql",
+      "resume_ecart": "Écart de commentaires uniquement (2 commentaires présents en prod, absents du repo), code identique."
+    },
+    {
+      "fonction": "fn_admin_mes_acces",
+      "derniere_migration": "20260610100000_fix_grants_fondateur.sql",
+      "resume_ecart": "Écart de commentaire uniquement (commentaire '-- Fondatrice ... accès total' présent en prod, absent du repo), code identique."
+    }
+  ],
+  "absent_du_repo": [
+    "dec_verifier_docs_jusqua_fin",
+    "dec_verifier_profession_etablissement",
+    "dec_verifier_numerotation_facture",
+    "dec_verifier_eligibilite_liberal",
+    "est_admin",
+    "dec_verifier_type_contrat_mission",
+    "dec_verifier_type_exercice_profession",
+    "est_soignant",
+    "fn_activer_liberal",
+    "fn_admin_mandats_stats"
+  ]
+}

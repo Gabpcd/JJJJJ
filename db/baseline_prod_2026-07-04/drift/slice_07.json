@@ -1,0 +1,128 @@
+{
+  "slice": 7,
+  "total": 80,
+  "match": 41,
+  "different": [
+    {
+      "fonction": "fn_ouvrir_litige_rate_limited",
+      "derniere_migration": "20260417130707_fix2_audit_wrapper_legacy.sql",
+      "resume_ecart": "Surcharge legacy 2 arguments (p_mission_id, p_motif) : écart limité aux commentaires SQL, code identique."
+    },
+    {
+      "fonction": "fn_ouvrir_litige_rate_limited",
+      "derniere_migration": "20260417130721_fix_t18_fenetre_financier_facture_lookup.sql",
+      "resume_ecart": "Surcharge 3 arguments (avec p_type_litige) : écart limité aux commentaires SQL, code identique."
+    },
+    {
+      "fonction": "fn_obtenir_mes_preferences_notifications",
+      "derniere_migration": "20260429180000_j23a_preferences_notifications.sql",
+      "resume_ecart": "Prod précise `ON CONFLICT (utilisateur_id) DO NOTHING` là où le repo a `ON CONFLICT DO NOTHING` ; le reste de l'écart = espaces."
+    },
+    {
+      "fonction": "fn_pointer_arrivee",
+      "derniere_migration": "20260517130400_fn_pointer_arrivee_dpae_warning.sql",
+      "resume_ecart": "Prod filtre `type_contrat IN ('CDD','CDD','SALARIE')` (doublon CDD, CDDU absent) alors que le repo a `('CDD','CDDU','SALARIE')`."
+    },
+    {
+      "fonction": "fn_pointer_depart",
+      "derniere_migration": "20260513150000_pr3s3_gps_pointage_hardening.sql",
+      "resume_ecart": "Écart cosmétique : le message hors-périmètre est scindé en deux littéraux concaténés dans le repo (`'… ' || '(tolérance '`) vs littéral unique en prod, plus des espaces — comportement identique."
+    },
+    {
+      "fonction": "fn_postuler_mission",
+      "derniere_migration": "20260627140000_fix_coeur_candidatures_matching.sql",
+      "resume_ecart": "Écart limité aux commentaires SQL, code identique."
+    },
+    {
+      "fonction": "fn_proposer_cloture_litige",
+      "derniere_migration": "20260328171813_3702d80f-f7e2-4085-b49f-cfdc767863aa.sql",
+      "resume_ecart": "Corps réécrit en prod : accepte le statut EN_MEDIATION et passe le litige en EN_MEDIATION (workflow accord des parties) au lieu de le clore directement en RESOLU — repo obsolète."
+    },
+    {
+      "fonction": "fn_protect_candidature_statut",
+      "derniere_migration": "20260608180000_fix_annulation_candidature_soignant_statut.sql",
+      "resume_ecart": "Écart limité aux commentaires SQL, code identique."
+    },
+    {
+      "fonction": "fn_proposer_mission_soignant",
+      "derniere_migration": "20260630250000_documents_gate_per_mission_acceptation.sql",
+      "resume_ecart": "Écart d'espaces/mise en forme uniquement, code identique."
+    },
+    {
+      "fonction": "fn_protect_mission_financials",
+      "derniere_migration": "20260416170000_cp5a_colonnes_et_gel.sql",
+      "resume_ecart": "Écart limité aux commentaires SQL, code identique."
+    },
+    {
+      "fonction": "fn_protect_etablissement_commercial",
+      "derniere_migration": "20260313130707_0a1aa64f-1637-4454-8172-8fc8ca2aedc3.sql",
+      "resume_ecart": "Prod ajoute un bypass service_role + contexte interne (v_is_service_role / v_is_internal via app.internal) et des messages d'exception raccourcis — repo obsolète."
+    },
+    {
+      "fonction": "fn_protect_facture_honoraire_immutability",
+      "derniere_migration": "20260417130000_cp_litiges_1_ddl.sql",
+      "resume_ecart": "Écart limité au texte des messages d'exception (prod sans les précisions entre parenthèses du repo), logique identique."
+    },
+    {
+      "fonction": "fn_protect_creneaux_si_facture",
+      "derniere_migration": "20260416190500_cp5b_protect_previsionnel_gel.sql",
+      "resume_ecart": "Écart limité aux commentaires SQL, code identique."
+    },
+    {
+      "fonction": "fn_protect_notification_update",
+      "derniere_migration": "20260313165936_fdc6fc77-d923-4a0e-9fc3-a1eb3f3c798c.sql",
+      "resume_ecart": "Prod ajoute en tête des bypass service_role / auth.uid() NULL / est_admin() absents du repo — repo obsolète."
+    },
+    {
+      "fonction": "fn_proteger_document_verification",
+      "derniere_migration": "20260314193919_e2243a04-3c83-47ac-9e72-49b21cb9f4bb.sql",
+      "resume_ecart": "Prod ajoute bypass service_role/auth NULL, verrouille aussi les champs IA (resultat_ia, score_confiance_ia, nom/prenom extraits) et interdit le changement de soignant_id — repo obsolète."
+    },
+    {
+      "fonction": "fn_rappel_dpae_quotidien",
+      "derniere_migration": "20260513170000_pr6s3_bugfixes_audit.sql",
+      "resume_ecart": "Repo sélectionne cm.soignant_id en plus et filtre CDDU alors que prod a le doublon `('CDD','CDD','SALARIE')` sans CDDU ; le reste = espaces jsonb_build_object."
+    },
+    {
+      "fonction": "fn_rappel_pointage_arrivee",
+      "derniere_migration": "20260513170000_pr6s3_bugfixes_audit.sql",
+      "resume_ecart": "Écart d'espaces/mise en forme uniquement, code identique."
+    },
+    {
+      "fonction": "fn_recalculer_palier_commission",
+      "derniere_migration": "20260429230100_audit_fix_crons_et_fn_palier.sql",
+      "resume_ecart": "Écart limité aux commentaires SQL, code identique."
+    },
+    {
+      "fonction": "fn_recalculer_commissions_post_litige",
+      "derniere_migration": "20260417130716_bloc4_commission_ajustee_push.sql",
+      "resume_ecart": "Écart limité aux commentaires SQL, code identique."
+    },
+    {
+      "fonction": "fn_rechercher_aide",
+      "derniere_migration": "20260429160000_j22_articles_aide_schema.sql",
+      "resume_ecart": "Écart limité aux commentaires SQL, code identique."
+    }
+  ],
+  "absent_du_repo": [
+    "fn_notifier_documents_expirants",
+    "fn_note_moyenne",
+    "fn_obtenir_conversation",
+    "fn_paiements_etablissement",
+    "fn_pointer_fin_pause",
+    "fn_pointer_debut_pause",
+    "fn_presences_detail_mission",
+    "fn_professions_liberales",
+    "fn_protect_facture_montants",
+    "fn_protect_message_mission_update",
+    "fn_protect_message_chat_update",
+    "fn_protect_paiement_mission",
+    "fn_protect_stripe_transfer",
+    "fn_protect_stripe_connect_onboarding",
+    "fn_purger_gps_ancien",
+    "fn_purger_audit_ancien",
+    "fn_purger_demo",
+    "fn_recalculer_tous_paliers",
+    "fn_relancer_signatures_contrats"
+  ]
+}
