@@ -3210,3 +3210,806 @@ BEGIN
   DELETE FROM missions WHERE id = p_mission_id;
 END;
 $function$
+
+
+---FIN-FONCTION---
+
+CREATE OR REPLACE FUNCTION public.fn_traiter_reclamation(p_reclamation_id uuid, p_statut text, p_points_restaures integer DEFAULT 0)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+DECLARE v_recl RECORD;
+BEGIN
+    IF NOT est_admin() THEN RETURN '{"error":"Accès refusé"}'::JSONB; END IF;
+    SELECT * INTO v_recl FROM reclamations_scoring WHERE id = p_reclamation_id;
+    IF v_recl IS NULL THEN RETURN '{"error":"Réclamation introuvable"}'::JSONB; END IF;
+    UPDATE reclamations_scoring SET statut = p_statut, points_restaures = p_points_restaures, traite_par = auth.uid(), traite_le = NOW() WHERE id = p_reclamation_id;
+    IF p_statut = 'ACCEPTEE' AND p_points_restaures > 0 THEN
+        UPDATE soignants SET score_fiabilite = LEAST(100, score_fiabilite + p_points_restaures), modifie_le = NOW() WHERE id = v_recl.soignant_id;
+    END IF;
+    RETURN '{"success":true}'::JSONB;
+END;
+$function$
+
+
+---FIN-FONCTION---
+
+CREATE OR REPLACE FUNCTION public.fn_traiter_candidature(p_candidature_id uuid, p_decision text, p_motif text DEFAULT NULL::text)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+DECLARE
+    v_cand RECORD; v_mission RECORD; v_soignant RECORD; v_etab RECORD;
+    v_jours_avant NUMERIC; v_rcp_valide BOOLEAN;
+    v_heures_semaine NUMERIC; v_debut_semaine TIMESTAMPTZ; v_fin_semaine TIMESTAMPTZ;
+    v_type_contrat TEXT; v_numero TEXT; v_html TEXT;
+    v_choix_applique TEXT;
+    v_type_paiement TEXT; v_mode_paiement TEXT;
+    v_rows INT;
+BEGIN
+    SELECT * INTO v_cand FROM candidatures WHERE id = p_candidature_id;
+    IF NOT FOUND THEN RETURN jsonb_build_object('error', 'Candidature introuvable'); END IF;
+
+    SELECT * INTO v_mission FROM missions WHERE id = v_cand.mission_id;
+    IF v_mission.etablissement_id != mon_etablissement_id() AND NOT est_admin() THEN
+        RETURN jsonb_build_object('error', 'Non autorisé');
+    END IF;
+
+    -- Idempotence : ne traiter qu'une candidature encore en attente. Empêche la
+    -- ré-acceptation (qui régénérait un 2e contrat + une 2e notification).
+    IF v_cand.statut <> 'EN_ATTENTE' THEN
+        RETURN jsonb_build_object('error', 'Cette candidature a déjà été traitée.');
+    END IF;
+
+    IF p_decision = 'ACCEPTEE' THEN
+        SELECT * INTO v_soignant FROM soignants WHERE id = v_cand.soignant_id;
+        SELECT * INTO v_etab FROM etablissements WHERE id = v_mission.etablissement_id;
+
+        -- Compatibilité hiérarchique (alignée sur la candidature) au lieu de l'égalité stricte.
+        IF NOT fn_soignant_compatible_mission(v_soignant.profession, v_soignant.specialite_medicale,
+               v_mission.profession_requise, v_mission.specialite_medicale_requise, v_mission.accepte_non_specialises) THEN
+            RETURN jsonb_build_object('error', 'Ce soignant (' || v_soignant.profession::TEXT || ') n''est pas compatible avec la mission requise (' || v_mission.profession_requise::TEXT || ').');
+        END IF;
+
+        IF fn_est_exclu(v_cand.soignant_id, v_mission.etablissement_id) THEN
+            RETURN jsonb_build_object('error', 'Ce soignant est dans la liste d''exclusions.');
+        END IF;
+
+        IF v_mission.type_contrat_recherche = 'SALARIE' AND COALESCE(v_soignant.type_exercice, 'SALARIE') = 'LIBERAL' THEN
+            RETURN jsonb_build_object('error', 'Cette mission est réservée aux salariés.');
+        END IF;
+        IF v_mission.type_contrat_recherche = 'LIBERAL' AND COALESCE(v_soignant.type_exercice, 'SALARIE') NOT IN ('LIBERAL', 'MIXTE') THEN
+            RETURN jsonb_build_object('error', 'Cette mission est réservée aux libéraux.');
+        END IF;
+
+        IF v_soignant.type_exercice = 'MIXTE' AND v_mission.type_contrat_recherche = 'TOUS' THEN
+            IF v_cand.type_contrat_choisi IS NULL OR v_cand.type_contrat_choisi NOT IN ('SALARIE', 'LIBERAL') THEN
+                RETURN jsonb_build_object(
+                    'error', 'E16_CANDIDATURE_ORPHELINE',
+                    'message', 'Candidature soumise avant correctif E16 : demander au soignant de re-candidater avec son choix de contrat (salarié ou libéral).',
+                    'candidature_id', p_candidature_id
+                );
+            END IF;
+            v_choix_applique := v_cand.type_contrat_choisi;
+        ELSIF v_mission.type_contrat_recherche = 'SALARIE' THEN
+            v_choix_applique := 'SALARIE';
+        ELSIF v_mission.type_contrat_recherche = 'LIBERAL' THEN
+            v_choix_applique := 'LIBERAL';
+        ELSIF v_cand.type_contrat_choisi IN ('SALARIE', 'LIBERAL') THEN
+            v_choix_applique := v_cand.type_contrat_choisi;
+        ELSE
+            v_choix_applique := COALESCE(v_soignant.type_exercice, 'SALARIE');
+        END IF;
+
+        v_jours_avant := EXTRACT(EPOCH FROM (v_mission.debut_le - NOW())) / 86400;
+        IF v_jours_avant < 7 THEN
+            IF v_soignant.tous_documents_valides IS NOT TRUE THEN
+                INSERT INTO notifications (destinataire_id, type, titre, corps, lien, type_destinataire)
+                SELECT v_cand.soignant_id, 'RAPPEL_DOCUMENTS', 'Un établissement veut vous accepter !',
+                    'L''établissement a tenté d''accepter votre candidature pour "' || fn_html_escape(v_mission.intitule) || '" mais vos documents ne sont pas encore validés. Validez-les vite pour décrocher la mission.',
+                    '/soignant/mes-documents', 'SOIGNANT'
+                WHERE NOT EXISTS (
+                    SELECT 1 FROM notifications
+                    WHERE destinataire_id = v_cand.soignant_id AND type = 'RAPPEL_DOCUMENTS'
+                      AND cree_le > NOW() - INTERVAL '6 hours');
+                RETURN jsonb_build_object('error', 'Les documents de ce soignant sont en cours de vérification — il vient d''être relancé automatiquement. Réessayez dès que son badge documents passe au vert.');
+            END IF;
+            IF v_choix_applique = 'LIBERAL' THEN
+                SELECT EXISTS(
+                    SELECT 1 FROM documents_soignants
+                    WHERE soignant_id = v_cand.soignant_id AND type_document = 'RCP_ASSURANCE'
+                    AND statut_verification = 'VERIFIE' AND supprime_le IS NULL
+                    AND (valide_jusqua IS NULL OR valide_jusqua > CURRENT_DATE)
+                ) INTO v_rcp_valide;
+                IF NOT v_rcp_valide THEN
+                    RETURN jsonb_build_object('error', 'RCP expirée ou manquante — obligatoire pour une mission en libéral.');
+                END IF;
+            END IF;
+        END IF;
+
+        IF v_choix_applique = 'SALARIE' THEN
+            v_debut_semaine := DATE_TRUNC('week', v_mission.debut_le);
+            v_fin_semaine := v_debut_semaine + INTERVAL '7 days';
+            SELECT COALESCE(SUM(duree_heures), 0) INTO v_heures_semaine
+            FROM missions WHERE soignant_assigne_id = v_cand.soignant_id
+              AND statut IN ('ASSIGNEE', 'EN_COURS', 'TERMINEE')
+              AND debut_le >= v_debut_semaine AND debut_le < v_fin_semaine;
+            IF v_heures_semaine + COALESCE(v_mission.duree_heures, 0) > 48 THEN
+                RETURN jsonb_build_object('error', 'Dépasse 48h/semaine (' || ROUND(v_heures_semaine, 1) || 'h planifiées).');
+            END IF;
+        END IF;
+
+        IF v_choix_applique = 'LIBERAL' THEN
+            v_type_contrat := 'REMPLACEMENT_LIBERAL';
+            v_type_paiement := 'NOTE_HONORAIRES';
+            v_mode_paiement := 'STRIPE_CONNECT';
+        ELSE
+            v_type_contrat := 'CDD';
+            v_type_paiement := 'BULLETIN_PAIE';
+            v_mode_paiement := 'DIRECT';
+        END IF;
+
+        -- Claim ATOMIQUE de la mission AVANT de toucher les candidatures : si une autre
+        -- acceptation a déjà pris la mission, on s'arrête proprement (aucune candidature modifiée).
+        UPDATE missions SET
+            soignant_assigne_id = v_cand.soignant_id,
+            statut = 'ASSIGNEE',
+            type_contrat_applique = v_choix_applique::type_contrat_applique_enum,
+            choix_contrat_soignant = v_choix_applique,
+            type_paiement_soignant = v_type_paiement,
+            mode_paiement_soignant = v_mode_paiement,
+            modifie_le = NOW()
+        WHERE id = v_cand.mission_id AND statut = 'OUVERTE';
+        GET DIAGNOSTICS v_rows = ROW_COUNT;
+        IF v_rows = 0 THEN
+            RETURN jsonb_build_object('error', 'Cette mission a déjà été attribuée ou n''est plus ouverte.');
+        END IF;
+
+        UPDATE candidatures SET statut = 'ACCEPTEE', traite_le = NOW() WHERE id = p_candidature_id;
+        UPDATE candidatures SET statut = 'REFUSEE', motif_refus = 'Un autre candidat a été sélectionné', traite_le = NOW()
+        WHERE mission_id = v_cand.mission_id AND id != p_candidature_id AND statut = 'EN_ATTENTE';
+
+        v_numero := fn_generer_numero_contrat(v_type_contrat);
+
+        SELECT contenu_html INTO v_html FROM templates_contrat
+        WHERE type_contrat = v_type_contrat AND est_actif = TRUE LIMIT 1;
+
+        IF v_html IS NOT NULL THEN
+            v_html := REPLACE(v_html, '{{etablissement_nom}}', fn_html_escape(v_etab.nom));
+            v_html := REPLACE(v_html, '{{etablissement_siret}}', fn_html_escape(v_etab.siret));
+            v_html := REPLACE(v_html, '{{etablissement_finess}}', fn_html_escape(COALESCE(v_etab.finess, 'N/A')));
+            v_html := REPLACE(v_html, '{{etablissement_adresse}}', fn_html_escape(COALESCE(v_etab.adresse_rue || ', ' || v_etab.adresse_code_postal || ' ' || v_etab.adresse_ville, '')));
+            v_html := REPLACE(v_html, '{{soignant_prenom}}', fn_html_escape(v_soignant.prenom));
+            v_html := REPLACE(v_html, '{{soignant_nom}}', fn_html_escape(v_soignant.nom));
+            v_html := REPLACE(v_html, '{{soignant_rpps}}', fn_html_escape(COALESCE(v_soignant.numero_rpps, '')));
+            v_html := REPLACE(v_html, '{{profession}}', fn_html_escape(COALESCE(v_soignant.profession::TEXT, '')));
+            v_html := REPLACE(v_html, '{{debut_date}}', TO_CHAR(v_mission.debut_le AT TIME ZONE 'Europe/Paris', 'DD/MM/YYYY'));
+            v_html := REPLACE(v_html, '{{debut_heure}}', TO_CHAR(v_mission.debut_le AT TIME ZONE 'Europe/Paris', 'HH24:MI'));
+            v_html := REPLACE(v_html, '{{fin_date}}', TO_CHAR(v_mission.fin_le AT TIME ZONE 'Europe/Paris', 'DD/MM/YYYY'));
+            v_html := REPLACE(v_html, '{{fin_heure}}', TO_CHAR(v_mission.fin_le AT TIME ZONE 'Europe/Paris', 'HH24:MI'));
+            v_html := REPLACE(v_html, '{{duree_heures}}', COALESCE(v_mission.duree_heures::TEXT, ''));
+            v_html := REPLACE(v_html, '{{taux_horaire}}', COALESCE(v_mission.taux_horaire_base::TEXT, ''));
+            v_html := REPLACE(v_html, '{{retrocession_pct}}', COALESCE(v_mission.retrocession_pct::TEXT, ''));
+            v_html := REPLACE(v_html, '{{mode_remuneration}}', CASE WHEN v_mission.mode_remuneration = 'RETROCESSION' THEN 'Rétrocession d''honoraires' ELSE 'Taux horaire' END);
+            v_html := REPLACE(v_html, '{{numero_contrat}}', fn_html_escape(v_numero));
+            v_html := REPLACE(v_html, '{{date_signature}}', TO_CHAR(NOW() AT TIME ZONE 'Europe/Paris', 'DD/MM/YYYY'));
+            v_html := REPLACE(v_html, '{{lieu}}', fn_html_escape(COALESCE(v_etab.adresse_ville, '')));
+        END IF;
+
+        INSERT INTO contrats_mission (mission_id, etablissement_id, soignant_id,
+            type_contrat, numero_contrat, contenu_html, statut
+        ) VALUES (v_cand.mission_id, v_mission.etablissement_id, v_cand.soignant_id,
+            v_type_contrat, v_numero, v_html, 'EN_ATTENTE_SIGNATURES');
+
+        INSERT INTO notifications (destinataire_id, type, titre, corps, lien, type_destinataire)
+        VALUES (v_cand.soignant_id, 'CANDIDATURE_ACCEPTEE', 'Candidature acceptee',
+            'Votre candidature pour "' || fn_html_escape(v_mission.intitule) || '" a ete acceptee. Signez votre contrat.',
+            '/soignant/missions', 'SOIGNANT');
+
+        -- D3 : la paperasse couplée au pic de motivation — mission LIBERALE
+        -- acceptée + mandat non signé → deep-link vers la sheet de signature.
+        -- (La mission ne pourra pas démarrer sans : trg_verifier_mandat_avant_debut.)
+        IF v_choix_applique = 'LIBERAL' AND COALESCE(v_soignant.mandat_facturation_signe, false) IS NOT TRUE THEN
+            INSERT INTO notifications (destinataire_id, type, titre, corps, lien, type_destinataire)
+            VALUES (v_cand.soignant_id, 'CONTRAT_A_SIGNER', '✍️ Signe ton mandat pour confirmer ta mission',
+                'Tu viens d''être accepté(e) sur « ' || fn_html_escape(v_mission.intitule) || ' » en libéral. Signe ton mandat de facturation (1 min) : sans lui, Jolene ne peut pas émettre tes factures d''honoraires ni déclencher ton paiement.',
+                '/soignant/mandat-facturation', 'SOIGNANT');
+        END IF;
+
+    ELSIF p_decision = 'REFUSEE' THEN
+        UPDATE candidatures SET statut = 'REFUSEE', motif_refus = p_motif, traite_le = NOW() WHERE id = p_candidature_id;
+
+        INSERT INTO notifications (destinataire_id, type, titre, corps, lien, type_destinataire)
+        VALUES (v_cand.soignant_id, 'CANDIDATURE_REFUSEE', 'Candidature non retenue',
+            'Votre candidature pour "' || fn_html_escape(v_mission.intitule) || '" n''a pas ete retenue.' ||
+            CASE WHEN p_motif IS NOT NULL THEN ' Motif : ' || fn_html_escape(p_motif) ELSE '' END,
+            '/soignant/missions', 'SOIGNANT');
+    ELSE
+        RETURN jsonb_build_object('error', 'Décision invalide');
+    END IF;
+
+    RETURN jsonb_build_object('success', true, 'choix_applique', v_choix_applique);
+END;
+$function$
+
+
+---FIN-FONCTION---
+
+CREATE OR REPLACE FUNCTION public.fn_trg_auto_commission_facturee()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SET search_path TO 'public'
+AS $function$
+BEGIN
+    IF NEW.facture_id IS NOT NULL AND (OLD.facture_id IS NULL OR OLD.facture_id != NEW.facture_id) THEN
+        NEW.commission_facturee := true;
+    END IF;
+    RETURN NEW;
+END;
+$function$
+
+
+---FIN-FONCTION---
+
+CREATE OR REPLACE FUNCTION public.fn_traiter_reclamation_generale(p_reclamation_id uuid, p_statut text, p_reponse text DEFAULT NULL::text)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$ DECLARE v_admin_id UUID := auth.uid(); BEGIN IF NOT est_admin() THEN RETURN jsonb_build_object('error', 'Accès réservé aux administrateurs'); END IF; UPDATE reclamations SET statut = p_statut, reponse_admin = COALESCE(p_reponse, reponse_admin), traite_par = v_admin_id, traite_le = now() WHERE id = p_reclamation_id; RETURN jsonb_build_object('ok', true); END; $function$
+
+
+---FIN-FONCTION---
+
+CREATE OR REPLACE FUNCTION public.fn_trg_articles_aide_updated_at()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SET search_path TO 'public'
+AS $function$ BEGIN NEW.mis_a_jour_le := now(); RETURN NEW; END; $function$
+
+
+---FIN-FONCTION---
+
+CREATE OR REPLACE FUNCTION public.fn_trg_anonymiser_notations_suppression()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public', 'extensions'
+AS $function$
+BEGIN
+  -- Anonymise quand supprime_le passe de NULL à NOT NULL
+  IF OLD.supprime_le IS NULL AND NEW.supprime_le IS NOT NULL THEN
+    UPDATE notations_missions SET
+      notateur_id = NULL,
+      notateur_anonymise = true
+    WHERE notateur_id = NEW.id;
+  END IF;
+  RETURN NEW;
+END;
+$function$
+
+
+---FIN-FONCTION---
+
+CREATE OR REPLACE FUNCTION public.fn_trg_absence_event_score()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+BEGIN
+  IF NEW.absence_sans_prevenir IS TRUE
+     AND COALESCE(OLD.absence_sans_prevenir, FALSE) IS DISTINCT FROM TRUE
+     AND NEW.soignant_assigne_id IS NOT NULL THEN
+    INSERT INTO evenements_score_soignant (soignant_id, type_evenement, points, motif, contestable, mission_id)
+    SELECT NEW.soignant_assigne_id, 'NO_SHOW', -30,
+           'Absence sans prévenir sur la mission "' || COALESCE(NEW.intitule, '') || '"',
+           TRUE, NEW.id
+    WHERE NOT EXISTS (
+      SELECT 1 FROM evenements_score_soignant
+      WHERE mission_id = NEW.id AND soignant_id = NEW.soignant_assigne_id AND type_evenement = 'NO_SHOW');
+  END IF;
+  RETURN NEW;
+END;
+$function$
+
+
+---FIN-FONCTION---
+
+CREATE OR REPLACE FUNCTION public.fn_trg_annuler_contrat_orphelin()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+BEGIN
+  IF OLD.soignant_assigne_id IS NOT NULL
+     AND NEW.soignant_assigne_id IS NULL
+     AND NEW.statut = 'OUVERTE' THEN
+    UPDATE contrats_mission
+       SET statut = 'ANNULE'
+     WHERE mission_id = NEW.id
+       AND soignant_id = OLD.soignant_assigne_id
+       AND statut NOT IN ('ANNULE', 'EXPIRE');
+  END IF;
+  RETURN NEW;
+END;
+$function$
+
+
+---FIN-FONCTION---
+
+CREATE OR REPLACE FUNCTION public.fn_trg_auto_facture_honoraires()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+DECLARE
+    v_mandat_signe BOOLEAN;
+    v_existing_id UUID;
+BEGIN
+    IF NEW.statut = 'TERMINEE' AND (OLD.statut IS NULL OR OLD.statut <> 'TERMINEE') THEN
+        -- Rétrocession : la facture sortirait à 0 € avant la déclaration des
+        -- honoraires (et les factures sont immuables) → fn_declarer_honoraires_
+        -- retrocession déclenchera la génération au bon moment.
+        IF NEW.mode_remuneration = 'RETROCESSION' AND NEW.montant_honoraires_bruts IS NULL THEN
+            RETURN NEW;
+        END IF;
+        IF NEW.soignant_assigne_id IS NOT NULL THEN
+            SELECT COALESCE(mandat_facturation_signe, FALSE)
+            INTO v_mandat_signe
+            FROM soignants
+            WHERE id = NEW.soignant_assigne_id;
+
+            IF v_mandat_signe THEN
+                SELECT id INTO v_existing_id FROM factures_honoraires WHERE mission_id = NEW.id LIMIT 1;
+                IF v_existing_id IS NULL THEN
+                    PERFORM fn_generer_facture_honoraires_mission(NEW.id);
+                END IF;
+            END IF;
+        END IF;
+    END IF;
+    RETURN NEW;
+END;
+$function$
+
+
+---FIN-FONCTION---
+
+CREATE OR REPLACE FUNCTION public.fn_trg_auto_heures_majorees()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+DECLARE
+  v_creneau RECORD;
+  v_nuit numeric := 0;
+  v_dim numeric := 0;
+  v_fer numeric := 0;
+  v_h_debut_nuit time;
+  v_h_fin_nuit time;
+  v_cursor timestamptz;
+  v_step interval := '30 minutes';
+  v_local_time time;
+  v_dow int;
+  v_date date;
+  v_type_source text;
+  v_sum_prev numeric;
+  v_sum_eff numeric;
+BEGIN
+  IF NEW.debut_le IS NULL OR NEW.fin_le IS NULL THEN
+    RETURN NEW;
+  END IF;
+
+  SELECT
+    COALESCE(NEW.heure_debut_nuit_fige, e.heure_debut_nuit, '21:00'::time),
+    COALESCE(NEW.heure_fin_nuit_fige, e.heure_fin_nuit, '06:00'::time)
+  INTO v_h_debut_nuit, v_h_fin_nuit
+  FROM etablissements e WHERE e.id = NEW.etablissement_id;
+
+  IF NOT FOUND THEN
+    v_h_debut_nuit := '21:00'::time;
+    v_h_fin_nuit := '06:00'::time;
+  END IF;
+
+  SELECT
+    COALESCE(SUM(EXTRACT(EPOCH FROM (fin - debut)) / 3600.0)
+      FILTER (WHERE type_creneau = 'PREVISIONNEL' AND NOT est_pause), 0),
+    COALESCE(SUM(EXTRACT(EPOCH FROM (fin - debut)) / 3600.0)
+      FILTER (WHERE type_creneau = 'EFFECTIF' AND fin IS NOT NULL AND NOT est_pause), 0)
+  INTO v_sum_prev, v_sum_eff
+  FROM mission_creneaux WHERE mission_id = NEW.id;
+
+  IF v_sum_eff > v_sum_prev THEN
+    v_type_source := 'EFFECTIF';
+  ELSE
+    v_type_source := 'PREVISIONNEL';
+  END IF;
+
+  FOR v_creneau IN
+    SELECT debut, fin FROM mission_creneaux
+    WHERE mission_id = NEW.id
+      AND type_creneau = v_type_source
+      AND NOT est_pause
+      AND (v_type_source = 'PREVISIONNEL' OR fin IS NOT NULL)
+  LOOP
+    v_cursor := v_creneau.debut;
+    WHILE v_cursor < v_creneau.fin LOOP
+      v_local_time := (v_cursor AT TIME ZONE 'Europe/Paris')::time;
+      v_dow := EXTRACT(DOW FROM (v_cursor AT TIME ZONE 'Europe/Paris'));
+      v_date := (v_cursor AT TIME ZONE 'Europe/Paris')::date;
+
+      IF v_h_debut_nuit > v_h_fin_nuit THEN
+        IF v_local_time >= v_h_debut_nuit OR v_local_time < v_h_fin_nuit THEN
+          v_nuit := v_nuit + 0.5;
+        END IF;
+      ELSE
+        IF v_local_time >= v_h_debut_nuit AND v_local_time < v_h_fin_nuit THEN
+          v_nuit := v_nuit + 0.5;
+        END IF;
+      END IF;
+
+      IF v_dow = 0 THEN v_dim := v_dim + 0.5; END IF;
+      IF EXISTS (SELECT 1 FROM jours_feries_fr WHERE date_ferie = v_date) THEN v_fer := v_fer + 0.5; END IF;
+
+      v_cursor := v_cursor + v_step;
+    END LOOP;
+  END LOOP;
+
+  NEW.heures_nuit := v_nuit;
+  NEW.heures_dimanche := v_dim;
+  NEW.heures_ferie := v_fer;
+
+  RETURN NEW;
+END;
+$function$
+
+
+---FIN-FONCTION---
+
+CREATE OR REPLACE FUNCTION public.fn_trg_coherence_statut_soignant()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SET search_path TO 'public'
+AS $function$
+BEGIN
+    -- ASSIGNEE ou EN_COURS sans soignant → forcer OUVERTE
+    IF NEW.statut IN ('ASSIGNEE','EN_COURS') AND NEW.soignant_assigne_id IS NULL THEN
+        NEW.statut := 'OUVERTE';
+    END IF;
+    RETURN NEW;
+END;
+$function$
+
+
+---FIN-FONCTION---
+
+CREATE OR REPLACE FUNCTION public.fn_trg_defacto_auto_cession()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public', 'extensions'
+AS $function$
+DECLARE
+  v_opt_in boolean;
+  v_soignant RECORD;
+BEGIN
+  IF NEW.statut = 'EMISE' AND (OLD.statut IS DISTINCT FROM 'EMISE')
+     AND NEW.type_document = 'FACTURE' THEN
+    SELECT defacto_opt_in, mandat_facturation_signe
+    INTO v_opt_in, v_soignant.mandat_facturation_signe
+    FROM soignants WHERE id = NEW.soignant_id;
+
+    IF COALESCE(v_opt_in, false) = true THEN
+      IF NOT EXISTS (SELECT 1 FROM cessions_creance WHERE facture_honoraire_id = NEW.id) THEN
+        INSERT INTO cessions_creance (
+          soignant_id, facture_honoraire_id, montant,
+          version_texte, contenu_hash, signed_at, ip_address, user_agent
+        ) VALUES (
+          NEW.soignant_id, NEW.id, NEW.montant_ttc,
+          'auto_defacto_opt_in_v1', 'auto', NOW(), 'system', 'weekly-invoicing-cron'
+        );
+        UPDATE factures_honoraires SET factor_assigned = true WHERE id = NEW.id;
+        PERFORM public.fn_ecrire_audit_safe(
+          p_acteur_id := NEW.soignant_id, p_type_acteur := 'SYSTEME',
+          p_action := 'FACTURATION', p_type_ressource := 'facture_honoraire',
+          p_id_ressource := NEW.id,
+          p_details := jsonb_build_object('event','DEFACTO_AUTO_CESSION','montant_ttc',NEW.montant_ttc,'opt_in',true)
+        );
+      END IF;
+    END IF;
+  END IF;
+  RETURN NEW;
+END;
+$function$
+
+
+---FIN-FONCTION---
+
+CREATE OR REPLACE FUNCTION public.fn_trg_auto_notify_mission_urgente()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public', 'extensions'
+AS $function$
+DECLARE
+  v_etab RECORD;
+  v_count INT := 0;
+  v_soignant RECORD;
+  v_url TEXT := 'https://flripxtsyegjshnhzjkz.supabase.co';
+  v_token TEXT;
+  v_should_fire BOOLEAN := false;
+  v_corps TEXT;
+BEGIN
+  IF (TG_OP = 'INSERT' AND COALESCE(NEW.est_urgente, false) = true AND NEW.statut = 'OUVERTE') THEN
+    v_should_fire := true;
+  ELSIF (TG_OP = 'UPDATE' AND COALESCE(NEW.est_urgente, false) = true AND NEW.statut = 'OUVERTE'
+         AND (
+           COALESCE(OLD.est_urgente, false) IS DISTINCT FROM COALESCE(NEW.est_urgente, false)
+           OR (OLD.statut = 'ASSIGNEE' AND NEW.statut = 'OUVERTE')
+         )) THEN
+    v_should_fire := true;
+  END IF;
+
+  IF NOT v_should_fire THEN
+    RETURN NEW;
+  END IF;
+
+  SELECT id, nom, adresse_lat, adresse_lng, adresse_ville
+  INTO v_etab FROM etablissements WHERE id = NEW.etablissement_id;
+
+  -- Token service_role depuis le vault (pattern fonctionnel, cf. dec_push_contrat_a_signer)
+  BEGIN
+    v_token := (SELECT decrypted_secret FROM vault.decrypted_secrets WHERE name = 'service_role_key' LIMIT 1);
+  EXCEPTION WHEN OTHERS THEN
+    v_token := NULL;
+  END;
+
+  FOR v_soignant IN
+    SELECT s.id, s.email, s.prenom, s.telephone,
+      COALESCE(s.pool_urgence_sms_opt_in, false) AS sms_opt_in,
+      CASE
+        WHEN v_etab.adresse_lat IS NOT NULL AND s.adresse_lat IS NOT NULL THEN
+          (6371 * 2 * asin(sqrt(
+            power(sin(radians(s.adresse_lat - v_etab.adresse_lat) / 2), 2) +
+            cos(radians(v_etab.adresse_lat)) * cos(radians(s.adresse_lat)) *
+            power(sin(radians(s.adresse_lng - v_etab.adresse_lng) / 2), 2)
+          )))
+        ELSE NULL
+      END AS distance_km
+    FROM soignants s
+    WHERE s.supprime_le IS NULL
+      AND COALESCE(s.disponible_urgence, false) = true
+      AND COALESCE(s.tous_documents_valides, false) = true
+      AND public.fn_soignant_compatible_mission(
+        s.profession, s.specialite_medicale,
+        NEW.profession_requise, NEW.specialite_medicale_requise,
+        COALESCE(NEW.accepte_non_specialises, true)
+      ) = true
+      AND NOT EXISTS (SELECT 1 FROM candidatures c WHERE c.mission_id = NEW.id AND c.soignant_id = s.id)
+      AND NOT EXISTS (
+        SELECT 1 FROM missions m2
+        WHERE m2.soignant_assigne_id = s.id AND m2.id <> NEW.id
+          AND m2.statut IN ('ASSIGNEE', 'EN_COURS')
+          AND m2.debut_le < NEW.fin_le AND m2.fin_le > NEW.debut_le)
+      AND (COALESCE(s.type_exercice, 'SALARIE') NOT IN ('LIBERAL','MIXTE')
+           OR COALESCE(s.mandat_facturation_signe, false) = true)
+      AND (s.profession::text IN ('AS','AES') OR COALESCE(s.rpps_verifie, false) = true)
+      AND (
+        v_etab.adresse_lat IS NULL OR s.adresse_lat IS NULL OR
+        (6371 * 2 * asin(sqrt(
+          power(sin(radians(s.adresse_lat - v_etab.adresse_lat) / 2), 2) +
+          cos(radians(v_etab.adresse_lat)) * cos(radians(s.adresse_lat)) *
+          power(sin(radians(s.adresse_lng - v_etab.adresse_lng) / 2), 2)
+        ))) <= COALESCE(s.urgence_rayon_km, 30)
+      )
+    ORDER BY distance_km ASC NULLS LAST, COALESCE(s.score_fiabilite, 0) DESC
+  LOOP
+    v_corps := 'Mission ' || COALESCE(NEW.intitule, NEW.profession_requise::text)
+        || ' à ' || COALESCE(v_etab.adresse_ville, 'votre zone')
+        || CASE WHEN v_soignant.distance_km IS NOT NULL THEN ' (' || ROUND(v_soignant.distance_km::numeric, 1) || ' km)' ELSE '' END
+        || ' · ' || COALESCE(NEW.taux_horaire_base::text, '?') || '€/h. Acceptez en 1 clic.';
+
+    INSERT INTO notifications (
+      destinataire_id, type_destinataire, type, titre, corps, lien, type_ressource, id_ressource
+    ) VALUES (
+      v_soignant.id, 'SOIGNANT', 'MISSION_URGENTE',
+      '🚨 Mission urgente près de chez vous', v_corps,
+      '/soignant/pool-urgence', 'mission', NEW.id
+    );
+
+    IF v_token IS NOT NULL THEN
+      -- PUSH natif : canal le plus immédiat pour une urgence (était totalement absent)
+      BEGIN
+        PERFORM net.http_post(
+          url := v_url || '/functions/v1/send-push',
+          headers := jsonb_build_object('Content-Type', 'application/json', 'Authorization', 'Bearer ' || v_token),
+          body := jsonb_build_object(
+            'destinataire_id', v_soignant.id,
+            'type_evenement', 'MISSION_URGENTE',
+            'titre', '🚨 Mission urgente près de chez vous',
+            'corps', v_corps,
+            'data', jsonb_build_object('mission_id', NEW.id, 'lien', '/soignant/pool-urgence')
+          )
+        );
+      EXCEPTION WHEN OTHERS THEN NULL; END;
+
+      -- EMAIL
+      BEGIN
+        PERFORM net.http_post(
+          url := v_url || '/functions/v1/send-email',
+          headers := jsonb_build_object('Content-Type', 'application/json', 'Authorization', 'Bearer ' || v_token),
+          body := jsonb_build_object(
+            'type', 'MISSION_URGENTE_POOL',
+            'destinataire_id', v_soignant.id,
+            'data', jsonb_build_object(
+              'prenom', v_soignant.prenom, 'mission_id', NEW.id, 'mission_intitule', NEW.intitule,
+              'profession', NEW.profession_requise::text, 'ville', v_etab.adresse_ville,
+              'distance_km', v_soignant.distance_km, 'taux_horaire', NEW.taux_horaire_base, 'debut_le', NEW.debut_le
+            )
+          )
+        );
+      EXCEPTION WHEN OTHERS THEN NULL; END;
+
+      -- SMS (opt-in uniquement)
+      IF v_soignant.sms_opt_in = true AND COALESCE(v_soignant.telephone, '') <> '' THEN
+        BEGIN
+          PERFORM net.http_post(
+            url := v_url || '/functions/v1/send-sms',
+            headers := jsonb_build_object('Content-Type', 'application/json', 'Authorization', 'Bearer ' || v_token),
+            body := jsonb_build_object(
+              'destinataire_id', v_soignant.id, 'telephone', v_soignant.telephone,
+              'message', 'URGENT - Mission ' || COALESCE(NEW.profession_requise::text, '')
+                || ' ' || COALESCE(v_etab.adresse_ville, '')
+                || ' ' || TO_CHAR(NEW.debut_le AT TIME ZONE 'Europe/Paris', 'DD/MM HH24h')
+                || ' - ' || COALESCE(NEW.taux_horaire_base::text, '?') || E'€/h - Acceptez sur jolene.app/pool-urgence'
+            )
+          );
+        EXCEPTION WHEN OTHERS THEN NULL; END;
+      END IF;
+    END IF;
+
+    v_count := v_count + 1;
+  END LOOP;
+
+  IF v_count > 0 THEN
+    PERFORM public.fn_ecrire_audit_safe(
+      p_acteur_id := NEW.etablissement_id, p_type_acteur := 'SYSTEME',
+      p_action := 'POOL_URGENCE_NOTIFICATIONS_ENVOYEES', p_type_ressource := 'mission', p_id_ressource := NEW.id,
+      p_details := jsonb_build_object('count', v_count, 'mission_intitule', NEW.intitule, 'event', TG_OP,
+        'canaux', jsonb_build_array('in_app', 'push', 'email', 'sms_opt_in'))
+    );
+  END IF;
+
+  RETURN NEW;
+END;
+$function$
+
+
+---FIN-FONCTION---
+
+CREATE OR REPLACE FUNCTION public.fn_trg_compteur_absences_sans_prevenir()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public', 'extensions'
+AS $function$
+DECLARE
+  v_nb_total INT;
+  v_soignant_email TEXT;
+  v_soignant_prenom TEXT;
+  v_url TEXT;
+  v_token TEXT;
+BEGIN
+  IF NEW.statut <> 'ABSENCE' THEN RETURN NEW; END IF;
+  IF COALESCE(NEW.absence_sans_prevenir, false) = false THEN RETURN NEW; END IF;
+  IF TG_OP = 'UPDATE' AND COALESCE(OLD.absence_sans_prevenir, false) = COALESCE(NEW.absence_sans_prevenir, false)
+     AND OLD.statut = NEW.statut THEN RETURN NEW; END IF;
+
+  IF NEW.soignant_assigne_id IS NULL THEN RETURN NEW; END IF;
+
+  SELECT COUNT(*) INTO v_nb_total
+  FROM missions
+  WHERE soignant_assigne_id = NEW.soignant_assigne_id
+    AND statut = 'ABSENCE' AND absence_sans_prevenir = true
+    AND COALESCE(fin_le, debut_le) >= NOW() - INTERVAL '6 months';
+
+  UPDATE soignants
+  SET nb_absences_sans_prevenir_6_mois = v_nb_total, modifie_le = NOW()
+  WHERE id = NEW.soignant_assigne_id;
+
+  IF v_nb_total >= 3 THEN
+    SELECT email, prenom INTO v_soignant_email, v_soignant_prenom
+    FROM soignants WHERE id = NEW.soignant_assigne_id;
+
+    UPDATE soignants
+    SET statut_compte = 'SUSPENDU',
+        suspension_raison = 'Suspension auto : 3 absences sans prévenir sur 6 mois',
+        suspension_le = NOW(), modifie_le = NOW()
+    WHERE id = NEW.soignant_assigne_id AND statut_compte = 'ACTIF';
+
+    IF FOUND THEN
+      INSERT INTO notifications (destinataire_id, type_destinataire, type, titre, corps, lien)
+      VALUES (
+        NEW.soignant_assigne_id, 'SOIGNANT', 'SYSTEM',
+        '🚫 Compte suspendu',
+        'Votre compte est suspendu suite à 3 absences sans prévenir sur 6 mois. Pour faire un recours, écrivez à bonjour@jolene.app.',
+        '/soignant/profil'
+      );
+
+      PERFORM public.fn_ecrire_audit_safe(
+        p_acteur_id := NEW.soignant_assigne_id, p_type_acteur := 'SYSTEME',
+        p_action := 'COMPTE_SUSPENDU', p_type_ressource := 'soignant', p_id_ressource := NEW.soignant_assigne_id,
+        p_details := jsonb_build_object('raison', 'auto_3_absences_sans_prevenir_6m', 'mission_declencheur', NEW.id, 'nb_absences', v_nb_total)
+      );
+
+      BEGIN
+        v_url := public.fn_lire_secret_cron('supabase_url');
+        v_token := public.fn_lire_secret_cron('service_role_key');
+        IF v_url IS NOT NULL AND v_token IS NOT NULL THEN
+          PERFORM net.http_post(
+            url := v_url || '/functions/v1/send-email',
+            headers := jsonb_build_object('Content-Type','application/json','Authorization','Bearer '||v_token),
+            body := jsonb_build_object(
+              'type', 'COMPTE_SUSPENDU',
+              'destinataire_id', NEW.soignant_assigne_id,
+              'data', jsonb_build_object('prenom', v_soignant_prenom, 'raison', 'absences_sans_prevenir', 'nb_absences', v_nb_total)
+            )
+          );
+        END IF;
+      EXCEPTION WHEN OTHERS THEN NULL;
+      END;
+    END IF;
+  END IF;
+
+  RETURN NEW;
+EXCEPTION WHEN OTHERS THEN
+  RETURN NEW;
+END;
+$function$
+
+
+---FIN-FONCTION---
+
+CREATE OR REPLACE FUNCTION public.fn_trg_classifier_acquisition()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SET search_path TO 'public'
+AS $function$
+BEGIN
+  IF NEW.source_acquisition IS NULL THEN
+    NEW.source_acquisition := fn_classifier_canal(
+      NEW.utm_source, NEW.utm_medium, NEW.http_referrer, NEW.ref_capture
+    );
+  END IF;
+  RETURN NEW;
+END;
+$function$
+
+
+---FIN-FONCTION---
+
+CREATE OR REPLACE FUNCTION public.fn_trg_candidature_conflit_planning()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+DECLARE
+  v_check jsonb;
+BEGIN
+  IF NEW.statut IN ('EN_ATTENTE', 'EN_ATTENTE_VALIDATION_ETAB') THEN
+    v_check := fn_conflit_planning_soignant(NEW.soignant_id, NEW.mission_id);
+    IF (v_check->>'conflit')::boolean THEN
+      RAISE EXCEPTION '%', (v_check->>'message');
+    END IF;
+  END IF;
+  RETURN NEW;
+END;
+$function$

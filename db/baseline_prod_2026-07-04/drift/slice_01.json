@@ -1,0 +1,124 @@
+{
+  "slice": 1,
+  "total": 80,
+  "match": 17,
+  "different": [
+    {
+      "fonction": "dec_bloquer_modif_apres_acceptation",
+      "derniere_migration": "20260416150000_cp3_fix_targeted_bypass.sql",
+      "resume_ecart": "Écart de commentaire uniquement (le repo contient un commentaire '-- Skip timing check' absent en prod), code exécutable identique."
+    },
+    {
+      "fonction": "dec_auto_generer_qr_mission",
+      "derniere_migration": "20260514090000_pr4s45_qr_code_backend.sql",
+      "resume_ecart": "Prod qualifie extensions.gen_random_bytes(8) alors que le repo appelle gen_random_bytes(8) non qualifié."
+    },
+    {
+      "fonction": "dec_calculer_finance_mission",
+      "derniere_migration": "20260624170000_plancher_previsionnel_garanti.sql",
+      "resume_ecart": "Écarts de commentaires et d'espacement uniquement (commentaire PLANCHER, espaces autour des parenthèses et de ':='), logique identique."
+    },
+    {
+      "fonction": "dec_email_contrat_signe_complet",
+      "derniere_migration": "20260512180000_pr7_workflow_post_signature.sql",
+      "resume_ecart": "dpae_requise : le repo teste type_contrat IN ('CDD','CDDU') alors que prod contient IN ('CDD','CDD') — CDDU non couvert en prod."
+    },
+    {
+      "fonction": "dec_mettre_a_jour_fiabilite",
+      "derniere_migration": "20260530210000_heures_cumulees_reelles.sql",
+      "resume_ecart": "Écart de commentaire uniquement ('-- Heures réellement pointées' présent au repo, absent en prod), code identique."
+    },
+    {
+      "fonction": "dec_maj_note_moyenne",
+      "derniere_migration": "20260328170027_6b898a19-2468-4d32-9605-b8a1fe7c4128.sql",
+      "resume_ecart": "Prod ajoute PERFORM set_config('jolene.system_update','true',true) avant l'UPDATE soignants (flag pour le trigger de protection), absent du repo."
+    },
+    {
+      "fonction": "dec_notif_signature_soignant_recue",
+      "derniere_migration": "20260513170000_pr6s3_bugfixes_audit.sql",
+      "resume_ecart": "Écarts de commentaires et d'espacement uniquement (commentaires supprimés en prod, espaces dans jsonb_build_object), logique identique."
+    },
+    {
+      "fonction": "dec_notifier_resolution_litige",
+      "derniere_migration": "20260316130534_497d79c0-9e0a-4915-a09b-9f13f819668b.sql",
+      "resume_ecart": "Prod pointe vers /soignant/litiges et /etablissement/litiges avec label FERME 'clôturé par accord mutuel' ; le repo garde /presences, 'fermé par l'administrateur' et une variable v_etab_nom obsolète."
+    },
+    {
+      "fonction": "dec_notifier_creation_litige",
+      "derniere_migration": "20260316131737_10db766c-e011-4d56-8a5d-4b6b4fbb4af8.sql",
+      "resume_ecart": "Prod notifie vers /etablissement/litiges et /soignant/litiges avec messages simplifiés (appels fn_creer_notification inlinés) ; le repo garde la version antérieure (/presences, variables v_dest_id/v_dest_type, mention 'Veuillez consulter et répondre')."
+    },
+    {
+      "fonction": "dec_notifier_reponse_litige",
+      "derniere_migration": "20260316131737_10db766c-e011-4d56-8a5d-4b6b4fbb4af8.sql",
+      "resume_ecart": "Prod détecte les réponses ajoutées (comparaison LENGTH + split_part + préfixes 'Établissement:'/'Soignant:') et pointe vers /litiges ; le repo ne gère que la première réponse et pointe vers /presences."
+    },
+    {
+      "fonction": "dec_push_contrat_a_signer",
+      "derniere_migration": "20260513160000_pr4s3_notifications_hardening.sql",
+      "resume_ecart": "Écarts de commentaires et d'espacement uniquement (commentaire '-- Best-effort' et espaces dans jsonb_build_object), logique identique."
+    },
+    {
+      "fonction": "dec_push_contrat_signe_complet",
+      "derniere_migration": "20260513160000_pr4s3_notifications_hardening.sql",
+      "resume_ecart": "Écarts de commentaires et d'espacement uniquement (commentaires '-- Push soignant/étab' et espaces dans jsonb_build_object), logique identique."
+    },
+    {
+      "fonction": "dec_verifier_docs_avant_debut",
+      "derniere_migration": "20260630250000_documents_gate_per_mission_acceptation.sql",
+      "resume_ecart": "Écarts de commentaire et d'espacement uniquement (commentaire '-- RCP exigée' et espaces dans SELECT EXISTS(...)), logique identique."
+    }
+  ],
+  "absent_du_repo": [
+    "dec_appliquer_plafond_rist",
+    "dec_antifraude_presence",
+    "dec_annuler_contrat_si_mission_annulee",
+    "dec_anti_double_assignation",
+    "dec_auto_calculer_cotisations",
+    "dec_alerte_pause_obligatoire",
+    "dec_bloquer_modification_audit",
+    "dec_bloquer_changement_proprio_facture",
+    "dec_bloquer_desinscription_missions",
+    "dec_bloquer_si_facture_impayee",
+    "dec_bloquer_paiement_manuel_facture",
+    "dec_auto_partager_rib",
+    "dec_bloquer_suppression_audit",
+    "dec_calculer_net_estime",
+    "dec_bonus_urgence",
+    "dec_check_coherence_apres_rpps",
+    "dec_check_coherence_apres_doc_identite",
+    "dec_calculer_duree_presence",
+    "dec_definir_type_paiement",
+    "dec_detecter_secteur_public_facture",
+    "dec_depart_apres_arrivee",
+    "dec_detecter_secteur_public_etablissement",
+    "dec_creer_conversation_assignation",
+    "dec_creer_partage_rib_contrat",
+    "dec_incrementer_heures_plateforme",
+    "dec_fenetre_pointage",
+    "dec_idempotence_facture_payee",
+    "dec_limiter_liste_attente",
+    "dec_evaluer_dans_delai",
+    "dec_maj_compteurs_soignant",
+    "dec_maj_note_moyenne_etab",
+    "dec_notifier_changement_mission",
+    "dec_penalite_annulation_tardive",
+    "dec_proteger_champs_commerciaux_etab",
+    "dec_premiere_mission",
+    "dec_proteger_journaux_audit",
+    "dec_proteger_contenu_notification",
+    "dec_proteger_donnees_financieres_mission",
+    "dec_proteger_presence_soignant",
+    "dec_proteger_signature_contrat",
+    "dec_proteger_validation_documents",
+    "dec_sanitiser_contrat",
+    "dec_refuser_mission_passee",
+    "dec_refuser_chevauchement_soignant",
+    "dec_refuser_auto_evaluation",
+    "dec_rappel_evaluation",
+    "dec_valider_paiement_facture",
+    "dec_verifier_age_minimum",
+    "dec_valider_couleur_theme",
+    "dec_valider_type_exercice_soignant"
+  ]
+}
