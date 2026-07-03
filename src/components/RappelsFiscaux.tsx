@@ -88,8 +88,27 @@ export function RappelsFiscaux({ regimeFiscal = 'MICRO_BNC', regimeFiscalConfirm
     ];
   }, [microBnc]);
 
+  // 9.3 — promotion J-7 : l'échéance la plus proche à ≤ 7 jours passe la carte en
+  // mode « urgent » et affiche un bandeau qui pousse vers la préparation (Mes
+  // charges / exports, juste en dessous dans l'écran Revenus).
+  const joursMin = useMemo(
+    () => Math.min(...echeances.map(e => differenceInDays(e.date, new Date()))),
+    [echeances],
+  );
+  const urgente = joursMin >= 0 && joursMin <= 7;
+
   return (
-    <div className="card-base mb-6 cursor-pointer hover:shadow-md transition-all" onClick={() => navigate('/soignant/charges')}>
+    <div
+      className={`card-base mb-6 cursor-pointer hover:shadow-md transition-all ${
+        urgente ? 'border-destructive/40 ring-1 ring-destructive/20' : ''
+      }`}
+      onClick={() => navigate('/soignant/charges')}
+    >
+      {urgente && (
+        <div className="flex items-center gap-2 rounded-lg bg-destructive/10 text-destructive text-xs font-semibold px-3 py-2 mb-3">
+          ⏰ Échéance {joursMin === 0 ? "aujourd'hui" : `dans ${joursMin}j`} — prépare tes exports et tes charges maintenant.
+        </div>
+      )}
       <div className="flex items-center justify-between gap-2 mb-3">
         <div className="flex items-center gap-2 min-w-0">
           <Calendar className="h-5 w-5 text-primary shrink-0" />
