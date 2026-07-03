@@ -189,6 +189,31 @@ export default function PageParrainage() {
           </div>
         </div>
 
+        {/* 7f-3 — CTA « recommande ton cadre de santé » : le soignant fait
+            découvrir Jolene à l'établissement de son cadre. Growth prompt, sans
+            promesse de récompense chiffrée (règle ② : aucune promesse de paiement
+            non contrôlée techniquement — le programme parrainage étab a ses
+            propres conditions). */}
+        <div className="rounded-2xl border border-jolene-mauve-200/60 bg-gradient-soft p-4">
+          <div className="flex items-start gap-3">
+            <Landmark className="h-5 w-5 text-jolene-mauve-500 shrink-0 mt-0.5" />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-bold text-foreground">Tu connais un bon cadre de santé ?</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Fais découvrir Jolene à son établissement — plus d'étabs sur la plateforme, c'est plus de missions près de chez toi.
+              </p>
+              <a
+                href={`https://wa.me/?text=${encodeURIComponent('Je bosse avec Jolene pour trouver mes missions — ça pourrait bien aider ton établissement à trouver des remplaçants rapidement : https://jolene.app/inscription/etablissement')}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 mt-2 px-4 py-2 rounded-lg text-xs font-semibold bg-jolene-mauve-500/10 text-jolene-mauve-600 hover:bg-jolene-mauve-500/20 transition-colors"
+              >
+                <Share2 className="h-3.5 w-3.5" /> Recommander à mon cadre
+              </a>
+            </div>
+          </div>
+        </div>
+
         {/* Compteur */}
         <div className="grid grid-cols-2 gap-4">
           <div className="rounded-xl border border-border bg-card p-5 text-center">
