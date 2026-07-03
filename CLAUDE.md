@@ -31,6 +31,34 @@
 7. Surveillance post-merge via MCP Supabase
 8. Dollar-quoting imbriqué interdit avec `$$` — utiliser tags distincts (`$body$`)
 
+### Garde-fous 9.0 — réconciliation repo ↔ prod (NON NÉGOCIABLES, post-incidents 02/07/2026)
+
+1. **Un seul chemin d'application : le CI `deploy-supabase`.** Plus JAMAIS de
+   `apply_migration`/`execute_sql` MCP pour du DDL en temps normal — la
+   migration part en PR, le merge l'applique. Exception unique : hotfix
+   incident prod → SQL direct autorisé MAIS re-capturé en fichier de migration
+   **le jour même** + enregistré dans `schema_migrations`.
+2. **Toute redéfinition part de la définition LIVE** (`scripts/dump-live-def.sh
+   <fonction|trigger|policy> <nom>` ou `pg_get_functiondef` via SQL), JAMAIS
+   d'un fichier de migration du repo. Les fichiers repo peuvent être obsolètes :
+   l'incident enum du 02/07 (21 min de transitions de statut mission cassées
+   en prod) vient d'un trigger réécrit depuis `20260528131400` alors que la
+   version live avait été corrigée depuis.
+3. **Step « Heal » du deploy = fenêtre de grâce 24 h.** Il ne purge plus les
+   versions remote orphelines récentes (une migration MCP dont la PR n'est pas
+   mergée est orpheline par construction — la purger casse le deploy SUIVANT :
+   incident registre `20260702180753` du 02/07). Orphelin récent → warning +
+   consigne « merger la PR puis re-run », pas d'effacement.
+4. **Drift-check quotidien** (`.github/workflows/drift-check.yml`, 5h UTC) :
+   dump du schéma prod diffé contre la baseline versionnée
+   `supabase/schema/public.sql` (produite par `schema-snapshot.yml`). Rouge =
+   dérive → soit re-snapshot (dérive légitime après merge), soit re-capture en
+   migration (dérive sauvage).
+5. **Baseline de vérité** : `db/baseline_prod_2026-07-04/` (703 fonctions,
+   structure, policies, cron, edge) + `docs/DRIFT_AUDIT.md` (écarts repo↔prod
+   au 04/07). Toute archéologie de fonction commence là, pas dans les
+   migrations historiques.
+
 ## Règles TypeScript / build
 
 - `npx tsc -b` (pas `--noEmit`) pour valider en local

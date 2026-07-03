@@ -100,7 +100,22 @@ jobs:
           echo "Local versions:  $(wc -l < /tmp/local_versions.txt)"
 
           # Orphelins = remote mais pas local
-          comm -23 /tmp/remote_versions.txt /tmp/local_versions.txt > /tmp/orphans.txt
+          comm -23 /tmp/remote_versions.txt /tmp/local_versions.txt > /tmp/orphans_bruts.txt
+
+          # 9.0 — FENÊTRE DE GRÂCE 24 h : une migration appliquée via MCP dont
+          # la PR n'est pas encore mergée est "remote sans fichier local" par
+          # construction. L'effacer casse le déploiement SUIVANT (out-of-order
+          # quand le fichier arrive) — c'est exactement l'incident 20260702180753
+          # du 02/07. On ne purge que les orphelins de plus de 24 h (versions
+          # YYYYMMDDHHMMSS, comparables lexicalement à un timestamp UTC).
+          CUTOFF=$(date -u -d '24 hours ago' +%Y%m%d%H%M%S)
+          awk -v cutoff="$CUTOFF" '$1 < cutoff' /tmp/orphans_bruts.txt > /tmp/orphans.txt
+          RECENT_COUNT=$(( $(wc -l < /tmp/orphans_bruts.txt) - $(wc -l < /tmp/orphans.txt) ))
+          if [ "$RECENT_COUNT" -gt 0 ]; then
+            echo "::warning::$RECENT_COUNT orphan(s) remote de moins de 24h CONSERVÉ(S) (fenêtre de grâce — PR probablement pas encore mergée) :"
+            comm -23 /tmp/orphans_bruts.txt /tmp/orphans.txt || true
+            echo "::warning::Si db push échoue avec 'Remote migration versions not found' : merger la PR qui porte ces fichiers de migration puis re-run ce workflow. NE PAS effacer ces versions du registre."
+          fi
 
           ORPHAN_COUNT=$(wc -l < /tmp/orphans.txt)
           if [ "$ORPHAN_COUNT" -gt 0 ]; then
