@@ -1,0 +1,126 @@
+{
+  "slice": 8,
+  "total": 80,
+  "match": 43,
+  "different": [
+    {
+      "fonction": "fn_repondre_proposition",
+      "derniere_migration": "20260420163000_e16_d_repondre_proposition.sql",
+      "resume_ecart": "Commentaires uniquement : 3 commentaires E16 du repo absents en prod, code identique."
+    },
+    {
+      "fonction": "fn_retirer_candidature",
+      "derniere_migration": "20260630230000_fn_retirer_candidature.sql",
+      "resume_ecart": "Commentaires uniquement : 2 commentaires du repo absents en prod, code identique."
+    },
+    {
+      "fonction": "fn_rgpd_exporter_rate_limited",
+      "derniere_migration": "20260530240000_rgpd_export_rate_limit_relache.sql",
+      "resume_ecart": "Prod appelle fn_rgpd_exporter_donnees_soignant(v_user_id) alors que le repo l'appelle sans argument."
+    },
+    {
+      "fonction": "fn_revoquer_contrat_service",
+      "derniere_migration": "20260429140000_j2_onboarding_etab_contrat_rib.sql",
+      "resume_ecart": "Libellés différents en prod ('Aucun contrat actif à révoquer', message de succès enrichi) + formatage."
+    },
+    {
+      "fonction": "fn_scanner_code_pointage",
+      "derniere_migration": "20260624120000_pointage_gate_contrat_signe.sql",
+      "resume_ecart": "Commentaires uniquement : 3 blocs de commentaires PONT/arrondi du repo absents en prod, code identique."
+    },
+    {
+      "fonction": "fn_signaler_utilisateur",
+      "derniere_migration": "20260609150000_signalement_utilisateur.sql",
+      "resume_ecart": "Formatage compacté et commentaires absents en prod, code identique."
+    },
+    {
+      "fonction": "fn_signer_cession_creance",
+      "derniere_migration": "20260417110000_export_affactureur_schema.sql",
+      "resume_ecart": "Commentaires uniquement : prod contient 2 commentaires absents du fichier repo, code identique."
+    },
+    {
+      "fonction": "fn_signer_contrat_otp",
+      "derniere_migration": "20260513090000_pr1s2_signature_limits.sql",
+      "resume_ecart": "Prod sans le cast v_ip::text (2 occurrences COALESCE) présent dans le repo."
+    },
+    {
+      "fonction": "fn_soignant_pour_etablissement",
+      "derniere_migration": "20260608220000_profil_soignant_consultable_annuaire.sql",
+      "resume_ecart": "Prod ajoute les clés est_etudiant et etudiant_details au JSON de retour — repo obsolète."
+    },
+    {
+      "fonction": "fn_soumettre_reclamation",
+      "derniere_migration": "20260413090000_reclamations_generales.sql",
+      "resume_ecart": "Corps prod compacté sur une ligne sans commentaires, code identique au repo."
+    },
+    {
+      "fonction": "fn_soignant_dpae_complet",
+      "derniere_migration": "20260607110000_sec_secdef_authz_idor.sql",
+      "resume_ecart": "Commentaire GARDE absent et reformatage en prod, code identique."
+    },
+    {
+      "fonction": "fn_soignant_score_breakdown",
+      "derniere_migration": "20260628140000_fn_ma_streak_et_score_breakdown.sql",
+      "resume_ecart": "Formatage uniquement (retours à la ligne/parenthèses), code identique."
+    },
+    {
+      "fonction": "fn_stripe_webhook_event_is_new",
+      "derniere_migration": "20260628190000_fix_idempotence_webhook_stripe_retry.sql",
+      "resume_ecart": "Commentaires uniquement : prod porte un commentaire enrichi expliquant le bug retry Stripe, code identique."
+    },
+    {
+      "fonction": "fn_supprimer_mon_compte",
+      "derniere_migration": "20260607120000_rgpd_suppression_pii_complete.sql",
+      "resume_ecart": "Commentaires absents et reformatage compacté en prod, code identique."
+    },
+    {
+      "fonction": "fn_sync_mission_creneaux",
+      "derniere_migration": "20260624170000_plancher_previsionnel_garanti.sql",
+      "resume_ecart": "Commentaire PLANCHER PRÉVISIONNEL absent et compactage en prod, code identique."
+    },
+    {
+      "fonction": "fn_toggle_pool_urgence",
+      "derniere_migration": "20260530200000_rcp_par_type_contrat_effectif.sql",
+      "resume_ecart": "Commentaires uniquement : bloc RCP du repo absent en prod, code identique."
+    },
+    {
+      "fonction": "fn_toggle_favori_etablissement",
+      "derniere_migration": "20260429320100_j5g_a_favoris_bidirectionnels.sql",
+      "resume_ecart": "Prod passe un argument NULL supplémentaire à fn_ecrire_audit_safe (2 appels) — repo obsolète."
+    },
+    {
+      "fonction": "fn_test_purge_mission",
+      "derniere_migration": "20260627150000_fn_test_purge_mission.sql",
+      "resume_ecart": "Commentaires uniquement : prod contient un commentaire garde-fou absent du repo, code identique."
+    },
+    {
+      "fonction": "fn_trg_auto_heures_majorees",
+      "derniere_migration": "20260417120000_correction_garantie_heures.sql",
+      "resume_ecart": "Commentaires uniquement : bloc GREATEST du repo absent en prod, code identique."
+    },
+    {
+      "fonction": "fn_trg_auto_notify_mission_urgente",
+      "derniere_migration": "20260626160000_fix_broadcast_urgence_secrets_push.sql",
+      "resume_ecart": "Commentaires uniquement : 2 commentaires reformulés/ajoutés en prod, code identique."
+    }
+  ],
+  "absent_du_repo": [
+    "fn_rgpd_purge_automatique_inactifs",
+    "fn_sanitiser_html",
+    "fn_set_user_role",
+    "fn_sauvegarder_profil",
+    "fn_signer_contrat_etablissement",
+    "fn_soignant_stripe_connect_actif",
+    "fn_souscrire_prevoyance",
+    "fn_stats_dashboard_etablissement",
+    "fn_stats_rh_etablissement",
+    "fn_terminer_mission",
+    "fn_supprimer_compte_rate_limited",
+    "fn_traiter_reclamation",
+    "fn_trg_auto_commission_facturee",
+    "fn_trg_absence_event_score",
+    "fn_trg_annuler_contrat_orphelin",
+    "fn_trg_auto_facture_honoraires",
+    "fn_trg_coherence_statut_soignant"
+  ]
+}

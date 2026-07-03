@@ -1,0 +1,96 @@
+{
+  "slice": 9,
+  "total": 63,
+  "match": 36,
+  "different": [
+    {
+      "fonction": "fn_trg_notif_admin_remboursement_manuel",
+      "derniere_migration": "20260530230000_remboursement_avoir_swan_auto.sql",
+      "resume_ecart": "Prod notifie type_destinataire 'ADMIN' (fix contrainte Sprint 17) vs 'ADMIN_PLATEFORME' dans le repo"
+    },
+    {
+      "fonction": "fn_trg_verifier_onboarding_etab",
+      "derniere_migration": "20260624220000_retirer_rib_gate_onboarding_etab.sql",
+      "resume_ecart": "Seuls les commentaires diffèrent (code identique hors commentaires)"
+    },
+    {
+      "fonction": "fn_trg_valider_parrainage_etab_commission",
+      "derniere_migration": "20260624230000_parrainage_etab_50_50_credit_commission.sql",
+      "resume_ecart": "Seuls les commentaires diffèrent (code identique hors commentaires)"
+    },
+    {
+      "fonction": "fn_update_document_verification",
+      "derniere_migration": "20260317234042_2ac23bbf-3439-420e-9d86-b0ff6db9c591.sql",
+      "resume_ecart": "Prod fait l'UPDATE direct (passthrough service_role) alors que le repo DISABLE/ENABLE encore les triggers de protection"
+    },
+    {
+      "fonction": "fn_update_presence",
+      "derniere_migration": "20260514183200_pr3s10a_typing_presence_realtime.sql",
+      "resume_ecart": "Seuls les commentaires diffèrent (code identique hors commentaires)"
+    },
+    {
+      "fonction": "fn_typing_start",
+      "derniere_migration": "20260514183200_pr3s10a_typing_presence_realtime.sql",
+      "resume_ecart": "Seuls les commentaires diffèrent (code identique hors commentaires)"
+    },
+    {
+      "fonction": "fn_update_streak_on_swipe",
+      "derniere_migration": "20260515140100_streaks_quotidien.sql",
+      "resume_ecart": "Seuls les commentaires diffèrent (code identique hors commentaires)"
+    },
+    {
+      "fonction": "fn_upsert_token_push",
+      "derniere_migration": "20260313181053_eb22df22-7e62-47bc-840f-592fcde5f80e.sql",
+      "resume_ecart": "Prod parse le token Web Push JSON (endpoint/p256dh/auth_key + COALESCE à l'upsert), absent de la version FCM simple du repo"
+    },
+    {
+      "fonction": "fn_user_id_pour_etablissement",
+      "derniere_migration": "20260602120000_secu_etab_init_proprietaire_et_userid_enumeration.sql",
+      "resume_ecart": "Seuls les commentaires diffèrent (code identique hors commentaires)"
+    },
+    {
+      "fonction": "fn_valider_code_secours",
+      "derniere_migration": "20260514110000_pr9s45_code_secours.sql",
+      "resume_ecart": "Prod corrige l'antipattern record IS NOT NULL en v_presence.id IS NOT NULL (fix Sprint 17), repo obsolète"
+    },
+    {
+      "fonction": "fn_verifier_documents_expirants",
+      "derniere_migration": "20260630240000_consolider_calcul_tous_documents_valides.sql",
+      "resume_ecart": "Seuls les commentaires diffèrent (code identique hors commentaires)"
+    },
+    {
+      "fonction": "next_invoice_number",
+      "derniere_migration": "20260413140000_invoicing_module_schema.sql",
+      "resume_ecart": "Écart de forme uniquement (espaces/commentaires), code identique"
+    },
+    {
+      "fonction": "next_avoir_number",
+      "derniere_migration": "20260417130300_cp_litiges_3_resolution_avoirs.sql",
+      "resume_ecart": "Seuls les commentaires diffèrent (code identique hors commentaires)"
+    },
+    {
+      "fonction": "peut_exercer",
+      "derniere_migration": "20260512130100_pr2_matrice_v2.sql",
+      "resume_ecart": "Liste des exercices salariés : prod ('SALARIE','CDD','CDD','VACATION') avec doublon CDD, repo garde 'CDDU'"
+    },
+    {
+      "fonction": "tg_candidature_acceptee_creer_conversation",
+      "derniere_migration": "20260514183100_pr1s10a_trigger_chat_acceptation_candidature.sql",
+      "resume_ecart": "Seuls les commentaires diffèrent (code identique hors commentaires)"
+    }
+  ],
+  "absent_du_repo": [
+    "fn_trg_email_mission_terminee",
+    "fn_trg_email_evaluation",
+    "fn_trg_email_paiement_confirme",
+    "fn_trg_desistement_garanti",
+    "fn_trg_sms_annulation_tardive",
+    "fn_types_exercice_autorises",
+    "fn_valider_alerte_presence",
+    "fn_verifier_coherence_identite",
+    "fn_verifier_coherence_publication",
+    "fn_verifier_api_key",
+    "mon_role",
+    "fn_verifier_rate_limit"
+  ]
+}
