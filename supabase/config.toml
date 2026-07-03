@@ -123,6 +123,9 @@ verify_jwt = false
 [functions.escrow-debit-echeance]
 verify_jwt = false
 
+[functions.escrow-release]
+verify_jwt = false
+
 [functions.send-sms]
 verify_jwt = false
 
