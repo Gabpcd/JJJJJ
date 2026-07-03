@@ -1304,6 +1304,36 @@ Deno.serve(async (req) => {
     // ── payout.paid : argent arrivé sur compte soignant ──
     if (event.type === "payout.paid") {
       const payout = event.data.object as Stripe.Payout;
+
+      // Escrow 7b-D PR 5 (découverte 2) : un payout escrow (créé par
+      // escrow-release, metadata.type=ESCROW_RELEASE) est déjà réconcilié sur
+      // paiements_escrow. On le traite ici et on RETOURNE avant le matching
+      // legacy sur stripe_transfers — celui-ci matche `stripe_payout_id.is.null`
+      // GLOBALEMENT et marquerait PAYE des transfers legacy sans lien avec ce
+      // payout (bug de matching non scopé par compte). Le early-return protège.
+      if (payout.metadata?.type === "ESCROW_RELEASE") {
+        await supabaseAdmin.rpc("fn_ecrire_audit_safe", {
+          p_acteur_id: "00000000-0000-0000-0000-000000000000",
+          p_type_acteur: "SYSTEME",
+          p_action: "ESCROW_RELEASE_PAYE",
+          p_type_ressource: "mission",
+          p_id_ressource: payout.metadata?.mission_id ?? null,
+          p_cle_s3: null,
+          p_details: {
+            paiement_escrow_id: payout.metadata?.paiement_escrow_id ?? null,
+            stripe_payout_id: payout.id,
+            arrival_date: payout.arrival_date,
+          },
+          p_ip: null,
+          p_navigateur: "stripe-webhook",
+        });
+        await markEventProcessed();
+        return new Response(JSON.stringify({ received: true, escrow: "payout_paid" }), {
+          status: 200,
+          headers: { ...corsHeaders(req), "Content-Type": "application/json" },
+        });
+      }
+
       // Match par stripe_payout_id (si déjà défini) ou par destination_account + statut TRANSFERE
       const { data: transfersToMark } = await supabaseAdmin
         .from("stripe_transfers")
