@@ -43,11 +43,16 @@ const MAX_TENTATIVES = 3;
 
 interface QueueRow {
   id: string;
-  avoir_id: string;
-  facture_origine_id: string;
+  avoir_id: string | null;
+  facture_origine_id: string | null;
   stripe_payment_intent_id: string;
   montant_cts: number;
   tentatives: number;
+  // Escrow 7b-D PR 4 (nullable : legacy = null/false)
+  paiement_escrow_id: string | null;
+  reverse_transfer: boolean | null;
+  refund_application_fee_cts: number | null;
+  absorbe_plateforme: boolean | null;
 }
 
 interface StripeErrorLike {
@@ -93,7 +98,7 @@ Deno.serve(async (req) => {
     // 2. SELECT des lignes éligibles (max 10 / run)
     const { data: rows, error: selErr } = await sb
       .from("stripe_refunds_queue")
-      .select("id, avoir_id, facture_origine_id, stripe_payment_intent_id, montant_cts, tentatives")
+      .select("id, avoir_id, facture_origine_id, stripe_payment_intent_id, montant_cts, tentatives, paiement_escrow_id, reverse_transfer, refund_application_fee_cts, absorbe_plateforme")
       .eq("statut", "EN_ATTENTE")
       .lt("tentatives", MAX_TENTATIVES)
       .or(`dernier_essai_le.is.null,dernier_essai_le.lt.${new Date(Date.now() - 15 * 60 * 1000).toISOString()}`)
@@ -146,16 +151,35 @@ Deno.serve(async (req) => {
 
       // 3b. Appel Stripe refunds.create
       try {
-        const refund = await stripe.refunds.create({
+        // Escrow 7b-D PR 4 — destination charge : le refund doit reprendre les
+        // fonds côté compte connecté du soignant (reverse_transfer) AVANT release
+        // (A5) et rembourser tout ou partie de la commission (A6). APRÈS release
+        // (absorbe_plateforme), refund simple sur le solde plateforme : Jolene
+        // absorbe, pas de reversal, jamais de solde négatif imposé à la soignante.
+        const refundParams: Stripe.RefundCreateParams = {
           payment_intent: item.stripe_payment_intent_id,
           amount: item.montant_cts,
           reason: "requested_by_customer",
           metadata: {
-            avoir_id: item.avoir_id,
-            facture_origine_id: item.facture_origine_id,
+            avoir_id: item.avoir_id ?? "",
+            facture_origine_id: item.facture_origine_id ?? "",
             queue_id: item.id,
             source: "jolene_refunds_cron",
+            paiement_escrow_id: item.paiement_escrow_id ?? "",
           },
+        };
+        if (item.paiement_escrow_id) {
+          if (item.reverse_transfer) refundParams.reverse_transfer = true;
+          // refund_application_fee reprend la commission côté plateforme. On ne
+          // le passe qu'avec reverse_transfer (destination charge pré-release) et
+          // seulement si une part de commission est à rembourser (A6).
+          if (item.reverse_transfer && (item.refund_application_fee_cts ?? 0) > 0) {
+            refundParams.refund_application_fee = true;
+          }
+        }
+        // Idempotency key = queue id : un retry ne crée jamais un 2e refund.
+        const refund = await stripe.refunds.create(refundParams, {
+          idempotencyKey: `refund_queue_${item.id}`,
         });
 
         // 3c. Succès → TRAITE
