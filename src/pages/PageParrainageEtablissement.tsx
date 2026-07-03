@@ -12,7 +12,6 @@ import { toast } from 'sonner';
 import {
   PARRAINAGE_ETAB_CAP,
   PARRAINAGE_ETAB_SEUIL_AMBASSADEUR,
-  PARRAINAGE_ETAB_RECOMPENSE_EUR,
 } from '@/lib/constantes';
 
 interface Filleul {
@@ -43,7 +42,6 @@ interface CreditsState {
 
 const CAP_PARRAINAGES = PARRAINAGE_ETAB_CAP;
 const SEUIL_AMBASSADEUR = PARRAINAGE_ETAB_SEUIL_AMBASSADEUR;
-const RECOMPENSE_EUR = PARRAINAGE_ETAB_RECOMPENSE_EUR;
 
 export default function PageParrainageEtab() {
   usePageTitle('Parrainage — Établissement');
@@ -135,14 +133,14 @@ export default function PageParrainageEtab() {
 
   return (
     <LayoutApp role="ADMIN_ETABLISSEMENT">
-      <SEOHead title="Parrainage Établissement — Jolene" description="Parrainez d'autres établissements : 50€ de crédit commission pour vous + 50€ pour votre filleul, par filleul validé." />
+      <SEOHead title="Parrainage Établissement — Jolene" description="Parrainez d'autres établissements : des crédits commission par paliers (50€ à 500€ de missions, puis 150€ à 2 000€), pour vous et votre filleul." />
       <div className="max-w-3xl mx-auto px-4 py-8 space-y-8">
         <div>
           <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
             <Gift className="h-6 w-6 text-primary" /> Parrainage entre établissements
           </h1>
           <p className="text-muted-foreground mt-1">
-            Recommandez Jolene à un confrère : <strong className="text-primary">{RECOMPENSE_EUR}€ de crédit</strong> pour vous <strong className="text-primary">+ {RECOMPENSE_EUR}€ pour votre filleul</strong>, déduits de vos factures commission, par filleul validé.
+            Recommandez Jolene à un confrère et gagnez des crédits commission par paliers : <strong className="text-primary">50€ chacun</strong> dès 500€ de missions réalisées par votre filleul, puis <strong className="text-primary">150€ chacun</strong> à 2 000€. Crédits déduits de vos factures commission.
           </p>
         </div>
 
@@ -157,7 +155,7 @@ export default function PageParrainageEtab() {
               <div className="card-base border-l-4 border-l-primary bg-primary/5">
                 <h2 className="font-semibold text-foreground mb-2">Avez-vous reçu un code parrainage ?</h2>
                 <p className="text-xs text-muted-foreground mb-3">
-                  Un autre établissement vous a recommandé Jolene ? Saisissez son code (format <code className="bg-muted px-1 rounded">ETB-XXXXXX</code>). Dès que Jolene aura encaissé 100€ de commission sur vos missions, vous et votre parrain recevrez chacun 50€ de crédit commission.
+                  Un autre établissement vous a recommandé Jolene ? Saisissez son code (format <code className="bg-muted px-1 rounded">ETB-XXXXXX</code>). Au fil de vos missions, vous et votre parrain recevrez chacun 50€ de crédit dès 500€ de missions réalisées, puis 150€ à 2 000€.
                 </p>
                 <label htmlFor="code-parrainage-recu" className="sr-only">Code parrainage reçu</label>
                 <div className="flex gap-2">
@@ -279,8 +277,9 @@ export default function PageParrainageEtab() {
               <ol className="text-sm text-muted-foreground leading-relaxed space-y-2 list-decimal list-inside">
                 <li>Partagez votre code ou lien avec un autre établissement de santé</li>
                 <li>Il s'inscrit, signe son contrat de service Jolene et applique votre code</li>
-                <li>Dès qu'il publie ses missions et que Jolene encaisse <strong>100€ de commission</strong>, le parrainage est validé</li>
-                <li><strong className="text-primary">{RECOMPENSE_EUR}€ de crédit</strong> pour vous <strong className="text-primary">+ {RECOMPENSE_EUR}€ pour votre filleul</strong>, déduits de vos prochaines factures commission Jolene</li>
+                <li>Il publie ses missions et les réalise ; les crédits se déclenchent au fil de sa GMV encaissée</li>
+                <li><strong className="text-primary">Palier 1 — 50€ de crédit</strong> pour vous <strong className="text-primary">+ 50€ pour votre filleul</strong> dès <strong>500€ de missions réalisées</strong></li>
+                <li><strong className="text-primary">Palier 2 — 150€ de crédit</strong> chacun à <strong>2 000€ de missions</strong>, déduits de vos factures commission</li>
                 <li>Après <strong>{SEUIL_AMBASSADEUR} filleuls validés</strong>, vous obtenez le badge <span className="text-primary font-semibold">Ambassadeur</span></li>
               </ol>
               <div className="mt-3 p-2 rounded-lg bg-muted text-xs text-muted-foreground">
