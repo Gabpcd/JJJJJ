@@ -21,13 +21,12 @@
 import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { CheckCircle2, ChevronRight, Circle } from 'lucide-react';
+import { ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { TYPES_DOCUMENTS_EXCLUS_UPLOAD } from '@/lib/documents';
 import { PROFESSIONS_SANS_RPPS } from '@/lib/constantes';
-import { Mascotte } from '@/components/mascotte/Mascotte';
 
 /* ─── Types ──────────────────────────────────────────────────────────────── */
 
@@ -228,60 +227,36 @@ export function ChecklistActivation({ state, className }: ChecklistActivationPro
 
   if (!state.visible || !state.prochaineEtape) return null;
 
-  const { etapes, nbFaites } = state;
+  const { etapes, nbFaites, prochaineEtape } = state;
+  const restantes = etapes.length - nbFaites;
 
+  // 9.2 — checklist compactée : anneau X/N + PROCHAINE étape seule (une ligne
+  // cliquable, ≤ 96px). Les étapes déjà faites ne sont plus listées ; le détail
+  // complet reste accessible en tapant sur l'étape (navigation existante).
   return (
-    <div
+    <button
+      type="button"
       data-testid="checklist-activation"
+      onClick={() => navigate(prochaineEtape.destination)}
+      aria-label={`Active ton compte, ${nbFaites} sur ${etapes.length} — prochaine étape : ${prochaineEtape.label}`}
       className={cn(
-        'rounded-2xl border border-jolene-rose-200/60 bg-gradient-soft p-4',
+        'w-full flex items-center gap-3 text-left rounded-2xl border border-jolene-rose-200/60 bg-gradient-soft p-3',
+        'transition-colors hover:bg-card/40',
         className,
       )}
     >
-      <div className="flex items-center gap-3 mb-3">
-        <AnneauProgression valeur={nbFaites} max={etapes.length} />
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-bold text-foreground">Active ton compte — {nbFaites}/{etapes.length}</p>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            {etapes.length - nbFaites === 1
-              ? 'Plus qu\'une étape pour tout débloquer'
-              : 'Chaque étape débloque un bout du parcours'}
-          </p>
-        </div>
-        <Mascotte etat={nbFaites >= etapes.length - 1 ? 'happy' : 'thinking'} taille="sm" className="shrink-0" />
-      </div>
-
-      <div className="space-y-1">
-        {etapes.map((etape) => (
-          <button
-            key={etape.id}
-            type="button"
-            onClick={() => navigate(etape.destination)}
-            aria-label={`${etape.label}${etape.faite ? ' — fait' : ''}`}
-            className={cn(
-              'w-full flex items-center gap-2.5 rounded-xl px-2.5 py-2 text-left min-h-[44px]',
-              'transition-colors',
-              etape.faite ? 'opacity-60' : 'bg-card/70 hover:bg-card border border-jolene-rose-100',
-            )}
-          >
-            {etape.faite ? (
-              <CheckCircle2 className="h-5 w-5 text-success shrink-0" aria-hidden="true" />
-            ) : (
-              <Circle className="h-5 w-5 text-primary shrink-0" aria-hidden="true" />
-            )}
-            <span className="flex-1 min-w-0">
-              <span className={cn('block text-sm font-medium', etape.faite ? 'text-muted-foreground line-through' : 'text-foreground')}>
-                {etape.label}
-              </span>
-              {!etape.faite && etape.detail && (
-                <span className="block text-xs text-muted-foreground truncate">{etape.detail}</span>
-              )}
-            </span>
-            {!etape.faite && <ChevronRight className="h-4 w-4 text-primary shrink-0" aria-hidden="true" />}
-          </button>
-        ))}
-      </div>
-    </div>
+      <AnneauProgression valeur={nbFaites} max={etapes.length} />
+      <span className="flex-1 min-w-0">
+        <span className="block text-[11px] font-semibold uppercase tracking-wide text-primary">
+          {restantes === 1 ? 'Dernière étape' : `Active ton compte · ${nbFaites}/${etapes.length}`}
+        </span>
+        <span className="block text-sm font-bold text-foreground truncate">{prochaineEtape.label}</span>
+        {prochaineEtape.detail && (
+          <span className="block text-xs text-muted-foreground truncate">{prochaineEtape.detail}</span>
+        )}
+      </span>
+      <ChevronRight className="h-5 w-5 text-primary shrink-0" aria-hidden="true" />
+    </button>
   );
 }
 

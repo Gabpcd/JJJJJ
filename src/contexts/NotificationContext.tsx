@@ -99,12 +99,15 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       {children}
       {/*
         Position responsive Sprint 8 PR 3 (chantier 3.2) :
-        - Mobile (< 768px) : bottom-center, marge bas pour pas masquer bottom-nav
+        - Mobile (< 768px) : bottom-center, AU-DESSUS de la bottom-nav.
+          9.5 — la bottom-nav mesure 4rem + safe-area-inset-bottom ; on place le
+          toast à 5rem + safe-area pour dégager la nav même sur les appareils à
+          grande safe-area (l'ancien `bottom-20` = 5rem sec pouvait chevaucher).
         - Desktop : top-right (top-4 right-4)
       */}
       <div
         role="region"
-        className="fixed z-[100] flex flex-col gap-2 inset-x-4 bottom-20 md:bottom-auto md:top-4 md:right-4 md:left-auto md:w-96"
+        className="fixed z-[100] flex flex-col gap-2 inset-x-4 bottom-[calc(5rem+env(safe-area-inset-bottom))] md:bottom-auto md:top-4 md:right-4 md:left-auto md:w-96"
         aria-live="polite"
         aria-label="Notifications"
       >
