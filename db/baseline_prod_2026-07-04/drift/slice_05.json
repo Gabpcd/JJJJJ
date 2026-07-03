@@ -1,0 +1,123 @@
+{
+  "slice": 5,
+  "total": 80,
+  "match": 38,
+  "different": [
+    {
+      "fonction": "fn_doit_notifier",
+      "derniere_migration": "20260429180000_j23a_preferences_notifications.sql",
+      "resume_ecart": "Écart limité aux commentaires : la version prod contient des commentaires explicatifs absents du repo, logique identique."
+    },
+    {
+      "fonction": "fn_documents_ok_pour_mission",
+      "derniere_migration": "20260630250000_documents_gate_per_mission_acceptation.sql",
+      "resume_ecart": "Écart cosmétique : commentaire sur le régime libéral et espaces dans les parenthèses absents en prod, logique identique."
+    },
+    {
+      "fonction": "fn_enregistrer_numero_dpae",
+      "derniere_migration": "20260517125600_fn_enregistrer_numero_dpae_validation_email.sql",
+      "resume_ecart": "Écart limité aux commentaires : la prod est dépourvue des commentaires (validation URSSAF, audit, email best-effort) du repo, logique identique."
+    },
+    {
+      "fonction": "fn_enregistrer_swipe",
+      "derniere_migration": "20260702112405_favoris_missions_garde_fous_candidature.sql",
+      "resume_ecart": "Écart limité aux commentaires : la prod est dépourvue des commentaires D1/D2 (favoris, garde-fous) du repo, logique identique."
+    },
+    {
+      "fonction": "fn_envoyer_rappels_litiges",
+      "derniere_migration": "20260417130400_cp_litiges_4_cron.sql",
+      "resume_ecart": "Écart limité aux commentaires : deux commentaires (ciblage destinataire, clé rappel) absents en prod, logique identique."
+    },
+    {
+      "fonction": "fn_envoyer_otp_signature",
+      "derniere_migration": "20260513190000_pr9s3_integration_rate_limit_signature.sql",
+      "resume_ecart": "Écart cosmétique : un commentaire rate-limit et des espaces dans jsonb_build_object absents en prod, logique identique."
+    },
+    {
+      "fonction": "fn_est_contexte_cron_ou_admin",
+      "derniere_migration": "20260624140000_fix_cron_auth_gates.sql",
+      "resume_ecart": "Écart limité à un commentaire (contexte cron/trigger) absent en prod, logique identique."
+    },
+    {
+      "fonction": "fn_etablissement_public",
+      "derniere_migration": "20260312205752_b54770d9-64d5-4bff-a195-65b2b874f6ec.sql",
+      "resume_ecart": "Divergence fonctionnelle : la prod retourne un jsonb enrichi (logo_url, couleur_theme) via RETURN jsonb_build_object, le repo une version SELECT colonnes sans ces champs."
+    },
+    {
+      "fonction": "fn_evaluer_coherence_pointage",
+      "derniere_migration": "20260517131200_search_path_immutable_4_fonctions.sql",
+      "resume_ecart": "Écart cosmétique : espaces après parenthèse ouvrante dans les jsonb_build_object, logique identique."
+    },
+    {
+      "fonction": "fn_fh_auto_audit",
+      "derniere_migration": "20260413140000_invoicing_module_schema.sql",
+      "resume_ecart": "Écart cosmétique : espaces après parenthèse dans le VALUES, logique identique."
+    },
+    {
+      "fonction": "fn_fenetre_contestation_ouverte",
+      "derniere_migration": "20260417130722_fix_t19_escalade_type_contrat_applique.sql",
+      "resume_ecart": "Écart limité à un commentaire [FIX T19] absent en prod, logique identique."
+    },
+    {
+      "fonction": "fn_externalisations_a_traiter",
+      "derniere_migration": "20260513270000_pr2s4_worker_externalisation.sql",
+      "resume_ecart": "Divergence fonctionnelle : la prod supprime le RETURNING orphelin de l'UPDATE (erreur plpgsql « query has no destination ») encore présent dans le repo, plus commentaires retirés."
+    },
+    {
+      "fonction": "fn_externalisation_echec",
+      "derniere_migration": "20260513270000_pr2s4_worker_externalisation.sql",
+      "resume_ecart": "Écart cosmétique : commentaires (PENDING_AIFE, backoff, notif admin) et espaces absents en prod, logique identique."
+    },
+    {
+      "fonction": "fn_generer_code_parrainage",
+      "derniere_migration": "20260528180208_fix_search_path_parrainage_code.sql",
+      "resume_ecart": "Divergence fonctionnelle : la prod qualifie extensions.gen_random_bytes (hardening search_path) là où le repo appelle gen_random_bytes non qualifié."
+    },
+    {
+      "fonction": "fn_generer_facture_mensuelle",
+      "derniere_migration": "20260313152433_8096a62c-342b-4938-a6cd-ba3793e15e8d.sql",
+      "resume_ecart": "Divergence fonctionnelle majeure : implémentations distinctes (prod : garde p_etablissement_id/est_admin() et erreurs JSONB littérales ; repo : mon_etablissement_id(), v_mission_ids et période calculée)."
+    },
+    {
+      "fonction": "fn_generer_qr_mission",
+      "derniere_migration": "20260514090000_pr4s45_qr_code_backend.sql",
+      "resume_ecart": "Divergence fonctionnelle : statuts mission bloquants LITIGE/ANNULEE_PAR_ETABLISSEMENT en prod vs ANNULEE_LITIGE/ANNULEE_ETAB dans le repo, et extensions.gen_random_bytes qualifié en prod."
+    },
+    {
+      "fonction": "fn_haversine_distance_m",
+      "derniere_migration": "20260513150000_pr3s3_gps_pointage_hardening.sql",
+      "resume_ecart": "Écart limité à un commentaire (rayon Terre en m) absent en prod, logique identique."
+    },
+    {
+      "fonction": "fn_init_proprietaire_etab",
+      "derniere_migration": "20260602120000_secu_etab_init_proprietaire_et_userid_enumeration.sql",
+      "resume_ecart": "Écart limité aux commentaires : la prod contient des commentaires (appel serveur vs client) absents du repo, logique identique."
+    }
+  ],
+  "absent_du_repo": [
+    "fn_ecrire_audit",
+    "fn_email_documents_expirants",
+    "fn_email_factures_impayees",
+    "fn_email_eligible_liberal",
+    "fn_email_rappels_j1",
+    "fn_email_recap_hebdo",
+    "fn_enregistrer_siret_liberal",
+    "fn_envoyer_message",
+    "fn_est_jour_ferie",
+    "fn_est_exclu",
+    "fn_etablissement_pour_mission",
+    "fn_evaluer_etablissement",
+    "fn_etablissements_avec_missions_ouvertes",
+    "fn_evaluer_soignant",
+    "fn_generer_facture",
+    "fn_generer_jours_feries",
+    "fn_generer_numero_facture",
+    "fn_generer_numero_contrat",
+    "fn_generer_numero_contrat_safe",
+    "fn_generer_numero_note_honoraires",
+    "fn_generer_facture_rate_limited",
+    "fn_health_check",
+    "fn_html_escape",
+    "fn_get_stripe_account_soignant"
+  ]
+}

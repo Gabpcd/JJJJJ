@@ -1,0 +1,158 @@
+{
+  "slice": 3,
+  "total": 80,
+  "match": 39,
+  "different": [
+    {
+      "fonction": "fn_admin_resoudre_litige",
+      "derniere_migration": "20260417130720_fix_bonus_resolution_null_values.sql",
+      "resume_ecart": "Ancien overload 5 params (p_ajuster_heures avant p_en_faveur_de) encore présent en prod sans aucune définition repo pour cette signature — corps entièrement différent de la version 6 params du repo."
+    },
+    {
+      "fonction": "fn_admin_recategoriser_litige_legacy",
+      "derniere_migration": "20260417130718_cp7b3_recategorisation_rpc.sql",
+      "resume_ecart": "Écart limité aux commentaires SQL — code identique une fois les commentaires retirés."
+    },
+    {
+      "fonction": "fn_admin_stripe_connect_stats",
+      "derniere_migration": "20260415120000_fix_stripe_connect_stats.sql",
+      "resume_ecart": "Écart de commentaires et de mise en forme uniquement — code identique à espaces près."
+    },
+    {
+      "fonction": "fn_admin_suspendre_utilisateur",
+      "derniere_migration": "20260411160000_rpc_drift_fixes_admin_payment_urgence.sql",
+      "resume_ecart": "Écart limité aux commentaires SQL (prod contient un commentaire absent du repo) — code identique."
+    },
+    {
+      "fonction": "fn_admin_resoudre_litige",
+      "derniere_migration": "20260417130720_fix_bonus_resolution_null_values.sql",
+      "resume_ecart": "Prod (6 params) intègre les fixes Sprint 17 (v_facture.id IS NOT NULL + periode_debut/periode_fin/numero_semaine_iso/annee_iso dans les INSERT) appliqués par patch dynamique 20260530287000/288000 — aucun CREATE littéral à jour dans le repo."
+    },
+    {
+      "fonction": "fn_admin_supprimer_compte_test",
+      "derniere_migration": "20260624200000_admin_supprimer_compte_test.sql",
+      "resume_ecart": "Écart limité aux commentaires SQL (prod contient des commentaires absents du repo) — code identique."
+    },
+    {
+      "fonction": "fn_admin_valider_etablissement",
+      "derniere_migration": "20260606140000_phase4_admin_revue_etablissements.sql",
+      "resume_ecart": "Écart limité aux commentaires SQL — code identique une fois les commentaires retirés."
+    },
+    {
+      "fonction": "fn_ajouter_jours_ouvres",
+      "derniere_migration": "20260417130709_fix10_timezone_europe_paris.sql",
+      "resume_ecart": "Écart limité aux commentaires SQL — code identique une fois les commentaires retirés."
+    },
+    {
+      "fonction": "fn_admin_valider_heures_externes",
+      "derniere_migration": "20260530170000_admin_validation_heures_externes.sql",
+      "resume_ecart": "Écart limité aux commentaires SQL — code identique une fois les commentaires retirés."
+    },
+    {
+      "fonction": "fn_alerter_mediation_prioritaire",
+      "derniere_migration": "20260417130400_cp_litiges_4_cron.sql",
+      "resume_ecart": "Prod a retiré l'emoji 🚨 du titre de la notification push (seul écart de code, plus commentaires)."
+    },
+    {
+      "fonction": "fn_alerter_paiements_retard",
+      "derniere_migration": "20260420171000_cp_c_2_c_refonte_alerter_paiements.sql",
+      "resume_ecart": "Prod remplace € par EUR et désaccentue les textes des relances, et supprime deux variables inutilisées (v_etab_email, v_etab_nom)."
+    },
+    {
+      "fonction": "fn_annuler_candidature_soignant",
+      "derniere_migration": "20260608180000_fix_annulation_candidature_soignant_statut.sql",
+      "resume_ecart": "Écart limité aux commentaires SQL — code identique une fois les commentaires retirés."
+    },
+    {
+      "fonction": "fn_alerte_reclamations_pending_old",
+      "derniere_migration": "20260513280000_pr3s4_cron_alertes_admin.sql",
+      "resume_ecart": "La version repo contient un INSERT journaux_audit final et des textes plus verbeux (clé 'message', corps de notif) absents de la version prod."
+    },
+    {
+      "fonction": "fn_annuler_mission_soignant",
+      "derniere_migration": "20260608200000_bonus_urgence_acceptation_formule.sql",
+      "resume_ecart": "Écart limité aux commentaires SQL — code identique une fois les commentaires retirés."
+    },
+    {
+      "fonction": "fn_annuler_mission_complete",
+      "derniere_migration": "20260513210000_pr2s35_litiges_execution_accords.sql",
+      "resume_ecart": "Prod écrit statut mission 'LITIGE' là où le repo écrit 'ANNULEE_LITIGE'."
+    },
+    {
+      "fonction": "fn_annuler_mission_etab",
+      "derniere_migration": "20260513230000_pr5s35_annulation_etab_indemnites.sql",
+      "resume_ecart": "Statuts divergents : prod utilise 'LITIGE'/'ANNULEE_PAR_ETABLISSEMENT' là où le repo utilise 'ANNULEE_LITIGE'/'ANNULEE_ETAB'."
+    },
+    {
+      "fonction": "fn_anti_seed_facture_honoraire",
+      "derniere_migration": "20260608170000_fix_anti_seed_exempte_admin_litige_avoir.sql",
+      "resume_ecart": "Écart de commentaires et de mise en forme uniquement — code identique à espaces près."
+    },
+    {
+      "fonction": "fn_anti_seed_mission",
+      "derniere_migration": "20260416200000_cp6_anti_seed_triggers.sql",
+      "resume_ecart": "Écart limité aux commentaires SQL — code identique une fois les commentaires retirés."
+    },
+    {
+      "fonction": "fn_assigner_mission_admin",
+      "derniere_migration": "20260420162000_e16_c_assigner_admin.sql",
+      "resume_ecart": "Prod utilise type_contrat 'CDD' vs 'CDDU' dans le repo (éradication CDDU appliquée dynamiquement par 20260530280000, sans CREATE littéral)."
+    },
+    {
+      "fonction": "fn_audit_rls_strict",
+      "derniere_migration": "20260513180000_pr7s3_durcissement_securite.sql",
+      "resume_ecart": "Écart de commentaires et de mise en forme uniquement — code identique à espaces près."
+    },
+    {
+      "fonction": "fn_archiver_conversations_anciennes",
+      "derniere_migration": "20260514183300_pr4s10a_archivage_conversations_30j.sql",
+      "resume_ecart": "Écart limité aux commentaires SQL — code identique une fois les commentaires retirés."
+    },
+    {
+      "fonction": "fn_auto_facturation_mensuelle",
+      "derniere_migration": "20260624140000_fix_cron_auth_gates.sql",
+      "resume_ecart": "Écart de commentaires et de mise en forme uniquement — code identique à espaces près."
+    },
+    {
+      "fonction": "fn_auto_creation_litiges_presence",
+      "derniere_migration": "20260417130719_fix_bonus_auto_creation_cas_b_c.sql",
+      "resume_ecart": "Écart limité aux commentaires SQL — code identique une fois les commentaires retirés."
+    },
+    {
+      "fonction": "fn_bfa_info",
+      "derniere_migration": "20260328172746_e156b0ad-f95c-4e90-9d75-1dd2c78ee7cd.sql",
+      "resume_ecart": "Prod corrige l'antipattern record NULL ('v_prochain.id IS NOT NULL' au lieu de 'v_prochain IS NOT NULL'), fix absent du repo."
+    },
+    {
+      "fonction": "fn_auto_transitions_missions",
+      "derniere_migration": "20260420190001_cp_c_4_a_expiree_enum_fn.sql",
+      "resume_ecart": "Écart limité aux commentaires SQL — code identique une fois les commentaires retirés."
+    },
+    {
+      "fonction": "fn_award_badges_swipe",
+      "derniere_migration": "20260515140000_badges_engagement.sql",
+      "resume_ecart": "Écart limité aux commentaires SQL — code identique une fois les commentaires retirés."
+    },
+    {
+      "fonction": "fn_blocage_publication_etab",
+      "derniere_migration": "20260606120000_phase4_verrou_publication_finess_rattachement.sql",
+      "resume_ecart": "Écart limité aux commentaires SQL — code identique une fois les commentaires retirés."
+    }
+  ],
+  "absent_du_repo": [
+    "fn_admin_valider_contrat_etablissement",
+    "fn_ajouter_message_litige",
+    "fn_annuler_serie",
+    "fn_annuler_mission",
+    "fn_annuler_mission_etablissement",
+    "fn_appliquer_remise_groupe",
+    "fn_auto_revoke_anon_execute",
+    "fn_auto_publier_evaluation",
+    "fn_auto_terminer_missions",
+    "fn_auto_confirmer_honoraires",
+    "fn_badge_stats",
+    "fn_auto_valider_etablissement_siret",
+    "fn_calculer_bfa",
+    "fn_bloquer_delete_doc_verifie"
+  ]
+}
