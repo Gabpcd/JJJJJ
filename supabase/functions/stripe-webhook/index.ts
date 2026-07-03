@@ -90,6 +90,18 @@ Deno.serve(async (req) => {
       });
     }
 
+    // HOTFIX double transfert — fn_stripe_webhook_event_is_new répond TRUE tant
+    // que traite_le est NULL, or plusieurs branches (dont CONNECT_MISSION_PAYMENT)
+    // retournaient AVANT le marquage final de fin de handler. Sur un retry Stripe
+    // (timeout inclus), la branche entière se ré-exécutait — y compris
+    // transfers.create. Chaque return anticipé « traitement terminé » doit poser
+    // traite_le via ce helper. Le catch global, lui, ne marque pas (retry voulu).
+    const markEventProcessed = async () => {
+      await supabaseAdmin.from("stripe_webhook_events")
+        .update({ traite_le: new Date().toISOString() })
+        .eq("event_id", event.id);
+    };
+
     // Handle checkout.session.completed
     if (event.type === "checkout.session.completed") {
       const session = event.data.object as Stripe.Checkout.Session;
@@ -100,6 +112,7 @@ Deno.serve(async (req) => {
         // Verify payment actually succeeded before creating transfer
         if (session.payment_status !== "paid") {
           console.warn(`CONNECT_MISSION_PAYMENT session ${session.id} not paid (status: ${session.payment_status}), skipping transfer`);
+          await markEventProcessed();
           return new Response(JSON.stringify({ received: true, skipped: "not_paid" }), {
             status: 200,
             headers: { ...corsHeaders(req), "Content-Type": "application/json" },
@@ -166,14 +179,42 @@ Deno.serve(async (req) => {
         }
 
         if (missionId && connectedAccountId && soignantCents > 0) {
+          // HOTFIX double transfert — garde idempotente AVANT transfers.create :
+          // si un transfer définitif existe déjà pour cette mission (retry Stripe
+          // après timeout, ré-livraison), on ne recrée RIEN. Statuts définitifs =
+          // même liste que stripe-connect-pay-mission (:271). REMBOURSE exclu :
+          // un re-paiement légitime après remboursement doit pouvoir re-transférer.
+          const { data: transferExistant } = await supabaseAdmin
+            .from("stripe_transfers")
+            .select("statut, stripe_transfer_id")
+            .eq("mission_id", missionId)
+            .maybeSingle();
+          if (
+            transferExistant?.stripe_transfer_id &&
+            ["TRANSFERE", "CHARGE_REUSSI", "PAYE"].includes(transferExistant.statut)
+          ) {
+            console.log(
+              `Transfer déjà créé pour mission ${missionId} (${transferExistant.stripe_transfer_id}, statut ${transferExistant.statut}) — skip idempotent`
+            );
+            await markEventProcessed();
+            return new Response(
+              JSON.stringify({ received: true, skipped: "transfer_deja_cree" }),
+              { status: 200, headers: { ...corsHeaders(req), "Content-Type": "application/json" } },
+            );
+          }
+
           try {
+            // Idempotency key portée par la session Checkout : un retry du même
+            // event réutilise la même clé (Stripe renvoie le transfer existant au
+            // lieu d'en créer un second) ; un nouveau paiement légitime (nouvelle
+            // session après remboursement) a une clé différente.
             const transfer = await stripe.transfers.create({
               amount: soignantCents,
               currency: "eur",
               destination: connectedAccountId,
               transfer_group: `mission_${missionId}`,
               metadata: { mission_id: missionId, soignant_id: soignantId || "" },
-            });
+            }, { idempotencyKey: `transfer_${session.id}` });
 
             // Get the actual charge ID from the payment intent
             const paymentIntentId = typeof session.payment_intent === "string" ? session.payment_intent : null;
@@ -490,6 +531,7 @@ Deno.serve(async (req) => {
           }
         }
 
+        await markEventProcessed();
         return new Response(JSON.stringify({ received: true }), {
           status: 200,
           headers: { ...corsHeaders(req), "Content-Type": "application/json" },
@@ -501,6 +543,7 @@ Deno.serve(async (req) => {
 
       if (!factureId) {
         console.warn("checkout.session.completed sans facture_id dans metadata");
+        await markEventProcessed();
         return new Response(JSON.stringify({ received: true }), {
           status: 200,
           headers: { ...corsHeaders(req), "Content-Type": "application/json" },
@@ -516,6 +559,7 @@ Deno.serve(async (req) => {
 
       if (existingFacture?.statut === "PAYEE") {
         console.log(`Facture ${factureId} already PAYEE, skipping duplicate webhook`);
+        await markEventProcessed();
         return new Response(JSON.stringify({ received: true, skipped: "already_paid" }), {
           status: 200,
           headers: { ...corsHeaders(req), "Content-Type": "application/json" },
@@ -575,6 +619,7 @@ Deno.serve(async (req) => {
           p_ip: null,
           p_navigateur: "stripe-webhook",
         });
+        await markEventProcessed();
         return new Response(JSON.stringify({ received: true, skipped: "facture_statut_invalide" }), {
           status: 200,
           headers: { ...corsHeaders(req), "Content-Type": "application/json" },
