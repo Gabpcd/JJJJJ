@@ -275,17 +275,6 @@ export function MesGainsApercuContent() {
         </div>
       )}
 
-      {/* Rappels fiscaux libéral — remontés ici (Aperçu) depuis l'ancien onglet
-          Gains du Dashboard : c'est leur place, près des revenus. */}
-      {isLiberal && (
-        <div className="mb-6">
-          <RappelsFiscaux
-            regimeFiscal={soignant?.regime_fiscal ?? 'MICRO_BNC'}
-            regimeFiscalConfirme={soignant?.regime_fiscal_confirme === true}
-          />
-        </div>
-      )}
-
       {/* §7.2 Lot 7a — banner parrainage permanent RETIRÉ de Revenus : cet écran a
           un seul job, la confiance paiement. Le parrainage vit dans Compte (entrée
           dédiée), en bas d'Accueil (carte discrète) et aux pics d'émotion (§5). */}
@@ -364,6 +353,18 @@ export function MesGainsApercuContent() {
         <Suspense fallback={<div className="h-64 animate-pulse bg-muted rounded-lg" />}>
           <GraphiqueGains6Mois missions={allMissions.map(m => ({ debut_le: m.debut_le, net_a_payer: netEstime(m) }))} />
         </Suspense>
+      )}
+
+      {/* 9.3 — échéances fiscales : descendues sous les KPIs/gains (hiérarchie
+          pipeline → KPIs → gains → échéances), juste au-dessus des exports pour
+          que la promotion J-7 pointe vers eux. */}
+      {isLiberal && (
+        <div className="mb-6">
+          <RappelsFiscaux
+            regimeFiscal={soignant?.regime_fiscal ?? 'MICRO_BNC'}
+            regimeFiscalConfirme={soignant?.regime_fiscal_confirme === true}
+          />
+        </div>
       )}
 
       {/* Filtre + Actions */}
