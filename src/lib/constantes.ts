@@ -204,3 +204,13 @@ export function getTypesContratSoignant(soignant: { type_contrat?: string | null
   if (soignant.type_exercice === 'LIBERAL') return ['LIBERAL'];
   return soignant.type_contrat ? [soignant.type_contrat] : ['CDD', 'VACATION', 'LIBERAL', 'SALARIE'];
 }
+
+// ── Parrainage établissement (7f-3) ────────────────────────────────────────
+// Constantes extraites de PageParrainageEtablissement (étaient en dur en tête
+// de fichier). Un seul code de parrainage par établissement (code unique).
+// Modèle actuel : récompense forfaitaire à la validation (100 € de commission
+// encaissée du filleul). Les paliers GMV (50 €/500 € + 150 €/2000 €) sont une
+// évolution de logique d'argent réservée à une PR backend dédiée (règles ①②).
+export const PARRAINAGE_ETAB_CAP = 10;
+export const PARRAINAGE_ETAB_SEUIL_AMBASSADEUR = 3;
+export const PARRAINAGE_ETAB_RECOMPENSE_EUR = 50;

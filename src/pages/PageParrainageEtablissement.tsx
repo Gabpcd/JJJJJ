@@ -9,6 +9,11 @@ import { usePageTitle } from '@/hooks/usePageTitle';
 import { useEtablissementScope } from '@/hooks/useEtablissementScope';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { toast } from 'sonner';
+import {
+  PARRAINAGE_ETAB_CAP,
+  PARRAINAGE_ETAB_SEUIL_AMBASSADEUR,
+  PARRAINAGE_ETAB_RECOMPENSE_EUR,
+} from '@/lib/constantes';
 
 interface Filleul {
   parrainage_id: string;
@@ -36,9 +41,9 @@ interface CreditsState {
   credits: CreditEtab[];
 }
 
-const CAP_PARRAINAGES = 10;
-const SEUIL_AMBASSADEUR = 3;
-const RECOMPENSE_EUR = 50;
+const CAP_PARRAINAGES = PARRAINAGE_ETAB_CAP;
+const SEUIL_AMBASSADEUR = PARRAINAGE_ETAB_SEUIL_AMBASSADEUR;
+const RECOMPENSE_EUR = PARRAINAGE_ETAB_RECOMPENSE_EUR;
 
 export default function PageParrainageEtab() {
   usePageTitle('Parrainage — Établissement');
