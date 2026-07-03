@@ -46,12 +46,26 @@ jobs:
 
       - name: Check if schema changed
         id: diff
+        # git status --porcelain (et pas git diff --quiet) : un fichier
+        # UNTRACKED ne produit aucun diff → tous les runs historiques
+        # concluaient "changed=false" et le step PR était skipped, la
+        # baseline n'a jamais atterri dans le repo (découvert Lot 9.0,
+        # run #28652615624 du 03/07/2026). git status voit aussi le "??".
         run: |
-          if git diff --quiet supabase/schema/public.sql; then
+          if [ -z "$(git status --porcelain supabase/schema/public.sql)" ]; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
           else
             echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
+
+      - name: Upload dump artifact
+        # Toujours disponible même si la PR bot échoue ou est skipped —
+        # permet de récupérer le dump et de le committer à la main.
+        uses: actions/upload-artifact@v5
+        with:
+          name: schema-public-sql
+          path: supabase/schema/public.sql
+          retention-days: 14
 
       - name: Create PR with updated schema
         if: steps.diff.outputs.changed == 'true'

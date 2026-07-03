@@ -1,0 +1,77 @@
+name: Drift check (daily)
+
+# 9.0 — Garde-fou permanent : détecte toute dérive entre le schéma PROD réel
+# et la baseline versionnée (supabase/schema/public.sql, produite par
+# schema-snapshot.yml). ROUGE si diff non vide — une modification prod
+# hors-migrations (dashboard, MCP, SQL direct) devient visible en < 24 h
+# au lieu d'exploser des semaines plus tard (cf. incidents du 02/07/2026).
+#
+# Rouge attendu ? → si la dérive est LÉGITIME (migration mergée dont le dump
+# n'a pas suivi) : re-run schema-snapshot.yml (workflow_dispatch), merger la
+# PR de snapshot. Sinon : la dérive est un incident — re-capturer la
+# modification prod en migration le jour même (règle CLAUDE.md).
+
+on:
+  schedule:
+    # Tous les jours à 5h UTC (7h Paris) — avant la journée de dev.
+    - cron: '0 5 * * *'
+  workflow_dispatch:
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+
+jobs:
+  drift:
+    name: Diff schéma prod vs baseline versionnée
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: 2.98.0
+
+      - name: Baseline présente ?
+        id: baseline
+        run: |
+          if [ -f supabase/schema/public.sql ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::Pas de baseline supabase/schema/public.sql — lancer schema-snapshot.yml et merger sa PR d'abord."
+          fi
+
+      - name: Dump schéma prod
+        if: steps.baseline.outputs.present == 'true'
+        run: |
+          set -euo pipefail
+          supabase link --project-ref "$SUPABASE_PROJECT_REF"
+          supabase db dump --schema public --linked \
+            --password "$SUPABASE_DB_PASSWORD" \
+            > /tmp/prod_schema.sql
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+
+      - name: Diff vs baseline
+        if: steps.baseline.outputs.present == 'true'
+        run: |
+          set -euo pipefail
+          if diff -u supabase/schema/public.sql /tmp/prod_schema.sql > /tmp/drift.diff; then
+            echo "✅ Aucune dérive : le schéma prod correspond à la baseline versionnée."
+          else
+            LINES=$(wc -l < /tmp/drift.diff)
+            echo "::error::DÉRIVE DÉTECTÉE ($LINES lignes de diff) entre la prod et supabase/schema/public.sql — voir l'artifact drift-diff."
+            head -100 /tmp/drift.diff
+            exit 1
+          fi
+
+      - name: Upload diff artifact
+        if: failure()
+        uses: actions/upload-artifact@v5
+        with:
+          name: drift-diff
+          path: /tmp/drift.diff
+          retention-days: 30
