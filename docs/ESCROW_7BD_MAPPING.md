@@ -192,3 +192,60 @@
 
 **Le flag `feature_paiement_rapide_actif` reste à 0 pendant tout le chantier.**
 Le flip n'intervient qu'après recette §4.7 verte et validation du diff légal §4.6.
+
+## 6. Amendements validés (03/07/2026 — GO Gabrielle)
+
+Le mapping et le séquencement §5 sont approuvés avec les 10 amendements suivants,
+à intégrer **avant** d'écrire le cœur du chantier (PR 2-3).
+
+- **A1 — PR 0 GO immédiat** : hotfix idempotence livré (PR #785), discipline
+  live-def respectée (pour une edge function, le repo est la source déployée par
+  le CI à chaque merge).
+- **A2 — Plafond d'exposition §11.1 (🔴, PR 2 ou 3)** : compteur par étab des fonds
+  libérés encore remboursables (fenêtre glissante 8 semaines post-débit SEPA,
+  incrément au release, décrément à expiration/règlement) ; enforcement dans le
+  gating ⚡ : plafond 2 000 € (5 000 € après 3 missions sans incident), au-delà les
+  nouvelles missions repassent en régime standard ; **1ʳᵉ mission de chaque étab =
+  virement instantané** (intégré au gating 7c) ; gel du ⚡ au premier incident
+  (dispute/échec), déblocage manuel admin.
+- **A3 — Machine à états : DÉBITÉ ≠ DISPONIBLE** : états
+  `INITIE → DEBITE (succeeded) → DISPONIBLE (balance available) → RELEASE_PLANIFIE
+  → PAYE` + branches `ECHOUE / REMBOURSE / DISPUTE`. Le consumer de release vérifie
+  **deux** conditions (présences validées ET fonds `available` sur le solde
+  connecté — retry avec backoff sinon) ; le gating « settled avant J » lit
+  `available_on` de la balance transaction, pas le statut du PaymentIntent.
+- **A4 — Fallback court délai** : SEPA (≥ 6 j ouvrés) → virement instantané → à
+  défaut **pas de badge ⚡, mission en régime standard** (publication normale). La
+  carte n'est jamais un prérequis (décision produit : la RH ne met pas sa CB) ;
+  reste une option si enregistrée. Débit carte immédiat confirmé (pas de hold J-7,
+  cf. découverte 7).
+- **A5 — Règle post-release (PR 4)** : avant release `reverse_transfer: true` ;
+  **après release, tout remboursement étab est absorbé par Jolene** via l'avoir
+  AUTO_STRIPE — jamais de reversal ni de solde négatif imposé à une soignante qui
+  a travaillé, sauf fraude avérée (décision admin manuelle, tracée). L'exposition
+  A2 est décrémentée en conséquence.
+- **A6 — `refund_application_fee` (PR 4)** : annulation totale avant début de
+  mission → commission remboursée à 100 % (`refund_application_fee: true`) ;
+  réduction partielle → prorata sur la part non due. À encoder avec la correction
+  de base de montant (part soignant réellement transférée, pas l'écart HT).
+- **A7 — Backfill payouts manual (PR 1) : drainer le legacy d'abord** : inventorier
+  les `stripe_transfers` TRANSFERE non payés ; les solder par payout manuel avant
+  de basculer chaque compte. Le script loggue compte par compte « soldé → basculé ».
+- **A8 — Relances régime standard (PR 3 ou 3 bis)** : ① cron de transition
+  `EMISE → EN_RETARD` à échéance dépassée ; ② re-prélèvement automatique d'une
+  facture EN_RETARD (réintégration dans `sepa-auto-charge` avec cap de tentatives).
+- **A9 — PR 6 : texte légal verbatim** depuis `jolene-clauses-cgv-et-mandat.md`
+  (sections B « Paiement rapide ⚡ » CGU soignante + C avenant mandat
+  d'encaissement) fourni par Gabrielle. Diff toujours soumis à validation ✋ avant
+  merge (règle ④), mais rédaction faite.
+- **A10 — Recette PR 7 : +2 scénarios** : ⑧ validation des présences avant
+  disponibilité des fonds (SEPA en settlement) → release en file, retry, payout au
+  passage `available`, aucune erreur visible soignante ; ⑨ remboursement
+  post-release → avoir absorbé plateforme, aucun mouvement côté soignante,
+  exposition décrémentée.
+
+Rappels inchangés : flag à 0 pendant tout le chantier (flip après recette
+§4.7+A10 verte ET validation du diff légal) ; au flip, réécriture de la copie
+`PageStripeConnect.tsx` (découverte 3) et du KPI `fn_mes_revenus_connect`
+(découverte 4) **dans la même PR que le flip** ; enrichissement du mandat SEPA
+(RUM + date de signature via l'objet `mandate` Stripe, découverte 5) requis.
