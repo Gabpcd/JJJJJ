@@ -158,7 +158,9 @@ export function MesGainsApercuContent() {
   // paiement est LE facteur de conversion — plus jamais deux chiffres divergents.
   const pipeline = useMemo(() => {
     const etapes = {
-      aValider: { montant: 0, nb: 0 },
+      // 9.1 — aValider.ids : liste des missions comptées (pour la règle singleton
+      // du deep link : 1 seule → détail mission direct).
+      aValider: { montant: 0, nb: 0, ids: [] as string[] },
       enAttente: { montant: 0, nb: 0 },
       paye: { montant: 0, nb: 0 },
     };
@@ -186,6 +188,7 @@ export function MesGainsApercuContent() {
       // présences par l'établissement encore en cours.
       etapes.aValider.montant += montantDefaut;
       etapes.aValider.nb += 1;
+      etapes.aValider.ids.push(m.id);
     });
     return etapes;
   }, [allMissions, paiementsMap, facturesMap, isSalariePur]);
@@ -234,7 +237,14 @@ export function MesGainsApercuContent() {
                 label: 'À valider',
                 detail: 'présences côté étab',
                 etape: pipeline.aValider,
-                onClick: () => navigate('/soignant/presences'),
+                // 9.1 — deep link ciblé : singleton → détail mission direct
+                // (bloc statut + relance) ; sinon onglet Historique filtré sur
+                // les présences en attente de validation étab (miroir gate 7b-B).
+                onClick: () => navigate(
+                  pipeline.aValider.ids.length === 1
+                    ? `/soignant/presences/mission/${pipeline.aValider.ids[0]}`
+                    : '/soignant/presences?tab=historique&filtre=a_valider',
+                ),
               },
               {
                 label: 'En attente de paiement',
