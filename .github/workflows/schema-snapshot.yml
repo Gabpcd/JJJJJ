@@ -6,10 +6,9 @@ name: Schema snapshot (weekly)
 # le drift-check part au rouge (dérive légitime — incident 04/07/2026).
 #
 # Fix permanent : ce workflow se déclenche AUTOMATIQUEMENT après un
-# `deploy-supabase` réussi (workflow_run) et committe la baseline DIRECTEMENT
-# sur main via GITHUB_TOKEN (contents:write) — plus de dépendance à la création
-# de PR par les Actions (réglage repo qui bloquait peter-evans). Le commit est
-# non-fatal : si main est protégée contre les push Actions, warning + artifact.
+# `deploy-supabase` réussi (workflow_run) et pousse la baseline sur la branche
+# dédiée `auto/schema-baseline` ; une PR de cette branche vers main la fait
+# atterrir (main exige une PR — protection de branche).
 
 on:
   workflow_run:
@@ -79,18 +78,22 @@ jobs:
           path: supabase/schema/public.sql
           retention-days: 14
 
-      - name: Re-baseline main (commit direct, non-fatal)
+      - name: Re-baseline via branche dédiée (main exige une PR)
         if: steps.diff.outputs.changed == 'true'
+        # `main` est protégée : « Changes must be made through a pull request »
+        # → un push direct du bot est refusé (GH006). On pousse donc la baseline
+        # sur une branche dédiée NON protégée (le push GITHUB_TOKEN passe), puis
+        # une PR `auto/schema-baseline` → main la fait atterrir. Le push --force
+        # est sûr : la branche ne porte que ce commit de re-baseline au-dessus de
+        # main, régénéré à chaque run.
         run: |
           set -uo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add supabase/schema/public.sql
-          git commit -m "chore(schema): re-baseline auto du schéma prod [skip ci]"
-          # main a pu avancer depuis le checkout → rebase avant push.
-          git pull --rebase --autostash origin main || true
-          if git push origin HEAD:main; then
-            echo "✅ Baseline re-versionnée sur main."
+          git commit -m "chore(schema): re-baseline auto du schéma prod"
+          if git push --force origin HEAD:auto/schema-baseline; then
+            echo "✅ Baseline poussée sur auto/schema-baseline — ouvrir/merger la PR vers main pour verdir drift-check."
           else
-            echo "::warning::Push de la baseline refusé (main protégée contre les push Actions ?). Le dump reste disponible en artifact 'schema-public-sql' — le committer à la main, ou activer Settings → Actions → General → 'Allow GitHub Actions to create and approve pull requests' + rétablir la création de PR."
+            echo "::warning::Push sur auto/schema-baseline refusé. Le dump reste disponible en artifact 'schema-public-sql' — le committer à la main."
           fi
