@@ -10,6 +10,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { BadgeY2K } from '@/components/y2k/BadgeY2K';
 import { AffichageCodeRotatifEtab } from '@/components/pointage/AffichageCodeRotatifEtab';
+import { toast } from 'sonner';
 
 function fmt(v: number) {
   return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(v);
@@ -64,8 +65,25 @@ export default function DetailPresencesMission({ role = 'ADMIN_ETABLISSEMENT' }:
   const [mission, setMission] = useState<any>(null);
   const [presences, setPresences] = useState<any[]>([]);
   const [soignant, setSoignant] = useState<any>(null);
+  const [relancing, setRelancing] = useState(false);
 
   const layoutRole = role === 'ADMIN_PLATEFORME' ? 'ADMIN_PLATEFORME' : role === 'SOIGNANT' ? 'SOIGNANT' : 'ADMIN_ETABLISSEMENT';
+
+  // 9.1 — le soignant peut relancer l'établissement quand une présence à
+  // pointage complet attend encore sa validation (miroir gate 7b-B).
+  const presenceEnAttente = presences.some(
+    (p: any) => !p.valide_par_etablissement && p.pointage_depart_le,
+  );
+  const relancerEtablissement = async () => {
+    if (!missionId) return;
+    setRelancing(true);
+    const { data, error } = await supabase.rpc('fn_relancer_validation_presence' as any, { p_mission_id: missionId });
+    setRelancing(false);
+    if (error) { toast.error(error.message); return; }
+    const r = data as any;
+    if (r?.success) toast.success(r.message ?? 'Établissement relancé.');
+    else toast.error(r?.message ?? r?.error ?? 'Relance impossible.');
+  };
 
   useEffect(() => {
     if (!missionId || !user) return;
@@ -350,6 +368,17 @@ export default function DetailPresencesMission({ role = 'ADMIN_ETABLISSEMENT' }:
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* 9.1 — Relancer l'établissement (soignant, présence en attente de validation) */}
+      {role === 'SOIGNANT' && presenceEnAttente && (
+        <div className="card-base border-warning/30 bg-warning/5">
+          <p className="text-sm text-foreground font-medium mb-1">⏳ Tes présences attendent la validation de l'établissement</p>
+          <p className="text-xs text-muted-foreground mb-3">Le paiement se débloque à la validation (automatique sous 72h). Tu peux envoyer un rappel.</p>
+          <BoutonY2K variant="secondary" size="sm" onClick={relancerEtablissement} disabled={relancing}>
+            {relancing ? 'Envoi…' : 'Relancer l\'établissement'}
+          </BoutonY2K>
         </div>
       )}
 

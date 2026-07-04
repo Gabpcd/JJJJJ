@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { getCurrentPosition as obtenirGeoloc, JoleneGeolocError } from '@/lib/geoloc';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { usePageTitle } from '@/hooks/usePageTitle';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { LayoutApp } from '@/components/LayoutApp';
 import { ChargementPage } from '@/components/ChargementPage';
 import { PointageRotatifSoignant } from '@/components/pointage/PointageRotatifSoignant';
@@ -238,6 +238,23 @@ export default function PresencesSoignant() {
   const presencesValidees = useMemo(() => presencesData?.presencesValidees ?? [], [presencesData]);
   const historiquePresences = useMemo(() => presencesData?.historiquePresences ?? [], [presencesData]);
 
+  // 9.1 — deep link : la page consomme ?tab= (onglet initial) et ?filtre= .
+  // Sans ça, le clic sur « À valider » du pipeline Revenus atterrissait sur
+  // « À venir » (defaultValue) — vide — au lieu des présences en attente.
+  const [searchParams] = useSearchParams();
+  const tabInitial = searchParams.get('tab') || 'avenir';
+  const filtreAValider = searchParams.get('filtre') === 'a_valider';
+
+  // Filtre « à valider » = miroir EXACT du gate 7b-B : présence à pointage
+  // complet (départ pointé) non encore validée par l'établissement. C'est la
+  // même condition qui alimente le KPI « À valider » de Revenus.
+  const historiqueAffiche = useMemo(
+    () => (filtreAValider
+      ? historiquePresences.filter((p: any) => !p.valide_par_etablissement && p.pointage_depart_le)
+      : historiquePresences),
+    [historiquePresences, filtreAValider],
+  );
+
   const charger = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: ['presences-soignant'] });
   }, [queryClient]);
@@ -436,7 +453,7 @@ export default function PresencesSoignant() {
         <p className="text-sm text-muted-foreground mt-1">Pointe tes arrivées et départs pour chaque mission</p>
       </div>
 
-      <Tabs defaultValue="avenir">
+      <Tabs defaultValue={tabInitial}>
         <TabsList className="w-full max-w-lg mb-4">
           <TabsTrigger value="avenir" className="flex-1 gap-1.5"><CalendarDays className="h-4 w-4" />À venir{missionsAVenir.length > 0 && <BadgeY2K variant="info" size="sm" className="ml-1 h-5 min-w-[20px] justify-center px-1" aria-label={`${missionsAVenir.length} mission${missionsAVenir.length > 1 ? 's' : ''} à venir`}>{missionsAVenir.length}</BadgeY2K>}</TabsTrigger>
           <TabsTrigger value="encours" className="flex-1 gap-1.5"><Activity className="h-4 w-4" />En cours</TabsTrigger>
@@ -604,9 +621,14 @@ export default function PresencesSoignant() {
         </TabsContent>
 
         <TabsContent value="historique">
-          {historiquePresences.length > 0 ? (
+          {filtreAValider && (
+            <div className="mb-3 rounded-xl bg-warning/10 border border-warning/30 p-3 text-sm text-warning font-medium">
+              ⏳ Présences en attente de validation par l'établissement. Le paiement est débloqué dès la validation (automatique sous 72h).
+            </div>
+          )}
+          {historiqueAffiche.length > 0 ? (
             <div className="space-y-3">
-              {historiquePresences.map((p: any) => {
+              {historiqueAffiche.map((p: any) => {
                 const m = p.missions;
                 const arrivee = p.pointage_arrivee_le ? new Date(p.pointage_arrivee_le) : null;
                 const depart = p.pointage_depart_le ? new Date(p.pointage_depart_le) : null;
