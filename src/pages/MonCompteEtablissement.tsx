@@ -10,6 +10,7 @@ import {
   BookOpen, Mail,
 } from 'lucide-react';
 import { ModalContacterJolene } from '@/components/ModalContacterJolene';
+import { BuildStamp } from '@/components/BuildStamp';
 import { useTheme } from '@/hooks/useTheme';
 import { Moon, Sun } from 'lucide-react';
 
@@ -76,6 +77,7 @@ export default function MonCompteEtablissement() {
         sousTitre={etab?.type || undefined}
       />
       <ListeReglages sections={sections} />
+      <BuildStamp />
       <ModalContacterJolene open={contactOpen} onClose={() => setContactOpen(false)} source="compte-etablissement" />
     </LayoutApp>
   );

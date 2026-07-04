@@ -142,7 +142,7 @@ export function SectionPreferences(props: Props) {
             <p className="text-xs text-muted-foreground mt-1">
               {consentementGPS
                 ? 'Ta position sera capturée uniquement au moment de l\'arrivée et du départ.'
-                : '⚠️ Sans GPS, tes pointages nécessiteront une vérification manuelle par l\'établissement.'}
+                : 'Sans GPS, tes pointages seront validés manuellement par l\'établissement — rien à faire de ton côté.'}
             </p>
           </div>
           <Switch
@@ -165,8 +165,8 @@ export function SectionPreferences(props: Props) {
                   p_ip: null, p_navigateur: navigator.userAgent,
                 });
                 afficherNotification({
-                  type: checked ? 'succes' : 'avertissement',
-                  message: checked ? 'Consentement GPS activé.' : 'Consentement GPS retiré. Vérification manuelle requise.',
+                  type: checked ? 'succes' : 'info',
+                  message: checked ? 'Consentement GPS activé.' : 'Consentement GPS retiré — tes pointages seront validés manuellement par l\'établissement.',
                 });
               }
               setGpsToggling(false);
