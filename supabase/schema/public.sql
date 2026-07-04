@@ -4976,6 +4976,37 @@ COMMENT ON FUNCTION "public"."fn_admin_creer_litige_force"("p_mission_id" "uuid"
 
 
 
+CREATE OR REPLACE FUNCTION "public"."fn_admin_degeler_escrow_etablissement"("p_etablissement_id" "uuid") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+BEGIN
+  IF NOT est_admin() THEN
+    RETURN jsonb_build_object('success', false, 'error', 'ADMIN_REQUIS');
+  END IF;
+
+  UPDATE escrow_etablissement_etat
+  SET gele = false, gele_le = NULL, gele_raison = NULL, modifie_le = now()
+  WHERE etablissement_id = p_etablissement_id;
+
+  IF NOT FOUND THEN
+    RETURN jsonb_build_object('success', false, 'error', 'ETAB_INCONNU_OU_NON_GELE');
+  END IF;
+
+  PERFORM public.fn_ecrire_audit_safe(
+    auth.uid(), 'ADMIN',
+    'ESCROW_ETAB_DEGELE', 'etablissement', p_etablissement_id,
+    NULL, '{}'::jsonb, NULL, 'fn_admin_degeler_escrow_etablissement'
+  );
+
+  RETURN jsonb_build_object('success', true);
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_admin_degeler_escrow_etablissement"("p_etablissement_id" "uuid") OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."fn_admin_detail_contrat"("p_contrat_id" "uuid") RETURNS "jsonb"
     LANGUAGE "plpgsql" STABLE SECURITY DEFINER
     SET "search_path" TO 'public'
@@ -9858,7 +9889,7 @@ BEGIN
   RETURN jsonb_build_object(
     'success', true,
     'parrain_nom', v_parrain_etab.nom,
-    'message', 'Code parrainage appliqué. Dès que Jolene aura encaissé 100€ de commission sur vos missions, vous et votre parrain recevrez chacun 50€ de crédit commission.'
+    'message', 'Code parrainage appliqué. Vous et votre parrain recevrez des crédits commission au fil des missions : 50€ chacun dès 500€ de missions réalisées, puis 150€ chacun à 2 000€.'
   );
 END;
 $$;
@@ -18099,6 +18130,361 @@ $$;
 ALTER FUNCTION "public"."fn_escalade_remplacement_non_pourvu"() OWNER TO "postgres";
 
 
+CREATE TABLE IF NOT EXISTS "public"."paiements_escrow" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "mission_id" "uuid" NOT NULL,
+    "etablissement_id" "uuid" NOT NULL,
+    "soignant_id" "uuid" NOT NULL,
+    "montant_total_cents" integer NOT NULL,
+    "commission_cents" integer NOT NULL,
+    "honoraires_cents" integer NOT NULL,
+    "methode_debit" "text",
+    "stripe_payment_intent_id" "text",
+    "stripe_charge_id" "text",
+    "stripe_payout_id" "text",
+    "statut" "text" DEFAULT 'INITIE'::"text" NOT NULL,
+    "available_on" timestamp with time zone,
+    "relance_prevue_le" timestamp with time zone,
+    "erreur" "text",
+    "initie_le" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "debite_le" timestamp with time zone,
+    "disponible_le" timestamp with time zone,
+    "release_planifie_le" timestamp with time zone,
+    "paye_le" timestamp with time zone,
+    "cree_le" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "modifie_le" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "debit_prevu_le" timestamp with time zone,
+    "premiere_mission_etab" boolean DEFAULT false NOT NULL,
+    "tentatives_debit" integer DEFAULT 0 NOT NULL,
+    "derniere_tentative_le" timestamp with time zone,
+    CONSTRAINT "paiements_escrow_commission_cents_check" CHECK (("commission_cents" >= 0)),
+    CONSTRAINT "paiements_escrow_honoraires_cents_check" CHECK (("honoraires_cents" > 0)),
+    CONSTRAINT "paiements_escrow_methode_debit_check" CHECK (("methode_debit" = ANY (ARRAY['SEPA'::"text", 'CARTE'::"text", 'VIREMENT_INSTANTANE'::"text"]))),
+    CONSTRAINT "paiements_escrow_montant_total_cents_check" CHECK (("montant_total_cents" > 0)),
+    CONSTRAINT "paiements_escrow_statut_check" CHECK (("statut" = ANY (ARRAY['INITIE'::"text", 'DEBITE'::"text", 'DISPONIBLE'::"text", 'RELEASE_PLANIFIE'::"text", 'PAYE'::"text", 'ECHOUE'::"text", 'REMBOURSE'::"text", 'DISPUTE'::"text"])))
+);
+
+
+ALTER TABLE "public"."paiements_escrow" OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."fn_escrow_debits_a_echeance"("p_limit" integer DEFAULT 50) RETURNS SETOF "public"."paiements_escrow"
+    LANGUAGE "sql" STABLE SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+  SELECT * FROM paiements_escrow
+  WHERE statut = 'INITIE'
+    AND debit_prevu_le <= now()
+    AND tentatives_debit < 3
+  ORDER BY debit_prevu_le ASC
+  LIMIT p_limit;
+$$;
+
+
+ALTER FUNCTION "public"."fn_escrow_debits_a_echeance"("p_limit" integer) OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."fn_escrow_enregistrer_exposition"("p_paiement_escrow_id" "uuid") RETURNS "void"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+DECLARE
+  v_row paiements_escrow%ROWTYPE;
+  v_fenetre_jours integer;
+BEGIN
+  SELECT * INTO v_row FROM paiements_escrow WHERE id = p_paiement_escrow_id;
+  IF v_row.id IS NULL THEN
+    RETURN;
+  END IF;
+
+  v_fenetre_jours := public.fn_param_num('escrow_fenetre_remboursable_jours', 56)::integer;
+
+  INSERT INTO escrow_exposition_releases (
+    etablissement_id, paiement_escrow_id, montant_cents,
+    debite_le, expire_le, statut
+  ) VALUES (
+    v_row.etablissement_id, v_row.id, v_row.honoraires_cents,
+    now(), now() + make_interval(days => v_fenetre_jours), 'ACTIF'
+  )
+  ON CONFLICT (paiement_escrow_id) DO NOTHING;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_escrow_enregistrer_exposition"("p_paiement_escrow_id" "uuid") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."fn_escrow_etab_eligible"("p_etablissement_id" "uuid", "p_montant_cents" integer DEFAULT 0) RETURNS boolean
+    LANGUAGE "plpgsql" STABLE SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+DECLARE
+  v_gele boolean := false;
+BEGIN
+  SELECT gele INTO v_gele
+  FROM escrow_etablissement_etat
+  WHERE etablissement_id = p_etablissement_id;
+
+  IF COALESCE(v_gele, false) THEN
+    RETURN false;
+  END IF;
+
+  RETURN public.fn_escrow_exposition_courante(p_etablissement_id)
+         + COALESCE(p_montant_cents, 0)
+         <= public.fn_escrow_plafond_cents(p_etablissement_id);
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_escrow_etab_eligible"("p_etablissement_id" "uuid", "p_montant_cents" integer) OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."fn_escrow_expirer_expositions"() RETURNS integer
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+DECLARE
+  v_count integer;
+BEGIN
+  UPDATE escrow_exposition_releases
+  SET statut = 'EXPIRE'
+  WHERE statut = 'ACTIF' AND expire_le < now();
+  GET DIAGNOSTICS v_count = ROW_COUNT;
+  RETURN v_count;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_escrow_expirer_expositions"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."fn_escrow_exposition_courante"("p_etablissement_id" "uuid") RETURNS integer
+    LANGUAGE "sql" STABLE SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+  SELECT COALESCE(SUM(montant_cents), 0)::integer
+  FROM escrow_exposition_releases
+  WHERE etablissement_id = p_etablissement_id AND statut = 'ACTIF';
+$$;
+
+
+ALTER FUNCTION "public"."fn_escrow_exposition_courante"("p_etablissement_id" "uuid") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."fn_escrow_geler_etablissement"("p_etablissement_id" "uuid", "p_raison" "text") RETURNS "void"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+BEGIN
+  INSERT INTO escrow_etablissement_etat (etablissement_id, gele, gele_le, gele_raison, modifie_le)
+  VALUES (p_etablissement_id, true, now(), p_raison, now())
+  ON CONFLICT (etablissement_id) DO UPDATE
+    SET gele = true,
+        gele_le = COALESCE(escrow_etablissement_etat.gele_le, now()),
+        gele_raison = EXCLUDED.gele_raison,
+        modifie_le = now();
+
+  PERFORM public.fn_ecrire_audit_safe(
+    '00000000-0000-0000-0000-000000000000'::uuid, 'SYSTEME',
+    'ESCROW_ETAB_GELE', 'etablissement', p_etablissement_id,
+    NULL, jsonb_build_object('raison', p_raison), NULL, 'fn_escrow_geler_etablissement'
+  );
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_escrow_geler_etablissement"("p_etablissement_id" "uuid", "p_raison" "text") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."fn_escrow_incrementer_confiance"("p_etablissement_id" "uuid") RETURNS "void"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+BEGIN
+  INSERT INTO escrow_etablissement_etat (etablissement_id, missions_sans_incident, modifie_le)
+  VALUES (p_etablissement_id, 1, now())
+  ON CONFLICT (etablissement_id) DO UPDATE
+    SET missions_sans_incident = CASE
+          WHEN escrow_etablissement_etat.gele THEN escrow_etablissement_etat.missions_sans_incident
+          ELSE escrow_etablissement_etat.missions_sans_incident + 1
+        END,
+        modifie_le = now();
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_escrow_incrementer_confiance"("p_etablissement_id" "uuid") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."fn_escrow_marquer_incident"("p_paiement_escrow_id" "uuid", "p_type_incident" "text", "p_detail" "text" DEFAULT NULL::"text") RETURNS "void"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+DECLARE
+  v_row paiements_escrow%ROWTYPE;
+  v_nouveau_statut text;
+BEGIN
+  SELECT * INTO v_row FROM paiements_escrow WHERE id = p_paiement_escrow_id;
+  IF v_row.id IS NULL THEN
+    RETURN;
+  END IF;
+
+  v_nouveau_statut := CASE WHEN p_type_incident = 'DISPUTE' THEN 'DISPUTE' ELSE 'ECHOUE' END;
+
+  UPDATE paiements_escrow
+  SET statut = v_nouveau_statut,
+      erreur = p_detail,
+      -- Relance J+3 uniquement sur un échec de débit (pas sur une dispute,
+      -- qui suit son propre circuit contentieux).
+      relance_prevue_le = CASE WHEN p_type_incident = 'ECHEC' THEN now() + interval '3 days' ELSE relance_prevue_le END,
+      modifie_le = now()
+  WHERE id = p_paiement_escrow_id;
+
+  -- Gel du ⚡ de l'établissement au premier incident (A2). Réinitialise aussi
+  -- le compteur de confiance.
+  PERFORM public.fn_escrow_geler_etablissement(
+    v_row.etablissement_id,
+    format('%s escrow mission %s : %s', p_type_incident, v_row.mission_id, COALESCE(p_detail, ''))
+  );
+
+  UPDATE escrow_etablissement_etat
+  SET missions_sans_incident = 0, modifie_le = now()
+  WHERE etablissement_id = v_row.etablissement_id;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_escrow_marquer_incident"("p_paiement_escrow_id" "uuid", "p_type_incident" "text", "p_detail" "text") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."fn_escrow_plafond_cents"("p_etablissement_id" "uuid") RETURNS integer
+    LANGUAGE "plpgsql" STABLE SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+DECLARE
+  v_sans_incident integer := 0;
+BEGIN
+  SELECT missions_sans_incident INTO v_sans_incident
+  FROM escrow_etablissement_etat
+  WHERE etablissement_id = p_etablissement_id;
+
+  IF COALESCE(v_sans_incident, 0) >= public.fn_param_num('escrow_missions_confiance_seuil', 3) THEN
+    RETURN public.fn_param_num('escrow_plafond_confiance_cents', 500000)::integer;
+  END IF;
+  RETURN public.fn_param_num('escrow_plafond_base_cents', 200000)::integer;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_escrow_plafond_cents"("p_etablissement_id" "uuid") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."fn_escrow_releases_a_traiter"("p_limit" integer DEFAULT 50) RETURNS TABLE("queue_id" "uuid", "paiement_escrow_id" "uuid", "mission_id" "uuid", "soignant_id" "uuid", "etablissement_id" "uuid", "honoraires_cents" integer, "escrow_statut" "text", "tentatives" integer)
+    LANGUAGE "sql" STABLE SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+  SELECT q.id, q.paiement_escrow_id, q.mission_id,
+         pe.soignant_id, pe.etablissement_id, pe.honoraires_cents,
+         pe.statut, q.tentatives
+  FROM escrow_release_queue q
+  JOIN paiements_escrow pe ON pe.id = q.paiement_escrow_id
+  WHERE q.statut = 'EN_ATTENTE'
+    AND q.prochaine_tentative_le <= now()
+    AND q.tentatives < 5
+  ORDER BY q.prochaine_tentative_le ASC
+  LIMIT p_limit;
+$$;
+
+
+ALTER FUNCTION "public"."fn_escrow_releases_a_traiter"("p_limit" integer) OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."fn_escrow_rembourser"("p_paiement_escrow_id" "uuid", "p_montant_honoraires_cts" integer, "p_annulation_totale" boolean DEFAULT false, "p_motif" "text" DEFAULT NULL::"text") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+DECLARE
+  v_row            paiements_escrow%ROWTYPE;
+  v_absorbe        boolean;
+  v_reverse        boolean;
+  v_fee_cts        integer;
+  v_montant_total  integer;
+BEGIN
+  SELECT * INTO v_row FROM paiements_escrow WHERE id = p_paiement_escrow_id;
+  IF v_row.id IS NULL THEN
+    RETURN jsonb_build_object('success', false, 'error', 'ESCROW_INCONNU');
+  END IF;
+
+  IF p_montant_honoraires_cts <= 0 OR p_montant_honoraires_cts > v_row.honoraires_cents THEN
+    RETURN jsonb_build_object('success', false, 'error', 'MONTANT_INVALIDE');
+  END IF;
+
+  IF v_row.stripe_payment_intent_id IS NULL THEN
+    RETURN jsonb_build_object('success', false, 'error', 'PAS_DE_DEBIT');
+  END IF;
+
+  -- A5 : après release (PAYE) → absorption plateforme, pas de reverse_transfer.
+  v_absorbe := (v_row.statut = 'PAYE');
+  v_reverse := (NOT v_absorbe) AND (v_row.statut IN ('DEBITE', 'DISPONIBLE', 'RELEASE_PLANIFIE'));
+
+  -- A6 : commission remboursée à 100 % si annulation totale, sinon prorata sur
+  -- la part d'honoraires effectivement reprise.
+  IF p_annulation_totale THEN
+    v_fee_cts := v_row.commission_cents;
+  ELSE
+    v_fee_cts := ROUND(v_row.commission_cents::numeric
+                       * p_montant_honoraires_cts / v_row.honoraires_cents)::integer;
+  END IF;
+
+  -- Montant total remboursé à l'établissement = honoraires repris + commission.
+  v_montant_total := p_montant_honoraires_cts + v_fee_cts;
+
+  INSERT INTO stripe_refunds_queue (
+    avoir_id, facture_origine_id, stripe_payment_intent_id, montant_cts, statut,
+    paiement_escrow_id, reverse_transfer, refund_application_fee_cts, absorbe_plateforme
+  ) VALUES (
+    NULL, NULL, v_row.stripe_payment_intent_id, v_montant_total, 'EN_ATTENTE',
+    p_paiement_escrow_id, v_reverse, v_fee_cts, v_absorbe
+  );
+
+  UPDATE paiements_escrow
+  SET statut = 'REMBOURSE', modifie_le = now()
+  WHERE id = p_paiement_escrow_id;
+
+  -- Décrémente l'exposition A2 : le release est réglé (remboursé).
+  UPDATE escrow_exposition_releases
+  SET statut = 'REGLE'
+  WHERE paiement_escrow_id = p_paiement_escrow_id AND statut = 'ACTIF';
+
+  PERFORM public.fn_ecrire_audit_safe(
+    '00000000-0000-0000-0000-000000000000'::uuid, 'SYSTEME',
+    'ESCROW_REMBOURSEMENT_ENFILE', 'mission', v_row.mission_id, NULL,
+    jsonb_build_object(
+      'paiement_escrow_id', p_paiement_escrow_id,
+      'montant_honoraires_cts', p_montant_honoraires_cts,
+      'refund_application_fee_cts', v_fee_cts,
+      'montant_total_cts', v_montant_total,
+      'reverse_transfer', v_reverse,
+      'absorbe_plateforme', v_absorbe,
+      'annulation_totale', p_annulation_totale,
+      'motif', p_motif
+    ), NULL, 'fn_escrow_rembourser'
+  );
+
+  RETURN jsonb_build_object(
+    'success', true,
+    'reverse_transfer', v_reverse,
+    'absorbe_plateforme', v_absorbe,
+    'refund_application_fee_cts', v_fee_cts,
+    'montant_total_cts', v_montant_total
+  );
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_escrow_rembourser"("p_paiement_escrow_id" "uuid", "p_montant_honoraires_cts" integer, "p_annulation_totale" boolean, "p_motif" "text") OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."fn_est_contexte_cron_ou_admin"() RETURNS boolean
     LANGUAGE "sql" STABLE SECURITY DEFINER
     SET "search_path" TO 'public'
@@ -18428,9 +18814,11 @@ BEGIN
         -- 7c : capacité ⚡ de l'ÉTABLISSEMENT (flag + SEPA). La condition mission
         -- LIBERAL est appliquée par le consommateur (le régime est une propriété
         -- de la mission, jamais de l'établissement).
+        -- 7b-D PR 2 (A2) : + éligibilité escrow (pas gelé, sous plafond).
         (public.fn_param_num('feature_paiement_rapide_actif', 0) = 1
          AND e.mode_paiement_commission = 'SEPA_DEBIT'
-         AND e.stripe_sepa_payment_method_id IS NOT NULL) AS paiement_rapide,
+         AND e.stripe_sepa_payment_method_id IS NOT NULL
+         AND public.fn_escrow_etab_eligible(e.id)) AS paiement_rapide,
         e.jour_paie_habituel
     FROM etablissements e
     WHERE e.id = ANY(p_ids)
@@ -24698,11 +25086,13 @@ BEGIN
       'montant_majoration_nuit', COALESCE(m.montant_majoration_nuit, 0), 'montant_majoration_dimanche', COALESCE(m.montant_majoration_dimanche, 0),
       'montant_majoration_ferie', COALESCE(m.montant_majoration_ferie, 0), 'score', COALESCE(ms.score_global, 0),
       'breakdown', COALESCE(ms.breakdown, '{}'::jsonb),
+      -- 7b-D PR 2 (A2) : + éligibilité escrow (pas gelé, sous plafond).
       'paiement_rapide', (
         v_flag_pr
         AND m.type_contrat_recherche = 'LIBERAL'
         AND e.mode_paiement_commission = 'SEPA_DEBIT'
         AND e.stripe_sepa_payment_method_id IS NOT NULL
+        AND public.fn_escrow_etab_eligible(m.etablissement_id)
       ),
       'distance_km', CASE
         WHEN v_sg.adresse_lat IS NOT NULL AND v_sg.adresse_lng IS NOT NULL
@@ -24992,6 +25382,65 @@ $$;
 
 
 ALTER FUNCTION "public"."fn_param_num"("p_cle" "text", "p_defaut" numeric) OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."fn_parrainage_etab_crediter_palier"("p_parrainage_id" "uuid", "p_montant_eur" integer, "p_palier" integer, "p_gmv_cents" numeric) RETURNS "void"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+DECLARE
+  v_p RECORD;
+  v_filleul_nom text;
+  v_parrain_nom text;
+  v_credit_parrain uuid;
+  v_credit_filleul uuid;
+BEGIN
+  SELECT * INTO v_p FROM parrainages_etablissements WHERE id = p_parrainage_id;
+  IF v_p.id IS NULL THEN RETURN; END IF;
+
+  SELECT nom INTO v_filleul_nom FROM etablissements WHERE id = v_p.filleul_etab_id;
+  SELECT nom INTO v_parrain_nom FROM etablissements WHERE id = v_p.parrain_etab_id;
+
+  INSERT INTO credits_etablissement (etablissement_id, montant_eur, motif, parrainage_id)
+  VALUES (v_p.parrain_etab_id, p_montant_eur, 'PARRAINAGE', v_p.id)
+  RETURNING id INTO v_credit_parrain;
+
+  INSERT INTO credits_etablissement (etablissement_id, montant_eur, motif, parrainage_id)
+  VALUES (v_p.filleul_etab_id, p_montant_eur, 'PARRAINAGE', v_p.id)
+  RETURNING id INTO v_credit_filleul;
+
+  PERFORM public.fn_ecrire_audit_safe(
+    p_acteur_id := v_p.parrain_etab_id, p_type_acteur := 'SYSTEME',
+    p_action := 'CREDIT_PARRAINAGE_CREE', p_type_ressource := 'parrainage_etab',
+    p_id_ressource := v_p.id,
+    p_details := jsonb_build_object(
+      'palier', p_palier, 'montant_eur', p_montant_eur,
+      'credit_parrain_id', v_credit_parrain, 'credit_filleul_id', v_credit_filleul,
+      'gmv_cents', p_gmv_cents, 'filleul_etab_id', v_p.filleul_etab_id)
+  );
+
+  INSERT INTO notifications (destinataire_id, type_destinataire, type, titre, corps, lien)
+  VALUES (
+    v_p.parrain_etab_id, 'ETABLISSEMENT', 'CREDIT_PARRAINAGE',
+    '🎉 +' || p_montant_eur || '€ de crédit Jolene !',
+    'Votre filleul ' || COALESCE(v_filleul_nom, 'établissement') || ' a franchi le palier '
+      || p_palier || '. ' || p_montant_eur || '€ de crédit ont été ajoutés et seront déduits de votre prochaine facture commission.',
+    '/etablissement/parrainage'
+  );
+
+  INSERT INTO notifications (destinataire_id, type_destinataire, type, titre, corps, lien)
+  VALUES (
+    v_p.filleul_etab_id, 'ETABLISSEMENT', 'CREDIT_PARRAINAGE',
+    '🎉 +' || p_montant_eur || '€ de crédit parrainage !',
+    'Grâce au parrainage de ' || COALESCE(v_parrain_nom, 'votre parrain') || ', vous avez franchi le palier '
+      || p_palier || ' : ' || p_montant_eur || '€ de crédit ont été ajoutés et seront déduits de votre prochaine facture commission.',
+    '/etablissement/parrainage'
+  );
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_parrainage_etab_crediter_palier"("p_parrainage_id" "uuid", "p_montant_eur" integer, "p_palier" integer, "p_gmv_cents" numeric) OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."fn_parrainage_verifier_seuils"("p_parrainage_id" "uuid") RETURNS "void"
@@ -31996,6 +32445,155 @@ $$;
 ALTER FUNCTION "public"."fn_trg_email_paiement_confirme"() OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."fn_trg_escrow_creer_a_confirmation"() RETURNS "trigger"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+DECLARE
+  v_etab           etablissements%ROWTYPE;
+  v_soignant_id    uuid;
+  v_commission_c   integer;
+  v_honoraires_c   integer;
+  v_total_c        integer;
+  v_premiere       boolean;
+  v_marge_jours    integer;
+  v_methode        text;
+  v_debit_prevu    timestamptz;
+BEGIN
+  -- Garde flag : escrow éteint → no-op total (tout le trafic actuel).
+  IF public.fn_param_num('feature_paiement_rapide_actif', 0) <> 1 THEN
+    RETURN NEW;
+  END IF;
+
+  -- Escrow réservé au LIBERAL (le régime SALARIE ne passe jamais par Stripe).
+  IF NEW.type_contrat_applique <> 'LIBERAL' THEN
+    RETURN NEW;
+  END IF;
+
+  v_soignant_id := NEW.soignant_assigne_id;
+  IF v_soignant_id IS NULL THEN
+    RETURN NEW;
+  END IF;
+
+  -- Déjà un escrow pour cette mission (re-confirmation, idempotence).
+  IF EXISTS (SELECT 1 FROM paiements_escrow WHERE mission_id = NEW.id) THEN
+    RETURN NEW;
+  END IF;
+
+  SELECT * INTO v_etab FROM etablissements WHERE id = NEW.etablissement_id;
+
+  -- Mandat SEPA obligatoire : sans lui, pas d'escrow → régime standard (A4).
+  IF v_etab.mode_paiement_commission <> 'SEPA_DEBIT'
+     OR v_etab.stripe_sepa_payment_method_id IS NULL THEN
+    RETURN NEW;
+  END IF;
+
+  v_commission_c := ROUND(COALESCE(NEW.montant_commission_ttc, 0) * 100)::integer;
+  v_honoraires_c := ROUND(COALESCE(NEW.net_a_payer, 0) * 100)::integer;
+  v_total_c := v_commission_c + v_honoraires_c;
+
+  IF v_honoraires_c <= 0 THEN
+    RETURN NEW;
+  END IF;
+
+  -- Plafond A2 : l'exposition courante + ce montant doit rester sous le plafond,
+  -- et l'établissement ne doit pas être gelé. Sinon → régime standard.
+  IF NOT public.fn_escrow_etab_eligible(NEW.etablissement_id, v_honoraires_c) THEN
+    RETURN NEW;
+  END IF;
+
+  -- 1re mission escrow de cet établissement (A2) → débit immédiat.
+  v_premiere := NOT EXISTS (
+    SELECT 1 FROM paiements_escrow WHERE etablissement_id = NEW.etablissement_id
+  );
+
+  v_marge_jours := public.fn_param_num('escrow_sepa_marge_jours', 8)::integer;
+
+  -- A4 + A2 : méthode et timing du débit.
+  IF v_premiere THEN
+    -- 1re mission : débit immédiat, Jolene fronte sous plafond.
+    v_methode := 'VIREMENT_INSTANTANE';
+    v_debit_prevu := now();
+  ELSIF NEW.debut_le - now() >= make_interval(days => v_marge_jours) THEN
+    -- Marge suffisante : SEPA différé, débit initié à J-7 du début.
+    v_methode := 'SEPA';
+    v_debit_prevu := GREATEST(now(), NEW.debut_le - interval '7 days');
+  ELSE
+    -- Marge courte : débit immédiat.
+    v_methode := 'VIREMENT_INSTANTANE';
+    v_debit_prevu := now();
+  END IF;
+
+  INSERT INTO paiements_escrow (
+    mission_id, etablissement_id, soignant_id,
+    montant_total_cents, commission_cents, honoraires_cents,
+    methode_debit, statut, debit_prevu_le, premiere_mission_etab
+  ) VALUES (
+    NEW.id, NEW.etablissement_id, v_soignant_id,
+    v_total_c, v_commission_c, v_honoraires_c,
+    v_methode, 'INITIE', v_debit_prevu, v_premiere
+  );
+
+  PERFORM public.fn_ecrire_audit_safe(
+    '00000000-0000-0000-0000-000000000000'::uuid, 'SYSTEME',
+    'ESCROW_INITIE', 'mission', NEW.id, NULL,
+    jsonb_build_object(
+      'etablissement_id', NEW.etablissement_id, 'soignant_id', v_soignant_id,
+      'total_cents', v_total_c, 'honoraires_cents', v_honoraires_c,
+      'commission_cents', v_commission_c, 'methode', v_methode,
+      'premiere_mission_etab', v_premiere, 'debit_prevu_le', v_debit_prevu
+    ), NULL, 'fn_trg_escrow_creer_a_confirmation'
+  );
+
+  RETURN NEW;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_trg_escrow_creer_a_confirmation"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."fn_trg_escrow_release_check"() RETURNS "trigger"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+DECLARE
+  v_escrow_id uuid;
+BEGIN
+  -- Pas de paiement escrow en séquestre pour cette mission → no-op total
+  -- (tout le trafic actuel, flag ⚡ à 0). Antipattern record-NULL évité :
+  -- on sélectionne l'id directement.
+  SELECT id INTO v_escrow_id
+  FROM paiements_escrow
+  WHERE mission_id = NEW.mission_id
+    AND statut IN ('DEBITE', 'DISPONIBLE');
+
+  IF v_escrow_id IS NULL THEN
+    RETURN NEW;
+  END IF;
+
+  -- Gate 7b-B : une présence bloquante subsiste → pas de release.
+  IF EXISTS (
+    SELECT 1 FROM presences p
+    WHERE p.mission_id = NEW.mission_id
+      AND COALESCE(p.valide_par_etablissement, false) = false
+      AND (p.pointage_depart_le IS NOT NULL OR p.motif_litige IS NOT NULL)
+  ) THEN
+    RETURN NEW;
+  END IF;
+
+  INSERT INTO escrow_release_queue (paiement_escrow_id, mission_id)
+  VALUES (v_escrow_id, NEW.mission_id)
+  ON CONFLICT (paiement_escrow_id) DO NOTHING;
+
+  RETURN NEW;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_trg_escrow_release_check"() OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."fn_trg_favori_nouvelle_mission"() RETURNS "trigger"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public', 'extensions'
@@ -32479,86 +33077,72 @@ CREATE OR REPLACE FUNCTION "public"."fn_trg_valider_parrainage_etab_commission"(
     AS $$
 DECLARE
   v_parrainage RECORD;
-  v_filleul_nom TEXT;
-  v_parrain_nom TEXT;
-  v_total_commission NUMERIC;
-  v_credit_parrain UUID;
-  v_credit_filleul UUID;
+  v_gmv_cents NUMERIC;
+  v_p1_gmv INTEGER := public.fn_param_num('parrainage_etab_palier1_gmv_cents', 50000)::int;
+  v_p1_eur INTEGER := public.fn_param_num('parrainage_etab_palier1_recompense_eur', 50)::int;
+  v_p2_gmv INTEGER := public.fn_param_num('parrainage_etab_palier2_gmv_cents', 200000)::int;
+  v_p2_eur INTEGER := public.fn_param_num('parrainage_etab_palier2_recompense_eur', 150)::int;
   v_nb_validations_mois INT;
-  v_prime INT := 50;
 BEGIN
   IF NEW.statut <> 'PAYEE' THEN RETURN NEW; END IF;
   IF TG_OP = 'UPDATE' AND COALESCE(OLD.statut, '') = 'PAYEE' THEN RETURN NEW; END IF;
   IF NEW.etablissement_id IS NULL THEN RETURN NEW; END IF;
 
+  -- Parrainage du filleul encore éligible à un palier (palier 2 non atteint).
   SELECT * INTO v_parrainage FROM parrainages_etablissements
-  WHERE filleul_etab_id = NEW.etablissement_id AND statut = 'PENDING'
+  WHERE filleul_etab_id = NEW.etablissement_id
+    AND statut IN ('PENDING', 'VALIDATED')
+    AND palier2_atteint_le IS NULL
   LIMIT 1;
   IF v_parrainage.id IS NULL THEN RETURN NEW; END IF;
 
-  SELECT COALESCE(SUM(montant_ht), 0) INTO v_total_commission
-  FROM factures
-  WHERE etablissement_id = NEW.etablissement_id
-    AND statut = 'PAYEE'
-    AND COALESCE(montant_ht, 0) > 0;
+  -- GMV encaissé du filleul = SUM total_brut des missions dont la facture
+  -- commission est PAYEE (× 100 pour comparer aux seuils en centimes).
+  SELECT COALESCE(SUM(m.total_brut), 0) * 100 INTO v_gmv_cents
+  FROM missions m
+  JOIN factures f ON f.id = m.facture_id
+  WHERE m.etablissement_id = NEW.etablissement_id
+    AND f.statut = 'PAYEE';
 
-  IF v_total_commission < 100 THEN RETURN NEW; END IF;
+  -- Palier 1 : valide le parrainage + crédite (une seule fois).
+  IF v_gmv_cents >= v_p1_gmv AND v_parrainage.palier1_atteint_le IS NULL THEN
+    UPDATE parrainages_etablissements
+    SET statut = 'VALIDATED', valide_le = COALESCE(valide_le, NOW()),
+        palier1_atteint_le = NOW(), mis_a_jour_le = NOW()
+    WHERE id = v_parrainage.id;
 
-  UPDATE parrainages_etablissements
-  SET statut = 'VALIDATED', valide_le = NOW(), mis_a_jour_le = NOW()
-  WHERE id = v_parrainage.id;
+    PERFORM public.fn_parrainage_etab_crediter_palier(v_parrainage.id, v_p1_eur, 1, v_gmv_cents);
 
-  SELECT nom INTO v_filleul_nom FROM etablissements WHERE id = v_parrainage.filleul_etab_id;
-  SELECT nom INTO v_parrain_nom FROM etablissements WHERE id = v_parrainage.parrain_etab_id;
-
-  INSERT INTO credits_etablissement (etablissement_id, montant_eur, motif, parrainage_id)
-  VALUES (v_parrainage.parrain_etab_id, v_prime, 'PARRAINAGE', v_parrainage.id)
-  RETURNING id INTO v_credit_parrain;
-
-  INSERT INTO credits_etablissement (etablissement_id, montant_eur, motif, parrainage_id)
-  VALUES (v_parrainage.filleul_etab_id, v_prime, 'PARRAINAGE', v_parrainage.id)
-  RETURNING id INTO v_credit_filleul;
-
-  PERFORM public.fn_ecrire_audit_safe(
-    p_acteur_id := v_parrainage.parrain_etab_id, p_type_acteur := 'SYSTEME',
-    p_action := 'CREDIT_PARRAINAGE_CREE', p_type_ressource := 'parrainage_etab', p_id_ressource := v_parrainage.id,
-    p_details := jsonb_build_object('credit_parrain_id', v_credit_parrain, 'credit_filleul_id', v_credit_filleul,
-                                    'montant_eur', v_prime, 'filleul_etab_id', v_parrainage.filleul_etab_id,
-                                    'commission_cumulee', v_total_commission)
-  );
-
-  PERFORM public.fn_ecrire_audit_safe(
-    p_acteur_id := v_parrainage.filleul_etab_id, p_type_acteur := 'SYSTEME',
-    p_action := 'PARRAINAGE_ETAB_VALIDE', p_type_ressource := 'parrainage_etab', p_id_ressource := v_parrainage.id,
-    p_details := jsonb_build_object('parrain_etab_id', v_parrainage.parrain_etab_id, 'facture_id', NEW.id)
-  );
-
-  INSERT INTO notifications (destinataire_id, type_destinataire, type, titre, corps, lien)
-  VALUES (
-    v_parrainage.parrain_etab_id, 'ETABLISSEMENT', 'CREDIT_PARRAINAGE',
-    '🎉 +' || v_prime || '€ de crédit Jolene !',
-    'Votre filleul ' || COALESCE(v_filleul_nom, 'établissement') || ' a généré 100€ de commission. ' || v_prime || '€ de crédit ont été ajoutés et seront déduits de votre prochaine facture commission.',
-    '/etablissement/parrainage'
-  );
-
-  INSERT INTO notifications (destinataire_id, type_destinataire, type, titre, corps, lien)
-  VALUES (
-    v_parrainage.filleul_etab_id, 'ETABLISSEMENT', 'CREDIT_PARRAINAGE',
-    '🎉 +' || v_prime || '€ de crédit parrainage !',
-    'Grâce au parrainage de ' || COALESCE(v_parrain_nom, 'votre parrain') || ', ' || v_prime || '€ de crédit ont été ajoutés et seront déduits de votre prochaine facture commission.',
-    '/etablissement/parrainage'
-  );
-
-  SELECT COUNT(*) INTO v_nb_validations_mois FROM parrainages_etablissements
-  WHERE parrain_etab_id = v_parrainage.parrain_etab_id
-    AND statut = 'VALIDATED' AND valide_le >= DATE_TRUNC('month', NOW());
-  IF v_nb_validations_mois > 5 THEN
     PERFORM public.fn_ecrire_audit_safe(
-      p_acteur_id := v_parrainage.parrain_etab_id, p_type_acteur := 'SYSTEME',
-      p_action := 'PARRAINAGE_ETAB_ANOMALIE', p_type_ressource := 'etablissement',
-      p_id_ressource := v_parrainage.parrain_etab_id,
-      p_details := jsonb_build_object('nb_validations_mois', v_nb_validations_mois)
+      p_acteur_id := v_parrainage.filleul_etab_id, p_type_acteur := 'SYSTEME',
+      p_action := 'PARRAINAGE_ETAB_VALIDE', p_type_ressource := 'parrainage_etab',
+      p_id_ressource := v_parrainage.id,
+      p_details := jsonb_build_object('parrain_etab_id', v_parrainage.parrain_etab_id,
+                                      'facture_id', NEW.id, 'palier', 1, 'gmv_cents', v_gmv_cents)
     );
+
+    -- Anti-abus : > 5 validations dans le mois pour un même parrain.
+    SELECT COUNT(*) INTO v_nb_validations_mois FROM parrainages_etablissements
+    WHERE parrain_etab_id = v_parrainage.parrain_etab_id
+      AND statut = 'VALIDATED' AND valide_le >= DATE_TRUNC('month', NOW());
+    IF v_nb_validations_mois > 5 THEN
+      PERFORM public.fn_ecrire_audit_safe(
+        p_acteur_id := v_parrainage.parrain_etab_id, p_type_acteur := 'SYSTEME',
+        p_action := 'PARRAINAGE_ETAB_ANOMALIE', p_type_ressource := 'etablissement',
+        p_id_ressource := v_parrainage.parrain_etab_id,
+        p_details := jsonb_build_object('nb_validations_mois', v_nb_validations_mois)
+      );
+    END IF;
+  END IF;
+
+  -- Palier 2 : crédit additionnel (une seule fois). Peut tomber sur la même
+  -- facture que le palier 1 si le GMV franchit d'emblée les 2 seuils.
+  IF v_gmv_cents >= v_p2_gmv AND v_parrainage.palier2_atteint_le IS NULL THEN
+    UPDATE parrainages_etablissements
+    SET palier2_atteint_le = NOW(), mis_a_jour_le = NOW()
+    WHERE id = v_parrainage.id;
+
+    PERFORM public.fn_parrainage_etab_crediter_palier(v_parrainage.id, v_p2_eur, 2, v_gmv_cents);
   END IF;
 
   RETURN NEW;
@@ -35829,6 +36413,55 @@ COMMENT ON TABLE "public"."equivalences_scolarite" IS 'Equivalences etudiant : u
 
 
 
+CREATE TABLE IF NOT EXISTS "public"."escrow_etablissement_etat" (
+    "etablissement_id" "uuid" NOT NULL,
+    "missions_sans_incident" integer DEFAULT 0 NOT NULL,
+    "gele" boolean DEFAULT false NOT NULL,
+    "gele_le" timestamp with time zone,
+    "gele_raison" "text",
+    "modifie_le" timestamp with time zone DEFAULT "now"() NOT NULL,
+    CONSTRAINT "escrow_etablissement_etat_missions_sans_incident_check" CHECK (("missions_sans_incident" >= 0))
+);
+
+
+ALTER TABLE "public"."escrow_etablissement_etat" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "public"."escrow_exposition_releases" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "etablissement_id" "uuid" NOT NULL,
+    "paiement_escrow_id" "uuid" NOT NULL,
+    "montant_cents" integer NOT NULL,
+    "debite_le" timestamp with time zone NOT NULL,
+    "release_le" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "expire_le" timestamp with time zone NOT NULL,
+    "statut" "text" DEFAULT 'ACTIF'::"text" NOT NULL,
+    "cree_le" timestamp with time zone DEFAULT "now"() NOT NULL,
+    CONSTRAINT "escrow_exposition_releases_montant_cents_check" CHECK (("montant_cents" > 0)),
+    CONSTRAINT "escrow_exposition_releases_statut_check" CHECK (("statut" = ANY (ARRAY['ACTIF'::"text", 'EXPIRE'::"text", 'REGLE'::"text"])))
+);
+
+
+ALTER TABLE "public"."escrow_exposition_releases" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "public"."escrow_release_queue" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "paiement_escrow_id" "uuid" NOT NULL,
+    "mission_id" "uuid" NOT NULL,
+    "statut" "text" DEFAULT 'EN_ATTENTE'::"text" NOT NULL,
+    "tentatives" integer DEFAULT 0 NOT NULL,
+    "prochaine_tentative_le" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "erreur" "text",
+    "cree_le" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "traite_le" timestamp with time zone,
+    CONSTRAINT "escrow_release_queue_statut_check" CHECK (("statut" = ANY (ARRAY['EN_ATTENTE'::"text", 'EN_COURS'::"text", 'TRAITE'::"text", 'ECHEC'::"text"])))
+);
+
+
+ALTER TABLE "public"."escrow_release_queue" OWNER TO "postgres";
+
+
 CREATE TABLE IF NOT EXISTS "public"."etablissements" (
     "id" "uuid" DEFAULT "extensions"."uuid_generate_v4"() NOT NULL,
     "nom" "text" NOT NULL,
@@ -36676,7 +37309,7 @@ CREATE TABLE IF NOT EXISTS "public"."journaux_audit" (
     "cle_s3_ressource" "text",
     "details" "jsonb",
     "cree_le" timestamp with time zone DEFAULT "now"(),
-    CONSTRAINT "journaux_audit_action_check" CHECK (("action" = ANY (ARRAY['INSCRIPTION'::"text", 'CONNEXION'::"text", 'DECONNEXION'::"text", 'MODIFICATION_PROFIL'::"text", 'SUPPRESSION_COMPTE'::"text", 'UPLOAD_DOCUMENT'::"text", 'TELECHARGEMENT_DOCUMENT'::"text", 'VERIFICATION_DOCUMENT'::"text", 'VERIFICATION_RPPS'::"text", 'CREATION_MISSION'::"text", 'MODIFICATION_MISSION'::"text", 'ANNULATION_MISSION'::"text", 'CANDIDATURE'::"text", 'ASSIGNATION'::"text", 'POINTAGE'::"text", 'SIGNATURE_CONTRAT'::"text", 'EVALUATION'::"text", 'PAIEMENT'::"text", 'FACTURATION'::"text", 'DONNEES_PERSO_CONSULTATION'::"text", 'DONNEES_PERSO_EXPORT'::"text", 'DONNEES_PERSO_SUPPRESSION'::"text", 'ADMIN_ACTION'::"text", 'SYSTEM'::"text", 'RIB_CONSULTE'::"text", 'RIB_PARTAGE'::"text", 'CONTRAT_SIGNE'::"text", 'DOCUMENT_CONSULTATION'::"text", 'DOCUMENT_TELEVERSEMENT'::"text", 'DONNEES_PERSO_MODIFICATION'::"text", 'EXPORT_RH_PAIE'::"text", 'FINANCE_FACTURE_PAYEE'::"text", 'MISSION_ASSIGNATION'::"text", 'MISSION_CREATION'::"text", 'RGPD_EXPORT_DONNEES'::"text", 'RGPD_SUPPRESSION_COMPTE'::"text", 'RGPD_SUPPRESSION_COMPTE_ETABLISSEMENT'::"text", 'DEGEL_APPLIED'::"text", 'OVERRIDE_CHAMP_POST_GEL'::"text", 'GEL_APPLIED'::"text", 'OVERRIDE_ANTI_SEED'::"text", 'CONNECT_METADATA_MANQUANTE'::"text", 'DOCUMENT_VERIFICATION_AUTO'::"text", 'FACTURE_COMMISSION_PAYEE_SKIP_ANOMALIE'::"text", 'FACTURE_HONORAIRES_PAYEE_SKIP_ANOMALIE'::"text", 'FINANCE_CHARGE_EXPIRED'::"text", 'FINANCE_CHARGE_FAILED'::"text", 'FINANCE_CHARGE_PENDING'::"text", 'FINANCE_CHARGE_REFUNDED'::"text", 'FINANCE_DISPUTE_CLOSE'::"text", 'FINANCE_DISPUTE_OUVERTE'::"text", 'FINANCE_PAYOUT_CANCELED'::"text", 'FINANCE_PAYOUT_CREATED'::"text", 'FINANCE_PAYOUT_FAILED'::"text", 'FINANCE_PAYOUT_PAID'::"text", 'FINANCE_SEPA_CAPTURE'::"text", 'FINANCE_TRANSFER_CONNECT'::"text", 'FINANCE_TRANSFER_CREATED'::"text", 'FINANCE_TRANSFER_FAILED'::"text", 'FINANCE_TRANSFER_REVERSED'::"text", 'FINANCE_TRANSFER_UPDATED'::"text", 'STRIPE_CHECKOUT_ORPHANED_RECOVERED'::"text", 'STRIPE_CONNECT_ACCOUNT_DELETED'::"text", 'ATTESTATION_SANTE_SIGNEE'::"text", 'EXCLUSION_CREEE'::"text", 'EXCLUSION_SUPPRIMEE'::"text", 'FACTURE_GENEREE'::"text", 'MISSION_ANNULATION_SERIE'::"text", 'MISSION_MODIFICATION'::"text", 'PAIEMENT_SOIGNANT_DECLARE_ETAB'::"text", 'RECLAMATION_CREEE'::"text", 'ADMIN_CONSULTATION_ETABLISSEMENT'::"text", 'ADMIN_CONSULTATION_SOIGNANT'::"text", 'DOCUMENT_SUPPRESSION'::"text", 'HEURES_EXTERNES_DECLAREES'::"text", 'MISSION_ANNULATION'::"text", 'NOTE_HONORAIRES_GENEREE'::"text", 'PRESENCE_CONTESTATION'::"text", 'PRESENCE_POINTAGE_ARRIVEE'::"text", 'PRESENCE_VALIDATION'::"text", 'PRESENCE_VALIDATION_LOT'::"text", 'RGPD_CONSENTEMENT_DONNE'::"text", 'PAIEMENT_MONTANT_ECART'::"text", 'FACTURE_COMMISSION_CREATED_VIA_STRIPE'::"text", 'TAUX_COMMISSION_MODIFIE'::"text", 'LITIGE_GEL_SCOPE_MODIFIE'::"text", 'PREFERENCE_NOTIFICATION_MODIFIEE'::"text", 'NOTIFICATION_SKIPPED'::"text", 'SERIE_EMAIL_ENVOYE'::"text", 'SERIE_EMAIL_SKIPPED'::"text", 'FILTRE_CREE'::"text", 'FILTRE_MODIFIE'::"text", 'FILTRE_SUPPRIME'::"text", 'ALERTE_ACTIVEE'::"text", 'ALERTE_DESACTIVEE'::"text", 'ALERTE_ENVOYEE'::"text", 'POOL_URGENCE_NOTIFICATIONS_ENVOYEES'::"text", 'POOL_URGENCE_ACCEPTATION_RAPIDE'::"text", 'POOL_URGENCE_VALIDATION_ETAB'::"text", 'POOL_URGENCE_REFUS_ETAB'::"text", 'POOL_URGENCE_SMS_TOGGLE'::"text", 'FAVORI_AJOUTE'::"text", 'FAVORI_RETIRE'::"text", 'SCORE_FIABILITE_PENALITE_LITIGE'::"text", 'PARRAINAGE_ETAB_APPLIQUE'::"text", 'PARRAINAGE_ETAB_VALIDE'::"text", 'CREDIT_PARRAINAGE_CREE'::"text", 'CREDIT_PARRAINAGE_APPLIQUE'::"text", 'PARRAINAGE_ETAB_ANOMALIE'::"text", 'PARRAINAGE_SOIGNANT_FILLEUL_ACTIF'::"text", 'PARRAINAGE_SOIGNANT_SEUIL_ATTEINT'::"text", 'PARRAINAGE_SOIGNANT_PRIME_VERSEE'::"text", 'PARRAINAGE_SOIGNANT_FRAUDE'::"text", 'INSCRIPTION_LISTE_ATTENTE_PREVOYANCE'::"text", 'SCORE_RECALCULE_V2'::"text", 'IBAN_RENSEIGNE'::"text", 'IBAN_MODIFIE'::"text", 'AVOIR_REMBOURSEMENT_CONFIRME'::"text", 'ETABLISSEMENT_MODIFICATION'::"text", 'LITIGE_ACCORD_CLOTURE'::"text", 'LITIGE_AUTO_CREATION'::"text", 'LITIGE_CLOTURE_AMIABLE'::"text", 'LITIGE_CREATION'::"text", 'LITIGE_ESCALADE_AUTO'::"text", 'LITIGE_FORCE_CREATION'::"text", 'LITIGE_OUVERTURE'::"text", 'LITIGE_OUVERTURE_LEGACY'::"text", 'LITIGE_RECATEGORISATION_LEGACY'::"text", 'LITIGE_REPONSE'::"text", 'LITIGE_RESOLUTION'::"text", 'PRESENCE_ALERTE_FRAUDE'::"text", 'RGPD_SUPPRESSION_DONNEES'::"text", 'TVA_MODIFICATION'::"text", 'API_KEY_CREEE'::"text", 'API_KEY_REVOQUEE'::"text", 'API_KEY_SUPPRIMEE'::"text", 'FACTURE_MARQUEE_EN_RETARD'::"text", 'HEURES_EXTERNES_VALIDATION_MANUELLE'::"text", 'MISSION_ANNULEE_PAR_SOIGNANT'::"text", 'MISSION_ANNULEE_PAR_ETABLISSEMENT'::"text", 'MISSION_LITIGE'::"text", 'MISSION_TYPE_CONTRAT_MODIFIE'::"text", 'MODERATION_DOCUMENT'::"text", 'COHERENCE_IDENTITE_VERIFIEE'::"text", 'MODERATION_EVALUATION'::"text", 'COHERENCE_DOCUMENTS_ALERTE'::"text"]))),
+    CONSTRAINT "journaux_audit_action_check" CHECK (("action" = ANY (ARRAY['INSCRIPTION'::"text", 'CONNEXION'::"text", 'DECONNEXION'::"text", 'MODIFICATION_PROFIL'::"text", 'SUPPRESSION_COMPTE'::"text", 'UPLOAD_DOCUMENT'::"text", 'TELECHARGEMENT_DOCUMENT'::"text", 'VERIFICATION_DOCUMENT'::"text", 'VERIFICATION_RPPS'::"text", 'CREATION_MISSION'::"text", 'MODIFICATION_MISSION'::"text", 'ANNULATION_MISSION'::"text", 'CANDIDATURE'::"text", 'ASSIGNATION'::"text", 'POINTAGE'::"text", 'SIGNATURE_CONTRAT'::"text", 'EVALUATION'::"text", 'PAIEMENT'::"text", 'FACTURATION'::"text", 'DONNEES_PERSO_CONSULTATION'::"text", 'DONNEES_PERSO_EXPORT'::"text", 'DONNEES_PERSO_SUPPRESSION'::"text", 'ADMIN_ACTION'::"text", 'SYSTEM'::"text", 'RIB_CONSULTE'::"text", 'RIB_PARTAGE'::"text", 'CONTRAT_SIGNE'::"text", 'DOCUMENT_CONSULTATION'::"text", 'DOCUMENT_TELEVERSEMENT'::"text", 'DONNEES_PERSO_MODIFICATION'::"text", 'EXPORT_RH_PAIE'::"text", 'FINANCE_FACTURE_PAYEE'::"text", 'MISSION_ASSIGNATION'::"text", 'MISSION_CREATION'::"text", 'RGPD_EXPORT_DONNEES'::"text", 'RGPD_SUPPRESSION_COMPTE'::"text", 'RGPD_SUPPRESSION_COMPTE_ETABLISSEMENT'::"text", 'DEGEL_APPLIED'::"text", 'OVERRIDE_CHAMP_POST_GEL'::"text", 'GEL_APPLIED'::"text", 'OVERRIDE_ANTI_SEED'::"text", 'CONNECT_METADATA_MANQUANTE'::"text", 'DOCUMENT_VERIFICATION_AUTO'::"text", 'FACTURE_COMMISSION_PAYEE_SKIP_ANOMALIE'::"text", 'FACTURE_HONORAIRES_PAYEE_SKIP_ANOMALIE'::"text", 'FINANCE_CHARGE_EXPIRED'::"text", 'FINANCE_CHARGE_FAILED'::"text", 'FINANCE_CHARGE_PENDING'::"text", 'FINANCE_CHARGE_REFUNDED'::"text", 'FINANCE_DISPUTE_CLOSE'::"text", 'FINANCE_DISPUTE_OUVERTE'::"text", 'FINANCE_PAYOUT_CANCELED'::"text", 'FINANCE_PAYOUT_CREATED'::"text", 'FINANCE_PAYOUT_FAILED'::"text", 'FINANCE_PAYOUT_PAID'::"text", 'FINANCE_SEPA_CAPTURE'::"text", 'FINANCE_TRANSFER_CONNECT'::"text", 'FINANCE_TRANSFER_CREATED'::"text", 'FINANCE_TRANSFER_FAILED'::"text", 'FINANCE_TRANSFER_REVERSED'::"text", 'FINANCE_TRANSFER_UPDATED'::"text", 'STRIPE_CHECKOUT_ORPHANED_RECOVERED'::"text", 'STRIPE_CONNECT_ACCOUNT_DELETED'::"text", 'ATTESTATION_SANTE_SIGNEE'::"text", 'EXCLUSION_CREEE'::"text", 'EXCLUSION_SUPPRIMEE'::"text", 'FACTURE_GENEREE'::"text", 'MISSION_ANNULATION_SERIE'::"text", 'MISSION_MODIFICATION'::"text", 'PAIEMENT_SOIGNANT_DECLARE_ETAB'::"text", 'RECLAMATION_CREEE'::"text", 'ADMIN_CONSULTATION_ETABLISSEMENT'::"text", 'ADMIN_CONSULTATION_SOIGNANT'::"text", 'DOCUMENT_SUPPRESSION'::"text", 'HEURES_EXTERNES_DECLAREES'::"text", 'MISSION_ANNULATION'::"text", 'NOTE_HONORAIRES_GENEREE'::"text", 'PRESENCE_CONTESTATION'::"text", 'PRESENCE_POINTAGE_ARRIVEE'::"text", 'PRESENCE_VALIDATION'::"text", 'PRESENCE_VALIDATION_LOT'::"text", 'RGPD_CONSENTEMENT_DONNE'::"text", 'PAIEMENT_MONTANT_ECART'::"text", 'FACTURE_COMMISSION_CREATED_VIA_STRIPE'::"text", 'TAUX_COMMISSION_MODIFIE'::"text", 'LITIGE_GEL_SCOPE_MODIFIE'::"text", 'PREFERENCE_NOTIFICATION_MODIFIEE'::"text", 'NOTIFICATION_SKIPPED'::"text", 'SERIE_EMAIL_ENVOYE'::"text", 'SERIE_EMAIL_SKIPPED'::"text", 'FILTRE_CREE'::"text", 'FILTRE_MODIFIE'::"text", 'FILTRE_SUPPRIME'::"text", 'ALERTE_ACTIVEE'::"text", 'ALERTE_DESACTIVEE'::"text", 'ALERTE_ENVOYEE'::"text", 'POOL_URGENCE_NOTIFICATIONS_ENVOYEES'::"text", 'POOL_URGENCE_ACCEPTATION_RAPIDE'::"text", 'POOL_URGENCE_VALIDATION_ETAB'::"text", 'POOL_URGENCE_REFUS_ETAB'::"text", 'POOL_URGENCE_SMS_TOGGLE'::"text", 'FAVORI_AJOUTE'::"text", 'FAVORI_RETIRE'::"text", 'SCORE_FIABILITE_PENALITE_LITIGE'::"text", 'PARRAINAGE_ETAB_APPLIQUE'::"text", 'PARRAINAGE_ETAB_VALIDE'::"text", 'CREDIT_PARRAINAGE_CREE'::"text", 'CREDIT_PARRAINAGE_APPLIQUE'::"text", 'PARRAINAGE_ETAB_ANOMALIE'::"text", 'PARRAINAGE_SOIGNANT_FILLEUL_ACTIF'::"text", 'PARRAINAGE_SOIGNANT_SEUIL_ATTEINT'::"text", 'PARRAINAGE_SOIGNANT_PRIME_VERSEE'::"text", 'PARRAINAGE_SOIGNANT_FRAUDE'::"text", 'INSCRIPTION_LISTE_ATTENTE_PREVOYANCE'::"text", 'SCORE_RECALCULE_V2'::"text", 'IBAN_RENSEIGNE'::"text", 'IBAN_MODIFIE'::"text", 'AVOIR_REMBOURSEMENT_CONFIRME'::"text", 'ETABLISSEMENT_MODIFICATION'::"text", 'LITIGE_ACCORD_CLOTURE'::"text", 'LITIGE_AUTO_CREATION'::"text", 'LITIGE_CLOTURE_AMIABLE'::"text", 'LITIGE_CREATION'::"text", 'LITIGE_ESCALADE_AUTO'::"text", 'LITIGE_FORCE_CREATION'::"text", 'LITIGE_OUVERTURE'::"text", 'LITIGE_OUVERTURE_LEGACY'::"text", 'LITIGE_RECATEGORISATION_LEGACY'::"text", 'LITIGE_REPONSE'::"text", 'LITIGE_RESOLUTION'::"text", 'PRESENCE_ALERTE_FRAUDE'::"text", 'RGPD_SUPPRESSION_DONNEES'::"text", 'TVA_MODIFICATION'::"text", 'API_KEY_CREEE'::"text", 'API_KEY_REVOQUEE'::"text", 'API_KEY_SUPPRIMEE'::"text", 'FACTURE_MARQUEE_EN_RETARD'::"text", 'HEURES_EXTERNES_VALIDATION_MANUELLE'::"text", 'MISSION_ANNULEE_PAR_SOIGNANT'::"text", 'MISSION_ANNULEE_PAR_ETABLISSEMENT'::"text", 'MISSION_LITIGE'::"text", 'MISSION_TYPE_CONTRAT_MODIFIE'::"text", 'MODERATION_DOCUMENT'::"text", 'COHERENCE_IDENTITE_VERIFIEE'::"text", 'MODERATION_EVALUATION'::"text", 'COHERENCE_DOCUMENTS_ALERTE'::"text", 'ESCROW_INITIE'::"text", 'ESCROW_DEBIT_INITIE'::"text", 'ESCROW_DEBITE'::"text", 'ESCROW_ETAB_GELE'::"text", 'ESCROW_ETAB_DEGELE'::"text", 'ESCROW_REMBOURSEMENT_ENFILE'::"text", 'ESCROW_REMBOURSE'::"text", 'ESCROW_DISPONIBLE'::"text", 'ESCROW_RELEASE_PAYE'::"text", 'ESCROW_RELEASE_ATTENTE_FONDS'::"text"]))),
     CONSTRAINT "journaux_audit_type_acteur_check" CHECK (("type_acteur" = ANY (ARRAY['SOIGNANT'::"text", 'ADMIN_ETABLISSEMENT'::"text", 'ADMIN_PLATEFORME'::"text", 'ADMIN_GROUPE'::"text", 'SYSTEME'::"text", 'SERVICE_API'::"text", 'ADMIN'::"text", 'ETABLISSEMENT'::"text", 'SYSTEM'::"text", 'DEPRECATED_CALLER'::"text"])))
 );
 
@@ -37404,6 +38037,8 @@ CREATE TABLE IF NOT EXISTS "public"."parrainages_etablissements" (
     "valide_le" timestamp with time zone,
     "cree_le" timestamp with time zone DEFAULT "now"() NOT NULL,
     "mis_a_jour_le" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "palier1_atteint_le" timestamp with time zone,
+    "palier2_atteint_le" timestamp with time zone,
     CONSTRAINT "parrainages_etablissements_check" CHECK (("parrain_etab_id" <> "filleul_etab_id"))
 );
 
@@ -38300,6 +38935,10 @@ CREATE TABLE IF NOT EXISTS "public"."stripe_refunds_queue" (
     "cree_le" timestamp with time zone DEFAULT "now"() NOT NULL,
     "traite_le" timestamp with time zone,
     "dernier_essai_le" timestamp with time zone,
+    "paiement_escrow_id" "uuid",
+    "reverse_transfer" boolean DEFAULT false NOT NULL,
+    "refund_application_fee_cts" integer DEFAULT 0 NOT NULL,
+    "absorbe_plateforme" boolean DEFAULT false NOT NULL,
     CONSTRAINT "stripe_refunds_queue_montant_cts_check" CHECK (("montant_cts" > 0)),
     CONSTRAINT "stripe_refunds_queue_statut_check" CHECK (("statut" = ANY (ARRAY['EN_ATTENTE'::"text", 'EN_COURS'::"text", 'TRAITE'::"text", 'ECHEC'::"text"])))
 );
@@ -38772,6 +39411,31 @@ ALTER TABLE ONLY "public"."equivalences_scolarite"
 
 
 
+ALTER TABLE ONLY "public"."escrow_etablissement_etat"
+    ADD CONSTRAINT "escrow_etablissement_etat_pkey" PRIMARY KEY ("etablissement_id");
+
+
+
+ALTER TABLE ONLY "public"."escrow_exposition_releases"
+    ADD CONSTRAINT "escrow_exposition_releases_paiement_escrow_id_key" UNIQUE ("paiement_escrow_id");
+
+
+
+ALTER TABLE ONLY "public"."escrow_exposition_releases"
+    ADD CONSTRAINT "escrow_exposition_releases_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."escrow_release_queue"
+    ADD CONSTRAINT "escrow_release_queue_paiement_escrow_id_key" UNIQUE ("paiement_escrow_id");
+
+
+
+ALTER TABLE ONLY "public"."escrow_release_queue"
+    ADD CONSTRAINT "escrow_release_queue_pkey" PRIMARY KEY ("id");
+
+
+
 ALTER TABLE ONLY "public"."etablissements"
     ADD CONSTRAINT "etablissements_code_parrainage_key" UNIQUE ("code_parrainage");
 
@@ -39084,6 +39748,16 @@ ALTER TABLE ONLY "public"."notifications"
 
 ALTER TABLE ONLY "public"."otps_telephone"
     ADD CONSTRAINT "otps_telephone_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."paiements_escrow"
+    ADD CONSTRAINT "paiements_escrow_mission_id_key" UNIQUE ("mission_id");
+
+
+
+ALTER TABLE ONLY "public"."paiements_escrow"
+    ADD CONSTRAINT "paiements_escrow_pkey" PRIMARY KEY ("id");
 
 
 
@@ -39804,6 +40478,18 @@ CREATE INDEX "idx_equipes_etab" ON "public"."equipes" USING "btree" ("etablissem
 
 
 
+CREATE INDEX "idx_escrow_exposition_etab_statut" ON "public"."escrow_exposition_releases" USING "btree" ("etablissement_id", "statut");
+
+
+
+CREATE INDEX "idx_escrow_exposition_expire" ON "public"."escrow_exposition_releases" USING "btree" ("expire_le") WHERE ("statut" = 'ACTIF'::"text");
+
+
+
+CREATE INDEX "idx_escrow_release_queue_a_traiter" ON "public"."escrow_release_queue" USING "btree" ("prochaine_tentative_le") WHERE ("statut" = 'EN_ATTENTE'::"text");
+
+
+
 CREATE INDEX "idx_etab_palier" ON "public"."etablissements" USING "btree" ("palier_commission_id");
 
 
@@ -40257,6 +40943,22 @@ CREATE INDEX "idx_paie_etab" ON "public"."paiements_soignant" USING "btree" ("et
 
 
 CREATE INDEX "idx_paie_soignant" ON "public"."paiements_soignant" USING "btree" ("soignant_id");
+
+
+
+CREATE INDEX "idx_paiements_escrow_a_debiter" ON "public"."paiements_escrow" USING "btree" ("debit_prevu_le") WHERE ("statut" = 'INITIE'::"text");
+
+
+
+CREATE INDEX "idx_paiements_escrow_etab_statut" ON "public"."paiements_escrow" USING "btree" ("etablissement_id", "statut");
+
+
+
+CREATE INDEX "idx_paiements_escrow_soignant" ON "public"."paiements_escrow" USING "btree" ("soignant_id");
+
+
+
+CREATE INDEX "idx_paiements_escrow_statut" ON "public"."paiements_escrow" USING "btree" ("statut");
 
 
 
@@ -41200,6 +41902,14 @@ CREATE OR REPLACE TRIGGER "trg_email_paiement_confirme" AFTER UPDATE ON "public"
 
 
 
+CREATE OR REPLACE TRIGGER "trg_escrow_creer_a_confirmation" AFTER UPDATE OF "statut" ON "public"."missions" FOR EACH ROW WHEN ((("new"."statut" = 'ASSIGNEE'::"public"."statut_mission") AND ("old"."statut" IS DISTINCT FROM 'ASSIGNEE'::"public"."statut_mission"))) EXECUTE FUNCTION "public"."fn_trg_escrow_creer_a_confirmation"();
+
+
+
+CREATE OR REPLACE TRIGGER "trg_escrow_release_on_validation" AFTER UPDATE OF "valide_par_etablissement" ON "public"."presences" FOR EACH ROW WHEN ((("new"."valide_par_etablissement" = true) AND (COALESCE("old"."valide_par_etablissement", false) = false))) EXECUTE FUNCTION "public"."fn_trg_escrow_release_check"();
+
+
+
 CREATE OR REPLACE TRIGGER "trg_evaluer_dans_delai" BEFORE INSERT ON "public"."evaluations" FOR EACH ROW EXECUTE FUNCTION "public"."dec_evaluer_dans_delai"();
 
 
@@ -41737,6 +42447,31 @@ ALTER TABLE ONLY "public"."equipes"
 
 
 
+ALTER TABLE ONLY "public"."escrow_etablissement_etat"
+    ADD CONSTRAINT "escrow_etablissement_etat_etablissement_id_fkey" FOREIGN KEY ("etablissement_id") REFERENCES "public"."etablissements"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."escrow_exposition_releases"
+    ADD CONSTRAINT "escrow_exposition_releases_etablissement_id_fkey" FOREIGN KEY ("etablissement_id") REFERENCES "public"."etablissements"("id");
+
+
+
+ALTER TABLE ONLY "public"."escrow_exposition_releases"
+    ADD CONSTRAINT "escrow_exposition_releases_paiement_escrow_id_fkey" FOREIGN KEY ("paiement_escrow_id") REFERENCES "public"."paiements_escrow"("id");
+
+
+
+ALTER TABLE ONLY "public"."escrow_release_queue"
+    ADD CONSTRAINT "escrow_release_queue_mission_id_fkey" FOREIGN KEY ("mission_id") REFERENCES "public"."missions"("id");
+
+
+
+ALTER TABLE ONLY "public"."escrow_release_queue"
+    ADD CONSTRAINT "escrow_release_queue_paiement_escrow_id_fkey" FOREIGN KEY ("paiement_escrow_id") REFERENCES "public"."paiements_escrow"("id");
+
+
+
 ALTER TABLE ONLY "public"."etablissements"
     ADD CONSTRAINT "etablissements_groupe_sante_id_fkey" FOREIGN KEY ("groupe_sante_id") REFERENCES "public"."groupes_sante"("id");
 
@@ -42047,6 +42782,21 @@ ALTER TABLE ONLY "public"."otps_telephone"
 
 
 
+ALTER TABLE ONLY "public"."paiements_escrow"
+    ADD CONSTRAINT "paiements_escrow_etablissement_id_fkey" FOREIGN KEY ("etablissement_id") REFERENCES "public"."etablissements"("id");
+
+
+
+ALTER TABLE ONLY "public"."paiements_escrow"
+    ADD CONSTRAINT "paiements_escrow_mission_id_fkey" FOREIGN KEY ("mission_id") REFERENCES "public"."missions"("id");
+
+
+
+ALTER TABLE ONLY "public"."paiements_escrow"
+    ADD CONSTRAINT "paiements_escrow_soignant_id_fkey" FOREIGN KEY ("soignant_id") REFERENCES "public"."soignants"("id");
+
+
+
 ALTER TABLE ONLY "public"."paiements_mission"
     ADD CONSTRAINT "paiements_mission_etablissement_id_fkey" FOREIGN KEY ("etablissement_id") REFERENCES "public"."etablissements"("id");
 
@@ -42309,6 +43059,11 @@ ALTER TABLE ONLY "public"."stripe_refunds_queue"
 
 ALTER TABLE ONLY "public"."stripe_refunds_queue"
     ADD CONSTRAINT "stripe_refunds_queue_facture_origine_id_fkey" FOREIGN KEY ("facture_origine_id") REFERENCES "public"."factures_honoraires"("id") ON DELETE RESTRICT;
+
+
+
+ALTER TABLE ONLY "public"."stripe_refunds_queue"
+    ADD CONSTRAINT "stripe_refunds_queue_paiement_escrow_id_fkey" FOREIGN KEY ("paiement_escrow_id") REFERENCES "public"."paiements_escrow"("id");
 
 
 
@@ -42597,6 +43352,27 @@ CREATE POLICY "equiv_scolarite_admin_all" ON "public"."equivalences_scolarite" U
 
 
 ALTER TABLE "public"."equivalences_scolarite" ENABLE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "public"."escrow_etablissement_etat" ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "escrow_etat_select_etab" ON "public"."escrow_etablissement_etat" FOR SELECT USING ((("etablissement_id" = "public"."mon_etablissement_id"()) OR "public"."est_admin"()));
+
+
+
+ALTER TABLE "public"."escrow_exposition_releases" ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "escrow_exposition_select_admin" ON "public"."escrow_exposition_releases" FOR SELECT USING ("public"."est_admin"());
+
+
+
+ALTER TABLE "public"."escrow_release_queue" ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "escrow_release_queue_select_admin" ON "public"."escrow_release_queue" FOR SELECT USING ("public"."est_admin"());
+
 
 
 CREATE POLICY "etab_own_affectations" ON "public"."shift_affectations" TO "authenticated" USING ((("shift_id" IN ( SELECT "shifts"."id"
@@ -42889,6 +43665,21 @@ CREATE POLICY "own_calendar_connections" ON "public"."calendar_connections" USIN
 CREATE POLICY "own_calendar_events" ON "public"."calendar_events_sync" USING (("connection_id" IN ( SELECT "calendar_connections"."id"
    FROM "public"."calendar_connections"
   WHERE ("calendar_connections"."utilisateur_id" = ( SELECT "auth"."uid"() AS "uid")))));
+
+
+
+ALTER TABLE "public"."paiements_escrow" ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "paiements_escrow_select_admin" ON "public"."paiements_escrow" FOR SELECT USING ("public"."est_admin"());
+
+
+
+CREATE POLICY "paiements_escrow_select_etab" ON "public"."paiements_escrow" FOR SELECT USING (("etablissement_id" = "public"."mon_etablissement_id"()));
+
+
+
+CREATE POLICY "paiements_escrow_select_soignant" ON "public"."paiements_escrow" FOR SELECT USING (("soignant_id" = "auth"."uid"()));
 
 
 
@@ -44833,6 +45624,11 @@ GRANT ALL ON FUNCTION "public"."fn_admin_creer_litige_force"("p_mission_id" "uui
 
 
 
+REVOKE ALL ON FUNCTION "public"."fn_admin_degeler_escrow_etablissement"("p_etablissement_id" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_admin_degeler_escrow_etablissement"("p_etablissement_id" "uuid") TO "service_role";
+
+
+
 REVOKE ALL ON FUNCTION "public"."fn_admin_detail_contrat"("p_contrat_id" "uuid") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_admin_detail_contrat"("p_contrat_id" "uuid") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."fn_admin_detail_contrat"("p_contrat_id" "uuid") TO "service_role";
@@ -46106,6 +46902,65 @@ GRANT ALL ON FUNCTION "public"."fn_escalade_remplacement_non_pourvu"() TO "servi
 
 
 
+GRANT ALL ON TABLE "public"."paiements_escrow" TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."fn_escrow_debits_a_echeance"("p_limit" integer) FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_escrow_debits_a_echeance"("p_limit" integer) TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."fn_escrow_enregistrer_exposition"("p_paiement_escrow_id" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_escrow_enregistrer_exposition"("p_paiement_escrow_id" "uuid") TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."fn_escrow_etab_eligible"("p_etablissement_id" "uuid", "p_montant_cents" integer) FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_escrow_etab_eligible"("p_etablissement_id" "uuid", "p_montant_cents" integer) TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."fn_escrow_expirer_expositions"() FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_escrow_expirer_expositions"() TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."fn_escrow_exposition_courante"("p_etablissement_id" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_escrow_exposition_courante"("p_etablissement_id" "uuid") TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."fn_escrow_geler_etablissement"("p_etablissement_id" "uuid", "p_raison" "text") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_escrow_geler_etablissement"("p_etablissement_id" "uuid", "p_raison" "text") TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."fn_escrow_incrementer_confiance"("p_etablissement_id" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_escrow_incrementer_confiance"("p_etablissement_id" "uuid") TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."fn_escrow_marquer_incident"("p_paiement_escrow_id" "uuid", "p_type_incident" "text", "p_detail" "text") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_escrow_marquer_incident"("p_paiement_escrow_id" "uuid", "p_type_incident" "text", "p_detail" "text") TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."fn_escrow_plafond_cents"("p_etablissement_id" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_escrow_plafond_cents"("p_etablissement_id" "uuid") TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."fn_escrow_releases_a_traiter"("p_limit" integer) FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_escrow_releases_a_traiter"("p_limit" integer) TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."fn_escrow_rembourser"("p_paiement_escrow_id" "uuid", "p_montant_honoraires_cts" integer, "p_annulation_totale" boolean, "p_motif" "text") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_escrow_rembourser"("p_paiement_escrow_id" "uuid", "p_montant_honoraires_cts" integer, "p_annulation_totale" boolean, "p_motif" "text") TO "service_role";
+
+
+
 REVOKE ALL ON FUNCTION "public"."fn_est_contexte_cron_ou_admin"() FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_est_contexte_cron_ou_admin"() TO "service_role";
 
@@ -46996,6 +47851,11 @@ GRANT ALL ON FUNCTION "public"."fn_param_num"("p_cle" "text", "p_defaut" numeric
 
 
 
+REVOKE ALL ON FUNCTION "public"."fn_parrainage_etab_crediter_palier"("p_parrainage_id" "uuid", "p_montant_eur" integer, "p_palier" integer, "p_gmv_cents" numeric) FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_parrainage_etab_crediter_palier"("p_parrainage_id" "uuid", "p_montant_eur" integer, "p_palier" integer, "p_gmv_cents" numeric) TO "service_role";
+
+
+
 REVOKE ALL ON FUNCTION "public"."fn_parrainage_verifier_seuils"("p_parrainage_id" "uuid") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_parrainage_verifier_seuils"("p_parrainage_id" "uuid") TO "service_role";
 
@@ -47810,6 +48670,16 @@ GRANT ALL ON FUNCTION "public"."fn_trg_email_paiement_confirme"() TO "service_ro
 
 
 
+REVOKE ALL ON FUNCTION "public"."fn_trg_escrow_creer_a_confirmation"() FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_trg_escrow_creer_a_confirmation"() TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."fn_trg_escrow_release_check"() FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_trg_escrow_release_check"() TO "service_role";
+
+
+
 REVOKE ALL ON FUNCTION "public"."fn_trg_favori_nouvelle_mission"() FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_trg_favori_nouvelle_mission"() TO "service_role";
 
@@ -48574,6 +49444,18 @@ GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE "public"."equipes" TO "authenticated"
 
 GRANT ALL ON TABLE "public"."equivalences_scolarite" TO "service_role";
 GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE "public"."equivalences_scolarite" TO "authenticated";
+
+
+
+GRANT ALL ON TABLE "public"."escrow_etablissement_etat" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."escrow_exposition_releases" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."escrow_release_queue" TO "service_role";
 
 
 
