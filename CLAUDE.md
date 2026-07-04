@@ -12,6 +12,28 @@
 6. **Surveillance du déploiement** : suivre `deploy-supabase` jusqu'à confirmation verte
 7. **Rapport final** : URLs de la PR mergée, du run de workflow, confirmation prod
 
+### Règle « livré ≠ mergé » — recette obligatoire (post-incident merges invisibles)
+
+**« Mergé » ne veut pas dire « recetté ».** Une PR UI n'est déclarée *livrée* que
+lorsque le comportement a été **vérifié sur le device de destination** (capture
+d'écran du nouvel état dans la PR). Un « Lot terminé » annoncé sans cette
+vérification est prématuré.
+
+Corollaires (incident du 03/07 : deux surfaces GPS empilées → l'edit portait sur
+un composant réel mais **pas celui rendu au pointage**) :
+1. **Avant d'éditer une chaîne UI** : `git grep` le texte visible pour repérer
+   les **doublons** (plusieurs composants/toasts affichent la même idée). Éditer
+   TOUTES les surfaces réellement rendues par l'écran cible, pas la première
+   trouvée.
+2. **Tracer le composant réellement monté** par la route (App.tsx → page →
+   sous-composants) avant de conclure « c'est fait ».
+3. **Cache** : `index.html` en `no-store` (vercel.json), assets hashés
+   `immutable`. Un merge doit être visible au prochain chargement, sans vider le
+   cache à la main.
+4. **Build stamp** (`<BuildStamp />` en bas de « Mon compte ») : le SHA affiché
+   doit correspondre au dernier commit de `main`. C'est le test « mon merge
+   est-il sur mon téléphone » en 2 secondes.
+
 ### Vérification CI systématique — règle non-négociable
 
 1. **Avant merge** : `get_check_runs` → tous les checks `success` requis (Typecheck+build, Drift, Lighthouse, Vercel)

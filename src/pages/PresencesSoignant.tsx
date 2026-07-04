@@ -89,7 +89,7 @@ export default function PresencesSoignant() {
       p_ip: null, p_navigateur: navigator.userAgent,
     });
 
-    afficherNotification({ type: 'info', message: 'Pointage sans GPS activé. Vérification manuelle requise.' });
+    afficherNotification({ type: 'info', message: 'Pointage sans GPS activé — ton pointage sera validé manuellement par l\'établissement, rien à faire de ton côté.' });
   };
 
   const { data: presencesData, isLoading: loading } = useQuery({
@@ -308,7 +308,7 @@ export default function PresencesSoignant() {
     const alerteTeleportation = rpcResult?.alerte_teleportation;
 
     if (!consentementGPS) {
-      afficherNotification({ type: 'avertissement', message: '⚠️ Arrivée pointée sans GPS. Vérification manuelle requise.' });
+      afficherNotification({ type: 'info', message: '✅ Arrivée pointée. Sans localisation, l\'établissement la validera manuellement — rien à faire de ton côté.' });
     } else if (perimetreOk) {
       afficherNotification({ type: 'succes', message: `✅ Arrivée pointée ! Tu es à ${Math.round(distanceM || 0)}m de l'établissement.` });
     } else {

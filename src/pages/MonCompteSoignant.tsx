@@ -11,6 +11,7 @@ import { estEligibleLiberal } from '@/lib/regles-installation-liberal';
 import { ChangementMotDePasse } from '@/components/soignant/ChangementMotDePasse';
 import { ConsentementPingGps } from '@/components/soignant/ConsentementPingGps';
 import { ModalContacterJolene } from '@/components/ModalContacterJolene';
+import { BuildStamp } from '@/components/BuildStamp';
 import { useTheme } from '@/hooks/useTheme';
 import {
   User, ShieldCheck, LogOut,
@@ -196,6 +197,7 @@ export default function MonCompteSoignant() {
         </section>
       </div>
 
+      <BuildStamp />
       <ModalContacterJolene open={contactOpen} onClose={() => setContactOpen(false)} source="compte-soignant" />
     </LayoutApp>
   );
