@@ -28378,6 +28378,72 @@ $$;
 ALTER FUNCTION "public"."fn_relancer_signatures_contrats"() OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."fn_relancer_validation_presence"("p_mission_id" "uuid") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+DECLARE
+  v_soignant uuid := auth.uid();
+  v_mission RECORD;
+  v_intitule text;
+BEGIN
+  IF v_soignant IS NULL THEN
+    RETURN jsonb_build_object('success', false, 'error', 'NON_AUTHENTIFIE');
+  END IF;
+
+  SELECT id, etablissement_id, intitule INTO v_mission
+  FROM missions
+  WHERE id = p_mission_id AND soignant_assigne_id = v_soignant;
+  IF v_mission.id IS NULL THEN
+    RETURN jsonb_build_object('success', false, 'error', 'MISSION_INCONNUE');
+  END IF;
+
+  -- Il doit exister une présence à pointage complet non encore validée
+  -- (miroir du gate 7b-B). Sinon il n'y a rien à relancer.
+  IF NOT EXISTS (
+    SELECT 1 FROM presences p
+    WHERE p.mission_id = p_mission_id
+      AND COALESCE(p.valide_par_etablissement, false) = false
+      AND p.pointage_depart_le IS NOT NULL
+  ) THEN
+    RETURN jsonb_build_object('success', false, 'error', 'RIEN_A_VALIDER');
+  END IF;
+
+  -- Throttle 24h : pas deux relances pour la même mission dans la journée.
+  IF EXISTS (
+    SELECT 1 FROM notifications
+    WHERE type = 'RAPPEL_VALIDATION_PRESENCE'
+      AND id_ressource = p_mission_id
+      AND cree_le > now() - interval '24 hours'
+  ) THEN
+    RETURN jsonb_build_object('success', false, 'error', 'DEJA_RELANCE',
+      'message', 'Tu as déjà relancé cet établissement aujourd''hui. Il a été notifié.');
+  END IF;
+
+  v_intitule := COALESCE(v_mission.intitule, 'une mission');
+
+  INSERT INTO notifications (destinataire_id, type_destinataire, type, titre, corps, lien, type_ressource, id_ressource)
+  VALUES (
+    v_mission.etablissement_id, 'ETABLISSEMENT', 'RAPPEL_VALIDATION_PRESENCE',
+    '⏳ Une présence attend votre validation',
+    'Le soignant de « ' || v_intitule || ' » attend la validation de ses présences pour être payé. Merci de valider depuis vos présences.',
+    '/etablissement/presences', 'mission', p_mission_id
+  );
+
+  PERFORM public.fn_ecrire_audit_safe(
+    v_soignant, 'SOIGNANT', 'PRESENCE_RELANCE_VALIDATION', 'mission', p_mission_id,
+    NULL, jsonb_build_object('etablissement_id', v_mission.etablissement_id), NULL, 'fn_relancer_validation_presence'
+  );
+
+  RETURN jsonb_build_object('success', true,
+    'message', 'Établissement relancé. Il a été notifié de valider tes présences.');
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_relancer_validation_presence"("p_mission_id" "uuid") OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."fn_repartition_heures_soignant"("p_periode_jours" integer DEFAULT 30) RETURNS "jsonb"
     LANGUAGE "plpgsql" STABLE SECURITY DEFINER
     SET "search_path" TO 'public', 'extensions'
@@ -37309,7 +37375,7 @@ CREATE TABLE IF NOT EXISTS "public"."journaux_audit" (
     "cle_s3_ressource" "text",
     "details" "jsonb",
     "cree_le" timestamp with time zone DEFAULT "now"(),
-    CONSTRAINT "journaux_audit_action_check" CHECK (("action" = ANY (ARRAY['INSCRIPTION'::"text", 'CONNEXION'::"text", 'DECONNEXION'::"text", 'MODIFICATION_PROFIL'::"text", 'SUPPRESSION_COMPTE'::"text", 'UPLOAD_DOCUMENT'::"text", 'TELECHARGEMENT_DOCUMENT'::"text", 'VERIFICATION_DOCUMENT'::"text", 'VERIFICATION_RPPS'::"text", 'CREATION_MISSION'::"text", 'MODIFICATION_MISSION'::"text", 'ANNULATION_MISSION'::"text", 'CANDIDATURE'::"text", 'ASSIGNATION'::"text", 'POINTAGE'::"text", 'SIGNATURE_CONTRAT'::"text", 'EVALUATION'::"text", 'PAIEMENT'::"text", 'FACTURATION'::"text", 'DONNEES_PERSO_CONSULTATION'::"text", 'DONNEES_PERSO_EXPORT'::"text", 'DONNEES_PERSO_SUPPRESSION'::"text", 'ADMIN_ACTION'::"text", 'SYSTEM'::"text", 'RIB_CONSULTE'::"text", 'RIB_PARTAGE'::"text", 'CONTRAT_SIGNE'::"text", 'DOCUMENT_CONSULTATION'::"text", 'DOCUMENT_TELEVERSEMENT'::"text", 'DONNEES_PERSO_MODIFICATION'::"text", 'EXPORT_RH_PAIE'::"text", 'FINANCE_FACTURE_PAYEE'::"text", 'MISSION_ASSIGNATION'::"text", 'MISSION_CREATION'::"text", 'RGPD_EXPORT_DONNEES'::"text", 'RGPD_SUPPRESSION_COMPTE'::"text", 'RGPD_SUPPRESSION_COMPTE_ETABLISSEMENT'::"text", 'DEGEL_APPLIED'::"text", 'OVERRIDE_CHAMP_POST_GEL'::"text", 'GEL_APPLIED'::"text", 'OVERRIDE_ANTI_SEED'::"text", 'CONNECT_METADATA_MANQUANTE'::"text", 'DOCUMENT_VERIFICATION_AUTO'::"text", 'FACTURE_COMMISSION_PAYEE_SKIP_ANOMALIE'::"text", 'FACTURE_HONORAIRES_PAYEE_SKIP_ANOMALIE'::"text", 'FINANCE_CHARGE_EXPIRED'::"text", 'FINANCE_CHARGE_FAILED'::"text", 'FINANCE_CHARGE_PENDING'::"text", 'FINANCE_CHARGE_REFUNDED'::"text", 'FINANCE_DISPUTE_CLOSE'::"text", 'FINANCE_DISPUTE_OUVERTE'::"text", 'FINANCE_PAYOUT_CANCELED'::"text", 'FINANCE_PAYOUT_CREATED'::"text", 'FINANCE_PAYOUT_FAILED'::"text", 'FINANCE_PAYOUT_PAID'::"text", 'FINANCE_SEPA_CAPTURE'::"text", 'FINANCE_TRANSFER_CONNECT'::"text", 'FINANCE_TRANSFER_CREATED'::"text", 'FINANCE_TRANSFER_FAILED'::"text", 'FINANCE_TRANSFER_REVERSED'::"text", 'FINANCE_TRANSFER_UPDATED'::"text", 'STRIPE_CHECKOUT_ORPHANED_RECOVERED'::"text", 'STRIPE_CONNECT_ACCOUNT_DELETED'::"text", 'ATTESTATION_SANTE_SIGNEE'::"text", 'EXCLUSION_CREEE'::"text", 'EXCLUSION_SUPPRIMEE'::"text", 'FACTURE_GENEREE'::"text", 'MISSION_ANNULATION_SERIE'::"text", 'MISSION_MODIFICATION'::"text", 'PAIEMENT_SOIGNANT_DECLARE_ETAB'::"text", 'RECLAMATION_CREEE'::"text", 'ADMIN_CONSULTATION_ETABLISSEMENT'::"text", 'ADMIN_CONSULTATION_SOIGNANT'::"text", 'DOCUMENT_SUPPRESSION'::"text", 'HEURES_EXTERNES_DECLAREES'::"text", 'MISSION_ANNULATION'::"text", 'NOTE_HONORAIRES_GENEREE'::"text", 'PRESENCE_CONTESTATION'::"text", 'PRESENCE_POINTAGE_ARRIVEE'::"text", 'PRESENCE_VALIDATION'::"text", 'PRESENCE_VALIDATION_LOT'::"text", 'RGPD_CONSENTEMENT_DONNE'::"text", 'PAIEMENT_MONTANT_ECART'::"text", 'FACTURE_COMMISSION_CREATED_VIA_STRIPE'::"text", 'TAUX_COMMISSION_MODIFIE'::"text", 'LITIGE_GEL_SCOPE_MODIFIE'::"text", 'PREFERENCE_NOTIFICATION_MODIFIEE'::"text", 'NOTIFICATION_SKIPPED'::"text", 'SERIE_EMAIL_ENVOYE'::"text", 'SERIE_EMAIL_SKIPPED'::"text", 'FILTRE_CREE'::"text", 'FILTRE_MODIFIE'::"text", 'FILTRE_SUPPRIME'::"text", 'ALERTE_ACTIVEE'::"text", 'ALERTE_DESACTIVEE'::"text", 'ALERTE_ENVOYEE'::"text", 'POOL_URGENCE_NOTIFICATIONS_ENVOYEES'::"text", 'POOL_URGENCE_ACCEPTATION_RAPIDE'::"text", 'POOL_URGENCE_VALIDATION_ETAB'::"text", 'POOL_URGENCE_REFUS_ETAB'::"text", 'POOL_URGENCE_SMS_TOGGLE'::"text", 'FAVORI_AJOUTE'::"text", 'FAVORI_RETIRE'::"text", 'SCORE_FIABILITE_PENALITE_LITIGE'::"text", 'PARRAINAGE_ETAB_APPLIQUE'::"text", 'PARRAINAGE_ETAB_VALIDE'::"text", 'CREDIT_PARRAINAGE_CREE'::"text", 'CREDIT_PARRAINAGE_APPLIQUE'::"text", 'PARRAINAGE_ETAB_ANOMALIE'::"text", 'PARRAINAGE_SOIGNANT_FILLEUL_ACTIF'::"text", 'PARRAINAGE_SOIGNANT_SEUIL_ATTEINT'::"text", 'PARRAINAGE_SOIGNANT_PRIME_VERSEE'::"text", 'PARRAINAGE_SOIGNANT_FRAUDE'::"text", 'INSCRIPTION_LISTE_ATTENTE_PREVOYANCE'::"text", 'SCORE_RECALCULE_V2'::"text", 'IBAN_RENSEIGNE'::"text", 'IBAN_MODIFIE'::"text", 'AVOIR_REMBOURSEMENT_CONFIRME'::"text", 'ETABLISSEMENT_MODIFICATION'::"text", 'LITIGE_ACCORD_CLOTURE'::"text", 'LITIGE_AUTO_CREATION'::"text", 'LITIGE_CLOTURE_AMIABLE'::"text", 'LITIGE_CREATION'::"text", 'LITIGE_ESCALADE_AUTO'::"text", 'LITIGE_FORCE_CREATION'::"text", 'LITIGE_OUVERTURE'::"text", 'LITIGE_OUVERTURE_LEGACY'::"text", 'LITIGE_RECATEGORISATION_LEGACY'::"text", 'LITIGE_REPONSE'::"text", 'LITIGE_RESOLUTION'::"text", 'PRESENCE_ALERTE_FRAUDE'::"text", 'RGPD_SUPPRESSION_DONNEES'::"text", 'TVA_MODIFICATION'::"text", 'API_KEY_CREEE'::"text", 'API_KEY_REVOQUEE'::"text", 'API_KEY_SUPPRIMEE'::"text", 'FACTURE_MARQUEE_EN_RETARD'::"text", 'HEURES_EXTERNES_VALIDATION_MANUELLE'::"text", 'MISSION_ANNULEE_PAR_SOIGNANT'::"text", 'MISSION_ANNULEE_PAR_ETABLISSEMENT'::"text", 'MISSION_LITIGE'::"text", 'MISSION_TYPE_CONTRAT_MODIFIE'::"text", 'MODERATION_DOCUMENT'::"text", 'COHERENCE_IDENTITE_VERIFIEE'::"text", 'MODERATION_EVALUATION'::"text", 'COHERENCE_DOCUMENTS_ALERTE'::"text", 'ESCROW_INITIE'::"text", 'ESCROW_DEBIT_INITIE'::"text", 'ESCROW_DEBITE'::"text", 'ESCROW_ETAB_GELE'::"text", 'ESCROW_ETAB_DEGELE'::"text", 'ESCROW_REMBOURSEMENT_ENFILE'::"text", 'ESCROW_REMBOURSE'::"text", 'ESCROW_DISPONIBLE'::"text", 'ESCROW_RELEASE_PAYE'::"text", 'ESCROW_RELEASE_ATTENTE_FONDS'::"text"]))),
+    CONSTRAINT "journaux_audit_action_check" CHECK (("action" = ANY (ARRAY['INSCRIPTION'::"text", 'CONNEXION'::"text", 'DECONNEXION'::"text", 'MODIFICATION_PROFIL'::"text", 'SUPPRESSION_COMPTE'::"text", 'UPLOAD_DOCUMENT'::"text", 'TELECHARGEMENT_DOCUMENT'::"text", 'VERIFICATION_DOCUMENT'::"text", 'VERIFICATION_RPPS'::"text", 'CREATION_MISSION'::"text", 'MODIFICATION_MISSION'::"text", 'ANNULATION_MISSION'::"text", 'CANDIDATURE'::"text", 'ASSIGNATION'::"text", 'POINTAGE'::"text", 'SIGNATURE_CONTRAT'::"text", 'EVALUATION'::"text", 'PAIEMENT'::"text", 'FACTURATION'::"text", 'DONNEES_PERSO_CONSULTATION'::"text", 'DONNEES_PERSO_EXPORT'::"text", 'DONNEES_PERSO_SUPPRESSION'::"text", 'ADMIN_ACTION'::"text", 'SYSTEM'::"text", 'RIB_CONSULTE'::"text", 'RIB_PARTAGE'::"text", 'CONTRAT_SIGNE'::"text", 'DOCUMENT_CONSULTATION'::"text", 'DOCUMENT_TELEVERSEMENT'::"text", 'DONNEES_PERSO_MODIFICATION'::"text", 'EXPORT_RH_PAIE'::"text", 'FINANCE_FACTURE_PAYEE'::"text", 'MISSION_ASSIGNATION'::"text", 'MISSION_CREATION'::"text", 'RGPD_EXPORT_DONNEES'::"text", 'RGPD_SUPPRESSION_COMPTE'::"text", 'RGPD_SUPPRESSION_COMPTE_ETABLISSEMENT'::"text", 'DEGEL_APPLIED'::"text", 'OVERRIDE_CHAMP_POST_GEL'::"text", 'GEL_APPLIED'::"text", 'OVERRIDE_ANTI_SEED'::"text", 'CONNECT_METADATA_MANQUANTE'::"text", 'DOCUMENT_VERIFICATION_AUTO'::"text", 'FACTURE_COMMISSION_PAYEE_SKIP_ANOMALIE'::"text", 'FACTURE_HONORAIRES_PAYEE_SKIP_ANOMALIE'::"text", 'FINANCE_CHARGE_EXPIRED'::"text", 'FINANCE_CHARGE_FAILED'::"text", 'FINANCE_CHARGE_PENDING'::"text", 'FINANCE_CHARGE_REFUNDED'::"text", 'FINANCE_DISPUTE_CLOSE'::"text", 'FINANCE_DISPUTE_OUVERTE'::"text", 'FINANCE_PAYOUT_CANCELED'::"text", 'FINANCE_PAYOUT_CREATED'::"text", 'FINANCE_PAYOUT_FAILED'::"text", 'FINANCE_PAYOUT_PAID'::"text", 'FINANCE_SEPA_CAPTURE'::"text", 'FINANCE_TRANSFER_CONNECT'::"text", 'FINANCE_TRANSFER_CREATED'::"text", 'FINANCE_TRANSFER_FAILED'::"text", 'FINANCE_TRANSFER_REVERSED'::"text", 'FINANCE_TRANSFER_UPDATED'::"text", 'STRIPE_CHECKOUT_ORPHANED_RECOVERED'::"text", 'STRIPE_CONNECT_ACCOUNT_DELETED'::"text", 'ATTESTATION_SANTE_SIGNEE'::"text", 'EXCLUSION_CREEE'::"text", 'EXCLUSION_SUPPRIMEE'::"text", 'FACTURE_GENEREE'::"text", 'MISSION_ANNULATION_SERIE'::"text", 'MISSION_MODIFICATION'::"text", 'PAIEMENT_SOIGNANT_DECLARE_ETAB'::"text", 'RECLAMATION_CREEE'::"text", 'ADMIN_CONSULTATION_ETABLISSEMENT'::"text", 'ADMIN_CONSULTATION_SOIGNANT'::"text", 'DOCUMENT_SUPPRESSION'::"text", 'HEURES_EXTERNES_DECLAREES'::"text", 'MISSION_ANNULATION'::"text", 'NOTE_HONORAIRES_GENEREE'::"text", 'PRESENCE_CONTESTATION'::"text", 'PRESENCE_POINTAGE_ARRIVEE'::"text", 'PRESENCE_VALIDATION'::"text", 'PRESENCE_VALIDATION_LOT'::"text", 'RGPD_CONSENTEMENT_DONNE'::"text", 'PAIEMENT_MONTANT_ECART'::"text", 'FACTURE_COMMISSION_CREATED_VIA_STRIPE'::"text", 'TAUX_COMMISSION_MODIFIE'::"text", 'LITIGE_GEL_SCOPE_MODIFIE'::"text", 'PREFERENCE_NOTIFICATION_MODIFIEE'::"text", 'NOTIFICATION_SKIPPED'::"text", 'SERIE_EMAIL_ENVOYE'::"text", 'SERIE_EMAIL_SKIPPED'::"text", 'FILTRE_CREE'::"text", 'FILTRE_MODIFIE'::"text", 'FILTRE_SUPPRIME'::"text", 'ALERTE_ACTIVEE'::"text", 'ALERTE_DESACTIVEE'::"text", 'ALERTE_ENVOYEE'::"text", 'POOL_URGENCE_NOTIFICATIONS_ENVOYEES'::"text", 'POOL_URGENCE_ACCEPTATION_RAPIDE'::"text", 'POOL_URGENCE_VALIDATION_ETAB'::"text", 'POOL_URGENCE_REFUS_ETAB'::"text", 'POOL_URGENCE_SMS_TOGGLE'::"text", 'FAVORI_AJOUTE'::"text", 'FAVORI_RETIRE'::"text", 'SCORE_FIABILITE_PENALITE_LITIGE'::"text", 'PARRAINAGE_ETAB_APPLIQUE'::"text", 'PARRAINAGE_ETAB_VALIDE'::"text", 'CREDIT_PARRAINAGE_CREE'::"text", 'CREDIT_PARRAINAGE_APPLIQUE'::"text", 'PARRAINAGE_ETAB_ANOMALIE'::"text", 'PARRAINAGE_SOIGNANT_FILLEUL_ACTIF'::"text", 'PARRAINAGE_SOIGNANT_SEUIL_ATTEINT'::"text", 'PARRAINAGE_SOIGNANT_PRIME_VERSEE'::"text", 'PARRAINAGE_SOIGNANT_FRAUDE'::"text", 'INSCRIPTION_LISTE_ATTENTE_PREVOYANCE'::"text", 'SCORE_RECALCULE_V2'::"text", 'IBAN_RENSEIGNE'::"text", 'IBAN_MODIFIE'::"text", 'AVOIR_REMBOURSEMENT_CONFIRME'::"text", 'ETABLISSEMENT_MODIFICATION'::"text", 'LITIGE_ACCORD_CLOTURE'::"text", 'LITIGE_AUTO_CREATION'::"text", 'LITIGE_CLOTURE_AMIABLE'::"text", 'LITIGE_CREATION'::"text", 'LITIGE_ESCALADE_AUTO'::"text", 'LITIGE_FORCE_CREATION'::"text", 'LITIGE_OUVERTURE'::"text", 'LITIGE_OUVERTURE_LEGACY'::"text", 'LITIGE_RECATEGORISATION_LEGACY'::"text", 'LITIGE_REPONSE'::"text", 'LITIGE_RESOLUTION'::"text", 'PRESENCE_ALERTE_FRAUDE'::"text", 'RGPD_SUPPRESSION_DONNEES'::"text", 'TVA_MODIFICATION'::"text", 'API_KEY_CREEE'::"text", 'API_KEY_REVOQUEE'::"text", 'API_KEY_SUPPRIMEE'::"text", 'FACTURE_MARQUEE_EN_RETARD'::"text", 'HEURES_EXTERNES_VALIDATION_MANUELLE'::"text", 'MISSION_ANNULEE_PAR_SOIGNANT'::"text", 'MISSION_ANNULEE_PAR_ETABLISSEMENT'::"text", 'MISSION_LITIGE'::"text", 'MISSION_TYPE_CONTRAT_MODIFIE'::"text", 'MODERATION_DOCUMENT'::"text", 'COHERENCE_IDENTITE_VERIFIEE'::"text", 'MODERATION_EVALUATION'::"text", 'COHERENCE_DOCUMENTS_ALERTE'::"text", 'ESCROW_INITIE'::"text", 'ESCROW_DEBIT_INITIE'::"text", 'ESCROW_DEBITE'::"text", 'ESCROW_ETAB_GELE'::"text", 'ESCROW_ETAB_DEGELE'::"text", 'ESCROW_REMBOURSEMENT_ENFILE'::"text", 'ESCROW_REMBOURSE'::"text", 'ESCROW_DISPONIBLE'::"text", 'ESCROW_RELEASE_PAYE'::"text", 'ESCROW_RELEASE_ATTENTE_FONDS'::"text", 'PRESENCE_RELANCE_VALIDATION'::"text"]))),
     CONSTRAINT "journaux_audit_type_acteur_check" CHECK (("type_acteur" = ANY (ARRAY['SOIGNANT'::"text", 'ADMIN_ETABLISSEMENT'::"text", 'ADMIN_PLATEFORME'::"text", 'ADMIN_GROUPE'::"text", 'SYSTEME'::"text", 'SERVICE_API'::"text", 'ADMIN'::"text", 'ETABLISSEMENT'::"text", 'SYSTEM'::"text", 'DEPRECATED_CALLER'::"text"])))
 );
 
@@ -37853,7 +37919,7 @@ CREATE TABLE IF NOT EXISTS "public"."notifications" (
     "email_envoye" boolean DEFAULT false,
     "email_envoye_le" timestamp with time zone,
     "cree_le" timestamp with time zone DEFAULT "now"(),
-    CONSTRAINT "notifications_type_check" CHECK (("type" = ANY (ARRAY['CANDIDATURE_ACCEPTEE'::"text", 'CANDIDATURE_REFUSEE'::"text", 'CANDIDATURE_PROPOSEE'::"text", 'CANDIDATURE_RECUE'::"text", 'MISSION_ACCEPTEE'::"text", 'MISSION_ANNULEE'::"text", 'MISSION_TERMINEE'::"text", 'MISSION_URGENTE'::"text", 'MISSION_NON_POURVUE'::"text", 'MISSION_ASSIGNEE'::"text", 'MISSION_A_POURVOIR'::"text", 'CONTRAT_A_SIGNER'::"text", 'CONTRAT_SIGNE'::"text", 'FACTURE_EMISE'::"text", 'FACTURE_PAYEE'::"text", 'DOCUMENT_EXPIRANT'::"text", 'RAPPEL_DOCUMENTS'::"text", 'DOCUMENT_VERIFIE'::"text", 'DOCUMENT_REJETE'::"text", 'MESSAGE_RECU'::"text", 'MESSAGE_ADMIN'::"text", 'POINTAGE_ARRIVEE'::"text", 'POINTAGE_DEPART'::"text", 'EVALUATION_RECUE'::"text", 'PARRAINAGE'::"text", 'CREDIT_PARRAINAGE'::"text", 'PARRAINAGE_PRIME_VERSEE'::"text", 'RAPPEL_MISSION'::"text", 'RAPPEL_CANDIDATURES'::"text", 'POOL_URGENCE'::"text", 'POOL_URGENCE_ACCEPTATION'::"text", 'SYSTEM'::"text", 'LITIGE_OUVERT'::"text", 'LITIGE_REPONSE'::"text", 'LITIGE_RESOLU'::"text", 'LITIGE_MEDIATION'::"text", 'LITIGE_RESOLU_AJUSTE'::"text", 'LITIGE_ESCALADE_ADMIN'::"text", 'LITIGE_MEDIATION_PRIORITAIRE'::"text", 'LITIGE_RAPPEL_J1'::"text", 'LITIGE_RAPPEL_J3'::"text", 'LITIGE_RAPPEL_J5'::"text", 'CHORUS_DEPOSEE'::"text", 'CHORUS_MISE_A_DISPOSITION'::"text", 'CHORUS_PAIEMENT_EN_COURS'::"text", 'CHORUS_PAIEMENT_COMPTABILISE'::"text", 'CHORUS_REJETEE'::"text", 'FAVORI_NOUVELLE_MISSION'::"text", 'AVOIR_EMIS'::"text", 'COMMISSION_AJUSTEE'::"text", 'REMBOURSEMENT_MANUEL_A_FAIRE'::"text", 'REMBOURSEMENT_CONFIRME'::"text", 'MATCHING_SUPER_LIKE'::"text", 'FAVORI_MISSION_EXPIRE'::"text"]))),
+    CONSTRAINT "notifications_type_check" CHECK (("type" = ANY (ARRAY['CANDIDATURE_ACCEPTEE'::"text", 'CANDIDATURE_REFUSEE'::"text", 'CANDIDATURE_PROPOSEE'::"text", 'CANDIDATURE_RECUE'::"text", 'MISSION_ACCEPTEE'::"text", 'MISSION_ANNULEE'::"text", 'MISSION_TERMINEE'::"text", 'MISSION_URGENTE'::"text", 'MISSION_NON_POURVUE'::"text", 'MISSION_ASSIGNEE'::"text", 'MISSION_A_POURVOIR'::"text", 'CONTRAT_A_SIGNER'::"text", 'CONTRAT_SIGNE'::"text", 'FACTURE_EMISE'::"text", 'FACTURE_PAYEE'::"text", 'DOCUMENT_EXPIRANT'::"text", 'RAPPEL_DOCUMENTS'::"text", 'DOCUMENT_VERIFIE'::"text", 'DOCUMENT_REJETE'::"text", 'MESSAGE_RECU'::"text", 'MESSAGE_ADMIN'::"text", 'POINTAGE_ARRIVEE'::"text", 'POINTAGE_DEPART'::"text", 'EVALUATION_RECUE'::"text", 'PARRAINAGE'::"text", 'CREDIT_PARRAINAGE'::"text", 'PARRAINAGE_PRIME_VERSEE'::"text", 'RAPPEL_MISSION'::"text", 'RAPPEL_CANDIDATURES'::"text", 'POOL_URGENCE'::"text", 'POOL_URGENCE_ACCEPTATION'::"text", 'SYSTEM'::"text", 'LITIGE_OUVERT'::"text", 'LITIGE_REPONSE'::"text", 'LITIGE_RESOLU'::"text", 'LITIGE_MEDIATION'::"text", 'LITIGE_RESOLU_AJUSTE'::"text", 'LITIGE_ESCALADE_ADMIN'::"text", 'LITIGE_MEDIATION_PRIORITAIRE'::"text", 'LITIGE_RAPPEL_J1'::"text", 'LITIGE_RAPPEL_J3'::"text", 'LITIGE_RAPPEL_J5'::"text", 'CHORUS_DEPOSEE'::"text", 'CHORUS_MISE_A_DISPOSITION'::"text", 'CHORUS_PAIEMENT_EN_COURS'::"text", 'CHORUS_PAIEMENT_COMPTABILISE'::"text", 'CHORUS_REJETEE'::"text", 'FAVORI_NOUVELLE_MISSION'::"text", 'AVOIR_EMIS'::"text", 'COMMISSION_AJUSTEE'::"text", 'REMBOURSEMENT_MANUEL_A_FAIRE'::"text", 'REMBOURSEMENT_CONFIRME'::"text", 'MATCHING_SUPER_LIKE'::"text", 'FAVORI_MISSION_EXPIRE'::"text", 'RAPPEL_VALIDATION_PRESENCE'::"text"]))),
     CONSTRAINT "notifications_type_destinataire_check" CHECK (("type_destinataire" = ANY (ARRAY['SOIGNANT'::"text", 'ETABLISSEMENT'::"text", 'ADMIN'::"text"])))
 );
 
@@ -48190,6 +48256,12 @@ GRANT ALL ON FUNCTION "public"."fn_relancer_missions_sans_candidat"() TO "servic
 
 REVOKE ALL ON FUNCTION "public"."fn_relancer_signatures_contrats"() FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_relancer_signatures_contrats"() TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."fn_relancer_validation_presence"("p_mission_id" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_relancer_validation_presence"("p_mission_id" "uuid") TO "service_role";
+GRANT ALL ON FUNCTION "public"."fn_relancer_validation_presence"("p_mission_id" "uuid") TO "authenticated";
 
 
 
