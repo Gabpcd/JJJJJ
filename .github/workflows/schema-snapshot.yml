@@ -9,14 +9,19 @@ name: Schema snapshot (weekly)
 # `deploy-supabase` réussi (workflow_run) et pousse la baseline sur la branche
 # dédiée `auto/schema-baseline` ; une PR de cette branche vers main la fait
 # atterrir (main exige une PR — protection de branche).
+#
+# NOTE 05/07/2026 : le déclencheur workflow_run n'a jamais tiré (name exact ✓,
+# workflows sur main ✓, pas de filtre branches ✓ — cause inconnue). Fallback :
+# schedule QUOTIDIEN 6h UTC (1h après drift-check) + dispatch manuel après un
+# merge de migration si on veut verdir sans attendre.
 
 on:
   workflow_run:
     workflows: ["Deploy Supabase (migrations + edge functions)"]
     types: [completed]
   schedule:
-    # Filet hebdo (lundi 6h UTC) au cas où un deploy n'aurait pas re-baseliné.
-    - cron: '0 6 * * 1'
+    # Quotidien 6h UTC — filet permanent puisque workflow_run ne tire pas.
+    - cron: '0 6 * * *'
   workflow_dispatch: # Déclenchement manuel
 
 env:
