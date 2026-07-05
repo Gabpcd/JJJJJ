@@ -16938,9 +16938,12 @@ BEGIN
     v_acteur_id := v_uid;
   END IF;
 
+  -- FIX 05/07/2026 (recette escrow) : les colonnes s'appellent ip_acteur,
+  -- navigateur_acteur, cle_s3_ressource — l'INSERT historique visait ip,
+  -- navigateur, cle_s3 (inexistantes) → échec 100 % avalé par le catch.
   INSERT INTO journaux_audit (
     acteur_id, type_acteur, action, type_ressource, id_ressource,
-    cle_s3, details, ip, navigateur
+    cle_s3_ressource, details, ip_acteur, navigateur_acteur
   ) VALUES (
     v_acteur_id, p_type_acteur, p_action, p_type_ressource, p_id_ressource,
     p_cle_s3, p_details, p_ip, p_navigateur
@@ -38990,8 +38993,8 @@ COMMENT ON COLUMN "public"."stripe_connect_onboarding"."statut" IS 'Statut Conne
 
 CREATE TABLE IF NOT EXISTS "public"."stripe_refunds_queue" (
     "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
-    "avoir_id" "uuid" NOT NULL,
-    "facture_origine_id" "uuid" NOT NULL,
+    "avoir_id" "uuid",
+    "facture_origine_id" "uuid",
     "stripe_payment_intent_id" "text" NOT NULL,
     "montant_cts" integer NOT NULL,
     "statut" "text" DEFAULT 'EN_ATTENTE'::"text" NOT NULL,
@@ -39006,6 +39009,7 @@ CREATE TABLE IF NOT EXISTS "public"."stripe_refunds_queue" (
     "refund_application_fee_cts" integer DEFAULT 0 NOT NULL,
     "absorbe_plateforme" boolean DEFAULT false NOT NULL,
     CONSTRAINT "stripe_refunds_queue_montant_cts_check" CHECK (("montant_cts" > 0)),
+    CONSTRAINT "stripe_refunds_queue_origine_check" CHECK ((("avoir_id" IS NOT NULL) OR ("paiement_escrow_id" IS NOT NULL))),
     CONSTRAINT "stripe_refunds_queue_statut_check" CHECK (("statut" = ANY (ARRAY['EN_ATTENTE'::"text", 'EN_COURS'::"text", 'TRAITE'::"text", 'ECHEC'::"text"])))
 );
 
