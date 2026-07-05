@@ -32,6 +32,31 @@ jobs:
         with:
           version: 2.98.0
 
+      - name: Invariant registre — statements peuplés (9.0)
+        # Le branching Supabase rejoue les migrations depuis la colonne
+        # `statements` du registre, PAS depuis les fichiers git. Une ligne avec
+        # statements NULL/vide = migration muette au rejeu → base neuve
+        # incomplète (incident branches 04-05/07/2026 : baseline enregistrée
+        # sans statements → 0 table). Tout migration repair / INSERT registre
+        # DOIT peupler statements (cf. scripts/populate-baseline-statements.ts
+        # + workflow populate-baseline-registry).
+        run: |
+          set -euo pipefail
+          API="https://api.supabase.com/v1/projects/${SUPABASE_PROJECT_REF}/database/query"
+          RES=$(curl -sf -X POST "$API" \
+            -H "Authorization: Bearer ${SUPABASE_ACCESS_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d '{"query":"SELECT count(*) AS n FROM supabase_migrations.schema_migrations WHERE statements IS NULL OR coalesce(array_length(statements,1),0) = 0"}')
+          N=$(echo "$RES" | jq -r '.[0].n')
+          if [ "$N" != "0" ]; then
+            echo "::error::$N ligne(s) du registre avec statements NULL/vide — une base neuve ne peut pas les rejouer. Peupler via le workflow populate-baseline-registry (source : fichier de migration versionné)."
+            exit 1
+          fi
+          echo "✅ Invariant registre OK : toutes les migrations ont leurs statements."
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+
       - name: Baseline présente ?
         id: baseline
         run: |
