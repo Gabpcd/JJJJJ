@@ -1,0 +1,105 @@
+name: Populate baseline registry (one-shot 9.0)
+
+# Peuple supabase_migrations.schema_migrations.statements pour la baseline
+# 00000000000000 sur la PROD, depuis le fichier versionné (source unique :
+# supabase/migrations/00000000000000_baseline_prod.sql, préambule extensions
+# inclus). POURQUOI : le branching Supabase rejoue les migrations depuis la
+# colonne `statements` du registre, PAS depuis les fichiers git. Le squash a
+# enregistré la baseline sans statements → toute branche neuve reconstruisait
+# 0 table (incident 04-05/07/2026).
+#
+# GARANTIES (protocole registre post-incident) :
+#   - Métadonnées uniquement : aucun objet du schéma prod n'est touché.
+#   - Backup du registre en artifact AVANT toute écriture.
+#   - batch_001 fait `SET statements = ARRAY[…]` (reset) → re-run idempotent.
+#   - Vérification finale bloquante : nb statements + md5(contenu joint) ==
+#     fichier de main + premier élément = ligne pgcrypto. Mismatch → run ROUGE.
+#   - Rollback : UPDATE supabase_migrations.schema_migrations
+#       SET statements = NULL WHERE version = '00000000000000';
+#     (revient à l'état pré-run ; le schéma prod n'est jamais affecté).
+
+on:
+  workflow_dispatch:
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+
+jobs:
+  populate:
+    name: Backup → écrire statements → vérifier
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Générer les batches depuis le fichier de main
+        run: |
+          set -euo pipefail
+          npx tsx scripts/populate-baseline-statements.ts
+          ls build/populate-baseline/ | head -40
+
+      - name: Backup registre AVANT écriture
+        run: |
+          set -euo pipefail
+          API="https://api.supabase.com/v1/projects/${SUPABASE_PROJECT_REF}/database/query"
+          curl -sf -X POST "$API" \
+            -H "Authorization: Bearer ${SUPABASE_ACCESS_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d '{"query":"SELECT version, name, statements FROM supabase_migrations.schema_migrations ORDER BY version"}' \
+            > registre_backup_pre_populate.json
+          jq -r '.[].version' registre_backup_pre_populate.json
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+
+      - name: Upload backup artifact
+        uses: actions/upload-artifact@v5
+        with:
+          name: registre-backup-pre-populate
+          path: |
+            registre_backup_pre_populate.json
+            build/populate-baseline/manifest.json
+          retention-days: 90
+
+      - name: Appliquer les batches (Management API)
+        run: |
+          set -euo pipefail
+          API="https://api.supabase.com/v1/projects/${SUPABASE_PROJECT_REF}/database/query"
+          for f in build/populate-baseline/batch_*.sql; do
+            jq -Rs '{query:.}' "$f" > /tmp/payload.json
+            curl -sf --retry 3 --retry-delay 5 -X POST "$API" \
+              -H "Authorization: Bearer ${SUPABASE_ACCESS_TOKEN}" \
+              -H "Content-Type: application/json" \
+              -d @/tmp/payload.json > /dev/null
+            echo "✓ $f"
+          done
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+
+      - name: Vérifier — nb + md5 joint + premier élément (bloquant)
+        run: |
+          set -euo pipefail
+          API="https://api.supabase.com/v1/projects/${SUPABASE_PROJECT_REF}/database/query"
+          jq -Rs '{query:.}' build/populate-baseline/verify.sql > /tmp/verify.json
+          RES=$(curl -sf -X POST "$API" \
+            -H "Authorization: Bearer ${SUPABASE_ACCESS_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d @/tmp/verify.json)
+          echo "$RES" | jq .
+          NB=$(echo "$RES" | jq -r '.[0].nb_statements')
+          MD5=$(echo "$RES" | jq -r '.[0].md5_joint')
+          FIRST=$(echo "$RES" | jq -r '.[0].premier_element')
+          EXP_NB=$(jq -r '.nbStatements' build/populate-baseline/manifest.json)
+          EXP_MD5=$(jq -r '.md5File' build/populate-baseline/manifest.json)
+          FAIL=0
+          [ "$NB" = "$EXP_NB" ] || { echo "::error::nb_statements=$NB ≠ attendu $EXP_NB"; FAIL=1; }
+          [ "$MD5" = "$EXP_MD5" ] || { echo "::error::md5_joint=$MD5 ≠ attendu $EXP_MD5 (fichier de main)"; FAIL=1; }
+          echo "$FIRST" | grep -q 'pgcrypto' || { echo "::error::premier élément ≠ ligne pgcrypto : $FIRST"; FAIL=1; }
+          if [ "$FAIL" = "1" ]; then
+            echo "::error::ROLLBACK : UPDATE supabase_migrations.schema_migrations SET statements = NULL WHERE version = '00000000000000';"
+            exit 1
+          fi
+          echo "✅ Registre peuplé et vérifié : $NB statements, md5 $MD5 == fichier de main."
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
