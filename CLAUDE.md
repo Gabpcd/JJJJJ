@@ -52,6 +52,16 @@ un composant réel mais **pas celui rendu au pointage**) :
 6. Test deploy manuel `supabase db push --dry-run` si possible
 7. Surveillance post-merge via MCP Supabase
 8. Dollar-quoting imbriqué interdit avec `$$` — utiliser tags distincts (`$body$`)
+9. **Tout migration repair / INSERT dans `schema_migrations` DOIT peupler la
+   colonne `statements`** (le SQL découpé de la migration). Le branching
+   Supabase (branche preview, rebuild from scratch) rejoue les migrations
+   depuis `statements` — PAS depuis les fichiers git. Une ligne sans
+   statements = migration muette au rejeu → base neuve incomplète (incident
+   04-05/07/2026 : baseline squash enregistrée `(version, name)` seulement →
+   branches à 0 table). Outil : `scripts/populate-baseline-statements.ts` +
+   workflow `populate-baseline-registry` (source unique = fichier versionné,
+   vérif md5 bloquante). Invariant surveillé par drift-check (rouge si une
+   ligne du registre a `statements` NULL/vide).
 
 ### Garde-fous 9.0 — réconciliation repo ↔ prod (NON NÉGOCIABLES, post-incidents 02/07/2026)
 
