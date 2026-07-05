@@ -1,0 +1,117 @@
+name: Recette escrow — legs Stripe (branche test)
+
+# Déroule les legs STRIPE de la recette escrow 7b-D contre la branche Supabase
+# de recette (JAMAIS la prod) : destination charge SEPA réelle, settlement
+# webhook, A10.8 (attente fonds), payout manuel, refunds avec/sans
+# reverse_transfer, échec de débit, dispute. Cf. scripts/recette-escrow-stripe.ts
+# et docs/RECETTE_ESCROW.md.
+#
+# Prérequis secrets repo :
+#   - STRIPE_TEST_SECRET_KEY : clé SECRÈTE **TEST** (sk_test_…) — jamais live.
+#   - SUPABASE_ACCESS_TOKEN  : déjà en place (Management API).
+#
+# Garde-fous : refuse une clé non sk_test / livemode ; ref prod interdit ;
+# l'endpoint webhook Stripe créé pour la branche est détruit en fin de run.
+
+on:
+  workflow_dispatch:
+    inputs:
+      branch_ref:
+        description: 'Ref de la branche Supabase de recette'
+        required: true
+        default: 'wnepopwygokbhlqghydb'
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+
+jobs:
+  stripe-legs:
+    name: S2/S5/S3x/S4x/S6/S7 + invariant solde plateforme
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Garde-fous clé + ref
+        run: |
+          set -euo pipefail
+          if [ -z "${STRIPE_TEST_SECRET_KEY:-}" ]; then
+            echo "::error::Secret STRIPE_TEST_SECRET_KEY absent — le créer dans Settings → Secrets → Actions."
+            exit 1
+          fi
+          case "$STRIPE_TEST_SECRET_KEY" in sk_test_*) ;; *) echo "::error::La clé n'est pas une clé TEST (sk_test_…)."; exit 1;; esac
+          if [ "${{ inputs.branch_ref }}" = "flripxtsyegjshnhzjkz" ]; then
+            echo "::error::Ref PROD interdit."; exit 1
+          fi
+          LIVE=$(curl -sf -u "$STRIPE_TEST_SECRET_KEY:" https://api.stripe.com/v1/balance | jq -r '.livemode')
+          [ "$LIVE" = "false" ] || { echo "::error::livemode=$LIVE"; exit 1; }
+          echo "✅ Clé test vérifiée (livemode=false)."
+        env:
+          STRIPE_TEST_SECRET_KEY: ${{ secrets.STRIPE_TEST_SECRET_KEY }}
+
+      - name: Récupérer la clé service_role de la branche
+        id: keys
+        run: |
+          set -euo pipefail
+          KEYS=$(curl -sf "https://api.supabase.com/v1/projects/${{ inputs.branch_ref }}/api-keys?reveal=true" \
+            -H "Authorization: Bearer ${SUPABASE_ACCESS_TOKEN}")
+          SR=$(echo "$KEYS" | jq -r '.[] | select(.name=="service_role") | .api_key')
+          [ -n "$SR" ] && [ "$SR" != "null" ] || { echo "::error::service_role introuvable"; exit 1; }
+          echo "::add-mask::$SR"
+          echo "service_role=$SR" >> "$GITHUB_OUTPUT"
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+
+      - name: Basculer les secrets edge de la branche en TEST + webhook Stripe
+        id: wh
+        run: |
+          set -euo pipefail
+          # Endpoint webhook test → stripe-webhook de la BRANCHE
+          WH=$(curl -sf https://api.stripe.com/v1/webhook_endpoints \
+            -u "$STRIPE_TEST_SECRET_KEY:" \
+            -d "url=https://${{ inputs.branch_ref }}.supabase.co/functions/v1/stripe-webhook" \
+            -d "enabled_events[]=payment_intent.succeeded" \
+            -d "enabled_events[]=payment_intent.payment_failed" \
+            -d "enabled_events[]=charge.dispute.created" \
+            -d "enabled_events[]=payout.paid" \
+            -d "enabled_events[]=charge.refunded" \
+            -d "description=recette-escrow branche ${{ inputs.branch_ref }} (éphémère)")
+          WH_ID=$(echo "$WH" | jq -r '.id'); WH_SECRET=$(echo "$WH" | jq -r '.secret')
+          echo "::add-mask::$WH_SECRET"
+          echo "endpoint_id=$WH_ID" >> "$GITHUB_OUTPUT"
+          # Secrets edge de la BRANCHE (clé test + signing secret) — redémarre les fns
+          curl -sf -X POST "https://api.supabase.com/v1/projects/${{ inputs.branch_ref }}/secrets" \
+            -H "Authorization: Bearer ${SUPABASE_ACCESS_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d "[{\"name\":\"STRIPE_SECRET_KEY\",\"value\":\"$STRIPE_TEST_SECRET_KEY\"},{\"name\":\"STRIPE_WEBHOOK_SECRET\",\"value\":\"$WH_SECRET\"}]"
+          echo "⏳ propagation secrets edge…"; sleep 45
+          echo "✅ endpoint $WH_ID + secrets branche posés."
+        env:
+          STRIPE_TEST_SECRET_KEY: ${{ secrets.STRIPE_TEST_SECRET_KEY }}
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+
+      - name: Dérouler les legs Stripe
+        run: npx tsx scripts/recette-escrow-stripe.ts | tee rapport-stripe.log
+        env:
+          RECETTE_BRANCH_REF: ${{ inputs.branch_ref }}
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          STRIPE_TEST_SECRET_KEY: ${{ secrets.STRIPE_TEST_SECRET_KEY }}
+          BRANCH_SERVICE_ROLE_KEY: ${{ steps.keys.outputs.service_role }}
+
+      - name: Nettoyage endpoint webhook (toujours)
+        if: always()
+        run: |
+          [ -n "${{ steps.wh.outputs.endpoint_id }}" ] && \
+            curl -s -X DELETE "https://api.stripe.com/v1/webhook_endpoints/${{ steps.wh.outputs.endpoint_id }}" \
+              -u "$STRIPE_TEST_SECRET_KEY:" > /dev/null || true
+          echo "endpoint webhook supprimé."
+        env:
+          STRIPE_TEST_SECRET_KEY: ${{ secrets.STRIPE_TEST_SECRET_KEY }}
+
+      - name: Rapport artifact
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: rapport-recette-stripe
+          path: rapport-stripe.log
+          retention-days: 90
