@@ -51,18 +51,10 @@ jobs:
         env:
           STRIPE_TEST_SECRET_KEY: ${{ secrets.STRIPE_TEST_SECRET_KEY }}
 
-      - name: Récupérer la clé service_role de la branche
-        id: keys
-        run: |
-          set -euo pipefail
-          KEYS=$(curl -sf "https://api.supabase.com/v1/projects/${{ inputs.branch_ref }}/api-keys?reveal=true" \
-            -H "Authorization: Bearer ${SUPABASE_ACCESS_TOKEN}")
-          SR=$(echo "$KEYS" | jq -r '.[] | select(.name=="service_role") | .api_key')
-          [ -n "$SR" ] && [ "$SR" != "null" ] || { echo "::error::service_role introuvable"; exit 1; }
-          echo "::add-mask::$SR"
-          echo "service_role=$SR" >> "$GITHUB_OUTPUT"
-        env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      # NB : plus de reveal de la clé service_role de la branche — l'auth des
+      # invocations edge passe par un secret vault posé par le harness
+      # (cf. CRON_BEARER dans scripts/recette-escrow-stripe.ts, fix run #4 :
+      # la clé api-keys ne matchait pas l'env du runtime edge → 403).
 
       - name: Basculer les secrets edge de la branche en TEST + webhook Stripe
         id: wh
@@ -103,7 +95,6 @@ jobs:
           RECETTE_BRANCH_REF: ${{ inputs.branch_ref }}
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           STRIPE_TEST_SECRET_KEY: ${{ secrets.STRIPE_TEST_SECRET_KEY }}
-          BRANCH_SERVICE_ROLE_KEY: ${{ steps.keys.outputs.service_role }}
 
       - name: Nettoyage endpoint webhook (toujours)
         if: always()

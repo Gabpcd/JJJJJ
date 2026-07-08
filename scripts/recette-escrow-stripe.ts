@@ -28,15 +28,15 @@
  * Garde-fous : refuse la prod ; refuse une clé non sk_test_ ; branche détruite
  * séparément après recette.
  */
+import { randomBytes } from 'node:crypto';
 
 const BRANCH_REF = process.env.RECETTE_BRANCH_REF || '';
 const MGMT_TOKEN = process.env.SUPABASE_ACCESS_TOKEN || '';
 const STRIPE_KEY = process.env.STRIPE_TEST_SECRET_KEY || '';
-const SERVICE_KEY = process.env.BRANCH_SERVICE_ROLE_KEY || '';
 const PROD_REF = 'flripxtsyegjshnhzjkz';
 
-if (!BRANCH_REF || !MGMT_TOKEN || !STRIPE_KEY || !SERVICE_KEY) {
-  console.error('Requis : RECETTE_BRANCH_REF, SUPABASE_ACCESS_TOKEN, STRIPE_TEST_SECRET_KEY, BRANCH_SERVICE_ROLE_KEY');
+if (!BRANCH_REF || !MGMT_TOKEN || !STRIPE_KEY) {
+  console.error('Requis : RECETTE_BRANCH_REF, SUPABASE_ACCESS_TOKEN, STRIPE_TEST_SECRET_KEY');
   process.exit(1);
 }
 if (BRANCH_REF === PROD_REF) { console.error('REFUS : ref prod.'); process.exit(1); }
@@ -48,6 +48,16 @@ const ETAB = 'e2e00000-0000-4000-8000-0000000000e7';
 const SOIGNANTE = 'e2e00000-0000-4000-8000-000000000001';
 const ADMIN = 'e2e00000-0000-4000-8000-00000000ad01';
 const RUN = Date.now().toString(36);
+
+// Bearer des invocations edge. La clé service_role « révélée » par l'endpoint
+// api-keys de la branche NE correspond PAS à l'env SUPABASE_SERVICE_ROLE_KEY
+// injectée dans le runtime edge (403 forbidden, run #4 du 08/07). Chemin
+// déterministe : on pose un secret vault `service_role_key` sur la branche
+// (Setup 0) et bearerAutorise() des fonctions escrow le lit via
+// fn_lire_secret_cron — exactement le mécanisme pg_cron de la prod
+// (cf. CLAUDE.md « Auth crons pg_cron »). Valeur aléatoire par run, la
+// branche est éphémère et détruite après recette.
+const CRON_BEARER = `recette_${RUN}_${randomBytes(24).toString('hex')}`;
 
 const IBAN_OK = 'DE89370400440532013000';
 const IBAN_FAIL = 'DE62370400440532013001';
@@ -105,7 +115,7 @@ async function stripe(method: 'GET' | 'POST' | 'DELETE', path: string, params: R
 async function invoke(fn: string): Promise<any> {
   const r = await fetch(`${FUNCTIONS}/${fn}`, {
     method: 'POST',
-    headers: { Authorization: `Bearer ${SERVICE_KEY}`, 'Content-Type': 'application/json' },
+    headers: { Authorization: `Bearer ${CRON_BEARER}`, 'Content-Type': 'application/json' },
     body: '{}',
   });
   const t = await r.text();
@@ -196,6 +206,10 @@ async function main() {
   console.log(`=== Recette escrow — legs Stripe (branche ${BRANCH_REF}, run ${RUN}) ===`);
   const bal = await stripe('GET', 'balance');
   if (bal.livemode) { console.error('REFUS : livemode=true.'); process.exit(1); }
+
+  // ── Setup 0 : bearer vault pour les invocations edge (cf. CRON_BEARER) ─────
+  await sql(`DELETE FROM vault.secrets WHERE name = 'service_role_key';
+SELECT vault.create_secret('${CRON_BEARER}', 'service_role_key');`);
 
   // ── Setup 1 : customer + mandat SEPA test pour l'étab ──────────────────────
   const cust = await stripe('POST', 'customers', { name: 'Clinique Recette Escrow', email: 'recette-etab@test.jolene', metadata: { recette: RUN } });
