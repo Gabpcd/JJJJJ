@@ -8,6 +8,8 @@ name: Recette escrow — legs Stripe (branche test)
 #
 # Prérequis secrets repo :
 #   - STRIPE_TEST_SECRET_KEY : clé SECRÈTE **TEST** (sk_test_…) — jamais live.
+#     ⚠️ Le compte/sandbox de cette clé doit avoir CONNECT ACTIVÉ
+#     (dashboard.stripe.com/connect) : la recette crée un compte connecté.
 #   - SUPABASE_ACCESS_TOKEN  : déjà en place (Management API).
 #
 # Garde-fous : refuse une clé non sk_test / livemode ; ref prod interdit ;
@@ -91,7 +93,12 @@ jobs:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
 
       - name: Dérouler les legs Stripe
-        run: npx tsx scripts/recette-escrow-stripe.ts | tee rapport-stripe.log
+        # pipefail OBLIGATOIRE : sans lui, `| tee` rend le step vert même si le
+        # script échoue (faux positif run #2 du 08/07 — 73 s « vert » avec
+        # rapport vide). Un FAIL du harness doit faire le run ROUGE (§6.2).
+        run: |
+          set -euo pipefail
+          npx tsx scripts/recette-escrow-stripe.ts | tee rapport-stripe.log
         env:
           RECETTE_BRANCH_REF: ${{ inputs.branch_ref }}
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
