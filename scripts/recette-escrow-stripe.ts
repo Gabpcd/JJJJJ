@@ -203,19 +203,26 @@ async function main() {
   await sql(`UPDATE etablissements SET stripe_customer_id='${cust.id}', stripe_sepa_payment_method_id='${pmOk}', mode_paiement_commission='SEPA_DEBIT' WHERE id='${ETAB}';`);
 
   // ── Setup 2 : compte connecté custom FR (payouts manual) ──────────────────
+  // Plateforme FR : les données d'identité des comptes Custom DOIVENT passer
+  // par un account token (exigence Stripe France, découverte run #3 08/07).
+  const acctToken = await stripe('POST', 'tokens', {
+    account: {
+      business_type: 'individual',
+      individual: {
+        first_name: 'Recette', last_name: 'Soignante', email: 'recette-soignante@test.jolene',
+        phone: '+33600000000', dob: { day: 1, month: 1, year: 1990 },
+        address: { line1: '1 rue du Test', city: 'Paris', postal_code: '75001', country: 'FR' },
+      },
+      tos_shown_and_accepted: true,
+    },
+  });
   const acct = await stripe('POST', 'accounts', {
     type: 'custom', country: 'FR', email: 'recette-soignante@test.jolene',
-    business_type: 'individual',
+    account_token: acctToken.id,
     capabilities: { transfers: { requested: true }, sepa_debit_payments: { requested: true } },
-    individual: {
-      first_name: 'Recette', last_name: 'Soignante', email: 'recette-soignante@test.jolene',
-      phone: '+33600000000', dob: { day: 1, month: 1, year: 1990 },
-      address: { line1: '1 rue du Test', city: 'Paris', postal_code: '75001', country: 'FR' },
-    },
     business_profile: { mcc: '8050', product_description: 'Soins infirmiers (recette test)' },
     external_account: { object: 'bank_account', country: 'FR', currency: 'eur', account_number: 'FR1420041010050500013M02606' },
     settings: { payouts: { schedule: { interval: 'manual' } } },
-    tos_acceptance: { date: Math.floor(Date.now() / 1000), ip: '127.0.0.1' },
     metadata: { recette: RUN },
   });
   acctSoignante = acct.id;
