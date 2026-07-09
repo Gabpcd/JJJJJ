@@ -28,8 +28,27 @@ Connect, mandataire), **soignant** (compte Stripe Connect Custom, `payouts.sched
    `available`) : `payouts.create` **manuel** sur le compte connecté → virement
    vers le compte bancaire du soignant. Escrow → `PAYE`.
 
-**Invariant vérifié (recette)** : les honoraires ne transitent **jamais** par le
-solde plateforme de Jolene — seule la commission (application fee) y entre.
+**Invariant vérifié (recette)** : les honoraires ne **STATIONNENT jamais** sur le
+solde plateforme de Jolene — seule la commission (application fee) y reste.
+
+### 1 bis. « Ne stationne jamais » ≠ « ne transite jamais » (distinction exacte)
+
+Formulation **précise**, car la mécanique d'une *destination charge* l'impose :
+
+- **Transiter** : à l'instant du settlement, la charge est portée par le compte
+  **plateforme** Jolene (Jolene = **merchant of record**, cf. mandat SEPA qui la
+  nomme créancier, `on_behalf_of` retiré v15). Stripe crée **simultanément** le
+  transfer vers le compte connecté du soignant (`transfer_data.destination`).
+  → Les honoraires **transitent** donc le temps d'un battement comptable par la
+  plateforme (inhérent aux destination charges).
+- **Stationner** : **jamais**. Aucun solde d'honoraires ne *reste* / ne *repose* sur
+  le compte Jolene : le transfer part avec la charge, le net plateforme = la seule
+  application fee. **Ni cantonnement, ni détention prolongée** côté Jolene.
+
+→ **Wording CGU/produit correct** : « les honoraires ne **stationnent** jamais sur
+un compte Jolene ; ils sont **détenus par Stripe** sur le compte connecté du
+soignant, payout **manuel** contrôlé par Jolene ». **Ne pas** écrire « ne transitent
+jamais » (techniquement faux) — écrire « ne stationnent jamais ».
 
 ## 2. Rétention — où sont les fonds ? (question pour le gate CGU)
 
