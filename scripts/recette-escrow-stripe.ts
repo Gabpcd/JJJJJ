@@ -219,7 +219,12 @@ async function main() {
   await sql(`${CTX}
 DELETE FROM vault.secrets WHERE name = 'service_role_key';
 SELECT vault.create_secret('${CRON_BEARER}', 'service_role_key');
-DO $neut$ DECLARE m record; i int := 0; BEGIN
+DO $neut$ DECLARE m record; i int; BEGIN
+  -- Compteur CUMULATIF entre les runs : la grille de parking (now-2ans+i jours)
+  -- redémarrait à i=1 à chaque run → collision avec les missions garées par le
+  -- run précédent (run #8 : cible 2024-07-10 déjà occupée par le run #7).
+  SELECT count(*) INTO i FROM missions
+   WHERE soignant_assigne_id = '${SOIGNANTE}' AND debut_le < now() - interval '1 year';
   FOR m IN SELECT id FROM missions
            WHERE soignant_assigne_id = '${SOIGNANTE}' AND statut = 'ASSIGNEE' AND debut_le > now()
            ORDER BY cree_le LOOP
