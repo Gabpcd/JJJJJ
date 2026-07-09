@@ -219,22 +219,27 @@ async function main() {
   await sql(`${CTX}
 DELETE FROM vault.secrets WHERE name = 'service_role_key';
 SELECT vault.create_secret('${CRON_BEARER}', 'service_role_key');
-DO $neut$ DECLARE m record; i int; BEGIN
-  -- Compteur CUMULATIF entre les runs : la grille de parking (now-2ans+i jours)
-  -- redémarrait à i=1 à chaque run → collision avec les missions garées par le
-  -- run précédent (run #8 : cible 2024-07-10 déjà occupée par le run #7).
-  SELECT count(*) INTO i FROM missions
+DO $neut$ DECLARE m record; d timestamptz; BEGIN
+  -- Parking des résidus : slots espacés de 4 JOURS (repos hebdo 35h,
+  -- dec_verifier_repos_hebdo_35h refuse des 8h/jour consécutifs — run #9),
+  -- ancrés sur le max déjà garé (cumulatif entre les runs — run #8).
+  -- Fenêtre : 7 derniers jours inclus, pas seulement le futur — la cible de
+  -- validerPresences (now-1j) chevauchait un résidu de la recette SQL du
+  -- 05/07 (run #9).
+  SELECT coalesce(max(debut_le), now() - interval '2 years') INTO d FROM missions
    WHERE soignant_assigne_id = '${SOIGNANTE}' AND debut_le < now() - interval '1 year';
   FOR m IN SELECT id FROM missions
-           WHERE soignant_assigne_id = '${SOIGNANTE}' AND statut = 'ASSIGNEE' AND debut_le > now()
+           WHERE soignant_assigne_id = '${SOIGNANTE}'
+             AND statut = 'ASSIGNEE' AND debut_le > now() - interval '7 days'
            ORDER BY cree_le LOOP
-    i := i + 1;
+    d := d + interval '4 days';
     PERFORM fn_test_update_mission(m.id, jsonb_build_object(
-      'debut_le', (now() - interval '2 years' + make_interval(days => i))::text,
-      'fin_le',   (now() - interval '2 years' + make_interval(days => i, hours => 8))::text));
+      'debut_le', d::text,
+      'fin_le',   (d + interval '8 hours')::text));
   END LOOP;
 END $neut$;
-UPDATE paiements_escrow SET debit_prevu_le = now() + interval '10 years' WHERE statut = 'INITIE';`);
+UPDATE paiements_escrow SET debit_prevu_le = now() + interval '10 years' WHERE statut = 'INITIE';
+UPDATE escrow_release_queue SET prochaine_tentative_le = now() + interval '10 years' WHERE statut = 'EN_ATTENTE';`);
 
   // ── Setup 1 : customer + mandat SEPA test pour l'étab ──────────────────────
   const cust = await stripe('POST', 'customers', { name: 'Clinique Recette Escrow', email: 'recette-etab@test.jolene', metadata: { recette: RUN } });
