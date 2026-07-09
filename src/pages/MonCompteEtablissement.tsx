@@ -10,6 +10,7 @@ import {
   BookOpen, Mail,
 } from 'lucide-react';
 import { ModalContacterJolene } from '@/components/ModalContacterJolene';
+import { getLabelTypeEtablissement } from '@/lib/constantes';
 import { BuildStamp } from '@/components/BuildStamp';
 import { useTheme } from '@/hooks/useTheme';
 import { Moon, Sun } from 'lucide-react';
@@ -74,7 +75,7 @@ export default function MonCompteEtablissement() {
           </span>
         }
         titre={etab?.nom || 'Mon établissement'}
-        sousTitre={etab?.type || undefined}
+        sousTitre={etab?.type ? getLabelTypeEtablissement(etab.type) : undefined}
       />
       <ListeReglages sections={sections} />
       <BuildStamp />

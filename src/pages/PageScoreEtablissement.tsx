@@ -64,11 +64,13 @@ export default function PageScoreEtablissement() {
       {/* Score visible */}
       <div className="card-base mb-6 text-center py-6">
         {nonNote ? (
+          /* Lot 11 : vrai état vide — jamais de « — / 100 » qui ressemble à un
+             zéro. Le badge « Nouveau » + la condition d'obtention suffisent. */
           <>
             <div className="mb-2"><BadgeNiveauV2 nonNote /></div>
-            <p className="text-4xl font-extrabold text-muted-foreground/40">— / 100</p>
-            <p className="text-xs text-muted-foreground mt-2">
-              Score disponible après 3 notations soignants OU 1 facture payée.
+            <p className="text-sm font-medium text-foreground">Pas encore de score</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              Votre score apparaîtra après 3 notations de soignants ou 1 facture payée.
             </p>
           </>
         ) : (

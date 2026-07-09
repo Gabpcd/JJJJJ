@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Star, ShieldCheck, ChevronRight, Send } from 'lucide-react';
+import { Star, ShieldCheck, ChevronRight, Send, Check, Siren } from 'lucide-react';
 import { LayoutApp } from '@/components/LayoutApp';
 import { ChargementPage } from '@/components/ChargementPage';
 import { usePageTitle } from '@/hooks/usePageTitle';
@@ -198,7 +198,7 @@ export default function MesFavorisEtablissement() {
                     )}
                     {s.note_moyenne != null && (
                       <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 text-amber-700 px-2 py-0.5 font-medium">
-                        ⭐ {Number(s.note_moyenne).toFixed(1)}
+                        <Star className="h-3 w-3" aria-hidden="true" /> {Number(s.note_moyenne).toFixed(1)}
                       </span>
                     )}
                   </div>
@@ -206,9 +206,9 @@ export default function MesFavorisEtablissement() {
               case 'badges':
                 return (
                   <div className="flex flex-wrap items-center gap-1 text-[10px]">
-                    {s.rpps_verifie && <span className="badge-base bg-success/10 text-success">RPPS ✓</span>}
-                    {s.tous_documents_valides && <span className="badge-base bg-success/10 text-success">Docs ✓</span>}
-                    {s.disponible_urgence && <span className="badge-base bg-orange-50 text-orange-700">🚨 Urgence</span>}
+                    {s.rpps_verifie && <span className="badge-base bg-success/10 text-success">RPPS <Check className="inline-block h-3 w-3" aria-hidden="true" /></span>}
+                    {s.tous_documents_valides && <span className="badge-base bg-success/10 text-success">Docs <Check className="inline-block h-3 w-3" aria-hidden="true" /></span>}
+                    {s.disponible_urgence && <span className="badge-base bg-orange-50 text-orange-700"><Siren className="inline-block h-3 w-3 mr-0.5" aria-hidden="true" />Urgence</span>}
                   </div>
                 );
               case 'depuis':
@@ -274,12 +274,12 @@ export default function MesFavorisEtablissement() {
                   )}
                   {s.note_moyenne != null && (
                     <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 text-amber-700 px-2 py-0.5 font-medium">
-                      ⭐ {Number(s.note_moyenne).toFixed(1)}
+                      <Star className="h-3 w-3" aria-hidden="true" /> {Number(s.note_moyenne).toFixed(1)}
                     </span>
                   )}
-                  {s.rpps_verifie && <span className="badge-base bg-success/10 text-success text-[10px]">RPPS ✓</span>}
-                  {s.tous_documents_valides && <span className="badge-base bg-success/10 text-success text-[10px]">Docs ✓</span>}
-                  {s.disponible_urgence && <span className="badge-base bg-orange-50 text-orange-700 text-[10px]">🚨 Urgence</span>}
+                  {s.rpps_verifie && <span className="badge-base bg-success/10 text-success text-[10px]">RPPS <Check className="inline-block h-3 w-3" aria-hidden="true" /></span>}
+                  {s.tous_documents_valides && <span className="badge-base bg-success/10 text-success text-[10px]">Docs <Check className="inline-block h-3 w-3" aria-hidden="true" /></span>}
+                  {s.disponible_urgence && <span className="badge-base bg-orange-50 text-orange-700 text-[10px]"><Siren className="inline-block h-3 w-3 mr-0.5" aria-hidden="true" />Urgence</span>}
                 </div>
 
                 <p className="text-xs text-muted-foreground mt-2">

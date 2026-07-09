@@ -762,15 +762,8 @@ export function ProfilEtablissementContent() {
         </div>
       )}
 
-      {/* Déconnexion — visible uniquement sur mobile */}
-      <div className="md:hidden mt-6 pt-6 border-t border-border">
-        <button
-          onClick={async () => { await deconnexion(); navigate('/'); }}
-          className="btn-secondary w-full flex items-center justify-center gap-2 text-destructive border-destructive/30 hover:bg-destructive/5"
-        >
-          <LogOut className="h-4 w-4" /> Se déconnecter
-        </button>
-      </div>
+      {/* Lot 11 : Se déconnecter unique — il vit en fin de Mon compte
+          (le doublon mobile de cet onglet est retiré). */}
     </>
   );
 }

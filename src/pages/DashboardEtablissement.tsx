@@ -7,7 +7,7 @@ import { logger } from '@/lib/logger';
 import { SkeletonDashboard } from '@/components/SkeletonCard';
 import { FadeInView } from '@/components/FadeInView';
 import { useNavigate } from 'react-router-dom';
-import { Briefcase, PlayCircle, CheckCircle, ClipboardList, FileText, Users, ClipboardCheck, ShieldAlert, CreditCard, BarChart3, ChevronDown } from 'lucide-react';
+import { Briefcase, PlayCircle, CheckCircle, ClipboardList, FileText, Users, ClipboardCheck, ShieldAlert, CreditCard, BarChart3, ChevronDown, AlertTriangle, Timer, Scale, MessageCircle, Clock, type LucideIcon } from 'lucide-react';
 import { LayoutApp } from '@/components/LayoutApp';
 import { CarteKPIY2K } from '@/components/y2k/CarteKPIY2K';
 import { CarteMission } from '@/components/CarteMission';
@@ -306,7 +306,7 @@ export default function DashboardEtablissement() {
     <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-300 dark:border-amber-700 rounded-xl p-4 mb-4 flex items-start gap-3">
       <ShieldAlert className="h-5 w-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
       <div className="flex-1">
-        <p className="text-sm font-medium text-amber-800 dark:text-amber-300">⏳ Votre compte est en cours de vérification</p>
+        <p className="text-sm font-medium text-amber-800 dark:text-amber-300"><Clock className="inline-block h-4 w-4 mr-1 align-text-bottom" aria-hidden="true" />Votre compte est en cours de vérification</p>
         <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">Vérifiez votre établissement (FINESS + rattachement du représentant) pour pouvoir publier des missions. À défaut, l'équipe Jolene valide votre dossier.</p>
         <BoutonY2K size="sm" variant="secondary" className="mt-3" onClick={() => navigate('/etablissement/activer')}>
           Vérifier mon établissement
@@ -324,7 +324,7 @@ export default function DashboardEtablissement() {
         {blocageBanner}
         {erreurPartielle && (
           <div className="bg-warning/10 border border-warning/30 rounded-xl p-3 mb-4 text-sm text-warning">
-            ⚠️ Certaines données n'ont pas pu être chargées.
+            <AlertTriangle className="inline-block h-4 w-4 mr-1 align-text-bottom" aria-hidden="true" />Certaines données n'ont pas pu être chargées.
           </div>
         )}
 
@@ -383,13 +383,13 @@ export default function DashboardEtablissement() {
   // F6 — « À faire maintenant » : on consolide les ~6 bannières concurrentes en
   // une seule carte qui ne surface QUE les 1-2 actions prioritaires.
   // Ordre de priorité : blocage compte/vérif > candidatures > litiges > évaluations > messages.
-  interface ActionAFaire { cle: string; emoji: string; label: string; sousTexte?: string; urgent?: boolean; cta: string; onClick: () => void; }
+  interface ActionAFaire { cle: string; icone: LucideIcon; label: string; sousTexte?: string; urgent?: boolean; cta: string; onClick: () => void; }
   const actionsAFaire: ActionAFaire[] = [];
   if (stats.candidatures_en_attente > 0) {
     const n = stats.candidatures_en_attente;
     actionsAFaire.push({
       cle: 'candidatures',
-      emoji: '⏱️',
+      icone: Timer,
       // Loss-aversion : un soignant non répondu peut accepter une autre mission
       // → la mission ne se remplit pas. On pousse à répondre vite.
       label: `${n} soignant${n > 1 ? 's' : ''} attend${n > 1 ? 'ent' : ''} votre réponse`,
@@ -402,7 +402,7 @@ export default function DashboardEtablissement() {
   if (stats.litiges_ouverts > 0) {
     actionsAFaire.push({
       cle: 'litiges',
-      emoji: '⚖️',
+      icone: Scale,
       label: `${stats.litiges_ouverts} litige${stats.litiges_ouverts > 1 ? 's' : ''} en cours`,
       cta: 'Gérer',
       onClick: () => navigate('/etablissement/litiges'),
@@ -411,7 +411,7 @@ export default function DashboardEtablissement() {
   if (stats.messages_non_lus > 0) {
     actionsAFaire.push({
       cle: 'messages',
-      emoji: '💬',
+      icone: MessageCircle,
       label: `${stats.messages_non_lus} message${stats.messages_non_lus > 1 ? 's' : ''} non lu${stats.messages_non_lus > 1 ? 's' : ''}`,
       cta: 'Ouvrir',
       onClick: () => navigate('/etablissement/messagerie'),
@@ -427,7 +427,7 @@ export default function DashboardEtablissement() {
       <CardScoreQualiteEtab />
       {erreurPartielle && (
         <div className="bg-warning/10 border border-warning/30 rounded-xl p-3 mb-4 text-sm text-warning">
-          ⚠️ Certaines données n'ont pas pu être chargées.
+          <AlertTriangle className="inline-block h-4 w-4 mr-1 align-text-bottom" aria-hidden="true" />Certaines données n'ont pas pu être chargées.
         </div>
       )}
 
@@ -479,7 +479,7 @@ export default function DashboardEtablissement() {
                   }`}
                 >
                   <span className="flex items-center gap-2 min-w-0">
-                    <span aria-hidden="true" className="shrink-0">{a.emoji}</span>
+                    <span aria-hidden="true" className="shrink-0"><a.icone className="h-4 w-4" /></span>
                     <span className="min-w-0">
                       <span className="block text-sm font-medium text-foreground truncate">{a.label}</span>
                       {a.sousTexte && <span className="block text-[11px] text-muted-foreground truncate">{a.sousTexte}</span>}
@@ -574,7 +574,7 @@ export default function DashboardEtablissement() {
               <CarteKPIY2K
                 icone={<IconeImpayes className="h-4 w-4" />}
                 valeur={hasImpayes ? totalImpayes : 0}
-                label={hasImpayes ? 'Impayés — ⚠️ Cliquez pour payer' : 'Paiements à jour'}
+                label={hasImpayes ? 'Impayés — Cliquez pour payer' : 'Paiements à jour'}
                 contexte={sousLabelParts.length > 0 ? sousLabelParts.join(' + ') : undefined}
                 variant="default"
                 onClick={() => navigate('/etablissement/facturation')}
