@@ -19,6 +19,7 @@
     "postinstall": "node scripts/fix-bg-geolocation-spm.mjs",
     "resources": "npx @capacitor/assets generate",
     "test:e2e": "npx playwright test",
+    "test:escrow": "npx playwright test e2e/flows/escrow-revenus-soignant.spec.ts --project=chromium",
     "test:e2e:ui": "npx playwright test --ui",
     "test:invoicing": "vitest run tests/invoicing/",
     "test:chorus:sandbox": "vitest run tests/invoicing/chorus-submission.test.ts",
