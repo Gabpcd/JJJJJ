@@ -218,6 +218,25 @@ BEGIN
                 ));
             END IF;
         END IF;
+
+        -- Lot 13 (recours) : une anomalie n'est JAMAIS un rejet silencieux — le
+        -- soignant est prévenu et peut expliquer/contester depuis ses présences.
+        IF NEW.alerte_teleportation OR (NEW.perimetre_gps_valide IS FALSE) THEN
+            BEGIN
+                PERFORM fn_creer_notification(
+                    p_destinataire_id   := NEW.soignant_id,
+                    p_type_destinataire := 'SOIGNANT',
+                    p_type              := 'SYSTEM',
+                    p_titre             := 'Anomalie GPS sur votre pointage',
+                    p_corps             := 'Un écart GPS a été détecté sur votre pointage. Votre présence reste enregistrée — vous pouvez apporter une explication depuis vos présences.',
+                    p_lien              := '/soignant/presences',
+                    p_type_ressource    := 'presence',
+                    p_id_ressource      := NEW.id
+                );
+            EXCEPTION WHEN OTHERS THEN
+                NULL; -- la notif ne doit jamais bloquer le pointage.
+            END;
+        END IF;
     END IF;
 
     -- Retard de pointage (> 15 min)
