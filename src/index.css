@@ -289,9 +289,9 @@
 
   /* ── Use dynamic viewport height everywhere to handle Safari iOS URL bar
      auto-show/hide behavior (the bars appear on scroll down, hide on scroll up).
-     Without this, 100vh includes the hidden bars space and layout jumps. ── */
+     With the static viewport unit, the hidden bars space is included and the
+     layout jumps — dvh only (supporté partout depuis iOS 15.4 / Chrome 108). ── */
   html, body {
-    min-height: 100vh; /* fallback */
     min-height: 100dvh;
   }
 
@@ -431,7 +431,6 @@
   [role="dialog"] {
     padding-top: max(16px, env(safe-area-inset-top));
     padding-bottom: max(16px, env(safe-area-inset-bottom));
-    max-height: calc(100vh - env(safe-area-inset-top) - env(safe-area-inset-bottom)); /* fallback */
     max-height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom));
   }
 
@@ -473,13 +472,11 @@
     .sidebar-mobile {
       padding-top: env(safe-area-inset-top);
       padding-bottom: env(safe-area-inset-bottom);
-      height: 100vh;
       height: 100dvh; /* Dynamic viewport height (iOS Safari) */
     }
 
     /* Pages publiques (login/inscription): centrage vertical correct */
     .gradient-hero {
-      min-height: 100vh;
       min-height: 100dvh;
       padding-top: env(safe-area-inset-top);
     }

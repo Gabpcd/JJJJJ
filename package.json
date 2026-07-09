@@ -22,7 +22,11 @@
     "test:e2e:ui": "npx playwright test --ui",
     "test:invoicing": "vitest run tests/invoicing/",
     "test:chorus:sandbox": "vitest run tests/invoicing/chorus-submission.test.ts",
-    "test:regression": "vitest run tests/invoicing/no-regression.test.ts"
+    "test:guards": "bash tests/non-regression/guards.sh",
+    "test:schema": "node tests/non-regression/schema-guard.mjs",
+    "test:regression:invoicing": "vitest run tests/invoicing/no-regression.test.ts",
+    "test:e2e:regression": "npx playwright test --project=mobile-non-regression",
+    "test:regression": "npm run test:guards && npm run test:schema && npm run test:regression:invoicing && npm run test:e2e:regression"
   },
   "dependencies": {
     "@capacitor-community/background-geolocation": "^1.2.26",
@@ -127,6 +131,7 @@
     "eslint-plugin-react-refresh": "^0.4.20",
     "globals": "^15.15.0",
     "jsdom": "^20.0.3",
+    "pg": "^8.22.0",
     "postcss": "^8.5.6",
     "tailwindcss": "^3.4.17",
     "typescript": "^5.8.3",
