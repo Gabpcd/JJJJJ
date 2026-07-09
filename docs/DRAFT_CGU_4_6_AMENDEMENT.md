@@ -51,6 +51,18 @@
 > En cas d'annulation **avant le début** de la mission, les sommes sont restituées
 > à l'établissement.
 
+## Clause « Attestation d'empêchement impérieux » (désistement soignant)
+
+> **Attestation d'empêchement impérieux.** En cas de désistement d'une mission
+> pour empêchement impérieux, le soignant peut le déclarer par une **attestation
+> sur l'honneur** (engagement + dates d'indisponibilité). Aucun justificatif ni
+> catégorie de motif n'est demandé ni conservé. **Toute fausse déclaration engage
+> la responsabilité de l'utilisateur** et peut entraîner l'application de la
+> pénalité de score et une revue de son compte.
+> `<!-- art. 1103 C. civ. ; le motif générique (pas la nature santé/familial)`
+> `sort Jolene du champ RGPD art. 9 — aucune donnée de santé collectée. Anti-abus`
+> `par compteur (fn_param_num) au-delà de N annulations justifiées/12 mois. -->`
+
 ## ⛔ Clause « Heures supplémentaires » — À NE PAS PUBLIER dans cet amendement
 
 > **À PUBLIER AVEC LA LIVRAISON LOT 14 — mécanisme inexistant à ce jour.** Une CGU
