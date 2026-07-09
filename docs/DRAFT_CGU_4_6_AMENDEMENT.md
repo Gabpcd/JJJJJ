@@ -1,93 +1,100 @@
-# DRAFT — Amendement CGU §4.6 « Paiement rapide ⚡ »
+# DRAFT — Amendement CGU §4.6 « Paiement des honoraires (missions libérales) »
 
-> **Statut : brouillon, hors code.** Protocole de validation : **Gabrielle valide
-> chaque draft avant mise en ligne** (ce protocole tient lieu de relecture — pas
-> de point avocat). Ne PAS publier tant que non validé.
-> Référence : `src/pages/PageCGU.tsx:112-113` (texte actuel).
+> **Statut : brouillon, hors code.** Protocole : **Gabrielle valide** chaque draft
+> avant mise en ligne. Relu 09/07/2026 (3 corrections bloquantes + ajustements
+> intégrés). **GATE FINAL avant mise en ligne** : recroiser la localisation des
+> fonds (§ chapeau + clause plancher) avec `docs/flux-monetaire-escrow.md`.
+> Référence code : `src/pages/PageCGU.tsx:112-113`.
 
-## Vocabulaire BANNI (transversal à toutes les clauses)
+## Vocabulaire BANNI (transversal)
 
-- ❌ « **garantie** » (au sens financier ou intérim) — Jolene ne garantit pas les
-  fonds ; ils sont détenus par le prestataire de paiement.
-- ❌ « **service de paiement fourni par Jolene** » — Jolene n'est pas
-  établissement de paiement (agrément ACPR non détenu).
-- ✅ **Formulation de référence** : « **Jolene agit en qualité de mandataire de
-  facturation et d'encaissement du soignant ; les fonds sont détenus par
-  Stripe** » (prestataire de services de paiement agréé).
+- ❌ « **garantie** » (financière/intérim). ❌ « **service de paiement fourni par
+  Jolene** ». ❌ toute promesse d'un délai que Jolene ne contrôle pas
+  techniquement (le virement interbancaire).
+- ✅ « **Jolene agit en qualité de mandataire de facturation et d'encaissement du
+  soignant ; les fonds sont détenus par Stripe** ».
 
-## Texte actuel (§4.6)
+## Texte proposé — §4.6 (à intégrer dans PageCGU)
 
-> Pour les missions éligibles au paiement rapide, tes honoraires sont encaissés
-> sur ton compte de paiement (Stripe) dès la confirmation de la mission […]
-
-## Proposition d'amendement (chaque clause cite sa base légale)
-
-> **4.6 — Paiement rapide ⚡**
+> **§4.6 — Paiement des honoraires (missions libérales)**
 >
 > Jolene agit en qualité de **mandataire de facturation et d'encaissement** du
 > soignant. Les fonds sont **détenus par Stripe** (prestataire de services de
 > paiement), jamais par Jolene.
-> <!-- base : mandat civil art. 1984 C. civ. ; Jolene hors monopole bancaire
->      art. L521-1 CMF (pas d'encaissement pour compte de tiers en propre —
->      c'est Stripe, agréé, qui détient les fonds). -->
+> `<!-- mandat civil art. 1984 C. civ. ; hors monopole bancaire art. L521-1 CMF ;`
+> `exemption d'agent commercial DSP2 art. 3, b) — transposition CMF à préciser`
+> `dans docs/flux-monetaire-escrow.md (L521-1 seul ne porte pas l'analyse). -->`
 >
-> Pour les missions éligibles, le montant de tes honoraires **tel qu'établi à la
-> confirmation** (« montant réservé ») est encaissé sur ton compte de paiement
-> Stripe et libéré vers ton compte bancaire après validation de tes présences
-> par l'établissement — au plus tard 72 heures après la fin de la mission
-> (validation automatique à défaut de réponse).
-> <!-- base : liberté contractuelle art. 1103 C. civ. ; le délai 72 h est un
->      engagement contractuel, pas une garantie financière. -->
+> Pour les missions éligibles (dispositif commercial « Paiement rapide »), le
+> montant de tes honoraires tel qu'établi à la confirmation (« montant réservé »)
+> est **conservé par Stripe** et sa libération est déclenchée dès la validation de
+> tes présences par l'établissement — automatique à défaut de réponse sous
+> 72 heures après la fin de la mission —, **sous réserve de l'encaissement
+> effectif des fonds auprès de l'établissement**. Le délai de réception sur ton
+> compte bancaire dépend des délais d'exécution interbancaires et du prestataire
+> de paiement ; il t'est indiqué, à titre estimatif, dans l'application.
+> `<!-- art. 1103 C. civ. ; les 72 h qualifient la VALIDATION, jamais le virement`
+> `— règle : aucune promesse d'un délai que Jolene ne contrôle pas. -->`
 >
 > **Montant réservé — plancher.** Le montant réservé correspond aux heures
 > prévues à la confirmation. Si les heures réalisées sont **inférieures** aux
-> heures prévues, tu perçois néanmoins le montant réservé, sauf litige constaté
-> et résolu selon l'article [litiges]. Aucune réduction automatique.
-> <!-- base : art. 1103 C. civ. (force obligatoire du contrat) ; cohérent avec
->      la règle rémunération plancher (règle #11, GREATEST prévisionnel/effectif). -->
->
-> **Heures supplémentaires.** Les heures réalisées **au-delà** des heures prévues,
-> une fois validées par l'établissement, font l'objet d'un **règlement
-> complémentaire** distinct (débit complémentaire sur le mandat de
-> l'établissement), au même barème.
-> <!-- base : art. 1103 C. civ. ; à ne publier qu'une fois la mécanique livrée
->      (Lot 13/14) ou à formuler au futur. -->
+> heures prévues, tu perçois néanmoins le montant réservé, sauf litige constaté et
+> résolu selon **l'article 9 (Droit applicable)**. Aucune réduction automatique.
+> `<!-- art. 1103 C. civ. ; cohérent règle #11 (plancher GREATEST). -->`
 >
 > **Échec de prélèvement.** Le versement est conditionné à l'encaissement effectif
 > auprès de l'établissement. En cas d'échec, il est **suspendu le temps de la
 > régularisation** ; tu en es informé. Le montant réservé n'est pas définitivement
 > acquis tant que l'encaissement n'a pas eu lieu.
-> <!-- base : condition suspensive art. 1304 C. civ. ; évite toute promesse de
->      garantie de paiement (interdit, cf. vocabulaire banni). -->
+> `<!-- condition suspensive art. 1304 C. civ. ; évite toute garantie de paiement. -->`
 >
-> En cas d'annulation **avant le début** de la mission, les sommes sont
-> restituées à l'établissement.
+> En cas d'annulation **avant le début** de la mission, les sommes sont restituées
+> à l'établissement.
 
-## Clause de modification des CGU (nouvelle, transversale — article dédié)
+## ⛔ Clause « Heures supplémentaires » — À NE PAS PUBLIER dans cet amendement
 
-> **Modification des CGU.** Jolene peut modifier les présentes CGU. Toute
-> modification substantielle est **notifiée par email** aux utilisateurs
-> concernés avant son entrée en vigueur. La **version en vigueur, datée**, est
-> affichée en permanence dans l'application. La poursuite de l'utilisation vaut
-> acceptation de la version en vigueur.
-> <!-- base : art. L221-1 s. C. consommation (information précontractuelle) ;
->      RGPD art. 13 (information) ; loyauté contractuelle. Implémentation :
->      bandeau version datée + envoi email — à câbler (hors ce draft). -->
+> **À PUBLIER AVEC LA LIVRAISON LOT 14 — mécanisme inexistant à ce jour.** Une CGU
+> décrit le système qui existe. Texte conservé pour mémoire, à sortir seulement
+> quand le débit complémentaire des heures sup sera livré :
+>
+> > « Les heures réalisées **au-delà** des heures prévues, une fois validées par
+> > l'établissement, font l'objet d'un **règlement complémentaire** distinct
+> > (débit complémentaire sur le mandat de l'établissement), au même barème. »
+> > `<!-- art. 1103 C. civ. -->`
 
-## Interdiction de transit de données patients (nouvelle — article données/usage)
+## Clause de modification des CGU (article dédié)
 
-> **Données de santé et de patients — interdiction.** Il est **strictement
-> interdit** de faire transiter, via la messagerie ou tout champ libre de la
-> Plateforme, des **données de santé ou identifiantes de patients** (nom, état
-> de santé, données de soins). La Plateforme n'est pas un dispositif de
-> traitement de données de santé et n'est pas hébergeur de données de santé
-> (HDS). Tout manquement engage la responsabilité de l'utilisateur.
-> <!-- base : art. L1110-4 CSP (secret médical) ; RGPD art. 9 (données
->      sensibles) ; art. L1111-8 CSP (HDS — Jolene HORS périmètre, cf.
->      docs/CONFORMITE.md). Implémentation : masquage/anti-fuite messagerie
->      (déjà partiel, cf. contact_leak_attempt) — renforcer côté champs libres. -->
+> Jolene peut modifier les présentes CGU. Toute modification substantielle est
+> **notifiée par email avec un préavis d'au moins quinze (15) jours** avant son
+> entrée en vigueur ; l'utilisateur qui la refuse peut résilier son compte avant
+> cette date. La **version en vigueur, datée**, est affichée en permanence dans
+> l'application. La poursuite de l'utilisation après l'entrée en vigueur vaut
+> acceptation.
+> `<!-- art. 1103 et 1193 C. civ. ; préavis 15 j = standard de loyauté aligné sur`
+> `le règlement (UE) 2019/1150 (intermédiation B2B, hors champ ici). NE JAMAIS`
+> `citer le C. conso ni RGPD art. 13 ici : utilisateurs professionnels. -->`
 
-## Validation
+## Interdiction transit données patients (article données/usage)
 
-- **Gabrielle valide chaque draft** avant mise en ligne. Aucune publication
-  automatique.
+> Il est **strictement interdit** de faire transiter, via la messagerie ou tout
+> champ libre, des **données de santé ou identifiantes de patients**. La
+> Plateforme n'est ni un dispositif de traitement de données de santé, ni
+> hébergeur HDS. **Jolene se réserve le droit de retirer tout contenu
+> contrevenant.** Tout manquement engage la responsabilité de l'utilisateur.
+> `<!-- art. L1110-4 CSP (secret médical) ; RGPD art. 9 ; L1111-8 CSP (HDS, Jolene`
+> `hors périmètre, cf. docs/CONFORMITE.md). -->`
+
+## Finitions appliquées
+
+- Placeholder `[litiges]` → **Article 9 (Droit applicable)** (`PageCGU.tsx:177`).
+- Titre **sans emoji** ; « Paiement rapide » mentionné **une fois** comme nom
+  commercial.
+- Registre « tu » conservé pour §4.6 (cohérent avec §4.5) ; clause de
+  modification en registre formel (utilisateurs professionnels).
+
+## GATE avant mise en ligne
+
+1. Recroiser « conservé par Stripe » (chapeau + plancher) avec
+   `docs/flux-monetaire-escrow.md` (localisation exacte des fonds pendant la
+   rétention). **Bloquant.**
+2. Validation Gabrielle.
