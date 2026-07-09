@@ -9,7 +9,7 @@ import {
   CreditCard, Clock, CheckCircle, FileText, Loader2, Trophy, RefreshCw,
   Building2, AlertTriangle, Download, Banknote, Info, Eye, ChevronDown,
   Edit2, X, Scale, ChevronRight, ExternalLink, Landmark,
-  AlertCircle, Ban, CheckCircle2, Lightbulb,
+  AlertCircle, CheckCircle2, Lightbulb,
 } from 'lucide-react';
 import { LayoutApp } from '@/components/LayoutApp';
 import { getChorusStatutBadge } from '@/lib/chorus-helpers';
@@ -74,11 +74,22 @@ const METHODE_LABELS: Record<MethodePaiement, string> = {
 };
 
 // ─── Helpers cards missions ───
+// Lot 11 : sévérité graduée par ancienneté du dû. Un dû récent (< 7 j) est un
+// état NORMAL → badge neutre (muted), jamais rouge. Le rouge est réservé au
+// vrai retard (> 14 j).
 function RetardBadge({ jours }: { jours: number }) {
-  if (jours < 15) return null;
-  if (jours < 30) return <BadgeY2K variant="warning" icone={<Clock className="h-3 w-3" />}>{jours}j</BadgeY2K>;
-  if (jours < 60) return <BadgeY2K variant="error" icone={<AlertCircle className="h-3 w-3" />}>{jours}j de retard</BadgeY2K>;
-  return <BadgeY2K variant="error" className="bg-destructive text-destructive-foreground border-destructive" icone={<Ban className="h-3 w-3" />}>{jours}j — risque de suspension</BadgeY2K>;
+  if (jours == null || Number.isNaN(jours)) return null;
+  if (jours < 7) {
+    return (
+      <BadgeY2K variant="info" className="bg-muted text-muted-foreground border-border" icone={<Clock className="h-3 w-3" />}>
+        {jours}j
+      </BadgeY2K>
+    );
+  }
+  if (jours <= 14) {
+    return <BadgeY2K variant="warning" icone={<Clock className="h-3 w-3" />}>{jours}j de retard</BadgeY2K>;
+  }
+  return <BadgeY2K variant="error" icone={<AlertCircle className="h-3 w-3" />}>En retard de {jours} j</BadgeY2K>;
 }
 
 function TypeExerciceBadge({ type }: { type: string }) {
@@ -472,7 +483,7 @@ export default function FacturationEtablissement() {
           >
             <div>
               <p className="text-2xl font-bold text-foreground">{fmt(data?.total_soignants_du)}</p>
-              <p className="text-xs text-muted-foreground">Soignants à régler · {data?.nb_missions_non_payees || 0} mission(s)</p>
+              <p className="text-xs text-muted-foreground">Soignants à régler · {data?.nb_missions_non_payees || 0} mission{(data?.nb_missions_non_payees || 0) > 1 ? 's' : ''}</p>
             </div>
             <ChevronRight className="h-4 w-4 text-muted-foreground/60 shrink-0 mt-1" />
           </button>
@@ -485,7 +496,7 @@ export default function FacturationEtablissement() {
           >
             <div>
               <p className="text-2xl font-bold text-foreground">{fmt(data?.total_commissions_du)}</p>
-              <p className="text-xs text-muted-foreground">Commissions Jolene · {data?.nb_factures_impayees || 0} facture(s)</p>
+              <p className="text-xs text-muted-foreground">Commissions Jolene · {data?.nb_factures_impayees || 0} facture{(data?.nb_factures_impayees || 0) > 1 ? 's' : ''}</p>
             </div>
             <ChevronRight className="h-4 w-4 text-muted-foreground/60 shrink-0 mt-1" />
           </button>
@@ -515,7 +526,8 @@ export default function FacturationEtablissement() {
       <div id={SECTIONS.payer} className="mb-4">
         <Collapsible open={sectionsOpen[SECTIONS.payer]} onOpenChange={() => toggleSection(SECTIONS.payer)}>
           <CollapsibleTrigger className="w-full">
-            <CardY2K noPadding>
+            {/* Lot 11 : dé-emphase de l'en-tête quand la section est vide */}
+            <CardY2K noPadding className={missionsNonPayees.length === 0 ? 'opacity-60' : undefined}>
               <CardY2KHeader className="py-3">
                 <div className="flex items-center justify-between">
                   <CardY2KTitle className="flex items-center gap-2 text-base">
@@ -656,7 +668,7 @@ export default function FacturationEtablissement() {
       <div id={SECTIONS.attente} className="mb-4">
         <Collapsible open={sectionsOpen[SECTIONS.attente]} onOpenChange={() => toggleSection(SECTIONS.attente)}>
           <CollapsibleTrigger className="w-full">
-            <CardY2K noPadding>
+            <CardY2K noPadding className={paiementsEnAttente.length === 0 ? 'opacity-60' : undefined}>
               <CardY2KHeader className="py-3">
                 <div className="flex items-center justify-between">
                   <CardY2KTitle className="flex items-center gap-2 text-base">
@@ -712,7 +724,7 @@ export default function FacturationEtablissement() {
       <div id={SECTIONS.commissions} className="mb-4">
         <Collapsible open={sectionsOpen[SECTIONS.commissions]} onOpenChange={() => toggleSection(SECTIONS.commissions)}>
           <CollapsibleTrigger className="w-full">
-            <CardY2K noPadding>
+            <CardY2K noPadding className={facturesImpayees.length === 0 ? 'opacity-60' : undefined}>
               <CardY2KHeader className="py-3">
                 <div className="flex items-center justify-between">
                   <CardY2KTitle className="flex items-center gap-2 text-base">
@@ -749,7 +761,7 @@ export default function FacturationEtablissement() {
                               )}
                             </div>
                             <p className="text-xs text-muted-foreground">
-                              {f.nombre_missions} mission(s) · Échéance : {f.date_echeance && new Date(f.date_echeance).toLocaleDateString('fr-FR')}
+                              {f.nombre_missions} mission{(f.nombre_missions ?? 0) > 1 ? 's' : ''} · Échéance : {f.date_echeance && new Date(f.date_echeance).toLocaleDateString('fr-FR')}
                               {f.est_secteur_public && f.chorus_pro_numero_flux && ` · Flux ${f.chorus_pro_numero_flux}`}
                             </p>
                           </div>
@@ -1155,7 +1167,7 @@ export default function FacturationEtablissement() {
       <div id={SECTIONS.historique} className="mb-4">
         <Collapsible open={sectionsOpen[SECTIONS.historique]} onOpenChange={() => toggleSection(SECTIONS.historique)}>
           <CollapsibleTrigger className="w-full">
-            <CardY2K noPadding>
+            <CardY2K noPadding className={paiementsConfirmes.length === 0 ? 'opacity-60' : undefined}>
               <CardY2KHeader className="py-3">
                 <div className="flex items-center justify-between">
                   <CardY2KTitle className="flex items-center gap-2 text-base">
@@ -1335,7 +1347,7 @@ export default function FacturationEtablissement() {
                         facturesCommissionHistorique.forEach((f: any, i: number) => {
                           setTimeout(() => telechargerFactureCommissionPDF(f.facture_id), i * 200);
                         });
-                        toast.success(`Téléchargement de ${facturesCommissionHistorique.length} facture(s)…`);
+                        toast.success(`Téléchargement de ${facturesCommissionHistorique.length} facture${facturesCommissionHistorique.length > 1 ? 's' : ''}…`);
                       }}
                     >
                       <Download className="h-5 w-5 text-primary shrink-0" />

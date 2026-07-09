@@ -5,7 +5,11 @@ import { handleErrorSilent } from '@/lib/handleError';
 import { logger } from '@/lib/logger';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-import { UserSearch, PlusCircle, Copy, XCircle, RotateCcw, Star, Send, CreditCard, MessageCircle, BellRing, Scale } from 'lucide-react';
+import {
+  UserSearch, PlusCircle, Copy, XCircle, RotateCcw, Star, Send, CreditCard, MessageCircle, BellRing, Scale,
+  AlertTriangle, Banknote, Bot, CalendarDays, CheckCircle, Clock, FileText, Flame, Landmark, MapPin,
+  Paperclip, Phone, Rocket, Shield, Siren, Smartphone, User, Zap,
+} from 'lucide-react';
 import { Textarea } from '@/components/ui/textarea';
 import { LayoutApp } from '@/components/LayoutApp';
 import { BadgeStatut } from '@/components/BadgeStatut';
@@ -148,7 +152,7 @@ function AlerterPoolUrgence({ missionId, mission, user, afficherNotification }: 
       );
       const sent = results.filter(r => r.status === 'fulfilled').length;
 
-      toast.success(`🚨 ${sent} soignant${sent > 1 ? 's' : ''} alerté${sent > 1 ? 's' : ''}`);
+      toast.success(`${sent} soignant${sent > 1 ? 's' : ''} alerté${sent > 1 ? 's' : ''}`);
       setAlerted(true);
     } catch (err: any) {
       capturerErreurSentry(err, 'DetailMission', 'alerter_pool');
@@ -174,7 +178,7 @@ function AlerterPoolUrgence({ missionId, mission, user, afficherNotification }: 
           loading={alerting}
           iconeGauche={!alerting ? <BellRing className="h-4 w-4" /> : undefined}
         >
-          {alerted ? 'Pool alerté ✅' : '🚨 Alerter le pool'}
+          {alerted ? 'Pool alerté' : 'Alerter le pool'}
         </BoutonY2K>
       </div>
     </div>
@@ -192,12 +196,12 @@ function DeclarationRetrocession({ mission, onMaj }: { mission: any; onMaj: (pat
     const retro = Math.round(mission.montant_honoraires_bruts * (mission.retrocession_pct ?? 50)) / 100 * 100 / 100;
     return (
       <div className="card-base border-success/30 bg-success/5">
-        <p className="text-sm font-semibold text-success">💶 Honoraires déclarés : {Number(mission.montant_honoraires_bruts).toLocaleString('fr-FR')} €</p>
+        <p className="text-sm font-semibold text-success flex items-center gap-1.5"><Banknote className="h-4 w-4 shrink-0" aria-hidden="true" />Honoraires déclarés : {Number(mission.montant_honoraires_bruts).toLocaleString('fr-FR')} €</p>
         <p className="text-xs text-muted-foreground mt-1">
           Rétrocession au remplaçant ({mission.retrocession_pct}%) : <strong>{Number(mission.net_a_payer ?? retro).toLocaleString('fr-FR')} €</strong> —
           {mission.honoraires_confirmes_le
             ? ' relevé confirmé par le remplaçant ✓. Réglez-le par virement puis déclarez le paiement ci-dessous.'
-            : ' ⏳ en attente de confirmation du remplaçant (validation automatique sous 48h sans contestation).'}
+            : ' en attente de confirmation du remplaçant (validation automatique sous 48h sans contestation).'}
         </p>
       </div>
     );
@@ -230,7 +234,7 @@ function DeclarationRetrocession({ mission, onMaj }: { mission: any; onMaj: (pat
 
   return (
     <div className="card-base border-primary/30 bg-primary/5 space-y-2">
-      <p className="text-sm font-semibold text-foreground">💶 Déclarez les honoraires du remplacement</p>
+      <p className="text-sm font-semibold text-foreground flex items-center gap-1.5"><Banknote className="h-4 w-4 shrink-0" aria-hidden="true" />Déclarez les honoraires du remplacement</p>
       <p className="text-xs text-muted-foreground">
         Montant brut des actes encaissés pendant le remplacement (vos feuilles de soins).
         La rétrocession ({mission.retrocession_pct ?? 50}%) et la commission Jolene seront calculées automatiquement.
@@ -238,7 +242,7 @@ function DeclarationRetrocession({ mission, onMaj }: { mission: any; onMaj: (pat
         preuve opposable jointe à la mission.
       </p>
       <label className="text-xs font-medium text-foreground block">
-        📎 Relevé justificatif *
+        <Paperclip className="inline-block h-4 w-4 mr-1 align-text-bottom" aria-hidden="true" />Relevé justificatif *
         <input
           type="file"
           accept="image/*,.pdf"
@@ -272,7 +276,7 @@ function BoostEtGarantie({ mission, onMaj }: { mission: any; onMaj: (patch: any)
       const { data, error } = await supabase.rpc('fn_booster_mission' as any, { p_mission_id: mission.id });
       if (error || (data as any)?.error) { toast.error((data as any)?.error || 'Boost impossible.'); return; }
       const nb = (data as any)?.soignants_notifies ?? 0;
-      toast.success(`🚀 Mission boostée — ${nb} soignant${nb > 1 ? 's' : ''} compatible${nb > 1 ? 's' : ''} notifié${nb > 1 ? 's' : ''}, priorité dans le feed.`);
+      toast.success(`Mission boostée — ${nb} soignant${nb > 1 ? 's' : ''} compatible${nb > 1 ? 's' : ''} notifié${nb > 1 ? 's' : ''}, priorité dans le feed.`);
       onMaj({ boostee_le: new Date().toISOString() });
     } finally {
       setBoosting(false);
@@ -297,7 +301,7 @@ function BoostEtGarantie({ mission, onMaj }: { mission: any; onMaj: (patch: any)
       {/* Boost */}
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-sm font-semibold text-foreground">🚀 Booster cette mission</p>
+          <p className="text-sm font-semibold text-foreground flex items-center gap-1.5"><Rocket className="h-4 w-4 shrink-0" aria-hidden="true" />Booster cette mission</p>
           <p className="text-xs text-muted-foreground mt-0.5">
             Notifie immédiatement les soignants compatibles dans le rayon et remonte la mission
             en tête de leur feed pendant 7 jours. <span className="text-success font-medium">Inclus — offre de lancement.</span>
@@ -316,7 +320,7 @@ function BoostEtGarantie({ mission, onMaj }: { mission: any; onMaj: (patch: any)
       {(mission.statut === 'OUVERTE' || mission.statut === 'ASSIGNEE') && (
         <div className="flex items-center justify-between gap-3 pt-3 border-t border-border">
           <div className="min-w-0">
-            <p className="text-sm font-semibold text-foreground">🛡️ Garantie remplacement</p>
+            <p className="text-sm font-semibold text-foreground flex items-center gap-1.5"><Shield className="h-4 w-4 shrink-0" aria-hidden="true" />Garantie remplacement</p>
             <p className="text-xs text-muted-foreground mt-0.5">
               Sans pointage 30 min après le début, une mission de remplacement urgente est diffusée
               automatiquement au pool de soignants disponibles (premier arrivé, premier servi).
@@ -549,6 +553,12 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
   const m = mission;
   const debut = new Date(m.debut_le);
   const fin = new Date(m.fin_le);
+  // Mission multi-jours : « 8 h/jour · 120 h au total » est lisible là où
+  // « 13:00 → 21:00 (120h) » ne l'est pas (même logique que CarteMission).
+  const dureeMission = m.duree_heures ?? ((fin.getTime() - debut.getTime()) / 3600000);
+  const nbJoursMission = Math.max(1, Math.round((fin.getTime() - debut.getTime()) / 86400000));
+  const estMultiJours = dureeMission > 24 && nbJoursMission > 1;
+  const heuresParJour = estMultiJours ? Math.round((dureeMission / nbJoursMission) * 10) / 10 : 0;
   const estAnnulee = m.statut === 'ANNULEE_PAR_ETABLISSEMENT' || m.statut === 'ANNULEE_PAR_SOIGNANT';
 
   /* Hiérarchisation : LA prochaine action attendue de l'établissement —
@@ -602,7 +612,7 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
 
       {alerteRequalif?.alerte && (
         <div className="bg-warning/5 border border-warning/30 rounded-xl p-4 mb-4 flex items-start gap-3">
-          <span className="text-lg">⚠️</span>
+          <AlertTriangle className="h-5 w-5 text-warning shrink-0" aria-hidden="true" />
           <p className="text-sm font-medium text-warning">
             Ce soignant a travaillé {alerteRequalif.jours_travailles || '?'} jours chez vous sur 12 mois. Risque de requalification en CDI au-delà de 150 jours.
           </p>
@@ -640,12 +650,18 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
                 <div className="flex items-center gap-2 flex-wrap mb-3">
                   <BadgeStatut statut={m.statut} />
                   {m.est_urgente && (
-                    <span className="badge-base bg-destructive/10 text-destructive text-[10px]">
-                      {m.niveau_urgence === 3 ? '🚨 Critique' : m.niveau_urgence === 2 ? '🔥 Élevé' : '⚡ Urgent'}
+                    <span className="badge-base bg-destructive/10 text-destructive text-[10px] inline-flex items-center gap-1">
+                      {m.niveau_urgence === 3 ? (
+                        <><Siren className="h-3 w-3" aria-hidden="true" />Critique</>
+                      ) : m.niveau_urgence === 2 ? (
+                        <><Flame className="h-3 w-3" aria-hidden="true" />Élevé</>
+                      ) : (
+                        <><Zap className="h-3 w-3" aria-hidden="true" />Urgent</>
+                      )}
                     </span>
                   )}
                   {m.rist_plafond_applique && (
-                    <span className="badge-base bg-warning/10 text-warning text-[10px]">⚠️ Rist plafonné</span>
+                    <span className="badge-base bg-warning/10 text-warning text-[10px] inline-flex items-center gap-1"><AlertTriangle className="h-3 w-3" aria-hidden="true" />Rist plafonné</span>
                   )}
                 </div>
                 {m.description && <p className="text-sm text-muted-foreground mb-3">{m.description}</p>}
@@ -653,8 +669,16 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
                   {getLabelProfession(m.profession_requise)}{m.service ? ` · ${m.service}` : ''}
                 </p>
                 <hr className="my-3 border-border" />
-                <p className="text-sm text-foreground">📅 {format(debut, 'EEEE d MMMM yyyy', { locale: fr })}</p>
-                <p className="text-sm text-foreground">🕐 {format(debut, 'HH:mm')} → {format(fin, 'HH:mm')} ({m.duree_heures?.toFixed(1)}h)</p>
+                <p className="text-sm text-foreground flex items-center gap-1.5">
+                  <CalendarDays className="h-4 w-4 text-muted-foreground shrink-0" aria-hidden="true" />
+                  {format(debut, 'EEEE d MMMM yyyy', { locale: fr })}
+                </p>
+                <p className="text-sm text-foreground flex items-center gap-1.5">
+                  <Clock className="h-4 w-4 text-muted-foreground shrink-0" aria-hidden="true" />
+                  {estMultiJours
+                    ? `${heuresParJour} h/jour · ${Math.round(dureeMission * 10) / 10} h au total`
+                    : `${format(debut, 'HH:mm')} → ${format(fin, 'HH:mm')} (${m.duree_heures?.toFixed(1)}h)`}
+                </p>
               </div>
 
               <div className="card-base">
@@ -662,8 +686,9 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
                 {m.soignants ? (
                   <div className="space-y-2">
                     <div className="flex items-center gap-2">
-                      <Link to={`/etablissement/soignants/${m.soignant_assigne_id}`} className="font-semibold text-foreground hover:text-primary hover:underline">
-                        👤 {m.soignants.prenom} {m.soignants.nom}
+                      <Link to={`/etablissement/soignants/${m.soignant_assigne_id}`} className="font-semibold text-foreground hover:text-primary hover:underline inline-flex items-center gap-1.5">
+                        <User className="h-4 w-4 shrink-0" aria-hidden="true" />
+                        {m.soignants.prenom} {m.soignants.nom}
                       </Link>
                       <button
                         type="button"
@@ -683,15 +708,30 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
                     <p className="text-sm text-muted-foreground">
                       {getLabelProfession(m.soignants.profession)} ·{' '}
                       {m.soignants.score_fiabilite != null && m.soignants.total_missions_terminees > 0 ? (
-                        <span className={`font-semibold ${scoreColor(m.soignants.score_fiabilite)}`}>
-                          ⭐ {m.soignants.score_fiabilite}/100 ({scoreLabel(m.soignants.score_fiabilite)})
+                        <span className={`font-semibold inline-flex items-center gap-1 ${scoreColor(m.soignants.score_fiabilite)}`}>
+                          <Star className="h-3.5 w-3.5 fill-current" aria-hidden="true" />
+                          {m.soignants.score_fiabilite}/100 ({scoreLabel(m.soignants.score_fiabilite)})
                         </span>
+                      ) : m.statut === 'TERMINEE' && !isAdmin ? (
+                        /* Lot 11 : mission terminée sans évaluation → CTA direct vers la
+                           modale d'évaluation existante (EvaluationPostMission). */
+                        <button
+                          type="button"
+                          onClick={() => setShowEvaluation(true)}
+                          className="text-primary font-medium hover:underline underline-offset-2"
+                        >
+                          Évaluer ce soignant
+                        </button>
                       ) : (
-                        <span className="text-muted-foreground">Pas encore d'évaluation</span>
+                        <span className="text-muted-foreground">(nouveau sur Jolene)</span>
                       )}
                     </p>
-                    <p className="text-sm text-muted-foreground">
-                      {m.soignants.telephone ? `📱 ${m.soignants.telephone}` : '📞 Numéro disponible le jour de la mission'}
+                    <p className="text-sm text-muted-foreground flex items-center gap-1.5">
+                      {m.soignants.telephone ? (
+                        <><Smartphone className="h-4 w-4 shrink-0" aria-hidden="true" />{m.soignants.telephone}</>
+                      ) : (
+                        <><Phone className="h-4 w-4 shrink-0" aria-hidden="true" />Numéro disponible le jour de la mission</>
+                      )}
                     </p>
                     {m.soignants.numero_rpps && <p className="text-xs text-muted-foreground">RPPS : {m.soignants.numero_rpps}</p>}
                     <div className="mt-2 pt-2 border-t border-border space-y-2">
@@ -767,13 +807,13 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
               {m.montant_commission_ttc > 0 && (
                 <div className="card-base flex items-center gap-2 text-xs text-muted-foreground">
                   {m.mode_paiement_soignant === 'STRIPE_CONNECT' && m.commission_facturee ? (
-                    <><CreditCard className="h-3.5 w-3.5 text-success" /><span>Commission : {m.montant_commission_ttc?.toFixed(2)} € TTC — ✅ Capturée à la source par Stripe lors du paiement (déjà réglée)</span></>
+                    <><CreditCard className="h-3.5 w-3.5 text-success" aria-hidden="true" /><span>Commission : {m.montant_commission_ttc?.toFixed(2)} € TTC — Capturée à la source par Stripe lors du paiement (déjà réglée)</span></>
                   ) : (m.etablissements as any)?.mode_paiement_commission === 'STRIPE_RESERVATION' ? (
-                    <><CreditCard className="h-3.5 w-3.5 text-primary" /><span>Commission : {m.montant_commission_ttc?.toFixed(2)} € TTC — 💳 Prélevée à la réservation</span></>
+                    <><CreditCard className="h-3.5 w-3.5 text-primary" aria-hidden="true" /><span>Commission : {m.montant_commission_ttc?.toFixed(2)} € TTC — Prélevée à la réservation</span></>
                   ) : (m.etablissements as any)?.mode_paiement_commission === 'CHORUS_PRO' ? (
-                    <><span>🏛️ Commission : {m.montant_commission_ttc?.toFixed(2)} € TTC — Chorus Pro</span></>
+                    <><Landmark className="h-3.5 w-3.5 shrink-0" aria-hidden="true" /><span>Commission : {m.montant_commission_ttc?.toFixed(2)} € TTC — Chorus Pro</span></>
                   ) : (
-                    <><span>📄 Commission : {m.montant_commission_ttc?.toFixed(2)} € TTC — Facturée en fin de mois</span></>
+                    <><FileText className="h-3.5 w-3.5 shrink-0" aria-hidden="true" /><span>Commission : {m.montant_commission_ttc?.toFixed(2)} € TTC — Facturée en fin de mois</span></>
                   )}
                 </div>
               )}
@@ -853,7 +893,7 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
               {!isAdmin && (m.statut === 'TERMINEE' || m.statut === 'LITIGE') && m.soignant_assigne_id && (
                 litigeExistant ? (
                   <div className="card-base border-warning/30">
-                    <h2 className="font-semibold text-foreground mb-3 flex items-center gap-2">⚖️ Litige en cours</h2>
+                    <h2 className="font-semibold text-foreground mb-3 flex items-center gap-2"><Scale className="h-4 w-4 text-warning shrink-0" aria-hidden="true" />Litige en cours</h2>
                     <FilDiscussionLitige
                       litige={{
                         id: litigeExistant.litige_id,
@@ -877,7 +917,7 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
                           placeholder="Décrivez le problème rencontré (min. 10 caractères)..." rows={3} />
                         <div className="flex gap-2">
                           <BoutonY2K onClick={ouvrirLitige} disabled={litigeCreating || litigeMotif.trim().length < 10}>
-                            {litigeCreating ? 'Création…' : '⚠️ Confirmer le litige'}
+                            {litigeCreating ? 'Création…' : 'Confirmer le litige'}
                           </BoutonY2K>
                           <BoutonY2K variant="ghost" onClick={() => setShowLitigeForm(false)}>Annuler</BoutonY2K>
                         </div>
@@ -887,7 +927,8 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
                         onClick={() => setShowLitigeForm(true)}
                         className="text-sm text-warning hover:underline font-medium flex items-center gap-1.5"
                       >
-                        ⚖️ Ouvrir un litige pour cette mission
+                        <Scale className="h-4 w-4 shrink-0" aria-hidden="true" />
+                        Ouvrir un litige pour cette mission
                       </button>
                     )}
                   </div>
@@ -926,7 +967,7 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
         {m.statut === 'OUVERTE' && (
           <TabsContent value="recommandations">
             <div className="card-base">
-              <h2 className="font-semibold text-foreground mb-4">🤖 Soignants recommandés par l'IA</h2>
+              <h2 className="font-semibold text-foreground mb-4 flex items-center gap-2"><Bot className="h-4 w-4 text-primary shrink-0" aria-hidden="true" />Soignants recommandés par l'IA</h2>
               {loadingReco ? (
                 <p className="text-sm text-muted-foreground py-8 text-center">Analyse en cours…</p>
               ) : recommandations.length > 0 ? (
@@ -963,8 +1004,9 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
                           <td className="py-3">
                             <div className="space-y-0.5">
                               {r.score_fiabilite != null && r.score_fiabilite > 0 ? (
-                                <span className={`badge-base text-[10px] ${scoreBadgeClasses(r.score_fiabilite)}`}>
-                                  ⭐ {r.score_fiabilite}/100
+                                <span className={`badge-base text-[10px] inline-flex items-center gap-1 ${scoreBadgeClasses(r.score_fiabilite)}`}>
+                                  <Star className="h-3 w-3 fill-current" aria-hidden="true" />
+                                  {r.score_fiabilite}/100
                                 </span>
                               ) : (
                                 <span className="text-[10px] text-muted-foreground">—</span>
@@ -982,13 +1024,13 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
                           <td className="py-3">
                             <div className="flex flex-wrap gap-1">
                               {r.tous_documents_valides === false && (
-                                <span className="badge-base bg-warning/10 text-warning text-[9px]">⚠️ Docs incomplets</span>
+                                <span className="badge-base bg-warning/10 text-warning text-[9px] inline-flex items-center gap-1"><AlertTriangle className="h-3 w-3" aria-hidden="true" />Docs incomplets</span>
                               )}
                               {r.distance_km != null && r.distance_km > 50 && (
-                                <span className="badge-base bg-muted text-muted-foreground text-[9px]">📍 Hors zone</span>
+                                <span className="badge-base bg-muted text-muted-foreground text-[9px] inline-flex items-center gap-1"><MapPin className="h-3 w-3" aria-hidden="true" />Hors zone</span>
                               )}
                               {incompatible && (
-                                <span className="badge-base bg-destructive/10 text-destructive text-[9px]">⚠️ Type incompatible</span>
+                                <span className="badge-base bg-destructive/10 text-destructive text-[9px] inline-flex items-center gap-1"><AlertTriangle className="h-3 w-3" aria-hidden="true" />Type incompatible</span>
                               )}
                             </div>
                           </td>
@@ -1035,7 +1077,8 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
         )}
         {m.statut === 'EN_COURS' && (
           <button onClick={() => setModalTerminer(true)} className="text-sm font-semibold flex items-center gap-1 px-4 py-2 rounded-xl bg-success text-success-foreground hover:bg-success/90 transition flex-1 md:flex-none justify-center">
-            ✅ Terminer la mission
+            <CheckCircle className="h-4 w-4 shrink-0" aria-hidden="true" />
+            Terminer la mission
           </button>
         )}
         <button onClick={() => setModalDupliquer(true)} className="text-sm font-medium text-muted-foreground hover:text-foreground flex items-center gap-1 px-3">
@@ -1100,7 +1143,7 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
           } else if (data && typeof data === 'object' && (data as any).success === false) {
             afficherNotification({ type: 'erreur', message: (data as any).error || 'Erreur lors de la terminaison.' });
           } else {
-            afficherNotification({ type: 'succes', message: 'Mission terminée ✅' });
+            afficherNotification({ type: 'succes', message: 'Mission terminée' });
             refresh();
           }
           setTerminating(false);

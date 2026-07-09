@@ -7,7 +7,7 @@ import { logger } from '@/lib/logger';
 import { SkeletonDashboard } from '@/components/SkeletonCard';
 import { FadeInView } from '@/components/FadeInView';
 import { useNavigate } from 'react-router-dom';
-import { Briefcase, PlayCircle, CheckCircle, ClipboardList, FileText, Users, ClipboardCheck, ShieldAlert, CreditCard, BarChart3, ChevronDown, AlertTriangle, Timer, Scale, MessageCircle, Clock, type LucideIcon } from 'lucide-react';
+import { Briefcase, PlayCircle, CheckCircle, ClipboardList, FileText, Users, ClipboardCheck, ShieldAlert, CreditCard, BarChart3, ChevronDown, ChevronRight, AlertTriangle, Timer, Scale, MessageCircle, Clock, Star, type LucideIcon } from 'lucide-react';
 import { LayoutApp } from '@/components/LayoutApp';
 import { CarteKPIY2K } from '@/components/y2k/CarteKPIY2K';
 import { CarteMission } from '@/components/CarteMission';
@@ -18,7 +18,6 @@ const ModaleAnnulationMissionEtab = lazy(() =>
     default: m.ModaleAnnulationMissionEtab,
   })),
 );
-import { BandeauEvaluationsEnAttente } from '@/components/BandeauEvaluationsEnAttente';
 import { BandeauBlocageAuto } from '@/components/BandeauBlocageAuto';
 
 import { BadgePalier } from '@/components/BadgePalier';
@@ -119,6 +118,10 @@ export default function DashboardEtablissement() {
       };
       let topSoignantsResult: any[] = [];
       let prochainesResult: any[] = [];
+      // Lot 11 : évaluations en attente — converge dans « À faire maintenant »
+      // (remplace le BandeauEvaluationsEnAttente, même logique de données :
+      // missions TERMINEE − évaluations ETABLISSEMENT − notations ETAB_VERS_SOIGNANT).
+      let evaluationsEnAttenteResult: { count: number; premiereMissionId: string | null } = { count: 0, premiereMissionId: null };
 
       try {
         // Primary data: RPC stats + etab + recent missions + paliers
@@ -236,6 +239,34 @@ export default function DashboardEtablissement() {
           logger.warn('[DashboardEtab] Erreur secondaire (top soignants / prochaines)', err);
         }
 
+        // --- Évaluations en attente (ex-BandeauEvaluationsEnAttente) ---
+        try {
+          const { data: msTerminees } = await supabase
+            .from('missions')
+            .select('id')
+            .eq('etablissement_id', etablissementId)
+            .eq('statut', 'TERMINEE')
+            .not('soignant_assigne_id', 'is', null)
+            .limit(50);
+          if (msTerminees && msTerminees.length > 0) {
+            const idsTerminees = msTerminees.map((m: any) => m.id);
+            // Deux sources d'évaluation à croiser : evaluations (modale post-mission)
+            // ET notations_missions (notation 1-tap) — cf. BandeauEvaluationsEnAttente (F4 Lot 7b).
+            const [resEvals, resNotes] = await Promise.all([
+              supabase.from('evaluations').select('mission_id').eq('type_evaluateur', 'ETABLISSEMENT').in('mission_id', idsTerminees),
+              supabase.from('notations_missions' as any).select('mission_id').eq('sens', 'ETAB_VERS_SOIGNANT').in('mission_id', idsTerminees),
+            ]);
+            const evalSet = new Set([
+              ...(resEvals.data || []).map((e: any) => e.mission_id),
+              ...((resNotes.data || []) as any[]).map((n: any) => n.mission_id),
+            ]);
+            const nonEvaluees = idsTerminees.filter((mid: string) => !evalSet.has(mid));
+            evaluationsEnAttenteResult = { count: nonEvaluees.length, premiereMissionId: nonEvaluees[0] ?? null };
+          }
+        } catch (err) {
+          logger.warn('[DashboardEtab] Erreur évaluations en attente', err);
+        }
+
       } catch (err) {
         handleErrorSilent(err, '[DashboardEtab] Erreur critique');
         partialError = true;
@@ -260,6 +291,7 @@ export default function DashboardEtablissement() {
         stats: statsResult,
         topSoignants: topSoignantsResult,
         prochaines: prochainesResult,
+        evaluationsEnAttente: evaluationsEnAttenteResult,
         erreurPartielle: partialError,
       };
     },
@@ -280,6 +312,7 @@ export default function DashboardEtablissement() {
   }, [dashData]);
   const topSoignants = useMemo(() => dashData?.topSoignants ?? [], [dashData]);
   const prochaines = useMemo(() => dashData?.prochaines ?? [], [dashData]);
+  const evaluationsEnAttente = useMemo(() => dashData?.evaluationsEnAttente ?? { count: 0, premiereMissionId: null }, [dashData]);
   const erreurPartielle = useMemo(() => dashData?.erreurPartielle ?? false, [dashData]);
 
   const queryClient = useQueryClient();
@@ -408,6 +441,24 @@ export default function DashboardEtablissement() {
       onClick: () => navigate('/etablissement/litiges'),
     });
   }
+  // Lot 11 : évaluations en attente — remplace le BandeauEvaluationsEnAttente
+  // (doublon visuel) ; deep-link vers la mission à évaluer (la modale
+  // EvaluationPostMission s'ouvre sur la fiche mission TERMINEE).
+  if (evaluationsEnAttente.count > 0) {
+    const n = evaluationsEnAttente.count;
+    actionsAFaire.push({
+      cle: 'evaluations',
+      icone: Star,
+      label: `${n} soignant${n > 1 ? 's' : ''} à évaluer`,
+      cta: 'Évaluer',
+      onClick: () =>
+        navigate(
+          evaluationsEnAttente.premiereMissionId
+            ? `/etablissement/missions/${evaluationsEnAttente.premiereMissionId}`
+            : '/etablissement/missions?statut=TERMINEE',
+        ),
+    });
+  }
   if (stats.messages_non_lus > 0) {
     actionsAFaire.push({
       cle: 'messages',
@@ -422,8 +473,8 @@ export default function DashboardEtablissement() {
 
   return (
     <LayoutApp role="ADMIN_ETABLISSEMENT">
-      {/* F6 — bannière évaluations conservée mais discrète (composant existant) */}
-      <BandeauEvaluationsEnAttente role="ETABLISSEMENT" />
+      {/* Lot 11 : bannière évaluations retirée — les évaluations en attente
+          convergent dans « À faire maintenant » (actionsTop). */}
       <CardScoreQualiteEtab />
       {erreurPartielle && (
         <div className="bg-warning/10 border border-warning/30 rounded-xl p-3 mb-4 text-sm text-warning">
@@ -515,7 +566,7 @@ export default function DashboardEtablissement() {
             icone={<Briefcase className="h-4 w-4" />}
             valeur={stats.missions_ouvertes}
             label="Missions ouvertes"
-            variant="holographic"
+            variant="default"
             onClick={() => navigate('/etablissement/missions?statut=OUVERTE')}
           />
         </FadeInView>
@@ -625,9 +676,16 @@ export default function DashboardEtablissement() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-foreground">Commission Jolene</p>
-              <p className="text-xs text-muted-foreground">
+              {/* Lot 11 : palier cliquable → page facturation (l'échelle réelle arrive au Lot 12) */}
+              <button
+                type="button"
+                aria-label="Voir les paliers de commission"
+                onClick={(e) => { e.stopPropagation(); navigate('/etablissement/facturation'); }}
+                className="inline-flex items-center gap-0.5 text-xs text-muted-foreground underline underline-offset-2 hover:text-primary transition-colors"
+              >
                 Palier {etab.paliers_commission?.nom || paliers[0]?.nom || 'Découverte'}
-              </p>
+                <ChevronRight className="h-3 w-3" aria-hidden="true" />
+              </button>
             </div>
             <div className="text-right">
               <p className="text-lg font-bold text-primary">{etab.taux_commission_negocie ?? 15}%</p>
