@@ -797,33 +797,50 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
           </div>
         </div>
 
-        {/* Estimation (ponctuel only) */}
-        {!modeRecurrent && dureeEstimee > 0 && taux > 0 && (
+        {/* Estimation (ponctuel) — D5 : le COÛT TOTAL EMPLOYEUR est la métrique
+            primaire (c'est sur lui que l'acheteur décide — l'afficher évite les
+            surprises de facturation, donc les litiges). Net soignant en
+            secondaire (argument d'attractivité du taux). */}
+        {!modeRecurrent && dureeEstimee > 0 && taux > 0 && (() => {
+          const base = taux * dureeEstimee;
+          const estSalarie = contratPreference !== 'LIBERAL';
+          const indemnites = estSalarie ? base * 0.21 : 0; // IFM 10 % + ICP 10 % (salarié)
+          const commission = (base + indemnites) * (tauxCommission / 100);
+          const coutTotal = base + indemnites + commission;
+          return (
           <div className="bg-gradient-to-r from-primary/5 to-info/5 border border-primary/20 rounded-2xl p-5">
-            <p className="font-bold text-foreground mb-3 flex items-center gap-1.5"><Calculator aria-hidden="true" className="h-4 w-4" />Estimation de rémunération</p>
+            <p className="font-bold text-foreground mb-3 flex items-center gap-1.5"><Calculator aria-hidden="true" className="h-4 w-4" />Coût total employeur estimé</p>
             <div className="space-y-2 text-sm">
               <div className="flex justify-between">
-                <span className="text-muted-foreground">Taux de base</span>
-                <span className="font-medium">{taux.toFixed(2)} €/h</span>
+                <span className="text-muted-foreground">Base ({taux.toFixed(2)} €/h × ~{dureeEstimee.toFixed(1)} h)</span>
+                <span className="font-medium">~{base.toFixed(2)} €</span>
               </div>
+              {estSalarie && (
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">IFM 10 % + ICP 10 %</span>
+                  <span className="font-medium">~{indemnites.toFixed(2)} €</span>
+                </div>
+              )}
               <div className="flex justify-between">
-                <span className="text-muted-foreground">Durée estimée</span>
-                <span className="font-medium">~{dureeEstimee.toFixed(1)}h</span>
+                <span className="text-muted-foreground">Commission Jolene ({tauxCommission} %)</span>
+                <span className="font-medium">~{commission.toFixed(2)} €</span>
               </div>
               <div className="border-t border-border pt-2 flex justify-between">
-                <span className="text-muted-foreground">Base brute estimée</span>
-                <span className="font-bold text-primary">~{(taux * dureeEstimee).toFixed(2)} €</span>
+                <span className="text-foreground font-semibold">Coût total estimé</span>
+                <span className="font-bold text-primary">~{coutTotal.toFixed(2)} €</span>
+              </div>
+              <div className="flex justify-between text-xs">
+                <span className="text-muted-foreground">Net estimé soignant (indicatif)</span>
+                <span className="text-muted-foreground font-medium">~{(base * (estSalarie ? 0.78 : 1)).toFixed(2)} €</span>
               </div>
             </div>
-            <div className="mt-3 text-xs text-muted-foreground space-y-1">
-              <p className="flex items-center gap-1"><Info aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />Le montant final inclura automatiquement :</p>
-              <p>• Majorations nuit (21h-6h), dimanche et jours fériés</p>
-              <p>• IFM 10% (Indemnité de Fin de Mission)</p>
-              <p>• ICP 10% (Indemnité de Congés Payés)</p>
-              <p className="mt-1">→ Le net à payer sera calculé après la création.</p>
-            </div>
+            <p className="mt-3 text-xs text-muted-foreground flex items-start gap-1">
+              <Info aria-hidden="true" className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+              Hors majorations nuit (21h-6h), dimanche et jours fériés, ajoutées automatiquement au réel selon vos taux. Le décompte exact est calculé après la création.
+            </p>
           </div>
-        )}
+          );
+        })()}
 
         {/* Estimation (récurrent) */}
         {modeRecurrent && taux > 0 && recurrenceValidation && recurrenceValidation.totalHebdo > 0 && (() => {

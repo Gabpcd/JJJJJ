@@ -188,6 +188,8 @@ async function getVaultCronSecret(sb: any): Promise<string> {
 1. **Avant tout `fn_creer_notification` avec un nouveau type** : vérifier `notifications_type_check` (le type `CONTESTATION_PRESENCE` était utilisé par le front mais absent du CHECK → notifs de contestation muettes en prod, jamais d'erreur visible côté client).
 2. **Tout `cron.schedule` posé via MCP doit être recapturé en migration** (garde `pg_extension pg_cron` pour les branches preview) — le cron d'auto-validation 72h tournait en prod sans exister dans le repo : un rebuild l'aurait perdu, et l'« auto-72h » CGU §4.6 avec lui.
 
+**Pattern régime/contrat (Lot 14, gardé par `test:guards` 7)** : sur toute ligne financière/facturation, le régime affiché vient de `missions.type_contrat_applique` (figé à l'assignation) — **jamais** de `soignants.type_exercice` (profil) : un libéral peut faire une mission CDD, afficher le profil crée des chips contradictoires.
+
 **Patterns escrow (3 bugs recette, gardés par `test:guards` 4-6)** :
 1. **Jamais `on_behalf_of`** sur un PaymentIntent escrow : le mandat SEPA nomme Jolene créancier — avec `on_behalf_of`, Stripe exige un mandat au nom du compte connecté et le débit échoue (recette run #10).
 2. **Audit escrow = insert DIRECT en table** (helper `auditEscrow`), jamais `rpc('fn_ecrire_audit_safe')` côté edge : binding uuid cassé PostgREST 14.5 (« invalid input syntax for type uuid: null ») → audits muets. Ne PAS « corriger » en passant la fonction uuid→text : 66 appelants DB positionnels casseraient.
