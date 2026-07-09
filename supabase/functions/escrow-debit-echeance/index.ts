@@ -6,11 +6,15 @@
  *
  * Modèle destination charge (invariant : aucun fonds de mission ne stationne
  * sur le solde plateforme de Jolene) :
- *   - charge sur le mandat SEPA de l'établissement (off_session)
+ *   - charge sur le mandat SEPA de l'établissement (off_session, mandate_data
+ *     offline — même pattern que sepa-auto-charge, éprouvé en prod)
  *   - transfer_data[destination] = compte connecté du soignant
  *   - application_fee_amount = commission (seule part qui revient à Jolene)
- *   - on_behalf_of = compte connecté (le soignant est le marchand)
- *   → les honoraires vont DIRECTEMENT au solde connecté du soignant.
+ *   - PAS de on_behalf_of : le mandat SEPA signé par l'étab (setup-sepa) nomme
+ *     JOLENE comme créancier — avec on_behalf_of, Stripe exige un mandat au
+ *     nom du compte connecté et n'en trouve pas (« no existing mandate was
+ *     found », recette run #7 du 09/07). Le marchand du débit est Jolene ;
+ *   → les honoraires vont quand même DIRECTEMENT au solde connecté du soignant.
  *
  * La charge SEPA passe en `processing` puis `succeeded` (J+quelques jours) :
  * ce webhook (stripe-webhook, branche ESCROW_MISSION_PAYMENT) fait passer
@@ -115,8 +119,8 @@ Deno.serve(async (req) => {
         payment_method_types: ["sepa_debit"],
         confirm: true,
         off_session: true,
+        mandate_data: { customer_acceptance: { type: "offline" } },
         application_fee_amount: esc.commission_cents,
-        on_behalf_of: onboarding.stripe_account_id,
         transfer_data: { destination: onboarding.stripe_account_id },
         transfer_group: `mission_${esc.mission_id}`,
         statement_descriptor: "JOLENE",
