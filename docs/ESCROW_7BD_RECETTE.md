@@ -42,7 +42,9 @@
      en `processing`. Audit `ESCROW_DEBIT_INITIE`. Ligne
      `escrow_exposition_releases` en `ACTIF` (fenêtre 8 semaines).
    - ✅ Vérifier côté Stripe : destination charge (application_fee = commission,
-     `transfer_data[destination]` = compte connecté soignant, `on_behalf_of`).
+     `transfer_data[destination]` = compte connecté soignant). **`on_behalf_of`
+     ABSENT (retiré v15 : Jolene merchant of record via mandat SEPA)** — la recette
+     asserte d'ailleurs son absence (S2.2).
 3. **Settlement SEPA** (webhook `payment_intent.succeeded`, quelques jours en
    réel / immédiat en test si simulé).
    - ✅ Attendu : `paiements_escrow.statut = DEBITE`. Audit `ESCROW_DEBITE`.
