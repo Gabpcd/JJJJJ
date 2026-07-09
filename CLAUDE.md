@@ -675,3 +675,25 @@ rouge (out-of-order `db push`). Toujours vérifier `schema_migrations` vs fichie
   Cf. docs/SESSION_E.md.
 - **Sessions F (activation étab + matching) et G (consolidation nav)** : à
   lancer — périmètres détaillés dans la stratégie.
+
+### Lot 17 — Matching alert-first paramétrable + calendrier dispos (09/07/2026)
+
+- **Toutes les mécaniques A2/A3/A4 sont paramétrées** via `parametres_systeme`
+  (`vague_taille_1/2/3`, `vague_delai_2/3_min`, `vague_cap_push_24h`,
+  `vague_fenetre_urgente_h`, `vague_non_urgente_*`, `alerte_filtre_cap_h`,
+  `confirmation_j1_min/max_h`, `relance_presence_max_h`,
+  `alerte_etab_presence_h`, `noshow_detection_min`, `matching_bonus_service`).
+  Défauts = anciennes valeurs en dur ; ne plus JAMAIS remettre un seuil en dur
+  dans ces fonctions (migration `20260709250000`).
+- **Vagues non urgentes** : vague UNIQUE par mission (dédup = existence d'une
+  notification `MISSION_A_POURVOIR` pointant vers la mission). Vagues urgentes :
+  élargissement cumulatif par ancienneté (comportement historique 7d-5).
+- **A1** : le `service` (libellés normalisés Lot 12) est désormais un critère
+  soft du scoring (`matching_bonus_service`, comparaison lower/btrim).
+- **F5** : table `disponibilites_soignant` (RLS lecture soignant, écriture via
+  `fn_definir_disponibilite`), matching inversé quotidien
+  (`fn_matching_inverse_dispos`, cron `jolene_matching_inverse_dispos` 06:30 UTC),
+  vivier étab `fn_vivier_disponibilites` (compte + prénoms/scores, RGPD), page
+  `/soignant/disponibilites` + hint vivier dans FormulaireMission.
+- **F2** : `mission_source='REPUBLICATION'` posé par `fn_marquer_source_mission`
+  juste après `fn_creer_mission[_multi_jours]` quand `?dupliquer=` est présent.

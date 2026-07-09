@@ -83,6 +83,7 @@ const DocumentsSoignant = lazy(() => import("./pages/DocumentsSoignant"));
 const ConformiteSoignant = lazy(() => import("./pages/ConformiteSoignant"));
 const PresencesSoignant = lazy(() => import("./pages/PresencesSoignant"));
 const SyncCalendrier = lazy(() => import("./pages/SyncCalendrier"));
+const MesDisponibilites = lazy(() => import("./pages/MesDisponibilites"));
 const MesGains = lazy(() => import("./pages/MesGains"));
 const HistoriqueMissions = lazy(() => import("./pages/HistoriqueMissions"));
 const PageScoreSoignant = lazy(() => import("./pages/PageScoreSoignant"));
@@ -266,6 +267,8 @@ function AppRoutes() {
           {/* Refonte nav : le planning devient l'onglet « À venir » de Mes missions.
               La vue calendrier (mois) sera réintégrée comme toggle de cet onglet
               (PR dédiée) en réutilisant PlanningSoignant. */}
+          {/* Lot 17 (F5) : calendrier de disponibilités (matching inversé). */}
+          <Route path="/soignant/disponibilites" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><MesDisponibilites /></RouteProtegee>} />
           <Route path="/soignant/planning" element={<Navigate to="/soignant/missions?tab=a-venir" replace />} />
           <Route path="/soignant/calendrier-sync" element={<Navigate to="/soignant/missions?tab=a-venir" replace />} />
           <Route path="/soignant/conformite" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><ConformiteSoignant /></RouteProtegee>} />
