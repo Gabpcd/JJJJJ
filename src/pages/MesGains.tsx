@@ -3,7 +3,8 @@ import { lazyRetry as lazy } from '@/lib/lazyRetry';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useAffacturageActif } from '@/hooks/useAffacturageActif';
-import { Banknote, Clock, Download, TrendingUp, ChevronRight, FileText, Search, CheckCircle, AlertTriangle, Scale, Receipt, Zap, Calculator } from 'lucide-react';
+import { Banknote, Clock, Download, TrendingUp, ChevronRight, FileText, Search, CheckCircle, AlertTriangle, Scale, Receipt, Zap, Calculator, Landmark } from 'lucide-react';
+import PaiementsEscrowAVenir from '@/components/gains/PaiementsEscrowAVenir';
 import { LayoutApp } from '@/components/LayoutApp';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { MesFacturesHonorairesContent } from './MesFacturesHonoraires';
@@ -219,6 +220,10 @@ export function MesGainsApercuContent() {
   return (
     <>
       <BandeauPaiementDeclare />
+
+      {/* Paiement rapide ⚡ (escrow) — bloc « À venir » en tête. Masqué si aucun
+          paiement escrow (cf. PaiementsEscrowAVenir + spec §4). */}
+      <PaiementsEscrowAVenir />
 
       {/* 6d.1 — Pipeline unique : la SEULE histoire d'argent de l'Aperçu.
           Chaque étape a un montant ; « En attente » lit exactement les factures
@@ -621,7 +626,7 @@ export default function MesGains() {
     <LayoutApp role="SOIGNANT">
       <div className="mb-4">
         <h1 className="text-xl font-bold text-foreground">💰 Revenus</h1>
-        <p className="text-sm text-muted-foreground mt-1">{affacturageActif ? 'Tes gains, factures, bulletins et avances au même endroit' : 'Tes gains, factures et bulletins au même endroit'}</p>
+        <p className="text-sm text-muted-foreground mt-1">{affacturageActif ? 'Tes gains, factures, bulletins et avance de trésorerie au même endroit' : 'Tes gains, factures et bulletins au même endroit'}</p>
       </div>
 
       <Tabs value={currentTab} onValueChange={(v) => setSearchParams({ tab: v }, { replace: true })}>
@@ -643,9 +648,11 @@ export default function MesGains() {
             </TabsTrigger>
           )}
           {showAvances && (
+            /* ⚡ Zap = réservé au paiement rapide escrow. L'affacturage Defacto
+               a son vocabulaire propre : « Avance de trésorerie » + icône Landmark. */
             <TabsTrigger value="avances" className="flex items-center gap-1.5 text-xs sm:text-sm">
-              <Zap className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-              <span>Avances</span>
+              <Landmark className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+              <span>Avance de trésorerie</span>
             </TabsTrigger>
           )}
         </TabsList>

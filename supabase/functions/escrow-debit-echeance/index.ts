@@ -80,6 +80,14 @@ Deno.serve(async (req) => {
     apiVersion: "2025-08-27.basil",
   });
 
+  // TODO(Lot 14) — Débit complémentaire heures supplémentaires : c'est ICI la
+  // mécanique. Quand la validation étab (déclencheur, PresencesEtablissement /
+  // fn_valider_presence) constate effectif > prévisionnel sur une mission ⚡,
+  // enfiler un débit SEPA du delta sur le MÊME mandat (delta × taux +
+  // majorations, commission 15 %), en cycle escrow propre lié à la mission.
+  // Aujourd'hui l'escrow ne couvre que le prévisionnel figé à la confirmation
+  // (règle #11, aucun top-up). Cf. docs/SPEC_ESCROW_REVENUS_SOIGNANT.md §9.3.
+
   // Débits à échéance (INITIE, debit_prevu_le <= now, < 3 tentatives).
   const { data: dus, error: dusErr } = await admin.rpc("fn_escrow_debits_a_echeance", { p_limit: 50 });
   if (dusErr) {

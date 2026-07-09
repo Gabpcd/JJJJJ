@@ -130,6 +130,13 @@ export default function PresencesEtablissement() {
       prev.map(p => p.id === presenceId ? { ...p, valide_par_etablissement: true, valide_le: new Date().toISOString() } : p)
     );
 
+    // TODO(Lot 13) — Heures supplémentaires escrow : c'est ICI le déclencheur.
+    // Si les heures validées dépassent le prévisionnel d'une mission en paiement
+    // rapide ⚡, un débit SEPA complémentaire (delta × taux + majorations,
+    // commission 15 %) doit être enfilé (garde-fou 48h : dépassement = alerte,
+    // jamais un paiement silencieux). La validation ne réduit JAMAIS l'escrow
+    // sous le plancher (règle #11) — contester = litige, pas validation partielle.
+    // Cf. docs/SPEC_ESCROW_REVENUS_SOIGNANT.md §9.3.
     const { data, error } = await supabase.rpc('fn_valider_presence', { p_presence_id: presenceId });
     const result = data as unknown as RpcSuccessOrError | null;
 
