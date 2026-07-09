@@ -3,184 +3,206 @@
 > Point 1 du chantier post-flip. Spec légère (pas de maquette pixel).
 > Objectif : rendre lisible le cycle de paiement escrow dans « Mes gains »,
 > côté soignant uniquement (jamais la mécanique établissement).
+> Cadrage validé (11 points, 09/07/2026).
 
-## 1. États côté soignant (wording exact)
+## 0. Invariants (non négociables)
 
-Mapping depuis `paiements_escrow.statut` + validation des présences. On ne montre
-JAMAIS le débit SEPA de l'établissement, ni la commission : seul l'honoraire du
-soignant (`honoraires_cents`) est affiché.
+- **I1 — Plancher inviolable.** La validation des présences ne réduit JAMAIS
+  l'escrow. `honoraires_cents` est figé à la confirmation (`net_a_payer`
+  prévisionnel) et versé intégralement. Contester des heures = **litige**
+  (gel `DISPUTE`), **seule** voie de réduction. Aucune « validation partielle »
+  silencieuse. (Cf. règle rémunération CLAUDE.md, `GREATEST(prévisionnel,
+  effectif)`.)
+- **I2 — Jamais de fausse promesse.** Le mot « garanti » est **interdit** à
+  l'écran : avant settlement le débit peut échouer (`ECHOUE`), et le plancher a
+  l'exception litige. Wording : « **Réservé** » / « le montant de ta
+  confirmation ». Montant affiché = `honoraires_cents` exact, jamais présenté
+  comme absolu.
+- **I3 — Part soignant seule.** On n'affiche que `honoraires_cents`. Jamais
+  `montant_total_cents` (inclut la commission = mécanique étab), jamais
+  `commission_cents`, jamais le débit SEPA de l'établissement.
+- **I4 — Icônes lucide, jamais d'emoji** (pattern CLAUDE.md). Les 🔒⏳💸 de cette
+  spec sont des placeholders sémantiques.
+- **I5 — Pas de récompense fantôme.** Section masquée si vide ; un service
+  inactif (ex. affacturage non branché) ne montre aucune promesse.
 
-| Priorité | Condition (backend réel) | État affiché | Icône | Date |
-|---|---|---|---|---|
-| 1 | `statut = PAYE` | **Versé le JJ/MM** | ✅ | `paye_le` |
-| 2 | `statut = REMBOURSE` | **Paiement annulé** | ❌ | — (lien détail mission) |
-| 3 | `statut = DISPUTE` | **Paiement en litige** | ⏸️ | — (lien détail mission) |
-| 4 | `statut = ECHOUE` | **Paiement retardé** | ⚠️ | — (« nous relançons le règlement ») |
-| 5 | in-flight¹ ET présences validées² | **Versement en cours** | 💸 | « estimé le JJ/MM » **si** date réelle dispo, sinon aucune date |
-| 6 | in-flight¹ ET mission travaillée³ non validée | **En attente de validation des heures** | ⏳ | — |
-| 7 | in-flight¹ sinon (mission pas encore effectuée) | **Paiement sécurisé** | 🔒 | — (« montant garanti dès la confirmation ») |
+## 1. États côté soignant (wording exact + icône lucide + action)
+
+Calculés depuis `paiements_escrow.statut` + validation des présences.
+
+| # | Condition (backend réel) | Libellé écran | Icône lucide | Date | Ligne d'explication / action |
+|---|---|---|---|---|---|
+| 1 | in-flight¹ ET mission pas encore effectuée | **Réservé** | `ShieldCheck` | — | « le montant de ta confirmation, mis de côté » |
+| 2 | in-flight¹ ET mission travaillée³ non validée | **En attente de validation des heures** | `Clock` | — | « l'établissement valide tes heures (auto sous 72 h) » |
+| 3 | in-flight¹ ET présences validées² | **Versement en cours** | `Send` | « estimé le JJ/MM » si date réelle, sinon rien | « ton virement est en route » |
+| 4 | `statut = PAYE` | **Versé le JJ/MM** | `CheckCircle2` | `paye_le` | — |
+| 5 | `statut = ECHOUE` | **Paiement retardé** | `AlertTriangle` | — | « nouvelle tentative le JJ/MM » (si `relance_prevue_le`) ; sinon « nous relançons le règlement » |
+| 6 | `statut = DISPUTE` | **Paiement en litige** | `PauseCircle` | — | lien → le litige de la mission |
+| 7 | `statut = REMBOURSE` ET `paye_le` posé (absorption post-versement) | **Versé le JJ/MM** | `CheckCircle2` | `paye_le` | (le soignant a touché 100 % — la reprise est étab↔Jolene, invisible) |
+| 8 | `statut = REMBOURSE` ET `paye_le` NULL (annulé avant versement) | **Paiement annulé** | `XCircle` | — | motif court (`p_motif`) + lien support |
 
 ¹ in-flight = `statut ∈ {INITIE, DEBITE, DISPONIBLE, RELEASE_PLANIFIE}`
-² présences validées = `presences.valide_par_etablissement = true` (aucune présence bloquante)
+² présences validées = `presences.valide_par_etablissement = true`, aucune présence bloquante
 ³ mission travaillée = `presences.pointage_depart_le IS NOT NULL`
 
-**Principe** : l'état est fonction de DEUX axes indépendants — l'avancement
-escrow (piloté par le SEPA/settlement, invisible au soignant) ET la validation
-des heures. Un paiement peut être « débité côté étab » mais rester « En attente
-de validation des heures » tant que l'établissement n'a pas validé.
+**Principe** : l'état combine DEUX axes indépendants — l'avancement escrow
+(piloté par le SEPA/settlement, invisible au soignant) ET la validation des
+heures. Un paiement peut être « débité côté étab » (DEBITE) mais rester « En
+attente de validation des heures ».
+
+> **⚠️ « Versé partiellement » NON livrable (cf. §9.4).** Le backend n'a pas
+> d'état « payé partiel » : un remboursement partiel passe tout l'escrow en
+> `REMBOURSE`, et le reliquat pré-release n'est pas reversé (gap Lot 13). On
+> n'affiche donc PAS « Versé partiellement (X sur Y) » tant que le backend ne
+> le supporte pas honnêtement (I2). États 7/8 ci-dessus = comportement réel.
 
 ## 2. Logique de dates (jamais de promesse en dur)
 
-- **Versé** : `paye_le` (date réelle).
-- **Versement en cours** : date estimée = `COALESCE(release_planifie_le, disponible_le)`.
-  Ces deux champs ne sont peuplés que lorsque les fonds sont réellement settled
-  côté Stripe. **Si aucun des deux n'est peuplé → on n'affiche AUCUNE date**,
-  juste « Versement en cours ». On n'invente pas de délai « 24-72 h ».
-- **Paiement retardé** (`ECHOUE`) : pas de date exposée (la `relance_prevue_le`
-  est de la mécanique interne).
-- Aucune date « 24-72 h » ni « J+2 » écrite en dur nulle part dans l'écran.
-  Le wording du badge ⚡ sera recalibré après la mission témoin (hors salve).
+- **Versé** : `paye_le` (réel).
+- **Versement en cours** : `COALESCE(release_planifie_le, disponible_le)` —
+  peuplés seulement quand les fonds sont réellement settled. **Aucun des deux →
+  aucune date affichée**, juste « Versement en cours ». On n'invente pas de
+  « 24-72 h » ni « J+2 ».
+- **Paiement retardé** (`ECHOUE`) : `relance_prevue_le` si présente, sinon rien.
+- Aucun délai en dur nulle part. Le wording du badge ⚡ sera recalibré après la
+  mission témoin (hors salve).
 
-## 3. Montants
+## 3. Montants & vocabulaire
 
-- Afficher **uniquement** `honoraires_cents` (part soignant). Jamais
-  `montant_total_cents` (inclut la commission = mécanique étab), jamais
-  `commission_cents`.
-- Conversion centimes → euros : `honoraires_cents / 100`, formaté 2 décimales,
-  séparateur FR (ex. `255,00 €`). Vigilance centimes/euros (règle CLAUDE.md :
-  ne jamais mélanger les deux unités dans un même calcul).
-- Scénario témoin (run #12) : `honoraires_cents = 25500` → **255,00 €** visible
-  soignant (la commission 43,20 € et le total 298,20 € ne sont PAS montrés).
+- Afficher **uniquement** `honoraires_cents / 100`, formaté FR 2 décimales
+  (`255,00 €`). Vigilance centimes/euros (CLAUDE.md : ne jamais mélanger les
+  unités dans un calcul). Témoin run #12 : `honoraires_cents = 25500` →
+  **255,00 €** (commission 43,20 € et total 298,20 € JAMAIS montrés).
+- **⚡ = exclusivement le cycle escrow.** « Paiement rapide ⚡ » = **badge par
+  paiement éligible**, jamais un titre de section.
+- **Affacturage Defacto** (onglet « Avances ») → renommé **« Avance de
+  trésorerie »**, icône distincte (pas ⚡). Vérifier qu'il reste **derrière son
+  feature flag** tant que le service n'est pas actif (I5).
 
-## 4. Vocabulaire tranché (anti-confusion)
+## 4. Placement UI
 
-- **⚡ = exclusivement le cycle escrow** (cette vue). Libellé produit :
-  « Paiement rapide ⚡ ».
-- **Affacturage Defacto** (onglet « Avances » de MesGains) = renommé
-  **« Avance de trésorerie »**, icône distincte (pas ⚡), vocabulaire séparé.
-  Vérifier que cet onglet reste **derrière son feature flag** tant que le
-  service n'est pas actif (règle des récompenses fantômes — un service inactif
-  ne doit pas afficher de promesse).
+- **Onglet Aperçu** de MesGains. Bloc **« À venir »** en HAUT, affiché seulement
+  s'il existe ≥ 1 paiement en cours (états 1-3, 5 retardé, 6 litige). Même
+  composant carte que l'historique. Badge ⚡ par ligne éligible.
+- Historique (versés/annulés) dans le flux existant.
+- Section entière masquée si aucun paiement escrow (I5).
 
 ## 5. Backend — fonctions SQL
 
-- **Nouvelle** `fn_mes_paiements_escrow()` : liste par mission des escrows du
-  soignant courant (`auth.uid()`), `SECURITY DEFINER`, retourne pour chaque
-  ligne : `mission_id`, `mission_intitule`, `etablissement_nom`, `honoraires_cents`,
-  `etat` (une des 7 valeurs ci-dessus, calculée en SQL), `date_affichee` (timestamptz
-  nullable), `mission_date`. Tri : in-flight/attente d'abord, versés ensuite.
-- **Enrichir** `fn_mes_revenus_connect` : les compteurs `total` (versés) et
-  `en_attente` (in-flight) doivent inclure l'escrow (`paiements_escrow`), pas
-  seulement `stripe_transfers`. **Sans double-comptage** : escrow et
-  `stripe_transfers` couvrent des missions disjointes (l'escrow remplace le
-  transfer direct quand ⚡ actif). L'ancien modèle `stripe_transfers` continue
-  d'afficher correctement pour les missions pré-flip.
+- **Nouvelle** `fn_mes_paiements_escrow()` : `SECURITY DEFINER`, escrows du
+  soignant `auth.uid()`. Par ligne : `mission_id`, `mission_intitule`,
+  `etablissement_nom`, `honoraires_cents`, `etat` (1 des 8, calculé SQL depuis
+  statut + présences + `paye_le`), `date_affichee` (nullable), `mission_date`,
+  `relance_prevue_le`, `a_litige` (bool). Tri : en cours/attente d'abord.
+- **Enrichir** `fn_mes_revenus_connect` : `total` (versés) et `en_attente`
+  (in-flight) incluent l'escrow (`paiements_escrow`), pas seulement
+  `stripe_transfers`. **Sans double-comptage** : escrow et `stripe_transfers`
+  couvrent des missions disjointes (l'escrow remplace le transfer direct quand
+  ⚡ actif). L'ancien modèle continue d'afficher pour les missions pré-flip.
 
 ## 6. Frontend
 
-- Nouvelle section « Paiement rapide ⚡ » dans **MesGains** (onglet Aperçu ou
-  sous-section dédiée), affichant la liste `fn_mes_paiements_escrow` sous forme
-  de lignes-timeline compactes (état + montant + date estimée/réelle). Masquée
-  si la liste est vide (pas de récompense fantôme).
-- Réutiliser les composants existants (CarteKPIY2K, BadgeY2K) ; état visuel par
-  couleur sémantique (versé = success, en cours = info, retardé/litige = warning,
-  annulé = neutre/error).
+- Nouvelle sous-section « À venir » (Aperçu MesGains) rendant
+  `fn_mes_paiements_escrow` en lignes-carte compactes (icône lucide + libellé +
+  montant + date + ligne d'explication/action). Couleurs sémantiques
+  (versé=success, en cours=info, retardé/litige=warning, annulé=neutre).
+- Réutiliser CarteKPIY2K / BadgeY2K / composants existants.
 
 ## 7. Fix REJETE (PageStripeConnect)
 
-- Ajouter `REJETE` à l'union `ConnectStatut` (aujourd'hui 5/6 → écran vide
-  possible).
-- Bloc UI dédié : **raison affichée** (depuis `stripe-connect-status`
-  `disabled_reason` / `requirements`) + **chemin de remédiation** :
-  bouton « Reprendre / corriger mon inscription » (relance `stripe-connect-onboard`)
-  + lien support. Pas seulement un libellé d'état.
+- Ajouter `REJETE` à l'union `ConnectStatut` (aujourd'hui 5/6 → écran vide).
+- Bloc dédié : **raison** (`disabled_reason` / `requirements` de
+  `stripe-connect-status`) + **chemin de remédiation** : bouton « Reprendre /
+  corriger mon inscription » (relance `stripe-connect-onboard`) + lien support.
+  Pas seulement un libellé d'état.
 
 ## 8. Tests
 
-- **`fn_mes_paiements_escrow`** testée avec le scénario exact du run #12
-  (débit 298,20 € → 255 € soignant + 43,20 € commission) : le soignant ne voit
-  que 255,00 €, l'état reflète le statut escrow, la date suit `paye_le`/estimée.
-- **`fn_mes_revenus_connect`** : les missions escrow PAYE alimentent `total`,
-  les in-flight alimentent `en_attente`, **et** l'ancien modèle `stripe_transfers`
-  continue d'afficher correctement (non-régression, pas de double-comptage).
-- Vigilance centimes/euros sur tous les calculs.
-- `verify-recette` sur la page Revenus en **390 × 844** (iPhone) : rendu correct
-  de la nouvelle section, états vides gérés.
+- **`fn_mes_paiements_escrow`** avec le scénario run #12 (débit 298,20 € →
+  255 € soignant + 43,20 € commission) : le soignant ne voit que **255,00 €**,
+  l'état suit le statut escrow, la date suit `paye_le`/estimée.
+- **Cas mixte** : un même soignant avec ancien modèle (`stripe_transfers`) ET
+  escrow → totaux `fn_mes_revenus_connect` corrects, **sans double-comptage**.
+- **Un rendu testé par état** : les 8 états (dont « versé partiellement » NON
+  affiché — vérifier qu'un REMBOURSE post-PAYE tombe en « Versé » et non
+  « Annulé »).
+- **Non-régression** `stripe_transfers` (missions pré-flip inchangées).
+- Vigilance centimes/euros partout.
+- `verify-recette` sur la page Revenus en **390 × 844** (iPhone) : nouvelle
+  section, états vides, badge ⚡ par ligne.
 
-## 9. FAIT STRUCTURANT — heures validées < heures publiées (montant transféré)
+## 9. FAIT STRUCTURANT — heures validées vs publiées + remboursement partiel
 
-> Investigation code prod (09/07/2026). Détermine le montant « À venir », l'écran
-> de validation Lot 13 et le flux litige.
+> Investigation code prod (09/07/2026). Détermine le montant affiché, l'écran de
+> validation (Lot 13) et le flux litige.
 
 ### 9.1 Le montant escrow est FIGÉ à la confirmation, jamais recalculé
 
-`fn_trg_escrow_creer_a_confirmation` fige, à la confirmation de la mission :
-
+`fn_trg_escrow_creer_a_confirmation` :
 ```
-v_honoraires_c := ROUND(COALESCE(NEW.net_a_payer, 0) * 100)  -- part soignant
+v_honoraires_c := ROUND(COALESCE(NEW.net_a_payer, 0) * 100)  -- prévisionnel
 ```
-
-`honoraires_cents` = `missions.net_a_payer` **au moment de la confirmation** =
-le **prévisionnel** (aucune heure encore effectuée). **Aucune fonction ne met à
-jour `paiements_escrow.honoraires_cents` après l'INITIE** (vérifié : seules
+`honoraires_cents` = `missions.net_a_payer` **à la confirmation** (prévisionnel,
+aucune heure faite). **Aucune fonction ne le met à jour après l'INITIE** (seules
 `fn_escrow_rembourser` et `fn_trg_escrow_release_check` touchent la table, aucune
-ne recalcule le montant). Le release (`escrow-release`) verse **`honoraires_cents`
-en intégralité** — le montant figé, PAS `heures_validées × taux`.
+ne recalcule). Le release verse `honoraires_cents` **intégralement** — PAS
+`heures_validées × taux`.
 
-### 9.2 Réponses aux 3 questions
+### 9.2 Heures validées < publiées
 
-**Q1 — Montant transféré = honoraires publiés ou heures validées × taux ?**
-→ **Honoraires publiés figés à la confirmation** (prévisionnel). Le release ne
-recalcule rien depuis les heures validées.
-**Remboursement partiel : existe au niveau mécanisme** —
-`fn_escrow_rembourser(p_paiement_escrow_id, p_montant_honoraires_cts,
-p_annulation_totale, p_motif)` accepte `0 < montant ≤ honoraires_cents` (reprise
-partielle : reverse_transfer avant release, absorption plateforme si PAYE ;
-commission au prorata). **MAIS** : (a) il passe TOUT l'escrow en `REMBOURSE` (pas
-d'état « payé partiel »), et (b) il n'est **jamais appelé par la validation des
-présences** — uniquement par la résolution de litige (`fn_admin_resoudre_litige`)
-/ admin. Il n'y a **aucune réduction automatique** liée aux heures.
+Aucune réduction automatique. **Plancher prévisionnel garanti** (`GREATEST`,
+règle #11) : le soignant touche le prévisionnel = tout l'escrow figé, peu
+importe la cause (étab ou soignant). Réduction possible **uniquement via litige**
+(admin → `fn_escrow_rembourser`). Pas d'asymétrie codée.
 
-**Q2 — Asymétrie codée (réduction étab vs heures non faites du soignant) ?**
-→ **Aucune asymétrie codée, et aucune réduction automatique du tout.** Le modèle
-applique le **plancher prévisionnel garanti** (`heures_facturées =
-GREATEST(prévisionnel, effectif)`, règle CLAUDE.md / tâche #11) :
-- **validées < publiées** (peu importe la cause, étab ou soignant) : le soignant
-  touche **le plancher = le prévisionnel = l'intégralité de l'escrow figé**.
-  Pas de réduction. Une réduction ne peut venir que d'un **litige explicite**
-  (admin → `fn_escrow_rembourser` partiel/total).
-- **validées > publiées** (soignant a fait PLUS) : l'escrow **sous-couvre** (figé
-  au prévisionnel). Le surplus n'est PAS dans l'escrow et n'est **pas** ajouté
-  automatiquement (aucun top-up codé) → il relèverait du flux d'honoraires
-  standard. **Zone grise à trancher au Lot 13.**
+### 9.3 Heures validées > publiées — SURPLUS (décision tranchée, NON implémentée)
 
-**Q3 — CGU / mandat (clause escrow) ?**
-→ CGU **§4.6 « Paiement rapide ⚡ »** (`src/pages/PageCGU.tsx:112-113`) :
-honoraires encaissés dès la confirmation, « **libérés vers ton compte bancaire
-après la validation de tes présences par l'établissement — au plus tard 72 h
-après la fin de la mission** (validation automatique en l'absence de réponse) »,
-« en cas d'annulation **avant le début**, les sommes sont restituées à
-l'établissement ». **La CGU est SILENCIEUSE sur le cas heures validées <
-publiées** (ni réduction, ni prorata mentionnés) → par défaut, le comportement
-codé s'applique : plancher garanti, libération intégrale de l'escrow figé.
+Décision produit : le surplus (`effectif − prévisionnel > 0`) → **débit SEPA
+complémentaire sur le même mandat** (delta × taux + majorations, commission
+15 %), **déclenché par la validation explicite des heures sup par
+l'établissement**, en **cycle escrow propre lié à la mission**. **Garde-fou 48 h**
+sur les heures effectives : tout dépassement = **alerte**, jamais un paiement
+silencieux. Aujourd'hui l'escrow ne couvre que le prévisionnel figé (aucun
+top-up codé). **Ne rien implémenter dans cette salve** — TODO commentés tagués
+`Lot 13` (déclencheur : flux de validation des présences) et `Lot 14`
+(mécanique : edge functions escrow).
 
-### 9.3 Conséquences pour cette spec + Lot 13
+### 9.4 Remboursement partiel — sort du reliquat (gap à corriger)
 
-- **Montant affiché « À venir »** = `honoraires_cents` (le plancher figé, ce qui
-  sera réellement libéré). C'est un montant **garanti**, pas une estimation.
-- **Écran de validation Lot 13** : la validation partielle d'heures **ne doit pas
-  réduire l'escrow sous le plancher** (sinon on viole la règle #11 et la CGU
-  implicite). Si l'étab conteste des heures → ce n'est pas une « validation
-  partielle » silencieuse mais un **litige** (seul chemin de réduction :
-  `fn_escrow_rembourser`). À cadrer explicitement dans le Lot 13.
-- **Surplus (effectif > prévisionnel)** : décision produit à prendre au Lot 13
-  (facture d'honoraires complémentaire hors escrow, ou top-up escrow). Non
-  couvert aujourd'hui — à ne pas promettre dans l'UI revenus.
-- **Flux litige** : la seule réduction du versement soignant passe par la
-  résolution de litige admin (`fn_admin_resoudre_litige` → `fn_escrow_rembourser`).
-  L'écran revenus affiche alors l'état **⏸️ Paiement en litige** puis
-  **❌ Paiement annulé** (REMBOURSE) — jamais un montant réduit « discret ».
+`fn_escrow_rembourser(id, p_montant_honoraires_cts, p_annulation_totale, motif)`
+accepte `0 < montant ≤ honoraires_cents`, MAIS :
+- Il passe **tout** l'escrow en `REMBOURSE` (pas d'état « payé partiel »).
+  `paiements_escrow` n'a **aucune** colonne montant_remboursé/reliquat ; le
+  montant repris n'est traçable que via `stripe_refunds_queue.montant_cts −
+  refund_application_fee_cts`.
+- **Post-versement** (`paye_le` posé, `absorbe_plateforme=true`) : le soignant a
+  déjà touché 100 %, Jolene absorbe la reprise → côté soignant = **Versé** (état
+  7). Correct.
+- **Pré-release** (`reverse_transfer=true`, jamais PAYE) : le payout n'a jamais
+  lieu (release skippé dès REMBOURSE), la reprise partielle est prélevée sur le
+  solde connecté → **le reliquat (`honoraires − repris`) reste bloqué sur le
+  solde Stripe connecté, jamais reversé au soignant**. **GAP backend.**
+- Conséquence UI (I2) : on n'affiche **pas** « Versé partiellement (X sur Y) » —
+  ce serait faux (le reliquat n'a pas été versé). État 8 « Paiement annulé »
+  pour le pré-release. **TODO `Lot 13`** : re-release du reliquat après
+  remboursement partiel pré-release + colonne `montant_rembourse_cents` +
+  état `PAYE_PARTIEL`, pour un vrai « Versé partiellement » honnête.
+
+### 9.5 CGU / mandat
+
+CGU **§4.6 « Paiement rapide ⚡ »** (`src/pages/PageCGU.tsx:112-113`) : encaissé
+dès la confirmation, « libéré après validation des présences — au plus tard 72 h
+après la fin (validation automatique en l'absence de réponse) », annulation
+**avant début** → restitution étab. **Silencieuse** sur validées < publiées, sur
+le surplus et sur le débit complémentaire → amendement à préparer (§10).
+
+## 10. Amendement CGU §4.6 (draft — hors code, à valider + relecture avocat)
+
+Voir `docs/DRAFT_CGU_4_6_AMENDEMENT.md`. Trois ajouts : plancher explicite
+(montant de la confirmation garanti hors litige), débit complémentaire des
+heures sup validées, comportement en cas d'échec de débit.
 
 ## Hors salve (follow-up)
 
-- Notification push à la transition « Versé » (matrice B8). Non inclus ici.
+- Notification push à la transition « Versé » (matrice B8).
+- Backend surplus (Lot 13/14) + re-release reliquat + état PAYE_PARTIEL (Lot 13).
