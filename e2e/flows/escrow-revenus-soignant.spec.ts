@@ -94,6 +94,19 @@ async function seedEscrow(
   return mission.id;
 }
 
+/**
+ * Purge complète d'une mission seedée : `fn_test_purge_mission` ne supprime PAS
+ * les enfants `paiements_escrow` / `stripe_transfers` (FK
+ * `paiements_escrow_mission_id_fkey` → le DELETE mission échoue en silence). On
+ * retire donc les enfants financiers AVANT la cascade.
+ */
+async function purgeMissionFull(admin: ReturnType<typeof adminClient>, id: string): Promise<void> {
+  await admin.from('stripe_transfers').delete().eq('mission_id', id);
+  await admin.from('paiements_escrow').delete().eq('mission_id', id);
+  await admin.from('presences').delete().eq('mission_id', id);
+  await cleanupMissionCascade(id);
+}
+
 test.beforeAll(async () => {
   const admin = adminClient();
   const soignantId = await userIdByEmail(SOIGNANT.email);
@@ -103,13 +116,15 @@ test.beforeAll(async () => {
   if (soignantId) {
     await admin.from('paiements_escrow').delete().eq('soignant_id', soignantId).like('stripe_payment_intent_id', 'pi_pwtest%');
   }
-  const { data: oldMissions } = await admin.from('missions').select('id').like('intitule', '[pw-test:escrow%');
-  for (const m of (oldMissions || []) as Array<{ id: string }>) await cleanupMissionCascade(m.id);
   await admin.from('stripe_transfers').delete().like('description', '[pw-test:escrow%');
+  const { data: oldMissions } = await admin.from('missions').select('id').like('intitule', '[pw-test:escrow%');
+  for (const m of (oldMissions || []) as Array<{ id: string }>) await purgeMissionFull(admin, m.id);
 
   // Sonde de déploiement des verrous : seede un escrow DEBITE jetable puis tente
   // un remboursement partiel pré-release. Erreur = verrou 170000 déployé (donc
   // 180000 aussi, même PR). Aucune donnée de santé impliquée par la sonde.
+  // ⚠️ Purge COMPLÈTE ensuite : sans verrou, le remboursement passe et l'escrow
+  // devient REMBOURSE→ANNULE ; s'il subsistait, il polluerait le test des états.
   try {
     const probeMission = await seedEscrow('DEBITE');
     const { data: esc } = await admin.from('paiements_escrow').select('id, honoraires_cents').eq('mission_id', probeMission).single();
@@ -121,7 +136,8 @@ test.beforeAll(async () => {
     // Seul le message du verrou compte (une erreur Stripe sur un PI factice ne
     // doit pas faire croire à tort que le verrou est déployé).
     VERROUS_DEPLOYED = /partielle indisponible avant release|Lot 13/i.test(error?.message || '');
-    await cleanupMissionCascade(probeMission);
+    await purgeMissionFull(admin, probeMission);
+    seededMissions.splice(seededMissions.indexOf(probeMission), 1);
   } catch {
     VERROUS_DEPLOYED = false;
   }
@@ -129,8 +145,7 @@ test.beforeAll(async () => {
 
 test.afterAll(async () => {
   const admin = adminClient();
-  for (const id of seededMissions) await cleanupMissionCascade(id);
-  await admin.from('stripe_transfers').delete().eq('description', TRANSFER_DESC);
+  for (const id of seededMissions) await purgeMissionFull(admin, id);
 });
 
 test('fn_mes_paiements_escrow — états soignant + part soignant seule (255 €, jamais le total)', async () => {
@@ -182,12 +197,17 @@ test('fn_mes_revenus_connect — escrow inclus (delta), sans double-comptage ave
   expect(a2.en_attente).toBeCloseTo(a1.en_attente + 255, 2);
   expect(a2.total).toBeCloseTo(a1.total, 2);
 
-  // Un stripe_transfer DISJOINT s'ajoute +100 exactement (modèles séparés, pas de
-  // double-compte escrow↔transfer).
-  await admin.from('stripe_transfers').insert({
-    soignant_id: soignantId, montant_soignant: 100, statut: 'PAYE',
-    transfere_le: new Date().toISOString(), description: TRANSFER_DESC,
+  // Un stripe_transfer DISJOINT (mission sans escrow) s'ajoute +100 exactement
+  // (modèles séparés, pas de double-compte escrow↔transfer).
+  const tMission = await seedMissionMatching({ intitule: `${TAG} transfer ${Date.now()}`, tauxHoraire: 30 });
+  if (!tMission || !soignantId) throw new Error('seed: mission transfer KO');
+  seededMissions.push(tMission.id);
+  const { error: eT } = await admin.from('stripe_transfers').insert({
+    mission_id: tMission.id, soignant_id: soignantId, etablissement_id: tMission.etablissement_id,
+    montant_total: 100, montant_commission: 0, montant_soignant: 100,
+    statut: 'PAYE', transfere_le: new Date().toISOString(), description: TRANSFER_DESC,
   } as never);
+  if (eT) throw new Error(`seed: transfer KO — ${eT.message}`);
   const a3 = (await soignant.rpc('fn_mes_revenus_connect' as any)).data as { total: number };
   expect(a3.total).toBeCloseTo(a2.total + 100, 2);
 });
