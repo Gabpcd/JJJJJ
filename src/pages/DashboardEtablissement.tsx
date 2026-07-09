@@ -676,24 +676,20 @@ export default function DashboardEtablissement() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-foreground">Commission Jolene</p>
-              {/* Lot 11 : palier cliquable → page facturation (l'échelle réelle arrive au Lot 12) */}
+              {/* Lot 12 : le modèle « paliers » est abandonné (taux unique, décision
+                  12/06) — on affiche le taux réel, cliquable vers la facturation. */}
               <button
                 type="button"
-                aria-label="Voir les paliers de commission"
+                aria-label="Voir le détail de la commission dans la facturation"
                 onClick={(e) => { e.stopPropagation(); navigate('/etablissement/facturation'); }}
                 className="inline-flex items-center gap-0.5 text-xs text-muted-foreground underline underline-offset-2 hover:text-primary transition-colors"
               >
-                Palier {etab.paliers_commission?.nom || paliers[0]?.nom || 'Découverte'}
+                {etab.taux_commission_negocie != null && etab.taux_commission_negocie !== 15 ? 'Taux négocié' : 'Taux standard'} — détail
                 <ChevronRight className="h-3 w-3" aria-hidden="true" />
               </button>
             </div>
             <div className="text-right">
               <p className="text-lg font-bold text-primary">{etab.taux_commission_negocie ?? 15}%</p>
-              {paliers[1] && (
-                <p className="text-[10px] text-muted-foreground">
-                  Prochain : {paliers[1].nom} →
-                </p>
-              )}
             </div>
           </div>
         </div>

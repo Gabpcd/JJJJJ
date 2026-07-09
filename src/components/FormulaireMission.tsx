@@ -571,11 +571,21 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
           </div>
         )}
 
-        {/* Service */}
+        {/* Service — Lot 12 : liste normalisée (datalist) + saisie libre en repli.
+            La fragmentation « Urgences/urgences/URG » dégrade la recherche et le
+            matching : on suggère les libellés canoniques sans bloquer la saisie. */}
         <div>
           <label htmlFor="mission-service" className="text-sm font-medium text-foreground mb-1 block">Service</label>
           <input id="mission-service" value={service} onChange={(e) => setService(e.target.value)}
-            placeholder="Ex: Urgences, Gériatrie, Réa, Bloc, EHPAD" className="input-base" />
+            list="services-canoniques"
+            placeholder="Choisissez ou saisissez le service" className="input-base" />
+          <datalist id="services-canoniques">
+            {['Urgences', 'Réanimation', 'Soins intensifs', 'Soins continus', 'Médecine polyvalente',
+              'Chirurgie', 'Bloc opératoire', 'Gériatrie', 'Pédiatrie', 'Cardiologie', 'Maternité',
+              'Rééducation', 'EHPAD', 'Psychiatrie', 'Oncologie', 'Officine'].map((s) => (
+              <option key={s} value={s} />
+            ))}
+          </datalist>
         </div>
 
         {/* Type de contrat proposé (Lot 11 : c'est le choix du type_contrat de la

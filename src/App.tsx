@@ -340,7 +340,9 @@ function AppRoutes() {
           <Route path="/etablissement/export-paie" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><ExportPaie /></RouteProtegee>} />
           <Route path="/etablissement/rh" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><DashboardRH /></RouteProtegee>} />
           <Route path="/etablissement/mon-groupe" element={<Navigate to="/etablissement/parametres?tab=groupe" replace />} />
-          <Route path="/etablissement/notifications" element={<Navigate to="/etablissement/parametres?tab=config" replace />} />
+          {/* Lot 12 : centre de notifications étab plein écran (liste mutualisée,
+              chaque item deep-linke via n.lien) — plus un renvoi vers un onglet. */}
+          <Route path="/etablissement/notifications" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><PageNotifications role="ADMIN_ETABLISSEMENT" /></RouteProtegee>} />
           <Route path="/etablissement/exclusions" element={<Navigate to="/etablissement/parametres?tab=exclusions" replace />} />
           <Route path="/etablissement/api" element={<Navigate to="/etablissement/parametres?tab=config" replace />} />
           <Route path="/etablissement/premium" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><PremiumEtablissement /></RouteProtegee>} />

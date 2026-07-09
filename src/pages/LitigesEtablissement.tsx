@@ -6,7 +6,7 @@ import { ChargementPage } from '@/components/ChargementPage';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
-import { Scale, PlusCircle, MessageCircle, User, AlertTriangle } from 'lucide-react';
+import { Scale, MessageCircle, User, AlertTriangle } from 'lucide-react';
 import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
@@ -62,6 +62,19 @@ export default function LitigesEtablissement() {
   };
 
   useEffect(() => { charger(); }, [user, etablissementId]);
+
+  // Lot 12 : litiges contextuels — la page est un SUIVI. L'ouverture ne se fait
+  // qu'en contexte (fiche mission → « Ouvrir un litige », ou deep-link
+  // ?mission=<id> qui arrive PRÉ-REMPLI ici). Plus de CTA global sur la liste.
+  useEffect(() => {
+    const missionCtx = searchParams.get('mission');
+    if (missionCtx && etablissementId) {
+      openNewLitige().then(() => setSelectedMissionId(missionCtx));
+      searchParams.delete('mission');
+      setSearchParams(searchParams, { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [etablissementId]);
 
   const openNewLitige = async () => {
     if (!user || !etablissementId) return;
@@ -134,13 +147,11 @@ export default function LitigesEtablissement() {
 
         <TabsContent value="litiges">
       {loading ? <ChargementPage /> : (<>
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <p className="text-sm text-muted-foreground">Contestations sur vos missions (pointage, paiement, qualité)</p>
-        </div>
-        <BoutonY2K onClick={openNewLitige} className="gap-1.5">
-          <PlusCircle className="h-4 w-4" /> Ouvrir un litige
-        </BoutonY2K>
+      <div className="mb-6">
+        <p className="text-sm text-muted-foreground">
+          Suivi des contestations sur vos missions (pointage, paiement, qualité).
+          Pour en ouvrir un, rendez-vous sur la mission concernée.
+        </p>
       </div>
 
       {/* Lot 11 / D10 : registre sobre sur le conflit — pas de mascotte, état
