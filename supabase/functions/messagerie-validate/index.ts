@@ -185,6 +185,37 @@ Deno.serve(async (req) => {
         },
       });
 
+      // Lot 16 (Couche 4) : événement de risque PAR PAIRE (étab, soignant) —
+      // la donnée coule dès maintenant, le batch de scoring/escalade s'active
+      // post-launch. La paire se dérive de la mission (etablissement_id) et des
+      // participants de la conversation (le soignant = l'autre participant).
+      try {
+        const { data: convPaire } = await supabaseAdmin
+          .from("conversations")
+          .select("participant_1_id, participant_2_id, missions(etablissement_id)")
+          .eq("id", conversation_id)
+          .maybeSingle();
+        const etabId = (convPaire as any)?.missions?.etablissement_id as string | undefined;
+        const p1 = (convPaire as any)?.participant_1_id as string | undefined;
+        const p2 = (convPaire as any)?.participant_2_id as string | undefined;
+        const soignantId = etabId ? (p1 === etabId ? p2 : p1) : undefined;
+        if (etabId && soignantId) {
+          await supabaseAdmin.from("evenements_risque_paires").insert({
+            etablissement_id: etabId,
+            soignant_id: soignantId,
+            type_evenement: "CONTACT_TENTE",
+            details: {
+              detected_type: detection.type,
+              content_hash: contentHash,
+              recidive_n: (recidives ?? 0) + 1,
+              initie_par: userId,
+            },
+          });
+        }
+      } catch (_) {
+        // best-effort : l'événement de risque ne bloque jamais le refus lui-même.
+      }
+
       return new Response(
         JSON.stringify({
           success: false,

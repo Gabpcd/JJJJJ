@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { CheckCircle, XCircle, Clock, Send, Loader2 } from 'lucide-react';
+import { CheckCircle, XCircle, Clock, Send, Loader2, Scale } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { extraireMessageErreur, messageErreurEdgeFn } from '@/lib/erreurs';
 import { ModalPaiementCommission } from '@/components/ModalPaiementCommission';
@@ -202,6 +202,19 @@ export function ListeCandidatures({ missionId, missionProfession, missionSpecial
       {enAttente.length > 0 && (
         <div className="space-y-3">
           <p className="text-sm font-semibold text-foreground">En attente ({enAttente.length})</p>
+          {/* Lot 16 (Couche 2) : rappel contractuel au moment de la sélection —
+              les clauses existent (CGV art. 8.2/8.3) mais n'étaient jamais
+              surfacées dans le flux. Ton factuel, pas de mur. */}
+          <p className="text-[11px] text-muted-foreground flex items-start gap-1.5">
+            <Scale aria-hidden="true" className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+            <span>
+              En acceptant un candidat, la mission reste opérée via Jolene (
+              <a href="/cgv#art8" target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 hover:text-primary">
+                non-contournement & recrutement direct — CGV art. 8
+              </a>
+              ). Recruter en CDI un soignant rencontré ici ? La grille dégressive 15/10/5/0 % s'applique — souvent moins cher qu'un cabinet.
+            </span>
+          </p>
           {enAttente.map((c: any) => (
             <div key={c.id} className={`card-base ${estSuperLike(c) ? 'border-2 border-amber-400 bg-amber-50/30 dark:bg-amber-950/10' : 'border-primary/20'}`}>
               <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
