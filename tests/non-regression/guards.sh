@@ -90,8 +90,19 @@ else
   echo "   OK"
 fi
 
+echo "── Garde-fou 7 : régime affiché = contrat de la MISSION, jamais le profil"
+# Bug Lot 11/14 : Facturation affichait le type_exercice du PROFIL soignant
+# comme chip de régime → « Libéral » sur une mission CDD. Le seul champ qui
+# fait foi sur une ligne financière est type_contrat_applique (mission).
+if grep -n "soignant_type_exercice" src/pages/FacturationEtablissement.tsx; then
+  echo "   soignant_type_exercice réintroduit dans la Facturation (chip régime profil interdit)"
+  FAIL=1
+else
+  echo "   OK"
+fi
+
 if [ "$FAIL" -ne 0 ]; then
   echo "✗ guards.sh : au moins un garde-fou a échoué (voir ci-dessus)."
   exit 1
 fi
-echo "✓ guards.sh : les 6 garde-fous passent."
+echo "✓ guards.sh : les 7 garde-fous passent."

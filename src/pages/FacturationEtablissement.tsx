@@ -92,16 +92,6 @@ function RetardBadge({ jours }: { jours: number }) {
   return <BadgeY2K variant="error" icone={<AlertCircle className="h-3 w-3" />}>En retard de {jours} j</BadgeY2K>;
 }
 
-function TypeExerciceBadge({ type }: { type: string }) {
-  const map: Record<string, { label: string; cls: string }> = {
-    SALARIE: { label: 'Salarié', cls: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' },
-    LIBERAL: { label: 'Libéral', cls: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' },
-    MIXTE: { label: 'Mixte', cls: 'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400' },
-  };
-  const info = map[type] || { label: type, cls: 'bg-muted text-muted-foreground' };
-  return <BadgeY2K variant="info" className={info.cls}>{info.label}</BadgeY2K>;
-}
-
 // Section IDs pour navigation rapide
 const SECTIONS = {
   payer: 'section-a-payer',
@@ -578,7 +568,11 @@ export default function FacturationEtablissement() {
                             ) : (
                               <span className="text-xs text-muted-foreground">{m.soignant_nom}</span>
                             )}
-                            <TypeExerciceBadge type={m.soignant_type_exercice} />
+                            {/* Lot 14 (bug documenté Lot 11) : le chip régime affichait le
+                                type_exercice du PROFIL soignant — contradictoire avec le
+                                contrat de la MISSION (chip « Contrat … » ci-dessous, seul
+                                à faire foi via type_contrat_applique). On n'affiche JAMAIS
+                                le régime du profil sur une ligne de facturation. */}
                             <RetardBadge jours={m.jours_depuis_fin} />
                           </div>
                           <p className="text-xs text-muted-foreground mt-1">
