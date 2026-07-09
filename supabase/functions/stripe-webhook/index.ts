@@ -22,6 +22,28 @@ function corsHeaders(req: Request) {
   };
 }
 
+// Audit escrow DIRECT en table (pas via le rpc fn_ecrire_audit_safe) : le
+// binding PostgREST de ce RPC 9-params sérialise les uuid en « null » →
+// « invalid input syntax for type uuid » → l'audit edge échouait silencieusement
+// (trou d'observabilité prod découvert par la recette escrow, run #11 du
+// 09/07/2026). Le service_role bypasse la RLS : l'insert direct est fiable.
+async function auditEscrow(admin: any, action: string, missionId: string | null, details: unknown) {
+  try {
+    const { error } = await admin.from("journaux_audit").insert({
+      acteur_id: "00000000-0000-0000-0000-000000000000",
+      type_acteur: "SYSTEME",
+      action,
+      type_ressource: "mission",
+      id_ressource: missionId,
+      cle_s3_ressource: null,
+      details: details ?? null,
+      ip_acteur: null,
+      navigateur_acteur: "stripe-webhook",
+    });
+    if (error) console.error("audit escrow webhook insert:", error.message);
+  } catch (e) { console.error("audit escrow webhook throw:", e); }
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders(req) });
@@ -702,21 +724,11 @@ Deno.serve(async (req) => {
           .select("id, mission_id, etablissement_id")
           .maybeSingle();
 
-        await supabaseAdmin.rpc("fn_ecrire_audit_safe", {
-          p_acteur_id: "00000000-0000-0000-0000-000000000000",
-          p_type_acteur: "SYSTEME",
-          p_action: "ESCROW_DEBITE",
-          p_type_ressource: "mission",
-          p_id_ressource: pi.metadata?.mission_id ?? null,
-          p_cle_s3: null,
-          p_details: {
-            paiement_escrow_id: escrowId,
-            stripe_payment_intent_id: pi.id,
-            stripe_charge_id: chargeId,
-            deja_traite: !updated,
-          },
-          p_ip: null,
-          p_navigateur: "stripe-webhook",
+        await auditEscrow(supabaseAdmin, "ESCROW_DEBITE", pi.metadata?.mission_id ?? null, {
+          paiement_escrow_id: escrowId,
+          stripe_payment_intent_id: pi.id,
+          stripe_charge_id: chargeId,
+          deja_traite: !updated,
         });
       }
       await markEventProcessed();

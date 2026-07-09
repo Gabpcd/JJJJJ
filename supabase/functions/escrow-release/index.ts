@@ -37,6 +37,29 @@ async function bearerAutorise(req: Request, admin: any): Promise<boolean> {
 
 const BACKOFF_MS = 30 * 60 * 1000; // 30 min entre 2 essais si fonds pas encore dispo
 
+// Audit DIRECT en table (pas via le rpc fn_ecrire_audit_safe) : le binding
+// PostgREST de ce RPC à 9 paramètres sérialise les uuid en « null » →
+// « invalid input syntax for type uuid » → l'audit edge échouait
+// silencieusement (trou d'observabilité prod découvert par la recette escrow,
+// run #11 du 09/07/2026). Le service_role bypasse la RLS : l'insert direct est
+// fiable. Les fonctions DB (triggers, RPC SQL) continuent d'utiliser le wrapper.
+async function auditEscrow(admin: any, action: string, missionId: string | null, details: unknown) {
+  try {
+    const { error } = await admin.from("journaux_audit").insert({
+      acteur_id: "00000000-0000-0000-0000-000000000000",
+      type_acteur: "SYSTEME",
+      action,
+      type_ressource: "mission",
+      id_ressource: missionId,
+      cle_s3_ressource: null,
+      details: details ?? null,
+      ip_acteur: null,
+      navigateur_acteur: "escrow-release",
+    });
+    if (error) console.error("audit escrow-release insert:", error.message);
+  } catch (e) { console.error("audit escrow-release throw:", e); }
+}
+
 Deno.serve(async (req) => {
   const admin = createClient(
     Deno.env.get("SUPABASE_URL") ?? "",
@@ -124,17 +147,8 @@ Deno.serve(async (req) => {
             erreur: `fonds insuffisants (available ${availableCents} < ${rel.honoraires_cents})`,
           })
           .eq("id", rel.queue_id);
-        await admin.rpc("fn_ecrire_audit_safe", {
-          p_acteur_id: "00000000-0000-0000-0000-000000000000",
-          p_type_acteur: "SYSTEME",
-          p_action: "ESCROW_RELEASE_ATTENTE_FONDS",
-          p_type_ressource: "mission",
-          p_id_ressource: rel.mission_id,
-          p_cle_s3: null,
-          p_details: { paiement_escrow_id: rel.paiement_escrow_id, available_cents: availableCents, requis_cents: rel.honoraires_cents },
-          p_ip: null,
-          p_navigateur: "escrow-release",
-        });
+        await auditEscrow(admin, "ESCROW_RELEASE_ATTENTE_FONDS", rel.mission_id,
+          { paiement_escrow_id: rel.paiement_escrow_id, available_cents: availableCents, requis_cents: rel.honoraires_cents });
         attente_fonds++;
         continue;
       }
@@ -184,21 +198,11 @@ Deno.serve(async (req) => {
         .update({ statut: "TRAITE", traite_le: new Date().toISOString(), erreur: null })
         .eq("id", rel.queue_id);
 
-      await admin.rpc("fn_ecrire_audit_safe", {
-        p_acteur_id: "00000000-0000-0000-0000-000000000000",
-        p_type_acteur: "SYSTEME",
-        p_action: "ESCROW_RELEASE_PAYE",
-        p_type_ressource: "mission",
-        p_id_ressource: rel.mission_id,
-        p_cle_s3: null,
-        p_details: {
-          paiement_escrow_id: rel.paiement_escrow_id,
-          stripe_payout_id: payout.id,
-          honoraires_cents: rel.honoraires_cents,
-          destination: acct,
-        },
-        p_ip: null,
-        p_navigateur: "escrow-release",
+      await auditEscrow(admin, "ESCROW_RELEASE_PAYE", rel.mission_id, {
+        paiement_escrow_id: rel.paiement_escrow_id,
+        stripe_payout_id: payout.id,
+        honoraires_cents: rel.honoraires_cents,
+        destination: acct,
       });
       payes++;
     } catch (err: any) {
