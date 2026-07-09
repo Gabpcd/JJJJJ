@@ -15,7 +15,7 @@ import { toast } from 'sonner';
 const formatEur = (v: number) =>
   new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(v);
 
-type ConnectStatut = 'NON_DEMANDE' | 'EN_COURS' | 'COMPLET' | 'SUSPENDU' | 'SUPPRIME';
+type ConnectStatut = 'NON_DEMANDE' | 'EN_COURS' | 'COMPLET' | 'SUSPENDU' | 'REJETE' | 'SUPPRIME';
 type TypeExercice = 'SALARIE' | 'LIBERAL' | 'MIXTE' | null;
 
 export default function PageStripeConnect() {
@@ -31,6 +31,7 @@ export default function PageStripeConnect() {
   const [typeExercice, setTypeExercice] = useState<TypeExercice>(null);
   const [contactOpen, setContactOpen] = useState(false);
   const [soignantNom, setSoignantNom] = useState('');
+  const [motifRejet, setMotifRejet] = useState<string | null>(null);
 
   const chargerStatut = useCallback(async (forceRefresh = false) => {
     try {
@@ -41,6 +42,8 @@ export default function PageStripeConnect() {
       if (data) {
         setStatut(data.statut || 'NON_DEMANDE');
         setIbanLast4(data.iban_last4 || null);
+        // Motif de rejet/suspension pour l'écran REJETE (chemin de remédiation).
+        setMotifRejet(data.disabled_reason || (Array.isArray(data.requirements) ? data.requirements[0] : null) || null);
       }
     } catch {
       // Not LIBERAL or function unavailable — OK
@@ -399,6 +402,36 @@ export default function PageStripeConnect() {
                     variant="secondary"
                     className="gap-2"
                   >
+                    <Info className="h-4 w-4" />
+                    Contacter le support
+                  </BoutonY2K>
+                </div>
+              </div>
+            )}
+
+            {/* REJETE : compte refusé par Stripe (vérification KO). Raison + remédiation.
+                (6e état — auparavant absent de l'UI → écran vide possible.) */}
+            {statut === 'REJETE' && (
+              <div className="card-base border-destructive/30 bg-destructive/5 space-y-4">
+                <div className="flex items-start gap-3">
+                  <AlertTriangle className="h-5 w-5 text-destructive shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-semibold text-destructive">Compte non validé</p>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      Stripe n'a pas pu valider ton compte de paiement. Tu peux reprendre ta
+                      vérification pour corriger les informations manquantes ou erronées, ou
+                      contacter le support si le problème persiste.
+                    </p>
+                    {motifRejet && (
+                      <p className="text-xs text-muted-foreground/80 mt-2">Motif : {motifRejet}</p>
+                    )}
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <BoutonY2K onClick={lancerOnboarding} disabled={actionLoading} loading={actionLoading} variant="destructive" iconeGauche={!actionLoading ? <ExternalLink className="h-4 w-4" /> : undefined}>
+                    Reprendre ma vérification
+                  </BoutonY2K>
+                  <BoutonY2K onClick={() => setContactOpen(true)} variant="secondary" className="gap-2">
                     <Info className="h-4 w-4" />
                     Contacter le support
                   </BoutonY2K>
