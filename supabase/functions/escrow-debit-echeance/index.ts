@@ -44,6 +44,27 @@ async function bearerAutorise(req: Request, admin: any): Promise<boolean> {
   return false;
 }
 
+// Audit DIRECT en table (pas via le rpc fn_ecrire_audit_safe) : le binding
+// PostgREST de ce RPC 9-params sérialise les uuid en « null » → l'audit edge
+// échouait silencieusement (trou d'observabilité prod, recette escrow run #11).
+// service_role bypasse la RLS. Les fonctions DB gardent le wrapper.
+async function auditEscrow(admin: any, action: string, missionId: string | null, details: unknown) {
+  try {
+    const { error } = await admin.from("journaux_audit").insert({
+      acteur_id: "00000000-0000-0000-0000-000000000000",
+      type_acteur: "SYSTEME",
+      action,
+      type_ressource: "mission",
+      id_ressource: missionId,
+      cle_s3_ressource: null,
+      details: details ?? null,
+      ip_acteur: null,
+      navigateur_acteur: "escrow-debit-echeance",
+    });
+    if (error) console.error("audit escrow-debit insert:", error.message);
+  } catch (e) { console.error("audit escrow-debit throw:", e); }
+}
+
 Deno.serve(async (req) => {
   const admin = createClient(
     Deno.env.get("SUPABASE_URL") ?? "",
@@ -150,25 +171,15 @@ Deno.serve(async (req) => {
 
       await admin.rpc("fn_escrow_enregistrer_exposition", { p_paiement_escrow_id: esc.id });
 
-      await admin.rpc("fn_ecrire_audit_safe", {
-        p_acteur_id: "00000000-0000-0000-0000-000000000000",
-        p_type_acteur: "SYSTEME",
-        p_action: "ESCROW_DEBIT_INITIE",
-        p_type_ressource: "mission",
-        p_id_ressource: esc.mission_id,
-        p_cle_s3: null,
-        p_details: {
-          paiement_escrow_id: esc.id,
-          stripe_payment_intent_id: pi.id,
-          pi_status: pi.status,
-          methode_debit: esc.methode_debit,
-          total_cents: esc.montant_total_cents,
-          honoraires_cents: esc.honoraires_cents,
-          commission_cents: esc.commission_cents,
-          destination: onboarding.stripe_account_id,
-        },
-        p_ip: null,
-        p_navigateur: "escrow-debit-echeance",
+      await auditEscrow(admin, "ESCROW_DEBIT_INITIE", esc.mission_id, {
+        paiement_escrow_id: esc.id,
+        stripe_payment_intent_id: pi.id,
+        pi_status: pi.status,
+        methode_debit: esc.methode_debit,
+        total_cents: esc.montant_total_cents,
+        honoraires_cents: esc.honoraires_cents,
+        commission_cents: esc.commission_cents,
+        destination: onboarding.stripe_account_id,
       });
       debites++;
     } catch (err: any) {
