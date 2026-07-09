@@ -208,8 +208,12 @@ async function main() {
   if (bal.livemode) { console.error('REFUS : livemode=true.'); process.exit(1); }
 
   // ── Setup 0 : bearer vault pour les invocations edge (cf. CRON_BEARER) ─────
+  // + neutralisation des escrows INITIE résiduels des runs précédents sur la
+  // branche (échéance repoussée, pas de DELETE) : sans ça, escrow-debit-echeance
+  // les ré-examine et l'assertion debites=1 du run casse (run #5 : examined=3).
   await sql(`DELETE FROM vault.secrets WHERE name = 'service_role_key';
-SELECT vault.create_secret('${CRON_BEARER}', 'service_role_key');`);
+SELECT vault.create_secret('${CRON_BEARER}', 'service_role_key');
+UPDATE paiements_escrow SET debit_prevu_le = now() + interval '10 years' WHERE statut = 'INITIE';`);
 
   // ── Setup 1 : customer + mandat SEPA test pour l'étab ──────────────────────
   const cust = await stripe('POST', 'customers', { name: 'Clinique Recette Escrow', email: 'recette-etab@test.jolene', metadata: { recette: RUN } });
@@ -230,19 +234,26 @@ SELECT vault.create_secret('${CRON_BEARER}', 'service_role_key');`);
       tos_shown_and_accepted: true,
     },
   });
+  // Capabilities = EXACTEMENT celles de la prod (stripe-connect-onboard :
+  // card_payments + transfers). Run #5 : une destination charge avec
+  // on_behalf_of exige card_payments actif sur le compte connecté —
+  // transfers seul est refusé par Stripe. Tester le même set que la prod
+  // valide au passage que les comptes soignants prod passeront.
   const acct = await stripe('POST', 'accounts', {
     type: 'custom', country: 'FR', email: 'recette-soignante@test.jolene',
     account_token: acctToken.id,
-    capabilities: { transfers: { requested: true }, sepa_debit_payments: { requested: true } },
-    business_profile: { mcc: '8050', product_description: 'Soins infirmiers (recette test)' },
+    capabilities: { card_payments: { requested: true }, transfers: { requested: true } },
+    business_profile: { mcc: '8050', url: 'https://jolene.app', product_description: 'Soins infirmiers (recette test)' },
     external_account: { object: 'bank_account', country: 'FR', currency: 'eur', account_number: 'FR1420041010050500013M02606' },
     settings: { payouts: { schedule: { interval: 'manual' } } },
     metadata: { recette: RUN },
   });
   acctSoignante = acct.id;
-  await poll('capabilité transfers active', 120_000, 5000, async () => {
+  await poll('capabilités card_payments + transfers actives', 180_000, 10_000, async () => {
     const a = await stripe('GET', `accounts/${acct.id}`);
-    return a.capabilities?.transfers === 'active' ? a : null;
+    if (a.capabilities?.card_payments === 'active' && a.capabilities?.transfers === 'active') return a;
+    console.log(`   … capabilities=${JSON.stringify(a.capabilities)} currently_due=${JSON.stringify(a.requirements?.currently_due)}`);
+    return null;
   });
   await sql(`UPDATE soignants SET stripe_account_id='${acct.id}' WHERE id='${SOIGNANTE}';
 INSERT INTO stripe_connect_onboarding (soignant_id, stripe_account_id, statut, onboarding_complete, charges_enabled, payouts_enabled, details_submitted, country, business_type)
