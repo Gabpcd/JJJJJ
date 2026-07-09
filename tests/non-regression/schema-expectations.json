@@ -1,0 +1,70 @@
+{
+  "$commentaire": "Attentes structurelles vérifiées par schema-guard.mjs. Noms réels extraits de src/integrations/supabase/types.ts. journaux_audit : les 9 colonnes ciblées par l'INSERT de fn_ecrire_audit_safe + id + cree_le (incident 05/07 : colonnes renommées → 0 audit écrit).",
+  "tables": {
+    "journaux_audit": [
+      "id",
+      "acteur_id",
+      "type_acteur",
+      "action",
+      "type_ressource",
+      "id_ressource",
+      "cle_s3_ressource",
+      "details",
+      "ip_acteur",
+      "navigateur_acteur",
+      "cree_le"
+    ],
+    "soignants": [
+      "id",
+      "email",
+      "nom",
+      "prenom",
+      "profession",
+      "numero_rpps",
+      "rpps_verifie",
+      "score_fiabilite",
+      "tous_documents_valides"
+    ],
+    "documents_soignants": [
+      "id",
+      "soignant_id",
+      "type_document",
+      "statut_verification",
+      "valide_depuis",
+      "valide_jusqua",
+      "est_critique",
+      "resultat_ia"
+    ],
+    "missions": [
+      "id",
+      "etablissement_id",
+      "intitule",
+      "statut",
+      "profession_requise",
+      "debut_le",
+      "fin_le",
+      "duree_heures",
+      "est_urgente"
+    ],
+    "candidatures": [
+      "id",
+      "mission_id",
+      "soignant_id",
+      "statut",
+      "type_contrat_choisi",
+      "cree_le"
+    ]
+  },
+  "functions": [
+    "fn_ecrire_audit_safe",
+    "fn_calculer_tous_documents_valides",
+    "dec_maj_tous_documents_valides"
+  ],
+  "rls": [
+    "journaux_audit",
+    "soignants",
+    "documents_soignants",
+    "missions",
+    "candidatures"
+  ]
+}

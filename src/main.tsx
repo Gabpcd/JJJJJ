@@ -330,7 +330,7 @@ async function initNativePlugins() {
     if (Capacitor.getPlatform() === 'android') {
       await StatusBar.setBackgroundColor({ color: isDark ? '#6B3FA0' : '#FFFFFF' });
     }
-  } catch {}
+  } catch { /* plugin StatusBar indisponible (web) — non bloquant */ }
 
   // Splash screen: check session, then hide
   // This prevents white screen between splash and content
@@ -363,7 +363,7 @@ async function initNativePlugins() {
 
     // Hide splash after session check (max 1.5s enforced by config)
     await SplashScreen.hide();
-  } catch {}
+  } catch { /* SplashScreen indisponible (web) — le flux auth normal prend le relais */ }
 }
 
 initNativePlugins();
