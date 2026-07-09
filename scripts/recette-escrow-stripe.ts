@@ -217,6 +217,7 @@ async function main() {
   //      escrow-debit-echeance les ré-examine et l'assertion debites=1 casse
   //      (run #5 : examined=3). Ordre : missions d'abord, échéances ensuite.
   await sql(`${CTX}
+NOTIFY pgrst, 'reload schema';
 DELETE FROM vault.secrets WHERE name = 'service_role_key';
 SELECT vault.create_secret('${CRON_BEARER}', 'service_role_key');
 DO $neut$ DECLARE m record; d timestamptz; BEGIN
@@ -305,16 +306,17 @@ ON CONFLICT (soignant_id) DO UPDATE SET stripe_account_id='${acct.id}', statut='
   note('S2.2 exposition + audit débit', Number(expo[0].n) === 1 ? 'PASS' : 'FAIL', `exposition ACTIF=${expo[0].n}`);
   await snapshot('S2 débit initié');
 
-  // A10.8 : valider les présences PENDANT le processing (fonds pas encore au connecté)
+  // A10.8 (1/2) : valider les présences PENDANT le processing. La queue de
+  // release n'est peuplée qu'à la transition DEBITE (trigger 20260709130000 —
+  // le trigger présences exige un escrow déjà DEBITE). Garantie testée ici :
+  // AUCUN payout ne peut partir pendant le processing.
   if (pi.status === 'processing') {
     await validerPresences(m8);
     const r2 = await invoke('escrow-release');
-    const attente = r2.attente_fonds === 1;
-    const audit = await sql(`SELECT count(*) n FROM journaux_audit WHERE action='ESCROW_RELEASE_ATTENTE_FONDS' AND id_ressource='${m8}';`);
-    note('S5/A10.8 attente fonds', attente && Number(audit[0].n) >= 1 ? 'PASS' : 'FAIL',
-      `release=${JSON.stringify(r2)}, audit ATTENTE_FONDS=${audit[0].n} (queue reste EN_ATTENTE, backoff 30 min)`);
+    note('S5/A10.8 pas de payout pendant processing', r2.examined === 0 && r2.payes === 0 ? 'PASS' : 'FAIL',
+      `release=${JSON.stringify(r2)} — la queue n'est peuplée qu'au DEBITE`);
   } else {
-    note('S5/A10.8 attente fonds', 'FAIL', `PI status inattendu (${pi.status}) — fenêtre processing manquée`);
+    note('S5/A10.8 pas de payout pendant processing', 'FAIL', `PI status inattendu (${pi.status}) — fenêtre processing manquée`);
   }
 
   // Settlement SEPA test → webhook payment_intent.succeeded → DEBITE
@@ -327,9 +329,29 @@ ON CONFLICT (soignant_id) DO UPDATE SET stripe_account_id='${acct.id}', statut='
   note('S2.3 settlement → DEBITE (webhook)', Number(auditDebite[0].n) >= 1 ? 'PASS' : 'FAIL', `statut=DEBITE, audit ESCROW_DEBITE=${auditDebite[0].n}`);
   const s2d = await snapshot('S2 settled');
 
-  // Fonds available côté connecté → release → payout → PAYE
+  // A10.8 (2/2) : au DEBITE, le trigger 20260709130000 enfile la release
+  // (présences déjà validées) ; les fonds SEPA sont encore PENDING côté
+  // connecté (available_on à J+2-5, même en test — run #10) → escrow-release
+  // doit répondre attente_fonds + audit, la queue reste EN_ATTENTE.
+  await poll('queue release enfilée au DEBITE', 60_000, 5000, async () => {
+    const q = await sql(`SELECT statut FROM escrow_release_queue WHERE mission_id='${m8}';`);
+    return q.length ? q[0] : null;
+  });
+  const r2b = await invoke('escrow-release');
+  const auditAtt = await sql(`SELECT count(*) n FROM journaux_audit WHERE action='ESCROW_RELEASE_ATTENTE_FONDS' AND id_ressource='${m8}';`);
+  note('S5/A10.8 attente fonds (DEBITE, fonds pending)', r2b.attente_fonds === 1 && Number(auditAtt[0].n) >= 1 ? 'PASS' : 'FAIL',
+    `release=${JSON.stringify(r2b)}, audit ATTENTE_FONDS=${auditAtt[0].n} (backoff 30 min)`);
+
+  // Disponibilité : les fonds SEPA restent pending des jours, même en test —
+  // top-up tok_bypassPending sur le compte connecté (fonds immédiatement
+  // available, marge pour les frais Stripe du top-up). Ne touche PAS le solde
+  // plateforme : l'invariant reste vérifié tel quel.
+  await stripe('POST', 'charges', {
+    amount: Math.round(e8.honoraires_cents * 1.05) + 1000, currency: 'eur',
+    source: 'tok_bypassPending', description: `recette top-up disponibilité ${RUN}`,
+  }, acct.id);
   await sql(`UPDATE escrow_release_queue SET prochaine_tentative_le = now() WHERE mission_id='${m8}';`);
-  await poll('fonds available connecté', 600_000, 10_000, async () => {
+  await poll('fonds available connecté', 120_000, 5000, async () => {
     const cb = await stripe('GET', 'balance', {}, acct.id);
     const avail = (cb.available || []).find((b: any) => b.currency === 'eur')?.amount ?? 0;
     return avail >= e8.honoraires_cents ? avail : null;
