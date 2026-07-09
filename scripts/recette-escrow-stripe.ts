@@ -284,10 +284,13 @@ ON CONFLICT (soignant_id) DO UPDATE SET stripe_account_id='${acct.id}', statut='
   if (r1.debites !== 1) throw new Error(`debit-echeance attendu debites=1, reçu ${JSON.stringify(r1)}`);
   let e8 = await escrowDe(m8);
   const pi = await stripe('GET', `payment_intents/${e8.stripe_payment_intent_id}`);
+  // PAS de on_behalf_of attendu : le mandat SEPA de l'étab nomme Jolene
+  // (cf. escrow-debit-echeance, fix run #7) — marchand = Jolene, fonds
+  // directs au connecté via transfer_data.
   const chkPi = pi.transfer_data?.destination === acct.id && pi.application_fee_amount === e8.commission_cents
-    && pi.on_behalf_of === acct.id && pi.amount === e8.montant_total_cents;
+    && !pi.on_behalf_of && pi.amount === e8.montant_total_cents;
   note('S2.2 destination charge', chkPi ? 'PASS' : 'FAIL',
-    `PI ${pi.id} status=${pi.status} fee=${pi.application_fee_amount} dest=${pi.transfer_data?.destination} on_behalf_of=${pi.on_behalf_of}`);
+    `PI ${pi.id} status=${pi.status} fee=${pi.application_fee_amount} dest=${pi.transfer_data?.destination} on_behalf_of=${pi.on_behalf_of ?? 'aucun (attendu)'}`);
   const expo = await sql(`SELECT count(*) n FROM escrow_exposition_releases er JOIN paiements_escrow pe ON pe.id=er.paiement_escrow_id WHERE pe.mission_id='${m8}' AND er.statut='ACTIF';`);
   note('S2.2 exposition + audit débit', Number(expo[0].n) === 1 ? 'PASS' : 'FAIL', `exposition ACTIF=${expo[0].n}`);
   await snapshot('S2 débit initié');
