@@ -107,6 +107,80 @@ de validation des heures » tant que l'établissement n'a pas validé.
 - `verify-recette` sur la page Revenus en **390 × 844** (iPhone) : rendu correct
   de la nouvelle section, états vides gérés.
 
+## 9. FAIT STRUCTURANT — heures validées < heures publiées (montant transféré)
+
+> Investigation code prod (09/07/2026). Détermine le montant « À venir », l'écran
+> de validation Lot 13 et le flux litige.
+
+### 9.1 Le montant escrow est FIGÉ à la confirmation, jamais recalculé
+
+`fn_trg_escrow_creer_a_confirmation` fige, à la confirmation de la mission :
+
+```
+v_honoraires_c := ROUND(COALESCE(NEW.net_a_payer, 0) * 100)  -- part soignant
+```
+
+`honoraires_cents` = `missions.net_a_payer` **au moment de la confirmation** =
+le **prévisionnel** (aucune heure encore effectuée). **Aucune fonction ne met à
+jour `paiements_escrow.honoraires_cents` après l'INITIE** (vérifié : seules
+`fn_escrow_rembourser` et `fn_trg_escrow_release_check` touchent la table, aucune
+ne recalcule le montant). Le release (`escrow-release`) verse **`honoraires_cents`
+en intégralité** — le montant figé, PAS `heures_validées × taux`.
+
+### 9.2 Réponses aux 3 questions
+
+**Q1 — Montant transféré = honoraires publiés ou heures validées × taux ?**
+→ **Honoraires publiés figés à la confirmation** (prévisionnel). Le release ne
+recalcule rien depuis les heures validées.
+**Remboursement partiel : existe au niveau mécanisme** —
+`fn_escrow_rembourser(p_paiement_escrow_id, p_montant_honoraires_cts,
+p_annulation_totale, p_motif)` accepte `0 < montant ≤ honoraires_cents` (reprise
+partielle : reverse_transfer avant release, absorption plateforme si PAYE ;
+commission au prorata). **MAIS** : (a) il passe TOUT l'escrow en `REMBOURSE` (pas
+d'état « payé partiel »), et (b) il n'est **jamais appelé par la validation des
+présences** — uniquement par la résolution de litige (`fn_admin_resoudre_litige`)
+/ admin. Il n'y a **aucune réduction automatique** liée aux heures.
+
+**Q2 — Asymétrie codée (réduction étab vs heures non faites du soignant) ?**
+→ **Aucune asymétrie codée, et aucune réduction automatique du tout.** Le modèle
+applique le **plancher prévisionnel garanti** (`heures_facturées =
+GREATEST(prévisionnel, effectif)`, règle CLAUDE.md / tâche #11) :
+- **validées < publiées** (peu importe la cause, étab ou soignant) : le soignant
+  touche **le plancher = le prévisionnel = l'intégralité de l'escrow figé**.
+  Pas de réduction. Une réduction ne peut venir que d'un **litige explicite**
+  (admin → `fn_escrow_rembourser` partiel/total).
+- **validées > publiées** (soignant a fait PLUS) : l'escrow **sous-couvre** (figé
+  au prévisionnel). Le surplus n'est PAS dans l'escrow et n'est **pas** ajouté
+  automatiquement (aucun top-up codé) → il relèverait du flux d'honoraires
+  standard. **Zone grise à trancher au Lot 13.**
+
+**Q3 — CGU / mandat (clause escrow) ?**
+→ CGU **§4.6 « Paiement rapide ⚡ »** (`src/pages/PageCGU.tsx:112-113`) :
+honoraires encaissés dès la confirmation, « **libérés vers ton compte bancaire
+après la validation de tes présences par l'établissement — au plus tard 72 h
+après la fin de la mission** (validation automatique en l'absence de réponse) »,
+« en cas d'annulation **avant le début**, les sommes sont restituées à
+l'établissement ». **La CGU est SILENCIEUSE sur le cas heures validées <
+publiées** (ni réduction, ni prorata mentionnés) → par défaut, le comportement
+codé s'applique : plancher garanti, libération intégrale de l'escrow figé.
+
+### 9.3 Conséquences pour cette spec + Lot 13
+
+- **Montant affiché « À venir »** = `honoraires_cents` (le plancher figé, ce qui
+  sera réellement libéré). C'est un montant **garanti**, pas une estimation.
+- **Écran de validation Lot 13** : la validation partielle d'heures **ne doit pas
+  réduire l'escrow sous le plancher** (sinon on viole la règle #11 et la CGU
+  implicite). Si l'étab conteste des heures → ce n'est pas une « validation
+  partielle » silencieuse mais un **litige** (seul chemin de réduction :
+  `fn_escrow_rembourser`). À cadrer explicitement dans le Lot 13.
+- **Surplus (effectif > prévisionnel)** : décision produit à prendre au Lot 13
+  (facture d'honoraires complémentaire hors escrow, ou top-up escrow). Non
+  couvert aujourd'hui — à ne pas promettre dans l'UI revenus.
+- **Flux litige** : la seule réduction du versement soignant passe par la
+  résolution de litige admin (`fn_admin_resoudre_litige` → `fn_escrow_rembourser`).
+  L'écran revenus affiche alors l'état **⏸️ Paiement en litige** puis
+  **❌ Paiement annulé** (REMBOURSE) — jamais un montant réduit « discret ».
+
 ## Hors salve (follow-up)
 
 - Notification push à la transition « Versé » (matrice B8). Non inclus ici.
