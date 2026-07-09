@@ -13,6 +13,14 @@ on:
     branches: [main]
   workflow_dispatch:
 
+# Un seul run E2E par ref à la fois : la suite tourne contre la PROD PARTAGÉE
+# (seed/cleanup sur les mêmes comptes test). Deux runs simultanés se purgent
+# mutuellement leurs seeds (beforeAll escrow) et cassent les assertions en
+# delta. Un nouveau push annule le run devenu obsolète.
+concurrency:
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
   # Valeurs PUBLIQUES hardcodées (présentes dans le bundle client / le code du
