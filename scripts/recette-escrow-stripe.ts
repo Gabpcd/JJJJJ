@@ -208,11 +208,27 @@ async function main() {
   if (bal.livemode) { console.error('REFUS : livemode=true.'); process.exit(1); }
 
   // ── Setup 0 : bearer vault pour les invocations edge (cf. CRON_BEARER) ─────
-  // + neutralisation des escrows INITIE résiduels des runs précédents sur la
-  // branche (échéance repoussée, pas de DELETE) : sans ça, escrow-debit-echeance
-  // les ré-examine et l'assertion debites=1 du run casse (run #5 : examined=3).
-  await sql(`DELETE FROM vault.secrets WHERE name = 'service_role_key';
+  // + neutralisation des résidus des runs précédents sur la branche :
+  //   1. missions futures encore ASSIGNEE à la soignante e2e → déplacées 2 ans
+  //      dans le passé (1 jour d'écart chacune) via fn_test_update_mission,
+  //      sinon dec_refuser_chevauchement_soignant bloque les nouveaux seeds
+  //      (run #6 : « Ce soignant a déjà une mission sur ce créneau ») ;
+  //   2. escrows INITIE résiduels → échéance repoussée (pas de DELETE), sinon
+  //      escrow-debit-echeance les ré-examine et l'assertion debites=1 casse
+  //      (run #5 : examined=3). Ordre : missions d'abord, échéances ensuite.
+  await sql(`${CTX}
+DELETE FROM vault.secrets WHERE name = 'service_role_key';
 SELECT vault.create_secret('${CRON_BEARER}', 'service_role_key');
+DO $neut$ DECLARE m record; i int := 0; BEGIN
+  FOR m IN SELECT id FROM missions
+           WHERE soignant_assigne_id = '${SOIGNANTE}' AND statut = 'ASSIGNEE' AND debut_le > now()
+           ORDER BY cree_le LOOP
+    i := i + 1;
+    PERFORM fn_test_update_mission(m.id, jsonb_build_object(
+      'debut_le', (now() - interval '2 years' + make_interval(days => i))::text,
+      'fin_le',   (now() - interval '2 years' + make_interval(days => i, hours => 8))::text));
+  END LOOP;
+END $neut$;
 UPDATE paiements_escrow SET debit_prevu_le = now() + interval '10 years' WHERE statut = 'INITIE';`);
 
   // ── Setup 1 : customer + mandat SEPA test pour l'étab ──────────────────────
@@ -318,7 +334,10 @@ ON CONFLICT (soignant_id) DO UPDATE SET stripe_account_id='${acct.id}', statut='
     `plateforme ${s2d.plateforme}→${s2p.plateforme} (attendu inchangé — les honoraires ne transitent pas par Jolene)`);
 
   // ── S3x : refund pré-release exécuté (reverse_transfer) ────────────────────
-  const m9 = await seedMission(`Recette Stripe S3 ${RUN}`, 2);
+  // Jours étalés (S3=+3, S6=+4, S7=+5/+6) : les missions du run restent
+  // ASSIGNEE à la même soignante — un même J+2 partout se chevaucherait
+  // (dec_refuser_chevauchement_soignant). Tous < 8 j ⇒ débit immédiat (A2).
+  const m9 = await seedMission(`Recette Stripe S3 ${RUN}`, 3);
   await invoke('escrow-debit-echeance');
   const e9i = await escrowDe(m9);
   await poll(`PI M9 succeeded`, 900_000, 10_000, async () => {
@@ -364,7 +383,7 @@ ON CONFLICT (soignant_id) DO UPDATE SET stripe_account_id='${acct.id}', statut='
   // ── S6 : échec de débit réel → ECHOUE + gel, puis dégel ────────────────────
   const pmFail = await creerPmSepa(cust.id, IBAN_FAIL);
   await setPmEtab(pmFail);
-  const m10 = await seedMission(`Recette Stripe S6 ${RUN}`, 2);
+  const m10 = await seedMission(`Recette Stripe S6 ${RUN}`, 4);
   await invoke('escrow-debit-echeance');
   const e10 = await escrowDe(m10);
   await attendreStatut(m10, 'ECHOUE', 900_000);
@@ -378,11 +397,12 @@ ON CONFLICT (soignant_id) DO UPDATE SET stripe_account_id='${acct.id}', statut='
 
   // ── S7 : dispute réelle ─────────────────────────────────────────────────────
   let disputeOk = false; let disputeDetail = '';
+  let jourS7 = 5;
   for (const iban of IBANS_DISPUTE) {
     try {
       const pmD = await creerPmSepa(cust.id, iban);
       await setPmEtab(pmD);
-      const m11 = await seedMission(`Recette Stripe S7 ${RUN} ${iban.slice(-4)}`, 2);
+      const m11 = await seedMission(`Recette Stripe S7 ${RUN} ${iban.slice(-4)}`, jourS7++);
       await invoke('escrow-debit-echeance');
       const e11 = await escrowDe(m11);
       // Le débit doit d'abord réussir, puis être disputé.
