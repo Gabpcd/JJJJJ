@@ -36,7 +36,6 @@ const TOTAL = HONO + COMMISSION; // 29820 = 298,20 €
 // Nonce unique par run → immunise les assertions contre les résidus prod.
 const RUN = `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
 const TAG = `[pw-test:escrow:${RUN}]`;
-const TRANSFER_DESC = `${TAG} transfer`;
 
 const seededMissions: string[] = [];
 let VERROUS_DEPLOYED = false; // 170000/180000 en prod ? (déployés au merge de cette PR)
@@ -97,10 +96,20 @@ async function seedEscrow(
 /**
  * Purge complète d'une mission seedée : `fn_test_purge_mission` ne supprime PAS
  * les enfants `paiements_escrow` / `stripe_transfers` (FK
- * `paiements_escrow_mission_id_fkey` → le DELETE mission échoue en silence). On
- * retire donc les enfants financiers AVANT la cascade.
+ * `paiements_escrow_mission_id_fkey` → le DELETE mission échoue en silence),
+ * et `paiements_escrow` a lui-même 3 tables enfants FK (stripe_refunds_queue,
+ * escrow_release_queue, escrow_exposition_releases — c'est la refunds_queue,
+ * créée par fn_escrow_rembourser, qui bloquait la purge de la sonde en CI).
+ * On retire donc TOUTE la descendance financière avant la cascade.
  */
 async function purgeMissionFull(admin: ReturnType<typeof adminClient>, id: string): Promise<void> {
+  const { data: escs } = await admin.from('paiements_escrow').select('id').eq('mission_id', id);
+  const escIds = ((escs || []) as Array<{ id: string }>).map((e) => e.id);
+  if (escIds.length) {
+    await admin.from('stripe_refunds_queue').delete().in('paiement_escrow_id', escIds);
+    await admin.from('escrow_release_queue').delete().in('paiement_escrow_id', escIds);
+    await admin.from('escrow_exposition_releases').delete().in('paiement_escrow_id', escIds);
+  }
   await admin.from('stripe_transfers').delete().eq('mission_id', id);
   await admin.from('paiements_escrow').delete().eq('mission_id', id);
   await admin.from('presences').delete().eq('mission_id', id);
@@ -111,35 +120,21 @@ test.beforeAll(async () => {
   const admin = adminClient();
   const soignantId = await userIdByEmail(SOIGNANT.email);
 
-  // Purge des résidus escrow de TOUS les runs antérieurs pour ce soignant
-  // (prod partagée) : sinon les deltas / états sont pollués.
-  if (soignantId) {
-    await admin.from('paiements_escrow').delete().eq('soignant_id', soignantId).like('stripe_payment_intent_id', 'pi_pwtest%');
-  }
-  await admin.from('stripe_transfers').delete().like('description', '[pw-test:escrow%');
+  // Purge des résidus escrow de TOUS les runs antérieurs (prod partagée) :
+  // sinon les deltas / états sont pollués.
   const { data: oldMissions } = await admin.from('missions').select('id').like('intitule', '[pw-test:escrow%');
   for (const m of (oldMissions || []) as Array<{ id: string }>) await purgeMissionFull(admin, m.id);
 
-  // Sonde de déploiement des verrous : seede un escrow DEBITE jetable puis tente
-  // un remboursement partiel pré-release. Erreur = verrou 170000 déployé (donc
-  // 180000 aussi, même PR). Aucune donnée de santé impliquée par la sonde.
-  // ⚠️ Purge COMPLÈTE ensuite : sans verrou, le remboursement passe et l'escrow
-  // devient REMBOURSE→ANNULE ; s'il subsistait, il polluerait le test des états.
-  try {
-    const probeMission = await seedEscrow('DEBITE');
-    const { data: esc } = await admin.from('paiements_escrow').select('id, honoraires_cents').eq('mission_id', probeMission).single();
-    const { error } = await admin.rpc('fn_escrow_rembourser' as any, {
-      p_paiement_escrow_id: (esc as { id: string }).id,
-      p_montant_honoraires_cts: Math.floor((esc as { honoraires_cents: number }).honoraires_cents / 2),
-      p_annulation_totale: false,
-    });
-    // Seul le message du verrou compte (une erreur Stripe sur un PI factice ne
-    // doit pas faire croire à tort que le verrou est déployé).
-    VERROUS_DEPLOYED = /partielle indisponible avant release|Lot 13/i.test(error?.message || '');
-    await purgeMissionFull(admin, probeMission);
-    seededMissions.splice(seededMissions.indexOf(probeMission), 1);
-  } catch {
-    VERROUS_DEPLOYED = false;
+  // Sonde de déploiement des verrous — SANS effet de bord : tente un INSERT
+  // documents santé (verrou 180000, même PR que 170000). Rejet santé/CONFORMITE
+  // = verrous déployés ; insert passé (pas de verrou) = ligne supprimée aussitôt.
+  if (soignantId) {
+    const { data: doc, error } = await admin.from('documents_soignants').insert({
+      soignant_id: soignantId, type_document: 'VACCINATIONS',
+      s3_cle: `pw-test/${RUN}/probe.pdf`, nom_fichier: 'probe.pdf', statut_verification: 'EN_ATTENTE',
+    } as never).select('id').single();
+    VERROUS_DEPLOYED = /santé|CONFORMITE/i.test(error?.message || '');
+    if (!error && doc) await admin.from('documents_soignants').delete().eq('id', (doc as { id: string }).id);
   }
 });
 
@@ -205,7 +200,7 @@ test('fn_mes_revenus_connect — escrow inclus (delta), sans double-comptage ave
   const { error: eT } = await admin.from('stripe_transfers').insert({
     mission_id: tMission.id, soignant_id: soignantId, etablissement_id: tMission.etablissement_id,
     montant_total: 100, montant_commission: 0, montant_soignant: 100,
-    statut: 'PAYE', transfere_le: new Date().toISOString(), description: TRANSFER_DESC,
+    statut: 'PAYE', transfere_le: new Date().toISOString(),
   } as never);
   if (eT) throw new Error(`seed: transfer KO — ${eT.message}`);
   const a3 = (await soignant.rpc('fn_mes_revenus_connect' as any)).data as { total: number };
