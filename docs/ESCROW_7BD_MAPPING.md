@@ -11,11 +11,15 @@
 ## 1. Architecture cible (rappel des décisions §4.2–4.4 du Lot 9)
 
 - **Modèle PSP Stripe Connect — destination charges** : la charge établissement porte
-  `transfer_data[destination]` (compte connecté soignant) + `on_behalf_of` +
-  `application_fee_amount` (commission 15 % capturée à la source). **Invariant : aucun
-  fonds de mission ne stationne jamais sur le solde plateforme de Jolene** — les
-  honoraires vont directement au solde du compte connecté du soignant, seule
-  l'application fee revient à Jolene.
+  `transfer_data[destination]` (compte connecté soignant) + `application_fee_amount`
+  (commission 15 % capturée à la source). **⚠️ MàJ v15 : `on_behalf_of` RETIRÉ.** Le
+  mandat SEPA désigne **Jolene** comme créancier (`_shared` : `mandate_data.customer_acceptance`) →
+  Jolene est **merchant of record**, `on_behalf_of` (qui ferait du compte connecté le
+  merchant/settlement) est incompatible et supprimé (cf. `escrow-debit-echeance` v15).
+  **Invariant : les honoraires ne STATIONNENT jamais sur le solde plateforme** — ils
+  transitent l'instant du settlement (mécanique destination charge) puis filent au
+  solde du compte connecté du soignant ; seule l'application fee reste à Jolene. Cf.
+  `docs/flux-monetaire-escrow.md` (distinction « ne stationne » vs « ne transite »).
 - **Séquestre = payouts manuels** : comptes connectés en
   `settings.payouts.schedule.interval = "manual"`. Les fonds attendent sur le solde
   Connect du soignant (cantonnement Stripe) ; le « release » = `payouts.create` sur le
@@ -41,8 +45,9 @@
 - **Mécanisme cible** : le débit part **à la confirmation** (assignation) — nouveau
   point d'entrée déclenché par la confirmation de mission + cron J-7 pour les missions
   confirmées loin en avance. Le PaymentIntent devient une destination charge
-  (`transfer_data[destination]`, `on_behalf_of`, `application_fee_amount`) débitée sur
-  le mandat SEPA étab (`setup-sepa` existant) ou en carte si délai court.
+  (`transfer_data[destination]`, `application_fee_amount` ; **`on_behalf_of` retiré en
+  v15**, cf. §1) débitée sur le mandat SEPA étab (`setup-sepa` existant) ou en carte si
+  délai court.
 - **Fichiers** : `stripe-connect-pay-mission` (refonte ou nouvelle fonction
   `escrow-debit-mission`), nouveau cron `escrow-debits-j7`, garde du statut mission
   (ASSIGNEE au lieu de TERMINEE) derrière le flag `feature_paiement_rapide_actif`.
