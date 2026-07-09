@@ -151,6 +151,16 @@ async function getVaultCronSecret(sb: any): Promise<string> {
 
 ## Règle de rémunération / facturation — heures facturées
 
+> **GLOSSAIRE ESCROW — RÈGLE #11 (plancher inviolable).** À connaître d'office
+> pour toute session escrow/paiement rapide ⚡ : `honoraires_cents` de
+> `paiements_escrow` est **figé à la confirmation** (`net_a_payer` prévisionnel)
+> et **jamais recalculé** par la validation des présences. Heures validées <
+> publiées → le soignant touche **le plancher = tout l'escrow** (jamais de
+> réduction auto). Contester des heures = **litige** (`DISPUTE`), seule voie de
+> réduction (`fn_escrow_rembourser`, admin). Surplus (validées > publiées) : non
+> couvert aujourd'hui, débit complémentaire à venir (Lot 13/14). Détail :
+> `docs/SPEC_ESCROW_REVENUS_SOIGNANT.md` §9.
+
 **Règle officielle (explicite)** : les heures facturées (et payées au soignant) =
 
 ```
