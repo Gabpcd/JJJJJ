@@ -184,6 +184,11 @@ async function getVaultCronSecret(sb: any): Promise<string> {
 > jamais ». Séquestre = payout **manuel** sur le compte connecté, libéré à la
 > validation des présences. Réf. unique : `docs/flux-monetaire-escrow.md`.
 
+**Patterns escrow (3 bugs recette, gardés par `test:guards` 4-6)** :
+1. **Jamais `on_behalf_of`** sur un PaymentIntent escrow : le mandat SEPA nomme Jolene créancier — avec `on_behalf_of`, Stripe exige un mandat au nom du compte connecté et le débit échoue (recette run #10).
+2. **Audit escrow = insert DIRECT en table** (helper `auditEscrow`), jamais `rpc('fn_ecrire_audit_safe')` côté edge : binding uuid cassé PostgREST 14.5 (« invalid input syntax for type uuid: null ») → audits muets. Ne PAS « corriger » en passant la fonction uuid→text : 66 appelants DB positionnels casseraient.
+3. **Le passage `→ DEBITE` doit enfiler la release** (`fn_trg_escrow_enqueue_on_debite`, migration `20260709130000`) : sans ce trigger, settlement OK mais aucun versement ne part jamais.
+
 **Règle officielle (explicite)** : les heures facturées (et payées au soignant) =
 
 ```
