@@ -234,7 +234,7 @@ export function ObligationsFinancieresContent() {
                       return <span className="text-xs whitespace-nowrap">{format(new Date(m.fin_le), 'dd MMM yyyy', { locale: fr })}</span>;
                     case 'retard':
                       return jours > 0
-                        ? <span className={`text-xs font-medium ${urgent ? 'text-destructive' : 'text-warning'}`}>{jours}j{urgent ? ' ⚠️' : ''}</span>
+                        ? <span className={`text-xs font-medium ${urgent ? 'text-destructive' : 'text-warning'}`}>{jours}j{urgent && <AlertTriangle className="inline-block h-3 w-3 ml-0.5 align-text-bottom" aria-hidden="true" />}</span>
                         : <span className="text-xs text-muted-foreground">—</span>;
                     case 'montant':
                       return <span className="font-bold text-foreground tabular-nums">{formatEur(m.net_a_payer)}</span>;
@@ -419,7 +419,7 @@ function MissionNonPayeeCardContent({ mission, onVoir }: { mission: MissionNonPa
             {jours > 0 && (
               <span className={urgent ? 'text-destructive font-semibold' : 'text-warning'}>
                 {' '}— il y a {jours} jour{jours > 1 ? 's' : ''}
-                {urgent && ' ⚠️ Retard important'}
+                {urgent && <> <AlertTriangle className="inline-block h-3 w-3 align-text-bottom" aria-hidden="true" /> Retard important</>}
               </span>
             )}
           </p>

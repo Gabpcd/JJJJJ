@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { X, Share, Plus, Download } from 'lucide-react';
 import { isIOSBrowser, isAndroidBrowser, isStandalonePWA, isNative } from '@/lib/platform';
 import { estSessionRecurrente } from '@/lib/session-count';
@@ -20,6 +21,7 @@ interface BeforeInstallPromptEvent extends Event {
  * - Dismissible for 7 days
  */
 export function BandeauInstallerPWA() {
+  const { pathname } = useLocation();
   const [visible, setVisible] = useState(false);
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [mode, setMode] = useState<'ios' | 'android-native' | null>(null);
@@ -81,6 +83,10 @@ export function BandeauInstallerPWA() {
       // ignore errors
     }
   };
+
+  // Lot 11 : jamais couvrante sur les écrans où les CTA vivent en bas de page
+  // (RGPD / Se déconnecter / Enregistrer) — la bannière fixed les recouvrait.
+  if (/compte|parametres|profil/.test(pathname)) return null;
 
   if (!visible || !mode) return null;
 

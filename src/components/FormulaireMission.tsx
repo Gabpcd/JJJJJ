@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useMemo, Suspense } from 'react';
 import { lazyRetry as lazy } from '@/lib/lazyRetry';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
-import { Loader2, AlertTriangle } from 'lucide-react';
-import { extraireContratPreference, injecterContratTag, peutExercerLiberal, getLabelProfession, type ContratPreference } from '@/lib/constantes';
+import { Loader2, AlertTriangle, CalendarDays, Timer, Ban, Banknote, Lightbulb, Lock, User, Calculator, Info, Save, Send, ClipboardList } from 'lucide-react';
+import { extraireContratPreference, injecterContratTag, peutExercerLiberal, getLabelProfession, getLabelTypeEtablissement, type ContratPreference } from '@/lib/constantes';
 import { SelectProfession } from '@/components/SelectProfession';
 import { SelectSpecialiteMedicale } from '@/components/SelectSpecialiteMedicale';
 import { WarningRist } from '@/components/WarningRist';
@@ -487,13 +487,13 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
 
       {dupliquerInfo && (
         <div className="bg-info/10 border border-info/20 rounded-xl p-3 mb-4 text-sm text-info">
-          📋 Vous dupliquez la mission « {dupliquerInfo} ». Ajustez les dates ci-dessous.
+          <ClipboardList aria-hidden="true" className="inline-block h-4 w-4 mr-1 -mt-0.5" />Vous dupliquez la mission « {dupliquerInfo} ». Ajustez les dates ci-dessous.
         </div>
       )}
 
       {erreurFactureImpayee && (
         <div className="bg-destructive/10 border border-destructive/30 rounded-xl p-3 mb-4">
-          <p className="text-sm font-semibold text-destructive">⚠️ Vous avez des factures impayées.</p>
+          <p className="text-sm font-semibold text-destructive flex items-center gap-1.5"><AlertTriangle aria-hidden="true" className="h-4 w-4 shrink-0" />Vous avez des factures impayées.</p>
           <p className="text-xs text-destructive/80 mt-1">Vous devez régulariser vos factures avant de publier de nouvelles missions.</p>
           <a href="/etablissement/facturation" className="text-sm font-medium text-destructive underline mt-2 inline-block">
             Régulariser mes factures →
@@ -523,10 +523,11 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
           <SelectProfession
             value={profession}
             onChange={setProfession}
+            placeholder="Sélectionnez la profession recherchée"
             filtresProfessions={etablissementType === 'PHARMACIE_OFFICINE' ? ['PHARMACIEN', 'PREPARATEUR_PHARMA'] : undefined}
           />
           {etablissementType === 'PHARMACIE_OFFICINE' && (
-            <p className="text-[10px] text-muted-foreground mt-1">🏥 Pharmacie : seuls les pharmaciens et préparateurs sont proposés.</p>
+            <p className="text-[10px] text-muted-foreground mt-1">Pharmacie : seuls les pharmaciens et préparateurs sont proposés.</p>
           )}
         </div>
 
@@ -577,9 +578,10 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
             placeholder="Ex: Urgences, Gériatrie, Réa, Bloc, EHPAD" className="input-base" />
         </div>
 
-        {/* Type de profil recherché */}
+        {/* Type de contrat proposé (Lot 11 : c'est le choix du type_contrat de la
+            mission, pas un « profil » — chaque option affiche ses conséquences) */}
         <div>
-          <label className="text-sm font-medium text-foreground mb-2 block">Type de profil recherché</label>
+          <label className="text-sm font-medium text-foreground mb-2 block">Type de contrat proposé</label>
           {uniqueExType === 'SALARIE' ? (
             <div className="p-3 bg-primary/5 border border-primary/20 rounded-xl">
               <p className="text-sm text-foreground">
@@ -595,9 +597,9 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
                 ? peutExercerLiberal(profession, etablissementType)
                 : true;
               return ([
-                { value: 'TOUS' as const, label: 'Tous les profils', desc: 'Salariés et libéraux peuvent postuler' },
-                { value: 'SALARIE' as const, label: 'Salarié uniquement', desc: 'Contrat CDD — soumis au plafond 48h/semaine' },
-                { value: 'LIBERAL' as const, label: 'Libéral uniquement', desc: 'Remplacement libéral — pas de plafond horaire' },
+                { value: 'TOUS' as const, label: 'Tous profils', desc: 'Selon le soignant retenu : salarié (vous êtes l’employeur) ou libéral (honoraires via la plateforme)' },
+                { value: 'SALARIE' as const, label: 'Salarié', desc: 'Vous êtes l’employeur : CDD, bulletin de paie, plafond légal 48 h/semaine' },
+                { value: 'LIBERAL' as const, label: 'Libéral', desc: 'Honoraires facturés via la plateforme — pas de plafond horaire' },
               ]).filter(opt => {
                 if (typesExAutorise && opt.value !== 'TOUS' && !typesExAutorise.includes(opt.value)) return false;
                 // Bloquer LIBERAL si incompatible avec le type d'établissement courant
@@ -622,7 +624,7 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
             ))}
             {profession && etablissementType && !peutExercerLiberal(profession, etablissementType) && (
               <div className="text-xs text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 rounded-lg p-3 mt-2">
-                <strong>ℹ️ Mode libéral non disponible :</strong> pour <strong>{profession}</strong> en <strong>{etablissementType}</strong>, le mode libéral n'est pas autorisé par la réglementation (cas de salariat déguisé, cf Conseil d'État 11/02/2025 arrêt Mediflash). Vous pouvez proposer la mission en CDD ou Vacation.
+                <strong><Info aria-hidden="true" className="inline-block h-3.5 w-3.5 mr-1 -mt-0.5" />Mode libéral non disponible :</strong> pour <strong>{getLabelProfession(profession)}</strong> en <strong>{getLabelTypeEtablissement(etablissementType).toLowerCase()}</strong>, le mode libéral n'est pas autorisé par la réglementation (cas de salariat déguisé, cf Conseil d'État 11/02/2025 arrêt Mediflash). Vous pouvez proposer la mission en CDD ou Vacation.
               </div>
             )}
           </div>
@@ -632,7 +634,7 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
         {/* Mode ponctuel: horaires */}
         {!modeRecurrent && (
           <div className="border border-primary/20 rounded-xl p-4 bg-primary/5 space-y-3">
-            <p className="text-sm font-semibold text-foreground">📅 Horaires de la mission</p>
+            <p className="text-sm font-semibold text-foreground flex items-center gap-1.5"><CalendarDays aria-hidden="true" className="h-4 w-4" />Horaires de la mission</p>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div>
                 <label htmlFor="mission-debut-le" className="text-xs text-muted-foreground mb-1 block">Date et heure de début *</label>
@@ -651,13 +653,13 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
                 <input id="mission-fin-le" type="datetime-local" value={finLe} onChange={(e) => setFinLe(e.target.value)} required className="input-base" />
               </div>
             </div>
-            {erreurDates && <p className="text-xs text-destructive font-medium">{erreurDates === 'La mission ne peut pas commencer dans le passé' ? '⛔ La mission doit commencer dans le futur.' : erreurDates}</p>}
-            {warningDureeLongue && <p className="text-xs text-warning font-medium">⚠️ Mission longue — assurez-vous que les repos légaux sont respectés</p>}
-            {warningDureeTresLongue && <p className="text-xs text-destructive font-medium">⚠️ Pour un remplacement de plusieurs jours, utilisez le mode récurrent ci-dessous</p>}
+            {erreurDates && <p className="text-xs text-destructive font-medium flex items-center gap-1"><Ban aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />{erreurDates === 'La mission ne peut pas commencer dans le passé' ? 'La mission doit commencer dans le futur.' : erreurDates}</p>}
+            {warningDureeLongue && <p className="text-xs text-warning font-medium flex items-center gap-1"><AlertTriangle aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />Mission longue — assurez-vous que les repos légaux sont respectés</p>}
+            {warningDureeTresLongue && <p className="text-xs text-destructive font-medium flex items-center gap-1"><AlertTriangle aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />Pour un remplacement de plusieurs jours, utilisez le mode récurrent ci-dessous</p>}
             {dureeEstimee > 0 && !erreurDates && (
               <div className="text-center">
-                <span className="badge-base bg-primary/10 text-primary">
-                  ⏱ Durée estimée : {Math.floor(dureeEstimee)}h{String(Math.round((dureeEstimee % 1) * 60)).padStart(2, '0')}
+                <span className="badge-base bg-primary/10 text-primary inline-flex items-center gap-1">
+                  <Timer aria-hidden="true" className="h-3.5 w-3.5" />Durée estimée : {Math.floor(dureeEstimee)}h{String(Math.round((dureeEstimee % 1) * 60)).padStart(2, '0')}
                 </span>
                 {heuresNuitEstimees > 0 && (
                   <p className="text-[10px] text-muted-foreground mt-1">dont ~{heuresNuitEstimees.toFixed(0)}h de nuit (21h-6h)</p>
@@ -671,7 +673,7 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
             Une mission de plusieurs jours = UNE seule mission (plusieurs créneaux). */}
         {!modeEdition && (
           <div>
-            <p className="text-sm font-semibold text-foreground mb-1">📅 Jours et horaires de la mission</p>
+            <p className="text-sm font-semibold text-foreground mb-1 flex items-center gap-1.5"><CalendarDays aria-hidden="true" className="h-4 w-4" />Jours et horaires de la mission</p>
             <p className="text-xs text-muted-foreground mb-3">
               Choisissez la période, puis ajustez les jours travaillés. Tout est publié en <strong>une seule mission</strong>.
             </p>
@@ -683,7 +685,7 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
             de cabinet : dentistes, médecins), création de mission ponctuelle uniquement */}
         {contratPreference === 'LIBERAL' && !modeEdition && (
           <div className="border border-primary/20 rounded-xl p-4 bg-primary/5 space-y-2">
-            <p className="text-sm font-semibold text-foreground">💶 Mode de rémunération</p>
+            <p className="text-sm font-semibold text-foreground flex items-center gap-1.5"><Banknote aria-hidden="true" className="h-4 w-4" />Mode de rémunération</p>
             <label className="flex items-start gap-3 cursor-pointer">
               <input type="radio" name="modeRemuneration" checked={modeRemuneration === 'TAUX_HORAIRE'}
                 onChange={() => setModeRemuneration('TAUX_HORAIRE')} className="mt-0.5 accent-primary" />
@@ -730,11 +732,11 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
           {/* Session F (F5) — Taux conseillé indicatif par profession (n'impose rien) */}
           {profession && (
             <p className="text-xs text-muted-foreground mt-1">
-              💡 Taux conseillé pour {getLabelProfession(profession)} : {getTauxConseille(profession)[0]}–{getTauxConseille(profession)[1]} €/h brut
+              <Lightbulb aria-hidden="true" className="inline-block h-3.5 w-3.5 mr-1 -mt-0.5" />Taux conseillé pour {getLabelProfession(profession)} : {getTauxConseille(profession)[0]}–{getTauxConseille(profession)[1]} €/h brut
             </p>
           )}
           {modeEdition && missionSource?.statut !== 'OUVERTE' && (
-            <p className="text-[10px] text-muted-foreground mt-1">🔒 Ces champs ne sont plus modifiables après acceptation.</p>
+            <p className="text-[10px] text-muted-foreground mt-1 flex items-center gap-1"><Lock aria-hidden="true" className="h-3 w-3 shrink-0" />Verrouillé : ces champs ne sont plus modifiables après acceptation.</p>
           )}
         </div>
         )}
@@ -743,19 +745,22 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
         {profession && taux > 0 && <WarningRist profession={profession} tauxSaisi={taux} ristPlafondActif={ristPlafondActif} estSecteurPublic={estSecteurPublic} />}
 
         {/* Urgence */}
-        <div className="flex items-center justify-between">
-          <label className="text-sm font-medium text-foreground">Mission urgente ?</label>
-          <button type="button" onClick={() => setEstUrgente(!estUrgente)}
-            className={`relative w-12 h-6 rounded-full transition-colors ${estUrgente ? 'bg-primary' : 'bg-muted'}`}>
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <label className="text-sm font-medium text-foreground">Mission urgente ?</label>
+            <p className="text-xs text-muted-foreground">Mise en avant dans les recherches + notification immédiate aux soignants disponibles à proximité.</p>
+          </div>
+          <button type="button" aria-label="Mission urgente" onClick={() => setEstUrgente(!estUrgente)}
+            className={`relative w-12 h-6 rounded-full transition-colors shrink-0 ${estUrgente ? 'bg-primary' : 'bg-muted'}`}>
             <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-card shadow transition-transform ${estUrgente ? 'translate-x-6' : 'translate-x-0.5'}`} />
           </button>
         </div>
 
         {estUrgente && (
-          <select value={niveauUrgence} onChange={(e) => setNiveauUrgence(Number(e.target.value))} className="input-base">
-            <option value={1}>⚡ Modéré — sous 48h</option>
-            <option value={2}>🔥 Élevé — sous 24h</option>
-            <option value={3}>🚨 Critique — sous 6h</option>
+          <select value={niveauUrgence} onChange={(e) => setNiveauUrgence(Number(e.target.value))} className="input-base" aria-label="Niveau d'urgence">
+            <option value={1}>Modéré — besoin sous 48h</option>
+            <option value={2}>Élevé — besoin sous 24h</option>
+            <option value={3}>Critique — besoin sous 6h</option>
         </select>
         )}
 
@@ -767,7 +772,7 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
               <input type="radio" name="modeAttribution" checked={modeAttribution === 'PREMIER_ARRIVE'}
                 onChange={() => setModeAttribution('PREMIER_ARRIVE')} className="mt-0.5 accent-primary" />
               <div>
-                <span className="text-sm text-foreground font-medium group-hover:text-primary transition-colors">⚡ Premier arrivé</span>
+                <span className="text-sm text-foreground font-medium group-hover:text-primary transition-colors inline-flex items-center gap-1.5"><Timer aria-hidden="true" className="h-4 w-4" />Premier arrivé</span>
                 <p className="text-xs text-muted-foreground">Le premier soignant qui accepte remporte la mission.</p>
               </div>
             </label>
@@ -775,7 +780,7 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
               <input type="radio" name="modeAttribution" checked={modeAttribution === 'CANDIDATURE'}
                 onChange={() => setModeAttribution('CANDIDATURE')} className="mt-0.5 accent-primary" />
               <div>
-                <span className="text-sm text-foreground font-medium group-hover:text-primary transition-colors">👤 Je choisis</span>
+                <span className="text-sm text-foreground font-medium group-hover:text-primary transition-colors inline-flex items-center gap-1.5"><User aria-hidden="true" className="h-4 w-4" />Je choisis</span>
                 <p className="text-xs text-muted-foreground">Les soignants postulent, vous consultez les profils et choisissez.</p>
               </div>
             </label>
@@ -785,7 +790,7 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
         {/* Estimation (ponctuel only) */}
         {!modeRecurrent && dureeEstimee > 0 && taux > 0 && (
           <div className="bg-gradient-to-r from-primary/5 to-info/5 border border-primary/20 rounded-2xl p-5">
-            <p className="font-bold text-foreground mb-3">💰 Estimation de rémunération</p>
+            <p className="font-bold text-foreground mb-3 flex items-center gap-1.5"><Calculator aria-hidden="true" className="h-4 w-4" />Estimation de rémunération</p>
             <div className="space-y-2 text-sm">
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Taux de base</span>
@@ -801,7 +806,7 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
               </div>
             </div>
             <div className="mt-3 text-xs text-muted-foreground space-y-1">
-              <p>ℹ️ Le montant final inclura automatiquement :</p>
+              <p className="flex items-center gap-1"><Info aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />Le montant final inclura automatiquement :</p>
               <p>• Majorations nuit (21h-6h), dimanche et jours fériés</p>
               <p>• IFM 10% (Indemnité de Fin de Mission)</p>
               <p>• ICP 10% (Indemnité de Congés Payés)</p>
@@ -820,7 +825,7 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
             : `${recurrenceValidation.totalHebdo}h / semaine (renseignez les dates pour le total)`;
           return (
             <div className="bg-gradient-to-r from-primary/5 to-info/5 border border-primary/20 rounded-2xl p-5">
-              <p className="font-bold text-foreground mb-3">💰 Estimation de rémunération (série)</p>
+              <p className="font-bold text-foreground mb-3 flex items-center gap-1.5"><Calculator aria-hidden="true" className="h-4 w-4" />Estimation de rémunération (série)</p>
               <div className="space-y-2 text-sm">
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Taux de base</span>
@@ -856,15 +861,11 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
         <button type="submit" disabled={!canSubmit}
           className="btn-primary w-full flex items-center justify-center gap-2 disabled:opacity-50">
           {loading && <Loader2 className="h-4 w-4 animate-spin" />}
-          {modeEdition ? '💾 Enregistrer les modifications' :
-            modeRecurrent ? `📤 Publier la mission${creneaux.length > 1 ? ` (${creneaux.length} jours)` : ''}` : '📤 Publier la mission'}
+          {modeEdition ? <><Save aria-hidden="true" className="h-4 w-4" />Enregistrer les modifications</> :
+            <><Send aria-hidden="true" className="h-4 w-4" />Publier la mission{modeRecurrent && creneaux.length > 1 ? ` (${creneaux.length} jours)` : ''}</>}
         </button>
-
-        {modeRecurrent && recurrenceBlocante && (
-          <p className="text-xs text-destructive text-center font-medium">
-            ⛔ Corrigez les violations légales ci-dessus avant de publier.
-          </p>
-        )}
+        {/* Lot 11 : plus de doublon d'erreur ici — la zone unique d'erreurs 48h
+            vit dans le bloc récurrence (scroll auto), le bouton est désactivé. */}
       </form>
 
       {erreurCodeTravail && (

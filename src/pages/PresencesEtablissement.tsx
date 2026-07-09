@@ -19,7 +19,7 @@ import { useNotification } from '@/contexts/NotificationContext';
 import { supabase } from '@/integrations/supabase/client';
 import { extraireMessageErreur } from '@/lib/erreurs';
 import type { RpcSuccessOrError, RpcValiderPresencesLot } from '@/lib/supabase-rpc-types';
-import { ClipboardCheck, CheckCircle, Clock, AlertTriangle } from 'lucide-react';
+import { ClipboardCheck, CheckCircle, CheckCircle2, Clock, AlertTriangle, Siren, MapPin, Bot } from 'lucide-react';
 import { toast } from 'sonner';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { useSearchParams } from 'react-router-dom';
@@ -132,7 +132,7 @@ export default function PresencesEtablissement() {
 
     // TODO(Lot 13) — Heures supplémentaires escrow : c'est ICI le déclencheur.
     // Si les heures validées dépassent le prévisionnel d'une mission en paiement
-    // rapide ⚡, un débit SEPA complémentaire (delta × taux + majorations,
+    // rapide, un débit SEPA complémentaire (delta × taux + majorations,
     // commission 15 %) doit être enfilé (garde-fou 48h : dépassement = alerte,
     // jamais un paiement silencieux). La validation ne réduit JAMAIS l'escrow
     // sous le plancher (règle #11) — contester = litige, pas validation partielle.
@@ -167,7 +167,7 @@ export default function PresencesEtablissement() {
     }
     afficherNotification({
       type: 'succes',
-      message: noteOk ? `✅ Présence validée et ${'★'.repeat(note)} envoyée !` : '✅ Présence validée !',
+      message: noteOk ? `Présence validée et note ${note}/5 envoyée !` : 'Présence validée !',
     });
     charger(); // Refresh from server to ensure consistency
   };
@@ -216,7 +216,7 @@ export default function PresencesEtablissement() {
         p_details: { type: 'validation_en_lot', nb_validees: nbValidees, ids_presences: ids },
         p_ip: null, p_navigateur: navigator.userAgent,
       });
-      afficherNotification({ type: 'succes', message: `✅ ${nbValidees} présences validées !` });
+      afficherNotification({ type: 'succes', message: `${nbValidees} présences validées !` });
       charger();
     }
   };
@@ -278,12 +278,12 @@ export default function PresencesEtablissement() {
       case 'alertes':
         return (
           <div className="flex flex-wrap gap-1">
-            {p.alerte_teleportation && <BadgeY2K variant="error" size="sm">🚨 Téléport.</BadgeY2K>}
-            {p.perimetre_gps_valide === false && <BadgeY2K variant="warning" size="sm">📍 Hors zone</BadgeY2K>}
-            {(p.arrivee_mock_detected || p.depart_mock_detected) && <BadgeY2K variant="error" size="sm">🤖 GPS truqué</BadgeY2K>}
-            {p.valide_par_etablissement && <BadgeY2K variant="success" size="sm">✅ Validée</BadgeY2K>}
+            {p.alerte_teleportation && <BadgeY2K variant="error" size="sm" icone={<Siren className="h-3 w-3" />}>Téléport.</BadgeY2K>}
+            {p.perimetre_gps_valide === false && <BadgeY2K variant="warning" size="sm" icone={<MapPin className="h-3 w-3" />}>Hors zone</BadgeY2K>}
+            {(p.arrivee_mock_detected || p.depart_mock_detected) && <BadgeY2K variant="error" size="sm" icone={<Bot className="h-3 w-3" />}>GPS truqué</BadgeY2K>}
+            {p.valide_par_etablissement && <BadgeY2K variant="success" size="sm" icone={<CheckCircle2 className="h-3 w-3" />}>Validée</BadgeY2K>}
             {!p.valide_par_etablissement && p.pointage_depart_le && !p.alerte_teleportation && p.perimetre_gps_valide && <BadgeY2K variant="info" size="sm" className="bg-muted text-muted-foreground border-muted">À valider</BadgeY2K>}
-            {!p.pointage_depart_le && <BadgeY2K variant="info" size="sm">⏳ En cours</BadgeY2K>}
+            {!p.pointage_depart_le && <BadgeY2K variant="info" size="sm" icone={<Clock className="h-3 w-3" />}>En cours</BadgeY2K>}
           </div>
         );
       case 'actions':

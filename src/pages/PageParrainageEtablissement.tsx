@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Copy, CheckCircle, MessageCircle, Mail, Linkedin, Share2, Gift, Trophy, Building2, Award, AlertCircle, Loader2 } from 'lucide-react';
+import { Copy, CheckCircle, MessageCircle, Mail, Linkedin, Share2, Gift, Trophy, Building2, Award, AlertCircle, Loader2, Info } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -205,7 +205,7 @@ export default function PageParrainageEtab() {
                   <Trophy className="h-8 w-8" />
                 </div>
                 <div>
-                  <h2 className="text-lg font-bold text-foreground">🏆 Ambassadeur</h2>
+                  <h2 className="text-lg font-bold text-foreground">Ambassadeur</h2>
                   <p className="text-sm text-muted-foreground">Vous avez parrainé {filleulsValides} établissements validés ! Merci pour votre confiance.</p>
                 </div>
               </div>
@@ -283,7 +283,7 @@ export default function PageParrainageEtab() {
                 <li>Après <strong>{SEUIL_AMBASSADEUR} filleuls validés</strong>, vous obtenez le badge <span className="text-primary font-semibold">Ambassadeur</span></li>
               </ol>
               <div className="mt-3 p-2 rounded-lg bg-muted text-xs text-muted-foreground">
-                ℹ️ Limite : {CAP_PARRAINAGES} parrainages validés maximum par établissement. Un même SIRET ne peut bénéficier que d'un seul parrainage validé.
+                <Info className="inline-block h-3.5 w-3.5 mr-1 align-text-bottom" aria-hidden="true" />Limite : {CAP_PARRAINAGES} parrainages validés maximum par établissement. Un même SIRET ne peut bénéficier que d'un seul parrainage validé.
               </div>
             </div>
 

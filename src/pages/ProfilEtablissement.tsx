@@ -12,7 +12,7 @@ import { extraireMessageErreur } from '@/lib/erreurs';
 import { reverseGeocode } from '@/lib/geocodage';
 import { capturerErreurSentry } from '@/lib/sentry';
 import { supabase, SUPABASE_URL } from '@/integrations/supabase/client';
-import { Info, MapPin, Loader2, Download, Trash2, Palette, Building2, Upload, FileCheck, Clock, AlertTriangle, LogOut } from 'lucide-react';
+import { Info, MapPin, Loader2, Download, Trash2, Palette, Building2, Upload, FileCheck, Clock, AlertTriangle, Lock } from 'lucide-react';
 import { AvatarUpload } from '@/components/AvatarUpload';
 import { Switch } from '@/components/ui/switch';
 import { Elements, IbanElement, useStripe, useElements } from '@stripe/react-stripe-js';
@@ -170,6 +170,15 @@ const CONVENTIONS_COLLECTIVES = [
   { valeur: 'AUTRE', label: 'Autre' },
 ];
 
+// Lot 11 : convention PROPOSÉE d'après le type d'établissement — une clinique
+// privée ne doit jamais hériter de la FPH par défaut (fausse les majorations).
+// L'établissement confirme avant d'enregistrer, rien n'est imposé.
+const CONVENTION_PAR_TYPE: Record<string, string> = {
+  HOPITAL_PUBLIC: 'FPH', CHU: 'FPH', CENTRE_SANTE: 'FPH', HAD: 'FPH',
+  CLINIQUE_PRIVEE: 'CCN_FHP_PRIVE', EHPAD_PRIVE: 'CCN_51_FEHAP',
+  PHARMACIE_OFFICINE: 'CCN_PHARMACIE',
+};
+
 export default function ProfilEtablissement() {
   usePageTitle('Profil');
   return (
@@ -192,6 +201,7 @@ export function ProfilEtablissementContent() {
   const [siret, setSiret] = useState('');
   const [type, setType] = useState('');
   const [conventionCollective, setConventionCollective] = useState('');
+  const [conventionSuggeree, setConventionSuggeree] = useState(false);
   const [modePaiement, setModePaiement] = useState('FACTURE_MENSUELLE');
   const [contratValide, setContratValide] = useState(false);
   const [contratUrl, setContratUrl] = useState<string | null>(null);
@@ -210,7 +220,13 @@ export function ProfilEtablissementContent() {
       if (data) {
         setSiret(data.siret);
         setType(data.type);
-        setConventionCollective(data.convention_collective || '');
+        if (data.convention_collective) {
+          setConventionCollective(data.convention_collective);
+        } else {
+          // Pas encore choisie : proposer celle du type d'établissement (à confirmer).
+          setConventionCollective(CONVENTION_PAR_TYPE[data.type] || '');
+          setConventionSuggeree(!!CONVENTION_PAR_TYPE[data.type]);
+        }
         setModePaiement((data as any).mode_paiement_commission || 'FACTURE_MENSUELLE');
         setContratValide(!!data.contrat_valide);
         setContratUrl(data.contrat_url || null);
@@ -253,6 +269,35 @@ export function ProfilEtablissementContent() {
 
   const maj = (champ: string, valeur: any) => setForm(prev => ({ ...prev, [champ]: valeur }));
 
+  // Lot 11 : la position de l'établissement (socle du géofencing F1) se pose
+  // par GÉOCODAGE DE L'ADRESSE (BAN) — pas par le GPS du téléphone de la
+  // personne qui remplit le profil. Toute nouvelle position (BAN ou GPS de
+  // secours) passe par une CONFIRMATION explicite avant d'écraser l'existante.
+  const [positionEnAttente, setPositionEnAttente] = useState<{ lat: number; lng: number; label: string; source: 'adresse' | 'gps' } | null>(null);
+
+  const localiserDepuisAdresse = async () => {
+    const q = [form.rue, form.codePostal, form.ville].filter(Boolean).join(' ').trim();
+    if (q.length < 6) {
+      afficherNotification({ type: 'erreur', message: 'Renseignez d\'abord l\'adresse (rue, code postal, ville) ci-dessus.' });
+      return;
+    }
+    setGeoLoading(true);
+    try {
+      const res = await fetch(`https://api-adresse.data.gouv.fr/search/?q=${encodeURIComponent(q)}&limit=1`);
+      const json = await res.json();
+      const f = json?.features?.[0];
+      if (f?.geometry?.coordinates) {
+        const [lo, la] = f.geometry.coordinates as [number, number];
+        setPositionEnAttente({ lat: la, lng: lo, label: f.properties?.label || q, source: 'adresse' });
+      } else {
+        afficherNotification({ type: 'erreur', message: 'Adresse introuvable dans la Base Adresse Nationale — vérifiez la saisie.' });
+      }
+    } catch {
+      afficherNotification({ type: 'erreur', message: 'Géocodage indisponible pour le moment. Réessayez.' });
+    }
+    setGeoLoading(false);
+  };
+
   const demanderGeolocalisation = () => {
     if (!navigator.geolocation) {
       afficherNotification({ type: 'erreur', message: 'La géolocalisation n\'est pas supportée par votre navigateur.' });
@@ -262,27 +307,42 @@ export function ProfilEtablissementContent() {
     navigator.geolocation.getCurrentPosition(
       async (position) => {
         const la = position.coords.latitude, lo = position.coords.longitude;
-        setLat(la.toString());
-        setLng(lo.toString());
         const adr = await reverseGeocode(la, lo);
-        if (adr) {
-          setForm((prev: any) => ({ ...prev, rue: adr.rue || prev.rue, ville: adr.ville || prev.ville, codePostal: adr.codePostal || prev.codePostal }));
-          afficherNotification({ type: 'succes', message: `📍 ${adr.label}` });
-        } else {
-          afficherNotification({ type: 'succes', message: 'Position récupérée.' });
-        }
+        // Jamais d'écrasement direct : la position part en confirmation.
+        setPositionEnAttente({ lat: la, lng: lo, label: adr?.label || `${la.toFixed(4)}, ${lo.toFixed(4)}`, source: 'gps' });
         setGeoLoading(false);
       },
       () => {
         setGeoLoading(false);
-        afficherNotification({ type: 'erreur', message: 'Localisation refusée. Vous pouvez saisir les coordonnées manuellement.' });
+        afficherNotification({ type: 'erreur', message: 'Localisation refusée. Utilisez « Localiser depuis l\'adresse ».' });
       }
     );
+  };
+
+  const confirmerPosition = async () => {
+    if (!positionEnAttente) return;
+    setLat(positionEnAttente.lat.toString());
+    setLng(positionEnAttente.lng.toString());
+    if (positionEnAttente.source === 'gps') {
+      const adr = await reverseGeocode(positionEnAttente.lat, positionEnAttente.lng);
+      if (adr) setForm((prev: any) => ({ ...prev, rue: adr.rue || prev.rue, ville: adr.ville || prev.ville, codePostal: adr.codePostal || prev.codePostal }));
+    }
+    setPositionEnAttente(null);
+    afficherNotification({ type: 'succes', message: 'Position confirmée — pensez à enregistrer le profil.' });
   };
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;
+    // Lot 11 : FINESS = 9 chiffres, taux de majoration bornes 0-200 %.
+    if (form.finess && !/^\d{9}$/.test(form.finess)) {
+      afficherNotification({ type: 'erreur', message: 'Le numéro FINESS comporte exactement 9 chiffres.' });
+      return;
+    }
+    if ([form.tauxNuit, form.tauxDimanche, form.tauxFerie].some(t => t < 0 || t > 200 || Number.isNaN(t))) {
+      afficherNotification({ type: 'erreur', message: 'Les taux de majoration doivent être compris entre 0 et 200 %.' });
+      return;
+    }
     setSaving(true);
 
     // C3: Validate couleur_theme format before saving
@@ -382,8 +442,24 @@ export function ProfilEtablissementContent() {
           <div className="space-y-3">
             <div><label className="text-sm font-medium text-foreground mb-1.5 block">Nom</label><input value={form.nom} onChange={e => maj('nom', e.target.value)} className="input-base" /></div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div><label className="text-sm font-medium text-foreground mb-1.5 block">SIRET</label><input value={siret} disabled className="input-base bg-muted cursor-not-allowed" /></div>
-              <div><label className="text-sm font-medium text-foreground mb-1.5 block">FINESS</label><input value={form.finess} onChange={e => maj('finess', e.target.value)} className="input-base" /></div>
+              <div>
+                <label className="text-sm font-medium text-foreground mb-1.5 flex items-center gap-1">SIRET <Lock aria-hidden="true" className="h-3 w-3 text-muted-foreground" /></label>
+                <input value={siret} disabled className="input-base bg-muted cursor-not-allowed" aria-describedby="siret-lock" />
+                <p id="siret-lock" className="text-[10px] text-muted-foreground mt-1">Verrouillé : identifiant légal vérifié à l'inscription.</p>
+              </div>
+              <div>
+                <label className="text-sm font-medium text-foreground mb-1.5 block">FINESS</label>
+                <input
+                  value={form.finess}
+                  onChange={e => maj('finess', e.target.value.replace(/\D/g, '').slice(0, 9))}
+                  inputMode="numeric"
+                  placeholder="9 chiffres"
+                  className={`input-base ${form.finess && form.finess.length !== 9 ? 'border-destructive' : ''}`}
+                />
+                {form.finess && form.finess.length !== 9 && (
+                  <p className="text-[10px] text-destructive mt-1">Le numéro FINESS comporte 9 chiffres.</p>
+                )}
+              </div>
             </div>
             <div><label className="text-sm font-medium text-foreground mb-1.5 block">Type</label><input value={getLabelTypeEtablissement(type)} disabled className="input-base bg-muted cursor-not-allowed" /></div>
             {/* A2: Convention collective */}
@@ -391,7 +467,7 @@ export function ProfilEtablissementContent() {
               <label className="text-sm font-medium text-foreground mb-1.5 block">Convention collective</label>
               <select
                 value={conventionCollective}
-                onChange={e => setConventionCollective(e.target.value)}
+                onChange={e => { setConventionCollective(e.target.value); setConventionSuggeree(false); }}
                 className="input-base"
               >
                 <option value="">— Sélectionner —</option>
@@ -399,6 +475,11 @@ export function ProfilEtablissementContent() {
                   <option key={c.valeur} value={c.valeur}>{c.label}</option>
                 ))}
               </select>
+              {conventionSuggeree && (
+                <p className="text-[10px] text-primary mt-1">
+                  Proposée d'après votre type d'établissement — vérifiez qu'elle correspond bien avant d'enregistrer.
+                </p>
+              )}
             </div>
           </div>
         </div>
@@ -462,27 +543,52 @@ export function ProfilEtablissementContent() {
         <div className="card-base">
           <h2 className="text-base font-semibold text-foreground mb-4">Géolocalisation</h2>
           <div className="space-y-3">
-            <button type="button" onClick={demanderGeolocalisation} disabled={geoLoading} className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-primary/5 border-2 border-dashed border-primary/30 rounded-xl text-primary font-semibold hover:bg-primary/10 transition disabled:opacity-50">
-              {geoLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <MapPin className="h-4 w-4" />}
-              {geoLoading ? 'Récupération en cours…' : '📍 Localiser mon établissement'}
+            <button type="button" onClick={localiserDepuisAdresse} disabled={geoLoading} className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-primary/5 border-2 border-dashed border-primary/30 rounded-xl text-primary font-semibold hover:bg-primary/10 transition disabled:opacity-50">
+              {geoLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <MapPin className="h-4 w-4" aria-hidden="true" />}
+              {geoLoading ? 'Recherche en cours…' : 'Localiser depuis l\'adresse'}
             </button>
+            <button type="button" onClick={demanderGeolocalisation} disabled={geoLoading} className="w-full text-xs text-muted-foreground underline underline-offset-2 disabled:opacity-50">
+              Ou utiliser la position de cet appareil (moins fiable)
+            </button>
+
+            {positionEnAttente && (
+              <div className="rounded-xl border border-primary/30 bg-primary/5 p-3 space-y-2">
+                <p className="text-sm font-medium text-foreground">Confirmer cette position ?</p>
+                <p className="text-xs text-muted-foreground">{positionEnAttente.label}</p>
+                <a
+                  href={`https://www.openstreetmap.org/?mlat=${positionEnAttente.lat}&mlon=${positionEnAttente.lng}#map=18/${positionEnAttente.lat}/${positionEnAttente.lng}`}
+                  target="_blank" rel="noopener noreferrer"
+                  className="text-xs text-primary underline"
+                >
+                  Vérifier sur la carte →
+                </a>
+                <div className="flex gap-2 pt-1">
+                  <button type="button" onClick={confirmerPosition} className="btn-primary text-xs flex-1">Confirmer la position</button>
+                  <button type="button" onClick={() => setPositionEnAttente(null)} className="btn-secondary text-xs flex-1">Annuler</button>
+                </div>
+              </div>
+            )}
+
             <p className="text-xs text-muted-foreground mt-2">
               {lat && lng
-                ? <>📍 Position enregistrée — l'adresse est renseignée automatiquement dans les champs ci-dessus. <span className="opacity-60">(coordonnées techniques : {Number(lat).toFixed(4)}, {Number(lng).toFixed(4)})</span></>
-                : "Cliquez sur « Localiser » pour positionner votre établissement (l'adresse sera remplie automatiquement)."}
+                ? <>Position enregistrée <span className="opacity-60">(coordonnées : {Number(lat).toFixed(4)}, {Number(lng).toFixed(4)})</span>. Elle sert au pointage géolocalisé des soignants.</>
+                : 'La position se calcule depuis votre adresse (Base Adresse Nationale) et sert au pointage géolocalisé des soignants.'}
             </p>
           </div>
         </div>
         <div className="card-base">
           <div className="flex items-start gap-2 rounded-xl bg-primary/5 border border-primary/20 p-3 mb-4">
             <Info className="h-4 w-4 text-primary mt-0.5 flex-shrink-0" />
-            <p className="text-xs text-primary">Ces taux s'appliquent automatiquement au calcul de la rémunération. Par défaut : Convention FPH.</p>
+            <p className="text-xs text-primary">Ces taux s'appliquent automatiquement au calcul de la rémunération, selon la convention collective choisie ci-dessus.</p>
           </div>
           <h2 className="text-base font-semibold text-foreground mb-4">Taux de majoration (Convention)</h2>
           <div className="space-y-3">
-            <div><label className="text-sm font-medium text-foreground mb-1.5 block">Nuit (21h-06h) — %</label><input type="number" step="0.01" value={form.tauxNuit} onChange={e => maj('tauxNuit', Number(e.target.value))} className="input-base" /></div>
-            <div><label className="text-sm font-medium text-foreground mb-1.5 block">Dimanche — %</label><input type="number" step="0.01" value={form.tauxDimanche} onChange={e => maj('tauxDimanche', Number(e.target.value))} className="input-base" /></div>
-            <div><label className="text-sm font-medium text-foreground mb-1.5 block">Jours fériés — %</label><input type="number" step="0.01" value={form.tauxFerie} onChange={e => maj('tauxFerie', Number(e.target.value))} className="input-base" /></div>
+            <div><label className="text-sm font-medium text-foreground mb-1.5 block">Nuit (21h-06h) — %</label><input type="number" step="0.01" min={0} max={200} value={form.tauxNuit} onChange={e => maj('tauxNuit', Number(e.target.value))} className="input-base" /></div>
+            <div><label className="text-sm font-medium text-foreground mb-1.5 block">Dimanche — %</label><input type="number" step="0.01" min={0} max={200} value={form.tauxDimanche} onChange={e => maj('tauxDimanche', Number(e.target.value))} className="input-base" /></div>
+            <div><label className="text-sm font-medium text-foreground mb-1.5 block">Jours fériés — %</label><input type="number" step="0.01" min={0} max={200} value={form.tauxFerie} onChange={e => maj('tauxFerie', Number(e.target.value))} className="input-base" /></div>
+            {[form.tauxNuit, form.tauxDimanche, form.tauxFerie].some(t => t < 0 || t > 200) && (
+              <p className="text-[10px] text-destructive">Un taux de majoration se situe entre 0 et 200 %.</p>
+            )}
           </div>
         </div>
         {/* Mode de paiement commission */}
@@ -537,13 +643,22 @@ export function ProfilEtablissementContent() {
             <Palette className="h-5 w-5 text-primary" /> Couleur de votre établissement
           </h2>
           <div className="flex items-center gap-4">
-            <input
-              type="color"
-              value={couleurTheme}
-              onChange={e => setCouleurTheme(e.target.value)}
-              className="w-12 h-12 rounded-xl border border-border cursor-pointer"
-              aria-label="Choisir la couleur de l'établissement"
-            />
+            {/* Lot 11 : palette curatée — pas de rouge/orange (réservés aux états
+                sémantiques erreur/warning des cartes). */}
+            <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Couleur de l'établissement">
+              {['#E04590', '#8B5CF6', '#06B6D4', '#2563EB', '#059669', '#0D9488', '#4F46E5', '#475569'].map((c) => (
+                <button
+                  key={c}
+                  type="button"
+                  role="radio"
+                  aria-checked={couleurTheme.toLowerCase() === c.toLowerCase()}
+                  aria-label={`Couleur ${c}`}
+                  onClick={() => setCouleurTheme(c)}
+                  className={`h-9 w-9 rounded-full border-2 transition-transform ${couleurTheme.toLowerCase() === c.toLowerCase() ? 'border-foreground scale-110' : 'border-transparent hover:scale-105'}`}
+                  style={{ backgroundColor: c }}
+                />
+              ))}
+            </div>
             <div className="flex-1">
               <p className="text-sm text-muted-foreground">Cette couleur apparaît sur vos cartes mission.</p>
               <div className="mt-2 rounded-xl border border-border overflow-hidden">
@@ -637,9 +752,12 @@ export function ProfilEtablissementContent() {
           </div>
         </div>
 
-        <button type="submit" disabled={saving} className="btn-primary w-full md:w-auto disabled:opacity-50">
-          {saving ? 'Enregistrement…' : 'Enregistrer les modifications'}
-        </button>
+        {/* Lot 11 : Enregistrer sticky — toujours accessible sur un long formulaire mobile */}
+        <div className="sticky bottom-4 z-10">
+          <button type="submit" disabled={saving} className="btn-primary w-full md:w-auto disabled:opacity-50 shadow-lg">
+            {saving ? 'Enregistrement…' : 'Enregistrer les modifications'}
+          </button>
+        </div>
       </form>
 
       {/* Widget embarquable */}
@@ -762,15 +880,8 @@ export function ProfilEtablissementContent() {
         </div>
       )}
 
-      {/* Déconnexion — visible uniquement sur mobile */}
-      <div className="md:hidden mt-6 pt-6 border-t border-border">
-        <button
-          onClick={async () => { await deconnexion(); navigate('/'); }}
-          className="btn-secondary w-full flex items-center justify-center gap-2 text-destructive border-destructive/30 hover:bg-destructive/5"
-        >
-          <LogOut className="h-4 w-4" /> Se déconnecter
-        </button>
-      </div>
+      {/* Lot 11 : Se déconnecter unique — il vit en fin de Mon compte
+          (le doublon mobile de cet onglet est retiré). */}
     </>
   );
 }

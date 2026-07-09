@@ -12,7 +12,7 @@
  *   3. Coordonnées bancaires (RIB) — DIFFÉRÉ : demandé à la première
  *      facturation (just-in-time, standard Stripe). Aucune action requise ici.
  *
- * Les états ✓ done / actuel / à faire sont pilotés par l'état réel de
+ * Les états done / actuel / à faire sont pilotés par l'état réel de
  * l'établissement (contrat signé ? rattachement vérifié ?). Le CTA principal
  * fait défiler / ouvre la première étape incomplète.
  */
@@ -23,6 +23,7 @@ import { messageErreurEdgeFn } from '@/lib/erreurs';
 import {
   FileText, CheckCircle, CheckCircle2, Loader2, ArrowLeft, Shield, Upload,
   Building2, UserCheck, Mail, AlertTriangle, Clock, CreditCard, ChevronRight,
+  Check, Zap,
 } from 'lucide-react';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { LayoutApp } from '@/components/LayoutApp';
@@ -91,7 +92,7 @@ type EtabState = {
   email_contact_verifie: boolean | null;
   rattachement_methode: string | null;
   rattachement_verifie: boolean | null;
-  // 7c — préfinancement ⚡ (mandat SEPA) + prévisibilité paie
+  // 7c — préfinancement (mandat SEPA) + prévisibilité paie
   mode_paiement_commission?: string | null;
   stripe_sepa_payment_method_id?: string | null;
   jour_paie_habituel?: number | null;
@@ -718,7 +719,7 @@ export default function ActiverEtablissement() {
         </CardY2K>
 
         {/* ── Étape 3 : Paiement — SEPA en OPT-OUT (7c, décision §11.3) ───────
-            Le mandat SEPA est une étape du chemin normal avec pitch ⚡, mais
+            Le mandat SEPA est une étape du chemin normal avec pitch, mais
             « passer cette étape » reste possible discrètement : l'étape n'est
             pas gatante. Le flux SEPA (SetupIntent Stripe) existe déjà dans
             Paramètres → Profil — on y renvoie, on ne le duplique pas. */}
@@ -730,7 +731,7 @@ export default function ActiverEtablissement() {
                 <p className="text-sm font-semibold text-foreground">3. Paiement des commissions</p>
                 <p className="text-xs text-muted-foreground">
                   {etab?.mode_paiement_commission === 'SEPA_DEBIT' && etab?.stripe_sepa_payment_method_id
-                    ? 'Prélèvement SEPA actif ✓'
+                    ? <>Prélèvement SEPA actif <Check className="inline-block h-3 w-3 align-text-bottom" aria-hidden="true" /></>
                     : 'Prélèvement SEPA recommandé — 2 minutes'}
                 </p>
               </div>
@@ -763,7 +764,7 @@ export default function ActiverEtablissement() {
                   <p className="text-xs text-muted-foreground">
                     Vos factures de commission sont prélevées automatiquement, sans
                     virement à faire ni relance. C'est aussi le prérequis du futur
-                    « ⚡ Paiement rapide » : les missions des établissements en
+                    « <Zap className="inline-block h-3 w-3 align-text-bottom" aria-hidden="true" /> Paiement rapide » : les missions des établissements en
                     prélèvement SEPA seront mises en avant auprès des soignants et
                     pourvues en premier.
                   </p>

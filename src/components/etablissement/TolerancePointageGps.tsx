@@ -106,6 +106,24 @@ export function TolerancePointageGps() {
         </div>
       </div>
 
+      {/* Lot 11 : presets 1-tap (Urbain/Rural/Campus) + saisie libre conservée */}
+      <div className="flex gap-2" role="group" aria-label="Presets de tolérance">
+        {([['Urbain', 100], ['Rural', 200], ['Campus', 500]] as const).map(([nom, m]) => (
+          <button
+            key={nom}
+            type="button"
+            onClick={() => setValeur(m)}
+            disabled={saving}
+            className={`flex-1 rounded-xl border px-3 py-2 text-xs font-medium transition-colors ${
+              valeur === m ? 'border-primary bg-primary/10 text-primary' : 'border-border text-muted-foreground hover:border-primary/40'
+            }`}
+          >
+            {nom}
+            <span className="block text-[10px] font-normal">{m} m</span>
+          </button>
+        ))}
+      </div>
+
       <div className="space-y-3">
         <div className="flex items-baseline justify-between">
           <label htmlFor="tolerance-slider" className="text-sm font-medium text-foreground">

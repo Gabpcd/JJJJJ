@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Calendar, Clock, Banknote, User, Copy, XCircle, RotateCcw, Bell } from 'lucide-react';
+import { Calendar, Clock, Banknote, User, Copy, XCircle, RotateCcw, Bell, AlertTriangle, Star, Siren } from 'lucide-react';
 import { AvatarDisplay } from '@/components/AvatarUpload';
 import { BadgeStatut } from '@/components/BadgeStatut';
 import { BadgeY2K } from '@/components/y2k/BadgeY2K';
@@ -42,14 +42,14 @@ function formatMontant(v: number | null | undefined): string {
   return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(v);
 }
 
-function tempsDepuis(dateStr: string): { texte: string; couleur: string } {
+function tempsDepuis(dateStr: string): { texte: string; couleur: string; jours: number } {
   const diff = Date.now() - new Date(dateStr).getTime();
   const minutes = Math.floor(diff / 60000);
-  if (minutes < 60) return { texte: `Il y a ${minutes} min`, couleur: 'text-success' };
+  if (minutes < 60) return { texte: `Il y a ${minutes} min`, couleur: 'text-success', jours: 0 };
   const heures = Math.floor(minutes / 60);
-  if (heures < 24) return { texte: `Il y a ${heures}h`, couleur: 'text-warning' };
+  if (heures < 24) return { texte: `Il y a ${heures}h`, couleur: 'text-warning', jours: 0 };
   const jours = Math.floor(heures / 24);
-  return { texte: `Il y a ${jours} jour${jours > 1 ? 's' : ''}`, couleur: 'text-destructive' };
+  return { texte: `Il y a ${jours} jour${jours > 1 ? 's' : ''}`, couleur: 'text-destructive', jours };
 }
 
 function scoreColor(score: number): string {
@@ -67,7 +67,19 @@ export const CarteMission = React.memo(function CarteMission({ mission, afficher
   const heureDebut = format(debut, 'HH:mm');
   const heureFin = format(fin, 'HH:mm');
   const dateFormatee = format(debut, 'EEEE d MMMM yyyy', { locale: fr });
-  const tempsInfo = m.statut === 'OUVERTE' ? tempsDepuis(m.cree_le) : null;
+  // Lot 11 : l'ancienneté seule n'est pas un signal — le rouge est réservé au
+  // cas actionnable « ouverte, ancienne ET sans candidature ». Sinon, neutre.
+  const anciennete = m.statut === 'OUVERTE' ? tempsDepuis(m.cree_le) : null;
+  const sansCandidatureDepuis = anciennete && anciennete.jours >= 2 && (m.nb_candidatures_attente ?? 0) === 0
+    ? anciennete.jours : null;
+  const tempsInfo = anciennete && sansCandidatureDepuis == null
+    ? { texte: `Publiée ${anciennete.texte.toLowerCase()}`, couleur: 'text-muted-foreground' }
+    : null;
+  // Mission multi-jours : « 8 h/jour · 120 h au total » est lisible là où
+  // « 13:00 → 21:00 (120h) » ne l'est pas.
+  const nbJoursMission = Math.max(1, Math.round((fin.getTime() - debut.getTime()) / 86400000));
+  const estMultiJours = duree > 24 && nbJoursMission > 1;
+  const heuresParJour = estMultiJours ? Math.round((duree / nbJoursMission) * 10) / 10 : 0;
   const estAnnulee = m.statut === 'ANNULEE_PAR_ETABLISSEMENT' || m.statut === 'ANNULEE_PAR_SOIGNANT';
   const estTerminee = m.statut === 'TERMINEE';
   // F3 — « Republier » disponible sur les missions passées : annulées ET terminées.
@@ -119,13 +131,14 @@ export const CarteMission = React.memo(function CarteMission({ mission, afficher
       <div className="flex items-start justify-between mb-2">
         <div className="flex items-center gap-2 flex-wrap">
            {m.est_urgente && (
-            <span className="badge-base bg-destructive/10 text-destructive text-[10px]" aria-label={`Urgence niveau ${m.niveau_urgence === 3 ? 'critique' : m.niveau_urgence === 2 ? 'élevé' : 'standard'}`}>
-              {m.niveau_urgence === 3 ? '🚨 URGENT Critique' : m.niveau_urgence === 2 ? '🔥 URGENT Élevé' : '⚡ URGENT'}
+            <span className="badge-base bg-destructive/10 text-destructive text-[10px] inline-flex items-center gap-1" aria-label={`Urgence niveau ${m.niveau_urgence === 3 ? 'critique' : m.niveau_urgence === 2 ? 'élevé' : 'standard'}`}>
+              <Siren aria-hidden="true" className="h-3 w-3" />
+              {m.niveau_urgence === 3 ? 'URGENT · critique' : m.niveau_urgence === 2 ? 'URGENT · élevé' : 'URGENT'}
             </span>
           )}
           <BadgeStatut statut={m.statut} />
           {m.has_litige && (
-            <span className="badge-base bg-warning/10 text-warning text-[10px]">⚠️ Litige</span>
+            <span className="badge-base bg-warning/10 text-warning text-[10px] inline-flex items-center gap-1"><AlertTriangle aria-hidden="true" className="h-3 w-3" />Litige</span>
           )}
           {/* F4 — candidatures en attente à traiter */}
           {afficheCandidatures && (
@@ -138,6 +151,14 @@ export const CarteMission = React.memo(function CarteMission({ mission, afficher
           )}
         </div>
       </div>
+
+      {/* Signal actionnable : ouverte, ancienne, zéro candidature → suggérer un levier */}
+      {sansCandidatureDepuis != null && (
+        <p className="text-[10px] font-medium text-destructive mb-2 flex items-center gap-1">
+          <AlertTriangle aria-hidden="true" className="h-3 w-3 shrink-0" />
+          Aucune candidature depuis {sansCandidatureDepuis} j — essayez d'ajuster le taux ou de passer la mission en urgente.
+        </p>
+      )}
 
       <h3 className="font-semibold text-sm text-foreground mb-1">{m.intitule}</h3>
       <p className="text-xs text-muted-foreground mb-2">
@@ -157,7 +178,10 @@ export const CarteMission = React.memo(function CarteMission({ mission, afficher
       </div>
       <div className="flex items-center gap-4 text-xs text-muted-foreground mb-3">
         <span className="flex items-center gap-1">
-          <Clock className="h-3.5 w-3.5" />{heureDebut} → {heureFin} ({Math.round(duree * 10) / 10}h)
+          <Clock className="h-3.5 w-3.5" />
+          {estMultiJours
+            ? `${heuresParJour} h/jour · ${Math.round(duree * 10) / 10} h au total`
+            : `${heureDebut} → ${heureFin} (${Math.round(duree * 10) / 10}h)`}
         </span>
       </div>
 
@@ -165,11 +189,11 @@ export const CarteMission = React.memo(function CarteMission({ mission, afficher
         <Banknote className="h-3.5 w-3.5 text-primary" />
         <span className="text-foreground font-medium">{m.taux_horaire_base?.toFixed(2)} €/h</span>
         {(m.net_estime ?? m.net_a_payer ?? 0) > 0 && (
-          <span className="text-muted-foreground">→ Net estimé* : <strong className="text-primary">{formatMontant(m.net_estime ?? (m.net_a_payer != null ? m.net_a_payer * 0.78 : null))}</strong></span>
+          <span className="text-muted-foreground">→ Net estimé soignant (indicatif) : <strong className="text-primary">{formatMontant(m.net_estime ?? (m.net_a_payer != null ? m.net_a_payer * 0.78 : null))}</strong></span>
         )}
       </div>
       {m.rist_plafond_applique && (
-        <p className="text-[10px] text-warning font-medium mb-2">⚠️ Taux plafonné Loi Rist</p>
+        <p className="text-[10px] text-warning font-medium mb-2 flex items-center gap-1"><AlertTriangle aria-hidden="true" className="h-3 w-3 shrink-0" />Taux plafonné Loi Rist</p>
       )}
 
       <div className="flex items-center gap-2 text-xs text-muted-foreground mb-3">
@@ -184,11 +208,19 @@ export const CarteMission = React.memo(function CarteMission({ mission, afficher
             <span>
               {m.soignants.prenom} {m.soignants.nom}
               {m.soignants.score_fiabilite != null && m.soignants.total_missions_terminees >= 3 ? (
-                <span className={`ml-1 font-semibold ${scoreColor(m.soignants.score_fiabilite)}`}>
-                  (⭐ {m.soignants.score_fiabilite}/100)
+                <span className={`ml-1 font-semibold inline-flex items-center gap-0.5 ${scoreColor(m.soignants.score_fiabilite)}`}>
+                  (<Star aria-hidden="true" className="h-3 w-3" />{m.soignants.score_fiabilite}/100)
                 </span>
+              ) : estTerminee ? (
+                /* Lot 11 : au lieu d'un constat passif, le CTA contextuel */
+                <button
+                  onClick={(e) => { e.stopPropagation(); navigate(`/etablissement/missions/${m.id}`); }}
+                  className="ml-1 text-primary font-medium hover:underline"
+                >
+                  Évaluer ce soignant
+                </button>
               ) : (
-                <span className="ml-1 text-muted-foreground">(Pas encore d'évaluation)</span>
+                <span className="ml-1 text-muted-foreground">(nouveau sur Jolene)</span>
               )}
             </span>
           </>
@@ -207,24 +239,28 @@ export const CarteMission = React.memo(function CarteMission({ mission, afficher
           <BoutonY2K variant="primary" size="sm" onClick={ouvrirRepublier} iconeGauche={<RotateCcw className="h-4 w-4" />} className="w-full sm:w-auto">
             Republier cette mission
           </BoutonY2K>
+          {/* Lot 11 : Republier ≠ Dupliquer — sous-textes explicites */}
+          <p className="text-[10px] text-muted-foreground mt-1">Mêmes paramètres, nouvelles dates — publiée directement.</p>
         </div>
       )}
 
-      <div className="flex gap-3 mt-2 flex-wrap items-center" onClick={(e) => e.stopPropagation()}>
+      <div className="flex gap-3 mt-2 flex-wrap items-center min-h-[44px]" onClick={(e) => e.stopPropagation()}>
         <button
           onClick={() => navigate(`/etablissement/missions/${m.id}`)}
-          className="text-xs font-medium text-primary hover:underline"
+          className="text-xs font-medium text-primary hover:underline py-2"
         >
           Voir détail
         </button>
         {onDupliquer && (
-          <button onClick={() => onDupliquer(m)} className="text-xs font-medium text-muted-foreground hover:text-foreground flex items-center gap-1">
-            <Copy className="h-3 w-3" /> Dupliquer
+          <button onClick={() => onDupliquer(m)} title="Crée un brouillon éditable à partir de cette mission" className="text-xs font-medium text-muted-foreground hover:text-foreground flex items-center gap-1 py-2">
+            <Copy className="h-3 w-3" aria-hidden="true" /> Dupliquer <span className="hidden sm:inline text-muted-foreground/70">(brouillon éditable)</span>
           </button>
         )}
         {onAnnuler && (m.statut === 'OUVERTE' || m.statut === 'ASSIGNEE') && (
-          <button onClick={() => onAnnuler(m)} className="text-xs font-medium text-destructive hover:underline flex items-center gap-1">
-            <XCircle className="h-3 w-3" /> Annuler
+          /* Lot 11 : action destructive séparée du groupe (ml-auto) — la
+             confirmation vit dans la modale du parent. */
+          <button onClick={() => onAnnuler(m)} className="text-xs font-medium text-destructive hover:underline flex items-center gap-1 py-2 ml-auto">
+            <XCircle className="h-3 w-3" aria-hidden="true" /> Annuler
           </button>
         )}
       </div>

@@ -6,7 +6,7 @@ import { ChargementPage } from '@/components/ChargementPage';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
-import { Scale, PlusCircle, MessageCircle } from 'lucide-react';
+import { Scale, PlusCircle, MessageCircle, User, AlertTriangle } from 'lucide-react';
 import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
@@ -143,13 +143,14 @@ export default function LitigesEtablissement() {
         </BoutonY2K>
       </div>
 
+      {/* Lot 11 / D10 : registre sobre sur le conflit — pas de mascotte, état
+          vide rassurant qui n'invite pas au litige. */}
       {litiges.length === 0 ? (
         <EmptyState
           icone={<Scale />}
-          mascotte="happy"
-          titre="Aucun litige"
-          description="Aucun litige sur vos missions. Cliquez sur « Ouvrir un litige » pour contester une mission."
-          variant="success"
+          titre="Aucun litige en cours"
+          description="Tout est en ordre sur vos missions. Si un désaccord survient, vous pourrez le signaler depuis la mission concernée."
+          variant="info"
         />
       ) : (
         <div className="space-y-4">
@@ -183,7 +184,7 @@ export default function LitigesEtablissement() {
                       {l.mission_intitule || 'Mission'}
                     </button>
                     <p className="text-xs text-muted-foreground mt-0.5">
-                      👤 {l.soignant_nom} · {l.soignant_profession}
+                      <User className="inline-block h-3 w-3 mr-0.5 align-text-bottom" aria-hidden="true" />{l.soignant_nom} · {l.soignant_profession}
                       {l.mission_debut && ` · ${format(new Date(l.mission_debut), 'd MMM yyyy', { locale: fr })}`}
                     </p>
                     <p className="text-xs text-muted-foreground mt-1 truncate" title={l.motif}>
@@ -270,7 +271,7 @@ export default function LitigesEtablissement() {
           <DialogResponsiveFooter>
             <BoutonY2K variant="ghost" onClick={() => setShowNew(false)}>Annuler</BoutonY2K>
             <BoutonY2K onClick={creerLitige} disabled={creating || !selectedMissionId || !newMotif.trim()}>
-              {creating ? 'Création…' : '⚠️ Ouvrir le litige'}
+              {creating ? 'Création…' : <><AlertTriangle className="inline-block h-4 w-4 mr-1 align-text-bottom" aria-hidden="true" />Ouvrir le litige</>}
             </BoutonY2K>
           </DialogResponsiveFooter>
         </DialogResponsiveContent>

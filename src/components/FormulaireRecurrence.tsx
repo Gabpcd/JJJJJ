@@ -164,9 +164,18 @@ export function validerHorairesFlex(horairesParJour: HorairesJour[]): Validation
 
   const totalHebdo = joursActifs.reduce((s, j) => s + j.dureeHeures, 0);
   if (totalHebdo > 48) {
+    // Suggestion de fix chiffrée (Lot 11) : retirer un jour si ça suffit, sinon
+    // la durée/jour qui ramène la semaine exactement à 48h (ex. « 9h36/jour »).
+    const dureeMax = joursActifs.length ? Math.max(...joursActifs.map((j) => j.dureeHeures)) : 0;
+    const cibleParJour = joursActifs.length ? 48 / joursActifs.length : 48;
+    const hCible = Math.floor(cibleParJour);
+    const minCible = Math.round((cibleParJour - hCible) * 60);
+    const fix = totalHebdo - dureeMax <= 48
+      ? `retirez un jour ou passez à ${hCible}h${String(minCible).padStart(2, '0')}/jour`
+      : `passez à ${hCible}h${String(minCible).padStart(2, '0')}/jour maximum`;
     erreurs.push({
       type: 'PLAFOND_48H',
-      message: `La semaine totalise ${totalHebdo}h. Maximum légal : 48h (Art. L3121-20)`,
+      message: `La semaine totalise ${totalHebdo}h. Maximum légal : 48h (Art. L3121-20). Pour corriger : ${fix}.`,
       gravite: 'bloquant',
     });
   }
@@ -289,6 +298,14 @@ export function FormulaireRecurrence({ onChange }: FormulaireRecurrenceProps) {
     onChange({ dateDebut, dateFin, horairesParJour }, creneaux, validation);
   }, [dateDebut, dateFin, horairesParJour, creneaux, validation]);
 
+  // Lot 11 : zone d'erreurs UNIQUE — quand une violation bloquante apparaît,
+  // on l'amène à l'écran (scroll de section, pas de focus input — règle iOS).
+  const zoneErreursRef = React.useRef<HTMLDivElement | null>(null);
+  const aBloquant = validation.erreurs.some((e) => e.gravite === 'bloquant');
+  React.useEffect(() => {
+    if (aBloquant) zoneErreursRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }, [aBloquant]);
+
   const toggleJour = useCallback((iso: number) => {
     setHorairesParJour(prev =>
       prev.map(j => j.jourISO === iso ? { ...j, actif: !j.actif } : j)
@@ -407,7 +424,7 @@ export function FormulaireRecurrence({ onChange }: FormulaireRecurrenceProps) {
                 />
                 {reposErr && (
                   <div className="flex items-center gap-2 text-xs text-destructive font-medium pl-4 py-1">
-                    <span>↕️ ❌</span>
+                    <XCircle aria-hidden="true" className="h-4 w-4 shrink-0" />
                     <span>{reposErr}</span>
                   </div>
                 )}
@@ -419,25 +436,28 @@ export function FormulaireRecurrence({ onChange }: FormulaireRecurrenceProps) {
           <div className="border-t border-border mt-3 pt-3 flex items-center justify-between text-sm">
             <span className="text-muted-foreground">Total hebdomadaire :</span>
             <span className={`font-bold ${validation.totalHebdo > 48 ? 'text-destructive' : validation.totalHebdo > 36 ? 'text-warning' : 'text-primary'}`}>
-              {validation.totalHebdo}h {validation.totalHebdo > 48 && '← 🔴 DÉPASSE 48h !'}
+              {validation.totalHebdo}h{validation.totalHebdo > 48 && ' — dépasse le plafond légal de 48h'}
             </span>
           </div>
+          <p className="text-[10px] text-muted-foreground mt-1">
+            Durées : orange = journée de plus de 10h (12h max recommandé), rouge = plus de 12h.
+          </p>
         </div>
       )}
 
-      {/* Validations */}
+      {/* Validations — zone d'erreurs UNIQUE (Lot 11), amenée à l'écran au 1er bloquant */}
       {validation.erreurs.length > 0 && (
-        <div className="space-y-2">
+        <div ref={zoneErreursRef} className="space-y-2" role="alert">
           {validation.erreurs.map((e, i) => (
             <div key={i} className={`flex items-start gap-2 text-xs font-medium ${e.gravite === 'bloquant' ? 'text-destructive' : 'text-warning'}`}>
-              {e.gravite === 'bloquant' ? <XCircle className="h-4 w-4 shrink-0 mt-0.5" /> : <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />}
+              {e.gravite === 'bloquant' ? <XCircle aria-hidden="true" className="h-4 w-4 shrink-0 mt-0.5" /> : <AlertTriangle aria-hidden="true" className="h-4 w-4 shrink-0 mt-0.5" />}
               <div>
                 <p>{e.message}</p>
                 {e.type === 'PLAFOND_48H' && (
-                  <p className="text-[10px] mt-0.5">📖 Art. L3121-20 — {ARTICLES_CODE_TRAVAIL['L3121-20']?.explicationSimple}</p>
+                  <p className="text-[10px] mt-0.5">Art. L3121-20 — {ARTICLES_CODE_TRAVAIL['L3121-20']?.explicationSimple}</p>
                 )}
                 {e.type === 'REPOS_11H' && (
-                  <p className="text-[10px] mt-0.5">📖 Art. L3131-1 — {ARTICLES_CODE_TRAVAIL['L3131-1']?.explicationSimple}</p>
+                  <p className="text-[10px] mt-0.5">Art. L3131-1 — {ARTICLES_CODE_TRAVAIL['L3131-1']?.explicationSimple}</p>
                 )}
               </div>
             </div>
@@ -462,7 +482,7 @@ export function FormulaireRecurrence({ onChange }: FormulaireRecurrenceProps) {
       {creneaux.length > 0 && (
         <div className="card-base">
           <p className="text-sm font-bold text-foreground mb-3">
-            📋 Prévisualisation : {creneaux.length} créneau{creneaux.length > 1 ? 'x' : ''} sur {creneauxParSemaine.length} semaine{creneauxParSemaine.length > 1 ? 's' : ''}
+            Prévisualisation : {creneaux.length} créneau{creneaux.length > 1 ? 'x' : ''} sur {creneauxParSemaine.length} semaine{creneauxParSemaine.length > 1 ? 's' : ''}
           </p>
 
           <div className="max-h-64 overflow-y-auto space-y-4">
@@ -470,14 +490,14 @@ export function FormulaireRecurrence({ onChange }: FormulaireRecurrenceProps) {
               <div key={key}>
                 <div className="flex items-center justify-between mb-1">
                   <p className="text-xs font-semibold text-foreground">Semaine ({sem.label})</p>
-                  <span className={`text-xs font-bold ${sem.totalHeures > 48 ? 'text-destructive' : 'text-primary'}`}>
-                    {sem.totalHeures}h {sem.totalHeures > 48 ? '❌' : '✅'}
+                  <span className={`text-xs font-bold inline-flex items-center gap-1 ${sem.totalHeures > 48 ? 'text-destructive' : 'text-primary'}`}>
+                    {sem.totalHeures}h {sem.totalHeures > 48 ? <XCircle aria-hidden="true" className="h-3.5 w-3.5" /> : <CheckCircle2 aria-hidden="true" className="h-3.5 w-3.5" />}
                   </span>
                 </div>
                 <div className="space-y-0.5">
                   {sem.creneaux.map((c, i) => (
                     <div key={i} className="flex items-center gap-2 text-xs text-foreground">
-                      <span className="text-primary">✅</span>
+                      <CheckCircle2 aria-hidden="true" className="h-3.5 w-3.5 text-primary shrink-0" />
                       <span className="font-medium w-32">
                         {format(new Date(c.debut), 'EEE d MMM', { locale: fr })}
                       </span>

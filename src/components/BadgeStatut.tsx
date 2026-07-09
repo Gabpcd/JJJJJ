@@ -6,11 +6,13 @@ interface BadgeStatutProps {
 }
 
 // Mapping statut métier mission → variant Y2K (Sprint 12-G).
-// Cohérence avec autres usages Sprint 12-E (OUVERTE warning, etc.).
+// Lot 11 : Ouverte ≠ Expirée — une mission ouverte (recrutement actif) n'est
+// pas un avertissement ; l'orange est réservé aux états qui demandent
+// attention (expirée sans candidat, litige).
 const STATUT_VARIANT: Record<string, 'success' | 'warning' | 'error' | 'info' | 'premium'> = {
-  OUVERTE: 'warning',
-  ASSIGNEE: 'info',
-  EN_COURS: 'info',
+  OUVERTE: 'info',
+  ASSIGNEE: 'success',
+  EN_COURS: 'success',
   TERMINEE: 'success',
   EXPIREE: 'warning',
   ANNULEE_PAR_ETABLISSEMENT: 'info',

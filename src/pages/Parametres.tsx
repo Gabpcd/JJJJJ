@@ -30,19 +30,19 @@ export default function Parametres() {
         <TabsList className="w-max">
           <TabsTrigger value="profil" className="flex items-center gap-1.5 text-xs sm:text-sm">
             <User className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-            <span className="hidden sm:inline">Profil</span>
+            <span>Profil</span>
           </TabsTrigger>
           <TabsTrigger value="groupe" className="flex items-center gap-1.5 text-xs sm:text-sm">
             <Building2 className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-            <span className="hidden sm:inline">Groupe</span>
+            <span>Groupe</span>
           </TabsTrigger>
           <TabsTrigger value="config" className="flex items-center gap-1.5 text-xs sm:text-sm">
             <Bell className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-            <span className="hidden sm:inline">Config</span>
+            <span>Config</span>
           </TabsTrigger>
           <TabsTrigger value="exclusions" className="flex items-center gap-1.5 text-xs sm:text-sm">
             <Ban className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-            <span className="hidden sm:inline">Exclusions</span>
+            <span>Exclusions</span>
           </TabsTrigger>
         </TabsList>
         </div>

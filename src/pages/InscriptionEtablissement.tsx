@@ -1,7 +1,7 @@
 import { usePageTitle } from '@/hooks/usePageTitle';
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { HeartPulse, Eye, EyeOff, Check, AlertCircle, CheckCircle2, Loader2, ShieldCheck, ShieldAlert, ShieldX } from 'lucide-react';
+import { HeartPulse, Eye, EyeOff, Check, AlertCircle, CheckCircle2, Loader2, ShieldCheck, ShieldAlert, ShieldX, AlertTriangle, XCircle, Info, Clock } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
 import { handleErrorSilent } from '@/lib/handleError';
@@ -265,7 +265,7 @@ export default function InscriptionEtablissement() {
                 <input value={form.nom} onChange={e => maj('nom', e.target.value)} className={`input-base ${coherenceNom === 'INCOHERENT' ? 'border-amber-500' : ''}`} required />
                 {coherenceNom === 'INCOHERENT' && inseeCheck?.raison_sociale && (
                   <div className="mt-1.5 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2">
-                    <p>⚠️ Ce nom ne correspond pas à la raison sociale officielle du SIRET : <strong>{inseeCheck.raison_sociale}</strong>.</p>
+                    <p><AlertTriangle className="inline-block h-3.5 w-3.5 mr-1 align-text-bottom" aria-hidden="true" />Ce nom ne correspond pas à la raison sociale officielle du SIRET : <strong>{inseeCheck.raison_sociale}</strong>.</p>
                     <p className="mt-0.5">Corrigez-le, ou utilisez le nom officiel. Sinon votre compte passera en validation manuelle (24-48 h).</p>
                     <button type="button" onClick={() => maj('nom', inseeCheck!.raison_sociale!)} className="mt-1 text-primary underline font-medium">
                       Utiliser « {inseeCheck.raison_sociale} »
@@ -295,9 +295,9 @@ export default function InscriptionEtablissement() {
                   </div>
                   {finessCheck && form.type !== 'PHARMACIE_OFFICINE' && (
                     <div className={`mt-1.5 flex items-center gap-1.5 text-xs rounded-lg px-2 py-1.5 ${finessCheck.trouve && finessCheck.verifie ? 'bg-emerald-50 text-emerald-700' : finessCheck.trouve ? 'bg-amber-50 text-amber-700' : 'bg-red-50 text-red-700'}`}>
-                      {finessCheck.trouve && finessCheck.verifie && <><ShieldCheck className="h-3.5 w-3.5" /> ✅ FINESS vérifié{finessCheck.raison_sociale ? ` — ${finessCheck.raison_sociale}` : ''}</>}
-                      {finessCheck.trouve && !finessCheck.verifie && <><ShieldAlert className="h-3.5 w-3.5" /> ⚠️ FINESS trouvé mais structure inactive</>}
-                      {!finessCheck.trouve && <><ShieldX className="h-3.5 w-3.5" /> ❌ FINESS introuvable dans l'Annuaire Santé</>}
+                      {finessCheck.trouve && finessCheck.verifie && <><ShieldCheck className="h-3.5 w-3.5" /> FINESS vérifié{finessCheck.raison_sociale ? ` — ${finessCheck.raison_sociale}` : ''}</>}
+                      {finessCheck.trouve && !finessCheck.verifie && <><ShieldAlert className="h-3.5 w-3.5" /> FINESS trouvé mais structure inactive</>}
+                      {!finessCheck.trouve && <><ShieldX className="h-3.5 w-3.5" /> FINESS introuvable dans l'Annuaire Santé</>}
                     </div>
                   )}
                 </div>
@@ -320,13 +320,13 @@ export default function InscriptionEtablissement() {
                       'text-red-800 dark:text-red-300'
                     }`}>{inseeCheck.message}</p>
                     {inseeCheck.statut === 'VERIFIE' && (
-                      <p className="text-xs text-green-600 dark:text-green-400 mt-1">✅ Votre établissement pourra publier des missions immédiatement.</p>
+                      <p className="text-xs text-green-600 dark:text-green-400 mt-1"><CheckCircle2 className="inline-block h-3.5 w-3.5 mr-1 align-text-bottom" aria-hidden="true" />Votre établissement pourra publier des missions immédiatement.</p>
                     )}
                     {inseeCheck.statut === 'ALERTE' && (
-                      <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">🟡 Votre inscription sera en attente de validation par Jolene (24-48h).</p>
+                      <p className="text-xs text-amber-600 dark:text-amber-400 mt-1"><Clock className="inline-block h-3.5 w-3.5 mr-1 align-text-bottom" aria-hidden="true" />Votre inscription sera en attente de validation par Jolene (24-48h).</p>
                     )}
                     {inseeCheck.statut === 'INTROUVABLE' && (
-                      <p className="text-xs text-red-600 dark:text-red-400 mt-1">❌ Veuillez vérifier votre numéro SIRET. Vous pouvez tout de même vous inscrire, une vérification manuelle sera effectuée.</p>
+                      <p className="text-xs text-red-600 dark:text-red-400 mt-1"><XCircle className="inline-block h-3.5 w-3.5 mr-1 align-text-bottom" aria-hidden="true" />Veuillez vérifier votre numéro SIRET. Vous pouvez tout de même vous inscrire, une vérification manuelle sera effectuée.</p>
                     )}
                   </div>
                 </div>
@@ -334,7 +334,7 @@ export default function InscriptionEtablissement() {
 
               <div><label className="text-sm font-medium text-foreground mb-1.5 block">Type d'établissement *</label><SelectTypeEtablissement value={form.type} onChange={v => maj('type', v)} /></div>
               {form.type !== 'PHARMACIE_OFFICINE' && (
-                <p className="text-xs text-muted-foreground">ℹ️ Le plafond Loi Rist s'applique aux taux horaires en CDD.</p>
+                <p className="text-xs text-muted-foreground"><Info className="inline-block h-3.5 w-3.5 mr-1 align-text-bottom" aria-hidden="true" />Le plafond Loi Rist s'applique aux taux horaires en CDD.</p>
               )}
               {/* Seule la ville est requise ici. L'adresse complète (rue / code
                   postal / département), l'email et le téléphone de contact ainsi

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Scale, Clock, CheckCircle2, FileText } from 'lucide-react';
+import { Scale, Clock, CheckCircle2, FileText, Building2, HeartHandshake, Zap, Wrench, PenLine, HelpCircle, type LucideIcon } from 'lucide-react';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { LayoutApp } from '@/components/LayoutApp';
 import { ChargementPage } from '@/components/ChargementPage';
@@ -24,13 +24,13 @@ interface Reclamation {
   cree_le: string;
 }
 
-const MOTIFS_LABELS: Record<string, string> = {
-  URGENCE_MEDICALE: '🏥 Urgence médicale',
-  DEUIL: '🕊️ Deuil',
-  FORCE_MAJEURE: '⚡ Force majeure',
-  ERREUR_JOLENE: '🔧 Erreur Jolene',
-  CONTEXTE_PARTICULIER: '📝 Contexte particulier',
-  AUTRE: '❓ Autre',
+const MOTIFS_LABELS: Record<string, { icone: LucideIcon; label: string }> = {
+  URGENCE_MEDICALE: { icone: Building2, label: 'Urgence médicale' },
+  DEUIL: { icone: HeartHandshake, label: 'Deuil' },
+  FORCE_MAJEURE: { icone: Zap, label: 'Force majeure' },
+  ERREUR_JOLENE: { icone: Wrench, label: 'Erreur Jolene' },
+  CONTEXTE_PARTICULIER: { icone: PenLine, label: 'Contexte particulier' },
+  AUTRE: { icone: HelpCircle, label: 'Autre' },
 };
 
 const DECISIONS_LABELS: Record<string, { label: string; color: string }> = {
@@ -145,8 +145,15 @@ function MesReclamationsContent() {
                       >
                         {r.statut === 'PENDING' ? 'En attente' : 'Traitée'}
                       </span>
-                      <span className="text-xs text-muted-foreground">
-                        {MOTIFS_LABELS[r.motif_categorie] || r.motif_categorie}
+                      <span className="text-xs text-muted-foreground inline-flex items-center gap-1">
+                        {MOTIFS_LABELS[r.motif_categorie] ? (
+                          <>
+                            {(() => { const Icone = MOTIFS_LABELS[r.motif_categorie].icone; return <Icone className="h-3 w-3" aria-hidden="true" />; })()}
+                            {MOTIFS_LABELS[r.motif_categorie].label}
+                          </>
+                        ) : (
+                          r.motif_categorie
+                        )}
                       </span>
                     </div>
                     <p className="text-xs text-muted-foreground mt-1">

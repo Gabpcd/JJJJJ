@@ -9,6 +9,7 @@ import {
   CreditCard, Clock, CheckCircle, FileText, Loader2, Trophy, RefreshCw,
   Building2, AlertTriangle, Download, Banknote, Info, Eye, ChevronDown,
   Edit2, X, Scale, ChevronRight, ExternalLink, Landmark,
+  AlertCircle, CheckCircle2, Lightbulb,
 } from 'lucide-react';
 import { LayoutApp } from '@/components/LayoutApp';
 import { getChorusStatutBadge } from '@/lib/chorus-helpers';
@@ -73,11 +74,22 @@ const METHODE_LABELS: Record<MethodePaiement, string> = {
 };
 
 // ─── Helpers cards missions ───
+// Lot 11 : sévérité graduée par ancienneté du dû. Un dû récent (< 7 j) est un
+// état NORMAL → badge neutre (muted), jamais rouge. Le rouge est réservé au
+// vrai retard (> 14 j).
 function RetardBadge({ jours }: { jours: number }) {
-  if (jours < 15) return null;
-  if (jours < 30) return <BadgeY2K variant="warning">⏳ {jours}j</BadgeY2K>;
-  if (jours < 60) return <BadgeY2K variant="error">🔴 {jours}j de retard</BadgeY2K>;
-  return <BadgeY2K variant="error" className="bg-destructive text-destructive-foreground border-destructive">⛔ {jours}j — risque de suspension</BadgeY2K>;
+  if (jours == null || Number.isNaN(jours)) return null;
+  if (jours < 7) {
+    return (
+      <BadgeY2K variant="info" className="bg-muted text-muted-foreground border-border" icone={<Clock className="h-3 w-3" />}>
+        {jours}j
+      </BadgeY2K>
+    );
+  }
+  if (jours <= 14) {
+    return <BadgeY2K variant="warning" icone={<Clock className="h-3 w-3" />}>{jours}j de retard</BadgeY2K>;
+  }
+  return <BadgeY2K variant="error" icone={<AlertCircle className="h-3 w-3" />}>En retard de {jours} j</BadgeY2K>;
 }
 
 function TypeExerciceBadge({ type }: { type: string }) {
@@ -436,7 +448,7 @@ export default function FacturationEtablissement() {
             <BadgePalier palierNom={etab.paliers_commission.nom || 'Standard'} taux={etab.taux_commission_negocie ?? 15} />
           )}
           {etab?.est_secteur_public && (
-            <BadgeY2K variant="info">🏛️ Secteur public</BadgeY2K>
+            <BadgeY2K variant="info" icone={<Landmark className="h-3 w-3" />}>Secteur public</BadgeY2K>
           )}
         </div>
       </div>
@@ -448,7 +460,7 @@ export default function FacturationEtablissement() {
         <FadeInView>
           <div className="card-base p-8 text-center mb-6">
             <CheckCircle className="h-12 w-12 text-success mx-auto mb-3" />
-            <p className="text-lg font-semibold text-foreground">Tout est à jour ✅</p>
+            <p className="text-lg font-semibold text-foreground">Tout est à jour <CheckCircle2 className="inline-block h-5 w-5 text-success align-text-bottom" aria-hidden="true" /></p>
             <p className="text-sm text-muted-foreground mt-1">Aucune obligation financière en cours</p>
           </div>
         </FadeInView>
@@ -471,7 +483,7 @@ export default function FacturationEtablissement() {
           >
             <div>
               <p className="text-2xl font-bold text-foreground">{fmt(data?.total_soignants_du)}</p>
-              <p className="text-xs text-muted-foreground">Soignants à régler · {data?.nb_missions_non_payees || 0} mission(s)</p>
+              <p className="text-xs text-muted-foreground">Soignants à régler · {data?.nb_missions_non_payees || 0} mission{(data?.nb_missions_non_payees || 0) > 1 ? 's' : ''}</p>
             </div>
             <ChevronRight className="h-4 w-4 text-muted-foreground/60 shrink-0 mt-1" />
           </button>
@@ -484,7 +496,7 @@ export default function FacturationEtablissement() {
           >
             <div>
               <p className="text-2xl font-bold text-foreground">{fmt(data?.total_commissions_du)}</p>
-              <p className="text-xs text-muted-foreground">Commissions Jolene · {data?.nb_factures_impayees || 0} facture(s)</p>
+              <p className="text-xs text-muted-foreground">Commissions Jolene · {data?.nb_factures_impayees || 0} facture{(data?.nb_factures_impayees || 0) > 1 ? 's' : ''}</p>
             </div>
             <ChevronRight className="h-4 w-4 text-muted-foreground/60 shrink-0 mt-1" />
           </button>
@@ -514,7 +526,8 @@ export default function FacturationEtablissement() {
       <div id={SECTIONS.payer} className="mb-4">
         <Collapsible open={sectionsOpen[SECTIONS.payer]} onOpenChange={() => toggleSection(SECTIONS.payer)}>
           <CollapsibleTrigger className="w-full">
-            <CardY2K noPadding>
+            {/* Lot 11 : dé-emphase de l'en-tête quand la section est vide */}
+            <CardY2K noPadding className={missionsNonPayees.length === 0 ? 'opacity-60' : undefined}>
               <CardY2KHeader className="py-3">
                 <div className="flex items-center justify-between">
                   <CardY2KTitle className="flex items-center gap-2 text-base">
@@ -591,7 +604,7 @@ export default function FacturationEtablissement() {
                             <div className="mt-2 flex items-center gap-2 flex-wrap rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2">
                               <Scale className="h-4 w-4 text-destructive shrink-0" />
                               <div className="flex-1 min-w-0">
-                                <p className="text-sm font-semibold text-destructive">⚠️ Litige en cours sur un paiement</p>
+                                <p className="text-sm font-semibold text-destructive"><AlertTriangle className="inline-block h-4 w-4 mr-1 align-text-bottom" aria-hidden="true" />Litige en cours sur un paiement</p>
                                 <p className="text-xs text-destructive/80">
                                   Les paiements sont désactivés tant que le litige n'est pas résolu.
                                 </p>
@@ -629,7 +642,7 @@ export default function FacturationEtablissement() {
                           className="w-full"
                         >
                           <CreditCard className="w-4 h-4 mr-2" />
-                          {connectPayingId === m.mission_id ? 'Redirection…' : '💳 Payer via Stripe'}
+                          {connectPayingId === m.mission_id ? 'Redirection…' : 'Payer via Stripe'}
                         </BoutonY2K>
                       ) : (
                         <BoutonY2K
@@ -655,7 +668,7 @@ export default function FacturationEtablissement() {
       <div id={SECTIONS.attente} className="mb-4">
         <Collapsible open={sectionsOpen[SECTIONS.attente]} onOpenChange={() => toggleSection(SECTIONS.attente)}>
           <CollapsibleTrigger className="w-full">
-            <CardY2K noPadding>
+            <CardY2K noPadding className={paiementsEnAttente.length === 0 ? 'opacity-60' : undefined}>
               <CardY2KHeader className="py-3">
                 <div className="flex items-center justify-between">
                   <CardY2KTitle className="flex items-center gap-2 text-base">
@@ -711,7 +724,7 @@ export default function FacturationEtablissement() {
       <div id={SECTIONS.commissions} className="mb-4">
         <Collapsible open={sectionsOpen[SECTIONS.commissions]} onOpenChange={() => toggleSection(SECTIONS.commissions)}>
           <CollapsibleTrigger className="w-full">
-            <CardY2K noPadding>
+            <CardY2K noPadding className={facturesImpayees.length === 0 ? 'opacity-60' : undefined}>
               <CardY2KHeader className="py-3">
                 <div className="flex items-center justify-between">
                   <CardY2KTitle className="flex items-center gap-2 text-base">
@@ -748,7 +761,7 @@ export default function FacturationEtablissement() {
                               )}
                             </div>
                             <p className="text-xs text-muted-foreground">
-                              {f.nombre_missions} mission(s) · Échéance : {f.date_echeance && new Date(f.date_echeance).toLocaleDateString('fr-FR')}
+                              {f.nombre_missions} mission{(f.nombre_missions ?? 0) > 1 ? 's' : ''} · Échéance : {f.date_echeance && new Date(f.date_echeance).toLocaleDateString('fr-FR')}
                               {f.est_secteur_public && f.chorus_pro_numero_flux && ` · Flux ${f.chorus_pro_numero_flux}`}
                             </p>
                           </div>
@@ -836,15 +849,23 @@ export default function FacturationEtablissement() {
                           </thead>
                           <tbody>
                             {facturesCommissionHistorique.map((f: any) => {
+                              const ModeIcone =
+                                f.mode_paiement === 'STRIPE'
+                                  ? CreditCard
+                                  : f.mode_paiement === 'VIREMENT'
+                                  ? Banknote
+                                  : f.mode_paiement === 'CHORUS_PRO'
+                                  ? Landmark
+                                  : null;
                               const modeLabel =
                                 f.mode_paiement === 'STRIPE' && f.stripe_payment_intent_id
-                                  ? '💳 Stripe (à la source)'
+                                  ? 'Stripe (à la source)'
                                   : f.mode_paiement === 'STRIPE'
-                                  ? '💳 Stripe'
+                                  ? 'Stripe'
                                   : f.mode_paiement === 'VIREMENT'
-                                  ? '🏦 Virement'
+                                  ? 'Virement'
                                   : f.mode_paiement === 'CHORUS_PRO'
-                                  ? '🏛️ Chorus Pro'
+                                  ? 'Chorus Pro'
                                   : '—';
                               return (
                                 <tr
@@ -857,7 +878,7 @@ export default function FacturationEtablissement() {
                                   <td className="py-2 pr-3 text-xs">{f.date_paiement ? new Date(f.date_paiement).toLocaleDateString('fr-FR') : '—'}</td>
                                   <td className="py-2 pr-3 text-xs">{f.nombre_missions ?? '—'}</td>
                                   <td className="py-2 pr-3 font-medium">{fmt(f.montant_ttc)}</td>
-                                  <td className="py-2 pr-3 text-xs">{modeLabel}</td>
+                                  <td className="py-2 pr-3 text-xs">{ModeIcone && <ModeIcone className="inline-block h-3.5 w-3.5 mr-1 align-text-bottom" aria-hidden="true" />}{modeLabel}</td>
                                   <td className="py-2 pr-3">
                                     {f.statut === 'PAYEE' ? (
                                       <BadgeY2K variant="success">Payée</BadgeY2K>
@@ -1007,7 +1028,7 @@ export default function FacturationEtablissement() {
                 <div className="rounded-lg border border-info/30 bg-info/5 p-3 flex items-start gap-2">
                   <Info className="h-4 w-4 text-info shrink-0 mt-0.5" />
                   <div className="text-xs text-muted-foreground">
-                    <p className="font-semibold text-info mb-0.5">🏦 Mandat SEPA actif</p>
+                    <p className="font-semibold text-info mb-0.5"><Banknote className="inline-block h-3.5 w-3.5 mr-1 align-text-bottom" aria-hidden="true" />Mandat SEPA actif</p>
                     <p>Les factures commission sont prélevées automatiquement chaque mois sur le compte bancaire enregistré.</p>
                   </div>
                 </div>
@@ -1060,7 +1081,7 @@ export default function FacturationEtablissement() {
                 <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 flex items-start gap-2">
                   <Building2 className="h-4 w-4 text-primary shrink-0 mt-0.5" />
                   <div className="text-xs text-muted-foreground">
-                    <p className="font-semibold text-primary mb-0.5">🏛️ Secteur public — Chorus Pro</p>
+                    <p className="font-semibold text-primary mb-0.5"><Landmark className="inline-block h-3.5 w-3.5 mr-1 align-text-bottom" aria-hidden="true" />Secteur public — Chorus Pro</p>
                     <p>Vos factures commission sont déposées sur Chorus Pro. Le paiement suit le cycle de mandatement habituel (30 à 60 jours).</p>
                     <button
                       onClick={() => navigate('/etablissement/chorus-config')}
@@ -1146,7 +1167,7 @@ export default function FacturationEtablissement() {
       <div id={SECTIONS.historique} className="mb-4">
         <Collapsible open={sectionsOpen[SECTIONS.historique]} onOpenChange={() => toggleSection(SECTIONS.historique)}>
           <CollapsibleTrigger className="w-full">
-            <CardY2K noPadding>
+            <CardY2K noPadding className={paiementsConfirmes.length === 0 ? 'opacity-60' : undefined}>
               <CardY2KHeader className="py-3">
                 <div className="flex items-center justify-between">
                   <CardY2KTitle className="flex items-center gap-2 text-base">
@@ -1195,7 +1216,7 @@ export default function FacturationEtablissement() {
                               <td className="py-2 pr-3 text-primary">{p.mission_intitule}</td>
                               <td className="py-2 pr-3 text-right font-medium">{fmt(p.montant_net)}</td>
                               <td className="py-2 pr-3 text-xs text-muted-foreground">{p.reference_virement}</td>
-                              <td className="py-2"><BadgeY2K variant="success">✅</BadgeY2K></td>
+                              <td className="py-2"><BadgeY2K variant="success" aria-label="Confirmé"><CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" /></BadgeY2K></td>
                               <td className="py-2">
                                 <div className="flex items-center gap-1 justify-end">
                                   {p.facture_honoraires_id && (
@@ -1235,7 +1256,7 @@ export default function FacturationEtablissement() {
                             </div>
                             <div className="flex items-center gap-2 shrink-0 ml-2">
                               <span className="text-sm font-semibold">{fmt(p.montant_net)}</span>
-                              <BadgeY2K variant="success">✅</BadgeY2K>
+                              <BadgeY2K variant="success" aria-label="Confirmé"><CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" /></BadgeY2K>
                             </div>
                           </div>
                           <div className="flex items-center justify-between text-xs text-muted-foreground">
@@ -1326,7 +1347,7 @@ export default function FacturationEtablissement() {
                         facturesCommissionHistorique.forEach((f: any, i: number) => {
                           setTimeout(() => telechargerFactureCommissionPDF(f.facture_id), i * 200);
                         });
-                        toast.success(`Téléchargement de ${facturesCommissionHistorique.length} facture(s)…`);
+                        toast.success(`Téléchargement de ${facturesCommissionHistorique.length} facture${facturesCommissionHistorique.length > 1 ? 's' : ''}…`);
                       }}
                     >
                       <Download className="h-5 w-5 text-primary shrink-0" />
@@ -1340,7 +1361,7 @@ export default function FacturationEtablissement() {
                   </div>
 
                   <div className="rounded-lg border bg-muted/20 p-3 text-xs text-muted-foreground">
-                    <p className="font-semibold text-foreground mb-1">💡 À savoir</p>
+                    <p className="font-semibold text-foreground mb-1"><Lightbulb className="inline-block h-3.5 w-3.5 mr-1 align-text-bottom" aria-hidden="true" />À savoir</p>
                     <p>
                       Les factures honoraires soignants (mandat art. 289 I-2 CGI) sont accessibles
                       individuellement depuis la section 5 (historique paiements).

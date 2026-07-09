@@ -6,7 +6,6 @@ import { BandeauHorsLigne } from '@/components/BandeauHorsLigne';
 import { SyncHorsLigne } from '@/components/SyncHorsLigne';
 import { BandeauInstallerPWA } from '@/components/BandeauInstallerPWA';
 import { BandeauOnboardingEtab } from '@/components/BandeauOnboardingEtab';
-import { FABCreerMission } from '@/components/FABCreerMission';
 import { UserRole } from '@/lib/types';
 import { toast } from 'sonner';
 
@@ -106,10 +105,9 @@ export function LayoutApp({ role, children, pleinEcran = false }: LayoutAppProps
       </div>
       <DemandePermissionPush />
       <BandeauInstallerPWA />
-      {/* FAB « ? » retiré (Lot 6a.4) : il masquait les CTA critiques (Signer,
-          net estimé, Enregistrer GPS). L'aide vit dans Compte > Aide & légal. */}
-      {/* FAB "Publier une mission" : action n°1 étab, toujours visible mobile */}
-      {role === 'ADMIN_ETABLISSEMENT' && <FABCreerMission />}
+      {/* FAB « ? » retiré (Lot 6a.4) et FAB « Publier » retiré (Lot 11) : tout
+          élément flottant finit par recouvrir un CTA (KPI, Enregistrer GPS,
+          exports, contrat). Publier vit dans la nav et le dashboard. */}
     </div>
   );
 }

@@ -8,7 +8,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
 import { extraireMessageErreur } from '@/lib/erreurs';
 import { supabase } from '@/integrations/supabase/client';
-import { BarChart3, TrendingUp, Users, Clock, DollarSign, RefreshCw } from 'lucide-react';
+import { BarChart3, TrendingUp, Users, Clock, DollarSign, RefreshCw, Star } from 'lucide-react';
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 
 const COULEURS = ['#E04590', '#E04590', '#F59E0B', '#10B981', '#8B5CF6', '#F97316'];
@@ -206,7 +206,7 @@ export function AnalyticsContent() {
                   </div>
                   <div className="flex items-center gap-3 shrink-0">
                     <span className="inline-flex items-center justify-center rounded-full bg-primary/10 text-primary px-2.5 py-0.5 text-xs font-semibold">{s.nb_missions} mission{s.nb_missions > 1 ? 's' : ''}</span>
-                    {s.note_moyenne > 0 && <span className="text-xs text-warning font-medium">⭐ {s.note_moyenne}/5</span>}
+                    {s.note_moyenne > 0 && <span className="text-xs text-warning font-medium"><Star className="inline-block h-3 w-3 mr-0.5 align-text-bottom" aria-hidden="true" />{s.note_moyenne}/5</span>}
                   </div>
                 </div>
               )}
