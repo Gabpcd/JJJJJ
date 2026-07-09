@@ -10,6 +10,7 @@ import { useTypesExerciceAutorises } from '@/hooks/useTypesExerciceAutorises';
 import { EncartCommissionDegressif } from '@/components/EncartCommissionDegressif';
 import { ModalCodeTravail } from '@/components/ModalCodeTravail';
 import { FormulaireRecurrence, type RecurrenceFlexConfig, type CreneauFlex, type ValidationFlexResult } from '@/components/FormulaireRecurrence';
+import { VivierDisponibilitesHint } from '@/components/VivierDisponibilitesHint';
 import type { RecapMissionData } from '@/components/mission/ModalRecapMission';
 // Sprint 8 ter-G PR 3 — lazy load modal récap (code splitting, ~8KB)
 const ModalRecapMission = lazy(() =>
@@ -297,6 +298,13 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
           p_type_contrat: contratPreference,
         });
       }
+      // Lot 17 (F2) : une mission issue d'un « Republier »/« Dupliquer » est
+      // tracée mission_source=REPUBLICATION (best-effort, ne bloque jamais).
+      if (missionId && searchParams.get('dupliquer')) {
+        await supabase.rpc('fn_marquer_source_mission' as any, {
+          p_mission_id: missionId, p_source: 'REPUBLICATION',
+        }).then(() => {}, () => {});
+      }
       await supabase.rpc('fn_ecrire_audit_safe', {
         p_acteur_id: user.id, p_type_acteur: role, p_action: 'MISSION_CREATION',
         p_type_ressource: 'mission', p_id_ressource: missionId || user.id, p_cle_s3: null,
@@ -425,6 +433,13 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
             p_mission_id: missionId,
             p_type_contrat: contratPreference,
           });
+        }
+        // Lot 17 (F2) : une mission issue d'un « Republier »/« Dupliquer » est
+        // tracée mission_source=REPUBLICATION (best-effort, ne bloque jamais).
+        if (missionId && searchParams.get('dupliquer')) {
+          await supabase.rpc('fn_marquer_source_mission' as any, {
+            p_mission_id: missionId, p_source: 'REPUBLICATION',
+          }).then(() => {}, () => {});
         }
         await supabase.rpc('fn_ecrire_audit_safe', {
           p_acteur_id: user.id, p_type_acteur: role, p_action: 'MISSION_CREATION',
@@ -676,6 +691,8 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
                 )}
               </div>
             )}
+            {/* Lot 17 (F5) : vivier de disponibilités déclarées ce jour-là */}
+            {!modeEdition && <VivierDisponibilitesHint jour={debutLe || null} profession={profession || null} />}
           </div>
         )}
 

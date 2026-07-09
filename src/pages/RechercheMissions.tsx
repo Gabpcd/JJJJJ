@@ -5,7 +5,7 @@ import { logger } from '@/lib/logger';
 import { handleErrorSilent } from '@/lib/handleError';
 import { toast } from 'sonner';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { SearchX, MapPin, List, Map as MapIcon, SlidersHorizontal, LayoutGrid, Sparkles } from 'lucide-react';
+import { SearchX, MapPin, List, Map as MapIcon, SlidersHorizontal, LayoutGrid, Sparkles, CalendarDays } from 'lucide-react';
 import { LayoutApp } from '@/components/LayoutApp';
 import { ChargementPage } from '@/components/ChargementPage';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -500,6 +500,15 @@ export default function RechercheMissions() {
                 </button>
               ))}
             </div>
+            {/* Lot 17 (F5) : calendrier de disponibilités — matching inversé */}
+            <button
+              type="button"
+              onClick={() => navigate('/soignant/disponibilites')}
+              aria-label="Mes disponibilités"
+              className="h-10 w-10 shrink-0 flex items-center justify-center rounded-xl border border-jolene-rose-200 bg-card text-jolene-bubblegum hover:text-jolene-rose-700 hover:border-jolene-rose-300 transition-colors active:scale-95"
+            >
+              <CalendarDays className="h-4 w-4" aria-hidden="true" />
+            </button>
             {/* Filtres = bottom sheet, badge du nombre de filtres actifs */}
             <button
               type="button"
