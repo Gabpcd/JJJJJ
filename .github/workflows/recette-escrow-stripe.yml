@@ -56,6 +56,26 @@ jobs:
       # (cf. CRON_BEARER dans scripts/recette-escrow-stripe.ts, fix run #4 :
       # la clé api-keys ne matchait pas l'env du runtime edge → 403).
 
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: 2.98.0
+
+      - name: Sync fonctions escrow de la branche sur le code de main
+        # Les fonctions de la branche datent de sa création : un fix edge mergé
+        # sur main (ex. #817 mandat SEPA) n'y est pas. On redéploie les 4
+        # fonctions du flux escrow depuis le checkout AVANT chaque run.
+        # --use-api ne relit pas verify_jwt (CLAUDE.md) : le gateway garde la
+        # valeur posée à la création de la branche (false, cf. config.toml).
+        run: |
+          set -euo pipefail
+          for fn in escrow-debit-echeance escrow-release process-stripe-refunds stripe-webhook; do
+            supabase functions deploy "$fn" --project-ref "${{ inputs.branch_ref }}" --use-api
+            echo "✓ $fn"
+          done
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+
       - name: Basculer les secrets edge de la branche en TEST + webhook Stripe
         id: wh
         run: |
