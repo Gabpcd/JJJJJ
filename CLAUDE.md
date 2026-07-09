@@ -91,6 +91,18 @@ un composant réel mais **pas celui rendu au pointage**) :
    au 04/07). Toute archéologie de fonction commence là, pas dans les
    migrations historiques.
 
+## Principe — un gap connu reste verrouillé
+
+Toute limitation/gap documenté doit être **rendu impossible à déclencher
+silencieusement** : rejet explicite (exception + message clair) + **référence au
+TODO/doc** dans le message. Un « TODO » seul ne suffit pas — le chemin qui
+mènerait au comportement cassé doit lever une erreur nette, pas produire un état
+incohérent en silence. Exemples : verrou remboursement partiel pré-release escrow
+(`fn_escrow_rembourser`, gap SPEC §9.4), verrou stockage documents de santé
+(`fn_trg_bloquer_documents_sante`, `docs/CONFORMITE.md`). Corollaire : avant de
+poser un tel verrou, `git grep` les chemins appelants — s'il existe une feature
+vivante qui l'emprunte, la traiter d'abord (ou exclure explicitement + documenter).
+
 ## Règles TypeScript / build
 
 - `npx tsc -b` (pas `--noEmit`) pour valider en local

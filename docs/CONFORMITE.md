@@ -31,23 +31,47 @@
 - Corollaire produit : documents requis = identité + qualification + assurance +
   situation administrative/bancaire uniquement.
 
-### 1.3 ⚠️ SIGNALEMENT (sans suppression) — valeurs d'enum « santé » dormantes
+### 1.3 Types de données « santé » de l'enum `type_document` — verrou (pas de retrait)
 
-L'enum `type_document` **contient** 3 valeurs qui seraient des données de santé
-si utilisées — mais elles sont **dormantes** : exigées par **0** profession,
-stockées **0** fois (vérifié prod 09/07/2026) :
+L'enum `type_document` **contient** 3 valeurs qui sont des données de santé
+(RGPD art. 9). **On ne retire PAS les valeurs de l'enum** (drop d'une valeur
+d'enum Postgres = migration à risque). À la place, un **trigger BEFORE INSERT**
+(`fn_trg_bloquer_documents_sante`, migration `20260709180000`) **rejette** tout
+stockage, avec un message renvoyant à ce document. **Le verrou remplace le
+retrait.**
 
-- `VACCINATIONS` — certificat de vaccination (donnée de santé, RGPD art. 9)
-- `MEDECINE_TRAVAIL` — aptitude médicale / médecine du travail (donnée de santé)
-- `ARRET_MALADIE` — arrêt maladie (donnée de santé)
+| Type | Statut | Verrou DB | Chemin frontend |
+|---|---|---|---|
+| `VACCINATIONS` | Dormant (0 requis, 0 stocké) | ✅ Verrouillé | Déjà exclu de l'upload (`src/lib/documents.ts` `TYPES_DOCUMENTS_EXCLUS_UPLOAD`) |
+| `MEDECINE_TRAVAIL` | Dormant (0 requis, 0 stocké) | ✅ Verrouillé | Déjà exclu de l'upload |
+| `ARRET_MALADIE` | **⚠️ FEATURE VIVANTE** (0 stocké à ce jour) | ⏸️ **NON verrouillé** (voir §1.4) | **Chemin actif** : `src/pages/DetailMissionSoignant.tsx` |
 
-**Ne PAS supprimer maintenant** (instruction). **Risque latent** : un futur dev
-pourrait câbler l'un d'eux → Jolene basculerait dans le périmètre HDS.
-**Remplacement prévu** (si un besoin d'aptitude/vaccination émerge) :
-**attestation sur l'honneur du soignant + vérification par l'établissement** (qui
-lui est dans son rôle d'employeur/donneur d'ordre), jamais le stockage du
-document médical par Jolene. **TODO** : retirer ces 3 valeurs de l'enum une fois
-confirmé qu'aucun flux ne les vise (migration dédiée + audit `documents_soignants`).
+**Remplacement de référence** (si un besoin santé émerge) : **attestation sur
+l'honneur du soignant + vérification par l'établissement** (dans son rôle
+d'employeur/donneur d'ordre), jamais de stockage du document médical par Jolene.
+
+### 1.4 ⚠️ FINDING — `ARRET_MALADIE` est une fonctionnalité vivante (donnée de santé)
+
+Contrairement aux 2 autres, `ARRET_MALADIE` **n'est pas dormant** :
+`src/pages/DetailMissionSoignant.tsx:863-899` propose « Je dois me désister pour
+raison médicale (arrêt maladie) » → **téléversement du certificat médical** →
+`INSERT documents_soignants(type_document='ARRET_MALADIE')` → vérification IA
+(`verify-document`) → justifie l'annulation sans pénalité de score.
+
+**C'est du stockage de donnée de santé, en contradiction avec la décision « zéro
+donnée de santé ».** Le verrouiller CASSERAIT la feature → **non verrouillé pour
+l'instant** (décision produit requise).
+
+**Décision à trancher (Gabrielle)** — options :
+1. **Remplacer** le téléversement du certificat par une **attestation sur
+   l'honneur** (case à cocher + engagement) : le soignant déclare l'arrêt sans
+   qu'aucun document médical soit stocké ; anti-abus via score/récurrence, pas
+   via la pièce médicale. Puis **ajouter `ARRET_MALADIE` au verrou**.
+2. Conserver le stockage → alors la décision « zéro donnée de santé » doit être
+   révisée (périmètre HDS à réévaluer) — **non recommandé**.
+
+Recommandation : **option 1**. Chantier distinct (touche le flux annulation +
+la logique de score) — à cadrer avant de verrouiller `ARRET_MALADIE`.
 
 ## 2. DAC7 — déclaration annuelle des revenus des opérateurs de plateforme
 
@@ -110,4 +134,5 @@ confirmé qu'aucun flux ne les vise (migration dédiée + audit `documents_soign
 | 242 bis — récapitulatif annuel | 1ère clôture annuelle | Dev | À faire |
 | Réception factures via PA | 01/09/2026 | Admin (Gabrielle, 15 j) | À faire |
 | Émission via PA (Factur-X → PA) | 09/2027 | Dev | À planifier |
-| Retrait enum santé dormant | Post-confirmation | Dev (migration) | Signalé |
+| Verrou docs santé (VACCINATIONS/MEDECINE_TRAVAIL) | Fait | Dev (trigger) | ✅ Verrouillé |
+| ARRET_MALADIE : attestation sur l'honneur + verrou | À trancher | Produit + Dev | ⚠️ Décision Gabrielle (§1.4) |
