@@ -40,7 +40,10 @@ interface Props {
   onUpdate?: () => void;
 }
 
-const DELAI_CONTESTATION_MS = 48 * 60 * 60 * 1000;
+// Lot 13 : fenêtre de contestation alignée sur la spec (72 h, comme
+// l'auto-validation) — l'ancienne valeur 48 h créait un écart avec le
+// wording produit et la CGU §4.6.
+const DELAI_CONTESTATION_MS = 72 * 60 * 60 * 1000;
 
 const STATUT_CONFIG: Record<string, { label: string; icon: React.ReactNode; color: string }> = {
   CONTESTEE: { label: 'Contestée', icon: <AlertTriangle className="h-3.5 w-3.5" />, color: 'text-warning' },
@@ -78,12 +81,12 @@ export function PanneauContestation({
 
   useEffect(() => { charger(); }, [charger]);
 
-  const dans48h = presenceValideeLe
+  const dansFenetre = presenceValideeLe
     ? (Date.now() - new Date(presenceValideeLe).getTime()) < DELAI_CONTESTATION_MS
     : false;
 
-  // Both roles can initiate a contestation within 48h if no existing litige
-  const peutContester = dans48h && !litige;
+  // Les deux rôles peuvent contester dans la fenêtre (72 h) si aucun litige.
+  const peutContester = dansFenetre && !litige;
 
   // The other party can respond when status is CONTESTEE or EN_DISCUSSION
   const estInitiateur = litige?.initie_par === (role === 'SOIGNANT' ? 'SOIGNANT' : 'ETABLISSEMENT');
@@ -365,7 +368,7 @@ export function PanneauContestation({
               </button>
             </div>
             <p className="text-[11px] text-muted-foreground">
-              ⏱ Vous avez 48h après la validation pour contester. Sans résolution sous 72h, l'admin plateforme tranchera.
+              Vous avez 72 h après la validation pour contester. Sans résolution sous 72 h, l'admin plateforme tranchera.
             </p>
           </div>
         )}
