@@ -173,6 +173,17 @@ async function getVaultCronSecret(sb: any): Promise<string> {
 > couvert aujourd'hui, débit complémentaire à venir (Lot 13/14). Détail :
 > `docs/SPEC_ESCROW_REVENUS_SOIGNANT.md` §9.
 
+> **CIRCUIT MONÉTAIRE ESCROW (v15) — à connaître d'office.** Le débit
+> (`escrow-debit-echeance`) est une **destination charge** Stripe :
+> `transfer_data.destination` = compte connecté soignant + `application_fee_amount`
+> = commission. **`on_behalf_of` est RETIRÉ depuis v15** : le mandat SEPA nomme
+> **Jolene créancier** → Jolene = **merchant of record** (toute redéfinition part de
+> `escrow-debit-echeance` LIVE, jamais d'un doc obsolète). Wording exact : les
+> honoraires ne **STATIONNENT jamais** sur un compte Jolene (ils *transitent* le
+> settlement, mécanique destination charge) — **ne pas** écrire « ne transitent
+> jamais ». Séquestre = payout **manuel** sur le compte connecté, libéré à la
+> validation des présences. Réf. unique : `docs/flux-monetaire-escrow.md`.
+
 **Règle officielle (explicite)** : les heures facturées (et payées au soignant) =
 
 ```
