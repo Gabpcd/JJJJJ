@@ -24,7 +24,12 @@ export default defineConfig({
   // baselines committées. Lancer via le workflow `playwright-visual-update.yml`
   // (workflow_dispatch) qui génère les baselines puis crée une PR auto.
   // Pour run en local manuellement : `npx playwright test e2e/visual --project=chromium`.
-  testIgnore: process.env.PLAYWRIGHT_INCLUDE_VISUAL === 'true' ? [] : ['**/visual.spec.ts'],
+  testIgnore: [
+    ...(process.env.PLAYWRIGHT_INCLUDE_VISUAL === 'true' ? [] : ['**/visual.spec.ts']),
+    // e2e/non-regression/ appartient exclusivement au projet
+    // mobile-non-regression ci-dessous — chromium & co l'ignorent.
+    '**/non-regression/**',
+  ],
   globalSetup: './e2e/global-setup.ts',
   timeout: 30_000,
   expect: { timeout: 10_000 },
@@ -90,6 +95,21 @@ export default defineConfig({
     {
       name: 'tablet-ipad',
       use: { ...devices['iPad (gen 7)'] },
+    },
+    {
+      // Non-régression mobile : uniquement e2e/non-regression/ (viewport
+      // 390×844 + tactile). Lancer : npm run test:e2e:regression.
+      name: 'mobile-non-regression',
+      testMatch: /non-regression\/.*\.spec\.ts/,
+      // Override du testIgnore global (qui exclut non-regression pour tous
+      // les autres projets) ; visual.spec.ts ne matche pas le testMatch.
+      testIgnore: [],
+      use: {
+        browserName: 'chromium',
+        viewport: { width: 390, height: 844 },
+        hasTouch: true,
+        isMobile: true,
+      },
     },
   ],
 

@@ -165,7 +165,7 @@ export function BadgeNotification() {
 
   // Persist sound preference
   useEffect(() => {
-    try { localStorage.setItem('notif_sound', soundEnabled ? 'on' : 'off'); } catch {}
+    try { localStorage.setItem('notif_sound', soundEnabled ? 'on' : 'off'); } catch { /* stockage indisponible (Safari privé) — préférence non persistée */ }
   }, [soundEnabled]);
 
   // Load count + realtime
