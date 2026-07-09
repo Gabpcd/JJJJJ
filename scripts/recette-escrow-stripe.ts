@@ -220,6 +220,12 @@ async function main() {
 NOTIFY pgrst, 'reload schema';
 DELETE FROM vault.secrets WHERE name = 'service_role_key';
 SELECT vault.create_secret('${CRON_BEARER}', 'service_role_key');
+-- Tripwires « premier euro réel » (migration 20260709190000) DÉSACTIVÉS en
+-- recette : le mandat SEPA (Setup 1) et les PaymentIntents de test feraient
+-- sinon appeler notify-support (URL prod) à chaque run. Défaut prod = actif.
+INSERT INTO parametres_systeme(cle, valeur, label, categorie)
+VALUES('alertes_tripwire_actives', 0, 'Alertes tripwire paiement actives', 'GENERAL')
+ON CONFLICT (cle) DO UPDATE SET valeur = 0;
 DO $neut$ DECLARE m record; d timestamptz; BEGIN
   -- Parking des résidus : slots espacés de 4 JOURS (repos hebdo 35h,
   -- dec_verifier_repos_hebdo_35h refuse des 8h/jour consécutifs — run #9),
