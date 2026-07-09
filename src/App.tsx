@@ -344,7 +344,7 @@ function AppRoutes() {
               chaque item deep-linke via n.lien) — plus un renvoi vers un onglet. */}
           <Route path="/etablissement/notifications" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><PageNotifications role="ADMIN_ETABLISSEMENT" /></RouteProtegee>} />
           <Route path="/etablissement/exclusions" element={<Navigate to="/etablissement/parametres?tab=exclusions" replace />} />
-          <Route path="/etablissement/api" element={<Navigate to="/etablissement/parametres?tab=config" replace />} />
+          <Route path="/etablissement/api" element={<Navigate to="/etablissement/parametres?tab=securite" replace />} />
           <Route path="/etablissement/premium" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><PremiumEtablissement /></RouteProtegee>} />
           <Route path="/etablissement/chorus-config" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><ChorusConfig /></RouteProtegee>} />
           <Route path="/etablissement/pool-urgence" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><PoolUrgenceEtablissement /></RouteProtegee>} />

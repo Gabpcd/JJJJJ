@@ -1,8 +1,8 @@
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { LayoutApp } from '@/components/LayoutApp';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { User, Building2, Bell, Ban } from 'lucide-react';
+import { User, CreditCard, Settings2, Bell, ShieldCheck, ChevronRight } from 'lucide-react';
 import { ProfilEtablissementContent } from './ProfilEtablissement';
 import { MonGroupeContent } from './MonGroupe';
 import { NotificationsContent } from './PageNotifications';
@@ -10,14 +10,38 @@ import { APIContent } from './APIEtablissement';
 import { ExclusionsContent } from './ExclusionsEtablissement';
 import { TolerancePointageGps } from '@/components/etablissement/TolerancePointageGps';
 
-const TABS = ['profil', 'groupe', 'config', 'exclusions'] as const;
+// Lot 12 : 5 sections nommées — Profil / Facturation / Opérations /
+// Notifications / Sécurité & RGPD. Les blocs de ProfilEtablissementContent
+// sont redistribués via sa prop `sections`.
+const TABS = ['profil', 'facturation', 'operations', 'notifications', 'securite'] as const;
 type Tab = typeof TABS[number];
+
+// Alias de deep-links historiques (?tab=) — les vieux liens ne cassent jamais.
+// `contrats` n'a jamais existé comme onglet (lien FormulaireMission) : il
+// atterrit sur la section facturation qui porte le contrat de service.
+const ALIAS_TABS: Record<string, Tab> = {
+  config: 'operations',
+  groupe: 'operations',
+  exclusions: 'operations',
+  contrats: 'facturation',
+  notifications: 'notifications',
+};
+
+const ONGLETS: Array<{ value: Tab; label: string; icone: typeof User }> = [
+  { value: 'profil', label: 'Profil', icone: User },
+  { value: 'facturation', label: 'Facturation', icone: CreditCard },
+  { value: 'operations', label: 'Opérations', icone: Settings2 },
+  { value: 'notifications', label: 'Notifications', icone: Bell },
+  { value: 'securite', label: 'Sécurité & RGPD', icone: ShieldCheck },
+];
 
 export default function Parametres() {
   usePageTitle('Paramètres');
   const [searchParams, setSearchParams] = useSearchParams();
   const tabParam = searchParams.get('tab');
-  const currentTab: Tab = TABS.includes(tabParam as Tab) ? (tabParam as Tab) : 'profil';
+  // Appliquer le mapping d'alias AVANT de sélectionner l'onglet.
+  const tabResolu = tabParam ? (ALIAS_TABS[tabParam] ?? tabParam) : null;
+  const currentTab: Tab = TABS.includes(tabResolu as Tab) ? (tabResolu as Tab) : 'profil';
 
   return (
     <LayoutApp role="ADMIN_ETABLISSEMENT">
@@ -28,41 +52,47 @@ export default function Parametres() {
       >
         <div className="overflow-x-auto -mx-1 px-1 mb-6">
         <TabsList className="w-max">
-          <TabsTrigger value="profil" className="flex items-center gap-1.5 text-xs sm:text-sm">
-            <User className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-            <span>Profil</span>
-          </TabsTrigger>
-          <TabsTrigger value="groupe" className="flex items-center gap-1.5 text-xs sm:text-sm">
-            <Building2 className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-            <span>Groupe</span>
-          </TabsTrigger>
-          <TabsTrigger value="config" className="flex items-center gap-1.5 text-xs sm:text-sm">
-            <Bell className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-            <span>Config</span>
-          </TabsTrigger>
-          <TabsTrigger value="exclusions" className="flex items-center gap-1.5 text-xs sm:text-sm">
-            <Ban className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-            <span>Exclusions</span>
-          </TabsTrigger>
+          {ONGLETS.map(({ value, label, icone: Icone }) => (
+            <TabsTrigger key={value} value={value} className="flex items-center gap-1.5 text-xs sm:text-sm">
+              <Icone className="h-3.5 w-3.5 sm:h-4 sm:w-4" aria-hidden="true" />
+              <span>{label}</span>
+            </TabsTrigger>
+          ))}
         </TabsList>
         </div>
 
         <TabsContent value="profil" className="mt-0">
-          <ProfilEtablissementContent />
+          <ProfilEtablissementContent sections={['profil']} />
         </TabsContent>
 
-        <TabsContent value="groupe" className="mt-0">
-          <MonGroupeContent />
+        <TabsContent value="facturation" className="mt-0">
+          <ProfilEtablissementContent sections={['facturation']} />
         </TabsContent>
 
-        <TabsContent value="config" className="mt-0 space-y-8">
+        <TabsContent value="operations" className="mt-0 space-y-8">
+          <ProfilEtablissementContent sections={['geoloc']} />
           <TolerancePointageGps />
-          <NotificationsContent />
-          <APIContent />
+          <MonGroupeContent />
+          <ExclusionsContent />
         </TabsContent>
 
-        <TabsContent value="exclusions" className="mt-0">
-          <ExclusionsContent />
+        <TabsContent value="notifications" className="mt-0 space-y-6">
+          <NotificationsContent />
+          <Link
+            to="/etablissement/parametres/notifications"
+            className="max-w-2xl flex items-center justify-between gap-2 card-base text-sm text-foreground hover:bg-muted/50 transition"
+          >
+            <span className="flex items-center gap-2">
+              <Bell className="h-4 w-4 text-primary" aria-hidden="true" />
+              Gérer mes préférences de canaux (email, push, SMS)
+            </span>
+            <ChevronRight className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+          </Link>
+        </TabsContent>
+
+        <TabsContent value="securite" className="mt-0 space-y-8">
+          <ProfilEtablissementContent sections={['securite']} />
+          <APIContent />
         </TabsContent>
       </Tabs>
     </LayoutApp>

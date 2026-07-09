@@ -7,7 +7,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Building2 } from 'lucide-react';
 import {
   CreditCard, Scale, Settings, LogOut, User, Star, ShieldCheck, FileText, Trash2,
-  BookOpen, Mail,
+  BookOpen, Mail, Bell,
 } from 'lucide-react';
 import { ModalContacterJolene } from '@/components/ModalContacterJolene';
 import { getLabelTypeEtablissement } from '@/lib/constantes';
@@ -38,9 +38,12 @@ export default function MonCompteEtablissement() {
       titre: '',
       lignes: [
         { icone: User, label: 'Mon établissement', route: '/etablissement/parametres?tab=profil' },
-        { icone: CreditCard, label: 'Facturation', route: '/etablissement/facturation' },
+        { icone: CreditCard, label: 'Facturation & contrat', route: '/etablissement/parametres?tab=facturation' },
+        { icone: FileText, label: 'Mes factures', route: '/etablissement/facturation' },
         { icone: Star, label: 'Qualité', route: '/etablissement/litiges' },
-        { icone: Settings, label: 'Paramètres', route: '/etablissement/parametres?tab=config' },
+        { icone: Settings, label: 'Opérations', route: '/etablissement/parametres?tab=operations' },
+        { icone: Bell, label: 'Notifications', route: '/etablissement/parametres?tab=notifications' },
+        { icone: ShieldCheck, label: 'Sécurité & RGPD', route: '/etablissement/parametres?tab=securite' },
         // Toggle thème rapatrié ici depuis le header mobile (Lot 6b.1 — header épuré).
         {
           icone: theme === 'dark' ? Sun : Moon,
