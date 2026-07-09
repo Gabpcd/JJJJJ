@@ -52,26 +52,38 @@ d'employeur/donneur d'ordre), jamais de stockage du document médical par Jolene
 
 ### 1.4 ⚠️ FINDING — `ARRET_MALADIE` est une fonctionnalité vivante (donnée de santé)
 
-Contrairement aux 2 autres, `ARRET_MALADIE` **n'est pas dormant** :
-`src/pages/DetailMissionSoignant.tsx:863-899` propose « Je dois me désister pour
-raison médicale (arrêt maladie) » → **téléversement du certificat médical** →
-`INSERT documents_soignants(type_document='ARRET_MALADIE')` → vérification IA
-(`verify-document`) → justifie l'annulation sans pénalité de score.
+**Constat initial** : `ARRET_MALADIE` n'était pas dormant —
+`src/pages/DetailMissionSoignant.tsx:863-899` téléversait un **certificat
+médical** (`INSERT documents_soignants(type_document='ARRET_MALADIE')` +
+vérification IA) pour justifier un désistement. C'était du stockage de donnée de
+santé, contraire à la décision « zéro donnée de santé ».
 
-**C'est du stockage de donnée de santé, en contradiction avec la décision « zéro
-donnée de santé ».** Le verrouiller CASSERAIT la feature → **non verrouillé pour
-l'instant** (décision produit requise).
+### ✅ RÉSOLU — empêchement impérieux sur l'honneur, zéro donnée de santé, verrou 3/3
 
-**Décision à trancher (Gabrielle)** — options :
-1. **Remplacer** le téléversement du certificat par une **attestation sur
-   l'honneur** (case à cocher + engagement) : le soignant déclare l'arrêt sans
-   qu'aucun document médical soit stocké ; anti-abus via score/récurrence, pas
-   via la pièce médicale. Puis **ajouter `ARRET_MALADIE` au verrou**.
-2. Conserver le stockage → alors la décision « zéro donnée de santé » doit être
-   révisée (périmètre HDS à réévaluer) — **non recommandé**.
+**Décision (Gabrielle, 09/07/2026)** : remplacer par une **attestation sur
+l'honneur d'empêchement impérieux** (santé, urgence familiale…), **le motif
+générique n'étant PAS stocké** — le seul fait d'être malade est déjà une donnée
+de santé (RGPD art. 9) ; un motif générique sort Jolene entièrement du champ.
 
-Recommandation : **option 1**. Chantier distinct (touche le flux annulation +
-la logique de score) — à cadrer avant de verrouiller `ARRET_MALADIE`.
+Périmètre de la **mini-PR dédiée** (après la PR verrous/tests, avant la salve
+store-readiness) — cf. `docs/MINI_PR_ARRET_MALADIE.md` :
+1. Déclaration **structurée** : case sur l'honneur + **dates d'indisponibilité**,
+   **AUCUN champ libre**, aucune catégorie/justificatif stockés.
+2. **Anti-abus** : attestation horodatée dans `journaux_audit` ; compteur par
+   soignant en paramètre (`fn_param_num`, défaut **2** annulations justifiées /
+   12 mois glissants) — au-delà, pénalité de score **malgré** l'attestation +
+   revue. Fausse déclaration = responsabilité utilisateur (ligne CGU ajoutée au
+   wagon §4.6 en cours).
+3. **Démantèlement** : upload `ARRET_MALADIE` retiré de `DetailMissionSoignant`,
+   pipeline IA débranché pour ce type, **0 document `ARRET_MALADIE` stocké**
+   vérifié (prod = 0 au 09/07/2026 ; purger seeds si trouvés), puis
+   `ARRET_MALADIE` **ajouté au verrou** trigger → **3/3**.
+4. CGU : le wording d'annulation actuel **ne mentionne pas** « certificat
+   médical » (vérifié) — rien à réaligner ; clause attestation ajoutée à
+   l'amendement §4.6.
+
+**Conséquence store** : privacy labels iOS/Android = **aucune donnée de santé
+collectée** — d'où l'exécution de ce chantier **avant la soumission** aux stores.
 
 ## 2. DAC7 — déclaration annuelle des revenus des opérateurs de plateforme
 
