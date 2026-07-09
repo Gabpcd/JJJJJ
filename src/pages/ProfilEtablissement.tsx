@@ -188,8 +188,18 @@ export default function ProfilEtablissement() {
   );
 }
 
-export function ProfilEtablissementContent() {
+// Lot 12 : sections affichables — permet de redistribuer les blocs de ce
+// composant entre les onglets de Paramètres (Profil / Facturation /
+// Opérations / Sécurité & RGPD) sans dupliquer états ni handlers.
+export type SectionProfilEtab = 'profil' | 'facturation' | 'geoloc' | 'securite';
+
+export function ProfilEtablissementContent({ sections }: { sections?: SectionProfilEtab[] } = {}) {
   const { user, deconnexion } = useAuth();
+  // Défaut (prop absente) : tout est visible — rétro-compatibilité totale.
+  const visible = (s: SectionProfilEtab) => !sections || sections.includes(s);
+  // Le <form> + « Enregistrer » ne se rendent que si au moins une section
+  // formulaire est visible (la section sécurité n'a pas de formulaire).
+  const formVisible = visible('profil') || visible('geoloc') || visible('facturation');
   const { afficherNotification } = useNotification();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
@@ -403,26 +413,28 @@ export function ProfilEtablissementContent() {
 
   return (
     <>
-      <div className="flex items-center gap-4 mb-6">
-        <AvatarUpload
-          src={(form as any).logoUrl}
-          prenom={form.nom}
-          nom=""
-          size={96}
-          mode="etablissement"
-          onUploaded={(url) => setForm(prev => ({ ...prev, logoUrl: url } as any))}
-        />
-        <h2 className="text-lg font-bold text-foreground">Profil de l'établissement</h2>
-      </div>
+      {visible('profil') && (
+        <div className="flex items-center gap-4 mb-6">
+          <AvatarUpload
+            src={(form as any).logoUrl}
+            prenom={form.nom}
+            nom=""
+            size={96}
+            mode="etablissement"
+            onUploaded={(url) => setForm(prev => ({ ...prev, logoUrl: url } as any))}
+          />
+          <h2 className="text-lg font-bold text-foreground">Profil de l'établissement</h2>
+        </div>
+      )}
 
-      {noteMoyenne && noteMoyenne.total > 0 && (
+      {visible('profil') && noteMoyenne && noteMoyenne.total > 0 && (
         <div className="card-base mb-6">
           <p className="text-lg font-bold text-foreground">⭐ {noteMoyenne.moyenne.toFixed(1)}/5 — {noteMoyenne.total} évaluation{noteMoyenne.total > 1 ? 's' : ''}</p>
         </div>
       )}
 
       {/* Bandeau contrat non validé */}
-      {!contratValide && (
+      {visible('facturation') && !contratValide && (
         <div className="max-w-2xl mb-6 rounded-xl border border-warning/30 bg-warning/10 p-4 flex items-start gap-3">
           <AlertTriangle className="h-5 w-5 text-warning mt-0.5 flex-shrink-0" />
           <div>
@@ -436,7 +448,9 @@ export function ProfilEtablissementContent() {
         </div>
       )}
 
+      {formVisible && (
       <form onSubmit={handleSave} className="space-y-6 max-w-2xl">
+        {visible('profil') && (
         <div className="card-base">
           <h2 className="text-base font-semibold text-foreground mb-4">Informations générales</h2>
           <div className="space-y-3">
@@ -483,6 +497,8 @@ export function ProfilEtablissementContent() {
             </div>
           </div>
         </div>
+        )}
+        {visible('profil') && (
         <div className="card-base">
           <h2 className="text-base font-semibold text-foreground mb-4">Adresse</h2>
           <div className="space-y-3">
@@ -494,6 +510,8 @@ export function ProfilEtablissementContent() {
             </div>
           </div>
         </div>
+        )}
+        {visible('profil') && (
         <div className="card-base">
           <h2 className="text-base font-semibold text-foreground mb-4">Contact</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -540,6 +558,8 @@ export function ProfilEtablissementContent() {
             />
           </div>
         </div>
+        )}
+        {visible('geoloc') && (
         <div className="card-base">
           <h2 className="text-base font-semibold text-foreground mb-4">Géolocalisation</h2>
           <div className="space-y-3">
@@ -576,6 +596,8 @@ export function ProfilEtablissementContent() {
             </p>
           </div>
         </div>
+        )}
+        {visible('profil') && (
         <div className="card-base">
           <div className="flex items-start gap-2 rounded-xl bg-primary/5 border border-primary/20 p-3 mb-4">
             <Info className="h-4 w-4 text-primary mt-0.5 flex-shrink-0" />
@@ -591,7 +613,9 @@ export function ProfilEtablissementContent() {
             )}
           </div>
         </div>
+        )}
         {/* Mode de paiement commission */}
+        {visible('facturation') && (
         <div className="card-base">
           <h2 className="text-base font-semibold text-foreground mb-4">💳 Mode de paiement de la commission</h2>
           <div className="space-y-3">
@@ -636,8 +660,10 @@ export function ProfilEtablissementContent() {
             <SepaSetupSection userId={user?.id} />
           )}
         </div>
+        )}
 
         {/* Couleur de thème */}
+        {visible('profil') && (
         <div className="card-base">
           <h2 className="text-base font-semibold text-foreground mb-4 flex items-center gap-2">
             <Palette className="h-5 w-5 text-primary" /> Couleur de votre établissement
@@ -668,8 +694,10 @@ export function ProfilEtablissementContent() {
             </div>
           </div>
         </div>
+        )}
 
         {/* Contrat de service Jolene */}
+        {visible('facturation') && (
         <div className="card-base">
           <h2 className="text-base font-semibold text-foreground mb-4 flex items-center gap-2">
             <FileCheck className="h-5 w-5 text-primary" /> Contrat de service Jolene
@@ -751,6 +779,7 @@ export function ProfilEtablissementContent() {
             </button>
           </div>
         </div>
+        )}
 
         {/* Lot 11 : Enregistrer sticky — toujours accessible sur un long formulaire mobile */}
         <div className="sticky bottom-4 z-10">
@@ -759,8 +788,10 @@ export function ProfilEtablissementContent() {
           </button>
         </div>
       </form>
+      )}
 
       {/* Widget embarquable */}
+      {visible('profil') && (
       <div className="max-w-2xl mt-8">
         <div className="card-base space-y-3">
           <h2 className="text-base font-semibold text-foreground">Widget recrutement</h2>
@@ -780,8 +811,10 @@ export function ProfilEtablissementContent() {
           </button>
         </div>
       </div>
+      )}
 
       {/* RGPD / Suppression compte (obligation Apple) */}
+      {visible('securite') && (
       <div className="max-w-2xl mt-12 space-y-4">
         <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Données personnelles (RGPD)</h2>
         <button
@@ -824,9 +857,10 @@ export function ProfilEtablissementContent() {
           <Trash2 className="h-4 w-4" /> Supprimer mon compte
         </button>
       </div>
+      )}
 
       {/* Modale de confirmation de suppression */}
-      {showDeleteModal && (
+      {visible('securite') && showDeleteModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="bg-background rounded-2xl p-6 max-w-md w-full shadow-xl space-y-4">
             <h3 className="text-lg font-bold text-destructive">⚠️ Suppression définitive</h3>
