@@ -41,6 +41,7 @@ import { fr } from 'date-fns/locale';
 import { toast } from 'sonner';
 import type { Database } from '@/integrations/supabase/types';
 import { BlocContratTravailMission } from '@/components/BlocContratTravailMission';
+import { DeclarationEmpechement } from '@/components/DeclarationEmpechement';
 import { BandeauActionPrioritaire, type ActionPrioritaire } from '@/components/BandeauActionPrioritaire';
 import { ModaleAnnulationCandidature } from '@/components/soignant/ModaleAnnulationCandidature';
 import { AnnulationCandidatureTimer } from '@/components/soignant/AnnulationCandidatureTimer';
@@ -847,61 +848,18 @@ export default function DetailMissionSoignant() {
                   </div>
                 )}
 
-                {/* Arrêt maladie : sans pénalité de score (justificatif sous 48h),
-                    étab prévenu, remplacement automatique si mission garantie. */}
+                {/* Empêchement impérieux : attestation sur l'honneur + dates —
+                    zéro donnée de santé (docs/CONFORMITE.md §1.4), étab prévenu,
+                    remplacement automatique si mission garantie. */}
                 {(mission.statut === 'ASSIGNEE' || mission.statut === 'EN_COURS') && !(mission as any).est_arret_maladie && (
-                  <button
-                    onClick={async () => {
-                      if (!window.confirm('Déclarer un arrêt maladie sur cette mission ? L\'établissement sera prévenu immédiatement et tu devras fournir un certificat médical sous 48h. Aucune pénalité de score avec justificatif.')) return;
-                      const { data, error } = await supabase.rpc('fn_declarer_arret_maladie' as any, { p_mission_id: mission.id });
-                      if (error || (data as any)?.error) { toast.error((data as any)?.error || 'Déclaration impossible.'); return; }
-                      toast.success('Arrêt maladie déclaré — pense au certificat médical sous 48h. Bon rétablissement.');
-                      setMission((prev: any) => ({ ...prev, est_arret_maladie: true }));
-                    }}
-                    className="w-full text-xs text-muted-foreground hover:text-foreground underline mb-4"
-                  >
-                    🏥 Je dois me désister pour raison médicale (arrêt maladie)
-                  </button>
+                  <DeclarationEmpechement
+                    missionId={mission.id}
+                    onDeclare={() => setMission((prev: any) => ({ ...prev, est_arret_maladie: true }))}
+                  />
                 )}
                 {(mission as any).est_arret_maladie && (
-                  <div className="bg-warning/5 border border-warning/20 rounded-xl p-3 mb-4 space-y-2">
-                    <p className="text-xs text-warning text-center">🏥 Arrêt maladie déclaré — certificat médical à fournir sous 48h</p>
-                    <label className="btn-primary w-full text-sm py-2.5 text-center cursor-pointer block">
-                      📎 Téléverser mon certificat (vérifié automatiquement)
-                      <input
-                        type="file"
-                        accept="image/*,.pdf"
-                        className="hidden"
-                        onChange={async (e) => {
-                          const fichier = e.target.files?.[0];
-                          if (!fichier || !user) return;
-                          const nomSanitise = fichier.name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^\w.-]+/g, '-');
-                          const chemin = `${user.id}/documents/ARRET_MALADIE/${Date.now()}-${nomSanitise}`;
-                          const { error: upErr } = await supabase.storage.from('jolene-documents')
-                            .upload(chemin, fichier, { contentType: fichier.type || undefined, upsert: false });
-                          if (upErr) { toast.error('Téléversement impossible.'); return; }
-                          const { data: doc, error: insErr } = await supabase.from('documents_soignants').insert({
-                            soignant_id: user.id,
-                            type_document: 'ARRET_MALADIE' as any,
-                            libelle: `Arrêt maladie — mission ${mission.intitule}`.slice(0, 120),
-                            s3_bucket: 'jolene-documents', s3_cle: chemin,
-                            nom_fichier: fichier.name, type_mime: fichier.type, taille_octets: fichier.size,
-                            statut_verification: 'EN_ATTENTE',
-                          } as any).select().single();
-                          if (insErr || !doc) {
-                            await supabase.storage.from('jolene-documents').remove([chemin]);
-                            toast.error('Enregistrement impossible.');
-                            return;
-                          }
-                          toast.success('Certificat reçu — vérification automatique en cours.');
-                          supabase.functions.invoke('verify-document', { body: { document_id: (doc as any).id } })
-                            .then(({ data: v }) => {
-                              if ((v as any)?.verdict === 'VERIFIE') toast.success('✅ Certificat vérifié — arrêt justifié, aucun impact score.');
-                              else if ((v as any)?.verdict === 'REJETE') toast.error('❌ Certificat rejeté : ' + ((v as any)?.analysis?.motif_rejet || 'non conforme') + '. Re-téléversez un document lisible.');
-                            });
-                        }}
-                      />
-                    </label>
+                  <div className="bg-warning/5 border border-warning/20 rounded-xl p-2.5 mb-4 text-center">
+                    <p className="text-xs text-warning">Empêchement impérieux déclaré — l'établissement est prévenu. Aucun justificatif à fournir.</p>
                   </div>
                 )}
 
