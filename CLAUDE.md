@@ -11,6 +11,11 @@
 5. **Merge automatique** via `gh pr merge --squash` ou `mcp__github__merge_pull_request`
 6. **Surveillance du déploiement** : suivre `deploy-supabase` jusqu'à confirmation verte
 7. **Rapport final** : URLs de la PR mergée, du run de workflow, confirmation prod
+8. **Séquence stricte (rappel Gabrielle 10/07/2026)** : PR ouverte → CI VERT
+   (`validate-pr` + Vercel) → merge sur main. JAMAIS de merge git-level direct
+   sur main, SAUF panne avérée de l'API GitHub (rate-limit, MCP déconnecté)
+   **ET** contenu déjà recetté (branche Supabase + `tsc -b` + guards) — et dans
+   ce cas le signaler explicitement dans le message de merge et le rapport.
 
 ### Règle « livré ≠ mergé » — recette obligatoire (post-incident merges invisibles)
 
