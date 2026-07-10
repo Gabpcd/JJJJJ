@@ -195,12 +195,20 @@ async function getVaultCronSecret(sb: any): Promise<string> {
    d'une fonction existante conserve ses ACLs, mais une fonction créée de zéro
    n'hérite de RIEN dans cette base → 42501 « permission denied » pour tous les
    utilisateurs connectés (incident : 4 RPCs Lot 17/empêchement muettes en prod).
-2. **`fn_test_update_mission` bypasse tous les triggers** (replica mode scoped,
-   migration `20260710130000`) : `dec_proteger_mission_soignant` re-force
-   debut_le/soignant_assigne_id depuis OLD pour tout caller non-admin, y compris
-   service_role — sans le bypass, le helper était un no-op SILENCIEUX (l'UPDATE
-   « réussit », rien ne change). Avant d'écrire un test qui modifie `missions`
-   hors RPC métier, passer par ce helper, jamais par un UPDATE direct.
+2. **`fn_test_update_mission` pose le flag `app.test_bypass_protections`**
+   (migration `20260710130000` v2) que `dec_proteger_mission_soignant` respecte
+   (early return) : ce trigger re-force debut_le/soignant_assigne_id depuis OLD
+   pour tout caller non-admin, service_role compris — sans le flag, le helper
+   était un no-op SILENCIEUX (l'UPDATE « réussit », rien ne change). NB :
+   `SET session_replication_role` est refusé via PostgREST (supautils vérifie
+   le rôle de SESSION, pas le owner SECURITY DEFINER). Avant d'écrire un test
+   qui modifie `missions` hors RPC métier, passer par ce helper, jamais par un
+   UPDATE direct.
+3. **`journaux_audit` est IMMUABLE** (triggers dec_audit_immuable +
+   dec_proteger_audit_delete) : aucune purge possible dans les tests. Toute
+   assertion E2E sur un compteur basé sur l'audit (ex. empêchements/12 mois du
+   compte partagé) doit être RELATIVE (n_avant + 1), jamais absolue, avec
+   snapshot/restore de l'état du soignant (score, compteurs) autour du test.
 
 **Patterns backend (Lot 13)** :
 1. **Avant tout `fn_creer_notification` avec un nouveau type** : vérifier `notifications_type_check` (le type `CONTESTATION_PRESENCE` était utilisé par le front mais absent du CHECK → notifs de contestation muettes en prod, jamais d'erreur visible côté client).
