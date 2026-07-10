@@ -44,7 +44,7 @@ retrait.**
 |---|---|---|---|
 | `VACCINATIONS` | Dormant (0 requis, 0 stocké) | ✅ Verrouillé | Déjà exclu de l'upload (`src/lib/documents.ts` `TYPES_DOCUMENTS_EXCLUS_UPLOAD`) |
 | `MEDECINE_TRAVAIL` | Dormant (0 requis, 0 stocké) | ✅ Verrouillé | Déjà exclu de l'upload |
-| `ARRET_MALADIE` | **⚠️ FEATURE VIVANTE** (0 stocké à ce jour) | ⏸️ **NON verrouillé** (voir §1.4) | **Chemin actif** : `src/pages/DetailMissionSoignant.tsx` |
+| `ARRET_MALADIE` | Démantelé (0 stocké, chemin upload supprimé) | ✅ **Verrouillé** (migration `20260710090000`, voir §1.4) | Remplacé par `fn_declarer_empechement_imperieux` + `<DeclarationEmpechement>` |
 
 **Remplacement de référence** (si un besoin santé émerge) : **attestation sur
 l'honneur du soignant + vérification par l'établissement** (dans son rôle
@@ -65,8 +65,9 @@ l'honneur d'empêchement impérieux** (santé, urgence familiale…), **le motif
 générique n'étant PAS stocké** — le seul fait d'être malade est déjà une donnée
 de santé (RGPD art. 9) ; un motif générique sort Jolene entièrement du champ.
 
-Périmètre de la **mini-PR dédiée** (après la PR verrous/tests, avant la salve
-store-readiness) — cf. `docs/MINI_PR_ARRET_MALADIE.md` :
+**Mini-PR EXÉCUTÉE le 10/07/2026** (migration `20260710090000_attestation_empechement_imperieux.sql`
++ `src/components/DeclarationEmpechement.tsx`) — périmètre livré, cf.
+`docs/MINI_PR_ARRET_MALADIE.md` :
 1. Déclaration **structurée** : case sur l'honneur + **dates d'indisponibilité**,
    **AUCUN champ libre**, aucune catégorie/justificatif stockés.
 2. **Anti-abus** : attestation horodatée dans `journaux_audit` ; compteur par
@@ -147,4 +148,4 @@ collectée** — d'où l'exécution de ce chantier **avant la soumission** aux s
 | Réception factures via PA | 01/09/2026 | Admin (Gabrielle, 15 j) | À faire |
 | Émission via PA (Factur-X → PA) | 09/2027 | Dev | À planifier |
 | Verrou docs santé (VACCINATIONS/MEDECINE_TRAVAIL) | Fait | Dev (trigger) | ✅ Verrouillé |
-| ARRET_MALADIE : attestation sur l'honneur + verrou | À trancher | Produit + Dev | ⚠️ Décision Gabrielle (§1.4) |
+| ARRET_MALADIE : attestation sur l'honneur + verrou | Fait (10/07/2026) | Produit + Dev | ✅ Livré — migration 20260710090000 (§1.4) |

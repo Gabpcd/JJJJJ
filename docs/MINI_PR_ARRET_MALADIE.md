@@ -1,8 +1,10 @@
 # Mini-PR — Attestation d'empêchement impérieux (remplace l'arrêt maladie)
 
-> **À exécuter** après la PR verrous/tests (#826) et la relecture-lot, **avant**
-> la salve store-readiness. Décision validée (Gabrielle, 09/07/2026), cf.
-> `docs/CONFORMITE.md §1.4`. **Ne rien coder avant ce jalon.**
+> **✅ EXÉCUTÉE le 10/07/2026** — migration `20260710090000_attestation_empechement_imperieux.sql`
+> (RPC `fn_declarer_empechement_imperieux`, ancien RPC verrouillé, verrou docs
+> santé 3/3, param `annulations_justifiees_max_12m`) + front
+> `src/components/DeclarationEmpechement.tsx`. Décision validée (Gabrielle,
+> 09/07/2026), cf. `docs/CONFORMITE.md §1.4`.
 >
 > Objectif : supprimer tout stockage de donnée de santé (arrêt maladie) et le
 > remplacer par une attestation sur l'honneur générique — zéro donnée de santé,

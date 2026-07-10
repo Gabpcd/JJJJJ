@@ -101,8 +101,18 @@ else
   echo "   OK"
 fi
 
+echo "── Garde-fou 8 : zéro upload ARRET_MALADIE côté front (zéro donnée de santé)"
+# Mini-PR empêchement impérieux (docs/CONFORMITE.md §1.4) : le certificat
+# médical ne doit JAMAIS revenir — attestation sur l'honneur uniquement.
+if grep -rn "type_document: 'ARRET_MALADIE'" src/; then
+  echo "   upload ARRET_MALADIE réintroduit dans src/ (donnée de santé interdite)"
+  FAIL=1
+else
+  echo "   OK"
+fi
+
 if [ "$FAIL" -ne 0 ]; then
   echo "✗ guards.sh : au moins un garde-fou a échoué (voir ci-dessus)."
   exit 1
 fi
-echo "✓ guards.sh : les 7 garde-fous passent."
+echo "✓ guards.sh : les 8 garde-fous passent."
