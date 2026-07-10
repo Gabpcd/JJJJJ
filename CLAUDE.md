@@ -210,6 +210,25 @@ async function getVaultCronSecret(sb: any): Promise<string> {
    compte partagé) doit être RELATIVE (n_avant + 1), jamais absolue, avec
    snapshot/restore de l'état du soignant (score, compteurs) autour du test.
 
+**Patterns backend (audit 10/07/2026, filet 72h + RPC mortes)** :
+1. **Le cron d'auto-validation 72h était neutralisé par un trigger de protection.**
+   `dec_proteger_presence_soignant` (BEFORE UPDATE presences) revertait
+   `valide_par_etablissement` dès `NOT est_admin() AND NOT est_admin_etablissement()`
+   — vrai en contexte cron (`auth.uid()` NULL → `est_admin()`=false). Le cron
+   posait `valide_auto_72h_le` (non reverté) → présence exclue des passages
+   suivants mais jamais réellement validée. Fix `20260710140000` : exempter
+   `auth.uid() IS NULL` (système), comme le jumeau `fn_protect_presence_integrity`.
+   **Règle** : tout trigger anti-tamper sur une table écrite par un cron/backend
+   DOIT exempter le contexte système (`auth.uid() IS NULL`), sinon il annule
+   silencieusement les writes légitimes du cron.
+2. **Audit croisé RPC↔grants** : `grep` toutes les `supabase.rpc('fn_...')` de
+   `src/`, puis vérifier en prod `has_function_privilege('authenticated', oid,
+   'EXECUTE')`. Une fonction NEUVE n'hérite d'aucun grant → 42501 silencieux.
+   Audit du 10/07 : 4 RPC frontend mortes (fn_scanner_code_pointage,
+   fn_admin_lister/maj_parametre, fn_calculer_bfa_safe) — 3 grantées
+   (`20260710150000`), la 4e laissée morte (aucun contrôle interne + composant
+   non monté).
+
 **Patterns backend (Lot 13)** :
 1. **Avant tout `fn_creer_notification` avec un nouveau type** : vérifier `notifications_type_check` (le type `CONTESTATION_PRESENCE` était utilisé par le front mais absent du CHECK → notifs de contestation muettes en prod, jamais d'erreur visible côté client).
 2. **Tout `cron.schedule` posé via MCP doit être recapturé en migration** (garde `pg_extension pg_cron` pour les branches preview) — le cron d'auto-validation 72h tournait en prod sans exister dans le repo : un rebuild l'aurait perdu, et l'« auto-72h » CGU §4.6 avec lui.
