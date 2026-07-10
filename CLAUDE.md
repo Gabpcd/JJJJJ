@@ -189,6 +189,19 @@ async function getVaultCronSecret(sb: any): Promise<string> {
 > jamais ». Séquestre = payout **manuel** sur le compte connecté, libéré à la
 > validation des présences. Réf. unique : `docs/flux-monetaire-escrow.md`.
 
+**Patterns backend (10/07/2026, incident PR #835)** :
+1. **Toute NOUVELLE fonction SQL user-facing DOIT être suivie d'un `GRANT
+   EXECUTE ... TO authenticated`** dans la même migration. `CREATE OR REPLACE`
+   d'une fonction existante conserve ses ACLs, mais une fonction créée de zéro
+   n'hérite de RIEN dans cette base → 42501 « permission denied » pour tous les
+   utilisateurs connectés (incident : 4 RPCs Lot 17/empêchement muettes en prod).
+2. **`fn_test_update_mission` bypasse tous les triggers** (replica mode scoped,
+   migration `20260710130000`) : `dec_proteger_mission_soignant` re-force
+   debut_le/soignant_assigne_id depuis OLD pour tout caller non-admin, y compris
+   service_role — sans le bypass, le helper était un no-op SILENCIEUX (l'UPDATE
+   « réussit », rien ne change). Avant d'écrire un test qui modifie `missions`
+   hors RPC métier, passer par ce helper, jamais par un UPDATE direct.
+
 **Patterns backend (Lot 13)** :
 1. **Avant tout `fn_creer_notification` avec un nouveau type** : vérifier `notifications_type_check` (le type `CONTESTATION_PRESENCE` était utilisé par le front mais absent du CHECK → notifs de contestation muettes en prod, jamais d'erreur visible côté client).
 2. **Tout `cron.schedule` posé via MCP doit être recapturé en migration** (garde `pg_extension pg_cron` pour les branches preview) — le cron d'auto-validation 72h tournait en prod sans exister dans le repo : un rebuild l'aurait perdu, et l'« auto-72h » CGU §4.6 avec lui.
