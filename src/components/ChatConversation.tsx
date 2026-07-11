@@ -25,6 +25,7 @@ import { logger } from '@/lib/logger';
 import { useConversationRealtime } from '@/hooks/useConversationRealtime';
 import { InputMessage } from '@/components/messagerie/InputMessage';
 import { AvatarDisplay } from '@/components/AvatarUpload';
+import { BloquerUtilisateur } from '@/components/BloquerUtilisateur';
 
 interface Message {
   id: string;
@@ -270,7 +271,13 @@ export function ChatConversation({ missionId, autreUserId, isEtablissement }: Ch
             )}
           </p>
         </div>
-        <div className="text-[10px] text-muted-foreground">{messages.length} msg</div>
+        <div className="flex flex-col items-end gap-1 shrink-0">
+          <span className="text-[10px] text-muted-foreground">{messages.length} msg</span>
+          {/* Blocage (App Store 1.2 — UGC) : coupe la messagerie dans les 2 sens. */}
+          {resolvedAutreId && resolvedAutreId !== '00000000-0000-0000-0000-000000000000' && (
+            <BloquerUtilisateur cibleId={resolvedAutreId} variant="lien" />
+          )}
+        </div>
       </div>
 
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-3 py-4 space-y-4 min-h-0 bg-jolene-lavender-50/40">
