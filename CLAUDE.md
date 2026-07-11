@@ -144,6 +144,29 @@ jours avec un défaut figé qui se désynchronise ensuite de la période). Corol
 si deux champs peuvent diverger, l'un des deux est de trop — dériver, ne pas
 dupliquer la saisie.
 
+## Principe — Publication différée = filtre de visibilité CENTRALISÉ
+
+Toute donnée à **visibilité conditionnelle** (publication différée, double-aveugle,
+embargo) est filtrée par **une source unique**, jamais par une clause répétée sur
+chaque surface. Une donnée non publiée ne doit JAMAIS transparaître — ni en liste,
+ni en stat, ni en score dérivé, ni via un recalcul déclenché par une autre cause.
+Cas d'école (Finding #3, double-aveugle notations D8, `notations_missions.publie_le`) :
+le filtre répété par surface a été **oublié sur 3 surfaces distinctes**, révélées
+par un audit à 4 étages (fonctions SQL, RLS, `src/`, edge) :
+1. `fn_calculer_score_fiabilite_v2` — le score public soignant bougeait sur une note
+   d'étab non publiée (filtrait `masque=false` sans `publie_le`).
+2. `fn_mes_notations_recues_avec_stats` — listait la note non publiée en clair
+   (5 requêtes sans filtre).
+3. **RLS** `pol_notations_select` — laissait lire la note non publiée via PostgREST
+   direct (`note_id = self AND masque=false`, sans `publie_le`).
+Règle : la source canonique est la **vue `evaluations_publiees`** (`publie_le IS
+NOT NULL AND masque = false`) ; toute agrégation/lecture publique lit cette vue (ou
+réplique EXACTEMENT son filtre) — auditer les **4 étages** (`pg_proc`, `pg_policy`,
+`git grep from('notations_missions')`, edge) à chaque ajout de surface, avec un
+**test-garde** qui énumère les lecteurs et échoue si l'un oublie le filtre.
+Corollaire de « État dérivé » : la visibilité est dérivée d'un seul prédicat, pas
+re-décidée localement (elle a été re-décidée 3 fois, oubliée 3 fois).
+
 ## Protocole de preuve — assertions, pas de screenshots
 
 La preuve d'une recette = **des assertions** (test unitaire sur fonction pure quand
