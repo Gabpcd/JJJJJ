@@ -47,6 +47,32 @@ un composant réel mais **pas celui rendu au pointage**) :
 4. **`npx tsc -b` local AVANT push** : reproduit le check CI
 5. **Subagents Write/Edit** : après chaque subagent qui touche TS/TSX, faire un `npx tsc -b`
 
+### Protocole de merge — checks requis, revue fraîche, tiering (Lots 19+)
+
+**B7 — checks CI requis sur toute PR.** `test:regression` + `guards` sont
+bloquants avant merge ; `test:escrow` devient requis dès qu'un diff touche
+`supabase/`, les paiements ou l'escrow. Protection de branche GitHub si
+disponible, sinon vérification systématique via `get_check_runs` avant merge.
+NB : `npm run test:regression` a une chaîne CI-only (schema + e2e ont besoin
+DB/serveur) — le rendre requis suppose que la CI fournit l'env (sinon le check
+tourne à vide, cf. incident maillon invoicing fantôme #823).
+
+**B8 — revue fraîche dans la boucle.** Avant tout merge non trivial, un agent à
+**contexte vierge** (`/code-review` + skill de revue) poste son verdict dans la
+PR. Merge possible uniquement sur verdict **CLÔTURABLE** (aucun bloquant ouvert).
+
+**B9 — tiering des merges.** Auto-merge autorisé quand **checks verts ET verdict
+vert**, SAUF si le diff touche l'une de ces catégories → **approbation humaine
+explicite obligatoire**, nommément :
+- paiements / escrow / Stripe / mandats SEPA ;
+- migrations destructives (DROP / TRUNCATE / DELETE, `ALTER … DROP COLUMN`) ;
+- RLS / auth / GRANT / SECURITY DEFINER ;
+- CGU / légal / mentions / consentement ;
+- suppression ou écrasement de **données prod**.
+
+Dans ces catégories : jamais d'auto-merge, jamais de SQL direct prod hors incident
+avéré (cf. garde-fous 9.0), la PR attend un « go » humain explicite.
+
 ## Règles migrations Supabase
 
 1. Format obligatoire `YYYYMMDDHHMMSS_*.sql` (14 chiffres)
