@@ -36,6 +36,7 @@ jobs:
     if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
     permissions:
       contents: write
+      pull-requests: write
     steps:
       - uses: actions/checkout@v5
         with:
@@ -98,7 +99,42 @@ jobs:
           git add supabase/schema/public.sql
           git commit -m "chore(schema): re-baseline auto du schéma prod"
           if git push --force origin HEAD:auto/schema-baseline; then
-            echo "✅ Baseline poussée sur auto/schema-baseline — ouvrir/merger la PR vers main pour verdir drift-check."
+            echo "✅ Baseline poussée sur auto/schema-baseline."
           else
             echo "::warning::Push sur auto/schema-baseline refusé. Le dump reste disponible en artifact 'schema-public-sql' — le committer à la main."
+            exit 0
+          fi
+
+      - name: Ouvrir + auto-merger la PR de baseline (chaînon manquant du pipeline)
+        if: steps.diff.outputs.changed == 'true'
+        # Sans cette étape, la baseline restait poussée sur auto/schema-baseline
+        # SANS PR → jamais mergée → drift-check rouge en permanence (la baseline
+        # versionnée sur main ne suivait aucune migration mergée). On ouvre donc
+        # la PR automatiquement (idempotent : réutilise la PR ouverte s'il y en a
+        # une) puis on tente l'auto-merge.
+        #
+        # NB dégradation gracieuse : une PR créée par le GITHUB_TOKEN ne
+        # re-déclenche pas la CI (anti-boucle GitHub). L'auto-merge sur checks
+        # requis peut donc rester en attente selon la protection de branche.
+        # `--auto` d'abord (si le repo l'autorise), sinon merge immédiat (fichier
+        # snapshot INERTE, zéro runtime), sinon la PR reste ouverte à merger en
+        # 1 clic. Dans tous les cas : fini le « périmé en silence sans PR ».
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -uo pipefail
+          PR=$(gh pr list --head auto/schema-baseline --base main --state open --json number -q '.[0].number' || true)
+          if [ -z "${PR:-}" ]; then
+            gh pr create --base main --head auto/schema-baseline \
+              --title "chore(schema): re-baseline auto du schéma prod (verdir drift-check)" \
+              --body "PR auto-générée par \`schema-snapshot.yml\` après un deploy réussi. Seul \`supabase/schema/public.sql\` change (dump prod) — **aucun effet runtime**. Fait suivre la baseline versionnée aux migrations mergées et verdit drift-check."
+            PR=$(gh pr view auto/schema-baseline --json number -q '.number')
+          fi
+          echo "PR de baseline : #$PR"
+          if gh pr merge "$PR" --squash --auto; then
+            echo "✅ Auto-merge activé sur #$PR (mergera dès checks OK)."
+          elif gh pr merge "$PR" --squash; then
+            echo "✅ #$PR mergée immédiatement (fichier snapshot inerte)."
+          else
+            echo "::warning::#$PR ouverte mais non mergée automatiquement — merger à la main (activer « Allow auto-merge » dans Settings pour du 100% hands-off)."
           fi
