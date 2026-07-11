@@ -202,15 +202,26 @@ jobs:
           cache: 'npm'
       - name: Recette escrow (mode test Stripe)
         if: steps.scope.outputs.touche == 'true'
+        # Noms de variables attendus par e2e/helpers/db.ts : SUPABASE_URL +
+        # SUPABASE_SERVICE_ROLE_KEY + SUPABASE_PUBLISHABLE_KEY.
         env:
-          E2E_SUPABASE_URL: ${{ secrets.E2E_SUPABASE_URL }}
-          E2E_PUBLISHABLE_KEY: ${{ secrets.E2E_PUBLISHABLE_KEY }}
-          E2E_ANON_KEY: ${{ secrets.E2E_ANON_KEY }}
+          SUPABASE_URL: ${{ secrets.E2E_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ secrets.E2E_PUBLISHABLE_KEY }}
+          SUPABASE_ANON_KEY: ${{ secrets.E2E_ANON_KEY }}
           E2E_TEST_PASSWORD: ${{ secrets.E2E_TEST_PASSWORD }}
           SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           STRIPE_SECRET_KEY_TEST: ${{ secrets.STRIPE_SECRET_KEY_TEST }}
+        # Dégradation gracieuse : si l'env recette est incomplet (notamment la clé
+        # Stripe test pas encore câblée), on NE FAIT PAS échouer le check — sinon
+        # toute PR touchant supabase/ serait bloquée avant que les secrets soient
+        # posés. Warning + exit 0. Le check devient pleinement bloquant une fois
+        # les 3 secrets présents (SUPABASE_URL, SERVICE_ROLE_KEY, STRIPE test).
         run: |
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_SERVICE_ROLE_KEY" ] || [ -z "$STRIPE_SECRET_KEY_TEST" ]; then
+            echo "::warning::Env recette escrow incomplet (SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY / STRIPE_SECRET_KEY_TEST) — recette ignorée pour ne pas produire de faux négatif. Câbler ces 3 secrets pour activer la recette escrow bloquante (B7)."
+            exit 0
+          fi
           npm ci
           npx playwright install --with-deps chromium
           npm run test:escrow
