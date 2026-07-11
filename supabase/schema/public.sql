@@ -508,8 +508,9 @@ BEGIN
             );
         END IF;
 
-        -- Vérification périmètre GPS (géofence 500m)
-        SELECT e.adresse_lat, e.adresse_lng INTO v_etab
+        -- Vérification périmètre GPS — tolérance RÉGLÉE par l'établissement
+        SELECT e.adresse_lat, e.adresse_lng, COALESCE(e.tolerance_pointage_m, 500) AS tolerance
+        INTO v_etab
         FROM missions m JOIN etablissements e ON e.id = m.etablissement_id
         WHERE m.id = NEW.mission_id;
 
@@ -520,15 +521,34 @@ BEGIN
                 + sin(radians(v_etab.adresse_lat)) * sin(radians(NEW.arrivee_lat))
             ));
             NEW.distance_etablissement_m := ROUND(v_dist, 2);
-            NEW.perimetre_gps_valide := (v_dist <= 500);
+            NEW.perimetre_gps_valide := (v_dist <= v_etab.tolerance);
 
             IF NOT NEW.perimetre_gps_valide THEN
                 NEW.alertes_fraude := NEW.alertes_fraude || jsonb_build_array(jsonb_build_object(
                     'type_alerte', 'HORS_PERIMETRE',
                     'distance_m', ROUND(v_dist, 2),
-                    'distance_max_m', 500
+                    'distance_max_m', v_etab.tolerance
                 ));
             END IF;
+        END IF;
+
+        -- Lot 13 (recours) : une anomalie n'est JAMAIS un rejet silencieux — le
+        -- soignant est prévenu et peut expliquer/contester depuis ses présences.
+        IF NEW.alerte_teleportation OR (NEW.perimetre_gps_valide IS FALSE) THEN
+            BEGIN
+                PERFORM fn_creer_notification(
+                    p_destinataire_id   := NEW.soignant_id,
+                    p_type_destinataire := 'SOIGNANT',
+                    p_type              := 'SYSTEM',
+                    p_titre             := 'Anomalie GPS sur votre pointage',
+                    p_corps             := 'Un écart GPS a été détecté sur votre pointage. Votre présence reste enregistrée — vous pouvez apporter une explication depuis vos présences.',
+                    p_lien              := '/soignant/presences',
+                    p_type_ressource    := 'presence',
+                    p_id_ressource      := NEW.id
+                );
+            EXCEPTION WHEN OTHERS THEN
+                NULL; -- la notif ne doit jamais bloquer le pointage.
+            END;
         END IF;
     END IF;
 
@@ -805,16 +825,19 @@ CREATE OR REPLACE FUNCTION "public"."dec_bloquer_si_facture_impayee"() RETURNS "
     AS $$
 DECLARE
     v_nb_impayees INTEGER;
+    v_delai_jours NUMERIC;
 BEGIN
     IF TG_OP = 'INSERT' THEN
+        v_delai_jours := public.fn_param_num('gel_publication_impaye_jours', 15);
+
         SELECT COUNT(*) INTO v_nb_impayees
         FROM factures
         WHERE etablissement_id = NEW.etablissement_id
           AND statut = 'EMISE'
-          AND cree_le + INTERVAL '30 days' < NOW();
+          AND cree_le + make_interval(days => v_delai_jours::int) < NOW();
 
         IF v_nb_impayees > 0 AND NOT est_admin() THEN
-            RAISE EXCEPTION 'Vous avez % facture(s) impayée(s) depuis plus de 30 jours. Régularisez votre situation pour publier de nouvelles missions.', v_nb_impayees;
+            RAISE EXCEPTION 'Vous avez % facture(s) impayée(s) depuis plus de % jours : les nouvelles publications sont suspendues (vos missions en cours ne sont pas affectées). Régularisez depuis Facturation pour republier.', v_nb_impayees, v_delai_jours::int;
         END IF;
     END IF;
     RETURN NEW;
@@ -2282,6 +2305,13 @@ CREATE OR REPLACE FUNCTION "public"."dec_proteger_mission_soignant"() RETURNS "t
     SET "search_path" TO 'public'
     AS $$
 BEGIN
+    -- TEST BYPASS (10/07/2026) : posé uniquement par fn_test_update_mission
+    -- (réservé service_role, seed E2E). Sans lui, le helper était un no-op
+    -- silencieux : ce trigger re-forçait debut_le/soignant_assigne_id depuis OLD.
+    IF current_setting('app.test_bypass_protections', true) = 'true' THEN
+        RETURN NEW;
+    END IF;
+
     IF current_setting('jolene.sync_in_progress', true) = 'true' THEN
         NEW.soignant_assigne_id := OLD.soignant_assigne_id;
         NEW.taux_horaire_base := OLD.taux_horaire_base;
@@ -2385,8 +2415,7 @@ CREATE OR REPLACE FUNCTION "public"."dec_proteger_presence_soignant"() RETURNS "
     SET "search_path" TO 'public'
     AS $$
 BEGIN
-    IF NOT est_admin() AND NOT est_admin_etablissement() THEN
-        -- Le soignant ne peut PAS modifier :
+    IF auth.uid() IS NOT NULL AND NOT est_admin() AND NOT est_admin_etablissement() THEN
         NEW.valide_par_etablissement := OLD.valide_par_etablissement;
         NEW.valide_le := OLD.valide_le;
         NEW.alerte_teleportation := OLD.alerte_teleportation;
@@ -12135,7 +12164,8 @@ BEGIN
     NULLIF(SUM(GREATEST(0, 1 - EXTRACT(EPOCH FROM (NOW() - cree_le))/(365.0*86400))), 0)
   INTO v_nb_notations, v_notation_pct
   FROM notations_missions
-  WHERE note_id = p_etab_id AND sens = 'SOIGNANT_VERS_ETAB' AND cree_le >= v_since AND masque = false;
+  WHERE note_id = p_etab_id AND sens = 'SOIGNANT_VERS_ETAB' AND cree_le >= v_since AND masque = false
+    AND publie_le IS NOT NULL; -- D8
 
   IF v_nb_notations < 3 OR v_notation_pct IS NULL THEN
     v_notation_pct := NULL;
@@ -12499,6 +12529,7 @@ DECLARE
   v_bonus_connaissance integer := 0;
   v_bonus_paiement_rapide integer := 0;
   v_bonus_boost integer := 0;
+  v_bonus_service integer := 0;
   v_score_global integer := 0;
   v_breakdown jsonb;
 BEGIN
@@ -12513,7 +12544,7 @@ BEGIN
 
   SELECT m.id, m.profession_requise, m.etablissement_id, m.taux_horaire_base,
          m.statut, m.est_urgente, m.debut_le, m.fin_le, m.duree_heures,
-         m.cree_le, m.boostee_le, m.type_contrat_recherche
+         m.cree_le, m.boostee_le, m.type_contrat_recherche, m.service
     INTO v_mission
     FROM public.missions m
    WHERE m.id = p_mission_id;
@@ -12630,6 +12661,20 @@ BEGIN
        AND mh.statut = 'TERMINEE'
   ) THEN 8 ELSE 0 END;
 
+  -- Lot 17 (A1) : bonus « tu connais ce service » — mission TERMINEE dans le
+  -- même service (libellé normalisé Lot 12), quel que soit l'établissement.
+  v_bonus_service := CASE WHEN
+    v_mission.service IS NOT NULL
+    AND btrim(v_mission.service) <> ''
+    AND EXISTS (
+      SELECT 1 FROM public.missions mh
+       WHERE mh.soignant_assigne_id = p_soignant_id
+         AND mh.statut = 'TERMINEE'
+         AND mh.service IS NOT NULL
+         AND lower(btrim(mh.service)) = lower(btrim(v_mission.service))
+    )
+  THEN GREATEST(0, public.fn_param_num('matching_bonus_service', 4)::integer) ELSE 0 END;
+
   -- v3 : bonus ⚡ paiement rapide (même gating serveur que le badge 7c).
   v_bonus_paiement_rapide := CASE WHEN
     public.fn_param_num('feature_paiement_rapide_actif', 0) = 1
@@ -12645,7 +12690,7 @@ BEGIN
 
   v_score_global := v_score_tarif + v_score_distance + v_score_horaire + v_score_etab
                   + v_score_urgence + v_score_soignant_fiabilite
-                  + v_bonus_fraicheur + v_bonus_connaissance
+                  + v_bonus_fraicheur + v_bonus_connaissance + v_bonus_service
                   + v_bonus_paiement_rapide + v_bonus_boost;
 
   v_breakdown := jsonb_build_object(
@@ -12657,6 +12702,7 @@ BEGIN
     'soignant_fiabilite', v_score_soignant_fiabilite,
     'fraicheur', v_bonus_fraicheur,
     'connaissance_etab', v_bonus_connaissance,
+    'service', v_bonus_service,
     'paiement_rapide', v_bonus_paiement_rapide,
     'boost', v_bonus_boost,
     'distance_km', CASE WHEN v_distance_km IS NULL THEN NULL ELSE round(v_distance_km, 1) END,
@@ -14838,6 +14884,18 @@ BEGIN
     RETURN jsonb_build_object('success', false, 'error', 'Mission déjà notée pour ce sens');
   END IF;
 
+  -- D8 (Lot 15) : double-aveugle — l'INSERT part NON publié (publie_le NULL).
+  -- Dès que les deux sens existent, publication SIMULTANÉE des deux notes
+  -- (l'UPDATE déclenche le recalcul des scores via le trigger). Sinon le cron
+  -- fn_publier_notations_echues publie à J+7.
+  IF EXISTS (
+    SELECT 1 FROM notations_missions
+    WHERE mission_id = p_mission_id AND sens <> v_sens
+  ) THEN
+    UPDATE notations_missions SET publie_le = NOW()
+    WHERE mission_id = p_mission_id AND publie_le IS NULL;
+  END IF;
+
   PERFORM public.fn_ecrire_audit_safe(
     p_acteur_id := v_notateur_id,
     p_type_acteur := CASE WHEN v_sens = 'ETAB_VERS_SOIGNANT' THEN 'ADMIN_ETABLISSEMENT' ELSE 'SOIGNANT' END,
@@ -15318,7 +15376,27 @@ CREATE OR REPLACE FUNCTION "public"."fn_declarer_arret_maladie"("p_mission_id" "
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
     AS $$
-DECLARE v_m RECORD; v_nb int := 0;
+BEGIN
+  RETURN jsonb_build_object('error',
+    'La déclaration d''arrêt maladie est remplacée par l''attestation d''empêchement impérieux — aucune donnée de santé n''est collectée (docs/CONFORMITE.md §1.4). Rechargez l''application pour accéder au nouveau formulaire.');
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_declarer_arret_maladie"("p_mission_id" "uuid", "p_message" "text") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."fn_declarer_empechement_imperieux"("p_mission_id" "uuid", "p_indispo_debut" "date", "p_indispo_fin" "date") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+DECLARE
+  v_m RECORD;
+  v_nb int := 0;
+  v_max int := GREATEST(0, fn_param_num('annulations_justifiees_max_12m', 2)::int);
+  v_n12 int;
+  v_depasse boolean;
+  v_admin uuid;
 BEGIN
   SELECT * INTO v_m FROM missions WHERE id = p_mission_id AND soignant_assigne_id = auth.uid();
   IF NOT FOUND THEN RETURN jsonb_build_object('error', 'Mission introuvable'); END IF;
@@ -15326,28 +15404,71 @@ BEGIN
     RETURN jsonb_build_object('error', 'Cette mission n''est plus active.');
   END IF;
   IF v_m.est_arret_maladie THEN
-    RETURN jsonb_build_object('error', 'Arrêt maladie déjà déclaré sur cette mission.');
+    RETURN jsonb_build_object('error', 'Un empêchement est déjà déclaré sur cette mission.');
   END IF;
+  IF p_indispo_debut IS NULL OR p_indispo_fin IS NULL OR p_indispo_fin < p_indispo_debut THEN
+    RETURN jsonb_build_object('error', 'Dates d''indisponibilité invalides.');
+  END IF;
+  IF p_indispo_fin - p_indispo_debut > 90 THEN
+    RETURN jsonb_build_object('error', 'Période d''indisponibilité trop longue (90 jours max).');
+  END IF;
+
+  -- Anti-abus : N attestations max / 12 mois glissants (param).
+  SELECT count(*) INTO v_n12 FROM journaux_audit
+   WHERE acteur_id = auth.uid()
+     AND action = 'ANNULATION_EMPECHEMENT_IMPERIEUX'
+     AND cree_le > NOW() - INTERVAL '12 months';
+  v_depasse := (v_n12 + 1) > v_max;
 
   UPDATE missions SET est_arret_maladie = TRUE, arret_maladie_declare_le = NOW(), modifie_le = NOW()
    WHERE id = p_mission_id;
 
-  -- Étab = employeur (CDDU) : notification + checklist des obligations CPAM
+  -- Trace horodatée : dates + sur l'honneur. JAMAIS de motif/catégorie (RGPD art. 9).
+  PERFORM fn_ecrire_audit_safe(
+    auth.uid(), 'SOIGNANT', 'ANNULATION_EMPECHEMENT_IMPERIEUX', 'mission', p_mission_id, NULL,
+    jsonb_build_object('sur_honneur', true,
+                       'indispo_debut', p_indispo_debut, 'indispo_fin', p_indispo_fin,
+                       'n_12_mois', v_n12 + 1, 'max_12_mois', v_max, 'depassement', v_depasse));
+
+  -- Au-delà du compteur : la pénalité s'applique malgré l'attestation
+  -- (même barème que l'annulation tardive) + passage en revue admin.
+  IF v_depasse THEN
+    UPDATE soignants SET
+      total_missions_annulees = COALESCE(total_missions_annulees, 0) + 1,
+      score_fiabilite = GREATEST(0, COALESCE(score_fiabilite, 50) - 8),
+      modifie_le = NOW()
+    WHERE id = auth.uid();
+
+    FOR v_admin IN SELECT user_id FROM equipe_admin WHERE actif AND user_id IS NOT NULL
+    LOOP
+      INSERT INTO notifications (destinataire_id, type, titre, corps, lien, type_destinataire)
+      VALUES (v_admin, 'SYSTEM', 'Empêchements répétés — revue soignant ⚠️',
+        'Un soignant vient de déclarer son ' || (v_n12 + 1) || 'e empêchement impérieux sur 12 mois (max toléré : ' ||
+        v_max || '). Pénalité de score appliquée. Détails dans le journal d''audit (action ANNULATION_EMPECHEMENT_IMPERIEUX).',
+        '/admin/audit', 'ADMIN');
+    END LOOP;
+  END IF;
+
+  -- Étab : wording générique, aucune mention médicale.
   INSERT INTO notifications (destinataire_id, type, titre, corps, lien, type_destinataire)
-  VALUES (v_m.etablissement_id, 'SYSTEM', 'Arrêt maladie déclaré 🏥 — vos 3 démarches employeur',
-    'Le soignant assigné à "' || fn_html_escape(v_m.intitule) || '" déclare un arrêt maladie' ||
-    CASE WHEN p_message IS NOT NULL THEN ' : « ' || fn_html_escape(p_message) || ' »' ELSE '.' END ||
-    ' En tant qu''employeur (CDDU) : 1) réceptionnez le volet 3 de l''arrêt sous 48h ; ' ||
-    '2) transmettez l''attestation de salaire à la CPAM sous 5 jours (net-entreprises.fr) pour déclencher ses IJSS ; ' ||
-    '3) si le CDDU se termine pendant l''arrêt, signalez la fin de contrat.' ||
-    CASE WHEN v_m.garantie_remplacement THEN ' Garantie remplacement : le pool d''urgence est alerté automatiquement.' ELSE ' Vous pouvez alerter le pool d''urgence depuis la mission.' END,
+  VALUES (v_m.etablissement_id, 'SYSTEM', 'Empêchement impérieux déclaré ⚠️',
+    'Le soignant assigné à "' || fn_html_escape(v_m.intitule) || '" atteste sur l''honneur d''un empêchement impérieux ' ||
+    'et sera indisponible du ' || TO_CHAR(p_indispo_debut, 'DD/MM') || ' au ' || TO_CHAR(p_indispo_fin, 'DD/MM') || '.' ||
+    CASE WHEN v_m.garantie_remplacement
+      THEN ' Garantie remplacement : le pool d''urgence est alerté automatiquement.'
+      ELSE ' Vous pouvez alerter le pool d''urgence depuis la mission.' END,
     '/etablissement/missions/' || v_m.id, 'ETABLISSEMENT');
 
   INSERT INTO notifications (destinataire_id, type, titre, corps, lien, type_destinataire)
-  VALUES (auth.uid(), 'SYSTEM', 'Arrêt maladie enregistré',
-    'Votre arrêt est déclaré sans pénalité de score. Envoyez votre certificat médical sous 48h via Mes documents — sans justificatif, l''absence pourra être requalifiée. Pensez aussi à envoyer les volets 1-2 à votre CPAM sous 48h.',
-    '/soignant/mes-documents', 'SOIGNANT');
+  VALUES (auth.uid(), 'SYSTEM', 'Empêchement enregistré',
+    'Votre attestation sur l''honneur est enregistrée — aucun justificatif à fournir.' ||
+    CASE WHEN v_depasse
+      THEN ' Attention : au-delà de ' || v_max || ' empêchements sur 12 mois, la pénalité de score s''applique (c''est le cas ici).'
+      ELSE ' Aucune pénalité de score.' END ||
+    ' Une fausse déclaration engage votre responsabilité (CGU).',
+    '/soignant/missions/' || v_m.id, 'SOIGNANT');
 
+  -- Remplacement garanti : mécanique inchangée (reprise de la définition LIVE).
   IF v_m.garantie_remplacement AND v_m.fin_le > NOW() + INTERVAL '1 hour' THEN
     UPDATE missions SET statut = 'OUVERTE', soignant_assigne_id = NULL,
         mode_attribution = 'PREMIER_ARRIVE', est_urgente = TRUE, niveau_urgence = 3,
@@ -15358,12 +15479,13 @@ BEGIN
     v_nb := fn_diffuser_pool_urgence(p_mission_id);
   END IF;
 
-  RETURN jsonb_build_object('success', TRUE, 'pool_alerte', v_nb);
+  RETURN jsonb_build_object('success', TRUE, 'pool_alerte', v_nb,
+                            'depassement', v_depasse, 'n_12_mois', v_n12 + 1, 'max_12_mois', v_max);
 END;
 $$;
 
 
-ALTER FUNCTION "public"."fn_declarer_arret_maladie"("p_mission_id" "uuid", "p_message" "text") OWNER TO "postgres";
+ALTER FUNCTION "public"."fn_declarer_empechement_imperieux"("p_mission_id" "uuid", "p_indispo_debut" "date", "p_indispo_fin" "date") OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."fn_declarer_fin_retroactive"("p_mission_id" "uuid", "p_heure_fin" timestamp with time zone, "p_raison" "text" DEFAULT 'Oubli de scan'::"text") RETURNS "jsonb"
@@ -15767,6 +15889,40 @@ $$;
 ALTER FUNCTION "public"."fn_declarer_virement"("p_facture_id" "uuid", "p_reference" "text") OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."fn_definir_disponibilite"("p_jour" "date", "p_creneau" "text", "p_disponible" boolean) RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+DECLARE
+  v_uid uuid := auth.uid();
+BEGIN
+  IF v_uid IS NULL OR NOT EXISTS (SELECT 1 FROM soignants s WHERE s.id = v_uid AND s.supprime_le IS NULL) THEN
+    RETURN jsonb_build_object('error', 'Profil soignant introuvable');
+  END IF;
+  IF p_creneau NOT IN ('JOURNEE', 'MATIN', 'APRES_MIDI', 'NUIT') THEN
+    RETURN jsonb_build_object('error', 'Créneau invalide');
+  END IF;
+  IF p_jour < CURRENT_DATE OR p_jour > CURRENT_DATE + 90 THEN
+    RETURN jsonb_build_object('error', 'La disponibilité doit être entre aujourd''hui et J+90');
+  END IF;
+
+  IF p_disponible THEN
+    INSERT INTO disponibilites_soignant (soignant_id, jour, creneau)
+    VALUES (v_uid, p_jour, p_creneau)
+    ON CONFLICT (soignant_id, jour, creneau) DO NOTHING;
+  ELSE
+    DELETE FROM disponibilites_soignant
+    WHERE soignant_id = v_uid AND jour = p_jour AND creneau = p_creneau;
+  END IF;
+
+  RETURN jsonb_build_object('success', TRUE);
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_definir_disponibilite"("p_jour" "date", "p_creneau" "text", "p_disponible" boolean) OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."fn_definir_retrocession_mission"("p_mission_id" "uuid", "p_pct" numeric) RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
@@ -15916,6 +16072,11 @@ DECLARE
   v_url text := 'https://flripxtsyegjshnhzjkz.supabase.co';
   v_token text;
   v_corps text;
+  -- Lot 17 : fenêtres en configuration (défauts = anciennes valeurs en dur).
+  v_j1_min int := GREATEST(1, fn_param_num('confirmation_j1_min_h', 12)::int);
+  v_j1_max int := GREATEST(2, fn_param_num('confirmation_j1_max_h', 36)::int);
+  v_relance_max int := GREATEST(3, fn_param_num('relance_presence_max_h', 12)::int);
+  v_alerte_etab int := GREATEST(2, fn_param_num('alerte_etab_presence_h', 6)::int);
 BEGIN
   BEGIN
     v_token := (SELECT decrypted_secret FROM vault.decrypted_secrets WHERE name = 'service_role_key' LIMIT 1);
@@ -15928,7 +16089,7 @@ BEGIN
     WHERE m.statut = 'ASSIGNEE'
       AND m.soignant_assigne_id IS NOT NULL
       AND m.presence_confirmee_le IS NULL
-      AND m.debut_le BETWEEN NOW() + INTERVAL '12 hours' AND NOW() + INTERVAL '36 hours'
+      AND m.debut_le BETWEEN NOW() + make_interval(hours => v_j1_min) AND NOW() + make_interval(hours => v_j1_max)
       AND NOT EXISTS (
         SELECT 1 FROM notifications n
         WHERE n.destinataire_id = m.soignant_assigne_id AND n.type = 'RAPPEL_MISSION'
@@ -15967,7 +16128,7 @@ BEGIN
     WHERE m.statut = 'ASSIGNEE'
       AND m.soignant_assigne_id IS NOT NULL
       AND m.presence_confirmee_le IS NULL
-      AND m.debut_le BETWEEN NOW() + INTERVAL '2 hours' AND NOW() + INTERVAL '12 hours'
+      AND m.debut_le BETWEEN NOW() + INTERVAL '2 hours' AND NOW() + make_interval(hours => v_relance_max)
       AND NOT EXISTS (
         SELECT 1 FROM notifications n
         WHERE n.destinataire_id = m.soignant_assigne_id AND n.type = 'RAPPEL_MISSION'
@@ -16006,7 +16167,7 @@ BEGIN
     WHERE m.statut = 'ASSIGNEE'
       AND m.soignant_assigne_id IS NOT NULL
       AND m.presence_confirmee_le IS NULL
-      AND m.debut_le BETWEEN NOW() + INTERVAL '2 hours' AND NOW() + INTERVAL '6 hours'
+      AND m.debut_le BETWEEN NOW() + INTERVAL '2 hours' AND NOW() + make_interval(hours => v_alerte_etab)
       AND NOT EXISTS (
         SELECT 1 FROM notifications n
         WHERE n.destinataire_id = m.etablissement_id AND n.type = 'SYSTEM'
@@ -16270,6 +16431,8 @@ DECLARE
   v_token text;
   v_s uuid;
   v_corps text;
+  -- Lot 17 : seuil en configuration (défaut = ancienne valeur en dur).
+  v_seuil_min int := GREATEST(5, fn_param_num('noshow_detection_min', 30)::int);
 BEGIN
   BEGIN
     v_token := (SELECT decrypted_secret FROM vault.decrypted_secrets WHERE name = 'service_role_key' LIMIT 1);
@@ -16280,7 +16443,7 @@ BEGIN
     FROM missions m JOIN etablissements e ON e.id = m.etablissement_id
     WHERE m.statut IN ('ASSIGNEE', 'EN_COURS')
       AND m.soignant_assigne_id IS NOT NULL
-      AND m.debut_le < NOW() - INTERVAL '30 minutes'
+      AND m.debut_le < NOW() - make_interval(mins => v_seuil_min)
       AND m.debut_le > NOW() - INTERVAL '4 hours'
       AND m.fin_le > NOW() + INTERVAL '1 hour'
       AND NOT EXISTS (SELECT 1 FROM presences p WHERE p.mission_id = m.id AND p.soignant_id = m.soignant_assigne_id)
@@ -16386,7 +16549,7 @@ BEGIN
 
       INSERT INTO notifications (destinataire_id, type, titre, corps, lien, type_destinataire)
       VALUES (v_m.etablissement_id, 'SYSTEM', 'Aucun pointage — remplacement lancé 🚨',
-        'Aucun pointage détecté 30 min après le début de "' || fn_html_escape(v_m.intitule) ||
+        'Aucun pointage détecté ' || v_seuil_min || ' min après le début de "' || fn_html_escape(v_m.intitule) ||
         '". Garantie remplacement activée : une mission de remplacement urgente vient d''être diffusée au pool de soignants disponibles.',
         '/etablissement/missions/' || v_m.id, 'ETABLISSEMENT');
 
@@ -16397,14 +16560,14 @@ BEGIN
     ELSE
       INSERT INTO notifications (destinataire_id, type, titre, corps, lien, type_destinataire)
       VALUES (v_m.etablissement_id, 'SYSTEM', 'Aucun pointage détecté ⚠️',
-        'Aucun pointage 30 min après le début de "' || fn_html_escape(v_m.intitule) ||
+        'Aucun pointage ' || v_seuil_min || ' min après le début de "' || fn_html_escape(v_m.intitule) ||
         '". Contactez le soignant, ou alertez le pool d''urgence depuis la mission.',
         '/etablissement/missions/' || v_m.id, 'ETABLISSEMENT');
     END IF;
 
     INSERT INTO notifications (destinataire_id, type, titre, corps, lien, type_destinataire)
     VALUES (v_m.soignant_assigne_id, 'SYSTEM', 'Aucun pointage détecté sur votre mission',
-      'Votre mission "' || fn_html_escape(v_m.intitule) || '" a démarré il y a 30 min sans pointage. ' ||
+      'Votre mission "' || fn_html_escape(v_m.intitule) || '" a démarré il y a ' || v_seuil_min || ' min sans pointage. ' ||
       'Pointez immédiatement ou contactez l''établissement — une absence non justifiée impacte fortement votre score de fiabilité.',
       '/soignant/presences', 'SOIGNANT');
   END LOOP;
@@ -18426,6 +18589,14 @@ BEGIN
     RETURN jsonb_build_object('success', false, 'error', 'PAS_DE_DEBIT');
   END IF;
 
+  -- VERROU gap §9.4 : partiel pré-release interdit (reliquat non versable).
+  IF NOT p_annulation_totale
+     AND p_montant_honoraires_cts < v_row.honoraires_cents
+     AND v_row.statut IN ('DEBITE', 'DISPONIBLE', 'RELEASE_PLANIFIE') THEN
+    RAISE EXCEPTION 'Résolution partielle indisponible avant release, reliquat non versable — cf. docs/SPEC_ESCROW_REVENUS_SOIGNANT.md §9.4, TODO Lot 13'
+      USING ERRCODE = 'P0001';
+  END IF;
+
   -- A5 : après release (PAYE) → absorption plateforme, pas de reverse_transfer.
   v_absorbe := (v_row.statut = 'PAYE');
   v_reverse := (NOT v_absorbe) AND (v_row.statut IN ('DEBITE', 'DISPONIBLE', 'RELEASE_PLANIFIE'));
@@ -18939,6 +19110,8 @@ CREATE OR REPLACE FUNCTION "public"."fn_evaluer_alertes_filtres"("p_frequence" "
 DECLARE
   r RECORD;
   v_count integer;
+  -- Lot 17 : cap en configuration (défaut = ancienne valeur en dur).
+  v_cap_h int := GREATEST(1, fn_param_num('alerte_filtre_cap_h', 20)::int);
 BEGIN
   FOR r IN
     SELECT * FROM filtres_sauvegardes
@@ -18962,12 +19135,12 @@ BEGIN
       -- le deck de swipe. L'email (pipeline existant) part en parallèle via
       -- les lignes retournées par cette fonction.
       -- 7d-A2 : CAP DE FRÉQUENCE — au plus une notification MISSION_A_POURVOIR
-      -- par 20 h et par soignant, toutes recherches confondues (anti-spam).
+      -- par N h (param) et par soignant, toutes recherches confondues (anti-spam).
       IF r.audience = 'SOIGNANT_RECHERCHE_MISSIONS' AND NOT EXISTS (
         SELECT 1 FROM notifications n
          WHERE n.destinataire_id = r.utilisateur_id
            AND n.type = 'MISSION_A_POURVOIR'
-           AND n.cree_le > now() - interval '20 hours'
+           AND n.cree_le > now() - make_interval(hours => v_cap_h)
       ) THEN
         INSERT INTO notifications (destinataire_id, type_destinataire, type, titre, corps, lien)
         VALUES (
@@ -21519,6 +21692,7 @@ BEGIN
   FROM notations_missions n
   JOIN missions m ON m.id = n.mission_id
   WHERE n.note_id = v_target_id AND n.sens = v_target_sens AND n.masque = false
+    AND n.publie_le IS NOT NULL -- D8 : une note non publiée n'est visible de personne
   LIMIT v_limit;
 
   RETURN v_result;
@@ -22337,6 +22511,125 @@ $$;
 ALTER FUNCTION "public"."fn_marquer_rappel_contrat_travail_envoye"("p_mission_id" "uuid", "p_cible_etab" boolean, "p_cible_soignant" boolean) OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."fn_marquer_source_mission"("p_mission_id" "uuid", "p_source" "text") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+DECLARE
+  v_etab_id uuid := mon_etablissement_id();
+BEGIN
+  IF p_source <> 'REPUBLICATION' THEN
+    RETURN jsonb_build_object('error', 'Source non autorisée');
+  END IF;
+  IF v_etab_id IS NULL THEN
+    RETURN jsonb_build_object('error', 'Réservé aux établissements');
+  END IF;
+
+  UPDATE missions
+     SET mission_source = p_source
+   WHERE id = p_mission_id
+     AND etablissement_id = v_etab_id
+     AND mission_source IS NULL
+     AND cree_le > NOW() - INTERVAL '10 minutes';
+
+  RETURN jsonb_build_object('success', FOUND);
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_marquer_source_mission"("p_mission_id" "uuid", "p_source" "text") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."fn_matching_inverse_dispos"() RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+DECLARE
+  v_s RECORD;
+  v_count int;
+  v_notifies int := 0;
+  v_url text := 'https://flripxtsyegjshnhzjkz.supabase.co';
+  v_token text;
+  v_corps text;
+  v_cap_h int := GREATEST(1, fn_param_num('alerte_filtre_cap_h', 20)::int);
+BEGIN
+  BEGIN
+    v_token := (SELECT decrypted_secret FROM vault.decrypted_secrets WHERE name = 'service_role_key' LIMIT 1);
+  EXCEPTION WHEN OTHERS THEN v_token := NULL; END;
+
+  FOR v_s IN
+    SELECT DISTINCT s.id, s.profession, s.adresse_lat, s.adresse_lng, s.rayon_deplacement_km
+    FROM soignants s
+    JOIN disponibilites_soignant d ON d.soignant_id = s.id
+    WHERE d.jour BETWEEN CURRENT_DATE AND CURRENT_DATE + 14
+      AND s.supprime_le IS NULL
+      AND COALESCE(s.statut_compte::text, 'ACTIF') = 'ACTIF'
+      AND COALESCE(s.tous_documents_valides, false)
+      -- respecte le cap MISSION_A_POURVOIR partagé (A2)
+      AND NOT EXISTS (
+        SELECT 1 FROM notifications n
+        WHERE n.destinataire_id = s.id AND n.type = 'MISSION_A_POURVOIR'
+          AND n.cree_le > NOW() - make_interval(hours => v_cap_h))
+  LOOP
+    SELECT COUNT(*) INTO v_count
+    FROM missions m
+    JOIN etablissements e ON e.id = m.etablissement_id
+    WHERE m.statut = 'OUVERTE'
+      AND m.profession_requise = v_s.profession
+      AND m.debut_le > NOW()
+      AND m.intitule NOT LIKE '[%'
+      AND NOT fn_est_exclu(v_s.id, m.etablissement_id)
+      AND NOT EXISTS (SELECT 1 FROM swipes sw WHERE sw.mission_id = m.id AND sw.soignant_id = v_s.id)
+      AND (v_s.adresse_lat IS NULL OR e.adresse_lat IS NULL
+           OR fn_haversine_distance_m(v_s.adresse_lat, v_s.adresse_lng, e.adresse_lat, e.adresse_lng)
+              <= COALESCE(v_s.rayon_deplacement_km, 50) * 1000)
+      AND EXISTS (
+        SELECT 1 FROM disponibilites_soignant d
+        WHERE d.soignant_id = v_s.id
+          AND d.jour = (m.debut_le AT TIME ZONE 'Europe/Paris')::date
+          AND (
+            d.creneau = 'JOURNEE'
+            OR (d.creneau = 'NUIT' AND (
+                  EXTRACT(HOUR FROM m.debut_le AT TIME ZONE 'Europe/Paris') >= 20
+                  OR EXTRACT(HOUR FROM m.debut_le AT TIME ZONE 'Europe/Paris') < 7))
+            OR (d.creneau IN ('MATIN', 'APRES_MIDI') AND
+                  EXTRACT(HOUR FROM m.debut_le AT TIME ZONE 'Europe/Paris') BETWEEN 7 AND 19)
+          ));
+
+    IF v_count > 0 THEN
+      v_corps := v_count || ' mission' || CASE WHEN v_count > 1 THEN 's correspondent' ELSE ' correspond' END ||
+                 ' à tes disponibilités des 2 prochaines semaines. Premier arrivé, premier servi.';
+
+      INSERT INTO notifications (destinataire_id, type, titre, corps, lien, type_destinataire)
+      VALUES (v_s.id, 'MISSION_A_POURVOIR', '📅 Des missions collent à ton planning',
+        v_corps, '/soignant/recherche-missions?vue=swipe', 'SOIGNANT');
+
+      IF v_token IS NOT NULL THEN
+        BEGIN
+          PERFORM net.http_post(
+            url := v_url || '/functions/v1/send-push',
+            headers := jsonb_build_object('Content-Type', 'application/json', 'Authorization', 'Bearer ' || v_token),
+            body := jsonb_build_object(
+              'destinataire_id', v_s.id, 'type_evenement', 'MISSION_A_POURVOIR',
+              'titre', '📅 Des missions collent à ton planning', 'corps', v_corps,
+              'data', jsonb_build_object('lien', '/soignant/recherche-missions?vue=swipe')
+            )
+          );
+        EXCEPTION WHEN OTHERS THEN NULL; END;
+      END IF;
+
+      v_notifies := v_notifies + 1;
+    END IF;
+  END LOOP;
+
+  RETURN jsonb_build_object('success', TRUE, 'notifies', v_notifies);
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_matching_inverse_dispos"() OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."fn_mes_avances_factor"() RETURNS TABLE("id" "uuid", "numero_facture" "text", "etablissement_nom" "text", "mission_intitule" "text", "montant_facture_ttc" numeric, "frais_factor" numeric, "frais_jolene" numeric, "montant_net_soignant" numeric, "statut" "text", "cree_le" timestamp with time zone, "financee_le" timestamp with time zone)
     LANGUAGE "sql" SECURITY DEFINER
     SET "search_path" TO 'public'
@@ -22973,6 +23266,87 @@ $$;
 ALTER FUNCTION "public"."fn_mes_notations_recues_avec_stats"("p_periode" "text", "p_note_min" integer, "p_etablissement_id" "uuid", "p_limit" integer, "p_offset" integer) OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."fn_mes_paiements_escrow"() RETURNS "jsonb"
+    LANGUAGE "sql" STABLE SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+  WITH base AS (
+    SELECT
+      pe.mission_id,
+      m.intitule                       AS mission_intitule,
+      e.nom                            AS etablissement_nom,
+      pe.honoraires_cents,
+      pe.statut,
+      pe.paye_le,
+      pe.release_planifie_le,
+      pe.disponible_le,
+      pe.relance_prevue_le,
+      m.debut_le                       AS mission_date,
+      COALESCE(pr.travaillee, false)                       AS travaillee,
+      COALESCE(pr.bloquante, false)                        AS bloquante,
+      COALESCE(pr.a_litige_presence, false)                AS a_litige_presence
+    FROM paiements_escrow pe
+    JOIN missions m         ON m.id = pe.mission_id
+    JOIN etablissements e   ON e.id = pe.etablissement_id
+    LEFT JOIN LATERAL (
+      SELECT
+        bool_or(p.pointage_depart_le IS NOT NULL) AS travaillee,
+        bool_or(COALESCE(p.valide_par_etablissement, false) = false
+                AND (p.pointage_depart_le IS NOT NULL OR p.motif_litige IS NOT NULL)) AS bloquante,
+        bool_or(p.motif_litige IS NOT NULL) AS a_litige_presence
+      FROM presences p
+      WHERE p.mission_id = pe.mission_id
+    ) pr ON true
+    WHERE pe.soignant_id = auth.uid()
+  ),
+  calc AS (
+    SELECT
+      base.*,
+      CASE
+        WHEN statut = 'PAYE'                            THEN 'VERSE'
+        WHEN statut = 'REMBOURSE' AND paye_le IS NOT NULL THEN 'VERSE'      -- absorption post-versement : le soignant a touché 100 %
+        WHEN statut = 'REMBOURSE'                       THEN 'ANNULE'
+        WHEN statut = 'ECHOUE'                          THEN 'RETARDE'
+        WHEN statut = 'DISPUTE'                         THEN 'LITIGE'
+        -- in-flight : INITIE / DEBITE / DISPONIBLE / RELEASE_PLANIFIE
+        WHEN travaillee AND NOT bloquante               THEN 'VERSEMENT_EN_COURS'
+        WHEN travaillee                                 THEN 'ATTENTE_VALIDATION'
+        ELSE 'RESERVE'
+      END AS etat
+    FROM base
+  )
+  SELECT COALESCE(jsonb_agg(
+    jsonb_build_object(
+      'mission_id',        mission_id,
+      'mission_intitule',  mission_intitule,
+      'etablissement_nom', etablissement_nom,
+      'honoraires_cents',  honoraires_cents,
+      'etat',              etat,
+      'date_affichee',     CASE etat
+                             WHEN 'VERSE'              THEN paye_le
+                             WHEN 'VERSEMENT_EN_COURS' THEN COALESCE(release_planifie_le, disponible_le)
+                             WHEN 'RETARDE'            THEN relance_prevue_le
+                             ELSE NULL
+                           END,
+      'mission_date',      mission_date,
+      'a_litige',          a_litige_presence OR statut = 'DISPUTE'
+    )
+    ORDER BY
+      -- en cours / attente d'abord, versés/annulés ensuite ; récents d'abord
+      CASE etat
+        WHEN 'RETARDE' THEN 0 WHEN 'LITIGE' THEN 1
+        WHEN 'ATTENTE_VALIDATION' THEN 2 WHEN 'VERSEMENT_EN_COURS' THEN 3
+        WHEN 'RESERVE' THEN 4 WHEN 'VERSE' THEN 5 ELSE 6
+      END,
+      mission_date DESC
+  ), '[]'::jsonb)
+  FROM calc;
+$$;
+
+
+ALTER FUNCTION "public"."fn_mes_paiements_escrow"() OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."fn_mes_permissions_etab"("p_etablissement_id" "uuid" DEFAULT NULL::"uuid") RETURNS "jsonb"
     LANGUAGE "plpgsql" STABLE SECURITY DEFINER
     SET "search_path" TO 'public'
@@ -23064,7 +23438,7 @@ ALTER FUNCTION "public"."fn_mes_reclamations"("p_statut" "text") OWNER TO "postg
 
 
 CREATE OR REPLACE FUNCTION "public"."fn_mes_revenus_connect"("p_mois_debut" "date" DEFAULT NULL::"date") RETURNS "jsonb"
-    LANGUAGE "plpgsql" SECURITY DEFINER
+    LANGUAGE "plpgsql" STABLE SECURITY DEFINER
     SET "search_path" TO 'public'
     AS $$
 DECLARE
@@ -23074,10 +23448,14 @@ DECLARE
     v_connect_attente NUMERIC;
     v_paiements_mois NUMERIC;
     v_paiements_total NUMERIC;
+    -- Escrow (paiements_escrow) : honoraires_cents en CENTIMES → euros.
+    v_escrow_mois NUMERIC;
+    v_escrow_total NUMERIC;
+    v_escrow_attente NUMERIC;
 BEGIN
     v_debut := COALESCE(p_mois_debut, DATE_TRUNC('month', CURRENT_DATE)::DATE);
 
-    -- Stripe Connect transfers
+    -- Stripe Connect transfers (ancien modèle, déjà en euros) — inchangé.
     SELECT COALESCE(SUM(montant_soignant), 0) INTO v_connect_mois
     FROM stripe_transfers WHERE soignant_id = auth.uid() AND statut IN ('TRANSFERE','PAYE') AND transfere_le >= v_debut;
 
@@ -23087,17 +23465,31 @@ BEGIN
     SELECT COALESCE(SUM(montant_soignant), 0) INTO v_connect_attente
     FROM stripe_transfers WHERE soignant_id = auth.uid() AND statut IN ('EN_ATTENTE');
 
-    -- Also count confirmed manual payments (virement/note honoraires)
+    -- Paiements manuels confirmés (déjà en euros) — inchangé.
     SELECT COALESCE(SUM(montant_net), 0) INTO v_paiements_mois
     FROM paiements_soignant WHERE soignant_id = auth.uid() AND statut = 'CONFIRME' AND confirme_par_soignant_le >= v_debut;
 
     SELECT COALESCE(SUM(montant_net), 0) INTO v_paiements_total
     FROM paiements_soignant WHERE soignant_id = auth.uid() AND statut = 'CONFIRME';
 
+    -- Escrow versé (PAYE) — centimes → euros. Missions disjointes de
+    -- stripe_transfers (l'escrow remplace le transfer direct) → pas de double-compte.
+    SELECT COALESCE(SUM(honoraires_cents), 0) / 100.0 INTO v_escrow_mois
+    FROM paiements_escrow WHERE soignant_id = auth.uid() AND statut = 'PAYE' AND paye_le >= v_debut;
+
+    SELECT COALESCE(SUM(honoraires_cents), 0) / 100.0 INTO v_escrow_total
+    FROM paiements_escrow WHERE soignant_id = auth.uid() AND statut = 'PAYE';
+
+    -- Escrow in-flight (réservé / en attente / versement en cours) = à venir.
+    SELECT COALESCE(SUM(honoraires_cents), 0) / 100.0 INTO v_escrow_attente
+    FROM paiements_escrow
+    WHERE soignant_id = auth.uid()
+      AND statut IN ('INITIE','DEBITE','DISPONIBLE','RELEASE_PLANIFIE');
+
     RETURN jsonb_build_object(
-        'mois_en_cours', v_connect_mois + v_paiements_mois,
-        'total', v_connect_total + v_paiements_total,
-        'en_attente', v_connect_attente,
+        'mois_en_cours', v_connect_mois + v_paiements_mois + v_escrow_mois,
+        'total', v_connect_total + v_paiements_total + v_escrow_total,
+        'en_attente', v_connect_attente + v_escrow_attente,
         'stripe_connect_actif', fn_soignant_stripe_connect_actif(auth.uid())
     );
 END;
@@ -23559,6 +23951,8 @@ BEGIN
         logo_url = COALESCE(p_logo_url, logo_url),
         contrat_url = COALESCE(p_contrat_url, contrat_url),
         contrat_uploade_le = CASE WHEN p_contrat_url IS NOT NULL THEN NOW() ELSE contrat_uploade_le END,
+        -- Lot 16 / D9(d) : un contrat remplacé repart EN ATTENTE DE VALIDATION.
+        contrat_valide = CASE WHEN p_contrat_url IS NOT NULL THEN FALSE ELSE contrat_valide END,
         modifie_le = NOW()
     WHERE id = v_etab_id;
 
@@ -23576,6 +23970,7 @@ BEGIN
     IF p_email_contact IS NOT NULL OR p_telephone IS NOT NULL THEN v_champs_modifies := v_champs_modifies || '"contact"'::jsonb; END IF;
     IF p_taux_majoration_nuit IS NOT NULL OR p_taux_majoration_dimanche IS NOT NULL OR p_taux_majoration_ferie IS NOT NULL THEN v_champs_modifies := v_champs_modifies || '"taux_majoration"'::jsonb; END IF;
     IF p_convention_collective IS NOT NULL THEN v_champs_modifies := v_champs_modifies || '"convention_collective"'::jsonb; END IF;
+    IF p_contrat_url IS NOT NULL THEN v_champs_modifies := v_champs_modifies || '"contrat"'::jsonb; END IF;
 
     PERFORM fn_ecrire_audit(
       auth.uid(), 'ADMIN_ETABLISSEMENT', 'ETABLISSEMENT_MODIFICATION',
@@ -27186,6 +27581,27 @@ $$;
 ALTER FUNCTION "public"."fn_proteger_document_verification"() OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."fn_publier_notations_echues"() RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+DECLARE
+  v_jours numeric := public.fn_param_num('notation_publication_jours', 7);
+  v_count int;
+BEGIN
+  UPDATE notations_missions
+  SET publie_le = NOW()
+  WHERE publie_le IS NULL
+    AND cree_le + make_interval(days => v_jours::int) < NOW();
+  GET DIAGNOSTICS v_count = ROW_COUNT;
+  RETURN jsonb_build_object('success', true, 'publiees', v_count);
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_publier_notations_echues"() OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."fn_purger_audit_ancien"() RETURNS integer
     LANGUAGE "plpgsql"
     SET "search_path" TO 'public'
@@ -27722,6 +28138,26 @@ $$;
 
 
 ALTER FUNCTION "public"."fn_recalculer_score_fiabilite_soignant"("p_soignant_id" "uuid") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."fn_recalculer_scores_etablissements"() RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+DECLARE
+  v_etab record;
+  v_count int := 0;
+BEGIN
+  FOR v_etab IN SELECT id FROM etablissements WHERE supprime_le IS NULL LOOP
+    PERFORM public.fn_calculer_score_etablissement(v_etab.id);
+    v_count := v_count + 1;
+  END LOOP;
+  RETURN jsonb_build_object('success', true, 'recalcules', v_count);
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_recalculer_scores_etablissements"() OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."fn_recalculer_scores_soignants_actifs"() RETURNS "jsonb"
@@ -31411,11 +31847,13 @@ BEGIN
   END IF;
   PERFORM set_config('app.internal_operation', 'true', true);
   PERFORM set_config('jolene.creer_mission_context', 'true', true);
+  PERFORM set_config('app.test_bypass_protections', 'true', true);
   v_set := (SELECT string_agg(format('%I = r.%I', key, key), ',') FROM jsonb_object_keys(p_data) AS key);
   EXECUTE format(
     'UPDATE public.missions m SET %s FROM jsonb_populate_record(NULL::public.missions, $1) r WHERE m.id = $2',
     v_set
   ) USING p_data, p_mission_id;
+  PERFORM set_config('app.test_bypass_protections', '', true);
 END;
 $_$;
 
@@ -32225,6 +32663,42 @@ $$;
 ALTER FUNCTION "public"."fn_trg_auto_notify_mission_urgente"() OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."fn_trg_bloquer_documents_sante"() RETURNS "trigger"
+    LANGUAGE "plpgsql"
+    AS $$
+BEGIN
+  IF NEW.type_document::text IN ('VACCINATIONS', 'MEDECINE_TRAVAIL', 'ARRET_MALADIE') THEN
+    RAISE EXCEPTION 'Document de santé interdit au stockage (type %). Jolene ne stocke aucune donnée de santé (hors HDS, L1111-8 CSP). Remplacement : attestation sur l''honneur (empêchement impérieux) + vérification établissement. Cf. docs/CONFORMITE.md §1.', NEW.type_document
+      USING ERRCODE = 'P0001';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_trg_bloquer_documents_sante"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."fn_trg_bloquer_paiement_manuel_escrow"() RETURNS "trigger"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+BEGIN
+  IF NEW.mission_id IS NOT NULL AND EXISTS (
+    SELECT 1 FROM paiements_escrow pe
+    WHERE pe.mission_id = NEW.mission_id
+      AND pe.statut <> 'REMBOURSE'
+  ) THEN
+    RAISE EXCEPTION 'Le paiement de cette mission passe par le circuit sécurisé (paiement rapide) : il sera versé automatiquement à la validation des présences. La déclaration manuelle est indisponible (décision D4 — cf. docs/PLAYBOOK_ESCROW.md) ; en cas de désaccord, ouvrez un litige depuis la mission.';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_trg_bloquer_paiement_manuel_escrow"() OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."fn_trg_candidature_conflit_planning"() RETURNS "trigger"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
@@ -32402,6 +32876,26 @@ $$;
 
 
 ALTER FUNCTION "public"."fn_trg_defacto_auto_cession"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."fn_trg_defaut_mode_paiement_secteur"() RETURNS "trigger"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+BEGIN
+  IF NEW.mode_paiement_commission IS NULL OR NEW.mode_paiement_commission = 'FACTURE_MENSUELLE' THEN
+    IF NEW.type::text IN ('HOPITAL_PUBLIC', 'CHU', 'CENTRE_SANTE', 'HAD') THEN
+      NEW.mode_paiement_commission := 'CHORUS_PRO';
+    ELSE
+      NEW.mode_paiement_commission := 'SEPA_DEBIT';
+    END IF;
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_trg_defaut_mode_paiement_secteur"() OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."fn_trg_desistement_garanti"() RETURNS "trigger"
@@ -32622,6 +33116,47 @@ $$;
 ALTER FUNCTION "public"."fn_trg_escrow_creer_a_confirmation"() OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."fn_trg_escrow_enqueue_on_debite"() RETURNS "trigger"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+BEGIN
+  IF NEW.statut <> 'DEBITE' OR NEW.statut = OLD.statut THEN
+    RETURN NEW;
+  END IF;
+
+  -- Gate 7b-B, miroir de fn_trg_escrow_release_check :
+  -- au moins une présence validée…
+  IF NOT EXISTS (
+    SELECT 1 FROM presences p
+    WHERE p.mission_id = NEW.mission_id
+      AND COALESCE(p.valide_par_etablissement, false) = true
+  ) THEN
+    RETURN NEW; -- validation pas encore faite : le trigger présences prendra le relais
+  END IF;
+
+  -- … et aucune présence bloquante.
+  IF EXISTS (
+    SELECT 1 FROM presences p
+    WHERE p.mission_id = NEW.mission_id
+      AND COALESCE(p.valide_par_etablissement, false) = false
+      AND (p.pointage_depart_le IS NOT NULL OR p.motif_litige IS NOT NULL)
+  ) THEN
+    RETURN NEW;
+  END IF;
+
+  INSERT INTO escrow_release_queue (paiement_escrow_id, mission_id)
+  VALUES (NEW.id, NEW.mission_id)
+  ON CONFLICT (paiement_escrow_id) DO NOTHING;
+
+  RETURN NEW;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_trg_escrow_enqueue_on_debite"() OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."fn_trg_escrow_release_check"() RETURNS "trigger"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
@@ -32732,6 +33267,37 @@ $$;
 
 
 ALTER FUNCTION "public"."fn_trg_favori_nouvelle_mission"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."fn_trg_gate_assignation_paiement"() RETURNS "trigger"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+DECLARE
+  v_mode text;
+  v_mandat boolean;
+BEGIN
+  IF NEW.soignant_assigne_id IS NOT NULL
+     AND (OLD.soignant_assigne_id IS NULL OR OLD.soignant_assigne_id <> NEW.soignant_assigne_id)
+     AND auth.uid() IS NOT NULL
+     AND NOT est_admin() THEN
+    SELECT mode_paiement_commission, stripe_sepa_payment_method_id IS NOT NULL
+    INTO v_mode, v_mandat
+    FROM etablissements WHERE id = NEW.etablissement_id;
+
+    IF v_mode IS NULL THEN
+      RAISE EXCEPTION 'Configurez votre mode de paiement avant d''attribuer une mission (Paramètres → Facturation).';
+    END IF;
+    IF v_mode = 'SEPA_DEBIT' AND NOT v_mandat THEN
+      RAISE EXCEPTION 'Votre mandat SEPA n''est pas encore posé : ajoutez votre IBAN (Paramètres → Facturation) avant d''attribuer la mission.';
+    END IF;
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_trg_gate_assignation_paiement"() OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."fn_trg_init_preferences_notifications"() RETURNS "trigger"
@@ -33035,6 +33601,13 @@ DECLARE
   v_etab_id UUID;
 BEGIN
   IF TG_TABLE_NAME = 'notations_missions' THEN
+    -- D8 : la note n'existe pour les scores qu'une fois PUBLIÉE.
+    IF NOT (
+      (NEW.publie_le IS NOT NULL AND (TG_OP = 'INSERT' OR OLD.publie_le IS NULL))
+      OR (TG_OP = 'UPDATE' AND COALESCE(OLD.masque, false) <> COALESCE(NEW.masque, false))
+    ) THEN
+      RETURN NEW;
+    END IF;
     IF NEW.sens = 'ETAB_VERS_SOIGNANT' THEN
       v_soignant_id := NEW.note_id; v_etab_id := NEW.notateur_id;
     ELSE
@@ -33123,6 +33696,74 @@ $$;
 
 
 ALTER FUNCTION "public"."fn_trg_sms_annulation_tardive"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."fn_trg_tripwire_premier_connect_complet"() RETURNS "trigger"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+BEGIN
+  IF NEW.statut = 'COMPLET'
+     AND (TG_OP = 'INSERT' OR OLD.statut IS DISTINCT FROM 'COMPLET')
+     AND NOT EXISTS (SELECT 1 FROM stripe_connect_onboarding
+                     WHERE statut = 'COMPLET' AND soignant_id <> NEW.soignant_id) THEN
+    PERFORM public.fn_tripwire_alerte(
+      '[TRIPWIRE] Premier compte Connect complété',
+      'Le premier soignant vient de compléter son onboarding Stripe Connect. Soignant id: ' || NEW.soignant_id || '. Il peut désormais recevoir des virements — à surveiller.'
+    );
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_trg_tripwire_premier_connect_complet"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."fn_trg_tripwire_premier_mandat_sepa"() RETURNS "trigger"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+BEGIN
+  IF NEW.stripe_sepa_payment_method_id IS NOT NULL
+     AND (TG_OP = 'INSERT' OR OLD.stripe_sepa_payment_method_id IS NULL)
+     AND NOT EXISTS (SELECT 1 FROM etablissements
+                     WHERE stripe_sepa_payment_method_id IS NOT NULL AND id <> NEW.id) THEN
+    PERFORM public.fn_tripwire_alerte(
+      '[TRIPWIRE] Premier mandat SEPA posé',
+      'Le premier établissement vient de poser son mandat SEPA (paiement rapide ⚡). Établissement id: ' || NEW.id || '. Le rail d''encaissement est désormais actif — à surveiller.'
+    );
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_trg_tripwire_premier_mandat_sepa"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."fn_trg_tripwire_premier_payment_intent"() RETURNS "trigger"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+BEGIN
+  IF NEW.stripe_payment_intent_id IS NOT NULL
+     AND NEW.stripe_payment_intent_id NOT LIKE 'pi_pwtest%'
+     AND (TG_OP = 'INSERT' OR OLD.stripe_payment_intent_id IS NULL)
+     AND NOT EXISTS (SELECT 1 FROM paiements_escrow
+                     WHERE stripe_payment_intent_id IS NOT NULL
+                       AND stripe_payment_intent_id NOT LIKE 'pi_pwtest%' AND id <> NEW.id) THEN
+    PERFORM public.fn_tripwire_alerte(
+      '[TRIPWIRE] Premier PaymentIntent réel créé',
+      'Le premier débit escrow réel vient d''être initié. Escrow id: ' || NEW.id || ', mission: ' || NEW.mission_id || ', PI: ' || NEW.stripe_payment_intent_id || '. Le premier euro réel circule — À REGARDER.'
+    );
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_trg_tripwire_premier_payment_intent"() OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."fn_trg_valider_parrainage_etab"() RETURNS "trigger"
@@ -33433,6 +34074,37 @@ ALTER FUNCTION "public"."fn_trigger_regen_pdf_immediate"("p_facture_id" "uuid") 
 
 COMMENT ON FUNCTION "public"."fn_trigger_regen_pdf_immediate"("p_facture_id" "uuid") IS 'CP-LITIGES-7a FIX 18 — déclenche regen PDF immédiat via pg_net. Retourne net.http_post request_id ou NULL si URL/secret manquant.';
 
+
+
+CREATE OR REPLACE FUNCTION "public"."fn_tripwire_alerte"("p_sujet" "text", "p_corps" "text") RETURNS "void"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+BEGIN
+  IF public.fn_param_num('alertes_tripwire_actives', 1) <> 1 THEN
+    RETURN;
+  END IF;
+  BEGIN
+    PERFORM net.http_post(
+      url := 'https://flripxtsyegjshnhzjkz.supabase.co/functions/v1/notify-support',
+      headers := jsonb_build_object(
+        'Content-Type', 'application/json',
+        'Authorization', 'Bearer ' || (SELECT decrypted_secret FROM vault.decrypted_secrets WHERE name = 'service_role_key' LIMIT 1)
+      ),
+      body := jsonb_build_object(
+        'sujet', p_sujet,
+        'corps', p_corps,
+        'source', 'tripwire-paiement'
+      )
+    );
+  EXCEPTION WHEN OTHERS THEN
+    NULL; -- non bloquant : une alerte ratée ne casse jamais le flux métier.
+  END;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_tripwire_alerte"("p_sujet" "text", "p_corps" "text") OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."fn_types_exercice_autorises"("p_profession" "text") RETURNS "text"[]
@@ -33795,9 +34467,22 @@ DECLARE
   v_taille int;
   v_envoyes int := 0;
   v_missions int := 0;
+  v_nu_missions int := 0;
+  v_nu_envoyes int := 0;
   v_url text := 'https://flripxtsyegjshnhzjkz.supabase.co';
   v_token text;
   v_corps text;
+  -- Lot 17 : seuils en configuration (défauts = anciennes valeurs en dur).
+  v_t1 int := GREATEST(1, fn_param_num('vague_taille_1', 10)::int);
+  v_t2 int := GREATEST(1, fn_param_num('vague_taille_2', 30)::int);
+  v_t3 int := GREATEST(1, fn_param_num('vague_taille_3', 60)::int);
+  v_d2 int := GREATEST(1, fn_param_num('vague_delai_2_min', 15)::int);
+  v_d3 int := GREATEST(1, fn_param_num('vague_delai_3_min', 30)::int);
+  v_cap int := GREATEST(1, fn_param_num('vague_cap_push_24h', 3)::int);
+  v_fenetre_h int := GREATEST(1, fn_param_num('vague_fenetre_urgente_h', 48)::int);
+  v_nu_delai_h int := GREATEST(1, fn_param_num('vague_non_urgente_delai_h', 4)::int);
+  v_nu_taille int := GREATEST(1, fn_param_num('vague_non_urgente_taille', 20)::int);
+  v_nu_cap int := GREATEST(1, fn_param_num('vague_non_urgente_cap_24h', 2)::int);
 BEGIN
   BEGIN
     v_token := (SELECT decrypted_secret FROM vault.decrypted_secrets WHERE name = 'service_role_key' LIMIT 1);
@@ -33812,16 +34497,16 @@ BEGIN
     WHERE m.statut = 'OUVERTE'
       AND m.est_urgente
       AND m.remplacement_de_mission_id IS NULL           -- la chaîne remplacement a sa propre diffusion
-      AND m.debut_le BETWEEN NOW() AND NOW() + INTERVAL '48 hours'
+      AND m.debut_le BETWEEN NOW() AND NOW() + make_interval(hours => v_fenetre_h)
       AND m.intitule NOT LIKE '[%'                        -- jamais les missions de test
       AND NOT EXISTS (SELECT 1 FROM candidatures c WHERE c.mission_id = m.id)
   LOOP
     v_missions := v_missions + 1;
     -- Taille de vague selon l'ancienneté de la mission (cron */15 → deltas).
     v_taille := CASE
-      WHEN v_m.cree_le > NOW() - INTERVAL '15 minutes' THEN 10
-      WHEN v_m.cree_le > NOW() - INTERVAL '30 minutes' THEN 30
-      ELSE 60
+      WHEN v_m.cree_le > NOW() - make_interval(mins => v_d2) THEN v_t1
+      WHEN v_m.cree_le > NOW() - make_interval(mins => v_d3) THEN v_t2
+      ELSE v_t3
     END;
 
     v_corps := fn_html_escape(v_m.intitule) || ' — ' || COALESCE(v_m.etab_ville, '') ||
@@ -33846,10 +34531,10 @@ BEGIN
           SELECT 1 FROM notifications n
           WHERE n.destinataire_id = s.id AND n.type = 'MISSION_URGENTE'
             AND n.lien = '/soignant/missions/' || v_m.id)
-        -- anti-spam : max 3 pushs urgents / 24 h / soignant
+        -- anti-spam : max N pushs urgents / 24 h / soignant (param)
         AND (SELECT COUNT(*) FROM notifications n2
              WHERE n2.destinataire_id = s.id AND n2.type = 'MISSION_URGENTE'
-               AND n2.cree_le > NOW() - INTERVAL '24 hours') < 3
+               AND n2.cree_le > NOW() - INTERVAL '24 hours') < v_cap
       ORDER BY COALESCE(ms.score_global, 0) DESC,
                fn_haversine_distance_m(COALESCE(s.adresse_lat, 0), COALESCE(s.adresse_lng, 0),
                                        COALESCE(v_m.etab_lat, 0), COALESCE(v_m.etab_lng, 0)) ASC
@@ -33878,7 +34563,79 @@ BEGIN
     END LOOP;
   END LOOP;
 
-  RETURN jsonb_build_object('success', TRUE, 'missions', v_missions, 'notifications', v_envoyes);
+  -- Lot 17 (A3) : VAGUE UNIQUE pour les missions NON urgentes restées sans
+  -- candidature N heures après publication. Une seule vague par mission :
+  -- si une notification MISSION_A_POURVOIR pointe déjà vers la mission,
+  -- elle n'est JAMAIS re-diffusée (dédup mission + soignant).
+  FOR v_m IN
+    SELECT m.id, m.intitule, m.profession_requise, m.taux_horaire_base,
+           m.debut_le, m.etablissement_id,
+           e.adresse_ville AS etab_ville, e.adresse_lat AS etab_lat, e.adresse_lng AS etab_lng
+    FROM missions m
+    JOIN etablissements e ON e.id = m.etablissement_id
+    WHERE m.statut = 'OUVERTE'
+      AND NOT m.est_urgente
+      AND m.remplacement_de_mission_id IS NULL
+      AND m.cree_le < NOW() - make_interval(hours => v_nu_delai_h)
+      AND m.debut_le > NOW()
+      AND m.intitule NOT LIKE '[%'
+      AND NOT EXISTS (SELECT 1 FROM candidatures c WHERE c.mission_id = m.id)
+      AND NOT EXISTS (
+        SELECT 1 FROM notifications n
+        WHERE n.type = 'MISSION_A_POURVOIR'
+          AND n.lien = '/soignant/missions/' || m.id)
+  LOOP
+    v_nu_missions := v_nu_missions + 1;
+    v_corps := fn_html_escape(v_m.intitule) || ' — ' || COALESCE(v_m.etab_ville, '') ||
+               ', débute le ' || TO_CHAR(v_m.debut_le AT TIME ZONE 'Europe/Paris', 'DD/MM à HH24:MI') ||
+               ' à ' || COALESCE(v_m.taux_horaire_base::text, '?') || ' €/h. Personne n''a encore postulé.';
+
+    FOR v_s IN
+      SELECT s.id AS soignant_id
+      FROM soignants s
+      LEFT JOIN matching_scores ms ON ms.soignant_id = s.id AND ms.mission_id = v_m.id
+      WHERE s.profession = v_m.profession_requise
+        AND s.supprime_le IS NULL
+        AND COALESCE(s.statut_compte::text, 'ACTIF') = 'ACTIF'
+        AND COALESCE(s.tous_documents_valides, false)
+        AND NOT fn_est_exclu(s.id, v_m.etablissement_id)
+        AND NOT EXISTS (SELECT 1 FROM swipes sw WHERE sw.mission_id = v_m.id AND sw.soignant_id = s.id)
+        AND (s.adresse_lat IS NULL OR v_m.etab_lat IS NULL
+             OR fn_haversine_distance_m(s.adresse_lat, s.adresse_lng, v_m.etab_lat, v_m.etab_lng)
+                <= COALESCE(s.rayon_deplacement_km, 50) * 1000)
+        AND (SELECT COUNT(*) FROM notifications n2
+             WHERE n2.destinataire_id = s.id AND n2.type = 'MISSION_A_POURVOIR'
+               AND n2.cree_le > NOW() - INTERVAL '24 hours') < v_nu_cap
+      ORDER BY COALESCE(ms.score_global, 0) DESC,
+               fn_haversine_distance_m(COALESCE(s.adresse_lat, 0), COALESCE(s.adresse_lng, 0),
+                                       COALESCE(v_m.etab_lat, 0), COALESCE(v_m.etab_lng, 0)) ASC
+      LIMIT v_nu_taille
+    LOOP
+      INSERT INTO notifications (destinataire_id, type, titre, corps, lien, type_destinataire)
+      VALUES (v_s.soignant_id, 'MISSION_A_POURVOIR',
+        '✨ Une mission sélectionnée pour toi',
+        v_corps, '/soignant/missions/' || v_m.id, 'SOIGNANT');
+
+      IF v_token IS NOT NULL THEN
+        BEGIN
+          PERFORM net.http_post(
+            url := v_url || '/functions/v1/send-push',
+            headers := jsonb_build_object('Content-Type', 'application/json', 'Authorization', 'Bearer ' || v_token),
+            body := jsonb_build_object(
+              'destinataire_id', v_s.soignant_id, 'type_evenement', 'MISSION_A_POURVOIR',
+              'titre', '✨ Une mission sélectionnée pour toi', 'corps', v_corps,
+              'data', jsonb_build_object('mission_id', v_m.id, 'lien', '/soignant/missions/' || v_m.id)
+            )
+          );
+        EXCEPTION WHEN OTHERS THEN NULL; END;
+      END IF;
+
+      v_nu_envoyes := v_nu_envoyes + 1;
+    END LOOP;
+  END LOOP;
+
+  RETURN jsonb_build_object('success', TRUE, 'missions', v_missions, 'notifications', v_envoyes,
+                            'missions_non_urgentes', v_nu_missions, 'notifications_non_urgentes', v_nu_envoyes);
 END;
 $$;
 
@@ -34066,6 +34823,28 @@ BEGIN
       modifie_le = now()
   WHERE id = p_presence_id;
 
+  -- Lot 13 : la transition est auditée CÔTÉ SQL (l'audit client seul manquait
+  -- tout chemin non-UI) et le soignant est notifié (déclencheur du paiement).
+  PERFORM fn_ecrire_audit(
+    v_etab_id, 'ETABLISSEMENT', 'PRESENCE_VALIDATION', 'presence',
+    p_presence_id, NULL,
+    jsonb_build_object('mission_id', v_presence.mission_id, 'soignant_id', v_presence.soignant_id)
+  );
+  BEGIN
+    PERFORM fn_creer_notification(
+      p_destinataire_id   := v_presence.soignant_id,
+      p_type_destinataire := 'SOIGNANT',
+      p_type              := 'PRESENCE_VALIDEE',
+      p_titre             := 'Présence validée',
+      p_corps             := 'Vos heures ont été validées par l''établissement. Le paiement suit son cours.',
+      p_lien              := '/soignant/presences',
+      p_type_ressource    := 'presence',
+      p_id_ressource      := p_presence_id
+    );
+  EXCEPTION WHEN OTHERS THEN
+    NULL; -- une notif ratée ne doit jamais annuler une validation.
+  END;
+
   RETURN jsonb_build_object('success', true);
 END;
 $$;
@@ -34113,25 +34892,57 @@ CREATE OR REPLACE FUNCTION "public"."fn_valider_presences_lot"("p_ids" "uuid"[])
 DECLARE
   v_etab_id uuid;
   v_count integer;
+  v_row record;
 BEGIN
   v_etab_id := mon_etablissement_id();
   IF v_etab_id IS NULL THEN
     RETURN jsonb_build_object('success', false, 'error', 'Non autorisé');
   END IF;
 
-  UPDATE presences p
-  SET valide_par_etablissement = true,
-      valide_le = now(),
-      modifie_le = now()
-  FROM missions m
-  WHERE p.id = ANY(p_ids)
-    AND p.mission_id = m.id
-    AND m.etablissement_id = v_etab_id
-    AND p.valide_par_etablissement = false
-    AND p.perimetre_gps_valide = true
-    AND (p.alerte_teleportation = false OR p.alerte_teleportation IS NULL);
+  CREATE TEMP TABLE IF NOT EXISTS _validees_lot (presence_id uuid, mission_id uuid, soignant_id uuid) ON COMMIT DROP;
+  DELETE FROM _validees_lot;
 
-  GET DIAGNOSTICS v_count = ROW_COUNT;
+  WITH maj AS (
+    UPDATE presences p
+    SET valide_par_etablissement = true,
+        valide_le = now(),
+        modifie_le = now()
+    FROM missions m
+    WHERE p.id = ANY(p_ids)
+      AND p.mission_id = m.id
+      AND m.etablissement_id = v_etab_id
+      AND p.valide_par_etablissement = false
+      AND p.perimetre_gps_valide = true
+      AND (p.alerte_teleportation = false OR p.alerte_teleportation IS NULL)
+    RETURNING p.id, p.mission_id, p.soignant_id
+  )
+  INSERT INTO _validees_lot SELECT id, mission_id, soignant_id FROM maj;
+
+  SELECT count(*) INTO v_count FROM _validees_lot;
+
+  IF v_count > 0 THEN
+    PERFORM fn_ecrire_audit(
+      v_etab_id, 'ETABLISSEMENT', 'PRESENCE_VALIDATION_LOT', 'presence',
+      NULL, NULL,
+      jsonb_build_object('nb_validees', v_count, 'presence_ids', (SELECT jsonb_agg(presence_id) FROM _validees_lot))
+    );
+    FOR v_row IN SELECT * FROM _validees_lot LOOP
+      BEGIN
+        PERFORM fn_creer_notification(
+          p_destinataire_id   := v_row.soignant_id,
+          p_type_destinataire := 'SOIGNANT',
+          p_type              := 'PRESENCE_VALIDEE',
+          p_titre             := 'Présence validée',
+          p_corps             := 'Vos heures ont été validées par l''établissement. Le paiement suit son cours.',
+          p_lien              := '/soignant/presences',
+          p_type_ressource    := 'presence',
+          p_id_ressource      := v_row.presence_id
+        );
+      EXCEPTION WHEN OTHERS THEN
+        NULL;
+      END;
+    END LOOP;
+  END IF;
 
   RETURN jsonb_build_object('success', true, 'nb_validees', v_count);
 END;
@@ -35160,6 +35971,52 @@ $$;
 
 
 ALTER FUNCTION "public"."fn_vitesse_entre_pointages"("p_lat1" numeric, "p_lng1" numeric, "p_ts1" timestamp with time zone, "p_lat2" numeric, "p_lng2" numeric, "p_ts2" timestamp with time zone) OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."fn_vivier_disponibilites"("p_jour" "date", "p_profession" "text" DEFAULT NULL::"text") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+DECLARE
+  v_etab_id uuid := mon_etablissement_id();
+  v_etab RECORD;
+  v_nb int;
+  v_echantillon jsonb;
+BEGIN
+  IF v_etab_id IS NULL AND NOT est_admin() THEN
+    RETURN jsonb_build_object('error', 'Réservé aux établissements');
+  END IF;
+  IF p_jour IS NULL OR p_jour < CURRENT_DATE OR p_jour > CURRENT_DATE + 90 THEN
+    RETURN jsonb_build_object('nb', 0);
+  END IF;
+
+  SELECT adresse_lat, adresse_lng INTO v_etab FROM etablissements WHERE id = v_etab_id;
+
+  WITH dispo AS (
+    SELECT DISTINCT s.id, s.prenom, s.score_fiabilite
+    FROM soignants s
+    JOIN disponibilites_soignant d ON d.soignant_id = s.id AND d.jour = p_jour
+    WHERE s.supprime_le IS NULL
+      AND COALESCE(s.statut_compte::text, 'ACTIF') = 'ACTIF'
+      AND COALESCE(s.tous_documents_valides, false)
+      AND (p_profession IS NULL OR s.profession::text = p_profession)
+      AND (v_etab_id IS NULL OR NOT fn_est_exclu(s.id, v_etab_id))
+      AND (s.adresse_lat IS NULL OR v_etab.adresse_lat IS NULL
+           OR fn_haversine_distance_m(s.adresse_lat, s.adresse_lng, v_etab.adresse_lat, v_etab.adresse_lng)
+              <= COALESCE(s.rayon_deplacement_km, 50) * 1000)
+  )
+  SELECT COUNT(*),
+         COALESCE(jsonb_agg(jsonb_build_object('prenom', prenom, 'score_fiabilite', score_fiabilite)
+                            ORDER BY score_fiabilite DESC NULLS LAST) FILTER (WHERE rn <= 5), '[]'::jsonb)
+    INTO v_nb, v_echantillon
+    FROM (SELECT *, row_number() OVER (ORDER BY score_fiabilite DESC NULLS LAST) AS rn FROM dispo) t;
+
+  RETURN jsonb_build_object('nb', COALESCE(v_nb, 0), 'echantillon', COALESCE(v_echantillon, '[]'::jsonb));
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_vivier_disponibilites"("p_jour" "date", "p_profession" "text") OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."mon_etablissement_id"() RETURNS "uuid"
@@ -36301,6 +37158,19 @@ ALTER TABLE ONLY "public"."demandes_rgpd" FORCE ROW LEVEL SECURITY;
 ALTER TABLE "public"."demandes_rgpd" OWNER TO "postgres";
 
 
+CREATE TABLE IF NOT EXISTS "public"."disponibilites_soignant" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "soignant_id" "uuid" NOT NULL,
+    "jour" "date" NOT NULL,
+    "creneau" "text" NOT NULL,
+    "cree_le" timestamp with time zone DEFAULT "now"() NOT NULL,
+    CONSTRAINT "disponibilites_soignant_creneau_check" CHECK (("creneau" = ANY (ARRAY['JOURNEE'::"text", 'MATIN'::"text", 'APRES_MIDI'::"text", 'NUIT'::"text"])))
+);
+
+
+ALTER TABLE "public"."disponibilites_soignant" OWNER TO "postgres";
+
+
 CREATE TABLE IF NOT EXISTS "public"."documents_requis_par_profession" (
     "id" "uuid" DEFAULT "extensions"."uuid_generate_v4"() NOT NULL,
     "profession" "public"."type_profession" NOT NULL,
@@ -36730,6 +37600,20 @@ ALTER TABLE ONLY "public"."evaluations" FORCE ROW LEVEL SECURITY;
 
 
 ALTER TABLE "public"."evaluations" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "public"."evenements_risque_paires" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "etablissement_id" "uuid" NOT NULL,
+    "soignant_id" "uuid" NOT NULL,
+    "type_evenement" "text" NOT NULL,
+    "details" "jsonb",
+    "cree_le" timestamp with time zone DEFAULT "now"() NOT NULL,
+    CONSTRAINT "evenements_risque_paires_type_evenement_check" CHECK (("type_evenement" = ANY (ARRAY['CONTACT_TENTE'::"text", 'ANNULATION_POST_CONTACT'::"text", 'BINOME_RECURRENT_INACTIF'::"text"])))
+);
+
+
+ALTER TABLE "public"."evenements_risque_paires" OWNER TO "postgres";
 
 
 CREATE TABLE IF NOT EXISTS "public"."evenements_score_etab" (
@@ -37378,7 +38262,7 @@ CREATE TABLE IF NOT EXISTS "public"."journaux_audit" (
     "cle_s3_ressource" "text",
     "details" "jsonb",
     "cree_le" timestamp with time zone DEFAULT "now"(),
-    CONSTRAINT "journaux_audit_action_check" CHECK (("action" = ANY (ARRAY['INSCRIPTION'::"text", 'CONNEXION'::"text", 'DECONNEXION'::"text", 'MODIFICATION_PROFIL'::"text", 'SUPPRESSION_COMPTE'::"text", 'UPLOAD_DOCUMENT'::"text", 'TELECHARGEMENT_DOCUMENT'::"text", 'VERIFICATION_DOCUMENT'::"text", 'VERIFICATION_RPPS'::"text", 'CREATION_MISSION'::"text", 'MODIFICATION_MISSION'::"text", 'ANNULATION_MISSION'::"text", 'CANDIDATURE'::"text", 'ASSIGNATION'::"text", 'POINTAGE'::"text", 'SIGNATURE_CONTRAT'::"text", 'EVALUATION'::"text", 'PAIEMENT'::"text", 'FACTURATION'::"text", 'DONNEES_PERSO_CONSULTATION'::"text", 'DONNEES_PERSO_EXPORT'::"text", 'DONNEES_PERSO_SUPPRESSION'::"text", 'ADMIN_ACTION'::"text", 'SYSTEM'::"text", 'RIB_CONSULTE'::"text", 'RIB_PARTAGE'::"text", 'CONTRAT_SIGNE'::"text", 'DOCUMENT_CONSULTATION'::"text", 'DOCUMENT_TELEVERSEMENT'::"text", 'DONNEES_PERSO_MODIFICATION'::"text", 'EXPORT_RH_PAIE'::"text", 'FINANCE_FACTURE_PAYEE'::"text", 'MISSION_ASSIGNATION'::"text", 'MISSION_CREATION'::"text", 'RGPD_EXPORT_DONNEES'::"text", 'RGPD_SUPPRESSION_COMPTE'::"text", 'RGPD_SUPPRESSION_COMPTE_ETABLISSEMENT'::"text", 'DEGEL_APPLIED'::"text", 'OVERRIDE_CHAMP_POST_GEL'::"text", 'GEL_APPLIED'::"text", 'OVERRIDE_ANTI_SEED'::"text", 'CONNECT_METADATA_MANQUANTE'::"text", 'DOCUMENT_VERIFICATION_AUTO'::"text", 'FACTURE_COMMISSION_PAYEE_SKIP_ANOMALIE'::"text", 'FACTURE_HONORAIRES_PAYEE_SKIP_ANOMALIE'::"text", 'FINANCE_CHARGE_EXPIRED'::"text", 'FINANCE_CHARGE_FAILED'::"text", 'FINANCE_CHARGE_PENDING'::"text", 'FINANCE_CHARGE_REFUNDED'::"text", 'FINANCE_DISPUTE_CLOSE'::"text", 'FINANCE_DISPUTE_OUVERTE'::"text", 'FINANCE_PAYOUT_CANCELED'::"text", 'FINANCE_PAYOUT_CREATED'::"text", 'FINANCE_PAYOUT_FAILED'::"text", 'FINANCE_PAYOUT_PAID'::"text", 'FINANCE_SEPA_CAPTURE'::"text", 'FINANCE_TRANSFER_CONNECT'::"text", 'FINANCE_TRANSFER_CREATED'::"text", 'FINANCE_TRANSFER_FAILED'::"text", 'FINANCE_TRANSFER_REVERSED'::"text", 'FINANCE_TRANSFER_UPDATED'::"text", 'STRIPE_CHECKOUT_ORPHANED_RECOVERED'::"text", 'STRIPE_CONNECT_ACCOUNT_DELETED'::"text", 'ATTESTATION_SANTE_SIGNEE'::"text", 'EXCLUSION_CREEE'::"text", 'EXCLUSION_SUPPRIMEE'::"text", 'FACTURE_GENEREE'::"text", 'MISSION_ANNULATION_SERIE'::"text", 'MISSION_MODIFICATION'::"text", 'PAIEMENT_SOIGNANT_DECLARE_ETAB'::"text", 'RECLAMATION_CREEE'::"text", 'ADMIN_CONSULTATION_ETABLISSEMENT'::"text", 'ADMIN_CONSULTATION_SOIGNANT'::"text", 'DOCUMENT_SUPPRESSION'::"text", 'HEURES_EXTERNES_DECLAREES'::"text", 'MISSION_ANNULATION'::"text", 'NOTE_HONORAIRES_GENEREE'::"text", 'PRESENCE_CONTESTATION'::"text", 'PRESENCE_POINTAGE_ARRIVEE'::"text", 'PRESENCE_VALIDATION'::"text", 'PRESENCE_VALIDATION_LOT'::"text", 'RGPD_CONSENTEMENT_DONNE'::"text", 'PAIEMENT_MONTANT_ECART'::"text", 'FACTURE_COMMISSION_CREATED_VIA_STRIPE'::"text", 'TAUX_COMMISSION_MODIFIE'::"text", 'LITIGE_GEL_SCOPE_MODIFIE'::"text", 'PREFERENCE_NOTIFICATION_MODIFIEE'::"text", 'NOTIFICATION_SKIPPED'::"text", 'SERIE_EMAIL_ENVOYE'::"text", 'SERIE_EMAIL_SKIPPED'::"text", 'FILTRE_CREE'::"text", 'FILTRE_MODIFIE'::"text", 'FILTRE_SUPPRIME'::"text", 'ALERTE_ACTIVEE'::"text", 'ALERTE_DESACTIVEE'::"text", 'ALERTE_ENVOYEE'::"text", 'POOL_URGENCE_NOTIFICATIONS_ENVOYEES'::"text", 'POOL_URGENCE_ACCEPTATION_RAPIDE'::"text", 'POOL_URGENCE_VALIDATION_ETAB'::"text", 'POOL_URGENCE_REFUS_ETAB'::"text", 'POOL_URGENCE_SMS_TOGGLE'::"text", 'FAVORI_AJOUTE'::"text", 'FAVORI_RETIRE'::"text", 'SCORE_FIABILITE_PENALITE_LITIGE'::"text", 'PARRAINAGE_ETAB_APPLIQUE'::"text", 'PARRAINAGE_ETAB_VALIDE'::"text", 'CREDIT_PARRAINAGE_CREE'::"text", 'CREDIT_PARRAINAGE_APPLIQUE'::"text", 'PARRAINAGE_ETAB_ANOMALIE'::"text", 'PARRAINAGE_SOIGNANT_FILLEUL_ACTIF'::"text", 'PARRAINAGE_SOIGNANT_SEUIL_ATTEINT'::"text", 'PARRAINAGE_SOIGNANT_PRIME_VERSEE'::"text", 'PARRAINAGE_SOIGNANT_FRAUDE'::"text", 'INSCRIPTION_LISTE_ATTENTE_PREVOYANCE'::"text", 'SCORE_RECALCULE_V2'::"text", 'IBAN_RENSEIGNE'::"text", 'IBAN_MODIFIE'::"text", 'AVOIR_REMBOURSEMENT_CONFIRME'::"text", 'ETABLISSEMENT_MODIFICATION'::"text", 'LITIGE_ACCORD_CLOTURE'::"text", 'LITIGE_AUTO_CREATION'::"text", 'LITIGE_CLOTURE_AMIABLE'::"text", 'LITIGE_CREATION'::"text", 'LITIGE_ESCALADE_AUTO'::"text", 'LITIGE_FORCE_CREATION'::"text", 'LITIGE_OUVERTURE'::"text", 'LITIGE_OUVERTURE_LEGACY'::"text", 'LITIGE_RECATEGORISATION_LEGACY'::"text", 'LITIGE_REPONSE'::"text", 'LITIGE_RESOLUTION'::"text", 'PRESENCE_ALERTE_FRAUDE'::"text", 'RGPD_SUPPRESSION_DONNEES'::"text", 'TVA_MODIFICATION'::"text", 'API_KEY_CREEE'::"text", 'API_KEY_REVOQUEE'::"text", 'API_KEY_SUPPRIMEE'::"text", 'FACTURE_MARQUEE_EN_RETARD'::"text", 'HEURES_EXTERNES_VALIDATION_MANUELLE'::"text", 'MISSION_ANNULEE_PAR_SOIGNANT'::"text", 'MISSION_ANNULEE_PAR_ETABLISSEMENT'::"text", 'MISSION_LITIGE'::"text", 'MISSION_TYPE_CONTRAT_MODIFIE'::"text", 'MODERATION_DOCUMENT'::"text", 'COHERENCE_IDENTITE_VERIFIEE'::"text", 'MODERATION_EVALUATION'::"text", 'COHERENCE_DOCUMENTS_ALERTE'::"text", 'ESCROW_INITIE'::"text", 'ESCROW_DEBIT_INITIE'::"text", 'ESCROW_DEBITE'::"text", 'ESCROW_ETAB_GELE'::"text", 'ESCROW_ETAB_DEGELE'::"text", 'ESCROW_REMBOURSEMENT_ENFILE'::"text", 'ESCROW_REMBOURSE'::"text", 'ESCROW_DISPONIBLE'::"text", 'ESCROW_RELEASE_PAYE'::"text", 'ESCROW_RELEASE_ATTENTE_FONDS'::"text", 'PRESENCE_RELANCE_VALIDATION'::"text"]))),
+    CONSTRAINT "journaux_audit_action_check" CHECK (("action" = ANY (ARRAY['ANNULATION_EMPECHEMENT_IMPERIEUX'::"text", 'INSCRIPTION'::"text", 'CONNEXION'::"text", 'DECONNEXION'::"text", 'MODIFICATION_PROFIL'::"text", 'SUPPRESSION_COMPTE'::"text", 'UPLOAD_DOCUMENT'::"text", 'TELECHARGEMENT_DOCUMENT'::"text", 'VERIFICATION_DOCUMENT'::"text", 'VERIFICATION_RPPS'::"text", 'CREATION_MISSION'::"text", 'MODIFICATION_MISSION'::"text", 'ANNULATION_MISSION'::"text", 'CANDIDATURE'::"text", 'ASSIGNATION'::"text", 'POINTAGE'::"text", 'SIGNATURE_CONTRAT'::"text", 'EVALUATION'::"text", 'PAIEMENT'::"text", 'FACTURATION'::"text", 'DONNEES_PERSO_CONSULTATION'::"text", 'DONNEES_PERSO_EXPORT'::"text", 'DONNEES_PERSO_SUPPRESSION'::"text", 'ADMIN_ACTION'::"text", 'SYSTEM'::"text", 'RIB_CONSULTE'::"text", 'RIB_PARTAGE'::"text", 'CONTRAT_SIGNE'::"text", 'DOCUMENT_CONSULTATION'::"text", 'DOCUMENT_TELEVERSEMENT'::"text", 'DONNEES_PERSO_MODIFICATION'::"text", 'EXPORT_RH_PAIE'::"text", 'FINANCE_FACTURE_PAYEE'::"text", 'MISSION_ASSIGNATION'::"text", 'MISSION_CREATION'::"text", 'RGPD_EXPORT_DONNEES'::"text", 'RGPD_SUPPRESSION_COMPTE'::"text", 'RGPD_SUPPRESSION_COMPTE_ETABLISSEMENT'::"text", 'DEGEL_APPLIED'::"text", 'OVERRIDE_CHAMP_POST_GEL'::"text", 'GEL_APPLIED'::"text", 'OVERRIDE_ANTI_SEED'::"text", 'CONNECT_METADATA_MANQUANTE'::"text", 'DOCUMENT_VERIFICATION_AUTO'::"text", 'FACTURE_COMMISSION_PAYEE_SKIP_ANOMALIE'::"text", 'FACTURE_HONORAIRES_PAYEE_SKIP_ANOMALIE'::"text", 'FINANCE_CHARGE_EXPIRED'::"text", 'FINANCE_CHARGE_FAILED'::"text", 'FINANCE_CHARGE_PENDING'::"text", 'FINANCE_CHARGE_REFUNDED'::"text", 'FINANCE_DISPUTE_CLOSE'::"text", 'FINANCE_DISPUTE_OUVERTE'::"text", 'FINANCE_PAYOUT_CANCELED'::"text", 'FINANCE_PAYOUT_CREATED'::"text", 'FINANCE_PAYOUT_FAILED'::"text", 'FINANCE_PAYOUT_PAID'::"text", 'FINANCE_SEPA_CAPTURE'::"text", 'FINANCE_TRANSFER_CONNECT'::"text", 'FINANCE_TRANSFER_CREATED'::"text", 'FINANCE_TRANSFER_FAILED'::"text", 'FINANCE_TRANSFER_REVERSED'::"text", 'FINANCE_TRANSFER_UPDATED'::"text", 'STRIPE_CHECKOUT_ORPHANED_RECOVERED'::"text", 'STRIPE_CONNECT_ACCOUNT_DELETED'::"text", 'ATTESTATION_SANTE_SIGNEE'::"text", 'EXCLUSION_CREEE'::"text", 'EXCLUSION_SUPPRIMEE'::"text", 'FACTURE_GENEREE'::"text", 'MISSION_ANNULATION_SERIE'::"text", 'MISSION_MODIFICATION'::"text", 'PAIEMENT_SOIGNANT_DECLARE_ETAB'::"text", 'RECLAMATION_CREEE'::"text", 'ADMIN_CONSULTATION_ETABLISSEMENT'::"text", 'ADMIN_CONSULTATION_SOIGNANT'::"text", 'DOCUMENT_SUPPRESSION'::"text", 'HEURES_EXTERNES_DECLAREES'::"text", 'MISSION_ANNULATION'::"text", 'NOTE_HONORAIRES_GENEREE'::"text", 'PRESENCE_CONTESTATION'::"text", 'PRESENCE_POINTAGE_ARRIVEE'::"text", 'PRESENCE_VALIDATION'::"text", 'PRESENCE_VALIDATION_LOT'::"text", 'RGPD_CONSENTEMENT_DONNE'::"text", 'PAIEMENT_MONTANT_ECART'::"text", 'FACTURE_COMMISSION_CREATED_VIA_STRIPE'::"text", 'TAUX_COMMISSION_MODIFIE'::"text", 'LITIGE_GEL_SCOPE_MODIFIE'::"text", 'PREFERENCE_NOTIFICATION_MODIFIEE'::"text", 'NOTIFICATION_SKIPPED'::"text", 'SERIE_EMAIL_ENVOYE'::"text", 'SERIE_EMAIL_SKIPPED'::"text", 'FILTRE_CREE'::"text", 'FILTRE_MODIFIE'::"text", 'FILTRE_SUPPRIME'::"text", 'ALERTE_ACTIVEE'::"text", 'ALERTE_DESACTIVEE'::"text", 'ALERTE_ENVOYEE'::"text", 'POOL_URGENCE_NOTIFICATIONS_ENVOYEES'::"text", 'POOL_URGENCE_ACCEPTATION_RAPIDE'::"text", 'POOL_URGENCE_VALIDATION_ETAB'::"text", 'POOL_URGENCE_REFUS_ETAB'::"text", 'POOL_URGENCE_SMS_TOGGLE'::"text", 'FAVORI_AJOUTE'::"text", 'FAVORI_RETIRE'::"text", 'SCORE_FIABILITE_PENALITE_LITIGE'::"text", 'PARRAINAGE_ETAB_APPLIQUE'::"text", 'PARRAINAGE_ETAB_VALIDE'::"text", 'CREDIT_PARRAINAGE_CREE'::"text", 'CREDIT_PARRAINAGE_APPLIQUE'::"text", 'PARRAINAGE_ETAB_ANOMALIE'::"text", 'PARRAINAGE_SOIGNANT_FILLEUL_ACTIF'::"text", 'PARRAINAGE_SOIGNANT_SEUIL_ATTEINT'::"text", 'PARRAINAGE_SOIGNANT_PRIME_VERSEE'::"text", 'PARRAINAGE_SOIGNANT_FRAUDE'::"text", 'INSCRIPTION_LISTE_ATTENTE_PREVOYANCE'::"text", 'SCORE_RECALCULE_V2'::"text", 'IBAN_RENSEIGNE'::"text", 'IBAN_MODIFIE'::"text", 'AVOIR_REMBOURSEMENT_CONFIRME'::"text", 'ETABLISSEMENT_MODIFICATION'::"text", 'LITIGE_ACCORD_CLOTURE'::"text", 'LITIGE_AUTO_CREATION'::"text", 'LITIGE_CLOTURE_AMIABLE'::"text", 'LITIGE_CREATION'::"text", 'LITIGE_ESCALADE_AUTO'::"text", 'LITIGE_FORCE_CREATION'::"text", 'LITIGE_OUVERTURE'::"text", 'LITIGE_OUVERTURE_LEGACY'::"text", 'LITIGE_RECATEGORISATION_LEGACY'::"text", 'LITIGE_REPONSE'::"text", 'LITIGE_RESOLUTION'::"text", 'PRESENCE_ALERTE_FRAUDE'::"text", 'RGPD_SUPPRESSION_DONNEES'::"text", 'TVA_MODIFICATION'::"text", 'API_KEY_CREEE'::"text", 'API_KEY_REVOQUEE'::"text", 'API_KEY_SUPPRIMEE'::"text", 'FACTURE_MARQUEE_EN_RETARD'::"text", 'HEURES_EXTERNES_VALIDATION_MANUELLE'::"text", 'MISSION_ANNULEE_PAR_SOIGNANT'::"text", 'MISSION_ANNULEE_PAR_ETABLISSEMENT'::"text", 'MISSION_LITIGE'::"text", 'MISSION_TYPE_CONTRAT_MODIFIE'::"text", 'MODERATION_DOCUMENT'::"text", 'COHERENCE_IDENTITE_VERIFIEE'::"text", 'MODERATION_EVALUATION'::"text", 'COHERENCE_DOCUMENTS_ALERTE'::"text", 'ESCROW_INITIE'::"text", 'ESCROW_DEBIT_INITIE'::"text", 'ESCROW_DEBITE'::"text", 'ESCROW_ETAB_GELE'::"text", 'ESCROW_ETAB_DEGELE'::"text", 'ESCROW_REMBOURSEMENT_ENFILE'::"text", 'ESCROW_REMBOURSE'::"text", 'ESCROW_DISPONIBLE'::"text", 'ESCROW_RELEASE_PAYE'::"text", 'ESCROW_RELEASE_ATTENTE_FONDS'::"text", 'PRESENCE_RELANCE_VALIDATION'::"text"]))),
     CONSTRAINT "journaux_audit_type_acteur_check" CHECK (("type_acteur" = ANY (ARRAY['SOIGNANT'::"text", 'ADMIN_ETABLISSEMENT'::"text", 'ADMIN_PLATEFORME'::"text", 'ADMIN_GROUPE'::"text", 'SYSTEME'::"text", 'SERVICE_API'::"text", 'ADMIN'::"text", 'ETABLISSEMENT'::"text", 'SYSTEM'::"text", 'DEPRECATED_CALLER'::"text"])))
 );
 
@@ -37813,7 +38697,7 @@ CREATE TABLE IF NOT EXISTS "public"."missions" (
     CONSTRAINT "chk_taux_horaire_raisonnable" CHECK ((("taux_horaire_base" = (0)::numeric) OR (("taux_horaire_base" >= 11.88) AND ("taux_horaire_base" <= (1000)::numeric)))),
     CONSTRAINT "chk_type_contrat_recherche" CHECK (("type_contrat_recherche" = ANY (ARRAY['TOUS'::"text", 'SALARIE'::"text", 'LIBERAL'::"text"]))),
     CONSTRAINT "ck_max_366_creneaux" CHECK ((("nb_creneaux" >= 0) AND ("nb_creneaux" <= 366))),
-    CONSTRAINT "missions_mission_source_check" CHECK (("mission_source" = ANY (ARRAY['SWIPE'::"text", 'CANDIDATURE'::"text", 'REBOOK'::"text", 'PROPOSITION_DIRECTE'::"text", 'REMPLACEMENT'::"text"]))),
+    CONSTRAINT "missions_mission_source_check" CHECK (("mission_source" = ANY (ARRAY['SWIPE'::"text", 'CANDIDATURE'::"text", 'REBOOK'::"text", 'PROPOSITION_DIRECTE'::"text", 'REMPLACEMENT'::"text", 'REPUBLICATION'::"text"]))),
     CONSTRAINT "missions_mode_attribution_check" CHECK (("mode_attribution" = ANY (ARRAY['PREMIER_ARRIVE'::"text", 'CANDIDATURE'::"text"]))),
     CONSTRAINT "missions_mode_paiement_soignant_check" CHECK (("mode_paiement_soignant" = ANY (ARRAY['DIRECT'::"text", 'STRIPE_CONNECT'::"text", 'VIREMENT'::"text"]))),
     CONSTRAINT "missions_mode_remuneration_check" CHECK (("mode_remuneration" = ANY (ARRAY['TAUX_HORAIRE'::"text", 'RETROCESSION'::"text"]))),
@@ -37894,6 +38778,7 @@ CREATE TABLE IF NOT EXISTS "public"."notations_missions" (
     "cree_le" timestamp with time zone DEFAULT "now"() NOT NULL,
     "mis_a_jour_le" timestamp with time zone DEFAULT "now"() NOT NULL,
     "notateur_anonymise" boolean DEFAULT false NOT NULL,
+    "publie_le" timestamp with time zone,
     CONSTRAINT "notations_missions_commentaire_check" CHECK ((("commentaire" IS NULL) OR ("length"("commentaire") <= 2000))),
     CONSTRAINT "notations_missions_critere_1_check" CHECK ((("critere_1" >= 1) AND ("critere_1" <= 5))),
     CONSTRAINT "notations_missions_critere_2_check" CHECK ((("critere_2" >= 1) AND ("critere_2" <= 5))),
@@ -37922,7 +38807,7 @@ CREATE TABLE IF NOT EXISTS "public"."notifications" (
     "email_envoye" boolean DEFAULT false,
     "email_envoye_le" timestamp with time zone,
     "cree_le" timestamp with time zone DEFAULT "now"(),
-    CONSTRAINT "notifications_type_check" CHECK (("type" = ANY (ARRAY['CANDIDATURE_ACCEPTEE'::"text", 'CANDIDATURE_REFUSEE'::"text", 'CANDIDATURE_PROPOSEE'::"text", 'CANDIDATURE_RECUE'::"text", 'MISSION_ACCEPTEE'::"text", 'MISSION_ANNULEE'::"text", 'MISSION_TERMINEE'::"text", 'MISSION_URGENTE'::"text", 'MISSION_NON_POURVUE'::"text", 'MISSION_ASSIGNEE'::"text", 'MISSION_A_POURVOIR'::"text", 'CONTRAT_A_SIGNER'::"text", 'CONTRAT_SIGNE'::"text", 'FACTURE_EMISE'::"text", 'FACTURE_PAYEE'::"text", 'DOCUMENT_EXPIRANT'::"text", 'RAPPEL_DOCUMENTS'::"text", 'DOCUMENT_VERIFIE'::"text", 'DOCUMENT_REJETE'::"text", 'MESSAGE_RECU'::"text", 'MESSAGE_ADMIN'::"text", 'POINTAGE_ARRIVEE'::"text", 'POINTAGE_DEPART'::"text", 'EVALUATION_RECUE'::"text", 'PARRAINAGE'::"text", 'CREDIT_PARRAINAGE'::"text", 'PARRAINAGE_PRIME_VERSEE'::"text", 'RAPPEL_MISSION'::"text", 'RAPPEL_CANDIDATURES'::"text", 'POOL_URGENCE'::"text", 'POOL_URGENCE_ACCEPTATION'::"text", 'SYSTEM'::"text", 'LITIGE_OUVERT'::"text", 'LITIGE_REPONSE'::"text", 'LITIGE_RESOLU'::"text", 'LITIGE_MEDIATION'::"text", 'LITIGE_RESOLU_AJUSTE'::"text", 'LITIGE_ESCALADE_ADMIN'::"text", 'LITIGE_MEDIATION_PRIORITAIRE'::"text", 'LITIGE_RAPPEL_J1'::"text", 'LITIGE_RAPPEL_J3'::"text", 'LITIGE_RAPPEL_J5'::"text", 'CHORUS_DEPOSEE'::"text", 'CHORUS_MISE_A_DISPOSITION'::"text", 'CHORUS_PAIEMENT_EN_COURS'::"text", 'CHORUS_PAIEMENT_COMPTABILISE'::"text", 'CHORUS_REJETEE'::"text", 'FAVORI_NOUVELLE_MISSION'::"text", 'AVOIR_EMIS'::"text", 'COMMISSION_AJUSTEE'::"text", 'REMBOURSEMENT_MANUEL_A_FAIRE'::"text", 'REMBOURSEMENT_CONFIRME'::"text", 'MATCHING_SUPER_LIKE'::"text", 'FAVORI_MISSION_EXPIRE'::"text", 'RAPPEL_VALIDATION_PRESENCE'::"text"]))),
+    CONSTRAINT "notifications_type_check" CHECK (("type" = ANY (ARRAY['CANDIDATURE_ACCEPTEE'::"text", 'CANDIDATURE_REFUSEE'::"text", 'CANDIDATURE_PROPOSEE'::"text", 'CANDIDATURE_RECUE'::"text", 'MISSION_ACCEPTEE'::"text", 'MISSION_ANNULEE'::"text", 'MISSION_TERMINEE'::"text", 'MISSION_URGENTE'::"text", 'MISSION_NON_POURVUE'::"text", 'MISSION_ASSIGNEE'::"text", 'MISSION_A_POURVOIR'::"text", 'CONTRAT_A_SIGNER'::"text", 'CONTRAT_SIGNE'::"text", 'FACTURE_EMISE'::"text", 'FACTURE_PAYEE'::"text", 'DOCUMENT_EXPIRANT'::"text", 'RAPPEL_DOCUMENTS'::"text", 'DOCUMENT_VERIFIE'::"text", 'DOCUMENT_REJETE'::"text", 'MESSAGE_RECU'::"text", 'MESSAGE_ADMIN'::"text", 'POINTAGE_ARRIVEE'::"text", 'POINTAGE_DEPART'::"text", 'EVALUATION_RECUE'::"text", 'PARRAINAGE'::"text", 'CREDIT_PARRAINAGE'::"text", 'PARRAINAGE_PRIME_VERSEE'::"text", 'RAPPEL_MISSION'::"text", 'RAPPEL_CANDIDATURES'::"text", 'POOL_URGENCE'::"text", 'POOL_URGENCE_ACCEPTATION'::"text", 'SYSTEM'::"text", 'LITIGE_OUVERT'::"text", 'LITIGE_REPONSE'::"text", 'LITIGE_RESOLU'::"text", 'LITIGE_MEDIATION'::"text", 'LITIGE_RESOLU_AJUSTE'::"text", 'LITIGE_ESCALADE_ADMIN'::"text", 'LITIGE_MEDIATION_PRIORITAIRE'::"text", 'LITIGE_RAPPEL_J1'::"text", 'LITIGE_RAPPEL_J3'::"text", 'LITIGE_RAPPEL_J5'::"text", 'CHORUS_DEPOSEE'::"text", 'CHORUS_MISE_A_DISPOSITION'::"text", 'CHORUS_PAIEMENT_EN_COURS'::"text", 'CHORUS_PAIEMENT_COMPTABILISE'::"text", 'CHORUS_REJETEE'::"text", 'FAVORI_NOUVELLE_MISSION'::"text", 'AVOIR_EMIS'::"text", 'COMMISSION_AJUSTEE'::"text", 'REMBOURSEMENT_MANUEL_A_FAIRE'::"text", 'REMBOURSEMENT_CONFIRME'::"text", 'MATCHING_SUPER_LIKE'::"text", 'FAVORI_MISSION_EXPIRE'::"text", 'RAPPEL_VALIDATION_PRESENCE'::"text", 'CONTESTATION_PRESENCE'::"text", 'PRESENCE_VALIDEE'::"text"]))),
     CONSTRAINT "notifications_type_destinataire_check" CHECK (("type_destinataire" = ANY (ARRAY['SOIGNANT'::"text", 'ETABLISSEMENT'::"text", 'ADMIN'::"text"])))
 );
 
@@ -39421,6 +40306,16 @@ ALTER TABLE ONLY "public"."demandes_rgpd"
 
 
 
+ALTER TABLE ONLY "public"."disponibilites_soignant"
+    ADD CONSTRAINT "disponibilites_soignant_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."disponibilites_soignant"
+    ADD CONSTRAINT "disponibilites_soignant_soignant_id_jour_creneau_key" UNIQUE ("soignant_id", "jour", "creneau");
+
+
+
 ALTER TABLE ONLY "public"."documents_requis_par_profession"
     ADD CONSTRAINT "documents_requis_par_profession_pkey" PRIMARY KEY ("id");
 
@@ -39533,6 +40428,11 @@ ALTER TABLE ONLY "public"."evaluations"
 
 ALTER TABLE ONLY "public"."evaluations"
     ADD CONSTRAINT "evaluations_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."evenements_risque_paires"
+    ADD CONSTRAINT "evenements_risque_paires_pkey" PRIMARY KEY ("id");
 
 
 
@@ -40516,6 +41416,14 @@ CREATE INDEX "idx_credits_etablissement_facture_id" ON "public"."credits_etablis
 
 
 
+CREATE INDEX "idx_dispos_soignant_jour" ON "public"."disponibilites_soignant" USING "btree" ("jour", "creneau");
+
+
+
+CREATE INDEX "idx_dispos_soignant_soignant" ON "public"."disponibilites_soignant" USING "btree" ("soignant_id", "jour");
+
+
+
 CREATE INDEX "idx_docs_critiques" ON "public"."documents_soignants" USING "btree" ("soignant_id", "est_critique", "valide_jusqua") WHERE (("est_critique" = true) AND ("supprime_le" IS NULL));
 
 
@@ -41268,6 +42176,10 @@ CREATE INDEX "idx_relances_soignant" ON "public"."relances_soignants" USING "btr
 
 
 
+CREATE INDEX "idx_risque_paires_paire" ON "public"."evenements_risque_paires" USING "btree" ("etablissement_id", "soignant_id", "cree_le" DESC);
+
+
+
 CREATE INDEX "idx_sales_contacts_groupe_id" ON "public"."sales_contacts" USING "btree" ("groupe_id");
 
 
@@ -41844,6 +42756,14 @@ CREATE OR REPLACE TRIGGER "trg_bloquer_delete_doc_verifie" BEFORE DELETE ON "pub
 
 
 
+CREATE OR REPLACE TRIGGER "trg_bloquer_documents_sante" BEFORE INSERT ON "public"."documents_soignants" FOR EACH ROW EXECUTE FUNCTION "public"."fn_trg_bloquer_documents_sante"();
+
+
+
+CREATE OR REPLACE TRIGGER "trg_bloquer_paiement_manuel_escrow" BEFORE INSERT ON "public"."paiements_soignant" FOR EACH ROW EXECUTE FUNCTION "public"."fn_trg_bloquer_paiement_manuel_escrow"();
+
+
+
 CREATE OR REPLACE TRIGGER "trg_bp_immutability" BEFORE UPDATE ON "public"."bulletins_paie" FOR EACH ROW EXECUTE FUNCTION "public"."fn_protect_bulletin_paie_immutability"();
 
 
@@ -41952,6 +42872,10 @@ CREATE OR REPLACE TRIGGER "trg_defacto_auto_cession" AFTER UPDATE OF "statut" ON
 
 
 
+CREATE OR REPLACE TRIGGER "trg_defaut_mode_paiement_secteur" BEFORE INSERT ON "public"."etablissements" FOR EACH ROW EXECUTE FUNCTION "public"."fn_trg_defaut_mode_paiement_secteur"();
+
+
+
 CREATE OR REPLACE TRIGGER "trg_desistement_garanti" AFTER UPDATE OF "statut" ON "public"."missions" FOR EACH ROW EXECUTE FUNCTION "public"."fn_trg_desistement_garanti"();
 
 
@@ -41973,6 +42897,10 @@ CREATE OR REPLACE TRIGGER "trg_email_paiement_confirme" AFTER UPDATE ON "public"
 
 
 CREATE OR REPLACE TRIGGER "trg_escrow_creer_a_confirmation" AFTER UPDATE OF "statut" ON "public"."missions" FOR EACH ROW WHEN ((("new"."statut" = 'ASSIGNEE'::"public"."statut_mission") AND ("old"."statut" IS DISTINCT FROM 'ASSIGNEE'::"public"."statut_mission"))) EXECUTE FUNCTION "public"."fn_trg_escrow_creer_a_confirmation"();
+
+
+
+CREATE OR REPLACE TRIGGER "trg_escrow_enqueue_on_debite" AFTER UPDATE OF "statut" ON "public"."paiements_escrow" FOR EACH ROW EXECUTE FUNCTION "public"."fn_trg_escrow_enqueue_on_debite"();
 
 
 
@@ -42013,6 +42941,10 @@ CREATE OR REPLACE TRIGGER "trg_fh_updated_at" BEFORE UPDATE ON "public"."facture
 
 
 CREATE OR REPLACE TRIGGER "trg_fs_updated_at" BEFORE UPDATE ON "public"."filtres_sauvegardes" FOR EACH ROW EXECUTE FUNCTION "public"."fn_trg_pn_updated_at"();
+
+
+
+CREATE OR REPLACE TRIGGER "trg_gate_assignation_paiement" BEFORE UPDATE OF "soignant_assigne_id" ON "public"."missions" FOR EACH ROW EXECUTE FUNCTION "public"."fn_trg_gate_assignation_paiement"();
 
 
 
@@ -42208,7 +43140,7 @@ CREATE OR REPLACE TRIGGER "trg_recalcul_score_v2_missions" AFTER UPDATE OF "stat
 
 
 
-CREATE OR REPLACE TRIGGER "trg_recalcul_score_v2_notations" AFTER INSERT OR UPDATE OF "critere_1", "critere_2", "critere_3", "critere_4", "masque" ON "public"."notations_missions" FOR EACH ROW EXECUTE FUNCTION "public"."fn_trg_recalculer_score_v2"();
+CREATE OR REPLACE TRIGGER "trg_recalcul_score_v2_notations" AFTER INSERT OR UPDATE OF "critere_1", "critere_2", "critere_3", "critere_4", "masque", "publie_le" ON "public"."notations_missions" FOR EACH ROW EXECUTE FUNCTION "public"."fn_trg_recalculer_score_v2"();
 
 
 
@@ -42237,6 +43169,18 @@ CREATE OR REPLACE TRIGGER "trg_sync_creneaux" AFTER INSERT OR DELETE OR UPDATE O
 
 
 CREATE OR REPLACE TRIGGER "trg_sync_types_contrat" BEFORE UPDATE ON "public"."soignants" FOR EACH ROW EXECUTE FUNCTION "public"."dec_sync_types_contrat_exercice"();
+
+
+
+CREATE OR REPLACE TRIGGER "trg_tripwire_premier_connect_complet" AFTER INSERT OR UPDATE OF "statut" ON "public"."stripe_connect_onboarding" FOR EACH ROW EXECUTE FUNCTION "public"."fn_trg_tripwire_premier_connect_complet"();
+
+
+
+CREATE OR REPLACE TRIGGER "trg_tripwire_premier_mandat_sepa" AFTER INSERT OR UPDATE OF "stripe_sepa_payment_method_id" ON "public"."etablissements" FOR EACH ROW EXECUTE FUNCTION "public"."fn_trg_tripwire_premier_mandat_sepa"();
+
+
+
+CREATE OR REPLACE TRIGGER "trg_tripwire_premier_payment_intent" AFTER INSERT OR UPDATE OF "stripe_payment_intent_id" ON "public"."paiements_escrow" FOR EACH ROW EXECUTE FUNCTION "public"."fn_trg_tripwire_premier_payment_intent"();
 
 
 
@@ -43393,6 +44337,13 @@ CREATE POLICY "ctm_select" ON "public"."contrats_travail_missions" FOR SELECT TO
 ALTER TABLE "public"."demandes_rgpd" ENABLE ROW LEVEL SECURITY;
 
 
+ALTER TABLE "public"."disponibilites_soignant" ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "dispos_soignant_select" ON "public"."disponibilites_soignant" FOR SELECT USING ((("soignant_id" = "auth"."uid"()) OR "public"."est_admin"()));
+
+
+
 ALTER TABLE "public"."documents_requis_par_profession" ENABLE ROW LEVEL SECURITY;
 
 
@@ -43481,6 +44432,9 @@ ALTER TABLE "public"."etablissements" ENABLE ROW LEVEL SECURITY;
 
 
 ALTER TABLE "public"."evaluations" ENABLE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "public"."evenements_risque_paires" ENABLE ROW LEVEL SECURITY;
 
 
 ALTER TABLE "public"."evenements_score_etab" ENABLE ROW LEVEL SECURITY;
@@ -44881,6 +45835,10 @@ ALTER TABLE "public"."regles_exercice_profession" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "public"."relances_soignants" ENABLE ROW LEVEL SECURITY;
 
 
+CREATE POLICY "risque_paires_admin_select" ON "public"."evenements_risque_paires" FOR SELECT USING ("public"."est_admin"());
+
+
+
 ALTER TABLE "public"."rist_plafonds" ENABLE ROW LEVEL SECURITY;
 
 
@@ -45838,6 +46796,7 @@ GRANT ALL ON TABLE "public"."parametres_systeme" TO "authenticated";
 
 REVOKE ALL ON FUNCTION "public"."fn_admin_lister_parametres"() FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_admin_lister_parametres"() TO "service_role";
+GRANT ALL ON FUNCTION "public"."fn_admin_lister_parametres"() TO "authenticated";
 
 
 
@@ -45867,6 +46826,7 @@ GRANT ALL ON FUNCTION "public"."fn_admin_lister_templates_contrats"() TO "servic
 
 REVOKE ALL ON FUNCTION "public"."fn_admin_maj_parametre"("p_cle" "text", "p_valeur" numeric) FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_admin_maj_parametre"("p_cle" "text", "p_valeur" numeric) TO "service_role";
+GRANT ALL ON FUNCTION "public"."fn_admin_maj_parametre"("p_cle" "text", "p_valeur" numeric) TO "authenticated";
 
 
 
@@ -46752,6 +47712,12 @@ GRANT ALL ON FUNCTION "public"."fn_declarer_arret_maladie"("p_mission_id" "uuid"
 
 
 
+REVOKE ALL ON FUNCTION "public"."fn_declarer_empechement_imperieux"("p_mission_id" "uuid", "p_indispo_debut" "date", "p_indispo_fin" "date") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_declarer_empechement_imperieux"("p_mission_id" "uuid", "p_indispo_debut" "date", "p_indispo_fin" "date") TO "service_role";
+GRANT ALL ON FUNCTION "public"."fn_declarer_empechement_imperieux"("p_mission_id" "uuid", "p_indispo_debut" "date", "p_indispo_fin" "date") TO "authenticated";
+
+
+
 REVOKE ALL ON FUNCTION "public"."fn_declarer_fin_retroactive"("p_mission_id" "uuid", "p_heure_fin" timestamp with time zone, "p_raison" "text") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_declarer_fin_retroactive"("p_mission_id" "uuid", "p_heure_fin" timestamp with time zone, "p_raison" "text") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."fn_declarer_fin_retroactive"("p_mission_id" "uuid", "p_heure_fin" timestamp with time zone, "p_raison" "text") TO "service_role";
@@ -46773,6 +47739,12 @@ GRANT ALL ON FUNCTION "public"."fn_declarer_paiement_soignant"("p_mission_id" "u
 REVOKE ALL ON FUNCTION "public"."fn_declarer_virement"("p_facture_id" "uuid", "p_reference" "text") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_declarer_virement"("p_facture_id" "uuid", "p_reference" "text") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."fn_declarer_virement"("p_facture_id" "uuid", "p_reference" "text") TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."fn_definir_disponibilite"("p_jour" "date", "p_creneau" "text", "p_disponible" boolean) FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_definir_disponibilite"("p_jour" "date", "p_creneau" "text", "p_disponible" boolean) TO "service_role";
+GRANT ALL ON FUNCTION "public"."fn_definir_disponibilite"("p_jour" "date", "p_creneau" "text", "p_disponible" boolean) TO "authenticated";
 
 
 
@@ -47509,6 +48481,17 @@ GRANT ALL ON FUNCTION "public"."fn_marquer_rappel_contrat_travail_envoye"("p_mis
 
 
 
+REVOKE ALL ON FUNCTION "public"."fn_marquer_source_mission"("p_mission_id" "uuid", "p_source" "text") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_marquer_source_mission"("p_mission_id" "uuid", "p_source" "text") TO "service_role";
+GRANT ALL ON FUNCTION "public"."fn_marquer_source_mission"("p_mission_id" "uuid", "p_source" "text") TO "authenticated";
+
+
+
+REVOKE ALL ON FUNCTION "public"."fn_matching_inverse_dispos"() FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_matching_inverse_dispos"() TO "service_role";
+
+
+
 REVOKE ALL ON FUNCTION "public"."fn_mes_avances_factor"() FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_mes_avances_factor"() TO "authenticated";
 GRANT ALL ON FUNCTION "public"."fn_mes_avances_factor"() TO "service_role";
@@ -47596,6 +48579,12 @@ GRANT ALL ON FUNCTION "public"."fn_mes_matches"() TO "service_role";
 REVOKE ALL ON FUNCTION "public"."fn_mes_notations_recues_avec_stats"("p_periode" "text", "p_note_min" integer, "p_etablissement_id" "uuid", "p_limit" integer, "p_offset" integer) FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_mes_notations_recues_avec_stats"("p_periode" "text", "p_note_min" integer, "p_etablissement_id" "uuid", "p_limit" integer, "p_offset" integer) TO "authenticated";
 GRANT ALL ON FUNCTION "public"."fn_mes_notations_recues_avec_stats"("p_periode" "text", "p_note_min" integer, "p_etablissement_id" "uuid", "p_limit" integer, "p_offset" integer) TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."fn_mes_paiements_escrow"() FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_mes_paiements_escrow"() TO "service_role";
+GRANT ALL ON FUNCTION "public"."fn_mes_paiements_escrow"() TO "authenticated";
 
 
 
@@ -48134,6 +49123,11 @@ GRANT ALL ON FUNCTION "public"."fn_proteger_document_verification"() TO "service
 
 
 
+REVOKE ALL ON FUNCTION "public"."fn_publier_notations_echues"() FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_publier_notations_echues"() TO "service_role";
+
+
+
 REVOKE ALL ON FUNCTION "public"."fn_purger_audit_ancien"() FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_purger_audit_ancien"() TO "service_role";
 
@@ -48188,6 +49182,11 @@ GRANT ALL ON FUNCTION "public"."fn_recalculer_palier_commission"("p_etablissemen
 
 REVOKE ALL ON FUNCTION "public"."fn_recalculer_score_fiabilite_soignant"("p_soignant_id" "uuid") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_recalculer_score_fiabilite_soignant"("p_soignant_id" "uuid") TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."fn_recalculer_scores_etablissements"() FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_recalculer_scores_etablissements"() TO "service_role";
 
 
 
@@ -48377,6 +49376,7 @@ GRANT ALL ON FUNCTION "public"."fn_sauvegarder_profil"("p_data" "jsonb") TO "ser
 
 REVOKE ALL ON FUNCTION "public"."fn_scanner_code_pointage"("p_code" "text", "p_metadata" "jsonb") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_scanner_code_pointage"("p_code" "text", "p_metadata" "jsonb") TO "service_role";
+GRANT ALL ON FUNCTION "public"."fn_scanner_code_pointage"("p_code" "text", "p_metadata" "jsonb") TO "authenticated";
 
 
 
@@ -48701,6 +49701,16 @@ GRANT ALL ON FUNCTION "public"."fn_trg_auto_notify_mission_urgente"() TO "servic
 
 
 
+REVOKE ALL ON FUNCTION "public"."fn_trg_bloquer_documents_sante"() FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_trg_bloquer_documents_sante"() TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."fn_trg_bloquer_paiement_manuel_escrow"() FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_trg_bloquer_paiement_manuel_escrow"() TO "service_role";
+
+
+
 REVOKE ALL ON FUNCTION "public"."fn_trg_candidature_conflit_planning"() FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_trg_candidature_conflit_planning"() TO "service_role";
 
@@ -48723,6 +49733,11 @@ GRANT ALL ON FUNCTION "public"."fn_trg_compteur_absences_sans_prevenir"() TO "se
 
 REVOKE ALL ON FUNCTION "public"."fn_trg_defacto_auto_cession"() FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_trg_defacto_auto_cession"() TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."fn_trg_defaut_mode_paiement_secteur"() FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_trg_defaut_mode_paiement_secteur"() TO "service_role";
 
 
 
@@ -48751,6 +49766,11 @@ GRANT ALL ON FUNCTION "public"."fn_trg_escrow_creer_a_confirmation"() TO "servic
 
 
 
+REVOKE ALL ON FUNCTION "public"."fn_trg_escrow_enqueue_on_debite"() FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_trg_escrow_enqueue_on_debite"() TO "service_role";
+
+
+
 REVOKE ALL ON FUNCTION "public"."fn_trg_escrow_release_check"() FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_trg_escrow_release_check"() TO "service_role";
 
@@ -48758,6 +49778,11 @@ GRANT ALL ON FUNCTION "public"."fn_trg_escrow_release_check"() TO "service_role"
 
 REVOKE ALL ON FUNCTION "public"."fn_trg_favori_nouvelle_mission"() FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_trg_favori_nouvelle_mission"() TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."fn_trg_gate_assignation_paiement"() FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_trg_gate_assignation_paiement"() TO "service_role";
 
 
 
@@ -48826,6 +49851,21 @@ GRANT ALL ON FUNCTION "public"."fn_trg_sms_annulation_tardive"() TO "service_rol
 
 
 
+REVOKE ALL ON FUNCTION "public"."fn_trg_tripwire_premier_connect_complet"() FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_trg_tripwire_premier_connect_complet"() TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."fn_trg_tripwire_premier_mandat_sepa"() FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_trg_tripwire_premier_mandat_sepa"() TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."fn_trg_tripwire_premier_payment_intent"() FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_trg_tripwire_premier_payment_intent"() TO "service_role";
+
+
+
 REVOKE ALL ON FUNCTION "public"."fn_trg_valider_parrainage_etab"() FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_trg_valider_parrainage_etab"() TO "service_role";
 
@@ -48853,6 +49893,11 @@ GRANT ALL ON FUNCTION "public"."fn_trg_verifier_onboarding_etab"() TO "service_r
 
 REVOKE ALL ON FUNCTION "public"."fn_trigger_regen_pdf_immediate"("p_facture_id" "uuid") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_trigger_regen_pdf_immediate"("p_facture_id" "uuid") TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."fn_tripwire_alerte"("p_sujet" "text", "p_corps" "text") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_tripwire_alerte"("p_sujet" "text", "p_corps" "text") TO "service_role";
 
 
 
@@ -49015,6 +50060,12 @@ GRANT ALL ON FUNCTION "public"."fn_verifier_skip_serie_onboarding"("p_envoi_id" 
 REVOKE ALL ON FUNCTION "public"."fn_vitesse_entre_pointages"("p_lat1" numeric, "p_lng1" numeric, "p_ts1" timestamp with time zone, "p_lat2" numeric, "p_lng2" numeric, "p_ts2" timestamp with time zone) FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_vitesse_entre_pointages"("p_lat1" numeric, "p_lng1" numeric, "p_ts1" timestamp with time zone, "p_lat2" numeric, "p_lng2" numeric, "p_ts2" timestamp with time zone) TO "authenticated";
 GRANT ALL ON FUNCTION "public"."fn_vitesse_entre_pointages"("p_lat1" numeric, "p_lng1" numeric, "p_ts1" timestamp with time zone, "p_lat2" numeric, "p_lng2" numeric, "p_ts2" timestamp with time zone) TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."fn_vivier_disponibilites"("p_jour" "date", "p_profession" "text") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_vivier_disponibilites"("p_jour" "date", "p_profession" "text") TO "service_role";
+GRANT ALL ON FUNCTION "public"."fn_vivier_disponibilites"("p_jour" "date", "p_profession" "text") TO "authenticated";
 
 
 
@@ -49480,6 +50531,11 @@ GRANT ALL ON TABLE "public"."demandes_rgpd" TO "service_role";
 
 
 
+GRANT ALL ON TABLE "public"."disponibilites_soignant" TO "service_role";
+GRANT SELECT ON TABLE "public"."disponibilites_soignant" TO "authenticated";
+
+
+
 GRANT SELECT ON TABLE "public"."documents_requis_par_profession" TO "authenticated";
 GRANT ALL ON TABLE "public"."documents_requis_par_profession" TO "service_role";
 
@@ -49723,6 +50779,10 @@ GRANT SELECT("horaires_ouverture") ON TABLE "public"."etablissements" TO "authen
 
 GRANT SELECT,INSERT ON TABLE "public"."evaluations" TO "authenticated";
 GRANT ALL ON TABLE "public"."evaluations" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."evenements_risque_paires" TO "service_role";
 
 
 
