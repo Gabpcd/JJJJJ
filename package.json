@@ -25,7 +25,7 @@
     "test:chorus:sandbox": "vitest run tests/invoicing/chorus-submission.test.ts",
     "test:guards": "bash tests/non-regression/guards.sh",
     "test:schema": "node tests/non-regression/schema-guard.mjs",
-    "test:regression:invoicing": "vitest run tests/invoicing/no-regression.test.ts",
+    "test:regression:invoicing": "vitest run --config vitest.invoicing.config.ts",
     "test:regression:derivation": "vitest run src/lib/planning-derive.test.ts",
     "test:e2e:regression": "npx playwright test --project=mobile-non-regression",
     "test:regression": "npm run test:guards && npm run test:schema && npm run test:regression:invoicing && npm run test:regression:derivation && npm run test:e2e:regression"
