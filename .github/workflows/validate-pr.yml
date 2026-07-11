@@ -133,6 +133,88 @@ jobs:
           fi
           node scripts/check-contrat-frontend-backend.mjs
 
+  # ── B7 (Lots 19+) — checks requis : guards + non-régression + escrow gaté ──
+
+  guards:
+    name: Garde-fous (test:guards)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: test:guards (grep non-régression, pur)
+        run: bash tests/non-regression/guards.sh
+
+  regression:
+    name: Non-régression (dérivation + schema + invoicing)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+          cache: 'npm'
+      - name: Install
+        run: npm ci
+      - name: test:regression:derivation (pur, toujours bloquant)
+        run: npm run test:regression:derivation
+      - name: test:schema + invoicing (DB) — dégradation gracieuse si secret absent
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          if [ -z "$SUPABASE_DB_URL" ]; then
+            echo "::warning::SUPABASE_DB_URL absent — schema+invoicing (DB) ignorés pour ne pas produire de faux négatif. Câbler ce secret pour rendre le check pleinement bloquant (B7)."
+            exit 0
+          fi
+          npm run test:schema
+          npm run test:regression:invoicing
+
+  escrow-gate:
+    name: Escrow (recette si paiements touchés)
+    # Check REQUIS et TOUJOURS répondant : no-op vert quand le diff ne touche ni
+    # supabase/ ni les chemins paiements/escrow (un check requis ne peut pas être
+    # conditionnel/skippé, sinon les PR restent bloquées « en attente »).
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Portée du diff
+        id: scope
+        run: |
+          BASE="${{ github.event.pull_request.base.sha }}"
+          if [ -n "$BASE" ]; then
+            CHANGED=$(git diff --name-only "$BASE"...HEAD)
+          else
+            CHANGED=$(git diff --name-only HEAD~1 2>/dev/null || true)
+          fi
+          echo "Fichiers modifiés :"; echo "$CHANGED"
+          if echo "$CHANGED" | grep -qiE '^supabase/|escrow|paiement|stripe|sepa|mandat|facturation'; then
+            echo "touche=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "touche=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: No-op — paiements non concernés (check vert)
+        if: steps.scope.outputs.touche == 'false'
+        run: echo "✅ Le diff ne touche ni supabase/ ni les chemins paiements/escrow — test:escrow non requis."
+      - uses: actions/setup-node@v5
+        if: steps.scope.outputs.touche == 'true'
+        with:
+          node-version: '24'
+          cache: 'npm'
+      - name: Recette escrow (mode test Stripe)
+        if: steps.scope.outputs.touche == 'true'
+        env:
+          E2E_SUPABASE_URL: ${{ secrets.E2E_SUPABASE_URL }}
+          E2E_PUBLISHABLE_KEY: ${{ secrets.E2E_PUBLISHABLE_KEY }}
+          E2E_ANON_KEY: ${{ secrets.E2E_ANON_KEY }}
+          E2E_TEST_PASSWORD: ${{ secrets.E2E_TEST_PASSWORD }}
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          STRIPE_SECRET_KEY_TEST: ${{ secrets.STRIPE_SECRET_KEY_TEST }}
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+          npm run test:escrow
+
   # NB : le job supabase-advisors a été retiré parce que l'endpoint
   # /v1/projects/{ref}/advisors n'existe pas dans le Management API public.
   # Les advisors restent accessibles via le dashboard Supabase ou le MCP.
