@@ -1,21 +1,19 @@
 import React, { useState, useMemo, useCallback } from 'react';
-import { format, startOfWeek, getISOWeek } from 'date-fns';
+import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { CheckCircle2, XCircle, AlertTriangle } from 'lucide-react';
 import { ARTICLES_CODE_TRAVAIL } from '@/constantes/loi';
-import { LigneHoraireJour, type HorairesJour, parseHeure, calculerDuree } from '@/components/LigneHoraireJour';
+import { LigneHoraireJour, type HorairesJour, parseHeure } from '@/components/LigneHoraireJour';
+import { calculerDuree } from '@/components/LigneHoraireJour';
+import {
+  derivePlanning, validerPlanning, parseDateLocale, fmtDateLocale, libelleDate,
+  type SemaineCivile, type ValidationPlanning,
+} from '@/lib/planning-derive';
 import { toast } from 'sonner';
-import { logger } from '@/lib/logger';
 
-const JOURS_SEMAINE_DEF = [
-  { jourISO: 1, label: 'Lundi' },
-  { jourISO: 2, label: 'Mardi' },
-  { jourISO: 3, label: 'Mercredi' },
-  { jourISO: 4, label: 'Jeudi' },
-  { jourISO: 5, label: 'Vendredi' },
-  { jourISO: 6, label: 'Samedi' },
-  { jourISO: 7, label: 'Dimanche' },
-];
+const NOMS_JOURS_ISO: Record<number, string> = {
+  1: 'Lundi', 2: 'Mardi', 3: 'Mercredi', 4: 'Jeudi', 5: 'Vendredi', 6: 'Samedi', 7: 'Dimanche',
+};
 
 export interface CreneauFlex {
   debut: string;
@@ -30,34 +28,64 @@ export interface RecurrenceFlexConfig {
   horairesParJour: HorairesJour[];
 }
 
-export interface ErreurValidation {
-  type: 'PLAFOND_48H' | 'REPOS_11H' | 'DUREE_LONGUE';
-  message: string;
-  gravite: 'bloquant' | 'avertissement';
-  joursAffectes?: number[];
+// Compat : FormulaireMission importe `ValidationFlexResult` — c'est désormais la
+// validation dérivée par semaine civile réelle (mêmes champs valide/erreurs/totalHebdo).
+export type ErreurValidation = ValidationPlanning['erreurs'][number];
+export type ValidationFlexResult = ValidationPlanning;
+
+// ─── Génération des créneaux (par date réelle) ────────────────────
+export function genererCreneauxFlex(
+  dateDebut: string, dateFin: string, horairesParJour: HorairesJour[],
+): CreneauFlex[] {
+  if (!dateDebut || !dateFin) return [];
+  const joursActifs = horairesParJour.filter((j) => j.actif);
+  if (joursActifs.length === 0) return [];
+
+  const creneaux: CreneauFlex[] = [];
+  const debut = parseDateLocale(dateDebut);
+  const fin = parseDateLocale(dateFin);
+
+  const d = new Date(debut);
+  let guard = 0;
+  while (d <= fin && guard < 400) {
+    const rawDay = d.getDay();
+    const jourISO = rawDay === 0 ? 7 : rawDay;
+    const horaireJour = joursActifs.find((j) => j.jourISO === jourISO);
+
+    if (horaireJour) {
+      const dateStr = fmtDateLocale(d);
+      let finCreneau: string;
+      if (parseHeure(horaireJour.heureFin) <= parseHeure(horaireJour.heureDebut)) {
+        const lendemain = new Date(d);
+        lendemain.setDate(lendemain.getDate() + 1);
+        finCreneau = `${fmtDateLocale(lendemain)}T${horaireJour.heureFin}:00`;
+      } else {
+        finCreneau = `${dateStr}T${horaireJour.heureFin}:00`;
+      }
+      creneaux.push({
+        debut: `${dateStr}T${horaireJour.heureDebut}:00`,
+        fin: finCreneau,
+        jourLabel: horaireJour.label,
+        dureeHeures: horaireJour.dureeHeures,
+      });
+    }
+    d.setDate(d.getDate() + 1);
+    guard++;
+  }
+  return creneaux;
 }
 
-export interface ValidationFlexResult {
-  valide: boolean;
-  erreurs: ErreurValidation[];
-  totalHebdo: number;
+/** Conservé pour compat : validation d'un jeu d'horaires hors période (motif). */
+export function validerHorairesFlex(horairesParJour: HorairesJour[]): ValidationFlexResult {
+  const total = horairesParJour.filter((j) => j.actif).reduce((s, j) => s + j.dureeHeures, 0);
+  const erreurs: ValidationFlexResult['erreurs'] = [];
+  if (total > 48) {
+    erreurs.push({ type: 'PLAFOND_48H', gravite: 'bloquant', message: `La semaine totalise ${total}h. Maximum légal : 48h (Art. L3121-20).` });
+  }
+  return { valide: !erreurs.some((e) => e.gravite === 'bloquant'), erreurs, totalHebdo: total, semaines: [] };
 }
 
-// ─── Génération des créneaux ──────────────────────────────────────
-// Parse "YYYY-MM-DD" as LOCAL date (not UTC)
-function parseDateLocale(str: string): Date {
-  const [y, m, d] = str.split('-').map(Number);
-  return new Date(y, m - 1, d);
-}
-
-function fmtDateLocale(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
-}
-
-// Jours ISO (1=lundi … 7=dimanche) présents dans la plage [debut, fin].
+// Jours ISO présents dans la plage (pour (dé)cocher automatiquement).
 function joursISODansPlage(debut: string, fin: string): Set<number> {
   const set = new Set<number>();
   if (!debut || !fin) return set;
@@ -75,8 +103,6 @@ function joursISODansPlage(debut: string, fin: string): Set<number> {
   return set;
 }
 
-// Plage réellement travaillée : 1ère et dernière date dont le jour est actif,
-// dans [debut, fin]. Sert à recaler les dates quand on (dé)coche un jour.
 function plageEffectiveJours(debut: string, fin: string, actifsISO: Set<number>): [string, string] | null {
   if (!debut || !fin || actifsISO.size === 0) return null;
   const d = parseDateLocale(debut);
@@ -105,118 +131,6 @@ function formatDateFr(str: string): string {
   return format(parseDateLocale(str), 'EEEE d MMMM', { locale: fr });
 }
 
-export function genererCreneauxFlex(
-  dateDebut: string, dateFin: string, horairesParJour: HorairesJour[]
-): CreneauFlex[] {
-  if (!dateDebut || !dateFin) return [];
-  const joursActifs = horairesParJour.filter(j => j.actif);
-  if (joursActifs.length === 0) return [];
-
-  const creneaux: CreneauFlex[] = [];
-  const debut = parseDateLocale(dateDebut);
-  const fin = parseDateLocale(dateFin);
-
-
-  const d = new Date(debut);
-  while (d <= fin) {
-    const rawDay = d.getDay(); // 0=Sun..6=Sat
-    const jourISO = rawDay === 0 ? 7 : rawDay; // 1=Mon..7=Sun
-    const horaireJour = joursActifs.find(j => j.jourISO === jourISO);
-
-    if (horaireJour) {
-      const y = d.getFullYear();
-      const m = String(d.getMonth() + 1).padStart(2, '0');
-      const day = String(d.getDate()).padStart(2, '0');
-      const dateStr = `${y}-${m}-${day}`;
-
-      let finCreneau: string;
-      if (parseHeure(horaireJour.heureFin) <= parseHeure(horaireJour.heureDebut)) {
-        const lendemain = new Date(d);
-        lendemain.setDate(lendemain.getDate() + 1);
-        const ly = lendemain.getFullYear();
-        const lm = String(lendemain.getMonth() + 1).padStart(2, '0');
-        const ld = String(lendemain.getDate()).padStart(2, '0');
-        finCreneau = `${ly}-${lm}-${ld}T${horaireJour.heureFin}:00`;
-      } else {
-        finCreneau = `${dateStr}T${horaireJour.heureFin}:00`;
-      }
-
-      
-      creneaux.push({
-        debut: `${dateStr}T${horaireJour.heureDebut}:00`,
-        fin: finCreneau,
-        jourLabel: horaireJour.label,
-        dureeHeures: horaireJour.dureeHeures,
-      });
-    }
-
-    d.setDate(d.getDate() + 1);
-  }
-
-  
-  return creneaux;
-}
-
-// ─── Validation ───────────────────────────────────────────────────
-export function validerHorairesFlex(horairesParJour: HorairesJour[]): ValidationFlexResult {
-  const joursActifs = horairesParJour.filter(j => j.actif);
-  const erreurs: ErreurValidation[] = [];
-
-  const totalHebdo = joursActifs.reduce((s, j) => s + j.dureeHeures, 0);
-  if (totalHebdo > 48) {
-    // Suggestion de fix chiffrée (Lot 11) : retirer un jour si ça suffit, sinon
-    // la durée/jour qui ramène la semaine exactement à 48h (ex. « 9h36/jour »).
-    const dureeMax = joursActifs.length ? Math.max(...joursActifs.map((j) => j.dureeHeures)) : 0;
-    const cibleParJour = joursActifs.length ? 48 / joursActifs.length : 48;
-    const hCible = Math.floor(cibleParJour);
-    const minCible = Math.round((cibleParJour - hCible) * 60);
-    const fix = totalHebdo - dureeMax <= 48
-      ? `retirez un jour ou passez à ${hCible}h${String(minCible).padStart(2, '0')}/jour`
-      : `passez à ${hCible}h${String(minCible).padStart(2, '0')}/jour maximum`;
-    erreurs.push({
-      type: 'PLAFOND_48H',
-      message: `La semaine totalise ${totalHebdo}h. Maximum légal : 48h (Art. L3121-20). Pour corriger : ${fix}.`,
-      gravite: 'bloquant',
-    });
-  }
-
-  const joursTriés = [...joursActifs].sort((a, b) => a.jourISO - b.jourISO);
-  for (let i = 0; i < joursTriés.length - 1; i++) {
-    const actuel = joursTriés[i];
-    const suivant = joursTriés[i + 1];
-    if (suivant.jourISO - actuel.jourISO === 1) {
-      const finActuel = parseHeure(actuel.heureFin);
-      const debutSuivant = parseHeure(suivant.heureDebut);
-      const repos = (24 - finActuel) + debutSuivant;
-      if (repos < 11) {
-        erreurs.push({
-          type: 'REPOS_11H',
-          message: `Repos insuffisant entre ${actuel.label} (fin ${actuel.heureFin}) et ${suivant.label} (début ${suivant.heureDebut}) : ${repos.toFixed(1)}h au lieu de 11h`,
-          gravite: 'bloquant',
-          joursAffectes: [actuel.jourISO, suivant.jourISO],
-        });
-      }
-    }
-  }
-
-  for (const jour of joursActifs) {
-    if (jour.dureeHeures > 12) {
-      erreurs.push({
-        type: 'DUREE_LONGUE',
-        message: `${jour.label} : créneau de ${jour.dureeHeures}h (recommandation : max 12h)`,
-        gravite: 'avertissement',
-        joursAffectes: [jour.jourISO],
-      });
-    }
-  }
-
-  return {
-    valide: !erreurs.some(e => e.gravite === 'bloquant'),
-    erreurs,
-    totalHebdo,
-  };
-}
-
 // ─── Props ────────────────────────────────────────────────────────
 interface FormulaireRecurrenceProps {
   onChange: (config: RecurrenceFlexConfig, creneaux: CreneauFlex[], validation: ValidationFlexResult) => void;
@@ -225,26 +139,31 @@ interface FormulaireRecurrenceProps {
 export function FormulaireRecurrence({ onChange }: FormulaireRecurrenceProps) {
   const [dateDebut, setDateDebut] = useState('');
   const [dateFin, setDateFin] = useState('');
-  // Avertissement affiché quand un (dé)cochage de jour recale les dates.
   const [avertissementDates, setAvertissementDates] = useState<string | null>(null);
+  // État des horaires PAR jour-de-semaine ISO. Les heures saisies sont conservées
+  // par jour même quand la période change (seul `actif` est re-dérivé). `actif`
+  // initial = false : rien n'est proposé tant que la période n'est pas choisie.
   const [horairesParJour, setHorairesParJour] = useState<HorairesJour[]>(
-    JOURS_SEMAINE_DEF.map(j => ({
-      ...j,
+    [1, 2, 3, 4, 5, 6, 7].map((jourISO) => ({
+      jourISO,
+      label: NOMS_JOURS_ISO[jourISO],
       heureDebut: '07:00',
       heureFin: '19:00',
       dureeHeures: 12,
-      actif: [1, 2, 3, 4, 5].includes(j.jourISO),
-    }))
+      actif: false,
+    })),
   );
 
-  // Choisir une plage de dates coche AUTOMATIQUEMENT les jours présents dans
-  // cette plage (ex : du vendredi au lundi → ven/sam/dim/lun cochés), au lieu
-  // d'un défaut figé lun-ven qui effacerait l'intention de l'utilisateur.
+  // ── ÉTAT DÉRIVÉ : la période est la seule source de vérité. ──
+  const plan = useMemo(() => derivePlanning(dateDebut, dateFin), [dateDebut, dateFin]);
+
+  // Choisir/ajuster la période coche automatiquement les jours présents dans la
+  // plage (sans effacer les heures déjà saisies) — jamais un défaut figé lun-ven.
   const appliquerJoursSelonPlage = useCallback((debut: string, fin: string) => {
     if (!debut || !fin) return;
     const presents = joursISODansPlage(debut, fin);
     if (presents.size === 0) return;
-    setHorairesParJour(prev => prev.map(j => ({ ...j, actif: presents.has(j.jourISO) })));
+    setHorairesParJour((prev) => prev.map((j) => ({ ...j, actif: presents.has(j.jourISO) })));
   }, []);
 
   const handleDateDebut = useCallback((val: string) => {
@@ -259,47 +178,39 @@ export function FormulaireRecurrence({ onChange }: FormulaireRecurrenceProps) {
     appliquerJoursSelonPlage(dateDebut, val);
   }, [dateDebut, appliquerJoursSelonPlage]);
 
-  const joursActifs = useMemo(() => horairesParJour.filter(j => j.actif), [horairesParJour]);
+  // Horaire (par jour ISO) enrichi du libellé DÉRIVÉ (daté si plage ≤ 14 j).
+  const jourISOversLabel = useMemo(() => {
+    const m = new Map<number, string>();
+    for (const j of plan.jours) m.set(j.jourISO, j.label);
+    return m;
+  }, [plan]);
 
-  const validation = useMemo(() => validerHorairesFlex(horairesParJour), [horairesParJour]);
+  // Liste des jours ACTIFS dans l'ORDRE CHRONOLOGIQUE réel (depuis le 1er jour).
+  const joursActifsOrdonnes = useMemo(() => {
+    return plan.jours
+      .filter((pj) => horairesParJour.find((h) => h.jourISO === pj.jourISO)?.actif)
+      .map((pj) => {
+        const h = horairesParJour.find((x) => x.jourISO === pj.jourISO)!;
+        return { ...h, label: pj.label };
+      });
+  }, [plan, horairesParJour]);
+
+  const validation = useMemo(
+    () => validerPlanning(dateDebut, dateFin, horairesParJour),
+    [dateDebut, dateFin, horairesParJour],
+  );
 
   const creneaux = useMemo(
     () => genererCreneauxFlex(dateDebut, dateFin, horairesParJour),
-    [dateDebut, dateFin, horairesParJour]
+    [dateDebut, dateFin, horairesParJour],
   );
-
-  // Group creneaux by ISO week
-  const creneauxParSemaine = useMemo(() => {
-    const map = new Map<string, { label: string; creneaux: CreneauFlex[]; totalHeures: number }>();
-    creneaux.forEach(c => {
-      const d = new Date(c.debut);
-      const w = startOfWeek(d, { weekStartsOn: 1 });
-      const key = w.toISOString().split('T')[0];
-      if (!map.has(key)) {
-        const fin = new Date(w);
-        fin.setDate(fin.getDate() + 6);
-        map.set(key, {
-          label: `${format(w, 'd MMM', { locale: fr })} → ${format(fin, 'd MMM', { locale: fr })}`,
-          creneaux: [],
-          totalHeures: 0,
-        });
-      }
-      const entry = map.get(key)!;
-      entry.creneaux.push(c);
-      entry.totalHeures += c.dureeHeures;
-    });
-    return [...map.entries()];
-  }, [creneaux]);
 
   const totalHeures = creneaux.reduce((s, c) => s + c.dureeHeures, 0);
 
-  // Notify parent
   React.useEffect(() => {
     onChange({ dateDebut, dateFin, horairesParJour }, creneaux, validation);
   }, [dateDebut, dateFin, horairesParJour, creneaux, validation]);
 
-  // Lot 11 : zone d'erreurs UNIQUE — quand une violation bloquante apparaît,
-  // on l'amène à l'écran (scroll de section, pas de focus input — règle iOS).
   const zoneErreursRef = React.useRef<HTMLDivElement | null>(null);
   const aBloquant = validation.erreurs.some((e) => e.gravite === 'bloquant');
   React.useEffect(() => {
@@ -307,13 +218,9 @@ export function FormulaireRecurrence({ onChange }: FormulaireRecurrenceProps) {
   }, [aBloquant]);
 
   const toggleJour = useCallback((iso: number) => {
-    setHorairesParJour(prev =>
-      prev.map(j => j.jourISO === iso ? { ...j, actif: !j.actif } : j)
-    );
-    // Changer les jours recale automatiquement les dates sur la 1ère/dernière
-    // journée réellement travaillée, et le signale.
+    setHorairesParJour((prev) => prev.map((j) => (j.jourISO === iso ? { ...j, actif: !j.actif } : j)));
     const actifsApres = new Set(
-      horairesParJour.filter(j => (j.jourISO === iso ? !j.actif : j.actif)).map(j => j.jourISO)
+      horairesParJour.filter((j) => (j.jourISO === iso ? !j.actif : j.actif)).map((j) => j.jourISO),
     );
     const eff = plageEffectiveJours(dateDebut, dateFin, actifsApres);
     if (eff && (eff[0] !== dateDebut || eff[1] !== dateFin)) {
@@ -326,32 +233,28 @@ export function FormulaireRecurrence({ onChange }: FormulaireRecurrenceProps) {
   }, [horairesParJour, dateDebut, dateFin]);
 
   const updateHoraire = useCallback((jourISO: number, heureDebut: string, heureFin: string) => {
-    setHorairesParJour(prev =>
-      prev.map(j =>
-        j.jourISO === jourISO
-          ? { ...j, heureDebut, heureFin, dureeHeures: calculerDuree(heureDebut, heureFin) }
-          : j
-      )
-    );
+    setHorairesParJour((prev) => prev.map((j) => (
+      j.jourISO === jourISO
+        ? { ...j, heureDebut, heureFin, dureeHeures: calculerDuree(heureDebut, heureFin) }
+        : j
+    )));
   }, []);
 
+  const premierJourActifISO = joursActifsOrdonnes[0]?.jourISO;
+
   const appliquerATous = useCallback(() => {
-    const premier = horairesParJour.find(j => j.actif);
+    const premier = joursActifsOrdonnes[0];
     if (!premier) return;
-    setHorairesParJour(prev =>
-      prev.map(j =>
-        j.actif
-          ? { ...j, heureDebut: premier.heureDebut, heureFin: premier.heureFin, dureeHeures: premier.dureeHeures }
-          : j
-      )
-    );
+    setHorairesParJour((prev) => prev.map((j) => (
+      j.actif
+        ? { ...j, heureDebut: premier.heureDebut, heureFin: premier.heureFin, dureeHeures: premier.dureeHeures }
+        : j
+    )));
     toast.success('Horaires appliqués à tous les jours');
-  }, [horairesParJour]);
+  }, [joursActifsOrdonnes]);
 
-  const joursEnErreur = new Set(validation.erreurs.flatMap(e => e.joursAffectes || []));
-  const premierJourActif = joursActifs[0]?.jourISO;
+  const joursEnErreur = new Set(validation.erreurs.flatMap((e) => e.joursAffectes || []));
 
-  // Find repos errors between specific pairs for inline display
   const reposErreurs = useMemo(() => {
     const map = new Map<number, string>();
     for (const e of validation.erreurs) {
@@ -370,11 +273,11 @@ export function FormulaireRecurrence({ onChange }: FormulaireRecurrenceProps) {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div>
             <label className="text-xs text-muted-foreground mb-1 block">Du *</label>
-            <input type="date" value={dateDebut} onChange={e => handleDateDebut(e.target.value)} className="input-base" required />
+            <input type="date" value={dateDebut} onChange={(e) => handleDateDebut(e.target.value)} className="input-base" required />
           </div>
           <div>
             <label className="text-xs text-muted-foreground mb-1 block">Au *</label>
-            <input type="date" value={dateFin} onChange={e => handleDateFin(e.target.value)} className="input-base" required />
+            <input type="date" value={dateFin} onChange={(e) => handleDateFin(e.target.value)} className="input-base" required />
           </div>
         </div>
 
@@ -385,67 +288,83 @@ export function FormulaireRecurrence({ onChange }: FormulaireRecurrenceProps) {
           </div>
         )}
 
-        {/* Jours */}
+        {/* Jours travaillés — DÉRIVÉS de la période : seuls les jours présents
+            dans la plage sont proposés, ordonnés depuis le 1er jour de mission,
+            libellés datés si la plage tient sur ≤ 14 jours. */}
         <div>
           <label className="text-xs text-muted-foreground mb-2 block">Jours travaillés</label>
-          <div className="flex flex-wrap gap-2">
-            {JOURS_SEMAINE_DEF.map(j => (
-              <button
-                key={j.jourISO}
-                type="button"
-                onClick={() => toggleJour(j.jourISO)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
-                  horairesParJour.find(h => h.jourISO === j.jourISO)?.actif
-                    ? 'bg-primary text-primary-foreground'
-                    : 'bg-muted text-muted-foreground hover:bg-muted/80'
-                }`}
-              >
-                {horairesParJour.find(h => h.jourISO === j.jourISO)?.actif ? '☑️' : '☐'} {j.label.slice(0, 3)}
-              </button>
-            ))}
-          </div>
+          {plan.jours.length === 0 ? (
+            <p className="text-xs text-muted-foreground italic">Choisissez d'abord une période Du / Au ci-dessus.</p>
+          ) : (
+            <div className="flex flex-wrap gap-2" data-testid="jours-travailles">
+              {plan.jours.map((pj) => {
+                const actif = horairesParJour.find((h) => h.jourISO === pj.jourISO)?.actif;
+                return (
+                  <button
+                    key={pj.jourISO}
+                    type="button"
+                    onClick={() => toggleJour(pj.jourISO)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                      actif ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                    }`}
+                  >
+                    {actif ? '☑️' : '☐'} {pj.label}
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Horaires par jour */}
-      {joursActifs.length > 0 && (
+      {/* Horaires par jour — liste UNIQUEMENT les jours cochés, dans l'ordre
+          chronologique réel (une mission qui commence un mercredi commence par
+          mercredi), libellés datés réels si plage ≤ 14 jours. */}
+      {joursActifsOrdonnes.length > 0 && (
         <div className="bg-primary/5 border border-primary/20 rounded-2xl p-4 space-y-1">
           <p className="text-sm font-semibold text-foreground mb-3">🕐 Horaires par jour</p>
-          {horairesParJour.filter(j => j.actif).map((jour, idx) => {
-            const reposErr = reposErreurs.get(jour.jourISO);
-            return (
-              <React.Fragment key={jour.jourISO}>
-                <LigneHoraireJour
-                  jour={jour}
-                  onChange={(hd, hf) => updateHoraire(jour.jourISO, hd, hf)}
-                  estPremierJour={jour.jourISO === premierJourActif}
-                  onAppliquerATous={jour.jourISO === premierJourActif ? appliquerATous : undefined}
-                  enErreur={joursEnErreur.has(jour.jourISO)}
-                />
-                {reposErr && (
-                  <div className="flex items-center gap-2 text-xs text-destructive font-medium pl-4 py-1">
-                    <XCircle aria-hidden="true" className="h-4 w-4 shrink-0" />
-                    <span>{reposErr}</span>
-                  </div>
-                )}
-              </React.Fragment>
-            );
-          })}
+          <div data-testid="horaires-par-jour">
+            {joursActifsOrdonnes.map((jour) => {
+              const reposErr = reposErreurs.get(jour.jourISO);
+              return (
+                <React.Fragment key={jour.jourISO}>
+                  <LigneHoraireJour
+                    jour={jour}
+                    onChange={(hd, hf) => updateHoraire(jour.jourISO, hd, hf)}
+                    estPremierJour={jour.jourISO === premierJourActifISO}
+                    onAppliquerATous={jour.jourISO === premierJourActifISO ? appliquerATous : undefined}
+                    enErreur={joursEnErreur.has(jour.jourISO)}
+                  />
+                  {reposErr && (
+                    <div className="flex items-center gap-2 text-xs text-destructive font-medium pl-4 py-1">
+                      <XCircle aria-hidden="true" className="h-4 w-4 shrink-0" />
+                      <span>{reposErr}</span>
+                    </div>
+                  )}
+                </React.Fragment>
+              );
+            })}
+          </div>
 
-          {/* Récap hebdo */}
-          <div className="border-t border-border mt-3 pt-3 flex items-center justify-between text-sm">
-            <span className="text-muted-foreground">Total hebdomadaire :</span>
-            <span className={`font-bold ${validation.totalHebdo > 48 ? 'text-destructive' : validation.totalHebdo > 36 ? 'text-warning' : 'text-primary'}`}>
-              {validation.totalHebdo}h{validation.totalHebdo > 48 && ' — dépasse le plafond légal de 48h'}
-            </span>
+          {/* Récap PAR SEMAINE CIVILE réelle (48h contrôlé semaine par semaine). */}
+          <div className="border-t border-border mt-3 pt-3 space-y-1" data-testid="recap-semaines">
+            {validation.semaines.map((s: SemaineCivile) => (
+              <div key={s.cleLundi} className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground">{s.label} :</span>
+                <span className={`font-bold inline-flex items-center gap-1 ${s.depasse48 ? 'text-destructive' : 'text-primary'}`}>
+                  {s.totalHeures}h{s.depasse48 && ' — dépasse 48h'}
+                  {s.depasse48 ? <XCircle aria-hidden="true" className="h-3.5 w-3.5" /> : <CheckCircle2 aria-hidden="true" className="h-3.5 w-3.5" />}
+                </span>
+              </div>
+            ))}
           </div>
           <p className="text-[10px] text-muted-foreground mt-1">
-            Durées : orange = journée de plus de 10h (12h max recommandé), rouge = plus de 12h.
+            Plafond légal : 48h par semaine civile (lundi-dimanche). Chaque semaine est contrôlée séparément.
           </p>
         </div>
       )}
 
-      {/* Validations — zone d'erreurs UNIQUE (Lot 11), amenée à l'écran au 1er bloquant */}
+      {/* Zone d'erreurs UNIQUE, amenée à l'écran au 1er bloquant */}
       {validation.erreurs.length > 0 && (
         <div ref={zoneErreursRef} className="space-y-2" role="alert">
           {validation.erreurs.map((e, i) => (
@@ -465,7 +384,7 @@ export function FormulaireRecurrence({ onChange }: FormulaireRecurrenceProps) {
         </div>
       )}
 
-      {validation.erreurs.length === 0 && joursActifs.length > 0 && (
+      {validation.erreurs.length === 0 && joursActifsOrdonnes.length > 0 && (
         <div className="space-y-2">
           <div className="flex items-center gap-2 text-xs font-medium text-primary">
             <CheckCircle2 className="h-4 w-4" />
@@ -473,46 +392,30 @@ export function FormulaireRecurrence({ onChange }: FormulaireRecurrenceProps) {
           </div>
           <div className="flex items-center gap-2 text-xs font-medium text-primary">
             <CheckCircle2 className="h-4 w-4" />
-            Heures hebdomadaires : {validation.totalHebdo}h / 48h — conforme
+            Chaque semaine civile ≤ 48h — conforme
           </div>
         </div>
       )}
 
-      {/* Prévisualisation groupée par semaine */}
+      {/* Prévisualisation groupée (créneaux réels, ordre chronologique) */}
       {creneaux.length > 0 && (
         <div className="card-base">
           <p className="text-sm font-bold text-foreground mb-3">
-            Prévisualisation : {creneaux.length} créneau{creneaux.length > 1 ? 'x' : ''} sur {creneauxParSemaine.length} semaine{creneauxParSemaine.length > 1 ? 's' : ''}
+            Prévisualisation : {creneaux.length} créneau{creneaux.length > 1 ? 'x' : ''} sur {validation.semaines.length} semaine{validation.semaines.length > 1 ? 's' : ''}
           </p>
-
-          <div className="max-h-64 overflow-y-auto space-y-4">
-            {creneauxParSemaine.map(([key, sem]) => (
-              <div key={key}>
-                <div className="flex items-center justify-between mb-1">
-                  <p className="text-xs font-semibold text-foreground">Semaine ({sem.label})</p>
-                  <span className={`text-xs font-bold inline-flex items-center gap-1 ${sem.totalHeures > 48 ? 'text-destructive' : 'text-primary'}`}>
-                    {sem.totalHeures}h {sem.totalHeures > 48 ? <XCircle aria-hidden="true" className="h-3.5 w-3.5" /> : <CheckCircle2 aria-hidden="true" className="h-3.5 w-3.5" />}
-                  </span>
-                </div>
-                <div className="space-y-0.5">
-                  {sem.creneaux.map((c, i) => (
-                    <div key={i} className="flex items-center gap-2 text-xs text-foreground">
-                      <CheckCircle2 aria-hidden="true" className="h-3.5 w-3.5 text-primary shrink-0" />
-                      <span className="font-medium w-32">
-                        {format(new Date(c.debut), 'EEE d MMM', { locale: fr })}
-                      </span>
-                      <span className="text-muted-foreground">
-                        {c.debut.slice(11, 16)} → {c.fin.slice(11, 16)} ({c.dureeHeures}h)
-                      </span>
-                    </div>
-                  ))}
-                </div>
+          <div className="max-h-64 overflow-y-auto space-y-0.5">
+            {creneaux.map((c, i) => (
+              <div key={i} className="flex items-center gap-2 text-xs text-foreground">
+                <CheckCircle2 aria-hidden="true" className="h-3.5 w-3.5 text-primary shrink-0" />
+                <span className="font-medium w-28">{libelleDate(c.debut.slice(0, 10))}</span>
+                <span className="text-muted-foreground">
+                  {c.debut.slice(11, 16)} → {c.fin.slice(11, 16)} ({c.dureeHeures}h)
+                </span>
               </div>
             ))}
           </div>
-
           <div className="border-t border-border mt-3 pt-3 text-xs text-muted-foreground">
-            <p>Total : <strong className="text-foreground">{totalHeures.toFixed(0)}h</strong> sur {creneauxParSemaine.length} semaine{creneauxParSemaine.length > 1 ? 's' : ''} ({creneaux.length} créneaux)</p>
+            <p>Total : <strong className="text-foreground">{totalHeures.toFixed(0)}h</strong> sur {validation.semaines.length} semaine{validation.semaines.length > 1 ? 's' : ''} ({creneaux.length} créneaux)</p>
           </div>
         </div>
       )}
