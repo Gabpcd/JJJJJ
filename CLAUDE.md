@@ -108,6 +108,26 @@ incohérent en silence. Exemples : verrou remboursement partiel pré-release esc
 poser un tel verrou, `git grep` les chemins appelants — s'il existe une feature
 vivante qui l'emprunte, la traiter d'abord (ou exclure explicitement + documenter).
 
+## Principe — État dérivé
+
+**État dérivé** — toute donnée calculable depuis une autre saisie est dérivée en
+temps réel, jamais re-saisie ni initialisée par un défaut statique. Cas type :
+période → jours travaillés → horaires (choisir une période **recalcule** la liste
+des jours, qui **recalcule** les plages horaires ; on ne pré-remplit jamais les
+jours avec un défaut figé qui se désynchronise ensuite de la période). Corollaire :
+si deux champs peuvent diverger, l'un des deux est de trop — dériver, ne pas
+dupliquer la saisie.
+
+## Protocole de preuve — assertions, pas de screenshots
+
+La preuve d'une recette = **des assertions** (test unitaire sur fonction pure quand
+c'est calculable, sinon assertion Playwright sur le texte/DOM/état exact) + un
+**dump ARIA/texte** avant/après collé dans la PR. Les screenshots ne sont que des
+artefacts optionnels pour l'humain, **jamais la preuve**. La vérification visuelle
+finale reste humaine (preview Vercel). Écran établissement = **double viewport
+obligatoire** (390 × 844 **et** 1440 × 900). Protocole complet et actionnable :
+skill **`verify-recette`** (`.claude/skills/verify-recette/SKILL.md`).
+
 ## Règles TypeScript / build
 
 - `npx tsc -b` (pas `--noEmit`) pour valider en local
