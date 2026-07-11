@@ -118,6 +118,23 @@ jours avec un défaut figé qui se désynchronise ensuite de la période). Corol
 si deux champs peuvent diverger, l'un des deux est de trop — dériver, ne pas
 dupliquer la saisie.
 
+## Principe — Publication différée = filtre de visibilité CENTRALISÉ
+
+Toute donnée à **visibilité conditionnelle** (publication différée, double-aveugle,
+embargo) est filtrée par **une source unique**, jamais par une clause répétée sur
+chaque surface. Une donnée non publiée ne doit JAMAIS transparaître — ni en liste,
+ni en stat, ni en score dérivé, ni via un recalcul déclenché par une autre cause.
+Cas type (Finding #3, double-aveugle notations D8) : `notations_missions.publie_le`.
+Le score de fiabilité soignant fuitait la note d'établissement non publiée parce
+que `fn_calculer_score_fiabilite_v2` filtrait `masque=false` **mais pas
+`publie_le IS NOT NULL`** — répétition du filtre par surface, une l'a oublié (et
+`fn_mes_notations_recues_avec_stats` aussi, sur 5 requêtes). Règle : la source
+canonique est la **vue `evaluations_publiees`** (`publie_le IS NOT NULL AND masque
+= false`) ; toute agrégation publique lit cette vue (ou réplique EXACTEMENT son
+filtre) — auditer par `git grep` / `pg_get_functiondef` de tous les lecteurs à
+chaque ajout de surface. Corollaire de « État dérivé » : la visibilité est dérivée
+d'un seul prédicat, pas re-décidée localement.
+
 ## Protocole de preuve — assertions, pas de screenshots
 
 La preuve d'une recette = **des assertions** (test unitaire sur fonction pure quand
