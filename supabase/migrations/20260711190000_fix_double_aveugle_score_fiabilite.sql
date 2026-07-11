@@ -20,6 +20,23 @@
 -- migration de TOUTES les surfaces vers cette vue est un suivi Lot 19 (les 3
 -- autres filtrent déjà correctement en inline, donc non bloquant).
 
+-- Finding #3 — ÉTAGE RLS (découvert par la preuve b élargie). La policy SELECT
+-- `pol_notations_select` laissait un soignant/étab lire une note NON PUBLIÉE
+-- le/la concernant via PostgREST direct (`note_id = self AND masque = false`,
+-- sans `publie_le`) : 3e surface de fuite, au niveau API. Ajout de
+-- `publie_le IS NOT NULL` aux branches « reçues » uniquement — les branches
+-- `notateur_id = self` restent inchangées (l'auteur voit toujours sa propre
+-- note, publiée ou non). Prouvé par JWT soignant en tx annulée : ancien = 1
+-- ligne visible → nouveau = 0.
+DROP POLICY IF EXISTS pol_notations_select ON public.notations_missions;
+CREATE POLICY pol_notations_select ON public.notations_missions FOR SELECT USING (
+  ((note_id = (SELECT auth.uid())) AND (masque = false) AND (publie_le IS NOT NULL))
+  OR ((note_id = mon_etablissement_id()) AND (masque = false) AND (publie_le IS NOT NULL))
+  OR (notateur_id = (SELECT auth.uid()))
+  OR (notateur_id = mon_etablissement_id())
+  OR (SELECT est_admin())
+);
+
 -- Vue canonique : la seule source « publiée + non masquée » des notations.
 CREATE OR REPLACE VIEW public.evaluations_publiees AS
   SELECT * FROM public.notations_missions
