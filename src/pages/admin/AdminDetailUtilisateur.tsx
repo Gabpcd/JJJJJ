@@ -36,6 +36,7 @@ export default function AdminDetailUtilisateur() {
   const [missions, setMissions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalSuspendre, setModalSuspendre] = useState(false);
+  const [motifSuspension, setMotifSuspension] = useState(''); // Lot 21 : motif obligatoire (journalisé)
   const [modalSupprimer, setModalSupprimer] = useState(false);
   const [modalLeverSuspension, setModalLeverSuspension] = useState(false);
   const [raisonLeverSuspension, setRaisonLeverSuspension] = useState('');
@@ -270,10 +271,17 @@ export default function AdminDetailUtilisateur() {
     const entity = type === 'soignant' ? soignant : etablissement;
     const isSuspended = !!entity?.supprime_le;
 
+    // Lot 21 : suspendre exige un motif (journalisé). Réactiver : pas de motif.
+    if (!isSuspended && !motifSuspension.trim()) {
+      toast.error('Motif obligatoire pour suspendre le compte.');
+      return;
+    }
+
     const { data, error } = await supabase.rpc('fn_admin_suspendre_utilisateur' as any, {
       p_table: table,
       p_id: id!,
       p_suspendre: !isSuspended,
+      p_motif: !isSuspended ? motifSuspension.trim() : null,
     });
 
     if (error || (data as any)?.error) {
@@ -281,6 +289,8 @@ export default function AdminDetailUtilisateur() {
       return;
     }
     toast.success(isSuspended ? 'Compte réactivé' : 'Compte suspendu');
+    setModalSuspendre(false);
+    setMotifSuspension('');
     charger();
   };
 
@@ -879,18 +889,29 @@ export default function AdminDetailUtilisateur() {
         </TabsContent>
       </Tabs>
 
-      <ModalConfirmation
-        ouvert={modalSuspendre}
-        onFermer={() => setModalSuspendre(false)}
-        onConfirmer={suspendre}
-        titre={isSuspended ? 'Réactiver le compte' : 'Suspendre le compte'}
-        message={isSuspended
-          ? `Voulez-vous réactiver le compte de ${nom} ?`
-          : `Voulez-vous suspendre le compte de ${nom} ? L'utilisateur ne pourra plus accéder à la plateforme.`
-        }
-        labelConfirmer={isSuspended ? 'Réactiver' : 'Suspendre'}
-        variante={isSuspended ? 'primaire' : 'danger'}
-      />
+      {isSuspended ? (
+        <ModalConfirmation
+          ouvert={modalSuspendre}
+          onFermer={() => setModalSuspendre(false)}
+          onConfirmer={suspendre}
+          titre="Réactiver le compte"
+          message={`Voulez-vous réactiver le compte de ${nom} ?`}
+          labelConfirmer="Réactiver"
+          variante="primaire"
+        />
+      ) : (
+        <ModalActionAvecRaison
+          ouvert={modalSuspendre}
+          onFermer={() => { setModalSuspendre(false); setMotifSuspension(''); }}
+          onConfirmer={suspendre}
+          titre="Suspendre le compte"
+          message={`Voulez-vous suspendre le compte de ${nom} ? L'utilisateur ne pourra plus accéder à la plateforme. Le motif est obligatoire et journalisé dans l'audit.`}
+          raison={motifSuspension}
+          onChangeRaison={setMotifSuspension}
+          placeholder="Motif de la suspension (obligatoire)"
+          labelConfirmer="Suspendre le compte"
+        />
+      )}
 
       <ModalConfirmation
         ouvert={modalSupprimer}
