@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { usePageTitle } from '@/hooks/usePageTitle';
-import { Users, Building2, CheckCircle, Clock, Banknote, TrendingUp, Target, Star, AlertTriangle, FileText, UserPlus, CreditCard, ExternalLink, ShieldCheck } from 'lucide-react';
+import { Users, Building2, CheckCircle, Clock, Banknote, TrendingUp, Target, Star, AlertTriangle, FileText, UserPlus, CreditCard, ExternalLink, ShieldCheck, FlaskConical } from 'lucide-react';
 import { LayoutAdmin } from '@/components/LayoutAdmin';
 import { CarteKPIY2K } from '@/components/y2k/CarteKPIY2K';
 import { ChargementPage } from '@/components/ChargementPage';
@@ -67,6 +67,10 @@ export default function AdminDashboard() {
   usePageTitle('Admin');
   const navigate = useNavigate();
   const [kpi, setKpi] = useState<any>(null);
+  // Source UNIQUE de toutes les métriques d'argent (fn_admin_metriques_argent) —
+  // KPI, carte rentabilité et alertes lisent cet objet, jamais un calcul local
+  // divergent. Chaque montant a un split réel / test (est_compte_test) + HT/TTC.
+  const [argent, setArgent] = useState<any>(null);
   const [graphiques, setGraphiques] = useState<any>(null);
   const [derniersSoignants, setDerniersSoignants] = useState<any[]>([]);
   const [derniersEtabs, setDerniersEtabs] = useState<any[]>([]);
@@ -77,26 +81,15 @@ export default function AdminDashboard() {
   const [stripeMoisCapture, setStripeMoisCapture] = useState(0);
   const [stripeMoisAttente, setStripeMoisAttente] = useState(0);
   const [connectStats, setConnectStats] = useState<any>(null);
-  const [nbEtabsAVerifier, setNbEtabsAVerifier] = useState(0);
 
-  // B4 : nombre d'établissements en attente de validation (file de travail admin).
-  useEffect(() => {
-    supabase.rpc('fn_admin_lister_etablissements_a_verifier' as any, { p_limit: 200 }).then(({ data }) => {
-      if ((data as any)?.success) setNbEtabsAVerifier(((data as any).etablissements || []).length);
-    });
-  }, []);
-
-  const [caCommissionsHT, setCaCommissionsHT] = useState(0);
-  const [caEncaisse, setCaEncaisse] = useState(0);
-  const [tvaCollectee, setTvaCollectee] = useState(0);
-  const [nbTransactions, setNbTransactions] = useState(0);
   const [salaireNet, setSalaireNet] = useState(0);
   const [caMensuelData, setCaMensuelData] = useState<{ mois: string; ca_ht: number }[]>([]);
 
   useEffect(() => {
     async function charger() {
-      const [resKpi, resGraph, resSoignants, resEtabs, resLitiges, resFactures, resRentabilite, resEncaisse, resTransactions] = await Promise.all([
+      const [resKpi, resArgent, resGraph, resSoignants, resEtabs, resLitiges, resFactures] = await Promise.all([
         supabase.rpc('fn_admin_kpi' as any),
+        supabase.rpc('fn_admin_metriques_argent' as any),
         supabase.rpc('fn_admin_graphiques' as any),
         supabase.from('soignants').select('id, prenom, nom, profession, cree_le').order('cree_le', { ascending: false }).limit(5),
         supabase.from('etablissements').select('id, nom, type, cree_le').is('supprime_le', null).order('cree_le', { ascending: false }).limit(5),
@@ -107,24 +100,10 @@ export default function AdminDashboard() {
           .in('statut', ['EMISE', 'EN_RETARD'])
           .order('date_echeance', { ascending: true })
           .limit(10),
-        supabase
-          .from('missions')
-          .select('montant_commission_ht, montant_commission_tva, commission_facturee')
-          .eq('statut', 'TERMINEE')
-          .not('montant_commission_ht', 'is', null),
-        supabase
-          .from('missions')
-          .select('montant_commission_ht')
-          .eq('statut', 'TERMINEE')
-          .eq('commission_facturee', true)
-          .not('montant_commission_ht', 'is', null),
-        supabase
-          .from('missions')
-          .select('id', { count: 'exact', head: true })
-          .eq('statut', 'TERMINEE'),
       ]);
 
       if (resKpi.data) setKpi(resKpi.data);
+      if (resArgent.data && !(resArgent.data as any).error) setArgent(resArgent.data);
       if (resGraph.data) {
         setGraphiques(resGraph.data);
         if (resGraph.data.ca_par_mois) setCaMensuelData(resGraph.data.ca_par_mois);
@@ -134,16 +113,8 @@ export default function AdminDashboard() {
       if (resLitiges.data) setLitiges(resLitiges.data);
       if (resFactures.data) setFacturesImpayees(resFactures.data);
 
-      if (Array.isArray(resRentabilite.data)) {
-        setCaCommissionsHT(resRentabilite.data.reduce((s: number, m: any) => s + (Number(m.montant_commission_ht) || 0), 0));
-        setTvaCollectee(resRentabilite.data.reduce((s: number, m: any) => s + (Number(m.montant_commission_tva) || 0), 0));
-      }
-      if (Array.isArray(resEncaisse.data)) {
-        setCaEncaisse(resEncaisse.data.reduce((s: number, m: any) => s + (Number(m.montant_commission_ht) || 0), 0));
-      }
-      if (resTransactions.count != null) setNbTransactions(resTransactions.count);
-
-      // Stripe paiements ce mois
+      // Stripe paiements ce mois (rail paiements_mission — vue opérationnelle brute TTC,
+      // distincte de « Encaissé commission » qui vient de la source unique).
       const debutMois = new Date();
       debutMois.setDate(1);
       debutMois.setHours(0, 0, 0, 0);
@@ -165,6 +136,18 @@ export default function AdminDashboard() {
     }
     charger();
   }, []);
+
+  // ── Dérivés de la SOURCE UNIQUE (jamais recalculés localement) ────────────────
+  const caCommissionsHT = Number(argent?.commission?.total_reel ?? 0); // réel HT
+  const caEncaisse = Number(argent?.encaisse?.ht_reel ?? 0);           // réel HT (cash)
+  const caEncaisseTTC = Number(argent?.encaisse?.ttc_reel ?? 0);
+  const tvaCollectee = Number(argent?.commission?.tva_reel ?? 0);
+  const nbTransactions = Number(argent?.nb_missions_terminees_reel ?? 0);
+  const nbEtabsAVerifier = Number(argent?.etab_a_valider ?? 0);
+  const aDesDonneesTest = Boolean(argent?.a_des_donnees_test);
+  const nbMissionsTest = Number(argent?.nb_missions_terminees_test ?? 0);
+  const commissionTestTotal = Number(argent?.commission?.total_test ?? 0);
+  const gmvTestTotal = Number(argent?.gmv?.total_test ?? 0);
 
   const rentabilite = useMemo(() => {
     const nbMois = Math.max(caMensuelData.length, 1);
@@ -288,33 +271,48 @@ export default function AdminDashboard() {
           </div>
         </div>
 
+        {/* Bandeau « données de test » : tant que la purge pré-lancement (phase 7)
+            n'est pas faite, les seeds sont exclus des montants ci-dessous et signalés ici. */}
+        {aDesDonneesTest && (
+          <div className="rounded-lg border border-warning/40 bg-warning/5 px-3 py-2 text-xs text-foreground flex items-start gap-2">
+            <FlaskConical className="h-4 w-4 text-warning shrink-0 mt-0.5" />
+            <span>
+              <strong>Données de test présentes</strong> — les montants ci-dessous <strong>excluent</strong> les comptes de test.
+              {nbMissionsTest > 0 && ` ${nbMissionsTest} mission${nbMissionsTest > 1 ? 's' : ''} test`}
+              {commissionTestTotal > 0 && ` · commission test ${formatEur(commissionTestTotal)} HT`}
+              {gmvTestTotal > 0 && ` · GMV test ${formatEur(gmvTestTotal)}`}
+              {'. Purge à la mise en production.'}
+            </span>
+          </div>
+        )}
+
         {/* CA */}
         <div className="rounded-lg bg-muted/30 border border-border px-3 py-2 text-xs text-muted-foreground">
-          <strong className="text-foreground">Commission Jolene</strong> = ce que vous gardez (commission facturée aux établissements).
+          <strong className="text-foreground">Commission Jolene</strong> = ce que vous gardez (commission facturée aux établissements, HT).
           <strong className="text-foreground"> GMV</strong> = volume brut des missions (argent qui passe par la plateforme mais va aux soignants — vous ne le touchez pas).
         </div>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           <CarteKPIY2K
             icone={<Banknote className="h-4 w-4" />}
-            valeur={formatEur(kpi?.ca_commissions_ht_mois ?? 0)}
-            label="Commission Jolene ce mois"
-            contexte={`Potentiel si tout se termine : ${formatEur(kpi?.ca_potentiel_mois ?? 0)}`}
+            valeur={formatEur(argent?.commission?.mois_reel ?? 0)}
+            label="Commission Jolene ce mois (HT)"
+            contexte={`Facturable au total : ${formatEur(argent?.facturable?.ht_reel ?? 0)} HT`}
             variant="holographic"
             onClick={() => navigate('/admin/finances')}
           />
           <CarteKPIY2K
             icone={<TrendingUp className="h-4 w-4" />}
-            valeur={formatEur(kpi?.ca_encaisse_total ?? 0)}
-            label="Encaissé total (sur compte)"
-            contexte={`Facturable : ${formatEur(kpi?.ca_potentiel_total ?? 0)}`}
+            valeur={formatEur(caEncaisse)}
+            label="Encaissé (commission, HT)"
+            contexte={`${formatEur(caEncaisseTTC)} TTC · sur compte`}
             variant="default"
             onClick={() => navigate('/admin/facturation')}
           />
           <CarteKPIY2K
             icone={<FileText className="h-4 w-4" />}
-            valeur={formatEur(kpi?.gmv_total ?? 0)}
-            label="GMV (volume transité)"
-            contexte={`Ce mois : ${formatEur(kpi?.gmv_mois ?? 0)}`}
+            valeur={formatEur(argent?.gmv?.total_reel ?? 0)}
+            label="GMV (volume brut transité)"
+            contexte={`Ce mois : ${formatEur(argent?.gmv?.mois_reel ?? 0)}`}
             variant="default"
             onClick={() => navigate('/admin/missions')}
           />
@@ -365,19 +363,19 @@ export default function AdminDashboard() {
             <CardY2KTitle className="text-lg font-bold flex items-center gap-2">💰 Rentabilité estimée</CardY2KTitle>
           </CardY2KHeader>
           <CardY2KContent className="space-y-6">
-            {/* CA */}
+            {/* CA — mêmes chiffres que les KPI ci-dessus (source unique fn_admin_metriques_argent) */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="rounded-lg bg-muted/50 p-4">
-                <p className="text-xs text-muted-foreground">CA commissions HT</p>
+                <p className="text-xs text-muted-foreground">CA commissions (HT)</p>
                 <p className="text-2xl font-bold text-foreground">{formatEur(caCommissionsHT)}</p>
-                <p className="text-xs text-muted-foreground mt-1">Encaissé : {formatEur(caEncaisse)}</p>
+                <p className="text-xs text-muted-foreground mt-1">Encaissé : {formatEur(caEncaisse)} HT</p>
               </div>
               <div className="rounded-lg bg-muted/50 p-4">
                 <p className="text-xs text-muted-foreground">TVA collectée</p>
                 <p className="text-2xl font-bold text-foreground">{formatEur(tvaCollectee)}</p>
               </div>
               <div className="rounded-lg bg-muted/50 p-4">
-                <p className="text-xs text-muted-foreground">CA annualisé</p>
+                <p className="text-xs text-muted-foreground">CA annualisé (HT)</p>
                 <p className="text-2xl font-bold text-primary">{formatEur(rentabilite.caAnnualise)}</p>
               </div>
             </div>
@@ -489,11 +487,11 @@ export default function AdminDashboard() {
           </CardY2KContent>
         </CardY2K>
 
-        {/* 💳 Stripe paiements */}
+        {/* 💳 Stripe paiements — vue opérationnelle brute (TTC), distincte de « Encaissé commission ». */}
         <CardY2K noPadding>
           <CardY2KHeader>
             <CardY2KTitle className="text-sm font-medium flex items-center gap-2">
-              <CreditCard className="h-4 w-4 text-primary" /> 💳 Paiements Stripe
+              <CreditCard className="h-4 w-4 text-primary" /> 💳 Paiements Stripe (bruts, TTC)
             </CardY2KTitle>
           </CardY2KHeader>
           <CardY2KContent>
@@ -505,11 +503,11 @@ export default function AdminDashboard() {
                     <p className="text-xl font-bold text-foreground">{stripeMoisNb}</p>
                   </div>
                   <div className="rounded-lg bg-muted/50 p-3 text-center">
-                    <p className="text-xs text-muted-foreground">Encaissé</p>
+                    <p className="text-xs text-muted-foreground">Capturé (TTC brut)</p>
                     <p className="text-xl font-bold text-success">{formatEur(stripeMoisCapture)}</p>
                   </div>
                   <div className="rounded-lg bg-muted/50 p-3 text-center">
-                    <p className="text-xs text-muted-foreground">En attente</p>
+                    <p className="text-xs text-muted-foreground">En attente (TTC)</p>
                     <p className="text-xl font-bold text-warning">{formatEur(stripeMoisAttente)}</p>
                   </div>
                 </div>
@@ -528,7 +526,8 @@ export default function AdminDashboard() {
           </CardY2KContent>
         </CardY2K>
 
-        {/* Stripe Connect */}
+        {/* Stripe Connect — versements soignants + commission retenue (le GMV canonique est
+            le KPI ci-dessus ; pas de second « GMV » ici pour éviter les homonymes). */}
         {connectStats && (
           <CardY2K noPadding>
             <CardY2KHeader>
@@ -542,26 +541,19 @@ export default function AdminDashboard() {
                 <p className="text-xl font-bold text-foreground">{connectStats.total_comptes}</p>
                 <p className="text-[10px] text-muted-foreground">{connectStats.complets} complets · {connectStats.en_cours} en cours</p>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="rounded-lg bg-success/5 border border-success/20 p-3 text-center" title="Montant net effectivement versé aux soignants via Stripe Connect (hors commission Jolene)">
-                  <p className="text-xs text-muted-foreground">Versé aux soignants</p>
+                  <p className="text-xs text-muted-foreground">Versé aux soignants (net)</p>
                   <p className="text-xl font-bold text-success">{formatEur(connectStats.total_verse_soignants ?? 0)}</p>
                   {(connectStats.en_attente_soignants ?? 0) > 0 && (
                     <p className="text-[10px] text-warning">En attente : {formatEur(connectStats.en_attente_soignants)}</p>
                   )}
                 </div>
-                <div className="rounded-lg bg-primary/5 border border-primary/20 p-3 text-center" title="Commission Jolene retenue sur chaque paiement Connect (CA réel de la plateforme)">
-                  <p className="text-xs text-muted-foreground">Commission Jolene</p>
+                <div className="rounded-lg bg-primary/5 border border-primary/20 p-3 text-center" title="Commission Jolene retenue sur chaque paiement Connect (versée réellement)">
+                  <p className="text-xs text-muted-foreground">Commission retenue (Connect)</p>
                   <p className="text-xl font-bold text-primary">{formatEur(connectStats.total_commission_jolene ?? 0)}</p>
                   {(connectStats.en_attente_commission ?? 0) > 0 && (
                     <p className="text-[10px] text-warning">En attente : {formatEur(connectStats.en_attente_commission)}</p>
-                  )}
-                </div>
-                <div className="rounded-lg bg-muted/50 p-3 text-center" title="Volume brut total ayant transité via Stripe Connect (GMV = soignant + commission)">
-                  <p className="text-xs text-muted-foreground">Volume transité (GMV)</p>
-                  <p className="text-xl font-bold text-foreground">{formatEur(connectStats.volume_total ?? 0)}</p>
-                  {(connectStats.volume_en_attente ?? 0) > 0 && (
-                    <p className="text-[10px] text-warning">En attente : {formatEur(connectStats.volume_en_attente)}</p>
                   )}
                 </div>
               </div>
@@ -621,7 +613,7 @@ export default function AdminDashboard() {
                 <div key={f.id} className="text-sm cursor-pointer hover:bg-muted/50 rounded p-1.5 -mx-1.5" onClick={() => navigate('/admin/impayees')}>
                   <div className="flex justify-between">
                     <span className="font-medium text-foreground">{f.numero_facture}</span>
-                    <span className="font-semibold text-destructive">{formatEur(f.montant_ttc)}</span>
+                    <span className="font-semibold text-destructive">{formatEur(f.montant_ttc)} TTC</span>
                   </div>
                   <p className="text-xs text-muted-foreground mt-0.5">{(f.etablissements as any)?.nom ?? '—'} · Échue le {formatDate(f.date_echeance)}</p>
                 </div>
