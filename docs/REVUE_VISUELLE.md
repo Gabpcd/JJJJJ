@@ -75,7 +75,7 @@ Viewports : écrans **établissement** = **390×844 ET 1440×900** (règle criti
 ## 8. Mécanique et finitions admin (Lot 21 — branche de finition)
 
 **Écrans** : `/admin`, `/admin/utilisateurs`, `/admin/missions`, `/admin/verification-etablissements`, `/admin/facturation`, `/admin/status`.
-**Preuve machine** : tests `adminPresentation` + `lot21AdminStructure` ; recette axe sombre `admin-lot21-dark-mode` sous drapeau.
+**Preuve machine** : tests `adminPresentation` + `lot21AdminStructure` ; recette axe sombre `admin-lot21-dark-mode` activée quand le secret admin Playwright est disponible.
 **À vérifier (1440×900, clair puis sombre)** : données de test toujours visibles avec badge ; « Détails » primaire et « Suspendre » discret ; warnings NAF/SIRET + lien Annuaire des Entreprises ; notifications en bas à droite sans recouvrir les KPI. Sur 390×844, vérifier les mêmes cartes et cibles de 44 px.
 
 ---

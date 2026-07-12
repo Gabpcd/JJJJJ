@@ -3,7 +3,7 @@ import { test, expect } from '@playwright/test';
 import { loginAs } from '../helpers/auth';
 import { expectNoCriticalA11y, runAxe } from '../helpers/axe';
 
-const ACTIF = process.env.PLAYWRIGHT_ADMIN_LOT21 === '1';
+const ACTIF = !!process.env.PLAYWRIGHT_ADMIN_PASSWORD;
 const PAGES = [
   '/admin',
   '/admin/utilisateurs',
@@ -15,10 +15,11 @@ const PAGES = [
 
 test.describe('Lot 21 — contraste AA admin en mode sombre', () => {
   test.beforeEach(() => {
-    test.skip(!ACTIF, 'Activer via PLAYWRIGHT_ADMIN_LOT21=1');
+    test.skip(!ACTIF, 'PLAYWRIGHT_ADMIN_PASSWORD requis pour la recette admin authentifiée');
   });
 
   test('les six écrans principaux passent axe en sombre', async ({ page }, testInfo) => {
+    test.setTimeout(120_000);
     await loginAs(page, 'admin');
     await page.evaluate(() => localStorage.setItem('theme', 'dark'));
 
