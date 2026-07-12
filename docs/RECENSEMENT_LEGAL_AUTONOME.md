@@ -6,10 +6,10 @@
 > toast, message RPC, email ou PDF). Objectif : traçabilité + statut par élément.
 >
 > **Statut** : `corrigé via section C` = fait partie de la matrice des modes
-> d'exercice (proposition CONFORMITE.md §5, en attente du go Gabrielle) ·
+> d'exercice validée C1-C7 par Gabrielle (CONFORMITE.md §5) ·
 > `à valider individuellement` = assertion juridique shippée en autonomie, à
-> revalider par Gabrielle (hard stop n°4, rétroactif). Aucune correction n'est
-> mergée sans son go.
+> revalider par Gabrielle (hard stop n°4, rétroactif). Le GO donné porte sur C1-C7 ;
+> les autres assertions restent hors de ce périmètre.
 
 ## Décompte
 
@@ -30,9 +30,9 @@
 | `src/components/mission/ModalRecapMission.tsx:95-100, 221-238` | « ⚠️ Mode libéral non autorisé … la réglementation interdit le mode libéral (salariat déguisé — CE 11/02/2025 arrêt Mediflash). » / « Salarié uniquement (CDD) » | Modale récap avant publication (étab) | corrigé via C |
 | `src/components/BannerMediflashExplication.tsx:33-89` | « jurisprudence Mediflash (CE 11/02/2025) » ; « Conseil d'État … arrêt **n°488367** … salariat déguisé … ne peuvent pas être proposées en mode libéral » | Bannière pédagogique (soignant) | corrigé via C |
 
-> ⚠️ **Incohérence de citation détectée** : `BannerMediflashExplication` cite l'arrêt
-> **n°488367** ; le fait vérifié (section C) est **n°491128**. À trancher sur le texte
-> primaire — l'un des deux numéros est erroné en app.
+> ✅ **Incohérence tranchée et corrigée (C1)** : le numéro exact est **n°491128**
+> (CE, 5e-6e chambres réunies, 11/02/2025, CETATEXT000051156546). Le n°488367
+> était erroné ; le n°491130 désigne l'ordonnance de référé du 05/02/2024.
 
 ## Bloc 2 — Autres assertions juridiques user-facing → **à valider individuellement**
 
@@ -69,7 +69,7 @@
 ## 5 items les plus à risque
 
 1. **`FormulaireMission.tsx:652` + `ModalRecapMission.tsx:232`** — affirment + **bloquent** le libéral en citant l'arrêt Mediflash pour toute profession × étab.
-2. **`BannerMediflashExplication.tsx`** — cite l'arrêt n°488367 nominativement (« CDD obligatoire » comme règle générale) — cf. incohérence de numéro.
+2. **`BannerMediflashExplication.tsx` (historique, corrigé C1)** — citait l'arrêt n°488367 nominativement et généralisait le « CDD obligatoire ».
 3. **`constantes.ts` (`LIBERAL_COMPATIBILITY`/`PROFESSIONS_NON_LIBERAL`)** — hard-bloque IBODE/IADE/PHARMACIEN, décisions produit habillées en contrainte réglementaire.
 4. **`DeclarationEtudiant.tsx:110-119`** — restreint la profession déclarable en mêlant règle interne + arrêté 03/02/2022.
 5. **`ModaleAnnulationMissionEtab.tsx:334,344`** — obligation financière chiffrée (L1243-8 + art. 1231-5 C. civ.) générée in-app.

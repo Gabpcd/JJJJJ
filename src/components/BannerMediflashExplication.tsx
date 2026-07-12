@@ -8,8 +8,8 @@ const STORAGE_KEY = 'mediflash_banner_dismissed';
  *
  * Sprint 7 PR 4 — Cosmétique P2 §5 audit.
  *
- * Explique pourquoi certaines missions sont en CDD obligatoire selon la
- * jurisprudence (CE 11/02/2025). Dismissible (localStorage).
+ * Explique la distinction entre la décision CE sur les aides-soignants et la
+ * matrice mission × établissement. Dismissible (localStorage).
  */
 export function BannerMediflashExplication() {
   const [ouvert, setOuvert] = useState(false);
@@ -31,8 +31,8 @@ export function BannerMediflashExplication() {
         <Info className="h-4 w-4 text-info shrink-0 mt-0.5" />
         <div className="flex-1 min-w-0">
           <p className="text-xs text-foreground">
-            Certaines missions ne peuvent être proposées qu'en <strong>CDD</strong> selon la
-            jurisprudence Mediflash (CE 11/02/2025).{' '}
+            Le mode d'exercice est défini pour chaque mission selon la profession demandée
+            et l'établissement.{' '}
             <button
               type="button"
               onClick={() => setOuvert(true)}
@@ -62,7 +62,7 @@ export function BannerMediflashExplication() {
           >
             <div className="flex items-center justify-between">
               <h2 id="mediflash-titre" className="text-lg font-bold text-foreground">
-                Jurisprudence Mediflash — pourquoi CDD obligatoire ?
+                Pourquoi certaines missions sont salariées ?
               </h2>
               <button onClick={() => setOuvert(false)} className="p-1 hover:bg-muted rounded-lg" aria-label="Fermer">
                 <X className="h-5 w-5" />
@@ -72,28 +72,27 @@ export function BannerMediflashExplication() {
             <div className="space-y-3 text-sm text-muted-foreground">
               <p>
                 Le <strong>Conseil d'État</strong> a tranché le <strong>11 février 2025</strong>
-                {' '}(arrêt n°488367) que certaines missions intérimaires en hôpital public
-                relèvent du <strong>salariat déguisé</strong> et ne peuvent donc pas être
-                proposées en mode libéral.
+                {' '}(arrêt <strong>n°491128</strong>) le cas des aides-soignants exerçant en
+                établissement sanitaire, social ou médico-social : ils sont placés sous l'autorité
+                et le contrôle de l'établissement. L'arrêt ne juge pas les autres professions.
               </p>
-              <p className="font-medium text-foreground">Critères concernés :</p>
-              <ul className="list-disc list-inside space-y-1 text-xs">
-                <li>Hôpital public (HOPITAL_PUBLIC, CENTRE_SANTE)</li>
-                <li>Mission ponctuelle avec lien de subordination caractérisé</li>
-                <li>Profession permettant le CDD (la plupart)</li>
-              </ul>
               <p className="text-xs">
-                Jolene applique cette matrice automatiquement : si vous voyez certaines missions
-                disparaître quand vous filtrez par "Libéral uniquement", c'est probablement à cause
-                de cette règle. Pour ces missions, sélectionnez "CDD" ou "Tous" dans vos préférences.
+                Jolene applique une matrice sourcée à la <strong>profession demandée par la mission</strong>,
+                jamais aux seuls diplômes du profil. Une IADE peut donc candidater à une mission IDE,
+                qui suit les règles IDE. Pour chaque restriction, la source exacte est affichée dans
+                le formulaire de publication.
+              </p>
+              <p className="text-xs font-medium text-foreground">
+                Tes missions salariées comptent dans les 3 200 h d'expérience requises pour
+                l'installation en libéral.
               </p>
               <a
-                href="https://www.conseil-etat.fr/decisions-de-justice"
+                href="https://www.legifrance.gouv.fr/ceta/id/CETATEXT000051156546"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-info hover:underline inline-flex items-center gap-1 text-xs"
               >
-                Décisions Conseil d'État <ExternalLink className="h-3 w-3" />
+                Lire l'arrêt n°491128 sur Légifrance <ExternalLink className="h-3 w-3" />
               </a>
             </div>
 

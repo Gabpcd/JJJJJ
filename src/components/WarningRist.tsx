@@ -18,7 +18,7 @@ export function WarningRist({ profession, tauxSaisi, ristPlafondActif, estSecteu
       <p className="font-semibold text-sm mb-1">⚠️ Attention — Loi Rist (Décret 2023-920)</p>
       <p className="text-xs">
         Le taux saisi ({tauxSaisi.toFixed(2)} €/h) dépasse le plafond légal de{' '}
-        <strong>{plafond.toFixed(2)} €/h</strong> pour les {getLabelProfession(profession)} en CDD/Vacation.
+        <strong>{plafond.toFixed(2)} €/h</strong> pour les {getLabelProfession(profession)} en CDD, y compris court.
       </p>
       <p className="text-xs mt-1">
         Le taux sera automatiquement plafonné à {plafond.toFixed(2)} €/h par le système lors de la création.

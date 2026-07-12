@@ -20,7 +20,7 @@ export const PROFESSIONS = [
 
 export const CONTRATS = [
   { valeur: 'CDD', label: 'Contrat à Durée Déterminée (CDD)' },
-  { valeur: 'VACATION', label: 'Vacation' },
+  { valeur: 'VACATION', label: 'CDD court' },
   { valeur: 'LIBERAL', label: 'Libéral' },
   { valeur: 'SALARIE', label: 'Salarié' },
 ] as const;
@@ -48,62 +48,6 @@ export const TYPES_ETABLISSEMENT = [
   { valeur: 'CABINET_ERGO', label: 'Cabinet ergothérapie (libéral)' },
   { valeur: 'CABINET_PSYCHOMOT', label: 'Cabinet psychomotricité (libéral)' },
 ] as const;
-
-// Professions NON éligibles au libéral (mode salarié uniquement)
-export const PROFESSIONS_NON_LIBERAL = [
-  'PHARMACIEN', 'PREPARATEUR_PHARMA',
-  'AS', 'AES', 'AUXILIAIRE_PUERICULTURE',
-  'MANIPULATEUR_RADIO',
-  // IBODE et IADE existent en théorie en libéral mais quasi inexistants en
-  // pratique (pas de marché de remplacement consolidé). Bloqué par défaut.
-  'IBODE', 'IADE',
-  // Diététicien : exercice libéral autorisé mais hors scope Jolene v1
-  // (pas de marché de remplacement actuellement).
-  'DIETETICIEN',
-];
-
-// ─── Matrice de compatibilité exercice libéral × type d'établissement ───
-// Mirror exact de la RPC SQL public.peut_exercer_liberal (migration
-// 20260512_pr2_matrice_compatibilite_liberal.sql). Toute modification ici
-// DOIT être répliquée côté SQL. Validation côté backend par trigger
-// dec_valider_compatibilite_mission_liberal.
-//
-// Référence juridique : Conseil d'État 11/02/2025 (arrêt Mediflash) +
-// art. L8221-1 Code travail (interdiction du salariat déguisé).
-export const LIBERAL_COMPATIBILITY: Record<string, string[]> = {
-  MEDECIN: ['CABINET_MEDICAL', 'CLINIQUE_PRIVEE', 'EHPAD', 'SSIAD', 'HAD', 'CENTRE_SANTE', 'MAS', 'FAM'],
-  DENTISTE: ['CABINET_DENTAIRE'],
-  IDE: ['CABINET_IDEL'],
-  SAGE_FEMME: ['CABINET_SAGE_FEMME', 'CLINIQUE_PRIVEE', 'HAD', 'CENTRE_SANTE'],
-  KINE: ['CABINET_KINE', 'CLINIQUE_PRIVEE', 'SSIAD', 'HAD', 'MAS', 'FAM'],
-  ORTHOPHONISTE: ['CABINET_ORTHO'],
-  ERGOTHERAPEUTE: ['CABINET_ERGO', 'HAD'],
-  PSYCHOMOTRICIEN: ['CABINET_PSYCHOMOT', 'HAD'],
-  // Les autres professions sont dans PROFESSIONS_NON_LIBERAL (pas d'entrée
-  // dans cette matrice = pas de libéral autorisé du tout).
-};
-
-export function peutExercerLiberal(profession: string, typeEtablissement: string): boolean {
-  if (PROFESSIONS_NON_LIBERAL.includes(profession)) return false;
-  const allowed = LIBERAL_COMPATIBILITY[profession];
-  if (!allowed) return false;
-  return allowed.includes(typeEtablissement);
-}
-
-/** Mirror de la RPC peut_exercer côté DB (étend peut_exercer_liberal en couvrant aussi le mode salarié). */
-export function peutExercer(profession: string, typeExercice: string, typeEtablissement: string): boolean {
-  if (['SALARIE', 'CDD', 'VACATION'].includes(typeExercice)) return true;
-  if (['LIBERAL', 'MIXTE'].includes(typeExercice)) {
-    return peutExercerLiberal(profession, typeEtablissement);
-  }
-  return true;
-}
-
-/** Pour une profession donnée, retourne la liste des types d'établissement où le libéral est autorisé. */
-export function typesEtablissementCompatiblesLiberal(profession: string): string[] {
-  if (PROFESSIONS_NON_LIBERAL.includes(profession)) return [];
-  return LIBERAL_COMPATIBILITY[profession] || [];
-}
 
 // Professions sans numéro d'identification professionnelle (RPPS).
 // Vérification par diplôme + CNI uniquement (ADELI obsolète depuis 2024).

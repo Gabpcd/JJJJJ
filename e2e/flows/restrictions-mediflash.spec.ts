@@ -1,98 +1,86 @@
 /**
- * Flow C — Restrictions matrice profession × type_etab (Sprint 2 PR 6).
+ * Matrice des modes d'exercice — preuve UI + contrat DB.
  *
- * Le trigger dec_valider_compatibilite_mission_liberal bloque côté DB
- * les missions libérales sur des paires incompatibles (ex: IDE LIBERAL
- * en CLINIQUE).
- *
- * Tests :
- *  - Mission IDE LIBERAL en CLINIQUE → blocage (le formulaire UI ou
- *    le INSERT RPC retourne erreur)
- *  - Mission MEDECIN LIBERAL en CABINET_MEDICAL → OK
- *  - Mission IDE CDD en CLINIQUE → OK (CDD non concerné)
- *
- * Skip par défaut car nécessite admin client + seed étab.
- * Activer via PLAYWRIGHT_SEED_MEDIFLASH=1.
+ * Activer avec PLAYWRIGHT_MODE_EXERCICE=1. Le compte établissement Playwright
+ * doit être une clinique privée validée.
  */
-import { test, expect } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
 import { adminClient } from '../helpers/db';
+import { loginAs } from '../helpers/auth';
 
-const SEED_READY = process.env.PLAYWRIGHT_SEED_MEDIFLASH === '1';
+const ACTIF = process.env.PLAYWRIGHT_MODE_EXERCICE === '1';
 
-test.describe('Restrictions Mediflash (matrice prof × type_etab)', () => {
+async function choisirProfession(page: Page, profession: string) {
+  await page.locator('#mission-profession').click();
+  await page.getByTestId(`profession-option-${profession}`).click();
+}
+
+test.describe('Matrice profession requise × établissement', () => {
   test.beforeEach(() => {
-    test.skip(!SEED_READY, 'Seed Mediflash E2E à compléter — flow validé manuellement Sprint 1 PR 2');
+    test.skip(!ACTIF, 'Activer via PLAYWRIGHT_MODE_EXERCICE=1 (compte étab clinique requis)');
   });
 
-  test('IDE LIBERAL en CLINIQUE → trigger refuse INSERT', async () => {
-    const etabId = process.env.PLAYWRIGHT_ETAB_CLINIQUE_ID;
-    test.skip(!etabId, 'PLAYWRIGHT_ETAB_CLINIQUE_ID non défini');
-
+  test('DB : trois niveaux, défaut salarié et profil IADE × mission IDE', async () => {
     const client = adminClient();
-    const { error } = await client.from('missions' as any).insert({
-      intitule: '[playwright-test] IDE LIBERAL CLINIQUE — refus attendu',
-      etablissement_id: etabId,
-      profession: 'IDE',
-      type_contrat: 'REMPLACEMENT_LIBERAL',
-      statut: 'BROUILLON',
-      debut_le: new Date(Date.now() + 86400000).toISOString(),
-      fin_le: new Date(Date.now() + 172800000).toISOString(),
-      duree_heures: 8,
-      taux_horaire_base: 35,
-    } as any);
 
-    expect(error, 'INSERT IDE LIBERAL en CLINIQUE doit être refusé par le trigger').toBeTruthy();
-    expect(error?.message || '').toMatch(/(incompatible|libéral|compatibilité)/i);
-  });
+    const cas = [
+      ['AS', 'CLINIQUE_PRIVEE', 'BLOQUE'],
+      ['DENTISTE', 'CLINIQUE_PRIVEE', 'AUTORISE'],
+      ['IDE', 'CLINIQUE_PRIVEE', 'NON_PROPOSE'],
+      ['PROFESSION_INCONNUE', 'TYPE_INCONNU', 'NON_PROPOSE'],
+      ['DENTISTE', 'CENTRE_SANTE', 'BLOQUE'],
+      ['MANIPULATEUR_RADIO', 'CLINIQUE_PRIVEE', 'BLOQUE'],
+      ['PHARMACIEN', 'CLINIQUE_PRIVEE', 'NON_PROPOSE'],
+    ] as const;
 
-  test('MEDECIN LIBERAL en CABINET_MEDICAL → INSERT accepté', async () => {
-    const etabId = process.env.PLAYWRIGHT_ETAB_CABINET_ID;
-    test.skip(!etabId, 'PLAYWRIGHT_ETAB_CABINET_ID non défini');
-
-    const client = adminClient();
-    const { data, error } = await client.from('missions' as any).insert({
-      intitule: '[playwright-test] MEDECIN LIBERAL CABINET — OK attendu',
-      etablissement_id: etabId,
-      profession: 'MEDECIN',
-      type_contrat: 'REMPLACEMENT_LIBERAL',
-      statut: 'BROUILLON',
-      debut_le: new Date(Date.now() + 86400000).toISOString(),
-      fin_le: new Date(Date.now() + 172800000).toISOString(),
-      duree_heures: 6,
-      taux_horaire_base: 80,
-    } as any).select().single();
-
-    expect(error).toBeNull();
-    expect((data as any)?.id).toBeTruthy();
-
-    // Cleanup
-    if ((data as any)?.id) {
-      await client.from('missions' as any).delete().eq('id', (data as any).id);
+    for (const [profession, typeEtab, niveau] of cas) {
+      const { data, error } = await client.rpc('fn_mode_exercice' as any, {
+        p_profession: profession,
+        p_type_etab: typeEtab,
+        p_finess_secteur: null,
+      });
+      expect(error).toBeNull();
+      expect((data as any)?.niveau).toBe(niveau);
     }
+
+    const { data: compatible, error: compatError } = await client.rpc(
+      'fn_soignant_compatible_mission' as any,
+      {
+        p_soignant_profession: 'IADE',
+        p_soignant_specialite: null,
+        p_mission_profession: 'IDE',
+        p_mission_specialite: null,
+        p_accepte_non_specialises: false,
+      },
+    );
+    expect(compatError).toBeNull();
+    expect(compatible).toBe(true);
+
+    const { data: regleMission } = await client.rpc('fn_mode_exercice' as any, {
+      p_profession: 'IDE',
+      p_type_etab: 'CLINIQUE_PRIVEE',
+      p_finess_secteur: null,
+    });
+    expect((regleMission as any)?.niveau).toBe('NON_PROPOSE');
   });
 
-  test('IDE CDD en CLINIQUE → INSERT accepté (CDD non concerné par matrice libéral)', async () => {
-    const etabId = process.env.PLAYWRIGHT_ETAB_CLINIQUE_ID;
-    test.skip(!etabId, 'PLAYWRIGHT_ETAB_CLINIQUE_ID non défini');
+  test('UI clinique : AS bloqué, IDE non proposé, dentiste autorisé', async ({ page }) => {
+    await loginAs(page, 'etab');
+    await page.goto('/etablissement/missions/creer');
 
-    const client = adminClient();
-    const { data, error } = await client.from('missions' as any).insert({
-      intitule: '[playwright-test] IDE CDD CLINIQUE — OK attendu',
-      etablissement_id: etabId,
-      profession: 'IDE',
-      type_contrat: 'CDD',
-      statut: 'BROUILLON',
-      debut_le: new Date(Date.now() + 86400000).toISOString(),
-      fin_le: new Date(Date.now() + 172800000).toISOString(),
-      duree_heures: 8,
-      taux_horaire_base: 25,
-    } as any).select().single();
+    await choisirProfession(page, 'AS');
+    await expect(page.getByText('Mode libéral non disponible', { exact: false })).toBeVisible();
+    await expect(page.getByText(/Conseil d'État, 11\/02\/2025, n°491128/)).toBeVisible();
+    await expect(page.getByText('Libéral', { exact: true })).toHaveCount(0);
 
-    expect(error).toBeNull();
-    expect((data as any)?.id).toBeTruthy();
+    await choisirProfession(page, 'IDE');
+    await expect(page.getByText('Mission proposée en salarié', { exact: false })).toBeVisible();
+    await expect(page.getByText(/expose à une requalification/)).toBeVisible();
+    await expect(page.getByText('Libéral', { exact: true })).toHaveCount(0);
 
-    if ((data as any)?.id) {
-      await client.from('missions' as any).delete().eq('id', (data as any).id);
-    }
+    await choisirProfession(page, 'DENTISTE');
+    await expect(page.getByText('Libéral', { exact: true })).toBeVisible();
+    await expect(page.getByText('Mission proposée en salarié', { exact: false })).toHaveCount(0);
+    await expect(page.getByText('Mode libéral non disponible', { exact: false })).toHaveCount(0);
   });
 });

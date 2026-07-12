@@ -28,7 +28,7 @@ const LIBELLES_TYPE_CONTRAT: Record<string, string> = {
   CDD: 'CDD',
   CDDU: "CDD d'usage",
   CDDU_USAGE: "CDD d'usage",
-  VACATION: 'Vacation',
+  VACATION: 'CDD court',
   SALARIE: 'Salarié',
   LIBERAL_MEDECIN_CLINIQUE: 'Libéral — médecin en clinique',
   LIBERAL_MEDECIN_EHPAD: 'Libéral — médecin en EHPAD',
