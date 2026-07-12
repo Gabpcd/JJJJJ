@@ -31,6 +31,16 @@ Viewports : écrans **établissement** = **390×844 ET 1440×900** (règle criti
 - Après blocage : le lien devient **Débloquer** ; l'envoi d'un message renvoie « Vous ne pouvez plus échanger avec cet utilisateur (blocage actif) ».
 - Débloquer : le lien redevient Bloquer, l'envoi refonctionne.
 
+## 4. Cockpit fondateur à source unique — montants d'argent (Lot 19)
+
+**Écrans** : `/admin` (`AdminDashboard`, « Tableau de bord ») + `/admin/cockpit-fondateur` (`AdminCockpitFondateur`).
+**Preuve machine** : `e2e/flows/cockpit-metriques-argent.spec.ts` (gate admin, `etab_a_valider` == file, invariants HT/TTC, GMV/revenus identiques entre les 2 cockpits) + assertions tx-live prod (migration `20260712120000`).
+**À vérifier (desktop 1440)** — connecté en admin, données de test présentes en base :
+- KPI argent : **Commission Jolene ce mois (HT)**, **Encaissé (commission, HT)** avec « X TTC · sur compte », **GMV (volume brut transité)** — libellés HT/TTC explicites, valeurs = celles de la carte « Rentabilité » (même source).
+- Bandeau **« Données de test présentes »** (icône fiole) au-dessus des KPI argent tant que des comptes test existent ; les montants affichés **excluent** les seeds.
+- Alerte **« N établissements à valider »** = exactement le nombre de la page `/admin/verification-etablissements` (plus de 10 vs 6).
+- Carte Stripe renommée **« Paiements Stripe (bruts, TTC) »** (plus de 2ᵉ « Encaissé ») ; carte Stripe Connect **sans** second « GMV ».
+
 ---
 
 _Mettre à jour ce fichier à chaque PR UI (écran + preuve + états à vérifier ≤ 3 lignes)._
