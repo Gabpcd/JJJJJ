@@ -33,10 +33,10 @@ interface Alerte {
 
 const PAR_PAGE = 50;
 const DECISIONS = [
-  { value: 'LEGITIME', label: '✅ Légitime (faux positif)', description: 'Pas de fraude, alerte fermée sans sanction' },
-  { value: 'FRAUDE_AVERTISSEMENT', label: '⚠️ Fraude — avertissement', description: 'Note la fraude, avertit le soignant, pas de suspension' },
-  { value: 'FRAUDE_SUSPENSION_PROPOSEE', label: '🚫 Fraude — proposer suspension', description: 'Une tâche est créée pour que l\'équipe procède à la suspension manuellement' },
-  { value: 'IGNORER', label: '🗑️ Ignorer', description: 'Faible importance, alerte fermée' },
+  { value: 'LEGITIME', label: 'Légitime (faux positif)', description: 'Pas de fraude, alerte fermée sans sanction' },
+  { value: 'FRAUDE_AVERTISSEMENT', label: 'Fraude — avertissement', description: 'Note la fraude, avertit le soignant, pas de suspension' },
+  { value: 'FRAUDE_SUSPENSION_PROPOSEE', label: 'Fraude — proposer suspension', description: 'Une tâche est créée pour que l\'équipe procède à la suspension manuellement' },
+  { value: 'IGNORER', label: 'Ignorer', description: 'Faible importance, alerte fermée' },
 ];
 
 const LIBELLES_SEVERITE: Record<string, string> = {
@@ -180,7 +180,7 @@ export default function AdminAlertesPointage() {
                     {LIBELLES_SEVERITE[a.severite] ?? a.severite}
                   </BadgeY2K>
                   <span className="text-xs text-muted-foreground">{LIBELLES_TYPE_ALERTE[a.type_alerte] ?? a.type_alerte}</span>
-                  {a.resolu_le && <span className="text-[11px] text-success">✓ Résolue</span>}
+                  {a.resolu_le && <span className="text-[11px] text-success">Résolue</span>}
                 </div>
                 <p className="text-sm text-foreground">{a.message}</p>
                 <p className="text-[11px] text-muted-foreground mt-1">

@@ -20,10 +20,11 @@ import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
 import { Separator } from '@/components/ui/separator';
 import { BandeauAlertesAntiTricheAdmin } from '@/components/admin/BandeauAlertesAntiTricheAdmin';
+import { formatEuroAdmin } from '@/lib/adminPresentation';
 
-const formatEur = (v: number) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(v);
-const formatEurPrecis = (v: number) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 2 }).format(v);
-const formatDate = (d: string) => new Date(d).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' });
+const formatEur = (v: number) => formatEuroAdmin(v, { decimales: 0 });
+const formatEurPrecis = (v: number) => formatEuroAdmin(v, { decimales: 2 });
+const formatDate = (d: string) => new Date(d).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' }).replace(/ /g, '\u00a0');
 
 // Libellés humains des statuts de litige affichés (alignés sur FilDiscussionLitige)
 const STATUTS_LITIGE_LABELS: Record<string, string> = {
@@ -357,10 +358,10 @@ export default function AdminDashboard() {
           </CardY2K>
         </div>
 
-        {/* ══════════════ 💰 RENTABILITÉ ══════════════ */}
+        {/* Rentabilité */}
         <CardY2K noPadding className="border-primary/30">
           <CardY2KHeader>
-            <CardY2KTitle className="text-lg font-bold flex items-center gap-2">💰 Rentabilité estimée</CardY2KTitle>
+            <CardY2KTitle className="text-lg font-bold flex items-center gap-2"><TrendingUp className="h-5 w-5 text-primary" /> Rentabilité estimée</CardY2KTitle>
           </CardY2KHeader>
           <CardY2KContent className="space-y-6">
             {/* CA — mêmes chiffres que les KPI ci-dessus (source unique fn_admin_metriques_argent) */}
@@ -421,7 +422,9 @@ export default function AdminDashboard() {
                     <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">€</span>
                   </div>
                 </div>
-                <p className="text-xs text-muted-foreground">Coût société : {formatEurPrecis(rentabilite.coutSociete)} / mois (×1.82)</p>
+                <p className="text-xs text-muted-foreground" title="Estimation du salaire net majoré des cotisations employeur et salarié.">
+                  Coût société estimé : {formatEurPrecis(rentabilite.coutSociete)} / mois (net × 1,82, charges incluses)
+                </p>
               </div>
             </div>
 
@@ -449,7 +452,7 @@ export default function AdminDashboard() {
               <div className="flex items-center justify-between mb-2">
                 <h3 className="text-sm font-semibold text-foreground">Seuil de rentabilité</h3>
                 {rentabilite.seuilAtteint ? (
-                  <BadgeY2K variant="success">Seuil atteint ✅</BadgeY2K>
+                  <BadgeY2K variant="success" icone={<CheckCircle className="h-3 w-3" />}>Seuil atteint</BadgeY2K>
                 ) : (
                   <span className="text-xs text-muted-foreground">Plus que {formatEur(rentabilite.resteAvantSeuil)} de CA</span>
                 )}
@@ -482,16 +485,16 @@ export default function AdminDashboard() {
             )}
 
             <p className="text-xs text-muted-foreground">
-              *Estimation indicative SASU. Ne tient pas compte de la CFE, CVAE, ni des spécificités fiscales. Consultez votre expert-comptable.
+              Estimation indicative SASU, à confirmer avec votre expert-comptable.
             </p>
           </CardY2KContent>
         </CardY2K>
 
-        {/* 💳 Stripe paiements — vue opérationnelle brute (TTC), distincte de « Encaissé commission ». */}
+        {/* Stripe paiements — vue opérationnelle brute (TTC), distincte de « Encaissé commission ». */}
         <CardY2K noPadding>
           <CardY2KHeader>
             <CardY2KTitle className="text-sm font-medium flex items-center gap-2">
-              <CreditCard className="h-4 w-4 text-primary" /> 💳 Paiements Stripe (bruts, TTC)
+              <CreditCard className="h-4 w-4 text-primary" /> Paiements Stripe (bruts, TTC)
             </CardY2KTitle>
           </CardY2KHeader>
           <CardY2KContent>

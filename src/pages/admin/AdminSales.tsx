@@ -3,7 +3,7 @@ import { usePageTitle } from '@/hooks/usePageTitle';
 import { LayoutAdmin } from '@/components/LayoutAdmin';
 import { ChargementPage } from '@/components/ChargementPage';
 import { supabase } from '@/integrations/supabase/client';
-import { PROFESSIONS, getLabelProfession } from '@/lib/constantes';
+import { PROFESSIONS, getLabelProfession, getLabelTypeEtablissement } from '@/lib/constantes';
 import { CardY2K, CardY2KContent } from '@/components/y2k/CardY2K';
 import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { BadgeY2K } from '@/components/y2k/BadgeY2K';
@@ -319,7 +319,7 @@ export default function AdminSales() {
     else if (reponse === 'NEGATIVE') patch.statut = 'PERDU';
     const { error } = await supabase.from('sales_contacts' as any).update(patch).eq('id', c.id);
     if (error) { toast.error(error.message); return; }
-    toast.success(reponse === 'POSITIVE' ? 'Marqué intéressé ✓' : reponse === 'NEGATIVE' ? 'Marqué pas intéressé.' : 'Réponse mise à jour.');
+    toast.success(reponse === 'POSITIVE' ? 'Marqué intéressé' : reponse === 'NEGATIVE' ? 'Marqué pas intéressé.' : 'Réponse mise à jour.');
     charger();
   };
 
@@ -762,8 +762,8 @@ function ListeContacts({ type, contacts, voirArchives, onToggleArchives, onAdd, 
                 )}
                 {/* Suivi : réponse + à rappeler */}
                 <div className="flex gap-1.5 mt-2 flex-wrap items-center">
-                  <BoutonY2K size="sm" variant={c.reponse === 'POSITIVE' ? 'primary' : 'secondary'} onClick={() => onReponse(c, 'POSITIVE')}>👍 Intéressé(e)</BoutonY2K>
-                  <BoutonY2K size="sm" variant="ghost" onClick={() => onReponse(c, 'NEGATIVE')}>👎 Non</BoutonY2K>
+                  <BoutonY2K size="sm" variant={c.reponse === 'POSITIVE' ? 'primary' : 'secondary'} onClick={() => onReponse(c, 'POSITIVE')}>Intéressé(e)</BoutonY2K>
+                  <BoutonY2K size="sm" variant="ghost" onClick={() => onReponse(c, 'NEGATIVE')}>Non</BoutonY2K>
                   <BoutonY2K size="sm" variant={c.a_rappeler ? 'primary' : 'ghost'} onClick={() => onARappeler(c)} iconeGauche={<RotateCcw className="h-4 w-4" />}>
                     {c.a_rappeler ? 'Rappel programmé' : 'À rappeler'}
                   </BoutonY2K>
@@ -847,7 +847,7 @@ function EtablissementsJolene() {
                   <div className="min-w-0">
                     <span className="font-semibold text-foreground">{e.nom}</span>
                     <p className="text-xs text-muted-foreground mt-0.5">
-                      {e.type}{e.ville ? ` · ${e.ville}` : ''}{e.code_postal ? ` (${e.code_postal})` : ''}
+                      {getLabelTypeEtablissement(e.type)}{e.ville ? ` · ${e.ville}` : ''}{e.code_postal ? ` (${e.code_postal})` : ''}
                     </p>
                   </div>
                   <BadgeY2K variant={e.peut_publier ? 'success' : 'warning'}>{e.statut_verification || (e.peut_publier ? 'Vérifié' : 'En attente')}</BadgeY2K>
@@ -1119,7 +1119,7 @@ function EnvoiMasseBar({ cible }: { cible: 'ETABLISSEMENT' | 'SOIGNANT' }) {
       });
       if (error || (data as any)?.error) { toast.error((data as any)?.error || 'Enrichissement impossible.'); return; }
       const d = data as any;
-      toast.success(`🔎 ${d.traites} fiche(s) passée(s) à l'Annuaire Santé : ${d.emails} email(s) + ${d.telephones} téléphone(s) trouvés${d.ambigus ? ` · ${d.ambigus} homonyme(s) ignoré(s) par sécurité` : ''}${d.restants ? ` — ${d.restants.toLocaleString('fr-FR')} restantes, recliquez pour continuer` : ''}`);
+      toast.success(`${d.traites} fiche(s) passée(s) à l'Annuaire Santé : ${d.emails} email(s) + ${d.telephones} téléphone(s) trouvés${d.ambigus ? ` · ${d.ambigus} homonyme(s) ignoré(s) par sécurité` : ''}${d.restants ? ` — ${d.restants.toLocaleString('fr-FR')} restantes, recliquez pour continuer` : ''}`);
       chargerEtat();
     } finally {
       setEnrichissement(false);
@@ -1152,7 +1152,7 @@ function EnvoiMasseBar({ cible }: { cible: 'ETABLISSEMENT' | 'SOIGNANT' }) {
       });
       if (error || (data as any)?.error) { toast.error((data as any)?.error || 'Envoi en masse impossible.'); return; }
       const d = data as any;
-      toast.success(`✉️ ${d.envoyes} email(s) envoyé(s)${d.echecs ? `, ${d.echecs} échec(s)` : ''}${d.restants ? ` — ${d.restants} restant(s), recliquez pour continuer` : ' — tous les prospects avec email sont contactés ✓'}`);
+      toast.success(`${d.envoyes} email(s) envoyé(s)${d.echecs ? `, ${d.echecs} échec(s)` : ''}${d.restants ? ` — ${d.restants} restant(s), recliquez pour continuer` : ' — tous les prospects avec email sont contactés'}`);
       chargerEtat();
     } finally {
       setEnvoi(false);
@@ -1163,10 +1163,10 @@ function EnvoiMasseBar({ cible }: { cible: 'ETABLISSEMENT' | 'SOIGNANT' }) {
   return (
     <div className="rounded-xl border border-primary/30 bg-primary/5 p-3 mb-4 flex flex-col sm:flex-row sm:items-center gap-2">
       <p className="text-xs text-muted-foreground flex-1">
-        ✉️ <strong className="text-foreground">{aEnvoyer}</strong> prospect(s) <strong>avec un email collecté</strong>, jamais contacté(s) — prêts pour l'envoi groupé.
+        <strong className="text-foreground">{aEnvoyer}</strong> prospect(s) <strong>avec un email collecté</strong>, jamais contacté(s) — prêts pour l'envoi groupé.
         {' '}<span className="text-muted-foreground/80">(Ce compteur ne montre QUE ceux qui ont déjà un email, pas le total de la base. L'enrichissement Annuaire Santé tourne automatiquement en fond et le fera monter.)</span>
         {aEnvoyer === 0 && ' Pour l’instant aucun email collecté : l’enrichissement auto les remplit progressivement, ou saisissez-les via « + Email » sur chaque carte.'}
-        {!template && ' ⚠️ Aucun template trouvé (onglet Modèles).'}
+        {!template && ' Aucun template trouvé (onglet Modèles).'}
       </p>
       <BoutonY2K
         size="sm"
@@ -1176,7 +1176,7 @@ function EnvoiMasseBar({ cible }: { cible: 'ETABLISSEMENT' | 'SOIGNANT' }) {
         loading={enrichissement}
         className="whitespace-nowrap"
       >
-        🔎 Enrichir (Annuaire Santé)
+        Enrichir (Annuaire Santé)
       </BoutonY2K>
       <BoutonY2K
         size="sm"
@@ -1338,10 +1338,10 @@ function PostsGenerateur() {
     const label = getLabelProfession(s.profession) || s.profession;
     const taux = s.taux_max ? ` jusqu'à ${Number(s.taux_max).toFixed(0)} €/h` : '';
     const villes = s.villes ? ` (${s.villes})` : '';
-    return `🩺 ${s.nb} mission${s.nb > 1 ? 's' : ''} ${label} disponible${s.nb > 1 ? 's' : ''} cette semaine${villes}${taux}.\n\nÉtablissements vérifiés, paiement garanti, inscription gratuite.\n👉 https://jolene.app/soignant/recherche-missions?${utm}\n\n#emploi #soignant #${(s.profession || '').toLowerCase()}`;
+    return `${s.nb} mission${s.nb > 1 ? 's' : ''} ${label} disponible${s.nb > 1 ? 's' : ''} cette semaine${villes}${taux}.\n\nÉtablissements vérifiés, paiement garanti, inscription gratuite.\nhttps://jolene.app/soignant/recherche-missions?${utm}\n\n#emploi #soignant #${(s.profession || '').toLowerCase()}`;
   };
   const totalMissions = stats.reduce((acc, s) => acc + Number(s.nb || 0), 0);
-  const postGlobal = `🩺 ${totalMissions} mission${totalMissions > 1 ? 's' : ''} médicales et paramédicales ouvertes cette semaine sur Jolene.\n\nInfirmiers, aides-soignants, kinés, pharmaciens… des établissements vérifiés recrutent près de chez vous. Paiement garanti, 0 frais pour les soignants.\n👉 https://jolene.app?${utm}\n\n#emploi #santé #soignants`;
+  const postGlobal = `${totalMissions} mission${totalMissions > 1 ? 's' : ''} médicales et paramédicales ouvertes cette semaine sur Jolene.\n\nInfirmiers, aides-soignants, kinés, pharmaciens… des établissements vérifiés recrutent près de chez vous. Paiement garanti, 0 frais pour les soignants.\nhttps://jolene.app?${utm}\n\n#emploi #santé #soignants`;
 
   if (chargement) return <ChargementPage />;
 
@@ -1363,7 +1363,7 @@ function PostsGenerateur() {
           <div className="flex gap-2">
             <Input value={lienAvis} onChange={e => setLienAvis(e.target.value)} placeholder="https://g.page/r/…/review" className="h-9" />
             <BoutonY2K size="sm" onClick={sauverLienAvis} iconeGauche={<Save className="h-4 w-4" />}>
-              {lienAvisSauve ? 'Enregistré ✓' : 'Enregistrer'}
+              {lienAvisSauve ? 'Enregistré' : 'Enregistrer'}
             </BoutonY2K>
           </div>
         </CardY2KContent>
@@ -1561,7 +1561,7 @@ function ProspectionSoignants({ onAjouter }: { onAjouter: () => void }) {
             <BoutonY2K size="sm" variant={avecEmail ? 'primary' : 'secondary'} onClick={() => setAvecEmail(!avecEmail)} iconeGauche={<Mail className="h-4 w-4" />}>Avec email</BoutonY2K>
             <BoutonY2K size="sm" variant={avecTel ? 'primary' : 'secondary'} onClick={() => setAvecTel(!avecTel)} iconeGauche={<Phone className="h-4 w-4" />}>Avec tél.</BoutonY2K>
             <BoutonY2K size="sm" variant={favoris ? 'primary' : 'secondary'} onClick={() => setFavoris(!favoris)} iconeGauche={<Star className="h-4 w-4" />}>Favoris</BoutonY2K>
-            <BoutonY2K size="sm" variant={etudiants ? 'primary' : 'secondary'} onClick={() => setEtudiants(!etudiants)}>🎓 Étudiants</BoutonY2K>
+            <BoutonY2K size="sm" variant={etudiants ? 'primary' : 'secondary'} onClick={() => setEtudiants(!etudiants)}>Étudiants</BoutonY2K>
             <BoutonY2K size="sm" onClick={() => rechercher(1)} disabled={loading} iconeGauche={<Search className="h-4 w-4" />}>
               {loading ? 'Recherche…' : 'Rechercher'}
             </BoutonY2K>
@@ -1758,7 +1758,7 @@ function BacklinksAnnuaires() {
                   <BadgeY2K variant={badgeStatutAnnuaire(a.statut)}>{LABELS_STATUT_ANNUAIRE[a.statut]}</BadgeY2K>
                 </div>
               </div>
-              {a.comment_soumettre && <p className="text-[11px] text-muted-foreground mt-2">📍 {a.comment_soumettre}</p>}
+              {a.comment_soumettre && <p className="text-[11px] text-muted-foreground mt-2">Soumission : {a.comment_soumettre}</p>}
               {a.texte_a_soumettre && <pre className="text-[11px] text-muted-foreground whitespace-pre-wrap font-sans bg-muted/40 rounded-lg p-2.5 mt-2">{a.texte_a_soumettre}</pre>}
               <div className="flex gap-2 mt-2 flex-wrap items-center">
                 <BoutonY2K size="sm" onClick={() => copier(a.texte_a_soumettre || '')} iconeGauche={<Copy className="h-4 w-4" />}>Copier le texte</BoutonY2K>
@@ -1768,7 +1768,7 @@ function BacklinksAnnuaires() {
                 </select>
                 <BoutonY2K size="sm" variant="ghost" onClick={() => setEdit({ ...a })} iconeGauche={<Pencil className="h-4 w-4" />}>Note / lien</BoutonY2K>
               </div>
-              {a.lien_obtenu && <p className="text-[11px] mt-1.5"><a href={a.lien_obtenu} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline break-all">🔗 {a.lien_obtenu}</a></p>}
+              {a.lien_obtenu && <p className="text-[11px] mt-1.5"><a href={a.lien_obtenu} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline break-all">{a.lien_obtenu}</a></p>}
               {a.notes && <p className="text-[11px] text-muted-foreground mt-1">{a.notes}</p>}
             </CardY2KContent>
           </CardY2K>

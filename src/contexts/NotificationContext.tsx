@@ -64,9 +64,10 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   const timersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
   useEffect(() => {
+    const timers = timersRef.current;
     return () => {
-      timersRef.current.forEach(timer => clearTimeout(timer));
-      timersRef.current.clear();
+      timers.forEach(timer => clearTimeout(timer));
+      timers.clear();
     };
   }, []);
 
@@ -103,20 +104,21 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
           9.5 — la bottom-nav mesure 4rem + safe-area-inset-bottom ; on place le
           toast à 5rem + safe-area pour dégager la nav même sur les appareils à
           grande safe-area (l'ancien `bottom-20` = 5rem sec pouvait chevaucher).
-        - Desktop : top-right (top-4 right-4)
+        - Desktop : bottom-right, hors de la zone des KPI et CTA du haut de page.
       */}
       <div
         role="region"
-        className="fixed z-[100] flex flex-col gap-2 inset-x-4 bottom-[calc(5rem+env(safe-area-inset-bottom))] md:bottom-auto md:top-4 md:right-4 md:left-auto md:w-96"
+        className="pointer-events-none fixed z-[100] flex flex-col gap-2 inset-x-4 bottom-[calc(5rem+env(safe-area-inset-bottom))] md:bottom-4 md:right-4 md:left-auto md:w-96"
         aria-live="polite"
         aria-label="Notifications"
+        data-toast-safe-zone="bottom"
       >
         {notifications.map((n) => (
           <div
             key={n.id}
             role={n.type === 'erreur' ? 'alert' : 'status'}
             data-notification-type={n.type}
-            className={`animate-slide-in rounded-xl border-l-4 p-4 shadow-lg bg-card ${BG_CLASSES[n.type]} flex items-start gap-3`}
+            className={`pointer-events-auto animate-slide-in rounded-xl border-l-4 p-4 shadow-lg bg-card ${BG_CLASSES[n.type]} flex items-start gap-3`}
           >
             {ICONS[n.type]}
             <div className="flex-1 min-w-0">

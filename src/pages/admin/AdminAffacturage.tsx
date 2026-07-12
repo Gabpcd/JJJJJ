@@ -236,13 +236,13 @@ export default function AdminAffacturage() {
                         </div>
                         <div className="text-xs text-muted-foreground space-y-0.5">
                           <p>
-                            👤{' '}
+                            Soignant :{' '}
                             <button onClick={() => navigate(`/admin/utilisateurs/${a.soignant_id}`)} className="text-primary hover:underline">
                               {sg ? `${sg.prenom} ${sg.nom}` : '—'}
                             </button>
                           </p>
                           <p>
-                            🏥{' '}
+                            Établissement :{' '}
                             <button onClick={() => navigate(`/admin/utilisateurs/${a.etablissement_id}`)} className="text-primary hover:underline">
                               {etab?.nom || '—'}
                             </button>

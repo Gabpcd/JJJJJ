@@ -21,7 +21,8 @@ import { toast } from 'sonner';
 import { logger } from '@/lib/logger';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { TYPES_DOCUMENTS, STATUTS_VERIFICATION } from '@/lib/documents';
-import { BADGES_STATUT, getLabelProfession } from '@/lib/constantes';
+import { BADGES_STATUT, getLabelProfession, getLabelTypeEtablissement } from '@/lib/constantes';
+import { formatEuroAdmin } from '@/lib/adminPresentation';
 import { ModalConfirmation } from '@/components/ModalConfirmation';
 import { Textarea } from '@/components/ui/textarea';
 import { AdminMissionChatPanel } from '@/components/admin/AdminMissionChatPanel';
@@ -84,7 +85,7 @@ export default function AdminDetailUtilisateur() {
         toast.error((data as any)?.error || 'Enregistrement impossible.');
         return;
       }
-      toast.success(`Document ${TYPES_DOCUMENTS[uploadDocType] || uploadDocType} ajouté et validé ✓`);
+      toast.success(`Document ${TYPES_DOCUMENTS[uploadDocType] || uploadDocType} ajouté et validé`);
       charger();
     } finally {
       setUploadEnCours(false);
@@ -98,7 +99,7 @@ export default function AdminDetailUtilisateur() {
         p_document_id: docId, p_action: 'VALIDER',
       });
       if (error || (data as any)?.error) { toast.error((data as any)?.error || 'Validation impossible.'); return; }
-      toast.success('Document validé ✓');
+      toast.success('Document validé');
       charger();
     } finally {
       setValidationEnCours(null);
@@ -457,7 +458,7 @@ export default function AdminDetailUtilisateur() {
                   <InfoRow icon={Phone} label="Téléphone" value={etablissement.telephone_contact || '—'} />
                   <InfoRow icon={FileText} label="SIRET" value={etablissement.siret} />
                   <InfoRow icon={FileText} label="FINESS" value={etablissement.finess || '—'} />
-                  <InfoRow icon={Shield} label="Type" value={etablissement.type} />
+                  <InfoRow icon={Shield} label="Type" value={getLabelTypeEtablissement(etablissement.type)} />
                   <InfoRow icon={MapPin} label="Adresse" value={`${etablissement.adresse_rue}, ${etablissement.adresse_code_postal} ${etablissement.adresse_ville}`} />
                   <InfoRow icon={Clock} label="Inscrit le" value={new Date(etablissement.cree_le).toLocaleDateString('fr-FR')} />
                   <InfoRow icon={FileText} label="Formule" value={etablissement.formule_abonnement || '—'} />
@@ -478,7 +479,7 @@ export default function AdminDetailUtilisateur() {
                 {/* Upload admin : documents reçus en privé, validés à l'ajout */}
                 <div className="rounded-xl border border-primary/30 bg-primary/5 p-3 mb-4 flex flex-col sm:flex-row sm:items-center gap-2">
                   <p className="text-xs text-muted-foreground flex-1">
-                    📎 Le soignant vous a envoyé un document en privé ? Ajoutez-le ici : il sera validé immédiatement.
+                    Le soignant vous a envoyé un document en privé ? Ajoutez-le ici : il sera validé immédiatement.
                   </p>
                   <select
                     value={uploadDocType}
@@ -621,7 +622,7 @@ export default function AdminDetailUtilisateur() {
                             <TableCell>
                               <BadgeY2K variant="info" size="sm">{BADGES_STATUT[m.statut]?.label || m.statut}</BadgeY2K>
                             </TableCell>
-                            {type === 'soignant' && <TableCell className="text-xs font-mono">{m.net_a_payer ? `${Number(m.net_a_payer).toFixed(2)} €` : '—'}</TableCell>}
+                            {type === 'soignant' && <TableCell className="text-xs font-mono">{m.net_a_payer ? formatEuroAdmin(m.net_a_payer) : '—'}</TableCell>}
                           </TableRow>
                         ))}
                       </TableBody>
@@ -657,7 +658,7 @@ export default function AdminDetailUtilisateur() {
                             {type === 'soignant' && (
                               <div className="flex items-start justify-between gap-2">
                                 <span className="text-muted-foreground shrink-0">Net</span>
-                                <span className="text-foreground font-mono">{m.net_a_payer ? `${Number(m.net_a_payer).toFixed(2)} €` : '—'}</span>
+                                <span className="text-foreground font-mono">{m.net_a_payer ? formatEuroAdmin(m.net_a_payer) : '—'}</span>
                               </div>
                             )}
                           </div>
@@ -790,7 +791,7 @@ export default function AdminDetailUtilisateur() {
                   <ProfileRow label="Nom" value={etablissement.nom} />
                   <ProfileRow label="SIRET" value={etablissement.siret} />
                   <ProfileRow label="FINESS" value={etablissement.finess || '—'} />
-                  <ProfileRow label="Type" value={etablissement.type} />
+                  <ProfileRow label="Type" value={getLabelTypeEtablissement(etablissement.type)} />
                   <ProfileRow label="Email contact" value={etablissement.email_contact} />
                   <ProfileRow label="Téléphone" value={etablissement.telephone_contact || '—'} />
                 </CardY2KContent>
@@ -1026,9 +1027,9 @@ function VerifRow({ label, ok }: { label: string; ok: boolean }) {
     <div className="flex items-center justify-between text-sm">
       <span className="text-muted-foreground">{label}</span>
       {ok ? (
-        <BadgeY2K variant="success" size="sm">✓ Oui</BadgeY2K>
+        <BadgeY2K variant="success" size="sm">Oui</BadgeY2K>
       ) : (
-        <BadgeY2K variant="info" size="sm">✗ Non</BadgeY2K>
+        <BadgeY2K variant="info" size="sm">Non</BadgeY2K>
       )}
     </div>
   );

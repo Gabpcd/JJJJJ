@@ -8,7 +8,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { CardY2K, CardY2KContent } from '@/components/y2k/CardY2K';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { BadgeY2K } from '@/components/y2k/BadgeY2K';
-import { BADGES_STATUT } from '@/lib/constantes';
+import { BADGES_STATUT, getLabelProfession } from '@/lib/constantes';
 import { ShieldAlert, Clock, FileWarning, FileQuestion, Repeat, UserX, FileX, ChevronDown, Loader2, ExternalLink } from 'lucide-react';
 
 /** Libellés français des résultats de contrôle (table conformite_travail). */
@@ -95,7 +95,7 @@ const INDICATEURS: Indicateur[] = [
       { titre: 'Soignant', primary: true, render: (i) => <LienSoignant id={i.soignant_id} nom={i.soignant_nom} /> },
       { titre: 'Mission', render: (i) => <LienMission id={i.mission_id} intitule={i.mission_intitule} /> },
       { titre: 'Établissement', render: (i) => <LienEtablissement id={i.etablissement_id} nom={i.etablissement_nom} /> },
-      { titre: 'Profession', render: (i) => <BadgeY2K variant="info" size="sm">{i.profession}</BadgeY2K> },
+      { titre: 'Profession', render: (i) => <BadgeY2K variant="info" size="sm">{getLabelProfession(i.profession)}</BadgeY2K> },
       { titre: 'Heures semaine', render: (i) => <span className="font-semibold text-destructive">{i.heures_semaine}h</span> },
     ],
   },
@@ -108,7 +108,7 @@ const INDICATEURS: Indicateur[] = [
       { titre: 'Soignant', primary: true, render: (i) => <LienSoignant id={i.soignant_id} nom={i.soignant_nom} /> },
       { titre: 'Mission', render: (i) => <LienMission id={i.mission_id} intitule={i.mission_intitule} /> },
       { titre: 'Établissement', render: (i) => <LienEtablissement id={i.etablissement_id} nom={i.etablissement_nom} /> },
-      { titre: 'Profession', render: (i) => <BadgeY2K variant="info" size="sm">{i.profession}</BadgeY2K> },
+      { titre: 'Profession', render: (i) => <BadgeY2K variant="info" size="sm">{getLabelProfession(i.profession)}</BadgeY2K> },
       { titre: 'Document', render: (i) => i.type_document },
       { titre: 'Expiré le', render: (i) => <span className="text-destructive">{formatDate(i.valide_jusqua)}</span> },
     ],
@@ -122,7 +122,7 @@ const INDICATEURS: Indicateur[] = [
       { titre: 'Soignant', primary: true, render: (i) => <LienSoignant id={i.soignant_id} nom={i.soignant_nom} /> },
       { titre: 'Mission', render: (i) => <LienMission id={i.mission_id} intitule={i.mission_intitule} /> },
       { titre: 'Établissement', render: (i) => <LienEtablissement id={i.etablissement_id} nom={i.etablissement_nom} /> },
-      { titre: 'Profession', render: (i) => <BadgeY2K variant="info" size="sm">{i.profession}</BadgeY2K> },
+      { titre: 'Profession', render: (i) => <BadgeY2K variant="info" size="sm">{getLabelProfession(i.profession)}</BadgeY2K> },
       { titre: 'Document', render: (i) => i.type_document },
       { titre: 'Téléversé le', render: (i) => <span className="text-muted-foreground">{formatDate(i.televerse_le)}</span> },
     ],
@@ -150,7 +150,7 @@ const INDICATEURS: Indicateur[] = [
       { titre: 'Soignant', primary: true, render: (i) => <LienSoignant id={i.soignant_id} nom={i.soignant_nom} /> },
       { titre: 'Mission', render: (i) => <LienMission id={i.mission_id} intitule={i.mission_intitule} /> },
       { titre: 'Établissement', render: (i) => <LienEtablissement id={i.etablissement_id} nom={i.etablissement_nom} /> },
-      { titre: 'Profession', render: (i) => <BadgeY2K variant="info" size="sm">{i.profession}</BadgeY2K> },
+      { titre: 'Profession', render: (i) => <BadgeY2K variant="info" size="sm">{getLabelProfession(i.profession)}</BadgeY2K> },
       { titre: 'Email', render: (i) => i.email
         ? <a href={`mailto:${i.email}`} className="text-primary hover:underline" onClick={(e) => e.stopPropagation()}>{i.email}</a>
         : <span className="text-muted-foreground">—</span> },

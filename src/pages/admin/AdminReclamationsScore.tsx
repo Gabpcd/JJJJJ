@@ -246,9 +246,9 @@ function ModaleDecision({ reclamation, onFermer, onTraitee }: {
         <div className="space-y-2">
           <span className="text-xs font-medium block">Décision *</span>
           {[
-            { v: 'MAINTENIR', l: '✋ MAINTENIR la pénalité (réclamation rejetée)', i: <XCircle className="h-4 w-4 text-muted-foreground" /> },
-            { v: 'REDUIRE', l: '⚖️ RÉDUIRE la pénalité', i: <Edit3 className="h-4 w-4 text-blue-600" /> },
-            { v: 'ANNULER', l: '✅ ANNULER complètement (event neutralisé)', i: <CheckCircle className="h-4 w-4 text-emerald-600" /> },
+            { v: 'MAINTENIR', l: 'MAINTENIR la pénalité (réclamation rejetée)', i: <XCircle className="h-4 w-4 text-muted-foreground" /> },
+            { v: 'REDUIRE', l: 'RÉDUIRE la pénalité', i: <Edit3 className="h-4 w-4 text-blue-600" /> },
+            { v: 'ANNULER', l: 'ANNULER complètement (événement neutralisé)', i: <CheckCircle className="h-4 w-4 text-emerald-600" /> },
           ].map(opt => (
             <label key={opt.v} className="flex items-center gap-2 cursor-pointer p-2 rounded hover:bg-muted">
               <input type="radio" checked={decision === opt.v} onChange={() => setDecision(opt.v as any)} />

@@ -15,6 +15,7 @@ import { FilDiscussionLitige } from '@/components/FilDiscussionLitige';
 import { LitigeResolutionModal } from '@/components/admin/litiges/LitigeResolutionModal';
 import type { LitigeEnrichi } from '@/components/admin/litiges/types';
 import { statutBadgeV2, type StatutLitige } from '@/lib/statutLitige';
+import { getLabelProfession } from '@/lib/constantes';
 
 type FiltreStatut = 'ACCORDS_A_VALIDER' | 'REVUE_ADMIN' | 'OUVERTS' | 'RESOLUS' | 'TOUS';
 
@@ -187,16 +188,16 @@ export default function AdminLitiges() {
                         Ouvert il y a {ageLabel}
                       </span>
                       {isUrgent && (
-                        <span className="text-[10px] font-semibold text-destructive">⚠️ À trancher</span>
+                        <span className="text-[10px] font-semibold text-destructive">À trancher</span>
                       )}
                     </div>
                     <p className="text-sm font-semibold text-foreground truncate">
                       {l.missions?.intitule || 'Mission'}
                     </p>
                     <p className="text-xs text-muted-foreground truncate">
-                      🏥 {l.etablissements?.nom || '—'}
+                      Établissement : {l.etablissements?.nom || '—'}
                       {' · '}
-                      👤 {l.soignants?.prenom} {l.soignants?.nom?.charAt(0)}. ({l.soignants?.profession})
+                      Soignant : {l.soignants?.prenom} {l.soignants?.nom?.charAt(0)}. ({getLabelProfession(l.soignants?.profession || '')})
                       {l.missions?.debut_le && ` · ${format(new Date(l.missions.debut_le), 'd MMM yyyy', { locale: fr })}`}
                     </p>
                     <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">
@@ -218,7 +219,7 @@ export default function AdminLitiges() {
                     {estAccordAValider(l) && (
                       <div className="rounded-xl border border-amber-300/60 bg-amber-50 p-3 space-y-2">
                         <p className="text-xs font-semibold text-amber-900">
-                          ⚖️ Accord financier proposé par les parties — validation requise
+                          Accord financier proposé par les parties — validation requise
                         </p>
                         <p className="text-[11px] text-amber-800">
                           Type : <span className="font-mono">{l.payload_modifications?.type}</span>

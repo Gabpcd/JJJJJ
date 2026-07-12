@@ -10,9 +10,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { Building2, Save, Loader2, ChevronDown, TrendingUp, CreditCard, Users, Mail, Percent, Activity, Euro, Calendar, Send } from 'lucide-react';
+import { Building2, Save, Loader2, ChevronDown, TrendingUp, CreditCard, Users, Mail, Percent, Activity, Euro, Calendar, Send, Edit3 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
+import { getLabelTypeEtablissement } from '@/lib/constantes';
 
 const fmt = (v: number) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(v);
 const fmtPct = (v: number) => `${v.toFixed(1)}%`;
@@ -321,7 +322,8 @@ export default function AdminGroupes() {
                           onClick={() => setEditingRemise({ groupeId: g.id, remise: String(g.remise_groupe_pourcent ?? 0) })}
                           className="ml-1 text-primary hover:underline"
                           title="Modifier la remise du groupe"
-                        >✏️</button>
+                          aria-label="Modifier le groupe"
+                        ><Edit3 className="h-4 w-4" /></button>
                       </span>
                     )}
                     <span>{g.cliniques.length} clinique{g.cliniques.length > 1 ? 's' : ''}</span>
@@ -479,7 +481,7 @@ export default function AdminGroupes() {
                               <button onClick={() => navigate(`/admin/utilisateurs/${c.id}`)} className="text-primary hover:underline text-left">
                                 <p className="font-medium">{c.nom}</p>
                               </button>
-                              <p className="text-[10px] text-muted-foreground">{c.adresse_ville} · {c.type}</p>
+                              <p className="text-[10px] text-muted-foreground">{c.adresse_ville} · {getLabelTypeEtablissement(c.type)}</p>
                             </td>
                             <td className="py-2.5 text-center font-medium">{c.nb_missions}</td>
                             <td className="py-2.5 text-center">
@@ -573,7 +575,7 @@ export default function AdminGroupes() {
                           className="text-left flex-1 min-w-0"
                         >
                           <p className="text-primary hover:underline font-semibold text-sm truncate">{c.nom}</p>
-                          <p className="text-[10px] text-muted-foreground">{c.adresse_ville} · {c.type}</p>
+                          <p className="text-[10px] text-muted-foreground">{c.adresse_ville} · {getLabelTypeEtablissement(c.type)}</p>
                         </button>
                         {c.nb_missions_en_cours > 0 && (
                           <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 shrink-0">

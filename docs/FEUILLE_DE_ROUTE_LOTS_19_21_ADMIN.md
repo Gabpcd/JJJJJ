@@ -75,7 +75,7 @@ Extension de la feuille de route Lots 11-18. Source : audit des 17 écrans admin
 
 **Périmètre** :
 1. **Icônes** : emojis → lucide partout (🏥👤📅 des cartes missions, 💰 du cockpit…).
-2. **Données de test** : les seeds `[pw-test:*]` disparaissent des listes admin par défaut (toggle « Afficher les données de test » pour toi) ; les entrées fantômes de la file de vérification (« H », « G », « Larmor », NAF incohérents) sont triées — rejetées ou purgées ; enums mappés (`CLINIQUE_PRIVEE`, `LABO`…), labels INSEE propres.
+2. **Données de test — décision Gabrielle du 12/07/2026** : les seeds `[pw-test:*]` restent **visibles** afin de préparer les screenshots stores ; aucune liste ne les masque. L'admin les identifie avec un badge « Donnée de test ». La purge reste une action humaine pré-publication ; enums mappés (`CLINIQUE_PRIVEE`, `LABO`…), labels INSEE propres.
 3. **Actions utilisateurs rééquilibrées** : Détails devient l'action primaire ; Suspendre rétrogradé en secondaire, derrière une confirmation avec **motif obligatoire journalisé** dans `journaux_audit` ; cibles ≥ 44 px.
 4. **Formats français** : « 31,00 € », dates insécables (« 26 juin » sans retour à la ligne), « -0 € » → « 0 € », HT/TTC explicites hors cockpit (le cockpit est traité au Lot 19).
 5. **Toasts** : position qui ne recouvre jamais un KPI ou un CTA (le pattern FAB, version notification), auto-dismiss.
@@ -86,7 +86,7 @@ Extension de la feuille de route Lots 11-18. Source : audit des 17 écrans admin
 **Critère /goal** :
 
 ```
-/goal La mécanique admin est au standard des deux autres interfaces, prouvé par assertions : git grep zéro emoji-icône dans les pages admin, zéro [pw-test visible dans les listes par défaut (e2e avec le toggle testé dans les deux états), Suspendre exige un motif et l'écrit dans journaux_audit (INSERT réel vérifié), formats français testés (31,00 € ; aucune date coupée ; 0 € jamais négatif), aucun toast rendu sur une zone interactive (assertion de position), les warnings NAF/SIRET s'affichent sur les cas de test de la file de vérification, dark mode : les 6 écrans principaux passent AA ou le toggle a disparu. npm run test:regression vert. Stop après 10 turns.
+/goal La mécanique admin est au standard des deux autres interfaces, prouvé par assertions : git grep zéro emoji-icône dans les pages admin, données `[pw-test:*]` conservées visibles et clairement badgées (décision Gabrielle du 12/07/2026), Suspendre exige un motif et l'écrit dans journaux_audit (INSERT réel vérifié), formats français testés (31,00 € ; aucune date coupée ; 0 € jamais négatif), aucun toast rendu sur une zone interactive (assertion de position), les warnings NAF/SIRET s'affichent sur les cas de test de la file de vérification, dark mode : les 6 écrans principaux passent AA ou le toggle a disparu. npm run test:regression vert. Stop après 10 turns.
 ```
 
 ---

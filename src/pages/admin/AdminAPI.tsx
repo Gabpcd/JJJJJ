@@ -135,7 +135,7 @@ export default function AdminAPI() {
 
       {/* Documentation */}
       <CardY2K hoverLift={false} className="mb-6">
-        <h2 className="font-bold text-foreground mb-4">📖 Endpoints disponibles</h2>
+        <h2 className="font-bold text-foreground mb-4">Endpoints disponibles</h2>
         <p className="text-xs text-muted-foreground mb-4">Base URL : <code className="bg-muted px-2 py-0.5 rounded text-foreground">{SUPABASE_FUNCTIONS_URL}</code></p>
         <div className="space-y-4">
           {ENDPOINTS.map((ep, i) => (
@@ -302,7 +302,7 @@ export default function AdminAPI() {
                   <CheckCircle className="h-5 w-5 text-success" />
                   <h3 className="font-bold text-foreground">Clé générée !</h3>
                 </div>
-                <p className="text-xs text-muted-foreground mb-2">⚠️ Copiez ces informations <strong>maintenant</strong>. Le secret ne sera plus jamais affiché.</p>
+                <p className="text-xs text-muted-foreground mb-2">Copiez ces informations <strong>maintenant</strong>. Le secret ne sera plus jamais affiché.</p>
                 <p className="text-[11px] text-muted-foreground mb-1 mt-3 font-semibold">Clé API (publique)</p>
                 <div className="flex items-center gap-2 bg-muted rounded-lg p-3 mb-3">
                   <code className="text-xs flex-1 break-all">{generatedKey}</code>

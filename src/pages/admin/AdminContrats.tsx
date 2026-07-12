@@ -183,7 +183,7 @@ export default function AdminContrats() {
 
   const dpaeBadge = (c: ContratLigne) =>
     c.dpae_effectuee && c.dpae_numero ? (
-      <span className="text-success text-xs">✅ {c.dpae_numero.slice(0, 8)}…</span>
+      <span className="text-success text-xs">Validée · {c.dpae_numero.slice(0, 8)}…</span>
     ) : c.type_contrat?.startsWith('CDD') || c.type_contrat === 'SALARIE' ? (
       <span className="text-warning text-xs">⏳ À déclarer</span>
     ) : <span className="text-muted-foreground text-xs">Non requise</span>;
@@ -257,8 +257,8 @@ export default function AdminContrats() {
             {statutBadge(c)}
           </div>
           <div className="text-xs text-muted-foreground space-y-0.5">
-            <p>👤 {c.soignant_nom}</p>
-            <p>🏥 {c.etablissement_nom}</p>
+            <p>Soignant : {c.soignant_nom}</p>
+            <p>Établissement : {c.etablissement_nom}</p>
             <p className="flex items-center gap-2">
               <span>{libelleTypeContrat(c.type_contrat)}</span>
               {c.hash_court && <span className="font-mono">#{c.hash_court}</span>}
