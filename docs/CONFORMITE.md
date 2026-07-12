@@ -141,23 +141,25 @@ collectée** — d'où l'exécution de ce chantier **avant la soumission** aux s
 - **Inchangé** : les factures vers le secteur public continuent de passer par
   **Chorus Pro** (déjà intégré). La réforme B2B ne modifie pas ce canal.
 
-## 5. Matrice des modes d'exercice (profession × établissement) — ⏳ EN ATTENTE DE VALIDATION GABRIELLE (HARD STOP n°4)
+## 5. Matrice des modes d'exercice (profession × établissement) — ✅ GO GABRIELLE AVEC C1-C7 (12/07/2026)
 
-> **Cette section est une PROPOSITION sourcée, non implémentée.** Rien n'est mergé
-> tant que Gabrielle n'a pas validé cellule par cellule (règle HARD STOP n°4,
-> CLAUDE.md). Claude instruit et propose ; Gabrielle décide.
+> **Décision validée sous réserve de C1-C7**, intégrées ci-dessous. La migration
+> initiale `20260712160000` a créé et seedé la table ; la migration corrective
+> `20260712161000` prépare le câblage des consommateurs, corrige le seed public, ajoute les
+> sources cliquables et supprime les règles juridiques clientes en dur.
 
-### 5.0 Constat — la règle actuelle est en dur, binaire et sur-appliquée
+### 5.0 Constat initial — règle en dur, binaire et sur-appliquée
 
-- `fn_profession_peut_etre_liberal` (booléen en dur) autorise le libéral pour IDE,
+- Avant la migration corrective, `fn_profession_peut_etre_liberal` (booléen en dur)
+  autorisait le libéral pour IDE,
   **IADE, IBODE**, SAGE_FEMME, KINE, MEDECIN, PHARMACIEN, ORTHOPHONISTE, DIETETICIEN,
   ERGOTHERAPEUTE, PSYCHOMOTRICIEN, MANIPULATEUR_RADIO, **DENTISTE** ; bloque AS, AES,
   AUXILIAIRE_PUERICULTURE, PREPARATEUR_PHARMA.
-- **Incohérences** : IADE et IBODE sont **autorisés libéral à tort** (ils font partie
+- **Incohérences constatées** : IADE et IBODE étaient **autorisés libéral à tort** (ils font partie
   des 7 professions de la lettre du 30/12/2021) ; IDE et paramédicaux autorisés sans
   la nuance « risque de requalification » ; **aucune dimension type d'établissement**
   (centre de santé vs clinique privée).
-- **Citations inexactes exposées à l'utilisateur** (4 surfaces, cf. recensement A3) :
+- **Citations inexactes précédemment exposées à l'utilisateur** (4 surfaces, cf. recensement A3) :
   - `src/lib/constantes.ts:52-91` (`LIBERAL_COMPATIBILITY` / `PROFESSIONS_NON_LIBERAL` /
     `peutExercerLiberal()`) — la matrice en dur qui pilote tout.
   - `src/components/FormulaireMission.tsx:650-654` — « le mode libéral n'est pas autorisé
@@ -165,11 +167,11 @@ collectée** — d'où l'exécution de ce chantier **avant la soumission** aux s
   - `src/components/mission/ModalRecapMission.tsx:95-100, 221-238` — « la réglementation
     interdit le mode libéral … CE 11/02/2025 arrêt Mediflash ».
   - `src/components/BannerMediflashExplication.tsx:33-89` — cite l'arrêt **n°488367**.
-  → Ces messages sont affichés pour **toute** profession × établissement, or l'arrêt ne
-    juge **que les aides-soignants**.
+  → Ces quatre surfaces sont corrigées par `20260712161000` et le présent diff : elles
+    ne généralisent plus l'arrêt, qui ne juge **que les aides-soignants**.
 - **✅ Numéro d'arrêt TRANCHÉ (C1)** : le bon numéro est **n°491128** (CE, 5e-6e chambres
   réunies, 11/02/2025 — Légifrance **CETATEXT000051156546**). Le **n°488367** cité par
-  `BannerMediflashExplication` est **erroné** → à corriger sur les 4 surfaces. Le
+  `BannerMediflashExplication` était **erroné** → corrigé sur les 4 surfaces. Le
   **n°491130** est l'**ordonnance de référé du 05/02/2024** (CETATEXT000049101638) :
   citable **en complément**, jamais à la place de l'arrêt au fond.
 
@@ -196,9 +198,11 @@ collectée** — d'où l'exécution de ce chantier **avant la soumission** aux s
 **Ce que l'arrêt JUGE réellement (C2)** : la seule profession **jugée** est
 l'**aide-soignant** (Cons. 1 + Article 1er). L'arrêt **n'énumère PAS** la liste complète :
 il renvoie à la lettre, qui vise « certains professionnels paramédicaux, dont les
-aides-soignants ». La liste complète est dans la **lettre D21-031940**, dont le **texte
-primaire n'a PAS pu être obtenu** (absent de Légifrance ; les sources secondaires
-divergent, notamment sur « infirmiers puériculteurs »).
+aides-soignants ». La liste complète se vérifie dans la **copie primaire de la lettre
+D21-031940 mise à disposition par la FEHAP** : aides-soignants, auxiliaires de
+puériculture, infirmiers de bloc opératoire diplômés d'État, infirmiers anesthésistes
+diplômés d'État, infirmiers en puériculture, conseillers en génétique et assistants
+dentaires. Source primaire : [lettre interministérielle du 30/12/2021](https://www.fehap.fr/jcms/navigation-internet/courrier-ministeres-du-30-decembre-2021-10912_DBFileDocument).
 
 **Mapping vers l'enum professions Jolene** (résout la divergence) : les 7 professions de
 la lettre → **seules 4 existent dans Jolene** : `AS` (JUGÉ), `AUXILIAIRE_PUERICULTURE`,
@@ -211,6 +215,16 @@ génétique », « assistant dentaire » **ne sont pas des professions Jolene** 
   libéral. Centres de santé : **L.6323-1-5 CSP** (« Les professionnels qui exercent au sein
   des centres de santé sont **salariés** ») — **interdiction légale**, pas choix (C5).
 
+#### Démonstration « ni statut autonome, ni nomenclature en propre » (professions de la lettre présentes dans Jolene)
+
+| Profession | Cadre d'actes primaire | Nomenclature / statut libéral propre |
+|---|---|---|
+| `AUXILIAIRE_PUERICULTURE` | Depuis le 30/06/2026, **R.4311-5 CSP** : l'infirmier confie, sous sa responsabilité, certains actes aux auxiliaires qu'il encadre (la décision CE cite l'ancien R.4311-4, en vigueur lors du litige). | Aucun titre propre dans la NGAP ; l'auxiliaire n'est pas un facturant conventionnel autonome. |
+| `IBODE` | **R.4311-11 et R.4311-11-1 CSP** : activité en bloc, présence de l'opérateur ; actes sur protocole signé par le chirurgien, en sa présence ou sur sa demande expresse selon l'acte. | Spécialisation du titre infirmier, sans statut conventionnel IBODE ni cotation NGAP IBODE en propre. |
+| `IADE` | **R.4311-12 CSP** : activité sous le contrôle exclusif d'un médecin anesthésiste-réanimateur, présent sur site et pouvant intervenir à tout moment. | Spécialisation du titre infirmier, sans statut conventionnel IADE ni cotation NGAP IADE en propre. |
+
+Référentiel de nomenclature contrôlé : [NGAP Assurance Maladie, version du 28/05/2026](https://www.ameli.fr/infirmier/exercice-liberal/facturation-remuneration/nomenclatures-ngap-lpp). L'absence est établie par la structure exhaustive de la NGAP (actes remboursables) combinée aux articles d'exercice ci-dessus ; elle ne transforme pas la doctrine ministérielle en décision juridictionnelle pour ces trois professions.
+
 ### 5.2 Matrice cible — 3 niveaux, TABLE PARAMÉTRÉE (zéro règle en dur), C3-C6
 
 Lecture sur la **profession REQUISE PAR LA MISSION**, jamais sur les diplômes du soignant
@@ -221,10 +235,10 @@ sourcée**.
 
 | Profession requise (mission) | Établissement privé (clinique…) | Centre de santé | Établissement public | Source / force |
 |---|---|---|---|---|
-| `AS` | **BLOQUÉ** | **BLOQUÉ** | salarié (défaut public) | **JUGÉ** — CE n°491128 |
-| `AUXILIAIRE_PUERICULTURE`, `IBODE`, `IADE` | **BLOQUÉ** | **BLOQUÉ** | salarié (défaut public) | Doctrine — lettre 30/12/2021 (n° D21-031940), validée par CE n°491128 |
-| `AES`, `PREPARATEUR_PHARMA` (sans exercice libéral) | **BLOQUÉ** | **BLOQUÉ** | salarié | Absence de cadre libéral de la profession |
-| **`MANIPULATEUR_RADIO`** (C4) | **BLOQUÉ** | **BLOQUÉ** | salarié | Pas de cadre d'exercice libéral propre (sous responsabilité du radiologue, aucune nomenclature d'actes en propre). *Si un statut libéral réel est trouvé → remonter avec source avant de seeder.* |
+| `AS` | **BLOQUÉ** | **BLOQUÉ** | **NON PROPOSÉ → salarié (défaut public)** | **JUGÉ** — CE n°491128 |
+| `AUXILIAIRE_PUERICULTURE`, `IBODE`, `IADE` | **BLOQUÉ** | **BLOQUÉ** | **NON PROPOSÉ → salarié (défaut public)** | Doctrine — lettre 30/12/2021 (n° D21-031940), validée par CE n°491128 |
+| `AES`, `PREPARATEUR_PHARMA` (sans exercice libéral) | **BLOQUÉ** | **BLOQUÉ** | **NON PROPOSÉ → salarié (défaut public)** | Absence de cadre libéral de la profession |
+| **`MANIPULATEUR_RADIO`** (C4) | **BLOQUÉ** | **BLOQUÉ** | **NON PROPOSÉ → salarié (défaut public)** | L.4351-1 CSP : prescription et responsabilité d'un médecin ; aucune nomenclature d'actes en propre. |
 | **`MEDECIN`, `DENTISTE`, `SAGE_FEMME`** (praticiens) | **AUTORISÉ** (contrat d'exercice libéral, honoraires facturés directement) | **BLOQUÉ** (C5) | salarié (défaut public — recrutement contractuel ; L.6146-2 CSP hors flux plateforme au lancement) | AUTORISÉ = cellule explicite ; centre de santé = **L.6323-1-5 CSP** |
 | **`PHARMACIEN`** (C3) | **NON PROPOSÉ → salarié** | **NON PROPOSÉ → salarié** | salarié | Mission d'établissement = pharmacien de **PUI** (salarié) ; le remplacement de titulaire d'officine n'est pas une mission d'établissement Jolene |
 | **`IDE`** + paramédicaux libéraux (`KINE`, `ORTHOPHONISTE`, `DIETETICIEN`, `ERGOTHERAPEUTE`, `PSYCHOMOTRICIEN`) | **NON PROPOSÉ → salarié par défaut** | **NON PROPOSÉ → salarié** | salarié | Faisceau : raisonnement CE transposable (subordination organisationnelle), soins inclus dans les tarifs de l'établissement, contrôles URSSAF — **choix de conformité Jolene** |
@@ -257,12 +271,12 @@ sourcée**.
 - **Reframe soignant IDE** (côté soignant) : « Tes missions **salariées** comptent dans les
   **3200 h** d'expérience requises pour l'installation en libéral. »
 
-### 5.4 Encodage technique (GO conditionné à C1-C7)
+### 5.4 Encodage technique (C1-C7 intégrées — prêt pour relecture éclair)
 
 - Table `matrice_modes_exercice(profession, type_etablissement, niveau, source_libelle,
   source_force)` — **seed cellule par cellule depuis 5.2**, **défaut = NON PROPOSÉ/salarié**
   (C6) ; **zéro règle juridique en dur** (`grep` doit le prouver). `fn_profession_peut_etre_liberal`
-  et le trigger `dec_valider_type_contrat_mission` réécrits pour **lire la table** ; nouvelle
+  et le trigger `dec_valider_compatibilite_mission_liberal` réécrits pour **lire la table** ;
   `fn_mode_exercice(profession, type_etablissement)` → `{niveau, source_libelle}` consommée
   par le formulaire.
 - **Types d'établissement** : mapping `type` → catégorie {privé, centre_de_santé, public}

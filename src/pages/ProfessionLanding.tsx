@@ -10,7 +10,7 @@ import { Euro, Clock, ShieldCheck, TrendingUp, Stethoscope, ArrowRight } from 'l
 const avantages = [
   { icon: Euro, titre: 'Rémunération transparente', desc: 'Taux horaire affiché avant candidature. Zéro frais cachés, paiement garanti sous 7 jours.' },
   { icon: Clock, titre: 'Flexibilité des horaires', desc: 'Choisissez vos missions, vos jours et vos créneaux. Vous gardez le contrôle de votre emploi du temps.' },
-  { icon: ShieldCheck, titre: 'Contrats conformes', desc: 'CDD ou vacation générés automatiquement, conformes au Code du Travail et signés électroniquement.' },
+  { icon: ShieldCheck, titre: 'Contrats conformes', desc: 'CDD, y compris courts, générés automatiquement et signés électroniquement.' },
   { icon: TrendingUp, titre: 'Évolution de carrière', desc: 'Missions variées et, pour les professions autorisées en libéral, cumul de vos heures suivi heure par heure vers les 3 200 h.' },
 ];
 
@@ -36,7 +36,7 @@ const faqParProfession: Record<string, { q: string; a: string }[]> = {
 
 const defaultFaq = [
   { q: 'Comment s\'inscrire sur Jolene ?', a: 'L\'inscription est gratuite et prend moins de 2 minutes. Renseignez votre profession, téléversez vos documents (diplôme, RPPS/ADELI, RCP) et validez votre profil. La vérification est automatique : identité professionnelle contrôlée via l\'Annuaire Santé (ou Pro Santé Connect) et documents analysés dès leur téléversement.' },
-  { q: 'Quels types de contrats sont proposés ?', a: 'Jolene propose des missions en CDD (Contrat à Durée Déterminée), en vacation et en exercice libéral selon votre profession et votre statut. Le type de contrat est précisé sur chaque annonce de mission.' },
+  { q: 'Quels types de contrats sont proposés ?', a: 'Jolene propose des missions salariées en CDD, y compris des CDD courts, et des missions en exercice libéral lorsqu’elles sont explicitement ouvertes. Le type de contrat est précisé sur chaque annonce.' },
   { q: 'Comment est calculée la rémunération ?', a: 'Le taux horaire brut est affiché sur chaque mission. S\'y ajoutent les majorations légales (nuit, week-end, férié), l\'IFM (10%) et l\'ICP (10%) pour les CDD. Le détail complet est visible avant la candidature.' },
   { q: 'Dans quels établissements puis-je travailler ?', a: 'Jolene référence des hôpitaux publics, cliniques privées, EHPAD, SSIAD, HAD, pharmacies d\'officine, centres de santé, laboratoires et établissements médico-sociaux (IME, MAS, FAM).' },
 ];
@@ -55,7 +55,7 @@ export default function ProfessionLanding() {
   return (
     <>
       <SEOHead
-        title={`Missions ${professionLabel} — remplacement & vacations | Jolene Santé`}
+        title={`Missions ${professionLabel} — remplacements & CDD courts | Jolene Santé`}
         description={`${professionDesc} Taux horaire moyen : ${salaire}. Inscription gratuite, soignants vérifiés, paiement garanti.`}
         url={`https://jolene.app/metier/${professionSlug}`}
       />

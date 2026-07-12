@@ -8,7 +8,7 @@ const FAQ = [
   { q: "Jolene Santé est-elle une agence d'intérim ?", r: "Non. Jolene Santé est une plateforme de mise en relation directe : vous publiez votre besoin, des soignants vérifiés candidatent, et vous contractualisez directement avec eux. Pas de marge d'agence." },
   { q: "Combien coûte le service ?", r: "15 % de commission tout compris sur le montant de la mission, sans abonnement ni frais d'entrée. Vous ne payez que lorsque vous recrutez." },
   { q: "Comment les soignants sont-ils vérifiés ?", r: "Chaque soignant fournit son diplôme, son numéro RPPS et son assurance responsabilité civile professionnelle, contrôlés avant toute mise en relation." },
-  { q: "Quels types de contrats sont possibles ?", r: "Selon le profil et votre besoin : CDD, vacation, ou contrat avec un soignant libéral. Les contrats sont générés automatiquement et les démarches administratives facilitées." },
+  { q: "Quels types de contrats sont possibles ?", r: "Selon la mission : CDD, y compris CDD court, ou exercice libéral lorsqu'il est explicitement proposé. Les contrats sont générés automatiquement et les démarches administratives facilitées." },
   { q: "Quelles professions puis-je recruter ?", r: "Infirmiers (IDE), aides-soignants (AS et AES), kinésithérapeutes, pharmaciens, préparateurs en pharmacie, sages-femmes et d'autres professions de santé." },
   { q: "Suis-je engagé sur la durée ?", r: "Non, aucun engagement ni abonnement. Vous publiez un besoin uniquement lorsque vous en avez un." },
 ];
@@ -25,7 +25,7 @@ const faqJsonLd = {
 
 const garanties = [
   { icon: ShieldCheck, titre: 'RPPS vérifié', desc: 'Chaque soignant est vérifié via le Répertoire Partagé des Professionnels de Santé. Diplômes et assurance RCP contrôlés.' },
-  { icon: Scale, titre: 'Conformité Code du Travail', desc: 'Contrats CDD ou vacation générés automatiquement, durées maximales respectées, repos obligatoires vérifiés.' },
+  { icon: Scale, titre: 'Conformité Code du Travail', desc: 'Contrats CDD, y compris courts, générés automatiquement, durées maximales respectées et repos obligatoires vérifiés.' },
   { icon: PercentCircle, titre: 'Tarification transparente', desc: 'Commission unique de 15 % sur le montant de la mission. Aucun abonnement, aucun frais caché.' },
   { icon: Receipt, titre: 'Facturation automatique', desc: 'Factures mensuelles consolidées, compatibles Chorus Pro pour le secteur public. Paiement par carte ou virement.' },
 ];

@@ -48,12 +48,12 @@ export default function VilleLanding() {
     <>
       <SEOHead
         title={`Missions soignants à ${villeNom} | Jolene Santé`}
-        description={`Missions de remplacement santé à ${villeNom}${villeDept ? ` (${villeDept})` : ''} : infirmiers, aides-soignants, pharmaciens et 15+ professions. Inscription gratuite, vacations et remplacements.`}
+        description={`Missions de remplacement santé à ${villeNom}${villeDept ? ` (${villeDept})` : ''} : infirmiers, aides-soignants, pharmaciens et 15+ professions. Inscription gratuite, CDD courts et remplacements.`}
         url={`https://jolene.app/emploi-soignant/${villeSlug}`}
       />
       <SEOPageLayout
         heroTitle={`Missions soignants à ${villeNom}`}
-        heroSubtitle={`Trouvez des remplacements et vacations en santé à ${villeNom}${villeDept ? ` (${villeDept})` : ''}. Hôpitaux, cliniques, EHPAD, pharmacies.`}
+        heroSubtitle={`Trouvez des remplacements et CDD courts en santé à ${villeNom}${villeDept ? ` (${villeDept})` : ''}. Hôpitaux, cliniques, EHPAD, pharmacies.`}
         ctaText="Voir les missions disponibles"
         ctaHref="/inscription/soignant"
       >

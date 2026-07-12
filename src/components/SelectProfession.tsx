@@ -72,6 +72,7 @@ export function SelectProfession({ value, onChange, disabled, filtresProfessions
                 <CommandItem
                   key={p.valeur}
                   value={p.valeur}
+                  data-testid={`profession-option-${p.valeur}`}
                   onSelect={(v) => {
                     onChange(v);
                     setOpen(false);

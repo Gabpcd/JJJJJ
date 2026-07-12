@@ -57,7 +57,7 @@ const libelleStatut = (s: string) =>
 
 const TYPE_CONTRAT_LABEL: Record<string, string> = {
   CDD: 'CDD',
-  VACATION: 'Vacation',
+  VACATION: 'CDD court',
   LIBERAL: 'Libéral',
   SALARIE: 'Salarié',
 };
