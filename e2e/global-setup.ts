@@ -81,7 +81,37 @@ export default async function globalSetup() {
     else console.log(`[global-setup] ${ids.length} mission(s) de test orpheline(s) purgée(s).`);
   }
 
-  // 2. État volatile du soignant test (quota super-likes du jour, swipes badges
+  // 2. Factures résiduelles du compte TECHNIQUE Playwright. Ce compte est
+  //    distinct des comptes de démonstration/review : toutes ses données sont
+  //    exclusivement créées par la CI. Une facture EMISE laissée par un run
+  //    ancien déclenche légitimement le gel J+15 et fait ensuite échouer toutes
+  //    les créations de missions du run suivant. On annule donc uniquement les
+  //    factures impayées de ce compte technique, sans toucher aux données démo.
+  const { data: etablissementTest, error: etablissementError } = await admin
+    .from('etablissements')
+    .select('id')
+    .eq('email', 'playwright-etab@jolene.app')
+    .maybeSingle();
+  if (etablissementError || !etablissementTest?.id) {
+    throw new Error(
+      `[global-setup] compte établissement Playwright introuvable : ${etablissementError?.message || 'aucune ligne'}`,
+    );
+  }
+
+  const { data: facturesAnnulees, error: facturesError } = await admin
+    .from('factures')
+    .update({ statut: 'ANNULEE' })
+    .eq('etablissement_id', etablissementTest.id)
+    .eq('statut', 'EMISE')
+    .select('id');
+  if (facturesError) {
+    throw new Error(`[global-setup] neutralisation des factures Playwright impossible : ${facturesError.message}`);
+  }
+  if ((facturesAnnulees ?? []).length > 0) {
+    console.log(`[global-setup] ${(facturesAnnulees ?? []).length} facture(s) technique(s) Playwright annulée(s).`);
+  }
+
+  // 3. État volatile du soignant test (quota super-likes du jour, swipes badges
   //    résiduels) — repart de zéro pour les tests de matching.
   const { data: soignant } = await admin
     .from('soignants')
