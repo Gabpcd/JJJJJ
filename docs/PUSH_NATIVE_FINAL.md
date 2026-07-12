@@ -55,7 +55,7 @@ utilise le son de notification système ; les payloads serveur envoient
 
 ## Build
 
-Le 12/07/2026, l'archive iOS `1.0 (2)` a été produite avec Xcode 26.5,
+Le 12/07/2026, l'archive iOS `1.0 (3)` a été produite avec Xcode 26.5,
 re-signée en distribution SOIN DIRECT avec `aps-environment=production`, puis
 acceptée par App Store Connect. Le lint Android Release passe avec SDK 36 et
 Gradle 8.14.5 ; la production de l'AAB reste volontairement stoppée tant que

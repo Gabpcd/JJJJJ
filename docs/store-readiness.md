@@ -10,8 +10,9 @@ repo.
 |---|---|---|
 | Build web production | ✅ | `npm run build` |
 | Synchronisation Capacitor | ✅ | 15 plugins iOS et Android, sans géolocalisation de fond |
-| Build iOS Xcode 26 | ✅ archive App Store | Xcode 26.5, SDK iOS 26.5, archive Release `1.0 (2)` validée |
+| Build iOS Xcode 26 | ✅ archive App Store | Xcode 26.5, SDK iOS 26.5, archive Release `1.0 (3)` validée |
 | Distribution iOS | ✅ uploadée | IPA signée `Apple Distribution: SOIN DIRECT`, upload App Store Connect accepté le 12/07/2026 |
+| Rendu iPhone 6,9 pouces | ✅ simulateur | barre d'état lisible et capture native `1320 × 2868` validée sur iPhone 17 Pro Max |
 | Privacy manifest iOS | ✅ | membre de la cible et présent à la racine de `App.app` |
 | Permissions GPS | ✅ minimisées | When In Use/foreground : pointage ou action volontaire « me localiser » du profil/adresse |
 | QR natif | ✅ | `@capacitor/barcode-scanner`, QR-only |
@@ -29,13 +30,13 @@ repo.
 
 - [x] Générer automatiquement le profil App Store pour l'équipe `FPQ78HDF4Y`
   (SOIN DIRECT) et `app.jolene`, avec Push Notifications et Associated Domains.
-- [x] Archiver, exporter et uploader `Jolene 1.0 (2)` vers App Store Connect.
+- [x] Archiver, exporter et uploader `Jolene 1.0 (3)` vers App Store Connect.
 - [x] Vérifier la présence côté Supabase de `APNS_KEY_P8`, `APNS_KEY_ID`,
   `APNS_TEAM_ID`, `APNS_BUNDLE_ID` et `APNS_ENVIRONMENT`.
 - [ ] Après traitement App Store Connect, installer le build TestFlight et
   valider un push réel (la présence des secrets ne valide pas leurs valeurs).
-- [ ] Déployer l'AASA avec `Content-Type: application/json`, sans redirection,
-  puis réinstaller l'app après propagation du CDN Apple.
+- [x] Déployer l'AASA avec `Content-Type: application/json`, sans redirection,
+  puis vérifier sa propagation sur le CDN Apple pour l'équipe `FPQ78HDF4Y`.
 - [ ] Reporter exactement les catégories de `PrivacyInfo.xcprivacy` dans App
   Privacy, avec GPS lié au compte, limité au pointage et à la localisation
   volontaire du profil/adresse, jamais en continu.
