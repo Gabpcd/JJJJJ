@@ -3753,6 +3753,21 @@ $$;
 ALTER FUNCTION "public"."fn_accepter_mission_urgence"("p_mission_id" "uuid") OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."fn_acquitter_alerte"("p_id" "uuid") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+BEGIN
+  IF NOT est_admin() THEN RETURN jsonb_build_object('error', 'Accès refusé'); END IF;
+  UPDATE alertes_systeme SET acquitte_le = now() WHERE id = p_id AND resolu_le IS NULL;
+  RETURN jsonb_build_object('success', true);
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_acquitter_alerte"("p_id" "uuid") OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."fn_activer_garantie_mission"("p_mission_id" "uuid", "p_actif" boolean) RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
@@ -3938,6 +3953,26 @@ $$;
 
 
 ALTER FUNCTION "public"."fn_admin_ajouter_document_soignant"("p_soignant_id" "uuid", "p_type_document" "text", "p_cle" "text", "p_nom_fichier" "text", "p_type_mime" "text", "p_taille_octets" bigint, "p_valider" boolean) OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."fn_admin_alertes_actives"() RETURNS "jsonb"
+    LANGUAGE "plpgsql" STABLE SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+BEGIN
+  IF NOT est_admin() THEN RETURN jsonb_build_object('error', 'Accès refusé'); END IF;
+  RETURN COALESCE((SELECT jsonb_agg(jsonb_build_object(
+    'id', id, 'type', type_alerte, 'severite', severite, 'source', source,
+    'message', message, 'occurrences', occurrences,
+    'premiere', cree_le, 'derniere', derniere_occurrence,
+    'acquittee', acquitte_le IS NOT NULL
+  ) ORDER BY (severite = 'CRITICAL') DESC, derniere_occurrence DESC)
+  FROM alertes_systeme WHERE resolu_le IS NULL), '[]'::jsonb);
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_admin_alertes_actives"() OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."fn_admin_bfa_calculer"("p_annee" integer DEFAULT (EXTRACT(year FROM "now"()))::integer) RETURNS "jsonb"
@@ -4322,6 +4357,7 @@ DECLARE
   v_etabs_30j int;
   v_missions_terminees int;
   v_missions_mois int;
+  v_argent jsonb;
   v_gmv_total numeric;
   v_revenue_total numeric;
   v_revenue_mois numeric;
@@ -4350,13 +4386,13 @@ BEGIN
   SELECT count(*) INTO v_missions_mois FROM missions
     WHERE statut = 'TERMINEE' AND debut_le >= date_trunc('month', now());
 
-  SELECT coalesce(sum(total_brut), 0) INTO v_gmv_total FROM missions WHERE statut = 'TERMINEE';
-  SELECT coalesce(sum(montant_commission_ht), 0) INTO v_revenue_total
-    FROM missions WHERE statut = 'TERMINEE' AND montant_commission_ht IS NOT NULL;
-  SELECT coalesce(sum(montant_commission_ht), 0) INTO v_revenue_mois
-    FROM missions
-    WHERE statut = 'TERMINEE' AND montant_commission_ht IS NOT NULL
-    AND debut_le >= date_trunc('month', now());
+  -- Montants headline (GMV, revenus) lus depuis la SOURCE UNIQUE
+  -- fn_admin_metriques_argent — jamais recalculés ici, pour des chiffres
+  -- strictement identiques au tableau de bord (réel, hors comptes test).
+  v_argent := public.fn_admin_metriques_argent();
+  v_gmv_total := COALESCE((v_argent#>>'{gmv,total_reel}')::numeric, 0);
+  v_revenue_total := COALESCE((v_argent#>>'{commission,total_reel}')::numeric, 0);
+  v_revenue_mois := COALESCE((v_argent#>>'{commission,mois_reel}')::numeric, 0);
 
   SELECT CASE WHEN v_total_soignants = 0 THEN 0 ELSE
     round(100.0 * (SELECT count(DISTINCT soignant_id) FROM candidatures) / v_total_soignants, 1)
@@ -4380,6 +4416,7 @@ BEGIN
     ) AS m(mois)
   ) t;
 
+  -- Timeseries revenus : exclut aussi les comptes test.
   SELECT coalesce(jsonb_agg(row_to_json(t)::jsonb ORDER BY t.mois), '[]'::jsonb)
   INTO v_revenue_mensuel
   FROM (
@@ -4388,15 +4425,21 @@ BEGIN
       coalesce((
         SELECT sum(mi.montant_commission_ht)
         FROM missions mi
+        LEFT JOIN etablissements e ON e.id = mi.etablissement_id
+        LEFT JOIN soignants s ON s.id = mi.soignant_assigne_id
         WHERE mi.statut = 'TERMINEE'
         AND mi.montant_commission_ht IS NOT NULL
         AND date_trunc('month', mi.debut_le) = m.mois
+        AND NOT (COALESCE(e.est_compte_test,false) OR COALESCE(s.est_compte_test,false))
       ), 0) AS revenue_ht,
       coalesce((
         SELECT sum(mi.total_brut)
         FROM missions mi
+        LEFT JOIN etablissements e ON e.id = mi.etablissement_id
+        LEFT JOIN soignants s ON s.id = mi.soignant_assigne_id
         WHERE mi.statut = 'TERMINEE'
         AND date_trunc('month', mi.debut_le) = m.mois
+        AND NOT (COALESCE(e.est_compte_test,false) OR COALESCE(s.est_compte_test,false))
       ), 0) AS gmv
     FROM generate_series(
       date_trunc('month', now()) - interval '11 months',
@@ -5531,50 +5574,38 @@ BEGIN
     IF NOT est_admin() THEN RETURN '{"error":"Accès réservé aux administrateurs"}'::JSONB; END IF;
 
     SELECT jsonb_build_object(
-        -- Totaux
         'soignants_total', (SELECT COUNT(*) FROM soignants WHERE supprime_le IS NULL),
         'etablissements_total', (SELECT COUNT(*) FROM etablissements WHERE supprime_le IS NULL),
         'missions_terminees_total', (SELECT COUNT(*) FROM missions WHERE statut = 'TERMINEE'),
         'missions_terminees_mois', (SELECT COUNT(*) FROM missions WHERE statut = 'TERMINEE' AND fin_le >= debut_mois AND fin_le < fin_mois),
         'missions_ouvertes', (SELECT COUNT(*) FROM missions WHERE statut IN ('OUVERTE','ASSIGNEE','EN_COURS')),
 
-        -- Nouveaux
         'soignants_semaine', (SELECT COUNT(*) FROM soignants WHERE supprime_le IS NULL AND cree_le >= debut_semaine),
         'etablissements_semaine', (SELECT COUNT(*) FROM etablissements WHERE supprime_le IS NULL AND cree_le >= debut_semaine),
 
-        -- Litiges
         'litiges_ouverts', (SELECT COUNT(*) FROM litiges WHERE statut IN ('OUVERT','EN_DISCUSSION','EN_MEDIATION','CONTESTEE')),
 
-        -- COMMISSIONS JOLENE = ce que Jolene garde (pas le GMV)
-        -- Réalisé ce mois : commissions des missions déjà TERMINEE ce mois
         'ca_commissions_ht_mois', (
             SELECT COALESCE(SUM(montant_commission_ht), 0)
             FROM missions
             WHERE statut = 'TERMINEE' AND fin_le >= debut_mois AND fin_le < fin_mois
         ),
-        -- Potentiel ce mois = réalisé + missions ASSIGNEE/EN_COURS dont fin_le est ce mois (projection)
         'ca_potentiel_mois', (
             SELECT COALESCE(SUM(montant_commission_ht), 0)
             FROM missions
             WHERE fin_le >= debut_mois AND fin_le < fin_mois
               AND statut IN ('TERMINEE','ASSIGNEE','EN_COURS')
         ),
-
-        -- Encaissé total = factures payées (l'argent réellement sur le compte)
         'ca_encaisse_total', (
             SELECT COALESCE(SUM(montant_ht), 0)
             FROM factures
             WHERE statut = 'PAYEE'
         ),
-        -- Potentiel total = toutes les commissions sur missions TERMINEE (facturables)
         'ca_potentiel_total', (
             SELECT COALESCE(SUM(montant_commission_ht), 0)
             FROM missions
             WHERE statut = 'TERMINEE'
         ),
-
-        -- GMV (volume brut transité) = total brut des missions = ce que les établissements paient aux soignants via Jolene
-        -- C'est PAS du CA Jolene, juste le volume d'affaires qui passe par la plateforme
         'gmv_mois', (
             SELECT COALESCE(SUM(total_brut), 0)
             FROM missions
@@ -5587,7 +5618,7 @@ BEGIN
         ),
 
         'taux_acceptation_mois', (
-            SELECT CASE 
+            SELECT CASE
                 WHEN COUNT(*) FILTER (WHERE cree_le >= debut_mois) = 0 THEN 0
                 ELSE ROUND(100.0 * COUNT(*) FILTER (WHERE statut IN ('ASSIGNEE','EN_COURS','TERMINEE') AND cree_le >= debut_mois)
                     / NULLIF(COUNT(*) FILTER (WHERE cree_le >= debut_mois), 0))
@@ -5597,7 +5628,9 @@ BEGIN
 
         'factures_impayees', (SELECT COUNT(*) FROM factures WHERE statut IN ('EMISE','EN_RETARD')),
         'docs_en_attente', (SELECT COUNT(*) FROM documents_soignants WHERE statut_verification = 'EN_ATTENTE'),
-        'etab_en_attente', (SELECT COUNT(*) FROM etablissements WHERE statut_verification = 'EN_ATTENTE')
+        -- Aligné sur la file de travail réelle (source unique) — plus de divergence 10 vs 6.
+        'etab_en_attente', (SELECT COUNT(*) FROM etablissements
+            WHERE supprime_le IS NULL AND COALESCE(rattachement_verifie,false)=false AND COALESCE(statut_verification,'')<>'REJETE')
     ) INTO result;
 
     RETURN result;
@@ -6360,6 +6393,93 @@ $$;
 
 
 ALTER FUNCTION "public"."fn_admin_mes_acces"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."fn_admin_metriques_argent"() RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+DECLARE
+  result jsonb;
+  debut_mois timestamptz := date_trunc('month', now());
+  fin_mois   timestamptz := date_trunc('month', now()) + INTERVAL '1 month';
+BEGIN
+  IF NOT est_admin() THEN
+    RETURN jsonb_build_object('error', 'Accès réservé aux administrateurs');
+  END IF;
+
+  WITH m AS (
+    SELECT mi.montant_commission_ht, mi.montant_commission_tva, mi.total_brut, mi.fin_le,
+           NOT (COALESCE(e.est_compte_test,false) OR COALESCE(s.est_compte_test,false)) AS est_reel
+    FROM missions mi
+    LEFT JOIN etablissements e ON e.id = mi.etablissement_id
+    LEFT JOIN soignants s ON s.id = mi.soignant_assigne_id
+    WHERE mi.statut = 'TERMINEE'
+  ),
+  f AS (
+    SELECT fa.montant_ht, fa.montant_ttc, fa.statut,
+           NOT COALESCE(e.est_compte_test,false) AS est_reel
+    FROM factures fa
+    LEFT JOIN etablissements e ON e.id = fa.etablissement_id
+  ),
+  esc AS (
+    SELECT pe.commission_cents, pe.debite_le,
+           NOT (COALESCE(e.est_compte_test,false) OR COALESCE(s.est_compte_test,false)) AS est_reel
+    FROM paiements_escrow pe
+    LEFT JOIN etablissements e ON e.id = pe.etablissement_id
+    LEFT JOIN soignants s ON s.id = pe.soignant_id
+  )
+  SELECT jsonb_build_object(
+    -- ══ COMMISSION JOLENE (CA) — HT — accrual sur missions TERMINEE ══
+    'commission', jsonb_build_object(
+      'unite', 'HT',
+      'total_reel', (SELECT COALESCE(SUM(montant_commission_ht),0) FROM m WHERE est_reel),
+      'total_test', (SELECT COALESCE(SUM(montant_commission_ht),0) FROM m WHERE NOT est_reel),
+      'mois_reel',  (SELECT COALESCE(SUM(montant_commission_ht),0) FROM m WHERE est_reel     AND fin_le>=debut_mois AND fin_le<fin_mois),
+      'mois_test',  (SELECT COALESCE(SUM(montant_commission_ht),0) FROM m WHERE NOT est_reel AND fin_le>=debut_mois AND fin_le<fin_mois),
+      'tva_reel',   (SELECT COALESCE(SUM(montant_commission_tva),0) FROM m WHERE est_reel)
+    ),
+    -- ══ ENCAISSÉ (commission réellement perçue) — cash : factures PAYEE + escrow débité ══
+    -- escrow.commission_cents compté en HT (la TVA sur commission est portée par la facture émise séparément).
+    'encaisse', jsonb_build_object(
+      'ht_reel',  ROUND((SELECT COALESCE(SUM(montant_ht),0)  FROM f   WHERE statut='PAYEE' AND est_reel)
+                + (SELECT COALESCE(SUM(commission_cents),0)/100.0 FROM esc WHERE debite_le IS NOT NULL AND est_reel), 2),
+      'ttc_reel', ROUND((SELECT COALESCE(SUM(montant_ttc),0) FROM f   WHERE statut='PAYEE' AND est_reel)
+                + (SELECT COALESCE(SUM(commission_cents),0)/100.0 FROM esc WHERE debite_le IS NOT NULL AND est_reel), 2),
+      'ht_test',  ROUND((SELECT COALESCE(SUM(montant_ht),0)  FROM f   WHERE statut='PAYEE' AND NOT est_reel)
+                + (SELECT COALESCE(SUM(commission_cents),0)/100.0 FROM esc WHERE debite_le IS NOT NULL AND NOT est_reel), 2)
+    ),
+    -- ══ FACTURABLE (plafond commission encaissable, HT) = commission des missions TERMINEE ══
+    'facturable', jsonb_build_object(
+      'unite', 'HT',
+      'ht_reel', (SELECT COALESCE(SUM(montant_commission_ht),0) FROM m WHERE est_reel),
+      'ht_test', (SELECT COALESCE(SUM(montant_commission_ht),0) FROM m WHERE NOT est_reel)
+    ),
+    -- ══ GMV (volume brut transité = honoraires bruts des missions) ══
+    'gmv', jsonb_build_object(
+      'unite', 'brut',
+      'total_reel', (SELECT COALESCE(SUM(total_brut),0) FROM m WHERE est_reel),
+      'total_test', (SELECT COALESCE(SUM(total_brut),0) FROM m WHERE NOT est_reel),
+      'mois_reel',  (SELECT COALESCE(SUM(total_brut),0) FROM m WHERE est_reel     AND fin_le>=debut_mois AND fin_le<fin_mois),
+      'mois_test',  (SELECT COALESCE(SUM(total_brut),0) FROM m WHERE NOT est_reel AND fin_le>=debut_mois AND fin_le<fin_mois)
+    ),
+    -- ══ Divers cockpit ══
+    'nb_missions_terminees_reel', (SELECT COUNT(*) FROM m WHERE est_reel),
+    'nb_missions_terminees_test', (SELECT COUNT(*) FROM m WHERE NOT est_reel),
+    -- Compteur « établissements à valider » = MÊME filtre que la file de travail
+    -- (fn_admin_lister_etablissements_a_verifier) — source unique du KPI et de l'alerte.
+    'etab_a_valider', (SELECT COUNT(*) FROM etablissements
+        WHERE supprime_le IS NULL AND COALESCE(rattachement_verifie,false)=false AND COALESCE(statut_verification,'')<>'REJETE'),
+    'a_des_donnees_test', (SELECT EXISTS(SELECT 1 FROM etablissements WHERE COALESCE(est_compte_test,false))
+                              OR EXISTS(SELECT 1 FROM soignants WHERE COALESCE(est_compte_test,false)))
+  ) INTO result;
+
+  RETURN result;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_admin_metriques_argent"() OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."fn_admin_moderer_document"("p_document_id" "uuid", "p_action" "text", "p_motif" "text" DEFAULT NULL::"text") RETURNS "jsonb"
@@ -10242,29 +10362,54 @@ CREATE OR REPLACE FUNCTION "public"."fn_audit_rls_strict"() RETURNS "jsonb"
     LANGUAGE "plpgsql" STABLE SECURITY DEFINER
     SET "search_path" TO 'public'
     AS $$
-DECLARE v_uid uuid := auth.uid(); v_tables_sans_rls jsonb; v_tables_avec_rls_faible jsonb;
+DECLARE
+  v_uid uuid := auth.uid();
+  v_total int;
+  v_problemes jsonb;
+  v_nb_sans_rls int;
+  v_nb_sans_policy int;
 BEGIN
   IF v_uid IS NULL OR NOT est_admin() THEN
     RETURN jsonb_build_object('success', false, 'error', 'Admin requis');
   END IF;
-  SELECT jsonb_agg(c.relname) INTO v_tables_sans_rls
+
+  SELECT count(*) INTO v_total
   FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
-  WHERE n.nspname = 'public' AND c.relkind = 'r' AND c.relrowsecurity = false
+  WHERE n.nspname = 'public' AND c.relkind = 'r'
     AND c.relname NOT IN ('signature_rate_limit_ip', 'spatial_ref_sys');
-  SELECT jsonb_agg(jsonb_build_object('table', c.relname, 'policies', cnt))
-  INTO v_tables_avec_rls_faible
-  FROM (
-    SELECT c.relname, COUNT(p.polname) AS cnt
+
+  WITH sans_rls AS (
+    SELECT c.relname AS t, 'RLS_DESACTIVEE' AS type
+    FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+    WHERE n.nspname = 'public' AND c.relkind = 'r' AND c.relrowsecurity = false
+      AND c.relname NOT IN ('signature_rate_limit_ip', 'spatial_ref_sys')
+  ),
+  sans_policy AS (
+    SELECT c.relname AS t, 'RLS_ACTIVE_SANS_POLICY' AS type
     FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
     LEFT JOIN pg_policy p ON p.polrelid = c.oid
     WHERE n.nspname = 'public' AND c.relkind = 'r' AND c.relrowsecurity = true
     GROUP BY c.relname HAVING COUNT(p.polname) = 0
-  ) c;
-  RETURN jsonb_build_object('success', true,
-    'tables_sans_rls', COALESCE(v_tables_sans_rls, '[]'::jsonb),
-    'tables_rls_active_sans_policy', COALESCE(v_tables_avec_rls_faible, '[]'::jsonb),
-    'exec_le', NOW());
-END; $$;
+  ),
+  tous AS (SELECT * FROM sans_rls UNION ALL SELECT * FROM sans_policy)
+  SELECT
+    COALESCE(jsonb_agg(jsonb_build_object('type', type, 'table', t) ORDER BY type, t), '[]'::jsonb),
+    (SELECT count(*) FROM sans_rls),
+    (SELECT count(*) FROM sans_policy)
+  INTO v_problemes, v_nb_sans_rls, v_nb_sans_policy
+  FROM tous;
+
+  RETURN jsonb_build_object(
+    'success', true,
+    'verdict', CASE WHEN (v_nb_sans_rls + v_nb_sans_policy) = 0 THEN 'OK' ELSE 'KO' END,
+    'total_tables', v_total,
+    'tables_sans_rls', v_nb_sans_rls,
+    'tables_sans_policy', v_nb_sans_policy,
+    'problemes', v_problemes,
+    'executed_at', NOW()
+  );
+END;
+$$;
 
 
 ALTER FUNCTION "public"."fn_audit_rls_strict"() OWNER TO "postgres";
@@ -10607,6 +10752,40 @@ $$;
 
 
 ALTER FUNCTION "public"."fn_auto_publier_evaluation"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."fn_auto_resoudre_alertes_crons"() RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public', 'extensions'
+    AS $$
+DECLARE v_alerte RECORD; v_last_status text; v_last_run timestamptz; v_job_exists boolean; v_n int := 0;
+BEGIN
+  IF NOT fn_est_contexte_cron_ou_admin() THEN
+    RAISE EXCEPTION 'Accès refusé' USING ERRCODE = '42501';
+  END IF;
+  FOR v_alerte IN SELECT id, source, derniere_occurrence FROM alertes_systeme
+                  WHERE resolu_le IS NULL AND type_alerte LIKE 'CRON%' LOOP
+    SELECT true, d.status, d.start_time INTO v_job_exists, v_last_status, v_last_run
+    FROM cron.job j
+    LEFT JOIN LATERAL (SELECT status, start_time FROM cron.job_run_details WHERE jobid = j.jobid ORDER BY start_time DESC LIMIT 1) d ON true
+    WHERE j.jobname = v_alerte.source
+    LIMIT 1;
+
+    IF v_job_exists AND v_last_status = 'succeeded' AND v_last_run > v_alerte.derniere_occurrence THEN
+      UPDATE alertes_systeme SET resolu_le = now(), resolu_motif = 'auto: cron repassé vert' WHERE id = v_alerte.id;
+      v_n := v_n + 1;
+    ELSIF v_job_exists IS NULL AND v_alerte.derniere_occurrence < now() - INTERVAL '72 hours' THEN
+      -- cron décommissionné (plus dans cron.job) + fenêtre de grâce écoulée
+      UPDATE alertes_systeme SET resolu_le = now(), resolu_motif = 'auto: cron décommissionné (orphelin, >72h)' WHERE id = v_alerte.id;
+      v_n := v_n + 1;
+    END IF;
+  END LOOP;
+  RETURN jsonb_build_object('success', true, 'resolues', v_n);
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_auto_resoudre_alertes_crons"() OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."fn_auto_revoke_anon_execute"() RETURNS "event_trigger"
@@ -11218,6 +11397,27 @@ $$;
 
 
 ALTER FUNCTION "public"."fn_bloquer_delete_doc_verifie"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."fn_bloquer_utilisateur"("p_cible_id" "uuid", "p_motif" "text" DEFAULT NULL::"text") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+DECLARE v_uid uuid := auth.uid();
+BEGIN
+  IF v_uid IS NULL THEN RETURN jsonb_build_object('error', 'Non authentifié'); END IF;
+  IF p_cible_id IS NULL OR p_cible_id = v_uid THEN
+    RETURN jsonb_build_object('error', 'Cible invalide.');
+  END IF;
+  INSERT INTO utilisateurs_bloques (bloqueur_id, bloque_id, motif)
+  VALUES (v_uid, p_cible_id, NULLIF(TRIM(COALESCE(p_motif, '')), ''))
+  ON CONFLICT (bloqueur_id, bloque_id) DO UPDATE SET motif = EXCLUDED.motif;
+  RETURN jsonb_build_object('success', true);
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_bloquer_utilisateur"("p_cible_id" "uuid", "p_motif" "text") OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."fn_booster_mission"("p_mission_id" "uuid") RETURNS "jsonb"
@@ -12287,13 +12487,16 @@ BEGIN
   SELECT COUNT(*) INTO v_nb_terminees_12m FROM missions
   WHERE soignant_assigne_id = p_soignant_id AND statut = 'TERMINEE' AND fin_le >= v_since;
 
+  -- FIX Finding #3 : double-aveugle — n'agréger que les notes PUBLIÉES
+  -- (publie_le IS NOT NULL), comme les 3 autres surfaces. Une note non publiée
+  -- ne doit JAMAIS déplacer le score public du soignant avant réciprocité.
   SELECT COUNT(*),
     SUM(((critere_1 + critere_2 + critere_3 + critere_4) / 4.0) * GREATEST(0, 1 - EXTRACT(EPOCH FROM (NOW() - cree_le))/(365.0*86400))) /
     NULLIF(SUM(GREATEST(0, 1 - EXTRACT(EPOCH FROM (NOW() - cree_le))/(365.0*86400))), 0)
   INTO v_nb_notations, v_notation_etab
   FROM notations_missions
   WHERE note_id = p_soignant_id AND sens = 'ETAB_VERS_SOIGNANT'
-    AND cree_le >= v_since AND masque = false;
+    AND cree_le >= v_since AND masque = false AND publie_le IS NOT NULL;
 
   IF v_nb_notations < 3 OR v_notation_etab IS NULL THEN
     v_notation_etab := NULL;
@@ -15372,6 +15575,22 @@ $$;
 ALTER FUNCTION "public"."fn_dashboard_soignant_complet"() OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."fn_debloquer_utilisateur"("p_cible_id" "uuid") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+DECLARE v_uid uuid := auth.uid();
+BEGIN
+  IF v_uid IS NULL THEN RETURN jsonb_build_object('error', 'Non authentifié'); END IF;
+  DELETE FROM utilisateurs_bloques WHERE bloqueur_id = v_uid AND bloque_id = p_cible_id;
+  RETURN jsonb_build_object('success', true);
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_debloquer_utilisateur"("p_cible_id" "uuid") OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."fn_declarer_arret_maladie"("p_mission_id" "uuid", "p_message" "text" DEFAULT NULL::"text") RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
@@ -17259,19 +17478,20 @@ CREATE OR REPLACE FUNCTION "public"."fn_emettre_alerte_monitoring"("p_type" "tex
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public', 'extensions'
     AS $$
-DECLARE v_id UUID; v_existing UUID;
+DECLARE v_id UUID;
 BEGIN
   IF NOT fn_est_contexte_cron_ou_admin() THEN
     RAISE EXCEPTION 'Accès refusé' USING ERRCODE = '42501';
   END IF;
-  SELECT id INTO v_existing FROM alertes_systeme
-  WHERE type_alerte = p_type AND source = p_source AND resolu_le IS NULL
-    AND cree_le > NOW() - INTERVAL '1 hour'
-  LIMIT 1;
-  IF v_existing IS NOT NULL THEN RETURN v_existing; END IF;
-
-  INSERT INTO alertes_systeme (type_alerte, severite, source, message, details)
-  VALUES (p_type, p_severite, p_source, p_message, p_details)
+  INSERT INTO alertes_systeme (type_alerte, severite, source, message, details, occurrences, derniere_occurrence)
+  VALUES (p_type, p_severite, p_source, p_message, p_details, 1, now())
+  ON CONFLICT (source, type_alerte) WHERE resolu_le IS NULL
+  DO UPDATE SET
+    occurrences = alertes_systeme.occurrences + 1,
+    derniere_occurrence = now(),
+    severite = EXCLUDED.severite,
+    message = EXCLUDED.message,
+    details = EXCLUDED.details
   RETURNING id INTO v_id;
   RETURN v_id;
 END;
@@ -17731,8 +17951,8 @@ CREATE OR REPLACE FUNCTION "public"."fn_envoyer_message"("p_conversation_id" "uu
     AS $$
 DECLARE
     v_conv RECORD;
+    v_autre uuid;
 BEGIN
-    -- ★ Vérifier longueur
     IF p_contenu IS NULL OR LENGTH(TRIM(p_contenu)) < 1 THEN
         RETURN jsonb_build_object('error', 'Le message ne peut pas être vide.');
     END IF;
@@ -17749,7 +17969,18 @@ BEGIN
         RETURN '{"error":"Accès refusé"}'::JSONB;
     END IF;
 
-    -- ★ XSS protection
+    -- Blocage (App Store 1.2) : si l'un des deux participants a bloqué l'autre,
+    -- plus aucun message ne passe (dans les deux sens).
+    v_autre := CASE WHEN v_conv.participant_1_id = auth.uid()
+                    THEN v_conv.participant_2_id ELSE v_conv.participant_1_id END;
+    IF v_autre IS NOT NULL AND EXISTS (
+      SELECT 1 FROM utilisateurs_bloques
+      WHERE (bloqueur_id = auth.uid() AND bloque_id = v_autre)
+         OR (bloqueur_id = v_autre AND bloque_id = auth.uid())
+    ) THEN
+        RETURN jsonb_build_object('error', 'Vous ne pouvez plus échanger avec cet utilisateur (blocage actif).');
+    END IF;
+
     INSERT INTO messages_chat (conversation_id, auteur_id, contenu, est_admin)
     VALUES (p_conversation_id, auth.uid(), fn_html_escape(p_contenu), est_admin());
 
@@ -18657,6 +18888,17 @@ $$;
 
 
 ALTER FUNCTION "public"."fn_escrow_rembourser"("p_paiement_escrow_id" "uuid", "p_montant_honoraires_cts" integer, "p_annulation_totale" boolean, "p_motif" "text") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."fn_est_bloque"("p_cible_id" "uuid") RETURNS boolean
+    LANGUAGE "sql" STABLE SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+  SELECT EXISTS (SELECT 1 FROM utilisateurs_bloques WHERE bloqueur_id = auth.uid() AND bloque_id = p_cible_id);
+$$;
+
+
+ALTER FUNCTION "public"."fn_est_bloque"("p_cible_id" "uuid") OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."fn_est_contexte_cron_ou_admin"() RETURNS boolean
@@ -23166,6 +23408,7 @@ BEGIN
   WHERE n.note_id = v_target_id
     AND n.sens = v_target_sens
     AND n.masque = false
+    AND n.publie_le IS NOT NULL
     AND n.cree_le > v_seuil_periode
     AND (p_note_min IS NULL OR ROUND(((n.critere_1 + n.critere_2 + n.critere_3 + n.critere_4) / 4.0)::numeric, 1) >= p_note_min)
     AND (p_etablissement_id IS NULL OR m.etablissement_id = p_etablissement_id);
@@ -23198,6 +23441,7 @@ BEGIN
     WHERE n.note_id = v_target_id
       AND n.sens = v_target_sens
       AND n.masque = false
+      AND n.publie_le IS NOT NULL
       AND n.cree_le > v_seuil_periode
       AND (p_note_min IS NULL OR ROUND(((n.critere_1 + n.critere_2 + n.critere_3 + n.critere_4) / 4.0)::numeric, 1) >= p_note_min)
       AND (p_etablissement_id IS NULL OR m.etablissement_id = p_etablissement_id)
@@ -23215,7 +23459,7 @@ BEGIN
   )
   INTO v_stats
   FROM public.notations_missions n
-  WHERE n.note_id = v_target_id AND n.sens = v_target_sens AND n.masque = false;
+  WHERE n.note_id = v_target_id AND n.sens = v_target_sens AND n.masque = false AND n.publie_le IS NOT NULL;
 
   -- Évolution 6 derniers mois (note moyenne par mois)
   SELECT COALESCE(jsonb_agg(jsonb_build_object(
@@ -23232,19 +23476,19 @@ BEGIN
     WHERE n.note_id = v_target_id
       AND n.sens = v_target_sens
       AND n.masque = false
+      AND n.publie_le IS NOT NULL
       AND n.cree_le > now() - INTERVAL '6 months'
     GROUP BY 1
   ) x;
 
   -- Liste étabs ayant évalué le soignant (pour dropdown filtre)
-  -- (uniquement pour sens ETAB_VERS_SOIGNANT, sinon liste les soignants — moins pertinent côté soignant)
   IF v_target_sens = 'ETAB_VERS_SOIGNANT' THEN
     SELECT COALESCE(jsonb_agg(DISTINCT jsonb_build_object('id', e.id, 'nom', e.nom)), '[]'::jsonb)
     INTO v_etabs_disponibles
     FROM public.notations_missions n
     JOIN public.missions m ON m.id = n.mission_id
     JOIN public.etablissements e ON e.id = m.etablissement_id
-    WHERE n.note_id = v_target_id AND n.sens = v_target_sens AND n.masque = false;
+    WHERE n.note_id = v_target_id AND n.sens = v_target_sens AND n.masque = false AND n.publie_le IS NOT NULL;
   ELSE
     v_etabs_disponibles := '[]'::jsonb;
   END IF;
@@ -29174,6 +29418,21 @@ $_$;
 ALTER FUNCTION "public"."fn_resolve_template_contrat"("p_type_contrat" "text", "p_profession" "text", "p_type_etab" "text") OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."fn_resoudre_alerte"("p_id" "uuid", "p_motif" "text" DEFAULT NULL::"text") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+BEGIN
+  IF NOT est_admin() THEN RETURN jsonb_build_object('error', 'Accès refusé'); END IF;
+  UPDATE alertes_systeme SET resolu_le = now(), resolu_motif = p_motif WHERE id = p_id AND resolu_le IS NULL;
+  RETURN jsonb_build_object('success', true);
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_resoudre_alerte"("p_id" "uuid", "p_motif" "text") OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."fn_resoudre_litige"("p_litige_id" "uuid", "p_statut" "text", "p_resolution" "text") RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
@@ -29983,6 +30242,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_score_etab_public"("p_etab_id" "uuid") R
 DECLARE
   v_uid UUID := auth.uid();
   v_a_eu_mission BOOLEAN := false;
+  v_nb_evals INT := 0;
   v_result JSONB;
 BEGIN
   IF v_uid IS NULL THEN RETURN jsonb_build_object('error', 'Non authentifié'); END IF;
@@ -29991,9 +30251,19 @@ BEGIN
   IF NOT v_a_eu_mission AND NOT est_admin() THEN
     RETURN jsonb_build_object('error', 'Accès refusé');
   END IF;
+
+  -- Gate Finding #2 : compte d'évaluations SOIGNANT_VERS_ETAB PUBLIÉES.
+  SELECT COUNT(*) INTO v_nb_evals
+  FROM notations_missions
+  WHERE note_id = p_etab_id AND sens = 'SOIGNANT_VERS_ETAB'
+    AND masque = false AND publie_le IS NOT NULL;
+
   SELECT jsonb_build_object(
     'etablissement_id', e.id, 'nom', e.nom,
-    'score_qualite', e.score_qualite, 'niveau', e.niveau
+    'nb_evaluations_publiees', v_nb_evals,
+    -- score/niveau masqués tant que < 3 évaluations publiées (→ badge « Nouveau »)
+    'score_qualite', CASE WHEN v_nb_evals >= 3 THEN e.score_qualite ELSE NULL END,
+    'niveau', CASE WHEN v_nb_evals >= 3 THEN e.niveau ELSE NULL END
   ) INTO v_result FROM etablissements e WHERE e.id = p_etab_id;
   RETURN COALESCE(v_result, '{}'::jsonb);
 END;
@@ -33286,10 +33556,10 @@ BEGIN
     FROM etablissements WHERE id = NEW.etablissement_id;
 
     IF v_mode IS NULL THEN
-      RAISE EXCEPTION 'Configurez votre mode de paiement avant d''attribuer une mission (Paramètres → Facturation).';
+      RAISE EXCEPTION 'Cette mission ne peut pas être attribuée : l''établissement doit d''abord configurer un mode de paiement (Paramètres → Facturation).';
     END IF;
     IF v_mode = 'SEPA_DEBIT' AND NOT v_mandat THEN
-      RAISE EXCEPTION 'Votre mandat SEPA n''est pas encore posé : ajoutez votre IBAN (Paramètres → Facturation) avant d''attribuer la mission.';
+      RAISE EXCEPTION 'Cette mission ne peut pas être attribuée : le mandat SEPA de l''établissement n''est pas encore posé (IBAN à ajouter dans Paramètres → Facturation).';
     END IF;
   END IF;
   RETURN NEW;
@@ -34084,6 +34354,18 @@ BEGIN
   IF public.fn_param_num('alertes_tripwire_actives', 1) <> 1 THEN
     RETURN;
   END IF;
+
+  -- 1. Alerte in-app CRITICAL dans le canal (visible cockpit, dédupliquée).
+  BEGIN
+    INSERT INTO public.alertes_systeme (type_alerte, severite, source, message, details, occurrences, derniere_occurrence, email_envoye_le)
+    VALUES ('TRIPWIRE_PREMIER_EURO', 'CRITICAL', p_sujet, p_sujet, jsonb_build_object('corps', p_corps), 1, now(), now())
+    ON CONFLICT (source, type_alerte) WHERE resolu_le IS NULL
+    DO UPDATE SET occurrences = alertes_systeme.occurrences + 1, derniere_occurrence = now(), email_envoye_le = now(), details = EXCLUDED.details;
+  EXCEPTION WHEN OTHERS THEN
+    NULL; -- non bloquant.
+  END;
+
+  -- 2. Email (inchangé — edge notify-support).
   BEGIN
     PERFORM net.http_post(
       url := 'https://flripxtsyegjshnhzjkz.supabase.co/functions/v1/notify-support',
@@ -34091,11 +34373,7 @@ BEGIN
         'Content-Type', 'application/json',
         'Authorization', 'Bearer ' || (SELECT decrypted_secret FROM vault.decrypted_secrets WHERE name = 'service_role_key' LIMIT 1)
       ),
-      body := jsonb_build_object(
-        'sujet', p_sujet,
-        'corps', p_corps,
-        'source', 'tripwire-paiement'
-      )
+      body := jsonb_build_object('sujet', p_sujet, 'corps', p_corps, 'source', 'tripwire-paiement')
     );
   EXCEPTION WHEN OTHERS THEN
     NULL; -- non bloquant : une alerte ratée ne casse jamais le flux métier.
@@ -36547,6 +36825,10 @@ CREATE TABLE IF NOT EXISTS "public"."alertes_systeme" (
     "resolu_le" timestamp with time zone,
     "email_envoye_le" timestamp with time zone,
     "cree_le" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "occurrences" integer DEFAULT 1 NOT NULL,
+    "derniere_occurrence" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "acquitte_le" timestamp with time zone,
+    "resolu_motif" "text",
     CONSTRAINT "alertes_systeme_severite_check" CHECK (("severite" = ANY (ARRAY['INFO'::"text", 'WARNING'::"text", 'CRITICAL'::"text"])))
 );
 
@@ -37600,6 +37882,66 @@ ALTER TABLE ONLY "public"."evaluations" FORCE ROW LEVEL SECURITY;
 
 
 ALTER TABLE "public"."evaluations" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "public"."notations_missions" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "mission_id" "uuid" NOT NULL,
+    "notateur_id" "uuid" NOT NULL,
+    "note_id" "uuid" NOT NULL,
+    "sens" "public"."sens_notation" NOT NULL,
+    "critere_1" integer NOT NULL,
+    "critere_2" integer NOT NULL,
+    "critere_3" integer NOT NULL,
+    "critere_4" integer NOT NULL,
+    "commentaire" "text",
+    "signale" boolean DEFAULT false NOT NULL,
+    "masque" boolean DEFAULT false NOT NULL,
+    "masque_par" "uuid",
+    "masque_le" timestamp with time zone,
+    "cree_le" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "mis_a_jour_le" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "notateur_anonymise" boolean DEFAULT false NOT NULL,
+    "publie_le" timestamp with time zone,
+    CONSTRAINT "notations_missions_commentaire_check" CHECK ((("commentaire" IS NULL) OR ("length"("commentaire") <= 2000))),
+    CONSTRAINT "notations_missions_critere_1_check" CHECK ((("critere_1" >= 1) AND ("critere_1" <= 5))),
+    CONSTRAINT "notations_missions_critere_2_check" CHECK ((("critere_2" >= 1) AND ("critere_2" <= 5))),
+    CONSTRAINT "notations_missions_critere_3_check" CHECK ((("critere_3" >= 1) AND ("critere_3" <= 5))),
+    CONSTRAINT "notations_missions_critere_4_check" CHECK ((("critere_4" >= 1) AND ("critere_4" <= 5)))
+);
+
+
+ALTER TABLE "public"."notations_missions" OWNER TO "postgres";
+
+
+CREATE OR REPLACE VIEW "public"."evaluations_publiees" AS
+ SELECT "id",
+    "mission_id",
+    "notateur_id",
+    "note_id",
+    "sens",
+    "critere_1",
+    "critere_2",
+    "critere_3",
+    "critere_4",
+    "commentaire",
+    "signale",
+    "masque",
+    "masque_par",
+    "masque_le",
+    "cree_le",
+    "mis_a_jour_le",
+    "notateur_anonymise",
+    "publie_le"
+   FROM "public"."notations_missions"
+  WHERE (("publie_le" IS NOT NULL) AND ("masque" = false));
+
+
+ALTER VIEW "public"."evaluations_publiees" OWNER TO "postgres";
+
+
+COMMENT ON VIEW "public"."evaluations_publiees" IS 'Source canonique des notations visibles (double-aveugle). Toute agrégation publique de score DOIT lire ici (ou répliquer publie_le IS NOT NULL AND masque = false), jamais notations_missions brute. Cf. Finding #3 / pattern CLAUDE.md publication différée.';
+
 
 
 CREATE TABLE IF NOT EXISTS "public"."evenements_risque_paires" (
@@ -38758,36 +39100,6 @@ CREATE TABLE IF NOT EXISTS "public"."missions_sauvegardees" (
 
 
 ALTER TABLE "public"."missions_sauvegardees" OWNER TO "postgres";
-
-
-CREATE TABLE IF NOT EXISTS "public"."notations_missions" (
-    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
-    "mission_id" "uuid" NOT NULL,
-    "notateur_id" "uuid" NOT NULL,
-    "note_id" "uuid" NOT NULL,
-    "sens" "public"."sens_notation" NOT NULL,
-    "critere_1" integer NOT NULL,
-    "critere_2" integer NOT NULL,
-    "critere_3" integer NOT NULL,
-    "critere_4" integer NOT NULL,
-    "commentaire" "text",
-    "signale" boolean DEFAULT false NOT NULL,
-    "masque" boolean DEFAULT false NOT NULL,
-    "masque_par" "uuid",
-    "masque_le" timestamp with time zone,
-    "cree_le" timestamp with time zone DEFAULT "now"() NOT NULL,
-    "mis_a_jour_le" timestamp with time zone DEFAULT "now"() NOT NULL,
-    "notateur_anonymise" boolean DEFAULT false NOT NULL,
-    "publie_le" timestamp with time zone,
-    CONSTRAINT "notations_missions_commentaire_check" CHECK ((("commentaire" IS NULL) OR ("length"("commentaire") <= 2000))),
-    CONSTRAINT "notations_missions_critere_1_check" CHECK ((("critere_1" >= 1) AND ("critere_1" <= 5))),
-    CONSTRAINT "notations_missions_critere_2_check" CHECK ((("critere_2" >= 1) AND ("critere_2" <= 5))),
-    CONSTRAINT "notations_missions_critere_3_check" CHECK ((("critere_3" >= 1) AND ("critere_3" <= 5))),
-    CONSTRAINT "notations_missions_critere_4_check" CHECK ((("critere_4" >= 1) AND ("critere_4" <= 5)))
-);
-
-
-ALTER TABLE "public"."notations_missions" OWNER TO "postgres";
 
 
 CREATE TABLE IF NOT EXISTS "public"."notifications" (
@@ -40081,6 +40393,18 @@ COMMENT ON TABLE "public"."typing_status" IS 'Sprint 10-A v3 PR 3 : indicateur t
 
 
 
+CREATE TABLE IF NOT EXISTS "public"."utilisateurs_bloques" (
+    "bloqueur_id" "uuid" NOT NULL,
+    "bloque_id" "uuid" NOT NULL,
+    "motif" "text",
+    "cree_le" timestamp with time zone DEFAULT "now"() NOT NULL,
+    CONSTRAINT "chk_pas_soi_meme" CHECK (("bloqueur_id" <> "bloque_id"))
+);
+
+
+ALTER TABLE "public"."utilisateurs_bloques" OWNER TO "postgres";
+
+
 ALTER TABLE ONLY "public"."admin_invocations"
     ADD CONSTRAINT "admin_invocations_pkey" PRIMARY KEY ("id");
 
@@ -41173,6 +41497,11 @@ ALTER TABLE ONLY "public"."mission_creneaux"
 
 ALTER TABLE ONLY "public"."paiements_mission"
     ADD CONSTRAINT "uq_paiements_mission_mission_id" UNIQUE ("mission_id");
+
+
+
+ALTER TABLE ONLY "public"."utilisateurs_bloques"
+    ADD CONSTRAINT "utilisateurs_bloques_pkey" PRIMARY KEY ("bloqueur_id", "bloque_id");
 
 
 
@@ -42393,6 +42722,10 @@ CREATE INDEX "idx_typing_status_user_id" ON "public"."typing_status" USING "btre
 
 
 CREATE UNIQUE INDEX "sms_envoyes_idempotency_key_uniq" ON "public"."sms_envoyes" USING "btree" ("idempotency_key") WHERE ("idempotency_key" IS NOT NULL);
+
+
+
+CREATE UNIQUE INDEX "uidx_alertes_actives_source_type" ON "public"."alertes_systeme" USING "btree" ("source", "type_alerte") WHERE ("resolu_le" IS NULL);
 
 
 
@@ -44136,6 +44469,16 @@ ALTER TABLE ONLY "public"."typing_status"
 
 
 
+ALTER TABLE ONLY "public"."utilisateurs_bloques"
+    ADD CONSTRAINT "utilisateurs_bloques_bloque_id_fkey" FOREIGN KEY ("bloque_id") REFERENCES "auth"."users"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."utilisateurs_bloques"
+    ADD CONSTRAINT "utilisateurs_bloques_bloqueur_id_fkey" FOREIGN KEY ("bloqueur_id") REFERENCES "auth"."users"("id") ON DELETE CASCADE;
+
+
+
 CREATE POLICY "Admin gère factures honoraires" ON "public"."factures_honoraires" TO "authenticated" USING ("public"."est_admin"()) WITH CHECK ("public"."est_admin"());
 
 
@@ -44865,6 +45208,10 @@ CREATE POLICY "pol_bfa_select" ON "public"."bfa_suivi" FOR SELECT TO "authentica
 
 
 
+CREATE POLICY "pol_blocages_select" ON "public"."utilisateurs_bloques" FOR SELECT USING ((("bloqueur_id" = ( SELECT "auth"."uid"() AS "uid")) OR ( SELECT "public"."est_admin"() AS "est_admin")));
+
+
+
 CREATE POLICY "pol_cal_token_delete" ON "public"."tokens_calendrier" FOR DELETE TO "authenticated" USING (("soignant_id" = ( SELECT "auth"."uid"() AS "uid")));
 
 
@@ -45339,7 +45686,7 @@ CREATE POLICY "pol_notations_insert" ON "public"."notations_missions" FOR INSERT
 
 
 
-CREATE POLICY "pol_notations_select" ON "public"."notations_missions" FOR SELECT USING (((("note_id" = ( SELECT "auth"."uid"() AS "uid")) AND ("masque" = false)) OR (("note_id" = "public"."mon_etablissement_id"()) AND ("masque" = false)) OR ("notateur_id" = ( SELECT "auth"."uid"() AS "uid")) OR ("notateur_id" = "public"."mon_etablissement_id"()) OR ( SELECT "public"."est_admin"() AS "est_admin")));
+CREATE POLICY "pol_notations_select" ON "public"."notations_missions" FOR SELECT USING (((("note_id" = ( SELECT "auth"."uid"() AS "uid")) AND ("masque" = false) AND ("publie_le" IS NOT NULL)) OR (("note_id" = "public"."mon_etablissement_id"()) AND ("masque" = false) AND ("publie_le" IS NOT NULL)) OR ("notateur_id" = ( SELECT "auth"."uid"() AS "uid")) OR ("notateur_id" = "public"."mon_etablissement_id"()) OR ( SELECT "public"."est_admin"() AS "est_admin")));
 
 
 
@@ -46004,6 +46351,9 @@ ALTER TABLE "public"."tokens_push" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "public"."typing_status" ENABLE ROW LEVEL SECURITY;
 
 
+ALTER TABLE "public"."utilisateurs_bloques" ENABLE ROW LEVEL SECURITY;
+
+
 REVOKE USAGE ON SCHEMA "public" FROM PUBLIC;
 GRANT USAGE ON SCHEMA "public" TO "authenticated";
 GRANT USAGE ON SCHEMA "public" TO "service_role";
@@ -46526,6 +46876,12 @@ GRANT ALL ON FUNCTION "public"."fn_accepter_mission_urgence"("p_mission_id" "uui
 
 
 
+REVOKE ALL ON FUNCTION "public"."fn_acquitter_alerte"("p_id" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_acquitter_alerte"("p_id" "uuid") TO "service_role";
+GRANT ALL ON FUNCTION "public"."fn_acquitter_alerte"("p_id" "uuid") TO "authenticated";
+
+
+
 REVOKE ALL ON FUNCTION "public"."fn_activer_garantie_mission"("p_mission_id" "uuid", "p_actif" boolean) FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_activer_garantie_mission"("p_mission_id" "uuid", "p_actif" boolean) TO "authenticated";
 GRANT ALL ON FUNCTION "public"."fn_activer_garantie_mission"("p_mission_id" "uuid", "p_actif" boolean) TO "service_role";
@@ -46547,6 +46903,12 @@ GRANT ALL ON FUNCTION "public"."fn_admin_acquisition_canaux"("p_jours" integer) 
 REVOKE ALL ON FUNCTION "public"."fn_admin_ajouter_document_soignant"("p_soignant_id" "uuid", "p_type_document" "text", "p_cle" "text", "p_nom_fichier" "text", "p_type_mime" "text", "p_taille_octets" bigint, "p_valider" boolean) FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_admin_ajouter_document_soignant"("p_soignant_id" "uuid", "p_type_document" "text", "p_cle" "text", "p_nom_fichier" "text", "p_type_mime" "text", "p_taille_octets" bigint, "p_valider" boolean) TO "authenticated";
 GRANT ALL ON FUNCTION "public"."fn_admin_ajouter_document_soignant"("p_soignant_id" "uuid", "p_type_document" "text", "p_cle" "text", "p_nom_fichier" "text", "p_type_mime" "text", "p_taille_octets" bigint, "p_valider" boolean) TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."fn_admin_alertes_actives"() FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_admin_alertes_actives"() TO "service_role";
+GRANT ALL ON FUNCTION "public"."fn_admin_alertes_actives"() TO "authenticated";
 
 
 
@@ -46857,6 +47219,12 @@ GRANT ALL ON FUNCTION "public"."fn_admin_masquer_notation"("p_notation_id" "uuid
 REVOKE ALL ON FUNCTION "public"."fn_admin_mes_acces"() FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_admin_mes_acces"() TO "authenticated";
 GRANT ALL ON FUNCTION "public"."fn_admin_mes_acces"() TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."fn_admin_metriques_argent"() FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_admin_metriques_argent"() TO "service_role";
+GRANT ALL ON FUNCTION "public"."fn_admin_metriques_argent"() TO "authenticated";
 
 
 
@@ -47251,6 +47619,11 @@ GRANT ALL ON FUNCTION "public"."fn_auto_publier_evaluation"() TO "service_role";
 
 
 
+REVOKE ALL ON FUNCTION "public"."fn_auto_resoudre_alertes_crons"() FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_auto_resoudre_alertes_crons"() TO "service_role";
+
+
+
 REVOKE ALL ON FUNCTION "public"."fn_auto_revoke_anon_execute"() FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_auto_revoke_anon_execute"() TO "service_role";
 
@@ -47327,6 +47700,12 @@ GRANT ALL ON FUNCTION "public"."fn_block_bulletin_paie_delete"() TO "service_rol
 
 REVOKE ALL ON FUNCTION "public"."fn_bloquer_delete_doc_verifie"() FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_bloquer_delete_doc_verifie"() TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."fn_bloquer_utilisateur"("p_cible_id" "uuid", "p_motif" "text") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_bloquer_utilisateur"("p_cible_id" "uuid", "p_motif" "text") TO "service_role";
+GRANT ALL ON FUNCTION "public"."fn_bloquer_utilisateur"("p_cible_id" "uuid", "p_motif" "text") TO "authenticated";
 
 
 
@@ -47706,6 +48085,12 @@ GRANT ALL ON FUNCTION "public"."fn_dashboard_soignant_complet"() TO "service_rol
 
 
 
+REVOKE ALL ON FUNCTION "public"."fn_debloquer_utilisateur"("p_cible_id" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_debloquer_utilisateur"("p_cible_id" "uuid") TO "service_role";
+GRANT ALL ON FUNCTION "public"."fn_debloquer_utilisateur"("p_cible_id" "uuid") TO "authenticated";
+
+
+
 REVOKE ALL ON FUNCTION "public"."fn_declarer_arret_maladie"("p_mission_id" "uuid", "p_message" "text") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_declarer_arret_maladie"("p_mission_id" "uuid", "p_message" "text") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."fn_declarer_arret_maladie"("p_mission_id" "uuid", "p_message" "text") TO "service_role";
@@ -48000,6 +48385,12 @@ GRANT ALL ON FUNCTION "public"."fn_escrow_releases_a_traiter"("p_limit" integer)
 
 REVOKE ALL ON FUNCTION "public"."fn_escrow_rembourser"("p_paiement_escrow_id" "uuid", "p_montant_honoraires_cts" integer, "p_annulation_totale" boolean, "p_motif" "text") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_escrow_rembourser"("p_paiement_escrow_id" "uuid", "p_montant_honoraires_cts" integer, "p_annulation_totale" boolean, "p_motif" "text") TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."fn_est_bloque"("p_cible_id" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_est_bloque"("p_cible_id" "uuid") TO "service_role";
+GRANT ALL ON FUNCTION "public"."fn_est_bloque"("p_cible_id" "uuid") TO "authenticated";
 
 
 
@@ -49295,6 +49686,12 @@ GRANT ALL ON FUNCTION "public"."fn_reset_onboarding"() TO "service_role";
 REVOKE ALL ON FUNCTION "public"."fn_resolve_template_contrat"("p_type_contrat" "text", "p_profession" "text", "p_type_etab" "text") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_resolve_template_contrat"("p_type_contrat" "text", "p_profession" "text", "p_type_etab" "text") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."fn_resolve_template_contrat"("p_type_contrat" "text", "p_profession" "text", "p_type_etab" "text") TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."fn_resoudre_alerte"("p_id" "uuid", "p_motif" "text") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_resoudre_alerte"("p_id" "uuid", "p_motif" "text") TO "service_role";
+GRANT ALL ON FUNCTION "public"."fn_resoudre_alerte"("p_id" "uuid", "p_motif" "text") TO "authenticated";
 
 
 
@@ -50782,6 +51179,15 @@ GRANT ALL ON TABLE "public"."evaluations" TO "service_role";
 
 
 
+GRANT SELECT,INSERT,UPDATE ON TABLE "public"."notations_missions" TO "authenticated";
+GRANT ALL ON TABLE "public"."notations_missions" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."evaluations_publiees" TO "service_role";
+
+
+
 GRANT ALL ON TABLE "public"."evenements_risque_paires" TO "service_role";
 
 
@@ -50970,11 +51376,6 @@ GRANT ALL ON TABLE "public"."missions" TO "service_role";
 
 GRANT ALL ON TABLE "public"."missions_sauvegardees" TO "service_role";
 GRANT SELECT,INSERT,DELETE ON TABLE "public"."missions_sauvegardees" TO "authenticated";
-
-
-
-GRANT SELECT,INSERT,UPDATE ON TABLE "public"."notations_missions" TO "authenticated";
-GRANT ALL ON TABLE "public"."notations_missions" TO "service_role";
 
 
 
@@ -51274,6 +51675,10 @@ GRANT ALL ON TABLE "public"."tokens_push" TO "service_role";
 
 
 GRANT ALL ON TABLE "public"."typing_status" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."utilisateurs_bloques" TO "service_role";
 
 
 
