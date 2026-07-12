@@ -56,7 +56,7 @@ function safeNotificationLink(raw: unknown): SafeLinkResult {
     if (!isRelative && !/^https:\/\//i.test(raw)) return { provided: true, value: null };
     const url = new URL(raw, 'https://jolene.app');
     if (url.protocol !== 'https:' || url.port) return { provided: true, value: null };
-    if (!['jolene.app', 'www.jolene.app', 'app.jolene.app'].includes(url.hostname.toLowerCase())) {
+    if (!['jolene.app', 'www.jolene.app'].includes(url.hostname.toLowerCase())) {
       return { provided: true, value: null };
     }
     return {

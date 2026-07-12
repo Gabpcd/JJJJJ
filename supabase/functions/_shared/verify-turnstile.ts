@@ -57,7 +57,7 @@ export async function verifyTurnstileToken(
     }
     const data = await response.json();
     if (data.success === true) {
-      const allowedHostnames = (Deno.env.get('TURNSTILE_ALLOWED_HOSTNAMES') || 'jolene.app,www.jolene.app,app.jolene.app,localhost')
+      const allowedHostnames = (Deno.env.get('TURNSTILE_ALLOWED_HOSTNAMES') || 'jolene.app,www.jolene.app,localhost')
         .split(',').map((value) => value.trim().toLowerCase()).filter(Boolean);
       const hostname = String(data.hostname || '').toLowerCase();
       if (!hostname || !allowedHostnames.includes(hostname)) {
