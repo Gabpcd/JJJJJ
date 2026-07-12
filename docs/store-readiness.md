@@ -10,11 +10,13 @@ repo.
 |---|---|---|
 | Build web production | ✅ | `npm run build` |
 | Synchronisation Capacitor | ✅ | 15 plugins iOS et Android, sans géolocalisation de fond |
-| Build iOS Xcode 26 | ✅ Debug simulateur | Xcode 26.5, SDK iOS Simulator 26.5, `BUILD SUCCEEDED` |
+| Build iOS Xcode 26 | ✅ archive App Store | Xcode 26.5, SDK iOS 26.5, archive Release `1.0 (2)` validée |
+| Distribution iOS | ✅ uploadée | IPA signée `Apple Distribution: SOIN DIRECT`, upload App Store Connect accepté le 12/07/2026 |
 | Privacy manifest iOS | ✅ | membre de la cible et présent à la racine de `App.app` |
 | Permissions GPS | ✅ minimisées | When In Use/foreground : pointage ou action volontaire « me localiser » du profil/adresse |
 | QR natif | ✅ | `@capacitor/barcode-scanner`, QR-only |
 | Universal Links iOS | ✅ repo | AASA valide pour reset, PSC, invitation et missions |
+| Lint Android Release | ✅ | SDK 36, Gradle 8.14.5, `:app:lintRelease` : 0 erreur |
 | App Links Android | ⛔ fingerprint externe | le build release refuse le placeholder actuel |
 | Signature Android | ⛔ externe | le build release refuse l'absence de keystore |
 | Firebase Android | ⛔ externe | `android/app/google-services.json` absent |
@@ -25,9 +27,13 @@ repo.
 
 ### Apple Developer / App Store Connect
 
-- [ ] Sélectionner l'équipe Apple et générer un profil App Store pour
-  `app.jolene` contenant Push Notifications et Associated Domains.
-- [ ] Configurer la clé APNs côté Supabase, puis valider un push sur TestFlight.
+- [x] Générer automatiquement le profil App Store pour l'équipe `FPQ78HDF4Y`
+  (SOIN DIRECT) et `app.jolene`, avec Push Notifications et Associated Domains.
+- [x] Archiver, exporter et uploader `Jolene 1.0 (2)` vers App Store Connect.
+- [x] Vérifier la présence côté Supabase de `APNS_KEY_P8`, `APNS_KEY_ID`,
+  `APNS_TEAM_ID`, `APNS_BUNDLE_ID` et `APNS_ENVIRONMENT`.
+- [ ] Après traitement App Store Connect, installer le build TestFlight et
+  valider un push réel (la présence des secrets ne valide pas leurs valeurs).
 - [ ] Déployer l'AASA avec `Content-Type: application/json`, sans redirection,
   puis réinstaller l'app après propagation du CDN Apple.
 - [ ] Reporter exactement les catégories de `PrivacyInfo.xcprivacy` dans App
@@ -40,9 +46,11 @@ repo.
 
 ### Google Play
 
-- [ ] Installer Android SDK 36 et exécuter `./gradlew lintRelease`.
+- [x] Installer Android SDK 36 et exécuter `:app:lintRelease` (0 erreur).
 - [ ] Ajouter le keystore d'upload, `keystore.properties` et
-  `google-services.json` hors Git.
+  `google-services.json` hors Git. Le secret serveur
+  `FIREBASE_SERVICE_ACCOUNT_JSON` est déjà présent dans Supabase ; il ne
+  remplace pas la configuration Firebase du client Android.
 - [ ] Renseigner l'empreinte SHA-256 de Play App Signing, régénérer puis
   déployer `assetlinks.json`, et vérifier App Links après installation Play.
 - [ ] Exécuter `bundleRelease`, tester l'AAB en piste Internal, puis compléter

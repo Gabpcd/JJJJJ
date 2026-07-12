@@ -22,7 +22,7 @@ tokens du compte sont supprimés en base et les listeners locaux sont retirés.
 ## Configuration iOS hors repo
 
 1. Dans Apple Developer, vérifier l'App ID explicite `app.jolene`, l'équipe
-   `5D9L5FQQ86`, Push Notifications et Associated Domains.
+   `FPQ78HDF4Y` (SOIN DIRECT), Push Notifications et Associated Domains.
 2. Créer une clé APNs `.p8`, puis poser son contenu et ses identifiants dans les
    secrets Supabase : `APNS_KEY_P8`, `APNS_KEY_ID`, `APNS_TEAM_ID`.
 3. Vérifier `APNS_BUNDLE_ID=app.jolene` et choisir l'environnement APNs adapté
@@ -55,6 +55,13 @@ utilise le son de notification système ; les payloads serveur envoient
 
 ## Build
 
+Le 12/07/2026, l'archive iOS `1.0 (2)` a été produite avec Xcode 26.5,
+re-signée en distribution SOIN DIRECT avec `aps-environment=production`, puis
+acceptée par App Store Connect. Le lint Android Release passe avec SDK 36 et
+Gradle 8.14.5 ; la production de l'AAB reste volontairement stoppée tant que
+la signature d'upload, `google-services.json` et l'empreinte Play App Signing
+ne sont pas disponibles.
+
 ```bash
 # Prépare les secrets Android, valide App Links, construit le web et synchronise.
 npm run build:mobile
@@ -67,7 +74,17 @@ cd android && ./gradlew lintRelease bundleRelease
 # Xcode 26 installé localement sur ce Mac
 DEVELOPER_DIR=/Users/gabrielle/Downloads/Xcode.app/Contents/Developer \
   xcodebuild -project ios/App/App.xcodeproj -scheme App \
-  -configuration Release -destination 'generic/platform=iOS' archive
+  -configuration Release -destination 'generic/platform=iOS' \
+  -archivePath "$HOME/Library/Developer/Xcode/Archives/<date>/Jolene.xcarchive" \
+  archive
+
+# Export App Store (configuration non secrète versionnée)
+DEVELOPER_DIR=/Users/gabrielle/Downloads/Xcode.app/Contents/Developer \
+  xcodebuild -exportArchive \
+  -archivePath "$HOME/Library/Developer/Xcode/Archives/<date>/Jolene.xcarchive" \
+  -exportPath "$HOME/Desktop/Jolene-AppStore" \
+  -exportOptionsPlist ios/ExportOptions-AppStore.plist \
+  -allowProvisioningUpdates
 ```
 
 Pour éviter une demande de trousseau dans les exécutions headless SwiftPM,
