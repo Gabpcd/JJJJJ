@@ -137,16 +137,18 @@ jobs:
           SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
 
       - name: Push pending migrations
-        # Pas de --include-all : on laisse le CLI ignorer ce qui est déjà
-        # appliqué. La table schema_migrations contient déjà les versions
-        # appliquées donc db push est quasiment un no-op s'il n'y a rien
-        # de nouveau dans le repo depuis le dernier run.
+        # --include-all est requis lorsqu'une PR ajoute une migration dont le
+        # timestamp est antérieur à la dernière version déjà appliquée (par
+        # exemple un correctif préparé plus tôt puis mergé après un autre lot).
+        # Le CLI s'appuie toujours sur schema_migrations et n'exécute pas une
+        # version déjà enregistrée : l'option autorise seulement le rattrapage
+        # ordonné des fichiers locaux réellement absents du registre remote.
         #
         # Baseline initialisé manuellement le 2026-04-11 : les 141 versions
         # Lovable ont été insérées en bulk dans schema_migrations via MCP
         # execute_sql (le schéma existait déjà, appliqué hors-CLI par
         # Lovable pendant le dev). Les runs suivants sont ~no-op.
-        run: supabase db push --password "$SUPABASE_DB_PASSWORD"
+        run: supabase db push --include-all --password "$SUPABASE_DB_PASSWORD"
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
