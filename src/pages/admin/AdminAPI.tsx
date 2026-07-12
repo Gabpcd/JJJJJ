@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { LayoutAdmin } from '@/components/LayoutAdmin';
-import { ChargementPage } from '@/components/ChargementPage';
+import { ChargementAdmin } from '@/components/admin/ChargementAdmin';
 import { supabase } from '@/integrations/supabase/client';
 import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { BadgeY2K } from '@/components/y2k/BadgeY2K';
@@ -11,59 +11,64 @@ import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { logger } from '@/lib/logger';
 import { toast } from 'sonner';
-import { SUPABASE_URL } from '@/integrations/supabase/client';
-
-const SUPABASE_FUNCTIONS_URL = `${SUPABASE_URL}/functions/v1`;
-
-const ENDPOINTS = [
-  { method: 'GET', path: '/api-v1/missions', desc: 'Lister les missions de l\'établissement', example: '{ "missions": [{ "id": "uuid", "intitule": "IDE Nuit", "debut_le": "2026-03-15T20:00:00Z", "statut": "OUVERTE" }], "count": 1 }' },
-  { method: 'POST', path: '/api-v1/missions', desc: 'Créer une nouvelle mission', example: '{ "mission": { "id": "uuid", "intitule": "IDE Jour", "statut": "OUVERTE" } }' },
-  { method: 'GET', path: '/api-v1/presences', desc: 'Lister les pointages validés', example: '{ "presences": [{ "id": "uuid", "mission_id": "uuid", "pointage_arrivee_le": "2026-03-15T07:00:00Z", "validee_par_etablissement": true }], "count": 1 }' },
-  { method: 'GET', path: '/api-v1/factures', desc: 'Lister les factures émises', example: '{ "factures": [{ "id": "uuid", "numero_facture": "SD-2026-001", "montant_ttc": 150.00, "statut": "PAYEE" }], "count": 1 }' },
-];
-
-const PERMISSIONS = [
-  { value: 'missions:read', label: 'Lire les missions' },
-  { value: 'missions:write', label: 'Créer/modifier des missions' },
-  { value: 'presences:read', label: 'Lire les pointages' },
-  { value: 'factures:read', label: 'Lire les factures' },
-];
-
-const METHOD_COLORS: Record<string, string> = {
-  GET: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
-  POST: 'bg-primary/10 text-primary',
-};
+import { API_BASE_URL, API_ENDPOINTS, API_METHOD_COLORS, API_PERMISSIONS, type ApiKeySafe } from '@/lib/apiDocumentation';
 
 export default function AdminAPI() {
   usePageTitle('API REST');
-  const [keys, setKeys] = useState<any[]>([]);
+  const [keys, setKeys] = useState<ApiKeySafe[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [newName, setNewName] = useState('');
   const [newPerms, setNewPerms] = useState<string[]>(['missions:read']);
   const [generatedKey, setGeneratedKey] = useState<string | null>(null);
+  const [generatedSecret, setGeneratedSecret] = useState<string | null>(null);
+  const [generating, setGenerating] = useState(false);
   const [revealedKeys, setRevealedKeys] = useState<Set<string>>(new Set());
+  const [etablissements, setEtablissements] = useState<Array<{ id: string; nom: string }>>([]);
+  const [selectedEtablissementId, setSelectedEtablissementId] = useState('');
 
   const charger = async () => {
-    const { data } = await supabase.from('api_keys').select('*').order('cree_le', { ascending: false });
-    setKeys(data ?? []);
+    const { data, error } = await supabase.rpc('fn_lister_api_keys' as any, { p_etablissement_id: null });
+    if (error || (data as any)?.success !== true) {
+      toast.error((data as any)?.error || 'Impossible de charger les clés API.');
+      setKeys([]);
+    } else {
+      setKeys(((data as any).keys || []) as ApiKeySafe[]);
+    }
     setLoading(false);
   };
 
-  useEffect(() => { charger(); }, []);
+  useEffect(() => {
+    charger();
+    supabase.from('etablissements').select('id, nom').is('supprime_le', null).order('nom')
+      .then(({ data, error }) => {
+        if (error) return;
+        const liste = (data || []) as Array<{ id: string; nom: string }>;
+        setEtablissements(liste);
+        setSelectedEtablissementId(liste[0]?.id || '');
+      });
+  }, []);
 
-  const [generating, setGenerating] = useState(false);
-
-  const [generatedSecret, setGeneratedSecret] = useState<string | null>(null);
+  useEffect(() => {
+    if (!showModal) return;
+    const fermerAvecEchap = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || generating) return;
+      setShowModal(false);
+      setGeneratedKey(null);
+      setGeneratedSecret(null);
+    };
+    document.addEventListener('keydown', fermerAvecEchap);
+    return () => document.removeEventListener('keydown', fermerAvecEchap);
+  }, [showModal, generating]);
 
   const genererCle = async () => {
-    if (!newName.trim() || generating) return;
+    if (!newName.trim() || !selectedEtablissementId || generating) return;
     setGenerating(true);
     try {
       const { data, error } = await supabase.rpc('fn_creer_api_key' as any, {
         p_nom: newName.trim(),
         p_permissions: newPerms,
-        p_etablissement_id: null,
+        p_etablissement_id: selectedEtablissementId,
       });
       if (error || (data as any)?.error) {
         logger.error('Erreur génération clé API:', error || data);
@@ -104,13 +109,16 @@ export default function AdminAPI() {
   };
 
   const copier = (text: string) => {
-    navigator.clipboard.writeText(text);
+    navigator.clipboard.writeText(text)
+      .then(() => toast.success('Copié dans le presse-papiers'))
+      .catch(() => toast.error('La copie a échoué.'));
   };
 
   const toggleReveal = (id: string) => {
     setRevealedKeys(prev => {
       const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
       return next;
     });
   };
@@ -120,7 +128,7 @@ export default function AdminAPI() {
     return cle.slice(0, 8) + '••••••••••••••••';
   };
 
-  if (loading) return <LayoutAdmin><ChargementPage /></LayoutAdmin>;
+  if (loading) return <LayoutAdmin><ChargementAdmin titre="API REST Jolene v1" /></LayoutAdmin>;
 
   return (
     <LayoutAdmin>
@@ -135,13 +143,14 @@ export default function AdminAPI() {
 
       {/* Documentation */}
       <CardY2K hoverLift={false} className="mb-6">
-        <h2 className="font-bold text-foreground mb-4">Endpoints disponibles</h2>
-        <p className="text-xs text-muted-foreground mb-4">Base URL : <code className="bg-muted px-2 py-0.5 rounded text-foreground">{SUPABASE_FUNCTIONS_URL}</code></p>
+        <h2 className="font-bold text-foreground mb-4">Points d’accès disponibles</h2>
+        <p className="text-xs text-muted-foreground mb-1">Base URL : <code className="bg-muted px-2 py-0.5 rounded text-foreground">{API_BASE_URL}</code></p>
+        <p className="text-xs text-muted-foreground mb-4">Authentification : envoyez les deux en-têtes <code className="bg-muted px-1 rounded">x-api-key</code> et <code className="bg-muted px-1 rounded">x-api-secret</code>. Le secret n’est affiché qu’à la création.</p>
         <div className="space-y-4">
-          {ENDPOINTS.map((ep, i) => (
-            <div key={i} className="border border-border rounded-lg p-4">
+          {API_ENDPOINTS.map((ep) => (
+            <div key={`${ep.method}-${ep.path}`} className="border border-border rounded-lg p-4">
               <div className="flex items-center gap-2 mb-2">
-                <span className={`px-2 py-0.5 rounded text-xs font-bold ${METHOD_COLORS[ep.method]}`}>{ep.method}</span>
+                <span className={`px-2 py-0.5 rounded text-xs font-bold ${API_METHOD_COLORS[ep.method]}`}>{ep.method}</span>
                 <code className="text-sm font-mono text-foreground">{ep.path}</code>
               </div>
               <p className="text-sm text-muted-foreground mb-2">{ep.desc}</p>
@@ -160,7 +169,7 @@ export default function AdminAPI() {
           <h2 className="font-bold text-foreground flex items-center gap-2">
             <Key className="h-5 w-5 text-primary" /> Clés API
           </h2>
-          <BoutonY2K variant="primary" size="sm" onClick={() => { setShowModal(true); setGeneratedKey(null); }} iconeGauche={<Plus className="h-3.5 w-3.5" />}>
+          <BoutonY2K variant="primary" size="sm" disabled={etablissements.length === 0} onClick={() => { setShowModal(true); setGeneratedKey(null); setGeneratedSecret(null); }} iconeGauche={<Plus className="h-3.5 w-3.5" />}>
             Générer une clé
           </BoutonY2K>
         </div>
@@ -183,7 +192,10 @@ export default function AdminAPI() {
                 <tbody>
                   {keys.map(k => (
                     <tr key={k.id} className="border-b border-border/50">
-                      <td className="py-3 font-medium text-foreground">{k.nom}</td>
+                      <td className="py-3 font-medium text-foreground">
+                        {k.nom}
+                        <span className="block max-w-[180px] truncate text-[11px] font-normal text-muted-foreground">{etablissements.find((etablissement) => etablissement.id === k.etablissement_id)?.nom || 'Établissement supprimé ou inaccessible'}</span>
+                      </td>
                       <td className="py-3">
                         <div className="flex items-center gap-1">
                           <code className="text-xs bg-muted px-2 py-0.5 rounded">{masquer(k.cle_api, revealedKeys.has(k.id))}</code>
@@ -243,7 +255,10 @@ export default function AdminAPI() {
               {keys.map(k => (
                 <CardY2K key={k.id} hoverLift={false} className="space-y-3">
                   <div className="flex items-start justify-between gap-2">
-                    <p className="font-semibold text-foreground">{k.nom}</p>
+                    <p className="font-semibold text-foreground">
+                      {k.nom}
+                      <span className="block text-[11px] font-normal text-muted-foreground">{etablissements.find((etablissement) => etablissement.id === k.etablissement_id)?.nom || 'Établissement supprimé ou inaccessible'}</span>
+                    </p>
                     <BadgeY2K variant={k.actif ? 'success' : 'error'} size="sm">
                       {k.actif ? 'Active' : 'Désactivée'}
                     </BadgeY2K>
@@ -295,12 +310,12 @@ export default function AdminAPI() {
       {/* Modal */}
       {showModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-card rounded-2xl p-6 max-w-md w-full shadow-xl">
+          <div className="bg-card rounded-2xl p-6 max-w-md w-full max-h-[90dvh] overflow-y-auto shadow-xl" role="dialog" aria-modal="true" aria-labelledby="admin-api-modal-title">
             {generatedKey ? (
               <>
                 <div className="flex items-center gap-2 mb-4">
                   <CheckCircle className="h-5 w-5 text-success" />
-                  <h3 className="font-bold text-foreground">Clé générée !</h3>
+                  <h3 id="admin-api-modal-title" className="font-bold text-foreground">Clé générée !</h3>
                 </div>
                 <p className="text-xs text-muted-foreground mb-2">Copiez ces informations <strong>maintenant</strong>. Le secret ne sera plus jamais affiché.</p>
                 <p className="text-[11px] text-muted-foreground mb-1 mt-3 font-semibold">Clé API (publique)</p>
@@ -321,16 +336,20 @@ export default function AdminAPI() {
                     </div>
                   </>
                 )}
-                <BoutonY2K variant="primary" size="md" onClick={() => { setShowModal(false); setGeneratedSecret(null); }} className="w-full">Fermer</BoutonY2K>
+                <BoutonY2K variant="primary" size="md" onClick={() => { setShowModal(false); setGeneratedSecret(null); setGeneratedKey(null); }} className="w-full">Fermer</BoutonY2K>
               </>
             ) : (
               <>
-                <h3 className="font-bold text-foreground mb-4">Générer une clé API</h3>
-                <label className="block text-sm font-medium text-foreground mb-1">Nom de la clé</label>
-                <input value={newName} onChange={e => setNewName(e.target.value)} className="input-base w-full mb-4" placeholder="Ex: Integration SIRH" />
+                <h3 id="admin-api-modal-title" className="font-bold text-foreground mb-4">Générer une clé API</h3>
+                <label htmlFor="admin-api-etablissement" className="block text-sm font-medium text-foreground mb-1">Établissement propriétaire</label>
+                <select id="admin-api-etablissement" value={selectedEtablissementId} onChange={(event) => setSelectedEtablissementId(event.target.value)} className="input-base w-full mb-4">
+                  {etablissements.map((etablissement) => <option key={etablissement.id} value={etablissement.id}>{etablissement.nom}</option>)}
+                </select>
+                <label htmlFor="admin-api-nom-cle" className="block text-sm font-medium text-foreground mb-1">Nom de la clé</label>
+                <input id="admin-api-nom-cle" autoFocus value={newName} onChange={e => setNewName(e.target.value)} className="input-base w-full mb-4" placeholder="Ex. : intégration SIRH" />
                 <label className="block text-sm font-medium text-foreground mb-2">Permissions</label>
                 <div className="space-y-2 mb-6">
-                  {PERMISSIONS.map(p => (
+                  {API_PERMISSIONS.map(p => (
                     <label key={p.value} className="flex items-center gap-2 text-sm">
                       <input
                         type="checkbox"
@@ -346,7 +365,7 @@ export default function AdminAPI() {
                   ))}
                 </div>
                 <div className="flex gap-2">
-                  <BoutonY2K variant="primary" size="md" onClick={genererCle} disabled={!newName.trim() || generating} loading={generating} className="flex-1">{generating ? 'Génération…' : 'Générer'}</BoutonY2K>
+                  <BoutonY2K variant="primary" size="md" onClick={genererCle} disabled={!newName.trim() || !selectedEtablissementId || generating} loading={generating} className="flex-1">{generating ? 'Génération…' : 'Générer'}</BoutonY2K>
                   <BoutonY2K variant="secondary" size="md" onClick={() => setShowModal(false)} className="flex-1">Annuler</BoutonY2K>
                 </div>
               </>

@@ -3,7 +3,7 @@ import { useSearchParams, Link, useNavigate } from 'react-router-dom';
 import { LayoutAdmin } from '@/components/LayoutAdmin';
 import { BreadcrumbAdmin } from '@/components/BreadcrumbAdmin';
 import { usePageTitle } from '@/hooks/usePageTitle';
-import { ChargementPage } from '@/components/ChargementPage';
+import { ChargementAdmin } from '@/components/admin/ChargementAdmin';
 import { supabase } from '@/integrations/supabase/client';
 import { BadgeY2K } from '@/components/y2k/BadgeY2K';
 import { BoutonY2K } from '@/components/y2k/BoutonY2K';
@@ -169,6 +169,15 @@ export default function AdminMissions() {
     charger();
   }, [filtre, groupeParam, rechargement]);
 
+  useEffect(() => {
+    if (!absenceMissionId) return;
+    const fermerAvecEchap = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && !absenceLoading) setAbsenceMissionId(null);
+    };
+    document.addEventListener('keydown', fermerAvecEchap);
+    return () => document.removeEventListener('keydown', fermerAvecEchap);
+  }, [absenceMissionId, absenceLoading]);
+
   function changerFiltre(f: FiltreStatut) {
     setFiltre(f);
     const params: Record<string, string> = {};
@@ -293,7 +302,7 @@ export default function AdminMissions() {
     );
   };
 
-  if (loading) return <LayoutAdmin><ChargementPage /></LayoutAdmin>;
+  if (loading) return <LayoutAdmin><ChargementAdmin titre="Missions" /></LayoutAdmin>;
 
   // L'historique exclut les missions déjà affichées dans « À traiter » (pas de doublon).
   const idsATraiter = new Set(aTraiter.map((m: any) => m.id));
@@ -402,14 +411,14 @@ export default function AdminMissions() {
       {/* Task 6 — Modal marquer absence sans prévenir */}
       {absenceMissionId && (
         <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={() => setAbsenceMissionId(null)}>
-          <div className="bg-card border border-border rounded-2xl max-w-md w-full p-6 space-y-4 max-h-[90dvh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <h2 className="text-lg font-bold text-foreground inline-flex items-center gap-2">
+          <div className="bg-card border border-border rounded-2xl max-w-md w-full p-6 space-y-4 max-h-[90dvh] overflow-y-auto" role="dialog" aria-modal="true" aria-labelledby="admin-absence-title" onClick={(e) => e.stopPropagation()}>
+            <h2 id="admin-absence-title" className="text-lg font-bold text-foreground inline-flex items-center gap-2">
               <UserX className="h-5 w-5 text-warning" />Absence sans prévenir
             </h2>
             <p className="text-xs text-muted-foreground">Enregistre une absence non justifiée du soignant. Motif tracé RGPD.</p>
-            <label className="block">
+            <label htmlFor="admin-absence-motif" className="block">
               <span className="text-xs font-medium text-foreground mb-1 block">Motif * (RGPD audit)</span>
-              <Textarea value={absenceMotif} onChange={(e) => setAbsenceMotif(e.target.value)} rows={3} placeholder="Décrivez les circonstances de l'absence…" disabled={absenceLoading} />
+              <Textarea id="admin-absence-motif" value={absenceMotif} onChange={(e) => setAbsenceMotif(e.target.value)} rows={3} placeholder="Décrivez les circonstances de l'absence…" disabled={absenceLoading} />
             </label>
             <div className="flex gap-2">
               <BoutonY2K variant="secondary" onClick={() => setAbsenceMissionId(null)} disabled={absenceLoading}>Annuler</BoutonY2K>

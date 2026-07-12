@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, FileText, Shield, Clock, Copy, ExternalLink } from 'lucide-react';
 import { LayoutAdmin } from '@/components/LayoutAdmin';
-import { ChargementPage } from '@/components/ChargementPage';
+import { ChargementAdmin } from '@/components/admin/ChargementAdmin';
 import { supabase } from '@/integrations/supabase/client';
 import { useNotification } from '@/contexts/NotificationContext';
 import { usePageTitle } from '@/hooks/usePageTitle';
@@ -115,10 +115,13 @@ export default function AdminDetailContrat() {
     });
   }
 
-  if (loading) return <LayoutAdmin><ChargementPage /></LayoutAdmin>;
+  if (loading) return <LayoutAdmin><ChargementAdmin titre="Détail du contrat" /></LayoutAdmin>;
   if (!contrat) return (
     <LayoutAdmin>
-      <p className="text-sm text-muted-foreground">Contrat introuvable.</p>
+      <div className="space-y-2">
+        <h1 className="text-2xl font-bold text-foreground">Contrat introuvable</h1>
+        <p className="text-sm text-muted-foreground">Ce contrat n’existe pas ou n’est plus accessible.</p>
+      </div>
     </LayoutAdmin>
   );
 

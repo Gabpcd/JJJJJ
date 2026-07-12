@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 
 const googleServicesPath = resolve('android/app/google-services.json');
+const requireMobileSecrets = process.env.REQUIRE_MOBILE_SECRETS === '1';
 
 function decodeGoogleServices() {
   if (process.env.GOOGLE_SERVICES_JSON_BASE64) {
@@ -21,5 +22,7 @@ if (googleServices) {
   writeFileSync(googleServicesPath, `${googleServices.trim()}\n`, { mode: 0o600 });
   console.log('android/app/google-services.json generated from environment.');
 } else if (!existsSync(googleServicesPath)) {
-  console.warn('android/app/google-services.json missing; Android FCM push will not work until GOOGLE_SERVICES_JSON is provided.');
+  const message = 'android/app/google-services.json missing; provide GOOGLE_SERVICES_JSON before a mobile release.';
+  if (requireMobileSecrets) throw new Error(message);
+  console.warn(message);
 }

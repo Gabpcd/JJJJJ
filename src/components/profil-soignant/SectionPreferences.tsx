@@ -96,6 +96,8 @@ export function SectionPreferences(props: Props) {
           </div>
           <input
             type="range"
+            aria-label="Taux horaire minimum accepté"
+            aria-valuetext={tauxHoraireMinimum ? `${tauxHoraireMinimum} euros par heure` : 'Non défini'}
             min={10}
             max={100}
             step={1}
@@ -117,6 +119,8 @@ export function SectionPreferences(props: Props) {
         </label>
         <input
           type="range"
+          aria-label="Rayon de déplacement"
+          aria-valuetext={`${rayon} kilomètres`}
           min={5}
           max={100}
           value={rayon}
@@ -146,6 +150,7 @@ export function SectionPreferences(props: Props) {
             </p>
           </div>
           <Switch
+            aria-label="Autoriser la géolocalisation lors des pointages"
             checked={consentementGPS}
             disabled={gpsToggling}
             onCheckedChange={async (checked) => {
@@ -187,6 +192,7 @@ export function SectionPreferences(props: Props) {
             </p>
           </div>
           <Switch
+            aria-label="Recevoir les alertes par SMS"
             checked={consentementSMS}
             disabled={smsToggling}
             onCheckedChange={async (checked) => {
@@ -227,6 +233,7 @@ export function SectionPreferences(props: Props) {
             </p>
           </div>
           <Switch
+            aria-label="Recevoir les notifications push"
             checked={typeof Notification !== 'undefined' && Notification.permission === 'granted'}
             onCheckedChange={async (checked) => {
               if (checked) {

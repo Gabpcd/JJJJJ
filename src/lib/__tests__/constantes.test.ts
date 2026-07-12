@@ -1,5 +1,13 @@
 import { describe, it, expect } from 'vitest';
-import { PROFESSIONS, CONTRATS, TYPES_ETABLISSEMENT, PROFESSIONS_SANS_RPPS, PROFESSIONS_PHARMACIE } from '../constantes';
+import {
+  PROFESSIONS,
+  CONTRATS,
+  TYPES_ETABLISSEMENT,
+  PROFESSIONS_SANS_RPPS,
+  PROFESSIONS_PHARMACIE,
+  getTypesContratSoignant,
+  missionCompatibleContrat,
+} from '../constantes';
 
 describe('constantes', () => {
   describe('PROFESSIONS', () => {
@@ -100,6 +108,24 @@ describe('constantes', () => {
   describe('PROFESSIONS_PHARMACIE', () => {
     it('should contain PHARMACIEN and PREPARATEUR_PHARMA', () => {
       expect(PROFESSIONS_PHARMACIE).toEqual(['PHARMACIEN', 'PREPARATEUR_PHARMA']);
+    });
+  });
+
+  describe('cascade contrat par mission (Lot 21 D4)', () => {
+    it('ne masque pas une mission salariée à un profil libéral', () => {
+      const typesProfil = getTypesContratSoignant({
+        type_exercice: 'LIBERAL',
+        type_contrat: 'LIBERAL',
+        types_contrat_acceptes: 'LIBERAL',
+      });
+
+      expect(typesProfil).toEqual(['LIBERAL']);
+      expect(missionCompatibleContrat('SALARIE', typesProfil)).toBe(true);
+    });
+
+    it('continue de réserver une mission libérale à un profil qui l’accepte', () => {
+      expect(missionCompatibleContrat('LIBERAL', ['CDD', 'SALARIE'])).toBe(false);
+      expect(missionCompatibleContrat('LIBERAL', ['LIBERAL'])).toBe(true);
     });
   });
 });

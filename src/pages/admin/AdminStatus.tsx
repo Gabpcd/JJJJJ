@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import * as Sentry from '@sentry/react';
 import { LayoutAdmin } from '@/components/LayoutAdmin';
-import { ChargementPage } from '@/components/ChargementPage';
+import { ChargementAdmin } from '@/components/admin/ChargementAdmin';
 import { supabase } from '@/integrations/supabase/client';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { Activity, AlertCircle, AlertTriangle, Bug, CheckCircle, Clock, ExternalLink, RefreshCw } from 'lucide-react';
@@ -85,8 +85,17 @@ export default function AdminStatus() {
     charger();
   };
 
-  if (loading) return <LayoutAdmin><ChargementPage /></LayoutAdmin>;
-  if (!data) return <LayoutAdmin><div className="p-6 text-destructive">Erreur chargement health check</div></LayoutAdmin>;
+  if (loading) return <LayoutAdmin><ChargementAdmin titre="État du système" /></LayoutAdmin>;
+  if (!data) return (
+    <LayoutAdmin>
+      <div className="space-y-4">
+        <h1 className="text-xl font-bold text-foreground">État du système</h1>
+        <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-destructive" role="alert">
+          Impossible de charger l’état du système. Réessayez avec le bouton d’actualisation du navigateur.
+        </div>
+      </div>
+    </LayoutAdmin>
+  );
 
   const cronsCritiques = data.crons.crons.filter(c => c.echec);
   const cronsRetard = data.crons.crons.filter(c => c.retard && !c.echec);

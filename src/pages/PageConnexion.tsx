@@ -4,6 +4,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { HeartPulse, Mail, Lock, Eye, EyeOff, Fingerprint } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
+import { urlCallbackPublique } from '@/lib/nativeLinks';
 import { extraireMessageErreur } from '@/lib/erreurs';
 import { gererErreurSupabase } from '@/lib/supabaseErrorHandler';
 import { FooterLegal } from '@/components/FooterLegal';
@@ -90,14 +91,6 @@ export default function PageConnexion() {
       }
     }
 
-    // Init native push
-    if (isNative()) {
-      const { data: { user: u } } = await supabase.auth.getUser();
-      if (u) {
-        import('@/lib/pushNative').then(m => m.initNativePush(u.id));
-      }
-    }
-
     if (role === 'ADMIN_PLATEFORME' || role === 'ADMIN') navigate('/admin');
     else if (role === 'ADMIN_ETABLISSEMENT' || role === 'ETABLISSEMENT') navigate('/etablissement/tableau-de-bord');
     else if (role === 'ADMIN_GROUPE') navigate('/groupe/tableau-de-bord');
@@ -171,18 +164,18 @@ export default function PageConnexion() {
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="text-sm font-medium text-foreground mb-1.5 block">Email</label>
+              <label htmlFor="connexion-email" className="text-sm font-medium text-foreground mb-1.5 block">Email</label>
               <div className="relative">
                 <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <input type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="votre@email.com" className="input-base pl-10" required />
+                <input id="connexion-email" type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="votre@email.com" className="input-base pl-10" required />
               </div>
             </div>
 
             <div>
-              <label className="text-sm font-medium text-foreground mb-1.5 block">Mot de passe</label>
+              <label htmlFor="connexion-mot-de-passe" className="text-sm font-medium text-foreground mb-1.5 block">Mot de passe</label>
               <div className="relative">
                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <input type={afficherMdp ? "text" : "password"} autoComplete="current-password" value={motDePasse} onChange={(e) => setMotDePasse(e.target.value)} placeholder="••••••••" className="input-base pl-10 pr-10" required />
+                <input id="connexion-mot-de-passe" type={afficherMdp ? "text" : "password"} autoComplete="current-password" value={motDePasse} onChange={(e) => setMotDePasse(e.target.value)} placeholder="••••••••" className="input-base pl-10 pr-10" required />
                 <button
                   type="button"
                   onClick={() => setAfficherMdp(!afficherMdp)}
@@ -300,7 +293,7 @@ export default function PageConnexion() {
                       try {
                         const { supabase } = await import('@/integrations/supabase/client');
                         const opts: { redirectTo: string; captchaToken?: string } = {
-                          redirectTo: `${window.location.origin}/reset-password`,
+                          redirectTo: urlCallbackPublique('/reset-password'),
                         };
                         if (resetTurnstileToken) opts.captchaToken = resetTurnstileToken;
                         const { error } = await supabase.auth.resetPasswordForEmail(email, opts);

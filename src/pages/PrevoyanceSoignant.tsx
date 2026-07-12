@@ -121,8 +121,9 @@ export default function PrevoyanceSoignant() {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
             <div>
-              <label className="text-xs font-medium text-foreground mb-1 block">Ton revenu mensuel net (€)</label>
+              <label htmlFor="prevoyance-revenu" className="text-xs font-medium text-foreground mb-1 block">Ton revenu mensuel net (€)</label>
               <input
+                id="prevoyance-revenu"
                 type="number" min={500} max={20000} step={100}
                 value={revenuMensuel}
                 onChange={(e) => setRevenuMensuel(Math.max(0, parseInt(e.target.value, 10) || 0))}
@@ -130,8 +131,9 @@ export default function PrevoyanceSoignant() {
               />
             </div>
             <div>
-              <label className="text-xs font-medium text-foreground mb-1 block">Niveau de couverture</label>
+              <label htmlFor="prevoyance-niveau-calcul" className="text-xs font-medium text-foreground mb-1 block">Niveau de couverture</label>
               <select
+                id="prevoyance-niveau-calcul"
                 value={niveau}
                 onChange={(e) => setNiveau(e.target.value as Niveau)}
                 className="w-full px-3 py-2 text-sm rounded-lg border border-border bg-background"
@@ -192,6 +194,7 @@ export default function PrevoyanceSoignant() {
               <div className="relative">
                 <Mail className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
                 <input
+                  aria-label="Email pour la liste d’attente prévoyance"
                   type="email"
                   value={emailInput}
                   onChange={(e) => setEmailInput(e.target.value)}
@@ -200,6 +203,7 @@ export default function PrevoyanceSoignant() {
                 />
               </div>
               <select
+                aria-label="Niveau de couverture souhaité"
                 value={niveau}
                 onChange={(e) => setNiveau(e.target.value as Niveau)}
                 className="px-3 py-2 text-sm rounded-lg border border-border bg-background"

@@ -5,6 +5,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
+import { normaliserLienJolene } from '@/lib/nativeLinks';
 
 interface Notif {
   id: string;
@@ -41,7 +42,8 @@ export function NotificationsRecentes() {
     if (!n.lue) {
       await supabase.from('notifications').update({ lue: true, lue_le: new Date().toISOString() }).eq('id', n.id);
     }
-    if (n.lien) navigate(n.lien);
+    const route = n.lien ? normaliserLienJolene(n.lien) : null;
+    if (route) navigate(route);
   };
 
   if (loading || items.length === 0) return null;

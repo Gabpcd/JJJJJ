@@ -1,5 +1,7 @@
 // Pro Santé Connect — étape 1 : génère PKCE + state + nonce, redirige vers PSC
-import { createClient } from "npm:@supabase/supabase-js@2";
+import { createClient } from "npm:@supabase/supabase-js@2.99.2";
+import { jsonResponse, preflightResponse } from "../_shared/cors.ts";
+import { applyRateLimit, getClientIp } from "../_shared/rate-limit.ts";
 
 // Endpoints PSC selon ANS (Agence du Numérique en Santé)
 // https://industriels.esante.gouv.fr/produits-et-services/pro-sante-connect/documentation-technique
@@ -32,25 +34,14 @@ async function sha256(text: string): Promise<Uint8Array> {
   return new Uint8Array(hash);
 }
 
-function corsHeaders(req: Request) {
-  const origin = req.headers.get("origin") || "";
-  const allowed = [
-    "https://jolene.app",
-    "https://www.jolene.app",
-    "http://localhost:5173",
-    "http://localhost:8080",
-  ];
-  const allowedOrigin = allowed.includes(origin) ? origin : "https://jolene.app";
-  return {
-    "Access-Control-Allow-Origin": allowedOrigin,
-    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-    "Content-Type": "application/json",
-  };
-}
-
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders(req) });
+    return preflightResponse(req);
+  }
+  if (req.method !== 'POST') return jsonResponse(req, { error: 'Methode non autorisee' }, 405);
+  const clientIp = getClientIp(req);
+  if (applyRateLimit('psc-authorize', clientIp, { max: 10, windowMs: 10 * 60_000 })) {
+    return jsonResponse(req, { error: 'Trop de tentatives. Reessayez plus tard.' }, 429);
   }
 
   try {
@@ -62,18 +53,18 @@ Deno.serve(async (req) => {
 
     // Warm ping (admin healthcheck) — pas d'effet de bord, juste retourne le statut config.
     if (body.warm === true) {
-      return new Response(JSON.stringify({
+      return jsonResponse(req, {
         warm: true,
         configured: !!(clientId && redirectUri),
         environment: env,
-      }), { status: 200, headers: corsHeaders(req) });
+      });
     }
 
     if (!clientId || !redirectUri) {
       console.warn(`psc-authorize: configuration incomplete (clientId=${!!clientId}, redirectUri=${!!redirectUri})`);
-      return new Response(JSON.stringify({
+      return jsonResponse(req, {
         error: "Pro Santé Connect indisponible : configuration serveur incomplète.",
-      }), { status: 503, headers: corsHeaders(req) });
+      }, 503);
     }
 
     const intention: "login" | "signup" = body.intention === "signup" ? "signup" : "login";
@@ -92,6 +83,28 @@ Deno.serve(async (req) => {
       { auth: { persistSession: false } }
     );
 
+    const rateKey = base64urlEncode(await sha256(
+      clientIp === 'unknown'
+        ? `unknown|${(req.headers.get('user-agent') || '').slice(0, 160)}`
+        : clientIp,
+    ));
+    const { data: rateAllowed, error: rateError } = await supabaseAdmin.rpc(
+      'fn_verifier_rate_limit',
+      {
+        p_cle: rateKey,
+        p_action: 'edge_psc_authorize',
+        p_max_tentatives: 20,
+        p_fenetre_secondes: 600,
+      },
+    );
+    if (rateError) {
+      console.error('psc-authorize: distributed rate limit unavailable', rateError.code);
+      return jsonResponse(req, { error: 'Service temporairement indisponible.' }, 503);
+    }
+    if (rateAllowed !== true) {
+      return jsonResponse(req, { error: 'Trop de tentatives. Reessayez plus tard.' }, 429);
+    }
+
     const { error: insertError } = await supabaseAdmin
       .from("psc_auth_sessions")
       .insert({
@@ -103,7 +116,7 @@ Deno.serve(async (req) => {
 
     if (insertError) {
       console.error("psc-authorize: cannot store session", insertError);
-      return new Response(JSON.stringify({ error: "Erreur interne" }), { status: 500, headers: corsHeaders(req) });
+      return jsonResponse(req, { error: "Erreur interne" }, 500);
     }
 
     // Nettoyer les vieilles sessions (best effort, non bloquant).
@@ -128,12 +141,12 @@ Deno.serve(async (req) => {
     authUrl.searchParams.set("code_challenge_method", "S256");
     authUrl.searchParams.set("acr_values", "eidas1");
 
-    return new Response(JSON.stringify({
+    return jsonResponse(req, {
       authorization_url: authUrl.toString(),
       environment: env,
-    }), { status: 200, headers: corsHeaders(req) });
+    });
   } catch (err: unknown) {
     console.error("psc-authorize error:", err);
-    return new Response(JSON.stringify({ error: "Erreur interne" }), { status: 500, headers: corsHeaders(req) });
+    return jsonResponse(req, { error: "Erreur interne" }, 500);
   }
 });

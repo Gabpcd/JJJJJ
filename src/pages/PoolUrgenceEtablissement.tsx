@@ -64,15 +64,22 @@ interface MissionOuverte {
   id: string;
   intitule: string;
   debut_le: string;
+  fin_le: string;
+  taux_horaire_base: number | null;
   profession_requise: string;
   mode_attribution: string | null;
+  type_contrat_recherche: string | null;
+  etablissements: { nom: string } | null;
+}
+
+function PoolLayout({ isAdmin, children }: { isAdmin: boolean; children: React.ReactNode }) {
+  return isAdmin
+    ? <LayoutAdmin>{children}</LayoutAdmin>
+    : <LayoutApp role="ADMIN_ETABLISSEMENT">{children}</LayoutApp>;
 }
 
 export default function PoolUrgenceEtablissement({ isAdmin = false }: { isAdmin?: boolean }) {
   const { user, etablissementId: scopedEtablissementId } = useEtablissementScope();
-  const Layout = isAdmin 
-    ? ({ children }: { children: React.ReactNode }) => <LayoutAdmin>{children}</LayoutAdmin>
-    : ({ children }: { children: React.ReactNode }) => <LayoutApp role="ADMIN_ETABLISSEMENT">{children}</LayoutApp>;
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [soignants, setSoignants] = useState<SoignantPool[]>([]);
@@ -96,6 +103,7 @@ export default function PoolUrgenceEtablissement({ isAdmin = false }: { isAdmin?
   const [filtreScoreMin, setFiltreScoreMin] = useState(0);
   const [filtreHistorique, setFiltreHistorique] = useState<'TOUT' | 'POURVUES_MOIS'>('TOUT');
   const [historiqueOuvert, setHistoriqueOuvert] = useState(false);
+  const [kpiUrgencesMois, setKpiUrgencesMois] = useState<number | null>(null);
 
   const etablissementId = isAdmin ? selectedEtablissementId : scopedEtablissementId || '';
 
@@ -113,6 +121,7 @@ export default function PoolUrgenceEtablissement({ isAdmin = false }: { isAdmin?
       const etablissements = (data ?? []) as Array<{ id: string; nom: string }>;
       setEtablissementsAdmin(etablissements);
       setSelectedEtablissementId((current) => current || etablissements[0]?.id || '');
+      if (etablissements.length === 0) setLoading(false);
     };
 
     loadEtablissements();
@@ -133,7 +142,13 @@ export default function PoolUrgenceEtablissement({ isAdmin = false }: { isAdmin?
 
   const loadData = async () => {
     setLoading(true);
-    const [poolRes, histRes] = await Promise.all([
+    const debutMois = new Date();
+    debutMois.setDate(1);
+    debutMois.setHours(0, 0, 0, 0);
+    const debutMoisSuivant = new Date(debutMois);
+    debutMoisSuivant.setMonth(debutMoisSuivant.getMonth() + 1);
+
+    const [poolRes, histRes, kpiRes] = await Promise.all([
       supabase.rpc('fn_pool_urgence_etablissement' as any, { p_etablissement_id: etablissementId }),
       supabase
         .from('missions')
@@ -141,8 +156,20 @@ export default function PoolUrgenceEtablissement({ isAdmin = false }: { isAdmin?
         .eq('etablissement_id', etablissementId)
         .eq('est_urgente', true)
         .order('debut_le', { ascending: false })
-        .limit(20),
+        .limit(100),
+      supabase
+        .from('missions')
+        .select('id', { count: 'exact', head: true })
+        .eq('etablissement_id', etablissementId)
+        .eq('est_urgente', true)
+        .not('soignant_assigne_id', 'is', null)
+        .in('statut', ['ASSIGNEE', 'EN_COURS', 'TERMINEE'])
+        .gte('debut_le', debutMois.toISOString())
+        .lt('debut_le', debutMoisSuivant.toISOString()),
     ]);
+    if (poolRes.error || histRes.error || kpiRes.error) {
+      toast.error("Le pool d'urgence n'a pas pu être chargé complètement.");
+    }
     if (poolRes.data) setSoignants(poolRes.data as any);
     if (histRes.data) {
       setHistorique(
@@ -158,6 +185,7 @@ export default function PoolUrgenceEtablissement({ isAdmin = false }: { isAdmin?
         }))
       );
     }
+    setKpiUrgencesMois(kpiRes.error ? null : (kpiRes.count ?? 0));
     setLoading(false);
   };
 
@@ -176,12 +204,6 @@ export default function PoolUrgenceEtablissement({ isAdmin = false }: { isAdmin?
 
   const kpiTotal = soignants.length;
   const kpiDisponibles = soignants.filter((s) => !s.en_mission_maintenant).length;
-  const kpiUrgencesMois = historique.filter((h) => {
-    const d = new Date(h.debut_le);
-    const now = new Date();
-    return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear() && h.statut === 'TERMINEE';
-  }).length;
-
   // File de travail : les urgences encore à pourvoir en tête de page, le reste en historique replié.
   const urgencesAPourvoir = useMemo(
     () =>
@@ -201,14 +223,17 @@ export default function PoolUrgenceEtablissement({ isAdmin = false }: { isAdmin?
     const now = new Date();
     return historiqueClos.filter((h) => {
       const d = new Date(h.debut_le);
-      return h.soignant_assigne_id && h.statut === 'TERMINEE' && d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+      return Boolean(h.soignant_assigne_id)
+        && ['ASSIGNEE', 'EN_COURS', 'TERMINEE'].includes(h.statut)
+        && d.getMonth() === now.getMonth()
+        && d.getFullYear() === now.getFullYear();
     });
   }, [historiqueClos, filtreHistorique]);
 
   const alerterSoignant = async (s: SoignantPool) => {
     const { error } = await supabase.functions.invoke('send-push', {
       body: {
-        destinataire_id: s.id,
+        destinataire_id: s.soignant_id,
         titre: '🚨 Mission urgente disponible',
         corps: 'Un établissement a besoin de vous en urgence.',
         lien: '/soignant/missions',
@@ -218,13 +243,21 @@ export default function PoolUrgenceEtablissement({ isAdmin = false }: { isAdmin?
     else toast.success(`🚨 Alerte envoyée à ${s.prenom} ${s.nom}`);
   };
 
+  const ouvrirConversation = async (soignantId: string) => {
+    const base = isAdmin ? '/admin/messagerie' : '/etablissement/messagerie';
+    const { data, error } = await supabase.rpc('fn_obtenir_conversation', { p_autre_id: soignantId, p_mission_id: null });
+    logger.debug('fn_obtenir_conversation pool:', { data, error });
+    if (error || !data) toast.error("La conversation n'a pas pu être ouverte.");
+    else navigate(`${base}?conv=${data}`);
+  };
+
   const alerterTous = async () => {
     setAlerterTousOpen(false);
     const disponibles = filtered.filter(s => !s.en_mission_maintenant);
     let sent = 0;
     for (const s of disponibles) {
       const { error } = await supabase.functions.invoke('send-push', {
-        body: { destinataire_id: s.id, titre: '🚨 Mission urgente', corps: 'Remplacement urgent disponible.', lien: '/soignant/missions' },
+        body: { destinataire_id: s.soignant_id, titre: '🚨 Mission urgente', corps: 'Remplacement urgent disponible.', lien: '/soignant/missions' },
       });
       if (!error) sent++;
     }
@@ -238,7 +271,7 @@ export default function PoolUrgenceEtablissement({ isAdmin = false }: { isAdmin?
 
     const { data } = await supabase
       .from('missions')
-      .select('id, intitule, debut_le, profession_requise, mode_attribution')
+      .select('id, intitule, debut_le, fin_le, taux_horaire_base, profession_requise, mode_attribution, type_contrat_recherche, etablissements(nom)')
       .eq('etablissement_id', etablissementId)
       .eq('statut', 'OUVERTE')
       .is('soignant_assigne_id', null)
@@ -255,70 +288,32 @@ export default function PoolUrgenceEtablissement({ isAdmin = false }: { isAdmin?
     const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     if (!UUID_REGEX.test(proposerSoignant.soignant_id)) {
       logger.warn('[PoolUrgence] assignation pool error: soignant_id invalide', proposerSoignant.soignant_id);
-      toast.error(`ID soignant invalide : ${proposerSoignant.soignant_id}`);
+      toast.error('Le profil sélectionné est invalide. Actualisez la page puis réessayez.');
       return;
     }
 
     setAssigningMissionId(mission.id);
     logger.debug('pool: proposing mission to soignant', { mission_id: mission.id, soignant_id: proposerSoignant.soignant_id });
 
-    const { data: existingCandidature, error: checkError } = await supabase
-      .from('candidatures')
-      .select('id, statut')
-      .eq('mission_id', mission.id)
-      .eq('soignant_id', proposerSoignant.soignant_id)
-      .maybeSingle();
+    const { data: proposition, error: candError } = await supabase.rpc('fn_proposer_mission_soignant' as any, {
+      p_mission_id: mission.id,
+      p_soignant_id: proposerSoignant.soignant_id,
+      p_choix_contrat: null,
+    });
 
-    if (checkError) {
-      logger.warn('[PoolUrgence] assignation pool check error', checkError);
-      toast.error('Impossible de proposer cette mission. Veuillez réessayer.');
+    if (candError || (proposition as any)?.error) {
+      logger.warn('[PoolUrgence] assignation pool error', candError || proposition);
+      const message = (proposition as any)?.choix_requis
+        ? 'Cette proposition exige de choisir le type de contrat depuis la fiche de la mission.'
+        : ((proposition as any)?.message || (proposition as any)?.error || 'Impossible de proposer cette mission. Veuillez réessayer.');
+      toast.error(message);
       setAssigningMissionId(null);
       return;
     }
 
-    if (existingCandidature && !['REFUSEE', 'EXPIREE'].includes(existingCandidature.statut || '')) {
-      toast.error('Ce soignant a déjà une candidature en cours pour cette mission.');
-      setAssigningMissionId(null);
-      return;
-    }
-
-    const { error: candError } = existingCandidature
-      ? await supabase
-          .from('candidatures')
-          .update({
-            statut: 'PROPOSEE',
-            message: `Mission proposée depuis le pool d'urgence`,
-            traite_le: null,
-            motif_refus: null,
-          } as any)
-          .eq('id', existingCandidature.id)
-      : await supabase.from('candidatures').insert({
-          mission_id: mission.id,
-          soignant_id: proposerSoignant.soignant_id,
-          statut: 'PROPOSEE',
-          message: `Mission proposée depuis le pool d'urgence`,
-        } as any);
-
-    if (candError) {
-      logger.warn('[PoolUrgence] assignation pool error', candError);
-      toast.error('Impossible de proposer cette mission. Veuillez réessayer.');
-      setAssigningMissionId(null);
-      return;
-    }
-
-    // Send notification + email (non-blocking)
+    // La RPC métier crée la notification applicative. L'email est un complément
+    // best-effort et ne doit jamais créer une seconde candidature.
     try {
-      await supabase.rpc('fn_creer_notification', {
-        p_destinataire_id: proposerSoignant.soignant_id,
-        p_type_destinataire: 'SOIGNANT',
-        p_type: 'CANDIDATURE_PROPOSEE',
-        p_titre: `📩 Mission proposée : ${mission.intitule}`,
-        p_corps: `${mission.intitule} — le ${format(new Date(mission.debut_le), 'dd/MM/yyyy à HH:mm', { locale: fr })}. Acceptez ou refusez dans les 2h.`,
-        p_lien: '/soignant/tableau-de-bord',
-        p_type_ressource: 'MISSION',
-        p_id_ressource: mission.id,
-      });
-
       const { data: session } = await supabase.auth.getSession();
       const token = session?.session?.access_token;
       if (token) {
@@ -332,11 +327,11 @@ export default function PoolUrgenceEtablissement({ isAdmin = false }: { isAdmin?
             data: {
               prenom: proposerSoignant.prenom,
               mission: mission.intitule,
-              etablissement: 'Pool d\'urgence',
+              etablissement: mission.etablissements?.nom || 'Établissement Jolene',
               date: format(new Date(mission.debut_le), 'dd/MM/yyyy', { locale: fr }),
               heure_debut: format(new Date(mission.debut_le), 'HH:mm'),
-              heure_fin: '—',
-              taux_horaire: '—',
+              heure_fin: format(new Date(mission.fin_le), 'HH:mm'),
+              taux_horaire: mission.taux_horaire_base != null ? String(mission.taux_horaire_base) : '',
               mission_id: mission.id,
             },
           }),
@@ -362,11 +357,21 @@ export default function PoolUrgenceEtablissement({ isAdmin = false }: { isAdmin?
     return found ? found.label : code;
   };
 
-  const statutMissionLabel = (statut: string) => BADGES_STATUT[statut]?.label ?? statut;
+  const statutMissionLabel = (statut: string) => BADGES_STATUT[statut]?.label
+    ?? statut.toLocaleLowerCase('fr-FR').replace(/_/g, ' ').replace(/^./, (lettre) => lettre.toLocaleUpperCase('fr-FR'));
+  const statutMissionVariant = (statut: string): 'success' | 'warning' | 'error' | 'info' => {
+    if (statut === 'TERMINEE') return 'success';
+    if (statut === 'OUVERTE' || statut === 'ABSENCE' || statut === 'ANNULEE_PAR_SOIGNANT') return 'error';
+    if (statut === 'ASSIGNEE' || statut === 'EN_COURS' || statut === 'LITIGE') return 'warning';
+    return 'info';
+  };
+  const detailMissionPath = (missionId: string) => isAdmin
+    ? `/admin/missions/${missionId}`
+    : `/etablissement/missions/${missionId}`;
 
   if (loading) {
     return (
-      <Layout>
+      <PoolLayout isAdmin={isAdmin}>
         <div className="max-w-6xl mx-auto space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {[1, 2, 3].map(i => (
@@ -375,12 +380,12 @@ export default function PoolUrgenceEtablissement({ isAdmin = false }: { isAdmin?
           </div>
           <div className="card-base animate-pulse h-64" />
         </div>
-      </Layout>
+      </PoolLayout>
     );
   }
 
   return (
-    <Layout>
+    <PoolLayout isAdmin={isAdmin}>
       <div className="max-w-6xl mx-auto space-y-6">
         {/* Header */}
         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
@@ -408,7 +413,7 @@ export default function PoolUrgenceEtablissement({ isAdmin = false }: { isAdmin?
             <Button
               variant="destructive"
               onClick={() => setAlerterTousOpen(true)}
-              disabled={filtered.filter(s => !s.en_mission_maintenant).length === 0}
+              disabled={urgencesAPourvoir.length === 0 || filtered.filter(s => !s.en_mission_maintenant).length === 0}
             >
               <BellRing className="h-4 w-4 mr-1" />
               Alerter tout le pool 🚨
@@ -428,6 +433,7 @@ export default function PoolUrgenceEtablissement({ isAdmin = false }: { isAdmin?
             <p className="text-xs text-muted-foreground mt-1 mb-3">
               Ces missions urgentes attendent encore un remplaçant. Alertez le pool ou proposez-les à un soignant disponible.
             </p>
+            <div className="hidden overflow-x-auto md:block">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -439,7 +445,7 @@ export default function PoolUrgenceEtablissement({ isAdmin = false }: { isAdmin?
               </TableHeader>
               <TableBody>
                 {urgencesAPourvoir.map((h) => (
-                  <TableRow key={h.id} className="cursor-pointer hover:bg-muted/50" onClick={() => navigate(`/etablissement/missions/${h.id}`)}>
+                  <TableRow key={h.id} className="cursor-pointer hover:bg-muted/50" onClick={() => navigate(detailMissionPath(h.id))}>
                     <TableCell className="font-medium text-sm">{h.intitule}</TableCell>
                     <TableCell className="text-sm text-muted-foreground">
                       {format(new Date(h.debut_le), 'dd/MM/yyyy HH:mm', { locale: fr })}
@@ -454,6 +460,24 @@ export default function PoolUrgenceEtablissement({ isAdmin = false }: { isAdmin?
                 ))}
               </TableBody>
             </Table>
+            </div>
+            <div className="space-y-2 md:hidden">
+              {urgencesAPourvoir.map((mission) => (
+                <button
+                  key={mission.id}
+                  type="button"
+                  onClick={() => navigate(detailMissionPath(mission.id))}
+                  className="w-full rounded-xl border border-destructive/20 p-3 text-left hover:bg-muted/50"
+                >
+                  <span className="mb-2 flex items-start justify-between gap-2">
+                    <span className="text-sm font-semibold text-foreground">{mission.intitule}</span>
+                    <BadgeY2K variant="error" size="sm">À pourvoir</BadgeY2K>
+                  </span>
+                  <span className="block text-xs text-muted-foreground">Début : {format(new Date(mission.debut_le), 'dd/MM/yyyy HH:mm', { locale: fr })}</span>
+                  <span className="block text-xs text-muted-foreground">Créée : {format(new Date(mission.cree_le), 'dd/MM/yyyy HH:mm', { locale: fr })}</span>
+                </button>
+              ))}
+            </div>
           </section>
         )}
 
@@ -470,11 +494,18 @@ export default function PoolUrgenceEtablissement({ isAdmin = false }: { isAdmin?
             valeur={kpiDisponibles}
             label="Disponibles maintenant"
             variant="default"
-            onClick={() => { setFiltreDispo(true); }}
+            onClick={() => {
+              setFiltreDispo(true);
+              setSearchParams((current) => {
+                const next = new URLSearchParams(current);
+                next.set('disponibles', '1');
+                return next;
+              }, { replace: true });
+            }}
           />
           <CarteKPIY2K
             icone={<Trophy className="h-4 w-4" />}
-            valeur={kpiUrgencesMois}
+            valeur={kpiUrgencesMois ?? '—'}
             label="Urgences pourvues ce mois"
             variant="default"
             onClick={() => {
@@ -493,7 +524,7 @@ export default function PoolUrgenceEtablissement({ isAdmin = false }: { isAdmin?
             <div>
               <label className="text-xs text-muted-foreground mb-1 block">Profession</label>
               <Select value={filtreProfession} onValueChange={setFiltreProfession}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectTrigger aria-label="Filtrer par profession"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="TOUTES">Toutes</SelectItem>
                   {professions.map((p) => (
@@ -506,17 +537,29 @@ export default function PoolUrgenceEtablissement({ isAdmin = false }: { isAdmin?
               <label className="text-xs text-muted-foreground mb-1 block">
                 Rayon max : <span className="font-bold text-primary">{filtreRayonMax} km</span>
               </label>
-              <Slider value={[filtreRayonMax]} min={5} max={100} step={5} onValueChange={(v) => setFiltreRayonMax(v[0])} />
+              <Slider aria-label="Rayon maximal en kilomètres" value={[filtreRayonMax]} min={5} max={100} step={5} onValueChange={(v) => setFiltreRayonMax(v[0])} />
             </div>
             <div>
               <label className="text-xs text-muted-foreground mb-1 block">
                 Score min : <span className="font-bold text-primary">{filtreScoreMin}</span>
               </label>
-              <Slider value={[filtreScoreMin]} min={0} max={100} step={5} onValueChange={(v) => setFiltreScoreMin(v[0])} />
+              <Slider aria-label="Score de fiabilité minimal" value={[filtreScoreMin]} min={0} max={100} step={5} onValueChange={(v) => setFiltreScoreMin(v[0])} />
             </div>
             <div className="flex items-center gap-2">
-              <Switch checked={filtreDispo} onCheckedChange={setFiltreDispo} />
-              <span className="text-sm text-foreground">Disponibles uniquement</span>
+              <Switch
+                id="filtre-disponibles-pool"
+                checked={filtreDispo}
+                onCheckedChange={(checked) => {
+                  setFiltreDispo(checked);
+                  setSearchParams((current) => {
+                    const next = new URLSearchParams(current);
+                    if (checked) next.set('disponibles', '1');
+                    else next.delete('disponibles');
+                    return next;
+                  }, { replace: true });
+                }}
+              />
+              <label htmlFor="filtre-disponibles-pool" className="text-sm text-foreground">Disponibles uniquement</label>
             </div>
           </div>
         </div>
@@ -528,10 +571,13 @@ export default function PoolUrgenceEtablissement({ isAdmin = false }: { isAdmin?
             mascotte="empty"
             titre="Aucun soignant dans le pool"
             description="Publiez une mission urgente et les soignants du pool seront notifiés."
-            cta={{ label: 'Publier une mission urgente', onClick: () => navigate('/etablissement/missions/creer') }}
+            cta={isAdmin
+              ? { label: 'Voir toutes les missions', onClick: () => navigate('/admin/missions') }
+              : { label: 'Publier une mission urgente', onClick: () => navigate('/etablissement/missions/creer') }}
           />
         ) : (
           <div className="card-base p-0 overflow-hidden">
+            <div className="hidden overflow-x-auto md:block">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -561,15 +607,13 @@ export default function PoolUrgenceEtablissement({ isAdmin = false }: { isAdmin?
                         </div>
                         <button
                           type="button"
-                          onClick={async (e) => {
+                          onClick={(e) => {
                             e.stopPropagation();
-                            const base = isAdmin ? '/admin/messagerie' : '/etablissement/messagerie';
-                            const { data, error } = await supabase.rpc('fn_obtenir_conversation', { p_autre_id: s.soignant_id, p_mission_id: null });
-                            logger.debug('fn_obtenir_conversation pool:', { data, error });
-                            if (data) navigate(`${base}?conv=${data}`);
+                            ouvrirConversation(s.soignant_id);
                           }}
                           className="h-7 w-7 rounded-full bg-primary text-primary-foreground flex items-center justify-center hover:bg-primary/90 transition-colors shrink-0"
                           title="Contacter"
+                          aria-label={`Contacter ${s.prenom} ${s.nom}`}
                         >
                           <MessageCircle className="h-3.5 w-3.5" />
                         </button>
@@ -624,8 +668,9 @@ export default function PoolUrgenceEtablissement({ isAdmin = false }: { isAdmin?
                           variant="destructive"
                           className="text-xs h-7 px-2"
                           onClick={() => alerterSoignant(s)}
-                          disabled={s.en_mission_maintenant}
+                          disabled={s.en_mission_maintenant || urgencesAPourvoir.length === 0}
                           title="Alerter pour une urgence"
+                          aria-label={`Alerter ${s.prenom} ${s.nom} pour une urgence`}
                         >
                           <Bell className="h-3 w-3" />
                         </Button>
@@ -635,16 +680,57 @@ export default function PoolUrgenceEtablissement({ isAdmin = false }: { isAdmin?
                           className="text-xs h-7 px-2"
                           onClick={() => ouvrirProposerMission(s)}
                           title="Proposer une mission"
+                          aria-label={`Proposer une mission à ${s.prenom} ${s.nom}`}
                         >
                           <Send className="h-3 w-3" />
                         </Button>
-                        <BoutonFavori soignantId={s.soignant_id} etablissementId={etablissementId} />
+                        {!isAdmin && <BoutonFavori soignantId={s.soignant_id} etablissementId={etablissementId} />}
                       </div>
                     </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
             </Table>
+            </div>
+            <div className="space-y-3 p-3 md:hidden">
+              {filtered.map((soignant) => (
+                <article key={soignant.soignant_id} className="rounded-xl border border-border p-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <button
+                      type="button"
+                      onClick={() => navigate(isAdmin ? `/admin/utilisateurs/${soignant.soignant_id}` : `/etablissement/soignants/${soignant.soignant_id}`)}
+                      className="flex min-w-0 items-center gap-2 text-left"
+                    >
+                      <AvatarDisplay src={soignant.avatar_url} prenom={soignant.prenom} nom={soignant.nom} size={40} rounded="full" />
+                      <span className="min-w-0">
+                        <span className="block truncate text-sm font-semibold text-foreground">{soignant.prenom} {soignant.nom}</span>
+                        <span className="block text-xs text-muted-foreground">{professionLabel(soignant.profession)}</span>
+                      </span>
+                    </button>
+                    {soignant.en_mission_maintenant
+                      ? <BadgeY2K variant="error" size="sm">En mission</BadgeY2K>
+                      : <BadgeY2K variant="success" size="sm">Disponible</BadgeY2K>}
+                  </div>
+                  <dl className="mt-3 grid grid-cols-2 gap-2 text-xs">
+                    <div><dt className="text-muted-foreground">Distance</dt><dd className="font-medium text-foreground">{soignant.distance_km != null ? `${soignant.distance_km} km` : '—'}</dd></div>
+                    <div><dt className="text-muted-foreground">Rayon choisi</dt><dd className="font-medium text-foreground">{soignant.pool_urgence_rayon_km} km</dd></div>
+                    <div><dt className="text-muted-foreground">Fiabilité</dt><dd className="font-medium text-foreground">{soignant.score_fiabilite}/100</dd></div>
+                    <div><dt className="text-muted-foreground">Urgences réalisées</dt><dd className="font-medium text-foreground">{soignant.missions_urgence_terminees}</dd></div>
+                  </dl>
+                  <div className="mt-3 grid grid-cols-3 gap-2 border-t border-border pt-3">
+                    <Button type="button" variant="outline" size="sm" onClick={() => ouvrirConversation(soignant.soignant_id)} aria-label={`Contacter ${soignant.prenom} ${soignant.nom}`}>
+                      <MessageCircle className="h-4 w-4" aria-hidden="true" />
+                    </Button>
+                    <Button type="button" variant="destructive" size="sm" onClick={() => alerterSoignant(soignant)} disabled={soignant.en_mission_maintenant || urgencesAPourvoir.length === 0} aria-label={`Alerter ${soignant.prenom} ${soignant.nom}`}>
+                      <Bell className="h-4 w-4" aria-hidden="true" />
+                    </Button>
+                    <Button type="button" variant="outline" size="sm" onClick={() => ouvrirProposerMission(soignant)} aria-label={`Proposer une mission à ${soignant.prenom} ${soignant.nom}`}>
+                      <Send className="h-4 w-4" aria-hidden="true" />
+                    </Button>
+                  </div>
+                </article>
+              ))}
+            </div>
           </div>
         )}
 
@@ -680,23 +766,20 @@ export default function PoolUrgenceEtablissement({ isAdmin = false }: { isAdmin?
             </div>
             {historiqueOuvert && (
               <div className="mt-4">
+                <div className="hidden overflow-x-auto md:block">
                 <Table>
                   <TableHeader>
                     <TableRow>
                       <TableHead>Mission</TableHead>
                       <TableHead>Date</TableHead>
                       <TableHead>Remplaçant</TableHead>
-                      <TableHead>Délai de réponse</TableHead>
+                      <TableHead>Mission créée le</TableHead>
                       <TableHead>Statut</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {historiqueAffiche.map((h) => {
-                      const delaiMin = h.soignant_assigne_id
-                        ? Math.round((new Date(h.debut_le).getTime() - new Date(h.cree_le).getTime()) / 60000)
-                        : null;
-                      return (
-                        <TableRow key={h.id} className="cursor-pointer hover:bg-muted/50" onClick={() => navigate(`/etablissement/missions/${h.id}`)}>
+                    {historiqueAffiche.map((h) => (
+                        <TableRow key={h.id} className="cursor-pointer hover:bg-muted/50" onClick={() => navigate(detailMissionPath(h.id))}>
                           <TableCell className="font-medium text-sm">{h.intitule}</TableCell>
                           <TableCell className="text-sm text-muted-foreground">
                             {format(new Date(h.debut_le), 'dd/MM/yyyy HH:mm', { locale: fr })}
@@ -704,26 +787,39 @@ export default function PoolUrgenceEtablissement({ isAdmin = false }: { isAdmin?
                           <TableCell className="text-sm">
                             {h.soignant_prenom ? `${h.soignant_prenom} ${h.soignant_nom}` : <span className="text-muted-foreground">—</span>}
                           </TableCell>
-                          <TableCell className="text-sm">
-                            {delaiMin !== null && delaiMin > 0 ? (
-                              <BadgeY2K variant="info" size="sm">{delaiMin < 60 ? `${delaiMin} min` : `${Math.round(delaiMin / 60)}h`}</BadgeY2K>
-                            ) : (
-                              <span className="text-muted-foreground">—</span>
-                            )}
+                          <TableCell className="text-sm text-muted-foreground">
+                            {format(new Date(h.cree_le), 'dd/MM/yyyy HH:mm', { locale: fr })}
                           </TableCell>
                           <TableCell>
                             <BadgeY2K
-                              variant={h.statut === 'TERMINEE' ? 'info' : h.statut === 'OUVERTE' ? 'error' : 'info'}
+                              variant={statutMissionVariant(h.statut)}
                               size="sm"
                             >
                               {statutMissionLabel(h.statut)}
                             </BadgeY2K>
                           </TableCell>
                         </TableRow>
-                      );
-                    })}
+                    ))}
                   </TableBody>
                 </Table>
+                </div>
+                <div className="space-y-2 md:hidden">
+                  {historiqueAffiche.map((mission) => (
+                    <button
+                      key={mission.id}
+                      type="button"
+                      onClick={() => navigate(detailMissionPath(mission.id))}
+                      className="w-full rounded-xl border border-border p-3 text-left hover:bg-muted/50"
+                    >
+                      <span className="mb-2 flex items-start justify-between gap-2">
+                        <span className="text-sm font-semibold text-foreground">{mission.intitule}</span>
+                        <BadgeY2K variant={statutMissionVariant(mission.statut)} size="sm">{statutMissionLabel(mission.statut)}</BadgeY2K>
+                      </span>
+                      <span className="block text-xs text-muted-foreground">Mission : {format(new Date(mission.debut_le), 'dd/MM/yyyy HH:mm', { locale: fr })}</span>
+                      <span className="block text-xs text-muted-foreground">Remplaçant : {mission.soignant_prenom ? `${mission.soignant_prenom} ${mission.soignant_nom}` : '—'}</span>
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
           </section>
@@ -805,6 +901,6 @@ export default function PoolUrgenceEtablissement({ isAdmin = false }: { isAdmin?
           </DialogResponsiveBody>
         </DialogResponsiveContent>
       </DialogResponsive>
-    </Layout>
+    </PoolLayout>
   );
 }

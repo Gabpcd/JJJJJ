@@ -1,5 +1,6 @@
-import { createClient } from 'npm:@supabase/supabase-js@2';
+import { createClient } from 'npm:@supabase/supabase-js@2.99.2';
 import { applyRateLimit, getClientIp } from '../_shared/rate-limit.ts';
+import { verifyAdminOrServiceRole } from '../_shared/admin-auth.ts';
 
 function getCorsOrigin(req: Request): string {
   const origin = req.headers.get("origin") || "";
@@ -7,6 +8,8 @@ function getCorsOrigin(req: Request): string {
     origin === "https://jolene.app" ||
     origin === "https://app.jolene.app" ||
     origin === "https://www.jolene.app" ||
+    origin === "https://localhost" ||
+    origin === "capacitor://localhost" ||
     origin === "http://localhost:5173" ||
     origin === "http://localhost:8080"
   ) {
@@ -141,6 +144,21 @@ const ALLOWED_TYPES = new Set([
   // [Sprint 5.7 PR 4 → Sprint 6 PR 1] invitation équipe étab multi-utilisateurs
   'INVITATION_EQUIPE_ETAB',
   // [Sprint 15 PR 3] DPAE déclarée par l'étab → notif soignant avec n° URSSAF
+  'DPAE_DECLAREE_SOIGNANT',
+]);
+
+// Ces messages sont indispensables a la securite du compte, a une obligation
+// legale ou au traitement d'un incident financier. Tous les autres types,
+// meme absents de l'enum fin des preferences, respectent au minimum canal_email.
+const ALWAYS_SEND_TRANSACTIONAL_TYPES = new Set([
+  'INVITATION_EQUIPE_ETAB',
+  'COMPTE_SUSPENDU', 'COMPTE_REACTIVE',
+  'PUBLICATION_SUSPENDUE', 'PUBLICATION_REACTIVEE',
+  'REGULARISATION_SOCIALE_REQUISE', 'PAIEMENT_RETARD_J21',
+  'CHARGE_FAILED_ETAB',
+  'DISPUTE_OUVERTE_ADMIN', 'DISPUTE_CLOSE_ADMIN',
+  'PAYOUT_FAILED_ADMIN', 'PAYOUT_FAILED_SOIGNANT', 'PAYOUT_CANCELED_ADMIN',
+  'REFUND_ECHEC_ADMIN',
   'DPAE_DECLAREE_SOIGNANT',
 ]);
 
@@ -1487,13 +1505,19 @@ Deno.serve(async (req) => {
     return new Response(null, { headers: corsHeaders(req) });
   }
 
-  // Warm ping (utilisé par /admin/healthcheck pour vérifier la disponibilité
-  // de la fonction sans envoyer d'email réel). Doit être traité AVANT le
-  // rate-limit et l'auth pour ne pas polluer ces compteurs.
+  // Warm ping admin/interne uniquement : il divulgue l'etat d'un fournisseur
+  // payant et ne doit pas devenir un endpoint public sans quota.
   // Body attendu : { warm: true }. Réponse : { warm: true } 200.
   try {
     const peeked = await req.clone().json().catch(() => null);
     if (peeked && (peeked as Record<string, unknown>).warm === true) {
+      const warmAuth = await verifyAdminOrServiceRole(req);
+      if (!warmAuth.ok) {
+        return new Response(JSON.stringify({ error: warmAuth.error }), {
+          status: warmAuth.status,
+          headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
+        });
+      }
       return new Response(JSON.stringify({ warm: true }), {
         status: 200,
         headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
@@ -1557,6 +1581,16 @@ Deno.serve(async (req) => {
   try {
     const body = await req.json();
     const { type, data: templateData, destinataire_id, destinataire_email: bodyEmail } = body;
+
+    if (isPlatformAdmin) {
+      const adminAuth = await verifyAdminOrServiceRole(req);
+      if (!adminAuth.ok) {
+        return new Response(JSON.stringify({ error: adminAuth.error }), {
+          status: adminAuth.status,
+          headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
+        });
+      }
+    }
 
     // [Sprint 6 PR 1] INVITATION_EQUIPE_ETAB peut viser un email non-user (invité externe).
     // Pour ce cas précis, on accepte destinataire_email sans destinataire_id mais on exige
@@ -1627,6 +1661,8 @@ Deno.serve(async (req) => {
       'CONTRAT_TRAVAIL_DEPOSE': 'CONTRAT_TRAVAIL_DEPOSE',
       'CONTRAT_TRAVAIL_RAPPEL_ETAB': 'CONTRAT_TRAVAIL_DEPOSE',
       'CONTRAT_TRAVAIL_MANQUANT_SOIGNANT': 'CONTRAT_TRAVAIL_DEPOSE',
+      'CONTRAT_A_SIGNER': 'CONTRAT_TRAVAIL_DEPOSE',
+      'CONTRAT_SIGNE': 'CONTRAT_TRAVAIL_DEPOSE',
       'LITIGE_OUVERTURE': 'LITIGE_OUVERT', 'LITIGE_NOUVEAU_MESSAGE': 'LITIGE_OUVERT',
       'LITIGE_RESOLU_AJUSTE': 'LITIGE_RESOLU', 'LITIGE_RAPPEL_J1': 'LITIGE_OUVERT',
       'LITIGE_RAPPEL_J3': 'LITIGE_OUVERT', 'LITIGE_RAPPEL_J5': 'LITIGE_OUVERT',
@@ -1641,18 +1677,50 @@ Deno.serve(async (req) => {
       // [Refonte.D.3] rappel notation J+1
       'RAPPEL_NOTATION_ETAB': 'NOTATION_RAPPEL',
       'RAPPEL_NOTATION_SOIGNANT': 'NOTATION_RAPPEL',
-      // COMPTE_SUSPENDU / COMPTE_REACTIVE = transactionnel critique, jamais skippé via préférences
+      'EVALUATION_RECUE': 'NOTATION_RAPPEL',
+      'AVOIR_EMIS': 'PAIEMENT_RECU',
+      'REMBOURSEMENT_CONFIRME': 'PAIEMENT_RECU',
+      'COMMISSION_AJUSTEE': 'PAIEMENT_RECU',
+      'PAIEMENT_SOIGNANT_DECLARE': 'PAIEMENT_RECU',
+      'RAPPEL_PAIEMENT_J7': 'PAIEMENT_RECU',
+      // Les types ALWAYS_SEND_TRANSACTIONAL_TYPES sont explicitement exempts.
     };
     const typeEvenement = TYPE_TO_EVENT[type] || null;
 
-    // [Sprint 6 PR 1] flow externe : skip préférences (pas de user) + skip auth
-    if (typeEvenement && !isExternalInviteFlow) {
+    // Flow externe/transactionnel obligatoire : pas de preference utilisateur.
+    // Pour tout le reste, un type hors enum respecte au minimum canal_email.
+    if (!isExternalInviteFlow && !ALWAYS_SEND_TRANSACTIONAL_TYPES.has(type)) {
       const supabaseCheck = createClient(supabaseUrl, serviceRoleKey);
-      const { data: shouldNotify } = await supabaseCheck.rpc('fn_doit_notifier' as any, {
-        p_utilisateur_id: destinataire_id,
-        p_type_evenement: typeEvenement,
-        p_canal: 'EMAIL',
-      });
+      let shouldNotify: boolean;
+      if (typeEvenement) {
+        const { data, error } = await supabaseCheck.rpc('fn_doit_notifier' as any, {
+          p_utilisateur_id: destinataire_id,
+          p_type_evenement: typeEvenement,
+          p_canal: 'EMAIL',
+        });
+        if (error || typeof data !== 'boolean') {
+          console.error('[send-email] verification preferences impossible', error?.message);
+          return new Response(JSON.stringify({ error: 'Verification des preferences indisponible' }), {
+            status: 503,
+            headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
+          });
+        }
+        shouldNotify = data;
+      } else {
+        const { data, error } = await supabaseCheck
+          .from('preferences_notifications')
+          .select('canal_email')
+          .eq('utilisateur_id', destinataire_id)
+          .maybeSingle();
+        if (error) {
+          console.error('[send-email] lecture preference globale impossible', error.message);
+          return new Response(JSON.stringify({ error: 'Verification des preferences indisponible' }), {
+            status: 503,
+            headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
+          });
+        }
+        shouldNotify = data?.canal_email ?? true;
+      }
       if (shouldNotify === false) {
         // Audit le skip pour traçabilité, puis return 200 silent
         await supabaseCheck.from('journaux_audit').insert({

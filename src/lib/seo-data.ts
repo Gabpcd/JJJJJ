@@ -180,14 +180,14 @@ export const PROFESSIONS_SEO: ProfessionSEO[] = [
     valeur: 'PHARMACIEN',
     label: 'Pharmacien(ne)',
     slug: 'pharmacien',
-    description: 'Le pharmacien délivre les médicaments et assure le conseil pharmaceutique. Remplacements fréquents en officine et en pharmacie hospitalière.',
+    description: 'Jolene propose des missions salariées de pharmacien en établissement, notamment en pharmacie à usage intérieur (PUI). Le remplacement d’un titulaire d’officine n’est pas proposé.',
     salaire_moyen: '30-45\u20AC/h',
   },
   {
     valeur: 'MANIPULATEUR_RADIO',
     label: 'Manipulateur Radio',
     slug: 'manipulateur-radio',
-    description: 'Le manipulateur en électroradiologie réalise les examens d\'imagerie médicale (radiographie, scanner, IRM) sous la responsabilité du radiologue.',
+    description: 'Le manipulateur en électroradiologie réalise les examens d\'imagerie médicale sous la responsabilité du radiologue. Ces missions sont proposées exclusivement en contrat salarié.',
     salaire_moyen: '25-35\u20AC/h',
   },
   {

@@ -145,8 +145,8 @@ export default function ExclusionsSoignant() {
                       Depuis le {format(new Date(e.cree_le), 'd MMM yyyy', { locale: fr })}
                     </p>
                   </div>
-                  <button onClick={() => setSuppressionExcluId(e.exclu_id)} className="text-destructive hover:text-destructive/80 p-2">
-                    <Trash2 className="h-4 w-4" />
+                  <button aria-label={`Retirer l’exclusion de ${e.nom_exclu}`} onClick={() => setSuppressionExcluId(e.exclu_id)} className="text-destructive hover:text-destructive/80 p-2">
+                    <Trash2 className="h-4 w-4" aria-hidden="true" />
                   </button>
                 </div>
               ))}

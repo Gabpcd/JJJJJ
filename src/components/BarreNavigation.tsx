@@ -104,6 +104,7 @@ function getEtablissementSidebar(): SidebarEntry[] {
         { icone: Users, label: 'Annuaire', route: '/etablissement/soignants' },
         { icone: Star, label: 'Mes favoris', route: '/etablissement/mes-favoris' },
         { icone: Flame, label: 'Pool urgence', route: '/etablissement/pool-urgence' },
+        { icone: User, label: 'Équipe', route: '/etablissement/equipe' },
       ],
     },
     {
@@ -114,6 +115,14 @@ function getEtablissementSidebar(): SidebarEntry[] {
       ],
     },
     { icone: CreditCard, label: 'Facturation', route: '/etablissement/facturation' },
+    {
+      icone: Activity, label: 'Pilotage', items: [
+        { icone: Activity, label: 'RH & statistiques', route: '/etablissement/rh' },
+        { icone: FileText, label: 'Export paie', route: '/etablissement/export-paie' },
+        { icone: ShieldCheck, label: 'Score qualité', route: '/etablissement/score' },
+        { icone: Gift, label: 'Parrainage', route: '/etablissement/parrainage' },
+      ],
+    },
     { icone: MessageCircle, label: 'Messagerie', route: '/etablissement/messagerie' },
     { icone: Settings, label: 'Paramètres', route: '/etablissement/parametres' },
   ];

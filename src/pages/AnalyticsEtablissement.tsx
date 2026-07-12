@@ -75,8 +75,8 @@ export function AnalyticsContent() {
               {m} mois
             </button>
           ))}
-          <button onClick={charger} className="p-1.5 rounded-lg bg-muted hover:bg-muted/80 transition">
-            <RefreshCw className="h-4 w-4 text-muted-foreground" />
+          <button onClick={charger} aria-label="Actualiser les indicateurs" className="p-1.5 rounded-lg bg-muted hover:bg-muted/80 transition">
+            <RefreshCw aria-hidden="true" className="h-4 w-4 text-muted-foreground" />
           </button>
         </div>
       </div>

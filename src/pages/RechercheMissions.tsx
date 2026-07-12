@@ -66,6 +66,7 @@ interface SoignantData {
   tous_documents_valides: boolean;
   type_contrat: string | null;
   types_contrat_acceptes: string | null;
+  type_exercice?: string | null;
 }
 
 type Horaire = 'TOUS' | 'JOUR' | 'NUIT' | 'WEEKEND';
@@ -262,7 +263,6 @@ export default function RechercheMissions() {
         if (data) {
           const s = data as any;
           setSoignant(s);
-          setProfession(s.profession);
           setRayonKm(s.rayon_deplacement_km || 50);
           // Plancher tarif horaire = préférence de profil persistante. On l'applique
           // par défaut, sans écraser un filtre déjà appliqué (filtre sauvegardé).
@@ -349,7 +349,6 @@ export default function RechercheMissions() {
   }, [user, soignant, profession, tauxMin, urgentesOnly, refreshTick]);
 
   const filtered = useMemo(() => {
-    const typesContrat = soignant ? getTypesContratSoignant(soignant) : ['CDD', 'VACATION', 'LIBERAL', 'SALARIE'];
     const villeSearch = debouncedVille.trim().toLowerCase();
 
     return missions
@@ -431,15 +430,37 @@ export default function RechercheMissions() {
           if (!lat || !lng) return;
 
           const marker = L.marker([lat, lng]).addTo(markersLayer.current!);
-          const popup = `
-            <div style="min-width:200px;font-family:Inter,sans-serif;">
-              <p style="font-weight:600;font-size:13px;margin:0 0 4px;">${m.intitule}</p>
-              <p style="font-size:11px;color:#666;margin:0 0 2px;">🏥 ${m.etablissements?.nom ?? '—'}</p>
-              <p style="font-size:11px;color:#666;margin:0 0 2px;">📅 ${format(new Date(m.debut_le), "d MMM · HH'h'mm", { locale: fr })}</p>
-              <p style="font-size:13px;font-weight:700;color:#E04590;margin:4px 0;">💰 ${(m.taux_horaire_base ?? 0).toFixed(2)} €/h</p>
-              <a href="/soignant/missions/${m.id}" style="display:inline-block;margin-top:6px;padding:4px 12px;background:#E04590;color:white;border-radius:6px;text-decoration:none;font-size:11px;font-weight:600;">Voir la mission</a>
-            </div>
-          `;
+          // Leaflet accepte un HTMLElement : textContent évite toute injection
+          // HTML depuis l'intitulé de mission ou le nom de l'établissement.
+          const popup = document.createElement('div');
+          popup.style.cssText = 'min-width:200px;font-family:Inter,sans-serif;';
+
+          const titre = document.createElement('p');
+          titre.style.cssText = 'font-weight:600;font-size:13px;margin:0 0 4px;';
+          titre.textContent = String(m.intitule ?? 'Mission');
+          popup.appendChild(titre);
+
+          const etablissement = document.createElement('p');
+          etablissement.style.cssText = 'font-size:11px;color:#666;margin:0 0 2px;';
+          etablissement.textContent = `🏥 ${String(m.etablissements?.nom ?? '—')}`;
+          popup.appendChild(etablissement);
+
+          const date = document.createElement('p');
+          date.style.cssText = 'font-size:11px;color:#666;margin:0 0 2px;';
+          date.textContent = `📅 ${format(new Date(m.debut_le), "d MMM · HH'h'mm", { locale: fr })}`;
+          popup.appendChild(date);
+
+          const taux = document.createElement('p');
+          taux.style.cssText = 'font-size:13px;font-weight:700;color:#E04590;margin:4px 0;';
+          taux.textContent = `💰 ${Number(m.taux_horaire_base ?? 0).toFixed(2)} €/h`;
+          popup.appendChild(taux);
+
+          const lien = document.createElement('a');
+          lien.href = `/soignant/missions/${encodeURIComponent(String(m.id))}`;
+          lien.style.cssText = 'display:inline-block;margin-top:6px;padding:4px 12px;background:#E04590;color:white;border-radius:6px;text-decoration:none;font-size:11px;font-weight:600;';
+          lien.textContent = 'Voir la mission';
+          popup.appendChild(lien);
+
           marker.bindPopup(popup);
         });
       }
@@ -562,7 +583,15 @@ export default function RechercheMissions() {
               onBasculerListe={() => basculerVue('liste')}
               onCreerAlerte={() => setAlerteOpen(true)}
               onElargirRayon={() => { setRayonKm((r) => Math.min(100, r + 20)); basculerVue('liste'); }}
-              filtreDeck={{ urgentesOnly, horaire }}
+              filtreDeck={{
+                urgentesOnly,
+                horaire,
+                profession,
+                ville: debouncedVille,
+                rayonKm,
+                tauxMin,
+                typeContrat,
+              }}
             />
           </div>
         ) : (
@@ -787,7 +816,9 @@ export default function RechercheMissions() {
               size="sm"
               className="text-xs text-muted-foreground"
               onClick={() => {
-                setProfession(soignant?.profession || '');
+                // Valeur vide = profession du profil avec hiérarchie de
+                // compétences (IADE/IBODE voient notamment les missions IDE).
+                setProfession('');
                 setRayonKm(soignant?.rayon_deplacement_km || 50);
                 setTauxMin(0);
                 setTypeContrat('TOUS');

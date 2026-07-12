@@ -2,12 +2,13 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Save, Eye, Loader2, AlertCircle } from 'lucide-react';
 import { LayoutAdmin } from '@/components/LayoutAdmin';
-import { ChargementPage } from '@/components/ChargementPage';
+import { ChargementAdmin } from '@/components/admin/ChargementAdmin';
 import { supabase } from '@/integrations/supabase/client';
 import { useNotification } from '@/contexts/NotificationContext';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { CardY2K } from '@/components/y2k/CardY2K';
+import { sanitizeHTML } from '@/lib/sanitize';
 
 interface Template {
   id: string;
@@ -123,8 +124,8 @@ export default function AdminEditerTemplateContrat() {
     setContenuHtml((prev) => prev + ' ' + v);
   }
 
-  if (loading) return <LayoutAdmin><ChargementPage /></LayoutAdmin>;
-  if (!template) return <LayoutAdmin><p className="text-sm text-muted-foreground">Template introuvable.</p></LayoutAdmin>;
+  if (loading) return <LayoutAdmin><ChargementAdmin titre="Éditer le template" /></LayoutAdmin>;
+  if (!template) return <LayoutAdmin><div className="space-y-2"><h1 className="text-2xl font-bold text-foreground">Template introuvable</h1><p className="text-sm text-muted-foreground">Ce template n’existe pas ou n’est plus accessible.</p></div></LayoutAdmin>;
 
   return (
     <LayoutAdmin>
@@ -163,7 +164,7 @@ export default function AdminEditerTemplateContrat() {
         <div className="space-y-4">
           <label className="block">
             <span className="text-xs font-medium text-foreground mb-1 block">Nom</span>
-            <input value={nom} onChange={(e) => setNom(e.target.value)} className="input-base" disabled={saving} />
+            <input aria-label="Nom du template de contrat" value={nom} onChange={(e) => setNom(e.target.value)} className="input-base" disabled={saving} />
           </label>
 
           <div>
@@ -179,10 +180,11 @@ export default function AdminEditerTemplateContrat() {
             {showPreview ? (
               <div
                 className="rounded-lg border border-border bg-card p-4 prose prose-sm max-w-none min-h-[400px] max-h-[600px] overflow-y-auto"
-                dangerouslySetInnerHTML={{ __html: contenuHtml }}
+                dangerouslySetInnerHTML={{ __html: sanitizeHTML(contenuHtml) }}
               />
             ) : (
               <textarea
+                aria-label="Contenu HTML du template de contrat"
                 value={contenuHtml}
                 onChange={(e) => setContenuHtml(e.target.value)}
                 className="input-base font-mono text-xs min-h-[400px]"

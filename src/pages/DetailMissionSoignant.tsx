@@ -194,6 +194,12 @@ export default function DetailMissionSoignant() {
   const estTerminee = mission.statut === 'TERMINEE';
   const estAssigneAutre = !estOuverte && !estAssigne && mission.soignant_assigne_id;
   const estModeCandidature = mission.mode_attribution === 'CANDIDATURE';
+  // Le régime financier se lit sur la mission, jamais sur le statut général du
+  // profil. Un même soignant peut enchaîner des missions salariées et libérales.
+  // En l'absence de valeur explicite, le défaut de sécurité reste SALARIE.
+  const typeContratEffectif = mission.type_contrat_applique
+    ?? (mission.type_contrat_recherche === 'LIBERAL' ? 'LIBERAL' : 'SALARIE');
+  const missionEstLiberale = typeContratEffectif === 'LIBERAL';
 
   // Session E-6 : net estimé de la mission (même source que la liste,
   // cf. CarteMissionSoignant) pour la barre sticky mobile.
@@ -589,7 +595,7 @@ export default function DetailMissionSoignant() {
           )}
 
           {/* Rémunération — Note d'honoraires pour libéraux, décomposition classique sinon */}
-          {(soignant as any).type_contrat === 'LIBERAL' && estTerminee ? (
+          {missionEstLiberale && estTerminee ? (
             <NoteHonoraires
               mission={mission}
               soignant={soignant}
@@ -658,15 +664,15 @@ export default function DetailMissionSoignant() {
           {/* 7c : quand est-on payé ? Copy différenciée par régime — jamais de
               promesse que Jolene ne contrôle pas (⚡ gated serveur, escrow requis). */}
           {(mission as any).mode_remuneration !== 'RETROCESSION' && (
-            mission.type_contrat_recherche === 'LIBERAL' && etabSafe?.paiement_rapide ? (
+            missionEstLiberale && etabSafe?.paiement_rapide ? (
               <p className="text-xs font-semibold text-success text-center">
                 ⚡ Payée sous 24 à 72 h après validation des présences.
               </p>
-            ) : mission.type_contrat_recherche === 'LIBERAL' ? (
+            ) : missionEstLiberale ? (
               <p className="text-xs text-muted-foreground text-center">
                 Payée après règlement de l'établissement (~30 à 60 jours).
               </p>
-            ) : mission.type_contrat_recherche === 'SALARIE' && etabSafe?.jour_paie_habituel != null ? (
+            ) : etabSafe?.jour_paie_habituel != null ? (
               <p className="text-xs text-muted-foreground text-center">
                 💶 Salaire versé vers le {etabSafe.jour_paie_habituel} du mois par l'établissement employeur.
               </p>
@@ -674,7 +680,7 @@ export default function DetailMissionSoignant() {
           )}
 
           {/* Facture honoraires — visible dès que mission TERMINEE (facture générée) */}
-          {estTerminee && (
+          {estTerminee && missionEstLiberale && (
             <FactureHonorairesCard missionId={mission.id} viewerRole="SOIGNANT" />
           )}
 
@@ -904,12 +910,14 @@ export default function DetailMissionSoignant() {
                 >
                   💬 Contacter l'établissement
                 </button>
-                <button
-                  onClick={() => candidatureRec ? setModalAnnulationCandidature(true) : setModalAnnuler(true)}
-                  className="w-full border-2 border-destructive text-destructive rounded-xl px-4 py-2.5 text-sm font-medium hover:bg-destructive/5 transition-colors"
-                >
-                  Annuler ma participation
-                </button>
+                {mission.statut === 'ASSIGNEE' && (
+                  <button
+                    onClick={() => candidatureRec ? setModalAnnulationCandidature(true) : setModalAnnuler(true)}
+                    className="w-full border-2 border-destructive text-destructive rounded-xl px-4 py-2.5 text-sm font-medium hover:bg-destructive/5 transition-colors"
+                  >
+                    Annuler ma participation
+                  </button>
+                )}
               </>
             )}
 

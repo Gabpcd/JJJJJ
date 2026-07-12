@@ -48,8 +48,9 @@ export function SectionBio({ bio, onBioChange, anneesExperience, onAnneesChange,
       <div className="space-y-4">
         {/* Bio */}
         <div>
-          <label className="text-sm font-medium text-foreground mb-1.5 block">Bio</label>
+          <label htmlFor="profil-bio" className="text-sm font-medium text-foreground mb-1.5 block">Bio</label>
           <textarea
+            id="profil-bio"
             value={bio}
             onChange={e => onBioChange(e.target.value.slice(0, 500))}
             placeholder="Présentez-vous aux établissements : votre expérience, vos spécialités, vos préférences..."
@@ -63,10 +64,11 @@ export function SectionBio({ bio, onBioChange, anneesExperience, onAnneesChange,
 
         {/* Années d'expérience */}
         <div>
-          <label className="text-sm font-medium text-foreground mb-1.5 block">
+          <label htmlFor="profil-annees-experience" className="text-sm font-medium text-foreground mb-1.5 block">
             Années d'expérience <span className="text-destructive">*</span>
           </label>
           <input
+            id="profil-annees-experience"
             type="number"
             min={0}
             max={50}
@@ -80,7 +82,7 @@ export function SectionBio({ bio, onBioChange, anneesExperience, onAnneesChange,
 
         {/* Spécialités */}
         <div>
-          <label className="text-sm font-medium text-foreground mb-1.5 block">
+          <label htmlFor="profil-specialite-libre" className="text-sm font-medium text-foreground mb-1.5 block">
             Spécialités ({specialites.length}/10)
           </label>
 
@@ -90,8 +92,8 @@ export function SectionBio({ bio, onBioChange, anneesExperience, onAnneesChange,
               {specialites.map(s => (
                 <span key={s} className="badge-base bg-primary/10 text-primary text-xs flex items-center gap-1 pr-1">
                   {s}
-                  <button type="button" onClick={() => retirerTag(s)} className="hover:text-destructive transition-colors">
-                    <X className="h-3 w-3" />
+                  <button type="button" aria-label={`Retirer la spécialité ${s}`} onClick={() => retirerTag(s)} className="hover:text-destructive transition-colors">
+                    <X className="h-3 w-3" aria-hidden="true" />
                   </button>
                 </span>
               ))}
@@ -101,6 +103,7 @@ export function SectionBio({ bio, onBioChange, anneesExperience, onAnneesChange,
           {/* Input libre */}
           <div className="flex gap-2">
             <input
+              id="profil-specialite-libre"
               value={tagInput}
               onChange={e => setTagInput(e.target.value)}
               onKeyDown={e => {

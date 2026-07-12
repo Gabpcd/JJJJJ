@@ -125,7 +125,7 @@ function AttestationSante({ userId }: { userId: string }) {
       )}
 
       <p className="text-[11px] text-muted-foreground mt-3 leading-relaxed">
-        Les documents originaux (carnet de vaccination, attestation de médecine du travail) sont vérifiés par l'établissement lors de ta première mission. Jolene ne stocke aucune donnée de santé.
+        Les documents originaux (carnet de vaccination, attestation de médecine du travail) sont vérifiés par l'établissement lors de ta première mission. Jolene enregistre uniquement ta déclaration et sa date de signature, avec un accès restreint.
       </p>
     </div>
   );
@@ -299,6 +299,26 @@ export function DocumentsSoignantContent() {
       toast.error('Erreur lors de la revérification.');
     } finally {
       setReverifyingId(null);
+    }
+  };
+
+  const [reviewRequestId, setReviewRequestId] = useState<string | null>(null);
+
+  const demanderRevueHumaine = async (docId: string) => {
+    setReviewRequestId(docId);
+    try {
+      const { data, error } = await supabase.rpc('fn_demander_revue_document' as any, {
+        p_document_id: docId,
+        p_motif: 'Contestation du verdict automatique depuis l’espace Documents',
+      });
+      if (error || (data as any)?.error) {
+        toast.error((data as any)?.error || extraireMessageErreur(error));
+        return;
+      }
+      toast.success('Demande envoyée. Un membre de l’équipe vérifiera le document.');
+      await charger();
+    } finally {
+      setReviewRequestId(null);
     }
   };
 
@@ -652,13 +672,14 @@ export function DocumentsSoignantContent() {
                     ) : (
                       <>
                         <p className="text-xs text-destructive">
-                          Document non valide{doc.motif_rejet && ` — ${doc.motif_rejet}`}. Veuillez en téléverser un correct.
+                          Document non valide{doc.motif_rejet && ` — ${doc.motif_rejet}`}. Tu peux le remplacer ou demander une revue humaine.
                         </p>
                         <BadgeY2K variant="error" size="sm" className="mt-1">Rejeté</BadgeY2K>
                       </>
                     )}
                     <div className="flex items-center gap-3 mt-2">
                       <button onClick={() => setTeleversementType(requis.type_document)} className="btn-primary text-xs px-3 py-1.5">Réessayer</button>
+                      <button onClick={() => voirDocument(doc)} className="text-xs text-primary font-medium hover:underline">Voir</button>
                       <button
                         onClick={() => reverifier(doc.id)}
                         disabled={reverifyingId === doc.id}
@@ -666,6 +687,13 @@ export function DocumentsSoignantContent() {
                       >
                         {reverifyingId === doc.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
                         Revérifier
+                      </button>
+                      <button
+                        onClick={() => demanderRevueHumaine(doc.id)}
+                        disabled={reviewRequestId === doc.id}
+                        className="text-xs text-primary font-semibold hover:underline disabled:opacity-50"
+                      >
+                        {reviewRequestId === doc.id ? 'Demande en cours…' : 'Demander une revue humaine'}
                       </button>
                     </div>
                   </div>
@@ -702,7 +730,7 @@ export function DocumentsSoignantContent() {
       {/* Encart « à quoi sert le RIB » — le RIB est bien un document obligatoire (TOUS),
           téléversé dans la liste ci-dessus. Cet encart explique son usage :
           - Salarié : RIB transmis à l'établissement (employeur légal) pour la paie ;
-            primes Jolene via l'IBAN de Profil → Paiements.
+            primes Jolene via l'IBAN de Mon compte → Coordonnées bancaires.
           - Libéral / mixte : honoraires versés via Stripe Connect (compte de versement). */}
       {soignant?.profession && (() => {
         const isLiberalOrMixte = soignant?.type_exercice === 'LIBERAL' || soignant?.type_exercice === 'MIXTE';
@@ -725,7 +753,7 @@ export function DocumentsSoignantContent() {
                   </>
                 ) : (
                   <p className="text-sm text-muted-foreground mt-1">
-                    Pour les <span className="font-medium text-foreground">missions salariées</span>, ton RIB est transmis à l'établissement (ton employeur), qui établit ton bulletin de paie. Tes primes Jolene utilisent l'IBAN renseigné dans <span className="font-medium text-foreground">Profil → Paiements</span>.
+                    Pour les <span className="font-medium text-foreground">missions salariées</span>, ton RIB est transmis à l'établissement (ton employeur), qui établit ton bulletin de paie. Tes primes Jolene utilisent l'IBAN renseigné dans <span className="font-medium text-foreground">Mon compte → Coordonnées bancaires</span>.
                   </p>
                 )}
               </div>

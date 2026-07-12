@@ -33,7 +33,7 @@ export default function PageCGV() {
       {/* Article 2 */}
       <section id="art2">
         <h2 className="text-xl sm:text-2xl font-bold text-foreground mb-4">Article 2 — Nature des frais de service</h2>
-        <p className="mb-3">Jolene facture à l'Établissement des frais de service (commission) calculés en pourcentage du montant brut de chaque mission réalisée. Ces frais rémunèrent l'intermédiation technique, la gestion administrative automatisée (contrats, pointage, conformité) et la mise à disposition de la Plateforme.</p>
+        <p className="mb-3">Jolene facture à l'Établissement des frais de service (commission) calculés en pourcentage de la rémunération brute totale due au Soignant pour chaque mission (base, majorations et indemnités le cas échéant). Ces frais rémunèrent l'intermédiation technique, la gestion administrative automatisée (contrats, pointage, conformité) et la mise à disposition de la Plateforme.</p>
         <div className="bg-muted/50 border-l-4 border-primary p-4 rounded-r-xl my-4">
           <p className="font-semibold text-foreground">Mention obligatoire :</p>
           <p>Il ne s'agit en aucun cas d'un prélèvement sur le salaire du Soignant. Les frais de service sont exclusivement à la charge de l'Établissement et facturés en sus de la rémunération du Soignant.</p>
@@ -44,7 +44,7 @@ export default function PageCGV() {
       {/* Article 3 */}
       <section id="art3">
         <h2 className="text-xl sm:text-2xl font-bold text-foreground mb-4">Article 3 — Tarification</h2>
-        <p className="mb-4">L'utilisation de la Plateforme donne lieu à une commission de <strong>15 % (HT)</strong> du montant brut de chaque mission réalisée, facturée à l'Établissement. Aucun abonnement ni frais d'inscription n'est dû.</p>
+        <p className="mb-4">L'utilisation de la Plateforme donne lieu à une commission de <strong>15 % (HT)</strong> de la rémunération brute totale due au Soignant pour chaque mission réalisée, facturée à l'Établissement. Aucun abonnement ni frais d'inscription n'est dû.</p>
         <p className="mb-4">En cas de négociation commerciale, un taux différent peut être convenu contractuellement entre l'Éditeur et l'Établissement (notamment pour les groupes d'établissements) ; il est alors précisé dans les conditions particulières.</p>
         <p>Aucun frais n'est facturé au Soignant, quel que soit le type de contrat.</p>
       </section>

@@ -4,6 +4,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Loader2, CheckCircle, XCircle, HeartPulse, ExternalLink } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
+import { ouvrirUrlPsc } from '@/lib/pscNavigation';
 
 const LIEN_ACTIVATION_ECPS = 'https://esante.gouv.fr/produits-services/e-cps';
 
@@ -21,6 +22,16 @@ export default function PscCallback() {
       const tokenHash = searchParams.get('token_hash');
       const isNewUser = searchParams.get('new_user') === '1';
       const errorMessage = searchParams.get('message');
+
+      // Le token magic-link PSC est un secret à usage unique. On le retire de
+      // l'URL et de l'historique avant tout appel réseau, succès ou échec.
+      if (tokenHash || errorMessage) {
+        const paramsNettoyes = new URLSearchParams(searchParams);
+        paramsNettoyes.delete('token_hash');
+        paramsNettoyes.delete('message');
+        const query = paramsNettoyes.toString();
+        window.history.replaceState(null, '', `/auth/psc/callback${query ? `?${query}` : ''}`);
+      }
 
       if (result === 'error') {
         setStatus('error');
@@ -76,8 +87,7 @@ export default function PscCallback() {
         body: { intention: 'login' },
       });
       if (!error && data?.authorization_url) {
-        window.location.href = data.authorization_url;
-        return;
+        if (await ouvrirUrlPsc(data.authorization_url)) return;
       }
       // Fallback : retour à la page de connexion
       navigate('/connexion');

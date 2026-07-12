@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { LayoutAdmin } from '@/components/LayoutAdmin';
-import { ChargementPage } from '@/components/ChargementPage';
+import { ChargementAdmin } from '@/components/admin/ChargementAdmin';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { supabase } from '@/integrations/supabase/client';
 import { usePageTitle } from '@/hooks/usePageTitle';
@@ -94,7 +94,7 @@ export default function AdminLitiges() {
     }
   }, [litiges, filtre]);
 
-  if (loading) return <LayoutAdmin><ChargementPage /></LayoutAdmin>;
+  if (loading) return <LayoutAdmin><ChargementAdmin titre="Litiges" /></LayoutAdmin>;
 
   return (
     <LayoutAdmin>

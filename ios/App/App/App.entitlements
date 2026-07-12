@@ -7,9 +7,7 @@
 	<key>com.apple.developer.associated-domains</key>
 	<array>
 		<string>applinks:jolene.app</string>
-		<string>applinks:www.jolene.app</string>
 		<string>webcredentials:jolene.app</string>
-		<string>webcredentials:www.jolene.app</string>
 	</array>
 </dict>
 </plist>

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
-import { Loader2, Maximize2, Printer, RefreshCw, Copy, Check, KeyRound } from 'lucide-react';
+import { Loader2, Maximize2, Printer, RefreshCw, Copy, Check, KeyRound, X } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useNotification } from '@/contexts/NotificationContext';
 import { format } from 'date-fns';
@@ -108,35 +108,51 @@ export function QRPointageEtab({ missionId, missionIntitule, etablissementNom }:
       afficherNotification({ type: 'erreur', message: 'Bloqué par votre navigateur. Autorisez les popups.' });
       return;
     }
-    const html = `<!doctype html><html><head><meta charset="utf-8"><title>QR Pointage Jolene — ${missionIntitule || ''}</title>
-<style>
-  @page { size: A4; margin: 20mm; }
-  body { font-family: Arial, sans-serif; text-align: center; }
-  h1 { color: #d6336c; font-size: 32px; margin-bottom: 8px; }
-  .etab { font-size: 20px; color: #444; margin-bottom: 4px; }
-  .mission { font-size: 16px; color: #666; margin-bottom: 24px; }
-  .qr-box { margin: 32px auto; }
-  .instructions { font-size: 18px; color: #222; margin-top: 24px; line-height: 1.6; }
-  .footer { margin-top: 40px; font-size: 12px; color: #888; }
-</style></head><body>
-<h1>🏥 Jolene</h1>
-<p class="etab">${etablissementNom || 'Établissement'}</p>
-<p class="mission">${missionIntitule || ''}</p>
-<div class="qr-box" id="qr"></div>
-<p class="instructions">📲 <strong>Soignant : scannez ce code avec l'app Jolene</strong><br/>
-pour valider votre arrivée et votre départ.</p>
-<p class="footer">QR généré le ${format(new Date(qr.genere_le), "d MMM yyyy 'à' HH:mm", { locale: fr })} —
-expire le ${format(new Date(qr.expire_le), "d MMM yyyy 'à' HH:mm", { locale: fr })}</p>
-<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
-<script>
-  const div = document.getElementById('qr');
-  const c = document.createElement('canvas');
-  div.appendChild(c);
-  QRCode.toCanvas(c, ${JSON.stringify(qr.token)}, { width: 360, margin: 2 }, () => window.print());
-</script>
-</body></html>`;
-    printWindow.document.write(html);
-    printWindow.document.close();
+    printWindow.opener = null;
+    const qrSvg = document.getElementById(`qr-pointage-${missionId}`)?.cloneNode(true);
+    if (!qrSvg) {
+      printWindow.close();
+      afficherNotification({ type: 'erreur', message: 'Le QR code n’est pas prêt à être imprimé.' });
+      return;
+    }
+
+    const doc = printWindow.document;
+    doc.title = `QR Pointage Jolene — ${missionIntitule || 'Mission'}`;
+    const style = doc.createElement('style');
+    style.textContent = `
+      @page { size: A4; margin: 20mm; }
+      body { font-family: Arial, sans-serif; text-align: center; color: #222; }
+      h1 { color: #d6336c; font-size: 32px; margin-bottom: 8px; }
+      .etab { font-size: 20px; color: #444; margin-bottom: 4px; }
+      .mission { font-size: 16px; color: #666; margin-bottom: 24px; }
+      .qr-box { margin: 32px auto; }
+      .qr-box svg { width: 360px; height: 360px; }
+      .instructions { font-size: 18px; margin-top: 24px; line-height: 1.6; }
+      .footer { margin-top: 40px; font-size: 12px; color: #666; }
+    `;
+    doc.head.appendChild(style);
+
+    const ajouterTexte = (tag: 'h1' | 'p', texte: string, classe?: string) => {
+      const element = doc.createElement(tag);
+      element.textContent = texte;
+      if (classe) element.className = classe;
+      doc.body.appendChild(element);
+      return element;
+    };
+    ajouterTexte('h1', 'Jolene');
+    ajouterTexte('p', etablissementNom || 'Établissement', 'etab');
+    ajouterTexte('p', missionIntitule || 'Mission', 'mission');
+    const qrBox = doc.createElement('div');
+    qrBox.className = 'qr-box';
+    qrBox.appendChild(qrSvg);
+    doc.body.appendChild(qrBox);
+    ajouterTexte('p', 'Soignant : scannez ce code avec l’app Jolene pour valider votre arrivée et votre départ.', 'instructions');
+    ajouterTexte(
+      'p',
+      `QR généré le ${format(new Date(qr.genere_le), "d MMM yyyy 'à' HH:mm", { locale: fr })} — expire le ${format(new Date(qr.expire_le), "d MMM yyyy 'à' HH:mm", { locale: fr })}`,
+      'footer',
+    );
+    printWindow.setTimeout(() => printWindow.print(), 100);
   }
 
   function copierToken() {
@@ -182,7 +198,7 @@ expire le ${format(new Date(qr.expire_le), "d MMM yyyy 'à' HH:mm", { locale: fr
         </div>
 
         <div className="flex justify-center bg-white dark:bg-card p-4 rounded-lg border border-border">
-          <QRCodeSVG value={qr.token} size={240} level="M" includeMargin />
+          <QRCodeSVG id={`qr-pointage-${missionId}`} value={qr.token} size={240} level="M" includeMargin aria-label="QR code de pointage de la mission" role="img" />
         </div>
 
         <p className="text-xs text-center text-muted-foreground">
@@ -206,7 +222,7 @@ expire le ${format(new Date(qr.expire_le), "d MMM yyyy 'à' HH:mm", { locale: fr
             <Printer className="h-3 w-3" /> Imprimer A4
           </button>
           <button onClick={copierToken} className="btn-secondary text-xs inline-flex items-center gap-1">
-            {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />} {copied ? 'Copié !' : 'Copier token'}
+            {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />} {copied ? 'Copié !' : 'Copier le code QR'}
           </button>
           <button
             onClick={() => setShowConfirmRegen(true)}
@@ -253,7 +269,15 @@ expire le ${format(new Date(qr.expire_le), "d MMM yyyy 'à' HH:mm", { locale: fr
       </div>
 
       {fullscreen && (
-        <div className="fixed inset-0 z-50 bg-white dark:bg-black flex flex-col items-center justify-center p-8" onClick={() => setFullscreen(false)}>
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="QR code de pointage en plein écran"
+          className="fixed inset-0 z-50 bg-white dark:bg-black flex flex-col items-center justify-center p-8"
+        >
+          <button type="button" onClick={() => setFullscreen(false)} className="absolute right-4 top-4 btn-secondary" aria-label="Fermer le plein écran">
+            <X className="h-5 w-5" />
+          </button>
           <p className="text-2xl font-bold text-foreground mb-2">🏥 Jolene</p>
           <p className="text-lg text-foreground mb-1">{etablissementNom}</p>
           <p className="text-sm text-muted-foreground mb-8">{missionIntitule}</p>
@@ -261,7 +285,7 @@ expire le ${format(new Date(qr.expire_le), "d MMM yyyy 'à' HH:mm", { locale: fr
             <QRCodeSVG value={qr.token} size={420} level="M" includeMargin />
           </div>
           <p className="text-xl text-foreground mt-8 text-center">📲 Soignant : scannez avec l'app Jolene</p>
-          <p className="text-xs text-muted-foreground mt-12">Cliquez pour fermer</p>
+          <p className="text-xs text-muted-foreground mt-12">Utilisez le bouton Fermer pour revenir à la mission.</p>
         </div>
       )}
 

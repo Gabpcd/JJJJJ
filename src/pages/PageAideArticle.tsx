@@ -4,6 +4,7 @@ import { ArrowLeft, HelpCircle, Loader2, Calendar } from 'lucide-react';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { supabase } from '@/integrations/supabase/client';
 import { FooterLegal } from '@/components/FooterLegal';
+import DOMPurify from 'dompurify';
 
 interface Article {
   id: string;
@@ -27,10 +28,16 @@ function safeLink(rawUrl: string, text: string): string {
     // URL non whitelistée → retourner le texte brut sans lien
     return text;
   }
+  const href = url.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   const isExternal = isHttps && !url.startsWith('https://jolene.app') && !url.startsWith('https://www.jolene.app');
   const externalAttrs = isExternal ? ' target="_blank" rel="noopener noreferrer"' : '';
-  return `<a href="${url}" class="text-primary hover:underline"${externalAttrs}>${text}</a>`;
+  return `<a href="${href}" class="text-primary hover:underline"${externalAttrs}>${text}</a>`;
 }
+
+const sanitizeMarkdownHtml = (html: string) => DOMPurify.sanitize(html, {
+  ALLOWED_TAGS: ['a', 'strong', 'code'],
+  ALLOWED_ATTR: ['href', 'class', 'target', 'rel'],
+});
 
 function renderMarkdown(texte: string) {
   const lines = texte.split('\n');
@@ -42,12 +49,12 @@ function renderMarkdown(texte: string) {
       elements.push(
         <ul key={key++} className="list-disc list-inside space-y-1.5 text-base text-foreground ml-2 mb-3">
           {listBuffer.map((item, i) => (
-            <li key={i} dangerouslySetInnerHTML={{ __html: item
+            <li key={i} dangerouslySetInnerHTML={{ __html: sanitizeMarkdownHtml(item
               .replace(/[<>]/g, m => m === '<' ? '&lt;' : '&gt;')
               .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
               .replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, txt, url) => safeLink(url, txt))
               .replace(/`([^`]+)`/g, '<code class="bg-muted px-1.5 py-0.5 rounded text-sm">$1</code>')
-            }} />
+            ) }} />
           ))}
         </ul>,
       );
@@ -69,7 +76,7 @@ function renderMarkdown(texte: string) {
     else if (line.match(/^\d+\.\s/)) { listBuffer.push(line.replace(/^\d+\.\s/, '')); }
     else if (line.trim() === '---') { flushList(); elements.push(<hr key={key++} className="border-border my-6" />); }
     else if (line.trim() === '') { flushList(); }
-    else { flushList(); elements.push(<p key={key++} className="text-base text-foreground mb-3 leading-relaxed" dangerouslySetInnerHTML={{ __html: renderInline(line) }} />); }
+    else { flushList(); elements.push(<p key={key++} className="text-base text-foreground mb-3 leading-relaxed" dangerouslySetInnerHTML={{ __html: sanitizeMarkdownHtml(renderInline(line)) }} />); }
   }
   flushList();
   return elements;
@@ -130,7 +137,7 @@ export default function PageAideArticle() {
     <div className="min-h-[100dvh] bg-background">
       <header className="border-b border-border bg-card">
         <div className="max-w-3xl mx-auto px-4 py-4 flex items-center gap-3">
-          <button onClick={() => navigate('/aide')} className="text-muted-foreground hover:text-foreground">
+          <button onClick={() => navigate('/aide')} className="text-muted-foreground hover:text-foreground" aria-label="Retour au centre d'aide">
             <ArrowLeft className="h-5 w-5" />
           </button>
           <div className="flex items-center gap-2">

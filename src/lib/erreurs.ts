@@ -22,6 +22,13 @@ export type CodeErreurInscription =
   | 'RATE_LIMITED'
   | 'UNAUTHORIZED'
   | 'INVALID_TOKEN'
+  | 'ACCOUNT_TYPE_MISMATCH'
+  | 'ACCOUNT_ALREADY_REGISTERED'
+  | 'ACCOUNT_REGISTRATION_IN_PROGRESS'
+  | 'ACCOUNT_PROFILE_CONFLICT'
+  | 'ACCOUNT_REGISTRATION_INCOMPLETE'
+  | 'ACCOUNT_AUTH_INACTIVE'
+  | 'ACCOUNT_RESERVATION_UNAVAILABLE'
   | 'NETWORK_ERROR'
   | 'INTERNAL_ERROR'
   | 'UNKNOWN';
@@ -173,6 +180,10 @@ const CODES_CONNUS = new Set<string>([
   'SIRET_FORMAT_INVALID', 'SIRET_CHECKSUM_INVALID', 'SIRET_ALREADY_REGISTERED',
   'MISSING_REQUIRED_FIELDS', 'UNDERAGE', 'CAPTCHA_FAILED', 'RATE_LIMITED',
   'UNAUTHORIZED', 'INVALID_TOKEN', 'NETWORK_ERROR', 'INTERNAL_ERROR',
+  'ACCOUNT_TYPE_MISMATCH', 'ACCOUNT_ALREADY_REGISTERED',
+  'ACCOUNT_REGISTRATION_IN_PROGRESS', 'ACCOUNT_PROFILE_CONFLICT',
+  'ACCOUNT_REGISTRATION_INCOMPLETE', 'ACCOUNT_AUTH_INACTIVE',
+  'ACCOUNT_RESERVATION_UNAVAILABLE',
 ]);
 
 function estCodeConnu(code: string): boolean {
@@ -196,6 +207,8 @@ export const CODES_REFUS_ATTENDU_INSCRIPTION = new Set<string>([
   'RPPS_ALREADY_REGISTERED', 'RPPS_PROFESSION_MISMATCH',
   'SIRET_FORMAT_INVALID', 'SIRET_CHECKSUM_INVALID', 'SIRET_ALREADY_REGISTERED',
   'MISSING_REQUIRED_FIELDS', 'UNDERAGE', 'CAPTCHA_FAILED', 'RATE_LIMITED',
+  'ACCOUNT_TYPE_MISMATCH', 'ACCOUNT_ALREADY_REGISTERED',
+  'ACCOUNT_REGISTRATION_IN_PROGRESS',
 ]);
 
 /** True si le code est un refus métier attendu (pas un bug → pas d'issue Sentry). */
@@ -212,10 +225,42 @@ function enrichirParCode(
 
   switch (code) {
     case 'USER_ALREADY_REGISTERED':
+    case 'ACCOUNT_ALREADY_REGISTERED':
       return {
         code,
         message: messageBackend || 'Un compte existe déjà avec cet email. Voulez-vous vous connecter ?',
         action: 'reconnexion',
+      };
+    case 'ACCOUNT_TYPE_MISMATCH':
+      return {
+        code,
+        message: messageBackend || 'Cette adresse est déjà associée à un autre espace Jolene.',
+        action: 'support',
+      };
+    case 'ACCOUNT_REGISTRATION_IN_PROGRESS':
+      return {
+        code,
+        message: messageBackend || 'Une inscription est déjà en cours. Patientez quelques instants puis réessayez.',
+        action: 'retry',
+      };
+    case 'ACCOUNT_PROFILE_CONFLICT':
+    case 'ACCOUNT_REGISTRATION_INCOMPLETE':
+      return {
+        code,
+        message: messageBackend || 'Votre compte nécessite une vérification. Contactez le support Jolene.',
+        action: 'support',
+      };
+    case 'ACCOUNT_AUTH_INACTIVE':
+      return {
+        code,
+        message: messageBackend || 'Ce compte est inactif. Reconnectez-vous ou contactez le support.',
+        action: 'reconnexion',
+      };
+    case 'ACCOUNT_RESERVATION_UNAVAILABLE':
+      return {
+        code,
+        message: messageBackend || 'Inscription momentanément indisponible. Réessayez dans quelques minutes.',
+        action: 'retry',
       };
     case 'EMAIL_RATE_LIMIT':
       return {

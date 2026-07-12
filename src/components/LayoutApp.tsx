@@ -70,7 +70,6 @@ export function LayoutApp({ role, children, pleinEcran = false }: LayoutAppProps
       className="flex flex-col bg-background"
       style={pleinEcran ? { height: '100dvh', overflow: 'hidden' } : { minHeight: '100dvh' }}
     >
-      <a href="#main-content" className="skip-to-main">Aller au contenu principal</a>
       <BarreNavigation role={role} />
       {/* Bandeaux + main décalés à droite de la sidebar desktop (260px).
           Bandeaux placés ICI (pas en flex-column root) pour ne PAS être

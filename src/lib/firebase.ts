@@ -1,3 +1,5 @@
+import { memoriserTokenPushAppareil } from './pushDeviceToken';
+
 const firebaseConfig = {
   apiKey: "AIzaSyBWhTy5scThcxUMtFq8spPdg2ViD0E-x6s",
   authDomain: "jolene-app-d91fd.firebaseapp.com",
@@ -56,10 +58,12 @@ export async function demanderPermissionPush(
   const token = JSON.stringify(subscription);
   const plateforme = detecterPlateforme();
 
-  await supabase.rpc('fn_upsert_token_push' as any, {
+  const { error } = await supabase.rpc('fn_upsert_token_push' as any, {
     p_token: token,
     p_plateforme: plateforme,
   });
+  if (error) throw error;
+  memoriserTokenPushAppareil(token);
 
   return token;
 }

@@ -66,7 +66,11 @@ export function ListeContratsContent({ role }: { role: UserRole }) {
 
   return (
     <>
-      <h1 className="text-xl font-bold text-foreground mb-4">{role === 'SOIGNANT' ? 'Mes contrats' : 'Contrats'}</h1>
+      {role === 'SOIGNANT' ? (
+        <h2 className="text-xl font-bold text-foreground mb-4">Mes contrats</h2>
+      ) : (
+        <h1 className="text-xl font-bold text-foreground mb-4">Contrats</h1>
+      )}
 
       <div className="flex gap-2 mb-4 flex-wrap">
         {FILTRES_STATUT.map(f => (

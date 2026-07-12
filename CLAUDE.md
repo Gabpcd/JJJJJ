@@ -170,6 +170,11 @@ jours avec un défaut figé qui se désynchronise ensuite de la période). Corol
 si deux champs peuvent diverger, l'un des deux est de trop — dériver, ne pas
 dupliquer la saisie.
 
+**Récurrences** — un motif répétitif n'est jamais la donnée : c'est uniquement un
+initialiseur. Les occurrences réellement datées sont la seule source de vérité ;
+elles restent modifiables individuellement et leurs exceptions survivent à toute
+re-dérivation tant que la date demeure dans la période.
+
 ## Principe — Publication différée = filtre de visibilité CENTRALISÉ
 
 Toute donnée à **visibilité conditionnelle** (publication différée, double-aveugle,

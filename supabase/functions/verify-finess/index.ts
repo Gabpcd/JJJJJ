@@ -11,19 +11,15 @@
 // Auth : verify_jwt=false (registre public, appelé à l'inscription sans session, comme
 // verify-rpps). Écriture finess_verifie UNIQUEMENT si appelé avec la service-role key.
 
-import { createClient } from 'npm:@supabase/supabase-js@2';
+import { createClient } from 'npm:@supabase/supabase-js@2.99.2';
+import { jsonResponse, preflightResponse } from '../_shared/cors.ts';
+import { verifyAdminOrServiceRole } from '../_shared/admin-auth.ts';
+import { applyRateLimit, getClientIp } from '../_shared/rate-limit.ts';
 
-function corsHeaders(req: Request): Record<string, string> {
-  const origin = req.headers.get('origin') || '';
-  const allowed =
-    origin === 'https://jolene.app' || origin === 'https://app.jolene.app' ||
-    origin === 'https://www.jolene.app' || origin === 'http://localhost:5173' ||
-    origin === 'http://localhost:8080';
-  return {
-    'Access-Control-Allow-Origin': allowed ? origin : 'https://jolene.app',
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-    'Access-Control-Allow-Methods': 'POST, OPTIONS',
-  };
+async function fingerprint(value: string): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value));
+  return [...new Uint8Array(digest)].slice(0, 16)
+    .map((octet) => octet.toString(16).padStart(2, '0')).join('');
 }
 
 async function fetchWithTimeout(url: string, init: RequestInit, ms: number): Promise<Response> {
@@ -97,38 +93,64 @@ async function queryFiness(finess: string, apiKey: string): Promise<FinessResult
 }
 
 Deno.serve(async (req) => {
-  const cors = corsHeaders(req);
-  if (req.method === 'OPTIONS') return new Response(null, { headers: cors });
-  const json = (status: number, body: unknown) =>
-    new Response(JSON.stringify(body), { status, headers: { ...cors, 'Content-Type': 'application/json' } });
+  if (req.method === 'OPTIONS') return preflightResponse(req);
+  if (req.method !== 'POST') return jsonResponse(req, { error: 'Methode non autorisee' }, 405);
+  const ip = getClientIp(req);
+  if (applyRateLimit('verify-finess', ip, { max: 10, windowMs: 60_000 })) {
+    return jsonResponse(req, { ok: false, code: 'RATE_LIMITED', error: 'Trop de verifications.' }, 429);
+  }
 
   try {
     const apiKey = Deno.env.get('ESANTE_FHIR_API_KEY') || '';
-    const body = await req.json().catch(() => ({}));
+    const body = await req.json().catch(() => null) as Record<string, unknown> | null;
+    if (!body || Array.isArray(body)) return jsonResponse(req, { error: 'Corps JSON invalide' }, 400);
 
     if (body?.warm === true) {
-      return json(200, { warm: true, configured: !!apiKey, endpoint: GATEWAY });
+      const adminAuth = await verifyAdminOrServiceRole(req);
+      if (!adminAuth.ok) return jsonResponse(req, { error: adminAuth.error }, adminAuth.status);
+      return jsonResponse(req, { warm: true, configured: !!apiKey, endpoint: GATEWAY });
+    }
+
+    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
+    const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
+    if (!serviceRoleKey || !supabaseUrl) return jsonResponse(req, { error: 'Service indisponible' }, 503);
+    const authHeader = req.headers.get('Authorization') || '';
+    const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
+    const isServiceRole = token === serviceRoleKey;
+    if (!isServiceRole) {
+      const admin = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false } });
+      const { data: allowed, error: rateError } = await admin.rpc('fn_verifier_rate_limit', {
+        p_cle: await fingerprint(ip === 'unknown'
+          ? `unknown|${(req.headers.get('user-agent') || '').slice(0, 160)}`
+          : ip),
+        p_action: 'edge_verify_finess',
+        p_max_tentatives: 30,
+        p_fenetre_secondes: 600,
+      });
+      if (rateError) return jsonResponse(req, { error: 'Service temporairement indisponible' }, 503);
+      if (allowed !== true) return jsonResponse(req, { code: 'RATE_LIMITED', error: 'Quota de verification atteint' }, 429);
     }
 
     const finess = String(body?.finess || '').replace(/\D/g, '').trim();
     if (!finess || finess.length !== 9) {
-      return json(400, { ok: false, error: 'FINESS invalide : 9 chiffres attendus.' });
+      return jsonResponse(req, { ok: false, error: 'FINESS invalide : 9 chiffres attendus.' }, 400);
     }
 
     // Dégradation gracieuse si la clé n'est pas configurée (vérif différée)
     if (!apiKey) {
-      return json(200, { ok: false, fhir_indisponible: true, source: 'Format FINESS valide - vérification ANS différée' });
+      return jsonResponse(req, { ok: false, fhir_indisponible: true, source: 'Format FINESS valide - vérification ANS différée' });
     }
 
     let result: FinessResult;
     try {
       result = await queryFiness(finess, apiKey);
     } catch (e) {
-      return json(200, { ok: false, fhir_indisponible: true, source: 'Annuaire Santé indisponible', detail: String(e).slice(0, 200) });
+      console.error('[verify-finess] Annuaire Sante indisponible', e instanceof Error ? e.message : String(e));
+      return jsonResponse(req, { ok: false, fhir_indisponible: true, source: 'Annuaire Santé indisponible' });
     }
 
     if (!result.trouve) {
-      return json(200, { ok: true, trouve: false, message: 'FINESS introuvable dans l\'Annuaire Santé.' });
+      return jsonResponse(req, { ok: true, trouve: false, message: 'FINESS introuvable dans l\'Annuaire Santé.' });
     }
 
     // Écriture finess_verifie : autorisée si l'appelant est
@@ -136,10 +158,6 @@ Deno.serve(async (req) => {
     //   (b) un membre PROPRIETAIRE/ADMIN_GROUPE de l'établissement (UI de vérification).
     // L'écriture s'appuie TOUJOURS sur le résultat FHIR vérifié server-side (result.actif),
     // jamais sur une affirmation du client.
-    const authHeader = req.headers.get('Authorization') || '';
-    const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
-    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const etablissementId = body?.etablissement_id ? String(body.etablissement_id) : '';
     let ecrit = false;
 
@@ -185,7 +203,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    return json(200, {
+    return jsonResponse(req, {
       ok: true,
       trouve: true,
       finess,
@@ -200,6 +218,7 @@ Deno.serve(async (req) => {
       source: 'FHIR Annuaire Santé v2 (Organization)',
     });
   } catch (e) {
-    return json(200, { ok: false, fhir_indisponible: true, source: 'Erreur appel FHIR', detail: String(e).slice(0, 200) });
+    console.error('[verify-finess] erreur', e instanceof Error ? e.message : String(e));
+    return jsonResponse(req, { ok: false, fhir_indisponible: true, source: 'Erreur appel FHIR' });
   }
 });

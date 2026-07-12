@@ -119,7 +119,7 @@ export function ReclamationsContent({ role: _role }: { role: 'SOIGNANT' | 'ADMIN
               <MessageCircle className="h-5 w-5 text-primary" />
             </div>
             <div>
-              <h1 className="text-xl font-bold text-foreground">Mes réclamations</h1>
+              <h2 className="text-xl font-bold text-foreground">Mes réclamations</h2>
               <p className="text-sm text-muted-foreground">Signale un problème ou suis tes demandes</p>
             </div>
           </div>

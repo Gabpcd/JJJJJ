@@ -1,25 +1,11 @@
-import { createClient } from 'npm:@supabase/supabase-js@2';
+import { createClient } from 'npm:@supabase/supabase-js@2.99.2';
 import { applyRateLimit, getClientIp } from '../_shared/rate-limit.ts';
+import { corsHeaders, jsonResponse, preflightResponse } from '../_shared/cors.ts';
 
-function getCorsOrigin(req: Request): string {
-  const origin = req.headers.get("origin") || "";
-  if (
-    origin === "https://jolene.app" ||
-    origin === "https://app.jolene.app" ||
-    origin === "https://www.jolene.app" ||
-    origin === "http://localhost:5173" ||
-    origin === "http://localhost:8080"
-  ) {
-    return origin;
-  }
-  return "https://jolene.app";
-}
-
-function corsHeaders(req: Request) {
-  return {
-    'Access-Control-Allow-Origin': getCorsOrigin(req),
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
-  };
+async function fingerprint(value: string): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value));
+  return [...new Uint8Array(digest)].slice(0, 16)
+    .map((octet) => octet.toString(16).padStart(2, '0')).join('');
 }
 
 const NAF_SANTE = new Set([
@@ -117,11 +103,13 @@ function buildResult(matching: any, matchingEtab: any): VerificationResult {
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders(req) });
+    return preflightResponse(req);
   }
+  if (req.method !== 'POST') return jsonResponse(req, { error: 'Methode non autorisee' }, 405);
 
   // Rate-limit IP : 20 vérifs SIRET/min/IP (API INSEE quota partagé).
-  if (applyRateLimit('verify-siret', getClientIp(req), { max: 20, windowMs: 60_000 })) {
+  const clientIp = getClientIp(req);
+  if (applyRateLimit('verify-siret', clientIp, { max: 20, windowMs: 60_000 })) {
     return new Response(JSON.stringify({ ok: false, code: 'RATE_LIMITED', error: 'Trop de vérifications. Réessayez dans 1 minute.' }), {
       status: 429,
       headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
@@ -136,7 +124,10 @@ Deno.serve(async (req) => {
     // donc PAS la lecture : seule l'écriture en base (plus bas) exige une
     // autorisation (service-role ou membre PROPRIETAIRE/ADMIN_GROUPE). La fonction
     // est protégée contre l'abus par le rate-limit IP (20/min) défini au-dessus.
-    const { siret, etablissement_id } = await req.json();
+    const body = await req.json().catch(() => null) as Record<string, unknown> | null;
+    if (!body || Array.isArray(body)) return jsonResponse(req, { error: 'Corps JSON invalide' }, 400);
+    const siret = typeof body.siret === 'string' ? body.siret.trim() : '';
+    const etablissement_id = typeof body.etablissement_id === 'string' ? body.etablissement_id : null;
     if (!siret || !/^\d{14}$/.test(siret)) {
       return new Response(JSON.stringify({ ok: false, code: 'SIRET_INVALID', error: 'SIRET invalide' }), {
         status: 400,
@@ -144,11 +135,33 @@ Deno.serve(async (req) => {
       });
     }
 
+    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
+    const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
+    if (!serviceRoleKey || !supabaseUrl) return jsonResponse(req, { error: 'Service indisponible' }, 503);
+    const authHeader = req.headers.get('Authorization') || '';
+    const tokenVal = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
+    if (tokenVal !== serviceRoleKey) {
+      const admin = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false } });
+      const { data: allowed, error: rateError } = await admin.rpc('fn_verifier_rate_limit', {
+        p_cle: await fingerprint(clientIp === 'unknown'
+          ? `unknown|${(req.headers.get('user-agent') || '').slice(0, 160)}`
+          : clientIp),
+        p_action: 'edge_verify_siret',
+        p_max_tentatives: 60,
+        p_fenetre_secondes: 600,
+      });
+      if (rateError) return jsonResponse(req, { error: 'Service temporairement indisponible' }, 503);
+      if (allowed !== true) return jsonResponse(req, { code: 'RATE_LIMITED', error: 'Quota de verification atteint' }, 429);
+    }
+
     let result: VerificationResult;
 
     try {
       const rechercheUrl = `https://recherche-entreprises.api.gouv.fr/search?q=${siret}&mtm_campaign=jolene`;
-      const response = await fetch(rechercheUrl, { headers: { 'Accept': 'application/json' } });
+      const response = await fetch(rechercheUrl, {
+        headers: { 'Accept': 'application/json' },
+        signal: AbortSignal.timeout(8_000),
+      });
 
       if (!response.ok) {
         result = buildResult(null, null);
@@ -173,11 +186,6 @@ Deno.serve(async (req) => {
     // À l'inscription publique il n'y a PAS d'etablissement_id → on ne fait que lire,
     // donc la vérification anti-usurpation côté serveur reste intacte.
     if (result.statut === 'VERIFIE' && etablissement_id) {
-      const authHeader = req.headers.get('Authorization') || '';
-      const tokenVal = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
-      const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-      const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-
       let autorise = false;
       if (tokenVal && serviceRoleKey && tokenVal === serviceRoleKey) {
         autorise = true; // service-role

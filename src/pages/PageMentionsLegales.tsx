@@ -46,7 +46,7 @@ export default function PageMentionsLegales() {
           <p><strong className="text-foreground">Sécurité :</strong> Chiffrement AES-256 au repos, TLS 1.3 en transit, SOC 2 Type II, ISO 27001</p>
           <p><strong className="text-foreground">Site web :</strong> <a href="https://supabase.com" target="_blank" rel="noopener noreferrer" className="text-primary underline">supabase.com</a></p>
         </div>
-        <p className="mt-3 text-muted-foreground">L'ensemble des données sont stockées sur des serveurs situés dans l'Union européenne. Jolene ne stocke aucune donnée de santé à caractère personnel au sens de l'article L.1111-8 du Code de la santé publique.</p>
+        <p className="mt-3 text-muted-foreground">Les informations d'hébergement et de sous-traitance sont détaillées dans la politique de confidentialité. Jolene ne demande pas de dossier médical, mais enregistre certaines déclarations de conformité professionnelle liées aux vaccinations et à la médecine du travail avec un accès restreint.</p>
       </section>
 
       {/* Nom de domaine */}

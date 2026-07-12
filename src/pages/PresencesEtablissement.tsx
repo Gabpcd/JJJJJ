@@ -36,7 +36,7 @@ export default function PresencesEtablissement() {
   const [loading, setLoading] = useState(true);
   const [modalLot, setModalLot] = useState(false);
   const tabParam = searchParams.get('tab');
-  const [activeTab, setActiveTab] = useState(['a_valider', 'en_cours', 'validees', 'alertes'].includes(tabParam || '') ? tabParam! : 'validees');
+  const [activeTab, setActiveTab] = useState(['a_valider', 'en_cours', 'validees', 'alertes'].includes(tabParam || '') ? tabParam! : 'a_valider');
 
   const charger = useCallback(async () => {
     if (!user || !etablissementId) return;

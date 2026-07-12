@@ -17,6 +17,7 @@
 // }
 
 import { verifyAdminOrServiceRole } from "../_shared/admin-auth.ts";
+import { corsHeaders, preflightResponse } from "../_shared/cors.ts";
 
 // Endpoints hardcodés dans psc-authorize/psc-callback. Le test compare la
 // découverte OIDC à ces valeurs : si l'ANS modifie un endpoint, on le détecte.
@@ -45,25 +46,9 @@ const REQUIRED_SECRETS = [
   "PSC_FRONTEND_URL",
 ];
 
-function corsHeaders(req: Request) {
-  const origin = req.headers.get("origin") || "";
-  const allowed = [
-    "https://jolene.app",
-    "https://www.jolene.app",
-    "http://localhost:5173",
-    "http://localhost:8080",
-  ];
-  const allowedOrigin = allowed.includes(origin) ? origin : "https://jolene.app";
-  return {
-    "Access-Control-Allow-Origin": allowedOrigin,
-    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-    "Content-Type": "application/json",
-  };
-}
-
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders(req) });
+    return preflightResponse(req);
   }
 
   const t0 = Date.now();

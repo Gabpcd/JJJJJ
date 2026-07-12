@@ -9,13 +9,13 @@ import { BadgeRPPS } from '@/components/BadgeRPPS';
 import { Mascotte } from '@/components/mascotte/Mascotte';
 import { estEligibleLiberal } from '@/lib/regles-installation-liberal';
 import { ChangementMotDePasse } from '@/components/soignant/ChangementMotDePasse';
-import { ConsentementPingGps } from '@/components/soignant/ConsentementPingGps';
+import { SectionPaiements } from '@/components/profil-soignant/SectionPaiements';
 import { ModalContacterJolene } from '@/components/ModalContacterJolene';
 import { BuildStamp } from '@/components/BuildStamp';
 import { useTheme } from '@/hooks/useTheme';
 import {
   User, ShieldCheck, LogOut,
-  Mail, Phone, MapPin, KeyRound, FileText, Scale, Trash2,
+  Mail, Phone, KeyRound, FileText, Scale, Trash2,
   CreditCard, Gift, Rocket, Umbrella, GraduationCap, Bell,
   Search, Ban, BookOpen, Moon, Sun,
 } from 'lucide-react';
@@ -29,13 +29,14 @@ export default function MonCompteSoignant() {
     prenom: string; nom: string; avatar_url: string | null;
     type_exercice: string | null; rpps_verifie: boolean; numero_rpps: string | null;
     profession: string | null; statut_liberal: string | null;
+    mandat_facturation_signe: boolean | null; mandat_facturation_signe_le: string | null;
   } | null>(null);
   const [contactOpen, setContactOpen] = useState(false);
 
   useEffect(() => {
     if (!user) return;
     supabase.from('soignants')
-      .select('prenom, nom, avatar_url, type_exercice, rpps_verifie, numero_rpps, profession, statut_liberal')
+      .select('prenom, nom, avatar_url, type_exercice, rpps_verifie, numero_rpps, profession, statut_liberal, mandat_facturation_signe, mandat_facturation_signe_le')
       .eq('id', user.id).maybeSingle()
       .then(({ data }) => { if (data) setProfil(data as any); });
   }, [user]);
@@ -59,13 +60,21 @@ export default function MonCompteSoignant() {
     },
     // Config paiement/facturation = CONFIG → Compte (source unique). « Charges sociales »
     // retirée d'ici : c'est de l'INFO → elle vit dans Revenus (entrée nommée).
-    ...(estLiberal ? [{
+    ...[{
       titre: 'Paiements & facturation',
       lignes: [
-        { icone: CreditCard, label: 'Compte de paiement (Stripe)', route: '/soignant/stripe-connect' },
-        { icone: FileText, label: 'Mandat de facturation', route: '/soignant/mandat-facturation' },
+        ...(estLiberal ? [
+          { icone: CreditCard, label: 'Compte de paiement (Stripe)', route: '/soignant/stripe-connect' },
+          { icone: FileText, label: 'Mandat de facturation', route: '/soignant/mandat-facturation' },
+        ] : []),
+        {
+          icone: CreditCard,
+          label: 'Coordonnées bancaires',
+          onClick: () => document.getElementById('paiements')?.scrollIntoView({ behavior: 'smooth', block: 'start' }),
+          sansChevron: true,
+        },
       ],
-    }] : []),
+    }],
     // « Ma réputation » retiré : hub dissous, le score simple vit désormais sur le Profil.
     {
       // Section « Développement » renommée « Documents & protection ».
@@ -116,7 +125,7 @@ export default function MonCompteSoignant() {
         { icone: ShieldCheck, label: 'Confidentialité', route: '/confidentialite' },
         { icone: Scale, label: 'Conditions générales', route: '/cgu' },
         { icone: FileText, label: 'Mentions légales', route: '/mentions-legales' },
-        { icone: Trash2, label: 'Supprimer mon compte', route: '/supprimer-mon-compte' },
+        { icone: Trash2, label: 'Supprimer mon compte', route: '/soignant/profil?tab=confidentialite#suppression-compte' },
       ],
     },
     {
@@ -140,6 +149,18 @@ export default function MonCompteSoignant() {
         }
       />
       <ListeReglages sections={sections} />
+
+      <section id="paiements" tabIndex={-1} className="mt-8 scroll-mt-20" aria-labelledby="titre-paiements">
+        <h2 id="titre-paiements" className="px-4 mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          Paiements & coordonnées bancaires
+        </h2>
+        <SectionPaiements
+          userId={user!.id}
+          typeExercice={profil?.type_exercice ?? null}
+          mandatFacturationSigne={profil?.mandat_facturation_signe ?? null}
+          mandatFacturationSigneLe={profil?.mandat_facturation_signe_le ?? null}
+        />
+      </section>
 
       {/* Session G3 — réglages de compte foldés depuis l'ancienne page
           /soignant/parametres (devenue une redirection vers ce hub). */}
@@ -173,25 +194,6 @@ export default function MonCompteSoignant() {
                 Changer mon mot de passe
               </h3>
               <ChangementMotDePasse />
-            </div>
-          </div>
-        </section>
-
-        <section>
-          <h2 className="px-4 mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            Confidentialité & données
-          </h2>
-          <div className="rounded-2xl border border-border bg-card p-4">
-            <p className="text-xs text-muted-foreground mb-3 flex items-start gap-2">
-              <MapPin className="h-4 w-4 text-primary shrink-0 mt-0.5" />
-              <span>
-                Option facultative : si activée, ta position GPS est enregistrée pendant la
-                durée de tes missions, pour renforcer la fiabilité du pointage et faciliter la
-                résolution de litiges. Données conservées 30 jours puis supprimées.
-              </span>
-            </p>
-            <div className="rounded-lg border border-border bg-background overflow-hidden">
-              <ConsentementPingGps />
             </div>
           </div>
         </section>

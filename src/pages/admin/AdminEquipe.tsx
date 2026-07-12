@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { LayoutAdmin } from '@/components/LayoutAdmin';
-import { ChargementPage } from '@/components/ChargementPage';
+import { ChargementAdmin } from '@/components/admin/ChargementAdmin';
 import { supabase } from '@/integrations/supabase/client';
 import { CardY2K, CardY2KHeader, CardY2KTitle, CardY2KContent } from '@/components/y2k/CardY2K';
 import { BoutonY2K } from '@/components/y2k/BoutonY2K';
@@ -66,6 +66,17 @@ export default function AdminEquipe() {
   };
 
   useEffect(() => { charger(); }, []);
+
+  useEffect(() => {
+    if (!showForm) return;
+    const fermerAvecEchap = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || saving) return;
+      setShowForm(false);
+      setEditMembre(null);
+    };
+    document.addEventListener('keydown', fermerAvecEchap);
+    return () => document.removeEventListener('keydown', fermerAvecEchap);
+  }, [showForm, saving]);
 
   const coutTotal = useMemo(() => {
     const brut = membres.filter(m => m.actif).reduce((s, m) => s + (Number(m.salaire_brut_mensuel) || 0), 0);
@@ -148,7 +159,7 @@ export default function AdminEquipe() {
     setEditMembre({ ...editMembre, acces_groupes: next });
   };
 
-  if (loading) return <LayoutAdmin><ChargementPage /></LayoutAdmin>;
+  if (loading) return <LayoutAdmin><ChargementAdmin titre="Gestion de l’équipe" /></LayoutAdmin>;
 
   return (
     <LayoutAdmin>
@@ -227,50 +238,50 @@ export default function AdminEquipe() {
         {/* Formulaire modal inline */}
         {showForm && editMembre && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-foreground/40">
-            <CardY2K className="max-w-lg w-full max-h-[90vh] overflow-y-auto">
+            <CardY2K className="max-w-lg w-full max-h-[90vh] overflow-y-auto" role="dialog" aria-modal="true" aria-labelledby="admin-equipe-dialog-title">
               <CardY2KHeader>
                 <div className="flex items-center justify-between w-full">
-                  <CardY2KTitle className="text-sm">{editMembre.id ? 'Modifier' : 'Ajouter'} un membre</CardY2KTitle>
-                  <button onClick={() => { setShowForm(false); setEditMembre(null); }} className="text-muted-foreground hover:text-foreground">
-                    <X className="h-5 w-5" />
+                  <CardY2KTitle id="admin-equipe-dialog-title" className="text-sm">{editMembre.id ? 'Modifier' : 'Ajouter'} un membre</CardY2KTitle>
+                  <button aria-label="Fermer le formulaire du membre" onClick={() => { setShowForm(false); setEditMembre(null); }} className="text-muted-foreground hover:text-foreground">
+                    <X className="h-5 w-5" aria-hidden="true" />
                   </button>
                 </div>
               </CardY2KHeader>
               <CardY2KContent className="space-y-4">
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <Label>Prénom</Label>
-                    <Input value={editMembre.prenom || ''} onChange={e => setEditMembre({ ...editMembre, prenom: e.target.value })} />
+                    <Label htmlFor="admin-equipe-prenom">Prénom</Label>
+                    <Input id="admin-equipe-prenom" value={editMembre.prenom || ''} onChange={e => setEditMembre({ ...editMembre, prenom: e.target.value })} />
                   </div>
                   <div>
-                    <Label>Nom</Label>
-                    <Input value={editMembre.nom || ''} onChange={e => setEditMembre({ ...editMembre, nom: e.target.value })} />
+                    <Label htmlFor="admin-equipe-nom">Nom</Label>
+                    <Input id="admin-equipe-nom" value={editMembre.nom || ''} onChange={e => setEditMembre({ ...editMembre, nom: e.target.value })} />
                   </div>
                 </div>
                 <div>
-                  <Label>Email</Label>
-                  <Input type="email" value={editMembre.email || ''} onChange={e => setEditMembre({ ...editMembre, email: e.target.value })} />
+                  <Label htmlFor="admin-equipe-email">Email</Label>
+                  <Input id="admin-equipe-email" type="email" value={editMembre.email || ''} onChange={e => setEditMembre({ ...editMembre, email: e.target.value })} />
                 </div>
                 {!editMembre.id && (
                   <div>
-                    <Label>Mot de passe (8 caractères min.)</Label>
-                    <Input type="password" value={editMembre.password || ''} onChange={e => setEditMembre({ ...editMembre, password: e.target.value })} placeholder="••••••••" autoComplete="new-password" />
+                    <Label htmlFor="admin-equipe-password">Mot de passe (8 caractères min.)</Label>
+                    <Input id="admin-equipe-password" type="password" value={editMembre.password || ''} onChange={e => setEditMembre({ ...editMembre, password: e.target.value })} placeholder="••••••••" autoComplete="new-password" />
                     <p className="text-[10px] text-muted-foreground mt-1">Crée un compte admin avec ce mot de passe. L'employé pourra le changer ensuite.</p>
                   </div>
                 )}
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <Label>Poste</Label>
-                    <Input value={editMembre.poste || ''} onChange={e => setEditMembre({ ...editMembre, poste: e.target.value })} />
+                    <Label htmlFor="admin-equipe-poste">Poste</Label>
+                    <Input id="admin-equipe-poste" value={editMembre.poste || ''} onChange={e => setEditMembre({ ...editMembre, poste: e.target.value })} />
                   </div>
                   <div>
-                    <Label>Salaire brut /mois (€)</Label>
-                    <Input type="number" value={editMembre.salaire_brut_mensuel || ''} onChange={e => setEditMembre({ ...editMembre, salaire_brut_mensuel: Number(e.target.value) })} />
+                    <Label htmlFor="admin-equipe-salaire">Salaire brut /mois (€)</Label>
+                    <Input id="admin-equipe-salaire" type="number" value={editMembre.salaire_brut_mensuel || ''} onChange={e => setEditMembre({ ...editMembre, salaire_brut_mensuel: Number(e.target.value) })} />
                   </div>
                 </div>
                 <div>
-                  <Label>Date d'embauche</Label>
-                  <Input type="date" value={editMembre.date_embauche || ''} onChange={e => setEditMembre({ ...editMembre, date_embauche: e.target.value })} />
+                  <Label htmlFor="admin-equipe-date-embauche">Date d'embauche</Label>
+                  <Input id="admin-equipe-date-embauche" type="date" value={editMembre.date_embauche || ''} onChange={e => setEditMembre({ ...editMembre, date_embauche: e.target.value })} />
                 </div>
                 <div>
                   <Label>Périmètres d'accès (pages admin visibles)</Label>

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { LayoutAdmin } from '@/components/LayoutAdmin';
-import { ChargementPage } from '@/components/ChargementPage';
+import { ChargementSectionAdmin } from '@/components/admin/ChargementAdmin';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { TableOuCartes, type ColonneTableau } from '@/components/ui/TableOuCartes';
 import { supabase } from '@/integrations/supabase/client';
@@ -56,6 +56,11 @@ const ACTEURS_LIBELLES: Record<string, string> = {
   'ADMIN_ETABLISSEMENT': 'Admin établissement',
   'ADMIN_PLATEFORME': 'Admin plateforme',
   'SYSTEME': 'Système',
+  'SYSTEM': 'Système',
+  'SERVICE_API': 'Service API',
+  'ADMIN_GROUPE': 'Admin groupe',
+  'ADMIN': 'Administrateur',
+  'ETABLISSEMENT': 'Établissement',
 };
 
 const EVENEMENTS_LIBELLES: Record<string, string> = {
@@ -103,9 +108,11 @@ export default function AdminAuditLogs() {
   const [filterAction, setFilterAction] = useState('');
   const [filterType, setFilterType] = useState('');
   const [filterEvenement, setFilterEvenement] = useState('');
+  const [erreur, setErreur] = useState<string | null>(null);
 
   const charger = async () => {
     setLoading(true);
+    setErreur(null);
     let query = supabase
       .from('journaux_audit')
       .select('*')
@@ -118,18 +125,30 @@ export default function AdminAuditLogs() {
       // Sprint 6 PR 11 — filtre événements anti-triche via details->>'evenement' jsonb
       query = (query as any).eq('details->>evenement', filterEvenement);
     }
-    if (search) query = query.or(`action.ilike.%${search}%,type_ressource.ilike.%${search}%`);
+    const rechercheSure = search.trim().replace(/[%_,().]/g, ' ').replace(/\s+/g, ' ');
+    if (rechercheSure) query = query.or(`action.ilike.%${rechercheSure}%,type_ressource.ilike.%${rechercheSure}%`);
 
-    const { data } = await query;
-    setLogs(data || []);
-    setHasMore((data || []).length === PAGE_SIZE);
+    const { data, error } = await query;
+    if (error) {
+      setLogs([]);
+      setHasMore(false);
+      setErreur(error.message || 'Impossible de charger les journaux d’audit.');
+    } else {
+      setLogs(data || []);
+      setHasMore((data || []).length === PAGE_SIZE);
+    }
     setLoading(false);
   };
 
   useEffect(() => { charger(); }, [page, filterAction, filterType, filterEvenement]);
 
   const actions = ['RGPD_SUPPRESSION_COMPTE', 'RGPD_EXPORT_DONNEES', 'DOCUMENT_VERIFICATION_AUTO', 'GPS_CONSENTEMENT_ACTIVE', 'GPS_CONSENTEMENT_RETIRE', 'SMS_CONSENTEMENT_ACTIVE', 'SMS_CONSENTEMENT_RETIRE', 'DONNEES_PERSO_MODIFICATION', 'DONNEES_PERSO_CONSULTATION', 'POINTAGE', 'ADMIN_ACTION'];
-  const types = ['SOIGNANT', 'ADMIN_ETABLISSEMENT', 'ADMIN_PLATEFORME', 'SYSTEME'];
+  const types = ['SOIGNANT', 'ETABLISSEMENT', 'ADMIN_ETABLISSEMENT', 'ADMIN_GROUPE', 'ADMIN_PLATEFORME', 'ADMIN', 'SERVICE_API', 'SYSTEME', 'SYSTEM'];
+
+  const relancerDepuisPremierePage = () => {
+    if (page === 0) void charger();
+    else setPage(0);
+  };
 
   return (
     <LayoutAdmin>
@@ -138,7 +157,7 @@ export default function AdminAuditLogs() {
           <h1 className="text-xl font-bold text-foreground flex items-center gap-2"><Shield className="h-5 w-5 text-primary" /> Journaux d'audit</h1>
           <p className="text-sm text-muted-foreground">Traçabilité RGPD des actions sensibles</p>
         </div>
-        <BoutonY2K variant="ghost" size="sm" onClick={() => { setPage(0); charger(); }} aria-label="Rafraîchir">
+        <BoutonY2K variant="ghost" size="sm" onClick={relancerDepuisPremierePage} aria-label="Rafraîchir">
           <RefreshCw className="h-4 w-4" />
         </BoutonY2K>
       </div>
@@ -151,17 +170,18 @@ export default function AdminAuditLogs() {
             <input
               value={search}
               onChange={e => setSearch(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && charger()}
+              onKeyDown={e => { if (e.key === 'Enter') relancerDepuisPremierePage(); }}
               placeholder="Rechercher action ou ressource..."
               className="input-base pl-10"
+              aria-label="Rechercher dans les journaux d’audit"
             />
           </div>
         </div>
-        <select value={filterAction} onChange={e => { setFilterAction(e.target.value); setPage(0); }} className="input-base w-auto">
+        <select aria-label="Filtrer par action" value={filterAction} onChange={e => { setFilterAction(e.target.value); setPage(0); }} className="input-base w-auto">
           <option value="">Toutes les actions</option>
           {actions.map(a => <option key={a} value={a}>{libelleAction(a)}</option>)}
         </select>
-        <select value={filterType} onChange={e => { setFilterType(e.target.value); setPage(0); }} className="input-base w-auto">
+        <select aria-label="Filtrer par type d’acteur" value={filterType} onChange={e => { setFilterType(e.target.value); setPage(0); }} className="input-base w-auto">
           <option value="">Tous les acteurs</option>
           {types.map(t => <option key={t} value={t}>{libelleActeur(t)}</option>)}
         </select>
@@ -171,7 +191,13 @@ export default function AdminAuditLogs() {
         </select>
       </div>
 
-      {loading ? <ChargementPage /> : (
+      {erreur && (
+        <div role="alert" className="mb-4 rounded-xl border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
+          {erreur}
+        </div>
+      )}
+
+      {loading ? <ChargementSectionAdmin label="Chargement des journaux d’audit…" /> : (
         <>
           {(() => {
             const colonnes: ColonneTableau<any>[] = [

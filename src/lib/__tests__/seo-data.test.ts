@@ -39,6 +39,15 @@ describe('PROFESSIONS_SEO', () => {
       expect(p.salaire_moyen).toMatch(/\d+.*€\/h/);
     }
   });
+
+  it('ne promet aucun remplacement de titulaire d’officine', () => {
+    const pharmacien = PROFESSIONS_SEO.find((p) => p.valeur === 'PHARMACIEN');
+    const manipulateur = PROFESSIONS_SEO.find((p) => p.valeur === 'MANIPULATEUR_RADIO');
+
+    expect(pharmacien?.description).toContain('PUI');
+    expect(pharmacien?.description).toContain('n’est pas proposé');
+    expect(manipulateur?.description).toContain('exclusivement en contrat salarié');
+  });
 });
 
 describe('getVilleBySlug', () => {

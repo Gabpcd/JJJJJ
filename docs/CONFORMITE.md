@@ -202,7 +202,7 @@ aides-soignants ». La liste complète se vérifie dans la **copie primaire de l
 D21-031940 mise à disposition par la FEHAP** : aides-soignants, auxiliaires de
 puériculture, infirmiers de bloc opératoire diplômés d'État, infirmiers anesthésistes
 diplômés d'État, infirmiers en puériculture, conseillers en génétique et assistants
-dentaires. Source primaire : [lettre interministérielle du 30/12/2021](https://www.fehap.fr/jcms/navigation-internet/courrier-ministeres-du-30-decembre-2021-10912_DBFileDocument).
+dentaires. Source primaire : [lettre interministérielle du 30/12/2021](https://www.fehap.fr/jcms/navigation-internet/upload/docs/application/pdf/2023-02/courrierconjointministeres_30decembre2021_.pdf).
 
 **Mapping vers l'enum professions Jolene** (résout la divergence) : les 7 professions de
 la lettre → **seules 4 existent dans Jolene** : `AS` (JUGÉ), `AUXILIAIRE_PUERICULTURE`,
@@ -255,9 +255,9 @@ sourcée**.
   - `AS` : « L'exercice libéral n'est pas ouvert aux aides-soignants (**Conseil d'État,
     11/02/2025, n°491128**). Mission proposée en salarié. »
   - `AUXILIAIRE_PUERICULTURE` / `IBODE` / `IADE` (C7 — **double source, jamais « instruction »**) :
-    « L'exercice libéral n'est pas prévu pour cette profession (**lettre interministérielle
-    du 30 décembre 2021, n° D21-031940, validée par le Conseil d'État — 11/02/2025,
-    n°491128**). Mission proposée en salarié. »
+    « L'exercice libéral n'est pas prévu pour cette profession — **lettre interministérielle
+    du 30 décembre 2021 (n° D21-031940), validée par le Conseil d'État (11/02/2025,
+    n°491128)**. Mission proposée en salarié. »
   - `AES` / `PREPARATEUR_PHARMA` / `MANIPULATEUR_RADIO` : « Cette profession n'a pas de cadre
     d'exercice libéral. Mission proposée en salarié. »
   - Praticien × **centre de santé** : « Au sein d'un centre de santé, les professionnels

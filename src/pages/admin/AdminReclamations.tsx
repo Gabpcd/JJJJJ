@@ -4,7 +4,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ReclamationsScoreContent } from './AdminReclamationsScore';
 import { ScoreTriageContent } from './AdminScoreTriage';
 import { LayoutAdmin } from '@/components/LayoutAdmin';
-import { ChargementPage } from '@/components/ChargementPage';
+import { ChargementSectionAdmin } from '@/components/admin/ChargementAdmin';
 import { supabase } from '@/integrations/supabase/client';
 import { useNotification } from '@/contexts/NotificationContext';
 import { usePageTitle } from '@/hooks/usePageTitle';
@@ -112,7 +112,7 @@ export default function AdminReclamations() {
         <TabsContent value="generales" className="mt-0">
       <div className="space-y-4">
         {loading ? (
-          <ChargementPage />
+          <ChargementSectionAdmin label="Chargement des réclamations…" />
         ) : reclamations.length === 0 ? (
           <p className="text-center py-12 text-muted-foreground">Aucune réclamation générale.</p>
         ) : (
@@ -135,6 +135,7 @@ export default function AdminReclamations() {
 
                 <div className="space-y-2 pt-2">
                   <textarea
+                    aria-label={`Réponse à la réclamation de ${r.nom_utilisateur}`}
                     placeholder="Réponse à l'utilisateur (optionnelle)"
                     value={reponseInput[r.id] || ''}
                     onChange={e => setReponseInput(prev => ({ ...prev, [r.id]: e.target.value }))}
@@ -143,6 +144,7 @@ export default function AdminReclamations() {
                   />
                   <div className="flex items-center gap-2">
                     <select
+                      aria-label={`Statut de la réclamation de ${r.nom_utilisateur}`}
                       value={statutInput[r.id] || 'RESOLUE'}
                       onChange={e => setStatutInput(prev => ({ ...prev, [r.id]: e.target.value }))}
                       className="input-base text-sm"

@@ -3,7 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { ChevronRight, ArrowLeft, Mail, Phone, MapPin, Calendar, Shield, Star, Award, FileText, Clock, Ban, RefreshCw, Trash2, KeyRound, UserCog, AlertTriangle, MessageCircle, Send } from 'lucide-react';
 import { supabase as supabaseClient, SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from '@/integrations/supabase/client';
 import { LayoutAdmin } from '@/components/LayoutAdmin';
-import { ChargementPage } from '@/components/ChargementPage';
+import { ChargementAdmin } from '@/components/admin/ChargementAdmin';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { BoutonY2K } from '@/components/y2k/BoutonY2K';
@@ -336,13 +336,14 @@ export default function AdminDetailUtilisateur() {
     setRaisonForceRib('');
   };
 
-  if (loading) return <LayoutAdmin><ChargementPage /></LayoutAdmin>;
+  if (loading) return <LayoutAdmin><ChargementAdmin titre="Détail utilisateur" /></LayoutAdmin>;
 
   if (!soignant && !etablissement) {
     return (
       <LayoutAdmin>
         <div className="text-center py-20">
-          <p className="text-muted-foreground">Utilisateur introuvable.</p>
+          <h1 className="text-2xl font-bold text-foreground">Utilisateur introuvable</h1>
+          <p className="mt-2 text-muted-foreground">Ce compte n’existe pas ou n’est plus accessible.</p>
           <BoutonY2K variant="secondary" className="mt-4" onClick={() => navigate('/admin/utilisateurs')} iconeGauche={<ArrowLeft className="h-4 w-4" />}>
             Retour
           </BoutonY2K>
@@ -368,8 +369,8 @@ export default function AdminDetailUtilisateur() {
       </nav>
 
       <div className="flex items-center gap-3 mb-6">
-        <Button variant="ghost" size="icon" onClick={() => navigate('/admin/utilisateurs')}>
-          <ArrowLeft className="h-5 w-5" />
+        <Button aria-label="Retour à la liste des utilisateurs" variant="ghost" size="icon" onClick={() => navigate('/admin/utilisateurs')}>
+          <ArrowLeft className="h-5 w-5" aria-hidden="true" />
         </Button>
         <div className="flex-1">
           <div className="flex items-center gap-2">
@@ -482,6 +483,7 @@ export default function AdminDetailUtilisateur() {
                     Le soignant vous a envoyé un document en privé ? Ajoutez-le ici : il sera validé immédiatement.
                   </p>
                   <select
+                    aria-label="Type du document à ajouter"
                     value={uploadDocType}
                     onChange={(e) => setUploadDocType(e.target.value)}
                     className="input-base text-xs h-9 sm:w-44"
@@ -982,6 +984,7 @@ function ModalActionAvecRaison({ ouvert, onFermer, onConfirmer, titre, message, 
         <h3 id={titleId} className="text-lg font-bold text-foreground mb-2">{titre}</h3>
         <p id={descId} className="text-sm text-muted-foreground mb-4">{message}</p>
         <Textarea
+          aria-label={placeholder}
           value={raison}
           onChange={(e) => onChangeRaison(e.target.value)}
           placeholder={placeholder}

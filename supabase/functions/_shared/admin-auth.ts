@@ -23,31 +23,56 @@
  *   // auth.userId / auth.isServiceRole disponibles si besoin
  */
 
-import { createClient } from 'npm:@supabase/supabase-js@2';
+import { createClient } from 'npm:@supabase/supabase-js@2.99.2';
 
 export type AdminAuthResult =
   | { ok: true; isServiceRole: boolean; userId: string | null; userEmail: string | null }
+  | { ok: false; status: number; error: string };
+
+export type UserOrServiceAuthResult =
+  | {
+      ok: true;
+      isServiceRole: boolean;
+      userId: string | null;
+      userEmail: string | null;
+      role: string | null;
+      aal: string | null;
+    }
   | { ok: false; status: number; error: string };
 
 const ADMIN_ROLES = new Set(['ADMIN', 'ADMIN_PLATEFORME']);
 
 // Cache mémoire du secret vault (sb_secret_*) lu via RPC fn_lire_secret_cron.
 // Pg_cron envoie ce secret comme Bearer ; il n'est pas auto-injecté en env var.
-let _cachedVaultSecret: string | null = null;
+let _cachedVaultSecret: { value: string; expiresAt: number } | null = null;
 async function fetchVaultCronSecret(supabaseUrl: string, serviceRoleKey: string): Promise<string> {
-  if (_cachedVaultSecret) return _cachedVaultSecret;
+  if (_cachedVaultSecret && _cachedVaultSecret.expiresAt > Date.now()) {
+    return _cachedVaultSecret.value;
+  }
+  _cachedVaultSecret = null;
   if (!supabaseUrl || !serviceRoleKey) return '';
   try {
     const admin = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false } });
     const { data } = await admin.rpc('fn_lire_secret_cron');
-    if (data && typeof data === 'string') { _cachedVaultSecret = data; return data; }
+    if (data && typeof data === 'string') {
+      // Une rotation/revocation Vault doit prendre effet sur une instance Edge
+      // chaude; ne jamais conserver le secret pour toute sa duree de vie.
+      _cachedVaultSecret = { value: data, expiresAt: Date.now() + 5 * 60_000 };
+      return data;
+    }
   } catch { /* ignore */ }
   return '';
 }
 
-/** Vérifie que la requête provient d'un admin authentifié OU d'un appel
- *  server-to-server avec la service_role. Retourne un objet stable. */
-export async function verifyAdminOrServiceRole(req: Request): Promise<AdminAuthResult> {
+/**
+ * Verifie un JWT utilisateur aupres de Supabase Auth, ou un secret interne par
+ * egalite stricte avec une valeur configuree cote serveur.
+ *
+ * Important : le contenu d'un JWT n'est jamais decode pour prendre une decision
+ * d'autorisation. En particulier, un payload forge `{ role: "service_role" }`
+ * ne peut pas activer le bypass server-to-server.
+ */
+export async function verifyUserOrServiceRole(req: Request): Promise<UserOrServiceAuthResult> {
   const authHeader = req.headers.get('Authorization') || '';
   const bearer = authHeader.replace(/^Bearer\s+/i, '').trim();
 
@@ -65,28 +90,17 @@ export async function verifyAdminOrServiceRole(req: Request): Promise<AdminAuthR
   // Match strict pour éviter la fuite par préfixe.
   if ((serviceRoleKey && bearer === serviceRoleKey) ||
       (newSecretKey && bearer === newSecretKey)) {
-    return { ok: true, isServiceRole: true, userId: null, userEmail: null };
+    return { ok: true, isServiceRole: true, userId: null, userEmail: null, role: 'service_role', aal: 'aal2' };
   }
 
   // Fallback vault : pg_cron envoie le sb_secret_* stocké dans vault.decrypted_secrets
   // (name='service_role_key'). Quand SUPABASE_SECRET_KEY n'est pas configuré dans les
   // Edge Functions Secrets, on lit le secret via fn_lire_secret_cron pour valider.
-  const vaultSecret = await fetchVaultCronSecret(supabaseUrl, serviceRoleKey);
-  if (vaultSecret && bearer === vaultSecret) {
-    return { ok: true, isServiceRole: true, userId: null, userEmail: null };
-  }
-
-  // Détection JWT service_role classique (legacy Supabase Auth tokens)
-  const parts = bearer.split('.');
-  if (parts.length === 3) {
-    try {
-      const b64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
-      const padded = b64 + '='.repeat((4 - b64.length % 4) % 4);
-      const payload = JSON.parse(atob(padded));
-      if (payload?.role === 'service_role') {
-        return { ok: true, isServiceRole: true, userId: null, userEmail: null };
-      }
-    } catch { /* invalid JWT, fallthrough to user check */ }
+  if (bearer.startsWith('sb_secret_')) {
+    const vaultSecret = await fetchVaultCronSecret(supabaseUrl, serviceRoleKey);
+    if (vaultSecret && bearer === vaultSecret) {
+      return { ok: true, isServiceRole: true, userId: null, userEmail: null, role: 'service_role', aal: 'aal2' };
+    }
   }
 
   // ── JWT user + check rôle admin ──
@@ -100,22 +114,22 @@ export async function verifyAdminOrServiceRole(req: Request): Promise<AdminAuthR
     return { ok: false, status: 401, error: 'Token invalide ou expiré' };
   }
 
-  // Vérification du rôle admin via app_metadata (la source de vérité côté serveur,
-  // jamais user_metadata qui est modifiable par l'utilisateur).
-  let role = userData.user.app_metadata?.role as string | undefined;
-
-  // Fallback : si app_metadata.role absent, lookup via service_role pour
-  // gérer les anciens comptes qui n'ont pas eu app_metadata renseigné.
-  if (!role && serviceRoleKey) {
-    try {
-      const adminClient = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false } });
-      const { data: full } = await adminClient.auth.admin.getUserById(userData.user.id);
-      role = full?.user?.app_metadata?.role as string | undefined;
-    } catch { /* ignore */ }
+  const deletedAt = (userData.user as typeof userData.user & { deleted_at?: string | null }).deleted_at;
+  if (deletedAt) {
+    return { ok: false, status: 403, error: 'Compte desactive' };
+  }
+  const bannedUntilRaw = userData.user.banned_until;
+  const bannedUntil = bannedUntilRaw ? new Date(bannedUntilRaw).getTime() : 0;
+  if (bannedUntilRaw && (!Number.isFinite(bannedUntil) || bannedUntil > Date.now())) {
+    return { ok: false, status: 403, error: 'Compte desactive' };
   }
 
-  if (!role || !ADMIN_ROLES.has(role)) {
-    return { ok: false, status: 403, error: 'Accès réservé aux administrateurs Jolene' };
+  // getUser() a deja valide le token cote Auth. getClaims() fournit ensuite
+  // le niveau AAL cryptographiquement verifie, sans decoder un payload non
+  // fiable dans le code applicatif.
+  const { data: claimsData, error: claimsError } = await supabaseAuth.auth.getClaims(bearer);
+  if (claimsError || !claimsData?.claims) {
+    return { ok: false, status: 401, error: 'Claims du token invalides' };
   }
 
   return {
@@ -123,6 +137,57 @@ export async function verifyAdminOrServiceRole(req: Request): Promise<AdminAuthR
     isServiceRole: false,
     userId: userData.user.id,
     userEmail: userData.user.email || null,
+    // app_metadata vient de la reponse Auth serveur. Ne jamais utiliser
+    // user_metadata pour une autorisation.
+    role: (userData.user.app_metadata?.role as string | undefined) || null,
+    aal: typeof claimsData.claims.aal === 'string' ? claimsData.claims.aal : null,
+  };
+}
+
+/** Verifie que la requete provient d'un admin actif ou d'un appel interne. */
+export async function verifyAdminOrServiceRole(req: Request): Promise<AdminAuthResult> {
+  const auth = await verifyUserOrServiceRole(req);
+  if (!auth.ok) return auth;
+  if (auth.isServiceRole) {
+    return { ok: true, isServiceRole: true, userId: null, userEmail: null };
+  }
+
+  const role = auth.role || '';
+
+  if (!role || !ADMIN_ROLES.has(role)) {
+    return { ok: false, status: 403, error: 'Accès réservé aux administrateurs Jolene' };
+  }
+  if (auth.aal !== 'aal2') {
+    return { ok: false, status: 403, error: 'Authentification forte AAL2 requise' };
+  }
+
+  // Un admin present dans equipe_admin mais marque inactif doit rester bloque,
+  // meme si son ancien JWT contient toujours ADMIN_PLATEFORME. Une erreur de
+  // lecture est elle aussi bloquante (fail closed).
+  const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
+  const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
+  if (!serviceRoleKey) {
+    return { ok: false, status: 500, error: 'Configuration serveur incomplète' };
+  }
+  const adminClient = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false } });
+  const { data: equipe, error: equipeError } = await adminClient
+    .from('equipe_admin')
+    .select('actif')
+    .eq('user_id', auth.userId!)
+    .maybeSingle();
+  if (equipeError) {
+    console.error('[admin-auth] verification equipe_admin impossible', equipeError.message);
+    return { ok: false, status: 503, error: 'Verification des acces admin indisponible' };
+  }
+  if (equipe && equipe.actif !== true) {
+    return { ok: false, status: 403, error: 'Compte administrateur desactive' };
+  }
+
+  return {
+    ok: true,
+    isServiceRole: false,
+    userId: auth.userId,
+    userEmail: auth.userEmail,
   };
 }
 

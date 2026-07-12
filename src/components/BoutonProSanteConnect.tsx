@@ -3,6 +3,7 @@ import { Loader2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { ModalePscPreAuth } from '@/components/ModalePscPreAuth';
+import { ouvrirUrlPsc } from '@/lib/pscNavigation';
 
 interface Props {
   intention?: 'login' | 'signup';
@@ -63,7 +64,9 @@ export function BoutonProSanteConnect({ intention = 'login', fullWidth = true, o
       }
 
       if (data?.authorization_url) {
-        window.location.href = data.authorization_url;
+        if (await ouvrirUrlPsc(data.authorization_url)) return;
+        toast.error('Adresse Pro Santé Connect invalide. Réessayez plus tard.');
+        setModaleOuverte(false);
         return;
       }
 

@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { LayoutAdmin } from '@/components/LayoutAdmin';
-import { ChargementPage } from '@/components/ChargementPage';
+import { ChargementAdmin } from '@/components/admin/ChargementAdmin';
 import { supabase } from '@/integrations/supabase/client';
 import { CarteKPIY2K } from '@/components/y2k/CarteKPIY2K';
 import { CardY2K, CardY2KHeader, CardY2KTitle, CardY2KContent } from '@/components/y2k/CardY2K';
@@ -51,7 +51,7 @@ export default function AdminAcquisition() {
     [canaux],
   );
 
-  if (loading) return <LayoutAdmin><ChargementPage /></LayoutAdmin>;
+  if (loading) return <LayoutAdmin><ChargementAdmin titre="Acquisition par canal" /></LayoutAdmin>;
 
   return (
     <LayoutAdmin>
@@ -171,6 +171,7 @@ export default function AdminAcquisition() {
                             <td className="py-2 px-2 text-right">{c.soignants_actifs || 0} <span className="text-[10px] text-muted-foreground">({tauxActiv}%)</span></td>
                             <td className="py-2 px-2 text-right">
                               <Input
+                                aria-label={`Dépense publicitaire pour le canal ${libelle(c.canal)}`}
                                 type="number"
                                 value={depenses[c.canal] ?? ''}
                                 onChange={e => setDepenses(prev => ({ ...prev, [c.canal]: Number(e.target.value) }))}

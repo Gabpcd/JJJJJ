@@ -596,6 +596,7 @@ async function dispatchPush(admin: any, action: ActionRow): Promise<DispatchResu
     titre: p.titre || p.title,
     corps: p.corps || p.body,
     lien: p.lien || p.data?.lien,
+    data: p.data,
     type_evenement: p.type_evenement,
   };
   const res = await fetch(`${SUPABASE_URL}/functions/v1/send-push`, {

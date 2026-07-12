@@ -19,7 +19,7 @@ export default function MonGroupe() {
   );
 }
 
-export function MonGroupeContent() {
+export function MonGroupeContent({ headingLevel = 'h1' }: { headingLevel?: 'h1' | 'h2' }) {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [etab, setEtab] = useState<any>(null);
@@ -90,11 +90,12 @@ export function MonGroupeContent() {
     if (filtreType && e.type !== filtreType) return false;
     return true;
   });
+  const Heading = headingLevel;
 
   return (
     <>
       <div className="card-base bg-gradient-to-r from-primary/5 to-info/5 mb-6">
-        <h1 className="text-2xl font-bold text-foreground">{groupe.nom}</h1>
+        <Heading className="text-2xl font-bold text-foreground">{groupe.nom}</Heading>
         <div className="flex items-center gap-3 mt-2 flex-wrap text-sm text-muted-foreground">
           {groupe.siren && <span>SIREN : {groupe.siren}</span>}
           {groupe.formule_abonnement && (
@@ -107,11 +108,11 @@ export function MonGroupeContent() {
       </div>
 
       <div className="flex gap-2 flex-wrap mb-4">
-        <select value={filtreDepartement} onChange={(e) => setFiltreDepartement(e.target.value)} className="input-base text-sm flex-1 min-w-0 sm:min-w-[150px]">
+        <select aria-label="Filtrer par département" value={filtreDepartement} onChange={(e) => setFiltreDepartement(e.target.value)} className="input-base text-sm flex-1 min-w-0 sm:min-w-[150px]">
           <option value="">Tous les départements</option>
           {departements.map(d => <option key={d} value={d}>{d}</option>)}
         </select>
-        <select value={filtreType} onChange={(e) => setFiltreType(e.target.value)} className="input-base text-sm flex-1 min-w-0 sm:min-w-[150px]">
+        <select aria-label="Filtrer par type d’établissement" value={filtreType} onChange={(e) => setFiltreType(e.target.value)} className="input-base text-sm flex-1 min-w-0 sm:min-w-[150px]">
           <option value="">Tous les types</option>
           {types.map(t => <option key={t} value={t}>{getLabelTypeEtablissement(t)}</option>)}
         </select>

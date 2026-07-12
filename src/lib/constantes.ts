@@ -122,8 +122,10 @@ export function getTypeContratRechercheBadge(type: string): { label: string; cla
 export function missionCompatibleContrat(pref: ContratPreference | string, typesContratSoignant: string[]): boolean {
   if (!pref || pref === 'TOUS') return true;
   if (pref === 'LIBERAL') return typesContratSoignant.includes('LIBERAL');
-  // Contrat salarié = CDD uniquement.
-  if (pref === 'SALARIE') return typesContratSoignant.some(t => ['CDD', 'VACATION', 'SALARIE'].includes(t));
+  // Lot 21 / D4 : un profil libéral reste toujours éligible à une mission
+  // salariée. `types_contrat_acceptes` est une préférence de profil, pas une
+  // interdiction juridique ni une propriété du diplôme.
+  if (pref === 'SALARIE') return true;
   return true;
 }
 

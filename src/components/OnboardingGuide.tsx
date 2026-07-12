@@ -27,7 +27,7 @@ const ETAPES_SOIGNANT: Etape[] = [
   { id: 'pointage', titre: 'Pointage QR (recommandé)', description: 'Le jour J, scannez le QR affiché par l\'établissement pour pointer votre arrivée et votre départ. Si pas de QR : GPS ou code secours en backup.', icone: QrCode },
   { id: 'score', titre: 'Score Jolene & DPAE', description: 'Votre score qualité reflète votre fiabilité (notations, ponctualité, ancienneté). Pour signer un CDD, complétez vos infos DPAE (lieu de naissance, NIR, etc.).', icone: Star,
     encart: { titre: 'DPAE incomplète ?', texte: 'Pour pouvoir signer des CDD, remplissez votre identité DPAE complète (NIR, lieu de naissance, nationalité).', lien: '/soignant/mes-documents?tab=dpae', labelLien: 'Compléter ma DPAE' } },
-  { id: 'parametres', titre: 'Paramètres & vie privée', description: 'Préférences notifications, consentement ping GPS background (optionnel, RGPD), suppression de compte. Vous gardez le contrôle.', icone: Shield, lien: '/soignant/parametres', labelLien: 'Mes paramètres' },
+  { id: 'parametres', titre: 'Paramètres & vie privée', description: 'Le GPS est utilisé à votre demande pour un pointage ou pour localiser votre profil. Jamais en continu ni en arrière-plan.', icone: Shield, lien: '/soignant/parametres', labelLien: 'Mes paramètres' },
 ];
 
 const ETAPES_ETABLISSEMENT: Etape[] = [

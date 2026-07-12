@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Search, Eye, Ban, RefreshCw, Mail, Phone, ShieldCheck, ShieldX, Clock, Users, FlaskConical, ArrowRight } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { LayoutAdmin } from '@/components/LayoutAdmin';
-import { ChargementPage } from '@/components/ChargementPage';
+import { ChargementAdmin } from '@/components/admin/ChargementAdmin';
 import { BreadcrumbAdmin } from '@/components/BreadcrumbAdmin';
 import { supabase } from '@/integrations/supabase/client';
 import { Input } from '@/components/ui/input';
@@ -127,7 +127,7 @@ export default function AdminUtilisateurs() {
     }
   };
 
-  if (loading) return <LayoutAdmin><ChargementPage /></LayoutAdmin>;
+  if (loading) return <LayoutAdmin><ChargementAdmin titre="Gestion utilisateurs" /></LayoutAdmin>;
 
   const colonnesSoignants: ColonneTableau<any>[] = [
     { cle: 'nom', titre: 'Nom' },
@@ -192,7 +192,7 @@ export default function AdminUtilisateurs() {
         {/* Une seule recherche dans cette page ; la recherche globale reste disponible via ⌘K. */}
         <div className="relative max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input placeholder="Rechercher un utilisateur…" value={recherche} onChange={(e) => setRecherche(e.target.value)} className="pl-10 min-h-[44px]" />
+          <Input aria-label="Rechercher un utilisateur" placeholder="Rechercher un utilisateur…" value={recherche} onChange={(e) => setRecherche(e.target.value)} className="pl-10 min-h-[44px]" />
         </div>
 
         <Tabs defaultValue="soignants">
@@ -424,6 +424,7 @@ export default function AdminUtilisateurs() {
             Le compte sera suspendu (accès bloqué, réversible). Indiquez le <strong>motif</strong> — il est obligatoire et journalisé dans l'audit.
           </p>
           <Textarea
+            aria-label="Motif de la suspension"
             value={suspendMotif}
             onChange={e => setSuspendMotif(e.target.value)}
             placeholder="Motif de la suspension (obligatoire)…"

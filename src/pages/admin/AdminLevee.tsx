@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { LayoutAdmin } from '@/components/LayoutAdmin';
-import { ChargementPage } from '@/components/ChargementPage';
+import { ChargementAdmin } from '@/components/admin/ChargementAdmin';
 import { supabase } from '@/integrations/supabase/client';
 import { CardY2K, CardY2KHeader, CardY2KTitle, CardY2KContent } from '@/components/y2k/CardY2K';
 import { BoutonY2K } from '@/components/y2k/BoutonY2K';
@@ -98,6 +98,19 @@ export default function AdminLevee() {
 
   useEffect(() => { charger(); }, []);
 
+  useEffect(() => {
+    if (!showForm && !showDocForm) return;
+    const fermerAvecEchap = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      setShowForm(false);
+      setEditItem(null);
+      setShowDocForm(false);
+      setEditDoc(null);
+    };
+    document.addEventListener('keydown', fermerAvecEchap);
+    return () => document.removeEventListener('keydown', fermerAvecEchap);
+  }, [showForm, showDocForm]);
+
   const stats = useMemo(() => {
     return {
       total: investisseurs.length,
@@ -167,7 +180,7 @@ export default function AdminLevee() {
     toast.success('Supprimé.'); charger();
   };
 
-  if (loading) return <LayoutAdmin><ChargementPage /></LayoutAdmin>;
+  if (loading) return <LayoutAdmin><ChargementAdmin titre="Levée de fonds & Documents" /></LayoutAdmin>;
 
   return (
     <LayoutAdmin>
@@ -284,49 +297,49 @@ export default function AdminLevee() {
         {/* Modal investisseur */}
         {showForm && editItem && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-foreground/40">
-            <CardY2K className="max-w-lg w-full max-h-[90vh] overflow-y-auto">
+            <CardY2K className="max-w-lg w-full max-h-[90vh] overflow-y-auto" role="dialog" aria-modal="true" aria-labelledby="admin-levee-investisseur-title">
               <CardY2KHeader>
                 <div className="flex items-center justify-between w-full">
-                  <CardY2KTitle className="text-sm">{editItem.id ? 'Modifier' : 'Ajouter'} un investisseur</CardY2KTitle>
-                  <button onClick={() => { setShowForm(false); setEditItem(null); }} className="text-muted-foreground hover:text-foreground"><X className="h-5 w-5" /></button>
+                  <CardY2KTitle id="admin-levee-investisseur-title" className="text-sm">{editItem.id ? 'Modifier' : 'Ajouter'} un investisseur</CardY2KTitle>
+                  <button aria-label="Fermer le formulaire investisseur" onClick={() => { setShowForm(false); setEditItem(null); }} className="text-muted-foreground hover:text-foreground"><X className="h-5 w-5" aria-hidden="true" /></button>
                 </div>
               </CardY2KHeader>
               <CardY2KContent className="space-y-4">
                 <div>
-                  <Label>Nom du fonds / investisseur</Label>
-                  <Input value={editItem.nom || ''} onChange={e => setEditItem({ ...editItem, nom: e.target.value })} />
+                  <Label htmlFor="admin-levee-investisseur-nom">Nom du fonds / investisseur</Label>
+                  <Input id="admin-levee-investisseur-nom" value={editItem.nom || ''} onChange={e => setEditItem({ ...editItem, nom: e.target.value })} />
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <Label>Type</Label>
-                    <select value={editItem.type || 'VC'} onChange={e => setEditItem({ ...editItem, type: e.target.value })} className="input-base w-full">
+                    <Label htmlFor="admin-levee-investisseur-type">Type</Label>
+                    <select id="admin-levee-investisseur-type" value={editItem.type || 'VC'} onChange={e => setEditItem({ ...editItem, type: e.target.value })} className="input-base w-full">
                       {['VC', 'BA', 'Family Office', 'Corporate', 'Public', 'Autre'].map(t => <option key={t} value={t}>{t}</option>)}
                     </select>
                   </div>
                   <div>
-                    <Label>Statut</Label>
-                    <select value={editItem.statut || 'A_CONTACTER'} onChange={e => setEditItem({ ...editItem, statut: e.target.value as Statut })} className="input-base w-full">
+                    <Label htmlFor="admin-levee-investisseur-statut">Statut</Label>
+                    <select id="admin-levee-investisseur-statut" value={editItem.statut || 'A_CONTACTER'} onChange={e => setEditItem({ ...editItem, statut: e.target.value as Statut })} className="input-base w-full">
                       {STATUTS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
                     </select>
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <Label>Contact</Label>
-                    <Input value={editItem.contact_nom || ''} onChange={e => setEditItem({ ...editItem, contact_nom: e.target.value })} placeholder="Nom du contact" />
+                    <Label htmlFor="admin-levee-contact-nom">Contact</Label>
+                    <Input id="admin-levee-contact-nom" value={editItem.contact_nom || ''} onChange={e => setEditItem({ ...editItem, contact_nom: e.target.value })} placeholder="Nom du contact" />
                   </div>
                   <div>
-                    <Label>Email contact</Label>
-                    <Input type="email" value={editItem.contact_email || ''} onChange={e => setEditItem({ ...editItem, contact_email: e.target.value })} />
+                    <Label htmlFor="admin-levee-contact-email">Email contact</Label>
+                    <Input id="admin-levee-contact-email" type="email" value={editItem.contact_email || ''} onChange={e => setEditItem({ ...editItem, contact_email: e.target.value })} />
                   </div>
                 </div>
                 <div>
-                  <Label>Montant visé (€)</Label>
-                  <Input type="number" value={editItem.montant_vise || ''} onChange={e => setEditItem({ ...editItem, montant_vise: Number(e.target.value) || null })} />
+                  <Label htmlFor="admin-levee-montant">Montant visé (€)</Label>
+                  <Input id="admin-levee-montant" type="number" value={editItem.montant_vise || ''} onChange={e => setEditItem({ ...editItem, montant_vise: Number(e.target.value) || null })} />
                 </div>
                 <div>
-                  <Label>Notes</Label>
-                  <textarea value={editItem.notes || ''} onChange={e => setEditItem({ ...editItem, notes: e.target.value })} className="input-base w-full min-h-[80px]" />
+                  <Label htmlFor="admin-levee-investisseur-notes">Notes</Label>
+                  <textarea id="admin-levee-investisseur-notes" value={editItem.notes || ''} onChange={e => setEditItem({ ...editItem, notes: e.target.value })} className="input-base w-full min-h-[80px]" />
                 </div>
                 <div className="flex justify-end gap-2 pt-2">
                   <BoutonY2K variant="secondary" onClick={() => { setShowForm(false); setEditItem(null); }}>Annuler</BoutonY2K>
@@ -342,31 +355,31 @@ export default function AdminLevee() {
         {/* Modal document */}
         {showDocForm && editDoc && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-foreground/40">
-            <CardY2K className="max-w-lg w-full max-h-[90vh] overflow-y-auto">
+            <CardY2K className="max-w-lg w-full max-h-[90vh] overflow-y-auto" role="dialog" aria-modal="true" aria-labelledby="admin-levee-document-title">
               <CardY2KHeader>
                 <div className="flex items-center justify-between w-full">
-                  <CardY2KTitle className="text-sm">{editDoc.id ? 'Modifier' : 'Ajouter'} un document</CardY2KTitle>
-                  <button onClick={() => { setShowDocForm(false); setEditDoc(null); }} className="text-muted-foreground hover:text-foreground"><X className="h-5 w-5" /></button>
+                  <CardY2KTitle id="admin-levee-document-title" className="text-sm">{editDoc.id ? 'Modifier' : 'Ajouter'} un document</CardY2KTitle>
+                  <button aria-label="Fermer le formulaire document" onClick={() => { setShowDocForm(false); setEditDoc(null); }} className="text-muted-foreground hover:text-foreground"><X className="h-5 w-5" aria-hidden="true" /></button>
                 </div>
               </CardY2KHeader>
               <CardY2KContent className="space-y-4">
                 <div>
-                  <Label>Titre</Label>
-                  <Input value={editDoc.titre || ''} onChange={e => setEditDoc({ ...editDoc, titre: e.target.value })} />
+                  <Label htmlFor="admin-levee-document-titre">Titre</Label>
+                  <Input id="admin-levee-document-titre" value={editDoc.titre || ''} onChange={e => setEditDoc({ ...editDoc, titre: e.target.value })} />
                 </div>
                 <div>
-                  <Label>Catégorie</Label>
-                  <select value={editDoc.categorie || 'NOTE'} onChange={e => setEditDoc({ ...editDoc, categorie: e.target.value })} className="input-base w-full">
+                  <Label htmlFor="admin-levee-document-categorie">Catégorie</Label>
+                  <select id="admin-levee-document-categorie" value={editDoc.categorie || 'NOTE'} onChange={e => setEditDoc({ ...editDoc, categorie: e.target.value })} className="input-base w-full">
                     {CATEGORIES_DOC.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
                   </select>
                 </div>
                 <div>
-                  <Label>URL externe (Google Drive, Notion…)</Label>
-                  <Input value={editDoc.url_externe || ''} onChange={e => setEditDoc({ ...editDoc, url_externe: e.target.value })} placeholder="https://..." />
+                  <Label htmlFor="admin-levee-document-url">URL externe (Google Drive, Notion…)</Label>
+                  <Input id="admin-levee-document-url" value={editDoc.url_externe || ''} onChange={e => setEditDoc({ ...editDoc, url_externe: e.target.value })} placeholder="https://..." />
                 </div>
                 <div>
-                  <Label>Notes / contenu</Label>
-                  <textarea value={editDoc.contenu || ''} onChange={e => setEditDoc({ ...editDoc, contenu: e.target.value })} className="input-base w-full min-h-[120px]" />
+                  <Label htmlFor="admin-levee-document-contenu">Notes / contenu</Label>
+                  <textarea id="admin-levee-document-contenu" value={editDoc.contenu || ''} onChange={e => setEditDoc({ ...editDoc, contenu: e.target.value })} className="input-base w-full min-h-[120px]" />
                 </div>
                 <div className="flex justify-end gap-2 pt-2">
                   <BoutonY2K variant="secondary" onClick={() => { setShowDocForm(false); setEditDoc(null); }}>Annuler</BoutonY2K>

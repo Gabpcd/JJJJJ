@@ -51,6 +51,11 @@ export function SuggestionsMissions() {
       return;
     }
     const r = data as any;
+    if (r?.choix_requis) {
+      toast('Choisis ton type de contrat sur le détail de la mission');
+      navigate(`/soignant/missions/${s.id}`);
+      return;
+    }
     if (r?.success || r?.candidature_id) {
       toast.success('Candidature envoyée ✨');
       charger();

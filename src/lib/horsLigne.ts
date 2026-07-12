@@ -12,7 +12,23 @@ export interface PointageHorsLigne {
   presenceId?: string;
 }
 
-export function stockerPointageHorsLigne(missionId: string, type: 'arrivee' | 'depart', presenceId?: string) {
+export function stockerPointageHorsLigne(
+  missionId: string,
+  type: 'arrivee' | 'depart',
+  presenceId?: string,
+  utiliserGps = false,
+) {
+  if (!utiliserGps) {
+    sauvegarderLocal({
+      missionId, type,
+      horodatage: new Date().toISOString(),
+      lat: null, lng: null, precision: null,
+      idTerminal: genererIdTerminal(),
+      presenceId,
+    });
+    return;
+  }
+
   // Sprint 4 PR 5 : wrapper unifié Capacitor/web — natif si app, web sinon
   getCurrentPosition({ enableHighAccuracy: true, timeout: 10000 })
     .then((result) => {
@@ -38,13 +54,34 @@ export function stockerPointageHorsLigne(missionId: string, type: 'arrivee' | 'd
 }
 
 function sauvegarderLocal(pointage: PointageHorsLigne) {
-  const existants = JSON.parse(localStorage.getItem('pointages_hors_ligne') || '[]');
+  const existants = lirePointagesValides();
   existants.push(pointage);
-  localStorage.setItem('pointages_hors_ligne', JSON.stringify(existants));
+  // Une file locale courte évite de conserver indéfiniment des coordonnées GPS
+  // sur un appareil partagé. Les plus anciennes sont abandonnées en premier.
+  localStorage.setItem('pointages_hors_ligne', JSON.stringify(existants.slice(-20)));
 }
 
 export function getPointagesEnAttente(): PointageHorsLigne[] {
-  return JSON.parse(localStorage.getItem('pointages_hors_ligne') || '[]');
+  const valides = lirePointagesValides();
+  localStorage.setItem('pointages_hors_ligne', JSON.stringify(valides));
+  return valides;
+}
+
+function lirePointagesValides(): PointageHorsLigne[] {
+  try {
+    const valeur = JSON.parse(localStorage.getItem('pointages_hors_ligne') || '[]');
+    if (!Array.isArray(valeur)) return [];
+    const limite = Date.now() - 24 * 60 * 60 * 1000;
+    return valeur.filter((pointage): pointage is PointageHorsLigne =>
+      pointage != null
+      && typeof pointage.missionId === 'string'
+      && (pointage.type === 'arrivee' || pointage.type === 'depart')
+      && typeof pointage.horodatage === 'string'
+      && new Date(pointage.horodatage).getTime() >= limite,
+    );
+  } catch {
+    return [];
+  }
 }
 
 export function clearPointagesEnAttente() {

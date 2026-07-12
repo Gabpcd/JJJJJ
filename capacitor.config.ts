@@ -11,8 +11,10 @@ const config: CapacitorConfig = {
   },
   plugins: {
     SplashScreen: {
-      launchShowDuration: 1500,
-      launchAutoHide: false, // We hide manually after session check
+      launchShowDuration: 1800,
+      // Filet natif si le bundle JS ne démarre pas ; le code masque aussi le
+      // splash plus tôt dès que la session locale est prête.
+      launchAutoHide: true,
       backgroundColor: '#FFFFFF',
       showSpinner: false,
     },
@@ -23,6 +25,11 @@ const config: CapacitorConfig = {
     Keyboard: {
       resize: 'native',
       scrollAssist: true,
+    },
+    PushNotifications: {
+      // Affichage cohérent au premier plan sur iOS ; Android s'appuie sur
+      // les NotificationChannel déclarés dans MainActivity.
+      presentationOptions: ['badge', 'sound', 'banner', 'list'],
     },
   },
   ios: {

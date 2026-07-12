@@ -20,6 +20,10 @@ const ALLOWED_ORIGINS = new Set([
   'https://jolene.app',
   'https://www.jolene.app',
   'https://app.jolene.app',
+  // Coquilles natives Capacitor. Android utilise androidScheme=https et iOS
+  // conserve le scheme Capacitor par defaut.
+  'https://localhost',
+  'capacitor://localhost',
   'http://localhost:5173',
   'http://localhost:8080',
 ]);
@@ -40,7 +44,7 @@ export function corsHeaders(req: Request): Record<string, string> {
   return {
     'Access-Control-Allow-Origin': getCorsOrigin(req),
     'Access-Control-Allow-Methods': 'POST, GET, OPTIONS',
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-api-key, x-api-secret, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
     'Content-Type': 'application/json',
   };
 }

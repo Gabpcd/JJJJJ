@@ -69,6 +69,7 @@ export function AdminMissionChatPanel({
 
         <div className="flex flex-col gap-2 md:min-w-[320px]">
           <select
+            aria-label="Mission associée à la conversation"
             value={selectedMission.id}
             onChange={(e) => setSelectedMissionId(e.target.value)}
             className="h-10 rounded-md border border-input bg-background px-3 text-sm text-foreground"

@@ -63,7 +63,15 @@ interface VueSwipeMissionsProps {
   onElargirRayon?: () => void;
   /** Chips rapides du parent appliquées au deck (6c.1) : le deck respecte
       les mêmes filtres 1-tap que la liste. */
-  filtreDeck?: { urgentesOnly: boolean; horaire: 'TOUS' | 'JOUR' | 'NUIT' | 'WEEKEND' };
+  filtreDeck?: {
+    urgentesOnly: boolean;
+    horaire: 'TOUS' | 'JOUR' | 'NUIT' | 'WEEKEND';
+    profession: string;
+    ville: string;
+    rayonKm: number;
+    tauxMin: number;
+    typeContrat: string;
+  };
 }
 
 export function VueSwipeMissions({ onBasculerListe, onCreerAlerte, onElargirRayon, filtreDeck }: VueSwipeMissionsProps) {
@@ -288,6 +296,17 @@ export function VueSwipeMissions({ onBasculerListe, onCreerAlerte, onElargirRayo
   const stackFiltre = useMemo(() => {
     if (!filtreDeck) return localStack;
     return localStack.filter((m) => {
+      if (filtreDeck.profession && m.profession_requise !== filtreDeck.profession) return false;
+      const ville = filtreDeck.ville.trim().toLowerCase();
+      if (ville) {
+        const missionVille = (m.etablissement_ville || '').toLowerCase();
+        const codePostal = (m.etablissement_code_postal || '').toLowerCase();
+        if (!missionVille.includes(ville) && !codePostal.startsWith(ville)) return false;
+      }
+      if (m.distance_km != null && m.distance_km > filtreDeck.rayonKm) return false;
+      if (filtreDeck.tauxMin > 0 && (m.taux_horaire_base ?? 0) < filtreDeck.tauxMin) return false;
+      if (filtreDeck.typeContrat === 'CDD' && m.type_contrat_recherche === 'LIBERAL') return false;
+      if (filtreDeck.typeContrat === 'LIBERAL' && m.type_contrat_recherche === 'SALARIE') return false;
       if (filtreDeck.urgentesOnly && !m.est_urgente) return false;
       if (filtreDeck.horaire === 'NUIT' && !estMissionDeNuit(m.debut_le)) return false;
       if (filtreDeck.horaire === 'JOUR' && estMissionDeNuit(m.debut_le)) return false;

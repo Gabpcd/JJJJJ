@@ -10,8 +10,35 @@ import { ModalAttestationHebdo } from '@/components/ModalAttestationHebdo';
 
 const EXPIRATION_MINUTES = 120; // 2h
 
+interface MissionProposee {
+  id?: string;
+  intitule?: string;
+  debut_le?: string;
+  fin_le?: string;
+  duree_heures?: number | null;
+  taux_horaire_base?: number | null;
+  net_estime?: number | null;
+  type_contrat_recherche?: string | null;
+  etablissement_id?: string;
+  est_urgente?: boolean | null;
+  etab_nom?: string | null;
+}
+
+export interface PropositionMission extends MissionProposee {
+  id: string;
+  mission_id: string;
+  cree_le: string;
+  type_contrat_choisi?: string | null;
+  missions?: MissionProposee | null;
+}
+
+interface ReponseProposition {
+  success?: boolean;
+  error?: string;
+}
+
 interface Props {
-  proposition: any;
+  proposition: PropositionMission;
   onTraitee: (id: string) => void;
 }
 
@@ -22,25 +49,19 @@ export function CarteProposition({ proposition, onTraitee }: Props) {
   const [restant, setRestant] = useState('');
   const [expiree, setExpiree] = useState(false);
   const [showAttestation, setShowAttestation] = useState(false);
-  const [typeExercice, setTypeExercice] = useState<string>('SALARIE');
   const [heuresJoleneSemaine, setHeuresJoleneSemaine] = useState(0);
 
-  const mission = proposition.missions;
-  const creeLe = new Date(proposition.cree_le);
-  const expiration = new Date(creeLe.getTime() + EXPIRATION_MINUTES * 60 * 1000);
-
-  useEffect(() => {
-    if (!user) return;
-    // Load type_exercice
-    supabase.from('soignants').select('type_exercice').eq('id', user.id).maybeSingle().then(({ data }) => {
-      if (data) setTypeExercice((data as any).type_exercice || 'SALARIE');
-    });
-  }, [user]);
+  // Le dashboard canonique renvoie la relation dans `missions`. Le repli sur
+  // l'objet lui-même garde la carte compatible avec une réponse mise en cache
+  // produite par l'ancienne version aplatie du RPC pendant le déploiement.
+  const mission = proposition.missions ?? proposition;
+  const contratPropose = proposition.type_contrat_choisi ?? mission?.type_contrat_recherche;
+  const expirationMs = new Date(proposition.cree_le).getTime() + EXPIRATION_MINUTES * 60 * 1000;
 
   useEffect(() => {
     const tick = () => {
       const now = new Date();
-      const diffSec = differenceInSeconds(expiration, now);
+      const diffSec = differenceInSeconds(new Date(expirationMs), now);
       if (diffSec <= 0) {
         setExpiree(true);
         setRestant('Expirée');
@@ -54,9 +75,9 @@ export function CarteProposition({ proposition, onTraitee }: Props) {
     tick();
     const interval = setInterval(tick, 30000);
     return () => clearInterval(interval);
-  }, [proposition.cree_le]);
+  }, [expirationMs, onTraitee, proposition.id]);
 
-  if (expiree || !mission) return null;
+  if (expiree || !mission.intitule || !mission.debut_le || !mission.fin_le) return null;
 
   const netEstime = mission.taux_horaire_base && mission.debut_le && mission.fin_le
     ? (() => {
@@ -66,7 +87,9 @@ export function CarteProposition({ proposition, onTraitee }: Props) {
     : null;
 
   const checkAttestationNeeded = async (): Promise<boolean> => {
-    if (!user || typeExercice === 'LIBERAL') return false;
+    // Lot 21 D4 : l'attestation de temps de travail dépend du contrat de la
+    // MISSION proposée, jamais du statut déclaré sur le profil.
+    if (!user || contratPropose === 'LIBERAL') return false;
     if (!mission.debut_le) return false;
 
     const missionDate = new Date(mission.debut_le);
@@ -92,7 +115,7 @@ export function CarteProposition({ proposition, onTraitee }: Props) {
       .gte('debut_le', lundi.toISOString())
       .lt('debut_le', dimanche.toISOString());
 
-    const h = (msSemaine || []).reduce((t: number, m: any) => t + (m.duree_heures || 0), 0);
+    const h = (msSemaine || []).reduce((t, m) => t + (Number(m.duree_heures) || 0), 0);
     setHeuresJoleneSemaine(h);
     return true; // Need attestation
   };
@@ -112,13 +135,14 @@ export function CarteProposition({ proposition, onTraitee }: Props) {
   const executeAction = async (action: 'ACCEPTEE' | 'REFUSEE') => {
     setLoading(action === 'ACCEPTEE' ? 'accept' : 'refuse');
     try {
-      const { data, error } = await supabase.rpc('fn_repondre_proposition' as any, {
+      const { data, error } = await supabase.rpc('fn_repondre_proposition', {
         p_candidature_id: proposition.id,
         p_accepter: action === 'ACCEPTEE',
       });
       if (error) throw error;
+      const reponse = data as ReponseProposition | null;
 
-      if ((data as any)?.error === 'E16_CANDIDATURE_ORPHELINE') {
+      if (reponse?.error === 'E16_CANDIDATURE_ORPHELINE') {
         toast({
           title: 'Proposition obsolète',
           description: 'Cette proposition date d\'avant une mise à jour. Merci de postuler directement depuis la mission dans votre espace.',
@@ -127,7 +151,16 @@ export function CarteProposition({ proposition, onTraitee }: Props) {
         return;
       }
 
-      if ((data as any)?.error) throw new Error((data as any).error);
+      if (reponse?.error === 'Cette proposition a expiré') {
+        toast({
+          title: 'Proposition expirée',
+          description: 'La fenêtre de réponse de 2 heures est terminée.',
+        });
+        onTraitee(proposition.id);
+        return;
+      }
+
+      if (reponse?.error) throw new Error(reponse.error);
 
       if (action === 'ACCEPTEE') {
         toast({ title: 'Mission acceptée ✅', description: 'Signez le contrat pour confirmer.' });
@@ -137,7 +170,7 @@ export function CarteProposition({ proposition, onTraitee }: Props) {
         toast({ title: 'Mission déclinée', description: 'La proposition a été refusée.' });
         onTraitee(proposition.id);
       }
-    } catch (err: any) {
+    } catch {
       toast({ title: 'Erreur', description: 'Impossible de traiter la proposition. Veuillez réessayer.', variant: 'destructive' });
     } finally {
       setLoading(null);

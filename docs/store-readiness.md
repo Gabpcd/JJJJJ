@@ -1,41 +1,71 @@
-# Store readiness — préparation soumission App Store / Play Store
+# Store readiness — préparation App Store et Play Store
 
-État au 11/07/2026 (Phase 2 MODE AUTONOME). « Soumettre ≠ publier » : publication
-manuelle sur les deux stores après review.
+État au 12/07/2026. « Build validé » ne signifie pas « publiable » : les
+éléments de signature, consoles et recette sur appareils restent externes au
+repo.
 
-## Fait dans le repo (vérifié)
+## Vérifié dans le repo
 
-| Item | État | Preuve / emplacement |
+| Élément | État | Preuve |
 |---|---|---|
-| Purpose strings iOS (FR) | ✅ | `ios/App/App/Info.plist` : Location (WhenInUse + AlwaysAndWhenInUse avec rétention 30j), Camera, PhotoLibrary (+Add), LocalNotification, FaceID — **tous en français** |
-| `ITSAppUsesNonExemptEncryption` | ✅ | `Info.plist` = `false` (pas de chiffrement non-exempté → pas de déclaration export) |
-| Région / langue | ✅ | `CFBundleDevelopmentRegion = fr` |
-| Universal Links iOS (AASA) | ✅ | `public/.well-known/apple-app-site-association` : appID `5D9L5FQQ86.app.jolene`, paths soignant/étab/admin/missions + `webcredentials` |
-| App Links Android | ⚠️ repo OK, **fingerprint hors-repo** | `public/.well-known/assetlinks.json` (placeholder) régénéré au build par `scripts/prepare-well-known.mjs` depuis l'env `ANDROID_SHA256_CERT_FINGERPRINTS` |
-| Suppression de compte in-app | ✅ | `fn_supprimer_mon_compte` / `_etablissement` (+ wrappers rate-limited 1/jour). **Garde-fou métier** : refus si missions `ASSIGNEE`/`EN_COURS` à venir ; anonymise messages/GPS ; conserve les pièces légales (factures, paiements nulled). UI `SectionConfidentialite`, `AdminRGPDTools` |
-| Signalement utilisateur (UGC) | ✅ | `fn_signaler_utilisateur` + `SignalerUtilisateur.tsx` (motif ≥ 10 car., 7 catégories) |
-| **Blocage utilisateur (UGC)** | ✅ (cette salve) | `utilisateurs_bloques` + `fn_bloquer/debloquer/est_bloque` + `fn_envoyer_message` refuse si blocage bilatéral + `BloquerUtilisateur.tsx` câblé dans `ChatConversation` |
-| Sign in with Apple | ✅ **N/A** | Jolene = **email/mot de passe uniquement**, aucun login social tiers (le seul OAuth = Chorus Pro, backend facturation). Apple ne l'exige pas (Guideline 4.8 conditionnée à la présence d'un login social tiers) |
+| Build web production | ✅ | `npm run build` |
+| Synchronisation Capacitor | ✅ | 15 plugins iOS et Android, sans géolocalisation de fond |
+| Build iOS Xcode 26 | ✅ Debug simulateur | Xcode 26.5, SDK iOS Simulator 26.5, `BUILD SUCCEEDED` |
+| Privacy manifest iOS | ✅ | membre de la cible et présent à la racine de `App.app` |
+| Permissions GPS | ✅ minimisées | When In Use/foreground : pointage ou action volontaire « me localiser » du profil/adresse |
+| QR natif | ✅ | `@capacitor/barcode-scanner`, QR-only |
+| Universal Links iOS | ✅ repo | AASA valide pour reset, PSC, invitation et missions |
+| App Links Android | ⛔ fingerprint externe | le build release refuse le placeholder actuel |
+| Signature Android | ⛔ externe | le build release refuse l'absence de keystore |
+| Firebase Android | ⛔ externe | `android/app/google-services.json` absent |
+| Suppression de compte in-app | ✅ | écran confidentialité + garde-fous serveur |
+| Signalement et blocage UGC | ✅ | UI et contrôles serveur |
 
-## Actions HORS-REPO pour Gabrielle (checklist humaine)
+## À faire avant toute soumission
 
 ### Apple Developer / App Store Connect
-- [ ] **Associated Domains** : activer `applinks:` + `webcredentials:` pour le domaine `jolene.app` sur l'App ID `5D9L5FQQ86.app.jolene` (Certificates, Identifiers & Profiles).
-- [ ] **Encryption compliance** : à la soumission, répondre « No » (cohérent avec `ITSAppUsesNonExemptEncryption=false`).
-- [ ] **App Privacy (nutrition labels)** : déclarer les données collectées (localisation pour pointage, contact, documents). Cf. `docs/CONFORMITE.md`.
-- [ ] **Age rating** + **Privacy Policy URL** (`jolene.app/confidentialite`) + **EULA/CGU** (`jolene.app/cgu`).
-- [ ] **Compte démo Apple** : fournir des identifiants de test (compte démo, à NE PAS purger — cf. inventaire données phase 7).
-- [ ] **Screenshots** stores (les écrans admin n'y figurent pas).
+
+- [ ] Sélectionner l'équipe Apple et générer un profil App Store pour
+  `app.jolene` contenant Push Notifications et Associated Domains.
+- [ ] Configurer la clé APNs côté Supabase, puis valider un push sur TestFlight.
+- [ ] Déployer l'AASA avec `Content-Type: application/json`, sans redirection,
+  puis réinstaller l'app après propagation du CDN Apple.
+- [ ] Reporter exactement les catégories de `PrivacyInfo.xcprivacy` dans App
+  Privacy, avec GPS lié au compte, limité au pointage et à la localisation
+  volontaire du profil/adresse, jamais en continu.
+- [ ] Compléter âge, URL de confidentialité, CGU, contact review, notes de
+  review et identifiants du compte démo.
+- [ ] Produire les captures iPhone/iPad et vérifier le parcours complet sur un
+  appareil réel.
 
 ### Google Play
-- [ ] **`ANDROID_SHA256_CERT_FINGERPRINTS`** : poser en variable/secret de build (empreinte SHA-256 du certificat d'upload Play App Signing) → `prepare-well-known.mjs` génère `assetlinks.json` au build. Sans ça, les App Links Android ne s'ouvrent pas dans l'app.
-- [ ] **Data safety form** + **Content rating** + Privacy Policy.
 
-### Général
-- [ ] **Vérification visuelle** : cf. `docs/REVUE_VISUELLE.md` (passe globale TestFlight).
-- [ ] **Mission témoin réelle** (premier euro contrôlé — tripwires Lot 19 en place) avant/juste après soumission.
-- [ ] **Purge données de test** : uniquement catégorie (a) seed `[pw-test:*]`, sur demande explicite, **sauf compte démo Apple** (cf. inventaire données phase 7 — actifs de prospection JAMAIS touchés).
+- [ ] Installer Android SDK 36 et exécuter `./gradlew lintRelease`.
+- [ ] Ajouter le keystore d'upload, `keystore.properties` et
+  `google-services.json` hors Git.
+- [ ] Renseigner l'empreinte SHA-256 de Play App Signing, régénérer puis
+  déployer `assetlinks.json`, et vérifier App Links après installation Play.
+- [ ] Exécuter `bundleRelease`, tester l'AAB en piste Internal, puis compléter
+  Data safety, Content rating, accès au compte démo et fiche store.
 
-## Non requis / décisions
+### Recette commune
 
-- **Sign in with Apple** : non implémenté car non requis (pas de login social tiers). Si un login Google/Facebook est ajouté un jour → Sign in with Apple devient obligatoire (Guideline 4.8).
+- [ ] Reset password depuis un email, retour natif compris.
+- [ ] Callback Pro Santé Connect, invitation établissement et mission publique.
+- [ ] Scan QR, pointage GPS, mode hors-ligne puis resynchronisation.
+- [ ] Push au premier plan/arrière-plan/app tuée avec routage par rôle.
+- [ ] Paiement réel à faible montant, remboursement et suppression de compte.
+- [ ] Accessibilité, petits/grands écrans, réseau lent et absence de réseau.
+
+## Données de démonstration
+
+Ne pas masquer ni purger les données de démonstration avant les captures stores
+et la review. Conserver en particulier les comptes de review et leurs scénarios
+préparés ; toute purge ultérieure doit être explicitement demandée et ne doit
+jamais toucher les données réelles ou de prospection.
+
+## Décision produit
+
+Sign in with Apple n'est pas requis tant que Jolene propose seulement
+email/mot de passe et aucun login social tiers. L'ajout futur de Google,
+Facebook ou équivalent impose de réévaluer cette obligation avant release.

@@ -50,6 +50,7 @@ export default function PremiumEtablissement() {
             <div className="flex flex-col sm:flex-row gap-2">
               <Input
                 type="email"
+                aria-label="Adresse email pour la liste d’attente Pro"
                 placeholder="votre@email.fr"
                 value={email}
                 onChange={e => setEmail(e.target.value)}

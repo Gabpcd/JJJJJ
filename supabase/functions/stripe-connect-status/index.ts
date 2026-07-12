@@ -1,6 +1,8 @@
 import Stripe from "npm:stripe@18.5.0";
-import { createClient } from "npm:@supabase/supabase-js@2";
+import { createClient } from "npm:@supabase/supabase-js@2.99.2";
 import { mapStripeError } from "../_shared/stripe-errors.ts";
+import { jsonResponse, preflightResponse } from "../_shared/cors.ts";
+import { verifyUserOrServiceRole } from "../_shared/admin-auth.ts";
 
 // [CP-STRIPE-6 H10] TTL du cache : si onboarding.modifie_le est plus
 // récent que CACHE_TTL_MS, on retourne les données DB sans appeler
@@ -9,81 +11,57 @@ import { mapStripeError } from "../_shared/stripe-errors.ts";
 // automatique à chaque changement réel côté Stripe.
 const CACHE_TTL_MS = 5 * 60 * 1000;
 
-function getCorsOrigin(req: Request): string {
-  const origin = req.headers.get("origin") || "";
-  if (
-    origin === "https://jolene.app" ||
-    origin === "https://app.jolene.app" ||
-    origin === "https://www.jolene.app" ||
-    origin === "http://localhost:5173" ||
-    origin === "http://localhost:8080"
-  ) {
-    return origin;
-  }
-  return "https://jolene.app";
-}
-
-function corsHeaders(req: Request) {
-  return {
-    "Access-Control-Allow-Origin": getCorsOrigin(req),
-    "Access-Control-Allow-Headers":
-      "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
-  };
-}
+const NON_DEMANDE = {
+  statut: 'NON_DEMANDE',
+  onboarding_complete: false,
+  charges_enabled: false,
+  payouts_enabled: false,
+  iban_last4: null,
+  requirements: [],
+  disabled_reason: null,
+  cached: true,
+};
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders(req) });
+    return preflightResponse(req);
   }
-
-  const supabaseAdmin = createClient(
-    Deno.env.get("SUPABASE_URL") ?? "",
-    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
-    { auth: { persistSession: false } }
-  );
+  if (req.method !== 'POST') return jsonResponse(req, { error: 'Methode non autorisee' }, 405);
 
   try {
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader) {
-      return new Response(JSON.stringify({ error: "Non autorisé" }), {
-        status: 401,
-        headers: { ...corsHeaders(req), "Content-Type": "application/json" },
-      });
+    const auth = await verifyUserOrServiceRole(req);
+    if (!auth.ok) return jsonResponse(req, { error: auth.error }, auth.status);
+    if (auth.isServiceRole || !auth.userId) {
+      return jsonResponse(req, { error: 'Consultation utilisateur uniquement' }, 403);
     }
 
-    const supabaseClient = createClient(
-      Deno.env.get("SUPABASE_URL") ?? "",
-      Deno.env.get("SUPABASE_ANON_KEY") ?? ""
-    );
-    const {
-      data: { user },
-      error: authError,
-    } = await supabaseClient.auth.getUser(authHeader.replace("Bearer ", ""));
-    if (authError || !user) {
-      return new Response(JSON.stringify({ error: "Non autorisé" }), {
-        status: 401,
-        headers: { ...corsHeaders(req), "Content-Type": "application/json" },
-      });
+    const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
+    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+    if (!supabaseUrl || !serviceRoleKey) {
+      return jsonResponse(req, { error: 'Configuration serveur incomplete' }, 503);
     }
+    const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false } });
 
-    const { data: onboarding } = await supabaseAdmin
+    const { data: onboarding, error: onboardingError } = await supabaseAdmin
       .from("stripe_connect_onboarding")
-      .select("*")
-      .eq("soignant_id", user.id)
+      .select("id, stripe_account_id, statut, modifie_le, charges_enabled, payouts_enabled, details_submitted, iban_last4")
+      .eq("soignant_id", auth.userId)
       .maybeSingle();
+    if (onboardingError) {
+      console.error('[stripe-connect-status] lecture onboarding impossible', onboardingError.code);
+      return jsonResponse(req, { error: 'STRIPE_STATUS_UNAVAILABLE', message: 'Statut de paiement temporairement indisponible.' }, 503);
+    }
 
-    if (!onboarding?.stripe_account_id) {
-      return new Response(JSON.stringify({ statut: "NON_DEMANDE" }), {
-        status: 200,
-        headers: { ...corsHeaders(req), "Content-Type": "application/json" },
-      });
+    // Aucun onboarding (cas normal, y compris comptes de demonstration) n'est
+    // pas une panne Stripe et ne doit jamais initialiser le SDK ni appeler son API.
+    if (!onboarding || onboarding.statut === 'NON_DEMANDE' || !onboarding.stripe_account_id) {
+      return jsonResponse(req, NON_DEMANDE);
     }
 
     // [CP-STRIPE-6 H11] Si déjà marqué SUPPRIME, pas besoin de re-tenter
     // un retrieve Stripe qui échouera de la même manière.
     if (onboarding.statut === "SUPPRIME") {
-      return new Response(
-        JSON.stringify({
+      return jsonResponse(req, {
           statut: "SUPPRIME",
           onboarding_complete: false,
           charges_enabled: false,
@@ -93,12 +71,7 @@ Deno.serve(async (req) => {
           disabled_reason: "account_deleted",
           message: "Votre compte Stripe Connect a été supprimé. Contactez le support ou recommencez l'onboarding.",
           cached: true,
-        }),
-        {
-          status: 200,
-          headers: { ...corsHeaders(req), "Content-Type": "application/json" },
-        }
-      );
+        });
     }
 
     // [CP-STRIPE-6 H10] Check cache via modifie_le
@@ -117,8 +90,7 @@ Deno.serve(async (req) => {
         onboarding.payouts_enabled &&
         onboarding.details_submitted
       );
-      return new Response(
-        JSON.stringify({
+      return jsonResponse(req, {
           statut: onboarding.statut,
           onboarding_complete: onboardingComplete,
           charges_enabled: !!onboarding.charges_enabled,
@@ -128,16 +100,15 @@ Deno.serve(async (req) => {
           disabled_reason: null,
           cached: true,
           cache_age_seconds: Math.round(cacheAge / 1000),
-        }),
-        {
-          status: 200,
-          headers: { ...corsHeaders(req), "Content-Type": "application/json" },
-        }
-      );
+        });
     }
 
     // Cache miss : call Stripe API
-    const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") || "", {
+    const stripeSecretKey = Deno.env.get("STRIPE_SECRET_KEY") || "";
+    if (!stripeSecretKey) {
+      return jsonResponse(req, { error: 'STRIPE_NOT_CONFIGURED', message: 'Service Stripe temporairement indisponible.' }, 503);
+    }
+    const stripe = new Stripe(stripeSecretKey, {
       apiVersion: "2025-08-27.basil",
     });
 
@@ -160,11 +131,11 @@ Deno.serve(async (req) => {
             payouts_enabled: false,
             modifie_le: new Date().toISOString(),
           })
-          .eq("soignant_id", user.id);
+          .eq("soignant_id", auth.userId);
 
         // Audit RGPD
         await supabaseAdmin.rpc("fn_ecrire_audit_safe", {
-          p_acteur_id: user.id,
+          p_acteur_id: auth.userId,
           p_type_acteur: "SYSTEME",
           p_action: "STRIPE_CONNECT_ACCOUNT_DELETED",
           p_type_ressource: "stripe_connect_onboarding",
@@ -179,8 +150,7 @@ Deno.serve(async (req) => {
           p_navigateur: "stripe-connect-status",
         });
 
-        return new Response(
-          JSON.stringify({
+        return jsonResponse(req, {
             statut: "SUPPRIME",
             onboarding_complete: false,
             charges_enabled: false,
@@ -189,12 +159,7 @@ Deno.serve(async (req) => {
             requirements: [],
             disabled_reason: "account_deleted",
             message: "Votre compte Stripe Connect a été supprimé. Contactez le support ou recommencez l'onboarding.",
-          }),
-          {
-            status: 200,
-            headers: { ...corsHeaders(req), "Content-Type": "application/json" },
-          }
-        );
+          });
       }
       // Autre erreur → remonter au catch global (mapStripeError)
       throw retrieveErr;
@@ -235,10 +200,9 @@ Deno.serve(async (req) => {
         iban_last4: ibanLast4,
         modifie_le: new Date().toISOString(),
       })
-      .eq("soignant_id", user.id);
+      .eq("soignant_id", auth.userId);
 
-    return new Response(
-      JSON.stringify({
+    return jsonResponse(req, {
         statut,
         onboarding_complete: onboardingComplete,
         charges_enabled: account.charges_enabled ?? false,
@@ -247,12 +211,7 @@ Deno.serve(async (req) => {
         requirements: account.requirements?.currently_due ?? [],
         disabled_reason: account.requirements?.disabled_reason ?? null,
         cached: false,
-      }),
-      {
-        status: 200,
-        headers: { ...corsHeaders(req), "Content-Type": "application/json" },
-      }
-    );
+      });
   } catch (error: unknown) {
     // [CP-STRIPE-6 H9] Mapping typed Stripe errors
     const mapped = mapStripeError(error);
@@ -260,12 +219,6 @@ Deno.serve(async (req) => {
       code: mapped.code,
       raw: error instanceof Error ? error.message : String(error),
     });
-    return new Response(
-      JSON.stringify({ error: mapped.code, message: mapped.userMessage }),
-      {
-        status: mapped.status,
-        headers: { ...corsHeaders(req), "Content-Type": "application/json" },
-      }
-    );
+    return jsonResponse(req, { error: mapped.code, message: mapped.userMessage }, mapped.status);
   }
 });

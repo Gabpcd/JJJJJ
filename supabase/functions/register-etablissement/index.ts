@@ -1,5 +1,4 @@
-import { createClient } from 'npm:@supabase/supabase-js@2';
-import { verifyTurnstileToken } from '../_shared/verify-turnstile.ts';
+import { createClient } from 'npm:@supabase/supabase-js@2.99.2';
 import { errorResponse, safeStringifyError } from '../_shared/errors.ts';
 import { colonnesAttribution } from '../_shared/attribution.ts';
 
@@ -9,6 +8,8 @@ function getCorsOrigin(req: Request): string {
     origin === "https://jolene.app" ||
     origin === "https://app.jolene.app" ||
     origin === "https://www.jolene.app" ||
+    origin === "https://localhost" ||
+    origin === "capacitor://localhost" ||
     origin === "http://localhost:5173" ||
     origin === "http://localhost:8080"
   ) {
@@ -20,6 +21,7 @@ function getCorsOrigin(req: Request): string {
 function corsHeaders(req: Request) {
   return {
     'Access-Control-Allow-Origin': getCorsOrigin(req),
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
     'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
   };
 }
@@ -99,25 +101,65 @@ Deno.serve(async (req) => {
     return errorResponse(cors, 401, 'INVALID_TOKEN', 'Session invalide. Reconnectez-vous et réessayez.');
   }
 
+  const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey, {
+    auth: { autoRefreshToken: false, persistSession: false },
+    db: { schema: 'public' },
+  });
+  let suppressionAuthAutorisee = false;
+  let inscriptionFinalisee = false;
+  const claimToken = crypto.randomUUID();
+  const annulerCompteAuth = async (raison: string) => {
+    // Ne jamais supprimer un compte existant qui rappelle l'endpoint. Seule la
+    // reservation fraiche possedee par cette requete autorise la compensation.
+    if (!suppressionAuthAutorisee || inscriptionFinalisee) return;
+    try {
+      const { error } = await supabaseAdmin.auth.admin.deleteUser(user.id);
+      if (error) throw error;
+      console.log(`[register-etablissement] Compte Auth ${user.id} supprimé (échec avant création du profil: ${raison})`);
+    } catch (cleanupErr) {
+      console.error('[register-etablissement] Cleanup Auth user échoué:', safeStringifyError(cleanupErr));
+    }
+  };
+
   try {
+    const { data: reservation, error: reservationError } = await supabaseAdmin.rpc(
+      'fn_reserver_type_compte',
+      { p_user_id: user.id, p_type_compte: 'ETABLISSEMENT', p_claim_token: claimToken },
+    );
+    if (reservationError || !reservation || typeof reservation !== 'object') {
+      console.error('[register-etablissement] Reservation type compte echouee:', reservationError?.code || 'INVALID_RESULT');
+      return errorResponse(cors, 503, 'ACCOUNT_RESERVATION_UNAVAILABLE', 'Inscription momentanément indisponible. Réessayez dans quelques minutes.');
+    }
+    const reservationResult = reservation as Record<string, unknown>;
+    if (reservationResult.allowed !== true) {
+      const code = String(reservationResult.code || 'ACCOUNT_TYPE_MISMATCH');
+      const status = code === 'ACCOUNT_AUTH_INACTIVE' ? 401 : 409;
+      const message = code === 'ACCOUNT_ALREADY_REGISTERED'
+        ? 'Ce compte établissement existe déjà. Connectez-vous pour continuer.'
+        : code === 'ACCOUNT_REGISTRATION_IN_PROGRESS'
+          ? 'Une inscription est déjà en cours pour ce compte. Patientez quelques instants puis réessayez.'
+          : 'Ce compte est déjà associé à un autre espace Jolene. Utilisez une autre adresse ou contactez le support.';
+      return errorResponse(cors, status, code, message);
+    }
+    suppressionAuthAutorisee = reservationResult.fresh === true;
+
     const body = await req.json();
     const { nom, siret, finess, type, adresse_rue, adresse_ville, adresse_code_postal,
       adresse_departement, telephone_contact, email_contact, adresse_lat, adresse_lng,
-      numero_licence, turnstileToken } = body;
+      numero_licence } = body;
 
-    // Captcha anti-bot Cloudflare Turnstile (no-op tant que TURNSTILE_SECRET_KEY non configurée)
-    const captcha = await verifyTurnstileToken(turnstileToken, clientIp);
-    if (!captcha.success) {
-      return errorResponse(cors, 403, 'CAPTCHA_FAILED', captcha.error || 'Vérification anti-bot échouée. Rafraîchissez la page.');
-    }
+    // Token Turnstile a usage unique deja consomme par Auth signUp. Ne pas le
+    // soumettre une seconde fois a Siteverify (`timeout-or-duplicate`).
 
     // Validate required fields
     if (!nom || !siret || !type || !adresse_ville) {
+      await annulerCompteAuth('MISSING_REQUIRED_FIELDS');
       return errorResponse(cors, 400, 'MISSING_REQUIRED_FIELDS', 'Champs obligatoires manquants.', { champs_manquants: [!nom && 'nom', !siret && 'siret', !type && 'type', !adresse_ville && 'adresse_ville'].filter(Boolean) });
     }
 
     // Luhn validation
     if (!/^\d{14}$/.test(siret) || /^0+$/.test(siret)) {
+      await annulerCompteAuth('SIRET_FORMAT_INVALID');
       return errorResponse(cors, 400, 'SIRET_FORMAT_INVALID', 'Le SIRET doit contenir 14 chiffres.');
     }
     {
@@ -128,17 +170,19 @@ Deno.serve(async (req) => {
         sum += d;
       }
       if (sum % 10 !== 0) {
+        await annulerCompteAuth('SIRET_CHECKSUM_INVALID');
         return errorResponse(cors, 400, 'SIRET_CHECKSUM_INVALID', 'SIRET invalide (checksum incorrecte).');
       }
     }
-
-    const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false } });
 
     // 2a. Verify SIRET against INSEE registry
     let siretVerification: any = null;
     try {
       const rechercheUrl = `https://recherche-entreprises.api.gouv.fr/search?q=${siret}&mtm_campaign=jolene`;
-      const verifyResp = await fetch(rechercheUrl, { headers: { 'Accept': 'application/json' } });
+      const verifyResp = await fetch(rechercheUrl, {
+        headers: { 'Accept': 'application/json' },
+        signal: AbortSignal.timeout(9_000),
+      });
       if (verifyResp.ok) {
         const verifyData = await verifyResp.json();
         const results = verifyData.results || [];
@@ -262,38 +306,43 @@ Deno.serve(async (req) => {
 
     if (insertError) {
       console.error('INSERT etablissements échoué', insertError.code || safeStringifyError(insertError));
-      const msg = insertError.message || '';
+      const msg = (insertError.message || '').toLowerCase();
       const estSiretDuplique = msg.includes('duplicate key') && msg.includes('siret');
-      // Compensation : on supprime TOUJOURS le user Auth fraîchement créé — y compris
-      // sur SIRET déjà enregistré (409). Sinon il reste orphelin et un nouvel essai
-      // avec le MÊME e-mail échoue en "User already registered" : l'utilisateur ne
-      // peut alors plus corriger son SIRET sans changer d'adresse e-mail.
-      try {
-        await supabaseAdmin.auth.admin.deleteUser(user.id);
-      } catch (cleanupErr) {
-        console.error('[register-etablissement] Cleanup Auth user échoué:', safeStringifyError(cleanupErr));
-      }
+      const estProfilDuplique = msg.includes('duplicate key')
+        && (msg.includes('etablissements_pkey') || msg.includes('(id)'));
+      if (!estProfilDuplique) await annulerCompteAuth(estSiretDuplique ? 'SIRET_ALREADY_REGISTERED' : 'INSERT_ETABLISSEMENT_FAILED');
       if (estSiretDuplique) {
         return errorResponse(cors, 409, 'SIRET_ALREADY_REGISTERED', 'Ce numéro SIRET est déjà enregistré. S\'il s\'agit de votre établissement, connectez-vous ; sinon vérifiez le numéro saisi.');
+      }
+      if (estProfilDuplique) {
+        return errorResponse(cors, 409, 'USER_ALREADY_REGISTERED', 'Ce compte établissement existe déjà. Connectez-vous pour continuer.');
       }
       return errorResponse(cors, 500, 'INTERNAL_ERROR', 'Erreur lors de la création du profil établissement. Réessayez dans quelques minutes.');
     }
 
     // 3. Set app_metadata role — server-side, no client involvement
     const { error: claimsError } = await supabaseAdmin.auth.admin.updateUserById(user.id, {
-      app_metadata: { role: 'ADMIN_ETABLISSEMENT', etablissement_id: user.id },
+      app_metadata: { ...(user.app_metadata || {}), role: 'ADMIN_ETABLISSEMENT', etablissement_id: user.id },
     });
 
     if (claimsError) {
       console.error('set-user-claims échoué', claimsError.code || safeStringifyError(claimsError));
       await supabaseAdmin.from('etablissements').delete().eq('id', user.id);
-      try {
-        await supabaseAdmin.auth.admin.deleteUser(user.id);
-      } catch (cleanupErr) {
-        console.error('[register-etablissement] Cleanup Auth user échoué (claims):', safeStringifyError(cleanupErr));
-      }
+      await annulerCompteAuth('SET_CLAIMS_FAILED');
       return errorResponse(cors, 500, 'INTERNAL_ERROR', 'Erreur lors de la configuration du compte. Réessayez dans quelques minutes.');
     }
+
+    const { data: typeFinalise, error: finalisationError } = await supabaseAdmin.rpc(
+      'fn_finaliser_type_compte',
+      { p_user_id: user.id, p_type_compte: 'ETABLISSEMENT', p_claim_token: claimToken },
+    );
+    if (finalisationError || typeFinalise !== true) {
+      console.error('[register-etablissement] Finalisation type compte echouee:', finalisationError?.code || 'INVALID_RESULT');
+      await supabaseAdmin.from('etablissements').delete().eq('id', user.id);
+      await annulerCompteAuth('ACCOUNT_TYPE_FINALIZATION_FAILED');
+      return errorResponse(cors, 500, 'INTERNAL_ERROR', 'Erreur lors de la configuration du compte. Réessayez dans quelques minutes.');
+    }
+    inscriptionFinalisee = true;
 
     // 4. Audit inscription + CGU + L1: CGV consent
     await supabaseAdmin.from('journaux_audit').insert({
@@ -349,6 +398,7 @@ Deno.serve(async (req) => {
     });
   } catch (err) {
     console.error('register-etablissement error:', safeStringifyError(err));
+    await annulerCompteAuth('UNEXPECTED_ERROR');
     return errorResponse(cors, 500, 'INTERNAL_ERROR', 'Erreur serveur. Notre équipe a été notifiée. Réessayez dans quelques minutes.');
   }
 });

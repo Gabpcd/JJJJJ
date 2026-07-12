@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Database, Loader2, Trash2, Building2, Users, Briefcase, FileText } from 'lucide-react';
+import { Database, Loader2, ShieldCheck, Building2, Users, Briefcase, FileText } from 'lucide-react';
 import { LayoutAdmin } from '@/components/LayoutAdmin';
 import { BreadcrumbAdmin } from '@/components/BreadcrumbAdmin';
 import { usePageTitle } from '@/hooks/usePageTitle';
@@ -11,7 +11,7 @@ import { CarteKPIY2K } from '@/components/y2k/CarteKPIY2K';
 
 export default function AdminDemo() {
   usePageTitle('Données de démo');
-  const [loading, setLoading] = useState<'charger' | 'purger' | null>(null);
+  const [loading, setLoading] = useState<'charger' | null>(null);
   const [kpi, setKpi] = useState<any>(null);
   const [kpiLoading, setKpiLoading] = useState(true);
 
@@ -36,35 +36,24 @@ export default function AdminDemo() {
     }
   };
 
-  const purgerDemo = async () => {
-    setLoading('purger');
-    const { error } = await supabase.rpc('fn_purger_demo' as any);
-    setLoading(null);
-    if (error) {
-      toast.error('Une erreur est survenue. Veuillez réessayer.');
-    } else {
-      toast.success('Données de démo supprimées — La base a été nettoyée');
-      chargerKpi();
-    }
-  };
-
   return (
     <LayoutAdmin>
       <BreadcrumbAdmin pageName="Données de démo" />
       <div className="space-y-8">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Données de démonstration</h1>
-          <p className="text-muted-foreground mt-1">Charger ou purger un jeu de données réaliste pour les démos investisseurs.</p>
+          <p className="text-muted-foreground mt-1">Charger un jeu de données réaliste pour les démos investisseurs et les captures stores.</p>
         </div>
 
         {/* Actions */}
-        <div className="flex flex-wrap gap-4">
+        <div className="flex flex-wrap items-center gap-4">
           <BoutonY2K onClick={chargerDemo} disabled={loading !== null} loading={loading === 'charger'} size="lg" className="gap-2" iconeGauche={loading === 'charger' ? undefined : <Database className="h-5 w-5" />}>
             Charger les données de démo
           </BoutonY2K>
-          <BoutonY2K onClick={purgerDemo} disabled={loading !== null} loading={loading === 'purger'} variant="destructive" size="lg" className="gap-2" iconeGauche={loading === 'purger' ? undefined : <Trash2 className="h-5 w-5" />}>
-            Purger la démo
-          </BoutonY2K>
+          <div className="rounded-xl border border-success/30 bg-success/10 px-4 py-3 text-sm text-foreground flex items-start gap-2 max-w-xl">
+            <ShieldCheck className="h-5 w-5 text-success shrink-0" />
+            <span>Les données de démonstration sont conservées pour les captures stores. La purge depuis l'interface est désactivée afin d'éviter toute suppression accidentelle.</span>
+          </div>
         </div>
 
         {/* Résumé BDD */}

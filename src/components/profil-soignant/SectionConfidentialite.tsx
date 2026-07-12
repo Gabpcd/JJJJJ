@@ -12,6 +12,11 @@ interface Props {
   userId: string;
 }
 
+interface DeleteAccountResponse {
+  success?: boolean;
+  error?: string;
+}
+
 export function SectionConfidentialite({ userId }: Props) {
   const { afficherNotification } = useNotification();
   const { role } = useRole();
@@ -75,17 +80,20 @@ export function SectionConfidentialite({ userId }: Props) {
   const handleSupprimerCompte = async () => {
     setDeleteLoading(true);
     try {
-      const { data, error } = await supabase.rpc('fn_supprimer_compte_rate_limited' as any);
+      const { data, error } = await supabase.functions.invoke<DeleteAccountResponse>('delete-account', { body: {} });
       if (error) throw error;
-      if ((data as any)?.error) {
-        afficherNotification({ type: 'erreur', message: (data as any).error });
+      if (data?.error || data?.success !== true) {
+        afficherNotification({ type: 'erreur', message: data?.error || 'Suppression impossible.' });
         setDeleteLoading(false);
         return;
       }
       afficherNotification({ type: 'succes', message: 'Compte supprimé. Redirection...' });
-      await supabase.auth.signOut();
+      // La fonction a deja revoque les sessions et supprime logiquement le
+      // compte Auth. Cet appel efface la copie locale, meme si le JWT est deja
+      // invalide cote serveur.
+      await supabase.auth.signOut({ scope: 'local' });
       navigate('/');
-    } catch (err: any) {
+    } catch (err: unknown) {
       capturerErreurSentry(err, 'SectionConfidentialite', 'supprimer_compte');
       afficherNotification({ type: 'erreur', message: extraireMessageErreur(err) });
     }
@@ -137,7 +145,7 @@ export function SectionConfidentialite({ userId }: Props) {
         </button>
       </div>
 
-      <div className="card-base border-destructive/30">
+      <div id="suppression-compte" className="card-base scroll-mt-24 border-destructive/30">
         <h2 className="text-base font-semibold text-destructive mb-2">
           Suppression de compte
         </h2>

@@ -97,6 +97,7 @@ export function PoolUrgenceToggle({ actif, rayonKm, villeUrgence, smsOptIn, onUp
           </p>
         </div>
         <Switch
+          aria-label="Disponible pour les remplacements d’urgence"
           checked={localActif}
           disabled={loading}
           onCheckedChange={(checked) => {
@@ -129,6 +130,7 @@ export function PoolUrgenceToggle({ actif, rayonKm, villeUrgence, smsOptIn, onUp
             </div>
             {modeZone === 'ville' && (
               <input
+                aria-label="Ville des alertes d’urgence"
                 value={localVille}
                 onChange={(e) => setLocalVille(e.target.value)}
                 placeholder="Ex : Lyon, Marseille..."
@@ -142,6 +144,7 @@ export function PoolUrgenceToggle({ actif, rayonKm, villeUrgence, smsOptIn, onUp
               Rayon maximum : <span className="text-primary font-bold">{localRayon} km</span>
             </label>
             <Slider
+              aria-label="Rayon maximum des alertes d’urgence"
               value={[localRayon]}
               min={5}
               max={50}
@@ -170,6 +173,7 @@ export function PoolUrgenceToggle({ actif, rayonKm, villeUrgence, smsOptIn, onUp
                 </p>
               </div>
               <Switch
+                aria-label="Recevoir les alertes d’urgence par SMS"
                 checked={localSms}
                 disabled={smsLoading}
                 onCheckedChange={(checked) => {

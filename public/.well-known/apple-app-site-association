@@ -3,9 +3,7 @@
     "apps": [],
     "details": [
       {
-        "appIDs": [
-          "5D9L5FQQ86.app.jolene"
-        ],
+        "appID": "5D9L5FQQ86.app.jolene",
         "paths": [
           "/soignant/*",
           "/etablissement/*",
@@ -13,7 +11,15 @@
           "/admin/*",
           "/connexion",
           "/inscription/*",
-          "/missions/*"
+          "/reset-password",
+          "/auth/psc/callback",
+          "/etab/invitation/*",
+          "/mission/*",
+          "/contrat/*",
+          "/soignant/missions",
+          "/soignant/missions/*",
+          "/etablissement/missions",
+          "/etablissement/missions/*"
         ]
       }
     ]

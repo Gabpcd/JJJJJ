@@ -280,7 +280,7 @@ export default function PresencesSoignant() {
     }
 
     if (!navigator.onLine) {
-      stockerPointageHorsLigne(missionId, 'arrivee');
+      stockerPointageHorsLigne(missionId, 'arrivee', undefined, consentementGPS === true);
       afficherNotification({ type: 'info', message: '📡 Mode hors-ligne : pointage stocké localement.', duree: 8000 });
       return;
     }
@@ -301,9 +301,9 @@ export default function PresencesSoignant() {
 
     const { data: rpcResult, error } = await supabase.rpc('fn_pointer_arrivee' as any, {
       p_mission_id: missionId,
-      p_lat: position?.coords.latitude ?? 0,
-      p_lng: position?.coords.longitude ?? 0,
-      p_precision: position?.coords.accuracy ?? 0,
+      p_lat: position?.coords.latitude ?? null,
+      p_lng: position?.coords.longitude ?? null,
+      p_precision: position?.coords.accuracy ?? null,
       p_terminal_id: idTerminal,
       p_modele: modeleTerminal,
     });
@@ -349,7 +349,7 @@ export default function PresencesSoignant() {
   const pointerDepart = async (presenceId: string, missionId: string) => {
     if (!user) return;
     if (!navigator.onLine) {
-      stockerPointageHorsLigne(missionId, 'depart', presenceId);
+      stockerPointageHorsLigne(missionId, 'depart', presenceId, consentementGPS === true);
       afficherNotification({ type: 'info', message: '📡 Mode hors-ligne : pointage stocké localement.', duree: 8000 });
       return;
     }
@@ -367,9 +367,9 @@ export default function PresencesSoignant() {
 
     const { data: rpcResult, error } = await supabase.rpc('fn_pointer_depart' as any, {
       p_presence_id: presenceId,
-      p_lat: position?.coords.latitude ?? 0,
-      p_lng: position?.coords.longitude ?? 0,
-      p_precision: position?.coords.accuracy ?? 0,
+      p_lat: position?.coords.latitude ?? null,
+      p_lng: position?.coords.longitude ?? null,
+      p_precision: position?.coords.accuracy ?? null,
       p_terminal_id: genererIdTerminal(),
       p_modele: navigator.userAgent.slice(0, 100),
     });
@@ -509,7 +509,7 @@ export default function PresencesSoignant() {
                         🏥 {m.etablissements?.nom || 'Établissement'}{m.debut_le ? ` · ${format(new Date(m.debut_le), "EEE d MMM HH'h'mm", { locale: fr })}` : ''}
                       </p>
                     </div>
-                    <PointageRotatifSoignant missionId={m.id} />
+                    <PointageRotatifSoignant missionId={m.id} consentementGPS={consentementGPS} />
                   </div>
                 );
               })}
@@ -566,7 +566,7 @@ export default function PresencesSoignant() {
                         🏥 {m.etablissements?.nom || 'Établissement'}{m.debut_le ? ` · ${format(new Date(m.debut_le), "EEE d MMM HH'h'mm", { locale: fr })}` : ''}
                       </p>
                     </div>
-                    <PointageRotatifSoignant missionId={m.id} />
+                    <PointageRotatifSoignant missionId={m.id} consentementGPS={consentementGPS} />
                   </div>
                 );
               })}

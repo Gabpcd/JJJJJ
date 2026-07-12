@@ -143,11 +143,18 @@ function SidebarGroup({
 }) {
   const hasActiveChild = group.items.some(i => isActive(i.route));
   const [open, setOpen] = useState(hasActiveChild);
+  const groupId = `admin-nav-${group.label.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
+
+  useEffect(() => {
+    if (hasActiveChild) setOpen(true);
+  }, [hasActiveChild]);
 
   return (
     <div>
       <button
         onClick={() => setOpen(!open)}
+        aria-expanded={open}
+        aria-controls={groupId}
         className={`sidebar-item w-full text-left justify-between ${hasActiveChild ? 'text-sidebar-primary' : 'text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground'}`}
       >
         <div className="flex items-center gap-3">
@@ -157,13 +164,14 @@ function SidebarGroup({
         <ChevronDown className={`h-4 w-4 transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
       {open && (
-        <div className="ml-4 pl-3 border-l border-sidebar-border space-y-0.5 mt-0.5 mb-1">
+        <div id={groupId} className="ml-4 pl-3 border-l border-sidebar-border space-y-0.5 mt-0.5 mb-1">
           {group.items.map(item => {
             const actif = isActive(item.route);
             return (
               <button
                 key={item.route}
                 onClick={() => navigate(item.route)}
+                aria-current={actif ? 'page' : undefined}
                 className={`sidebar-item w-full text-left text-sm ${actif ? 'bg-sidebar-accent text-sidebar-primary' : 'text-sidebar-foreground/60 hover:bg-sidebar-accent hover:text-sidebar-foreground'}`}
               >
                 <item.icone className="h-4 w-4" />
@@ -197,6 +205,15 @@ export function LayoutAdmin({ children }: { children: React.ReactNode }) {
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
   }, []);
+
+  useEffect(() => {
+    if (!menuOuvert) return;
+    const fermerAvecEchap = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setMenuOuvert(false);
+    };
+    document.addEventListener('keydown', fermerAvecEchap);
+    return () => document.removeEventListener('keydown', fermerAvecEchap);
+  }, [menuOuvert]);
 
   const handleDeconnexion = async () => {
     await deconnexion();
@@ -263,15 +280,15 @@ export function LayoutAdmin({ children }: { children: React.ReactNode }) {
           )}
         </nav>
         <div className="p-3 border-t border-sidebar-border">
-          <div className="mb-2 grid grid-cols-2 gap-1">
+          <div className="mb-2 space-y-0.5" aria-label="Liens légaux">
             {NAV_LEGAL.map((item) => (
               <button
                 key={item.route}
                 onClick={() => navigate(item.route)}
-                className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-[11px] text-sidebar-foreground/50 hover:bg-sidebar-accent hover:text-sidebar-foreground transition-colors"
+                className="flex w-full items-center gap-1.5 rounded-lg px-2 py-1 text-[11px] leading-tight text-sidebar-foreground/50 hover:bg-sidebar-accent hover:text-sidebar-foreground transition-colors"
               >
                 <item.icone className="h-3.5 w-3.5" />
-                <span className="truncate">{item.label}</span>
+                <span className="text-left">{item.label}</span>
               </button>
             ))}
           </div>
@@ -305,7 +322,7 @@ export function LayoutAdmin({ children }: { children: React.ReactNode }) {
             <Search className="h-5 w-5" />
           </button>
           <ThemeToggle />
-          <button onClick={handleDeconnexion} className="p-2 text-muted-foreground hover:text-destructive transition-colors" title="Déconnexion">
+          <button onClick={handleDeconnexion} className="p-2 text-muted-foreground hover:text-destructive transition-colors" title="Déconnexion" aria-label="Se déconnecter">
             <LogOut className="h-5 w-5" />
           </button>
         </div>
@@ -331,6 +348,7 @@ export function LayoutAdmin({ children }: { children: React.ReactNode }) {
             <button
               key={item.route}
               onClick={() => { setMenuOuvert(false); navigate(item.route); }}
+              aria-current={actif ? 'page' : undefined}
               className={`flex-1 flex flex-col items-center justify-center gap-0.5 transition-colors ${actif ? 'text-primary' : 'text-muted-foreground'}`}
               style={{ minWidth: 44, minHeight: 44 }}
             >
@@ -341,6 +359,8 @@ export function LayoutAdmin({ children }: { children: React.ReactNode }) {
         })}
         <button
           onClick={() => setMenuOuvert(!menuOuvert)}
+          aria-expanded={menuOuvert}
+          aria-controls="admin-mobile-plus"
           className={`flex-1 flex flex-col items-center justify-center gap-0.5 transition-colors ${menuOuvert ? 'text-primary' : 'text-muted-foreground'}`}
           style={{ minWidth: 44, minHeight: 44 }}
         >
@@ -354,6 +374,10 @@ export function LayoutAdmin({ children }: { children: React.ReactNode }) {
         <div className="fixed inset-0 z-40 md:hidden" onClick={() => setMenuOuvert(false)}>
           <div className="absolute inset-0 bg-foreground/40" />
           <div
+            id="admin-mobile-plus"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Toutes les rubriques d’administration"
             className="absolute bottom-20 left-4 right-4 bg-card rounded-2xl shadow-xl border border-border p-3 grid grid-cols-3 gap-2 max-h-[60vh] overflow-y-auto"
             style={{ marginBottom: 'env(safe-area-inset-bottom)' }}
             onClick={(e) => e.stopPropagation()}
@@ -364,6 +388,7 @@ export function LayoutAdmin({ children }: { children: React.ReactNode }) {
                 <button
                   key={item.route}
                   onClick={() => { setMenuOuvert(false); navigate(item.route); }}
+                  aria-current={actif ? 'page' : undefined}
                   className={`flex flex-col items-center gap-1 p-3 rounded-xl transition-colors ${actif ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted'}`}
                   style={{ minHeight: 44 }}
                 >
@@ -397,11 +422,6 @@ export function LayoutAdmin({ children }: { children: React.ReactNode }) {
         className="flex-1 md:ml-[240px] mt-14 md:mt-0 overflow-x-hidden"
       >
         <div className="max-w-7xl mx-auto px-4 py-6 pb-24 md:pb-6">
-          {/* 2FA email admin retirée : l'adresse de réception n'existait pas,
-              le code n'arrivait jamais → verrouillage total de l'admin.
-              Connexion classique email + mot de passe (l'edge function
-              admin-2fa reste déployée, dormante, si on veut la rebrancher
-              avec une vraie boîte mail un jour). */}
           {children}
         </div>
         {/* Footer légal retiré des écrans authentifiés (Lot 6b.1). */}

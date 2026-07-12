@@ -5,6 +5,7 @@ import { LayoutApp } from '@/components/LayoutApp';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { useRole } from '@/hooks/useRole';
 import { Button } from '@/components/ui/button';
 import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { toast } from 'sonner';
@@ -64,7 +65,8 @@ const EVENTS_ETAB: EventDef[] = [
 export default function PageParametresNotifications() {
   usePageTitle('Préférences de notifications');
   const navigate = useNavigate();
-  const { user, role } = useAuth();
+  const { user } = useAuth();
+  const { role } = useRole();
   const isEtab = role === 'ADMIN_ETABLISSEMENT';
   const [typeExercice, setTypeExercice] = useState<string | null>(null);
   // Un soignant purement libéral ne voit pas les événements salarié (CDD) et
@@ -195,7 +197,7 @@ export default function PageParametresNotifications() {
     <LayoutApp role={role_safe}>
       <div className="max-w-4xl mx-auto space-y-6">
         <div className="flex items-center gap-3">
-          <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
+          <Button variant="ghost" size="icon" aria-label="Retour" onClick={() => navigate(-1)}>
             <ArrowLeft className="h-5 w-5" />
           </Button>
           <div>
@@ -324,6 +326,10 @@ function ToggleCanal({ icone, label, actif, onChange, disabled }: { icone: JSX.E
         <span className="text-sm text-foreground">{label}</span>
       </div>
       <button
+        type="button"
+        role="switch"
+        aria-label={label}
+        aria-checked={actif}
         onClick={() => !disabled && onChange(!actif)}
         disabled={disabled}
         className={`relative inline-flex h-6 w-11 shrink-0 rounded-full border-2 border-transparent transition-colors ${disabled ? 'cursor-not-allowed' : 'cursor-pointer'} ${actif ? 'bg-primary' : 'bg-muted-foreground/30'}`}

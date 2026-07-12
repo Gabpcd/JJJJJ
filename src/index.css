@@ -28,7 +28,7 @@
     --rose-foreground: 0 0% 100%;
     --rose-light: 340 70% 95%;
 
-    --teal: 174 72% 48%;
+    --teal: 174 72% 30%;
     --teal-foreground: 0 0% 100%;
 
     --secondary: 260 60% 96%;
@@ -46,11 +46,11 @@
     --destructive: 0 75% 45%;
     --destructive-foreground: 0 0% 100%;
 
-    --success: 152 70% 48%;
+    --success: 152 70% 30%;
     --success-foreground: 0 0% 100%;
 
-    --warning: 38 95% 55%;
-    --warning-foreground: 38 95% 15%;
+    --warning: 38 95% 32%;
+    --warning-foreground: 0 0% 100%;
 
     /* info ajusté pour 4.5:1 sur blanc (215 90% 62% → 215 90% 42% = #1565C0 ratio 5.0:1) */
     --info: 215 90% 42%;
@@ -146,17 +146,17 @@
     --popover-foreground: 240 10% 92%;
 
     --primary: 330 85% 62%;
-    --primary-foreground: 0 0% 100%;
+    --primary-foreground: 260 20% 8%;
 
     --primary-dark: 330 85% 68%;
     --primary-light: 330 50% 15%;
 
     --rose: 340 82% 60%;
-    --rose-foreground: 0 0% 100%;
+    --rose-foreground: 260 20% 8%;
     --rose-light: 340 50% 15%;
 
     --teal: 174 72% 52%;
-    --teal-foreground: 0 0% 100%;
+    --teal-foreground: 260 20% 8%;
 
     --secondary: 260 20% 18%;
     --secondary-foreground: 260 20% 90%;
@@ -170,16 +170,16 @@
     --accent-navy: 250 40% 40%;
 
     --destructive: 0 84% 62%;
-    --destructive-foreground: 0 0% 100%;
+    --destructive-foreground: 260 20% 8%;
 
     --success: 152 70% 52%;
-    --success-foreground: 0 0% 100%;
+    --success-foreground: 260 20% 8%;
 
     --warning: 38 95% 55%;
     --warning-foreground: 38 95% 15%;
 
     --info: 215 90% 65%;
-    --info-foreground: 0 0% 100%;
+    --info-foreground: 260 20% 8%;
 
     --border: 260 15% 20%;
     --input: 260 15% 20%;
@@ -324,6 +324,12 @@
     -webkit-tap-highlight-color: transparent;
   }
 
+  /* Taille minimale WCAG 2.2 pour les contrôles iconographiques sur desktop. */
+  button[aria-label] {
+    min-width: 24px;
+    min-height: 24px;
+  }
+
   /* ── iOS-specific fixes (Capacitor native wrapper only) ── */
   body.platform-ios {
     -webkit-touch-callout: none; /* Prevent long-press context menu on links/images */
@@ -448,6 +454,18 @@
   /* Formulaires mobile: éviter le zoom auto iOS (déjà géré par 16px) */
   /* + padding suffisant pour les doigts */
   @media (max-width: 768px) {
+    button,
+    a[role="button"],
+    [role="switch"] {
+      min-height: 44px;
+    }
+
+    /* Les contrôles uniquement identifiés par leur nom accessible (œil du mot
+       de passe, impression, retour compact…) gardent une cible tactile WCAG. */
+    button[aria-label] {
+      min-width: 44px;
+    }
+
     .input-base {
       min-height: 48px;
       font-size: 16px;

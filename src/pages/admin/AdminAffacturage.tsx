@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { LayoutAdmin } from '@/components/LayoutAdmin';
 import { BreadcrumbAdmin } from '@/components/BreadcrumbAdmin';
-import { ChargementPage } from '@/components/ChargementPage';
+import { ChargementAdmin } from '@/components/admin/ChargementAdmin';
 import { supabase } from '@/integrations/supabase/client';
 import {
   CardY2K,
@@ -83,7 +83,7 @@ export default function AdminAffacturage() {
   });
   const filtered = filtre === 'TOUS' ? triees : triees.filter(a => a.statut === filtre);
 
-  if (loading) return <LayoutAdmin><ChargementPage /></LayoutAdmin>;
+  if (loading) return <LayoutAdmin><ChargementAdmin titre="Affacturage" /></LayoutAdmin>;
 
   return (
     <LayoutAdmin>

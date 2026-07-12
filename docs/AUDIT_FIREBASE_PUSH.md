@@ -1,5 +1,12 @@
 # Audit Firebase / Notifications push natives — diagnostic
 
+> **ARCHIVÉ — ne pas utiliser comme checklist de release.** Ce diagnostic
+> décrit l'état du 13/05/2026 avant l'implémentation APNs/FCM. L'état courant et
+> les seuls prérequis de soumission sont dans `docs/PUSH_NATIVE_FINAL.md` et
+> `docs/store-readiness.md`. En particulier, iOS utilise APNs direct : aucun
+> `GoogleService-Info.plist` ni mode `remote-notification` n'est requis pour les
+> notifications visibles de Jolene.
+
 > Date : 2026-05-13. État actuel des push iOS/Android natives via
 > Firebase / FCM / APNS pour le wrapper Capacitor Jolene.
 > Audit-only, aucun fix appliqué.

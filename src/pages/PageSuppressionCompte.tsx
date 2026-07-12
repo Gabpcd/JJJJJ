@@ -14,7 +14,7 @@ export default function PageSuppressionCompte() {
   return (
     <LayoutLegal
       titre="Supprimer mon compte"
-      dateMaj="25 juin 2026"
+      dateMaj="12 juillet 2026"
       toc={TOC}
       seoDescription="Comment demander la suppression de votre compte Jolene et des données associées : procédure depuis l'application ou par e-mail, données supprimées et durées de conservation légales."
     >
@@ -33,7 +33,7 @@ export default function PageSuppressionCompte() {
         <h2 className="text-xl sm:text-2xl font-bold text-foreground mb-4">Méthode 1 — Depuis l’application (immédiat)</h2>
         <ol className="list-decimal pl-6 space-y-2 mb-3">
           <li>Connectez-vous à votre compte Jolene.</li>
-          <li>Ouvrez votre <strong className="text-foreground">Profil</strong>, puis l’onglet <strong className="text-foreground">Confidentialité</strong>.</li>
+          <li>Soignant : ouvrez <strong className="text-foreground">Mon compte → Supprimer mon compte</strong>. Établissement : ouvrez <strong className="text-foreground">Mon établissement → Supprimer mon compte</strong>.</li>
           <li>Dans la section <strong className="text-foreground">« Suppression de compte »</strong>, cliquez sur <strong className="text-foreground">« Supprimer mon compte »</strong>.</li>
           <li>Saisissez <strong className="text-foreground">SUPPRIMER</strong> pour confirmer, puis validez.</li>
         </ol>
@@ -73,12 +73,12 @@ export default function PageSuppressionCompte() {
         <ul className="list-disc pl-6 space-y-2 mb-4">
           <li>Documents comptables et factures : conservés <strong className="text-foreground">10 ans</strong> (article L123-22 du Code de commerce)</li>
           <li>Contrats et bulletins de paie : durées légales applicables</li>
-          <li>Journaux d’audit (métadonnées techniques) : <strong className="text-foreground">5 ans</strong> (recommandation CNIL)</li>
+          <li>Journaux d’audit concernés par la preuve ou la sécurité : jusqu’à <strong className="text-foreground">5 ans</strong> selon la catégorie</li>
           <li>Données d’identification archivées : jusqu’à <strong className="text-foreground">3 ans</strong> après la suppression</li>
         </ul>
         <p className="text-sm text-muted-foreground">
           Le détail complet des durées de conservation figure dans notre <a href="/confidentialite" className="text-primary underline">Politique de confidentialité</a>.
-          Pour toute question relative à vos données, contactez notre DPO à <a href="mailto:support@jolene.app" className="text-primary underline">support@jolene.app</a>.
+          Pour toute question relative à vos données, contactez notre référent confidentialité à <a href="mailto:support@jolene.app" className="text-primary underline">support@jolene.app</a>.
         </p>
       </section>
     </LayoutLegal>

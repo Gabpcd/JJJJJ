@@ -608,9 +608,15 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
         {backLabel}
       </button>
 
+      {isAdmin && (
+        <div className="mb-4 rounded-xl border border-info/30 bg-info/5 px-4 py-3 text-sm text-foreground" role="status">
+          Consultation administrateur en lecture seule. Les actions métier restent réservées à l’établissement propriétaire.
+        </div>
+      )}
+
       {actionPrioritaire && <BandeauActionPrioritaire {...actionPrioritaire} />}
 
-      {alerteRequalif?.alerte && (
+      {!isAdmin && alerteRequalif?.alerte && (
         <div className="bg-warning/5 border border-warning/30 rounded-xl p-4 mb-4 flex items-start gap-3">
           <AlertTriangle className="h-5 w-5 text-warning shrink-0" aria-hidden="true" />
           <p className="text-sm font-medium text-warning">
@@ -620,7 +626,7 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
       )}
 
       {/* Candidatures en haut si mode CANDIDATURE et OUVERTE */}
-      {m.mode_attribution === 'CANDIDATURE' && m.statut === 'OUVERTE' && (
+      {!isAdmin && m.mode_attribution === 'CANDIDATURE' && m.statut === 'OUVERTE' && (
         <div id="bloc-candidatures" className="mb-4">
           <h2 className="text-lg font-bold text-foreground mb-3">Candidatures {nbCandidatures > 0 ? `(${nbCandidatures})` : ''}</h2>
           <ListeCandidatures
@@ -639,7 +645,7 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
       <Tabs defaultValue="details">
         <TabsList className="mb-4">
           <TabsTrigger value="details">Détails</TabsTrigger>
-          {m.statut === 'OUVERTE' && <TabsTrigger value="recommandations" onClick={chargerRecommandations}>Soignants recommandés</TabsTrigger>}
+          {!isAdmin && m.statut === 'OUVERTE' && <TabsTrigger value="recommandations" onClick={chargerRecommandations}>Soignants recommandés</TabsTrigger>}
         </TabsList>
 
         <TabsContent value="details">
@@ -686,19 +692,19 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
                 {m.soignants ? (
                   <div className="space-y-2">
                     <div className="flex items-center gap-2">
-                      <Link to={`/etablissement/soignants/${m.soignant_assigne_id}`} className="font-semibold text-foreground hover:text-primary hover:underline inline-flex items-center gap-1.5">
+                      <Link to={isAdmin ? `/admin/utilisateurs/${m.soignant_assigne_id}` : `/etablissement/soignants/${m.soignant_assigne_id}`} className="font-semibold text-foreground hover:text-primary hover:underline inline-flex items-center gap-1.5">
                         <User className="h-4 w-4 shrink-0" aria-hidden="true" />
                         {m.soignants.prenom} {m.soignants.nom}
                       </Link>
                       <button
                         type="button"
-                        onClick={() => ouvrirConv(m.soignant_assigne_id, m.id)}
+                        onClick={() => ouvrirConv(m.soignant_assigne_id, m.id, isAdmin)}
                         className="h-8 w-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center hover:bg-primary/90 transition-colors shrink-0"
                         title="Contacter le soignant"
                       >
                         <MessageCircle className="h-4 w-4" />
                       </button>
-                      {m.statut === 'TERMINEE' && m.soignant_assigne_id && (
+                      {!isAdmin && m.statut === 'TERMINEE' && m.soignant_assigne_id && (
                         <BoutonFavori soignantId={m.soignant_assigne_id} etablissementId={m.etablissement_id} />
                       )}
                       {m.statut === 'TERMINEE' && m.soignant_assigne_id && !isAdmin && (
@@ -734,9 +740,11 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
                       )}
                     </p>
                     {m.soignants.numero_rpps && <p className="text-xs text-muted-foreground">RPPS : {m.soignants.numero_rpps}</p>}
-                    <div className="mt-2 pt-2 border-t border-border space-y-2">
-                      <BoutonExclusion excluId={m.soignant_assigne_id} typeExcluPar="ETABLISSEMENT" />
-                    </div>
+                    {!isAdmin && (
+                      <div className="mt-2 pt-2 border-t border-border space-y-2">
+                        <BoutonExclusion excluId={m.soignant_assigne_id} typeExcluPar="ETABLISSEMENT" />
+                      </div>
+                    )}
                   </div>
                 ) : m.statut === 'ASSIGNEE' || m.statut === 'EN_COURS' ? (
                   <div className="text-center py-6">
@@ -752,17 +760,17 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
               </div>
 
               {/* Alert pool urgence button */}
-              {m.statut === 'OUVERTE' && m.est_urgente && (
+              {!isAdmin && m.statut === 'OUVERTE' && m.est_urgente && (
                 <AlerterPoolUrgence missionId={m.id} mission={m} user={user} afficherNotification={afficherNotification} />
               )}
 
               {/* Boost + garantie remplacement */}
-              {(m.statut === 'OUVERTE' || m.statut === 'ASSIGNEE') && (
+              {!isAdmin && (m.statut === 'OUVERTE' || m.statut === 'ASSIGNEE') && (
                 <BoostEtGarantie mission={m} onMaj={(patch) => setMission((prev: any) => ({ ...prev, ...patch }))} />
               )}
 
               {/* Rétrocession : déclaration des honoraires encaissés en fin de mission */}
-              {m.statut === 'TERMINEE' && (m as any).mode_remuneration === 'RETROCESSION' && (
+              {!isAdmin && m.statut === 'TERMINEE' && (m as any).mode_remuneration === 'RETROCESSION' && (
                 <div id="bloc-retro-declaration">
                   <DeclarationRetrocession mission={m} onMaj={(patch) => setMission((prev: any) => ({ ...prev, ...patch }))} />
                 </div>
@@ -770,7 +778,7 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
 
 
               {/* Recherche remplaçant urgence si ABSENCE */}
-              {m.statut === 'ABSENCE' && (
+              {!isAdmin && m.statut === 'ABSENCE' && (
                 <div id="bloc-remplacant">
                 <RechercheRemplacantUrgence
                   missionId={m.id}
@@ -820,7 +828,7 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
               {/* Contrat de travail SALARIE (Partie 2 onboarding) — étab uploade
                   le contrat CDD pour les missions salariées. Affichage seulement si
                   type_contrat_applique=SALARIE et soignant assigné. */}
-              {m.soignant_assigne_id && (
+              {!isAdmin && m.soignant_assigne_id && (
                 <div className="mb-4">
                   <BlocContratTravailMission
                     missionId={m.id}
@@ -934,7 +942,7 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
                   </div>
                 )
               )}
-              {(m.statut === 'ASSIGNEE' || m.statut === 'EN_COURS') && (
+              {!isAdmin && (m.statut === 'ASSIGNEE' || m.statut === 'EN_COURS') && (
                 <AffichageCodeRotatifEtab missionId={m.id} />
               )}
               {isAdmin && (
@@ -964,7 +972,7 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
         </TabsContent>
 
 
-        {m.statut === 'OUVERTE' && (
+        {!isAdmin && m.statut === 'OUVERTE' && (
           <TabsContent value="recommandations">
             <div className="card-base">
               <h2 className="font-semibold text-foreground mb-4 flex items-center gap-2"><Bot className="h-4 w-4 text-primary shrink-0" aria-hidden="true" />Soignants recommandés par l'IA</h2>
@@ -1069,8 +1077,9 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
         )}
       </Tabs>
 
+      {!isAdmin && (
       <div className="fixed bottom-16 left-0 right-0 z-30 flex gap-3 border-t border-border bg-card p-3 md:static md:mt-6 md:justify-end md:border-0 md:p-0">
-        {!isAdmin && m.statut === 'OUVERTE' && (
+        {m.statut === 'OUVERTE' && (
           <button onClick={() => navigate(`/etablissement/missions/${m.id}/modifier`)} className="btn-secondary text-sm flex-1 md:flex-none">
             Modifier
           </button>
@@ -1095,17 +1104,18 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
           </button>
         )}
       </div>
+      )}
 
       {/* Sprint 5.5 PR 3 : modale annulation avec décomposition L1243-8 / 1231-5
           Sprint 8 ter-G : lazy mount uniquement quand ouverte (code splitting) */}
-      {modalAnnuler && (
+      {!isAdmin && modalAnnuler && (
         <Suspense fallback={null}>
           <ModaleAnnulationMissionEtab
             ouvert={true}
             onFermer={() => setModalAnnuler(false)}
             onAnnulee={() => {
               setModalAnnuler(false);
-              navigate(role === 'ADMIN_PLATEFORME' ? '/admin/calendrier' : '/etablissement/missions');
+              navigate('/etablissement/missions');
             }}
             mission={{
               id: m.id,
@@ -1123,16 +1133,16 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
         </Suspense>
       )}
 
-      <ModalConfirmation
+      {!isAdmin && <ModalConfirmation
         ouvert={modalDupliquer}
         onFermer={() => setModalDupliquer(false)}
         onConfirmer={() => navigate(`/etablissement/missions/creer?dupliquer=${m.id}`)}
         titre="Dupliquer cette mission ?"
         message={`Une copie de « ${m.intitule} » sera créée avec le statut OUVERTE.`}
         labelConfirmer="Dupliquer"
-      />
+      />}
 
-      <ModalConfirmation
+      {!isAdmin && <ModalConfirmation
         ouvert={modalTerminer}
         onFermer={() => setModalTerminer(false)}
         onConfirmer={async () => {
@@ -1151,7 +1161,7 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
         titre="Terminer cette mission ?"
         message="Êtes-vous sûr de vouloir terminer cette mission ? Le soignant sera notifié et la facture sera générée."
         labelConfirmer="Terminer la mission"
-      />
+      />}
 
       {!isAdmin && m.statut === 'TERMINEE' && m.soignant_assigne_id && showEvaluation && (
         <Suspense fallback={null}>
@@ -1165,7 +1175,7 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
         </Suspense>
       )}
 
-      {showConnectCheckout && connectClientSecret && (
+      {!isAdmin && showConnectCheckout && connectClientSecret && (
         <StripeEmbeddedCheckout
           factureId={m.id}
           open={showConnectCheckout}

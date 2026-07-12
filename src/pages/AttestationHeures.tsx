@@ -141,7 +141,7 @@ export default function AttestationHeures() {
       <LayoutApp role="SOIGNANT">
         <div className="max-w-xl mx-auto space-y-5">
           <div className="flex items-center gap-3">
-            <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
+            <Button variant="ghost" size="icon" aria-label="Retour" onClick={() => navigate(-1)}>
               <ArrowLeft className="h-5 w-5" />
             </Button>
             <div>
@@ -157,12 +157,12 @@ export default function AttestationHeures() {
               <p className="text-sm font-medium text-foreground mb-2">Période :</p>
               <div className="flex items-center gap-2">
                 <div className="flex-1">
-                  <label className="text-xs text-muted-foreground">Du</label>
-                  <Input type="date" value={formDebut} onChange={(e) => setFormDebut(e.target.value)} />
+                  <label htmlFor="attestation-date-debut" className="text-xs text-muted-foreground">Du</label>
+                  <Input id="attestation-date-debut" type="date" value={formDebut} onChange={(e) => setFormDebut(e.target.value)} />
                 </div>
                 <div className="flex-1">
-                  <label className="text-xs text-muted-foreground">Au</label>
-                  <Input type="date" value={formFin} onChange={(e) => setFormFin(e.target.value)} />
+                  <label htmlFor="attestation-date-fin" className="text-xs text-muted-foreground">Au</label>
+                  <Input id="attestation-date-fin" type="date" value={formFin} onChange={(e) => setFormFin(e.target.value)} />
                 </div>
               </div>
             </div>

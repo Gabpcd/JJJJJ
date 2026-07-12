@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { LayoutAdmin } from '@/components/LayoutAdmin';
-import { ChargementPage } from '@/components/ChargementPage';
+import { ChargementAdmin } from '@/components/admin/ChargementAdmin';
 import { BreadcrumbAdmin } from '@/components/BreadcrumbAdmin';
 import { supabase } from '@/integrations/supabase/client';
 import { BoutonY2K } from '@/components/y2k/BoutonY2K';
@@ -72,6 +72,8 @@ export default function AdminModeration() {
   const [litiges, setLitiges] = useState<LitigeEnrichi[]>([]);
   const [evaluations, setEvaluations] = useState<any[]>([]);
   const [documents, setDocuments] = useState<any[]>([]);
+  const [documentARejeter, setDocumentARejeter] = useState<any | null>(null);
+  const [motifRejetDocument, setMotifRejetDocument] = useState('');
   const [incoherences, setIncoherences] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -125,8 +127,8 @@ export default function AdminModeration() {
         .limit(50),
       supabase
         .from('documents_soignants')
-        .select('id, nom_fichier, type_document, soignant_id, televerse_le')
-        .eq('statut_verification', 'EN_ATTENTE')
+        .select('id, nom_fichier, type_document, soignant_id, televerse_le, s3_bucket, s3_cle, statut_verification, motif_rejet')
+        .in('statut_verification', ['EN_ATTENTE', 'REVUE_MANUELLE_REQUISE'])
         .is('supprime_le', null)
         .order('televerse_le', { ascending: true })
         .limit(50),
@@ -241,11 +243,36 @@ export default function AdminModeration() {
     charger();
   };
 
-  const rejeterDocument = async (id: string) => {
-    const { data, error } = await supabase.rpc('fn_admin_moderer_document' as any, { p_document_id: id, p_action: 'REJETER', p_motif: 'Rejeté par admin' });
+  const rejeterDocument = async (id: string, motif: string) => {
+    if (motif.trim().length < 10) {
+      toast.error('Le motif doit contenir au moins 10 caractères.');
+      return;
+    }
+    const { data, error } = await supabase.rpc('fn_admin_moderer_document' as any, { p_document_id: id, p_action: 'REJETER', p_motif: motif.trim() });
     if (error || (data as any)?.error) { toast.error('Une erreur est survenue. Veuillez réessayer.'); return; }
     toast.success('Document rejeté');
+    setDocumentARejeter(null);
+    setMotifRejetDocument('');
     charger();
+  };
+
+  const voirDocument = async (document: any) => {
+    const preview = window.open('about:blank', '_blank');
+    if (!preview) {
+      toast.error('Autorisez les fenêtres contextuelles pour consulter le document.');
+      return;
+    }
+    preview.opener = null;
+    try {
+      const { data, error } = await supabase.storage
+        .from(document.s3_bucket || 'jolene-documents')
+        .createSignedUrl(document.s3_cle, 300);
+      if (error || !data?.signedUrl) throw error || new Error('URL signée absente');
+      preview.location.replace(data.signedUrl);
+    } catch {
+      preview.close();
+      toast.error('Impossible d’ouvrir ce document.');
+    }
   };
 
   // Task 5 — masquer notation
@@ -307,7 +334,7 @@ export default function AdminModeration() {
     charger();
   };
 
-  if (loading) return <LayoutAdmin><ChargementPage /></LayoutAdmin>;
+  if (loading) return <LayoutAdmin><ChargementAdmin titre="Modération" /></LayoutAdmin>;
 
   return (
     <LayoutAdmin>
@@ -489,8 +516,9 @@ export default function AdminModeration() {
                       <TableCell><BadgeY2K variant="info" size="sm">{libelleTypeDocument(d.type_document)}</BadgeY2K></TableCell>
                       <TableCell className="text-xs text-muted-foreground">{d.televerse_le ? formatDate(d.televerse_le) : '—'}</TableCell>
                       <TableCell className="space-x-1 text-right">
+                        <BoutonY2K size="sm" variant="ghost" onClick={() => voirDocument(d)} iconeGauche={<Eye className="h-3.5 w-3.5" />}>Voir</BoutonY2K>
                         <BoutonY2K size="sm" variant="secondary" onClick={() => validerDocument(d.id)} iconeGauche={<Check className="h-3.5 w-3.5" />}>Valider</BoutonY2K>
-                        <BoutonY2K size="sm" variant="destructive" onClick={() => rejeterDocument(d.id)} iconeGauche={<X className="h-3.5 w-3.5" />}>Rejeter</BoutonY2K>
+                        <BoutonY2K size="sm" variant="destructive" onClick={() => { setDocumentARejeter(d); setMotifRejetDocument(''); }} iconeGauche={<X className="h-3.5 w-3.5" />}>Rejeter</BoutonY2K>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -510,11 +538,14 @@ export default function AdminModeration() {
                     <BadgeY2K variant="info" size="sm" className="shrink-0">{libelleTypeDocument(d.type_document)}</BadgeY2K>
                   </div>
                   <p className="text-[11px] text-muted-foreground">{d.televerse_le ? `Téléversé le ${formatDate(d.televerse_le)}` : 'Date inconnue'}</p>
+                  <BoutonY2K size="sm" variant="ghost" className="w-full" onClick={() => voirDocument(d)} iconeGauche={<Eye className="h-3.5 w-3.5" />}>
+                    Ouvrir le document
+                  </BoutonY2K>
                   <div className="grid grid-cols-2 gap-2">
                     <BoutonY2K size="sm" variant="secondary" className="min-h-[36px]" onClick={() => validerDocument(d.id)} iconeGauche={<Check className="h-3.5 w-3.5" />}>
                       Valider
                     </BoutonY2K>
-                    <BoutonY2K size="sm" variant="destructive" className="min-h-[36px]" onClick={() => rejeterDocument(d.id)} iconeGauche={<X className="h-3.5 w-3.5" />}>
+                    <BoutonY2K size="sm" variant="destructive" className="min-h-[36px]" onClick={() => { setDocumentARejeter(d); setMotifRejetDocument(''); }} iconeGauche={<X className="h-3.5 w-3.5" />}>
                       Rejeter
                     </BoutonY2K>
                   </div>
@@ -641,6 +672,23 @@ export default function AdminModeration() {
       </div>
 
       {/* Task 5 — Modal masquer notation */}
+      {documentARejeter && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={() => setDocumentARejeter(null)}>
+          <div role="dialog" aria-modal="true" aria-labelledby="titre-rejet-document" className="bg-card border border-border rounded-2xl max-w-md w-full p-6 space-y-4" onClick={(e) => e.stopPropagation()}>
+            <h2 id="titre-rejet-document" className="text-lg font-bold text-foreground">Rejeter le document</h2>
+            <p className="text-sm text-muted-foreground">Le motif sera visible par le soignant. Décrivez précisément ce qu’il doit corriger.</p>
+            <label className="block">
+              <span className="text-sm font-medium text-foreground mb-1 block">Motif du rejet *</span>
+              <Textarea value={motifRejetDocument} onChange={(e) => setMotifRejetDocument(e.target.value)} rows={4} placeholder="Ex. : le document est illisible sur la page 2…" />
+            </label>
+            <div className="flex gap-2 justify-end">
+              <BoutonY2K variant="secondary" onClick={() => setDocumentARejeter(null)}>Annuler</BoutonY2K>
+              <BoutonY2K variant="destructive" disabled={motifRejetDocument.trim().length < 10} onClick={() => rejeterDocument(documentARejeter.id, motifRejetDocument)}>Confirmer le rejet</BoutonY2K>
+            </div>
+          </div>
+        </div>
+      )}
+
       {masquerNotationId && (
         <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={() => setMasquerNotationId(null)}>
           <div className="bg-card border border-border rounded-2xl max-w-md w-full p-6 space-y-4 max-h-[90dvh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>

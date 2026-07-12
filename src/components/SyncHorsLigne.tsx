@@ -18,23 +18,27 @@ export function SyncHorsLigne() {
     for (const p of pointages) {
       try {
         if (p.type === 'arrivee') {
-          const { error } = await supabase.rpc('fn_pointer_arrivee' as any, {
+          const { data, error } = await supabase.rpc('fn_pointer_arrivee' as any, {
             p_mission_id: p.missionId,
             p_lat: p.lat,
             p_lng: p.lng,
-            p_precision_m: p.precision,
-            p_id_terminal: p.idTerminal,
+            p_precision: p.precision,
+            p_terminal_id: p.idTerminal,
+            p_modele: navigator.userAgent.slice(0, 100),
+            p_code_arrivee: null,
           });
-          if (error) throw error;
+          if (error || (data as any)?.error || (data as any)?.success === false) throw error || new Error((data as any)?.error || 'Pointage refusé');
         } else {
-          const { error } = await supabase.rpc('fn_pointer_depart' as any, {
+          const { data, error } = await supabase.rpc('fn_pointer_depart' as any, {
             p_presence_id: p.presenceId || null,
             p_lat: p.lat,
             p_lng: p.lng,
-            p_precision_m: p.precision,
-            p_id_terminal: p.idTerminal,
+            p_precision: p.precision,
+            p_terminal_id: p.idTerminal,
+            p_modele: navigator.userAgent.slice(0, 100),
+            p_code_depart: null,
           });
-          if (error) throw error;
+          if (error || (data as any)?.error || (data as any)?.success === false) throw error || new Error((data as any)?.error || 'Pointage refusé');
         }
         synced++;
       } catch {

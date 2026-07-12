@@ -10,12 +10,15 @@ import { CardY2K, CardY2KContent } from '@/components/y2k/CardY2K';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { Mail, Send, CheckCircle } from 'lucide-react';
+import { CaptchaTurnstile, TURNSTILE_REQUIRED } from '@/components/CaptchaTurnstile';
 
 export default function PageContact() {
   usePageTitle('Contact');
   const [form, setForm] = useState({ nom: '', email: '', sujet: '', message: '', hp: '' });
   const [envoi, setEnvoi] = useState(false);
   const [envoye, setEnvoye] = useState(false);
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+  const [captchaKey, setCaptchaKey] = useState(0);
 
   const maj = (champ: string, valeur: string) => setForm((f) => ({ ...f, [champ]: valeur }));
 
@@ -26,8 +29,15 @@ export default function PageContact() {
       return;
     }
     setEnvoi(true);
-    const { data, error } = await supabase.functions.invoke('contact-form', { body: form });
+    if (TURNSTILE_REQUIRED && !turnstileToken) {
+      toast.error('Merci de confirmer que vous n’êtes pas un robot.');
+      setEnvoi(false);
+      return;
+    }
+    const { data, error } = await supabase.functions.invoke('contact-form', { body: { ...form, turnstileToken } });
     setEnvoi(false);
+    setTurnstileToken(null);
+    setCaptchaKey((k) => k + 1);
     if (error || (data as any)?.error) {
       toast.error((data as any)?.error || 'Envoi impossible, réessayez plus tard.');
       return;
@@ -85,7 +95,14 @@ export default function PageContact() {
                       <Label htmlFor="contact-message">Message *</Label>
                       <Textarea id="contact-message" rows={6} value={form.message} onChange={(e) => maj('message', e.target.value)} placeholder="Comment pouvons-nous vous aider ?" required />
                     </div>
-                    <BoutonY2K type="submit" disabled={envoi} loading={envoi} iconeGauche={envoi ? undefined : <Send className="h-4 w-4" />} className="w-full">
+                    <CaptchaTurnstile
+                      key={captchaKey}
+                      className="flex justify-center"
+                      onVerify={setTurnstileToken}
+                      onExpire={() => setTurnstileToken(null)}
+                      onError={() => setTurnstileToken(null)}
+                    />
+                    <BoutonY2K type="submit" disabled={envoi || (TURNSTILE_REQUIRED && !turnstileToken)} loading={envoi} iconeGauche={envoi ? undefined : <Send className="h-4 w-4" />} className="w-full">
                       {envoi ? 'Envoi…' : 'Envoyer le message'}
                     </BoutonY2K>
                   </form>

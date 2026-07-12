@@ -7,6 +7,8 @@ import { getAttribution } from '@/lib/attribution';
 import { gererErreurSupabase } from '@/lib/supabaseErrorHandler';
 import { viderCacheHorsLigne } from '@/lib/cacheHorsLigne';
 import { estRefusInscriptionAttendu, extraireErreurEdgeFn } from '@/lib/erreurs';
+import { useQueryClient } from '@tanstack/react-query';
+import { ouvrirUrlPsc } from '@/lib/pscNavigation';
 
 interface AppUser {
   id: string;
@@ -37,6 +39,7 @@ function toAppUser(user: User): AppUser {
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  const queryClient = useQueryClient();
   const [user, setUser] = useState<AppUser | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
@@ -50,6 +53,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Detect session expiry / sign out triggered by token refresh failure
       if (event === 'SIGNED_OUT' || (event === 'TOKEN_REFRESHED' && !session)) {
         Sentry.setUser(null);
+        queryClient.clear();
       }
     });
 
@@ -60,7 +64,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
 
     return () => subscription.unsubscribe();
-  }, []);
+  }, [queryClient]);
+
+  // Initialise aussi le push pour une session restaurée, PSC ou biométrique —
+  // pas seulement après le formulaire de connexion. Le module est idempotent.
+  useEffect(() => {
+    if (loading) return;
+    if (user) {
+      void import('@/lib/pushNative').then(({ initNativePush }) => initNativePush(user.id));
+    } else {
+      void import('@/lib/pushNative').then(({ resetNativePushListeners }) => resetNativePushListeners());
+    }
+  }, [loading, user?.id]);
 
   const connexion = useCallback(async (email: string, motDePasse: string, captchaToken?: string) => {
     const { data, error } = await supabase.auth.signInWithPassword({
@@ -87,7 +102,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (auditError) logger.error('Audit connexion échoué', auditError);
 
     // Sentry user identification
-    Sentry.setUser({ id: u.id, email: u.email || undefined });
+    Sentry.setUser({ id: u.id });
 
     if (verifiedRole === 'SOIGNANT') {
       supabase.rpc('fn_maj_activite_soignant' as any).then(() => {});
@@ -132,29 +147,44 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // que PSC ait redirigé le navigateur. Cela évite une race entre un signOut local
       // (qui invalide tout) et le redirect PSC qui pourrait être abandonné.
       viderCacheHorsLigne();
-      // Cleanup tokens push avant le signOut PSC (best-effort, ne bloque pas)
+      queryClient.clear();
+      // Retirer uniquement cette installation. Les autres appareils du compte
+      // continuent a recevoir leurs notifications.
       try {
-        await supabase.rpc('fn_supprimer_mes_tokens_push' as any);
+        const { desactiverPushAppareilCourant } = await import('@/lib/pushDeviceToken');
+        await desactiverPushAppareilCourant();
       } catch (e) {
-        logger.warn('[AuthContext] cleanup tokens push avant PSC logout failed', e);
+        logger.warn('[AuthContext] cleanup token push appareil avant PSC logout failed', e);
+      } finally {
+        try {
+          const { resetNativePushListeners } = await import('@/lib/pushNative');
+          await resetNativePushListeners();
+        } catch { /* ne jamais bloquer le logout pour un cleanup local */ }
       }
       Sentry.setUser(null);
-      window.location.href = pscEndSessionUrl;
-      return;
+      if (await ouvrirUrlPsc(pscEndSessionUrl)) return;
+      logger.warn('[AuthContext] URL de déconnexion PSC refusée ou navigateur indisponible');
     }
 
-    // Cleanup tokens push avant le signOut (évite les orphelins / fuites
-    // entre comptes sur appareil partagé)
+    // Retire seulement le token de l'appareil courant. Un logout sur mobile ne
+    // doit jamais couper les notifications des autres appareils du compte.
     try {
-      await supabase.rpc('fn_supprimer_mes_tokens_push' as any);
+      const { desactiverPushAppareilCourant } = await import('@/lib/pushDeviceToken');
+      await desactiverPushAppareilCourant();
     } catch (e) {
-      logger.warn('[AuthContext] cleanup tokens push avant signOut failed', e);
+      logger.warn('[AuthContext] cleanup token push appareil avant signOut failed', e);
+    } finally {
+      try {
+        const { resetNativePushListeners } = await import('@/lib/pushNative');
+        await resetNativePushListeners();
+      } catch { /* ne jamais bloquer le logout pour un cleanup local */ }
     }
 
     await supabase.auth.signOut();
     viderCacheHorsLigne();
+    queryClient.clear();
     Sentry.setUser(null);
-  }, [user]);
+  }, [user, queryClient]);
 
   const inscriptionSoignant = useCallback(async (data: any) => {
     logger.debug('[INSCRIPTION] 1. Début inscription soignant, données:', { email: data.email, prenom: data.prenom, nom: data.nom, profession: data.profession });
@@ -288,7 +318,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const inscriptionEtablissement = useCallback(async (data: any) => {
-    const { data: authData, error: authError } = await supabase.auth.signUp({
+    let authData: { user: User | null; session: Session | null };
+    const { data: signUpData, error: authError } = await supabase.auth.signUp({
       email: data.email,
       password: data.motDePasse,
       options: {
@@ -297,14 +328,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       },
     });
     if (authError) {
-      logger.error('Inscription établissement auth échouée', authError);
-      // Ne PAS masquer la cause réelle : on propage le message + code Supabase
-      // pour que la page affiche un message précis (e-mail déjà utilisé, mot de
-      // passe trop faible, captcha, rate-limit) via mapperErreurInscription.
-      const erreur = new Error(authError.message || 'Erreur lors de la création du compte.');
-      (erreur as any).code = (authError as any).code;
-      (erreur as any).status = (authError as any).status;
-      throw erreur;
+      const dejaInscrit = /already.*registered|user.*registered/i.test(authError.message || '');
+      if (dejaInscrit) {
+        // Reprise d'une inscription interrompue après création Auth mais avant
+        // le profil métier. Le backend décidera ensuite, via sa réservation
+        // atomique, si ce compte peut réellement devenir établissement.
+        const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+          email: data.email,
+          password: data.motDePasse,
+        });
+        if (signInError) {
+          const erreur = new Error('Ce compte existe déjà. Vérifiez votre mot de passe ou connectez-vous.');
+          (erreur as any).code = 'USER_ALREADY_REGISTERED';
+          throw erreur;
+        }
+        authData = signInData;
+      } else {
+        logger.error('Inscription établissement auth échouée', authError);
+        // Ne PAS masquer la cause réelle : on propage le message + code Supabase
+        // pour que la page affiche un message précis (e-mail déjà utilisé, mot de
+        // passe trop faible, captcha, rate-limit) via mapperErreurInscription.
+        const erreur = new Error(authError.message || 'Erreur lors de la création du compte.');
+        (erreur as any).code = (authError as any).code;
+        (erreur as any).status = (authError as any).status;
+        throw erreur;
+      }
+    } else {
+      authData = signUpData;
+    }
+
+    if (!authData.user || !authData.session) {
+      throw new Error('Session introuvable après inscription. Veuillez réessayer.');
     }
 
     const { data: result, error: fnError } = await supabase.functions.invoke('register-etablissement', {

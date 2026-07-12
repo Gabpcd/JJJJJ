@@ -46,7 +46,7 @@ export default function DevenirSoignant() {
     <>
       <SEOHead
         title="Devenir soignant remplaçant | Jolene Santé"
-        description="Missions de remplacement santé pour infirmiers, aides-soignants, pharmaciens et 15+ professions. Inscription gratuite, rémunération transparente, parcours libéral suivi."
+        description="Missions de remplacement santé pour infirmiers, aides-soignants et professionnels de santé. Inscription gratuite, rémunération transparente et contrat indiqué avant candidature."
         url="https://jolene.app/devenir-soignant"
         jsonLd={faqJsonLd}
       />

@@ -398,6 +398,7 @@ export function PanneauxHealthcheck() {
         </div>
         <div className="flex flex-col sm:flex-row gap-2">
           <input
+            aria-label="Numéro de téléphone pour le SMS de test"
             type="tel"
             inputMode="tel"
             value={smsPhone}
