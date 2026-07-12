@@ -62,6 +62,16 @@ Viewports : écrans **établissement** = **390×844 ET 1440×900** (règle criti
 - Carte **« SMS Twilio »** avec champ téléphone préchargé + bouton « Tester SMS ».
 - Ouvrir `/admin/healthcheck` → redirige vers `/admin/status` et **tous ces outils sont présents** (plus de perte fonctionnelle).
 
+## 7. Suspension d'un compte — motif obligatoire (Lot 21-2)
+
+**Écrans** : `/admin/utilisateurs` (cartes/table) + `/admin/utilisateurs/:id` (détail).
+**Preuve machine** : `e2e/flows/admin-suspension-motif.spec.ts` (refus sans motif ; succès + motif dans `journaux_audit` ; réactivation cleanup) + assertions tx-live prod (migration `20260712140000`).
+**À vérifier (desktop 1440)** — connecté admin :
+- Bouton **« Suspendre »** rétrogradé en **secondaire** (plus en rouge/destructif proéminent) ; « Détails » reste accessible.
+- Cliquer « Suspendre » → **modale avec champ Motif obligatoire** ; le bouton « Suspendre le compte » est **désactivé tant que le motif est vide**.
+- Idem sur la page détail (`ModalActionAvecRaison`) ; la réactivation reste une simple confirmation (sans motif).
+- Après suspension : toast « Utilisateur suspendu », le badge passe à suspendu, « Réactiver » apparaît.
+
 ---
 
 _Mettre à jour ce fichier à chaque PR UI (écran + preuve + états à vérifier ≤ 3 lignes)._

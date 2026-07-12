@@ -103,17 +103,29 @@ export default function AdminUtilisateurs() {
 
   const [rejectModalId, setRejectModalId] = useState<string | null>(null);
   const [rejectMotif, setRejectMotif] = useState('');
+  // Lot 21 : suspension derrière confirmation + motif OBLIGATOIRE (journalisé côté RPC).
+  const [suspendModal, setSuspendModal] = useState<{ table: string; id: string; nom: string } | null>(null);
+  const [suspendMotif, setSuspendMotif] = useState('');
 
-  const suspendre = async (table: string, id: string) => {
+  const suspendre = (table: string, id: string, nom: string) => {
+    setSuspendModal({ table, id, nom });
+    setSuspendMotif('');
+  };
+
+  const confirmerSuspension = async () => {
+    if (!suspendModal || !suspendMotif.trim()) return;
     try {
       const { data, error } = await supabase.rpc('fn_admin_suspendre_utilisateur' as any, {
-        p_table: table,
-        p_id: id,
+        p_table: suspendModal.table,
+        p_id: suspendModal.id,
         p_suspendre: true,
+        p_motif: suspendMotif.trim(),
       });
       if (error) throw error;
       if ((data as any)?.error) { toast.error((data as any).error); return; }
       toast.success('Utilisateur suspendu');
+      setSuspendModal(null);
+      setSuspendMotif('');
       charger();
     } catch (err) {
       capturerErreurSentry(err, 'AdminUtilisateurs', 'suspendre');
@@ -353,7 +365,7 @@ export default function AdminUtilisateurs() {
                             Réactiver
                           </BoutonY2K>
                         ) : (
-                          <BoutonY2K size="sm" variant="destructive" onClick={() => suspendre('soignants', s.id)} className="h-8" iconeGauche={<Ban className="h-3.5 w-3.5" />}>
+                          <BoutonY2K size="sm" variant="secondary" onClick={() => suspendre('soignants', s.id, `${s.prenom} ${s.nom}`)} className="h-8" iconeGauche={<Ban className="h-3.5 w-3.5" />}>
                             Suspendre
                           </BoutonY2K>
                         )}
@@ -400,7 +412,7 @@ export default function AdminUtilisateurs() {
                         Réactiver
                       </BoutonY2K>
                     ) : (
-                      <BoutonY2K size="sm" variant="destructive" onClick={() => suspendre('soignants', s.id)} className="min-h-[44px]" iconeGauche={<Ban className="h-3.5 w-3.5" />}>
+                      <BoutonY2K size="sm" variant="secondary" onClick={() => suspendre('soignants', s.id, `${s.prenom} ${s.nom}`)} className="min-h-[44px]" iconeGauche={<Ban className="h-3.5 w-3.5" />}>
                         Suspendre
                       </BoutonY2K>
                     )}
@@ -467,7 +479,7 @@ export default function AdminUtilisateurs() {
                             Réactiver
                           </BoutonY2K>
                         ) : (
-                          <BoutonY2K size="sm" variant="destructive" onClick={() => suspendre('etablissements', e.id)} className="h-8" iconeGauche={<Ban className="h-3.5 w-3.5" />}>
+                          <BoutonY2K size="sm" variant="secondary" onClick={() => suspendre('etablissements', e.id, e.nom)} className="h-8" iconeGauche={<Ban className="h-3.5 w-3.5" />}>
                             Suspendre
                           </BoutonY2K>
                         )}
@@ -519,7 +531,7 @@ export default function AdminUtilisateurs() {
                         Réactiver
                       </BoutonY2K>
                     ) : (
-                      <BoutonY2K size="sm" variant="destructive" onClick={() => suspendre('etablissements', e.id)} className="min-h-[44px]" iconeGauche={<Ban className="h-3.5 w-3.5" />}>
+                      <BoutonY2K size="sm" variant="secondary" onClick={() => suspendre('etablissements', e.id, e.nom)} className="min-h-[44px]" iconeGauche={<Ban className="h-3.5 w-3.5" />}>
                         Suspendre
                       </BoutonY2K>
                     )}
@@ -553,6 +565,33 @@ export default function AdminUtilisateurs() {
         <DialogFooter>
           <BoutonY2K variant="secondary" onClick={() => setRejectModalId(null)}>Annuler</BoutonY2K>
           <BoutonY2K variant="destructive" onClick={rejeterEtablissement}>Confirmer le rejet</BoutonY2K>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+
+    {/* Modale suspension — motif OBLIGATOIRE (journalisé dans journaux_audit côté RPC) */}
+    <Dialog open={!!suspendModal} onOpenChange={() => setSuspendModal(null)}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Suspendre le compte{suspendModal?.nom ? ` — ${suspendModal.nom}` : ''}</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            Le compte sera suspendu (accès bloqué, réversible). Indiquez le <strong>motif</strong> — il est obligatoire et journalisé dans l'audit.
+          </p>
+          <Textarea
+            value={suspendMotif}
+            onChange={e => setSuspendMotif(e.target.value)}
+            placeholder="Motif de la suspension (obligatoire)…"
+            maxLength={500}
+            autoFocus
+          />
+        </div>
+        <DialogFooter>
+          <BoutonY2K variant="secondary" onClick={() => setSuspendModal(null)}>Annuler</BoutonY2K>
+          <BoutonY2K variant="destructive" onClick={confirmerSuspension} disabled={!suspendMotif.trim()}>
+            Suspendre le compte
+          </BoutonY2K>
         </DialogFooter>
       </DialogContent>
     </Dialog>
