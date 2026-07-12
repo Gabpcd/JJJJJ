@@ -17,6 +17,32 @@
    **ET** contenu déjà recetté (branche Supabase + `tsc -b` + guards) — et dans
    ce cas le signaler explicitement dans le message de merge et le rapport.
 
+## HARD STOP n°4 — Légal utilisateur (règle non-négociable, 12/07/2026)
+
+Toute **règle juridique exposée à l'utilisateur** est un **HARD STOP** : elle se
+**conçoit**, se **poste dans la PR avec ses sources**, et **attend la validation
+explicite de Gabrielle avant merge**. Sont concernés :
+- tout **blocage ou restriction d'un mode d'exercice** (libéral / salarié) ;
+- tout **avertissement citant une loi ou une jurisprudence** ;
+- tout **wording à portée contractuelle** hors CGU.
+
+« CI verte + revue fraîche » **ne remplace JAMAIS** cette validation : la revue
+fraîche vérifie le **code**, pas le **droit**. (Le tiering B9 amendé s'applique à
+tout le reste ; le juridique-utilisateur en est la seule exception qui exige
+toujours le feu vert humain.)
+
+**Rôle de Claude Code sur le juridique** : Claude Code **instruit et PROPOSE** les
+décisions juridiques (recherche sourcée, options, recommandation) ; **la décision
+est validée par Gabrielle** avant toute implémentation exposée à l'utilisateur.
+(Remplace tout principe antérieur où « Claude vérifie la législation et prend les
+décisions juridico-produit ».)
+
+**Sources** : toujours la **source primaire** (texte de l'arrêt / du décret / de
+l'article), jamais une source secondaire pour fonder une restriction. Distinguer
+la **force** de la source : **JUGÉ** (jurisprudence) vs **doctrine ministérielle**
+vs **choix de conformité Jolene**. La matrice profession × établissement → mode
+d'exercice est une **table paramétrée** (zéro règle juridique en dur dans le code).
+
 ### Règle « livré ≠ mergé » — recette obligatoire (post-incident merges invisibles)
 
 **« Mergé » ne veut pas dire « recetté ».** Une PR UI n'est déclarée *livrée* que
