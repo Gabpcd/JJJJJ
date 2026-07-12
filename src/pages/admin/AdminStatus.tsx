@@ -16,6 +16,7 @@ import {
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { toast } from 'sonner';
+import { PanneauxHealthcheck } from '@/components/admin/PanneauxHealthcheck';
 
 type CronInfo = {
   jobid: number;
@@ -313,10 +314,15 @@ export default function AdminStatus() {
             </BoutonY2K>
           </div>
           <p className="text-[11px] text-muted-foreground italic">
-            ℹ️ Si la VITE_SENTRY_DSN n'est pas configurée côté Vercel, ce bouton est inactif silencieusement.
+            Si la VITE_SENTRY_DSN n'est pas configurée côté Vercel, ce bouton est inactif silencieusement.
           </p>
         </CardY2KContent>
       </CardY2K>
+
+      {/* ── Vérification des services (ex-page /admin/healthcheck, fusionnée Lot 20/21) ── */}
+      <div className="mt-6 pt-6 border-t border-border">
+        <PanneauxHealthcheck />
+      </div>
     </LayoutAdmin>
   );
 }

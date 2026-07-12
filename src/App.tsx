@@ -170,7 +170,6 @@ const AdminConfig = lazy(() => import("./pages/admin/AdminConfig"));
 const AdminAuditLogs = lazy(() => import("./pages/admin/AdminAuditLogs"));
 const AdminMessagesContact = lazy(() => import("./pages/admin/AdminMessagesContact"));
 const AdminDPIA = lazy(() => import("./pages/admin/AdminDPIA"));
-const AdminHealthcheck = lazy(() => import("./pages/admin/AdminHealthcheck"));
 const AdminCohortEconomics = lazy(() => import("./pages/admin/AdminCohortEconomics"));
 const AdminAuditRLS = lazy(() => import("./pages/admin/AdminAuditRLS"));
 const AdminRGPDTools = lazy(() => import("./pages/admin/AdminRGPDTools"));
