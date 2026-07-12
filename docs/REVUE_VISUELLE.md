@@ -52,6 +52,16 @@ Viewports : écrans **établissement** = **390×844 ET 1440×900** (règle criti
 - ⌘K : taper 2+ caractères → résultats mêlés soignants / établissements / missions / factures.
 - Chaque ancienne destination a exactement une entrée (Cockpit fondateur dans **Croissance**, Vérif. établissements unique dans **Opérations**).
 
+## 6. Statut système — fusion des diagnostics Healthcheck (Lot 21-1)
+
+**Écran** : `/admin/status` (« État du système »). L'ancienne page `/admin/healthcheck` est supprimée (redirige ici depuis Lot 20).
+**Preuve machine** : `tsc -b` vert + suppression de la page + composant `PanneauxHealthcheck` monté dans `AdminStatus`.
+**À vérifier (desktop 1440)** — connecté admin, en bas de « État du système » :
+- Section **« Vérification des services (warm pings) »** : grille de ~11 services (PostgreSQL, Auth, Edge, Stripe, Twilio, Document AI, Resend, **Pro Santé Connect**, **Chorus Pro/PISTE**, **Annuaire RPPS**) + bouton « Revérifier ».
+- Carte **« Pro Santé Connect »** avec bouton « Vérifier connexion PSC » (secrets / discovery OIDC / endpoints).
+- Carte **« SMS Twilio »** avec champ téléphone préchargé + bouton « Tester SMS ».
+- Ouvrir `/admin/healthcheck` → redirige vers `/admin/status` et **tous ces outils sont présents** (plus de perte fonctionnelle).
+
 ---
 
 _Mettre à jour ce fichier à chaque PR UI (écran + preuve + états à vérifier ≤ 3 lignes)._

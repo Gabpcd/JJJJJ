@@ -1,6 +1,4 @@
 import { useState, useEffect } from 'react';
-import { usePageTitle } from '@/hooks/usePageTitle';
-import { LayoutAdmin } from '@/components/LayoutAdmin';
 import { supabase, SUPABASE_URL } from '@/integrations/supabase/client';
 import { CheckCircle, XCircle, Clock, RefreshCw, Server, Database, Mail, CreditCard, Shield, Smartphone, Globe, KeyRound, MessageSquare, Send, ShieldCheck, Landmark } from 'lucide-react';
 import { toast } from 'sonner';
@@ -17,8 +15,13 @@ interface ServiceStatus {
   detail?: string;
 }
 
-export default function AdminHealthcheck() {
-  usePageTitle('Vérifier la santé des services');
+/**
+ * Vérification de la santé des services (warm pings) + tests isolés PSC / SMS.
+ *
+ * Lot 21 — extrait de l'ancienne page `/admin/healthcheck` (fusionnée dans
+ * « Statut système », cf. redirect Lot 20). Rendu comme section dans AdminStatus.
+ */
+export function PanneauxHealthcheck() {
   const { user } = useAuth();
   const [services, setServices] = useState<ServiceStatus[]>([]);
   const [checking, setChecking] = useState(false);
@@ -188,7 +191,6 @@ export default function AdminHealthcheck() {
   useEffect(() => {
     if (!user) return;
     (async () => {
-      // Si l'admin est aussi inscrit comme soignant, on récupère son téléphone
       const { data } = await supabase.from('soignants').select('telephone').eq('id', user.id).maybeSingle();
       if (data && (data as any).telephone) setSmsPhone((data as any).telephone);
     })();
@@ -206,8 +208,7 @@ export default function AdminHealthcheck() {
         body: {
           telephone: smsPhone.trim(),
           type: 'TEST_ADMIN',
-          contenu: `Test SMS Jolene depuis /admin/healthcheck à ${new Date().toLocaleTimeString('fr-FR')}.`,
-          // Pas de destinataire_id → pas de check sms_alertes_actives, c'est un test admin pur
+          contenu: `Test SMS Jolene depuis Statut système à ${new Date().toLocaleTimeString('fr-FR')}.`,
         },
       });
       if (error) {
@@ -273,24 +274,23 @@ export default function AdminHealthcheck() {
   const totalCount = services.length;
 
   return (
-    <LayoutAdmin>
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6 gap-3">
+    <div className="space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h1 className="text-xl font-bold text-foreground flex items-center gap-2"><Server className="h-5 w-5 text-primary" /> Vérifier la santé des services</h1>
-          <p className="text-sm text-muted-foreground">
-            {totalCount > 0 ? `${okCount}/${totalCount} services opérationnels` : 'Vérification en cours...'}
+          <h2 className="text-base font-bold text-foreground flex items-center gap-2"><Server className="h-4 w-4 text-primary" /> Vérification des services (warm pings)</h2>
+          <p className="text-xs text-muted-foreground">
+            {totalCount > 0 ? `${okCount}/${totalCount} services opérationnels` : 'Vérification en cours…'}
             {lastCheck && ` — dernière vérification ${lastCheck.toLocaleTimeString('fr-FR')}`}
           </p>
         </div>
-        <BoutonY2K variant="primary" size="sm" onClick={checkAll} disabled={checking} loading={checking} iconeGauche={!checking ? <RefreshCw className="h-4 w-4" /> : undefined}>
-          {checking ? 'Vérification...' : 'Revérifier'}
+        <BoutonY2K variant="secondary" size="sm" onClick={checkAll} disabled={checking} loading={checking} iconeGauche={!checking ? <RefreshCw className="h-4 w-4" /> : undefined}>
+          {checking ? 'Vérification…' : 'Revérifier'}
         </BoutonY2K>
       </div>
 
-      {/* Overall status */}
       {totalCount > 0 && (
-        <CardY2K hoverLift={false} className={`mb-6 p-4 border-l-4 ${okCount === totalCount ? 'border-success bg-success/5' : okCount > totalCount / 2 ? 'border-warning bg-warning/5' : 'border-destructive bg-destructive/5'}`}>
-          <p className="text-lg font-bold text-foreground">
+        <CardY2K hoverLift={false} className={`p-4 border-l-4 ${okCount === totalCount ? 'border-success bg-success/5' : okCount > totalCount / 2 ? 'border-warning bg-warning/5' : 'border-destructive bg-destructive/5'}`}>
+          <p className="text-sm font-bold text-foreground">
             {okCount === totalCount ? 'Tous les services sont opérationnels' : `${totalCount - okCount} service(s) en alerte`}
           </p>
         </CardY2K>
@@ -308,7 +308,7 @@ export default function AdminHealthcheck() {
               <div className="flex items-center gap-2">
                 <StatusIcon className={`h-4 w-4 ${statusColor(svc.status)}`} />
                 <span className={`text-xs font-medium ${statusColor(svc.status)}`}>
-                  {svc.status === 'ok' ? 'Opérationnel' : svc.status === 'degraded' ? 'Dégradé' : svc.status === 'error' ? 'Erreur' : 'Vérification...'}
+                  {svc.status === 'ok' ? 'Opérationnel' : svc.status === 'degraded' ? 'Dégradé' : svc.status === 'error' ? 'Erreur' : 'Vérification…'}
                 </span>
                 {svc.latency != null && <span className="text-[10px] text-muted-foreground ml-auto">{svc.latency}ms</span>}
               </div>
@@ -319,13 +319,13 @@ export default function AdminHealthcheck() {
       </div>
 
       {/* ── Pro Santé Connect : diagnostic isolé (bascule prod) ── */}
-      <CardY2K hoverLift={false} className="mt-6 p-5">
+      <CardY2K hoverLift={false} className="p-5">
         <div className="flex items-start justify-between gap-4 mb-4">
           <div>
-            <h2 className="text-base font-bold text-foreground flex items-center gap-2">
+            <h3 className="text-base font-bold text-foreground flex items-center gap-2">
               <KeyRound className="h-4 w-4 text-primary" />
               Pro Santé Connect
-            </h2>
+            </h3>
             <p className="text-xs text-muted-foreground mt-0.5">
               Vérifie la configuration PSC : secrets présents, OIDC discovery joignable, endpoints alignés. Outil critique le jour de la bascule prod.
             </p>
@@ -384,13 +384,13 @@ export default function AdminHealthcheck() {
       </CardY2K>
 
       {/* ── SMS Twilio : test rapide ── */}
-      <CardY2K hoverLift={false} className="mt-6 p-5">
+      <CardY2K hoverLift={false} className="p-5">
         <div className="flex items-start justify-between gap-4 mb-4">
           <div>
-            <h2 className="text-base font-bold text-foreground flex items-center gap-2">
+            <h3 className="text-base font-bold text-foreground flex items-center gap-2">
               <MessageSquare className="h-4 w-4 text-primary" />
               SMS Twilio
-            </h2>
+            </h3>
             <p className="text-xs text-muted-foreground mt-0.5">
               Envoi d'un SMS de test au numéro indiqué (préchargé depuis votre profil si admin = soignant). Chaque envoi est facturé au tarif SMS Twilio en vigueur.
             </p>
@@ -422,12 +422,6 @@ export default function AdminHealthcheck() {
           </div>
         )}
       </CardY2K>
-
-      {!import.meta.env.VITE_SENTRY_DSN && (
-        <p className="text-[11px] text-muted-foreground/60 italic mt-6 text-center">
-          ℹ️ Sentry sera activé prochainement (configuration VITE_SENTRY_DSN côté Vercel à venir).
-        </p>
-      )}
-    </LayoutAdmin>
+    </div>
   );
 }
