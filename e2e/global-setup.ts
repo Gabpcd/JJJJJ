@@ -87,12 +87,12 @@ export default async function globalSetup() {
   //    ancien déclenche légitimement le gel J+15 et fait ensuite échouer toutes
   //    les créations de missions du run suivant. On annule donc uniquement les
   //    factures impayées de ce compte technique, sans toucher aux données démo.
-  const { data: etablissementTest, error: etablissementError } = await admin
-    .from('etablissements')
-    .select('id')
-    .eq('email', 'playwright-etab@jolene.app')
-    .maybeSingle();
-  if (etablissementError || !etablissementTest?.id) {
+  const { data: etablissementTestIdBrut, error: etablissementError } = await admin.rpc(
+    'fn_admin_get_user_id_by_email',
+    { p_email: 'playwright-etab@jolene.app' },
+  );
+  const etablissementTestId = etablissementTestIdBrut as string | null;
+  if (etablissementError || !etablissementTestId) {
     throw new Error(
       `[global-setup] compte établissement Playwright introuvable : ${etablissementError?.message || 'aucune ligne'}`,
     );
@@ -101,7 +101,7 @@ export default async function globalSetup() {
   const { data: facturesAnnulees, error: facturesError } = await admin
     .from('factures')
     .update({ statut: 'ANNULEE' })
-    .eq('etablissement_id', etablissementTest.id)
+    .eq('etablissement_id', etablissementTestId)
     .eq('statut', 'EMISE')
     .select('id');
   if (facturesError) {
