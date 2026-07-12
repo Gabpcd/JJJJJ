@@ -176,6 +176,8 @@ if (Capacitor.isNativePlatform()) {
   // Capacitor status bar: style adapté
   import('@capacitor/status-bar').then(({ StatusBar, Style }) => {
     const isDark = document.documentElement.classList.contains('dark');
+    // Chez Capacitor, Dark = texte clair sur fond sombre et Light = texte
+    // sombre sur fond clair.
     StatusBar.setStyle({ style: isDark ? Style.Dark : Style.Light }).catch(() => {});
     StatusBar.setBackgroundColor({ color: isDark ? '#1a1a2e' : '#ffffff' }).catch(() => {});
   }).catch(() => {});
@@ -357,7 +359,7 @@ async function initNativePlugins() {
   try {
     const { StatusBar, Style } = await import("@capacitor/status-bar");
     const isDark = document.documentElement.classList.contains('dark');
-    await StatusBar.setStyle({ style: isDark ? Style.Light : Style.Dark });
+    await StatusBar.setStyle({ style: isDark ? Style.Dark : Style.Light });
     if (Capacitor.getPlatform() === 'android') {
       await StatusBar.setBackgroundColor({ color: isDark ? '#6B3FA0' : '#FFFFFF' });
     }
@@ -396,7 +398,11 @@ async function initNativePlugins() {
 
         const roleResult = await dansDelai(supabase.rpc('fn_get_my_role'), 850);
         const roleData = roleResult?.data;
-        const role = typeof roleData === 'string' ? roleData : (roleData as any)?.role;
+        const role = typeof roleData === 'string'
+          ? roleData
+          : typeof roleData === 'object' && roleData !== null && 'role' in roleData && typeof roleData.role === 'string'
+            ? roleData.role
+            : undefined;
         let target = '/connexion';
         if (role === 'ADMIN_PLATEFORME' || role === 'ADMIN') target = '/admin';
         else if (role === 'ADMIN_ETABLISSEMENT' || role === 'ETABLISSEMENT') target = '/etablissement/tableau-de-bord';

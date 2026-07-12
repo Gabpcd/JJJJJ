@@ -19,7 +19,8 @@ const config: CapacitorConfig = {
       showSpinner: false,
     },
     StatusBar: {
-      style: 'DARK',
+      // Capacitor nomme le style d'après le fond : LIGHT = texte sombre.
+      style: 'LIGHT',
       backgroundColor: '#FFFFFF',
     },
     Keyboard: {

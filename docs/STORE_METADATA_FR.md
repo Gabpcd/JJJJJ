@@ -1,6 +1,6 @@
 # Métadonnées stores — fr-FR
 
-Version préparée le 12/07/2026 pour `Jolene 1.0 (2)` iOS et `1.0 (2)` Android.
+Version préparée le 12/07/2026 pour `Jolene 1.0 (3)` iOS et `1.0 (2)` Android.
 Ce document contient uniquement des éléments publiables. Les mots de passe des
 comptes de review doivent être saisis directement dans les consoles et ne
 doivent jamais être ajoutés au dépôt, à une PR ou à une capture.

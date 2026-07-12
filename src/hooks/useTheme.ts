@@ -24,12 +24,15 @@ export function useTheme() {
       meta.setAttribute('content', isDark ? '#6B3FA0' : '#E04590');
     }
 
-    // Update Android status bar color if native
-    import('@/lib/platform').then(({ isAndroid }) => {
-      if (!isAndroid()) return;
+    // Met à jour le contraste sur iOS et Android ; la couleur de fond n'est
+    // configurable par le plugin que sur Android.
+    import('@/lib/platform').then(({ isNative, isAndroid }) => {
+      if (!isNative()) return;
       import('@capacitor/status-bar').then(({ StatusBar, Style }) => {
-        StatusBar.setStyle({ style: isDark ? Style.Light : Style.Dark });
-        StatusBar.setBackgroundColor({ color: isDark ? '#151B2B' : '#FFFFFF' });
+        StatusBar.setStyle({ style: isDark ? Style.Dark : Style.Light });
+        if (isAndroid()) {
+          StatusBar.setBackgroundColor({ color: isDark ? '#151B2B' : '#FFFFFF' });
+        }
       }).catch((err) => { logger.warn('[useTheme] StatusBar update failed', err); });
     });
   }, [theme]);
