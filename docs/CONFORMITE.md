@@ -139,6 +139,101 @@ collectée** — d'où l'exécution de ce chantier **avant la soumission** aux s
 - **Inchangé** : les factures vers le secteur public continuent de passer par
   **Chorus Pro** (déjà intégré). La réforme B2B ne modifie pas ce canal.
 
+## 5. Matrice des modes d'exercice (profession × établissement) — ⏳ EN ATTENTE DE VALIDATION GABRIELLE (HARD STOP n°4)
+
+> **Cette section est une PROPOSITION sourcée, non implémentée.** Rien n'est mergé
+> tant que Gabrielle n'a pas validé cellule par cellule (règle HARD STOP n°4,
+> CLAUDE.md). Claude instruit et propose ; Gabrielle décide.
+
+### 5.0 Constat — la règle actuelle est en dur, binaire et sur-appliquée
+
+- `fn_profession_peut_etre_liberal` (booléen en dur) autorise le libéral pour IDE,
+  **IADE, IBODE**, SAGE_FEMME, KINE, MEDECIN, PHARMACIEN, ORTHOPHONISTE, DIETETICIEN,
+  ERGOTHERAPEUTE, PSYCHOMOTRICIEN, MANIPULATEUR_RADIO, **DENTISTE** ; bloque AS, AES,
+  AUXILIAIRE_PUERICULTURE, PREPARATEUR_PHARMA.
+- **Incohérences** : IADE et IBODE sont **autorisés libéral à tort** (ils font partie
+  des 7 professions de la lettre du 30/12/2021) ; IDE et paramédicaux autorisés sans
+  la nuance « risque de requalification » ; **aucune dimension type d'établissement**
+  (centre de santé vs clinique privée).
+- **Citations inexactes exposées à l'utilisateur** (4 surfaces, cf. recensement A3) :
+  - `src/lib/constantes.ts:52-91` (`LIBERAL_COMPATIBILITY` / `PROFESSIONS_NON_LIBERAL` /
+    `peutExercerLiberal()`) — la matrice en dur qui pilote tout.
+  - `src/components/FormulaireMission.tsx:650-654` — « le mode libéral n'est pas autorisé
+    par la réglementation (salariat déguisé, cf CE 11/02/2025 arrêt Mediflash) ».
+  - `src/components/mission/ModalRecapMission.tsx:95-100, 221-238` — « la réglementation
+    interdit le mode libéral … CE 11/02/2025 arrêt Mediflash ».
+  - `src/components/BannerMediflashExplication.tsx:33-89` — cite l'arrêt **n°488367**.
+  → Ces messages sont affichés pour **toute** profession × établissement, or l'arrêt ne
+    juge **que les aides-soignants**.
+- **⚠️ Incohérence de numéro d'arrêt** : `BannerMediflashExplication` cite **n°488367**,
+  la présente proposition retient **n°491128** (indiqué par Gabrielle). **L'un des deux
+  est erroné** — à trancher sur le **texte primaire de l'arrêt** avant tout wording.
+
+### 5.1 Faits vérifiés (sources primaires — à confirmer sur le texte même de l'arrêt)
+
+- **Arrêt CE 11/02/2025 n°491128** (« Mediflash ») : statue **UNIQUEMENT sur les
+  aides-soignants**. Il **valide** la lettre interministérielle **n° D21-031940 du
+  30/12/2021**.
+- **Lettre du 30/12/2021** : vise **7 professions** — aides-soignants, auxiliaires de
+  puériculture, IBODE, IADE, infirmiers puériculteurs, conseillers en génétique,
+  assistants dentaires. Elle **ne vise ni** les IDE généralistes, **ni** les praticiens
+  (médecins, chirurgiens-dentistes, sages-femmes).
+- **Force des sources** : aide-soignant = **JUGÉ** (CE n°491128) ; les 6 autres
+  professions de la lettre = **doctrine ministérielle** + **absence de tout cadre
+  d'exercice libéral** de la spécialité (à démontrer profession par profession : ni
+  statut, ni nomenclature). Centres de santé : **L.6323-1 CSP** (personnel salarié).
+
+> ⚠️ **À faire avant merge** : recroiser cette liste sur le **texte même** de l'arrêt
+> n°491128 (qui cite la lettre D21-031940), **pas** sur des sources secondaires (D5).
+
+### 5.2 Matrice cible — 3 niveaux, TABLE PARAMÉTRÉE (zéro règle en dur)
+
+Lecture sur la **profession REQUISE PAR LA MISSION**, jamais sur les diplômes du
+soignant (une IADE peut candidater à une mission IDE → règles **IDE** ; une mission
+IADE/IBODE est salariée sans exception).
+
+| Profession requise | Établissement privé (clinique…) | Centre de santé (L.6323-1) | Niveau | Source / force |
+|---|---|---|---|---|
+| **AS, AUXILIAIRE_PUERICULTURE, IBODE, IADE** (+ infirmier puériculteur, conseiller génétique, assistant dentaire) | **BLOQUÉ** | **BLOQUÉ** | BLOQUÉ | AS = **JUGÉ** (CE n°491128) ; autres = doctrine (lettre 30/12/2021) + absence de cadre libéral |
+| Toute profession **sans exercice libéral** (AES, PREPARATEUR_PHARMA…) | **BLOQUÉ** | **BLOQUÉ** | BLOQUÉ | Liste des professions libérales (absence de statut) |
+| **MEDECIN, DENTISTE (chirurgien-dentiste), SAGE_FEMME** | **AUTORISÉ** (contrat d'exercice libéral, honoraires facturés directement) | **NON PROPOSÉ → salarié** | AUTORISÉ / NON PROPOSÉ | L.6323-1 CSP (centre de santé = salariat) |
+| **IDE** et **paramédicaux à exercice libéral** (KINE, ORTHOPHONISTE, DIETETICIEN, ERGOTHERAPEUTE, PSYCHOMOTRICIEN, MANIPULATEUR_RADIO) | **NON PROPOSÉ → salarié par défaut** | **NON PROPOSÉ → salarié** | NON PROPOSÉ | Faisceau : raisonnement CE transposable (subordination organisationnelle), soins inclus dans les tarifs de l'établissement, contrôles URSSAF — **choix de conformité Jolene** |
+
+- **AUTORISÉ** = Jolene propose le mode libéral.
+- **NON PROPOSÉ** = Jolene ne propose que le salarié (risque de requalification), **sans
+  l'interdire juridiquement** — choix de conformité.
+- **BLOQUÉ** = interdiction sourcée, le libéral n'est pas proposable.
+
+### 5.3 Wordings par niveau (plus jamais de citation inexacte)
+
+- **BLOQUÉ** (cite sa source RÉELLE et EXACTE, selon la profession) :
+  - Aide-soignant : « L'exercice libéral n'est pas ouvert aux aides-soignants (Conseil
+    d'État, 11/02/2025, n°491128). Mission proposée en salarié. »
+  - Autres professions de la lettre : « L'exercice libéral n'est pas prévu pour cette
+    profession (instruction interministérielle du 30/12/2021). Mission proposée en salarié. »
+- **NON PROPOSÉ** : « Jolene propose cette mission en **salarié** : l'exercice libéral au
+  sein d'un établissement expose à une **requalification**. » + lien **« comprendre pourquoi »**.
+- **« Vacation »** : disparaît de l'UI ou est **défini comme un CDD court** (l'app n'a que
+  **deux modes réels** : salarié / libéral). Retirer `FormulaireMission.tsx:652` (citation
+  Mediflash générique) au profit des wordings ci-dessus.
+- **Reframe soignant IDE** (côté soignant) : « Tes missions **salariées** comptent dans les
+  **3200 h** d'expérience requises pour l'installation en libéral. »
+
+### 5.4 Encodage technique proposé (à valider avant implémentation)
+
+- Table `matrice_modes_exercice(profession, type_etablissement, niveau, source_libelle,
+  source_force)` — seed cellule par cellule depuis 5.2 ; **zéro règle juridique en dur**
+  (`grep` doit le prouver). `fn_profession_peut_etre_liberal` + trigger
+  `dec_valider_type_contrat_mission` réécrits pour **lire la table**.
+- Le formulaire Publier lit la table sur `(profession_requise, type_etablissement)` et
+  affiche le niveau + wording. Un test par niveau (AS→BLOQUÉ source exacte ; DENTISTE×clinique
+  →AUTORISÉ ; IDE×clinique→NON PROPOSÉ) + e2e des 3 cas ; test « profil IADE × mission IDE →
+  règles IDE ».
+
+**➡️ Point d'arrêt (HARD STOP n°4)** : la matrice complète (5.2) + les 3 wordings (5.3) +
+leurs sources attendent le **go explicite de Gabrielle** avant tout merge/implémentation.
+La cascade d'impact (section D) en dépend.
+
 ## Récapitulatif — à câbler avant échéance
 
 | Sujet | Échéance | Type | Statut |
