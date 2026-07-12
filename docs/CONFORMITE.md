@@ -88,8 +88,10 @@ collectée** — d'où l'exécution de ce chantier **avant la soumission** aux s
 
 ## 2. DAC7 — déclaration annuelle des revenus des opérateurs de plateforme
 
-- **Base** : directive (UE) 2021/514 (**DAC7**), transposée art. **1649 ter A et
-  s. CGI** ; Jolene = opérateur de plateforme au sens de l'art. **242 bis CGI**.
+- **Base** : Jolene est **opérateur de plateforme au sens des art. 1649 ter A et s.
+  CGI** (directive (UE) 2021/514, **DAC7**), qui portent l'obligation **déclarative**
+  DAC7 ; l'art. **242 bis CGI** porte, lui, l'obligation d'**information des
+  utilisateurs** (cf. §3).
 - **Obligation** : déclaration annuelle à la **DGFiP en janvier** (au titre de
   l'année N-1) des revenus perçus par les soignants via la plateforme, avec leurs
   données d'identification fiscale.
@@ -165,74 +167,115 @@ collectée** — d'où l'exécution de ce chantier **avant la soumission** aux s
   - `src/components/BannerMediflashExplication.tsx:33-89` — cite l'arrêt **n°488367**.
   → Ces messages sont affichés pour **toute** profession × établissement, or l'arrêt ne
     juge **que les aides-soignants**.
-- **⚠️ Incohérence de numéro d'arrêt** : `BannerMediflashExplication` cite **n°488367**,
-  la présente proposition retient **n°491128** (indiqué par Gabrielle). **L'un des deux
-  est erroné** — à trancher sur le **texte primaire de l'arrêt** avant tout wording.
+- **✅ Numéro d'arrêt TRANCHÉ (C1)** : le bon numéro est **n°491128** (CE, 5e-6e chambres
+  réunies, 11/02/2025 — Légifrance **CETATEXT000051156546**). Le **n°488367** cité par
+  `BannerMediflashExplication` est **erroné** → à corriger sur les 4 surfaces. Le
+  **n°491130** est l'**ordonnance de référé du 05/02/2024** (CETATEXT000049101638) :
+  citable **en complément**, jamais à la place de l'arrêt au fond.
 
-### 5.1 Faits vérifiés (sources primaires — à confirmer sur le texte même de l'arrêt)
+### 5.1 Sources primaires (C1-C2) — passages VERBATIM
 
-- **Arrêt CE 11/02/2025 n°491128** (« Mediflash ») : statue **UNIQUEMENT sur les
-  aides-soignants**. Il **valide** la lettre interministérielle **n° D21-031940 du
-  30/12/2021**.
-- **Lettre du 30/12/2021** : vise **7 professions** — aides-soignants, auxiliaires de
-  puériculture, IBODE, IADE, infirmiers puériculteurs, conseillers en génétique,
-  assistants dentaires. Elle **ne vise ni** les IDE généralistes, **ni** les praticiens
-  (médecins, chirurgiens-dentistes, sages-femmes).
-- **Force des sources** : aide-soignant = **JUGÉ** (CE n°491128) ; les 6 autres
-  professions de la lettre = **doctrine ministérielle** + **absence de tout cadre
-  d'exercice libéral** de la spécialité (à démontrer profession par profession : ni
-  statut, ni nomenclature). Centres de santé : **L.6323-1 CSP** (personnel salarié).
+**Arrêt CE, 5e-6e ch. réunies, 11/02/2025, n°491128** (Légifrance CETATEXT000051156546) :
 
-> ⚠️ **À faire avant merge** : recroiser cette liste sur le **texte même** de l'arrêt
-> n°491128 (qui cite la lettre D21-031940), **pas** sur des sources secondaires (D5).
+> **Cons. 1** — « la lettre qu'ils avaient adressée, le 30 décembre 2021, aux directeurs
+> des établissements sanitaires, sociaux et médico-sociaux sur le recours aux services de
+> personnels paramédicaux sous un statut de travailleur indépendant, par l'intermédiaire de
+> plateformes de mise en relation, **en tant qu'elle vise la profession d'aide-soignant**. »
+>
+> **Cons. 3** — « La lettre du 30 décembre 2021 … vise explicitement à mettre en garde les
+> directeurs d'établissements de santé, sociaux et médico-sociaux quant au recours aux
+> services de **certains professionnels paramédicaux, dont les aides-soignants**, sous un
+> statut de travailleur indépendant. »
+>
+> **Cons. 6** — « lorsqu'ils exercent au sein d'un tel établissement, les aides-soignants
+> doivent nécessairement être regardés comme étant **placés sous l'autorité et le contrôle
+> de la hiérarchie** de cet établissement. »
+>
+> **Article 1er** — « La requête de la société Médiflash est **rejetée**. »
 
-### 5.2 Matrice cible — 3 niveaux, TABLE PARAMÉTRÉE (zéro règle en dur)
+**Ce que l'arrêt JUGE réellement (C2)** : la seule profession **jugée** est
+l'**aide-soignant** (Cons. 1 + Article 1er). L'arrêt **n'énumère PAS** la liste complète :
+il renvoie à la lettre, qui vise « certains professionnels paramédicaux, dont les
+aides-soignants ». La liste complète est dans la **lettre D21-031940**, dont le **texte
+primaire n'a PAS pu être obtenu** (absent de Légifrance ; les sources secondaires
+divergent, notamment sur « infirmiers puériculteurs »).
 
-Lecture sur la **profession REQUISE PAR LA MISSION**, jamais sur les diplômes du
-soignant (une IADE peut candidater à une mission IDE → règles **IDE** ; une mission
-IADE/IBODE est salariée sans exception).
+**Mapping vers l'enum professions Jolene** (résout la divergence) : les 7 professions de
+la lettre → **seules 4 existent dans Jolene** : `AS` (JUGÉ), `AUXILIAIRE_PUERICULTURE`,
+`IBODE`, `IADE` (doctrine ministérielle). « Infirmier puériculteur », « conseiller en
+génétique », « assistant dentaire » **ne sont pas des professions Jolene** → **sans objet**
+(la divergence « infirmiers puériculteurs » ne concerne aucune cellule de la matrice).
 
-| Profession requise | Établissement privé (clinique…) | Centre de santé (L.6323-1) | Niveau | Source / force |
+- **Force des sources** : `AS` = **JUGÉ** (CE n°491128) ; `AUXILIAIRE_PUERICULTURE` / `IBODE`
+  / `IADE` = **doctrine ministérielle** (lettre 30/12/2021) + absence de cadre d'exercice
+  libéral. Centres de santé : **L.6323-1-5 CSP** (« Les professionnels qui exercent au sein
+  des centres de santé sont **salariés** ») — **interdiction légale**, pas choix (C5).
+
+### 5.2 Matrice cible — 3 niveaux, TABLE PARAMÉTRÉE (zéro règle en dur), C3-C6
+
+Lecture sur la **profession REQUISE PAR LA MISSION**, jamais sur les diplômes du soignant
+(une IADE peut candidater à une mission IDE → règles **IDE** ; une mission IADE/IBODE est
+salariée sans exception). **Défaut de la table (C6) : NON PROPOSÉ → salarié** — toute
+combinaison absente tombe en salarié ; **AUTORISÉ n'existe que par cellule explicite et
+sourcée**.
+
+| Profession requise (mission) | Établissement privé (clinique…) | Centre de santé | Établissement public | Source / force |
 |---|---|---|---|---|
-| **AS, AUXILIAIRE_PUERICULTURE, IBODE, IADE** (+ infirmier puériculteur, conseiller génétique, assistant dentaire) | **BLOQUÉ** | **BLOQUÉ** | BLOQUÉ | AS = **JUGÉ** (CE n°491128) ; autres = doctrine (lettre 30/12/2021) + absence de cadre libéral |
-| Toute profession **sans exercice libéral** (AES, PREPARATEUR_PHARMA…) | **BLOQUÉ** | **BLOQUÉ** | BLOQUÉ | Liste des professions libérales (absence de statut) |
-| **MEDECIN, DENTISTE (chirurgien-dentiste), SAGE_FEMME** | **AUTORISÉ** (contrat d'exercice libéral, honoraires facturés directement) | **NON PROPOSÉ → salarié** | AUTORISÉ / NON PROPOSÉ | L.6323-1 CSP (centre de santé = salariat) |
-| **IDE** et **paramédicaux à exercice libéral** (KINE, ORTHOPHONISTE, DIETETICIEN, ERGOTHERAPEUTE, PSYCHOMOTRICIEN, MANIPULATEUR_RADIO) | **NON PROPOSÉ → salarié par défaut** | **NON PROPOSÉ → salarié** | NON PROPOSÉ | Faisceau : raisonnement CE transposable (subordination organisationnelle), soins inclus dans les tarifs de l'établissement, contrôles URSSAF — **choix de conformité Jolene** |
+| `AS` | **BLOQUÉ** | **BLOQUÉ** | salarié (défaut public) | **JUGÉ** — CE n°491128 |
+| `AUXILIAIRE_PUERICULTURE`, `IBODE`, `IADE` | **BLOQUÉ** | **BLOQUÉ** | salarié (défaut public) | Doctrine — lettre 30/12/2021 (n° D21-031940), validée par CE n°491128 |
+| `AES`, `PREPARATEUR_PHARMA` (sans exercice libéral) | **BLOQUÉ** | **BLOQUÉ** | salarié | Absence de cadre libéral de la profession |
+| **`MANIPULATEUR_RADIO`** (C4) | **BLOQUÉ** | **BLOQUÉ** | salarié | Pas de cadre d'exercice libéral propre (sous responsabilité du radiologue, aucune nomenclature d'actes en propre). *Si un statut libéral réel est trouvé → remonter avec source avant de seeder.* |
+| **`MEDECIN`, `DENTISTE`, `SAGE_FEMME`** (praticiens) | **AUTORISÉ** (contrat d'exercice libéral, honoraires facturés directement) | **BLOQUÉ** (C5) | salarié (défaut public — recrutement contractuel ; L.6146-2 CSP hors flux plateforme au lancement) | AUTORISÉ = cellule explicite ; centre de santé = **L.6323-1-5 CSP** |
+| **`PHARMACIEN`** (C3) | **NON PROPOSÉ → salarié** | **NON PROPOSÉ → salarié** | salarié | Mission d'établissement = pharmacien de **PUI** (salarié) ; le remplacement de titulaire d'officine n'est pas une mission d'établissement Jolene |
+| **`IDE`** + paramédicaux libéraux (`KINE`, `ORTHOPHONISTE`, `DIETETICIEN`, `ERGOTHERAPEUTE`, `PSYCHOMOTRICIEN`) | **NON PROPOSÉ → salarié par défaut** | **NON PROPOSÉ → salarié** | salarié | Faisceau : raisonnement CE transposable (subordination organisationnelle), soins inclus dans les tarifs de l'établissement, contrôles URSSAF — **choix de conformité Jolene** |
+| *Toute combinaison absente* | **NON PROPOSÉ → salarié** (défaut C6) | idem | idem | Défaut table (testé) |
 
-- **AUTORISÉ** = Jolene propose le mode libéral.
-- **NON PROPOSÉ** = Jolene ne propose que le salarié (risque de requalification), **sans
-  l'interdire juridiquement** — choix de conformité.
-- **BLOQUÉ** = interdiction sourcée, le libéral n'est pas proposable.
+- **AUTORISÉ** = Jolene propose le libéral (cellule explicite sourcée uniquement).
+- **NON PROPOSÉ** = Jolene ne propose que le salarié (risque de requalification), sans
+  l'interdire juridiquement — choix de conformité.
+- **BLOQUÉ** = interdiction sourcée, libéral non proposable.
 
-### 5.3 Wordings par niveau (plus jamais de citation inexacte)
+### 5.3 Wordings par niveau (C7 — plus jamais de citation inexacte)
 
-- **BLOQUÉ** (cite sa source RÉELLE et EXACTE, selon la profession) :
-  - Aide-soignant : « L'exercice libéral n'est pas ouvert aux aides-soignants (Conseil
-    d'État, 11/02/2025, n°491128). Mission proposée en salarié. »
-  - Autres professions de la lettre : « L'exercice libéral n'est pas prévu pour cette
-    profession (instruction interministérielle du 30/12/2021). Mission proposée en salarié. »
+- **BLOQUÉ** :
+  - `AS` : « L'exercice libéral n'est pas ouvert aux aides-soignants (**Conseil d'État,
+    11/02/2025, n°491128**). Mission proposée en salarié. »
+  - `AUXILIAIRE_PUERICULTURE` / `IBODE` / `IADE` (C7 — **double source, jamais « instruction »**) :
+    « L'exercice libéral n'est pas prévu pour cette profession (**lettre interministérielle
+    du 30 décembre 2021, n° D21-031940, validée par le Conseil d'État — 11/02/2025,
+    n°491128**). Mission proposée en salarié. »
+  - `AES` / `PREPARATEUR_PHARMA` / `MANIPULATEUR_RADIO` : « Cette profession n'a pas de cadre
+    d'exercice libéral. Mission proposée en salarié. »
+  - Praticien × **centre de santé** : « Au sein d'un centre de santé, les professionnels
+    sont **salariés** (**art. L.6323-1-5 du code de la santé publique**). »
 - **NON PROPOSÉ** : « Jolene propose cette mission en **salarié** : l'exercice libéral au
   sein d'un établissement expose à une **requalification**. » + lien **« comprendre pourquoi »**.
-- **« Vacation »** : disparaît de l'UI ou est **défini comme un CDD court** (l'app n'a que
-  **deux modes réels** : salarié / libéral). Retirer `FormulaireMission.tsx:652` (citation
-  Mediflash générique) au profit des wordings ci-dessus.
+- **« Vacation »** : **retiré de l'UI** ou **défini comme un CDD court** (l'app n'a que
+  **deux modes réels** : salarié / libéral). Retrait de la citation Mediflash générique des
+  **4 surfaces** (`constantes.ts`, `FormulaireMission.tsx:650-654`, `ModalRecapMission.tsx`,
+  `BannerMediflashExplication.tsx` — dont correction **n°488367 → n°491128**).
 - **Reframe soignant IDE** (côté soignant) : « Tes missions **salariées** comptent dans les
   **3200 h** d'expérience requises pour l'installation en libéral. »
 
-### 5.4 Encodage technique proposé (à valider avant implémentation)
+### 5.4 Encodage technique (GO conditionné à C1-C7)
 
 - Table `matrice_modes_exercice(profession, type_etablissement, niveau, source_libelle,
-  source_force)` — seed cellule par cellule depuis 5.2 ; **zéro règle juridique en dur**
-  (`grep` doit le prouver). `fn_profession_peut_etre_liberal` + trigger
-  `dec_valider_type_contrat_mission` réécrits pour **lire la table**.
-- Le formulaire Publier lit la table sur `(profession_requise, type_etablissement)` et
-  affiche le niveau + wording. Un test par niveau (AS→BLOQUÉ source exacte ; DENTISTE×clinique
-  →AUTORISÉ ; IDE×clinique→NON PROPOSÉ) + e2e des 3 cas ; test « profil IADE × mission IDE →
-  règles IDE ».
+  source_force)` — **seed cellule par cellule depuis 5.2**, **défaut = NON PROPOSÉ/salarié**
+  (C6) ; **zéro règle juridique en dur** (`grep` doit le prouver). `fn_profession_peut_etre_liberal`
+  et le trigger `dec_valider_type_contrat_mission` réécrits pour **lire la table** ; nouvelle
+  `fn_mode_exercice(profession, type_etablissement)` → `{niveau, source_libelle}` consommée
+  par le formulaire.
+- **Types d'établissement** : mapping `type` → catégorie {privé, centre_de_santé, public}
+  (à dériver de `etablissements.type` / `finess_secteur`).
+- **Tests** : un par niveau (`AS`→BLOQUÉ source CE n°491128 ; `DENTISTE`×clinique→AUTORISÉ ;
+  `DENTISTE`×centre_de_santé→BLOQUÉ L.6323-1-5 ; `IDE`×clinique→NON PROPOSÉ ;
+  `PHARMACIEN`→NON PROPOSÉ ; `MANIPULATEUR_RADIO`→BLOQUÉ) + **test du défaut** (combinaison
+  inconnue → salarié) + « profil IADE × mission IDE → règles IDE » + e2e des 3 cas dans le
+  formulaire.
 
-**➡️ Point d'arrêt (HARD STOP n°4)** : la matrice complète (5.2) + les 3 wordings (5.3) +
-leurs sources attendent le **go explicite de Gabrielle** avant tout merge/implémentation.
-La cascade d'impact (section D) en dépend.
+**➡️ Dernière relecture éclair (Gabrielle)** : avant merge, la PR contiendra **(1) le diff
+des wordings finaux tels qu'affichés** et **(2) le seed complet de la table** — relecture
+sur ces deux artefacts uniquement, puis merge + cascade section D.
 
 ## Récapitulatif — à câbler avant échéance
 
