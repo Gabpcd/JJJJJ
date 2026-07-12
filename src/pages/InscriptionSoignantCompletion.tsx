@@ -6,7 +6,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
 import { extraireMessageErreur } from '@/lib/erreurs';
 import { supabase } from '@/integrations/supabase/client';
-import { CONTRATS, PROFESSIONS_NON_LIBERAL } from '@/lib/constantes';
+import { CONTRATS } from '@/lib/constantes';
+import { useTypesExerciceAutorises } from '@/hooks/useTypesExerciceAutorises';
 import { Checkbox } from '@/components/ui/checkbox';
 import { FooterLegal } from '@/components/FooterLegal';
 import { logger } from '@/lib/logger';
@@ -136,9 +137,10 @@ export default function InscriptionSoignantCompletion() {
     form.cgu &&
     (form.motDePasse === '' || form.motDePasse.length >= 8);
 
-  // Harmonisé avec le flow email : pas de contrat libéral/vacation pour les
-  // professions salariées-only (AS, AES, préparateur en pharmacie…).
-  const peutEtreLiberal = !!identite?.profession && !PROFESSIONS_NON_LIBERAL.includes(identite.profession);
+  // Règle de PROFIL issue du référentiel DB, indépendante des règles de mission.
+  const { typesAutorises: typesExerciceProfil } = useTypesExerciceAutorises(identite?.profession || '');
+  const peutEtreLiberal = !!identite?.profession
+    && !!typesExerciceProfil?.some((type) => type === 'LIBERAL' || type === 'MIXTE');
   const contratsAffiches = CONTRATS.filter(c => peutEtreLiberal || (c.valeur !== 'LIBERAL' && c.valeur !== 'VACATION'));
 
   const handleSubmit = async (e: React.FormEvent) => {

@@ -21,7 +21,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { enrichirEtablissements } from '@/lib/etablissements';
 import { calculerDistanceKm } from '@/lib/geo';
-import { PROFESSIONS, getLabelProfession, extraireContratPreference, missionCompatibleContrat, getTypesContratSoignant, peutExercerLiberal } from '@/lib/constantes';
+import { PROFESSIONS, getLabelProfession, extraireContratPreference, missionCompatibleContrat, getTypesContratSoignant } from '@/lib/constantes';
 import { getMissionsCompatiblesFilter } from '@/lib/profession-hierarchy';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
@@ -373,13 +373,9 @@ export default function RechercheMissions() {
         const mType = m.type_contrat_recherche || extraireContratPreference(m.description);
         const typesAcceptes = getTypesContratSoignant(soignant);
         if (!missionCompatibleContrat(mType, typesAcceptes)) return false;
-        // PR 2 Sprint 1 — matrice prof × type_etab : si la mission est LIBERAL
-        // et que la combinaison est incompatible, on retire la mission du
-        // listing (pas affichée au soignant). Défense en profondeur côté
-        // backend via trigger dec_valider_compatibilite_mission_liberal.
-        if (mType === 'LIBERAL' && soignant?.profession && m.etablissements?.type) {
-          if (!peutExercerLiberal(soignant.profession, m.etablissements.type)) return false;
-        }
+        // La matrice a déjà validé la mission sur m.profession_requise côté DB.
+        // Ne jamais la recalculer depuis soignant.profession : une IADE peut
+        // candidater à une mission IDE, qui suit les règles IDE.
         // Additional UI filter
         if (typeContrat !== 'TOUS') {
           if (typeContrat === 'CDD' && mType === 'LIBERAL') return false;

@@ -1,5 +1,6 @@
 import React from 'react';
 import { Loader2 } from 'lucide-react';
+import type { ModeExerciceMission } from '@/lib/modeExerciceMission';
 import {
   DialogResponsive,
   DialogResponsiveContent,
@@ -29,6 +30,7 @@ export interface RecapMissionData {
   qrAutoGenere: boolean;
   etablissementType: string | null;
   liberalRestreint: boolean;
+  modeExerciceMission: ModeExerciceMission | null;
 }
 
 interface ModalRecapMissionProps {
@@ -68,8 +70,8 @@ export function ModalRecapMission({
     tauxCommission,
     toleranceGpsMetres,
     qrAutoGenere,
-    etablissementType,
     liberalRestreint,
+    modeExerciceMission,
   } = data;
 
   const brutSoignant = tauxHoraire * dureeHeures;
@@ -217,22 +219,31 @@ export function ModalRecapMission({
             </div>
           </section>
 
-          {/* Section 3 — Restrictions */}
-          {liberalRestreint && (
+          {/* Section 3 — Mode d'exercice résolu par la table serveur */}
+          {liberalRestreint && modeExerciceMission && (
             <section className="space-y-2">
               <h3 className="text-sm font-bold text-foreground uppercase tracking-wide">
-                3. Restrictions réglementaires
+                3. Mode d'exercice
               </h3>
               <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 rounded-xl p-4 text-sm">
                 <p className="font-semibold text-amber-900 dark:text-amber-200">
-                  ⚠️ Mode libéral non autorisé
+                  {modeExerciceMission.niveau === 'BLOQUE'
+                    ? 'Mode libéral non disponible'
+                    : 'Mission proposée en salarié'}
                 </p>
                 <p className="text-xs text-amber-800 dark:text-amber-300 mt-1">
-                  Pour <strong>{profession}</strong> en <strong>{etablissementType}</strong>, la
-                  réglementation interdit le mode libéral (cas de salariat déguisé — Conseil
-                  d'État 11/02/2025 arrêt Mediflash). La mission sera publiée uniquement en CDD
-                  salarié.
+                  {modeExerciceMission.source_libelle}
                 </p>
+                {modeExerciceMission.source_url && (
+                  <a
+                    href={modeExerciceMission.source_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-2 inline-block text-xs text-amber-900 underline hover:no-underline dark:text-amber-200"
+                  >
+                    Consulter la source
+                  </a>
+                )}
               </div>
             </section>
           )}

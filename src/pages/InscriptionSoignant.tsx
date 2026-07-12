@@ -16,7 +16,7 @@ import { SelectProfession } from '@/components/SelectProfession';
 import { DeclarationEtudiant, FORMATIONS_ETUDIANT } from '@/components/inscription/DeclarationEtudiant';
 import { FooterLegal } from '@/components/FooterLegal';
 import { AuthLayout } from '@/components/AuthLayout';
-import { CONTRATS, PROFESSIONS_SANS_RPPS, PROFESSIONS_RPPS_REQUIS, PROFESSIONS_NON_LIBERAL } from '@/lib/constantes';
+import { CONTRATS, PROFESSIONS_SANS_RPPS, PROFESSIONS_RPPS_REQUIS } from '@/lib/constantes';
 import { Checkbox } from '@/components/ui/checkbox';
 import { logger } from '@/lib/logger';
 import { BoutonProSanteConnect } from '@/components/BoutonProSanteConnect';
@@ -151,8 +151,11 @@ export default function InscriptionSoignant() {
     });
   };
 
-  // Auto-décocher LIBERAL/VACATION si la profession ne peut pas exercer en libéral
-  const peutEtreLiberal = !!form.profession && !PROFESSIONS_NON_LIBERAL.includes(form.profession);
+  // Règle de PROFIL issue du référentiel DB. Elle est distincte de la matrice
+  // profession_requise × établissement appliquée à chaque mission.
+  const { typesAutorises: typesExerciceProfil } = useTypesExerciceAutorises(form.profession);
+  const peutEtreLiberal = !!form.profession
+    && !!typesExerciceProfil?.some((type) => type === 'LIBERAL' || type === 'MIXTE');
   useEffect(() => {
     if (!form.profession) return;
     if (peutEtreLiberal) return;

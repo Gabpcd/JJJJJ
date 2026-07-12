@@ -2,11 +2,12 @@ import React, { useState, useEffect, useMemo, Suspense } from 'react';
 import { lazyRetry as lazy } from '@/lib/lazyRetry';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { Loader2, AlertTriangle, CalendarDays, Timer, Ban, Banknote, Lightbulb, Lock, User, Calculator, Info, Save, Send, ClipboardList } from 'lucide-react';
-import { extraireContratPreference, injecterContratTag, peutExercerLiberal, getLabelProfession, getLabelTypeEtablissement, type ContratPreference } from '@/lib/constantes';
+import { extraireContratPreference, injecterContratTag, getLabelProfession, type ContratPreference } from '@/lib/constantes';
 import { SelectProfession } from '@/components/SelectProfession';
 import { SelectSpecialiteMedicale } from '@/components/SelectSpecialiteMedicale';
 import { WarningRist } from '@/components/WarningRist';
-import { useTypesExerciceAutorises } from '@/hooks/useTypesExerciceAutorises';
+import { useModeExerciceMission } from '@/hooks/useModeExerciceMission';
+import { liberalEstProposable } from '@/lib/modeExerciceMission';
 import { EncartCommissionDegressif } from '@/components/EncartCommissionDegressif';
 import { ModalCodeTravail } from '@/components/ModalCodeTravail';
 import { FormulaireRecurrence, type RecurrenceFlexConfig, type CreneauFlex, type ValidationFlexResult } from '@/components/FormulaireRecurrence';
@@ -102,19 +103,23 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
   const [toleranceGpsMetres, setToleranceGpsMetres] = useState<number | null>(null);
   // Sprint 7 PR 1 — Modal récap mission (P1-4)
   const [modalRecapOuvert, setModalRecapOuvert] = useState(false);
-  const { typesAutorises: typesExAutorise, uniqueType: uniqueExType } = useTypesExerciceAutorises(profession);
-
-  // Auto-set contratPreference when profession only allows SALARIE
-  useEffect(() => {
-    if (uniqueExType === 'SALARIE') {
-      setContratPreference('SALARIE');
-    }
-  }, [uniqueExType]);
+  const [explicationModeOuverte, setExplicationModeOuverte] = useState(false);
   const [siretInvalide, setSiretInvalide] = useState(false);
   const [contratNonValide, setContratNonValide] = useState(false);
 
   // Load rist_plafond_actif + commission info + type + siret validation
   const [estSecteurPublic, setEstSecteurPublic] = useState(false);
+  const {
+    mode: modeExerciceMission,
+    loading: modeExerciceLoading,
+    error: modeExerciceError,
+  } = useModeExerciceMission(profession, etablissementType, estSecteurPublic);
+  const liberalAutoriseMission = liberalEstProposable(modeExerciceMission);
+
+  useEffect(() => {
+    if (!profession || !etablissementType) return;
+    if (!liberalAutoriseMission) setContratPreference('SALARIE');
+  }, [profession, etablissementType, liberalAutoriseMission]);
   useEffect(() => {
     if (!user) return;
     supabase.rpc('fn_mon_etablissement_complet' as any).then(({ data, error }: any) => {
@@ -462,7 +467,7 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
     : (!!intitule && !!profession && !!debutLe && !!finLe && !!tauxHoraire && !erreurDates && !loading));
 
   // Sprint 7 PR 1 — Données récap pour le modal (P1-4)
-  const liberalRestreint = !!profession && !!etablissementType && !peutExercerLiberal(profession, etablissementType);
+  const liberalRestreint = !!modeExerciceMission && !liberalAutoriseMission;
   const recapData: RecapMissionData = {
     intitule,
     description,
@@ -482,6 +487,7 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
     qrAutoGenere: true, // Sprint 4.5 PR 4 : trigger auto à la signature du contrat
     etablissementType,
     liberalRestreint,
+    modeExerciceMission,
   };
 
   return (
@@ -538,6 +544,7 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
           <SelectProfession
             value={profession}
             onChange={setProfession}
+            triggerId="mission-profession"
             placeholder="Sélectionnez la profession recherchée"
             filtresProfessions={etablissementType === 'PHARMACIE_OFFICINE' ? ['PHARMACIEN', 'PREPARATEUR_PHARMA'] : undefined}
           />
@@ -607,33 +614,21 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
             mission, pas un « profil » — chaque option affiche ses conséquences) */}
         <div>
           <label className="text-sm font-medium text-foreground mb-2 block">Type de contrat proposé</label>
-          {uniqueExType === 'SALARIE' ? (
-            <div className="p-3 bg-primary/5 border border-primary/20 rounded-xl">
-              <p className="text-sm text-foreground">
-                Pour cette profession, seuls les profils <strong>salariés</strong> sont autorisés.
-              </p>
-            </div>
-          ) : (
           <div className="space-y-2">
-            {(() => {
-              // PR 2 Sprint 1 — matrice de compatibilité prof × type_etab.
-              // Si la combinaison ne permet pas le libéral, on retire l'option.
-              const liberalAutorise = profession && etablissementType
-                ? peutExercerLiberal(profession, etablissementType)
-                : true;
-              return ([
+            {modeExerciceLoading && profession && etablissementType ? (
+              <div className="flex items-center gap-2 rounded-xl border border-border bg-muted/30 p-3 text-sm text-muted-foreground" role="status">
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                Vérification du mode d'exercice…
+              </div>
+            ) : (
+              <>
+              {([
                 { value: 'TOUS' as const, label: 'Tous profils', desc: 'Selon le soignant retenu : salarié (vous êtes l’employeur) ou libéral (honoraires via la plateforme)' },
                 { value: 'SALARIE' as const, label: 'Salarié', desc: 'Vous êtes l’employeur : CDD, bulletin de paie, plafond légal 48 h/semaine' },
                 { value: 'LIBERAL' as const, label: 'Libéral', desc: 'Honoraires facturés via la plateforme — pas de plafond horaire' },
               ]).filter(opt => {
-                if (typesExAutorise && opt.value !== 'TOUS' && !typesExAutorise.includes(opt.value)) return false;
-                // Bloquer LIBERAL si incompatible avec le type d'établissement courant
-                if (opt.value === 'LIBERAL' && !liberalAutorise) return false;
-                // Bloquer TOUS si LIBERAL n'est pas autorisé (force SALARIE only)
-                if (opt.value === 'TOUS' && !liberalAutorise) return false;
-                return true;
-              });
-            })().map(opt => (
+                return liberalAutoriseMission || opt.value === 'SALARIE';
+              }).map(opt => (
               <label key={opt.value} className="flex items-start gap-3 cursor-pointer group">
                 <input
                   type="radio" name="contratPreference"
@@ -646,14 +641,49 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
                   <p className="text-xs text-muted-foreground">{opt.desc}</p>
                 </div>
               </label>
-            ))}
-            {profession && etablissementType && !peutExercerLiberal(profession, etablissementType) && (
+              ))}
+              </>
+            )}
+            {profession && etablissementType && modeExerciceMission && !liberalAutoriseMission && (
               <div className="text-xs text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 rounded-lg p-3 mt-2">
-                <strong><Info aria-hidden="true" className="inline-block h-3.5 w-3.5 mr-1 -mt-0.5" />Mode libéral non disponible :</strong> pour <strong>{getLabelProfession(profession)}</strong> en <strong>{getLabelTypeEtablissement(etablissementType).toLowerCase()}</strong>, le mode libéral n'est pas autorisé par la réglementation (cas de salariat déguisé, cf Conseil d'État 11/02/2025 arrêt Mediflash). Vous pouvez proposer la mission en CDD ou Vacation.
+                <strong>
+                  <Info aria-hidden="true" className="inline-block h-3.5 w-3.5 mr-1 -mt-0.5" />
+                  {modeExerciceMission.niveau === 'BLOQUE'
+                    ? 'Mode libéral non disponible'
+                    : 'Mission proposée en salarié'}
+                </strong>
+                <p className="mt-1">{modeExerciceMission.source_libelle}</p>
+                {modeExerciceMission.source_url && (
+                  <a
+                    href={modeExerciceMission.source_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-1.5 inline-block underline hover:no-underline"
+                  >
+                    Consulter la source
+                  </a>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setExplicationModeOuverte((value) => !value)}
+                  className="ml-3 underline hover:no-underline"
+                  aria-expanded={explicationModeOuverte}
+                >
+                  Comprendre pourquoi
+                </button>
+                {explicationModeOuverte && (
+                  <p className="mt-2 border-t border-amber-200 pt-2 dark:border-amber-900">
+                    La règle se lit sur la profession demandée par cette mission, pas sur les diplômes du soignant. Un profil IADE peut donc candidater à une mission IDE, qui suit les règles IDE.
+                  </p>
+                )}
               </div>
             )}
+            {profession && etablissementType && modeExerciceError && (
+              <p className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-xs text-destructive" role="alert">
+                Impossible de vérifier le mode libéral pour le moment. La mission reste proposée en salarié par sécurité.
+              </p>
+            )}
           </div>
-          )}
         </div>
 
         {/* Mode ponctuel: horaires */}
