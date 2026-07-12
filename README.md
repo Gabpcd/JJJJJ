@@ -1,73 +1,77 @@
-# Welcome to your Lovable project
+# Jolene
 
-## Project info
+Jolene est une plateforme française de mise en relation directe entre
+établissements de santé et professionnels soignants. Elle couvre le cycle de
+la mission : publication, candidature, contrat, pointage, facturation et
+paiement.
 
-**URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
+Le produit comprend trois espaces distincts :
 
-## How can I edit this code?
+- **Soignant** : missions compatibles, candidatures, contrats, pointage,
+  revenus et documents administratifs ;
+- **Établissement** : publication et suivi des missions, candidatures,
+  contrats, pointages, factures et équipe ;
+- **Administration** : conformité, modération, pilotage, support et
+  observabilité.
 
-There are several ways of editing your application.
+Jolene est un outil professionnel de staffing. Il ne fournit ni diagnostic ni
+soin médical aux patients et ne collecte pas de données de santé.
 
-**Use Lovable**
+## Stack
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and start prompting.
+- React 18, TypeScript, Vite, Tailwind CSS et shadcn/ui ;
+- Supabase (PostgreSQL, Auth, Storage, Realtime et Edge Functions) ;
+- Capacitor 8 pour iOS et Android ;
+- Stripe Connect, Yousign, Pro Santé Connect et Chorus Pro ;
+- Vitest, Playwright, Lighthouse et GitHub Actions.
 
-Changes made via Lovable will be committed automatically to this repo.
+## Développement local
 
-**Use your preferred IDE**
+Prérequis : Node.js 24 et npm.
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
-
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-
-Follow these steps:
-
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
+```bash
+npm ci
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+Les variables Supabase et les secrets tiers ne sont jamais versionnés. Voir
+[la procédure staging](docs/staging.md) pour la configuration des
+environnements.
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+## Vérifications
 
-**Use GitHub Codespaces**
+```bash
+npm run build
+npm test
+npm run test:guards
+npm run test:regression
+npm run test:e2e
+```
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+## Applications natives
 
-## What technologies are used for this project?
+```bash
+npx cap sync
+npm run open:ios
+npm run open:android
+```
 
-This project is built with:
+La préparation de production, les signatures et les hard stops sont décrits
+dans :
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+- [Production Capacitor](docs/CAPACITOR_PRODUCTION.md)
+- [Préparation App Store et Play Store](docs/store-readiness.md)
+- [Push natif iOS et Android](docs/PUSH_NATIVE_FINAL.md)
+- [Métadonnées stores fr-FR](docs/STORE_METADATA_FR.md)
 
-## How can I deploy this project?
+## Sécurité et données
 
-Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
+- Aucun secret, keystore ou fichier Firebase n'est accepté dans Git.
+- Les tables exposées utilisent RLS et les opérations privilégiées passent par
+  des fonctions serveur contrôlées.
+- La politique de confidentialité publique est disponible sur
+  [jolene.app/confidentialite](https://jolene.app/confidentialite).
+- Les vulnérabilités ne doivent pas être publiées dans une issue publique ; le
+  contact est `support@jolene.app`.
 
-## Can I connect a custom domain to my Lovable project?
-
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+Projet propriétaire — Jolene SASU.
