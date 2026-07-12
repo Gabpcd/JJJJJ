@@ -90,7 +90,14 @@ test.describe('Lot 19 — Cockpit métriques argent (source unique)', () => {
       const { data: metriques } = await admin!.rpc('fn_admin_metriques_argent' as any);
       const { data: file } = await admin!.rpc('fn_admin_lister_etablissements_a_verifier' as any, { p_limit: 500 });
       const nFile = ((file as any)?.etablissements ?? []).length;
-      expect(Number((metriques as any)?.etab_a_valider)).toBe(nFile);
+      const nCompteur = Number((metriques as any)?.etab_a_valider);
+      // La file est plafonnée à 500 (LEAST(p_limit,500)) ; le compteur ne l'est pas.
+      // Sous 500 → égalité stricte (le fix « 10 vs 6 ») ; au plafond → le compteur couvre au moins la file.
+      if (nFile < 500) {
+        expect(nCompteur).toBe(nFile);
+      } else {
+        expect(nCompteur).toBeGreaterThanOrEqual(nFile);
+      }
     });
 
     test('fn_admin_cockpit_fondateur lit la même source (GMV / revenus identiques)', async () => {
