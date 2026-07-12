@@ -72,6 +72,12 @@ Viewports : écrans **établissement** = **390×844 ET 1440×900** (règle criti
 - Idem sur la page détail (`ModalActionAvecRaison`) ; la réactivation reste une simple confirmation (sans motif).
 - Après suspension : toast « Utilisateur suspendu », le badge passe à suspendu, « Réactiver » apparaît.
 
+## 8. Mécanique et finitions admin (Lot 21 — branche de finition)
+
+**Écrans** : `/admin`, `/admin/utilisateurs`, `/admin/missions`, `/admin/verification-etablissements`, `/admin/facturation`, `/admin/status`.
+**Preuve machine** : tests `adminPresentation` + `lot21AdminStructure` ; recette axe sombre `admin-lot21-dark-mode` sous drapeau.
+**À vérifier (1440×900, clair puis sombre)** : données de test toujours visibles avec badge ; « Détails » primaire et « Suspendre » discret ; warnings NAF/SIRET + lien Annuaire des Entreprises ; notifications en bas à droite sans recouvrir les KPI. Sur 390×844, vérifier les mêmes cartes et cibles de 44 px.
+
 ---
 
 _Mettre à jour ce fichier à chaque PR UI (écran + preuve + états à vérifier ≤ 3 lignes)._

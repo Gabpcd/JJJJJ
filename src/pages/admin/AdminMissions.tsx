@@ -11,7 +11,8 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { TableOuCartes, type ColonneTableau } from '@/components/ui/TableOuCartes';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
-import { ExternalLink, Clock, CheckCircle, CheckCircle2, ChevronDown, History, PlayCircle, Send, ClipboardList, UserX } from 'lucide-react';
+import { ExternalLink, Clock, CheckCircle, CheckCircle2, ChevronDown, History, PlayCircle, Send, ClipboardList, UserX, Building2, User, CalendarDays, FlaskConical } from 'lucide-react';
+import { estMissionTestAdmin, formatEuroAdmin } from '@/lib/adminPresentation';
 
 type FiltreStatut = 'TOUTES' | 'OUVERTE' | 'ASSIGNEE' | 'EN_COURS' | 'TERMINEE';
 
@@ -31,11 +32,11 @@ const STATUT_LABEL: Record<string, string> = {
   ANNULEE: 'Annulée',
 };
 
-const SELECT_MISSIONS = 'id, intitule, statut, debut_le, fin_le, duree_heures, profession_requise, taux_horaire_base, net_estime, est_asap, est_urgente, soignant_assigne_id, etablissement_id, etablissements(nom), soignants(prenom, nom)';
+const SELECT_MISSIONS = 'id, intitule, statut, debut_le, fin_le, duree_heures, profession_requise, taux_horaire_base, net_estime, est_asap, est_urgente, soignant_assigne_id, etablissement_id, etablissements(nom, est_compte_test), soignants(prenom, nom, est_compte_test)';
 
-const formatDate = (d: string) => d ? new Date(d).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
+const formatDate = (d: string) => d ? new Date(d).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' }).replace(/ /g, '\u00a0') : '—';
 const formatHeure = (d: string) => d ? new Date(d).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : '';
-const formatEur = (v: number | null) => v != null ? `${Number(v).toFixed(2)} €` : '—';
+const formatEur = (v: number | null) => formatEuroAdmin(v);
 
 function statutBadge(statut: string) {
   const map: Record<string, 'success' | 'warning' | 'error' | 'info'> = {
@@ -208,6 +209,11 @@ export default function AdminMissions() {
               {m.intitule}
               <ExternalLink className="h-3 w-3 opacity-0 group-hover:opacity-100 transition-opacity" />
             </Link>
+            {estMissionTestAdmin(m) && (
+              <BadgeY2K variant="warning" size="sm" icone={<FlaskConical className="h-3 w-3" />}>
+                Donnée de test
+              </BadgeY2K>
+            )}
             {urgenceBadge(m)}
           </span>
         );
@@ -260,15 +266,20 @@ export default function AdminMissions() {
             <ExternalLink className="h-3.5 w-3.5 text-primary shrink-0" />
           </p>
           <span className="inline-flex items-center gap-1.5 shrink-0">
+            {estMissionTestAdmin(m) && (
+              <BadgeY2K variant="warning" size="sm" icone={<FlaskConical className="h-3 w-3" />}>
+                Test
+              </BadgeY2K>
+            )}
             {urgenceBadge(m)}
             {statutBadge(m.statut)}
           </span>
         </div>
         <div className="text-xs text-muted-foreground space-y-0.5">
-          <p>🏥 {etabNom ?? '—'}</p>
-          <p>👤 {soignantNom || 'Non assigné'}</p>
-          <p className="whitespace-nowrap">
-            📅 {formatDate(m.debut_le)} {formatHeure(m.debut_le)} · {m.duree_heures ? `${m.duree_heures}h` : '—'} · {formatEur(m.taux_horaire_base)}
+          <p className="flex items-center gap-1.5"><Building2 className="h-3.5 w-3.5 shrink-0" /> {etabNom ?? '—'}</p>
+          <p className="flex items-center gap-1.5"><User className="h-3.5 w-3.5 shrink-0" /> {soignantNom || 'Non assigné'}</p>
+          <p className="flex items-center gap-1.5 whitespace-nowrap">
+            <CalendarDays className="h-3.5 w-3.5 shrink-0" /> {formatDate(m.debut_le)} {formatHeure(m.debut_le)} · {m.duree_heures ? `${m.duree_heures}h` : '—'} · {formatEur(m.taux_horaire_base)}
           </p>
         </div>
         {m.soignant_assigne_id && (

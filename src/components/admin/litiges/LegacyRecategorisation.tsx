@@ -146,7 +146,7 @@ export function LegacyRecategorisation({ onChanged, onCountChange }: Props) {
           className="py-8 text-center text-sm text-muted-foreground"
           data-testid="legacy-empty"
         >
-          Aucun litige legacy à recatégoriser 🎉
+          Aucun litige historique à recatégoriser.
         </p>
       )}
 

@@ -123,7 +123,7 @@ export default function AdminReclamations() {
                   <div>
                     <p className="font-semibold text-foreground">{r.nom_utilisateur}</p>
                     <p className="text-xs text-muted-foreground">
-                      {r.type_utilisateur === 'SOIGNANT' ? '🩺 Soignant' : '🏥 Établissement'} · {r.categorie} · {format(new Date(r.cree_le), 'd MMM yyyy HH:mm', { locale: fr })}
+                      {r.type_utilisateur === 'SOIGNANT' ? 'Soignant' : 'Établissement'} · {r.categorie} · {format(new Date(r.cree_le), 'd MMM yyyy HH:mm', { locale: fr })}
                     </p>
                   </div>
                   <span className={`badge-base text-xs ${r.statut === 'EN_ATTENTE' ? 'bg-warning/10 text-warning' : 'bg-primary/10 text-primary'}`}>
@@ -179,7 +179,7 @@ export default function AdminReclamations() {
                       <span className="text-xs text-muted-foreground ml-2">{r.sujet}</span>
                     </div>
                     <span className={`badge-base text-[10px] ${r.statut === 'RESOLUE' ? 'bg-success/10 text-success' : 'bg-muted text-muted-foreground'}`}>
-                      {r.statut === 'RESOLUE' ? '✅ Résolue' : '🔒 Fermée'}
+                      {r.statut === 'RESOLUE' ? 'Résolue' : 'Fermée'}
                     </span>
                   </div>
                 ))}

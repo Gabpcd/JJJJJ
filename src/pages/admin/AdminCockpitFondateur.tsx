@@ -10,8 +10,10 @@ import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { BadgeY2K } from '@/components/y2k/BadgeY2K';
 import { Users, Building2, TrendingUp, DollarSign, Target, Zap, Rocket, Calculator, RefreshCw, UserPlus, Percent, X, Loader2, ChevronRight } from 'lucide-react';
 import { BarChart, Bar, LineChart, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
+import { getLabelProfession, getLabelTypeEtablissement } from '@/lib/constantes';
+import { formatEuroAdmin } from '@/lib/adminPresentation';
 
-const fmt = (v: number) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(v);
+const fmt = (v: number) => formatEuroAdmin(v, { decimales: 0 });
 const fmtK = (v: number) => v >= 1000 ? `${(v / 1000).toFixed(1)}k` : String(v);
 
 /** Bornes [début, fin) d'un mois 'YYYY-MM' pour les requêtes de drill-down. */
@@ -289,7 +291,7 @@ export default function AdminCockpitFondateur() {
                                 onClick={() => navigate(`/admin/utilisateurs/${s.id}`)}
                                 className="text-xs text-primary hover:underline inline-flex items-center gap-0.5 text-left"
                               >
-                                {s.prenom} {s.nom}{s.profession ? ` — ${s.profession}` : ''} <ChevronRight className="h-3 w-3 shrink-0" />
+                                {s.prenom} {s.nom}{s.profession ? ` — ${getLabelProfession(s.profession)}` : ''} <ChevronRight className="h-3 w-3 shrink-0" />
                               </button>
                             </li>
                           ))}
@@ -304,7 +306,7 @@ export default function AdminCockpitFondateur() {
                                 onClick={() => navigate(`/admin/utilisateurs/${e.id}`)}
                                 className="text-xs text-primary hover:underline inline-flex items-center gap-0.5 text-left"
                               >
-                                {e.nom}{e.type ? ` — ${e.type}` : ''} <ChevronRight className="h-3 w-3 shrink-0" />
+                                {e.nom}{e.type ? ` — ${getLabelTypeEtablissement(e.type)}` : ''} <ChevronRight className="h-3 w-3 shrink-0" />
                               </button>
                             </li>
                           ))}

@@ -21,8 +21,8 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { EmptyState } from '@/components/ui/EmptyState';
 
 const formatEur = (v: number) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(v);
-const formatDate = (d: string) => new Date(d).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' });
-const formatDateTime = (d: string) => new Date(d).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+const formatDate = (d: string) => new Date(d).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' }).replace(/ /g, '\u00a0');
+const formatDateTime = (d: string) => new Date(d).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }).replace(/ /g, '\u00a0');
 
 // Statuts demandant une action admin → section « À traiter » en tête de page.
 // Le reste est relégué dans l'historique replié (pattern « file de travail », Session D).
@@ -40,7 +40,7 @@ const statutColor: Record<string, 'success' | 'warning' | 'error' | 'info' | 'pr
 const statutLabel: Record<string, string> = {
   BROUILLON: 'Brouillon',
   EMISE: 'Émise',
-  VIREMENT_DECLARE: 'Virement déclaré 🔍',
+  VIREMENT_DECLARE: 'Virement déclaré',
   PAYEE: 'Payée',
   EN_RETARD: 'En retard',
   ANNULEE: 'Annulée',
@@ -394,7 +394,7 @@ export default function AdminFacturation() {
     if (error || (data as any)?.error) {
       toast.error('Erreur lors de la confirmation du virement.');
     } else {
-      toast.success('Virement confirmé ✅');
+      toast.success('Virement confirmé');
       charger();
     }
     setActionId(null);

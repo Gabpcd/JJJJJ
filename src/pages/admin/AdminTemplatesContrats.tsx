@@ -256,7 +256,7 @@ export default function AdminTemplatesContrats() {
       )}
 
       <div className="rounded-xl bg-muted/30 border border-border p-4 text-xs text-muted-foreground mt-6">
-        <p className="font-semibold text-foreground mb-1">⚠️ Mises en garde</p>
+        <p className="font-semibold text-foreground mb-1">Mises en garde</p>
         <ul className="list-disc list-inside space-y-1">
           <li>Une modification de template incrémente automatiquement la version.</li>
           <li>Les contrats déjà signés conservent leur template d'origine (immutable).</li>

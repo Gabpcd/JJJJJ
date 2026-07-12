@@ -195,7 +195,7 @@ export default function AdminDetailContrat() {
         <h2 className="text-sm font-bold text-foreground mb-3">Signatures</h2>
         <div className="space-y-2">
           <div className="rounded-lg border border-border p-3 text-xs">
-            <p className="font-semibold text-foreground mb-1">Soignant {contrat.signature_soignant ? '✅' : '⏳'}</p>
+            <p className="font-semibold text-foreground mb-1">Soignant — {contrat.signature_soignant ? 'signé' : 'en attente'}</p>
             {contrat.signature_soignant_le && (
               <>
                 <p className="text-muted-foreground">Signé le {format(new Date(contrat.signature_soignant_le), 'dd MMM yyyy HH:mm:ss', { locale: fr })}</p>
@@ -205,7 +205,7 @@ export default function AdminDetailContrat() {
             )}
           </div>
           <div className="rounded-lg border border-border p-3 text-xs">
-            <p className="font-semibold text-foreground mb-1">Établissement {contrat.signature_etablissement ? '✅' : '⏳'}</p>
+            <p className="font-semibold text-foreground mb-1">Établissement — {contrat.signature_etablissement ? 'signé' : 'en attente'}</p>
             {contrat.signature_etablissement_le && (
               <>
                 <p className="text-muted-foreground">Signé le {format(new Date(contrat.signature_etablissement_le), 'dd MMM yyyy HH:mm:ss', { locale: fr })}</p>
@@ -241,7 +241,7 @@ export default function AdminDetailContrat() {
           <h2 className="text-sm font-bold text-foreground mb-2">DPAE</h2>
           {contrat.dpae_effectuee && contrat.dpae_numero ? (
             <div className="text-xs space-y-1">
-              <p>✅ DPAE validée le {format(new Date(contrat.dpae_effectuee_le!), 'dd MMM yyyy', { locale: fr })}</p>
+              <p>DPAE validée le {format(new Date(contrat.dpae_effectuee_le!), 'dd MMM yyyy', { locale: fr })}</p>
               <p className="font-mono text-foreground">N° URSSAF : {contrat.dpae_numero}</p>
             </div>
           ) : (

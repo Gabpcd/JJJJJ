@@ -240,7 +240,7 @@ export default function AdminCalendrier() {
                         className={`w-full rounded px-1 py-0.5 text-[8px] leading-tight truncate block text-left transition-opacity hover:opacity-80 ${style.bg} ${style.text}`}
                         title={`${m.intitule} — ${m.etab_nom || ''}${m.soignant_nom ? ` · ${m.soignant_nom}` : ' · NON POURVUE'}`}
                       >
-                        {m.est_urgente ? '🚨 ' : ''}{m.intitule}
+                        {m.est_urgente ? 'Urgente — ' : ''}{m.intitule}
                       </button>
                     );
                   })}

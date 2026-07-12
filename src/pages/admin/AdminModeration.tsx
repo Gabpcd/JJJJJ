@@ -428,7 +428,7 @@ export default function AdminModeration() {
               Les évaluations positives (4-5 étoiles) sans commentaire sont publiées automatiquement. Seules les évaluations nécessitant une vérification apparaissent ici.
             </p>
             {evaluations.length === 0 ? (
-              <p className="py-8 text-center text-sm text-muted-foreground">Aucune évaluation en attente de modération 🎉</p>
+              <p className="py-8 text-center text-sm text-muted-foreground">Aucune évaluation en attente de modération.</p>
             ) : (
               <div className="space-y-3">
                 {evaluations.map((e) => (
@@ -438,7 +438,7 @@ export default function AdminModeration() {
                         <div className="space-y-1">
                           <div className="flex items-center gap-2">
                             <BadgeY2K variant={e.note <= 2 ? 'error' : e.note === 3 ? 'warning' : 'info'}>
-                              {'★'.repeat(e.note)}{'☆'.repeat(5 - e.note)}
+                              Note {e.note}/5
                             </BadgeY2K>
                             <span className="text-xs text-muted-foreground">{formatDate(e.cree_le)}</span>
                           </div>
@@ -575,7 +575,7 @@ export default function AdminModeration() {
                       </TableRow>
                     );
                   })}
-                  {incoherences.length === 0 && <TableRow><TableCell colSpan={8} className="py-8 text-center text-muted-foreground">Aucune incohérence identitaire détectée 🎉</TableCell></TableRow>}
+                  {incoherences.length === 0 && <TableRow><TableCell colSpan={8} className="py-8 text-center text-muted-foreground">Aucune incohérence identitaire détectée.</TableCell></TableRow>}
                 </TableBody>
               </Table>
             </div>
@@ -583,7 +583,7 @@ export default function AdminModeration() {
             {/* Mobile : cards avec 3 matches résumés visuellement */}
             <div className="md:hidden space-y-3">
               {incoherences.length === 0 ? (
-                <p className="py-8 text-center text-sm text-muted-foreground">Aucune incohérence identitaire détectée 🎉</p>
+                <p className="py-8 text-center text-sm text-muted-foreground">Aucune incohérence identitaire détectée.</p>
               ) : incoherences.map((inc: any) => {
                 const matchProfilRpps = inc.nom_profil && inc.nom_rpps
                   ? inc.nom_profil.toUpperCase() === inc.nom_rpps.toUpperCase()

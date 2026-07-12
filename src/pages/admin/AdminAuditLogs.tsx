@@ -251,8 +251,8 @@ export default function AdminAuditLogs() {
                       </div>
                     </div>
                     <div className="text-xs text-muted-foreground space-y-0.5">
-                      <p>👤 <span className="font-mono">{libelleActeur(log.type_acteur)}</span> · {log.acteur_id?.slice(0, 8)}…</p>
-                      <p>📦 <span className="font-mono">{libelleRessource(log.type_ressource)}</span>{log.id_ressource && <> · {log.id_ressource?.slice(0, 8)}…</>}</p>
+                      <p>Acteur : <span className="font-mono">{libelleActeur(log.type_acteur)}</span> · {log.acteur_id?.slice(0, 8)}…</p>
+                      <p>Ressource : <span className="font-mono">{libelleRessource(log.type_ressource)}</span>{log.id_ressource && <> · {log.id_ressource?.slice(0, 8)}…</>}</p>
                     </div>
                     {log.details && <div className="pt-1 border-t border-border">{detailsContent(log)}</div>}
                   </div>

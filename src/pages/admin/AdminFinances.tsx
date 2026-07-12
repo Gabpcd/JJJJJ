@@ -19,6 +19,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
 import { TrendingUp, TrendingDown, Download, AlertTriangle, ExternalLink, Building2, CheckCircle2, Stethoscope } from 'lucide-react';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
+import { getLabelTypeEtablissement } from '@/lib/constantes';
 
 // Task 12 — diagnostic result type
 interface DiagResult {
@@ -631,7 +632,7 @@ export default function AdminFinances() {
                         <ExternalLink className="h-3 w-3 shrink-0" />
                       </button>
                     );
-                  case 'type': return <BadgeY2K variant="info" size="sm">{e.type}</BadgeY2K>;
+                  case 'type': return <BadgeY2K variant="info" size="sm">{getLabelTypeEtablissement(e.type)}</BadgeY2K>;
                   case 'nb_missions': return <span className="font-medium">{e.nb_missions}</span>;
                   case 'taux_com': return <span className="font-medium text-primary">{e.taux_com}%</span>;
                   case 'commissions_ht': return <span className="font-medium">{formatEur(e.commissions_ht)}</span>;
@@ -659,7 +660,7 @@ export default function AdminFinances() {
                       {e.nom}
                       <ExternalLink className="h-3 w-3 shrink-0" />
                     </button>
-                    <BadgeY2K variant="info" size="sm" className="shrink-0">{e.type}</BadgeY2K>
+                    <BadgeY2K variant="info" size="sm" className="shrink-0">{getLabelTypeEtablissement(e.type)}</BadgeY2K>
                   </div>
                   <div className="grid grid-cols-2 gap-2 text-xs">
                     <div>

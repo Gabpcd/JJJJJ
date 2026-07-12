@@ -9,6 +9,7 @@ import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { BadgeY2K } from '@/components/y2k/BadgeY2K';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
+import { getLabelProfession, getLabelTypeEtablissement } from '@/lib/constantes';
 
 interface HeureExterneAdmin {
   id: string;
@@ -125,7 +126,7 @@ export default function AdminHeuresExternes() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-semibold text-foreground">{h.soignant_prenom} {h.soignant_nom}</span>
-                        {h.profession && <span className="text-xs font-mono bg-muted px-1.5 py-0.5 rounded">{h.profession}</span>}
+                        {h.profession && <span className="text-xs bg-muted px-1.5 py-0.5 rounded">{getLabelProfession(h.profession)}</span>}
                         {h.type_exercice && <span className="text-[11px] text-muted-foreground">{h.type_exercice}</span>}
                         <BadgeY2K
                           variant={h.statut_validation === 'VALIDE' ? 'success' : h.statut_validation === 'REJETE' ? 'error' : 'warning'}
@@ -138,7 +139,7 @@ export default function AdminHeuresExternes() {
 
                       <p className="text-sm text-foreground mt-2">
                         <strong>{h.etablissement_nom}</strong>
-                        {h.etablissement_type && <span className="text-muted-foreground"> · {h.etablissement_type.replace(/_/g, ' ').toLowerCase()}</span>}
+                        {h.etablissement_type && <span className="text-muted-foreground"> · {getLabelTypeEtablissement(h.etablissement_type)}</span>}
                       </p>
                       <p className="text-xs text-muted-foreground mt-0.5">
                         {format(new Date(h.date_debut), 'd MMM yyyy', { locale: fr })} → {format(new Date(h.date_fin), 'd MMM yyyy', { locale: fr })}
@@ -148,11 +149,11 @@ export default function AdminHeuresExternes() {
                         <span className="text-foreground"><strong>{h.heures_declarees.toLocaleString('fr-FR')}h</strong> déclarées</span>
                         {h.verifie_ia_le && (
                           <span className="inline-flex items-center gap-1 text-muted-foreground">
-                            🤖 {h.heures_extraites_ia != null
+                            Analyse IA : {h.heures_extraites_ia != null
                               ? <strong className="text-foreground">{h.heures_extraites_ia.toLocaleString('fr-FR')}h lues</strong>
                               : 'heures non extraites'}
-                            {h.coherence_ia === true && <span className="text-emerald-600"> · cohérent ✓</span>}
-                            {h.coherence_ia === false && <span className="text-amber-600"> · écart ⚠</span>}
+                            {h.coherence_ia === true && <span className="text-emerald-600"> · cohérent</span>}
+                            {h.coherence_ia === false && <span className="text-amber-600"> · écart détecté</span>}
                           </span>
                         )}
                       </div>
@@ -252,8 +253,8 @@ function ModaleDecisionHeures({ heure, onFermer, onTraitee }: {
         <div className="space-y-2">
           <span className="text-xs font-medium block">Décision *</span>
           {[
-            { v: 'VALIDE', l: '✅ VALIDER (les heures comptent vers les 3200h)', i: <CheckCircle className="h-4 w-4 text-emerald-600" /> },
-            { v: 'REJETE', l: '❌ REJETER (heures écartées)', i: <XCircle className="h-4 w-4 text-destructive" /> },
+            { v: 'VALIDE', l: 'VALIDER (les heures comptent vers les 3 200 h)', i: <CheckCircle className="h-4 w-4 text-emerald-600" /> },
+            { v: 'REJETE', l: 'REJETER (heures écartées)', i: <XCircle className="h-4 w-4 text-destructive" /> },
           ].map(opt => (
             <label key={opt.v} className="flex items-center gap-2 cursor-pointer p-2 rounded hover:bg-muted">
               <input type="radio" checked={decision === opt.v} onChange={() => setDecision(opt.v as any)} />

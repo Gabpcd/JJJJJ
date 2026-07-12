@@ -450,15 +450,16 @@ const App = () => (
               <a href="#main-content" className="skip-to-content">Aller au contenu principal</a>
               <AppRoutes />
               <Toaster
-                position="top-center"
+                position="bottom-right"
                 richColors
                 closeButton
-                offset={16}
-                toastOptions={{
-                  style: {
-                    marginTop: 'calc(env(safe-area-inset-top, 0px) + 3.75rem)',
-                  },
+                offset={{ right: 16, bottom: 16 }}
+                mobileOffset={{
+                  right: 16,
+                  left: 16,
+                  bottom: 'calc(5rem + env(safe-area-inset-bottom))',
                 }}
+                toastOptions={{ duration: 5000 }}
               />
               <BandeauCookies />
             </BrowserRouter>
