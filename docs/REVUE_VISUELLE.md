@@ -41,6 +41,17 @@ Viewports : écrans **établissement** = **390×844 ET 1440×900** (règle criti
 - Alerte **« N établissements à valider »** = exactement le nombre de la page `/admin/verification-etablissements` (plus de 10 vs 6).
 - Carte Stripe renommée **« Paiements Stripe (bruts, TTC) »** (plus de 2ᵉ « Encaissé ») ; carte Stripe Connect **sans** second « GMV ».
 
+## 5. Sidebar admin — 5 domaines (Lot 20)
+
+**Écran** : toute page `/admin/*` (sidebar desktop `LayoutAdmin`, 1440×900) + regroupement mobile 390×844 (bottom bar + « Plus »).
+**Preuve machine** : `e2e/flows/admin-recherche-globale.spec.ts` (recherche unique → soignant + étab + mission) + `git grep` zéro libellé anglais dans la nav + redirect `/admin/healthcheck`→`/admin/status`.
+**À vérifier (desktop 1440)** — connecté admin :
+- Sidebar = **5 domaines** dans l'ordre : **Opérations · Argent · Croissance · Conformité & légal · Système** (plus de « Pilotage / Utilisateurs / Finances »).
+- Labels français : **Prospection** (ex « Sales / Sourcing »), **Cohortes & économie** (ex « economics »), plus de **Healthcheck** (fusionné dans « Statut système »).
+- Ouvrir `/admin/healthcheck` → redirige vers **Statut système** (`/admin/status`).
+- ⌘K : taper 2+ caractères → résultats mêlés soignants / établissements / missions / factures.
+- Chaque ancienne destination a exactement une entrée (Cockpit fondateur dans **Croissance**, Vérif. établissements unique dans **Opérations**).
+
 ---
 
 _Mettre à jour ce fichier à chaque PR UI (écran + preuve + états à vérifier ≤ 3 lignes)._

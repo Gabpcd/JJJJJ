@@ -419,7 +419,8 @@ function AppRoutes() {
           <Route path="/admin/config" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminConfig /></RouteProtegee>} />
           <Route path="/admin/audit" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminAuditLogs /></RouteProtegee>} />
           <Route path="/admin/dpia" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminDPIA /></RouteProtegee>} />
-          <Route path="/admin/healthcheck" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminHealthcheck /></RouteProtegee>} />
+          {/* Lot 20 — Healthcheck fusionné dans « Statut système » (dédoublonnage IA admin). */}
+          <Route path="/admin/healthcheck" element={<Navigate to="/admin/status" replace />} />
           <Route path="/admin/cohort" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminCohortEconomics /></RouteProtegee>} />
           <Route path="/admin/audit-rls" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminAuditRLS /></RouteProtegee>} />
           <Route path="/admin/rgpd-tools" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminRGPDTools /></RouteProtegee>} />
