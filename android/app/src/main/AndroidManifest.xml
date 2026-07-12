@@ -1,5 +1,19 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Permissions et capacités déclarées avant l'application pour éviter les
+         inférences matérielles restrictives de Google Play. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Sprint 4 PR 4 — robustesse FCM en Doze mode + re-registration au boot -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- Sprint 4 PR 4 — détection connectivité (offline queue pointage) -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
     <application
         android:allowBackup="false"
         android:dataExtractionRules="@xml/data_extraction_rules"
@@ -32,13 +46,15 @@
                 <category android:name="android.intent.category.BROWSABLE" />
 
                 <!-- Callbacks auth et liens métier effectivement routés par App.tsx. -->
-                <data android:scheme="https" android:host="jolene.app" android:pathPrefix="/reset-password" />
-                <data android:scheme="https" android:host="jolene.app" android:pathPrefix="/auth/psc/callback" />
-                <data android:scheme="https" android:host="jolene.app" android:pathPrefix="/etab/invitation/" />
-                <data android:scheme="https" android:host="jolene.app" android:pathPrefix="/mission/" />
-                <data android:scheme="https" android:host="jolene.app" android:pathPrefix="/contrat/" />
-                <data android:scheme="https" android:host="jolene.app" android:pathPrefix="/soignant/missions" />
-                <data android:scheme="https" android:host="jolene.app" android:pathPrefix="/etablissement/missions" />
+                <data android:scheme="https" />
+                <data android:host="jolene.app" />
+                <data android:pathPrefix="/reset-password" />
+                <data android:pathPrefix="/auth/psc/callback" />
+                <data android:pathPrefix="/etab/invitation/" />
+                <data android:pathPrefix="/mission/" />
+                <data android:pathPrefix="/contrat/" />
+                <data android:pathPrefix="/soignant/missions" />
+                <data android:pathPrefix="/etablissement/missions" />
             </intent-filter>
         </activity>
 
@@ -51,16 +67,4 @@
         </provider>
     </application>
 
-    <!-- Permissions -->
-
-    <uses-permission android:name="android.permission.INTERNET" />
-    <uses-permission android:name="android.permission.CAMERA" />
-    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
-    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
-    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-    <!-- Sprint 4 PR 4 — robustesse FCM en Doze mode + re-registration au boot -->
-    <uses-permission android:name="android.permission.WAKE_LOCK" />
-    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
-    <!-- Sprint 4 PR 4 — détection connectivité (offline queue pointage) -->
-    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 </manifest>

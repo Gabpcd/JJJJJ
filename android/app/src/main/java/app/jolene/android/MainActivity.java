@@ -4,7 +4,6 @@ import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.content.Context;
 import android.media.AudioAttributes;
-import android.os.Build;
 import android.os.Bundle;
 import android.provider.Settings;
 import com.getcapacitor.BridgeActivity;
@@ -36,10 +35,6 @@ public class MainActivity extends BridgeActivity {
   }
 
   private void creerNotificationChannels() {
-    // NotificationChannel requis depuis Android 8 (API 26).
-    // Sur versions plus anciennes : no-op.
-    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return;
-
     NotificationManager manager =
         (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
     if (manager == null) return;

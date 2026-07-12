@@ -3,7 +3,7 @@
     "apps": [],
     "details": [
       {
-        "appID": "5D9L5FQQ86.app.jolene",
+        "appID": "FPQ78HDF4Y.app.jolene",
         "paths": [
           "/soignant/*",
           "/etablissement/*",
@@ -26,7 +26,7 @@
   },
   "webcredentials": {
     "apps": [
-      "5D9L5FQQ86.app.jolene"
+      "FPQ78HDF4Y.app.jolene"
     ]
   }
 }
