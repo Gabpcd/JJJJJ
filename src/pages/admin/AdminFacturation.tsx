@@ -3,7 +3,7 @@ import { telechargerOuPartagerPdf, telechargerOuPartager } from '@/lib/telecharg
 import { LayoutAdmin } from '@/components/LayoutAdmin';
 import { BreadcrumbAdmin } from '@/components/BreadcrumbAdmin';
 import { usePageTitle } from '@/hooks/usePageTitle';
-import { ChargementPage } from '@/components/ChargementPage';
+import { ChargementAdmin } from '@/components/admin/ChargementAdmin';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { BoutonY2K } from '@/components/y2k/BoutonY2K';
@@ -179,7 +179,7 @@ function useMissionsFacture(factureId: string) {
       .then(async ({ data }: any) => {
         const mList = (data as any[]) || [];
         const sgIds = [...new Set(mList.map((m: any) => m.soignant_assigne_id).filter(Boolean))];
-        let sgMap: Record<string, any> = {};
+        const sgMap: Record<string, any> = {};
         if (sgIds.length > 0) {
           const { data: sgData } = await supabase.from('soignants').select('id, prenom, nom').in('id', sgIds);
           if (sgData) for (const s of sgData) sgMap[s.id] = s;
@@ -313,7 +313,7 @@ export default function AdminFacturation() {
   // Historique replié par défaut (pattern « file de travail »), mais ouvert d'emblée
   // si on arrive depuis la recherche globale ⌘K (?q=) pour que le résultat cherché
   // soit immédiatement visible. État au niveau page : il survit aux refetchs
-  // (ChargementPage plein écran) contrairement à l'état interne de <FileDeTravail />.
+  // (état de chargement de la page) contrairement à l'état interne de <FileDeTravail />.
   const [historiqueOuvert, setHistoriqueOuvert] = useState(() => Boolean(searchParams.get('q')));
 
   const navigate = useNavigate();
@@ -481,7 +481,7 @@ export default function AdminFacturation() {
     toast.success('Rapport PDF généré');
   };
 
-  if (loading) return <LayoutAdmin><ChargementPage /></LayoutAdmin>;
+  if (loading) return <LayoutAdmin><ChargementAdmin titre="Facturation" /></LayoutAdmin>;
 
   return (
     <LayoutAdmin>
@@ -681,10 +681,10 @@ export default function AdminFacturation() {
               <div className="flex flex-col sm:flex-row gap-3">
                 <div className="relative max-w-xs flex-1">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input placeholder="Rechercher…" value={recherche} onChange={(e) => setRecherche(e.target.value)} className="pl-10" />
+                  <Input aria-label="Rechercher dans l’historique des factures" placeholder="Rechercher…" value={recherche} onChange={(e) => setRecherche(e.target.value)} className="pl-10" />
                 </div>
                 <Select value={filtreStatut} onValueChange={setFiltreStatut}>
-                  <SelectTrigger className="w-full sm:w-[160px]"><SelectValue /></SelectTrigger>
+                  <SelectTrigger aria-label="Filtrer l’historique des factures par statut" className="w-full sm:w-[160px]"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {STATUTS_HISTORIQUE.map(s => <SelectItem key={s} value={s}>{s === 'TOUS' ? 'Tous statuts' : statutLabel[s] ?? s}</SelectItem>)}
                   </SelectContent>

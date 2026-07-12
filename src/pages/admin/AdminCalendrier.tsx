@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { LayoutAdmin } from '@/components/LayoutAdmin';
 import { BreadcrumbAdmin } from '@/components/BreadcrumbAdmin';
-import { ChargementPage } from '@/components/ChargementPage';
+import { ChargementAdmin } from '@/components/admin/ChargementAdmin';
 import { supabase } from '@/integrations/supabase/client';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
@@ -127,7 +127,7 @@ export default function AdminCalendrier() {
     { label: 'Annulée', cls: 'bg-destructive/60' },
   ];
 
-  if (loading) return <LayoutAdmin><ChargementPage /></LayoutAdmin>;
+  if (loading) return <LayoutAdmin><ChargementAdmin titre="Calendrier des missions" /></LayoutAdmin>;
 
   return (
     <LayoutAdmin>

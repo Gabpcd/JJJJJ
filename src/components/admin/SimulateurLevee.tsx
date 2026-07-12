@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useId, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { CardY2K, CardY2KHeader, CardY2KTitle, CardY2KContent } from '@/components/y2k/CardY2K';
 import { BadgeY2K } from '@/components/y2k/BadgeY2K';
@@ -30,13 +30,15 @@ interface Inputs {
 }
 
 function ChampNombre({ label, value, onChange, suffix, aide }: { label: string; value: number; onChange: (v: number) => void; suffix?: string; aide?: string }) {
+  const inputId = useId();
   return (
     <div>
-      <Label className="text-xs flex items-center gap-1">
+      <Label htmlFor={inputId} className="text-xs flex items-center gap-1">
         {label}{suffix ? <span className="text-muted-foreground">({suffix})</span> : null}
         {aide ? <span title={aide}><Info className="h-3 w-3 text-muted-foreground" /></span> : null}
       </Label>
       <Input
+        id={inputId}
         type="number"
         value={Number.isFinite(value) ? value : 0}
         onChange={e => onChange(Number(e.target.value))}

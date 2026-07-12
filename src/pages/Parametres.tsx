@@ -45,6 +45,7 @@ export default function Parametres() {
 
   return (
     <LayoutApp role="ADMIN_ETABLISSEMENT">
+      <h1 className="mb-5 text-xl font-bold text-foreground">Paramètres de l’établissement</h1>
       <Tabs
         value={currentTab}
         onValueChange={(v) => setSearchParams({ tab: v }, { replace: true })}
@@ -72,12 +73,12 @@ export default function Parametres() {
         <TabsContent value="operations" className="mt-0 space-y-8">
           <ProfilEtablissementContent sections={['geoloc']} />
           <TolerancePointageGps />
-          <MonGroupeContent />
+          <MonGroupeContent headingLevel="h2" />
           <ExclusionsContent />
         </TabsContent>
 
         <TabsContent value="notifications" className="mt-0 space-y-6">
-          <NotificationsContent />
+          <NotificationsContent headingLevel="h2" />
           <Link
             to="/etablissement/parametres/notifications"
             className="max-w-2xl flex items-center justify-between gap-2 card-base text-sm text-foreground hover:bg-muted/50 transition"

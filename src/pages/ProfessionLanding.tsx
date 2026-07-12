@@ -8,7 +8,7 @@ import { MissionsPubliquesSEO } from '@/components/MissionsPubliquesSEO';
 import { Euro, Clock, ShieldCheck, TrendingUp, Stethoscope, ArrowRight } from 'lucide-react';
 
 const avantages = [
-  { icon: Euro, titre: 'Rémunération transparente', desc: 'Taux horaire affiché avant candidature. Zéro frais cachés, paiement garanti sous 7 jours.' },
+  { icon: Euro, titre: 'Rémunération transparente', desc: 'Taux et modalités de paiement affichés avant candidature. Zéro frais pour le soignant.' },
   { icon: Clock, titre: 'Flexibilité des horaires', desc: 'Choisissez vos missions, vos jours et vos créneaux. Vous gardez le contrôle de votre emploi du temps.' },
   { icon: ShieldCheck, titre: 'Contrats conformes', desc: 'CDD, y compris courts, générés automatiquement et signés électroniquement.' },
   { icon: TrendingUp, titre: 'Évolution de carrière', desc: 'Missions variées et, pour les professions autorisées en libéral, cumul de vos heures suivi heure par heure vers les 3 200 h.' },
@@ -17,7 +17,7 @@ const avantages = [
 const faqParProfession: Record<string, { q: string; a: string }[]> = {
   'infirmier-ide': [
     { q: 'Quel est le taux horaire moyen pour un IDE intérimaire ?', a: 'Le taux horaire moyen pour un(e) IDE intérimaire se situe entre 25 et 35\u20AC brut de l\'heure, selon l\'établissement (public/privé), la zone géographique et les majorations (nuit, week-end, férié). Sur Jolene, le taux est toujours affiché avant la candidature.' },
-    { q: 'Quels documents faut-il pour s\'inscrire en tant qu\'IDE ?', a: 'Vous aurez besoin de votre Diplôme d\'État Infirmier, de votre numéro RPPS, d\'une attestation d\'assurance RCP en cours de validité et d\'une pièce d\'identité. La vérification est automatique et prend en général quelques minutes.' },
+    { q: 'Quels documents faut-il pour s\'inscrire en tant qu\'IDE ?', a: 'Vous aurez besoin de votre Diplôme d\'État Infirmier, de votre numéro RPPS et d\'une pièce d\'identité. Une assurance RCP en cours de validité est en plus requise pour les missions libérales.' },
     { q: 'Les heures sur Jolene comptent-elles pour le passage en libéral ?', a: 'Oui, toutes les heures effectuées via Jolene sont comptabilisées pour le parcours 3 200h. Votre compteur est mis à jour automatiquement après chaque mission validée.' },
     { q: 'Peut-on choisir entre missions en hôpital et en EHPAD ?', a: 'Absolument. Vous pouvez filtrer les missions par type d\'établissement (hôpital public, clinique privée, EHPAD, SSIAD, HAD, etc.) et ne postuler qu\'aux missions qui vous intéressent.' },
   ],
@@ -28,17 +28,17 @@ const faqParProfession: Record<string, { q: string; a: string }[]> = {
     { q: 'Peut-on cumuler des missions en tant qu\'AS ?', a: 'Oui, vous pouvez accepter plusieurs missions dans différents établissements, tant que les horaires ne se chevauchent pas. Jolene vérifie automatiquement les conflits de planning.' },
   ],
   'pharmacien': [
-    { q: 'Comment fonctionne le remplacement en pharmacie d\'officine ?', a: 'Le pharmacien remplaçant intervient en l\'absence du titulaire. Le contrat de remplacement est généré automatiquement par Jolene, conforme au Code de la Santé Publique, et signé électroniquement.' },
-    { q: 'Faut-il être inscrit à l\'Ordre pour exercer via Jolene ?', a: 'Oui, l\'inscription à la section A (officine) ou D (adjoints) de l\'Ordre des Pharmaciens est obligatoire. Jolene vérifie votre inscription via le RPPS avant votre première mission.' },
-    { q: 'Quel est le taux horaire pour un pharmacien remplaçant ?', a: 'Le taux horaire moyen se situe entre 30 et 45\u20AC brut, selon le type de pharmacie (officine, hospitalière) et la zone géographique. Les pharmacies rurales proposent souvent des taux plus élevés.' },
+    { q: 'Quelles missions de pharmacien sont proposées ?', a: 'Jolene propose uniquement des missions salariées d’établissement, notamment en pharmacie à usage intérieur (PUI). Le remplacement d’un titulaire d’officine n’entre pas dans le périmètre de la plateforme.' },
+    { q: 'Faut-il un numéro RPPS ?', a: 'Oui. Le numéro RPPS et les justificatifs correspondant au poste salarié sont vérifiés avant l’attribution de la mission.' },
+    { q: 'Quel contrat est généré ?', a: 'Les missions pharmacien proposées sur Jolene donnent lieu à un contrat salarié et à un bulletin de paie, jamais à une note d’honoraires.' },
   ],
 };
 
 const defaultFaq = [
-  { q: 'Comment s\'inscrire sur Jolene ?', a: 'L\'inscription est gratuite et prend moins de 2 minutes. Renseignez votre profession, téléversez vos documents (diplôme, RPPS/ADELI, RCP) et validez votre profil. La vérification est automatique : identité professionnelle contrôlée via l\'Annuaire Santé (ou Pro Santé Connect) et documents analysés dès leur téléversement.' },
+  { q: 'Comment s\'inscrire sur Jolene ?', a: 'L\'inscription est gratuite et prend moins de 2 minutes. Renseignez votre profession, puis téléversez votre diplôme, votre identifiant professionnel lorsqu’il existe et les pièces demandées pour le contrat visé. La RCP est requise pour les missions libérales.' },
   { q: 'Quels types de contrats sont proposés ?', a: 'Jolene propose des missions salariées en CDD, y compris des CDD courts, et des missions en exercice libéral lorsqu’elles sont explicitement ouvertes. Le type de contrat est précisé sur chaque annonce.' },
   { q: 'Comment est calculée la rémunération ?', a: 'Le taux horaire brut est affiché sur chaque mission. S\'y ajoutent les majorations légales (nuit, week-end, férié), l\'IFM (10%) et l\'ICP (10%) pour les CDD. Le détail complet est visible avant la candidature.' },
-  { q: 'Dans quels établissements puis-je travailler ?', a: 'Jolene référence des hôpitaux publics, cliniques privées, EHPAD, SSIAD, HAD, pharmacies d\'officine, centres de santé, laboratoires et établissements médico-sociaux (IME, MAS, FAM).' },
+  { q: 'Dans quels établissements puis-je travailler ?', a: 'Jolene référence des hôpitaux publics, cliniques privées, EHPAD, SSIAD, HAD, centres de santé, laboratoires et établissements médico-sociaux (IME, MAS, FAM).' },
 ];
 
 export default function ProfessionLanding() {
@@ -56,7 +56,7 @@ export default function ProfessionLanding() {
     <>
       <SEOHead
         title={`Missions ${professionLabel} — remplacements & CDD courts | Jolene Santé`}
-        description={`${professionDesc} Taux horaire moyen : ${salaire}. Inscription gratuite, soignants vérifiés, paiement garanti.`}
+        description={`${professionDesc} Taux horaire moyen : ${salaire}. Inscription gratuite, profils vérifiés et modalités de paiement affichées avant candidature.`}
         url={`https://jolene.app/metier/${professionSlug}`}
       />
       <SEOPageLayout

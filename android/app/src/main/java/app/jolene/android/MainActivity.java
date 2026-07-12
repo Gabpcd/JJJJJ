@@ -4,9 +4,9 @@ import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.content.Context;
 import android.media.AudioAttributes;
-import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.provider.Settings;
 import com.getcapacitor.BridgeActivity;
 
 /**
@@ -57,7 +57,7 @@ public class MainActivity extends BridgeActivity {
     urgence.setVibrationPattern(new long[]{0, 250, 250, 250});
     urgence.setShowBadge(true);
     urgence.setSound(
-        Uri.parse("android.resource://" + getPackageName() + "/raw/jolene_urgence"),
+        Settings.System.DEFAULT_NOTIFICATION_URI,
         audioAttrs);
     manager.createNotificationChannel(urgence);
 

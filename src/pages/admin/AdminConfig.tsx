@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
-  AlertTriangle, Coins, Loader2, Save, Settings, ShieldAlert, Sparkles, TrendingUp, Check,
+  AlertTriangle, Coins, Save, Settings, ShieldAlert, Sparkles, TrendingUp, Check,
 } from 'lucide-react';
 import { LayoutAdmin } from '@/components/LayoutAdmin';
+import { ChargementAdmin } from '@/components/admin/ChargementAdmin';
 import { BreadcrumbAdmin } from '@/components/BreadcrumbAdmin';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { BoutonY2K } from '@/components/y2k/BoutonY2K';
@@ -86,9 +87,7 @@ export default function AdminConfig() {
   if (loading) {
     return (
       <LayoutAdmin>
-        <div className="flex items-center justify-center py-20">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        </div>
+        <ChargementAdmin titre="Configuration système" />
       </LayoutAdmin>
     );
   }

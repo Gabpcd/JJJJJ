@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { LayoutAdmin } from '@/components/LayoutAdmin';
 import { BreadcrumbAdmin } from '@/components/BreadcrumbAdmin';
-import { ChargementPage } from '@/components/ChargementPage';
+import { ChargementAdmin } from '@/components/admin/ChargementAdmin';
 import { supabase } from '@/integrations/supabase/client';
 import { CardY2K, CardY2KContent } from '@/components/y2k/CardY2K';
 import { Input } from '@/components/ui/input';
@@ -119,7 +119,7 @@ export default function AdminMandatsFacturation() {
     .sort((a, b) => new Date(a.cree_le || 0).getTime() - new Date(b.cree_le || 0).getTime());
   const signes = soignants.filter((s) => s.mandat_facturation_signe && matchRecherche(s));
 
-  if (loading) return <LayoutAdmin><ChargementPage /></LayoutAdmin>;
+  if (loading) return <LayoutAdmin><ChargementAdmin titre="Mandats de facturation" /></LayoutAdmin>;
 
   const tauxSignature = stats?.total_soignants > 0
     ? Math.round((stats.mandat_signe / stats.total_soignants) * 100)
@@ -318,6 +318,7 @@ export default function AdminMandatsFacturation() {
           <div className="relative flex-1 max-w-md">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
+              aria-label="Rechercher un soignant dans les mandats"
               placeholder="Rechercher un soignant…"
               value={recherche}
               onChange={(e) => setRecherche(e.target.value)}

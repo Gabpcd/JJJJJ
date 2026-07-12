@@ -3,7 +3,7 @@
  *
  * Couvre les 12 mécanismes anti-triche du Sprint 4.5 au niveau base de données.
  * Les tests UI sont volontairement exclus : les QR scanners et
- * background-geolocation natifs ne sont pas testables en Playwright headless
+ * GPS et scanners natifs ne sont pas testables en Playwright headless
  * sans device émulé.
  *
  * Mise à jour durcissement RPCs (post-Sprint 17) :

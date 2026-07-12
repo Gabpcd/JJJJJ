@@ -14,7 +14,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { LayoutAdmin } from '@/components/LayoutAdmin';
-import { ChargementPage } from '@/components/ChargementPage';
+import { ChargementSectionAdmin } from '@/components/admin/ChargementAdmin';
 import { supabase } from '@/integrations/supabase/client';
 import { CardY2K, CardY2KContent, CardY2KHeader, CardY2KTitle } from '@/components/y2k/CardY2K';
 import { CarteKPIY2K } from '@/components/y2k/CarteKPIY2K';
@@ -174,6 +174,7 @@ function TauxEditeur({
   return (
     <div className="flex items-center gap-1 flex-wrap">
       <Input
+        aria-label="Taux BFA du bénéficiaire"
         type="number"
         step="0.5"
         min="0"
@@ -185,6 +186,7 @@ function TauxEditeur({
       />
       <span className="text-xs">%</span>
       <Input
+        aria-label="Date de signature du contrat BFA"
         type="date"
         value={contrat}
         onChange={(e) => setContrat(e.target.value)}
@@ -637,7 +639,7 @@ function PanelAjout({
             <div>
               <label className="text-xs font-medium text-muted-foreground mb-1 block">Groupe santé</label>
               <Select value={groupeId} onValueChange={setGroupeId}>
-                <SelectTrigger className="text-sm">
+                <SelectTrigger className="text-sm" aria-label="Groupe santé bénéficiaire">
                   <SelectValue placeholder="Sélectionner un groupe…" />
                 </SelectTrigger>
                 <SelectContent>
@@ -667,6 +669,7 @@ function PanelAjout({
                   <button
                     type="button"
                     onClick={() => { setEtabSelectionne(null); setEtabId(''); setEtabQuery(''); }}
+                    aria-label={`Retirer l’établissement ${etabSelectionne.nom} de la sélection`}
                     className="text-muted-foreground hover:text-destructive transition-colors"
                   >
                     <X className="h-4 w-4" />
@@ -675,6 +678,7 @@ function PanelAjout({
               ) : (
                 <div className="relative">
                   <Input
+                    aria-label="Rechercher un établissement bénéficiaire"
                     type="text"
                     placeholder="Rechercher un établissement…"
                     value={etabQuery}
@@ -717,6 +721,7 @@ function PanelAjout({
               <label className="text-xs font-medium text-muted-foreground mb-1 block">Taux BFA (%)</label>
               <div className="flex items-center gap-1">
                 <Input
+                  aria-label="Taux BFA du nouveau bénéficiaire"
                   type="number"
                   step="0.5"
                   min="0"
@@ -734,6 +739,7 @@ function PanelAjout({
                 Date contrat signé
               </label>
               <Input
+                aria-label="Date de signature du contrat du nouveau bénéficiaire"
                 type="date"
                 value={contrat}
                 onChange={(e) => setContrat(e.target.value)}
@@ -834,7 +840,7 @@ export default function AdminBFA() {
           <div className="shrink-0">
             <label className="text-xs font-medium text-muted-foreground mb-1 block">Année</label>
             <Select value={String(annee)} onValueChange={(v) => setAnnee(Number(v))}>
-              <SelectTrigger className="w-28 text-sm">
+              <SelectTrigger className="w-28 text-sm" aria-label="Année du programme BFA">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -849,7 +855,7 @@ export default function AdminBFA() {
         </div>
 
         {loading ? (
-          <ChargementPage />
+          <ChargementSectionAdmin label="Chargement du programme BFA…" />
         ) : (
           <>
             {/* KPIs */}

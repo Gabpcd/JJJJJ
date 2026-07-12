@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { LayoutAdmin } from '@/components/LayoutAdmin';
 import { BreadcrumbAdmin } from '@/components/BreadcrumbAdmin';
-import { ChargementPage } from '@/components/ChargementPage';
+import { ChargementAdmin } from '@/components/admin/ChargementAdmin';
 import { supabase } from '@/integrations/supabase/client';
 import { CardY2K, CardY2KContent } from '@/components/y2k/CardY2K';
 import { BoutonY2K } from '@/components/y2k/BoutonY2K';
@@ -92,10 +92,10 @@ export default function AdminGroupes() {
         .order('nom');
 
       const etabIds = (etabs ?? []).map(e => e.id);
-      let cliniques: CliniqueStat[] = [];
+      const cliniques: CliniqueStat[] = [];
       let totalMissions = 0, totalEnCours = 0, totalTerminees = 0;
       let totalCa = 0, totalPayees = 0, totalImpayees = 0;
-      let allSoignantIds = new Set<string>();
+      const allSoignantIds = new Set<string>();
 
       if (etabIds.length > 0) {
         // 2 requêtes batch au lieu de N×2 requêtes par clinique
@@ -279,7 +279,7 @@ export default function AdminGroupes() {
     setSendingEmail(false);
   };
 
-  if (loading) return <LayoutAdmin><ChargementPage /></LayoutAdmin>;
+  if (loading) return <LayoutAdmin><ChargementAdmin titre="Groupes de santé" /></LayoutAdmin>;
 
   return (
     <LayoutAdmin>
@@ -307,6 +307,7 @@ export default function AdminGroupes() {
                       <span className="inline-flex items-center gap-1">
                         Remise groupe:
                         <Input
+                          aria-label={`Remise du groupe ${g.nom} en pourcentage`}
                           type="number" step="0.5" min="0" max="100"
                           value={editingRemise.remise}
                           onChange={e => setEditingRemise({ ...editingRemise, remise: e.target.value })}
@@ -322,8 +323,8 @@ export default function AdminGroupes() {
                           onClick={() => setEditingRemise({ groupeId: g.id, remise: String(g.remise_groupe_pourcent ?? 0) })}
                           className="ml-1 text-primary hover:underline"
                           title="Modifier la remise du groupe"
-                          aria-label="Modifier le groupe"
-                        ><Edit3 className="h-4 w-4" /></button>
+                          aria-label={`Modifier la remise du groupe ${g.nom}`}
+                        ><Edit3 className="h-4 w-4" aria-hidden="true" /></button>
                       </span>
                     )}
                     <span>{g.cliniques.length} clinique{g.cliniques.length > 1 ? 's' : ''}</span>
@@ -334,6 +335,7 @@ export default function AdminGroupes() {
                     <div className="flex items-center gap-1">
                       <span className="text-xs text-muted-foreground">Taux groupe :</span>
                       <Input
+                        aria-label={`Taux de commission du groupe ${g.nom}`}
                         type="number" step="0.5" min="0" max="50"
                         value={editingTauxGroupe.taux}
                         onChange={e => setEditingTauxGroupe({ ...editingTauxGroupe, taux: e.target.value })}
@@ -433,8 +435,9 @@ export default function AdminGroupes() {
                   <p className="text-sm font-semibold text-foreground flex items-center gap-1.5">
                     <Mail className="h-4 w-4 text-primary" /> Email à tout le groupe ({g.cliniques.length} clinique{g.cliniques.length > 1 ? 's' : ''})
                   </p>
-                  <Input value={emailSubject} onChange={e => setEmailSubject(e.target.value)} placeholder="Sujet" className="text-sm" />
+                  <Input aria-label={`Sujet de l’email au groupe ${g.nom}`} value={emailSubject} onChange={e => setEmailSubject(e.target.value)} placeholder="Sujet" className="text-sm" />
                   <textarea
+                    aria-label={`Contenu de l’email au groupe ${g.nom}`}
                     value={emailBody} onChange={e => setEmailBody(e.target.value)}
                     placeholder="Contenu du message..."
                     rows={4}
@@ -501,6 +504,7 @@ export default function AdminGroupes() {
                               {editingTaux?.etabId === c.id ? (
                                 <div className="flex items-center gap-1 justify-center">
                                   <Input
+                                    aria-label={`Taux de commission de ${c.nom}`}
                                     type="number" step="0.5" min="0" max="50"
                                     value={editingTaux.taux}
                                     onChange={e => setEditingTaux({ ...editingTaux, taux: e.target.value })}
@@ -537,8 +541,9 @@ export default function AdminGroupes() {
                               <td colSpan={9} className="py-2 px-2">
                                 <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-2">
                                   <p className="text-xs font-semibold">Email à {c.nom}</p>
-                                  <Input value={emailSubject} onChange={e => setEmailSubject(e.target.value)} placeholder="Sujet" className="text-xs h-8" />
+                                  <Input aria-label={`Sujet de l’email à ${c.nom}`} value={emailSubject} onChange={e => setEmailSubject(e.target.value)} placeholder="Sujet" className="text-xs h-8" />
                                   <textarea
+                                    aria-label={`Contenu de l’email à ${c.nom}`}
                                     value={emailBody} onChange={e => setEmailBody(e.target.value)}
                                     placeholder="Contenu..." rows={3}
                                     className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs resize-none focus:outline-none focus:ring-2 focus:ring-primary/50"
@@ -594,6 +599,7 @@ export default function AdminGroupes() {
                           {editingTaux?.etabId === c.id ? (
                             <div className="flex items-center gap-1">
                               <Input
+                                aria-label={`Taux de commission de ${c.nom}`}
                                 type="number" step="0.5" min="0" max="50"
                                 value={editingTaux.taux}
                                 onChange={e => setEditingTaux({ ...editingTaux, taux: e.target.value })}
@@ -646,8 +652,9 @@ export default function AdminGroupes() {
                       {emailClinicId === c.id && emailGroupeId === g.id && (
                         <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-2">
                           <p className="text-xs font-semibold">Email à {c.nom}</p>
-                          <Input value={emailSubject} onChange={e => setEmailSubject(e.target.value)} placeholder="Sujet" className="text-xs h-8" />
+                          <Input aria-label={`Sujet de l’email à ${c.nom}`} value={emailSubject} onChange={e => setEmailSubject(e.target.value)} placeholder="Sujet" className="text-xs h-8" />
                           <textarea
+                            aria-label={`Contenu de l’email à ${c.nom}`}
                             value={emailBody} onChange={e => setEmailBody(e.target.value)}
                             placeholder="Contenu..." rows={3}
                             className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs resize-none focus:outline-none focus:ring-2 focus:ring-primary/50"

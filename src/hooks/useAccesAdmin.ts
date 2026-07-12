@@ -9,7 +9,9 @@ interface AccesAdmin {
 }
 
 export function useAccesAdmin(): AccesAdmin {
-  const [accesTotal, setAccesTotal] = useState(true);
+  // Fail closed : aucun menu sensible n'est disponible avant la reponse
+  // serveur, ni lorsque la verification des droits echoue.
+  const [accesTotal, setAccesTotal] = useState(false);
   const [groupes, setGroupes] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -17,7 +19,8 @@ export function useAccesAdmin(): AccesAdmin {
     async function charger() {
       const { data, error } = await supabase.rpc('fn_admin_mes_acces' as any);
       if (error || !data) {
-        setAccesTotal(true);
+        setAccesTotal(false);
+        setGroupes([]);
         setLoading(false);
         return;
       }

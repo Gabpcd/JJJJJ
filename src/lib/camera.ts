@@ -61,8 +61,12 @@ async function prendrePhotoCapacitor(opts: Required<JoleneCameraOptions>): Promi
 
     // Demander permission au besoin
     const perm = await Camera.checkPermissions();
-    if (perm.camera === 'denied') {
-      throw new JoleneCameraError('PERMISSION_DENIED', 'Permission caméra refusée');
+    const permissionRefusee =
+      (opts.source === 'camera' && perm.camera === 'denied') ||
+      (opts.source === 'gallery' && perm.photos === 'denied') ||
+      (opts.source === 'prompt' && perm.camera === 'denied' && perm.photos === 'denied');
+    if (permissionRefusee) {
+      throw new JoleneCameraError('PERMISSION_DENIED', 'Permission caméra ou photothèque refusée');
     }
 
     const sourceMap: Record<string, any> = {
@@ -87,11 +91,11 @@ async function prendrePhotoCapacitor(opts: Required<JoleneCameraOptions>): Promi
     logger.error('[camera] capacitor error', err);
     if (err instanceof JoleneCameraError) throw err;
     const message = (err as Error)?.message?.toLowerCase() || '';
-    if (message.includes('cancel') || message.includes('user denied') || message.includes('cancelled')) {
-      throw new JoleneCameraError('CANCELLED', 'Annulé par l\'utilisateur');
+    if (/permission|denied|access.*(?:camera|photo)/i.test(message)) {
+      throw new JoleneCameraError('PERMISSION_DENIED', 'Permission caméra ou photothèque refusée');
     }
-    if (message.includes('permission')) {
-      throw new JoleneCameraError('PERMISSION_DENIED', 'Permission caméra refusée');
+    if (message.includes('cancel') || message.includes('cancelled')) {
+      throw new JoleneCameraError('CANCELLED', 'Annulé par l\'utilisateur');
     }
     throw new JoleneCameraError('UNKNOWN', (err as Error)?.message || 'Erreur caméra');
   }
@@ -155,7 +159,7 @@ function prendrePhotoWeb(opts: Required<JoleneCameraOptions>): Promise<JoleneCam
 // ─── QR Scanner unifié ───────────────────────────────────────────────
 
 export interface JoleneQrResult {
-  source: 'mlkit' | 'html5-qrcode';
+  source: 'native' | 'html5-qrcode';
   text: string;
   format: string;
 }
@@ -163,8 +167,8 @@ export interface JoleneQrResult {
 /**
  * Lance un scan QR code et retourne le texte décodé.
  *
- * Sur Capacitor native : @capacitor-mlkit/barcode-scanning (caméra full
- * screen modal système, support QR + EAN + DataMatrix).
+ * Sur Capacitor native : @capacitor/barcode-scanner (caméra plein écran,
+ * compatible Swift Package Manager sur iOS et ZXing sur Android).
  * Sur web : déléguer à html5-qrcode (le caller doit gérer le DOM).
  *
  * Sur web, cette fonction NE renvoie PAS de résultat direct — le caller
@@ -180,41 +184,46 @@ export async function scannerQr(): Promise<JoleneQrResult | null> {
   }
 
   try {
-    const { BarcodeScanner, BarcodeFormat } = await import('@capacitor-mlkit/barcode-scanning');
-
-    // Check installation Google Code Scanner (Android) ou Vision Framework (iOS)
-    const supported = await BarcodeScanner.isSupported();
-    if (!supported.supported) {
-      throw new JoleneCameraError('UNSUPPORTED', 'Scanner natif non supporté sur cet appareil');
-    }
-
-    // Permissions
-    const perm = await BarcodeScanner.checkPermissions();
-    if (perm.camera !== 'granted') {
-      const newPerm = await BarcodeScanner.requestPermissions();
-      if (newPerm.camera !== 'granted') {
-        throw new JoleneCameraError('PERMISSION_DENIED', 'Permission caméra refusée');
-      }
-    }
+    const {
+      CapacitorBarcodeScanner,
+      CapacitorBarcodeScannerAndroidScanningLibrary,
+      CapacitorBarcodeScannerTypeHint,
+    } = await import('@capacitor/barcode-scanner');
 
     // Scan
-    const result = await BarcodeScanner.scan({
-      formats: [BarcodeFormat.QrCode],
+    const result = await CapacitorBarcodeScanner.scanBarcode({
+      hint: CapacitorBarcodeScannerTypeHint.QR_CODE,
+      scanInstructions: 'Placez le QR code Jolene dans le cadre',
+      scanButton: false,
+      cancelButtonAccessibilityLabel: 'Annuler le scan',
+      torchButtonOnAccessibilityLabel: 'Éteindre la lampe',
+      torchButtonOffAccessibilityLabel: 'Allumer la lampe',
+      android: {
+        scanningLibrary: CapacitorBarcodeScannerAndroidScanningLibrary.ZXING,
+      },
     });
 
-    if (!result.barcodes || result.barcodes.length === 0) {
+    if (!result.ScanResult?.trim()) {
       throw new JoleneCameraError('CANCELLED', 'Aucun QR détecté');
     }
 
     return {
-      source: 'mlkit',
-      text: result.barcodes[0].rawValue,
-      format: result.barcodes[0].format,
+      source: 'native',
+      text: result.ScanResult.trim(),
+      format: String(result.format),
     };
   } catch (err) {
-    logger.error('[camera] mlkit scan error', err);
+    logger.error('[camera] native barcode scan error', err);
     if (err instanceof JoleneCameraError) throw err;
-    throw new JoleneCameraError('UNKNOWN', (err as Error)?.message || 'Erreur scan QR');
+    const code = String((err as { code?: string })?.code ?? '');
+    const message = (err as Error)?.message ?? '';
+    if (code === 'OS-PLUG-BARC-0006' || /cancel/i.test(message)) {
+      throw new JoleneCameraError('CANCELLED', 'Scan annulé');
+    }
+    if (code === 'OS-PLUG-BARC-0007' || /camera access|permission|denied|refus/i.test(message)) {
+      throw new JoleneCameraError('PERMISSION_DENIED', 'Permission caméra refusée');
+    }
+    throw new JoleneCameraError('UNKNOWN', message || 'Erreur scan QR');
   }
 }
 
@@ -224,9 +233,9 @@ export async function scannerQr(): Promise<JoleneQrResult | null> {
 export async function qrScannerNatifDispo(): Promise<boolean> {
   if (!isNative()) return false;
   try {
-    const { BarcodeScanner } = await import('@capacitor-mlkit/barcode-scanning');
-    const supported = await BarcodeScanner.isSupported();
-    return supported.supported;
+    const { Capacitor } = await import('@capacitor/core');
+    await import('@capacitor/barcode-scanner');
+    return Capacitor.isPluginAvailable('CapacitorBarcodeScanner');
   } catch {
     return false;
   }

@@ -54,7 +54,8 @@ export function AuthLayout({ children, showBack = true, backTo }: AuthLayoutProp
           carte, créant un « rabaissement » visible au clic sur Se connecter).
           Centré verticalement à partir de sm (desktop/tablette, pas de clavier
           natif qui resize). */}
-      <div
+      <main
+        id="contenu-principal"
         className="flex-1 flex flex-col items-center justify-start sm:justify-center px-4 py-6"
         style={{
           paddingTop: showBack ? '0.5rem' : 'calc(env(safe-area-inset-top) + 1rem)',
@@ -62,7 +63,7 @@ export function AuthLayout({ children, showBack = true, backTo }: AuthLayoutProp
         }}
       >
         {children}
-      </div>
+      </main>
     </div>
   );
 }

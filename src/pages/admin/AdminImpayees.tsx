@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { LayoutAdmin } from '@/components/LayoutAdmin';
 import { BreadcrumbAdmin } from '@/components/BreadcrumbAdmin';
-import { ChargementPage } from '@/components/ChargementPage';
+import { ChargementAdmin } from '@/components/admin/ChargementAdmin';
 import { supabase } from '@/integrations/supabase/client';
 import { CardY2K, CardY2KContent } from '@/components/y2k/CardY2K';
 import { BoutonY2K } from '@/components/y2k/BoutonY2K';
@@ -234,7 +234,7 @@ export default function AdminImpayees() {
     charger();
   };
 
-  if (loading) return <LayoutAdmin><ChargementPage /></LayoutAdmin>;
+  if (loading) return <LayoutAdmin><ChargementAdmin titre="Factures impayées" /></LayoutAdmin>;
 
   const totalImpaye = factures.reduce((s, f) => s + f.montant_ttc, 0);
   const nbEnRetard = factures.filter(f => f.joursRetard > 0).length;

@@ -19,7 +19,7 @@ export default function PageCGU() {
   return (
     <LayoutLegal
       titre="Conditions Générales d'Utilisation"
-      dateMaj="16 juin 2026"
+      dateMaj="12 juillet 2026"
       toc={TOC}
       seoDescription="Conditions Générales d'Utilisation de Jolene, plateforme de staffing médical. Inscription, vérification, pointage, score de fiabilité et résiliation."
     >
@@ -30,7 +30,7 @@ export default function PageCGU() {
         <ul className="list-disc pl-6 space-y-2">
           <li><strong>« Plateforme »</strong> : le site web et l'application mobile Jolene, édités par Jolene SASU, permettant la mise en relation entre Établissements de santé et Soignants pour des missions de remplacement paramédical.</li>
           <li><strong>« Éditeur »</strong> : Jolene SASU, société par actions simplifiée, dont le siège social est situé à Paris (75006).</li>
-          <li><strong>« Soignant »</strong> : toute personne physique exerçant une profession paramédicale (aide-soignant·e, infirmier·ère, kinésithérapeute, sage-femme, manipulateur·rice en électroradiologie, préparateur·rice en pharmacie) inscrite sur la Plateforme.</li>
+          <li><strong>« Soignant »</strong> : tout professionnel de santé ou du secteur médico-social dont la profession est proposée sur la Plateforme, inscrit à titre personnel.</li>
           <li><strong>« Établissement »</strong> : tout établissement de santé public ou privé (hôpital, clinique, EHPAD, centre de soins) inscrit sur la Plateforme en vue de publier des missions.</li>
           <li><strong>« Mission »</strong> : une offre de travail temporaire publiée par un Établissement et pouvant être acceptée par un Soignant via la Plateforme.</li>
           <li><strong>« Contrat de mission »</strong> : le contrat auto-généré par la Plateforme, signé électroniquement par le Soignant et l'Établissement avant le début de la Mission.</li>
@@ -63,8 +63,8 @@ export default function PageCGU() {
         <p className="mb-3">Avant toute première mission, chaque Soignant fait l'objet d'une vérification :</p>
         <ul className="list-disc pl-6 space-y-2 mb-3">
           <li><strong>Vérification RPPS automatique</strong> : le numéro RPPS est vérifié en temps réel via l'API officielle de l'Annuaire Santé (annuaire.sante.fr). La Plateforme compare le nom, le prénom et la profession déclarés avec les données du répertoire.</li>
-          <li><strong>Documents obligatoires</strong> : le Soignant doit téléverser l'ensemble des documents requis pour sa profession (pièce d'identité, diplôme, attestation d'assurance RCP, carte vitale, etc.) avant de pouvoir accepter une mission. Les documents font l'objet d'une vérification manuelle ou automatisée.</li>
-          <li><strong>Vérification automatisée par intelligence artificielle</strong> : certains documents téléversés (pièce d'identité, diplômes, attestations) peuvent être analysés par un système d'intelligence artificielle (IA) fourni par un prestataire tiers (Anthropic Claude). Cette analyse vise à vérifier l'authenticité, la lisibilité et la concordance des informations avec les données déclarées. Aucune décision automatisée n'est prise sans possibilité de recours : en cas de rejet automatique, le Soignant peut demander une revue manuelle par l'équipe Jolene. Les documents sont transmis de manière sécurisée et ne sont pas conservés par le prestataire d'IA au-delà du traitement.</li>
+          <li><strong>Documents obligatoires</strong> : le Soignant doit téléverser les documents requis pour sa profession et pour le contrat de la mission (pièce d'identité, diplôme, identifiant professionnel lorsqu'il existe et, pour le libéral, attestation d'assurance RCP). Les documents font l'objet d'une vérification manuelle ou automatisée avant l'attribution.</li>
+          <li><strong>Vérification automatisée par intelligence artificielle</strong> : certains documents téléversés (pièce d'identité, diplômes, attestations) peuvent être analysés par un système d'intelligence artificielle (IA) fourni par un prestataire tiers (Anthropic Claude). Cette analyse vise à vérifier l'authenticité, la lisibilité et la concordance des informations avec les données déclarées. Aucune décision automatisée n'est prise sans possibilité de recours : en cas de rejet automatique, le Soignant peut demander une revue manuelle par l'équipe Jolene. Les documents sont transmis de manière chiffrée ; les conditions de traitement et de conservation applicables sont celles du contrat et de la configuration en vigueur avec le prestataire.</li>
           <li><strong>Vérification d'identité</strong> : l'Éditeur se réserve le droit de demander une vérification d'identité complémentaire (vidéo, selfie avec pièce d'identité) en cas de doute.</li>
         </ul>
         <p>Un Soignant dont les documents sont incomplets ou expirés ne peut pas postuler ni être affecté à une Mission.</p>
@@ -93,11 +93,11 @@ export default function PageCGU() {
         <p>L'Établissement et le Soignant sont informés par notification en cas de blocage. Des dérogations peuvent être accordées dans les cas prévus par la loi (urgence sanitaire, article L.3131-15 du CSP).</p>
 
         <h3 className="text-lg font-semibold text-foreground mt-6 mb-2">4.4 — Pointage et géolocalisation</h3>
-        <p className="mb-3">Le pointage (arrivée et départ) s'effectue via l'application mobile. La Plateforme collecte les coordonnées GPS <strong>uniquement au moment du pointage</strong>. Il n'y a aucun tracking continu de la position du Soignant.</p>
+        <p className="mb-3">Le pointage (arrivée et départ) s'effectue via l'application mobile. La Plateforme demande les coordonnées GPS au moment du pointage lorsque le Soignant l'autorise. Une localisation peut aussi être demandée si l'utilisateur choisit volontairement « me localiser » pour renseigner son profil ou l'adresse de son établissement. Il n'y a aucun suivi continu ni en arrière-plan.</p>
         <ul className="list-disc pl-6 space-y-2 mb-3">
-          <li><strong>Géofence</strong> : le pointage est validé si le Soignant se trouve dans un rayon de 500 mètres autour de l'adresse de l'Établissement.</li>
+          <li><strong>Périmètre GPS</strong> : pour le pointage GPS, la distance maximale autour de l'adresse de l'Établissement est configurée selon le site (notamment 100, 200 ou 500 mètres). Le QR code ou le code de secours permet de pointer sans fournir de position.</li>
           <li><strong>Anti-téléportation</strong> : un algorithme détecte les incohérences de déplacement (distance physiquement impossible entre deux pointages successifs) et déclenche une alerte pour vérification manuelle.</li>
-          <li><strong>Données GPS</strong> : les coordonnées de pointage sont conservées pendant la durée de la mission + 3 ans (prescription légale), puis supprimées automatiquement.</li>
+          <li><strong>Données GPS</strong> : les coordonnées brutes de pointage sont supprimées au plus tard 90 jours après le pointage. La présence, sans coordonnées, peut être conservée comme preuve contractuelle selon les durées applicables.</li>
         </ul>
 
         <h3 className="text-lg font-semibold text-foreground mt-6 mb-2">4.5 — Déclaration Préalable à l'Embauche (DPAE)</h3>

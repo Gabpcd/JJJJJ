@@ -6,6 +6,7 @@ import { useNotification } from '@/contexts/NotificationContext';
 import { extraireMessageErreur } from '@/lib/erreurs';
 import { FooterLegal } from '@/components/FooterLegal';
 import { usePageTitle } from '@/hooks/usePageTitle';
+import { extraireRecoveryCredentials, nettoyerCallbackRecovery } from '@/lib/nativeLinks';
 
 const EMAIL_REGEX = /^[^\s@]{1,64}@[^\s@]{1,255}\.[a-z]{2,}$/i;
 
@@ -21,25 +22,57 @@ export default function PageResetPassword() {
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
 
-  // Supabase pose les tokens du lien email dans le hash : #access_token=...&type=recovery
-  // Le SDK les consume automatiquement et déclenche un évènement PASSWORD_RECOVERY.
+  // Sur le web, Supabase consomme généralement le callback au chargement du
+  // SDK. Dans une coquille native, l'Universal Link arrive après l'initialisation
+  // du client : on prend donc explicitement en charge implicit, PKCE et token_hash.
   useEffect(() => {
+    let actif = true;
     const { data: subscription } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === 'PASSWORD_RECOVERY' || (session && window.location.hash.includes('type=recovery'))) {
+      if (actif && (event === 'PASSWORD_RECOVERY' || (session && window.location.hash.includes('type=recovery')))) {
         setRecoverySession(true);
       }
     });
-    // Fallback : si déjà authentifié au mount avec hash recovery
-    supabase.auth.getSession().then(({ data }) => {
-      if (data?.session && (window.location.hash.includes('type=recovery') || recoverySession === null)) {
-        setRecoverySession(true);
-      } else if (recoverySession === null) {
-        // Pas de session = lien expiré ou invalide
-        setRecoverySession(false);
+
+    const finaliserCallback = async () => {
+      const credentials = extraireRecoveryCredentials(window.location);
+      let error: { message?: string } | null = null;
+
+      if (credentials?.kind === 'implicit') {
+        ({ error } = await supabase.auth.setSession({
+          access_token: credentials.accessToken,
+          refresh_token: credentials.refreshToken,
+        }));
+      } else if (credentials?.kind === 'pkce') {
+        ({ error } = await supabase.auth.exchangeCodeForSession(credentials.code));
+      } else if (credentials?.kind === 'token_hash') {
+        ({ error } = await supabase.auth.verifyOtp({
+          token_hash: credentials.tokenHash,
+          type: 'recovery',
+        }));
       }
-    });
-    return () => subscription.subscription.unsubscribe();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+
+      if (!actif) return;
+      if (credentials) {
+        // Même invalide/expiré, un token de récupération ne doit jamais rester
+        // dans l'historique ou la barre d'adresse du WebView.
+        nettoyerCallbackRecovery();
+        if (error) {
+          setRecoverySession(false);
+          return;
+        }
+        setRecoverySession(true);
+        return;
+      }
+
+      const { data } = await supabase.auth.getSession();
+      if (actif) setRecoverySession(Boolean(data.session));
+    };
+
+    void finaliserCallback();
+    return () => {
+      actif = false;
+      subscription.subscription.unsubscribe();
+    };
   }, []);
 
   const valide = motDePasse.length >= 8 && motDePasse === confirmMdp;

@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { LayoutAdmin } from '@/components/LayoutAdmin';
-import { ChargementPage } from '@/components/ChargementPage';
+import { ChargementAdmin } from '@/components/admin/ChargementAdmin';
 import { supabase } from '@/integrations/supabase/client';
 import { CarteKPIY2K } from '@/components/y2k/CarteKPIY2K';
 import { CardY2K, CardY2KHeader, CardY2KTitle, CardY2KContent } from '@/components/y2k/CardY2K';
@@ -153,8 +153,15 @@ export default function AdminCockpitFondateur() {
     };
   }, [data]);
 
-  if (loading) return <LayoutAdmin><ChargementPage /></LayoutAdmin>;
-  if (!data) return <LayoutAdmin><p className="text-muted-foreground">Erreur de chargement.</p></LayoutAdmin>;
+  if (loading) return <LayoutAdmin><ChargementAdmin titre="Cockpit Fondateur" /></LayoutAdmin>;
+  if (!data) return (
+    <LayoutAdmin>
+      <div className="space-y-3">
+        <h1 className="text-xl font-bold text-foreground">Cockpit Fondateur</h1>
+        <p className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-destructive" role="alert">Impossible de charger le cockpit fondateur.</p>
+      </div>
+    </LayoutAdmin>
+  );
 
   const acqData = data.acquisition_mensuelle || [];
   const revData = data.revenue_mensuel || [];

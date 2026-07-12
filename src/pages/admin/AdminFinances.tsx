@@ -3,7 +3,7 @@ import { telechargerOuPartager } from '@/lib/telechargement';
 import { LayoutAdmin } from '@/components/LayoutAdmin';
 import { BreadcrumbAdmin } from '@/components/BreadcrumbAdmin';
 import { usePageTitle } from '@/hooks/usePageTitle';
-import { ChargementPage } from '@/components/ChargementPage';
+import { ChargementAdmin } from '@/components/admin/ChargementAdmin';
 import { supabase } from '@/integrations/supabase/client';
 import {
   CardY2K,
@@ -47,6 +47,37 @@ const LIBELLES_PERIODE: Record<Periode, string> = {
   perso: 'Période personnalisée',
 };
 
+const TAILLE_PAGE_SUPABASE = 1000;
+
+async function chargerToutesFactures() {
+  const lignes: any[] = [];
+  for (let offset = 0; ; offset += TAILLE_PAGE_SUPABASE) {
+    const { data, error } = await supabase.from('factures')
+      .select('id, numero_facture, montant_ht, montant_tva, montant_ttc, statut, date_emission, etablissement_id, etablissements(nom, type)')
+      .order('date_emission', { ascending: false })
+      .range(offset, offset + TAILLE_PAGE_SUPABASE - 1);
+    if (error) throw error;
+    const page = data || [];
+    lignes.push(...page);
+    if (page.length < TAILLE_PAGE_SUPABASE) return lignes;
+  }
+}
+
+async function chargerToutesMissionsFinancieres() {
+  const lignes: any[] = [];
+  for (let offset = 0; ; offset += TAILLE_PAGE_SUPABASE) {
+    const { data, error } = await supabase.from('missions')
+      .select('id, total_brut, montant_commission_ht, montant_commission_ttc, statut, debut_le, etablissement_id, soignant_assigne_id, etablissements(nom, type, taux_commission_negocie)')
+      .in('statut', ['TERMINEE', 'EN_COURS', 'ASSIGNEE'])
+      .order('debut_le', { ascending: false })
+      .range(offset, offset + TAILLE_PAGE_SUPABASE - 1);
+    if (error) throw error;
+    const page = data || [];
+    lignes.push(...page);
+    if (page.length < TAILLE_PAGE_SUPABASE) return lignes;
+  }
+}
+
 export default function AdminFinances() {
   usePageTitle('Finances Jolene');
   const navigate = useNavigate();
@@ -66,23 +97,14 @@ export default function AdminFinances() {
   const [diagLoading, setDiagLoading] = useState(false);
 
   useEffect(() => {
-    Promise.all([
-      supabase.from('factures')
-        .select('id, montant_ht, montant_tva, montant_ttc, statut, date_emission, etablissement_id, etablissements(nom, type)')
-        .order('date_emission', { ascending: false })
-        .limit(200),
-      supabase.from('missions')
-        .select('id, total_brut, montant_commission_ht, montant_commission_ttc, statut, debut_le, etablissement_id, soignant_assigne_id, etablissements(nom, type, taux_commission_negocie)')
-        .in('statut', ['TERMINEE', 'EN_COURS', 'ASSIGNEE'])
-        .limit(200),
-    ]).then(([fRes, mRes]) => {
-      setFactures(fRes.data || []);
-      setMissions(mRes.data || []);
+    Promise.all([chargerToutesFactures(), chargerToutesMissionsFinancieres()]).then(([fRes, mRes]) => {
+      setFactures(fRes);
+      setMissions(mRes);
       setLoading(false);
     })
       .catch((err) => {
         setLoading(false);
-        toast.error(err?.message || 'Erreur chargement finances');
+        toast.error(err?.message || 'Impossible de charger les données financières.');
       });
   }, []);
 
@@ -176,7 +198,7 @@ export default function AdminFinances() {
       if (taux != null && m.etablissement_id) map.set(m.etablissement_id, Number(taux));
     });
     const vals = [...map.values()];
-    return vals.length > 0 ? vals.reduce((a, b) => a + b, 0) / vals.length : 15;
+    return vals.length > 0 ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
   }, [missions]);
 
   // Chart data
@@ -205,16 +227,17 @@ export default function AdminFinances() {
   const etabData = useMemo(() => {
     const map = new Map<string, {
       id: string; nom: string; type: string; nb_missions: number; soignants: Set<string>;
-      commissions_ht: number; commissions_ttc: number; impayes: number; taux_com: number; derniere_mission: string;
+      commissions_ht: number; commissions_ttc: number; impayes: number; taux_com: number | null; derniere_mission: string;
     }>();
     missionsFiltrees.forEach((m: any) => {
       const eid = m.etablissement_id;
       if (!eid) return;
+      const tauxCommission = (m.etablissements as any)?.taux_commission_negocie;
       const existing = map.get(eid) || {
         id: eid,
         nom: (m.etablissements as any)?.nom || '—',
         type: (m.etablissements as any)?.type || '—',
-        taux_com: Number((m.etablissements as any)?.taux_commission_negocie) || 15,
+        taux_com: tauxCommission != null && Number.isFinite(Number(tauxCommission)) ? Number(tauxCommission) : null,
         nb_missions: 0, soignants: new Set<string>(),
         commissions_ht: 0, commissions_ttc: 0, impayes: 0, derniere_mission: '',
       };
@@ -225,10 +248,26 @@ export default function AdminFinances() {
       if (!existing.derniere_mission || (m.debut_le && m.debut_le > existing.derniere_mission)) existing.derniere_mission = m.debut_le;
       map.set(eid, existing);
     });
-    facturesFiltrees.filter(f => f.statut === 'EMISE' || f.statut === 'EN_RETARD').forEach(f => {
+    facturesFiltrees.forEach(f => {
       const eid = f.etablissement_id;
-      if (!eid || !map.has(eid)) return;
-      map.get(eid)!.impayes += f.montant_ttc || 0;
+      if (!eid) return;
+      if (!map.has(eid)) {
+        map.set(eid, {
+          id: eid,
+          nom: (f.etablissements as any)?.nom || '—',
+          type: (f.etablissements as any)?.type || '—',
+          taux_com: null,
+          nb_missions: 0,
+          soignants: new Set<string>(),
+          commissions_ht: 0,
+          commissions_ttc: 0,
+          impayes: 0,
+          derniere_mission: '',
+        });
+      }
+      if (f.statut === 'EMISE' || f.statut === 'EN_RETARD') {
+        map.get(eid)!.impayes += f.montant_ttc || 0;
+      }
     });
     return Array.from(map.values()).map(e => ({ ...e, nb_soignants: e.soignants.size }));
   }, [missionsFiltrees, facturesFiltrees]);
@@ -248,11 +287,6 @@ export default function AdminFinances() {
       return sortDir === 'asc' ? String(va).localeCompare(String(vb)) : String(vb).localeCompare(String(va));
     });
   }, [etabData, sortKey, sortDir]);
-
-  const toggleSort = (key: SortKey) => {
-    if (sortKey === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
-    else { setSortKey(key); setSortDir('desc'); }
-  };
 
   const exporterCSV = () => {
     const headers = ['Date émission', 'N° Facture', 'Établissement', 'Type', 'Montant HT', 'TVA', 'Montant TTC', 'Statut'];
@@ -291,7 +325,7 @@ export default function AdminFinances() {
     setDiagLoading(false);
   };
 
-  if (loading) return <LayoutAdmin><ChargementPage /></LayoutAdmin>;
+  if (loading) return <LayoutAdmin><ChargementAdmin titre="Piloter les finances Jolene" /></LayoutAdmin>;
 
   // Scopé période (cohérent avec « Volume brut soignants » du même bloc récap).
   const nbSoignantsTotal = new Set(missionsFiltrees.map((m: any) => m.soignant_assigne_id).filter(Boolean)).size;
@@ -302,7 +336,7 @@ export default function AdminFinances() {
       <BreadcrumbAdmin pageName="Finances" />
       <div className="space-y-6">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <h1 className="text-2xl font-bold text-foreground">Finances Jolene</h1>
+          <h1 className="text-2xl font-bold text-foreground">Piloter les finances Jolene</h1>
           <div className="flex gap-2">
             <BoutonY2K variant="secondary" onClick={exporterCSV} className="gap-2" iconeGauche={<Download className="h-4 w-4" />}>
               Export CSV
@@ -323,7 +357,7 @@ export default function AdminFinances() {
                   <p className="text-xl font-bold text-foreground">{formatEur(commHTMois)}</p>
                 </div>
                 <div className={`flex items-center gap-1 text-xs font-medium ${variationPositive ? 'text-success' : 'text-destructive'}`}>
-                  {variationPositive ? <TrendingUp className="h-3.5 w-3.5" /> : <TrendingDown className="h-3.5 w-3.5" />}
+                  {variationPct !== 0 && (variationPositive ? <TrendingUp className="h-3.5 w-3.5" /> : <TrendingDown className="h-3.5 w-3.5" />)}
                   {variationPct !== 0 ? `${variationPositive ? '+' : ''}${variationPct.toFixed(0)}%` : '—'}
                 </div>
               </div>
@@ -354,8 +388,8 @@ export default function AdminFinances() {
           </CardY2K>
           <CardY2K noPadding>
             <CardY2KContent className="pt-4 pb-3">
-              <p className="text-[10px] text-muted-foreground uppercase">Taux com. moyen</p>
-              <p className="text-xl font-bold text-foreground">{tauxParEtab.toFixed(1)}%</p>
+              <p className="text-[10px] text-muted-foreground uppercase">Taux de commission moyen</p>
+              <p className="text-xl font-bold text-foreground">{tauxParEtab != null ? `${tauxParEtab.toFixed(1)}%` : '—'}</p>
             </CardY2KContent>
           </CardY2K>
         </div>
@@ -540,10 +574,11 @@ export default function AdminFinances() {
             <CardY2KTitle className="text-base">Détail par établissement — {libellePeriode}</CardY2KTitle>
             {/* Mobile : tri visible via select */}
             <div className="md:hidden flex items-center gap-2 mt-2">
-              <label className="text-xs text-muted-foreground">Trier par</label>
+              <label htmlFor="admin-finances-tri-mobile" className="text-xs text-muted-foreground">Trier par</label>
               <select
+                id="admin-finances-tri-mobile"
                 value={sortKey}
-                onChange={(e) => setSortKey(e.target.value as SortKey)}
+                onChange={(e) => { setSortKey(e.target.value as SortKey); setSortDir('desc'); }}
                 className="rounded-lg border border-border bg-background px-2 py-1 text-xs"
               >
                 <option value="commissions_ht">Com. HT</option>
@@ -634,7 +669,7 @@ export default function AdminFinances() {
                     );
                   case 'type': return <BadgeY2K variant="info" size="sm">{getLabelTypeEtablissement(e.type)}</BadgeY2K>;
                   case 'nb_missions': return <span className="font-medium">{e.nb_missions}</span>;
-                  case 'taux_com': return <span className="font-medium text-primary">{e.taux_com}%</span>;
+                  case 'taux_com': return <span className="font-medium text-primary">{e.taux_com != null ? `${e.taux_com}%` : '—'}</span>;
                   case 'commissions_ht': return <span className="font-medium">{formatEur(e.commissions_ht)}</span>;
                   case 'commissions_ttc': return formatEur(e.commissions_ttc);
                   case 'impayes': return e.impayes > 0 ? (
@@ -669,7 +704,7 @@ export default function AdminFinances() {
                     </div>
                     <div>
                       <p className="text-muted-foreground">Taux com.</p>
-                      <p className="font-semibold text-primary">{e.taux_com}%</p>
+                      <p className="font-semibold text-primary">{e.taux_com != null ? `${e.taux_com}%` : '—'}</p>
                     </div>
                     <div>
                       <p className="text-muted-foreground">Com. HT</p>

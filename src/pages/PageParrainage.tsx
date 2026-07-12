@@ -123,7 +123,7 @@ export default function PageParrainage() {
               {/* 7f (§5) : 25 € chacun à 500 € de missions ENCAISSÉES du filleul
                   — jamais « mission terminée » (règle d'or, prime autofinancée). */}
               <p className="font-semibold">Prime de 25€ pour toi + 25€ pour ton filleul</p>
-              <p className="text-xs text-muted-foreground mt-0.5">Versée par virement quand ton filleul atteint 500€ de missions encaissées (1 à 2 missions en général). Renseigne ton IBAN dans <strong>Profil → Paiements</strong>.</p>
+              <p className="text-xs text-muted-foreground mt-0.5">Versée par virement quand ton filleul atteint 500€ de missions encaissées (1 à 2 missions en général). Renseigne ton IBAN dans <strong>Mon compte → Coordonnées bancaires</strong>.</p>
             </div>
           </div>
           <div className="flex items-start gap-2 p-3 rounded-xl bg-primary/5 border border-primary/20">

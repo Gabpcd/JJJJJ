@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { AlertTriangle, MapPin, Clock, Smartphone, Loader2, ShieldCheck } from 'lucide-react';
 import { LayoutAdmin } from '@/components/LayoutAdmin';
-import { ChargementPage } from '@/components/ChargementPage';
+import { ChargementAdmin } from '@/components/admin/ChargementAdmin';
 import { supabase } from '@/integrations/supabase/client';
 import { useNotification } from '@/contexts/NotificationContext';
 import { usePageTitle } from '@/hooks/usePageTitle';
@@ -34,8 +34,8 @@ interface Alerte {
 const PAR_PAGE = 50;
 const DECISIONS = [
   { value: 'LEGITIME', label: 'Légitime (faux positif)', description: 'Pas de fraude, alerte fermée sans sanction' },
-  { value: 'FRAUDE_AVERTISSEMENT', label: 'Fraude — avertissement', description: 'Note la fraude, avertit le soignant, pas de suspension' },
-  { value: 'FRAUDE_SUSPENSION_PROPOSEE', label: 'Fraude — proposer suspension', description: 'Une tâche est créée pour que l\'équipe procède à la suspension manuellement' },
+  { value: 'FRAUDE_AVERTISSEMENT', label: 'Fraude — avertissement à préparer', description: 'Consigne la décision pour un avertissement manuel, sans suspension automatique' },
+  { value: 'FRAUDE_SUSPENSION_PROPOSEE', label: 'Fraude — proposer une suspension', description: 'Crée une tâche de revue prioritaire pour l’équipe, sans suspendre automatiquement le compte' },
   { value: 'IGNORER', label: 'Ignorer', description: 'Faible importance, alerte fermée' },
 ];
 
@@ -61,9 +61,11 @@ export default function AdminAlertesPointage() {
   const [typeFiltre, setTypeFiltre] = useState<string>('Tous');
   const [statutFiltre, setStatutFiltre] = useState<string>('OUVERTE');
   const [alerteATraiter, setAlerteATraiter] = useState<Alerte | null>(null);
+  const [erreurChargement, setErreurChargement] = useState<string | null>(null);
 
   async function charger() {
     setLoading(true);
+    setErreurChargement(null);
     const [resKpi, resListe] = await Promise.all([
       supabase.rpc('fn_admin_resume_alertes_pointage' as any),
       supabase.rpc('fn_admin_lister_alertes_pointage' as any, {
@@ -73,21 +75,34 @@ export default function AdminAlertesPointage() {
         p_offset: page * PAR_PAGE,
       }),
     ]);
+    const erreurKpi = resKpi.error?.message
+      || (resKpi.data && !(resKpi.data as any).success ? (resKpi.data as any).error || (resKpi.data as any).error_code : null);
+    const erreurListe = resListe.error?.message
+      || (resListe.data && !(resListe.data as any).success ? (resListe.data as any).error || (resListe.data as any).error_code : null);
+
     if (resKpi.data && (resKpi.data as any).success) {
       setKpis((resKpi.data as any).kpis as KPI);
+    } else {
+      setKpis(null);
     }
     if (resListe.data && (resListe.data as any).success) {
       setAlertes((resListe.data as any).alertes as Alerte[]);
       setTotal((resListe.data as any).total as number);
-    } else if (resListe.error) {
-      afficherNotification({ type: 'erreur', message: resListe.error.message });
+    } else {
+      setAlertes([]);
+      setTotal(0);
+    }
+    if (erreurKpi || erreurListe) {
+      const message = erreurListe || erreurKpi || 'Impossible de charger les alertes.';
+      setErreurChargement(message);
+      afficherNotification({ type: 'erreur', message });
     }
     setLoading(false);
   }
 
   useEffect(() => { charger(); }, [typeFiltre, statutFiltre, page]);
 
-  if (loading && alertes.length === 0) return <LayoutAdmin><ChargementPage /></LayoutAdmin>;
+  if (loading && alertes.length === 0) return <LayoutAdmin><ChargementAdmin titre="Alertes pointage" /></LayoutAdmin>;
 
   const totalPages = Math.ceil(total / PAR_PAGE);
 
@@ -95,12 +110,18 @@ export default function AdminAlertesPointage() {
     <LayoutAdmin>
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-foreground inline-flex items-center gap-2">
-          <AlertTriangle className="h-6 w-6 text-warning" /> Alertes pointage anti-triche
+          <AlertTriangle className="h-6 w-6 text-warning" /> Traiter les alertes de pointage
         </h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Alertes détectées automatiquement : téléportation, position GPS falsifiée, incohérence temporelle. Chaque alerte nécessite votre décision.
+          La file de traitement regroupe les téléportations et incohérences temporelles. Les cartes affichent aussi les signaux GPS agrégés sur 7 jours.
         </p>
       </div>
+
+      {erreurChargement && (
+        <div role="alert" className="mb-4 rounded-xl border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
+          Données incomplètes : {erreurChargement}
+        </div>
+      )}
 
       {/* KPI cards */}
       {kpis && (
@@ -145,6 +166,7 @@ export default function AdminAlertesPointage() {
       {/* Filtres */}
       <div className="flex flex-col sm:flex-row gap-2 mb-4">
         <select
+          aria-label="Filtrer les alertes par type"
           value={typeFiltre}
           onChange={(e) => { setTypeFiltre(e.target.value); setPage(0); }}
           className="input-base sm:w-64"
@@ -154,6 +176,7 @@ export default function AdminAlertesPointage() {
           <option value="POINTAGE_INCOHERENT">Pointage incohérent</option>
         </select>
         <select
+          aria-label="Filtrer les alertes par statut"
           value={statutFiltre}
           onChange={(e) => { setStatutFiltre(e.target.value); setPage(0); }}
           className="input-base sm:w-48"
@@ -208,7 +231,7 @@ export default function AdminAlertesPointage() {
               icone={<ShieldCheck />}
               mascotte="happy"
               titre="Aucune alerte détectée"
-              description="Aucune alerte anti-triche ne correspond à ces critères. Les alertes (téléportation, mock GPS, incohérence) apparaîtront ici."
+              description="Aucune téléportation ni incohérence de pointage ne correspond à ces critères. Les autres signaux GPS restent visibles dans les indicateurs ci-dessus."
               variant="success"
             />
           </li>
@@ -263,21 +286,33 @@ function ModaleTraiterAlerte({ alerte, onFermer, onTraitee }: { alerte: Alerte; 
       p_motif: motif.trim(),
     });
     setLoading(false);
-    if (error || !(data as any)?.success) {
-      afficherNotification({ type: 'erreur', message: error?.message || (data as any)?.error || 'Erreur.' });
+    const resultat = data as { success?: boolean; error?: string; effect?: string } | null;
+    if (error || !resultat?.success) {
+      afficherNotification({ type: 'erreur', message: error?.message || resultat?.error || 'Erreur.' });
       return;
     }
-    afficherNotification({ type: 'succes', message: 'Alerte traitée.' });
+    const message = resultat.effect === 'SUSPENSION_REVIEW_CREATED'
+      ? 'Alerte fermée et tâche de revue de suspension créée.'
+      : resultat.effect === 'AVERTISSEMENT_A_PREPARER_ENREGISTRE'
+        ? 'Alerte fermée ; l’avertissement manuel est consigné.'
+        : 'Alerte traitée et fermée.';
+    afficherNotification({ type: 'succes', message });
     onTraitee();
   }
 
   return (
     <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={onFermer}>
-      <div className="bg-card border border-border rounded-2xl max-w-lg w-full p-6 space-y-4 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-        <h2 className="text-lg font-bold text-foreground">Traiter l'alerte</h2>
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="titre-traitement-alerte"
+        className="bg-card border border-border rounded-2xl max-w-lg w-full p-6 space-y-4 max-h-[90vh] overflow-y-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h2 id="titre-traitement-alerte" className="text-lg font-bold text-foreground">Traiter l'alerte</h2>
 
         <div className="rounded-lg bg-muted/40 p-3 text-xs">
-          <p className="font-semibold text-foreground">{alerte.type_alerte}</p>
+          <p className="font-semibold text-foreground">{LIBELLES_TYPE_ALERTE[alerte.type_alerte] ?? alerte.type_alerte}</p>
           <p className="text-muted-foreground mt-1">{alerte.message}</p>
         </div>
 
@@ -311,10 +346,11 @@ function ModaleTraiterAlerte({ alerte, onFermer, onTraitee }: { alerte: Alerte; 
             onChange={(e) => setMotif(e.target.value)}
             className="input-base"
             rows={3}
+            maxLength={1000}
             placeholder="Justification de la décision (conservée pour traçabilité)…"
             disabled={loading}
           />
-          <span className="text-[10px] text-muted-foreground">{motif.length} / 10+</span>
+          <span className="text-[10px] text-muted-foreground">{motif.trim().length} / 10 minimum</span>
         </label>
 
         <div className="flex gap-2">

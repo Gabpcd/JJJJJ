@@ -18,7 +18,7 @@ Deux raccourcis vers les sous-pages existantes :
 |---|---|---|
 | 1 | **Mon compte** | Email read-only + téléphone (mention édition profil) + `ChangementMotDePasse` (PR 6) |
 | 2 | **Identité et documents** | Description + CTA vers `/soignant/profil` |
-| 3 | **Préférences mission** | CTA vers `/soignant/profil?tab=preferences` + bloc **suivi GPS** avec `ConsentementPingGps` (PR 7) |
+| 3 | **Préférences mission** | CTA vers `/soignant/profil?tab=preferences` ; GPS ponctuel au pointage ou sur action « me localiser » du profil |
 | 4 | **Disponibilités et calendrier** | CTAs vers planning + recherches sauvegardées |
 | 5 | **Données personnelles (RGPD)** | CTA vers `/soignant/profil?tab=confidentialite` (export/suppression) |
 | 6 | **Paramètres avancés** | Mode sombre (auto), langue (FR uniquement) |
@@ -50,20 +50,12 @@ Jauge horizontale colorée + label texte (Très faible → Excellent).
 4. Toggle visibilité ancien/nouveau (Eye/EyeOff).
 5. Reset des 3 champs après succès.
 
-## Section "Préférences mission" : ping GPS background (PR 7)
+## Section « Préférences mission » : GPS
 
-Wiring du composant `ConsentementPingGps.tsx` (Sprint 4.5 PR 10).
-
-### Bloc dédié
-- Titre "Suivi GPS pendant les missions" + icône MapPin
-- Description : finalité (fiabilité pointage + résolution litige), rétention 30j, opt-in révocable
-- `ConsentementPingGps` inline :
-  - Utilise `aConsenti()` + `setConsentement()` (`src/lib/background-geoloc.ts`)
-  - Affichage explicite des finalités RGPD
-  - Toggle révocable à tout moment
-
-### Audit
-Chaque changement déclenche `RGPD_CONSENTEMENT_DONNE` côté backend (cf. Sprint 4.5).
+Il n'existe plus de suivi GPS continu ni de consentement au ping en arrière-plan.
+La position est acquise ponctuellement, après une action de pointage ou une
+demande volontaire de localisation du profil. Les réglages expliquent ces
+finalités et renvoient vers les préférences de mission.
 
 ## Routes App.tsx
 
@@ -77,6 +69,6 @@ Chaque changement déclenche `RGPD_CONSENTEMENT_DONNE` côté backend (cf. Sprin
 
 - **PR 5** (#138) : page parente + 6 sections + nav rapide
 - **PR 6** (#139) : `ChangementMotDePasse` intégré section "Mon compte"
-- **PR 7** (#140) : `ConsentementPingGps` wiring section "Préférences mission"
+- **Retrait pré-release** : suppression du ping GPS continu et de son plugin natif inutilisé
 
 Fix global : **P0-3 audit Sprint 5** "Pas de page parente `/soignant/parametres`".

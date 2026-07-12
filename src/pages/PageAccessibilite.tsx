@@ -28,14 +28,19 @@ export default function PageAccessibilite() {
         </header>
 
         <section className="card-base mb-6 space-y-3">
-          <h2 className="text-lg font-bold text-foreground">Mesures en place</h2>
+          <h2 className="text-lg font-bold text-foreground">État de conformité</h2>
+          <p className="text-sm text-foreground"><strong>Conformité non encore évaluée</strong> par un audit RGAA complet. Les améliorations ci-dessous sont déployées progressivement et ne valent pas déclaration de conformité.</p>
+        </section>
+
+        <section className="card-base mb-6 space-y-3">
+          <h2 className="text-lg font-bold text-foreground">Mesures actuellement déployées</h2>
           <ul className="list-disc list-inside text-sm text-foreground space-y-1.5 ml-2">
-            <li>Tests automatisés via <strong>axe-core</strong> intégrés à notre suite de tests</li>
-            <li>Navigation clavier complète et indicateurs de focus visibles</li>
-            <li>Contrastes texte/fond conformes et taille de police lisible</li>
-            <li>Lien <em>« Aller au contenu principal »</em> en haut de chaque page</li>
+            <li>Tests automatisés via <strong>axe-core</strong> sur les parcours critiques</li>
+            <li>Indicateurs de focus visibles et corrections progressives de la navigation clavier</li>
+            <li>Palette de contraste renforcée et taille minimale des principales zones tactiles</li>
+            <li>Lien <em>« Aller au contenu principal »</em> global</li>
             <li>Attribut <code>lang="fr"</code> sur l'élément racine</li>
-            <li>Étiquettes (labels) associées aux champs de formulaire (<code>htmlFor</code>)</li>
+            <li>Étiquetage accessible des nouveaux formulaires et correction continue des écrans historiques</li>
             <li>Respect de <code>prefers-reduced-motion</code> pour les personnes sensibles aux animations</li>
           </ul>
         </section>

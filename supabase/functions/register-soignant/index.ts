@@ -1,5 +1,4 @@
-import { createClient } from 'npm:@supabase/supabase-js@2';
-import { verifyTurnstileToken } from '../_shared/verify-turnstile.ts';
+import { createClient } from 'npm:@supabase/supabase-js@2.99.2';
 import { errorResponse, safeStringifyError } from '../_shared/errors.ts';
 import { colonnesAttribution } from '../_shared/attribution.ts';
 
@@ -9,6 +8,8 @@ function getCorsOrigin(req: Request): string {
     origin === "https://jolene.app" ||
     origin === "https://app.jolene.app" ||
     origin === "https://www.jolene.app" ||
+    origin === "https://localhost" ||
+    origin === "capacitor://localhost" ||
     origin === "http://localhost:5173" ||
     origin === "http://localhost:8080"
   ) {
@@ -20,6 +21,7 @@ function getCorsOrigin(req: Request): string {
 function corsHeaders(req: Request) {
   return {
     'Access-Control-Allow-Origin': getCorsOrigin(req),
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
     'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
   };
 }
@@ -92,8 +94,16 @@ function professionCoherenteRpps(declaree: string, apiValue: string): boolean {
   return tokens.some((t) => v.includes(normaliserProf(t)));
 }
 
-async function verifierRppsServeur(rpps: string, nom: string, prenom: string, profession: string): Promise<VerifierRppsResult> {
-  if (rpps === '00000000001') return { valide: true, verifie: true };
+async function verifierRppsServeur(
+  rpps: string,
+  nom: string,
+  prenom: string,
+  profession: string,
+  autoriserIdentifiantDemo = false,
+): Promise<VerifierRppsResult> {
+  if (rpps === '00000000001' && autoriserIdentifiantDemo) {
+    return { valide: true, verifie: true };
+  }
   const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
   const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
   try {
@@ -146,29 +156,59 @@ Deno.serve(async (req) => {
   if (authError || !user) {
     return errorResponse(cors, 401, 'INVALID_TOKEN', 'Session invalide. Reconnectez-vous et réessayez.');
   }
+
+  const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey, {
+    auth: { autoRefreshToken: false, persistSession: false },
+    db: { schema: 'public' },
+  });
+  let suppressionAuthAutorisee = false;
+  let inscriptionFinalisee = false;
+  const claimToken = crypto.randomUUID();
+  const annulerCompteAuth = async (raison: string) => {
+    // La compensation ne s'applique qu'au user Auth fraichement cree et
+    // reserve atomiquement par CETTE inscription. Elle ne doit jamais pouvoir
+    // supprimer un compte existant qui rappelle l'endpoint.
+    if (!suppressionAuthAutorisee || inscriptionFinalisee) return;
+    try {
+      const { error } = await supabaseAdmin.auth.admin.deleteUser(user.id);
+      if (error) throw error;
+      console.log(`[register-soignant] Compte Auth ${user.id} supprimé (échec avant création du profil: ${raison})`);
+    } catch (e) {
+      console.error('[register-soignant] Cleanup Auth échoué:', safeStringifyError(e));
+    }
+  };
+
   try {
-    // Compensation anti-« e-mail consommé » : le compte Auth a déjà été créé
-    // (signUp côté client) AVANT cet appel. Si une validation échoue ici, on
-    // supprime ce compte pour que l'e-mail ne reste PAS réservé par une simple
-    // tentative interrompue. L'e-mail n'est définitivement pris qu'une fois le
-    // profil soignant réellement inséré (succès complet de l'inscription).
-    const adminCleanup = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false } });
-    const annulerCompteAuth = async (raison: string) => {
-      try {
-        await adminCleanup.auth.admin.deleteUser(user.id);
-        console.log(`[register-soignant] Compte Auth ${user.id} supprimé (échec avant création du profil: ${raison})`);
-      } catch (e) {
-        console.error('[register-soignant] Cleanup Auth échoué:', safeStringifyError(e));
-      }
-    };
+    // Reservation DB atomique : un meme auth.users.id ne peut pas devenir a la
+    // fois soignant et etablissement, meme si les deux endpoints sont appeles
+    // en concurrence. La RPC service-role refuse aussi tout compte deja finalise.
+    const { data: reservation, error: reservationError } = await supabaseAdmin.rpc(
+      'fn_reserver_type_compte',
+      { p_user_id: user.id, p_type_compte: 'SOIGNANT', p_claim_token: claimToken },
+    );
+    if (reservationError || !reservation || typeof reservation !== 'object') {
+      console.error('[register-soignant] Reservation type compte echouee:', reservationError?.code || 'INVALID_RESULT');
+      return errorResponse(cors, 503, 'ACCOUNT_RESERVATION_UNAVAILABLE', 'Inscription momentanément indisponible. Réessayez dans quelques minutes.');
+    }
+    const reservationResult = reservation as Record<string, unknown>;
+    if (reservationResult.allowed !== true) {
+      const code = String(reservationResult.code || 'ACCOUNT_TYPE_MISMATCH');
+      const status = code === 'ACCOUNT_AUTH_INACTIVE' ? 401 : 409;
+      const message = code === 'ACCOUNT_ALREADY_REGISTERED'
+        ? 'Ce compte soignant existe déjà. Connectez-vous pour continuer.'
+        : code === 'ACCOUNT_REGISTRATION_IN_PROGRESS'
+          ? 'Une inscription est déjà en cours pour ce compte. Patientez quelques instants puis réessayez.'
+          : 'Ce compte est déjà associé à un autre espace Jolene. Utilisez une autre adresse ou contactez le support.';
+      return errorResponse(cors, status, code, message);
+    }
+    suppressionAuthAutorisee = reservationResult.fresh === true;
 
     const body = await req.json();
-    const { prenom, nom, telephone, dateNaissance, profession, typesContrat, rpps, rayon, lat, lng, turnstileToken, est_etudiant, etudiant_details } = body;
-    const captcha = await verifyTurnstileToken(turnstileToken, clientIp);
-    if (!captcha.success) {
-      await annulerCompteAuth('CAPTCHA_FAILED');
-      return errorResponse(cors, 403, 'CAPTCHA_FAILED', captcha.error || 'Vérification anti-bot échouée. Rafraîchissez la page.');
-    }
+    const { prenom, nom, telephone, dateNaissance, profession, typesContrat, rpps, rayon, lat, lng, est_etudiant, etudiant_details } = body;
+    // Le token Turnstile est a usage unique et a deja ete valide par
+    // supabase.auth.signUp. Le revalider ici ferait echouer toute inscription
+    // legitime (`timeout-or-duplicate`). Le JWT utilisateur verifie ci-dessus
+    // prouve que l'etape Auth protegee a reussi.
     if (!prenom || !nom || !profession) {
       await annulerCompteAuth('MISSING_REQUIRED_FIELDS');
       return errorResponse(cors, 400, 'MISSING_REQUIRED_FIELDS', 'Champs obligatoires manquants (prénom, nom, profession).', { champs_manquants: [!prenom && 'prenom', !nom && 'nom', !profession && 'profession'].filter(Boolean) });
@@ -210,7 +250,15 @@ Deno.serve(async (req) => {
       // RPPS fourni : on le vérifie. On NE bloque QUE l'usurpation (le numéro
       // correspond à une AUTRE identité). Introuvable / annuaire indisponible →
       // inscription autorisée, vérification différée.
-      const verification = await verifierRppsServeur(rpps, nom, prenom, profession);
+      const identifiantDemoAutorise = Deno.env.get('ALLOW_DEMO_IDENTIFIERS') === 'true'
+        && !!user.email?.toLowerCase().endsWith('@jolene-demo.dev');
+      const verification = await verifierRppsServeur(
+        rpps,
+        nom,
+        prenom,
+        profession,
+        identifiantDemoAutorise,
+      );
       if (verification.code === 'RPPS_TRAITS_MISMATCH') {
         await annulerCompteAuth('RPPS_TRAITS_MISMATCH');
         return errorResponse(cors, 400, 'RPPS_TRAITS_MISMATCH', verification.message || 'Ce numéro RPPS ne correspond pas à votre identité.');
@@ -225,10 +273,6 @@ Deno.serve(async (req) => {
     const validContrats = ['CDD', 'VACATION', 'LIBERAL', 'SALARIE'];
     const contrats: string[] = Array.isArray(typesContrat) ? typesContrat.filter((c: string) => validContrats.includes(c)) : ['CDD'];
     if (contrats.length === 0) contrats.push('CDD');
-    const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey, {
-      auth: { autoRefreshToken: false, persistSession: false },
-      db: { schema: 'public' },
-    });
     const insertPayload = {
       id: user.id, prenom: String(prenom).slice(0, 100), nom: String(nom).slice(0, 100), email: user.email,
       telephone: telephone ? String(telephone).slice(0, 20) : null,
@@ -257,11 +301,7 @@ Deno.serve(async (req) => {
           // vient de créer (e-mail neuf) est désormais orphelin → on le nettoie
           // pour que l'utilisateur puisse réessayer avec le même e-mail (même
           // logique anti-orphelin que register-etablissement).
-          try {
-            await supabaseAdmin.auth.admin.deleteUser(user.id);
-          } catch (cleanupErr) {
-            console.error('[register-soignant] Cleanup orphan (rpps dup) échoué:', safeStringifyError(cleanupErr));
-          }
+          await annulerCompteAuth('RPPS_ALREADY_REGISTERED');
           return errorResponse(cors, 409, 'RPPS_ALREADY_REGISTERED', 'Ce numéro RPPS est déjà associé à un compte Jolene. Connectez-vous à ce compte, ou contactez le support si ce n\'est pas vous.');
         }
         // email / clé primaire (id) / autre contrainte : le compte existe déjà
@@ -271,28 +311,30 @@ Deno.serve(async (req) => {
       // [P1 — fix compte zombie] L'INSERT a échoué pour une autre raison
       // (validation, RLS, contrainte autre). On nettoie le user Auth pour que
       // le retry de l'utilisateur ne se heurte pas à "User already registered".
-      try {
-        await supabaseAdmin.auth.admin.deleteUser(user.id);
-        console.log(`[register-soignant] Compte Auth ${user.id} nettoyé après échec INSERT soignants`);
-      } catch (cleanupErr) {
-        console.error('[register-soignant] Cleanup Auth user échoué:', safeStringifyError(cleanupErr));
-      }
+      await annulerCompteAuth('INSERT_SOIGNANT_FAILED');
       return errorResponse(cors, 500, 'INTERNAL_ERROR', 'Erreur lors de la création du profil soignant. Notre équipe a été notifiée. Réessayez dans quelques minutes.');
     }
     const { error: claimsError } = await supabaseAdmin.auth.admin.updateUserById(user.id, {
-      app_metadata: { role: 'SOIGNANT' },
+      app_metadata: { ...(user.app_metadata || {}), role: 'SOIGNANT' },
     });
     if (claimsError) {
       console.error('set-user-claims echoue', claimsError.code || safeStringifyError(claimsError));
       // Compensation : on supprime aussi le row soignants ET le user Auth.
       await supabaseAdmin.from('soignants').delete().eq('id', user.id);
-      try {
-        await supabaseAdmin.auth.admin.deleteUser(user.id);
-      } catch (cleanupErr) {
-        console.error('[register-soignant] Cleanup Auth user échoué (claims):', safeStringifyError(cleanupErr));
-      }
+      await annulerCompteAuth('SET_CLAIMS_FAILED');
       return errorResponse(cors, 500, 'INTERNAL_ERROR', 'Erreur lors de la configuration du compte. Réessayez dans quelques minutes.');
     }
+    const { data: typeFinalise, error: finalisationError } = await supabaseAdmin.rpc(
+      'fn_finaliser_type_compte',
+      { p_user_id: user.id, p_type_compte: 'SOIGNANT', p_claim_token: claimToken },
+    );
+    if (finalisationError || typeFinalise !== true) {
+      console.error('[register-soignant] Finalisation type compte echouee:', finalisationError?.code || 'INVALID_RESULT');
+      await supabaseAdmin.from('soignants').delete().eq('id', user.id);
+      await annulerCompteAuth('ACCOUNT_TYPE_FINALIZATION_FAILED');
+      return errorResponse(cors, 500, 'INTERNAL_ERROR', 'Erreur lors de la configuration du compte. Réessayez dans quelques minutes.');
+    }
+    inscriptionFinalisee = true;
     await supabaseAdmin.from('journaux_audit').insert({
       acteur_id: user.id, type_acteur: 'SOIGNANT', action: 'INSCRIPTION',
       type_ressource: 'soignant', id_ressource: user.id,
@@ -323,6 +365,7 @@ Deno.serve(async (req) => {
     });
   } catch (err) {
     console.error('register-soignant error:', safeStringifyError(err));
+    await annulerCompteAuth('UNEXPECTED_ERROR');
     return errorResponse(cors, 500, 'INTERNAL_ERROR', 'Erreur serveur. Notre équipe a été notifiée. Réessayez dans quelques minutes.');
   }
 });

@@ -3,6 +3,8 @@ import * as Sentry from "@sentry/react";
 import { Capacitor } from "@capacitor/core";
 import App from "./App.tsx";
 import "./index.css";
+import { normaliserLienJolene } from './lib/nativeLinks';
+import { fermerNavigateurPsc } from './lib/pscNavigation';
 
 // ─── Sentry Initialization ───
 const SENTRY_DSN = import.meta.env.VITE_SENTRY_DSN;
@@ -40,7 +42,10 @@ const PII_PATTERNS: { regex: RegExp; replacement: string }[] = [
   { regex: /eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g, replacement: '[jwt-redacted]' },
   { regex: /\b\d{11}\b/g, replacement: '[rpps-redacted]' },
 ];
-const SENSITIVE_QUERY_PARAMS = ['email', 'token', 'access_token', 'refresh_token', 'recovery_token', 'rpps'];
+const SENSITIVE_QUERY_PARAMS = [
+  'email', 'token', 'token_hash', 'code', 'access_token', 'refresh_token',
+  'recovery_token', 'confirmation_url', 'rpps',
+];
 
 function scrubString(s: string | undefined): string | undefined {
   if (!s) return s;
@@ -56,7 +61,9 @@ function scrubUrl(url: string | undefined): string | undefined {
     for (const k of SENSITIVE_QUERY_PARAMS) {
       if (u.searchParams.has(k)) u.searchParams.set(k, '[redacted]');
     }
-    if (u.hash && /access_token|recovery/i.test(u.hash)) u.hash = '#[redacted]';
+    if (u.hash && /access_token|refresh_token|token_hash|recovery|code/i.test(u.hash)) {
+      u.hash = '#[redacted]';
+    }
     return scrubString(u.toString());
   } catch {
     return scrubString(url);
@@ -173,10 +180,6 @@ if (Capacitor.isNativePlatform()) {
     StatusBar.setBackgroundColor({ color: isDark ? '#1a1a2e' : '#ffffff' }).catch(() => {});
   }).catch(() => {});
 
-  // iOS: hide splash when ready
-  import('@capacitor/splash-screen').then(({ SplashScreen }) => {
-    SplashScreen.hide().catch(() => {});
-  }).catch(() => {});
 }
 
 // ─── Service Worker Registration ───
@@ -281,17 +284,45 @@ async function initNativePlugins() {
   if (!Capacitor.isNativePlatform()) return;
 
   const { App: CapApp } = await import("@capacitor/app");
+  const { SplashScreen } = await import('@capacitor/splash-screen');
+  let deepLinkTraite = false;
+  let splashMasque = false;
 
-  // Deep links — route appUrlOpen events to React Router
-  CapApp.addListener("appUrlOpen", (event) => {
-    const url = new URL(event.url);
-    const path = url.pathname + url.search;
-    if (path) {
-      window.location.hash = "";
-      window.history.replaceState(null, "", path);
-      window.dispatchEvent(new PopStateEvent("popstate"));
+  const masquerSplash = async () => {
+    if (splashMasque) return;
+    splashMasque = true;
+    await SplashScreen.hide().catch(() => {});
+  };
+
+  // Filet dur : un réseau lent ou absent ne doit jamais laisser le splash
+  // natif bloqué. Les vérifications d'auth peuvent continuer dans React.
+  const splashTimeout = window.setTimeout(() => { void masquerSplash(); }, 1800);
+
+  const appliquerLien = (rawUrl: string): boolean => {
+    const route = normaliserLienJolene(rawUrl);
+    if (!route) return false;
+    deepLinkTraite = true;
+    window.history.replaceState(null, '', route);
+    window.dispatchEvent(new PopStateEvent('popstate'));
+    return true;
+  };
+
+  // Deep links reçus lorsque l'app tourne. Le normaliseur conserve query +
+  // fragment (recovery Supabase) et refuse toute origine externe.
+  await CapApp.addListener('appUrlOpen', (event) => {
+    const route = normaliserLienJolene(event.url);
+    if (!route || !appliquerLien(event.url)) return;
+    if (route.startsWith('/auth/psc/callback') || /^\/connexion\?.*\blogout=psc(?:&|$)/.test(route)) {
+      void fermerNavigateurPsc();
     }
   });
+
+  // Cold start : appUrlOpen n'est pas garanti avant le premier rendu sur les
+  // deux plateformes, donc on consomme aussi explicitement l'URL de lancement.
+  try {
+    const launch = await CapApp.getLaunchUrl();
+    if (launch?.url) appliquerLien(launch.url);
+  } catch { /* aucune URL de lancement — flux normal */ }
 
   // Android hardware back button
   let lastBackPress = 0;
@@ -332,20 +363,39 @@ async function initNativePlugins() {
     }
   } catch { /* plugin StatusBar indisponible (web) — non bloquant */ }
 
-  // Splash screen: check session, then hide
-  // This prevents white screen between splash and content
+  // Splash screen : la session locale est lue immédiatement. L'appel réseau
+  // de rôle est borné et sauté hors-ligne afin de ne jamais bloquer le launch.
   try {
-    const { SplashScreen } = await import("@capacitor/splash-screen");
     const { supabase } = await import("./integrations/supabase/client");
+    const dansDelai = async <T,>(promise: PromiseLike<T>, timeoutMs: number): Promise<T | null> => {
+      let timer: number | undefined;
+      try {
+        return await Promise.race([
+          Promise.resolve(promise),
+          new Promise<null>((resolve) => {
+            timer = window.setTimeout(() => resolve(null), timeoutMs);
+          }),
+        ]);
+      } catch {
+        return null;
+      } finally {
+        if (timer !== undefined) window.clearTimeout(timer);
+      }
+    };
 
-    // Check for existing session while splash is still showing
-    const { data: { session } } = await supabase.auth.getSession();
+    const sessionResult = await dansDelai(supabase.auth.getSession(), 600);
+    const session = sessionResult?.data.session ?? null;
 
     if (session) {
       // User is logged in — navigate to their dashboard
       // The role check will happen in RouteProtegee, but we pre-navigate
       try {
-        const { data: roleData } = await supabase.rpc('fn_get_my_role');
+        const { Network } = await import('@capacitor/network');
+        const network = await dansDelai(Network.getStatus(), 250);
+        if (!network?.connected || deepLinkTraite) return;
+
+        const roleResult = await dansDelai(supabase.rpc('fn_get_my_role'), 850);
+        const roleData = roleResult?.data;
         const role = typeof roleData === 'string' ? roleData : (roleData as any)?.role;
         let target = '/connexion';
         if (role === 'ADMIN_PLATEFORME' || role === 'ADMIN') target = '/admin';
@@ -360,13 +410,17 @@ async function initNativePlugins() {
         // If role check fails, let normal auth flow handle it
       }
     }
-
-    // Hide splash after session check (max 1.5s enforced by config)
-    await SplashScreen.hide();
-  } catch { /* SplashScreen indisponible (web) — le flux auth normal prend le relais */ }
+  } catch { /* le flux auth React prend le relais */ }
+  finally {
+    window.clearTimeout(splashTimeout);
+    await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
+    await masquerSplash();
+  }
 }
 
-initNativePlugins();
+void initNativePlugins().catch(() => {
+  // Le filet 1,8 s masque malgré tout le splash si un plugin natif échoue.
+});
 
 // Configure keyboard behavior per-platform
 import { configurerClavier } from './lib/platform';

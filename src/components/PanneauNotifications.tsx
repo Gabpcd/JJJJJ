@@ -7,6 +7,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { formatDistanceToNow } from 'date-fns';
 import { fr } from 'date-fns/locale';
+import { normaliserLienJolene } from '@/lib/nativeLinks';
 
 interface NotificationItem {
   id: string;
@@ -75,9 +76,10 @@ export function PanneauNotifications({ open, onClose }: PanneauNotificationsProp
       setNotifications(prev => prev.map(x => x.id === n.id ? { ...x, lue: true } : x));
     }
     if (n.lien) {
-      if (n.lien.startsWith('/') || n.lien.startsWith('https://jolene.app')) {
+      const route = normaliserLienJolene(n.lien);
+      if (route) {
         onClose();
-        navigate(n.lien.replace('https://jolene.app', '') || '/');
+        navigate(route);
       } else {
         toast.error('Lien non autorisé');
       }
@@ -123,7 +125,7 @@ export function PanneauNotifications({ open, onClose }: PanneauNotificationsProp
                     </span>
                   </div>
                   <p className="text-xs text-muted-foreground mt-1 ml-4">{n.corps}</p>
-                  {n.lien && <span className="text-[10px] text-primary ml-4 mt-1 inline-flex items-center gap-1">Voir <ExternalLink className="h-2.5 w-2.5" /></span>}
+                  {n.lien && normaliserLienJolene(n.lien) && <span className="text-[10px] text-primary ml-4 mt-1 inline-flex items-center gap-1">Voir <ExternalLink className="h-2.5 w-2.5" /></span>}
                 </button>
               ))}
             </div>
@@ -203,8 +205,9 @@ export function BadgeNotification() {
           });
           notification.onclick = () => {
             window.focus();
-            if (n.lien && (n.lien.startsWith('/') || n.lien.startsWith('https://jolene.app') || n.lien.startsWith('https://jolene.app'))) {
-              window.location.href = n.lien.startsWith('/') ? n.lien : n.lien.replace('https://jolene.app', '').replace('https://jolene.app', '') || '/';
+            const route = typeof n.lien === 'string' ? normaliserLienJolene(n.lien) : null;
+            if (route) {
+              window.location.href = route;
             }
             notification.close();
           };
@@ -230,8 +233,14 @@ export function BadgeNotification() {
 
   return (
     <>
-      <button onClick={() => setOpen(true)} className="relative text-sidebar-foreground/70 hover:text-sidebar-foreground transition-colors p-2">
-        <Bell className="h-5 w-5" />
+      <button
+        onClick={() => setOpen(true)}
+        aria-label={count > 0 ? `Notifications, ${count} non lue${count > 1 ? 's' : ''}` : 'Notifications'}
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        className="relative text-sidebar-foreground/70 hover:text-sidebar-foreground transition-colors p-2"
+      >
+        <Bell className="h-5 w-5" aria-hidden="true" />
         {count > 0 && (
           <span className={`absolute -top-0.5 -right-0.5 h-[18px] min-w-[18px] flex items-center justify-center rounded-full bg-[#EF4444] text-white text-[10px] font-bold px-1 leading-none ${bouncing ? 'animate-bounce-badge' : ''}`}>
             {count > 9 ? '9+' : count}

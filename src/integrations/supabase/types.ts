@@ -10129,6 +10129,10 @@ export type Database = {
         Args: { p_limit?: number }
         Returns: Json
       }
+      fn_desactiver_mon_token_push: {
+        Args: { p_token: string }
+        Returns: Json
+      }
       fn_supprimer_api_key: { Args: { p_id: string }; Returns: Json }
       fn_supprimer_compte_etablissement_rate_limited: {
         Args: never

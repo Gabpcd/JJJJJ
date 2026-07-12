@@ -12,6 +12,7 @@ import { IllustrationCloche } from '@/components/ui/EmptyState';
 import { formatDistanceToNow } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { UserRole } from '@/lib/types';
+import { normaliserLienJolene } from '@/lib/nativeLinks';
 
 const FILTRES = ['Toutes', 'Missions', 'Documents', 'Finance', 'Système'] as const;
 type Filtre = typeof FILTRES[number];
@@ -33,7 +34,7 @@ export default function PageNotifications({ role }: { role: UserRole }) {
   );
 }
 
-export function NotificationsContent() {
+export function NotificationsContent({ headingLevel = 'h1' }: { headingLevel?: 'h1' | 'h2' }) {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [notifications, setNotifications] = useState<any[]>([]);
@@ -77,7 +78,11 @@ export function NotificationsContent() {
       await supabase.from('notifications').update({ lue: true, lue_le: new Date().toISOString() } as any).eq('id', n.id);
       setNotifications(prev => prev.map(x => x.id === n.id ? { ...x, lue: true } : x));
     }
-    if (n.lien) navigate(n.lien);
+    if (n.lien) {
+      const route = normaliserLienJolene(n.lien);
+      if (route) navigate(route);
+      else toast.error('Le lien de cette notification n’est pas valide.');
+    }
   };
 
   const supprimerLues = async () => {
@@ -92,13 +97,14 @@ export function NotificationsContent() {
   };
 
   const filtered = filtre === 'Toutes' ? notifications : notifications.filter(n => TYPE_MAP[filtre].includes(n.type));
+  const Heading = headingLevel;
 
   if (loading) return <ChargementPage />;
 
   return (
     <>
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg font-bold text-foreground">Notifications</h2>
+        <Heading className="text-lg font-bold text-foreground">Notifications</Heading>
         <button onClick={supprimerLues} className="text-xs text-muted-foreground hover:text-destructive flex items-center gap-1">
           <Trash2 className="h-3.5 w-3.5" /> Supprimer les lues
         </button>
@@ -132,7 +138,7 @@ export function NotificationsContent() {
                 </span>
               </div>
               <p className="text-xs text-muted-foreground mt-1 ml-4">{n.corps}</p>
-              {n.lien && <span className="text-[10px] text-primary ml-4 mt-1 inline-flex items-center gap-1">Voir <ExternalLink className="h-2.5 w-2.5" /></span>}
+              {n.lien && normaliserLienJolene(n.lien) && <span className="text-[10px] text-primary ml-4 mt-1 inline-flex items-center gap-1">Voir <ExternalLink className="h-2.5 w-2.5" /></span>}
             </button>
           ))}
         </div>

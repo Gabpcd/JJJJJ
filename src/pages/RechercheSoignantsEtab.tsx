@@ -202,10 +202,11 @@ export default function RechercheSoignantsEtab() {
             </div>
 
             <div>
-              <label className="text-xs font-medium text-muted-foreground mb-1 block">Recherche libre</label>
+              <label htmlFor="annuaire-recherche" className="text-xs font-medium text-muted-foreground mb-1 block">Recherche libre</label>
               <div className="relative">
-                <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Search aria-hidden="true" className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
                 <input
+                  id="annuaire-recherche"
                   type="text"
                   value={filtres.recherche_texte}
                   onChange={(e) => update('recherche_texte', e.target.value)}
@@ -216,8 +217,9 @@ export default function RechercheSoignantsEtab() {
             </div>
 
             <div>
-              <label className="text-xs font-medium text-muted-foreground mb-1 block">Profession</label>
+              <label htmlFor="annuaire-profession" className="text-xs font-medium text-muted-foreground mb-1 block">Profession</label>
               <select
+                id="annuaire-profession"
                 value={filtres.profession}
                 onChange={(e) => update('profession', e.target.value)}
                 className="w-full px-2 py-2 text-sm rounded-lg border border-border bg-background"
@@ -230,8 +232,9 @@ export default function RechercheSoignantsEtab() {
             </div>
 
             <div>
-              <label className="text-xs font-medium text-muted-foreground mb-1 block">Type d'exercice</label>
+              <label htmlFor="annuaire-type-exercice" className="text-xs font-medium text-muted-foreground mb-1 block">Type d'exercice</label>
               <select
+                id="annuaire-type-exercice"
                 value={filtres.type_exercice}
                 onChange={(e) => update('type_exercice', e.target.value)}
                 className="w-full px-2 py-2 text-sm rounded-lg border border-border bg-background"
@@ -244,8 +247,9 @@ export default function RechercheSoignantsEtab() {
             </div>
 
             <div>
-              <label className="text-xs font-medium text-muted-foreground mb-1 block">Ville</label>
+              <label htmlFor="annuaire-ville" className="text-xs font-medium text-muted-foreground mb-1 block">Ville</label>
               <input
+                id="annuaire-ville"
                 type="text"
                 value={filtres.ville}
                 onChange={(e) => update('ville', e.target.value)}
@@ -255,8 +259,9 @@ export default function RechercheSoignantsEtab() {
             </div>
 
             <div>
-              <label className="text-xs font-medium text-muted-foreground mb-1 block">Distance max (km)</label>
+              <label htmlFor="annuaire-distance" className="text-xs font-medium text-muted-foreground mb-1 block">Distance max (km)</label>
               <input
+                id="annuaire-distance"
                 type="number"
                 min={0}
                 max={500}
@@ -269,8 +274,9 @@ export default function RechercheSoignantsEtab() {
 
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <label className="text-xs font-medium text-muted-foreground mb-1 block">Note ≥</label>
+                <label htmlFor="annuaire-note" className="text-xs font-medium text-muted-foreground mb-1 block">Note ≥</label>
                 <input
+                  id="annuaire-note"
                   type="number" min={0} max={5} step={0.5}
                   value={filtres.note_min}
                   onChange={(e) => update('note_min', e.target.value)}
@@ -279,8 +285,9 @@ export default function RechercheSoignantsEtab() {
                 />
               </div>
               <div>
-                <label className="text-xs font-medium text-muted-foreground mb-1 block">Score ≥</label>
+                <label htmlFor="annuaire-score" className="text-xs font-medium text-muted-foreground mb-1 block">Score ≥</label>
                 <input
+                  id="annuaire-score"
                   type="number" min={0} max={100}
                   value={filtres.score_min}
                   onChange={(e) => update('score_min', e.target.value)}
@@ -291,8 +298,9 @@ export default function RechercheSoignantsEtab() {
             </div>
 
             <div>
-              <label className="text-xs font-medium text-muted-foreground mb-1 block">Expérience min (années)</label>
+              <label htmlFor="annuaire-experience" className="text-xs font-medium text-muted-foreground mb-1 block">Expérience min (années)</label>
               <input
+                id="annuaire-experience"
                 type="number" min={0} max={50}
                 value={filtres.experience_min}
                 onChange={(e) => update('experience_min', e.target.value)}
@@ -325,7 +333,7 @@ export default function RechercheSoignantsEtab() {
         </aside>
 
         {/* Résultats */}
-        <main>
+        <section aria-label="Résultats de recherche">
           <div className="lg:hidden mb-3 flex items-center gap-2">
             <button
               type="button"
@@ -374,7 +382,7 @@ export default function RechercheSoignantsEtab() {
               )}
             </>
           )}
-        </main>
+        </section>
       </div>
     </LayoutApp>
   );
@@ -383,18 +391,18 @@ export default function RechercheSoignantsEtab() {
 function CarteSoignant({ soignant: s, onClick, etablissementId }: { soignant: SoignantResultat; onClick: () => void; etablissementId?: string }) {
   const initiales = `${s.prenom?.[0] ?? ''}${s.nom_initiale?.[0] ?? ''}`.toUpperCase() || 'SD';
   return (
-    <div
-      role="button"
-      tabIndex={0}
-      onClick={onClick}
-      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(); } }}
-      className="card-base relative text-left cursor-pointer transition-shadow hover:shadow-md focus:outline-none focus:ring-2 focus:ring-primary/40"
-    >
+    <div className="card-base relative text-left transition-shadow hover:shadow-md">
       {etablissementId && (
-        <div className="absolute top-2 right-2 z-10" onClick={(e) => e.stopPropagation()}>
+        <div className="absolute top-2 right-2 z-10">
           <BoutonFavori soignantId={s.id} etablissementId={etablissementId} />
         </div>
       )}
+      <button
+        type="button"
+        onClick={onClick}
+        aria-label={`Voir le profil de ${s.prenom} ${s.nom_initiale}`}
+        className="w-full rounded-lg pr-7 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+      >
       <div className="flex items-start gap-3">
         {s.avatar_url ? (
           <img src={s.avatar_url} alt="" className="h-14 w-14 rounded-2xl object-cover border border-border" />
@@ -470,6 +478,7 @@ function CarteSoignant({ soignant: s, onClick, etablissementId }: { soignant: So
           )}
         </div>
       </div>
+      </button>
     </div>
   );
 }

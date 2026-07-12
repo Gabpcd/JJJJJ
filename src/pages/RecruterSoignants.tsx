@@ -24,7 +24,7 @@ const faqJsonLd = {
 };
 
 const garanties = [
-  { icon: ShieldCheck, titre: 'RPPS vérifié', desc: 'Chaque soignant est vérifié via le Répertoire Partagé des Professionnels de Santé. Diplômes et assurance RCP contrôlés.' },
+  { icon: ShieldCheck, titre: 'Profil vérifié', desc: 'Identité professionnelle, diplôme, RPPS lorsqu’il existe et pièces requises par le contrat sont contrôlés.' },
   { icon: Scale, titre: 'Conformité Code du Travail', desc: 'Contrats CDD, y compris courts, générés automatiquement, durées maximales respectées et repos obligatoires vérifiés.' },
   { icon: PercentCircle, titre: 'Tarification transparente', desc: 'Commission unique de 15 % sur le montant de la mission. Aucun abonnement, aucun frais caché.' },
   { icon: Receipt, titre: 'Facturation automatique', desc: 'Factures mensuelles consolidées, compatibles Chorus Pro pour le secteur public. Paiement par carte ou virement.' },

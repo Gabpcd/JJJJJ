@@ -43,23 +43,13 @@
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Jolene utilise votre position pour valider votre pointage à l'arrivée et au départ de vos missions.</string>
-	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-	<string>Jolene enregistre votre position pendant vos missions (option facultative) pour fiabiliser le pointage et faciliter la résolution de litiges. Données conservées 30 jours puis supprimées.</string>
+	<string>Jolene utilise votre position, à votre demande, pour valider un pointage ou localiser votre profil ou votre établissement.</string>
 	<key>NSCameraUsageDescription</key>
-	<string>Jolene utilise la caméra pour photographier vos documents professionnels (diplômes, pièce d'identité, RCP).</string>
+	<string>Jolene utilise la caméra pour photographier vos documents professionnels et scanner les QR codes de pointage.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Jolene accède à vos photos pour téléverser vos documents professionnels.</string>
-	<key>NSLocalNotificationUsageDescription</key>
-	<string>Jolene vous envoie des rappels pour vos missions (début, pointage, paiement).</string>
-	<key>NSPhotoLibraryAddUsageDescription</key>
-	<string>Jolene enregistre vos justificatifs téléchargés (avoirs, certificats) dans votre photothèque.</string>
 	<key>NSFaceIDUsageDescription</key>
 	<string>Jolene utilise Face ID ou Touch ID pour sécuriser la connexion à votre compte.</string>
-	<key>UIBackgroundModes</key>
-	<array>
-		<string>remote-notification</string>
-	</array>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 </dict>

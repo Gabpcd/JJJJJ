@@ -17,9 +17,9 @@ export default function PageConfidentialite() {
   return (
     <LayoutLegal
       titre="Politique de Confidentialité"
-      dateMaj="12 mars 2026"
+      dateMaj="12 juillet 2026"
       toc={TOC}
-      seoDescription="Politique de confidentialité de Jolene. Données collectées, hébergement sécurisé en UE, durées de conservation et exercice de vos droits RGPD."
+      seoDescription="Politique de confidentialité de Jolene : données collectées, sous-traitants, durées de conservation et exercice de vos droits RGPD."
     >
       {/* Article 1 */}
       <section id="art1">
@@ -30,7 +30,7 @@ export default function PageConfidentialite() {
           <p className="text-muted-foreground">SIRET : {ENTREPRISE.siret}</p>
           <p className="text-muted-foreground">Siège social : {ENTREPRISE.adresse}</p>
           <p className="text-muted-foreground">E-mail : {ENTREPRISE.email}</p>
-          <p className="text-muted-foreground mt-2">Délégué à la protection des données (DPO) : <a href="mailto:support@jolene.app" className="text-primary underline">support@jolene.app</a></p>
+          <p className="text-muted-foreground mt-2">Contact protection des données : <a href="mailto:support@jolene.app" className="text-primary underline">support@jolene.app</a></p>
         </div>
         <p>Le traitement des données est réalisé conformément au Règlement (UE) 2016/679 du 27 avril 2016 (RGPD) et à la loi n° 78-17 du 6 janvier 1978 modifiée (loi Informatique et Libertés).</p>
       </section>
@@ -44,33 +44,42 @@ export default function PageConfidentialite() {
         <p className="mb-3">Nom, prénom, date de naissance, adresse e-mail, numéro de téléphone, adresse postale, photo de profil (facultative). Pour les Soignants : numéro RPPS, numéro ADELI, numéro de sécurité sociale, profession.</p>
 
         <h3 className="text-lg font-semibold text-foreground mt-6 mb-2">2.2 — Données professionnelles</h3>
-        <p className="mb-3">Diplômes, habilitations, attestation RCP, statut (salarié/libéral), numéro SIRET le cas échéant, historique des missions réalisées, score de fiabilité, heures cumulées. Les vaccinations et aptitudes médicales sont déclarées sur l'honneur (aucun document de santé n'est stocké).</p>
+        <p className="mb-3">Diplômes, habilitations, attestation RCP, statut (salarié/libéral), numéro SIRET le cas échéant, historique des missions réalisées, score de fiabilité et heures cumulées. Les déclarations relatives aux vaccinations obligatoires et à la médecine du travail, ainsi que leur date de signature, sont également enregistrées. Elles peuvent révéler des informations liées à la santé et bénéficient d'un accès restreint.</p>
 
         <h3 className="text-lg font-semibold text-foreground mt-6 mb-2">2.3 — Données de géolocalisation</h3>
         <div className="bg-muted/50 border-l-4 border-primary p-4 rounded-r-xl my-4">
-          <p>Les coordonnées GPS sont collectées <strong>uniquement au moment du pointage</strong> (arrivée et départ). Il n'y a <strong>aucun tracking continu</strong> de la position des Soignants. Les données GPS comprennent : latitude, longitude, précision du signal, identifiant du terminal, adresse IP.</p>
+          <p>Les coordonnées GPS ne sont demandées que lors d'une action explicite : <strong>au pointage d'arrivée ou de départ</strong>, ou lorsque l'utilisateur choisit « me localiser » pour renseigner son profil ou l'adresse de son établissement. Il n'y a <strong>aucun suivi continu ou en arrière-plan</strong>. Le refus n'empêche pas le pointage par QR code ou code fourni par l'établissement, ni la saisie manuelle d'une ville ou d'une adresse. Les métadonnées de pointage peuvent comprendre la latitude, la longitude, la précision du signal et un identifiant technique du terminal.</p>
         </div>
 
         <h3 className="text-lg font-semibold text-foreground mt-6 mb-2">2.4 — Données financières</h3>
         <p className="mb-3">Coordonnées bancaires (IBAN) des Soignants pour le versement des rémunérations. Données de facturation des Établissements. Les données de carte bancaire sont traitées exclusivement par Stripe (certifié PCI-DSS niveau 1) et ne sont jamais stockées sur nos serveurs.</p>
 
         <h3 className="text-lg font-semibold text-foreground mt-6 mb-2">2.5 — Données de connexion</h3>
-        <p>Adresse IP, type et version du navigateur, système d'exploitation, date et heure de connexion, pages consultées, durée de session. Ces données sont collectées à des fins de sécurité et d'amélioration du service.</p>
+        <p>Adresse IP, type et version du navigateur, système d'exploitation, date et heure de connexion et contexte technique d'erreur. Selon les fonctionnalités utilisées, des événements de navigation limités peuvent également être produits à des fins de sécurité, de diagnostic et d'amélioration du service.</p>
+
+        <h3 className="text-lg font-semibold text-foreground mt-6 mb-2">2.6 — Finalités et bases juridiques</h3>
+        <ul className="list-disc pl-6 space-y-2">
+          <li>Création du compte, mise en relation, candidatures, missions, contrats et paiements : exécution du contrat ou mesures précontractuelles (article 6.1.b du RGPD).</li>
+          <li>Facturation, obligations sociales, fiscales et demandes des autorités : obligation légale (article 6.1.c).</li>
+          <li>Sécurité, prévention de la fraude, preuve des opérations, modération et amélioration du service : intérêt légitime de Jolene et des utilisateurs (article 6.1.f), mis en balance avec leurs droits.</li>
+          <li>Géolocalisation au pointage, localisation volontaire du profil ou de l'adresse, et communications facultatives : consentement lorsque celui-ci est requis (article 6.1.a), retirable pour l'avenir depuis les réglages concernés.</li>
+          <li>Les déclarations professionnelles susceptibles de révéler une information liée à la santé ne sont traitées que pour la conformité d'exercice et dans le cadre d'une exception applicable de l'article 9.2 du RGPD. Les justificatifs médicaux originaux ne sont pas téléversés sur Jolene.</li>
+        </ul>
       </section>
 
       {/* Article 3 */}
       <section id="art3">
         <h2 className="text-xl sm:text-2xl font-bold text-foreground mb-4">Article 3 — Hébergement sécurisé</h2>
-        <p className="mb-3">Les données sont hébergées par Supabase Inc. sur des serveurs localisés au sein de l'Union européenne. Les données sont chiffrées au repos (AES-256) et en transit (TLS 1.3).</p>
+        <p className="mb-3">La base de données et le stockage principal sont fournis par Supabase. Les données sont protégées en transit et au repos conformément à la configuration du projet et aux garanties contractuelles applicables.</p>
         <div className="bg-muted/50 border border-border rounded-xl p-4 mb-3">
           <p className="font-semibold text-foreground">Supabase Inc.</p>
-          <p className="text-muted-foreground">Infrastructure : Amazon Web Services (AWS) — Région eu-west-3 (Paris)</p>
-          <p className="text-muted-foreground">Sécurité : Chiffrement AES-256 au repos, TLS 1.3 en transit, SOC 2 Type II, ISO 27001</p>
+          <p className="text-muted-foreground">Finalité : authentification, base de données, fonctions serveur et stockage de fichiers</p>
+          <p className="text-muted-foreground">Localisation et garanties : précisées dans le registre des sous-traitants et les documents contractuels en vigueur</p>
         </div>
         <div className="bg-muted/50 border-l-4 border-primary p-4 rounded-r-xl my-4">
-          <p><strong>Jolene ne stocke aucune donnée de santé à caractère personnel</strong> au sens de l'article L.1111-8 du Code de la santé publique. Les vaccinations et aptitudes médicales sont déclarées sur l'honneur par le Soignant et vérifiées en présentiel par l'Établissement lors de la première mission.</p>
+          <p><strong>Informations liées à la santé :</strong> Jolene ne demande pas le dossier médical des Soignants. La Plateforme conserve néanmoins leurs déclarations relatives aux vaccinations obligatoires et à la médecine du travail, ainsi que la date de signature. Ces informations sont traitées comme sensibles et limitées aux finalités de conformité professionnelle.</p>
         </div>
-        <p className="mb-3">L'ensemble des données sont stockées sur des serveurs situés dans l'Union européenne (France). Les sauvegardes sont chiffrées (AES-256) et répliquées sur un site secondaire au sein de l'UE.</p>
+        <p className="mb-3">Les localisations, mécanismes de sauvegarde et mesures de sécurité applicables sont suivis dans le registre interne des sous-traitants et la documentation de continuité. Ils sont revus lors de tout changement de fournisseur ou de région.</p>
         <p className="mb-3">Les transferts de données hors UE, s'ils devaient avoir lieu dans le cadre de prestations techniques de sous-traitants, sont encadrés par des clauses contractuelles types approuvées par la Commission européenne (décision 2021/914).</p>
 
         <h3 className="text-lg font-semibold text-foreground mt-6 mb-2">3.2 — Sous-traitants et processeurs de données</h3>
@@ -79,30 +88,33 @@ export default function PageConfidentialite() {
           <table className="w-full text-sm border border-border rounded-xl overflow-hidden">
             <thead><tr className="bg-muted/50"><th className="px-4 py-2 text-left font-semibold text-foreground">Sous-traitant</th><th className="px-4 py-2 text-left font-semibold text-foreground">Finalité</th><th className="px-4 py-2 text-left font-semibold text-foreground">Données concernées</th><th className="px-4 py-2 text-left font-semibold text-foreground">Localisation</th></tr></thead>
             <tbody className="divide-y divide-border">
-              <tr><td className="px-4 py-2 text-foreground">Supabase Inc.</td><td className="px-4 py-2 text-muted-foreground">Hébergement, base de données, stockage</td><td className="px-4 py-2 text-muted-foreground">Toutes données</td><td className="px-4 py-2 text-muted-foreground">UE (AWS Paris)</td></tr>
-              <tr><td className="px-4 py-2 text-foreground">Stripe Inc.</td><td className="px-4 py-2 text-muted-foreground">Paiements, SEPA, Connect</td><td className="px-4 py-2 text-muted-foreground">IBAN, identité, facturation</td><td className="px-4 py-2 text-muted-foreground">UE (Ireland)</td></tr>
-              <tr><td className="px-4 py-2 text-foreground">Anthropic PBC</td><td className="px-4 py-2 text-muted-foreground">Vérification IA de documents</td><td className="px-4 py-2 text-muted-foreground">Documents téléversés, nom du soignant</td><td className="px-4 py-2 text-muted-foreground">USA (SCC)</td></tr>
-              <tr><td className="px-4 py-2 text-foreground">Twilio Inc.</td><td className="px-4 py-2 text-muted-foreground">Envoi de SMS</td><td className="px-4 py-2 text-muted-foreground">Numéro de téléphone, contenu SMS</td><td className="px-4 py-2 text-muted-foreground">USA (SCC)</td></tr>
-              <tr><td className="px-4 py-2 text-foreground">Resend Inc.</td><td className="px-4 py-2 text-muted-foreground">Envoi d'emails transactionnels</td><td className="px-4 py-2 text-muted-foreground">Adresse email, contenu email</td><td className="px-4 py-2 text-muted-foreground">USA (SCC)</td></tr>
+              <tr><td className="px-4 py-2 text-foreground">Supabase Inc.</td><td className="px-4 py-2 text-muted-foreground">Hébergement, base de données, stockage</td><td className="px-4 py-2 text-muted-foreground">Données du compte et du service</td><td className="px-4 py-2 text-muted-foreground">Région du projet et garanties consignées au registre des sous-traitants</td></tr>
+              <tr><td className="px-4 py-2 text-foreground">Stripe</td><td className="px-4 py-2 text-muted-foreground">Paiements, SEPA, Connect</td><td className="px-4 py-2 text-muted-foreground">IBAN, identité, facturation</td><td className="px-4 py-2 text-muted-foreground">EEE et pays tiers encadrés selon le service</td></tr>
+              <tr><td className="px-4 py-2 text-foreground">Anthropic PBC</td><td className="px-4 py-2 text-muted-foreground">Vérification IA de documents</td><td className="px-4 py-2 text-muted-foreground">Documents téléversés et données nécessaires à leur rapprochement</td><td className="px-4 py-2 text-muted-foreground">Selon configuration et garanties contractuelles en vigueur</td></tr>
+              <tr><td className="px-4 py-2 text-foreground">Twilio Inc.</td><td className="px-4 py-2 text-muted-foreground">Envoi de SMS</td><td className="px-4 py-2 text-muted-foreground">Numéro de téléphone, contenu SMS</td><td className="px-4 py-2 text-muted-foreground">Selon configuration et garanties contractuelles en vigueur</td></tr>
+              <tr><td className="px-4 py-2 text-foreground">Resend Inc.</td><td className="px-4 py-2 text-muted-foreground">Envoi d'emails transactionnels</td><td className="px-4 py-2 text-muted-foreground">Adresse email, contenu email</td><td className="px-4 py-2 text-muted-foreground">Selon configuration et garanties contractuelles en vigueur</td></tr>
+              <tr><td className="px-4 py-2 text-foreground">Sentry</td><td className="px-4 py-2 text-muted-foreground">Diagnostic d'erreurs et stabilité</td><td className="px-4 py-2 text-muted-foreground">Identifiant technique, contexte d'erreur et appareil</td><td className="px-4 py-2 text-muted-foreground">Selon configuration contractuelle</td></tr>
+              <tr><td className="px-4 py-2 text-foreground">Cloudflare</td><td className="px-4 py-2 text-muted-foreground">Protection anti-abus Turnstile</td><td className="px-4 py-2 text-muted-foreground">Données techniques de connexion et de navigateur</td><td className="px-4 py-2 text-muted-foreground">Réseau mondial</td></tr>
+              <tr><td className="px-4 py-2 text-foreground">Apple Push Notification Service / Google Firebase Cloud Messaging</td><td className="px-4 py-2 text-muted-foreground">Notifications push mobiles</td><td className="px-4 py-2 text-muted-foreground">Jeton de l'appareil et contenu de notification</td><td className="px-4 py-2 text-muted-foreground">Selon le système mobile et les garanties du service</td></tr>
             </tbody>
           </table>
         </div>
-        <p className="text-xs text-muted-foreground italic">SCC = Standard Contractual Clauses (clauses contractuelles types, décision 2021/914). Les documents transmis à Anthropic pour vérification ne sont pas conservés par le prestataire au-delà du traitement.</p>
+        <p className="text-xs text-muted-foreground italic">SCC = Standard Contractual Clauses (clauses contractuelles types, décision 2021/914). Les conditions de traitement, de conservation et de transfert applicables sont celles du contrat et de la configuration en vigueur pour chaque prestataire ; le registre interne fait foi en cas d'évolution.</p>
       </section>
 
       {/* Article 4 */}
       <section id="art4">
         <h2 className="text-xl sm:text-2xl font-bold text-foreground mb-4">Article 4 — Journaux d'audit</h2>
-        <p className="mb-3">La Plateforme maintient des journaux d'audit détaillés pour chaque action critique :</p>
+        <p className="mb-3">La Plateforme journalise les événements de sécurité et certaines opérations métier critiques, notamment :</p>
         <ul className="list-disc pl-6 space-y-2 mb-3">
           <li>Connexion et déconnexion des utilisateurs (date, heure, IP, navigateur)</li>
-          <li>Consultation, création, modification et suppression de données</li>
+          <li>Certaines consultations sensibles, créations, modifications et suppressions de données</li>
           <li>Téléversement et vérification de documents</li>
           <li>Signature électronique de contrats</li>
-          <li>Opérations de pointage (avec coordonnées GPS)</li>
+          <li>Opérations de pointage (avec coordonnées GPS lorsqu'elles ont été fournies)</li>
           <li>Opérations de facturation et de paiement</li>
         </ul>
-        <p className="mb-3">Les journaux d'audit sont conservés pendant 5 ans conformément aux recommandations de la CNIL. Ils sont accessibles uniquement aux administrateurs habilités de Jolene et peuvent être communiqués aux autorités judiciaires sur réquisition.</p>
+        <p className="mb-3">Les journaux d'audit concernés par la preuve contractuelle ou la sécurité sont conservés jusqu'à 5 ans selon la catégorie. Leur accès est limité aux administrateurs habilités et ils peuvent être communiqués aux autorités sur demande légalement fondée.</p>
         <p>Les journaux ne contiennent pas de données de santé des patients. Seules les métadonnées administratives (qui a fait quoi, quand, depuis où) sont enregistrées.</p>
       </section>
 
@@ -133,10 +145,15 @@ export default function PageConfidentialite() {
               </tr>
               <tr className="border-b border-border bg-card">
                 <td className="px-4 py-3">Données de géolocalisation (pointage)</td>
-                <td className="px-4 py-3">Durée de la mission</td>
-                <td className="px-4 py-3">3 ans</td>
+                <td className="px-4 py-3">Jusqu'à 90 jours après le pointage</td>
+                <td className="px-4 py-3">Coordonnées supprimées ; la présence non géolocalisée peut être conservée comme preuve contractuelle</td>
               </tr>
               <tr className="border-b border-border bg-muted/30">
+                <td className="px-4 py-3">Ville du profil / coordonnées de l'adresse d'établissement</td>
+                <td className="px-4 py-3">Tant que le profil ou l'adresse est actif</td>
+                <td className="px-4 py-3">Modifiables ou supprimées avec le profil, sous réserve des obligations légales applicables</td>
+              </tr>
+              <tr className="border-b border-border bg-card">
                 <td className="px-4 py-3">Contrats de mission</td>
                 <td className="px-4 py-3">Durée de la mission</td>
                 <td className="px-4 py-3">5 ans</td>
@@ -170,7 +187,7 @@ export default function PageConfidentialite() {
         <ul className="list-disc pl-6 space-y-3 mb-4">
           <li><strong>Droit d'accès</strong> (article 15) : obtenir la confirmation que des données vous concernant sont traitées et en recevoir une copie.</li>
           <li><strong>Droit de rectification</strong> (article 16) : demander la correction de données inexactes ou incomplètes.</li>
-          <li><strong>Droit à l'effacement</strong> (article 17) : demander la suppression de vos données, sous réserve des obligations légales de conservation. La suppression entraîne l'anonymisation irréversible de votre profil et le nettoyage de vos données personnelles dans l'ensemble des 34 tables concernées (messages, documents, presences GPS, tokens, candidatures, évaluations, paiements, etc.). Les données comptables sont conservées conformément aux obligations fiscales (10 ans).</li>
+          <li><strong>Droit à l'effacement</strong> (article 17) : demander la suppression de vos données, sous réserve des obligations légales de conservation. Le processus supprime ou anonymise le profil, révoque les accès et traite les fichiers associés. Les données comptables devant être conservées restent archivées avec un accès restreint pendant la durée légale.</li>
           <li><strong>Droit à la limitation du traitement</strong> (article 18) : demander la suspension du traitement de vos données dans certains cas.</li>
           <li><strong>Droit à la portabilité</strong> (article 20) : recevoir vos données dans un format structuré, couramment utilisé et lisible par machine (JSON ou CSV).</li>
           <li><strong>Droit d'opposition</strong> (article 21) : vous opposer au traitement de vos données pour des motifs légitimes.</li>
@@ -178,7 +195,7 @@ export default function PageConfidentialite() {
         </ul>
 
         <h3 className="text-lg font-semibold text-foreground mt-6 mb-2">6.2 — Traitement par intelligence artificielle</h3>
-        <p className="mb-3">Certains documents téléversés (pièce d'identité, diplômes, attestations RCP) sont analysés par un système d'intelligence artificielle (Anthropic Claude) pour vérifier leur authenticité et leur concordance avec les informations déclarées. Ce traitement est fondé sur l'intérêt légitime de l'Éditeur (sécurité de la plateforme et protection des Établissements). Les documents sont transmis via une connexion chiffrée (TLS 1.3) et ne sont pas conservés par le prestataire d'IA au-delà du temps de traitement.</p>
+        <p className="mb-3">Certains documents téléversés (pièce d'identité, diplômes, attestations RCP) sont analysés par un système d'intelligence artificielle (Anthropic Claude) pour vérifier leur lisibilité, leur cohérence et les indices d'authenticité. Ils sont transmis via une connexion chiffrée. Une voie de revue humaine est proposée lorsqu'un verdict automatique est contesté.</p>
 
         <p className="mb-3">Pour exercer vos droits, adressez votre demande à : <a href="mailto:support@jolene.app" className="text-primary underline font-medium">support@jolene.app</a></p>
         <p className="mb-3">L'Éditeur s'engage à répondre dans un délai d'un mois. Ce délai peut être prolongé de deux mois en cas de complexité ou de nombre élevé de demandes.</p>

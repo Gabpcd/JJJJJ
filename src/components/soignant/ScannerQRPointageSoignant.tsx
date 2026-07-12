@@ -36,7 +36,7 @@ const MESSAGES_ERREUR: Record<string, string> = {
  * Composant scan QR pointage Sprint 4.5 PR 6.
  *
  * Flow :
- *  1. Demande permission caméra (Capacitor mlkit natif ou html5-qrcode web)
+ *  1. Demande permission caméra (scanner Capacitor natif ou html5-qrcode web)
  *  2. Ouvre vue caméra avec overlay
  *  3. Au scan : récupère GPS coords en background (non bloquant)
  *  4. Appelle fn_valider_scan_qr(token, lat, lng, precision, terminal_id)
@@ -60,7 +60,7 @@ export function ScannerQRPointageSoignant({ missionId, onValide, onAnnuler, onFa
     (async () => {
       const dispo = await qrScannerNatifDispo();
       if (!dispo) {
-        // Fallback web même sur Capacitor si pas supporté
+        setErreurCamera('Scanner natif indisponible. Utilisez le code de secours.');
         return;
       }
       try {
@@ -146,7 +146,7 @@ export function ScannerQRPointageSoignant({ missionId, onValide, onAnnuler, onFa
 
   async function traiterToken(token: string) {
     setValidating(true);
-    // GPS coords en background (non bloquant)
+    // Position demandée au premier plan pendant le scan, facultative et non bloquante.
     let lat: number | undefined, lng: number | undefined, precision: number | undefined;
     try {
       const pos = await Promise.race([

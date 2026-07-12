@@ -9,11 +9,9 @@
 //       { status: 403, headers: { 'Content-Type': 'application/json' } });
 //   }
 //
-// Mode dev : si TURNSTILE_SECRET_KEY n'est pas configurée dans les secrets
-// Supabase, on retourne success=true. Cela permet au code d'être déployé
-// avant que Gabrielle ait créé les clés Cloudflare. Une fois la secret
-// `TURNSTILE_SECRET_KEY` ajoutée au dashboard Supabase, la vérification
-// devient bloquante automatiquement.
+// Mode dev explicite uniquement : le bypass exige a la fois
+// TURNSTILE_ALLOW_DEV_BYPASS=true ET une origine HTTP localhost. Une coquille
+// native Capacitor utilise https://localhost et ne beneficie jamais du bypass.
 
 const VERIFY_URL = 'https://challenges.cloudflare.com/turnstile/v0/siteverify';
 
@@ -27,12 +25,19 @@ export interface TurnstileResult {
 export async function verifyTurnstileToken(
   token: string | undefined | null,
   remoteIp?: string,
+  requestOrigin?: string | null,
 ): Promise<TurnstileResult> {
   const secretKey = Deno.env.get('TURNSTILE_SECRET_KEY');
 
   if (!secretKey) {
-    console.warn('[Turnstile] TURNSTILE_SECRET_KEY non configurée — vérification désactivée (mode dev).');
-    return { success: true };
+    const devBypass = Deno.env.get('TURNSTILE_ALLOW_DEV_BYPASS') === 'true';
+    const localOrigin = /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(requestOrigin || '');
+    if (devBypass && localOrigin) {
+      console.warn('[Turnstile] bypass local explicite actif');
+      return { success: true, hostname: 'localhost' };
+    }
+    console.error('[Turnstile] secret absent hors bypass local explicite');
+    return { success: false, error: 'Protection anti-bot indisponible. Reessayez plus tard.' };
   }
 
   if (!token) {
@@ -52,6 +57,13 @@ export async function verifyTurnstileToken(
     }
     const data = await response.json();
     if (data.success === true) {
+      const allowedHostnames = (Deno.env.get('TURNSTILE_ALLOWED_HOSTNAMES') || 'jolene.app,www.jolene.app,localhost')
+        .split(',').map((value) => value.trim().toLowerCase()).filter(Boolean);
+      const hostname = String(data.hostname || '').toLowerCase();
+      if (!hostname || !allowedHostnames.includes(hostname)) {
+        console.warn('[Turnstile] hostname refuse', hostname);
+        return { success: false, error: 'Verification anti-bot invalide.' };
+      }
       return { success: true, hostname: data.hostname, challenge_ts: data.challenge_ts };
     }
     console.warn('[Turnstile] Verification refusée', data['error-codes']);

@@ -3,13 +3,13 @@ import { Link } from 'react-router-dom';
 import { LayoutAdmin } from '@/components/LayoutAdmin';
 import { BreadcrumbAdmin } from '@/components/BreadcrumbAdmin';
 import { usePageTitle } from '@/hooks/usePageTitle';
-import { ChargementPage } from '@/components/ChargementPage';
+import { ChargementAdmin } from '@/components/admin/ChargementAdmin';
 import { supabase } from '@/integrations/supabase/client';
 import { CardY2K, CardY2KContent } from '@/components/y2k/CardY2K';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { BadgeY2K } from '@/components/y2k/BadgeY2K';
 import { BADGES_STATUT, getLabelProfession } from '@/lib/constantes';
-import { ShieldAlert, Clock, FileWarning, FileQuestion, Repeat, UserX, FileX, ChevronDown, Loader2, ExternalLink } from 'lucide-react';
+import { AlertTriangle, ShieldAlert, Clock, FileWarning, FileQuestion, Repeat, UserX, FileX, ChevronDown, Loader2, ExternalLink } from 'lucide-react';
 
 /** Libellés français des résultats de contrôle (table conformite_travail). */
 const LIBELLES_RESULTAT_CONTROLE: Record<string, string> = {
@@ -188,18 +188,29 @@ export default function AdminConformite() {
   usePageTitle('Conformité');
   const [data, setData] = useState<Record<string, number> | null>(null);
   const [loading, setLoading] = useState(true);
+  const [erreur, setErreur] = useState<string | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const [detail, setDetail] = useState<any[] | null>(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
 
   useEffect(() => {
     (supabase.rpc('fn_admin_conformite' as any) as any).then(({ data: d, error: e }: any) => {
-      if (e) { console.warn('fn_admin_conformite error:', e); }
+      if (e) {
+        console.warn('fn_admin_conformite error:', e);
+        setErreur('Le contrôle de conformité est indisponible. Aucun indicateur ne peut être considéré comme conforme.');
+      }
       else if (d && typeof d === 'object' && !Array.isArray(d)) setData(d);
       else if (Array.isArray(d) && d.length > 0 && typeof d[0] === 'object') setData(d[0]);
-      else { console.warn('fn_admin_conformite: unexpected response shape', d); }
+      else {
+        console.warn('fn_admin_conformite: unexpected response shape', d);
+        setErreur('La réponse du contrôle de conformité est invalide. Aucun résultat n’est affiché.');
+      }
       setLoading(false);
-    }).catch((err: any) => { console.warn('fn_admin_conformite exception:', err); setLoading(false); });
+    }).catch((err: any) => {
+      console.warn('fn_admin_conformite exception:', err);
+      setErreur('Le contrôle de conformité est indisponible. Aucun indicateur ne peut être considéré comme conforme.');
+      setLoading(false);
+    });
   }, []);
 
   async function toggleDetail(cle: string) {
@@ -211,12 +222,17 @@ export default function AdminConformite() {
     setSelected(cle);
     setDetail(null);
     setLoadingDetail(true);
-    const { data: d } = await supabase.rpc('fn_admin_conformite_detail' as any, { p_type: cle });
-    setDetail(Array.isArray(d) ? d : []);
+    const { data: d, error } = await supabase.rpc('fn_admin_conformite_detail' as any, { p_type: cle });
+    if (error) {
+      setDetail(null);
+      setErreur(`Impossible de charger le détail « ${INDICATEURS.find((i) => i.cle === cle)?.label ?? cle} ».`);
+    } else {
+      setDetail(Array.isArray(d) ? d : []);
+    }
     setLoadingDetail(false);
   }
 
-  if (loading) return <LayoutAdmin><ChargementPage /></LayoutAdmin>;
+  if (loading) return <LayoutAdmin><ChargementAdmin titre="Conformité" /></LayoutAdmin>;
 
   const mappedData: Record<string, number> = {};
   if (data) {
@@ -233,7 +249,17 @@ export default function AdminConformite() {
       <div className="space-y-6">
         <h1 className="text-2xl font-bold text-foreground">Conformité</h1>
 
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        {erreur && (
+          <div role="alert" className="rounded-xl border border-destructive/40 bg-destructive/10 p-4 text-sm text-destructive flex items-start gap-2">
+            <AlertTriangle className="h-5 w-5 shrink-0" />
+            <div>
+              <p className="font-semibold">Résultats indisponibles</p>
+              <p className="mt-1">{erreur}</p>
+            </div>
+          </div>
+        )}
+
+        {!erreur && data && <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {INDICATEURS.map((ind) => {
             const val = mappedData[ind.cle] ?? 0;
             const isSelected = selected === ind.cle;
@@ -257,9 +283,9 @@ export default function AdminConformite() {
               </CardY2K>
             );
           })}
-        </div>
+        </div>}
 
-        {selected && selectedInd && (
+        {!erreur && selected && selectedInd && (
           <CardY2K noPadding className="animate-in slide-in-from-top-2 fade-in-0 duration-200">
             <CardY2KContent className="pt-5">
               <div className="mb-4 flex items-center gap-2">

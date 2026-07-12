@@ -42,8 +42,13 @@ function CompteurAnime({ cible, suffixe, prefix }: { cible: number; suffixe?: st
   }, [cible]);
 
   return (
-    <div ref={ref} className="text-center">
-      <p className="text-4xl md:text-5xl font-extrabold text-primary tabular-nums">
+    <div
+      ref={ref}
+      className="text-center"
+      role="img"
+      aria-label={`${prefix ?? ''}${cible.toLocaleString('fr-FR')}${suffixe ?? ''}`}
+    >
+      <p aria-hidden="true" className="text-4xl md:text-5xl font-extrabold text-primary tabular-nums">
         {prefix}{valeur.toLocaleString('fr-FR')}{suffixe}
       </p>
     </div>
@@ -84,9 +89,9 @@ function RevealOnScroll({ children, className = '', delay = 0 }: { children: Rea
 
 /* ─── FAQ data ─── */
 const faqData = [
-  { q: 'Comment fonctionne la commission ?', a: 'Jolene facture à l\'établissement une commission de 15 % calculée sur le montant brut de la mission (taux négocié possible pour les groupes). Aucun frais pour le soignant.' },
+  { q: 'Comment fonctionne la commission ?', a: 'Jolene facture à l\'établissement une commission de 15 % calculée sur la rémunération brute totale due au soignant (base, majorations et indemnités le cas échéant ; taux négocié possible pour les groupes). Aucun frais pour le soignant.' },
   { q: 'Jolene est-il une agence d\'intérim ?', a: 'Non. Jolene est une plateforme de mise en relation. Le contrat est signé directement entre l\'établissement et le soignant. Nous ne sommes pas employeur.' },
-  { q: 'Comment sont vérifiés les soignants ?', a: 'La vérification est automatique : identité et numéro RPPS contrôlés via Pro Santé Connect ou l\'Annuaire Santé, diplôme, pièce d\'identité et assurance RCP analysés dès leur téléversement. Dans la plupart des cas, le profil est vérifié en quelques minutes.' },
+  { q: 'Comment sont vérifiés les soignants ?', a: 'La vérification est automatique : identité professionnelle, numéro RPPS lorsqu’il existe, diplôme et pièces requises pour le contrat de la mission sont contrôlés. L’assurance RCP est demandée pour les missions libérales.' },
   { q: 'Quels types de contrats sont générés ?', a: 'La plateforme génère automatiquement des CDD, y compris des CDD courts, signés électroniquement par les deux parties. Le libéral n’est proposé que pour les missions explicitement ouvertes par la matrice profession × établissement.' },
   { q: 'Comment fonctionne le pointage ?', a: 'Le soignant pointe son arrivée et son départ via l\'application mobile avec géolocalisation GPS. Le périmètre est vérifié automatiquement par rapport à l\'adresse de l\'établissement.' },
   { q: 'Puis-je passer en libéral via Jolene ?', a: 'Oui, si votre profession peut s\'exercer en libéral (infirmier, kiné, sage-femme…). Notre parcours 3 200 heures vous accompagne vers l\'installation en libéral avec un suivi personnalisé, des partenaires (comptabilité, assurance, banque) et une prise en charge partielle des frais.' },
@@ -306,6 +311,7 @@ export default function PageAccueil() {
         </div>
       </header>
 
+      <main id="contenu-principal">
       {/* ═══ Section 1 — Hero ═══ */}
       <section className="relative overflow-hidden">
         {/* Vibrant gradient background */}
@@ -404,7 +410,7 @@ export default function PageAccueil() {
                 <h3 className="text-xl font-bold text-foreground mb-6">🏥 Pour les établissements</h3>
                 <ul className="space-y-4">
                   {[
-                    { emoji: '✅', text: 'Soignants vérifiés : identité, diplôme, RPPS, RCP' },
+                    { emoji: '✅', text: 'Soignants vérifiés : identité, diplôme, RPPS et pièces adaptées à la mission' },
                     { emoji: '⚡', text: 'Remplaçant trouvé en urgence, garantie no-show' },
                     { emoji: '⚖️', text: 'DPAE, loi Rist, Code du travail : conformité intégrée' },
                     { emoji: '🧾', text: 'Facturation automatisée, Chorus Pro inclus' },
@@ -547,6 +553,7 @@ export default function PageAccueil() {
           </RevealOnScroll>
         </div>
       </section>
+      </main>
 
       {/* ═══ Footer ═══ */}
       <footer className="border-t border-border bg-card py-12 md:py-16">

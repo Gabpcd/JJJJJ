@@ -1,10 +1,11 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useNavigate } from 'react-router-dom';
 import { SkeletonDashboard } from '@/components/SkeletonCard';
 import { AlertCircle, Banknote, Bell, CalendarDays, ChevronRight, CreditCard, FileText, Sparkles } from 'lucide-react';
 import { CarteProposition } from '@/components/CarteProposition';
+import type { PropositionMission } from '@/components/CarteProposition';
 import { NoteNetEstime } from '@/components/NoteNetEstime';
 import { BadgeRPPS } from '@/components/BadgeRPPS';
 import { BoutonY2K } from '@/components/y2k/BoutonY2K';
@@ -53,7 +54,7 @@ export default function DashboardSoignant() {
   const { user } = useAuth();
   // 7f : consomme le code parrainage capté (?ref=/?parrain=) à la 1ʳᵉ session.
   useAppliquerParrainage(user?.id);
-  const [propositions, setPropositions] = useState<any[]>([]);
+  const [propositions, setPropositions] = useState<PropositionMission[]>([]);
   // Postuler 1-tap depuis l'accueil : mission_id → candidature_id (pour l'undo).
   const [candidatingId, setCandidatingId] = useState<string | null>(null);
   const [postulees, setPostulees] = useState<Record<string, string>>({});
@@ -76,8 +77,13 @@ export default function DashboardSoignant() {
   // Keep propositions in local state so they can be removed on action
   const dashboardPropositions = dashboard?.propositions;
   useEffect(() => {
-    if (dashboardPropositions) setPropositions(dashboardPropositions);
+    if (Array.isArray(dashboardPropositions)) {
+      setPropositions(dashboardPropositions as PropositionMission[]);
+    }
   }, [dashboardPropositions]);
+  const retirerPropositionTraitee = useCallback((id: string) => {
+    setPropositions(prev => prev.filter(proposition => proposition.id !== id));
+  }, []);
 
   // Derive all values from the dashboard RPC response
   const soignant = dashboard?.profil as SoignantData | undefined ?? null;
@@ -103,12 +109,7 @@ export default function DashboardSoignant() {
     }) || null;
   }, [mesMissions]);
 
-  const missionsOubliDepart = useMemo(() => {
-    const count = (dashboard?.missions_oubliees_count ?? 0) as number;
-    // The RPC returns a count; if we need full mission objects, fall back to empty
-    // For BandeauOubliDepart we need mission objects - kept as empty when only count available
-    return count > 0 ? [{ id: 'oubli', count }] : [];
-  }, [dashboard?.missions_oubliees_count]);
+  const missionsOubliDepartCount = Math.max(0, Number(dashboard?.missions_oubliees_count) || 0);
 
   const gainsCeMois = useMemo(() => {
     // RPC returns { net_total, brut_total, nb_missions } as an object
@@ -172,7 +173,7 @@ export default function DashboardSoignant() {
     setCandidatingId(null);
     if (error) { toast.error(error.message); return; }
     const r = data as any;
-    if (r?.choix_contrat_requis) {
+    if (r?.choix_requis) {
       toast('Choisis ton type de contrat pour postuler');
       navigate(`/soignant/missions/${m.id}`);
       return;
@@ -236,9 +237,12 @@ export default function DashboardSoignant() {
 
       {/* ═══ ZONE 2 : CONTEXTE IMMÉDIAT (missions en cours / pointage) ═══ */}
 
-      {missionsOubliDepart.map(m => (
-        <BandeauOubliDepart key={m.id} mission={m} onPointer={() => navigate('/soignant/presences')} />
-      ))}
+      {missionsOubliDepartCount > 0 && (
+        <BandeauOubliDepart
+          mission={{ count: missionsOubliDepartCount }}
+          onPointer={() => navigate('/soignant/presences')}
+        />
+      )}
 
       {missionProchaine && <WidgetAllerPointer mission={missionProchaine} />}
 
@@ -299,8 +303,16 @@ export default function DashboardSoignant() {
         {missionsOuvertes.length > 0 ? (
           <div className="space-y-2">
             {missionsOuvertes.slice(0, 2).map((m: any) => {
-              const duree = m.fin_le && m.debut_le ? (new Date(m.fin_le).getTime() - new Date(m.debut_le).getTime()) / 3600000 : 0;
-              const brutEstime = m.taux_horaire_base && duree ? Math.round(m.taux_horaire_base * duree) : null;
+              const duree = Number(m.duree_heures) > 0 ? Number(m.duree_heures) : 0;
+              const netDirect = Number(m.net_estime ?? m.net_a_payer);
+              const brutDirect = Number(m.total_brut ?? m.brut_estime);
+              const estimation = Number.isFinite(netDirect) && netDirect > 0
+                ? { montant: Math.round(netDirect), libelle: 'net' }
+                : Number.isFinite(brutDirect) && brutDirect > 0
+                  ? { montant: Math.round(brutDirect), libelle: 'brut' }
+                  : m.taux_horaire_base && duree
+                    ? { montant: Math.round(Number(m.taux_horaire_base) * duree), libelle: 'brut' }
+                    : null;
               return (
                 <div key={m.id} onClick={() => navigate(`/soignant/missions/${m.id}`)} className="card-base hover:shadow-md cursor-pointer transition-all flex items-center gap-3 py-3">
                   <div className="flex flex-col items-center justify-center rounded-xl bg-primary/10 px-3 py-1.5 min-w-[52px]">
@@ -315,7 +327,7 @@ export default function DashboardSoignant() {
                     <div className="flex items-center gap-3 mt-0.5 text-[11px] text-muted-foreground">
                       <span>🕐 {format(new Date(m.debut_le), "HH'h'mm", { locale: fr })} → {format(new Date(m.fin_le), "HH'h'mm", { locale: fr })}</span>
                       {m.taux_horaire_base && <span className="font-semibold text-primary">{m.taux_horaire_base} €/h</span>}
-                      {brutEstime && <span>~{brutEstime} € brut</span>}
+                      {estimation && <span>~{estimation.montant} € {estimation.libelle}</span>}
                     </div>
                   </div>
                   {m.id in postulees ? (
@@ -351,11 +363,11 @@ export default function DashboardSoignant() {
             <Bell className="h-5 w-5 text-orange-500" /> 🚨 Missions proposées
           </h2>
           <div className="space-y-3">
-            {propositions.map((p: any) => (
+            {propositions.map((p) => (
               <CarteProposition
                 key={p.id}
                 proposition={p}
-                onTraitee={(id) => setPropositions(prev => prev.filter(x => x.id !== id))}
+                onTraitee={retirerPropositionTraitee}
               />
             ))}
           </div>

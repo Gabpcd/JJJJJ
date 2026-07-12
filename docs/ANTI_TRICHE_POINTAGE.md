@@ -16,7 +16,6 @@ L'app propose 3 méthodes de pointage, présentées par ordre de fiabilité :
 - Détection mock GPS (faux GPS)
 - Détection téléportation (>200 km/h entre 2 pointages d'un même soignant)
 - Cohérence temporelle (arrivée avant fin, départ après arrivée, etc.)
-- Ping GPS périodique pendant la mission (opt-in RGPD)
 
 **Tous les incidents génèrent des alertes `alertes_systeme` SANS action automatique.** L'administration Jolene tranche manuellement.
 
@@ -34,8 +33,8 @@ L'app propose 3 méthodes de pointage, présentées par ordre de fiabilité :
 
 ### Scan (soignant)
 - Composant `<ScannerQRPointageSoignant />` :
-  - Routing `isNative()` : `@capacitor-mlkit/barcode-scanning` (natif) vs `html5-qrcode` (web)
-  - Capture GPS background non bloquante (timeout 5s)
+  - Routing `isNative()` : `@capacitor/barcode-scanner` (natif) vs `html5-qrcode` (web)
+  - Acquisition GPS ponctuelle et non bloquante au scan (timeout 5s)
   - Appel `fn_valider_scan_qr(token, lat?, lng?, precision?, terminal_id?)`
   - 10 codes erreur mappés FR :
     - `QR_INVALIDE` / `QR_EXPIRE` / `QR_MISSION_AUTRE`
@@ -92,31 +91,13 @@ Si `FORT` détecté : flag `presences.arrivee_mock_detected` / `depart_mock_dete
 - `nb_essais` incrémenté à chaque tentative ratée (audit).
 - Échec silencieux côté caller (pas de leak par timing).
 
-## Couche 4 — Ping GPS background (PR 10)
+## Couche retirée avant publication — ping GPS continu
 
-### Consentement RGPD strict
-- Table `consentements_ping_gps` (opt-in horodaté + retrait).
-- Composant `<ConsentementPingGps />` : finalité, données collectées, durée 30j, accès, droit de retrait.
-- RPC `fn_donner_consentement_ping_gps(consent)` avec audit `RGPD_CONSENTEMENT_DONNE`.
-
-### Collecte
-- `@capacitor-community/background-geolocation` (foreground service Android + background mode iOS).
-- `src/lib/background-geoloc.ts` :
-  - Buffer mémoire flushé par batch de 20 ou interval 60s
-  - Détection mock GPS sur chaque ping → `mock_detected` flag
-  - Re-buffering en cas d'échec réseau
-
-### Stockage
-- Table `pings_gps_mission` : `lat/lng/precision_m/vitesse_ms/cap_deg/altitude_m/mock_detected`.
-- RPC `fn_enregistrer_pings_gps` :
-  - Vérifie consentement actif (double sécurité)
-  - Fenêtre `[debut_le-1h, fin_le+2h]` (hors fenêtre = ignoré)
-  - Validation lat/lng `[-90..90] / [-180..180]`
-  - Limite 200 pings par batch
-
-### Purge RGPD
-- `fn_purger_pings_gps_anciens` : DELETE >30j
-- pg_cron `jolene_purger_pings_gps` daily 3am UTC
+Le plugin natif, le wrapper et l'interface de consentement au suivi continu ont
+été supprimés : aucune partie du client ne démarrait ou n'arrêtait réellement
+ce suivi. Les tables/RPC historiques éventuels ne constituent pas une collecte
+active. La preuve de présence repose sur QR, position ponctuelle au pointage,
+code de secours et contrôles de cohérence.
 
 ## Couche 5 — Cohérence temporelle (PR 11)
 
@@ -156,7 +137,8 @@ Helper pure function qui retourne un `jsonb[]` d'incidents :
 12 tests E2E DB-level dans `e2e/flows/anti-triche-pointage.spec.ts` :
 QR génération/scan, codes erreur, téléportation, hash bcrypt, ping GPS, cohérence temporelle, tolérance CHECK, worker.
 
-**Tests UI exclus** : QR scanners + background-geolocation natifs ne sont pas testables Playwright headless sans device émulé. Test manuel sur device réel.
+**Tests UI exclus** : le scanner QR natif et le GPS réel ne sont pas testables
+par Playwright headless. Test manuel sur appareils réels.
 
 ## Tableau récapitulatif des migrations
 
@@ -180,7 +162,7 @@ QR génération/scan, codes erreur, téléportation, hash bcrypt, ping GPS, coh�
 
 ## Décisions architecturales
 
-- **Aucune photo selfie** : friction utilisateur, RGPD lourd, faible valeur ajoutée vs QR + GPS + ping.
+- **Aucune photo selfie** : friction utilisateur et RGPD lourd ; QR + GPS ponctuel suffisent.
 - **Aucune suspension automatique** : toute action sur compte passe par admin manuel.
 - **Aucune pénalité financière soignant** : conforme prudhommes.
 - **Indemnités légales étab** auto-calculées (cf. `ANNULATION_MISSION.md`).

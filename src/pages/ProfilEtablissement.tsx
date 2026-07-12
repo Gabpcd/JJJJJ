@@ -10,6 +10,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
 import { extraireMessageErreur } from '@/lib/erreurs';
 import { reverseGeocode } from '@/lib/geocodage';
+import { getCurrentPosition as obtenirGeoloc } from '@/lib/geoloc';
 import { capturerErreurSentry } from '@/lib/sentry';
 import { supabase, SUPABASE_URL } from '@/integrations/supabase/client';
 import { Info, MapPin, Loader2, Download, Trash2, Palette, Building2, Upload, FileCheck, Clock, AlertTriangle, Lock } from 'lucide-react';
@@ -17,6 +18,11 @@ import { AvatarUpload } from '@/components/AvatarUpload';
 import { Switch } from '@/components/ui/switch';
 import { Elements, IbanElement, useStripe, useElements } from '@stripe/react-stripe-js';
 import { stripePromise } from '@/lib/stripe';
+
+interface DeleteAccountResponse {
+  success?: boolean;
+  error?: string;
+}
 
 // SEPA IBAN Form (inside Stripe Elements)
 function SepaIbanForm({ onSuccess }: { onSuccess: (last4: string) => void }) {
@@ -308,25 +314,19 @@ export function ProfilEtablissementContent({ sections }: { sections?: SectionPro
     setGeoLoading(false);
   };
 
-  const demanderGeolocalisation = () => {
-    if (!navigator.geolocation) {
-      afficherNotification({ type: 'erreur', message: 'La géolocalisation n\'est pas supportée par votre navigateur.' });
-      return;
-    }
+  const demanderGeolocalisation = async () => {
     setGeoLoading(true);
-    navigator.geolocation.getCurrentPosition(
-      async (position) => {
-        const la = position.coords.latitude, lo = position.coords.longitude;
-        const adr = await reverseGeocode(la, lo);
-        // Jamais d'écrasement direct : la position part en confirmation.
-        setPositionEnAttente({ lat: la, lng: lo, label: adr?.label || `${la.toFixed(4)}, ${lo.toFixed(4)}`, source: 'gps' });
-        setGeoLoading(false);
-      },
-      () => {
-        setGeoLoading(false);
-        afficherNotification({ type: 'erreur', message: 'Localisation refusée. Utilisez « Localiser depuis l\'adresse ».' });
-      }
-    );
+    try {
+      const position = await obtenirGeoloc({ enableHighAccuracy: true, timeout: 15_000 });
+      const la = position.coords.latitude, lo = position.coords.longitude;
+      const adr = await reverseGeocode(la, lo);
+      // Jamais d'écrasement direct : la position part en confirmation.
+      setPositionEnAttente({ lat: la, lng: lo, label: adr?.label || `${la.toFixed(4)}, ${lo.toFixed(4)}`, source: 'gps' });
+    } catch {
+      afficherNotification({ type: 'erreur', message: 'Localisation refusée ou indisponible. Utilisez « Localiser depuis l\'adresse ».' });
+    } finally {
+      setGeoLoading(false);
+    }
   };
 
   const confirmerPosition = async () => {
@@ -454,16 +454,17 @@ export function ProfilEtablissementContent({ sections }: { sections?: SectionPro
         <div className="card-base">
           <h2 className="text-base font-semibold text-foreground mb-4">Informations générales</h2>
           <div className="space-y-3">
-            <div><label className="text-sm font-medium text-foreground mb-1.5 block">Nom</label><input value={form.nom} onChange={e => maj('nom', e.target.value)} className="input-base" /></div>
+            <div><label htmlFor="etablissement-nom" className="text-sm font-medium text-foreground mb-1.5 block">Nom</label><input id="etablissement-nom" value={form.nom} onChange={e => maj('nom', e.target.value)} className="input-base" /></div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className="text-sm font-medium text-foreground mb-1.5 flex items-center gap-1">SIRET <Lock aria-hidden="true" className="h-3 w-3 text-muted-foreground" /></label>
-                <input value={siret} disabled className="input-base bg-muted cursor-not-allowed" aria-describedby="siret-lock" />
+                <label htmlFor="etablissement-siret" className="text-sm font-medium text-foreground mb-1.5 flex items-center gap-1">SIRET <Lock aria-hidden="true" className="h-3 w-3 text-muted-foreground" /></label>
+                <input id="etablissement-siret" value={siret} disabled className="input-base bg-muted cursor-not-allowed" aria-describedby="siret-lock" />
                 <p id="siret-lock" className="text-[10px] text-muted-foreground mt-1">Verrouillé : identifiant légal vérifié à l'inscription.</p>
               </div>
               <div>
-                <label className="text-sm font-medium text-foreground mb-1.5 block">FINESS</label>
+                <label htmlFor="etablissement-finess" className="text-sm font-medium text-foreground mb-1.5 block">FINESS</label>
                 <input
+                  id="etablissement-finess"
                   value={form.finess}
                   onChange={e => maj('finess', e.target.value.replace(/\D/g, '').slice(0, 9))}
                   inputMode="numeric"
@@ -475,11 +476,12 @@ export function ProfilEtablissementContent({ sections }: { sections?: SectionPro
                 )}
               </div>
             </div>
-            <div><label className="text-sm font-medium text-foreground mb-1.5 block">Type</label><input value={getLabelTypeEtablissement(type)} disabled className="input-base bg-muted cursor-not-allowed" /></div>
+            <div><label htmlFor="etablissement-type" className="text-sm font-medium text-foreground mb-1.5 block">Type</label><input id="etablissement-type" value={getLabelTypeEtablissement(type)} disabled className="input-base bg-muted cursor-not-allowed" /></div>
             {/* A2: Convention collective */}
             <div>
-              <label className="text-sm font-medium text-foreground mb-1.5 block">Convention collective</label>
+              <label htmlFor="etablissement-convention" className="text-sm font-medium text-foreground mb-1.5 block">Convention collective</label>
               <select
+                id="etablissement-convention"
                 value={conventionCollective}
                 onChange={e => { setConventionCollective(e.target.value); setConventionSuggeree(false); }}
                 className="input-base"
@@ -515,8 +517,8 @@ export function ProfilEtablissementContent({ sections }: { sections?: SectionPro
         <div className="card-base">
           <h2 className="text-base font-semibold text-foreground mb-4">Contact</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div><label className="text-sm font-medium text-foreground mb-1.5 block">Email</label><input type="email" value={form.emailContact} onChange={e => maj('emailContact', e.target.value)} className="input-base" /></div>
-            <div><label className="text-sm font-medium text-foreground mb-1.5 block">Téléphone</label><input value={form.telephoneContact} onChange={e => maj('telephoneContact', e.target.value)} className="input-base" /></div>
+            <div><label htmlFor="etablissement-email-contact" className="text-sm font-medium text-foreground mb-1.5 block">Email</label><input id="etablissement-email-contact" type="email" value={form.emailContact} onChange={e => maj('emailContact', e.target.value)} className="input-base" /></div>
+            <div><label htmlFor="etablissement-telephone-contact" className="text-sm font-medium text-foreground mb-1.5 block">Téléphone</label><input id="etablissement-telephone-contact" value={form.telephoneContact} onChange={e => maj('telephoneContact', e.target.value)} className="input-base" /></div>
           </div>
           {/* SMS notifications toggle */}
           <div className="flex items-center justify-between mt-4 pt-4 border-t border-border">
@@ -529,6 +531,7 @@ export function ProfilEtablissementContent({ sections }: { sections?: SectionPro
               </p>
             </div>
             <Switch
+              aria-label="Recevoir les notifications SMS critiques"
               checked={consentementSMS}
               disabled={smsToggling}
               onCheckedChange={async (checked) => {
@@ -605,9 +608,9 @@ export function ProfilEtablissementContent({ sections }: { sections?: SectionPro
           </div>
           <h2 className="text-base font-semibold text-foreground mb-4">Taux de majoration (Convention)</h2>
           <div className="space-y-3">
-            <div><label className="text-sm font-medium text-foreground mb-1.5 block">Nuit (21h-06h) — %</label><input type="number" step="0.01" min={0} max={200} value={form.tauxNuit} onChange={e => maj('tauxNuit', Number(e.target.value))} className="input-base" /></div>
-            <div><label className="text-sm font-medium text-foreground mb-1.5 block">Dimanche — %</label><input type="number" step="0.01" min={0} max={200} value={form.tauxDimanche} onChange={e => maj('tauxDimanche', Number(e.target.value))} className="input-base" /></div>
-            <div><label className="text-sm font-medium text-foreground mb-1.5 block">Jours fériés — %</label><input type="number" step="0.01" min={0} max={200} value={form.tauxFerie} onChange={e => maj('tauxFerie', Number(e.target.value))} className="input-base" /></div>
+            <div><label htmlFor="etablissement-taux-nuit" className="text-sm font-medium text-foreground mb-1.5 block">Nuit (21h-06h) — %</label><input id="etablissement-taux-nuit" type="number" step="0.01" min={0} max={200} value={form.tauxNuit} onChange={e => maj('tauxNuit', Number(e.target.value))} className="input-base" /></div>
+            <div><label htmlFor="etablissement-taux-dimanche" className="text-sm font-medium text-foreground mb-1.5 block">Dimanche — %</label><input id="etablissement-taux-dimanche" type="number" step="0.01" min={0} max={200} value={form.tauxDimanche} onChange={e => maj('tauxDimanche', Number(e.target.value))} className="input-base" /></div>
+            <div><label htmlFor="etablissement-taux-ferie" className="text-sm font-medium text-foreground mb-1.5 block">Jours fériés — %</label><input id="etablissement-taux-ferie" type="number" step="0.01" min={0} max={200} value={form.tauxFerie} onChange={e => maj('tauxFerie', Number(e.target.value))} className="input-base" /></div>
             {[form.tauxNuit, form.tauxDimanche, form.tauxFerie].some(t => t < 0 || t > 200) && (
               <p className="text-[10px] text-destructive">Un taux de majoration se situe entre 0 et 200 %.</p>
             )}
@@ -815,6 +818,7 @@ export function ProfilEtablissementContent({ sections }: { sections?: SectionPro
 
       {/* RGPD / Suppression compte (obligation Apple) */}
       {visible('securite') && (
+      <div id="suppression-compte" className="scroll-mt-24">
       <div className="max-w-2xl mt-12 space-y-4">
         <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Données personnelles (RGPD)</h2>
         <button
@@ -857,6 +861,7 @@ export function ProfilEtablissementContent({ sections }: { sections?: SectionPro
           <Trash2 className="h-4 w-4" /> Supprimer mon compte
         </button>
       </div>
+      </div>
       )}
 
       {/* Modale de confirmation de suppression */}
@@ -868,10 +873,11 @@ export function ProfilEtablissementContent({ sections }: { sections?: SectionPro
               Cette action est irréversible. Toutes vos données seront supprimées conformément au RGPD.
             </p>
             <div>
-              <label className="text-sm font-medium text-foreground mb-1.5 block">
+              <label htmlFor="etablissement-confirmation-suppression" className="text-sm font-medium text-foreground mb-1.5 block">
                 Tapez <span className="font-bold text-destructive">SUPPRIMER</span> pour confirmer
               </label>
               <input
+                id="etablissement-confirmation-suppression"
                 value={deleteConfirmText}
                 onChange={e => setDeleteConfirmText(e.target.value)}
                 placeholder="SUPPRIMER"
@@ -893,13 +899,13 @@ export function ProfilEtablissementContent({ sections }: { sections?: SectionPro
                 onClick={async () => {
                   setDeleting(true);
                   try {
-                    const { data, error } = await supabase.rpc('fn_supprimer_compte_etablissement_rate_limited' as any);
+                    const { data, error } = await supabase.functions.invoke<DeleteAccountResponse>('delete-account', { body: {} });
                     if (error) throw error;
-                    if (data?.error) { afficherNotification({ type: 'erreur', message: data.error }); setDeleting(false); return; }
+                    if (data?.error || data?.success !== true) { afficherNotification({ type: 'erreur', message: data?.error || 'Suppression impossible.' }); setDeleting(false); return; }
                     afficherNotification({ type: 'succes', message: 'Compte supprimé. Redirection…' });
-                    await supabase.auth.signOut();
+                    await supabase.auth.signOut({ scope: 'local' });
                     navigate('/');
-                  } catch (err: any) {
+                  } catch (err: unknown) {
                     capturerErreurSentry(err, 'ProfilEtablissement', 'supprimer_compte');
                     afficherNotification({ type: 'erreur', message: extraireMessageErreur(err) });
                     setDeleting(false);

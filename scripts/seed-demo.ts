@@ -62,7 +62,7 @@ async function ensureDemoUser(): Promise<string> {
       role: 'SOIGNANT',
       prenom: 'Marie',
       nom: 'Lefèvre',
-      profession: 'INFIRMIER',
+      profession: 'IDE',
     },
   });
   if (error || !data.user) throw new Error(`createUser: ${error?.message}`);
@@ -86,25 +86,37 @@ async function main() {
   // Laisser le trigger handle_new_user créer la ligne soignants.
   await new Promise((r) => setTimeout(r, 1500));
 
-  // ── Profil : complété via le client AUTHENTIFIÉ (RLS actif = vrai flux app),
-  //    pas d'INSERT service_role dans les tables métier. ──
+  // ── Profil : complété via la RPC authentifiée canonique (mêmes contrôles que
+  //    l'app). Un UPDATE PostgREST direct serait à la fois interdit par les ACL
+  //    P0 et fragile dès qu'une colonne change. ──
   const user = await userClient();
 
-  const { error: majErr } = await user
-    .from('soignants')
-    .update({
-      prenom: 'Marie',
-      nom: 'Lefèvre',
-      profession: 'INFIRMIER',
-      type_exercice: 'SALARIE',
-      ville: 'Lyon',
-      adresse_ville: 'Lyon',
-      adresse_code_postal: '69003',
-      telephone: '0600000000',
-      onboarding_complete: true,
-    } as never)
-    .eq('id', soignantId);
-  if (majErr) console.warn(`maj profil (non bloquant) : ${majErr.message}`);
+  const { data: profilResult, error: majErr } = await user.rpc('fn_modifier_mon_profil', {
+    p_prenom: 'Marie',
+    p_nom: 'Lefèvre',
+    p_profession: 'IDE',
+    p_type_exercice: 'SALARIE',
+    p_adresse_ville: 'Lyon',
+    p_adresse_code_postal: '69003',
+    p_ville_recherche: 'Lyon',
+    p_telephone: '0600000000',
+    p_types_contrat: ['CDD', 'SALARIE'],
+  });
+  const profilErreur = (profilResult as { error?: string } | null)?.error;
+  if (majErr || profilErreur) {
+    throw new Error(`mise à jour profil démo : ${majErr?.message || profilErreur}`);
+  }
+
+  // Ne pas recouvrir les captures stores avec le guide de première connexion.
+  // Le guide reste testable : sa réinitialisation est disponible dans l'app.
+  const { data: onboardingResult, error: onboardingErr } = await user.rpc('fn_marquer_etape_onboarding', {
+    p_etape_id: 'TERMINE',
+    p_termine: true,
+  });
+  const onboardingErreur = (onboardingResult as { error_code?: string } | null)?.error_code;
+  if (onboardingErr || onboardingErreur) {
+    throw new Error(`finalisation onboarding démo : ${onboardingErr?.message || onboardingErreur}`);
+  }
 
   // Préférences matching via la RPC réelle (cold start 7d-4), best-effort.
   try {
@@ -119,7 +131,7 @@ async function main() {
   const { data: requis } = await admin
     .from('documents_requis_par_profession' as never)
     .select('type_document')
-    .eq('profession', 'INFIRMIER')
+    .eq('profession', 'IDE')
     .eq('est_critique', true);
   const types = Array.from(
     new Set(((requis as { type_document: string }[] | null) ?? []).map((r) => r.type_document)),

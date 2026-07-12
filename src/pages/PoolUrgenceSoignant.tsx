@@ -110,7 +110,7 @@ export default function PoolUrgenceSoignant() {
         </aside>
 
         {/* Liste missions urgentes */}
-        <main>
+        <section aria-label="Missions urgentes disponibles">
           {loading ? (
             <ChargementPage />
           ) : !meta.pool_actif ? (
@@ -213,7 +213,7 @@ export default function PoolUrgenceSoignant() {
               ))}
             </div>
           )}
-        </main>
+        </section>
       </div>
     </LayoutApp>
   );

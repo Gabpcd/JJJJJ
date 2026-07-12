@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { LucideIcon, Building2, ClipboardList, FileText, Loader2, User } from 'lucide-react';
-import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import {
   Command,
   CommandEmpty,
@@ -122,8 +122,13 @@ export function RechercheGlobaleAdmin({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="overflow-hidden p-0 shadow-lg top-[20%] translate-y-0 max-w-xl">
+        <DialogTitle className="sr-only">Recherche globale d’administration</DialogTitle>
+        <DialogDescription className="sr-only">
+          Rechercher une page, un utilisateur, une mission ou une facture.
+        </DialogDescription>
         <Command shouldFilter={false} className="[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:text-muted-foreground [&_[cmdk-group]]:px-2 [&_[cmdk-input]]:h-12">
           <CommandInput
+            aria-label="Rechercher une page ou une donnée d’administration"
             placeholder="Rechercher un utilisateur, une mission, une facture…"
             value={query}
             onValueChange={setQuery}

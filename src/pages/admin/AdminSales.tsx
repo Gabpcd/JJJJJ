@@ -1,7 +1,7 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { cloneElement, isValidElement, useCallback, useEffect, useId, useMemo, useState } from 'react';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { LayoutAdmin } from '@/components/LayoutAdmin';
-import { ChargementPage } from '@/components/ChargementPage';
+import { ChargementAdmin, ChargementSectionAdmin } from '@/components/admin/ChargementAdmin';
 import { supabase } from '@/integrations/supabase/client';
 import { PROFESSIONS, getLabelProfession, getLabelTypeEtablissement } from '@/lib/constantes';
 import { CardY2K, CardY2KContent } from '@/components/y2k/CardY2K';
@@ -332,7 +332,7 @@ export default function AdminSales() {
     charger();
   };
 
-  if (loading) return <LayoutAdmin><ChargementPage /></LayoutAdmin>;
+  if (loading) return <LayoutAdmin><ChargementAdmin titre="Recruter des soignants et des établissements" /></LayoutAdmin>;
 
   return (
     <LayoutAdmin>
@@ -364,22 +364,22 @@ export default function AdminSales() {
           <div className="space-y-4">
             <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-end">
               <div className="flex-1">
-                <Label className="text-xs">Recherche</Label>
+                <Label htmlFor="admin-sales-recherche-groupes" className="text-xs">Recherche</Label>
                 <div className="relative">
                   <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                  <Input value={recherche} onChange={e => setRecherche(e.target.value)} placeholder="Nom, région, note…" className="pl-8 h-9" />
+                  <Input id="admin-sales-recherche-groupes" value={recherche} onChange={e => setRecherche(e.target.value)} placeholder="Nom, région, note…" className="pl-8 h-9" />
                 </div>
               </div>
               <div>
-                <Label className="text-xs">Plateforme</Label>
-                <select value={fPlateforme} onChange={e => setFPlateforme(e.target.value)} className="input-base h-9 w-full">
+                <Label htmlFor="admin-sales-plateforme" className="text-xs">Plateforme</Label>
+                <select id="admin-sales-plateforme" value={fPlateforme} onChange={e => setFPlateforme(e.target.value)} className="input-base h-9 w-full">
                   <option value="">Toutes</option>
                   {PLATEFORMES.map(p => <option key={p.v} value={p.v}>{p.label}</option>)}
                 </select>
               </div>
               <div>
-                <Label className="text-xs">Profession</Label>
-                <select value={fProfession} onChange={e => setFProfession(e.target.value)} className="input-base h-9 w-full">
+                <Label htmlFor="admin-sales-profession" className="text-xs">Profession</Label>
+                <select id="admin-sales-profession" value={fProfession} onChange={e => setFProfession(e.target.value)} className="input-base h-9 w-full">
                   <option value="">Toutes</option>
                   <option value="TOUTES">Toutes professions</option>
                   {PROFESSIONS.map(p => <option key={p.valeur} value={p.valeur}>{p.label}</option>)}
@@ -424,9 +424,13 @@ export default function AdminSales() {
                         </div>
                       </div>
                       <div className="flex gap-2 mt-3 flex-wrap items-center">
-                        <button onClick={() => toggleFavoriGroupe(g)} title={g.favori ? 'Retirer des favoris' : 'Ajouter aux favoris'}
+                        <button
+                          onClick={() => toggleFavoriGroupe(g)}
+                          title={g.favori ? 'Retirer des favoris' : 'Ajouter aux favoris'}
+                          aria-label={`${g.favori ? 'Retirer des favoris' : 'Ajouter aux favoris'} : ${g.nom}`}
+                          aria-pressed={Boolean(g.favori)}
                           className="p-1.5 rounded-lg hover:bg-muted transition-colors">
-                          <Star className={`h-5 w-5 ${g.favori ? 'fill-yellow-400 text-yellow-400' : 'text-muted-foreground'}`} />
+                          <Star aria-hidden="true" className={`h-5 w-5 ${g.favori ? 'fill-yellow-400 text-yellow-400' : 'text-muted-foreground'}`} />
                         </button>
                         {g.url ? (
                           <BoutonY2K size="sm" onClick={() => window.open(g.url, '_blank', 'noopener')} iconeGauche={<ExternalLink className="h-4 w-4" />}>Ouvrir</BoutonY2K>
@@ -434,7 +438,13 @@ export default function AdminSales() {
                           <BadgeY2K variant="warning">Lien à renseigner</BadgeY2K>
                         )}
                         <BoutonY2K size="sm" variant="ghost" onClick={() => setEditGroupe({ ...g })}>Éditer</BoutonY2K>
-                        <BoutonY2K size="sm" variant="ghost" onClick={() => supprimerGroupe(g.id)} iconeGauche={<Trash2 className="h-4 w-4" />} />
+                        <BoutonY2K
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => supprimerGroupe(g.id)}
+                          aria-label={`Supprimer le groupe ${g.nom}`}
+                          iconeGauche={<Trash2 className="h-4 w-4" aria-hidden="true" />}
+                        />
                       </div>
                     </CardY2KContent>
                   </CardY2K>
@@ -677,20 +687,20 @@ function ListeContacts({ type, contacts, voirArchives, onToggleArchives, onAdd, 
       <div className="flex gap-2 flex-wrap items-end">
         <div>
           <Label className="text-xs">Statut</Label>
-          <select value={fStatut} onChange={e => setFStatut(e.target.value)} className="input-base h-8 text-xs">
+          <select aria-label="Filtrer les contacts par statut" value={fStatut} onChange={e => setFStatut(e.target.value)} className="input-base h-8 text-xs">
             <option value="">Tous</option>
             {STATUTS_CONTACT.map(s => <option key={s} value={s}>{LABELS_STATUT_CONTACT[s] || s}</option>)}
           </select>
         </div>
         <div>
           <Label className="text-xs">Réponse</Label>
-          <select value={fReponse} onChange={e => setFReponse(e.target.value)} className="input-base h-8 text-xs">
+          <select aria-label="Filtrer les contacts par réponse" value={fReponse} onChange={e => setFReponse(e.target.value)} className="input-base h-8 text-xs">
             {REPONSES_FILTRE.map(r => <option key={r.v} value={r.v}>{r.label}</option>)}
           </select>
         </div>
         <div>
           <Label className="text-xs">{type === 'SOIGNANT' ? 'Profession' : "Type d'étab."}</Label>
-          <select value={fProfType} onChange={e => setFProfType(e.target.value)} className="input-base h-8 text-xs">
+          <select aria-label={type === 'SOIGNANT' ? 'Filtrer les contacts par profession' : 'Filtrer les contacts par type d’établissement'} value={fProfType} onChange={e => setFProfType(e.target.value)} className="input-base h-8 text-xs">
             <option value="">{type === 'SOIGNANT' ? 'Toutes' : 'Tous'}</option>
             {type === 'SOIGNANT'
               ? PROFESSIONS.map(p => <option key={p.valeur} value={p.valeur}>{p.label}</option>)
@@ -699,11 +709,11 @@ function ListeContacts({ type, contacts, voirArchives, onToggleArchives, onAdd, 
         </div>
         <div>
           <Label className="text-xs">Dépt.</Label>
-          <Input value={fDept} onChange={e => setFDept(e.target.value)} placeholder="ex : 75" className="h-8 w-20 text-xs" />
+          <Input aria-label="Filtrer les contacts par département" value={fDept} onChange={e => setFDept(e.target.value)} placeholder="ex : 75" className="h-8 w-20 text-xs" />
         </div>
         <div>
           <Label className="text-xs">Tri</Label>
-          <select value={tri} onChange={e => setTri(e.target.value)} className="input-base h-8 text-xs">
+          <select aria-label="Trier les contacts" value={tri} onChange={e => setTri(e.target.value)} className="input-base h-8 text-xs">
             <option value="recent">Plus récent</option>
             <option value="nom">Nom (A→Z)</option>
             <option value="statut">Statut</option>
@@ -770,7 +780,7 @@ function ListeContacts({ type, contacts, voirArchives, onToggleArchives, onAdd, 
                 </div>
                 {/* Pipeline + édition */}
                 <div className="flex gap-2 mt-2 items-center flex-wrap">
-                  <select value={c.statut} onChange={e => onStatut(c.id, e.target.value)} className="input-base h-8 text-xs">
+                  <select aria-label={`Statut du contact ${c.nom}`} value={c.statut} onChange={e => onStatut(c.id, e.target.value)} className="input-base h-8 text-xs">
                     {STATUTS_CONTACT.map(s => <option key={s} value={s}>{LABELS_STATUT_CONTACT[s] || s}</option>)}
                   </select>
                   <BoutonY2K size="sm" variant="ghost" onClick={() => onEdit(c)}>Éditer / note</BoutonY2K>
@@ -792,12 +802,22 @@ function ListeContacts({ type, contacts, voirArchives, onToggleArchives, onAdd, 
 
 /* ── Panneau de formulaire ── */
 function FormPanel({ titre, children, onClose, onSave }: { titre: string; children: React.ReactNode; onClose: () => void; onSave: () => void }) {
+  const titleId = useId();
+
+  useEffect(() => {
+    const fermerAvecEchap = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose();
+    };
+    document.addEventListener('keydown', fermerAvecEchap);
+    return () => document.removeEventListener('keydown', fermerAvecEchap);
+  }, [onClose]);
+
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-foreground/40 p-0 sm:p-4" onClick={onClose}>
-      <div className="bg-card w-full sm:max-w-lg rounded-t-2xl sm:rounded-2xl p-5 max-h-[90vh] overflow-y-auto space-y-3" onClick={e => e.stopPropagation()}>
+      <div className="bg-card w-full sm:max-w-lg rounded-t-2xl sm:rounded-2xl p-5 max-h-[90vh] overflow-y-auto space-y-3" role="dialog" aria-modal="true" aria-labelledby={titleId} onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between">
-          <h2 className="font-bold text-foreground">{titre}</h2>
-          <button onClick={onClose} className="text-muted-foreground hover:text-foreground"><X className="h-5 w-5" /></button>
+          <h2 id={titleId} className="font-bold text-foreground">{titre}</h2>
+          <button aria-label={`Fermer : ${titre}`} onClick={onClose} className="text-muted-foreground hover:text-foreground"><X className="h-5 w-5" aria-hidden="true" /></button>
         </div>
         {children}
         <div className="flex gap-2 pt-2">
@@ -810,7 +830,12 @@ function FormPanel({ titre, children, onClose, onSave }: { titre: string; childr
 }
 
 function Champ({ label, children }: { label: string; children: React.ReactNode }) {
-  return <div><Label className="text-xs">{label}</Label>{children}</div>;
+  const generatedId = useId();
+  const controlId = isValidElement<{ id?: string }>(children) && children.props.id ? children.props.id : generatedId;
+  const control = isValidElement<{ id?: string }>(children)
+    ? cloneElement(children, { id: controlId })
+    : children;
+  return <div><Label htmlFor={controlId} className="text-xs">{label}</Label>{control}</div>;
 }
 
 /* ── Établissements déjà inscrits sur Jolene ── */
@@ -832,7 +857,7 @@ function EtablissementsJolene() {
     <div className="space-y-3">
       <div className="relative max-w-sm">
         <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-        <Input value={recherche} onChange={e => setRecherche(e.target.value)} placeholder="Nom ou ville…" className="pl-8 h-9" />
+        <Input aria-label="Rechercher un établissement Jolene" value={recherche} onChange={e => setRecherche(e.target.value)} placeholder="Nom ou ville…" className="pl-8 h-9" />
       </div>
       {loading ? (
         <p className="text-sm text-muted-foreground py-4">Chargement…</p>
@@ -875,7 +900,6 @@ const TYPES_PROSPECTION = [
   { v: '', label: 'Tous les types' },
   { v: 'EHPAD', label: 'EHPAD / personnes âgées' },
   { v: 'HOPITAL', label: 'Hôpitaux / cliniques' },
-  { v: 'PHARMACIE', label: "Pharmacies d'officine" },
   { v: 'DOMICILE', label: 'SSIAD / soins à domicile' },
   { v: 'HANDICAP', label: 'Handicap / médico-social' },
   { v: 'CENTRE_SANTE', label: 'Centres / maisons de santé' },
@@ -985,17 +1009,17 @@ function ProspectionEtab({ onAjouter }: { onAjouter: () => void }) {
           <div className="flex flex-col sm:flex-row gap-2 sm:items-end flex-wrap">
             <div className="flex-1 min-w-[160px]">
               <Label className="text-xs">Type d'établissement</Label>
-              <select value={type} onChange={e => setType(e.target.value)} className="input-base h-9 w-full">
+              <select aria-label="Type d’établissement à prospecter" value={type} onChange={e => setType(e.target.value)} className="input-base h-9 w-full">
                 {TYPES_PROSPECTION.map(c => <option key={c.v} value={c.v}>{c.label}</option>)}
               </select>
             </div>
             <div>
               <Label className="text-xs">Département (optionnel)</Label>
-              <Input value={departement} onChange={e => setDepartement(e.target.value)} placeholder="National" className="h-9 w-28" />
+              <Input aria-label="Département des établissements à prospecter" value={departement} onChange={e => setDepartement(e.target.value)} placeholder="National" className="h-9 w-28" />
             </div>
             <div className="flex-1 min-w-[160px]">
               <Label className="text-xs">Nom ou ville</Label>
-              <Input value={q} onChange={e => setQ(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') rechercher(1); }} placeholder="Korian, Marseille…" className="h-9" />
+              <Input aria-label="Nom ou ville de l’établissement à prospecter" value={q} onChange={e => setQ(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') rechercher(1); }} placeholder="Korian, Marseille…" className="h-9" />
             </div>
             <BoutonY2K size="sm" variant={avecEmail ? 'primary' : 'secondary'} onClick={() => setAvecEmail(!avecEmail)} iconeGauche={<Mail className="h-4 w-4" />}>Avec email</BoutonY2K>
             <BoutonY2K size="sm" variant={avecTel ? 'primary' : 'secondary'} onClick={() => setAvecTel(!avecTel)} iconeGauche={<Phone className="h-4 w-4" />}>Avec tél.</BoutonY2K>
@@ -1140,7 +1164,7 @@ function EnvoiMasseBar({ cible }: { cible: 'ETABLISSEMENT' | 'SOIGNANT' }) {
     setTemplate((tpl as any) || null);
   };
 
-  useEffect(() => { chargerEtat(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [cible]);
+  useEffect(() => { chargerEtat(); }, [cible]);
 
   const envoyerTous = async () => {
     if (!template) return;
@@ -1195,6 +1219,7 @@ function EnvoiMasseBar({ cible }: { cible: 'ETABLISSEMENT' | 'SOIGNANT' }) {
 /* ── Modal d'envoi email 1-clic via Jolene (Resend) ──
    Pré-remplie avec le template officiel (onglet Templates) — modifiable avant envoi. */
 function OutreachModal({ prospect, template, onClose }: { prospect: any; template: TemplateProspection; onClose: () => void }) {
+  const titleId = useId();
   // Nom d'affichage : étab = nom ; soignant = prénom + nom.
   const nomAffiche = prospect.prenom ? `${prospect.prenom} ${prospect.nom}`.trim() : prospect.nom;
   const [sujet, setSujet] = useState(remplirTemplate(template.sujet, { ...prospect, nom: nomAffiche }));
@@ -1219,10 +1244,10 @@ function OutreachModal({ prospect, template, onClose }: { prospect: any; templat
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-foreground/40 p-0 sm:p-4" onClick={onClose}>
-      <div className="bg-card w-full sm:max-w-lg rounded-t-2xl sm:rounded-2xl p-5 max-h-[90vh] overflow-y-auto space-y-3" onClick={e => e.stopPropagation()}>
+      <div className="bg-card w-full sm:max-w-lg rounded-t-2xl sm:rounded-2xl p-5 max-h-[90vh] overflow-y-auto space-y-3" role="dialog" aria-modal="true" aria-labelledby={titleId} onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between">
-          <h2 className="font-bold text-foreground">Email à {nomAffiche}</h2>
-          <button onClick={onClose} className="text-muted-foreground hover:text-foreground"><X className="h-5 w-5" /></button>
+          <h2 id={titleId} className="font-bold text-foreground">Email à {nomAffiche}</h2>
+          <button aria-label={`Fermer l’email à ${nomAffiche}`} onClick={onClose} className="text-muted-foreground hover:text-foreground"><X className="h-5 w-5" aria-hidden="true" /></button>
         </div>
         <p className="text-xs text-muted-foreground">À : {prospect.email} · De : Gabrielle de Jolene (réponses → votre boîte perso)</p>
         <Champ label="Sujet"><Input value={sujet} onChange={e => setSujet(e.target.value)} /></Champ>
@@ -1240,13 +1265,14 @@ function OutreachModal({ prospect, template, onClose }: { prospect: any; templat
 
 /* ── Modal suivi d'appel : a décroché ? ── */
 function AppelModal({ prospect, onChoix, onClose }: { prospect: any; onChoix: (aDecroche: boolean) => void; onClose: () => void }) {
+  const titleId = useId();
   const nom = prospect.prenom ? `${prospect.prenom} ${prospect.nom}`.trim() : prospect.nom;
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-foreground/40 p-0 sm:p-4" onClick={onClose}>
-      <div className="bg-card w-full sm:max-w-sm rounded-t-2xl sm:rounded-2xl p-5 space-y-4" onClick={e => e.stopPropagation()}>
+      <div className="bg-card w-full sm:max-w-sm rounded-t-2xl sm:rounded-2xl p-5 space-y-4" role="dialog" aria-modal="true" aria-labelledby={titleId} onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between">
-          <h2 className="font-bold text-foreground">Appel à {nom}</h2>
-          <button onClick={onClose} className="text-muted-foreground hover:text-foreground"><X className="h-5 w-5" /></button>
+          <h2 id={titleId} className="font-bold text-foreground">Appel à {nom}</h2>
+          <button aria-label={`Fermer le suivi d’appel de ${nom}`} onClick={onClose} className="text-muted-foreground hover:text-foreground"><X className="h-5 w-5" aria-hidden="true" /></button>
         </div>
         <p className="text-sm text-muted-foreground">Cette personne a-t-elle décroché ?</p>
         <div className="flex gap-2">
@@ -1265,6 +1291,7 @@ function ImportCsvModal({ cible, onClose, onImport }: {
   onClose: () => void;
   onImport: (texte: string) => Promise<void>;
 }) {
+  const titleId = useId();
   const [texte, setTexte] = useState('');
   const [encours, setEncours] = useState(false);
   const format = cible === 'GROUPES'
@@ -1273,16 +1300,16 @@ function ImportCsvModal({ cible, onClose, onImport }: {
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-foreground/40 p-0 sm:p-4" onClick={onClose}>
-      <div className="bg-card w-full sm:max-w-lg rounded-t-2xl sm:rounded-2xl p-5 max-h-[90vh] overflow-y-auto space-y-3" onClick={e => e.stopPropagation()}>
+      <div className="bg-card w-full sm:max-w-lg rounded-t-2xl sm:rounded-2xl p-5 max-h-[90vh] overflow-y-auto space-y-3" role="dialog" aria-modal="true" aria-labelledby={titleId} onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between">
-          <h2 className="font-bold text-foreground">Importer en masse ({cible === 'GROUPES' ? 'groupes' : 'contacts'})</h2>
-          <button onClick={onClose} className="text-muted-foreground hover:text-foreground"><X className="h-5 w-5" /></button>
+          <h2 id={titleId} className="font-bold text-foreground">Importer en masse ({cible === 'GROUPES' ? 'groupes' : 'contacts'})</h2>
+          <button aria-label="Fermer l’import CSV" onClick={onClose} className="text-muted-foreground hover:text-foreground"><X className="h-5 w-5" aria-hidden="true" /></button>
         </div>
         <p className="text-xs text-muted-foreground">
           Une ligne par entrée, colonnes séparées par <code>;</code> — format : <code>{format}</code>.
           Collez directement depuis Excel/Numbers (export CSV point-virgule).
         </p>
-        <Textarea value={texte} onChange={e => setTexte(e.target.value)} rows={10}
+        <Textarea aria-label={`Données CSV à importer pour ${cible === 'GROUPES' ? 'les groupes' : 'les contacts'}`} value={texte} onChange={e => setTexte(e.target.value)} rows={10}
           placeholder={cible === 'GROUPES'
             ? "IDEL Bretagne;https://facebook.com/groups/xxx;IDE;Bretagne"
             : "EHPAD Les Lilas;0145678900;contact@leslilas.fr;Paris;"} />
@@ -1338,12 +1365,12 @@ function PostsGenerateur() {
     const label = getLabelProfession(s.profession) || s.profession;
     const taux = s.taux_max ? ` jusqu'à ${Number(s.taux_max).toFixed(0)} €/h` : '';
     const villes = s.villes ? ` (${s.villes})` : '';
-    return `${s.nb} mission${s.nb > 1 ? 's' : ''} ${label} disponible${s.nb > 1 ? 's' : ''} cette semaine${villes}${taux}.\n\nÉtablissements vérifiés, paiement garanti, inscription gratuite.\nhttps://jolene.app/soignant/recherche-missions?${utm}\n\n#emploi #soignant #${(s.profession || '').toLowerCase()}`;
+    return `${s.nb} mission${s.nb > 1 ? 's' : ''} ${label} disponible${s.nb > 1 ? 's' : ''} cette semaine${villes}${taux}.\n\nÉtablissements vérifiés, contrat et modalités de paiement affichés, inscription gratuite.\nhttps://jolene.app/soignant/recherche-missions?${utm}\n\n#emploi #soignant #${(s.profession || '').toLowerCase()}`;
   };
   const totalMissions = stats.reduce((acc, s) => acc + Number(s.nb || 0), 0);
-  const postGlobal = `${totalMissions} mission${totalMissions > 1 ? 's' : ''} médicales et paramédicales ouvertes cette semaine sur Jolene.\n\nInfirmiers, aides-soignants, kinés, pharmaciens… des établissements vérifiés recrutent près de chez vous. Paiement garanti, 0 frais pour les soignants.\nhttps://jolene.app?${utm}\n\n#emploi #santé #soignants`;
+  const postGlobal = `${totalMissions} mission${totalMissions > 1 ? 's' : ''} médicales et paramédicales ouvertes cette semaine sur Jolene.\n\nInfirmiers, aides-soignants, kinés et autres professionnels de santé : des établissements vérifiés recrutent près de chez vous. Contrat et modalités de paiement affichés, 0 frais pour les soignants.\nhttps://jolene.app?${utm}\n\n#emploi #santé #soignants`;
 
-  if (chargement) return <ChargementPage />;
+  if (chargement) return <ChargementSectionAdmin label="Chargement des posts…" />;
 
   return (
     <div className="space-y-4">
@@ -1361,7 +1388,7 @@ function PostsGenerateur() {
             automatique post-mission n'envoie que le nudge parrainage.
           </p>
           <div className="flex gap-2">
-            <Input value={lienAvis} onChange={e => setLienAvis(e.target.value)} placeholder="https://g.page/r/…/review" className="h-9" />
+          <Input aria-label="Lien Google pour recueillir des avis" value={lienAvis} onChange={e => setLienAvis(e.target.value)} placeholder="https://g.page/r/…/review" className="h-9" />
             <BoutonY2K size="sm" onClick={sauverLienAvis} iconeGauche={<Save className="h-4 w-4" />}>
               {lienAvisSauve ? 'Enregistré' : 'Enregistrer'}
             </BoutonY2K>
@@ -1407,16 +1434,15 @@ function PostsGenerateur() {
   );
 }
 
-/* ── Prospection soignants (base Annuaire Santé CNAM : libéraux conventionnés
-   avec téléphone de cabinet — IDE, dentistes, kinés, médecins généralistes,
-   pharmaciens titulaires, sages-femmes, orthophonistes, podologues) ── */
+/* ── Prospection soignants (base Annuaire Santé CNAM : professionnels
+   conventionnés avec téléphone de cabinet). Les titulaires d'officine sont
+   exclus : Jolene ne propose pas leur remplacement. ── */
 const PROFESSIONS_PROSPECTION_SOIGNANTS = [
   { v: '', label: 'Toutes les professions' },
   { v: 'IDE', label: 'Infirmiers (IDEL)' },
   { v: 'DENTISTE', label: 'Chirurgiens-dentistes' },
   { v: 'KINE', label: 'Kinésithérapeutes' },
   { v: 'MEDECIN', label: 'Médecins généralistes' },
-  { v: 'PHARMACIEN', label: 'Pharmaciens (officines)' },
   { v: 'SAGE_FEMME', label: 'Sages-femmes' },
   { v: 'ORTHOPHONISTE', label: 'Orthophonistes' },
   { v: 'PEDICURE_PODOLOGUE', label: 'Pédicures-podologues' },
@@ -1428,7 +1454,7 @@ Je suis Gabrielle, la fondatrice de Jolene. Des établissements de santé près 
 
 • Inscription gratuite en 2 minutes, zéro commission pour les soignants
 • Contrats et démarches administratives gérés automatiquement
-• Paiement garanti et rapide après chaque mission
+• Contrat et modalités de paiement affichés avant candidature
 
 Découvrez les missions ouvertes : https://jolene.app/inscription/soignant
 
@@ -1546,17 +1572,17 @@ function ProspectionSoignants({ onAjouter }: { onAjouter: () => void }) {
           <div className="flex flex-col sm:flex-row gap-2 sm:items-end flex-wrap">
             <div className="flex-1 min-w-[170px]">
               <Label className="text-xs">Profession</Label>
-              <select value={profession} onChange={e => setProfessionP(e.target.value)} className="input-base h-9 w-full">
+              <select aria-label="Profession des soignants à prospecter" value={profession} onChange={e => setProfessionP(e.target.value)} className="input-base h-9 w-full">
                 {PROFESSIONS_PROSPECTION_SOIGNANTS.map(c => <option key={c.v} value={c.v}>{c.label}</option>)}
               </select>
             </div>
             <div>
               <Label className="text-xs">Département (optionnel)</Label>
-              <Input value={departement} onChange={e => setDepartement(e.target.value)} placeholder="National" className="h-9 w-28" />
+              <Input aria-label="Département des soignants à prospecter" value={departement} onChange={e => setDepartement(e.target.value)} placeholder="National" className="h-9 w-28" />
             </div>
             <div className="flex-1 min-w-[160px]">
               <Label className="text-xs">Nom, ville ou cabinet</Label>
-              <Input value={q} onChange={e => setQ(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') rechercher(1); }} placeholder="Dupont, Lorient…" className="h-9" />
+              <Input aria-label="Nom, ville ou cabinet du soignant à prospecter" value={q} onChange={e => setQ(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') rechercher(1); }} placeholder="Dupont, Lorient…" className="h-9" />
             </div>
             <BoutonY2K size="sm" variant={avecEmail ? 'primary' : 'secondary'} onClick={() => setAvecEmail(!avecEmail)} iconeGauche={<Mail className="h-4 w-4" />}>Avec email</BoutonY2K>
             <BoutonY2K size="sm" variant={avecTel ? 'primary' : 'secondary'} onClick={() => setAvecTel(!avecTel)} iconeGauche={<Phone className="h-4 w-4" />}>Avec tél.</BoutonY2K>
@@ -1711,7 +1737,7 @@ function BacklinksAnnuaires() {
     publies: annuaires.filter(a => a.statut === 'PUBLIE').length,
   }), [annuaires]);
 
-  if (loading) return <ChargementPage />;
+  if (loading) return <ChargementSectionAdmin label="Chargement des annuaires…" />;
   return (
     <div className="space-y-4">
       <CardY2K hoverLift={false}><CardY2KContent>
@@ -1725,14 +1751,14 @@ function BacklinksAnnuaires() {
       <div className="flex gap-2 flex-wrap items-end">
         <div>
           <Label className="text-xs">Statut</Label>
-          <select value={fStatut} onChange={e => setFStatut(e.target.value)} className="input-base h-8 text-xs">
+          <select aria-label="Filtrer les annuaires par statut" value={fStatut} onChange={e => setFStatut(e.target.value)} className="input-base h-8 text-xs">
             <option value="">Tous</option>
             {STATUTS_ANNUAIRE.map(s => <option key={s} value={s}>{LABELS_STATUT_ANNUAIRE[s]}</option>)}
           </select>
         </div>
         <div>
           <Label className="text-xs">Catégorie</Label>
-          <select value={fCategorie} onChange={e => setFCategorie(e.target.value)} className="input-base h-8 text-xs">
+          <select aria-label="Filtrer les annuaires par catégorie" value={fCategorie} onChange={e => setFCategorie(e.target.value)} className="input-base h-8 text-xs">
             {CATEGORIES_ANNUAIRE.map(c => <option key={c.v} value={c.v}>{c.label}</option>)}
           </select>
         </div>
@@ -1744,8 +1770,13 @@ function BacklinksAnnuaires() {
             <CardY2KContent>
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0 flex items-start gap-1.5">
-                  <button onClick={() => maj(a.id, { favori: !a.favori })} className="mt-0.5 shrink-0" title="Favori">
-                    <Star className={`h-4 w-4 ${a.favori ? 'fill-yellow-400 text-yellow-400' : 'text-muted-foreground'}`} />
+                  <button
+                    onClick={() => maj(a.id, { favori: !a.favori })}
+                    className="mt-0.5 shrink-0"
+                    aria-label={`${a.favori ? 'Retirer des favoris' : 'Ajouter aux favoris'} : ${a.nom}`}
+                    aria-pressed={Boolean(a.favori)}
+                  >
+                    <Star aria-hidden="true" className={`h-4 w-4 ${a.favori ? 'fill-yellow-400 text-yellow-400' : 'text-muted-foreground'}`} />
                   </button>
                   <div className="min-w-0">
                     <a href={a.url} target="_blank" rel="noopener noreferrer" className="font-semibold text-primary hover:underline inline-flex items-center gap-1">{a.nom}<ExternalLink className="h-3.5 w-3.5 shrink-0" /></a>
@@ -1763,7 +1794,7 @@ function BacklinksAnnuaires() {
               <div className="flex gap-2 mt-2 flex-wrap items-center">
                 <BoutonY2K size="sm" onClick={() => copier(a.texte_a_soumettre || '')} iconeGauche={<Copy className="h-4 w-4" />}>Copier le texte</BoutonY2K>
                 <BoutonY2K size="sm" variant="secondary" onClick={() => window.open(a.url, '_blank', 'noopener')} iconeGauche={<ExternalLink className="h-4 w-4" />}>Ouvrir l'annuaire</BoutonY2K>
-                <select value={a.statut} onChange={e => maj(a.id, { statut: e.target.value })} className="input-base h-8 text-xs">
+                <select aria-label={`Statut de l’annuaire ${a.nom}`} value={a.statut} onChange={e => maj(a.id, { statut: e.target.value })} className="input-base h-8 text-xs">
                   {STATUTS_ANNUAIRE.map(s => <option key={s} value={s}>{LABELS_STATUT_ANNUAIRE[s]}</option>)}
                 </select>
                 <BoutonY2K size="sm" variant="ghost" onClick={() => setEdit({ ...a })} iconeGauche={<Pencil className="h-4 w-4" />}>Note / lien</BoutonY2K>

@@ -8,6 +8,7 @@ import { SelectSpecialiteMedicale } from '@/components/SelectSpecialiteMedicale'
 import { SelectProfession } from '@/components/SelectProfession';
 import { supabase, SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY } from '@/integrations/supabase/client';
 import { reverseGeocode } from '@/lib/geocodage';
+import { getCurrentPosition as obtenirGeoloc } from '@/lib/geoloc';
 import { CaptchaTurnstile } from '@/components/CaptchaTurnstile';
 import { getLabelProfession, PROFESSIONS_SANS_RPPS } from '@/lib/constantes';
 import { useTypesExerciceAutorises } from '@/hooks/useTypesExerciceAutorises';
@@ -203,8 +204,9 @@ function RppsVerifierInline(props: {
       <div className="space-y-3">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
-            <label className="text-sm font-medium text-foreground mb-1.5 block">Prénom *</label>
+            <label htmlFor="rpps-prenom" className="text-sm font-medium text-foreground mb-1.5 block">Prénom *</label>
             <input
+              id="rpps-prenom"
               value={prenom}
               onChange={(e) => setPrenom(e.target.value)}
               className="input-base"
@@ -212,8 +214,9 @@ function RppsVerifierInline(props: {
             />
           </div>
           <div>
-            <label className="text-sm font-medium text-foreground mb-1.5 block">Nom *</label>
+            <label htmlFor="rpps-nom" className="text-sm font-medium text-foreground mb-1.5 block">Nom *</label>
             <input
+              id="rpps-nom"
               value={nom}
               onChange={(e) => setNom(e.target.value)}
               className="input-base"
@@ -222,8 +225,9 @@ function RppsVerifierInline(props: {
           </div>
         </div>
         <div>
-          <label className="text-sm font-medium text-foreground mb-1.5 block">Date de naissance</label>
+          <label htmlFor="rpps-date-naissance" className="text-sm font-medium text-foreground mb-1.5 block">Date de naissance</label>
           <input
+            id="rpps-date-naissance"
             type="date"
             value={dateNaissance}
             onChange={(e) => setDateNaissance(e.target.value)}
@@ -231,8 +235,9 @@ function RppsVerifierInline(props: {
           />
         </div>
         <div>
-          <label className="text-sm font-medium text-foreground mb-1.5 block">Numéro RPPS *</label>
+          <label htmlFor="rpps-numero" className="text-sm font-medium text-foreground mb-1.5 block">Numéro RPPS *</label>
           <input
+            id="rpps-numero"
             value={rpps}
             onChange={(e) => setRpps(e.target.value.replace(/\D/g, '').slice(0, 11))}
             placeholder="11 chiffres"
@@ -360,12 +365,13 @@ function BoutonModifierProfession({ rppsVerifie, tousDocumentsValides, onChanged
 
   const reset = async () => {
     setResetting(true);
-    const { error } = await supabase
-      .from('soignants')
-      .update({ profession: null } as any)
-      .eq('id', (await supabase.auth.getUser()).data.user?.id || '');
-    if (error) {
-      afficherNotification({ type: 'erreur', message: extraireMessageErreur(error) });
+    const { data, error } = await supabase.rpc('fn_reinitialiser_ma_profession' as any);
+    const resultat = data as { success?: boolean; error?: string; error_code?: string } | null;
+    if (error || !resultat?.success) {
+      afficherNotification({
+        type: 'erreur',
+        message: resultat?.error || (error ? extraireMessageErreur(error) : 'La profession ne peut pas être réinitialisée.'),
+      });
       setResetting(false);
       setShowConfirm(false);
       return;
@@ -483,12 +489,13 @@ function BlocPaieFacturation({ typeExercice, userId }: { typeExercice: string; u
       </h2>
       <div className="space-y-3">
         <div>
-          <label className="text-sm font-medium text-foreground mb-1.5 block">
+          <label htmlFor="profil-nir" className="text-sm font-medium text-foreground mb-1.5 block">
             Numéro de sécurité sociale (NIR)
             {peutSalarie && <span className="text-xs text-warning ml-2">requis pour le bulletin de paie</span>}
           </label>
           <div className="flex gap-2">
             <input
+              id="profil-nir"
               value={nir}
               onChange={(e) => setNir(e.target.value)}
               placeholder="13 ou 15 chiffres"
@@ -604,31 +611,25 @@ export function SectionProfilPrincipal(props: Props) {
     if (uniqueType) setTypeExercice(uniqueType);
   }, [uniqueType, setTypeExercice]);
 
-  const demanderGeolocalisation = () => {
-    if (!navigator.geolocation) {
-      afficherNotification({ type: 'erreur', message: 'La géolocalisation n\'est pas supportée par ton navigateur.' });
-      return;
-    }
+  const demanderGeolocalisation = async () => {
     setGeoLoading(true);
-    navigator.geolocation.getCurrentPosition(
-      async (position) => {
-        const la = position.coords.latitude, lo = position.coords.longitude;
-        setLat(la.toString());
-        setLng(lo.toString());
-        const adr = await reverseGeocode(la, lo);
-        if (adr) {
-          if (adr.ville) setVilleRecherche(adr.ville);
-          afficherNotification({ type: 'succes', message: `📍 ${adr.label}` });
-        } else {
-          afficherNotification({ type: 'succes', message: 'Position récupérée.' });
-        }
-        setGeoLoading(false);
-      },
-      () => {
-        setGeoLoading(false);
-        afficherNotification({ type: 'erreur', message: 'Localisation refusée. Tu peux saisir ton adresse manuellement.' });
-      },
-    );
+    try {
+      const position = await obtenirGeoloc({ enableHighAccuracy: true, timeout: 15_000 });
+      const la = position.coords.latitude, lo = position.coords.longitude;
+      setLat(la.toString());
+      setLng(lo.toString());
+      const adr = await reverseGeocode(la, lo);
+      if (adr) {
+        if (adr.ville) setVilleRecherche(adr.ville);
+        afficherNotification({ type: 'succes', message: `📍 ${adr.label}` });
+      } else {
+        afficherNotification({ type: 'succes', message: 'Position récupérée.' });
+      }
+    } catch {
+      afficherNotification({ type: 'erreur', message: 'Localisation refusée ou indisponible. Tu peux saisir ton adresse manuellement.' });
+    } finally {
+      setGeoLoading(false);
+    }
   };
 
   const sansRPPS = profession && PROFESSIONS_SANS_RPPS.includes(profession);
@@ -701,10 +702,11 @@ export function SectionProfilPrincipal(props: Props) {
           </div>
           <div className="space-y-3">
             <div>
-              <label className="text-sm font-medium text-foreground mb-1.5 block">
+              <label htmlFor="profil-profession" className="text-sm font-medium text-foreground mb-1.5 block">
                 Profession <span className="text-xs text-muted-foreground">(vérifiée RPPS — non modifiable)</span>
               </label>
               <input
+                id="profil-profession"
                 value={profession ? getLabelProfession(profession) : '—'}
                 disabled
                 className="input-base bg-muted cursor-not-allowed"
@@ -747,10 +749,10 @@ export function SectionProfilPrincipal(props: Props) {
               </div>
             )}
             <div>
-              <label className="text-sm font-medium text-foreground mb-1.5 block">
+              <label htmlFor="profil-rpps" className="text-sm font-medium text-foreground mb-1.5 block">
                 RPPS <span className="text-xs text-muted-foreground">(vérifié — non modifiable)</span>
               </label>
-              <input value={rpps} readOnly className="input-base bg-muted cursor-not-allowed" />
+              <input id="profil-rpps" value={rpps} readOnly className="input-base bg-muted cursor-not-allowed" />
             </div>
           </div>
         </div>
@@ -762,13 +764,14 @@ export function SectionProfilPrincipal(props: Props) {
         <div className="space-y-3">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="text-sm font-medium text-foreground mb-1.5 block">
+              <label htmlFor="profil-prenom" className="text-sm font-medium text-foreground mb-1.5 block">
                 Prénom{' '}
                 {rppsVerifie && (
                   <span className="text-xs text-muted-foreground">(vérifié RPPS — non modifiable)</span>
                 )}
               </label>
               <input
+                id="profil-prenom"
                 value={prenom}
                 onChange={(e) => setPrenom(e.target.value)}
                 readOnly={rppsVerifie}
@@ -776,13 +779,14 @@ export function SectionProfilPrincipal(props: Props) {
               />
             </div>
             <div>
-              <label className="text-sm font-medium text-foreground mb-1.5 block">
+              <label htmlFor="profil-nom" className="text-sm font-medium text-foreground mb-1.5 block">
                 Nom{' '}
                 {rppsVerifie && (
                   <span className="text-xs text-muted-foreground">(vérifié RPPS — non modifiable)</span>
                 )}
               </label>
               <input
+                id="profil-nom"
                 value={nom}
                 onChange={(e) => setNom(e.target.value)}
                 readOnly={rppsVerifie}
@@ -791,21 +795,23 @@ export function SectionProfilPrincipal(props: Props) {
             </div>
           </div>
           <div>
-            <label className="text-sm font-medium text-foreground mb-1.5 block">Téléphone</label>
+            <label htmlFor="profil-telephone" className="text-sm font-medium text-foreground mb-1.5 block">Téléphone</label>
             <input
+              id="profil-telephone"
               value={telephone}
               onChange={(e) => setTelephone(e.target.value)}
               className="input-base"
             />
           </div>
           <div>
-            <label className="text-sm font-medium text-foreground mb-1.5 block">
+            <label htmlFor="profil-date-naissance" className="text-sm font-medium text-foreground mb-1.5 block">
               Date de naissance{' '}
               {rppsVerifie && (
                 <span className="text-xs text-muted-foreground">(vérifiée — non modifiable)</span>
               )}
             </label>
             <input
+              id="profil-date-naissance"
               type="date"
               value={dateNaissance}
               onChange={(e) => setDateNaissance(e.target.value)}
@@ -814,8 +820,8 @@ export function SectionProfilPrincipal(props: Props) {
             />
           </div>
           <div>
-            <label className="text-sm font-medium text-foreground mb-1.5 block">Email</label>
-            <input value={email} disabled className="input-base bg-muted cursor-not-allowed" />
+            <label htmlFor="profil-email" className="text-sm font-medium text-foreground mb-1.5 block">Email</label>
+            <input id="profil-email" value={email} disabled className="input-base bg-muted cursor-not-allowed" />
           </div>
         </div>
       </div>
@@ -843,11 +849,12 @@ export function SectionProfilPrincipal(props: Props) {
               : "Utilise ta position pour renseigner automatiquement ta ville."}
           </p>
           <div className="pt-2 border-t border-border">
-            <label className="text-sm font-medium text-foreground mb-1.5 block">🏙️ Ville de recherche</label>
+            <label htmlFor="profil-ville-recherche" className="text-sm font-medium text-foreground mb-1.5 block">🏙️ Ville de recherche</label>
             <p className="text-xs text-muted-foreground mb-2">
               Indique la ville où tu cherches des missions. Utile si tu es en déplacement ou en vacances.
             </p>
             <input
+              id="profil-ville-recherche"
               value={villeRecherche}
               onChange={(e) => setVilleRecherche(e.target.value)}
               placeholder="Ex : Lyon, Paris..."
@@ -950,6 +957,7 @@ export function SectionProfilPrincipal(props: Props) {
             <div className="mt-4 p-3 bg-warning/5 border border-warning/20 rounded-xl">
               <label className="flex items-start gap-3 cursor-pointer">
                 <Checkbox
+                  aria-label="J’atteste que mon contrat autorise le cumul d’activités"
                   checked={attestationCumul}
                   onCheckedChange={(v) => setAttestationCumul(!!v)}
                   className="mt-0.5"

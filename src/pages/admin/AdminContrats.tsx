@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, FileText, Loader2, CheckCircle2, XCircle } from 'lucide-react';
+import { Search, FileText, Loader2 } from 'lucide-react';
 import { LayoutAdmin } from '@/components/LayoutAdmin';
-import { ChargementPage } from '@/components/ChargementPage';
+import { ChargementAdmin } from '@/components/admin/ChargementAdmin';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { TableOuCartes, type ColonneTableau } from '@/components/ui/TableOuCartes';
 import { FileDeTravail } from '@/components/admin/FileDeTravail';
@@ -10,9 +10,6 @@ import { supabase } from '@/integrations/supabase/client';
 import { useNotification } from '@/contexts/NotificationContext';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useDebounce } from '@/hooks/useDebounce';
-import { BoutonY2K } from '@/components/y2k/BoutonY2K';
-import { ModalConfirmation } from '@/components/ModalConfirmation';
-import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 
@@ -53,7 +50,7 @@ const libelleStatut = (s: string) =>
   STATUT_LABEL[s]
   ?? (s?.startsWith('EXPIRE') ? 'Expiré'
     : s?.startsWith('EN_ATTENTE_SIGNATURE') ? 'En attente de signature'
-    : s);
+    : s?.toLocaleLowerCase('fr-FR').replace(/_/g, ' ').replace(/^./, (lettre) => lettre.toLocaleUpperCase('fr-FR')));
 
 const TYPE_CONTRAT_LABEL: Record<string, string> = {
   CDD: 'CDD',
@@ -62,7 +59,8 @@ const TYPE_CONTRAT_LABEL: Record<string, string> = {
   SALARIE: 'Salarié',
 };
 
-const libelleTypeContrat = (t: string) => TYPE_CONTRAT_LABEL[t] ?? t;
+const libelleTypeContrat = (t: string) => TYPE_CONTRAT_LABEL[t]
+  ?? t?.toLocaleLowerCase('fr-FR').replace(/_/g, ' ').replace(/^./, (lettre) => lettre.toLocaleUpperCase('fr-FR'));
 
 /** Contrat soumis à DPAE (CDD/Salarié), signé, mais sans numéro DPAE enregistré : obligation légale à traiter. */
 const estDpaeManquante = (c: ContratLigne) =>
@@ -83,9 +81,6 @@ export default function AdminContrats() {
   const [filtreStatut, setFiltreStatut] = useState<string>('Tous');
   const [recherche, setRecherche] = useState('');
   const rechercheDeb = useDebounce(recherche, 400);
-
-  // Task 9 — valider/refuser contrat établissement
-  const [validerModal, setValiderModal] = useState<{ etabId: string; valider: boolean } | null>(null);
 
   async function charger() {
     setLoading(true);
@@ -130,24 +125,7 @@ export default function AdminContrats() {
     return { aTraiter: file, historique: clos };
   }, [contrats]);
 
-  // Task 9
-  const validerContratEtablissement = async () => {
-    if (!validerModal) return;
-    const { data, error } = await supabase.rpc('fn_admin_valider_contrat_etablissement' as any, {
-      p_etablissement_id: validerModal.etabId,
-      p_valider: validerModal.valider,
-    });
-    if (error || (data as any)?.error) {
-      toast.error((data as any)?.error || error?.message || 'Erreur.');
-      setValiderModal(null);
-      return;
-    }
-    toast.success(validerModal.valider ? 'Contrat validé' : 'Contrat refusé');
-    setValiderModal(null);
-    charger();
-  };
-
-  if (loading && contrats.length === 0) return <LayoutAdmin><ChargementPage /></LayoutAdmin>;
+  if (loading && contrats.length === 0) return <LayoutAdmin><ChargementAdmin titre="Suivre les signatures de contrats" /></LayoutAdmin>;
 
   const totalPages = Math.ceil(total / PAR_PAGE);
 
@@ -225,16 +203,6 @@ export default function AdminContrats() {
           case 'actions':
             return (
               <div className="flex items-center gap-1 justify-end" onClick={(e) => e.stopPropagation()}>
-                {c.statut !== 'SIGNE_COMPLET' && c.etablissement_id && (
-                  <>
-                    <BoutonY2K size="sm" variant="secondary" onClick={() => setValiderModal({ etabId: c.etablissement_id, valider: true })} iconeGauche={<CheckCircle2 className="h-3.5 w-3.5" />}>
-                      Valider
-                    </BoutonY2K>
-                    <BoutonY2K size="sm" variant="destructive" onClick={() => setValiderModal({ etabId: c.etablissement_id, valider: false })} iconeGauche={<XCircle className="h-3.5 w-3.5" />}>
-                      Refuser
-                    </BoutonY2K>
-                  </>
-                )}
                 <button
                   onClick={() => navigate(`/admin/contrats/${c.id}`)}
                   className="btn-secondary text-xs py-1 px-3"
@@ -277,10 +245,10 @@ export default function AdminContrats() {
     <LayoutAdmin>
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-foreground inline-flex items-center gap-2">
-          <FileText className="h-6 w-6 text-primary" /> Contrats
+          <FileText className="h-6 w-6 text-primary" /> Suivre les signatures de contrats
         </h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Consultation de tous les contrats Jolene avec hash SHA-256 + certificat + audit trail.
+          Consultez les signatures, l’empreinte SHA-256, le certificat et les événements de preuve de chaque contrat de mission.
         </p>
       </div>
 
@@ -289,14 +257,16 @@ export default function AdminContrats() {
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <input
+            aria-label="Rechercher un contrat"
             type="text"
             value={recherche}
             onChange={(e) => { setRecherche(e.target.value); setPage(0); }}
-            placeholder="Numéro, mission, soignant, étab…"
+            placeholder="Numéro, mission, soignant, établissement…"
             className="input-base pl-9"
           />
         </div>
         <select
+          aria-label="Filtrer les contrats par statut"
           value={filtreStatut}
           onChange={(e) => { setFiltreStatut(e.target.value); setPage(0); }}
           className="input-base sm:w-64"
@@ -337,20 +307,6 @@ export default function AdminContrats() {
         </div>
       )}
 
-      {/* Task 9 — Modal valider/refuser contrat établissement */}
-      {validerModal && (
-        <ModalConfirmation
-          ouvert={!!validerModal}
-          onFermer={() => setValiderModal(null)}
-          onConfirmer={validerContratEtablissement}
-          titre={validerModal.valider ? 'Valider le contrat' : 'Refuser le contrat'}
-          message={validerModal.valider
-            ? 'Valider le contrat de cet établissement ? Il pourra publier des missions.'
-            : 'Refuser le contrat de cet établissement ? Il sera notifié.'}
-          labelConfirmer={validerModal.valider ? 'Valider' : 'Refuser'}
-          variante={validerModal.valider ? 'primaire' : 'danger'}
-        />
-      )}
     </LayoutAdmin>
   );
 }

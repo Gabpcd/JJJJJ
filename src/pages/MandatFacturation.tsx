@@ -47,7 +47,7 @@ function renderMarkdown(texte: string) {
   for (const line of lines) {
     if (line.startsWith('# ')) {
       flushList();
-      elements.push(<h1 key={key++} className="text-xl font-bold text-foreground mb-3 mt-2">{line.substring(2)}</h1>);
+      elements.push(<h2 key={key++} className="text-xl font-bold text-foreground mb-3 mt-2">{line.substring(2)}</h2>);
     } else if (line.startsWith('## ')) {
       flushList();
       elements.push(<h2 key={key++} className="text-base font-bold text-foreground mt-5 mb-2">{line.substring(3)}</h2>);
@@ -304,7 +304,7 @@ export default function MandatFacturation() {
   // ── Écran de confirmation post-signature (horodaté, retour auto) ─────────
   if (justSigned) {
     return (
-      <div className="fixed inset-0 z-50 bg-background flex flex-col items-center justify-center px-6 text-center" style={{ height: '100dvh' }}>
+      <main className="fixed inset-0 z-50 bg-background flex flex-col items-center justify-center px-6 text-center" style={{ height: '100dvh' }}>
         <div className="h-16 w-16 rounded-full bg-success/10 flex items-center justify-center mb-4">
           <CheckCircle className="h-9 w-9 text-success" />
         </div>
@@ -326,7 +326,7 @@ export default function MandatFacturation() {
           </BoutonY2K>
         </div>
         <p className="text-[11px] text-muted-foreground mt-4">Retour automatique dans quelques secondes…</p>
-      </div>
+      </main>
     );
   }
 
@@ -366,7 +366,7 @@ export default function MandatFacturation() {
         </header>
 
         {/* Corps scrollable — SEULE zone de scroll de l'écran */}
-        <div
+        <main
           ref={scrollRef}
           onScroll={checkFinScroll}
           className="flex-1 min-h-0 overflow-y-auto px-5 py-4"
@@ -402,7 +402,7 @@ export default function MandatFacturation() {
           {renderMarkdown(mandatTexte)}
           {/* Sentinelle de fin — un peu d'air pour que le dernier paragraphe ne colle pas au footer */}
           <div className="h-4" aria-hidden="true" />
-        </div>
+        </main>
 
         {/* Bouton « Aller à la fin » — visible tant que le gate n'est pas déverrouillé */}
         {!hasScrolledToBottom && (

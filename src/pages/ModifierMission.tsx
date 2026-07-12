@@ -15,7 +15,13 @@ export default function ModifierMission() {
   useEffect(() => {
     if (!id) return;
     (async () => {
-      const { data, error } = await supabase.from('missions').select('id, intitule, description, service, profession_requise, debut_le, fin_le, taux_horaire_base, est_urgente, niveau_urgence, statut').eq('id', id).single();
+      const { data, error } = await supabase.from('missions').select(`
+        id, intitule, description, service, profession_requise,
+        debut_le, fin_le, taux_horaire_base, est_urgente, niveau_urgence,
+        mode_attribution, type_contrat_recherche,
+        specialite_medicale_requise, accepte_non_specialises,
+        nb_creneaux, statut
+      `).eq('id', id).single();
       if (error) logger.error('[ModifierMission] Erreur chargement', error);
       setMission(data);
       setLoading(false);
@@ -28,9 +34,9 @@ export default function ModifierMission() {
     return (
       <LayoutApp role="ADMIN_ETABLISSEMENT">
         <div className="text-center py-12">
-          <p className="text-lg font-semibold text-foreground mb-2">
+          <h1 className="text-lg font-semibold text-foreground mb-2">
             {!mission ? 'Mission introuvable' : 'Modification impossible'}
-          </p>
+          </h1>
           <p className="text-sm text-muted-foreground mb-4">
             {!mission
               ? 'Cette mission n\'existe pas ou vous n\'avez pas les droits pour y accéder.'

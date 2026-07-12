@@ -1,39 +1,13 @@
 import { errorResponse, safeStringifyError } from '../_shared/errors.ts';
+import { createClient } from 'npm:@supabase/supabase-js@2.99.2';
+import { corsHeaders, jsonResponse, preflightResponse } from '../_shared/cors.ts';
+import { verifyAdminOrServiceRole, verifyUserOrServiceRole } from '../_shared/admin-auth.ts';
+import { applyRateLimit, getClientIp } from '../_shared/rate-limit.ts';
 
-function getCorsOrigin(req: Request): string {
-  const origin = req.headers.get("origin") || "";
-  if (
-    origin === "https://jolene.app" ||
-    origin === "https://app.jolene.app" ||
-    origin === "https://www.jolene.app" ||
-    origin === "http://localhost:5173" ||
-    origin === "http://localhost:8080"
-  ) {
-    return origin;
-  }
-  return "https://jolene.app";
-}
-
-function corsHeaders(req: Request) {
-  return {
-    'Access-Control-Allow-Origin': getCorsOrigin(req),
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
-  };
-}
-
-const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
-const RATE_LIMIT_MAX = 10;
-const RATE_LIMIT_WINDOW_MS = 60_000;
-
-function isRateLimited(ip: string): boolean {
-  const now = Date.now();
-  const entry = rateLimitMap.get(ip);
-  if (!entry || now > entry.resetAt) {
-    rateLimitMap.set(ip, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
-    return false;
-  }
-  entry.count++;
-  return entry.count > RATE_LIMIT_MAX;
+async function fingerprint(value: string): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value));
+  return [...new Uint8Array(digest)].slice(0, 16)
+    .map((octet) => octet.toString(16).padStart(2, '0')).join('');
 }
 
 async function fetchWithTimeout(url: string, init: RequestInit = {}, timeoutMs = 8000): Promise<Response> {
@@ -139,15 +113,13 @@ async function queryFhirAnnuaire(numero: string, type: IdentifierType = 'RPPS'):
   return { trouve: true, nom, prenom, professionCode, professionLabel, specialiteCode, specialiteLabel, actif: practitioner.active !== false };
 }
 
-import { createClient } from 'npm:@supabase/supabase-js@2';
-import { verifyTurnstileToken } from '../_shared/verify-turnstile.ts';
-
 Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders(req) });
+  if (req.method === 'OPTIONS') return preflightResponse(req);
+  if (req.method !== 'POST') return jsonResponse(req, { error: 'Methode non autorisee' }, 405);
   const cors = corsHeaders(req);
-  const clientIp = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
-  if (isRateLimited(clientIp)) {
-    return errorResponse(cors, 429, 'RATE_LIMITED', 'Trop de requêtes. Réessayez dans une minute.');
+  const clientIp = getClientIp(req);
+  if (applyRateLimit('verify-rpps', clientIp, { max: 10, windowMs: 60_000 })) {
+    return jsonResponse(req, { ok: false, code: 'RATE_LIMITED', message: 'Trop de requêtes. Réessayez dans une minute.' }, 429);
   }
   try {
     // [BUG 1 fix] Auth devenue OPTIONNELLE : verify-rpps interroge un registre
@@ -155,40 +127,65 @@ Deno.serve(async (req) => {
     // n'a PAS encore de session, donc exiger un JWT cassait la vérif RPPS
     // temps réel (401 → feedback visuel disparu).
     //
-    // Sécurité conservée :
-    //   - Rate-limit IP : 10 requêtes/minute (cf. RATE_LIMIT_MAX en haut)
-    //   - Turnstile : exigé si la page d'origine en envoie un (anti-bot)
-    //   - Aucune écriture en base sauf si soignant_id fourni AVEC service-role
-    //
-    // Les appels authentifiés (service-role admin, healthcheck) continuent
-    // de fonctionner — leur token n'est juste plus vérifié strictement.
+    // Le lookup temps reel precede signUp. Son token Turnstile ne doit surtout
+    // pas etre consomme ici puis reutilise par Auth (token a usage unique).
+    // La protection repose sur les quotas memoire + PostgreSQL ci-dessous.
+    // Toute ecriture reste reservee au service-role ou au profil authentifie.
     const authHeader = req.headers.get('Authorization');
     const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const anonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
     const token = authHeader?.startsWith('Bearer ') ? authHeader.replace('Bearer ', '') : '';
     const isServiceRole = !!token && token === serviceRoleKey;
     const isAnonKey = !!token && token === anonKey;
-    const body = await req.json();
+    let callerUid: string | null = null;
+    if (token && !isServiceRole && !isAnonKey) {
+      const auth = await verifyUserOrServiceRole(req);
+      if (!auth.ok) return jsonResponse(req, { error: auth.error }, auth.status);
+      callerUid = auth.userId;
+    }
+
+    const body = await req.json().catch(() => null) as Record<string, unknown> | null;
+    if (!body || Array.isArray(body)) return jsonResponse(req, { error: 'Corps JSON invalide' }, 400);
     if (body && body.warm === true) {
-      return new Response(JSON.stringify({
+      const adminAuth = await verifyAdminOrServiceRole(req);
+      if (!adminAuth.ok) return jsonResponse(req, { error: adminAuth.error }, adminAuth.status);
+      return jsonResponse(req, {
         warm: true,
         configured: !!Deno.env.get('ESANTE_FHIR_API_KEY'),
         endpoint: 'https://gateway.api.esante.gouv.fr/fhir/v2/Practitioner',
-      }), { status: 200, headers: { ...cors, 'Content-Type': 'application/json' } });
+      });
     }
-    const { numero_rpps, rpps, numero_adeli, adeli, prenom, nom, soignant_id, turnstileToken } = body;
-    const numeroRpps = String(numero_rpps || rpps || '').trim();
-    const numeroAdeli = String(numero_adeli || adeli || '').trim();
+    const numeroRpps = String(body.numero_rpps || body.rpps || '').trim();
+    const numeroAdeli = String(body.numero_adeli || body.adeli || '').trim();
+    const prenom = typeof body.prenom === 'string' ? body.prenom : '';
+    const nom = typeof body.nom === 'string' ? body.nom : '';
+    const soignantId = typeof body.soignant_id === 'string' ? body.soignant_id : null;
+    if (body.soignant_id && (!soignantId || !/^[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(soignantId))) {
+      return jsonResponse(req, { error: 'soignant_id invalide' }, 400);
+    }
+    if (soignantId && !isServiceRole && callerUid !== soignantId) {
+      return jsonResponse(req, { error: 'Ecriture profil interdite' }, 403);
+    }
+
+    const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
+    if (!supabaseUrl || !serviceRoleKey) return jsonResponse(req, { error: 'Service indisponible' }, 503);
+    if (!isServiceRole) {
+      const admin = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false } });
+      const { data: allowed, error: rateError } = await admin.rpc('fn_verifier_rate_limit', {
+        p_cle: await fingerprint(clientIp === 'unknown'
+          ? `unknown|${(req.headers.get('user-agent') || '').slice(0, 160)}`
+          : clientIp),
+        p_action: 'edge_verify_rpps',
+        p_max_tentatives: 30,
+        p_fenetre_secondes: 600,
+      });
+      if (rateError) return jsonResponse(req, { error: 'Service temporairement indisponible' }, 503);
+      if (allowed !== true) return jsonResponse(req, { code: 'RATE_LIMITED', error: 'Quota de verification atteint' }, 429);
+    }
+
     const isAdeliRequest = !numeroRpps && !!numeroAdeli;
     const numero = isAdeliRequest ? numeroAdeli : numeroRpps;
     const idType: IdentifierType = isAdeliRequest ? 'ADELI' : 'RPPS';
-    const captchaRequis = !isServiceRole && (!isAnonKey || !!soignant_id);
-    if (captchaRequis) {
-      const captcha = await verifyTurnstileToken(turnstileToken, clientIp);
-      if (!captcha.success) {
-        return errorResponse(cors, 403, 'CAPTCHA_FAILED', captcha.error || 'Vérification anti-bot échouée.');
-      }
-    }
     if (isAdeliRequest) {
       if (!numeroAdeli || numeroAdeli.length !== 9 || !/^[0-9]+$/.test(numeroAdeli)) {
         return errorResponse(cors, 400, 'ADELI_FORMAT_INVALID', 'Numéro ADELI invalide. Vérifiez qu\'il contient bien 9 chiffres.');
@@ -199,8 +196,7 @@ Deno.serve(async (req) => {
       }
     }
     const TEST_PREFIX = '00100';
-    const ENVIRONMENT = Deno.env.get('ENVIRONMENT') || 'development';
-    const testModeActif = ENVIRONMENT !== 'production';
+    const testModeActif = Deno.env.get('ALLOW_DEMO_IDENTIFIERS') === 'true';
     if (!isAdeliRequest && numero.startsWith(TEST_PREFIX) && testModeActif) {
       const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
       const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -234,7 +230,7 @@ Deno.serve(async (req) => {
         actif: true, source: 'Mode test (rpps_test)',
       }), { headers: { ...cors, 'Content-Type': 'application/json' } });
     }
-    if (!isAdeliRequest && numero === '00000000001') {
+    if (!isAdeliRequest && numero === '00000000001' && testModeActif) {
       return new Response(JSON.stringify({
         ok: true, code: 'RPPS_OK',
         trouve: true, correspond: true, rpps: numeroRpps,
@@ -269,26 +265,16 @@ Deno.serve(async (req) => {
       const correspondTraits = nomCorrespond && prenomCorrespond;
       const professionApi = result.professionLabel || mapProfessionCode(result.professionCode);
 
-      let callerUid: string | null = null;
-      if (token && !isServiceRole && !isAnonKey) {
-        try {
-          const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-          const aKey = Deno.env.get('SUPABASE_ANON_KEY')!;
-          const sbUser = createClient(supabaseUrl, aKey, { global: { headers: { Authorization: `Bearer ${token}` } } });
-          const { data: ud } = await sbUser.auth.getUser(token);
-          if (ud?.user?.id) callerUid = ud.user.id;
-        } catch { /* ignore */ }
-      }
-      const canWriteDb = isServiceRole || (!!callerUid && callerUid === soignant_id);
+      const canWriteDb = isServiceRole || (!!callerUid && callerUid === soignantId);
 
       // Profession déclarée : du body (inscription) OU récupérée sur le soignant (re-vérif profil).
       let professionDeclaree = String(body.profession || '').trim();
-      if (!professionDeclaree && soignant_id && canWriteDb) {
+      if (!professionDeclaree && soignantId && canWriteDb) {
         try {
           const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
           const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
           const sbA = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
-          const { data: sg } = await sbA.from('soignants').select('profession').eq('id', soignant_id).maybeSingle();
+          const { data: sg } = await sbA.from('soignants').select('profession').eq('id', soignantId).maybeSingle();
           if (sg?.profession) professionDeclaree = String(sg.profession);
         } catch { /* ignore */ }
       }
@@ -298,7 +284,7 @@ Deno.serve(async (req) => {
       const correspond = correspondTraits && !professionMismatch;
 
       // On n'écrit rpps_verifie=true QUE si traits ET profession concordent.
-      if (soignant_id && correspond && canWriteDb) {
+      if (soignantId && correspond && canWriteDb) {
         try {
           const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
           const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -320,7 +306,7 @@ Deno.serve(async (req) => {
             updateFields.specialite_verifiee = true;
             updateFields.specialite_verifiee_le = new Date().toISOString();
           }
-          await supabaseAdmin.from('soignants').update(updateFields as any).eq('id', soignant_id);
+          await supabaseAdmin.from('soignants').update(updateFields as any).eq('id', soignantId);
         } catch (dbErr) { console.error('Erreur sauvegarde RPPS sur soignant:', safeStringifyError(dbErr)); }
       }
       const codePrefix = isAdeliRequest ? 'ADELI' : 'RPPS';

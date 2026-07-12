@@ -1,5 +1,26 @@
 import { describe, it, expect } from 'vitest';
-import { extraireMessageErreur, estBlocageCodeTravail, extraireArticleLoi } from '../erreurs';
+import {
+  estBlocageCodeTravail,
+  estRefusInscriptionAttendu,
+  extraireArticleLoi,
+  extraireMessageErreur,
+  mapperErreurInscription,
+} from '../erreurs';
+
+describe('erreurs inscription familles de compte', () => {
+  it('propose la reconnexion pour un compte deja finalise', () => {
+    expect(mapperErreurInscription({
+      code: 'ACCOUNT_ALREADY_REGISTERED',
+      message: 'Compte existant',
+    })).toMatchObject({ code: 'ACCOUNT_ALREADY_REGISTERED', action: 'reconnexion' });
+  });
+
+  it('traite un croisement de type comme refus attendu mais un conflit legacy comme anomalie', () => {
+    expect(estRefusInscriptionAttendu('ACCOUNT_TYPE_MISMATCH')).toBe(true);
+    expect(estRefusInscriptionAttendu('ACCOUNT_PROFILE_CONFLICT')).toBe(false);
+    expect(mapperErreurInscription({ code: 'ACCOUNT_PROFILE_CONFLICT' }).action).toBe('support');
+  });
+});
 
 describe('extraireMessageErreur', () => {
   it('should return empty string for null/undefined', () => {

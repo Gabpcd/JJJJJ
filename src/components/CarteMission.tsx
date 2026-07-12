@@ -84,7 +84,7 @@ export const CarteMission = React.memo(function CarteMission({ mission, afficher
   const estTerminee = m.statut === 'TERMINEE';
   // F3 — « Republier » disponible sur les missions passées : annulées ET terminées.
   const peutRepublier = !!onRepublier && (estAnnulee || estTerminee);
-  const contratPref = extraireContratPreference(m.description);
+  const contratPref = m.type_contrat_recherche || extraireContratPreference(m.description);
   const contratBadge = getContratBadge(contratPref);
 
   // F4 — candidatures en attente à traiter (count agrégé côté ListeMissions).
@@ -306,7 +306,7 @@ export const CarteMission = React.memo(function CarteMission({ mission, afficher
                     id={`republier-debut-${m.id}`}
                     type="datetime-local"
                     value={republierDebut}
-                    min={new Date().toISOString().slice(0, 16)}
+                    min={format(new Date(), "yyyy-MM-dd'T'HH:mm")}
                     onChange={(e) => setRepublierDebut(e.target.value)}
                     className="input-base"
                   />
@@ -319,7 +319,7 @@ export const CarteMission = React.memo(function CarteMission({ mission, afficher
                     id={`republier-fin-${m.id}`}
                     type="datetime-local"
                     value={republierFin}
-                    min={republierDebut || new Date().toISOString().slice(0, 16)}
+                    min={republierDebut || format(new Date(), "yyyy-MM-dd'T'HH:mm")}
                     onChange={(e) => setRepublierFin(e.target.value)}
                     className="input-base"
                   />

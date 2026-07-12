@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { usePageTitle } from '@/hooks/usePageTitle';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { LayoutApp } from '@/components/LayoutApp';
 import { ChargementPage } from '@/components/ChargementPage';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
@@ -33,6 +33,11 @@ export default function ProfilSoignant() {
   const { user, deconnexion } = useAuth();
   const { afficherNotification } = useNotification();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tabParam = searchParams.get('tab');
+  const ongletActif = ['principal', 'preferences', 'confidentialite'].includes(tabParam || '')
+    ? tabParam!
+    : 'principal';
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [deconnexionEnCours, setDeconnexionEnCours] = useState(false);
@@ -332,7 +337,11 @@ export default function ProfilSoignant() {
       )}
 
       <div className="max-w-2xl">
-        <Tabs defaultValue="principal" className="w-full">
+        <Tabs
+          value={ongletActif}
+          onValueChange={(value) => setSearchParams({ tab: value }, { replace: true })}
+          className="w-full"
+        >
           <div className="overflow-x-auto -mx-1 px-1 mb-4">
             <TabsList className="w-max">
               <TabsTrigger value="principal">Profil principal</TabsTrigger>
@@ -503,6 +512,9 @@ function BlocStatutEtudiant({ userId }: { userId: string }) {
         </div>
         <button type="button"
           onClick={() => { const v = !estEtudiant; setEstEtudiant(v); sauver(v, details); }}
+          role="switch"
+          aria-checked={estEtudiant}
+          aria-label="Déclarer mon statut d'étudiant en santé"
           className={`relative w-12 h-6 rounded-full transition-colors shrink-0 ${estEtudiant ? 'bg-primary' : 'bg-muted'}`}>
           <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-card shadow transition-transform ${estEtudiant ? 'translate-x-6' : 'translate-x-0.5'}`} />
         </button>

@@ -31,7 +31,13 @@ interface Etat {
 
 const CLE_PROMPT_NOTE = (missionId: string) => `jolene_note_checkout_${missionId}`;
 
-export function PointageRotatifSoignant({ missionId }: { missionId: string }) {
+export function PointageRotatifSoignant({
+  missionId,
+  consentementGPS,
+}: {
+  missionId: string;
+  consentementGPS: boolean | null;
+}) {
   const [code, setCode] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [scanning, setScanning] = useState(false);
@@ -60,12 +66,15 @@ export function PointageRotatifSoignant({ missionId }: { missionId: string }) {
     const c = codeSaisi.trim();
     if (c.length !== 6 || submitting) return;
     setSubmitting(true);
-    // GPS best-effort (l'anti-triche se base dessus mais ne bloque pas le scan)
+    // Le GPS est strictement opt-in. Un refus n'empêche jamais le pointage :
+    // l'établissement peut alors le valider manuellement.
     let meta: Record<string, unknown> = { id_terminal: genererIdTerminal() };
-    try {
-      const pos = await obtenirPosition();
-      meta = { ...meta, latitude: pos.lat, longitude: pos.lng, precision_gps_m: pos.precisionM };
-    } catch { /* GPS indisponible — le scan reste valable, validation étab possible */ }
+    if (consentementGPS === true) {
+      try {
+        const pos = await obtenirPosition();
+        meta = { ...meta, latitude: pos.lat, longitude: pos.lng, precision_gps_m: pos.precisionM };
+      } catch { /* GPS indisponible — le scan reste valable, validation étab possible */ }
+    }
 
     const { data: res, error } = await supabase.rpc('fn_scanner_code_pointage' as any, { p_code: c, p_metadata: meta });
     setSubmitting(false);

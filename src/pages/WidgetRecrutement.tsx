@@ -10,6 +10,7 @@ export default function WidgetRecrutement() {
   const [missions, setMissions] = useState<any[]>([]);
   const [etabNom, setEtabNom] = useState('');
   const [loading, setLoading] = useState(true);
+  const [erreur, setErreur] = useState(false);
 
   useEffect(() => {
     if (!etabId) { setLoading(false); return; }
@@ -17,6 +18,11 @@ export default function WidgetRecrutement() {
     supabase.rpc('fn_missions_publiques_etablissement' as any, {
       p_etablissement_id: etabId,
     }).then(({ data, error }) => {
+      if (error) {
+        setErreur(true);
+        setLoading(false);
+        return;
+      }
       if (data && Array.isArray(data) && data.length > 0) {
         setEtabNom((data[0] as any).nom_etablissement || '');
         setMissions(data);
@@ -25,18 +31,25 @@ export default function WidgetRecrutement() {
     });
   }, [etabId]);
 
-  if (!etabId) return <div className="p-4 text-sm text-muted-foreground">Paramètre etab manquant.</div>;
+  if (!etabId) {
+    return (
+      <main className="p-4 text-sm text-muted-foreground">
+        <h1 className="font-semibold text-foreground mb-1">Missions disponibles sur Jolene</h1>
+        <p>Ce widget doit être ouvert depuis la page de recrutement d’un établissement.</p>
+      </main>
+    );
+  }
 
   const formatDate = (d: string) => new Date(d).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' });
   const formatHeure = (d: string) => new Date(d).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
 
   return (
-    <div className="max-w-lg mx-auto font-sans">
+    <main className="max-w-lg mx-auto font-sans" aria-busy={loading}>
       {/* Header */}
       <div className="bg-primary text-primary-foreground px-4 py-3 rounded-t-xl flex items-center gap-2">
         <HeartPulse className="h-5 w-5" />
         <div>
-          <p className="font-semibold text-sm">{etabNom || 'Établissement'}</p>
+          <h1 className="font-semibold text-sm">{etabNom || 'Établissement'}</h1>
           <p className="text-[11px] opacity-80">Missions disponibles sur Jolene</p>
         </div>
       </div>
@@ -45,6 +58,8 @@ export default function WidgetRecrutement() {
       <div className="border border-t-0 rounded-b-xl divide-y divide-border bg-card">
         {loading ? (
           <div className="p-6 text-center text-sm text-muted-foreground">Chargement…</div>
+        ) : erreur ? (
+          <div role="alert" className="p-6 text-center text-sm text-destructive">Impossible de charger les missions pour le moment.</div>
         ) : missions.length === 0 ? (
           <div className="p-6 text-center text-sm text-muted-foreground">Aucune mission ouverte actuellement.</div>
         ) : (
@@ -77,6 +92,6 @@ export default function WidgetRecrutement() {
           </a>
         </div>
       </div>
-    </div>
+    </main>
   );
 }

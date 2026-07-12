@@ -16,25 +16,7 @@ import {
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { toast } from 'sonner';
-
-const ENDPOINTS = [
-  { method: 'GET', path: '/api-v1/missions', desc: 'Lister vos missions', example: '{ "missions": [{ "id": "uuid", "intitule": "IDE Nuit", "statut": "OUVERTE" }], "count": 1 }' },
-  { method: 'POST', path: '/api-v1/missions', desc: 'Créer une mission (permission missions:write)', example: '{ "mission": { "id": "uuid", "intitule": "IDE Jour" } }' },
-  { method: 'GET', path: '/api-v1/presences', desc: 'Lister les pointages', example: '{ "presences": [{ "id": "uuid", "validee": true }], "count": 1 }' },
-  { method: 'GET', path: '/api-v1/factures', desc: 'Lister les factures', example: '{ "factures": [{ "numero_facture": "SD-2026-001", "montant_ttc": 150.00 }], "count": 1 }' },
-];
-
-const PERMISSIONS = [
-  { value: 'missions:read', label: 'Lire les missions' },
-  { value: 'missions:write', label: 'Créer/modifier des missions' },
-  { value: 'presences:read', label: 'Lire les pointages' },
-  { value: 'factures:read', label: 'Lire les factures' },
-];
-
-const METHOD_COLORS: Record<string, string> = {
-  GET: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
-  POST: 'bg-primary/10 text-primary',
-};
+import { API_BASE_URL, API_ENDPOINTS, API_METHOD_COLORS, API_PERMISSIONS, type ApiKeySafe } from '@/lib/apiDocumentation';
 
 export default function APIEtablissement() {
   usePageTitle('API');
@@ -47,7 +29,7 @@ export default function APIEtablissement() {
 
 export function APIContent() {
   const { user } = useAuth();
-  const [keys, setKeys] = useState<any[]>([]);
+  const [keys, setKeys] = useState<ApiKeySafe[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [newName, setNewName] = useState('');
@@ -57,8 +39,13 @@ export function APIContent() {
 
   const charger = async () => {
     if (!user) return;
-    const { data } = await supabase.from('api_keys').select('*').eq('etablissement_id', user.id).order('cree_le', { ascending: false });
-    setKeys(data ?? []);
+    const { data, error } = await supabase.rpc('fn_lister_api_keys' as any, { p_etablissement_id: null });
+    if (error || (data as any)?.success !== true) {
+      toast.error((data as any)?.error || 'Impossible de charger les clés API.');
+      setKeys([]);
+    } else {
+      setKeys(((data as any).keys || []) as ApiKeySafe[]);
+    }
     setLoading(false);
   };
 
@@ -74,7 +61,7 @@ export function APIContent() {
       const { data, error } = await supabase.rpc('fn_creer_api_key' as any, {
         p_nom: newName.trim(),
         p_permissions: newPerms,
-        p_etablissement_id: user.id,
+        p_etablissement_id: null,
       });
       if (error || (data as any)?.error) {
         toast.error((data as any)?.error || 'Erreur lors de la génération de la clé.');
@@ -107,7 +94,11 @@ export function APIContent() {
     charger();
   };
 
-  const copier = (text: string) => { navigator.clipboard.writeText(text); };
+  const copier = (text: string) => {
+    navigator.clipboard.writeText(text)
+      .then(() => toast.success('Copié dans le presse-papiers'))
+      .catch(() => toast.error('La copie a échoué.'));
+  };
   const toggleReveal = (id: string) => {
     setRevealedKeys(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
   };
@@ -124,14 +115,14 @@ export function APIContent() {
 
       {/* Doc */}
       <div className="card-base mb-6">
-        <h2 className="font-bold text-foreground mb-3">📖 Endpoints</h2>
-        <p className="text-xs text-muted-foreground mb-1">Base URL : <code className="bg-muted px-2 py-0.5 rounded text-foreground">https://flripxtsyegjshnhzjkz.supabase.co/functions/v1</code></p>
-        <p className="text-xs text-muted-foreground mb-3">Authentification : header <code className="bg-muted px-2 py-0.5 rounded text-foreground">x-api-key: sd_live_…</code> (votre clé ci-dessous).</p>
+        <h2 className="font-bold text-foreground mb-3">Points d’accès</h2>
+        <p className="text-xs text-muted-foreground mb-1">Base URL : <code className="bg-muted px-2 py-0.5 rounded text-foreground">{API_BASE_URL}</code></p>
+        <p className="text-xs text-muted-foreground mb-3">Authentification : envoyez les deux en-têtes <code className="bg-muted px-1 rounded">x-api-key</code> et <code className="bg-muted px-1 rounded">x-api-secret</code>. Le secret n’est affiché qu’à la création.</p>
         <div className="space-y-3">
-          {ENDPOINTS.map((ep, i) => (
-            <div key={i} className="border border-border rounded-lg p-3">
+          {API_ENDPOINTS.map((ep) => (
+            <div key={`${ep.method}-${ep.path}`} className="border border-border rounded-lg p-3">
               <div className="flex items-center gap-2 mb-1">
-                <span className={`px-2 py-0.5 rounded text-xs font-bold ${METHOD_COLORS[ep.method]}`}>{ep.method}</span>
+                <span className={`px-2 py-0.5 rounded text-xs font-bold ${API_METHOD_COLORS[ep.method]}`}>{ep.method}</span>
                 <code className="text-sm font-mono text-foreground">{ep.path}</code>
               </div>
               <p className="text-xs text-muted-foreground">{ep.desc}</p>
@@ -144,7 +135,7 @@ export function APIContent() {
       <div className="card-base">
         <div className="flex items-center justify-between mb-4">
           <h2 className="font-bold text-foreground flex items-center gap-2"><Key className="h-5 w-5 text-primary" /> Mes clés API</h2>
-          <button onClick={() => { setShowModal(true); setGeneratedKey(null); }} className="btn-primary text-xs flex items-center gap-1"><Plus className="h-3.5 w-3.5" /> Générer</button>
+          <button onClick={() => { setShowModal(true); setGeneratedKey(null); setGeneratedSecret(null); }} className="btn-primary text-xs flex items-center gap-1"><Plus className="h-3.5 w-3.5" /> Générer</button>
         </div>
 
         {keys.length > 0 ? (
@@ -208,16 +199,16 @@ export function APIContent() {
                   </div>
                 </>
               )}
-              <button onClick={() => { setShowModal(false); setGeneratedSecret(null); }} className="btn-primary w-full text-sm">Fermer</button>
+              <button onClick={() => { setShowModal(false); setGeneratedSecret(null); setGeneratedKey(null); }} className="btn-primary w-full text-sm">Fermer</button>
             </>
           ) : (
             <>
               <h3 className="font-bold text-foreground mb-4">Générer une clé API</h3>
               <label className="block text-sm font-medium text-foreground mb-1">Nom</label>
-              <input value={newName} onChange={e => setNewName(e.target.value)} className="input-base w-full mb-4" placeholder="Ex: SIRH Integration" />
+              <input value={newName} onChange={e => setNewName(e.target.value)} className="input-base w-full mb-4" placeholder="Ex. : intégration SIRH" />
               <label className="block text-sm font-medium text-foreground mb-2">Permissions</label>
               <div className="space-y-2 mb-6">
-                {PERMISSIONS.map(p => (
+                {API_PERMISSIONS.map(p => (
                   <label key={p.value} className="flex items-center gap-2 text-sm">
                     <input type="checkbox" checked={newPerms.includes(p.value)} onChange={e => setNewPerms(prev => e.target.checked ? [...prev, p.value] : prev.filter(x => x !== p.value))} className="rounded border-border" />
                     <span className="text-foreground">{p.label}</span>

@@ -337,10 +337,11 @@ export default function AdminRGPDTools() {
 
           <div className="space-y-4">
             <div>
-              <label className="block text-xs font-semibold text-foreground mb-1">
+              <label htmlFor="admin-rgpd-utilisateur" className="block text-xs font-semibold text-foreground mb-1">
                 ID utilisateur (UUID) <span className="text-destructive">*</span>
               </label>
               <input
+                id="admin-rgpd-utilisateur"
                 type="text"
                 value={userIdCible}
                 onChange={(e) => setUserIdCible(e.target.value)}
@@ -354,13 +355,14 @@ export default function AdminRGPDTools() {
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-foreground mb-1">
+              <label htmlFor="admin-rgpd-motif" className="block text-xs font-semibold text-foreground mb-1">
                 Motif RGPD détaillé <span className="text-destructive">*</span>{' '}
                 <span className="text-muted-foreground font-normal">
                   ({motif.trim().length}/{MOTIF_MIN_LENGTH} min)
                 </span>
               </label>
               <textarea
+                id="admin-rgpd-motif"
                 value={motif}
                 onChange={(e) => setMotif(e.target.value)}
                 placeholder="Référence demande, vérification d'identité, contexte légal…"
@@ -376,13 +378,14 @@ export default function AdminRGPDTools() {
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-foreground mb-1">
+              <label htmlFor="admin-rgpd-confirmation" className="block text-xs font-semibold text-foreground mb-1">
                 Confirmation <span className="text-destructive">*</span>
               </label>
               <p className="text-xs text-muted-foreground mb-2">
                 Saisissez exactement : <code className="font-mono bg-muted/50 px-1.5 py-0.5 rounded">{CONFIRMATION_PHRASE}</code>
               </p>
               <input
+                id="admin-rgpd-confirmation"
                 type="text"
                 value={confirmation}
                 onChange={(e) => setConfirmation(e.target.value)}

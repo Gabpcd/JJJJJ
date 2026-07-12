@@ -31,7 +31,7 @@ INSERT INTO public.matrice_modes_exercice
 SELECT p, c, 'BLOQUE',
   'L''exercice libéral n''est pas prévu pour cette profession (lettre interministérielle du 30 décembre 2021, n° D21-031940, validée par le Conseil d''État — 11/02/2025, n°491128). Mission proposée en salarié.',
   'DOCTRINE',
-  'https://www.fehap.fr/jcms/navigation-internet/courrier-ministeres-du-30-decembre-2021-10912_DBFileDocument'
+  'https://www.fehap.fr/jcms/navigation-internet/upload/docs/application/pdf/2023-02/courrierconjointministeres_30decembre2021_.pdf'
 FROM unnest(ARRAY['AUXILIAIRE_PUERICULTURE','IBODE','IADE']) p,
      unnest(ARRAY['cabinet_liberal','prive','centre_sante']) c;
 

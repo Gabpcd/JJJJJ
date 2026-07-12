@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Building2, Layers, Loader2, Pencil, Save, Search, X } from 'lucide-react';
+import { Building2, Layers, Pencil, Save, Search, X } from 'lucide-react';
 import { LayoutAdmin } from '@/components/LayoutAdmin';
+import { ChargementAdmin } from '@/components/admin/ChargementAdmin';
 import { BreadcrumbAdmin } from '@/components/BreadcrumbAdmin';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { BoutonY2K } from '@/components/y2k/BoutonY2K';
@@ -85,6 +86,15 @@ export default function AdminTauxCommission() {
 
   useEffect(() => { charger(); }, []);
 
+  useEffect(() => {
+    if (!editing) return;
+    const fermerAvecEchap = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && !saving) fermerEdition();
+    };
+    document.addEventListener('keydown', fermerAvecEchap);
+    return () => document.removeEventListener('keydown', fermerAvecEchap);
+  }, [editing, saving]);
+
   const ouvrirEdition = (kind: 'etab' | 'groupe', id: string, nom: string, current: number | null) => {
     setEditing({ kind, id, nom, current });
     setNouveauTaux(current != null ? String(current) : '');
@@ -129,9 +139,7 @@ export default function AdminTauxCommission() {
   if (loading) {
     return (
       <LayoutAdmin>
-        <div className="flex items-center justify-center py-20">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        </div>
+        <ChargementAdmin titre="Taux de commission" />
       </LayoutAdmin>
     );
   }
@@ -239,13 +247,13 @@ export default function AdminTauxCommission() {
 
       {editing && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => !saving && fermerEdition()}>
-          <div className="bg-background rounded-xl shadow-xl max-w-md w-full p-6 space-y-4" onClick={e => e.stopPropagation()}>
+          <div className="bg-background rounded-xl shadow-xl max-w-md w-full p-6 space-y-4" role="dialog" aria-modal="true" aria-labelledby="admin-taux-dialog-title" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between">
-              <h3 className="text-lg font-bold text-foreground">
+              <h3 id="admin-taux-dialog-title" className="text-lg font-bold text-foreground">
                 Modifier le taux — {editing.nom}
               </h3>
-              <button onClick={fermerEdition} disabled={saving} className="text-muted-foreground hover:text-foreground">
-                <X className="h-4 w-4" />
+              <button aria-label="Fermer la modification du taux" onClick={fermerEdition} disabled={saving} className="text-muted-foreground hover:text-foreground">
+                <X className="h-4 w-4" aria-hidden="true" />
               </button>
             </div>
             <p className="text-xs text-muted-foreground">
@@ -253,8 +261,9 @@ export default function AdminTauxCommission() {
               Le nouveau taux ne s'appliquera qu'aux <strong>missions assignées après cette modification</strong>.
             </p>
             <div>
-              <label className="text-sm font-medium text-foreground mb-1.5 block">Nouveau taux (%)</label>
+              <label htmlFor="admin-taux-nouveau" className="text-sm font-medium text-foreground mb-1.5 block">Nouveau taux (%)</label>
               <input
+                id="admin-taux-nouveau"
                 type="number"
                 step="0.01"
                 min="0"
@@ -269,8 +278,9 @@ export default function AdminTauxCommission() {
               </p>
             </div>
             <div>
-              <label className="text-sm font-medium text-foreground mb-1.5 block">Raison <span className="text-destructive">*</span></label>
+              <label htmlFor="admin-taux-raison" className="text-sm font-medium text-foreground mb-1.5 block">Raison <span className="text-destructive">*</span></label>
               <textarea
+                id="admin-taux-raison"
                 value={raison}
                 onChange={e => setRaison(e.target.value)}
                 placeholder="Ex : Renégociation contrat-cadre client X au 01/05/2026"

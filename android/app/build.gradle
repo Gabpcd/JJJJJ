@@ -1,12 +1,71 @@
+import groovy.json.JsonSlurper
+
 apply plugin: 'com.android.application'
 
 // Signature release : lit android/keystore.properties (gitignoré, jamais commité).
-// Absent (CI sans secret, autre dev) → release non signée, le build ne casse pas.
+// Un artefact release ne doit jamais être produit silencieusement non signé.
 def keystorePropertiesFile = rootProject.file("keystore.properties")
 def keystoreProperties = new Properties()
 def hasKeystore = keystorePropertiesFile.exists()
 if (hasKeystore) {
     keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
+}
+def requiredSigningKeys = ['storeFile', 'storePassword', 'keyAlias', 'keyPassword']
+def missingSigningKeys = hasKeystore
+        ? requiredSigningKeys.findAll { !keystoreProperties[it]?.toString()?.trim() }
+        : requiredSigningKeys
+def configuredStoreFile = missingSigningKeys.isEmpty()
+        ? file(keystoreProperties['storeFile'])
+        : null
+def releaseSigningReady = hasKeystore && missingSigningKeys.isEmpty() && configuredStoreFile?.exists()
+def googleServicesFile = file('google-services.json')
+def assetLinksFile = file('src/main/assets/public/.well-known/assetlinks.json')
+def sha256FingerprintPattern = ~/(?i)^[0-9A-F]{2}(:[0-9A-F]{2}){31}$/
+def assetLinksReady = false
+if (assetLinksFile.exists()) {
+    try {
+        def document = new JsonSlurper().parse(assetLinksFile)
+        assetLinksReady = document instanceof List && document.any { entry ->
+            def fingerprints = entry?.target?.sha256_cert_fingerprints
+            entry?.relation?.contains('delegate_permission/common.handle_all_urls') &&
+                    entry?.target?.namespace == 'android_app' &&
+                    entry?.target?.package_name == 'app.jolene' &&
+                    fingerprints instanceof List && !fingerprints.isEmpty() &&
+                    fingerprints.every { it instanceof String && it ==~ sha256FingerprintPattern }
+        }
+    } catch (Exception ignored) {
+        assetLinksReady = false
+    }
+}
+def releaseArtifactTasks = ['assembleRelease', 'bundleRelease', 'packageRelease']
+def releaseBlockers = {
+    def details = []
+    if (!hasKeystore) details << 'android/keystore.properties absent'
+    if (hasKeystore && !missingSigningKeys.isEmpty()) {
+        details << "propriétés manquantes: ${missingSigningKeys.join(', ')}"
+    }
+    if (hasKeystore && missingSigningKeys.isEmpty() && !configuredStoreFile?.exists()) {
+        details << 'fichier keystore introuvable'
+    }
+    if (!googleServicesFile.exists()) details << 'android/app/google-services.json absent'
+    if (!assetLinksReady) details << 'assetlinks.json sans empreinte SHA-256 de release'
+    return details
+}
+def failReleaseIfNeeded = {
+    def details = releaseBlockers()
+    if (!details.isEmpty()) {
+        throw new GradleException(
+                "RELEASE ANDROID BLOQUÉE — ${details.join(' ; ')}. " +
+                "Configurez la signature, Firebase et App Links avant bundleRelease/assembleRelease."
+        )
+    }
+}
+
+// Échec dès la configuration pour les commandes explicites : le message reste
+// utile même sur une machine où le SDK Android n'est pas encore installé.
+def cliRequestsReleaseArtifact = gradle.startParameter.taskNames.any { requested ->
+    def taskName = requested.tokenize(':').last()
+    releaseArtifactTasks.contains(taskName) || taskName.startsWith('publishRelease')
 }
 
 android {
@@ -27,8 +86,8 @@ android {
     }
     signingConfigs {
         release {
-            if (hasKeystore) {
-                storeFile file(keystoreProperties['storeFile'])
+            if (releaseSigningReady) {
+                storeFile configuredStoreFile
                 storePassword keystoreProperties['storePassword']
                 keyAlias keystoreProperties['keyAlias']
                 keyPassword keystoreProperties['keyPassword']
@@ -37,13 +96,27 @@ android {
     }
     buildTypes {
         release {
-            if (hasKeystore) {
+            if (releaseSigningReady) {
                 signingConfig signingConfigs.release
             }
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
     }
+}
+
+if (cliRequestsReleaseArtifact) failReleaseIfNeeded()
+
+// lintRelease reste exécutable sans secret. Seules les tâches qui produisent
+// ou publient réellement un APK/AAB release sont stoppées avec un message clair.
+gradle.taskGraph.whenReady { graph ->
+    def requestsReleaseArtifact = graph.allTasks.any { task ->
+        task.project == project && (
+                releaseArtifactTasks.contains(task.name) ||
+                task.name.startsWith('publishRelease')
+        )
+    }
+    if (requestsReleaseArtifact) failReleaseIfNeeded()
 }
 
 repositories {

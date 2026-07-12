@@ -7,7 +7,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { Building2 } from 'lucide-react';
 import {
   CreditCard, Scale, Settings, LogOut, User, Star, ShieldCheck, FileText, Trash2,
-  BookOpen, Mail, Bell,
+  BookOpen, Mail, Bell, ClipboardCheck, Users, Flame, BarChart3, UserPlus,
+  Gift, FileSpreadsheet, MessageCircle, Trophy, Sparkles,
 } from 'lucide-react';
 import { ModalContacterJolene } from '@/components/ModalContacterJolene';
 import { getLabelTypeEtablissement } from '@/lib/constantes';
@@ -34,6 +35,28 @@ export default function MonCompteEtablissement() {
   // fiche mission). Missions + Présences + Messages = bottom nav. Contrats /
   // annuaire / pool urgence = depuis la fiche mission ou la liste missions.
   const sections: SectionReglages[] = [
+    {
+      titre: 'Activité',
+      lignes: [
+        { icone: ClipboardCheck, label: 'Présences à valider', route: '/etablissement/presences?tab=a_valider' },
+        { icone: FileText, label: 'Contrats', route: '/etablissement/contrats' },
+        { icone: Users, label: 'Annuaire des soignants', route: '/etablissement/soignants' },
+        { icone: Star, label: 'Soignants favoris', route: '/etablissement/mes-favoris' },
+        { icone: Flame, label: 'Pool urgence', route: '/etablissement/pool-urgence' },
+        { icone: MessageCircle, label: 'Messagerie', route: '/etablissement/messagerie' },
+      ],
+    },
+    {
+      titre: 'Équipe & pilotage',
+      lignes: [
+        { icone: UserPlus, label: 'Gérer mon équipe', route: '/etablissement/equipe' },
+        { icone: BarChart3, label: 'Pilotage RH & statistiques', route: '/etablissement/rh' },
+        { icone: FileSpreadsheet, label: 'Export paie', route: '/etablissement/export-paie' },
+        { icone: Trophy, label: 'Score qualité', route: '/etablissement/score' },
+        { icone: Gift, label: 'Parrainage', route: '/etablissement/parrainage' },
+        { icone: Sparkles, label: 'Offre Premium', route: '/etablissement/premium' },
+      ],
+    },
     {
       titre: '',
       lignes: [
@@ -64,7 +87,7 @@ export default function MonCompteEtablissement() {
         { icone: Scale, label: 'CGU', route: '/cgu' },
         { icone: CreditCard, label: 'CGV', route: '/cgv' },
         { icone: FileText, label: 'Mentions légales', route: '/mentions-legales' },
-        { icone: Trash2, label: 'Supprimer mon compte', route: '/supprimer-mon-compte' },
+        { icone: Trash2, label: 'Supprimer mon compte', route: '/etablissement/parametres?tab=securite#suppression-compte' },
       ],
     },
   ];

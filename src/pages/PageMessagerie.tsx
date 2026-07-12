@@ -411,10 +411,10 @@ export default function PageMessagerie({ role }: PageMessagerieProps) {
           <div className={`w-full md:w-[380px] md:border-r border-border flex flex-col bg-jolene-lavender-50/30 ${showMobileChat ? 'hidden md:flex' : 'flex'}`}>
             <div className="px-4 pt-4 pb-2 border-b border-border bg-card/85 backdrop-blur-sm sticky top-0 z-10">
               <div className="flex items-center justify-between mb-3">
-                <h2 className="font-bold text-foreground flex items-center gap-2 text-base">
+                <h1 className="font-bold text-foreground flex items-center gap-2 text-base">
                   <MessageCircle className="h-5 w-5 text-jolene-rose-500" />
                   Messagerie
-                </h2>
+                </h1>
                 {isAdmin && (
                   <BoutonY2K size="sm" variant="secondary" onClick={() => setShowNewConvModal(true)} className="rounded-full" iconeGauche={<Plus className="h-4 w-4" />}>
                     Nouvelle
@@ -424,6 +424,7 @@ export default function PageMessagerie({ role }: PageMessagerieProps) {
               <div className="relative mb-2">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
+                  aria-label="Rechercher une conversation"
                   placeholder="Rechercher une conversation…"
                   value={filtre}
                   onChange={e => setFiltre(e.target.value)}
@@ -610,6 +611,7 @@ export default function PageMessagerie({ role }: PageMessagerieProps) {
                       onChange={e => setTexte(e.target.value)}
                       onKeyDown={handleKeyDown}
                       placeholder="Votre message…"
+                      aria-label="Votre message"
                       className="flex-1 resize-none rounded-2xl border border-border bg-background px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-jolene-rose-400/40 disabled:opacity-50"
                       maxLength={4000}
                       disabled={envoi}
@@ -647,6 +649,7 @@ export default function PageMessagerie({ role }: PageMessagerieProps) {
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
+                  aria-label="Rechercher un soignant ou un établissement"
                   placeholder="Rechercher un soignant ou établissement…"
                   value={searchQuery}
                   onChange={e => setSearchQuery(e.target.value)}
@@ -654,7 +657,7 @@ export default function PageMessagerie({ role }: PageMessagerieProps) {
                   autoFocus
                 />
                 {searchQuery && (
-                  <button type="button" onClick={() => { setSearchQuery(''); setSearchResults([]); }} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                  <button type="button" aria-label="Effacer la recherche" onClick={() => { setSearchQuery(''); setSearchResults([]); }} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
                     <X className="h-4 w-4" />
                   </button>
                 )}

@@ -1,7 +1,7 @@
 import React, { Suspense, useEffect } from 'react';
 import { lazyRetry as lazy } from '@/lib/lazyRetry';
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/contexts/AuthContext";
@@ -196,6 +196,42 @@ function CaptureAttribution() {
   return null;
 }
 
+const ROUTES_NOINDEX = [
+  '/soignant', '/etablissement', '/admin', '/groupe', '/contrat',
+  '/connexion', '/reset-password', '/auth', '/confirmer-email',
+  '/inscription', '/verification-email-etab', '/widget-recrutement',
+];
+
+function RouteMeta() {
+  const location = useLocation();
+
+  useEffect(() => {
+    const noIndex = ROUTES_NOINDEX.some((prefix) =>
+      location.pathname === prefix || location.pathname.startsWith(`${prefix}/`),
+    );
+    let robots = document.querySelector('meta[name="robots"]') as HTMLMetaElement | null;
+    if (!robots) {
+      robots = document.createElement('meta');
+      robots.name = 'robots';
+      document.head.appendChild(robots);
+    }
+    robots.content = noIndex ? 'noindex, nofollow' : 'index, follow';
+
+    let canonical = document.querySelector('link[rel="canonical"]') as HTMLLinkElement | null;
+    if (!canonical) {
+      canonical = document.createElement('link');
+      canonical.rel = 'canonical';
+      document.head.appendChild(canonical);
+    }
+    const canonicalPath = location.pathname === '/politique-confidentialite'
+      ? '/confidentialite'
+      : location.pathname;
+    canonical.href = `https://jolene.app${canonicalPath}`;
+  }, [location.pathname]);
+
+  return null;
+}
+
 // Session G1 : ancienne route /soignant/swipe-missions → page canonique
 // « Trouver une mission ». On force la préférence de vue sur « swipe » pour que
 // la page s'ouvre directement sur le mode swipe (préserve les deep links).
@@ -208,6 +244,7 @@ function AppRoutes() {
   return (
     <PageTransition>
       <CaptureAttribution />
+      <RouteMeta />
       <ScrollToTop />
       <Suspense fallback={<ChargementPage />}>
         <Routes>
@@ -447,8 +484,10 @@ const App = () => (
         <AuthProvider>
           <NotificationProvider>
             <BrowserRouter>
-              <a href="#main-content" className="skip-to-content">Aller au contenu principal</a>
-              <AppRoutes />
+              <a href="#app-route-content" className="skip-to-content">Aller au contenu principal</a>
+              <div id="app-route-content" tabIndex={-1} className="flex-1 min-h-0">
+                <AppRoutes />
+              </div>
               <Toaster
                 position="bottom-right"
                 richColors

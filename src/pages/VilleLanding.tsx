@@ -31,7 +31,7 @@ function AnimatedCounter({ target, suffix = '' }: { target: number; suffix?: str
 
 const etapes = [
   { num: '1', titre: 'Inscrivez-vous gratuitement', desc: 'Créez votre compte en 2 minutes. Renseignez votre profession et votre zone géographique.' },
-  { num: '2', titre: 'Validez votre profil', desc: 'Téléversez vos documents (diplôme, RPPS, RCP). Vérification automatique, en général en quelques minutes.' },
+  { num: '2', titre: 'Validez votre profil', desc: 'Téléversez votre diplôme, votre RPPS lorsqu’il existe et les pièces requises par le contrat (dont la RCP pour le libéral).' },
   { num: '3', titre: 'Acceptez vos missions', desc: 'Recevez des propositions de missions près de chez vous et postulez en un clic.' },
 ];
 
@@ -48,12 +48,12 @@ export default function VilleLanding() {
     <>
       <SEOHead
         title={`Missions soignants à ${villeNom} | Jolene Santé`}
-        description={`Missions de remplacement santé à ${villeNom}${villeDept ? ` (${villeDept})` : ''} : infirmiers, aides-soignants, pharmaciens et 15+ professions. Inscription gratuite, CDD courts et remplacements.`}
+        description={`Missions de remplacement santé à ${villeNom}${villeDept ? ` (${villeDept})` : ''} : infirmiers, aides-soignants et professionnels de santé. Inscription gratuite et contrats clairement indiqués.`}
         url={`https://jolene.app/emploi-soignant/${villeSlug}`}
       />
       <SEOPageLayout
         heroTitle={`Missions soignants à ${villeNom}`}
-        heroSubtitle={`Trouvez des remplacements et CDD courts en santé à ${villeNom}${villeDept ? ` (${villeDept})` : ''}. Hôpitaux, cliniques, EHPAD, pharmacies.`}
+        heroSubtitle={`Trouvez des remplacements et CDD courts en santé à ${villeNom}${villeDept ? ` (${villeDept})` : ''}. Hôpitaux, cliniques, EHPAD et établissements médico-sociaux.`}
         ctaText="Voir les missions disponibles"
         ctaHref="/inscription/soignant"
       >

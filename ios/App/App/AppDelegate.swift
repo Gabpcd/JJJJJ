@@ -34,8 +34,8 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     }
 
     func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
-        // Transmet le token APNs au plugin @capacitor/push-notifications,
-        // qui le convertit en token FCM via le SDK Firebase côté natif.
+        // Le plugin Capacitor expose le token APNs brut. C'est volontaire :
+        // le backend iOS de Jolene envoie directement via APNs.
         NotificationCenter.default.post(name: .capacitorDidRegisterForRemoteNotifications, object: deviceToken)
     }
 

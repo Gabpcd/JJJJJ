@@ -77,7 +77,7 @@ export function BoutonsBulkFactures({ selection, onActionTerminee, className }: 
         ].join(';'),
       );
       const csv = [entetes.join(';'), ...lignes].join('\n');
-      await telechargerOuPartager(`﻿${csv}`, `factures-${new Date().toISOString().slice(0, 10)}.csv`, 'text/csv');
+      await telechargerOuPartager(`\uFEFF${csv}`, `factures-${new Date().toISOString().slice(0, 10)}.csv`, 'text/csv');
       afficherNotification({
         type: 'succes',
         message: `Export effectué : ${selection.length} ligne(s) exportée(s).`,

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Loader2, RefreshCw, XCircle, AlertTriangle, CheckCircle, Clock } from 'lucide-react';
 import { LayoutAdmin } from '@/components/LayoutAdmin';
 import { supabase } from '@/integrations/supabase/client';
@@ -43,6 +43,7 @@ export default function AdminExternalisationsActions() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [details, setDetails] = useState<Action | null>(null);
+  const detailsRef = useRef<HTMLDivElement>(null);
 
   async function charger() {
     setLoading(true);
@@ -57,6 +58,16 @@ export default function AdminExternalisationsActions() {
   }
 
   useEffect(() => { charger(); }, [filtreStatut, filtreType]);
+
+  useEffect(() => {
+    if (!details) return;
+    detailsRef.current?.focus();
+    const fermerAvecEchap = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setDetails(null);
+    };
+    document.addEventListener('keydown', fermerAvecEchap);
+    return () => document.removeEventListener('keydown', fermerAvecEchap);
+  }, [details]);
 
   async function retry(id: string) {
     const { data, error } = await supabase.rpc('fn_admin_externalisation_retry' as any, { p_id: id });
@@ -123,13 +134,14 @@ export default function AdminExternalisationsActions() {
 
         {/* Filtres */}
         <div className="flex flex-wrap gap-2">
-          <select value={filtreStatut} onChange={e => setFiltreStatut(e.target.value as Filtre)} className="input-base">
+          <select aria-label="Filtrer par statut" value={filtreStatut} onChange={e => setFiltreStatut(e.target.value as Filtre)} className="input-base">
             {STATUTS.map(s => <option key={s} value={s}>{s}</option>)}
           </select>
-          <select value={filtreType} onChange={e => setFiltreType(e.target.value)} className="input-base">
+          <select aria-label="Filtrer par type d’action" value={filtreType} onChange={e => setFiltreType(e.target.value)} className="input-base">
             {TYPES_ACTION.map(t => <option key={t} value={t}>{t}</option>)}
           </select>
           <input
+            aria-label="Rechercher une action externalisée"
             type="text"
             placeholder="Rechercher (source_id, erreur, action ID)..."
             value={search} onChange={e => setSearch(e.target.value)}
@@ -193,8 +205,16 @@ export default function AdminExternalisationsActions() {
 
         {details && (
           <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={() => setDetails(null)}>
-            <div className="bg-card border border-border rounded-xl max-w-2xl w-full p-6 space-y-3 max-h-[80vh] overflow-auto" onClick={e => e.stopPropagation()}>
-              <h2 className="text-lg font-bold text-foreground">{details.type_action}</h2>
+            <div
+              ref={detailsRef}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="externalisation-details-title"
+              tabIndex={-1}
+              className="bg-card border border-border rounded-xl max-w-2xl w-full p-6 space-y-3 max-h-[80vh] overflow-auto outline-none"
+              onClick={e => e.stopPropagation()}
+            >
+              <h2 id="externalisation-details-title" className="text-lg font-bold text-foreground">{details.type_action}</h2>
               <p className="text-xs text-muted-foreground font-mono">{details.id}</p>
               <div className="rounded-lg bg-muted/40 p-3">
                 <p className="text-xs font-semibold mb-1">Payload :</p>

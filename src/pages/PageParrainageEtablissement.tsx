@@ -230,8 +230,9 @@ export default function PageParrainageEtab() {
                     onClick={() => copier('code', code)}
                     className="h-9 w-9 rounded-lg bg-primary/10 hover:bg-primary/20 flex items-center justify-center transition-colors"
                     title="Copier le code"
+                    aria-label="Copier le code de parrainage"
                   >
-                    {copied === 'code' ? <CheckCircle className="h-4 w-4 text-primary" /> : <Copy className="h-4 w-4 text-primary" />}
+                    {copied === 'code' ? <CheckCircle aria-hidden="true" className="h-4 w-4 text-primary" /> : <Copy aria-hidden="true" className="h-4 w-4 text-primary" />}
                   </button>
                 </div>
               </div>

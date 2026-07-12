@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { LayoutAdmin } from '@/components/LayoutAdmin';
-import { ChargementPage } from '@/components/ChargementPage';
+import { ChargementAdmin } from '@/components/admin/ChargementAdmin';
 import { supabase } from '@/integrations/supabase/client';
 import { useNotification } from '@/contexts/NotificationContext';
 import { extraireMessageErreur } from '@/lib/erreurs';
@@ -32,7 +32,7 @@ export default function AdminCohortEconomics() {
 
   useEffect(() => { charger(); }, [periode]);
 
-  if (loading) return <LayoutAdmin><ChargementPage /></LayoutAdmin>;
+  if (loading) return <LayoutAdmin><ChargementAdmin titre="Cohort Analysis & Unit Economics" /></LayoutAdmin>;
 
   const cohortes = data?.cohortes_mensuelles || [];
   const retention = data?.retention_mensuelle || [];

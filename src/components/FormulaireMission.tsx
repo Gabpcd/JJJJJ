@@ -60,6 +60,18 @@ function getTauxConseille(profession: string): [number, number] {
   return TAUX_CONSEILLE[profession] ?? [20, 40];
 }
 
+/**
+ * Convertit une date stockée en ISO (UTC) vers la valeur locale attendue par
+ * `<input type="datetime-local">`. Tronquer directement l'ISO conserverait
+ * l'heure UTC et décalerait silencieusement le créneau en Europe/Paris.
+ */
+function versDateHeureLocale(value?: string | null): string {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return format(date, "yyyy-MM-dd'T'HH:mm");
+}
+
 export function FormulaireMission({ missionSource, modeEdition }: FormulaireMissionProps) {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -117,9 +129,18 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
   const liberalAutoriseMission = liberalEstProposable(modeExerciceMission);
 
   useEffect(() => {
-    if (!profession || !etablissementType) return;
-    if (!liberalAutoriseMission) setContratPreference('SALARIE');
-  }, [profession, etablissementType, liberalAutoriseMission]);
+    if (!profession || !etablissementType || modeExerciceLoading) return;
+    if (modeExerciceError || (modeExerciceMission && !liberalAutoriseMission)) {
+      setContratPreference('SALARIE');
+    }
+  }, [
+    profession,
+    etablissementType,
+    liberalAutoriseMission,
+    modeExerciceError,
+    modeExerciceLoading,
+    modeExerciceMission,
+  ]);
   useEffect(() => {
     if (!user) return;
     supabase.rpc('fn_mon_etablissement_complet' as any).then(({ data, error }: any) => {
@@ -157,12 +178,12 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
     const dupId = searchParams.get('dupliquer');
     if (dupId && !missionSource) {
       // Session F (F3) — « Republier » : si des nouvelles dates sont passées en query
-      // params (?debut=<iso>&fin=<iso>), on préremplit les horaires. Format attendu
-      // pour <input datetime-local> : "YYYY-MM-DDTHH:mm" (slice ISO à 16 caractères).
+      // params (?debut=<iso>&fin=<iso>), on préremplit les horaires dans le fuseau
+      // local attendu par <input datetime-local>.
       const debutParam = searchParams.get('debut');
       const finParam = searchParams.get('fin');
-      if (debutParam) setDebutLe(debutParam.slice(0, 16));
-      if (finParam) setFinLe(finParam.slice(0, 16));
+      if (debutParam) setDebutLe(versDateHeureLocale(debutParam));
+      if (finParam) setFinLe(versDateHeureLocale(finParam));
 
       supabase.from('missions').select('intitule, description, profession_requise, service, taux_horaire_base, est_urgente, niveau_urgence, type_contrat_recherche, specialite_medicale_requise, accepte_non_specialises').eq('id', dupId).single().then(({ data, error }) => {
         if (error) {
@@ -193,12 +214,16 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
       setDescription(missionSource.description || '');
       setProfession(missionSource.profession_requise);
       setService(missionSource.service || '');
-      setDebutLe(missionSource.debut_le?.slice(0, 16) || '');
-      setFinLe(missionSource.fin_le?.slice(0, 16) || '');
+      setDebutLe(versDateHeureLocale(missionSource.debut_le));
+      setFinLe(versDateHeureLocale(missionSource.fin_le));
       setTauxHoraire(String(missionSource.taux_horaire_base));
       setEstUrgente(missionSource.est_urgente || false);
       setNiveauUrgence(missionSource.niveau_urgence || 1);
       setModeAttribution(missionSource.mode_attribution || 'PREMIER_ARRIVE');
+      setContratPreference(
+        (missionSource.type_contrat_recherche as 'TOUS' | 'SALARIE' | 'LIBERAL')
+          || extraireContratPreference(missionSource.description),
+      );
       setSpecialiteMedicaleRequise(missionSource.specialite_medicale_requise || '');
       setAccepteNonSpecialises(missionSource.accepte_non_specialises !== false);
     }
@@ -373,11 +398,21 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
       };
 
       if (modeEdition && missionSource) {
-        const { data: rpcResult, error } = await supabase.rpc('fn_modifier_mission_etablissement' as any, {
+        const { data: rpcResult, error } = await supabase.rpc('fn_modifier_mission_etablissement_v2' as any, {
           p_mission_id: missionSource.id,
           p_intitule: intitule,
           p_description: descriptionFinale || null,
           p_service: service || null,
+          p_profession_requise: profession,
+          p_debut_le: payload.debut_le,
+          p_fin_le: payload.fin_le,
+          p_taux_horaire_base: payload.taux_horaire_base,
+          p_est_urgente: payload.est_urgente,
+          p_niveau_urgence: payload.niveau_urgence,
+          p_mode_attribution: modeAttribution,
+          p_type_contrat_recherche: contratPreference,
+          p_specialite_medicale_requise: payload.specialite_medicale_requise,
+          p_accepte_non_specialises: payload.accepte_non_specialises,
         });
 
         if (error) {
@@ -462,7 +497,8 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
     }
   };
 
-  const canSubmit = !siretInvalide && !contratNonValide && !erreurFactureImpayee && (modeRecurrent
+  const officineNonProposee = etablissementType === 'PHARMACIE_OFFICINE';
+  const canSubmit = !officineNonProposee && !siretInvalide && !contratNonValide && !erreurFactureImpayee && (modeRecurrent
     ? (!!intitule && !!profession && !!tauxHoraire && recurrenceValide && !publicationEnCours)
     : (!!intitule && !!profession && !!debutLe && !!finLe && !!tauxHoraire && !erreurDates && !loading));
 
@@ -522,6 +558,18 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
         </div>
       )}
 
+      {officineNonProposee && (
+        <div className="bg-warning/10 border border-warning/30 rounded-xl p-3 mb-4">
+          <p className="text-sm font-semibold text-warning flex items-center gap-1.5">
+            <Ban aria-hidden="true" className="h-4 w-4 shrink-0" />
+            Les remplacements de titulaire d’officine ne sont pas proposés sur Jolene.
+          </p>
+          <p className="text-xs text-muted-foreground mt-1">
+            Les missions de pharmacien disponibles sur la plateforme sont des postes salariés d’établissement, notamment en pharmacie à usage intérieur (PUI).
+          </p>
+        </div>
+      )}
+
       <form onSubmit={handleSubmit} className="space-y-5">
         {/* Intitulé */}
         <div>
@@ -546,10 +594,10 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
             onChange={setProfession}
             triggerId="mission-profession"
             placeholder="Sélectionnez la profession recherchée"
-            filtresProfessions={etablissementType === 'PHARMACIE_OFFICINE' ? ['PHARMACIEN', 'PREPARATEUR_PHARMA'] : undefined}
+            disabled={officineNonProposee}
           />
           {etablissementType === 'PHARMACIE_OFFICINE' && (
-            <p className="text-[10px] text-muted-foreground mt-1">Pharmacie : seuls les pharmaciens et préparateurs sont proposés.</p>
+            <p className="text-[10px] text-muted-foreground mt-1">Publication désactivée pour les officines.</p>
           )}
         </div>
 
@@ -604,7 +652,7 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
           <datalist id="services-canoniques">
             {['Urgences', 'Réanimation', 'Soins intensifs', 'Soins continus', 'Médecine polyvalente',
               'Chirurgie', 'Bloc opératoire', 'Gériatrie', 'Pédiatrie', 'Cardiologie', 'Maternité',
-              'Rééducation', 'EHPAD', 'Psychiatrie', 'Oncologie', 'Officine'].map((s) => (
+              'Rééducation', 'EHPAD', 'Psychiatrie', 'Oncologie'].map((s) => (
               <option key={s} value={s} />
             ))}
           </datalist>
@@ -698,7 +746,7 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
                   type="datetime-local"
                   value={debutLe}
                   onChange={(e) => setDebutLe(e.target.value)}
-                  min={!modeEdition ? new Date().toISOString().slice(0, 16) : undefined}
+                  min={!modeEdition ? versDateHeureLocale(new Date().toISOString()) : undefined}
                   required
                   className="input-base"
                 />

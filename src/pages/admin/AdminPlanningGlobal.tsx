@@ -129,8 +129,9 @@ export default function AdminPlanningGlobal() {
           <CardY2KContent className="pt-4">
             <div className="flex flex-col sm:flex-row items-end gap-3">
               <div className="flex flex-col gap-1 flex-1">
-                <label className="text-xs text-muted-foreground font-medium">Début</label>
+                <label htmlFor="admin-planning-debut" className="text-xs text-muted-foreground font-medium">Début</label>
                 <Input
+                  id="admin-planning-debut"
                   type="date"
                   value={debut}
                   onChange={(e) => setDebut(e.target.value)}
@@ -138,8 +139,9 @@ export default function AdminPlanningGlobal() {
                 />
               </div>
               <div className="flex flex-col gap-1 flex-1">
-                <label className="text-xs text-muted-foreground font-medium">Fin</label>
+                <label htmlFor="admin-planning-fin" className="text-xs text-muted-foreground font-medium">Fin</label>
                 <Input
+                  id="admin-planning-fin"
                   type="date"
                   value={fin}
                   onChange={(e) => setFin(e.target.value)}

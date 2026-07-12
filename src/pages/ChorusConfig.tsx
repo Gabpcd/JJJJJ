@@ -187,11 +187,12 @@ export default function ChorusConfig() {
 
             {/* Numéro de structure + bouton Vérifier */}
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1.5">
+              <label htmlFor="chorus-numero-structure" className="block text-sm font-medium text-foreground mb-1.5">
                 Numéro de structure Chorus <span className="text-destructive">*</span>
               </label>
               <div className="flex gap-2">
                 <Input
+                  id="chorus-numero-structure"
                   value={numeroStructure}
                   onChange={e => { setNumeroStructure(e.target.value); setVerify({ status: 'idle' }); }}
                   placeholder="Ex: 10000071800067"
@@ -248,7 +249,7 @@ export default function ChorusConfig() {
 
             {/* Code service — select dynamique si services chargés */}
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1.5">
+              <label htmlFor="chorus-code-service" className="block text-sm font-medium text-foreground mb-1.5">
                 Code service
                 {verify.codeServiceObligatoire && (
                   <span className="text-destructive ml-1">* obligatoire pour cette structure</span>
@@ -256,6 +257,7 @@ export default function ChorusConfig() {
               </label>
               {activeServices.length > 0 ? (
                 <select
+                  id="chorus-code-service"
                   value={codeService}
                   onChange={e => setCodeService(e.target.value)}
                   disabled={isReadOnly}
@@ -268,6 +270,7 @@ export default function ChorusConfig() {
                 </select>
               ) : (
                 <Input
+                  id="chorus-code-service"
                   value={codeService}
                   onChange={e => setCodeService(e.target.value)}
                   placeholder="Ex: SRV001"
@@ -284,8 +287,9 @@ export default function ChorusConfig() {
 
             {/* Identifiant CPro */}
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1.5">Identifiant CPro</label>
+              <label htmlFor="chorus-identifiant-cpro" className="block text-sm font-medium text-foreground mb-1.5">Identifiant CPro</label>
               <Input
+                id="chorus-identifiant-cpro"
                 value={identifiantCpro}
                 onChange={e => setIdentifiantCpro(e.target.value)}
                 placeholder="Votre identifiant de connexion"

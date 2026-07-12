@@ -4,7 +4,7 @@ import { usePageTitle } from '@/hooks/usePageTitle';
 import { Users, Building2, CheckCircle, Clock, Banknote, TrendingUp, Target, Star, AlertTriangle, FileText, UserPlus, CreditCard, ExternalLink, ShieldCheck, FlaskConical } from 'lucide-react';
 import { LayoutAdmin } from '@/components/LayoutAdmin';
 import { CarteKPIY2K } from '@/components/y2k/CarteKPIY2K';
-import { ChargementPage } from '@/components/ChargementPage';
+import { ChargementAdmin } from '@/components/admin/ChargementAdmin';
 import { supabase } from '@/integrations/supabase/client';
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, BarChart, Bar, AreaChart, Area, ReferenceLine } from 'recharts';
@@ -185,7 +185,7 @@ export default function AdminDashboard() {
     return { stripeMensuel, chargesMensuelles, coutSociete, caAnnualise, chargesAnnuelles, remunerationAnnuelle, resultatAvantIS, is, resultatNetApresIS, dividendes, dividendesNets, salaireNetAnnuel, revenuTotal, seuilRentabilite, progressionSeuil, seuilAtteint, resteAvantSeuil, graphResultat };
   }, [caCommissionsHT, salaireNet, caMensuelData, nbTransactions]);
 
-  if (loading) return <LayoutAdmin><ChargementPage /></LayoutAdmin>;
+  if (loading) return <LayoutAdmin><ChargementAdmin titre="Tableau de bord" /></LayoutAdmin>;
 
   const missionChartConfig = { total: { label: 'Missions', color: 'hsl(var(--primary))' } };
   const caChartConfig = { ca_ht: { label: 'CA HT', color: 'hsl(var(--primary))' } };
@@ -408,9 +408,10 @@ export default function AdminDashboard() {
               <h3 className="text-sm font-semibold text-foreground mb-3">Rémunération dirigeante</h3>
               <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
                 <div className="flex items-center gap-2">
-                  <label className="text-sm text-muted-foreground whitespace-nowrap">Salaire net mensuel souhaité :</label>
+                  <label htmlFor="admin-salaire-net" className="text-sm text-muted-foreground whitespace-nowrap">Salaire net mensuel souhaité :</label>
                   <div className="relative">
                     <Input
+                      id="admin-salaire-net"
                       type="number"
                       min={0}
                       step={100}

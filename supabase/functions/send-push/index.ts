@@ -3,7 +3,7 @@
 // Routing par tokens_push.plateforme :
 //   WEB     → web-push (RFC 8030 + VAPID)
 //   IOS     → APNs direct HTTP/2 (clé .p8 Apple, JWT ES256, ZÉRO Google).
-//             Fallback FCM v1 si APNs non configuré mais Firebase l'est.
+//             Aucun fallback FCM : Capacitor fournit ici un device token APNs.
 //   ANDROID → FCM HTTP v1
 //
 // iOS passe par APNs direct car l'org policy GCP bloque la création de clés
@@ -17,22 +17,110 @@
 //   APNS_BUNDLE_ID / APNS_ENVIRONMENT                      (iOS, optionnels)
 //   FIREBASE_SERVICE_ACCOUNT_JSON / FIREBASE_PROJECT_ID    (Android FCM, optionnels)
 
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "npm:@supabase/supabase-js@2.99.2";
 import webpush from "npm:web-push@3.6.7";
 import { apnsConfigured, sendApns } from "../_shared/apns-client.ts";
+import { corsHeaders, jsonResponse, preflightResponse } from "../_shared/cors.ts";
+import { verifyAdminOrServiceRole, verifyUserOrServiceRole } from "../_shared/admin-auth.ts";
+import { applyRateLimit, getClientIp } from "../_shared/rate-limit.ts";
 
-function getCorsOrigin(req: Request): string {
-  const origin = req.headers.get("origin") || "";
-  if (
-    origin === "https://jolene.app" ||
-    origin === "https://app.jolene.app" ||
-    origin === "https://www.jolene.app" ||
-    origin === "http://localhost:5173" ||
-    origin === "http://localhost:8080"
-  ) {
-    return origin;
+type SafeLinkResult =
+  | { provided: false; value: null }
+  | { provided: true; value: string | null };
+
+const WEB_PUSH_EXACT_HOSTS = new Set([
+  'fcm.googleapis.com',
+  'updates.push.services.mozilla.com',
+  'notify.windows.com',
+]);
+
+function isAllowedWebPushEndpoint(raw: unknown): raw is string {
+  if (typeof raw !== 'string' || raw.length === 0 || raw.length > 2048) return false;
+  try {
+    const url = new URL(raw);
+    if (url.protocol !== 'https:' || url.username || url.password || url.port) return false;
+    const host = url.hostname.toLowerCase();
+    return WEB_PUSH_EXACT_HOSTS.has(host)
+      || host.endsWith('.push.apple.com')
+      || host.endsWith('.notify.windows.com');
+  } catch {
+    return false;
   }
-  return "https://jolene.app";
+}
+
+function safeNotificationLink(raw: unknown): SafeLinkResult {
+  if (raw === undefined || raw === null || raw === '') return { provided: false, value: null };
+  if (typeof raw !== 'string' || raw.length > 500) return { provided: true, value: null };
+  try {
+    const isRelative = raw.startsWith('/') && !raw.startsWith('//');
+    if (!isRelative && !/^https:\/\//i.test(raw)) return { provided: true, value: null };
+    const url = new URL(raw, 'https://jolene.app');
+    if (url.protocol !== 'https:' || url.port) return { provided: true, value: null };
+    if (!['jolene.app', 'www.jolene.app'].includes(url.hostname.toLowerCase())) {
+      return { provided: true, value: null };
+    }
+    return {
+      provided: true,
+      value: isRelative ? `${url.pathname}${url.search}${url.hash}` : url.toString(),
+    };
+  } catch {
+    return { provided: true, value: null };
+  }
+}
+
+const ALLOWED_DATA_KEYS = new Set([
+  'mission_id', 'contrat_id', 'candidature_id', 'facture_id', 'litige_id',
+  'presence_id', 'conversation_id', 'etablissement_id', 'soignant_id',
+  'notification_id', 'action', 'statut', 'tab', 'source',
+]);
+
+function safeScalarData(raw: Record<string, unknown>): Record<string, string> {
+  const result: Record<string, string> = {};
+  let remainingBytes = 2500;
+  for (const [key, value] of Object.entries(raw).slice(0, 30)) {
+    if (!ALLOWED_DATA_KEYS.has(key)) continue;
+    let scalar: string | null = null;
+    if (typeof value === 'string' && value.length <= 500) scalar = value;
+    else if (typeof value === 'number' && Number.isFinite(value)) scalar = String(value);
+    else if (typeof value === 'boolean') scalar = value ? 'true' : 'false';
+    if (scalar === null) continue;
+    const bytes = new TextEncoder().encode(key + scalar).byteLength;
+    if (bytes > remainingBytes) continue;
+    result[key] = scalar;
+    remainingBytes -= bytes;
+  }
+  return result;
+}
+
+const CANONICAL_NOTIFICATION_TYPES = new Set([
+  'NOUVELLE_MISSION_MATCHANT_FILTRE', 'CANDIDATURE_RECUE',
+  'CANDIDATURE_ACCEPTEE', 'MISSION_ASSIGNEE', 'RAPPEL_J1_MISSION',
+  'POINTAGE_MANQUANT', 'FACTURE_EMISE', 'PAIEMENT_RECU',
+  'CONTRAT_TRAVAIL_DEPOSE', 'LITIGE_OUVERT', 'LITIGE_RESOLU',
+  'DOCUMENT_EXPIRANT', 'MANDAT_RE_SIGNATURE', 'SERIE_ONBOARDING',
+  'URGENCE', 'NOUVEAU_SOIGNANT_MATCHANT_FILTRE',
+  'FAVORI_NOUVELLE_MISSION', 'NOTATION_RAPPEL',
+]);
+
+function canonicalNotificationType(raw: string): string | null {
+  if (!raw) return null;
+  if (CANONICAL_NOTIFICATION_TYPES.has(raw)) return raw;
+  if (raw.includes('URGENCE') || raw === 'ALERTE_ADMIN') return 'URGENCE';
+  if (raw === 'MISSION_A_POURVOIR' || raw === 'MISSION_OUVERTE') {
+    return 'NOUVELLE_MISSION_MATCHANT_FILTRE';
+  }
+  if (raw.startsWith('RAPPEL_MISSION')) return 'RAPPEL_J1_MISSION';
+  if (raw.startsWith('CANDIDATURE_RECUE')) return 'CANDIDATURE_RECUE';
+  if (raw.startsWith('CANDIDATURE_ACCEPTEE')) return 'CANDIDATURE_ACCEPTEE';
+  if (raw.startsWith('MISSION_ASSIGNEE')) return 'MISSION_ASSIGNEE';
+  if (raw.includes('POINTAGE') || raw.startsWith('DPAE_')) return 'POINTAGE_MANQUANT';
+  if (raw.includes('CONTRAT')) return 'CONTRAT_TRAVAIL_DEPOSE';
+  if (raw.includes('FACTURE') || raw.startsWith('AVOIR_')) return 'FACTURE_EMISE';
+  if (raw.includes('PAIEMENT') || raw.startsWith('REMBOURSEMENT_')) return 'PAIEMENT_RECU';
+  if (raw.startsWith('LITIGE_RESOLU')) return 'LITIGE_RESOLU';
+  if (raw.startsWith('LITIGE_')) return 'LITIGE_OUVERT';
+  if (raw.startsWith('DOCUMENT_')) return 'DOCUMENT_EXPIRANT';
+  return null;
 }
 
 // ─── FCM HTTP v1 helper — Sprint 4 PR 1 ──────────────────────────────
@@ -117,9 +205,9 @@ async function getFcmAccessToken(sa: ServiceAccount): Promise<string> {
 }
 
 /**
- * Envoie un push via FCM HTTP v1.
- * FCM dispatche automatiquement vers APNS (iOS) si la clé p8 est uploadée
- * dans Firebase Console.
+ * Envoie un push Android via FCM HTTP v1. Ne jamais lui transmettre un token
+ * IOS issu de @capacitor/push-notifications : c'est un device token APNs brut,
+ * pas un registration token FCM.
  *
  * Retourne true si succès, false si token expiré (404/UNREGISTERED).
  * Throw sur autres erreurs réseau.
@@ -142,12 +230,6 @@ async function sendViaFcm(opts: {
       notification: {
         channel_id: opts.channelId || "jolene_info",
         sound: "default",
-      },
-    },
-    apns: {
-      headers: { "apns-priority": "10" },
-      payload: {
-        aps: { sound: "default", "mutable-content": 1 },
       },
     },
   };
@@ -174,82 +256,168 @@ async function sendViaFcm(opts: {
 // ─── Edge function principale ────────────────────────────────────────
 
 Deno.serve(async (req) => {
-  const corsHeaders = {
-    "Access-Control-Allow-Origin": getCorsOrigin(req),
-    "Content-Type": "application/json",
-    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
-    "Access-Control-Allow-Methods": "POST",
-  };
   if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
+    return preflightResponse(req);
   }
 
   try {
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader?.startsWith("Bearer ")) {
-      return new Response(JSON.stringify({ error: "Non autorisé" }), { status: 401, headers: corsHeaders });
+    if (req.method !== 'POST') {
+      return jsonResponse(req, { error: 'Methode non autorisee' }, 405);
     }
-    const token = authHeader.replace("Bearer ", "");
+
+    const auth = await verifyUserOrServiceRole(req);
+    if (!auth.ok) return jsonResponse(req, { error: auth.error }, auth.status);
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
+    const anonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
+    if (!supabaseUrl || !serviceRoleKey || !anonKey) {
+      return jsonResponse(req, { error: 'Configuration serveur incomplete' }, 500);
+    }
+    const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false } });
 
-    // Appel server-to-server : les triggers DB / crons (match, mission assignée,
-    // candidature, pointage…) appellent send-push avec la clé service_role ou le
-    // secret vault sb_secret_*. Ces appels sont de confiance — on saute la
-    // validation user (sinon auth.getUser(service_key) échoue → 401, ce qui
-    // cassait TOUTES les notifications push déclenchées par le backend).
-    // Pattern : _shared/admin-auth.ts.
-    const secretKey = Deno.env.get("SUPABASE_SECRET_KEY") || Deno.env.get("SB_SECRET_KEY") || "";
-    let estAppelService = (token === serviceRoleKey) || (!!secretKey && token === secretKey);
-    if (!estAppelService) {
-      try {
-        const { data: vaultSecret } = await supabaseAdmin.rpc("fn_lire_secret_cron" as any);
-        if (vaultSecret && typeof vaultSecret === "string" && token === vaultSecret) estAppelService = true;
-      } catch { /* ignore — fallback sur validation user */ }
+    const requestBody = await req.json().catch(() => null) as Record<string, unknown> | null;
+    if (!requestBody || Array.isArray(requestBody)) {
+      return jsonResponse(req, { error: 'Corps JSON invalide' }, 400);
     }
 
-    if (!estAppelService) {
-      // Appel frontend : valider le token utilisateur.
-      const supabaseAuth = createClient(supabaseUrl, Deno.env.get("SUPABASE_ANON_KEY")!);
-      const { data: { user }, error: authError } = await supabaseAuth.auth.getUser(token);
-      if (authError || !user) {
-        return new Response(JSON.stringify({ error: "Token invalide" }), { status: 401, headers: corsHeaders });
+    const destinataire_id = typeof requestBody.destinataire_id === 'string' ? requestBody.destinataire_id : '';
+    const titre = typeof requestBody.titre === 'string' ? requestBody.titre.trim() : '';
+    const corps = typeof requestBody.corps === 'string' ? requestBody.corps.trim() : '';
+    let type_evenement = typeof requestBody.type_evenement === 'string'
+      ? requestBody.type_evenement.trim().slice(0, 100)
+      : '';
+    const dataPayload = requestBody.data && typeof requestBody.data === 'object' && !Array.isArray(requestBody.data)
+      ? requestBody.data as Record<string, unknown>
+      : {};
+    const linkResult = safeNotificationLink(requestBody.lien ?? dataPayload.lien ?? dataPayload.url ?? dataPayload.link);
+    const lien = linkResult.value;
+    const safeDataPayload = safeScalarData(dataPayload);
+    const channel_id = typeof requestBody.channel_id === 'string' ? requestBody.channel_id : undefined;
+
+    if (!/^[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(destinataire_id) || !titre) {
+      return jsonResponse(req, { error: 'destinataire_id UUID et titre requis' }, 400);
+    }
+    if (titre.length > 120 || corps.length > 500) {
+      return jsonResponse(req, { error: 'Notification trop longue' }, 413);
+    }
+    if (linkResult.provided && lien === null) {
+      return jsonResponse(req, { error: 'Lien de notification interdit' }, 400);
+    }
+    if (type_evenement && !/^[A-Z0-9_:-]{1,100}$/.test(type_evenement)) {
+      return jsonResponse(req, { error: 'type_evenement invalide' }, 400);
+    }
+
+    // Depuis le navigateur, seuls un admin actif ou un membre etablissement
+    // autorise a gerer les missions peuvent cibler un tiers. La cible d'un
+    // etablissement doit appartenir a son pool urgence calcule en base.
+    if (!auth.isServiceRole) {
+      let estAdminActif = false;
+      if (auth.role === 'ADMIN' || auth.role === 'ADMIN_PLATEFORME') {
+        const adminAuth = await verifyAdminOrServiceRole(req);
+        if (!adminAuth.ok) return jsonResponse(req, { error: adminAuth.error }, adminAuth.status);
+        estAdminActif = true;
+      } else {
+        const bearer = (req.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '').trim();
+        const userClient = createClient(supabaseUrl, anonKey, {
+          auth: { persistSession: false },
+          global: { headers: { Authorization: `Bearer ${bearer}` } },
+        });
+        const { data: permissions, error: permissionError } = await userClient
+          .rpc('fn_mes_permissions_etab', { p_etablissement_id: null });
+        const permissionsJson = permissions as Record<string, any> | null;
+        const etablissementId = permissionsJson?.etablissement_id as string | undefined;
+        if (permissionError || !permissionsJson?.permissions?.missions || !etablissementId) {
+          return jsonResponse(req, { error: 'Permission etablissement requise' }, 403);
+        }
+        const { data: pool, error: poolError } = await userClient.rpc('fn_pool_urgence_etablissement', {
+          p_etablissement_id: etablissementId,
+        });
+        const cibleDansPool = Array.isArray(pool)
+          && pool.some((row: Record<string, unknown>) => row.soignant_id === destinataire_id);
+        if (poolError || !cibleDansPool) {
+          return jsonResponse(req, { error: 'Destinataire hors du pool autorise' }, 403);
+        }
+        if (!type_evenement) type_evenement = 'MISSION_URGENTE';
+      }
+
+      if (applyRateLimit('send-push', `${auth.userId}:${getClientIp(req)}`, { max: 20, windowMs: 60_000 })) {
+        return jsonResponse(req, { error: 'Trop de notifications. Reessayez dans une minute.' }, 429);
+      }
+      const { data: callerAllowed, error: callerLimitError } = await supabaseAdmin.rpc('fn_verifier_rate_limit', {
+        p_cle: auth.userId,
+        p_action: 'edge_send_push_caller',
+        p_max_tentatives: estAdminActif ? 200 : 100,
+        p_fenetre_secondes: 3600,
+      });
+      const { data: targetAllowed, error: targetLimitError } = await supabaseAdmin.rpc('fn_verifier_rate_limit', {
+        p_cle: destinataire_id,
+        p_action: 'edge_send_push_target',
+        p_max_tentatives: 5,
+        p_fenetre_secondes: 600,
+      });
+      if (callerLimitError || targetLimitError || callerAllowed !== true || targetAllowed !== true) {
+        return jsonResponse(req, { error: 'Limite de notifications atteinte' }, 429);
       }
     }
 
-    const { destinataire_id, titre, corps, lien, type_evenement, channel_id } = await req.json();
-    if (!destinataire_id || !titre) {
-      return new Response(JSON.stringify({ error: "destinataire_id et titre requis" }), { status: 400, headers: corsHeaders });
-    }
-
-    // Préférences notifications canal PUSH
-    if (type_evenement) {
-      const { data: should } = await supabaseAdmin.rpc('fn_doit_notifier' as any, {
+    // Préférences notifications canal PUSH. Même un type absent/hors enum
+    // respecte le canal global; URGENCE reste non désactivable dans la RPC.
+    const canonicalType = canonicalNotificationType(type_evenement);
+    let should: boolean;
+    if (canonicalType) {
+      const { data, error } = await supabaseAdmin.rpc('fn_doit_notifier' as any, {
         p_utilisateur_id: destinataire_id,
-        p_type_evenement: type_evenement,
+        p_type_evenement: canonicalType,
         p_canal: 'PUSH',
       });
-      if (should === false) {
-        await supabaseAdmin.from('journaux_audit').insert({
-          acteur_id: null, type_acteur: 'SYSTEME',
-          action: 'NOTIFICATION_SKIPPED', type_ressource: 'push',
-          id_ressource: destinataire_id,
-          details: { type_evenement, canal: 'PUSH', raison: 'preference_user_off' },
-        }).then(() => {}).catch(() => {});
-        return new Response(JSON.stringify({ success: true, skipped: true, reason: 'preference_user_off' }), {
-          status: 200, headers: corsHeaders,
-        });
+      if (error || typeof data !== 'boolean') {
+        console.error('[send-push] verification preferences impossible', error?.message);
+        return jsonResponse(req, { error: 'Verification des preferences indisponible' }, 503);
       }
+      should = data;
+    } else {
+      // Les evenements encore hors enum respectent au minimum le canal global
+      // au lieu d'ignorer silencieusement l'erreur de cast PostgreSQL.
+      const { data, error } = await supabaseAdmin
+        .from('preferences_notifications')
+        .select('canal_push')
+        .eq('utilisateur_id', destinataire_id)
+        .maybeSingle();
+      if (error) {
+        console.error('[send-push] lecture preference globale impossible', error.message);
+        return jsonResponse(req, { error: 'Verification des preferences indisponible' }, 503);
+      }
+      should = data?.canal_push ?? true;
+    }
+    if (should === false) {
+      await supabaseAdmin.from('journaux_audit').insert({
+        acteur_id: null, type_acteur: 'SYSTEME',
+        action: 'NOTIFICATION_SKIPPED', type_ressource: 'push',
+        id_ressource: destinataire_id,
+        details: {
+          type_evenement,
+          type_evenement_canonique: canonicalType,
+          canal: 'PUSH',
+          raison: 'preference_user_off',
+        },
+      }).then(() => {}).catch(() => {});
+      return jsonResponse(req, { success: true, skipped: true, reason: 'preference_user_off' });
     }
 
     // Récupérer tous les tokens du destinataire (Web + IOS + ANDROID)
-    const { data: tokens } = await supabaseAdmin
+    const { data: tokens, error: tokensError } = await supabaseAdmin
       .from("tokens_push")
       .select("id, token, plateforme, endpoint, p256dh, auth_key")
       .eq("utilisateur_id", destinataire_id)
       .eq("actif", true);
+    if (tokensError) {
+      console.error('[send-push] Lecture tokens_push impossible:', tokensError.code);
+      return jsonResponse(req, {
+        error: 'Service de notification momentanément indisponible',
+        code: 'PUSH_TOKENS_UNAVAILABLE',
+      }, 503);
+    }
 
     let sentWeb = 0;
     let sentFcm = 0;
@@ -285,26 +453,40 @@ Deno.serve(async (req) => {
     }
 
     // Payload Web Push
+    const webData: Record<string, string> = {
+      ...safeDataPayload,
+      type_evenement: type_evenement || '',
+    };
+    if (lien) {
+      webData.url = lien;
+      webData.lien = lien;
+    }
     const webPayload = JSON.stringify({
       title: titre,
       body: corps || "",
       icon: "/favicon.svg",
       badge: "/icon-192x192.png",
-      data: { url: lien || "https://jolene.app", type_evenement, ...{} },
+      data: webData,
     });
 
     // FCM payload data (in-app navigation après tap)
     const fcmData: Record<string, string> = {
-      lien: lien || "/",
+      ...safeDataPayload,
       type_evenement: type_evenement || "",
     };
+    if (lien) fcmData.lien = lien;
 
     for (const t of tokens || []) {
       const plat = (t.plateforme || "").toUpperCase();
       try {
         if (plat === "WEB" || (!plat && t.endpoint && t.p256dh && t.auth_key)) {
           // Web Push standard
-          if (vapidConfigured && t.endpoint && t.p256dh && t.auth_key) {
+          // Revalider au moment de l'appel protege aussi les lignes historiques
+          // creees avant l'allowlist fournisseur (defense en profondeur SSRF).
+          if (!isAllowedWebPushEndpoint(t.endpoint)) {
+            console.warn('[send-push] Endpoint Web Push hors allowlist, token desactive');
+            expiredTokenIds.push(t.id);
+          } else if (vapidConfigured && t.p256dh && t.auth_key) {
             await webpush.sendNotification(
               { endpoint: t.endpoint, keys: { p256dh: t.p256dh, auth: t.auth_key } },
               webPayload,
@@ -312,19 +494,24 @@ Deno.serve(async (req) => {
             );
             sentWeb++;
           }
-        } else if (plat === "IOS" && apnsReady && t.token) {
-          // APNs direct HTTP/2 (clé .p8 Apple, zéro Google)
-          const result = await sendApns({
-            deviceToken: t.token,
-            title: titre,
-            body: corps || "",
-            data: fcmData,
-          });
-          if (result.ok) sentApnsCount++;
-          else if (result.expired) expiredTokenIds.push(t.id);
-          else console.warn("[send-push] APNs error:", result.error);
-        } else if (plat === "IOS" || plat === "ANDROID") {
-          // FCM HTTP v1 — Android, ou iOS en fallback si APNs non configuré
+        } else if (plat === "IOS") {
+          // Capacitor iOS fournit un token APNs brut. Il ne faut jamais le
+          // présenter à FCM (qui pourrait le refuser puis le faire désactiver).
+          if (apnsReady && t.token) {
+            const result = await sendApns({
+              deviceToken: t.token,
+              title: titre,
+              body: corps || "",
+              data: fcmData,
+            });
+            if (result.ok) sentApnsCount++;
+            else if (result.expired) expiredTokenIds.push(t.id);
+            else console.warn("[send-push] APNs error:", result.error);
+          } else {
+            skippedApns++;
+          }
+        } else if (plat === "ANDROID") {
+          // FCM HTTP v1 — Android uniquement.
           if (fcmAccessToken && firebaseProjectId && t.token) {
             const result = await sendViaFcm({
               accessToken: fcmAccessToken,
@@ -333,14 +520,11 @@ Deno.serve(async (req) => {
               title: titre,
               body: corps || "",
               data: fcmData,
-              channelId: channel_id || channelForType(type_evenement),
+              channelId: auth.isServiceRole && channel_id ? channel_id : channelForType(type_evenement),
             });
             if (result.ok) sentFcm++;
             else if (result.expired) expiredTokenIds.push(t.id);
             else console.warn("[send-push] FCM error:", result.error);
-          } else if (plat === "IOS") {
-            // Ni APNs ni FCM configurés → skip propre iOS
-            skippedApns++;
           } else {
             // FIREBASE_SERVICE_ACCOUNT_JSON pas configuré → skip propre Android
             skippedFcm++;
@@ -357,9 +541,16 @@ Deno.serve(async (req) => {
 
     // Cleanup tokens expirés (404/410 Web Push ou UNREGISTERED FCM)
     if (expiredTokenIds.length > 0) {
-      await supabaseAdmin.from("tokens_push")
+      const { error: cleanupTokensError } = await supabaseAdmin.from("tokens_push")
         .update({ actif: false })
         .in("id", expiredTokenIds);
+      if (cleanupTokensError) {
+        console.error('[send-push] Desactivation tokens invalides impossible:', cleanupTokensError.code);
+        return jsonResponse(req, {
+          error: 'Nettoyage des abonnements push momentanément indisponible',
+          code: 'PUSH_TOKEN_CLEANUP_UNAVAILABLE',
+        }, 503);
+      }
     }
 
     if (skippedFcm > 0) {
@@ -381,25 +572,22 @@ Deno.serve(async (req) => {
           body: JSON.stringify({
             type: "NOTIFICATION_PUSH_FALLBACK",
             destinataire_id,
-            data: { titre, corps: corps || "", lien: lien || "https://jolene.app" },
+            data: { titre, corps: corps || "", ...(lien ? { lien } : {}) },
           }),
         });
       } catch { /* email fallback failed silently */ }
     }
 
-    return new Response(
-      JSON.stringify({
+    return jsonResponse(req, {
         sent, sentWeb, sentFcm, sentApns: sentApnsCount,
         total: totalTokens, skippedFcm, skippedApns,
         apns_configured: apnsReady,
         fcm_configured: Boolean(fcmAccessToken),
         email_fallback: sent === 0 && totalTokens > 0,
-      }),
-      { headers: corsHeaders },
-    );
+      });
   } catch (err) {
     console.error("send-push error:", err);
-    return new Response(JSON.stringify({ error: "Erreur interne" }), { status: 500, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": getCorsOrigin(req) } });
+    return jsonResponse(req, { error: "Erreur interne" }, 500);
   }
 });
 

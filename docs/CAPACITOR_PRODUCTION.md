@@ -1,130 +1,87 @@
-# Capacitor production — architecture plugins + permissions
+# Capacitor production — état natif iOS et Android
 
-> Sprint 4. État des wrappers natifs Jolene pour iOS + Android via Capacitor.
+État vérifié le 12/07/2026. La source de vérité des versions reste
+`package.json`; `npx cap sync` régénère les fichiers natifs gérés par Capacitor.
 
-## Plugins installés
+## Plugins structurants
 
-| Plugin | Version | Usage |
-|---|---|---|
-| `@capacitor/core` | ^8.2.0 | Bridge JS ↔ natif |
-| `@capacitor/cli` | ^8.2.0 | CLI build/sync |
-| `@capacitor/ios` | ^8.2.0 | Cible iOS |
-| `@capacitor/android` | ^8.2.0 | Cible Android |
-| `@capacitor/app` | ^8.1.0 | Lifecycle (background, deeplinks) |
-| `@capacitor/browser` | ^8.0.3 | InAppBrowser (Stripe Connect, PSC) |
-| `@capacitor/camera` | ^8.0.2 | Photo + galerie |
-| `@capacitor/geolocation` | ^8.1.0 | GPS pointage |
-| `@capacitor/haptics` | ^8.0.2 | Vibration feedback |
-| `@capacitor/keyboard` | ^8.0.2 | Keyboard show/hide events |
-| `@capacitor/network` | ^8.0.1 | Détection connectivité (**Sprint 4 PR 4**) |
-| `@capacitor/preferences` | ^8.0.1 | Storage local sécurisé |
-| `@capacitor/push-notifications` | ^8.0.3 | Push FCM/APNS |
-| `@capacitor/share` | ^8.0.1 | Partage natif |
-| `@capacitor/splash-screen` | ^8.0.1 | Splash app |
-| `@capacitor/status-bar` | ^8.0.2 | Style status bar |
-| `@capacitor-mlkit/barcode-scanning` | ^8.1.0 | QR scanner natif (**Sprint 4 PR 4**) |
+| Plugin | Usage |
+|---|---|
+| `@capacitor/app` | cycle de vie, Universal Links/App Links, bouton retour |
+| `@capacitor/barcode-scanner` | scan QR natif iOS/Android |
+| `@capacitor/camera` | photo et sélection de documents |
+| `@capacitor/geolocation` | position ponctuelle au pointage ou sur action « me localiser » du profil/adresse |
+| `@capacitor/network` | démarrage et synchronisation hors-ligne |
+| `@capacitor/push-notifications` | token APNs sur iOS, token FCM sur Android |
+| `@capacitor/splash-screen` | splash natif, avec filet de sortie à 1,8 s |
+| `@capgo/capacitor-native-biometric` | déverrouillage biométrique |
 
-## Wrappers unifiés (Sprint 4)
+Le plugin de géolocalisation en arrière-plan et son code mort ont été retirés.
+Jolene ne demande ni localisation permanente iOS, ni
+`ACCESS_BACKGROUND_LOCATION` Android.
 
-### `src/lib/geoloc.ts` (PR 5 S4)
-- `getCurrentPosition(options)` : isNative → `@capacitor/geolocation`, sinon `navigator.geolocation`
-- `JoleneGeolocResult` standardisé
-- `JoleneGeolocError` : PERMISSION_DENIED / POSITION_UNAVAILABLE / TIMEOUT / UNSUPPORTED / UNKNOWN
-- `checkGeolocPermission()` / `requestGeolocPermission()`
+## Wrappers applicatifs
 
-### `src/lib/camera.ts` (PR 6 S4)
-- `prendrePhoto(options)` : isNative → `@capacitor/camera` DataUrl, sinon input file
-- `scannerQr()` : isNative → `@capacitor-mlkit/barcode-scanning`, sinon `null` (caller utilise `ScannerQRPointage` web)
-- `JoleneCameraError` : PERMISSION_DENIED / CANCELLED / UNSUPPORTED / UNKNOWN
+- `src/lib/camera.ts` utilise le scanner officiel Capacitor en QR-only sur le
+  natif et conserve `html5-qrcode` pour le web.
+- `src/lib/geoloc.ts` effectue une acquisition ponctuelle, déclenchée par un
+  pointage ou une demande volontaire de localisation du profil/adresse.
+- `src/lib/nativeLinks.ts` n'accepte que les hôtes exacts `jolene.app`,
+  `www.jolene.app`, `app.jolene.app` ou un chemin interne, en conservant query
+  string et fragment. Les associations OS restent limitées au domaine canonique
+  `jolene.app` ; `app.jolene.app` sert uniquement aux anciens payloads in-app.
+- `src/lib/pushNative.ts` initialise le push pour toute session, y compris une
+  session restaurée, PSC ou biométrique. Les liens de notification passent par
+  la même liste d'origines autorisées.
 
-### `src/lib/pushNative.ts` (existant + amélioré PR 7 S4)
-- `initNativePush(userId)` : permission + register + listeners
-- Listener `pushNotificationReceived` (foreground) → dispatch `jolene:push-foreground` CustomEvent
-- Listener `pushNotificationActionPerformed` (tap) → `navigationPathForEvent` smart routing par type_evenement
+## Permissions réellement déclarées
 
-## Permissions iOS — `ios/App/App/Info.plist`
+iOS (`ios/App/App/Info.plist`) : caméra, photothèque en lecture, localisation
+« When In Use » et Face ID. Aucun mode d'arrière-plan n'est déclaré. Le manifest
+de confidentialité `PrivacyInfo.xcprivacy` est membre de la cible App et se
+retrouve à la racine du bundle produit.
 
-Sprint 4 PR 4 ajouts :
-- `NSLocationWhenInUseUsageDescription` (déjà OK avant)
-- `NSCameraUsageDescription` (déjà OK)
-- `NSPhotoLibraryUsageDescription` (déjà OK)
-- `NSLocalNotificationUsageDescription` (déjà OK)
-- **`NSPhotoLibraryAddUsageDescription`** (PR 4 S4) — enregistrer justificatifs
-- **`UIBackgroundModes ['remote-notification']`** (PR 4 S4) — bloquant push iOS background
+Android (`android/app/src/main/AndroidManifest.xml`) : internet, caméra,
+localisation fine/approximative, notifications, état réseau, wake lock et
+réception après redémarrage. Aucune permission de stockage large ni de
+localisation en arrière-plan n'est demandée.
 
-À ajouter au Sprint final via Xcode :
-- Capability Push Notifications → génère `App.entitlements` avec `aps-environment`
-- Background Modes → cocher "Remote notifications"
+## Deep links
 
-## Permissions Android — `android/app/src/main/AndroidManifest.xml`
+Les chemins stores couverts sont :
 
-Sprint 4 PR 4 ajouts :
-- `INTERNET` (déjà OK)
-- `CAMERA` (déjà OK)
-- `ACCESS_FINE_LOCATION` / `ACCESS_COARSE_LOCATION` (déjà OK)
-- `POST_NOTIFICATIONS` (déjà OK — Android 13+ runtime permission)
-- `READ_EXTERNAL_STORAGE` (déjà OK)
-- **`WAKE_LOCK`** (PR 4 S4) — robustesse FCM en Doze mode
-- **`RECEIVE_BOOT_COMPLETED`** (PR 4 S4) — re-registration FCM au boot
-- **`ACCESS_NETWORK_STATE`** (PR 4 S4) — détection connectivité offline queue
+- `/reset-password`
+- `/auth/psc/callback`
+- `/etab/invitation/*`
+- `/mission/*`
+- `/contrat/*`
+- `/soignant/missions*`
+- `/etablissement/missions*`
 
-## Notification channels Android (PR 7 S4)
+La configuration iOS est dans `App.entitlements` et l'AASA public. Android
+utilise un intent filter `autoVerify` et `assetlinks.json`. Toute combinaison
+host/chemin non autorisée est refusée de nouveau côté TypeScript.
 
-Déclarés dans `MainActivity.onCreate` (requis Android 8+) :
+## Commandes de vérification
 
-| `channel_id` | Importance | Caractéristiques |
-|---|---|---|
-| `jolene_urgence` | HIGH | Vibration + son personnalisé + badge |
-| `jolene_info` | DEFAULT | Vibration + badge |
-| `jolene_paiement` | DEFAULT | Badge ON |
-| `jolene_messagerie` | HIGH | Vibration légère (150 ms) + badge |
-| `jolene_signature` | HIGH | Vibration pattern (200/100/200) + badge |
-| `jolene_pointage` | DEFAULT | Vibration + badge OFF |
+```bash
+npm run build
+npx cap sync
+npx tsc --noEmit
+npx vitest run src/lib/nativeLinks.test.ts src/lib/pushNative.test.ts
+```
 
-Le `send-push` edge function (PR 1 S4) mappe `type_evenement` vers le
-bon channel_id via le helper `channelForType` côté Deno.
+Le projet iOS utilise Swift Package Manager et s'ouvre avec
+`ios/App/App.xcodeproj`. Sur ce Mac, Xcode 26 est installé hors du chemin
+sélectionné globalement ; utiliser sans modifier la machine :
 
-## Lifecycle et listeners
+```bash
+DEVELOPER_DIR=/Users/gabrielle/Downloads/Xcode.app/Contents/Developer \
+  xcodebuild -resolvePackageDependencies \
+  -project ios/App/App.xcodeproj -scheme App \
+  -packageAuthorizationProvider netrc -scmProvider system
+```
 
-| Event | Source | Comportement |
-|---|---|---|
-| `appStateChange` | `@capacitor/app` | Pause/resume → sync horsLigne queue |
-| `appUrlOpen` | `@capacitor/app` | Deep links (universalLinks iOS, app links Android) |
-| `backButton` | `@capacitor/app` | Android : custom handler navigation back |
-| `pushNotificationReceived` | `@capacitor/push-notifications` | Foreground → CustomEvent toast |
-| `pushNotificationActionPerformed` | `@capacitor/push-notifications` | Tap → smart nav |
-| `keyboardWillShow` / `keyboardDidHide` | `@capacitor/keyboard` | Layout adjust |
-| `networkStatusChange` | `@capacitor/network` | Online/offline → bandeau + sync |
-
-## Best practices
-
-### Tests
-- Sur iOS : Xcode Simulator iPhone 15 + iPad Pro
-- Sur Android : Android Studio AVD Pixel 7 + tablette
-- TestFlight pour les tests devices réels iOS
-- Internal testing Play Console pour Android
-
-### Build CI
-À configurer Sprint final :
-- GitHub Actions workflow `.github/workflows/build-mobile.yml`
-- Trigger : tag `v*` ou manuel
-- Jobs : iOS (macOS runner, xcodebuild archive) + Android (ubuntu, gradle bundleRelease)
-- Artifacts : `.ipa` + `.aab` uploadés
-- Optionnel : Fastlane pour automatiser l'upload TestFlight + Play Console
-
-### Performance
-- Lazy loading composants (cf. `lazy()` dans App.tsx) → réduit le bundle initial
-- Service worker pour assets statiques (déjà en place)
-- Compression images via `@capacitor/camera` quality:80
-
-### Sécurité
-- `@capacitor/preferences` pour storage sensible (jamais localStorage pour tokens)
-- Validation tous deep links côté frontend (path absolu jolene.app uniquement)
-- Pas de stocker `service_role_key` côté client — uniquement edge functions
-
-## Roadmap post-Sprint final
-
-- `@capacitor/biometric-auth` pour Face ID / fingerprint sur signature OTP
-- `@capacitor-community/native-audio` pour son urgence custom plus reliable
-- Background fetch pour sync presences hors-ligne sans wake-up app
-- Universal Links iOS + App Links Android pour deep linking depuis emails/SMS
+Pour Android, `bundleRelease` s'arrête explicitement tant que la signature,
+`google-services.json` ou l'empreinte App Links sont absents. `lintRelease`
+reste exécutable sans secrets, mais requiert un Android SDK 36 installé.

@@ -79,12 +79,13 @@ export type AlerteVetting = {
   message: string;
 };
 
-// Familles NAF santé / médico-social + officines. Le warning éclaire la revue :
+// Familles NAF santé / médico-social. Les officines ne publient pas de missions
+// Jolene (Lot 21), leur code NAF ne doit donc pas être auto-validé ici.
 // il ne valide ni ne rejette automatiquement un dossier.
 export function estCodeNafSante(codeNaf: string | null | undefined): boolean {
   if (!codeNaf) return false;
   const code = codeNaf.trim().toUpperCase();
-  return /^(86|87|88)/.test(code) || code === '47.73Z';
+  return /^(86|87|88)/.test(code);
 }
 
 export function analyserVettingEtablissement(

@@ -26,6 +26,20 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+
+                <!-- Callbacks auth et liens métier effectivement routés par App.tsx. -->
+                <data android:scheme="https" android:host="jolene.app" android:pathPrefix="/reset-password" />
+                <data android:scheme="https" android:host="jolene.app" android:pathPrefix="/auth/psc/callback" />
+                <data android:scheme="https" android:host="jolene.app" android:pathPrefix="/etab/invitation/" />
+                <data android:scheme="https" android:host="jolene.app" android:pathPrefix="/mission/" />
+                <data android:scheme="https" android:host="jolene.app" android:pathPrefix="/contrat/" />
+                <data android:scheme="https" android:host="jolene.app" android:pathPrefix="/soignant/missions" />
+                <data android:scheme="https" android:host="jolene.app" android:pathPrefix="/etablissement/missions" />
+            </intent-filter>
         </activity>
 
         <provider
@@ -44,7 +58,6 @@
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
     <!-- Sprint 4 PR 4 — robustesse FCM en Doze mode + re-registration au boot -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />

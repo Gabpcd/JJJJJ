@@ -6,6 +6,12 @@ import { FooterLegal } from '@/components/FooterLegal';
 import { getLabelProfession } from '@/lib/constantes';
 import { HeartPulse, MapPin, Clock, Building2, Flame, ArrowRight } from 'lucide-react';
 
+function libelleContrat(type: string | null | undefined) {
+  if (type === 'LIBERAL') return 'Mission libérale · note d’honoraires';
+  if (type === 'TOUS') return 'CDD salarié ou mission libérale selon votre éligibilité';
+  return 'CDD salarié · bulletin de paie';
+}
+
 /**
  * Page publique d'une mission OUVERTE — indexable par Google for Jobs
  * (JSON-LD schema.org/JobPosting). URL : /mission/:id, listée dans le
@@ -33,13 +39,12 @@ export default function MissionPublique() {
       '@type': 'JobPosting',
       title: mission.intitule,
       description: mission.description || `Mission ${getLabelProfession(mission.profession_requise) || mission.profession_requise} chez ${mission.etablissement_nom} à ${mission.ville}.`,
-      datePosted: new Date().toISOString().slice(0, 10),
+      datePosted: mission.cree_le ? new Date(mission.cree_le).toISOString().slice(0, 10) : undefined,
       validThrough: mission.debut_le,
       employmentType: 'TEMPORARY',
       hiringOrganization: {
         '@type': 'Organization',
         name: mission.etablissement_nom,
-        sameAs: 'https://jolene.app',
       },
       jobLocation: {
         '@type': 'Place',
@@ -59,9 +64,8 @@ export default function MissionPublique() {
           unitText: 'HOUR',
         },
       },
-      directApply: true,
+      directApply: false,
       applicantLocationRequirements: { '@type': 'Country', name: 'France' },
-      jobBenefits: 'Paiement garanti, horaires flexibles, contrats automatisés',
     } as Record<string, any>;
   }, [mission]);
 
@@ -69,14 +73,15 @@ export default function MissionPublique() {
 
   return (
     <div className="min-h-[100dvh] bg-background text-foreground flex flex-col">
-      {mission && (
-        <SEOHead
-          title={`${mission.intitule} — ${mission.ville} | Jolene Santé`}
-          description={`Mission ${getLabelProfession(mission.profession_requise) || ''} à ${mission.ville} : ${Number(mission.taux_horaire_base).toFixed(0)} €/h. Soignants vérifiés, paiement garanti. Postulez gratuitement sur Jolene Santé.`}
-          url={`https://jolene.app/mission/${id}`}
-          jsonLd={jsonLd}
-        />
-      )}
+      <SEOHead
+        title={mission ? `${mission.intitule} — ${mission.ville} | Jolene Santé` : 'Mission indisponible — Jolene Santé'}
+        description={mission
+          ? `Mission ${getLabelProfession(mission.profession_requise) || ''} à ${mission.ville} : ${Number(mission.taux_horaire_base).toFixed(0)} €/h. Consultez les conditions et créez votre compte pour candidater.`
+          : 'Cette mission n’est plus disponible.'}
+        url={`https://jolene.app/mission/${id}`}
+        jsonLd={jsonLd}
+        noIndex={charge && !mission}
+      />
 
       <header className="sticky top-0 z-50 bg-card/80 backdrop-blur-lg border-b border-border">
         <div className="max-w-4xl mx-auto px-4 h-16 flex items-center justify-between">
@@ -129,6 +134,9 @@ export default function MissionPublique() {
               <div>
                 <p className="text-sm text-muted-foreground">Rémunération</p>
                 <p className="text-3xl font-extrabold text-primary">{Number(mission.taux_horaire_base).toFixed(0)} €/h</p>
+                <p className="text-sm font-semibold text-foreground mt-1">
+                  {libelleContrat(mission.type_contrat_recherche)}
+                </p>
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Profession</p>
@@ -152,7 +160,7 @@ export default function MissionPublique() {
             <div className="rounded-2xl bg-gradient-to-r from-primary/10 to-primary/5 border border-primary/20 p-6 text-center space-y-3">
               <h2 className="text-xl font-bold text-foreground">Cette mission vous intéresse ?</h2>
               <p className="text-sm text-muted-foreground">
-                Inscription gratuite en 2 minutes · établissements vérifiés · paiement garanti · 0 frais pour les soignants.
+                Inscription gratuite · établissements vérifiés · conditions et contrat présentés avant l'affectation.
               </p>
               <Link to={cta} className="btn-primary inline-flex items-center gap-2 px-8 py-3 text-base">
                 Postuler gratuitement <ArrowRight className="h-4 w-4" />

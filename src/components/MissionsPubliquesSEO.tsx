@@ -9,6 +9,12 @@ interface Props {
   campagne: string;      // slug pour l'UTM (ex. "seo-paris", "seo-ide")
 }
 
+function libelleContrat(type: string | null | undefined) {
+  if (type === 'LIBERAL') return 'Mission libérale';
+  if (type === 'TOUS') return 'Salarié ou libéral selon éligibilité';
+  return 'CDD salarié';
+}
+
 /**
  * Liste publique de missions ouvertes (RPC anon fn_missions_publiques_recherche)
  * pour les landing pages SEO ville/métier. CTA inscription avec UTM tracées.
@@ -61,6 +67,7 @@ export function MissionsPubliquesSEO({ profession, ville, campagne }: Props) {
                 <Clock className="h-3.5 w-3.5" />
                 {new Date(m.debut_le).toLocaleDateString('fr-FR')} → {new Date(m.fin_le).toLocaleDateString('fr-FR')}
               </p>
+              <p className="text-xs font-semibold text-foreground">{libelleContrat(m.type_contrat_recherche)}</p>
               <p className="text-base font-bold text-primary">{Number(m.taux_horaire_base).toFixed(0)} €/h</p>
             </div>
           ))}

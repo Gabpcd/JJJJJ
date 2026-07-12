@@ -3,74 +3,63 @@
 // Pour l'instant : mode "dry-run" -- enregistre les entrees calendar_events_sync
 // sans appeler les API Google/Microsoft (OAuth2 pas encore configure).
 
-import { createClient } from "npm:@supabase/supabase-js@2";
-
-function corsHeaders(req: Request) {
-  const origin = req.headers.get("origin") || "";
-  if (
-    origin === "https://jolene.app" ||
-    origin === "https://app.jolene.app" ||
-    origin === "https://www.jolene.app" ||
-    origin === "http://localhost:5173" ||
-    origin === "http://localhost:8080"
-  ) {
-    return {
-      "Access-Control-Allow-Origin": origin,
-      "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-      "Content-Type": "application/json",
-    };
-  }
-  return {
-    "Access-Control-Allow-Origin": "https://jolene.app",
-    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-    "Content-Type": "application/json",
-  };
-}
+import { createClient } from "npm:@supabase/supabase-js@2.99.2";
+import { jsonResponse, preflightResponse } from '../_shared/cors.ts';
+import { verifyAdminOrServiceRole, verifyUserOrServiceRole } from '../_shared/admin-auth.ts';
+import { applyRateLimit, getClientIp } from '../_shared/rate-limit.ts';
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders(req) });
+    return preflightResponse(req);
   }
 
   try {
-    const bodyRaw = await req.clone().json().catch(() => ({}));
-    if (bodyRaw?.warm === true) {
-      return new Response(JSON.stringify({ warm: true }), { headers: corsHeaders(req) });
-    }
-
     if (req.method !== "POST") {
-      return new Response(JSON.stringify({ error: "Methode non autorisee" }), {
-        status: 405,
-        headers: corsHeaders(req),
-      });
+      return jsonResponse(req, { error: "Methode non autorisee" }, 405);
     }
 
-    const { user_id, provider } = bodyRaw;
+    const auth = await verifyUserOrServiceRole(req);
+    if (!auth.ok) return jsonResponse(req, { error: auth.error }, auth.status);
 
-    if (!user_id) {
-      return new Response(JSON.stringify({ error: "user_id requis" }), {
-        status: 400,
-        headers: corsHeaders(req),
-      });
+    const bodyRaw = await req.json().catch(() => null) as Record<string, unknown> | null;
+    if (!bodyRaw || Array.isArray(bodyRaw)) {
+      return jsonResponse(req, { error: 'Corps JSON invalide' }, 400);
+    }
+    if (bodyRaw.warm === true) {
+      const adminAuth = await verifyAdminOrServiceRole(req);
+      if (!adminAuth.ok) return jsonResponse(req, { error: adminAuth.error }, adminAuth.status);
+      return jsonResponse(req, { warm: true });
+    }
+
+    const user_id = typeof bodyRaw.user_id === 'string' ? bodyRaw.user_id : '';
+    const provider = typeof bodyRaw.provider === 'string' ? bodyRaw.provider.trim() : null;
+
+    if (!/^[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(user_id)) {
+      return jsonResponse(req, { error: "user_id UUID requis" }, 400);
+    }
+    if (provider && !/^[a-z0-9_-]{1,40}$/i.test(provider)) {
+      return jsonResponse(req, { error: 'provider invalide' }, 400);
     }
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false } });
 
-    const authHeader = req.headers.get("Authorization");
-    if (authHeader) {
-      const bearerToken = authHeader.replace("Bearer ", "");
-      if (bearerToken !== serviceRoleKey) {
-        const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
-        const authClient = createClient(supabaseUrl, anonKey, { auth: { persistSession: false } });
-        const { data: { user }, error: authError } = await authClient.auth.getUser(bearerToken);
-        if (authError || !user || user.id !== user_id) {
-          return new Response(JSON.stringify({ error: "Non autorise" }), {
-            status: 401,
-            headers: corsHeaders(req),
-          });
-        }
+    if (!auth.isServiceRole) {
+      if (auth.userId !== user_id) {
+        return jsonResponse(req, { error: 'Non autorise' }, 403);
+      }
+      if (applyRateLimit('calendar-sync', `${user_id}:${getClientIp(req)}`, { max: 3, windowMs: 60_000 })) {
+        return jsonResponse(req, { error: 'Synchronisations trop frequentes' }, 429);
+      }
+      const { data: allowed, error: rateError } = await supabase.rpc('fn_verifier_rate_limit', {
+        p_cle: user_id,
+        p_action: 'edge_calendar_sync',
+        p_max_tentatives: 20,
+        p_fenetre_secondes: 3600,
+      });
+      if (rateError || allowed !== true) {
+        return jsonResponse(req, { error: 'Limite horaire de synchronisation atteinte' }, 429);
       }
     }
 
@@ -78,7 +67,7 @@ Deno.serve(async (req) => {
       .from("calendar_connections")
       .select("*")
       .eq("utilisateur_id", user_id)
-      .eq("status", "connected");
+      .eq("sync_enabled", true);
 
     if (provider) {
       connectionsQuery = connectionsQuery.eq("provider", provider);
@@ -88,10 +77,7 @@ Deno.serve(async (req) => {
 
     if (connError) {
       console.error("Erreur recuperation connexions:", connError);
-      return new Response(JSON.stringify({ error: "Erreur recuperation connexions" }), {
-        status: 500,
-        headers: corsHeaders(req),
-      });
+      return jsonResponse(req, { error: "Erreur recuperation connexions" }, 500);
     }
 
     const { data: missions, error: missionsError } = await supabase
@@ -104,10 +90,7 @@ Deno.serve(async (req) => {
 
     if (missionsError) {
       console.error("Erreur recuperation missions:", missionsError);
-      return new Response(JSON.stringify({ error: "Erreur recuperation missions" }), {
-        status: 500,
-        headers: corsHeaders(req),
-      });
+      return jsonResponse(req, { error: "Erreur recuperation missions" }, 500);
     }
 
     const etabIds = [...new Set((missions || []).map((m: any) => m.etablissement_id))];
@@ -135,21 +118,10 @@ Deno.serve(async (req) => {
           .from("calendar_events_sync")
           .upsert(
             {
-              utilisateur_id: user_id,
               connection_id: conn.id,
               mission_id: mission.id,
-              provider: conn.provider,
-              event_summary: mission.intitule,
-              event_start: mission.debut_le,
-              event_end: mission.fin_le,
-              event_location: location,
-              event_description: [
-                etab ? `Etablissement: ${etab.nom}` : "",
-                mission.service ? `Service: ${mission.service}` : "",
-                `Taux: ${mission.taux_horaire_base} EUR/h`,
-              ].filter(Boolean).join("\n"),
-              sync_status: "pending",
-              updated_at: new Date().toISOString(),
+              sync_direction: "PUSH",
+              last_synced_at: null,
             },
             { onConflict: "connection_id,mission_id" }
           );
@@ -182,15 +154,9 @@ Deno.serve(async (req) => {
       );
     }
 
-    return new Response(
-      JSON.stringify({ success: true, synced: syncedCount }),
-      { headers: corsHeaders(req) }
-    );
+    return jsonResponse(req, { success: true, synced: syncedCount });
   } catch (err) {
     console.error("calendar-sync error:", err);
-    return new Response(
-      JSON.stringify({ error: "Erreur interne du serveur" }),
-      { status: 500, headers: corsHeaders(req) }
-    );
+    return jsonResponse(req, { error: "Erreur interne du serveur" }, 500);
   }
 });

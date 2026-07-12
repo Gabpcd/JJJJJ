@@ -6,11 +6,12 @@ interface SEOHeadProps {
   url?: string;
   image?: string;
   jsonLd?: Record<string, any> | Record<string, any>[];
+  noIndex?: boolean;
 }
 
 const DEFAULT_OG_IMAGE = 'https://jolene.app/og-default.png';
 
-export function SEOHead({ title, description, url, image, jsonLd }: SEOHeadProps) {
+export function SEOHead({ title, description, url, image, jsonLd, noIndex = false }: SEOHeadProps) {
   useEffect(() => {
     document.title = title;
 
@@ -36,6 +37,15 @@ export function SEOHead({ title, description, url, image, jsonLd }: SEOHeadProps
     setMeta('name', 'twitter:title', title);
     setMeta('name', 'twitter:description', description);
     setMeta('name', 'twitter:image', ogImage);
+    setMeta('name', 'robots', noIndex ? 'noindex, nofollow' : 'index, follow');
+
+    let canonical = document.querySelector('link[rel="canonical"]') as HTMLLinkElement | null;
+    if (!canonical) {
+      canonical = document.createElement('link');
+      canonical.rel = 'canonical';
+      document.head.appendChild(canonical);
+    }
+    canonical.href = url || `https://jolene.app${window.location.pathname}`;
 
     // JSON-LD structured data
     let ldScript: HTMLScriptElement | null = null;
@@ -54,7 +64,7 @@ export function SEOHead({ title, description, url, image, jsonLd }: SEOHeadProps
       document.title = 'Jolene Santé — Missions soignants & remplacements vérifiés';
       if (ldScript) ldScript.remove();
     };
-  }, [title, description, url, image, jsonLd]);
+  }, [title, description, url, image, jsonLd, noIndex]);
 
   return null;
 }

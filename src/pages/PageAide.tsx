@@ -4,6 +4,7 @@ import { Search, HelpCircle, Loader2, ChevronRight, ArrowLeft, Mail } from 'luci
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { useRole } from '@/hooks/useRole';
 import { FooterLegal } from '@/components/FooterLegal';
 import { ModalContacterJolene } from '@/components/ModalContacterJolene';
 import { toast } from 'sonner';
@@ -21,7 +22,8 @@ interface ArticleResume {
 export default function PageAide() {
   usePageTitle('Centre d\'aide');
   const navigate = useNavigate();
-  const { user, role } = useAuth();
+  const { user } = useAuth();
+  const { role } = useRole();
   const [searchParams, setSearchParams] = useSearchParams();
   const [query, setQuery] = useState(searchParams.get('q') || '');
   const [audience, setAudience] = useState<'TOUS' | 'SOIGNANT' | 'ETABLISSEMENT'>(
@@ -76,6 +78,13 @@ export default function PageAide() {
 
   const audienceLabel = (aud: string) =>
     aud === 'SOIGNANT' ? 'Soignant' : aud === 'ETABLISSEMENT' ? 'Établissement' : 'Commun';
+  const nettoyerExtrait = (texte: string) => texte
+    .replace(/^#{1,6}\s+/gm, '')
+    .replace(/\*\*(.*?)\*\*/g, '$1')
+    .replace(/`([^`]+)`/g, '$1')
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+    .replace(/\s+/g, ' ')
+    .trim();
 
   return (
     <div className="min-h-[100dvh] bg-background">
@@ -98,6 +107,7 @@ export default function PageAide() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
             <input
               type="search"
+              aria-label="Rechercher dans le centre d'aide"
               value={query}
               onChange={e => setQuery(e.target.value)}
               placeholder="Rechercher dans l'aide (mandat, facture, pointage...)"
@@ -154,7 +164,7 @@ export default function PageAide() {
                               {audienceLabel(a.audience)}
                             </span>
                           </div>
-                          <p className="text-sm text-muted-foreground line-clamp-2">{a.extrait}</p>
+                          <p className="text-sm text-muted-foreground line-clamp-2">{nettoyerExtrait(a.extrait)}</p>
                         </div>
                         <ChevronRight className="h-5 w-5 text-muted-foreground group-hover:text-primary shrink-0 mt-1" />
                       </div>

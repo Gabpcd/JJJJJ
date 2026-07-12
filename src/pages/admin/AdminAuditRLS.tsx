@@ -101,7 +101,7 @@ export default function AdminAuditRLS() {
     toast.success('Export JSON téléchargé');
   };
 
-  const verdictOK = data?.verdict === 'OK';
+  const verdictOK = !isError && !!data && data.verdict === 'OK';
 
   return (
     <LayoutAdmin>
@@ -172,6 +172,14 @@ export default function AdminAuditRLS() {
             <CardY2KContent>
               {isLoading ? (
                 <Skeleton className="h-10 w-24" />
+              ) : isError || !data ? (
+                <div className="flex items-center gap-2 text-destructive">
+                  <AlertTriangle className="h-8 w-8" />
+                  <div>
+                    <div className="text-lg font-bold">Indisponible</div>
+                    <div className="text-xs text-muted-foreground">Aucun verdict ne peut être rendu</div>
+                  </div>
+                </div>
               ) : verdictOK ? (
                 <div className="flex items-center gap-2">
                   <CheckCircle2 className="h-8 w-8 text-green-600" />
@@ -207,6 +215,8 @@ export default function AdminAuditRLS() {
             <CardY2KContent>
               {isLoading ? (
                 <Skeleton className="h-10 w-16" />
+              ) : isError || !data ? (
+                <div className="text-3xl font-bold text-muted-foreground">—</div>
               ) : (
                 <div>
                   <div
@@ -237,6 +247,8 @@ export default function AdminAuditRLS() {
             <CardY2KContent>
               {isLoading ? (
                 <Skeleton className="h-10 w-16" />
+              ) : isError || !data ? (
+                <div className="text-3xl font-bold text-muted-foreground">—</div>
               ) : (
                 <div>
                   <div
@@ -268,6 +280,11 @@ export default function AdminAuditRLS() {
                 {[...Array(3)].map((_, i) => (
                   <Skeleton key={i} className="h-12 w-full" />
                 ))}
+              </div>
+            ) : isError ? (
+              <div role="alert" className="text-center py-8 text-destructive">
+                <AlertTriangle className="h-12 w-12 mx-auto mb-2" />
+                <p className="text-sm">Audit indisponible. Aucun feu vert n'est affiché tant que la vérification échoue.</p>
               </div>
             ) : !data || data.problemes.length === 0 ? (
               <div className="text-center py-8">

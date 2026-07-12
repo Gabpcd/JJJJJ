@@ -9,7 +9,14 @@ interface BandeauOubliDepartProps {
 }
 
 export function BandeauOubliDepart({ mission, onPointer }: BandeauOubliDepartProps) {
-  const finPrevue = format(new Date(mission.fin_le), "HH:mm", { locale: fr });
+  const dateFin = mission?.fin_le ? new Date(mission.fin_le) : null;
+  const finPrevue = dateFin && !Number.isNaN(dateFin.getTime())
+    ? format(dateFin, "HH:mm", { locale: fr })
+    : null;
+  const count = Math.max(1, Number(mission?.count) || 1);
+  const intitule = typeof mission?.intitule === 'string' && mission.intitule.trim()
+    ? mission.intitule.trim()
+    : null;
 
   return (
     <div className="bg-warning/10 border-l-4 border-warning p-4 rounded-r-xl mb-4 animate-pulse [animation-duration:3s] [animation-iteration-count:3]">
@@ -18,8 +25,9 @@ export function BandeauOubliDepart({ mission, onPointer }: BandeauOubliDepartPro
         <div className="flex-1">
           <p className="text-sm font-semibold text-foreground">⚠️ Oubli de pointage ?</p>
           <p className="text-sm text-muted-foreground mt-1">
-            Ta mission « {mission.intitule} » devait se terminer à {finPrevue}.
-            N'oublie pas de valider ton départ.
+            {intitule && finPrevue
+              ? <>Ta mission « {intitule} » devait se terminer à {finPrevue}. N'oublie pas de valider ton départ.</>
+              : <>{count} mission{count > 1 ? 's' : ''} semble{count > 1 ? 'nt' : ''} attendre un pointage de départ. Vérifie tes présences.</>}
           </p>
           <button
             onClick={onPointer}

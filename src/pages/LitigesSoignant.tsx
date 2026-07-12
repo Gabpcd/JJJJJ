@@ -134,9 +134,9 @@ export function LitigesSoignantContent() {
     <>
       <div className="flex items-center justify-between mb-4">
         <div>
-          <h1 className="text-xl font-bold text-foreground flex items-center gap-2">
+          <h2 className="text-xl font-bold text-foreground flex items-center gap-2">
             <Scale className="h-6 w-6 text-primary" /> Mes litiges
-          </h1>
+          </h2>
           <p className="text-sm text-muted-foreground mt-1">Suis tes contestations de missions</p>
         </div>
         <BoutonY2K onClick={openNewLitige} className="gap-1.5">

@@ -22,11 +22,10 @@ interface Props {
 /**
  * Wrapper Cloudflare Turnstile avec fallback no-op en dev.
  *
- * Si `VITE_TURNSTILE_SITE_KEY` n'est pas définie (ex. dev local sans clé,
- * preview Vercel sans config), le composant appelle `onVerify('')`
- * immédiatement et ne rend rien. Côté backend, `verify-turnstile.ts`
- * retourne success=true quand `TURNSTILE_SECRET_KEY` est absente : les
- * deux comportements sont symétriques.
+ * Si `VITE_TURNSTILE_SITE_KEY` n'est pas définie en développement local, le
+ * composant fournit un marqueur de développement et ne rend rien. Les Edge
+ * Functions publiques restent fail-closed : leur éventuel bypass exige
+ * explicitement TURNSTILE_ALLOW_DEV_BYPASS=true et une origine HTTP locale.
  *
  * En production, dès que les clés sont présentes des deux côtés, le widget
  * apparaît et bloque la soumission tant que l'utilisateur n'a pas validé.
@@ -37,8 +36,8 @@ export function CaptchaTurnstile({ onVerify, onError, onExpire, invisible, class
   useEffect(() => {
     if (!SITE_KEY && !verifiedRef.current) {
       verifiedRef.current = true;
-      // Token "dev-no-key" : non vide pour passer les checks `&& token`,
-      // accepté par le backend `verify-turnstile.ts` quand TURNSTILE_SECRET_KEY est absente.
+      // Marqueur non vide pour les parcours locaux. Il n'est jamais accepte
+      // automatiquement par une Edge Function de production.
       onVerify('dev-no-key');
     }
   }, [onVerify]);

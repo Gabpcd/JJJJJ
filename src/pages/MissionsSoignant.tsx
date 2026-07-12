@@ -266,7 +266,19 @@ export default function MissionsSoignant() {
                   const m = c.missions;
                   const estSuperLike = (c.message || '').toLowerCase().includes('super-like');
                   return (
-                    <div key={c.id} onClick={() => navigate(`/soignant/missions/${m.id}`)} className="card-base hover:shadow-md cursor-pointer transition-all flex items-center gap-3 py-3">
+                    <div
+                      key={c.id}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => navigate(`/soignant/missions/${m.id}`)}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter' || event.key === ' ') {
+                          event.preventDefault();
+                          navigate(`/soignant/missions/${m.id}`);
+                        }
+                      }}
+                      className="card-base hover:shadow-md cursor-pointer transition-all flex items-center gap-3 py-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+                    >
                       <div className="flex flex-col items-center justify-center rounded-xl bg-primary/10 px-3 py-1.5 min-w-[52px]">
                         <span className="text-[10px] font-semibold text-primary uppercase">{format(new Date(m.debut_le), 'EEE', { locale: fr })}</span>
                         <span className="text-lg font-bold text-primary leading-tight">{format(new Date(m.debut_le), 'd')}</span>
@@ -337,7 +349,19 @@ export default function MissionsSoignant() {
                 {missionsAvecDistance.map(m => {
                   const dureeH = m.duree_heures ?? ((new Date(m.fin_le).getTime() - new Date(m.debut_le).getTime()) / 3600000);
                   return (
-                    <div key={m.id} onClick={() => navigate(`/soignant/missions/${m.id}`)} className="card-base hover:shadow-md cursor-pointer transition-all flex items-center gap-3 py-3">
+                    <div
+                      key={m.id}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => navigate(`/soignant/missions/${m.id}`)}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter' || event.key === ' ') {
+                          event.preventDefault();
+                          navigate(`/soignant/missions/${m.id}`);
+                        }
+                      }}
+                      className="card-base hover:shadow-md cursor-pointer transition-all flex items-center gap-3 py-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+                    >
                       <div className="flex flex-col items-center justify-center rounded-xl bg-primary/10 px-3 py-1.5 min-w-[52px]">
                         <span className="text-[10px] font-semibold text-primary uppercase">{format(new Date(m.debut_le), 'EEE', { locale: fr })}</span>
                         <span className="text-lg font-bold text-primary leading-tight">{format(new Date(m.debut_le), 'd')}</span>
@@ -371,7 +395,19 @@ export default function MissionsSoignant() {
               <>
                 <div className="space-y-3">
                   {missionsAvecDistance.slice(0, nbAffiche).map(m => (
-                    <div key={m.id} onClick={() => navigate(`/soignant/missions/${m.id}`)} className="card-base hover:shadow-md cursor-pointer transition-all">
+                    <div
+                      key={m.id}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => navigate(`/soignant/missions/${m.id}`)}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter' || event.key === ' ') {
+                          event.preventDefault();
+                          navigate(`/soignant/missions/${m.id}`);
+                        }
+                      }}
+                      className="card-base hover:shadow-md cursor-pointer transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+                    >
                       <div className="flex items-center justify-between mb-2">
                         <BadgeStatut statut={m.statut} />
                         <span className="text-xs text-muted-foreground">

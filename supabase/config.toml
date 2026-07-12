@@ -132,6 +132,9 @@ verify_jwt = false
 [functions.calendar-sync]
 verify_jwt = false
 
+[functions.delete-account]
+verify_jwt = false
+
 [functions.generate-invoice]
 verify_jwt = false
 

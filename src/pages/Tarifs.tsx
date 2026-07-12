@@ -6,7 +6,7 @@ import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 
 const INCLUS = [
   'Publication de missions illimitée',
-  'Soignants vérifiés (identité, diplômes, RPPS, RCP)',
+  'Soignants vérifiés (identité, diplôme, RPPS et pièces requises par la mission)',
   'Contrats générés et signés électroniquement',
   'Pointage GPS et suivi des présences',
   'Facturation automatique (Chorus Pro pour le secteur public)',
