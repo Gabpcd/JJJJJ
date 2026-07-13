@@ -1,6 +1,6 @@
 # Store readiness — préparation App Store et Play Store
 
-État au 12/07/2026. « Build validé » ne signifie pas « publiable » : les
+État au 13/07/2026. « Build validé » ne signifie pas « publiable » : les
 éléments de signature, consoles et recette sur appareils restent externes au
 repo.
 
@@ -10,8 +10,8 @@ repo.
 |---|---|---|
 | Build web production | ✅ | `npm run build` |
 | Synchronisation Capacitor | ✅ | 15 plugins iOS et Android, sans géolocalisation de fond |
-| Build iOS Xcode 26 | ✅ archive App Store | Xcode 26.5, SDK iOS 26.5, archive Release `1.0 (3)` validée |
-| Distribution iOS | ✅ uploadée | IPA signée `Apple Distribution: SOIN DIRECT`, upload App Store Connect accepté le 12/07/2026 |
+| Build iOS Xcode 26 | ✅ archive App Store | Xcode 26.5, SDK iOS 26.5, archive Release `1.0 (4)` validée |
+| Distribution iOS | ✅ uploadée | IPA signée `Apple Distribution: SOIN DIRECT`, upload App Store Connect accepté le 13/07/2026 |
 | Rendu iPhone 6,9 pouces | ✅ simulateur | barre d'état lisible et capture native `1320 × 2868` validée sur iPhone 17 Pro Max |
 | Privacy manifest iOS | ✅ | membre de la cible et présent à la racine de `App.app` |
 | Permissions GPS | ✅ minimisées | When In Use/foreground : pointage ou action volontaire « me localiser » du profil/adresse |
@@ -19,7 +19,7 @@ repo.
 | Universal Links iOS | ✅ repo | AASA valide pour reset, PSC, invitation et missions |
 | Lint Android Release | ✅ | SDK 36, Gradle 8.14.5, `:app:lintRelease` : 0 erreur |
 | App Links Android | ⛔ fingerprint externe | le build release refuse le placeholder actuel |
-| Signature Android | ⛔ externe | le build release refuse l'absence de keystore |
+| Signature Android | ✅ locale | clé d'upload Jolene et `keystore.properties` retrouvés, gitignorés et protégés en mode `0600` |
 | Firebase Android | ⛔ externe | `android/app/google-services.json` absent |
 | Suppression de compte in-app | ✅ | écran confidentialité + garde-fous serveur |
 | Signalement et blocage UGC | ✅ | UI et contrôles serveur |
@@ -30,7 +30,9 @@ repo.
 
 - [x] Générer automatiquement le profil App Store pour l'équipe `FPQ78HDF4Y`
   (SOIN DIRECT) et `app.jolene`, avec Push Notifications et Associated Domains.
-- [x] Archiver, exporter et uploader `Jolene 1.0 (3)` vers App Store Connect.
+- [x] Archiver, exporter et uploader `Jolene 1.0 (4)` vers App Store Connect ;
+  le purpose string `NSLocationAlwaysAndWhenInUseUsageDescription` demandé par
+  Apple après le build 3 est présent dans le binaire.
 - [x] Vérifier la présence côté Supabase de `APNS_KEY_P8`, `APNS_KEY_ID`,
   `APNS_TEAM_ID`, `APNS_BUNDLE_ID` et `APNS_ENVIRONMENT`.
 - [ ] Après traitement App Store Connect, installer le build TestFlight et
@@ -48,8 +50,10 @@ repo.
 ### Google Play
 
 - [x] Installer Android SDK 36 et exécuter `:app:lintRelease` (0 erreur).
-- [ ] Ajouter le keystore d'upload, `keystore.properties` et
-  `google-services.json` hors Git. Le secret serveur
+- [x] Retrouver et configurer hors Git le keystore d'upload et
+  `keystore.properties` ; Gradle reconnaît désormais la signature release.
+- [ ] Télécharger `google-services.json` pour l'app Firebase Android
+  `app.jolene`. Le secret serveur
   `FIREBASE_SERVICE_ACCOUNT_JSON` est déjà présent dans Supabase ; il ne
   remplace pas la configuration Firebase du client Android.
 - [ ] Renseigner l'empreinte SHA-256 de Play App Signing, régénérer puis
