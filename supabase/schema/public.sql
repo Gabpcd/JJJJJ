@@ -1878,6 +1878,22 @@ $$;
 ALTER FUNCTION "public"."dec_mettre_a_jour_fiabilite"() OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."dec_normaliser_specialite_infirmiere_mission"() RETURNS "trigger"
+    LANGUAGE "plpgsql"
+    SET "search_path" TO 'public'
+    AS $$
+BEGIN
+  IF NEW.profession_requise IN ('IBODE', 'IADE') THEN
+    NEW.accepte_non_specialises := false;
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."dec_normaliser_specialite_infirmiere_mission"() OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."dec_notif_signature_soignant_recue"() RETURNS "trigger"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
@@ -3246,13 +3262,13 @@ CREATE OR REPLACE FUNCTION "public"."dec_verifier_plafond_48h"() RETURNS "trigge
     SET "search_path" TO 'public'
     AS $$
 DECLARE
-  v_heures_mission numeric;
+  v_semaine record;
   v_heures_jolene numeric;
   v_heures_externes numeric;
   v_heures_total numeric;
-  v_semaine_debut date;
-  v_use_effectif boolean;
   v_regime text;
+  v_nb_creneaux_valides integer;
+  v_details_semaines jsonb := '[]'::jsonb;
 BEGIN
   IF NEW.soignant_assigne_id IS NULL OR NEW.statut NOT IN ('ASSIGNEE', 'EN_COURS') THEN
     RETURN NEW;
@@ -3265,88 +3281,75 @@ BEGIN
   );
   IF v_regime = 'LIBERAL' THEN RETURN NEW; END IF;
 
-  v_semaine_debut := date_trunc('week', NEW.debut_le)::date;
-  v_use_effectif := EXISTS (
-    SELECT 1 FROM public.mission_creneaux
-     WHERE mission_id = NEW.id AND type_creneau = 'EFFECTIF' AND fin IS NOT NULL
-  );
-  IF v_use_effectif THEN
-    SELECT COALESCE(sum(extract(epoch FROM (fin - debut)) / 3600.0), 0)
-      INTO v_heures_mission
-      FROM public.mission_creneaux
-     WHERE mission_id = NEW.id AND type_creneau = 'EFFECTIF'
-       AND fin IS NOT NULL AND NOT est_pause;
-  ELSE
-    SELECT COALESCE(sum(extract(epoch FROM (fin - debut)) / 3600.0), 0)
-      INTO v_heures_mission
-      FROM public.mission_creneaux
-     WHERE mission_id = NEW.id AND type_creneau = 'PREVISIONNEL' AND NOT est_pause;
+  IF COALESCE(NEW.nb_creneaux, 0) > 1 THEN
+    SELECT count(*)::integer INTO v_nb_creneaux_valides
+      FROM public.mission_creneaux mc
+     WHERE mc.mission_id = NEW.id
+       AND mc.fin IS NOT NULL
+       AND mc.type_creneau = CASE
+         WHEN EXISTS (
+           SELECT 1 FROM public.mission_creneaux p
+            WHERE p.mission_id = NEW.id AND p.type_creneau = 'PREVISIONNEL'
+              AND p.fin IS NOT NULL AND NOT p.est_pause
+         ) THEN 'PREVISIONNEL'
+         ELSE 'EFFECTIF'
+       END;
+    IF v_nb_creneaux_valides < NEW.nb_creneaux THEN
+      RAISE EXCEPTION '[PLANNING_HEBDOMADAIRE_INDISPONIBLE] Mission % : % créneau(x) valide(s) sur % attendu(s)',
+        NEW.id, v_nb_creneaux_valides, NEW.nb_creneaux;
+    END IF;
   END IF;
-  IF v_heures_mission = 0
-     AND NOT EXISTS (SELECT 1 FROM public.mission_creneaux WHERE mission_id = NEW.id) THEN
-    v_heures_mission := COALESCE(
-      NEW.duree_heures,
-      extract(epoch FROM (NEW.fin_le - NEW.debut_le)) / 3600.0,
-      0
+
+  FOR v_semaine IN
+    SELECT * FROM public.fn_semaines_mission(NEW.id)
+  LOOP
+    v_heures_jolene := public.fn_heures_soignant_semaine(
+      NEW.soignant_assigne_id, v_semaine.semaine_debut, NEW.id
     );
-  END IF;
+    SELECT COALESCE(heures_salarie, 0)
+      INTO v_heures_externes
+      FROM public.attestations_heures_externes
+     WHERE soignant_id = NEW.soignant_assigne_id
+       AND semaine_du = v_semaine.semaine_debut;
+    IF NOT FOUND THEN v_heures_externes := 0; END IF;
 
-  SELECT COALESCE(sum(
-    CASE WHEN EXISTS (
-      SELECT 1 FROM public.mission_creneaux mc2
-       WHERE mc2.mission_id = m.id AND mc2.type_creneau = 'EFFECTIF' AND mc2.fin IS NOT NULL
-    ) THEN (
-      SELECT COALESCE(sum(extract(epoch FROM (mc3.fin - mc3.debut)) / 3600.0), 0)
-        FROM public.mission_creneaux mc3
-       WHERE mc3.mission_id = m.id AND mc3.type_creneau = 'EFFECTIF'
-         AND mc3.fin IS NOT NULL AND NOT mc3.est_pause
-    ) ELSE (
-      SELECT COALESCE(sum(extract(epoch FROM (mc4.fin - mc4.debut)) / 3600.0), 0)
-        FROM public.mission_creneaux mc4
-       WHERE mc4.mission_id = m.id AND mc4.type_creneau = 'PREVISIONNEL' AND NOT mc4.est_pause
-    ) END
-  ), 0)
-    INTO v_heures_jolene
-    FROM public.missions m
-   WHERE m.soignant_assigne_id = NEW.soignant_assigne_id
-     AND m.id <> NEW.id
-     AND m.statut IN ('ASSIGNEE', 'EN_COURS', 'TERMINEE')
-     AND m.debut_le >= v_semaine_debut::timestamptz
-     AND m.debut_le < (v_semaine_debut + 7)::timestamptz
-     AND COALESCE(
-       m.type_contrat_applique::text,
-       NULLIF(upper(m.choix_contrat_soignant), ''),
-       CASE WHEN m.type_contrat_recherche::text = 'LIBERAL' THEN 'LIBERAL' ELSE 'SALARIE' END
-     ) = 'SALARIE';
+    v_heures_total := v_heures_jolene + v_heures_externes + v_semaine.heures;
+    v_details_semaines := v_details_semaines || jsonb_build_array(jsonb_build_object(
+      'semaine_du', v_semaine.semaine_debut,
+      'heures_jolene_existantes', round(v_heures_jolene, 2),
+      'heures_mission', round(v_semaine.heures, 2),
+      'heures_externes', round(v_heures_externes, 2),
+      'total', round(v_heures_total, 2),
+      'plafond', 48
+    ));
 
-  SELECT COALESCE(heures_salarie, 0)
-    INTO v_heures_externes
-    FROM public.attestations_heures_externes
-   WHERE soignant_id = NEW.soignant_assigne_id AND semaine_du = v_semaine_debut;
-  IF NOT FOUND THEN v_heures_externes := 0; END IF;
-
-  v_heures_total := v_heures_jolene + v_heures_externes + v_heures_mission;
-  IF v_heures_total > 48 THEN
-    INSERT INTO public.conformite_travail(
-      soignant_id, mission_id, type_controle, resultat, details_violation
-    ) VALUES (
-      NEW.soignant_assigne_id, NEW.id, 'PLAFOND_48H_HEBDO', 'VIOLATION_BLOQUEE',
-      jsonb_build_object(
-        'heures_jolene', round(v_heures_jolene + v_heures_mission, 2),
-        'heures_externes', round(v_heures_externes, 2),
-        'total', round(v_heures_total, 2), 'plafond', 48, 'article', 'L3121-20'
-      )
-    );
-    RAISE EXCEPTION '[CODE DU TRAVAIL] Plafond hebdomadaire dépassé : %h Jolene + %h ailleurs = %h total (max 48h, Art. L3121-20)',
-      round(v_heures_jolene + v_heures_mission, 1),
-      round(v_heures_externes, 1), round(v_heures_total, 1);
-  END IF;
+    IF v_heures_total > 48 THEN
+      INSERT INTO public.conformite_travail(
+        soignant_id, mission_id, type_controle, resultat, details_violation
+      ) VALUES (
+        NEW.soignant_assigne_id, NEW.id, 'PLAFOND_48H_HEBDO', 'VIOLATION_BLOQUEE',
+        jsonb_build_object(
+          'semaine_du', v_semaine.semaine_debut,
+          'heures_jolene', round(v_heures_jolene + v_semaine.heures, 2),
+          'heures_externes', round(v_heures_externes, 2),
+          'total', round(v_heures_total, 2),
+          'plafond', 48,
+          'article', 'L3121-20'
+        )
+      );
+      RAISE EXCEPTION '[CODE DU TRAVAIL] Semaine du % : %h Jolene + %h ailleurs = %h total (max 48h, Art. L3121-20)',
+        to_char(v_semaine.semaine_debut, 'DD/MM/YYYY'),
+        round(v_heures_jolene + v_semaine.heures, 1),
+        round(v_heures_externes, 1),
+        round(v_heures_total, 1);
+    END IF;
+  END LOOP;
 
   INSERT INTO public.conformite_travail(
     soignant_id, mission_id, type_controle, resultat, details_violation
   ) VALUES (
     NEW.soignant_assigne_id, NEW.id, 'PLAFOND_48H_HEBDO', 'CONFORME',
-    jsonb_build_object('total_heures', round(v_heures_total, 2))
+    jsonb_build_object('semaines', v_details_semaines)
   );
   RETURN NEW;
 END;
@@ -20670,9 +20673,11 @@ DECLARE
   v_etab record;
   v_resolution jsonb;
   v_choix text;
-  v_heures_semaine numeric;
-  v_debut_semaine timestamptz;
-  v_fin_semaine timestamptz;
+  v_semaine record;
+  v_heures_existantes numeric;
+  v_heures_externes numeric;
+  v_heures_total numeric;
+  v_nb_creneaux_valides integer;
   v_type_contrat text;
   v_type_paiement text;
   v_mode_paiement text;
@@ -20722,26 +20727,67 @@ BEGIN
     );
   END IF;
 
+  -- Sérialise toutes les attributions visant un même soignant dans la
+  -- transaction courante. Deux missions acceptées en parallèle ne peuvent
+  -- ainsi plus vérifier chacune un planning encore vide puis dépasser 48 h.
+  PERFORM pg_advisory_xact_lock(
+    hashtextextended('jolene:attribution:' || p_soignant_id::text, 0)
+  );
+
   IF v_choix = 'SALARIE' THEN
-    v_debut_semaine := date_trunc('week', v_mission.debut_le);
-    v_fin_semaine := v_debut_semaine + interval '7 days';
-    SELECT COALESCE(sum(duree_heures), 0)
-      INTO v_heures_semaine
-      FROM public.missions
-     WHERE soignant_assigne_id = p_soignant_id
-       AND statut IN ('ASSIGNEE', 'EN_COURS', 'TERMINEE')
-       AND debut_le >= v_debut_semaine AND debut_le < v_fin_semaine
-       AND COALESCE(
-         type_contrat_applique::text,
-         NULLIF(upper(choix_contrat_soignant), ''),
-         CASE WHEN type_contrat_recherche::text = 'LIBERAL' THEN 'LIBERAL' ELSE 'SALARIE' END
-       ) = 'SALARIE';
-    IF v_heures_semaine + COALESCE(v_mission.duree_heures, 0) > 48 THEN
-      RETURN jsonb_build_object(
-        'error', 'Dépassement du plafond de 48 h par semaine (' ||
-          round(v_heures_semaine, 1) || ' h déjà planifiées).'
-      );
+    IF COALESCE(v_mission.nb_creneaux, 0) > 1 THEN
+      SELECT count(*)::integer INTO v_nb_creneaux_valides
+        FROM public.mission_creneaux mc
+       WHERE mc.mission_id = p_mission_id
+         AND mc.fin IS NOT NULL
+         AND mc.type_creneau = CASE
+           WHEN EXISTS (
+             SELECT 1 FROM public.mission_creneaux p
+              WHERE p.mission_id = p_mission_id AND p.type_creneau = 'PREVISIONNEL'
+                AND p.fin IS NOT NULL AND NOT p.est_pause
+           ) THEN 'PREVISIONNEL'
+           ELSE 'EFFECTIF'
+         END;
+      IF v_nb_creneaux_valides < v_mission.nb_creneaux THEN
+        RETURN jsonb_build_object(
+          'error', 'Planning hebdomadaire incomplet : impossible de vérifier le plafond de 48 h.',
+          'code', 'PLANNING_HEBDOMADAIRE_INDISPONIBLE',
+          'creneaux_valides', v_nb_creneaux_valides,
+          'creneaux_attendus', v_mission.nb_creneaux
+        );
+      END IF;
     END IF;
+
+    FOR v_semaine IN
+      SELECT * FROM public.fn_semaines_mission(p_mission_id)
+    LOOP
+      v_heures_existantes := public.fn_heures_soignant_semaine(
+        p_soignant_id, v_semaine.semaine_debut, p_mission_id
+      );
+      SELECT COALESCE(heures_salarie, 0)
+        INTO v_heures_externes
+        FROM public.attestations_heures_externes
+       WHERE soignant_id = p_soignant_id
+         AND semaine_du = v_semaine.semaine_debut;
+      IF NOT FOUND THEN v_heures_externes := 0; END IF;
+      v_heures_total := v_heures_existantes + v_heures_externes + v_semaine.heures;
+
+      IF v_heures_total > 48 THEN
+        RETURN jsonb_build_object(
+          'error', 'Dépassement du plafond de 48 h pour la semaine du ' ||
+            to_char(v_semaine.semaine_debut, 'DD/MM/YYYY') || ' (' ||
+            round(v_heures_existantes, 1) || ' h déjà planifiées + ' ||
+            round(v_semaine.heures, 1) || ' h pour cette mission + ' ||
+            round(v_heures_externes, 1) || ' h ailleurs).',
+          'code', 'PLAFOND_48H_HEBDO',
+          'semaine_du', v_semaine.semaine_debut,
+          'heures_existantes', round(v_heures_existantes, 2),
+          'heures_mission', round(v_semaine.heures, 2),
+          'heures_externes', round(v_heures_externes, 2),
+          'total', round(v_heures_total, 2)
+        );
+      END IF;
+    END LOOP;
   END IF;
 
   IF v_choix = 'LIBERAL' THEN
@@ -20785,7 +20831,6 @@ BEGIN
     v_html := replace(v_html, '{{soignant_nom}}', public.fn_html_escape(COALESCE(v_soignant.nom, '')));
     v_html := replace(v_html, '{{soignant_rpps}}', public.fn_html_escape(COALESCE(v_soignant.numero_rpps, '')));
     v_html := replace(v_html, '{{soignant_siret}}', public.fn_html_escape(COALESCE(v_soignant.siret_liberal, '')));
-    -- La profession affichée dans le contrat est celle REQUISE par la mission.
     v_html := replace(v_html, '{{profession}}', public.fn_html_escape(v_mission.profession_requise::text));
     v_html := replace(v_html, '{{service}}', public.fn_html_escape(COALESCE(v_mission.service, '')));
     v_html := replace(v_html, '{{debut_date}}', to_char(v_mission.debut_le AT TIME ZONE 'Europe/Paris', 'DD/MM/YYYY'));
@@ -21812,14 +21857,37 @@ BEGIN
   IF v_uid IS NULL OR NOT public.fn_compte_auth_actif() THEN
     RETURN jsonb_build_object('user_id', v_uid, 'role', 'INCONNU', 'etablissement_id', NULL);
   END IF;
-  IF public.est_admin() THEN
+
+  IF EXISTS (
+    SELECT 1
+    FROM auth.users u
+    WHERE u.id = v_uid
+      AND u.raw_app_meta_data ->> 'role' = 'ADMIN_PLATEFORME'
+      AND u.deleted_at IS NULL
+      AND (u.banned_until IS NULL OR u.banned_until <= now())
+      AND u.email_confirmed_at IS NOT NULL
+      AND NOT EXISTS (
+        SELECT 1
+        FROM public.equipe_admin ea
+        WHERE ea.user_id = u.id
+          AND ea.actif IS NOT TRUE
+      )
+  ) THEN
     RETURN jsonb_build_object('user_id', v_uid, 'role', 'ADMIN_PLATEFORME', 'etablissement_id', NULL);
   END IF;
-  IF EXISTS (SELECT 1 FROM public.soignants s WHERE s.id = v_uid AND s.supprime_le IS NULL) THEN
+
+  IF EXISTS (
+    SELECT 1
+    FROM public.soignants s
+    WHERE s.id = v_uid
+      AND s.supprime_le IS NULL
+  ) THEN
     RETURN jsonb_build_object('user_id', v_uid, 'role', 'SOIGNANT', 'etablissement_id', NULL);
   END IF;
+
   IF EXISTS (
-    SELECT 1 FROM public.admins_groupe_sante ag
+    SELECT 1
+    FROM public.admins_groupe_sante ag
     JOIN auth.users u ON u.id = ag.utilisateur_id
     WHERE ag.utilisateur_id = v_uid
       AND u.raw_app_meta_data ->> 'role' = 'ADMIN_GROUPE'
@@ -21829,14 +21897,23 @@ BEGIN
 
   v_etab_id := public.mon_etablissement_id();
   IF v_etab_id IS NOT NULL THEN
-    RETURN jsonb_build_object('user_id', v_uid, 'role', 'ADMIN_ETABLISSEMENT', 'etablissement_id', v_etab_id);
+    RETURN jsonb_build_object(
+      'user_id', v_uid,
+      'role', 'ADMIN_ETABLISSEMENT',
+      'etablissement_id', v_etab_id
+    );
   END IF;
+
   RETURN jsonb_build_object('user_id', v_uid, 'role', 'INCONNU', 'etablissement_id', NULL);
 END;
 $$;
 
 
 ALTER FUNCTION "public"."fn_get_my_role"() OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "public"."fn_get_my_role"() IS 'Résout la famille de compte avant le gate MFA. Identifier ADMIN_PLATEFORME ne confère aucun privilège : les opérations admin restent protégées par est_admin_valide() et aal2.';
+
 
 
 CREATE OR REPLACE FUNCTION "public"."fn_get_or_create_parcours_liberal"("p_soignant_id" "uuid" DEFAULT NULL::"uuid") RETURNS "public"."parcours_liberal_soignants"
@@ -21942,6 +22019,99 @@ $$;
 
 
 ALTER FUNCTION "public"."fn_health_check"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."fn_heures_mission_semaine"("p_mission_id" "uuid", "p_semaine_debut" "date") RETURNS numeric
+    LANGUAGE "sql" STABLE
+    SET "search_path" TO 'public'
+    AS $$
+  WITH bornes AS (
+    SELECT
+      p_semaine_debut::timestamp AT TIME ZONE 'Europe/Paris' AS debut_ts,
+      (p_semaine_debut + 7)::timestamp AT TIME ZONE 'Europe/Paris' AS fin_ts
+  ), mission AS (
+    SELECT m.* FROM public.missions m WHERE m.id = p_mission_id
+  ), type_reference AS (
+    SELECT CASE
+      WHEN m.statut = 'TERMINEE' AND EXISTS (
+        SELECT 1 FROM public.mission_creneaux mc
+         WHERE mc.mission_id = m.id AND mc.type_creneau = 'EFFECTIF'
+           AND mc.fin IS NOT NULL AND NOT mc.est_pause
+      ) THEN 'EFFECTIF'
+      WHEN EXISTS (
+        SELECT 1 FROM public.mission_creneaux mc
+         WHERE mc.mission_id = m.id AND mc.type_creneau = 'PREVISIONNEL'
+           AND mc.fin IS NOT NULL AND NOT mc.est_pause
+      ) THEN 'PREVISIONNEL'
+      WHEN EXISTS (
+        SELECT 1 FROM public.mission_creneaux mc
+         WHERE mc.mission_id = m.id AND mc.type_creneau = 'EFFECTIF'
+           AND mc.fin IS NOT NULL AND NOT mc.est_pause
+      ) THEN 'EFFECTIF'
+      ELSE NULL
+    END AS type_creneau
+    FROM mission m
+  ), heures_creneaux AS (
+    SELECT sum(
+      extract(epoch FROM (
+        least(mc.fin, b.fin_ts) - greatest(mc.debut, b.debut_ts)
+      )) / 3600.0
+    ) AS heures
+    FROM public.mission_creneaux mc
+    CROSS JOIN bornes b
+    CROSS JOIN type_reference tr
+    WHERE tr.type_creneau IS NOT NULL
+      AND mc.mission_id = p_mission_id
+      AND mc.type_creneau = tr.type_creneau
+      AND mc.fin IS NOT NULL
+      AND NOT mc.est_pause
+      AND mc.debut < b.fin_ts
+      AND mc.fin > b.debut_ts
+  ), heures_repli AS (
+    -- Compatibilité avec les anciennes missions simples sans créneaux.
+    SELECT CASE
+      WHEN tr.type_creneau IS NULL
+       AND COALESCE(m.nb_creneaux, 0) <= 1
+       AND date_trunc('week', m.debut_le AT TIME ZONE 'Europe/Paris')::date = p_semaine_debut
+      THEN COALESCE(
+        m.duree_heures,
+        extract(epoch FROM (m.fin_le - m.debut_le)) / 3600.0,
+        0
+      )
+      ELSE 0
+    END AS heures
+    FROM mission m CROSS JOIN type_reference tr
+  )
+  SELECT round(COALESCE(hc.heures, hr.heures, 0)::numeric, 2)
+  FROM heures_creneaux hc CROSS JOIN heures_repli hr;
+$$;
+
+
+ALTER FUNCTION "public"."fn_heures_mission_semaine"("p_mission_id" "uuid", "p_semaine_debut" "date") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."fn_heures_soignant_semaine"("p_soignant_id" "uuid", "p_semaine_debut" "date", "p_exclure_mission_id" "uuid" DEFAULT NULL::"uuid") RETURNS numeric
+    LANGUAGE "sql" STABLE
+    SET "search_path" TO 'public'
+    AS $$
+  SELECT round(COALESCE(sum(
+    public.fn_heures_mission_semaine(m.id, p_semaine_debut)
+  ), 0)::numeric, 2)
+  FROM public.missions m
+  WHERE m.soignant_assigne_id = p_soignant_id
+    AND m.id IS DISTINCT FROM p_exclure_mission_id
+    AND m.statut IN ('ASSIGNEE', 'EN_COURS', 'TERMINEE')
+    AND m.debut_le < ((p_semaine_debut + 7)::timestamp AT TIME ZONE 'Europe/Paris')
+    AND m.fin_le > (p_semaine_debut::timestamp AT TIME ZONE 'Europe/Paris')
+    AND COALESCE(
+      m.type_contrat_applique::text,
+      NULLIF(upper(m.choix_contrat_soignant), ''),
+      CASE WHEN m.type_contrat_recherche::text = 'LIBERAL' THEN 'LIBERAL' ELSE 'SALARIE' END
+    ) = 'SALARIE';
+$$;
+
+
+ALTER FUNCTION "public"."fn_heures_soignant_semaine"("p_soignant_id" "uuid", "p_semaine_debut" "date", "p_exclure_mission_id" "uuid") OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."fn_html_escape"("p_text" "text") RETURNS "text"
@@ -22115,6 +22285,117 @@ $_$;
 
 
 ALTER FUNCTION "public"."fn_inscrire_liste_attente_prevoyance"("p_email" "text", "p_niveau" "text") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."fn_interlocuteurs_conversations"("p_conversation_ids" "uuid"[]) RETURNS TABLE("conversation_id" "uuid", "participant_id" "uuid", "prenom" "text", "nom" "text", "avatar_url" "text", "est_jolene" boolean)
+    LANGUAGE "plpgsql" STABLE SECURITY DEFINER
+    SET "search_path" TO 'public', 'pg_temp'
+    AS $_$
+DECLARE
+  v_uid uuid := auth.uid();
+BEGIN
+  IF v_uid IS NULL THEN
+    RAISE EXCEPTION 'Non authentifie' USING ERRCODE = '28000';
+  END IF;
+
+  IF NOT public.fn_compte_auth_actif() THEN
+    RAISE EXCEPTION 'Compte inactif' USING ERRCODE = '42501';
+  END IF;
+
+  IF COALESCE(cardinality(p_conversation_ids), 0) = 0 THEN
+    RETURN;
+  END IF;
+
+  IF cardinality(p_conversation_ids) > 100 THEN
+    RAISE EXCEPTION 'Trop de conversations demandees' USING ERRCODE = '22023';
+  END IF;
+
+  RETURN QUERY
+  WITH conversations_autorisees AS (
+    SELECT
+      c.id,
+      c.mission_id,
+      c.participant_1_id,
+      c.participant_2_id
+    FROM public.conversations c
+    WHERE c.id = ANY (p_conversation_ids)
+      AND (
+        c.participant_1_id = v_uid
+        OR c.participant_2_id = v_uid
+        OR public.est_admin()
+      )
+  ), participants AS (
+    SELECT
+      c.id AS conversation_id,
+      c.mission_id,
+      p.participant_id
+    FROM conversations_autorisees c
+    CROSS JOIN LATERAL (
+      VALUES (c.participant_1_id), (c.participant_2_id)
+    ) AS p(participant_id)
+  )
+  SELECT
+    p.conversation_id,
+    p.participant_id,
+    CASE
+      WHEN s.id IS NOT NULL THEN s.prenom
+      WHEN e.id IS NOT NULL THEN e.nom
+      ELSE 'Jolene'
+    END::text AS prenom,
+    CASE WHEN s.id IS NOT NULL THEN s.nom ELSE '' END::text AS nom,
+    CASE WHEN s.id IS NOT NULL THEN s.avatar_url ELSE e.logo_url END::text AS avatar_url,
+    (s.id IS NULL AND e.id IS NULL) AS est_jolene
+  FROM participants p
+  LEFT JOIN public.soignants s
+    ON s.id = p.participant_id
+   AND s.supprime_le IS NULL
+  LEFT JOIN LATERAL (
+    SELECT e0.id, e0.nom, e0.logo_url
+    FROM public.etablissements e0
+    WHERE s.id IS NULL
+      AND e0.supprime_le IS NULL
+      AND (
+        -- Compatibilité avec les premiers comptes établissement, pour
+        -- lesquels l'UUID Auth et l'UUID métier étaient identiques.
+        e0.id = p.participant_id
+        OR EXISTS (
+          SELECT 1
+          FROM public.membres_etablissement me
+          WHERE me.user_id = p.participant_id
+            AND me.etablissement_id = e0.id
+            AND me.actif
+        )
+        OR EXISTS (
+          SELECT 1
+          FROM auth.users u
+          WHERE u.id = p.participant_id
+            AND CASE
+              WHEN (u.raw_app_meta_data ->> 'etablissement_id')
+                ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
+              THEN (u.raw_app_meta_data ->> 'etablissement_id')::uuid
+              ELSE NULL
+            END = e0.id
+        )
+      )
+    ORDER BY
+      CASE WHEN e0.id = (
+        SELECT m.etablissement_id
+        FROM public.missions m
+        WHERE m.id = p.mission_id
+      ) THEN 0 ELSE 1 END,
+      e0.id
+    LIMIT 1
+  ) e ON true
+  ORDER BY p.conversation_id, p.participant_id;
+END;
+$_$;
+
+
+ALTER FUNCTION "public"."fn_interlocuteurs_conversations"("p_conversation_ids" "uuid"[]) OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "public"."fn_interlocuteurs_conversations"("p_conversation_ids" "uuid"[]) IS 'Projection messagerie nom/avatar des seuls participants de conversations accessibles a l appelant.';
+
 
 
 CREATE OR REPLACE FUNCTION "public"."fn_inviter_membre_etab"("p_email" "text", "p_role" "text", "p_etablissement_id" "uuid" DEFAULT NULL::"uuid") RETURNS "jsonb"
@@ -24834,7 +25115,8 @@ BEGIN
       'categorie', v_cat,
       'source_libelle', v_row.source_libelle,
       'source_force', v_row.source_force,
-      'source_url', v_row.source_url
+      'source_url', v_row.source_url,
+      'source_url_complementaire', v_row.source_url_complementaire
     );
   END IF;
 
@@ -24843,7 +25125,8 @@ BEGIN
     'categorie', v_cat,
     'source_libelle', 'Jolene propose cette mission en salarié : l''exercice libéral au sein d''un établissement expose à une requalification.',
     'source_force', 'CONFORMITE_JOLENE',
-    'source_url', NULL
+    'source_url', NULL,
+    'source_url_complementaire', NULL
   );
 END;
 $$;
@@ -31843,6 +32126,37 @@ $$;
 ALTER FUNCTION "public"."fn_score_etab_public"("p_etab_id" "uuid") OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."fn_semaines_mission"("p_mission_id" "uuid") RETURNS TABLE("semaine_debut" "date", "heures" numeric)
+    LANGUAGE "sql" STABLE
+    SET "search_path" TO 'public'
+    AS $$
+  WITH bornes AS (
+    SELECT
+      date_trunc('week', m.debut_le AT TIME ZONE 'Europe/Paris')::date AS premiere,
+      date_trunc(
+        'week',
+        (m.fin_le - interval '1 microsecond') AT TIME ZONE 'Europe/Paris'
+      )::date AS derniere
+    FROM public.missions m
+    WHERE m.id = p_mission_id
+  ), semaines AS (
+    SELECT (b.premiere + (n * 7))::date AS semaine_debut
+    FROM bornes b
+    CROSS JOIN LATERAL generate_series(0, ((b.derniere - b.premiere) / 7)::integer) n
+  )
+  SELECT s.semaine_debut, h.heures
+  FROM semaines s
+  CROSS JOIN LATERAL (
+    SELECT public.fn_heures_mission_semaine(p_mission_id, s.semaine_debut) AS heures
+  ) h
+  WHERE h.heures > 0
+  ORDER BY s.semaine_debut;
+$$;
+
+
+ALTER FUNCTION "public"."fn_semaines_mission"("p_mission_id" "uuid") OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."fn_set_mis_a_jour_le"() RETURNS "trigger"
     LANGUAGE "plpgsql"
     SET "search_path" TO 'public', 'extensions'
@@ -32425,10 +32739,10 @@ CREATE OR REPLACE FUNCTION "public"."fn_soignant_compatible_mission"("p_soignant
     SET "search_path" TO 'public'
     AS $$
   SELECT CASE
-    -- Cas 1 : match exact profession
+    -- La profession requise par la mission prime. Un match exact est accepté ;
+    -- pour les médecins, la souplesse ne porte que sur la spécialité médicale.
     WHEN p_soignant_profession = p_mission_profession THEN
       CASE
-        -- Pour MEDECIN avec spécialité requise, filtrer selon le flag
         WHEN p_mission_profession = 'MEDECIN'
              AND p_mission_specialite IS NOT NULL
              AND p_mission_specialite <> '' THEN
@@ -32436,22 +32750,22 @@ CREATE OR REPLACE FUNCTION "public"."fn_soignant_compatible_mission"("p_soignant
           OR COALESCE(p_soignant_specialite, '') = p_mission_specialite
         ELSE TRUE
       END
-    -- Cas 2 : hiérarchie IDE — IBODE et IADE sont diplômés IDE de base,
-    -- ils peuvent toujours candidater à une mission IDE (pas besoin du
-    -- flag accepte_non_specialises côté IDE)
+    -- IADE et IBODE sont aussi IDE : ils peuvent candidater à une mission IDE,
+    -- laquelle reste résolue selon la cellule IDE de la matrice.
     WHEN p_mission_profession = 'IDE'
          AND p_soignant_profession IN ('IBODE', 'IADE') THEN TRUE
-    -- Cas 3 : IDE peut candidater à mission IBODE/IADE uniquement si
-    -- l'étab accepte les non-spécialisés
-    WHEN p_soignant_profession = 'IDE'
-         AND p_mission_profession IN ('IBODE', 'IADE') THEN
-      COALESCE(p_accepte_non_specialises, true)
+    -- Le sens inverse est interdit : une mission IADE/IBODE ne peut pas être
+    -- transformée en mission d'assistance ouverte à un IDE non spécialisé.
     ELSE FALSE
   END;
 $$;
 
 
 ALTER FUNCTION "public"."fn_soignant_compatible_mission"("p_soignant_profession" "public"."type_profession", "p_soignant_specialite" "text", "p_mission_profession" "public"."type_profession", "p_mission_specialite" "text", "p_accepte_non_specialises" boolean) OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "public"."fn_soignant_compatible_mission"("p_soignant_profession" "public"."type_profession", "p_soignant_specialite" "text", "p_mission_profession" "public"."type_profession", "p_mission_specialite" "text", "p_accepte_non_specialises" boolean) IS 'Compatibilité lue sur la profession requise : match exact, plus IADE/IBODE vers mission IDE uniquement. Une mission IADE/IBODE exige la spécialité correspondante.';
+
 
 
 CREATE OR REPLACE FUNCTION "public"."fn_soignant_dpae_complet"("p_soignant_id" "uuid") RETURNS "jsonb"
@@ -40390,6 +40704,7 @@ CREATE TABLE IF NOT EXISTS "public"."matrice_modes_exercice" (
     "source_libelle" "text" NOT NULL,
     "source_force" "text" NOT NULL,
     "source_url" "text",
+    "source_url_complementaire" "text",
     CONSTRAINT "matrice_modes_exercice_categorie_etablissement_check" CHECK (("categorie_etablissement" = ANY (ARRAY['cabinet_liberal'::"text", 'prive'::"text", 'centre_sante'::"text", 'public'::"text"]))),
     CONSTRAINT "matrice_modes_exercice_niveau_check" CHECK (("niveau" = ANY (ARRAY['AUTORISE'::"text", 'NON_PROPOSE'::"text", 'BLOQUE'::"text"]))),
     CONSTRAINT "matrice_modes_exercice_source_force_check" CHECK (("source_force" = ANY (ARRAY['JUGE'::"text", 'DOCTRINE'::"text", 'LEGAL'::"text", 'CONFORMITE_JOLENE'::"text"])))
@@ -40397,6 +40712,10 @@ CREATE TABLE IF NOT EXISTS "public"."matrice_modes_exercice" (
 
 
 ALTER TABLE "public"."matrice_modes_exercice" OWNER TO "postgres";
+
+
+COMMENT ON COLUMN "public"."matrice_modes_exercice"."source_url_complementaire" IS 'Second texte officiel utile lorsque la force juridique ne peut pas être résumée par une URL unique.';
+
 
 
 CREATE TABLE IF NOT EXISTS "public"."membres_etablissement" (
@@ -42011,168 +42330,6 @@ CREATE TABLE IF NOT EXISTS "public"."utilisateurs_bloques" (
 
 
 ALTER TABLE "public"."utilisateurs_bloques" OWNER TO "postgres";
-
-
-CREATE OR REPLACE VIEW "public"."vue_etablissements_soignant" WITH ("security_barrier"='true') AS
- SELECT "id",
-    "nom",
-    "siret",
-    "finess",
-    "type",
-    "adresse_rue",
-    "adresse_ville",
-    "adresse_code_postal",
-    "adresse_departement",
-    "adresse_lat",
-    "adresse_lng",
-    "email_contact",
-    "telephone_contact",
-    "convention_collective",
-    "couleur_theme",
-    "logo_url",
-    "description",
-    "horaires_ouverture",
-    "note_moyenne",
-    "nb_evaluations",
-    "est_secteur_public",
-    "rist_plafond_actif",
-    "rist_taux_base_horaire",
-    "taux_majoration_nuit_pourcent",
-    "taux_majoration_dimanche_pourcent",
-    "taux_majoration_ferie_pourcent",
-    "est_compte_test"
-   FROM "public"."etablissements" "e"
-  WHERE ("supprime_le" IS NULL);
-
-
-ALTER VIEW "public"."vue_etablissements_soignant" OWNER TO "postgres";
-
-
-COMMENT ON VIEW "public"."vue_etablissements_soignant" IS 'Projection publique minimale des etablissements actifs. Aucun identifiant paiement, cle Storage, resultat IA ni token.';
-
-
-
-CREATE OR REPLACE VIEW "public"."vue_soignants_etablissement" WITH ("security_barrier"='true') AS
- SELECT "id",
-    "prenom",
-    "nom",
-        CASE
-            WHEN "public"."fn_a_permission_etablissement"('lecture_candidatures'::"text", "public"."mon_etablissement_id"()) THEN "email"
-            ELSE NULL::"text"
-        END AS "email",
-        CASE
-            WHEN "public"."fn_a_permission_etablissement"('lecture_candidatures'::"text", "public"."mon_etablissement_id"()) THEN "telephone"
-            ELSE NULL::character varying
-        END AS "telephone",
-    "profession",
-        CASE
-            WHEN "public"."fn_a_permission_etablissement"('lecture_candidatures'::"text", "public"."mon_etablissement_id"()) THEN "numero_rpps"
-            ELSE NULL::character varying
-        END AS "numero_rpps",
-        CASE
-            WHEN "public"."fn_a_permission_etablissement"('lecture_candidatures'::"text", "public"."mon_etablissement_id"()) THEN "type_contrat"
-            ELSE NULL::"public"."type_contrat"
-        END AS "type_contrat",
-        CASE
-            WHEN "public"."fn_a_permission_etablissement"('lecture_candidatures'::"text", "public"."mon_etablissement_id"()) THEN "type_exercice"
-            ELSE NULL::"text"
-        END AS "type_exercice",
-        CASE
-            WHEN "public"."fn_a_permission_etablissement"('lecture_candidatures'::"text", "public"."mon_etablissement_id"()) THEN "score_fiabilite"
-            ELSE NULL::numeric
-        END AS "score_fiabilite",
-        CASE
-            WHEN "public"."fn_a_permission_etablissement"('lecture_candidatures'::"text", "public"."mon_etablissement_id"()) THEN "total_missions_terminees"
-            ELSE NULL::integer
-        END AS "total_missions_terminees",
-        CASE
-            WHEN "public"."fn_a_permission_etablissement"('lecture_candidatures'::"text", "public"."mon_etablissement_id"()) THEN "total_missions_annulees"
-            ELSE NULL::integer
-        END AS "total_missions_annulees",
-        CASE
-            WHEN "public"."fn_a_permission_etablissement"('lecture_candidatures'::"text", "public"."mon_etablissement_id"()) THEN "total_retards_pointage"
-            ELSE NULL::integer
-        END AS "total_retards_pointage",
-        CASE
-            WHEN "public"."fn_a_permission_etablissement"('lecture_candidatures'::"text", "public"."mon_etablissement_id"()) THEN "total_absences"
-            ELSE NULL::integer
-        END AS "total_absences",
-        CASE
-            WHEN "public"."fn_a_permission_etablissement"('lecture_candidatures'::"text", "public"."mon_etablissement_id"()) THEN "tous_documents_valides"
-            ELSE NULL::boolean
-        END AS "tous_documents_valides",
-        CASE
-            WHEN "public"."fn_a_permission_etablissement"('lecture_candidatures'::"text", "public"."mon_etablissement_id"()) THEN "identite_verifiee"
-            ELSE NULL::boolean
-        END AS "identite_verifiee",
-        CASE
-            WHEN "public"."fn_a_permission_etablissement"('lecture_candidatures'::"text", "public"."mon_etablissement_id"()) THEN "diplome_verifie"
-            ELSE NULL::boolean
-        END AS "diplome_verifie",
-        CASE
-            WHEN "public"."fn_a_permission_etablissement"('lecture_candidatures'::"text", "public"."mon_etablissement_id"()) THEN "rpps_verifie"
-            ELSE NULL::boolean
-        END AS "rpps_verifie",
-    "avatar_url",
-        CASE
-            WHEN "public"."fn_a_permission_etablissement"('lecture_candidatures'::"text", "public"."mon_etablissement_id"()) THEN "bio"
-            ELSE NULL::"text"
-        END AS "bio",
-        CASE
-            WHEN "public"."fn_a_permission_etablissement"('lecture_candidatures'::"text", "public"."mon_etablissement_id"()) THEN "annees_experience"
-            ELSE NULL::integer
-        END AS "annees_experience",
-        CASE
-            WHEN "public"."fn_a_permission_etablissement"('lecture_candidatures'::"text", "public"."mon_etablissement_id"()) THEN "specialites"
-            ELSE NULL::"text"[]
-        END AS "specialites",
-        CASE
-            WHEN "public"."fn_a_permission_etablissement"('lecture_candidatures'::"text", "public"."mon_etablissement_id"()) THEN "disponible_urgence"
-            ELSE NULL::boolean
-        END AS "disponible_urgence",
-        CASE
-            WHEN "public"."fn_a_permission_etablissement"('lecture_candidatures'::"text", "public"."mon_etablissement_id"()) THEN "urgence_rayon_km"
-            ELSE NULL::integer
-        END AS "urgence_rayon_km",
-        CASE
-            WHEN "public"."fn_a_permission_etablissement"('lecture_candidatures'::"text", "public"."mon_etablissement_id"()) THEN "note_moyenne"
-            ELSE NULL::numeric
-        END AS "note_moyenne",
-        CASE
-            WHEN "public"."fn_a_permission_etablissement"('lecture_candidatures'::"text", "public"."mon_etablissement_id"()) THEN "nb_evaluations"
-            ELSE NULL::integer
-        END AS "nb_evaluations",
-        CASE
-            WHEN "public"."fn_a_permission_etablissement"('lecture_candidatures'::"text", "public"."mon_etablissement_id"()) THEN "est_etudiant"
-            ELSE NULL::boolean
-        END AS "est_etudiant",
-        CASE
-            WHEN "public"."fn_a_permission_etablissement"('lecture_candidatures'::"text", "public"."mon_etablissement_id"()) THEN "scolarite_verifiee"
-            ELSE NULL::boolean
-        END AS "scolarite_verifiee",
-        CASE
-            WHEN "public"."fn_a_permission_etablissement"('lecture_candidatures'::"text", "public"."mon_etablissement_id"()) THEN "scolarite_annee_validee"
-            ELSE NULL::integer
-        END AS "scolarite_annee_validee",
-        CASE
-            WHEN "public"."fn_a_permission_etablissement"('lecture_candidatures'::"text", "public"."mon_etablissement_id"()) THEN "scolarite_profession_autorisee"
-            ELSE NULL::"public"."type_profession"
-        END AS "scolarite_profession_autorisee",
-    "est_compte_test"
-   FROM "public"."soignants" "s"
-  WHERE (("supprime_le" IS NULL) AND "public"."fn_a_permission_etablissement"('lecture'::"text", "public"."mon_etablissement_id"()) AND ((EXISTS ( SELECT 1
-           FROM "public"."missions" "m"
-          WHERE (("m"."etablissement_id" = "public"."mon_etablissement_id"()) AND ("m"."soignant_assigne_id" = "s"."id")))) OR (EXISTS ( SELECT 1
-           FROM ("public"."candidatures" "c"
-             JOIN "public"."missions" "m" ON (("m"."id" = "c"."mission_id")))
-          WHERE (("m"."etablissement_id" = "public"."mon_etablissement_id"()) AND ("c"."soignant_id" = "s"."id"))))));
-
-
-ALTER VIEW "public"."vue_soignants_etablissement" OWNER TO "postgres";
-
-
-COMMENT ON VIEW "public"."vue_soignants_etablissement" IS 'Projection minimale des soignants ayant candidate ou travaille pour l etablissement actif. Aucune donnee de sante, bancaire, GPS ou Stripe.';
-
 
 
 ALTER TABLE ONLY "public"."admin_invocations"
@@ -45134,6 +45291,10 @@ CREATE OR REPLACE TRIGGER "trg_mirror_teleportation_alerte_systeme" AFTER INSERT
 
 
 CREATE OR REPLACE TRIGGER "trg_no_overlap_creneaux" BEFORE INSERT OR UPDATE ON "public"."mission_creneaux" FOR EACH ROW EXECUTE FUNCTION "public"."fn_no_overlap_creneaux"();
+
+
+
+CREATE OR REPLACE TRIGGER "trg_normaliser_specialite_infirmiere_mission" BEFORE INSERT OR UPDATE ON "public"."missions" FOR EACH ROW EXECUTE FUNCTION "public"."dec_normaliser_specialite_infirmiere_mission"();
 
 
 
@@ -49086,6 +49247,11 @@ GRANT ALL ON FUNCTION "public"."dec_mettre_a_jour_fiabilite"() TO "service_role"
 
 
 
+REVOKE ALL ON FUNCTION "public"."dec_normaliser_specialite_infirmiere_mission"() FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."dec_normaliser_specialite_infirmiere_mission"() TO "service_role";
+
+
+
 REVOKE ALL ON FUNCTION "public"."dec_notif_signature_soignant_recue"() FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."dec_notif_signature_soignant_recue"() TO "service_role";
 
@@ -51235,6 +51401,16 @@ GRANT ALL ON FUNCTION "public"."fn_health_check"() TO "authenticated";
 
 
 
+REVOKE ALL ON FUNCTION "public"."fn_heures_mission_semaine"("p_mission_id" "uuid", "p_semaine_debut" "date") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_heures_mission_semaine"("p_mission_id" "uuid", "p_semaine_debut" "date") TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."fn_heures_soignant_semaine"("p_soignant_id" "uuid", "p_semaine_debut" "date", "p_exclure_mission_id" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_heures_soignant_semaine"("p_soignant_id" "uuid", "p_semaine_debut" "date", "p_exclure_mission_id" "uuid") TO "service_role";
+
+
+
 REVOKE ALL ON FUNCTION "public"."fn_html_escape"("p_text" "text") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_html_escape"("p_text" "text") TO "service_role";
 GRANT ALL ON FUNCTION "public"."fn_html_escape"("p_text" "text") TO "authenticated";
@@ -51257,6 +51433,11 @@ REVOKE ALL ON FUNCTION "public"."fn_inscrire_liste_attente_prevoyance"("p_email"
 GRANT ALL ON FUNCTION "public"."fn_inscrire_liste_attente_prevoyance"("p_email" "text", "p_niveau" "text") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."fn_inscrire_liste_attente_prevoyance"("p_email" "text", "p_niveau" "text") TO "anon";
 GRANT ALL ON FUNCTION "public"."fn_inscrire_liste_attente_prevoyance"("p_email" "text", "p_niveau" "text") TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."fn_interlocuteurs_conversations"("p_conversation_ids" "uuid"[]) FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_interlocuteurs_conversations"("p_conversation_ids" "uuid"[]) TO "authenticated";
 
 
 
@@ -52370,6 +52551,11 @@ GRANT ALL ON FUNCTION "public"."fn_score_etab_public"("p_etab_id" "uuid") TO "se
 
 
 
+REVOKE ALL ON FUNCTION "public"."fn_semaines_mission"("p_mission_id" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_semaines_mission"("p_mission_id" "uuid") TO "service_role";
+
+
+
 REVOKE ALL ON FUNCTION "public"."fn_set_mis_a_jour_le"() FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_set_mis_a_jour_le"() TO "service_role";
 
@@ -52442,7 +52628,6 @@ GRANT ALL ON FUNCTION "public"."fn_sms_doit_envoyer"("p_destinataire_id" "uuid",
 
 REVOKE ALL ON FUNCTION "public"."fn_soignant_compatible_mission"("p_soignant_profession" "public"."type_profession", "p_soignant_specialite" "text", "p_mission_profession" "public"."type_profession", "p_mission_specialite" "text", "p_accepte_non_specialises" boolean) FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_soignant_compatible_mission"("p_soignant_profession" "public"."type_profession", "p_soignant_specialite" "text", "p_mission_profession" "public"."type_profession", "p_mission_specialite" "text", "p_accepte_non_specialises" boolean) TO "authenticated";
-GRANT ALL ON FUNCTION "public"."fn_soignant_compatible_mission"("p_soignant_profession" "public"."type_profession", "p_soignant_specialite" "text", "p_mission_profession" "public"."type_profession", "p_mission_specialite" "text", "p_accepte_non_specialises" boolean) TO "anon";
 GRANT ALL ON FUNCTION "public"."fn_soignant_compatible_mission"("p_soignant_profession" "public"."type_profession", "p_soignant_specialite" "text", "p_mission_profession" "public"."type_profession", "p_mission_specialite" "text", "p_accepte_non_specialises" boolean) TO "service_role";
 
 
@@ -53948,17 +54133,6 @@ GRANT ALL ON TABLE "public"."typing_status" TO "service_role";
 
 
 GRANT ALL ON TABLE "public"."utilisateurs_bloques" TO "service_role";
-
-
-
-GRANT ALL ON TABLE "public"."vue_etablissements_soignant" TO "service_role";
-GRANT SELECT ON TABLE "public"."vue_etablissements_soignant" TO "authenticated";
-GRANT SELECT ON TABLE "public"."vue_etablissements_soignant" TO "anon";
-
-
-
-GRANT ALL ON TABLE "public"."vue_soignants_etablissement" TO "service_role";
-GRANT SELECT ON TABLE "public"."vue_soignants_etablissement" TO "authenticated";
 
 
 
