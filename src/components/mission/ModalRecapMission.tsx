@@ -1,6 +1,9 @@
 import React from 'react';
 import { Loader2 } from 'lucide-react';
-import type { ModeExerciceMission } from '@/lib/modeExerciceMission';
+import {
+  liensSourcesModeExercice,
+  type ModeExerciceMission,
+} from '@/lib/modeExerciceMission';
 import {
   DialogResponsive,
   DialogResponsiveContent,
@@ -77,6 +80,9 @@ export function ModalRecapMission({
   const brutSoignant = tauxHoraire * dureeHeures;
   const commissionMontant = brutSoignant * (tauxCommission / 100);
   const totalHT = brutSoignant + commissionMontant;
+  const sourcesModeExerciceMission = modeExerciceMission
+    ? liensSourcesModeExercice(modeExerciceMission)
+    : [];
 
   const formaterDateHeure = (iso: string) => {
     if (!iso) return '—';
@@ -234,15 +240,20 @@ export function ModalRecapMission({
                 <p className="text-xs text-amber-800 dark:text-amber-300 mt-1">
                   {modeExerciceMission.source_libelle}
                 </p>
-                {modeExerciceMission.source_url && (
-                  <a
-                    href={modeExerciceMission.source_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="mt-2 inline-block text-xs text-amber-900 underline hover:no-underline dark:text-amber-200"
-                  >
-                    Consulter la source
-                  </a>
+                {sourcesModeExerciceMission.length > 0 && (
+                  <div className="mt-2 flex flex-col items-start gap-1">
+                    {sourcesModeExerciceMission.map((source) => (
+                      <a
+                        key={source.href}
+                        href={source.href}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs text-amber-900 underline hover:no-underline dark:text-amber-200"
+                      >
+                        {source.libelle}
+                      </a>
+                    ))}
+                  </div>
                 )}
               </div>
             </section>

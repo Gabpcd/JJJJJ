@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
+  libelleLienSourceModeExercice,
+  liensSourcesModeExercice,
   liberalEstProposable,
   paramsModeExerciceMission,
   type ModeExerciceMission,
@@ -35,5 +37,37 @@ describe('matrice des modes d’exercice par mission', () => {
       p_type_etab: 'EHPAD',
       p_finess_secteur: 'PUBLIC',
     });
+  });
+
+  it('nomme explicitement chaque source primaire affichée', () => {
+    expect(libelleLienSourceModeExercice({
+      source_url: 'https://www.legifrance.gouv.fr/ceta/id/CETATEXT000051156546',
+    })).toBe('Lire l’arrêt n°491128 sur Légifrance');
+    expect(libelleLienSourceModeExercice({
+      source_url: 'https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000033621093',
+    })).toBe('Lire l’article L.4351-1 sur Légifrance');
+    expect(libelleLienSourceModeExercice({
+      source_url: 'https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000047567923',
+    })).toBe('Lire l’article L.6323-1-5 sur Légifrance');
+    expect(libelleLienSourceModeExercice({ source_url: null })).toBe(
+      'Consulter la source officielle',
+    );
+  });
+
+  it('distingue la lettre originale de la portée limitée de l’arrêt CE', () => {
+    expect(liensSourcesModeExercice({
+      source_force: 'DOCTRINE',
+      source_url: 'https://www.fehap.fr/jcms/navigation-internet/upload/docs/application/pdf/2023-02/courrierconjointministeres_30decembre2021_.pdf',
+      source_url_complementaire: 'https://www.legifrance.gouv.fr/ceta/id/CETATEXT000051156546',
+    })).toEqual([
+      {
+        href: 'https://www.fehap.fr/jcms/navigation-internet/upload/docs/application/pdf/2023-02/courrierconjointministeres_30decembre2021_.pdf',
+        libelle: 'Lire la lettre D21-031940 (texte original)',
+      },
+      {
+        href: 'https://www.legifrance.gouv.fr/ceta/id/CETATEXT000051156546',
+        libelle: 'Lire l’arrêt n°491128 — cas aide-soignant uniquement',
+      },
+    ]);
   });
 });

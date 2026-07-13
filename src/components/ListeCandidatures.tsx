@@ -59,14 +59,6 @@ function getCandidatMatchBadge(
     };
   }
 
-  if (candidatProfession === 'IDE' && (missionProfession === 'IBODE' || missionProfession === 'IADE')) {
-    return {
-      label: `↓ IDE non spécialisé`,
-      classes: 'bg-violet-500/10 text-violet-700 dark:text-violet-300',
-      tooltip: `Ce candidat est IDE — la mission ${missionProfession} accepte les non-spécialisés.`,
-    };
-  }
-
   return null;
 }
 

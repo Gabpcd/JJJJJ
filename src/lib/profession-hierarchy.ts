@@ -4,8 +4,8 @@
  * Mirror exact de la fonction SQL fn_soignant_compatible_mission appliquée
  * côté backend par fn_postuler_mission. Sert à élargir le filtre des missions
  * visibles côté soignant pour inclure celles auxquelles il peut candidater
- * via la hiérarchie pro (IBODE/IADE peuvent faire IDE ; IDE peut faire
- * IBODE/IADE si accepte_non_specialises).
+ * via la hiérarchie pro (IBODE/IADE peuvent faire IDE). La profession requise
+ * reste stricte pour une mission IADE ou IBODE.
  */
 
 /**
@@ -13,9 +13,7 @@
  * matchables par un soignant de la profession donnée.
  *
  * - Match strict (profession = X)
- * - Plus, pour IDE/IBODE/IADE, les missions hiérarchiquement compatibles avec
- *   la condition `accepte_non_specialises=true` quand la mission est plus
- *   spécialisée que le soignant.
+ * - Plus, pour IBODE/IADE, les missions IDE couvertes par leur diplôme initial.
  *
  * Retourne null si la profession est non reconnue ou ne nécessite pas de
  * filtre élargi (le caller utilisera alors `.eq('profession_requise', X)`).
@@ -28,16 +26,11 @@ export function getMissionsCompatiblesFilter(soignantProfession: string | null |
     return `profession_requise.eq.${soignantProfession},profession_requise.eq.IDE`;
   }
 
-  // IDE peut candidater à mission IBODE/IADE si accepte_non_specialises=true
-  if (soignantProfession === 'IDE') {
-    return 'profession_requise.eq.IDE,and(profession_requise.in.(IBODE,IADE),accepte_non_specialises.eq.true)';
-  }
-
   // Autres professions : pas de hiérarchie, match strict uniquement
   return null;
 }
 
-export type MatchType = 'EXACT' | 'HIERARCHIE_NATURELLE' | 'HIERARCHIE_SOUPLE' | 'SPECIALITE_SOUPLE';
+export type MatchType = 'EXACT' | 'HIERARCHIE_NATURELLE' | 'SPECIALITE_SOUPLE';
 
 export interface MatchInfo {
   type: MatchType;
@@ -76,20 +69,6 @@ export function getMissionMatchInfo(
     };
   }
 
-  // Cas hiérarchie souple : IDE sur mission IBODE/IADE acceptant non-spec
-  if (
-    soignantProfession === 'IDE' &&
-    (missionProfession === 'IBODE' || missionProfession === 'IADE') &&
-    accepteNonSpecialises !== false
-  ) {
-    return {
-      type: 'HIERARCHIE_SOUPLE',
-      badgeLabel: `🩺 Mission ${missionProfession} — ouverte aux IDE`,
-      badgeClasses: 'bg-violet-500/10 text-violet-700 dark:text-violet-300',
-      tooltip: `L'établissement accepte les IDE pour cette mission ${missionProfession}.`,
-    };
-  }
-
   // Cas spécialité souple : médecin sans la spécialité requise mais accepté
   if (
     missionProfession === 'MEDECIN' &&
@@ -109,3 +88,9 @@ export function getMissionMatchInfo(
   return null;
 }
 
+/** Une mission IADE ou IBODE exige le diplôme spécialisé correspondant. */
+export function professionMissionExigeSpecialisationExacte(
+  professionRequise: string | null | undefined,
+): boolean {
+  return professionRequise === 'IADE' || professionRequise === 'IBODE';
+}

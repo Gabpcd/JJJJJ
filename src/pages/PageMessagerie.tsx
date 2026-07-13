@@ -50,6 +50,11 @@ import {
 } from '@/components/ui/DialogResponsive';
 import { Input } from '@/components/ui/input';
 import { BoutonY2K } from '@/components/y2k/BoutonY2K';
+import {
+  chargerInterlocuteursConversations,
+  cleInterlocuteur,
+  type InterlocuteurConversation,
+} from '@/lib/messagerieInterlocuteurs';
 
 interface Conversation {
   id: string;
@@ -136,7 +141,7 @@ export default function PageMessagerie({ role }: PageMessagerieProps) {
 
     let query = supabase
       .from('conversations')
-      .select('id, participant_1_id, participant_2_id, mission_id, dernier_message_le, cree_le, archived_at' as any)
+      .select('id, participant_1_id, participant_2_id, mission_id, dernier_message_le, cree_le, archived_at')
       .order('dernier_message_le', { ascending: false, nullsFirst: false });
 
     if (!isAdminPlateforme) {
@@ -159,27 +164,14 @@ export default function PageMessagerie({ role }: PageMessagerieProps) {
       return;
     }
 
-    const otherIds = new Set<string>();
-    convs.forEach(c => {
-      if (isAdmin) {
-        otherIds.add(c.participant_1_id);
-        otherIds.add(c.participant_2_id);
-      } else {
-        otherIds.add(c.participant_1_id === user.id ? c.participant_2_id : c.participant_1_id);
-      }
-    });
-
-    const ids = Array.from(otherIds);
-    const [{ data: soignants }, { data: etabs }] = await Promise.all([
-      supabase.from('soignants').select('id, prenom, nom, avatar_url').in('id', ids),
-      supabase.from('etablissements').select('id, nom, logo_url').in('id', ids),
-    ]);
-
-    const userMap = new Map<string, { prenom: string; nom: string; avatar: string | null }>();
-    soignants?.forEach(s => userMap.set(s.id, { prenom: s.prenom, nom: s.nom, avatar: (s as any).avatar_url }));
-    etabs?.forEach(e => userMap.set(e.id, { prenom: e.nom, nom: '', avatar: (e as any).logo_url }));
-
     const convIds = convs.map(c => c.id);
+    let interlocuteurs = new Map<string, InterlocuteurConversation>();
+    try {
+      interlocuteurs = await chargerInterlocuteursConversations(convIds);
+    } catch (error) {
+      logger.error('fn_interlocuteurs_conversations error', error);
+    }
+
     const { data: lastMessages } = await supabase
       .from('messages_chat')
       .select('conversation_id, contenu, cree_le')
@@ -203,8 +195,8 @@ export default function PageMessagerie({ role }: PageMessagerieProps) {
       unreadMap.set(m.conversation_id, (unreadMap.get(m.conversation_id) || 0) + 1);
     });
 
-    const resolveUserName = (uid: string) => {
-      const info = userMap.get(uid);
+    const resolveUserName = (conversationId: string, uid: string) => {
+      const info = interlocuteurs.get(cleInterlocuteur(conversationId, uid));
       if (info) return `${info.prenom} ${info.nom}`.trim();
       return 'Jolene';
     };
@@ -218,23 +210,23 @@ export default function PageMessagerie({ role }: PageMessagerieProps) {
 
     const enriched: Conversation[] = convs.map(c => {
       const autreId = c.participant_1_id === user.id ? c.participant_2_id : c.participant_1_id;
-      const info = userMap.get(autreId) || userMap.get(c.participant_1_id) || userMap.get(c.participant_2_id);
+      const info = interlocuteurs.get(cleInterlocuteur(c.id, autreId));
 
-      const isJolene = !info;
+      const isJolene = info?.est_jolene ?? true;
       let displayPrenom = info?.prenom || 'Jolene';
       let displayNom = info?.nom || '';
       if (isAdmin) {
-        displayPrenom = resolveUserName(c.participant_1_id);
-        displayNom = `↔ ${resolveUserName(c.participant_2_id)}`;
+        displayPrenom = resolveUserName(c.id, c.participant_1_id);
+        displayNom = `↔ ${resolveUserName(c.id, c.participant_2_id)}`;
       }
 
       return {
         ...c,
-        archived_at: (c as any).archived_at || null,
+        archived_at: c.archived_at || null,
         autre_id: autreId,
         autre_prenom: displayPrenom,
         autre_nom: displayNom,
-        autre_avatar: isJolene ? null : (info?.avatar || null),
+        autre_avatar: isJolene ? null : (info?.avatar_url || null),
         dernier_contenu: lastMsgMap.get(c.id) || null,
         non_lus: unreadMap.get(c.id) || 0,
         is_jolene: isJolene,
@@ -314,7 +306,10 @@ export default function PageMessagerie({ role }: PageMessagerieProps) {
       p_contenu: contenu,
     });
 
-    if (error || (data && typeof data === 'object' && (data as any).error)) {
+    const erreurMetier = data && typeof data === 'object' && !Array.isArray(data)
+      ? (data as { error?: unknown }).error
+      : undefined;
+    if (error || erreurMetier) {
       logger.error('fn_envoyer_message error', error || data);
       toast.error("Impossible d'envoyer le message.");
       setTexte(contenuBrut);
@@ -346,8 +341,8 @@ export default function PageMessagerie({ role }: PageMessagerieProps) {
     ]);
 
     const results: SearchResult[] = [];
-    sData?.forEach(s => results.push({ id: s.id, type: 'soignant', label: `${s.prenom} ${s.nom}`, sub: s.email || '', avatar: (s as any).avatar_url }));
-    eData?.forEach(e => results.push({ id: e.id, type: 'etablissement', label: e.nom, sub: e.email_contact || '', avatar: (e as any).logo_url }));
+    sData?.forEach(s => results.push({ id: s.id, type: 'soignant', label: `${s.prenom} ${s.nom}`, sub: s.email || '', avatar: s.avatar_url }));
+    eData?.forEach(e => results.push({ id: e.id, type: 'etablissement', label: e.nom, sub: e.email_contact || '', avatar: e.logo_url }));
 
     setSearchResults(results);
     setSearching(false);

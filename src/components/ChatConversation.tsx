@@ -26,6 +26,10 @@ import { useConversationRealtime } from '@/hooks/useConversationRealtime';
 import { InputMessage } from '@/components/messagerie/InputMessage';
 import { AvatarDisplay } from '@/components/AvatarUpload';
 import { BloquerUtilisateur } from '@/components/BloquerUtilisateur';
+import {
+  chargerInterlocuteursConversations,
+  cleInterlocuteur,
+} from '@/lib/messagerieInterlocuteurs';
 
 interface Message {
   id: string;
@@ -95,7 +99,7 @@ export function ChatConversation({ missionId, autreUserId, isEtablissement }: Ch
       let resolvedUserId = autreUserId;
 
       if (isEtablissement) {
-        const { data: uid, error: resolveErr } = await supabase.rpc('fn_user_id_pour_etablissement' as any, { p_etablissement_id: autreUserId });
+        const { data: uid, error: resolveErr } = await supabase.rpc('fn_user_id_pour_etablissement', { p_etablissement_id: autreUserId });
         if (resolveErr || !uid) {
           logger.error('ChatConversation: cannot resolve etablissement user ID', resolveErr);
           if (!cancelled) setLoading(false);
@@ -126,26 +130,26 @@ export function ChatConversation({ missionId, autreUserId, isEtablissement }: Ch
   }, [user, missionId, autreUserId, isEtablissement]);
 
   useEffect(() => {
-    if (!resolvedAutreId) return;
+    if (!convId || !resolvedAutreId) return;
     let cancelled = false;
+    setAutreInfo(null);
 
     (async () => {
-      const [{ data: soignant }, { data: etab }] = await Promise.all([
-        supabase.from('soignants').select('prenom, nom, avatar_url').eq('id', resolvedAutreId).maybeSingle(),
-        supabase.from('etablissements').select('nom, logo_url').eq('id', resolvedAutreId).maybeSingle(),
-      ]);
-      if (cancelled) return;
-      if (soignant) {
-        setAutreInfo({ prenom: (soignant as any).prenom, nom: (soignant as any).nom, avatar: (soignant as any).avatar_url });
-      } else if (etab) {
-        setAutreInfo({ prenom: (etab as any).nom, nom: '', avatar: (etab as any).logo_url });
-      } else {
-        setAutreInfo({ prenom: 'Jolene', nom: '', avatar: null });
+      try {
+        const interlocuteurs = await chargerInterlocuteursConversations([convId]);
+        const info = interlocuteurs.get(cleInterlocuteur(convId, resolvedAutreId));
+        if (cancelled) return;
+        setAutreInfo(info
+          ? { prenom: info.prenom, nom: info.nom, avatar: info.avatar_url }
+          : { prenom: 'Jolene', nom: '', avatar: null });
+      } catch (error) {
+        logger.error('ChatConversation: fn_interlocuteurs_conversations error', error);
+        if (!cancelled) setAutreInfo({ prenom: 'Jolene', nom: '', avatar: null });
       }
     })();
 
     return () => { cancelled = true; };
-  }, [resolvedAutreId]);
+  }, [convId, resolvedAutreId]);
 
   useEffect(() => {
     if (!convId) return;
@@ -156,7 +160,7 @@ export function ChatConversation({ missionId, autreUserId, isEtablissement }: Ch
         .select('archived_at')
         .eq('id', convId)
         .maybeSingle();
-      setArchived(!!(conv as any)?.archived_at);
+      setArchived(!!conv?.archived_at);
 
       const { data } = await supabase
         .from('messages_chat')

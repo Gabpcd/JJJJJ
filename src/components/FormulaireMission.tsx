@@ -7,7 +7,8 @@ import { SelectProfession } from '@/components/SelectProfession';
 import { SelectSpecialiteMedicale } from '@/components/SelectSpecialiteMedicale';
 import { WarningRist } from '@/components/WarningRist';
 import { useModeExerciceMission } from '@/hooks/useModeExerciceMission';
-import { liberalEstProposable } from '@/lib/modeExerciceMission';
+import { liberalEstProposable, liensSourcesModeExercice } from '@/lib/modeExerciceMission';
+import { professionMissionExigeSpecialisationExacte } from '@/lib/profession-hierarchy';
 import { EncartCommissionDegressif } from '@/components/EncartCommissionDegressif';
 import { ModalCodeTravail } from '@/components/ModalCodeTravail';
 import { FormulaireRecurrence, type RecurrenceFlexConfig, type CreneauFlex, type ValidationFlexResult } from '@/components/FormulaireRecurrence';
@@ -83,7 +84,6 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
   const [description, setDescription] = useState('');
   const [profession, setProfession] = useState('');
   const [specialiteMedicaleRequise, setSpecialiteMedicaleRequise] = useState('');
-  const [accepteNonSpecialises, setAccepteNonSpecialises] = useState(true);
   const [service, setService] = useState('');
   const [debutLe, setDebutLe] = useState('');
   const [finLe, setFinLe] = useState('');
@@ -127,6 +127,9 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
     error: modeExerciceError,
   } = useModeExerciceMission(profession, etablissementType, estSecteurPublic);
   const liberalAutoriseMission = liberalEstProposable(modeExerciceMission);
+  const sourcesModeExerciceMission = modeExerciceMission
+    ? liensSourcesModeExercice(modeExerciceMission)
+    : [];
 
   useEffect(() => {
     if (!profession || !etablissementType || modeExerciceLoading) return;
@@ -185,7 +188,7 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
       if (debutParam) setDebutLe(versDateHeureLocale(debutParam));
       if (finParam) setFinLe(versDateHeureLocale(finParam));
 
-      supabase.from('missions').select('intitule, description, profession_requise, service, taux_horaire_base, est_urgente, niveau_urgence, type_contrat_recherche, specialite_medicale_requise, accepte_non_specialises').eq('id', dupId).single().then(({ data, error }) => {
+      supabase.from('missions').select('intitule, description, profession_requise, service, taux_horaire_base, est_urgente, niveau_urgence, type_contrat_recherche, specialite_medicale_requise').eq('id', dupId).single().then(({ data, error }) => {
         if (error) {
           console.warn('FormulaireMission: mission duplication fetch error', error);
           return;
@@ -200,7 +203,6 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
           setEstUrgente(data.est_urgente || false);
           setNiveauUrgence(data.niveau_urgence || 1);
           setSpecialiteMedicaleRequise(((data as any).specialite_medicale_requise as string) || '');
-          setAccepteNonSpecialises((data as any).accepte_non_specialises !== false);
           setDupliquerInfo(data.intitule);
         }
       });
@@ -225,7 +227,6 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
           || extraireContratPreference(missionSource.description),
       );
       setSpecialiteMedicaleRequise(missionSource.specialite_medicale_requise || '');
-      setAccepteNonSpecialises(missionSource.accepte_non_specialises !== false);
     }
   }, [missionSource]);
 
@@ -297,7 +298,7 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
         p_niveau_urgence: estUrgente ? niveauUrgence : 0,
         p_mode_attribution: modeAttribution,
         p_specialite_medicale_requise: profession === 'MEDECIN' ? (specialiteMedicaleRequise || null) : null,
-        p_accepte_non_specialises: (profession === 'IBODE' || profession === 'IADE') ? accepteNonSpecialises : true,
+        p_accepte_non_specialises: !professionMissionExigeSpecialisationExacte(profession),
         p_creneaux: creneauxPayload as any,
       });
 
@@ -394,7 +395,7 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
         est_urgente: estUrgente,
         niveau_urgence: estUrgente ? niveauUrgence : 0,
         specialite_medicale_requise: profession === 'MEDECIN' ? (specialiteMedicaleRequise || null) : null,
-        accepte_non_specialises: (profession === 'IBODE' || profession === 'IADE') ? accepteNonSpecialises : true,
+        accepte_non_specialises: !professionMissionExigeSpecialisationExacte(profession),
       };
 
       if (modeEdition && missionSource) {
@@ -619,28 +620,6 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
           </div>
         )}
 
-        {/* Tolérance IDE non spécialisés pour IBODE/IADE */}
-        {(profession === 'IBODE' || profession === 'IADE') && (
-          <div className="rounded-xl border border-primary/20 bg-primary/5 p-3">
-            <label className="flex items-start gap-3 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={accepteNonSpecialises}
-                onChange={(e) => setAccepteNonSpecialises(e.target.checked)}
-                className="mt-0.5 h-4 w-4 rounded border-border accent-primary"
-              />
-              <div className="flex-1">
-                <span className="text-sm font-medium text-foreground">
-                  Accepter aussi les IDE non spécialisés
-                </span>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  Élargit le vivier aux IDE motivés qui peuvent assister un {profession === 'IBODE' ? 'IBODE' : 'IADE'}.
-                </p>
-              </div>
-            </label>
-          </div>
-        )}
-
         {/* Service — Lot 12 : liste normalisée (datalist) + saisie libre en repli.
             La fragmentation « Urgences/urgences/URG » dégrade la recherche et le
             matching : on suggère les libellés canoniques sans bloquer la saisie. */}
@@ -701,27 +680,32 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
                     : 'Mission proposée en salarié'}
                 </strong>
                 <p className="mt-1">{modeExerciceMission.source_libelle}</p>
-                {modeExerciceMission.source_url && (
-                  <a
-                    href={modeExerciceMission.source_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="mt-1.5 inline-block underline hover:no-underline"
-                  >
-                    Consulter la source
-                  </a>
+                {sourcesModeExerciceMission.length > 0 && (
+                  <div className="mt-1.5 flex flex-col items-start gap-1">
+                    {sourcesModeExerciceMission.map((source) => (
+                      <a
+                        key={source.href}
+                        href={source.href}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="underline hover:no-underline"
+                      >
+                        {source.libelle}
+                      </a>
+                    ))}
+                  </div>
                 )}
                 <button
                   type="button"
                   onClick={() => setExplicationModeOuverte((value) => !value)}
-                  className="ml-3 underline hover:no-underline"
+                  className="mt-1.5 block underline hover:no-underline"
                   aria-expanded={explicationModeOuverte}
                 >
                   Comprendre pourquoi
                 </button>
                 {explicationModeOuverte && (
                   <p className="mt-2 border-t border-amber-200 pt-2 dark:border-amber-900">
-                    La règle se lit sur la profession demandée par cette mission, pas sur les diplômes du soignant. Un profil IADE peut donc candidater à une mission IDE, qui suit les règles IDE.
+                    La règle se lit sur la profession demandée par cette mission, pas sur les diplômes du soignant. Un profil IADE peut donc candidater à une mission IDE, qui suit les règles IDE. À l'inverse, une mission IADE ou IBODE exige la profession spécialisée correspondante.
                   </p>
                 )}
               </div>

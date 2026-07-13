@@ -5,7 +5,6 @@ BEGIN;
 DO $catalogue$
 DECLARE
   v_policy text;
-  v_cols text[];
   v_definition text;
 BEGIN
   IF has_function_privilege('authenticated', 'public.fn_purger_demo()', 'EXECUTE') THEN
@@ -73,18 +72,31 @@ BEGIN
     RAISE EXCEPTION 'P0: pol_soig_select autorise encore une relation etablissement: %', v_policy;
   END IF;
 
-  SELECT array_agg(column_name ORDER BY ordinal_position) INTO v_cols
-  FROM information_schema.columns
-  WHERE table_schema = 'public' AND table_name = 'vue_soignants_etablissement';
-  IF v_cols && ARRAY['numero_securite_sociale','numero_secu','iban','stripe_account_id','psc_sub','adresse_lat','adresse_lng','attestation_vaccinations','etudiant_details']::text[] THEN
-    RAISE EXCEPTION 'P0: vue soignant partagee contient une colonne sensible: %', v_cols;
+  IF to_regclass('public.vue_soignants_etablissement') IS NOT NULL
+     OR to_regclass('public.vue_etablissements_soignant') IS NOT NULL THEN
+    RAISE EXCEPTION 'P0: une vue SECURITY DEFINER de partage reste exposee';
   END IF;
 
-  SELECT array_agg(column_name ORDER BY ordinal_position) INTO v_cols
-  FROM information_schema.columns
-  WHERE table_schema = 'public' AND table_name = 'vue_etablissements_soignant';
-  IF v_cols && ARRAY['stripe_customer_id','stripe_account_id','stripe_sepa_payment_method_id','rib_s3_key','representant_piece_s3_key','email_confirmation_token','rib_ia_resultat']::text[] THEN
-    RAISE EXCEPTION 'P0: vue etablissement partagee contient une colonne sensible: %', v_cols;
+  IF NOT has_function_privilege(
+    'authenticated',
+    'public.fn_interlocuteurs_conversations(uuid[])',
+    'EXECUTE'
+  ) OR has_function_privilege(
+    'anon',
+    'public.fn_interlocuteurs_conversations(uuid[])',
+    'EXECUTE'
+  ) THEN
+    RAISE EXCEPTION 'P0: ACL invalide sur la projection des interlocuteurs de messagerie';
+  END IF;
+  SELECT pg_get_functiondef(
+    'public.fn_interlocuteurs_conversations(uuid[])'::regprocedure
+  ) INTO v_definition;
+  IF v_definition !~ 'participant_1_id = v_uid'
+     OR v_definition !~ 'participant_2_id = v_uid'
+     OR v_definition !~ 'fn_compte_auth_actif'
+     OR v_definition !~ 'cardinality\(p_conversation_ids\) > 100'
+     OR v_definition ~* '(email_contact|telephone_contact|numero_rpps|stripe_)' THEN
+    RAISE EXCEPTION 'P0: projection interlocuteurs trop large ou non bornee';
   END IF;
 
   IF NOT EXISTS (

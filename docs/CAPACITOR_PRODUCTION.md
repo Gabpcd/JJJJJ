@@ -1,6 +1,6 @@
 # Capacitor production — état natif iOS et Android
 
-État vérifié le 12/07/2026. La source de vérité des versions reste
+État vérifié le 13/07/2026. La source de vérité des versions reste
 `package.json`; `npx cap sync` régénère les fichiers natifs gérés par Capacitor.
 
 ## Plugins structurants
@@ -82,6 +82,8 @@ DEVELOPER_DIR=/Users/gabrielle/Downloads/Xcode.app/Contents/Developer \
   -packageAuthorizationProvider netrc -scmProvider system
 ```
 
-Pour Android, `bundleRelease` s'arrête explicitement tant que la signature,
-`google-services.json` ou l'empreinte App Links sont absents. `lintRelease`
-reste exécutable sans secrets, mais requiert un Android SDK 36 installé.
+Pour Android, la signature d'upload, le `google-services.json` local gitignoré
+et l'empreinte Play App Signing sont désormais configurés. `assetlinks.json`
+est généré avec l'empreinte de signature Play. Avec Android SDK 36,
+`lintRelease` et `bundleRelease` passent ; l'AAB signé produit est Jolene
+`1.0` (`versionCode 2`).
