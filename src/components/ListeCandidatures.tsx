@@ -145,6 +145,24 @@ export function ListeCandidatures({ missionId, missionProfession, missionSpecial
     setTraitement(null);
   };
 
+  const verifierPaiementPuisAccepter = async (candidatureId: string) => {
+    const { data, error } = await supabase.functions.invoke('create-mission-payment', {
+      body: { mission_id: missionId },
+    });
+    if (error) {
+      throw new Error(
+        await messageErreurEdgeFn(error, "L’autorisation Stripe n’a pas pu être vérifiée."),
+      );
+    }
+    if (data?.statut !== 'AUTORISE' && data?.statut !== 'CAPTURE') {
+      throw new Error(
+        "L’autorisation bancaire n’est pas encore finalisée. Patientez quelques instants puis réessayez.",
+      );
+    }
+    setPaiementModal(null);
+    await finaliserAcceptation(candidatureId);
+  };
+
   const traiterCandidature = async (candidatureId: string, decision: 'ACCEPTEE' | 'REFUSEE') => {
     if (decision === 'ACCEPTEE') {
       await accepterAvecPaiement(candidatureId);
@@ -338,10 +356,7 @@ export function ListeCandidatures({ missionId, missionProfession, missionSpecial
         <ModalPaiementCommission
           clientSecret={paiementModal.clientSecret}
           montant={paiementModal.montant}
-          onSuccess={() => {
-            setPaiementModal(null);
-            finaliserAcceptation(paiementModal.candidatureId);
-          }}
+          onSuccess={() => verifierPaiementPuisAccepter(paiementModal.candidatureId)}
           onCancel={() => setPaiementModal(null)}
         />
       )}

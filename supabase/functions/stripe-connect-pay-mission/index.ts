@@ -1,28 +1,8 @@
 import Stripe from "npm:stripe@18.5.0";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { corsHeaders } from "../_shared/cors.ts";
 import { mapStripeError } from "../_shared/stripe-errors.ts";
-
-function getCorsOrigin(req: Request): string {
-  const origin = req.headers.get("origin") || "";
-  if (
-    origin === "https://jolene.app" ||
-    origin === "https://app.jolene.app" ||
-    origin === "https://www.jolene.app" ||
-    origin === "http://localhost:5173" ||
-    origin === "http://localhost:8080"
-  ) {
-    return origin;
-  }
-  return "https://jolene.app";
-}
-
-function corsHeaders(req: Request) {
-  return {
-    "Access-Control-Allow-Origin": getCorsOrigin(req),
-    "Access-Control-Allow-Headers":
-      "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
-  };
-}
+import { assertStripeSecretMode } from "../_shared/stripe-production.ts";
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -261,7 +241,7 @@ Deno.serve(async (req) => {
     //   - EN_ATTENTE >= 15 min              : orphelin → marquer ECHOUE puis laisser repartir une nouvelle session.
     const { data: existingTransfer } = await supabaseAdmin
       .from("stripe_transfers")
-      .select("id, statut, cree_le")
+      .select("id, statut, cree_le, stripe_checkout_session_id, stripe_payment_intent_id")
       .eq("mission_id", mission_id)
       .order("cree_le", { ascending: false })
       .limit(1)
@@ -269,6 +249,8 @@ Deno.serve(async (req) => {
 
     const FENETRE_ORPHELIN_MINUTES = 15;
     const statutBloquantDefinitif = ["TRANSFERE", "CHARGE_REUSSI", "PAYE"];
+    const statutAutoriseNouvelleTentative = !!existingTransfer
+      && ["ECHOUE", "REMBOURSE", "ANNULEE"].includes(existingTransfer.statut);
 
     if (existingTransfer && statutBloquantDefinitif.includes(existingTransfer.statut)) {
       return new Response(
@@ -284,7 +266,7 @@ Deno.serve(async (req) => {
       );
     }
 
-    let transferAReutiliserId: string | null = existingTransfer?.id ?? null;
+    const transferAReutiliserId: string | null = existingTransfer?.id ?? null;
 
     if (existingTransfer?.statut === "EN_ATTENTE") {
       const ageMs = Date.now() - new Date(existingTransfer.cree_le).getTime();
@@ -306,20 +288,59 @@ Deno.serve(async (req) => {
       }
 
       // Orphelin > 15 min : marquer ECHOUE et autoriser une nouvelle session.
-      await supabaseAdmin
+      const { data: nettoye, error: nettoyageErr } = await supabaseAdmin
         .from("stripe_transfers")
         .update({
           statut: "ECHOUE",
           erreur: `Orphelin auto-cleanup (>${FENETRE_ORPHELIN_MINUTES} min sans webhook) — BUG-UI-OBLIG-1`,
         })
-        .eq("id", existingTransfer.id);
-
-      transferAReutiliserId = null;
+        .eq("id", existingTransfer.id)
+        .eq("statut", "EN_ATTENTE")
+        .select("id")
+        .maybeSingle();
+      if (nettoyageErr) throw nettoyageErr;
+      if (!nettoye) {
+        return new Response(JSON.stringify({
+          already_paid: true,
+          statut: "EN_ATTENTE",
+          message: "Une autre tentative de paiement est déjà en cours.",
+        }), {
+          status: 200,
+          headers: { ...corsHeaders(req), "Content-Type": "application/json" },
+        });
+      }
     }
 
-    const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") || "", {
+    const stripeKey = Deno.env.get("STRIPE_SECRET_KEY") || "";
+    assertStripeSecretMode(stripeKey);
+    const stripe = new Stripe(stripeKey, {
       apiVersion: "2025-08-27.basil",
     });
+
+    let checkoutIdempotencyKey = `connect_checkout_${mission_id}`;
+    if (existingTransfer) {
+      const versionPrecedente = existingTransfer.stripe_checkout_session_id || existingTransfer.id;
+      checkoutIdempotencyKey = `connect_checkout_${mission_id}_after_${versionPrecedente}`;
+    }
+
+    if (existingTransfer?.stripe_checkout_session_id) {
+      // Une ancienne session ne doit jamais rester payable en parallèle de la
+      // nouvelle. En cas d'indisponibilité Stripe on échoue fermé.
+      const precedente = await stripe.checkout.sessions.retrieve(existingTransfer.stripe_checkout_session_id);
+      if (precedente.status === "complete" && !statutAutoriseNouvelleTentative) {
+        return new Response(JSON.stringify({
+          already_paid: true,
+          statut: "RAPPROCHEMENT_EN_COURS",
+          message: "Le paiement Stripe est validé et son rapprochement est en cours.",
+        }), {
+          status: 200,
+          headers: { ...corsHeaders(req), "Content-Type": "application/json" },
+        });
+      }
+      if (precedente.status === "open") {
+        await stripe.checkout.sessions.expire(precedente.id);
+      }
+    }
 
     // Calculate amounts
     const commissionCents = Math.round(
@@ -331,16 +352,108 @@ Deno.serve(async (req) => {
     // Reuse or create Stripe customer
     let customerId = etab.stripe_customer_id;
     if (!customerId) {
-      const customer = await stripe.customers.create({
-        name: etab.nom,
-        email: etab.email_contact,
-        metadata: { etablissement_id: etab.id },
-      });
+      const customer = await stripe.customers.create(
+        {
+          name: etab.nom,
+          email: etab.email_contact,
+          metadata: { etablissement_id: etab.id },
+        },
+        { idempotencyKey: `connect_customer_${etab.id}` },
+      );
       customerId = customer.id;
       await supabaseAdmin
         .from("etablissements")
         .update({ stripe_customer_id: customerId })
         .eq("id", etab.id);
+    }
+
+    // La recherche Stripe est indispensable même sans ligne DB : si la
+    // création Checkout a réussi puis l'INSERT stripe_transfers a échoué, la
+    // clé de base rejouerait sinon éternellement la même Session expirée.
+    const sessionsConnues = await stripe.checkout.sessions.list({ customer: customerId, limit: 100 });
+    const derniereSessionMission = sessionsConnues.data
+      .filter((candidate) => (
+        candidate.metadata?.type === "CONNECT_MISSION_PAYMENT"
+        && candidate.metadata?.mission_id === mission_id
+      ))
+      .sort((a, b) => b.created - a.created)[0] ?? null;
+
+    if (derniereSessionMission) {
+      if (derniereSessionMission.status === "complete" && !statutAutoriseNouvelleTentative) {
+        return new Response(JSON.stringify({
+          already_paid: true,
+          statut: "RAPPROCHEMENT_EN_COURS",
+          message: "Le paiement Stripe est validé et son rapprochement est en cours.",
+        }), {
+          status: 200,
+          headers: { ...corsHeaders(req), "Content-Type": "application/json" },
+        });
+      }
+
+      if (
+        derniereSessionMission.status === "open"
+        && derniereSessionMission.expires_at * 1000 > Date.now()
+        && !statutAutoriseNouvelleTentative
+      ) {
+        // Répare la trace DB avant de rendre la Session existante au client.
+        const piExistant = typeof derniereSessionMission.payment_intent === "string"
+          ? derniereSessionMission.payment_intent
+          : derniereSessionMission.payment_intent?.id || null;
+        if (transferAReutiliserId) {
+          const { error: repriseErr } = await supabaseAdmin
+            .from("stripe_transfers")
+            .update({
+              stripe_checkout_session_id: derniereSessionMission.id,
+              stripe_payment_intent_id: piExistant,
+              montant_soignant: soignantCents / 100,
+              montant_commission: commissionCents / 100,
+              montant_total: totalCents / 100,
+              statut: "EN_ATTENTE",
+              erreur: null,
+              cree_le: new Date().toISOString(),
+            })
+            .eq("id", transferAReutiliserId);
+          if (repriseErr) throw repriseErr;
+        } else {
+          const { error: repriseErr } = await supabaseAdmin.from("stripe_transfers").insert({
+            mission_id,
+            soignant_id: soignantId,
+            etablissement_id: mission.etablissement_id,
+            montant_soignant: soignantCents / 100,
+            montant_commission: commissionCents / 100,
+            montant_total: totalCents / 100,
+            stripe_checkout_session_id: derniereSessionMission.id,
+            stripe_payment_intent_id: piExistant,
+            statut: "EN_ATTENTE",
+          });
+          if (repriseErr && repriseErr.code !== "23505") throw repriseErr;
+        }
+
+        const { error: missionRepriseErr } = await supabaseAdmin
+          .from("missions")
+          .update({ mode_paiement_soignant: "STRIPE_CONNECT" })
+          .eq("id", mission_id);
+        if (missionRepriseErr) throw missionRepriseErr;
+
+        return new Response(JSON.stringify({
+          success: true,
+          resumed: true,
+          client_secret: derniereSessionMission.client_secret,
+          total: totalCents / 100,
+          commission: commissionCents / 100,
+          soignant: soignantCents / 100,
+        }), {
+          status: 200,
+          headers: { ...corsHeaders(req), "Content-Type": "application/json" },
+        });
+      }
+
+      if (derniereSessionMission.status === "open") {
+        await stripe.checkout.sessions.expire(derniereSessionMission.id);
+      }
+      // Expirée (y compris compensation après INSERT raté) : la génération
+      // suivante dépend de l'ID Stripe, donc reste fraîche et concurrent-safe.
+      checkoutIdempotencyKey = `connect_checkout_${mission_id}_after_${derniereSessionMission.id}`;
     }
 
     // Create Checkout Session (embedded)
@@ -397,7 +510,7 @@ Deno.serve(async (req) => {
         facture_honoraires_id: factureHonoraires.id,
       },
       return_url: `${origin}/etablissement/facturation?paiement=succes`,
-    });
+    }, { idempotencyKey: checkoutIdempotencyKey });
 
     // [CP-STRIPE-3 H5] Compensation Checkout Session orpheline.
     // Les 2 opérations DB ci-dessous (upsert stripe_transfers + update missions)
@@ -420,17 +533,20 @@ Deno.serve(async (req) => {
     // intervient manuellement pour réconcilier (via INSERT stripe_transfers
     // ou refund Stripe).
     const paymentIntentId = typeof session.payment_intent === 'string' ? session.payment_intent : session.payment_intent?.id || null;
+    let sessionPartageeParConcurrent = false;
 
     try {
       if (transferAReutiliserId) {
         const { error: updErr } = await supabaseAdmin
           .from("stripe_transfers")
           .update({
+            stripe_checkout_session_id: session.id,
             stripe_payment_intent_id: paymentIntentId,
             montant_soignant: soignantCents / 100,
             montant_commission: commissionCents / 100,
             montant_total: totalCents / 100,
             statut: "EN_ATTENTE",
+            cree_le: new Date().toISOString(),
           })
           .eq("id", transferAReutiliserId);
         if (updErr) throw updErr;
@@ -442,10 +558,34 @@ Deno.serve(async (req) => {
           montant_soignant: soignantCents / 100,
           montant_commission: commissionCents / 100,
           montant_total: totalCents / 100,
+          stripe_checkout_session_id: session.id,
           stripe_payment_intent_id: paymentIntentId,
           statut: "EN_ATTENTE",
         });
-        if (insErr) throw insErr;
+        if (insErr?.code === "23505") {
+          // Deux appels initiaux reçoivent la même Session grâce à la même clé
+          // Stripe. Le perdant du UNIQUE ne doit surtout pas expirer la Session
+          // déjà persistée par le gagnant.
+          sessionPartageeParConcurrent = true;
+          const { data: gagnant, error: gagnantErr } = await supabaseAdmin
+            .from("stripe_transfers")
+            .select("mission_id, soignant_id, etablissement_id, montant_soignant, montant_commission, montant_total, statut")
+            .eq("stripe_checkout_session_id", session.id)
+            .maybeSingle();
+          if (gagnantErr || !gagnant) {
+            throw new Error(`Session concurrente introuvable: ${gagnantErr?.message || session.id}`);
+          }
+          const identique = gagnant.mission_id === mission_id
+            && gagnant.soignant_id === soignantId
+            && gagnant.etablissement_id === mission.etablissement_id
+            && Math.round(Number(gagnant.montant_soignant) * 100) === soignantCents
+            && Math.round(Number(gagnant.montant_commission) * 100) === commissionCents
+            && Math.round(Number(gagnant.montant_total) * 100) === totalCents
+            && ["EN_ATTENTE", "CHARGE_REUSSI", "TRANSFERE", "PAYE"].includes(gagnant.statut);
+          if (!identique) throw new Error("Collision Checkout Session incohérente");
+        } else if (insErr) {
+          throw insErr;
+        }
       }
 
       // Update mission payment mode
@@ -459,14 +599,16 @@ Deno.serve(async (req) => {
       const dbErrMsg = dbErr instanceof Error ? dbErr.message : String(dbErr);
       console.error("CHECKOUT_CREATED_DB_WRITE_FAILED:", dbErrMsg);
 
-      // Expire la session Stripe (fire-and-forget — si ça échoue, la session
-      // reste ouverte côté Stripe ; le webhook traitera l'anomalie Option A).
-      try {
-        await stripe.checkout.sessions.expire(session.id);
-        console.log(`Stripe session ${session.id} expired (compensation)`);
-      } catch (expireErr) {
-        const expireMsg = expireErr instanceof Error ? expireErr.message : String(expireErr);
-        console.error(`SESSION_EXPIRE_FAILED for ${session.id}:`, expireMsg);
+      // Une collision UNIQUE signifie que la même Session appartient déjà au
+      // worker gagnant : l'expirer casserait son paiement légitime.
+      if (!sessionPartageeParConcurrent) {
+        try {
+          await stripe.checkout.sessions.expire(session.id);
+          console.log(`Stripe session ${session.id} expired (compensation)`);
+        } catch (expireErr) {
+          const expireMsg = expireErr instanceof Error ? expireErr.message : String(expireErr);
+          console.error(`SESSION_EXPIRE_FAILED for ${session.id}:`, expireMsg);
+        }
       }
 
       // Audit trail pour investigation admin
@@ -481,7 +623,8 @@ Deno.serve(async (req) => {
           stripe_session_id: session.id,
           stripe_payment_intent_id: paymentIntentId,
           db_error: dbErrMsg,
-          compensation_expire_attempted: true,
+          compensation_expire_attempted: !sessionPartageeParConcurrent,
+          concurrent_session_reused: sessionPartageeParConcurrent,
         },
         p_ip: null,
         p_navigateur: "stripe-connect-pay-mission",

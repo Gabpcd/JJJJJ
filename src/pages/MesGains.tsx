@@ -149,7 +149,7 @@ export function MesGainsApercuContent() {
   const salMissions = useMemo(() => missions.filter(m => m.type_contrat_applique === 'SALARIE'), [missions]);
   const indetCount = useMemo(() => missions.filter(m => !m.type_contrat_applique).length, [missions]);
   // Libéral : honoraires réellement encaissés (après commission Jolene), PAS ×0,78.
-  const honorairesLib = useMemo(() => libMissions.reduce((s, m) => s + (m.net_estime ?? m.net_a_payer ?? Number(m.total_brut) ?? 0), 0), [libMissions]);
+  const honorairesLib = useMemo(() => libMissions.reduce((s, m) => s + (m.net_estime ?? m.net_a_payer ?? Number(m.total_brut ?? 0)), 0), [libMissions]);
   // Salarié : net estimé après cotisations salariales (~22 %).
   const netSal = useMemo(() => salMissions.reduce((s, m) => s + (netEstime(m) ?? 0), 0), [salMissions]);
 

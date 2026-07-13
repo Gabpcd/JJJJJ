@@ -63,13 +63,13 @@ jobs:
 
       - name: Sync fonctions escrow de la branche sur le code de main
         # Les fonctions de la branche datent de sa création : un fix edge mergé
-        # sur main (ex. #817 mandat SEPA) n'y est pas. On redéploie les 4
+        # sur main (ex. #817 mandat SEPA) n'y est pas. On redéploie les 5
         # fonctions du flux escrow depuis le checkout AVANT chaque run.
         # --use-api ne relit pas verify_jwt (CLAUDE.md) : le gateway garde la
         # valeur posée à la création de la branche (false, cf. config.toml).
         run: |
           set -euo pipefail
-          for fn in escrow-debit-echeance escrow-release process-stripe-refunds stripe-webhook; do
+          for fn in escrow-debit-echeance escrow-release process-stripe-refunds stripe-webhook stripe-connect-webhook; do
             supabase functions deploy "$fn" --project-ref "${{ inputs.branch_ref }}" --use-api
             echo "✓ $fn"
           done
@@ -80,26 +80,43 @@ jobs:
         id: wh
         run: |
           set -euo pipefail
-          # Endpoint webhook test → stripe-webhook de la BRANCHE
-          WH=$(curl -sf https://api.stripe.com/v1/webhook_endpoints \
+          # Deux destinations Stripe distinctes : compte plateforme et comptes
+          # Connect. Chaque destination possède son propre signing secret.
+          WH_PLATFORM=$(curl -sf https://api.stripe.com/v1/webhook_endpoints \
             -u "$STRIPE_TEST_SECRET_KEY:" \
             -d "url=https://${{ inputs.branch_ref }}.supabase.co/functions/v1/stripe-webhook" \
             -d "enabled_events[]=payment_intent.succeeded" \
             -d "enabled_events[]=payment_intent.payment_failed" \
             -d "enabled_events[]=charge.dispute.created" \
-            -d "enabled_events[]=payout.paid" \
             -d "enabled_events[]=charge.refunded" \
-            -d "description=recette-escrow branche ${{ inputs.branch_ref }} (éphémère)")
-          WH_ID=$(echo "$WH" | jq -r '.id'); WH_SECRET=$(echo "$WH" | jq -r '.secret')
-          echo "::add-mask::$WH_SECRET"
-          echo "endpoint_id=$WH_ID" >> "$GITHUB_OUTPUT"
-          # Secrets edge de la BRANCHE (clé test + signing secret) — redémarre les fns
+            -d "api_version=2025-08-27.basil" \
+            -d "description=recette-escrow plateforme ${{ inputs.branch_ref }} (éphémère)")
+          WH_CONNECT=$(curl -sf https://api.stripe.com/v1/webhook_endpoints \
+            -u "$STRIPE_TEST_SECRET_KEY:" \
+            -d "connect=true" \
+            -d "url=https://${{ inputs.branch_ref }}.supabase.co/functions/v1/stripe-connect-webhook" \
+            -d "enabled_events[]=account.updated" \
+            -d "enabled_events[]=payout.created" \
+            -d "enabled_events[]=payout.paid" \
+            -d "enabled_events[]=payout.failed" \
+            -d "enabled_events[]=payout.canceled" \
+            -d "api_version=2025-08-27.basil" \
+            -d "description=recette-escrow Connect ${{ inputs.branch_ref }} (éphémère)")
+          WH_PLATFORM_ID=$(echo "$WH_PLATFORM" | jq -r '.id')
+          WH_PLATFORM_SECRET=$(echo "$WH_PLATFORM" | jq -r '.secret')
+          WH_CONNECT_ID=$(echo "$WH_CONNECT" | jq -r '.id')
+          WH_CONNECT_SECRET=$(echo "$WH_CONNECT" | jq -r '.secret')
+          echo "::add-mask::$WH_PLATFORM_SECRET"
+          echo "::add-mask::$WH_CONNECT_SECRET"
+          echo "platform_endpoint_id=$WH_PLATFORM_ID" >> "$GITHUB_OUTPUT"
+          echo "connect_endpoint_id=$WH_CONNECT_ID" >> "$GITHUB_OUTPUT"
+          # Secrets edge de la BRANCHE (clé test + 2 signing secrets) — redémarre les fns
           curl -sf -X POST "https://api.supabase.com/v1/projects/${{ inputs.branch_ref }}/secrets" \
             -H "Authorization: Bearer ${SUPABASE_ACCESS_TOKEN}" \
             -H "Content-Type: application/json" \
-            -d "[{\"name\":\"STRIPE_SECRET_KEY\",\"value\":\"$STRIPE_TEST_SECRET_KEY\"},{\"name\":\"STRIPE_WEBHOOK_SECRET\",\"value\":\"$WH_SECRET\"}]"
+            -d "[{\"name\":\"STRIPE_SECRET_KEY\",\"value\":\"$STRIPE_TEST_SECRET_KEY\"},{\"name\":\"STRIPE_PLATFORM_WEBHOOK_SECRET\",\"value\":\"$WH_PLATFORM_SECRET\"},{\"name\":\"STRIPE_CONNECT_WEBHOOK_SECRET\",\"value\":\"$WH_CONNECT_SECRET\"}]"
           echo "⏳ propagation secrets edge…"; sleep 45
-          echo "✅ endpoint $WH_ID + secrets branche posés."
+          echo "✅ endpoints plateforme/Connect + secrets branche posés."
         env:
           STRIPE_TEST_SECRET_KEY: ${{ secrets.STRIPE_TEST_SECRET_KEY }}
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
@@ -119,10 +136,13 @@ jobs:
       - name: Nettoyage endpoint webhook (toujours)
         if: always()
         run: |
-          [ -n "${{ steps.wh.outputs.endpoint_id }}" ] && \
-            curl -s -X DELETE "https://api.stripe.com/v1/webhook_endpoints/${{ steps.wh.outputs.endpoint_id }}" \
+          [ -n "${{ steps.wh.outputs.platform_endpoint_id }}" ] && \
+            curl -s -X DELETE "https://api.stripe.com/v1/webhook_endpoints/${{ steps.wh.outputs.platform_endpoint_id }}" \
               -u "$STRIPE_TEST_SECRET_KEY:" > /dev/null || true
-          echo "endpoint webhook supprimé."
+          [ -n "${{ steps.wh.outputs.connect_endpoint_id }}" ] && \
+            curl -s -X DELETE "https://api.stripe.com/v1/webhook_endpoints/${{ steps.wh.outputs.connect_endpoint_id }}" \
+              -u "$STRIPE_TEST_SECRET_KEY:" > /dev/null || true
+          echo "endpoints webhooks supprimés."
         env:
           STRIPE_TEST_SECRET_KEY: ${{ secrets.STRIPE_TEST_SECRET_KEY }}
 

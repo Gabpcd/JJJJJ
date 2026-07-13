@@ -100,7 +100,12 @@ export function APIContent() {
       .catch(() => toast.error('La copie a échoué.'));
   };
   const toggleReveal = (id: string) => {
-    setRevealedKeys(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+    setRevealedKeys(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   };
   const masquer = (cle: string, revealed: boolean) => revealed ? cle : cle.slice(0, 12) + '••••••••••••';
 

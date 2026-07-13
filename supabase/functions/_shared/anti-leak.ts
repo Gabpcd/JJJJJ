@@ -28,19 +28,19 @@ export function detecterLeak(content: string): DetectionResult {
   const lower = content.toLowerCase();
 
   // ─── 1. TÉLÉPHONES FR (mobile + fixe + international + spéciaux) ─────
-  const telFR = /(?:(?:\+|00)33|0)\s*[1-9](?:[\s.\-]*\d{2}){4}/g;
+  const telFR = /(?:(?:\+|00)33|0)\s*[1-9](?:[\s.-]*\d{2}){4}/g;
   const matchTelFR = content.match(telFR);
   if (matchTelFR && matchTelFR.length > 0) {
     return { blocked: true, type: "TELEPHONE", match: matchTelFR[0] };
   }
 
-  const telSpecialFR = /\b(?:08\d{2}|36\d{2}|39\d{2})[\s.\-]?\d{0,6}/g;
+  const telSpecialFR = /\b(?:08\d{2}|36\d{2}|39\d{2})[\s.-]?\d{0,6}/g;
   const matchSpecial = content.match(telSpecialFR);
   if (matchSpecial && matchSpecial.length > 0) {
     return { blocked: true, type: "TELEPHONE", match: matchSpecial[0] };
   }
 
-  const telIntl = /(?:\+|00)\d{1,3}[\s.\-]?\d{6,}/g;
+  const telIntl = /(?:\+|00)\d{1,3}[\s.-]?\d{6,}/g;
   const matchIntl = content.match(telIntl);
   if (matchIntl && matchIntl.length > 0) {
     return { blocked: true, type: "TELEPHONE", match: matchIntl[0] };
@@ -54,7 +54,7 @@ export function detecterLeak(content: string): DetectionResult {
   }
 
   // ─── 2. EMAILS (RFC 5322 simplifié, TOUS domaines) ──────────────────
-  const email = /[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/g;
+  const email = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
   const matchEmail = content.match(email);
   if (matchEmail && matchEmail.length > 0) {
     return { blocked: true, type: "EMAIL", match: matchEmail[0] };
@@ -71,7 +71,7 @@ export function detecterLeak(content: string): DetectionResult {
     }
   }
 
-  const domain = /\b(?!jolene\.app\b)[a-z0-9\-]+\.(?:fr|com|net|org|eu|io|app|co|info|biz|pro|me|tv|us|uk|de|es|it|be|ch|ca)\b/gi;
+  const domain = /\b(?!jolene\.app\b)[a-z0-9-]+\.(?:fr|com|net|org|eu|io|app|co|info|biz|pro|me|tv|us|uk|de|es|it|be|ch|ca)\b/gi;
   const matchDomain = content.match(domain);
   if (matchDomain) {
     for (const d of matchDomain) {
@@ -81,7 +81,7 @@ export function detecterLeak(content: string): DetectionResult {
     }
   }
 
-  const www = /www\.[a-z0-9.\-]+\.[a-z]{2,}/gi;
+  const www = /www\.[a-z0-9.-]+\.[a-z]{2,}/gi;
   const matchWww = content.match(www);
   if (matchWww) {
     for (const w of matchWww) {

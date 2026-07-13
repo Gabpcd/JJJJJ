@@ -8,66 +8,125 @@ import { ChargementPage } from '@/components/ChargementPage';
 import { getLabelTypeEtablissement } from '@/lib/constantes';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
-import { extraireMessageErreur } from '@/lib/erreurs';
+import { extraireMessageErreur, messageErreurEdgeFn } from '@/lib/erreurs';
 import { reverseGeocode } from '@/lib/geocodage';
 import { getCurrentPosition as obtenirGeoloc } from '@/lib/geoloc';
 import { capturerErreurSentry } from '@/lib/sentry';
-import { supabase, SUPABASE_URL } from '@/integrations/supabase/client';
+import { verifierFichierDocument } from '@/lib/documentUpload';
+import { supabase } from '@/integrations/supabase/client';
 import { Info, MapPin, Loader2, Download, Trash2, Palette, Building2, Upload, FileCheck, Clock, AlertTriangle, Lock } from 'lucide-react';
 import { AvatarUpload } from '@/components/AvatarUpload';
 import { Switch } from '@/components/ui/switch';
 import { Elements, IbanElement, useStripe, useElements } from '@stripe/react-stripe-js';
-import { stripePromise } from '@/lib/stripe';
+import { isStripeConfigured, stripePromise } from '@/lib/stripe';
 
 interface DeleteAccountResponse {
   success?: boolean;
   error?: string;
 }
 
+type SepaSetupResponse = {
+  client_secret?: string;
+  billing_name?: string;
+  billing_email?: string;
+  success?: boolean;
+  has_sepa?: boolean;
+  last4?: string;
+  error?: string;
+};
+
+async function appelerSetupSepa(body: Record<string, unknown>): Promise<SepaSetupResponse> {
+  const { data, error } = await supabase.functions.invoke('setup-sepa', { body });
+  if (error) {
+    throw new Error(await messageErreurEdgeFn(error, 'Le service de paiement est temporairement indisponible.'));
+  }
+  const response = (data || {}) as SepaSetupResponse;
+  if (response.error) throw new Error(response.error);
+  return response;
+}
+
 // SEPA IBAN Form (inside Stripe Elements)
-function SepaIbanForm({ onSuccess }: { onSuccess: (last4: string) => void }) {
+function SepaIbanForm({
+  onSuccess,
+  onCancel,
+}: {
+  onSuccess: (last4: string) => void;
+  onCancel?: () => void;
+}) {
   const stripe = useStripe();
   const elements = useElements();
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const [ibanComplete, setIbanComplete] = useState(false);
+  const [mandateAccepted, setMandateAccepted] = useState(false);
+  const [pendingSetupIntentId, setPendingSetupIntentId] = useState<string | null>(null);
+
+  const finaliserMandat = async (setupIntentId: string) => {
+    const result = await appelerSetupSepa({
+      action: 'finalize_setup_intent',
+      setup_intent_id: setupIntentId,
+    });
+    if (!result.success || !result.last4) {
+      throw new Error("Le mandat SEPA n'a pas pu être enregistré. Réessayez.");
+    }
+    setPendingSetupIntentId(null);
+    onSuccess(result.last4);
+  };
 
   const handleSubmit = async () => {
     if (!stripe || !elements) return;
     setSubmitting(true);
     setError('');
-
-    const ibanElement = elements.getElement(IbanElement);
-    if (!ibanElement) { setSubmitting(false); return; }
-
-    const { error: stripeErr, paymentMethod } = await stripe.createPaymentMethod({
-      type: 'sepa_debit',
-      sepa_debit: ibanElement as any,
-      billing_details: { name: 'Établissement' },
-    } as any);
-
-    if (stripeErr) {
-      setError(stripeErr.message || 'Erreur IBAN');
-      setSubmitting(false);
-      return;
-    }
-
-    const { data: session } = await supabase.auth.getSession();
-    const token = session?.session?.access_token;
-    const res = await fetch(
-      `${SUPABASE_URL}/functions/v1/setup-sepa`,
-      {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'confirm_sepa', payment_method_id: paymentMethod?.id }),
+    try {
+      if (pendingSetupIntentId) {
+        await finaliserMandat(pendingSetupIntentId);
+        return;
       }
-    );
-    const data = await res.json();
-    if (data.success) {
-      onSuccess(data.last4);
-    } else {
-      setError(data.error || 'Erreur lors de la configuration SEPA');
+      if (!mandateAccepted) {
+        throw new Error('Confirmez votre habilitation et le mandat SEPA avant de continuer.');
+      }
+
+      const ibanElement = elements.getElement(IbanElement);
+      if (!ibanElement || !ibanComplete) {
+        throw new Error('Saisissez un IBAN SEPA complet et valide.');
+      }
+
+      const setup = await appelerSetupSepa({ action: 'create_setup_intent' });
+      if (!setup.client_secret || !setup.billing_name || !setup.billing_email) {
+        throw new Error("Le mandat SEPA n'a pas pu être initialisé. Réessayez.");
+      }
+
+      const { error: stripeError, setupIntent } = await stripe.confirmSepaDebitSetup(
+        setup.client_secret,
+        {
+          payment_method: {
+            sepa_debit: ibanElement,
+            billing_details: {
+              name: setup.billing_name,
+              email: setup.billing_email,
+            },
+          },
+        },
+      );
+      if (stripeError) {
+        throw new Error(stripeError.message || "Stripe n'a pas pu confirmer le mandat SEPA.");
+      }
+      if (!setupIntent?.id) {
+        throw new Error("Stripe n'a pas renvoyé le mandat confirmé. Réessayez.");
+      }
+
+      // Conserver uniquement l'identifiant non secret permet de relancer la
+      // finalisation après une coupure réseau sans ressaisir ni exposer l'IBAN.
+      setPendingSetupIntentId(setupIntent.id);
+      if (setupIntent.status !== 'succeeded') {
+        throw new Error('Le mandat est encore en cours de confirmation. Réessayez dans quelques instants.');
+      }
+      await finaliserMandat(setupIntent.id);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Erreur lors de la configuration SEPA');
+    } finally {
+      setSubmitting(false);
     }
-    setSubmitting(false);
   };
 
   return (
@@ -80,20 +139,45 @@ function SepaIbanForm({ onSuccess }: { onSuccess: (last4: string) => void }) {
               base: { fontSize: '16px', color: '#333', '::placeholder': { color: '#aab7c4' } },
             },
           }}
+          onChange={(event) => {
+            setIbanComplete(event.complete);
+            if (event.error?.message) setError(event.error.message);
+          }}
         />
       </div>
-      {error && <p className="text-xs text-destructive">{error}</p>}
+      {error && <p className="text-xs text-destructive" role="alert" aria-live="polite">{error}</p>}
+      <label className="flex items-start gap-2 text-xs text-foreground cursor-pointer">
+        <input
+          type="checkbox"
+          checked={mandateAccepted}
+          onChange={(event) => setMandateAccepted(event.target.checked)}
+          disabled={submitting || !!pendingSetupIntentId}
+          className="mt-0.5 accent-primary"
+        />
+        <span>Je confirme être habilité(e) à engager cet établissement et j'accepte le mandat de prélèvement SEPA.</span>
+      </label>
       <button
         type="button"
         onClick={handleSubmit}
-        disabled={submitting || !stripe}
+        disabled={submitting || !stripe || (!pendingSetupIntentId && (!ibanComplete || !mandateAccepted))}
         className="btn-primary text-sm w-full disabled:opacity-50"
       >
-        {submitting ? 'Validation…' : !stripe ? '⏳ Chargement Stripe…' : '🏦 Valider le mandat SEPA'}
+        {submitting
+          ? 'Validation…'
+          : !stripe
+            ? '⏳ Chargement Stripe…'
+            : pendingSetupIntentId
+              ? 'Réessayer la finalisation du mandat'
+              : '🏦 Confirmer le mandat SEPA'}
       </button>
+      {onCancel && !submitting && !pendingSetupIntentId && (
+        <button type="button" onClick={onCancel} className="btn-secondary text-sm w-full">
+          Annuler
+        </button>
+      )}
       {!stripe && <p className="text-[10px] text-warning">Le module de paiement charge. Patientez quelques secondes…</p>}
       <p className="text-[10px] text-muted-foreground">
-        En fournissant votre IBAN, vous autorisez Jolene à envoyer des instructions à votre banque pour débiter votre compte conformément au mandat SEPA.
+        En fournissant votre IBAN et en confirmant, vous autorisez Jolene à envoyer des instructions à votre banque pour débiter votre compte conformément au mandat SEPA. Vous bénéficiez d'un droit au remboursement selon votre convention bancaire ; la demande doit être présentée dans les 8 semaines suivant le débit.
       </p>
     </div>
   );
@@ -106,21 +190,14 @@ function SepaSetupSection({ userId }: { userId?: string }) {
   const [showForm, setShowForm] = useState(false);
 
   useEffect(() => {
-    if (!userId) return;
+    if (!userId) {
+      setLoading(false);
+      return;
+    }
     (async () => {
-      const { data: session } = await supabase.auth.getSession();
-      const token = session?.session?.access_token;
       try {
-        const res = await fetch(
-          `${SUPABASE_URL}/functions/v1/setup-sepa`,
-          {
-            method: 'POST',
-            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action: 'get_sepa_status' }),
-          }
-        );
-        const data = await res.json();
-        setSepaStatus(data);
+        const data = await appelerSetupSepa({ action: 'get_sepa_status' });
+        setSepaStatus({ has_sepa: data.has_sepa === true, last4: data.last4 });
       } catch {
         setSepaStatus({ has_sepa: false });
       }
@@ -136,7 +213,7 @@ function SepaSetupSection({ userId }: { userId?: string }) {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Building2 className="h-4 w-4 text-success" />
-            <span className="text-sm font-medium text-success">IBAN enregistré : FR76 •••• •••• {sepaStatus.last4}</span>
+            <span className="text-sm font-medium text-success">Mandat SEPA actif · IBAN •••• {sepaStatus.last4}</span>
           </div>
           <button
             type="button"
@@ -150,7 +227,7 @@ function SepaSetupSection({ userId }: { userId?: string }) {
     );
   }
 
-  if (!stripePromise) {
+  if (!isStripeConfigured) {
     return (
       <div className="mt-4 p-3 rounded-xl bg-warning/10 border border-warning/20">
         <p className="text-xs text-warning">Configuration Stripe manquante. Contactez le support.</p>
@@ -161,7 +238,10 @@ function SepaSetupSection({ userId }: { userId?: string }) {
   return (
     <div className="mt-4">
       <Elements stripe={stripePromise} options={{ locale: 'fr' }}>
-        <SepaIbanForm onSuccess={(last4) => { setSepaStatus({ has_sepa: true, last4 }); setShowForm(false); }} />
+        <SepaIbanForm
+          onSuccess={(last4) => { setSepaStatus({ has_sepa: true, last4 }); setShowForm(false); }}
+          onCancel={sepaStatus?.has_sepa ? () => setShowForm(false) : undefined}
+        />
       </Elements>
     </div>
   );
@@ -219,6 +299,12 @@ export function ProfilEtablissementContent({ sections }: { sections?: SectionPro
   const [conventionCollective, setConventionCollective] = useState('');
   const [conventionSuggeree, setConventionSuggeree] = useState(false);
   const [modePaiement, setModePaiement] = useState('FACTURE_MENSUELLE');
+  const [etablissementId, setEtablissementId] = useState<string | null>(null);
+  const [ribKey, setRibKey] = useState<string | null>(null);
+  const [ribCoherent, setRibCoherent] = useState<boolean | null>(null);
+  const [ribLast4, setRibLast4] = useState<string | null>(null);
+  const [uploadingRib, setUploadingRib] = useState(false);
+  const ribInputRef = React.useRef<HTMLInputElement>(null);
   const [contratValide, setContratValide] = useState(false);
   const [contratUrl, setContratUrl] = useState<string | null>(null);
   const [contratUploadeLe, setContratUploadeLe] = useState<string | null>(null);
@@ -234,6 +320,7 @@ export function ProfilEtablissementContent({ sections }: { sections?: SectionPro
     if (!user) return;
     supabase.rpc('fn_mon_etablissement_complet' as any).then(({ data }: any) => {
       if (data) {
+        setEtablissementId(data.id || user.id);
         setSiret(data.siret);
         setType(data.type);
         if (data.convention_collective) {
@@ -247,6 +334,9 @@ export function ProfilEtablissementContent({ sections }: { sections?: SectionPro
         setContratValide(!!data.contrat_valide);
         setContratUrl(data.contrat_url || null);
         setContratUploadeLe(data.contrat_uploade_le || null);
+        setRibKey(data.rib_s3_key || null);
+        setRibCoherent(data.rib_ia_coherent ?? null);
+        setRibLast4(data.iban_last4 || null);
         (setForm as any)(prev => ({ ...prev, logoUrl: (data as any).logo_url || '' }));
         setForm({
           nom: data.nom, finess: data.finess || '',
@@ -284,6 +374,69 @@ export function ProfilEtablissementContent({ sections }: { sections?: SectionPro
   // adresse_lat, adresse_lng, couleur_theme are loaded from the RPC in the main useEffect above
 
   const maj = (champ: string, valeur: any) => setForm(prev => ({ ...prev, [champ]: valeur }));
+
+  const televerserRibEtablissement = async (file: File) => {
+    const cibleId = etablissementId || user?.id;
+    if (!user || !cibleId) return;
+    const validation = await verifierFichierDocument(file);
+    if (validation.ok === false) {
+      afficherNotification({ type: 'erreur', message: validation.message });
+      return;
+    }
+    const path = `${cibleId}/rib-etablissement-${Date.now()}-${globalThis.crypto.randomUUID()}.${validation.extension}`;
+    const ancienRibKey = ribKey;
+    setUploadingRib(true);
+    try {
+      const { error: uploadError } = await supabase.storage
+        .from('jolene-documents')
+        .upload(path, file, { contentType: validation.mime, upsert: false });
+      if (uploadError) throw uploadError;
+
+      const { data: updated, error: updateError } = await supabase
+        .from('etablissements')
+        .update({ rib_s3_key: path })
+        .eq('id', cibleId)
+        .select('id')
+        .maybeSingle();
+      if (updateError || !updated) {
+        await supabase.functions.invoke('verify-rib-etablissement', {
+          body: { action: 'cleanup_orphan', etablissement_id: cibleId, rib_s3_key: path },
+        });
+        throw updateError || new Error('Établissement introuvable');
+      }
+
+      if (ancienRibKey && ancienRibKey !== path) {
+        void supabase.functions.invoke('verify-rib-etablissement', {
+          body: { action: 'cleanup_orphan', etablissement_id: cibleId, rib_s3_key: ancienRibKey },
+        });
+      }
+
+      const { data, error } = await supabase.functions.invoke('verify-rib-etablissement', {
+        body: { etablissement_id: cibleId },
+      });
+      setRibKey(path);
+      if (error) {
+        setRibCoherent(null);
+        setRibLast4(null);
+        afficherNotification({ type: 'avertissement', message: await messageErreurEdgeFn(error, 'RIB enregistré. Sa vérification reste en attente.') });
+        return;
+      }
+      setRibCoherent(data?.coherent ?? null);
+      setRibLast4(data?.analysis?.iban_last4 || null);
+      if (data?.coherent === true) {
+        afficherNotification({ type: 'succes', message: 'RIB vérifié : titulaire et IBAN concordants.' });
+      } else if (data?.coherent === false) {
+        afficherNotification({ type: 'erreur', message: data?.motif || 'Ce RIB ne correspond pas à l’établissement.' });
+      } else {
+        afficherNotification({ type: 'avertissement', message: data?.motif || 'RIB reçu — une revue manuelle est nécessaire.' });
+      }
+    } catch (error) {
+      afficherNotification({ type: 'erreur', message: error instanceof Error ? error.message : extraireMessageErreur(error) });
+    } finally {
+      setUploadingRib(false);
+      if (ribInputRef.current) ribInputRef.current.value = '';
+    }
+  };
 
   // Lot 11 : la position de l'établissement (socle du géofencing F1) se pose
   // par GÉOCODAGE DE L'ADRESSE (BAN) — pas par le GPS du téléphone de la
@@ -665,6 +818,73 @@ export function ProfilEtablissementContent({ sections }: { sections?: SectionPro
         </div>
         )}
 
+        {/* RIB de facturation : vérification distincte du mandat SEPA. */}
+        {visible('facturation') && (
+        <div className="card-base">
+          <h2 className="text-base font-semibold text-foreground mb-2 flex items-center gap-2">
+            <Building2 className="h-5 w-5 text-primary" aria-hidden="true" /> RIB de l’établissement
+          </h2>
+          <p className="text-xs text-muted-foreground mb-4">
+            Le titulaire et l’IBAN sont contrôlés par rapport à l’identité juridique de l’établissement. L’IBAN complet n’est jamais affiché après vérification.
+          </p>
+
+          <div aria-live="polite" className={`flex items-start gap-2 p-3 rounded-xl border ${
+            ribCoherent === true
+              ? 'bg-success/10 border-success/20'
+              : ribCoherent === false
+                ? 'bg-destructive/5 border-destructive/20'
+                : ribKey
+                  ? 'bg-warning/10 border-warning/20'
+                  : 'bg-muted border-border'
+          }`}>
+            {ribCoherent === true ? (
+              <FileCheck className="h-4 w-4 text-success shrink-0 mt-0.5" aria-hidden="true" />
+            ) : ribCoherent === false ? (
+              <AlertTriangle className="h-4 w-4 text-destructive shrink-0 mt-0.5" aria-hidden="true" />
+            ) : ribKey ? (
+              <Clock className="h-4 w-4 text-warning shrink-0 mt-0.5" aria-hidden="true" />
+            ) : (
+              <AlertTriangle className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" aria-hidden="true" />
+            )}
+            <div>
+              <p className="text-sm font-medium text-foreground">
+                {ribCoherent === true
+                  ? `RIB vérifié${ribLast4 ? ` — IBAN se terminant par ${ribLast4}` : ''}`
+                  : ribCoherent === false
+                    ? 'RIB non concordant — remplacez-le ou contactez le support'
+                    : ribKey
+                      ? 'RIB reçu — revue manuelle nécessaire'
+                      : 'Aucun RIB fourni'}
+              </p>
+              {ribCoherent === false && (
+                <p className="text-xs text-muted-foreground mt-0.5">Le document ne permet pas de confirmer à la fois le titulaire et un IBAN valide.</p>
+              )}
+            </div>
+          </div>
+
+          <input
+            ref={ribInputRef}
+            type="file"
+            accept="application/pdf,image/jpeg,image/png,image/webp"
+            className="hidden"
+            aria-label="Choisir le RIB de l’établissement"
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              if (file) void televerserRibEtablissement(file);
+            }}
+          />
+          <button
+            type="button"
+            onClick={() => ribInputRef.current?.click()}
+            disabled={uploadingRib}
+            className="mt-4 w-full flex items-center justify-center gap-2 px-4 py-3 bg-primary/5 border-2 border-dashed border-primary/30 rounded-xl text-primary font-semibold hover:bg-primary/10 transition disabled:opacity-50"
+          >
+            {uploadingRib ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Upload className="h-4 w-4" aria-hidden="true" />}
+            {uploadingRib ? 'Vérification en cours…' : ribKey ? 'Remplacer le RIB' : 'Téléverser un RIB'}
+          </button>
+        </div>
+        )}
+
         {/* Couleur de thème */}
         {visible('profil') && (
         <div className="card-base">
@@ -735,28 +955,35 @@ export function ProfilEtablissementContent({ sections }: { sections?: SectionPro
               onChange={async (e) => {
                 const file = e.target.files?.[0];
                 if (!file || !user) return;
-                if (file.type !== 'application/pdf') {
-                  afficherNotification({ type: 'erreur', message: 'Seuls les fichiers PDF sont acceptés.' });
-                  return;
-                }
-                if (file.size > 20 * 1024 * 1024) {
-                  afficherNotification({ type: 'erreur', message: 'Le fichier ne doit pas dépasser 20 Mo.' });
+                const validation = await verifierFichierDocument(file, {
+                  allowedMimes: ['application/pdf'],
+                });
+                if (validation.ok === false) {
+                  afficherNotification({ type: 'erreur', message: validation.message });
+                  e.target.value = '';
                   return;
                 }
                 setUploadingContrat(true);
-                const fileName = `${user.id}/contrat-service-${Date.now()}.pdf`;
-                const { error: uploadErr } = await supabase.storage.from('jolene-documents').upload(fileName, file, { upsert: true });
+                const cibleId = etablissementId || user.id;
+                const fileName = `${cibleId}/contrat-service-${Date.now()}.pdf`;
+                const ancienContratUrl = contratUrl;
+                const { error: uploadErr } = await supabase.storage.from('jolene-documents').upload(fileName, file, {
+                  contentType: validation.mime,
+                  upsert: false,
+                });
                 if (uploadErr) {
                   afficherNotification({ type: 'erreur', message: extraireMessageErreur(uploadErr) });
                   setUploadingContrat(false);
+                  e.target.value = '';
                   return;
                 }
-                const { data: urlData } = await supabase.storage.from('jolene-documents').createSignedUrl(fileName, 300);
-                const contratSignedUrl = urlData?.signedUrl || '';
                 const { error: updateErr } = await supabase.rpc('fn_modifier_mon_etablissement' as any, {
                   p_contrat_url: fileName, // Store path, not public URL
                 });
                 if (updateErr) {
+                  await supabase.functions.invoke('verify-contrat-etablissement', {
+                    body: { action: 'cleanup_orphan', etablissement_id: cibleId, contrat_url: fileName },
+                  });
                   afficherNotification({ type: 'erreur', message: extraireMessageErreur(updateErr) });
                 } else {
                   setContratUrl(fileName);
@@ -764,11 +991,17 @@ export function ProfilEtablissementContent({ sections }: { sections?: SectionPro
                   setContratValide(false);
                   // Re-vérification IA à chaque re-upload (type + SIRET + identité signataire).
                   supabase.functions.invoke('verify-contrat-etablissement', {
-                    body: { etablissement_id: user.id },
+                    body: { etablissement_id: cibleId },
                   }).catch(() => { /* best-effort */ });
+                  if (ancienContratUrl && ancienContratUrl !== fileName) {
+                    void supabase.functions.invoke('verify-contrat-etablissement', {
+                      body: { action: 'cleanup_orphan', etablissement_id: cibleId, contrat_url: ancienContratUrl },
+                    });
+                  }
                   afficherNotification({ type: 'succes', message: 'Contrat téléversé. Vérification IA en cours, puis validation par Jolene.' });
                 }
                 setUploadingContrat(false);
+                e.target.value = '';
               }}
             />
             <button

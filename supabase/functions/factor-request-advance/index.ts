@@ -11,22 +11,7 @@
 //   FACTOR_MARGE_JOLENE=0.5             (% de marge ajoutée par Jolene au taux Defacto)
 
 import { createClient } from "npm:@supabase/supabase-js@2";
-
-function corsHeaders(req: Request) {
-  const origin = req.headers.get("origin") || "";
-  const allowed = [
-    "https://jolene.app",
-    "https://jolene.app",
-    "http://localhost:5173",
-    "http://localhost:8080",
-  ];
-  const ok = allowed.includes(origin);
-  return {
-    "Access-Control-Allow-Origin": ok ? origin : "https://jolene.app",
-    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-    "Content-Type": "application/json",
-  };
-}
+import { corsHeaders } from "../_shared/cors.ts";
 
 // Interface générique provider
 interface FactorProvider {

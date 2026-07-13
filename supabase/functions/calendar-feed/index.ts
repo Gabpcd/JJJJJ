@@ -1,25 +1,5 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
-
-function getCorsOrigin(req: Request): string {
-  const origin = req.headers.get("origin") || "";
-  if (
-    origin === "https://jolene.app" ||
-    origin === "https://app.jolene.app" ||
-    origin === "https://www.jolene.app" ||
-    origin === "http://localhost:5173" ||
-    origin === "http://localhost:8080"
-  ) {
-    return origin;
-  }
-  return "https://jolene.app";
-}
-
-function corsHeaders(req: Request) {
-  return {
-    "Access-Control-Allow-Origin": getCorsOrigin(req),
-    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
-  };
-}
+import { corsHeaders } from "../_shared/cors.ts";
 
 function escapeIcal(str: string): string {
   return (str || "").replace(/\\/g, "\\\\").replace(/;/g, "\\;").replace(/,/g, "\\,").replace(/\n/g, "\\n");
@@ -76,7 +56,7 @@ Deno.serve(async (req) => {
 
   // Fetch establishment info
   const etabIds = [...new Set((missions || []).map((m: any) => m.etablissement_id))];
-  let etabMap: Record<string, any> = {};
+  const etabMap: Record<string, any> = {};
   if (etabIds.length > 0) {
     const { data: etabs } = await supabase
       .from("etablissements")

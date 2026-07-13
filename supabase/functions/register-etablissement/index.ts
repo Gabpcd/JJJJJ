@@ -1,35 +1,173 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.99.2';
 import { errorResponse, safeStringifyError } from '../_shared/errors.ts';
-import { colonnesAttribution } from '../_shared/attribution.ts';
-
-function getCorsOrigin(req: Request): string {
-  const origin = req.headers.get("origin") || "";
-  if (
-    origin === "https://jolene.app" ||
-    origin === "https://app.jolene.app" ||
-    origin === "https://www.jolene.app" ||
-    origin === "https://localhost" ||
-    origin === "capacitor://localhost" ||
-    origin === "http://localhost:5173" ||
-    origin === "http://localhost:8080"
-  ) {
-    return origin;
-  }
-  return "https://jolene.app";
-}
-
-function corsHeaders(req: Request) {
-  return {
-    'Access-Control-Allow-Origin': getCorsOrigin(req),
-    'Access-Control-Allow-Methods': 'POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
-  };
-}
+import { colonnesAttribution, type AttributionInput } from '../_shared/attribution.ts';
+import { corsHeaders, preflightResponse } from '../_shared/cors.ts';
+import { corporateNameMatches } from '../_shared/verification-rules.ts';
 
 // M7: Rate limiting - 5 requests per IP per 10 minutes
 const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
 const RATE_LIMIT = 5;
 const RATE_WINDOW_MS = 10 * 60 * 1000;
+
+const TYPES_ETABLISSEMENT = new Set([
+  'HOPITAL_PUBLIC', 'CLINIQUE_PRIVEE', 'EHPAD', 'SSIAD', 'HAD',
+  'CENTRE_SANTE', 'LABO', 'IME', 'MAS', 'FAM', 'PHARMACIE_OFFICINE',
+  'ESPIC', 'CABINET_MEDICAL', 'CABINET_DENTAIRE', 'CABINET_IDEL',
+  'CABINET_SAGE_FEMME', 'CABINET_KINE', 'CABINET_ORTHO', 'CABINET_ERGO',
+  'CABINET_PSYCHOMOT',
+]);
+
+const NAF_SANTE = new Set([
+  '86.10Z', '86.21Z', '86.22A', '86.22B', '86.22C', '86.23Z',
+  '86.90A', '86.90B', '86.90C', '86.90D', '86.90E', '86.90F',
+  '87.10A', '87.10B', '87.10C', '87.20A', '87.20B', '87.30A',
+  '87.30B', '87.90A', '87.90B', '88.10A', '88.10B', '88.10C',
+  '47.73Z',
+]);
+
+type CoherenceIdentite = 'OK' | 'INCOHERENT' | null;
+
+interface RegistreEtablissement {
+  siret?: string | null;
+  activite_principale?: string | null;
+  etat_administratif?: string | null;
+}
+
+interface RegistreEntreprise {
+  matching_etablissements?: RegistreEtablissement[] | null;
+  siege?: RegistreEtablissement | null;
+  nom_raison_sociale?: string | null;
+  nom_complet?: string | null;
+  activite_principale?: string | null;
+  nature_juridique?: string | null;
+  dirigeants?: unknown[] | null;
+}
+
+interface SiretVerification {
+  trouve: boolean;
+  raison_sociale: string | null;
+  est_actif: boolean;
+  est_sante: boolean;
+  est_public: boolean;
+  code_naf: string | null;
+  categorie_juridique: string | null;
+  dirigeants: unknown[] | null;
+}
+
+interface FhirIdentifier {
+  system?: string;
+  value?: string;
+  type?: { coding?: Array<{ code?: string; display?: string }> };
+}
+
+interface FhirOrganization {
+  resourceType?: string;
+  identifier?: FhirIdentifier[];
+  name?: string;
+  active?: boolean;
+  address?: Array<{ line?: string[]; city?: string; postalCode?: string }>;
+  type?: Array<{ coding?: Array<{ system?: string; code?: string; display?: string }> }>;
+}
+
+interface FinessVerification {
+  trouve: boolean;
+  raison_sociale: string | null;
+  actif: boolean;
+  siret: string | null;
+  categorie: string | null;
+  secteur: string | null;
+  est_public: boolean;
+}
+
+function texte(value: unknown, maxLength: number): string {
+  return typeof value === 'string' ? value.trim().slice(0, maxLength) : '';
+}
+
+function chiffres(value: unknown): string {
+  return typeof value === 'string' ? value.replace(/\D/g, '') : '';
+}
+
+function siretLuhnValide(siret: string): boolean {
+  if (!/^\d{14}$/.test(siret) || /^0+$/.test(siret)) return false;
+  let somme = 0;
+  for (let index = 0; index < siret.length; index += 1) {
+    let chiffre = Number(siret[index]);
+    if (index % 2 === 0) {
+      chiffre *= 2;
+      if (chiffre > 9) chiffre -= 9;
+    }
+    somme += chiffre;
+  }
+  return somme % 10 === 0;
+}
+
+function normaliserNaf(value: unknown): string {
+  const brut = texte(value, 8).toUpperCase();
+  return brut.length === 5 && !brut.includes('.')
+    ? `${brut.slice(0, 2)}.${brut.slice(2)}`
+    : brut;
+}
+
+function trouverSiretExact(
+  resultats: RegistreEntreprise[],
+  siret: string,
+): { entreprise: RegistreEntreprise; etablissement: RegistreEtablissement } | null {
+  for (const entreprise of resultats) {
+    for (const etablissement of entreprise.matching_etablissements || []) {
+      if (chiffres(etablissement.siret) === siret) return { entreprise, etablissement };
+    }
+    if (entreprise.siege && chiffres(entreprise.siege.siret) === siret) {
+      return { entreprise, etablissement: entreprise.siege };
+    }
+  }
+  return null;
+}
+
+async function querySiretInscription(siret: string): Promise<SiretVerification | null> {
+  try {
+    const url = `https://recherche-entreprises.api.gouv.fr/search?q=${encodeURIComponent(siret)}&mtm_campaign=jolene`;
+    const response = await fetch(url, {
+      headers: { Accept: 'application/json' },
+      signal: AbortSignal.timeout(9_000),
+    });
+    if (!response.ok) return null;
+    const payload = await response.json() as { results?: RegistreEntreprise[] };
+    const exact = trouverSiretExact(Array.isArray(payload.results) ? payload.results : [], siret);
+    if (!exact) {
+      return {
+        trouve: false,
+        raison_sociale: null,
+        est_actif: false,
+        est_sante: false,
+        est_public: false,
+        code_naf: null,
+        categorie_juridique: null,
+        dirigeants: null,
+      };
+    }
+
+    const codeNaf = normaliserNaf(
+      exact.etablissement.activite_principale || exact.entreprise.activite_principale,
+    );
+    const categorieJuridique = texte(exact.entreprise.nature_juridique, 20) || null;
+    return {
+      trouve: true,
+      raison_sociale: texte(
+        exact.entreprise.nom_raison_sociale || exact.entreprise.nom_complet,
+        300,
+      ) || null,
+      est_actif: exact.etablissement.etat_administratif === 'A',
+      est_sante: NAF_SANTE.has(codeNaf),
+      est_public: !!categorieJuridique && (categorieJuridique.startsWith('7') || categorieJuridique.startsWith('4')),
+      code_naf: codeNaf || null,
+      categorie_juridique: categorieJuridique,
+      dirigeants: Array.isArray(exact.entreprise.dirigeants) ? exact.entreprise.dirigeants : null,
+    };
+  } catch (error) {
+    console.warn('[register-etablissement] Registre SIRET indisponible:', safeStringifyError(error));
+    return null;
+  }
+}
 
 function checkRateLimit(ip: string): boolean {
   const now = Date.now();
@@ -47,36 +185,103 @@ function checkRateLimit(ip: string): boolean {
 // inline ici pour pouvoir croiser raison sociale FINESS ↔ SIRET ↔ nom AVANT l'insert.
 const FINESS_GATEWAY = 'https://gateway.api.esante.gouv.fr/fhir/v2/Organization';
 const FINESS_SYSTEM = 'https://finess.esante.gouv.fr';
-async function queryFinessInscription(finess: string, apiKey: string): Promise<{ trouve: boolean; raison_sociale?: string | null; actif?: boolean; categorie?: string | null; secteur?: string | null; est_public?: boolean } | null> {
+const SIRENE_SYSTEM = 'https://sirene.fr';
+
+function identifiantFinessExact(identifier: FhirIdentifier, finess: string): boolean {
+  const systeme = texte(identifier.system, 200).toLowerCase().replace(/\/$/, '');
+  return (systeme === FINESS_SYSTEM || systeme.includes('finess'))
+    && chiffres(identifier.value) === finess;
+}
+
+function extraireSiretFhir(organization: FhirOrganization): string | null {
+  for (const identifier of organization.identifier || []) {
+    const valeur = chiffres(identifier.value);
+    if (valeur.length !== 14) continue;
+    const systeme = texte(identifier.system, 200).toLowerCase().replace(/\/$/, '');
+    const typeSiret = (identifier.type?.coding || []).some((coding) =>
+      texte(coding.code, 50).toUpperCase() === 'SIRET'
+      || texte(coding.display, 100).toUpperCase().includes('SIRET')
+    );
+    if (systeme === SIRENE_SYSTEM || systeme.includes('siret') || typeSiret) return valeur;
+  }
+  return null;
+}
+
+async function queryFinessInscription(
+  finess: string,
+  apiKey: string,
+): Promise<FinessVerification | null> {
   try {
     const identifier = `${FINESS_SYSTEM}|${finess}`;
     const url = `${FINESS_GATEWAY}?identifier=${encodeURIComponent(identifier)}`;
     const controller = new AbortController();
-    const t = setTimeout(() => controller.abort(), 9000);
-    const r = await fetch(url, { headers: { 'Accept': 'application/fhir+json', 'ESANTE-API-KEY': apiKey }, signal: controller.signal });
-    clearTimeout(t);
-    if (!r.ok) return null;
-    const bundle = await r.json();
-    if (!bundle.entry || bundle.entry.length === 0) return { trouve: false };
-    const org = bundle.entry[0].resource;
+    const timer = setTimeout(() => controller.abort(), 9_000);
+    let response: Response;
+    try {
+      response = await fetch(url, {
+        headers: { Accept: 'application/fhir+json', 'ESANTE-API-KEY': apiKey },
+        signal: controller.signal,
+      });
+    } finally {
+      clearTimeout(timer);
+    }
+    if (!response.ok) return null;
+    const bundle = await response.json() as {
+      entry?: Array<{ resource?: FhirOrganization }>;
+    };
+    const organizations = (bundle.entry || [])
+      .map((entry) => entry.resource)
+      .filter((resource): resource is FhirOrganization =>
+        resource?.resourceType === 'Organization'
+        && (resource.identifier || []).some((id) => identifiantFinessExact(id, finess))
+      );
+    if (organizations.length === 0) {
+      return {
+        trouve: false,
+        raison_sociale: null,
+        actif: false,
+        siret: null,
+        categorie: null,
+        secteur: null,
+        est_public: false,
+      };
+    }
+    const org = organizations.find((item) => item.active === true) || organizations[0];
     let categorie: string | null = null, secteur: string | null = null;
     for (const ty of org.type || []) {
       for (const c of ty.coding || []) {
         const sys = String(c.system || '');
-        if (sys.includes('TRE_R66-CategorieEtablissement') && !categorie) categorie = c.display;
-        if (sys.includes('TRE_R02-SecteurActivite') && !secteur) secteur = c.display;
+        if (sys.includes('TRE_R66-CategorieEtablissement') && !categorie) {
+          categorie = texte(c.display || c.code, 300) || null;
+        }
+        if (sys.includes('TRE_R02-SecteurActivite') && !secteur) {
+          secteur = texte(c.display || c.code, 300) || null;
+        }
       }
     }
-    return { trouve: true, raison_sociale: org.name || null, actif: org.active !== false, categorie, secteur, est_public: /public/i.test(secteur || '') };
-  } catch { return null; }
+    return {
+      trouve: true,
+      raison_sociale: texte(org.name, 300) || null,
+      actif: org.active === true,
+      siret: extraireSiretFhir(org),
+      categorie,
+      secteur,
+      est_public: /public/i.test(secteur || ''),
+    };
+  } catch (error) {
+    console.warn('[register-etablissement] Annuaire FINESS indisponible:', safeStringifyError(error));
+    return null;
+  }
 }
 
 Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders(req) });
-  }
+  if (req.method === 'OPTIONS') return preflightResponse(req);
 
   const cors = corsHeaders(req);
+
+  if (req.method !== 'POST') {
+    return errorResponse(cors, 405, 'METHOD_NOT_ALLOWED', 'Méthode non autorisée.');
+  }
 
   // M7: Rate limiting
   const clientIp = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
@@ -84,18 +289,27 @@ Deno.serve(async (req) => {
     return errorResponse(cors, 429, 'RATE_LIMITED', 'Trop de tentatives. Réessayez dans quelques minutes.');
   }
 
-  const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-  const anonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
-  const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+  const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
+  const anonKey = Deno.env.get('SUPABASE_ANON_KEY') || '';
+  const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
+  if (!supabaseUrl || !anonKey || !serviceRoleKey) {
+    return errorResponse(cors, 503, 'SERVER_NOT_CONFIGURED', 'Inscription momentanément indisponible.');
+  }
 
   // 1. Authenticate caller via JWT
-  const authHeader = req.headers.get('Authorization');
-  if (!authHeader) {
+  const authHeader = req.headers.get('Authorization') || '';
+  const bearerMatch = authHeader.match(/^Bearer\s+(.+)$/i);
+  if (!bearerMatch) {
     return errorResponse(cors, 401, 'UNAUTHORIZED', 'Non authentifié.');
   }
 
-  const token = authHeader.replace('Bearer ', '');
-  const supabaseAuth = createClient(supabaseUrl, anonKey);
+  const token = bearerMatch[1].trim();
+  if (!token || token === serviceRoleKey) {
+    return errorResponse(cors, 401, 'UNAUTHORIZED', 'Une session utilisateur est requise.');
+  }
+  const supabaseAuth = createClient(supabaseUrl, anonKey, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
   const { data: { user }, error: authError } = await supabaseAuth.auth.getUser(token);
   if (authError || !user) {
     return errorResponse(cors, 401, 'INVALID_TOKEN', 'Session invalide. Reconnectez-vous et réessayez.');
@@ -143,127 +357,110 @@ Deno.serve(async (req) => {
     }
     suppressionAuthAutorisee = reservationResult.fresh === true;
 
-    const body = await req.json();
-    const { nom, siret, finess, type, adresse_rue, adresse_ville, adresse_code_postal,
-      adresse_departement, telephone_contact, email_contact, adresse_lat, adresse_lng,
-      numero_licence } = body;
+    const rawBody = await req.json().catch(() => null);
+    if (!rawBody || typeof rawBody !== 'object' || Array.isArray(rawBody)) {
+      await annulerCompteAuth('INVALID_JSON');
+      return errorResponse(cors, 400, 'INVALID_JSON', 'Corps de requête invalide.');
+    }
+    const body = rawBody as Record<string, unknown>;
+    const nom = texte(body.nom, 200);
+    const siret = texte(body.siret, 20).replace(/\s/g, '');
+    const finess = texte(body.finess, 20).replace(/\s/g, '');
+    const type = texte(body.type, 50).toUpperCase();
+    const adresseRue = texte(body.adresse_rue, 300);
+    const adresseVille = texte(body.adresse_ville, 150);
+    const adresseCodePostal = texte(body.adresse_code_postal, 10);
+    const adresseDepartement = texte(body.adresse_departement, 3);
+    const telephoneContact = texte(body.telephone_contact, 30);
+    const emailContact = texte(body.email_contact, 254) || user.email || '';
+    const attribution = body.attribution
+      && typeof body.attribution === 'object'
+      && !Array.isArray(body.attribution)
+      ? body.attribution as AttributionInput
+      : null;
+    const adresseLat = typeof body.adresse_lat === 'number'
+      && Number.isFinite(body.adresse_lat)
+      && body.adresse_lat >= -90 && body.adresse_lat <= 90
+      ? body.adresse_lat : null;
+    const adresseLng = typeof body.adresse_lng === 'number'
+      && Number.isFinite(body.adresse_lng)
+      && body.adresse_lng >= -180 && body.adresse_lng <= 180
+      ? body.adresse_lng : null;
 
     // Token Turnstile a usage unique deja consomme par Auth signUp. Ne pas le
     // soumettre une seconde fois a Siteverify (`timeout-or-duplicate`).
 
     // Validate required fields
-    if (!nom || !siret || !type || !adresse_ville) {
+    if (!nom || !siret || !type || !adresseVille) {
       await annulerCompteAuth('MISSING_REQUIRED_FIELDS');
-      return errorResponse(cors, 400, 'MISSING_REQUIRED_FIELDS', 'Champs obligatoires manquants.', { champs_manquants: [!nom && 'nom', !siret && 'siret', !type && 'type', !adresse_ville && 'adresse_ville'].filter(Boolean) });
+      return errorResponse(cors, 400, 'MISSING_REQUIRED_FIELDS', 'Champs obligatoires manquants.', {
+        champs_manquants: [!nom && 'nom', !siret && 'siret', !type && 'type', !adresseVille && 'adresse_ville'].filter(Boolean),
+      });
     }
 
-    // Luhn validation
-    if (!/^\d{14}$/.test(siret) || /^0+$/.test(siret)) {
+    if (!/^\d{14}$/.test(siret)) {
       await annulerCompteAuth('SIRET_FORMAT_INVALID');
       return errorResponse(cors, 400, 'SIRET_FORMAT_INVALID', 'Le SIRET doit contenir 14 chiffres.');
     }
-    {
-      let sum = 0;
-      for (let i = 0; i < 14; i++) {
-        let d = parseInt(siret[i], 10);
-        if (i % 2 === 0) { d *= 2; if (d > 9) d -= 9; }
-        sum += d;
-      }
-      if (sum % 10 !== 0) {
-        await annulerCompteAuth('SIRET_CHECKSUM_INVALID');
-        return errorResponse(cors, 400, 'SIRET_CHECKSUM_INVALID', 'SIRET invalide (checksum incorrecte).');
-      }
+    if (!siretLuhnValide(siret)) {
+      await annulerCompteAuth('SIRET_CHECKSUM_INVALID');
+      return errorResponse(cors, 400, 'SIRET_CHECKSUM_INVALID', 'SIRET invalide (checksum incorrecte).');
+    }
+    if (finess && !/^\d{9}$/.test(finess)) {
+      await annulerCompteAuth('FINESS_FORMAT_INVALID');
+      return errorResponse(cors, 400, 'FINESS_FORMAT_INVALID', 'Le FINESS doit contenir exactement 9 chiffres.');
     }
 
-    // 2a. Verify SIRET against INSEE registry
-    let siretVerification: any = null;
-    try {
-      const rechercheUrl = `https://recherche-entreprises.api.gouv.fr/search?q=${siret}&mtm_campaign=jolene`;
-      const verifyResp = await fetch(rechercheUrl, {
-        headers: { 'Accept': 'application/json' },
-        signal: AbortSignal.timeout(9_000),
-      });
-      if (verifyResp.ok) {
-        const verifyData = await verifyResp.json();
-        const results = verifyData.results || [];
-        let matching: any = null;
-        let matchingEtab: any = null;
-        for (const r of results) {
-          if (r.matching_etablissements) {
-            for (const e of r.matching_etablissements) {
-              if (e.siret === siret) { matching = r; matchingEtab = e; break; }
-            }
-          }
-          if (matching) break;
-          if (r.siege?.siret === siret) { matching = r; matchingEtab = r.siege; break; }
-        }
-        if (matching) {
-          const NAF_SANTE = ['86.10Z','86.21Z','86.22A','86.22B','86.22C','86.23Z','86.90A','86.90B','86.90C','86.90D','86.90E','86.90F','87.10A','87.10B','87.10C','87.20A','87.20B','87.30A','87.30B','87.90A','87.90B','88.10A','88.10B','88.10C','47.73Z'];
-          const codeNaf = matchingEtab?.activite_principale || matching.activite_principale || '';
-          const nafNorm = codeNaf.length === 5 ? `${codeNaf.slice(0,2)}.${codeNaf.slice(2)}` : codeNaf;
-          const estActif = matchingEtab?.etat_administratif === 'A';
-          const estSante = NAF_SANTE.includes(nafNorm);
-          const catJuridique = matching.nature_juridique || '';
-          const estPublic = catJuridique.startsWith('7') || catJuridique.startsWith('4');
-
-          siretVerification = {
-            raison_sociale: matching.nom_raison_sociale || matching.nom_complet || null,
-            est_actif: estActif,
-            est_sante: estSante,
-            est_public: estPublic,
-            code_naf: codeNaf,
-            categorie_juridique: catJuridique,
-            // Dirigeants (personnes physiques/morales) renvoyés par l'API INSEE —
-            // sert au match auto identité↔titulaire pour les petites structures (Phase 3).
-            dirigeants: Array.isArray((matching as any).dirigeants) ? (matching as any).dirigeants : null,
-          };
-        }
-      }
-    } catch (verifyErr) {
-      console.warn('SIRET verification failed (non-blocking):', verifyErr);
+    if (!TYPES_ETABLISSEMENT.has(type)) {
+      await annulerCompteAuth('TYPE_ETABLISSEMENT_INVALID');
+      return errorResponse(cors, 400, 'TYPE_ETABLISSEMENT_INVALID', 'Type d’établissement invalide.');
+    }
+    if (adresseCodePostal && !/^\d{5}$/.test(adresseCodePostal)) {
+      await annulerCompteAuth('POSTAL_CODE_INVALID');
+      return errorResponse(cors, 400, 'POSTAL_CODE_INVALID', 'Le code postal doit contenir 5 chiffres.');
+    }
+    if (telephoneContact && !/^\+?[0-9\s.-]{8,20}$/.test(telephoneContact)) {
+      await annulerCompteAuth('PHONE_INVALID');
+      return errorResponse(cors, 400, 'PHONE_INVALID', 'Le numéro de téléphone est invalide.');
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailContact)) {
+      await annulerCompteAuth('EMAIL_INVALID');
+      return errorResponse(cors, 400, 'EMAIL_INVALID', 'L’adresse e-mail de contact est invalide.');
     }
 
-    // Cohérence nom déclaré ↔ raison sociale SIRET (anti-usurpation : on refuse
-    // qu'un SIRET sans rapport avec l'établissement passe en auto-vérifié).
-    const normNom = (s: string | null | undefined) => (s || '')
-      .toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
-      .replace(/\b(sas|sasu|sarl|sa|eurl|sci|scp|selarl|selas|snc|gie|association|asso|groupe|clinique|centre|hopital|ehpad|cabinet|pharmacie|ste|societe)\b/g, '')
-      .replace(/[^a-z0-9]+/g, ' ').trim();
-    const compareNoms = (a: string | null | undefined, b: string | null | undefined): 'OK' | 'PARTIEL' | 'INCOHERENT' | null => {
-      const na = normNom(a), nb = normNom(b);
-      if (!na || !nb) return null;
-      if (na === nb) return 'OK';
-      if (na.includes(nb) || nb.includes(na)) return 'PARTIEL';
-      const sa = new Set(na.split(' ').filter((w) => w.length >= 3));
-      const sb = new Set(nb.split(' ').filter((w) => w.length >= 3));
-      if ([...sa].some((w) => sb.has(w))) return 'PARTIEL';
-      return 'INCOHERENT';
-    };
-    // Vérification FINESS (si fourni) via l'Annuaire Santé + croisement
-    // nom ↔ raison sociale SIRET ↔ raison sociale FINESS.
+    // Les registres officiels ne valident que les preuves unitaires. Ils ne
+    // peuvent jamais, à eux seuls, promouvoir le compte ni ouvrir la publication.
+    const siretVerification = await querySiretInscription(siret);
+    const nomCorrespondAuSiret = siretVerification?.trouve
+      ? corporateNameMatches(nom, siretVerification.raison_sociale)
+      : null;
+    const siretVerifie = !!(
+      siretVerification?.trouve
+      && siretVerification.est_actif
+      && siretVerification.est_sante
+      && nomCorrespondAuSiret === true
+    );
+    const coherenceIdentite: CoherenceIdentite = nomCorrespondAuSiret === true
+      ? 'OK'
+      : nomCorrespondAuSiret === false ? 'INCOHERENT' : null;
+
     let finessResult: Awaited<ReturnType<typeof queryFinessInscription>> = null;
     const finessApiKey = Deno.env.get('ESANTE_FHIR_API_KEY') || '';
-    if (finess && /^\d{9}$/.test(finess) && finessApiKey) {
+    if (finess && finessApiKey) {
       finessResult = await queryFinessInscription(finess, finessApiKey);
     }
     const finessRs = finessResult?.trouve ? (finessResult.raison_sociale ?? null) : null;
-    const finessVerifie = !!(finessResult?.trouve && finessResult.actif);
-
-    const cohParts = [
-      compareNoms(nom, siretVerification?.raison_sociale),
-      finessRs ? compareNoms(nom, finessRs) : null,
-      (siretVerification?.raison_sociale && finessRs) ? compareNoms(siretVerification.raison_sociale, finessRs) : null,
-    ];
-    const coherenceIdentite: 'OK' | 'PARTIEL' | 'INCOHERENT' | null =
-      cohParts.includes('INCOHERENT') ? 'INCOHERENT'
-      : cohParts.includes('PARTIEL') ? 'PARTIEL'
-      : cohParts.some((v) => v === 'OK') ? 'OK' : null;
-
-    // Auto-vérifié uniquement si SIRET actif + secteur santé + identités cohérentes
-    // (nom ↔ SIRET ↔ FINESS). Toute incohérence → EN_ATTENTE + revue admin.
-    const autoVerifie = siretVerification?.est_actif && siretVerification?.est_sante
-      && coherenceIdentite !== 'INCOHERENT';
-    const statutVerification = autoVerifie ? 'VERIFIE' : 'EN_ATTENTE';
+    // Un FINESS actif mais non relié au SIRET exact reste à contrôler. Un nom
+    // approchant n'est pas une preuve suffisante pour une validation automatique.
+    const finessVerifie = !!(
+      finess
+      && siretVerifie
+      && finessResult?.trouve
+      && finessResult.actif
+      && finessResult.siret === siret
+    );
+    const statutVerification = 'EN_COURS' as const;
+    const maintenant = new Date().toISOString();
 
     // 2. Insert into etablissements table
     const insertPayload = {
@@ -271,23 +468,23 @@ Deno.serve(async (req) => {
       nom,
       siret,
       finess: finess || null,
-      finess_verifie: finessVerifie || false,
-      finess_verifie_le: finessVerifie ? new Date().toISOString() : null,
+      finess_verifie: finessVerifie,
+      finess_verifie_le: finessVerifie ? maintenant : null,
       finess_raison_sociale: finessRs,
       finess_categorie: finessResult?.categorie ?? null,
       finess_secteur: finessResult?.secteur ?? null,
       finess_est_public: finessResult?.est_public ?? null,
       type,
-      adresse_rue: adresse_rue || 'Non renseigné',
-      adresse_ville,
-      adresse_code_postal: adresse_code_postal || '00000',
-      adresse_departement: adresse_departement || null,
-      email_contact: email_contact || user.email,
-      telephone_contact: telephone_contact || null,
-      adresse_lat: adresse_lat || null,
-      adresse_lng: adresse_lng || null,
-      siret_verifie: autoVerifie || false,
-      siret_verifie_le: autoVerifie ? new Date().toISOString() : null,
+      adresse_rue: adresseRue || 'Non renseigné',
+      adresse_ville: adresseVille,
+      adresse_code_postal: adresseCodePostal || '00000',
+      adresse_departement: adresseDepartement || null,
+      email_contact: emailContact,
+      telephone_contact: telephoneContact || null,
+      adresse_lat: adresseLat,
+      adresse_lng: adresseLng,
+      siret_verifie: siretVerifie,
+      siret_verifie_le: siretVerifie ? maintenant : null,
       siret_est_actif: siretVerification?.est_actif ?? null,
       siret_code_naf: siretVerification?.code_naf ?? null,
       siret_raison_sociale: siretVerification?.raison_sociale ?? null,
@@ -296,8 +493,10 @@ Deno.serve(async (req) => {
       est_secteur_public: siretVerification?.est_public ?? false,
       coherence_identite: coherenceIdentite,
       statut_verification: statutVerification,
-      peut_publier_missions: autoVerifie || false,
-      ...colonnesAttribution(body.attribution, req),
+      peut_publier_missions: false,
+      verifie_le: null,
+      verifie_par: null,
+      ...colonnesAttribution(attribution, req),
     };
 
     const { error: insertError } = await supabaseAdmin
@@ -351,8 +550,15 @@ Deno.serve(async (req) => {
       action: 'INSCRIPTION',
       type_ressource: 'etablissement',
       id_ressource: user.id,
-      details: { evenement: 'inscription', type },
-      navigateur_acteur: body.navigateur || null,
+      details: {
+        evenement: 'inscription',
+        type,
+        siret_verifie: siretVerifie,
+        finess_fourni: !!finess,
+        finess_verifie: finessVerifie,
+        statut_verification: statutVerification,
+      },
+      navigateur_acteur: texte(body.navigateur, 500) || null,
     });
 
     await supabaseAdmin.from('journaux_audit').insert({
@@ -362,7 +568,7 @@ Deno.serve(async (req) => {
       type_ressource: 'etablissement',
       id_ressource: user.id,
       details: { type: 'inscription', cgu: true, confidentialite: true, cgv: true },
-      navigateur_acteur: body.navigateur || null,
+      navigateur_acteur: texte(body.navigateur, 500) || null,
     });
 
     // 5. Email bienvenue (best-effort — ne bloque pas l'inscription)
@@ -379,7 +585,7 @@ Deno.serve(async (req) => {
         },
       });
     } catch (emailErr) {
-      console.warn('[register-etablissement] Email bienvenue non envoyé (best-effort):', emailErr);
+      console.warn('[register-etablissement] Email bienvenue non envoyé (best-effort):', safeStringifyError(emailErr));
     }
 
     // 6. Planifier la série onboarding J0/J1/J3/J7 (best-effort)
@@ -389,10 +595,22 @@ Deno.serve(async (req) => {
         p_serie: 'ETAB_ONBOARDING',
       });
     } catch (serieErr) {
-      console.warn('[register-etablissement] Planification série onboarding échouée (best-effort):', serieErr);
+      console.warn('[register-etablissement] Planification série onboarding échouée (best-effort):', safeStringifyError(serieErr));
     }
 
-    return new Response(JSON.stringify({ ok: true, success: true, etablissement_id: user.id, auto_verifie: autoVerifie, statut_verification: statutVerification, coherence_identite: coherenceIdentite, siret_raison_sociale: siretVerification?.raison_sociale ?? null }), {
+    return new Response(JSON.stringify({
+      ok: true,
+      success: true,
+      etablissement_id: user.id,
+      auto_verifie: false,
+      statut_verification: statutVerification,
+      peut_publier_missions: false,
+      siret_verifie: siretVerifie,
+      finess_verifie: finessVerifie,
+      coherence_identite: coherenceIdentite,
+      siret_raison_sociale: siretVerification?.raison_sociale ?? null,
+      verification_complete_requise: true,
+    }), {
       status: 200,
       headers: { ...cors, 'Content-Type': 'application/json' },
     });

@@ -77,7 +77,9 @@ function extractReferences(files) {
 function repoFunctions() {
   const names = new Set();
   if (!existsSync(MIGRATIONS_DIR)) return names;
-  const re = /CREATE\s+(?:OR\s+REPLACE\s+)?FUNCTION\s+(?:public\.)?["']?([a-zA-Z0-9_]+)/gi;
+  // Accepte aussi le format pg_dump du baseline :
+  // CREATE FUNCTION "public"."fn_exemple"(...)
+  const re = /CREATE\s+(?:OR\s+REPLACE\s+)?FUNCTION\s+(?:"?public"?\.)?"?([a-zA-Z0-9_]+)"?\s*\(/gi;
   for (const f of readdirSync(MIGRATIONS_DIR)) {
     if (!f.endsWith('.sql')) continue;
     const text = readFileSync(join(MIGRATIONS_DIR, f), 'utf8');

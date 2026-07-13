@@ -12,6 +12,9 @@ verify_jwt = false
 [functions.stripe-webhook]
 verify_jwt = false
 
+[functions.stripe-connect-webhook]
+verify_jwt = false
+
 [functions.verify-rpps]
 verify_jwt = false
 
@@ -76,6 +79,9 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.setup-sepa]
+verify_jwt = false
+
+[functions.stripe-config-health]
 verify_jwt = false
 
 [functions.chorus-pro-deposit]

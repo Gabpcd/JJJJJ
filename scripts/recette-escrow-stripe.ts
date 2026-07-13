@@ -319,7 +319,7 @@ ON CONFLICT (soignant_id) DO UPDATE SET stripe_account_id='${acct.id}', statut='
   if (pi.status === 'processing') {
     await validerPresences(m8);
     const r2 = await invoke('escrow-release');
-    note('S5/A10.8 pas de payout pendant processing', r2.examined === 0 && r2.payes === 0 ? 'PASS' : 'FAIL',
+    note('S5/A10.8 pas de payout pendant processing', r2.examined === 0 && r2.planifies === 0 ? 'PASS' : 'FAIL',
       `release=${JSON.stringify(r2)} — la queue n'est peuplée qu'au DEBITE`);
   } else {
     note('S5/A10.8 pas de payout pendant processing', 'FAIL', `PI status inattendu (${pi.status}) — fenêtre processing manquée`);
@@ -367,7 +367,7 @@ ON CONFLICT (soignant_id) DO UPDATE SET stripe_account_id='${acct.id}', statut='
   const payout = await stripe('GET', `payouts/${e8.stripe_payout_id}`, {}, acct.id);
   const conf = await sql(`SELECT missions_sans_incident FROM escrow_etablissement_etat WHERE etablissement_id='${ETAB}';`);
   const queue8 = await sql(`SELECT statut FROM escrow_release_queue WHERE mission_id='${m8}';`);
-  note('S2.5 release → payout → PAYE', r3.payes === 1 && payout.amount === e8.honoraires_cents && queue8[0].statut === 'TRAITE' ? 'PASS' : 'FAIL',
+  note('S2.5 release → payout → webhook PAYE', r3.planifies === 1 && payout.amount === e8.honoraires_cents && queue8[0].statut === 'TRAITE' ? 'PASS' : 'FAIL',
     `payout ${payout.id} (${payout.amount}cts, status=${payout.status}), queue=${queue8[0].statut}, confiance=${conf[0]?.missions_sans_incident}`);
   const s2p = await snapshot('S2 payé');
   // Invariant : le payout sort du connecté, la plateforme ne bouge pas.

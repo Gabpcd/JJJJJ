@@ -94,7 +94,7 @@ Deno.serve(async (req) => {
     }
 
     const etabIds = [...new Set((missions || []).map((m: any) => m.etablissement_id))];
-    let etabMap: Record<string, any> = {};
+    const etabMap: Record<string, any> = {};
     if (etabIds.length > 0) {
       const { data: etabs } = await supabase
         .from("etablissements")

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase, SUPABASE_URL } from '@/integrations/supabase/client';
 import { CheckCircle, XCircle, Clock, RefreshCw, Server, Database, Mail, CreditCard, Shield, Smartphone, Globe, KeyRound, MessageSquare, Send, ShieldCheck, Landmark } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { toast } from 'sonner';
 import { messageErreurEdgeFn } from '@/lib/erreurs';
 import { useAuth } from '@/contexts/AuthContext';
@@ -9,10 +10,19 @@ import { CardY2K } from '@/components/y2k/CardY2K';
 
 interface ServiceStatus {
   name: string;
-  icon: any;
+  icon: LucideIcon;
   status: 'ok' | 'error' | 'loading' | 'degraded';
   latency?: number;
   detail?: string;
+}
+
+type PisteHealth = {
+  diagnostics?: Array<{ step?: string; status?: string }>;
+  success?: boolean;
+};
+
+function messageInconnue(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 /**
@@ -39,8 +49,8 @@ export function PanneauxHealthcheck() {
     try {
       const { error } = await supabase.from('health_check').select('id').limit(1);
       results.push({ name: 'Supabase PostgreSQL', icon: Database, status: error ? 'error' : 'ok', latency: Date.now() - dbStart, detail: error?.message });
-    } catch (e: any) {
-      results.push({ name: 'Supabase PostgreSQL', icon: Database, status: 'error', latency: Date.now() - dbStart, detail: e.message });
+    } catch (error: unknown) {
+      results.push({ name: 'Supabase PostgreSQL', icon: Database, status: 'error', latency: Date.now() - dbStart, detail: messageInconnue(error) });
     }
 
     // 2. Supabase Auth
@@ -48,8 +58,8 @@ export function PanneauxHealthcheck() {
     try {
       const { data } = await supabase.auth.getSession();
       results.push({ name: 'Supabase Auth', icon: Shield, status: data?.session ? 'ok' : 'degraded', latency: Date.now() - authStart, detail: data?.session ? 'Session active' : 'Pas de session' });
-    } catch (e: any) {
-      results.push({ name: 'Supabase Auth', icon: Shield, status: 'error', latency: Date.now() - authStart, detail: e.message });
+    } catch (error: unknown) {
+      results.push({ name: 'Supabase Auth', icon: Shield, status: 'error', latency: Date.now() - authStart, detail: messageInconnue(error) });
     }
 
     // 3. Edge Functions (health-check)
@@ -57,40 +67,59 @@ export function PanneauxHealthcheck() {
     try {
       const res = await fetch(`${SUPABASE_URL}/functions/v1/health-check`, { method: 'HEAD' });
       results.push({ name: 'Edge Functions', icon: Server, status: res.status < 500 ? 'ok' : 'error', latency: Date.now() - efStart, detail: `HTTP ${res.status}` });
-    } catch (e: any) {
-      results.push({ name: 'Edge Functions', icon: Server, status: 'error', latency: Date.now() - efStart, detail: e.message });
+    } catch (error: unknown) {
+      results.push({ name: 'Edge Functions', icon: Server, status: 'error', latency: Date.now() - efStart, detail: messageInconnue(error) });
     }
 
-    // 4. Stripe (check if key is configured)
+    // 4. Stripe — authentifie réellement la clé serveur et exige le mode live.
+    const stripeStart = Date.now();
     try {
-      const stripeKey = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY;
-      results.push({ name: 'Stripe', icon: CreditCard, status: stripeKey ? 'ok' : 'degraded', detail: stripeKey ? 'Clé configurée' : 'VITE_STRIPE_PUBLISHABLE_KEY manquante' });
-    } catch {
-      results.push({ name: 'Stripe', icon: CreditCard, status: 'error', detail: 'Erreur config' });
+      const { data, error } = await supabase.functions.invoke('stripe-config-health', { body: {} });
+      if (error) throw error;
+      const live = data?.authenticated === true && data?.livemode === true && data?.mode === 'live';
+      const productionReady = live && data?.production_ready === true;
+      results.push({
+        name: 'Stripe production',
+        icon: CreditCard,
+        status: productionReady ? 'ok' : 'error',
+        latency: Date.now() - stripeStart,
+        detail: productionReady
+          ? 'Clé live authentifiée · webhook live actif et complet'
+          : live
+            ? 'Clé live OK, mais endpoint/événements/secret webhook incomplets'
+            : 'Clé serveur absente, invalide ou non-live',
+      });
+    } catch (error: unknown) {
+      const msg = await messageErreurEdgeFn(error, 'Erreur Stripe');
+      results.push({ name: 'Stripe production', icon: CreditCard, status: 'error', latency: Date.now() - stripeStart, detail: msg });
     }
 
     // 5. Twilio SMS
     const smsStart = Date.now();
     try {
-      const { data } = await supabase.functions.invoke('send-sms', { body: { warm: true } });
-      results.push({ name: 'Twilio SMS', icon: Smartphone, status: 'ok', latency: Date.now() - smsStart, detail: data?.warm ? 'Warm ping OK' : 'Réponse inattendue' });
-    } catch (e: any) {
-      const msg = await messageErreurEdgeFn(e, 'Erreur SMS');
+      const { data, error } = await supabase.functions.invoke('send-sms', { body: { warm: true } });
+      if (error) throw error;
+      results.push({ name: 'Twilio SMS', icon: Smartphone, status: data?.warm ? 'ok' : 'degraded', latency: Date.now() - smsStart, detail: data?.warm ? 'Warm ping OK' : 'Réponse inattendue' });
+    } catch (error: unknown) {
+      const msg = await messageErreurEdgeFn(error, 'Erreur SMS');
       results.push({ name: 'Twilio SMS', icon: Smartphone, status: 'error', latency: Date.now() - smsStart, detail: msg });
     }
 
-    // 6. Document AI (verify-document warm ping)
+    // 6. Document AI — appel Anthropic minimal, sans document ni écriture.
     const aiStart = Date.now();
     try {
-      const res = await fetch(`${SUPABASE_URL}/functions/v1/verify-document`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ warm: true }),
+      const { data, error } = await supabase.functions.invoke('verify-document', { body: { warm: true, probe: true } });
+      if (error) throw error;
+      const reachable = data?.configured === true && data?.reachable === true;
+      results.push({
+        name: 'Document AI',
+        icon: Globe,
+        status: reachable ? 'ok' : data?.configured ? 'degraded' : 'error',
+        latency: Date.now() - aiStart,
+        detail: reachable ? `Anthropic opérationnel · ${data?.model || 'modèle actif'}` : 'Clé absente ou API IA injoignable',
       });
-      const data = await res.json();
-      results.push({ name: 'Document AI', icon: Globe, status: data?.warm ? 'ok' : 'degraded', latency: Date.now() - aiStart, detail: data?.warm ? 'Warm ping OK' : `HTTP ${res.status}` });
-    } catch (e: any) {
-      results.push({ name: 'Document AI', icon: Globe, status: 'error', latency: Date.now() - aiStart, detail: e.message });
+    } catch (error: unknown) {
+      results.push({ name: 'Document AI', icon: Globe, status: 'error', latency: Date.now() - aiStart, detail: messageInconnue(error) });
     }
 
     // 7. Email (send-email warm)
@@ -99,15 +128,16 @@ export function PanneauxHealthcheck() {
       const { error } = await supabase.functions.invoke('send-email', { body: { warm: true } });
       const emailDetail = error ? await messageErreurEdgeFn(error, 'Erreur email') : 'Warm ping OK';
       results.push({ name: 'Resend Email', icon: Mail, status: error ? 'error' : 'ok', latency: Date.now() - emailStart, detail: emailDetail });
-    } catch (e: any) {
-      const msg = await messageErreurEdgeFn(e, 'Erreur email');
+    } catch (error: unknown) {
+      const msg = await messageErreurEdgeFn(error, 'Erreur email');
       results.push({ name: 'Resend Email', icon: Mail, status: 'error', latency: Date.now() - emailStart, detail: msg });
     }
 
     // 8. Pro Santé Connect (warm ping psc-authorize)
     const pscStart = Date.now();
     try {
-      const { data } = await supabase.functions.invoke('psc-authorize', { body: { warm: true } });
+      const { data, error } = await supabase.functions.invoke('psc-authorize', { body: { warm: true } });
+      if (error) throw error;
       const configured = data?.configured !== false;
       results.push({
         name: 'Pro Santé Connect',
@@ -116,8 +146,8 @@ export function PanneauxHealthcheck() {
         latency: Date.now() - pscStart,
         detail: configured ? 'Credentials ANS configurés' : 'En attente credentials ANS (PSC_CLIENT_ID/SECRET)',
       });
-    } catch (e: any) {
-      const msg = await messageErreurEdgeFn(e, 'Erreur Pro Santé Connect');
+    } catch (error: unknown) {
+      const msg = await messageErreurEdgeFn(error, 'Erreur Pro Santé Connect');
       results.push({ name: 'Pro Santé Connect', icon: ShieldCheck, status: 'error', latency: Date.now() - pscStart, detail: msg });
     }
 
@@ -128,8 +158,9 @@ export function PanneauxHealthcheck() {
       // manquant ») et affichait à tort « Credentials PISTE manquants ».
       const { data, error: pisteErr } = await supabase.functions.invoke('test-piste-credentials', { body: {} });
       if (pisteErr) throw pisteErr;
-      const oauthOk = (data as any)?.diagnostics?.some((d: any) => d.step?.includes('OAuth') && d.status === 'OK');
-      const apiOk = (data as any)?.success === true;
+      const piste = data as PisteHealth | null;
+      const oauthOk = piste?.diagnostics?.some((diagnostic) => diagnostic.step?.includes('OAuth') && diagnostic.status === 'OK');
+      const apiOk = piste?.success === true;
       results.push({
         name: 'Chorus Pro (PISTE)',
         icon: Landmark,
@@ -137,15 +168,16 @@ export function PanneauxHealthcheck() {
         latency: Date.now() - pisteStart,
         detail: apiOk ? 'OAuth + API factures opérationnels' : oauthOk ? 'OAuth OK, API métier en erreur — voir Chorus Pro → Vérifier connexion' : 'Vérification impossible — voir Chorus Pro → Vérifier connexion',
       });
-    } catch (e: any) {
-      const msg = await messageErreurEdgeFn(e, 'Erreur Chorus Pro');
+    } catch (error: unknown) {
+      const msg = await messageErreurEdgeFn(error, 'Erreur Chorus Pro');
       results.push({ name: 'Chorus Pro (PISTE)', icon: Landmark, status: 'error', latency: Date.now() - pisteStart, detail: msg });
     }
 
     // 10. Annuaire Santé FHIR (warm ping verify-rpps)
     const rppsStart = Date.now();
     try {
-      const { data } = await supabase.functions.invoke('verify-rpps', { body: { warm: true } });
+      const { data, error } = await supabase.functions.invoke('verify-rpps', { body: { warm: true } });
+      if (error) throw error;
       const configured = data?.configured === true;
       results.push({
         name: 'Annuaire Santé (RPPS)',
@@ -156,12 +188,30 @@ export function PanneauxHealthcheck() {
           ? 'Clé API FHIR ANS configurée (vérification automatique active)'
           : 'ESANTE_FHIR_API_KEY manquante (vérification différée à 24h)',
       });
-    } catch (e: any) {
-      const msg = await messageErreurEdgeFn(e, 'Erreur Annuaire Santé');
+    } catch (error: unknown) {
+      const msg = await messageErreurEdgeFn(error, 'Erreur Annuaire Santé');
       results.push({ name: 'Annuaire Santé (RPPS)', icon: ShieldCheck, status: 'error', latency: Date.now() - rppsStart, detail: msg });
     }
 
-    // 11. Sentry — masqué si DSN non configurée (activation à venir côté Vercel).
+    // 11. Répertoire FINESS — même source primaire ANS, endpoint dédié.
+    const finessStart = Date.now();
+    try {
+      const { data, error } = await supabase.functions.invoke('verify-finess', { body: { warm: true } });
+      if (error) throw error;
+      const configured = data?.configured === true;
+      results.push({
+        name: 'Annuaire Santé (FINESS)',
+        icon: Landmark,
+        status: configured ? 'ok' : 'degraded',
+        latency: Date.now() - finessStart,
+        detail: configured ? 'Clé API FHIR ANS configurée' : 'ESANTE_FHIR_API_KEY manquante',
+      });
+    } catch (error: unknown) {
+      const msg = await messageErreurEdgeFn(error, 'Erreur FINESS');
+      results.push({ name: 'Annuaire Santé (FINESS)', icon: Landmark, status: 'error', latency: Date.now() - finessStart, detail: msg });
+    }
+
+    // 12. Sentry — masqué si DSN non configurée.
     const sentryDsn = import.meta.env.VITE_SENTRY_DSN;
     if (sentryDsn) {
       results.push({ name: 'Sentry Monitoring', icon: Shield, status: 'ok', detail: 'DSN configuré' });
@@ -192,7 +242,7 @@ export function PanneauxHealthcheck() {
     if (!user) return;
     (async () => {
       const { data } = await supabase.from('soignants').select('telephone').eq('id', user.id).maybeSingle();
-      if (data && (data as any).telephone) setSmsPhone((data as any).telephone);
+      if (data?.telephone) setSmsPhone(data.telephone);
     })();
   }, [user]);
 
@@ -227,9 +277,10 @@ export function PanneauxHealthcheck() {
       } else {
         setSmsResult({ ok: true, detail: 'Réponse inattendue : ' + JSON.stringify(data).slice(0, 200) });
       }
-    } catch (e: any) {
-      setSmsResult({ ok: false, detail: e?.message || String(e) });
-      toast.error(`Exception : ${e?.message || e}`);
+    } catch (error: unknown) {
+      const detail = messageInconnue(error);
+      setSmsResult({ ok: false, detail });
+      toast.error(`Exception : ${detail}`);
     } finally {
       setSmsTesting(false);
     }
@@ -250,8 +301,8 @@ export function PanneauxHealthcheck() {
       } else {
         toast.error('PSC : configuration incomplète — voir détail ci-dessous');
       }
-    } catch (e: any) {
-      const msg = await messageErreurEdgeFn(e, 'Erreur lors de la vérification Pro Santé Connect.');
+    } catch (error: unknown) {
+      const msg = await messageErreurEdgeFn(error, 'Erreur lors de la vérification Pro Santé Connect.');
       toast.error(`PSC : erreur — ${msg}`);
       setPscResult({
         env: 'inconnu',

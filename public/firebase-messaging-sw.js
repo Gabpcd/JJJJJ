@@ -1,5 +1,3 @@
-/* eslint-disable no-undef */
-
 // ─── Cache Configuration ───
 // v6 (2026-05-04) : ne plus intercepter les requêtes cross-origin (corrige
 // l'iframe Turnstile bloqué par SOP en mode normal — incognito OK car pas

@@ -17,7 +17,7 @@ const PATTERNS: { regex: RegExp; replacement: string }[] = [
   // Stripe publishable keys (less sensitive but still mask)
   { regex: /pk_(live|test)_[A-Za-z0-9]{20,}/g, replacement: 'STRIPE_PK_MASKED' },
   // Generic tokens: 40+ chars mixed alphanumeric (heuristic)
-  { regex: /(?<![a-zA-Z0-9\/+])[A-Za-z0-9]{40,}(?![a-zA-Z0-9\/+=])/g, replacement: 'TOKEN_MASKED' },
+  { regex: /(?<![a-zA-Z0-9/+])[A-Za-z0-9]{40,}(?![a-zA-Z0-9/+=])/g, replacement: 'TOKEN_MASKED' },
 ];
 
 /**

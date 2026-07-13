@@ -9,17 +9,9 @@
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { verifyAdminOrServiceRole } from "../_shared/admin-auth.ts";
+import { corsHeaders } from "../_shared/cors.ts";
 
 const FHIR_BASE = "https://gateway.api.esante.gouv.fr/fhir/v2";
-
-function getCorsOrigin(req: Request): string {
-  const o = req.headers.get("origin") || "";
-  if (["https://jolene.app", "https://app.jolene.app", "https://www.jolene.app", "http://localhost:5173", "http://localhost:8080"].includes(o)) return o;
-  return "https://jolene.app";
-}
-function cors(req: Request) {
-  return { "Access-Control-Allow-Origin": getCorsOrigin(req), "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type", "Content-Type": "application/json" };
-}
 
 interface Telecoms { email: string | null; telephone: string | null }
 
@@ -52,23 +44,23 @@ async function fhir(path: string, apiKey: string): Promise<any | null> {
 }
 
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response(null, { headers: cors(req) });
+  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders(req) });
   try {
     // Auth standard : JWT admin OU service_role/sb_secret_* (fallback vault
     // géré par le helper — piège pg_cron documenté CLAUDE.md)
     const authResult = await verifyAdminOrServiceRole(req);
     if (!authResult.ok) {
-      return new Response(JSON.stringify({ error: authResult.error }), { status: authResult.status, headers: cors(req) });
+      return new Response(JSON.stringify({ error: authResult.error }), { status: authResult.status, headers: corsHeaders(req) });
     }
     const url = Deno.env.get("SUPABASE_URL")!;
     const admin = createClient(url, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } });
 
     const apiKey = Deno.env.get("ESANTE_FHIR_API_KEY") || "";
-    if (!apiKey) return new Response(JSON.stringify({ error: "ESANTE_FHIR_API_KEY non configurée." }), { status: 500, headers: cors(req) });
+    if (!apiKey) return new Response(JSON.stringify({ error: "ESANTE_FHIR_API_KEY non configurée." }), { status: 500, headers: corsHeaders(req) });
 
     const { cible, departement, limite } = await req.json().catch(() => ({}));
     if (!["ETABLISSEMENT", "SOIGNANT"].includes(cible)) {
-      return new Response(JSON.stringify({ error: "cible invalide (ETABLISSEMENT|SOIGNANT)" }), { status: 400, headers: cors(req) });
+      return new Response(JSON.stringify({ error: "cible invalide (ETABLISSEMENT|SOIGNANT)" }), { status: 400, headers: corsHeaders(req) });
     }
     const table = cible === "ETABLISSEMENT" ? "prospects_etablissements" : "prospects_soignants";
     const pk = cible === "ETABLISSEMENT" ? "finess" : "cle";
@@ -80,9 +72,9 @@ Deno.serve(async (req) => {
     let q = admin.from(table).select("*").is("enrichi_le", null).order("nom", { ascending: true }).limit(max);
     if (departement) q = q.eq("departement", String(departement).toUpperCase());
     const { data: prospects, error: qErr } = await q;
-    if (qErr) return new Response(JSON.stringify({ error: qErr.message }), { status: 500, headers: cors(req) });
+    if (qErr) return new Response(JSON.stringify({ error: qErr.message }), { status: 500, headers: corsHeaders(req) });
     if (!prospects?.length) {
-      return new Response(JSON.stringify({ success: true, traites: 0, emails: 0, telephones: 0, restants: 0, message: "Tous les prospects ont déjà été passés à l'Annuaire." }), { headers: cors(req) });
+      return new Response(JSON.stringify({ success: true, traites: 0, emails: 0, telephones: 0, restants: 0, message: "Tous les prospects ont déjà été passés à l'Annuaire." }), { headers: corsHeaders(req) });
     }
 
     let traites = 0; let emails = 0; let telephones = 0; let ambigus = 0;
@@ -132,8 +124,8 @@ Deno.serve(async (req) => {
     const { count: restants } = await admin.from(table)
       .select(pk, { count: "exact", head: true }).is("enrichi_le", null);
 
-    return new Response(JSON.stringify({ success: true, traites, emails, telephones, ambigus, restants: restants ?? 0 }), { headers: cors(req) });
+    return new Response(JSON.stringify({ success: true, traites, emails, telephones, ambigus, restants: restants ?? 0 }), { headers: corsHeaders(req) });
   } catch (e) {
-    return new Response(JSON.stringify({ error: (e as Error)?.message || "Erreur interne" }), { status: 500, headers: cors(req) });
+    return new Response(JSON.stringify({ error: (e as Error)?.message || "Erreur interne" }), { status: 500, headers: corsHeaders(req) });
   }
 });

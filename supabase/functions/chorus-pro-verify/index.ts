@@ -21,14 +21,7 @@ import {
   rechercherStructure, consulterStructure, rechercherServicesStructure, consulterService,
 } from '../_shared/piste-client.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2';
-
-function corsHeaders(req: Request) {
-  return {
-    'Access-Control-Allow-Origin': req.headers.get('origin') || '*',
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-    'Content-Type': 'application/json',
-  };
-}
+import { corsHeaders } from '../_shared/cors.ts';
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -61,7 +54,7 @@ Deno.serve(async (req) => {
     // Normalisation : Chorus attend un identifiant SANS espaces ni séparateurs
     // (SIRET = 14 chiffres collés). Un SIRET collé/saisi avec des espaces
     // ("818 613 663 00017") était envoyé tel quel et toujours "introuvable".
-    const identifiant = (body.identifiant?.toString() ?? '').replace(/[\s.\-]/g, '').trim();
+    const identifiant = (body.identifiant?.toString() ?? '').replace(/[\s.-]/g, '').trim();
     if (!identifiant) {
       return new Response(JSON.stringify({ error: 'identifiant requis' }), { status: 400, headers });
     }

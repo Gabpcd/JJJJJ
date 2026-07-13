@@ -11,6 +11,10 @@ import { validerSiret } from '@/lib/luhn';
 
 interface ProfilLiberal {
   siret_liberal: string | null;
+  siret_liberal_verifie: boolean | null;
+  siret_liberal_verifie_le: string | null;
+  siret_liberal_raison_sociale: string | null;
+  siret_liberal_coherence_identite: boolean | null;
   statut_liberal: string | null;
   type_contrat: string | null;
   assujetti_tva: boolean | null;
@@ -38,7 +42,7 @@ export function FinaliserInstallationLiberal() {
     if (!user) return;
     const { data } = await supabase
       .from('soignants')
-      .select('siret_liberal, statut_liberal, type_contrat, assujetti_tva, numero_tva')
+      .select('siret_liberal, siret_liberal_verifie, siret_liberal_verifie_le, siret_liberal_raison_sociale, siret_liberal_coherence_identite, statut_liberal, type_contrat, assujetti_tva, numero_tva')
       .eq('id', user.id)
       .maybeSingle();
     if (data) {
@@ -57,6 +61,13 @@ export function FinaliserInstallationLiberal() {
 
   const actif = profil?.statut_liberal === 'ACTIF' || profil?.type_contrat === 'LIBERAL';
   const siretEnregistre = Boolean(profil?.siret_liberal);
+  const siretSaisi = siret.replace(/\s/g, '');
+  const siretVerifie = Boolean(
+    profil?.siret_liberal
+    && profil.siret_liberal === siretSaisi
+    && profil.siret_liberal_verifie === true
+    && profil.siret_liberal_coherence_identite === true
+  );
 
   const enregistrerSiret = async () => {
     const v = validerSiret(siret);
@@ -65,32 +76,30 @@ export function FinaliserInstallationLiberal() {
       return;
     }
     setSavingSiret(true);
-    const { data, error } = await supabase.rpc('fn_enregistrer_siret_liberal' as any, {
-      p_siret: siret.replace(/\s/g, ''),
-    });
-    setSavingSiret(false);
-    const res = data as { error?: string } | null;
-    if (error || res?.error) {
-      toast.error(res?.error || error?.message || "Erreur lors de l'enregistrement du SIRET");
-      return;
-    }
-    toast.success('SIRET enregistré — vérification INSEE en cours…');
     try {
-      const { data: verifData } = await supabase.functions.invoke('verify-siret', {
-        body: { siret: siret.replace(/\s/g, '') },
+      const { data: verifData, error } = await supabase.functions.invoke('verify-siret', {
+        body: { siret: siret.replace(/\s/g, ''), usage: 'SOIGNANT_LIBERAL' },
       });
-      const v2 = verifData as { ok?: boolean; statut?: string; raison_sociale?: string; est_actif?: boolean; message?: string } | null;
-      if (v2?.statut === 'INTROUVABLE') {
-        toast.error(v2.message || 'SIRET introuvable dans le registre INSEE. Vérifie ton numéro.');
-      } else if (v2?.statut === 'ALERTE') {
-        toast.warning(v2.message || 'SIRET valide mais activité non-santé — vérification manuelle requise.');
-      } else if (v2?.statut === 'VERIFIE') {
-        toast.success(`SIRET vérifié : ${v2.raison_sociale}`);
+      if (error) throw error;
+      const verification = verifData as {
+        ok?: boolean;
+        enregistre?: boolean;
+        code?: string;
+        raison_sociale?: string | null;
+        message?: string;
+        error?: string;
+      } | null;
+      if (!verification?.ok || !verification.enregistre) {
+        toast.error(verification?.message || verification?.error || 'Ce SIRET ne peut pas être vérifié');
+        return;
       }
-    } catch {
-      // Vérif INSEE en best-effort — ne bloque pas l'enregistrement.
+      toast.success(`SIRET vérifié et enregistré${verification.raison_sociale ? ` : ${verification.raison_sociale}` : ''}`);
+      await charger();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Vérification INSEE temporairement indisponible');
+    } finally {
+      setSavingSiret(false);
     }
-    await charger();
   };
 
   const enregistrerTva = async () => {
@@ -99,7 +108,7 @@ export function FinaliserInstallationLiberal() {
       return;
     }
     setSavingTva(true);
-    const { data, error } = await supabase.rpc('fn_modifier_tva_liberal' as any, {
+    const { data, error } = await supabase.rpc('fn_modifier_tva_liberal', {
       p_assujetti_tva: assujettiTva,
       p_numero_tva: assujettiTva ? numeroTva.trim() : null,
     });
@@ -115,7 +124,7 @@ export function FinaliserInstallationLiberal() {
 
   const activer = async () => {
     setActivating(true);
-    const { data, error } = await supabase.rpc('fn_activer_liberal' as any);
+    const { data, error } = await supabase.rpc('fn_activer_liberal');
     setActivating(false);
     const res = data as { error?: string; success?: boolean } | null;
     if (error || res?.error) {
@@ -182,11 +191,21 @@ export function FinaliserInstallationLiberal() {
                 disabled={savingSiret}
                 onClick={enregistrerSiret}
               >
-                Enregistrer le SIRET
+                Vérifier et enregistrer
               </BoutonY2K>
             </div>
-            {siretEnregistre && (
-              <p className="text-xs text-success">SIRET enregistré — tu peux activer ton statut libéral.</p>
+            {siretVerifie && (
+              <div className="rounded-lg border border-success/30 bg-success/5 p-2" role="status">
+                <p className="text-xs font-medium text-success">SIRET officiel actif et identité vérifiée.</p>
+                {profil?.siret_liberal_raison_sociale && (
+                  <p className="mt-0.5 text-xs text-muted-foreground">{profil.siret_liberal_raison_sociale}</p>
+                )}
+              </div>
+            )}
+            {siretEnregistre && !siretVerifie && (
+              <p className="text-xs text-warning" role="status">
+                Ce SIRET n’est pas encore vérifié. Relance la vérification avant l’activation.
+              </p>
             )}
           </>
         )}
@@ -229,14 +248,14 @@ export function FinaliserInstallationLiberal() {
           <BoutonY2K
             variant="primary"
             loading={activating}
-            disabled={activating || !siretEnregistre}
+            disabled={activating || !siretVerifie}
             onClick={activer}
             className="w-full"
           >
             Activer mon statut libéral
           </BoutonY2K>
-          {!siretEnregistre && (
-            <p className="text-xs text-muted-foreground text-center">Renseigne d'abord ton SIRET.</p>
+          {!siretVerifie && (
+            <p className="text-xs text-muted-foreground text-center">Vérifie d’abord ton SIRET officiel et son titulaire.</p>
           )}
         </div>
       )}

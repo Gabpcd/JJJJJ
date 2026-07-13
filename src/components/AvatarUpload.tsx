@@ -3,6 +3,7 @@ import { Camera, Loader2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
+import { IMAGE_DOCUMENT_MIME_TYPES, verifierFichierDocument } from '@/lib/documentUpload';
 
 const FALLBACK_COLORS = [
   'hsl(var(--primary))',        // teal
@@ -30,7 +31,9 @@ function getFallbackColor(name: string): string {
 async function compressImage(file: File): Promise<Blob> {
   return new Promise((resolve, reject) => {
     const img = new Image();
+    const objectUrl = URL.createObjectURL(file);
     img.onload = () => {
+      URL.revokeObjectURL(objectUrl);
       const MAX = 256;
       let w = img.width, h = img.height;
       if (w > h) { if (w > MAX) { h = (h * MAX) / w; w = MAX; } }
@@ -38,7 +41,8 @@ async function compressImage(file: File): Promise<Blob> {
       const canvas = document.createElement('canvas');
       canvas.width = w;
       canvas.height = h;
-      const ctx = canvas.getContext('2d')!;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) { reject(new Error('Compression failed')); return; }
       ctx.drawImage(img, 0, 0, w, h);
       canvas.toBlob(
         (blob) => blob ? resolve(blob) : reject(new Error('Compression failed')),
@@ -46,8 +50,11 @@ async function compressImage(file: File): Promise<Blob> {
         0.8
       );
     };
-    img.onerror = reject;
-    img.src = URL.createObjectURL(file);
+    img.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      reject(new Error('Image illisible'));
+    };
+    img.src = objectUrl;
   });
 }
 
@@ -109,8 +116,13 @@ export function AvatarUpload({ src, prenom, nom, size = 96, mode, onUploaded }: 
   const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !user) return;
-    if (file.size > 2 * 1024 * 1024) {
-      toast.error('Image trop lourde (max 2 Mo).');
+    const validation = await verifierFichierDocument(file, {
+      maxBytes: 2 * 1024 * 1024,
+      allowedMimes: IMAGE_DOCUMENT_MIME_TYPES,
+    });
+    if (validation.ok === false) {
+      toast.error(validation.message);
+      e.target.value = '';
       return;
     }
 
@@ -127,15 +139,20 @@ export function AvatarUpload({ src, prenom, nom, size = 96, mode, onUploaded }: 
 
       const { data: urlData } = await supabase.storage
         .from('jolene-documents')
-        .createSignedUrl(path, 60 * 60); // 1 hour — refreshed on demand
+        // avatar_url/logo_url sont consommés directement par les listes et la
+        // messagerie. Une URL d'une heure cassait donc l'image dès le lendemain.
+        // Le jeton reste limité à cet avatar (jamais aux autres documents).
+        .createSignedUrl(path, 5 * 365 * 24 * 60 * 60);
 
       const signedUrl = urlData?.signedUrl;
       if (!signedUrl) throw new Error('URL generation failed');
 
       if (mode === 'soignant') {
-        await supabase.rpc('fn_modifier_mon_profil' as any, { p_avatar_url: signedUrl });
+        const { error } = await supabase.rpc('fn_modifier_mon_profil', { p_avatar_url: signedUrl });
+        if (error) throw error;
       } else {
-        await supabase.rpc('fn_modifier_mon_etablissement' as any, { p_logo_url: signedUrl });
+        const { error } = await supabase.rpc('fn_modifier_mon_etablissement', { p_logo_url: signedUrl });
+        if (error) throw error;
       }
 
       setCurrentSrc(signedUrl);
@@ -150,36 +167,37 @@ export function AvatarUpload({ src, prenom, nom, size = 96, mode, onUploaded }: 
   };
 
   return (
-    <button
-      type="button"
-      onClick={() => inputRef.current?.click()}
-      disabled={uploading}
-      aria-label={mode === 'soignant' ? 'Changer ma photo de profil' : 'Changer le logo de l\'établissement'}
-      className={`relative group shrink-0 ${r} overflow-hidden focus:outline-none focus-visible:ring-2 focus-visible:ring-ring`}
-      style={{ width: size, height: size }}
-    >
-      {/* Image or initials */}
-      <div
-        className={`w-full h-full flex items-center justify-center ${r}`}
-        style={{ backgroundColor: currentSrc ? undefined : bg }}
+    <div className="relative shrink-0" style={{ width: size, height: size }}>
+      <button
+        type="button"
+        onClick={() => inputRef.current?.click()}
+        disabled={uploading}
+        aria-label={mode === 'soignant' ? 'Changer ma photo de profil' : 'Changer le logo de l\'établissement'}
+        className={`relative group w-full h-full ${r} overflow-hidden focus:outline-none focus-visible:ring-2 focus-visible:ring-ring`}
       >
-        {currentSrc ? (
-          <img src={currentSrc} alt="Avatar" className={`w-full h-full object-cover ${r}`} />
-        ) : (
-          <span className={`font-bold text-white select-none ${fontSize}`}>{initials}</span>
-        )}
-      </div>
+        {/* Image or initials */}
+        <div
+          className={`w-full h-full flex items-center justify-center ${r}`}
+          style={{ backgroundColor: currentSrc ? undefined : bg }}
+        >
+          {currentSrc ? (
+            <img src={currentSrc} alt="" className={`w-full h-full object-cover ${r}`} />
+          ) : (
+            <span className={`font-bold text-white select-none ${fontSize}`}>{initials}</span>
+          )}
+        </div>
 
-      {/* Overlay */}
-      {uploading ? (
-        <div className={`absolute inset-0 flex items-center justify-center bg-black/50 ${r}`}>
-          <Loader2 className="h-6 w-6 text-white animate-spin" />
-        </div>
-      ) : (
-        <div className={`absolute inset-0 flex items-center justify-center bg-black/0 group-hover:bg-black/40 transition-colors ${r}`}>
-          <Camera className="h-5 w-5 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
-        </div>
-      )}
+        {/* Overlay */}
+        {uploading ? (
+          <div aria-hidden="true" className={`absolute inset-0 flex items-center justify-center bg-black/50 ${r}`}>
+            <Loader2 className="h-6 w-6 text-white animate-spin" />
+          </div>
+        ) : (
+          <div aria-hidden="true" className={`absolute inset-0 flex items-center justify-center bg-black/0 group-hover:bg-black/40 transition-colors ${r}`}>
+            <Camera className="h-5 w-5 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+          </div>
+        )}
+      </button>
 
       <input
         ref={inputRef}
@@ -189,6 +207,6 @@ export function AvatarUpload({ src, prenom, nom, size = 96, mode, onUploaded }: 
         className="hidden"
         aria-hidden="true"
       />
-    </button>
+    </div>
   );
 }

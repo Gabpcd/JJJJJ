@@ -10,21 +10,17 @@
 
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { appelerAnthropic } from "../_shared/anthropic.ts";
+import { verifyAdminOrServiceRole, verifyUserOrServiceRole } from '../_shared/admin-auth.ts';
+import { canManageEstablishment } from '../_shared/etablissement-auth.ts';
+import { applyRateLimit, getClientIp } from '../_shared/rate-limit.ts';
+import {
+  normalizeIsoCivilDate,
+  personNameMatches,
+  strictAiVerificationQuality,
+  validateDocumentFile,
+} from '../_shared/verification-rules.ts';
+import { corsHeaders } from '../_shared/cors.ts';
 
-function corsHeaders(req: Request): Record<string, string> {
-  const origin = req.headers.get('origin') || '';
-  const allowed =
-    origin === 'https://jolene.app' || origin === 'https://app.jolene.app' ||
-    origin === 'https://www.jolene.app' || origin === 'http://localhost:5173' ||
-    origin === 'http://localhost:8080';
-  return {
-    'Access-Control-Allow-Origin': allowed ? origin : 'https://jolene.app',
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-    'Access-Control-Allow-Methods': 'POST, OPTIONS',
-  };
-}
-
-const ALLOWED_MIME = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'application/pdf'];
 const TYPE_LABELS: Record<string, string> = {
   CARTE_IDENTITE: "Carte d'identité ou Passeport",
   PASSEPORT: 'Passeport',
@@ -58,53 +54,108 @@ Deno.serve(async (req) => {
     new Response(JSON.stringify(body), { status, headers: { ...cors, 'Content-Type': 'application/json' } });
 
   try {
+    const auth = await verifyUserOrServiceRole(req);
+    if (!auth.ok) return json(auth.status, { error: auth.error });
     const body = await req.json().catch(() => ({}));
-    if (body?.warm === true) return json(200, { warm: true });
+    if (body?.warm === true) {
+      if (!auth.isServiceRole) {
+        const adminAuth = await verifyAdminOrServiceRole(req);
+        if (!adminAuth.ok) return json(adminAuth.status, { error: adminAuth.error });
+      }
+      return json(200, { warm: true, configured: !!Deno.env.get('ANTHROPIC_API_KEY') });
+    }
 
     const etablissementId = String(body?.etablissement_id || '').trim();
     if (!etablissementId) return json(400, { error: 'etablissement_id requis' });
 
-    const authHeader = req.headers.get('Authorization') || '';
-    if (!authHeader.startsWith('Bearer ')) return json(401, { error: 'Non autorisé' });
-    const token = authHeader.slice(7);
-
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const admin = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
-    const isServiceRole = token === serviceKey;
 
-    // Autorisation : service-role OU membre PROPRIETAIRE/ADMIN de l'établissement.
-    if (!isServiceRole) {
-      const userClient = createClient(supabaseUrl, Deno.env.get('SUPABASE_ANON_KEY')!, {
-        global: { headers: { Authorization: authHeader } },
-      });
-      const { data: { user } } = await userClient.auth.getUser();
-      if (!user) return json(401, { error: 'Session invalide' });
-      const { data: membre } = await admin.from('membres_etablissement')
-        .select('role').eq('etablissement_id', etablissementId).eq('user_id', user.id).eq('actif', true).maybeSingle();
-      const okRole = membre && ['PROPRIETAIRE', 'ADMIN_GROUPE'].includes((membre as any).role);
-      if (!okRole) return json(403, { error: 'Non autorisé pour cet établissement' });
+    if (!auth.isServiceRole) {
+      if (applyRateLimit('verify-piece-identite-etab', getClientIp(req), { max: 8, windowMs: 60_000 })) {
+        return json(429, { error: 'Trop de vérifications. Réessayez dans une minute.' });
+      }
+      if (!(await canManageEstablishment(admin, auth.userId, etablissementId))) {
+        const adminAuth = await verifyAdminOrServiceRole(req);
+        if (!adminAuth.ok) return json(403, { error: 'Non autorisé pour cet établissement' });
+      }
     }
 
     const anthropicKey = Deno.env.get('ANTHROPIC_API_KEY');
     if (!anthropicKey) return json(200, { ok: false, error: 'ANTHROPIC_API_KEY non configurée' });
 
     const { data: etab, error: etabErr } = await admin.from('etablissements')
-      .select('representant_nom, representant_prenom, representant_piece_s3_key, representant_piece_type_mime, representant_piece_type_document')
+      .select('verification_source_version, representant_nom, representant_prenom, representant_piece_s3_key, representant_piece_type_mime, representant_piece_type_document')
       .eq('id', etablissementId).maybeSingle();
     if (etabErr || !etab) return json(404, { error: 'Établissement introuvable' });
     const e = etab as Record<string, any>;
+    const appliquerVerdict = async (verifie: boolean, resultat: Record<string, unknown>) => {
+      if (!auth.isServiceRole && !(await canManageEstablishment(admin, auth.userId, etablissementId))) {
+        const adminAuth = await verifyAdminOrServiceRole(req);
+        if (!adminAuth.ok) return false;
+      }
+      const { data, error } = await admin.rpc(
+        'fn_appliquer_verification_identite_etablissement',
+        {
+          p_etablissement_id: etablissementId,
+          p_version_attendue: Number(e.verification_source_version),
+          p_piece_s3_key: e.representant_piece_s3_key ?? null,
+          p_piece_type_mime: e.representant_piece_type_mime ?? null,
+          p_piece_type_document: e.representant_piece_type_document ?? null,
+          p_representant_nom: e.representant_nom ?? null,
+          p_representant_prenom: e.representant_prenom ?? null,
+          p_verifie: verifie,
+          p_resultat: resultat,
+        },
+      );
+      if (error) throw new Error(`Persistance atomique identité impossible: ${error.code || error.message}`);
+      return data === true;
+    };
+    const sourceChangee = () => json(409, {
+      ok: false,
+      code: 'VERIFICATION_SOURCE_CHANGED',
+      error: 'La pièce ou le profil a changé pendant la vérification. Relancez le contrôle.',
+    });
     if (!e.representant_piece_s3_key) return json(400, { error: 'Aucune pièce d\'identité téléversée' });
-    if (!e.representant_nom) return json(400, { error: 'Nom du représentant non renseigné' });
-    if (e.representant_piece_type_mime && !ALLOWED_MIME.includes(e.representant_piece_type_mime)) {
-      return json(200, { ok: true, verdict: 'REJETE', motif: `Type de fichier non autorisé: ${e.representant_piece_type_mime}` });
+    const piecePath = String(e.representant_piece_s3_key);
+    const proprietairesAutorises = new Set(
+      [etablissementId, auth.userId].filter((value): value is string => !!value),
+    );
+    const cheminAutorise = !piecePath.includes('..')
+      && !piecePath.includes('\\')
+      && [...proprietairesAutorises].some((ownerId) => piecePath.startsWith(`${ownerId}/`));
+    if (!cheminAutorise) return json(403, { error: 'Chemin de pièce d\'identité non autorisé' });
+    if (!e.representant_nom || !e.representant_prenom) {
+      return json(400, { error: 'Nom et prénom du représentant requis' });
     }
-
     // Téléchargement du fichier
-    const { data: file, error: dlErr } = await admin.storage.from('jolene-documents').download(e.representant_piece_s3_key);
+    const { data: file, error: dlErr } = await admin.storage.from('jolene-documents').download(piecePath);
     if (dlErr || !file) return json(200, { ok: false, error: 'Fichier introuvable dans le stockage' });
-    const base64 = toBase64(await file.arrayBuffer());
-    const mime = e.representant_piece_type_mime || 'image/jpeg';
+    const arrayBuffer = await file.arrayBuffer();
+    const fileValidation = validateDocumentFile(
+      new Uint8Array(arrayBuffer),
+      e.representant_piece_type_mime,
+    );
+    if (!fileValidation.ok) {
+      const motifs: Record<string, string> = {
+        EMPTY: "La pièce d'identité est vide.",
+        TOO_LARGE: "La pièce d'identité dépasse 10 Mo.",
+        UNSUPPORTED_MIME: "Le type MIME déclaré de la pièce d'identité est absent ou non autorisé.",
+        INVALID_SIGNATURE: "Le contenu de la pièce d'identité ne correspond pas à son type MIME déclaré.",
+      };
+      const motif = motifs[fileValidation.code];
+      const applique = await appliquerVerdict(false, {
+        verdict_final: 'REJETE',
+        motif,
+        controle_fichier: fileValidation.code,
+        regle_version: '2026-07-14',
+      });
+      if (!applique) return sourceChangee();
+      return json(200, { ok: true, verdict: 'REJETE', motif });
+    }
+    const base64 = toBase64(arrayBuffer);
+    const mime = fileValidation.mime;
     const isPdf = mime === 'application/pdf';
 
     const typeLabel = TYPE_LABELS[e.representant_piece_type_document] || "Pièce d'identité";
@@ -119,13 +170,15 @@ Deno.serve(async (req) => {
   "nom_extrait": "le nom de famille lu sur le document" ou null,
   "prenom_extrait": "le prénom lu sur le document" ou null,
   "document_lisible": true/false,
+  "document_complet": true/false,
+  "score_confiance": 0-100,
   "confiance": "HAUTE"/"MOYENNE"/"FAIBLE",
   "indices_falsification": ["liste des indices de falsification/retouche détectés"] ou [],
   "motif_rejet": null ou "string",
   "verdict": "VERIFIE"/"EN_ATTENTE"/"REJETE"
 }
 Règles:
-- verdict = "VERIFIE" si c'est bien une pièce d'identité officielle (CNI, passeport, titre de séjour), lisible, confiance HAUTE.
+- verdict = "VERIFIE" si c'est bien une pièce d'identité officielle (CNI, passeport, titre de séjour), lisible, complète, non expirée et confiance HAUTE.
 - verdict = "EN_ATTENTE" si doute ou confiance MOYENNE.
 - verdict = "REJETE" si ce n'est pas une pièce d'identité, illisible/tronquée, ou confiance FAIBLE.
 - nom_correspond : compare le nom/prénom du document au nom du représentant fourni (tolère casse/accents/ordre).
@@ -158,44 +211,97 @@ Analyse ce document et vérifie sa conformité + la concordance du nom.`;
     // status 0 = erreur réseau / abort (timeout) interceptée par le module partagé.
     if (ai.status === 0) {
       const estTimeout = aiController.signal.aborted;
-      await admin.from('etablissements').update({
-        representant_identite_resultat_ia: { erreur_anthropic: { status: estTimeout ? 'timeout' : 'network', at: new Date().toISOString() } },
-      }).eq('id', etablissementId);
+      const applique = await appliquerVerdict(false, {
+        erreur_anthropic: { status: estTimeout ? 'timeout' : 'network', at: new Date().toISOString() },
+      });
+      if (!applique) return sourceChangee();
       return json(200, { ok: true, verdict: 'EN_ATTENTE', reason: estTimeout ? 'AI timeout' : 'AI network error' });
     }
 
     if (!ai.ok) {
-      await admin.from('etablissements').update({
-        representant_identite_resultat_ia: { erreur_anthropic: { status: ai.status, body_excerpt: ai.body.slice(0, 1000), at: new Date().toISOString() } },
-      }).eq('id', etablissementId);
+      const applique = await appliquerVerdict(false, {
+        erreur_anthropic: { status: ai.status, body_excerpt: ai.body.slice(0, 1000), at: new Date().toISOString() },
+      });
+      if (!applique) return sourceChangee();
       return json(200, { ok: false, verdict: 'EN_ATTENTE', error: `Anthropic ${ai.status}` });
     }
 
     const aiJson = ai.data;
     const text = (aiJson?.content || []).map((c: any) => c?.text || '').join('\n');
     const result = parseJsonFromText(text) || {};
-    // GATE FALSIFICATION : tout indice de retouche → revue humaine (jamais VERIFIE auto).
-    const indicesFalsif = Array.isArray(result.indices_falsification) ? result.indices_falsification : [];
-    const verdict = (result.verdict === 'VERIFIE' && indicesFalsif.length > 0) ? 'EN_ATTENTE' : (result.verdict || 'EN_ATTENTE');
-    const nomCorrespond = result.nom_correspond === true;
+    // GATE FALSIFICATION : la liste doit être explicitement présente et bien formée.
+    const quality = strictAiVerificationQuality(result);
+    const indicesFalsif = quality.indicators;
+    const nomDeterministe = personNameMatches(
+      e.representant_nom,
+      e.representant_prenom,
+      result.nom_extrait,
+      result.prenom_extrait,
+    );
+    const dateExpiration = normalizeIsoCivilDate(result.date_expiration);
+    const expiree = dateExpiration !== null && dateExpiration < new Date().toISOString().slice(0, 10);
+    const verdictsAutorises = new Set(['VERIFIE', 'EN_ATTENTE', 'REJETE']);
+    let verdict = typeof result.verdict === 'string' && verdictsAutorises.has(result.verdict)
+      ? result.verdict
+      : 'EN_ATTENTE';
+    let motif = typeof result.motif_rejet === 'string' ? result.motif_rejet : null;
+
+    if (verdict === 'VERIFIE' && !quality.antifraudComplete) {
+      verdict = 'EN_ATTENTE';
+      motif = 'Le contrôle antifraude est absent ou mal formé — vérification manuelle requise.';
+    } else if (verdict === 'VERIFIE' && indicesFalsif.length > 0) {
+      verdict = 'EN_ATTENTE';
+      motif = 'Indices de falsification détectés — vérification manuelle requise.';
+    }
+    if (verdict === 'VERIFIE' && (
+      result.type_correspond !== true || result.document_lisible !== true ||
+      result.document_complet !== true || !quality.highConfidence ||
+      result.nom_correspond !== true || nomDeterministe !== true || dateExpiration === null
+    )) {
+      verdict = 'EN_ATTENTE';
+      motif = nomDeterministe === false || result.nom_correspond === false
+        ? "Le nom de la pièce ne correspond pas au représentant déclaré."
+        : dateExpiration === null
+          ? "La date d'expiration n'a pas pu être lue : vérification manuelle requise."
+          : "L'identité, le type ou la lisibilité doit être confirmé manuellement.";
+    }
+    if (verdict === 'VERIFIE' && expiree) {
+      verdict = 'REJETE';
+      motif = "La pièce d'identité est expirée.";
+    }
+
+    const nomCorrespond = result.nom_correspond === true && nomDeterministe === true;
     const identiteVerifiee = verdict === 'VERIFIE' && nomCorrespond;
 
-    await admin.from('etablissements').update({
-      representant_identite_verifiee: identiteVerifiee,
-      representant_identite_verifiee_le: identiteVerifiee ? new Date().toISOString() : null,
-      representant_identite_resultat_ia: result,
-    }).eq('id', etablissementId);
+    const applique = await appliquerVerdict(identiteVerifiee, {
+        verdict_final: verdict,
+        motif,
+        type_correspond: result.type_correspond === true,
+        nom_extrait: result.nom_extrait ?? null,
+        prenom_extrait: result.prenom_extrait ?? null,
+        date_expiration: dateExpiration,
+        document_lisible: result.document_lisible === true,
+        document_complet: result.document_complet === true,
+        score_confiance: quality.score,
+        confiance: quality.confidence,
+        antifraude_complete: quality.antifraudComplete,
+        indices_falsification_count: indicesFalsif.length,
+        regle_version: '2026-07-14',
+    });
+    if (!applique) return sourceChangee();
 
     // Évalue le rattachement adaptatif (AUTO_DIRIGEANT / EMAIL_PRO / ADMIN)
     let rattachement: any = null;
     try {
-      const { data: rat } = await admin.rpc('fn_evaluer_rattachement_etablissement', { p_etablissement_id: etablissementId });
+      const { data: rat, error: ratError } = await admin.rpc('fn_evaluer_rattachement_etablissement', { p_etablissement_id: etablissementId });
+      if (ratError) throw ratError;
       rattachement = rat;
-    } catch { /* non bloquant */ }
+    } catch (ratError) { console.error('[verify-piece-identite-etab] rattachement', String(ratError)); }
 
     return json(200, {
       ok: true,
       verdict,
+      motif,
       nom_correspond: nomCorrespond,
       nom_extrait: result.nom_extrait ?? null,
       prenom_extrait: result.prenom_extrait ?? null,

@@ -5,7 +5,7 @@
  * parcours d'activation établissement en une checklist à 3 étapes :
  *   1. Contrat plateforme (signature électronique) — logique reprise de
  *      l'ancienne FinaliserInscriptionEtab (RPC fn_signer_contrat_service).
- *   2. Vérification établissement (FINESS + représentant + e-mail pro) —
+ *   2. Vérification établissement (FINESS + représentant + justificatif) —
  *      logique reprise de l'ancienne VerificationEtablissement (edge functions
  *      verify-finess / verify-piece-identite-etab + RPC
  *      fn_demander_confirmation_email_etab).
@@ -35,6 +35,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { verifierFichierDocument } from '@/lib/documentUpload';
 import { toast } from 'sonner';
 import SignatureCanvas from '@/components/SignatureCanvas';
 import { buildContratServiceTexte, CONTRAT_SERVICE_VERSION, hashContratTexte } from '@/constantes/contratServiceEtablissement';
@@ -89,6 +90,7 @@ type EtabState = {
   representant_nom: string | null;
   representant_prenom: string | null;
   representant_identite_verifiee: boolean | null;
+  justificatif_fonction_verifie: boolean | null;
   email_contact_verifie: boolean | null;
   rattachement_methode: string | null;
   rattachement_verifie: boolean | null;
@@ -100,11 +102,10 @@ type EtabState = {
 
 const LIBELLE_METHODE: Record<string, string> = {
   AUTO_DIRIGEANT: 'Dirigeant vérifié (INSEE)',
+  JUSTIFICATIF: 'Justificatif de fonction vérifié',
   EMAIL_PRO: 'E-mail professionnel confirmé',
   ADMIN: 'Validation par un administrateur Jolene',
 };
-
-const ALLOWED_EXT = ['pdf', 'jpg', 'jpeg', 'png'];
 
 type EtatEtape = 'fait' | 'actuel' | 'a_faire';
 
@@ -132,6 +133,10 @@ export default function ActiverEtablissement() {
   const [pieceFile, setPieceFile] = useState<File | null>(null);
   const [pieceLoading, setPieceLoading] = useState(false);
   const pieceLockRef = useRef(false);
+  const [justifType, setJustifType] = useState<'ATTESTATION_EMPLOYEUR' | 'DELEGATION_SIGNATURE' | 'FICHE_POSTE' | 'CONTRAT_TRAVAIL' | 'DECISION_NOMINATION'>('DELEGATION_SIGNATURE');
+  const [justifFile, setJustifFile] = useState<File | null>(null);
+  const [justifLoading, setJustifLoading] = useState(false);
+  const justifLockRef = useRef(false);
   const [emailInput, setEmailInput] = useState('');
   const [emailLoading, setEmailLoading] = useState(false);
 
@@ -147,7 +152,7 @@ export default function ActiverEtablissement() {
     if (!user) return;
     const { data } = await supabase
       .from('etablissements')
-      .select('nom, siret, type, adresse_rue, adresse_code_postal, adresse_ville, email_contact, contrat_service_signe, contrat_service_signe_le, finess, finess_verifie, finess_raison_sociale, representant_nom, representant_prenom, representant_identite_verifiee, email_contact_verifie, rattachement_methode, rattachement_verifie, mode_paiement_commission, stripe_sepa_payment_method_id, jour_paie_habituel' as any)
+      .select('nom, siret, type, adresse_rue, adresse_code_postal, adresse_ville, email_contact, contrat_service_signe, contrat_service_signe_le, finess, finess_verifie, finess_raison_sociale, representant_nom, representant_prenom, representant_identite_verifiee, justificatif_fonction_verifie, email_contact_verifie, rattachement_methode, rattachement_verifie, mode_paiement_commission, stripe_sepa_payment_method_id, jour_paie_habituel')
       .eq('id', user.id)
       .maybeSingle();
     if (data) {
@@ -175,8 +180,10 @@ export default function ActiverEtablissement() {
   const rattachOk = !!etab?.rattachement_verifie;
   const finessOk = !!etab?.finess_verifie;
   const identiteOk = !!etab?.representant_identite_verifiee;
+  const justifOk = !!etab?.justificatif_fonction_verifie;
+  const estDirigeant = etab?.rattachement_methode === 'AUTO_DIRIGEANT';
   const emailOk = !!etab?.email_contact_verifie;
-  const toutActive = contratSigne && rattachOk;
+  const toutActive = contratSigne && rattachOk && finessOk;
 
   // Première étape incomplète (1 contrat → 2 vérif). Le RIB (3) est différé,
   // jamais bloquant.
@@ -231,11 +238,13 @@ export default function ActiverEtablissement() {
           const { error: upErr } = await supabase.storage
             .from('jolene-documents')
             .upload(path, blob, { upsert: false, contentType: `image/${matches[1]}` });
-          if (!upErr) signatureS3Key = path;
+          if (upErr) throw upErr;
+          signatureS3Key = path;
         }
       } catch {
-        // Best-effort : si upload signature échoue, continue sans bloquer
+        throw new Error("La signature dessinée n'a pas pu être enregistrée. Réessayez.");
       }
+      if (!signatureS3Key) throw new Error('Une signature dessinée valide est obligatoire.');
 
       const hash = await hashContratTexte(contratTexte);
       // L'IP réelle est récupérée côté serveur (RPC SECURITY DEFINER). Passer
@@ -279,11 +288,16 @@ export default function ActiverEtablissement() {
         toast.error('Annuaire Santé momentanément indisponible. Réessayez dans un instant.');
       } else if (data?.trouve === false) {
         toast.error("Ce numéro FINESS est introuvable dans l'Annuaire Santé.");
+        await recharger();
       } else if (data?.verifie) {
         toast.success(`FINESS vérifié : ${data.raison_sociale || 'structure trouvée'}.`);
         await recharger();
+      } else if (data?.revue_manuelle) {
+        toast.warning(data?.motif || 'FINESS trouvé, mais le lien avec votre établissement doit être vérifié manuellement.');
+        await recharger();
       } else {
         toast.error("Cet établissement n'est pas actif dans l'Annuaire Santé.");
+        await recharger();
       }
     } catch (e: unknown) {
       toast.error((e as Error)?.message || 'Erreur lors de la vérification FINESS.');
@@ -296,27 +310,23 @@ export default function ActiverEtablissement() {
   const verifierPiece = async () => {
     if (!user || !pieceFile) return;
     if (pieceLockRef.current) return;
-    if (!nom.trim()) {
-      toast.error('Veuillez renseigner le nom du représentant.');
+    if (!nom.trim() || !prenom.trim()) {
+      toast.error('Veuillez renseigner le prénom et le nom du représentant.');
       return;
     }
-    const ext = pieceFile.name.split('.').pop()?.toLowerCase() || '';
-    if (!ALLOWED_EXT.includes(ext)) {
-      toast.error('Format accepté : PDF, JPG ou PNG.');
-      return;
-    }
-    if (pieceFile.size > 10 * 1024 * 1024) {
-      toast.error('Fichier trop volumineux (max 10 Mo).');
+    const validation = await verifierFichierDocument(pieceFile);
+    if (validation.ok === false) {
+      toast.error(validation.message);
       return;
     }
     pieceLockRef.current = true;
     setPieceLoading(true);
     try {
-      const mime = ext === 'pdf' ? 'application/pdf' : `image/${ext === 'jpg' ? 'jpeg' : ext}`;
-      const path = `${user.id}/representant-piece-${Date.now()}.${ext}`;
+      const mime = validation.mime;
+      const path = `${user.id}/representant-piece-${Date.now()}.${validation.extension}`;
       const { error: upErr } = await supabase.storage
         .from('jolene-documents')
-        .upload(path, pieceFile, { upsert: true, contentType: mime });
+        .upload(path, pieceFile, { upsert: false, contentType: mime });
       if (upErr) throw upErr;
 
       const { error: updErr } = await supabase
@@ -327,7 +337,7 @@ export default function ActiverEtablissement() {
           representant_piece_s3_key: path,
           representant_piece_type_mime: mime,
           representant_piece_type_document: typeDoc,
-        } as Record<string, unknown>)
+        })
         .eq('id', user.id);
       if (updErr) throw updErr;
 
@@ -354,6 +364,56 @@ export default function ActiverEtablissement() {
     } finally {
       pieceLockRef.current = false;
       setPieceLoading(false);
+    }
+  };
+
+  // ── Étape 2 : justificatif de fonction (représentant non dirigeant) ────────
+  const verifierJustificatif = async () => {
+    if (!user || !justifFile || !identiteOk || justifLockRef.current) return;
+    const validation = await verifierFichierDocument(justifFile);
+    if (validation.ok === false) {
+      toast.error(validation.message);
+      return;
+    }
+
+    justifLockRef.current = true;
+    setJustifLoading(true);
+    try {
+      const mime = validation.mime;
+      const path = `${user.id}/justificatif-fonction-${Date.now()}.${validation.extension}`;
+      const { error: upErr } = await supabase.storage
+        .from('jolene-documents')
+        .upload(path, justifFile, { upsert: false, contentType: mime });
+      if (upErr) throw upErr;
+
+      const { error: updErr } = await supabase.from('etablissements').update({
+        justificatif_fonction_s3_key: path,
+        justificatif_fonction_type_mime: mime,
+        justificatif_fonction_type: justifType,
+      }).eq('id', user.id);
+      if (updErr) throw updErr;
+
+      const { data, error } = await supabase.functions.invoke('verify-justificatif-fonction', {
+        body: { etablissement_id: user.id },
+      });
+      if (error) {
+        toast.error(await messageErreurEdgeFn(error, "Le justificatif n'a pas pu être vérifié."));
+        return;
+      }
+      if (data?.justificatif_verifie) {
+        toast.success('Justificatif vérifié — rattachement confirmé.');
+      } else if (data?.verdict === 'REJETE') {
+        toast.error(data?.motif || "Ce document n'est pas un justificatif valide.");
+      } else {
+        toast('Document reçu — vérification manuelle nécessaire.');
+      }
+      setJustifFile(null);
+      await recharger();
+    } catch (e: unknown) {
+      toast.error((e as Error)?.message || 'Erreur lors de la vérification du justificatif.');
+    } finally {
+      justifLockRef.current = false;
+      setJustifLoading(false);
     }
   };
 
@@ -550,7 +610,7 @@ export default function ActiverEtablissement() {
               <PuceEtape index={2} icone={<Building2 className="h-5 w-5" />} />
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-semibold text-foreground">2. Vérification de l'établissement</p>
-                <p className="text-xs text-muted-foreground">FINESS, représentant légal et e-mail professionnel</p>
+                <p className="text-xs text-muted-foreground">FINESS, identité et habilitation du représentant</p>
               </div>
               <EnTeteEtape index={2} etat={etatEtape(2)} />
             </div>
@@ -650,8 +710,19 @@ export default function ActiverEtablissement() {
                         <input
                           id="rep-piece"
                           type="file"
-                          accept=".pdf,.jpg,.jpeg,.png"
-                          onChange={e => setPieceFile(e.target.files?.[0] || null)}
+                          accept="application/pdf,image/jpeg,image/png,image/webp"
+                          onChange={async e => {
+                            const selected = e.target.files?.[0] || null;
+                            if (!selected) { setPieceFile(null); return; }
+                            const validation = await verifierFichierDocument(selected);
+                            if (validation.ok === false) {
+                              setPieceFile(null);
+                              toast.error(validation.message);
+                              e.target.value = '';
+                              return;
+                            }
+                            setPieceFile(selected);
+                          }}
                           className="block w-full text-sm text-foreground file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-primary/10 file:text-primary hover:file:bg-primary/20 cursor-pointer"
                         />
                         {pieceFile && (
@@ -668,10 +739,60 @@ export default function ActiverEtablissement() {
                   )}
                 </section>
 
-                {/* 2c. E-mail professionnel */}
+                {/* 2c. Justificatif de fonction */}
                 <section className="rounded-xl border border-border bg-card p-4 space-y-3">
                   <p className="text-sm font-semibold text-foreground flex items-center gap-2">
-                    <Mail className="h-4 w-4 text-primary" /> E-mail professionnel
+                    <FileText className="h-4 w-4 text-primary" /> Justificatif de fonction
+                    {(justifOk || estDirigeant) && <CheckCircle2 className="h-4 w-4 text-jolene-cyan-700" />}
+                  </p>
+                  {estDirigeant ? (
+                    <p className="text-sm text-muted-foreground">Vous correspondez au dirigeant déclaré par l'INSEE : aucun justificatif supplémentaire n'est requis.</p>
+                  ) : justifOk ? (
+                    <p className="text-sm text-muted-foreground">Votre nom, votre fonction et l'établissement ont été vérifiés sur le justificatif.</p>
+                  ) : (
+                    <>
+                      <p className="text-xs text-muted-foreground">
+                        Si vous êtes RH, chef de service ou délégataire, ajoutez un document officiel qui mentionne votre nom et l'établissement.
+                      </p>
+                      <div>
+                        <Label htmlFor="justif-type">Type de justificatif</Label>
+                        <select id="justif-type" value={justifType} onChange={e => setJustifType(e.target.value as typeof justifType)} className="block w-full mt-1 rounded-lg border border-border bg-background px-3 py-2 text-sm">
+                          <option value="DELEGATION_SIGNATURE">Délégation de signature / pouvoir</option>
+                          <option value="DECISION_NOMINATION">Décision de nomination</option>
+                          <option value="ATTESTATION_EMPLOYEUR">Attestation employeur (revue manuelle)</option>
+                          <option value="FICHE_POSTE">Fiche de poste (revue manuelle)</option>
+                          <option value="CONTRAT_TRAVAIL">Contrat de travail (revue manuelle)</option>
+                        </select>
+                      </div>
+                      <div>
+                        <Label htmlFor="justif-file" className="sr-only">Justificatif de fonction</Label>
+                        <input id="justif-file" type="file" accept="application/pdf,image/jpeg,image/png,image/webp" onChange={async e => {
+                          const selected = e.target.files?.[0] || null;
+                          if (!selected) { setJustifFile(null); return; }
+                          const validation = await verifierFichierDocument(selected);
+                          if (validation.ok === false) {
+                            setJustifFile(null);
+                            toast.error(validation.message);
+                            e.target.value = '';
+                            return;
+                          }
+                          setJustifFile(selected);
+                        }} className="block w-full text-sm text-foreground file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-primary/10 file:text-primary hover:file:bg-primary/20 cursor-pointer" />
+                        {justifFile && <p className="text-xs text-muted-foreground mt-1">{justifFile.name} ({(justifFile.size / 1024).toFixed(0)} Ko)</p>}
+                      </div>
+                      {!identiteOk && <p className="text-xs text-amber-700">Vérifiez d'abord la pièce d'identité du représentant.</p>}
+                      <BoutonY2K onClick={verifierJustificatif} disabled={!justifFile || !identiteOk || justifLoading} className="gap-2">
+                        {justifLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                        Vérifier le justificatif
+                      </BoutonY2K>
+                    </>
+                  )}
+                </section>
+
+                {/* 2d. E-mail de contact */}
+                <section className="rounded-xl border border-border bg-card p-4 space-y-3">
+                  <p className="text-sm font-semibold text-foreground flex items-center gap-2">
+                    <Mail className="h-4 w-4 text-primary" /> E-mail de contact (optionnel)
                     {emailOk && <CheckCircle2 className="h-4 w-4 text-jolene-cyan-700" />}
                   </p>
                   {emailOk ? (
@@ -681,7 +802,7 @@ export default function ActiverEtablissement() {
                   ) : (
                     <>
                       <p className="text-xs text-muted-foreground">
-                        Alternative pour les grands établissements (CHU, groupes) : confirmez une adresse e-mail au domaine professionnel de la structure. Un lien de validation (valable 24h) vous sera envoyé.
+                        Confirmez l'adresse utilisée pour les notifications. L'e-mail seul ne remplace pas la preuve d'habilitation du représentant.
                       </p>
                       <div className="flex flex-col sm:flex-row gap-2">
                         <div className="flex-1">
@@ -751,7 +872,7 @@ export default function ActiverEtablissement() {
                 <Clock className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
                 <p className="text-xs text-muted-foreground">
                   Étape passée. Vous pourrez activer le prélèvement SEPA à tout moment
-                  depuis <button type="button" className="text-primary underline" onClick={() => navigate('/etablissement/parametres?tab=profil')}>Paramètres → Profil</button>.
+                  depuis <button type="button" className="text-primary underline" onClick={() => navigate('/etablissement/parametres?tab=facturation')}>Paramètres → Facturation</button>.
                   Vos coordonnées bancaires seront demandées à la première facturation.
                 </p>
               </div>
@@ -770,7 +891,7 @@ export default function ActiverEtablissement() {
                   </p>
                 </div>
                 <div className="flex items-center gap-3 flex-wrap">
-                  <BoutonY2K size="sm" onClick={() => navigate('/etablissement/parametres?tab=profil')}>
+                  <BoutonY2K size="sm" onClick={() => navigate('/etablissement/parametres?tab=facturation')}>
                     Activer le prélèvement SEPA (2 min)
                   </BoutonY2K>
                   {/* Opt-out discret — l'étape n'est pas gatante. */}

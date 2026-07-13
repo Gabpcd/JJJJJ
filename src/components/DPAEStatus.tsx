@@ -32,12 +32,13 @@ export function DPAEStatus({ contratId, typeContrat, dpaeNumero }: Props) {
 
   // Ne pas afficher pour les contrats libéraux (DPAE non requise)
   const requiresDpae = typeContrat && ['CDD', 'SALARIE'].includes(typeContrat);
-  if (!requiresDpae) return null;
 
   // Si déjà saisi à l'initial, considérer comme saved
   useEffect(() => {
     if (dpaeNumero) setSaved(true);
   }, [dpaeNumero]);
+
+  if (!requiresDpae) return null;
 
   async function genererPayload() {
     setLoading(true);

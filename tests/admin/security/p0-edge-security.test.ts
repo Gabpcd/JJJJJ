@@ -45,6 +45,23 @@ describe('P0 Edge security guards', () => {
     expect(calendar).toContain("auth.userId !== user_id");
   });
 
+  it('authenticates internal SMS invocations and never counts failed sends', () => {
+    const cron = read('supabase/functions/email-cron/index.ts');
+    expect(cron).toContain('global: { headers: { Authorization: `Bearer ${KEY}` } }');
+    expect(cron.match(/headers: \{ Authorization: `Bearer \$\{KEY\}` \}/g)).toHaveLength(3);
+    expect(cron.match(/if \(smsError\) throw new Error/g)).toHaveLength(2);
+    expect(cron.indexOf('if (smsError) throw new Error')).toBeLessThan(cron.indexOf('smsJ1++;'));
+  });
+
+  it('keeps public health probes shallow and detailed health admin-only', () => {
+    const health = read('supabase/functions/health-check/index.ts');
+    const headBranch = health.slice(health.indexOf("if (req.method === 'HEAD')"), health.indexOf("if (req.method !== 'GET'"));
+    expect(headBranch).not.toContain('fn_health_check');
+    expect(health).toContain('verifyAdminOrServiceRole(req)');
+    expect(health).not.toContain("searchParams.get('secret')");
+    expect(health.indexOf('verifyAdminOrServiceRole(req)')).toBeLessThan(health.indexOf("rpc('fn_health_check')"));
+  });
+
   it('reserves one immutable account family before either registration', () => {
     const soignant = read('supabase/functions/register-soignant/index.ts');
     const etablissement = read('supabase/functions/register-etablissement/index.ts');

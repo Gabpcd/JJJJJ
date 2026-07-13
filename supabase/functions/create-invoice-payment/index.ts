@@ -1,5 +1,7 @@
 import Stripe from "npm:stripe@18.5.0";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { corsHeaders } from "../_shared/cors.ts";
+import { assertStripeSecretMode } from "../_shared/stripe-production.ts";
 
 async function findMatchingPaymentIntent(
   stripe: Stripe,
@@ -12,7 +14,9 @@ async function findMatchingPaymentIntent(
       limit: 10,
     });
 
-    const exactMatch = result.data.find((intent) => intent.metadata?.facture_id === factureId);
+    const exactMatch = result.data
+      .filter((intent) => intent.metadata?.facture_id === factureId)
+      .sort((a, b) => b.created - a.created)[0];
     if (exactMatch) return exactMatch;
   } catch (error) {
     console.warn("create-invoice-payment: payment intent search unavailable", error);
@@ -21,10 +25,29 @@ async function findMatchingPaymentIntent(
   if (!customerId) return null;
 
   const intents = await stripe.paymentIntents.list({ customer: customerId, limit: 20 });
-  return intents.data.find((intent) => intent.metadata?.facture_id === factureId) ?? null;
+  return intents.data
+    .filter((intent) => intent.metadata?.facture_id === factureId)
+    .sort((a, b) => b.created - a.created)[0] ?? null;
 }
 
-function getCorsOrigin(req: Request): string {
+async function findMatchingCheckoutSession(
+  stripe: Stripe,
+  factureId: string,
+  customerId: string,
+) {
+  const sessions = await stripe.checkout.sessions.list({ customer: customerId, limit: 100 });
+  return sessions.data
+    .filter((session) => (
+      session.client_reference_id === factureId
+      || session.metadata?.facture_id === factureId
+    ))
+    .sort((a, b) => b.created - a.created)[0] ?? null;
+}
+
+// Les retours Stripe restent sur une URL web HTTPS. L'origine CORS native est
+// gérée séparément par le helper partagé et ne doit jamais devenir un
+// `return_url` capacitor:// ou https://localhost.
+function getApplicationReturnOrigin(req: Request): string {
   const origin = req.headers.get("origin") || "";
   if (
     origin === "https://jolene.app" ||
@@ -36,13 +59,6 @@ function getCorsOrigin(req: Request): string {
     return origin;
   }
   return "https://jolene.app";
-}
-
-function corsHeaders(req: Request) {
-  return {
-    "Access-Control-Allow-Origin": getCorsOrigin(req),
-    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
-  };
 }
 
 Deno.serve(async (req) => {
@@ -100,7 +116,7 @@ Deno.serve(async (req) => {
 
     const { data: facture, error: errF } = await supabaseAdmin
       .from("factures")
-      .select("id, numero_facture, montant_ttc, nombre_missions, statut, etablissement_id, etablissements(nom, email_contact, stripe_customer_id)")
+      .select("id, numero_facture, montant_ttc, nombre_missions, statut, etablissement_id, stripe_payment_intent_id, etablissements(nom, email_contact, stripe_customer_id)")
       .eq("id", facture_id)
       .single();
 
@@ -126,9 +142,16 @@ Deno.serve(async (req) => {
       });
     }
 
-    if (facture.statut === "PAYEE") {
-      return new Response(JSON.stringify({ error: "Facture déjà payée" }), {
-        status: 400,
+    const statutsPayables = ["EMISE", "EN_RETARD"];
+    if (!statutsPayables.includes(facture.statut)) {
+      const dejaPayee = facture.statut === "PAYEE";
+      return new Response(JSON.stringify({
+        error: dejaPayee
+          ? "Facture déjà payée"
+          : "Cette facture ne peut pas être payée dans son état actuel",
+        status: facture.statut,
+      }), {
+        status: dejaPayee ? 400 : 409,
         headers: { ...corsHeaders(req), "Content-Type": "application/json" },
       });
     }
@@ -142,6 +165,7 @@ Deno.serve(async (req) => {
         headers: { ...corsHeaders(req), "Content-Type": "application/json" },
       });
     }
+    assertStripeSecretMode(stripeKey);
 
     // Pas de apiVersion pinned : utiliser celle liée à la clé (safe, évite les versions inventées)
     const stripe = new Stripe(stripeKey);
@@ -155,11 +179,14 @@ Deno.serve(async (req) => {
         customerId = customers.data[0].id;
         console.log(`[create-invoice-payment] step=7 customer found by email: ${customerId}`);
       } else {
-        const customer = await stripe.customers.create({
-          email: user.email,
-          name: (facture.etablissements as any)?.nom,
-          metadata: { etablissement_id: facture.etablissement_id },
-        });
+        const customer = await stripe.customers.create(
+          {
+            email: user.email,
+            name: (facture.etablissements as any)?.nom,
+            metadata: { etablissement_id: facture.etablissement_id },
+          },
+          { idempotencyKey: `invoice_customer_${facture.etablissement_id}` },
+        );
         customerId = customer.id;
         console.log(`[create-invoice-payment] step=7 customer created: ${customerId}`);
       }
@@ -174,7 +201,7 @@ Deno.serve(async (req) => {
     const existingIntent = await findMatchingPaymentIntent(stripe, facture.id, customerId);
 
     if (existingIntent?.status === "succeeded") {
-      const { error: syncError } = await supabaseAdmin
+      const { data: factureSynchronisee, error: syncError } = await supabaseAdmin
         .from("factures")
         .update({
           statut: "PAYEE",
@@ -183,10 +210,49 @@ Deno.serve(async (req) => {
           modifie_le: new Date().toISOString(),
         })
         .eq("id", facture.id)
-        .neq("statut", "PAYEE");
+        .in("statut", ["EMISE", "EN_RETARD"])
+        .select("id")
+        .maybeSingle();
 
       if (syncError) {
-        console.error("create-invoice-payment: sync paid facture failed", syncError);
+        throw new Error(`Impossible de synchroniser la facture payée: ${syncError.message}`);
+      }
+
+      if (!factureSynchronisee) {
+        const { data: factureActuelle, error: factureActuelleError } = await supabaseAdmin
+          .from("factures")
+          .select("statut")
+          .eq("id", facture.id)
+          .maybeSingle();
+
+        if (factureActuelleError) {
+          console.error("create-invoice-payment: lost CAS state lookup failed", factureActuelleError);
+        }
+
+        const { error: auditError } = await supabaseAdmin.rpc("fn_ecrire_audit_safe", {
+          p_acteur_id: facture.etablissement_id,
+          p_type_acteur: "SYSTEME",
+          p_action: "FACTURE_PAIEMENT_CHECKOUT_CAS_PERDU",
+          p_type_ressource: "facture",
+          p_id_ressource: facture.id,
+          p_cle_s3: null,
+          p_details: {
+            raison: "statut_modifie_concurremment",
+            statut_initial: facture.statut,
+            statut_actuel: factureActuelle?.statut ?? "inconnu",
+            stripe_payment_intent: existingIntent.id,
+          },
+          p_ip: null,
+          p_navigateur: "edge-function/create-invoice-payment",
+        });
+
+        if (auditError) {
+          console.error("create-invoice-payment: lost CAS audit failed", auditError);
+        }
+
+        throw new Error(
+          `PaymentIntent réussi impossible à rapprocher avec la facture ${facture.id}`,
+        );
       }
 
       return new Response(JSON.stringify({ error: "Facture déjà payée", status: "PAYEE" }), {
@@ -195,11 +261,54 @@ Deno.serve(async (req) => {
       });
     }
 
-    if (existingIntent && ["processing", "requires_capture"].includes(existingIntent.status)) {
+    if (existingIntent && ["processing", "requires_capture", "requires_action", "requires_confirmation"].includes(existingIntent.status)) {
       return new Response(JSON.stringify({ error: "Un paiement est déjà en cours pour cette facture", status: existingIntent.status }), {
         status: 400,
         headers: { ...corsHeaders(req), "Content-Type": "application/json" },
       });
+    }
+
+    step = '8b_search_checkout';
+    const existingSession = await findMatchingCheckoutSession(stripe, facture.id, customerId);
+    let checkoutIdempotencyKey = `invoice_checkout_${facture.id}`;
+    const intentTerminalConnu = !!existingIntent
+      && ["canceled", "requires_payment_method"].includes(existingIntent.status);
+
+    if (existingSession?.status === "open" && existingSession.expires_at * 1000 > Date.now()) {
+      // Reprise de la même tentative : aucune nouvelle Session ni nouveau PI.
+      return new Response(JSON.stringify({
+        url: existingSession.url,
+        client_secret: existingSession.client_secret || null,
+        resumed: true,
+      }), {
+        headers: { ...corsHeaders(req), "Content-Type": "application/json" },
+        status: 200,
+      });
+    }
+
+    if (existingSession?.status === "complete" && !intentTerminalConnu) {
+      return new Response(JSON.stringify({
+        error: "Un paiement Checkout a déjà été validé et reste en cours de rapprochement",
+        status: "complete",
+      }), {
+        headers: { ...corsHeaders(req), "Content-Type": "application/json" },
+        status: 409,
+      });
+    }
+
+    if (existingSession) {
+      // Session expirée (ou encore marquée open après expires_at) : on la rend
+      // explicitement inutilisable, puis on avance la version de façon stable.
+      if (existingSession.status === "open") {
+        await stripe.checkout.sessions.expire(existingSession.id);
+      }
+      checkoutIdempotencyKey = `invoice_checkout_${facture.id}_after_${existingSession.id}`;
+    } else if (existingIntent && ["canceled", "requires_payment_method"].includes(existingIntent.status)) {
+      checkoutIdempotencyKey = `invoice_checkout_${facture.id}_after_${existingIntent.id}`;
+    } else if (facture.stripe_payment_intent_id) {
+      // Une référence DB orpheline reste une version déterministe ; elle ne doit
+      // jamais forcer la réutilisation éternelle de la première clé Stripe.
+      checkoutIdempotencyKey = `invoice_checkout_${facture.id}_after_${facture.stripe_payment_intent_id}`;
     }
 
     const montantCents = Math.round((facture.montant_ttc ?? 0) * 100);
@@ -211,7 +320,7 @@ Deno.serve(async (req) => {
     }
 
     step = '9_checkout';
-    const appUrl = getCorsOrigin(req);
+    const appUrl = getApplicationReturnOrigin(req);
 
     console.log(`[create-invoice-payment] step=9 creating checkout, amount=${facture.montant_ttc}, customer=${customerId}, embedded=${!!embedded}`);
 
@@ -250,7 +359,9 @@ Deno.serve(async (req) => {
       sessionParams.cancel_url = `${appUrl}/etablissement/facturation`;
     }
 
-    const session = await stripe.checkout.sessions.create(sessionParams);
+    const session = await stripe.checkout.sessions.create(sessionParams, {
+      idempotencyKey: checkoutIdempotencyKey,
+    });
 
     const { error: updateError } = await supabaseAdmin
       .from("factures")

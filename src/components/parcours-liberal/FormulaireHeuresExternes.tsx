@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import { Upload, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { BoutonY2K } from '@/components/y2k/BoutonY2K';
+import { verifierFichierDocument } from '@/lib/documentUpload';
 
 interface ResultatVerif {
   verdict: 'EN_ATTENTE' | 'VALIDE' | 'REJETE';
@@ -34,8 +35,6 @@ const TYPES_ETABLISSEMENT = [
 ];
 
 const MAX_SIZE = 10 * 1024 * 1024;
-const ALLOWED_MIME = ['application/pdf', 'image/jpeg', 'image/png'];
-
 export function FormulaireHeuresExternes({ onSubmit, onCancel, isLoading }: Props) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [etabNom, setEtabNom] = useState('');
@@ -46,20 +45,22 @@ export function FormulaireHeuresExternes({ onSubmit, onCancel, isLoading }: Prop
   const [file, setFile] = useState<File | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  const handleFile = (f: File | null) => {
+  const handleFile = async (f: File | null): Promise<boolean> => {
     if (!f) {
       setFile(null);
-      return;
+      return false;
     }
-    if (!ALLOWED_MIME.includes(f.type)) {
-      toast.error('Format accepté : PDF, JPEG ou PNG.');
-      return;
-    }
-    if (f.size > MAX_SIZE) {
-      toast.error('Fichier trop lourd (max 10 Mo).');
-      return;
+    const validation = await verifierFichierDocument(f, {
+      maxBytes: MAX_SIZE,
+      allowedMimes: ['application/pdf', 'image/jpeg', 'image/png'],
+    });
+    if (validation.ok === false) {
+      setFile(null);
+      toast.error(validation.message);
+      return false;
     }
     setFile(f);
+    return true;
   };
 
   const valid = () => {
@@ -140,7 +141,10 @@ export function FormulaireHeuresExternes({ onSubmit, onCancel, isLoading }: Prop
       <div>
         <label className="text-sm font-medium text-foreground mb-1 block">Attestation *</label>
         <div className="flex items-center gap-2 flex-wrap">
-          <input ref={fileRef} type="file" accept="application/pdf,image/jpeg,image/png" onChange={(e) => handleFile(e.target.files?.[0] ?? null)} className="hidden" id="attestation-file" />
+          <input ref={fileRef} type="file" accept="application/pdf,image/jpeg,image/png" onChange={async e => {
+            const selected = e.target.files?.[0] ?? null;
+            if (!(await handleFile(selected))) e.target.value = '';
+          }} className="hidden" id="attestation-file" />
           <BoutonY2K type="button" variant="secondary" onClick={() => fileRef.current?.click()} disabled={busy} className="gap-2" iconeGauche={<Upload className="h-4 w-4" />}>
             {file ? 'Changer le fichier' : 'Choisir un fichier'}
           </BoutonY2K>

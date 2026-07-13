@@ -149,10 +149,17 @@ Deno.serve(async (req) => {
 
     // ── Rate limit with advisory lock (V6: anti-race-condition) ──
     const userLockKey = `rate_limit:${userId}`;
-    const { error: lockErr } = await supabaseAdmin.rpc('pg_advisory_xact_lock' as any, {
-      key: Math.abs(hashCode(userLockKey)),
-    }).catch(() => ({ error: 'lock_unavailable' }));
+    let lockErr: unknown = null;
+    try {
+      const { error } = await supabaseAdmin.rpc('pg_advisory_xact_lock' as any, {
+        key: Math.abs(hashCode(userLockKey)),
+      });
+      lockErr = error;
+    } catch (error) {
+      lockErr = error;
+    }
     // Fallback if RPC not available: proceed without lock (acceptable degradation)
+    if (lockErr) console.warn(`[admin-invoke][${requestId}] advisory lock unavailable`);
 
     const oneHourAgo = new Date(Date.now() - 3600000).toISOString();
 
@@ -230,7 +237,7 @@ Deno.serve(async (req) => {
       const targetUrl = `${supabaseUrl}/functions/v1/${target_function}`;
 
       // V8: Propagate traceable reason to target
-      let finalPayload = { ...(target_payload || {}) };
+      const finalPayload = { ...(target_payload || {}) };
       if (target_function === 'generate-invoice') {
         finalPayload.service_role_reason = `admin_invoke_${invocationId}:${reason}`;
       }

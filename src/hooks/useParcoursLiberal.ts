@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { sanitiserNomFichier, verifierFichierDocument } from '@/lib/documentUpload';
 
 export interface ParcoursLiberal {
   id: string;
@@ -129,13 +130,17 @@ export function useParcoursLiberal() {
 
       if (payload.attestation_file) {
         const file = payload.attestation_file;
-        const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+        const validation = await verifierFichierDocument(file, {
+          allowedMimes: ['application/pdf', 'image/jpeg', 'image/png'],
+        });
+        if (validation.ok === false) throw new Error(validation.message);
+        const safeName = sanitiserNomFichier(file.name, validation.mime);
         const filename = `${Date.now()}_${safeName}`;
-        const path = `${user.id}/${filename}`;
+        const path = `${user.id}/heures-externes/${filename}`;
 
         const { error: uploadErr } = await supabase.storage
-          .from('attestations-heures-externes')
-          .upload(path, file, { contentType: file.type });
+          .from('jolene-documents')
+          .upload(path, file, { contentType: validation.mime, upsert: false });
         if (uploadErr) throw uploadErr;
 
         attestation_url = path;
@@ -157,7 +162,14 @@ export function useParcoursLiberal() {
         .select()
         .single();
 
-      if (err) throw err;
+      if (err) {
+        if (attestation_url) {
+          await supabase.functions.invoke('verify-heures-externes', {
+            body: { action: 'cleanup_orphan', attestation_url },
+          });
+        }
+        throw err;
+      }
       const ligne = data as unknown as HeureExterne;
 
       // Vérification IA de l'attestation (lecture du document, extraction des
@@ -189,14 +201,21 @@ export function useParcoursLiberal() {
 
   const supprimerHeuresExternes = useCallback(
     async (id: string) => {
-      const { error: err } = await supabase
-        .from('heures_externes_soignants' as any)
-        .delete()
-        .eq('id', id);
+      const ligne = heuresExternes.find((heure) => heure.id === id);
+      const { data, error: err } = await supabase.functions.invoke('verify-heures-externes', {
+        body: {
+          action: 'delete',
+          heure_externe_id: id,
+          // Permet à l'Edge Function de reprendre uniquement le nettoyage
+          // Storage si la ligne a déjà été supprimée lors d'un premier essai.
+          attestation_url: ligne?.attestation_url ?? null,
+        },
+      });
       if (err) throw err;
+      if (!data?.success) throw new Error(data?.error || 'Suppression impossible');
       await loadParcours();
     },
-    [loadParcours],
+    [heuresExternes, loadParcours],
   );
 
   return {

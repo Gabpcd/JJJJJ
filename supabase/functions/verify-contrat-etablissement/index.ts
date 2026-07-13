@@ -1,6 +1,15 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { applyRateLimit, getClientIp } from "../_shared/rate-limit.ts";
 import { appelerAnthropic } from "../_shared/anthropic.ts";
+import { verifyAdminOrServiceRole, verifyUserOrServiceRole } from "../_shared/admin-auth.ts";
+import { canManageEstablishment } from "../_shared/etablissement-auth.ts";
+import { corsHeaders } from "../_shared/cors.ts";
+import {
+  corporateNameMatches,
+  normalizeProfessionalIdentifier,
+  personNameMatches,
+  strictAiVerificationQuality,
+} from "../_shared/verification-rules.ts";
 
 // Vérification IA du contrat de service d'un établissement.
 // Lit le PDF téléversé via Anthropic, vérifie que c'est bien un contrat, extrait le
@@ -9,78 +18,32 @@ import { appelerAnthropic } from "../_shared/anthropic.ts";
 // concorde et qu'aucun indice de falsification n'est détecté. Appelée à l'upload ET
 // au re-upload (modification du contrat).
 
-function getCorsOrigin(req: Request): string {
-  const origin = req.headers.get("origin") || "";
-  if (
-    origin === "https://jolene.app" ||
-    origin === "https://app.jolene.app" ||
-    origin === "https://www.jolene.app" ||
-    origin === "http://localhost:5173" ||
-    origin === "http://localhost:8080"
-  ) {
-    return origin;
-  }
-  return "https://jolene.app";
-}
-
-function corsHeaders(req: Request) {
-  return {
-    "Access-Control-Allow-Origin": getCorsOrigin(req),
-    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
-  };
-}
-
-let _cachedVaultSecret: string | null = null;
-async function getVaultSecret(sb: any): Promise<string> {
-  if (_cachedVaultSecret) return _cachedVaultSecret;
-  const env = Deno.env.get("SUPABASE_SECRET_KEY") || "";
-  if (env) { _cachedVaultSecret = env; return env; }
-  try {
-    const { data } = await sb.rpc("fn_lire_secret_cron");
-    if (data && typeof data === "string") { _cachedVaultSecret = data; return data; }
-  } catch { /* ignore */ }
-  return "";
-}
-
-function norm(s: string | null | undefined): string {
-  return (s || "").toString().normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]/g, "");
-}
-
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders(req) });
 
   try {
-    const body = await req.clone().json().catch(() => ({}));
+    const auth = await verifyUserOrServiceRole(req);
+    if (!auth.ok) return new Response(JSON.stringify({ error: auth.error }), {
+      status: auth.status, headers: { ...corsHeaders(req), "Content-Type": "application/json" },
+    });
+    const body = await req.json().catch(() => ({}));
+    const action = body?.action === "cleanup_orphan" ? "cleanup_orphan" : "verify";
     if (body?.warm === true) {
-      return new Response(JSON.stringify({ warm: true }), {
+      if (!auth.isServiceRole) {
+        const adminAuth = await verifyAdminOrServiceRole(req);
+        if (!adminAuth.ok) return new Response(JSON.stringify({ error: adminAuth.error }), {
+          status: adminAuth.status, headers: { ...corsHeaders(req), "Content-Type": "application/json" },
+        });
+      }
+      return new Response(JSON.stringify({ warm: true, configured: !!Deno.env.get("ANTHROPIC_API_KEY") }), {
         headers: { ...corsHeaders(req), "Content-Type": "application/json" },
-      });
-    }
-
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader?.startsWith("Bearer ")) {
-      return new Response(JSON.stringify({ error: "Non autorisé" }), {
-        status: 401, headers: { ...corsHeaders(req), "Content-Type": "application/json" },
       });
     }
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const token = authHeader.replace("Bearer ", "");
     const supabase = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
-    const vaultSecret = await getVaultSecret(supabase);
-    const isServiceRole = token === serviceKey || (vaultSecret && token === vaultSecret);
-
-    let authUserId: string | null = null;
-    if (!isServiceRole) {
-      const supabaseAuth = createClient(supabaseUrl, Deno.env.get("SUPABASE_ANON_KEY")!);
-      const { data: { user }, error: authError } = await supabaseAuth.auth.getUser(token);
-      if (authError || !user) {
-        return new Response(JSON.stringify({ error: "Token invalide" }), {
-          status: 401, headers: { ...corsHeaders(req), "Content-Type": "application/json" },
-        });
-      }
-      authUserId = user.id;
+    if (!auth.isServiceRole) {
       if (applyRateLimit("verify-contrat-etab", getClientIp(req), { max: 8, windowMs: 60_000 })) {
         return new Response(JSON.stringify({ error: "Trop de vérifications. Réessayez dans 1 minute." }), {
           status: 429, headers: { ...corsHeaders(req), "Content-Type": "application/json" },
@@ -88,28 +51,96 @@ Deno.serve(async (req) => {
       }
     }
 
-    const { etablissement_id } = await req.json();
+    const { etablissement_id } = body;
     if (!etablissement_id) throw new Error("etablissement_id requis");
 
-    // Sécurité : un établissement ne peut vérifier que SON propre contrat.
-    if (!isServiceRole && authUserId && etablissement_id !== authUserId) {
-      return new Response(JSON.stringify({ error: "Accès refusé" }), {
+    if (!auth.isServiceRole && !(await canManageEstablishment(supabase, auth.userId, etablissement_id))) {
+      const adminAuth = await verifyAdminOrServiceRole(req);
+      if (!adminAuth.ok) return new Response(JSON.stringify({ error: "Accès refusé" }), {
         status: 403, headers: { ...corsHeaders(req), "Content-Type": "application/json" },
+      });
+    }
+
+    if (action === "cleanup_orphan") {
+      const sourcePath = String(body?.contrat_url || "");
+      const cheminAutorise = sourcePath.startsWith(`${etablissement_id}/contrat-service-`)
+        && sourcePath.endsWith(".pdf")
+        && !sourcePath.includes("..")
+        && !sourcePath.includes("\\");
+      if (!cheminAutorise) return new Response(JSON.stringify({ error: "Chemin de contrat non autorisé" }), {
+        status: 403,
+        headers: { ...corsHeaders(req), "Content-Type": "application/json" },
+      });
+      const { data: reference, error: referenceError } = await supabase
+        .from("etablissements")
+        .select("id")
+        .eq("contrat_url", sourcePath)
+        .limit(1)
+        .maybeSingle();
+      if (referenceError) throw referenceError;
+      if (reference) return new Response(JSON.stringify({ error: "Ce contrat est encore référencé" }), {
+        status: 409,
+        headers: { ...corsHeaders(req), "Content-Type": "application/json" },
+      });
+      const { error: removeError } = await supabase.storage.from("jolene-documents").remove([sourcePath]);
+      if (removeError) throw new Error("Nettoyage du contrat incomplet");
+      return new Response(JSON.stringify({ success: true }), {
+        headers: { ...corsHeaders(req), "Content-Type": "application/json" },
       });
     }
 
     const anthropicKey = Deno.env.get("ANTHROPIC_API_KEY");
     if (!anthropicKey) throw new Error("ANTHROPIC_API_KEY non configurée");
 
-    const { data: etab } = await supabase
+    const { data: etab, error: etabError } = await supabase
       .from("etablissements")
-      .select("id, nom, siret, siret_raison_sociale, finess_raison_sociale, representant_nom, representant_prenom, contrat_url")
+      .select("id, verification_source_version, nom, siret, siret_raison_sociale, finess_raison_sociale, representant_nom, representant_prenom, contrat_url")
       .eq("id", etablissement_id)
       .maybeSingle();
+    if (etabError) throw new Error("Impossible de lire le profil établissement");
     if (!etab) throw new Error("Établissement introuvable");
+    const e = etab as Record<string, any>;
+    const appliquerVerdict = async (
+      coherent: boolean | null,
+      resultat: Record<string, unknown>,
+    ) => {
+      if (!auth.isServiceRole && !(await canManageEstablishment(supabase, auth.userId, etablissement_id))) {
+        const adminAuth = await verifyAdminOrServiceRole(req);
+        if (!adminAuth.ok) return false;
+      }
+      const { data, error } = await supabase.rpc(
+        "fn_appliquer_verification_contrat_etablissement",
+        {
+          p_etablissement_id: etablissement_id,
+          p_version_attendue: Number(e.verification_source_version),
+          p_contrat_url: e.contrat_url ?? null,
+          p_nom_etablissement: e.nom ?? null,
+          p_siret: e.siret ?? null,
+          p_siret_raison_sociale: e.siret_raison_sociale ?? null,
+          p_finess_raison_sociale: e.finess_raison_sociale ?? null,
+          p_representant_nom: e.representant_nom ?? null,
+          p_representant_prenom: e.representant_prenom ?? null,
+          p_coherent: coherent,
+          p_resultat: resultat,
+        },
+      );
+      if (error) throw new Error(`Persistance atomique contrat impossible: ${error.code || error.message}`);
+      return data === true;
+    };
+    const sourceChangee = () => new Response(JSON.stringify({
+      success: false,
+      code: "VERIFICATION_SOURCE_CHANGED",
+      error: "Le contrat ou le profil a changé pendant la vérification. Relancez le contrôle.",
+    }), { status: 409, headers: { ...corsHeaders(req), "Content-Type": "application/json" } });
     if (!(etab as any).contrat_url) {
       return new Response(JSON.stringify({ success: true, coherent: null, reason: "Aucun contrat téléversé" }), {
         headers: { ...corsHeaders(req), "Content-Type": "application/json" },
+      });
+    }
+    const contratPath = String((etab as any).contrat_url);
+    if (!contratPath.startsWith(`${etablissement_id}/`) || contratPath.includes('..')) {
+      return new Response(JSON.stringify({ error: "Chemin de contrat non autorisé" }), {
+        status: 403, headers: { ...corsHeaders(req), "Content-Type": "application/json" },
       });
     }
 
@@ -119,7 +150,27 @@ Deno.serve(async (req) => {
     if (fileErr || !fileData) throw new Error("Impossible de télécharger le contrat");
 
     const arrayBuffer = await fileData.arrayBuffer();
+    if (arrayBuffer.byteLength === 0 || arrayBuffer.byteLength > 10 * 1024 * 1024) {
+      const applique = await appliquerVerdict(false, {
+        verdict_final: "REJETE",
+        motif: "PDF vide ou supérieur à 10 Mo.",
+      });
+      if (!applique) return sourceChangee();
+      return new Response(JSON.stringify({ success: true, coherent: false, motif: "PDF vide ou supérieur à 10 Mo." }), {
+        headers: { ...corsHeaders(req), "Content-Type": "application/json" },
+      });
+    }
     const bytes = new Uint8Array(arrayBuffer);
+    if (String.fromCharCode(...bytes.slice(0, 5)) !== '%PDF-') {
+      const applique = await appliquerVerdict(false, {
+        verdict_final: "REJETE",
+        motif: "Le fichier n'est pas un PDF valide.",
+      });
+      if (!applique) return sourceChangee();
+      return new Response(JSON.stringify({ success: true, coherent: false, motif: "Le fichier n'est pas un PDF valide." }), {
+        headers: { ...corsHeaders(req), "Content-Type": "application/json" },
+      });
+    }
     let binary = "";
     for (let i = 0; i < bytes.length; i += 8192) {
       const chunk = bytes.subarray(i, Math.min(i + 8192, bytes.length));
@@ -137,12 +188,16 @@ Deno.serve(async (req) => {
   "siret_extrait": "le SIRET (14 chiffres) lu sur le document" ou null,
   "raison_sociale_extraite": "la raison sociale / nom de l'établissement signataire" ou null,
   "signataire_extrait": "le nom du signataire / représentant lu" ou null,
+  "signataire_nom_extrait": "le nom de famille du signataire lu" ou null,
+  "signataire_prenom_extrait": "le prénom du signataire lu" ou null,
   "siret_correspond": true/false/null,
   "raison_sociale_correspond": true/false/null,
   "signataire_correspond": true/false/null,
   "document_lisible": true/false,
+  "document_complet": true/false,
   "indices_falsification": ["liste des indices de retouche/montage"] ou [],
   "score_confiance": 0-100,
+  "confiance": "HAUTE"/"MOYENNE"/"FAIBLE",
   "motif": null ou "string expliquant un éventuel problème",
   "verdict": "VERIFIE"/"EN_ATTENTE"/"REJETE"
 }
@@ -179,9 +234,10 @@ Vérifie que le document est bien un contrat et que ces informations concordent.
     } catch (e) {
       clearTimeout(aiTimeout);
       const estTimeout = (e as any)?.name === "AbortError";
-      await supabase.from("etablissements").update({
-        contrat_ia_resultat: { erreur_anthropic: { status: estTimeout ? "timeout" : "network", at: new Date().toISOString() } },
-      } as any).eq("id", etablissement_id);
+      const applique = await appliquerVerdict(null, {
+        erreur_anthropic: { status: estTimeout ? "timeout" : "network", at: new Date().toISOString() },
+      });
+      if (!applique) return sourceChangee();
       return new Response(JSON.stringify({ success: true, coherent: null, reason: estTimeout ? "AI timeout" : "AI network error" }), {
         headers: { ...corsHeaders(req), "Content-Type": "application/json" },
       });
@@ -189,9 +245,10 @@ Vérifie que le document est bien un contrat et que ces informations concordent.
     clearTimeout(aiTimeout);
 
     if (!ai.ok) {
-      await supabase.from("etablissements").update({
-        contrat_ia_resultat: { erreur_anthropic: { status: ai.status, body_excerpt: ai.body.slice(0, 1500), at: new Date().toISOString() } },
-      } as any).eq("id", etablissement_id);
+      const applique = await appliquerVerdict(null, {
+        erreur_anthropic: { status: ai.status, body_excerpt: ai.body.slice(0, 1500), at: new Date().toISOString() },
+      });
+      if (!applique) return sourceChangee();
       return new Response(JSON.stringify({ success: true, coherent: null, reason: "AI unavailable" }), {
         headers: { ...corsHeaders(req), "Content-Type": "application/json" },
       });
@@ -206,59 +263,101 @@ Vérifie que le document est bien un contrat et que ces informations concordent.
     } catch { analysis = null; }
 
     if (!analysis) {
-      await supabase.from("etablissements").update({
-        contrat_ia_resultat: { erreur_parse: { raw_excerpt: rawContent.slice(0, 1500), at: new Date().toISOString() } },
-      } as any).eq("id", etablissement_id);
+      const applique = await appliquerVerdict(null, {
+        erreur_parse: { raw_length: rawContent.length, at: new Date().toISOString() },
+      });
+      if (!applique) return sourceChangee();
       return new Response(JSON.stringify({ success: true, coherent: null, reason: "Parse error" }), {
         headers: { ...corsHeaders(req), "Content-Type": "application/json" },
       });
     }
 
     // Comparaisons côté serveur (ne pas faire confiance à l'IA seule pour le SIRET).
-    const siretAttendu = norm((etab as any).siret);
-    const siretExtrait = norm(analysis.siret_extrait);
+    const siretAttendu = normalizeProfessionalIdentifier((etab as any).siret);
+    const siretExtrait = normalizeProfessionalIdentifier(analysis.siret_extrait);
     const siretMatch = siretAttendu && siretExtrait ? siretAttendu === siretExtrait : null;
-    const indicesFalsif = Array.isArray(analysis.indices_falsification) ? analysis.indices_falsification : [];
+    const raisonSocialeMatch = corporateNameMatches(raisonSociale, analysis.raison_sociale_extraite);
+    const signataireMatch = personNameMatches(
+      (etab as any).representant_nom,
+      (etab as any).representant_prenom,
+      analysis.signataire_nom_extrait,
+      analysis.signataire_prenom_extrait,
+    );
+    const quality = strictAiVerificationQuality(analysis);
+    const indicesFalsif = quality.indicators;
 
-    let coherent: boolean;
+    let coherent: boolean | null = null;
     let motif: string | null = null;
-    if (analysis.verdict === "REJETE" || analysis.est_contrat === false) {
+    const verdictsAutorises = new Set(["VERIFIE", "EN_ATTENTE", "REJETE"]);
+    let verdictFinal = typeof analysis.verdict === "string" && verdictsAutorises.has(analysis.verdict)
+      ? analysis.verdict
+      : "EN_ATTENTE";
+    if (analysis.verdict === "REJETE" || analysis.est_contrat === false || analysis.document_lisible === false) {
       coherent = false;
+      verdictFinal = "REJETE";
       motif = analysis.motif || "Le document fourni n'est pas un contrat.";
+    } else if (!quality.antifraudComplete) {
+      coherent = null;
+      verdictFinal = "EN_ATTENTE";
+      motif = "Le contrôle antifraude est absent ou mal formé — vérification manuelle requise.";
     } else if (indicesFalsif.length > 0) {
-      coherent = false;
-      motif = `Indices de falsification : ${indicesFalsif.join(", ")}.`;
+      coherent = null;
+      verdictFinal = "EN_ATTENTE";
+      motif = "Indices de falsification détectés — vérification manuelle requise.";
     } else if (siretMatch === false) {
       coherent = false;
+      verdictFinal = "REJETE";
       motif = `SIRET du contrat (${analysis.siret_extrait || "?"}) différent du SIRET vérifié (${(etab as any).siret}).`;
-    } else if (analysis.verdict === "VERIFIE" && analysis.raison_sociale_correspond !== false && analysis.signataire_correspond !== false) {
+    } else if (
+      analysis.verdict === "VERIFIE" && analysis.est_contrat === true &&
+      analysis.document_lisible === true && analysis.document_complet === true && quality.highConfidence &&
+      siretMatch === true && analysis.siret_correspond === true &&
+      raisonSocialeMatch === true && analysis.raison_sociale_correspond === true &&
+      signataireMatch === true && analysis.signataire_correspond === true
+    ) {
       coherent = true;
+      verdictFinal = "VERIFIE";
       motif = "Contrat vérifié : type, SIRET et identité concordants.";
     } else {
-      coherent = false;
+      coherent = null;
+      verdictFinal = "EN_ATTENTE";
       motif = analysis.motif || "Concordance SIRET/identité non confirmée — revue manuelle requise.";
     }
 
-    await supabase.from("etablissements").update({
-      contrat_ia_resultat: { ...analysis, siret_match_serveur: siretMatch },
-      contrat_ia_coherent: coherent,
-      contrat_ia_verifie_le: new Date().toISOString(),
-    } as any).eq("id", etablissement_id);
+    const analysisPersisted = {
+      ...analysis,
+      score_confiance: quality.score,
+      confiance: quality.confidence,
+      indices_falsification: indicesFalsif,
+      antifraude_complete: quality.antifraudComplete,
+      verdict_final: verdictFinal,
+      siret_match_serveur: siretMatch,
+      raison_sociale_match_serveur: raisonSocialeMatch,
+      signataire_match_serveur: signataireMatch,
+    };
+    const applique = await appliquerVerdict(coherent, analysisPersisted);
+    if (!applique) return sourceChangee();
 
     await supabase.rpc("fn_ecrire_audit_safe" as any, {
       p_acteur_id: etablissement_id,
       p_type_acteur: "SYSTEME",
-      p_action: "CONTRAT_ETAB_VERIFICATION_IA",
+      p_action: "VERIFICATION_DOCUMENT",
       p_type_ressource: "etablissement",
       p_id_ressource: etablissement_id,
       p_cle_s3: (etab as any).contrat_url,
-      p_details: { coherent, verdict_ia: analysis.verdict, siret_match: siretMatch, est_contrat: analysis.est_contrat, falsification: indicesFalsif.length > 0 },
+      p_details: { coherent, verdict_ia: analysis.verdict, siret_match: siretMatch, est_contrat: analysis.est_contrat, antifraude_complete: quality.antifraudComplete, falsification: indicesFalsif.length > 0 },
       p_ip: null,
       p_navigateur: "edge-function/verify-contrat-etablissement",
     });
 
     return new Response(
-      JSON.stringify({ success: true, coherent, motif, analysis }),
+      JSON.stringify({
+        success: true,
+        coherent,
+        verdict: verdictFinal,
+        motif,
+        analysis: { type_detecte: analysis.type_detecte ?? null, score_confiance: quality.score },
+      }),
       { headers: { ...corsHeaders(req), "Content-Type": "application/json" } }
     );
   } catch (e: any) {

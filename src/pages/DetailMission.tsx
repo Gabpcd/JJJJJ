@@ -4,7 +4,6 @@ import { usePageTitle } from '@/hooks/usePageTitle';
 import { handleErrorSilent } from '@/lib/handleError';
 import { logger } from '@/lib/logger';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 import {
   UserSearch, PlusCircle, Copy, XCircle, RotateCcw, Star, Send, CreditCard, MessageCircle, BellRing, Scale,
   AlertTriangle, Banknote, Bot, CalendarDays, CheckCircle, Clock, FileText, Flame, Landmark, MapPin,
@@ -55,6 +54,7 @@ import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { BandeauActionPrioritaire, type ActionPrioritaire } from '@/components/BandeauActionPrioritaire';
 import { toast } from 'sonner';
 import { capturerErreurSentry } from '@/lib/sentry';
+import { sanitiserNomFichier, verifierFichierDocument } from '@/lib/documentUpload';
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip';
 
 function scoreColor(score: number): string {
@@ -187,7 +187,24 @@ function AlerterPoolUrgence({ missionId, mission, user, afficherNotification }: 
 
 /* ── Rétrocession : le titulaire déclare les honoraires bruts encaissés pendant
    le remplacement → rétrocession (%) et commission calculées automatiquement. ── */
-function DeclarationRetrocession({ mission, onMaj }: { mission: any; onMaj: (patch: any) => void }) {
+type MissionRetrocession = {
+  id: string;
+  montant_honoraires_bruts: number | null;
+  retrocession_pct: number | null;
+  net_a_payer: number | null;
+  honoraires_confirmes_le: string | null;
+};
+
+type MissionRetrocessionPatch = Partial<Pick<
+  MissionRetrocession,
+  'montant_honoraires_bruts' | 'net_a_payer'
+>> & { total_brut?: number };
+
+function DeclarationRetrocession({ mission, onMaj, uploaderId }: {
+  mission: MissionRetrocession;
+  onMaj: (patch: MissionRetrocessionPatch) => void;
+  uploaderId: string;
+}) {
   const [montant, setMontant] = useState('');
   const [justificatif, setJustificatif] = useState<File | null>(null);
   const [envoi, setEnvoi] = useState(false);
@@ -211,14 +228,16 @@ function DeclarationRetrocession({ mission, onMaj }: { mission: any; onMaj: (pat
     const v = parseFloat(montant);
     if (!v || v <= 0) { toast.error('Saisissez le montant des honoraires encaissés.'); return; }
     if (!justificatif) { toast.error('Joignez le relevé d\'actes / bordereau justificatif (obligatoire).'); return; }
+    const validation = await verifierFichierDocument(justificatif);
+    if (validation.ok === false) { toast.error(validation.message); return; }
     setEnvoi(true);
     try {
       // Preuve opposable : relevé uploadé dans le bucket privé 'justificatifs',
       // référencé sur la mission (consultable par le remplaçant via litige et l'admin).
-      const nomSanitise = justificatif.name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^\w.-]+/g, '-');
-      const cle = `retrocession/${mission.id}/${Date.now()}-${nomSanitise}`;
+      const nomSanitise = sanitiserNomFichier(justificatif.name, validation.mime);
+      const cle = `${uploaderId}/retrocession/${mission.id}/${Date.now()}-${nomSanitise}`;
       const { error: upErr } = await supabase.storage.from('justificatifs')
-        .upload(cle, justificatif, { contentType: justificatif.type || undefined, upsert: false });
+        .upload(cle, justificatif, { contentType: validation.mime, upsert: false });
       if (upErr) { toast.error('Téléversement du justificatif impossible.'); return; }
 
       const { data, error } = await supabase.rpc('fn_declarer_honoraires_retrocession' as any, {
@@ -245,8 +264,14 @@ function DeclarationRetrocession({ mission, onMaj }: { mission: any; onMaj: (pat
         <Paperclip className="inline-block h-4 w-4 mr-1 align-text-bottom" aria-hidden="true" />Relevé justificatif *
         <input
           type="file"
-          accept="image/*,.pdf"
-          onChange={(e) => setJustificatif(e.target.files?.[0] || null)}
+          accept="application/pdf,image/jpeg,image/png,image/webp"
+          onChange={async e => {
+            const selected = e.target.files?.[0] || null;
+            if (!selected) { setJustificatif(null); return; }
+            const validation = await verifierFichierDocument(selected);
+            if (validation.ok === false) { setJustificatif(null); toast.error(validation.message); e.target.value = ''; return; }
+            setJustificatif(selected);
+          }}
           className="block mt-1 text-xs text-muted-foreground file:mr-2 file:rounded-lg file:border-0 file:bg-primary/10 file:px-3 file:py-1.5 file:text-primary file:text-xs file:font-medium"
         />
         {justificatif && <span className="text-success">✓ {justificatif.name}</span>}
@@ -766,13 +791,13 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
 
               {/* Boost + garantie remplacement */}
               {!isAdmin && (m.statut === 'OUVERTE' || m.statut === 'ASSIGNEE') && (
-                <BoostEtGarantie mission={m} onMaj={(patch) => setMission((prev: any) => ({ ...prev, ...patch }))} />
+                <BoostEtGarantie mission={m} onMaj={(patch) => setMission((prev) => ({ ...prev, ...patch }))} />
               )}
 
               {/* Rétrocession : déclaration des honoraires encaissés en fin de mission */}
-              {!isAdmin && m.statut === 'TERMINEE' && (m as any).mode_remuneration === 'RETROCESSION' && (
+              {!isAdmin && m.statut === 'TERMINEE' && m.mode_remuneration === 'RETROCESSION' && (
                 <div id="bloc-retro-declaration">
-                  <DeclarationRetrocession mission={m} onMaj={(patch) => setMission((prev: any) => ({ ...prev, ...patch }))} />
+                  {user?.id && <DeclarationRetrocession mission={m} uploaderId={user.id} onMaj={(patch) => setMission((prev) => ({ ...prev, ...patch }))} />}
                 </div>
               )}
 

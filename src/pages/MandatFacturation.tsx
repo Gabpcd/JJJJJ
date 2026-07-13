@@ -35,7 +35,6 @@ function renderMarkdown(texte: string) {
       elements.push(
         <ol key={key++} className="list-decimal list-inside space-y-1.5 text-sm text-foreground ml-2 mb-3">
           {listBuffer.map((item, i) => (
-            // eslint-disable-next-line react/no-danger
             <li key={i} dangerouslySetInnerHTML={{ __html: item.replace(/[<>]/g, m => m === '<' ? '&lt;' : '&gt;').replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>') }} />
           ))}
         </ol>,

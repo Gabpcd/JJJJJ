@@ -331,7 +331,6 @@ export default function FacturationEtablissement() {
           },
         });
       } catch (emailErr) {
-        // eslint-disable-next-line no-console
         console.error('send-email PAIEMENT_SOIGNANT_DECLARE failed:', emailErr);
       }
 

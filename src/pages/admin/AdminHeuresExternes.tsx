@@ -73,10 +73,10 @@ export default function AdminHeuresExternes() {
     setOpeningId(id);
     try {
       const { data, error } = await supabase.storage
-        .from('attestations-heures-externes')
+        .from(path.includes('/heures-externes/') ? 'jolene-documents' : 'attestations-heures-externes')
         .createSignedUrl(path, 3600);
       if (error || !data?.signedUrl) throw error || new Error('URL indisponible');
-      window.open(data.signedUrl, '_blank');
+      window.open(data.signedUrl, '_blank', 'noopener,noreferrer');
     } catch {
       afficherNotification({ type: 'erreur', message: 'Impossible d\'ouvrir l\'attestation.' });
     } finally {

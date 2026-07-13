@@ -14,6 +14,7 @@
 
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { PDFDocument, StandardFonts, rgb, degrees } from 'npm:pdf-lib@1.17.1';
+import { corsHeaders } from '../_shared/cors.ts';
 import { applyRateLimit, getClientIp } from '../_shared/rate-limit.ts';
 
 /* ── Rate limit state (in-memory, per isolate) ── */
@@ -51,20 +52,16 @@ function checkServiceRoleRateLimit(): boolean {
   return true;
 }
 
-/* ── CORS ── */
-function getCorsOrigin(req: Request): string {
-  const origin = req.headers.get('origin') || '';
-  if (['https://jolene.app', 'https://www.jolene.app', 'http://localhost:5173', 'http://localhost:8080'].includes(origin)) return origin;
-  return 'https://jolene.app';
-}
-function corsHeaders(req: Request) {
-  return {
-    'Access-Control-Allow-Origin': getCorsOrigin(req),
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  };
-}
 function json(req: Request, body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { ...corsHeaders(req), 'Content-Type': 'application/json' } });
+}
+
+function creerBlobPdf(pdfBytes: Uint8Array): Blob {
+  // pdf-lib expose un Uint8Array<ArrayBufferLike>; Blob exige un ArrayBuffer
+  // concret avec les définitions DOM récentes de Deno/TypeScript.
+  const buffer = new ArrayBuffer(pdfBytes.byteLength);
+  new Uint8Array(buffer).set(pdfBytes);
+  return new Blob([buffer], { type: 'application/pdf' });
 }
 
 /* ── XML CII Generator (EN16931 BASIC WL) ── */
@@ -668,7 +665,7 @@ Deno.serve(async (req) => {
       const xmlPath = `${subDir}/${sg.id}/${facture.numero_facture}.xml`;
 
       await supabaseAdmin.storage.from('jolene-documents')
-        .upload(storagePath, new Blob([pdfBytes], { type: 'application/pdf' }), { upsert: true });
+        .upload(storagePath, creerBlobPdf(pdfBytes), { upsert: true });
       await supabaseAdmin.storage.from('jolene-documents')
         .upload(xmlPath, new Blob([xmlCii], { type: 'application/xml' }), { upsert: true });
 
@@ -827,7 +824,7 @@ Deno.serve(async (req) => {
     const dueDate = new Date(Date.now() + delaiJours * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
     // 7. Check factor
-    let factorData: any = null;
+    const factorData: any = null;
     let subrogationMention: string | null = null;
     // Factor assignment is done post-creation; here we just check if pre-assigned
 
@@ -978,7 +975,7 @@ Deno.serve(async (req) => {
     // Upload PDF + XML, puis UPDATE → EMISE. En cas d'échec, ERREUR_GENERATION.
     const { error: uploadErr } = await supabaseAdmin.storage
       .from('jolene-documents')
-      .upload(storagePath, new Blob([pdfBytes], { type: 'application/pdf' }), { upsert: true });
+      .upload(storagePath, creerBlobPdf(pdfBytes), { upsert: true });
 
     const { error: xmlUploadErr } = await supabaseAdmin.storage
       .from('jolene-documents')

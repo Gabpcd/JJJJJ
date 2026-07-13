@@ -177,6 +177,9 @@ Le présent contrat est signé électroniquement par l'Établissement via la pla
 }
 
 export const CONTRAT_SERVICE_TEXTE = buildContratServiceTexte({});
+// Empreinte du modèle v1.0 avec champs établissement neutres. Le backend la
+// combine aux données légales relues en base pour produire l'empreinte signée.
+export const CONTRAT_SERVICE_TEMPLATE_FINGERPRINT = '11202a832970b69fcccbcdb95f079cd3d2d4b7bfbf4dc39d64ff961100c547f8';
 
 export async function hashContratTexte(texte: string): Promise<string> {
   const encoder = new TextEncoder();
