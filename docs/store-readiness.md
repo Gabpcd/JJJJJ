@@ -10,9 +10,9 @@ repo.
 |---|---|---|
 | Build web production | ✅ | `npm run build` |
 | Synchronisation Capacitor | ✅ | 15 plugins iOS et Android, sans géolocalisation de fond |
-| Build iOS Xcode 26 | ✅ archive App Store | Xcode 26.5, SDK iOS 26.5, archive Release `1.0 (4)` validée |
-| Distribution iOS | ✅ uploadée | IPA **Jolene** signée avec l'équipe Apple `FPQ78HDF4Y`, upload App Store Connect accepté le 13/07/2026 |
-| Rendu iPhone 6,9 pouces | ✅ simulateur | barre d'état lisible et capture native `1320 × 2868` validée sur iPhone 17 Pro Max |
+| Build iOS Xcode 26 | ✅ archive App Store | Xcode 26.5, SDK iOS 26.5, archive Release finale `1.0 (5)` validée |
+| Distribution iOS | ⚠️ prête, non uploadée | IPA finale **Jolene** `1.0 (5)` exportée et signée avec l'équipe Apple `FPQ78HDF4Y` ; le build 4 antérieur reste le dernier uploadé dans App Store Connect |
+| Visuels Apple | ✅ produits | 8 iPhone 6,5 pouces `1284 × 2778`, 8 iPhone 6,9 pouces `1320 × 2868` et 8 iPad 13 pouces `2064 × 2752`, avec données de démonstration visibles |
 | Privacy manifest iOS | ✅ | membre de la cible et présent à la racine de `App.app` |
 | Permissions GPS | ✅ minimisées | When In Use/foreground : pointage ou action volontaire « me localiser » du profil/adresse |
 | QR natif | ✅ | `@capacitor/barcode-scanner`, QR-only |
@@ -31,9 +31,11 @@ repo.
 
 - [x] Générer automatiquement le profil App Store de **Jolene** pour l'équipe
   `FPQ78HDF4Y` et `app.jolene`, avec Push Notifications et Associated Domains.
-- [x] Archiver, exporter et uploader `Jolene 1.0 (4)` vers App Store Connect ;
-  le purpose string `NSLocationAlwaysAndWhenInUseUsageDescription` demandé par
-  Apple après le build 3 est présent dans le binaire.
+- [x] Archiver et exporter `Jolene 1.0 (5)` ; le purpose string
+  `NSLocationAlwaysAndWhenInUseUsageDescription` demandé par Apple après le
+  build 3 est présent dans le binaire.
+- [ ] Uploader le build final `1.0 (5)` seulement après accord explicite ; ne
+  pas sélectionner le build 4 antérieur pour la soumission.
 - [x] Vérifier la présence côté Supabase de `APNS_KEY_P8`, `APNS_KEY_ID`,
   `APNS_TEAM_ID`, `APNS_BUNDLE_ID` et `APNS_ENVIRONMENT`.
 - [ ] Après traitement App Store Connect, installer le build TestFlight et
@@ -45,8 +47,9 @@ repo.
   volontaire du profil/adresse, jamais en continu.
 - [ ] Compléter âge, URL de confidentialité, CGU, contact review, notes de
   review et identifiants du compte démo.
-- [ ] Produire les captures iPhone/iPad et vérifier le parcours complet sur un
-  appareil réel.
+- [x] Produire et charger dans le brouillon les captures iPhone 6,5 pouces et
+  iPad 13 pouces, sans masquer les données de démonstration.
+- [ ] Vérifier le parcours complet sur un appareil réel.
 
 ### Google Play
 
@@ -61,12 +64,16 @@ repo.
   remplace pas la configuration Firebase du client Android.
 - [x] Renseigner l'empreinte SHA-256 de Play App Signing et régénérer
   `assetlinks.json`.
-- [ ] Déployer l'`assetlinks.json` régénéré, puis vérifier App Links après une
-  installation depuis Google Play.
+- [x] Déployer l'`assetlinks.json` régénéré et vérifier sa réponse publique.
+- [ ] Vérifier App Links après une installation depuis Google Play.
 - [x] Exécuter `lintRelease` et `bundleRelease` : l'AAB signé `1.0`
   (`versionCode 2`) est généré.
-- [ ] Uploader cet AAB en piste Internal, le tester, puis compléter Data
-  safety, Content rating, accès au compte démo et fiche store.
+- [x] Compléter Data safety, Content rating et l'accès au compte de revue dans
+  Play Console.
+- [x] Produire et charger dans le brouillon 8 captures téléphone, 8 tablette
+  7 pouces et 8 tablette 10 pouces, sans masquer les données de démonstration.
+- [ ] Enregistrer les textes et visuels finaux de la fiche Play Store.
+- [ ] Uploader l'AAB en piste Internal et le tester avant toute publication.
 
 ### Recette commune
 
