@@ -67,6 +67,19 @@ describe('P0 Edge security guards', () => {
     expect(migration).not.toContain("v_endpoint !~ '^https://'");
   });
 
+  it('resolves the admin account before MFA without weakening aal2 privileges', () => {
+    const roleFix = read('supabase/migrations/20260713165730_corriger_resolution_role_admin_avant_mfa.sql');
+    const p0 = read('supabase/migrations/20260712230000_p0_securite_auth_rls.sql');
+    const protectedRoute = read('src/components/RouteProtegee.tsx');
+
+    expect(roleFix).toContain("u.raw_app_meta_data ->> 'role' = 'ADMIN_PLATEFORME'");
+    expect(roleFix).toContain('u.email_confirmed_at IS NOT NULL');
+    expect(roleFix).toContain('ea.actif IS NOT TRUE');
+    expect(roleFix).not.toContain('IF public.est_admin() THEN');
+    expect(p0).toContain("COALESCE(auth.jwt() ->> 'aal', '') = 'aal2'");
+    expect(protectedRoute).toContain('<AdminMfaGate>{children}</AdminMfaGate>');
+  });
+
   it('preserves the Lot 21 protected candidature transitions and ACLs', () => {
     const lot21 = read('supabase/migrations/20260712163000_lot21_finaliser_cascade_profession_mission.sql');
     const p0 = read('supabase/migrations/20260712230000_p0_securite_auth_rls.sql');

@@ -1,6 +1,6 @@
 # Push natif iOS et Android — runbook de production
 
-État vérifié le 12/07/2026.
+État vérifié le 13/07/2026.
 
 ## Architecture effective
 
@@ -21,8 +21,8 @@ tokens du compte sont supprimés en base et les listeners locaux sont retirés.
 
 ## Configuration iOS hors repo
 
-1. Dans Apple Developer, vérifier l'App ID explicite `app.jolene`, l'équipe
-   `FPQ78HDF4Y` (SOIN DIRECT), Push Notifications et Associated Domains.
+1. Dans Apple Developer, vérifier l'App ID explicite **Jolene** `app.jolene`,
+   l'équipe `FPQ78HDF4Y`, Push Notifications et Associated Domains.
 2. Créer une clé APNs `.p8`, puis poser son contenu et ses identifiants dans les
    secrets Supabase : `APNS_KEY_P8`, `APNS_KEY_ID`, `APNS_TEAM_ID`.
 3. Vérifier `APNS_BUNDLE_ID=app.jolene` et choisir l'environnement APNs adapté
@@ -39,15 +39,21 @@ Le projet est SPM : ouvrir `ios/App/App.xcodeproj`, pas un `.xcworkspace`.
 
 ## Configuration Android hors repo
 
-1. Dans Firebase, créer l'application Android avec le package `app.jolene`.
-2. Déposer `google-services.json` dans `android/app/` ou fournir
+1. L'application Firebase Android `app.jolene` est créée dans le projet
+   `jolene-app-d91fd`. Ses certificats SHA-1 et SHA-256 sont enregistrés.
+2. Le `google-services.json` officiel est déposé localement dans
+   `android/app/` et reste gitignoré. En CI, fournir plutôt
    `GOOGLE_SERVICES_JSON[_BASE64]` au script de build.
-3. Configurer `FIREBASE_SERVICE_ACCOUNT_JSON` côté Supabase pour l'envoi FCM.
-4. Créer le keystore d'upload et `android/keystore.properties` avec
-   `storeFile`, `storePassword`, `keyAlias`, `keyPassword`.
-5. Récupérer l'empreinte SHA-256 réellement utilisée par Play App Signing et
-   fournir `ANDROID_SHA256_CERT_FINGERPRINTS` avant le build et le déploiement
-   web d'`assetlinks.json`.
+3. `FIREBASE_SERVICE_ACCOUNT_JSON` est configuré côté Supabase pour l'envoi
+   FCM ; ce secret serveur ne remplace pas le fichier de configuration client.
+4. Le keystore d'upload et `android/keystore.properties` sont configurés hors
+   Git. L'empreinte SHA-256 du certificat d'upload est
+   `4B:43:18:5D:0F:67:C3:1F:A7:E9:0D:69:7D:5B:AF:D0:D6:DE:95:8C:66:27:8B:5D:22:79:66:31:6D:5D:69:B2`.
+5. L'empreinte réellement utilisée pour les installations Google Play est
+   celle de **Play App Signing** :
+   `18:6E:1F:3A:56:5D:DC:F0:88:0D:DD:58:EB:AF:D9:79:6C:88:7E:E9:61:81:0E:70:A8:3C:78:C3:0A:E8:EE:06`.
+   Elle est distincte de la clé d'upload et a servi à générer
+   `assetlinks.json`.
 
 Les six NotificationChannel Jolene sont créés au démarrage. Le canal urgence
 utilise le son de notification système ; les payloads serveur envoient
@@ -55,12 +61,14 @@ utilise le son de notification système ; les payloads serveur envoient
 
 ## Build
 
-Le 13/07/2026, l'archive iOS `1.0 (4)` a été produite avec Xcode 26.5,
-re-signée en distribution SOIN DIRECT avec `aps-environment=production`, puis
+Le 13/07/2026, l'archive iOS **Jolene** `1.0 (4)` a été produite avec Xcode
+26.5, re-signée avec le certificat Apple Distribution de l'équipe
+`FPQ78HDF4Y` et `aps-environment=production`, puis
 acceptée par App Store Connect. Le lint Android Release passe avec SDK 36 et
-Gradle 8.14.5 ; la production de l'AAB reste volontairement stoppée tant que
-la signature d'upload, `google-services.json` et l'empreinte Play App Signing
-ne sont pas disponibles.
+Gradle 8.14.5. Firebase Android, la signature d'upload et l'empreinte Play App
+Signing sont configurés : `lintRelease` et `bundleRelease` passent, et l'AAB
+signé Jolene `1.0` (`versionCode 2`) est généré dans
+`android/app/build/outputs/bundle/release/app-release.aab`.
 
 ```bash
 # Prépare les secrets Android, valide App Links, construit le web et synchronise.

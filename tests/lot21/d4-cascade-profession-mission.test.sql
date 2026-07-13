@@ -38,10 +38,36 @@ BEGIN
   IF public.fn_mode_exercice('PHARMACIEN', 'CLINIQUE_PRIVEE', NULL)->>'niveau' <> 'NON_PROPOSE' THEN
     RAISE EXCEPTION 'D4-T3: PHARMACIEN en établissement doit être NON_PROPOSE';
   END IF;
+  IF public.fn_mode_exercice('PHARMACIEN', 'CLINIQUE_PRIVEE', NULL)->>'source_url' IS NOT NULL THEN
+    RAISE EXCEPTION 'D4-T3B: le défaut PHARMACIEN ne doit pas afficher une source juridique trompeuse';
+  END IF;
+  IF public.fn_mode_exercice('MEDECIN', 'HOPITAL_PUBLIC', 'PUBLIC')->>'source_url' IS NOT NULL THEN
+    RAISE EXCEPTION 'D4-T3C: le défaut public Jolene ne doit pas afficher une interdiction juridique';
+  END IF;
+  IF public.fn_mode_exercice('IADE', 'CLINIQUE_PRIVEE', NULL)->>'source_url'
+     <> 'https://www.fehap.fr/jcms/navigation-internet/upload/docs/application/pdf/2023-02/courrierconjointministeres_30decembre2021_.pdf' THEN
+    RAISE EXCEPTION 'D4-T3D: IADE doit pointer vers le texte original de la lettre D21-031940';
+  END IF;
+  IF public.fn_mode_exercice('IADE', 'CLINIQUE_PRIVEE', NULL)->>'source_url_complementaire'
+     <> 'https://www.legifrance.gouv.fr/ceta/id/CETATEXT000051156546' THEN
+    RAISE EXCEPTION 'D4-T3D2: IADE doit compléter la lettre par CE n°491128, cas aide-soignant';
+  END IF;
+  IF public.fn_mode_exercice('MANIPULATEUR_RADIO', 'CLINIQUE_PRIVEE', NULL)->>'source_url'
+     <> 'https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000033621093' THEN
+    RAISE EXCEPTION 'D4-T3E: MANIPULATEUR_RADIO doit pointer vers L.4351-1 CSP';
+  END IF;
+  IF public.fn_mode_exercice('DENTISTE', 'CENTRE_SANTE', NULL)->>'source_url'
+     <> 'https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000047567923' THEN
+    RAISE EXCEPTION 'D4-T3F: le centre de santé doit pointer vers L.6323-1-5 CSP';
+  END IF;
 
   -- 2. Compatibilité de diplôme : IADE peut remplir une mission IDE.
   IF NOT public.fn_soignant_compatible_mission('IADE', NULL, 'IDE', NULL, true) THEN
     RAISE EXCEPTION 'D4-T4: IADE × mission IDE doit être compatible';
+  END IF;
+  IF public.fn_soignant_compatible_mission('IDE', NULL, 'IADE', NULL, true)
+     OR public.fn_soignant_compatible_mission('IDE', NULL, 'IBODE', NULL, true) THEN
+    RAISE EXCEPTION 'D4-T4B: IDE ne doit pas remplir une mission IADE/IBODE';
   END IF;
 
   INSERT INTO public.etablissements(
@@ -162,6 +188,9 @@ BEGIN
   SELECT type_contrat_recherche INTO v_mission FROM public.missions WHERE id = v_m_iade;
   IF v_mission.type_contrat_recherche::text <> 'SALARIE' THEN
     RAISE EXCEPTION 'D4-T6: une mission IADE doit être forcée en SALARIE, obtenu %', v_mission.type_contrat_recherche;
+  END IF;
+  IF (SELECT accepte_non_specialises FROM public.missions WHERE id = v_m_iade) IS DISTINCT FROM false THEN
+    RAISE EXCEPTION 'D4-T6A: une mission IADE doit exiger la profession exacte';
   END IF;
   IF NOT EXISTS (
     SELECT 1 FROM public.notifications

@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Info, ChevronDown, ChevronRight, AlertTriangle, Ban } from 'lucide-react';
+import { useModeExerciceMission } from '@/hooks/useModeExerciceMission';
+import { resoudreTypeContratFinancier } from '@/lib/financeMission';
 
 /**
  * DecompositionFinanciere — affichage selon type_contrat_applique
@@ -18,7 +20,11 @@ import { Info, ChevronDown, ChevronRight, AlertTriangle, Ban } from 'lucide-reac
  *   accordéon fermé par défaut ("Détail comptable"). Super brut pas en avant
  *   (éviter surpaiement). Commission idem LIBERAL côté ÉTAB/ADMIN uniquement.
  *
- * - type_contrat_applique = null (mission pas encore assignée) : placeholder.
+ * - type_contrat_applique = null (mission pas encore assignée) : régime
+ *   prévisionnel résolu par fn_mode_exercice depuis la profession requise par
+ *   la mission et le type/secteur de l'établissement. Le public reste salarié
+ *   par défaut. Une vraie mission TOUS autorisée conserve le placeholder
+ *   jusqu'au choix du soignant.
  *
  * Roles :
  *   ETAB/ADMIN : voient la commission Jolene (payeur)
@@ -38,9 +44,36 @@ function fmt(v: number | null | undefined): string {
   return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(v);
 }
 
-export function DecompositionFinanciere({ mission, role = 'ETAB' }: DecompositionFinanciereProps) {
+export function DecompositionFinanciere({ mission, etablissement, role = 'ETAB' }: DecompositionFinanciereProps) {
   const m = mission;
-  const typeContrat = (m.type_contrat_applique ?? null) as 'LIBERAL' | 'SALARIE' | null;
+  const etablissementContexte = etablissement ?? m.etablissements ?? null;
+  const typeContratApplique = (m.type_contrat_applique ?? null) as 'LIBERAL' | 'SALARIE' | null;
+  const professionRequise = (m.profession_requise ?? '') as string;
+  const typeEtablissement = (etablissementContexte?.type ?? null) as string | null;
+  const estSecteurPublic = etablissementContexte?.est_secteur_public === true;
+  const doitResoudreParMatrice = !typeContratApplique && Boolean(professionRequise && typeEtablissement);
+  const {
+    mode: modeExercice,
+    error: modeExerciceError,
+  } = useModeExerciceMission(
+    doitResoudreParMatrice ? professionRequise : '',
+    doitResoudreParMatrice ? typeEtablissement : null,
+    estSecteurPublic,
+  );
+  const resolutionMatriceEnAttente = doitResoudreParMatrice
+    && !estSecteurPublic
+    && !modeExercice
+    && !modeExerciceError;
+  const typeContrat = typeContratApplique ?? (
+    (doitResoudreParMatrice || estSecteurPublic) && !resolutionMatriceEnAttente
+      ? resoudreTypeContratFinancier({
+          typeContratApplique,
+          typeContratRecherche: m.type_contrat_recherche,
+          modeExercice,
+          estSecteurPublic,
+        })
+      : null
+  );
   const isEtabOrAdmin = role === 'ETAB' || role === 'ADMIN';
   const statutMission = (m.statut ?? null) as string | null;
 
@@ -107,7 +140,23 @@ export function DecompositionFinanciere({ mission, role = 'ETAB' }: Decompositio
     );
   }
 
-  // Placeholder : type_contrat non encore figé.
+  // La première résolution RPC part dans un effet : éviter d'afficher pendant
+  // ce bref délai le wording générique « salarié ou libéral », qui serait faux
+  // pour les cellules BLOQUE / NON_PROPOSE de la matrice.
+  if (!typeContrat && resolutionMatriceEnAttente) {
+    return (
+      <div className="bg-muted/30 border border-border rounded-2xl p-5" aria-live="polite">
+        <h3 className="text-lg font-bold text-foreground mb-3">💰 Décomposition financière</h3>
+        <div className="flex items-start gap-3 text-sm text-muted-foreground">
+          <Info className="h-4 w-4 mt-0.5 shrink-0" />
+          <p>Vérification du mode d'exercice de la mission…</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Placeholder : contrat réellement ouvert aux deux régimes et pas encore
+  // choisi, ou contexte établissement indisponible.
   // Côté SOIGNANT, on affiche quand même le net estimé (déjà calculé sur la
   // mission et déjà montré en liste, cf. CarteMissionSoignant) : le soignant
   // doit voir ce qu'il gagne AVANT de décider, comme en liste (standard Uber).

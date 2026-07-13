@@ -3,7 +3,7 @@
  * seed-demo.ts — Lot 9 §9.4 : compte de démonstration Apple Review.
  *
  * OBJECTIF : produire un compte soignant connectable
- * (marie.lefevre@jolene-demo.dev / JoleneDemo2026!) qui présente un parcours
+ * (marie.lefevre@jolene-demo.dev) qui présente un parcours
  * réaliste à un relecteur Apple — SANS aucun INSERT direct dans les tables
  * métier. Tout passe par :
  *   - l'API auth Supabase (création du compte = vrai flux d'inscription, le
@@ -21,6 +21,7 @@
  * Usage :
  *   SUPABASE_URL=https://xxx.supabase.co \
  *   SUPABASE_SERVICE_ROLE_KEY=... SUPABASE_PUBLISHABLE_KEY=... \
+ *   JOLENE_STORE_SOIGNANT_PASSWORD=... \
  *   npx tsx scripts/seed-demo.ts
  *
  * Idempotent : si le compte existe déjà, on le réutilise (reset password).
@@ -31,11 +32,14 @@ const URL = process.env.SUPABASE_URL || '';
 const SERVICE = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 const ANON = process.env.SUPABASE_PUBLISHABLE_KEY || process.env.SUPABASE_ANON_KEY || '';
 
-const DEMO_EMAIL = 'marie.lefevre@jolene-demo.dev';
-const DEMO_PASSWORD = 'JoleneDemo2026!';
+const DEMO_EMAIL = process.env.JOLENE_STORE_SOIGNANT_EMAIL || 'marie.lefevre@jolene-demo.dev';
+const DEMO_PASSWORD = process.env.JOLENE_STORE_SOIGNANT_PASSWORD || '';
 
-if (!URL || !SERVICE || !ANON) {
-  console.error('Variables requises : SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, SUPABASE_PUBLISHABLE_KEY');
+if (!URL || !SERVICE || !ANON || !DEMO_PASSWORD) {
+  console.error(
+    'Variables requises : SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, '
+      + 'SUPABASE_PUBLISHABLE_KEY, JOLENE_STORE_SOIGNANT_PASSWORD',
+  );
   process.exit(1);
 }
 

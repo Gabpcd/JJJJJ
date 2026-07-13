@@ -258,6 +258,9 @@ sourcée**.
     « L'exercice libéral n'est pas prévu pour cette profession — **lettre interministérielle
     du 30 décembre 2021 (n° D21-031940), validée par le Conseil d'État (11/02/2025,
     n°491128)**. Mission proposée en salarié. »
+    L'interface affiche séparément la **copie du texte original de la lettre** et
+    l'**arrêt CE n°491128, cas aide-soignant uniquement** ; ce second lien ne vaut ni
+    liste des professions ni jugement au fond pour les trois cellules de doctrine.
   - `AES` / `PREPARATEUR_PHARMA` / `MANIPULATEUR_RADIO` : « Cette profession n'a pas de cadre
     d'exercice libéral. Mission proposée en salarié. »
   - Praticien × **centre de santé** : « Au sein d'un centre de santé, les professionnels

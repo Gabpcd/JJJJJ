@@ -20,6 +20,8 @@
     "test:e2e": "npx playwright test",
     "test:escrow": "npx playwright test e2e/flows/escrow-revenus-soignant.spec.ts --project=chromium",
     "test:e2e:ui": "npx playwright test --ui",
+    "screenshots:play": "node scripts/capture-google-play.mjs",
+    "screenshots:play:check": "node --check scripts/capture-google-play.mjs && node scripts/capture-google-play.mjs --check",
     "test:invoicing": "vitest run tests/invoicing/",
     "test:chorus:sandbox": "vitest run tests/invoicing/chorus-submission.test.ts",
     "test:guards": "bash tests/non-regression/guards.sh",

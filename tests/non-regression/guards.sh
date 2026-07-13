@@ -129,8 +129,30 @@ for key in NSLocationWhenInUseUsageDescription NSLocationAlwaysAndWhenInUseUsage
 done
 if [ "$MISSING_IOS_PURPOSE" -ne 0 ]; then FAIL=1; else echo "   OK"; fi
 
+echo "── Garde-fou 10 : App Links signés par la clé Play App Signing de Jolene"
+# Les APK installés depuis Google Play sont signés par la clé gérée par Play,
+# pas par la clé d'importation locale. Une empreinte d'upload ici ferait échouer
+# l'ouverture vérifiée de https://jolene.app dans l'application publique.
+ASSETLINKS="public/.well-known/assetlinks.json"
+PLAY_APP_SIGNING_SHA256="18:6E:1F:3A:56:5D:DC:F0:88:0D:DD:58:EB:AF:D9:79:6C:88:7E:E9:61:81:0E:70:A8:3C:78:C3:0A:E8:EE:06"
+if ! grep -q '"package_name": "app.jolene"' "$ASSETLINKS" \
+  || ! grep -q "\"$PLAY_APP_SIGNING_SHA256\"" "$ASSETLINKS"; then
+  echo "   $ASSETLINKS ne contient pas la clé Play App Signing attendue pour app.jolene"
+  FAIL=1
+else
+  echo "   OK"
+fi
+
+echo "── Garde-fou 11 : aucun mot de passe de compte Store versionné"
+if grep -rnE "JoleneDemo[0-9]{4}|TestJolene[0-9]{4}|const[[:space:]]+DEMO_PASSWORD[[:space:]]*=[[:space:]]*['\"]" \
+  scripts docs src --include='*.ts' --include='*.tsx' --include='*.md'; then
+  FAIL=1
+else
+  echo "   OK"
+fi
+
 if [ "$FAIL" -ne 0 ]; then
   echo "✗ guards.sh : au moins un garde-fou a échoué (voir ci-dessus)."
   exit 1
 fi
-echo "✓ guards.sh : les 9 garde-fous passent."
+echo "✓ guards.sh : les 11 garde-fous passent."

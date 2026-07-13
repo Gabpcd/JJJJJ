@@ -11,7 +11,7 @@ Date : 12/07/2026 · périmètre : section D après validation C1-C7.
 | `BannerMediflashExplication` | Arrêt erroné n°488367 et généralisation à plusieurs professions. | Corrigé : n°491128 ; précise que le CE juge le seul cas aide-soignant. |
 | `RechercheMissions` | Recalculait la matrice depuis `soignant.profession`, donc risque de traiter une IADE comme IADE sur une mission IDE. | Corrigé : aucune règle juridique cliente ; la mission a déjà été validée sur `mission.profession_requise` en DB. |
 | Inscription / complétion profil | `PROFESSIONS_NON_LIBERAL` en dur mélangeait validité du profil et règle de mission. | Corrigé : le profil lit `regles_exercice_profession` via `fn_types_exercice_autorises`. |
-| Matching hiérarchique | `fn_soignant_compatible_mission` contient déjà IADE/IBODE → mission IDE. | Vérifié + test : profil IADE × mission IDE = compatible ; résolution de mode appelée avec `IDE`. |
+| Matching hiérarchique | L'ancien sens inverse permettait à un profil IDE de candidater à une mission IADE/IBODE via `accepte_non_specialises`. | Corrigé + testé : IADE/IBODE → mission IDE uniquement ; une mission IADE/IBODE exige la profession spécialisée correspondante. |
 | Notifications / emails | Aucun wording affirmant « IDE libéral en mission d'établissement » trouvé. | Sans impact. |
 | Templates libéraux | Templates IDEL cabinet et praticiens conservés. | Sans impact : cabinet IDEL et praticiens explicitement AUTORISÉS. |
 | Seeds / compte Apple | `scripts/seed-demo.ts` crée un profil salarié et ne fabrique aucune mission. Prod : 0 mission `LIBERAL` au 12/07/2026. | Aligné ; aucune mission IDE libérale d'établissement à purger. |
@@ -21,13 +21,14 @@ Date : 12/07/2026 · périmètre : section D après validation C1-C7.
 
 - `BLOQUE / AS` : « L'exercice libéral n'est pas ouvert aux aides-soignants (Conseil d'État, 11/02/2025, n°491128). Mission proposée en salarié. »
 - `BLOQUE / professions de la lettre` : « L'exercice libéral n'est pas prévu pour cette profession — lettre interministérielle du 30 décembre 2021 (n° D21-031940), validée par le Conseil d'État (11/02/2025, n°491128). Mission proposée en salarié. »
+  Deux liens distincts sont affichés : « Lettre D21-031940 (texte original) », puis « Arrêt n°491128 — cas aide-soignant uniquement ». L'arrêt n'est jamais présenté comme l'énumération ou le jugement au fond des autres professions.
 - `BLOQUE / centre de santé` : « Au sein d'un centre de santé, les professionnels sont salariés (art. L.6323-1-5 du code de la santé publique). »
 - `BLOQUE / sans cadre propre` : « Cette profession n'a pas de cadre d'exercice libéral. Mission proposée en salarié. » Le manipulateur radio reçoit la précision L.4351-1 CSP.
 - `NON_PROPOSE` : « Jolene propose cette mission en salarié : l'exercice libéral au sein d'un établissement expose à une requalification. »
 - Reframe : « La règle se lit sur la profession demandée par cette mission, pas sur les diplômes du soignant. Un profil IADE peut donc candidater à une mission IDE, qui suit les règles IDE. »
 - Reframe 3 200 h : « Tes missions salariées comptent dans les 3 200 h d'expérience requises pour l'installation en libéral. »
 
-Le seed complet relu est celui de `supabase/migrations/20260712161000_finaliser_matrice_modes_exercice.sql` ; la migration de cascade `20260712163000` aligne ensuite le libellé C7 exact sur les cellules de doctrine déjà seedées. Aucune cellule `public` n'est seedée : elle tombe au défaut `NON_PROPOSE`, pour toutes les professions.
+Le seed complet relu est celui de `supabase/migrations/20260712161000_finaliser_matrice_modes_exercice.sql` ; la migration de cascade `20260712163000` aligne ensuite le libellé C7 exact sur les cellules de doctrine déjà seedées. La migration corrective `20260713164844` encode deux URL pour ces cellules — copie du texte original de la lettre puis arrêt CE n°491128 explicitement limité au cas aide-soignant — et verrouille la hiérarchie IADE/IBODE → IDE dans son seul sens valide. Aucune cellule `public` n'est seedée : elle tombe au défaut `NON_PROPOSE`, pour toutes les professions.
 
 ## D4 — cascade structurelle finalisée
 

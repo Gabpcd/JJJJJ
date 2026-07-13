@@ -428,7 +428,7 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
           mode_remuneration, retrocession_pct, montant_honoraires_bruts, honoraires_confirmes_le,
           type_contrat_recherche, type_contrat_applique, type_paiement_soignant, mode_paiement_soignant, choix_contrat_soignant,
           cree_le, modifie_le,
-          etablissements(nom, adresse_ville, adresse_departement,
+          etablissements(nom, type, est_secteur_public, adresse_ville, adresse_departement,
             taux_majoration_nuit_pourcent, taux_majoration_dimanche_pourcent,
             taux_majoration_ferie_pourcent, mode_paiement_commission)
         `)
@@ -807,7 +807,11 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
             </div>
 
             <div className="space-y-4">
-              <DecompositionFinanciere mission={m} role={isAdmin ? 'ADMIN' : 'ETAB'} />
+              <DecompositionFinanciere
+                mission={m}
+                etablissement={m.etablissements}
+                role={isAdmin ? 'ADMIN' : 'ETAB'}
+              />
               {/* Payment mode indicator — ordre priorité :
                   1. mode_paiement_soignant=STRIPE_CONNECT + commission_facturee : commission capturée à la source, déjà réglée
                   2. etablissements.mode_paiement_commission (STRIPE_RESERVATION / CHORUS_PRO)

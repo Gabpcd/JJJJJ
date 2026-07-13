@@ -9295,6 +9295,17 @@ export type Database = {
         Args: { p_etablissement_id: string; p_user_id?: string }
         Returns: Json
       }
+      fn_interlocuteurs_conversations: {
+        Args: { p_conversation_ids: string[] }
+        Returns: {
+          avatar_url: string | null
+          conversation_id: string
+          est_jolene: boolean
+          nom: string
+          participant_id: string
+          prenom: string
+        }[]
+      }
       fn_inscrire_liste_attente_prevoyance: {
         Args: { p_email: string; p_niveau?: string }
         Returns: Json

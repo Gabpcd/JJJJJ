@@ -10,8 +10,14 @@ const cascade = readFileSync(
   resolve(process.cwd(), 'supabase/migrations/20260712163000_lot21_finaliser_cascade_profession_mission.sql'),
   'utf8',
 );
+const correctionSources = readFileSync(
+  resolve(process.cwd(), 'supabase/migrations/20260713164844_corriger_sources_modes_exercice_et_specialites_infirmieres.sql'),
+  'utf8',
+);
 const constantes = readFileSync(resolve(process.cwd(), 'src/lib/constantes.ts'), 'utf8');
 const formulaire = readFileSync(resolve(process.cwd(), 'src/components/FormulaireMission.tsx'), 'utf8');
+const recap = readFileSync(resolve(process.cwd(), 'src/components/mission/ModalRecapMission.tsx'), 'utf8');
+const hierarchy = readFileSync(resolve(process.cwd(), 'src/lib/profession-hierarchy.ts'), 'utf8');
 const seedDemo = readFileSync(resolve(process.cwd(), 'scripts/seed-demo.ts'), 'utf8');
 
 describe('encodage table des modes d’exercice', () => {
@@ -36,6 +42,36 @@ describe('encodage table des modes d’exercice', () => {
     expect(migration).toContain("'JUGE'");
     expect(migration).toContain("'DOCTRINE'");
     expect(migration).toContain("'CONFORMITE_JOLENE'");
+  });
+
+  it('renvoie les surfaces UI vers les sources primaires exactes', () => {
+    expect(correctionSources).toContain(
+      'https://www.fehap.fr/jcms/navigation-internet/upload/docs/application/pdf/2023-02/courrierconjointministeres_30decembre2021_.pdf',
+    );
+    expect(correctionSources).toContain(
+      'https://www.legifrance.gouv.fr/ceta/id/CETATEXT000051156546',
+    );
+    expect(correctionSources).toContain(
+      'https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000033621093',
+    );
+    expect(correctionSources).toContain(
+      'https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000047567923',
+    );
+    expect(correctionSources).toContain("'source_url_complementaire', v_row.source_url_complementaire");
+    expect(formulaire).toContain('liensSourcesModeExercice(modeExerciceMission)');
+    expect(recap).toContain('liensSourcesModeExercice(modeExerciceMission)');
+  });
+
+  it('interdit IDE vers mission IADE/IBODE tout en conservant IADE vers IDE', () => {
+    expect(correctionSources).toContain("p_soignant_profession IN ('IBODE', 'IADE')");
+    expect(correctionSources).not.toContain("p_soignant_profession = 'IDE'");
+    expect(correctionSources).toContain('NEW.accepte_non_specialises := false');
+    expect(formulaire).not.toContain('Accepter aussi les IDE non spécialisés');
+    expect(formulaire).toContain(
+      "une mission IADE ou IBODE exige la profession spécialisée correspondante",
+    );
+    expect(hierarchy).not.toContain('profession_requise.in.(IBODE,IADE)');
+    expect(hierarchy).not.toContain('HIERARCHIE_SOUPLE');
   });
 
   it('supprime la matrice juridique TypeScript en dur', () => {

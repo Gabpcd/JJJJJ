@@ -323,8 +323,9 @@ export default function RechercheMissions() {
       if (professionFiltre) {
         // Si l'utilisateur n'a pas explicitement choisi une profession dans le
         // filtre (utilise sa propre profession), on élargit la recherche aux
-        // missions hiérarchiquement compatibles (IBODE/IADE peuvent voir les
-        // missions IDE ; IDE voit les missions IBODE/IADE si accepte_non_spec).
+        // missions hiérarchiquement compatibles : IBODE/IADE peuvent voir les
+        // missions IDE. Le sens inverse reste interdit car la mission exige la
+        // profession spécialisée qu'elle annonce.
         const orFiltre = !profession ? getMissionsCompatiblesFilter(professionFiltre) : null;
         if (orFiltre) {
           query = query.or(orFiltre);

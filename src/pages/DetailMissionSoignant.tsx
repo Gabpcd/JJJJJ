@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { capturerErreurSentry } from '@/lib/sentry';
 import { ouvrirNavigation } from '@/lib/platform';
 import { usePageTitle } from '@/hooks/usePageTitle';
@@ -68,7 +68,8 @@ export default function DetailMissionSoignant() {
   const [modalCodeTravail, setModalCodeTravail] = useState<any>(null);
   const [modalPerdu, setModalPerdu] = useState(false);
   const [animationSucces, setAnimationSucces] = useState(false);
-  const [conformiteOk, setConformiteOk] = useState(true);
+  // Fail-closed : les CTA restent désactivés jusqu'à la fin des vérifications.
+  const [conformiteOk, setConformiteOk] = useState(false);
   const [showEvaluation, setShowEvaluation] = useState(true);
   const [chevauchement, setChevauchement] = useState(false);
   const [noteMoyenne, setNoteMoyenne] = useState<{ moyenne: number; total: number } | null>(null);
@@ -95,7 +96,7 @@ export default function DetailMissionSoignant() {
       const [{ data: m }, { data: s }] = await Promise.all([
         supabase.from('missions').select(`
           id, intitule, description, service, profession_requise,
-          debut_le, fin_le, duree_heures, taux_horaire_base, taux_rist_plafonne, rist_plafond_applique,
+          debut_le, fin_le, duree_heures, nb_creneaux, taux_horaire_base, taux_rist_plafonne, rist_plafond_applique,
           heures_nuit, heures_dimanche, heures_ferie,
           montant_majoration_nuit, montant_majoration_dimanche, montant_majoration_ferie,
           taux_ifm, taux_icp, montant_ifm, montant_icp,
@@ -174,6 +175,17 @@ export default function DetailMissionSoignant() {
         else if (Array.isArray(data) && data[0]) setNoteMoyenne(data[0]);
       }).then(undefined, (err) => handleErrorSilent(err, 'DetailMissionSoignant.noteMoyenne'));
   }, [mission?.etablissement_id]);
+
+  const missionCandidateHebdo = useMemo(() => mission ? {
+    id: mission.id,
+    debut_le: mission.debut_le,
+    fin_le: mission.fin_le,
+    duree_heures: mission.duree_heures,
+    nb_creneaux: mission.nb_creneaux,
+    type_contrat_applique: mission.type_contrat_applique,
+    choix_contrat_soignant: mission.choix_contrat_soignant,
+    type_contrat_recherche: mission.type_contrat_recherche,
+  } : undefined, [mission]);
 
   if (loading) return <LayoutApp role="SOIGNANT"><ChargementPage /></LayoutApp>;
   if (!loading && !mission) return <LayoutApp role="SOIGNANT"><div className="text-center py-20"><p className="text-lg font-semibold text-foreground">Mission introuvable</p><p className="text-sm text-muted-foreground mt-2">Cette mission n'existe pas ou a été supprimée.</p><button onClick={() => navigate('/soignant/missions')} className="btn-primary mt-4">Retour aux missions</button></div></LayoutApp>;
@@ -591,7 +603,10 @@ export default function DetailMissionSoignant() {
         <div className="space-y-4">
           {/* Compteur hebdomadaire compact */}
           {estOuverte && (
-            <CompteurHebdomadaire compact missionCandidateHeures={mission.duree_heures || 0} />
+            <CompteurHebdomadaire
+              compact
+              missionCandidate={missionCandidateHebdo}
+            />
           )}
 
           {/* Rémunération — Note d'honoraires pour libéraux, décomposition classique sinon */}
@@ -653,7 +668,11 @@ export default function DetailMissionSoignant() {
               )}
             </div>
           ) : (
-            <DecompositionFinanciere mission={mission} role="SOIGNANT" />
+            <DecompositionFinanciere
+              mission={mission}
+              etablissement={etablissement}
+              role="SOIGNANT"
+            />
           )}
           {(mission as any).mode_remuneration !== 'RETROCESSION' && (
           <p className="text-xs text-muted-foreground/60 italic text-center">
