@@ -44,6 +44,8 @@
 	<true/>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Jolene utilise votre position, à votre demande, pour valider un pointage ou localiser votre profil ou votre établissement.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>Jolene n’utilise votre position qu’au premier plan, lorsque vous demandez un pointage ou une localisation. Aucun suivi en arrière-plan n’est effectué.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Jolene utilise la caméra pour photographier vos documents professionnels et scanner les QR codes de pointage.</string>
 	<key>NSPhotoLibraryUsageDescription</key>

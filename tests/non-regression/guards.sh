@@ -111,8 +111,26 @@ else
   echo "   OK"
 fi
 
+echo "── Garde-fou 9 : mentions de localisation iOS exigées par App Store Connect"
+# Le SDK de géolocalisation référence les API WhenInUse et AlwaysAndWhenInUse.
+# Apple exige les deux purpose strings même si Jolene ne demande jamais la
+# localisation en arrière-plan (ITMS-90683 détecté sur le build 3).
+IOS_PLIST="ios/App/App/Info.plist"
+MISSING_IOS_PURPOSE=0
+for key in NSLocationWhenInUseUsageDescription NSLocationAlwaysAndWhenInUseUsageDescription; do
+  if ! KEY="$key" perl -0777 -e '
+    $s = <>;
+    $k = $ENV{"KEY"};
+    exit($s =~ m{<key>\Q$k\E</key>\s*<string>\s*\S.*?</string>}s ? 0 : 1);
+  ' "$IOS_PLIST"; then
+    echo "   $key absent ou vide dans $IOS_PLIST"
+    MISSING_IOS_PURPOSE=1
+  fi
+done
+if [ "$MISSING_IOS_PURPOSE" -ne 0 ]; then FAIL=1; else echo "   OK"; fi
+
 if [ "$FAIL" -ne 0 ]; then
   echo "✗ guards.sh : au moins un garde-fou a échoué (voir ci-dessus)."
   exit 1
 fi
-echo "✓ guards.sh : les 8 garde-fous passent."
+echo "✓ guards.sh : les 9 garde-fous passent."
