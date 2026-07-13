@@ -47,7 +47,8 @@ echo "── Garde-fou 4 : zéro on_behalf_of dans les edge functions escrow (v1
 # Le mandat SEPA nomme JOLENE créancier → Jolene merchant of record. Remettre
 # on_behalf_of casserait les débits (Stripe exigerait un mandat au nom du compte
 # connecté — bug recette run #10). Les mentions en commentaire sont autorisées.
-OBO=$(grep -rn "on_behalf_of" supabase/functions/escrow-* supabase/functions/stripe-webhook 2>/dev/null \
+OBO=$(grep -rn "on_behalf_of" supabase/functions/escrow-* supabase/functions/stripe-webhook \
+  supabase/functions/_shared/stripe-webhook-handler.ts 2>/dev/null \
   | grep -vE ':[0-9]+:\s*(\*|//)' || true)
 if [ -n "$OBO" ]; then
   echo "$OBO"
@@ -70,12 +71,16 @@ if [ -n "$AUDIT_RPC" ]; then
   FAIL=1
 else
   MISSING_AUDIT=0
-  for f in escrow-debit-echeance escrow-release stripe-webhook; do
+  for f in escrow-debit-echeance escrow-release; do
     if ! grep -q "auditEscrow" "supabase/functions/$f/index.ts"; then
       echo "   helper auditEscrow absent de $f"
       MISSING_AUDIT=1
     fi
   done
+  if ! grep -q "auditEscrow" "supabase/functions/_shared/stripe-webhook-handler.ts"; then
+    echo "   helper auditEscrow absent du handler Stripe partagé"
+    MISSING_AUDIT=1
+  fi
   if [ "$MISSING_AUDIT" -ne 0 ]; then FAIL=1; else echo "   OK"; fi
 fi
 

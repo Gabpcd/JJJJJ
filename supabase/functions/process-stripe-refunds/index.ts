@@ -19,6 +19,7 @@
 
 import Stripe from "npm:stripe@18.5.0";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { assertStripeSecretMode } from "../_shared/stripe-production.ts";
 
 const URL = Deno.env.get("SUPABASE_URL")!;
 const KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -93,15 +94,19 @@ Deno.serve(async (req) => {
       });
     }
 
+    assertStripeSecretMode(STRIPE_KEY);
     const stripe = new Stripe(STRIPE_KEY, { apiVersion: "2025-08-27.basil" });
 
-    // 2. SELECT des lignes éligibles (max 10 / run)
+    // 2. SELECT des lignes éligibles (max 10 / run). Une ligne EN_COURS
+    // abandonnée par un crash après l'appel Stripe redevient récupérable après
+    // le lease de 15 min ; la même clé d'idempotence rejouera le même refund.
+    const repriseAvant = new Date(Date.now() - 15 * 60 * 1000).toISOString();
     const { data: rows, error: selErr } = await sb
       .from("stripe_refunds_queue")
       .select("id, avoir_id, facture_origine_id, stripe_payment_intent_id, montant_cts, tentatives, paiement_escrow_id, reverse_transfer, refund_application_fee_cts, absorbe_plateforme")
-      .eq("statut", "EN_ATTENTE")
+      .in("statut", ["EN_ATTENTE", "EN_COURS"])
       .lt("tentatives", MAX_TENTATIVES)
-      .or(`dernier_essai_le.is.null,dernier_essai_le.lt.${new Date(Date.now() - 15 * 60 * 1000).toISOString()}`)
+      .or(`dernier_essai_le.is.null,dernier_essai_le.lt.${repriseAvant}`)
       .order("cree_le", { ascending: true })
       .limit(10);
 
@@ -139,7 +144,9 @@ Deno.serve(async (req) => {
           dernier_essai_le: new Date().toISOString(),
         })
         .eq("id", item.id)
-        .eq("statut", "EN_ATTENTE")
+        .in("statut", ["EN_ATTENTE", "EN_COURS"])
+        .eq("tentatives", item.tentatives)
+        .or(`dernier_essai_le.is.null,dernier_essai_le.lt.${repriseAvant}`)
         .select("id")
         .maybeSingle();
 
@@ -183,7 +190,7 @@ Deno.serve(async (req) => {
         });
 
         // 3c. Succès → TRAITE
-        await sb
+        const { data: refundPersiste, error: refundPersistError } = await sb
           .from("stripe_refunds_queue")
           .update({
             statut: "TRAITE",
@@ -191,7 +198,17 @@ Deno.serve(async (req) => {
             traite_le: new Date().toISOString(),
             erreur: null,
           })
-          .eq("id", item.id);
+          .eq("id", item.id)
+          // Le webhook charge.refunded peut avoir gagné la course et déjà mis
+          // TRAITE. On complète alors seulement l'identifiant exact du refund.
+          .in("statut", ["EN_COURS", "TRAITE"])
+          .select("id")
+          .maybeSingle();
+        if (refundPersistError || !refundPersiste) {
+          throw new Error(
+            `REFUND_PERSISTENCE_FAILED: ${refundPersistError?.message || "queue non modifiable"}`,
+          );
+        }
 
         console.log(`Refund ${refund.id} created for queue ${item.id} (avoir ${item.avoir_id})`);
         successCount++;
@@ -232,14 +249,46 @@ Deno.serve(async (req) => {
           );
         }
 
-        await sb
+        const statutsPersistables = nouveauStatut === "TRAITE"
+          ? ["EN_COURS", "TRAITE"]
+          : ["EN_COURS"];
+        const { data: etatPersiste, error: etatPersistError } = await sb
           .from("stripe_refunds_queue")
           .update({
             statut: nouveauStatut,
             tentatives: item.tentatives + 1,
             erreur: errMsg.substring(0, 500),
           })
-          .eq("id", item.id);
+          .eq("id", item.id)
+          .in("statut", statutsPersistables)
+          .select("id, statut")
+          .maybeSingle();
+
+        if (etatPersistError) {
+          // La ligne reste éventuellement EN_COURS ; le lease ajouté au SELECT
+          // garantit sa reprise idempotente au prochain passage.
+          throw new Error(`REFUND_STATE_PERSISTENCE_FAILED: ${etatPersistError.message}`);
+        }
+        if (!etatPersiste) {
+          const { data: etatCourant, error: etatCourantError } = await sb
+            .from("stripe_refunds_queue")
+            .select("statut")
+            .eq("id", item.id)
+            .maybeSingle();
+          if (etatCourantError) {
+            throw new Error(`REFUND_STATE_LOOKUP_FAILED: ${etatCourantError.message}`);
+          }
+          if (etatCourant?.statut === "TRAITE") {
+            // Webhook concurrent : succès financier déjà rapproché, ne jamais
+            // le rétrograder en EN_ATTENTE/ECHEC.
+            nouveauStatut = "TRAITE";
+            alertAdmin = false;
+          } else {
+            throw new Error(
+              `REFUND_STATE_CONFLICT: attendu ${nouveauStatut}, trouvé ${etatCourant?.statut || "absent"}`,
+            );
+          }
+        }
 
         if (nouveauStatut === "TRAITE") {
           successCount++;

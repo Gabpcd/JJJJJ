@@ -110,7 +110,9 @@ export default function ProfilSoignant() {
 
         setEmail(data.email || '');
         setProfession(data.profession || '');
-        setSpecialiteMedicale(data.specialite_medicale || '');
+        setSpecialiteMedicale(data.specialite_verifiee
+          ? (data.specialite_medicale || '')
+          : (data.specialite_medicale_declaree || data.specialite_medicale || ''));
         setSpecialiteVerifiee(!!data.specialite_verifiee);
         setSpecialiteSource(data.specialite_source || 'MANUEL');
         setRppsVerifie(!!data.rpps_verifie);
@@ -226,7 +228,7 @@ export default function ProfilSoignant() {
     let specialiteError: any = null;
     if ((profession === 'MEDECIN' || profession === 'IDE') && !specialiteVerifiee) {
       const { error: specErr } = await supabase.from('soignants')
-        .update({ specialite_medicale: specialiteMedicale || null, specialite_code: specialiteMedicale || null, specialite_source: 'MANUEL' } as any)
+        .update({ specialite_medicale_declaree: specialiteMedicale || null })
         .eq('id', user.id);
       specialiteError = specErr;
     }

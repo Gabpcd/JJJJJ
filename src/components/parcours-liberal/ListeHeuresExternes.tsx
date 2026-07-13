@@ -31,10 +31,10 @@ export function ListeHeuresExternes({ heures, onSupprimer }: Props) {
     setOpeningId(id);
     try {
       const { data, error } = await supabase.storage
-        .from('attestations-heures-externes')
+        .from(path.includes('/heures-externes/') ? 'jolene-documents' : 'attestations-heures-externes')
         .createSignedUrl(path, 3600);
       if (error || !data?.signedUrl) throw error || new Error('URL indisponible');
-      window.open(data.signedUrl, '_blank');
+      window.open(data.signedUrl, '_blank', 'noopener,noreferrer');
     } catch {
       toast.error('Impossible d\'ouvrir l\'attestation.');
     } finally {

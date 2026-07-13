@@ -31,7 +31,13 @@ async function loadExpectedSecret(sb: any): Promise<string> {
 
 Deno.serve(async (req) => {
   try {
-    const sb = createClient(URL, KEY);
+    // Les appels Edge -> Edge doivent toujours porter explicitement le secret
+    // interne. Sans cet en-tete, functions.invoke peut n'envoyer que `apikey`
+    // selon la version du client et send-sms rejette alors justement l'appel.
+    const sb = createClient(URL, KEY, {
+      auth: { persistSession: false },
+      global: { headers: { Authorization: `Bearer ${KEY}` } },
+    });
 
     // Auth: service_role only — accepte legacy JWT (KEY) OU le secret stocké en vault
     const authHeader = req.headers.get('Authorization') || '';
@@ -69,7 +75,7 @@ Deno.serve(async (req) => {
           const intitule = (r.mission || '').toString().slice(0, 40);
           const etab = (r.etablissement || '').toString().slice(0, 30);
           const smsBody = `📅 Rappel : votre mission ${intitule} démarre demain à ${r.heure_debut} chez ${etab}. Bonne journée !`;
-          await sb.functions.invoke('send-sms', {
+          const { error: smsError } = await sb.functions.invoke('send-sms', {
             body: {
               type: 'RAPPEL_MISSION_J1',
               destinataire_id: r.soignant_id,
@@ -77,7 +83,9 @@ Deno.serve(async (req) => {
               contenu: smsBody,
               prefix_type: 'RAPPEL_MISSION_J1',
             },
+            headers: { Authorization: `Bearer ${KEY}` },
           });
+          if (smsError) throw new Error(`send-sms: ${smsError.message}`);
           smsJ1++;
         }
       } catch (e) {
@@ -173,7 +181,7 @@ Deno.serve(async (req) => {
               action: 'SERIE_EMAIL_SKIPPED', type_ressource: 'serie_email_envois',
               id_ressource: envoi.id,
               details: { serie: envoi.serie, etape: envoi.etape, raison: (skipCheck as any).raison },
-            }).then(() => {}).catch(() => {});
+            });
             serieSkipped++;
             continue;
           }
@@ -193,7 +201,7 @@ Deno.serve(async (req) => {
               action: 'SERIE_EMAIL_SKIPPED', type_ressource: 'serie_email_envois',
               id_ressource: envoi.id,
               details: { serie: envoi.serie, etape: envoi.etape, raison: 'NOTIFICATION_DESACTIVEE' },
-            }).then(() => {}).catch(() => {});
+            });
             serieSkipped++;
             continue;
           }
@@ -226,7 +234,7 @@ Deno.serve(async (req) => {
             action: 'SERIE_EMAIL_ENVOYE', type_ressource: 'serie_email_envois',
             id_ressource: envoi.id,
             details: { serie: envoi.serie, etape: envoi.etape, type: emailType },
-          }).then(() => {}).catch(() => {});
+          });
           serieEnvoyes++;
 
         } catch (err: any) {
@@ -244,7 +252,7 @@ Deno.serve(async (req) => {
               action: 'ADMIN_ACTION', type_ressource: 'serie_email_envois',
               id_ressource: envoi.id,
               details: { event: 'SERIE_EMAIL_ERREUR_DEFINITIVE', serie: envoi.serie, etape: envoi.etape, error: err?.message },
-            }).then(() => {}).catch(() => {});
+            });
           }
           console.error(`[email-cron] Erreur série email ${envoi.id}:`, err);
         }
@@ -275,7 +283,7 @@ Deno.serve(async (req) => {
 
           // Préparer payload selon audience
           let emailType: string;
-          let payload: any = {
+          const payload: any = {
             nom_filtre: fm.nom,
             count: fm.nb_nouveaux,
           };
@@ -306,7 +314,7 @@ Deno.serve(async (req) => {
             action: 'ALERTE_ENVOYEE', type_ressource: 'filtre_sauvegarde',
             id_ressource: fm.filtre_id,
             details: { audience: fm.audience, nb_nouveaux: fm.nb_nouveaux, nom: fm.nom },
-          }).then(() => {}).catch(() => {});
+          });
           alertesEnvoyees++;
         } catch (err: any) {
           alertesErreurs++;
@@ -357,14 +365,16 @@ Deno.serve(async (req) => {
             ? `Annulation tardive sur "${email.data.mission}". Trouvez un remplaçant sur jolene.app`
             : `Notification Jolene: ${email.data.mission || 'Voir l\'app'}`;
 
-          await sb.functions.invoke('send-sms', {
+          const { error: smsError } = await sb.functions.invoke('send-sms', {
             body: {
               telephone: email.data.telephone,
               type: email.type,
               contenu: smsContenu,
               destinataire_id: email.destinataire_id,
             },
+            headers: { Authorization: `Bearer ${KEY}` },
           });
+          if (smsError) throw new Error(`send-sms: ${smsError.message}`);
           smsQueueCount++;
         } else {
           // Email classique

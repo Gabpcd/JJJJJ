@@ -12,7 +12,7 @@ const PATTERNS: { regex: RegExp; replacement: string }[] = [
   { regex: /eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}/g, replacement: 'JWT_MASKED' },
   { regex: /sk_(live|test)_[A-Za-z0-9]{20,}/g, replacement: 'STRIPE_KEY_MASKED' },
   { regex: /pk_(live|test)_[A-Za-z0-9]{20,}/g, replacement: 'STRIPE_PK_MASKED' },
-  { regex: /(?<![a-zA-Z0-9\/+])[A-Za-z0-9]{40,}(?![a-zA-Z0-9\/+=])/g, replacement: 'TOKEN_MASKED' },
+  { regex: /(?<![a-zA-Z0-9/+])[A-Za-z0-9]{40,}(?![a-zA-Z0-9/+=])/g, replacement: 'TOKEN_MASKED' },
 ];
 
 function maskSensitive(input: string, maxLength = 500): string {

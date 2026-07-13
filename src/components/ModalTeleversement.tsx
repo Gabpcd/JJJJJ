@@ -1,8 +1,9 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { X, Upload, Camera } from 'lucide-react';
 import { TYPES_DOCUMENTS } from '@/lib/documents';
 import { isNative } from '@/lib/platform';
 import { BoutonY2K } from '@/components/y2k/BoutonY2K';
+import { verifierFichierDocument } from '@/lib/documentUpload';
 import { toast } from 'sonner';
 
 // Placeholders adaptés par type de document
@@ -34,14 +35,14 @@ interface ModalTeleversementProps {
 export function ModalTeleversement({ typeDocument, onConfirmer, onFermer }: ModalTeleversementProps) {
   const [fichier, setFichier] = useState<File | null>(null);
   const [libelle, setLibelle] = useState('');
+  const [envoi, setEnvoi] = useState(false);
 
   // Reset state à la fermeture pour éviter de réouvrir avec un fichier précédent
-  const fermerEtReinitialiser = () => {
+  const fermerEtReinitialiser = useCallback(() => {
     setFichier(null);
     setLibelle('');
     onFermer();
-  };
-  const [envoi, setEnvoi] = useState(false);
+  }, [onFermer]);
   const [dragActive, setDragActive] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const cameraRef = useRef<HTMLInputElement>(null);
@@ -49,24 +50,29 @@ export function ModalTeleversement({ typeDocument, onConfirmer, onFermer }: Moda
 
   const placeholder = PLACEHOLDERS_LIBELLE[typeDocument] || 'Ex : Description du document';
 
-  const handleFile = (f: File) => {
-    const estSupporte = f.type === 'application/pdf' || f.type.startsWith('image/') || /\.(pdf|png|jpe?g|webp|heic|heif)$/i.test(f.name);
-    if (!estSupporte) {
-      toast.error('Format non pris en charge. Utilisez un PDF ou une image.');
-      return;
-    }
-    if (f.size > 10 * 1024 * 1024) {
-      toast.error('Le fichier ne doit pas dépasser 10 Mo.');
+  const handleFile = useCallback(async (f: File) => {
+    const validation = await verifierFichierDocument(f);
+    if (validation.ok === false) {
+      setFichier(null);
+      toast.error(validation.message);
       return;
     }
     setFichier(f);
-  };
+  }, []);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     setDragActive(false);
-    if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
-  }, []);
+    if (e.dataTransfer.files[0]) void handleFile(e.dataTransfer.files[0]);
+  }, [handleFile]);
+
+  useEffect(() => {
+    const fermerAvecEchap = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && !envoi) fermerEtReinitialiser();
+    };
+    window.addEventListener('keydown', fermerAvecEchap);
+    return () => window.removeEventListener('keydown', fermerAvecEchap);
+  }, [envoi, fermerEtReinitialiser]);
 
   const handleSubmit = async () => {
     if (!fichier) return;
@@ -87,7 +93,7 @@ export function ModalTeleversement({ typeDocument, onConfirmer, onFermer }: Moda
           const res = await fetch(result.dataUrl);
           const blob = await res.blob();
           const file = new File([blob], `photo_${Date.now()}.jpg`, { type: blob.type || 'image/jpeg' });
-          handleFile(file);
+          await handleFile(file);
         }
       } catch {
         toast.error("Impossible d'accéder à la caméra.");
@@ -99,22 +105,22 @@ export function ModalTeleversement({ typeDocument, onConfirmer, onFermer }: Moda
 
   return (
     <div className="fixed inset-0 z-[9999] flex items-start justify-center overflow-y-auto overscroll-contain" style={{ paddingTop: 'max(1rem, env(safe-area-inset-top))', paddingBottom: 'max(1rem, env(safe-area-inset-bottom))', paddingLeft: 'max(1rem, env(safe-area-inset-left))', paddingRight: 'max(1rem, env(safe-area-inset-right))' }}>
-      <div className="fixed inset-0 bg-foreground/50" style={{ backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)' }} onClick={fermerEtReinitialiser} />
-      <div className="relative bg-card rounded-2xl shadow-xl p-6 max-w-md w-full my-auto">
-        <button onClick={fermerEtReinitialiser} className="absolute top-4 right-4 text-muted-foreground hover:text-foreground">
+      <div className="fixed inset-0 bg-foreground/50" style={{ backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)' }} onClick={() => { if (!envoi) fermerEtReinitialiser(); }} />
+      <div role="dialog" aria-modal="true" aria-labelledby="televersement-titre" aria-describedby="televersement-aide" aria-busy={envoi} className="relative bg-card rounded-2xl shadow-xl p-6 max-w-md w-full my-auto">
+        <button type="button" onClick={fermerEtReinitialiser} disabled={envoi} aria-label="Fermer la fenêtre de téléversement" className="absolute top-4 right-4 text-muted-foreground hover:text-foreground disabled:opacity-50">
           <X className="h-5 w-5" />
         </button>
 
-        <h3 className="text-lg font-bold text-foreground mb-1">📤 Téléverser</h3>
+        <h3 id="televersement-titre" className="text-lg font-bold text-foreground mb-1">📤 Téléverser</h3>
         <p className="text-sm text-muted-foreground mb-1">{TYPES_DOCUMENTS[typeDocument] || typeDocument}</p>
-        <p className="text-xs text-muted-foreground mb-4">
+        <p id="televersement-aide" className="text-xs text-muted-foreground mb-4">
           Une photo nette suffit — les dates de validité sont lues automatiquement sur votre document.
         </p>
 
         {/* Mobile : prendre une photo = action n°1, visuellement dominante */}
         {isMobile && (
           <div className="mb-3 space-y-2">
-            <input ref={cameraRef} type="file" accept="image/*,.heic,.heif" capture="environment" className="hidden" onChange={e => e.target.files?.[0] && handleFile(e.target.files[0])} />
+            <input ref={cameraRef} type="file" accept="image/jpeg,image/png,image/webp" capture="environment" className="hidden" onChange={e => { const selected = e.target.files?.[0]; if (selected) void handleFile(selected); e.target.value = ''; }} />
             <BoutonY2K
               variant="primary"
               size="lg"
@@ -126,6 +132,7 @@ export function ModalTeleversement({ typeDocument, onConfirmer, onFermer }: Moda
             </BoutonY2K>
             {isNative() && (
               <button
+                type="button"
                 onClick={async () => {
                   try {
                     const { Camera: CapCamera, CameraResultType, CameraSource } = await import('@capacitor/camera');
@@ -138,7 +145,7 @@ export function ModalTeleversement({ typeDocument, onConfirmer, onFermer }: Moda
                       const res = await fetch(photo.dataUrl);
                       const blob = await res.blob();
                       const file = new File([blob], `galerie_${Date.now()}.jpg`, { type: blob.type || 'image/jpeg' });
-                      handleFile(file);
+                      await handleFile(file);
                     }
                   } catch {
                     toast.error("Impossible d'accéder à la galerie.");
@@ -158,12 +165,23 @@ export function ModalTeleversement({ typeDocument, onConfirmer, onFermer }: Moda
           onDragLeave={() => setDragActive(false)}
           onDrop={handleDrop}
           onClick={() => inputRef.current?.click()}
+          onKeyDown={event => {
+            if (event.key === 'Enter' || event.key === ' ') {
+              event.preventDefault();
+              inputRef.current?.click();
+            }
+          }}
+          role="button"
+          tabIndex={0}
+          aria-label="Choisir un document à téléverser"
+          aria-describedby="televersement-formats"
           className={`border-2 border-dashed rounded-xl text-center cursor-pointer transition-colors
             ${isMobile ? 'p-4' : 'p-6'}
             ${dragActive ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/50'}
             ${fichier ? 'bg-success/5 border-success/30' : ''}`}
         >
-          <input ref={inputRef} type="file" accept="application/pdf,image/*,.heic,.heif" className="hidden" onChange={e => e.target.files?.[0] && handleFile(e.target.files[0])} />
+          <input ref={inputRef} type="file" accept="application/pdf,image/jpeg,image/png,image/webp" className="hidden" onChange={e => { const selected = e.target.files?.[0]; if (selected) void handleFile(selected); e.target.value = ''; }} />
+          <span id="televersement-formats" className="sr-only">Formats autorisés : PDF, JPEG, PNG ou WebP, 10 Mo maximum.</span>
           {fichier ? (
             <div>
               <p className="text-sm font-medium text-foreground">📎 {fichier.name}</p>
@@ -173,7 +191,7 @@ export function ModalTeleversement({ typeDocument, onConfirmer, onFermer }: Moda
             <>
               {!isMobile && <Upload className="h-8 w-8 text-muted-foreground/40 mx-auto mb-2" />}
               <p className="text-sm text-muted-foreground">{isMobile ? 'ou choisissez un fichier' : 'Glissez votre fichier ici ou cliquez'}</p>
-              <p className="text-xs text-muted-foreground/60 mt-1">PDF ou image · 10 Mo max</p>
+              <p aria-hidden="true" className="text-xs text-muted-foreground/60 mt-1">PDF, JPEG, PNG ou WebP · 10 Mo max</p>
             </>
           )}
         </div>
@@ -185,8 +203,8 @@ export function ModalTeleversement({ typeDocument, onConfirmer, onFermer }: Moda
         </div>
 
         <div className="flex gap-3 mt-6">
-          <button onClick={fermerEtReinitialiser} className="btn-secondary text-sm flex-1 py-2.5">Annuler</button>
-          <button onClick={handleSubmit} disabled={!fichier || envoi} className="btn-primary text-sm flex-1 py-2.5 disabled:opacity-50">
+          <button type="button" onClick={fermerEtReinitialiser} disabled={envoi} className="btn-secondary text-sm flex-1 py-2.5 disabled:opacity-50">Annuler</button>
+          <button type="button" onClick={handleSubmit} disabled={!fichier || envoi} className="btn-primary text-sm flex-1 py-2.5 disabled:opacity-50">
             {envoi ? 'Envoi…' : 'Téléverser'}
           </button>
         </div>

@@ -20,29 +20,9 @@
  * frontend affiche une modale éducative et restaure le contenu pour édition.
  */
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { corsHeaders } from "../_shared/cors.ts";
 import { applyRateLimit, getClientIp } from "../_shared/rate-limit.ts";
 import { detecterLeak, sanitizeContent } from "../_shared/anti-leak.ts";
-
-function getCorsOrigin(req: Request): string {
-  const origin = req.headers.get("origin") || "";
-  if (
-    origin === "https://jolene.app" ||
-    origin === "https://app.jolene.app" ||
-    origin === "https://www.jolene.app" ||
-    origin === "http://localhost:5173" ||
-    origin === "http://localhost:8080"
-  ) return origin;
-  return "https://jolene.app";
-}
-
-function corsHeaders(req: Request) {
-  return {
-    "Access-Control-Allow-Origin": getCorsOrigin(req),
-    "Access-Control-Allow-Headers":
-      "authorization, x-client-info, apikey, content-type",
-    "Content-Type": "application/json",
-  };
-}
 
 const MAX_CONTENT_LENGTH = 4000;
 

@@ -3,6 +3,7 @@ import { FileText, Upload, Download, AlertTriangle, CheckCircle, RefreshCw } fro
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { BoutonY2K } from '@/components/y2k/BoutonY2K';
+import { verifierFichierDocument } from '@/lib/documentUpload';
 import { toast } from 'sonner';
 
 interface Props {
@@ -24,7 +25,6 @@ interface ContratTravail {
 }
 
 const BUCKET = 'jolene-documents';
-const PATH_PREFIX = 'contrats-travail';
 
 export function BlocContratTravailMission({
   missionId,
@@ -65,33 +65,53 @@ export function BlocContratTravailMission({
 
   const upload = async () => {
     if (!file || !user) return;
-    if (!file.name.toLowerCase().endsWith('.pdf')) {
-      toast.error('Seuls les fichiers PDF sont acceptés');
-      return;
-    }
-    if (file.size > 10 * 1024 * 1024) {
-      toast.error('Fichier trop volumineux (max 10 Mo)');
+    const validation = await verifierFichierDocument(file, {
+      allowedMimes: ['application/pdf'],
+    });
+    if (validation.ok === false) {
+      toast.error(validation.message);
       return;
     }
 
     setUploading(true);
     try {
-      const path = `${PATH_PREFIX}/${missionId}/contrat.pdf`;
+      // Le premier segment doit être l'établissement propriétaire. Une clé
+      // unique rend le remplacement compatible avec les preuves immuables.
+      const path = `${etablissementId}/contrats-travail/${missionId}/${Date.now()}-${globalThis.crypto.randomUUID()}-contrat.pdf`;
       const { error: upErr } = await supabase.storage
         .from(BUCKET)
-        .upload(path, file, { upsert: true, contentType: 'application/pdf' });
+        .upload(path, file, { upsert: false, contentType: validation.mime });
       if (upErr) throw upErr;
 
       // Upsert row contrats_travail_missions + audit via RPC unifiée
       const wasReplace = !!contrat;
-      const { data: rpcData, error: rpcErr } = await supabase.rpc('fn_uploader_contrat_travail_mission' as any, {
+      const ancienPath = contrat?.pdf_s3_key ?? null;
+      const { data: rpcData, error: rpcErr } = await supabase.rpc('fn_uploader_contrat_travail_mission', {
         p_mission_id: missionId,
         p_pdf_s3_key: path,
         p_nom_fichier: file.name,
         p_taille_octets: file.size,
       });
-      if (rpcErr) throw rpcErr;
-      if ((rpcData as any)?.error) throw new Error((rpcData as any).error);
+      const rpcErreur = rpcData && typeof rpcData === 'object' && !Array.isArray(rpcData) && 'error' in rpcData
+        ? String((rpcData as { error?: unknown }).error || '')
+        : '';
+      if (rpcErr || rpcErreur) {
+        // Le stockage est immuable : seul le service peut retirer cet objet
+        // qui n'a finalement été rattaché à aucune ligne métier.
+        await supabase.functions.invoke('verify-contrat-travail', {
+          body: { mission_id: missionId, action: 'cleanup_orphan', pdf_s3_key: path },
+        });
+        if (rpcErr) throw rpcErr;
+        throw new Error(rpcErreur);
+      }
+
+      if (ancienPath && ancienPath !== path) {
+        // Après remplacement, l'ancienne clé n'est plus référencée.
+        // Le nettoyage est idempotent et refuse toute clé encore active.
+        void supabase.functions.invoke('verify-contrat-travail', {
+          body: { mission_id: missionId, action: 'cleanup_orphan', pdf_s3_key: ancienPath },
+        });
+      }
 
       // Vérification IA du contrat de travail (type + parties), à l'upload ET au
       // remplacement. Fire-and-forget : résultat écrit côté contrats_travail_missions.
@@ -150,11 +170,15 @@ export function BlocContratTravailMission({
     if (!contrat) return;
     setDownloading(true);
     try {
-      const { data, error } = await supabase.storage
-        .from(BUCKET)
-        .createSignedUrl(contrat.pdf_s3_key, 3600);
+      // Le soignant n'est pas propriétaire du préfixe Storage de
+      // l'établissement. L'Edge Function vérifie la relation mission puis crée
+      // une URL courte côté service, sans élargir la politique du bucket.
+      const { data, error } = await supabase.functions.invoke('verify-contrat-travail', {
+        body: { mission_id: missionId, action: 'signed_url' },
+      });
       if (error) throw error;
-      window.open(data.signedUrl, '_blank');
+      if (!data?.signed_url) throw new Error('Lien de téléchargement indisponible');
+      window.open(data.signed_url, '_blank', 'noopener,noreferrer');
     } catch (err: any) {
       toast.error(err?.message || 'Erreur téléchargement');
     } finally {
@@ -219,7 +243,13 @@ export function BlocContratTravailMission({
           <input
             type="file"
             accept=".pdf,application/pdf"
-            onChange={e => setFile(e.target.files?.[0] || null)}
+            onChange={async e => {
+              const selected = e.target.files?.[0] || null;
+              if (!selected) { setFile(null); return; }
+              const validation = await verifierFichierDocument(selected, { allowedMimes: ['application/pdf'] });
+              if (validation.ok === false) { setFile(null); toast.error(validation.message); e.target.value = ''; return; }
+              setFile(selected);
+            }}
             className="block w-full text-sm text-foreground file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-primary/10 file:text-primary hover:file:bg-primary/20 cursor-pointer"
           />
           <BoutonY2K onClick={upload} disabled={!file || uploading} loading={uploading} className="gap-2 shrink-0" iconeGauche={uploading ? undefined : <Upload className="h-4 w-4" />}>
@@ -261,7 +291,13 @@ export function BlocContratTravailMission({
             <input
               type="file"
               accept=".pdf,application/pdf"
-              onChange={e => setFile(e.target.files?.[0] || null)}
+              onChange={async e => {
+                const selected = e.target.files?.[0] || null;
+                if (!selected) { setFile(null); return; }
+                const validation = await verifierFichierDocument(selected, { allowedMimes: ['application/pdf'] });
+                if (validation.ok === false) { setFile(null); toast.error(validation.message); e.target.value = ''; return; }
+                setFile(selected);
+              }}
               className="block w-full text-sm text-foreground file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-primary/10 file:text-primary hover:file:bg-primary/20 cursor-pointer"
             />
             <BoutonY2K onClick={upload} disabled={!file || uploading} loading={uploading} size="sm" className="gap-2" iconeGauche={uploading ? undefined : <Upload className="h-4 w-4" />}>

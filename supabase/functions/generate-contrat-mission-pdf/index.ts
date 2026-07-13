@@ -18,23 +18,7 @@
 // `mon_etablissement_id()`.
 
 import { createClient } from 'npm:@supabase/supabase-js@2';
-
-function corsOrigin(req: Request): string {
-  const o = req.headers.get('origin') || '';
-  const allowed = new Set([
-    'https://jolene.app', 'https://www.jolene.app', 'https://app.jolene.app',
-    'http://localhost:5173', 'http://localhost:8080',
-  ]);
-  return allowed.has(o) ? o : 'https://jolene.app';
-}
-
-function corsHeaders(req: Request) {
-  return {
-    'Access-Control-Allow-Origin': corsOrigin(req),
-    'Access-Control-Allow-Methods': 'POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  };
-}
+import { corsHeaders } from '../_shared/cors.ts';
 
 function escapeHtml(s: unknown): string {
   if (s == null) return '';

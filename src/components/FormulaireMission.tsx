@@ -164,7 +164,7 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
         const s = (data.siret || '').trim();
         setSiretInvalide(!s || s.length === 0);
         // Check contrat validation — explicit reset
-        setContratNonValide(data.contrat_valide !== true);
+        setContratNonValide(data.contrat_service_signe !== true);
       }
     });
   }, [user]);

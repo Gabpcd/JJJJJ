@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Loader2, Upload, AlertCircle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useNotification } from '@/contexts/NotificationContext';
+import { sanitiserNomFichier, verifierFichierDocument } from '@/lib/documentUpload';
 import { AnnulationCandidatureTimer } from './AnnulationCandidatureTimer';
 import {
   DialogResponsive,
@@ -68,13 +69,22 @@ export function ModaleAnnulationCandidature({
 
   async function uploadJustificatif(): Promise<string | null> {
     if (!fichier) return null;
-    if (fichier.size > 5 * 1024 * 1024) {
-      afficherNotification({ type: 'erreur', message: 'Fichier trop volumineux (max 5 MB).' });
+    const validation = await verifierFichierDocument(fichier, { maxBytes: 5 * 1024 * 1024 });
+    if (validation.ok === false) {
+      afficherNotification({ type: 'erreur', message: validation.message });
       return null;
     }
-    const safeName = fichier.name.replace(/[^a-zA-Z0-9._-]/g, '_');
-    const path = `annulations-candidature/${candidatureId}/${Date.now()}_${safeName}`;
-    const { error } = await supabase.storage.from('justificatifs').upload(path, fichier, { upsert: false });
+    const { data: authData } = await supabase.auth.getUser();
+    if (!authData.user) {
+      afficherNotification({ type: 'erreur', message: 'Votre session a expiré. Reconnectez-vous.' });
+      return null;
+    }
+    const safeName = sanitiserNomFichier(fichier.name, validation.mime);
+    const path = `${authData.user.id}/annulations-candidature/${candidatureId}/${Date.now()}_${safeName}`;
+    const { error } = await supabase.storage.from('justificatifs').upload(path, fichier, {
+      contentType: validation.mime,
+      upsert: false,
+    });
     if (error) {
       afficherNotification({ type: 'erreur', message: 'Erreur upload : ' + error.message });
       return null;
@@ -180,8 +190,8 @@ export function ModaleAnnulationCandidature({
           </label>
 
           {/* Justificatif optionnel */}
-          <label className="block">
-            <span className="text-xs font-medium text-foreground mb-1 block">Justificatif (optionnel — PDF, image, max 5 MB)</span>
+          <div className="block">
+            <span id="annulation-justificatif-label" className="text-xs font-medium text-foreground mb-1 block">Justificatif (optionnel — PDF, image, max 5 Mo)</span>
             <label className="flex items-center gap-2 cursor-pointer rounded-lg border border-dashed border-border bg-muted/20 p-3 hover:bg-muted/40 transition">
               <Upload className="h-4 w-4 text-muted-foreground" />
               <span className="text-xs text-muted-foreground flex-1">
@@ -189,15 +199,27 @@ export function ModaleAnnulationCandidature({
               </span>
               <input
                 type="file"
-                accept="application/pdf,image/*"
+                accept="application/pdf,image/jpeg,image/png,image/webp"
+                aria-labelledby="annulation-justificatif-label"
                 className="hidden"
-                onChange={(e) => setFichier(e.target.files?.[0] || null)}
+                onChange={async e => {
+                  const selected = e.target.files?.[0] || null;
+                  if (!selected) { setFichier(null); return; }
+                  const validation = await verifierFichierDocument(selected, { maxBytes: 5 * 1024 * 1024 });
+                  if (validation.ok === false) {
+                    setFichier(null);
+                    afficherNotification({ type: 'erreur', message: validation.message });
+                    e.target.value = '';
+                    return;
+                  }
+                  setFichier(selected);
+                }}
               />
             </label>
             <p className="text-[10px] text-muted-foreground mt-1">
               Un justificatif (certif médical, billet de train annulé…) facilite la contestation si vous le souhaitez.
             </p>
-          </label>
+          </div>
 
           {/* Coche confirmation */}
           <label className="flex items-start gap-2 rounded-lg border border-border bg-background p-3 cursor-pointer">

@@ -21,7 +21,7 @@ import { test, expect } from '@playwright/test';
 
 test.describe('Visual regression — pages critiques', () => {
   // Skip sur projets non-chromium : les baselines sont générées sur Chromium uniquement
-  test.beforeEach(({}, testInfo) => {
+  test.beforeEach((_fixtures, testInfo) => {
     test.skip(testInfo.project.name !== 'chromium', 'Visual regression : Chromium uniquement');
   });
 

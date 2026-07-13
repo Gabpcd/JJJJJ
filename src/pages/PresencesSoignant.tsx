@@ -160,7 +160,7 @@ export default function PresencesSoignant() {
         enCoursList = enCoursList.map((m: any) => ({ ...m, etablissements: etabMapEC[m.etablissement_id] || null }));
       }
 
-      let contratsMap: Record<string, any> = {};
+      const contratsMap: Record<string, any> = {};
       if (missionsList.length > 0) {
         const missionIds = missionsList.map((m: any) => m.id);
         const { data: contratsData } = await supabase

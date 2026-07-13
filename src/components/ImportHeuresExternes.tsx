@@ -4,6 +4,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
 import { supabase } from '@/integrations/supabase/client';
 import { capturerErreurSentry } from '@/lib/sentry';
+import { sanitiserNomFichier, verifierFichierDocument } from '@/lib/documentUpload';
 
 interface ImportHeuresExternesProps {
   onDone: () => void;
@@ -29,19 +30,35 @@ export default function ImportHeuresExternes({ onDone }: ImportHeuresExternesPro
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user || !fichier) return;
-    if (fichier.size > 10 * 1024 * 1024) {
-      afficherNotification({ type: 'erreur', message: 'Fichier trop volumineux. Maximum : 10 Mo.' });
+    const validation = await verifierFichierDocument(fichier, {
+      allowedMimes: ['application/pdf', 'image/jpeg', 'image/png'],
+    });
+    if (validation.ok === false) {
+      afficherNotification({ type: 'erreur', message: validation.message });
+      return;
+    }
+    const heures = Number(form.heures);
+    if (!Number.isFinite(heures) || heures < 1 || heures > 10_000) {
+      afficherNotification({ type: 'erreur', message: 'Le nombre d’heures doit être compris entre 1 et 10 000.' });
+      return;
+    }
+    if (!form.dateDebut || !form.dateFin || form.dateFin < form.dateDebut) {
+      afficherNotification({ type: 'erreur', message: 'La date de fin doit être postérieure ou égale à la date de début.' });
       return;
     }
     setSubmitting(true);
 
+    let documentCreeId: string | null = null;
     try {
       // 1. Upload document
-      const sanitizedName = fichier.name.replace(/[^\w.-]+/g, '-');
-      const s3Cle = `${user.id}/heures_externes/${Date.now()}-${sanitizedName}`;
+      const sanitizedName = sanitiserNomFichier(fichier.name, validation.mime);
+      // Tous les justificatifs d'un soignant restent sous ce préfixe. Il est
+      // contrôlé à la fois par Storage, la base et l'Edge Function afin qu'une
+      // ligne forgée ne puisse jamais pointer vers le document d'un tiers.
+      const s3Cle = `${user.id}/documents/${form.typePreuve}/${Date.now()}-${sanitizedName}`;
       const { error: upErr } = await supabase.storage
         .from('jolene-documents')
-        .upload(s3Cle, fichier, { contentType: fichier.type, upsert: false });
+        .upload(s3Cle, fichier, { contentType: validation.mime, upsert: false });
       if (upErr) throw upErr;
 
       // 2. Create document entry
@@ -50,12 +67,11 @@ export default function ImportHeuresExternes({ onDone }: ImportHeuresExternesPro
         type_document: form.typePreuve as any,
         nom_fichier: fichier.name,
         s3_cle: s3Cle,
-        s3_bucket: 'jolene-documents',
         taille_octets: fichier.size,
-        type_mime: fichier.type,
-        statut_verification: 'EN_ATTENTE',
+        type_mime: validation.mime,
       } as any).select('id').single();
       if (docErr) throw docErr;
+      documentCreeId = doc!.id;
 
       // 3. Insert heures_externes
       const { error: heErr } = await supabase.from('heures_externes').insert({
@@ -64,7 +80,7 @@ export default function ImportHeuresExternes({ onDone }: ImportHeuresExternesPro
         employeur_type: form.typeEmployeur,
         date_debut: form.dateDebut,
         date_fin: form.dateFin,
-        heures_declarees: parseFloat(form.heures),
+        heures_declarees: heures,
         document_id: doc!.id,
         type_preuve: form.typePreuve,
         statut: 'EN_ATTENTE',
@@ -77,7 +93,7 @@ export default function ImportHeuresExternes({ onDone }: ImportHeuresExternesPro
         p_action: 'HEURES_EXTERNES_DECLAREES',
         p_type_ressource: 'soignant', p_id_ressource: user.id,
         p_cle_s3: s3Cle,
-        p_details: { employeur: form.employeur, heures: parseFloat(form.heures), periode: `${form.dateDebut} - ${form.dateFin}` },
+        p_details: { employeur: form.employeur, heures, periode: `${form.dateDebut} - ${form.dateFin}` },
         p_ip: null, p_navigateur: navigator.userAgent,
       });
 
@@ -92,6 +108,14 @@ export default function ImportHeuresExternes({ onDone }: ImportHeuresExternesPro
       setFichier(null);
       onDone();
     } catch (err: any) {
+      // Si la déclaration métier échoue après création du document, ne pas
+      // laisser ce dernier apparaître comme une preuve active sans contexte.
+      if (documentCreeId) {
+        await supabase.from('documents_soignants')
+          .update({ supprime_le: new Date().toISOString() })
+          .eq('id', documentCreeId)
+          .eq('soignant_id', user.id);
+      }
       capturerErreurSentry(err, 'ImportHeuresExternes', 'soumettre_heures');
       afficherNotification({ type: 'erreur', message: 'Erreur lors de la soumission. Veuillez réessayer.' });
     } finally {
@@ -147,7 +171,20 @@ export default function ImportHeuresExternes({ onDone }: ImportHeuresExternesPro
             <label className="flex items-center gap-2 cursor-pointer border-2 border-dashed border-border rounded-lg p-3 hover:bg-accent/30 transition-colors">
               <Upload className="h-4 w-4 text-muted-foreground" />
               <span className="text-sm text-muted-foreground">{fichier ? fichier.name : 'Téléverser le document'}</span>
-              <input type="file" accept=".pdf,.jpg,.jpeg,.png" onChange={e => setFichier(e.target.files?.[0] || null)} className="hidden" required />
+              <input type="file" accept="application/pdf,image/jpeg,image/png" onChange={async e => {
+                const selected = e.target.files?.[0] || null;
+                if (!selected) { setFichier(null); return; }
+                const validation = await verifierFichierDocument(selected, {
+                  allowedMimes: ['application/pdf', 'image/jpeg', 'image/png'],
+                });
+                if (validation.ok === false) {
+                  setFichier(null);
+                  afficherNotification({ type: 'erreur', message: validation.message });
+                  e.target.value = '';
+                  return;
+                }
+                setFichier(selected);
+              }} className="hidden" required />
             </label>
           </div>
 

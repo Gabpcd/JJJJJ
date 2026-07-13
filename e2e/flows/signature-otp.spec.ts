@@ -20,7 +20,7 @@ import { TEST_ACCOUNTS } from '../helpers/auth';
 const SEED_READY = process.env.PLAYWRIGHT_SEED_SIGNATURES === '1';
 
 test.describe('Flow signature OTP — workflow critique', () => {
-  test.beforeEach(({ }) => {
+  test.beforeEach(() => {
     test.skip(!SEED_READY, 'Seed signature E2E à compléter (cf. helpers/seed.ts) — flow validé manuellement Sprint 2');
   });
 

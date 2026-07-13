@@ -1,8 +1,118 @@
-import { errorResponse, safeStringifyError } from '../_shared/errors.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2.99.2';
+import { errorResponse, safeStringifyError } from '../_shared/errors.ts';
 import { corsHeaders, jsonResponse, preflightResponse } from '../_shared/cors.ts';
 import { verifyAdminOrServiceRole, verifyUserOrServiceRole } from '../_shared/admin-auth.ts';
 import { applyRateLimit, getClientIp } from '../_shared/rate-limit.ts';
+import {
+  normalizeProfessionalIdentifier,
+  personNameMatches,
+  professionalIdentifierMatches,
+} from '../_shared/verification-rules.ts';
+
+const FHIR_ENDPOINT = 'https://gateway.api.esante.gouv.fr/fhir/v2/Practitioner';
+const IDNPS_SYSTEM = 'urn:oid:1.2.250.1.71.4.2.1';
+const G15_SYSTEM_FRAGMENT = 'TRE_G15-ProfessionSante';
+const G15_OID = '1.2.250.1.71.1.2.7';
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+type IdentifierType = 'RPPS' | 'ADELI';
+
+// Source primaire : TRE_G15-ProfessionSante (ANS). En particulier, le code 40
+// désigne un chirurgien-dentiste et le code 86 un technicien de laboratoire.
+const PROFESSION_INTERNE_PAR_CODE: Readonly<Record<string, string>> = {
+  '10': 'MEDECIN',
+  '21': 'PHARMACIEN',
+  '26': 'AUDIOPROTHESISTE',
+  '28': 'OPTICIEN',
+  '31': 'ASSISTANT_DENTAIRE',
+  '32': 'PHYSICIEN_MEDICAL',
+  '35': 'AS',
+  '36': 'AMBULANCIER',
+  '37': 'AUXILIAIRE_PUERICULTURE',
+  '38': 'PREPARATEUR_PHARMA',
+  '39': 'PREPARATEUR_PHARMA',
+  '40': 'DENTISTE',
+  '50': 'SAGE_FEMME',
+  '60': 'IDE',
+  '69': 'IDE',
+  '70': 'KINE',
+  '80': 'PEDICURE',
+  '86': 'TECHNICIEN_LABO',
+  '91': 'ORTHOPHONISTE',
+  '92': 'ORTHOPTISTE',
+  '94': 'ERGOTHERAPEUTE',
+  '95': 'DIETETICIEN',
+  '96': 'PSYCHOMOTRICIEN',
+  '98': 'MANIPULATEUR_RADIO',
+};
+
+const CODES_COMPATIBLES_PAR_PROFESSION: Readonly<Record<string, readonly string[]>> = {
+  MEDECIN: ['10'],
+  PHARMACIEN: ['21'],
+  AUDIOPROTHESISTE: ['26'],
+  OPTICIEN: ['28'],
+  AS: ['35'],
+  AUXILIAIRE_PUERICULTURE: ['37'],
+  PREPARATEUR_PHARMA: ['38', '39'],
+  DENTISTE: ['40'],
+  SAGE_FEMME: ['50'],
+  IDE: ['60', '69'],
+  IBODE: ['60', '69'],
+  IADE: ['60', '69'],
+  KINE: ['70'],
+  ORTHOPHONISTE: ['91'],
+  ERGOTHERAPEUTE: ['94'],
+  DIETETICIEN: ['95'],
+  PSYCHOMOTRICIEN: ['96'],
+  MANIPULATEUR_RADIO: ['98'],
+};
+
+interface FhirIdentifier {
+  system?: string;
+  value?: string;
+}
+
+interface FhirCoding {
+  system?: string;
+  code?: string;
+  display?: string;
+}
+
+interface FhirPractitioner {
+  resourceType?: string;
+  active?: boolean;
+  identifier?: FhirIdentifier[];
+  name?: Array<{ use?: string; family?: string; given?: string[] }>;
+  qualification?: Array<{ code?: { coding?: FhirCoding[] } }>;
+}
+
+interface AnnuaireResult {
+  trouve: boolean;
+  nom: string;
+  prenom: string;
+  professionCodes: string[];
+  professionLabels: string[];
+  professionsInternes: string[];
+  specialiteCode: string | null;
+  specialiteLabel: string | null;
+  actif: boolean;
+  source: string;
+}
+
+interface SoignantProfile {
+  id: string;
+  numero_rpps: string | null;
+  numero_adeli: string | null;
+  prenom: string | null;
+  nom: string | null;
+  profession: string | null;
+  supprime_le: string | null;
+  est_compte_test: boolean | null;
+}
+
+function matchNullableSnapshot(query: any, column: string, value: string | null) {
+  return value === null ? query.is(column, null) : query.eq(column, value);
+}
 
 async function fingerprint(value: string): Promise<string> {
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value));
@@ -10,7 +120,7 @@ async function fingerprint(value: string): Promise<string> {
     .map((octet) => octet.toString(16).padStart(2, '0')).join('');
 }
 
-async function fetchWithTimeout(url: string, init: RequestInit = {}, timeoutMs = 8000): Promise<Response> {
+async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs = 8_000): Promise<Response> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
@@ -20,323 +130,504 @@ async function fetchWithTimeout(url: string, init: RequestInit = {}, timeoutMs =
   }
 }
 
-function normalize(s: string): string {
-  return (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
+function stringValue(value: unknown, maxLength = 200): string {
+  return typeof value === 'string' ? value.trim().slice(0, maxLength) : '';
 }
 
-function mapProfessionCode(code: string | undefined): string {
-  const mapping: Record<string, string> = {
-    '10': 'MEDECIN', '21': 'PHARMACIEN', '26': 'AUDIOPROTHESISTE', '28': 'OPTICIEN',
-    '40': 'PHARMACIEN', '50': 'SAGE_FEMME', '60': 'IDE', '69': 'IDE',
-    '70': 'KINE', '80': 'PEDICURE', '86': 'AIDE_SOIGNANT', '91': 'ORTHOPHONISTE',
-    '94': 'ERGOTHERAPEUTE', '96': 'PSYCHOMOTRICIEN', '98': 'MANIPULATEUR_RADIO',
-  };
-  return mapping[code || ''] || code || '';
+function buildFhirIdentifier(numero: string, type: IdentifierType): string {
+  return `${type === 'RPPS' ? '8' : '0'}${numero}`;
 }
-
-// Cohérence profession déclarée ↔ profession de l'Annuaire. Familles regroupées
-// (IDE/IBODE/IADE = infirmier). On ne peut juger QUE si la profession déclarée est
-// connue ET la valeur API non vide ; sinon on ne tranche pas (null).
-const PROFESSION_TOKENS: Record<string, string[]> = {
-  MEDECIN: ['medecin'],
-  IDE: ['infirmier', 'ide'], IBODE: ['infirmier', 'ide'], IADE: ['infirmier', 'ide'],
-  SAGE_FEMME: ['sage-femme', 'sage femme', 'sage_femme', 'maieut'],
-  KINE: ['kine', 'masseur'],
-  PHARMACIEN: ['pharmacien'],
-  DENTISTE: ['dentiste', 'odontolog', 'chirurgien-dentiste'],
-  MANIPULATEUR_RADIO: ['manipulateur', 'electroradio', 'radio'],
-  ERGOTHERAPEUTE: ['ergoth'],
-  PSYCHOMOTRICIEN: ['psychomot'],
-  ORTHOPHONISTE: ['orthophon'],
-  DIETETICIEN: ['dieteti'],
-  PREPARATEUR_PHARMA: ['preparateur'],
-  PEDICURE: ['pedicure', 'podolog'],
-  AUDIOPROTHESISTE: ['audio'],
-  OPTICIEN: ['opticien', 'lunet'],
-};
-// Retourne true (cohérent), false (mismatch clair), ou null (indéterminable).
-function professionCorrespondRpps(declaree: string, apiValue: string | undefined): boolean | null {
-  const tokens = PROFESSION_TOKENS[(declaree || '').toUpperCase().trim()];
-  const v = normalize(apiValue || '');
-  if (!tokens || !v) return null;
-  return tokens.some((t) => v.includes(normalize(t)));
-}
-
-type IdentifierType = 'RPPS' | 'ADELI';
 
 function buildFhirIdentifierQuery(numero: string, type: IdentifierType): string {
-  const IDNPS_SYSTEM = 'urn:oid:1.2.250.1.71.4.2.1';
-  const idnps = type === 'RPPS' ? `8${numero}` : `0${numero}`;
-  return `${IDNPS_SYSTEM}|${idnps}`;
+  return `${IDNPS_SYSTEM}|${buildFhirIdentifier(numero, type)}`;
 }
 
-async function queryFhirAnnuaire(numero: string, type: IdentifierType = 'RPPS'): Promise<{
-  trouve: boolean; nom?: string; prenom?: string;
-  professionCode?: string; professionLabel?: string;
-  specialiteCode?: string; specialiteLabel?: string; actif?: boolean;
-}> {
-  const apiKey = Deno.env.get('ESANTE_FHIR_API_KEY') || '';
-  if (!apiKey) throw new Error('ESANTE_FHIR_API_KEY non configure');
-  const identifierParam = buildFhirIdentifierQuery(numero, type);
-  const url = `https://gateway.api.esante.gouv.fr/fhir/v2/Practitioner?identifier=${encodeURIComponent(identifierParam)}`;
-  const response = await fetchWithTimeout(url, {
-    headers: { 'Accept': 'application/fhir+json', 'ESANTE-API-KEY': apiKey },
-  }, 8000);
-  if (!response.ok) {
-    const body = await response.text();
-    console.error(`FHIR API error ${response.status}:`, body.slice(0, 500));
-    throw new Error(`Annuaire Sante API indisponible (HTTP ${response.status})`);
-  }
-  const bundle = await response.json();
-  if (!bundle.entry || bundle.entry.length === 0) return { trouve: false };
-  const practitioner = bundle.entry[0].resource;
-  const officialName = practitioner.name?.find((n: any) => n.use === 'official') || practitioner.name?.[0];
-  const nom = officialName?.family || '';
-  const prenom = officialName?.given?.[0] || '';
-  let professionCode: string | undefined;
-  let professionLabel: string | undefined;
-  let specialiteCode: string | undefined;
-  let specialiteLabel: string | undefined;
-  if (Array.isArray(practitioner.qualification)) {
-    for (const q of practitioner.qualification) {
-      const coding = q.code?.coding?.[0];
-      if (!coding?.code) continue;
-      const code = String(coding.code);
-      const display = coding.display as string | undefined;
-      if (/^[0-9]{2}$/.test(code)) {
-        if (!professionCode) { professionCode = code; professionLabel = display; }
-      } else if (/^(SM|SC|SF|SI)[0-9]+$/.test(code)) {
-        if (!specialiteCode) { specialiteCode = code; specialiteLabel = display; }
+function identifierExact(practitioner: FhirPractitioner, numero: string, type: IdentifierType): boolean {
+  const expected = buildFhirIdentifier(numero, type);
+  return (practitioner.identifier || []).some((identifier) =>
+    stringValue(identifier.system, 250).replace(/\/$/, '').toLowerCase() === IDNPS_SYSTEM
+    && stringValue(identifier.value, 30) === expected
+  );
+}
+
+function isProfessionCoding(coding: FhirCoding): boolean {
+  const system = stringValue(coding.system, 300);
+  return system.includes(G15_SYSTEM_FRAGMENT) || system.includes(G15_OID);
+}
+
+function extractAnnuaireResult(practitioner: FhirPractitioner, source: string): AnnuaireResult {
+  const officialName = practitioner.name?.find((name) => name.use === 'official') || practitioner.name?.[0];
+  const professionCodes: string[] = [];
+  const professionLabels: string[] = [];
+  let specialiteCode: string | null = null;
+  let specialiteLabel: string | null = null;
+
+  for (const qualification of practitioner.qualification || []) {
+    for (const coding of qualification.code?.coding || []) {
+      const code = stringValue(coding.code, 40);
+      if (!code) continue;
+      if (isProfessionCoding(coding) && /^\d{2}$/.test(code)) {
+        if (!professionCodes.includes(code)) professionCodes.push(code);
+        const label = stringValue(coding.display, 200);
+        if (label && !professionLabels.includes(label)) professionLabels.push(label);
+      } else if (!specialiteCode && /^(SM|SC|SF|SI)\d+$/i.test(code)) {
+        specialiteCode = code;
+        specialiteLabel = stringValue(coding.display, 200) || null;
       }
     }
   }
-  return { trouve: true, nom, prenom, professionCode, professionLabel, specialiteCode, specialiteLabel, actif: practitioner.active !== false };
+
+  return {
+    trouve: true,
+    nom: stringValue(officialName?.family, 120),
+    prenom: (officialName?.given || []).map((item) => stringValue(item, 120)).filter(Boolean).join(' '),
+    professionCodes,
+    professionLabels,
+    professionsInternes: professionCodes
+      .map((code) => PROFESSION_INTERNE_PAR_CODE[code])
+      .filter((value): value is string => !!value),
+    specialiteCode,
+    specialiteLabel,
+    actif: practitioner.active === true,
+    source,
+  };
+}
+
+async function queryFhirAnnuaire(
+  numero: string,
+  type: IdentifierType,
+  apiKey: string,
+): Promise<AnnuaireResult> {
+  const identifierParam = buildFhirIdentifierQuery(numero, type);
+  const response = await fetchWithTimeout(
+    `${FHIR_ENDPOINT}?identifier=${encodeURIComponent(identifierParam)}`,
+    { headers: { Accept: 'application/fhir+json', 'ESANTE-API-KEY': apiKey } },
+  );
+  if (!response.ok) {
+    const body = await response.text();
+    console.error(`[verify-rpps] FHIR HTTP ${response.status}:`, body.slice(0, 300));
+    throw new Error(`Annuaire Santé indisponible (HTTP ${response.status})`);
+  }
+
+  const bundle = await response.json() as { entry?: Array<{ resource?: FhirPractitioner }> };
+  const exactPractitioners = (bundle.entry || [])
+    .map((entry) => entry.resource)
+    .filter((resource): resource is FhirPractitioner =>
+      resource?.resourceType === 'Practitioner'
+      && identifierExact(resource, numero, type)
+    );
+  if (exactPractitioners.length === 0) {
+    return {
+      trouve: false,
+      nom: '',
+      prenom: '',
+      professionCodes: [],
+      professionLabels: [],
+      professionsInternes: [],
+      specialiteCode: null,
+      specialiteLabel: null,
+      actif: false,
+      source: 'FHIR Annuaire Santé v2',
+    };
+  }
+
+  const practitioner = exactPractitioners.find((item) => item.active === true) || exactPractitioners[0];
+  return extractAnnuaireResult(practitioner, 'FHIR Annuaire Santé v2');
+}
+
+function professionCompatible(profession: string, result: AnnuaireResult): boolean {
+  const declared = profession.toUpperCase().trim();
+  const expectedCodes = CODES_COMPATIBLES_PAR_PROFESSION[declared];
+  if (!expectedCodes || expectedCodes.length === 0) return false;
+  return result.professionCodes.some((code) => expectedCodes.includes(code))
+    || result.professionsInternes.includes(declared);
+}
+
+function emptyResult(source: string): AnnuaireResult {
+  return {
+    trouve: false,
+    nom: '',
+    prenom: '',
+    professionCodes: [],
+    professionLabels: [],
+    professionsInternes: [],
+    specialiteCode: null,
+    specialiteLabel: null,
+    actif: false,
+    source,
+  };
+}
+
+async function queryDemoProfile(
+  supabaseUrl: string,
+  serviceRoleKey: string,
+  profile: SoignantProfile,
+  numero: string,
+  type: IdentifierType,
+): Promise<AnnuaireResult | null> {
+  const demoIdentifiersEnabled = Deno.env.get('ALLOW_DEMO_IDENTIFIERS') === 'true';
+  if (
+    type !== 'RPPS'
+    || !demoIdentifiersEnabled
+    || profile.est_compte_test !== true
+  ) return null;
+
+  if (numero === '00000000001') {
+    return {
+      ...emptyResult('Mode test contrôlé'),
+      trouve: true,
+      nom: 'PICARD',
+      prenom: 'Gabrielle',
+      professionsInternes: ['IDE'],
+      actif: true,
+    };
+  }
+  if (!numero.startsWith('00100')) return null;
+
+  const admin = createClient(supabaseUrl, serviceRoleKey, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
+  const { data, error } = await admin.from('rpps_test')
+    .select('rpps, prenom, nom, profession, specialite_medicale')
+    .eq('rpps', numero)
+    .maybeSingle();
+  if (error) throw new Error(`Lecture rpps_test impossible: ${error.code || error.message}`);
+  if (!data) return emptyResult('Mode test contrôlé');
+  const profession = stringValue(data.profession, 80).toUpperCase();
+  return {
+    ...emptyResult('Mode test contrôlé'),
+    trouve: true,
+    nom: stringValue(data.nom, 120),
+    prenom: stringValue(data.prenom, 120),
+    professionsInternes: profession ? [profession] : [],
+    specialiteCode: stringValue(data.specialite_medicale, 80) || null,
+    specialiteLabel: stringValue(data.specialite_medicale, 200) || null,
+    actif: true,
+  };
+}
+
+async function setVerificationFalse(
+  supabaseUrl: string,
+  serviceRoleKey: string,
+  profile: SoignantProfile,
+  numero: string,
+  type: IdentifierType,
+): Promise<boolean> {
+  const fields = type === 'RPPS'
+    ? { rpps_verifie: false, rpps_verifie_le: null }
+    : { adeli_verifie: false, adeli_verifie_le: null };
+  const numberColumn = type === 'RPPS' ? 'numero_rpps' : 'numero_adeli';
+  const admin = createClient(supabaseUrl, serviceRoleKey, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
+  const { data, error } = await admin.from('soignants')
+    .update(fields)
+    .eq('id', profile.id)
+    .eq(numberColumn, numero)
+    .select('id')
+    .maybeSingle();
+  if (error || !data) {
+    console.error('[verify-rpps] révocation impossible:', error?.code || error?.message || 'ROW_NOT_FOUND');
+    return false;
+  }
+  return true;
 }
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return preflightResponse(req);
-  if (req.method !== 'POST') return jsonResponse(req, { error: 'Methode non autorisee' }, 405);
+  if (req.method !== 'POST') {
+    return jsonResponse(req, { ok: false, code: 'METHOD_NOT_ALLOWED', error: 'Méthode non autorisée' }, 405);
+  }
+
   const cors = corsHeaders(req);
   const clientIp = getClientIp(req);
   if (applyRateLimit('verify-rpps', clientIp, { max: 10, windowMs: 60_000 })) {
-    return jsonResponse(req, { ok: false, code: 'RATE_LIMITED', message: 'Trop de requêtes. Réessayez dans une minute.' }, 429);
+    return errorResponse(cors, 429, 'RATE_LIMITED', 'Trop de requêtes. Réessayez dans une minute.');
   }
+
   try {
-    // [BUG 1 fix] Auth devenue OPTIONNELLE : verify-rpps interroge un registre
-    // public (Annuaire Santé FHIR). L'utilisateur en cours d'inscription
-    // n'a PAS encore de session, donc exiger un JWT cassait la vérif RPPS
-    // temps réel (401 → feedback visuel disparu).
-    //
-    // Le lookup temps reel precede signUp. Son token Turnstile ne doit surtout
-    // pas etre consomme ici puis reutilise par Auth (token a usage unique).
-    // La protection repose sur les quotas memoire + PostgreSQL ci-dessous.
-    // Toute ecriture reste reservee au service-role ou au profil authentifie.
-    const authHeader = req.headers.get('Authorization');
-    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const anonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
-    const token = authHeader?.startsWith('Bearer ') ? authHeader.replace('Bearer ', '') : '';
-    const isServiceRole = !!token && token === serviceRoleKey;
-    const isAnonKey = !!token && token === anonKey;
-    let callerUid: string | null = null;
-    if (token && !isServiceRole && !isAnonKey) {
-      const auth = await verifyUserOrServiceRole(req);
-      if (!auth.ok) return jsonResponse(req, { error: auth.error }, auth.status);
-      callerUid = auth.userId;
+    const body = await req.json().catch(() => null) as Record<string, unknown> | null;
+    if (!body || Array.isArray(body)) {
+      return errorResponse(cors, 400, 'INVALID_JSON', 'Corps JSON invalide.');
     }
 
-    const body = await req.json().catch(() => null) as Record<string, unknown> | null;
-    if (!body || Array.isArray(body)) return jsonResponse(req, { error: 'Corps JSON invalide' }, 400);
-    if (body && body.warm === true) {
+    if (body.warm === true) {
       const adminAuth = await verifyAdminOrServiceRole(req);
-      if (!adminAuth.ok) return jsonResponse(req, { error: adminAuth.error }, adminAuth.status);
+      if (!adminAuth.ok) return errorResponse(cors, adminAuth.status, 'UNAUTHORIZED', adminAuth.error);
       return jsonResponse(req, {
+        ok: true,
         warm: true,
         configured: !!Deno.env.get('ESANTE_FHIR_API_KEY'),
-        endpoint: 'https://gateway.api.esante.gouv.fr/fhir/v2/Practitioner',
+        endpoint: FHIR_ENDPOINT,
       });
-    }
-    const numeroRpps = String(body.numero_rpps || body.rpps || '').trim();
-    const numeroAdeli = String(body.numero_adeli || body.adeli || '').trim();
-    const prenom = typeof body.prenom === 'string' ? body.prenom : '';
-    const nom = typeof body.nom === 'string' ? body.nom : '';
-    const soignantId = typeof body.soignant_id === 'string' ? body.soignant_id : null;
-    if (body.soignant_id && (!soignantId || !/^[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(soignantId))) {
-      return jsonResponse(req, { error: 'soignant_id invalide' }, 400);
-    }
-    if (soignantId && !isServiceRole && callerUid !== soignantId) {
-      return jsonResponse(req, { error: 'Ecriture profil interdite' }, 403);
     }
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
-    if (!supabaseUrl || !serviceRoleKey) return jsonResponse(req, { error: 'Service indisponible' }, 503);
+    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
+    const anonKey = Deno.env.get('SUPABASE_ANON_KEY') || '';
+    const publishableKey = Deno.env.get('SUPABASE_PUBLISHABLE_KEY') || Deno.env.get('SB_PUBLISHABLE_KEY') || '';
+    if (!supabaseUrl || !serviceRoleKey) {
+      return errorResponse(cors, 503, 'SERVER_NOT_CONFIGURED', 'Service de vérification indisponible.');
+    }
+    const admin = createClient(supabaseUrl, serviceRoleKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    });
+
+    const authHeader = req.headers.get('Authorization') || '';
+    const bearer = authHeader.replace(/^Bearer\s+/i, '').trim();
+    const isPublicCredential = !bearer || bearer === anonKey || (!!publishableKey && bearer === publishableKey);
+    let callerId: string | null = null;
+    let isServiceRole = false;
+    if (!isPublicCredential) {
+      const auth = await verifyUserOrServiceRole(req);
+      if (!auth.ok) return errorResponse(cors, auth.status, 'UNAUTHORIZED', auth.error);
+      callerId = auth.userId;
+      isServiceRole = auth.isServiceRole;
+    }
+
+    const soignantId = stringValue(body.soignant_id, 50) || null;
+    if (soignantId && !UUID_RE.test(soignantId)) {
+      return errorResponse(cors, 400, 'SOIGNANT_ID_INVALID', 'Identifiant soignant invalide.');
+    }
+
+    let profile: SoignantProfile | null = null;
+    if (soignantId) {
+      if (isPublicCredential) {
+        return errorResponse(cors, 401, 'AUTH_REQUIRED', 'Une session utilisateur est requise.');
+      }
+      if (!isServiceRole && callerId !== soignantId) {
+        const adminAuth = await verifyAdminOrServiceRole(req);
+        if (!adminAuth.ok) return errorResponse(cors, adminAuth.status, 'FORBIDDEN', adminAuth.error);
+      }
+
+      const { data, error } = await admin.from('soignants')
+        .select('id, numero_rpps, numero_adeli, prenom, nom, profession, supprime_le, est_compte_test')
+        .eq('id', soignantId)
+        .maybeSingle();
+      if (error) {
+        console.error('[verify-rpps] lecture profil impossible:', error.code || error.message);
+        return errorResponse(cors, 503, 'PROFILE_READ_FAILED', 'Vérification temporairement indisponible.');
+      }
+      if (!data || data.supprime_le) {
+        return errorResponse(cors, 404, 'PROFILE_NOT_FOUND', 'Profil soignant introuvable.');
+      }
+      profile = data as SoignantProfile;
+    }
+
     if (!isServiceRole) {
-      const admin = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false } });
+      const rateIdentity = callerId
+        ? `user|${callerId}`
+        : `public|${clientIp === 'unknown' ? (req.headers.get('user-agent') || '').slice(0, 160) : clientIp}`;
       const { data: allowed, error: rateError } = await admin.rpc('fn_verifier_rate_limit', {
-        p_cle: await fingerprint(clientIp === 'unknown'
-          ? `unknown|${(req.headers.get('user-agent') || '').slice(0, 160)}`
-          : clientIp),
+        p_cle: await fingerprint(rateIdentity),
         p_action: 'edge_verify_rpps',
         p_max_tentatives: 30,
         p_fenetre_secondes: 600,
       });
-      if (rateError) return jsonResponse(req, { error: 'Service temporairement indisponible' }, 503);
-      if (allowed !== true) return jsonResponse(req, { code: 'RATE_LIMITED', error: 'Quota de verification atteint' }, 429);
+      if (rateError) {
+        console.error('[verify-rpps] rate-limit persistant indisponible:', rateError.code || rateError.message);
+        return errorResponse(cors, 503, 'RATE_LIMIT_UNAVAILABLE', 'Service temporairement indisponible.');
+      }
+      if (allowed !== true) {
+        return errorResponse(cors, 429, 'RATE_LIMITED', 'Quota de vérification atteint.');
+      }
     }
 
-    const isAdeliRequest = !numeroRpps && !!numeroAdeli;
-    const numero = isAdeliRequest ? numeroAdeli : numeroRpps;
-    const idType: IdentifierType = isAdeliRequest ? 'ADELI' : 'RPPS';
-    if (isAdeliRequest) {
-      if (!numeroAdeli || numeroAdeli.length !== 9 || !/^[0-9]+$/.test(numeroAdeli)) {
-        return errorResponse(cors, 400, 'ADELI_FORMAT_INVALID', 'Numéro ADELI invalide. Vérifiez qu\'il contient bien 9 chiffres.');
+    const requestedRpps = (stringValue(body.numero_rpps, 30) || stringValue(body.rpps, 30)).replace(/\s/g, '');
+    const requestedAdeli = (stringValue(body.numero_adeli, 30) || stringValue(body.adeli, 30)).replace(/\s/g, '');
+    if (requestedRpps && requestedAdeli) {
+      return errorResponse(cors, 400, 'IDENTIFIER_AMBIGUOUS', 'Fournissez un RPPS ou un ADELI, pas les deux.');
+    }
+
+    let type: IdentifierType;
+    let numero: string;
+    let nom: string;
+    let prenom: string;
+    let profession: string;
+    if (profile) {
+      const persistedRpps = normalizeProfessionalIdentifier(profile.numero_rpps);
+      const persistedAdeli = normalizeProfessionalIdentifier(profile.numero_adeli);
+      type = requestedAdeli ? 'ADELI' : requestedRpps ? 'RPPS' : persistedRpps ? 'RPPS' : 'ADELI';
+      numero = type === 'RPPS' ? persistedRpps : persistedAdeli;
+      const requested = type === 'RPPS' ? requestedRpps : requestedAdeli;
+      if (
+        requested
+        && (requested !== numero || professionalIdentifierMatches(numero, requested) !== true)
+      ) {
+        return errorResponse(cors, 409, 'IDENTIFIER_PROFILE_MISMATCH', 'Le numéro demandé ne correspond pas au profil.');
       }
+      nom = stringValue(profile.nom, 120);
+      prenom = stringValue(profile.prenom, 120);
+      profession = stringValue(profile.profession, 80).toUpperCase();
     } else {
-      if (!numeroRpps || numeroRpps.length !== 11 || !/^[0-9]+$/.test(numeroRpps)) {
-        return errorResponse(cors, 400, 'RPPS_FORMAT_INVALID', 'Numéro RPPS invalide. Vérifiez qu\'il contient bien 11 chiffres.');
+      type = requestedAdeli ? 'ADELI' : 'RPPS';
+      numero = type === 'RPPS' ? requestedRpps : requestedAdeli;
+      nom = stringValue(body.nom, 120);
+      prenom = stringValue(body.prenom, 120);
+      profession = stringValue(body.profession, 80).toUpperCase();
+    }
+
+    const expectedLength = type === 'RPPS' ? 11 : 9;
+    if (!new RegExp(`^\\d{${expectedLength}}$`).test(numero)) {
+      return errorResponse(
+        cors,
+        400,
+        `${type}_FORMAT_INVALID`,
+        `Numéro ${type} invalide : ${expectedLength} chiffres attendus.`,
+      );
+    }
+    if (!nom || !prenom) {
+      if (profile && !(await setVerificationFalse(supabaseUrl, serviceRoleKey, profile, numero, type))) {
+        return errorResponse(cors, 503, 'VERIFICATION_STATE_UPDATE_FAILED', 'Impossible de sécuriser l’état de vérification.');
+      }
+      return errorResponse(cors, 422, 'IDENTITY_INCOMPLETE', 'Le nom et le prénom complets sont requis.');
+    }
+    if (!profession || !CODES_COMPATIBLES_PAR_PROFESSION[profession]) {
+      if (profile && !(await setVerificationFalse(supabaseUrl, serviceRoleKey, profile, numero, type))) {
+        return errorResponse(cors, 503, 'VERIFICATION_STATE_UPDATE_FAILED', 'Impossible de sécuriser l’état de vérification.');
+      }
+      return errorResponse(cors, 422, 'PROFESSION_UNSUPPORTED', 'La profession du profil ne permet pas une vérification automatique.');
+    }
+
+    let result: AnnuaireResult | null = profile
+      ? await queryDemoProfile(supabaseUrl, serviceRoleKey, profile, numero, type)
+      : null;
+    if (!result) {
+      const apiKey = Deno.env.get('ESANTE_FHIR_API_KEY') || '';
+      if (!apiKey) {
+        return errorResponse(cors, 503, 'RPPS_API_UNAVAILABLE', 'Annuaire Santé temporairement indisponible.');
+      }
+      try {
+        result = await queryFhirAnnuaire(numero, type, apiKey);
+      } catch (error) {
+        console.error('[verify-rpps] appel Annuaire Santé impossible:', safeStringifyError(error));
+        return errorResponse(cors, 503, 'RPPS_API_UNAVAILABLE', 'Annuaire Santé temporairement indisponible.');
       }
     }
-    const TEST_PREFIX = '00100';
-    const testModeActif = Deno.env.get('ALLOW_DEMO_IDENTIFIERS') === 'true';
-    if (!isAdeliRequest && numero.startsWith(TEST_PREFIX) && testModeActif) {
-      const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-      const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-      const supabaseAdmin = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
-      const { data: testRow, error: testErr } = await supabaseAdmin.from('rpps_test')
-        .select('rpps, prenom, nom, profession, specialite_medicale').eq('rpps', numeroRpps).maybeSingle();
-      if (testErr) {
-        return errorResponse(cors, 500, 'INTERNAL_ERROR', 'Erreur consultation rpps_test.');
+
+    const codePrefix = type;
+    if (!result.trouve) {
+      if (profile && !(await setVerificationFalse(supabaseUrl, serviceRoleKey, profile, numero, type))) {
+        return errorResponse(cors, 503, 'VERIFICATION_STATE_UPDATE_FAILED', 'Impossible de sécuriser l’état de vérification.');
       }
-      if (!testRow) {
-        // Réponse 200 avec code: not-found pour que le frontend puisse mapper.
-        return new Response(JSON.stringify({
-          ok: true, code: 'RPPS_NOT_FOUND',
-          trouve: false, correspond: false, nom_api: null, prenom_api: null, profession_api: null,
-          source: 'Mode test (rpps_test)',
-        }), { headers: { ...cors, 'Content-Type': 'application/json' } });
-      }
-      const nomNorm = normalize(testRow.nom);
-      const prenomNorm = normalize(testRow.prenom);
-      const nomFourni = normalize(nom || '');
-      const prenomFourni = normalize(prenom || '');
-      const nomCorrespond = !nomFourni || nomNorm.includes(nomFourni) || nomFourni.includes(nomNorm);
-      const prenomCorrespond = !prenomFourni || prenomNorm.slice(0, 3) === prenomFourni.slice(0, 3);
-      const correspond = nomCorrespond && prenomCorrespond;
-      return new Response(JSON.stringify({
+      return jsonResponse(req, {
         ok: true,
-        code: correspond ? 'RPPS_OK' : 'RPPS_TRAITS_MISMATCH',
-        trouve: true, correspond, rpps: numeroRpps,
-        nom_api: testRow.nom, prenom_api: testRow.prenom, profession_api: testRow.profession,
-        specialite_code: testRow.specialite_medicale ?? null, specialite_label: testRow.specialite_medicale ?? null,
-        actif: true, source: 'Mode test (rpps_test)',
-      }), { headers: { ...cors, 'Content-Type': 'application/json' } });
+        code: `${codePrefix}_NOT_FOUND`,
+        type,
+        trouve: false,
+        correspond: false,
+        correspond_traits: false,
+        profession_correspond: false,
+        actif: false,
+        source: result.source,
+      });
     }
-    if (!isAdeliRequest && numero === '00000000001' && testModeActif) {
-      return new Response(JSON.stringify({
-        ok: true, code: 'RPPS_OK',
-        trouve: true, correspond: true, rpps: numeroRpps,
-        nom_api: 'PICARD', prenom_api: 'Gabrielle', profession_api: 'IDE',
-        actif: true, source: 'Mode test (legacy)',
-      }), { headers: { ...cors, 'Content-Type': 'application/json' } });
+
+    const identityComplete = !!result.nom && !!result.prenom;
+    const traitsMatch = identityComplete
+      && personNameMatches(nom, prenom, result.nom, result.prenom) === true;
+    const professionMatch = professionCompatible(profession, result);
+    const actif = result.actif === true;
+    const correspond = actif && traitsMatch && professionMatch;
+
+    if (profile && !correspond && !(await setVerificationFalse(supabaseUrl, serviceRoleKey, profile, numero, type))) {
+      return errorResponse(cors, 503, 'VERIFICATION_STATE_UPDATE_FAILED', 'Impossible de sécuriser l’état de vérification.');
     }
-    if (!Deno.env.get('ESANTE_FHIR_API_KEY')) {
-      console.warn('verify-rpps: ESANTE_FHIR_API_KEY non configure, degradation gracieuse');
-      return new Response(JSON.stringify({
-        ok: true, code: 'RPPS_API_UNAVAILABLE',
-        trouve: true, correspond: null, nom_api: null, prenom_api: null, profession_api: null,
-        fhir_indisponible: true, source: 'Format RPPS valide - verification ANS differee',
-      }), { status: 200, headers: { ...cors, 'Content-Type': 'application/json' } });
+
+    // Statut actif manquant ou faux : échec HTTP explicite. Le service
+    // d'inscription appelant ne doit jamais confondre « trouvé » avec « autorisé
+    // à exercer » et promouvoir le profil sur la seule présence dans l'annuaire.
+    if (!actif) {
+      return jsonResponse(req, {
+        ok: false,
+        code: `${codePrefix}_INACTIVE`,
+        message: `Ce numéro ${type} correspond à un professionnel inactif.`,
+        error: `Ce numéro ${type} correspond à un professionnel inactif.`,
+        type,
+        trouve: true,
+        correspond: false,
+        correspond_traits: traitsMatch,
+        profession_correspond: professionMatch,
+        actif: false,
+        source: result.source,
+      }, 422);
     }
-    try {
-      const result = await queryFhirAnnuaire(numero, idType);
-      if (!result.trouve) {
-        return new Response(JSON.stringify({
-          ok: true, code: isAdeliRequest ? 'ADELI_NOT_FOUND' : 'RPPS_NOT_FOUND',
-          type: idType,
-          trouve: false, correspond: false, nom_api: null, prenom_api: null, profession_api: null,
-          source: 'FHIR Annuaire Sante',
-        }), { headers: { ...cors, 'Content-Type': 'application/json' } });
-      }
-      const nomNorm = normalize(result.nom || '');
-      const prenomNorm = normalize(result.prenom || '');
-      const nomFourni = normalize(nom || '');
-      const prenomFourni = normalize(prenom || '');
-      const nomCorrespond = !nomFourni || nomNorm.includes(nomFourni) || nomFourni.includes(nomNorm);
-      const prenomCorrespond = !prenomFourni || prenomNorm.slice(0, 3) === prenomFourni.slice(0, 3);
-      const correspondTraits = nomCorrespond && prenomCorrespond;
-      const professionApi = result.professionLabel || mapProfessionCode(result.professionCode);
 
-      const canWriteDb = isServiceRole || (!!callerUid && callerUid === soignantId);
-
-      // Profession déclarée : du body (inscription) OU récupérée sur le soignant (re-vérif profil).
-      let professionDeclaree = String(body.profession || '').trim();
-      if (!professionDeclaree && soignantId && canWriteDb) {
-        try {
-          const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-          const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-          const sbA = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
-          const { data: sg } = await sbA.from('soignants').select('profession').eq('id', soignantId).maybeSingle();
-          if (sg?.profession) professionDeclaree = String(sg.profession);
-        } catch { /* ignore */ }
-      }
-      // Contrôle profession AU MÊME TITRE que nom/prénom : tout mismatch clair bloque.
-      const profCheck = professionCorrespondRpps(professionDeclaree, professionApi); // true|false|null
-      const professionMismatch = profCheck === false;
-      const correspond = correspondTraits && !professionMismatch;
-
-      // On n'écrit rpps_verifie=true QUE si traits ET profession concordent.
-      if (soignantId && correspond && canWriteDb) {
-        try {
-          const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-          const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-          const supabaseAdmin = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
-          const now = new Date().toISOString();
-          const updateFields: Record<string, unknown> = isAdeliRequest ? {
-            adeli_verifie: true, adeli_verifie_le: now,
-            adeli_nom_api: result.nom, adeli_prenom_api: result.prenom,
-            adeli_profession_api: professionApi,
-          } : {
-            rpps_verifie: true, rpps_verifie_le: now,
-            rpps_nom_api: result.nom, rpps_prenom_api: result.prenom,
-            rpps_profession_api: professionApi,
-          };
-          if (result.specialiteCode) {
-            updateFields.specialite_medicale = result.specialiteCode;
-            updateFields.specialite_code = result.specialiteCode;
-            updateFields.specialite_source = 'RPPS';
-            updateFields.specialite_verifiee = true;
-            updateFields.specialite_verifiee_le = new Date().toISOString();
+    if (profile && correspond) {
+      const now = new Date().toISOString();
+      const fields: Record<string, unknown> = type === 'RPPS'
+        ? {
+            rpps_verifie: true,
+            rpps_verifie_le: now,
+            rpps_nom_api: result.nom,
+            rpps_prenom_api: result.prenom,
+            rpps_profession_api: result.professionLabels[0]
+              || result.professionsInternes[0]
+              || null,
           }
-          await supabaseAdmin.from('soignants').update(updateFields as any).eq('id', soignantId);
-        } catch (dbErr) { console.error('Erreur sauvegarde RPPS sur soignant:', safeStringifyError(dbErr)); }
+        : {
+            adeli_verifie: true,
+            adeli_verifie_le: now,
+            adeli_nom_api: result.nom,
+            adeli_prenom_api: result.prenom,
+            adeli_profession_api: result.professionLabels[0]
+              || result.professionsInternes[0]
+              || null,
+          };
+      if (result.specialiteCode) {
+        fields.specialite_medicale = result.specialiteCode;
+        fields.specialite_code = result.specialiteCode;
+        fields.specialite_source = 'RPPS';
+        fields.specialite_verifiee = true;
+        fields.specialite_verifiee_le = now;
       }
-      const codePrefix = isAdeliRequest ? 'ADELI' : 'RPPS';
-      // Priorité du verdict : mismatch traits (nom/prénom) puis mismatch profession.
-      const code = !correspondTraits
-        ? `${codePrefix}_TRAITS_MISMATCH`
-        : (professionMismatch ? `${codePrefix}_PROFESSION_MISMATCH` : `${codePrefix}_OK`);
-      return new Response(JSON.stringify({
-        ok: true,
-        code,
-        type: idType,
-        trouve: true, correspond,
-        correspond_traits: correspondTraits,
-        profession_correspond: profCheck,
-        profession_declaree: professionDeclaree || null,
-        nom_api: result.nom, prenom_api: result.prenom,
-        profession_api: professionApi,
-        specialite_code: result.specialiteCode ?? null, specialite_label: result.specialiteLabel ?? null,
-        actif: result.actif, source: 'FHIR Annuaire Sante v2',
-      }), { headers: { ...cors, 'Content-Type': 'application/json' } });
-    } catch (fhirError) {
-      console.error('Erreur API FHIR Annuaire Sante:', safeStringifyError(fhirError));
-      return new Response(JSON.stringify({
-        ok: true, code: 'RPPS_API_UNAVAILABLE',
-        trouve: true, correspond: null, nom_api: null, prenom_api: null, profession_api: null,
-        fhir_indisponible: true, source: 'Format RPPS valide - verification ANS differee',
-      }), { status: 200, headers: { ...cors, 'Content-Type': 'application/json' } });
+      const numberColumn = type === 'RPPS' ? 'numero_rpps' : 'numero_adeli';
+      const persistedNumber = type === 'RPPS' ? profile.numero_rpps : profile.numero_adeli;
+      let updateQuery = admin.from('soignants')
+        .update(fields)
+        .eq('id', profile.id)
+        .is('supprime_le', null);
+      updateQuery = matchNullableSnapshot(updateQuery, numberColumn, persistedNumber);
+      updateQuery = matchNullableSnapshot(updateQuery, 'prenom', profile.prenom);
+      updateQuery = matchNullableSnapshot(updateQuery, 'nom', profile.nom);
+      updateQuery = matchNullableSnapshot(updateQuery, 'profession', profile.profession);
+      const { data, error } = await updateQuery
+        .select('id')
+        .maybeSingle();
+      if (error || !data) {
+        console.error('[verify-rpps] sauvegarde impossible ou profil modifié:', error?.code || error?.message || 'SNAPSHOT_CHANGED');
+        return errorResponse(cors, 409, 'PROFILE_CHANGED_DURING_VERIFICATION',
+          'Le profil a changé pendant la vérification. Relancez le contrôle.');
+      }
     }
+
+    const code = !traitsMatch
+      ? `${codePrefix}_TRAITS_MISMATCH`
+      : !professionMatch
+        ? `${codePrefix}_PROFESSION_MISMATCH`
+        : `${codePrefix}_OK`;
+    return jsonResponse(req, {
+      ok: true,
+      code,
+      type,
+      trouve: true,
+      correspond,
+      correspond_traits: traitsMatch,
+      profession_correspond: professionMatch,
+      profession_declaree: profession,
+      nom_api: result.nom || null,
+      prenom_api: result.prenom || null,
+      profession_api: result.professionLabels[0]
+        || result.professionsInternes[0]
+        || null,
+      profession_code: result.professionCodes[0] || null,
+      specialite_code: result.specialiteCode,
+      specialite_label: result.specialiteLabel,
+      actif,
+      source: result.source,
+    });
   } catch (error) {
-    console.error('Erreur verify-rpps:', safeStringifyError(error));
-    return errorResponse(cors, 500, 'INTERNAL_ERROR', 'Erreur serveur. Notre équipe a été notifiée. Réessayez dans quelques minutes.');
+    console.error('[verify-rpps] erreur inattendue:', safeStringifyError(error));
+    return errorResponse(cors, 500, 'INTERNAL_ERROR', 'Erreur serveur. Réessayez dans quelques minutes.');
   }
 });

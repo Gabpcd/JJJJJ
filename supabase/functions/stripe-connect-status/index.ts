@@ -1,6 +1,7 @@
 import Stripe from "npm:stripe@18.5.0";
 import { createClient } from "npm:@supabase/supabase-js@2.99.2";
 import { mapStripeError } from "../_shared/stripe-errors.ts";
+import { assertStripeSecretMode } from "../_shared/stripe-production.ts";
 import { jsonResponse, preflightResponse } from "../_shared/cors.ts";
 import { verifyUserOrServiceRole } from "../_shared/admin-auth.ts";
 
@@ -108,6 +109,7 @@ Deno.serve(async (req) => {
     if (!stripeSecretKey) {
       return jsonResponse(req, { error: 'STRIPE_NOT_CONFIGURED', message: 'Service Stripe temporairement indisponible.' }, 503);
     }
+    assertStripeSecretMode(stripeSecretKey);
     const stripe = new Stripe(stripeSecretKey, {
       apiVersion: "2025-08-27.basil",
     });

@@ -118,10 +118,15 @@ BEGIN
     id, nom, prenom, email, profession, type_exercice, type_contrat,
     types_contrat_acceptes, preference_contrat_mixte, heures_cumulees,
     rpps_verifie, tous_documents_valides, disponible_urgence,
-    statut_compte, est_compte_test, mandat_facturation_signe
+    statut_compte, est_compte_test, mandat_facturation_signe,
+    statut_liberal, siret_liberal, siret_liberal_verifie,
+    siret_liberal_verifie_le, siret_liberal_raison_sociale,
+    siret_liberal_coherence_identite
   ) VALUES (
     v_iade, 'D4', 'Iade', 'd4-iade-' || v_iade::text || '@test.local', 'IADE', 'LIBERAL', 'LIBERAL',
-    'LIBERAL', NULL, 4000, true, true, true, 'ACTIF', true, true
+    'LIBERAL', NULL, 4000, true, true, true, 'ACTIF', true, true,
+    'ACTIF', substring(regexp_replace(v_iade::text, '[^0-9]', '', 'g') || '00000000000000' from 1 for 14),
+    true, now(), 'Cabinet D4 Iade', true
   );
 
   -- Fixture documentaire explicite : RIB requis en salarié, RCP uniquement en

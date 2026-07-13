@@ -70,19 +70,13 @@ Le schéma de `presences` a `arrivee_modele_terminal` mais pas son équivalent c
 
 ---
 
-### F-3 [P0 — XS — VÉRIFIÉ LOG] `health-check` retourne 401 systématiquement
+### F-3 [P0 — XS — CORRIGÉ] `health-check` retournait 401 systématiquement
 
-**Cause** : Le monitoring externe envoie `HEAD /functions/v1/health-check?secret=sd-health-2026-xyz` (secret en query string). L'edge function (`supabase/functions/health-check/index.ts:30-40`) n'accepte que `Authorization: Bearer <service-role>` et renvoie 401 si absent.
+**Cause historique** : le monitoring externe envoyait son secret dans la query string, qui est journalisée par les proxies, tandis que la fonction exigeait un Bearer.
 
 **Symptôme** : monitoring aveugle — toutes les sondes échouent, aucun reporting de uptime fiable. Logs confirment ~12 hits 401 par heure (1 toutes les 5 min).
 
-**Fix** :
-```typescript
-const secret = new URL(req.url).searchParams.get('secret');
-const isMonitoringSecret = !!secret && secret === Deno.env.get('HEALTH_CHECK_SECRET');
-if (!isMonitoringSecret && !isServiceRole && !isAdminJwt) { return 401; }
-```
-Ajouter env var `HEALTH_CHECK_SECRET=sd-health-2026-xyz` côté Supabase. Effort XS (15min code + 5min config secret).
+**Fix appliqué** : `HEAD` est une sonde publique superficielle qui ne touche pas la base et ne renvoie aucun diagnostic. Les diagnostics complets `GET`/`POST` exigent un administrateur AAL2 ou un appel interne. Aucun secret n'est accepté dans l'URL.
 
 ---
 

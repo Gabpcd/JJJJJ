@@ -26,6 +26,7 @@ import { formatEuroAdmin } from '@/lib/adminPresentation';
 import { ModalConfirmation } from '@/components/ModalConfirmation';
 import { Textarea } from '@/components/ui/textarea';
 import { AdminMissionChatPanel } from '@/components/admin/AdminMissionChatPanel';
+import { sanitiserNomFichier, verifierFichierDocument } from '@/lib/documentUpload';
 
 export default function AdminDetailUtilisateur() {
   const { id } = useParams<{ id: string }>();
@@ -64,24 +65,31 @@ export default function AdminDetailUtilisateur() {
 
   const uploaderPourSoignant = async (fichier: File) => {
     if (!id) return;
+    const validation = await verifierFichierDocument(fichier);
+    if (validation.ok === false) {
+      toast.error(validation.message);
+      return;
+    }
     setUploadEnCours(true);
     try {
-      const nomSanitise = fichier.name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^\w.-]+/g, '-');
+      const nomSanitise = sanitiserNomFichier(fichier.name, validation.mime);
       const cle = `${id}/documents/${uploadDocType}/${Date.now()}-${nomSanitise}`;
       const { error: upErr } = await supabase.storage.from('jolene-documents')
-        .upload(cle, fichier, { contentType: fichier.type || undefined, upsert: false });
+        .upload(cle, fichier, { contentType: validation.mime, upsert: false });
       if (upErr) { toast.error(`Téléversement impossible : ${upErr.message}`); return; }
       const { data, error } = await supabase.rpc('fn_admin_ajouter_document_soignant' as any, {
         p_soignant_id: id,
         p_type_document: uploadDocType,
         p_cle: cle,
         p_nom_fichier: fichier.name,
-        p_type_mime: fichier.type || null,
+        p_type_mime: validation.mime,
         p_taille_octets: fichier.size,
         p_valider: true,
       });
       if (error || (data as any)?.error) {
-        await supabase.storage.from('jolene-documents').remove([cle]);
+        await supabase.functions.invoke('verify-document', {
+          body: { action: 'cleanup_orphan', s3_cle: cle },
+        });
         toast.error((data as any)?.error || 'Enregistrement impossible.');
         return;
       }
@@ -496,7 +504,7 @@ export default function AdminDetailUtilisateur() {
                     {uploadEnCours ? 'Envoi…' : 'Choisir le fichier'}
                     <input
                       type="file"
-                      accept="image/*,.pdf"
+                      accept="application/pdf,image/jpeg,image/png,image/webp"
                       className="hidden"
                       disabled={uploadEnCours}
                       onChange={(e) => {

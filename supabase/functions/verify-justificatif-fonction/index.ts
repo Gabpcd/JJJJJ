@@ -10,21 +10,17 @@
 
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { appelerAnthropic } from "../_shared/anthropic.ts";
-
-function corsHeaders(req: Request): Record<string, string> {
-  const origin = req.headers.get('origin') || '';
-  const allowed =
-    origin === 'https://jolene.app' || origin === 'https://app.jolene.app' ||
-    origin === 'https://www.jolene.app' || origin === 'http://localhost:5173' ||
-    origin === 'http://localhost:8080';
-  return {
-    'Access-Control-Allow-Origin': allowed ? origin : 'https://jolene.app',
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-    'Access-Control-Allow-Methods': 'POST, OPTIONS',
-  };
-}
-
-const ALLOWED_MIME = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'application/pdf'];
+import { verifyAdminOrServiceRole, verifyUserOrServiceRole } from '../_shared/admin-auth.ts';
+import { canManageEstablishment } from '../_shared/etablissement-auth.ts';
+import { applyRateLimit, getClientIp } from '../_shared/rate-limit.ts';
+import {
+  corporateNameMatches,
+  normalizeProfessionalIdentifier,
+  personNameMatches,
+  strictAiVerificationQuality,
+  validateDocumentFile,
+} from '../_shared/verification-rules.ts';
+import { corsHeaders } from '../_shared/cors.ts';
 
 function parseJsonFromText(text: string): any | null {
   try { return JSON.parse(text); } catch { /* try to extract */ }
@@ -53,52 +49,111 @@ Deno.serve(async (req) => {
     new Response(JSON.stringify(body), { status, headers: { ...cors, 'Content-Type': 'application/json' } });
 
   try {
+    const auth = await verifyUserOrServiceRole(req);
+    if (!auth.ok) return json(auth.status, { error: auth.error });
     const body = await req.json().catch(() => ({}));
-    if (body?.warm === true) return json(200, { warm: true });
+    if (body?.warm === true) {
+      if (!auth.isServiceRole) {
+        const adminAuth = await verifyAdminOrServiceRole(req);
+        if (!adminAuth.ok) return json(adminAuth.status, { error: adminAuth.error });
+      }
+      return json(200, { warm: true, configured: !!Deno.env.get('ANTHROPIC_API_KEY') });
+    }
 
     const etablissementId = String(body?.etablissement_id || '').trim();
     if (!etablissementId) return json(400, { error: 'etablissement_id requis' });
 
-    const authHeader = req.headers.get('Authorization') || '';
-    if (!authHeader.startsWith('Bearer ')) return json(401, { error: 'Non autorisé' });
-    const token = authHeader.slice(7);
-
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const admin = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
-    const isServiceRole = token === serviceKey;
 
-    // Autorisation : service-role OU membre PROPRIETAIRE/ADMIN_GROUPE de l'établissement.
-    if (!isServiceRole) {
-      const userClient = createClient(supabaseUrl, Deno.env.get('SUPABASE_ANON_KEY')!, {
-        global: { headers: { Authorization: authHeader } },
-      });
-      const { data: { user } } = await userClient.auth.getUser();
-      if (!user) return json(401, { error: 'Session invalide' });
-      const { data: membre } = await admin.from('membres_etablissement')
-        .select('role').eq('etablissement_id', etablissementId).eq('user_id', user.id).eq('actif', true).maybeSingle();
-      const okRole = membre && ['PROPRIETAIRE', 'ADMIN_GROUPE'].includes((membre as any).role);
-      if (!okRole) return json(403, { error: 'Non autorisé pour cet établissement' });
+    if (!auth.isServiceRole) {
+      if (applyRateLimit('verify-justificatif-fonction', getClientIp(req), { max: 8, windowMs: 60_000 })) {
+        return json(429, { error: 'Trop de vérifications. Réessayez dans une minute.' });
+      }
+      if (!(await canManageEstablishment(admin, auth.userId, etablissementId))) {
+        const adminAuth = await verifyAdminOrServiceRole(req);
+        if (!adminAuth.ok) return json(403, { error: 'Non autorisé pour cet établissement' });
+      }
     }
 
     const anthropicKey = Deno.env.get('ANTHROPIC_API_KEY');
     if (!anthropicKey) return json(200, { ok: false, error: 'ANTHROPIC_API_KEY non configurée' });
 
     const { data: etab, error: etabErr } = await admin.from('etablissements')
-      .select('nom, siret, representant_nom, representant_prenom, justificatif_fonction_s3_key, justificatif_fonction_type, justificatif_fonction_type_mime')
+      .select('verification_source_version, nom, siret, siret_raison_sociale, finess_raison_sociale, representant_nom, representant_prenom, justificatif_fonction_s3_key, justificatif_fonction_type, justificatif_fonction_type_mime')
       .eq('id', etablissementId).maybeSingle();
     if (etabErr || !etab) return json(404, { error: 'Établissement introuvable' });
     const e = etab as Record<string, any>;
+    const appliquerVerdict = async (verifie: boolean, resultat: Record<string, unknown>) => {
+      if (!auth.isServiceRole && !(await canManageEstablishment(admin, auth.userId, etablissementId))) {
+        const adminAuth = await verifyAdminOrServiceRole(req);
+        if (!adminAuth.ok) return false;
+      }
+      const { data, error } = await admin.rpc(
+        'fn_appliquer_verification_fonction_etablissement',
+        {
+          p_etablissement_id: etablissementId,
+          p_version_attendue: Number(e.verification_source_version),
+          p_justificatif_s3_key: e.justificatif_fonction_s3_key ?? null,
+          p_justificatif_type: e.justificatif_fonction_type ?? null,
+          p_justificatif_type_mime: e.justificatif_fonction_type_mime ?? null,
+          p_representant_nom: e.representant_nom ?? null,
+          p_representant_prenom: e.representant_prenom ?? null,
+          p_nom_etablissement: e.nom ?? null,
+          p_siret: e.siret ?? null,
+          p_siret_raison_sociale: e.siret_raison_sociale ?? null,
+          p_finess_raison_sociale: e.finess_raison_sociale ?? null,
+          p_verifie: verifie,
+          p_resultat: resultat,
+        },
+      );
+      if (error) throw new Error(`Persistance atomique justificatif impossible: ${error.code || error.message}`);
+      return data === true;
+    };
+    const sourceChangee = () => json(409, {
+      ok: false,
+      code: 'VERIFICATION_SOURCE_CHANGED',
+      error: 'Le justificatif ou le profil a changé pendant la vérification. Relancez le contrôle.',
+    });
     if (!e.justificatif_fonction_s3_key) return json(400, { error: 'Aucun justificatif de fonction téléversé' });
-    if (!e.representant_nom) return json(400, { error: 'Nom du représentant non renseigné' });
-    if (e.justificatif_fonction_type_mime && !ALLOWED_MIME.includes(e.justificatif_fonction_type_mime)) {
-      return json(200, { ok: true, verdict: 'REJETE', motif: `Type de fichier non autorisé: ${e.justificatif_fonction_type_mime}` });
+    const justificatifPath = String(e.justificatif_fonction_s3_key);
+    const proprietairesAutorises = new Set(
+      [etablissementId, auth.userId].filter((value): value is string => !!value),
+    );
+    const cheminAutorise = !justificatifPath.includes('..')
+      && !justificatifPath.includes('\\')
+      && [...proprietairesAutorises].some((ownerId) => justificatifPath.startsWith(`${ownerId}/`));
+    if (!cheminAutorise) return json(403, { error: 'Chemin de justificatif non autorisé' });
+    if (!e.representant_nom || !e.representant_prenom) {
+      return json(400, { error: 'Nom et prénom du représentant requis' });
     }
-
-    const { data: file, error: dlErr } = await admin.storage.from('jolene-documents').download(e.justificatif_fonction_s3_key);
+    const { data: file, error: dlErr } = await admin.storage.from('jolene-documents').download(justificatifPath);
     if (dlErr || !file) return json(200, { ok: false, error: 'Fichier introuvable dans le stockage' });
-    const base64 = toBase64(await file.arrayBuffer());
-    const mime = e.justificatif_fonction_type_mime || 'image/jpeg';
+    const arrayBuffer = await file.arrayBuffer();
+    const fileValidation = validateDocumentFile(
+      new Uint8Array(arrayBuffer),
+      e.justificatif_fonction_type_mime,
+    );
+    if (!fileValidation.ok) {
+      const motifs: Record<string, string> = {
+        EMPTY: 'Le justificatif de fonction est vide.',
+        TOO_LARGE: 'Le justificatif de fonction dépasse 10 Mo.',
+        UNSUPPORTED_MIME: 'Le type MIME déclaré du justificatif est absent ou non autorisé.',
+        INVALID_SIGNATURE: 'Le contenu du justificatif ne correspond pas à son type MIME déclaré.',
+      };
+      const motif = motifs[fileValidation.code];
+      const applique = await appliquerVerdict(false, {
+        verdict_final: 'REJETE',
+        motif,
+        controle_fichier: fileValidation.code,
+        regle_version: '2026-07-14',
+      });
+      if (!applique) return sourceChangee();
+      return json(200, { ok: true, verdict: 'REJETE', motif });
+    }
+    const base64 = toBase64(arrayBuffer);
+    const mime = fileValidation.mime;
     const isPdf = mime === 'application/pdf';
 
     const nomComplet = `${e.representant_prenom || ''} ${e.representant_nom}`.trim();
@@ -111,18 +166,26 @@ Le document doit prouver qu'une personne physique est habilitée à représenter
   "type_detecte": "ATTESTATION_EMPLOYEUR" | "DELEGATION_SIGNATURE" | "FICHE_POSTE" | "CONTRAT_TRAVAIL" | "DECISION_NOMINATION" | "AUTRE" | null,
   "nom_correspond": true/false/null,
   "nom_extrait": "le nom de la personne lu sur le document" ou null,
+  "prenom_extrait": "le prénom de la personne lu sur le document" ou null,
   "fonction_detectee": "la fonction/le poste mentionné" ou null,
+  "autorise_representation": true/false/null,
   "etablissement_correspond": true/false/null,
   "etablissement_extrait": "le nom de l'établissement lu sur le document" ou null,
+  "siret_extrait": "les 14 chiffres du SIRET lu sur le document" ou null,
   "document_lisible": true/false,
+  "document_complet": true/false,
+  "score_confiance": 0-100,
   "confiance": "HAUTE"/"MOYENNE"/"FAIBLE",
   "indices_falsification": ["liste des indices de falsification/retouche"] ou [],
   "motif_rejet": null ou "string",
   "verdict": "VERIFIE"/"EN_ATTENTE"/"REJETE"
 }
 Règles:
-- verdict = "VERIFIE" UNIQUEMENT si : c'est bien un justificatif de fonction officiel, lisible, confiance HAUTE,
-  ET nom_correspond = true (la personne déclarée), ET etablissement_correspond = true (le bon établissement).
+- verdict = "VERIFIE" UNIQUEMENT pour une délégation de signature/pouvoir ou une décision de nomination explicite,
+  officielle et lisible, confiance HAUTE, qui autorise bien la représentation, avec nom_correspond = true
+  (la personne déclarée) et etablissement_correspond = true (le bon établissement).
+- Une attestation employeur, fiche de poste ou contrat de travail prouve un emploi mais pas, à elle seule,
+  le pouvoir de représenter l'établissement : verdict = "EN_ATTENTE" pour revue humaine.
 - verdict = "EN_ATTENTE" si doute, confiance MOYENNE, ou un seul des deux liens (personne/établissement) est confirmé.
 - verdict = "REJETE" si ce n'est pas un justificatif de fonction, illisible, ou confiance FAIBLE.
 - nom_correspond : compare au représentant déclaré (tolère casse/accents/ordre).
@@ -155,46 +218,119 @@ Analyse ce document : est-ce un justificatif de fonction valide, qui rattache bi
     } catch (err) {
       clearTimeout(aiTimeout);
       const estTimeout = (err as any)?.name === 'AbortError';
-      await admin.from('etablissements').update({
-        justificatif_fonction_resultat_ia: { erreur_anthropic: { status: estTimeout ? 'timeout' : 'network', at: new Date().toISOString() } },
-      }).eq('id', etablissementId);
+      const applique = await appliquerVerdict(false, {
+        erreur_anthropic: { status: estTimeout ? 'timeout' : 'network', at: new Date().toISOString() },
+      });
+      if (!applique) return sourceChangee();
       return json(200, { ok: true, verdict: 'EN_ATTENTE', reason: estTimeout ? 'AI timeout' : 'AI network error' });
     }
     clearTimeout(aiTimeout);
 
     if (!ai.ok) {
-      await admin.from('etablissements').update({
-        justificatif_fonction_resultat_ia: { erreur_anthropic: { status: ai.status, body_excerpt: ai.body.slice(0, 1000), at: new Date().toISOString() } },
-      }).eq('id', etablissementId);
+      const applique = await appliquerVerdict(false, {
+        erreur_anthropic: { status: ai.status, body_excerpt: ai.body.slice(0, 1000), at: new Date().toISOString() },
+      });
+      if (!applique) return sourceChangee();
       return json(200, { ok: false, verdict: 'EN_ATTENTE', error: `Anthropic ${ai.status}` });
     }
 
     const aiJson = ai.data;
     const text = (aiJson?.content || []).map((c: any) => c?.text || '').join('\n');
     const result = parseJsonFromText(text) || {};
-    // GATE FALSIFICATION : tout indice de retouche → revue humaine (jamais VERIFIE auto).
-    const indicesFalsif = Array.isArray(result.indices_falsification) ? result.indices_falsification : [];
-    const verdict = (result.verdict === 'VERIFIE' && indicesFalsif.length > 0) ? 'EN_ATTENTE' : (result.verdict || 'EN_ATTENTE');
+    // GATE FALSIFICATION : la liste doit être explicitement présente et bien formée.
+    const quality = strictAiVerificationQuality(result);
+    const indicesFalsif = quality.indicators;
+    const personneMatch = personNameMatches(
+      e.representant_nom,
+      e.representant_prenom,
+      result.nom_extrait,
+      result.prenom_extrait,
+    );
+    const nomsOfficiels = [e.siret_raison_sociale, e.finess_raison_sociale, e.nom].filter(Boolean);
+    const etablissementNomMatch = nomsOfficiels.some((nomAttendu) =>
+      corporateNameMatches(nomAttendu, result.etablissement_extrait) === true
+    );
+    const siretExtrait = normalizeProfessionalIdentifier(result.siret_extrait);
+    const siretMatch = siretExtrait.length === 14
+      ? siretExtrait === normalizeProfessionalIdentifier(e.siret)
+      : null;
+    // Un SIRET explicitement lu et contradictoire est toujours bloquant, même
+    // si le nom commercial ressemble à celui de l'établissement.
+    const etablissementDeterministe = siretMatch !== false && (etablissementNomMatch || siretMatch === true);
+    const typeHabilitant = ['DELEGATION_SIGNATURE', 'DECISION_NOMINATION'].includes(String(result.type_detecte || ''));
+    const verdictsAutorises = new Set(['VERIFIE', 'EN_ATTENTE', 'REJETE']);
+    let verdict = typeof result.verdict === 'string' && verdictsAutorises.has(result.verdict)
+      ? result.verdict
+      : 'EN_ATTENTE';
+    let motif = typeof result.motif_rejet === 'string' ? result.motif_rejet : null;
+
+    if (verdict === 'VERIFIE' && !quality.antifraudComplete) {
+      verdict = 'EN_ATTENTE';
+      motif = 'Le contrôle antifraude est absent ou mal formé — vérification manuelle requise.';
+    } else if (verdict === 'VERIFIE' && indicesFalsif.length > 0) {
+      verdict = 'EN_ATTENTE';
+      motif = 'Indices de falsification détectés — vérification manuelle requise.';
+    }
+    if (siretMatch === false) {
+      verdict = 'REJETE';
+      motif = "Le SIRET lu sur le justificatif contredit le SIRET vérifié de l'établissement.";
+    }
+    if (verdict === 'VERIFIE' && (
+      result.est_justificatif_fonction !== true || result.document_lisible !== true ||
+      result.document_complet !== true || !quality.highConfidence ||
+      result.nom_correspond !== true || personneMatch !== true ||
+      result.etablissement_correspond !== true || !etablissementDeterministe ||
+      !typeHabilitant || result.autorise_representation !== true
+    )) {
+      verdict = 'EN_ATTENTE';
+      motif = personneMatch === false || result.nom_correspond === false
+        ? "Le justificatif ne correspond pas au représentant déclaré."
+        : (siretMatch === false || result.etablissement_correspond === false)
+          ? "Le justificatif ne correspond pas à l'établissement déclaré."
+          : !typeHabilitant || result.autorise_representation !== true
+            ? "Le document prouve peut-être un emploi, mais pas un pouvoir explicite de représentation : revue manuelle requise."
+            : "Le lien entre la personne, sa fonction et l'établissement doit être confirmé manuellement.";
+    }
     const justificatifVerifie = verdict === 'VERIFIE'
       && result.nom_correspond === true
-      && result.etablissement_correspond === true;
+      && personneMatch === true
+      && result.etablissement_correspond === true
+      && etablissementDeterministe
+      && typeHabilitant
+      && result.autorise_representation === true;
 
-    await admin.from('etablissements').update({
-      justificatif_fonction_verifie: justificatifVerifie,
-      justificatif_fonction_verifie_le: justificatifVerifie ? new Date().toISOString() : null,
-      justificatif_fonction_resultat_ia: result,
-    }).eq('id', etablissementId);
+    const applique = await appliquerVerdict(justificatifVerifie, {
+        verdict_final: verdict,
+        motif,
+        type_detecte: result.type_detecte ?? null,
+        autorise_representation: result.autorise_representation === true,
+        nom_extrait: result.nom_extrait ?? null,
+        prenom_extrait: result.prenom_extrait ?? null,
+        fonction_detectee: result.fonction_detectee ?? null,
+        etablissement_extrait: result.etablissement_extrait ?? null,
+        siret_extrait: siretExtrait || null,
+        document_lisible: result.document_lisible === true,
+        document_complet: result.document_complet === true,
+        score_confiance: quality.score,
+        confiance: quality.confidence,
+        antifraude_complete: quality.antifraudComplete,
+        indices_falsification_count: indicesFalsif.length,
+        regle_version: '2026-07-14',
+    });
+    if (!applique) return sourceChangee();
 
     // Ré-évalue le rattachement adaptatif (→ JUSTIFICATIF si OK).
     let rattachement: any = null;
     try {
-      const { data: rat } = await admin.rpc('fn_evaluer_rattachement_etablissement', { p_etablissement_id: etablissementId });
+      const { data: rat, error: ratError } = await admin.rpc('fn_evaluer_rattachement_etablissement', { p_etablissement_id: etablissementId });
+      if (ratError) throw ratError;
       rattachement = rat;
-    } catch { /* non bloquant */ }
+    } catch (ratError) { console.error('[verify-justificatif-fonction] rattachement', String(ratError)); }
 
     return json(200, {
       ok: true,
       verdict,
+      motif,
       nom_correspond: result.nom_correspond ?? null,
       etablissement_correspond: result.etablissement_correspond ?? null,
       fonction_detectee: result.fonction_detectee ?? null,

@@ -6,11 +6,15 @@ import { stripePromise } from '@/lib/stripe';
 interface ModalPaiementCommissionProps {
   clientSecret: string;
   montant: number;
-  onSuccess: () => void;
+  onSuccess: () => Promise<void> | void;
   onCancel: () => void;
 }
 
-function FormPaiement({ montant, onSuccess, onCancel }: { montant: number; onSuccess: () => void; onCancel: () => void }) {
+function FormPaiement({ montant, onSuccess, onCancel }: {
+  montant: number;
+  onSuccess: () => Promise<void> | void;
+  onCancel: () => void;
+}) {
   const stripe = useStripe();
   const elements = useElements();
   const [loading, setLoading] = useState(false);
@@ -34,7 +38,18 @@ function FormPaiement({ montant, onSuccess, onCancel }: { montant: number; onSuc
       setErreur('Erreur de paiement. Veuillez réessayer.');
       setLoading(false);
     } else {
-      onSuccess();
+      try {
+        // L'autorisation Stripe est revérifiée côté serveur par le parent
+        // avant toute attribution de mission.
+        await onSuccess();
+      } catch (verificationError) {
+        setErreur(
+          verificationError instanceof Error
+            ? verificationError.message
+            : "L’autorisation n’a pas pu être vérifiée. Veuillez réessayer.",
+        );
+        setLoading(false);
+      }
     }
   };
 

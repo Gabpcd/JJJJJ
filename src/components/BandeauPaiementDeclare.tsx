@@ -91,8 +91,8 @@ export function BandeauPaiementDeclare() {
 
       // Enrich with mission details
       const missionIds = [...new Set(data.map((p: any) => p.mission_id).filter(Boolean))] as string[];
-      let missionMap: Record<string, any> = {};
-      let presenceMap: Record<string, any[]> = {};
+      const missionMap: Record<string, any> = {};
+      const presenceMap: Record<string, any[]> = {};
 
       if (missionIds.length > 0) {
         const { data: missions } = await supabase

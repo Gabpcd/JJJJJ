@@ -29,6 +29,7 @@
  */
 import Stripe from "npm:stripe@18.5.0";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { assertStripeSecretMode } from "../_shared/stripe-production.ts";
 
 let _vaultSecret: string | null = null;
 async function bearerAutorise(req: Request, admin: any): Promise<boolean> {
@@ -76,7 +77,13 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify({ error: "forbidden" }), { status: 403 });
   }
 
-  const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") || "", {
+  const stripeKey = Deno.env.get("STRIPE_SECRET_KEY") || "";
+  try {
+    assertStripeSecretMode(stripeKey);
+  } catch {
+    return new Response(JSON.stringify({ error: "stripe_not_configured" }), { status: 503 });
+  }
+  const stripe = new Stripe(stripeKey, {
     apiVersion: "2025-08-27.basil",
   });
 
@@ -133,13 +140,58 @@ Deno.serve(async (req) => {
         continue;
       }
 
-      // Compteur de tentatives (avant l'appel Stripe : une tentative = un essai).
-      await admin
+      let debitIdempotencyKey = `escrow_debit_${esc.id}`;
+      if (esc.stripe_payment_intent_id) {
+        const precedent = await stripe.paymentIntents.retrieve(esc.stripe_payment_intent_id);
+        if (precedent.status === "succeeded") {
+          const chargeId = precedent.latest_charge
+            ? (typeof precedent.latest_charge === "string" ? precedent.latest_charge : precedent.latest_charge.id)
+            : null;
+          const { data: recupere } = await admin
+            .from("paiements_escrow")
+            .update({
+              statut: "DEBITE",
+              stripe_charge_id: chargeId,
+              debite_le: new Date().toISOString(),
+              erreur: null,
+              modifie_le: new Date().toISOString(),
+            })
+            .eq("id", esc.id)
+            .eq("statut", "INITIE")
+            .eq("stripe_payment_intent_id", precedent.id)
+            .select("id")
+            .maybeSingle();
+          if (recupere) debites++;
+          else ignores++;
+          continue;
+        }
+        if (!["canceled", "requires_payment_method"].includes(precedent.status)) {
+          // processing/requires_action : une opération Stripe existe déjà.
+          ignores++;
+          continue;
+        }
+        // Le précédent PI est certain et terminal : une nouvelle tentative a
+        // une clé fraîche mais déterministe. Deux workers créent donc le même PI.
+        debitIdempotencyKey = `escrow_debit_${esc.id}_after_${precedent.id}`;
+      }
+
+      // Claim optimiste : un seul worker compte et lance cette tentative.
+      const { data: tentativeReservee, error: tentativeErr } = await admin
         .from("paiements_escrow")
         .update({ tentatives_debit: (esc.tentatives_debit ?? 0) + 1, derniere_tentative_le: new Date().toISOString() })
-        .eq("id", esc.id);
+        .eq("id", esc.id)
+        .eq("statut", "INITIE")
+        .eq("tentatives_debit", esc.tentatives_debit ?? 0)
+        .select("id")
+        .maybeSingle();
+      if (tentativeErr) throw tentativeErr;
+      if (!tentativeReservee) {
+        ignores++;
+        continue;
+      }
 
-      // DESTINATION CHARGE — idempotency key = escrow id (rejoue → même PI).
+      // DESTINATION CHARGE — un rejeu ambigu conserve la même clé ; seul un PI
+      // terminal et connu fait avancer la version déterministe ci-dessus.
       const pi = await stripe.paymentIntents.create({
         amount: esc.montant_total_cents,
         currency: "eur",
@@ -163,7 +215,7 @@ Deno.serve(async (req) => {
           commission_cents: String(esc.commission_cents),
           methode_debit: esc.methode_debit,
         },
-      }, { idempotencyKey: `escrow_debit_${esc.id}` });
+      }, { idempotencyKey: debitIdempotencyKey });
 
       // SEPA : `processing` (débit initié, settlement en cours). Le passage
       // DEBITE se fait sur payment_intent.succeeded (webhook). On enregistre le
@@ -175,7 +227,8 @@ Deno.serve(async (req) => {
           erreur: null,
           modifie_le: new Date().toISOString(),
         })
-        .eq("id", esc.id);
+        .eq("id", esc.id)
+        .eq("statut", "INITIE");
 
       await admin.rpc("fn_escrow_enregistrer_exposition", { p_paiement_escrow_id: esc.id });
 
@@ -193,6 +246,22 @@ Deno.serve(async (req) => {
     } catch (err: any) {
       const code = err?.code || err?.raw?.code || null;
       const msg = err?.message || String(err);
+      const failedIntent = err?.payment_intent ?? err?.raw?.payment_intent;
+      const failedIntentId = typeof failedIntent === "string" ? failedIntent : failedIntent?.id;
+      if (failedIntentId) {
+        // Une erreur de confirmation peut néanmoins contenir un PI Stripe
+        // certain. Le conserver permet au passage suivant de distinguer le
+        // rejeu ambigu d'une vraie génération terminale suivante.
+        await admin
+          .from("paiements_escrow")
+          .update({
+            stripe_payment_intent_id: failedIntentId,
+            erreur: `${code || "erreur"} — ${msg}`.substring(0, 500),
+            modifie_le: new Date().toISOString(),
+          })
+          .eq("id", esc.id)
+          .eq("statut", "INITIE");
+      }
       // Après 3 tentatives, on gèle + relance J+3 (incident). Avant, on laisse
       // la ligne INITIE pour un retry au prochain passage du cron.
       if ((esc.tentatives_debit ?? 0) + 1 >= 3) {

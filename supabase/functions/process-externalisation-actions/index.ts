@@ -19,6 +19,7 @@
 // Sur PENDING_AIFE → fn_externalisation_echec(..., 'PENDING_AIFE')
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { assertStripeSecretMode } from "../_shared/stripe-production.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -161,8 +162,8 @@ async function dispatch(admin: any, action: ActionRow): Promise<DispatchResult> 
 // ─── Stripe ──────────────────────────────────────────────────────────
 
 async function dispatchStripeRefund(admin: any, action: ActionRow): Promise<DispatchResult> {
-  const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
-  if (!stripeKey) return { ok: false, erreur: "STRIPE_SECRET_KEY missing" };
+  const stripeKey = Deno.env.get("STRIPE_SECRET_KEY") || "";
+  assertStripeSecretMode(stripeKey);
 
   const { mission_id, montant, pourcentage } = action.payload;
   if (!mission_id) return { ok: false, erreur: "mission_id missing in payload" };
@@ -195,7 +196,11 @@ async function dispatchStripeRefund(admin: any, action: ActionRow): Promise<Disp
 
   const res = await fetch("https://api.stripe.com/v1/refunds", {
     method: "POST",
-    headers: { "Authorization": `Bearer ${stripeKey}`, "Content-Type": "application/x-www-form-urlencoded" },
+    headers: {
+      "Authorization": `Bearer ${stripeKey}`,
+      "Content-Type": "application/x-www-form-urlencoded",
+      "Idempotency-Key": `externalisation_refund_${action.id}`,
+    },
     body,
   });
   const json = await res.json();
@@ -209,8 +214,8 @@ async function dispatchStripeRefund(admin: any, action: ActionRow): Promise<Disp
 }
 
 async function dispatchStripePayment(admin: any, action: ActionRow): Promise<DispatchResult> {
-  const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
-  if (!stripeKey) return { ok: false, erreur: "STRIPE_SECRET_KEY missing" };
+  const stripeKey = Deno.env.get("STRIPE_SECRET_KEY") || "";
+  assertStripeSecretMode(stripeKey);
   const { beneficiaire_id, montant, motif } = action.payload;
   if (!beneficiaire_id || !montant) return { ok: false, erreur: "beneficiaire_id + montant requis" };
 
@@ -223,7 +228,11 @@ async function dispatchStripePayment(admin: any, action: ActionRow): Promise<Dis
 
   const res = await fetch("https://api.stripe.com/v1/transfers", {
     method: "POST",
-    headers: { "Authorization": `Bearer ${stripeKey}`, "Content-Type": "application/x-www-form-urlencoded" },
+    headers: {
+      "Authorization": `Bearer ${stripeKey}`,
+      "Content-Type": "application/x-www-form-urlencoded",
+      "Idempotency-Key": `externalisation_transfer_${action.id}`,
+    },
     body: new URLSearchParams({
       amount: Math.round(montant * 100).toString(),
       currency: "eur",
@@ -300,9 +309,14 @@ async function dispatchRecompenseParrainage(admin: any, action: ActionRow): Prom
 
     // Canal 1 : Stripe Connect (libéraux)
     if (soignant?.stripe_account_id && stripeKey) {
+      assertStripeSecretMode(stripeKey);
       const res = await fetch("https://api.stripe.com/v1/transfers", {
         method: "POST",
-        headers: { "Authorization": `Bearer ${stripeKey}`, "Content-Type": "application/x-www-form-urlencoded" },
+        headers: {
+          "Authorization": `Bearer ${stripeKey}`,
+          "Content-Type": "application/x-www-form-urlencoded",
+          "Idempotency-Key": `parrainage_transfer_${parrainage_id}_${role}`,
+        },
         body: new URLSearchParams({
           amount: Math.round(montant * 100).toString(),
           currency: "eur",

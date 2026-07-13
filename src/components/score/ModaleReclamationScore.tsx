@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Loader2, Upload, AlertCircle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useNotification } from '@/contexts/NotificationContext';
+import { sanitiserNomFichier, verifierFichierDocument } from '@/lib/documentUpload';
 
 interface Props {
   ouvert: boolean;
@@ -50,14 +51,21 @@ export function ModaleReclamationScore({
 
   async function uploadJustificatif(): Promise<string | null> {
     if (!fichier) return null;
-    if (fichier.size > 5 * 1024 * 1024) {
-      afficherNotification({ type: 'erreur', message: 'Fichier trop volumineux (max 5 MB).' });
+    const validation = await verifierFichierDocument(fichier, { maxBytes: 5 * 1024 * 1024 });
+    if (validation.ok === false) {
+      afficherNotification({ type: 'erreur', message: validation.message });
       return null;
     }
-    const path = `reclamations/${evenementId}/${Date.now()}_${fichier.name}`;
+    const { data: authData } = await supabase.auth.getUser();
+    if (!authData.user) {
+      afficherNotification({ type: 'erreur', message: 'Votre session a expiré. Reconnectez-vous.' });
+      return null;
+    }
+    const safeName = sanitiserNomFichier(fichier.name, validation.mime);
+    const path = `${authData.user.id}/reclamations/${evenementId}/${Date.now()}_${safeName}`;
     const { error } = await supabase.storage
       .from('justificatifs')
-      .upload(path, fichier, { upsert: false });
+      .upload(path, fichier, { contentType: validation.mime, upsert: false });
     if (error) {
       afficherNotification({ type: 'erreur', message: 'Erreur upload : ' + error.message });
       return null;
@@ -77,6 +85,7 @@ export function ModaleReclamationScore({
     setLoading(true);
     try {
       const justificatif = fichier ? await uploadJustificatif() : null;
+      if (fichier && !justificatif) return;
       const { data, error } = await supabase.rpc('fn_creer_reclamation_score' as any, {
         p_evenement_id: evenementId,
         p_evenement_type: evenementType,
@@ -131,8 +140,8 @@ export function ModaleReclamationScore({
           <span className="text-[10px] text-muted-foreground">{texte.length} / 20+</span>
         </label>
 
-        <label className="block">
-          <span className="text-xs font-medium text-foreground mb-1 block">Justificatif (PDF, image, max 5 MB)</span>
+        <div className="block">
+          <span id="reclamation-justificatif-label" className="text-xs font-medium text-foreground mb-1 block">Justificatif (PDF, image, max 5 Mo)</span>
           <label className="flex items-center gap-2 cursor-pointer rounded-lg border border-dashed border-border bg-muted/20 p-3 hover:bg-muted/40 transition">
             <Upload className="h-4 w-4 text-muted-foreground" />
             <span className="text-xs text-muted-foreground flex-1">
@@ -140,15 +149,27 @@ export function ModaleReclamationScore({
             </span>
             <input
               type="file"
-              accept="application/pdf,image/*"
+              accept="application/pdf,image/jpeg,image/png,image/webp"
+              aria-labelledby="reclamation-justificatif-label"
               className="hidden"
-              onChange={e => setFichier(e.target.files?.[0] || null)}
+              onChange={async e => {
+                const selected = e.target.files?.[0] || null;
+                if (!selected) { setFichier(null); return; }
+                const validation = await verifierFichierDocument(selected, { maxBytes: 5 * 1024 * 1024 });
+                if (validation.ok === false) {
+                  setFichier(null);
+                  afficherNotification({ type: 'erreur', message: validation.message });
+                  e.target.value = '';
+                  return;
+                }
+                setFichier(selected);
+              }}
             />
           </label>
           <p className="text-[10px] text-muted-foreground mt-1">
             Un justificatif (certif médical, attestation, etc.) facilite la décision admin.
           </p>
-        </label>
+        </div>
 
         <div className="rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 p-3 text-xs text-amber-800 dark:text-amber-300 flex gap-2">
           <AlertCircle className="h-4 w-4 shrink-0" />

@@ -15,6 +15,7 @@ import { ConfettiMini } from '@/components/ConfettiMini';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { TYPES_DOCUMENTS, TYPES_DOCUMENTS_EXCLUS_UPLOAD, STATUTS_VERIFICATION } from '@/lib/documents';
+import { sanitiserNomFichier, verifierFichierDocument } from '@/lib/documentUpload';
 import { extraireMessageErreur, messageErreurEdgeFn } from '@/lib/erreurs';
 import { format, differenceInDays } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -325,65 +326,42 @@ export function DocumentsSoignantContent() {
   const televerser = async (fichierOriginal: File, libelle: string) => {
     if (!user || !televersementType) return;
 
-    if (fichierOriginal.size > 10 * 1024 * 1024) {
-      toast.error('Fichier trop volumineux. Maximum : 10 Mo.');
+    const validation = await verifierFichierDocument(fichierOriginal);
+    if (validation.ok === false) {
+      toast.error(validation.message);
       return;
     }
 
-    let fichier = fichierOriginal;
-    if (/^image\/hei[cf]$/i.test(fichier.type) || /\.hei[cf]$/i.test(fichier.name)) {
-      try {
-        const bitmap = await createImageBitmap(fichier);
-        const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
-        const ctx = canvas.getContext('2d')!;
-        ctx.drawImage(bitmap, 0, 0);
-        const blob = await canvas.convertToBlob({ type: 'image/jpeg', quality: 0.92 });
-        fichier = new File([blob], fichier.name.replace(/\.hei[cf]$/i, '.jpg'), { type: 'image/jpeg' });
-        bitmap.close();
-      } catch {
-        toast.error('Impossible de convertir le fichier HEIC. Merci de le re-prendre en JPEG.');
-        return;
-      }
-    }
-
-    const nomSanitise = fichier.name
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .replace(/[^\w.-]+/g, '-');
+    const fichier = fichierOriginal;
+    const nomSanitise = sanitiserNomFichier(fichier.name, validation.mime);
     const chemin = `${user.id}/documents/${televersementType}/${Date.now()}-${nomSanitise}`;
     const { error: uploadError } = await supabase.storage
       .from('jolene-documents')
-      .upload(chemin, fichier, { contentType: fichier.type || undefined, upsert: false });
+      .upload(chemin, fichier, { contentType: validation.mime, upsert: false });
     if (uploadError) {
       toast.error(`Téléversement impossible : ${extraireMessageErreur(uploadError)}`);
       return;
     }
 
-    const docReqData = documentsRequis.find(d => d.type_document === televersementType);
     const insertData: any = {
       soignant_id: user.id,
       type_document: televersementType as any,
       libelle: libelle || null,
-      s3_bucket: 'jolene-documents',
       s3_cle: chemin,
       nom_fichier: fichier.name,
-      type_mime: fichier.type,
+      type_mime: validation.mime,
       taille_octets: fichier.size,
-      // Dates de validité extraites automatiquement par l'IA (verify-document) —
-      // plus de saisie manuelle (colonnes nullables).
-      valide_depuis: null,
-      valide_jusqua: null,
-      est_critique: docReqData?.est_critique || false,
-      statut_verification: 'EN_ATTENTE',
-      verifie_par: null,
-      verifie_le: null,
-      motif_rejet: null,
+      // Les champs de validation, dates et criticité sont exclusivement
+      // calculés côté serveur : le client ne peut pas se déclarer vérifié.
     };
 
     const { data, error } = await supabase.from('documents_soignants').insert(insertData).select().single();
 
     if (error) {
-      await supabase.storage.from('jolene-documents').remove([chemin]);
+      const { error: cleanupError } = await supabase.functions.invoke('verify-document', {
+        body: { action: 'cleanup_orphan', s3_cle: chemin },
+      });
+      if (cleanupError) handleErrorSilent(cleanupError, 'Nettoyage document non rattaché');
       toast.error(extraireMessageErreur(error));
       return;
     }

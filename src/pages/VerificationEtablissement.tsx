@@ -25,6 +25,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { verifierFichierDocument } from '@/lib/documentUpload';
 import { toast } from 'sonner';
 
 type EtabVerif = {
@@ -49,8 +50,6 @@ const LIBELLE_METHODE: Record<string, string> = {
   ADMIN: 'Validation par un administrateur Jolene',
 };
 
-const ALLOWED_EXT = ['pdf', 'jpg', 'jpeg', 'png'];
-
 export default function VerificationEtablissement() {
   usePageTitle('Vérification établissement');
   const navigate = useNavigate();
@@ -72,7 +71,7 @@ export default function VerificationEtablissement() {
   const pieceLockRef = useRef(false);
 
   // Justificatif de fonction (non-dirigeants : RH, chef de service, délégataire)
-  const [justifType, setJustifType] = useState<'ATTESTATION_EMPLOYEUR' | 'DELEGATION_SIGNATURE' | 'FICHE_POSTE' | 'CONTRAT_TRAVAIL' | 'DECISION_NOMINATION'>('ATTESTATION_EMPLOYEUR');
+  const [justifType, setJustifType] = useState<'ATTESTATION_EMPLOYEUR' | 'DELEGATION_SIGNATURE' | 'FICHE_POSTE' | 'CONTRAT_TRAVAIL' | 'DECISION_NOMINATION'>('DELEGATION_SIGNATURE');
   const [justifFile, setJustifFile] = useState<File | null>(null);
   const [justifLoading, setJustifLoading] = useState(false);
   const justifLockRef = useRef(false);
@@ -124,11 +123,16 @@ export default function VerificationEtablissement() {
         toast.error('Annuaire Santé momentanément indisponible. Réessayez dans un instant.');
       } else if (data?.trouve === false) {
         toast.error("Ce numéro FINESS est introuvable dans l'Annuaire Santé.");
+        await recharger();
       } else if (data?.verifie) {
         toast.success(`FINESS vérifié : ${data.raison_sociale || 'structure trouvée'}.`);
         await recharger();
+      } else if (data?.revue_manuelle) {
+        toast.warning(data?.motif || 'FINESS trouvé, mais le lien avec votre établissement doit être vérifié manuellement.');
+        await recharger();
       } else {
         toast.error("Cet établissement n'est pas actif dans l'Annuaire Santé.");
+        await recharger();
       }
     } catch (e: unknown) {
       toast.error((e as Error)?.message || 'Erreur lors de la vérification FINESS.');
@@ -141,27 +145,23 @@ export default function VerificationEtablissement() {
   const verifierPiece = async () => {
     if (!user || !pieceFile) return;
     if (pieceLockRef.current) return;
-    if (!nom.trim()) {
-      toast.error('Veuillez renseigner le nom du représentant.');
+    if (!nom.trim() || !prenom.trim()) {
+      toast.error('Veuillez renseigner le prénom et le nom du représentant.');
       return;
     }
-    const ext = pieceFile.name.split('.').pop()?.toLowerCase() || '';
-    if (!ALLOWED_EXT.includes(ext)) {
-      toast.error('Format accepté : PDF, JPG ou PNG.');
-      return;
-    }
-    if (pieceFile.size > 10 * 1024 * 1024) {
-      toast.error('Fichier trop volumineux (max 10 Mo).');
+    const validation = await verifierFichierDocument(pieceFile);
+    if (validation.ok === false) {
+      toast.error(validation.message);
       return;
     }
     pieceLockRef.current = true;
     setPieceLoading(true);
     try {
-      const mime = ext === 'pdf' ? 'application/pdf' : `image/${ext === 'jpg' ? 'jpeg' : ext}`;
-      const path = `${user.id}/representant-piece-${Date.now()}.${ext}`;
+      const mime = validation.mime;
+      const path = `${user.id}/representant-piece-${Date.now()}.${validation.extension}`;
       const { error: upErr } = await supabase.storage
         .from('jolene-documents')
-        .upload(path, pieceFile, { upsert: true, contentType: mime });
+        .upload(path, pieceFile, { upsert: false, contentType: mime });
       if (upErr) throw upErr;
 
       const { error: updErr } = await supabase
@@ -172,7 +172,7 @@ export default function VerificationEtablissement() {
           representant_piece_s3_key: path,
           representant_piece_type_mime: mime,
           representant_piece_type_document: typeDoc,
-        } as Record<string, unknown>)
+        })
         .eq('id', user.id);
       if (updErr) throw updErr;
 
@@ -206,23 +206,19 @@ export default function VerificationEtablissement() {
   const verifierJustificatif = async () => {
     if (!user || !justifFile) return;
     if (justifLockRef.current) return;
-    const ext = justifFile.name.split('.').pop()?.toLowerCase() || '';
-    if (!ALLOWED_EXT.includes(ext)) {
-      toast.error('Format accepté : PDF, JPG ou PNG.');
-      return;
-    }
-    if (justifFile.size > 10 * 1024 * 1024) {
-      toast.error('Fichier trop volumineux (max 10 Mo).');
+    const validation = await verifierFichierDocument(justifFile);
+    if (validation.ok === false) {
+      toast.error(validation.message);
       return;
     }
     justifLockRef.current = true;
     setJustifLoading(true);
     try {
-      const mime = ext === 'pdf' ? 'application/pdf' : `image/${ext === 'jpg' ? 'jpeg' : ext}`;
-      const path = `${user.id}/justificatif-fonction-${Date.now()}.${ext}`;
+      const mime = validation.mime;
+      const path = `${user.id}/justificatif-fonction-${Date.now()}.${validation.extension}`;
       const { error: upErr } = await supabase.storage
         .from('jolene-documents')
-        .upload(path, justifFile, { upsert: true, contentType: mime });
+        .upload(path, justifFile, { upsert: false, contentType: mime });
       if (upErr) throw upErr;
 
       const { error: updErr } = await supabase
@@ -231,7 +227,7 @@ export default function VerificationEtablissement() {
           justificatif_fonction_s3_key: path,
           justificatif_fonction_type_mime: mime,
           justificatif_fonction_type: justifType,
-        } as Record<string, unknown>)
+        })
         .eq('id', user.id);
       if (updErr) throw updErr;
 
@@ -416,8 +412,14 @@ export default function VerificationEtablissement() {
                 <input
                   id="rep-piece"
                   type="file"
-                  accept=".pdf,.jpg,.jpeg,.png"
-                  onChange={e => setPieceFile(e.target.files?.[0] || null)}
+                  accept="application/pdf,image/jpeg,image/png,image/webp"
+                  onChange={async e => {
+                    const selected = e.target.files?.[0] || null;
+                    if (!selected) { setPieceFile(null); return; }
+                    const validation = await verifierFichierDocument(selected);
+                    if (validation.ok === false) { setPieceFile(null); toast.error(validation.message); e.target.value = ''; return; }
+                    setPieceFile(selected);
+                  }}
                   className="block w-full text-sm text-foreground file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-primary/10 file:text-primary hover:file:bg-primary/20 cursor-pointer"
                 />
                 {pieceFile && (
@@ -461,11 +463,11 @@ export default function VerificationEtablissement() {
                   onChange={e => setJustifType(e.target.value as typeof justifType)}
                   className="block w-full mt-1 rounded-lg border border-border bg-background px-3 py-2 text-sm"
                 >
-                  <option value="ATTESTATION_EMPLOYEUR">Attestation employeur</option>
                   <option value="DELEGATION_SIGNATURE">Délégation de signature / pouvoir</option>
-                  <option value="FICHE_POSTE">Fiche de poste</option>
-                  <option value="CONTRAT_TRAVAIL">Contrat de travail</option>
                   <option value="DECISION_NOMINATION">Décision de nomination</option>
+                  <option value="ATTESTATION_EMPLOYEUR">Attestation employeur (revue manuelle)</option>
+                  <option value="FICHE_POSTE">Fiche de poste (revue manuelle)</option>
+                  <option value="CONTRAT_TRAVAIL">Contrat de travail (revue manuelle)</option>
                 </select>
               </div>
               <div>
@@ -473,8 +475,14 @@ export default function VerificationEtablissement() {
                 <input
                   id="justif-file"
                   type="file"
-                  accept=".pdf,.jpg,.jpeg,.png"
-                  onChange={e => setJustifFile(e.target.files?.[0] || null)}
+                  accept="application/pdf,image/jpeg,image/png,image/webp"
+                  onChange={async e => {
+                    const selected = e.target.files?.[0] || null;
+                    if (!selected) { setJustifFile(null); return; }
+                    const validation = await verifierFichierDocument(selected);
+                    if (validation.ok === false) { setJustifFile(null); toast.error(validation.message); e.target.value = ''; return; }
+                    setJustifFile(selected);
+                  }}
                   className="block w-full text-sm text-foreground file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-primary/10 file:text-primary hover:file:bg-primary/20 cursor-pointer"
                 />
                 {justifFile && (

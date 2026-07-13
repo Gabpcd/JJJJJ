@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FileText, CheckCircle, Upload, Loader2, ArrowLeft, Shield, Download } from 'lucide-react';
+import { FileText, CheckCircle, Upload, Loader2, ArrowLeft, Shield, AlertTriangle } from 'lucide-react';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { LayoutApp } from '@/components/LayoutApp';
 import { Button } from '@/components/ui/button';
@@ -8,9 +8,30 @@ import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { Checkbox } from '@/components/ui/checkbox';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { verifierFichierDocument } from '@/lib/documentUpload';
 import { toast } from 'sonner';
 import SignatureCanvas from '@/components/SignatureCanvas';
 import { buildContratServiceTexte, CONTRAT_SERVICE_VERSION, hashContratTexte } from '@/constantes/contratServiceEtablissement';
+
+interface EtablissementInscription {
+  nom: string;
+  siret: string;
+  type: string;
+  adresse_rue: string;
+  adresse_code_postal: string;
+  adresse_ville: string;
+  email_contact: string;
+  contrat_service_signe: boolean;
+  contrat_service_signe_le: string | null;
+  rib_s3_key: string | null;
+  statut_verification: string | null;
+  peut_publier_missions: boolean | null;
+  siret_verifie: boolean | null;
+  finess: string | null;
+  finess_verifie: boolean | null;
+  representant_identite_verifiee: boolean | null;
+  rattachement_verifie: boolean | null;
+}
 
 function renderMarkdown(texte: string) {
   const lines = texte.split('\n');
@@ -48,7 +69,8 @@ export default function FinaliserInscriptionEtab() {
   const { user } = useAuth();
 
   const [loading, setLoading] = useState(true);
-  const [etabInfo, setEtabInfo] = useState<any>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [etabInfo, setEtabInfo] = useState<EtablissementInscription | null>(null);
   const [step, setStep] = useState<1 | 2>(1);
 
   // Step 1 state
@@ -68,15 +90,26 @@ export default function FinaliserInscriptionEtab() {
   useEffect(() => {
     if (!user) return;
     (async () => {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('etablissements')
-        .select('nom, siret, type, adresse_rue, adresse_code_postal, adresse_ville, email_contact, contrat_service_signe, contrat_service_signe_le, rib_s3_key')
+        .select('nom, siret, type, adresse_rue, adresse_code_postal, adresse_ville, email_contact, contrat_service_signe, contrat_service_signe_le, rib_s3_key, statut_verification, peut_publier_missions, siret_verifie, finess, finess_verifie, representant_identite_verifiee, rattachement_verifie')
         .eq('id', user.id)
         .maybeSingle();
+      if (error) {
+        setLoadError('Impossible de charger l’état de votre inscription. Réessayez dans quelques instants.');
+        setLoading(false);
+        return;
+      }
+      if (!data) {
+        setLoadError('Profil établissement introuvable.');
+        setLoading(false);
+        return;
+      }
       if (data) {
-        setEtabInfo(data);
-        const signe = !!(data as any).contrat_service_signe;
-        const ribOk = !!((data as any).rib_s3_key && (data as any).rib_s3_key !== 'legacy/auto-backfill');
+        const info = data as unknown as EtablissementInscription;
+        setEtabInfo(info);
+        const signe = !!info.contrat_service_signe;
+        const ribOk = !!(info.rib_s3_key && info.rib_s3_key !== 'legacy/auto-backfill');
         setContratSigne(signe);
         setRibUploaded(ribOk);
         // Step 2 dès que contrat signé (le user upload son RIB ensuite)
@@ -116,18 +149,20 @@ export default function FinaliserInscriptionEtab() {
           const { error: upErr } = await supabase.storage
             .from('jolene-documents')
             .upload(path, blob, { upsert: false, contentType: `image/${matches[1]}` });
-          if (!upErr) signatureS3Key = path;
+          if (upErr) throw upErr;
+          signatureS3Key = path;
         }
       } catch {
-        // Best-effort : si upload signature échoue, continue sans bloquer
+        throw new Error("La signature dessinée n'a pas pu être enregistrée. Réessayez.");
       }
+      if (!signatureS3Key) throw new Error('Une signature dessinée valide est obligatoire.');
 
       const hash = await hashContratTexte(contratTexte);
       // L'IP réelle est récupérée côté serveur (RPC SECURITY DEFINER lit
       // current_setting('request.headers')::jsonb->>'x-forwarded-for' ou
       // 'cf-connecting-ip'). Passer '' depuis le frontend est safe : la
       // RPC override avec l'IP serveur si présente. Cf. fn_signer_contrat_service.
-      const { data, error } = await supabase.rpc('fn_signer_contrat_service' as any, {
+      const { data, error } = await supabase.rpc('fn_signer_contrat_service', {
         p_version: CONTRAT_SERVICE_VERSION,
         p_ip: '',
         p_user_agent: navigator.userAgent,
@@ -135,12 +170,17 @@ export default function FinaliserInscriptionEtab() {
         p_signature_s3_key: signatureS3Key,
       });
       if (error) throw error;
-      if ((data as any)?.success === false) throw new Error((data as any)?.error);
+      const result = data && typeof data === 'object' && !Array.isArray(data)
+        ? data as Record<string, unknown>
+        : null;
+      if (result?.success === false) {
+        throw new Error(typeof result.error === 'string' ? result.error : 'Signature refusée.');
+      }
       toast.success('Contrat de service signé avec succès !');
       setContratSigne(true);
       setStep(2);
-    } catch (err: any) {
-      toast.error(err?.message || 'Erreur lors de la signature');
+    } catch {
+      toast.error('La signature n’a pas pu être enregistrée. Réessayez.');
     } finally {
       signLockRef.current = false;
       setSigning(false);
@@ -150,59 +190,105 @@ export default function FinaliserInscriptionEtab() {
   const uploadRib = async () => {
     if (!ribFile || !user) return;
     if (uploadLockRef.current) return;
-    uploadLockRef.current = true;
-    const ext = ribFile.name.split('.').pop()?.toLowerCase() || 'pdf';
-    const allowed = ['pdf', 'jpg', 'jpeg', 'png'];
-    if (!allowed.includes(ext)) {
-      toast.error('Format accepté : PDF, JPG ou PNG');
-      return;
-    }
-    if (ribFile.size > 5 * 1024 * 1024) {
-      toast.error('Fichier trop volumineux (max 5 Mo)');
+    const validation = await verifierFichierDocument(ribFile, { maxBytes: 5 * 1024 * 1024 });
+    if (validation.ok === false) {
+      toast.error(validation.message);
       return;
     }
 
+    uploadLockRef.current = true;
     setUploading(true);
     try {
-      const path = `${user.id}/rib.${ext}`;
+      // Une nouvelle clé évite tout écrasement d'une preuve déjà vérifiée et
+      // reste compatible avec la politique Storage immuable.
+      const path = `${user.id}/rib-etablissement-${Date.now()}-${globalThis.crypto.randomUUID()}.${validation.extension}`;
+      const ancienRibKey = etabInfo?.rib_s3_key && etabInfo.rib_s3_key !== 'legacy/auto-backfill'
+        ? etabInfo.rib_s3_key
+        : null;
       const { error: upErr } = await supabase.storage
         .from('jolene-documents')
-        .upload(path, ribFile, { upsert: true });
+        .upload(path, ribFile, { upsert: false, contentType: validation.mime });
       if (upErr) throw upErr;
 
-      const { error: updErr } = await supabase
+      const { data: updated, error: updErr } = await supabase
         .from('etablissements')
-        .update({ rib_s3_key: path } as any)
-        .eq('id', user.id);
-      if (updErr) throw updErr;
+        .update({ rib_s3_key: path })
+        .eq('id', user.id)
+        .select('id')
+        .maybeSingle();
+      if (updErr || !updated) {
+        await supabase.functions.invoke('verify-rib-etablissement', {
+          body: { action: 'cleanup_orphan', etablissement_id: user.id, rib_s3_key: path },
+        });
+        throw updErr || new Error('Établissement introuvable');
+      }
+      if (ancienRibKey && ancienRibKey !== path) {
+        void supabase.functions.invoke('verify-rib-etablissement', {
+          body: { action: 'cleanup_orphan', etablissement_id: user.id, rib_s3_key: ancienRibKey },
+        });
+      }
 
-      // Vérification IA du RIB (est-ce un RIB ? titulaire = établissement ?).
-      supabase.functions.invoke('verify-rib-etablissement', {
+      // Le téléversement et la validation sont deux états distincts : l'échec
+      // de l'analyse ne transforme jamais le RIB en preuve vérifiée.
+      const { data: verification, error: verificationError } = await supabase.functions.invoke('verify-rib-etablissement', {
         body: { etablissement_id: user.id },
-      }).catch(() => { /* best-effort */ });
+      });
 
-      toast.success('RIB uploadé avec succès !');
       setRibUploaded(true);
+      if (verificationError || verification?.ok === false) {
+        toast.warning('RIB enregistré. Sa vérification reste en cours.');
+      } else if (verification?.coherent === true) {
+        toast.success('RIB enregistré et contrôlé.');
+      } else {
+        toast.success('RIB enregistré. Une revue peut encore être nécessaire.');
+      }
 
       setTimeout(() => {
-        toast.success('Inscription finalisée ! Bienvenue sur Jolene.');
-        navigate('/etablissement/tableau-de-bord');
+        navigate('/etablissement/activer');
       }, 1200);
-    } catch (err: any) {
-      toast.error(err?.message || 'Erreur lors de l\'upload');
+    } catch {
+      toast.error('Le RIB n’a pas pu être enregistré. Réessayez.');
     } finally {
       uploadLockRef.current = false;
       setUploading(false);
     }
   };
 
-  const allDone = contratSigne && ribUploaded;
+  const preparationAdministrativeTerminee = contratSigne && ribUploaded;
+  const activationComplete = !!etabInfo
+    && contratSigne
+    && etabInfo.statut_verification === 'VERIFIE'
+    && etabInfo.peut_publier_missions === true
+    && etabInfo.siret_verifie === true
+    && !!etabInfo.finess
+    && etabInfo.finess_verifie === true
+    && etabInfo.representant_identite_verifiee === true
+    && etabInfo.rattachement_verifie === true;
 
   if (loading) {
     return (
       <LayoutApp role="ADMIN_ETABLISSEMENT">
         <div className="flex items-center justify-center py-20">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      </LayoutApp>
+    );
+  }
+
+  if (loadError || !etabInfo) {
+    return (
+      <LayoutApp role="ADMIN_ETABLISSEMENT">
+        <div className="max-w-xl mx-auto rounded-xl border border-destructive/30 bg-destructive/5 p-5">
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="h-5 w-5 text-destructive shrink-0 mt-0.5" aria-hidden="true" />
+            <div>
+              <h1 className="font-semibold text-foreground">Inscription indisponible</h1>
+              <p className="text-sm text-muted-foreground mt-1">{loadError || 'Profil établissement introuvable.'}</p>
+              <BoutonY2K size="sm" variant="secondary" className="mt-3" onClick={() => navigate('/etablissement/tableau-de-bord')}>
+                Retour au tableau de bord
+              </BoutonY2K>
+            </div>
+          </div>
         </div>
       </LayoutApp>
     );
@@ -219,7 +305,7 @@ export default function FinaliserInscriptionEtab() {
             <h1 className="text-xl font-bold text-foreground flex items-center gap-2">
               <Shield className="h-5 w-5 text-primary" /> Finaliser votre inscription
             </h1>
-            <p className="text-xs text-muted-foreground">2 étapes pour commencer à publier des missions</p>
+            <p className="text-xs text-muted-foreground">Préparation administrative avant vérification complète</p>
           </div>
         </div>
 
@@ -236,17 +322,27 @@ export default function FinaliserInscriptionEtab() {
           </div>
         </div>
 
-        {allDone && (
-          <div className="rounded-xl border-2 border-success/30 bg-success/5 p-4 flex items-start gap-3">
-            <CheckCircle className="h-6 w-6 text-success shrink-0 mt-0.5" />
+        {preparationAdministrativeTerminee && (
+          <div className={`rounded-xl border-2 p-4 flex items-start gap-3 ${activationComplete ? 'border-success/30 bg-success/5' : 'border-amber-300/60 bg-amber-50/70 dark:bg-amber-950/20'}`}>
+            {activationComplete
+              ? <CheckCircle className="h-6 w-6 text-success shrink-0 mt-0.5" aria-hidden="true" />
+              : <AlertTriangle className="h-6 w-6 text-amber-600 shrink-0 mt-0.5" aria-hidden="true" />}
             <div>
-              <p className="font-semibold text-foreground">Inscription finalisée</p>
+              <p className="font-semibold text-foreground">
+                {activationComplete ? 'Établissement vérifié' : 'Préparation administrative terminée'}
+              </p>
               <p className="text-sm text-muted-foreground mt-1">
-                Votre contrat de service est signé et votre RIB est enregistré. Vous pouvez publier des missions.
+                {activationComplete
+                  ? 'Tous les contrôles requis sont validés. Vous pouvez publier des missions.'
+                  : 'Le contrat et le RIB sont enregistrés. Le compte reste en cours de vérification tant que le SIRET, le FINESS, l’identité et l’habilitation du représentant ne sont pas tous validés.'}
               </p>
               <div className="flex gap-2 mt-3">
-                <BoutonY2K size="sm" variant="secondary" onClick={() => navigate('/etablissement/tableau-de-bord')}>
-                  Aller au dashboard
+                <BoutonY2K
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => navigate(activationComplete ? '/etablissement/tableau-de-bord' : '/etablissement/activer')}
+                >
+                  {activationComplete ? 'Aller au tableau de bord' : 'Poursuivre la vérification'}
                 </BoutonY2K>
               </div>
             </div>
@@ -315,15 +411,26 @@ export default function FinaliserInscriptionEtab() {
                 <Upload className="h-4 w-4 text-primary" /> Relevé d'identité bancaire (RIB)
               </p>
               <p className="text-xs text-muted-foreground" id="rib-help">
-                Votre RIB est nécessaire pour les opérations de paiement sur la plateforme (prélèvements commission, virements). Format PDF, JPG ou PNG (max 5 Mo). Donnée chiffrée et accessible uniquement par l'admin Jolene.
+                Votre RIB est nécessaire pour les opérations de paiement sur la plateforme (prélèvements commission, virements). Format PDF, JPEG, PNG ou WebP (max 5 Mo). Donnée chiffrée et accessible uniquement par l'admin Jolene.
               </p>
               <input
                 id="rib-file-input"
                 type="file"
-                accept=".pdf,.jpg,.jpeg,.png"
-                onChange={e => setRibFile(e.target.files?.[0] || null)}
+                accept="application/pdf,image/jpeg,image/png,image/webp"
+                onChange={async e => {
+                  const selected = e.target.files?.[0] || null;
+                  if (!selected) { setRibFile(null); return; }
+                  const validation = await verifierFichierDocument(selected, { maxBytes: 5 * 1024 * 1024 });
+                  if (validation.ok === false) {
+                    setRibFile(null);
+                    toast.error(validation.message);
+                    e.target.value = '';
+                    return;
+                  }
+                  setRibFile(selected);
+                }}
                 className="block w-full text-sm text-foreground file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-primary/10 file:text-primary hover:file:bg-primary/20 cursor-pointer"
-                aria-label="Téléverser votre RIB (PDF, JPG ou PNG, 5 Mo max)"
+                aria-label="Téléverser votre RIB (PDF, JPEG, PNG ou WebP, 5 Mo max)"
                 aria-describedby="rib-help"
               />
               {ribFile && (
@@ -340,7 +447,7 @@ export default function FinaliserInscriptionEtab() {
         )}
 
         {/* Step 2 done */}
-        {ribUploaded && step === 2 && !allDone && (
+        {ribUploaded && step === 2 && !preparationAdministrativeTerminee && (
           <div className="rounded-xl border border-success/20 bg-success/5 p-3 flex items-center gap-3">
             <CheckCircle className="h-5 w-5 text-success shrink-0" />
             <p className="text-sm font-medium text-foreground">RIB enregistré</p>

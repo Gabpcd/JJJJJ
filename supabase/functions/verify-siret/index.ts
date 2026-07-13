@@ -1,5 +1,6 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.99.2';
 import { applyRateLimit, getClientIp } from '../_shared/rate-limit.ts';
+import { verifyUserOrServiceRole } from '../_shared/admin-auth.ts';
 import { corsHeaders, jsonResponse, preflightResponse } from '../_shared/cors.ts';
 
 async function fingerprint(value: string): Promise<string> {
@@ -19,12 +20,12 @@ const NAF_SANTE = new Set([
 
 const PREFIXES_PUBLIC = ['7', '4'];
 
-function estSecteurPublic(categorieJuridique: string): boolean {
+function estSecteurPublic(categorieJuridique: string | null | undefined): boolean {
   if (!categorieJuridique) return false;
   return PREFIXES_PUBLIC.some(p => categorieJuridique.startsWith(p));
 }
 
-function estNafSante(codeNaf: string): boolean {
+function estNafSante(codeNaf: string | null | undefined): boolean {
   if (!codeNaf) return false;
   const normalized = codeNaf.length === 5 ? `${codeNaf.slice(0, 2)}.${codeNaf.slice(2)}` : codeNaf;
   return NAF_SANTE.has(normalized);
@@ -44,9 +45,155 @@ interface VerificationResult {
   dirigeants?: unknown[] | null;
 }
 
-function findMatchingEtablissement(results: any[], siret: string): { matching: any; matchingEtab: any } {
+interface SoignantIdentity {
+  id: string;
+  prenom: string;
+  nom: string;
+  date_naissance: string | null;
+  siret_liberal: string | null;
+  statut_liberal: string | null;
+  type_contrat: string | null;
+}
+
+interface RegistreEtablissement {
+  siret?: string | null;
+  activite_principale?: string | null;
+  libelle_activite_principale?: string | null;
+  etat_administratif?: string | null;
+}
+
+interface RegistreEntreprise extends Record<string, unknown> {
+  matching_etablissements?: RegistreEtablissement[] | null;
+  siege?: RegistreEtablissement | null;
+  nom_raison_sociale?: string | null;
+  nom_complet?: string | null;
+  activite_principale?: string | null;
+  libelle_activite_principale?: string | null;
+  nature_juridique?: string | null;
+  dirigeants?: unknown[] | null;
+  complements?: { est_entrepreneur_individuel?: boolean | null } | null;
+}
+
+interface EtablissementVerificationSnapshot {
+  verification_source_version: number | string;
+  siret: string | null;
+}
+
+const SOIGNANT_USAGE = 'SOIGNANT_LIBERAL';
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function estSiretValide(siret: string): boolean {
+  if (!/^\d{14}$/.test(siret) || /^0+$/.test(siret)) return false;
+  let somme = 0;
+  for (let index = 0; index < siret.length; index += 1) {
+    let chiffre = Number(siret[index]);
+    if (index % 2 === 0) {
+      chiffre *= 2;
+      if (chiffre > 9) chiffre -= 9;
+    }
+    somme += chiffre;
+  }
+  return somme % 10 === 0;
+}
+
+function normaliserIdentite(value: unknown): string {
+  return typeof value === 'string'
+    ? value.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9]+/g, ' ').trim()
+    : '';
+}
+
+function contientSequence(haystack: string, needle: string): boolean {
+  return !!needle && (` ${haystack} `).includes(` ${needle} `);
+}
+
+function naissanceCompatible(dateProfil: string | null, dirigeant: Record<string, unknown>): boolean | null {
+  // Sans date de naissance Jolene, une simple homonymie ne doit jamais suffire
+  // à activer une preuve SIRET libérale.
+  if (!dateProfil) return false;
+  const dateOfficielle = typeof dirigeant.date_de_naissance === 'string'
+    ? dirigeant.date_de_naissance.trim()
+    : '';
+  if (dateOfficielle) {
+    // L'API expose en général AAAA-MM, parfois une date complète.
+    if (!/^\d{4}(?:-\d{2}(?:-\d{2})?)?$/.test(dateOfficielle)) return null;
+    return dateProfil.slice(0, dateOfficielle.length) === dateOfficielle;
+  }
+  const anneeOfficielle = typeof dirigeant.annee_de_naissance === 'string'
+    ? dirigeant.annee_de_naissance.trim()
+    : '';
+  if (!anneeOfficielle) return null;
+  if (!/^\d{4}$/.test(anneeOfficielle)) return null;
+  return dateProfil.slice(0, 4) === anneeOfficielle;
+}
+
+/**
+ * Le SIRET libéral doit appartenir au soignant. Un rapprochement flou (préfixe
+ * de prénom, simple mot commun) n'est jamais suffisant : nom exact + prénom
+ * complet, et date/année de naissance obligatoirement publiée par le registre.
+ * `null` signifie que le registre ne publie pas assez d'information pour une
+ * activation automatique : la preuve reste en attente de revue.
+ */
+function identiteSoignantCoherente(
+  soignant: SoignantIdentity,
+  matching: RegistreEntreprise,
+): boolean | null {
+  const nomProfil = normaliserIdentite(soignant.nom);
+  const prenomProfil = normaliserIdentite(soignant.prenom);
+  if (!nomProfil || !prenomProfil) return false;
+
+  const dirigeants = Array.isArray(matching.dirigeants) ? matching.dirigeants : [];
+  const dirigeantsPhysiques = dirigeants.filter((raw) => {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return false;
+    const dirigeant = raw as Record<string, unknown>;
+    const type = normaliserIdentite(dirigeant.type_dirigeant);
+    return (!type || type === 'personne physique')
+      && typeof dirigeant.nom === 'string'
+      && typeof (dirigeant.prenoms ?? dirigeant.prenom) === 'string';
+  });
+  let identiteSansNaissanceOfficielle = false;
+  const dirigeantCorrespondant = dirigeantsPhysiques.some((raw) => {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return false;
+    const dirigeant = raw as Record<string, unknown>;
+    const nom = normaliserIdentite(dirigeant.nom);
+    const prenoms = normaliserIdentite(dirigeant.prenoms ?? dirigeant.prenom);
+    if (nom !== nomProfil || !contientSequence(prenoms, prenomProfil)) return false;
+    const naissance = naissanceCompatible(soignant.date_naissance, dirigeant);
+    if (naissance === null) identiteSansNaissanceOfficielle = true;
+    return naissance === true;
+  });
+  if (dirigeantCorrespondant) return true;
+  if (identiteSansNaissanceOfficielle) return null;
+  // Si le registre publie des dirigeants physiques, l'absence de correspondance
+  // est une incohérence ferme (notamment en cas de date de naissance différente).
+  if (dirigeantsPhysiques.length > 0) return false;
+
+  // Les entrepreneurs individuels ne publient pas toujours un tableau de
+  // dirigeants. Dans ce cas, le nom complet / la raison sociale doit contenir
+  // les séquences complètes du nom ET du prénom déclarés sur Jolene.
+  if (matching.complements?.est_entrepreneur_individuel !== true) return false;
+  const nomsOfficiels = [matching.nom_complet, matching.nom_raison_sociale]
+    .map(normaliserIdentite)
+    .filter(Boolean);
+  const nomEiCorrespond = nomsOfficiels.some((nomOfficiel) =>
+    contientSequence(nomOfficiel, nomProfil) && contientSequence(nomOfficiel, prenomProfil)
+  );
+  // Le nom d'un entrepreneur individuel confirme une piste, mais sans date ou
+  // année officielle il ne distingue pas de façon sûre deux homonymes.
+  return nomEiCorrespond ? null : false;
+}
+
+function resultatPublic(result: VerificationResult) {
+  const { dirigeants: _dirigeants, ...publicResult } = result;
+  return publicResult;
+}
+
+function findMatchingEtablissement(
+  results: RegistreEntreprise[],
+  siret: string,
+): { matching: RegistreEntreprise | null; matchingEtab: RegistreEtablissement | null } {
   for (const r of results) {
-    if (r.matching_etablissements) {
+    if (Array.isArray(r.matching_etablissements)) {
       for (const e of r.matching_etablissements) {
         if (e.siret === siret) return { matching: r, matchingEtab: e };
       }
@@ -56,7 +203,10 @@ function findMatchingEtablissement(results: any[], siret: string): { matching: a
   return { matching: null, matchingEtab: null };
 }
 
-function buildResult(matching: any, matchingEtab: any): VerificationResult {
+function buildResult(
+  matching: RegistreEntreprise | null,
+  matchingEtab: RegistreEtablissement | null,
+): VerificationResult {
   if (!matching) {
     return {
       statut: 'INTROUVABLE', raison_sociale: null, est_actif: false,
@@ -126,9 +276,10 @@ Deno.serve(async (req) => {
     // est protégée contre l'abus par le rate-limit IP (20/min) défini au-dessus.
     const body = await req.json().catch(() => null) as Record<string, unknown> | null;
     if (!body || Array.isArray(body)) return jsonResponse(req, { error: 'Corps JSON invalide' }, 400);
-    const siret = typeof body.siret === 'string' ? body.siret.trim() : '';
+    const siret = typeof body.siret === 'string' ? body.siret.replace(/\s/g, '') : '';
     const etablissement_id = typeof body.etablissement_id === 'string' ? body.etablissement_id : null;
-    if (!siret || !/^\d{14}$/.test(siret)) {
+    const usage = body.usage === SOIGNANT_USAGE ? SOIGNANT_USAGE : null;
+    if (!estSiretValide(siret)) {
       return new Response(JSON.stringify({ ok: false, code: 'SIRET_INVALID', error: 'SIRET invalide' }), {
         status: 400,
         headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
@@ -140,9 +291,71 @@ Deno.serve(async (req) => {
     if (!serviceRoleKey || !supabaseUrl) return jsonResponse(req, { error: 'Service indisponible' }, 503);
     const authHeader = req.headers.get('Authorization') || '';
     const tokenVal = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
+    const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false } });
+
+    // Snapshot pris AVANT l'appel au registre. L'autorisation d'écrire sera
+    // volontairement recalculée après l'appel ; la RPC exige en plus que cette
+    // version n'ait pas bougé entre les deux.
+    let etablissementSnapshot: EtablissementVerificationSnapshot | null = null;
+    if (usage !== SOIGNANT_USAGE && etablissement_id && UUID_RE.test(etablissement_id)) {
+      const { data: snapshot, error: snapshotError } = await supabaseAdmin
+        .from('etablissements')
+        .select('verification_source_version, siret')
+        .eq('id', etablissement_id)
+        .maybeSingle();
+      if (snapshotError) {
+        console.error('verify-siret: snapshot établissement impossible', snapshotError.code || snapshotError.message);
+        return jsonResponse(req, { ok: false, code: 'SERVICE_INDISPONIBLE', error: 'Vérification temporairement indisponible' }, 503);
+      }
+      etablissementSnapshot = snapshot as EtablissementVerificationSnapshot | null;
+    }
+
+    let soignant: SoignantIdentity | null = null;
+    if (usage === SOIGNANT_USAGE) {
+      const auth = await verifyUserOrServiceRole(req);
+      // Ce parcours ne cible jamais un identifiant fourni par le client : seul
+      // le profil rattaché au JWT utilisateur peut être modifié.
+      if (!auth.ok) return jsonResponse(req, { ok: false, code: 'NON_AUTHENTIFIE', error: auth.error }, auth.status);
+      if (auth.isServiceRole || !auth.userId) {
+        return jsonResponse(req, { ok: false, code: 'SESSION_UTILISATEUR_REQUISE', error: 'Session soignant requise' }, 403);
+      }
+      if ('soignant_id' in body && body.soignant_id !== auth.userId) {
+        return jsonResponse(req, { ok: false, code: 'NON_AUTORISE', error: 'Modification non autorisée' }, 403);
+      }
+
+      const { data: profil, error: profilError } = await supabaseAdmin
+        .from('soignants')
+        .select('id, prenom, nom, date_naissance, siret_liberal, statut_liberal, type_contrat')
+        .eq('id', auth.userId)
+        .maybeSingle();
+      if (profilError) {
+        console.error('verify-siret: lecture profil soignant impossible', profilError.message);
+        return jsonResponse(req, { ok: false, code: 'SERVICE_INDISPONIBLE', error: 'Vérification temporairement indisponible' }, 503);
+      }
+      if (!profil) return jsonResponse(req, { ok: false, code: 'PROFIL_INTROUVABLE', error: 'Profil soignant introuvable' }, 404);
+      soignant = profil as SoignantIdentity;
+
+      if (!soignant.date_naissance) {
+        return jsonResponse(req, {
+          ok: false,
+          code: 'IDENTITE_INCOMPLETE',
+          enregistre: false,
+          error: 'Renseignez et vérifiez votre date de naissance avant le contrôle du SIRET',
+        }, 409);
+      }
+
+      const liberalActif = soignant.statut_liberal === 'ACTIF' || soignant.type_contrat === 'LIBERAL';
+      if (liberalActif && soignant.siret_liberal && soignant.siret_liberal !== siret) {
+        return jsonResponse(req, {
+          ok: false,
+          code: 'SIRET_MODIFICATION_VERROUILLEE',
+          error: 'Le SIRET d’un statut libéral actif ne peut pas être remplacé depuis ce formulaire',
+        });
+      }
+    }
+
     if (tokenVal !== serviceRoleKey) {
-      const admin = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false } });
-      const { data: allowed, error: rateError } = await admin.rpc('fn_verifier_rate_limit', {
+      const { data: allowed, error: rateError } = await supabaseAdmin.rpc('fn_verifier_rate_limit', {
         p_cle: await fingerprint(clientIp === 'unknown'
           ? `unknown|${(req.headers.get('user-agent') || '').slice(0, 160)}`
           : clientIp),
@@ -155,6 +368,8 @@ Deno.serve(async (req) => {
     }
 
     let result: VerificationResult;
+    let matching: RegistreEntreprise | null = null;
+    let registreDisponible = true;
 
     try {
       const rechercheUrl = `https://recherche-entreprises.api.gouv.fr/search?q=${siret}&mtm_campaign=jolene`;
@@ -164,13 +379,21 @@ Deno.serve(async (req) => {
       });
 
       if (!response.ok) {
-        result = buildResult(null, null);
+        registreDisponible = false;
+        result = {
+          statut: 'ALERTE', raison_sociale: null, est_actif: false,
+          est_sante: false, est_public: false, code_naf: null,
+          libelle_naf: null, categorie_juridique: null,
+          message: 'Service de vérification temporairement indisponible — réessaie plus tard',
+        };
       } else {
-        const data = await response.json();
-        const { matching, matchingEtab } = findMatchingEtablissement(data.results || [], siret);
-        result = buildResult(matching, matchingEtab);
+        const data = await response.json() as { results?: RegistreEntreprise[] };
+        const found = findMatchingEtablissement(Array.isArray(data.results) ? data.results : [], siret);
+        matching = found.matching;
+        result = buildResult(found.matching, found.matchingEtab);
       }
     } catch (fetchErr) {
+      registreDisponible = false;
       console.error('API recherche-entreprises error:', fetchErr);
       result = {
         statut: 'ALERTE', raison_sociale: null, est_actif: false,
@@ -178,6 +401,98 @@ Deno.serve(async (req) => {
         libelle_naf: null, categorie_juridique: null,
         message: 'Service de vérification temporairement indisponible — Vérification manuelle requise',
       };
+    }
+
+    if (usage === SOIGNANT_USAGE && soignant) {
+      if (!registreDisponible) {
+        return jsonResponse(req, {
+          ok: false,
+          code: 'REGISTRE_INDISPONIBLE',
+          enregistre: false,
+          ...resultatPublic(result),
+        });
+      }
+      if (!matching || !result.est_actif) {
+        return jsonResponse(req, {
+          ok: false,
+          code: matching ? 'SIRET_INACTIF' : 'SIRET_INTROUVABLE',
+          enregistre: false,
+          ...resultatPublic(result),
+          message: matching ? 'Ce SIRET est fermé ou radié' : result.message,
+        });
+      }
+      if (!result.est_sante) {
+        return jsonResponse(req, {
+          ok: false,
+          code: 'ACTIVITE_NON_SANTE',
+          enregistre: false,
+          ...resultatPublic(result),
+          message: 'L’activité officielle de ce SIRET ne relève pas du secteur de la santé',
+        });
+      }
+
+      const coherenceIdentite = identiteSoignantCoherente(soignant, matching);
+      if (coherenceIdentite === null) {
+        return jsonResponse(req, {
+          ok: false,
+          code: 'IDENTITE_NON_CONFIRMABLE',
+          enregistre: false,
+          ...resultatPublic(result),
+          statut: 'ALERTE',
+          coherence_identite: null,
+          message: 'Le registre ne publie pas de date ou d’année de naissance permettant de confirmer automatiquement le titulaire. Revue manuelle requise.',
+        });
+      }
+      if (coherenceIdentite === false) {
+        return jsonResponse(req, {
+          ok: false,
+          code: 'IDENTITE_INCOHERENTE',
+          enregistre: false,
+          ...resultatPublic(result),
+          statut: 'ALERTE',
+          coherence_identite: false,
+          message: 'Le titulaire ou dirigeant officiel de ce SIRET ne correspond pas à ton identité Jolene',
+        });
+      }
+
+      const { data: applique, error: updateError } = await supabaseAdmin.rpc(
+        'fn_appliquer_verification_siret_soignant',
+        {
+          p_soignant_id: soignant.id,
+          p_expected_prenom: soignant.prenom,
+          p_expected_nom: soignant.nom,
+          p_expected_date_naissance: soignant.date_naissance,
+          p_expected_siret_liberal: soignant.siret_liberal,
+          p_expected_statut_liberal: soignant.statut_liberal,
+          p_expected_type_contrat: soignant.type_contrat,
+          p_siret: siret,
+          p_raison_sociale: result.raison_sociale,
+        },
+      );
+      if (updateError) {
+        console.error('verify-siret: persistance SIRET libéral impossible', updateError.code);
+        const dejaUtilise = updateError.code === '23505';
+        return jsonResponse(req, {
+          ok: false,
+          code: dejaUtilise ? 'SIRET_DEJA_UTILISE' : 'PERSISTENCE_IMPOSSIBLE',
+          error: dejaUtilise ? 'Ce SIRET est déjà rattaché à un autre compte' : 'Impossible d’enregistrer le SIRET vérifié',
+        }, dejaUtilise ? 200 : 503);
+      }
+      if (applique !== true) {
+        return jsonResponse(req, {
+          ok: false,
+          code: 'VERIFICATION_SOURCE_CHANGED',
+          enregistre: false,
+          error: 'Votre identité, votre SIRET ou votre statut a changé pendant la vérification. Relancez le contrôle.',
+        }, 409);
+      }
+
+      return jsonResponse(req, {
+        ok: true,
+        enregistre: true,
+        ...resultatPublic(result),
+        coherence_identite: true,
+      });
     }
 
     // Écriture en base : UNIQUEMENT si SIRET vérifié + etablissement_id fourni
@@ -207,31 +522,39 @@ Deno.serve(async (req) => {
       }
 
       if (autorise) {
-        try {
-          const supabaseAdmin = createClient(
-            supabaseUrl,
-            serviceRoleKey,
-            { auth: { persistSession: false } }
-          );
-          await supabaseAdmin.from('etablissements').update({
-            siret_verifie: true,
-            siret_verifie_le: new Date().toISOString(),
-            siret_est_actif: result.est_actif,
-            siret_code_naf: result.code_naf,
-            siret_raison_sociale: result.raison_sociale,
-            siret_categorie_juridique: result.categorie_juridique,
-            dirigeants: result.dirigeants ?? null,
-            est_secteur_public: result.est_public,
-            statut_verification: 'VERIFIE',
-          }).eq('id', etablissement_id).eq('siret', siret);
-          console.log(`SIRET vérifié → etablissement ${etablissement_id} mis à jour`);
-        } catch (updateErr) {
-          console.error('Erreur update etablissement après vérification SIRET:', updateErr);
+        if (!etablissementSnapshot) {
+          return jsonResponse(req, { ok: false, code: 'VERIFICATION_SOURCE_CHANGED', error: 'Le profil établissement a changé. Relancez le contrôle.' }, 409);
+        }
+        const { data: applique, error: updateError } = await supabaseAdmin.rpc(
+          'fn_appliquer_verification_siret_etablissement',
+          {
+            p_etablissement_id: etablissement_id,
+            p_version_attendue: Number(etablissementSnapshot.verification_source_version),
+            p_siret: siret,
+            p_verifie: true,
+            p_est_actif: result.est_actif,
+            p_code_naf: result.code_naf,
+            p_raison_sociale: result.raison_sociale,
+            p_categorie_juridique: result.categorie_juridique,
+            p_dirigeants: result.dirigeants ?? null,
+            p_est_secteur_public: result.est_public,
+          },
+        );
+        if (updateError) {
+          console.error('verify-siret: persistance établissement impossible', updateError.code || updateError.message);
+          return jsonResponse(req, { ok: false, code: 'PERSISTENCE_IMPOSSIBLE', error: 'Impossible d’enregistrer la vérification SIRET' }, 503);
+        }
+        if (applique !== true) {
+          return jsonResponse(req, {
+            ok: false,
+            code: 'VERIFICATION_SOURCE_CHANGED',
+            error: 'Le SIRET ou le profil a changé pendant la vérification. Relancez le contrôle.',
+          }, 409);
         }
       }
     }
 
-    return new Response(JSON.stringify({ ok: true, ...result }), {
+    return new Response(JSON.stringify({ ok: true, ...resultatPublic(result) }), {
       status: 200,
       headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
     });

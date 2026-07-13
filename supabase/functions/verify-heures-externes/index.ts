@@ -1,33 +1,20 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { applyRateLimit, getClientIp } from "../_shared/rate-limit.ts";
 import { appelerAnthropic } from "../_shared/anthropic.ts";
+import { corsHeaders } from "../_shared/cors.ts";
+import {
+  corporateNameMatches,
+  normalizeIsoCivilDate,
+  personNameMatches,
+  strictAiVerificationQuality,
+  validateDocumentFile,
+} from "../_shared/verification-rules.ts";
 
 // Vérification IA d'une attestation d'heures externes (parcours 3200h libéral).
 // Lit le document téléversé via Anthropic Vision, extrait le nombre d'heures +
 // l'établissement + la période, et confronte au déclaré. Validation auto VALIDE
 // uniquement si cohérent ; sinon EN_ATTENTE (revue admin) ; REJETE si non conforme.
 // Calqué sur verify-document (auth, modèle, gestion PDF/image, timeout 20s).
-
-function getCorsOrigin(req: Request): string {
-  const origin = req.headers.get("origin") || "";
-  if (
-    origin === "https://jolene.app" ||
-    origin === "https://app.jolene.app" ||
-    origin === "https://www.jolene.app" ||
-    origin === "http://localhost:5173" ||
-    origin === "http://localhost:8080"
-  ) {
-    return origin;
-  }
-  return "https://jolene.app";
-}
-
-function corsHeaders(req: Request) {
-  return {
-    "Access-Control-Allow-Origin": getCorsOrigin(req),
-    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
-  };
-}
 
 function wait(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -66,14 +53,12 @@ async function loadHeureWithRetry(supabase: any, id: string, attempts = 4) {
   throw new Error("Déclaration d'heures introuvable");
 }
 
-// Devine le type MIME à partir de l'extension du fichier (le bucket ne stocke
-// pas toujours le content-type de façon fiable côté download).
+// Fallback réservé aux anciens objets dont Storage ne conservait pas le MIME.
 function devinerMime(nom: string | null): string {
   const n = (nom || "").toLowerCase();
   if (n.endsWith(".pdf")) return "application/pdf";
   if (n.endsWith(".png")) return "image/png";
   if (n.endsWith(".webp")) return "image/webp";
-  if (n.endsWith(".gif")) return "image/gif";
   return "image/jpeg";
 }
 
@@ -122,7 +107,140 @@ Deno.serve(async (req) => {
       }
     }
 
-    const { heure_externe_id } = await req.json();
+    const action = typeof body?.action === "string" ? body.action : "verify";
+    const heure_externe_id = body?.heure_externe_id;
+
+    if (action === "cleanup_orphan") {
+      if (isServiceRole || !authUserId) {
+        return new Response(JSON.stringify({ error: "Action réservée au propriétaire du dépôt" }), {
+          status: 403,
+          headers: { ...corsHeaders(req), "Content-Type": "application/json" },
+        });
+      }
+      const path = String(body?.attestation_url || "");
+      const pathAutorise = path.startsWith(`${authUserId}/heures-externes/`)
+        && !path.includes("..")
+        && !path.includes("\\");
+      if (!pathAutorise) {
+        return new Response(JSON.stringify({ error: "Chemin d'attestation non autorisé" }), {
+          status: 403,
+          headers: { ...corsHeaders(req), "Content-Type": "application/json" },
+        });
+      }
+      const { data: reference, error: referenceError } = await supabaseAdmin.from("heures_externes_soignants")
+        .select("id")
+        .eq("attestation_url", path)
+        .limit(1)
+        .maybeSingle();
+      if (referenceError) throw referenceError;
+      if (reference) {
+        return new Response(JSON.stringify({ error: "Cette attestation est déjà rattachée à une déclaration" }), {
+          status: 409,
+          headers: { ...corsHeaders(req), "Content-Type": "application/json" },
+        });
+      }
+      const { error: removeError } = await supabaseAdmin.storage.from("jolene-documents").remove([path]);
+      if (removeError) throw new Error("Nettoyage du dépôt incomplet");
+      return new Response(JSON.stringify({ success: true }), {
+        headers: { ...corsHeaders(req), "Content-Type": "application/json" },
+      });
+    }
+
+    if (action === "delete") {
+      if (!heure_externe_id) throw new Error("heure_externe_id requis");
+      const { data: ligneASupprimer, error: ligneError } = await supabaseAdmin
+        .from("heures_externes_soignants")
+        .select("id, soignant_id, statut_validation, attestation_url")
+        .eq("id", heure_externe_id)
+        .maybeSingle();
+      if (ligneError) throw ligneError;
+      if (!ligneASupprimer) {
+        // Reprise idempotente : si la ligne a déjà été supprimée mais
+        // que le nettoyage Storage a échoué, le propriétaire peut renvoyer
+        // le chemin qu'il avait reçu. Aucune autre preuve de son espace ne peut
+        // être ciblée par cette branche.
+        const retryPath = String(body?.attestation_url || "");
+        const nouveauChemin = authUserId && retryPath.startsWith(`${authUserId}/heures-externes/`);
+        const ancienChemin = authUserId
+          && retryPath.startsWith(`${authUserId}/`)
+          && retryPath.slice(`${authUserId}/`.length).length > 0
+          && !retryPath.slice(`${authUserId}/`.length).includes("/");
+        if (!isServiceRole && authUserId && (nouveauChemin || ancienChemin)
+          && !retryPath.includes("..") && !retryPath.includes("\\")) {
+          const { data: reference, error: referenceError } = await supabaseAdmin
+            .from("heures_externes_soignants")
+            .select("id")
+            .eq("attestation_url", retryPath)
+            .limit(1)
+            .maybeSingle();
+          if (referenceError) throw referenceError;
+          if (!reference) {
+            const retryBucket = nouveauChemin ? "jolene-documents" : "attestations-heures-externes";
+            const { error: retryRemoveError } = await supabaseAdmin.storage.from(retryBucket).remove([retryPath]);
+            if (retryRemoveError) throw new Error("Suppression du fichier impossible");
+            return new Response(JSON.stringify({ success: true, resumed_cleanup: true }), {
+              headers: { ...corsHeaders(req), "Content-Type": "application/json" },
+            });
+          }
+        }
+        return new Response(JSON.stringify({ error: "Déclaration introuvable" }), {
+          status: 404,
+          headers: { ...corsHeaders(req), "Content-Type": "application/json" },
+        });
+      }
+      if (!isServiceRole && ligneASupprimer.soignant_id !== authUserId) {
+        return new Response(JSON.stringify({ error: "Accès refusé" }), {
+          status: 403,
+          headers: { ...corsHeaders(req), "Content-Type": "application/json" },
+        });
+      }
+      if (!isServiceRole && ligneASupprimer.statut_validation !== "EN_ATTENTE") {
+        return new Response(JSON.stringify({ error: "Seule une déclaration en attente peut être supprimée" }), {
+          status: 409,
+          headers: { ...corsHeaders(req), "Content-Type": "application/json" },
+        });
+      }
+      const path = ligneASupprimer.attestation_url ? String(ligneASupprimer.attestation_url) : null;
+      if (path && (!path.startsWith(`${ligneASupprimer.soignant_id}/`) || path.includes("..") || path.includes("\\"))) {
+        return new Response(JSON.stringify({ error: "Chemin d'attestation non autorisé" }), {
+          status: 403,
+          headers: { ...corsHeaders(req), "Content-Type": "application/json" },
+        });
+      }
+      let deleteQuery = supabaseAdmin.from("heures_externes_soignants")
+        .delete()
+        .eq("id", heure_externe_id)
+        .eq("soignant_id", ligneASupprimer.soignant_id);
+      if (!isServiceRole) deleteQuery = deleteQuery.eq("statut_validation", "EN_ATTENTE");
+      const { data: deleted, error: deleteError } = await deleteQuery.select("id").maybeSingle();
+      if (deleteError) throw new Error("Suppression de la déclaration impossible");
+      if (!deleted) {
+        return new Response(JSON.stringify({ error: "La déclaration a changé ; actualisez avant de la supprimer" }), {
+          status: 409,
+          headers: { ...corsHeaders(req), "Content-Type": "application/json" },
+        });
+      }
+      // La ligne est supprimée en premier : un incident Storage ne laisse
+      // jamais une preuve référencée mais introuvable. Le chemin envoyé par
+      // le client permet une reprise idempotente au prochain essai.
+      if (path) {
+        const bucket = path.includes("/heures-externes/")
+          ? "jolene-documents"
+          : "attestations-heures-externes";
+        const { error: removeError } = await supabaseAdmin.storage.from(bucket).remove([path]);
+        if (removeError) throw new Error("Déclaration supprimée, mais nettoyage du fichier à reprendre");
+      }
+      return new Response(JSON.stringify({ success: true }), {
+        headers: { ...corsHeaders(req), "Content-Type": "application/json" },
+      });
+    }
+
+    if (action !== "verify") {
+      return new Response(JSON.stringify({ error: "Action inconnue" }), {
+        status: 400,
+        headers: { ...corsHeaders(req), "Content-Type": "application/json" },
+      });
+    }
     if (!heure_externe_id) throw new Error("heure_externe_id requis");
 
     const anthropicKey = Deno.env.get("ANTHROPIC_API_KEY");
@@ -156,13 +274,70 @@ Deno.serve(async (req) => {
       });
     }
 
-    const { data: fileData, error: fileErr } = await supabase.storage
-      .from("attestations-heures-externes")
-      .download(ligne.attestation_url);
+    const attestationPath = String(ligne.attestation_url);
+    if (
+      !attestationPath.startsWith(`${ligne.soignant_id}/`)
+      || attestationPath.includes("..")
+      || attestationPath.includes("\\")
+    ) {
+      return new Response(JSON.stringify({ error: "Chemin d'attestation non autorisé" }), {
+        status: 403,
+        headers: { ...corsHeaders(req), "Content-Type": "application/json" },
+      });
+    }
+
+    // Les nouveaux dépôts utilisent le bucket privé reproductible. Le fallback
+    // conserve la lecture des attestations historiques sans déplacer les données.
+    const nouveauBucket = attestationPath.includes("/heures-externes/");
+    const bucketPrincipal = nouveauBucket ? "jolene-documents" : "attestations-heures-externes";
+    const bucketSecours = nouveauBucket ? "attestations-heures-externes" : "jolene-documents";
+    let { data: fileData, error: fileErr } = await supabase.storage
+      .from(bucketPrincipal)
+      .download(attestationPath);
+    if (fileErr || !fileData) {
+      const fallback = await supabase.storage.from(bucketSecours).download(attestationPath);
+      fileData = fallback.data;
+      fileErr = fallback.error;
+    }
     if (fileErr || !fileData) throw new Error("Impossible de télécharger l'attestation");
 
     const arrayBuffer = await fileData.arrayBuffer();
     const bytes = new Uint8Array(arrayBuffer);
+    const declaredMime = fileData.type && fileData.type !== "application/octet-stream"
+      ? fileData.type
+      : devinerMime(ligne.attestation_nom_fichier);
+    const fileValidation = validateDocumentFile(bytes, declaredMime);
+    if (!fileValidation.ok) {
+      const motifs: Record<string, string> = {
+        EMPTY: "L'attestation est vide.",
+        TOO_LARGE: "L'attestation dépasse 10 Mo.",
+        UNSUPPORTED_MIME: "Le type de l'attestation n'est pas autorisé.",
+        INVALID_SIGNATURE: "Le contenu de l'attestation ne correspond pas à son format déclaré.",
+      };
+      const motif = motifs[fileValidation.code];
+      const { data: rejected, error: rejectedError } = await supabase.from("heures_externes_soignants").update({
+        statut_validation: "REJETE",
+        resultat_ia: { controle_fichier: fileValidation.code, regle_version: "2026-07-14" },
+        commentaire_validation: motif,
+        verifie_ia_le: new Date().toISOString(),
+        valide_le: null,
+        mis_a_jour_le: new Date().toISOString(),
+      } as any)
+        .eq("id", heure_externe_id)
+        .eq("attestation_url", attestationPath)
+        .select("id")
+        .maybeSingle();
+      if (rejectedError) throw rejectedError;
+      if (!rejected) {
+        return new Response(JSON.stringify({ error: "L'attestation a changé pendant la vérification" }), {
+          status: 409,
+          headers: { ...corsHeaders(req), "Content-Type": "application/json" },
+        });
+      }
+      return new Response(JSON.stringify({ success: true, verdict: "REJETE", reason: motif }), {
+        headers: { ...corsHeaders(req), "Content-Type": "application/json" },
+      });
+    }
     const chunkSize = 8192;
     let binary = "";
     for (let i = 0; i < bytes.length; i += chunkSize) {
@@ -173,11 +348,7 @@ Deno.serve(async (req) => {
     }
     const base64 = btoa(binary);
 
-    const mime = (fileData as any).type && (fileData as any).type !== "application/octet-stream"
-      ? (fileData as any).type
-      : devinerMime(ligne.attestation_nom_fichier);
-    const ALLOWED_MIME_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif", "application/pdf"];
-    const mimeEffectif = ALLOWED_MIME_TYPES.includes(mime) ? mime : devinerMime(ligne.attestation_nom_fichier);
+    const mimeEffectif = fileValidation.mime;
     const isPdf = mimeEffectif === "application/pdf";
 
     const systemPrompt = `Tu es un vérificateur d'attestations d'heures de travail pour des soignants (parcours d'installation en libéral, seuil réglementaire d'expérience). Analyse le document fourni et réponds UNIQUEMENT en JSON valide avec cette structure exacte:
@@ -192,6 +363,7 @@ Deno.serve(async (req) => {
   "prenom_extrait": "le prénom lu sur le document" ou null,
   "nom_correspond": true/false/null,
   "document_lisible": true/false,
+  "document_complet": true/false,
   "score_confiance": 0-100,
   "confiance": "HAUTE"/"MOYENNE"/"FAIBLE",
   "indices_falsification": ["liste des indices de retouche/montage détectés"] ou [],
@@ -203,6 +375,7 @@ Règles:
 - Une attestation d'heures peut être : attestation d'employeur, certificat de travail, contrat + relevés, bulletins de paie cumulés, attestation Pôle emploi/France Travail.
 - "heures_total" = nombre TOTAL d'heures travaillées sur la période. Si le document donne un nombre de mois/années sans heures précises, estime à null (ne devine pas).
 - nom_correspond : compare le nom/prénom lu sur le document au nom du soignant fourni (tolère casse/accents/ordre). null si aucun nom lisible.
+- document_complet = true seulement si toutes les pages/zones utiles à l'identité, la période et aux heures sont visibles.
 - DÉTECTION DE FALSIFICATION : examine les signes de retouche/montage (polices incohérentes, bords de texte flous/pixellisés, zones recouvertes, arrière-plan altéré). Liste tout signe dans "indices_falsification". Au moindre indice sérieux, verdict = "EN_ATTENTE" et motif_rejet = "Indices de falsification détectés".
 - verdict = "VERIFIE" si c'est bien une attestation d'heures lisible, mentionnant un volume d'heures, confiance HAUTE, ET nom_correspond = true.
 - verdict = "EN_ATTENTE" si document lisible mais volume d'heures absent/ambigu, ou confiance MOYENNE, ou nom_correspond = false/null.
@@ -247,7 +420,7 @@ Lis le document, extrais le nombre réel d'heures travaillées, l'établissement
       console.error("Anthropic call failed:", estTimeout ? "timeout 20s" : e);
       await supabase.from("heures_externes_soignants").update({
         resultat_ia: { erreur_anthropic: { status: estTimeout ? "timeout" : "network", at: new Date().toISOString() } },
-      } as any).eq("id", heure_externe_id);
+      } as any).eq("id", heure_externe_id).eq("attestation_url", attestationPath);
       return new Response(JSON.stringify({ success: true, verdict: "EN_ATTENTE", reason: estTimeout ? "AI timeout" : "AI network error" }), {
         headers: { ...corsHeaders(req), "Content-Type": "application/json" },
       });
@@ -259,9 +432,9 @@ Lis le document, extrais le nombre réel d'heures travaillées, l'établissement
       console.error("Anthropic API failed:", ai.status, errText);
       await supabase.from("heures_externes_soignants").update({
         resultat_ia: {
-          erreur_anthropic: { status: ai.status, body_excerpt: errText.slice(0, 1500), at: new Date().toISOString() },
+          erreur_anthropic: { status: ai.status, body_length: errText.length, at: new Date().toISOString() },
         },
-      } as any).eq("id", heure_externe_id);
+      } as any).eq("id", heure_externe_id).eq("attestation_url", attestationPath);
       return new Response(JSON.stringify({ success: true, verdict: "EN_ATTENTE", reason: "AI unavailable" }), {
         headers: { ...corsHeaders(req), "Content-Type": "application/json" },
       });
@@ -280,16 +453,31 @@ Lis le document, extrais le nombre réel d'heures travaillées, l'établissement
 
     if (!analysis) {
       await supabase.from("heures_externes_soignants").update({
-        resultat_ia: { erreur_parse: { raw_excerpt: rawContent.slice(0, 1500), at: new Date().toISOString() } },
-      } as any).eq("id", heure_externe_id);
+        resultat_ia: { erreur_parse: { raw_length: rawContent.length, at: new Date().toISOString() } },
+      } as any).eq("id", heure_externe_id).eq("attestation_url", attestationPath);
       return new Response(JSON.stringify({ success: true, verdict: "EN_ATTENTE", reason: "Parse error" }), {
         headers: { ...corsHeaders(req), "Content-Type": "application/json" },
       });
     }
 
     // Gates côté code (concordance identité + falsification, comme verify-document).
-    const indicesFalsif = Array.isArray(analysis.indices_falsification) ? analysis.indices_falsification : [];
-    const nomCorrespond = analysis.nom_correspond === true;
+    const quality = strictAiVerificationQuality(analysis);
+    const indicesFalsif = quality.indicators;
+    const nomCorrespond = personNameMatches(
+      soignantNom,
+      soignantPrenom,
+      analysis.nom_extrait,
+      analysis.prenom_extrait,
+    );
+    const etablissementCorrespond = corporateNameMatches(
+      ligne.etablissement_nom,
+      analysis.etablissement_detecte,
+    );
+    const dateDebutExtraite = normalizeIsoCivilDate(analysis.date_debut_detectee);
+    const dateFinExtraite = normalizeIsoCivilDate(analysis.date_fin_detectee);
+    const periodeCorrespond = dateDebutExtraite && dateFinExtraite
+      ? dateDebutExtraite <= ligne.date_debut && dateFinExtraite >= ligne.date_fin
+      : null;
 
     // Cohérence heures extraites vs déclarées : tolérance = max(5% du déclaré, 40h).
     const heuresExtraites = typeof analysis.heures_total === "number" && Number.isFinite(analysis.heures_total)
@@ -304,16 +492,36 @@ Lis le document, extrais le nombre réel d'heures travaillées, l'établissement
 
     let statut: "EN_ATTENTE" | "VALIDE" | "REJETE";
     let commentaire: string | null = null;
-    if (analysis.verdict === "REJETE") {
+    if (analysis.verdict === "REJETE" || analysis.est_attestation_heures === false || analysis.document_lisible === false) {
       statut = "REJETE";
       commentaire = analysis.motif_rejet || "Document non conforme (pas une attestation d'heures).";
-    } else if (indicesFalsif.length > 0) {
+    } else if (nomCorrespond === false) {
+      statut = "REJETE";
+      commentaire = "L'identité lue sur l'attestation ne correspond pas au soignant déclaré.";
+    } else if (etablissementCorrespond === false) {
+      statut = "REJETE";
+      commentaire = "L'établissement lu sur l'attestation ne correspond pas à l'établissement déclaré.";
+    } else if (periodeCorrespond === false) {
+      statut = "REJETE";
+      commentaire = "La période lue sur l'attestation ne couvre pas la période déclarée.";
+    } else if (!quality.antifraudComplete || indicesFalsif.length > 0) {
       statut = "EN_ATTENTE";
-      commentaire = `Indices de falsification détectés : ${indicesFalsif.join(", ")}. Revue manuelle requise.`;
-    } else if (!nomCorrespond && analysis.nom_correspond !== null) {
-      statut = "EN_ATTENTE";
-      commentaire = `Le nom sur le document (${analysis.nom_extrait || "?"} ${analysis.prenom_extrait || "?"}) ne correspond pas au soignant déclaré (${nomCompletSoignant}). Revue manuelle requise.`;
-    } else if (analysis.verdict === "VERIFIE" && heuresExtraites !== null && coherence === true && nomCorrespond) {
+      commentaire = indicesFalsif.length > 0
+        ? `Indices de falsification détectés : ${indicesFalsif.join(", ")}. Revue manuelle requise.`
+        : "Contrôle antifraude incomplet — revue manuelle requise.";
+    } else if (
+      analysis.verdict === "VERIFIE"
+      && analysis.est_attestation_heures === true
+      && analysis.document_lisible === true
+      && analysis.document_complet === true
+      && quality.highConfidence
+      && declare > 0
+      && heuresExtraites !== null
+      && coherence === true
+      && nomCorrespond === true
+      && etablissementCorrespond === true
+      && periodeCorrespond === true
+    ) {
       statut = "VALIDE";
       commentaire = `Validé automatiquement par IA : ${heuresExtraites} h lues, cohérent avec ${declare} h déclarées, identité concordante.`;
     } else if (heuresExtraites !== null && coherence === false) {
@@ -324,16 +532,47 @@ Lis le document, extrais le nombre réel d'heures travaillées, l'établissement
       commentaire = analysis.motif_rejet || "Volume d'heures non extrait avec certitude. Revue manuelle requise.";
     }
 
-    await supabase.from("heures_externes_soignants").update({
+    const resultatPersisted = {
+      est_attestation_heures: typeof analysis.est_attestation_heures === "boolean" ? analysis.est_attestation_heures : null,
+      type_detecte: typeof analysis.type_detecte === "string" ? analysis.type_detecte.slice(0, 200) : null,
+      heures_total: heuresExtraites,
+      etablissement_detecte: typeof analysis.etablissement_detecte === "string" ? analysis.etablissement_detecte.slice(0, 300) : null,
+      date_debut_detectee: dateDebutExtraite,
+      date_fin_detectee: dateFinExtraite,
+      nom_extrait: typeof analysis.nom_extrait === "string" ? analysis.nom_extrait.slice(0, 150) : null,
+      prenom_extrait: typeof analysis.prenom_extrait === "string" ? analysis.prenom_extrait.slice(0, 150) : null,
+      document_lisible: typeof analysis.document_lisible === "boolean" ? analysis.document_lisible : null,
+      document_complet: typeof analysis.document_complet === "boolean" ? analysis.document_complet : null,
+      score_confiance: quality.score,
+      confiance: quality.confidence,
+      indices_falsification: indicesFalsif,
+      verdict: typeof analysis.verdict === "string" ? analysis.verdict.slice(0, 30) : null,
+      identite_match_serveur: nomCorrespond,
+      etablissement_match_serveur: etablissementCorrespond,
+      periode_match_serveur: periodeCorrespond,
+      coherence_heures_serveur: coherence,
+    };
+    const { data: updated, error: updateError } = await supabase.from("heures_externes_soignants").update({
       statut_validation: statut,
       heures_extraites_ia: heuresExtraites,
       coherence_ia: coherence,
-      resultat_ia: analysis,
+      resultat_ia: resultatPersisted,
       commentaire_validation: commentaire,
       verifie_ia_le: new Date().toISOString(),
       valide_le: statut === "VALIDE" ? new Date().toISOString() : null,
       mis_a_jour_le: new Date().toISOString(),
-    } as any).eq("id", heure_externe_id);
+    } as any)
+      .eq("id", heure_externe_id)
+      .eq("attestation_url", attestationPath)
+      .select("id")
+      .maybeSingle();
+    if (updateError) throw updateError;
+    if (!updated) {
+      return new Response(JSON.stringify({ error: "L'attestation a changé pendant la vérification" }), {
+        status: 409,
+        headers: { ...corsHeaders(req), "Content-Type": "application/json" },
+      });
+    }
 
     await supabase.rpc("fn_ecrire_audit_safe" as any, {
       p_acteur_id: ligne.soignant_id,
@@ -347,15 +586,26 @@ Lis le document, extrais le nombre réel d'heures travaillées, l'établissement
         heures_declarees: declare,
         heures_extraites_ia: heuresExtraites,
         coherence_ia: coherence,
-        confiance: analysis.confiance,
+        confiance: quality.confidence,
         verdict_ia: analysis.verdict,
+        identite_correspond: nomCorrespond,
+        etablissement_correspond: etablissementCorrespond,
+        periode_correspond: periodeCorrespond,
       },
       p_ip: null,
       p_navigateur: "edge-function/verify-heures-externes",
     });
 
     return new Response(
-      JSON.stringify({ success: true, verdict: statut, heures_extraites: heuresExtraites, coherence, analysis }),
+      JSON.stringify({
+        success: true,
+        verdict: statut,
+        heures_extraites: heuresExtraites,
+        coherence,
+        identite_correspond: nomCorrespond,
+        etablissement_correspond: etablissementCorrespond,
+        periode_correspond: periodeCorrespond,
+      }),
       { headers: { ...corsHeaders(req), "Content-Type": "application/json" } }
     );
   } catch (e: any) {

@@ -57,3 +57,4 @@ ios/App/App/GoogleService-Info.plist
 
 # Exports prospection (PII) — ne pas versionner les CSV
 exports/prospection/*.csv
+.vercel/

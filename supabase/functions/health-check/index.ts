@@ -1,78 +1,42 @@
 import { createClient } from 'npm:@supabase/supabase-js@2';
-
-function getCorsOrigin(req: Request): string {
-  const origin = req.headers.get("origin") || "";
-  if (
-    origin === "https://jolene.app" ||
-    origin === "https://app.jolene.app" ||
-    origin === "https://www.jolene.app" ||
-    origin === "http://localhost:5173" ||
-    origin === "http://localhost:8080"
-  ) {
-    return origin;
-  }
-  return "https://jolene.app";
-}
-
-function corsHeaders(req: Request) {
-  return {
-    'Access-Control-Allow-Origin': getCorsOrigin(req),
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
-  };
-}
+import { verifyAdminOrServiceRole } from '../_shared/admin-auth.ts';
+import { corsHeaders } from '../_shared/cors.ts';
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders(req) });
   }
 
-  // F-3 fix : support ?secret= query param pour monitoring externe.
-  // Le secret doit matcher HEALTH_CHECK_SECRET (Supabase Vault).
-  const url = new URL(req.url);
-  const querySecret = url.searchParams.get('secret');
-  const healthCheckSecret = Deno.env.get('HEALTH_CHECK_SECRET');
-  const isExternalMonitor = Boolean(
-    querySecret && healthCheckSecret && querySecret === healthCheckSecret
-  );
+  // Une sonde HEAD publique confirme seulement que le runtime Edge repond.
+  // Elle ne touche pas la base et ne divulgue aucun diagnostic. Le detail du
+  // healthcheck reste reserve aux administrateurs AAL2 et aux appels internes.
+  // Les secrets en query string sont volontairement ignores : les URL sont
+  // journalisees par les proxies et ne doivent jamais transporter un secret.
+  if (req.method === 'HEAD') {
+    return new Response(null, {
+      status: 200,
+      headers: { ...corsHeaders(req), 'Cache-Control': 'no-store' },
+    });
+  }
 
-  const authHeader = req.headers.get('Authorization');
-  const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-  const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-
-  if (!isExternalMonitor && !authHeader) {
-    return new Response(JSON.stringify({ error: 'Non autorisé' }), {
-      status: 401,
+  if (req.method !== 'GET' && req.method !== 'POST') {
+    return new Response(JSON.stringify({ error: 'Methode non autorisee' }), {
+      status: 405,
       headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
     });
   }
 
-  if (!isExternalMonitor) {
-    const bearerToken = authHeader!.replace('Bearer ', '');
-    const isServiceRole = bearerToken === serviceRoleKey;
-
-    if (!isServiceRole) {
-      // Verify JWT and check admin role
-      const supabaseAuth = createClient(supabaseUrl, Deno.env.get('SUPABASE_ANON_KEY')!, { auth: { persistSession: false } });
-      const { data: { user }, error } = await supabaseAuth.auth.getUser(bearerToken);
-      if (error || !user) {
-        return new Response(JSON.stringify({ error: 'Non autorisé' }), {
-          status: 401,
-          headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
-        });
-      }
-      const adminClient = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false } });
-      await adminClient.rpc('fn_get_my_role_for_user', { p_user_id: user.id }).maybeSingle();
-      const { data: { user: fullUser } } = await adminClient.auth.admin.getUserById(user.id);
-      if (fullUser?.app_metadata?.role !== 'ADMIN') {
-        return new Response(JSON.stringify({ error: 'Accès réservé aux administrateurs' }), {
-          status: 403,
-          headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
-        });
-      }
-    }
+  const auth = await verifyAdminOrServiceRole(req);
+  if (!auth.ok) {
+    return new Response(JSON.stringify({ error: auth.error }), {
+      status: auth.status,
+      headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
+    });
   }
 
   try {
+    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabase = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false } });
     const { data, error } = await supabase.rpc('fn_health_check');
     if (error) throw error;

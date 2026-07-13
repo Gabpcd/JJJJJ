@@ -1745,6 +1745,7 @@ export type Database = {
           type_mime: string | null
           valide_depuis: string | null
           valide_jusqua: string | null
+          verification_attempt_id: string | null
           verifie_le: string | null
           verifie_par: string | null
         }
@@ -1777,6 +1778,7 @@ export type Database = {
           type_mime?: string | null
           valide_depuis?: string | null
           valide_jusqua?: string | null
+          verification_attempt_id?: string | null
           verifie_le?: string | null
           verifie_par?: string | null
         }
@@ -1809,6 +1811,7 @@ export type Database = {
           type_mime?: string | null
           valide_depuis?: string | null
           valide_jusqua?: string | null
+          verification_attempt_id?: string | null
           verifie_le?: string | null
           verifie_par?: string | null
         }
@@ -2080,6 +2083,12 @@ export type Database = {
           horaires_ouverture: Json | null
           http_referrer: string | null
           id: string
+          justificatif_fonction_resultat_ia: Json | null
+          justificatif_fonction_s3_key: string | null
+          justificatif_fonction_type: string | null
+          justificatif_fonction_type_mime: string | null
+          justificatif_fonction_verifie: boolean | null
+          justificatif_fonction_verifie_le: string | null
           logo_url: string | null
           missions_mois_precedent: number | null
           mode_facturation: string | null
@@ -2133,6 +2142,7 @@ export type Database = {
           taux_commission_negocie: number | null
           taux_majoration_dimanche_pourcent: number | null
           taux_majoration_ferie_pourcent: number | null
+          verification_source_version: number
           taux_majoration_nuit_pourcent: number | null
           telephone_contact: string | null
           telephone_en_attente_verification: string | null
@@ -2194,6 +2204,12 @@ export type Database = {
           horaires_ouverture?: Json | null
           http_referrer?: string | null
           id?: string
+          justificatif_fonction_resultat_ia?: Json | null
+          justificatif_fonction_s3_key?: string | null
+          justificatif_fonction_type?: string | null
+          justificatif_fonction_type_mime?: string | null
+          justificatif_fonction_verifie?: boolean | null
+          justificatif_fonction_verifie_le?: string | null
           logo_url?: string | null
           missions_mois_precedent?: number | null
           mode_facturation?: string | null
@@ -2248,6 +2264,7 @@ export type Database = {
           taux_majoration_dimanche_pourcent?: number | null
           taux_majoration_ferie_pourcent?: number | null
           taux_majoration_nuit_pourcent?: number | null
+          verification_source_version?: number
           telephone_contact?: string | null
           telephone_en_attente_verification?: string | null
           telephone_verifie?: boolean
@@ -2308,6 +2325,12 @@ export type Database = {
           horaires_ouverture?: Json | null
           http_referrer?: string | null
           id?: string
+          justificatif_fonction_resultat_ia?: Json | null
+          justificatif_fonction_s3_key?: string | null
+          justificatif_fonction_type?: string | null
+          justificatif_fonction_type_mime?: string | null
+          justificatif_fonction_verifie?: boolean | null
+          justificatif_fonction_verifie_le?: string | null
           logo_url?: string | null
           missions_mois_precedent?: number | null
           mode_facturation?: string | null
@@ -2362,6 +2385,7 @@ export type Database = {
           taux_majoration_dimanche_pourcent?: number | null
           taux_majoration_ferie_pourcent?: number | null
           taux_majoration_nuit_pourcent?: number | null
+          verification_source_version?: number
           telephone_contact?: string | null
           telephone_en_attente_verification?: string | null
           telephone_verifie?: boolean
@@ -7117,12 +7141,17 @@ export type Database = {
           score_fiabilite: number | null
           sexe: string | null
           siret_liberal: string | null
+          siret_liberal_coherence_identite: boolean | null
+          siret_liberal_raison_sociale: string | null
+          siret_liberal_verifie: boolean
+          siret_liberal_verifie_le: string | null
           sms_actif: boolean | null
           sms_alertes_actives: boolean | null
           sms_consent_le: string | null
           source_acquisition: string | null
           specialite_code: string | null
           specialite_medicale: string | null
+          specialite_medicale_declaree: string | null
           specialite_source: string | null
           specialite_verifiee: boolean | null
           specialite_verifiee_le: string | null
@@ -7263,12 +7292,17 @@ export type Database = {
           score_fiabilite?: number | null
           sexe?: string | null
           siret_liberal?: string | null
+          siret_liberal_coherence_identite?: boolean | null
+          siret_liberal_raison_sociale?: string | null
+          siret_liberal_verifie?: boolean
+          siret_liberal_verifie_le?: string | null
           sms_actif?: boolean | null
           sms_alertes_actives?: boolean | null
           sms_consent_le?: string | null
           source_acquisition?: string | null
           specialite_code?: string | null
           specialite_medicale?: string | null
+          specialite_medicale_declaree?: string | null
           specialite_source?: string | null
           specialite_verifiee?: boolean | null
           specialite_verifiee_le?: string | null
@@ -7409,12 +7443,17 @@ export type Database = {
           score_fiabilite?: number | null
           sexe?: string | null
           siret_liberal?: string | null
+          siret_liberal_coherence_identite?: boolean | null
+          siret_liberal_raison_sociale?: string | null
+          siret_liberal_verifie?: boolean
+          siret_liberal_verifie_le?: string | null
           sms_actif?: boolean | null
           sms_alertes_actives?: boolean | null
           sms_consent_le?: string | null
           source_acquisition?: string | null
           specialite_code?: string | null
           specialite_medicale?: string | null
+          specialite_medicale_declaree?: string | null
           specialite_source?: string | null
           specialite_verifiee?: boolean | null
           specialite_verifiee_le?: string | null
@@ -7774,6 +7813,7 @@ export type Database = {
           soignant_id: string
           statut: string
           stripe_charge_id: string | null
+          stripe_checkout_session_id: string | null
           stripe_payment_intent_id: string | null
           stripe_payout_id: string | null
           stripe_transfer_id: string | null
@@ -7799,6 +7839,7 @@ export type Database = {
           soignant_id: string
           statut?: string
           stripe_charge_id?: string | null
+          stripe_checkout_session_id?: string | null
           stripe_payment_intent_id?: string | null
           stripe_payout_id?: string | null
           stripe_transfer_id?: string | null
@@ -7824,6 +7865,7 @@ export type Database = {
           soignant_id?: string
           statut?: string
           stripe_charge_id?: string | null
+          stripe_checkout_session_id?: string | null
           stripe_payment_intent_id?: string | null
           stripe_payout_id?: string | null
           stripe_transfer_id?: string | null
@@ -7865,24 +7907,36 @@ export type Database = {
           erreur: string | null
           event_id: string
           event_type: string
+          livemode: boolean | null
           payload: Json | null
           recu_le: string
+          source_webhook: string | null
+          tentatives: number
+          traitement_commence_le: string | null
           traite_le: string | null
         }
         Insert: {
           erreur?: string | null
           event_id: string
           event_type: string
+          livemode?: boolean | null
           payload?: Json | null
           recu_le?: string
+          source_webhook?: string | null
+          tentatives?: number
+          traitement_commence_le?: string | null
           traite_le?: string | null
         }
         Update: {
           erreur?: string | null
           event_id?: string
           event_type?: string
+          livemode?: boolean | null
           payload?: Json | null
           recu_le?: string
+          source_webhook?: string | null
+          tentatives?: number
+          traitement_commence_le?: string | null
           traite_le?: string | null
         }
         Relationships: []
