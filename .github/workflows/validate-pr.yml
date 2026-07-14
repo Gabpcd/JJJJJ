@@ -201,7 +201,20 @@ jobs:
             echo "::error::SUPABASE_PROJECT_REF ne cible pas la production Jolene autorisée."
             exit 1
           fi
-          SUPABASE_DB_URL="postgresql://postgres.${SUPABASE_PROJECT_REF}@aws-1-eu-west-1.pooler.supabase.com:5432/postgres" \
+
+          # verify-full exige la CA privée Supabase, absente du trust store
+          # Ubuntu/Node par défaut. Le certificat est public et distribué par
+          # Supabase ; son hash est épinglé pour ne jamais faire confiance à un
+          # contenu distant modifié silencieusement.
+          SUPABASE_CA="$RUNNER_TEMP/prod-ca-2021.crt"
+          curl --fail --silent --show-error --location \
+            --output "$SUPABASE_CA" \
+            'https://supabase-downloads.s3-ap-southeast-1.amazonaws.com/prod/ssl/prod-ca-2021.crt'
+          echo "700723581420dd1ac98fd7e9ac529f0ef210eadcaf87fc868a3ad7d114c2f3b7  $SUPABASE_CA" \
+            | sha256sum --check --strict
+          export PGSSLROOTCERT="$SUPABASE_CA"
+
+          SUPABASE_DB_URL="postgresql://postgres.${SUPABASE_PROJECT_REF}@aws-1-eu-west-1.pooler.supabase.com:5432/postgres?sslmode=verify-full&sslrootcert=${SUPABASE_CA}" \
             npm run test:schema
 
   sql-transaction:

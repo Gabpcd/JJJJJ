@@ -273,6 +273,13 @@ describe('gate déploiement Supabase main', () => {
     expect(validateWorkflow).toContain('contents: read');
     expect(validateWorkflow).toContain('PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}');
     expect(validateWorkflow).toContain('PGSSLMODE: verify-full');
+    expect(validateWorkflow).toContain('export PGSSLROOTCERT="$SUPABASE_CA"');
+    expect(validateWorkflow).toContain('sslmode=verify-full&sslrootcert=${SUPABASE_CA}');
+    expect(validateWorkflow).toContain('prod/ssl/prod-ca-2021.crt');
+    expect(validateWorkflow).toContain(
+      '700723581420dd1ac98fd7e9ac529f0ef210eadcaf87fc868a3ad7d114c2f3b7',
+    );
+    expect(validateWorkflow).toContain('sha256sum --check --strict');
     expect(validateWorkflow).toContain('aws-1-eu-west-1.pooler.supabase.com:5432/postgres');
     expect(validateWorkflow.match(/npm run test:schema/g)).toHaveLength(1);
     expect(validateWorkflow).not.toContain('secrets.SUPABASE_DB_URL');
