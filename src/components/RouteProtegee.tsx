@@ -3,7 +3,6 @@ import { Navigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRole } from '@/hooks/useRole';
 import { ChargementPage } from '@/components/ChargementPage';
-import { AdminMfaGate } from '@/components/admin/AdminMfaGate';
 
 interface RouteProtegeeProps {
   rolesAutorises: string[];
@@ -35,10 +34,6 @@ export function RouteProtegee({ rolesAutorises, children }: RouteProtegeeProps) 
       case 'ADMIN_PLATEFORME': return <Navigate to="/admin" replace />;
       default: return <Navigate to="/" replace />;
     }
-  }
-
-  if (roleServeur === 'ADMIN_PLATEFORME') {
-    return <AdminMfaGate>{children}</AdminMfaGate>;
   }
 
   return <>{children}</>;

@@ -11,7 +11,7 @@ describe('P0 Edge security guards', () => {
     expect(source).not.toContain('atob(padded)');
     expect(source).toContain('auth.getUser(bearer)');
     expect(source).toContain('auth.getClaims(bearer)');
-    expect(source).toContain("auth.aal !== 'aal2'");
+    expect(source).not.toContain("auth.aal !== 'aal2'");
     expect(source).toContain('expiresAt: Date.now() + 5 * 60_000');
     expect(source).toContain('if (deletedAt)');
   });
@@ -84,17 +84,24 @@ describe('P0 Edge security guards', () => {
     expect(migration).not.toContain("v_endpoint !~ '^https://'");
   });
 
-  it('resolves the admin account before MFA without weakening aal2 privileges', () => {
+  it('retire le MFA admin sans affaiblir le rôle, le compte confirmé ni le registre', () => {
     const roleFix = read('supabase/migrations/20260713165730_corriger_resolution_role_admin_avant_mfa.sql');
-    const p0 = read('supabase/migrations/20260712230000_p0_securite_auth_rls.sql');
+    const mfaRemoval = read('supabase/migrations/20260714125736_supprimer_mfa_admin.sql');
     const protectedRoute = read('src/components/RouteProtegee.tsx');
+    const edgeAuth = read('supabase/functions/_shared/admin-auth.ts');
 
     expect(roleFix).toContain("u.raw_app_meta_data ->> 'role' = 'ADMIN_PLATEFORME'");
     expect(roleFix).toContain('u.email_confirmed_at IS NOT NULL');
     expect(roleFix).toContain('ea.actif IS NOT TRUE');
     expect(roleFix).not.toContain('IF public.est_admin() THEN');
-    expect(p0).toContain("COALESCE(auth.jwt() ->> 'aal', '') = 'aal2'");
-    expect(protectedRoute).toContain('<AdminMfaGate>{children}</AdminMfaGate>');
+    expect(mfaRemoval).toContain("'est_admin_valide'");
+    expect(mfaRemoval).toContain('v_nombre_modifie <> 10');
+    expect(mfaRemoval).toContain('rôle ADMIN_PLATEFORME');
+    expect(protectedRoute).not.toContain('AdminMfaGate');
+    expect(edgeAuth).not.toContain("auth.aal !== 'aal2'");
+    expect(edgeAuth).toContain('if (!isCanonicalPlatformAdminRole(role))');
+    expect(edgeAuth).toContain('if (!isConfirmedAuthUser(');
+    expect(edgeAuth).toContain('if (!hasFullLaunchAdminAccess(equipe))');
   });
 
   it('preserves the Lot 21 protected candidature transitions and ACLs', () => {
