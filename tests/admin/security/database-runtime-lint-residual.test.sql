@@ -200,11 +200,6 @@ BEGIN
   PERFORM set_config('request.jwt.claim.sub', '', true);
   PERFORM set_config('request.jwt.claim.role', '', true);
   PERFORM set_config('request.jwt.claims', '{}', true);
-  PERFORM set_config(
-    'jolene.admin_seed_override_reason',
-    'Fixture transactionnelle anti-BOLA annulation mission',
-    true
-  );
 
   SELECT * INTO v_heures
   FROM public.fn_calculer_heures_majorees(
@@ -320,6 +315,11 @@ BEGIN
     v_etab_tiers_id, v_cross_etab_user_id, 'RH', true
   );
 
+  PERFORM set_config(
+    'jolene.admin_seed_override_reason',
+    'Fixture transactionnelle anti-BOLA annulation mission',
+    true
+  );
   INSERT INTO public.missions (
     id, etablissement_id, intitule, profession_requise,
     debut_le, fin_le, duree_heures, taux_horaire_base,
