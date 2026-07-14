@@ -1,5 +1,15 @@
 import { createClient } from "npm:@supabase/supabase-js@2"
 
+function timingSafeEqual(a: Uint8Array, b: Uint8Array): boolean {
+  if (a.byteLength !== b.byteLength) return false;
+
+  let result = 0;
+  for (let i = 0; i < a.byteLength; i++) {
+    result |= a[i] ^ b[i];
+  }
+  return result === 0;
+}
+
 function getCorsOrigin(req: Request): string {
   const origin = req.headers.get("origin") || "";
   if (
@@ -53,7 +63,7 @@ Deno.serve(async (req) => {
     const encoder = new TextEncoder();
     const a = encoder.encode(bearerToken);
     const b = encoder.encode(serviceRoleKey);
-    const isAuthorized = a.byteLength === b.byteLength && crypto.subtle.timingSafeEqual(a, b);
+    const isAuthorized = timingSafeEqual(a, b);
     if (!isAuthorized) {
       return new Response(JSON.stringify({ error: "Interdit — accès service_role uniquement" }), {
         status: 403,

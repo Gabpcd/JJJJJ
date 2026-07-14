@@ -57,11 +57,11 @@ describe('matrice des modes d’exercice par mission', () => {
   it('distingue la lettre originale de la portée limitée de l’arrêt CE', () => {
     expect(liensSourcesModeExercice({
       source_force: 'DOCTRINE',
-      source_url: 'https://www.fehap.fr/jcms/navigation-internet/upload/docs/application/pdf/2023-02/courrierconjointministeres_30decembre2021_.pdf',
+      source_url: 'https://www.fehap.fr/upload/docs/application/pdf/2023-02/courrierconjointministeres_30decembre2021_.pdf',
       source_url_complementaire: 'https://www.legifrance.gouv.fr/ceta/id/CETATEXT000051156546',
     })).toEqual([
       {
-        href: 'https://www.fehap.fr/jcms/navigation-internet/upload/docs/application/pdf/2023-02/courrierconjointministeres_30decembre2021_.pdf',
+        href: 'https://www.fehap.fr/upload/docs/application/pdf/2023-02/courrierconjointministeres_30decembre2021_.pdf',
         libelle: 'Lire la lettre D21-031940 (texte original)',
       },
       {

@@ -11,6 +11,7 @@ import { FooterLegal } from '@/components/FooterLegal';
 import { AuthLayout } from '@/components/AuthLayout';
 import { Loader2 } from 'lucide-react';
 import { logger } from '@/lib/logger';
+import { avecDelai } from '@/lib/avecDelai';
 import { isNative } from '@/lib/platform';
 import {
   isBiometricAvailable,
@@ -69,39 +70,80 @@ export default function PageConnexion() {
     return () => { cancelled = true; };
   }, [searchParams, setSearchParams, afficherNotification]);
 
-  const navigateToRole = async () => {
+  const navigateToRole = async (): Promise<boolean> => {
     const { supabase } = await import('@/integrations/supabase/client');
-    const { data: roleData, error: roleError } = await supabase.rpc('fn_get_my_role');
+    let roleResponse: Awaited<ReturnType<typeof supabase.rpc>>;
+    try {
+      roleResponse = await avecDelai(
+        supabase.rpc('fn_get_my_role'),
+        10_000,
+        'La résolution de votre espace a pris trop de temps',
+      );
+    } catch (roleRequestError) {
+      logger.error('[CONNEXION] Résolution du rôle expirée, session conservée', roleRequestError);
+      afficherNotification({
+        type: 'erreur',
+        message: 'Votre session est active, mais votre espace ne répond pas. Veuillez réessayer.',
+      });
+      return false;
+    }
+    const { data: roleData, error: roleError } = roleResponse;
     logger.debug('[CONNEXION] fn_get_my_role result:', JSON.stringify(roleData), 'error:', roleError);
+
+    // Une erreur réseau/serveur ne signifie jamais que le profil est absent.
+    // La session créée par connexion() reste active pour permettre une nouvelle
+    // tentative sans demander à l'utilisateur de se réauthentifier.
+    if (roleError) {
+      logger.error('[CONNEXION] Résolution du rôle indisponible, session conservée', roleError);
+      afficherNotification({
+        type: 'erreur',
+        message: 'Votre session est active, mais votre espace est momentanément indisponible. Veuillez réessayer.',
+      });
+      return false;
+    }
+
     const role = typeof roleData === 'string' ? roleData : (roleData as any)?.role;
     logger.debug('[CONNEXION] Resolved role:', role);
 
+    let destination: string | null = null;
+    if (role === 'ADMIN_PLATEFORME' || role === 'ADMIN') destination = '/admin';
+    else if (role === 'ADMIN_ETABLISSEMENT' || role === 'ETABLISSEMENT') destination = '/etablissement/tableau-de-bord';
+    else if (role === 'ADMIN_GROUPE') destination = '/groupe/tableau-de-bord';
+    else if (role === 'SOIGNANT') destination = '/soignant/tableau-de-bord';
+
+    // Ici seulement, la RPC a répondu avec succès mais aucun rôle n'existe :
+    // il s'agit bien d'une inscription incomplète, pas d'un incident transitoire.
+    if (!destination) {
+      if (import.meta.env.DEV) console.warn('[CONNEXION] Rôle non reconnu, roleData brut:', roleData);
+      afficherNotification({ type: 'erreur', message: 'Votre inscription n\'est pas complète. Veuillez vous réinscrire.' });
+      await supabase.auth.signOut();
+      navigate('/inscription/soignant');
+      return false;
+    }
+
     // Propose biometric on first login (native only)
-    if (isNative() && !isBiometricEnabled()) {
-      const bioOk = await isBiometricAvailable();
-      if (bioOk) {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session?.refresh_token) {
-          const confirm = window.confirm(`Activer ${getBiometricLabel()} pour les prochaines connexions ?`);
-          if (confirm) {
-            await enableBiometric(session.refresh_token);
-            hapticNotification('success');
+    try {
+      if (isNative() && !isBiometricEnabled()) {
+        const bioOk = await isBiometricAvailable();
+        if (bioOk) {
+          const { data: { session } } = await supabase.auth.getSession();
+          if (session?.refresh_token) {
+            const confirm = window.confirm(`Activer ${getBiometricLabel()} pour les prochaines connexions ?`);
+            if (confirm) {
+              await enableBiometric(session.refresh_token);
+              hapticNotification('success');
+            }
           }
         }
       }
+    } catch (biometricError) {
+      // La biométrie est un confort optionnel : une panne du plugin ou du
+      // trousseau ne doit jamais bloquer une session déjà authentifiée.
+      logger.warn('[CONNEXION] Activation biométrique ignorée', biometricError);
     }
 
-    if (role === 'ADMIN_PLATEFORME' || role === 'ADMIN') navigate('/admin');
-    else if (role === 'ADMIN_ETABLISSEMENT' || role === 'ETABLISSEMENT') navigate('/etablissement/tableau-de-bord');
-    else if (role === 'ADMIN_GROUPE') navigate('/groupe/tableau-de-bord');
-    else if (role === 'SOIGNANT') navigate('/soignant/tableau-de-bord');
-    else {
-      if (import.meta.env.DEV) console.warn('[CONNEXION] Rôle non reconnu, roleData brut:', roleData);
-      afficherNotification({ type: 'erreur', message: 'Votre inscription n\'est pas complète. Veuillez vous réinscrire.' });
-      const { supabase: sb } = await import('@/integrations/supabase/client');
-      await sb.auth.signOut();
-      navigate('/inscription/soignant');
-    }
+    navigate(destination);
+    return true;
   };
 
   const handleBiometricLogin = async () => {
@@ -118,9 +160,10 @@ export default function PageConnexion() {
         afficherNotification({ type: 'erreur', message: 'Session expirée. Connectez-vous avec votre mot de passe.' });
         return;
       }
-      hapticNotification('success');
-      afficherNotification({ type: 'succes', message: 'Connexion réussie !' });
-      await navigateToRole();
+      if (await navigateToRole()) {
+        hapticNotification('success');
+        afficherNotification({ type: 'succes', message: 'Connexion réussie !' });
+      }
     } catch (err) {
       afficherNotification({ type: 'erreur', message: extraireMessageErreur(err) });
     } finally {
@@ -141,8 +184,9 @@ export default function PageConnexion() {
     setSubmitting(true);
     try {
       await connexion(email, motDePasse, loginTurnstileToken || undefined);
-      afficherNotification({ type: 'succes', message: 'Connexion réussie !' });
-      await navigateToRole();
+      if (await navigateToRole()) {
+        afficherNotification({ type: 'succes', message: 'Connexion réussie !' });
+      }
     } catch (err) {
       if (!gererErreurSupabase(err, () => handleSubmit(e))) {
         afficherNotification({ type: 'erreur', message: extraireMessageErreur(err) });

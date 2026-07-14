@@ -1,7 +1,14 @@
-import Stripe from "npm:stripe@18.5.0";
+import Stripe from "npm:stripe@20.4.1";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { verifyUserOrServiceRole } from "../_shared/admin-auth.ts";
 import { corsHeaders } from "../_shared/cors.ts";
+import { findInvoicePaymentIntentInconsistencies } from "../_shared/invoice-payment-intent.ts";
+import { writeRequiredFinancialAudit } from "../_shared/financial-audit.ts";
 import { assertStripeSecretMode } from "../_shared/stripe-production.ts";
+import {
+  requireAcquiredStripeSourceCharge,
+  StripeSourceChargeValidationError,
+} from "../_shared/stripe-source-charge.ts";
 
 async function findMatchingPaymentIntent(
   stripe: Stripe,
@@ -39,31 +46,41 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders(req) });
   }
+  if (req.method !== "POST") {
+    return new Response(JSON.stringify({ error: "Méthode non autorisée" }), {
+      status: 405,
+      headers: { ...corsHeaders(req), "Content-Type": "application/json" },
+    });
+  }
 
   try {
     const authHeader = req.headers.get("Authorization");
-    if (!authHeader) {
-      return new Response(JSON.stringify({ error: "Non authentifié" }), {
-        status: 401,
+    const auth = await verifyUserOrServiceRole(req);
+    if (!auth.ok) {
+      return new Response(JSON.stringify({ error: auth.error }), {
+        status: auth.status,
+        headers: { ...corsHeaders(req), "Content-Type": "application/json" },
+      });
+    }
+    if (auth.isServiceRole || !auth.userId || !authHeader) {
+      return new Response(JSON.stringify({ error: "Session utilisateur requise" }), {
+        status: 403,
         headers: { ...corsHeaders(req), "Content-Type": "application/json" },
       });
     }
 
-    const supabaseClient = createClient(
-      Deno.env.get("SUPABASE_URL") ?? "",
+    const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
+    const supabaseUser = createClient(
+      supabaseUrl,
       Deno.env.get("SUPABASE_ANON_KEY") ?? "",
+      {
+        auth: { persistSession: false },
+        global: { headers: { Authorization: authHeader } },
+      },
     );
 
-    const token = authHeader.replace("Bearer ", "");
-    const { data: { user } } = await supabaseClient.auth.getUser(token);
-    if (!user?.id) {
-      return new Response(JSON.stringify({ error: "Non authentifié" }), {
-        status: 401,
-        headers: { ...corsHeaders(req), "Content-Type": "application/json" },
-      });
-    }
-
-    const { facture_id } = await req.json();
+    const body = await req.json().catch(() => null) as { facture_id?: unknown } | null;
+    const facture_id = typeof body?.facture_id === "string" ? body.facture_id : "";
     if (!facture_id) {
       return new Response(JSON.stringify({ error: "facture_id requis" }), {
         status: 400,
@@ -72,14 +89,14 @@ Deno.serve(async (req) => {
     }
 
     const supabaseAdmin = createClient(
-      Deno.env.get("SUPABASE_URL") ?? "",
+      supabaseUrl,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
       { auth: { persistSession: false } },
     );
 
     const { data: facture, error: factureError } = await supabaseAdmin
       .from("factures")
-      .select("id, numero_facture, statut, date_paiement, etablissement_id, montant_ttc, stripe_payment_intent_id, etablissements(stripe_customer_id)")
+      .select("id, numero_facture, statut, type_document, date_paiement, etablissement_id, montant_ttc, stripe_payment_intent_id, etablissements(stripe_customer_id)")
       .eq("id", facture_id)
       .single();
 
@@ -90,11 +107,25 @@ Deno.serve(async (req) => {
       });
     }
 
-    const { data: userData } = await supabaseAdmin.auth.admin.getUserById(user.id);
-    const userEtabId = userData?.user?.app_metadata?.etablissement_id || user.id;
-    if (userEtabId !== facture.etablissement_id) {
-      return new Response(JSON.stringify({ error: "Accès interdit" }), {
+    const { data: hasPaymentPermission, error: permissionError } = await supabaseUser.rpc(
+      "fn_a_permission_etablissement",
+      { p_permission: "paiement", p_etablissement_id: facture.etablissement_id },
+    );
+    if (permissionError) {
+      throw new Error(`Vérification des droits de paiement impossible: ${permissionError.message}`);
+    }
+    if (hasPaymentPermission !== true) {
+      return new Response(JSON.stringify({ error: "Vous n'avez pas les droits de paiement sur cet établissement" }), {
         status: 403,
+        headers: { ...corsHeaders(req), "Content-Type": "application/json" },
+      });
+    }
+    if (facture.type_document !== "FACTURE") {
+      return new Response(JSON.stringify({
+        confirmed: false,
+        error: "Seule une facture peut être rapprochée avec un débit Stripe",
+      }), {
+        status: 409,
         headers: { ...corsHeaders(req), "Content-Type": "application/json" },
       });
     }
@@ -121,7 +152,7 @@ Deno.serve(async (req) => {
     }
     assertStripeSecretMode(stripeKey);
 
-    const stripe = new Stripe(stripeKey, { apiVersion: "2025-08-27.basil" });
+    const stripe = new Stripe(stripeKey, { apiVersion: "2026-02-25.clover" });
     const paymentIntent = await findMatchingPaymentIntent(
       stripe,
       facture.id,
@@ -148,30 +179,23 @@ Deno.serve(async (req) => {
     }
 
     const montantAttenduCents = Math.round(Number(facture.montant_ttc ?? 0) * 100);
+    if (!Number.isSafeInteger(montantAttenduCents) || montantAttenduCents <= 0) {
+      return new Response(JSON.stringify({
+        confirmed: false,
+        error: "Le montant de la facture est invalide",
+      }), {
+        status: 409,
+        headers: { ...corsHeaders(req), "Content-Type": "application/json" },
+      });
+    }
     const customerFacture = (facture.etablissements as any)?.stripe_customer_id ?? null;
-    const customerPaymentIntent = typeof paymentIntent.customer === "string"
-      ? paymentIntent.customer
-      : paymentIntent.customer?.id ?? null;
-    const incoherences: string[] = [];
-
-    if (paymentIntent.metadata?.facture_id !== facture.id) {
-      incoherences.push("facture_id");
-    }
-    if (paymentIntent.currency.toLowerCase() !== "eur") {
-      incoherences.push("currency");
-    }
-    if (paymentIntent.amount !== montantAttenduCents) {
-      incoherences.push("amount");
-    }
-    if (
-      paymentIntent.status === "succeeded"
-      && paymentIntent.amount_received !== montantAttenduCents
-    ) {
-      incoherences.push("amount_received");
-    }
-    if (!customerFacture || !customerPaymentIntent || customerPaymentIntent !== customerFacture) {
-      incoherences.push("customer");
-    }
+    const incoherences = findInvoicePaymentIntentInconsistencies(paymentIntent, {
+      factureId: facture.id,
+      etablissementId: facture.etablissement_id,
+      customerId: customerFacture || "",
+      amountCents: montantAttenduCents,
+      currency: "eur",
+    });
 
     if (incoherences.length > 0) {
       console.error(
@@ -211,7 +235,35 @@ Deno.serve(async (req) => {
       });
     }
 
+    try {
+      await requireAcquiredStripeSourceCharge(stripe, paymentIntent, {
+        customerId: customerFacture || "",
+        amountCents: montantAttenduCents,
+        currency: "eur",
+      });
+    } catch (error) {
+      if (!(error instanceof StripeSourceChargeValidationError)) throw error;
+      return new Response(JSON.stringify({
+        confirmed: false,
+        error: "Le débit Stripe n'est plus acquis pour cette facture",
+        checks_failed: error.checks.map((check) => `source_charge.${check}`),
+      }), {
+        status: 409,
+        headers: { ...corsHeaders(req), "Content-Type": "application/json" },
+      });
+    }
+
     if (factureDejaPayee) {
+      if (facture.stripe_payment_intent_id !== paymentIntent.id) {
+        return new Response(JSON.stringify({
+          confirmed: false,
+          error: "La facture payée n'est pas liée à ce paiement Stripe",
+          invoice_status: facture.statut,
+        }), {
+          status: 409,
+          headers: { ...corsHeaders(req), "Content-Type": "application/json" },
+        });
+      }
       return new Response(JSON.stringify({
         confirmed: true,
         status: "PAYEE",
@@ -224,7 +276,7 @@ Deno.serve(async (req) => {
     }
 
     const datePaiement = new Date(paymentIntent.created * 1000).toISOString();
-    const { data: factureConfirmee, error: updateError } = await supabaseAdmin
+    let confirmationQuery = supabaseAdmin
       .from("factures")
       .update({
         statut: "PAYEE",
@@ -233,7 +285,12 @@ Deno.serve(async (req) => {
         modifie_le: new Date().toISOString(),
       })
       .eq("id", facture.id)
-      .in("statut", ["EMISE", "EN_RETARD"])
+      .eq("montant_ttc", facture.montant_ttc)
+      .in("statut", ["EMISE", "EN_RETARD"]);
+    confirmationQuery = facture.stripe_payment_intent_id
+      ? confirmationQuery.eq("stripe_payment_intent_id", facture.stripe_payment_intent_id)
+      : confirmationQuery.is("stripe_payment_intent_id", null);
+    const { data: factureConfirmee, error: updateError } = await confirmationQuery
       .select("id")
       .maybeSingle();
 
@@ -256,10 +313,10 @@ Deno.serve(async (req) => {
         console.error("confirm-invoice-payment: lost CAS state lookup failed", factureActuelleError);
       }
 
-      const { error: auditError } = await supabaseAdmin.rpc("fn_ecrire_audit_safe", {
+      await writeRequiredFinancialAudit(supabaseAdmin, {
         p_acteur_id: facture.etablissement_id,
         p_type_acteur: "SYSTEME",
-        p_action: "FACTURE_PAIEMENT_CONFIRMATION_CAS_PERDU",
+        p_action: "ADMIN_ACTION",
         p_type_ressource: "facture",
         p_id_ressource: facture.id,
         p_cle_s3: null,
@@ -268,14 +325,11 @@ Deno.serve(async (req) => {
           statut_initial: facture.statut,
           statut_actuel: factureActuelle?.statut ?? "inconnu",
           stripe_payment_intent: paymentIntent.id,
+          evenement: "FACTURE_PAIEMENT_CONFIRMATION_CAS_PERDU",
         },
         p_ip: null,
         p_navigateur: "edge-function/confirm-invoice-payment",
-      });
-
-      if (auditError) {
-        console.error("confirm-invoice-payment: lost CAS audit failed", auditError);
-      }
+      }, "confirm-invoice-payment: lost CAS audit failed");
 
       return new Response(JSON.stringify({
         confirmed: false,

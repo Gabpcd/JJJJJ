@@ -1,6 +1,20 @@
-import Stripe from "npm:stripe@18.5.0";
+import Stripe from "npm:stripe@20.4.1";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import {
+  findInvoiceCheckoutSessionInconsistencies,
+  findInvoicePaymentIntentInconsistencies,
+} from "./invoice-payment-intent.ts";
 import { assertStripeSecretMode, isProductionRuntime } from "./stripe-production.ts";
+import { releaseStripePaymentFlowClaimForExpiredSession } from "./stripe-payment-flow-claim.ts";
+import { writeRequiredFinancialAudit } from "./financial-audit.ts";
+import {
+  requireAcquiredStripeSourceCharge,
+  StripeSourceChargeValidationError,
+} from "./stripe-source-charge.ts";
+import {
+  escrowPayoutInconsistencies,
+  type EscrowPayoutExpectation,
+} from "./stripe-escrow-payout.ts";
 
 export type StripeWebhookSource = "PLATFORM" | "CONNECT";
 
@@ -155,26 +169,33 @@ function corsHeaders(req: Request) {
   };
 }
 
+function stripeObjectId(value: unknown): string | null {
+  if (typeof value === "string") return value;
+  if (value && typeof value === "object" && "id" in value) {
+    const id = (value as { id?: unknown }).id;
+    return typeof id === "string" ? id : null;
+  }
+  return null;
+}
+
 // Audit escrow DIRECT en table (pas via le rpc fn_ecrire_audit_safe) : le
 // binding PostgREST de ce RPC 9-params sérialise les uuid en « null » →
 // « invalid input syntax for type uuid » → l'audit edge échouait silencieusement
 // (trou d'observabilité prod découvert par la recette escrow, run #11 du
 // 09/07/2026). Le service_role bypasse la RLS : l'insert direct est fiable.
 async function auditEscrow(admin: any, action: string, missionId: string | null, details: unknown) {
-  try {
-    const { error } = await admin.from("journaux_audit").insert({
-      acteur_id: "00000000-0000-0000-0000-000000000000",
-      type_acteur: "SYSTEME",
-      action,
-      type_ressource: "mission",
-      id_ressource: missionId,
-      cle_s3_ressource: null,
-      details: details ?? null,
-      ip_acteur: null,
-      navigateur_acteur: "stripe-webhook",
-    });
-    if (error) console.error("audit escrow webhook insert:", error.message);
-  } catch (e) { console.error("audit escrow webhook throw:", e); }
+  const { error } = await admin.from("journaux_audit").insert({
+    acteur_id: "00000000-0000-0000-0000-000000000000",
+    type_acteur: "SYSTEME",
+    action,
+    type_ressource: "mission",
+    id_ressource: missionId,
+    cle_s3_ressource: null,
+    details: details ?? null,
+    ip_acteur: null,
+    navigateur_acteur: "stripe-webhook",
+  });
+  if (error) throw new Error(`audit escrow webhook insert: ${error.message}`);
 }
 
 export async function handleStripeWebhook(
@@ -195,7 +216,7 @@ export async function handleStripeWebhook(
     });
   }
   const stripe = new Stripe(stripeKey, {
-    apiVersion: "2025-08-27.basil",
+    apiVersion: "2026-02-25.clover",
   });
 
   const supabaseAdmin = createClient(
@@ -323,6 +344,229 @@ export async function handleStripeWebhook(
       claimedEventId = null;
     };
 
+    const loadAndValidateInvoicePayment = async (
+      factureId: string,
+      paymentIntent: Stripe.PaymentIntent,
+      context: "checkout.session.completed" | "payment_intent.succeeded",
+      session?: Stripe.Checkout.Session,
+    ) => {
+      const { data: facture, error: factureError } = await supabaseAdmin
+        .from("factures")
+        .select(
+          "id, statut, type_document, numero_facture, montant_ttc, etablissement_id, stripe_payment_intent_id, etablissements(stripe_customer_id)",
+        )
+        .eq("id", factureId)
+        .maybeSingle();
+      if (factureError || !facture) {
+        throw new Error(
+          `Stripe invoice validation lookup failed: ${factureError?.message || "row missing"}`,
+        );
+      }
+
+      const relation = facture.etablissements as
+        | { stripe_customer_id?: string | null }
+        | Array<{ stripe_customer_id?: string | null }>
+        | null;
+      const customerId = (Array.isArray(relation)
+        ? relation[0]?.stripe_customer_id
+        : relation?.stripe_customer_id) || "";
+      const amountCents = Math.round(Number(facture.montant_ttc ?? 0) * 100);
+      const incoherences: string[] = [];
+      if (facture.type_document !== "FACTURE") {
+        incoherences.push("invoice.type_document");
+      }
+      if (!Number.isSafeInteger(amountCents) || amountCents <= 0) {
+        incoherences.push("invoice.amount_invalid");
+      }
+      if (!customerId) incoherences.push("invoice.customer_missing");
+      incoherences.push(...findInvoicePaymentIntentInconsistencies(paymentIntent, {
+        factureId: facture.id,
+        etablissementId: facture.etablissement_id,
+        customerId,
+        amountCents,
+        currency: "eur",
+      }).map((check) => `payment_intent.${check}`));
+      if (paymentIntent.status !== "succeeded") {
+        incoherences.push("payment_intent.status");
+      } else if (customerId && Number.isSafeInteger(amountCents) && amountCents > 0) {
+        try {
+          await requireAcquiredStripeSourceCharge(stripe, paymentIntent, {
+            customerId,
+            amountCents,
+            currency: "eur",
+          });
+        } catch (error) {
+          if (!(error instanceof StripeSourceChargeValidationError)) throw error;
+          incoherences.push(...error.checks.map((check) => `source_charge.${check}`));
+        }
+      }
+      if (
+        facture.stripe_payment_intent_id
+        && facture.stripe_payment_intent_id !== paymentIntent.id
+      ) {
+        incoherences.push("invoice.payment_intent_id");
+      }
+
+      if (session) {
+        incoherences.push(...findInvoiceCheckoutSessionInconsistencies(session, {
+          factureId: facture.id,
+          etablissementId: facture.etablissement_id,
+          customerId,
+          amountCents,
+          currency: "eur",
+        }).map((check) => `checkout_session.${check}`));
+        const sessionPaymentIntentId = typeof session.payment_intent === "string"
+          ? session.payment_intent
+          : session.payment_intent?.id || null;
+        if (sessionPaymentIntentId !== paymentIntent.id) {
+          incoherences.push("checkout_session.payment_intent");
+        }
+        if (session.payment_status !== "paid") {
+          incoherences.push("checkout_session.payment_status");
+        }
+      }
+
+      if (incoherences.length > 0) {
+        await writeRequiredFinancialAudit(supabaseAdmin, {
+          p_acteur_id: facture.etablissement_id,
+          p_type_acteur: "SYSTEME",
+          p_action: "ADMIN_ACTION",
+          p_type_ressource: "facture",
+          p_id_ressource: facture.id,
+          p_cle_s3: null,
+          p_details: {
+            evenement: "FACTURE_PAIEMENT_STRIPE_IDENTITE_INCOHERENTE",
+            contexte: context,
+            stripe_event_id: event.id,
+            stripe_payment_intent_id: paymentIntent.id,
+            stripe_session_id: session?.id || null,
+            incoherences,
+          },
+          p_ip: null,
+          p_navigateur: "stripe-webhook",
+        }, "Stripe invoice mismatch audit failed");
+        throw new Error(
+          `Stripe invoice identity mismatch (${context}): ${incoherences.join(",")}`,
+        );
+      }
+
+      return facture;
+    };
+
+    const loadAndValidateEscrowPayment = async (
+      paymentIntent: Stripe.PaymentIntent,
+      requireSucceeded: boolean,
+    ) => {
+      const escrowId = paymentIntent.metadata?.paiement_escrow_id || "";
+      const { data: escrow, error: escrowError } = await supabaseAdmin
+        .from("paiements_escrow")
+        .select(
+          "id, statut, mission_id, etablissement_id, soignant_id, montant_total_cents, honoraires_cents, commission_cents, stripe_payment_intent_id",
+        )
+        .eq("id", escrowId)
+        .maybeSingle();
+      if (escrowError || !escrow) {
+        throw new Error(
+          `Escrow PaymentIntent lookup failed: ${escrowError?.message || "row missing"}`,
+        );
+      }
+      const { data: etablissement, error: etablissementError } = await supabaseAdmin
+        .from("etablissements")
+        .select("stripe_customer_id")
+        .eq("id", escrow.etablissement_id)
+        .maybeSingle();
+      const { data: onboarding, error: onboardingError } = await supabaseAdmin
+        .from("stripe_connect_onboarding")
+        .select("stripe_account_id, statut")
+        .eq("soignant_id", escrow.soignant_id)
+        .maybeSingle();
+      const customerId = etablissement?.stripe_customer_id || "";
+      const destinationId = typeof paymentIntent.transfer_data?.destination === "string"
+        ? paymentIntent.transfer_data.destination
+        : paymentIntent.transfer_data?.destination?.id || null;
+      const paymentCustomerId = typeof paymentIntent.customer === "string"
+        ? paymentIntent.customer
+        : paymentIntent.customer?.id || null;
+      const incoherences: string[] = [];
+      if (escrow.stripe_payment_intent_id !== paymentIntent.id) {
+        incoherences.push("escrow.payment_intent_id");
+      }
+      if (paymentIntent.metadata?.type !== "ESCROW_MISSION_PAYMENT") {
+        incoherences.push("payment_intent.type");
+      }
+      if (paymentIntent.metadata?.mission_id !== escrow.mission_id) {
+        incoherences.push("payment_intent.mission_id");
+      }
+      if (paymentIntent.metadata?.etablissement_id !== escrow.etablissement_id) {
+        incoherences.push("payment_intent.etablissement_id");
+      }
+      if (paymentIntent.metadata?.soignant_id !== escrow.soignant_id) {
+        incoherences.push("payment_intent.soignant_id");
+      }
+      if (
+        paymentIntent.amount !== escrow.montant_total_cents
+        || paymentIntent.currency !== "eur"
+      ) incoherences.push("payment_intent.amount_or_currency");
+      if (paymentIntent.application_fee_amount !== escrow.commission_cents) {
+        incoherences.push("payment_intent.application_fee_amount");
+      }
+      if (paymentCustomerId !== customerId) incoherences.push("payment_intent.customer");
+      if (
+        onboardingError || onboarding?.statut !== "COMPLET"
+        || destinationId !== onboarding?.stripe_account_id
+      ) incoherences.push("payment_intent.destination");
+      if (etablissementError || !customerId) incoherences.push("etablissement.customer");
+      if (
+        requireSucceeded
+        && (paymentIntent.status !== "succeeded"
+          || paymentIntent.amount_received !== escrow.montant_total_cents)
+      ) incoherences.push("payment_intent.status_or_received");
+      if (
+        requireSucceeded
+        && paymentIntent.status === "succeeded"
+        && customerId
+        && Number.isSafeInteger(escrow.montant_total_cents)
+        && escrow.montant_total_cents > 0
+      ) {
+        try {
+          await requireAcquiredStripeSourceCharge(stripe, paymentIntent, {
+            customerId,
+            amountCents: escrow.montant_total_cents,
+            currency: "eur",
+          });
+        } catch (error) {
+          if (!(error instanceof StripeSourceChargeValidationError)) throw error;
+          incoherences.push(...error.checks.map((check) => `source_charge.${check}`));
+        }
+      }
+      if (customerId) {
+        const customer = await stripe.customers.retrieve(customerId);
+        if (customer.deleted || customer.metadata?.etablissement_id !== escrow.etablissement_id) {
+          incoherences.push("customer.tenant_metadata");
+        }
+      }
+      if (incoherences.length > 0) {
+        await writeRequiredFinancialAudit(supabaseAdmin, {
+          p_acteur_id: escrow.etablissement_id,
+          p_type_acteur: "SYSTEME",
+          p_action: "ADMIN_ACTION",
+          p_type_ressource: "mission",
+          p_id_ressource: escrow.mission_id,
+          p_cle_s3: null,
+          p_details: {
+            evenement: "ESCROW_PAYMENT_INTENT_IDENTITE_INCOHERENTE",
+            paiement_escrow_id: escrow.id,
+            stripe_payment_intent_id: paymentIntent.id,
+            incoherences,
+          },
+          p_ip: null,
+          p_navigateur: "stripe-webhook",
+        }, "Escrow mismatch audit failed");
+        throw new Error(`Escrow PaymentIntent identity mismatch: ${incoherences.join(",")}`);
+      }
+      return escrow;
+    };
+
     const requireConnectedSoignantId = async (): Promise<string> => {
       if (verified.source !== "CONNECT" || !eventAccount) {
         throw new Error("Connected-account context required");
@@ -338,6 +582,65 @@ export async function handleStripeWebhook(
         );
       }
       return data.soignant_id as string;
+    };
+
+    const loadAndValidateEscrowPayout = async (
+      payout: Stripe.Payout,
+      connectedSoignantId: string,
+      expectedStatus: "paid" | "failed" | "canceled",
+    ) => {
+      const escrowId = payout.metadata?.paiement_escrow_id || "";
+      const { data: escrow, error: escrowError } = await supabaseAdmin
+        .from("paiements_escrow")
+        .select(
+          "id, mission_id, soignant_id, honoraires_cents, stripe_payout_id, statut",
+        )
+        .eq("id", escrowId)
+        .maybeSingle();
+      if (escrowError || !escrow) {
+        throw new Error(
+          `Escrow payout lookup failed: ${escrowError?.message || "row missing"}`,
+        );
+      }
+
+      const expected: EscrowPayoutExpectation = {
+        paiementEscrowId: escrow.id,
+        missionId: escrow.mission_id,
+        soignantId: escrow.soignant_id,
+        amountCents: Number(escrow.honoraires_cents),
+      };
+      const incoherences = escrowPayoutInconsistencies(payout, expected);
+      if (payout.status !== expectedStatus) incoherences.push("event.status");
+      if (escrow.stripe_payout_id !== payout.id) incoherences.push("escrow.payout_id");
+      if (escrow.soignant_id !== connectedSoignantId) {
+        incoherences.push("escrow.connected_soignant");
+      }
+      if (!Number.isSafeInteger(expected.amountCents) || expected.amountCents <= 0) {
+        incoherences.push("escrow.amount_invalid");
+      }
+
+      if (incoherences.length > 0) {
+        await writeRequiredFinancialAudit(supabaseAdmin, {
+          p_acteur_id: escrow.soignant_id,
+          p_type_acteur: "SYSTEME",
+          p_action: "ADMIN_ACTION",
+          p_type_ressource: "mission",
+          p_id_ressource: escrow.mission_id,
+          p_cle_s3: null,
+          p_details: {
+            evenement: "ESCROW_PAYOUT_IDENTITE_INCOHERENTE",
+            stripe_event_id: event.id,
+            stripe_payout_id: payout.id,
+            paiement_escrow_id: escrow.id,
+            statut_escrow: escrow.statut,
+            incoherences,
+          },
+          p_ip: null,
+          p_navigateur: "stripe-webhook",
+        }, "Escrow payout mismatch audit failed");
+        throw new Error(`Escrow payout identity mismatch: ${incoherences.join(",")}`);
+      }
+      return escrow;
     };
 
     const linkExactPayoutTransfers = async (
@@ -381,65 +684,230 @@ export async function handleStripeWebhook(
           });
         }
 
-        let missionId = session.metadata?.mission_id;
-        let soignantId = session.metadata?.soignant_id;
-        let connectedAccountId = session.metadata?.connected_account_id;
-        let soignantCents = parseInt(session.metadata?.soignant_cents || "0", 10);
+        const paymentIntentId = typeof session.payment_intent === "string"
+          ? session.payment_intent
+          : session.payment_intent?.id || null;
+        const missionId = session.metadata?.mission_id || null;
+        if (!paymentIntentId || !missionId) {
+          throw new Error("Paid Connect checkout missing PaymentIntent or mission binding");
+        }
+        const connectPaymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
 
-        // BUG-BOUCLE-PAIEMENT Fix D.2 — fallback defensive sur payment_intent.metadata.
-        // Les sessions Checkout legacy (avant Fix D.1) ont les metadata critiques
-        // uniquement sur payment_intent_data.metadata, pas sur session.metadata.
-        // Si un champ critique manque, retrieve le payment_intent pour récupérer.
-        if (!missionId || !soignantId || !connectedAccountId || !soignantCents) {
-          const paymentIntentIdForLookup = typeof session.payment_intent === "string"
-            ? session.payment_intent
-            : session.payment_intent?.id;
-          if (paymentIntentIdForLookup) {
-            try {
-              const pi = await stripe.paymentIntents.retrieve(paymentIntentIdForLookup);
-              missionId = missionId ?? pi.metadata?.mission_id;
-              soignantId = soignantId ?? pi.metadata?.soignant_id;
-              connectedAccountId = connectedAccountId ?? pi.metadata?.connected_account_id;
-              if (!soignantCents) {
-                soignantCents = parseInt(pi.metadata?.soignant_cents || "0", 10);
-              }
-              console.log(`CONNECT_MISSION_PAYMENT metadata fallback depuis payment_intent ${paymentIntentIdForLookup}`);
-            } catch (piErr) {
-              console.error("payment_intent.retrieve fallback failed:", piErr);
-            }
+        const { data: validatedTransferClaim, error: validatedTransferClaimError } =
+          await supabaseAdmin
+            .from("stripe_transfers")
+            .select(
+              "id, mission_id, soignant_id, etablissement_id, statut, montant_soignant, montant_commission, montant_total, stripe_checkout_session_id, stripe_payment_intent_id, stripe_transfer_id",
+            )
+            .eq("mission_id", missionId)
+            .eq("stripe_checkout_session_id", session.id)
+            .maybeSingle();
+
+        const { data: validatedMission, error: validatedMissionError } = await supabaseAdmin
+          .from("missions")
+          .select(
+            "id, etablissement_id, soignant_assigne_id, statut, type_contrat_applique, net_a_payer, montant_commission_ht, montant_commission_tva, montant_commission_ttc, intitule",
+          )
+          .eq("id", missionId)
+          .maybeSingle();
+        if (validatedMissionError || !validatedMission) {
+          throw new Error(
+            `Connect mission validation lookup failed: ${validatedMissionError?.message || "row missing"}`,
+          );
+        }
+        const soignantId = validatedMission.soignant_assigne_id;
+        const { data: validatedEtablissement, error: validatedEtablissementError } =
+          await supabaseAdmin
+            .from("etablissements")
+            .select("stripe_customer_id")
+            .eq("id", validatedMission.etablissement_id)
+            .maybeSingle();
+        const { data: validatedOnboarding, error: validatedOnboardingError } =
+          await supabaseAdmin
+            .from("stripe_connect_onboarding")
+            .select("stripe_account_id, statut")
+            .eq("soignant_id", soignantId)
+            .maybeSingle();
+        const factureHonorairesId = session.metadata?.facture_honoraires_id || null;
+        const { data: validatedFactureHonoraires, error: validatedFactureHonorairesError } =
+          factureHonorairesId
+            ? await supabaseAdmin
+              .from("factures_honoraires")
+              .select("id, statut, montant_ttc, mission_id, soignant_id, etablissement_id, stripe_payment_intent_id")
+              .eq("id", factureHonorairesId)
+              .maybeSingle()
+            : { data: null, error: null };
+        const { data: validatedFactureCommission, error: validatedFactureCommissionError } =
+          await supabaseAdmin
+            .from("factures")
+            .select("id, statut, montant_ttc, mission_id, etablissement_id, stripe_payment_intent_id")
+            .eq("mission_id", missionId)
+            .eq("type_document", "FACTURE")
+            .neq("statut", "ANNULEE")
+            .maybeSingle();
+
+        const connectedAccountId = validatedOnboarding?.stripe_account_id || "";
+        const customerId = validatedEtablissement?.stripe_customer_id || "";
+        const soignantCents = Math.round(Number(validatedMission.net_a_payer ?? 0) * 100);
+        const commissionCents = Math.round(
+          Number(validatedMission.montant_commission_ttc ?? 0) * 100,
+        );
+        const totalCents = soignantCents + commissionCents;
+        const chargeId = connectPaymentIntent.latest_charge
+          ? typeof connectPaymentIntent.latest_charge === "string"
+            ? connectPaymentIntent.latest_charge
+            : connectPaymentIntent.latest_charge.id
+          : null;
+        const incoherences: string[] = [];
+        const factureHonorairesPayable = Boolean(
+          validatedFactureHonoraires
+          && ["EMISE", "EN_RETARD"].includes(validatedFactureHonoraires.statut)
+          && (!validatedFactureHonoraires.stripe_payment_intent_id
+            || validatedFactureHonoraires.stripe_payment_intent_id === paymentIntentId),
+        );
+        const factureHonorairesDejaReconcilee = Boolean(
+          validatedFactureHonoraires?.statut === "PAYEE"
+          && validatedFactureHonoraires.stripe_payment_intent_id === paymentIntentId,
+        );
+        if (
+          validatedTransferClaimError || !validatedTransferClaim
+          || validatedTransferClaim.mission_id !== missionId
+          || validatedTransferClaim.soignant_id !== soignantId
+          || validatedTransferClaim.etablissement_id !== validatedMission.etablissement_id
+          || !["EN_ATTENTE", "TRANSFERE", "CHARGE_REUSSI", "PAYE"].includes(
+            validatedTransferClaim.statut,
+          )
+          || Math.round(Number(validatedTransferClaim.montant_soignant) * 100) !== soignantCents
+          || Math.round(Number(validatedTransferClaim.montant_commission) * 100) !== commissionCents
+          || Math.round(Number(validatedTransferClaim.montant_total) * 100) !== totalCents
+          || Boolean(
+            validatedTransferClaim.stripe_payment_intent_id
+            && validatedTransferClaim.stripe_payment_intent_id !== paymentIntentId,
+          )
+        ) incoherences.push("transfer_claim.identity");
+        if (
+          validatedMission.statut !== "TERMINEE"
+          || validatedMission.type_contrat_applique !== "LIBERAL"
+          || !soignantId
+        ) incoherences.push("mission.state_or_contract");
+        if (validatedEtablissementError || !customerId) incoherences.push("etablissement.customer");
+        if (
+          validatedOnboardingError || validatedOnboarding?.statut !== "COMPLET"
+          || !connectedAccountId
+        ) incoherences.push("onboarding.account");
+        if (
+          validatedFactureHonorairesError || !validatedFactureHonoraires
+          || (!factureHonorairesPayable && !factureHonorairesDejaReconcilee)
+          || validatedFactureHonoraires.mission_id !== missionId
+          || validatedFactureHonoraires.soignant_id !== soignantId
+          || validatedFactureHonoraires.etablissement_id !== validatedMission.etablissement_id
+          || Math.round(Number(validatedFactureHonoraires.montant_ttc ?? 0) * 100) !== soignantCents
+        ) incoherences.push("facture_honoraires.identity");
+        const sessionFactureCommissionId = session.metadata?.facture_commission_id || "";
+        if (
+          validatedFactureCommissionError
+          || (validatedFactureCommission
+            ? !(
+                (["EMISE", "EN_RETARD"].includes(validatedFactureCommission.statut)
+                  && (!validatedFactureCommission.stripe_payment_intent_id
+                    || validatedFactureCommission.stripe_payment_intent_id === paymentIntentId))
+                || (validatedFactureCommission.statut === "PAYEE"
+                  && validatedFactureCommission.stripe_payment_intent_id === paymentIntentId)
+              )
+              || validatedFactureCommission.etablissement_id !== validatedMission.etablissement_id
+              || Math.round(Number(validatedFactureCommission.montant_ttc ?? 0) * 100) !== commissionCents
+              || (sessionFactureCommissionId !== validatedFactureCommission.id
+                && !(sessionFactureCommissionId === ""
+                  && validatedFactureCommission.statut === "PAYEE"
+                  && validatedFactureCommission.stripe_payment_intent_id === paymentIntentId))
+            : sessionFactureCommissionId !== "")
+        ) incoherences.push("facture_commission.identity");
+        if (
+          !Number.isSafeInteger(soignantCents) || soignantCents <= 0
+          || !Number.isSafeInteger(commissionCents) || commissionCents <= 0
+          || !Number.isSafeInteger(totalCents) || totalCents <= 0
+        ) incoherences.push("amounts.invalid");
+        if (session.client_reference_id !== missionId) incoherences.push("session.reference");
+        if (session.metadata?.etablissement_id !== validatedMission.etablissement_id) {
+          incoherences.push("session.etablissement_id");
+        }
+        if (session.metadata?.soignant_id !== soignantId) incoherences.push("session.soignant_id");
+        if (session.metadata?.connected_account_id !== connectedAccountId) {
+          incoherences.push("session.connected_account_id");
+        }
+        if (session.metadata?.soignant_cents !== String(soignantCents)) {
+          incoherences.push("session.soignant_cents");
+        }
+        if (session.metadata?.commission_cents !== String(commissionCents)) {
+          incoherences.push("session.commission_cents");
+        }
+        if (session.amount_total !== totalCents || session.currency !== "eur") {
+          incoherences.push("session.amount_or_currency");
+        }
+        if (typeof session.customer === "string" ? session.customer !== customerId : session.customer?.id !== customerId) {
+          incoherences.push("session.customer");
+        }
+        if (
+          connectPaymentIntent.status !== "succeeded"
+          || connectPaymentIntent.amount !== totalCents
+          || connectPaymentIntent.amount_received !== totalCents
+          || connectPaymentIntent.currency !== "eur"
+          || (typeof connectPaymentIntent.customer === "string"
+            ? connectPaymentIntent.customer !== customerId
+            : connectPaymentIntent.customer?.id !== customerId)
+          || connectPaymentIntent.metadata?.mission_id !== missionId
+          || connectPaymentIntent.metadata?.type !== "CONNECT_MISSION_PAYMENT"
+          || connectPaymentIntent.metadata?.etablissement_id !== validatedMission.etablissement_id
+          || connectPaymentIntent.metadata?.soignant_id !== soignantId
+          || connectPaymentIntent.metadata?.connected_account_id !== connectedAccountId
+          || connectPaymentIntent.metadata?.soignant_cents !== String(soignantCents)
+          || connectPaymentIntent.metadata?.commission_cents !== String(commissionCents)
+          || connectPaymentIntent.metadata?.facture_honoraires_id !== factureHonorairesId
+          || (connectPaymentIntent.metadata?.facture_commission_id || "")
+            !== sessionFactureCommissionId
+          || !chargeId
+        ) incoherences.push("payment_intent.identity");
+        if (customerId) {
+          const customer = await stripe.customers.retrieve(customerId);
+          if (customer.deleted || customer.metadata?.etablissement_id !== validatedMission.etablissement_id) {
+            incoherences.push("customer.tenant_metadata");
           }
         }
 
-        // BUG-BOUCLE-PAIEMENT Fix D.3 — logging + audit anomalie si metadata toujours incomplet après fallback.
-        // Avant ce fix, la branche était skippée silencieusement (return 200 sans UPDATE DB ni log).
-        // Maintenant, on trace explicitement pour que l'admin puisse investiguer.
-        if (!missionId || !soignantId || !connectedAccountId || !soignantCents) {
-          const champsManquants: string[] = [];
-          if (!missionId) champsManquants.push("mission_id");
-          if (!soignantId) champsManquants.push("soignant_id");
-          if (!connectedAccountId) champsManquants.push("connected_account_id");
-          if (!soignantCents) champsManquants.push("soignant_cents");
-
-          console.error(
-            `CONNECT_METADATA_MANQUANTE session ${session.id}: champs manquants=${champsManquants.join(",")}, session.metadata=${JSON.stringify(session.metadata)}`
-          );
-          await supabaseAdmin.rpc("fn_ecrire_audit_safe", {
-            p_acteur_id: "00000000-0000-0000-0000-000000000000",
+        if (incoherences.length > 0) {
+          await writeRequiredFinancialAudit(supabaseAdmin, {
+            p_acteur_id: validatedMission.etablissement_id,
             p_type_acteur: "SYSTEME",
-            p_action: "CONNECT_METADATA_MANQUANTE",
-            p_type_ressource: "checkout_session",
-            p_id_ressource: missionId ?? null,
+            p_action: "ADMIN_ACTION",
+            p_type_ressource: "mission",
+            p_id_ressource: missionId,
             p_cle_s3: null,
             p_details: {
+              evenement: "CONNECT_PAIEMENT_IDENTITE_INCOHERENTE",
               stripe_session_id: session.id,
-              stripe_payment_intent_id: typeof session.payment_intent === "string" ? session.payment_intent : session.payment_intent?.id,
-              champs_manquants: champsManquants,
-              session_metadata: session.metadata,
+              stripe_payment_intent_id: paymentIntentId,
+              incoherences,
             },
             p_ip: null,
             p_navigateur: "stripe-webhook",
-          });
-          throw new Error(`Paid Connect checkout metadata incomplete: ${champsManquants.join(",")}`);
+          }, "Connect mismatch audit failed");
+          throw new Error(`Paid Connect checkout identity mismatch: ${incoherences.join(",")}`);
+        }
+        if (!chargeId) {
+          throw new Error("Paid Connect checkout has no source charge");
+        }
+
+        // Le PaymentIntent peut rester `succeeded` après un remboursement ou
+        // une contestation. Avant de créer — ou même de reprendre — le
+        // transfert, vérifier la Charge qui constitue réellement la source des
+        // fonds. Un retry webhook tardif échoue ainsi fermé.
+        const sourceCharge = await requireAcquiredStripeSourceCharge(
+          stripe,
+          connectPaymentIntent,
+          { customerId, amountCents: totalCents, currency: "eur" },
+        );
+        if (sourceCharge.id !== chargeId) {
+          throw new Error("Paid Connect source charge changed during reconciliation");
         }
 
         if (missionId && soignantId && connectedAccountId && soignantCents > 0) {
@@ -448,14 +916,7 @@ export async function handleStripeWebhook(
           // après timeout, ré-livraison), on ne recrée RIEN. Statuts définitifs =
           // même liste que stripe-connect-pay-mission (:271). REMBOURSE exclu :
           // un re-paiement légitime après remboursement doit pouvoir re-transférer.
-          const { data: transferExistant, error: transferExistantError } = await supabaseAdmin
-            .from("stripe_transfers")
-            .select("statut, stripe_transfer_id")
-            .eq("mission_id", missionId)
-            .maybeSingle();
-          if (transferExistantError) {
-            throw new Error(`Transfer idempotency lookup failed: ${transferExistantError.message}`);
-          }
+          const transferExistant = validatedTransferClaim;
           const transferDejaCree = Boolean(
             transferExistant?.stripe_transfer_id &&
             ["TRANSFERE", "CHARGE_REUSSI", "PAYE"].includes(transferExistant.statut)
@@ -468,29 +929,36 @@ export async function handleStripeWebhook(
             // lieu d'en créer un second) ; un nouveau paiement légitime (nouvelle
             // session après remboursement) a une clé différente.
             const transfer = transferDejaCree
-              ? { id: transferExistant!.stripe_transfer_id as string }
+              ? await stripe.transfers.retrieve(transferExistant!.stripe_transfer_id as string)
               : await stripe.transfers.create({
                 amount: soignantCents,
                 currency: "eur",
                 destination: connectedAccountId,
+                source_transaction: chargeId,
                 transfer_group: `mission_${missionId}`,
                 metadata: { mission_id: missionId, soignant_id: soignantId || "" },
               }, { idempotencyKey: `transfer_${session.id}` });
+            const transferDestinationId = typeof transfer.destination === "string"
+              ? transfer.destination
+              : transfer.destination?.id || null;
+            const transferSourceId = typeof transfer.source_transaction === "string"
+              ? transfer.source_transaction
+              : transfer.source_transaction?.id || null;
+            if (
+              transfer.amount !== soignantCents
+              || transfer.currency !== "eur"
+              || transferDestinationId !== connectedAccountId
+              || transferSourceId !== chargeId
+              || transfer.metadata?.mission_id !== missionId
+              || transfer.metadata?.soignant_id !== soignantId
+            ) {
+              throw new Error("Existing or created Stripe transfer identity mismatch");
+            }
             mouvementStripeConfirme = true;
             if (transferDejaCree) {
               console.log(
                 `Transfer ${transfer.id} déjà créé pour mission ${missionId}; reprise de la réconciliation locale`,
               );
-            }
-
-            // Get the actual charge ID from the payment intent
-            const paymentIntentId = typeof session.payment_intent === "string" ? session.payment_intent : null;
-            let chargeId: string | null = null;
-            if (paymentIntentId) {
-              try {
-                const pi = await stripe.paymentIntents.retrieve(paymentIntentId);
-                chargeId = pi.latest_charge ? (typeof pi.latest_charge === "string" ? pi.latest_charge : pi.latest_charge.id) : null;
-              } catch { /* fallback to payment_intent id */ }
             }
 
             if (!transferDejaCree) {
@@ -504,6 +972,11 @@ export async function handleStripeWebhook(
                   transfere_le: new Date().toISOString(),
                 })
                 .eq("mission_id", missionId)
+                .eq("stripe_checkout_session_id", session.id)
+                .eq("statut", "EN_ATTENTE")
+                .eq("montant_soignant", soignantCents / 100)
+                .eq("montant_commission", commissionCents / 100)
+                .eq("montant_total", totalCents / 100)
                 .select("id")
                 .maybeSingle();
               if (transferUpdateError || !transferUpdated) {
@@ -528,17 +1001,9 @@ export async function handleStripeWebhook(
               throw new Error(`Caregiver payment reconciliation lookup failed: ${existingPaymentError.message}`);
             }
 
-            // Fetch mission data une fois (utilisé pour paiements_soignant + facture commission)
-            const { data: missionRow, error: missionRowError } = await supabaseAdmin
-              .from("missions")
-              .select("etablissement_id, intitule, montant_commission_ht, montant_commission_tva, montant_commission_ttc, type_contrat_applique")
-              .eq("id", missionId)
-              .single();
-            if (missionRowError || !missionRow) {
-              throw new Error(
-                `Mission reconciliation lookup failed: ${missionRowError?.message || "row missing"}`,
-              );
-            }
+            // Toutes les valeurs financières viennent de la mission validée
+            // avant le mouvement Stripe, jamais des metadata de la Session.
+            const missionRow = validatedMission;
 
             if (!existingPayment) {
               const { error: paiementInsertErr } = await supabaseAdmin
@@ -572,6 +1037,11 @@ export async function handleStripeWebhook(
                 modifie_le: new Date().toISOString(),
               })
               .eq("id", missionId)
+              .eq("statut", "TERMINEE")
+              .eq("type_contrat_applique", "LIBERAL")
+              .eq("soignant_assigne_id", soignantId)
+              .eq("montant_commission_ttc", validatedMission.montant_commission_ttc)
+              .eq("net_a_payer", validatedMission.net_a_payer)
               .select("id")
               .maybeSingle();
             if (missionUpdateError || !missionUpdated) {
@@ -595,15 +1065,37 @@ export async function handleStripeWebhook(
             const commissionTva = Number(missionRow?.montant_commission_tva || 0);
             if (commissionTtc > 0 && missionRow?.etablissement_id) {
               const numeroFactureCommission = `FACT-STRIPE-${nowIso.split("T")[0]}-${missionId.split("-")[0]}`;
-              const { data: existingFactCom, error: existingFactComError } = await supabaseAdmin
-                .from("factures")
-                .select("id")
-                .eq("mission_id", missionId)
-                .maybeSingle();
-              if (existingFactComError) {
-                throw new Error(`Commission invoice lookup failed: ${existingFactComError.message}`);
-              }
-              if (!existingFactCom) {
+              if (validatedFactureCommission) {
+                if (
+                  validatedFactureCommission.statut !== "PAYEE"
+                  || validatedFactureCommission.stripe_payment_intent_id !== paymentIntentId
+                ) {
+                  const { data: factPaid, error: factPaidError } = await supabaseAdmin
+                    .from("factures")
+                    .update({
+                      statut: "PAYEE",
+                      date_paiement: nowIso,
+                      stripe_payment_intent_id: paymentIntentId,
+                      mode_paiement: "STRIPE",
+                      modifie_le: nowIso,
+                    })
+                    .eq("id", validatedFactureCommission.id)
+                    .eq("mission_id", missionId)
+                    .eq("etablissement_id", missionRow.etablissement_id)
+                    .eq("montant_ttc", validatedFactureCommission.montant_ttc)
+                    .or(
+                      `stripe_payment_intent_id.is.null,stripe_payment_intent_id.eq.${paymentIntentId}`,
+                    )
+                    .in("statut", ["EMISE", "EN_RETARD"])
+                    .select("id")
+                    .maybeSingle();
+                  if (factPaidError || !factPaid) {
+                    throw new Error(
+                      `Commission invoice reconciliation failed: ${factPaidError?.message || "row missing"}`,
+                    );
+                  }
+                }
+              } else {
                 const { data: factCreated, error: factErr } = await supabaseAdmin
                   .from("factures")
                   .insert({
@@ -630,7 +1122,7 @@ export async function handleStripeWebhook(
                   );
                 } else {
                   console.log(`Facture commission ${factCreated.numero_facture} créée (PAYEE) pour mission ${missionId}`);
-                  await supabaseAdmin.rpc("fn_ecrire_audit_safe", {
+                  await writeRequiredFinancialAudit(supabaseAdmin, {
                     p_acteur_id: "00000000-0000-0000-0000-000000000000",
                     p_type_acteur: "SYSTEME",
                     p_action: "FACTURE_COMMISSION_CREATED_VIA_STRIPE",
@@ -648,7 +1140,7 @@ export async function handleStripeWebhook(
                     },
                     p_ip: null,
                     p_navigateur: "stripe-webhook",
-                  });
+                  }, "Commission invoice creation audit failed");
                 }
               }
             }
@@ -659,7 +1151,6 @@ export async function handleStripeWebhook(
             // - invoke send-email PAIEMENT_RAPIDE_RECU (notif soignant)
             // Le guard `in statut EMISE/EN_RETARD` couvre H4 pour la facture honoraires
             // (une facture ANNULEE/REMPLACEE ne peut pas repasser PAYEE par ce chemin).
-            const factureHonorairesId = session.metadata?.facture_honoraires_id;
             if (factureHonorairesId && paymentIntentId) {
               const { data: factureUpdated, error: factureError } = await supabaseAdmin
                 .from("factures_honoraires")
@@ -669,6 +1160,13 @@ export async function handleStripeWebhook(
                   date_paiement: new Date().toISOString().split("T")[0],
                 })
                 .eq("id", factureHonorairesId)
+                .eq("mission_id", missionId)
+                .eq("soignant_id", soignantId)
+                .eq("etablissement_id", validatedMission.etablissement_id)
+                .eq("montant_ttc", validatedFactureHonoraires!.montant_ttc)
+                .or(
+                  `stripe_payment_intent_id.is.null,stripe_payment_intent_id.eq.${paymentIntentId}`,
+                )
                 .in("statut", ["EMISE", "EN_RETARD"])
                 .select("id, numero_facture, montant_ttc, soignant_id, mission_id")
                 .maybeSingle();
@@ -688,7 +1186,7 @@ export async function handleStripeWebhook(
                   factureDejaPayee?.statut !== "PAYEE"
                   || factureDejaPayee.stripe_payment_intent_id !== paymentIntentId
                 ) {
-                  const { error: anomalyAuditError } = await supabaseAdmin.rpc("fn_ecrire_audit_safe", {
+                  await writeRequiredFinancialAudit(supabaseAdmin, {
                     p_acteur_id: "00000000-0000-0000-0000-000000000000",
                     p_type_acteur: "SYSTEME",
                     p_action: "FACTURE_HONORAIRES_PAYEE_SKIP_ANOMALIE",
@@ -703,10 +1201,7 @@ export async function handleStripeWebhook(
                     },
                     p_ip: null,
                     p_navigateur: "stripe-webhook",
-                  });
-                  if (anomalyAuditError) {
-                    console.error("Caregiver invoice anomaly audit failed:", anomalyAuditError.message);
-                  }
+                  }, "Caregiver invoice anomaly audit failed");
                   throw new Error(
                     `Caregiver invoice ${factureHonorairesId} is not reconcilable after Stripe transfer`,
                   );
@@ -765,7 +1260,7 @@ export async function handleStripeWebhook(
             }
 
             // RGPD Art. 32 : audit du transfert financier (Stripe Connect mission payment)
-            await supabaseAdmin.rpc("fn_ecrire_audit_safe", {
+            await writeRequiredFinancialAudit(supabaseAdmin, {
               p_acteur_id: soignantId || "00000000-0000-0000-0000-000000000000",
               p_type_acteur: "SYSTEME",
               p_action: "FINANCE_TRANSFER_CONNECT",
@@ -785,7 +1280,7 @@ export async function handleStripeWebhook(
               },
               p_ip: null,
               p_navigateur: "stripe-webhook",
-            });
+            }, "Connect transfer audit failed");
 
             console.log(`Connect transfer ${transfer.id} created for mission ${missionId}`);
           } catch (transferErr: any) {
@@ -817,18 +1312,39 @@ export async function handleStripeWebhook(
               `STRIPE_TRANSFER_ECHOUE mission=${missionId} amount_cents=${soignantCents} destination=${connectedAccountId} code=${stripeErrCode} message=${stripeErrMsg}`
             );
 
-            const { error: updateErr } = await supabaseAdmin
+            const { data: failedTransferPersisted, error: updateErr } = await supabaseAdmin
               .from("stripe_transfers")
               .update({
-                statut: "ECHOUE",
+                statut: "EN_ATTENTE",
                 erreur: errorLabel.substring(0, 2000),
               })
-              .eq("mission_id", missionId);
-            if (updateErr) {
-              throw new Error(`Failed transfer persistence failed: ${updateErr.message}`);
+              .eq("mission_id", missionId)
+              .eq("stripe_checkout_session_id", session.id)
+              .eq("statut", "EN_ATTENTE")
+              .select("id")
+              .maybeSingle();
+            if (updateErr || !failedTransferPersisted) {
+              const { data: concurrentTransfer, error: concurrentTransferError } =
+                await supabaseAdmin
+                  .from("stripe_transfers")
+                  .select("statut, stripe_checkout_session_id, stripe_payment_intent_id")
+                  .eq("mission_id", missionId)
+                  .eq("stripe_checkout_session_id", session.id)
+                  .maybeSingle();
+              if (
+                concurrentTransferError || !concurrentTransfer
+                || !["CHARGE_REUSSI", "TRANSFERE", "PAYE"].includes(
+                  concurrentTransfer.statut,
+                )
+                || concurrentTransfer.stripe_payment_intent_id !== paymentIntentId
+              ) {
+                throw new Error(
+                  `Failed transfer persistence failed: ${updateErr?.message || concurrentTransferError?.message || "state conflict"}`,
+                );
+              }
             }
 
-            const { error: transferFailureAuditError } = await supabaseAdmin.rpc("fn_ecrire_audit_safe", {
+            await writeRequiredFinancialAudit(supabaseAdmin, {
               p_acteur_id: "00000000-0000-0000-0000-000000000000",
               p_type_acteur: "SYSTEME",
               p_action: "FINANCE_TRANSFER_FAILED",
@@ -848,10 +1364,10 @@ export async function handleStripeWebhook(
               },
               p_ip: null,
               p_navigateur: "stripe-webhook",
-            });
-            if (transferFailureAuditError) {
-              throw new Error(`Failed transfer audit failed: ${transferFailureAuditError.message}`);
-            }
+            }, "Failed transfer audit failed");
+            throw new Error(
+              `Connect transfer failed; Stripe event must retry: ${stripeErrMsg}`,
+            );
           }
         }
 
@@ -888,19 +1404,52 @@ export async function handleStripeWebhook(
         });
       }
 
-      // C2: Idempotency guard — skip if already PAYEE
-      const { data: existingFacture, error: existingFactureError } = await supabaseAdmin
-        .from("factures")
-        .select("statut")
-        .eq("id", factureId)
-        .single();
-      if (existingFactureError || !existingFacture) {
-        throw new Error(
-          `Checkout invoice reconciliation lookup failed: ${existingFactureError?.message || "row missing"}`,
-        );
+      const sessionPaymentIntentId = typeof session.payment_intent === "string"
+        ? session.payment_intent
+        : session.payment_intent?.id || null;
+      if (!sessionPaymentIntentId) {
+        const { data: invoiceWithoutIntent } = await supabaseAdmin
+          .from("factures")
+          .select("etablissement_id")
+          .eq("id", factureId)
+          .maybeSingle();
+        if (invoiceWithoutIntent?.etablissement_id) {
+          await writeRequiredFinancialAudit(supabaseAdmin, {
+            p_acteur_id: invoiceWithoutIntent.etablissement_id,
+            p_type_acteur: "SYSTEME",
+            p_action: "ADMIN_ACTION",
+            p_type_ressource: "facture",
+            p_id_ressource: factureId,
+            p_cle_s3: null,
+            p_details: {
+              evenement: "FACTURE_PAIEMENT_STRIPE_IDENTITE_INCOHERENTE",
+              contexte: "checkout.session.completed",
+              stripe_event_id: event.id,
+              stripe_session_id: session.id,
+              incoherences: ["checkout_session.payment_intent_missing"],
+            },
+            p_ip: null,
+            p_navigateur: "stripe-webhook",
+          }, "Missing checkout PaymentIntent audit failed");
+        }
+        throw new Error(`Paid checkout ${session.id} has no PaymentIntent`);
       }
+      const checkoutPaymentIntent = await stripe.paymentIntents.retrieve(
+        sessionPaymentIntentId,
+      );
+      // Validation cryptographique/Stripe complète AVANT toute idempotence ou
+      // écriture PAYEE : un ancien Checkout ne peut solder un montant modifié.
+      const existingFacture = await loadAndValidateInvoicePayment(
+        factureId,
+        checkoutPaymentIntent,
+        "checkout.session.completed",
+        session,
+      );
 
-      if (existingFacture?.statut === "PAYEE") {
+      if (
+        existingFacture?.statut === "PAYEE"
+        && existingFacture.stripe_payment_intent_id === checkoutPaymentIntent.id
+      ) {
         console.log(`Facture ${factureId} already PAYEE, skipping duplicate webhook`);
         await markEventProcessed();
         return new Response(JSON.stringify({ received: true, skipped: "already_paid" }), {
@@ -920,11 +1469,15 @@ export async function handleStripeWebhook(
         .update({
           statut: "PAYEE",
           date_paiement: new Date().toISOString(),
-          stripe_payment_intent_id: session.payment_intent as string,
+          stripe_payment_intent_id: checkoutPaymentIntent.id,
           stripe_hosted_url: session.url,
           modifie_le: new Date().toISOString(),
         })
         .eq("id", factureId)
+        .eq("montant_ttc", existingFacture.montant_ttc)
+        .or(
+          `stripe_payment_intent_id.is.null,stripe_payment_intent_id.eq.${checkoutPaymentIntent.id}`,
+        )
         .in("statut", ["EMISE", "EN_RETARD"])
         .select("id, numero_facture, etablissement_id, montant_ttc")
         .maybeSingle();
@@ -949,7 +1502,7 @@ export async function handleStripeWebhook(
         if (factureInvalideError) {
           throw new Error(`Invalid invoice state lookup failed: ${factureInvalideError.message}`);
         }
-        const { error: invalidFactureAuditError } = await supabaseAdmin.rpc("fn_ecrire_audit_safe", {
+        await writeRequiredFinancialAudit(supabaseAdmin, {
           p_acteur_id: factureInvalide?.etablissement_id || "00000000-0000-0000-0000-000000000000",
           p_type_acteur: "SYSTEME",
           p_action: "FACTURE_COMMISSION_PAYEE_SKIP_ANOMALIE",
@@ -964,10 +1517,7 @@ export async function handleStripeWebhook(
           },
           p_ip: null,
           p_navigateur: "stripe-webhook",
-        });
-        if (invalidFactureAuditError) {
-          console.error("Invalid invoice state audit failed:", invalidFactureAuditError.message);
-        }
+        }, "Invalid invoice state audit failed");
         throw new Error(
           `Captured checkout cannot reconcile invoice ${factureId} in status ${factureInvalide?.statut || "missing"}`,
         );
@@ -979,7 +1529,7 @@ export async function handleStripeWebhook(
 
       // Write audit log
       if (facture) {
-        await supabaseAdmin.rpc("fn_ecrire_audit_safe", {
+        await writeRequiredFinancialAudit(supabaseAdmin, {
           p_acteur_id: facture.etablissement_id,
           p_type_acteur: "SYSTEME",
           p_action: "FINANCE_FACTURE_PAYEE",
@@ -994,7 +1544,7 @@ export async function handleStripeWebhook(
           },
           p_ip: null,
           p_navigateur: "stripe-webhook",
-        });
+        }, "Paid invoice audit failed");
 
         // M6: Send FACTURE_PAYEE email
         {
@@ -1028,7 +1578,8 @@ export async function handleStripeWebhook(
     if (verified.source === "PLATFORM" && event.type === "payment_intent.succeeded"
         && (event.data.object as Stripe.PaymentIntent).metadata?.type === "ESCROW_MISSION_PAYMENT") {
       const pi = event.data.object as Stripe.PaymentIntent;
-      const escrowId = pi.metadata?.paiement_escrow_id;
+      const validatedEscrow = await loadAndValidateEscrowPayment(pi, true);
+      const escrowId = validatedEscrow.id;
       if (escrowId) {
         const chargeId = pi.latest_charge
           ? (typeof pi.latest_charge === "string" ? pi.latest_charge : pi.latest_charge.id)
@@ -1046,6 +1597,7 @@ export async function handleStripeWebhook(
           })
           .eq("id", escrowId)
           .eq("statut", "INITIE")
+          .eq("stripe_payment_intent_id", pi.id)
           .select("id, mission_id, etablissement_id")
           .maybeSingle();
         if (escrowDebitError) {
@@ -1070,18 +1622,37 @@ export async function handleStripeWebhook(
     if (verified.source === "PLATFORM" && event.type === "payment_intent.payment_failed"
         && (event.data.object as Stripe.PaymentIntent).metadata?.type === "ESCROW_MISSION_PAYMENT") {
       const pi = event.data.object as Stripe.PaymentIntent;
-      const escrowId = pi.metadata?.paiement_escrow_id;
+      const validatedEscrow = await loadAndValidateEscrowPayment(pi, false);
+      const escrowId = validatedEscrow.id;
       if (escrowId) {
-        const failMsg = pi.last_payment_error?.message
-          || pi.last_payment_error?.code
-          || "payment_intent.payment_failed";
-        const { error: escrowIncidentError } = await supabaseAdmin.rpc("fn_escrow_marquer_incident", {
-          p_paiement_escrow_id: escrowId,
-          p_type_incident: "ECHEC",
-          p_detail: String(failMsg).substring(0, 500),
-        });
-        if (escrowIncidentError) {
-          throw new Error(`Escrow payment failure reconciliation failed: ${escrowIncidentError.message}`);
+        const { data: incidentTarget, error: incidentTargetError } = await supabaseAdmin
+          .from("paiements_escrow")
+          .select("id")
+          .eq("id", escrowId)
+          .eq("statut", "INITIE")
+          .eq("stripe_payment_intent_id", pi.id)
+          .maybeSingle();
+        if (incidentTargetError) {
+          throw new Error(
+            `Escrow failure target lookup failed: ${incidentTargetError.message}`,
+          );
+        }
+        if (incidentTarget) {
+          const failMsg = pi.last_payment_error?.message
+            || pi.last_payment_error?.code
+            || "payment_intent.payment_failed";
+          const { error: escrowIncidentError } = await supabaseAdmin.rpc(
+            "fn_escrow_marquer_echec_debit",
+            {
+              p_paiement_escrow_id: escrowId,
+              p_detail: String(failMsg).substring(0, 500),
+            },
+          );
+          if (escrowIncidentError) {
+            throw new Error(`Escrow payment failure reconciliation failed: ${escrowIncidentError.message}`);
+          }
+        } else {
+          console.warn(`Escrow ${escrowId} no longer INITIE; stale payment_failed ignored`);
         }
       }
       await markEventProcessed();
@@ -1110,7 +1681,15 @@ export async function handleStripeWebhook(
       }
 
       if (factureId) {
-        const { data: paymentIntentFactureUpdated, error: paymentIntentFactureError } = await supabaseAdmin
+        // Même l'événement payment_intent.succeeded signé ne suffit pas : son
+        // identité comptable doit correspondre à l'état courant de la facture.
+        const validatedPaymentIntentFacture = await loadAndValidateInvoicePayment(
+          factureId,
+          paymentIntent,
+          "payment_intent.succeeded",
+        );
+        const { data: paymentIntentFactureUpdated, error: paymentIntentFactureError } =
+          await supabaseAdmin
           .from("factures")
           .update({
             statut: "PAYEE",
@@ -1119,6 +1698,10 @@ export async function handleStripeWebhook(
             modifie_le: new Date().toISOString(),
           })
           .eq("id", factureId)
+          .eq("montant_ttc", validatedPaymentIntentFacture.montant_ttc)
+          .or(
+            `stripe_payment_intent_id.is.null,stripe_payment_intent_id.eq.${paymentIntent.id}`,
+          )
           .in("statut", ["EMISE", "EN_RETARD"])
           .select("id")
           .maybeSingle();
@@ -1149,32 +1732,89 @@ export async function handleStripeWebhook(
     // Handle SEPA debit charge succeeded
     if (verified.source === "PLATFORM" && event.type === "charge.succeeded") {
       const charge = event.data.object as Stripe.Charge;
-      if (charge.payment_method_details?.type === "sepa_debit") {
+      if (
+        charge.payment_method_details?.type === "sepa_debit"
+        && charge.metadata?.type === "commission_reservation"
+      ) {
         const missionId = charge.metadata?.mission_id;
         if (missionId) {
-          // Fetch the etablissement before updating to capture it in audit
+          const chargePaymentIntentId = typeof charge.payment_intent === "string"
+            ? charge.payment_intent
+            : charge.payment_intent?.id || null;
+          if (!chargePaymentIntentId) {
+            throw new Error(`SEPA charge ${charge.id} missing PaymentIntent`);
+          }
+          const sepaPaymentIntent = await stripe.paymentIntents.retrieve(chargePaymentIntentId);
+          const { data: paiementMission, error: paiementMissionError } = await supabaseAdmin
+            .from("paiements_mission")
+            .select("id, statut, montant_ttc, etablissement_id, stripe_payment_intent_id")
+            .eq("mission_id", missionId)
+            .eq("stripe_payment_intent_id", chargePaymentIntentId)
+            .maybeSingle();
           const { data: mission, error: missionLookupError } = await supabaseAdmin
             .from("missions")
-            .select("etablissement_id")
+            .select("etablissement_id, montant_commission_ttc, type_contrat_applique")
             .eq("id", missionId)
-            .single();
-          if (missionLookupError || !mission) {
+            .maybeSingle();
+          const { data: etablissement, error: etablissementLookupError } = mission?.etablissement_id
+            ? await supabaseAdmin
+              .from("etablissements")
+              .select("stripe_customer_id")
+              .eq("id", mission.etablissement_id)
+              .maybeSingle()
+            : { data: null, error: null };
+          const expectedCents = Math.round(Number(paiementMission?.montant_ttc ?? 0) * 100);
+          const piCustomerId = typeof sepaPaymentIntent.customer === "string"
+            ? sepaPaymentIntent.customer
+            : sepaPaymentIntent.customer?.id || null;
+          const stripeCustomer = piCustomerId
+            ? await stripe.customers.retrieve(piCustomerId)
+            : null;
+          const stripeCustomerIsValid = Boolean(
+            stripeCustomer
+            && !("deleted" in stripeCustomer && stripeCustomer.deleted)
+            && stripeCustomer.metadata?.etablissement_id === mission?.etablissement_id,
+          );
+          if (
+            missionLookupError || !mission || paiementMissionError || !paiementMission
+            || etablissementLookupError
+            || paiementMission.etablissement_id !== mission.etablissement_id
+            || paiementMission.stripe_payment_intent_id !== sepaPaymentIntent.id
+            || !["EN_ATTENTE", "AUTORISE", "CAPTURE"].includes(paiementMission.statut)
+            || sepaPaymentIntent.status !== "succeeded"
+            || sepaPaymentIntent.amount !== expectedCents
+            || sepaPaymentIntent.amount_received !== expectedCents
+            || sepaPaymentIntent.currency !== "eur"
+            || piCustomerId !== etablissement?.stripe_customer_id
+            || !stripeCustomerIsValid
+            || sepaPaymentIntent.metadata?.mission_id !== missionId
+            || sepaPaymentIntent.metadata?.etablissement_id !== mission.etablissement_id
+            || sepaPaymentIntent.metadata?.type !== "commission_reservation"
+            || charge.amount !== expectedCents
+            || charge.currency !== "eur"
+          ) {
             throw new Error(
-              `SEPA mission lookup failed: ${missionLookupError?.message || "row missing"}`,
+              `SEPA mission payment identity mismatch: ${missionLookupError?.message || paiementMissionError?.message || "invalid binding"}`,
             );
           }
 
-          const { error: paymentCaptureError } = await supabaseAdmin
+          const { data: paymentCaptured, error: paymentCaptureError } = await supabaseAdmin
             .from("paiements_mission")
             .update({
               statut: "CAPTURE",
               capture_le: new Date().toISOString(),
               stripe_charge_id: charge.id,
             })
-            .eq("mission_id", missionId)
-            .eq("statut", "EN_ATTENTE");
-          if (paymentCaptureError) {
-            throw new Error(`SEPA payment reconciliation failed: ${paymentCaptureError.message}`);
+            .eq("id", paiementMission.id)
+            .eq("stripe_payment_intent_id", sepaPaymentIntent.id)
+            .eq("montant_ttc", paiementMission.montant_ttc)
+            .in("statut", ["EN_ATTENTE", "AUTORISE"])
+            .select("id")
+            .maybeSingle();
+          if (paymentCaptureError || (!paymentCaptured && paiementMission.statut !== "CAPTURE")) {
+            throw new Error(
+              `SEPA payment reconciliation failed: ${paymentCaptureError?.message || "row missing"}`,
+            );
           }
 
           // Mark commission as invoiced
@@ -1182,6 +1822,8 @@ export async function handleStripeWebhook(
             .from("missions")
             .update({ commission_facturee: true, modifie_le: new Date().toISOString() })
             .eq("id", missionId)
+            .eq("etablissement_id", mission.etablissement_id)
+            .eq("montant_commission_ttc", mission.montant_commission_ttc)
             .select("id")
             .maybeSingle();
           if (commissionMissionError || !commissionMissionUpdated) {
@@ -1192,7 +1834,7 @@ export async function handleStripeWebhook(
 
           // RGPD Art. 32 : audit du prélèvement SEPA
           if (mission?.etablissement_id) {
-            await supabaseAdmin.rpc("fn_ecrire_audit_safe", {
+            await writeRequiredFinancialAudit(supabaseAdmin, {
               p_acteur_id: mission.etablissement_id,
               p_type_acteur: "SYSTEME",
               p_action: "FINANCE_SEPA_CAPTURE",
@@ -1207,7 +1849,7 @@ export async function handleStripeWebhook(
               },
               p_ip: null,
               p_navigateur: "stripe-webhook",
-            });
+            }, "SEPA capture audit failed");
           }
 
           console.log(`SEPA charge captured for mission ${missionId}`);
@@ -1226,7 +1868,8 @@ export async function handleStripeWebhook(
           statut: "EN_RETARD",
           modifie_le: new Date().toISOString(),
         })
-        .eq("stripe_invoice_id", stripeInvoiceId);
+        .eq("stripe_invoice_id", stripeInvoiceId)
+        .in("statut", ["EMISE", "EN_RETARD"]);
 
       if (failErr) {
         throw new Error(`Invoice failure reconciliation failed: ${failErr.message}`);
@@ -1245,10 +1888,16 @@ export async function handleStripeWebhook(
           .from("stripe_transfers")
           .update({ statut: "ECHOUE", erreur: "Checkout expiré" })
           .eq("mission_id", expiredMissionId)
+          .eq("stripe_checkout_session_id", expiredSession.id)
           .eq("statut", "EN_ATTENTE");
         if (checkoutExpiryError) {
           throw new Error(`Expired checkout reconciliation failed: ${checkoutExpiryError.message}`);
         }
+        await releaseStripePaymentFlowClaimForExpiredSession(
+          supabaseAdmin,
+          "CONNECT_MISSION",
+          expiredSession.id,
+        );
 
         console.log(`Connect checkout expired for mission ${expiredMissionId}, transfer reset to ECHOUE`);
       }
@@ -1256,6 +1905,11 @@ export async function handleStripeWebhook(
       // For facture payments, just log — the facture stays EMISE
       const expiredFactureId = expiredSession.metadata?.facture_id;
       if (expiredFactureId) {
+        await releaseStripePaymentFlowClaimForExpiredSession(
+          supabaseAdmin,
+          "CHECKOUT_INVOICE",
+          expiredSession.id,
+        );
         console.log(`Facture checkout expired for ${expiredFactureId}`);
       }
     }
@@ -1316,44 +1970,132 @@ export async function handleStripeWebhook(
     // ── charge.failed : paiement étab échoué ──
     if (verified.source === "PLATFORM" && event.type === "charge.failed") {
       const charge = event.data.object as Stripe.Charge;
-      const paymentIntentId = typeof charge.payment_intent === "string" ? charge.payment_intent : charge.payment_intent?.id;
+      const paymentIntentId = stripeObjectId(charge.payment_intent);
       if (paymentIntentId) {
-        const { data: facture, error: failedChargeLookupError } = await supabaseAdmin
-          .from("factures")
-          .select("id, numero_facture, etablissement_id, montant_ttc, statut")
-          .eq("stripe_payment_intent_id", paymentIntentId)
-          .maybeSingle();
-        if (failedChargeLookupError) {
-          throw new Error(`Failed charge invoice lookup failed: ${failedChargeLookupError.message}`);
-        }
-
-        if (facture && facture.statut !== "PAYEE") {
-          const { data: failedChargeUpdated, error: failedChargeUpdateError } = await supabaseAdmin
+        const failedPaymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
+        const factureId = failedPaymentIntent.metadata?.facture_id || "";
+        // Connect et escrow n'ont pas de facture commission standard dans ce
+        // flux. Sans metadata facture exacte, l'événement reste informatif.
+        if (factureId) {
+          const { data: facture, error: failedChargeLookupError } = await supabaseAdmin
             .from("factures")
-            .update({ statut: "EN_RETARD", modifie_le: new Date().toISOString() })
-            .eq("id", facture.id)
-            .neq("statut", "PAYEE")
-            .select("id")
+            .select(
+              "id, numero_facture, type_document, etablissement_id, montant_ttc, statut, stripe_payment_intent_id, etablissements(stripe_customer_id)",
+            )
+            .eq("id", factureId)
             .maybeSingle();
-          if (failedChargeUpdateError) {
-            throw new Error(`Failed charge invoice reconciliation failed: ${failedChargeUpdateError.message}`);
+          if (failedChargeLookupError || !facture) {
+            throw new Error(
+              `Failed charge invoice lookup failed: ${failedChargeLookupError?.message || "row missing"}`,
+            );
           }
+          if (facture.type_document !== "FACTURE") {
+            throw new Error(`Failed charge cannot mutate ${facture.type_document}`);
+          }
+          const relation = facture.etablissements as
+            | { stripe_customer_id?: string | null }
+            | Array<{ stripe_customer_id?: string | null }>
+            | null;
+          const customerId = (Array.isArray(relation)
+            ? relation[0]?.stripe_customer_id
+            : relation?.stripe_customer_id) || "";
+          const amountCents = Math.round(Number(facture.montant_ttc ?? 0) * 100);
+          const chargeCustomerId = typeof charge.customer === "string"
+            ? charge.customer
+            : charge.customer?.id || null;
+          const incoherences: string[] = [
+            ...findInvoicePaymentIntentInconsistencies(
+              failedPaymentIntent,
+              {
+                factureId: facture.id,
+                etablissementId: facture.etablissement_id,
+                customerId,
+                amountCents,
+                currency: "eur",
+              },
+            ),
+          ];
+          if (
+            !Number.isSafeInteger(amountCents) || amountCents <= 0
+            || charge.amount !== amountCents
+            || charge.currency !== "eur"
+            || chargeCustomerId !== customerId
+            || stripeObjectId(charge.payment_intent) !== failedPaymentIntent.id
+            || stripeObjectId(failedPaymentIntent.latest_charge) !== charge.id
+            || charge.status !== "failed"
+            || charge.paid
+          ) incoherences.push("charge.identity");
+          if (customerId) {
+            const customer = await stripe.customers.retrieve(customerId);
+            if (
+              customer.deleted
+              || customer.metadata?.etablissement_id !== facture.etablissement_id
+            ) incoherences.push("customer.tenant_metadata");
+          }
+          if (incoherences.length > 0) {
+            throw new Error(`Failed charge identity mismatch: ${incoherences.join(",")}`);
+          }
+
+          const isCurrentAttempt = !facture.stripe_payment_intent_id
+            || facture.stripe_payment_intent_id === paymentIntentId;
+          let failedChargeUpdated: { id: string } | null = null;
+          if (isCurrentAttempt && ["EMISE", "EN_RETARD"].includes(facture.statut)) {
+            let failedChargeUpdateQuery = supabaseAdmin
+              .from("factures")
+              .update({
+                statut: "EN_RETARD",
+                stripe_payment_intent_id: paymentIntentId,
+                modifie_le: new Date().toISOString(),
+              })
+              .eq("id", facture.id)
+              .eq("montant_ttc", facture.montant_ttc)
+              .in("statut", ["EMISE", "EN_RETARD"]);
+            failedChargeUpdateQuery = facture.stripe_payment_intent_id
+              ? failedChargeUpdateQuery.eq(
+                "stripe_payment_intent_id",
+                facture.stripe_payment_intent_id,
+              )
+              : failedChargeUpdateQuery.is("stripe_payment_intent_id", null);
+            const { data, error: failedChargeUpdateError } = await failedChargeUpdateQuery
+              .select("id")
+              .maybeSingle();
+            failedChargeUpdated = data;
+            if (failedChargeUpdateError) {
+              throw new Error(`Failed charge invoice reconciliation failed: ${failedChargeUpdateError.message}`);
+            }
+          }
+
+          let reconciliation = failedChargeUpdated ? "MARKED_OVERDUE" : "STALE_OR_TERMINAL";
           if (!failedChargeUpdated) {
             const { data: concurrentFacture, error: concurrentFactureError } = await supabaseAdmin
               .from("factures")
-              .select("statut")
+              .select("statut, stripe_payment_intent_id")
               .eq("id", facture.id)
               .maybeSingle();
-            if (concurrentFactureError) {
-              throw new Error(`Failed charge invoice state lookup failed: ${concurrentFactureError.message}`);
+            if (concurrentFactureError || !concurrentFacture) {
+              throw new Error(
+                `Failed charge invoice state lookup failed: ${concurrentFactureError?.message || "row missing"}`,
+              );
             }
-            if (concurrentFacture?.statut !== "PAYEE") {
+            const staleAttempt = Boolean(
+              concurrentFacture.stripe_payment_intent_id
+              && concurrentFacture.stripe_payment_intent_id !== paymentIntentId,
+            );
+            const alreadyReconciled = concurrentFacture.statut === "EN_RETARD"
+              && concurrentFacture.stripe_payment_intent_id === paymentIntentId;
+            const terminalInvoice = ["PAYEE", "ANNULEE"].includes(concurrentFacture.statut);
+            if (!staleAttempt && !alreadyReconciled && !terminalInvoice) {
               throw new Error(`Failed charge cannot reconcile invoice ${facture.id}`);
             }
+            reconciliation = staleAttempt
+              ? "STALE_ATTEMPT_IGNORED"
+              : alreadyReconciled
+              ? "ALREADY_RECONCILED"
+              : "TERMINAL_INVOICE_IGNORED";
           }
 
           // Notif étab
-          try {
+          if (failedChargeUpdated) try {
             await supabaseAdmin.functions.invoke("send-email", {
               body: {
                 type: "CHARGE_FAILED_ETAB",
@@ -1369,27 +2111,27 @@ export async function handleStripeWebhook(
           } catch (emailErr) {
             console.error("send-email CHARGE_FAILED_ETAB failed:", emailErr);
           }
-        }
 
-        const { error: failedChargeAuditError } = await supabaseAdmin.rpc("fn_ecrire_audit_safe", {
-          p_acteur_id: facture?.etablissement_id || "00000000-0000-0000-0000-000000000000",
-          p_type_acteur: "SYSTEME",
-          p_action: "FINANCE_CHARGE_FAILED",
-          p_type_ressource: "facture",
-          p_id_ressource: facture?.id || null,
-          p_cle_s3: null,
-          p_details: {
-            stripe_charge_id: charge.id,
-            stripe_payment_intent_id: paymentIntentId,
-            failure_code: charge.failure_code,
-            failure_message: charge.failure_message,
-            amount: charge.amount,
-          },
-          p_ip: null,
-          p_navigateur: "stripe-webhook",
-        });
-        if (failedChargeAuditError) {
-          throw new Error(`Failed charge audit failed: ${failedChargeAuditError.message}`);
+          await writeRequiredFinancialAudit(supabaseAdmin, {
+            p_acteur_id: facture.etablissement_id,
+            p_type_acteur: "SYSTEME",
+            p_action: "FINANCE_CHARGE_FAILED",
+            p_type_ressource: "facture",
+            p_id_ressource: facture.id,
+            p_cle_s3: null,
+            p_details: {
+              stripe_charge_id: charge.id,
+              stripe_payment_intent_id: paymentIntentId,
+              failure_code: charge.failure_code,
+              failure_message: charge.failure_message,
+              amount: charge.amount,
+              current_attempt: isCurrentAttempt,
+              invoice_status: facture.statut,
+              reconciliation,
+            },
+            p_ip: null,
+            p_navigateur: "stripe-webhook",
+          }, "Failed charge audit failed");
         }
       }
       console.log(`charge.failed handled: ${charge.id}`);
@@ -1479,7 +2221,7 @@ export async function handleStripeWebhook(
         }
       }
 
-      const { error: disputeCreatedAuditError } = await supabaseAdmin.rpc("fn_ecrire_audit_safe", {
+      await writeRequiredFinancialAudit(supabaseAdmin, {
         p_acteur_id: transfer?.etablissement_id || "00000000-0000-0000-0000-000000000000",
         p_type_acteur: "SYSTEME",
         p_action: "FINANCE_DISPUTE_OUVERTE",
@@ -1495,10 +2237,7 @@ export async function handleStripeWebhook(
         },
         p_ip: null,
         p_navigateur: "stripe-webhook",
-      });
-      if (disputeCreatedAuditError) {
-        throw new Error(`Dispute creation audit failed: ${disputeCreatedAuditError.message}`);
-      }
+      }, "Dispute creation audit failed");
       console.log(`charge.dispute.created handled: ${dispute.id}`);
     }
 
@@ -1551,7 +2290,7 @@ export async function handleStripeWebhook(
         }
       }
 
-      const { error: disputeClosedAuditError } = await supabaseAdmin.rpc("fn_ecrire_audit_safe", {
+      await writeRequiredFinancialAudit(supabaseAdmin, {
         p_acteur_id: transfer?.etablissement_id || "00000000-0000-0000-0000-000000000000",
         p_type_acteur: "SYSTEME",
         p_action: "FINANCE_DISPUTE_CLOSE",
@@ -1561,46 +2300,512 @@ export async function handleStripeWebhook(
         p_details: { dispute_id: dispute.id, status: dispute.status, amount: dispute.amount },
         p_ip: null,
         p_navigateur: "stripe-webhook",
-      });
-      if (disputeClosedAuditError) {
-        throw new Error(`Dispute closure audit failed: ${disputeClosedAuditError.message}`);
-      }
+      }, "Dispute closure audit failed");
       console.log(`charge.dispute.closed handled: ${dispute.id} → ${dispute.status}`);
     }
 
-    // ── charge.refunded : refund exécuté (fondations CP-STRIPE-5) ──
+    // ── charge.refunded : rapprochement exact Refund → queue → avoir/escrow ──
     if (verified.source === "PLATFORM" && event.type === "charge.refunded") {
       const charge = event.data.object as Stripe.Charge;
-      const paymentIntentId = typeof charge.payment_intent === "string" ? charge.payment_intent : charge.payment_intent?.id;
+      const paymentIntentId = stripeObjectId(charge.payment_intent);
+      if (!paymentIntentId) throw new Error(`Refunded charge ${charge.id} missing PaymentIntent`);
+      const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
+      if (
+        stripeObjectId(paymentIntent.latest_charge) !== charge.id
+        || charge.currency !== "eur"
+      ) {
+        throw new Error(`Refunded charge ${charge.id} source mismatch`);
+      }
 
-      // Si ligne dans stripe_refunds_queue, la marquer TRAITE
-      if (paymentIntentId) {
-        const { error: refundQueueError } = await supabaseAdmin
+      const refunds: Stripe.Refund[] = [];
+      let refundStartingAfter: string | undefined;
+      do {
+        const page = await stripe.refunds.list({
+          charge: charge.id,
+          limit: 100,
+          ...(refundStartingAfter ? { starting_after: refundStartingAfter } : {}),
+        });
+        refunds.push(...page.data);
+        refundStartingAfter = page.has_more ? page.data.at(-1)?.id : undefined;
+      } while (refundStartingAfter);
+
+      const succeededRefundAmount = refunds
+        .filter((refund) => refund.status === "succeeded")
+        .reduce((sum, refund) => sum + refund.amount, 0);
+      if (succeededRefundAmount !== charge.amount_refunded) {
+        throw new Error(
+          `Refunded charge ${charge.id} amount mismatch (${succeededRefundAmount}/${charge.amount_refunded})`,
+        );
+      }
+
+      const queueRefunds = refunds.filter((refund) => Boolean(refund.metadata?.queue_id));
+      const queueIds = new Set<string>();
+      for (const refund of queueRefunds) {
+        const queueId = refund.metadata?.queue_id || "";
+        if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(queueId)) {
+          throw new Error(`Refund ${refund.id} has invalid queue metadata`);
+        }
+        if (queueIds.has(queueId)) {
+          throw new Error(`Multiple refunds claim queue ${queueId}`);
+        }
+        queueIds.add(queueId);
+
+        const { data: queueRow, error: queueError } = await supabaseAdmin
           .from("stripe_refunds_queue")
-          .update({ statut: "TRAITE", traite_le: new Date().toISOString() })
-          .eq("stripe_payment_intent_id", paymentIntentId)
-          .in("statut", ["EN_ATTENTE", "EN_COURS"]);
-        if (refundQueueError) {
-          throw new Error(`Refund queue reconciliation failed: ${refundQueueError.message}`);
+          .select(
+            "id, avoir_id, facture_origine_id, paiement_escrow_id, stripe_payment_intent_id, montant_cts, statut, stripe_refund_id, reverse_transfer, refund_application_fee_cts, absorbe_plateforme, escrow_statut_avant_remboursement",
+          )
+          .eq("id", queueId)
+          .maybeSingle();
+        if (queueError || !queueRow) {
+          throw new Error(
+            `Refund queue lookup failed: ${queueError?.message || "row missing"}`,
+          );
         }
 
-        // Si facture_honoraires AVOIR liée : marquer REMBOURSEE
-        const { error: creditNoteRefundError } = await supabaseAdmin
-          .from("factures_honoraires")
-          .update({
-            statut: "REMBOURSEE",
-            date_remboursement: new Date().toISOString(),
-            reference_remboursement: charge.id,
-          })
-          .eq("stripe_payment_intent_id", paymentIntentId)
-          .eq("type_document", "AVOIR")
-          .in("statut", ["EMISE", "EN_RETARD"]);
-        if (creditNoteRefundError) {
-          throw new Error(`Credit-note refund reconciliation failed: ${creditNoteRefundError.message}`);
+        const incoherences: string[] = [];
+        if (queueRow.stripe_payment_intent_id !== paymentIntentId) {
+          incoherences.push("queue.payment_intent");
+        }
+        if (
+          queueRow.stripe_refund_id
+          && queueRow.stripe_refund_id !== refund.id
+        ) incoherences.push("queue.refund_id");
+        if (refund.amount !== queueRow.montant_cts) incoherences.push("refund.amount");
+        if (refund.currency !== "eur") incoherences.push("refund.currency");
+        if (stripeObjectId(refund.charge) !== charge.id) incoherences.push("refund.charge");
+        if (stripeObjectId(refund.payment_intent) !== paymentIntentId) {
+          incoherences.push("refund.payment_intent");
+        }
+        if ((refund.metadata?.avoir_id || "") !== (queueRow.avoir_id || "")) {
+          incoherences.push("refund.avoir_id");
+        }
+        if (
+          (refund.metadata?.facture_origine_id || "")
+          !== (queueRow.facture_origine_id || "")
+        ) incoherences.push("refund.facture_origine_id");
+        if (
+          (refund.metadata?.paiement_escrow_id || "")
+          !== (queueRow.paiement_escrow_id || "")
+        ) incoherences.push("refund.paiement_escrow_id");
+        const expectedOrigin = queueRow.paiement_escrow_id ? "ESCROW" : "AVOIR";
+        if (refund.metadata?.source !== "jolene_refunds_cron") {
+          incoherences.push("refund.source");
+        }
+        if (refund.metadata?.origin_type !== expectedOrigin) {
+          incoherences.push("refund.origin_type");
+        }
+        if (refund.metadata?.reverse_transfer !== String(queueRow.reverse_transfer)) {
+          incoherences.push("refund.reverse_transfer");
+        }
+        if (refund.metadata?.absorbe_plateforme !== String(queueRow.absorbe_plateforme)) {
+          incoherences.push("refund.absorbe_plateforme");
+        }
+        if (
+          refund.metadata?.refund_application_fee_cts
+          !== String(queueRow.refund_application_fee_cts)
+        ) incoherences.push("refund.refund_application_fee_cts");
+        if (
+          refund.status === "succeeded"
+          && queueRow.reverse_transfer
+          && !refund.transfer_reversal
+        ) incoherences.push("refund.transfer_reversal");
+
+        if (queueRow.avoir_id) {
+          const { data: avoir, error: avoirError } = await supabaseAdmin
+            .from("factures_honoraires")
+            .select(
+              "id, type_document, statut, mode_remboursement, facture_precedente_id, montant_ttc, reference_remboursement, etablissement_id, mission_id, soignant_id",
+            )
+            .eq("id", queueRow.avoir_id)
+            .maybeSingle();
+          const { data: factureOrigine, error: factureOrigineError } =
+            queueRow.facture_origine_id
+              ? await supabaseAdmin
+                .from("factures_honoraires")
+                .select(
+                  "id, type_document, statut, montant_ttc, stripe_payment_intent_id, etablissement_id, mission_id, soignant_id",
+                )
+                .eq("id", queueRow.facture_origine_id)
+                .maybeSingle()
+              : { data: null, error: null };
+          const avoirCents = Math.round(Math.abs(Number(avoir?.montant_ttc ?? 0)) * 100);
+          if (avoirError || !avoir) incoherences.push("avoir.missing");
+          else {
+            if (avoir.type_document !== "AVOIR") incoherences.push("avoir.type_document");
+            if (avoir.mode_remboursement !== "AUTO_STRIPE") {
+              incoherences.push("avoir.mode_remboursement");
+            }
+            if (avoirCents !== queueRow.montant_cts) incoherences.push("avoir.amount");
+            if (avoir.facture_precedente_id !== queueRow.facture_origine_id) {
+              incoherences.push("avoir.facture_precedente_id");
+            }
+            if (
+              avoir.statut === "REMBOURSE"
+              && avoir.reference_remboursement !== refund.id
+            ) incoherences.push("avoir.reference_remboursement");
+          }
+          if (factureOrigineError || !factureOrigine) {
+            incoherences.push("facture_origine.missing");
+          } else if (avoir) {
+            if (factureOrigine.type_document !== "FACTURE") {
+              incoherences.push("facture_origine.type_document");
+            }
+            if (factureOrigine.statut !== "PAYEE") {
+              incoherences.push("facture_origine.statut");
+            }
+            if (factureOrigine.stripe_payment_intent_id !== paymentIntentId) {
+              incoherences.push("facture_origine.payment_intent");
+            }
+            if (
+              factureOrigine.etablissement_id !== avoir.etablissement_id
+              || factureOrigine.mission_id !== avoir.mission_id
+              || factureOrigine.soignant_id !== avoir.soignant_id
+            ) incoherences.push("avoir.facture_origine_identity");
+            if (refund.metadata?.mission_id !== (avoir.mission_id || "")) {
+              incoherences.push("refund.mission_id");
+            }
+            if (refund.metadata?.etablissement_id !== avoir.etablissement_id) {
+              incoherences.push("refund.etablissement_id");
+            }
+          }
+          if (
+            queueRow.paiement_escrow_id
+            || queueRow.reverse_transfer
+            || queueRow.absorbe_plateforme
+            || Number(queueRow.refund_application_fee_cts) !== 0
+          ) incoherences.push("avoir.queue_flags");
+        }
+
+        if (queueRow.paiement_escrow_id) {
+          const { data: escrow, error: escrowError } = await supabaseAdmin
+            .from("paiements_escrow")
+            .select(
+              "id, mission_id, etablissement_id, soignant_id, stripe_payment_intent_id, montant_total_cents, honoraires_cents, commission_cents, statut",
+            )
+            .eq("id", queueRow.paiement_escrow_id)
+            .maybeSingle();
+          if (escrowError || !escrow) incoherences.push("escrow.missing");
+          else {
+            if (escrow.stripe_payment_intent_id !== paymentIntentId) {
+              incoherences.push("escrow.payment_intent");
+            }
+            if (queueRow.montant_cts > Number(escrow.montant_total_cents || 0)) {
+              incoherences.push("escrow.amount");
+            }
+            if (!['REMBOURSE_EN_COURS', 'REMBOURSE'].includes(escrow.statut)) {
+              incoherences.push("escrow.statut");
+            }
+            const prior = queueRow.escrow_statut_avant_remboursement;
+            const beforeRelease = prior === "DEBITE" || prior === "DISPONIBLE";
+            const afterRelease = prior === "PAYE";
+            const honorairesRefund = Number(queueRow.montant_cts)
+              - Number(queueRow.refund_application_fee_cts);
+            const expectedFee = honorairesRefund === Number(escrow.honoraires_cents)
+              ? Number(escrow.commission_cents)
+              : Math.round(
+                Number(escrow.commission_cents) * honorairesRefund
+                  / Number(escrow.honoraires_cents),
+              );
+            if (
+              (!beforeRelease && !afterRelease)
+              || queueRow.reverse_transfer !== beforeRelease
+              || queueRow.absorbe_plateforme !== afterRelease
+              || honorairesRefund <= 0
+              || honorairesRefund > Number(escrow.honoraires_cents)
+              || Number(queueRow.refund_application_fee_cts) !== expectedFee
+              || (beforeRelease && honorairesRefund !== Number(escrow.honoraires_cents))
+              || queueRow.avoir_id
+              || queueRow.facture_origine_id
+            ) incoherences.push("escrow.queue_flags");
+            if (
+              paymentIntent.metadata?.type !== "ESCROW_MISSION_PAYMENT"
+              || paymentIntent.metadata?.paiement_escrow_id !== escrow.id
+              || paymentIntent.metadata?.mission_id !== escrow.mission_id
+              || paymentIntent.metadata?.etablissement_id !== escrow.etablissement_id
+              || paymentIntent.metadata?.soignant_id !== escrow.soignant_id
+              || Number(paymentIntent.metadata?.honoraires_cents)
+                !== Number(escrow.honoraires_cents)
+              || Number(paymentIntent.metadata?.commission_cents)
+                !== Number(escrow.commission_cents)
+              || paymentIntent.amount !== Number(escrow.montant_total_cents)
+              || paymentIntent.application_fee_amount !== Number(escrow.commission_cents)
+            ) incoherences.push("escrow.payment_provenance");
+            if (refund.metadata?.mission_id !== escrow.mission_id) {
+              incoherences.push("refund.mission_id");
+            }
+            if (refund.metadata?.etablissement_id !== escrow.etablissement_id) {
+              incoherences.push("refund.etablissement_id");
+            }
+          }
+        }
+
+        // Un paiement Connect utilise un separate transfer. Même un Refund
+        // exact ne peut solder la queue tant que le reversal exact n'est pas
+        // confirmé côté plateforme ET côté Stripe.
+        if (paymentIntent.metadata?.type === "CONNECT_MISSION_PAYMENT") {
+          const { data: transferRow, error: transferError } = await supabaseAdmin
+            .from("stripe_transfers")
+            .select("stripe_transfer_id, statut, reversed_le")
+            .eq("stripe_payment_intent_id", paymentIntentId)
+            .maybeSingle();
+          if (
+            transferError || !transferRow?.stripe_transfer_id
+            || transferRow.statut !== "REMBOURSE" || !transferRow.reversed_le
+          ) {
+            incoherences.push("connect.transfer_not_reversed");
+          } else {
+            const transferStripe = await stripe.transfers.retrieve(
+              transferRow.stripe_transfer_id,
+            );
+            if (!transferStripe.reversed || transferStripe.amount_reversed < transferStripe.amount) {
+              incoherences.push("connect.stripe_transfer_not_reversed");
+            }
+          }
+        }
+
+        if (incoherences.length > 0) {
+          await writeRequiredFinancialAudit(supabaseAdmin, {
+            p_acteur_id: "00000000-0000-0000-0000-000000000000",
+            p_type_acteur: "SYSTEME",
+            p_action: "ADMIN_ACTION",
+            p_type_ressource: "stripe_refunds_queue",
+            p_id_ressource: queueId,
+            p_cle_s3: null,
+            p_details: {
+              evenement: "REFUND_IDENTITE_INCOHERENTE",
+              stripe_refund_id: refund.id,
+              stripe_charge_id: charge.id,
+              incoherences,
+            },
+            p_ip: null,
+            p_navigateur: "stripe-webhook",
+          }, "Refund mismatch audit failed");
+          throw new Error(`Refund ${refund.id} identity mismatch: ${incoherences.join(",")}`);
+        }
+
+        const status = refund.status || "";
+        if (!["succeeded", "failed", "canceled"].includes(status)) {
+          throw new Error(`Refund ${refund.id} not terminal (${status || "unknown"})`);
+        }
+        const { data: rapprochement, error: rapprochementError } = await supabaseAdmin.rpc(
+          "fn_stripe_refund_rapprocher",
+          {
+            p_queue_id: queueId,
+            p_stripe_refund_id: refund.id,
+            p_resultat: status.toUpperCase(),
+            p_detail: refund.failure_reason || null,
+            p_finalise_le: new Date().toISOString(),
+          },
+        );
+        const rapprochementResult = rapprochement as { success?: boolean; error?: string } | null;
+        if (rapprochementError || rapprochementResult?.success !== true) {
+          throw new Error(
+            `Refund reconciliation failed: ${rapprochementError?.message || rapprochementResult?.error || "RPC rejected"}`,
+          );
         }
       }
 
-      await supabaseAdmin.rpc("fn_ecrire_audit_safe", {
+      // Ne jamais acquitter silencieusement un Refund réussi sans queue_id.
+      // Les refunds du worker legacy portent externalisation_action_id ; un
+      // refund Dashboard/non géré déclenche un gel escrow ou un recouvrement
+      // standard explicite avant que l'événement soit acquitté.
+      const nonQueueSucceededRefunds = refunds.filter(
+        (refund) => refund.status === "succeeded" && !refund.metadata?.queue_id,
+      );
+      const anomalyRefundIds: string[] = [];
+      const externalisationRefundIds: string[] = [];
+      for (const refund of nonQueueSucceededRefunds) {
+        if (
+          stripeObjectId(refund.charge) !== charge.id
+          || stripeObjectId(refund.payment_intent) !== paymentIntentId
+          || refund.currency !== "eur"
+          || refund.amount <= 0
+        ) {
+          throw new Error(`Non-queue refund ${refund.id} source mismatch`);
+        }
+
+        const actionId = refund.metadata?.externalisation_action_id;
+        if (actionId) {
+          const { data: action, error: actionError } = await supabaseAdmin
+            .from("externalisation_actions")
+            .select("id, type_action, payload, statut")
+            .eq("id", actionId)
+            .maybeSingle();
+          const missionId = action?.payload?.mission_id;
+          const { data: mission, error: missionError } = missionId
+            ? await supabaseAdmin
+              .from("missions")
+              .select("id, etablissement_id, stripe_payment_intent_id")
+              .eq("id", missionId)
+              .maybeSingle()
+            : { data: null, error: null };
+          if (
+            actionError || !action || missionError || !mission
+            || !["STRIPE_REFUND_TOTAL", "STRIPE_REFUND_PARTIEL"].includes(action.type_action)
+            || mission.stripe_payment_intent_id !== paymentIntentId
+            || refund.metadata?.mission_id !== mission.id
+            || refund.metadata?.etablissement_id !== mission.etablissement_id
+            || refund.metadata?.source !== "process_externalisation_actions"
+          ) {
+            throw new Error(
+              `Externalisation refund ${refund.id} identity mismatch: ${actionError?.message || missionError?.message || "invalid binding"}`,
+            );
+          }
+          const { data: actionAck, error: actionAckError } = await supabaseAdmin.rpc(
+            "fn_externalisation_succes",
+            {
+              p_id: action.id,
+              p_resultat: {
+                refund_id: refund.id,
+                payment_intent_id: paymentIntentId,
+                charge_id: charge.id,
+                amount: refund.amount,
+                status: refund.status,
+                source: "stripe_webhook",
+              },
+            },
+          );
+          if (actionAckError || actionAck?.success !== true) {
+            throw new Error(
+              `Externalisation refund ${refund.id} acknowledgement failed: ${actionAckError?.message || JSON.stringify(actionAck)}`,
+            );
+          }
+          externalisationRefundIds.push(refund.id);
+          continue;
+        }
+
+        const { data: escrow, error: escrowError } = await supabaseAdmin
+          .from("paiements_escrow")
+          .select("id, mission_id, etablissement_id, statut")
+          .eq("stripe_payment_intent_id", paymentIntentId)
+          .maybeSingle();
+        if (escrowError) {
+          throw new Error(`Unmanaged refund escrow lookup failed: ${escrowError.message}`);
+        }
+        if (escrow) {
+          const { error: escrowIncidentError } = await supabaseAdmin.rpc(
+            "fn_escrow_marquer_incident",
+            {
+              p_paiement_escrow_id: escrow.id,
+              p_type_incident: "DISPUTE",
+              p_detail: `Refund Stripe non géré ${refund.id} — payout bloqué`,
+            },
+          );
+          if (escrowIncidentError) {
+            throw new Error(
+              `Unmanaged escrow refund freeze failed: ${escrowIncidentError.message}`,
+            );
+          }
+          anomalyRefundIds.push(refund.id);
+          continue;
+        }
+
+        const { data: invoice, error: invoiceError } = await supabaseAdmin
+          .from("factures")
+          .select("id, statut, montant_ttc, etablissement_id, etablissements(stripe_customer_id)")
+          .eq("stripe_payment_intent_id", paymentIntentId)
+          .maybeSingle();
+        if (invoiceError) {
+          throw new Error(`Unmanaged refund invoice lookup failed: ${invoiceError.message}`);
+        }
+        if (invoice) {
+          const relation = invoice.etablissements as
+            | { stripe_customer_id?: string | null }
+            | Array<{ stripe_customer_id?: string | null }>
+            | null;
+          const expectedCustomerId = (Array.isArray(relation)
+            ? relation[0]?.stripe_customer_id
+            : relation?.stripe_customer_id) || null;
+          if (
+            Math.round(Number(invoice.montant_ttc) * 100) !== paymentIntent.amount
+            || paymentIntent.metadata?.facture_id !== invoice.id
+            || paymentIntent.metadata?.etablissement_id !== invoice.etablissement_id
+            || stripeObjectId(paymentIntent.customer) !== expectedCustomerId
+          ) {
+            throw new Error(`Unmanaged invoice refund ${refund.id} identity mismatch`);
+          }
+          const { data: invoiceRecovery, error: invoiceRecoveryError } = await supabaseAdmin
+            .from("factures")
+            .update({ statut: "EN_RETARD", modifie_le: new Date().toISOString() })
+            .eq("id", invoice.id)
+            .eq("statut", "PAYEE")
+            .eq("stripe_payment_intent_id", paymentIntentId)
+            .select("id")
+            .maybeSingle();
+          if (
+            invoiceRecoveryError
+            || (!invoiceRecovery && invoice.statut !== "EN_RETARD")
+          ) {
+            throw new Error(
+              `Unmanaged invoice refund recovery failed: ${invoiceRecoveryError?.message || "state conflict"}`,
+            );
+          }
+          anomalyRefundIds.push(refund.id);
+          continue;
+        }
+
+        const { data: missionPayment, error: missionPaymentError } = await supabaseAdmin
+          .from("paiements_mission")
+          .select("id, mission_id, etablissement_id, montant_ttc, statut")
+          .eq("stripe_payment_intent_id", paymentIntentId)
+          .maybeSingle();
+        if (missionPaymentError) {
+          throw new Error(
+            `Unmanaged refund mission-payment lookup failed: ${missionPaymentError.message}`,
+          );
+        }
+        if (missionPayment) {
+          if (
+            paymentIntent.metadata?.type !== "commission_reservation"
+            || paymentIntent.metadata?.mission_id !== missionPayment.mission_id
+            || paymentIntent.metadata?.etablissement_id !== missionPayment.etablissement_id
+            || Math.round(Number(missionPayment.montant_ttc) * 100) !== paymentIntent.amount
+          ) {
+            throw new Error(`Unmanaged mission refund ${refund.id} identity mismatch`);
+          }
+          const { data: missionRefunded, error: missionRefundError } = await supabaseAdmin
+            .from("paiements_mission")
+            .update({ statut: "REMBOURSE", rembourse_le: new Date().toISOString() })
+            .eq("id", missionPayment.id)
+            .eq("statut", "CAPTURE")
+            .eq("stripe_payment_intent_id", paymentIntentId)
+            .select("id")
+            .maybeSingle();
+          if (
+            missionRefundError
+            || (!missionRefunded && missionPayment.statut !== "REMBOURSE")
+          ) {
+            throw new Error(
+              `Unmanaged mission refund persistence failed: ${missionRefundError?.message || "state conflict"}`,
+            );
+          }
+          anomalyRefundIds.push(refund.id);
+          continue;
+        }
+
+        await writeRequiredFinancialAudit(supabaseAdmin, {
+          p_acteur_id: "00000000-0000-0000-0000-000000000000",
+          p_type_acteur: "SYSTEME",
+          p_action: "ADMIN_ACTION",
+          p_type_ressource: "charge",
+          p_id_ressource: null,
+          p_cle_s3: null,
+          p_details: {
+            evenement: "STRIPE_REFUND_SANS_PROVENANCE",
+            stripe_event_id: event.id,
+            stripe_refund_id: refund.id,
+            stripe_charge_id: charge.id,
+            stripe_payment_intent_id: paymentIntentId,
+            montant_cts: refund.amount,
+          },
+          p_ip: null,
+          p_navigateur: "stripe-webhook",
+        }, "Unmanaged refund audit failed");
+        throw new Error(`Unmanaged Stripe refund ${refund.id} has no business provenance`);
+      }
+
+      await writeRequiredFinancialAudit(supabaseAdmin, {
         p_acteur_id: "00000000-0000-0000-0000-000000000000",
         p_type_acteur: "SYSTEME",
         p_action: "FINANCE_CHARGE_REFUNDED",
@@ -1611,19 +2816,27 @@ export async function handleStripeWebhook(
           stripe_charge_id: charge.id,
           stripe_payment_intent_id: paymentIntentId,
           amount_refunded: charge.amount_refunded,
+          refunds_queue_rapproches: queueRefunds.map((refund) => refund.id),
+          refunds_externalisation_rapproches: externalisationRefundIds,
+          refunds_anormaux_mis_en_securite: anomalyRefundIds,
         },
         p_ip: null,
         p_navigateur: "stripe-webhook",
-      });
+      }, "Refunded charge audit failed");
       console.log(`charge.refunded handled: ${charge.id}`);
     }
 
     // ── transfer.reversed : transfer annulé ──
     if (verified.source === "PLATFORM" && event.type === "transfer.reversed") {
-      const transfer = event.data.object as Stripe.Transfer;
+      const eventTransfer = event.data.object as Stripe.Transfer;
+      // Relire l'objet courant : un ancien événement partiel livré après le
+      // reversal total ne doit jamais faire régresser le cumul local.
+      const transfer = await stripe.transfers.retrieve(eventTransfer.id);
       const { data: row, error: reversedTransferLookupError } = await supabaseAdmin
         .from("stripe_transfers")
-        .select("id, mission_id, soignant_id, etablissement_id")
+        .select(
+          "id, mission_id, soignant_id, etablissement_id, montant_soignant, statut, stripe_charge_id, stripe_amount_reversed_cents, stripe_reversal_statut",
+        )
         .eq("stripe_transfer_id", transfer.id)
         .maybeSingle();
       if (reversedTransferLookupError) {
@@ -1631,36 +2844,144 @@ export async function handleStripeWebhook(
       }
 
       if (row) {
-        const { error: reversedTransferError } = await supabaseAdmin
+        const { data: onboarding, error: onboardingError } = await supabaseAdmin
+          .from("stripe_connect_onboarding")
+          .select("stripe_account_id")
+          .eq("soignant_id", row.soignant_id)
+          .maybeSingle();
+        const expectedAmount = Math.round(Number(row.montant_soignant) * 100);
+        const destinationId = stripeObjectId(transfer.destination);
+        const sourceChargeId = stripeObjectId(transfer.source_transaction);
+        const incoherences: string[] = [];
+        if (!Number.isSafeInteger(expectedAmount) || expectedAmount <= 0) {
+          incoherences.push("db.amount");
+        }
+        if (transfer.amount !== expectedAmount) incoherences.push("transfer.amount");
+        if (transfer.currency !== "eur") incoherences.push("transfer.currency");
+        if (transfer.metadata?.mission_id !== row.mission_id) {
+          incoherences.push("transfer.mission_id");
+        }
+        if (transfer.metadata?.soignant_id !== row.soignant_id) {
+          incoherences.push("transfer.soignant_id");
+        }
+        if (transfer.transfer_group !== `mission_${row.mission_id}`) {
+          incoherences.push("transfer.group");
+        }
+        if (onboardingError || destinationId !== onboarding?.stripe_account_id) {
+          incoherences.push("transfer.destination");
+        }
+        if (row.stripe_charge_id && sourceChargeId !== row.stripe_charge_id) {
+          incoherences.push("transfer.source_charge");
+        }
+        if (
+          transfer.amount_reversed <= 0
+          || transfer.amount_reversed > transfer.amount
+          || transfer.reversed !== (transfer.amount_reversed === transfer.amount)
+        ) incoherences.push("transfer.reversal_totals");
+
+        let reversalStartingAfter: string | undefined;
+        let reversalSum = 0;
+        do {
+          const reversals = await stripe.transfers.listReversals(transfer.id, {
+            limit: 100,
+            ...(reversalStartingAfter ? { starting_after: reversalStartingAfter } : {}),
+          });
+          for (const reversal of reversals.data) {
+            if (
+              reversal.currency !== "eur"
+              || stripeObjectId(reversal.transfer) !== transfer.id
+              || !Number.isSafeInteger(reversal.amount)
+              || reversal.amount <= 0
+            ) incoherences.push(`reversal.${reversal.id}`);
+            reversalSum += reversal.amount;
+          }
+          reversalStartingAfter = reversals.has_more
+            ? reversals.data.at(-1)?.id
+            : undefined;
+          if (reversals.has_more && !reversalStartingAfter) {
+            throw new Error(`Transfer ${transfer.id} reversal pagination incomplete`);
+          }
+        } while (reversalStartingAfter);
+        if (reversalSum !== transfer.amount_reversed) {
+          incoherences.push("reversals.sum");
+        }
+
+        if (incoherences.length > 0) {
+          await writeRequiredFinancialAudit(supabaseAdmin, {
+            p_acteur_id: row.soignant_id,
+            p_type_acteur: "SYSTEME",
+            p_action: "ADMIN_ACTION",
+            p_type_ressource: "mission",
+            p_id_ressource: row.mission_id,
+            p_cle_s3: null,
+            p_details: {
+              evenement: "TRANSFER_REVERSAL_IDENTITE_INCOHERENTE",
+              stripe_transfer_id: transfer.id,
+              amount_reversed: transfer.amount_reversed,
+              incoherences,
+            },
+            p_ip: null,
+            p_navigateur: "stripe-webhook",
+          }, "Transfer reversal mismatch audit failed");
+          throw new Error(`Reversed transfer identity mismatch: ${incoherences.join(",")}`);
+        }
+
+        const reversalTotal = transfer.amount_reversed === transfer.amount;
+        const { data: reversedTransferUpdated, error: reversedTransferError } = await supabaseAdmin
           .from("stripe_transfers")
           .update({
-            statut: "REMBOURSE",
-            reversed_le: new Date().toISOString(),
+            ...(reversalTotal ? {
+              statut: "REMBOURSE",
+              reversed_le: new Date().toISOString(),
+              erreur: null,
+            } : {
+              erreur: `Reversal partiel Stripe: ${transfer.amount_reversed}/${transfer.amount}`,
+            }),
+            stripe_amount_reversed_cents: transfer.amount_reversed,
+            stripe_reversal_statut: reversalTotal ? "TOTAL" : "PARTIEL",
           })
-          .eq("id", row.id);
-        if (reversedTransferError) {
-          throw new Error(`Reversed transfer reconciliation failed: ${reversedTransferError.message}`);
+          .eq("id", row.id)
+          .eq("stripe_transfer_id", transfer.id)
+          .in(
+            "statut",
+            reversalTotal
+              ? ["TRANSFERE", "PAYE", "REMBOURSE"]
+              : ["TRANSFERE", "PAYE"],
+          )
+          .lte("stripe_amount_reversed_cents", transfer.amount_reversed)
+          .select("id")
+          .maybeSingle();
+        if (reversedTransferError || !reversedTransferUpdated) {
+          throw new Error(
+            `Reversed transfer reconciliation failed: ${reversedTransferError?.message || "state conflict"}`,
+          );
         }
+        await writeRequiredFinancialAudit(supabaseAdmin, {
+          p_acteur_id: row.soignant_id,
+          p_type_acteur: "SYSTEME",
+          p_action: "FINANCE_TRANSFER_REVERSED",
+          p_type_ressource: "mission",
+          p_id_ressource: row.mission_id,
+          p_cle_s3: null,
+          p_details: {
+            stripe_transfer_id: transfer.id,
+            amount: transfer.amount,
+            amount_reversed: transfer.amount_reversed,
+            reversal_total: reversalTotal,
+          },
+          p_ip: null,
+          p_navigateur: "stripe-webhook",
+        }, "Transfer reversal audit failed");
+      } else {
+        throw new Error(`Reversed transfer ${transfer.id} has no local binding`);
       }
-
-      await supabaseAdmin.rpc("fn_ecrire_audit_safe", {
-        p_acteur_id: row?.soignant_id || "00000000-0000-0000-0000-000000000000",
-        p_type_acteur: "SYSTEME",
-        p_action: "FINANCE_TRANSFER_REVERSED",
-        p_type_ressource: "mission",
-        p_id_ressource: row?.mission_id || null,
-        p_cle_s3: null,
-        p_details: { stripe_transfer_id: transfer.id, amount: transfer.amount },
-        p_ip: null,
-        p_navigateur: "stripe-webhook",
-      });
       console.log(`transfer.reversed handled: ${transfer.id}`);
     }
 
     // ── transfer.created : audit only ──
     if (verified.source === "PLATFORM" && event.type === "transfer.created") {
       const transfer = event.data.object as Stripe.Transfer;
-      await supabaseAdmin.rpc("fn_ecrire_audit_safe", {
+      await writeRequiredFinancialAudit(supabaseAdmin, {
         p_acteur_id: "00000000-0000-0000-0000-000000000000",
         p_type_acteur: "SYSTEME",
         p_action: "FINANCE_TRANSFER_CREATED",
@@ -1674,14 +2995,14 @@ export async function handleStripeWebhook(
         },
         p_ip: null,
         p_navigateur: "stripe-webhook",
-      });
+      }, "Transfer creation audit failed");
       console.log(`transfer.created audited: ${transfer.id}`);
     }
 
     // ── transfer.updated : audit only ──
     if (verified.source === "PLATFORM" && event.type === "transfer.updated") {
       const transfer = event.data.object as Stripe.Transfer;
-      await supabaseAdmin.rpc("fn_ecrire_audit_safe", {
+      await writeRequiredFinancialAudit(supabaseAdmin, {
         p_acteur_id: "00000000-0000-0000-0000-000000000000",
         p_type_acteur: "SYSTEME",
         p_action: "FINANCE_TRANSFER_UPDATED",
@@ -1691,7 +3012,7 @@ export async function handleStripeWebhook(
         p_details: { stripe_transfer_id: transfer.id, metadata: transfer.metadata },
         p_ip: null,
         p_navigateur: "stripe-webhook",
-      });
+      }, "Transfer update audit failed");
       console.log(`transfer.updated audited: ${transfer.id}`);
     }
 
@@ -1706,7 +3027,7 @@ export async function handleStripeWebhook(
       const linkage = payout.metadata?.type === "ESCROW_RELEASE"
         ? { sourceIds: [] as string[], linked: 0 }
         : await linkExactPayoutTransfers(payout.id, connectedSoignantId);
-      await supabaseAdmin.rpc("fn_ecrire_audit_safe", {
+      await writeRequiredFinancialAudit(supabaseAdmin, {
         p_acteur_id: "00000000-0000-0000-0000-000000000000",
         p_type_acteur: "SYSTEME",
         p_action: "FINANCE_PAYOUT_CREATED",
@@ -1725,7 +3046,7 @@ export async function handleStripeWebhook(
         },
         p_ip: null,
         p_navigateur: "stripe-webhook",
-      });
+      }, "Payout creation audit failed");
       console.log(`payout.created audited: ${payout.id}`);
     }
 
@@ -1737,10 +3058,15 @@ export async function handleStripeWebhook(
       // Payout escrow : confirmation atomique et exacte par escrow + payout +
       // compte Connect. C'est ici seulement que l'escrow devient PAYE.
       if (payout.metadata?.type === "ESCROW_RELEASE") {
-        const escrowId = payout.metadata?.paiement_escrow_id;
-        if (!escrowId || !eventAccount) {
+        if (!eventAccount) {
           throw new Error("ESCROW_RELEASE payout metadata incomplete");
         }
+        const validatedEscrowPayout = await loadAndValidateEscrowPayout(
+          payout,
+          connectedSoignantId,
+          "paid",
+        );
+        const escrowId = validatedEscrowPayout.id;
         const payeLe = payout.arrival_date
           ? new Date(payout.arrival_date * 1000).toISOString()
           : new Date().toISOString();
@@ -1757,7 +3083,7 @@ export async function handleStripeWebhook(
           throw new Error(`Escrow payout confirmation failed: ${transitionError.message}`);
         }
 
-        const { error: auditError } = await supabaseAdmin.rpc("fn_ecrire_audit_safe", {
+        await writeRequiredFinancialAudit(supabaseAdmin, {
           p_acteur_id: "00000000-0000-0000-0000-000000000000",
           p_type_acteur: "SYSTEME",
           p_action: "ESCROW_RELEASE_PAYE",
@@ -1774,10 +3100,7 @@ export async function handleStripeWebhook(
           },
           p_ip: null,
           p_navigateur: "stripe-webhook",
-        });
-        if (auditError) {
-          throw new Error(`Escrow payout audit failed: ${auditError.message}`);
-        }
+        }, "Escrow payout audit failed");
         await markEventProcessed();
         return new Response(JSON.stringify({ received: true, escrow: "payout_paid" }), {
           status: 200,
@@ -1842,7 +3165,7 @@ export async function handleStripeWebhook(
         }
       }
 
-      await supabaseAdmin.rpc("fn_ecrire_audit_safe", {
+      await writeRequiredFinancialAudit(supabaseAdmin, {
         p_acteur_id: "00000000-0000-0000-0000-000000000000",
         p_type_acteur: "SYSTEME",
         p_action: "FINANCE_PAYOUT_PAID",
@@ -1859,7 +3182,7 @@ export async function handleStripeWebhook(
         },
         p_ip: null,
         p_navigateur: "stripe-webhook",
-      });
+      }, "Paid payout audit failed");
       console.log(`payout.paid handled: ${payout.id} → ${(transfersToMark || []).length} transfers marked PAYE`);
     }
 
@@ -1870,10 +3193,15 @@ export async function handleStripeWebhook(
       const errMsg = payout.failure_message || "payout.failed";
 
       if (payout.metadata?.type === "ESCROW_RELEASE") {
-        const escrowId = payout.metadata?.paiement_escrow_id;
-        if (!escrowId || !eventAccount) {
+        if (!eventAccount) {
           throw new Error("ESCROW_RELEASE payout metadata incomplete");
         }
+        const validatedEscrowPayout = await loadAndValidateEscrowPayout(
+          payout,
+          connectedSoignantId,
+          "failed",
+        );
+        const escrowId = validatedEscrowPayout.id;
         const detail = `${payout.failure_code || "payout_failed"} — ${errMsg}`;
         const { data: transitioned, error: transitionError } = await supabaseAdmin.rpc(
           "fn_escrow_echouer_payout" as never,
@@ -1887,14 +3215,15 @@ export async function handleStripeWebhook(
         if (transitionError) {
           throw new Error(`Escrow payout failure persistence failed: ${transitionError.message}`);
         }
-        const { error: auditError } = await supabaseAdmin.rpc("fn_ecrire_audit_safe", {
+        await writeRequiredFinancialAudit(supabaseAdmin, {
           p_acteur_id: "00000000-0000-0000-0000-000000000000",
           p_type_acteur: "SYSTEME",
-          p_action: "ESCROW_RELEASE_ECHOUE",
+          p_action: "ADMIN_ACTION",
           p_type_ressource: "mission",
           p_id_ressource: payout.metadata?.mission_id ?? null,
           p_cle_s3: null,
           p_details: {
+            evenement: "ESCROW_RELEASE_ECHOUE",
             paiement_escrow_id: escrowId,
             stripe_payout_id: payout.id,
             stripe_account_id: eventAccount,
@@ -1904,10 +3233,7 @@ export async function handleStripeWebhook(
           },
           p_ip: null,
           p_navigateur: "stripe-webhook",
-        });
-        if (auditError) {
-          throw new Error(`Escrow payout failure audit failed: ${auditError.message}`);
-        }
+        }, "Escrow payout failure audit failed");
         await markEventProcessed();
         return new Response(JSON.stringify({ received: true, escrow: "payout_failed" }), {
           status: 200,
@@ -1997,7 +3323,7 @@ export async function handleStripeWebhook(
         }
       }
 
-      await supabaseAdmin.rpc("fn_ecrire_audit_safe", {
+      await writeRequiredFinancialAudit(supabaseAdmin, {
         p_acteur_id: "00000000-0000-0000-0000-000000000000",
         p_type_acteur: "SYSTEME",
         p_action: "FINANCE_PAYOUT_FAILED",
@@ -2015,7 +3341,7 @@ export async function handleStripeWebhook(
         },
         p_ip: null,
         p_navigateur: "stripe-webhook",
-      });
+      }, "Failed payout audit failed");
       console.log(`payout.failed handled: ${payout.id} → ${transfersArr.length} transfers marked ECHOUE`);
     }
 
@@ -2025,10 +3351,15 @@ export async function handleStripeWebhook(
       const connectedSoignantId = await requireConnectedSoignantId();
 
       if (payout.metadata?.type === "ESCROW_RELEASE") {
-        const escrowId = payout.metadata?.paiement_escrow_id;
-        if (!escrowId || !eventAccount) {
+        if (!eventAccount) {
           throw new Error("ESCROW_RELEASE payout metadata incomplete");
         }
+        const validatedEscrowPayout = await loadAndValidateEscrowPayout(
+          payout,
+          connectedSoignantId,
+          "canceled",
+        );
+        const escrowId = validatedEscrowPayout.id;
         const { data: transitioned, error: transitionError } = await supabaseAdmin.rpc(
           "fn_escrow_echouer_payout" as never,
           {
@@ -2041,14 +3372,15 @@ export async function handleStripeWebhook(
         if (transitionError) {
           throw new Error(`Escrow payout cancellation persistence failed: ${transitionError.message}`);
         }
-        const { error: auditError } = await supabaseAdmin.rpc("fn_ecrire_audit_safe", {
+        await writeRequiredFinancialAudit(supabaseAdmin, {
           p_acteur_id: "00000000-0000-0000-0000-000000000000",
           p_type_acteur: "SYSTEME",
-          p_action: "ESCROW_RELEASE_ANNULE",
+          p_action: "ADMIN_ACTION",
           p_type_ressource: "mission",
           p_id_ressource: payout.metadata?.mission_id ?? null,
           p_cle_s3: null,
           p_details: {
+            evenement: "ESCROW_RELEASE_ANNULE",
             paiement_escrow_id: escrowId,
             stripe_payout_id: payout.id,
             stripe_account_id: eventAccount,
@@ -2057,10 +3389,7 @@ export async function handleStripeWebhook(
           },
           p_ip: null,
           p_navigateur: "stripe-webhook",
-        });
-        if (auditError) {
-          throw new Error(`Escrow payout cancellation audit failed: ${auditError.message}`);
-        }
+        }, "Escrow payout cancellation audit failed");
         await markEventProcessed();
         return new Response(JSON.stringify({ received: true, escrow: "payout_canceled" }), {
           status: 200,
@@ -2108,7 +3437,7 @@ export async function handleStripeWebhook(
         }
       }
 
-      await supabaseAdmin.rpc("fn_ecrire_audit_safe", {
+      await writeRequiredFinancialAudit(supabaseAdmin, {
         p_acteur_id: "00000000-0000-0000-0000-000000000000",
         p_type_acteur: "SYSTEME",
         p_action: "FINANCE_PAYOUT_CANCELED",
@@ -2124,14 +3453,14 @@ export async function handleStripeWebhook(
         },
         p_ip: null,
         p_navigateur: "stripe-webhook",
-      });
+      }, "Canceled payout audit failed");
       console.log(`payout.canceled handled: ${payout.id}`);
     }
 
     // ── charge.pending : charge en attente (SEPA) — audit only ──
     if (verified.source === "PLATFORM" && event.type === "charge.pending") {
       const charge = event.data.object as Stripe.Charge;
-      await supabaseAdmin.rpc("fn_ecrire_audit_safe", {
+      await writeRequiredFinancialAudit(supabaseAdmin, {
         p_acteur_id: "00000000-0000-0000-0000-000000000000",
         p_type_acteur: "SYSTEME",
         p_action: "FINANCE_CHARGE_PENDING",
@@ -2145,14 +3474,14 @@ export async function handleStripeWebhook(
         },
         p_ip: null,
         p_navigateur: "stripe-webhook",
-      });
+      }, "Pending charge audit failed");
       console.log(`charge.pending audited: ${charge.id}`);
     }
 
     // ── charge.expired : charge non-capturée expirée — audit only ──
     if (verified.source === "PLATFORM" && event.type === "charge.expired") {
       const charge = event.data.object as Stripe.Charge;
-      await supabaseAdmin.rpc("fn_ecrire_audit_safe", {
+      await writeRequiredFinancialAudit(supabaseAdmin, {
         p_acteur_id: "00000000-0000-0000-0000-000000000000",
         p_type_acteur: "SYSTEME",
         p_action: "FINANCE_CHARGE_EXPIRED",
@@ -2162,7 +3491,7 @@ export async function handleStripeWebhook(
         p_details: { stripe_charge_id: charge.id, amount: charge.amount },
         p_ip: null,
         p_navigateur: "stripe-webhook",
-      });
+      }, "Expired charge audit failed");
       console.log(`charge.expired audited: ${charge.id}`);
     }
 

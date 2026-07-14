@@ -55,25 +55,13 @@ jobs:
           SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
           SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
 
-      - name: Heal schema_migrations drift (orphan remote versions)
-        # Quand Lovable (ou n'importe qui) applique une migration via le
-        # dashboard / MCP apply_migration / SQL direct, la ligne est ajoutée
-        # à supabase_migrations.schema_migrations avec un timestamp qui
-        # n'existe pas dans supabase/migrations/. `supabase db push` bloque
-        # alors avec "Remote migration versions not found in local migrations
-        # directory". On auto-répare en marquant ces orphelins comme
-        # "reverted" (retire la ligne du tracking, ne touche pas au schéma).
-        #
-        # On passe par l'API Management (POST /v1/projects/{ref}/database/query)
-        # plutôt que psql car le pooler Supavisor rejette parfois les
-        # connections depuis GitHub Actions avec "Tenant or user not found".
-        # L'API Management utilise SUPABASE_ACCESS_TOKEN (déjà configuré pour
-        # supabase link) et fonctionne où que tourne le runner.
-        #
-        # Step best-effort : en cas d'échec (rate limit, API indispo), on
-        # laisse `db push` tenter sa chance — s'il échoue aussi, le job fail
-        # avec son propre message d'erreur, plus actionable.
-        continue-on-error: true
+      - name: Refuser tout drift schema_migrations
+        # Une version remote absente du repo signale un DDL appliqué hors du
+        # flux Git. La retirer automatiquement du registre ne remettrait pas le
+        # schéma en arrière et permettrait à `db push` de la rejouer plus tard.
+        # On échoue donc sans mutation : la seule réparation sûre consiste à
+        # versionner le SQL/placeholder correspondant ou à effectuer une
+        # réparation manuelle explicitement revue.
         run: |
           set -euo pipefail
 
@@ -99,36 +87,15 @@ jobs:
           echo "Remote versions: $(wc -l < /tmp/remote_versions.txt)"
           echo "Local versions:  $(wc -l < /tmp/local_versions.txt)"
 
-          # Orphelins = remote mais pas local
-          comm -23 /tmp/remote_versions.txt /tmp/local_versions.txt > /tmp/orphans_bruts.txt
-
-          # 9.0 — FENÊTRE DE GRÂCE 24 h : une migration appliquée via MCP dont
-          # la PR n'est pas encore mergée est "remote sans fichier local" par
-          # construction. L'effacer casse le déploiement SUIVANT (out-of-order
-          # quand le fichier arrive) — c'est exactement l'incident 20260702180753
-          # du 02/07. On ne purge que les orphelins de plus de 24 h (versions
-          # YYYYMMDDHHMMSS, comparables lexicalement à un timestamp UTC).
-          CUTOFF=$(date -u -d '24 hours ago' +%Y%m%d%H%M%S)
-          awk -v cutoff="$CUTOFF" '$1 < cutoff' /tmp/orphans_bruts.txt > /tmp/orphans.txt
-          RECENT_COUNT=$(( $(wc -l < /tmp/orphans_bruts.txt) - $(wc -l < /tmp/orphans.txt) ))
-          if [ "$RECENT_COUNT" -gt 0 ]; then
-            echo "::warning::$RECENT_COUNT orphan(s) remote de moins de 24h CONSERVÉ(S) (fenêtre de grâce — PR probablement pas encore mergée) :"
-            comm -23 /tmp/orphans_bruts.txt /tmp/orphans.txt || true
-            echo "::warning::Si db push échoue avec 'Remote migration versions not found' : merger la PR qui porte ces fichiers de migration puis re-run ce workflow. NE PAS effacer ces versions du registre."
-          fi
-
+          # Orphelins = remote mais pas local. Cette étape est strictement en
+          # lecture seule : aucune écriture dans schema_migrations.
+          comm -23 /tmp/remote_versions.txt /tmp/local_versions.txt > /tmp/orphans.txt
           ORPHAN_COUNT=$(wc -l < /tmp/orphans.txt)
           if [ "$ORPHAN_COUNT" -gt 0 ]; then
-            echo "::warning::Found $ORPHAN_COUNT orphan remote migrations (applied out-of-band) — removing from schema_migrations tracking"
+            echo "::error::$ORPHAN_COUNT migration(s) remote sont absentes du repo. Déploiement arrêté sans modifier schema_migrations."
             cat /tmp/orphans.txt
-            # Build IN clause: 'v1','v2',... (single-quoted SQL string literals,
-            # safe dans un JSON double-quoted)
-            VERSIONS=$(awk 'BEGIN{q=sprintf("%c",39)} {printf "%s%s%s%s", (NR==1?"":","), q, $1, q}' /tmp/orphans.txt)
-            DELETE_QUERY="{\"query\":\"DELETE FROM supabase_migrations.schema_migrations WHERE version IN ($VERSIONS)\"}"
-            curl -sf -X POST "$API" \
-              -H "$AUTH" \
-              -H "Content-Type: application/json" \
-              -d "$DELETE_QUERY"
+            echo "::error::Versionner les migrations correspondantes (ou faire réparer manuellement le drift après revue), puis relancer."
+            exit 1
           else
             echo "No orphan remote migrations — schema_migrations is in sync with repo"
           fi
@@ -216,11 +183,52 @@ jobs:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
 
+      - name: Vérifier la configuration Stripe production
+        run: |
+          set -euo pipefail
+          ready=false
+          code=000
+          echo '{}' > /tmp/stripe-health.json
+
+          # Laisser le temps à la nouvelle version Edge de se propager et
+          # absorber un 429/5xx transitoire de Supabase ou Stripe.
+          for attempt in 1 2 3; do
+            if ! code=$(curl -sS --connect-timeout 10 --max-time 45 \
+              -o /tmp/stripe-health.json -w '%{http_code}' \
+              -X POST "$SUPABASE_URL/functions/v1/stripe-config-health" \
+              -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
+              -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
+              -H 'Content-Type: application/json' \
+              --data '{}'); then
+              code=000
+            fi
+
+            if [ "$code" = '200' ] \
+              && jq -e '.production_ready == true' /tmp/stripe-health.json >/dev/null 2>&1; then
+              ready=true
+              break
+            fi
+
+            echo "::warning::Healthcheck Stripe non prêt (tentative $attempt/3, HTTP $code)."
+            [ "$attempt" = '3' ] || sleep $((attempt * 5))
+          done
+
+          # La réponse ne contient que des booléens/états, jamais les secrets.
+          jq . /tmp/stripe-health.json 2>/dev/null || echo '{"production_ready":false}'
+          if [ "$ready" != 'true' ]; then
+            echo "::error::Configuration Stripe production incomplète ou incohérente (HTTP $code)."
+            exit 1
+          fi
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
       - name: Summary
         run: |
           echo "### Deploy Supabase ✅" >> "$GITHUB_STEP_SUMMARY"
           echo "- Migrations SQL appliquées (ou already-applied skip)" >> "$GITHUB_STEP_SUMMARY"
           echo "- Edge functions redéployées depuis le repo" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Configuration Stripe live et webhooks vérifiée" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "Projet : \`${{ secrets.SUPABASE_PROJECT_REF }}\`" >> "$GITHUB_STEP_SUMMARY"
 

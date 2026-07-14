@@ -64,7 +64,7 @@ export function LegacyRecategorisation({ onChanged, onCountChange }: Props) {
 
     if (error) {
       logger.error('charger legacy error', error);
-      toast.error('Impossible de charger les litiges legacy.');
+      toast.error('Impossible de charger les anciens litiges.');
       setLoading(false);
       return;
     }
@@ -125,13 +125,12 @@ export function LegacyRecategorisation({ onChanged, onCountChange }: Props) {
     <div className="space-y-4" data-testid="legacy-list">
       <div className="flex items-center gap-2">
         <BadgeY2K variant="info" data-testid="legacy-count">
-          {count} litige{count > 1 ? 's' : ''} legacy restant
+          {count} ancien litige{count > 1 ? 's' : ''} restant
           {count > 1 ? 's' : ''}
         </BadgeY2K>
         <span className="text-xs text-muted-foreground">
-          Litiges avec <code>type_legacy = TRUE</code> et{' '}
-          <code>type_litige = AUTRE</code>. Recatégoriser lève le flag
-          legacy et recalcule automatiquement la catégorie.
+          Ces litiges ont été créés avant l’ajout des catégories détaillées.
+          Leur recatégorisation met automatiquement leur classement à jour.
         </span>
       </div>
 
@@ -193,7 +192,7 @@ export function LegacyRecategorisation({ onChanged, onCountChange }: Props) {
                           id={`type-${l.id}`}
                           aria-label={`Choisir nouveau type pour litige ${l.id}`}
                         >
-                          <SelectValue placeholder="Choisir un type..." />
+                          <SelectValue placeholder="Choisir un type…" />
                         </SelectTrigger>
                         <SelectContent>
                           {TYPES_LITIGE.filter((t) => t !== 'AUTRE').map((t) => (

@@ -1508,9 +1508,13 @@ DECLARE
   v_path text;
 BEGIN
   IF auth.role() = 'service_role' OR public.est_admin() THEN RETURN NEW; END IF;
+  -- NEW est un record polymorphe : chaque table déclencheuse ne possède
+  -- qu'une des deux colonnes. Une lecture directe dans un CASE force
+  -- PostgreSQL à résoudre aussi la branche non retenue et échoue à l'exécution.
   v_path := CASE TG_TABLE_NAME
-    WHEN 'missions' THEN NEW.justificatif_honoraires_cle
-    ELSE NEW.justificatif_storage_path
+    WHEN 'missions'
+      THEN pg_catalog.to_jsonb(NEW)->>'justificatif_honoraires_cle'
+    ELSE pg_catalog.to_jsonb(NEW)->>'justificatif_storage_path'
   END;
   IF v_path IS NOT NULL AND NOT public.fn_peut_deposer_justificatif(v_path) THEN
     RAISE EXCEPTION 'Référence de justificatif non autorisée' USING ERRCODE = 'insufficient_privilege';

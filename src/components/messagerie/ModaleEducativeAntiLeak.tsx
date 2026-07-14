@@ -26,11 +26,13 @@ import {
   DialogResponsiveContent,
   DialogResponsiveHeader,
   DialogResponsiveTitle,
+  DialogResponsiveDescription,
   DialogResponsiveBody,
   DialogResponsiveFooter,
 } from '@/components/ui/DialogResponsive';
+import type { DetectedType } from '@/lib/messagerieEnvoi';
 
-export type DetectedType = 'TELEPHONE' | 'EMAIL' | 'URL' | 'HANDLE' | 'KEYWORD';
+export type { DetectedType } from '@/lib/messagerieEnvoi';
 
 interface Props {
   ouvert: boolean;
@@ -56,6 +58,9 @@ export function ModaleEducativeAntiLeak({ ouvert, onFermer, detectedType }: Prop
       <DialogResponsiveContent maxWidth="md">
         <DialogResponsiveHeader>
           <DialogResponsiveTitle>Pour votre sécurité</DialogResponsiveTitle>
+          <DialogResponsiveDescription>
+            Règle de protection des échanges avant la confirmation d'une mission.
+          </DialogResponsiveDescription>
         </DialogResponsiveHeader>
         <DialogResponsiveBody>
           <div className="flex flex-col items-center text-center gap-4">

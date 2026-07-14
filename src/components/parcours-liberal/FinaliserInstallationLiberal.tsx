@@ -85,10 +85,21 @@ export function FinaliserInstallationLiberal() {
         ok?: boolean;
         enregistre?: boolean;
         code?: string;
+        revue_manuelle?: boolean;
+        revue_id?: string;
+        canonique_conserve?: boolean;
+        candidat_conserve_en_revue?: boolean;
         raison_sociale?: string | null;
         message?: string;
         error?: string;
       } | null;
+      if (verification?.ok === true && verification.revue_manuelle === true) {
+        toast.warning(
+          verification.message
+          || 'Le SIRET n’est pas encore vérifié. Une revue humaine a bien été enregistrée.',
+        );
+        return;
+      }
       if (!verification?.ok || !verification.enregistre) {
         toast.error(verification?.message || verification?.error || 'Ce SIRET ne peut pas être vérifié');
         return;

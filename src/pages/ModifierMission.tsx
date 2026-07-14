@@ -5,12 +5,14 @@ import { FormulaireMission } from '@/components/FormulaireMission';
 import { ChargementPage } from '@/components/ChargementPage';
 import { supabase } from '@/integrations/supabase/client';
 import { logger } from '@/lib/logger';
+import { usePageTitle } from '@/hooks/usePageTitle';
 
 export default function ModifierMission() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [mission, setMission] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  usePageTitle(mission?.intitule ? `Modifier · ${mission.intitule}` : 'Modifier une mission');
 
   useEffect(() => {
     if (!id) return;

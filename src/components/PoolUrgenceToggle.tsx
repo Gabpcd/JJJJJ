@@ -25,6 +25,24 @@ export function PoolUrgenceToggle({ actif, rayonKm, villeUrgence, smsOptIn, onUp
   const [localRayon, setLocalRayon] = useState(rayonKm ?? 15);
   const [localSms, setLocalSms] = useState(smsOptIn ?? false);
   const [smsLoading, setSmsLoading] = useState(false);
+  const [modeZone, setModeZone] = useState<'position' | 'ville'>(villeUrgence ? 'ville' : 'position');
+  const [localVille, setLocalVille] = useState(villeUrgence || '');
+
+  // Ces props arrivent souvent après le premier rendu (notamment depuis la RPC
+  // du pool). Elles restent la projection contrôlée de la ligne soignants : le
+  // composant doit donc abandonner ses valeurs initiales dès que le serveur
+  // fournit l'état canonique.
+  useEffect(() => {
+    if (actif !== undefined) setLocalActif(actif);
+    if (rayonKm !== undefined) setLocalRayon(rayonKm);
+    if (smsOptIn !== undefined) setLocalSms(smsOptIn);
+  }, [actif, rayonKm, smsOptIn]);
+
+  useEffect(() => {
+    if (villeUrgence === undefined) return;
+    setLocalVille(villeUrgence);
+    setModeZone(villeUrgence ? 'ville' : 'position');
+  }, [villeUrgence]);
 
   useEffect(() => {
     if (actif !== undefined) return;
@@ -38,9 +56,6 @@ export function PoolUrgenceToggle({ actif, rayonKm, villeUrgence, smsOptIn, onUp
         }
       });
   }, [user, actif]);
-
-  const [modeZone, setModeZone] = useState<'position' | 'ville'>(villeUrgence ? 'ville' : 'position');
-  const [localVille, setLocalVille] = useState(villeUrgence || '');
 
   // revertActif : valeur à rétablir sur le switch si le save échoue (sinon le
   // toggle resterait visuellement activé alors que l'activation a été refusée,

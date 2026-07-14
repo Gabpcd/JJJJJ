@@ -1,9 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, type ReactNode } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { format, differenceInMinutes } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { ArrowLeft, Clock, MapPin, Radio, AlertTriangle, Keyboard, Wifi, CheckCircle, XCircle } from 'lucide-react';
 import { LayoutApp } from '@/components/LayoutApp';
+import { LayoutAdmin } from '@/components/LayoutAdmin';
 import { ChargementPage } from '@/components/ChargementPage';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -11,6 +12,7 @@ import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { BadgeY2K } from '@/components/y2k/BadgeY2K';
 import { AffichageCodeRotatifEtab } from '@/components/pointage/AffichageCodeRotatifEtab';
 import { toast } from 'sonner';
+import { usePageTitle } from '@/hooks/usePageTitle';
 
 function fmt(v: number) {
   return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(v);
@@ -57,6 +59,11 @@ interface Props {
   role?: 'ADMIN_ETABLISSEMENT' | 'SOIGNANT' | 'ADMIN_PLATEFORME';
 }
 
+function DetailPresencesLayout({ role, children }: Required<Pick<Props, 'role'>> & { children: ReactNode }) {
+  if (role === 'ADMIN_PLATEFORME') return <LayoutAdmin>{children}</LayoutAdmin>;
+  return <LayoutApp role={role}>{children}</LayoutApp>;
+}
+
 export default function DetailPresencesMission({ role = 'ADMIN_ETABLISSEMENT' }: Props) {
   const { id: missionId } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -66,8 +73,7 @@ export default function DetailPresencesMission({ role = 'ADMIN_ETABLISSEMENT' }:
   const [presences, setPresences] = useState<any[]>([]);
   const [soignant, setSoignant] = useState<any>(null);
   const [relancing, setRelancing] = useState(false);
-
-  const layoutRole = role === 'ADMIN_PLATEFORME' ? 'ADMIN_PLATEFORME' : role === 'SOIGNANT' ? 'SOIGNANT' : 'ADMIN_ETABLISSEMENT';
+  usePageTitle(mission?.intitule ? `Présences · ${mission.intitule}` : 'Détail des présences');
 
   // 9.1 — le soignant peut relancer l'établissement quand une présence à
   // pointage complet attend encore sa validation (miroir gate 7b-B).
@@ -123,8 +129,15 @@ export default function DetailPresencesMission({ role = 'ADMIN_ETABLISSEMENT' }:
     load();
   }, [missionId, user, role]);
 
-  if (loading) return <LayoutApp role={layoutRole}><ChargementPage /></LayoutApp>;
-  if (!mission) return <LayoutApp role={layoutRole}><p className="text-muted-foreground">Mission introuvable.</p></LayoutApp>;
+  if (loading) return <DetailPresencesLayout role={role}><ChargementPage /></DetailPresencesLayout>;
+  if (!mission) return (
+    <DetailPresencesLayout role={role}>
+      <div className="py-12 text-center">
+        <h1 className="text-lg font-semibold text-foreground">Mission introuvable</h1>
+        <p className="mt-2 text-sm text-muted-foreground">Cette mission n’existe pas ou n’est plus accessible.</p>
+      </div>
+    </DetailPresencesLayout>
+  );
 
   const brut = mission.total_brut || 0;
   const cotis = brut * 0.22;
@@ -143,8 +156,19 @@ export default function DetailPresencesMission({ role = 'ADMIN_ETABLISSEMENT' }:
   const sortedDays = Object.keys(presencesByDay).sort();
 
   return (
-    <LayoutApp role={layoutRole}>
-      <BoutonY2K variant="ghost" size="sm" className="mb-4" onClick={() => navigate(-1)} iconeGauche={<ArrowLeft className="h-4 w-4" />}>
+    <DetailPresencesLayout role={role}>
+      <BoutonY2K
+        variant="ghost"
+        size="sm"
+        className="mb-4"
+        onClick={() => {
+          if (window.history.length > 2) navigate(-1);
+          else if (role === 'ADMIN_PLATEFORME') navigate('/admin/missions');
+          else if (role === 'SOIGNANT') navigate('/soignant/presences');
+          else navigate('/etablissement/presences');
+        }}
+        iconeGauche={<ArrowLeft className="h-4 w-4" />}
+      >
         Retour
       </BoutonY2K>
 
@@ -435,6 +459,6 @@ export default function DetailPresencesMission({ role = 'ADMIN_ETABLISSEMENT' }:
           ⚠️ Simulation indicative. Seuls les montants calculés par le moteur de paie font foi.
         </p>
       </div>
-    </LayoutApp>
+    </DetailPresencesLayout>
   );
 }

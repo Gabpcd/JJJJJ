@@ -387,7 +387,7 @@ export default function AdminCockpitFondateur() {
           <CardY2K hoverLift={false}>
             <CardY2KHeader>
               <CardY2KTitle className="text-sm flex items-center gap-2">
-                <Calculator className="h-4 w-4" /> Unit Economics & Runway
+                <Calculator className="h-4 w-4" /> Économie unitaire & autonomie financière
               </CardY2KTitle>
             </CardY2KHeader>
             <CardY2KContent>
@@ -442,7 +442,7 @@ export default function AdminCockpitFondateur() {
             <div className="flex items-center gap-3 p-4">
               <TrendingUp className="h-6 w-6 text-primary" />
               <div>
-                <p className="font-semibold text-foreground">Cohort & Economics</p>
+                <p className="font-semibold text-foreground">Cohortes & économie</p>
                 <p className="text-xs text-muted-foreground">Rétention, cohortes mensuelles</p>
               </div>
             </div>

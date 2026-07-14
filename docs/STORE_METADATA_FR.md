@@ -1,7 +1,9 @@
 # Métadonnées stores — fr-FR
 
-Version préparée le 13/07/2026 pour `Jolene 1.0 (4)` iOS et `1.0 (2)` Android.
-Ce document contient uniquement des éléments publiables. Les mots de passe des
+Version préparée pour le candidat de soumission `Jolene 1.0`. Les numéros de
+build iOS et `versionCode` Android sont volontairement gérés au moment de la
+reconstruction finale afin que ce document ne devienne pas obsolète. Il
+contient uniquement des éléments publiables. Les mots de passe des
 comptes de review doivent être saisis directement dans les consoles et ne
 doivent jamais être ajoutés au dépôt, à une PR ou à une capture.
 

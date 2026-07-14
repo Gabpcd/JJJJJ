@@ -163,7 +163,7 @@ export function ModaleEvaluerSoignant({ mission, onFermer, onEvaluee }: Props) {
 
           <div className="rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 p-3 text-xs text-amber-800 dark:text-amber-300 flex gap-2">
             <AlertCircle className="h-4 w-4 shrink-0" />
-            <p>L'évaluation alimente le score de fiabilité du soignant (Sprint 3.5). Le soignant sera notifié de cette évaluation et pourra la contester via le support si elle paraît injuste.</p>
+            <p>L'évaluation alimente le score de fiabilité du soignant. Le soignant sera notifié de cette évaluation et pourra la contester via le support si elle paraît injuste.</p>
           </div>
         </DialogResponsiveBody>
         <DialogResponsiveFooter>

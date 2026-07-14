@@ -130,7 +130,11 @@ export default function ContratMission() {
   const [hashContratAffiche, setHashContratAffiche] = useState<string | null>(null);
 
   const { role: serverRole } = useRole();
-  const role: UserRole = serverRole === 'INCONNU' ? 'SOIGNANT' : serverRole;
+  const role: UserRole = serverRole === 'ETABLISSEMENT'
+    ? 'ADMIN_ETABLISSEMENT'
+    : serverRole === 'INCONNU'
+      ? 'SOIGNANT'
+      : serverRole;
 
   useEffect(() => {
     if (!id) return;

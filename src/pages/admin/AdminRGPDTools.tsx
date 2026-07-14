@@ -1,21 +1,13 @@
-// Sprint 7 PR 7 — Page AdminRGPDTools (P2 §15)
-// 2 sections :
-// 1. Export JSON des 500 dernières demandes RGPD (suppressions + exports) depuis journaux_audit
-// 2. Forcer suppression d'un compte via RPC fn_admin_force_supprimer_compte
-//    (à créer Sprint 8 si nécessaire — actuellement renvoie erreur si absente)
-// Double confirmation requise ("SUPPRIMER DÉFINITIVEMENT" exact) + motif min 30 chars
-// (audit légal).
-// Context menu utilisateurs + actions admin missions reportés Sprint 8.
+// Export des 500 dernières demandes RGPD (suppressions + exports)
+// depuis le journal d'audit sécurisé.
 
-import { useState, useEffect } from 'react';
+import { useCallback, useState, useEffect } from 'react';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { LayoutAdmin } from '@/components/LayoutAdmin';
 import { supabase } from '@/integrations/supabase/client';
 import {
   Shield,
   Download,
-  AlertTriangle,
-  Trash2,
   RefreshCw,
   FileJson,
 } from 'lucide-react';
@@ -27,9 +19,6 @@ import { fr } from 'date-fns/locale';
 import { toast } from 'sonner';
 import { telechargerOuPartager } from '@/lib/telechargement';
 
-// Confirmation exacte requise (audit légal RGPD Art. 17)
-const CONFIRMATION_PHRASE = 'SUPPRIMER DÉFINITIVEMENT';
-const MOTIF_MIN_LENGTH = 30;
 const EXPORT_LIMIT = 500;
 
 const ACTIONS_RGPD = ['RGPD_SUPPRESSION_COMPTE', 'RGPD_EXPORT_DONNEES'];
@@ -59,18 +48,11 @@ const libelle = (map: Record<string, string>, valeur: string | null | undefined)
 export default function AdminRGPDTools() {
   usePageTitle('Outils RGPD');
 
-  // ── Section 1 : Export demandes RGPD ──
   const [loadingDemandes, setLoadingDemandes] = useState(true);
   const [demandes, setDemandes] = useState<any[]>([]);
   const [exporting, setExporting] = useState(false);
 
-  // ── Section 2 : Forcer suppression compte ──
-  const [userIdCible, setUserIdCible] = useState('');
-  const [motif, setMotif] = useState('');
-  const [confirmation, setConfirmation] = useState('');
-  const [suppressionEnCours, setSuppressionEnCours] = useState(false);
-
-  const chargerDemandes = async () => {
+  const chargerDemandes = useCallback(async () => {
     setLoadingDemandes(true);
     const { data, error } = await supabase
       .from('journaux_audit')
@@ -86,11 +68,11 @@ export default function AdminRGPDTools() {
       setDemandes(data || []);
     }
     setLoadingDemandes(false);
-  };
+  }, []);
 
   useEffect(() => {
     chargerDemandes();
-  }, []);
+  }, [chargerDemandes]);
 
   const handleExportJSON = async () => {
     setExporting(true);
@@ -119,51 +101,6 @@ export default function AdminRGPDTools() {
     }
   };
 
-  const motifValide = motif.trim().length >= MOTIF_MIN_LENGTH;
-  const confirmationValide = confirmation === CONFIRMATION_PHRASE;
-  const userIdValide = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
-    userIdCible.trim(),
-  );
-  const peutSupprimer = motifValide && confirmationValide && userIdValide && !suppressionEnCours;
-
-  const handleForcerSuppression = async () => {
-    if (!peutSupprimer) return;
-    setSuppressionEnCours(true);
-    try {
-      // RPC à créer Sprint 8 si nécessaire — actuellement renvoie erreur si absente
-      const { data, error } = await (supabase.rpc as any)(
-        'fn_admin_force_supprimer_compte',
-        {
-          p_user_id: userIdCible.trim(),
-          p_motif: motif.trim(),
-        },
-      );
-      if (error) {
-        console.error('Erreur fn_admin_force_supprimer_compte :', error);
-        // Cas attendu si la fonction n'est pas encore déployée
-        if (error.message?.toLowerCase().includes('does not exist') ||
-            error.code === '42883' || error.code === 'PGRST202') {
-          toast.error(
-            'La suppression forcée de compte n\'est pas encore disponible. Aucun compte n\'a été supprimé.',
-          );
-        } else {
-          toast.error('La suppression a échoué. Aucun compte n\'a été supprimé. Veuillez réessayer.');
-        }
-        return;
-      }
-      toast.success('Compte supprimé. Action journalisée.');
-      setUserIdCible('');
-      setMotif('');
-      setConfirmation('');
-      // Recharger les demandes RGPD pour voir l'audit trail
-      chargerDemandes();
-    } catch (e: any) {
-      toast.error(`Erreur : ${e?.message || 'inconnue'}`);
-    } finally {
-      setSuppressionEnCours(false);
-    }
-  };
-
   return (
     <LayoutAdmin>
       <div className="mb-6">
@@ -171,7 +108,7 @@ export default function AdminRGPDTools() {
           <Shield className="h-5 w-5 text-primary" /> Outils RGPD
         </h1>
         <p className="text-sm text-muted-foreground">
-          Article 17 RGPD (droit à l'effacement) et Article 20 RGPD (portabilité) — actions admin sensibles, audit complet.
+          Suivi des demandes d'effacement (article 17) et de portabilité (article 20), avec export du journal d'audit.
         </p>
       </div>
 
@@ -184,7 +121,7 @@ export default function AdminRGPDTools() {
                 <FileJson className="h-4 w-4 text-primary" /> Export demandes RGPD
               </h2>
               <p className="text-xs text-muted-foreground mt-1">
-                {EXPORT_LIMIT} dernières demandes (suppressions + exports) depuis <code>journaux_audit</code>.
+                {EXPORT_LIMIT} dernières demandes (suppressions et exports) enregistrées dans le journal d'audit sécurisé.
               </p>
             </div>
             <div className="flex gap-2">
@@ -308,112 +245,6 @@ export default function AdminRGPDTools() {
               )}
             </>
           )}
-        </CardY2K>
-
-        {/* ── Section 2 : Forcer suppression compte ── */}
-        <CardY2K hoverLift={false} className="border-destructive/30 bg-destructive/5">
-          <div className="mb-4">
-            <h2 className="text-base font-semibold text-foreground flex items-center gap-2">
-              <Trash2 className="h-4 w-4 text-destructive" /> Forcer suppression d'un compte
-            </h2>
-            <p className="text-xs text-muted-foreground mt-1">
-              Action <strong>irréversible</strong>. À utiliser uniquement sur demande RGPD officielle (Art. 17) après
-              vérification d'identité. Audit légal complet dans <code>journaux_audit</code>.
-            </p>
-          </div>
-
-          <div className="flex items-start gap-2 mb-4 p-3 rounded-lg bg-destructive/10 border border-destructive/20">
-            <AlertTriangle className="h-4 w-4 text-destructive mt-0.5 flex-shrink-0" />
-            <div className="text-xs text-destructive-foreground">
-              <p className="font-semibold text-destructive">Pré-requis avant suppression</p>
-              <ul className="list-disc list-inside mt-1 space-y-0.5 text-destructive/90">
-                <li>Aucune mission active ou à venir.</li>
-                <li>Aucune facture impayée ou en litige.</li>
-                <li>Demande écrite ou vérification d'identité documentée.</li>
-                <li>Motif détaillé (min. {MOTIF_MIN_LENGTH} caractères) pour traçabilité juridique.</li>
-              </ul>
-            </div>
-          </div>
-
-          <div className="space-y-4">
-            <div>
-              <label htmlFor="admin-rgpd-utilisateur" className="block text-xs font-semibold text-foreground mb-1">
-                ID utilisateur (UUID) <span className="text-destructive">*</span>
-              </label>
-              <input
-                id="admin-rgpd-utilisateur"
-                type="text"
-                value={userIdCible}
-                onChange={(e) => setUserIdCible(e.target.value)}
-                placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-                className="input-base font-mono text-xs"
-                disabled={suppressionEnCours}
-              />
-              {userIdCible && !userIdValide && (
-                <p className="text-xs text-destructive mt-1">Format UUID invalide.</p>
-              )}
-            </div>
-
-            <div>
-              <label htmlFor="admin-rgpd-motif" className="block text-xs font-semibold text-foreground mb-1">
-                Motif RGPD détaillé <span className="text-destructive">*</span>{' '}
-                <span className="text-muted-foreground font-normal">
-                  ({motif.trim().length}/{MOTIF_MIN_LENGTH} min)
-                </span>
-              </label>
-              <textarea
-                id="admin-rgpd-motif"
-                value={motif}
-                onChange={(e) => setMotif(e.target.value)}
-                placeholder="Référence demande, vérification d'identité, contexte légal…"
-                rows={3}
-                className="input-base text-sm"
-                disabled={suppressionEnCours}
-              />
-              {motif && !motifValide && (
-                <p className="text-xs text-destructive mt-1">
-                  Motif trop court (min. {MOTIF_MIN_LENGTH} caractères).
-                </p>
-              )}
-            </div>
-
-            <div>
-              <label htmlFor="admin-rgpd-confirmation" className="block text-xs font-semibold text-foreground mb-1">
-                Confirmation <span className="text-destructive">*</span>
-              </label>
-              <p className="text-xs text-muted-foreground mb-2">
-                Saisissez exactement : <code className="font-mono bg-muted/50 px-1.5 py-0.5 rounded">{CONFIRMATION_PHRASE}</code>
-              </p>
-              <input
-                id="admin-rgpd-confirmation"
-                type="text"
-                value={confirmation}
-                onChange={(e) => setConfirmation(e.target.value)}
-                placeholder={CONFIRMATION_PHRASE}
-                className="input-base font-mono text-sm"
-                disabled={suppressionEnCours}
-              />
-              {confirmation && !confirmationValide && (
-                <p className="text-xs text-destructive mt-1">Confirmation incorrecte.</p>
-              )}
-            </div>
-
-            <BoutonY2K
-              variant="destructive"
-              size="md"
-              onClick={handleForcerSuppression}
-              disabled={!peutSupprimer}
-              loading={suppressionEnCours}
-              iconeGauche={!suppressionEnCours ? <Trash2 className="h-4 w-4" /> : undefined}
-            >
-              {suppressionEnCours ? 'Suppression en cours…' : 'Forcer la suppression définitive'}
-            </BoutonY2K>
-
-            <p className="text-[11px] text-muted-foreground">
-              Note : si la suppression forcée n'est pas encore disponible sur la plateforme, cette action affiche
-              une erreur explicite et aucun compte n'est supprimé.
-            </p>
-          </div>
         </CardY2K>
       </div>
     </LayoutAdmin>

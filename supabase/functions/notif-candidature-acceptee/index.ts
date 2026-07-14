@@ -1,6 +1,6 @@
 // Sprint 13-C PR 4 — Edge function notif-candidature-acceptee
 //
-// Endpoint déclenché quand une candidature passe à ASSIGNEE (étab accepte).
+// Endpoint déclenché quand une candidature passe à ACCEPTEE (étab accepte).
 // Envoie notification push immédiate au soignant : "C'est un match !"
 //
 // Auth : service_role uniquement (interne, appelable par trigger DB).
@@ -69,8 +69,8 @@ Deno.serve(async (req) => {
       .eq("id", payload.candidature_id)
       .maybeSingle();
     if (!cand) return json(req, { error: "candidature_not_found" }, 404);
-    if (cand.statut !== "ASSIGNEE") {
-      return json(req, { ok: true, skipped: "candidature_not_assignee" });
+    if (cand.statut !== "ACCEPTEE") {
+      return json(req, { ok: true, skipped: "candidature_not_accepted" });
     }
     soignantId = cand.soignant_id;
     missionId = cand.mission_id;
@@ -82,10 +82,13 @@ Deno.serve(async (req) => {
 
   const { data: mission } = await admin
     .from("missions")
-    .select("id, intitule, etablissement_id")
+    .select("id, intitule, etablissement_id, soignant_assigne_id, statut")
     .eq("id", missionId)
     .maybeSingle();
   if (!mission) return json(req, { error: "mission_not_found" }, 404);
+  if (mission.soignant_assigne_id !== soignantId || !["ASSIGNEE", "EN_COURS", "TERMINEE"].includes(mission.statut)) {
+    return json(req, { ok: true, skipped: "mission_not_assigned_to_caregiver" });
+  }
 
   const { data: etab } = await admin
     .from("etablissements")
@@ -111,36 +114,36 @@ Deno.serve(async (req) => {
     ? `${etabNom} a accepté votre candidature pour ${titreMission}. Bravo !`
     : `${etabNom} a accepté votre candidature pour ${titreMission}.`;
 
-  // Récup conversation_id (créée par trigger Sprint 10-A v3 acceptation candidature)
-  const { data: conv } = await admin
-    .from("conversations")
-    .select("id")
-    .eq("mission_id", missionId)
-    .eq("soignant_id", soignantId)
-    .maybeSingle();
-
-  const lien = conv?.id ? `/messagerie/${conv.id}` : `/soignant/missions/${missionId}`;
-
-  // INSERT notifications destinée au soignant
-  const { data: notif, error: notifErr } = await admin
-    .from("notifications")
-    .insert({
-      destinataire_id: soignantId,
-      type_destinataire: "SOIGNANT",
-      type: "MATCHING_CANDIDATURE_ACCEPTEE",
-      titre,
-      corps,
-      lien,
-      type_ressource: "mission",
-      id_ressource: missionId,
-    })
-    .select("id")
-    .maybeSingle();
-
-  if (notifErr) {
-    console.error("[notif-candidature-acceptee] notif insert failed:", notifErr);
-    return json(req, { error: "notification_insert_failed", details: notifErr.message }, 500);
+  // Un seul chemin SQL transactionnel sérialise création et retries, résout le
+  // vrai interlocuteur Auth et retourne la route canonique. L'Edge ne fait
+  // volontairement aucun INSERT direct dans notifications.
+  const { data: notificationData, error: notificationError } = await admin.rpc(
+    "fn_notifier_candidature_acceptee",
+    {
+      p_mission_id: missionId,
+      p_soignant_id: soignantId,
+      p_titre: titre,
+      p_corps: corps,
+    },
+  );
+  const notificationResult = notificationData as {
+    success?: boolean;
+    error?: string;
+    notification_id?: string;
+    lien?: string;
+  } | null;
+  if (notificationError || !notificationResult?.success) {
+    console.error(
+      "[notif-candidature-acceptee] transactional notification failed:",
+      notificationError?.message || notificationResult?.error,
+    );
+    return json(req, {
+      error: "notification_insert_failed",
+      details: notificationError?.message || notificationResult?.error,
+    }, 500);
   }
+  const lien = notificationResult.lien || `/soignant/missions/${missionId}`;
+  const notificationId = notificationResult.notification_id;
 
   // Audit trail
   try {
@@ -153,7 +156,7 @@ Deno.serve(async (req) => {
       p_cle_s3: null,
       p_details: {
         sous_action: "notif_candidature_acceptee_envoyee",
-        notification_id: notif?.id,
+        notification_id: notificationId,
         soignant_id: soignantId,
         via_swipe: viaSwipe,
       },
@@ -166,7 +169,7 @@ Deno.serve(async (req) => {
 
   return json(req, {
     ok: true,
-    notification_id: notif?.id,
+    notification_id: notificationId,
     destinataire_soignant: soignantId,
     via_swipe: viaSwipe,
     lien,

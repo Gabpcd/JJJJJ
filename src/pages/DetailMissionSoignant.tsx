@@ -17,7 +17,6 @@ import { DecompositionFinanciere } from '@/components/DecompositionFinanciere';
 import { FactureHonorairesCard } from '@/components/FactureHonorairesCard';
 import { NoteHonoraires } from '@/components/NoteHonoraires';
 import { BlocagePostulation } from '@/components/BlocagePostulation';
-import { ChatMission } from '@/components/ChatMission';
 import { ChatConversation } from '@/components/ChatConversation';
 import { BlocConformite } from '@/components/BlocConformite';
 import { BoutonExclusion } from '@/components/BoutonExclusion';
@@ -45,6 +44,7 @@ import { DeclarationEmpechement } from '@/components/DeclarationEmpechement';
 import { BandeauActionPrioritaire, type ActionPrioritaire } from '@/components/BandeauActionPrioritaire';
 import { ModaleAnnulationCandidature } from '@/components/soignant/ModaleAnnulationCandidature';
 import { AnnulationCandidatureTimer } from '@/components/soignant/AnnulationCandidatureTimer';
+import { netEstimeAfficheMission } from '@/lib/missionFinanceDisplay';
 
 type SoignantData = Database['public']['Tables']['soignants']['Row'];
 
@@ -215,7 +215,7 @@ export default function DetailMissionSoignant() {
 
   // Session E-6 : net estimé de la mission (même source que la liste,
   // cf. CarteMissionSoignant) pour la barre sticky mobile.
-  const netEstimeMission: number | null = (mission.net_estime ?? mission.net_a_payer ?? null) as number | null;
+  const netEstimeMission = netEstimeAfficheMission(mission);
   const fmtEuroEntier = (v: number) =>
     new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(v);
   const champsManquants = resumeCompletion.items_obligatoires_manquants;
@@ -967,6 +967,7 @@ export default function DetailMissionSoignant() {
           {(mission.statut === 'ASSIGNEE' || mission.statut === 'EN_COURS' || mission.statut === 'TERMINEE' || mission.statut === 'ABSENCE' || mission.statut === 'LITIGE') && estAssigne && (
             <div id="chat-mission">
               <ChatConversation
+                key={`${mission.id}:${mission.etablissement_id}`}
                 missionId={mission.id}
                 autreUserId={mission.etablissement_id}
                 isEtablissement

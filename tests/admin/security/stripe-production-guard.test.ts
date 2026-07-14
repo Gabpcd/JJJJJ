@@ -20,6 +20,30 @@ function edgeFunctionSourcesUsingStripeSecret(): Array<{ name: string; source: s
 }
 
 describe('Stripe — garde production et idempotence P0', () => {
+  it('aligne tous les clients serveur sur stripe-node 20.4.1 et Clover', () => {
+    const stripeClients = [
+      '_shared/stripe-webhook-handler.ts',
+      'confirm-invoice-payment/index.ts',
+      'create-invoice-payment/index.ts',
+      'escrow-debit-echeance/index.ts',
+      'escrow-release/index.ts',
+      'process-stripe-refunds/index.ts',
+      'sepa-auto-charge/index.ts',
+      'setup-sepa/index.ts',
+      'stripe-connect-onboard/index.ts',
+      'stripe-connect-pay-mission/index.ts',
+      'stripe-connect-status/index.ts',
+    ];
+
+    for (const relativePath of stripeClients) {
+      const source = readFileSync(join(FUNCTIONS_ROOT, relativePath), 'utf8');
+      expect(source, `${relativePath} doit charger le SDK Stripe homologué`)
+        .toContain('npm:stripe@20.4.1');
+      expect(source, `${relativePath} doit figer la version API Clover`)
+        .toContain('apiVersion: "2026-02-25.clover"');
+    }
+  });
+
   it('refuse une clé non live sur le projet Supabase de production', () => {
     const helper = readFileSync(`${FUNCTIONS_ROOT}/_shared/stripe-production.ts`, 'utf8');
 
@@ -44,12 +68,10 @@ describe('Stripe — garde production et idempotence P0', () => {
   it('conserve une clé d’idempotence stable sur chaque création financière critique', () => {
     const expectedKeys: Record<string, string[]> = {
       'create-invoice-payment': ['invoice_checkout_${facture.id}'],
-      'create-mission-payment': ['mission_payment_${mission.id}'],
       'escrow-debit-echeance': ['escrow_debit_${esc.id}'],
       'escrow-release': ['release_${rel.paiement_escrow_id}'],
       'process-externalisation-actions': [
         'externalisation_refund_${action.id}',
-        'externalisation_transfer_${action.id}',
         'parrainage_transfer_${parrainage_id}_${role}',
       ],
       'process-stripe-refunds': ['refund_queue_${item.id}'],
@@ -65,6 +87,12 @@ describe('Stripe — garde production et idempotence P0', () => {
 
     const webhook = readFileSync(STRIPE_WEBHOOK_HANDLER, 'utf8');
     expect(webhook).toContain('transfer_${session.id}');
+    const externalisations = readFileSync(
+      join(FUNCTIONS_ROOT, 'process-externalisation-actions', 'index.ts'),
+      'utf8',
+    );
+    expect(externalisations).toContain('STRIPE_PAYMENT_GENERIQUE_DESACTIVE');
+    expect(externalisations).not.toContain('externalisation_transfer_${action.id}');
   });
 
   it('avance la version seulement après une tentative Stripe terminale ou abandonnée connue', () => {
@@ -74,13 +102,15 @@ describe('Stripe — garde production et idempotence P0', () => {
     const release = readFileSync(`${FUNCTIONS_ROOT}/escrow-release/index.ts`, 'utf8');
     const connect = readFileSync(`${FUNCTIONS_ROOT}/stripe-connect-pay-mission/index.ts`, 'utf8');
 
-    expect(mission).toContain('mission_payment_${mission.id}_after_${precedent.id}');
-    expect(mission).not.toContain('delete().eq("id", existingPayment.id)');
+    expect(mission).toContain('STRIPE_RESERVATION_DISABLED');
+    expect(mission).not.toContain('stripe.paymentIntents.create');
+    expect(mission).not.toContain('npm:stripe@');
     expect(facture).toContain('invoice_checkout_${facture.id}_after_${existingSession.id}');
     expect(facture).toContain('resumed: true');
     expect(debit).toContain('escrow_debit_${esc.id}_after_${precedent.id}');
     expect(debit).toContain('.eq("tentatives_debit", esc.tentatives_debit ?? 0)');
-    expect(debit).toContain('err?.payment_intent ?? err?.raw?.payment_intent');
+    expect(debit).toContain('err?.paymentIntentId');
+    expect(debit).toContain('err?.raw?.payment_intent');
     expect(debit).toContain('stripe_payment_intent_id: failedIntentId');
     expect(release).toContain('release_${rel.paiement_escrow_id}_after_${precedent.id}');
     expect(connect).toContain('connect_checkout_${mission_id}_after_${versionPrecedente}');
@@ -114,12 +144,21 @@ describe('Stripe — garde production et idempotence P0', () => {
     expect(connect).toContain('concurrent_session_reused: sessionPartageeParConcurrent');
   });
 
-  it('laisse un statut métier terminal ouvrir une nouvelle génération après une ancienne Session complète', () => {
+  it('ne redébite jamais après une Session Connect complète, même si la ligne locale est ECHOUE', () => {
     const connect = readFileSync(`${FUNCTIONS_ROOT}/stripe-connect-pay-mission/index.ts`, 'utf8');
+    const retryStatusesStart = connect.indexOf('const statutAutoriseNouvelleTentative');
+    const retryStatusesEnd = connect.indexOf(';', retryStatusesStart);
+    const retryStatuses = connect.slice(retryStatusesStart, retryStatusesEnd);
 
-    expect(connect).toContain('["ECHOUE", "REMBOURSE", "ANNULEE"]');
-    expect(connect).toContain('precedente.status === "complete" && !statutAutoriseNouvelleTentative');
-    expect(connect).toContain('derniereSessionMission.status === "complete" && !statutAutoriseNouvelleTentative');
+    expect(retryStatuses).not.toContain('ECHOUE');
+    expect(connect).toContain('if (precedente.status === "complete")');
+    expect(connect).toContain(
+      'const sessionCompleteMission = sessionCompleteHistorique ?? sessionsMission.find(',
+    );
+    expect(connect).toContain('relancerTransfertEchoueSansRecharger(');
+    expect(connect).toContain('transfer_${session.id}');
+    expect(connect).toContain('source_transaction: chargeId');
+    expect(connect).toContain('CONNECT_TRANSFER_RETRY_SANS_NOUVELLE_CHARGE');
     expect(connect).toContain('connect_checkout_${mission_id}_after_${derniereSessionMission.id}');
   });
 
@@ -127,9 +166,16 @@ describe('Stripe — garde production et idempotence P0', () => {
     const facture = readFileSync(`${FUNCTIONS_ROOT}/create-invoice-payment/index.ts`, 'utf8');
 
     expect(facture).toContain('"requires_action", "requires_confirmation"');
-    expect(facture).toContain('existingSession?.status === "complete" && !intentTerminalConnu');
+    expect(facture).toContain('existingSession?.status === "complete"');
+    expect(facture).not.toContain(
+      'existingSession?.status === "complete" && !intentTerminalConnu',
+    );
     expect(facture).toContain('await stripe.checkout.sessions.expire(existingSession.id)');
     expect(facture).not.toContain('checkout expiration failed');
+    expect(facture).not.toContain('url=${session.url}');
+    expect(facture).not.toContain('stripe_param');
+    expect(facture).toContain('mapStripeError(error)');
+    expect(facture).toContain('hasHostedUrl: Boolean(session.url)');
   });
 
   it('fige le PaymentIntent renvoyé dans une erreur SEPA au lieu de le rejouer', () => {
@@ -142,7 +188,7 @@ describe('Stripe — garde production et idempotence P0', () => {
     expect(source).toContain('stripe_payment_intent_id: knownIntentId');
     expect(source).toContain('intentStatus !== "processing"');
     expect(source).toContain('recoveredUpdate.statut = "EN_RETARD"');
-    expect(source).toContain('.in("statut", ["EMISE", "EN_RETARD"])');
+    expect(source).toContain('.eq("statut", "EMISE")');
     expect(source).toContain('.is("stripe_payment_intent_id", null)');
   });
 
@@ -155,8 +201,8 @@ describe('Stripe — garde production et idempotence P0', () => {
   it('diagnostique la clé live et le webhook Stripe de production sans effet de bord', () => {
     const health = readFileSync(`${FUNCTIONS_ROOT}/stripe-config-health/index.ts`, 'utf8');
 
-    expect(health).toContain("fetch('https://api.stripe.com/v1/balance'");
-    expect(health).toContain("fetch('https://api.stripe.com/v1/webhook_endpoints?limit=100'");
+    expect(health).toContain("fetchWithTimeout('https://api.stripe.com/v1/balance'");
+    expect(health).toContain("fetchWithTimeout('https://api.stripe.com/v1/webhook_endpoints?limit=100'");
     expect(health).toContain("const supabaseBase = (Deno.env.get('SUPABASE_URL')");
     expect(health).toContain('`${supabaseBase}/functions/v1/stripe-webhook`');
     expect(health).toContain('`${supabaseBase}/functions/v1/stripe-connect-webhook`');
@@ -169,8 +215,19 @@ describe('Stripe — garde production et idempotence P0', () => {
     expect(health).toContain("'payout.failed'");
     expect(health).toContain('platform_webhook_events_complete');
     expect(health).toContain('connect_webhook_events_complete');
-    expect(health).toContain("const WEBHOOK_API_VERSION = '2025-08-27.basil'");
-    expect(health).not.toContain('2026-02-25.clover');
+    expect(health).toContain(".not('stripe_customer_id', 'is', null)");
+    expect(health).toContain('.range(offset, offset + pageSize - 1)');
+    expect(health).toContain('fetchWithTimeout(');
+    expect(health).toContain('const batchSize = 5');
+    expect(health).toContain('customers/${encodeURIComponent(row.stripe_customer_id)}');
+    expect(health).toContain('linkedId === row.id');
+    expect(health).toContain('customer_tenant_links_adoptable_legacy');
+    expect(health).toContain('customer_tenant_links_indeterminate');
+    expect(health).toContain('customer_tenant_links_ok');
+    expect(health).toContain('&& customerLinks.all_valid');
+    expect(health).toContain('all_valid: checked && valid === rows.length');
+    expect(health).toContain("const WEBHOOK_API_VERSION = '2026-02-25.clover'");
+    expect(health).toContain('stripe-node 20.4.1');
     expect(health).toContain('production_ready: productionReady');
     expect(health).not.toMatch(/sk_(?:live|test)_[A-Za-z0-9]+/);
   });

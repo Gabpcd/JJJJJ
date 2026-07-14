@@ -25,6 +25,7 @@ import { getMissionsCompatiblesFilter } from '@/lib/profession-hierarchy';
 import { format, startOfWeek, endOfWeek } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { handleErrorSilent } from '@/lib/handleError';
+import { netEstimeAfficheMission } from '@/lib/missionFinanceDisplay';
 
 type Onglet = 'candidatures' | 'disponibles' | 'mes_missions' | 'historique';
 
@@ -119,7 +120,8 @@ export default function MissionsSoignant() {
         specialite_medicale_requise, accepte_non_specialises,
         debut_le, fin_le, duree_heures, taux_horaire_base, taux_rist_plafonne, rist_plafond_applique,
         total_brut, net_a_payer, net_estime, est_urgente, niveau_urgence, statut,
-        soignant_assigne_id, cree_le, etablissement_id, type_contrat_recherche
+        soignant_assigne_id, cree_le, etablissement_id, type_contrat_recherche,
+        type_contrat_applique, choix_contrat_soignant
       `);
 
       if (onglet === 'disponibles') {
@@ -226,6 +228,20 @@ export default function MissionsSoignant() {
     { id: 'historique', label: 'Passées' },
   ];
 
+  const gererNavigationOnglets = (event: React.KeyboardEvent<HTMLButtonElement>, index: number) => {
+    let prochainIndex: number | null = null;
+    if (event.key === 'ArrowRight') prochainIndex = (index + 1) % onglets.length;
+    if (event.key === 'ArrowLeft') prochainIndex = (index - 1 + onglets.length) % onglets.length;
+    if (event.key === 'Home') prochainIndex = 0;
+    if (event.key === 'End') prochainIndex = onglets.length - 1;
+    if (prochainIndex === null) return;
+
+    event.preventDefault();
+    const prochainOnglet = onglets[prochainIndex].id;
+    setOnglet(prochainOnglet);
+    document.getElementById(`missions-tab-${prochainOnglet}`)?.focus();
+  };
+
   return (
     <LayoutApp role="SOIGNANT">
       <IndicateurPullToRefresh distance={pullDistance} refreshing={refreshing} />
@@ -237,9 +253,18 @@ export default function MissionsSoignant() {
           vers /recherche-missions pour la conversion. */}
 
       {(!soignant || !soignant.profession) && <BandeauProfilIncomplet />}
-      <div className="flex border-b border-border mb-4 overflow-x-auto">
-        {onglets.map(o => (
-          <button key={o.id} onClick={() => setOnglet(o.id)}
+      <div role="tablist" aria-label="Catégories de missions" className="flex border-b border-border mb-4 overflow-x-auto">
+        {onglets.map((o, index) => (
+          <button
+            key={o.id}
+            type="button"
+            id={`missions-tab-${o.id}`}
+            role="tab"
+            aria-selected={onglet === o.id}
+            aria-controls="missions-panel"
+            tabIndex={onglet === o.id ? 0 : -1}
+            onClick={() => setOnglet(o.id)}
+            onKeyDown={(event) => gererNavigationOnglets(event, index)}
             className={`px-4 py-2.5 text-sm font-medium whitespace-nowrap border-b-2 transition-colors
               ${onglet === o.id ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'}`}>
             {o.label}
@@ -247,15 +272,22 @@ export default function MissionsSoignant() {
         ))}
       </div>
 
-      {onglet === 'disponibles' && (
-        <>
-          <BandeauAlerte48h heuresSemaine={heuresSemaine} />
-          <FiltresMissions rayonDefaut={soignant?.rayon_deplacement_km} onFiltreChange={setFiltres} />
-        </>
-      )}
+      <div
+        id="missions-panel"
+        role="tabpanel"
+        aria-labelledby={`missions-tab-${onglet}`}
+        tabIndex={0}
+        className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+      >
+        {onglet === 'disponibles' && (
+          <>
+            <BandeauAlerte48h heuresSemaine={heuresSemaine} />
+            <FiltresMissions rayonDefaut={soignant?.rayon_deplacement_km} onFiltreChange={setFiltres} />
+          </>
+        )}
 
-      {loading ? <SkeletonList count={4} /> : (
-        <>
+        {loading ? <SkeletonList count={4} /> : (
+          <>
           {onglet === 'disponibles' && (
             <p className="text-sm text-muted-foreground mb-3">{missionsAvecDistance.length} mission{missionsAvecDistance.length !== 1 ? 's' : ''} trouvée{missionsAvecDistance.length !== 1 ? 's' : ''}</p>
           )}
@@ -418,7 +450,14 @@ export default function MissionsSoignant() {
                       </div>
                       <h3 className="font-semibold text-sm text-foreground">{m.intitule}</h3>
                       <p className="text-xs text-muted-foreground mt-1">🏥 {m.etablissements?.nom || 'Établissement'}</p>
-                      {(m.net_estime ?? m.net_a_payer ?? 0) > 0 && <p className="text-sm font-bold text-primary mt-1">Net estimé* : {new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(m.net_estime ?? (m.net_a_payer != null ? m.net_a_payer * 0.78 : 0))}</p>}
+                      {(() => {
+                        const net = netEstimeAfficheMission(m);
+                        return net != null && net > 0 ? (
+                          <p className="text-sm font-bold text-primary mt-1">
+                            Net estimé* : {new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(net)}
+                          </p>
+                        ) : null;
+                      })()}
                     </div>
                   ))}
                 </div>
@@ -441,8 +480,9 @@ export default function MissionsSoignant() {
           {missions.length === (page + 1) * PAGE_SIZE && (
             <button onClick={() => setPage(p => p + 1)} className="btn-secondary w-full mt-4">Charger plus de missions</button>
           )}
-        </>
-      )}
+          </>
+        )}
+      </div>
     </LayoutApp>
   );
 }

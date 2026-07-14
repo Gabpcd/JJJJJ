@@ -27,13 +27,19 @@ export function indexerInterlocuteurs(
 export async function chargerInterlocuteursConversations(
   conversationIds: string[],
 ): Promise<Map<string, InterlocuteurConversation>> {
-  const ids = [...new Set(conversationIds)].slice(0, 100);
+  const ids = [...new Set(conversationIds)];
   if (ids.length === 0) return new Map();
 
-  const { data, error } = await supabase.rpc('fn_interlocuteurs_conversations', {
-    p_conversation_ids: ids,
-  });
+  const resultat = new Map<string, InterlocuteurConversation>();
+  for (let index = 0; index < ids.length; index += 100) {
+    const lot = ids.slice(index, index + 100);
+    const { data, error } = await supabase.rpc('fn_interlocuteurs_conversations', {
+      p_conversation_ids: lot,
+    });
 
-  if (error) throw error;
-  return indexerInterlocuteurs((data || []) as InterlocuteurConversation[]);
+    if (error) throw error;
+    indexerInterlocuteurs((data || []) as InterlocuteurConversation[])
+      .forEach((valeur, cle) => resultat.set(cle, valeur));
+  }
+  return resultat;
 }

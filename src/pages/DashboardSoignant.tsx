@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { usePageTitle } from '@/hooks/usePageTitle';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { SkeletonDashboard } from '@/components/SkeletonCard';
 import { AlertCircle, Banknote, Bell, CalendarDays, ChevronRight, CreditCard, FileText, Sparkles } from 'lucide-react';
 import { CarteProposition } from '@/components/CarteProposition';
@@ -258,28 +258,34 @@ export default function DashboardSoignant() {
           </div>
           <div className="space-y-2">
             {mesMissions.map((m: any) => (
-              <div key={m.id} onClick={() => navigate(`/soignant/missions/${m.id}`)} className="card-base hover:shadow-md cursor-pointer transition-all flex items-center gap-3 py-3">
-                <div className="flex flex-col items-center justify-center rounded-xl bg-primary/10 px-3 py-1.5 min-w-[52px]">
-                  <span className="text-[10px] font-semibold text-primary uppercase">{format(new Date(m.debut_le), 'EEE', { locale: fr })}</span>
-                  <span className="text-lg font-bold text-primary leading-tight">{format(new Date(m.debut_le), 'd')}</span>
-                  <span className="text-[10px] text-primary">{format(new Date(m.debut_le), 'MMM', { locale: fr })}</span>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-0.5">
-                    <BadgeStatut statut={m.statut} />
-                    {m.est_urgente && <span className="badge-base bg-destructive/10 text-destructive text-[10px]">🔥 Urgent</span>}
+              <div key={m.id} className="card-base hover:shadow-md transition-all flex items-center gap-3 py-3">
+                <Link
+                  to={`/soignant/missions/${m.id}`}
+                  className="flex flex-1 min-w-0 items-center gap-3 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+                  aria-label={`Voir la mission ${m.intitule}`}
+                >
+                  <div className="flex flex-col items-center justify-center rounded-xl bg-primary/10 px-3 py-1.5 min-w-[52px]">
+                    <span className="text-[10px] font-semibold text-primary uppercase">{format(new Date(m.debut_le), 'EEE', { locale: fr })}</span>
+                    <span className="text-lg font-bold text-primary leading-tight">{format(new Date(m.debut_le), 'd')}</span>
+                    <span className="text-[10px] text-primary">{format(new Date(m.debut_le), 'MMM', { locale: fr })}</span>
                   </div>
-                  <h3 className="font-semibold text-sm text-foreground truncate" title={m.intitule}>{m.intitule}</h3>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    🏥 {m.etablissements?.nom || 'Établissement'}{m.etablissements?.adresse_ville ? ` · ${m.etablissements.adresse_ville}` : ''}
-                  </p>
-                  <div className="flex items-center gap-3 mt-0.5">
-                    <p className="text-xs text-muted-foreground">
-                      🕐 {format(new Date(m.debut_le), "HH'h'mm", { locale: fr })} → {format(new Date(m.fin_le), "HH'h'mm", { locale: fr })}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <BadgeStatut statut={m.statut} />
+                      {m.est_urgente && <span className="badge-base bg-destructive/10 text-destructive text-[10px]">🔥 Urgent</span>}
+                    </div>
+                    <h3 className="font-semibold text-sm text-foreground truncate" title={m.intitule}>{m.intitule}</h3>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      🏥 {m.etablissements?.nom || 'Établissement'}{m.etablissements?.adresse_ville ? ` · ${m.etablissements.adresse_ville}` : ''}
                     </p>
-                    <BoutonAjouterCalendrier mission={m} />
+                    <div className="flex items-center gap-3 mt-0.5">
+                      <p className="text-xs text-muted-foreground">
+                        🕐 {format(new Date(m.debut_le), "HH'h'mm", { locale: fr })} → {format(new Date(m.fin_le), "HH'h'mm", { locale: fr })}
+                      </p>
+                    </div>
                   </div>
-                </div>
+                </Link>
+                <BoutonAjouterCalendrier mission={m} />
               </div>
             ))}
           </div>
@@ -314,24 +320,30 @@ export default function DashboardSoignant() {
                     ? { montant: Math.round(Number(m.taux_horaire_base) * duree), libelle: 'brut' }
                     : null;
               return (
-                <div key={m.id} onClick={() => navigate(`/soignant/missions/${m.id}`)} className="card-base hover:shadow-md cursor-pointer transition-all flex items-center gap-3 py-3">
-                  <div className="flex flex-col items-center justify-center rounded-xl bg-primary/10 px-3 py-1.5 min-w-[52px]">
-                    <span className="text-[10px] font-semibold text-primary uppercase">{format(new Date(m.debut_le), 'EEE', { locale: fr })}</span>
-                    <span className="text-lg font-bold text-primary leading-tight">{format(new Date(m.debut_le), 'd')}</span>
-                    <span className="text-[10px] text-primary">{format(new Date(m.debut_le), 'MMM', { locale: fr })}</span>
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    {m.est_urgente && <span className="badge-base bg-destructive/10 text-destructive text-[10px] mb-0.5 inline-block">🔥 Urgent</span>}
-                    <h3 className="font-semibold text-sm text-foreground truncate" title={m.intitule}>{m.intitule}</h3>
-                    <p className="text-xs text-muted-foreground mt-0.5 truncate">🏥 {m.etab_nom || 'Établissement'}{m.service ? ` · ${m.service}` : ''}</p>
-                    <div className="flex items-center gap-3 mt-0.5 text-[11px] text-muted-foreground">
-                      <span>🕐 {format(new Date(m.debut_le), "HH'h'mm", { locale: fr })} → {format(new Date(m.fin_le), "HH'h'mm", { locale: fr })}</span>
-                      {m.taux_horaire_base && <span className="font-semibold text-primary">{m.taux_horaire_base} €/h</span>}
-                      {estimation && <span>~{estimation.montant} € {estimation.libelle}</span>}
+                <div key={m.id} className="card-base hover:shadow-md transition-all flex items-center gap-3 py-3">
+                  <Link
+                    to={`/soignant/missions/${m.id}`}
+                    className="flex flex-1 min-w-0 items-center gap-3 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+                    aria-label={`Voir la mission ${m.intitule}`}
+                  >
+                    <div className="flex flex-col items-center justify-center rounded-xl bg-primary/10 px-3 py-1.5 min-w-[52px]">
+                      <span className="text-[10px] font-semibold text-primary uppercase">{format(new Date(m.debut_le), 'EEE', { locale: fr })}</span>
+                      <span className="text-lg font-bold text-primary leading-tight">{format(new Date(m.debut_le), 'd')}</span>
+                      <span className="text-[10px] text-primary">{format(new Date(m.debut_le), 'MMM', { locale: fr })}</span>
                     </div>
-                  </div>
+                    <div className="flex-1 min-w-0">
+                      {m.est_urgente && <span className="badge-base bg-destructive/10 text-destructive text-[10px] mb-0.5 inline-block">🔥 Urgent</span>}
+                      <h3 className="font-semibold text-sm text-foreground truncate" title={m.intitule}>{m.intitule}</h3>
+                      <p className="text-xs text-muted-foreground mt-0.5 truncate">🏥 {m.etab_nom || 'Établissement'}{m.service ? ` · ${m.service}` : ''}</p>
+                      <div className="flex items-center gap-3 mt-0.5 text-[11px] text-muted-foreground">
+                        <span>🕐 {format(new Date(m.debut_le), "HH'h'mm", { locale: fr })} → {format(new Date(m.fin_le), "HH'h'mm", { locale: fr })}</span>
+                        {m.taux_horaire_base && <span className="font-semibold text-primary">{m.taux_horaire_base} €/h</span>}
+                        {estimation && <span>~{estimation.montant} € {estimation.libelle}</span>}
+                      </div>
+                    </div>
+                  </Link>
                   {m.id in postulees ? (
-                    <div className="shrink-0 flex flex-col items-end gap-0.5" onClick={(e) => e.stopPropagation()}>
+                    <div className="shrink-0 flex flex-col items-end gap-0.5">
                       <span className="text-xs font-semibold text-success inline-flex items-center gap-1">✓ Envoyée</span>
                       {postulees[m.id] && (
                         <button onClick={() => retirerCandidature(m.id, postulees[m.id])} className="text-[10px] text-muted-foreground hover:text-destructive hover:underline">Annuler</button>
@@ -377,7 +389,7 @@ export default function DashboardSoignant() {
 
       {/* Tes revenus du mois — déplacé hors des onglets (Accueil linéaire) */}
       {gainsCeMois.nb > 0 && (
-        <div className="card-base mb-6 cursor-pointer hover:shadow-md transition-all" onClick={() => navigate('/soignant/mes-gains')}>
+        <button type="button" className="card-base mb-6 w-full text-left hover:shadow-md transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50" onClick={() => navigate('/soignant/mes-gains')}>
           <div className="flex items-center gap-3">
             <div className="rounded-xl p-2.5 bg-primary/10"><Banknote className="h-5 w-5 text-primary" /></div>
             <div className="flex-1">
@@ -386,7 +398,7 @@ export default function DashboardSoignant() {
             </div>
           </div>
           <NoteNetEstime className="mt-2" />
-        </div>
+        </button>
       )}
 
       {/* ═══ ZONE 3 : ALERTES & ADMIN (repoussées sous le contenu utile) ═══ */}

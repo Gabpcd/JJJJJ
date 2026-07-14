@@ -213,11 +213,18 @@ function validateIbanChecksum(iban: string): boolean {
 }
 
 function SectionIbanPrime() {
+  const navigate = useNavigate();
   const [iban, setIban] = useState('');
   const [titulaire, setTitulaire] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [current, setCurrent] = useState<{ iban_renseigne: boolean; iban_last4: string | null; iban_titulaire: string | null } | null>(null);
+  const [current, setCurrent] = useState<{
+    iban_renseigne: boolean;
+    iban_verifie: boolean;
+    verification_requise?: boolean;
+    iban_last4: string | null;
+    iban_titulaire: string | null;
+  } | null>(null);
 
   useEffect(() => {
     supabase.rpc('fn_consulter_mon_iban' as any).then(({ data }: any) => {
@@ -241,7 +248,13 @@ function SectionIbanPrime() {
     if (error) { toast.error(error.message); return; }
     if (result?.error) { toast.error(result.error); return; }
     toast.success(result?.message || 'IBAN enregistré');
-    setCurrent({ iban_renseigne: true, iban_last4: result.iban_last4, iban_titulaire: result.titulaire });
+    setCurrent({
+      iban_renseigne: true,
+      iban_verifie: true,
+      verification_requise: false,
+      iban_last4: result.iban_last4,
+      iban_titulaire: result.titulaire,
+    });
     setIban('');
     setTitulaire('');
   };
@@ -259,7 +272,7 @@ function SectionIbanPrime() {
         <div className="flex justify-center py-4"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
       ) : (
         <div className="space-y-4">
-          {current?.iban_renseigne && (
+          {current?.iban_renseigne && current.iban_verifie && (
             <div className="flex items-start gap-3 rounded-xl border border-success/30 bg-success/5 p-3">
               <CheckCircle className="h-5 w-5 text-success shrink-0 mt-0.5" />
               <div>
@@ -270,6 +283,26 @@ function SectionIbanPrime() {
                 {current.iban_titulaire && (
                   <p className="text-xs text-muted-foreground mt-0.5">Titulaire : {current.iban_titulaire}</p>
                 )}
+              </div>
+            </div>
+          )}
+
+          {current?.iban_renseigne && !current.iban_verifie && (
+            <div className="flex items-start gap-3 rounded-xl border border-warning/30 bg-warning/5 p-3">
+              <AlertTriangle className="h-5 w-5 text-warning shrink-0 mt-0.5" />
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-semibold text-foreground">RIB vérifié requis</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  L'ancien IBAN est conservé dans ton historique, mais aucun nouveau versement ne peut l'utiliser sans un RIB courant vérifié portant exactement le même IBAN et ton identité.
+                </p>
+                <BoutonY2K
+                  variant="secondary"
+                  size="sm"
+                  className="mt-3"
+                  onClick={() => navigate('/soignant/documents')}
+                >
+                  Téléverser mon RIB
+                </BoutonY2K>
               </div>
             </div>
           )}

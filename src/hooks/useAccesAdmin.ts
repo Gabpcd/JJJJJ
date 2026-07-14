@@ -1,11 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import type { AdminAccessGroup } from '@/lib/adminAccess';
 
 interface AccesAdmin {
   accesTotal: boolean;
   groupes: string[];
   loading: boolean;
-  aAcces: (groupe: string) => boolean;
+  aAcces: (groupe: AdminAccessGroup) => boolean;
 }
 
 export function useAccesAdmin(): AccesAdmin {
@@ -16,8 +17,11 @@ export function useAccesAdmin(): AccesAdmin {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let cancelled = false;
+
     async function charger() {
       const { data, error } = await supabase.rpc('fn_admin_mes_acces' as any);
+      if (cancelled) return;
       if (error || !data) {
         setAccesTotal(false);
         setGroupes([]);
@@ -27,17 +31,19 @@ export function useAccesAdmin(): AccesAdmin {
       const d = data as any;
       if (d.acces_total) {
         setAccesTotal(true);
+        setGroupes([]);
       } else {
         setAccesTotal(false);
-        setGroupes(d.groupes || []);
+        setGroupes(Array.isArray(d.groupes) ? d.groupes : []);
       }
       setLoading(false);
     }
-    charger();
+    void charger();
+    return () => { cancelled = true; };
   }, []);
 
   const aAcces = useCallback(
-    (groupe: string) => accesTotal || groupes.includes(groupe),
+    (groupe: AdminAccessGroup) => accesTotal || groupes.includes(groupe),
     [accesTotal, groupes],
   );
 

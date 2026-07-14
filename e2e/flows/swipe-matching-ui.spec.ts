@@ -87,7 +87,7 @@ test.describe('Sprint 14 — UI swipe matching (réels)', () => {
     await page.goto('/soignant/missions?tab=candidatures');
     await page.waitForLoadState('networkidle');
     await expect(page.getByRole('heading', { name: 'Mes missions', level: 1 })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Candidatures', exact: true })).toBeVisible();
+    await expect(page.getByRole('tab', { name: 'Candidatures', exact: true })).toBeVisible();
     // Soit des cartes de candidature, soit l'état vide « élan » — jamais d'erreur.
     // NB : la description de l'état vide contient aussi « en attente de réponse »
     // (substring insensible à la casse) → quand l'état vide est rendu, les DEUX

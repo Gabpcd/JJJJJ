@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { CheckCircle, XCircle, Clock, Send, Loader2, Scale } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
-import { extraireMessageErreur, messageErreurEdgeFn } from '@/lib/erreurs';
-import { ModalPaiementCommission } from '@/components/ModalPaiementCommission';
+import { extraireMessageErreur } from '@/lib/erreurs';
 import { PopoverScoreSoignant } from '@/components/score/PopoverScoreSoignant';
 import { getLabelProfession } from '@/lib/constantes';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -62,13 +61,10 @@ function getCandidatMatchBadge(
   return null;
 }
 
-export function ListeCandidatures({ missionId, missionProfession, missionSpecialiteMedicale, missionAccepteNonSpecialises, modePaiement, onAccepted, onError, onSuccess }: ListeCandidaturesProps) {
+export function ListeCandidatures({ missionId, missionProfession, missionSpecialiteMedicale, missionAccepteNonSpecialises, onAccepted, onError, onSuccess }: ListeCandidaturesProps) {
   const [candidatures, setCandidatures] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [traitement, setTraitement] = useState<string | null>(null);
-
-  // Stripe payment modal state
-  const [paiementModal, setPaiementModal] = useState<{ clientSecret: string; montant: number; candidatureId: string } | null>(null);
 
   useEffect(() => {
     charger();
@@ -97,33 +93,7 @@ export function ListeCandidatures({ missionId, missionProfession, missionSpecial
   };
 
   const accepterAvecPaiement = async (candidatureId: string) => {
-    if (modePaiement === 'STRIPE_RESERVATION') {
-      setTraitement(candidatureId);
-      try {
-        const { data, error } = await supabase.functions.invoke('create-mission-payment', {
-          body: { mission_id: missionId },
-        });
-        if (error) {
-          const msg = await messageErreurEdgeFn(error, 'Erreur lors de la création du paiement de la mission.');
-          onError(msg);
-          setTraitement(null);
-          return;
-        }
-        if (data?.client_secret) {
-          // Need card input
-          setPaiementModal({ clientSecret: data.client_secret, montant: data.amount, candidatureId });
-          setTraitement(null);
-          return;
-        }
-        // Auto-charged or skipped → proceed with acceptance
-        await finaliserAcceptation(candidatureId);
-      } catch (err: any) {
-        onError(extraireMessageErreur(err));
-        setTraitement(null);
-      }
-    } else {
-      await finaliserAcceptation(candidatureId);
-    }
+    await finaliserAcceptation(candidatureId);
   };
 
   const finaliserAcceptation = async (candidatureId: string) => {
@@ -143,24 +113,6 @@ export function ListeCandidatures({ missionId, missionProfession, missionSpecial
       onError(extraireMessageErreur(err));
     }
     setTraitement(null);
-  };
-
-  const verifierPaiementPuisAccepter = async (candidatureId: string) => {
-    const { data, error } = await supabase.functions.invoke('create-mission-payment', {
-      body: { mission_id: missionId },
-    });
-    if (error) {
-      throw new Error(
-        await messageErreurEdgeFn(error, "L’autorisation Stripe n’a pas pu être vérifiée."),
-      );
-    }
-    if (data?.statut !== 'AUTORISE' && data?.statut !== 'CAPTURE') {
-      throw new Error(
-        "L’autorisation bancaire n’est pas encore finalisée. Patientez quelques instants puis réessayez.",
-      );
-    }
-    setPaiementModal(null);
-    await finaliserAcceptation(candidatureId);
   };
 
   const traiterCandidature = async (candidatureId: string, decision: 'ACCEPTEE' | 'REFUSEE') => {
@@ -351,15 +303,6 @@ export function ListeCandidatures({ missionId, missionProfession, missionSpecial
         </div>
       )}
 
-      {/* Stripe payment modal */}
-      {paiementModal && (
-        <ModalPaiementCommission
-          clientSecret={paiementModal.clientSecret}
-          montant={paiementModal.montant}
-          onSuccess={() => verifierPaiementPuisAccepter(paiementModal.candidatureId)}
-          onCancel={() => setPaiementModal(null)}
-        />
-      )}
     </div>
   );
 }

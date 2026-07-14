@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useId, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { LucideIcon, Home, Search, FileText, User, PlusCircle, List, ClipboardCheck, Settings, HeartPulse, LogOut, MapPin, Banknote, CreditCard, Rocket, Bell, Flame, MessageCircle, ClipboardList, Users, Scale, ChevronDown, Activity, Shield, Menu, X, Star, Gift, ShieldCheck, ArrowLeft } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
@@ -154,21 +154,25 @@ function SidebarGroup({ group, location, navigate, openGroups, toggleGroup, mess
 }) {
   const isOpen = openGroups.has(group.label);
   const hasActiveChild = group.items.some(i => location.pathname === i.route);
+  const contentId = useId();
 
   return (
     <div>
       <button
+        type="button"
         onClick={() => toggleGroup(group.label)}
+        aria-expanded={isOpen}
+        aria-controls={contentId}
         className={`sidebar-item w-full text-left justify-between ${hasActiveChild ? 'text-sidebar-primary' : 'text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground'}`}
       >
         <div className="flex items-center gap-3">
           <group.icone className="h-5 w-5" />
           <span>{group.label}</span>
         </div>
-        <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
+        <ChevronDown aria-hidden="true" className={`h-4 w-4 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
       </button>
       {isOpen && (
-        <div className="ml-4 pl-4 border-l border-sidebar-border space-y-0.5 mt-0.5">
+        <div id={contentId} className="ml-4 pl-4 border-l border-sidebar-border space-y-0.5 mt-0.5">
           {group.items.map(item => {
             const actif = location.pathname === item.route;
             const isMsg = item.label === 'Messagerie';
@@ -216,6 +220,50 @@ export function BarreNavigation({ role }: { role: UserRole }) {
   const nouvellesMissions = useNouvellesMissionsExplorer(role === 'SOIGNANT');
   const [openGroups, setOpenGroups] = useState<Set<string>>(new Set());
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const mobileMenuRef = useRef<HTMLDivElement>(null);
+  const mobileMenuCloseRef = useRef<HTMLButtonElement>(null);
+  const mobileMenuPreviousFocusRef = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    if (!mobileMenuOpen) return;
+    mobileMenuPreviousFocusRef.current = document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null;
+    const frame = window.requestAnimationFrame(() => mobileMenuCloseRef.current?.focus());
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        setMobileMenuOpen(false);
+        return;
+      }
+      if (event.key !== 'Tab') return;
+      const focusables = Array.from(
+        mobileMenuRef.current?.querySelectorAll<HTMLElement>(
+          'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        ) ?? [],
+      );
+      if (focusables.length === 0) {
+        event.preventDefault();
+        mobileMenuRef.current?.focus();
+        return;
+      }
+      const first = focusables[0];
+      const last = focusables[focusables.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      document.removeEventListener('keydown', handleKeyDown);
+      mobileMenuPreviousFocusRef.current?.focus();
+    };
+  }, [mobileMenuOpen]);
 
   // Close mobile menu on route change
   useEffect(() => {
@@ -301,7 +349,7 @@ export function BarreNavigation({ role }: { role: UserRole }) {
             <button
               onClick={() => { if (window.history.length > 1) navigate(-1); else navigate(role === 'SOIGNANT' ? '/soignant/tableau-de-bord' : role === 'ADMIN_ETABLISSEMENT' ? '/etablissement/tableau-de-bord' : '/groupe/tableau-de-bord'); }}
               aria-label="Retour"
-              className="flex items-center gap-1 p-2 -ml-2 rounded-lg text-foreground hover:bg-muted transition"
+              className="flex min-h-[44px] min-w-[44px] items-center gap-1 p-2 -ml-2 rounded-lg text-foreground hover:bg-muted transition"
             >
               <ArrowLeft className="h-6 w-6" />
             </button>
@@ -313,14 +361,16 @@ export function BarreNavigation({ role }: { role: UserRole }) {
                 <button
                   onClick={() => setMobileMenuOpen(true)}
                   aria-label="Ouvrir le menu"
-                  className="p-2 -ml-2 rounded-lg text-foreground hover:bg-muted transition"
+                  aria-expanded={mobileMenuOpen}
+                  aria-controls="navigation-mobile-dialog"
+                  className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center p-2 -ml-2 rounded-lg text-foreground hover:bg-muted transition"
                 >
                   <Menu className="h-6 w-6" />
                 </button>
               )}
             </>
           )}
-          <button onClick={() => navigate(role === 'SOIGNANT' ? '/soignant/tableau-de-bord' : role === 'ADMIN_ETABLISSEMENT' ? '/etablissement/tableau-de-bord' : '/groupe/tableau-de-bord')} className="flex items-center gap-2" aria-label="Accueil">
+          <button onClick={() => navigate(role === 'SOIGNANT' ? '/soignant/tableau-de-bord' : role === 'ADMIN_ETABLISSEMENT' ? '/etablissement/tableau-de-bord' : '/groupe/tableau-de-bord')} className="flex min-h-[44px] items-center gap-2" aria-label="Accueil">
             <HeartPulse className="h-6 w-6 text-primary" />
             <span className="text-lg font-bold text-primary">Jolene</span>
           </button>
@@ -330,7 +380,7 @@ export function BarreNavigation({ role }: { role: UserRole }) {
             <button
               onClick={() => navigate(messagerieRoute!)}
               aria-label="Messages"
-              className="relative p-2 rounded-lg text-foreground hover:bg-muted transition"
+              className="relative inline-flex min-h-[44px] min-w-[44px] items-center justify-center p-2 rounded-lg text-foreground hover:bg-muted transition"
             >
               <MessageCircle className="h-5 w-5" />
               {messagesNonLus > 0 && (
@@ -345,7 +395,7 @@ export function BarreNavigation({ role }: { role: UserRole }) {
               logo + messages + notifications). Le thème vit dans Profil > Réglages. */}
           {/* Déconnexion : masquée pour SOIGNANT (dans "Mon compte"). */}
           {!aMonCompte && (
-            <button onClick={handleDeconnexion} aria-label="Se déconnecter" className="p-2 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition">
+            <button onClick={handleDeconnexion} aria-label="Se déconnecter" className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center p-2 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition">
               <LogOut className="h-5 w-5" />
             </button>
           )}
@@ -361,13 +411,17 @@ export function BarreNavigation({ role }: { role: UserRole }) {
             aria-hidden="true"
           />
           <div
-            className="fixed left-0 top-0 bottom-0 z-[61] w-[280px] max-w-[85vw] flex md:hidden flex-col no-print animate-in slide-in-from-left duration-200"
+            id="navigation-mobile-dialog"
+            ref={mobileMenuRef}
+            className="fixed left-0 top-0 bottom-0 z-[61] !max-h-none !p-0 w-[280px] max-w-[85vw] flex md:hidden flex-col no-print animate-in slide-in-from-left duration-200"
             style={{
               paddingTop: 'env(safe-area-inset-top)',
               background: 'linear-gradient(180deg, hsl(270 40% 97%) 0%, hsl(330 50% 96%) 100%)',
             }}
-            role="navigation"
+            role="dialog"
+            aria-modal="true"
             aria-label="Menu principal"
+            tabIndex={-1}
           >
             <div className="p-4 flex items-center justify-between border-b border-sidebar-border">
               <div className="flex items-center gap-2">
@@ -375,9 +429,10 @@ export function BarreNavigation({ role }: { role: UserRole }) {
                 <span className="text-lg font-bold text-primary">Jolene</span>
               </div>
               <button
+                ref={mobileMenuCloseRef}
                 onClick={() => setMobileMenuOpen(false)}
                 aria-label="Fermer le menu"
-                className="p-2 rounded-lg text-foreground hover:bg-muted"
+                className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center p-2 rounded-lg text-foreground hover:bg-muted"
               >
                 <X className="h-5 w-5" />
               </button>

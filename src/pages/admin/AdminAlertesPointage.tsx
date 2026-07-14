@@ -11,6 +11,7 @@ import { BadgeY2K } from '@/components/y2k/BadgeY2K';
 import { CardY2K } from '@/components/y2k/CardY2K';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
+import { useSearchParams } from 'react-router-dom';
 
 interface KPI {
   teleportations_7j: number;
@@ -50,16 +51,26 @@ const LIBELLES_TYPE_ALERTE: Record<string, string> = {
   POINTAGE_INCOHERENT: 'Pointage incohérent',
 };
 
+const STATUTS_FILTRE = ['Tous', 'OUVERTE', 'RESOLUE'] as const;
+
+function normaliserStatutFiltre(value: string | null): string {
+  if (!value) return 'OUVERTE';
+  const upper = value.toUpperCase();
+  if (upper === 'TOUS') return 'Tous';
+  return STATUTS_FILTRE.includes(upper as (typeof STATUTS_FILTRE)[number]) ? upper : 'OUVERTE';
+}
+
 export default function AdminAlertesPointage() {
   usePageTitle('Admin · Alertes pointage');
   const { afficherNotification } = useNotification();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [loading, setLoading] = useState(true);
   const [kpis, setKpis] = useState<KPI | null>(null);
   const [alertes, setAlertes] = useState<Alerte[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(0);
   const [typeFiltre, setTypeFiltre] = useState<string>('Tous');
-  const [statutFiltre, setStatutFiltre] = useState<string>('OUVERTE');
+  const [statutFiltre, setStatutFiltre] = useState<string>(() => normaliserStatutFiltre(searchParams.get('statut')));
   const [alerteATraiter, setAlerteATraiter] = useState<Alerte | null>(null);
   const [erreurChargement, setErreurChargement] = useState<string | null>(null);
 
@@ -99,6 +110,12 @@ export default function AdminAlertesPointage() {
     }
     setLoading(false);
   }
+
+  useEffect(() => {
+    const statutUrl = normaliserStatutFiltre(searchParams.get('statut'));
+    setStatutFiltre((actuel) => actuel === statutUrl ? actuel : statutUrl);
+    setPage(0);
+  }, [searchParams]);
 
   useEffect(() => { charger(); }, [typeFiltre, statutFiltre, page]);
 
@@ -178,7 +195,14 @@ export default function AdminAlertesPointage() {
         <select
           aria-label="Filtrer les alertes par statut"
           value={statutFiltre}
-          onChange={(e) => { setStatutFiltre(e.target.value); setPage(0); }}
+          onChange={(e) => {
+            const statut = e.target.value;
+            setStatutFiltre(statut);
+            setPage(0);
+            const params = new URLSearchParams(searchParams);
+            params.set('statut', statut);
+            setSearchParams(params, { replace: true });
+          }}
           className="input-base sm:w-48"
         >
           <option value="Tous">Tous statuts</option>

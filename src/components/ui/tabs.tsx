@@ -34,7 +34,7 @@ const TabsTrigger = React.forwardRef<
       // Onglet actif : gradient rose→mauve Y2K + texte blanc (au lieu du blanc/gris
       // shadcn). Valeur arbitraire : .bg-gradient-hero (index.css hors @layer) ne
       // génère pas de variante data-[state=active].
-      "inline-flex items-center justify-center whitespace-nowrap rounded-xl px-3 py-1.5 text-sm font-medium ring-offset-background transition-all data-[state=active]:bg-[linear-gradient(135deg,hsl(var(--jolene-rose-500)),hsl(var(--jolene-mauve-500)))] data-[state=active]:text-white data-[state=active]:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50",
+      "inline-flex min-h-[44px] items-center justify-center whitespace-nowrap rounded-xl px-3 py-1.5 text-sm font-medium ring-offset-background transition-all data-[state=active]:bg-[linear-gradient(135deg,hsl(var(--jolene-rose-500)),hsl(var(--jolene-mauve-500)))] data-[state=active]:text-white data-[state=active]:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50",
       className,
     )}
     {...props}

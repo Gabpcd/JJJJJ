@@ -1,5 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <paths xmlns:android="http://schemas.android.com/apk/res/android">
-    <external-path name="my_images" path="." />
-    <cache-path name="my_cache_images" path="." />
+    <!-- Les captures caméra natives sont créées dans le dossier Pictures
+         propre à l'application. Ne jamais exposer la racine du stockage
+         externe : les exports Jolene à partager sont écrits dans le cache. -->
+    <external-files-path name="camera_images" path="Pictures/" />
+    <cache-path name="shared_cache" path="." />
 </paths>

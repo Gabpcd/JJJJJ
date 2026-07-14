@@ -36,6 +36,7 @@ BEGIN
     justificatif_fonction_verifie_le, justificatif_fonction_resultat_ia,
     rattachement_verifie, rattachement_verifie_le, rattachement_methode,
     rib_s3_key, rib_ia_resultat, rib_ia_coherent, rib_ia_verifie_le, iban_last4,
+    verification_source_version, rib_verifie_s3_key, rib_verifie_source_version,
     contrat_url, contrat_uploade_le, contrat_valide, contrat_ia_resultat,
     contrat_ia_coherent, contrat_ia_verifie_le,
     siret_verifie, siret_verifie_le, siret_raison_sociale,
@@ -54,10 +55,17 @@ BEGIN
     true, now(), '{"verdict":"VERIFIE"}',
     true, now(), 'JUSTIFICATIF',
     v_etab::text || '/rib/ancien.pdf', '{"verdict":"CONFORME"}', true, now(), '1234',
+    0, v_etab::text || '/rib/ancien.pdf', 0,
     v_etab::text || '/contrat/ancien.pdf', now(), true, '{"verdict":"CONFORME"}', true, now(),
     true, now(), 'CLINIQUE TRIGGER', '5710', '8610Z', true,
     true, now(), 'CLINIQUE TRIGGER', '1100', 'PRIVE', false,
     'EN_COURS', false, NULL, NULL, false, NULL
+  );
+
+  INSERT INTO public.membres_etablissement (
+    etablissement_id, user_id, role, actif
+  ) VALUES (
+    v_etab, v_user, 'PROPRIETAIRE', true
   );
 
   INSERT INTO public.contrats_service_signatures (
@@ -92,8 +100,10 @@ BEGIN
   SELECT * INTO v_row FROM public.etablissements WHERE id = v_etab;
   IF v_row.rib_ia_resultat IS NOT NULL OR v_row.rib_ia_coherent IS NOT NULL
      OR v_row.rib_ia_verifie_le IS NOT NULL OR v_row.iban_last4 IS NOT NULL
-     OR v_row.statut_verification <> 'EN_COURS'
-     OR v_row.peut_publier_missions IS NOT FALSE
+     OR v_row.rib_verifie_s3_key IS NOT NULL
+     OR v_row.rib_verifie_source_version IS NOT NULL
+     OR v_row.statut_verification IS DISTINCT FROM 'EN_COURS'
+     OR v_row.peut_publier_missions IS DISTINCT FROM FALSE
      OR v_row.verifie_le IS NOT NULL OR v_row.verifie_par IS NOT NULL THEN
     RAISE EXCEPTION 'RIB: remplacement non révoqué canoniquement';
   END IF;
@@ -107,30 +117,33 @@ BEGIN
   UPDATE public.etablissements
   SET rib_ia_resultat = '{"verdict":"CONFORME"}', rib_ia_coherent = true,
       rib_ia_verifie_le = now(), iban_last4 = '5678',
+      rib_verifie_s3_key = rib_s3_key,
+      rib_verifie_source_version = verification_source_version,
       statut_verification = 'VERIFIE', peut_publier_missions = true,
       verifie_le = now(), verifie_par = v_user
   WHERE id = v_etab;
 
-  -- 2. Le changement de SIRET doit aussi passer lorsque l'ancien rattachement
-  -- reste théoriquement déductible du justificatif : l'invalidation de la
-  -- source prime sur ce recalcul et remet explicitement le rattachement à zéro.
-  PERFORM set_config('request.jwt.claims', jsonb_build_object(
-    'sub', v_user, 'role', 'authenticated'
-  )::text, true);
-  SET LOCAL role = 'authenticated';
+  -- 2. Le SIRET n'est pas modifiable directement par le rôle authenticated :
+  -- on simule ici le chemin serveur autorisé. L'invalidation de la source
+  -- prime sur l'ancien rattachement et le remet explicitement à zéro.
+  PERFORM set_config('request.jwt.claims', '{"role":"service_role"}', true);
   UPDATE public.etablissements
   SET siret = '99999999999991'
   WHERE id = v_etab;
-  SET LOCAL role = 'postgres';
 
   SELECT * INTO v_row FROM public.etablissements WHERE id = v_etab;
-  IF v_row.siret_verifie IS NOT FALSE OR v_row.siret_verifie_le IS NOT NULL
+  IF v_row.siret_verifie IS DISTINCT FROM FALSE OR v_row.siret_verifie_le IS NOT NULL
      OR v_row.siret_raison_sociale IS NOT NULL OR v_row.dirigeants IS NOT NULL
-     OR v_row.rattachement_verifie IS NOT FALSE
+     OR v_row.rattachement_verifie IS DISTINCT FROM FALSE
      OR v_row.rattachement_verifie_le IS NOT NULL
-     OR v_row.rattachement_methode <> 'ADMIN'
-     OR v_row.statut_verification <> 'EN_COURS'
-     OR v_row.peut_publier_missions IS NOT FALSE THEN
+     OR v_row.rattachement_methode IS DISTINCT FROM 'ADMIN'
+     OR v_row.rib_ia_resultat IS NOT NULL
+     OR v_row.rib_ia_coherent IS NOT NULL
+     OR v_row.rib_ia_verifie_le IS NOT NULL
+     OR v_row.rib_verifie_s3_key IS NOT NULL
+     OR v_row.rib_verifie_source_version IS NOT NULL
+     OR v_row.statut_verification IS DISTINCT FROM 'EN_COURS'
+     OR v_row.peut_publier_missions IS DISTINCT FROM FALSE THEN
     RAISE EXCEPTION 'SIRET: remplacement non révoqué canoniquement';
   END IF;
 
@@ -165,19 +178,21 @@ BEGIN
   SET LOCAL role = 'postgres';
 
   SELECT * INTO v_row FROM public.etablissements WHERE id = v_etab;
-  IF v_row.representant_identite_verifiee IS NOT FALSE
+  IF v_row.representant_identite_verifiee IS DISTINCT FROM FALSE
      OR v_row.representant_identite_verifiee_le IS NOT NULL
      OR v_row.representant_identite_resultat_ia IS NOT NULL
-     OR v_row.rattachement_verifie IS NOT FALSE
+     OR v_row.rattachement_verifie IS DISTINCT FROM FALSE
      OR v_row.rattachement_verifie_le IS NOT NULL
-     OR v_row.rattachement_methode <> 'ADMIN'
-     OR v_row.statut_verification <> 'EN_COURS'
-     OR v_row.peut_publier_missions IS NOT FALSE THEN
+     OR v_row.rattachement_methode IS DISTINCT FROM 'ADMIN'
+     OR v_row.statut_verification IS DISTINCT FROM 'EN_COURS'
+     OR v_row.peut_publier_missions IS DISTINCT FROM FALSE THEN
     RAISE EXCEPTION 'Identité: remplacement non révoqué canoniquement';
   END IF;
 
   -- 4. Les trois autres familles documentaires suivent la même règle : la
   -- source reste modifiable, mais jamais avec son ancien résultat serveur.
+  -- Le justificatif a un droit UPDATE de colonne ; FINESS et contrat passent
+  -- par la RPC canonique de modification établissement.
   PERFORM set_config('request.jwt.claims', jsonb_build_object(
     'sub', v_user, 'role', 'authenticated'
   )::text, true);
@@ -185,27 +200,25 @@ BEGIN
   UPDATE public.etablissements
   SET justificatif_fonction_s3_key = v_etab::text || '/fonction/nouveau.pdf'
   WHERE id = v_etab;
-  UPDATE public.etablissements
-  SET contrat_url = v_etab::text || '/contrat/nouveau.pdf'
-  WHERE id = v_etab;
-  UPDATE public.etablissements
-  SET finess = '999999991'
-  WHERE id = v_etab;
+  PERFORM public.fn_modifier_mon_etablissement(
+    p_contrat_url => v_etab::text || '/contrat/nouveau.pdf'
+  );
+  PERFORM public.fn_modifier_mon_etablissement(p_finess => '999999991');
   SET LOCAL role = 'postgres';
 
   SELECT * INTO v_row FROM public.etablissements WHERE id = v_etab;
-  IF v_row.justificatif_fonction_verifie IS NOT FALSE
+  IF v_row.justificatif_fonction_verifie IS DISTINCT FROM FALSE
      OR v_row.justificatif_fonction_verifie_le IS NOT NULL
      OR v_row.justificatif_fonction_resultat_ia IS NOT NULL THEN
     RAISE EXCEPTION 'Justificatif: remplacement non révoqué canoniquement';
   END IF;
-  IF v_row.contrat_valide IS NOT FALSE OR v_row.contrat_ia_resultat IS NOT NULL
+  IF v_row.contrat_valide IS DISTINCT FROM FALSE OR v_row.contrat_ia_resultat IS NOT NULL
      OR v_row.contrat_ia_coherent IS NOT NULL
      OR v_row.contrat_ia_verifie_le IS NOT NULL
      OR v_row.contrat_uploade_le IS NULL THEN
     RAISE EXCEPTION 'Contrat uploadé: remplacement non révoqué canoniquement';
   END IF;
-  IF v_row.finess_verifie IS NOT FALSE OR v_row.finess_verifie_le IS NOT NULL
+  IF v_row.finess_verifie IS DISTINCT FROM FALSE OR v_row.finess_verifie_le IS NOT NULL
      OR v_row.finess_raison_sociale IS NOT NULL
      OR v_row.finess_categorie IS NOT NULL
      OR v_row.finess_secteur IS NOT NULL
@@ -226,7 +239,7 @@ BEGIN
   EXCEPTION WHEN insufficient_privilege THEN
     v_blocked := true;
   END;
-  IF NOT v_blocked THEN
+  IF v_blocked IS DISTINCT FROM TRUE THEN
     RAISE EXCEPTION 'Un utilisateur a modifié siret_verifie via la GUC interne';
   END IF;
 
@@ -238,7 +251,7 @@ BEGIN
   EXCEPTION WHEN insufficient_privilege THEN
     v_blocked := true;
   END;
-  IF NOT v_blocked THEN
+  IF v_blocked IS DISTINCT FROM TRUE THEN
     RAISE EXCEPTION 'Un utilisateur a modifié le contrat signé sans révoquer la preuve';
   END IF;
 
@@ -250,7 +263,7 @@ BEGIN
   EXCEPTION WHEN insufficient_privilege THEN
     v_blocked := true;
   END;
-  IF NOT v_blocked THEN
+  IF v_blocked IS DISTINCT FROM TRUE THEN
     RAISE EXCEPTION 'Un utilisateur a modifié directement le statut';
   END IF;
   SET LOCAL role = 'postgres';
@@ -261,7 +274,8 @@ BEGIN
   UPDATE public.etablissements
   SET siret_verifie = false, siret_verifie_le = NULL
   WHERE id = v_etab;
-  IF (SELECT siret_verifie FROM public.etablissements WHERE id = v_etab) IS NOT FALSE THEN
+  IF (SELECT siret_verifie FROM public.etablissements WHERE id = v_etab)
+       IS DISTINCT FROM FALSE THEN
     RAISE EXCEPTION 'Le service role ne peut plus écrire les verdicts';
   END IF;
 END;

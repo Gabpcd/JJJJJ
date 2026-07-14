@@ -1,8 +1,12 @@
-import Stripe from "npm:stripe@18.5.0";
+import Stripe from "npm:stripe@20.4.1";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { verifyUserOrServiceRole } from "../_shared/admin-auth.ts";
 import { corsHeaders, jsonResponse, preflightResponse } from "../_shared/cors.ts";
 import { applyRateLimit, getClientIp } from "../_shared/rate-limit.ts";
+import {
+  ensureCanonicalEtablissementCustomer,
+  StripeCustomerConfigurationError,
+} from "../_shared/stripe-customer.ts";
 import { assertStripeSecretMode } from "../_shared/stripe-production.ts";
 
 type SepaAction =
@@ -48,55 +52,6 @@ function safeErrorDetails(error: unknown): Record<string, string | null> {
     code: typeof record.code === "string" ? record.code : null,
     requestId: typeof record.requestId === "string" ? record.requestId : null,
   };
-}
-
-async function ensureStripeCustomer(
-  stripe: Stripe,
-  etab: EtablissementSepa,
-  billingName: string,
-  billingEmail: string,
-  persistCustomerId: (customerId: string) => Promise<void>,
-): Promise<string> {
-  if (etab.stripe_customer_id) {
-    try {
-      const existing = await stripe.customers.retrieve(etab.stripe_customer_id);
-      if (!("deleted" in existing && existing.deleted)) {
-        const linkedEtablissement = existing.metadata?.etablissement_id;
-        if (linkedEtablissement && linkedEtablissement !== etab.id) {
-          throw new PublicError(409, "Le compte de paiement doit être vérifié par le support Jolene.");
-        }
-
-        if (
-          linkedEtablissement !== etab.id ||
-          existing.name !== billingName ||
-          existing.email !== billingEmail
-        ) {
-          await stripe.customers.update(existing.id, {
-            name: billingName,
-            email: billingEmail,
-            metadata: { ...existing.metadata, etablissement_id: etab.id },
-          });
-        }
-        return existing.id;
-      }
-    } catch (error) {
-      if (error instanceof PublicError) throw error;
-      if (stripeErrorCode(error) !== "resource_missing") throw error;
-      // Identifiant Stripe devenu obsolète : recréation idempotente ci-dessous.
-    }
-  }
-
-  const customer = await stripe.customers.create(
-    {
-      email: billingEmail,
-      name: billingName,
-      metadata: { etablissement_id: etab.id },
-    },
-    { idempotencyKey: `jolene-sepa-customer-${etab.id}` },
-  );
-
-  await persistCustomerId(customer.id);
-  return customer.id;
 }
 
 Deno.serve(async (req) => {
@@ -193,7 +148,7 @@ Deno.serve(async (req) => {
     if (etabError) throw new PublicError(503, "Le profil de paiement est temporairement indisponible.");
     if (!etab) return jsonResponse(req, { error: "Établissement introuvable" }, 404);
 
-    const stripe = new Stripe(stripeSecretKey, { apiVersion: "2025-08-27.basil" });
+    const stripe = new Stripe(stripeSecretKey, { apiVersion: "2026-02-25.clover" });
     const currentEtab = etab as EtablissementSepa;
 
     if (action === "get_sepa_status") {
@@ -201,6 +156,13 @@ Deno.serve(async (req) => {
         return jsonResponse(req, { has_sepa: false });
       }
       try {
+        const customer = await stripe.customers.retrieve(currentEtab.stripe_customer_id);
+        if (
+          customer.deleted
+          || customer.metadata?.etablissement_id !== currentEtab.id
+        ) {
+          return jsonResponse(req, { has_sepa: false, needs_review: true });
+        }
         const paymentMethod = await stripe.paymentMethods.retrieve(currentEtab.stripe_sepa_payment_method_id);
         const linkedCustomer = objectId(paymentMethod.customer);
         const last4 = paymentMethod.sepa_debit?.last4 || null;
@@ -217,7 +179,7 @@ Deno.serve(async (req) => {
     }
 
     const billingName = (currentEtab.nom || "").trim();
-    const billingEmail = (currentEtab.email_contact || auth.userEmail || "").trim().toLowerCase();
+    const billingEmail = (currentEtab.email_contact || "").trim().toLowerCase();
     if (!billingName) {
       throw new PublicError(422, "Renseignez le nom légal de l'établissement avant de configurer le prélèvement.");
     }
@@ -225,24 +187,29 @@ Deno.serve(async (req) => {
       throw new PublicError(422, "Renseignez une adresse e-mail de contact valide avant de configurer le prélèvement.");
     }
 
-    if (action === "create_setup_intent") {
-      const customerId = await ensureStripeCustomer(
-        stripe,
-        currentEtab,
-        billingName,
-        billingEmail,
-        async (newCustomerId) => {
-          const { data: updated, error: updateError } = await supabaseAdmin
-            .from("etablissements")
-            .update({ stripe_customer_id: newCustomerId })
-            .eq("id", currentEtab.id)
-            .select("id")
-            .maybeSingle();
-          if (updateError || !updated) {
-            throw new PublicError(503, "Le compte de paiement n'a pas pu être enregistré. Réessayez.");
+    const resolveCanonicalCustomer = async (): Promise<string> => {
+      try {
+        return await ensureCanonicalEtablissementCustomer(
+          stripe,
+          supabaseAdmin,
+          currentEtab,
+        );
+      } catch (error) {
+        if (error instanceof StripeCustomerConfigurationError) {
+          if (error.code === "CUSTOMER_PROFILE_INCOMPLETE") {
+            throw new PublicError(422, "Renseignez le nom légal et l'e-mail de contact de l'établissement avant de configurer le prélèvement.");
           }
-        },
-      );
+          if (error.code === "CUSTOMER_TENANT_MISMATCH") {
+            throw new PublicError(409, "Le compte de paiement doit être vérifié par le support Jolene.");
+          }
+          throw new PublicError(503, "Le compte de paiement n'a pas pu être enregistré. Réessayez.");
+        }
+        throw error;
+      }
+    };
+
+    if (action === "create_setup_intent") {
+      const customerId = await resolveCanonicalCustomer();
       const setupIntent = await stripe.setupIntents.create({
         customer: customerId,
         payment_method_types: ["sepa_debit"],
@@ -271,9 +238,7 @@ Deno.serve(async (req) => {
         error: "setup_intent_id requis ; un PaymentMethod direct n'est pas accepté",
       }, 400);
     }
-    if (!currentEtab.stripe_customer_id) {
-      throw new PublicError(409, "Le compte Stripe de l'établissement est introuvable. Recommencez la configuration.");
-    }
+    const canonicalCustomerId = await resolveCanonicalCustomer();
 
     const setupIntent = await stripe.setupIntents.retrieve(setupIntentId);
     const setupCustomerId = objectId(setupIntent.customer);
@@ -283,7 +248,7 @@ Deno.serve(async (req) => {
       setupIntent.status !== "succeeded" ||
       setupIntent.usage !== "off_session" ||
       !setupIntent.payment_method_types.includes("sepa_debit") ||
-      setupCustomerId !== currentEtab.stripe_customer_id ||
+      setupCustomerId !== canonicalCustomerId ||
       setupIntent.metadata?.etablissement_id !== currentEtab.id ||
       setupIntent.metadata?.initiated_by !== auth.userId ||
       setupIntent.metadata?.purpose !== "jolene_commission_sepa" ||
@@ -298,14 +263,14 @@ Deno.serve(async (req) => {
     const last4 = paymentMethod.sepa_debit?.last4 || null;
     if (
       paymentMethod.type !== "sepa_debit" ||
-      paymentMethodCustomerId !== currentEtab.stripe_customer_id ||
+      paymentMethodCustomerId !== canonicalCustomerId ||
       !last4
     ) {
       throw new PublicError(409, "Le moyen de paiement SEPA n'est pas rattaché au bon établissement.");
     }
 
     await stripe.customers.update(
-      currentEtab.stripe_customer_id,
+      canonicalCustomerId,
       { invoice_settings: { default_payment_method: paymentMethod.id } },
       { idempotencyKey: `jolene-sepa-default-${setupIntent.id}` },
     );
@@ -319,7 +284,7 @@ Deno.serve(async (req) => {
         modifie_le: new Date().toISOString(),
       })
       .eq("id", currentEtab.id)
-      .eq("stripe_customer_id", currentEtab.stripe_customer_id)
+      .eq("stripe_customer_id", canonicalCustomerId)
       .select("id")
       .maybeSingle();
     if (saveError || !saved) {

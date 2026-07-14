@@ -28,14 +28,23 @@ export function ListeHeuresExternes({ heures, onSupprimer }: Props) {
 
   const ouvrirAttestation = async (id: string, path: string | null) => {
     if (!path) return;
+
+    const preview = window.open('about:blank', '_blank');
+    if (!preview) {
+      toast.error('Autorisez les fenêtres contextuelles pour consulter l’attestation.');
+      return;
+    }
+    preview.opener = null;
+
     setOpeningId(id);
     try {
       const { data, error } = await supabase.storage
         .from(path.includes('/heures-externes/') ? 'jolene-documents' : 'attestations-heures-externes')
         .createSignedUrl(path, 3600);
       if (error || !data?.signedUrl) throw error || new Error('URL indisponible');
-      window.open(data.signedUrl, '_blank', 'noopener,noreferrer');
+      preview.location.replace(data.signedUrl);
     } catch {
+      preview.close();
       toast.error('Impossible d\'ouvrir l\'attestation.');
     } finally {
       setOpeningId(null);

@@ -8,6 +8,8 @@ interface Props {
   cibleId: string;
   /** Rendu compact (lien texte) au lieu d'un bouton plein. */
   variant?: 'bouton' | 'lien';
+  /** Libellé métier lorsque la cible représente une équipe partagée. */
+  libelleCible?: string;
 }
 
 /**
@@ -15,7 +17,7 @@ interface Props {
  * report ET block). Un blocage coupe la messagerie dans les deux sens
  * (fn_envoyer_message refuse). Complète SignalerUtilisateur.
  */
-export function BloquerUtilisateur({ cibleId, variant = 'lien' }: Props) {
+export function BloquerUtilisateur({ cibleId, variant = 'lien', libelleCible = 'cet utilisateur' }: Props) {
   const [bloque, setBloque] = useState<boolean | null>(null);
   const [busy, setBusy] = useState(false);
   const [confirm, setConfirm] = useState(false);
@@ -39,7 +41,11 @@ export function BloquerUtilisateur({ cibleId, variant = 'lien' }: Props) {
       }
       setBloque(!bloque);
       setConfirm(false);
-      toast.success(bloque ? 'Utilisateur débloqué.' : 'Utilisateur bloqué — vous ne recevrez plus ses messages.');
+      toast.success(
+        bloque
+          ? `${libelleCible.charAt(0).toUpperCase()}${libelleCible.slice(1)} débloqué${libelleCible === 'l’établissement' ? '' : '·e'}.`
+          : `${libelleCible.charAt(0).toUpperCase()}${libelleCible.slice(1)} bloqué${libelleCible === 'l’établissement' ? '' : '·e'} — les nouveaux messages sont coupés dans les deux sens.`,
+      );
     } finally {
       setBusy(false);
     }
@@ -54,7 +60,7 @@ export function BloquerUtilisateur({ cibleId, variant = 'lien' }: Props) {
   if (!bloque && confirm) {
     return (
       <span className="inline-flex items-center gap-2 text-xs">
-        <span className="text-muted-foreground">Bloquer cet utilisateur ?</span>
+        <span className="text-muted-foreground">Bloquer {libelleCible} ?</span>
         <button type="button" disabled={busy} onClick={basculer} className="font-semibold text-destructive hover:underline disabled:opacity-50">Confirmer</button>
         <button type="button" onClick={() => setConfirm(false)} className="text-muted-foreground hover:underline">Annuler</button>
       </span>

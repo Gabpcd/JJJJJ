@@ -59,6 +59,24 @@ type ResolutionResult = {
   [key: string]: unknown;
 };
 
+const LABELS_TYPE_ACCORD: Record<string, string> = {
+  MODIFICATION_HORAIRES: 'Correction des horaires',
+  MODIFICATION_MONTANT: 'Ajustement du montant total',
+  MIXTE: 'Correction des horaires et du montant',
+  ANNULATION_TOTALE: 'Annulation totale',
+  COMPENSATION_PARTIELLE: 'Compensation partielle',
+};
+
+function formatDateAccord(value: unknown): string | null {
+  if (typeof value !== 'string' || !value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString('fr-FR', {
+    dateStyle: 'short',
+    timeStyle: 'short',
+  });
+}
+
 export function LitigeResolutionModal({
   litige,
   open,
@@ -81,6 +99,12 @@ export function LitigeResolutionModal({
     () => (ajusterTaux ? Number.parseFloat(ajusterTaux) : null),
     [ajusterTaux],
   );
+  const heuresInvalides =
+    heuresNum != null &&
+    (!Number.isFinite(heuresNum) || heuresNum <= 0 || heuresNum > 168);
+  const tauxInvalide =
+    tauxNum != null &&
+    (!Number.isFinite(tauxNum) || tauxNum < 0.01 || tauxNum > 1000);
 
   const preview = useMemo(() => {
     if (!litige) return null;
@@ -99,7 +123,7 @@ export function LitigeResolutionModal({
     switch (actionFinanciere) {
       case 'AUTO':
         messages.push(
-          'Action financière : AUTO → backend choisit selon statut facture (BROUILLON / ENVOYEE / PAYEE).',
+          'Action financière : AUTO → le serveur choisit selon le statut de la facture (BROUILLON / ÉMISE ou EN RETARD / PAYÉE).',
         );
         break;
       case 'RECALCUL':
@@ -109,12 +133,12 @@ export function LitigeResolutionModal({
         break;
       case 'ANNULER_REEMETTRE':
         messages.push(
-          'Action financière : ANNULER + réémettre → nouvelle facture remplace l\'actuelle (ENVOYEE).',
+          'Action financière : ANNULER + réémettre → une nouvelle facture remplace l’actuelle (ÉMISE ou EN RETARD).',
         );
         break;
       case 'AVOIR':
         messages.push(
-          'Action financière : AVOIR → avoir émis sur facture payée + facture complémentaire si ajustement à la hausse.',
+          'Action financière : AVOIR → un avoir partiel est émis sur une facture payée, uniquement pour une correction à la baisse.',
         );
         break;
     }
@@ -122,6 +146,16 @@ export function LitigeResolutionModal({
   }, [litige, heuresNum, tauxNum, actionFinanciere]);
 
   const disclaimerURSSAF = heuresNum != null && heuresNum > 0;
+  const accord = litige?.statut === 'REVUE_ADMIN'
+    ? litige.payload_modifications
+    : null;
+  const accordModifications = accord?.modifications ?? {};
+  const accordArrivee = formatDateAccord(
+    accordModifications.pointage_arrivee_le,
+  );
+  const accordDepart = formatDateAccord(
+    accordModifications.pointage_depart_le,
+  );
 
   const reset = () => {
     setResolutionText('');
@@ -145,6 +179,14 @@ export function LitigeResolutionModal({
     }
     if (!enFaveurDe) {
       toast.error('Veuillez choisir en faveur de qui trancher.');
+      return;
+    }
+    if (heuresInvalides) {
+      toast.error('Les heures doivent être strictement positives et limitées à 168 h.');
+      return;
+    }
+    if (tauxInvalide) {
+      toast.error('Le taux doit être strictement positif et limité à 1 000 €.');
       return;
     }
 
@@ -202,6 +244,57 @@ export function LitigeResolutionModal({
         <TooltipProvider delayDuration={200}>
           <div className="space-y-4">
             <LitigesSimilairesPanel litigeId={litige.id} />
+            {accord && (
+              <div
+                className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs text-amber-950"
+                data-testid="accord-parties-reference"
+              >
+                <p className="font-semibold">
+                  Accord exact accepté par les deux parties
+                </p>
+                <p className="mt-1 text-amber-800">
+                  Le serveur appliquera exactement cette référence si les champs
+                  ci-dessous restent vides. Toute valeur différente constituera
+                  une décision admin de remplacement auditée.
+                </p>
+                <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
+                  <dt className="font-medium">Type</dt>
+                  <dd>{LABELS_TYPE_ACCORD[accord.type] ?? accord.type}</dd>
+                  {accordArrivee && (
+                    <>
+                      <dt className="font-medium">Arrivée</dt>
+                      <dd>{accordArrivee}</dd>
+                    </>
+                  )}
+                  {accordDepart && (
+                    <>
+                      <dt className="font-medium">Départ</dt>
+                      <dd>{accordDepart}</dd>
+                    </>
+                  )}
+                  {typeof accordModifications.montant_total_corrige === 'number' && (
+                    <>
+                      <dt className="font-medium">Montant convenu</dt>
+                      <dd>{accordModifications.montant_total_corrige} € TTC</dd>
+                    </>
+                  )}
+                  {typeof accordModifications.pourcentage_compensation === 'number' && (
+                    <>
+                      <dt className="font-medium">Compensation</dt>
+                      <dd>{accordModifications.pourcentage_compensation} %</dd>
+                    </>
+                  )}
+                  {typeof accordModifications.motif_annulation === 'string' && (
+                    <>
+                      <dt className="font-medium">Motif</dt>
+                      <dd>{accordModifications.motif_annulation}</dd>
+                    </>
+                  )}
+                  <dt className="font-medium">Justification</dt>
+                  <dd>{accord.justification}</dd>
+                </dl>
+              </div>
+            )}
             <div>
               <Label className="mb-1.5 block">Résolution *</Label>
               <Textarea
@@ -264,7 +357,8 @@ export function LitigeResolutionModal({
                 <Input
                   type="number"
                   step="0.25"
-                  min="0"
+                  min="0.01"
+                  max="168"
                   value={ajusterHeures}
                   onChange={(e) => setAjusterHeures(e.target.value)}
                   placeholder="Heures réelles"
@@ -276,7 +370,8 @@ export function LitigeResolutionModal({
                 <Input
                   type="number"
                   step="0.01"
-                  min="0"
+                  min="0.01"
+                  max="1000"
                   value={ajusterTaux}
                   onChange={(e) => setAjusterTaux(e.target.value)}
                   placeholder="Nouveau taux"
@@ -390,7 +485,9 @@ export function LitigeResolutionModal({
             disabled={
               submitting ||
               resolutionText.trim().length < 10 ||
-              !enFaveurDe
+              !enFaveurDe ||
+              heuresInvalides ||
+              tauxInvalide
             }
             loading={submitting}
           >

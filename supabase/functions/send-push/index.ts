@@ -391,7 +391,7 @@ Deno.serve(async (req) => {
       should = data?.canal_push ?? true;
     }
     if (should === false) {
-      await supabaseAdmin.from('journaux_audit').insert({
+      await Promise.resolve(supabaseAdmin.from('journaux_audit').insert({
         acteur_id: null, type_acteur: 'SYSTEME',
         action: 'NOTIFICATION_SKIPPED', type_ressource: 'push',
         id_ressource: destinataire_id,
@@ -401,7 +401,7 @@ Deno.serve(async (req) => {
           canal: 'PUSH',
           raison: 'preference_user_off',
         },
-      }).then(() => {}).catch(() => {});
+      })).catch(() => {});
       return jsonResponse(req, { success: true, skipped: true, reason: 'preference_user_off' });
     }
 

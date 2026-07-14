@@ -11,7 +11,7 @@
  *    (Sprint 10-A v3 PR 2) AVANT envoi
  *  - Si retour ANTI_LEAK_REFUSE : ouvre ModaleEducativeAntiLeak (PR 4) sans
  *    effacer le message — l'utilisateur peut l'éditer
- *  - Si retour 200 OK : appel fn_envoyer_message pour insérer en base
+ *  - Si retour 200 OK : le message est déjà inséré atomiquement côté serveur
  *  - Indicateur caractères restants si > 3500 (sur 4000 max)
  *  - Disabled si conversation archivée
  *
@@ -22,21 +22,22 @@ import { Send } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { ModaleEducativeAntiLeak, type DetectedType } from './ModaleEducativeAntiLeak';
-import { sanitizeText } from '@/lib/sanitize';
 import { toast } from 'sonner';
 import { logger } from '@/lib/logger';
 import { hapticImpact } from '@/lib/haptics';
+import { envoyerMessageAvecAntiFuite } from '@/lib/messagerieEnvoi';
 
 const MAX_LENGTH = 4000;
 const WARN_THRESHOLD = 3500;
 const TYPING_IDLE_MS = 3000;
+const TYPING_REFRESH_MS = 2000;
 
 interface Props {
   conversationId: string;
   /** Si true, la conversation est archivée → input désactivé. */
   archived?: boolean;
   /** Callback après envoi réussi (rafraîchir la liste conv côté parent). */
-  onSent?: () => void;
+  onSent?: (messageId: string) => void | Promise<void>;
 }
 
 export function InputMessage({ conversationId, archived = false, onSent }: Props) {
@@ -46,6 +47,10 @@ export function InputMessage({ conversationId, archived = false, onSent }: Props
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const typingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isTypingRef = useRef(false);
+  const lastTypingSentAtRef = useRef(0);
+  // Le state React n'est mis à jour qu'au prochain rendu. Ce verrou synchrone
+  // empêche donc deux Enter/clics dans le même tick de créer deux messages.
+  const envoiRef = useRef(false);
 
   useEffect(() => {
     const el = textareaRef.current;
@@ -57,16 +62,26 @@ export function InputMessage({ conversationId, archived = false, onSent }: Props
   const stopTyping = useCallback(() => {
     if (!isTypingRef.current) return;
     isTypingRef.current = false;
+    lastTypingSentAtRef.current = 0;
     supabase.rpc('fn_typing_stop' as any, { p_conversation_id: conversationId })
-      .then(undefined, (err) => logger.debug('fn_typing_stop skip', err));
+      .then(
+        ({ error }) => { if (error) logger.debug('fn_typing_stop skip', error); },
+        (error) => logger.debug('fn_typing_stop skip', error),
+      );
   }, [conversationId]);
 
   const tickTyping = useCallback(() => {
     if (archived) return;
-    if (!isTypingRef.current) {
+    const maintenant = Date.now();
+    if (!isTypingRef.current
+        || maintenant - lastTypingSentAtRef.current >= TYPING_REFRESH_MS) {
       isTypingRef.current = true;
+      lastTypingSentAtRef.current = maintenant;
       supabase.rpc('fn_typing_start' as any, { p_conversation_id: conversationId })
-        .then(undefined, (err) => logger.debug('fn_typing_start skip', err));
+        .then(
+          ({ error }) => { if (error) logger.debug('fn_typing_start skip', error); },
+          (error) => logger.debug('fn_typing_start skip', error),
+        );
     }
     if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
     typingTimerRef.current = setTimeout(stopTyping, TYPING_IDLE_MS);
@@ -80,72 +95,54 @@ export function InputMessage({ conversationId, archived = false, onSent }: Props
   }, [stopTyping]);
 
   const envoyer = async () => {
-    if (archived) return;
+    if (archived || envoiRef.current) return;
     const contenuBrut = texte.trim();
     if (!contenuBrut) return;
 
-    const contenu = sanitizeText(contenuBrut);
-    if (!contenu) return;
+    const contenu = contenuBrut;
 
+    envoiRef.current = true;
     setEnvoi(true);
 
     try {
-      const { data: validateData, error: validateErr } = await supabase.functions.invoke('messagerie-validate', {
-        body: { conversation_id: conversationId, content: contenu },
-      });
-
-      if (validateErr) {
-        const ctx = validateErr.context as { body?: any; status?: number } | undefined;
-        const payload = ctx?.body;
-        if (payload?.error === 'ANTI_LEAK_REFUSE' && payload?.detected_type) {
-          setModaleAntiLeak(payload.detected_type as DetectedType);
-          return;
-        }
-        if (payload?.error === 'RATE_LIMIT') {
+      const resultat = await envoyerMessageAvecAntiFuite(conversationId, contenu);
+      if (!resultat.success) {
+        if (resultat.error === 'ANTI_LEAK_REFUSE' && resultat.detectedType) {
+          setModaleAntiLeak(resultat.detectedType);
+        } else if (resultat.error === 'RATE_LIMIT') {
           toast.error('Trop de messages envoyés. Patientez quelques secondes.');
-          return;
-        }
-        if (payload?.error === 'CONTENT_TOO_LARGE') {
+        } else if (resultat.error === 'CONTENT_TOO_LARGE') {
           toast.error('Message trop long.');
-          return;
+        } else if (resultat.error === 'CONVERSATION_ARCHIVEE') {
+          toast.error('Cette conversation est archivée.');
+        } else {
+          logger.error(
+            'messagerie-validate atomic send error',
+            resultat.transportError || resultat.error,
+          );
+          toast.error("Impossible d'envoyer le message. Veuillez réessayer.");
         }
-        logger.error('messagerie-validate error', validateErr);
-        toast.error("Validation du message impossible. Veuillez réessayer.");
-        return;
-      }
-
-      if (validateData && (validateData as any).error === 'ANTI_LEAK_REFUSE') {
-        setModaleAntiLeak((validateData as any).detected_type as DetectedType);
-        return;
-      }
-
-      const contenuSanitized = (validateData as any)?.sanitized_content || contenu;
-
-      const { data, error } = await supabase.rpc('fn_envoyer_message', {
-        p_conversation_id: conversationId,
-        p_contenu: contenuSanitized,
-      });
-
-      if (error || (data && typeof data === 'object' && (data as any).error)) {
-        logger.error('fn_envoyer_message error', error || data);
-        toast.error("Impossible d'envoyer le message.");
         return;
       }
 
       stopTyping();
       setTexte('');
       hapticImpact('light');
-      onSent?.();
+      // Le parent recharge explicitement la ligne confirmée. Le Realtime reste
+      // utile pour l'autre interlocuteur, mais n'est pas une garantie d'écho :
+      // l'INSERT peut précéder l'état SUBSCRIBED du canal local.
+      await onSent?.(resultat.messageId!);
     } finally {
+      envoiRef.current = false;
       setEnvoi(false);
       textareaRef.current?.focus();
     }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
+    if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
       e.preventDefault();
-      envoyer();
+      void envoyer();
     }
   };
 

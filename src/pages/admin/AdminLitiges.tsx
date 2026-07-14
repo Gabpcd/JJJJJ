@@ -21,10 +21,25 @@ type FiltreStatut = 'ACCORDS_A_VALIDER' | 'REVUE_ADMIN' | 'OUVERTS' | 'RESOLUS' 
 
 const STATUTS_RESOLUS = ['RESOLU', 'RESOLU_SOIGNANT', 'RESOLU_ETABLISSEMENT', 'RESOLU_ADMIN', 'RESOLU_ACCORD_PARTIES', 'RESOLU_FAVEUR_SOIGNANT', 'RESOLU_FAVEUR_ETAB', 'RESOLU_PARTAGE', 'FERME', 'CLOTURE'];
 
+const TYPES_RESOLUTION_FINANCIERE_MANUELLE = new Set([
+  'MODIFICATION_HORAIRES',
+  'MODIFICATION_MONTANT',
+  'MIXTE',
+]);
+
 // Un accord financier proposé par les parties, en attente de validation admin.
 const estAccordAValider = (l: any) =>
-  !!l.payload_modifications && !l.modifications_executees
+  l.statut === 'REVUE_ADMIN'
+  && l.accord_soignant === true
+  && l.accord_etablissement === true
+  && !!l.accord_soignant_le
+  && !!l.accord_etablissement_le
+  && !!l.payload_modifications
+  && !l.modifications_executees
   && (l.payload_modifications?.type && l.payload_modifications.type !== 'ACCORD_SANS_MODIFICATION');
+
+const requiertResolutionFinanciereManuelle = (l: any) =>
+  TYPES_RESOLUTION_FINANCIERE_MANUELLE.has(l.payload_modifications?.type);
 
 export default function AdminLitiges() {
   usePageTitle('Litiges — Supervision admin');
@@ -62,6 +77,39 @@ export default function AdminLitiges() {
   };
 
   useEffect(() => { charger(); }, []);
+
+  const ouvrirResolution = (l: any) => {
+    const enrichi: LitigeEnrichi = {
+      id: l.id, motif: l.motif, reponse: l.reponse ?? null,
+      statut: l.statut, cree_le: l.cree_le,
+      soignant_id: l.soignant_id, etablissement_id: l.etablissement_id,
+      mission_id: l.mission_id, initie_par: l.initie_par,
+      resolution: l.resolution, resolu_le: l.resolu_le,
+      type_litige: l.type_litige ?? null, categorie_litige: l.categorie_litige ?? null,
+      facture_id: l.facture_id ?? null,
+      payload_modifications: l.payload_modifications ?? null,
+      soignant: l.soignants ? {
+        id: l.soignants.id, prenom: l.soignants.prenom, nom: l.soignants.nom,
+        email: l.soignants.email ?? null, telephone: l.soignants.telephone ?? null,
+        profession: l.soignants.profession ?? null,
+      } : null,
+      etablissement: l.etablissements ? {
+        id: l.etablissements.id, nom: l.etablissements.nom,
+        email_contact: l.etablissements.email_contact ?? null,
+        telephone_contact: l.etablissements.telephone_contact ?? null,
+        type: l.etablissements.type ?? null,
+      } : null,
+      mission: l.missions ? {
+        id: l.missions.id, intitule: l.missions.intitule,
+        profession_requise: l.missions.profession_requise ?? '',
+        service: l.missions.service ?? null,
+        debut_le: l.missions.debut_le, fin_le: l.missions.fin_le,
+        statut: l.missions.statut ?? null,
+      } : null,
+    };
+    setResolutionLitige(enrichi);
+    setResolutionOpen(true);
+  };
 
   // Valider l'accord financier proposé par les parties (exécute le mouvement financier).
   const validerAccord = async (litigeId: string) => {
@@ -157,6 +205,8 @@ export default function AdminLitiges() {
               ? 'aujourd\'hui'
               : `${ageJours} jour${ageJours > 1 ? 's' : ''}`;
             const isUrgent = l.statut === 'REVUE_ADMIN';
+            const resolutionFinanciereManuelle =
+              requiertResolutionFinanciereManuelle(l);
             return (
               <div
                 key={l.id}
@@ -219,7 +269,9 @@ export default function AdminLitiges() {
                     {estAccordAValider(l) && (
                       <div className="rounded-xl border border-amber-300/60 bg-amber-50 p-3 space-y-2">
                         <p className="text-xs font-semibold text-amber-900">
-                          Accord financier proposé par les parties — validation requise
+                          Accord financier proposé par les parties — {resolutionFinanciereManuelle
+                            ? 'résolution comptable requise'
+                            : 'validation requise'}
                         </p>
                         <p className="text-[11px] text-amber-800">
                           Type : <span className="font-mono">{l.payload_modifications?.type}</span>
@@ -235,12 +287,22 @@ export default function AdminLitiges() {
                           variant="primary"
                           size="sm"
                           loading={validating === l.id}
-                          onClick={() => validerAccord(l.id)}
+                          onClick={() => {
+                            if (resolutionFinanciereManuelle) {
+                              ouvrirResolution(l);
+                            } else {
+                              validerAccord(l.id);
+                            }
+                          }}
                         >
-                          Valider l'accord et exécuter
+                          {resolutionFinanciereManuelle
+                            ? 'Traiter l’accord financier'
+                            : 'Valider l’accord et exécuter'}
                         </BoutonY2K>
                         <p className="text-[10px] text-amber-700">
-                          Ou ajustez à un autre montant via « Résoudre » ci-dessous.
+                          {resolutionFinanciereManuelle
+                            ? 'Vérifiez puis appliquez les heures, le taux et l’action comptable dans la résolution.'
+                            : 'Ou ajustez à un autre montant via « Résoudre » ci-dessous.'}
                         </p>
                       </div>
                     )}
@@ -249,37 +311,7 @@ export default function AdminLitiges() {
                       variant="primary"
                       size="sm"
                       iconeGauche={<Gavel className="h-4 w-4" />}
-                      onClick={() => {
-                        const enrichi: LitigeEnrichi = {
-                          id: l.id, motif: l.motif, reponse: l.reponse ?? null,
-                          statut: l.statut, cree_le: l.cree_le,
-                          soignant_id: l.soignant_id, etablissement_id: l.etablissement_id,
-                          mission_id: l.mission_id, initie_par: l.initie_par,
-                          resolution: l.resolution, resolu_le: l.resolu_le,
-                          type_litige: l.type_litige ?? null, categorie_litige: l.categorie_litige ?? null,
-                          facture_id: l.facture_id ?? null,
-                          soignant: l.soignants ? {
-                            id: l.soignants.id, prenom: l.soignants.prenom, nom: l.soignants.nom,
-                            email: l.soignants.email ?? null, telephone: l.soignants.telephone ?? null,
-                            profession: l.soignants.profession ?? null,
-                          } : null,
-                          etablissement: l.etablissements ? {
-                            id: l.etablissements.id, nom: l.etablissements.nom,
-                            email_contact: l.etablissements.email_contact ?? null,
-                            telephone_contact: l.etablissements.telephone_contact ?? null,
-                            type: l.etablissements.type ?? null,
-                          } : null,
-                          mission: l.missions ? {
-                            id: l.missions.id, intitule: l.missions.intitule,
-                            profession_requise: l.missions.profession_requise ?? '',
-                            service: l.missions.service ?? null,
-                            debut_le: l.missions.debut_le, fin_le: l.missions.fin_le,
-                            statut: l.missions.statut ?? null,
-                          } : null,
-                        };
-                        setResolutionLitige(enrichi);
-                        setResolutionOpen(true);
-                      }}
+                      onClick={() => ouvrirResolution(l)}
                     >
                       Résoudre (financier + statut)
                     </BoutonY2K>

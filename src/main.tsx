@@ -337,8 +337,9 @@ async function initNativePlugins() {
   ];
 
   CapApp.addListener("backButton", ({ canGoBack }) => {
-    const currentPath = window.location.pathname;
-    const isMainRoute = MAIN_ROUTES.some(r => currentPath === r || currentPath.startsWith(r + '/'));
+    const rawPath = window.location.pathname;
+    const currentPath = rawPath.length > 1 ? rawPath.replace(/\/+$/, '') : rawPath;
+    const isMainRoute = MAIN_ROUTES.includes(currentPath);
 
     if (canGoBack && !isMainRoute) {
       window.history.back();
@@ -403,13 +404,13 @@ async function initNativePlugins() {
           : typeof roleData === 'object' && roleData !== null && 'role' in roleData && typeof roleData.role === 'string'
             ? roleData.role
             : undefined;
-        let target = '/connexion';
+        let target: string | null = null;
         if (role === 'ADMIN_PLATEFORME' || role === 'ADMIN') target = '/admin';
         else if (role === 'ADMIN_ETABLISSEMENT' || role === 'ETABLISSEMENT') target = '/etablissement/tableau-de-bord';
         else if (role === 'ADMIN_GROUPE') target = '/groupe/tableau-de-bord';
         else if (role === 'SOIGNANT') target = '/soignant/tableau-de-bord';
 
-        if (window.location.pathname === '/' || window.location.pathname === '/connexion') {
+        if (target && (window.location.pathname === '/' || window.location.pathname === '/connexion')) {
           window.history.replaceState(null, '', target);
         }
       } catch {

@@ -49,6 +49,8 @@ export function useConversationRealtime({ conversationId, autreUserId }: Params)
   const typingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
+    setPresence('OFFLINE');
+    setLastSeen(null);
     if (!autreUserId) return;
     let cancelled = false;
 
@@ -68,8 +70,6 @@ export function useConversationRealtime({ conversationId, autreUserId }: Params)
         setLastSeen((data as any).last_seen_at ? new Date((data as any).last_seen_at) : null);
       }
     };
-    charger();
-
     const channel = supabase
       .channel(`presence-${autreUserId}`)
       .on('postgres_changes', {
@@ -78,17 +78,59 @@ export function useConversationRealtime({ conversationId, autreUserId }: Params)
         table: 'presence_status',
         filter: `user_id=eq.${autreUserId}`,
       }, (payload) => {
+        if (payload.eventType === 'DELETE') {
+          setPresence('OFFLINE');
+          setLastSeen(null);
+          return;
+        }
         const row = payload.new as { status?: PresenceStatus; last_seen_at?: string };
         if (row?.status) setPresence(row.status);
         if (row?.last_seen_at) setLastSeen(new Date(row.last_seen_at));
       })
-      .subscribe();
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') void charger();
+        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          logger.debug('useConversationRealtime.presence subscription skip', status);
+        }
+      });
 
     return () => { cancelled = true; supabase.removeChannel(channel); };
   }, [autreUserId]);
 
   useEffect(() => {
+    setTyping(false);
+    if (typingTimerRef.current) {
+      clearTimeout(typingTimerRef.current);
+      typingTimerRef.current = null;
+    }
     if (!conversationId || !autreUserId) return;
+    let cancelled = false;
+
+    const activerTyping = () => {
+      setTyping(true);
+      if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
+      typingTimerRef.current = setTimeout(() => {
+        setTyping(false);
+        typingTimerRef.current = null;
+      }, TYPING_STALE_MS);
+    };
+
+    const charger = async () => {
+      const seuil = new Date(Date.now() - TYPING_STALE_MS).toISOString();
+      const { data, error } = await supabase
+        .from('typing_status' as any)
+        .select('started_at')
+        .eq('conversation_id', conversationId)
+        .eq('user_id', autreUserId)
+        .gt('started_at', seuil)
+        .maybeSingle();
+      if (cancelled) return;
+      if (error) {
+        logger.debug('useConversationRealtime.typing initial load skip', error);
+        return;
+      }
+      if (data) activerTyping();
+    };
 
     const channel = supabase
       .channel(`typing-${conversationId}`)
@@ -100,9 +142,7 @@ export function useConversationRealtime({ conversationId, autreUserId }: Params)
       }, (payload) => {
         const row = payload.new as { user_id?: string };
         if (row?.user_id === autreUserId) {
-          setTyping(true);
-          if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
-          typingTimerRef.current = setTimeout(() => setTyping(false), TYPING_STALE_MS);
+          activerTyping();
         }
       })
       .on('postgres_changes', {
@@ -113,9 +153,7 @@ export function useConversationRealtime({ conversationId, autreUserId }: Params)
       }, (payload) => {
         const row = payload.new as { user_id?: string };
         if (row?.user_id === autreUserId) {
-          setTyping(true);
-          if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
-          typingTimerRef.current = setTimeout(() => setTyping(false), TYPING_STALE_MS);
+          activerTyping();
         }
       })
       .on('postgres_changes', {
@@ -127,26 +165,48 @@ export function useConversationRealtime({ conversationId, autreUserId }: Params)
         const row = payload.old as { user_id?: string };
         if (row?.user_id === autreUserId) {
           setTyping(false);
-          if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
+          if (typingTimerRef.current) {
+            clearTimeout(typingTimerRef.current);
+            typingTimerRef.current = null;
+          }
         }
       })
-      .subscribe();
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') void charger();
+        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          logger.debug('useConversationRealtime.typing subscription skip', status);
+        }
+      });
 
     return () => {
-      if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
+      cancelled = true;
+      if (typingTimerRef.current) {
+        clearTimeout(typingTimerRef.current);
+        typingTimerRef.current = null;
+      }
       supabase.removeChannel(channel);
     };
   }, [conversationId, autreUserId]);
 
   useEffect(() => {
     const beat = () => {
-      supabase.rpc('fn_update_presence' as any).then(undefined, (err) => {
-        logger.debug('useConversationRealtime heartbeat skip', err);
-      });
+      void supabase.rpc('fn_update_presence' as any).then(
+        ({ error }) => {
+          if (error) logger.debug('useConversationRealtime heartbeat skip', error);
+        },
+        (error) => logger.debug('useConversationRealtime heartbeat skip', error),
+      );
     };
     beat();
     const id = setInterval(beat, HEARTBEAT_INTERVAL_MS);
-    return () => clearInterval(id);
+    const auPremierPlan = () => {
+      if (document.visibilityState === 'visible') beat();
+    };
+    document.addEventListener('visibilitychange', auPremierPlan);
+    return () => {
+      clearInterval(id);
+      document.removeEventListener('visibilitychange', auPremierPlan);
+    };
   }, []);
 
   return { typing, presence, lastSeen };

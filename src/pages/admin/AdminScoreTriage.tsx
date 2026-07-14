@@ -7,6 +7,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useNotification } from '@/contexts/NotificationContext';
 import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { BadgeY2K } from '@/components/y2k/BadgeY2K';
+import { useOuvrirConversation } from '@/hooks/useOuvrirConversation';
 
 /**
  * Page admin /admin/scores (Sprint 7 PR 6 - P2 §14).
@@ -51,6 +52,7 @@ function badgeNiveauVariant(niveau: LigneScore['niveau']): 'premium' | 'warning'
    /admin/reclamations (l'ancienne route /admin/scores redirige). */
 export function ScoreTriageContent() {
   const navigate = useNavigate();
+  const ouvrirConversation = useOuvrirConversation('/admin/messagerie');
   const { afficherNotification } = useNotification();
   const [lignes, setLignes] = useState<LigneScore[]>([]);
   const [loading, setLoading] = useState(true);
@@ -110,13 +112,11 @@ export function ScoreTriageContent() {
   }, [lignes, recherche, filtreType, filtreNiveau]);
 
   const ouvrirProfil = (l: LigneScore) => {
-    if (l.type === 'SOIGNANT') navigate(`/admin/utilisateurs/${l.user_id}`);
-    else navigate(`/admin/utilisateurs/${l.user_id}`);
+    navigate(`/admin/utilisateurs/${l.user_id}`);
   };
 
-  const ouvrirMessagerie = () => {
-    navigate('/admin/messagerie');
-  };
+  const ouvrirMessagerie = (ligne: LigneScore) =>
+    ouvrirConversation(ligne.user_id, undefined, ligne.type === 'ETAB');
 
   return (
       <div className="space-y-6">
@@ -222,7 +222,7 @@ export function ScoreTriageContent() {
                         <BoutonY2K
                           variant="ghost"
                           size="sm"
-                          onClick={ouvrirMessagerie}
+                          onClick={() => ouvrirMessagerie(l)}
                           aria-label={`Messagerie ${l.nom}`}
                           iconeGauche={<MessageSquare className="w-3.5 h-3.5" />}
                         >
@@ -260,7 +260,7 @@ export function ScoreTriageContent() {
                     <BoutonY2K
                       variant="ghost"
                       size="sm"
-                      onClick={ouvrirMessagerie}
+                      onClick={() => ouvrirMessagerie(l)}
                       iconeGauche={<MessageSquare className="w-3.5 h-3.5" />}
                       className="w-full"
                     >

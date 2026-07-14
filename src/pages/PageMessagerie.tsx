@@ -19,18 +19,16 @@
  *  - Tri last_message_at desc
  *  - Touch targets 44px+
  *
- * Le chat detail panel garde son input inline (l'anti-leak + typing
- * indicators sont déjà disponibles via ChatConversation / InputMessage
- * pour les chats inline mission — refonte panel à venir Sprint 10-C
- * pour ne pas bloquer le merge PR 1).
+ * Le panneau de détail partage InputMessage et useConversationRealtime avec
+ * les chats de mission : anti-fuite, saisie et présence ont donc un seul flux.
  */
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { useSearchParams, useNavigate } from 'react-router-dom';
-import { MessageCircle, Send, ArrowLeft, Shield, Plus, Search, X } from 'lucide-react';
+import { useSearchParams } from 'react-router-dom';
+import { MessageCircle, ArrowLeft, Shield, Plus, Search, X } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { resoudreUserIdEtablissement } from '@/hooks/useOuvrirConversation';
+import { useConversationRealtime, type PresenceStatus } from '@/hooks/useConversationRealtime';
 import { useAuth } from '@/contexts/AuthContext';
-import { sanitizeText } from '@/lib/sanitize';
 import { AvatarDisplay } from '@/components/AvatarUpload';
 import { LayoutApp } from '@/components/LayoutApp';
 import { LayoutAdmin } from '@/components/LayoutAdmin';
@@ -55,6 +53,8 @@ import {
   cleInterlocuteur,
   type InterlocuteurConversation,
 } from '@/lib/messagerieInterlocuteurs';
+import { InputMessage } from '@/components/messagerie/InputMessage';
+import { BloquerUtilisateur } from '@/components/BloquerUtilisateur';
 
 interface Conversation {
   id: string;
@@ -64,6 +64,8 @@ interface Conversation {
   dernier_message_le: string | null;
   cree_le: string;
   archived_at: string | null;
+  etablissement_id?: string | null;
+  soignant_id?: string | null;
   autre_id: string;
   autre_prenom: string;
   autre_nom: string;
@@ -109,24 +111,34 @@ function formatTimestampIntelligent(iso: string | null): string {
   return format(d, 'd MMM', { locale: fr });
 }
 
+function formatPresence(
+  presence: PresenceStatus,
+  lastSeen: Date | null,
+): string {
+  if (presence === 'ONLINE') return 'En ligne';
+  if (presence === 'AWAY') return 'Absent';
+  if (!lastSeen) return 'Hors ligne';
+  return `Vu ${formatDistanceToNowStrict(lastSeen, { addSuffix: true, locale: fr })}`;
+}
+
 export default function PageMessagerie({ role }: PageMessagerieProps) {
   usePageTitle('Messagerie');
   const { user } = useAuth();
-  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const convParam = searchParams.get('conv');
 
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedConvId, setSelectedConvId] = useState<string | null>(convParam);
+  // La sélection est dérivée de l'URL : le bouton Retour Android/iOS et les
+  // liens de notification restent ainsi synchronisés avec l'interface.
+  const selectedConvId = convParam;
   const [messages, setMessages] = useState<Message[]>([]);
   const [loadingMessages, setLoadingMessages] = useState(false);
-  const [texte, setTexte] = useState('');
-  const [envoi, setEnvoi] = useState(false);
+  const [conversationCibleIntrouvable, setConversationCibleIntrouvable] = useState<string | null>(null);
   const [filtre, setFiltre] = useState('');
   const [tab, setTab] = useState<'ACTIVES' | 'ARCHIVEES'>('ACTIVES');
   const scrollRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const chargementConversationsRef = useRef(0);
 
   const [showNewConvModal, setShowNewConvModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -138,28 +150,76 @@ export default function PageMessagerie({ role }: PageMessagerieProps) {
 
   const chargerConversations = useCallback(async () => {
     if (!user) return;
+    const numeroChargement = ++chargementConversationsRef.current;
 
-    let query = supabase
-      .from('conversations')
-      .select('id, participant_1_id, participant_2_id, mission_id, dernier_message_le, cree_le, archived_at')
-      .order('dernier_message_le', { ascending: false, nullsFirst: false });
-
-    if (!isAdminPlateforme) {
-      query = query.or(`participant_1_id.eq.${user.id},participant_2_id.eq.${user.id}`);
-    }
-
-    const { data: convsRaw } = await query.limit(100);
-    const convs = ((convsRaw || []) as unknown) as Array<{
+    type ApercuConversation = {
       id: string;
       participant_1_id: string;
       participant_2_id: string;
       mission_id: string | null;
+      etablissement_id: string | null;
+      soignant_id: string | null;
       dernier_message_le: string | null;
       cree_le: string;
       archived_at: string | null;
-    }>;
+      autre_id: string;
+      dernier_contenu: string | null;
+      non_lus: number | string;
+      mission_intitule: string | null;
+      ordre_le: string;
+    };
+
+    const convs: ApercuConversation[] = [];
+    const dejaVues = new Set<string>();
+    let avant: string | null = null;
+    let avantId: string | null = null;
+    let erreurChargement: unknown = null;
+
+    // Pagination keyset : chaque aperçu/non-lu est agrégé côté SQL. On ne
+    // télécharge donc jamais tous les messages d'un fil pour calculer la liste.
+    for (let page = 0; page < 100; page += 1) {
+      const { data, error } = await supabase.rpc(
+        'fn_lister_conversations_messagerie' as any,
+        {
+          p_avant: avant,
+          p_avant_id: avantId,
+          p_limite: 100,
+        } as any,
+      );
+      if (numeroChargement !== chargementConversationsRef.current) return;
+      if (error) {
+        erreurChargement = error;
+        break;
+      }
+
+      const lot = ((data || []) as unknown) as ApercuConversation[];
+      lot.forEach((conversation) => {
+        if (!dejaVues.has(conversation.id)) {
+          dejaVues.add(conversation.id);
+          convs.push(conversation);
+        }
+      });
+      if (lot.length < 100) break;
+
+      const derniere = lot[lot.length - 1];
+      if (!derniere?.ordre_le || !derniere.id
+          || (derniere.ordre_le === avant && derniere.id === avantId)) break;
+      avant = derniere.ordre_le;
+      avantId = derniere.id;
+    }
+
+    if (erreurChargement) {
+      logger.error('PageMessagerie.chargerConversations error', erreurChargement);
+      setLoading(false);
+      return;
+    }
+
+    const cibleIntrouvable = !!convParam
+      && !convs.some(conversation => conversation.id === convParam);
+
     if (convs.length === 0) {
       setConversations([]);
+      setConversationCibleIntrouvable(cibleIntrouvable ? convParam : null);
       setLoading(false);
       return;
     }
@@ -172,44 +232,14 @@ export default function PageMessagerie({ role }: PageMessagerieProps) {
       logger.error('fn_interlocuteurs_conversations error', error);
     }
 
-    const { data: lastMessages } = await supabase
-      .from('messages_chat')
-      .select('conversation_id, contenu, cree_le')
-      .in('conversation_id', convIds)
-      .order('cree_le', { ascending: false });
-
-    const lastMsgMap = new Map<string, string>();
-    lastMessages?.forEach(m => {
-      if (!lastMsgMap.has(m.conversation_id)) lastMsgMap.set(m.conversation_id, m.contenu);
-    });
-
-    const { data: unreadMessages } = await supabase
-      .from('messages_chat')
-      .select('conversation_id, id')
-      .in('conversation_id', convIds)
-      .eq('lu', false)
-      .neq('auteur_id', user.id);
-
-    const unreadMap = new Map<string, number>();
-    unreadMessages?.forEach(m => {
-      unreadMap.set(m.conversation_id, (unreadMap.get(m.conversation_id) || 0) + 1);
-    });
-
     const resolveUserName = (conversationId: string, uid: string) => {
       const info = interlocuteurs.get(cleInterlocuteur(conversationId, uid));
       if (info) return `${info.prenom} ${info.nom}`.trim();
       return 'Jolene';
     };
 
-    const missionIds = [...new Set(convs.map(c => c.mission_id).filter(Boolean))] as string[];
-    const missionMap = new Map<string, string>();
-    if (missionIds.length > 0) {
-      const { data: missionData } = await supabase.from('missions').select('id, intitule').in('id', missionIds);
-      missionData?.forEach(m => missionMap.set(m.id, m.intitule));
-    }
-
     const enriched: Conversation[] = convs.map(c => {
-      const autreId = c.participant_1_id === user.id ? c.participant_2_id : c.participant_1_id;
+      const autreId = c.autre_id;
       const info = interlocuteurs.get(cleInterlocuteur(c.id, autreId));
 
       const isJolene = info?.est_jolene ?? true;
@@ -227,36 +257,112 @@ export default function PageMessagerie({ role }: PageMessagerieProps) {
         autre_prenom: displayPrenom,
         autre_nom: displayNom,
         autre_avatar: isJolene ? null : (info?.avatar_url || null),
-        dernier_contenu: lastMsgMap.get(c.id) || null,
-        non_lus: unreadMap.get(c.id) || 0,
+        dernier_contenu: c.dernier_contenu || null,
+        non_lus: Number(c.non_lus) || 0,
         is_jolene: isJolene,
-        mission_intitule: c.mission_id ? missionMap.get(c.mission_id) || null : null,
+        mission_intitule: c.mission_intitule || null,
       };
     });
 
+    if (numeroChargement !== chargementConversationsRef.current) return;
     setConversations(enriched);
+    setConversationCibleIntrouvable(cibleIntrouvable ? convParam : null);
     setLoading(false);
-  }, [user, isAdmin, isAdminPlateforme]);
-
-  useEffect(() => { chargerConversations(); }, [chargerConversations]);
+  }, [user, isAdmin, convParam]);
 
   useEffect(() => {
-    if (!selectedConvId) { setMessages([]); return; }
+    void chargerConversations();
+    return () => { chargementConversationsRef.current += 1; };
+  }, [chargerConversations]);
+
+  useEffect(() => {
+    if (!user) return;
+    const channel = supabase
+      .channel(`messagerie-liste-${user.id}`)
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'messages_chat',
+      }, (payload) => {
+        const message = payload.new as Message;
+        setConversations((precedentes) => {
+          const conversation = precedentes.find(c => c.id === message.conversation_id);
+          if (!conversation) return precedentes;
+          const entrant = conversation.soignant_id
+            ? role === 'ADMIN_ETABLISSEMENT'
+              ? message.auteur_id === conversation.soignant_id
+              : role === 'SOIGNANT'
+                ? message.auteur_id !== conversation.soignant_id
+                : message.auteur_id !== user.id
+            : message.auteur_id !== user.id;
+          return precedentes
+            .map(c => c.id === message.conversation_id
+              ? {
+                  ...c,
+                  dernier_contenu: message.contenu,
+                  dernier_message_le: message.cree_le,
+                  non_lus: entrant && selectedConvId !== c.id
+                    ? c.non_lus + 1
+                    : c.non_lus,
+                }
+              : c)
+            .sort((a, b) => new Date(
+              b.dernier_message_le || b.cree_le,
+            ).getTime() - new Date(
+              a.dernier_message_le || a.cree_le,
+            ).getTime());
+        });
+      })
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'conversations',
+      }, () => { void chargerConversations(); })
+      .subscribe();
+
+    return () => { void supabase.removeChannel(channel); };
+  }, [chargerConversations, role, selectedConvId, user]);
+
+  useEffect(() => {
+    if (!selectedConvId) {
+      setMessages([]);
+      setLoadingMessages(false);
+      return;
+    }
+    let cancelled = false;
+    setMessages([]);
+    setLoadingMessages(true);
 
     const load = async () => {
-      setLoadingMessages(true);
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('messages_chat')
         .select('id, conversation_id, auteur_id, contenu, est_admin, lu, cree_le')
         .eq('conversation_id', selectedConvId)
-        .order('cree_le', { ascending: true })
+        .order('cree_le', { ascending: false })
         .limit(500);
 
-      setMessages((data as Message[]) || []);
+      if (cancelled) return;
+      if (error) {
+        logger.error('PageMessagerie.chargerMessages error', error);
+        setMessages([]);
+        setLoadingMessages(false);
+        return;
+      }
+
+      const messagesRecents = ([...((data as Message[]) || [])]).reverse();
+      setMessages(prev => {
+        const fusion = new Map(messagesRecents.map(message => [message.id, message]));
+        prev
+          .filter(message => message.conversation_id === selectedConvId)
+          .forEach(message => fusion.set(message.id, message));
+        return [...fusion.values()].sort(
+          (a, b) => new Date(a.cree_le).getTime() - new Date(b.cree_le).getTime(),
+        );
+      });
       setLoadingMessages(false);
-      setTimeout(() => inputRef.current?.focus(), 100);
 
       supabase.rpc('fn_marquer_messages_lus', { p_conversation_id: selectedConvId }).then(({ error }) => {
+        if (cancelled) return;
         if (error) {
           logger.error('fn_marquer_messages_lus error', error);
           toast.error('Erreur lors du marquage des messages comme lus.');
@@ -279,54 +385,45 @@ export default function PageMessagerie({ role }: PageMessagerieProps) {
         setMessages(prev => prev.some(m => m.id === msg.id) ? prev : [...prev, msg]);
         if (msg.auteur_id !== user?.id) {
           supabase.rpc('fn_marquer_messages_lus', { p_conversation_id: selectedConvId })
-            .then(undefined, (err) => handleErrorSilent(err, 'PageMessagerie.marquer_messages_lus'));
+            .then(
+              ({ error }) => {
+                if (error) handleErrorSilent(error, 'PageMessagerie.marquer_messages_lus');
+              },
+              (err) => handleErrorSilent(err, 'PageMessagerie.marquer_messages_lus'),
+            );
         }
       })
       .subscribe();
 
-    return () => { supabase.removeChannel(channel); };
+    return () => {
+      cancelled = true;
+      supabase.removeChannel(channel);
+    };
   }, [selectedConvId, user]);
 
-  useEffect(() => {
-    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
-  }, [messages]);
+  const confirmerMessageEnvoye = useCallback(async (messageId: string) => {
+    if (!selectedConvId) return;
+    const { data, error } = await supabase
+      .from('messages_chat')
+      .select('id, conversation_id, auteur_id, contenu, est_admin, lu, cree_le')
+      .eq('id', messageId)
+      .eq('conversation_id', selectedConvId)
+      .maybeSingle();
 
-  const envoyer = async () => {
-    const contenuBrut = texte.trim();
-    if (!contenuBrut || !selectedConvId || !user) return;
-
-    const contenu = sanitizeText(contenuBrut);
-    if (!contenu) return;
-
-    setEnvoi(true);
-    setTexte('');
-
-    const { data, error } = await supabase.rpc('fn_envoyer_message', {
-      p_conversation_id: selectedConvId,
-      p_contenu: contenu,
-    });
-
-    const erreurMetier = data && typeof data === 'object' && !Array.isArray(data)
-      ? (data as { error?: unknown }).error
-      : undefined;
-    if (error || erreurMetier) {
-      logger.error('fn_envoyer_message error', error || data);
-      toast.error("Impossible d'envoyer le message.");
-      setTexte(contenuBrut);
+    if (error || !data) {
+      logger.error('PageMessagerie.confirmerMessageEnvoye error', error);
     } else {
-      chargerConversations().catch(() => { /* non bloquant */ });
+      const message = data as Message;
+      setMessages(prev => prev.some(item => item.id === message.id)
+        ? prev
+        : [...prev, message].sort(
+          (a, b) => new Date(a.cree_le).getTime() - new Date(b.cree_le).getTime(),
+        ));
     }
-
-    setEnvoi(false);
-    inputRef.current?.focus();
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); envoyer(); }
-  };
+    await chargerConversations();
+  }, [chargerConversations, selectedConvId]);
 
   const selectConv = (convId: string) => {
-    setSelectedConvId(convId);
     setSearchParams({ conv: convId });
   };
 
@@ -394,8 +491,28 @@ export default function PageMessagerie({ role }: PageMessagerieProps) {
   );
 
   const selectedConv = conversations.find(c => c.id === selectedConvId);
-  const showMobileChat = !!selectedConvId;
+  const showMobileChat = !!selectedConv;
   const isArchivedSelected = !!selectedConv?.archived_at;
+  const realtimeAutreId = !isAdminPlateforme && selectedConv && !selectedConv.is_jolene
+    ? selectedConv.autre_id
+    : null;
+  const { typing, presence, lastSeen } = useConversationRealtime({
+    conversationId: selectedConv?.id ?? null,
+    autreUserId: realtimeAutreId,
+  });
+
+  useEffect(() => {
+    if (!selectedConvId || conversationCibleIntrouvable !== selectedConvId) return;
+    toast.error("Cette conversation n'est plus accessible.");
+    setSearchParams({}, { replace: true });
+  }, [conversationCibleIntrouvable, selectedConvId, setSearchParams]);
+
+  useEffect(() => {
+    scrollRef.current?.scrollTo({
+      top: scrollRef.current.scrollHeight,
+      behavior: 'smooth',
+    });
+  }, [messages, typing]);
 
   const layoutRole = role === 'ADMIN_PLATEFORME' ? 'ADMIN_PLATEFORME' : role === 'ADMIN_ETABLISSEMENT' ? 'ADMIN_ETABLISSEMENT' : 'SOIGNANT';
 
@@ -523,7 +640,7 @@ export default function PageMessagerie({ role }: PageMessagerieProps) {
                 <div className="flex items-center gap-3 px-4 py-3 border-b border-border bg-card/85 backdrop-blur-sm">
                   <button
                     type="button"
-                    onClick={() => { setSelectedConvId(null); setSearchParams({}); }}
+                    onClick={() => setSearchParams({}, { replace: true })}
                     className="md:hidden text-muted-foreground hover:text-foreground p-1 -ml-1"
                     aria-label="Retour aux conversations"
                   >
@@ -544,7 +661,32 @@ export default function PageMessagerie({ role }: PageMessagerieProps) {
                     {selectedConv.mission_intitule && (
                       <p className="text-[11px] text-jolene-mauve-600 truncate">Mission · {selectedConv.mission_intitule}</p>
                     )}
+                    {realtimeAutreId && (
+                      <p
+                        aria-live="polite"
+                        className={`text-[11px] truncate ${
+                          typing
+                            ? 'italic text-jolene-rose-500'
+                            : 'text-muted-foreground'
+                        }`}
+                      >
+                        {typing
+                          ? "Est en train d'écrire…"
+                          : formatPresence(presence, lastSeen)}
+                      </p>
+                    )}
                   </div>
+                  {!selectedConv.is_jolene
+                    && selectedConv.autre_id
+                    && selectedConv.autre_id !== '00000000-0000-0000-0000-000000000000' && (
+                      <BloquerUtilisateur
+                        cibleId={selectedConv.autre_id}
+                        variant="lien"
+                        libelleCible={role === 'SOIGNANT' && selectedConv.etablissement_id
+                          ? 'l’établissement'
+                          : undefined}
+                      />
+                    )}
                 </div>
 
                 <div ref={scrollRef} className="flex-1 overflow-y-auto px-3 py-4 space-y-3 min-h-0 bg-jolene-lavender-50/30">
@@ -566,7 +708,15 @@ export default function PageMessagerie({ role }: PageMessagerieProps) {
                           </div>
                         );
                       }
-                      const mine = msg.auteur_id === user?.id;
+                      const mine = msg.est_admin
+                        ? msg.auteur_id === user?.id
+                        : role === 'ADMIN_ETABLISSEMENT'
+                          && selectedConv.soignant_id
+                          ? msg.auteur_id !== selectedConv.soignant_id
+                          : msg.auteur_id === user?.id;
+                      const messageEquipe = !msg.est_admin
+                        && mine
+                        && msg.auteur_id !== user?.id;
                       return (
                         <div key={msg.id} className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
                           <div className={`max-w-[80%] px-3.5 py-2 ${
@@ -579,6 +729,11 @@ export default function PageMessagerie({ role }: PageMessagerieProps) {
                                 <Shield className="h-3 w-3" /> Admin Jolene
                               </p>
                             )}
+                            {messageEquipe && (
+                              <p className="text-[10px] font-semibold mb-0.5 text-white/85">
+                                Équipe établissement
+                              </p>
+                            )}
                             <p className="text-sm whitespace-pre-wrap break-words">{msg.contenu}</p>
                             <p className={`text-[9px] mt-1 text-right ${mine ? 'text-white/70' : 'text-muted-foreground/70'}`}>
                               {format(new Date(msg.cree_le), 'HH:mm')}
@@ -588,40 +743,26 @@ export default function PageMessagerie({ role }: PageMessagerieProps) {
                       );
                     })
                   )}
+                  {typing && (
+                    <div className="flex justify-start" aria-live="polite">
+                      <div
+                        aria-label="L'interlocuteur écrit"
+                        className="inline-flex gap-1 rounded-2xl rounded-bl-md border border-border bg-card px-3 py-2"
+                      >
+                        <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-jolene-rose-400" style={{ animationDelay: '0ms' }} />
+                        <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-jolene-rose-400" style={{ animationDelay: '150ms' }} />
+                        <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-jolene-rose-400" style={{ animationDelay: '300ms' }} />
+                      </div>
+                    </div>
+                  )}
                 </div>
 
-                {isArchivedSelected ? (
-                  <div className="px-4 py-3 bg-muted/40 border-t border-border text-center text-xs text-muted-foreground italic">
-                    Conversation archivée — lecture seule.
-                  </div>
-                ) : (
-                  <div
-                    className="flex items-end gap-2 px-3 py-3 border-t border-border bg-card"
-                    style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom))' }}
-                  >
-                    <input
-                      ref={inputRef}
-                      type="text"
-                      value={texte}
-                      onChange={e => setTexte(e.target.value)}
-                      onKeyDown={handleKeyDown}
-                      placeholder="Votre message…"
-                      aria-label="Votre message"
-                      className="flex-1 resize-none rounded-2xl border border-border bg-background px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-jolene-rose-400/40 disabled:opacity-50"
-                      maxLength={4000}
-                      disabled={envoi}
-                    />
-                    <button
-                      type="button"
-                      onClick={envoyer}
-                      disabled={envoi || !texte.trim()}
-                      className="rounded-full p-2.5 bg-gradient-hero text-white shadow-sm hover:opacity-90 disabled:opacity-40 transition-opacity shrink-0 min-h-[44px] min-w-[44px] flex items-center justify-center"
-                      aria-label="Envoyer le message"
-                    >
-                      <Send className="h-4 w-4" />
-                    </button>
-                  </div>
-                )}
+                <InputMessage
+                  key={selectedConv.id}
+                  conversationId={selectedConv.id}
+                  archived={isArchivedSelected}
+                  onSent={confirmerMessageEnvoye}
+                />
               </>
             ) : (
               <div className="flex-1 flex items-center justify-center bg-jolene-lavender-50/30">

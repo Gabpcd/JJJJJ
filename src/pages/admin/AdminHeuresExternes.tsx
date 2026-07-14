@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Loader2, FileText, Clock, CheckCircle, XCircle } from 'lucide-react';
 import { LayoutAdmin } from '@/components/LayoutAdmin';
 import { supabase } from '@/integrations/supabase/client';
@@ -38,9 +38,9 @@ type Filtre = 'EN_ATTENTE' | 'VALIDE' | 'REJETE' | 'TOUS';
 /**
  * Page admin /admin/heures-externes — validation des heures externes (parcours 3200h).
  *
- * Les déclarations passées EN_ATTENTE par la vérification IA (écart heures lues vs
- * déclarées, ou volume non extrait) sont tranchées ici : VALIDE → comptent vers les
- * 3200h ; REJETE → écartées (motif obligatoire). La décision écrit valide_par/valide_le.
+ * L'analyse automatique extrait des signaux mais ne valide aucune heure. Toutes
+ * les déclarations non conclusivement invalides sont tranchées ici par un admin :
+ * VALIDE → comptent vers les 3200h ; REJETE → écartées (motif obligatoire).
  */
 export default function AdminHeuresExternes() {
   usePageTitle('Heures externes');
@@ -51,7 +51,7 @@ export default function AdminHeuresExternes() {
   const [selectionnee, setSelectionnee] = useState<HeureExterneAdmin | null>(null);
   const [openingId, setOpeningId] = useState<string | null>(null);
 
-  async function charger() {
+  const charger = useCallback(async () => {
     setLoading(true);
     const { data, error } = await supabase.rpc('fn_admin_lister_heures_externes' as any, {
       p_statut: filtre, p_limit: 200,
@@ -64,20 +64,32 @@ export default function AdminHeuresExternes() {
       afficherNotification({ type: 'erreur', message: (data as any)?.error || 'Erreur de chargement' });
     }
     setLoading(false);
-  }
+  }, [afficherNotification, filtre]);
 
-  useEffect(() => { charger(); }, [filtre]);
+  useEffect(() => { charger(); }, [charger]);
 
   const ouvrirAttestation = async (id: string, path: string | null) => {
     if (!path) return;
+
+    const preview = window.open('about:blank', '_blank');
+    if (!preview) {
+      afficherNotification({
+        type: 'erreur',
+        message: 'Autorisez les fenêtres contextuelles pour consulter l’attestation.',
+      });
+      return;
+    }
+    preview.opener = null;
+
     setOpeningId(id);
     try {
       const { data, error } = await supabase.storage
         .from(path.includes('/heures-externes/') ? 'jolene-documents' : 'attestations-heures-externes')
         .createSignedUrl(path, 3600);
       if (error || !data?.signedUrl) throw error || new Error('URL indisponible');
-      window.open(data.signedUrl, '_blank', 'noopener,noreferrer');
+      preview.location.replace(data.signedUrl);
     } catch {
+      preview.close();
       afficherNotification({ type: 'erreur', message: 'Impossible d\'ouvrir l\'attestation.' });
     } finally {
       setOpeningId(null);
@@ -90,8 +102,8 @@ export default function AdminHeuresExternes() {
         <div>
           <h1 className="text-2xl font-bold text-foreground">Heures externes — parcours 3200h</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Déclarations d'heures hors Jolene. La vérification IA valide automatiquement les attestations cohérentes ;
-            les cas en attente (écart ou volume non lu) sont à trancher ici.
+            Déclarations d'heures hors Jolene. L'analyse automatique prépare les contrôles ;
+            toute validation comptabilisée exige votre décision humaine.
           </p>
         </div>
 
@@ -239,8 +251,8 @@ function ModaleDecisionHeures({ heure, onFermer, onTraitee }: {
 
   return (
     <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={onFermer}>
-      <div className="bg-card border border-border rounded-xl max-w-lg w-full p-6 space-y-4" onClick={e => e.stopPropagation()}>
-        <h2 className="text-lg font-bold text-foreground">Valider les heures externes</h2>
+      <div role="dialog" aria-modal="true" aria-labelledby="admin-heures-externes-title" className="bg-card border border-border rounded-xl max-w-lg w-full p-6 space-y-4" onClick={e => e.stopPropagation()}>
+        <h2 id="admin-heures-externes-title" className="text-lg font-bold text-foreground">Valider les heures externes</h2>
 
         <div className="rounded-lg bg-muted/40 p-3 text-xs space-y-1">
           <p className="font-semibold">{heure.soignant_prenom} {heure.soignant_nom} — {heure.etablissement_nom}</p>

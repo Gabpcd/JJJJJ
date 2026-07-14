@@ -87,7 +87,7 @@ export const LABELS_ACTION_FINANCIERE: Record<
   AUTO: {
     label: 'Auto (par défaut)',
     tooltip:
-      'Le backend choisit : RECALCUL si facture BROUILLON, ANNULER_REEMETTRE si ENVOYEE non payée, AVOIR si PAYEE.',
+      'Le serveur choisit : RECALCUL si BROUILLON, ANNULER_REEMETTRE si ÉMISE ou EN RETARD, AVOIR si PAYÉE.',
   },
   RECALCUL: {
     label: 'Recalcul',
@@ -97,12 +97,12 @@ export const LABELS_ACTION_FINANCIERE: Record<
   ANNULER_REEMETTRE: {
     label: 'Annuler + réémettre',
     tooltip:
-      'Annule la facture courante (ENVOYEE non payée) et en émet une nouvelle avec les montants ajustés.',
+      'Remplace la facture courante (ÉMISE ou EN RETARD) par une nouvelle facture avec les montants ajustés.',
   },
   AVOIR: {
-    label: 'Avoir + FC',
+    label: 'Avoir partiel',
     tooltip:
-      'Émet un avoir sur la facture payée + facture complémentaire si ajustement à la hausse. Traçabilité comptable complète.',
+      'Émet un avoir sur une facture payée pour une correction à la baisse. Une hausse est refusée.',
   },
 };
 
@@ -175,6 +175,11 @@ export type LitigeEnrichi = {
   montant_tresorerie_bloquee?: number | null;
   facture_id?: string | null;
   escalade_auto_le?: string | null;
+  payload_modifications?: {
+    type: string;
+    modifications: Record<string, string | number | boolean | null>;
+    justification: string;
+  } | null;
   soignant?: {
     id: string;
     prenom: string | null;

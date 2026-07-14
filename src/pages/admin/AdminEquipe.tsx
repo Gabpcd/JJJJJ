@@ -8,24 +8,15 @@ import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { BadgeY2K } from '@/components/y2k/BadgeY2K';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { UserPlus, Trash2, Save, Calculator, Users, X } from 'lucide-react';
+import { UserPlus, Trash2, Save, Calculator, CheckCircle2, ShieldAlert, X } from 'lucide-react';
 import { toast } from 'sonner';
+import {
+  ADMIN_ACCESS_DESCRIPTIONS,
+  ADMIN_ACCESS_GROUPS,
+  aTousLesAccesAdmin,
+} from '@/lib/adminAccess';
 
 const fmt = (v: number) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(v);
-
-// Périmètres d'accès RBAC : clés historiques stockées dans equipe_admin.acces_groupes.
-// La sidebar (5 groupes depuis la Session D) mappe chaque page vers un de ces
-// périmètres — ne pas renommer sans migrer les données existantes.
-const PERIMETRES_ACCES: { cle: string; description: string }[] = [
-  { cle: 'Dashboard', description: 'Dashboard admin' },
-  { cle: 'Utilisateurs', description: 'Utilisateurs, modération, signalements, scores' },
-  { cle: 'Missions', description: 'Missions, pool urgence, plannings, pointage' },
-  { cle: 'Litiges & contrats', description: 'Litiges, contrats, templates' },
-  { cle: 'Finances', description: 'Facturation, impayées, affacturage, commissions' },
-  { cle: 'Messagerie', description: 'Messagerie admin' },
-  { cle: 'Conformité & Technique', description: 'Système : conformité, audits, emails, API' },
-  { cle: 'Fondateur', description: 'Pilotage : cockpit, acquisition, équipe, levée' },
-];
 
 const COEFF_CHARGES_PATRONALES = 1.45;
 
@@ -47,7 +38,17 @@ interface FormMembre extends Partial<Membre> {
 }
 
 function emptyMembre(): FormMembre {
-  return { nom: '', prenom: '', email: '', poste: '', salaire_brut_mensuel: 0, date_embauche: null, acces_groupes: ['Dashboard'], actif: true, password: '' };
+  return {
+    nom: '',
+    prenom: '',
+    email: '',
+    poste: '',
+    salaire_brut_mensuel: 0,
+    date_embauche: null,
+    acces_groupes: [...ADMIN_ACCESS_GROUPS],
+    actif: true,
+    password: '',
+  };
 }
 
 export default function AdminEquipe() {
@@ -106,7 +107,9 @@ export default function AdminEquipe() {
         poste: editMembre.poste || 'Opérations',
         salaire_brut_mensuel: Number(editMembre.salaire_brut_mensuel) || 0,
         date_embauche: editMembre.date_embauche || null,
-        acces_groupes: editMembre.acces_groupes || ['Dashboard'],
+        // Au lancement, l'accès partiel est désactivé : une mise à jour
+        // explicite attribue les huit périmètres canoniques.
+        acces_groupes: [...ADMIN_ACCESS_GROUPS],
         actif: editMembre.actif ?? true,
         maj_le: new Date().toISOString(),
       };
@@ -125,7 +128,7 @@ export default function AdminEquipe() {
         p_nom: editMembre.nom!.trim(),
         p_poste: editMembre.poste || 'Opérations',
         p_salaire_brut: Number(editMembre.salaire_brut_mensuel) || 0,
-        p_acces_groupes: editMembre.acces_groupes || ['Dashboard'],
+        p_acces_groupes: [...ADMIN_ACCESS_GROUPS],
       });
       err = rpcErr;
     }
@@ -150,13 +153,6 @@ export default function AdminEquipe() {
     }
     toast.success('Membre désactivé.');
     charger();
-  };
-
-  const toggleAcces = (groupe: string) => {
-    if (!editMembre) return;
-    const current = editMembre.acces_groupes || [];
-    const next = current.includes(groupe) ? current.filter(g => g !== groupe) : [...current, groupe];
-    setEditMembre({ ...editMembre, acces_groupes: next });
   };
 
   if (loading) return <LayoutAdmin><ChargementAdmin titre="Gestion de l’équipe" /></LayoutAdmin>;
@@ -209,6 +205,9 @@ export default function AdminEquipe() {
                   <div className="flex items-center gap-2 flex-wrap">
                     <p className="font-semibold text-foreground">{m.prenom} {m.nom}</p>
                     <BadgeY2K variant={m.actif ? 'success' : 'error'}>{m.actif ? 'Actif' : 'Désactivé'}</BadgeY2K>
+                    {m.actif && !aTousLesAccesAdmin(m.acces_groupes) && (
+                      <BadgeY2K variant="error">Bloqué au lancement</BadgeY2K>
+                    )}
                   </div>
                   <p className="text-sm text-muted-foreground">{m.poste} · {m.email}</p>
                   {m.salaire_brut_mensuel > 0 && (
@@ -284,21 +283,22 @@ export default function AdminEquipe() {
                   <Input id="admin-equipe-date-embauche" type="date" value={editMembre.date_embauche || ''} onChange={e => setEditMembre({ ...editMembre, date_embauche: e.target.value })} />
                 </div>
                 <div>
-                  <Label>Périmètres d'accès (pages admin visibles)</Label>
+                  <Label>Périmètres d'accès</Label>
+                  <div className="mt-2 flex gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-foreground" role="status">
+                    <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0 text-amber-700 dark:text-amber-300" aria-hidden="true" />
+                    <p>
+                      L'accès partiel est temporairement désactivé pour le lancement. Chaque compte administrateur reçoit les huit périmètres. Les comptes historiques incomplets restent bloqués tant qu'ils ne sont pas explicitement enregistrés avec cet accès complet.
+                    </p>
+                  </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2">
-                    {PERIMETRES_ACCES.map(({ cle, description }) => (
-                      <label key={cle} className="flex items-start gap-2 text-sm cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={(editMembre.acces_groupes || []).includes(cle)}
-                          onChange={() => toggleAcces(cle)}
-                          className="rounded border-border mt-0.5"
-                        />
+                    {ADMIN_ACCESS_DESCRIPTIONS.map(({ cle, description }) => (
+                      <div key={cle} className="flex items-start gap-2 text-sm">
+                        <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-success" aria-hidden="true" />
                         <span>
                           {cle}
                           <span className="block text-xs text-muted-foreground">{description}</span>
                         </span>
-                      </label>
+                      </div>
                     ))}
                   </div>
                 </div>

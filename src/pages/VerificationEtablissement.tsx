@@ -26,9 +26,11 @@ import { Label } from '@/components/ui/label';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { verifierFichierDocument } from '@/lib/documentUpload';
+import { finaliserTeleversementPreuveEtablissement } from '@/lib/etablissementProofUpload';
 import { toast } from 'sonner';
 
 type EtabVerif = {
+  verification_source_version: number;
   nom: string | null;
   finess: string | null;
   finess_verifie: boolean | null;
@@ -84,7 +86,7 @@ export default function VerificationEtablissement() {
     if (!user) return;
     const { data } = await supabase
       .from('etablissements')
-      .select('nom, finess, finess_verifie, finess_raison_sociale, representant_nom, representant_prenom, representant_identite_verifiee, justificatif_fonction_verifie, email_contact, email_contact_verifie, rattachement_methode, rattachement_verifie')
+      .select('verification_source_version, nom, finess, finess_verifie, finess_raison_sociale, representant_nom, representant_prenom, representant_identite_verifiee, justificatif_fonction_verifie, email_contact, email_contact_verifie, rattachement_methode, rattachement_verifie')
       .eq('id', user.id)
       .maybeSingle();
     if (data) {
@@ -129,7 +131,9 @@ export default function VerificationEtablissement() {
         await recharger();
       } else if (data?.revue_manuelle) {
         toast.warning(data?.motif || 'FINESS trouvé, mais le lien avec votre établissement doit être vérifié manuellement.');
-        await recharger();
+        // Le candidat est conservé dans la revue sécurisée, mais n'écrase pas
+        // le FINESS canonique avant décision humaine. Garder la saisie à l'écran.
+        setFinessInput(finess);
       } else {
         toast.error("Cet établissement n'est pas actif dans l'Annuaire Santé.");
         await recharger();
@@ -164,29 +168,38 @@ export default function VerificationEtablissement() {
         .upload(path, pieceFile, { upsert: false, contentType: mime });
       if (upErr) throw upErr;
 
-      const { error: updErr } = await supabase
-        .from('etablissements')
-        .update({
-          representant_nom: nom.trim(),
-          representant_prenom: prenom.trim() || null,
-          representant_piece_s3_key: path,
-          representant_piece_type_mime: mime,
-          representant_piece_type_document: typeDoc,
-        })
-        .eq('id', user.id);
-      if (updErr) throw updErr;
+      if (etab?.verification_source_version == null) {
+        throw new Error('Dossier obsolète. Rechargez la page avant de téléverser.');
+      }
+      await finaliserTeleversementPreuveEtablissement({
+        etablissementId: user.id,
+        preuve: 'IDENTITE',
+        nouvelleS3Key: path,
+        typeMime: mime,
+        typeDocument: typeDoc,
+        versionAttendue: etab.verification_source_version,
+        representantNom: nom.trim(),
+        representantPrenom: prenom.trim(),
+      });
 
       const { data, error } = await supabase.functions.invoke('verify-piece-identite-etab', {
         body: { etablissement_id: user.id },
       });
       if (error) { toast.error(await messageErreurEdgeFn(error, "Le document n'a pas pu être vérifié. Vérifiez qu'il s'agit bien d'une pièce d'identité officielle (CNI, passeport, titre de séjour), lisible et complète.")); return; }
+      if (data?.ok !== true) {
+        toast.error(data?.error || "Le document n'a pas pu être analysé. Il reste enregistré pour une nouvelle tentative.");
+        await recharger();
+        return;
+      }
 
       if (data?.identite_verifiee) {
         toast.success('Identité du représentant vérifiée.');
+      } else if (data?.revue_manuelle === true) {
+        toast.warning(data?.motif || 'Le document a été transmis à l’équipe Jolene pour une revue humaine. Il reste non vérifié jusque-là.');
       } else if (data?.verdict === 'REJETE') {
         toast.error(data?.motif || "Le document n'a pas pu être validé. Vérifiez la lisibilité et la concordance du nom.");
       } else if (data?.verdict === 'EN_ATTENTE') {
-        toast('Vérification en cours d\'analyse. Le résultat sera mis à jour sous peu.');
+        toast.warning('Le document reste non vérifié. Réessayez ou contactez le support pour demander une revue humaine.');
       } else if (data?.nom_correspond === false) {
         toast.error('Le nom du document ne correspond pas au représentant déclaré.');
       } else {
@@ -221,23 +234,32 @@ export default function VerificationEtablissement() {
         .upload(path, justifFile, { upsert: false, contentType: mime });
       if (upErr) throw upErr;
 
-      const { error: updErr } = await supabase
-        .from('etablissements')
-        .update({
-          justificatif_fonction_s3_key: path,
-          justificatif_fonction_type_mime: mime,
-          justificatif_fonction_type: justifType,
-        })
-        .eq('id', user.id);
-      if (updErr) throw updErr;
+      if (etab?.verification_source_version == null) {
+        throw new Error('Dossier obsolète. Rechargez la page avant de téléverser.');
+      }
+      await finaliserTeleversementPreuveEtablissement({
+        etablissementId: user.id,
+        preuve: 'FONCTION',
+        nouvelleS3Key: path,
+        typeMime: mime,
+        typeDocument: justifType,
+        versionAttendue: etab.verification_source_version,
+      });
 
       const { data, error } = await supabase.functions.invoke('verify-justificatif-fonction', {
         body: { etablissement_id: user.id },
       });
       if (error) { toast.error(await messageErreurEdgeFn(error, "Le justificatif n'a pas pu être vérifié. Vérifiez qu'il mentionne bien votre nom et votre établissement, et qu'il est lisible.")); return; }
+      if (data?.ok !== true) {
+        toast.error(data?.error || "Le justificatif n'a pas pu être analysé. Il reste enregistré pour une nouvelle tentative.");
+        await recharger();
+        return;
+      }
 
       if (data?.justificatif_verifie) {
         toast.success('Justificatif de fonction validé — rattachement confirmé.');
+      } else if (data?.revue_manuelle === true) {
+        toast.warning(data?.motif || 'Le justificatif a été transmis à l’équipe Jolene pour une revue humaine. Il reste non vérifié jusque-là.');
       } else if (data?.verdict === 'REJETE') {
         toast.error(data?.motif || "Le document n'a pas pu être validé comme justificatif de fonction.");
       } else if (data?.etablissement_correspond === false) {

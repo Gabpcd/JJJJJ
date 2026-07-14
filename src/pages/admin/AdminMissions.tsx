@@ -82,6 +82,7 @@ export default function AdminMissions() {
   // Support both ?filtre= (legacy) and ?statut= (from AdminGroupes)
   const filtreParam = (searchParams.get('filtre') || searchParams.get('statut') || 'TOUTES').toUpperCase() as FiltreStatut;
   const groupeParam = searchParams.get('groupe') || null;
+  const missionParam = searchParams.get('mission');
   const [filtre, setFiltre] = useState<FiltreStatut>(FILTRES.some(f => f.cle === filtreParam) ? filtreParam : 'TOUTES');
   const [missions, setMissions] = useState<any[]>([]);
   const [aTraiter, setATraiter] = useState<any[]>([]);
@@ -98,6 +99,13 @@ export default function AdminMissions() {
   const [absenceMissionId, setAbsenceMissionId] = useState<string | null>(null);
   const [absenceMotif, setAbsenceMotif] = useState('');
   const [absenceLoading, setAbsenceLoading] = useState(false);
+
+  // Compatibilité avec les liens profonds émis avant la route de détail dédiée.
+  // Ils doivent ouvrir la mission ciblée, pas afficher silencieusement toute la liste.
+  useEffect(() => {
+    if (!missionParam) return;
+    navigate(`/admin/missions/${encodeURIComponent(missionParam)}`, { replace: true });
+  }, [missionParam, navigate]);
 
   useEffect(() => {
     async function charger() {
@@ -188,7 +196,7 @@ export default function AdminMissions() {
 
   const marquerAbsence = async () => {
     if (!absenceMissionId) return;
-    if (!absenceMotif.trim()) { toast.error('Motif obligatoire (RGPD audit).'); return; }
+    if (!absenceMotif.trim()) { toast.error('Motif obligatoire pour la traçabilité.'); return; }
     setAbsenceLoading(true);
     const { data, error } = await supabase.rpc('fn_admin_marquer_absence_sans_prevenir' as any, {
       p_mission_id: absenceMissionId,
@@ -417,7 +425,7 @@ export default function AdminMissions() {
             </h2>
             <p className="text-xs text-muted-foreground">Enregistre une absence non justifiée du soignant. Motif tracé RGPD.</p>
             <label htmlFor="admin-absence-motif" className="block">
-              <span className="text-xs font-medium text-foreground mb-1 block">Motif * (RGPD audit)</span>
+              <span className="text-xs font-medium text-foreground mb-1 block">Motif * (journalisé)</span>
               <Textarea id="admin-absence-motif" value={absenceMotif} onChange={(e) => setAbsenceMotif(e.target.value)} rows={3} placeholder="Décrivez les circonstances de l'absence…" disabled={absenceLoading} />
             </label>
             <div className="flex gap-2">

@@ -40,7 +40,7 @@ export function detecterLeak(content: string): DetectionResult {
     return { blocked: true, type: "TELEPHONE", match: matchSpecial[0] };
   }
 
-  const telIntl = /(?:\+|00)\d{1,3}[\s.-]?\d{6,}/g;
+  const telIntl = /(?:\+|00)(?:[\s.-]*\d){7,15}\b/g;
   const matchIntl = content.match(telIntl);
   if (matchIntl && matchIntl.length > 0) {
     return { blocked: true, type: "TELEPHONE", match: matchIntl[0] };
@@ -124,17 +124,28 @@ export function detecterLeak(content: string): DetectionResult {
 }
 
 export function isJoleneUrl(url: string): boolean {
-  const lower = url.toLowerCase();
-  return /(?:^|[/.])jolene\.app(?:[/?#:]|$)/.test(lower);
+  const valeur = url.trim().replace(/[),.;!?]+$/g, '');
+  try {
+    const parsed = new URL(
+      /^[a-z][a-z\d+.-]*:\/\//i.test(valeur)
+        ? valeur
+        : `https://${valeur}`,
+    );
+    const hostname = parsed.hostname.toLowerCase().replace(/\.$/, '');
+    return hostname === 'jolene.app' || hostname.endsWith('.jolene.app');
+  } catch {
+    return false;
+  }
 }
 
 /**
- * Sanitization HTML basique : strip toutes les balises HTML + decode entities
- * dangereuses. Pas de DOMPurify (deno), pattern simple suffit pour un chat
- * texte plat (pas de markdown rendering côté serveur).
+ * Normalisation du texte brut. Les clients React rendent `contenu` comme un
+ * nœud texte (aucun HTML/Markdown), donc encoder ou retirer `<` altérerait des
+ * messages légitimes comme « 1 < 2 ». PostgreSQL interdit seulement NUL.
  */
 export function sanitizeContent(content: string): string {
-  let s = content.replace(/<\/?[^>]+(>|$)/g, "");
-  s = s.replace(/on\w+\s*=\s*["'][^"']*["']/gi, "");
-  return s.trim();
+  return content
+    .split(String.fromCharCode(0)).join("")
+    .replace(/\r\n?/g, "\n")
+    .trim();
 }

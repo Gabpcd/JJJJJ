@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Loader2, FileText, AlertCircle, CheckCircle, XCircle, Edit3 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useNotification } from '@/contexts/NotificationContext';
@@ -79,8 +79,29 @@ export function ReclamationsScoreContent() {
   const [reclamations, setReclamations] = useState<Reclamation[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectionnee, setSelectionnee] = useState<Reclamation | null>(null);
+  const [justificatifEnCours, setJustificatifEnCours] = useState<string | null>(null);
 
-  async function charger() {
+  async function ouvrirJustificatif(reclamation: Reclamation) {
+    if (!reclamation.justificatif_storage_path) return;
+    setJustificatifEnCours(reclamation.id);
+    const { data, error } = await supabase.storage
+      .from('justificatifs')
+      .createSignedUrl(reclamation.justificatif_storage_path, 300);
+    setJustificatifEnCours(null);
+
+    if (error || !data?.signedUrl) {
+      afficherNotification({ type: 'erreur', message: 'Impossible d’ouvrir le justificatif. Veuillez réessayer.' });
+      return;
+    }
+
+    const lien = document.createElement('a');
+    lien.href = data.signedUrl;
+    lien.target = '_blank';
+    lien.rel = 'noopener noreferrer';
+    lien.click();
+  }
+
+  const charger = useCallback(async () => {
     setLoading(true);
     const { data, error } = await supabase.rpc('fn_admin_lister_reclamations' as any, {
       p_statut: filtre, p_limit: 100,
@@ -91,9 +112,9 @@ export function ReclamationsScoreContent() {
       setReclamations(((data as any).reclamations || []) as Reclamation[]);
     }
     setLoading(false);
-  }
+  }, [afficherNotification, filtre]);
 
-  useEffect(() => { charger(); }, [filtre]);
+  useEffect(() => { charger(); }, [charger]);
 
   return (
       <div className="space-y-4">
@@ -153,11 +174,17 @@ export function ReclamationsScoreContent() {
                     </p>
                     <p className="text-sm text-foreground mt-2 italic">« {r.texte_libre} »</p>
                     {r.justificatif_storage_path && (
-                      <a href={`https://flripxtsyegjshnhzjkz.supabase.co/storage/v1/object/sign/justificatifs/${encodeURIComponent(r.justificatif_storage_path)}`}
-                        target="_blank" rel="noopener noreferrer"
-                        className="text-xs text-primary inline-flex items-center gap-1 mt-1">
-                        <FileText className="h-3 w-3" /> Justificatif joint
-                      </a>
+                      <button
+                        type="button"
+                        onClick={() => ouvrirJustificatif(r)}
+                        disabled={justificatifEnCours === r.id}
+                        className="text-xs text-primary inline-flex items-center gap-1 mt-1 hover:underline disabled:opacity-50"
+                      >
+                        {justificatifEnCours === r.id
+                          ? <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />
+                          : <FileText className="h-3 w-3" aria-hidden="true" />}
+                        {justificatifEnCours === r.id ? 'Ouverture…' : 'Ouvrir le justificatif'}
+                      </button>
                     )}
                     {r.motif_admin && (
                       <p className="text-xs mt-2 bg-muted/40 p-2 rounded">
@@ -196,10 +223,20 @@ function ModaleDecision({ reclamation, onFermer, onTraitee }: {
   const [pointsCorriges, setPointsCorriges] = useState<string>(Math.max(-5, Math.ceil(reclamation.event_points / 2)).toString());
   const [motifAdmin, setMotifAdmin] = useState('');
   const [loading, setLoading] = useState(false);
+  const dialogueRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    dialogueRef.current?.focus();
+    const fermerAvecEchap = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && !loading) onFermer();
+    };
+    document.addEventListener('keydown', fermerAvecEchap);
+    return () => document.removeEventListener('keydown', fermerAvecEchap);
+  }, [loading, onFermer]);
 
   async function soumettre() {
     if (motifAdmin.trim().length < 10) {
-      afficherNotification({ type: 'erreur', message: 'Motif admin min 10 caractères.' });
+        afficherNotification({ type: 'erreur', message: 'Le motif doit contenir au moins 10 caractères.' });
       return;
     }
     if (decision === 'REDUIRE') {
@@ -234,12 +271,20 @@ function ModaleDecision({ reclamation, onFermer, onTraitee }: {
 
   return (
     <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={onFermer}>
-      <div className="bg-card border border-border rounded-xl max-w-lg w-full p-6 space-y-4" onClick={e => e.stopPropagation()}>
-        <h2 className="text-lg font-bold text-foreground">Décider la réclamation</h2>
+      <div
+        ref={dialogueRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="admin-reclamation-decision-title"
+        tabIndex={-1}
+        className="bg-card border border-border rounded-xl max-w-lg w-full p-6 space-y-4 outline-none"
+        onClick={e => e.stopPropagation()}
+      >
+        <h2 id="admin-reclamation-decision-title" className="text-lg font-bold text-foreground">Décider la réclamation</h2>
 
         <div className="rounded-lg bg-muted/40 p-3 text-xs space-y-1">
-          <p className="font-semibold">{reclamation.event_type_evenement} <span className="font-mono text-destructive">({reclamation.event_points} pts)</span></p>
-          <p>Motif catégorie : <strong>{reclamation.motif_categorie}</strong></p>
+          <p className="font-semibold">{libelleTypeEvenement(reclamation.event_type_evenement)} <span className="font-mono text-destructive">({reclamation.event_points} pts)</span></p>
+          <p>Catégorie du motif : <strong>{reclamation.motif_categorie}</strong></p>
           <p className="italic">« {reclamation.texte_libre} »</p>
         </div>
 
@@ -267,14 +312,14 @@ function ModaleDecision({ reclamation, onFermer, onTraitee }: {
         )}
 
         <label className="block">
-          <span className="text-xs font-medium mb-1 block">Motif admin * (minimum 10 caractères, visible par l'utilisateur)</span>
+          <span className="text-xs font-medium mb-1 block">Motif de la décision * (minimum 10 caractères, visible par l'utilisateur)</span>
           <textarea value={motifAdmin} onChange={e => setMotifAdmin(e.target.value)} className="input-base" rows={3}
             placeholder="Ex: Certif médical fourni est conforme, justification valide..." />
         </label>
 
         <div className="rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 p-3 text-xs flex gap-2">
           <AlertCircle className="h-4 w-4 shrink-0" />
-          <p>La décision sera <strong>propagée automatiquement</strong> sur l'événement score, le score sera recalculé, et l'utilisateur recevra notification email + push.</p>
+          <p>La décision sera <strong>appliquée automatiquement</strong> à l'événement de score, le score sera recalculé et l'utilisateur recevra une notification par e-mail et push.</p>
         </div>
 
         <div className="flex gap-2">

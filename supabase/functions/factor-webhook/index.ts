@@ -91,7 +91,7 @@ Deno.serve(async (req) => {
     }
 
     // Trouver l'avance correspondante
-    const query = supabaseAdmin.from("factor_advances").select("id, statut, facture_honoraire_id, soignant_id");
+    const query = supabaseAdmin.from("factor_advances").select("id, statut, facture_honoraire_id, soignant_id, approuvee_le");
     const { data: advance } = providerAdvanceId
       ? await query.eq("provider_advance_id", providerAdvanceId).maybeSingle()
       : await (async () => {

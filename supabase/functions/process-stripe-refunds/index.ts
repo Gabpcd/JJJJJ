@@ -1,93 +1,641 @@
-// ============================================================
-// process-stripe-refunds — CP-STRIPE-5 (H3 + A21/T13)
-// ============================================================
-// Cron qui consomme stripe_refunds_queue pour exécuter les
-// remboursements Stripe associés aux avoirs AUTO_STRIPE.
+// process-stripe-refunds — remboursements Stripe rapprochés exactement.
 //
-// Cycle statut :
-//   EN_ATTENTE → EN_COURS (lock) → TRAITE (succès) OU EN_ATTENTE (retry)
-//                                → ECHEC (permanent ou 3 tentatives)
-//
-// Idempotence : UPDATE conditionnel `WHERE statut='EN_ATTENTE'` fait
-// office de lock optimiste. Si 2 crons tournent en parallèle, la ligne
-// ne sera prise qu'une fois.
-//
-// Webhook filet de sécurité : charge.refunded (CP-STRIPE-4) fait
-// UPDATE TRAITE idempotent si le cron tombe entre refunds.create et
-// le UPDATE final.
-// ============================================================
+// Un appel refunds.create n'est pas un succès financier : un Refund peut
+// rester pending/requires_action puis échouer. Cette fonction ne solde donc la
+// queue, l'AVOIR, l'escrow et son exposition qu'après `status=succeeded`, via
+// une seule transaction SQL (`fn_stripe_refund_rapprocher`).
 
-import Stripe from "npm:stripe@18.5.0";
+import Stripe from "npm:stripe@20.4.1";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { assertStripeSecretMode } from "../_shared/stripe-production.ts";
 
 const URL = Deno.env.get("SUPABASE_URL")!;
 const KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const STRIPE_KEY = Deno.env.get("STRIPE_SECRET_KEY") || "";
-
-// Codes d'erreur Stripe considérés comme permanents (ECHEC direct, pas de retry)
-const PERMANENT_ERROR_CODES = new Set([
-  "payment_intent_unexpected_state",
-  "amount_too_large",
-  "charge_disputed",
-  "charge_expired",
-  "missing_source",
-  "resource_missing", // payment_intent introuvable
-]);
-
-// Codes considérés comme succès idempotent (le refund existe déjà côté Stripe)
-const ALREADY_REFUNDED_CODES = new Set([
-  "charge_already_refunded",
-]);
-
-const MAX_TENTATIVES = 3;
+const LEASE_MS = 15 * 60 * 1000;
+const MAX_BATCH = 10;
 
 interface QueueRow {
   id: string;
   avoir_id: string | null;
   facture_origine_id: string | null;
   stripe_payment_intent_id: string;
+  stripe_refund_id: string | null;
   montant_cts: number;
   tentatives: number;
-  // Escrow 7b-D PR 4 (nullable : legacy = null/false)
   paiement_escrow_id: string | null;
-  reverse_transfer: boolean | null;
-  refund_application_fee_cts: number | null;
-  absorbe_plateforme: boolean | null;
+  reverse_transfer: boolean;
+  refund_application_fee_cts: number;
+  absorbe_plateforme: boolean;
+  escrow_statut_avant_remboursement: string | null;
 }
 
-interface StripeErrorLike {
-  type?: string;
-  code?: string;
-  message?: string;
-  raw?: { code?: string; message?: string };
+type RefundContext = {
+  paymentIntent: Stripe.PaymentIntent;
+  charge: Stripe.Charge;
+  params: Stripe.RefundCreateParams;
+};
+
+class ProvenPreflightError extends Error {
+  code: string;
+
+  constructor(code: string, message: string) {
+    super(message);
+    this.name = "ProvenPreflightError";
+    this.code = code;
+  }
 }
 
-// Auth résiliente : accepte legacy JWT ou nouveau secret asymétrique (vault).
-let _vaultSecret: string | null = null;
+class AmbiguousFinancialStateError extends Error {
+  code: string;
+
+  constructor(code: string, message: string) {
+    super(message);
+    this.name = "AmbiguousFinancialStateError";
+    this.code = code;
+  }
+}
+
+function objectId(value: unknown): string | null {
+  if (typeof value === "string") return value;
+  if (value && typeof value === "object" && "id" in value) {
+    const id = (value as { id?: unknown }).id;
+    return typeof id === "string" ? id : null;
+  }
+  return null;
+}
+
+function fail(code: string, message: string): never {
+  throw new ProvenPreflightError(code, message);
+}
+
+function isDeletedCustomer(
+  customer: Stripe.Customer | Stripe.DeletedCustomer,
+): customer is Stripe.DeletedCustomer {
+  return "deleted" in customer && customer.deleted === true;
+}
+
+// Auth résiliente : accepte le JWT service_role historique ou le nouveau
+// secret asymétrique stocké dans l'environnement/vault.
+let vaultSecretCache: string | null = null;
 async function getVaultSecret(sb: any): Promise<string> {
-  if (_vaultSecret) return _vaultSecret;
-  const env = Deno.env.get("SUPABASE_SECRET_KEY") || Deno.env.get("SB_SECRET_KEY") || "";
-  if (env) { _vaultSecret = env; return env; }
+  if (vaultSecretCache) return vaultSecretCache;
+  const env = Deno.env.get("SUPABASE_SECRET_KEY")
+    || Deno.env.get("SB_SECRET_KEY")
+    || "";
+  if (env) {
+    vaultSecretCache = env;
+    return env;
+  }
   try {
-    const { data } = await sb.rpc('fn_lire_secret_cron');
-    if (data) { _vaultSecret = data; return data; }
-  } catch { /* ignore */ }
+    const { data, error } = await sb.rpc("fn_lire_secret_cron");
+    if (!error && typeof data === "string" && data) {
+      vaultSecretCache = data;
+      return data;
+    }
+  } catch {
+    // L'auth échouera fermée ci-dessous.
+  }
   return "";
 }
 
+async function retrieveCharge(
+  stripe: Stripe,
+  paymentIntent: Stripe.PaymentIntent,
+): Promise<Stripe.Charge> {
+  const latest = paymentIntent.latest_charge;
+  if (!latest) fail("SOURCE_CHARGE_ABSENTE", "PaymentIntent sans Charge source");
+  return typeof latest === "string"
+    ? await stripe.charges.retrieve(latest)
+    : latest;
+}
+
+async function validateCommonStripeSource(
+  stripe: Stripe,
+  item: QueueRow,
+  paymentIntent: Stripe.PaymentIntent,
+  expected: {
+    etablissementId: string;
+    customerId: string;
+    amountCents: number;
+    metadataMissionId?: string | null;
+  },
+  existingRefund: Stripe.Refund | null,
+): Promise<Stripe.Charge> {
+  const charge = await retrieveCharge(stripe, paymentIntent);
+  const customer = await stripe.customers.retrieve(expected.customerId);
+  const ownSucceededAmount = existingRefund?.status === "succeeded"
+    ? existingRefund.amount
+    : 0;
+  const otherSucceededRefundedAmount = charge.amount_refunded - ownSucceededAmount;
+  // Un refund/dispute étranger à cette queue est déjà un mouvement financier.
+  // Il est donc interdit de classer le préflight en ECHEC et de restaurer
+  // l'escrow : on le garde gelé jusqu'au rapprochement manuel exact.
+  if (
+    charge.disputed
+    || otherSucceededRefundedAmount < 0
+    || otherSucceededRefundedAmount > 0
+  ) {
+    throw new AmbiguousFinancialStateError(
+      "STRIPE_SOURCE_ALREADY_MOVED",
+      "La Charge porte déjà un remboursement ou une contestation hors de cette queue",
+    );
+  }
+  const remainingForQueue = charge.amount - charge.amount_refunded + ownSucceededAmount;
+
+  if (
+    paymentIntent.id !== item.stripe_payment_intent_id
+    || paymentIntent.status !== "succeeded"
+    || paymentIntent.currency !== "eur"
+    || paymentIntent.amount !== expected.amountCents
+    || paymentIntent.amount_received !== expected.amountCents
+    || paymentIntent.amount_capturable !== 0
+    || objectId(paymentIntent.customer) !== expected.customerId
+    || paymentIntent.metadata?.etablissement_id !== expected.etablissementId
+    || (expected.metadataMissionId
+      && paymentIntent.metadata?.mission_id !== expected.metadataMissionId)
+    || isDeletedCustomer(customer)
+    || customer.metadata?.etablissement_id !== expected.etablissementId
+    || !charge.paid
+    || !charge.captured
+    || charge.status !== "succeeded"
+    || charge.currency !== "eur"
+    || charge.amount !== expected.amountCents
+    || charge.amount_refunded < 0
+    || charge.amount_refunded > charge.amount
+    || objectId(charge.customer) !== expected.customerId
+    || objectId(charge.payment_intent) !== paymentIntent.id
+    || item.montant_cts > remainingForQueue
+  ) {
+    fail(
+      "STRIPE_REFUND_SOURCE_IDENTITY_MISMATCH",
+      "Le paiement Stripe ne correspond pas exactement à l'origine de la queue",
+    );
+  }
+  return charge;
+}
+
+async function validateEscrowSource(
+  sb: any,
+  stripe: Stripe,
+  item: QueueRow,
+  paymentIntent: Stripe.PaymentIntent,
+  existingRefund: Stripe.Refund | null,
+): Promise<RefundContext> {
+  const { data: escrow, error: escrowError } = await sb
+    .from("paiements_escrow")
+    .select(
+      "id, mission_id, etablissement_id, soignant_id, montant_total_cents, honoraires_cents, commission_cents, stripe_payment_intent_id, statut",
+    )
+    .eq("id", item.paiement_escrow_id)
+    .maybeSingle();
+  if (escrowError || !escrow) {
+    fail(
+      "ESCROW_SOURCE_ABSENTE",
+      `Escrow introuvable: ${escrowError?.message || item.paiement_escrow_id}`,
+    );
+  }
+
+  const { data: etablissement, error: etablissementError } = await sb
+    .from("etablissements")
+    .select("id, stripe_customer_id")
+    .eq("id", escrow.etablissement_id)
+    .maybeSingle();
+  const { data: onboarding, error: onboardingError } = await sb
+    .from("stripe_connect_onboarding")
+    .select("soignant_id, stripe_account_id, statut, onboarding_complete, charges_enabled, payouts_enabled")
+    .eq("soignant_id", escrow.soignant_id)
+    .maybeSingle();
+  if (
+    etablissementError
+    || !etablissement?.stripe_customer_id
+    || onboardingError
+    || !onboarding?.stripe_account_id
+  ) {
+    fail(
+      "ESCROW_TENANT_BINDING_ABSENT",
+      etablissementError?.message || onboardingError?.message || "liaison Stripe absente",
+    );
+  }
+
+  const prior = item.escrow_statut_avant_remboursement;
+  const beforeRelease = prior === "DEBITE" || prior === "DISPONIBLE";
+  const afterRelease = prior === "PAYE";
+  const honorairesRefund = item.montant_cts - item.refund_application_fee_cts;
+  const expectedFee = honorairesRefund === escrow.honoraires_cents
+    ? escrow.commission_cents
+    : Math.round(
+      escrow.commission_cents * honorairesRefund / escrow.honoraires_cents,
+    );
+  if (
+    escrow.statut !== "REMBOURSE_EN_COURS"
+    || escrow.stripe_payment_intent_id !== item.stripe_payment_intent_id
+    || (!beforeRelease && !afterRelease)
+    || item.reverse_transfer !== beforeRelease
+    || item.absorbe_plateforme !== afterRelease
+    || honorairesRefund <= 0
+    || honorairesRefund > escrow.honoraires_cents
+    || item.refund_application_fee_cts < 0
+    || item.refund_application_fee_cts !== expectedFee
+    || item.montant_cts > escrow.montant_total_cents
+    || (beforeRelease && honorairesRefund !== escrow.honoraires_cents)
+  ) {
+    fail(
+      "ESCROW_REFUND_FLAGS_MISMATCH",
+      "Montants, état antérieur ou options de reversal escrow incohérents",
+    );
+  }
+
+  const destinationId = objectId(paymentIntent.transfer_data?.destination);
+  if (
+    paymentIntent.metadata?.type !== "ESCROW_MISSION_PAYMENT"
+    || paymentIntent.metadata?.paiement_escrow_id !== escrow.id
+    || paymentIntent.metadata?.mission_id !== escrow.mission_id
+    || paymentIntent.metadata?.soignant_id !== escrow.soignant_id
+    || paymentIntent.metadata?.etablissement_id !== escrow.etablissement_id
+    || Number(paymentIntent.metadata?.honoraires_cents) !== escrow.honoraires_cents
+    || Number(paymentIntent.metadata?.commission_cents) !== escrow.commission_cents
+    || paymentIntent.application_fee_amount !== escrow.commission_cents
+    || destinationId !== onboarding.stripe_account_id
+  ) {
+    fail(
+      "ESCROW_PAYMENT_PROVENANCE_MISMATCH",
+      "Le PaymentIntent n'est pas la destination charge de cet escrow",
+    );
+  }
+
+  const charge = await validateCommonStripeSource(
+    stripe,
+    item,
+    paymentIntent,
+    {
+      etablissementId: escrow.etablissement_id,
+      customerId: etablissement.stripe_customer_id,
+      amountCents: escrow.montant_total_cents,
+      metadataMissionId: escrow.mission_id,
+    },
+    existingRefund,
+  );
+
+  const params: Stripe.RefundCreateParams = {
+    payment_intent: paymentIntent.id,
+    amount: item.montant_cts,
+    reason: "requested_by_customer",
+    metadata: {
+      queue_id: item.id,
+      source: "jolene_refunds_cron",
+      origin_type: "ESCROW",
+      paiement_escrow_id: escrow.id,
+      mission_id: escrow.mission_id,
+      etablissement_id: escrow.etablissement_id,
+      reverse_transfer: String(item.reverse_transfer),
+      absorbe_plateforme: String(item.absorbe_plateforme),
+      refund_application_fee_cts: String(item.refund_application_fee_cts),
+    },
+  };
+  if (item.reverse_transfer) params.reverse_transfer = true;
+  if (item.reverse_transfer && item.refund_application_fee_cts > 0) {
+    params.refund_application_fee = true;
+  }
+  return { paymentIntent, charge, params };
+}
+
+async function validateAvoirSource(
+  sb: any,
+  stripe: Stripe,
+  item: QueueRow,
+  paymentIntent: Stripe.PaymentIntent,
+  existingRefund: Stripe.Refund | null,
+): Promise<RefundContext> {
+  const { data: avoir, error: avoirError } = await sb
+    .from("factures_honoraires")
+    .select(
+      "id, type_document, statut, mode_remboursement, facture_precedente_id, montant_ttc, etablissement_id, mission_id, soignant_id",
+    )
+    .eq("id", item.avoir_id)
+    .maybeSingle();
+  const { data: origine, error: origineError } = await sb
+    .from("factures_honoraires")
+    .select(
+      "id, type_document, statut, montant_ttc, etablissement_id, mission_id, soignant_id, stripe_payment_intent_id",
+    )
+    .eq("id", item.facture_origine_id)
+    .maybeSingle();
+  if (avoirError || !avoir || origineError || !origine) {
+    fail(
+      "AVOIR_SOURCE_ABSENTE",
+      avoirError?.message || origineError?.message || "avoir/facture introuvable",
+    );
+  }
+
+  const avoirCents = Math.round(Number(avoir.montant_ttc) * 100);
+  if (
+    avoir.type_document !== "AVOIR"
+    || !["EMISE", "EN_RETARD"].includes(avoir.statut)
+    || avoir.mode_remboursement !== "AUTO_STRIPE"
+    || avoir.facture_precedente_id !== origine.id
+    || origine.type_document !== "FACTURE"
+    || origine.statut !== "PAYEE"
+    || origine.stripe_payment_intent_id !== item.stripe_payment_intent_id
+    || Math.round(Number(origine.montant_ttc) * 100) !== paymentIntent.amount
+    || avoir.etablissement_id !== origine.etablissement_id
+    || avoir.mission_id !== origine.mission_id
+    || avoir.soignant_id !== origine.soignant_id
+    || item.montant_cts !== avoirCents
+  ) {
+    fail(
+      "AVOIR_REFUND_PROVENANCE_MISMATCH",
+      "L'avoir et sa facture d'origine ne correspondent pas exactement à la queue",
+    );
+  }
+
+  const { data: etablissement, error: etablissementError } = await sb
+    .from("etablissements")
+    .select("id, stripe_customer_id")
+    .eq("id", origine.etablissement_id)
+    .maybeSingle();
+  if (etablissementError || !etablissement?.stripe_customer_id) {
+    fail(
+      "AVOIR_CUSTOMER_ABSENT",
+      etablissementError?.message || "Customer établissement absent",
+    );
+  }
+
+  const { data: transfers, error: transfersError } = origine.mission_id
+    ? await sb
+      .from("stripe_transfers")
+      .select("id, statut, stripe_payment_intent_id")
+      .eq("mission_id", origine.mission_id)
+      .limit(20)
+    : { data: [], error: null };
+  if (transfersError) {
+    fail("CONNECT_LOOKUP_FAILED", transfersError.message);
+  }
+  const activeConnect = (transfers || []).some(
+    (transfer: { statut: string }) =>
+      !["ECHOUE", "ANNULEE", "REMBOURSE"].includes(transfer.statut),
+  );
+  const metadataType = paymentIntent.metadata?.type || "";
+  const metadataBound = paymentIntent.metadata?.mission_id === origine.mission_id
+    || paymentIntent.metadata?.facture_id === origine.id;
+  if (
+    activeConnect
+    || metadataType === "CONNECT_MISSION_PAYMENT"
+    || metadataType === "ESCROW_MISSION_PAYMENT"
+    || !metadataBound
+  ) {
+    fail(
+      activeConnect || metadataType === "CONNECT_MISSION_PAYMENT"
+        ? "CONNECT_TRANSFER_REVERSAL_REQUIRED"
+        : "STANDARD_PAYMENT_PROVENANCE_MISMATCH",
+      "Refund automatique interdit sans provenance standard exacte",
+    );
+  }
+
+  const charge = await validateCommonStripeSource(
+    stripe,
+    item,
+    paymentIntent,
+    {
+      etablissementId: origine.etablissement_id,
+      customerId: etablissement.stripe_customer_id,
+      amountCents: paymentIntent.amount,
+      metadataMissionId: paymentIntent.metadata?.mission_id ? origine.mission_id : null,
+    },
+    existingRefund,
+  );
+  if (item.montant_cts > paymentIntent.amount) {
+    fail("AVOIR_AMOUNT_EXCEEDS_SOURCE", "L'avoir dépasse le paiement Stripe source");
+  }
+
+  return {
+    paymentIntent,
+    charge,
+    params: {
+      payment_intent: paymentIntent.id,
+      amount: item.montant_cts,
+      reason: "requested_by_customer",
+      metadata: {
+        queue_id: item.id,
+        source: "jolene_refunds_cron",
+        origin_type: "AVOIR",
+        avoir_id: avoir.id,
+        facture_origine_id: origine.id,
+        mission_id: origine.mission_id || "",
+        etablissement_id: origine.etablissement_id,
+        reverse_transfer: "false",
+        absorbe_plateforme: "false",
+        refund_application_fee_cts: "0",
+      },
+    },
+  };
+}
+
+async function validateSource(
+  sb: any,
+  stripe: Stripe,
+  item: QueueRow,
+  paymentIntent: Stripe.PaymentIntent,
+  existingRefund: Stripe.Refund | null,
+): Promise<RefundContext> {
+  const isEscrow = Boolean(item.paiement_escrow_id);
+  const isAvoir = Boolean(item.avoir_id && item.facture_origine_id);
+  if (isEscrow === isAvoir) {
+    fail(
+      "QUEUE_ORIGIN_AMBIGUOUS",
+      "Une queue doit provenir exactement d'un escrow ou d'un avoir",
+    );
+  }
+  return isEscrow
+    ? validateEscrowSource(sb, stripe, item, paymentIntent, existingRefund)
+    : validateAvoirSource(sb, stripe, item, paymentIntent, existingRefund);
+}
+
+function assertRefundIdentity(
+  item: QueueRow,
+  context: RefundContext,
+  refund: Stripe.Refund,
+): void {
+  const metadata = refund.metadata || {};
+  const expectedOrigin = item.paiement_escrow_id ? "ESCROW" : "AVOIR";
+  if (
+    objectId(refund.payment_intent) !== context.paymentIntent.id
+    || objectId(refund.charge) !== context.charge.id
+    || refund.amount !== item.montant_cts
+    || refund.currency !== "eur"
+    || metadata.queue_id !== item.id
+    || metadata.source !== "jolene_refunds_cron"
+    || metadata.origin_type !== expectedOrigin
+    || metadata.reverse_transfer !== String(item.reverse_transfer)
+    || metadata.absorbe_plateforme !== String(item.absorbe_plateforme)
+    || metadata.refund_application_fee_cts
+      !== String(item.refund_application_fee_cts)
+  ) {
+    throw new Error(`REFUND_RESULT_IDENTITY_MISMATCH:${refund.id}`);
+  }
+  if (
+    refund.status === "succeeded"
+    && item.reverse_transfer
+    && !refund.transfer_reversal
+  ) {
+    throw new Error(`REFUND_TRANSFER_REVERSAL_MISSING:${refund.id}`);
+  }
+}
+
+async function findExistingRefund(
+  stripe: Stripe,
+  item: QueueRow,
+  paymentIntent: Stripe.PaymentIntent,
+): Promise<{ refund: Stripe.Refund | null; absenceProven: boolean }> {
+  if (item.stripe_refund_id) {
+    const refund = await stripe.refunds.retrieve(item.stripe_refund_id);
+    return { refund, absenceProven: false };
+  }
+
+  const refunds: Stripe.Refund[] = [];
+  let startingAfter: string | undefined;
+  do {
+    const page = await stripe.refunds.list({
+      payment_intent: paymentIntent.id,
+      limit: 100,
+      ...(startingAfter ? { starting_after: startingAfter } : {}),
+    });
+    refunds.push(...page.data);
+    startingAfter = page.has_more ? page.data.at(-1)?.id : undefined;
+    if (page.has_more && !startingAfter) {
+      throw new Error("REFUND_HISTORY_PAGINATION_FAILED");
+    }
+  } while (startingAfter);
+  const matches = refunds.filter(
+    (refund) => refund.metadata?.queue_id === item.id,
+  );
+  if (matches.length > 1) {
+    throw new Error("DUPLICATE_QUEUE_REFUNDS_MANUAL_REVIEW");
+  }
+  return { refund: matches[0] ?? null, absenceProven: matches.length === 0 };
+}
+
+async function bindRefundId(sb: any, item: QueueRow, refundId: string): Promise<void> {
+  let query = sb
+    .from("stripe_refunds_queue")
+    .update({
+      stripe_refund_id: refundId,
+      erreur: null,
+      dernier_essai_le: new Date().toISOString(),
+    })
+    .eq("id", item.id)
+    .eq("statut", "EN_COURS");
+  query = item.stripe_refund_id
+    ? query.eq("stripe_refund_id", item.stripe_refund_id)
+    : query.is("stripe_refund_id", null);
+  const { data, error } = await query.select("id").maybeSingle();
+  if (!error && data) return;
+
+  // Le webhook peut avoir gagné la course et déjà finalisé exactement ce
+  // refund. C'est la seule absence de ligne modifiable acceptée.
+  const { data: current, error: currentError } = await sb
+    .from("stripe_refunds_queue")
+    .select("statut, stripe_refund_id")
+    .eq("id", item.id)
+    .maybeSingle();
+  if (
+    currentError
+    || !current
+    || current.stripe_refund_id !== refundId
+    || !["EN_COURS", "TRAITE", "ECHEC"].includes(current.statut)
+  ) {
+    throw new Error(
+      `REFUND_ID_PERSISTENCE_FAILED:${error?.message || currentError?.message || "state conflict"}`,
+    );
+  }
+}
+
+async function reconcile(
+  sb: any,
+  item: QueueRow,
+  refundId: string | null,
+  result: "SUCCEEDED" | "FAILED" | "CANCELED",
+  detail: string | null,
+): Promise<void> {
+  const { data, error } = await sb.rpc("fn_stripe_refund_rapprocher", {
+    p_queue_id: item.id,
+    p_stripe_refund_id: refundId,
+    p_resultat: result,
+    p_detail: detail,
+    p_finalise_le: new Date().toISOString(),
+  });
+  if (error || !data?.success) {
+    throw new Error(
+      `REFUND_RECONCILIATION_FAILED:${error?.message || JSON.stringify(data)}`,
+    );
+  }
+}
+
+async function keepAmbiguousForPolling(
+  sb: any,
+  item: QueueRow,
+  detail: string,
+  refundId?: string | null,
+): Promise<void> {
+  const update: Record<string, unknown> = {
+    statut: "EN_COURS",
+    erreur: detail.slice(0, 500),
+    dernier_essai_le: new Date().toISOString(),
+  };
+  if (refundId) update.stripe_refund_id = refundId;
+  const { data, error } = await sb
+    .from("stripe_refunds_queue")
+    .update(update)
+    .eq("id", item.id)
+    .eq("statut", "EN_COURS")
+    .select("id")
+    .maybeSingle();
+  if (error || !data) {
+    throw new Error(`REFUND_POLL_STATE_FAILED:${error?.message || "state conflict"}`);
+  }
+}
+
+async function alertAdmins(
+  sb: any,
+  item: QueueRow,
+  code: string,
+  message: string,
+): Promise<void> {
+  try {
+    const { data: admins, error: adminsError } = await sb.rpc("fn_list_admin_user_ids");
+    if (adminsError) throw adminsError;
+    for (const adminId of (admins || []) as string[]) {
+      await sb.functions.invoke("send-email", {
+        body: {
+          type: "REFUND_ECHEC_ADMIN",
+          destinataire_id: adminId,
+          data: {
+            queue_id: item.id,
+            avoir_id: item.avoir_id,
+            paiement_escrow_id: item.paiement_escrow_id,
+            montant_formatte: (item.montant_cts / 100).toFixed(2),
+            payment_intent_id: item.stripe_payment_intent_id,
+            refund_id: item.stripe_refund_id,
+            erreur_code: code,
+            erreur_stripe: message.slice(0, 300),
+          },
+        },
+      });
+    }
+  } catch (error) {
+    console.error("REFUND_ECHEC_ADMIN notification failed:", error);
+  }
+}
+
 Deno.serve(async (req) => {
-  const t0 = Date.now();
+  const startedAt = Date.now();
+  const sb = createClient(URL, KEY);
 
   try {
-    const sb = createClient(URL, KEY);
-
-    // 1. Auth : Bearer service_role (legacy JWT OU vault secret)
     const authHeader = req.headers.get("Authorization") || "";
-    const bearer = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
+    const bearer = authHeader.replace(/^Bearer\s+/i, "").trim();
     const vaultSecret = await getVaultSecret(sb);
-    const validBearers = [KEY, vaultSecret].filter(Boolean);
-    if (!bearer || !validBearers.includes(bearer)) {
+    if (!bearer || ![KEY, vaultSecret].filter(Boolean).includes(bearer)) {
       return new Response(JSON.stringify({ error: "Non autorisé" }), {
         status: 401,
         headers: { "Content-Type": "application/json" },
@@ -95,306 +643,150 @@ Deno.serve(async (req) => {
     }
 
     assertStripeSecretMode(STRIPE_KEY);
-    const stripe = new Stripe(STRIPE_KEY, { apiVersion: "2025-08-27.basil" });
-
-    // 2. SELECT des lignes éligibles (max 10 / run). Une ligne EN_COURS
-    // abandonnée par un crash après l'appel Stripe redevient récupérable après
-    // le lease de 15 min ; la même clé d'idempotence rejouera le même refund.
-    const repriseAvant = new Date(Date.now() - 15 * 60 * 1000).toISOString();
-    const { data: rows, error: selErr } = await sb
+    const stripe = new Stripe(STRIPE_KEY, { apiVersion: "2026-02-25.clover" });
+    const leaseBefore = new Date(Date.now() - LEASE_MS).toISOString();
+    const { data: rows, error: selectError } = await sb
       .from("stripe_refunds_queue")
-      .select("id, avoir_id, facture_origine_id, stripe_payment_intent_id, montant_cts, tentatives, paiement_escrow_id, reverse_transfer, refund_application_fee_cts, absorbe_plateforme")
+      .select(
+        "id, avoir_id, facture_origine_id, stripe_payment_intent_id, stripe_refund_id, montant_cts, tentatives, paiement_escrow_id, reverse_transfer, refund_application_fee_cts, absorbe_plateforme, escrow_statut_avant_remboursement",
+      )
       .in("statut", ["EN_ATTENTE", "EN_COURS"])
-      .lt("tentatives", MAX_TENTATIVES)
-      .or(`dernier_essai_le.is.null,dernier_essai_le.lt.${repriseAvant}`)
+      .or(`dernier_essai_le.is.null,dernier_essai_le.lt.${leaseBefore}`)
       .order("cree_le", { ascending: true })
-      .limit(10);
-
-    if (selErr) {
-      console.error("stripe_refunds_queue SELECT error:", selErr);
-      return new Response(
-        JSON.stringify({ error: "Lecture queue impossible", details: selErr.message }),
-        { status: 500, headers: { "Content-Type": "application/json" } },
-      );
-    }
+      .limit(MAX_BATCH);
+    if (selectError) throw new Error(`REFUND_QUEUE_READ_FAILED:${selectError.message}`);
 
     const queue = (rows || []) as QueueRow[];
-    if (queue.length === 0) {
-      return new Response(
-        JSON.stringify({
-          success: true,
-          processed: 0,
-          message: "Queue vide",
-          duration_ms: Date.now() - t0,
-        }),
-        { headers: { "Content-Type": "application/json" } },
-      );
-    }
-
-    let successCount = 0;
-    let retryCount = 0;
-    let echecCount = 0;
+    let succeeded = 0;
+    let pending = 0;
+    let failed = 0;
+    let skipped = 0;
 
     for (const item of queue) {
-      // 3a. Lock atomique : EN_ATTENTE → EN_COURS
-      const { data: locked, error: lockErr } = await sb
+      const { data: lock, error: lockError } = await sb
         .from("stripe_refunds_queue")
-        .update({
-          statut: "EN_COURS",
-          dernier_essai_le: new Date().toISOString(),
-        })
+        .update({ statut: "EN_COURS", dernier_essai_le: new Date().toISOString() })
         .eq("id", item.id)
         .in("statut", ["EN_ATTENTE", "EN_COURS"])
         .eq("tentatives", item.tentatives)
-        .or(`dernier_essai_le.is.null,dernier_essai_le.lt.${repriseAvant}`)
+        .or(`dernier_essai_le.is.null,dernier_essai_le.lt.${leaseBefore}`)
         .select("id")
         .maybeSingle();
-
-      if (lockErr || !locked) {
-        // Autre cron a déjà pris la ligne — skip
-        console.log(`Queue row ${item.id} already locked by another cron, skipping`);
+      if (lockError || !lock) {
+        skipped++;
         continue;
       }
 
-      // 3b. Appel Stripe refunds.create
+      let exactRefund: Stripe.Refund | null = null;
+      let refundAbsenceProven = false;
+      let createAttempted = false;
       try {
-        // Escrow 7b-D PR 4 — destination charge : le refund doit reprendre les
-        // fonds côté compte connecté du soignant (reverse_transfer) AVANT release
-        // (A5) et rembourser tout ou partie de la commission (A6). APRÈS release
-        // (absorbe_plateforme), refund simple sur le solde plateforme : Jolene
-        // absorbe, pas de reversal, jamais de solde négatif imposé à la soignante.
-        const refundParams: Stripe.RefundCreateParams = {
-          payment_intent: item.stripe_payment_intent_id,
-          amount: item.montant_cts,
-          reason: "requested_by_customer",
-          metadata: {
-            avoir_id: item.avoir_id ?? "",
-            facture_origine_id: item.facture_origine_id ?? "",
-            queue_id: item.id,
-            source: "jolene_refunds_cron",
-            paiement_escrow_id: item.paiement_escrow_id ?? "",
-          },
-        };
-        if (item.paiement_escrow_id) {
-          if (item.reverse_transfer) refundParams.reverse_transfer = true;
-          // refund_application_fee reprend la commission côté plateforme. On ne
-          // le passe qu'avec reverse_transfer (destination charge pré-release) et
-          // seulement si une part de commission est à rembourser (A6).
-          if (item.reverse_transfer && (item.refund_application_fee_cts ?? 0) > 0) {
-            refundParams.refund_application_fee = true;
-          }
+        const paymentIntent = await stripe.paymentIntents.retrieve(
+          item.stripe_payment_intent_id,
+          { expand: ["latest_charge"] },
+        );
+        const existing = await findExistingRefund(stripe, item, paymentIntent);
+        exactRefund = existing.refund;
+        refundAbsenceProven = existing.absenceProven;
+        if (exactRefund) await bindRefundId(sb, item, exactRefund.id);
+
+        const context = await validateSource(
+          sb,
+          stripe,
+          item,
+          paymentIntent,
+          exactRefund,
+        );
+
+        if (!exactRefund) {
+          createAttempted = true;
+          exactRefund = await stripe.refunds.create(context.params, {
+            idempotencyKey: `refund_queue_${item.id}`,
+          });
+          await bindRefundId(sb, item, exactRefund.id);
         }
-        // Idempotency key = queue id : un retry ne crée jamais un 2e refund.
-        const refund = await stripe.refunds.create(refundParams, {
-          idempotencyKey: `refund_queue_${item.id}`,
-        });
+        assertRefundIdentity(item, context, exactRefund);
 
-        // 3c. Succès → TRAITE
-        const { data: refundPersiste, error: refundPersistError } = await sb
-          .from("stripe_refunds_queue")
-          .update({
-            statut: "TRAITE",
-            stripe_refund_id: refund.id,
-            traite_le: new Date().toISOString(),
-            erreur: null,
-          })
-          .eq("id", item.id)
-          // Le webhook charge.refunded peut avoir gagné la course et déjà mis
-          // TRAITE. On complète alors seulement l'identifiant exact du refund.
-          .in("statut", ["EN_COURS", "TRAITE"])
-          .select("id")
-          .maybeSingle();
-        if (refundPersistError || !refundPersiste) {
-          throw new Error(
-            `REFUND_PERSISTENCE_FAILED: ${refundPersistError?.message || "queue non modifiable"}`,
-          );
-        }
-
-        console.log(`Refund ${refund.id} created for queue ${item.id} (avoir ${item.avoir_id})`);
-        successCount++;
-      } catch (err) {
-        const stripeErr = err as StripeErrorLike;
-        const code = stripeErr.code || stripeErr.raw?.code || "";
-        const errMsg = stripeErr.message || stripeErr.raw?.message || String(err);
-        const errType = stripeErr.type || "";
-
-        // 3d. Déterminer action selon type d'erreur
-        let nouveauStatut: "TRAITE" | "ECHEC" | "EN_ATTENTE";
-        let alertAdmin = false;
-
-        if (ALREADY_REFUNDED_CODES.has(code)) {
-          // Idempotence Stripe : on considère que le refund existe → TRAITE
-          nouveauStatut = "TRAITE";
-          console.log(`Queue ${item.id}: charge_already_refunded — marking TRAITE (idempotence)`);
-        } else if (errType === "StripeAuthenticationError") {
-          // Config cassée — ECHEC permanent ET alerte admin URGENT
-          nouveauStatut = "ECHEC";
-          alertAdmin = true;
-          console.error(`Queue ${item.id}: StripeAuthenticationError — ECHEC + alert admin`);
-        } else if (PERMANENT_ERROR_CODES.has(code)) {
-          // Erreur permanente (donnée invalide) — ECHEC + alerte admin
-          nouveauStatut = "ECHEC";
-          alertAdmin = true;
-          console.error(`Queue ${item.id}: permanent Stripe error ${code} — ECHEC`);
-        } else if ((item.tentatives + 1) >= MAX_TENTATIVES) {
-          // 3e tentative échouée → ECHEC permanent + alerte
-          nouveauStatut = "ECHEC";
-          alertAdmin = true;
-          console.error(`Queue ${item.id}: max retries reached — ECHEC`);
+        if (exactRefund.status === "succeeded") {
+          await reconcile(sb, item, exactRefund.id, "SUCCEEDED", null);
+          succeeded++;
+        } else if (exactRefund.status === "failed" || exactRefund.status === "canceled") {
+          const result = exactRefund.status === "canceled" ? "CANCELED" : "FAILED";
+          const detail = exactRefund.failure_reason || `Stripe refund ${exactRefund.status}`;
+          await reconcile(sb, item, exactRefund.id, result, detail);
+          await alertAdmins(sb, { ...item, stripe_refund_id: exactRefund.id }, result, detail);
+          failed++;
         } else {
-          // Erreur retryable (rate limit, network, etc.) → retour EN_ATTENTE
-          nouveauStatut = "EN_ATTENTE";
-          console.warn(
-            `Queue ${item.id}: retryable error (${code || errType}), tentatives=${item.tentatives + 1}`,
+          // pending / requires_action / statut futur inconnu : le lease relira
+          // cet objet exact. Aucun compteur de retry ne doit transformer une
+          // issue Stripe ambiguë en échec métier.
+          await keepAmbiguousForPolling(
+            sb,
+            item,
+            `STRIPE_REFUND_PENDING:${exactRefund.id}:${exactRefund.status || "unknown"}`,
+            exactRefund.id,
           );
+          pending++;
         }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        const code = error instanceof ProvenPreflightError
+          ? error.code
+          : error instanceof AmbiguousFinancialStateError
+          ? error.code
+          : (error as { code?: string })?.code || "REFUND_AMBIGUOUS_ERROR";
 
-        const statutsPersistables = nouveauStatut === "TRAITE"
-          ? ["EN_COURS", "TRAITE"]
-          : ["EN_COURS"];
-        const { data: etatPersiste, error: etatPersistError } = await sb
-          .from("stripe_refunds_queue")
-          .update({
-            statut: nouveauStatut,
-            tentatives: item.tentatives + 1,
-            erreur: errMsg.substring(0, 500),
-          })
-          .eq("id", item.id)
-          .in("statut", statutsPersistables)
-          .select("id, statut")
-          .maybeSingle();
-
-        if (etatPersistError) {
-          // La ligne reste éventuellement EN_COURS ; le lease ajouté au SELECT
-          // garantit sa reprise idempotente au prochain passage.
-          throw new Error(`REFUND_STATE_PERSISTENCE_FAILED: ${etatPersistError.message}`);
-        }
-        if (!etatPersiste) {
-          const { data: etatCourant, error: etatCourantError } = await sb
-            .from("stripe_refunds_queue")
-            .select("statut")
-            .eq("id", item.id)
-            .maybeSingle();
-          if (etatCourantError) {
-            throw new Error(`REFUND_STATE_LOOKUP_FAILED: ${etatCourantError.message}`);
-          }
-          if (etatCourant?.statut === "TRAITE") {
-            // Webhook concurrent : succès financier déjà rapproché, ne jamais
-            // le rétrograder en EN_ATTENTE/ECHEC.
-            nouveauStatut = "TRAITE";
-            alertAdmin = false;
-          } else {
-            throw new Error(
-              `REFUND_STATE_CONFLICT: attendu ${nouveauStatut}, trouvé ${etatCourant?.statut || "absent"}`,
-            );
-          }
-        }
-
-        if (nouveauStatut === "TRAITE") {
-          successCount++;
-        } else if (nouveauStatut === "ECHEC") {
-          echecCount++;
+        // Seul un préflight prouvé, après une liste Stripe exhaustive montrant
+        // qu'aucun refund queue_id n'existe et avant refunds.create, autorise la
+        // restauration escrow + ECHEC. Après l'appel Stripe, timeout/réseau est
+        // toujours ambigu : polling indéfini, jamais de faux FAILED.
+        if (
+          error instanceof ProvenPreflightError
+          && refundAbsenceProven
+          && !createAttempted
+          && !exactRefund
+        ) {
+          await reconcile(sb, item, null, "FAILED", `${code}:${message}`);
+          await alertAdmins(sb, item, code, message);
+          failed++;
         } else {
-          retryCount++;
+          await keepAmbiguousForPolling(
+            sb,
+            item,
+            `${code}:${message}`,
+            exactRefund?.id || item.stripe_refund_id,
+          );
+          // Alerte immédiate : cet état est sûr (gelé) mais exige une attention
+          // si Stripe ou la DB ne redeviennent pas joignables.
+          await alertAdmins(
+            sb,
+            { ...item, stripe_refund_id: exactRefund?.id || item.stripe_refund_id },
+            code,
+            message,
+          );
+          pending++;
         }
-
-        // 3f. Email admin si ECHEC
-        if (alertAdmin) {
-          try {
-            // Récupérer les détails avoir + contexte pour le mail
-            const { data: avoir } = await sb
-              .from("factures_honoraires")
-              .select("numero_facture, montant_ttc, soignant_id, mission_id")
-              .eq("id", item.avoir_id)
-              .maybeSingle();
-
-            let soignantNom = "";
-            let etabNom = "";
-            if (avoir) {
-              const { data: s } = await sb
-                .from("soignants")
-                .select("prenom, nom")
-                .eq("id", avoir.soignant_id)
-                .maybeSingle();
-              soignantNom = s ? `${s.prenom || ""} ${s.nom || ""}`.trim() : "";
-
-              const { data: m } = await sb
-                .from("missions")
-                .select("etablissements(nom)")
-                .eq("id", avoir.mission_id)
-                .maybeSingle();
-              etabNom = (m?.etablissements as { nom?: string } | null)?.nom || "";
-            }
-
-            const { data: admins } = await sb.rpc("fn_list_admin_user_ids");
-            for (const adminId of (admins || []) as string[]) {
-              await sb.functions.invoke("send-email", {
-                body: {
-                  type: "REFUND_ECHEC_ADMIN",
-                  destinataire_id: adminId,
-                  data: {
-                    avoir_id: item.avoir_id,
-                    numero_avoir: avoir?.numero_facture || "—",
-                    montant_formatte: (item.montant_cts / 100).toFixed(2),
-                    payment_intent_id: item.stripe_payment_intent_id,
-                    tentatives: item.tentatives + 1,
-                    erreur_stripe: errMsg.substring(0, 300),
-                    erreur_code: code || errType || "unknown",
-                    soignant_nom: soignantNom,
-                    etablissement_nom: etabNom,
-                  },
-                },
-              });
-            }
-          } catch (emailErr) {
-            console.error("send-email REFUND_ECHEC_ADMIN failed:", emailErr);
-          }
-        }
-
-        // Audit trail pour investigation
-        await sb.rpc("fn_ecrire_audit_safe", {
-          p_acteur_id: "00000000-0000-0000-0000-000000000000",
-          p_type_acteur: "SYSTEME",
-          p_action: nouveauStatut === "TRAITE"
-            ? "FINANCE_REFUND_TRAITE_IDEMPOTENT"
-            : nouveauStatut === "ECHEC"
-            ? "FINANCE_REFUND_ECHEC"
-            : "FINANCE_REFUND_RETRY",
-          p_type_ressource: "stripe_refunds_queue",
-          p_id_ressource: item.id,
-          p_cle_s3: null,
-          p_details: {
-            avoir_id: item.avoir_id,
-            payment_intent_id: item.stripe_payment_intent_id,
-            montant_cts: item.montant_cts,
-            erreur_code: code,
-            erreur_type: errType,
-            erreur_message: errMsg.substring(0, 500),
-            tentatives: item.tentatives + 1,
-          },
-          p_ip: null,
-          p_navigateur: "process-stripe-refunds",
-        });
       }
     }
 
-    return new Response(
-      JSON.stringify({
-        success: true,
-        processed: queue.length,
-        success_count: successCount,
-        retry_count: retryCount,
-        echec_count: echecCount,
-        duration_ms: Date.now() - t0,
-      }),
-      { headers: { "Content-Type": "application/json" } },
-    );
-  } catch (err) {
-    const errMsg = err instanceof Error ? err.message : String(err);
-    console.error("process-stripe-refunds fatal:", errMsg);
-    return new Response(
-      JSON.stringify({ error: "Une erreur interne est survenue.", details: errMsg }),
-      { status: 500, headers: { "Content-Type": "application/json" } },
-    );
+    return new Response(JSON.stringify({
+      success: true,
+      processed: queue.length,
+      succeeded,
+      pending,
+      failed,
+      skipped,
+      duration_ms: Date.now() - startedAt,
+    }), { headers: { "Content-Type": "application/json" } });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("process-stripe-refunds fatal:", message);
+    return new Response(JSON.stringify({
+      error: "Une erreur interne est survenue.",
+      details: message,
+    }), {
+      status: 500,
+      headers: { "Content-Type": "application/json" },
+    });
   }
 });

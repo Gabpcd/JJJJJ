@@ -1,4 +1,4 @@
-import Stripe from "npm:stripe@18.5.0";
+import Stripe from "npm:stripe@20.4.1";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders, getCorsOrigin } from "../_shared/cors.ts";
 import { mapStripeError } from "../_shared/stripe-errors.ts";
@@ -111,7 +111,7 @@ Deno.serve(async (req) => {
     const stripeKey = Deno.env.get("STRIPE_SECRET_KEY") || "";
     assertStripeSecretMode(stripeKey);
     const stripe = new Stripe(stripeKey, {
-      apiVersion: "2025-08-27.basil",
+      apiVersion: "2026-02-25.clover",
     });
 
     // Check existing onboarding record

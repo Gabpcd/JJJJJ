@@ -1,19 +1,20 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { LucideIcon, Gift, BarChart3, Users, Shield, CreditCard, LogOut, HeartPulse, ShieldCheck, Mail, Code2, Building2, CalendarDays, Flame, ClipboardList, MessageCircle, Menu, X, Home, Coins, AlertTriangle, FileCheck, Zap, TrendingUp, ChevronDown, FileStack, Scale, Star, FileSignature, Activity, Flag, Rocket, UserPlus, Megaphone, Settings, Search, Trash2 } from 'lucide-react';
+import { LucideIcon, Gift, BarChart3, Users, Shield, CreditCard, LogOut, HeartPulse, ShieldCheck, Mail, Code2, Building2, CalendarDays, Flame, ClipboardList, MessageCircle, Menu, X, Home, Coins, AlertTriangle, FileCheck, FileSearch, Zap, TrendingUp, ChevronDown, FileStack, Scale, Star, FileSignature, Activity, Flag, Rocket, UserPlus, Megaphone, Settings, Search, Trash2 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { RechercheGlobaleAdmin } from '@/components/admin/RechercheGlobaleAdmin';
 import { useScrollDirection } from '@/hooks/useScrollDirection';
 
 import { useAccesAdmin } from '@/hooks/useAccesAdmin';
+import { ADMIN_ACCESS, type AdminAccessGroup } from '@/lib/adminAccess';
 import { cn } from '@/lib/utils';
 
 /* ── Types ── */
 // `acces` = périmètre RBAC historique (clé stockée dans equipe_admin.acces_groupes,
 // gérée sur /admin/fondateur/equipe). La structure visuelle de la sidebar est
 // découplée de ces périmètres : regrouper des pages ne change pas les droits.
-interface NavItem { icone: LucideIcon; label: string; route: string; acces: string; }
+interface NavItem { icone: LucideIcon; label: string; route: string; acces: AdminAccessGroup; }
 interface NavGroup { icone: LucideIcon; label: string; items: NavItem[]; }
 type SidebarEntry = NavItem | NavGroup;
 type LegalItem = Pick<NavItem, 'icone' | 'label' | 'route'>;
@@ -21,16 +22,7 @@ type LegalItem = Pick<NavItem, 'icone' | 'label' | 'route'>;
 function isGroup(e: SidebarEntry): e is NavGroup { return 'items' in e; }
 
 /* ── Périmètres RBAC historiques (ne pas renommer sans migrer equipe_admin) ── */
-const ACCES = {
-  DASHBOARD: 'Dashboard',
-  UTILISATEURS: 'Utilisateurs',
-  MISSIONS: 'Missions',
-  LITIGES: 'Litiges & contrats',
-  FINANCES: 'Finances',
-  MESSAGERIE: 'Messagerie',
-  FONDATEUR: 'Fondateur',
-  TECHNIQUE: 'Conformité & Technique',
-} as const;
+const ACCES = ADMIN_ACCESS;
 
 /* ── Sidebar 5 domaines (Lot 20) : Opérations, Argent, Croissance, Conformité & légal, Système ──
    Re-groupement de l'IA admin (feuille de route Lots 19-21). Le `acces` RBAC de
@@ -44,6 +36,7 @@ const NAV_ADMIN_GROUPED: SidebarEntry[] = [
       { icone: Home, label: 'Tableau de bord', route: '/admin', acces: ACCES.DASHBOARD },
       { icone: Users, label: 'Tous les utilisateurs', route: '/admin/utilisateurs', acces: ACCES.UTILISATEURS },
       { icone: ShieldCheck, label: 'Vérif. établissements', route: '/admin/verification-etablissements', acces: ACCES.UTILISATEURS },
+      { icone: FileSearch, label: 'Revues manuelles', route: '/admin/revues-manuelles', acces: ACCES.UTILISATEURS },
       { icone: ClipboardList, label: 'Toutes les missions', route: '/admin/missions', acces: ACCES.MISSIONS },
       { icone: Flame, label: 'Pool urgence', route: '/admin/pool-urgence', acces: ACCES.MISSIONS },
       { icone: CalendarDays, label: 'Calendrier', route: '/admin/calendrier', acces: ACCES.MISSIONS },
@@ -56,6 +49,7 @@ const NAV_ADMIN_GROUPED: SidebarEntry[] = [
       { icone: FileCheck, label: 'Heures externes (3200h)', route: '/admin/heures-externes', acces: ACCES.UTILISATEURS },
       { icone: Building2, label: 'Groupes santé', route: '/admin/groupes', acces: ACCES.UTILISATEURS },
       { icone: MessageCircle, label: 'Messagerie', route: '/admin/messagerie', acces: ACCES.MESSAGERIE },
+      { icone: Mail, label: 'Messages de contact', route: '/admin/messages-contact', acces: ACCES.MESSAGERIE },
     ],
   },
   {
@@ -191,6 +185,9 @@ export function LayoutAdmin({ children }: { children: React.ReactNode }) {
   const { deconnexion } = useAuth();
   const [menuOuvert, setMenuOuvert] = useState(false);
   const [rechercheOuverte, setRechercheOuverte] = useState(false);
+  const menuMobileRef = useRef<HTMLDivElement>(null);
+  const menuMobileTriggerRef = useRef<HTMLButtonElement>(null);
+  const menuMobilePreviousFocusRef = useRef<HTMLElement | null>(null);
   const scrollDirection = useScrollDirection();
   const { accesTotal, aAcces } = useAccesAdmin();
 
@@ -208,20 +205,54 @@ export function LayoutAdmin({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!menuOuvert) return;
-    const fermerAvecEchap = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setMenuOuvert(false);
+    menuMobilePreviousFocusRef.current = document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : menuMobileTriggerRef.current;
+    const frame = window.requestAnimationFrame(() => {
+      menuMobileRef.current?.querySelector<HTMLElement>('button:not([disabled])')?.focus();
+    });
+    const gererClavier = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        setMenuOuvert(false);
+        return;
+      }
+      if (event.key !== 'Tab') return;
+      const menu = menuMobileRef.current;
+      if (!menu) return;
+      const focusables = Array.from(menu.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      ));
+      if (focusables.length === 0) {
+        event.preventDefault();
+        menu.focus();
+        return;
+      }
+      const first = focusables[0];
+      const last = focusables[focusables.length - 1];
+      if (!menu.contains(document.activeElement)) {
+        event.preventDefault();
+        first.focus();
+      } else if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
     };
-    document.addEventListener('keydown', fermerAvecEchap);
-    return () => document.removeEventListener('keydown', fermerAvecEchap);
+    document.addEventListener('keydown', gererClavier);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      document.removeEventListener('keydown', gererClavier);
+      menuMobilePreviousFocusRef.current?.focus();
+    };
   }, [menuOuvert]);
 
   const handleDeconnexion = async () => {
     await deconnexion();
     navigate('/');
   };
-
-  const isActive = (route: string) =>
-    route === '/admin' ? location.pathname === '/admin' : location.pathname.startsWith(route);
 
   // RBAC : filtre item par item selon les périmètres autorisés (backend-driven).
   // Les périmètres restent les 8 clés historiques d'equipe_admin ; un groupe
@@ -234,6 +265,16 @@ export function LayoutAdmin({ children }: { children: React.ReactNode }) {
   }, [accesTotal, aAcces]);
 
   const allFlatItems = flattenEntries(navFiltered);
+  const pathnameNavigation = location.pathname.startsWith('/admin/presences/mission/')
+    ? '/admin/missions'
+    : location.pathname;
+  // Une seule entrée porte aria-current. Le match par segment évite notamment
+  // que « Journaux d’audit » soit aussi actif sur /admin/audit-rls, et le plus
+  // long match conserve le bon état sur les pages de détail imbriquées.
+  const routeActive = allFlatItems
+    .filter((item) => pathnameNavigation === item.route || pathnameNavigation.startsWith(`${item.route}/`))
+    .sort((a, b) => b.route.length - a.route.length)[0]?.route;
+  const isActive = (route: string) => route === routeActive;
   const mobileMainItems = useMemo(
     () => (accesTotal ? NAV_ADMIN_MOBILE_MAIN : NAV_ADMIN_MOBILE_MAIN.filter(m => aAcces(m.acces))),
     [accesTotal, aAcces],
@@ -256,14 +297,14 @@ export function LayoutAdmin({ children }: { children: React.ReactNode }) {
         <div className="px-3 pt-3">
           <button
             onClick={() => setRechercheOuverte(true)}
-            className="w-full flex items-center gap-2 rounded-lg border border-sidebar-border bg-sidebar-accent/40 px-3 py-2 text-sm text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-accent transition-colors"
+            className="min-h-[44px] w-full flex items-center gap-2 rounded-lg border border-sidebar-border bg-sidebar-accent/40 px-3 py-2 text-sm text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-accent transition-colors"
           >
             <Search className="h-4 w-4" />
             <span className="flex-1 text-left">Rechercher…</span>
             <kbd className="text-[10px] font-mono border border-sidebar-border rounded px-1.5 py-0.5">⌘K</kbd>
           </button>
         </div>
-        <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
+        <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto" aria-label="Navigation principale admin">
           {navFiltered.map((entry, i) =>
             isGroup(entry) ? (
               <SidebarGroup key={i} group={entry} isActive={isActive} navigate={navigate} />
@@ -285,7 +326,7 @@ export function LayoutAdmin({ children }: { children: React.ReactNode }) {
               <button
                 key={item.route}
                 onClick={() => navigate(item.route)}
-                className="flex w-full items-center gap-1.5 rounded-lg px-2 py-1 text-[11px] leading-tight text-sidebar-foreground/50 hover:bg-sidebar-accent hover:text-sidebar-foreground transition-colors"
+                className="flex min-h-[44px] w-full items-center gap-1.5 rounded-lg px-2 py-1 text-[11px] leading-tight text-sidebar-foreground/50 hover:bg-sidebar-accent hover:text-sidebar-foreground transition-colors"
               >
                 <item.icone className="h-3.5 w-3.5" />
                 <span className="text-left">{item.label}</span>
@@ -315,14 +356,14 @@ export function LayoutAdmin({ children }: { children: React.ReactNode }) {
         <div className="flex items-center gap-2">
           <button
             onClick={() => setRechercheOuverte(true)}
-            className="p-2 text-muted-foreground hover:text-foreground transition-colors"
+            className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center p-2 text-muted-foreground hover:text-foreground transition-colors"
             title="Rechercher"
             aria-label="Rechercher"
           >
             <Search className="h-5 w-5" />
           </button>
           <ThemeToggle />
-          <button onClick={handleDeconnexion} className="p-2 text-muted-foreground hover:text-destructive transition-colors" title="Déconnexion" aria-label="Se déconnecter">
+          <button onClick={handleDeconnexion} className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center p-2 text-muted-foreground hover:text-destructive transition-colors" title="Déconnexion" aria-label="Se déconnecter">
             <LogOut className="h-5 w-5" />
           </button>
         </div>
@@ -358,6 +399,7 @@ export function LayoutAdmin({ children }: { children: React.ReactNode }) {
           );
         })}
         <button
+          ref={menuMobileTriggerRef}
           onClick={() => setMenuOuvert(!menuOuvert)}
           aria-expanded={menuOuvert}
           aria-controls="admin-mobile-plus"
@@ -375,9 +417,11 @@ export function LayoutAdmin({ children }: { children: React.ReactNode }) {
           <div className="absolute inset-0 bg-foreground/40" />
           <div
             id="admin-mobile-plus"
+            ref={menuMobileRef}
             role="dialog"
             aria-modal="true"
             aria-label="Toutes les rubriques d’administration"
+            tabIndex={-1}
             className="absolute bottom-20 left-4 right-4 bg-card rounded-2xl shadow-xl border border-border p-3 grid grid-cols-3 gap-2 max-h-[60vh] overflow-y-auto"
             style={{ marginBottom: 'env(safe-area-inset-bottom)' }}
             onClick={(e) => e.stopPropagation()}

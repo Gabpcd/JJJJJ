@@ -23,19 +23,68 @@ DECLARE
   v_doc record;
   v_mission record;
   v_officine_bloquee boolean := false;
+  v_officine_erreur text;
 BEGIN
   -- Empêche les canaux externes (push/email/SMS) pendant ce test
   -- transactionnel ; les notifications en base restent vérifiées.
   PERFORM set_config('app.test_mode', 'true', true);
 
+  -- 0. Le référentiel de PROFIL contient exactement les 17 règles attendues,
+  -- avant toute fixture susceptible de masquer une profession mal seedée.
+  IF EXISTS (
+    WITH attendu(profession, types_exercice_autorises) AS (
+      VALUES
+        ('IDE'::public.type_profession, ARRAY['SALARIE','LIBERAL','MIXTE']::text[]),
+        ('AS'::public.type_profession, ARRAY['SALARIE']::text[]),
+        ('AES'::public.type_profession, ARRAY['SALARIE']::text[]),
+        ('IBODE'::public.type_profession, ARRAY['SALARIE','LIBERAL','MIXTE']::text[]),
+        ('IADE'::public.type_profession, ARRAY['SALARIE','LIBERAL','MIXTE']::text[]),
+        ('SAGE_FEMME'::public.type_profession, ARRAY['SALARIE','LIBERAL','MIXTE']::text[]),
+        ('KINE'::public.type_profession, ARRAY['SALARIE','LIBERAL','MIXTE']::text[]),
+        ('MEDECIN'::public.type_profession, ARRAY['SALARIE','LIBERAL','MIXTE']::text[]),
+        ('PHARMACIEN'::public.type_profession, ARRAY['SALARIE']::text[]),
+        ('MANIPULATEUR_RADIO'::public.type_profession, ARRAY['SALARIE']::text[]),
+        ('PREPARATEUR_PHARMA'::public.type_profession, ARRAY['SALARIE']::text[]),
+        ('DIETETICIEN'::public.type_profession, ARRAY['SALARIE','LIBERAL','MIXTE']::text[]),
+        ('ERGOTHERAPEUTE'::public.type_profession, ARRAY['SALARIE','LIBERAL','MIXTE']::text[]),
+        ('PSYCHOMOTRICIEN'::public.type_profession, ARRAY['SALARIE','LIBERAL','MIXTE']::text[]),
+        ('ORTHOPHONISTE'::public.type_profession, ARRAY['SALARIE','LIBERAL','MIXTE']::text[]),
+        ('DENTISTE'::public.type_profession, ARRAY['SALARIE','LIBERAL','MIXTE']::text[]),
+        ('AUXILIAIRE_PUERICULTURE'::public.type_profession, ARRAY['SALARIE']::text[])
+    )
+    SELECT 1
+    FROM attendu a
+    LEFT JOIN public.regles_exercice_profession r
+      ON r.profession = a.profession
+    WHERE r.profession IS NULL
+       OR r.types_exercice_autorises IS DISTINCT FROM a.types_exercice_autorises
+  ) THEN
+    RAISE EXCEPTION 'D4-T0: référentiel de profil incomplet ou divergent';
+  END IF;
+
   -- 1. Matrice : cellule inconnue et établissements publics = salarié par défaut.
-  IF public.fn_mode_exercice('PROFESSION_INCONNUE', 'CLINIQUE_PRIVEE', NULL)->>'niveau' <> 'NON_PROPOSE' THEN
+  IF public.fn_mode_exercice('PROFESSION_INCONNUE', 'CLINIQUE_PRIVEE', NULL)->>'niveau'
+       IS DISTINCT FROM 'NON_PROPOSE' THEN
     RAISE EXCEPTION 'D4-T1: une combinaison inconnue doit tomber en NON_PROPOSE';
   END IF;
-  IF public.fn_mode_exercice('MEDECIN', 'HOPITAL_PUBLIC', 'PUBLIC')->>'niveau' <> 'NON_PROPOSE' THEN
+  IF public.fn_mode_exercice('MEDECIN', 'HOPITAL_PUBLIC', 'PUBLIC')->>'niveau'
+       IS DISTINCT FROM 'NON_PROPOSE' THEN
     RAISE EXCEPTION 'D4-T2: le secteur public doit tomber en NON_PROPOSE';
   END IF;
-  IF public.fn_mode_exercice('PHARMACIEN', 'CLINIQUE_PRIVEE', NULL)->>'niveau' <> 'NON_PROPOSE' THEN
+  IF public.fn_mode_exercice('MEDECIN', 'CLINIQUE_PRIVEE', NULL)->>'niveau'
+       IS DISTINCT FROM 'AUTORISE'
+     OR public.fn_mode_exercice('MEDECIN', 'CENTRE_SANTE', NULL)->>'niveau'
+       IS DISTINCT FROM 'BLOQUE' THEN
+    RAISE EXCEPTION 'D4-T2B: branches MEDECIN privé/centre incohérentes';
+  END IF;
+  IF public.fn_mode_exercice('IADE', 'CLINIQUE_PRIVEE', NULL)->>'niveau'
+       IS DISTINCT FROM 'BLOQUE'
+     OR public.fn_mode_exercice('IBODE', 'CLINIQUE_PRIVEE', NULL)->>'niveau'
+       IS DISTINCT FROM 'BLOQUE' THEN
+    RAISE EXCEPTION 'D4-T2C: missions IADE/IBODE privées doivent rester salariées';
+  END IF;
+  IF public.fn_mode_exercice('PHARMACIEN', 'CLINIQUE_PRIVEE', NULL)->>'niveau'
+       IS DISTINCT FROM 'NON_PROPOSE' THEN
     RAISE EXCEPTION 'D4-T3: PHARMACIEN en établissement doit être NON_PROPOSE';
   END IF;
   IF public.fn_mode_exercice('PHARMACIEN', 'CLINIQUE_PRIVEE', NULL)->>'source_url' IS NOT NULL THEN
@@ -45,50 +94,57 @@ BEGIN
     RAISE EXCEPTION 'D4-T3C: le défaut public Jolene ne doit pas afficher une interdiction juridique';
   END IF;
   IF public.fn_mode_exercice('IADE', 'CLINIQUE_PRIVEE', NULL)->>'source_url'
-     <> 'https://www.fehap.fr/jcms/navigation-internet/upload/docs/application/pdf/2023-02/courrierconjointministeres_30decembre2021_.pdf' THEN
+       IS DISTINCT FROM 'https://www.fehap.fr/upload/docs/application/pdf/2023-02/courrierconjointministeres_30decembre2021_.pdf' THEN
     RAISE EXCEPTION 'D4-T3D: IADE doit pointer vers le texte original de la lettre D21-031940';
   END IF;
   IF public.fn_mode_exercice('IADE', 'CLINIQUE_PRIVEE', NULL)->>'source_url_complementaire'
-     <> 'https://www.legifrance.gouv.fr/ceta/id/CETATEXT000051156546' THEN
+       IS DISTINCT FROM 'https://www.legifrance.gouv.fr/ceta/id/CETATEXT000051156546' THEN
     RAISE EXCEPTION 'D4-T3D2: IADE doit compléter la lettre par CE n°491128, cas aide-soignant';
   END IF;
   IF public.fn_mode_exercice('MANIPULATEUR_RADIO', 'CLINIQUE_PRIVEE', NULL)->>'source_url'
-     <> 'https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000033621093' THEN
+       IS DISTINCT FROM 'https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000033621093' THEN
     RAISE EXCEPTION 'D4-T3E: MANIPULATEUR_RADIO doit pointer vers L.4351-1 CSP';
   END IF;
   IF public.fn_mode_exercice('DENTISTE', 'CENTRE_SANTE', NULL)->>'source_url'
-     <> 'https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000047567923' THEN
+       IS DISTINCT FROM 'https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000047567923' THEN
     RAISE EXCEPTION 'D4-T3F: le centre de santé doit pointer vers L.6323-1-5 CSP';
   END IF;
 
   -- 2. Compatibilité de diplôme : IADE peut remplir une mission IDE.
-  IF NOT public.fn_soignant_compatible_mission('IADE', NULL, 'IDE', NULL, true) THEN
+  IF public.fn_soignant_compatible_mission('IADE', NULL, 'IDE', NULL, true)
+       IS DISTINCT FROM true THEN
     RAISE EXCEPTION 'D4-T4: IADE × mission IDE doit être compatible';
   END IF;
   IF public.fn_soignant_compatible_mission('IDE', NULL, 'IADE', NULL, true)
-     OR public.fn_soignant_compatible_mission('IDE', NULL, 'IBODE', NULL, true) THEN
+       IS DISTINCT FROM false
+     OR public.fn_soignant_compatible_mission('IDE', NULL, 'IBODE', NULL, true)
+       IS DISTINCT FROM false THEN
     RAISE EXCEPTION 'D4-T4B: IDE ne doit pas remplir une mission IADE/IBODE';
   END IF;
 
   INSERT INTO public.etablissements(
-    id, nom, siret, type, adresse_rue, adresse_ville, adresse_code_postal,
+    id, nom, siret, finess, type, adresse_rue, adresse_ville, adresse_code_postal,
     email_contact, statut_verification, peut_publier_missions, est_compte_test,
-    siret_verifie, contrat_service_signe, representant_identite_verifiee,
-    rattachement_verifie, coherence_identite
+    siret_verifie, finess_verifie, contrat_service_signe, representant_identite_verifiee,
+    rattachement_verifie, coherence_identite,
+    mode_paiement_commission, stripe_sepa_payment_method_id
   ) VALUES (
-    v_etab, 'D4 Etablissement', substr(md5(v_etab::text), 1, 14), 'CLINIQUE_PRIVEE',
+    v_etab, 'D4 Etablissement', substr(md5(v_etab::text), 1, 14), '750000001', 'CLINIQUE_PRIVEE',
     '1 rue du Test', 'Paris', '75001', 'd4-etab-' || v_etab::text || '@test.local',
-    'VERIFIE', true, true, true, true, true, true, 'OK'
+    'VERIFIE', true, true, true, true, true, true, true, 'OK',
+    'SEPA_DEBIT', 'pm_d4_etablissement_test'
   );
   INSERT INTO public.etablissements(
-    id, nom, siret, type, adresse_rue, adresse_ville, adresse_code_postal,
+    id, nom, siret, finess, type, adresse_rue, adresse_ville, adresse_code_postal,
     email_contact, statut_verification, peut_publier_missions, est_compte_test,
-    siret_verifie, contrat_service_signe, representant_identite_verifiee,
-    rattachement_verifie, coherence_identite
+    siret_verifie, finess_verifie, contrat_service_signe, representant_identite_verifiee,
+    rattachement_verifie, coherence_identite,
+    mode_paiement_commission, stripe_sepa_payment_method_id
   ) VALUES (
-    v_officine, 'D4 Officine', substr(md5(v_officine::text), 1, 14), 'PHARMACIE_OFFICINE',
+    v_officine, 'D4 Officine', substr(md5(v_officine::text), 1, 14), '750000002', 'PHARMACIE_OFFICINE',
     '2 rue du Test', 'Paris', '75002', 'd4-officine-' || v_officine::text || '@test.local',
-    'VERIFIE', true, true, true, true, true, true, 'OK'
+    'VERIFIE', true, true, true, true, true, true, true, 'OK',
+    'SEPA_DEBIT', 'pm_d4_officine_test'
   );
 
   INSERT INTO auth.users(
@@ -104,6 +160,17 @@ BEGIN
       'authenticated', 'authenticated', '00000000-0000-0000-0000-000000000000'::uuid, now()
     )
   ON CONFLICT (id) DO NOTHING;
+
+  INSERT INTO public.equipe_admin(
+    user_id, nom, prenom, email, actif, acces_groupes
+  ) VALUES (
+    v_admin, 'D4', 'Admin',
+    'd4-admin-' || v_admin::text || '@test.local', true,
+    ARRAY[
+      'Dashboard', 'Utilisateurs', 'Missions', 'Litiges & contrats',
+      'Finances', 'Messagerie', 'Conformité & Technique', 'Fondateur'
+    ]::text[]
+  );
 
   -- Simule un profil IADE libéral déjà valide : sa spécialité IADE n'est pas
   -- exercée en libéral, mais il peut remplir une mission IDE. Cette règle de
@@ -166,14 +233,24 @@ BEGIN
 
   INSERT INTO public.documents_soignants(
     soignant_id, type_document, s3_cle, nom_fichier,
+    statut_verification, est_critique, resultat_ia
+  ) VALUES (
+    v_iade, 'DIPLOME', 'tests/lot21/diplome-iade', 'd4-diplome-iade.pdf',
+    'VERIFIE', true, '{"profession_certifiee":"IADE"}'::jsonb
+  );
+
+  INSERT INTO public.documents_soignants(
+    soignant_id, type_document, s3_cle, nom_fichier,
     statut_verification, est_critique, valide_jusqua
   ) VALUES (
     v_iade, 'RCP_ASSURANCE', 'tests/lot21/rcp-expiree', 'd4-rcp-expiree.pdf',
     'VERIFIE', true, current_date - 1
   );
 
-  IF NOT public.fn_documents_ok_pour_mission(v_iade, 'SALARIE')
-     OR public.fn_documents_ok_pour_mission(v_iade, 'LIBERAL') THEN
+  IF public.fn_documents_ok_pour_mission(v_iade, 'SALARIE')
+       IS DISTINCT FROM true
+     OR public.fn_documents_ok_pour_mission(v_iade, 'LIBERAL')
+       IS DISTINCT FROM false THEN
     RAISE EXCEPTION 'D4-T5: séparation des documents salarié/libéral invalide';
   END IF;
 
@@ -191,7 +268,7 @@ BEGIN
     (v_m_proposition_expiree, v_etab, 'D4 proposition IDE expirée', 'IDE', now()+interval '20 days', now()+interval '20 days 8 hours', 8, 30, 'OUVERTE', 'CANDIDATURE', 'SALARIE', false);
 
   SELECT type_contrat_recherche INTO v_mission FROM public.missions WHERE id = v_m_iade;
-  IF v_mission.type_contrat_recherche::text <> 'SALARIE' THEN
+  IF v_mission.type_contrat_recherche::text IS DISTINCT FROM 'SALARIE' THEN
     RAISE EXCEPTION 'D4-T6: une mission IADE doit être forcée en SALARIE, obtenu %', v_mission.type_contrat_recherche;
   END IF;
   IF (SELECT accepte_non_specialises FROM public.missions WHERE id = v_m_iade) IS DISTINCT FROM false THEN
@@ -208,13 +285,14 @@ BEGIN
 
   -- 3. Candidature + traitement : IADE libérale sur mission IDE salariée.
   PERFORM set_config('request.jwt.claim.sub', v_iade::text, true);
+  PERFORM set_config('request.jwt.claim.role', 'authenticated', true);
   PERFORM set_config('request.jwt.claims', jsonb_build_object(
     'sub', v_iade::text, 'role', 'authenticated', 'aal', 'aal1'
   )::text, true);
   v_result := public.fn_postuler_mission(v_m_candidature, 'Test IADE vers IDE', NULL);
-  IF COALESCE((v_result->>'success')::boolean, false) IS NOT TRUE
-     OR v_result->>'choix_contrat' <> 'SALARIE'
-     OR v_result->>'profession_requise' <> 'IDE' THEN
+  IF (v_result->>'success')::boolean IS DISTINCT FROM true
+     OR v_result->>'choix_contrat' IS DISTINCT FROM 'SALARIE'
+     OR v_result->>'profession_requise' IS DISTINCT FROM 'IDE' THEN
     RAISE EXCEPTION 'D4-T7: candidature IADE × IDE salariée invalide: %', v_result;
   END IF;
   v_candidature := (v_result->>'candidature_id')::uuid;
@@ -224,15 +302,15 @@ BEGIN
     'sub', v_admin::text, 'role', 'authenticated', 'aal', 'aal2'
   )::text, true);
   v_result := public.fn_traiter_candidature(v_candidature, 'ACCEPTEE', NULL);
-  IF COALESCE((v_result->>'success')::boolean, false) IS NOT TRUE
-     OR v_result->>'choix_applique' <> 'SALARIE' THEN
+  IF (v_result->>'success')::boolean IS DISTINCT FROM true
+     OR v_result->>'choix_applique' IS DISTINCT FROM 'SALARIE' THEN
     RAISE EXCEPTION 'D4-T8: traitement candidature invalide: %', v_result;
   END IF;
   SELECT type_contrat_applique, type_paiement_soignant, soignant_assigne_id
     INTO v_mission FROM public.missions WHERE id = v_m_candidature;
-  IF v_mission.type_contrat_applique::text <> 'SALARIE'
-     OR v_mission.type_paiement_soignant <> 'BULLETIN_PAIE'
-     OR v_mission.soignant_assigne_id <> v_iade THEN
+  IF v_mission.type_contrat_applique::text IS DISTINCT FROM 'SALARIE'
+     OR v_mission.type_paiement_soignant IS DISTINCT FROM 'BULLETIN_PAIE'
+     OR v_mission.soignant_assigne_id IS DISTINCT FROM v_iade THEN
     RAISE EXCEPTION 'D4-T9: attribution candidature incohérente: %', row_to_json(v_mission);
   END IF;
 
@@ -242,11 +320,12 @@ BEGIN
     'sub', v_iade::text, 'role', 'authenticated', 'aal', 'aal1'
   )::text, true);
   v_result := public.fn_accepter_mission(v_m_directe, NULL);
-  IF COALESCE((v_result->>'success')::boolean, false) IS NOT TRUE
-     OR v_result->>'choix_applique' <> 'SALARIE' THEN
+  IF (v_result->>'success')::boolean IS DISTINCT FROM true
+     OR v_result->>'choix_applique' IS DISTINCT FROM 'SALARIE' THEN
     RAISE EXCEPTION 'D4-T10: acceptation directe invalide: %', v_result;
   END IF;
-  IF (SELECT soignant_assigne_id FROM public.missions WHERE id = v_m_directe) <> v_iade THEN
+  IF (SELECT soignant_assigne_id FROM public.missions WHERE id = v_m_directe)
+       IS DISTINCT FROM v_iade THEN
     RAISE EXCEPTION 'D4-T11: le garde-fou a neutralisé soignant_assigne_id pendant le RPC';
   END IF;
   IF NOT EXISTS (
@@ -288,8 +367,8 @@ BEGIN
     RAISE EXCEPTION 'D4-T15: IFM/ICP salariées perdues à cause du profil libéral';
   END IF;
   v_result := public.fn_mode_paiement_mission(v_m_directe);
-  IF v_result->>'mode_recommande' <> 'VIREMENT_PAIE'
-     OR v_result->>'type_contrat_applique' <> 'SALARIE' THEN
+  IF v_result->>'mode_recommande' IS DISTINCT FROM 'VIREMENT_PAIE'
+     OR v_result->>'type_contrat_applique' IS DISTINCT FROM 'SALARIE' THEN
     RAISE EXCEPTION 'D4-T16: mode de paiement encore déduit du profil: %', v_result;
   END IF;
 
@@ -299,8 +378,8 @@ BEGIN
     'sub', v_admin::text, 'role', 'authenticated', 'aal', 'aal2'
   )::text, true);
   v_result := public.fn_assigner_mission_admin(v_m_admin, v_iade, NULL);
-  IF COALESCE((v_result->>'success')::boolean, false) IS NOT TRUE
-     OR v_result->>'choix_applique' <> 'SALARIE' THEN
+  IF (v_result->>'success')::boolean IS DISTINCT FROM true
+     OR v_result->>'choix_applique' IS DISTINCT FROM 'SALARIE' THEN
     RAISE EXCEPTION 'D4-T17: affectation admin invalide: %', v_result;
   END IF;
 
@@ -309,18 +388,19 @@ BEGIN
     now() + interval '16 days', now() + interval '16 days 8 hours', 42,
     false, 0, 'CANDIDATURE', 'LIBERAL', NULL, true
   );
-  IF COALESCE((v_result->>'success')::boolean, false) IS NOT TRUE
-     OR v_result->>'type_contrat_recherche' <> 'SALARIE'
-     OR (SELECT type_contrat_recherche::text FROM public.missions WHERE id = v_m_iade) <> 'SALARIE' THEN
+  IF (v_result->>'success')::boolean IS DISTINCT FROM true
+     OR v_result->>'type_contrat_recherche' IS DISTINCT FROM 'SALARIE'
+     OR (SELECT type_contrat_recherche::text FROM public.missions WHERE id = v_m_iade)
+       IS DISTINCT FROM 'SALARIE' THEN
     RAISE EXCEPTION 'D4-T17B: édition IADE n’a pas retourné le contrat réellement forcé: %', v_result;
   END IF;
 
   -- 7. Proposition directe établissement/admin puis acceptation soignant : la
   -- profession et le contrat viennent toujours de la mission IDE.
   v_result := public.fn_proposer_mission_soignant(v_m_proposition, v_iade, NULL);
-  IF COALESCE((v_result->>'success')::boolean, false) IS NOT TRUE
-     OR v_result->>'choix_persiste' <> 'SALARIE'
-     OR v_result->>'profession_requise' <> 'IDE' THEN
+  IF (v_result->>'success')::boolean IS DISTINCT FROM true
+     OR v_result->>'choix_persiste' IS DISTINCT FROM 'SALARIE'
+     OR v_result->>'profession_requise' IS DISTINCT FROM 'IDE' THEN
     RAISE EXCEPTION 'D4-T18: proposition IADE × IDE invalide: %', v_result;
   END IF;
   v_candidature := (v_result->>'candidature_id')::uuid;
@@ -339,9 +419,10 @@ BEGIN
     RAISE EXCEPTION 'D4-T18B: proposition dashboard absente ou forme mission invalide: %', v_result->'propositions';
   END IF;
   v_result := public.fn_repondre_proposition(v_candidature, true);
-  IF COALESCE((v_result->>'success')::boolean, false) IS NOT TRUE
-     OR v_result->>'choix_applique' <> 'SALARIE'
-     OR (SELECT soignant_assigne_id FROM public.missions WHERE id = v_m_proposition) <> v_iade THEN
+  IF (v_result->>'success')::boolean IS DISTINCT FROM true
+     OR v_result->>'choix_applique' IS DISTINCT FROM 'SALARIE'
+     OR (SELECT soignant_assigne_id FROM public.missions WHERE id = v_m_proposition)
+       IS DISTINCT FROM v_iade THEN
     RAISE EXCEPTION 'D4-T19: acceptation proposition IADE × IDE invalide: %', v_result;
   END IF;
 
@@ -364,72 +445,146 @@ BEGIN
   )::text, true);
   v_result := public.fn_repondre_proposition(v_candidature, true);
   IF v_result->>'error' IS DISTINCT FROM 'Cette proposition a expiré'
-     OR (SELECT statut FROM public.candidatures WHERE id = v_candidature) <> 'EXPIREE' THEN
+     OR (SELECT statut FROM public.candidatures WHERE id = v_candidature)
+       IS DISTINCT FROM 'EXPIREE' THEN
     RAISE EXCEPTION 'D4-T19C: proposition expirée encore acceptable: %', v_result;
   END IF;
 
   -- 8. Feed, pool et notification partagent l'éligibilité IADE × IDE.
-  IF NOT public.fn_soignant_eligible_mission(v_iade, v_m_feed, true) THEN
+  IF public.fn_soignant_eligible_mission(v_iade, v_m_feed, true)
+       IS DISTINCT FROM true THEN
     RAISE EXCEPTION 'D4-T20: mission IDE absente de l’éligibilité pool/feed IADE';
   END IF;
+
+  -- Isole les deux feeds des données ambiantes sans les modifier : la
+  -- fixture est seule dans le rayon, au plafond tarifaire autorisé et avec
+  -- le meilleur score de matching. Un limit=1 prouve alors chaque chemin.
+  -- Ces mutations sont celles du serveur de recette, pas celles du soignant.
+  PERFORM set_config('request.jwt.claim.sub', '', true);
+  PERFORM set_config('request.jwt.claim.role', 'service_role', true);
+  PERFORM set_config('request.jwt.claims', '{"role":"service_role"}', true);
+  UPDATE public.etablissements
+     SET adresse_lat = 89.123456, adresse_lng = 42.654321
+   WHERE id = v_etab;
+  UPDATE public.soignants
+     SET adresse_lat = 89.123456, adresse_lng = 42.654321,
+         rayon_deplacement_km = 1, urgence_rayon_km = 1,
+         taux_horaire_minimum = 1000
+   WHERE id = v_iade;
+  UPDATE public.missions
+     SET taux_horaire_base = 1000, cree_le = 'infinity'::timestamptz
+   WHERE id = v_m_feed;
+  INSERT INTO public.matching_scores(soignant_id, mission_id, score_global)
+  VALUES (v_iade, v_m_feed, 100)
+  ON CONFLICT (soignant_id, mission_id) DO UPDATE
+    SET score_global = EXCLUDED.score_global;
+
   PERFORM set_config('request.jwt.claim.sub', v_iade::text, true);
+  PERFORM set_config('request.jwt.claim.role', 'authenticated', true);
   PERFORM set_config('request.jwt.claims', jsonb_build_object(
     'sub', v_iade::text, 'role', 'authenticated', 'aal', 'aal1'
   )::text, true);
   v_result := public.fn_toggle_pool_urgence(false, 30, NULL);
   v_result := public.fn_toggle_pool_urgence(true, 30, NULL);
-  IF COALESCE((v_result->>'success')::boolean, false) IS NOT TRUE
-     OR COALESCE((v_result->>'documents_salarie_ok')::boolean, false) IS NOT TRUE THEN
+  IF (v_result->>'success')::boolean IS DISTINCT FROM true
+     OR (v_result->>'documents_salarie_ok')::boolean IS DISTINCT FROM true THEN
     RAISE EXCEPTION 'D4-T20B: la RCP expirée bloque encore le pool salarié: %', v_result;
   END IF;
-  v_result := public.fn_suggestions_missions_pour_soignant(10);
-  IF NOT EXISTS (
-    SELECT 1 FROM jsonb_array_elements(v_result) item
-     WHERE item->>'id' = v_m_feed::text
-  ) THEN
+  v_result := public.fn_suggestions_missions_pour_soignant(1);
+  IF jsonb_typeof(v_result) IS DISTINCT FROM 'array' THEN
+    RAISE EXCEPTION 'D4-T20C: le feed suggestions n’a pas retourné un tableau: %', v_result;
+  END IF;
+  IF jsonb_array_length(v_result) IS DISTINCT FROM 1
+     OR v_result->0->>'id' IS DISTINCT FROM v_m_feed::text THEN
     RAISE EXCEPTION 'D4-T20C: suggestion IDE absente pour le profil IADE: %', v_result;
   END IF;
-  v_result := public.fn_obtenir_missions_swipe(100);
-  IF NOT EXISTS (
-    SELECT 1 FROM jsonb_array_elements(v_result->'missions') item
-    WHERE item->>'mission_id' = v_m_feed::text
-  ) THEN
+  v_result := public.fn_obtenir_missions_swipe(1);
+  IF jsonb_typeof(v_result->'missions') IS DISTINCT FROM 'array' THEN
+    RAISE EXCEPTION 'D4-T21: le feed swipe n’a pas retourné un tableau: %', v_result;
+  END IF;
+  IF jsonb_array_length(v_result->'missions') IS DISTINCT FROM 1
+     OR v_result->'missions'->0->>'mission_id' IS DISTINCT FROM v_m_feed::text THEN
     RAISE EXCEPTION 'D4-T21: mission IDE absente du feed swipe IADE: %', v_result;
   END IF;
   PERFORM set_config('request.jwt.claim.sub', v_admin::text, true);
   PERFORM set_config('request.jwt.claims', jsonb_build_object(
     'sub', v_admin::text, 'role', 'authenticated', 'aal', 'aal2'
   )::text, true);
+
+  -- Borne les fan-outs inverses à la seule fixture IADE. Les exclusions
+  -- référencent uniquement l'établissement transactionnel du test et sont
+  -- annulées par le ROLLBACK final ; aucun profil ambiant n'est modifié.
+  INSERT INTO public.exclusions(
+    exclu_par, exclu_id, type_exclu_par, motif
+  )
+  SELECT v_etab, s.id, 'ETABLISSEMENT', 'Fixture Lot 21 D4'
+    FROM public.soignants s
+   WHERE s.id <> v_iade
+     AND public.fn_soignant_eligible_mission(s.id, v_m_feed, true)
+  ON CONFLICT (exclu_par, exclu_id) DO NOTHING;
+
+  -- Une preuve neuve et typée pour chaque diffusion : la notification
+  -- MISSION_URGENTE créée lors du seed ne peut satisfaire ces assertions.
+  DELETE FROM public.notifications
+   WHERE destinataire_id = v_iade
+     AND type = 'MISSION_A_POURVOIR'
+     AND lien = '/soignant/missions/' || v_m_feed;
   v_result := public.fn_booster_mission(v_m_feed);
-  IF COALESCE((v_result->>'success')::boolean, false) IS NOT TRUE
-     OR COALESCE((v_result->>'soignants_notifies')::integer, 0) < 1 THEN
+  IF (v_result->>'success')::boolean IS DISTINCT FROM true
+     OR (v_result->>'soignants_notifies')::integer IS DISTINCT FROM 1 THEN
     RAISE EXCEPTION 'D4-T21B: le boost n’a pas ciblé IADE × mission IDE: %', v_result;
   END IF;
-  IF public.fn_diffuser_pool_urgence(v_m_feed) < 1 THEN
-    RAISE EXCEPTION 'D4-T22: aucune notification pool pour IADE × mission IDE';
+  IF NOT EXISTS (
+    SELECT 1 FROM public.notifications
+     WHERE destinataire_id = v_iade
+       AND type = 'MISSION_A_POURVOIR'
+       AND lien = '/soignant/missions/' || v_m_feed
+  ) THEN
+    RAISE EXCEPTION 'D4-T21C: notification boost IADE × mission IDE introuvable';
+  END IF;
+
+  DELETE FROM public.notifications
+   WHERE destinataire_id = v_iade
+     AND type = 'POOL_URGENCE'
+     AND type_ressource = 'mission'
+     AND id_ressource = v_m_feed;
+  IF public.fn_diffuser_pool_urgence(v_m_feed) IS DISTINCT FROM 1 THEN
+    RAISE EXCEPTION 'D4-T22: diffusion pool non bornée à IADE × mission IDE';
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM public.notifications
+     WHERE destinataire_id = v_iade
+       AND type = 'POOL_URGENCE'
+       AND type_ressource = 'mission'
+       AND id_ressource = v_m_feed
+  ) THEN
+    RAISE EXCEPTION 'D4-T22B: notification pool IADE × mission IDE introuvable';
   END IF;
 
   v_result := public.fn_rebooker_soignant(
     v_iade, v_m_feed, now() + interval '22 days', now() + interval '22 days 8 hours'
   );
-  IF COALESCE((v_result->>'success')::boolean, false) IS NOT TRUE THEN
+  IF (v_result->>'success')::boolean IS DISTINCT FROM true THEN
     RAISE EXCEPTION 'D4-T23B: rebooking IADE × mission modèle IDE refusé: %', v_result;
-  END IF;
-  IF NOT EXISTS (
-    SELECT 1 FROM public.notifications
-    WHERE destinataire_id = v_iade AND id_ressource = v_m_feed
-  ) THEN
-    RAISE EXCEPTION 'D4-T23: notification pool IADE introuvable';
   END IF;
 
   -- 9. Le profil n'est jamais réécrit par une mission salariée.
-  IF (SELECT type_exercice FROM public.soignants WHERE id = v_iade) <> 'LIBERAL' THEN
+  IF (SELECT type_exercice FROM public.soignants WHERE id = v_iade)
+       IS DISTINCT FROM 'LIBERAL' THEN
     RAISE EXCEPTION 'D4-T24: le profil libéral a été muté';
   END IF;
-  IF COALESCE((public.fn_professions_liberales()->1->>'liberal')::boolean, true) THEN
+  IF (
+    SELECT (item->>'liberal')::boolean
+    FROM jsonb_array_elements(public.fn_professions_liberales()) AS item
+    WHERE item->>'code' = 'IADE'
+  ) IS DISTINCT FROM false THEN
     RAISE EXCEPTION 'D4-T25: IADE reste annoncé libéral dans l’API historique';
   END IF;
-  IF COALESCE((public.fn_professions_liberales()->5->>'liberal')::boolean, true) THEN
+  IF (
+    SELECT (item->>'liberal')::boolean
+    FROM jsonb_array_elements(public.fn_professions_liberales()) AS item
+    WHERE item->>'code' = 'PHARMACIEN'
+  ) IS DISTINCT FROM false THEN
     RAISE EXCEPTION 'D4-T26: PHARMACIEN reste annoncé libéral dans l’API historique';
   END IF;
 
@@ -443,11 +598,15 @@ BEGIN
       now()+interval '20 days', now()+interval '20 days 8 hours', 8, 35,
       'OUVERTE', 'SALARIE'
     );
-  EXCEPTION WHEN OTHERS THEN
-    v_officine_bloquee := SQLERRM ILIKE '%officine%';
+  EXCEPTION
+    WHEN SQLSTATE 'P0001' THEN
+      GET STACKED DIAGNOSTICS v_officine_erreur = MESSAGE_TEXT;
+      v_officine_bloquee := v_officine_erreur IS NOT DISTINCT FROM
+        'Jolene ne propose pas le remplacement du titulaire d''une officine. Les missions pharmacien proposées par la plateforme sont des missions salariées d''établissement, notamment en PUI.';
   END;
-  IF NOT v_officine_bloquee THEN
-    RAISE EXCEPTION 'D4-T27: une officine a pu publier une mission';
+  IF v_officine_bloquee IS DISTINCT FROM true THEN
+    RAISE EXCEPTION 'D4-T27: garde officine absente ou message inattendu: %',
+      COALESCE(v_officine_erreur, 'aucune exception P0001');
   END IF;
 
   RAISE NOTICE 'PASS Lot21 D4 — matrice, IADE×IDE, documents, attribution, paie, proposition, admin, feed, pool, notifications et officine';

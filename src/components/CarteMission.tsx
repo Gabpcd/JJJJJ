@@ -17,6 +17,7 @@ import {
 import { getLabelProfession, extraireContratPreference, getContratBadge } from '@/lib/constantes';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
+import { netEstimeAfficheMission } from '@/lib/missionFinanceDisplay';
 
 /** Nouvelles dates choisies lors d'une republication (F3). */
 export interface RepublierDates {
@@ -61,6 +62,7 @@ function scoreColor(score: number): string {
 export const CarteMission = React.memo(function CarteMission({ mission, afficherEtablissement, onDupliquer, onAnnuler, onRepublier }: CarteMissionProps) {
   const navigate = useNavigate();
   const m = mission;
+  const netEstimeAffiche = netEstimeAfficheMission(m);
   const debut = new Date(m.debut_le);
   const fin = new Date(m.fin_le);
   const duree = m.duree_heures ?? ((fin.getTime() - debut.getTime()) / 3600000);
@@ -188,8 +190,8 @@ export const CarteMission = React.memo(function CarteMission({ mission, afficher
       <div className="flex items-center gap-2 text-xs mb-2">
         <Banknote className="h-3.5 w-3.5 text-primary" />
         <span className="text-foreground font-medium">{m.taux_horaire_base?.toFixed(2)} €/h</span>
-        {(m.net_estime ?? m.net_a_payer ?? 0) > 0 && (
-          <span className="text-muted-foreground">→ Net estimé soignant (indicatif) : <strong className="text-primary">{formatMontant(m.net_estime ?? (m.net_a_payer != null ? m.net_a_payer * 0.78 : null))}</strong></span>
+        {(netEstimeAffiche ?? 0) > 0 && (
+          <span className="text-muted-foreground">→ Net estimé soignant (indicatif) : <strong className="text-primary">{formatMontant(netEstimeAffiche)}</strong></span>
         )}
       </div>
       {m.rist_plafond_applique && (

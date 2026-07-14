@@ -86,4 +86,4 @@ Pour Android, la signature d'upload, le `google-services.json` local gitignoré
 et l'empreinte Play App Signing sont désormais configurés. `assetlinks.json`
 est généré avec l'empreinte de signature Play. Avec Android SDK 36,
 `lintRelease` et `bundleRelease` passent ; l'AAB signé produit est Jolene
-`1.0` (`versionCode 2`).
+`1.0` (`versionCode 7`).

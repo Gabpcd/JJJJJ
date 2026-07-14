@@ -11,6 +11,10 @@ import { verifyAdminOrServiceRole, verifyUserOrServiceRole } from '../_shared/ad
 import { canManageEstablishment } from '../_shared/etablissement-auth.ts';
 import { corporateNameMatches, normalizeVerificationText } from '../_shared/verification-rules.ts';
 import { applyRateLimit, getClientIp } from '../_shared/rate-limit.ts';
+import {
+  openEstablishmentReview,
+  resolveEstablishmentReview,
+} from '../_shared/establishment-review.ts';
 
 async function fingerprint(value: string): Promise<string> {
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value));
@@ -449,6 +453,7 @@ Deno.serve(async (req) => {
       if (persistenceError) return persistenceError;
       return jsonResponse(req, {
         ok: true,
+        code: 'FINESS_INTROUVABLE',
         trouve: false,
         finess,
         verifie: false,
@@ -479,33 +484,112 @@ Deno.serve(async (req) => {
     }
 
     const recoupement = recouperAvecEtablissement(etablissement, result);
-    const verified = result.actif === true && recoupement.coherent;
-    const persistenceError = await persistVerification(verified, true);
-    if (persistenceError) return persistenceError;
-
-    if (verified) {
-      const { error: rattachementError } = await admin.rpc('fn_evaluer_rattachement_etablissement', {
-        p_etablissement_id: etablissementId,
+    if (result.actif !== true || recoupement.siret_correspond === false) {
+      const persistenceError = await persistVerification(false, true);
+      if (persistenceError) return persistenceError;
+      return jsonResponse(req, {
+        ok: true,
+        code: result.actif !== true
+          ? 'FINESS_INACTIF'
+          : 'FINESS_SIRET_CONTRADICTOIRE',
+        trouve: true,
+        finess,
+        verifie: false,
+        ecrit: true,
+        revue_manuelle: true,
+        motif: result.actif !== true
+          ? "Cet établissement n'est pas actif dans l'Annuaire Santé."
+          : "Le SIRET publié pour ce FINESS contredit celui de l'établissement.",
+        actif: result.actif,
+        source: 'FHIR Annuaire Santé v2 (Organization)',
       });
-      if (rattachementError) {
-        // La vérification FINESS est acquise ; la réévaluation du rattachement
-        // reste un traitement séparé et ne doit pas inverser ce verdict.
-        console.error('[verify-finess] réévaluation rattachement impossible', rattachementError.code || rattachementError.message);
+    }
+
+    if (!recoupement.coherent) {
+      const code = recoupement.siret_verifie
+        ? 'FINESS_RECOUPEMENT_INSUFFISANT'
+        : 'FINESS_SIRET_ETABLISSEMENT_NON_VERIFIE';
+      try {
+        const revueId = await openEstablishmentReview(
+          admin as unknown as Parameters<typeof openEstablishmentReview>[0],
+          etablissementId,
+          'VERIFY_FINESS_RECOUPEMENT',
+          recoupement.motif || 'Le registre ne permet pas un recoupement FINESS automatique suffisamment fort.',
+          {
+            code,
+            finess_candidat: finess,
+            donnees_officielles_candidat: {
+              raison_sociale: result.raison_sociale ?? null,
+              actif: result.actif === true,
+              adresse: result.adresse ?? null,
+              siret: result.siret ?? null,
+              categorie_code: result.categorie_code ?? null,
+              categorie_label: result.categorie_label ?? null,
+              secteur_code: result.secteur_code ?? null,
+              secteur_label: result.secteur_label ?? null,
+              est_public: result.est_public ?? null,
+              ej_reference: result.ej_reference ?? null,
+            },
+            recoupement,
+            verification_source_version: etablissement.verification_source_version,
+            finess_canonique_avant: etablissement.finess,
+            siret_profil: etablissement.siret,
+            siret_profil_verifie: etablissement.siret_verifie,
+            siret_officiel: result.siret || null,
+            preuve_canonique_conservee: true,
+          },
+        );
+        return jsonResponse(req, {
+          ok: true,
+          code,
+          trouve: true,
+          finess,
+          finess_candidat: finess,
+          verifie: false,
+          ecrit: false,
+          canonique_conserve: true,
+          candidat_conserve_en_revue: true,
+          revue_manuelle: true,
+          revue_id: revueId,
+          motif: recoupement.motif,
+          actif: true,
+          source: 'FHIR Annuaire Santé v2 (Organization)',
+        }, 202);
+      } catch (reviewError) {
+        console.error('[verify-finess] ouverture revue impossible', reviewError instanceof Error ? reviewError.message : String(reviewError));
+        return jsonResponse(req, {
+          ok: false,
+          code: 'REVIEW_QUEUE_FAILED',
+          error: 'La revue FINESS n’a pas pu être enregistrée. Réessayez.',
+        }, 503);
       }
     }
 
-    const motif = result.actif !== true
-      ? "Cet établissement n'est pas actif dans l'Annuaire Santé."
-      : recoupement.motif;
+    const persistenceError = await persistVerification(true, true);
+    if (persistenceError) return persistenceError;
+    const { error: rattachementError } = await admin.rpc('fn_evaluer_rattachement_etablissement', {
+      p_etablissement_id: etablissementId,
+    });
+    if (rattachementError) {
+      // La vérification FINESS est acquise ; la réévaluation du rattachement
+      // reste un traitement séparé et ne doit pas inverser ce verdict.
+      console.error('[verify-finess] réévaluation rattachement impossible', rattachementError.code || rattachementError.message);
+    }
+    await resolveEstablishmentReview(
+      admin as unknown as Parameters<typeof resolveEstablishmentReview>[0],
+      etablissementId,
+      'VERIFY_FINESS_RECOUPEMENT',
+    );
 
     return jsonResponse(req, {
       ok: true,
+      code: 'FINESS_OK',
       trouve: true,
       finess,
-      verifie: verified,
+      verifie: true,
       ecrit: true,
-      revue_manuelle: !verified,
-      motif,
+      revue_manuelle: false,
+      motif: null,
       raison_sociale: result.raison_sociale,
       actif: result.actif,
       adresse: result.adresse,

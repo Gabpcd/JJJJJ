@@ -15,7 +15,7 @@
  *
  * Realtime via useConversationRealtime (PR 5) : presence + typing.
  */
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { Check, CheckCheck, MessageCircle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -84,6 +84,7 @@ export function ChatConversation({ missionId, autreUserId, isEtablissement }: Ch
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
   const [archived, setArchived] = useState(false);
+  const [soignantId, setSoignantId] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const { typing, presence, lastSeen } = useConversationRealtime({
@@ -92,7 +93,20 @@ export function ChatConversation({ missionId, autreUserId, isEtablissement }: Ch
   });
 
   useEffect(() => {
-    if (!user || !missionId || !autreUserId) return;
+    // Changement de mission/interlocuteur : aucune donnée de l'ancien canal ne
+    // doit rester affichée ou envoyable pendant la nouvelle résolution.
+    setConvId(null);
+    setResolvedAutreId(null);
+    setAutreInfo(null);
+    setMessages([]);
+    setArchived(false);
+    setSoignantId(null);
+    setLoading(true);
+
+    if (!user || !missionId || !autreUserId) {
+      setLoading(false);
+      return;
+    }
     let cancelled = false;
 
     const resolve = async () => {
@@ -153,26 +167,58 @@ export function ChatConversation({ missionId, autreUserId, isEtablissement }: Ch
 
   useEffect(() => {
     if (!convId) return;
+    let cancelled = false;
+    setMessages([]);
+    setArchived(false);
+    setLoading(true);
 
     const load = async () => {
-      const { data: conv } = await supabase
+      const { data: conv, error: convError } = await supabase
         .from('conversations')
-        .select('archived_at')
+        .select('archived_at, soignant_id')
         .eq('id', convId)
         .maybeSingle();
+      if (cancelled) return;
+      if (convError || !conv) {
+        logger.error('ChatConversation: conversation inaccessible', convError);
+        setMessages([]);
+        setArchived(true);
+        setLoading(false);
+        return;
+      }
       setArchived(!!conv?.archived_at);
+      setSoignantId((conv as { soignant_id?: string | null }).soignant_id || null);
 
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('messages_chat')
         .select('id, conversation_id, auteur_id, contenu, est_admin, lu, cree_le')
         .eq('conversation_id', convId)
-        .order('cree_le', { ascending: true })
+        .order('cree_le', { ascending: false })
         .limit(500);
 
-      setMessages((data as Message[]) || []);
+      if (cancelled) return;
+      if (error) {
+        logger.error('ChatConversation: messages indisponibles', error);
+        setMessages([]);
+        setArchived(true);
+        setLoading(false);
+        return;
+      }
+
+      const messagesRecents = ([...((data as Message[]) || [])]).reverse();
+      setMessages(prev => {
+        const fusion = new Map(messagesRecents.map(message => [message.id, message]));
+        prev
+          .filter(message => message.conversation_id === convId)
+          .forEach(message => fusion.set(message.id, message));
+        return [...fusion.values()].sort(
+          (a, b) => new Date(a.cree_le).getTime() - new Date(b.cree_le).getTime(),
+        );
+      });
       setLoading(false);
 
       supabase.rpc('fn_marquer_messages_lus', { p_conversation_id: convId }).then(({ error }) => {
+        if (cancelled) return;
         if (error) logger.error('ChatConversation: fn_marquer_messages_lus error', error);
       });
     };
@@ -206,8 +252,31 @@ export function ChatConversation({ missionId, autreUserId, isEtablissement }: Ch
       })
       .subscribe();
 
-    return () => { supabase.removeChannel(channel); };
+    return () => {
+      cancelled = true;
+      supabase.removeChannel(channel);
+    };
   }, [convId, user]);
+
+  const confirmerMessageEnvoye = useCallback(async (messageId: string) => {
+    if (!convId) return;
+    const { data, error } = await supabase
+      .from('messages_chat')
+      .select('id, conversation_id, auteur_id, contenu, est_admin, lu, cree_le')
+      .eq('id', messageId)
+      .eq('conversation_id', convId)
+      .maybeSingle();
+    if (error || !data) {
+      logger.error('ChatConversation: message envoyé introuvable', error);
+      return;
+    }
+    const message = data as Message;
+    setMessages(prev => prev.some(item => item.id === message.id)
+      ? prev
+      : [...prev, message].sort(
+        (a, b) => new Date(a.cree_le).getTime() - new Date(b.cree_le).getTime(),
+      ));
+  }, [convId]);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
@@ -279,7 +348,11 @@ export function ChatConversation({ missionId, autreUserId, isEtablissement }: Ch
           <span className="text-[10px] text-muted-foreground">{messages.length} msg</span>
           {/* Blocage (App Store 1.2 — UGC) : coupe la messagerie dans les 2 sens. */}
           {resolvedAutreId && resolvedAutreId !== '00000000-0000-0000-0000-000000000000' && (
-            <BloquerUtilisateur cibleId={resolvedAutreId} variant="lien" />
+            <BloquerUtilisateur
+              cibleId={resolvedAutreId}
+              variant="lien"
+              libelleCible={isEtablissement ? 'l’établissement' : undefined}
+            />
           )}
         </div>
       </div>
@@ -308,7 +381,14 @@ export function ChatConversation({ missionId, autreUserId, isEtablissement }: Ch
                     </div>
                   );
                 }
-                const mine = msg.auteur_id === user?.id;
+                const mine = msg.est_admin
+                  ? msg.auteur_id === user?.id
+                  : soignantId && !isEtablissement
+                    ? msg.auteur_id !== soignantId
+                    : msg.auteur_id === user?.id;
+                const messageEquipe = !msg.est_admin
+                  && mine
+                  && msg.auteur_id !== user?.id;
                 return (
                   <div key={msg.id} className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
                     <div
@@ -318,6 +398,16 @@ export function ChatConversation({ missionId, autreUserId, isEtablissement }: Ch
                           : 'bg-card text-foreground rounded-2xl rounded-bl-md border border-border'
                       }`}
                     >
+                      {msg.est_admin && (
+                        <p className={`text-[10px] font-bold mb-0.5 ${mine ? 'text-white/85' : 'text-jolene-rose-500'}`}>
+                          Admin Jolene
+                        </p>
+                      )}
+                      {messageEquipe && (
+                        <p className="text-[10px] font-semibold mb-0.5 text-white/85">
+                          Équipe établissement
+                        </p>
+                      )}
                       <p className="text-sm whitespace-pre-wrap break-words">{msg.contenu}</p>
                       <div className={`text-[9px] mt-1 flex items-center justify-end gap-1 ${mine ? 'text-white/70' : 'text-muted-foreground/70'}`}>
                         <span>{format(new Date(msg.cree_le), 'HH:mm')}</span>
@@ -344,7 +434,12 @@ export function ChatConversation({ missionId, autreUserId, isEtablissement }: Ch
         )}
       </div>
 
-      <InputMessage conversationId={convId} archived={archived} />
+      <InputMessage
+        key={convId}
+        conversationId={convId}
+        archived={archived}
+        onSent={confirmerMessageEnvoye}
+      />
     </div>
   );
 }

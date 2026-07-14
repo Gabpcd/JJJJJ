@@ -18,7 +18,7 @@ const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 const skip = !serviceRoleKey;
 
 describe.skipIf(skip)('RLS — Sécurité des accès', () => {
-  const supabase = createClient(supabaseUrl, serviceRoleKey);
+  const supabase = createClient(supabaseUrl, serviceRoleKey || 'test-only-placeholder');
 
   it('RLS est activé sur factures_honoraires', async () => {
     const { data } = await supabase.rpc('fn_check_rls_enabled' as any, {

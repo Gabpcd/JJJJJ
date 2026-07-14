@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { BoutonY2K } from '@/components/y2k/BoutonY2K';
@@ -13,6 +13,7 @@ import { FormulaireAccord } from '@/components/litige/FormulaireAccord';
 interface Props {
   litige: any;
   onUpdate: () => void;
+  roleUtilisateur?: 'soignant' | 'etablissement';
 }
 
 const STATUT_LABELS: Record<string, { label: string; classes: string }> = {
@@ -35,7 +36,7 @@ const STATUT_LABELS: Record<string, { label: string; classes: string }> = {
   FERME: { label: 'Fermé', classes: 'bg-muted text-muted-foreground border-border' },
 };
 
-export function FilDiscussionLitige({ litige, onUpdate }: Props) {
+export function FilDiscussionLitige({ litige, onUpdate, roleUtilisateur }: Props) {
   const { user } = useAuth();
   const [messages, setMessages] = useState<any[]>([]);
   const [loadingMsgs, setLoadingMsgs] = useState(true);
@@ -43,7 +44,7 @@ export function FilDiscussionLitige({ litige, onUpdate }: Props) {
   const [sending, setSending] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
 
-  const chargerMessages = async () => {
+  const chargerMessages = useCallback(async () => {
     const { data } = await supabase
       .from('messages_litige')
       .select('*')
@@ -52,9 +53,9 @@ export function FilDiscussionLitige({ litige, onUpdate }: Props) {
     setMessages(data || []);
     setLoadingMsgs(false);
     setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
-  };
+  }, [litige.id]);
 
-  useEffect(() => { chargerMessages(); }, [litige.id]);
+  useEffect(() => { void chargerMessages(); }, [chargerMessages]);
 
   const envoyerMessage = async () => {
     if (!newMsg.trim() || newMsg.trim().length < 10) {
@@ -72,7 +73,7 @@ export function FilDiscussionLitige({ litige, onUpdate }: Props) {
       return;
     }
     setNewMsg('');
-    chargerMessages();
+    await chargerMessages();
     onUpdate();
   };
 
@@ -209,8 +210,11 @@ export function FilDiscussionLitige({ litige, onUpdate }: Props) {
 
       {/* PR 3 Sprint 3.5 — Formulaire d'accord structuré */}
       {isOpen && (() => {
-        const monRole = litige.soignant_id === user?.id ? 'soignant'
-          : (litige.etablissement_id === user?.id ? 'etablissement' : null);
+        const monRole = roleUtilisateur || (
+          litige.soignant_id === user?.id
+            ? 'soignant'
+            : (litige.etablissement_id === user?.id ? 'etablissement' : null)
+        );
         if (!monRole) return null;
         const proposition = litige.payload_modifications;
         const dejaAccordSoignant = !!litige.accord_soignant;

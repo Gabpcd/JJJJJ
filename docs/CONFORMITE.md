@@ -202,11 +202,11 @@ aides-soignants ». La liste complète se vérifie dans la **copie primaire de l
 D21-031940 mise à disposition par la FEHAP** : aides-soignants, auxiliaires de
 puériculture, infirmiers de bloc opératoire diplômés d'État, infirmiers anesthésistes
 diplômés d'État, infirmiers en puériculture, conseillers en génétique et assistants
-dentaires. Source primaire : [lettre interministérielle du 30/12/2021](https://www.fehap.fr/jcms/navigation-internet/upload/docs/application/pdf/2023-02/courrierconjointministeres_30decembre2021_.pdf).
+dentaires. Source primaire : [lettre interministérielle du 30/12/2021](https://www.fehap.fr/upload/docs/application/pdf/2023-02/courrierconjointministeres_30decembre2021_.pdf).
 
 **Mapping vers l'enum professions Jolene** (résout la divergence) : les 7 professions de
 la lettre → **seules 4 existent dans Jolene** : `AS` (JUGÉ), `AUXILIAIRE_PUERICULTURE`,
-`IBODE`, `IADE` (doctrine ministérielle). « Infirmier puériculteur », « conseiller en
+`IBODE`, `IADE` (doctrine ministérielle). « Infirmier en puériculture », « conseiller en
 génétique », « assistant dentaire » **ne sont pas des professions Jolene** → **sans objet**
 (la divergence « infirmiers puériculteurs » ne concerne aucune cellule de la matrice).
 
@@ -221,9 +221,9 @@ génétique », « assistant dentaire » **ne sont pas des professions Jolene** 
 |---|---|---|
 | `AUXILIAIRE_PUERICULTURE` | Depuis le 30/06/2026, **R.4311-5 CSP** : l'infirmier confie, sous sa responsabilité, certains actes aux auxiliaires qu'il encadre (la décision CE cite l'ancien R.4311-4, en vigueur lors du litige). | Aucun titre propre dans la NGAP ; l'auxiliaire n'est pas un facturant conventionnel autonome. |
 | `IBODE` | **R.4311-11 et R.4311-11-1 CSP** : activité en bloc, présence de l'opérateur ; actes sur protocole signé par le chirurgien, en sa présence ou sur sa demande expresse selon l'acte. | Spécialisation du titre infirmier, sans statut conventionnel IBODE ni cotation NGAP IBODE en propre. |
-| `IADE` | **R.4311-12 CSP** : activité sous le contrôle exclusif d'un médecin anesthésiste-réanimateur, présent sur site et pouvant intervenir à tout moment. | Spécialisation du titre infirmier, sans statut conventionnel IADE ni cotation NGAP IADE en propre. |
+| `IADE` | **[R.4301-10-1 CSP](https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000053185744)** (en vigueur depuis le 30/06/2026, transfert de l'ancien R.4311-12) : activité sous le contrôle exclusif d'un médecin anesthésiste-réanimateur, présent sur site et pouvant intervenir à tout moment. | Spécialisation du titre infirmier, sans statut conventionnel IADE ni cotation NGAP IADE en propre. |
 
-Référentiel de nomenclature contrôlé : [NGAP Assurance Maladie, version du 28/05/2026](https://www.ameli.fr/infirmier/exercice-liberal/facturation-remuneration/nomenclatures-ngap-lpp). L'absence est établie par la structure exhaustive de la NGAP (actes remboursables) combinée aux articles d'exercice ci-dessus ; elle ne transforme pas la doctrine ministérielle en décision juridictionnelle pour ces trois professions.
+Référentiel de nomenclature contrôlé : [NGAP Assurance Maladie, version du 21/06/2026](https://www.ameli.fr/infirmier/exercice-liberal/facturation-remuneration/nomenclatures-ngap-lpp). L'absence est établie par la structure exhaustive de la NGAP (actes remboursables) combinée aux articles d'exercice ci-dessus ; elle ne transforme pas la doctrine ministérielle en décision juridictionnelle pour ces trois professions.
 
 ### 5.2 Matrice cible — 3 niveaux, TABLE PARAMÉTRÉE (zéro règle en dur), C3-C6
 

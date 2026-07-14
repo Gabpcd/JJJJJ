@@ -1,174 +1,236 @@
-// swan-webhook — Réception des événements SWAN (statut virement SCT)
+// Réception fail-closed des événements de transaction Swan.
 //
-// Configuré dans SWAN Dashboard → Webhooks.
-// verify_jwt = false (SWAN ne sait pas signer un JWT Supabase).
-// Authentification : signature HMAC-SHA256 vérifiée via SWAN_WEBHOOK_SECRET.
-//
-// Événements traités :
-//   Transaction.Booked  → parrainage PRIME_VERSEE + notification soignant
-//   Transaction.Rejected → audit + notification admin + PRIME_REJETEE
-//
-// Le payload SWAN contient eventType + resourceId (transaction ID).
-// On query SWAN GraphQL pour récupérer les détails du paiement.
+// Swan transmet son secret partagé en clair dans `x-swan-secret` et une
+// enveloppe minimale (eventType/eventId/projectId/resourceId). Les détails
+// financiers sont toujours relus depuis l'API authentifiée. Au lancement,
+// aucun virement automatique Swan n'est autorisé : un événement canonique est
+// journalisé et signalé, mais ne peut jamais marquer une prime ou un avoir
+// comme payé sans liaison durable préalable.
 
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { createHmac } from "node:crypto";
+import { createClient } from "npm:@supabase/supabase-js@2";
+import { swanEnv, swanGraphQL } from "../_shared/swan-client.ts";
+import {
+  constantTimeSecretEquals,
+  parseSwanWebhookEnvelope,
+  sanitizeSwanTransaction,
+  SWAN_TRANSACTION_EVENT_TYPES,
+} from "../_shared/swan-webhook.ts";
 
-const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
-const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
+const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 
-function corsHeaders(req: Request) {
-  return {
-    "Content-Type": "application/json",
-    "Access-Control-Allow-Origin": req.headers.get("origin") || "*",
-    "Access-Control-Allow-Headers": "authorization, content-type, x-swan-signature",
-    "Access-Control-Allow-Methods": "POST, OPTIONS",
-  };
+const JSON_HEADERS = {
+  "Content-Type": "application/json; charset=utf-8",
+  "Cache-Control": "no-store",
+};
+
+function response(body: Record<string, unknown>, status = 200): Response {
+  return new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
 }
 
-function verifySwanSignature(body: string, signature: string | null, secret: string): boolean {
-  if (!signature || !secret) return false;
-  const expected = createHmac("sha256", secret).update(body).digest("hex");
-  return signature === expected;
+function safeErrorCode(error: unknown): string {
+  const message = error instanceof Error
+    ? error.message
+    : String(error ?? "ERREUR_INCONNUE");
+  return message.replace(/[^A-Z0-9_:.-]/gi, "_").slice(0, 180) ||
+    "ERREUR_INCONNUE";
 }
 
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders(req) });
-  const cors = corsHeaders(req);
+  if (req.method !== "POST") {
+    return response({ error: "METHOD_NOT_ALLOWED" }, 405);
+  }
+  if (!SUPABASE_URL || !SERVICE_ROLE_KEY) {
+    console.error("[swan-webhook] Supabase service configuration missing");
+    return response({ error: "SERVICE_UNAVAILABLE" }, 503);
+  }
 
-  const webhookSecret = Deno.env.get("SWAN_WEBHOOK_SECRET") || "";
+  const webhookSecret = Deno.env.get("SWAN_WEBHOOK_SECRET") ?? "";
+  if (!webhookSecret) {
+    console.error("[swan-webhook] SWAN_WEBHOOK_SECRET missing");
+    return response({ error: "WEBHOOK_NOT_CONFIGURED" }, 503);
+  }
+  const suppliedSecret = req.headers.get("x-swan-secret") ?? "";
+  if (!constantTimeSecretEquals(webhookSecret, suppliedSecret)) {
+    return response({ error: "UNAUTHORIZED" }, 401);
+  }
+
   const rawBody = await req.text();
-
-  if (webhookSecret) {
-    const signature = req.headers.get("x-swan-signature") || req.headers.get("x-webhook-signature") || "";
-    if (!verifySwanSignature(rawBody, signature, webhookSecret)) {
-      console.error("[swan-webhook] Signature invalide");
-      return new Response(JSON.stringify({ error: "Invalid signature" }), { status: 401, headers: cors });
-    }
+  if (new TextEncoder().encode(rawBody).byteLength > 16_384) {
+    return response({ error: "PAYLOAD_TOO_LARGE" }, 413);
   }
 
-  let payload: any;
+  let envelope;
   try {
-    payload = JSON.parse(rawBody);
-  } catch {
-    return new Response(JSON.stringify({ error: "Invalid JSON" }), { status: 400, headers: cors });
+    envelope = parseSwanWebhookEnvelope(JSON.parse(rawBody));
+  } catch (error) {
+    console.warn("[swan-webhook] Invalid envelope", safeErrorCode(error));
+    return response({ error: "INVALID_PAYLOAD" }, 400);
   }
 
-  const eventType = payload.eventType || payload.type || "";
-  const resourceId = payload.resourceId || payload.transaction?.id || "";
+  const configuredProjectId = (Deno.env.get("SWAN_PROJECT_ID") ?? "").trim();
+  if (configuredProjectId && envelope.projectId !== configuredProjectId) {
+    return response({ error: "PROJECT_MISMATCH" }, 401);
+  }
 
-  console.log(`[swan-webhook] Event: ${eventType}, resourceId: ${resourceId}`);
+  const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+  const { data: claim, error: claimError } = await admin.rpc(
+    "fn_swan_webhook_reclamer" as any,
+    {
+      p_event_id: envelope.eventId,
+      p_event_type: envelope.eventType,
+      p_resource_id: envelope.resourceId,
+      p_project_id: envelope.projectId,
+    },
+  );
+  if (claimError || claim?.success !== true) {
+    console.error(
+      "[swan-webhook] Claim failed",
+      claimError?.code || claim?.error_code || "unknown",
+    );
+    return response({ error: "PERSISTENCE_UNAVAILABLE" }, 503);
+  }
+  if (claim.claim === "DEJA_TRAITE") {
+    return response({ received: true, duplicate: true });
+  }
+  if (claim.claim === "EN_COURS") {
+    // EN_COURS n'est pas terminal : un 2xx ferait cesser les retries Swan et
+    // pourrait laisser définitivement l'événement sous lease après un crash.
+    return response({ received: false, retry: true }, 503);
+  }
 
-  const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, { auth: { persistSession: false } });
+  const finalize = async (
+    status: "TRAITE" | "IGNORE" | "ERREUR",
+    snapshot: Record<string, unknown> | null,
+    errorCode: string | null = null,
+  ) => {
+    const { data, error } = await admin.rpc(
+      "fn_swan_webhook_finaliser" as any,
+      {
+        p_event_id: envelope.eventId,
+        p_statut: status,
+        p_transaction_snapshot: snapshot,
+        p_error_code: errorCode,
+      },
+    );
+    if (error || data?.success !== true) {
+      throw new Error(
+        `SWAN_FINALISATION_FAILED:${
+          error?.code || data?.error_code || "unknown"
+        }`,
+      );
+    }
+  };
 
   try {
-    if (eventType === "Transaction.Booked") {
-      await handleTransactionBooked(admin, resourceId, payload);
-    } else if (eventType === "Transaction.Rejected" || eventType === "Transaction.Canceled") {
-      await handleTransactionRejected(admin, resourceId, payload, eventType);
+    if (!SWAN_TRANSACTION_EVENT_TYPES.has(envelope.eventType)) {
+      await finalize("IGNORE", null);
+      return response({ received: true, ignored: true });
     }
-  } catch (err) {
-    console.error(`[swan-webhook] Error handling ${eventType}:`, (err as Error).message);
-  }
 
-  return new Response(JSON.stringify({ received: true, eventType }), { status: 200, headers: cors });
-});
-
-async function findParrainageBySwanRef(admin: any, swanTransactionId: string): Promise<any> {
-  const { data } = await admin.from("externalisation_actions" as any)
-    .select("payload, source_id")
-    .eq("type_action", "RECOMPENSE_PARRAINAGE_SOIGNANT")
-    .eq("statut", "DONE")
-    .order("cree_le", { ascending: false })
-    .limit(50);
-
-  if (!data) return null;
-
-  for (const action of data) {
-    const p = action.payload as any;
-    if (p?.parrainage_id) {
-      const { data: parrainage } = await admin.from("parrainages" as any)
-        .select("id, parrain_id, filleul_id, statut")
-        .eq("id", p.parrainage_id)
-        .maybeSingle();
-      if (parrainage) return parrainage;
-    }
-  }
-  return null;
-}
-
-async function handleTransactionBooked(admin: any, resourceId: string, payload: any) {
-  const reference = payload.transaction?.reference || payload.reference || "";
-  const parrainageId = extractParrainageIdFromReference(reference);
-
-  if (parrainageId) {
-    const { data: parrainage } = await admin.from("parrainages" as any)
-      .select("id, parrain_id, filleul_id, statut")
-      .eq("id", parrainageId)
-      .maybeSingle();
-
-    if (parrainage && parrainage.statut !== "PRIME_VERSEE") {
-      await admin.from("parrainages" as any).update({
-        statut: "PRIME_VERSEE",
-        prime_versee_le: new Date().toISOString(),
-      }).eq("id", parrainageId);
-
-      for (const userId of [parrainage.parrain_id, parrainage.filleul_id]) {
-        if (userId) {
-          await admin.from("notifications").insert({
-            destinataire_id: userId,
-            type_destinataire: "SOIGNANT",
-            type: "PARRAINAGE_PRIME_VERSEE",
-            titre: "Prime de parrainage versée !",
-            corps: "Votre prime de 50€ a été versée sur votre compte bancaire.",
-            lien: "/soignant/parrainage",
-          });
+    const query = `
+      query JoleneSwanTransaction($id: ID!) {
+        transaction(id: $id) {
+          id
+          account { id }
+          amount { currency value }
+          statusInfo { status }
+          type
         }
       }
-
-      await admin.rpc("fn_ecrire_audit_safe" as any, {
-        p_acteur_id: parrainage.parrain_id,
-        p_type_acteur: "SYSTEME",
-        p_action: "PARRAINAGE_SOIGNANT_PRIME_VERSEE",
-        p_type_ressource: "parrainage",
-        p_id_ressource: parrainageId,
-        p_details: { swan_transaction_id: resourceId, event: "Transaction.Booked" },
-      });
+    `;
+    const canonical = await swanGraphQL<{ transaction?: unknown }>(
+      query,
+      { id: envelope.resourceId },
+      { signal: AbortSignal.timeout(6_000) },
+    );
+    if (!canonical.ok || !canonical.data?.transaction) {
+      throw new Error(
+        `SWAN_CANONICAL_QUERY_FAILED:${canonical.httpStatus || "graphql"}`,
+      );
     }
+
+    const transaction = sanitizeSwanTransaction(
+      canonical.data.transaction,
+      envelope.resourceId,
+    );
+    const environment = swanEnv();
+    if (!environment.accountId) throw new Error("SWAN_ACCOUNT_ID_MANQUANT");
+
+    const expectedStatusByEvent: Record<string, string> = {
+      "Transaction.Pending": "Pending",
+      "Transaction.Booked": "Booked",
+      "Transaction.Rejected": "Rejected",
+      "Transaction.Canceled": "Canceled",
+    };
+    const accountMatches =
+      transaction.accountId === environment.accountId.trim();
+    const eventStatusMatches =
+      transaction.status === expectedStatusByEvent[envelope.eventType];
+    const snapshot = {
+      id: transaction.id,
+      amount_cents: transaction.amountCents,
+      currency: transaction.currency,
+      status: transaction.status,
+      type: transaction.type,
+      account_id_matches: accountMatches,
+      event_status_matches: eventStatusMatches,
+    };
+
+    // Aucun binding action/beneficiaire/payment n'est créé tant que le flux
+    // consentement S2S complet n'est pas activé. Même un Booked authentique ne
+    // modifie donc jamais un avoir ou un parrainage par simple référence texte.
+    const { error: alertError } = await admin.rpc(
+      "fn_emettre_alerte_monitoring" as any,
+      {
+        p_type: accountMatches
+          ? "SWAN_TRANSACTION_SANS_LIAISON"
+          : "SWAN_ACCOUNT_MISMATCH",
+        p_severite: accountMatches && transaction.currency === "EUR"
+          ? "WARNING"
+          : "CRITICAL",
+        p_source: "swan-webhook",
+        p_message:
+          "Événement Swan authentique reçu sans liaison de paiement automatisée active.",
+        p_details: {
+          event_id: envelope.eventId,
+          resource_id: envelope.resourceId,
+          event_type: envelope.eventType,
+          account_id_matches: accountMatches,
+          event_status_matches: eventStatusMatches,
+          currency: transaction.currency,
+          amount_cents: transaction.amountCents,
+          transaction_type: transaction.type,
+        },
+      },
+    );
+    if (alertError) {
+      throw new Error(
+        `SWAN_ALERT_PERSISTENCE_FAILED:${alertError.code || "unknown"}`,
+      );
+    }
+
+    await finalize("IGNORE", snapshot);
+    return response({ received: true, ignored: true });
+  } catch (error) {
+    const errorCode = safeErrorCode(error);
+    console.error(
+      "[swan-webhook] Processing failed",
+      envelope.eventId,
+      errorCode,
+    );
+    try {
+      await finalize("ERREUR", null, errorCode);
+    } catch (finalizeError) {
+      console.error(
+        "[swan-webhook] Error persistence failed",
+        safeErrorCode(finalizeError),
+      );
+    }
+    // Swan retente les réponses non-2xx. Le délai API ci-dessus est borné pour
+    // répondre avant sa limite de dix secondes.
+    return response({ error: "PROCESSING_FAILED" }, 500);
   }
-
-  console.log(`[swan-webhook] Transaction.Booked processed: ${resourceId}, parrainage: ${parrainageId || "N/A"}`);
-}
-
-async function handleTransactionRejected(admin: any, resourceId: string, payload: any, eventType: string) {
-  const reference = payload.transaction?.reference || payload.reference || "";
-  const reason = payload.transaction?.reasonCode || payload.reason || "unknown";
-  const parrainageId = extractParrainageIdFromReference(reference);
-
-  if (parrainageId) {
-    await admin.rpc("fn_ecrire_audit_safe" as any, {
-      p_acteur_id: parrainageId,
-      p_type_acteur: "SYSTEME",
-      p_action: "PARRAINAGE_SOIGNANT_FRAUDE",
-      p_type_ressource: "parrainage",
-      p_id_ressource: parrainageId,
-      p_details: { swan_transaction_id: resourceId, event: eventType, reason },
-    });
-
-    await admin.from("notifications").insert({
-      destinataire_id: null,
-      type_destinataire: "ADMIN_PLATEFORME",
-      type: "SYSTEM",
-      titre: "Virement parrainage rejeté par SWAN",
-      corps: `Transaction ${resourceId} rejetée (${reason}). Parrainage ${parrainageId}.`,
-      lien: "/admin/utilisateurs",
-    });
-  }
-
-  console.log(`[swan-webhook] ${eventType}: ${resourceId}, reason: ${reason}, parrainage: ${parrainageId || "N/A"}`);
-}
-
-function extractParrainageIdFromReference(reference: string): string | null {
-  const match = reference.match(/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i);
-  return match ? match[1] : null;
-}
+});

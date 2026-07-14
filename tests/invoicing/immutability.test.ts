@@ -17,7 +17,7 @@ const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 const skip = !serviceRoleKey;
 
 describe.skipIf(skip)('Immutabilité factures honoraires', () => {
-  const supabase = createClient(supabaseUrl, serviceRoleKey);
+  const supabase = createClient(supabaseUrl, serviceRoleKey || 'test-only-placeholder');
   let testFactureId: string;
   let testSoignantId: string;
   let testEtabId: string;
@@ -111,7 +111,7 @@ describe.skipIf(skip)('Immutabilité factures honoraires', () => {
 });
 
 describe.skipIf(skip)('Append-only invoice_audit_log', () => {
-  const supabase = createClient(supabaseUrl, serviceRoleKey);
+  const supabase = createClient(supabaseUrl, serviceRoleKey || 'test-only-placeholder');
 
   it('un audit log est créé automatiquement à l\'INSERT d\'une facture', async () => {
     // Create a facture to generate an audit log entry

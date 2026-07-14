@@ -29,7 +29,11 @@
 import { test, expect } from '@playwright/test';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { adminClient, userClient, userIdByEmail } from '../helpers/db';
-import { cleanupMissionCascade } from '../helpers/seed';
+import {
+  cleanupMissionCascade,
+  createEphemeralVerifiedCaregiver,
+  type EphemeralVerifiedCaregiver,
+} from '../helpers/seed';
 import { TEST_ACCOUNTS } from '../helpers/auth';
 
 const TEST_REQS = !!process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -47,6 +51,17 @@ test.describe('Sprint 5.5 PR 2 — Annulation candidature soignant', () => {
 
   // Client étab authentifié mémoïsé (1 signInWithPassword pour la suite).
   let _etab: SupabaseClient | null = null;
+  let caregiver: EphemeralVerifiedCaregiver | undefined;
+
+  test.beforeAll(async () => {
+    if (!TEST_REQS) return;
+    caregiver = await createEphemeralVerifiedCaregiver();
+  });
+
+  test.afterAll(async () => {
+    await caregiver?.cleanup();
+  });
+
   async function etabClient(): Promise<SupabaseClient> {
     if (!_etab) _etab = await userClient(TEST_ACCOUNTS.etab.email, TEST_ACCOUNTS.etab.password);
     return _etab;
@@ -57,10 +72,8 @@ test.describe('Sprint 5.5 PR 2 — Annulation candidature soignant', () => {
    * Toute erreur REMONTE (throw) avec le message DB réel — plus de retour
    * null silencieux — après purge du seed partiel.
    *
-   * Fenêtre J+2 : disjointe d'anti-triche-pointage (now+30min) et de
-   * pointage (J+8) qui assignent le même soignant test en parallèle.
-   * Mission < 7 jours → fn_traiter_candidature exige tous_documents_valides :
-   * on force le flag (idempotent, compte test fixe, pattern anti-triche).
+   * Chaque suite utilise son propre soignant IDE vérifié éphémère : aucun
+   * document ni flag du compte de démonstration n'est modifié.
    */
   async function seedMissionAcceptee(opts: {
     debutOffsetHours: number;
@@ -69,15 +82,10 @@ test.describe('Sprint 5.5 PR 2 — Annulation candidature soignant', () => {
   }): Promise<{ candidatureId: string; missionId: string }> {
     const admin = adminClient();
     const etabId = await userIdByEmail('playwright-etab@jolene.app');
-    const soignantId = await userIdByEmail('playwright-soignant@jolene.app');
-    if (!etabId || !soignantId) {
-      throw new Error('[seed] comptes test playwright-etab/-soignant introuvables');
+    if (!etabId || !caregiver) {
+      throw new Error('[seed] établissement fixe ou soignant éphémère introuvable');
     }
-
-    await admin
-      .from('soignants' as any)
-      .update({ tous_documents_valides: true })
-      .eq('id', soignantId);
+    const soignantId = caregiver.id;
 
     // debut_le FUTUR obligatoire : le trigger prod dec_refuser_mission_passee
     // rejette tout INSERT avec debut_le < NOW() - 1h.
@@ -88,7 +96,7 @@ test.describe('Sprint 5.5 PR 2 — Annulation candidature soignant', () => {
     const { data: missionId, error: mErr } = await admin.rpc('fn_test_seed_mission' as any, {
       p_data: {
         etablissement_id: etabId,
-        intitule: `[playwright-test] Annulation candidature ${Date.now()}`,
+        intitule: `[pw-test:annulation] Annulation candidature ${Date.now()}`,
         description: 'Test annulation Sprint 3.5',
         profession_requise: 'IDE',
         service: 'Test',
@@ -97,6 +105,7 @@ test.describe('Sprint 5.5 PR 2 — Annulation candidature soignant', () => {
         duree_heures: 8,
         taux_horaire_base: 25,
         statut: 'OUVERTE',
+        type_contrat_recherche: 'SALARIE',
         mode_attribution: 'CANDIDATURE',
         est_asap: opts.estAsap ?? false,
       },
@@ -108,7 +117,12 @@ test.describe('Sprint 5.5 PR 2 — Annulation candidature soignant', () => {
     try {
       const { data: cand, error: cErr } = await admin
         .from('candidatures' as any)
-        .insert({ mission_id: missionId, soignant_id: soignantId, statut: 'EN_ATTENTE' })
+        .insert({
+          mission_id: missionId,
+          soignant_id: soignantId,
+          statut: 'EN_ATTENTE',
+          type_contrat_choisi: 'SALARIE',
+        })
         .select('id')
         .single();
       if (cErr || !cand) {
@@ -137,9 +151,16 @@ test.describe('Sprint 5.5 PR 2 — Annulation candidature soignant', () => {
       }
 
       return { candidatureId: (cand as any).id, missionId: missionId as string };
-    } catch (e) {
-      await cleanupMissionCascade(missionId as string).catch(() => {});
-      throw e;
+    } catch (error) {
+      const setupMessage = error instanceof Error ? error.message : String(error);
+      try {
+        await cleanupMissionCascade(missionId as string);
+      } catch (cleanupError) {
+        throw new Error(
+          `${setupMessage} | cleanup également en échec: ${cleanupError instanceof Error ? cleanupError.message : String(cleanupError)}`,
+        );
+      }
+      throw error;
     }
   }
 

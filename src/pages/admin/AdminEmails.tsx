@@ -11,22 +11,22 @@ import { supabase, SUPABASE_URL } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 
-// [DEV] Dummy data for email template previews — not sent to real users
+// Données fictives pour prévisualiser et tester les templates transactionnels.
 const DONNEES_FICTIVES: Record<string, Record<string, string>> = {
-  BIENVENUE_SOIGNANT: { prenom: '[DEV] Marie', lien_profil: 'https://jolene.app/soignant/profil' },
-  BIENVENUE_ETABLISSEMENT: { nom_etablissement: '[DEV] EHPAD Les Oliviers', lien_profil: 'https://jolene.app/etablissement/profil' },
-  MISSION_ACCEPTEE_SOIGNANT: { prenom: '[DEV] Marie', mission: '[DEV] Remplacement IDE — Jour', etablissement: '[DEV] EHPAD Les Oliviers', date: '15 mars 2026', heure: '07h00 – 19h00' },
-  MISSION_ACCEPTEE_ETABLISSEMENT: { nom_etablissement: '[DEV] EHPAD Les Oliviers', mission: '[DEV] Remplacement IDE — Jour', soignant: '[DEV] Marie Dupont', date: '15 mars 2026' },
-  MISSION_ANNULEE_SOIGNANT: { prenom: '[DEV] Marie', mission: '[DEV] Remplacement AS — Nuit', motif: 'Annulation par l\'établissement' },
-  MISSION_ANNULEE_ETABLISSEMENT: { nom_etablissement: '[DEV] EHPAD Les Oliviers', mission: '[DEV] Remplacement AS — Nuit', soignant: '[DEV] Marie Dupont' },
-  CONTRAT_SIGNE: { prenom: '[DEV] Marie', numero_contrat: '[DEV] CTR-2026-0042', mission: '[DEV] Remplacement IDE — Jour' },
-  RAPPEL_POINTAGE: { prenom: '[DEV] Marie', mission: '[DEV] Remplacement IDE — Jour', heure_debut: '07h00', etablissement: '[DEV] EHPAD Les Oliviers' },
-  FACTURE_EMISE: { nom_etablissement: '[DEV] EHPAD Les Oliviers', numero_facture: '[DEV] FA-2026-0018', montant_ttc: '1 250,00 €' },
-  PAIEMENT_RECU: { nom_etablissement: '[DEV] EHPAD Les Oliviers', numero_facture: '[DEV] FA-2026-0018', montant: '1 250,00 €' },
-  DOCUMENT_EXPIRE: { prenom: '[DEV] Marie', type_document: 'Attestation vaccinale', date_expiration: '20 avril 2026' },
-  EVALUATION_RECUE: { prenom: '[DEV] Marie', note: '5/5', commentaire: 'Excellente professionnelle, ponctuelle et compétente.', mission: '[DEV] Remplacement IDE — Jour' },
-  RAPPEL_DPAE: { nom_etablissement: '[DEV] EHPAD Les Oliviers', soignant: '[DEV] Marie Dupont', numero_contrat: '[DEV] CTR-2026-0042' },
-  LITIGE_OUVERT: { prenom: '[DEV] Marie', mission: '[DEV] Remplacement IDE — Jour', motif: 'Heures contestées', reference: '[DEV] LIT-2026-007' },
+  BIENVENUE_SOIGNANT: { prenom: '[TEST] Marie', lien_profil: 'https://jolene.app/soignant/profil' },
+  BIENVENUE_ETABLISSEMENT: { nom_etablissement: '[TEST] EHPAD Les Oliviers', lien_profil: 'https://jolene.app/etablissement/profil' },
+  MISSION_ACCEPTEE_SOIGNANT: { prenom: '[TEST] Marie', mission: '[TEST] Remplacement IDE — Jour', etablissement: '[TEST] EHPAD Les Oliviers', date: '15 mars 2026', heure: '07h00 – 19h00' },
+  MISSION_ACCEPTEE_ETABLISSEMENT: { nom_etablissement: '[TEST] EHPAD Les Oliviers', mission: '[TEST] Remplacement IDE — Jour', soignant: '[TEST] Marie Dupont', date: '15 mars 2026' },
+  MISSION_ANNULEE_SOIGNANT: { prenom: '[TEST] Marie', mission: '[TEST] Remplacement AS — Nuit', motif: 'Annulation par l\'établissement' },
+  MISSION_ANNULEE_ETABLISSEMENT: { nom_etablissement: '[TEST] EHPAD Les Oliviers', mission: '[TEST] Remplacement AS — Nuit', soignant: '[TEST] Marie Dupont' },
+  CONTRAT_SIGNE: { prenom: '[TEST] Marie', numero_contrat: '[TEST] CTR-2026-0042', mission: '[TEST] Remplacement IDE — Jour' },
+  RAPPEL_POINTAGE: { prenom: '[TEST] Marie', mission: '[TEST] Remplacement IDE — Jour', heure_debut: '07h00', etablissement: '[TEST] EHPAD Les Oliviers' },
+  FACTURE_EMISE: { nom_etablissement: '[TEST] EHPAD Les Oliviers', numero_facture: '[TEST] FA-2026-0018', montant_ttc: '1 250,00 €' },
+  PAIEMENT_RECU: { nom_etablissement: '[TEST] EHPAD Les Oliviers', numero_facture: '[TEST] FA-2026-0018', montant: '1 250,00 €' },
+  DOCUMENT_EXPIRE: { prenom: '[TEST] Marie', type_document: 'Attestation vaccinale', date_expiration: '20 avril 2026' },
+  EVALUATION_RECUE: { prenom: '[TEST] Marie', note: '5/5', commentaire: 'Excellente professionnelle, ponctuelle et compétente.', mission: '[TEST] Remplacement IDE — Jour' },
+  RAPPEL_DPAE: { nom_etablissement: '[TEST] EHPAD Les Oliviers', soignant: '[TEST] Marie Dupont', numero_contrat: '[TEST] CTR-2026-0042' },
+  LITIGE_OUVERT: { prenom: '[TEST] Marie', mission: '[TEST] Remplacement IDE — Jour', motif: 'Heures contestées', reference: '[TEST] LIT-2026-007' },
 };
 
 const TEMPLATES = Object.keys(DONNEES_FICTIVES);
@@ -73,7 +73,7 @@ function genererHtmlPreview(type: string, data: Record<string, string>): string 
         <h1 style="margin-top:16px">Prévisualisation du template</h1>
         <p>Voici les variables injectées dans ce template :</p>
         <table class="vars">${vars}</table>
-        <p style="color:#94a3b8;font-size:12px;margin-top:24px">Ceci est un aperçu de développement. L'email réel utilise le template serveur complet.</p>
+        <p style="color:#94a3b8;font-size:12px;margin-top:24px">Ceci est un aperçu avec des données fictives. L'email envoyé utilise le template serveur complet.</p>
       </div>
       <div class="footer">© 2026 Jolene — support@jolene.app</div>
     </div>

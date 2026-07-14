@@ -168,7 +168,7 @@ export default function MesFavorisSoignant() {
                     {e.nb_missions_ouvertes > 0 && (
                       <button
                         type="button"
-                        onClick={() => navigate(`/soignant/missions?etablissement=${e.etablissement_id}`)}
+                        onClick={() => navigate(`/soignant/recherche-missions?etablissement=${encodeURIComponent(e.etablissement_id)}`)}
                         className="btn-primary text-xs inline-flex items-center gap-1.5"
                       >
                         Voir missions ouvertes <ArrowRight className="h-3 w-3" />

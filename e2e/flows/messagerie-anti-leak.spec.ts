@@ -48,12 +48,10 @@ test.describe('Sprint 10-A v3 — Filtre anti-leak messagerie (DUR)', () => {
     expect(result.type).toBe('TELEPHONE');
   });
 
-  test('AUTORISE international +1 234 567 8900 (espaces rompent regex condensée)', () => {
-    // La regex telIntl (/(?:\+|00)\d{1,3}[\s.\-]?\d{6,}/) exige 6+ chiffres consécutifs
-    // après le code pays. "+1 234 567 8900" a des espaces entre groupes → pas de match.
-    // Comportement intentionnel (option DUR): les numéros fragmentés ne sont pas filtrés.
+  test('REFUSE international fragmenté +1 234 567 8900', () => {
     const result = detecterLeak('Call +1 234 567 8900');
-    expect(result.blocked).toBe(false);
+    expect(result.blocked).toBe(true);
+    expect(result.type).toBe('TELEPHONE');
   });
 
   // ─── EMAILS ──────────────────────────────────────────────────────────────────
@@ -109,6 +107,18 @@ test.describe('Sprint 10-A v3 — Filtre anti-leak messagerie (DUR)', () => {
   test('AUTORISE sous-domaine app.jolene.app', () => {
     const result = detecterLeak('https://app.jolene.app/dashboard');
     expect(result.blocked).toBe(false);
+  });
+
+  test('REFUSE domaine externe dont le chemin contient jolene.app', () => {
+    const result = detecterLeak('https://evil.xyz/jolene.app/missions');
+    expect(result.blocked).toBe(true);
+    expect(result.type).toBe('URL');
+  });
+
+  test('REFUSE domaine externe dont la query contient jolene.app', () => {
+    const result = detecterLeak('https://evil.xyz/?next=https://jolene.app');
+    expect(result.blocked).toBe(true);
+    expect(result.type).toBe('URL');
   });
 
   // ─── HANDLES RÉSEAUX (avec contexte) ────────────────────────────────────────
@@ -187,17 +197,16 @@ test.describe('Sprint 10-A v3 — Filtre anti-leak messagerie (DUR)', () => {
 
   // ─── SANITIZATION ────────────────────────────────────────────────────────────
 
-  test('sanitizeContent strip balises HTML', () => {
+  test('sanitizeContent préserve le texte littéral, rendu sans HTML par React', () => {
     const input = '<script>alert("xss")</script>Hello';
     const output = sanitizeContent(input);
-    expect(output).not.toContain('<script>');
-    expect(output).toContain('Hello');
+    expect(output).toBe(input);
   });
 
-  test('sanitizeContent strip onclick handlers', () => {
-    const input = 'Click me <a onclick="evil()">here</a>';
+  test('sanitizeContent préserve les comparaisons et esperluettes', () => {
+    const input = 'A & B et 1 < 2';
     const output = sanitizeContent(input);
-    expect(output).not.toContain('onclick');
+    expect(output).toBe(input);
   });
 
   test('sanitizeContent préserve texte normal', () => {

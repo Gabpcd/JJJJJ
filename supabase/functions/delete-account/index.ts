@@ -75,13 +75,13 @@ Deno.serve(async (req) => {
     // Le garde d'inscription empeche les nouveaux cas; un cas legacy est gele
     // pour revue explicite sans supprimer de donnees au hasard.
     if (soignant && etablissement) {
-      await admin.from('alertes_systeme').insert({
+      await Promise.resolve(admin.from('alertes_systeme').insert({
         type_alerte: 'AUTH_PROFILE_CONFLICT',
         severite: 'CRITICAL',
         source: 'delete-account',
         message: 'Suppression bloquee: profils soignant et etablissement simultanes',
         details: { user_id: auth.userId },
-      }).then(() => {}).catch(() => {});
+      })).catch(() => {});
       return jsonResponse(req, {
         error: 'Votre compte nécessite une vérification manuelle avant suppression.',
         error_code: 'ACCOUNT_PROFILE_CONFLICT',
@@ -169,14 +169,14 @@ Deno.serve(async (req) => {
         .eq('user_id', auth.userId)
         .eq('actif', true);
       if (error) return jsonResponse(req, { error: 'Retrait des equipes impossible' }, 500);
-      await admin.from('journaux_audit').insert({
+      await Promise.resolve(admin.from('journaux_audit').insert({
         acteur_id: auth.userId,
         type_acteur: 'ADMIN_ETABLISSEMENT',
         action: 'RGPD_SUPPRESSION_COMPTE_MEMBRE_ETABLISSEMENT',
         type_ressource: 'auth_user',
         id_ressource: auth.userId,
         details: { memberships_desactives: memberships?.length || 0 },
-      }).then(() => {}).catch(() => {});
+      })).catch(() => {});
     }
     if ((groupAdmins || []).length > 0) {
       const { error } = await admin
@@ -184,14 +184,14 @@ Deno.serve(async (req) => {
         .delete()
         .eq('utilisateur_id', auth.userId);
       if (error) return jsonResponse(req, { error: 'Retrait des groupes impossible' }, 500);
-      await admin.from('journaux_audit').insert({
+      await Promise.resolve(admin.from('journaux_audit').insert({
         acteur_id: auth.userId,
         type_acteur: 'ADMIN_ETABLISSEMENT',
         action: 'RGPD_SUPPRESSION_COMPTE_ADMIN_GROUPE',
         type_ressource: 'auth_user',
         id_ressource: auth.userId,
         details: { groupes_quittes: groupAdmins?.length || 0 },
-      }).then(() => {}).catch(() => {});
+      })).catch(() => {});
     }
 
     // Nettoyage des donnees purement techniques qui peuvent exister avant la
@@ -227,13 +227,13 @@ Deno.serve(async (req) => {
           deleted_at: new Date().toISOString(),
         },
       });
-      await admin.from('alertes_systeme').insert({
+      await Promise.resolve(admin.from('alertes_systeme').insert({
         type_alerte: 'AUTH_DELETE_FAILED',
         severite: 'CRITICAL',
         source: 'delete-account',
         message: 'Compte public anonymise mais soft-delete Auth a terminer',
         details: { user_id: auth.userId, error: deleteError.message.slice(0, 300) },
-      }).then(() => {}).catch(() => {});
+      })).catch(() => {});
       return jsonResponse(req, {
         error: 'Compte bloque et anonymise; suppression Auth en cours de finalisation',
         error_code: 'AUTH_DELETE_PENDING',

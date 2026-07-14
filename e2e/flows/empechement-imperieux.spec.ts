@@ -13,8 +13,8 @@
  *
  * CONTRAINTE STRUCTURELLE : journaux_audit est IMMUABLE (triggers
  * dec_audit_immuable + dec_proteger_audit_delete) — aucune purge possible, et
- * le compteur 12 mois du compte de test partagé ne fait que croître d'un run
- * CI à l'autre. Toutes les assertions sur le compteur sont donc RELATIVES
+ * chaque déclaration laisse sa preuve d'audit même après suppression de la
+ * fixture éphémère. Toutes les assertions sur le compteur sont donc RELATIVES
  * (n_12_mois = n_avant + 1), jamais absolues, et l'état du soignant
  * (score_fiabilite, total_missions_annulees) est snapshotté en beforeAll et
  * restauré en afterEach.
@@ -22,7 +22,11 @@
 import { test, expect } from '@playwright/test';
 import { adminClient, userClient, userIdByEmail } from '../helpers/db';
 import { TEST_ACCOUNTS } from '../helpers/auth';
-import { cleanupMissionCascade } from '../helpers/seed';
+import {
+  cleanupMissionCascade,
+  createEphemeralVerifiedCaregiver,
+  type EphemeralVerifiedCaregiver,
+} from '../helpers/seed';
 
 const PREFIX = '[pw-test:empechement]';
 const ENV_OK = !!process.env.SUPABASE_URL
@@ -34,6 +38,7 @@ test.describe('Empêchement impérieux (zéro donnée de santé)', () => {
 
   let soignantId: string;
   let etabId: string;
+  let caregiver: EphemeralVerifiedCaregiver | undefined;
   let snapshotSoignant: { score_fiabilite: number | null; total_missions_annulees: number | null };
   const seededMissions: string[] = [];
 
@@ -64,6 +69,10 @@ test.describe('Empêchement impérieux (zéro donnée de santé)', () => {
         fin_le: fin.toISOString(),
         duree_heures: 8,
         taux_horaire_base: 28,
+        type_contrat_recherche: 'SALARIE',
+        type_contrat_applique: 'SALARIE',
+        choix_contrat_soignant: 'SALARIE',
+        mode_attribution: 'CANDIDATURE',
       },
     });
     if (error || !data) throw new Error(`seed mission empêchement: ${error?.message || 'pas d\'id'}`);
@@ -71,28 +80,50 @@ test.describe('Empêchement impérieux (zéro donnée de santé)', () => {
     return data as string;
   }
 
-  /** Notifications + missions seedées + état soignant. L'audit, immuable, reste. */
+  /** Notifications de chaque mission + missions seedées + état soignant. */
   async function nettoyer(): Promise<void> {
     const admin = adminClient();
-    await admin.from('notifications').delete()
-      .in('destinataire_id', [soignantId, etabId]).like('titre', 'Empêchement%');
-    while (seededMissions.length) await cleanupMissionCascade(seededMissions.pop());
-    await admin.from('soignants').update(snapshotSoignant as any).eq('id', soignantId);
+    while (seededMissions.length) {
+      const missionId = seededMissions.pop();
+      if (!missionId) continue;
+      const { error: notificationsError } = await admin
+        .from('notifications')
+        .delete()
+        .in('destinataire_id', [soignantId, etabId])
+        .or([
+          `id_ressource.eq.${missionId}`,
+          `lien.eq./soignant/missions/${missionId}`,
+          `lien.eq./etablissement/missions/${missionId}`,
+        ].join(','));
+      if (notificationsError) {
+        throw new Error(`cleanup notifications empêchement: ${notificationsError.message}`);
+      }
+      await cleanupMissionCascade(missionId);
+    }
+    const { error: restoreError } = await admin
+      .from('soignants')
+      .update(snapshotSoignant as any)
+      .eq('id', soignantId);
+    if (restoreError) {
+      throw new Error(`restauration état soignant empêchement: ${restoreError.message}`);
+    }
   }
 
   test.beforeAll(async () => {
-    soignantId = (await userIdByEmail(TEST_ACCOUNTS.soignant.email))!;
+    // Le soignant est jetable et possède ses propres justificatifs vérifiés :
+    // aucun document ni flag du compte fixe/de démonstration n'est modifié.
+    // Les journaux d'audit, légalement immuables, restent pseudonymisés par UUID.
+    caregiver = await createEphemeralVerifiedCaregiver();
+    soignantId = caregiver.id;
     etabId = (await userIdByEmail(TEST_ACCOUNTS.etab.email))!;
-    expect(soignantId, 'compte soignant test introuvable').toBeTruthy();
     expect(etabId, 'compte étab test introuvable').toBeTruthy();
 
-    const { data: s } = await adminClient().from('soignants')
+    const { data: s, error: snapshotError } = await adminClient().from('soignants')
       .select('score_fiabilite, total_missions_annulees').eq('id', soignantId).single();
+    if (snapshotError || !s) {
+      throw new Error(`snapshot état soignant empêchement: ${snapshotError?.message || 'introuvable'}`);
+    }
     snapshotSoignant = s as any;
-
-    // Résidus de runs antérieurs (prod partagée).
-    const { data: olds } = await adminClient().from('missions').select('id').like('intitule', `${PREFIX}%`);
-    for (const m of (olds || []) as Array<{ id: string }>) seededMissions.push(m.id);
     await nettoyer();
   });
 
@@ -100,10 +131,14 @@ test.describe('Empêchement impérieux (zéro donnée de santé)', () => {
     await nettoyer();
   });
 
+  test.afterAll(async () => {
+    await caregiver?.cleanup();
+  });
+
   test('déclaration structurée : succès, audit écrit, aucun document, flag posé', async () => {
     const missionId = await seedMissionAssignee();
     const nAvant = await compterAttestations12m();
-    const soignant = await userClient(TEST_ACCOUNTS.soignant.email, TEST_ACCOUNTS.soignant.password);
+    const soignant = await userClient(caregiver!.email, caregiver!.password);
     const debut = new Date().toISOString().slice(0, 10);
     const fin = new Date(Date.now() + 3 * 86400000).toISOString().slice(0, 10);
 
@@ -180,7 +215,7 @@ test.describe('Empêchement impérieux (zéro donnée de santé)', () => {
     // Score posé à une valeur connue pour une assertion déterministe.
     await admin.from('soignants').update({ score_fiabilite: 62 } as any).eq('id', soignantId);
 
-    const soignant = await userClient(TEST_ACCOUNTS.soignant.email, TEST_ACCOUNTS.soignant.password);
+    const soignant = await userClient(caregiver!.email, caregiver!.password);
     const debut = new Date().toISOString().slice(0, 10);
     const { data, error } = await soignant.rpc('fn_declarer_empechement_imperieux' as any, {
       p_mission_id: missionId, p_indispo_debut: debut, p_indispo_fin: debut,
@@ -197,7 +232,7 @@ test.describe('Empêchement impérieux (zéro donnée de santé)', () => {
 
   test('ancien RPC fn_declarer_arret_maladie : gap verrouillé', async () => {
     const missionId = await seedMissionAssignee();
-    const soignant = await userClient(TEST_ACCOUNTS.soignant.email, TEST_ACCOUNTS.soignant.password);
+    const soignant = await userClient(caregiver!.email, caregiver!.password);
     const { data } = await soignant.rpc('fn_declarer_arret_maladie' as any, { p_mission_id: missionId });
     expect((data as any)?.error).toContain('empêchement impérieux');
   });

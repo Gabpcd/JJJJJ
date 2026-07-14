@@ -1,4 +1,4 @@
-import Stripe from "npm:stripe@18.5.0";
+import Stripe from "npm:stripe@20.4.1";
 import { createClient } from "npm:@supabase/supabase-js@2.99.2";
 import { mapStripeError } from "../_shared/stripe-errors.ts";
 import { assertStripeSecretMode } from "../_shared/stripe-production.ts";
@@ -111,7 +111,7 @@ Deno.serve(async (req) => {
     }
     assertStripeSecretMode(stripeSecretKey);
     const stripe = new Stripe(stripeSecretKey, {
-      apiVersion: "2025-08-27.basil",
+      apiVersion: "2026-02-25.clover",
     });
 
     let account: Stripe.Account;

@@ -82,7 +82,7 @@ export default function EvaluationsAFaireEtab() {
         </h1>
         <p className="text-sm text-muted-foreground mt-1">
           Notez les soignants ayant terminé une mission chez vous (60 derniers jours).
-          Vos évaluations alimentent leur score de fiabilité Sprint 3.5.
+          Vos évaluations alimentent leur score de fiabilité.
         </p>
       </div>
 

@@ -2,11 +2,10 @@
 //
 // Foundation Sprint 17-A Phase A.
 //
-// SWAN S2S consent : le représentant légal Jolene SASU (Gabrielle) a installé
-// la clé publique ECDSA P-256 dans le SWAN Dashboard > Server Consent. Toutes
-// les mutations soumises à consent (initiateCreditTransfers, etc.) doivent
-// être accompagnées d'une signature ECDSA P-256 SHA-256 du corps de la requête,
-// signée avec la clé privée correspondante (SWAN_S2S_PRIVATE_KEY_PEM).
+// SWAN S2S consent : après une mutation sensible, Swan renvoie un consent et
+// son challenge. Le serveur signe un JWT ES256 contenant uniquement ce
+// challenge, puis appelle `grantConsentWithServerSignature`. Il ne faut jamais
+// signer le corps GraphQL ni inventer un header de signature propriétaire.
 //
 // Variable d'environnement :
 //   SWAN_S2S_PRIVATE_KEY_PEM — clé privée PKCS#8 PEM
@@ -73,22 +72,43 @@ export function resetSwanS2SKeyCache() {
 }
 
 /**
- * Signe un payload (body GraphQL JSON) avec ECDSA P-256 SHA-256.
- * Retourne la signature en base64 standard.
+ * Signe le challenge Swan sous la forme JWT ES256 officielle :
+ * base64url({alg:"ES256",typ:"JWT"}).base64url({challenge}).base64url(signature).
  */
-export async function signSwanS2S(payload: string | Uint8Array): Promise<string> {
+export async function signSwanS2S(challenge: string): Promise<string> {
+  if (
+    typeof challenge !== "string" || challenge.length < 8 ||
+    challenge.length > 4096
+  ) {
+    throw new SwanS2SSignError("Challenge SWAN invalide");
+  }
   const key = await loadPrivateKey();
-  const data = typeof payload === "string"
-    ? new TextEncoder().encode(payload)
-    : payload;
+  const base64Url = (source: Uint8Array): string => {
+    let binary = "";
+    for (let index = 0; index < source.length; index += 1) {
+      binary += String.fromCharCode(source[index]);
+    }
+    return btoa(binary).replace(/=/g, "").replace(/\+/g, "-").replace(
+      /\//g,
+      "_",
+    );
+  };
+  const encoder = new TextEncoder();
+  const header = base64Url(
+    encoder.encode(JSON.stringify({ alg: "ES256", typ: "JWT" })),
+  );
+  const payload = base64Url(encoder.encode(JSON.stringify({ challenge })));
+  const signingInput = `${header}.${payload}`;
+  const source = encoder.encode(signingInput);
+  // Deno 2.9 / TypeScript 6 distingue ArrayBuffer de SharedArrayBuffer dans
+  // BufferSource. Une copie dédiée garantit ici un Uint8Array<ArrayBuffer>.
+  const data = new Uint8Array(source.byteLength);
+  data.set(source);
   const sig = await crypto.subtle.sign(
     { name: "ECDSA", hash: "SHA-256" },
     key,
     data,
   );
-  // base64 standard
   const bytes = new Uint8Array(sig);
-  let bin = "";
-  for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
-  return btoa(bin);
+  return `${signingInput}.${base64Url(bytes)}`;
 }

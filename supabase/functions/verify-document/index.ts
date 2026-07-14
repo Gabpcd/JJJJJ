@@ -8,6 +8,7 @@ import {
   corporateNameMatches,
   diplomaMatchesDeclaredProfession,
   isValidIban,
+  normalizeIban,
   personNameMatches,
   professionalIdentifierMatches,
   sanitizeBankAnalysis,
@@ -15,6 +16,16 @@ import {
 
 function wait(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function sha256Hex(value: string): Promise<string> {
+  const digest = await crypto.subtle.digest(
+    'SHA-256',
+    new TextEncoder().encode(value),
+  );
+  return Array.from(new Uint8Array(digest))
+    .map((byte) => byte.toString(16).padStart(2, '0'))
+    .join('');
 }
 
 const IDENTITY_DOCUMENT_TYPES = new Set([
@@ -97,6 +108,7 @@ async function saveDocumentVerdict(
       valide_depuis: statut === "REJETE" ? null : (params.p_valide_depuis ?? null),
       valide_jusqua: statut === "REJETE" ? null : (params.p_valide_jusqua ?? null),
       verifie_le: statut === "VERIFIE" ? (params.p_verifie_le ?? new Date().toISOString()) : null,
+      verification_attempt_id: null,
       modifie_le: new Date().toISOString(),
     })
     .eq("id", params.p_document_id)
@@ -106,6 +118,35 @@ async function saveDocumentVerdict(
   if (error || !data) {
     throw new Error(`Écriture verdict impossible: ${error?.code || error?.message || "tentative remplacée"}`);
   }
+}
+
+async function markDocumentForManualReview(
+  supabase: any,
+  documentId: string,
+  attemptId: string | null,
+  motif: string,
+  code: string,
+): Promise<boolean> {
+  const { data, error } = await supabase.rpc(
+    "fn_document_marquer_revue_manuelle" as any,
+    {
+      p_document_id: documentId,
+      p_attempt_id: attemptId,
+      p_service: "VERIFY_DOCUMENT",
+      p_motif: motif.slice(0, 1000),
+      // Ne jamais pousser le chemin Storage, le contenu IA ou un IBAN dans la
+      // file : seul un code technique borné est utile à l'exploitation.
+      p_details: { code: code.slice(0, 100) },
+    },
+  );
+  if (error || data?.success !== true) {
+    console.error(
+      "Mise en file de revue impossible:",
+      error?.code || error?.message || data?.error_code || "UNKNOWN",
+    );
+    return false;
+  }
+  return true;
 }
 
 async function beginDocumentVerification(
@@ -194,6 +235,11 @@ async function loadDocumentWithRetry(supabase: any, documentId: string, attempts
 }
 
 Deno.serve(async (req) => {
+  let reviewContext: {
+    supabase: any;
+    documentId: string;
+    attemptId: string;
+  } | null = null;
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders(req) });
 
   try {
@@ -387,15 +433,22 @@ Deno.serve(async (req) => {
     // réponse IA plus ancienne devient alors incapable d'écrire un verdict.
     const verificationAttemptId = crypto.randomUUID();
     await beginDocumentVerification(supabase, doc, verificationAttemptId);
+    reviewContext = {
+      supabase,
+      documentId: document_id,
+      attemptId: verificationAttemptId,
+    };
 
     const anthropicKey = Deno.env.get("ANTHROPIC_API_KEY");
     if (!anthropicKey) {
-      await saveDocumentVerdict(supabase, {
-        p_document_id: document_id,
-        p_statut_verification: "EN_ATTENTE",
-        p_motif_rejet: "Service de vérification automatique indisponible — revue manuelle requise.",
-        p_verifie_le: null,
-      });
+      await markDocumentForManualReview(
+        supabase,
+        document_id,
+        verificationAttemptId,
+        "Service de vérification automatique non configuré — demande en attente d'attribution à l'équipe.",
+        "AI_NOT_CONFIGURED",
+      );
+      reviewContext = null;
       return new Response(JSON.stringify({ error: "Service de vérification automatique non configuré" }), {
         status: 503,
         headers: { ...corsHeaders(req), "Content-Type": "application/json" },
@@ -429,6 +482,7 @@ Deno.serve(async (req) => {
         p_statut_verification: "REJETE",
         p_motif_rejet: `Type de fichier non autorisé: ${doc.type_mime}`,
       });
+      reviewContext = null;
       return new Response(JSON.stringify({ success: true, verdict: "REJETE", reason: "Unsupported MIME type" }), {
         headers: { ...corsHeaders(req), "Content-Type": "application/json" },
       });
@@ -442,6 +496,7 @@ Deno.serve(async (req) => {
         p_valide_jusqua: null,
         p_verifie_le: null,
       });
+      reviewContext = null;
       return new Response(JSON.stringify({ success: true, verdict: "REJETE", reason: "Invalid file signature" }), {
         headers: { ...corsHeaders(req), "Content-Type": "application/json" },
       });
@@ -583,11 +638,17 @@ Analyse ce document et vérifie sa conformité.`;
       await saveDocumentFields(supabase, document_id, {
         resultat_ia: { erreur_anthropic: { status: estTimeout ? "timeout" : "network", at: new Date().toISOString() } },
       });
-      await saveDocumentVerdict(supabase, {
-        p_document_id: document_id, p_statut_verification: "EN_ATTENTE", p_motif_rejet: null,
-        p_verifie_le: null,
-      });
-      return new Response(JSON.stringify({ success: true, verdict: "EN_ATTENTE", reason: estTimeout ? "AI timeout" : "AI network error" }), {
+      await markDocumentForManualReview(
+        supabase,
+        document_id,
+        verificationAttemptId,
+        estTimeout
+          ? "La vérification automatique a expiré — demande en attente d'attribution à l'équipe."
+          : "Le service de vérification automatique est momentanément inaccessible — demande en attente d'attribution à l'équipe.",
+        estTimeout ? "AI_TIMEOUT" : "AI_NETWORK_ERROR",
+      );
+      reviewContext = null;
+      return new Response(JSON.stringify({ success: true, verdict: "REVUE_MANUELLE_REQUISE", reason: estTimeout ? "AI timeout" : "AI network error" }), {
         headers: { ...corsHeaders(req), "Content-Type": "application/json" },
       });
     }
@@ -606,11 +667,15 @@ Analyse ce document et vérifie sa conformité.`;
           },
         },
       });
-      await saveDocumentVerdict(supabase, {
-        p_document_id: document_id, p_statut_verification: "EN_ATTENTE", p_motif_rejet: null,
-        p_verifie_le: null,
-      });
-      return new Response(JSON.stringify({ success: true, verdict: "EN_ATTENTE", reason: "AI unavailable" }), {
+      await markDocumentForManualReview(
+        supabase,
+        document_id,
+        verificationAttemptId,
+        "Le service de vérification a refusé la demande — demande en attente d'attribution à l'équipe.",
+        `AI_HTTP_${ai.status}`,
+      );
+      reviewContext = null;
+      return new Response(JSON.stringify({ success: true, verdict: "REVUE_MANUELLE_REQUISE", reason: "AI unavailable" }), {
         headers: { ...corsHeaders(req), "Content-Type": "application/json" },
       });
     }
@@ -632,13 +697,15 @@ Analyse ce document et vérifie sa conformité.`;
           erreur_parse: { raw_length: rawContent.length, at: new Date().toISOString() },
         },
       });
-      await saveDocumentVerdict(supabase, {
-        p_document_id: document_id, p_statut_verification: "EN_ATTENTE",
-        p_motif_rejet: "Analyse automatique illisible — vérification manuelle requise.",
-        p_verifie_le: null,
-      });
-
-      return new Response(JSON.stringify({ success: true, verdict: "EN_ATTENTE", reason: "Parse error" }), {
+      await markDocumentForManualReview(
+        supabase,
+        document_id,
+        verificationAttemptId,
+        "La réponse automatique était illisible — demande en attente d'attribution à l'équipe.",
+        "AI_PARSE_ERROR",
+      );
+      reviewContext = null;
+      return new Response(JSON.stringify({ success: true, verdict: "REVUE_MANUELLE_REQUISE", reason: "Parse error" }), {
         headers: { ...corsHeaders(req), "Content-Type": "application/json" },
       });
     }
@@ -1097,9 +1164,30 @@ Analyse ce document et vérifie sa conformité.`;
     // Ne jamais persister ni renvoyer un IBAN complet. Le contrôle a déjà été
     // effectué ci-dessus ; seuls le checksum et les quatre derniers caractères
     // sont conservés pour le support et l'affichage masqué.
-    const analysisPersisted = doc.type_document === "RIB"
+    const analysisPersisted: Record<string, any> = doc.type_document === "RIB"
       ? sanitizeBankAnalysis(analysis as Record<string, unknown>)
       : analysis;
+    let verifiedRibIban: string | null = null;
+    if (doc.type_document === "RIB" && verdictFinal === "VERIFIE") {
+      const normalizedIban = normalizeIban(analysis.iban_extrait ?? analysis.iban ?? "");
+      if (!isValidIban(normalizedIban)) {
+        // Défense en profondeur : la branche RIB ne doit jamais produire une
+        // provenance de paiement si le checksum n'est plus valide ici.
+        verdictFinal = "EN_ATTENTE";
+        motifRejet = "L'IBAN n'a pas pu être validé de façon déterministe — vérification manuelle requise.";
+        analysisPersisted.verdict_serveur = verdictFinal;
+        analysisPersisted.motif_serveur = motifRejet;
+        analysisPersisted.iban_preuve_hash_v1 = null;
+      } else {
+        // L'IBAN complet n'est jamais persisté. Cette empreinte salée par l'ID
+        // immuable du document permet à la RPC d'enregistrement de prouver une
+        // égalité exacte avec l'IBAN ressaisi, sans pouvoir reconstruire celui-ci.
+        analysisPersisted.iban_preuve_hash_v1 = await sha256Hex(
+          `${normalizedIban}:${document_id}`,
+        );
+        verifiedRibIban = normalizedIban;
+      }
+    }
 
     // Analyse, verdict et éventuels effets de scolarité/licence sont écrits
     // dans une seule transaction. La RPC reverrouille document + profil,
@@ -1157,6 +1245,14 @@ Analyse ce document et vérifie sa conformité.`;
         "Finalisation atomique impossible ou snapshot modifié:",
         finalizeError?.code || finalizeError?.message || "FINALIZATION_REJECTED",
       );
+      await markDocumentForManualReview(
+        supabase,
+        document_id,
+        verificationAttemptId,
+        "Le profil ou le document a changé pendant le contrôle — demande en attente d'attribution à l'équipe.",
+        "FINALIZATION_REJECTED",
+      );
+      reviewContext = null;
       return new Response(JSON.stringify({
         error: "Le profil ou le document a changé pendant la vérification. Relancez le contrôle.",
       }), {
@@ -1164,6 +1260,45 @@ Analyse ce document et vérifie sa conformité.`;
         headers: { ...corsHeaders(req), "Content-Type": "application/json" },
       });
     }
+
+    if (verdictFinal === "EN_ATTENTE") {
+      await markDocumentForManualReview(
+        supabase,
+        document_id,
+        null,
+        motifRejet || "La vérification automatique n'est pas concluante — demande en attente d'attribution à l'équipe.",
+        "AI_REVIEW_REQUIRED",
+      );
+    } else if (doc.type_document === "RIB" && verdictFinal === "VERIFIE" && verifiedRibIban) {
+      // L'IBAN complet ne transite qu'en mémoire entre l'analyse et cette RPC
+      // service-role. Il n'est jamais renvoyé, journalisé ni conservé dans le
+      // résultat IA ; seule sa liaison chiffrée à cette version du RIB demeure.
+      const { data: linked, error: linkError } = await supabase.rpc(
+        "fn_lier_iban_verifie_document" as any,
+        {
+          p_document_id: document_id,
+          p_expected_s3_cle: doc.s3_cle,
+          p_iban: verifiedRibIban,
+        },
+      );
+      if (linkError || (linked?.success !== true
+        && !["IDENTITE_VERIFIEE_REQUISE", "IDENTITE_COURANTE_REQUISE"].includes(linked?.error_code))) {
+        console.error(
+          "Liaison RIB déterministe impossible:",
+          linkError?.code || linkError?.message || linked?.error_code || "UNKNOWN",
+        );
+        await markDocumentForManualReview(
+          supabase,
+          document_id,
+          null,
+          "Le RIB n'a pas pu être lié de façon certaine au compte de versement — demande en attente d'attribution à l'équipe.",
+          "RIB_BINDING_FAILED",
+        );
+        verdictFinal = "EN_ATTENTE";
+        motifRejet = "Le RIB doit être revu avant tout versement.";
+      }
+    }
+    reviewContext = null;
 
     const { error: auditError } = await supabase.rpc("fn_ecrire_audit_safe" as any, {
       p_acteur_id: doc.soignant_id,
@@ -1204,6 +1339,17 @@ Analyse ce document et vérifie sa conformité.`;
     );
   } catch (e: any) {
     console.error("verify-document error:", e);
+    if (reviewContext) {
+      await markDocumentForManualReview(
+        reviewContext.supabase,
+        reviewContext.documentId,
+        reviewContext.attemptId,
+        "La vérification automatique a rencontré une erreur interne — demande en attente d'attribution à l'équipe.",
+        "UNHANDLED_VERIFICATION_ERROR",
+      ).catch((reviewError) => {
+        console.error("Mise en file après erreur interne impossible:", safeStringifyError(reviewError));
+      });
+    }
     return new Response(
       JSON.stringify({ error: e?.message || "Une erreur interne est survenue." }),
       { status: 500, headers: { ...corsHeaders(req), "Content-Type": "application/json" } }

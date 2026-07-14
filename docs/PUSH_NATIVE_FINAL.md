@@ -61,13 +61,13 @@ utilise le son de notification système ; les payloads serveur envoient
 
 ## Build
 
-Le 13/07/2026, l'archive iOS **Jolene** `1.0 (4)` a été produite avec Xcode
+Le 14/07/2026, l'archive iOS **Jolene** `1.0 (7)` a été produite avec Xcode
 26.5, re-signée avec le certificat Apple Distribution de l'équipe
 `FPQ78HDF4Y` et `aps-environment=production`, puis
-acceptée par App Store Connect. Le lint Android Release passe avec SDK 36 et
+exportée en IPA pour App Store Connect. Le lint Android Release passe avec SDK 36 et
 Gradle 8.14.5. Firebase Android, la signature d'upload et l'empreinte Play App
 Signing sont configurés : `lintRelease` et `bundleRelease` passent, et l'AAB
-signé Jolene `1.0` (`versionCode 2`) est généré dans
+signé Jolene `1.0` (`versionCode 7`) est généré dans
 `android/app/build/outputs/bundle/release/app-release.aab`.
 
 ```bash

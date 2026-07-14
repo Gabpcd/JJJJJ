@@ -28,7 +28,7 @@
  * du wrapper CardY2K (`p-5`) DOIT être désactivé via `noPadding` pour éviter
  * le double padding (sous-composants ont leur propre `p-6`).
  */
-import { HTMLAttributes, forwardRef } from 'react';
+import { HTMLAttributes, KeyboardEvent, forwardRef } from 'react';
 import { cn } from '@/lib/utils';
 
 type Variant = 'default' | 'holographic' | 'glass';
@@ -61,12 +61,38 @@ const VARIANTS: Record<Variant, string> = {
 };
 
 export const CardY2K = forwardRef<HTMLDivElement, Props>(function CardY2K(
-  { variant = 'default', hoverLift = true, noPadding = false, className, children, ...rest },
+  {
+    variant = 'default',
+    hoverLift = true,
+    noPadding = false,
+    className,
+    children,
+    onClick,
+    onKeyDown,
+    role,
+    tabIndex,
+    ...rest
+  },
   ref,
 ) {
+  const estInteractive = Boolean(onClick);
+
+  const gererClavier = (event: KeyboardEvent<HTMLDivElement>) => {
+    onKeyDown?.(event);
+    if (event.defaultPrevented || !estInteractive) return;
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      event.currentTarget.click();
+    }
+  };
+
   return (
     <div
       ref={ref}
+      role={role ?? (estInteractive ? 'button' : undefined)}
+      tabIndex={tabIndex ?? (estInteractive ? 0 : undefined)}
+      onClick={onClick}
+      onKeyDown={gererClavier}
       className={cn(
         'rounded-3xl',
         !noPadding && 'p-5',
@@ -74,6 +100,7 @@ export const CardY2K = forwardRef<HTMLDivElement, Props>(function CardY2K(
         // prefers-reduced-motion géré dans .transition-bouncy (src/index.css).
         'transition-bouncy',
         hoverLift && 'hover:-translate-y-1 hover:shadow-holographic motion-reduce:hover:translate-y-0',
+        estInteractive && 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2',
         VARIANTS[variant],
         className,
       )}

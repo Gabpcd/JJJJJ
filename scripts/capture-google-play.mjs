@@ -37,6 +37,39 @@ const CAPTURE_PROFILES = Object.freeze({
     expectedPixels: Object.freeze({ width: 1920, height: 1080 }),
     isMobile: false,
   }),
+  'iphone-6.5': Object.freeze({
+    directory: 'iphone-6.5',
+    viewport: Object.freeze({ width: 428, height: 926 }),
+    deviceScaleFactor: 3,
+    expectedPixels: Object.freeze({ width: 1284, height: 2778 }),
+    isMobile: true,
+  }),
+  'iphone-6.9': Object.freeze({
+    directory: 'iphone-6.9',
+    viewport: Object.freeze({ width: 440, height: 956 }),
+    deviceScaleFactor: 3,
+    expectedPixels: Object.freeze({ width: 1320, height: 2868 }),
+    isMobile: true,
+  }),
+  'ipad-13': Object.freeze({
+    directory: 'ipad-13',
+    viewport: Object.freeze({ width: 1032, height: 1376 }),
+    deviceScaleFactor: 2,
+    expectedPixels: Object.freeze({ width: 2064, height: 2752 }),
+    isMobile: false,
+  }),
+  'ipad-13-landscape': Object.freeze({
+    directory: 'ipad-13-landscape',
+    viewport: Object.freeze({ width: 1376, height: 1032 }),
+    deviceScaleFactor: 2,
+    expectedPixels: Object.freeze({ width: 2752, height: 2064 }),
+    isMobile: false,
+  }),
+});
+
+const CAPTURE_STORES = Object.freeze({
+  'google-play': Object.freeze(['phone', 'tablet-7', 'tablet-10']),
+  'app-store': Object.freeze(['iphone-6.5', 'iphone-6.9', 'ipad-13', 'ipad-13-landscape']),
 });
 
 const CAPTURE_STYLE_ID = 'jolene-store-capture-stabilizer';
@@ -118,8 +151,16 @@ function parseBoolean(value, defaultValue) {
   throw new Error('HEADLESS doit valoir true/false, 1/0 ou yes/no.');
 }
 
-function parseProfiles(value) {
-  const available = Object.keys(CAPTURE_PROFILES);
+function parseStore(value) {
+  const store = (value || 'google-play').trim().toLowerCase();
+  if (!CAPTURE_STORES[store]) {
+    throw new Error(`CAPTURE_STORE doit valoir : ${Object.keys(CAPTURE_STORES).join(' ou ')}.`);
+  }
+  return store;
+}
+
+function parseProfiles(value, store) {
+  const available = CAPTURE_STORES[store];
   if (!value || value.trim().toLowerCase() === 'all') return available;
 
   const requested = [...new Set(
@@ -145,7 +186,8 @@ function readConfig() {
     throw new Error('BASE_URL doit utiliser http ou https.');
   }
 
-  const requestedOutput = process.env.OUTPUT_DIR || path.join('artifacts', 'google-play');
+  const store = parseStore(process.env.CAPTURE_STORE);
+  const requestedOutput = process.env.OUTPUT_DIR || path.join('artifacts', store);
   const outputDir = path.resolve(REPO_ROOT, requestedOutput);
   const relativeOutput = path.relative(REPO_ROOT, outputDir);
   const outputIsInRepo = relativeOutput !== '..' && !relativeOutput.startsWith(`..${path.sep}`) && !path.isAbsolute(relativeOutput);
@@ -156,9 +198,10 @@ function readConfig() {
 
   return {
     baseUrl,
+    store,
     outputDir,
     headless: parseBoolean(process.env.HEADLESS, true),
-    profiles: parseProfiles(process.env.CAPTURE_FORMATS),
+    profiles: parseProfiles(process.env.CAPTURE_FORMATS, store),
   };
 }
 
@@ -179,7 +222,7 @@ function validateTargets() {
     if (width !== profile.expectedPixels.width || height !== profile.expectedPixels.height) {
       throw new Error(`Configuration de rendu invalide pour ${name} : ${width}x${height}.`);
     }
-    if (!/^[a-z0-9-]+$/.test(profile.directory)) {
+    if (!/^[a-z0-9.-]+$/.test(profile.directory)) {
       throw new Error(`Dossier de profil invalide pour ${name} : ${profile.directory}.`);
     }
   }
@@ -568,7 +611,7 @@ async function captureRole(browser, config, role, authSessionEntries) {
 }
 
 function printHelp() {
-  console.log(`Usage : npm run screenshots:play
+  console.log(`Usage : npm run screenshots:play | npm run screenshots:app-store
 
 Variables obligatoires :
   JOLENE_STORE_SOIGNANT_EMAIL
@@ -578,12 +621,14 @@ Variables obligatoires :
 
 Variables optionnelles :
   BASE_URL        défaut : https://jolene.app
-  OUTPUT_DIR      défaut : artifacts/google-play
-  CAPTURE_FORMATS défaut : all (phone,tablet-7,tablet-10 ; séparés par des virgules)
+  CAPTURE_STORE   défaut : google-play (ou app-store)
+  OUTPUT_DIR      défaut : artifacts/<CAPTURE_STORE>
+  CAPTURE_FORMATS défaut : all (formats du store sélectionné, séparés par des virgules)
   HEADLESS        défaut : true (utiliser false si Turnstile demande une action)
 
 Vérification sans navigateur ni identifiants :
-  npm run screenshots:play:check`);
+  npm run screenshots:play:check
+  npm run screenshots:app-store:check`);
 }
 
 async function main() {
@@ -631,10 +676,10 @@ async function main() {
     await browser.close();
   }
 
-  console.log(`Captures prêtes dans ${config.outputDir}`);
+  console.log(`Captures ${config.store} prêtes dans ${config.outputDir}`);
 }
 
 main().catch((error) => {
-  console.error(`[captures Google Play] ${error instanceof Error ? error.message : String(error)}`);
+  console.error(`[captures stores] ${error instanceof Error ? error.message : String(error)}`);
   process.exitCode = 1;
 });

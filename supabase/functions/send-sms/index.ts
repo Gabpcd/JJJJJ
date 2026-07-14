@@ -222,8 +222,11 @@ Deno.serve(async (req) => {
       }
     }
 
-    // [J2.3.A] Vérification préférences notifications (canal SMS)
-    if (destinataireId && type) {
+    // [J2.3.A] Vérification préférences notifications (canal SMS).
+    // Un OTP de vérification est un message transactionnel explicitement
+    // demandé par l'utilisateur. Il ne dépend pas de l'opt-in aux alertes
+    // facultatives : sinon la queue pourrait acquitter un code jamais reçu.
+    if (destinataireId && type && type !== 'OTP_VERIFICATION_TELEPHONE') {
       const TYPE_TO_EVENT: Record<string, string> = {
         'SMS_MISSION_URGENTE': 'URGENCE',
         'MISSION_URGENTE': 'URGENCE',
@@ -246,12 +249,12 @@ Deno.serve(async (req) => {
           return jsonResponse(req, { error: 'Verification des preferences indisponible' }, 503);
         }
         if (should === false) {
-          await supabaseAdmin.from('journaux_audit').insert({
+          await Promise.resolve(supabaseAdmin.from('journaux_audit').insert({
             acteur_id: null, type_acteur: 'SYSTEME',
             action: 'NOTIFICATION_SKIPPED', type_ressource: 'sms',
             id_ressource: destinataireId,
             details: { type, type_evenement: typeEvenement, canal: 'SMS', raison: 'preference_user_off' },
-          }).then(() => {}).catch(() => {});
+          })).catch(() => {});
           return jsonResponse(req, { success: true, skipped: true, reason: 'preference_user_off' });
         }
       } else {
@@ -302,13 +305,18 @@ Deno.serve(async (req) => {
 
     const twilioData = await twilioRes.json();
 
-    // Logger dans sms_envoyes
+    // Logger dans sms_envoyes. Un OTP ne doit jamais rester en clair dans les
+    // journaux applicatifs après son envoi ; Twilio reçoit le message réel,
+    // tandis que la base ne conserve qu'une trace expurgée.
+    const contenuJournal = type === 'OTP_VERIFICATION_TELEPHONE'
+      ? `${prefix}[CODE OTP MASQUÉ]`
+      : fullBody;
     try {
       await supabaseAdmin.from("sms_envoyes").insert({
         destinataire_id: destinataireId || null,
         telephone: to,
         type: type || "CUSTOM",
-        contenu: fullBody,
+        contenu: contenuJournal,
         provider_id: twilioData.sid || null,
         statut: twilioRes.ok ? "ENVOYE" : "ERREUR",
         erreur: twilioRes.ok ? null : (twilioData.message || JSON.stringify(twilioData)),

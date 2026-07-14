@@ -111,7 +111,7 @@ export function FormulaireAccord({ litigeId, propositionExistante, roleUtilisate
         afficherNotification({ type: 'erreur', message: result?.error || 'Erreur' });
         return;
       }
-      if (result.statut === 'RESOLU') {
+      if (result.statut === 'RESOLU_ACCORD_PARTIES') {
         afficherNotification({ type: 'succes', message: 'Litige résolu ✅ Modifications appliquées.' });
       } else if (result.statut === 'EN_ATTENTE_VALIDATION_ADMIN') {
         afficherNotification({ type: 'succes', message: 'Accord conclu ✅ Le mouvement financier sera exécuté après validation de l\'administrateur.' });
@@ -129,11 +129,19 @@ export function FormulaireAccord({ litigeId, propositionExistante, roleUtilisate
 
   async function accepterProposition() {
     if (!propositionExistante) return;
+    // `proposeur_role` est une donnée de présentation dérivée côté UI. Ne pas
+    // la renvoyer dans le JSON versionné : l'accord doit porter exactement sur
+    // le payload stocké par le proposant.
+    const payloadExact = {
+      type: propositionExistante.type,
+      modifications: propositionExistante.modifications,
+      justification: propositionExistante.justification,
+    };
     setLoading(true);
     try {
       const { data, error } = await supabase.rpc('fn_cloturer_litige_avec_payload' as any, {
         p_litige_id: litigeId,
-        p_payload: propositionExistante,
+        p_payload: payloadExact,
       });
       if (error) throw error;
       const result = data as any;

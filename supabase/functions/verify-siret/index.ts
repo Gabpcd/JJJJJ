@@ -51,8 +51,10 @@ interface SoignantIdentity {
   nom: string;
   date_naissance: string | null;
   siret_liberal: string | null;
+  siret_liberal_verifie: boolean;
   statut_liberal: string | null;
   type_contrat: string | null;
+  modifie_le: string | null;
 }
 
 interface RegistreEtablissement {
@@ -255,7 +257,13 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return preflightResponse(req);
   }
-  if (req.method !== 'POST') return jsonResponse(req, { error: 'Methode non autorisee' }, 405);
+  if (req.method !== 'POST') {
+    return jsonResponse(req, {
+      ok: false,
+      code: 'METHOD_NOT_ALLOWED',
+      error: 'Methode non autorisee',
+    }, 405);
+  }
 
   // Rate-limit IP : 20 vérifs SIRET/min/IP (API INSEE quota partagé).
   const clientIp = getClientIp(req);
@@ -275,7 +283,13 @@ Deno.serve(async (req) => {
     // autorisation (service-role ou membre PROPRIETAIRE/ADMIN_GROUPE). La fonction
     // est protégée contre l'abus par le rate-limit IP (20/min) défini au-dessus.
     const body = await req.json().catch(() => null) as Record<string, unknown> | null;
-    if (!body || Array.isArray(body)) return jsonResponse(req, { error: 'Corps JSON invalide' }, 400);
+    if (!body || Array.isArray(body)) {
+      return jsonResponse(req, {
+        ok: false,
+        code: 'INVALID_JSON',
+        error: 'Corps JSON invalide',
+      }, 400);
+    }
     const siret = typeof body.siret === 'string' ? body.siret.replace(/\s/g, '') : '';
     const etablissement_id = typeof body.etablissement_id === 'string' ? body.etablissement_id : null;
     const usage = body.usage === SOIGNANT_USAGE ? SOIGNANT_USAGE : null;
@@ -293,11 +307,19 @@ Deno.serve(async (req) => {
     const tokenVal = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
     const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false } });
 
+    if (etablissement_id && !UUID_RE.test(etablissement_id)) {
+      return jsonResponse(req, {
+        ok: false,
+        code: 'ETABLISSEMENT_ID_INVALID',
+        error: 'Identifiant établissement invalide',
+      }, 400);
+    }
+
     // Snapshot pris AVANT l'appel au registre. L'autorisation d'écrire sera
     // volontairement recalculée après l'appel ; la RPC exige en plus que cette
     // version n'ait pas bougé entre les deux.
     let etablissementSnapshot: EtablissementVerificationSnapshot | null = null;
-    if (usage !== SOIGNANT_USAGE && etablissement_id && UUID_RE.test(etablissement_id)) {
+    if (usage !== SOIGNANT_USAGE && etablissement_id) {
       const { data: snapshot, error: snapshotError } = await supabaseAdmin
         .from('etablissements')
         .select('verification_source_version, siret')
@@ -313,20 +335,30 @@ Deno.serve(async (req) => {
     let soignant: SoignantIdentity | null = null;
     if (usage === SOIGNANT_USAGE) {
       const auth = await verifyUserOrServiceRole(req);
-      // Ce parcours ne cible jamais un identifiant fourni par le client : seul
-      // le profil rattaché au JWT utilisateur peut être modifié.
       if (!auth.ok) return jsonResponse(req, { ok: false, code: 'NON_AUTHENTIFIE', error: auth.error }, auth.status);
-      if (auth.isServiceRole || !auth.userId) {
-        return jsonResponse(req, { ok: false, code: 'SESSION_UTILISATEUR_REQUISE', error: 'Session soignant requise' }, 403);
+      const requestedSoignantId = typeof body.soignant_id === 'string'
+        ? body.soignant_id.trim()
+        : '';
+      const targetSoignantId = auth.isServiceRole ? requestedSoignantId : auth.userId;
+      if (!targetSoignantId || !UUID_RE.test(targetSoignantId)) {
+        return jsonResponse(req, {
+          ok: false,
+          code: auth.isServiceRole ? 'SOIGNANT_ID_REQUIS' : 'SESSION_UTILISATEUR_REQUISE',
+          error: auth.isServiceRole
+            ? 'Identifiant soignant exact requis pour la revalidation interne'
+            : 'Session soignant requise',
+        }, auth.isServiceRole ? 400 : 403);
       }
-      if ('soignant_id' in body && body.soignant_id !== auth.userId) {
+      // Un utilisateur ne peut cibler que son propre profil. Le service_role
+      // doit, au contraire, fournir explicitement la cible exacte du batch.
+      if (!auth.isServiceRole && requestedSoignantId && requestedSoignantId !== auth.userId) {
         return jsonResponse(req, { ok: false, code: 'NON_AUTORISE', error: 'Modification non autorisée' }, 403);
       }
 
       const { data: profil, error: profilError } = await supabaseAdmin
         .from('soignants')
-        .select('id, prenom, nom, date_naissance, siret_liberal, statut_liberal, type_contrat')
-        .eq('id', auth.userId)
+        .select('id, prenom, nom, date_naissance, siret_liberal, siret_liberal_verifie, statut_liberal, type_contrat, modifie_le')
+        .eq('id', targetSoignantId)
         .maybeSingle();
       if (profilError) {
         console.error('verify-siret: lecture profil soignant impossible', profilError.message);
@@ -335,7 +367,46 @@ Deno.serve(async (req) => {
       if (!profil) return jsonResponse(req, { ok: false, code: 'PROFIL_INTROUVABLE', error: 'Profil soignant introuvable' }, 404);
       soignant = profil as SoignantIdentity;
 
+      if (auth.isServiceRole && soignant.siret_liberal !== siret) {
+        return jsonResponse(req, {
+          ok: false,
+          code: 'SIRET_PROFILE_MISMATCH',
+          error: 'Le SIRET demandé ne correspond plus au profil ciblé',
+        }, 409);
+      }
+
+      const revoquerPreuveSiret = async (code: string): Promise<Response | null> => {
+        // Lors d'une première saisie, aucune preuve canonique n'existe encore.
+        // Pour une revalidation, le numero exact est obligatoirement persiste.
+        if (soignant?.siret_liberal !== siret || soignant.siret_liberal_verifie !== true) {
+          return null;
+        }
+        const { data: revoque, error: revocationError } = await supabaseAdmin.rpc(
+          'fn_revoquer_siret_liberal_soignant',
+          {
+            p_soignant_id: soignant.id,
+            p_siret_attendu: siret,
+            p_code: code,
+          },
+        );
+        if (revocationError || revoque !== true) {
+          console.error(
+            'verify-siret: revocation SIRET soignant impossible',
+            revocationError?.code || 'SNAPSHOT_CHANGED',
+          );
+          return jsonResponse(req, {
+            ok: false,
+            code: 'VERIFICATION_STATE_UPDATE_FAILED',
+            error: 'Impossible de sécuriser l’état de vérification SIRET',
+          }, 503);
+        }
+        soignant.siret_liberal_verifie = false;
+        return null;
+      };
+
       if (!soignant.date_naissance) {
+        const revocationError = await revoquerPreuveSiret('IDENTITE_INCOMPLETE');
+        if (revocationError) return revocationError;
         return jsonResponse(req, {
           ok: false,
           code: 'IDENTITE_INCOMPLETE',
@@ -413,6 +484,21 @@ Deno.serve(async (req) => {
         });
       }
       if (!matching || !result.est_actif) {
+        const { data: revoque, error: revocationError } = soignant.siret_liberal === siret
+          && soignant.siret_liberal_verifie === true
+          ? await supabaseAdmin.rpc('fn_revoquer_siret_liberal_soignant', {
+              p_soignant_id: soignant.id,
+              p_siret_attendu: siret,
+              p_code: matching ? 'SIRET_INACTIF' : 'SIRET_INTROUVABLE',
+            })
+          : { data: true, error: null };
+        if (revocationError || revoque !== true) {
+          return jsonResponse(req, {
+            ok: false,
+            code: 'VERIFICATION_STATE_UPDATE_FAILED',
+            error: 'Impossible de sécuriser l’état de vérification SIRET',
+          }, 503);
+        }
         return jsonResponse(req, {
           ok: false,
           code: matching ? 'SIRET_INACTIF' : 'SIRET_INTROUVABLE',
@@ -422,6 +508,21 @@ Deno.serve(async (req) => {
         });
       }
       if (!result.est_sante) {
+        const { data: revoque, error: revocationError } = soignant.siret_liberal === siret
+          && soignant.siret_liberal_verifie === true
+          ? await supabaseAdmin.rpc('fn_revoquer_siret_liberal_soignant', {
+              p_soignant_id: soignant.id,
+              p_siret_attendu: siret,
+              p_code: 'ACTIVITE_NON_SANTE',
+            })
+          : { data: true, error: null };
+        if (revocationError || revoque !== true) {
+          return jsonResponse(req, {
+            ok: false,
+            code: 'VERIFICATION_STATE_UPDATE_FAILED',
+            error: 'Impossible de sécuriser l’état de vérification SIRET',
+          }, 503);
+        }
         return jsonResponse(req, {
           ok: false,
           code: 'ACTIVITE_NON_SANTE',
@@ -433,17 +534,73 @@ Deno.serve(async (req) => {
 
       const coherenceIdentite = identiteSoignantCoherente(soignant, matching);
       if (coherenceIdentite === null) {
+        const preuveDejaVerifiee = soignant.siret_liberal === siret
+          && soignant.siret_liberal_verifie === true;
+        const { data: revue, error: revueError } = await supabaseAdmin.rpc(
+          'fn_ouvrir_revue_siret_liberal_soignant',
+          {
+            p_soignant_id: soignant.id,
+            p_code: 'IDENTITE_NON_CONFIRMABLE',
+            p_donnees: {
+              siret_candidat: siret,
+              siret_canonique_avant: soignant.siret_liberal,
+              preuve_deja_verifiee: preuveDejaVerifiee,
+              prenom_declare: soignant.prenom,
+              nom_declare: soignant.nom,
+              date_naissance_declaree: soignant.date_naissance,
+              statut_liberal: soignant.statut_liberal,
+              type_contrat: soignant.type_contrat,
+              profil_modifie_le: soignant.modifie_le,
+              raison_sociale_officielle: result.raison_sociale,
+              siret_officiel_actif: result.est_actif,
+              activite_officielle_sante: result.est_sante,
+              code_naf_officiel: result.code_naf,
+              categorie_juridique_officielle: result.categorie_juridique,
+              source_officielle: 'API Recherche Entreprises / INSEE',
+            },
+          },
+        );
+        const revuePayload = revue && typeof revue === 'object'
+          ? revue as Record<string, unknown>
+          : {};
+        if (revueError || revuePayload.success !== true) {
+          return jsonResponse(req, {
+            ok: false,
+            code: 'REVIEW_QUEUE_FAILED',
+            error: 'La revue humaine n’a pas pu être enregistrée. Réessayez.',
+          }, 503);
+        }
         return jsonResponse(req, {
-          ok: false,
+          ok: true,
           code: 'IDENTITE_NON_CONFIRMABLE',
           enregistre: false,
+          siret_candidat: siret,
+          canonique_conserve: true,
+          candidat_conserve_en_revue: true,
+          revue_manuelle: true,
+          revue_id: revuePayload.revue_id,
           ...resultatPublic(result),
           statut: 'ALERTE',
           coherence_identite: null,
           message: 'Le registre ne publie pas de date ou d’année de naissance permettant de confirmer automatiquement le titulaire. Revue manuelle requise.',
-        });
+        }, 202);
       }
       if (coherenceIdentite === false) {
+        const { data: revoque, error: revocationError } = soignant.siret_liberal === siret
+          && soignant.siret_liberal_verifie === true
+          ? await supabaseAdmin.rpc('fn_revoquer_siret_liberal_soignant', {
+              p_soignant_id: soignant.id,
+              p_siret_attendu: siret,
+              p_code: 'IDENTITE_INCOHERENTE',
+            })
+          : { data: true, error: null };
+        if (revocationError || revoque !== true) {
+          return jsonResponse(req, {
+            ok: false,
+            code: 'VERIFICATION_STATE_UPDATE_FAILED',
+            error: 'Impossible de sécuriser l’état de vérification SIRET',
+          }, 503);
+        }
         return jsonResponse(req, {
           ok: false,
           code: 'IDENTITE_INCOHERENTE',
@@ -500,7 +657,7 @@ Deno.serve(async (req) => {
     // OU membre PROPRIETAIRE/ADMIN_GROUPE de cet établissement (UI de vérification).
     // À l'inscription publique il n'y a PAS d'etablissement_id → on ne fait que lire,
     // donc la vérification anti-usurpation côté serveur reste intacte.
-    if (result.statut === 'VERIFIE' && etablissement_id) {
+    if (registreDisponible && etablissement_id) {
       let autorise = false;
       if (tokenVal && serviceRoleKey && tokenVal === serviceRoleKey) {
         autorise = true; // service-role
@@ -531,7 +688,7 @@ Deno.serve(async (req) => {
             p_etablissement_id: etablissement_id,
             p_version_attendue: Number(etablissementSnapshot.verification_source_version),
             p_siret: siret,
-            p_verifie: true,
+            p_verifie: result.statut === 'VERIFIE',
             p_est_actif: result.est_actif,
             p_code_naf: result.code_naf,
             p_raison_sociale: result.raison_sociale,

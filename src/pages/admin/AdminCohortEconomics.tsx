@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useCallback, useState, useEffect } from 'react';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { LayoutAdmin } from '@/components/LayoutAdmin';
 import { ChargementAdmin } from '@/components/admin/ChargementAdmin';
@@ -16,23 +16,23 @@ function fmt(v: number | null | undefined): string {
 }
 
 export default function AdminCohortEconomics() {
-  usePageTitle('Cohort & Unit Economics');
+  usePageTitle('Cohortes & économie unitaire');
   const { afficherNotification } = useNotification();
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<any>(null);
   const [periode, setPeriode] = useState(12);
 
-  const charger = async () => {
+  const charger = useCallback(async () => {
     setLoading(true);
     const { data: result, error } = await supabase.rpc('fn_admin_cohort_economics' as any, { p_mois: periode });
     if (error) afficherNotification({ type: 'erreur', message: extraireMessageErreur(error) });
     else setData(result);
     setLoading(false);
-  };
+  }, [afficherNotification, periode]);
 
-  useEffect(() => { charger(); }, [periode]);
+  useEffect(() => { charger(); }, [charger]);
 
-  if (loading) return <LayoutAdmin><ChargementAdmin titre="Cohort Analysis & Unit Economics" /></LayoutAdmin>;
+  if (loading) return <LayoutAdmin><ChargementAdmin titre="Cohortes & économie unitaire" /></LayoutAdmin>;
 
   const cohortes = data?.cohortes_mensuelles || [];
   const retention = data?.retention_mensuelle || [];
@@ -43,7 +43,7 @@ export default function AdminCohortEconomics() {
     <LayoutAdmin>
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6 gap-3">
         <div>
-          <h1 className="text-xl font-bold text-foreground">Cohort Analysis & Unit Economics</h1>
+          <h1 className="text-xl font-bold text-foreground">Cohortes & économie unitaire</h1>
           <p className="text-sm text-muted-foreground">Métriques pour les investisseurs — {periode} derniers mois</p>
         </div>
         <div className="flex gap-2">
@@ -74,13 +74,13 @@ export default function AdminCohortEconomics() {
         ))}
       </div>
 
-      {/* Unit Economics cards */}
+      {/* Économie unitaire */}
       <CardY2K className="mb-6" hoverLift={false}>
-        <h2 className="text-base font-semibold text-foreground mb-4">Unit Economics</h2>
+        <h2 className="text-base font-semibold text-foreground mb-4">Économie unitaire</h2>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
           {[
             { label: 'ARPU / Établissement', value: fmt(ue.arpu_etab), sub: 'Commission moyenne par établissement' },
-            { label: 'Rev / Soignant actif', value: fmt(ue.rev_per_soignant), sub: 'GMV par soignant' },
+            { label: 'Revenu / soignant actif', value: fmt(ue.rev_per_soignant), sub: 'GMV par soignant' },
             { label: 'Commission / Mission', value: fmt(ue.commission_par_mission), sub: 'Commission moyenne par transaction' },
             { label: 'Commission / Heure', value: fmt(ue.commission_par_heure), sub: 'Marge horaire' },
             { label: 'GMV / Heure', value: fmt(ue.gmv_par_heure), sub: 'Volume horaire brut' },

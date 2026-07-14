@@ -12,9 +12,9 @@ import {
 
 // Vérification IA d'une attestation d'heures externes (parcours 3200h libéral).
 // Lit le document téléversé via Anthropic Vision, extrait le nombre d'heures +
-// l'établissement + la période, et confronte au déclaré. Validation auto VALIDE
-// uniquement si cohérent ; sinon EN_ATTENTE (revue admin) ; REJETE si non conforme.
-// Calqué sur verify-document (auth, modèle, gestion PDF/image, timeout 20s).
+// l'établissement + la période, et confronte au déclaré. Aucun résultat IA ne
+// passe automatiquement à VALIDE : seuls les fichiers conclusivement invalides
+// peuvent être rejetés ; tous les autres attendent une décision admin AAL2.
 
 function wait(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -36,7 +36,7 @@ async function loadHeureWithRetry(supabase: any, id: string, attempts = 4) {
   for (let attempt = 0; attempt < attempts; attempt++) {
     const { data, error, status, statusText } = await supabase
       .from("heures_externes_soignants")
-      .select("id, soignant_id, etablissement_nom, etablissement_type, date_debut, date_fin, heures_declarees, attestation_url, attestation_nom_fichier")
+      .select("id, soignant_id, etablissement_nom, etablissement_type, date_debut, date_fin, heures_declarees, attestation_url, attestation_nom_fichier, version_source")
       .eq("id", id)
       .maybeSingle();
 
@@ -60,6 +60,76 @@ function devinerMime(nom: string | null): string {
   if (n.endsWith(".png")) return "image/png";
   if (n.endsWith(".webp")) return "image/webp";
   return "image/jpeg";
+}
+
+function snapshotSource(ligne: any) {
+  return {
+    id: ligne.id,
+    soignant_id: ligne.soignant_id,
+    etablissement_nom: ligne.etablissement_nom,
+    etablissement_type: ligne.etablissement_type ?? null,
+    date_debut: ligne.date_debut,
+    date_fin: ligne.date_fin,
+    heures_declarees: ligne.heures_declarees,
+    attestation_url: ligne.attestation_url,
+    attestation_nom_fichier: ligne.attestation_nom_fichier ?? null,
+    version_source: ligne.version_source,
+  };
+}
+
+async function sha256Hex(bytes: Uint8Array): Promise<string> {
+  const copied = Uint8Array.from(bytes);
+  const digest = await crypto.subtle.digest("SHA-256", copied.buffer);
+  return Array.from(new Uint8Array(digest))
+    .map((octet) => octet.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+async function finaliserVerification(
+  supabaseAdmin: any,
+  ligne: any,
+  params: {
+    empreintePreuve: string;
+    verdict: "EN_ATTENTE" | "REJETE";
+    rejetConclusif: boolean;
+    heuresExtraites: number | null;
+    coherence: boolean | null;
+    resultat: Record<string, unknown>;
+    commentaire: string;
+  },
+) {
+  const { data, error } = await supabaseAdmin.rpc(
+    "fn_service_finaliser_heures_externes",
+    {
+      p_id: ligne.id,
+      p_snapshot_source: snapshotSource(ligne),
+      p_empreinte_preuve_sha256: params.empreintePreuve,
+      p_verdict: params.verdict,
+      p_rejet_conclusif: params.rejetConclusif,
+      p_heures_extraites: params.heuresExtraites,
+      p_coherence: params.coherence,
+      p_resultat_ia: params.resultat,
+      p_commentaire: params.commentaire,
+    },
+  );
+  if (error) throw error;
+  return data as {
+    success?: boolean;
+    statut?: "EN_ATTENTE" | "REJETE";
+    error_code?: string;
+    error?: string;
+    preuve_dupliquee?: boolean;
+  } | null;
+}
+
+function reponseConflitFinalisation(req: Request, resultat: { error?: string } | null) {
+  return new Response(
+    JSON.stringify({ error: resultat?.error || "La déclaration a changé pendant la vérification" }),
+    {
+      status: 409,
+      headers: { ...corsHeaders(req), "Content-Type": "application/json" },
+    },
+  );
 }
 
 Deno.serve(async (req) => {
@@ -244,7 +314,6 @@ Deno.serve(async (req) => {
     if (!heure_externe_id) throw new Error("heure_externe_id requis");
 
     const anthropicKey = Deno.env.get("ANTHROPIC_API_KEY");
-    if (!anthropicKey) throw new Error("ANTHROPIC_API_KEY non configurée — nécessaire pour la vérification IA des heures");
 
     const supabase = supabaseAdmin;
     const ligne = await loadHeureWithRetry(supabase, heure_externe_id);
@@ -286,6 +355,21 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Lecture CAS avant tout appel externe ; la RPC de finalisation répète ce
+    // contrôle sous FOR UPDATE sur le snapshot complet.
+    const { data: sourceCourante, error: sourceError } = await supabase
+      .from("heures_externes_soignants")
+      .select("id")
+      .eq("id", heure_externe_id)
+      .eq("attestation_url", attestationPath)
+      .eq("version_source", ligne.version_source)
+      .eq("statut_validation", "EN_ATTENTE")
+      .maybeSingle();
+    if (sourceError) throw sourceError;
+    if (!sourceCourante) {
+      return reponseConflitFinalisation(req, null);
+    }
+
     // Les nouveaux dépôts utilisent le bucket privé reproductible. Le fallback
     // conserve la lecture des attestations historiques sans déplacer les données.
     const nouveauBucket = attestationPath.includes("/heures-externes/");
@@ -303,6 +387,7 @@ Deno.serve(async (req) => {
 
     const arrayBuffer = await fileData.arrayBuffer();
     const bytes = new Uint8Array(arrayBuffer);
+    const empreintePreuve = await sha256Hex(bytes);
     const declaredMime = fileData.type && fileData.type !== "application/octet-stream"
       ? fileData.type
       : devinerMime(ligne.attestation_nom_fichier);
@@ -315,26 +400,35 @@ Deno.serve(async (req) => {
         INVALID_SIGNATURE: "Le contenu de l'attestation ne correspond pas à son format déclaré.",
       };
       const motif = motifs[fileValidation.code];
-      const { data: rejected, error: rejectedError } = await supabase.from("heures_externes_soignants").update({
-        statut_validation: "REJETE",
-        resultat_ia: { controle_fichier: fileValidation.code, regle_version: "2026-07-14" },
-        commentaire_validation: motif,
-        verifie_ia_le: new Date().toISOString(),
-        valide_le: null,
-        mis_a_jour_le: new Date().toISOString(),
-      } as any)
-        .eq("id", heure_externe_id)
-        .eq("attestation_url", attestationPath)
-        .select("id")
-        .maybeSingle();
-      if (rejectedError) throw rejectedError;
-      if (!rejected) {
-        return new Response(JSON.stringify({ error: "L'attestation a changé pendant la vérification" }), {
-          status: 409,
-          headers: { ...corsHeaders(req), "Content-Type": "application/json" },
-        });
-      }
+      const rejected = await finaliserVerification(supabaseAdmin, ligne, {
+        empreintePreuve,
+        verdict: "REJETE",
+        rejetConclusif: true,
+        heuresExtraites: null,
+        coherence: null,
+        resultat: {
+          controle_fichier: fileValidation.code,
+          rejet_conclusif_serveur: true,
+        },
+        commentaire: motif,
+      });
+      if (!rejected?.success) return reponseConflitFinalisation(req, rejected);
       return new Response(JSON.stringify({ success: true, verdict: "REJETE", reason: motif }), {
+        headers: { ...corsHeaders(req), "Content-Type": "application/json" },
+      });
+    }
+    if (!anthropicKey) {
+      const pending = await finaliserVerification(supabaseAdmin, ligne, {
+        empreintePreuve,
+        verdict: "EN_ATTENTE",
+        rejetConclusif: false,
+        heuresExtraites: null,
+        coherence: null,
+        resultat: { erreur_anthropic: { status: "configuration_absente" } },
+        commentaire: "Analyse automatique indisponible. Revue manuelle requise.",
+      });
+      if (!pending?.success) return reponseConflitFinalisation(req, pending);
+      return new Response(JSON.stringify({ success: true, verdict: "EN_ATTENTE", reason: "AI unavailable" }), {
         headers: { ...corsHeaders(req), "Content-Type": "application/json" },
       });
     }
@@ -418,9 +512,18 @@ Lis le document, extrais le nombre réel d'heures travaillées, l'établissement
       clearTimeout(aiTimeout);
       const estTimeout = (e as any)?.name === "AbortError";
       console.error("Anthropic call failed:", estTimeout ? "timeout 20s" : e);
-      await supabase.from("heures_externes_soignants").update({
-        resultat_ia: { erreur_anthropic: { status: estTimeout ? "timeout" : "network", at: new Date().toISOString() } },
-      } as any).eq("id", heure_externe_id).eq("attestation_url", attestationPath);
+      const pending = await finaliserVerification(supabaseAdmin, ligne, {
+        empreintePreuve,
+        verdict: "EN_ATTENTE",
+        rejetConclusif: false,
+        heuresExtraites: null,
+        coherence: null,
+        resultat: {
+          erreur_anthropic: { status: estTimeout ? "timeout" : "network" },
+        },
+        commentaire: "Analyse automatique indisponible. Revue manuelle requise.",
+      });
+      if (!pending?.success) return reponseConflitFinalisation(req, pending);
       return new Response(JSON.stringify({ success: true, verdict: "EN_ATTENTE", reason: estTimeout ? "AI timeout" : "AI network error" }), {
         headers: { ...corsHeaders(req), "Content-Type": "application/json" },
       });
@@ -430,11 +533,18 @@ Lis le document, extrais le nombre réel d'heures travaillées, l'établissement
     if (!ai.ok) {
       const errText = ai.body;
       console.error("Anthropic API failed:", ai.status, errText);
-      await supabase.from("heures_externes_soignants").update({
-        resultat_ia: {
-          erreur_anthropic: { status: ai.status, body_length: errText.length, at: new Date().toISOString() },
+      const pending = await finaliserVerification(supabaseAdmin, ligne, {
+        empreintePreuve,
+        verdict: "EN_ATTENTE",
+        rejetConclusif: false,
+        heuresExtraites: null,
+        coherence: null,
+        resultat: {
+          erreur_anthropic: { status: ai.status, body_length: errText.length },
         },
-      } as any).eq("id", heure_externe_id).eq("attestation_url", attestationPath);
+        commentaire: "Analyse automatique indisponible. Revue manuelle requise.",
+      });
+      if (!pending?.success) return reponseConflitFinalisation(req, pending);
       return new Response(JSON.stringify({ success: true, verdict: "EN_ATTENTE", reason: "AI unavailable" }), {
         headers: { ...corsHeaders(req), "Content-Type": "application/json" },
       });
@@ -452,9 +562,16 @@ Lis le document, extrais le nombre réel d'heures travaillées, l'établissement
     }
 
     if (!analysis) {
-      await supabase.from("heures_externes_soignants").update({
-        resultat_ia: { erreur_parse: { raw_length: rawContent.length, at: new Date().toISOString() } },
-      } as any).eq("id", heure_externe_id).eq("attestation_url", attestationPath);
+      const pending = await finaliserVerification(supabaseAdmin, ligne, {
+        empreintePreuve,
+        verdict: "EN_ATTENTE",
+        rejetConclusif: false,
+        heuresExtraites: null,
+        coherence: null,
+        resultat: { erreur_parse: { raw_length: rawContent.length } },
+        commentaire: "Résultat automatique inexploitable. Revue manuelle requise.",
+      });
+      if (!pending?.success) return reponseConflitFinalisation(req, pending);
       return new Response(JSON.stringify({ success: true, verdict: "EN_ATTENTE", reason: "Parse error" }), {
         headers: { ...corsHeaders(req), "Content-Type": "application/json" },
       });
@@ -490,25 +607,33 @@ Lis le document, extrais le nombre réel d'heures travaillées, l'établissement
       coherence = Math.abs(heuresExtraites - declare) <= tolerance;
     }
 
-    let statut: "EN_ATTENTE" | "VALIDE" | "REJETE";
-    let commentaire: string | null = null;
-    if (analysis.verdict === "REJETE" || analysis.est_attestation_heures === false || analysis.document_lisible === false) {
-      statut = "REJETE";
-      commentaire = analysis.motif_rejet || "Document non conforme (pas une attestation d'heures).";
+    // Un rejet IA n'est conclusif que si le document complet et lisible est
+    // clairement d'un autre type, à haute confiance, sans contrôle antifraude
+    // incomplet. Identité, établissement, période ou heures divergents restent
+    // des signaux de revue : ils ne déclenchent jamais seuls un rejet.
+    const rejetConclusif = analysis.est_attestation_heures === false
+      && analysis.document_lisible === true
+      && analysis.document_complet === true
+      && quality.highConfidence
+      && quality.antifraudComplete
+      && indicesFalsif.length === 0;
+
+    let statut: "EN_ATTENTE" | "REJETE" = rejetConclusif ? "REJETE" : "EN_ATTENTE";
+    let commentaire: string;
+    if (rejetConclusif) {
+      commentaire = typeof analysis.motif_rejet === "string" && analysis.motif_rejet.trim()
+        ? analysis.motif_rejet.trim().slice(0, 1000)
+        : "Le fichier lisible n'est conclusivement pas une attestation d'heures.";
     } else if (nomCorrespond === false) {
-      statut = "REJETE";
-      commentaire = "L'identité lue sur l'attestation ne correspond pas au soignant déclaré.";
+      commentaire = "L'identité lue diverge du profil. Revue manuelle requise.";
     } else if (etablissementCorrespond === false) {
-      statut = "REJETE";
-      commentaire = "L'établissement lu sur l'attestation ne correspond pas à l'établissement déclaré.";
+      commentaire = "L'établissement lu diverge de la déclaration. Revue manuelle requise.";
     } else if (periodeCorrespond === false) {
-      statut = "REJETE";
-      commentaire = "La période lue sur l'attestation ne couvre pas la période déclarée.";
+      commentaire = "La période lue ne couvre pas la période déclarée. Revue manuelle requise.";
     } else if (!quality.antifraudComplete || indicesFalsif.length > 0) {
-      statut = "EN_ATTENTE";
       commentaire = indicesFalsif.length > 0
-        ? `Indices de falsification détectés : ${indicesFalsif.join(", ")}. Revue manuelle requise.`
-        : "Contrôle antifraude incomplet — revue manuelle requise.";
+        ? `Indices à examiner : ${indicesFalsif.join(", ")}`.slice(0, 1000)
+        : "Contrôle antifraude incomplet. Revue manuelle requise.";
     } else if (
       analysis.verdict === "VERIFIE"
       && analysis.est_attestation_heures === true
@@ -522,14 +647,11 @@ Lis le document, extrais le nombre réel d'heures travaillées, l'établissement
       && etablissementCorrespond === true
       && periodeCorrespond === true
     ) {
-      statut = "VALIDE";
-      commentaire = `Validé automatiquement par IA : ${heuresExtraites} h lues, cohérent avec ${declare} h déclarées, identité concordante.`;
+      commentaire = `Contrôles automatiques concordants (${heuresExtraites} h lues). Validation humaine requise.`;
     } else if (heuresExtraites !== null && coherence === false) {
-      statut = "EN_ATTENTE";
-      commentaire = `Écart détecté : ${heuresExtraites} h lues sur l'attestation vs ${declare} h déclarées. Revue manuelle requise.`;
+      commentaire = `Écart détecté : ${heuresExtraites} h lues vs ${declare} h déclarées. Revue manuelle requise.`;
     } else {
-      statut = "EN_ATTENTE";
-      commentaire = analysis.motif_rejet || "Volume d'heures non extrait avec certitude. Revue manuelle requise.";
+      commentaire = "Volume ou concordances non établis avec certitude. Revue manuelle requise.";
     }
 
     const resultatPersisted = {
@@ -551,50 +673,21 @@ Lis le document, extrais le nombre réel d'heures travaillées, l'établissement
       etablissement_match_serveur: etablissementCorrespond,
       periode_match_serveur: periodeCorrespond,
       coherence_heures_serveur: coherence,
+      rejet_conclusif_serveur: rejetConclusif,
     };
-    const { data: updated, error: updateError } = await supabase.from("heures_externes_soignants").update({
-      statut_validation: statut,
-      heures_extraites_ia: heuresExtraites,
-      coherence_ia: coherence,
-      resultat_ia: resultatPersisted,
-      commentaire_validation: commentaire,
-      verifie_ia_le: new Date().toISOString(),
-      valide_le: statut === "VALIDE" ? new Date().toISOString() : null,
-      mis_a_jour_le: new Date().toISOString(),
-    } as any)
-      .eq("id", heure_externe_id)
-      .eq("attestation_url", attestationPath)
-      .select("id")
-      .maybeSingle();
-    if (updateError) throw updateError;
-    if (!updated) {
-      return new Response(JSON.stringify({ error: "L'attestation a changé pendant la vérification" }), {
-        status: 409,
-        headers: { ...corsHeaders(req), "Content-Type": "application/json" },
-      });
-    }
-
-    await supabase.rpc("fn_ecrire_audit_safe" as any, {
-      p_acteur_id: ligne.soignant_id,
-      p_type_acteur: "SYSTEME",
-      p_action: "HEURES_EXTERNES_VERIFICATION_AUTO",
-      p_type_ressource: "heures_externes_soignants",
-      p_id_ressource: heure_externe_id,
-      p_cle_s3: ligne.attestation_url,
-      p_details: {
-        statut,
-        heures_declarees: declare,
-        heures_extraites_ia: heuresExtraites,
-        coherence_ia: coherence,
-        confiance: quality.confidence,
-        verdict_ia: analysis.verdict,
-        identite_correspond: nomCorrespond,
-        etablissement_correspond: etablissementCorrespond,
-        periode_correspond: periodeCorrespond,
-      },
-      p_ip: null,
-      p_navigateur: "edge-function/verify-heures-externes",
+    const finalisation = await finaliserVerification(supabaseAdmin, ligne, {
+      empreintePreuve,
+      verdict: statut,
+      rejetConclusif,
+      heuresExtraites,
+      coherence,
+      resultat: resultatPersisted,
+      commentaire,
     });
+    if (!finalisation?.success) {
+      return reponseConflitFinalisation(req, finalisation);
+    }
+    statut = finalisation.statut || "EN_ATTENTE";
 
     return new Response(
       JSON.stringify({
@@ -605,6 +698,7 @@ Lis le document, extrais le nombre réel d'heures travaillées, l'établissement
         identite_correspond: nomCorrespond,
         etablissement_correspond: etablissementCorrespond,
         periode_correspond: periodeCorrespond,
+        preuve_dupliquee: finalisation.preuve_dupliquee === true,
       }),
       { headers: { ...corsHeaders(req), "Content-Type": "application/json" } }
     );

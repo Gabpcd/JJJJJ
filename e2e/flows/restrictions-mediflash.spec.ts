@@ -77,7 +77,7 @@ test.describe('Matrice profession requise × établissement', () => {
     expect((regleMission as { niveau?: string } | null)?.niveau).toBe('NON_PROPOSE');
 
     const sources = [
-      ['IADE', 'CLINIQUE_PRIVEE', null, 'https://www.fehap.fr/jcms/navigation-internet/upload/docs/application/pdf/2023-02/courrierconjointministeres_30decembre2021_.pdf', 'https://www.legifrance.gouv.fr/ceta/id/CETATEXT000051156546'],
+      ['IADE', 'CLINIQUE_PRIVEE', null, 'https://www.fehap.fr/upload/docs/application/pdf/2023-02/courrierconjointministeres_30decembre2021_.pdf', 'https://www.legifrance.gouv.fr/ceta/id/CETATEXT000051156546'],
       ['MANIPULATEUR_RADIO', 'CLINIQUE_PRIVEE', null, 'https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000033621093', null],
       ['DENTISTE', 'CENTRE_SANTE', null, 'https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000047567923', null],
       ['PHARMACIEN', 'CLINIQUE_PRIVEE', null, null, null],
@@ -123,7 +123,7 @@ test.describe('Matrice profession requise × établissement', () => {
     await expect(page.getByText(/validée par le Conseil d'État.*n°491128/)).toBeVisible();
     await expect(page.getByRole('link', { name: 'Lire la lettre D21-031940 (texte original)' })).toHaveAttribute(
       'href',
-      'https://www.fehap.fr/jcms/navigation-internet/upload/docs/application/pdf/2023-02/courrierconjointministeres_30decembre2021_.pdf',
+      'https://www.fehap.fr/upload/docs/application/pdf/2023-02/courrierconjointministeres_30decembre2021_.pdf',
     );
     await expect(page.getByRole('link', { name: 'Lire l’arrêt n°491128 — cas aide-soignant uniquement' })).toHaveAttribute(
       'href',

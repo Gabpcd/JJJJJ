@@ -103,16 +103,26 @@ async function seedEscrow(
  * On retire donc TOUTE la descendance financière avant la cascade.
  */
 async function purgeMissionFull(admin: ReturnType<typeof adminClient>, id: string): Promise<void> {
-  const { data: escs } = await admin.from('paiements_escrow').select('id').eq('mission_id', id);
+  const { data: escs, error: escrowsError } = await admin
+    .from('paiements_escrow')
+    .select('id')
+    .eq('mission_id', id);
+  if (escrowsError) throw new Error(`purge escrow: lecture ${id} — ${escrowsError.message}`);
   const escIds = ((escs || []) as Array<{ id: string }>).map((e) => e.id);
   if (escIds.length) {
-    await admin.from('stripe_refunds_queue').delete().in('paiement_escrow_id', escIds);
-    await admin.from('escrow_release_queue').delete().in('paiement_escrow_id', escIds);
-    await admin.from('escrow_exposition_releases').delete().in('paiement_escrow_id', escIds);
+    for (const table of [
+      'stripe_refunds_queue',
+      'escrow_release_queue',
+      'escrow_exposition_releases',
+    ] as const) {
+      const { error } = await admin.from(table).delete().in('paiement_escrow_id', escIds);
+      if (error) throw new Error(`purge escrow: ${table} ${id} — ${error.message}`);
+    }
   }
-  await admin.from('stripe_transfers').delete().eq('mission_id', id);
-  await admin.from('paiements_escrow').delete().eq('mission_id', id);
-  await admin.from('presences').delete().eq('mission_id', id);
+  for (const table of ['stripe_transfers', 'paiements_escrow', 'presences'] as const) {
+    const { error } = await admin.from(table).delete().eq('mission_id', id);
+    if (error) throw new Error(`purge escrow: ${table} ${id} — ${error.message}`);
+  }
   await cleanupMissionCascade(id);
 }
 
