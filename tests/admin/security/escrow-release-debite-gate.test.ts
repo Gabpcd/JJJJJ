@@ -32,11 +32,15 @@ describe('release escrow — débit confirmé obligatoire', () => {
 
   it('relit puis réserve atomiquement DEBITE avant de créer le payout', () => {
     const create = edge.indexOf('stripe.payouts.create(');
-    const reservation = edge.lastIndexOf('.eq("statut", "DEBITE")', create);
+    const reservation = edge.lastIndexOf('"fn_escrow_reserver_release"', create);
     expect(edge).toContain('.select("statut, stripe_payout_id")');
     expect(edge).toContain('!["DEBITE", "RELEASE_PLANIFIE"].includes(escrowCourant.statut)');
     expect(reservation).toBeGreaterThan(0);
     expect(reservation).toBeLessThan(create);
+    expect(edge.slice(reservation, create)).toContain('p_queue_id: rel.queue_id');
+    expect(edge.slice(reservation, create)).toContain(
+      'p_paiement_escrow_id: rel.paiement_escrow_id',
+    );
     expect(edge.slice(reservation, create)).toContain('releaseReservee = true');
   });
 

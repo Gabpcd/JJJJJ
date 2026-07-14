@@ -316,15 +316,16 @@ Deno.serve(async (req) => {
         debitIdempotencyKey = `escrow_debit_${esc.id}_after_${precedent.id}`;
       }
 
-      // Claim optimiste : un seul worker compte et lance cette tentative.
-      const { data: tentativeReservee, error: tentativeErr } = await admin
-        .from("paiements_escrow")
-        .update({ tentatives_debit: (esc.tentatives_debit ?? 0) + 1, derniere_tentative_le: new Date().toISOString() })
-        .eq("id", esc.id)
-        .eq("statut", "INITIE")
-        .eq("tentatives_debit", esc.tentatives_debit ?? 0)
-        .select("id")
-        .maybeSingle();
+      // Claim transactionnel : la DB verrouille aussi la mission et revalide
+      // statut + assigné + absence d'empêchement/remplacement. Ce verrou se
+      // sérialise avec la RPC d'attestation juste avant tout nouvel appel Stripe.
+      const { data: tentativeReservee, error: tentativeErr } = await admin.rpc(
+        "fn_escrow_reserver_tentative_debit",
+        {
+          p_paiement_escrow_id: esc.id,
+          p_tentatives_attendues: esc.tentatives_debit ?? 0,
+        },
+      );
       if (tentativeErr) throw tentativeErr;
       if (!tentativeReservee) {
         ignores++;

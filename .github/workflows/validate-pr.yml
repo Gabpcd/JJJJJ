@@ -325,6 +325,7 @@ jobs:
             tests/admin/security/mission-start-direct-insert-gate.test.sql
             tests/admin/security/external-hours-p0-hardening.test.sql
             tests/admin/security/heures-compteurs-coherence.test.sql
+            tests/admin/security/empechement-penalty-hardening.test.sql
             tests/admin/security/etablissement-rib-review-queue.test.sql
             tests/admin/security/manual-review-admin-queue.test.sql
             tests/security/establishment-admin-review-hardening.test.sql
