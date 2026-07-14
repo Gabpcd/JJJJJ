@@ -226,6 +226,28 @@ jobs:
               --project-ref "$STAGING_SUPABASE_PROJECT_REF" \
               --password "$STAGING_SUPABASE_DB_PASSWORD" \
               --workdir "$BASE_WORKTREE"
+
+          # Le staging vierge n'active pas pg_cron par défaut, alors que plusieurs
+          # migrations historiques de main créent les jobs de production. Le
+          # bootstrap doit donc installer cette dépendance avant de rejouer main ;
+          # l'opération reste strictement limitée au project ref staging contrôlé
+          # ci-dessus et est idempotente.
+          jq -nc \
+            --arg query 'CREATE EXTENSION IF NOT EXISTS pg_cron WITH SCHEMA pg_catalog;' \
+            '{query: $query}' > /tmp/jolene-staging-pg-cron.json
+          cron_code=$(curl -sS --connect-timeout 10 --max-time 60 \
+            -o /tmp/jolene-staging-pg-cron-response.json -w '%{http_code}' \
+            -X POST "https://api.supabase.com/v1/projects/${STAGING_SUPABASE_PROJECT_REF}/database/query" \
+            -H "Authorization: Bearer ${STAGING_SUPABASE_ACCESS_TOKEN}" \
+            -H 'Content-Type: application/json' \
+            --data-binary @/tmp/jolene-staging-pg-cron.json)
+          if [ "$cron_code" -lt 200 ] || [ "$cron_code" -ge 300 ]; then
+            echo "::error::Activation de pg_cron refusée sur le staging (HTTP $cron_code)."
+            jq -r '.message // .error // "Erreur SQL non détaillée"' \
+              /tmp/jolene-staging-pg-cron-response.json 2>/dev/null || true
+            exit 1
+          fi
+
           SUPABASE_ACCESS_TOKEN="$STAGING_SUPABASE_ACCESS_TOKEN" \
             supabase db push \
               --include-all \
