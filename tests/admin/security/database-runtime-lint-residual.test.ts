@@ -29,8 +29,12 @@ describe('solde du lint PL/pgSQL pré-lancement', () => {
   it('applique uniquement des remplacements exacts et fail-closed', () => {
     expect(migration).toContain('jolene_replace_function_fragment');
     expect(migration).toContain('p_expected_occurrences integer DEFAULT 1');
-    expect(migration).toContain('IF v_occurrences <> p_expected_occurrences THEN');
-    expect(migration).toContain('DROP FUNCTION pg_temp.jolene_replace_function_fragment');
+    expect(migration).toContain(
+      'IF v_occurrences <> p_expected_occurrences THEN',
+    );
+    expect(migration).toContain(
+      'DROP FUNCTION pg_temp.jolene_replace_function_fragment',
+    );
   });
 
   it('utilise les colonnes et tables canoniques', () => {
@@ -38,15 +42,21 @@ describe('solde du lint PL/pgSQL pré-lancement', () => {
     expect(migration).toContain('e.email_contact');
     expect(migration).toContain('FROM public.notations_missions n');
     expect(migration).toContain('n.publie_le IS NOT NULL');
-    expect(migration).toContain('exclu_par = v_user_id OR exclu_id = v_user_id');
+    expect(migration).toContain(
+      'exclu_par = v_user_id OR exclu_id = v_user_id',
+    );
     expect(migration).toContain("statut = 'OUVERTE'");
     expect(migration).toContain('f.date_echeance < CURRENT_DATE');
   });
 
   it('réutilise le lecteur de secret protégé sans créer de RPC à paramètre', () => {
-    expect(migration.match(/v_token := public\.fn_lire_secret_cron\(\);/g)).toHaveLength(2);
+    expect(
+      migration.match(/v_token := public\.fn_lire_secret_cron\(\);/g),
+    ).toHaveLength(2);
     expect(migration).toContain('https://flripxtsyegjshnhzjkz.supabase.co');
-    expect(migration).not.toMatch(/CREATE OR REPLACE FUNCTION public\.fn_lire_secret_cron/);
+    expect(migration).not.toMatch(
+      /CREATE OR REPLACE FUNCTION public\.fn_lire_secret_cron/,
+    );
     expect(migration.match(/IF v_send_email_called THEN/g)).toHaveLength(2);
     expect(migration).toContain(
       "jsonb_build_object('sens', 'ETAB_VERS_SOIGNANT', 'send_email_called', true)",
@@ -92,8 +102,11 @@ describe('solde du lint PL/pgSQL pré-lancement', () => {
     expect(runtimeRegression).toContain('BEGIN;');
     expect(runtimeRegression).toContain('INSERT INTO auth.users');
     expect(runtimeRegression).toContain('INSERT INTO public.etablissements');
-    expect(runtimeRegression).toContain('INSERT INTO public.membres_etablissement');
+    expect(runtimeRegression).toContain(
+      'INSERT INTO public.membres_etablissement',
+    );
     expect(runtimeRegression).toContain('INSERT INTO public.missions');
+    expect(runtimeRegression).toContain('jolene.admin_seed_override_reason');
     expect(runtimeRegression).toContain('ROLLBACK;');
     expect(runtimeRegression).not.toContain(
       'Fixture BOLA impossible : aucune mission cible',

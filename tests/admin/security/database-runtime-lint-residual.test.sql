@@ -200,6 +200,11 @@ BEGIN
   PERFORM set_config('request.jwt.claim.sub', '', true);
   PERFORM set_config('request.jwt.claim.role', '', true);
   PERFORM set_config('request.jwt.claims', '{}', true);
+  PERFORM set_config(
+    'jolene.admin_seed_override_reason',
+    'Fixture transactionnelle anti-BOLA annulation mission',
+    true
+  );
 
   SELECT * INTO v_heures
   FROM public.fn_calculer_heures_majorees(
@@ -273,12 +278,12 @@ DECLARE
   v_statut_apres public.statut_mission;
   v_modifie_apres timestamptz;
 BEGIN
-  -- L'insertion des fixtures s'effectue sans identite applicative. Les gardes
-  -- de creation de mission voient donc bien une operation SQL de test, jamais
-  -- un contournement accessible a un JWT utilisateur.
+  -- L'insertion des fixtures s'effectue sous le rôle serveur et avec un motif
+  -- de seed borné à cette transaction. Les gardes de création de mission ne
+  -- sont donc jamais contournables par un JWT utilisateur.
   PERFORM set_config('request.jwt.claim.sub', '', true);
-  PERFORM set_config('request.jwt.claim.role', '', true);
-  PERFORM set_config('request.jwt.claims', '{}', true);
+  PERFORM set_config('request.jwt.claim.role', 'service_role', true);
+  PERFORM set_config('request.jwt.claims', '{"role":"service_role"}', true);
 
   INSERT INTO auth.users (
     id, instance_id, email, role, aud, raw_app_meta_data, email_confirmed_at
@@ -318,12 +323,13 @@ BEGIN
   INSERT INTO public.missions (
     id, etablissement_id, intitule, profession_requise,
     debut_le, fin_le, duree_heures, taux_horaire_base,
-    statut, soignant_assigne_id
+    statut, soignant_assigne_id, type_contrat_recherche, mode_attribution
   ) VALUES (
     v_mission_id, v_etab_cible_id, 'Fixture anti-BOLA annulation', 'IDE',
     now() + interval '7 days', now() + interval '7 days 8 hours',
-    8, 20, 'OUVERTE', NULL
+    8, 20, 'OUVERTE', NULL, 'SALARIE', 'CANDIDATURE'
   );
+  PERFORM set_config('jolene.admin_seed_override_reason', '', true);
 
   SELECT m.id, m.etablissement_id, m.soignant_assigne_id,
          m.statut, m.modifie_le
