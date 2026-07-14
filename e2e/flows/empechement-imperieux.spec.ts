@@ -80,12 +80,35 @@ test.describe('Empêchement impérieux (zéro donnée de santé)', () => {
     return data as string;
   }
 
+  /** Dates civiles de la mission dans le fuseau métier utilisé par le RPC. */
+  async function datesIndisponibiliteMission(
+    missionId: string,
+  ): Promise<{ debut: string; fin: string }> {
+    const { data, error } = await adminClient()
+      .from('missions')
+      .select('debut_le, fin_le')
+      .eq('id', missionId)
+      .single();
+    if (error || !data) {
+      throw new Error(`dates mission empêchement: ${error?.message || 'introuvables'}`);
+    }
+    const dateParis = (value: string): string => new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Europe/Paris',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(new Date(value));
+    return {
+      debut: dateParis((data as any).debut_le),
+      fin: dateParis((data as any).fin_le),
+    };
+  }
+
   /** Notifications de chaque mission + missions seedées + état soignant. */
   async function nettoyer(): Promise<void> {
     const admin = adminClient();
-    while (seededMissions.length) {
-      const missionId = seededMissions.pop();
-      if (!missionId) continue;
+    const erreurs: string[] = [];
+    for (const missionId of [...seededMissions].reverse()) {
       const { error: notificationsError } = await admin
         .from('notifications')
         .delete()
@@ -96,16 +119,27 @@ test.describe('Empêchement impérieux (zéro donnée de santé)', () => {
           `lien.eq./etablissement/missions/${missionId}`,
         ].join(','));
       if (notificationsError) {
-        throw new Error(`cleanup notifications empêchement: ${notificationsError.message}`);
+        erreurs.push(`cleanup notifications ${missionId}: ${notificationsError.message}`);
       }
-      await cleanupMissionCascade(missionId);
+      try {
+        await cleanupMissionCascade(missionId);
+        const index = seededMissions.indexOf(missionId);
+        if (index >= 0) seededMissions.splice(index, 1);
+      } catch (error) {
+        erreurs.push(
+          `cleanup mission ${missionId}: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
     }
     const { error: restoreError } = await admin
       .from('soignants')
       .update(snapshotSoignant as any)
       .eq('id', soignantId);
     if (restoreError) {
-      throw new Error(`restauration état soignant empêchement: ${restoreError.message}`);
+      erreurs.push(`restauration état soignant: ${restoreError.message}`);
+    }
+    if (erreurs.length > 0) {
+      throw new Error(`nettoyage empêchement incomplet: ${erreurs.join(' | ')}`);
     }
   }
 
@@ -132,15 +166,36 @@ test.describe('Empêchement impérieux (zéro donnée de santé)', () => {
   });
 
   test.afterAll(async () => {
-    await caregiver?.cleanup();
+    const erreurs: string[] = [];
+    if (caregiver && snapshotSoignant) {
+      try {
+        await nettoyer();
+      } catch (error) {
+        erreurs.push(error instanceof Error ? error.message : String(error));
+      }
+    }
+    const resultats = await Promise.allSettled([
+      caregiver?.cleanup() ?? Promise.resolve(),
+    ]);
+    for (const resultat of resultats) {
+      if (resultat.status === 'rejected') {
+        erreurs.push(
+          resultat.reason instanceof Error
+            ? resultat.reason.message
+            : String(resultat.reason),
+        );
+      }
+    }
+    if (erreurs.length > 0) {
+      throw new Error(`afterAll empêchement incomplet: ${erreurs.join(' | ')}`);
+    }
   });
 
-  test('déclaration structurée : succès, audit écrit, aucun document, flag posé', async () => {
+  test('déclaration structurée : preuve, clôture originale et assigné conservé', async () => {
     const missionId = await seedMissionAssignee();
     const nAvant = await compterAttestations12m();
     const soignant = await userClient(caregiver!.email, caregiver!.password);
-    const debut = new Date().toISOString().slice(0, 10);
-    const fin = new Date(Date.now() + 3 * 86400000).toISOString().slice(0, 10);
+    const { debut, fin } = await datesIndisponibiliteMission(missionId);
 
     const { data, error } = await soignant.rpc('fn_declarer_empechement_imperieux' as any, {
       p_mission_id: missionId, p_indispo_debut: debut, p_indispo_fin: fin,
@@ -165,9 +220,15 @@ test.describe('Empêchement impérieux (zéro donnée de santé)', () => {
       .eq('soignant_id', soignantId).eq('type_document', 'ARRET_MALADIE' as any);
     expect(count ?? 0).toBe(0);
 
-    // Flag mission posé.
-    const { data: m } = await admin.from('missions').select('est_arret_maladie').eq('id', missionId).single();
+    // L'originale future est clôturée sans effacer son assigné ni sa preuve.
+    const { data: m } = await admin.from('missions')
+      .select('est_arret_maladie, statut, soignant_assigne_id')
+      .eq('id', missionId)
+      .single();
     expect((m as any).est_arret_maladie).toBe(true);
+    expect((m as any).statut).toBe('ANNULEE_PAR_SOIGNANT');
+    expect((m as any).soignant_assigne_id).toBe(soignantId);
+    expect((data as any)?.mission_originale_cloturee).toBe(true);
 
     // Re-déclaration : rejet propre.
     const { data: again } = await soignant.rpc('fn_declarer_empechement_imperieux' as any, {
@@ -216,7 +277,7 @@ test.describe('Empêchement impérieux (zéro donnée de santé)', () => {
     await admin.from('soignants').update({ score_fiabilite: 62 } as any).eq('id', soignantId);
 
     const soignant = await userClient(caregiver!.email, caregiver!.password);
-    const debut = new Date().toISOString().slice(0, 10);
+    const { debut } = await datesIndisponibiliteMission(missionId);
     const { data, error } = await soignant.rpc('fn_declarer_empechement_imperieux' as any, {
       p_mission_id: missionId, p_indispo_debut: debut, p_indispo_fin: debut,
     });
