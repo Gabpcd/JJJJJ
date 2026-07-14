@@ -1533,7 +1533,7 @@ VOLATILE
 SECURITY DEFINER
 SET search_path TO ''
 AS $function$
-  SELECT COALESCE(EXISTS (
+  SELECT EXISTS (
     SELECT 1
     FROM public.conversations c
     WHERE c.id = p_conversation_id
@@ -1560,9 +1560,8 @@ AS $function$
             c.mission_id
           )
         )
-        )
       )
-  ), false);
+  );
 $function$;
 
 REVOKE ALL ON FUNCTION private.fn_relation_conversation_partagee(uuid, uuid)
