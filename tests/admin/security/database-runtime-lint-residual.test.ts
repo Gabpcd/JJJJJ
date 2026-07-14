@@ -108,6 +108,20 @@ describe('solde du lint PL/pgSQL pré-lancement', () => {
     expect(runtimeRegression).toContain('INSERT INTO public.missions');
     expect(runtimeRegression).toContain('jolene.admin_seed_override_reason');
     expect(runtimeRegression).toContain('ROLLBACK;');
+    const deleteMission = runtimeRegression.indexOf(
+      'DELETE FROM public.missions',
+    );
+    const deleteMembership = runtimeRegression.indexOf(
+      'DELETE FROM public.membres_etablissement',
+    );
+    const deleteEstablishments = runtimeRegression.indexOf(
+      'DELETE FROM public.etablissements',
+    );
+    const deleteUsers = runtimeRegression.indexOf('DELETE FROM auth.users');
+    expect(deleteMission).toBeGreaterThan(0);
+    expect(deleteMembership).toBeGreaterThan(deleteMission);
+    expect(deleteEstablishments).toBeGreaterThan(deleteMembership);
+    expect(deleteUsers).toBeGreaterThan(deleteEstablishments);
     expect(runtimeRegression).not.toContain(
       'Fixture BOLA impossible : aucune mission cible',
     );

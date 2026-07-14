@@ -418,6 +418,44 @@ BEGIN
     RAISE EXCEPTION 'Mission modifiee par une tentative BOLA';
   END IF;
 
+  -- Une suite SQL peut concatener plusieurs fichiers avant le ROLLBACK final.
+  -- Nettoyer explicitement les fixtures empeche alors le test suivant de les
+  -- selectionner. Le role serveur sans utilisateur ne sert qu'a ce nettoyage.
+  PERFORM set_config('request.jwt.claim.sub', '', true);
+  PERFORM set_config('request.jwt.claim.role', 'service_role', true);
+  PERFORM set_config('request.jwt.claims', '{"role":"service_role"}', true);
+
+  DELETE FROM public.missions
+   WHERE id = v_mission_id;
+  DELETE FROM public.membres_etablissement
+   WHERE etablissement_id = v_etab_tiers_id
+     AND user_id = v_cross_etab_user_id;
+  DELETE FROM public.etablissements
+   WHERE id IN (v_etab_cible_id, v_etab_tiers_id);
+  DELETE FROM auth.users
+   WHERE id IN (v_soignant_id, v_cross_etab_user_id);
+
+  IF EXISTS (SELECT 1 FROM public.missions WHERE id = v_mission_id)
+     OR EXISTS (
+       SELECT 1
+       FROM public.membres_etablissement
+       WHERE etablissement_id = v_etab_tiers_id
+         AND user_id = v_cross_etab_user_id
+     )
+     OR EXISTS (
+       SELECT 1
+       FROM public.etablissements
+       WHERE id IN (v_etab_cible_id, v_etab_tiers_id)
+     )
+     OR EXISTS (
+       SELECT 1
+       FROM auth.users
+       WHERE id IN (v_soignant_id, v_cross_etab_user_id)
+     ) THEN
+    RAISE EXCEPTION 'Nettoyage des fixtures BOLA incomplet';
+  END IF;
+
+  PERFORM set_config('jolene.admin_seed_override_reason', '', true);
   PERFORM set_config('request.jwt.claim.sub', '', true);
   PERFORM set_config('request.jwt.claim.role', '', true);
   PERFORM set_config('request.jwt.claims', '{}', true);
