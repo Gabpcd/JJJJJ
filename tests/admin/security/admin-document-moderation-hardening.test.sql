@@ -110,13 +110,13 @@ BEGIN
       'Indice automatique à examiner', clock_timestamp()
     ),
     (
-      v_rejet, v_soignant, 'AUTRE', 'Fixture rejet',
+      v_rejet, v_soignant, 'CASIER_JUDICIAIRE', 'Fixture rejet',
       'jolene-documents', 'tests/62000/rejet.pdf', 'v1',
       'rejet.pdf', 'application/pdf', 1200, 'EN_ATTENTE',
       NULL, NULL, clock_timestamp()
     ),
     (
-      v_stale, v_soignant, 'AUTRE', 'Fixture CAS',
+      v_stale, v_soignant, 'ATTESTATION_URSSAF', 'Fixture CAS',
       'jolene-documents', 'tests/62000/stale.pdf', 'v1',
       'stale.pdf', 'application/pdf', 1200, 'EN_ATTENTE',
       NULL, NULL, clock_timestamp()
@@ -386,7 +386,7 @@ BEGIN
     'expected_document_modifie_le', v_doc_modifie,
     'expected_soignant_modifie_le', v_soignant_modifie,
     'expected_statut', 'EN_ATTENTE',
-    'expected_type_document', 'AUTRE',
+    'expected_type_document', 'CASIER_JUDICIAIRE',
     'expected_soignant_id', v_soignant,
     'expected_s3_bucket', 'jolene-documents',
     'expected_s3_cle', 'tests/62000/rejet.pdf',
@@ -422,7 +422,7 @@ BEGIN
     'expected_document_modifie_le', v_doc_modifie,
     'expected_soignant_modifie_le', v_soignant_modifie,
     'expected_statut', 'EN_ATTENTE',
-    'expected_type_document', 'AUTRE',
+    'expected_type_document', 'ATTESTATION_URSSAF',
     'expected_soignant_id', v_soignant,
     'expected_s3_bucket', 'jolene-documents',
     'expected_s3_cle', 'tests/62000/stale.pdf',
