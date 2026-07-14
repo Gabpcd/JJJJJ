@@ -635,7 +635,7 @@ BEGIN
   ) VALUES (
     v_mission_noshow_originale, v_etablissement_reel,
     'Fixture originale no-show sans audit EPI',
-    'IDE', now() - interval '2 hours', now() + interval '6 hours',
+    'IDE', now() - interval '50 minutes', now() + interval '6 hours',
     8, 20, 'ABSENCE', v_soignant_reel, 'SALARIE', 'SALARIE', 'CANDIDATURE',
     false, true, 'TAUX_HORAIRE', NULL, 'CANDIDATURE', true
   );
@@ -668,7 +668,7 @@ BEGIN
   ) VALUES (
     v_mission_chaine_epi_a, v_etablissement_reel,
     'Fixture chaîne A — EPI', 'IDE',
-    now() - interval '3 hours', now() + interval '5 hours',
+    now() - interval '55 minutes', now() + interval '5 hours',
     8, 20, 'ANNULEE_PAR_SOIGNANT', v_soignant_reel,
     'SALARIE', 'CANDIDATURE', true, 'TAUX_HORAIRE', 'CANDIDATURE',
     true, now()
@@ -683,7 +683,7 @@ BEGIN
   ) VALUES (
     v_mission_chaine_noshow_b, v_etablissement_reel,
     'Fixture chaîne B — no-show', 'IDE',
-    now() - interval '90 minutes', now() + interval '5 hours',
+    now() - interval '50 minutes', now() + interval '5 hours',
     6.5, 20, 'ABSENCE', v_soignant_noshow,
     'SALARIE', 'PREMIER_ARRIVE', true, 'TAUX_HORAIRE', 'REMPLACEMENT',
     v_mission_chaine_epi_a, true
@@ -714,45 +714,83 @@ BEGIN
   -- Trois no-shows garantis sur un établissement non publiable. Les rails
   -- sans paiement, INITIE propre et DEBITE doivent tous classer l'originale
   -- ABSENCE sans publier d'enfant ; les deux derniers couvrent en plus la
-  -- neutralisation financière sûre avant la revue admin.
-  INSERT INTO public.missions (
-    id, etablissement_id, intitule, profession_requise,
-    debut_le, fin_le, duree_heures, taux_horaire_base, statut,
-    soignant_assigne_id, type_contrat_recherche, type_contrat_applique,
-    mode_attribution,
-    est_urgente, garantie_remplacement, mode_remuneration,
-    retrocession_pct, mission_source
-  ) VALUES
-    (
-      v_mission_noshow_bloquee, v_etablissement_bloque,
-      'Fixture no-show gate sans escrow',
-      'IDE', now() - interval '60 minutes', now() + interval '6 hours',
-      7, 20, 'ASSIGNEE', v_soignant_noshow, 'SALARIE', 'SALARIE', 'CANDIDATURE',
-      false, true, 'TAUX_HORAIRE', NULL, 'CANDIDATURE'
-    ),
-    (
-      v_mission_noshow_initie, v_etablissement_bloque,
-      'Fixture no-show gate escrow INITIE',
-      'IDE', now() - interval '70 minutes', now() + interval '6 hours',
-      7.17, 20, 'ASSIGNEE', v_soignant_noshow, 'SALARIE', 'SALARIE', 'CANDIDATURE',
-      false, true, 'TAUX_HORAIRE', NULL, 'CANDIDATURE'
-    ),
-    (
-      v_mission_noshow_debite, v_etablissement_bloque,
-      'Fixture no-show gate escrow DEBITE',
-      'IDE', now() - interval '80 minutes', now() + interval '6 hours',
-      7.33, 20, 'ASSIGNEE', v_soignant_noshow, 'SALARIE', 'SALARIE', 'CANDIDATURE',
-      false, true, 'TAUX_HORAIRE', NULL, 'CANDIDATURE'
-    ),
-    (
-      -- Établissement publiable mais rail déjà ambigu : la seule cause
-      -- de revue doit être financière, sans aucun enfant publié.
-      v_mission_noshow_finance_ambigue, v_etablissement_reel,
-      'Fixture no-show escrow RELEASE_PLANIFIE',
-      'IDE', now() - interval '90 minutes', now() + interval '6 hours',
-      7.5, 20, 'ASSIGNEE', v_soignant_noshow, 'SALARIE', 'SALARIE', 'CANDIDATURE',
-      false, true, 'TAUX_HORAIRE', NULL, 'CANDIDATURE'
-    );
+  -- neutralisation financière sûre avant la revue admin. Ces quatre lignes
+  -- simulent un lot concurrent impossible à créer via l'application pour un
+  -- même soignant : le bypass est limité au multi-insert et immédiatement
+  -- restauré. La conformité documentaire est vérifiée explicitement avant de
+  -- construire cet état historique ; les appels métier testés ensuite
+  -- s'exécutent avec tous les triggers actifs.
+  IF NOT public.fn_documents_ok_pour_mission(v_soignant_noshow, 'SALARIE') THEN
+    RAISE EXCEPTION 'Fixture no-show : justificatifs IDE salariés incomplets';
+  END IF;
+
+  BEGIN
+    PERFORM set_config('session_replication_role', 'replica', true);
+
+    INSERT INTO public.missions (
+      id, etablissement_id, intitule, profession_requise,
+      debut_le, fin_le, duree_heures, taux_horaire_base, statut,
+      soignant_assigne_id, type_contrat_recherche, type_contrat_applique,
+      mode_attribution,
+      est_urgente, garantie_remplacement, mode_remuneration,
+      retrocession_pct, mission_source
+    ) VALUES
+      (
+        v_mission_noshow_bloquee, v_etablissement_bloque,
+        'Fixture no-show gate sans escrow',
+        'IDE', now() - interval '45 minutes', now() + interval '6 hours',
+        7, 20, 'ASSIGNEE', v_soignant_noshow, 'SALARIE', 'SALARIE', 'CANDIDATURE',
+        false, true, 'TAUX_HORAIRE', NULL, 'CANDIDATURE'
+      ),
+      (
+        v_mission_noshow_initie, v_etablissement_bloque,
+        'Fixture no-show gate escrow INITIE',
+        'IDE', now() - interval '46 minutes', now() + interval '6 hours',
+        7.17, 20, 'ASSIGNEE', v_soignant_noshow, 'SALARIE', 'SALARIE', 'CANDIDATURE',
+        false, true, 'TAUX_HORAIRE', NULL, 'CANDIDATURE'
+      ),
+      (
+        v_mission_noshow_debite, v_etablissement_bloque,
+        'Fixture no-show gate escrow DEBITE',
+        'IDE', now() - interval '47 minutes', now() + interval '6 hours',
+        7.33, 20, 'ASSIGNEE', v_soignant_noshow, 'SALARIE', 'SALARIE', 'CANDIDATURE',
+        false, true, 'TAUX_HORAIRE', NULL, 'CANDIDATURE'
+      ),
+      (
+        -- Établissement publiable mais rail déjà ambigu : la seule cause
+        -- de revue doit être financière, sans aucun enfant publié.
+        v_mission_noshow_finance_ambigue, v_etablissement_reel,
+        'Fixture no-show escrow RELEASE_PLANIFIE',
+        'IDE', now() - interval '48 minutes', now() + interval '6 hours',
+        7.5, 20, 'ASSIGNEE', v_soignant_noshow, 'SALARIE', 'SALARIE', 'CANDIDATURE',
+        false, true, 'TAUX_HORAIRE', NULL, 'CANDIDATURE'
+      );
+
+    PERFORM set_config('session_replication_role', 'origin', true);
+  EXCEPTION WHEN OTHERS THEN
+    PERFORM set_config('session_replication_role', 'origin', true);
+    RAISE;
+  END;
+
+  IF (
+    SELECT count(*)
+    FROM public.missions m
+    JOIN public.etablissements e ON e.id = m.etablissement_id
+    WHERE m.id IN (
+      v_mission_noshow_bloquee,
+      v_mission_noshow_initie,
+      v_mission_noshow_debite,
+      v_mission_noshow_finance_ambigue
+    )
+      AND m.statut = 'ASSIGNEE'
+      AND m.soignant_assigne_id = v_soignant_noshow
+      AND m.type_contrat_applique = 'SALARIE'
+      AND m.debut_le < now() - interval '30 minutes'
+      AND m.debut_le > now() - interval '1 hour'
+      AND m.fin_le > now() + interval '1 hour'
+  ) <> 4 THEN
+    RAISE EXCEPTION 'Fixture no-show : état concurrent incomplet après restauration des triggers';
+  END IF;
 
   INSERT INTO public.paiements_escrow (
     id, mission_id, etablissement_id, soignant_id,
