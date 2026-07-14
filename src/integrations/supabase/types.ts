@@ -1349,35 +1349,55 @@ export type Database = {
           archived_at: string | null
           cree_le: string | null
           dernier_message_le: string | null
+          etablissement_id: string | null
           id: string
           mission_id: string | null
           participant_1_id: string
           participant_2_id: string
+          soignant_id: string | null
         }
         Insert: {
           archived_at?: string | null
           cree_le?: string | null
           dernier_message_le?: string | null
+          etablissement_id?: string | null
           id?: string
           mission_id?: string | null
           participant_1_id: string
           participant_2_id: string
+          soignant_id?: string | null
         }
         Update: {
           archived_at?: string | null
           cree_le?: string | null
           dernier_message_le?: string | null
+          etablissement_id?: string | null
           id?: string
           mission_id?: string | null
           participant_1_id?: string
           participant_2_id?: string
+          soignant_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "conversations_etablissement_id_fkey"
+            columns: ["etablissement_id"]
+            isOneToOne: false
+            referencedRelation: "etablissements"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "conversations_mission_id_fkey"
             columns: ["mission_id"]
             isOneToOne: false
             referencedRelation: "missions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conversations_soignant_id_fkey"
+            columns: ["soignant_id"]
+            isOneToOne: false
+            referencedRelation: "soignants"
             referencedColumns: ["id"]
           },
         ]
