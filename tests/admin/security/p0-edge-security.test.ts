@@ -11,7 +11,7 @@ describe('P0 Edge security guards', () => {
     expect(source).not.toContain('atob(padded)');
     expect(source).toContain('auth.getUser(bearer)');
     expect(source).toContain('auth.getClaims(bearer)');
-    expect(source).not.toContain("auth.aal !== 'aal2'");
+    expect(source).toContain("auth.aal !== 'aal2' && !estCompteFondateur");
     expect(source).toContain('expiresAt: Date.now() + 5 * 60_000');
     expect(source).toContain('if (deletedAt)');
   });
@@ -86,7 +86,8 @@ describe('P0 Edge security guards', () => {
 
   it('retire le MFA admin sans affaiblir le rôle, le compte confirmé ni le registre', () => {
     const roleFix = read('supabase/migrations/20260713165730_corriger_resolution_role_admin_avant_mfa.sql');
-    const mfaRemoval = read('supabase/migrations/20260714125736_supprimer_mfa_admin.sql');
+    const mfaRemoval = read('supabase/migrations/20260714125948_supprimer_mfa_admin.sql');
+    const mfaScope = read('supabase/migrations/20260714130849_borner_exception_mfa_admin_principal.sql');
     const protectedRoute = read('src/components/RouteProtegee.tsx');
     const edgeAuth = read('supabase/functions/_shared/admin-auth.ts');
 
@@ -97,8 +98,11 @@ describe('P0 Edge security guards', () => {
     expect(mfaRemoval).toContain("'est_admin_valide'");
     expect(mfaRemoval).toContain('v_nombre_modifie <> 10');
     expect(mfaRemoval).toContain('rôle ADMIN_PLATEFORME');
-    expect(protectedRoute).not.toContain('AdminMfaGate');
-    expect(edgeAuth).not.toContain("auth.aal !== 'aal2'");
+    expect(mfaScope).toContain("lower(COALESCE(u.email, '')) = 'admin@jolene.app'");
+    expect(mfaScope).toContain("COALESCE(auth.jwt() ->> 'aal', '') = 'aal2'");
+    expect(protectedRoute).toContain("user.email?.trim().toLowerCase() !== 'admin@jolene.app'");
+    expect(protectedRoute).toContain('<AdminMfaGate>{children}</AdminMfaGate>');
+    expect(edgeAuth).toContain("auth.aal !== 'aal2' && !estCompteFondateur");
     expect(edgeAuth).toContain('if (!isCanonicalPlatformAdminRole(role))');
     expect(edgeAuth).toContain('if (!isConfirmedAuthUser(');
     expect(edgeAuth).toContain('if (!hasFullLaunchAdminAccess(equipe))');
