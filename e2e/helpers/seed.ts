@@ -579,6 +579,52 @@ export async function cleanupMissionCascade(missionId?: string | null): Promise<
   if (missionReadError) {
     throw new Error(`[cleanup mission] lecture ${missionId}: ${missionReadError.message}`);
   }
+  if (!mission) return;
+  const intitule = String(mission.intitule ?? '');
+  if (!intitule.startsWith('[pw-test') && !intitule.startsWith('[playwright-test]')) {
+    throw new Error(
+      `[cleanup mission] refus de purger une mission non technique ${missionId} (${intitule || 'sans intitulé'})`,
+    );
+  }
+
+  // La descendance financière a deux niveaux de FK : les trois files ci-dessous
+  // doivent précéder paiements_escrow, lui-même enfant de la mission.
+  const { data: escrows, error: escrowsReadError } = await admin
+    .from('paiements_escrow' as any)
+    .select('id')
+    .eq('mission_id', missionId);
+  if (escrowsReadError) {
+    throw new Error(`[cleanup mission] lecture escrows ${missionId}: ${escrowsReadError.message}`);
+  }
+  const escrowIds = ((escrows ?? []) as Array<{ id: string }>).map((escrow) => escrow.id);
+  if (escrowIds.length > 0) {
+    for (const table of [
+      'stripe_refunds_queue',
+      'escrow_release_queue',
+      'escrow_exposition_releases',
+    ]) {
+      const { error: escrowChildError } = await admin
+        .from(table as any)
+        .delete()
+        .in('paiement_escrow_id', escrowIds);
+      if (escrowChildError) {
+        throw new Error(
+          `[cleanup mission] purge ${table} ${missionId}: ${escrowChildError.message}`,
+        );
+      }
+    }
+  }
+  for (const table of ['stripe_transfers', 'paiements_escrow']) {
+    const { error: financialError } = await admin
+      .from(table as any)
+      .delete()
+      .eq('mission_id', missionId);
+    if (financialError) {
+      throw new Error(
+        `[cleanup mission] purge ${table} ${missionId}: ${financialError.message}`,
+      );
+    }
+  }
   // partages_rib référence à la fois mission, contrat et document RIB sans
   // cascade. Le purgeur SQL générique parcourt les FK dans un ordre non garanti
   // et pouvait donc tenter contrats_mission avant partages_rib.

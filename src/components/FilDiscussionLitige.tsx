@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { BoutonY2K } from '@/components/y2k/BoutonY2K';
@@ -43,7 +43,7 @@ export function FilDiscussionLitige({ litige, onUpdate }: Props) {
   const [sending, setSending] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
 
-  const chargerMessages = async () => {
+  const chargerMessages = useCallback(async () => {
     const { data } = await supabase
       .from('messages_litige')
       .select('*')
@@ -52,9 +52,9 @@ export function FilDiscussionLitige({ litige, onUpdate }: Props) {
     setMessages(data || []);
     setLoadingMsgs(false);
     setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
-  };
+  }, [litige.id]);
 
-  useEffect(() => { chargerMessages(); }, [litige.id]);
+  useEffect(() => { void chargerMessages(); }, [chargerMessages]);
 
   const envoyerMessage = async () => {
     if (!newMsg.trim() || newMsg.trim().length < 10) {
@@ -72,7 +72,7 @@ export function FilDiscussionLitige({ litige, onUpdate }: Props) {
       return;
     }
     setNewMsg('');
-    chargerMessages();
+    await chargerMessages();
     onUpdate();
   };
 

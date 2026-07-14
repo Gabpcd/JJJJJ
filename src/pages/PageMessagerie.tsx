@@ -19,18 +19,16 @@
  *  - Tri last_message_at desc
  *  - Touch targets 44px+
  *
- * Le chat detail panel garde son input inline (l'anti-leak + typing
- * indicators sont déjà disponibles via ChatConversation / InputMessage
- * pour les chats inline mission — refonte panel à venir Sprint 10-C
- * pour ne pas bloquer le merge PR 1).
+ * Le panneau de détail partage InputMessage et useConversationRealtime avec
+ * les chats de mission : anti-fuite, saisie et présence ont donc un seul flux.
  */
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { useSearchParams, useNavigate } from 'react-router-dom';
-import { MessageCircle, Send, ArrowLeft, Shield, Plus, Search, X } from 'lucide-react';
+import { useSearchParams } from 'react-router-dom';
+import { MessageCircle, ArrowLeft, Shield, Plus, Search, X } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { resoudreUserIdEtablissement } from '@/hooks/useOuvrirConversation';
+import { useConversationRealtime, type PresenceStatus } from '@/hooks/useConversationRealtime';
 import { useAuth } from '@/contexts/AuthContext';
-import { sanitizeText } from '@/lib/sanitize';
 import { AvatarDisplay } from '@/components/AvatarUpload';
 import { LayoutApp } from '@/components/LayoutApp';
 import { LayoutAdmin } from '@/components/LayoutAdmin';
@@ -55,6 +53,7 @@ import {
   cleInterlocuteur,
   type InterlocuteurConversation,
 } from '@/lib/messagerieInterlocuteurs';
+import { InputMessage } from '@/components/messagerie/InputMessage';
 
 interface Conversation {
   id: string;
@@ -109,24 +108,34 @@ function formatTimestampIntelligent(iso: string | null): string {
   return format(d, 'd MMM', { locale: fr });
 }
 
+function formatPresence(
+  presence: PresenceStatus,
+  lastSeen: Date | null,
+): string {
+  if (presence === 'ONLINE') return 'En ligne';
+  if (presence === 'AWAY') return 'Absent';
+  if (!lastSeen) return 'Hors ligne';
+  return `Vu ${formatDistanceToNowStrict(lastSeen, { addSuffix: true, locale: fr })}`;
+}
+
 export default function PageMessagerie({ role }: PageMessagerieProps) {
   usePageTitle('Messagerie');
   const { user } = useAuth();
-  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const convParam = searchParams.get('conv');
 
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedConvId, setSelectedConvId] = useState<string | null>(convParam);
+  // La sélection est dérivée de l'URL : le bouton Retour Android/iOS et les
+  // liens de notification restent ainsi synchronisés avec l'interface.
+  const selectedConvId = convParam;
   const [messages, setMessages] = useState<Message[]>([]);
   const [loadingMessages, setLoadingMessages] = useState(false);
-  const [texte, setTexte] = useState('');
-  const [envoi, setEnvoi] = useState(false);
+  const [conversationCibleIntrouvable, setConversationCibleIntrouvable] = useState<string | null>(null);
   const [filtre, setFiltre] = useState('');
   const [tab, setTab] = useState<'ACTIVES' | 'ARCHIVEES'>('ACTIVES');
   const scrollRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const chargementConversationsRef = useRef(0);
 
   const [showNewConvModal, setShowNewConvModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -138,6 +147,7 @@ export default function PageMessagerie({ role }: PageMessagerieProps) {
 
   const chargerConversations = useCallback(async () => {
     if (!user) return;
+    const numeroChargement = ++chargementConversationsRef.current;
 
     let query = supabase
       .from('conversations')
@@ -148,8 +158,17 @@ export default function PageMessagerie({ role }: PageMessagerieProps) {
       query = query.or(`participant_1_id.eq.${user.id},participant_2_id.eq.${user.id}`);
     }
 
-    const { data: convsRaw } = await query.limit(100);
-    const convs = ((convsRaw || []) as unknown) as Array<{
+    // Une cible deep-linkée peut être ajoutée ensuite ; 99 + 1 respecte la
+    // borne serveur de fn_interlocuteurs_conversations (100 UUID maximum).
+    const { data: convsRaw, error: convsError } = await query.limit(99);
+    if (numeroChargement !== chargementConversationsRef.current) return;
+    if (convsError) {
+      logger.error('PageMessagerie.chargerConversations error', convsError);
+      setLoading(false);
+      return;
+    }
+
+    let convs = ((convsRaw || []) as unknown) as Array<{
       id: string;
       participant_1_id: string;
       participant_2_id: string;
@@ -158,8 +177,31 @@ export default function PageMessagerie({ role }: PageMessagerieProps) {
       cree_le: string;
       archived_at: string | null;
     }>;
+
+    // Une notification peut viser une conversation plus ancienne que les 100
+    // premières. On la charge explicitement, toujours sous RLS, plutôt que de
+    // laisser un écran mobile vide avec la liste masquée.
+    let cibleIntrouvable = false;
+    if (convParam && !convs.some(c => c.id === convParam)) {
+      const { data: cible, error: cibleError } = await supabase
+        .from('conversations')
+        .select('id, participant_1_id, participant_2_id, mission_id, dernier_message_le, cree_le, archived_at')
+        .eq('id', convParam)
+        .maybeSingle();
+      if (numeroChargement !== chargementConversationsRef.current) return;
+      if (cibleError) {
+        logger.error('PageMessagerie.conversationCible error', cibleError);
+        cibleIntrouvable = true;
+      } else if (cible) {
+        convs = [cible as (typeof convs)[number], ...convs];
+      } else {
+        cibleIntrouvable = true;
+      }
+    }
+
     if (convs.length === 0) {
       setConversations([]);
+      setConversationCibleIntrouvable(cibleIntrouvable ? convParam : null);
       setLoading(false);
       return;
     }
@@ -234,29 +276,57 @@ export default function PageMessagerie({ role }: PageMessagerieProps) {
       };
     });
 
+    if (numeroChargement !== chargementConversationsRef.current) return;
     setConversations(enriched);
+    setConversationCibleIntrouvable(cibleIntrouvable ? convParam : null);
     setLoading(false);
-  }, [user, isAdmin, isAdminPlateforme]);
-
-  useEffect(() => { chargerConversations(); }, [chargerConversations]);
+  }, [user, isAdmin, isAdminPlateforme, convParam]);
 
   useEffect(() => {
-    if (!selectedConvId) { setMessages([]); return; }
+    void chargerConversations();
+    return () => { chargementConversationsRef.current += 1; };
+  }, [chargerConversations]);
+
+  useEffect(() => {
+    if (!selectedConvId) {
+      setMessages([]);
+      setLoadingMessages(false);
+      return;
+    }
+    let cancelled = false;
+    setMessages([]);
+    setLoadingMessages(true);
 
     const load = async () => {
-      setLoadingMessages(true);
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('messages_chat')
         .select('id, conversation_id, auteur_id, contenu, est_admin, lu, cree_le')
         .eq('conversation_id', selectedConvId)
-        .order('cree_le', { ascending: true })
+        .order('cree_le', { ascending: false })
         .limit(500);
 
-      setMessages((data as Message[]) || []);
+      if (cancelled) return;
+      if (error) {
+        logger.error('PageMessagerie.chargerMessages error', error);
+        setMessages([]);
+        setLoadingMessages(false);
+        return;
+      }
+
+      const messagesRecents = ([...((data as Message[]) || [])]).reverse();
+      setMessages(prev => {
+        const fusion = new Map(messagesRecents.map(message => [message.id, message]));
+        prev
+          .filter(message => message.conversation_id === selectedConvId)
+          .forEach(message => fusion.set(message.id, message));
+        return [...fusion.values()].sort(
+          (a, b) => new Date(a.cree_le).getTime() - new Date(b.cree_le).getTime(),
+        );
+      });
       setLoadingMessages(false);
-      setTimeout(() => inputRef.current?.focus(), 100);
 
       supabase.rpc('fn_marquer_messages_lus', { p_conversation_id: selectedConvId }).then(({ error }) => {
+        if (cancelled) return;
         if (error) {
           logger.error('fn_marquer_messages_lus error', error);
           toast.error('Erreur lors du marquage des messages comme lus.');
@@ -279,54 +349,45 @@ export default function PageMessagerie({ role }: PageMessagerieProps) {
         setMessages(prev => prev.some(m => m.id === msg.id) ? prev : [...prev, msg]);
         if (msg.auteur_id !== user?.id) {
           supabase.rpc('fn_marquer_messages_lus', { p_conversation_id: selectedConvId })
-            .then(undefined, (err) => handleErrorSilent(err, 'PageMessagerie.marquer_messages_lus'));
+            .then(
+              ({ error }) => {
+                if (error) handleErrorSilent(error, 'PageMessagerie.marquer_messages_lus');
+              },
+              (err) => handleErrorSilent(err, 'PageMessagerie.marquer_messages_lus'),
+            );
         }
       })
       .subscribe();
 
-    return () => { supabase.removeChannel(channel); };
+    return () => {
+      cancelled = true;
+      supabase.removeChannel(channel);
+    };
   }, [selectedConvId, user]);
 
-  useEffect(() => {
-    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
-  }, [messages]);
+  const confirmerMessageEnvoye = useCallback(async (messageId: string) => {
+    if (!selectedConvId) return;
+    const { data, error } = await supabase
+      .from('messages_chat')
+      .select('id, conversation_id, auteur_id, contenu, est_admin, lu, cree_le')
+      .eq('id', messageId)
+      .eq('conversation_id', selectedConvId)
+      .maybeSingle();
 
-  const envoyer = async () => {
-    const contenuBrut = texte.trim();
-    if (!contenuBrut || !selectedConvId || !user) return;
-
-    const contenu = sanitizeText(contenuBrut);
-    if (!contenu) return;
-
-    setEnvoi(true);
-    setTexte('');
-
-    const { data, error } = await supabase.rpc('fn_envoyer_message', {
-      p_conversation_id: selectedConvId,
-      p_contenu: contenu,
-    });
-
-    const erreurMetier = data && typeof data === 'object' && !Array.isArray(data)
-      ? (data as { error?: unknown }).error
-      : undefined;
-    if (error || erreurMetier) {
-      logger.error('fn_envoyer_message error', error || data);
-      toast.error("Impossible d'envoyer le message.");
-      setTexte(contenuBrut);
+    if (error || !data) {
+      logger.error('PageMessagerie.confirmerMessageEnvoye error', error);
     } else {
-      chargerConversations().catch(() => { /* non bloquant */ });
+      const message = data as Message;
+      setMessages(prev => prev.some(item => item.id === message.id)
+        ? prev
+        : [...prev, message].sort(
+          (a, b) => new Date(a.cree_le).getTime() - new Date(b.cree_le).getTime(),
+        ));
     }
-
-    setEnvoi(false);
-    inputRef.current?.focus();
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); envoyer(); }
-  };
+    await chargerConversations();
+  }, [chargerConversations, selectedConvId]);
 
   const selectConv = (convId: string) => {
-    setSelectedConvId(convId);
     setSearchParams({ conv: convId });
   };
 
@@ -394,8 +455,28 @@ export default function PageMessagerie({ role }: PageMessagerieProps) {
   );
 
   const selectedConv = conversations.find(c => c.id === selectedConvId);
-  const showMobileChat = !!selectedConvId;
+  const showMobileChat = !!selectedConv;
   const isArchivedSelected = !!selectedConv?.archived_at;
+  const realtimeAutreId = !isAdminPlateforme && selectedConv && !selectedConv.is_jolene
+    ? selectedConv.autre_id
+    : null;
+  const { typing, presence, lastSeen } = useConversationRealtime({
+    conversationId: selectedConv?.id ?? null,
+    autreUserId: realtimeAutreId,
+  });
+
+  useEffect(() => {
+    if (!selectedConvId || conversationCibleIntrouvable !== selectedConvId) return;
+    toast.error("Cette conversation n'est plus accessible.");
+    setSearchParams({}, { replace: true });
+  }, [conversationCibleIntrouvable, selectedConvId, setSearchParams]);
+
+  useEffect(() => {
+    scrollRef.current?.scrollTo({
+      top: scrollRef.current.scrollHeight,
+      behavior: 'smooth',
+    });
+  }, [messages, typing]);
 
   const layoutRole = role === 'ADMIN_PLATEFORME' ? 'ADMIN_PLATEFORME' : role === 'ADMIN_ETABLISSEMENT' ? 'ADMIN_ETABLISSEMENT' : 'SOIGNANT';
 
@@ -523,7 +604,7 @@ export default function PageMessagerie({ role }: PageMessagerieProps) {
                 <div className="flex items-center gap-3 px-4 py-3 border-b border-border bg-card/85 backdrop-blur-sm">
                   <button
                     type="button"
-                    onClick={() => { setSelectedConvId(null); setSearchParams({}); }}
+                    onClick={() => setSearchParams({}, { replace: true })}
                     className="md:hidden text-muted-foreground hover:text-foreground p-1 -ml-1"
                     aria-label="Retour aux conversations"
                   >
@@ -543,6 +624,20 @@ export default function PageMessagerie({ role }: PageMessagerieProps) {
                     </p>
                     {selectedConv.mission_intitule && (
                       <p className="text-[11px] text-jolene-mauve-600 truncate">Mission · {selectedConv.mission_intitule}</p>
+                    )}
+                    {realtimeAutreId && (
+                      <p
+                        aria-live="polite"
+                        className={`text-[11px] truncate ${
+                          typing
+                            ? 'italic text-jolene-rose-500'
+                            : 'text-muted-foreground'
+                        }`}
+                      >
+                        {typing
+                          ? "Est en train d'écrire…"
+                          : formatPresence(presence, lastSeen)}
+                      </p>
                     )}
                   </div>
                 </div>
@@ -588,40 +683,26 @@ export default function PageMessagerie({ role }: PageMessagerieProps) {
                       );
                     })
                   )}
+                  {typing && (
+                    <div className="flex justify-start" aria-live="polite">
+                      <div
+                        aria-label="L'interlocuteur écrit"
+                        className="inline-flex gap-1 rounded-2xl rounded-bl-md border border-border bg-card px-3 py-2"
+                      >
+                        <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-jolene-rose-400" style={{ animationDelay: '0ms' }} />
+                        <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-jolene-rose-400" style={{ animationDelay: '150ms' }} />
+                        <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-jolene-rose-400" style={{ animationDelay: '300ms' }} />
+                      </div>
+                    </div>
+                  )}
                 </div>
 
-                {isArchivedSelected ? (
-                  <div className="px-4 py-3 bg-muted/40 border-t border-border text-center text-xs text-muted-foreground italic">
-                    Conversation archivée — lecture seule.
-                  </div>
-                ) : (
-                  <div
-                    className="flex items-end gap-2 px-3 py-3 border-t border-border bg-card"
-                    style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom))' }}
-                  >
-                    <input
-                      ref={inputRef}
-                      type="text"
-                      value={texte}
-                      onChange={e => setTexte(e.target.value)}
-                      onKeyDown={handleKeyDown}
-                      placeholder="Votre message…"
-                      aria-label="Votre message"
-                      className="flex-1 resize-none rounded-2xl border border-border bg-background px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-jolene-rose-400/40 disabled:opacity-50"
-                      maxLength={4000}
-                      disabled={envoi}
-                    />
-                    <button
-                      type="button"
-                      onClick={envoyer}
-                      disabled={envoi || !texte.trim()}
-                      className="rounded-full p-2.5 bg-gradient-hero text-white shadow-sm hover:opacity-90 disabled:opacity-40 transition-opacity shrink-0 min-h-[44px] min-w-[44px] flex items-center justify-center"
-                      aria-label="Envoyer le message"
-                    >
-                      <Send className="h-4 w-4" />
-                    </button>
-                  </div>
-                )}
+                <InputMessage
+                  key={selectedConv.id}
+                  conversationId={selectedConv.id}
+                  archived={isArchivedSelected}
+                  onSent={confirmerMessageEnvoye}
+                />
               </>
             ) : (
               <div className="flex-1 flex items-center justify-center bg-jolene-lavender-50/30">

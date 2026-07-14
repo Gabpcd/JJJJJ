@@ -62,11 +62,11 @@ export default function AdminMessagesContact() {
 
   const marquerTraite = async (id: string) => {
     setMaj(id);
-    const { error } = await supabase
-      .from('messages_contact' as any)
-      .update({ statut: 'TRAITE', traite_le: new Date().toISOString() } as any)
-      .eq('id', id);
-    if (error) toast.error('Erreur mise à jour');
+    const { data, error } = await supabase.rpc(
+      'fn_admin_traiter_message_contact' as any,
+      { p_message_id: id },
+    );
+    if (error || (data as any)?.error) toast.error((data as any)?.error || 'Erreur mise à jour');
     else { toast.success('Marqué comme traité'); await charger(); }
     setMaj(null);
   };

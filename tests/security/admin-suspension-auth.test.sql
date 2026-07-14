@@ -10,6 +10,10 @@ DECLARE
   v_membre uuid := '68000000-0000-4000-8000-000000000004';
   v_mission uuid := '68000000-0000-4000-8000-000000000005';
   v_rgpd uuid := '68000000-0000-4000-8000-000000000006';
+  v_mission_finance uuid := '68000000-0000-4000-8000-000000000007';
+  v_mission_invalide uuid := '68000000-0000-4000-8000-000000000008';
+  v_finance record;
+  v_erreur text;
 BEGIN
   INSERT INTO auth.users (
     id, instance_id, email, role, aud, raw_app_meta_data, email_confirmed_at
@@ -68,12 +72,15 @@ BEGIN
     adresse_code_postal, email_contact, statut_verification,
     peut_publier_missions, siret_verifie, finess_verifie,
     representant_identite_verifiee, rattachement_verifie,
-    contrat_service_signe, est_compte_test
+    contrat_service_signe, est_compte_test,
+    taux_majoration_nuit_pourcent,
+    taux_majoration_dimanche_pourcent,
+    taux_majoration_ferie_pourcent
   ) VALUES (
     v_etab, 'Établissement suspension', '68000000000003', '680000003',
     'CLINIQUE_PRIVEE', '1 rue du Test', 'Paris', '75001',
     'suspension-etab@test.local', 'VERIFIE', true, true, true,
-    true, true, true, true
+    true, true, true, true, 25, 25, 50
   );
 
   INSERT INTO public.membres_etablissement (
@@ -83,12 +90,73 @@ BEGIN
   INSERT INTO public.missions (
     id, etablissement_id, intitule, profession_requise,
     debut_le, fin_le, duree_heures, taux_horaire_base,
-    statut, type_contrat_recherche, mode_attribution
-  ) VALUES (
-    v_mission, v_etab, 'Mission test suspension', 'IDE',
-    now() + interval '2 days', now() + interval '2 days 8 hours',
-    8, 20, 'OUVERTE', 'SALARIE', 'CANDIDATURE'
-  );
+    statut, type_contrat_recherche, mode_attribution,
+    soignant_assigne_id, type_contrat_applique, taux_commission_fige,
+    total_brut, net_a_payer
+  ) VALUES
+    (
+      v_mission, v_etab, 'Mission test suspension', 'IDE',
+      now() + interval '2 days', now() + interval '2 days 8 hours',
+      8, 20, 'OUVERTE', 'SALARIE', 'CANDIDATURE',
+      NULL, NULL, NULL, NULL, NULL
+    ),
+    (
+      v_mission_finance, v_etab, 'Mission test finance canonique', 'IDE',
+      '2035-06-18 09:00:00+02'::timestamptz,
+      '2035-06-18 17:00:00+02'::timestamptz,
+      8, 20, 'TERMINEE', 'SALARIE', 'CANDIDATURE',
+      v_soignant, 'SALARIE', 15, 160.00, 193.60
+    );
+
+  SELECT
+    m.total_brut,
+    m.montant_ifm,
+    m.montant_icp,
+    m.net_a_payer,
+    m.taux_commission,
+    m.montant_commission_ht,
+    m.montant_commission_tva,
+    m.montant_commission_ttc
+  INTO v_finance
+  FROM public.missions m
+  WHERE m.id = v_mission_finance;
+
+  IF v_finance.total_brut IS DISTINCT FROM 160.00::numeric
+     OR v_finance.montant_ifm IS DISTINCT FROM 16.00::numeric
+     OR v_finance.montant_icp IS DISTINCT FROM 17.60::numeric
+     OR v_finance.net_a_payer IS DISTINCT FROM 193.60::numeric
+     OR v_finance.taux_commission IS DISTINCT FROM 15.00::numeric
+     OR v_finance.montant_commission_ht IS DISTINCT FROM 29.04::numeric
+     OR v_finance.montant_commission_tva IS DISTINCT FROM 5.81::numeric
+     OR v_finance.montant_commission_ttc IS DISTINCT FROM 34.85::numeric
+     OR v_finance.net_a_payer + v_finance.montant_commission_ttc
+          IS DISTINCT FROM 228.45::numeric THEN
+    RAISE EXCEPTION 'Chaîne finance/commission non canonique : %',
+      row_to_json(v_finance);
+  END IF;
+
+  -- L'ancienne formule retranchait 15 % du dû soignant (193,60 - 29,04).
+  -- Ce snapshot doit être refusé avant que le moteur ne puisse le réécrire.
+  BEGIN
+    INSERT INTO public.missions (
+      id, etablissement_id, intitule, profession_requise,
+      debut_le, fin_le, duree_heures, taux_horaire_base,
+      statut, type_contrat_recherche, mode_attribution,
+      taux_commission_fige, total_brut, net_a_payer
+    ) VALUES (
+      v_mission_invalide, v_etab, 'Mission commission déduite interdite', 'IDE',
+      '2035-06-19 09:00:00+02'::timestamptz,
+      '2035-06-19 17:00:00+02'::timestamptz,
+      8, 20, 'TERMINEE', 'SALARIE', 'CANDIDATURE',
+      15, 160.00, 164.56
+    );
+    RAISE EXCEPTION 'Le snapshot avec commission déduite a été accepté';
+  EXCEPTION WHEN SQLSTATE '23514' THEN
+    GET STACKED DIAGNOSTICS v_erreur = MESSAGE_TEXT;
+    IF v_erreur NOT LIKE 'anti-seed mission: net_a_payer %' THEN
+      RAISE;
+    END IF;
+  END;
 END;
 $fixtures$;
 

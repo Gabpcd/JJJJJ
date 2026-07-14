@@ -12,7 +12,6 @@ import {
 import { Textarea } from '@/components/ui/textarea';
 import { LayoutApp } from '@/components/LayoutApp';
 import { BadgeStatut } from '@/components/BadgeStatut';
-import { ChatMission } from '@/components/ChatMission';
 import { ChatConversation } from '@/components/ChatConversation';
 import { DecompositionFinanciere } from '@/components/DecompositionFinanciere';
 import { FactureHonorairesCard } from '@/components/FactureHonorairesCard';
@@ -739,7 +738,7 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
                       </Link>
                       <button
                         type="button"
-                        onClick={() => ouvrirConv(m.soignant_assigne_id, m.id, isAdmin)}
+                        onClick={() => ouvrirConv(m.soignant_assigne_id, m.id)}
                         className="h-8 w-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center hover:bg-primary/90 transition-colors shrink-0"
                         title="Contacter le soignant"
                       >
@@ -997,14 +996,17 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
               {(m.statut === 'ASSIGNEE' || m.statut === 'EN_COURS' || m.statut === 'TERMINEE' || m.statut === 'ABSENCE' || m.statut === 'LITIGE') && m.soignant_assigne_id && (
                 <div id="chat-mission">
                   <ChatConversation
+                    key={`${m.id}:${m.soignant_assigne_id}`}
                     missionId={m.id}
                     autreUserId={m.soignant_assigne_id}
                   />
                 </div>
               )}
               {isAdmin && m.statut === 'OUVERTE' && (
-                <div id="chat-mission">
-                  <ChatMission missionId={m.id} role="ETABLISSEMENT" prenomUtilisateur="Admin" isAdmin />
+                <div className="card-base text-sm text-muted-foreground" role="status">
+                  La conversation de mission s’ouvrira automatiquement dès
+                  qu’un soignant sera assigné. Vous pouvez déjà contacter
+                  l’établissement avec le bouton ci-dessus.
                 </div>
               )}
             </div>

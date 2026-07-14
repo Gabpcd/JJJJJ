@@ -16,15 +16,45 @@ DECLARE
   v_caller uuid := auth.uid();
   v_autorise boolean;
 BEGIN
-  IF v_caller IS NULL OR NOT public.fn_compte_auth_actif() THEN
+  IF v_caller IS NULL OR public.fn_compte_auth_actif() IS NOT TRUE THEN
     RAISE EXCEPTION 'Non authentifié' USING ERRCODE = '28000';
   END IF;
 
   v_autorise :=
        public.est_admin()
+    -- L'appartenance est bornée à la cible, y compris pour un compte membre de
+    -- plusieurs établissements. mon_etablissement_id() ne renvoie qu'une
+    -- appartenance prioritaire et refusait donc à tort les suivantes.
+    OR EXISTS (
+      SELECT 1
+      FROM public.membres_etablissement me
+      JOIN public.etablissements e ON e.id = me.etablissement_id
+      WHERE me.user_id = v_caller
+        AND me.etablissement_id = p_etablissement_id
+        AND me.actif IS TRUE
+        AND e.supprime_le IS NULL
+    )
+    -- Compatibilité du compte historique (UUID Auth = UUID établissement),
+    -- seulement s'il n'existe aucune appartenance canonique cible. Une ligne
+    -- inactive représente une révocation explicite et interdit ce fallback.
     OR (
-      public.mon_etablissement_id() IS NOT NULL
-      AND p_etablissement_id = public.mon_etablissement_id()
+      v_caller = p_etablissement_id
+      AND EXISTS (
+        SELECT 1
+        FROM auth.users u
+        JOIN public.etablissements e ON e.id = u.id
+        WHERE u.id = v_caller
+          AND e.supprime_le IS NULL
+          AND u.raw_app_meta_data ->> 'role' IN (
+            'ADMIN_ETABLISSEMENT', 'ETABLISSEMENT', 'ADMIN_GROUPE'
+          )
+      )
+      AND NOT EXISTS (
+        SELECT 1
+        FROM public.membres_etablissement me
+        WHERE me.user_id = v_caller
+          AND me.etablissement_id = p_etablissement_id
+      )
     )
     OR EXISTS (
       SELECT 1
@@ -38,6 +68,7 @@ BEGIN
       JOIN public.missions m ON m.id = c.mission_id
       WHERE m.etablissement_id = p_etablissement_id
         AND c.soignant_id = v_caller
+        AND c.statut = 'ACCEPTEE'
     );
 
   IF NOT COALESCE(v_autorise, false) THEN
@@ -63,6 +94,7 @@ BEGIN
     JOIN auth.users u ON u.id = m.user_id
     WHERE m.etablissement_id = p_etablissement_id
       AND m.actif IS TRUE
+      AND m.role IN ('PROPRIETAIRE', 'ADMIN_GROUPE', 'RH')
       AND e.supprime_le IS NULL
       AND u.deleted_at IS NULL
       AND u.email_confirmed_at IS NOT NULL
@@ -82,6 +114,12 @@ BEGIN
       AND u.raw_app_meta_data ->> 'role' IN (
         'ADMIN_ETABLISSEMENT', 'ETABLISSEMENT', 'ADMIN_GROUPE'
       )
+      AND NOT EXISTS (
+        SELECT 1
+        FROM public.membres_etablissement me
+        WHERE me.user_id = u.id
+          AND me.etablissement_id = p_etablissement_id
+      )
 
     UNION ALL
 
@@ -99,6 +137,14 @@ BEGIN
       AND u.raw_app_meta_data ->> 'role' IN (
         'ADMIN_ETABLISSEMENT', 'ETABLISSEMENT', 'ADMIN_GROUPE'
       )
+      -- Ce fallback est réservé aux comptes réellement portés uniquement par
+      -- la métadonnée. Toute appartenance canonique, active ou révoquée,
+      -- neutralise une métadonnée potentiellement obsolète.
+      AND NOT EXISTS (
+        SELECT 1
+        FROM public.membres_etablissement me
+        WHERE me.user_id = u.id
+      )
   ) AS candidat
   ORDER BY candidat.priorite, candidat.user_id
   LIMIT 1;
@@ -108,7 +154,7 @@ END;
 $$;
 
 REVOKE ALL ON FUNCTION public.fn_user_id_pour_etablissement(uuid)
-  FROM PUBLIC, anon;
+  FROM PUBLIC, anon, authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.fn_user_id_pour_etablissement(uuid)
   TO authenticated, service_role;
 

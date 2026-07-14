@@ -25,7 +25,6 @@ import { BADGES_STATUT, getLabelProfession, getLabelTypeEtablissement } from '@/
 import { formatEuroAdmin } from '@/lib/adminPresentation';
 import { ModalConfirmation } from '@/components/ModalConfirmation';
 import { Textarea } from '@/components/ui/textarea';
-import { AdminMissionChatPanel } from '@/components/admin/AdminMissionChatPanel';
 import { sanitiserNomFichier, verifierFichierDocument } from '@/lib/documentUpload';
 import { useOuvrirConversation } from '@/hooks/useOuvrirConversation';
 

@@ -15,7 +15,7 @@
  *
  * Realtime via useConversationRealtime (PR 5) : presence + typing.
  */
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { Check, CheckCheck, MessageCircle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -92,7 +92,19 @@ export function ChatConversation({ missionId, autreUserId, isEtablissement }: Ch
   });
 
   useEffect(() => {
-    if (!user || !missionId || !autreUserId) return;
+    // Changement de mission/interlocuteur : aucune donnée de l'ancien canal ne
+    // doit rester affichée ou envoyable pendant la nouvelle résolution.
+    setConvId(null);
+    setResolvedAutreId(null);
+    setAutreInfo(null);
+    setMessages([]);
+    setArchived(false);
+    setLoading(true);
+
+    if (!user || !missionId || !autreUserId) {
+      setLoading(false);
+      return;
+    }
     let cancelled = false;
 
     const resolve = async () => {
@@ -153,26 +165,57 @@ export function ChatConversation({ missionId, autreUserId, isEtablissement }: Ch
 
   useEffect(() => {
     if (!convId) return;
+    let cancelled = false;
+    setMessages([]);
+    setArchived(false);
+    setLoading(true);
 
     const load = async () => {
-      const { data: conv } = await supabase
+      const { data: conv, error: convError } = await supabase
         .from('conversations')
         .select('archived_at')
         .eq('id', convId)
         .maybeSingle();
+      if (cancelled) return;
+      if (convError || !conv) {
+        logger.error('ChatConversation: conversation inaccessible', convError);
+        setMessages([]);
+        setArchived(true);
+        setLoading(false);
+        return;
+      }
       setArchived(!!conv?.archived_at);
 
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('messages_chat')
         .select('id, conversation_id, auteur_id, contenu, est_admin, lu, cree_le')
         .eq('conversation_id', convId)
-        .order('cree_le', { ascending: true })
+        .order('cree_le', { ascending: false })
         .limit(500);
 
-      setMessages((data as Message[]) || []);
+      if (cancelled) return;
+      if (error) {
+        logger.error('ChatConversation: messages indisponibles', error);
+        setMessages([]);
+        setArchived(true);
+        setLoading(false);
+        return;
+      }
+
+      const messagesRecents = ([...((data as Message[]) || [])]).reverse();
+      setMessages(prev => {
+        const fusion = new Map(messagesRecents.map(message => [message.id, message]));
+        prev
+          .filter(message => message.conversation_id === convId)
+          .forEach(message => fusion.set(message.id, message));
+        return [...fusion.values()].sort(
+          (a, b) => new Date(a.cree_le).getTime() - new Date(b.cree_le).getTime(),
+        );
+      });
       setLoading(false);
 
       supabase.rpc('fn_marquer_messages_lus', { p_conversation_id: convId }).then(({ error }) => {
+        if (cancelled) return;
         if (error) logger.error('ChatConversation: fn_marquer_messages_lus error', error);
       });
     };
@@ -206,8 +249,31 @@ export function ChatConversation({ missionId, autreUserId, isEtablissement }: Ch
       })
       .subscribe();
 
-    return () => { supabase.removeChannel(channel); };
+    return () => {
+      cancelled = true;
+      supabase.removeChannel(channel);
+    };
   }, [convId, user]);
+
+  const confirmerMessageEnvoye = useCallback(async (messageId: string) => {
+    if (!convId) return;
+    const { data, error } = await supabase
+      .from('messages_chat')
+      .select('id, conversation_id, auteur_id, contenu, est_admin, lu, cree_le')
+      .eq('id', messageId)
+      .eq('conversation_id', convId)
+      .maybeSingle();
+    if (error || !data) {
+      logger.error('ChatConversation: message envoyé introuvable', error);
+      return;
+    }
+    const message = data as Message;
+    setMessages(prev => prev.some(item => item.id === message.id)
+      ? prev
+      : [...prev, message].sort(
+        (a, b) => new Date(a.cree_le).getTime() - new Date(b.cree_le).getTime(),
+      ));
+  }, [convId]);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
@@ -344,7 +410,12 @@ export function ChatConversation({ missionId, autreUserId, isEtablissement }: Ch
         )}
       </div>
 
-      <InputMessage conversationId={convId} archived={archived} />
+      <InputMessage
+        key={convId}
+        conversationId={convId}
+        archived={archived}
+        onSent={confirmerMessageEnvoye}
+      />
     </div>
   );
 }

@@ -96,11 +96,24 @@ export function HistoriqueMissionsContent() {
     await telechargerOuPartager(header + rows, `historique-missions-${new Date().toISOString().slice(0, 10)}.csv`, 'text/csv');
   };
 
-  const ouvrirConversation = async (etablissementId: string) => {
+  const ouvrirConversation = async (etablissementId: string, missionId: string) => {
     try {
-      const { data } = await supabase.rpc('fn_user_id_pour_etablissement' as any, { p_etablissement_id: etablissementId });
-      if (data) navigate(`/soignant/messagerie?dest=${data}`);
-    } catch { toast.error('Impossible d\'ouvrir la conversation.'); }
+      const { data: userId, error: resolutionError } = await supabase.rpc(
+        'fn_user_id_pour_etablissement' as any,
+        { p_etablissement_id: etablissementId },
+      );
+      if (resolutionError || !userId) throw resolutionError ?? new Error('Interlocuteur absent');
+      const { data: conversationId, error: conversationError } = await supabase.rpc(
+        'fn_obtenir_conversation',
+        { p_autre_id: userId as string, p_mission_id: missionId },
+      );
+      if (conversationError || !conversationId) {
+        throw conversationError ?? new Error('Conversation absente');
+      }
+      navigate(`/soignant/messagerie?conv=${conversationId}`);
+    } catch {
+      toast.error('Impossible d\'ouvrir la conversation.');
+    }
   };
 
   if (loading) return <ChargementPage />;
@@ -225,7 +238,7 @@ export function HistoriqueMissionsContent() {
                       missionIntitule={m.intitule}
                       variant="secondary"
                     />
-                    <BoutonY2K variant="ghost" size="sm" className="gap-1.5 text-xs min-h-[44px]" onClick={(e) => { e.stopPropagation(); ouvrirConversation(m.etablissement_id); }}>
+                    <BoutonY2K variant="ghost" size="sm" className="gap-1.5 text-xs min-h-[44px]" onClick={(e) => { e.stopPropagation(); ouvrirConversation(m.etablissement_id, m.id); }}>
                       <MessageCircle className="h-3.5 w-3.5" /> Contacter
                     </BoutonY2K>
                     {!aLitige && (

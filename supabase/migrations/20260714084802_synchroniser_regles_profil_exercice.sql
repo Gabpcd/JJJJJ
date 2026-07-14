@@ -83,6 +83,45 @@ VALUES
     'AUXILIAIRE_PUERICULTURE', ARRAY['SALARIE']::text[],
     'Profil auxiliaire de puériculture — salarié uniquement.'
   )
-ON CONFLICT (profession) DO UPDATE
-SET types_exercice_autorises = EXCLUDED.types_exercice_autorises,
-    description = EXCLUDED.description;
+ON CONFLICT (profession) DO NOTHING;
+
+-- Ne réécrit jamais silencieusement une configuration déjà présente en
+-- production. Une divergence bloque la migration et impose une revue métier.
+DO $verifier_regles_profils$
+DECLARE
+  v_ecarts text;
+BEGIN
+  WITH attendu(profession, types_exercice_autorises) AS (
+    VALUES
+      ('IDE'::public.type_profession, ARRAY['SALARIE','LIBERAL','MIXTE']::text[]),
+      ('AS'::public.type_profession, ARRAY['SALARIE']::text[]),
+      ('AES'::public.type_profession, ARRAY['SALARIE']::text[]),
+      ('IBODE'::public.type_profession, ARRAY['SALARIE','LIBERAL','MIXTE']::text[]),
+      ('IADE'::public.type_profession, ARRAY['SALARIE','LIBERAL','MIXTE']::text[]),
+      ('SAGE_FEMME'::public.type_profession, ARRAY['SALARIE','LIBERAL','MIXTE']::text[]),
+      ('KINE'::public.type_profession, ARRAY['SALARIE','LIBERAL','MIXTE']::text[]),
+      ('MEDECIN'::public.type_profession, ARRAY['SALARIE','LIBERAL','MIXTE']::text[]),
+      ('PHARMACIEN'::public.type_profession, ARRAY['SALARIE']::text[]),
+      ('MANIPULATEUR_RADIO'::public.type_profession, ARRAY['SALARIE']::text[]),
+      ('PREPARATEUR_PHARMA'::public.type_profession, ARRAY['SALARIE']::text[]),
+      ('DIETETICIEN'::public.type_profession, ARRAY['SALARIE','LIBERAL','MIXTE']::text[]),
+      ('ERGOTHERAPEUTE'::public.type_profession, ARRAY['SALARIE','LIBERAL','MIXTE']::text[]),
+      ('PSYCHOMOTRICIEN'::public.type_profession, ARRAY['SALARIE','LIBERAL','MIXTE']::text[]),
+      ('ORTHOPHONISTE'::public.type_profession, ARRAY['SALARIE','LIBERAL','MIXTE']::text[]),
+      ('DENTISTE'::public.type_profession, ARRAY['SALARIE','LIBERAL','MIXTE']::text[]),
+      ('AUXILIAIRE_PUERICULTURE'::public.type_profession, ARRAY['SALARIE']::text[])
+  )
+  SELECT string_agg(a.profession::text, ', ' ORDER BY a.profession::text)
+  INTO v_ecarts
+  FROM attendu a
+  LEFT JOIN public.regles_exercice_profession r
+    ON r.profession = a.profession
+  WHERE r.profession IS NULL
+     OR r.types_exercice_autorises IS DISTINCT FROM a.types_exercice_autorises;
+
+  IF v_ecarts IS NOT NULL THEN
+    RAISE EXCEPTION
+      'Règles de profil divergentes, migration interrompue : %', v_ecarts;
+  END IF;
+END;
+$verifier_regles_profils$;
