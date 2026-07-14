@@ -123,24 +123,24 @@ BEGIN
   END IF;
 
   INSERT INTO public.etablissements(
-    id, nom, siret, type, adresse_rue, adresse_ville, adresse_code_postal,
+    id, nom, siret, finess, type, adresse_rue, adresse_ville, adresse_code_postal,
     email_contact, statut_verification, peut_publier_missions, est_compte_test,
-    siret_verifie, contrat_service_signe, representant_identite_verifiee,
+    siret_verifie, finess_verifie, contrat_service_signe, representant_identite_verifiee,
     rattachement_verifie, coherence_identite
   ) VALUES (
-    v_etab, 'D4 Etablissement', substr(md5(v_etab::text), 1, 14), 'CLINIQUE_PRIVEE',
+    v_etab, 'D4 Etablissement', substr(md5(v_etab::text), 1, 14), '750000001', 'CLINIQUE_PRIVEE',
     '1 rue du Test', 'Paris', '75001', 'd4-etab-' || v_etab::text || '@test.local',
-    'VERIFIE', true, true, true, true, true, true, 'OK'
+    'VERIFIE', true, true, true, true, true, true, true, 'OK'
   );
   INSERT INTO public.etablissements(
-    id, nom, siret, type, adresse_rue, adresse_ville, adresse_code_postal,
+    id, nom, siret, finess, type, adresse_rue, adresse_ville, adresse_code_postal,
     email_contact, statut_verification, peut_publier_missions, est_compte_test,
-    siret_verifie, contrat_service_signe, representant_identite_verifiee,
+    siret_verifie, finess_verifie, contrat_service_signe, representant_identite_verifiee,
     rattachement_verifie, coherence_identite
   ) VALUES (
-    v_officine, 'D4 Officine', substr(md5(v_officine::text), 1, 14), 'PHARMACIE_OFFICINE',
+    v_officine, 'D4 Officine', substr(md5(v_officine::text), 1, 14), '750000002', 'PHARMACIE_OFFICINE',
     '2 rue du Test', 'Paris', '75002', 'd4-officine-' || v_officine::text || '@test.local',
-    'VERIFIE', true, true, true, true, true, true, 'OK'
+    'VERIFIE', true, true, true, true, true, true, true, 'OK'
   );
 
   INSERT INTO auth.users(
