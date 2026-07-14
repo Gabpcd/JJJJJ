@@ -33,6 +33,14 @@ const penaltyMigration = readFileSync(
   join(process.cwd(), 'supabase/migrations/20260714135000_appliquer_penalite_empechement.sql'),
   'utf8',
 );
+const historicPenaltyMigration = readFileSync(
+  join(process.cwd(), 'supabase/migrations/20260714154908_appliquer_penalite_empechement.sql'),
+  'utf8',
+);
+const penaltyFinalizer = readFileSync(
+  join(process.cwd(), 'supabase/migrations/20260714162000_restaurer_empechement_canonique.sql'),
+  'utf8',
+);
 const e2eSeedHelper = readFileSync(
   join(process.cwd(), 'e2e/helpers/seed.ts'),
   'utf8',
@@ -200,6 +208,19 @@ describe('gate déploiement Supabase main', () => {
     expect(penaltyMigration).toContain("statut IN ('EMISE', 'EN_RETARD')");
     expect(penaltyMigration).toContain('date_echeance < current_date');
     expect(penaltyMigration).toContain('FROM PUBLIC, anon');
+  });
+
+  it('restaure la RPC canonique après la migration historique déjà en production', () => {
+    const marker = 'CREATE OR REPLACE FUNCTION public.fn_declarer_empechement_imperieux';
+    const canonicalRpc = penaltyMigration.slice(penaltyMigration.lastIndexOf(marker)).trim();
+    const finalRpc = penaltyFinalizer.slice(penaltyFinalizer.indexOf(marker)).trim();
+
+    expect(historicPenaltyMigration).toContain("WHERE id = auth.uid()");
+    expect(historicPenaltyMigration).not.toContain('pg_advisory_xact_lock');
+    expect(finalRpc).toBe(canonicalRpc);
+    expect(finalRpc).toContain('pg_advisory_xact_lock');
+    expect(finalRpc).toContain('RESOLUTION_FINANCIERE_MANUELLE_REQUISE');
+    expect(finalRpc).toContain("v_context := 'REPLACEMENT:'");
   });
 
   it('purge le compteur 3 200 h avant le profil Playwright éphémère', () => {
