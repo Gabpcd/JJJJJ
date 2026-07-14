@@ -329,8 +329,13 @@ BEGIN
       'error', 'Mission introuvable'
     );
   END IF;
-  IF v_mission.etablissement_id <> public.mon_etablissement_id()
-     AND public.est_admin() IS NOT TRUE THEN
+  IF public.est_admin() IS NOT TRUE
+     AND (
+       v_mission.etablissement_id IS DISTINCT FROM public.mon_etablissement_id()
+       OR public.fn_a_permission_etablissement(
+         'missions', v_mission.etablissement_id
+       ) IS NOT TRUE
+     ) THEN
     RETURN jsonb_build_object(
       'success', false, 'error_code', 'NON_AUTORISE',
       'error', 'Non autorisé à annuler cette mission'
@@ -401,7 +406,11 @@ BEGIN
     v_points := -20;
     v_type_evt := 'ANNULATION_APRES_POINTAGE';
     v_indemnite := public.fn_calculer_indemnite_annulation_etab(
-      COALESCE(v_contrat.type_contrat, v_mission.type_contrat::text),
+      COALESCE(
+        v_contrat.type_contrat,
+        v_mission.type_contrat_applique::text,
+        'SALARIE'
+      ),
       COALESCE(v_mission.duree_heures, 0)
         * COALESCE(v_mission.taux_horaire_base, 0),
       v_mission.duree_heures,

@@ -79,6 +79,9 @@ BEGIN
     clock_timestamp()
   );
 
+  -- Le trigger de remplacement ne conserve qu'une preuve courante par classe.
+  -- Les scénarios override/rejet/CAS utilisent donc des types distincts afin
+  -- de tester la modération elle-même, sans se remplacer entre eux à l'INSERT.
   INSERT INTO public.documents_soignants (
     id, soignant_id, type_document, libelle, s3_bucket, s3_cle,
     s3_version_id, nom_fichier, type_mime, taille_octets,
