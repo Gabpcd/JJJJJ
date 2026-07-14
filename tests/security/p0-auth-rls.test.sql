@@ -322,7 +322,17 @@ BEGIN
     RAISE EXCEPTION 'P0: LECTURE_SEULE peut muter les missions';
   END IF;
 
+  -- Simule la révocation serveur sans conférer au rôle LECTURE_SEULE la
+  -- permission gerer_equipe que le trigger protège précisément.
+  PERFORM set_config('request.jwt.claim.sub', '', true);
+  PERFORM set_config('request.jwt.claim.role', 'service_role', true);
+  PERFORM set_config('request.jwt.claims', '{"role":"service_role"}', true);
   UPDATE public.membres_etablissement SET actif = false WHERE user_id = v_user;
+  PERFORM set_config('request.jwt.claim.sub', v_user::text, true);
+  PERFORM set_config('request.jwt.claim.role', 'authenticated', true);
+  PERFORM set_config('request.jwt.claims', jsonb_build_object(
+    'sub', v_user, 'role', 'authenticated', 'aal', 'aal1'
+  )::text, true);
   IF public.mon_etablissement_id() IS NOT NULL THEN
     RAISE EXCEPTION 'P0: membre revoque conserve mon_etablissement_id';
   END IF;

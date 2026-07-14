@@ -62,6 +62,12 @@ BEGIN
     'EN_COURS', false, NULL, NULL, false, NULL
   );
 
+  INSERT INTO public.membres_etablissement (
+    etablissement_id, user_id, role, actif
+  ) VALUES (
+    v_etab, v_user, 'PROPRIETAIRE', true
+  );
+
   INSERT INTO public.contrats_service_signatures (
     etablissement_id, version, ip_address, user_agent, contenu_hash,
     signature_s3_key
@@ -117,17 +123,13 @@ BEGIN
       verifie_le = now(), verifie_par = v_user
   WHERE id = v_etab;
 
-  -- 2. Le changement de SIRET doit aussi passer lorsque l'ancien rattachement
-  -- reste théoriquement déductible du justificatif : l'invalidation de la
-  -- source prime sur ce recalcul et remet explicitement le rattachement à zéro.
-  PERFORM set_config('request.jwt.claims', jsonb_build_object(
-    'sub', v_user, 'role', 'authenticated'
-  )::text, true);
-  SET LOCAL role = 'authenticated';
+  -- 2. Le SIRET n'est pas modifiable directement par le rôle authenticated :
+  -- on simule ici le chemin serveur autorisé. L'invalidation de la source
+  -- prime sur l'ancien rattachement et le remet explicitement à zéro.
+  PERFORM set_config('request.jwt.claims', '{"role":"service_role"}', true);
   UPDATE public.etablissements
   SET siret = '99999999999991'
   WHERE id = v_etab;
-  SET LOCAL role = 'postgres';
 
   SELECT * INTO v_row FROM public.etablissements WHERE id = v_etab;
   IF v_row.siret_verifie IS DISTINCT FROM FALSE OR v_row.siret_verifie_le IS NOT NULL
@@ -189,6 +191,8 @@ BEGIN
 
   -- 4. Les trois autres familles documentaires suivent la même règle : la
   -- source reste modifiable, mais jamais avec son ancien résultat serveur.
+  -- Le justificatif a un droit UPDATE de colonne ; FINESS et contrat passent
+  -- par la RPC canonique de modification établissement.
   PERFORM set_config('request.jwt.claims', jsonb_build_object(
     'sub', v_user, 'role', 'authenticated'
   )::text, true);
@@ -196,12 +200,10 @@ BEGIN
   UPDATE public.etablissements
   SET justificatif_fonction_s3_key = v_etab::text || '/fonction/nouveau.pdf'
   WHERE id = v_etab;
-  UPDATE public.etablissements
-  SET contrat_url = v_etab::text || '/contrat/nouveau.pdf'
-  WHERE id = v_etab;
-  UPDATE public.etablissements
-  SET finess = '999999991'
-  WHERE id = v_etab;
+  PERFORM public.fn_modifier_mon_etablissement(
+    p_contrat_url => v_etab::text || '/contrat/nouveau.pdf'
+  );
+  PERFORM public.fn_modifier_mon_etablissement(p_finess => '999999991');
   SET LOCAL role = 'postgres';
 
   SELECT * INTO v_row FROM public.etablissements WHERE id = v_etab;

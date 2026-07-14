@@ -62,7 +62,7 @@ BEGIN
     RETURN NEW;
   END IF;
 
-  v_lien := 'https://app.jolene.app/contrat/' || NEW.id::text;
+  v_lien := 'https://jolene.app/contrat/' || NEW.id::text;
 
   -- Email soignant (best-effort, via net.http_post)
   BEGIN
@@ -115,7 +115,7 @@ BEGIN
     RETURN NEW;
   END IF;
 
-  v_lien := 'https://app.jolene.app/contrat/' || NEW.id::text;
+  v_lien := 'https://jolene.app/contrat/' || NEW.id::text;
 
   -- Email soignant
   BEGIN
@@ -203,7 +203,7 @@ BEGIN
   IF OLD.signature_soignant = TRUE THEN RETURN NEW; END IF;
   IF NEW.signature_etablissement IS TRUE THEN RETURN NEW; END IF;
   IF NEW.statut IN ('SIGNE_COMPLET','ANNULE','EXPIRE','REFUSE') THEN RETURN NEW; END IF;
-  v_lien := 'https://app.jolene.app/contrat/' || NEW.id::text;
+  v_lien := 'https://jolene.app/contrat/' || NEW.id::text;
   BEGIN
     PERFORM net.http_post(
       url := 'https://flripxtsyegjshnhzjkz.supabase.co/functions/v1/send-email',
@@ -288,7 +288,7 @@ BEGIN
         'corps', 'Vous avez un nouveau contrat ' || COALESCE(NEW.numero_contrat, '') || ' à signer.',
         'data', jsonb_build_object(
           'contrat_id', NEW.id,
-          'lien', 'https://app.jolene.app/contrat/' || NEW.id::text
+          'lien', 'https://jolene.app/contrat/' || NEW.id::text
         )
       )
     );
@@ -332,7 +332,7 @@ BEGIN
         'corps', 'Mission confirmée : contrat ' || COALESCE(NEW.numero_contrat, '') || ' signé par les 2 parties.',
         'data', jsonb_build_object(
           'contrat_id', NEW.id,
-          'lien', 'https://app.jolene.app/contrat/' || NEW.id::text
+          'lien', 'https://jolene.app/contrat/' || NEW.id::text
         )
       )
     );
@@ -356,7 +356,7 @@ BEGIN
         'corps', 'Mission confirmée : contrat ' || COALESCE(NEW.numero_contrat, '') || '.',
         'data', jsonb_build_object(
           'contrat_id', NEW.id,
-          'lien', 'https://app.jolene.app/contrat/' || NEW.id::text
+          'lien', 'https://jolene.app/contrat/' || NEW.id::text
         )
       )
     );

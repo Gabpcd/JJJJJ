@@ -29,22 +29,37 @@ BEGIN
   -- transactionnel ; les notifications en base restent vérifiées.
   PERFORM set_config('app.test_mode', 'true', true);
 
-  -- 0. Le référentiel de PROFIL est complet et distinct de la matrice mission.
+  -- 0. Le référentiel de PROFIL contient exactement les 17 règles attendues,
+  -- avant toute fixture susceptible de masquer une profession mal seedée.
   IF EXISTS (
+    WITH attendu(profession, types_exercice_autorises) AS (
+      VALUES
+        ('IDE'::public.type_profession, ARRAY['SALARIE','LIBERAL','MIXTE']::text[]),
+        ('AS'::public.type_profession, ARRAY['SALARIE']::text[]),
+        ('AES'::public.type_profession, ARRAY['SALARIE']::text[]),
+        ('IBODE'::public.type_profession, ARRAY['SALARIE','LIBERAL','MIXTE']::text[]),
+        ('IADE'::public.type_profession, ARRAY['SALARIE','LIBERAL','MIXTE']::text[]),
+        ('SAGE_FEMME'::public.type_profession, ARRAY['SALARIE','LIBERAL','MIXTE']::text[]),
+        ('KINE'::public.type_profession, ARRAY['SALARIE','LIBERAL','MIXTE']::text[]),
+        ('MEDECIN'::public.type_profession, ARRAY['SALARIE','LIBERAL','MIXTE']::text[]),
+        ('PHARMACIEN'::public.type_profession, ARRAY['SALARIE']::text[]),
+        ('MANIPULATEUR_RADIO'::public.type_profession, ARRAY['SALARIE']::text[]),
+        ('PREPARATEUR_PHARMA'::public.type_profession, ARRAY['SALARIE']::text[]),
+        ('DIETETICIEN'::public.type_profession, ARRAY['SALARIE','LIBERAL','MIXTE']::text[]),
+        ('ERGOTHERAPEUTE'::public.type_profession, ARRAY['SALARIE','LIBERAL','MIXTE']::text[]),
+        ('PSYCHOMOTRICIEN'::public.type_profession, ARRAY['SALARIE','LIBERAL','MIXTE']::text[]),
+        ('ORTHOPHONISTE'::public.type_profession, ARRAY['SALARIE','LIBERAL','MIXTE']::text[]),
+        ('DENTISTE'::public.type_profession, ARRAY['SALARIE','LIBERAL','MIXTE']::text[]),
+        ('AUXILIAIRE_PUERICULTURE'::public.type_profession, ARRAY['SALARIE']::text[])
+    )
     SELECT 1
-    FROM unnest(enum_range(NULL::public.type_profession)) AS p(profession)
+    FROM attendu a
     LEFT JOIN public.regles_exercice_profession r
-      ON r.profession = p.profession
+      ON r.profession = a.profession
     WHERE r.profession IS NULL
+       OR r.types_exercice_autorises IS DISTINCT FROM a.types_exercice_autorises
   ) THEN
-    RAISE EXCEPTION 'D4-T0: référentiel de profil incomplet';
-  END IF;
-  IF public.fn_profession_peut_etre_liberal('MEDECIN') IS DISTINCT FROM true
-     OR public.fn_profession_peut_etre_liberal('DENTISTE') IS DISTINCT FROM true
-     OR public.fn_profession_peut_etre_liberal('PHARMACIEN') IS DISTINCT FROM false
-     OR public.fn_profession_peut_etre_liberal('MANIPULATEUR_RADIO') IS DISTINCT FROM false
-     OR public.fn_profession_peut_etre_liberal('AUXILIAIRE_PUERICULTURE') IS DISTINCT FROM false THEN
-    RAISE EXCEPTION 'D4-T0B: règles libérales du profil incohérentes';
+    RAISE EXCEPTION 'D4-T0: référentiel de profil incomplet ou divergent';
   END IF;
 
   -- 1. Matrice : cellule inconnue et établissements publics = salarié par défaut.
@@ -55,6 +70,18 @@ BEGIN
   IF public.fn_mode_exercice('MEDECIN', 'HOPITAL_PUBLIC', 'PUBLIC')->>'niveau'
        IS DISTINCT FROM 'NON_PROPOSE' THEN
     RAISE EXCEPTION 'D4-T2: le secteur public doit tomber en NON_PROPOSE';
+  END IF;
+  IF public.fn_mode_exercice('MEDECIN', 'CLINIQUE_PRIVEE', NULL)->>'niveau'
+       IS DISTINCT FROM 'AUTORISE'
+     OR public.fn_mode_exercice('MEDECIN', 'CENTRE_SANTE', NULL)->>'niveau'
+       IS DISTINCT FROM 'BLOQUE' THEN
+    RAISE EXCEPTION 'D4-T2B: branches MEDECIN privé/centre incohérentes';
+  END IF;
+  IF public.fn_mode_exercice('IADE', 'CLINIQUE_PRIVEE', NULL)->>'niveau'
+       IS DISTINCT FROM 'BLOQUE'
+     OR public.fn_mode_exercice('IBODE', 'CLINIQUE_PRIVEE', NULL)->>'niveau'
+       IS DISTINCT FROM 'BLOQUE' THEN
+    RAISE EXCEPTION 'D4-T2C: missions IADE/IBODE privées doivent rester salariées';
   END IF;
   IF public.fn_mode_exercice('PHARMACIEN', 'CLINIQUE_PRIVEE', NULL)->>'niveau'
        IS DISTINCT FROM 'NON_PROPOSE' THEN
@@ -130,6 +157,17 @@ BEGIN
     )
   ON CONFLICT (id) DO NOTHING;
 
+  INSERT INTO public.equipe_admin(
+    user_id, nom, prenom, email, actif, acces_groupes
+  ) VALUES (
+    v_admin, 'D4', 'Admin',
+    'd4-admin-' || v_admin::text || '@test.local', true,
+    ARRAY[
+      'Dashboard', 'Utilisateurs', 'Missions', 'Litiges & contrats',
+      'Finances', 'Messagerie', 'Conformité & Technique', 'Fondateur'
+    ]::text[]
+  );
+
   -- Simule un profil IADE libéral déjà valide : sa spécialité IADE n'est pas
   -- exercée en libéral, mais il peut remplir une mission IDE. Cette règle de
   -- profil ne crée aucune cellule IADE libérale dans la matrice des missions.
@@ -191,6 +229,14 @@ BEGIN
 
   INSERT INTO public.documents_soignants(
     soignant_id, type_document, s3_cle, nom_fichier,
+    statut_verification, est_critique, resultat_ia
+  ) VALUES (
+    v_iade, 'DIPLOME', 'tests/lot21/diplome-iade', 'd4-diplome-iade.pdf',
+    'VERIFIE', true, '{"profession_certifiee":"IADE"}'::jsonb
+  );
+
+  INSERT INTO public.documents_soignants(
+    soignant_id, type_document, s3_cle, nom_fichier,
     statut_verification, est_critique, valide_jusqua
   ) VALUES (
     v_iade, 'RCP_ASSURANCE', 'tests/lot21/rcp-expiree', 'd4-rcp-expiree.pdf',
@@ -235,6 +281,7 @@ BEGIN
 
   -- 3. Candidature + traitement : IADE libérale sur mission IDE salariée.
   PERFORM set_config('request.jwt.claim.sub', v_iade::text, true);
+  PERFORM set_config('request.jwt.claim.role', 'authenticated', true);
   PERFORM set_config('request.jwt.claims', jsonb_build_object(
     'sub', v_iade::text, 'role', 'authenticated', 'aal', 'aal1'
   )::text, true);
@@ -408,6 +455,10 @@ BEGIN
   -- Isole les deux feeds des données ambiantes sans les modifier : la
   -- fixture est seule dans le rayon, au plafond tarifaire autorisé et avec
   -- le meilleur score de matching. Un limit=1 prouve alors chaque chemin.
+  -- Ces mutations sont celles du serveur de recette, pas celles du soignant.
+  PERFORM set_config('request.jwt.claim.sub', '', true);
+  PERFORM set_config('request.jwt.claim.role', 'service_role', true);
+  PERFORM set_config('request.jwt.claims', '{"role":"service_role"}', true);
   UPDATE public.etablissements
      SET adresse_lat = 89.123456, adresse_lng = 42.654321
    WHERE id = v_etab;
@@ -425,6 +476,7 @@ BEGIN
     SET score_global = EXCLUDED.score_global;
 
   PERFORM set_config('request.jwt.claim.sub', v_iade::text, true);
+  PERFORM set_config('request.jwt.claim.role', 'authenticated', true);
   PERFORM set_config('request.jwt.claims', jsonb_build_object(
     'sub', v_iade::text, 'role', 'authenticated', 'aal', 'aal1'
   )::text, true);

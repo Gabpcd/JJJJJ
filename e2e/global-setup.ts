@@ -33,6 +33,8 @@ const ENFANTS_MISSION = [
   'qr_codes_mission',
   'messages_mission',
   'conversations',
+  'stripe_transfers',
+  'paiements_escrow',
   'swipes',
   'matching_scores',
   'candidatures',
@@ -60,6 +62,35 @@ export default async function globalSetup() {
   }
   const ids = (missions ?? []).map((m: { id: string }) => m.id);
   if (ids.length > 0) {
+    // Les files Stripe référencent l'escrow (et non directement la mission).
+    // Elles doivent donc être supprimées avant paiements_escrow. Le périmètre
+    // reste strictement celui des missions techniques préfixées ci-dessus.
+    const { data: escrows, error: escrowsError } = await admin
+      .from('paiements_escrow')
+      .select('id')
+      .in('mission_id', ids);
+    if (escrowsError) {
+      throw new Error(`[global-setup] lecture escrows impossible : ${escrowsError.message}`);
+    }
+    const escrowIds = (escrows ?? []).map((escrow: { id: string }) => escrow.id);
+    if (escrowIds.length > 0) {
+      for (const table of [
+        'escrow_exposition_releases',
+        'escrow_release_queue',
+        'stripe_refunds_queue',
+      ]) {
+        const { error: escrowChildError } = await admin
+          .from(table as never)
+          .delete()
+          .in('paiement_escrow_id', escrowIds);
+        if (escrowChildError) {
+          throw new Error(
+            `[global-setup] purge ${table} impossible : ${escrowChildError.message}`,
+          );
+        }
+      }
+    }
+
     // messages_chat est enfant de conversations (FK conversation_id, pas de
     // mission_id direct). Il DOIT être purgé avant conversations, sinon le DELETE
     // conversations échoue (FK) et bloque en cascade la suppression des missions
