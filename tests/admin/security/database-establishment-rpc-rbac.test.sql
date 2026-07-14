@@ -958,6 +958,16 @@ BEGIN
        IS DISTINCT FROM v_cross_rh THEN
     RAISE EXCEPTION 'Seconde appartenance établissement refusée';
   END IF;
+
+  -- Le rôle LECTURE_SEULE ne doit pas pouvoir gérer l'équipe. Le nettoyage de
+  -- cette fixture est donc explicitement effectué par le rôle serveur.
+  PERFORM set_config('request.jwt.claim.sub', '', true);
+  PERFORM set_config('request.jwt.claim.role', 'service_role', true);
+  PERFORM set_config(
+    'request.jwt.claims',
+    '{"role":"service_role"}',
+    true
+  );
   DELETE FROM public.membres_etablissement
   WHERE etablissement_id = v_etab_b AND user_id = v_lecture;
 
