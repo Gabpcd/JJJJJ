@@ -30,6 +30,9 @@ describe("compteurs d’heures — source canonique et seuil exact", () => {
     expect(helper).toMatch(/heures_totales\s+numeric/i);
     expect(helper).toMatch(/\bstatut\s*=\s*'TERMINEE'/i);
     expect(helper).toContain("heures_reelles");
+    expect(helper).toMatch(
+      /FROM public\.presences pr[\s\S]*?WHERE pr\.mission_id\s*=\s*m\.id[\s\S]*?AND pr\.soignant_id\s*=\s*m\.soignant_assigne_id/i,
+    );
     expect(helper).toMatch(/\bstatut_validation\s*=\s*'VALIDE'/i);
     expect(helper).not.toMatch(/::integer/i);
     expect(migration).toContain(

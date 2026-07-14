@@ -8,13 +8,17 @@ DO $heures_compteurs_coherence$
 DECLARE
   v_admin constant uuid := 'cc420000-0000-4000-8000-000000000000';
   v_soignant constant uuid := 'cc420000-0000-4000-8000-000000000001';
+  v_soignant_remplacement constant uuid := 'cc420000-0000-4000-8000-000000000005';
   v_etablissement constant uuid := 'cc420000-0000-4000-8000-000000000002';
   v_mission constant uuid := 'cc420000-0000-4000-8000-000000000003';
   v_presence constant uuid := 'cc420000-0000-4000-8000-000000000004';
+  v_presence_remplacement constant uuid := 'cc420000-0000-4000-8000-000000000006';
   v_heures_externes uuid;
   v_compteur record;
   v_canonique record;
+  v_canonique_remplacement record;
   v_cache record;
+  v_cache_remplacement record;
 BEGIN
   PERFORM set_config('request.jwt.claim.sub', '', true);
   PERFORM set_config('request.jwt.claim.role', 'service_role', true);
@@ -45,6 +49,15 @@ BEGIN
       'authenticated',
       '{"role":"SOIGNANT"}',
       now()
+    ),
+    (
+      v_soignant_remplacement,
+      '00000000-0000-0000-0000-000000000000',
+      'playwright-test-caregiver-counter-reassignment@jolene.app',
+      'authenticated',
+      'authenticated',
+      '{"role":"SOIGNANT"}',
+      now()
     );
 
   INSERT INTO public.equipe_admin (
@@ -63,11 +76,17 @@ BEGIN
 
   INSERT INTO public.soignants (
     id, prenom, nom, email, profession, est_compte_test, type_exercice
-  ) VALUES (
-    v_soignant, 'Fixture', 'Compteurs',
-    'playwright-test-caregiver-counter-coherence@jolene.app',
-    'IDE', true, 'LIBERAL'
-  );
+  ) VALUES
+    (
+      v_soignant, 'Fixture', 'Compteurs',
+      'playwright-test-caregiver-counter-coherence@jolene.app',
+      'IDE', true, 'LIBERAL'
+    ),
+    (
+      v_soignant_remplacement, 'Fixture', 'Remplacement',
+      'playwright-test-caregiver-counter-reassignment@jolene.app',
+      'IDE', true, 'SALARIE'
+    );
 
   INSERT INTO public.etablissements (
     id, nom, siret, type, adresse_rue, adresse_ville,
@@ -316,6 +335,65 @@ BEGIN
        'EXECUTE'
      ) THEN
     RAISE EXCEPTION 'HC-T13 : helper privé exécutable par authenticated';
+  END IF;
+
+  -- Une mission peut conserver la présence de son premier soignant après une
+  -- réaffectation. Seule la présence du soignant actuellement assigné doit
+  -- alors alimenter ses heures : l'ancienne présence ne doit pas s'ajouter à
+  -- celle du remplaçant.
+  PERFORM set_config('request.jwt.claim.sub', v_admin::text, true);
+  PERFORM set_config('request.jwt.claim.role', 'authenticated', true);
+  PERFORM set_config(
+    'request.jwt.claims',
+    jsonb_build_object(
+      'sub', v_admin, 'role', 'authenticated', 'aal', 'aal2'
+    )::text,
+    true
+  );
+  UPDATE public.missions
+  SET soignant_assigne_id = v_soignant_remplacement
+  WHERE id = v_mission;
+
+  INSERT INTO public.presences (
+    id, mission_id, soignant_id, heures_reelles,
+    valide_par_etablissement, valide_le
+  ) VALUES (
+    v_presence_remplacement, v_mission, v_soignant_remplacement,
+    6, true, now()
+  );
+
+  IF (
+    SELECT count(*)
+    FROM public.presences
+    WHERE mission_id = v_mission
+  ) <> 2 THEN
+    RAISE EXCEPTION 'HC-T14 : la réaffectation n''a pas conservé les deux présences';
+  END IF;
+
+  SELECT * INTO STRICT v_canonique
+  FROM private.fn_heures_exercice_verifiees(v_soignant);
+  SELECT heures_plateforme, heures_cumulees, total_missions_terminees
+  INTO STRICT v_cache
+  FROM public.soignants WHERE id = v_soignant;
+  SELECT * INTO STRICT v_canonique_remplacement
+  FROM private.fn_heures_exercice_verifiees(v_soignant_remplacement);
+  SELECT heures_plateforme, heures_cumulees, total_missions_terminees
+  INTO STRICT v_cache_remplacement
+  FROM public.soignants WHERE id = v_soignant_remplacement;
+
+  IF v_canonique.heures_jolene IS DISTINCT FROM 0::numeric
+     OR v_canonique.heures_totales IS DISTINCT FROM 3192::numeric
+     OR v_cache.heures_plateforme IS DISTINCT FROM 0::numeric
+     OR v_cache.heures_cumulees IS DISTINCT FROM 3192::numeric
+     OR v_cache.total_missions_terminees IS DISTINCT FROM 0
+     OR v_canonique_remplacement.heures_jolene IS DISTINCT FROM 6::numeric
+     OR v_canonique_remplacement.heures_totales IS DISTINCT FROM 6::numeric
+     OR v_cache_remplacement.heures_plateforme IS DISTINCT FROM 6::numeric
+     OR v_cache_remplacement.heures_cumulees IS DISTINCT FROM 6::numeric
+     OR v_cache_remplacement.total_missions_terminees IS DISTINCT FROM 1 THEN
+    RAISE EXCEPTION 'HC-T15 : présence historique surcomptée après réaffectation : ancien canonique=%, ancien cache=%, remplaçant canonique=%, remplaçant cache=%',
+      row_to_json(v_canonique), row_to_json(v_cache),
+      row_to_json(v_canonique_remplacement), row_to_json(v_cache_remplacement);
   END IF;
 END;
 $heures_compteurs_coherence$;

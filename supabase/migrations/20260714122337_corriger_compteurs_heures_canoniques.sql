@@ -69,6 +69,7 @@ AS $function$
             SELECT sum(COALESCE(pr.heures_ajustees_litige, pr.heures_reelles))
             FROM public.presences pr
             WHERE pr.mission_id = m.id
+              AND pr.soignant_id = m.soignant_assigne_id
               AND COALESCE(pr.heures_ajustees_litige, pr.heures_reelles)
                   IS NOT NULL
           ),
