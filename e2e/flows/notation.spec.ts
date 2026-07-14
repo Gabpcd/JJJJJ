@@ -17,52 +17,55 @@
  * test — en fullyParallel 2 workers, deux missions chevauchantes pour le même
  * soignant déclencheraient dec_refuser_chevauchement_soignant / repos 11h.
  *
- * Note : la présence stricte du bouton "Noter" dépend des conditions UI
- * (mission DOIT avoir un soignant_assigne_id, statut TERMINEE, pas encore
- * notée) — soft check conservé.
+ * La fixture garantit les conditions UI du bouton "Noter l'établissement" :
+ * mission assignée, statut TERMINEE et aucune notation existante.
  */
 
 import { test, expect } from '@playwright/test';
-import { seedMission, seedCandidature, cleanupSeedData, cleanupMissionCascade, seedDocsRequisVerifie } from '../helpers/seed';
-import { loginAs, TEST_ACCOUNTS } from '../helpers/auth';
-import { adminClient, userClient, userIdByEmail } from '../helpers/db';
+import {
+  cleanupMissionCascade,
+  createEphemeralVerifiedCaregiver,
+  seedCandidature,
+  seedContratMissionSigne,
+  seedMission,
+  type EphemeralVerifiedCaregiver,
+} from '../helpers/seed';
+import { TEST_ACCOUNTS } from '../helpers/auth';
+import { adminClient, userClient } from '../helpers/db';
 
 test.describe('Flow notation bidirectionnelle', () => {
   /** IDs des missions seedées par CE test — purge ciblée ordonnée (la clôture
    *  TERMINEE crée des enfants en FK NO ACTION : bulletin de paie, cotisations,
    *  conformité, contrat, conversation… cleanupSeedData seul échoue en silence). */
   const seededMissionIds: string[] = [];
+  let caregiver: EphemeralVerifiedCaregiver;
+
+  test.beforeAll(async () => {
+    caregiver = await createEphemeralVerifiedCaregiver();
+  });
 
   test.afterEach(async () => {
     for (const missionId of seededMissionIds.splice(0)) {
-      await cleanupMissionCascade(missionId).catch(() => {});
+      await cleanupMissionCascade(missionId);
     }
-    await cleanupSeedData().catch(() => {});
   });
 
-  test('mission TERMINEE assignée → page détail mission accessible (CTA noter soft check)', async ({ page }) => {
-    const soignantId = await userIdByEmail(TEST_ACCOUNTS.soignant.email);
-    expect(soignantId, 'compte test soignant').toBeTruthy();
+  test.afterAll(async () => {
+    await caregiver?.cleanup();
+  });
 
-    // Robustesse : force le flag docs (idempotent, compte test fixe) — exigé
-    // par fn_traiter_candidature si la mission démarre < 7 jours (pattern
-    // pointage.spec.ts).
-    await adminClient()
-      .from('soignants' as any)
-      .update({ tous_documents_valides: true })
-      .eq('id', soignantId);
-    // Gate documents per-mission : fournir de vrais docs vérifiés (le flag seul ne suffit plus).
-    await seedDocsRequisVerifie(soignantId);
+  test('mission TERMINEE assignée → CTA Noter l’établissement visible', async ({ page }) => {
+    const soignantId = caregiver.id;
 
     // J+9 : hors fenêtre pointage (J+8 + 8h, repos 11h respecté) et au-delà
     // du seuil < 7 jours de fn_traiter_candidature.
     const debut = new Date(Date.now() + 9 * 86400000);
     const fin = new Date(debut.getTime() + 8 * 3600000);
-    const m = await seedMission({ intitule: '[playwright-test] Notation E2E', debut, fin });
+    const m = await seedMission({ intitule: '[pw-test:notation] Notation E2E', debut, fin });
     expect(m, 'seedMission').toBeTruthy();
     seededMissionIds.push(m!.id);
 
-    const cand = await seedCandidature(m!.id);
+    const cand = await seedCandidature(m!.id, soignantId);
     expect(cand, 'seedCandidature').toBeTruthy();
 
     // Acceptation par l'établissement authentifié → mission ASSIGNEE
@@ -74,6 +77,7 @@ test.describe('Flow notation bidirectionnelle', () => {
     });
     expect(acceptErr, `fn_traiter_candidature: ${acceptErr?.message}`).toBeFalsy();
     expect((accept as any)?.success, (accept as any)?.error).toBe(true);
+    await seedContratMissionSigne(m!.id, caregiver, { etablissement: etab });
 
     // Transitions valides du trigger fn_valider_transition_statut_mission :
     // ASSIGNEE → EN_COURS → TERMINEE, par l'étab (pol_mission_update).
@@ -98,7 +102,11 @@ test.describe('Flow notation bidirectionnelle', () => {
     expect((missionDb as any)?.statut).toBe('TERMINEE');
     expect((missionDb as any)?.soignant_assigne_id).toBe(soignantId);
 
-    await loginAs(page, 'soignant');
+    await page.goto('/connexion');
+    await page.locator('input[type="email"]').fill(caregiver.email);
+    await page.locator('input[type="password"]').first().fill(caregiver.password);
+    await page.getByTestId('login-submit').click();
+    await expect(page).toHaveURL(/\/soignant\/tableau-de-bord/, { timeout: 15_000 });
 
     await page.goto(`/soignant/missions/${m!.id}`);
     await page.waitForLoadState('networkidle');
@@ -107,9 +115,9 @@ test.describe('Flow notation bidirectionnelle', () => {
     const heading = page.locator('h1, h2').first();
     await expect(heading).toBeVisible({ timeout: 10_000 });
 
-    // CTA Noter/Évaluer présent côté UI quand mission éligible (soft check
-    // car affichage conditionnel selon état notation déjà existante).
-    const noter = page.getByRole('button', { name: /Noter|Évaluer/i }).first();
-    await expect(noter).toBeVisible({ timeout: 5_000 }).catch(() => {});
+    // Régression stricte : une mission éligible doit permettre au soignant de
+    // noter l'établissement. Une disparition du CTA fait désormais échouer le test.
+    const noter = page.getByRole('button', { name: /Noter l'établissement/i });
+    await expect(noter).toBeVisible({ timeout: 10_000 });
   });
 });

@@ -22,62 +22,50 @@
  */
 
 import { test, expect } from '@playwright/test';
-import { seedMission, seedCandidature, seedDocsRequisVerifie } from '../helpers/seed';
-import { adminClient, userClient, userIdByEmail } from '../helpers/db';
+import {
+  cleanupMissionCascade,
+  createEphemeralVerifiedCaregiver,
+  seedCandidature,
+  seedContratMissionSigne,
+  seedMission,
+  type EphemeralVerifiedCaregiver,
+} from '../helpers/seed';
+import { adminClient, userClient } from '../helpers/db';
 import { TEST_ACCOUNTS } from '../helpers/auth';
 
 test.describe('Flow pointage soignant', () => {
   /** IDs des missions seedées par CE test — purge ciblée (la purge globale
    *  cleanupSeedData échoue désormais en silence sur les FK NO ACTION). */
   const seededMissionIds: string[] = [];
+  let caregiver: EphemeralVerifiedCaregiver;
+
+  test.beforeAll(async () => {
+    caregiver = await createEphemeralVerifiedCaregiver();
+  });
 
   // La clôture TERMINEE crée des enfants en FK NO ACTION vers missions
   // (bulletin de paie, cotisations, conformité, contrat, conversation…) :
   // purge ordonnée obligatoire avant le DELETE missions.
   test.afterEach(async () => {
-    const admin = adminClient();
     for (const missionId of seededMissionIds.splice(0)) {
-      const enfants = [
-        'conformite_travail',
-        'cotisations_sociales',
-        'bulletins_paie',
-        'contrats_travail_missions',
-        'contrats_mission',
-        'presences',
-        'scans_pointage',
-        'messages_mission',
-        'conversations',
-        'candidatures',
-      ];
-      for (const table of enfants) {
-        await admin.from(table as any).delete().eq('mission_id', missionId).then(() => {}, () => {});
-      }
-      await admin.from('missions' as any).delete().eq('id', missionId).then(() => {}, () => {});
+      await cleanupMissionCascade(missionId);
     }
   });
 
-  test('seed mission + acceptation étab + clôture → statut DB = TERMINEE', async () => {
-    const soignantId = await userIdByEmail(TEST_ACCOUNTS.soignant.email);
-    expect(soignantId, 'compte test soignant').toBeTruthy();
+  test.afterAll(async () => {
+    await caregiver?.cleanup();
+  });
 
-    // Debout J+8 : au-delà du seuil < 7 jours de fn_traiter_candidature qui
-    // exigerait tous_documents_valides + RCP. On force quand même le flag docs
-    // (idempotent, compte test fixe) pour rester robuste aux triggers de
-    // vérification documentaire à l'assignation.
-    await adminClient()
-      .from('soignants' as any)
-      .update({ tous_documents_valides: true })
-      .eq('id', soignantId);
-    // Gate documents per-mission : fournir de vrais docs vérifiés (le flag seul ne suffit plus).
-    await seedDocsRequisVerifie(soignantId);
+  test('seed mission + acceptation étab + clôture → statut DB = TERMINEE', async () => {
+    const soignantId = caregiver.id;
 
     const debut = new Date(Date.now() + 8 * 86400000);
     const fin = new Date(debut.getTime() + 8 * 3600000);
-    const m = await seedMission({ intitule: '[playwright-test] Pointage E2E', debut, fin });
+    const m = await seedMission({ intitule: '[pw-test:pointage] Pointage E2E', debut, fin });
     expect(m, 'seedMission').toBeTruthy();
     seededMissionIds.push(m!.id);
 
-    const cand = await seedCandidature(m!.id);
+    const cand = await seedCandidature(m!.id, soignantId);
     expect(cand, 'seedCandidature').toBeTruthy();
 
     // Acceptation par l'établissement authentifié → mission ASSIGNEE
@@ -89,6 +77,7 @@ test.describe('Flow pointage soignant', () => {
     });
     expect(acceptErr).toBeFalsy();
     expect((accept as any)?.success, (accept as any)?.error).toBe(true);
+    await seedContratMissionSigne(m!.id, caregiver, { etablissement: etab });
 
     // Transitions valides du trigger fn_valider_transition_statut_mission :
     // ASSIGNEE → EN_COURS → TERMINEE, par l'étab (pol_mission_update).

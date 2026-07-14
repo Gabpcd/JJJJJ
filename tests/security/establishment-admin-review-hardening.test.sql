@@ -12,7 +12,7 @@ BEGIN
     'Alice',
     NULL
   );
-  IF v_result ->> 'statut' <> 'CORRESPOND' THEN
+  IF v_result ->> 'statut' IS DISTINCT FROM 'CORRESPOND' THEN
     RAISE EXCEPTION 'Le rapprochement mois/année devrait correspondre: %', v_result;
   END IF;
 
@@ -23,7 +23,7 @@ BEGIN
     'Alice',
     NULL
   );
-  IF v_result ->> 'statut' <> 'DIVERGE' THEN
+  IF v_result ->> 'statut' IS DISTINCT FROM 'DIVERGE' THEN
     RAISE EXCEPTION 'Une date contradictoire doit diverger: %', v_result;
   END IF;
 
@@ -34,7 +34,7 @@ BEGIN
     'Alice',
     NULL
   );
-  IF v_result ->> 'statut' <> 'PIECE_NON_LUE' THEN
+  IF v_result ->> 'statut' IS DISTINCT FROM 'PIECE_NON_LUE' THEN
     RAISE EXCEPTION 'Une date officielle disponible exige la lecture de la pièce: %', v_result;
   END IF;
 

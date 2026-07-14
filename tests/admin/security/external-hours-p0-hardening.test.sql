@@ -112,7 +112,7 @@ BEGIN
     v_soignant::text || '/heures-externes/1720936800099-absente.pdf',
     'absente.pdf'
   );
-  IF v_result->>'error_code' <> 'PREUVE_STORAGE_INVALIDE' THEN
+  IF v_result->>'error_code' IS DISTINCT FROM 'PREUVE_STORAGE_INVALIDE' THEN
     RAISE EXCEPTION 'HEX-P0-T1 : preuve Storage absente acceptée : %', v_result;
   END IF;
 
@@ -130,7 +130,7 @@ BEGIN
   EXCEPTION WHEN insufficient_privilege THEN
     v_failed := true;
   END;
-  IF NOT v_failed THEN
+  IF v_failed IS DISTINCT FROM TRUE THEN
     RAISE EXCEPTION 'HEX-P0-T2 : INSERT direct avec verdict accepté';
   END IF;
 
@@ -138,7 +138,7 @@ BEGIN
     'CHU Test', 'HOPITAL_PUBLIC', DATE '2020-01-01', DATE '2020-12-31',
     1600, v_path_1, 'preuve-1.pdf'
   );
-  IF v_result->>'success' <> 'true' THEN
+  IF v_result->>'success' IS DISTINCT FROM 'true' THEN
     RAISE EXCEPTION 'HEX-P0-T3 : déclaration propriétaire refusée : %', v_result;
   END IF;
   v_id_1 := (v_result->>'id')::uuid;
@@ -163,7 +163,7 @@ BEGIN
     DATE '2020-06-01', DATE '2021-01-31', 1600,
     v_path_overlap, 'preuve-overlap.pdf'
   );
-  IF v_result->>'error_code' <> 'PERIODE_CHEVAUCHANTE' THEN
+  IF v_result->>'error_code' IS DISTINCT FROM 'PERIODE_CHEVAUCHANTE' THEN
     RAISE EXCEPTION 'HEX-P0-T5 : période chevauchante acceptée : %', v_result;
   END IF;
 
@@ -185,7 +185,7 @@ BEGIN
   EXCEPTION WHEN insufficient_privilege THEN
     v_failed := true;
   END;
-  IF NOT v_failed THEN
+  IF v_failed IS DISTINCT FROM TRUE THEN
     RAISE EXCEPTION 'HEX-P0-T5B : un JWT utilisateur a appelé le finaliseur';
   END IF;
 
@@ -201,7 +201,7 @@ BEGIN
   EXCEPTION WHEN invalid_parameter_value THEN
     v_failed := true;
   END;
-  IF NOT v_failed THEN
+  IF v_failed IS DISTINCT FROM TRUE THEN
     RAISE EXCEPTION 'HEX-P0-T6 : le finaliseur IA a accepté VALIDE';
   END IF;
 
@@ -210,8 +210,8 @@ BEGIN
     1600, true, '{"verdict":"VERIFIE"}'::jsonb,
     'Contrôles concordants, revue humaine requise.'
   );
-  IF v_result->>'success' <> 'true'
-     OR v_result->>'statut' <> 'EN_ATTENTE'
+  IF v_result->>'success' IS DISTINCT FROM 'true'
+     OR v_result->>'statut' IS DISTINCT FROM 'EN_ATTENTE'
      OR NOT EXISTS (
        SELECT 1
        FROM public.heures_externes_soignants h
@@ -230,7 +230,7 @@ BEGIN
     v_hash, 'EN_ATTENTE', false, 1600, true,
     '{"verdict":"VERIFIE"}'::jsonb, 'Snapshot périmé'
   );
-  IF v_result->>'error_code' <> 'CONFLIT_SOURCE' THEN
+  IF v_result->>'error_code' IS DISTINCT FROM 'CONFLIT_SOURCE' THEN
     RAISE EXCEPTION 'HEX-P0-T8 : snapshot périmé accepté : %', v_result;
   END IF;
 
@@ -251,7 +251,7 @@ BEGIN
   EXCEPTION WHEN insufficient_privilege THEN
     v_failed := true;
   END;
-  IF NOT v_failed THEN
+  IF v_failed IS DISTINCT FROM TRUE THEN
     RAISE EXCEPTION 'HEX-P0-T9 : un admin AAL1 a validé les heures';
   END IF;
 
@@ -265,7 +265,7 @@ BEGIN
   v_result := public.fn_admin_valider_heures_externes(
     v_id_1, 'VALIDE', 'Preuve examinée manuellement'
   );
-  IF v_result->>'success' <> 'true'
+  IF v_result->>'success' IS DISTINCT FROM 'true'
      OR NOT EXISTS (
        SELECT 1
        FROM public.heures_externes_soignants h
@@ -290,7 +290,7 @@ BEGIN
     'CHU Test 2', 'HOPITAL_PUBLIC', DATE '2022-01-01', DATE '2022-12-31',
     1600, v_path_2, 'preuve-2.pdf'
   );
-  IF v_result->>'success' <> 'true' THEN
+  IF v_result->>'success' IS DISTINCT FROM 'true' THEN
     RAISE EXCEPTION 'HEX-P0-T11 : seconde période légitime refusée : %', v_result;
   END IF;
   v_id_2 := (v_result->>'id')::uuid;
@@ -306,8 +306,8 @@ BEGIN
     1600, true, '{"verdict":"VERIFIE"}'::jsonb,
     'Copie binaire à revoir'
   );
-  IF v_result->>'success' <> 'true'
-     OR v_result->>'preuve_dupliquee' <> 'true' THEN
+  IF v_result->>'success' IS DISTINCT FROM 'true'
+     OR v_result->>'preuve_dupliquee' IS DISTINCT FROM 'true' THEN
     RAISE EXCEPTION 'HEX-P0-T12 : doublon binaire non détecté : %', v_result;
   END IF;
 
@@ -322,7 +322,7 @@ BEGIN
   v_result := public.fn_admin_valider_heures_externes(
     v_id_2, 'VALIDE', 'Tentative doublon'
   );
-  IF v_result->>'error_code' <> 'PREUVE_DUPLIQUEE' THEN
+  IF v_result->>'error_code' IS DISTINCT FROM 'PREUVE_DUPLIQUEE' THEN
     RAISE EXCEPTION 'HEX-P0-T13 : doublon binaire validé : %', v_result;
   END IF;
 
@@ -337,9 +337,9 @@ BEGIN
   );
   SELECT * INTO v_compteur
   FROM public.fn_compteur_heures_soignant(v_soignant);
-  IF v_compteur.heures_externes_validees <> 1600
-     OR v_compteur.heures_totales <> 1600
-     OR v_compteur.eligible_free_transition IS TRUE THEN
+  IF v_compteur.heures_externes_validees IS DISTINCT FROM 1600
+     OR v_compteur.heures_totales IS DISTINCT FROM 1600
+     OR v_compteur.eligible_free_transition IS DISTINCT FROM FALSE THEN
     RAISE EXCEPTION 'HEX-P0-T14 : compteur gonflé ou provenance ignorée : %',
       row_to_json(v_compteur);
   END IF;
@@ -353,7 +353,7 @@ BEGIN
   EXCEPTION WHEN insufficient_privilege THEN
     v_failed := true;
   END;
-  IF NOT v_failed THEN
+  IF v_failed IS DISTINCT FROM TRUE THEN
     RAISE EXCEPTION 'HEX-P0-T15 : UPDATE direct des heures/verdict accepté';
   END IF;
 

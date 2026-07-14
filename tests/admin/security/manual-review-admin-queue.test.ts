@@ -103,4 +103,15 @@ describe('file admin de revue manuelle durable', () => {
     expect(layout).toContain("route: '/admin/revues-manuelles'");
     expect(workflow).toContain('tests/admin/security/manual-review-admin-queue.test.sql');
   });
+
+  it('isole chaque recette SQL dans son propre savepoint', () => {
+    expect(workflow).toContain('savepoint="jolene_sql_test_${test_index}"');
+    expect(workflow).toContain("printf 'SAVEPOINT %s;\\n' \"$savepoint\"");
+    expect(workflow).toContain(
+      "printf 'ROLLBACK TO SAVEPOINT %s;\\n' \"$savepoint\"",
+    );
+    expect(workflow).toContain(
+      "printf 'RELEASE SAVEPOINT %s;\\n' \"$savepoint\"",
+    );
+  });
 });

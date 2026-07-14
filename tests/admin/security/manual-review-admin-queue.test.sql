@@ -85,7 +85,7 @@ BEGIN
 
   INSERT INTO public.file_revue_manuelle (
     id, type_entite, id_entite, service_en_echec, motif_echec,
-    donnees_originales, statut, priorite, expire_le
+    donnees_originales, statut, priorite, cree_le, expire_le
   ) VALUES
     (
       '72000000-0000-4000-8000-000000000011', 'ETABLISSEMENT', v_etab_rib,
@@ -98,7 +98,7 @@ BEGIN
         'rib_source_sha256_v1', repeat('a', 64),
         'iban_last4', '0189'
       ),
-      'EN_ATTENTE', 4, now() + interval '7 days'
+      'EN_ATTENTE', 5, '-infinity'::timestamptz, now() + interval '7 days'
     ),
     (
       '72000000-0000-4000-8000-000000000012', 'ETABLISSEMENT', v_etab_finess,
@@ -119,7 +119,7 @@ BEGIN
         ),
         'recoupement', jsonb_build_object('mode', 'REVUE_HUMAINE')
       ),
-      'EN_ATTENTE', 4, now() + interval '7 days'
+      'EN_ATTENTE', 5, '-infinity'::timestamptz, now() + interval '7 days'
     ),
     (
       '72000000-0000-4000-8000-000000000013', 'SOIGNANT', v_soignant,
@@ -140,7 +140,7 @@ BEGIN
         'activite_officielle_sante', true,
         'source_officielle', 'API Recherche Entreprises / INSEE'
       ),
-      'EN_ATTENTE', 4, now() + interval '7 days'
+      'EN_ATTENTE', 5, '-infinity'::timestamptz, now() + interval '7 days'
     ),
     (
       '72000000-0000-4000-8000-000000000014', 'SOIGNANT', v_soignant_rejet,
@@ -160,7 +160,7 @@ BEGIN
         'activite_officielle_sante', true,
         'source_officielle', 'API Recherche Entreprises / INSEE'
       ),
-      'EN_ATTENTE', 4, now() + interval '7 days'
+      'EN_ATTENTE', 5, '-infinity'::timestamptz, now() + interval '7 days'
     ),
     (
       '72000000-0000-4000-8000-000000000015', 'ETABLISSEMENT', v_etab_finess_rejet,
@@ -181,7 +181,7 @@ BEGIN
         ),
         'recoupement', jsonb_build_object('mode', 'REVUE_HUMAINE')
       ),
-      'EN_ATTENTE', 4, now() + interval '7 days'
+      'EN_ATTENTE', 5, '-infinity'::timestamptz, now() + interval '7 days'
     );
 END;
 $fixtures$;
@@ -195,21 +195,26 @@ DECLARE
   v_finess_rejet uuid := '72000000-0000-4000-8000-000000000015';
   v_doc_identite uuid := '72000000-0000-4000-8000-000000000021';
   v_liste jsonb;
+  v_fixture_count bigint;
   v_token text;
   v_resultat jsonb;
 BEGIN
-  IF has_table_privilege('authenticated', 'public.file_revue_manuelle', 'SELECT')
-     OR has_table_privilege('authenticated', 'private.revue_manuelle_decisions', 'SELECT')
-     OR NOT has_function_privilege(
+  IF has_table_privilege(
+       'authenticated', 'public.file_revue_manuelle', 'SELECT'
+     ) IS DISTINCT FROM FALSE
+     OR has_table_privilege(
+       'authenticated', 'private.revue_manuelle_decisions', 'SELECT'
+     ) IS DISTINCT FROM FALSE
+     OR has_function_privilege(
        'authenticated',
        'public.fn_admin_lister_revues_manuelles(integer)',
        'EXECUTE'
-     )
-     OR NOT has_function_privilege(
+     ) IS DISTINCT FROM TRUE
+     OR has_function_privilege(
        'authenticated',
        'public.fn_admin_decider_revue_manuelle(uuid,text,text,text,jsonb)',
        'EXECUTE'
-     ) THEN
+     ) IS DISTINCT FROM TRUE THEN
     RAISE EXCEPTION 'Exposition SQL de la file ou des RPC invalide';
   END IF;
 
@@ -219,7 +224,7 @@ BEGIN
     true
   );
   BEGIN
-    PERFORM public.fn_admin_lister_revues_manuelles(100);
+    PERFORM public.fn_admin_lister_revues_manuelles(500);
     RAISE EXCEPTION 'Une session AAL1 a lu la file de revue';
   EXCEPTION WHEN insufficient_privilege THEN NULL;
   END;
@@ -229,9 +234,21 @@ BEGIN
     '{"sub":"72000000-0000-4000-8000-000000000001","role":"authenticated","aal":"aal2"}',
     true
   );
-  v_liste := public.fn_admin_lister_revues_manuelles(100);
-  IF v_liste->>'success' <> 'true'
-     OR jsonb_array_length(v_liste->'revues') <> 5 THEN
+  -- Les fixtures ont la priorité maximale et `cree_le = -infinity` : elles
+  -- restent en tête de la page maximale, indépendamment de la file staging.
+  v_liste := public.fn_admin_lister_revues_manuelles(500);
+  SELECT count(*)
+  INTO v_fixture_count
+  FROM jsonb_array_elements(COALESCE(v_liste->'revues', '[]'::jsonb)) AS item
+  WHERE item->>'id' IN (
+    v_rib::text,
+    v_finess::text,
+    v_siret::text,
+    v_siret_rejet::text,
+    v_finess_rejet::text
+  );
+  IF v_liste->>'success' IS DISTINCT FROM 'true'
+     OR v_fixture_count IS DISTINCT FROM 5 THEN
     RAISE EXCEPTION 'Projection de file incomplete: %', v_liste;
   END IF;
   SELECT item->>'jeton_cas' INTO v_token
@@ -254,7 +271,7 @@ BEGIN
   EXCEPTION WHEN serialization_failure THEN NULL;
   END;
 
-  v_liste := public.fn_admin_lister_revues_manuelles(100);
+  v_liste := public.fn_admin_lister_revues_manuelles(500);
   SELECT item->>'jeton_cas' INTO v_token
   FROM jsonb_array_elements(v_liste->'revues') AS item
   WHERE item->>'id' = v_rib::text;
@@ -274,7 +291,7 @@ BEGIN
     '"invalide"'::jsonb
   )
   WHERE id = v_rib;
-  v_liste := public.fn_admin_lister_revues_manuelles(100);
+  v_liste := public.fn_admin_lister_revues_manuelles(500);
   SELECT item->>'jeton_cas' INTO v_token
   FROM jsonb_array_elements(v_liste->'revues') AS item
   WHERE item->>'id' = v_rib::text;
@@ -300,7 +317,7 @@ BEGIN
     '72000000-0000-4000-8000-000000000002/rib-etablissement-revue.pdf',
     '{"mimetype":"application/pdf"}'::jsonb
   );
-  v_liste := public.fn_admin_lister_revues_manuelles(100);
+  v_liste := public.fn_admin_lister_revues_manuelles(500);
   SELECT item->>'jeton_cas' INTO v_token
   FROM jsonb_array_elements(v_liste->'revues') AS item
   WHERE item->>'id' = v_rib::text;
@@ -308,7 +325,8 @@ BEGIN
     v_rib, 'APPROUVER', 'RIB lisible et titulaire confirme.', v_token,
     '{"iban":"FR7630006000011234567890189"}'::jsonb
   );
-  IF v_resultat->>'success' <> 'true' OR v_resultat->>'idempotent' <> 'false' THEN
+  IF v_resultat->>'success' IS DISTINCT FROM 'true'
+     OR v_resultat->>'idempotent' IS DISTINCT FROM 'false' THEN
     RAISE EXCEPTION 'Approbation RIB echouee: %', v_resultat;
   END IF;
   IF NOT EXISTS (
@@ -337,7 +355,8 @@ BEGIN
     v_rib, 'APPROUVER', 'Retry de la meme decision RIB.', v_token,
     '{"iban":"FR7630006000011234567890189"}'::jsonb
   );
-  IF v_resultat->>'success' <> 'true' OR v_resultat->>'idempotent' <> 'true' THEN
+  IF v_resultat->>'success' IS DISTINCT FROM 'true'
+     OR v_resultat->>'idempotent' IS DISTINCT FROM 'true' THEN
     RAISE EXCEPTION 'Retry idempotent RIB refuse: %', v_resultat;
   END IF;
   BEGIN
@@ -349,14 +368,14 @@ BEGIN
   END;
 
   -- Le recoupement FINESS applique le candidat officiel seulement apres revue.
-  v_liste := public.fn_admin_lister_revues_manuelles(100);
+  v_liste := public.fn_admin_lister_revues_manuelles(500);
   SELECT item->>'jeton_cas' INTO v_token
   FROM jsonb_array_elements(v_liste->'revues') AS item
   WHERE item->>'id' = v_finess::text;
   v_resultat := public.fn_admin_decider_revue_manuelle(
     v_finess, 'APPROUVER', 'FINESS actif et rattachement confirme.', v_token, '{}'::jsonb
   );
-  IF v_resultat->>'success' <> 'true' OR NOT EXISTS (
+  IF v_resultat->>'success' IS DISTINCT FROM 'true' OR NOT EXISTS (
     SELECT 1 FROM public.etablissements
     WHERE id = '72000000-0000-4000-8000-000000000003'
       AND finess = '720000003'
@@ -367,14 +386,14 @@ BEGIN
   END IF;
 
   -- Un rejet du FINESS canonique révoque la preuve et la publication.
-  v_liste := public.fn_admin_lister_revues_manuelles(100);
+  v_liste := public.fn_admin_lister_revues_manuelles(500);
   SELECT item->>'jeton_cas' INTO v_token
   FROM jsonb_array_elements(v_liste->'revues') AS item
   WHERE item->>'id' = v_finess_rejet::text;
   v_resultat := public.fn_admin_decider_revue_manuelle(
     v_finess_rejet, 'REJETER', 'FINESS canonique non confirme apres controle.', v_token, '{}'::jsonb
   );
-  IF v_resultat->>'success' <> 'true' OR NOT EXISTS (
+  IF v_resultat->>'success' IS DISTINCT FROM 'true' OR NOT EXISTS (
     SELECT 1 FROM public.etablissements
     WHERE id = '72000000-0000-4000-8000-000000000006'
       AND finess = '720000006'
@@ -389,7 +408,7 @@ BEGIN
   END IF;
 
   -- L'approbation SIRET exige une pièce précise, courante et concordante.
-  v_liste := public.fn_admin_lister_revues_manuelles(100);
+  v_liste := public.fn_admin_lister_revues_manuelles(500);
   SELECT item->>'jeton_cas' INTO v_token
   FROM jsonb_array_elements(v_liste->'revues') AS item
   WHERE item->>'id' = v_siret::text;
@@ -425,7 +444,7 @@ BEGIN
   )
   FROM public.soignants s
   WHERE f.id = v_siret AND s.id = f.id_entite;
-  v_liste := public.fn_admin_lister_revues_manuelles(100);
+  v_liste := public.fn_admin_lister_revues_manuelles(500);
   SELECT item->>'jeton_cas' INTO v_token
   FROM jsonb_array_elements(v_liste->'revues') AS item
   WHERE item->>'id' = v_siret::text;
@@ -450,7 +469,7 @@ BEGIN
   )
   FROM public.soignants s
   WHERE f.id = v_siret AND s.id = f.id_entite;
-  v_liste := public.fn_admin_lister_revues_manuelles(100);
+  v_liste := public.fn_admin_lister_revues_manuelles(500);
   SELECT item->>'jeton_cas' INTO v_token
   FROM jsonb_array_elements(v_liste->'revues') AS item
   WHERE item->>'id' = v_siret::text;
@@ -473,7 +492,7 @@ BEGIN
   )
   FROM public.soignants s
   WHERE f.id = v_siret AND s.id = f.id_entite;
-  v_liste := public.fn_admin_lister_revues_manuelles(100);
+  v_liste := public.fn_admin_lister_revues_manuelles(500);
   SELECT item->>'jeton_cas' INTO v_token
   FROM jsonb_array_elements(v_liste->'revues') AS item
   WHERE item->>'id' = v_siret::text;
@@ -495,7 +514,7 @@ BEGIN
   )
   FROM public.soignants s
   WHERE f.id = v_siret AND s.id = f.id_entite;
-  v_liste := public.fn_admin_lister_revues_manuelles(100);
+  v_liste := public.fn_admin_lister_revues_manuelles(500);
   SELECT item->>'jeton_cas' INTO v_token
   FROM jsonb_array_elements(v_liste->'revues') AS item
   WHERE item->>'id' = v_siret::text;
@@ -516,7 +535,7 @@ BEGIN
   v_resultat := public.fn_admin_decider_revue_manuelle(
     v_siret, 'APPROUVER', 'Identite courante et titulaire SIRET demontres.', v_token, '{}'::jsonb
   );
-  IF v_resultat->>'success' <> 'true' OR NOT EXISTS (
+  IF v_resultat->>'success' IS DISTINCT FROM 'true' OR NOT EXISTS (
     SELECT 1 FROM public.soignants
     WHERE id = '72000000-0000-4000-8000-000000000004'
       AND siret_liberal = '72000000000004'
@@ -536,7 +555,7 @@ BEGIN
 
   IF private.fn_preuve_identite_siret_manuelle_courante(
        '72000000-0000-4000-8000-000000000004'
-     ) IS NOT TRUE THEN
+     ) IS DISTINCT FROM TRUE THEN
     RAISE EXCEPTION 'La provenance SIRET approuvee n est pas relue comme courante';
   END IF;
 
@@ -566,8 +585,8 @@ BEGIN
     true
   );
   v_resultat := public.fn_activer_liberal();
-  IF v_resultat->>'success' <> 'false'
-     OR v_resultat->>'error_code' <> 'SIRET_LIBERAL_NON_VERIFIE' THEN
+  IF v_resultat->>'success' IS DISTINCT FROM 'false'
+     OR v_resultat->>'error_code' IS DISTINCT FROM 'SIRET_LIBERAL_NON_VERIFIE' THEN
     RAISE EXCEPTION 'Une activation avec preuve revoquee n a pas echoue: %', v_resultat;
   END IF;
 
@@ -578,14 +597,14 @@ BEGIN
   );
 
   -- Un rejet SIRET séparé ne remplace jamais le canonique par le candidat.
-  v_liste := public.fn_admin_lister_revues_manuelles(100);
+  v_liste := public.fn_admin_lister_revues_manuelles(500);
   SELECT item->>'jeton_cas' INTO v_token
   FROM jsonb_array_elements(v_liste->'revues') AS item
   WHERE item->>'id' = v_siret_rejet::text;
   v_resultat := public.fn_admin_decider_revue_manuelle(
     v_siret_rejet, 'REJETER', 'Identite du titulaire non demontree.', v_token, '{}'::jsonb
   );
-  IF v_resultat->>'success' <> 'true' OR EXISTS (
+  IF v_resultat->>'success' IS DISTINCT FROM 'true' OR EXISTS (
     SELECT 1 FROM public.soignants
     WHERE id = '72000000-0000-4000-8000-000000000005'
       AND siret_liberal IS NOT NULL

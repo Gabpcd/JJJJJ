@@ -303,10 +303,16 @@ jobs:
               printf '\n-- migration: %s\n' "$file"
               sed -E '/^[[:space:]]*(BEGIN|COMMIT|ROLLBACK);[[:space:]]*$/d' "$file"
             done
+            test_index=0
             for file in "${SQL_TESTS[@]}"; do
               test -f "$file" || { echo "::error::Suite SQL absente: $file" >&2; exit 1; }
+              test_index=$((test_index + 1))
+              savepoint="jolene_sql_test_${test_index}"
               printf '\n-- regression: %s\n' "$file"
+              printf 'SAVEPOINT %s;\n' "$savepoint"
               sed -E '/^[[:space:]]*\\/d; /^[[:space:]]*(BEGIN|COMMIT|ROLLBACK);[[:space:]]*$/d' "$file"
+              printf 'ROLLBACK TO SAVEPOINT %s;\n' "$savepoint"
+              printf 'RELEASE SAVEPOINT %s;\n' "$savepoint"
             done
             echo 'ROLLBACK;'
           } > /tmp/jolene-pr-validation.sql

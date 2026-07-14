@@ -37,7 +37,12 @@ import { test, expect } from '@playwright/test';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { adminClient, userClient, userIdByEmail } from '../helpers/db';
 import { TEST_ACCOUNTS } from '../helpers/auth';
-import { seedDocsRequisVerifie } from '../helpers/seed';
+import {
+  cleanupMissionCascade,
+  createEphemeralVerifiedCaregiver,
+  seedContratMissionSigne,
+  type EphemeralVerifiedCaregiver,
+} from '../helpers/seed';
 
 const TEST_REQS = !!process.env.SUPABASE_SERVICE_ROLE_KEY;
 
@@ -56,13 +61,25 @@ test.describe('Anti-triche pointage Sprint 4.5', () => {
   // Clients authentifiés mémoïsés (1 signInWithPassword par worker).
   let _etab: SupabaseClient | null = null;
   let _soignant: SupabaseClient | null = null;
+  let caregiver: EphemeralVerifiedCaregiver | undefined;
+
+  test.beforeAll(async () => {
+    if (!TEST_REQS) return;
+    caregiver = await createEphemeralVerifiedCaregiver();
+  });
+
+  test.afterAll(async () => {
+    await caregiver?.cleanup();
+  });
+
   async function etabClient(): Promise<SupabaseClient> {
     if (!_etab) _etab = await userClient(TEST_ACCOUNTS.etab.email, TEST_ACCOUNTS.etab.password);
     return _etab;
   }
   async function soignantClient(): Promise<SupabaseClient> {
     if (!_soignant) {
-      _soignant = await userClient(TEST_ACCOUNTS.soignant.email, TEST_ACCOUNTS.soignant.password);
+      if (!caregiver) throw new Error('[antitriche] fixture soignant absente');
+      _soignant = await userClient(caregiver.email, caregiver.password);
     }
     return _soignant;
   }
@@ -76,8 +93,7 @@ test.describe('Anti-triche pointage Sprint 4.5', () => {
     fin?: Date;
   } = {}): Promise<{ mission_id: string; etab_id: string; soignant_id: string } | null> {
     const etabId = await userIdByEmail(TEST_ACCOUNTS.etab.email);
-    const soignantId = await userIdByEmail(TEST_ACCOUNTS.soignant.email);
-    if (!etabId || !soignantId) return null;
+    if (!etabId || !caregiver) return null;
 
     // debut +30 min : dans la fenêtre de scan QR (≥ debut - 1h) ET accepté par
     // le trigger dec_refuser_mission_passee (rejet si debut < now - 1h).
@@ -96,6 +112,7 @@ test.describe('Anti-triche pointage Sprint 4.5', () => {
         duree_heures: 8,
         taux_horaire_base: 25,
         statut: 'OUVERTE',
+        type_contrat_recherche: 'SALARIE',
         mode_attribution: 'CANDIDATURE',
       },
     });
@@ -106,27 +123,23 @@ test.describe('Anti-triche pointage Sprint 4.5', () => {
     return {
       mission_id: missionId as string,
       etab_id: etabId,
-      soignant_id: soignantId,
+      soignant_id: caregiver.id,
     };
   }
 
   // Helper : assigne le soignant test via le flow réel authentifié
   // (candidature seedée + fn_traiter_candidature ACCEPTEE par l'étab).
-  // La mission démarrant < 7 jours, fn_traiter_candidature exige
-  // tous_documents_valides = true → on force le flag (idempotent, compte test
-  // fixe ; pas de restore pour éviter les races fullyParallel).
+  // Les justificatifs appartiennent au soignant éphémère créé pour la suite.
   async function assignerAuSoignant(missionId: string, soignantId: string): Promise<boolean> {
     const admin = adminClient();
-    await admin
-      .from('soignants' as any)
-      .update({ tous_documents_valides: true })
-      .eq('id', soignantId);
-    // Gate documents per-mission : fournir de vrais docs vérifiés (le flag seul ne suffit plus).
-    await seedDocsRequisVerifie(soignantId);
-
     const { data: cand, error: candErr } = await admin
       .from('candidatures' as any)
-      .insert({ mission_id: missionId, soignant_id: soignantId, statut: 'EN_ATTENTE' })
+      .insert({
+        mission_id: missionId,
+        soignant_id: soignantId,
+        statut: 'EN_ATTENTE',
+        type_contrat_choisi: 'SALARIE',
+      })
       .select('id')
       .single();
     if (candErr || !cand) {
@@ -143,6 +156,11 @@ test.describe('Anti-triche pointage Sprint 4.5', () => {
       console.error('[seed antitriche] acceptation:', accErr?.message || (res as any)?.error);
       return false;
     }
+    if (!caregiver) throw new Error('[antitriche] fixture soignant absente');
+    await seedContratMissionSigne(missionId, caregiver, {
+      caregiver: await soignantClient(),
+      etablissement: etab,
+    });
     return true;
   }
 
@@ -153,8 +171,7 @@ test.describe('Anti-triche pointage Sprint 4.5', () => {
   // messages_chat → le DELETE missions échouait en silence → mission laissée
   // ASSIGNÉE → test suivant en échec par chevauchement (soignant de test partagé).
   async function cleanup(missionId?: string) {
-    if (!missionId) return;
-    await adminClient().rpc('fn_test_purge_mission' as any, { p_mission_id: missionId });
+    await cleanupMissionCascade(missionId);
   }
 
   // ─── 1. Génération + scan QR valide ────────────────────────────────────
@@ -253,6 +270,9 @@ test.describe('Anti-triche pointage Sprint 4.5', () => {
     const m = await seedMissionOuverte();
     expect(m).toBeTruthy();
     try {
+      const assigned = await assignerAuSoignant(m!.mission_id, m!.soignant_id);
+      expect(assigned, 'assignation + contrat signé').toBe(true);
+
       // Génération par l'étab de la mission (RPC exige est_admin() OU
       // mon_etablissement_id() = etablissement de la mission).
       const etab = await etabClient();
@@ -387,43 +407,57 @@ test.describe('Anti-triche pointage Sprint 4.5', () => {
     // Colonne réelle : etablissements.tolerance_pointage_m
     // (CHECK etablissements_tolerance_pointage_m_check : BETWEEN 30 AND 1000).
     // L'ancien nom tolerance_gps_metres n'a jamais existé en prod → PGRST204.
-    const etabId = await userIdByEmail(TEST_ACCOUNTS.etab.email);
-    expect(etabId).toBeTruthy();
-
-    // Sauvegarde la valeur courante pour la restaurer en fin de test.
-    const { data: avant } = await adminClient()
+    // Une ligne jetable isole ce CHECK du compte établissement fixe. Le finally
+    // la supprime normalement et global-setup purge ce préfixe après un arrêt
+    // brutal du worker.
+    const etabId = crypto.randomUUID();
+    const suffixe = Date.now().toString().slice(-11).padStart(11, '0');
+    const admin = adminClient();
+    const { error: fixtureError } = await admin
       .from('etablissements' as any)
-      .select('tolerance_pointage_m')
-      .eq('id', etabId)
-      .single();
-    const valeurInitiale = (avant as any)?.tolerance_pointage_m ?? 500;
+      .insert({
+        id: etabId,
+        nom: 'Fixture Playwright tolérance GPS',
+        siret: `990${suffixe}`,
+        type: 'CLINIQUE_PRIVEE',
+        adresse_rue: '1 rue du Test',
+        adresse_ville: 'Paris',
+        adresse_code_postal: '75001',
+        email_contact: `playwright-test-gps-${etabId}@jolene.app`,
+        tolerance_pointage_m: 500,
+        est_compte_test: true,
+      });
+    expect(fixtureError).toBeNull();
 
+    let cleanupFailure: string | null = null;
     try {
       // Tentative valeur hors range → rejet
-      const { error: errLow } = await adminClient()
+      const { error: errLow } = await admin
         .from('etablissements' as any)
         .update({ tolerance_pointage_m: 10 })
         .eq('id', etabId);
       expect(errLow?.message).toMatch(/check|constraint|tolerance/i);
 
-      const { error: errHigh } = await adminClient()
+      const { error: errHigh } = await admin
         .from('etablissements' as any)
         .update({ tolerance_pointage_m: 2000 })
         .eq('id', etabId);
       expect(errHigh?.message).toMatch(/check|constraint|tolerance/i);
 
       // Valeur dans range → OK
-      const { error: errOk } = await adminClient()
+      const { error: errOk } = await admin
         .from('etablissements' as any)
         .update({ tolerance_pointage_m: 150 })
         .eq('id', etabId);
       expect(errOk).toBeNull();
     } finally {
-      await adminClient()
+      const { error: cleanupError } = await admin
         .from('etablissements' as any)
-        .update({ tolerance_pointage_m: valeurInitiale })
+        .delete()
         .eq('id', etabId);
+      cleanupFailure = cleanupError?.message ?? null;
     }
+    expect(cleanupFailure, `[cleanup GPS] établissement ${etabId}`).toBeNull();
   });
 
   // ─── 12. Worker cohérence : cron pg_cron actif ─────────────────────────

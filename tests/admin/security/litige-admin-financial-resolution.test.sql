@@ -8,9 +8,9 @@ CREATE EXTENSION IF NOT EXISTS plpgsql_check WITH SCHEMA extensions;
 
 DO $test$
 DECLARE
-  v_etab uuid;
-  v_soignant uuid;
-  v_profession public.type_profession;
+  v_etab constant uuid := 'abac1000-0000-4000-8000-000000000010';
+  v_soignant constant uuid := 'abac1000-0000-4000-8000-000000000011';
+  v_profession constant public.type_profession := 'MEDECIN';
   v_admin constant uuid := 'abac1000-0000-4000-8000-000000000001';
   v_mission_tva constant uuid := 'abac1000-0000-4000-8000-000000000101';
   v_mission_connect constant uuid := 'abac1000-0000-4000-8000-000000000102';
@@ -27,25 +27,47 @@ DECLARE
   v_result jsonb;
   v_avoir uuid;
 BEGIN
-  SELECT e.id INTO v_etab
-    FROM public.etablissements e
-   WHERE e.type = 'CLINIQUE_PRIVEE'
-     AND e.est_secteur_public IS NOT TRUE
-     AND e.supprime_le IS NULL
-   ORDER BY e.id
-   LIMIT 1;
-  SELECT s.id, s.profession
-    INTO v_soignant, v_profession
-    FROM public.soignants s
-    JOIN auth.users u ON u.id = s.id
-   WHERE s.profession = 'MEDECIN'
-     AND s.supprime_le IS NULL
-     AND u.deleted_at IS NULL
-   ORDER BY s.id
-   LIMIT 1;
-  IF v_etab IS NULL OR v_soignant IS NULL OR v_profession IS NULL THEN
-    RAISE EXCEPTION 'Fixture de mission libérale indisponible';
-  END IF;
+  -- Sous-transaction sentinelle : les fixtures, audits immuables, avoirs et
+  -- files générées par les RPC disparaissent avant la suite SQL suivante.
+  -- Seul le SQLSTATE privé de fin est absorbé ; une assertion réelle échoue.
+  BEGIN
+  PERFORM set_config('request.jwt.claim.sub', '', true);
+  PERFORM set_config('request.jwt.claim.role', 'service_role', true);
+  PERFORM set_config('request.jwt.claims', '{"role":"service_role"}', true);
+  PERFORM set_config('jolene.admin_seed_override_reason', '', true);
+
+  INSERT INTO public.etablissements (
+    id, nom, siret, type, adresse_rue, adresse_ville,
+    adresse_code_postal, email_contact, est_secteur_public, est_compte_test
+  ) VALUES (
+    v_etab, 'Fixture résolution financière litige', '99140000000301',
+    'CLINIQUE_PRIVEE', '10 rue du Test', 'Paris', '75010',
+    'litige-finance-etab@test.local', false, true
+  );
+
+  INSERT INTO auth.users (
+    id, instance_id, email, role, aud, raw_app_meta_data, email_confirmed_at
+  ) VALUES (
+    v_soignant,
+    '00000000-0000-0000-0000-000000000000',
+    'litige-finance-soignant@test.local',
+    'authenticated',
+    'authenticated',
+    '{"role":"SOIGNANT"}',
+    now()
+  );
+
+  INSERT INTO public.soignants (
+    id, prenom, nom, email, profession, type_contrat, type_exercice,
+    statut_liberal, siret_liberal, siret_liberal_verifie,
+    siret_liberal_verifie_le, siret_liberal_coherence_identite,
+    heures_cumulees, rpps_verifie, tous_documents_valides,
+    mandat_facturation_signe, statut_compte, est_compte_test
+  ) VALUES (
+    v_soignant, 'Fixture', 'Finance', 'litige-finance-soignant@test.local',
+    v_profession, 'LIBERAL', 'LIBERAL', 'ACTIF', '99140000000302', true,
+    now(), true, 4000, true, true, true, 'ACTIF', true
+  );
 
   INSERT INTO auth.users (
     id, instance_id, email, role, aud, raw_app_meta_data, email_confirmed_at
@@ -77,11 +99,6 @@ BEGIN
   PERFORM set_config(
     'request.jwt.claims', '{"role":"service_role"}', true
   );
-
-  UPDATE public.soignants
-     SET type_exercice = 'LIBERAL',
-         statut_liberal = 'ACTIF'
-   WHERE id = v_soignant;
 
   INSERT INTO public.missions (
     id, etablissement_id, intitule, profession_requise,
@@ -147,8 +164,8 @@ BEGIN
     'Application exacte du montant TTC convenu.',
     'NEUTRE', NULL, NULL, 'AUTO'
   );
-  IF v_result->>'success' <> 'true'
-     OR v_result->>'action_financiere' <> 'RECALCUL'
+  IF v_result->>'success' IS DISTINCT FROM 'true'
+     OR v_result->>'action_financiere' IS DISTINCT FROM 'RECALCUL'
      OR NOT EXISTS (
        SELECT 1 FROM public.factures_honoraires f
        WHERE f.id = v_facture_tva
@@ -172,7 +189,7 @@ BEGIN
     'SOIGNANT', NULL, NULL, 'AUTO'
   );
   IF v_result->>'error'
-       <> 'Les modifications de cet accord ont déjà été exécutées.'
+       IS DISTINCT FROM 'Les modifications de cet accord ont déjà été exécutées.'
      OR EXISTS (
        SELECT 1 FROM public.factures_honoraires f
        WHERE f.facture_precedente_id = v_facture_execute
@@ -188,8 +205,8 @@ BEGIN
     'ETABLISSEMENT', NULL, NULL, 'AUTO'
   );
   v_avoir := NULLIF(v_result->>'avoir_id', '')::uuid;
-  IF v_result->>'success' <> 'true'
-     OR v_result->>'mode_remboursement' <> 'VIREMENT_MANUEL'
+  IF v_result->>'success' IS DISTINCT FROM 'true'
+     OR v_result->>'mode_remboursement' IS DISTINCT FROM 'VIREMENT_MANUEL'
      OR v_avoir IS NULL
      OR NOT EXISTS (
        SELECT 1 FROM public.factures_honoraires f
@@ -213,7 +230,8 @@ BEGIN
     'Tentative de remplacement pendant une session active.',
     'NEUTRE', NULL, NULL, 'AUTO'
   );
-  IF v_result->>'error' NOT LIKE 'Une tentative ou un paiement Stripe Connect%'
+  IF (v_result->>'error' LIKE 'Une tentative ou un paiement Stripe Connect%')
+       IS NOT TRUE
      OR NOT EXISTS (
        SELECT 1 FROM public.factures_honoraires f
        WHERE f.id = v_facture_pending AND f.statut = 'EMISE'
@@ -231,12 +249,66 @@ BEGIN
 
   IF NOT EXISTS (
     SELECT 1 FROM public.journaux_audit j
-    WHERE j.id_ressource IN (v_litige_tva, v_litige_connect)
+    WHERE j.id_ressource = v_litige_tva
+      AND j.action = 'LITIGE_RESOLUTION'
+      AND j.details->>'evenement' = 'LITIGE_RESOLUTION_FINANCIERE'
+  ) OR NOT EXISTS (
+    SELECT 1 FROM public.journaux_audit j
+    WHERE j.id_ressource = v_litige_connect
       AND j.action = 'LITIGE_RESOLUTION'
       AND j.details->>'evenement' = 'LITIGE_RESOLUTION_FINANCIERE'
   ) THEN
-    RAISE EXCEPTION 'Audit obligatoire de résolution absent';
+    RAISE EXCEPTION 'Audit obligatoire absent pour au moins une résolution';
   END IF;
+
+  RAISE EXCEPTION USING
+    ERRCODE = 'JLF01',
+    MESSAGE = 'LITIGE_FINANCE_FIXTURES_ROLLBACK';
+  EXCEPTION
+    WHEN SQLSTATE 'JLF01' THEN NULL;
+  END;
+
+  IF EXISTS (
+       SELECT 1 FROM public.etablissements WHERE id = v_etab
+     )
+     OR EXISTS (
+       SELECT 1 FROM public.soignants WHERE id = v_soignant
+     )
+     OR EXISTS (
+       SELECT 1 FROM auth.users WHERE id IN (v_admin, v_soignant)
+     )
+     OR EXISTS (
+       SELECT 1 FROM public.missions
+       WHERE id IN (
+         v_mission_tva, v_mission_connect,
+         v_mission_pending, v_mission_execute
+       )
+     )
+     OR EXISTS (
+       SELECT 1 FROM public.factures_honoraires
+       WHERE id IN (
+         v_facture_tva, v_facture_connect,
+         v_facture_pending, v_facture_execute
+       ) OR soignant_id = v_soignant
+     )
+     OR EXISTS (
+       SELECT 1 FROM public.litiges
+       WHERE id IN (
+         v_litige_tva, v_litige_connect,
+         v_litige_pending, v_litige_execute
+       )
+     )
+     OR EXISTS (
+       SELECT 1 FROM public.stripe_transfers
+       WHERE mission_id IN (v_mission_connect, v_mission_pending)
+     ) THEN
+    RAISE EXCEPTION 'Sous-transaction résolution financière non nettoyée';
+  END IF;
+
+  PERFORM set_config('jolene.admin_seed_override_reason', '', true);
+  PERFORM set_config('request.jwt.claim.sub', '', true);
+  PERFORM set_config('request.jwt.claim.role', '', true);
+  PERFORM set_config('request.jwt.claims', '{}', true);
 END;
 $test$;
 

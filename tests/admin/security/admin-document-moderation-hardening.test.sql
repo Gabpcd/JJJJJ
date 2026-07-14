@@ -169,7 +169,7 @@ BEGIN
   EXCEPTION WHEN insufficient_privilege THEN
     v_failed := true;
   END;
-  IF NOT v_failed THEN
+  IF v_failed IS DISTINCT FROM true THEN
     RAISE EXCEPTION 'MOD-DOC-T1 : AAL1 a validé un document';
   END IF;
 
@@ -188,7 +188,7 @@ BEGIN
   EXCEPTION WHEN invalid_parameter_value THEN
     v_failed := true;
   END;
-  IF NOT v_failed THEN
+  IF v_failed IS DISTINCT FROM true THEN
     RAISE EXCEPTION 'MOD-DOC-T2 : ancienne signature encore permissive';
   END IF;
 
@@ -196,8 +196,8 @@ BEGIN
   v_result := public.fn_admin_moderer_document(
     v_identite, 'VALIDER', NULL, v_context, NULL
   );
-  IF v_result->>'success' <> 'true'
-     OR v_result->>'source' <> 'ADMIN_SAISIE_MANUELLE'
+  IF v_result->>'success' IS DISTINCT FROM 'true'
+     OR v_result->>'source' IS DISTINCT FROM 'ADMIN_SAISIE_MANUELLE'
      OR NOT EXISTS (
        SELECT 1
        FROM public.documents_soignants d
@@ -252,7 +252,7 @@ BEGIN
   EXCEPTION WHEN check_violation THEN
     v_failed := true;
   END;
-  IF NOT v_failed OR EXISTS (
+  IF v_failed IS DISTINCT FROM true OR EXISTS (
     SELECT 1 FROM public.documents_soignants
     WHERE id = v_diplome AND statut_verification = 'VERIFIE'
   ) THEN
@@ -262,7 +262,7 @@ BEGIN
   v_result := public.fn_admin_moderer_document(
     v_diplome, 'VALIDER', NULL, v_context, NULL
   );
-  IF v_result->>'success' <> 'true' THEN
+  IF v_result->>'success' IS DISTINCT FROM 'true' THEN
     RAISE EXCEPTION 'MOD-DOC-T5 : diplôme IADE exact refusé : %', v_result;
   END IF;
 
@@ -298,7 +298,7 @@ BEGIN
   EXCEPTION WHEN check_violation THEN
     v_failed := true;
   END;
-  IF NOT v_failed THEN
+  IF v_failed IS DISTINCT FROM true THEN
     RAISE EXCEPTION 'MOD-DOC-T6 : IBAN au checksum invalide accepté';
   END IF;
   v_context := jsonb_set(
@@ -309,7 +309,7 @@ BEGIN
   v_result := public.fn_admin_moderer_document(
     v_rib, 'VALIDER', NULL, v_context, NULL
   );
-  IF v_result->>'success' <> 'true'
+  IF v_result->>'success' IS DISTINCT FROM 'true'
      OR NOT EXISTS (
        SELECT 1
        FROM public.documents_soignants d
@@ -358,7 +358,7 @@ BEGIN
   EXCEPTION WHEN check_violation THEN
     v_failed := true;
   END;
-  IF NOT v_failed THEN
+  IF v_failed IS DISTINCT FROM true THEN
     RAISE EXCEPTION 'MOD-DOC-T8 : override non motivé accepté';
   END IF;
   v_context := jsonb_set(v_context, '{override_confirme}', 'true');
@@ -369,7 +369,7 @@ BEGIN
     v_context,
     'Le document original signé a été comparé au registre ; le filigrane officiel explique la police signalée.'
   );
-  IF v_result->>'source' <> 'ADMIN_OVERRIDE_EXCEPTIONNEL'
+  IF v_result->>'source' IS DISTINCT FROM 'ADMIN_OVERRIDE_EXCEPTIONNEL'
      OR NOT EXISTS (
        SELECT 1 FROM public.journaux_audit j
        WHERE j.id_ressource = v_override
@@ -402,7 +402,7 @@ BEGIN
     v_context,
     NULL
   );
-  IF v_result->>'success' <> 'true'
+  IF v_result->>'success' IS DISTINCT FROM 'true'
      OR NOT EXISTS (
        SELECT 1 FROM public.documents_soignants
        WHERE id = v_rejet AND statut_verification = 'REJETE'
@@ -448,7 +448,7 @@ BEGIN
   EXCEPTION WHEN serialization_failure THEN
     v_failed := true;
   END;
-  IF NOT v_failed OR EXISTS (
+  IF v_failed IS DISTINCT FROM true OR EXISTS (
     SELECT 1 FROM public.documents_soignants
     WHERE id = v_stale AND statut_verification = 'REJETE'
   ) THEN
@@ -464,7 +464,7 @@ BEGIN
   EXCEPTION WHEN insufficient_privilege THEN
     v_failed := true;
   END;
-  IF NOT v_failed THEN
+  IF v_failed IS DISTINCT FROM true THEN
     RAISE EXCEPTION 'MOD-DOC-T12 : UPDATE direct admin accepté';
   END IF;
 END;

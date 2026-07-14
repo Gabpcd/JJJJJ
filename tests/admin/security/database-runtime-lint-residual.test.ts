@@ -99,25 +99,28 @@ describe('solde du lint PL/pgSQL pré-lancement', () => {
   });
 
   it('construit ses fixtures BOLA dans la transaction sans seed de démonstration', () => {
+    const bolaStart = runtimeRegression.indexOf('DO $bola_annulation$');
+    expect(bolaStart).toBeGreaterThan(0);
+    const bolaRegression = runtimeRegression.slice(bolaStart);
     expect(runtimeRegression).toContain('BEGIN;');
-    expect(runtimeRegression).toContain('INSERT INTO auth.users');
-    expect(runtimeRegression).toContain('INSERT INTO public.etablissements');
-    expect(runtimeRegression).toContain(
+    expect(bolaRegression).toContain('INSERT INTO auth.users');
+    expect(bolaRegression).toContain('INSERT INTO public.etablissements');
+    expect(bolaRegression).toContain(
       'INSERT INTO public.membres_etablissement',
     );
-    expect(runtimeRegression).toContain('INSERT INTO public.missions');
-    expect(runtimeRegression).toContain('jolene.admin_seed_override_reason');
+    expect(bolaRegression).toContain('INSERT INTO public.missions');
+    expect(bolaRegression).toContain('jolene.admin_seed_override_reason');
     expect(runtimeRegression).toContain('ROLLBACK;');
-    const deleteMission = runtimeRegression.indexOf(
+    const deleteMission = bolaRegression.indexOf(
       'DELETE FROM public.missions',
     );
-    const deleteMembership = runtimeRegression.indexOf(
+    const deleteMembership = bolaRegression.indexOf(
       'DELETE FROM public.membres_etablissement',
     );
-    const deleteEstablishments = runtimeRegression.indexOf(
+    const deleteEstablishments = bolaRegression.indexOf(
       'DELETE FROM public.etablissements',
     );
-    const deleteUsers = runtimeRegression.indexOf('DELETE FROM auth.users');
+    const deleteUsers = bolaRegression.indexOf('DELETE FROM auth.users');
     expect(deleteMission).toBeGreaterThan(0);
     expect(deleteMembership).toBeGreaterThan(deleteMission);
     expect(deleteEstablishments).toBeGreaterThan(deleteMembership);

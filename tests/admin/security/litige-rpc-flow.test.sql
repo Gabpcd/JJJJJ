@@ -45,8 +45,8 @@ $litige_lint$;
 
 DO $litige_flow$
 DECLARE
-  v_etab_id uuid;
-  v_soignant_id uuid;
+  v_etab_id uuid := 'abac0002-0000-4000-8000-000000000101'::uuid;
+  v_soignant_id uuid := 'abac0002-0000-4000-8000-000000000102'::uuid;
   v_mission_id uuid := gen_random_uuid();
   v_litige_id uuid;
   v_litige_mediation uuid := gen_random_uuid();
@@ -59,27 +59,38 @@ DECLARE
   v_result jsonb;
   v_message_count integer;
 BEGIN
-  SELECT e.id
-    INTO v_etab_id
-    FROM public.etablissements e
-   WHERE e.supprime_le IS NULL
-   ORDER BY e.id
-   LIMIT 1;
+  -- La suite est parfois concatenee a d'autres tests sous un unique ROLLBACK.
+  -- Cette sous-transaction sentinelle annule donc aussi les audits et les
+  -- notifications avant la suite suivante, sans dependre de donnees de demo.
+  BEGIN
+  PERFORM set_config('request.jwt.claim.sub', '', true);
+  PERFORM set_config('request.jwt.claim.role', 'service_role', true);
+  PERFORM set_config('request.jwt.claims', '{"role":"service_role"}', true);
+  PERFORM set_config('jolene.admin_seed_override_reason', '', true);
 
-  SELECT s.id
-    INTO v_soignant_id
-    FROM public.soignants s
-    JOIN auth.users u ON u.id = s.id
-   WHERE s.supprime_le IS NULL
-     AND u.deleted_at IS NULL
-     AND (u.banned_until IS NULL OR u.banned_until <= now())
-     AND u.email_confirmed_at IS NOT NULL
-   ORDER BY s.id
-   LIMIT 1;
+  INSERT INTO public.etablissements (
+    id, nom, siret, type, adresse_rue, adresse_ville,
+    adresse_code_postal, email_contact, est_compte_test
+  ) VALUES (
+    v_etab_id, 'Fixture parcours RPC litige', '99140000000201',
+    'CLINIQUE_PRIVEE', '3 rue du Test', 'Paris', '75003',
+    'litige-flow-etab@test.local', true
+  );
 
-  IF v_etab_id IS NULL OR v_soignant_id IS NULL THEN
-    RAISE EXCEPTION 'Fixtures litige impossibles';
-  END IF;
+  INSERT INTO auth.users (
+    id, instance_id, email, role, aud, raw_app_meta_data, email_confirmed_at
+  ) VALUES (
+    v_soignant_id, '00000000-0000-0000-0000-000000000000',
+    'litige-flow-soignant@test.local', 'authenticated', 'authenticated',
+    '{"role":"SOIGNANT"}', now()
+  );
+
+  INSERT INTO public.soignants (
+    id, prenom, nom, email, profession, est_compte_test
+  ) VALUES (
+    v_soignant_id, 'Fixture', 'Litige',
+    'litige-flow-soignant@test.local', 'IDE', true
+  );
 
   INSERT INTO auth.users (
     id, instance_id, email, role, aud, raw_app_meta_data, email_confirmed_at
@@ -145,11 +156,11 @@ BEGIN
   INSERT INTO public.missions (
     id, etablissement_id, intitule, profession_requise,
     debut_le, fin_le, duree_heures, taux_horaire_base, statut,
-    soignant_assigne_id
+    soignant_assigne_id, type_contrat_recherche, mode_attribution
   ) VALUES (
     v_mission_id, v_etab_id, 'Fixture parcours RPC litige', 'IDE',
     now() + interval '20 years', now() + interval '20 years 1 day',
-    24, 20, 'TERMINEE', v_soignant_id
+    24, 20, 'TERMINEE', v_soignant_id, 'SALARIE', 'CANDIDATURE'
   );
 
   INSERT INTO public.litiges (
@@ -339,7 +350,7 @@ BEGIN
     FROM public.messages_litige ml
    WHERE ml.litige_id = v_litige_id
      AND ml.auteur_id = v_rh;
-  IF v_message_count <> 1 THEN
+  IF v_message_count IS DISTINCT FROM 1 THEN
     RAISE EXCEPTION 'Message RH non persisté exactement une fois';
   END IF;
 
@@ -421,6 +432,34 @@ BEGIN
     RAISE EXCEPTION 'Arbitrage non financier légitime refusé : %', v_result;
   END IF;
 
+  RAISE EXCEPTION USING
+    ERRCODE = 'JLT01',
+    MESSAGE = 'LITIGE_FIXTURES_ROLLBACK';
+  EXCEPTION
+    WHEN SQLSTATE 'JLT01' THEN NULL;
+  END;
+
+  IF EXISTS (
+       SELECT 1 FROM public.etablissements WHERE id = v_etab_id
+     )
+     OR EXISTS (
+       SELECT 1 FROM public.soignants WHERE id = v_soignant_id
+     )
+     OR EXISTS (
+       SELECT 1 FROM public.missions WHERE id = v_mission_id
+     )
+     OR EXISTS (
+       SELECT 1 FROM public.litiges
+       WHERE mission_id = v_mission_id
+     )
+     OR EXISTS (
+       SELECT 1 FROM auth.users
+       WHERE id IN (v_soignant_id, v_lecture, v_pointage, v_rh, v_admin)
+     ) THEN
+    RAISE EXCEPTION 'Sous-transaction litige non nettoyee';
+  END IF;
+
+  PERFORM set_config('jolene.admin_seed_override_reason', '', true);
   PERFORM set_config('request.jwt.claim.sub', '', true);
   PERFORM set_config('request.jwt.claim.role', '', true);
   PERFORM set_config('request.jwt.claims', '{}', true);

@@ -18,6 +18,9 @@ const PREFIXES = ['[playwright-test]%', '[pw-test%'];
 
 /** Tables enfants de missions en FK NO ACTION — ordre de purge obligatoire. */
 const ENFANTS_MISSION = [
+  // Référence mission + contrat + document RIB sans ON DELETE CASCADE : doit
+  // impérativement précéder contrats_mission et documents_soignants.
+  'partages_rib',
   'conformite_travail',
   'cotisations_sociales',
   'bulletins_paie',
@@ -49,12 +52,11 @@ export default async function globalSetup() {
   const orFiltre = PREFIXES.map((p) => `intitule.like.${p}`).join(',');
   const { data: missions, error } = await admin
     .from('missions')
-    .select('id')
+    .select('id, intitule, soignant_assigne_id')
     .or(orFiltre)
     .limit(500);
   if (error) {
-    console.warn('[global-setup] lecture missions impossible :', error.message);
-    return;
+    throw new Error(`[global-setup] lecture missions impossible : ${error.message}`);
   }
   const ids = (missions ?? []).map((m: { id: string }) => m.id);
   if (ids.length > 0) {
@@ -62,23 +64,99 @@ export default async function globalSetup() {
     // mission_id direct). Il DOIT être purgé avant conversations, sinon le DELETE
     // conversations échoue (FK) et bloque en cascade la suppression des missions
     // → missions orphelines EN_COURS qui rebloquent les runs suivants (chevauchement).
-    const { data: convs } = await admin.from('conversations').select('id').in('mission_id', ids);
+    const { data: convs, error: conversationsError } = await admin
+      .from('conversations')
+      .select('id')
+      .in('mission_id', ids);
+    if (conversationsError) {
+      throw new Error(
+        `[global-setup] lecture conversations impossible : ${conversationsError.message}`,
+      );
+    }
     const convIds = (convs ?? []).map((c: { id: string }) => c.id);
     if (convIds.length > 0) {
       const { error: eMc } = await admin.from('messages_chat').delete().in('conversation_id', convIds);
-      if (eMc && !/relation .* does not exist/.test(eMc.message)) {
-        console.warn('[global-setup] purge messages_chat :', eMc.message);
+      if (eMc) {
+        throw new Error(`[global-setup] purge messages_chat impossible : ${eMc.message}`);
+      }
+    }
+    const { error: notificationsRessourceError } = await admin
+      .from('notifications')
+      .delete()
+      .in('id_ressource', ids);
+    if (notificationsRessourceError) {
+      throw new Error(
+        `[global-setup] purge notifications par ressource impossible : ${notificationsRessourceError.message}`,
+      );
+    }
+    const { error: notificationsLienError } = await admin
+      .from('notifications')
+      .delete()
+      .in('lien', ids.map((id) => `/etablissement/missions/${id}`));
+    if (notificationsLienError) {
+      throw new Error(
+        `[global-setup] purge notifications par lien impossible : ${notificationsLienError.message}`,
+      );
+    }
+    for (const mission of missions ?? []) {
+      if (mission.soignant_assigne_id && mission.intitule) {
+        const { error: evaluationError } = await admin
+          .from('notifications')
+          .delete()
+          .eq('destinataire_id', mission.soignant_assigne_id)
+          .eq('type_destinataire', 'SOIGNANT')
+          .eq('type', 'SYSTEM')
+          .eq('titre', "⭐ Évaluez l'établissement")
+          .eq('corps', `La mission "${mission.intitule}" est terminée. Laissez une évaluation.`)
+          .eq('lien', '/soignant/evaluations');
+        if (evaluationError) {
+          throw new Error(
+            `[global-setup] purge rappel évaluation ${mission.id} impossible : ${evaluationError.message}`,
+          );
+        }
+      }
+      const { error: emailQueueError } = await admin
+        .from('email_queue')
+        .delete()
+        .contains('data', { mission_id: mission.id });
+      if (emailQueueError) {
+        throw new Error(
+          `[global-setup] purge file email ${mission.id} impossible : ${emailQueueError.message}`,
+        );
       }
     }
     for (const table of ENFANTS_MISSION) {
       const { error: e } = await admin.from(table).delete().in('mission_id', ids);
-      if (e && !/relation .* does not exist/.test(e.message)) {
-        console.warn(`[global-setup] purge ${table} :`, e.message);
+      if (e) {
+        throw new Error(`[global-setup] purge ${table} impossible : ${e.message}`);
       }
     }
     const { error: eM } = await admin.from('missions').delete().in('id', ids);
-    if (eM) console.warn('[global-setup] purge missions :', eM.message);
-    else console.log(`[global-setup] ${ids.length} mission(s) de test orpheline(s) purgée(s).`);
+    if (eM) {
+      throw new Error(`[global-setup] purge missions impossible : ${eM.message}`);
+    }
+    const { count: missionsRestantes, error: verificationMissionsError } = await admin
+      .from('missions')
+      .select('id', { count: 'exact', head: true })
+      .in('id', ids);
+    if (verificationMissionsError || (missionsRestantes ?? 0) !== 0) {
+      throw new Error(
+        `[global-setup] vérification purge missions impossible : ${verificationMissionsError?.message || `${missionsRestantes} restante(s)`}`,
+      );
+    }
+    console.log(`[global-setup] ${ids.length} mission(s) de test orpheline(s) purgée(s).`);
+  }
+
+  // Fixtures établissement sans compte Auth utilisées uniquement pour vérifier
+  // la contrainte de tolérance GPS. Un worker tué avant son finally ne doit pas
+  // laisser ces lignes techniques dans la base partagée.
+  const { error: gpsFixturesError } = await admin
+    .from('etablissements')
+    .delete()
+    .eq('est_compte_test', true)
+    .like('email_contact', 'playwright-test-gps-%@jolene.app');
+  if (gpsFixturesError) {
+    throw new Error(`[global-setup] purge fixtures GPS impossible : ${gpsFixturesError.message}`);
   }
 
   // 2. Factures résiduelles du compte TECHNIQUE Playwright. Ce compte est
@@ -113,16 +191,26 @@ export default async function globalSetup() {
 
   // 3. État volatile du soignant test (quota super-likes du jour, swipes badges
   //    résiduels) — repart de zéro pour les tests de matching.
-  const { data: soignant } = await admin
+  const { data: soignant, error: soignantError } = await admin
     .from('soignants')
     .select('id')
     .eq('email', 'playwright-soignant@jolene.app')
     .maybeSingle();
+  if (soignantError) {
+    throw new Error(`[global-setup] lecture soignant Playwright impossible : ${soignantError.message}`);
+  }
   if (soignant?.id) {
-    await admin.from('super_swipes_quota').delete().eq('soignant_id', soignant.id);
-    await admin.from('swipes').delete().eq('soignant_id', soignant.id);
-    await admin.from('badges_soignant').delete().eq('soignant_id', soignant.id);
-    await admin.from('streaks_soignant' as never).delete().eq('soignant_id', soignant.id);
+    for (const table of ['super_swipes_quota', 'swipes', 'badges_soignant', 'streaks_soignant']) {
+      const { error: volatileError } = await admin
+        .from(table as never)
+        .delete()
+        .eq('soignant_id', soignant.id);
+      if (volatileError) {
+        throw new Error(
+          `[global-setup] purge ${table} Playwright impossible : ${volatileError.message}`,
+        );
+      }
+    }
   }
 
   console.log('[global-setup] état de test prêt.');

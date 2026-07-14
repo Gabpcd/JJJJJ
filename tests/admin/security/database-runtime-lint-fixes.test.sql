@@ -32,7 +32,7 @@ BEGIN
      ]::oid[])
      AND p.prosecdef
      AND p.proconfig @> ARRAY['search_path=public']::text[];
-  IF v_count <> 12 THEN
+  IF v_count IS DISTINCT FROM 12 THEN
     RAISE EXCEPTION 'Runtime lint: une signature ou un search_path a changé (%/12)', v_count;
   END IF;
 
@@ -43,7 +43,7 @@ BEGIN
    WHERE p.oid = 'public.fn_envoyer_message_contact(text,text,text)'::regprocedure
      AND p.prosecdef
      AND p.proconfig @> ARRAY['search_path=public, extensions']::text[];
-  IF v_count <> 1 THEN
+  IF v_count IS DISTINCT FROM 1 THEN
     RAISE EXCEPTION 'Runtime lint: SECURITY DEFINER/search_path du contact altéré';
   END IF;
 
@@ -54,7 +54,7 @@ BEGIN
    WHERE p.oid = 'public.fn_protect_etablissement_commercial()'::regprocedure
      AND p.prosecdef
      AND p.proconfig @> ARRAY['search_path=pg_catalog, public']::text[];
-  IF v_count <> 1 THEN
+  IF v_count IS DISTINCT FROM 1 THEN
     RAISE EXCEPTION 'Runtime lint: SECURITY DEFINER/search_path du protector altéré';
   END IF;
 
@@ -92,81 +92,92 @@ BEGIN
   SELECT pg_get_functiondef(
     'public.fn_protect_etablissement_commercial()'::regprocedure
   ) INTO v_definition;
-  IF v_definition !~ 'OLD[.]statut_verification = ''VERIFIE'''
-     OR v_definition !~ 'NEW[.]statut_verification = ''EN_COURS'''
-     OR v_definition !~ 'NEW[.]peut_publier_missions IS FALSE' THEN
+  IF (v_definition ~ 'OLD[.]statut_verification = ''VERIFIE''')
+       IS DISTINCT FROM true
+     OR (v_definition ~ 'NEW[.]statut_verification = ''EN_COURS''')
+       IS DISTINCT FROM true
+     OR (v_definition ~ 'NEW[.]peut_publier_missions IS FALSE')
+       IS DISTINCT FROM true THEN
     RAISE EXCEPTION 'Runtime lint: rétrogradation canonique établissement non admise';
   END IF;
 
   SELECT pg_get_functiondef(
     'public.fn_valider_presences_lot(uuid[])'::regprocedure
   ) INTO v_definition;
-  IF v_definition !~ 'fn_a_permission_etablissement[(]''pointage'', v_etab_id[)] IS NOT TRUE' THEN
+  IF (v_definition ~ 'fn_a_permission_etablissement[(]''pointage'', v_etab_id[)] IS NOT TRUE')
+       IS DISTINCT FROM true THEN
     RAISE EXCEPTION 'Runtime lint: permission pointage absente de la validation par lot';
   END IF;
 
   SELECT pg_get_functiondef(
     'public.fn_modifier_tolerance_pointage_etab(integer)'::regprocedure
   ) INTO v_definition;
-  IF v_definition !~ 'fn_a_permission_etablissement[(]''profil_etab'', v_etab_id[)] IS NOT TRUE' THEN
+  IF (v_definition ~ 'fn_a_permission_etablissement[(]''profil_etab'', v_etab_id[)] IS NOT TRUE')
+       IS DISTINCT FROM true THEN
     RAISE EXCEPTION 'Runtime lint: permission profil_etab absente de la tolérance GPS';
   END IF;
 
   SELECT pg_get_functiondef(
     'public.fn_cloturer_litige(uuid,text)'::regprocedure
   ) INTO v_definition;
-  IF v_definition !~ 'fn_compte_auth_actif[(][)] IS NOT TRUE'
-     OR regexp_count(v_definition, '''contrats''') < 3
-     OR v_definition ~ '''CLOTURE'''
-     OR v_definition !~ '''RESOLU_ADMIN'''
-     OR v_definition !~ '''RESOLU_ACCORD_PARTIES''' THEN
+  IF (v_definition ~ 'fn_compte_auth_actif[(][)] IS NOT TRUE')
+       IS DISTINCT FROM true
+     OR COALESCE(regexp_count(v_definition, '''contrats'''), 0) < 3
+     OR (v_definition ~ '''CLOTURE''') IS DISTINCT FROM false
+     OR (v_definition ~ '''RESOLU_ADMIN''') IS DISTINCT FROM true
+     OR (v_definition ~ '''RESOLU_ACCORD_PARTIES''') IS DISTINCT FROM true THEN
     RAISE EXCEPTION 'Runtime lint: garde/statuts de clôture litige non canoniques';
   END IF;
 
   SELECT pg_get_functiondef(
     'public.fn_cloturer_litige_avec_payload(uuid,jsonb)'::regprocedure
   ) INTO v_definition;
-  IF v_definition !~ 'fn_compte_auth_actif[(][)] IS NOT TRUE'
-     OR v_definition !~ '''contrats'''
-     OR v_definition !~ 'FOR UPDATE'
-     OR v_definition !~ 'p_payload IS DISTINCT FROM v_litige[.]payload_modifications'
-     OR v_definition ~ 'statut = ''RESOLU''' THEN
+  IF (v_definition ~ 'fn_compte_auth_actif[(][)] IS NOT TRUE')
+       IS DISTINCT FROM true
+     OR (v_definition ~ '''contrats''') IS DISTINCT FROM true
+     OR (v_definition ~ 'FOR UPDATE') IS DISTINCT FROM true
+     OR (v_definition ~ 'p_payload IS DISTINCT FROM v_litige[.]payload_modifications')
+       IS DISTINCT FROM true
+     OR (v_definition ~ 'statut = ''RESOLU''') IS DISTINCT FROM false THEN
     RAISE EXCEPTION 'Runtime lint: consentement payload non transactionnel';
   END IF;
 
-  IF v_definition !~ 'MODIFICATION_HORAIRES'
-     OR v_definition !~ 'ACCORD_SANS_MODIFICATION'
-     OR v_definition !~ 'Schéma de proposition invalide' THEN
+  IF (v_definition ~ 'MODIFICATION_HORAIRES') IS DISTINCT FROM true
+     OR (v_definition ~ 'ACCORD_SANS_MODIFICATION') IS DISTINCT FROM true
+     OR (v_definition ~ 'Schéma de proposition invalide') IS DISTINCT FROM true THEN
     RAISE EXCEPTION 'Runtime lint: schéma du payload non borné';
   END IF;
 
   SELECT pg_get_functiondef(
     'public.fn_confirmer_accord_partie(uuid)'::regprocedure
   ) INTO v_definition;
-  IF v_definition !~ 'fn_cloturer_litige[(]p_litige_id, NULL[)]'
-     OR v_definition ~ 'UPDATE[[:space:]]+(public[.])?litiges' THEN
+  IF (v_definition ~ 'fn_cloturer_litige[(]p_litige_id, NULL[)]')
+       IS DISTINCT FROM true
+     OR (v_definition ~ 'UPDATE[[:space:]]+(public[.])?litiges')
+       IS DISTINCT FROM false THEN
     RAISE EXCEPTION 'Runtime lint: confirmation legacy hors chemin canonique';
   END IF;
 
   SELECT pg_get_functiondef(
     'public.fn_proposer_accord_partie(uuid)'::regprocedure
   ) INTO v_definition;
-  IF v_definition !~ 'fn_compte_auth_actif[(][)] IS NOT TRUE'
-     OR v_definition !~ '''contrats'''
-     OR v_definition !~ 'FOR UPDATE' THEN
+  IF (v_definition ~ 'fn_compte_auth_actif[(][)] IS NOT TRUE')
+       IS DISTINCT FROM true
+     OR (v_definition ~ '''contrats''') IS DISTINCT FROM true
+     OR (v_definition ~ 'FOR UPDATE') IS DISTINCT FROM true THEN
     RAISE EXCEPTION 'Runtime lint: proposition de médiation non verrouillée';
   END IF;
 
   SELECT pg_get_functiondef(
     'public.fn_trg_litige_gel_degel_facture()'::regprocedure
   ) INTO v_definition;
-  IF v_definition ~ '''RESOLU'''
-     OR v_definition ~ '''CLOTURE'''
-     OR v_definition ~ '''CONTESTEE'''
-     OR v_definition !~ '''RESOLU_ACCORD_PARTIES'''
-     OR v_definition !~ '''RESOLU_FAVEUR_SOIGNANT'''
-     OR v_definition !~ '''RESOLU_FAVEUR_ETAB'''
-     OR v_definition !~ '''RESOLU_PARTAGE''' THEN
+  IF (v_definition ~ '''RESOLU''') IS DISTINCT FROM false
+     OR (v_definition ~ '''CLOTURE''') IS DISTINCT FROM false
+     OR (v_definition ~ '''CONTESTEE''') IS DISTINCT FROM false
+     OR (v_definition ~ '''RESOLU_ACCORD_PARTIES''') IS DISTINCT FROM true
+     OR (v_definition ~ '''RESOLU_FAVEUR_SOIGNANT''') IS DISTINCT FROM true
+     OR (v_definition ~ '''RESOLU_FAVEUR_ETAB''') IS DISTINCT FROM true
+     OR (v_definition ~ '''RESOLU_PARTAGE''') IS DISTINCT FROM true THEN
     RAISE EXCEPTION 'Runtime lint: statuts de dégel facture non canoniques';
   END IF;
 
@@ -174,30 +185,34 @@ BEGIN
     'authenticated',
     'public.fn_alerte_reclamations_pending_old()',
     'EXECUTE'
-  ) OR has_function_privilege(
+  ) IS DISTINCT FROM false
+  OR has_function_privilege(
     'authenticated',
     'public.fn_detecter_teleportations()',
     'EXECUTE'
-  ) OR has_function_privilege(
+  ) IS DISTINCT FROM false
+  OR has_function_privilege(
     'authenticated',
     'public.fn_escalade_remplacement_non_pourvu()',
     'EXECUTE'
-  ) THEN
+  ) IS DISTINCT FROM false THEN
     RAISE EXCEPTION 'Runtime lint: ACL service_role-only élargie';
   END IF;
 
   IF has_table_privilege('anon', 'public.litiges', 'UPDATE')
-     OR has_table_privilege('authenticated', 'public.litiges', 'UPDATE') THEN
+       IS DISTINCT FROM false
+     OR has_table_privilege('authenticated', 'public.litiges', 'UPDATE')
+       IS DISTINCT FROM false THEN
     RAISE EXCEPTION 'Runtime lint: UPDATE direct des litiges encore exposé';
   END IF;
 
   -- Le seul consommateur frontend appelle la cohérence sans argument : on
   -- conserve EXECUTE à authenticated, le garde anti-BOLA assurant le self-only.
-  IF NOT has_function_privilege(
+  IF has_function_privilege(
     'authenticated',
     'public.fn_verifier_coherence_documents(uuid)',
     'EXECUTE'
-  ) THEN
+  ) IS DISTINCT FROM true THEN
     RAISE EXCEPTION 'Runtime lint: flux documentaire frontend privé de son RPC';
   END IF;
 END;
@@ -221,12 +236,12 @@ BEGIN
   END;
 
   v_result := public.fn_valider_presences_lot(ARRAY[]::uuid[]);
-  IF v_result->>'error' <> 'Non autorisé' THEN
+  IF v_result->>'error' IS DISTINCT FROM 'Non autorisé' THEN
     RAISE EXCEPTION 'Runtime lint: garde présences inattendue: %', v_result;
   END IF;
 
   v_result := public.fn_modifier_tolerance_pointage_etab(100);
-  IF v_result->>'error_code' <> 'NON_AUTHENTIFIE' THEN
+  IF v_result->>'error_code' IS DISTINCT FROM 'NON_AUTHENTIFIE' THEN
     RAISE EXCEPTION 'Runtime lint: garde tolérance inattendue: %', v_result;
   END IF;
 
@@ -234,7 +249,7 @@ BEGIN
     'ffffffff-ffff-4fff-8fff-ffffffffffff'::uuid,
     NULL
   );
-  IF v_result->>'error' <> 'Accès refusé' THEN
+  IF v_result->>'error' IS DISTINCT FROM 'Accès refusé' THEN
     RAISE EXCEPTION 'Runtime lint: garde litige inattendue: %', v_result;
   END IF;
 
@@ -253,10 +268,23 @@ DECLARE
   v_uid uuid := '11111111-1111-4111-8111-111111111111'::uuid;
   v_banned_uid uuid := '11111111-1111-4111-8111-111111111112'::uuid;
   v_deleted_uid uuid := '11111111-1111-4111-8111-111111111113'::uuid;
+  v_tiers_uid uuid := '11111111-1111-4111-8111-111111111114'::uuid;
+  v_etab_tiers uuid := '11111111-1111-4111-8111-111111111115'::uuid;
+  v_mission_tiers uuid := '11111111-1111-4111-8111-111111111116'::uuid;
+  v_litige_tiers uuid := '11111111-1111-4111-8111-111111111117'::uuid;
   v_cible uuid := '22222222-2222-4222-8222-222222222222'::uuid;
-  v_litige_tiers uuid;
   v_result jsonb;
 BEGIN
+  PERFORM set_config('request.jwt.claim.sub', '', true);
+  PERFORM set_config('request.jwt.claim.role', 'service_role', true);
+  PERFORM set_config('request.jwt.claims', '{"role":"service_role"}', true);
+  PERFORM set_config('app.internal_operation', '', true);
+  PERFORM set_config(
+    'jolene.admin_seed_override_reason',
+    'Fixtures transactionnelles runtime anti-BOLA litige tiers',
+    true
+  );
+
   INSERT INTO auth.users (
     id, instance_id, email, role, aud, raw_app_meta_data,
     email_confirmed_at, banned_until, deleted_at
@@ -269,7 +297,47 @@ BEGIN
      '{"role":"SOIGNANT"}', now(), now() + interval '1 day', NULL),
     (v_deleted_uid, '00000000-0000-0000-0000-000000000000',
      'runtime-deleted@test.local', 'authenticated', 'authenticated',
-     '{"role":"SOIGNANT"}', now(), NULL, now());
+     '{"role":"SOIGNANT"}', now(), NULL, now()),
+    (v_tiers_uid, '00000000-0000-0000-0000-000000000000',
+     'runtime-tiers@test.local', 'authenticated', 'authenticated',
+     '{"role":"SOIGNANT"}', now(), NULL, NULL);
+
+  INSERT INTO public.etablissements (
+    id, nom, siret, type, adresse_rue, adresse_ville,
+    adresse_code_postal, email_contact, est_compte_test
+  ) VALUES (
+    v_etab_tiers, 'Fixture runtime anti-BOLA', '99140000000501',
+    'CLINIQUE_PRIVEE', '6 rue du Test', 'Paris', '75006',
+    'runtime-etablissement-tiers@test.local', true
+  );
+
+  INSERT INTO public.soignants (
+    id, prenom, nom, email, profession, est_compte_test
+  ) VALUES (
+    v_tiers_uid, 'Runtime', 'Tiers',
+    'runtime-tiers@test.local', 'IDE', true
+  );
+
+  INSERT INTO public.missions (
+    id, etablissement_id, intitule, profession_requise,
+    debut_le, fin_le, duree_heures, taux_horaire_base,
+    statut, type_contrat_recherche, mode_attribution
+  ) VALUES (
+    v_mission_tiers, v_etab_tiers, 'Fixture runtime litige tiers', 'IDE',
+    now() + interval '20 years', now() + interval '20 years 8 hours',
+    8, 20, 'OUVERTE', 'SALARIE', 'CANDIDATURE'
+  );
+
+  INSERT INTO public.litiges (
+    id, mission_id, soignant_id, etablissement_id,
+    initie_par, motif, type_litige, statut
+  ) VALUES (
+    v_litige_tiers, v_mission_tiers, v_tiers_uid, v_etab_tiers,
+    'SYSTEME', 'Fixture autonome de non-divulgation anti-BOLA',
+    'COMPORTEMENT_SOIGNANT', 'OUVERT'
+  );
+
+  PERFORM set_config('jolene.admin_seed_override_reason', '', true);
 
   PERFORM set_config('request.jwt.claim.sub', v_uid::text, true);
   PERFORM set_config('request.jwt.claim.role', 'authenticated', true);
@@ -285,7 +353,7 @@ BEGIN
 
   -- Le flux frontend sans argument reste autorisé pour son propre dossier.
   v_result := public.fn_verifier_coherence_documents(NULL);
-  IF v_result->>'error' <> 'Soignant introuvable' THEN
+  IF v_result->>'error' IS DISTINCT FROM 'Soignant introuvable' THEN
     RAISE EXCEPTION 'Runtime lint: appel documentaire self inattendu: %', v_result;
   END IF;
 
@@ -296,19 +364,11 @@ BEGIN
     WHEN insufficient_privilege THEN NULL;
   END;
 
-  -- Si la base contient un litige, un utilisateur synthétique non lié ne doit
-  -- jamais distinguer un UUID tiers absent d'un litige existant/clôturé.
-  SELECT l.id
-    INTO v_litige_tiers
-    FROM public.litiges l
-   WHERE l.soignant_id IS DISTINCT FROM v_uid
-   LIMIT 1;
-
-  IF v_litige_tiers IS NOT NULL THEN
-    v_result := public.fn_cloturer_litige(v_litige_tiers, NULL);
-    IF v_result->>'error' <> 'Litige introuvable ou accès refusé' THEN
-      RAISE EXCEPTION 'Runtime lint: fuite de statut du litige tiers: %', v_result;
-    END IF;
+  -- Un utilisateur non lié ne doit jamais distinguer un UUID tiers absent du
+  -- litige autonome existant, quel que soit son statut interne.
+  v_result := public.fn_cloturer_litige(v_litige_tiers, NULL);
+  IF v_result->>'error' IS DISTINCT FROM 'Litige introuvable ou accès refusé' THEN
+    RAISE EXCEPTION 'Runtime lint: fuite de statut du litige tiers: %', v_result;
   END IF;
 
   PERFORM set_config('request.jwt.claim.sub', v_banned_uid::text, true);
@@ -326,14 +386,14 @@ BEGIN
     WHEN insufficient_privilege THEN NULL;
   END;
   v_result := public.fn_cloturer_litige(v_cible, NULL);
-  IF v_result->>'error' <> 'Accès refusé' THEN
+  IF v_result->>'error' IS DISTINCT FROM 'Accès refusé' THEN
     RAISE EXCEPTION 'Runtime lint: compte banni accepté sur litige: %', v_result;
   END IF;
   v_result := public.fn_cloturer_litige_avec_payload(
     v_cible,
     '{"type":"ACCORD_SANS_MODIFICATION","modifications":{},"justification":"Test compte banni"}'::jsonb
   );
-  IF v_result->>'error' <> 'Non authentifié' THEN
+  IF v_result->>'error' IS DISTINCT FROM 'Non authentifié' THEN
     RAISE EXCEPTION 'Runtime lint: compte banni accepté sur payload litige: %', v_result;
   END IF;
 
@@ -352,7 +412,7 @@ BEGIN
     WHEN insufficient_privilege THEN NULL;
   END;
   v_result := public.fn_cloturer_litige(v_cible, NULL);
-  IF v_result->>'error' <> 'Accès refusé' THEN
+  IF v_result->>'error' IS DISTINCT FROM 'Accès refusé' THEN
     RAISE EXCEPTION 'Runtime lint: compte supprimé accepté sur litige: %', v_result;
   END IF;
 END;

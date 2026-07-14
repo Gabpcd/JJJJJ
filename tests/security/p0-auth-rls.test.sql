@@ -7,35 +7,58 @@ DECLARE
   v_policy text;
   v_definition text;
 BEGIN
-  IF has_function_privilege('authenticated', 'public.fn_purger_demo()', 'EXECUTE') THEN
+  IF has_function_privilege(
+       'authenticated', 'public.fn_purger_demo()', 'EXECUTE'
+     ) IS DISTINCT FROM false THEN
     RAISE EXCEPTION 'P0: authenticated peut encore executer fn_purger_demo';
   END IF;
-  IF has_function_privilege('authenticated', 'public.fn_admin_invocations_purge()', 'EXECUTE') THEN
+  IF has_function_privilege(
+       'authenticated', 'public.fn_admin_invocations_purge()', 'EXECUTE'
+     ) IS DISTINCT FROM false THEN
     RAISE EXCEPTION 'P0: authenticated peut encore purger admin_invocations';
   END IF;
-  IF has_function_privilege('authenticated', 'public.fn_purger_gps_ancien()', 'EXECUTE') THEN
+  IF has_function_privilege(
+       'authenticated', 'public.fn_purger_gps_ancien()', 'EXECUTE'
+     ) IS DISTINCT FROM false THEN
     RAISE EXCEPTION 'P0: authenticated peut encore purger les traces GPS';
   END IF;
-  IF NOT has_function_privilege('service_role', 'public.fn_purger_gps_ancien()', 'EXECUTE') THEN
+  IF has_function_privilege(
+       'service_role', 'public.fn_purger_gps_ancien()', 'EXECUTE'
+     ) IS DISTINCT FROM true THEN
     RAISE EXCEPTION 'P0: le cron service_role ne peut plus purger les traces GPS';
   END IF;
-  IF has_table_privilege('authenticated', 'public.api_keys', 'SELECT') THEN
+  IF has_table_privilege(
+       'authenticated', 'public.api_keys', 'SELECT'
+     ) IS DISTINCT FROM false THEN
     RAISE EXCEPTION 'P0: api_keys reste lisible directement';
   END IF;
-  IF has_function_privilege('authenticated', 'public.fn_verifier_api_key(text,text)', 'EXECUTE') THEN
+  IF has_function_privilege(
+       'authenticated', 'public.fn_verifier_api_key(text,text)', 'EXECUTE'
+     ) IS DISTINCT FROM false THEN
     RAISE EXCEPTION 'P0: verifier_api_key doit rester service_role-only';
   END IF;
-  IF NOT has_function_privilege('authenticated', 'public.fn_lister_api_keys(uuid)', 'EXECUTE') THEN
+  IF has_function_privilege(
+       'authenticated', 'public.fn_lister_api_keys(uuid)', 'EXECUTE'
+     ) IS DISTINCT FROM true THEN
     RAISE EXCEPTION 'P0: listing API sur projection sure inaccessible';
   END IF;
-  IF has_function_privilege('authenticated', 'public.fn_supprimer_mes_tokens_push()', 'EXECUTE') THEN
+  IF has_function_privilege(
+       'authenticated', 'public.fn_supprimer_mes_tokens_push()', 'EXECUTE'
+     ) IS DISTINCT FROM false THEN
     RAISE EXCEPTION 'P0: ancien logout peut encore supprimer tous les tokens push';
   END IF;
-  IF NOT has_function_privilege('authenticated', 'public.fn_desactiver_mon_token_push(text)', 'EXECUTE') THEN
+  IF has_function_privilege(
+       'authenticated', 'public.fn_desactiver_mon_token_push(text)', 'EXECUTE'
+     ) IS DISTINCT FROM true THEN
     RAISE EXCEPTION 'P0: logout appareil courant inaccessible';
   END IF;
   IF has_table_privilege('authenticated', 'public.types_comptes_auth', 'SELECT')
-     OR has_function_privilege('authenticated', 'public.fn_reserver_type_compte(uuid,text,uuid)', 'EXECUTE') THEN
+       IS DISTINCT FROM false
+     OR has_function_privilege(
+       'authenticated',
+       'public.fn_reserver_type_compte(uuid,text,uuid)',
+       'EXECUTE'
+     ) IS DISTINCT FROM false THEN
     RAISE EXCEPTION 'P0: reservation de famille de compte exposee au client';
   END IF;
   IF NOT EXISTS (
@@ -47,21 +70,33 @@ BEGIN
     RAISE EXCEPTION 'P0: une invitation peut encore croiser les familles de compte';
   END IF;
   IF has_column_privilege('authenticated', 'public.soignants', 'score_fiabilite', 'UPDATE')
+       IS DISTINCT FROM false
      OR has_column_privilege('authenticated', 'public.soignants', 'rpps_verifie', 'UPDATE')
+       IS DISTINCT FROM false
      OR has_column_privilege('authenticated', 'public.soignants', 'stripe_account_id', 'UPDATE')
-     OR has_column_privilege('authenticated', 'public.soignants', 'est_compte_test', 'UPDATE') THEN
+       IS DISTINCT FROM false
+     OR has_column_privilege('authenticated', 'public.soignants', 'est_compte_test', 'UPDATE')
+       IS DISTINCT FROM false THEN
     RAISE EXCEPTION 'P0: une colonne soignant serveur reste modifiable directement';
   END IF;
-  IF NOT has_column_privilege('authenticated', 'public.soignants', 'sms_actif', 'UPDATE') THEN
+  IF has_column_privilege(
+       'authenticated', 'public.soignants', 'sms_actif', 'UPDATE'
+     ) IS DISTINCT FROM true THEN
     RAISE EXCEPTION 'P0: les preferences soignant legitimes ne sont plus modifiables';
   END IF;
   IF has_column_privilege('authenticated', 'public.etablissements', 'peut_publier_missions', 'UPDATE')
+       IS DISTINCT FROM false
      OR has_column_privilege('authenticated', 'public.etablissements', 'siret_verifie', 'UPDATE')
+       IS DISTINCT FROM false
      OR has_column_privilege('authenticated', 'public.etablissements', 'stripe_customer_id', 'UPDATE')
-     OR has_column_privilege('authenticated', 'public.etablissements', 'est_compte_test', 'UPDATE') THEN
+       IS DISTINCT FROM false
+     OR has_column_privilege('authenticated', 'public.etablissements', 'est_compte_test', 'UPDATE')
+       IS DISTINCT FROM false THEN
     RAISE EXCEPTION 'P0: une colonne etablissement serveur reste modifiable directement';
   END IF;
-  IF NOT has_column_privilege('authenticated', 'public.etablissements', 'sms_actif', 'UPDATE') THEN
+  IF has_column_privilege(
+       'authenticated', 'public.etablissements', 'sms_actif', 'UPDATE'
+     ) IS DISTINCT FROM true THEN
     RAISE EXCEPTION 'P0: les preferences etablissement legitimes ne sont plus modifiables';
   END IF;
 
@@ -77,25 +112,27 @@ BEGIN
     RAISE EXCEPTION 'P0: une vue SECURITY DEFINER de partage reste exposee';
   END IF;
 
-  IF NOT has_function_privilege(
+  IF has_function_privilege(
     'authenticated',
     'public.fn_interlocuteurs_conversations(uuid[])',
     'EXECUTE'
-  ) OR has_function_privilege(
+  ) IS DISTINCT FROM true
+  OR has_function_privilege(
     'anon',
     'public.fn_interlocuteurs_conversations(uuid[])',
     'EXECUTE'
-  ) THEN
+  ) IS DISTINCT FROM false THEN
     RAISE EXCEPTION 'P0: ACL invalide sur la projection des interlocuteurs de messagerie';
   END IF;
   SELECT pg_get_functiondef(
     'public.fn_interlocuteurs_conversations(uuid[])'::regprocedure
   ) INTO v_definition;
-  IF v_definition !~ 'participant_1_id = v_uid'
-     OR v_definition !~ 'participant_2_id = v_uid'
-     OR v_definition !~ 'fn_compte_auth_actif'
-     OR v_definition !~ 'cardinality\(p_conversation_ids\) > 100'
-     OR v_definition ~* '(email_contact|telephone_contact|numero_rpps|stripe_)' THEN
+  IF (v_definition ~ 'participant_1_id = v_uid') IS DISTINCT FROM true
+     OR (v_definition ~ 'participant_2_id = v_uid') IS DISTINCT FROM true
+     OR (v_definition ~ 'fn_compte_auth_actif') IS DISTINCT FROM true
+     OR (v_definition ~ 'cardinality\(p_conversation_ids\) > 100') IS DISTINCT FROM true
+     OR (v_definition ~* '(email_contact|telephone_contact|numero_rpps|stripe_)')
+       IS DISTINCT FROM false THEN
     RAISE EXCEPTION 'P0: projection interlocuteurs trop large ou non bornee';
   END IF;
 
@@ -112,18 +149,18 @@ BEGIN
 
   SELECT pg_get_functiondef('public.fn_purger_gps_ancien()'::regprocedure)
   INTO v_definition;
-  IF v_definition !~* '90 days'
-     OR v_definition !~ 'arrivee_ip = NULL'
-     OR v_definition !~ 'depart_ip = NULL'
-     OR v_definition !~ 'arrivee_id_terminal = NULL'
-     OR v_definition !~ 'depart_modele_terminal = NULL' THEN
+  IF (v_definition ~* '90 days') IS DISTINCT FROM true
+     OR (v_definition ~ 'arrivee_ip = NULL') IS DISTINCT FROM true
+     OR (v_definition ~ 'depart_ip = NULL') IS DISTINCT FROM true
+     OR (v_definition ~ 'arrivee_id_terminal = NULL') IS DISTINCT FROM true
+     OR (v_definition ~ 'depart_modele_terminal = NULL') IS DISTINCT FROM true THEN
     RAISE EXCEPTION 'P0: purge GPS incomplete ou retention differente de 90 jours';
   END IF;
 
   SELECT pg_get_functiondef(
     'public.fn_verifier_rate_limit(text,text,integer,integer)'::regprocedure
   ) INTO v_definition;
-  IF v_definition !~ 'pg_advisory_xact_lock' THEN
+  IF (v_definition ~ 'pg_advisory_xact_lock') IS DISTINCT FROM true THEN
     RAISE EXCEPTION 'P0: rate-limit distribue non serialise';
   END IF;
 
@@ -141,18 +178,18 @@ BEGIN
   END IF;
   SELECT pg_get_functiondef('public.fn_upsert_token_push(text,text)'::regprocedure)
   INTO v_definition;
-  IF v_definition !~ 'ON CONFLICT \(token\)'
-     OR v_definition !~ 'fn_compte_auth_actif'
-     OR v_definition !~ 'utilisateur_id = EXCLUDED.utilisateur_id'
-     OR v_definition !~ 'push[.]services[.]mozilla'
-     OR v_definition ~ 'v_endpoint !~ ''\^https://''' THEN
+  IF (v_definition ~ 'ON CONFLICT \(token\)') IS DISTINCT FROM true
+     OR (v_definition ~ 'fn_compte_auth_actif') IS DISTINCT FROM true
+     OR (v_definition ~ 'utilisateur_id = EXCLUDED.utilisateur_id') IS DISTINCT FROM true
+     OR (v_definition ~ 'push[.]services[.]mozilla') IS DISTINCT FROM true
+     OR (v_definition ~ 'v_endpoint !~ ''\^https://''') IS DISTINCT FROM false THEN
     RAISE EXCEPTION 'P0: upsert push ne reaffecte pas surement un appareil';
   END IF;
   SELECT pg_get_functiondef('public.fn_desactiver_mon_token_push(text)'::regprocedure)
   INTO v_definition;
-  IF v_definition !~ 'utilisateur_id = v_uid'
-     OR v_definition !~ 'scope.*CURRENT_DEVICE'
-     OR v_definition ~* 'DELETE FROM' THEN
+  IF (v_definition ~ 'utilisateur_id = v_uid') IS DISTINCT FROM true
+     OR (v_definition ~ 'scope.*CURRENT_DEVICE') IS DISTINCT FROM true
+     OR (v_definition ~* 'DELETE FROM') IS DISTINCT FROM false THEN
     RAISE EXCEPTION 'P0: logout push non limite a l appareil courant';
   END IF;
 
@@ -180,16 +217,16 @@ BEGIN
   SELECT pg_get_functiondef(
     'public.fn_enforce_etablissement_rbac_trigger()'::regprocedure
   ) INTO v_definition;
-  IF v_definition !~ 'fn_a_permission_etablissement'
-     OR v_definition !~ 'fn_role_etablissement_courant' THEN
+  IF (v_definition ~ 'fn_a_permission_etablissement') IS DISTINCT FROM true
+     OR (v_definition ~ 'fn_role_etablissement_courant') IS DISTINCT FROM true THEN
     RAISE EXCEPTION 'P0: garde RBAC trigger incomplet';
   END IF;
   SELECT pg_get_functiondef(
     'public.fn_admin_traiter_alerte_pointage(uuid,text,text)'::regprocedure
   ) INTO v_definition;
-  IF v_definition !~ 'ADMIN_SUSPENSION_REVIEW'
-     OR v_definition !~ 'SUSPENSION_REVIEW_CREATED'
-     OR v_definition !~ 'automatic_suspension' THEN
+  IF (v_definition ~ 'ADMIN_SUSPENSION_REVIEW') IS DISTINCT FROM true
+     OR (v_definition ~ 'SUSPENSION_REVIEW_CREATED') IS DISTINCT FROM true
+     OR (v_definition ~ 'automatic_suspension') IS DISTINCT FROM true THEN
     RAISE EXCEPTION 'P0: proposition suspension sans effet tracable';
   END IF;
 
@@ -238,19 +275,19 @@ BEGIN
   PERFORM set_config('request.jwt.claims', jsonb_build_object(
     'sub', v_admin, 'role', 'authenticated', 'aal', 'aal1'
   )::text, true);
-  IF public.est_admin() THEN
+  IF public.est_admin() IS DISTINCT FROM false THEN
     RAISE EXCEPTION 'P0: admin aal1 accepte';
   END IF;
 
   PERFORM set_config('request.jwt.claims', jsonb_build_object(
     'sub', v_admin, 'role', 'authenticated', 'aal', 'aal2'
   )::text, true);
-  IF NOT public.est_admin() THEN
+  IF public.est_admin() IS DISTINCT FROM true THEN
     RAISE EXCEPTION 'P0: admin actif aal2 refuse';
   END IF;
 
   UPDATE public.equipe_admin SET actif = false WHERE user_id = v_admin;
-  IF public.est_admin() THEN
+  IF public.est_admin() IS DISTINCT FROM false THEN
     RAISE EXCEPTION 'P0: admin equipe_admin inactif accepte';
   END IF;
 END;
@@ -280,7 +317,8 @@ BEGIN
   IF public.mon_etablissement_id() IS DISTINCT FROM v_etab THEN
     RAISE EXCEPTION 'P0: membre actif non reconnu';
   END IF;
-  IF public.fn_a_permission_etablissement('missions', v_etab) THEN
+  IF public.fn_a_permission_etablissement('missions', v_etab)
+       IS DISTINCT FROM false THEN
     RAISE EXCEPTION 'P0: LECTURE_SEULE peut muter les missions';
   END IF;
 

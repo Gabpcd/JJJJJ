@@ -6,26 +6,41 @@ BEGIN;
 
 DO $rib_review_queue$
 DECLARE
+  v_etab_id constant uuid := 'a11c0000-0000-4000-8000-000000000011';
   v_etab public.etablissements%ROWTYPE;
   v_premiere jsonb;
   v_seconde jsonb;
   v_revue public.file_revue_manuelle%ROWTYPE;
   v_resolues integer;
 BEGIN
-  SELECT * INTO v_etab
-  FROM public.etablissements
-  WHERE supprime_le IS NULL
-  ORDER BY id
-  LIMIT 1;
-  IF NOT FOUND THEN
-    RAISE EXCEPTION 'Fixture établissement absente';
-  END IF;
-
+  PERFORM set_config('request.jwt.claim.sub', '', true);
+  PERFORM set_config('request.jwt.claim.role', 'service_role', true);
+  PERFORM set_config('request.jwt.claims', '{"role":"service_role"}', true);
   PERFORM set_config(
-    'request.jwt.claims',
-    jsonb_build_object('role', 'service_role', 'aal', 'aal2')::text,
+    'jolene.admin_seed_override_reason',
+    'Fixture transactionnelle file RIB établissement',
     true
   );
+
+  INSERT INTO public.etablissements (
+    id, nom, siret, type, adresse_rue, adresse_ville,
+    adresse_code_postal, email_contact, est_compte_test,
+    verification_source_version, rib_s3_key
+  ) VALUES (
+    v_etab_id, 'Fixture file RIB établissement', '99140000000311',
+    'CLINIQUE_PRIVEE', '5 rue du Test', 'Paris', '75005',
+    'rib-review-etablissement@test.local', true, 7,
+    v_etab_id::text || '/rib/fixture-file-revue.pdf'
+  );
+
+  PERFORM set_config('jolene.admin_seed_override_reason', '', true);
+
+  SELECT * INTO v_etab
+  FROM public.etablissements
+  WHERE id = v_etab_id;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Fixture dédiée de file RIB établissement absente';
+  END IF;
 
   v_premiere := public.fn_ouvrir_revue_verification_etablissement(
     v_etab.id,
@@ -56,7 +71,10 @@ BEGIN
     4
   );
 
-  IF v_premiere->>'revue_id' IS DISTINCT FROM v_seconde->>'revue_id' THEN
+  IF v_premiere->>'success' IS DISTINCT FROM 'true'
+     OR v_seconde->>'success' IS DISTINCT FROM 'true'
+     OR v_premiere->>'revue_id' IS NULL
+     OR v_premiere->>'revue_id' IS DISTINCT FROM v_seconde->>'revue_id' THEN
     RAISE EXCEPTION 'La revue RIB n’est pas idempotente: % / %', v_premiere, v_seconde;
   END IF;
 
@@ -64,10 +82,10 @@ BEGIN
   FROM public.file_revue_manuelle
   WHERE id = (v_premiere->>'revue_id')::uuid;
   IF NOT FOUND
-     OR v_revue.type_entite <> 'ETABLISSEMENT'
-     OR v_revue.id_entite <> v_etab.id
-     OR v_revue.service_en_echec <> 'VERIFY_RIB_ETABLISSEMENT'
-     OR v_revue.statut <> 'EN_ATTENTE'
+     OR v_revue.type_entite IS DISTINCT FROM 'ETABLISSEMENT'
+     OR v_revue.id_entite IS DISTINCT FROM v_etab.id
+     OR v_revue.service_en_echec IS DISTINCT FROM 'VERIFY_RIB_ETABLISSEMENT'
+     OR v_revue.statut IS DISTINCT FROM 'EN_ATTENTE'
      OR (v_revue.donnees_originales->>'verification_source_version')::bigint
           IS DISTINCT FROM v_etab.verification_source_version
      OR v_revue.donnees_originales->>'rib_s3_key'
@@ -81,7 +99,7 @@ BEGIN
     v_etab.id,
     'VERIFY_RIB_ETABLISSEMENT'
   );
-  IF v_resolues <> 1 OR NOT EXISTS (
+  IF v_resolues IS DISTINCT FROM 1 OR NOT EXISTS (
     SELECT 1 FROM public.file_revue_manuelle
     WHERE id = v_revue.id AND statut = 'RESOLU_AUTO' AND resolu_le IS NOT NULL
   ) THEN

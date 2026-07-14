@@ -120,7 +120,8 @@ BEGIN
   SELECT public.fn_admin_suspendre_utilisateur(
     'soignants', '68000000-0000-4000-8000-000000000002', true, 'Contrôle sécurité'
   ) INTO v_resultat;
-  IF v_resultat->>'success' = 'true' OR v_resultat->>'error' IS NULL THEN
+  IF (v_resultat->>'success' = 'true') IS TRUE
+     OR NULLIF(v_resultat->>'error', '') IS NULL THEN
     RAISE EXCEPTION 'P0: une session admin AAL1 peut suspendre un compte';
   END IF;
 END;
@@ -138,7 +139,7 @@ BEGIN
   SELECT public.fn_admin_suspendre_utilisateur(
     'soignants', '68000000-0000-4000-8000-000000000002', true, 'Contrôle sécurité'
   ) INTO v_resultat;
-  IF v_resultat->>'success' <> 'true' THEN
+  IF v_resultat->>'success' IS DISTINCT FROM 'true' THEN
     RAISE EXCEPTION 'Suspension soignant échouée: %', v_resultat;
   END IF;
 END;
@@ -172,7 +173,7 @@ SELECT set_config(
 );
 DO $jwt_suspendu$
 BEGIN
-  IF public.fn_compte_auth_actif() THEN
+  IF public.fn_compte_auth_actif() IS DISTINCT FROM FALSE THEN
     RAISE EXCEPTION 'P0: le JWT déjà émis reste actif après suspension';
   END IF;
   BEGIN
@@ -183,12 +184,12 @@ BEGIN
   END;
   IF public.fn_peut_deposer_justificatif(
        '68000000-0000-4000-8000-000000000002/preuve.pdf'
-     ) THEN
+     ) IS DISTINCT FROM FALSE THEN
     RAISE EXCEPTION 'P0: Storage accepte encore un dépôt du compte suspendu';
   END IF;
   IF public.fn_peut_lire_justificatif(
        '68000000-0000-4000-8000-000000000002/preuve.pdf'
-     ) THEN
+     ) IS DISTINCT FROM FALSE THEN
     RAISE EXCEPTION 'P0: Storage accepte encore une lecture du compte suspendu';
   END IF;
   BEGIN
@@ -220,7 +221,7 @@ BEGIN
     'soignants', '68000000-0000-4000-8000-000000000002', true,
     'Contrôle sécurité répété'
   ) INTO v_resultat;
-  IF v_resultat->>'success' <> 'true' THEN
+  IF v_resultat->>'success' IS DISTINCT FROM 'true' THEN
     RAISE EXCEPTION 'Suspension répétée échouée: %', v_resultat;
   END IF;
 END;
@@ -256,7 +257,7 @@ BEGIN
   SELECT public.fn_admin_suspendre_utilisateur(
     'soignants', '68000000-0000-4000-8000-000000000002', false, NULL
   ) INTO v_resultat;
-  IF v_resultat->>'success' <> 'true' THEN
+  IF v_resultat->>'success' IS DISTINCT FROM 'true' THEN
     RAISE EXCEPTION 'Réactivation soignant échouée: %', v_resultat;
   END IF;
 END;
@@ -338,7 +339,7 @@ BEGIN
   SELECT public.fn_admin_suspendre_utilisateur(
     'etablissements', '68000000-0000-4000-8000-000000000003', true, 'Contrôle établissement'
   ) INTO v_resultat;
-  IF v_resultat->>'success' <> 'true' THEN
+  IF v_resultat->>'success' IS DISTINCT FROM 'true' THEN
     RAISE EXCEPTION 'Suspension établissement échouée: %', v_resultat;
   END IF;
 END;
@@ -354,11 +355,14 @@ BEGIN
   ) OR EXISTS (
     SELECT 1 FROM public.membres_etablissement
     WHERE etablissement_id = '68000000-0000-4000-8000-000000000003'
-      AND actif IS TRUE
+      AND actif IS DISTINCT FROM FALSE
   ) OR EXISTS (
     SELECT 1 FROM public.etablissements
     WHERE id = '68000000-0000-4000-8000-000000000003'
-      AND (supprime_le IS NULL OR peut_publier_missions IS TRUE)
+      AND (
+        supprime_le IS NULL
+        OR peut_publier_missions IS DISTINCT FROM FALSE
+      )
   ) THEN
     RAISE EXCEPTION 'P0: suspension établissement incomplète';
   END IF;
@@ -377,7 +381,7 @@ BEGIN
   SELECT public.fn_admin_suspendre_utilisateur(
     'etablissements', '68000000-0000-4000-8000-000000000003', false, NULL
   ) INTO v_resultat;
-  IF v_resultat->>'success' <> 'true' THEN
+  IF v_resultat->>'success' IS DISTINCT FROM 'true' THEN
     RAISE EXCEPTION 'Réactivation établissement échouée: %', v_resultat;
   END IF;
 END;
