@@ -3132,6 +3132,23 @@ COMMENT ON FUNCTION public.fn_admin_resoudre_litige(
 ) IS
   'Résolution admin AAL2 atomique. Verrouille litige/mission/présence/facture, applique la matrice de statuts comptables, protège contre les doubles documents et trace tout remplacement d’un accord accepté.';
 
+-- Ces trois fonctions sont des tâches système/cron. Une recréation de fonction
+-- ne doit jamais dépendre des ACL historiques du schéma : on réaffirme ici le
+-- périmètre service_role-only après toutes les corrections de corps ci-dessus.
+REVOKE ALL ON FUNCTION public.fn_alerte_reclamations_pending_old()
+  FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.fn_detecter_teleportations()
+  FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.fn_escalade_remplacement_non_pourvu()
+  FROM PUBLIC, anon, authenticated;
+
+GRANT EXECUTE ON FUNCTION public.fn_alerte_reclamations_pending_old()
+  TO service_role;
+GRANT EXECUTE ON FUNCTION public.fn_detecter_teleportations()
+  TO service_role;
+GRANT EXECUTE ON FUNCTION public.fn_escalade_remplacement_non_pourvu()
+  TO service_role;
+
 -- Assertions de migration : aucun fragment P0 ciblé ne doit survivre dans le
 -- corps effectif des fonctions remplacées.
 DO $assertions$
