@@ -83,7 +83,15 @@ export default function LitigesEtablissement() {
         block: 'start',
       });
     });
-  }, [activeTab, litigeCible, litiges]);
+    const paramsSuivants = new URLSearchParams(searchParams);
+    paramsSuivants.delete('litige');
+    const rechercheSuivante = paramsSuivants.toString();
+    navigate({
+      pathname: location.pathname,
+      search: rechercheSuivante ? `?${rechercheSuivante}` : '',
+      hash: '',
+    }, { replace: true });
+  }, [activeTab, litigeCible, litiges, location.pathname, navigate, searchParams]);
 
   // Lot 12 : litiges contextuels — la page est un SUIVI. L'ouverture ne se fait
   // qu'en contexte (fiche mission → « Ouvrir un litige », ou deep-link

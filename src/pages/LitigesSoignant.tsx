@@ -85,7 +85,15 @@ export function LitigesSoignantContent() {
         block: 'start',
       });
     });
-  }, [filtre, litigeCible, litiges]);
+    const paramsSuivants = new URLSearchParams(searchParams);
+    paramsSuivants.delete('litige');
+    const rechercheSuivante = paramsSuivants.toString();
+    navigate({
+      pathname: location.pathname,
+      search: rechercheSuivante ? `?${rechercheSuivante}` : '',
+      hash: '',
+    }, { replace: true });
+  }, [filtre, litigeCible, litiges, location.pathname, navigate, searchParams]);
 
   const filteredLitiges = useMemo(() => {
     if (filtre === 'TOUS') return litiges;

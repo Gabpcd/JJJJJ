@@ -254,7 +254,11 @@ export function CarteValidation({ presence, litigeExistant, onValider, onContest
       {/* Litige section */}
       {litigeExistant ? (
         <div className="border-t border-border pt-2">
-          <FilDiscussionLitige litige={litigeExistant} onUpdate={onUpdate || (() => {})} />
+          <FilDiscussionLitige
+            litige={litigeExistant}
+            onUpdate={onUpdate || (() => {})}
+            roleUtilisateur="etablissement"
+          />
         </div>
       ) : (
         <>

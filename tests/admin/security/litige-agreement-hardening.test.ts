@@ -6,9 +6,17 @@ const read = (path: string) => readFileSync(join(process.cwd(), path), 'utf8');
 const migration = read(
   'supabase/migrations/20260714003439_corriger_fonctions_runtime_lint.sql',
 );
+const migrationScope = read(
+  'supabase/migrations/20260714096000_securiser_messages_contact_litige.sql',
+);
 const panneau = read('src/components/PanneauContestation.tsx');
 const adminLitiges = read('src/pages/admin/AdminLitiges.tsx');
 const formulaire = read('src/components/litige/FormulaireAccord.tsx');
+const detailMission = read('src/pages/DetailMission.tsx');
+const presencesEtablissement = read('src/pages/PresencesEtablissement.tsx');
+const carteValidation = read('src/components/CarteValidation.tsx');
+const litigesSoignant = read('src/pages/LitigesSoignant.tsx');
+const litigesEtablissement = read('src/pages/LitigesEtablissement.tsx');
 const resolutionModal = read(
   'src/components/admin/litiges/LitigeResolutionModal.tsx',
 );
@@ -109,6 +117,26 @@ describe('accords de litige liés à une proposition exacte', () => {
     expect(formulaire).toContain('const payloadExact = {');
     expect(formulaire).toContain('p_payload: payloadExact');
     expect(formulaire).not.toContain('p_payload: propositionExistante');
+  });
+
+  it('propage l’accord structuré sur toutes les surfaces établissement', () => {
+    expect(migrationScope).toContain(
+      'CREATE OR REPLACE FUNCTION public.fn_litige_pour_mission',
+    );
+    expect(migrationScope).toContain('l.payload_modifications');
+    expect(migrationScope).toContain('l.accord_soignant_le');
+    expect(migrationScope).toContain('l.accord_etablissement_le');
+    expect(migrationScope).toContain("'contrats', l.etablissement_id");
+    expect(detailMission).toContain(
+      'payload_modifications: litigeExistant.payload_modifications',
+    );
+    expect(detailMission).toContain('roleUtilisateur="etablissement"');
+    expect(presencesEtablissement).toContain(
+      'accord_soignant_le, accord_etablissement_le, payload_modifications',
+    );
+    expect(carteValidation).toContain('roleUtilisateur="etablissement"');
+    expect(litigesSoignant).toContain("paramsSuivants.delete('litige')");
+    expect(litigesEtablissement).toContain("paramsSuivants.delete('litige')");
   });
 
   it('n’autorise l’exécution admin que sur une double acceptation financière verrouillée', () => {

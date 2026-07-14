@@ -947,12 +947,18 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
                         statut: litigeExistant.statut,
                         motif: litigeExistant.motif,
                         cree_le: litigeExistant.cree_le,
+                        soignant_id: litigeExistant.soignant_id,
+                        etablissement_id: litigeExistant.etablissement_id,
                         accord_soignant: litigeExistant.accord_soignant,
                         accord_etablissement: litigeExistant.accord_etablissement,
+                        accord_soignant_le: litigeExistant.accord_soignant_le,
+                        accord_etablissement_le: litigeExistant.accord_etablissement_le,
+                        payload_modifications: litigeExistant.payload_modifications,
                         resolution: litigeExistant.resolution,
                         missions: { intitule: m.intitule },
                       }}
                       onUpdate={() => refresh()}
+                      roleUtilisateur="etablissement"
                     />
                   </div>
                 ) : (

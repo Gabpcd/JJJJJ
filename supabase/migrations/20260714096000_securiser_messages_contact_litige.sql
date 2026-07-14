@@ -589,4 +589,62 @@ REVOKE ALL ON FUNCTION public.fn_litiges_etablissement(uuid)
 GRANT EXECUTE ON FUNCTION public.fn_litiges_etablissement(uuid)
   TO authenticated, service_role;
 
+-- Le détail de mission doit exposer les deux parties et l'accord structuré ;
+-- l'autorisation reste évaluée sur la mission et l'établissement exacts.
+CREATE OR REPLACE FUNCTION public.fn_litige_pour_mission(
+  p_mission_id uuid
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+VOLATILE
+SECURITY DEFINER
+SET search_path TO ''
+AS $function$
+DECLARE
+  v_uid uuid := auth.uid();
+BEGIN
+  IF v_uid IS NULL OR public.fn_compte_auth_actif() IS NOT TRUE THEN
+    RAISE EXCEPTION 'Non authentifié' USING ERRCODE = '28000';
+  END IF;
+
+  RETURN COALESCE((
+    SELECT pg_catalog.to_jsonb(x)
+    FROM (
+      SELECT
+        l.id::text AS litige_id,
+        l.mission_id::text AS mission_id,
+        l.soignant_id::text AS soignant_id,
+        l.etablissement_id::text AS etablissement_id,
+        l.statut,
+        l.initie_par,
+        l.motif,
+        l.cree_le,
+        l.resolu_le,
+        l.accord_soignant,
+        l.accord_etablissement,
+        l.accord_soignant_le,
+        l.accord_etablissement_le,
+        l.payload_modifications,
+        l.resolution
+      FROM public.litiges l
+      WHERE l.mission_id = p_mission_id
+        AND (
+          l.soignant_id = v_uid
+          OR public.est_admin()
+          OR public.fn_a_permission_etablissement(
+            'contrats', l.etablissement_id
+          ) IS TRUE
+        )
+      ORDER BY l.cree_le DESC, l.id DESC
+      LIMIT 1
+    ) AS x
+  ), '{"exists": false}'::jsonb);
+END;
+$function$;
+
+REVOKE ALL ON FUNCTION public.fn_litige_pour_mission(uuid)
+  FROM PUBLIC, anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.fn_litige_pour_mission(uuid)
+  TO authenticated, service_role;
+
 NOTIFY pgrst, 'reload schema';

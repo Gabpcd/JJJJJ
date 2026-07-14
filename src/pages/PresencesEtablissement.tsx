@@ -60,7 +60,7 @@ export default function PresencesEtablissement() {
       supabase.rpc('fn_mes_soignants_etablissement'),
       supabase
         .from('litiges')
-        .select('id, mission_id, motif, statut, initie_par, cree_le, resolution, accord_soignant, accord_etablissement')
+        .select('id, mission_id, soignant_id, etablissement_id, motif, statut, initie_par, cree_le, resolution, accord_soignant, accord_etablissement, accord_soignant_le, accord_etablissement_le, payload_modifications')
         .eq('etablissement_id', etablissementId),
     ]);
 
