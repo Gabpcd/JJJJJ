@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { X509Certificate } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
@@ -43,6 +44,10 @@ const penaltyFinalizer = readFileSync(
 );
 const e2eSeedHelper = readFileSync(
   join(process.cwd(), 'e2e/helpers/seed.ts'),
+  'utf8',
+);
+const supabaseProdCa = readFileSync(
+  join(process.cwd(), 'config/certs/supabase-prod-ca-2021.crt'),
   'utf8',
 );
 
@@ -274,9 +279,20 @@ describe('gate déploiement Supabase main', () => {
     expect(validateWorkflow).toContain('PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}');
     expect(validateWorkflow).toContain('PGSSLMODE: verify-full');
     expect(validateWorkflow).toContain('aws-1-eu-west-1.pooler.supabase.com:5432/postgres');
+    expect(validateWorkflow).toContain(
+      'sslmode=verify-full&sslrootcert=./config/certs/supabase-prod-ca-2021.crt',
+    );
+    expect(validateWorkflow).not.toContain('rejectUnauthorized: false');
     expect(validateWorkflow.match(/npm run test:schema/g)).toHaveLength(1);
     expect(validateWorkflow).not.toContain('secrets.SUPABASE_DB_URL');
     expect(validateWorkflow).not.toContain('SUPABASE_DB_URL absent');
+
+    const certificate = new X509Certificate(supabaseProdCa);
+    expect(certificate.subject).toContain('CN=Supabase Root 2021 CA');
+    expect(certificate.issuer).toBe(certificate.subject);
+    expect(certificate.fingerprint256).toBe(
+      '80:70:25:AD:50:D4:ED:21:9D:2C:9C:7D:29:9C:00:4F:82:4E:B0:0C:F7:F6:5A:FE:F6:07:D0:7B:72:E6:CA:FA',
+    );
   });
 });
 

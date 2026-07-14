@@ -201,7 +201,7 @@ jobs:
             echo "::error::SUPABASE_PROJECT_REF ne cible pas la production Jolene autorisée."
             exit 1
           fi
-          SUPABASE_DB_URL="postgresql://postgres.${SUPABASE_PROJECT_REF}@aws-1-eu-west-1.pooler.supabase.com:5432/postgres" \
+          SUPABASE_DB_URL="postgresql://postgres.${SUPABASE_PROJECT_REF}@aws-1-eu-west-1.pooler.supabase.com:5432/postgres?sslmode=verify-full&sslrootcert=./config/certs/supabase-prod-ca-2021.crt" \
             npm run test:schema
 
   sql-transaction:
