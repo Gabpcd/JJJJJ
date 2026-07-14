@@ -217,36 +217,40 @@ async function seedEscrow(
 }
 
 /**
- * Purge complète d'une mission seedée : `fn_test_purge_mission` ne supprime PAS
- * les enfants `paiements_escrow` / `stripe_transfers` (FK
- * `paiements_escrow_mission_id_fkey` → le DELETE mission échoue en silence),
- * et `paiements_escrow` a lui-même 3 tables enfants FK (stripe_refunds_queue,
- * escrow_release_queue, escrow_exposition_releases — c'est la refunds_queue,
- * créée par fn_escrow_rembourser, qui bloquait la purge de la sonde en CI).
- * On retire donc TOUTE la descendance financière avant la cascade.
+ * Purge les missions techniques avec au plus trois cascades simultanées.
+ *
+ * `cleanupMissionCascade` traite déjà toute la descendance financière dans
+ * l'ordre FK correct, vérifie le préfixe `[pw-test…]` avant toute suppression,
+ * puis appelle le purgeur SQL générique. L'ancien wrapper répétait sept appels
+ * réseau par mission avant de refaire les mêmes contrôles dans ce helper. Avec
+ * douze missions par spec, ce doublon faisait dépasser au hook sa limite de
+ * 30 secondes sur le runner CI.
+ *
+ * Le traitement par lots borne la pression sur la base partagée. Toutes les
+ * missions sont néanmoins tentées et chaque erreur est remontée : aucun échec
+ * de nettoyage n'est masqué.
  */
-async function purgeMissionFull(admin: ReturnType<typeof adminClient>, id: string): Promise<void> {
-  const { data: escs, error: escrowsError } = await admin
-    .from('paiements_escrow')
-    .select('id')
-    .eq('mission_id', id);
-  if (escrowsError) throw new Error(`purge escrow: lecture ${id} — ${escrowsError.message}`);
-  const escIds = ((escs || []) as Array<{ id: string }>).map((e) => e.id);
-  if (escIds.length) {
-    for (const table of [
-      'stripe_refunds_queue',
-      'escrow_release_queue',
-      'escrow_exposition_releases',
-    ] as const) {
-      const { error } = await admin.from(table).delete().in('paiement_escrow_id', escIds);
-      if (error) throw new Error(`purge escrow: ${table} ${id} — ${error.message}`);
-    }
+async function purgeMissionsBounded(ids: Iterable<string>): Promise<void> {
+  const uniques = [...new Set(ids)];
+  const erreurs: string[] = [];
+  const concurrence = 3;
+
+  for (let debut = 0; debut < uniques.length; debut += concurrence) {
+    const lot = uniques.slice(debut, debut + concurrence);
+    const resultats = await Promise.allSettled(lot.map((id) => cleanupMissionCascade(id)));
+    resultats.forEach((resultat, index) => {
+      if (resultat.status === 'rejected') {
+        const cause = resultat.reason;
+        erreurs.push(
+          `mission ${lot[index]}: ${cause instanceof Error ? cause.message : String(cause)}`,
+        );
+      }
+    });
   }
-  for (const table of ['stripe_transfers', 'paiements_escrow', 'presences'] as const) {
-    const { error } = await admin.from(table).delete().eq('mission_id', id);
-    if (error) throw new Error(`purge escrow: ${table} ${id} — ${error.message}`);
+
+  if (erreurs.length > 0) {
+    throw new Error(erreurs.join(' | '));
   }
-  await cleanupMissionCascade(id);
 }
 
 test.beforeAll(async () => {
@@ -255,7 +259,9 @@ test.beforeAll(async () => {
   // Purge des résidus escrow de TOUS les runs antérieurs (prod partagée) :
   // sinon les deltas / états sont pollués.
   const { data: oldMissions } = await admin.from('missions').select('id').like('intitule', '[pw-test:escrow%');
-  for (const m of (oldMissions || []) as Array<{ id: string }>) await purgeMissionFull(admin, m.id);
+  await purgeMissionsBounded(
+    ((oldMissions || []) as Array<{ id: string }>).map((mission) => mission.id),
+  );
 
   // Fixture jetable dédiée à ce spec : le compte soignant de démonstration et
   // ses documents restent strictement intacts. SAGE_FEMME possède un cadre
@@ -293,16 +299,16 @@ test.beforeAll(async () => {
 });
 
 test.afterAll(async () => {
-  const admin = adminClient();
+  // Une suite complète peut laisser plus de missions escrow à purger qu'un
+  // lancement ciblé. Les hooks gardent la limite Playwright globale (30 s) :
+  // cette borne protège une vraie purge multi-mission sans relâcher le délai
+  // des tests fonctionnels eux-mêmes.
+  test.setTimeout(120_000);
   const erreurs: string[] = [];
-  for (const id of new Set(seededMissions)) {
-    try {
-      await purgeMissionFull(admin, id);
-    } catch (error) {
-      erreurs.push(
-        `mission ${id}: ${error instanceof Error ? error.message : String(error)}`,
-      );
-    }
+  try {
+    await purgeMissionsBounded(seededMissions);
+  } catch (error) {
+    erreurs.push(error instanceof Error ? error.message : String(error));
   }
   try {
     await caregiver?.cleanup();
