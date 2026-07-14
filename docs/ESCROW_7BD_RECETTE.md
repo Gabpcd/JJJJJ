@@ -66,25 +66,42 @@
    `fn_escrow_rembourser(escrow_id, honoraires_cents, p_annulation_totale := true)`.
    - ✅ Attendu : ligne `stripe_refunds_queue` avec `reverse_transfer = true`,
      `refund_application_fee_cts = commission` (annulation totale → 100 %),
-     `absorbe_plateforme = false`. `paiements_escrow.statut = REMBOURSE`,
-     exposition → `REGLE`.
+     `absorbe_plateforme = false`, queue `EN_ATTENTE` et
+     `paiements_escrow.statut = REMBOURSE_EN_COURS`. Le statut antérieur
+     `DEBITE` est mémorisé ; l'exposition n'est pas encore soldée.
 2. Cron `process-stripe-refunds`.
    - ✅ Attendu : `refunds.create` avec `reverse_transfer: true` +
      `refund_application_fee: true` → les fonds reviennent du compte connecté,
-     l'étab est remboursé, la commission aussi. Queue → `TRAITE`.
-3. Variante **réduction partielle** : `p_annulation_totale := false`,
-   `honoraires_cents` = moitié.
-   - ✅ Attendu : `refund_application_fee_cts` = prorata (commission × moitié /
-     honoraires), `montant_cts` queue = honoraires repris + fee prorata.
+     l'étab est remboursé et la commission aussi. Tant que Stripe n'a pas
+     confirmé `succeeded`, l'escrow reste `REMBOURSE_EN_COURS`. Après cette
+     confirmation seulement : queue → `TRAITE`, escrow → `REMBOURSE`,
+     exposition → `REGLE`.
+   - ✅ Si Stripe confirme `failed` ou `canceled` : queue → `ECHEC`, escrow
+     restauré à `DEBITE`, exposition non soldée.
+3. Garde-fou **réduction partielle pré-release** : appeler avec
+   `p_annulation_totale := false` et la moitié des `honoraires_cents`.
+   - ✅ Attendu : réponse structurée `{ success: false, error:
+     "REMBOURSEMENT_PARTIEL_PRE_RELEASE_INDISPONIBLE",
+     manual_resolution_required: true }` ; aucune ligne ajoutée à
+     `stripe_refunds_queue`, escrow toujours `DEBITE`, exposition inchangée.
 
 ## 4. Scénario A10.9 — remboursement APRÈS release (absorption plateforme)
 
-1. Escrow en `PAYE` (payout parti). Appeler `fn_escrow_rembourser(...)`.
-   - ✅ Attendu : `absorbe_plateforme = true`, `reverse_transfer = false`.
+1. Escrow en `PAYE` (payout parti). Appeler `fn_escrow_rembourser(...)`, avec
+   un montant total ou partiel.
+   - ✅ Attendu : le partiel est supporté ; sa commission remboursée est
+     calculée au prorata. `absorbe_plateforme = true`,
+     `reverse_transfer = false`, queue → `EN_ATTENTE`, escrow →
+     `REMBOURSE_EN_COURS` avec statut antérieur `PAYE` mémorisé.
 2. Cron `process-stripe-refunds`.
    - ✅ Attendu : `refunds.create` **sans** `reverse_transfer` → Jolene absorbe
      depuis le solde plateforme, **aucun** mouvement forcé sur le compte de la
-     soignante (règle A5). Exposition décrémentée.
+     soignante (règle A5).
+   - ✅ Après confirmation Stripe `succeeded` seulement : queue → `TRAITE`,
+     escrow → `REMBOURSE`, exposition → `REGLE`. La soignante conserve
+     l'affichage « Versé » puisqu'elle a déjà reçu 100 %.
+   - ✅ Si Stripe confirme `failed` ou `canceled` : queue → `ECHEC`, escrow
+     restauré à `PAYE`, exposition non soldée.
 
 ## 5. Scénario A10.8 — validation avant disponibilité des fonds
 

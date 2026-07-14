@@ -1,10 +1,9 @@
 name: Playwright E2E tests
 
 # Tests Playwright à chaque PR + push main.
-# Stratégie matrix :
-#   - PR : chromium uniquement (rapidité review)
-#   - push main : chromium + firefox + webkit + mobile-iphone + mobile-pixel
-#     (couverture cross-browser + mobile complet)
+# Stratégie : Chromium bloque les PR et main. Les runs sont sérialisés car ils
+# partagent une base de test en production. La couverture cross-browser/mobile
+# reste disponible à la demande après ajout temporaire des projets à la matrice.
 
 on:
   pull_request:
@@ -13,13 +12,13 @@ on:
     branches: [main]
   workflow_dispatch:
 
-# Un seul run E2E par ref à la fois : la suite tourne contre la PROD PARTAGÉE
-# (seed/cleanup sur les mêmes comptes test). Deux runs simultanés se purgent
-# mutuellement leurs seeds (beforeAll escrow) et cassent les assertions en
-# delta. Un nouveau push annule le run devenu obsolète.
+# Un seul run E2E au total : la suite tourne contre la PROD PARTAGÉE
+# (seed/cleanup sur les mêmes comptes test). Une concurrence par ref laissait
+# main et une PR s'effacer mutuellement leurs seeds. On sérialise donc toutes
+# les refs et on ne supprime jamais le résultat bloquant d'un run déjà parti.
 concurrency:
-  group: e2e-${{ github.ref }}
-  cancel-in-progress: true
+  group: e2e-shared-production
+  cancel-in-progress: false
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
@@ -52,7 +51,6 @@ jobs:
     container:
       image: mcr.microsoft.com/playwright:v1.58.2-noble
       options: --user 1001
-    continue-on-error: true
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v5
@@ -150,10 +148,9 @@ jobs:
     name: Playwright E2E (${{ matrix.project }})
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
-    # Informatif (comme e2e-pr) : la matrice cross-browser sur la MÊME DB prod a
-    # une flakiness inhérente (seed/cleanup partagés, timing Safari/Firefox). Les
-    # vrais gates bloquants sont Typecheck+build / Drift / Lighthouse / Vercel.
-    continue-on-error: true
+    # Bloquant comme le job PR. La matrice est volontairement limitée à
+    # Chromium et tous les runs sont sérialisés ci-dessus : un échec ne doit
+    # plus être transformé en faux workflow vert.
     # Conteneur officiel Playwright (chromium + firefox + webkit préinstallés,
     # toutes deps système incluses). Tag = version résolue lockfile (1.58.2).
     container:

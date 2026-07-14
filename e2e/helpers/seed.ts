@@ -15,24 +15,122 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { TEST_ACCOUNTS } from './auth';
 import { adminClient, userClient, userIdByEmail } from './db';
 
-export type CaregiverProfession = 'IDE' | 'IADE' | 'IBODE';
+export type CaregiverProfession = 'IDE' | 'IADE' | 'IBODE' | 'SAGE_FEMME';
+export type CaregiverExercise = 'SALARIE' | 'LIBERAL';
 
 export interface EphemeralVerifiedCaregiver {
   id: string;
   email: string;
   password: string;
   profession: CaregiverProfession;
+  typeExercice: CaregiverExercise;
+  /**
+   * Garantit les 3 200 h d'une fixture libérale via la preuve canonique.
+   * `false` signale exclusivement le repli temporaire pré-déploiement.
+   */
+  ensureLiberalEligibility: () => Promise<boolean>;
   cleanup: () => Promise<void>;
 }
 
 const EPHEMERAL_CAREGIVER_EMAIL_PREFIX = 'playwright-test-caregiver-';
 
 /**
- * Seed non destructif des documents VÉRIFIÉS requis pour une mission salariée.
+ * Seede l'éligibilité libérale uniquement sur un compte Playwright jetable.
+ *
+ * La RPC est la voie canonique après déploiement de la migration. Une PR est
+ * toutefois testée contre le schéma de production encore pré-déploiement :
+ * dans ce seul cas (`PGRST202`, fonction absente du cache PostgREST), on
+ * rafraîchit les anciens champs dénormalisés. Toute autre erreur reste
+ * bloquante afin de ne jamais masquer une régression de la RPC canonique.
+ */
+async function ensureEphemeralLiberalEligibility(
+  fixture: Pick<EphemeralVerifiedCaregiver, 'id' | 'email' | 'typeExercice'>,
+): Promise<boolean> {
+  if (
+    fixture.typeExercice !== 'LIBERAL'
+    || !fixture.email.startsWith(EPHEMERAL_CAREGIVER_EMAIL_PREFIX)
+  ) {
+    throw new Error(
+      `[fixture caregiver] seed libéral refusé hors fixture éphémère (${fixture.email})`,
+    );
+  }
+
+  const admin = adminClient();
+  const { data: profil, error: profilError } = await admin
+    .from('soignants' as any)
+    .select('id, email, est_compte_test, type_exercice')
+    .eq('id', fixture.id)
+    .maybeSingle();
+  if (profilError) {
+    throw new Error(
+      `[fixture caregiver] contrôle du profil libéral impossible: ${profilError.message}`,
+    );
+  }
+  const profilEphemere = profil as {
+    id: string;
+    email: string | null;
+    est_compte_test: boolean | null;
+    type_exercice: string | null;
+  } | null;
+  if (
+    profilEphemere?.id !== fixture.id
+    || profilEphemere.email !== fixture.email
+    || profilEphemere.est_compte_test !== true
+    || profilEphemere.type_exercice !== 'LIBERAL'
+    || !profilEphemere.email.startsWith(EPHEMERAL_CAREGIVER_EMAIL_PREFIX)
+  ) {
+    throw new Error(
+      `[fixture caregiver] identité libérale de fixture refusée pour ${fixture.id}`,
+    );
+  }
+
+  const { error: rpcError } = await admin.rpc(
+    'fn_test_seed_heures_externes_validees' as any,
+    { p_soignant_id: fixture.id, p_heures: 3200 },
+  );
+  if (!rpcError) return true;
+  if (rpcError.code !== 'PGRST202') {
+    throw new Error(
+      `[fixture caregiver] seed canonique des heures impossible: ${rpcError.code || 'RPC'} ${rpcError.message}`,
+    );
+  }
+
+  // Compatibilité strictement temporaire avec la production avant migration.
+  // Les prédicats du UPDATE répètent le garde-fou ci-dessus pour qu'aucun
+  // compte de démonstration ou utilisateur réel ne puisse être modifié.
+  const maintenant = new Date().toISOString();
+  const { data: profilMisAJour, error: fallbackError } = await admin
+    .from('soignants' as any)
+    .update({
+      heures_cumulees: 3200,
+      eligible_conversion_3200h: true,
+      validation_3200h_statut: 'VALIDEE',
+      validation_3200h_le: maintenant,
+    })
+    .eq('id', fixture.id)
+    .eq('email', fixture.email)
+    .eq('est_compte_test', true)
+    .eq('type_exercice', 'LIBERAL')
+    .select('id')
+    .maybeSingle();
+  if (fallbackError || !profilMisAJour) {
+    throw new Error(
+      `[fixture caregiver] repli pré-déploiement refusé: ${fallbackError?.message || 'profil non éphémère'}`,
+    );
+  }
+  return false;
+}
+
+/**
+ * Seed non destructif des documents VÉRIFIÉS requis pour une mission salariée
+ * ou libérale.
  * Ce helper refuse explicitement les comptes fixes : il ne peut écrire que sur
  * un profil éphémère `playwright-test-caregiver-*` marqué `est_compte_test`.
  */
-export async function seedDocsRequisVerifie(soignantId: string): Promise<void> {
+export async function seedDocsRequisVerifie(
+  soignantId: string,
+  typeExercice: CaregiverExercise = 'SALARIE',
+): Promise<void> {
   const admin = adminClient();
   const { data: sg, error: soignantError } = await admin
     .from('soignants' as any)
@@ -67,7 +165,10 @@ export async function seedDocsRequisVerifie(soignantId: string): Promise<void> {
     .select('type_document, a_expiration')
     .eq('profession', profession)
     .eq('est_critique', true)
-    .in('type_exercice_requis', ['TOUS', 'SALARIE_ONLY']);
+    .in('type_exercice_requis', [
+      'TOUS',
+      typeExercice === 'LIBERAL' ? 'LIBERAL_ONLY' : 'SALARIE_ONLY',
+    ]);
   if (requisError) {
     throw new Error(`[seed docs] lecture des exigences impossible: ${requisError.message}`);
   }
@@ -88,7 +189,9 @@ export async function seedDocsRequisVerifie(soignantId: string): Promise<void> {
     ).values(),
   );
   if (exigences.length === 0) {
-    throw new Error(`[seed docs] aucune exigence critique salariée configurée pour ${profession}`);
+    throw new Error(
+      `[seed docs] aucune exigence critique ${typeExercice.toLowerCase()} configurée pour ${profession}`,
+    );
   }
 
   if (
@@ -148,11 +251,11 @@ export async function seedDocsRequisVerifie(soignantId: string): Promise<void> {
 
   const { data: documentsOk, error: controleError } = await admin.rpc(
     'fn_documents_ok_pour_mission' as any,
-    { p_soignant_id: soignantId, p_type_contrat: 'SALARIE' },
+    { p_soignant_id: soignantId, p_type_contrat: typeExercice },
   );
   if (controleError || documentsOk !== true) {
     throw new Error(
-      `[seed docs] gate salarié non satisfait: ${controleError?.message || String(documentsOk)}`,
+      `[seed docs] gate ${typeExercice.toLowerCase()} non satisfait: ${controleError?.message || String(documentsOk)}`,
     );
   }
 }
@@ -305,6 +408,7 @@ export async function cleanupEphemeralVerifiedCaregiver(
  */
 export async function createEphemeralVerifiedCaregiver(
   profession: CaregiverProfession = 'IDE',
+  typeExercice: CaregiverExercise = 'SALARIE',
 ): Promise<EphemeralVerifiedCaregiver> {
   const admin = adminClient();
   const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
@@ -313,6 +417,19 @@ export async function createEphemeralVerifiedCaregiver(
   const numeroRpps = Math.floor(Math.random() * 100_000_000_000)
     .toString()
     .padStart(11, '0');
+  // Préfixe 13 chiffres + clé Luhn : évite de fabriquer un SIRET incohérent
+  // même dans une fixture technique. Le verdict reste explicitement marqué
+  // compte test et n'est jamais exposé aux utilisateurs réels.
+  const siretPrefix = `${Date.now()}${Math.floor(Math.random() * 1_000_000)}`
+    .replace(/\D/g, '')
+    .slice(-13)
+    .padStart(13, '9');
+  const siretDigits = `${siretPrefix}0`.split('').map(Number);
+  const luhnSum = siretDigits.reduce((sum, digit, index) => {
+    const doubled = index % 2 === 0 ? digit * 2 : digit;
+    return sum + (doubled > 9 ? doubled - 9 : doubled);
+  }, 0);
+  const siretLiberal = `${siretPrefix}${(10 - (luhnSum % 10)) % 10}`;
 
   const { data: authData, error: authError } = await admin.auth.admin.createUser({
     email,
@@ -358,8 +475,18 @@ export async function createEphemeralVerifiedCaregiver(
       diplome_verifie: true,
       identite_verifiee: true,
       coherence_identite: 'COHERENT',
-      type_exercice: 'SALARIE',
-      statut_liberal: 'NON_LIBERAL',
+      type_exercice: typeExercice,
+      statut_liberal: typeExercice === 'LIBERAL' ? 'ACTIF' : 'NON_LIBERAL',
+      siret_liberal: typeExercice === 'LIBERAL' ? siretLiberal : null,
+      siret_liberal_verifie: typeExercice === 'LIBERAL',
+      siret_liberal_verifie_le: typeExercice === 'LIBERAL' ? maintenant : null,
+      siret_liberal_coherence_identite: typeExercice === 'LIBERAL' ? true : null,
+      siret_liberal_raison_sociale: typeExercice === 'LIBERAL'
+        ? 'Playwright Fixture'
+        : null,
+      siret_liberal_source_verification: typeExercice === 'LIBERAL'
+        ? 'REGISTRE_OFFICIEL'
+        : null,
       statut_compte: 'ACTIF',
       est_compte_test: true,
       tous_documents_valides: false,
@@ -372,14 +499,22 @@ export async function createEphemeralVerifiedCaregiver(
       throw new Error(`création du profil impossible: ${profilError.message}`);
     }
 
-    await seedDocsRequisVerifie(fixtureBase.id);
+    await seedDocsRequisVerifie(fixtureBase.id, typeExercice);
 
     const fixture: EphemeralVerifiedCaregiver = {
       ...fixtureBase,
       password,
       profession,
+      typeExercice,
+      ensureLiberalEligibility: async () => ensureEphemeralLiberalEligibility({
+        ...fixtureBase,
+        typeExercice,
+      }),
       cleanup: async () => cleanupEphemeralVerifiedCaregiver(fixtureBase),
     };
+    if (typeExercice === 'LIBERAL') {
+      await fixture.ensureLiberalEligibility();
+    }
     return fixture;
   } catch (error) {
     const setupMessage = error instanceof Error ? error.message : String(error);
@@ -470,6 +605,7 @@ export async function seedMission(opts: {
   debut?: Date;
   fin?: Date;
   tauxHoraire?: number;
+  typeContratRecherche?: 'SALARIE' | 'LIBERAL' | 'TOUS';
 } = {}): Promise<{ id: string; etablissement_id: string } | null> {
   const etabId = await userIdByEmail('playwright-etab@jolene.app');
   if (!etabId) return null;
@@ -492,7 +628,7 @@ export async function seedMission(opts: {
       duree_heures: 8,
       taux_horaire_base: opts.tauxHoraire || 25,
       statut: 'OUVERTE',
-      type_contrat_recherche: 'SALARIE',
+      type_contrat_recherche: opts.typeContratRecherche || 'SALARIE',
       mode_attribution: 'CANDIDATURE',
     },
   });
@@ -508,6 +644,7 @@ export async function seedMission(opts: {
 export async function seedCandidature(
   missionId: string,
   caregiverId?: string,
+  typeContratChoisi: 'SALARIE' | 'LIBERAL' = 'SALARIE',
 ): Promise<{ id: string } | null> {
   const soignantId = caregiverId ?? await userIdByEmail('playwright-soignant@jolene.app');
   if (!soignantId) return null;
@@ -518,7 +655,7 @@ export async function seedCandidature(
       mission_id: missionId,
       soignant_id: soignantId,
       statut: 'EN_ATTENTE',
-      type_contrat_choisi: 'SALARIE',
+      type_contrat_choisi: typeContratChoisi,
     })
     .select('id')
     .single();
