@@ -25,6 +25,18 @@ const workflow = readFileSync(
   join(process.cwd(), '.github/workflows/playwright-e2e.yml'),
   'utf8',
 );
+const validateWorkflow = readFileSync(
+  join(process.cwd(), '.github/workflows/validate-pr.yml'),
+  'utf8',
+);
+const penaltyMigration = readFileSync(
+  join(process.cwd(), 'supabase/migrations/20260714135000_appliquer_penalite_empechement.sql'),
+  'utf8',
+);
+const e2eSeedHelper = readFileSync(
+  join(process.cwd(), 'e2e/helpers/seed.ts'),
+  'utf8',
+);
 
 describe('file FIFO Playwright', () => {
   it('attend uniquement les runs actifs plus anciens, dans leur ordre FIFO', () => {
@@ -93,6 +105,32 @@ describe('gate déploiement Supabase main', () => {
     expect(deployPathWasChanged([{ filename: 'src/App.tsx' }])).toBe(false);
   });
 
+  it('autorise uniquement la mutation interne bornée de la pénalité empêchement', () => {
+    const openIndex = penaltyMigration.indexOf(
+      "set_config('jolene.system_update', 'true', true)",
+    );
+    const penaltyIndex = penaltyMigration.indexOf('score_fiabilite = GREATEST');
+    const closeIndex = penaltyMigration.indexOf(
+      "set_config('jolene.system_update', '', true)",
+    );
+
+    expect(openIndex).toBeGreaterThan(-1);
+    expect(penaltyIndex).toBeGreaterThan(openIndex);
+    expect(closeIndex).toBeGreaterThan(penaltyIndex);
+    expect(penaltyMigration).toContain('WHERE id = auth.uid()');
+    expect(penaltyMigration).toContain('FROM PUBLIC, anon');
+  });
+
+  it('purge le compteur 3 200 h avant le profil Playwright éphémère', () => {
+    const counterCleanupIndex = e2eSeedHelper.indexOf(
+      "['suivi_conversion_3200h', 'soignant_id']",
+    );
+    const profileDeleteIndex = e2eSeedHelper.indexOf(".from('soignants' as any)\n      .delete()");
+
+    expect(counterCleanupIndex).toBeGreaterThan(-1);
+    expect(profileDeleteIndex).toBeGreaterThan(counterCleanupIndex);
+  });
+
   it('attend le workflow exact et le succès du même SHA', async () => {
     const sha = 'a'.repeat(40);
     const responses = [
@@ -121,6 +159,23 @@ describe('gate déploiement Supabase main', () => {
 
     expect(fetchImpl).toHaveBeenCalledTimes(4);
     expect(String(fetchImpl.mock.calls[2][0])).toContain('branch=main&event=push');
+  });
+
+  it('teste réellement le schéma PROD après le deploy du même SHA', () => {
+    const deployGateIndex = validateWorkflow.indexOf('node scripts/ci/wait-for-supabase-deploy.mjs');
+    const schemaGuardIndex = validateWorkflow.indexOf('npm run test:schema');
+
+    expect(deployGateIndex).toBeGreaterThan(-1);
+    expect(schemaGuardIndex).toBeGreaterThan(deployGateIndex);
+    expect(validateWorkflow.match(/github\.event_name == 'push' && github\.ref == 'refs\/heads\/main'/g)).toHaveLength(2);
+    expect(validateWorkflow).toContain('actions: read');
+    expect(validateWorkflow).toContain('contents: read');
+    expect(validateWorkflow).toContain('PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}');
+    expect(validateWorkflow).toContain('PGSSLMODE: verify-full');
+    expect(validateWorkflow).toContain('aws-1-eu-west-1.pooler.supabase.com:5432/postgres');
+    expect(validateWorkflow.match(/npm run test:schema/g)).toHaveLength(1);
+    expect(validateWorkflow).not.toContain('secrets.SUPABASE_DB_URL');
+    expect(validateWorkflow).not.toContain('SUPABASE_DB_URL absent');
   });
 });
 

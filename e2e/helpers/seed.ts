@@ -351,6 +351,11 @@ export async function cleanupEphemeralVerifiedCaregiver(
     ['email_queue', 'destinataire_id'],
     ['emails_envoyes', 'destinataire_id'],
     ['evenements_score_soignant', 'soignant_id'],
+    // Le recalcul canonique des heures initialise désormais cette ligne dès
+    // qu'une mission de la fixture est clôturée. La supprimer avant le profil
+    // évite de laisser des comptes Playwright orphelins, sans jamais toucher
+    // aux comptes fixes de démonstration.
+    ['suivi_conversion_3200h', 'soignant_id'],
   ] as const) {
     const { error } = await admin.from(table as any).delete().eq(colonne, fixture.id);
     if (error) erreurs.push(`purge ${table}: ${error.message}`);
