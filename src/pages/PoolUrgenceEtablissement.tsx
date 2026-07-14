@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { LayoutApp } from '@/components/LayoutApp';
 import { LayoutAdmin } from '@/components/LayoutAdmin';
@@ -106,6 +106,7 @@ export default function PoolUrgenceEtablissement({ isAdmin = false }: { isAdmin?
   const [filtreHistorique, setFiltreHistorique] = useState<'TOUT' | 'POURVUES_MOIS'>('TOUT');
   const [historiqueOuvert, setHistoriqueOuvert] = useState(false);
   const [kpiUrgencesMois, setKpiUrgencesMois] = useState<number | null>(null);
+  const chargementPoolRef = useRef(0);
 
   const etablissementId = isAdmin ? selectedEtablissementId : scopedEtablissementId || '';
 
@@ -130,11 +131,6 @@ export default function PoolUrgenceEtablissement({ isAdmin = false }: { isAdmin?
   }, [isAdmin]);
 
   useEffect(() => {
-    if (!etablissementId) return;
-    loadData();
-  }, [etablissementId]);
-
-  useEffect(() => {
     if (searchParams.get('disponibles') === '1') setFiltreDispo(true);
     if (searchParams.get('historique') === 'pourvues_mois') {
       setFiltreHistorique('POURVUES_MOIS');
@@ -142,8 +138,12 @@ export default function PoolUrgenceEtablissement({ isAdmin = false }: { isAdmin?
     }
   }, [searchParams]);
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
+    const numeroChargement = ++chargementPoolRef.current;
     setLoading(true);
+    setSoignants([]);
+    setHistorique([]);
+    setKpiUrgencesMois(null);
     const debutMois = new Date();
     debutMois.setDate(1);
     debutMois.setHours(0, 0, 0, 0);
@@ -169,6 +169,7 @@ export default function PoolUrgenceEtablissement({ isAdmin = false }: { isAdmin?
         .gte('debut_le', debutMois.toISOString())
         .lt('debut_le', debutMoisSuivant.toISOString()),
     ]);
+    if (numeroChargement !== chargementPoolRef.current) return;
     if (poolRes.error || histRes.error || kpiRes.error) {
       toast.error("Le pool d'urgence n'a pas pu être chargé complètement.");
     }
@@ -189,7 +190,20 @@ export default function PoolUrgenceEtablissement({ isAdmin = false }: { isAdmin?
     }
     setKpiUrgencesMois(kpiRes.error ? null : (kpiRes.count ?? 0));
     setLoading(false);
-  };
+  }, [etablissementId]);
+
+  useEffect(() => {
+    if (!etablissementId) {
+      chargementPoolRef.current += 1;
+      setSoignants([]);
+      setHistorique([]);
+      setKpiUrgencesMois(null);
+      setLoading(false);
+      return;
+    }
+    void loadData();
+    return () => { chargementPoolRef.current += 1; };
+  }, [etablissementId, loadData]);
 
   const filtered = useMemo(() => {
     return soignants
@@ -247,8 +261,19 @@ export default function PoolUrgenceEtablissement({ isAdmin = false }: { isAdmin?
 
   const ouvrirConversation = async (soignantId: string) => {
     const base = isAdmin ? '/admin/messagerie' : '/etablissement/messagerie';
-    const { data, error } = await supabase.rpc('fn_obtenir_conversation', { p_autre_id: soignantId, p_mission_id: null });
-    logger.debug('fn_obtenir_conversation pool:', { data, error });
+    const { data, error } = isAdmin
+      ? await supabase.rpc('fn_obtenir_conversation', {
+          p_autre_id: soignantId,
+          p_mission_id: null,
+        })
+      : await supabase.rpc(
+          'fn_obtenir_conversation_pool_etablissement' as any,
+          {
+            p_soignant_id: soignantId,
+            p_etablissement_id: etablissementId,
+          } as any,
+        );
+    logger.debug('conversation pool:', { data, error });
     if (error || !data) toast.error("La conversation n'a pas pu être ouverte.");
     else navigate(`${base}?conv=${data}`);
   };

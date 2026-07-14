@@ -54,6 +54,11 @@
                 <data android:pathPrefix="/etab/invitation/" />
                 <data android:pathPrefix="/mission/" />
                 <data android:pathPrefix="/contrat/" />
+                <!-- Parité avec l'AASA iOS : tous les deep-links authentifiés
+                     (litiges, messagerie, notifications, etc.) reviennent dans
+                     Jolene, puis le routeur applique ses propres garde-fous. -->
+                <data android:pathPrefix="/soignant/" />
+                <data android:pathPrefix="/etablissement/" />
                 <data android:pathPrefix="/soignant/missions" />
                 <data android:pathPrefix="/soignant/stripe-connect" />
                 <data android:pathPrefix="/etablissement/missions" />

@@ -54,6 +54,7 @@ import {
   type InterlocuteurConversation,
 } from '@/lib/messagerieInterlocuteurs';
 import { InputMessage } from '@/components/messagerie/InputMessage';
+import { BloquerUtilisateur } from '@/components/BloquerUtilisateur';
 
 interface Conversation {
   id: string;
@@ -63,6 +64,8 @@ interface Conversation {
   dernier_message_le: string | null;
   cree_le: string;
   archived_at: string | null;
+  etablissement_id?: string | null;
+  soignant_id?: string | null;
   autre_id: string;
   autre_prenom: string;
   autre_nom: string;
@@ -149,55 +152,70 @@ export default function PageMessagerie({ role }: PageMessagerieProps) {
     if (!user) return;
     const numeroChargement = ++chargementConversationsRef.current;
 
-    let query = supabase
-      .from('conversations')
-      .select('id, participant_1_id, participant_2_id, mission_id, dernier_message_le, cree_le, archived_at')
-      .order('dernier_message_le', { ascending: false, nullsFirst: false });
-
-    if (!isAdminPlateforme) {
-      query = query.or(`participant_1_id.eq.${user.id},participant_2_id.eq.${user.id}`);
-    }
-
-    // Une cible deep-linkée peut être ajoutée ensuite ; 99 + 1 respecte la
-    // borne serveur de fn_interlocuteurs_conversations (100 UUID maximum).
-    const { data: convsRaw, error: convsError } = await query.limit(99);
-    if (numeroChargement !== chargementConversationsRef.current) return;
-    if (convsError) {
-      logger.error('PageMessagerie.chargerConversations error', convsError);
-      setLoading(false);
-      return;
-    }
-
-    let convs = ((convsRaw || []) as unknown) as Array<{
+    type ApercuConversation = {
       id: string;
       participant_1_id: string;
       participant_2_id: string;
       mission_id: string | null;
+      etablissement_id: string | null;
+      soignant_id: string | null;
       dernier_message_le: string | null;
       cree_le: string;
       archived_at: string | null;
-    }>;
+      autre_id: string;
+      dernier_contenu: string | null;
+      non_lus: number | string;
+      mission_intitule: string | null;
+      ordre_le: string;
+    };
 
-    // Une notification peut viser une conversation plus ancienne que les 100
-    // premières. On la charge explicitement, toujours sous RLS, plutôt que de
-    // laisser un écran mobile vide avec la liste masquée.
-    let cibleIntrouvable = false;
-    if (convParam && !convs.some(c => c.id === convParam)) {
-      const { data: cible, error: cibleError } = await supabase
-        .from('conversations')
-        .select('id, participant_1_id, participant_2_id, mission_id, dernier_message_le, cree_le, archived_at')
-        .eq('id', convParam)
-        .maybeSingle();
+    const convs: ApercuConversation[] = [];
+    const dejaVues = new Set<string>();
+    let avant: string | null = null;
+    let avantId: string | null = null;
+    let erreurChargement: unknown = null;
+
+    // Pagination keyset : chaque aperçu/non-lu est agrégé côté SQL. On ne
+    // télécharge donc jamais tous les messages d'un fil pour calculer la liste.
+    for (let page = 0; page < 100; page += 1) {
+      const { data, error } = await supabase.rpc(
+        'fn_lister_conversations_messagerie' as any,
+        {
+          p_avant: avant,
+          p_avant_id: avantId,
+          p_limite: 100,
+        } as any,
+      );
       if (numeroChargement !== chargementConversationsRef.current) return;
-      if (cibleError) {
-        logger.error('PageMessagerie.conversationCible error', cibleError);
-        cibleIntrouvable = true;
-      } else if (cible) {
-        convs = [cible as (typeof convs)[number], ...convs];
-      } else {
-        cibleIntrouvable = true;
+      if (error) {
+        erreurChargement = error;
+        break;
       }
+
+      const lot = ((data || []) as unknown) as ApercuConversation[];
+      lot.forEach((conversation) => {
+        if (!dejaVues.has(conversation.id)) {
+          dejaVues.add(conversation.id);
+          convs.push(conversation);
+        }
+      });
+      if (lot.length < 100) break;
+
+      const derniere = lot[lot.length - 1];
+      if (!derniere?.ordre_le || !derniere.id
+          || (derniere.ordre_le === avant && derniere.id === avantId)) break;
+      avant = derniere.ordre_le;
+      avantId = derniere.id;
     }
+
+    if (erreurChargement) {
+      logger.error('PageMessagerie.chargerConversations error', erreurChargement);
+      setLoading(false);
+      return;
+    }
+
+    const cibleIntrouvable = !!convParam
+      && !convs.some(conversation => conversation.id === convParam);
 
     if (convs.length === 0) {
       setConversations([]);
@@ -214,44 +232,14 @@ export default function PageMessagerie({ role }: PageMessagerieProps) {
       logger.error('fn_interlocuteurs_conversations error', error);
     }
 
-    const { data: lastMessages } = await supabase
-      .from('messages_chat')
-      .select('conversation_id, contenu, cree_le')
-      .in('conversation_id', convIds)
-      .order('cree_le', { ascending: false });
-
-    const lastMsgMap = new Map<string, string>();
-    lastMessages?.forEach(m => {
-      if (!lastMsgMap.has(m.conversation_id)) lastMsgMap.set(m.conversation_id, m.contenu);
-    });
-
-    const { data: unreadMessages } = await supabase
-      .from('messages_chat')
-      .select('conversation_id, id')
-      .in('conversation_id', convIds)
-      .eq('lu', false)
-      .neq('auteur_id', user.id);
-
-    const unreadMap = new Map<string, number>();
-    unreadMessages?.forEach(m => {
-      unreadMap.set(m.conversation_id, (unreadMap.get(m.conversation_id) || 0) + 1);
-    });
-
     const resolveUserName = (conversationId: string, uid: string) => {
       const info = interlocuteurs.get(cleInterlocuteur(conversationId, uid));
       if (info) return `${info.prenom} ${info.nom}`.trim();
       return 'Jolene';
     };
 
-    const missionIds = [...new Set(convs.map(c => c.mission_id).filter(Boolean))] as string[];
-    const missionMap = new Map<string, string>();
-    if (missionIds.length > 0) {
-      const { data: missionData } = await supabase.from('missions').select('id, intitule').in('id', missionIds);
-      missionData?.forEach(m => missionMap.set(m.id, m.intitule));
-    }
-
     const enriched: Conversation[] = convs.map(c => {
-      const autreId = c.participant_1_id === user.id ? c.participant_2_id : c.participant_1_id;
+      const autreId = c.autre_id;
       const info = interlocuteurs.get(cleInterlocuteur(c.id, autreId));
 
       const isJolene = info?.est_jolene ?? true;
@@ -269,10 +257,10 @@ export default function PageMessagerie({ role }: PageMessagerieProps) {
         autre_prenom: displayPrenom,
         autre_nom: displayNom,
         autre_avatar: isJolene ? null : (info?.avatar_url || null),
-        dernier_contenu: lastMsgMap.get(c.id) || null,
-        non_lus: unreadMap.get(c.id) || 0,
+        dernier_contenu: c.dernier_contenu || null,
+        non_lus: Number(c.non_lus) || 0,
         is_jolene: isJolene,
-        mission_intitule: c.mission_id ? missionMap.get(c.mission_id) || null : null,
+        mission_intitule: c.mission_intitule || null,
       };
     });
 
@@ -280,12 +268,60 @@ export default function PageMessagerie({ role }: PageMessagerieProps) {
     setConversations(enriched);
     setConversationCibleIntrouvable(cibleIntrouvable ? convParam : null);
     setLoading(false);
-  }, [user, isAdmin, isAdminPlateforme, convParam]);
+  }, [user, isAdmin, convParam]);
 
   useEffect(() => {
     void chargerConversations();
     return () => { chargementConversationsRef.current += 1; };
   }, [chargerConversations]);
+
+  useEffect(() => {
+    if (!user) return;
+    const channel = supabase
+      .channel(`messagerie-liste-${user.id}`)
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'messages_chat',
+      }, (payload) => {
+        const message = payload.new as Message;
+        setConversations((precedentes) => {
+          const conversation = precedentes.find(c => c.id === message.conversation_id);
+          if (!conversation) return precedentes;
+          const entrant = conversation.soignant_id
+            ? role === 'ADMIN_ETABLISSEMENT'
+              ? message.auteur_id === conversation.soignant_id
+              : role === 'SOIGNANT'
+                ? message.auteur_id !== conversation.soignant_id
+                : message.auteur_id !== user.id
+            : message.auteur_id !== user.id;
+          return precedentes
+            .map(c => c.id === message.conversation_id
+              ? {
+                  ...c,
+                  dernier_contenu: message.contenu,
+                  dernier_message_le: message.cree_le,
+                  non_lus: entrant && selectedConvId !== c.id
+                    ? c.non_lus + 1
+                    : c.non_lus,
+                }
+              : c)
+            .sort((a, b) => new Date(
+              b.dernier_message_le || b.cree_le,
+            ).getTime() - new Date(
+              a.dernier_message_le || a.cree_le,
+            ).getTime());
+        });
+      })
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'conversations',
+      }, () => { void chargerConversations(); })
+      .subscribe();
+
+    return () => { void supabase.removeChannel(channel); };
+  }, [chargerConversations, role, selectedConvId, user]);
 
   useEffect(() => {
     if (!selectedConvId) {
@@ -640,6 +676,17 @@ export default function PageMessagerie({ role }: PageMessagerieProps) {
                       </p>
                     )}
                   </div>
+                  {!selectedConv.is_jolene
+                    && selectedConv.autre_id
+                    && selectedConv.autre_id !== '00000000-0000-0000-0000-000000000000' && (
+                      <BloquerUtilisateur
+                        cibleId={selectedConv.autre_id}
+                        variant="lien"
+                        libelleCible={role === 'SOIGNANT' && selectedConv.etablissement_id
+                          ? 'l’établissement'
+                          : undefined}
+                      />
+                    )}
                 </div>
 
                 <div ref={scrollRef} className="flex-1 overflow-y-auto px-3 py-4 space-y-3 min-h-0 bg-jolene-lavender-50/30">
@@ -661,7 +708,15 @@ export default function PageMessagerie({ role }: PageMessagerieProps) {
                           </div>
                         );
                       }
-                      const mine = msg.auteur_id === user?.id;
+                      const mine = msg.est_admin
+                        ? msg.auteur_id === user?.id
+                        : role === 'ADMIN_ETABLISSEMENT'
+                          && selectedConv.soignant_id
+                          ? msg.auteur_id !== selectedConv.soignant_id
+                          : msg.auteur_id === user?.id;
+                      const messageEquipe = !msg.est_admin
+                        && mine
+                        && msg.auteur_id !== user?.id;
                       return (
                         <div key={msg.id} className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
                           <div className={`max-w-[80%] px-3.5 py-2 ${
@@ -672,6 +727,11 @@ export default function PageMessagerie({ role }: PageMessagerieProps) {
                             {msg.est_admin && (
                               <p className={`text-[10px] font-bold mb-0.5 flex items-center gap-1 ${mine ? 'text-white/85' : 'text-jolene-rose-500'}`}>
                                 <Shield className="h-3 w-3" /> Admin Jolene
+                              </p>
+                            )}
+                            {messageEquipe && (
+                              <p className="text-[10px] font-semibold mb-0.5 text-white/85">
+                                Équipe établissement
                               </p>
                             )}
                             <p className="text-sm whitespace-pre-wrap break-words">{msg.contenu}</p>

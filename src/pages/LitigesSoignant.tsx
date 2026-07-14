@@ -1,5 +1,5 @@
-import { useState, useEffect, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { LayoutApp } from '@/components/LayoutApp';
 import { ChargementPage } from '@/components/ChargementPage';
@@ -41,11 +41,16 @@ export default function LitigesSoignant() {
 
 export function LitigesSoignantContent() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const [searchParams] = useSearchParams();
   const { user } = useAuth();
   const [litiges, setLitiges] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [filtre, setFiltre] = useState<FiltreStatut>('TOUS');
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const litigeCible = searchParams.get('litige')
+    || location.hash.replace(/^#/, '')
+    || null;
 
   // New dispute modal
   const [showNew, setShowNew] = useState(false);
@@ -54,7 +59,7 @@ export function LitigesSoignantContent() {
   const [newMotif, setNewMotif] = useState('');
   const [creating, setCreating] = useState(false);
 
-  const charger = async () => {
+  const charger = useCallback(async () => {
     if (!user) return;
     const { data } = await supabase
       .from('litiges')
@@ -63,9 +68,24 @@ export function LitigesSoignantContent() {
       .order('cree_le', { ascending: false });
     setLitiges(data || []);
     setLoading(false);
-  };
+  }, [user]);
 
-  useEffect(() => { charger(); }, [user]);
+  useEffect(() => { void charger(); }, [charger]);
+
+  useEffect(() => {
+    if (!litigeCible || !litiges.some(l => l.id === litigeCible)) return;
+    if (filtre !== 'TOUS') {
+      setFiltre('TOUS');
+      return;
+    }
+    setExpandedId(litigeCible);
+    requestAnimationFrame(() => {
+      document.getElementById(`litige-${litigeCible}`)?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'start',
+      });
+    });
+  }, [filtre, litigeCible, litiges]);
 
   const filteredLitiges = useMemo(() => {
     if (filtre === 'TOUS') return litiges;
@@ -184,7 +204,7 @@ export function LitigesSoignantContent() {
             const mission = l.missions;
             const showCountdown = l.statut === 'MEDIATION_EN_COURS' && !estResolu(l.statut);
             return (
-              <div key={l.id} className="card-base overflow-hidden">
+              <div id={`litige-${l.id}`} key={l.id} className="card-base overflow-hidden scroll-mt-24">
                 {/* Litige header — always visible, clickable */}
                 <div
                   className="flex items-center gap-3 cursor-pointer"
@@ -231,7 +251,11 @@ export function LitigesSoignantContent() {
                   <div className="border-t border-border mt-3 pt-3 space-y-3">
                     <TimelineLitige statut={l.statut} />
                     <BoutonsActionLitige litige={l} role="SOIGNANT" onUpdate={charger} />
-                    <FilDiscussionLitige litige={l} onUpdate={charger} />
+                    <FilDiscussionLitige
+                      litige={l}
+                      onUpdate={charger}
+                      roleUtilisateur="soignant"
+                    />
                   </div>
                 )}
               </div>

@@ -127,8 +127,7 @@ BEGIN
   SELECT pg_get_functiondef(
     'public.fn_interlocuteurs_conversations(uuid[])'::regprocedure
   ) INTO v_definition;
-  IF (v_definition ~ 'participant_1_id = v_uid') IS DISTINCT FROM true
-     OR (v_definition ~ 'participant_2_id = v_uid') IS DISTINCT FROM true
+  IF (v_definition ~ 'fn_conversation_accessible\(c.id\)') IS DISTINCT FROM true
      OR (v_definition ~ 'fn_compte_auth_actif') IS DISTINCT FROM true
      OR (v_definition ~ 'cardinality\(p_conversation_ids\) > 100') IS DISTINCT FROM true
      OR (v_definition ~* '(email_contact|telephone_contact|numero_rpps|stripe_)')

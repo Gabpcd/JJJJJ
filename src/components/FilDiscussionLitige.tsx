@@ -13,6 +13,7 @@ import { FormulaireAccord } from '@/components/litige/FormulaireAccord';
 interface Props {
   litige: any;
   onUpdate: () => void;
+  roleUtilisateur?: 'soignant' | 'etablissement';
 }
 
 const STATUT_LABELS: Record<string, { label: string; classes: string }> = {
@@ -35,7 +36,7 @@ const STATUT_LABELS: Record<string, { label: string; classes: string }> = {
   FERME: { label: 'Fermé', classes: 'bg-muted text-muted-foreground border-border' },
 };
 
-export function FilDiscussionLitige({ litige, onUpdate }: Props) {
+export function FilDiscussionLitige({ litige, onUpdate, roleUtilisateur }: Props) {
   const { user } = useAuth();
   const [messages, setMessages] = useState<any[]>([]);
   const [loadingMsgs, setLoadingMsgs] = useState(true);
@@ -209,8 +210,11 @@ export function FilDiscussionLitige({ litige, onUpdate }: Props) {
 
       {/* PR 3 Sprint 3.5 — Formulaire d'accord structuré */}
       {isOpen && (() => {
-        const monRole = litige.soignant_id === user?.id ? 'soignant'
-          : (litige.etablissement_id === user?.id ? 'etablissement' : null);
+        const monRole = roleUtilisateur || (
+          litige.soignant_id === user?.id
+            ? 'soignant'
+            : (litige.etablissement_id === user?.id ? 'etablissement' : null)
+        );
         if (!monRole) return null;
         const proposition = litige.payload_modifications;
         const dejaAccordSoignant = !!litige.accord_soignant;

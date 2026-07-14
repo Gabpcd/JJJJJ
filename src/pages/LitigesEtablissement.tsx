@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { usePageTitle } from '@/hooks/usePageTitle';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { LayoutApp } from '@/components/LayoutApp';
 import { ChargementPage } from '@/components/ChargementPage';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -34,6 +34,7 @@ import { statutBadgeV2, estResolu } from '@/lib/statutLitige';
 export default function LitigesEtablissement() {
   usePageTitle('Litiges & contestations');
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
   const initialTab = searchParams.get('tab') === 'reclamations' ? 'reclamations' : 'litiges';
   const [activeTab, setActiveTab] = useState<'litiges' | 'reclamations'>(initialTab);
@@ -41,6 +42,9 @@ export default function LitigesEtablissement() {
   const [litiges, setLitiges] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const litigeCible = searchParams.get('litige')
+    || location.hash.replace(/^#/, '')
+    || null;
 
   // New dispute modal
   const [showNew, setShowNew] = useState(false);
@@ -49,9 +53,12 @@ export default function LitigesEtablissement() {
   const [newMotif, setNewMotif] = useState('');
   const [creating, setCreating] = useState(false);
 
-  const charger = async () => {
+  const charger = useCallback(async () => {
     if (!user || !etablissementId) return;
-    const { data, error } = await supabase.rpc('fn_litiges_etablissement' as any);
+    const { data, error } = await supabase.rpc(
+      'fn_litiges_etablissement' as any,
+      { p_etablissement_id: etablissementId } as any,
+    );
     if (error) {
       toast.error('Erreur lors du chargement des litiges.');
       setLoading(false);
@@ -59,9 +66,24 @@ export default function LitigesEtablissement() {
     }
     setLitiges(Array.isArray(data) ? data : []);
     setLoading(false);
-  };
+  }, [user, etablissementId]);
 
-  useEffect(() => { charger(); }, [user, etablissementId]);
+  useEffect(() => { void charger(); }, [charger]);
+
+  useEffect(() => {
+    if (!litigeCible || !litiges.some(l => l.litige_id === litigeCible)) return;
+    if (activeTab !== 'litiges') {
+      setActiveTab('litiges');
+      return;
+    }
+    setExpandedId(litigeCible);
+    requestAnimationFrame(() => {
+      document.getElementById(`litige-${litigeCible}`)?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'start',
+      });
+    });
+  }, [activeTab, litigeCible, litiges]);
 
   // Lot 12 : litiges contextuels — la page est un SUIVI. L'ouverture ne se fait
   // qu'en contexte (fiche mission → « Ouvrir un litige », ou deep-link
@@ -181,10 +203,11 @@ export default function LitigesEtablissement() {
               soignant_id: l.soignant_id,
               etablissement_id: l.etablissement_id,
               resolution: l.resolution,
+              payload_modifications: l.payload_modifications,
               missions: { intitule: l.mission_intitule },
             };
             return (
-              <div key={l.litige_id} className="card-base">
+              <div id={`litige-${l.litige_id}`} key={l.litige_id} className="card-base scroll-mt-24">
                 {/* Summary row */}
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex-1 min-w-0">
@@ -234,7 +257,11 @@ export default function LitigesEtablissement() {
                   <div className="mt-3 space-y-3">
                     <TimelineLitige statut={l.statut} />
                     <BoutonsActionLitige litige={litigeFull} role="ETABLISSEMENT" onUpdate={charger} />
-                    <FilDiscussionLitige litige={litigeFull} onUpdate={charger} />
+                    <FilDiscussionLitige
+                      litige={litigeFull}
+                      onUpdate={charger}
+                      roleUtilisateur="etablissement"
+                    />
                   </div>
                 )}
               </div>

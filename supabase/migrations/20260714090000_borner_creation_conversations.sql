@@ -2,6 +2,16 @@
 -- validait plus aucune relation dès qu'un mission_id était fourni, tandis que
 -- les ACL permettaient encore INSERT/UPDATE direct sur les conversations.
 
+-- L'identité métier d'un fil établissement est indépendante du salarié qui
+-- l'ouvre. Les deux colonnes historiques participant_* restent présentes pour
+-- la compatibilité Realtime, mais ce couple partagé devient la source de
+-- vérité pour l'équipe.
+ALTER TABLE public.conversations
+  ADD COLUMN IF NOT EXISTS etablissement_id uuid
+    REFERENCES public.etablissements(id),
+  ADD COLUMN IF NOT EXISTS soignant_id uuid
+    REFERENCES public.soignants(id);
+
 CREATE OR REPLACE FUNCTION private.fn_interlocuteur_operationnel_actif(
   p_user_id uuid,
   p_etablissement_id uuid
@@ -296,13 +306,14 @@ AS $function$
   ), false);
 $function$;
 
-CREATE OR REPLACE FUNCTION private.fn_soignant_visible_pool(
+CREATE OR REPLACE FUNCTION private.fn_soignant_visible_pool_etablissement(
   p_etablissement_user_id uuid,
-  p_soignant_id uuid
+  p_soignant_id uuid,
+  p_etablissement_id uuid
 )
 RETURNS boolean
 LANGUAGE sql
-STABLE
+VOLATILE
 SECURITY DEFINER
 SET search_path TO ''
 AS $function$
@@ -310,7 +321,8 @@ AS $function$
     SELECT 1
     FROM public.etablissements e
     JOIN public.soignants s ON s.id = p_soignant_id
-    WHERE e.supprime_le IS NULL
+    WHERE e.id = p_etablissement_id
+      AND e.supprime_le IS NULL
       AND private.fn_interlocuteur_operationnel_actif(
         p_etablissement_user_id,
         e.id
@@ -344,6 +356,27 @@ AS $function$
             )
         )
       )
+  ), false);
+$function$;
+
+CREATE OR REPLACE FUNCTION private.fn_soignant_visible_pool(
+  p_etablissement_user_id uuid,
+  p_soignant_id uuid
+)
+RETURNS boolean
+LANGUAGE sql
+VOLATILE
+SECURITY DEFINER
+SET search_path TO ''
+AS $function$
+  SELECT COALESCE(EXISTS (
+    SELECT 1
+    FROM public.etablissements e
+    WHERE private.fn_soignant_visible_pool_etablissement(
+      p_etablissement_user_id,
+      p_soignant_id,
+      e.id
+    )
   ), false);
 $function$;
 
@@ -532,7 +565,7 @@ CREATE OR REPLACE FUNCTION private.fn_relation_messagerie_autorisee(
 )
 RETURNS boolean
 LANGUAGE sql
-STABLE
+VOLATILE
 SECURITY DEFINER
 SET search_path TO ''
 AS $function$
@@ -598,8 +631,211 @@ REVOKE ALL ON FUNCTION private.fn_support_messagerie_actif(uuid)
   FROM PUBLIC, anon, authenticated, service_role;
 REVOKE ALL ON FUNCTION private.fn_soignant_visible_pool(uuid, uuid)
   FROM PUBLIC, anon, authenticated, service_role;
+REVOKE ALL ON FUNCTION private.fn_soignant_visible_pool_etablissement(
+  uuid, uuid, uuid
+) FROM PUBLIC, anon, authenticated, service_role;
 REVOKE ALL ON FUNCTION private.fn_relation_messagerie_autorisee(uuid, uuid, uuid)
   FROM PUBLIC, anon, authenticated, service_role;
+
+-- Rattache les fils existants à leur couple métier quand il est démontrable.
+-- Pour une mission, l'affectation est la source canonique. Pour un fil Pool
+-- sans mission, le backfill n'agit que si un seul établissement opérationnel
+-- correspond au participant non soignant.
+UPDATE public.conversations c
+SET etablissement_id = mi.etablissement_id,
+    soignant_id = mi.soignant_assigne_id
+FROM public.missions mi
+WHERE c.mission_id = mi.id
+  AND mi.soignant_assigne_id IS NOT NULL
+  AND mi.soignant_assigne_id IN (
+    c.participant_1_id,
+    c.participant_2_id
+  )
+  -- Un fil admin de modération peut lui aussi référencer une mission et le
+  -- soignant assigné. Il ne doit jamais être fusionné dans le fil de l'équipe
+  -- établissement : l'autre participant doit être un membre opérationnel de
+  -- l'établissement exact de la mission.
+  AND private.fn_interlocuteur_operationnel_actif(
+    CASE
+      WHEN c.participant_1_id = mi.soignant_assigne_id
+        THEN c.participant_2_id
+      ELSE c.participant_1_id
+    END,
+    mi.etablissement_id
+  )
+  AND (
+    c.etablissement_id IS NULL
+    OR c.soignant_id IS NULL
+  );
+
+WITH possibilites AS (
+  SELECT
+    c.id AS conversation_id,
+    s.id AS soignant_id,
+    e.id AS etablissement_id
+  FROM public.conversations c
+  CROSS JOIN LATERAL (
+    VALUES (c.participant_1_id), (c.participant_2_id)
+  ) AS participant(user_id)
+  JOIN public.soignants s
+    ON s.id = participant.user_id
+   AND s.supprime_le IS NULL
+  CROSS JOIN LATERAL (
+    SELECT CASE
+      WHEN s.id = c.participant_1_id THEN c.participant_2_id
+      ELSE c.participant_1_id
+    END AS user_id
+  ) AS interlocuteur
+  JOIN public.etablissements e
+    ON private.fn_interlocuteur_operationnel_actif(
+      interlocuteur.user_id,
+      e.id
+    )
+  WHERE c.mission_id IS NULL
+    AND c.etablissement_id IS NULL
+    AND c.soignant_id IS NULL
+), rattachements_exacts AS (
+  SELECT
+    conversation_id,
+    min(soignant_id::text)::uuid AS soignant_id,
+    min(etablissement_id::text)::uuid AS etablissement_id
+  FROM possibilites
+  GROUP BY conversation_id
+  HAVING count(DISTINCT soignant_id) = 1
+     AND count(DISTINCT etablissement_id) = 1
+)
+UPDATE public.conversations c
+SET etablissement_id = r.etablissement_id,
+    soignant_id = r.soignant_id
+FROM rattachements_exacts r
+WHERE c.id = r.conversation_id;
+
+-- Une ancienne équipe a pu produire un fil par salarié. Tous les messages sont
+-- conservés et réunis dans le plus ancien fil ; les liens de notification sont
+-- réécrits avant suppression de la coquille vide.
+CREATE TEMP TABLE jolene_conversation_merge
+ON COMMIT DROP
+AS
+WITH classes AS (
+  SELECT
+    c.id,
+    first_value(c.id) OVER groupe AS conserver_id,
+    row_number() OVER groupe AS rang
+  FROM public.conversations c
+  WHERE c.etablissement_id IS NOT NULL
+    AND c.soignant_id IS NOT NULL
+  WINDOW groupe AS (
+    PARTITION BY c.etablissement_id, c.soignant_id, c.mission_id
+    ORDER BY c.cree_le, c.id
+  )
+)
+SELECT id AS fusionner_id, conserver_id
+FROM classes
+WHERE rang > 1;
+
+UPDATE public.messages_chat mc
+SET conversation_id = f.conserver_id
+FROM jolene_conversation_merge f
+WHERE mc.conversation_id = f.fusionner_id;
+
+INSERT INTO public.typing_status(conversation_id, user_id, started_at)
+SELECT
+  f.conserver_id,
+  ts.user_id,
+  max(ts.started_at)
+FROM public.typing_status ts
+JOIN jolene_conversation_merge f
+  ON f.fusionner_id = ts.conversation_id
+GROUP BY f.conserver_id, ts.user_id
+ON CONFLICT (conversation_id, user_id) DO UPDATE
+SET started_at = GREATEST(
+  public.typing_status.started_at,
+  EXCLUDED.started_at
+);
+
+DELETE FROM public.typing_status ts
+USING jolene_conversation_merge f
+WHERE ts.conversation_id = f.fusionner_id;
+
+UPDATE public.notifications n
+SET lien = pg_catalog.replace(
+  n.lien,
+  f.fusionner_id::text,
+  f.conserver_id::text
+)
+FROM jolene_conversation_merge f
+WHERE n.lien IS NOT NULL
+  AND pg_catalog.strpos(n.lien, f.fusionner_id::text) > 0;
+
+WITH etats AS (
+  SELECT
+    f.conserver_id,
+    pg_catalog.bool_or(source.archived_at IS NULL) AS contient_actif,
+    pg_catalog.max(source.archived_at) AS archive_max,
+    pg_catalog.max(source.dernier_message_le) AS dernier_max
+  FROM jolene_conversation_merge f
+  JOIN public.conversations source
+    ON source.id IN (f.conserver_id, f.fusionner_id)
+  GROUP BY f.conserver_id
+), messages_max AS (
+  SELECT
+    mc.conversation_id AS conserver_id,
+    pg_catalog.max(mc.cree_le) AS dernier_message
+  FROM public.messages_chat mc
+  WHERE mc.conversation_id IN (
+    SELECT DISTINCT conserver_id FROM jolene_conversation_merge
+  )
+  GROUP BY mc.conversation_id
+)
+UPDATE public.conversations c
+SET archived_at = CASE
+      WHEN e.contient_actif THEN NULL
+      ELSE e.archive_max
+    END,
+    dernier_message_le = CASE
+      WHEN mm.dernier_message IS NULL THEN e.dernier_max
+      WHEN e.dernier_max IS NULL THEN mm.dernier_message
+      ELSE GREATEST(mm.dernier_message, e.dernier_max)
+    END
+FROM etats e
+LEFT JOIN messages_max mm ON mm.conserver_id = e.conserver_id
+WHERE c.id = e.conserver_id;
+
+DELETE FROM public.conversations c
+USING jolene_conversation_merge f
+WHERE c.id = f.fusionner_id;
+
+WITH contacts AS (
+  SELECT
+    c.id,
+    private.fn_interlocuteur_operationnel_id(
+      c.etablissement_id
+    ) AS contact_id
+  FROM public.conversations c
+  WHERE c.etablissement_id IS NOT NULL
+    AND c.soignant_id IS NOT NULL
+)
+UPDATE public.conversations c
+SET participant_1_id = LEAST(c.soignant_id, ct.contact_id),
+    participant_2_id = GREATEST(c.soignant_id, ct.contact_id)
+FROM contacts ct
+WHERE c.id = ct.id
+  AND ct.contact_id IS NOT NULL;
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_conversation_mission_partagee
+ON public.conversations(etablissement_id, soignant_id, mission_id)
+WHERE etablissement_id IS NOT NULL
+  AND soignant_id IS NOT NULL
+  AND mission_id IS NOT NULL;
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_conversation_pool_partagee
+ON public.conversations(etablissement_id, soignant_id)
+WHERE etablissement_id IS NOT NULL
+  AND soignant_id IS NOT NULL
+  AND mission_id IS NULL;
+
+CREATE INDEX IF NOT EXISTS idx_messages_chat_dernier
+ON public.messages_chat(conversation_id, cree_le DESC, id DESC);
 
 CREATE OR REPLACE FUNCTION public.fn_obtenir_conversation(
   p_autre_id uuid,
@@ -614,8 +850,12 @@ DECLARE
   v_conv_id uuid;
   v_mon_id uuid := auth.uid();
   v_autorise boolean := false;
+  v_est_admin boolean := false;
   v_participant_1 uuid;
   v_participant_2 uuid;
+  v_etablissement_id uuid;
+  v_soignant_id uuid;
+  v_contact_etablissement_id uuid;
 BEGIN
   IF v_mon_id IS NULL OR public.fn_compte_auth_actif() IS NOT TRUE THEN
     RAISE EXCEPTION 'Non authentifié' USING ERRCODE = '28000';
@@ -625,7 +865,8 @@ BEGIN
     RAISE EXCEPTION 'Interlocuteur invalide' USING ERRCODE = '22023';
   END IF;
 
-  IF public.est_admin() THEN
+  v_est_admin := public.est_admin();
+  IF v_est_admin THEN
     IF p_mission_id IS NULL THEN
       v_autorise :=
         private.fn_soignant_messagerie_actif(p_autre_id)
@@ -663,11 +904,57 @@ BEGIN
     RAISE EXCEPTION 'Conversation non autorisée' USING ERRCODE = '42501';
   END IF;
 
-  v_participant_1 := LEAST(v_mon_id, p_autre_id);
-  v_participant_2 := GREATEST(v_mon_id, p_autre_id);
+  -- Les fils de mission non administratifs appartiennent au couple métier
+  -- établissement × soignant. Un second RH retrouve donc le fil canonique au
+  -- lieu d'en créer un nouveau avec son propre UUID Auth.
+  IF v_est_admin IS NOT TRUE AND p_mission_id IS NOT NULL THEN
+    SELECT mi.etablissement_id
+    INTO v_etablissement_id
+    FROM public.missions mi
+    WHERE mi.id = p_mission_id;
+
+    IF private.fn_soignant_lie_mission(v_mon_id, p_mission_id)
+       AND private.fn_soignant_messagerie_actif(v_mon_id)
+       AND private.fn_interlocuteur_operationnel_actif(
+         p_autre_id,
+         v_etablissement_id
+       ) THEN
+      v_soignant_id := v_mon_id;
+    ELSIF private.fn_soignant_lie_mission(p_autre_id, p_mission_id)
+       AND private.fn_soignant_messagerie_actif(p_autre_id)
+       AND private.fn_interlocuteur_operationnel_actif(
+         v_mon_id,
+         v_etablissement_id
+       ) THEN
+      v_soignant_id := p_autre_id;
+    END IF;
+
+    IF v_soignant_id IS NOT NULL THEN
+      v_contact_etablissement_id :=
+        private.fn_interlocuteur_operationnel_id(v_etablissement_id);
+    END IF;
+  END IF;
+
+  IF v_soignant_id IS NOT NULL
+     AND v_contact_etablissement_id IS NOT NULL THEN
+    v_participant_1 := LEAST(
+      v_soignant_id,
+      v_contact_etablissement_id
+    );
+    v_participant_2 := GREATEST(
+      v_soignant_id,
+      v_contact_etablissement_id
+    );
+  ELSE
+    v_etablissement_id := NULL;
+    v_soignant_id := NULL;
+    v_participant_1 := LEAST(v_mon_id, p_autre_id);
+    v_participant_2 := GREATEST(v_mon_id, p_autre_id);
+  END IF;
   PERFORM pg_catalog.pg_advisory_xact_lock(
     pg_catalog.hashtextextended(
-      v_participant_1::text || ':' || v_participant_2::text || ':' ||
+      COALESCE(v_etablissement_id::text, v_participant_1::text) || ':' ||
+      COALESCE(v_soignant_id::text, v_participant_2::text) || ':' ||
       COALESCE(p_mission_id::text, 'sans-mission'),
       0
     )
@@ -677,29 +964,63 @@ BEGIN
   INTO v_conv_id
   FROM public.conversations c
   WHERE (
-      (c.participant_1_id = v_mon_id AND c.participant_2_id = p_autre_id)
-      OR (c.participant_1_id = p_autre_id AND c.participant_2_id = v_mon_id)
+      (
+        v_etablissement_id IS NOT NULL
+        AND c.etablissement_id = v_etablissement_id
+        AND c.soignant_id = v_soignant_id
+      )
+      OR (
+        (
+          v_etablissement_id IS NULL
+          OR (
+            c.etablissement_id IS NULL
+            AND c.soignant_id IS NULL
+          )
+        )
+        AND c.participant_1_id = v_participant_1
+        AND c.participant_2_id = v_participant_2
+      )
     )
     AND (
       (p_mission_id IS NOT NULL AND c.mission_id = p_mission_id)
       OR (p_mission_id IS NULL AND c.mission_id IS NULL)
     )
   ORDER BY
+    CASE
+      WHEN c.etablissement_id = v_etablissement_id
+       AND c.soignant_id = v_soignant_id THEN 0
+      ELSE 1
+    END,
     CASE WHEN c.mission_id IS NULL THEN 0 ELSE 1 END,
     c.dernier_message_le DESC NULLS LAST,
     c.cree_le DESC NULLS LAST,
     c.id
   LIMIT 1;
 
+  IF v_conv_id IS NOT NULL
+     AND v_etablissement_id IS NOT NULL
+     AND v_soignant_id IS NOT NULL THEN
+    UPDATE public.conversations
+    SET etablissement_id = v_etablissement_id,
+        soignant_id = v_soignant_id
+    WHERE id = v_conv_id
+      AND etablissement_id IS NULL
+      AND soignant_id IS NULL;
+  END IF;
+
   IF v_conv_id IS NULL THEN
     INSERT INTO public.conversations (
       participant_1_id,
       participant_2_id,
-      mission_id
+      mission_id,
+      etablissement_id,
+      soignant_id
     ) VALUES (
       v_participant_1,
       v_participant_2,
-      p_mission_id
+      p_mission_id,
+      v_etablissement_id,
+      v_soignant_id
     )
     RETURNING id INTO v_conv_id;
   END IF;
@@ -715,6 +1036,93 @@ GRANT EXECUTE ON FUNCTION public.fn_obtenir_conversation(uuid, uuid)
 
 COMMENT ON FUNCTION public.fn_obtenir_conversation(uuid, uuid) IS
   'Crée ou retrouve une conversation après validation de la relation mission, match accepté ou Pool Urgence ; admin AAL2 borné aux endpoints de mission.';
+
+CREATE OR REPLACE FUNCTION public.fn_obtenir_conversation_pool_etablissement(
+  p_soignant_id uuid,
+  p_etablissement_id uuid
+)
+RETURNS uuid
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO ''
+AS $function$
+DECLARE
+  v_uid uuid := auth.uid();
+  v_contact_id uuid;
+  v_conversation_id uuid;
+  v_participant_1 uuid;
+  v_participant_2 uuid;
+BEGIN
+  IF v_uid IS NULL OR public.fn_compte_auth_actif() IS NOT TRUE THEN
+    RAISE EXCEPTION 'Non authentifié' USING ERRCODE = '28000';
+  END IF;
+  IF public.fn_a_permission_etablissement(
+       'candidatures', p_etablissement_id
+     ) IS NOT TRUE
+     OR private.fn_interlocuteur_operationnel_actif(
+       v_uid, p_etablissement_id
+     ) IS NOT TRUE
+     OR private.fn_soignant_messagerie_actif(p_soignant_id) IS NOT TRUE
+     OR NOT EXISTS (
+       SELECT 1
+       FROM public.fn_pool_urgence_etablissement(p_etablissement_id) pool
+       WHERE pool.soignant_id = p_soignant_id
+     ) THEN
+    RAISE EXCEPTION 'Conversation non autorisée' USING ERRCODE = '42501';
+  END IF;
+
+  v_contact_id :=
+    private.fn_interlocuteur_operationnel_id(p_etablissement_id);
+  IF v_contact_id IS NULL THEN
+    RAISE EXCEPTION 'Interlocuteur établissement indisponible'
+      USING ERRCODE = '55000';
+  END IF;
+
+  v_participant_1 := LEAST(v_contact_id, p_soignant_id);
+  v_participant_2 := GREATEST(v_contact_id, p_soignant_id);
+  PERFORM pg_catalog.pg_advisory_xact_lock(
+    pg_catalog.hashtextextended(
+      p_etablissement_id::text || ':' || p_soignant_id::text ||
+      ':pool',
+      0
+    )
+  );
+
+  SELECT c.id INTO v_conversation_id
+  FROM public.conversations c
+  WHERE c.etablissement_id = p_etablissement_id
+    AND c.soignant_id = p_soignant_id
+    AND c.mission_id IS NULL
+  ORDER BY c.cree_le, c.id
+  LIMIT 1;
+
+  IF v_conversation_id IS NULL THEN
+    INSERT INTO public.conversations (
+      participant_1_id,
+      participant_2_id,
+      mission_id,
+      etablissement_id,
+      soignant_id
+    ) VALUES (
+      v_participant_1,
+      v_participant_2,
+      NULL,
+      p_etablissement_id,
+      p_soignant_id
+    )
+    RETURNING id INTO v_conversation_id;
+  END IF;
+
+  RETURN v_conversation_id;
+END;
+$function$;
+
+REVOKE ALL ON FUNCTION public.fn_obtenir_conversation_pool_etablissement(
+  uuid, uuid
+) FROM PUBLIC, anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.fn_obtenir_conversation_pool_etablissement(
+  uuid, uuid
+) TO authenticated;
 
 -- Les deux triggers historiques d'attribution convergeaient vers des modèles
 -- différents : l'un utilisait à tort l'UUID de l'établissement comme UUID
@@ -795,7 +1203,7 @@ BEGIN
   v_participant_2 := GREATEST(p_soignant_id, v_user_etab_id);
   PERFORM pg_catalog.pg_advisory_xact_lock(
     pg_catalog.hashtextextended(
-      v_participant_1::text || ':' || v_participant_2::text || ':' ||
+      p_etablissement_id::text || ':' || p_soignant_id::text || ':' ||
       p_mission_id::text,
       0
     )
@@ -807,28 +1215,50 @@ BEGIN
   WHERE c.mission_id = p_mission_id
     AND (
       (
-        c.participant_1_id = p_soignant_id
-        AND c.participant_2_id = v_user_etab_id
+        c.etablissement_id = p_etablissement_id
+        AND c.soignant_id = p_soignant_id
       )
       OR (
-        c.participant_1_id = v_user_etab_id
-        AND c.participant_2_id = p_soignant_id
+        c.etablissement_id IS NULL
+        AND c.soignant_id IS NULL
+        AND c.participant_1_id = v_participant_1
+        AND c.participant_2_id = v_participant_2
       )
     )
-  ORDER BY c.cree_le, c.id
+  ORDER BY
+    CASE
+      WHEN c.etablissement_id = p_etablissement_id
+       AND c.soignant_id = p_soignant_id THEN 0
+      ELSE 1
+    END,
+    c.cree_le,
+    c.id
   LIMIT 1;
+
+  IF v_conv_id IS NOT NULL THEN
+    UPDATE public.conversations
+    SET etablissement_id = p_etablissement_id,
+        soignant_id = p_soignant_id
+    WHERE id = v_conv_id
+      AND etablissement_id IS NULL
+      AND soignant_id IS NULL;
+  END IF;
 
   IF v_conv_id IS NULL THEN
     INSERT INTO public.conversations (
       mission_id,
       participant_1_id,
       participant_2_id,
+      etablissement_id,
+      soignant_id,
       cree_le,
       dernier_message_le
     ) VALUES (
       p_mission_id,
       v_participant_1,
       v_participant_2,
+      p_etablissement_id,
+      p_soignant_id,
       pg_catalog.now(),
       pg_catalog.now()
     )
@@ -1003,12 +1433,151 @@ REVOKE ALL ON FUNCTION public.tg_candidature_acceptee_creer_conversation()
 GRANT EXECUTE ON FUNCTION public.tg_candidature_acceptee_creer_conversation()
   TO service_role;
 
+-- Revalidation du fil partagé sur son établissement exact. Pour un fil Pool,
+-- l'autorisation ne peut pas être empruntée à un autre établissement du même
+-- groupe ; pour une mission, le couple mission/établissement/soignant reste la
+-- source de vérité. Le contact canonique peut changer sans couper le soignant.
+CREATE OR REPLACE FUNCTION private.fn_relation_conversation_partagee(
+  p_user_id uuid,
+  p_conversation_id uuid
+)
+RETURNS boolean
+LANGUAGE sql
+VOLATILE
+SECURITY DEFINER
+SET search_path TO ''
+AS $function$
+  SELECT COALESCE(EXISTS (
+    SELECT 1
+    FROM public.conversations c
+    WHERE c.id = p_conversation_id
+      AND c.etablissement_id IS NOT NULL
+      AND c.soignant_id IS NOT NULL
+      AND (
+        (
+          p_user_id = c.soignant_id
+          AND private.fn_soignant_messagerie_actif(p_user_id)
+          AND CASE
+            WHEN c.mission_id IS NOT NULL THEN
+              private.fn_relation_messagerie_autorisee(
+                p_user_id,
+                private.fn_interlocuteur_operationnel_id(
+                  c.etablissement_id
+                ),
+                c.mission_id
+              )
+            ELSE
+              private.fn_soignant_visible_pool_etablissement(
+                private.fn_interlocuteur_operationnel_id(
+                  c.etablissement_id
+                ),
+                c.soignant_id,
+                c.etablissement_id
+              )
+          END
+        )
+        OR (
+          p_user_id <> c.soignant_id
+          AND private.fn_interlocuteur_operationnel_actif(
+            p_user_id,
+            c.etablissement_id
+          )
+          AND CASE
+            WHEN c.mission_id IS NOT NULL THEN
+              private.fn_relation_messagerie_autorisee(
+                p_user_id,
+                c.soignant_id,
+                c.mission_id
+              )
+            ELSE
+              private.fn_soignant_visible_pool_etablissement(
+                p_user_id,
+                c.soignant_id,
+                c.etablissement_id
+              )
+          END
+        )
+      )
+  ), false);
+$function$;
+
+CREATE OR REPLACE FUNCTION private.fn_membre_equipe_conversation(
+  p_user_id uuid,
+  p_conversation_id uuid
+)
+RETURNS boolean
+LANGUAGE sql
+VOLATILE
+SECURITY DEFINER
+SET search_path TO ''
+AS $function$
+  SELECT COALESCE(EXISTS (
+    SELECT 1
+    FROM public.conversations c
+    WHERE c.id = p_conversation_id
+      AND c.soignant_id IS DISTINCT FROM p_user_id
+      AND private.fn_relation_conversation_partagee(
+        p_user_id,
+        c.id
+      )
+  ), false);
+$function$;
+
+CREATE OR REPLACE FUNCTION private.fn_peut_ecrire_conversation(
+  p_user_id uuid,
+  p_conversation_id uuid
+)
+RETURNS boolean
+LANGUAGE sql
+VOLATILE
+SECURITY DEFINER
+SET search_path TO ''
+AS $function$
+  SELECT COALESCE(EXISTS (
+    SELECT 1
+    FROM public.conversations c
+    WHERE c.id = p_conversation_id
+      AND c.archived_at IS NULL
+      AND (
+        (
+          c.etablissement_id IS NOT NULL
+          AND c.soignant_id IS NOT NULL
+          AND private.fn_relation_conversation_partagee(
+            p_user_id,
+            c.id
+          )
+        )
+        OR (
+          (c.etablissement_id IS NULL OR c.soignant_id IS NULL)
+          AND p_user_id IN (c.participant_1_id, c.participant_2_id)
+          AND private.fn_relation_messagerie_autorisee(
+            p_user_id,
+            CASE
+              WHEN p_user_id = c.participant_1_id
+                THEN c.participant_2_id
+              ELSE c.participant_1_id
+            END,
+            c.mission_id
+          )
+        )
+        )
+      )
+  ), false);
+$function$;
+
+REVOKE ALL ON FUNCTION private.fn_relation_conversation_partagee(uuid, uuid)
+  FROM PUBLIC, anon, authenticated, service_role;
+REVOKE ALL ON FUNCTION private.fn_membre_equipe_conversation(uuid, uuid)
+  FROM PUBLIC, anon, authenticated, service_role;
+REVOKE ALL ON FUNCTION private.fn_peut_ecrire_conversation(uuid, uuid)
+  FROM PUBLIC, anon, authenticated, service_role;
+
 CREATE OR REPLACE FUNCTION public.fn_conversation_accessible(
   p_conversation_id uuid
 )
 RETURNS boolean
 LANGUAGE plpgsql
-STABLE
+VOLATILE
 SECURITY DEFINER
 SET search_path TO ''
 AS $function$
@@ -1031,12 +1600,23 @@ BEGIN
   WHERE c.id = p_conversation_id;
   IF NOT FOUND THEN RETURN false; END IF;
 
+  IF v_conv.etablissement_id IS NOT NULL
+     AND v_conv.soignant_id IS NOT NULL THEN
+    RETURN private.fn_relation_conversation_partagee(
+      v_uid,
+      p_conversation_id
+    );
+  END IF;
+
   IF v_uid = v_conv.participant_1_id THEN
     v_autre := v_conv.participant_2_id;
   ELSIF v_uid = v_conv.participant_2_id THEN
     v_autre := v_conv.participant_1_id;
   ELSE
-    RETURN false;
+    RETURN private.fn_membre_equipe_conversation(
+      v_uid,
+      p_conversation_id
+    );
   END IF;
 
   RETURN private.fn_relation_messagerie_autorisee(
@@ -1051,6 +1631,80 @@ REVOKE ALL ON FUNCTION public.fn_conversation_accessible(uuid)
   FROM PUBLIC, anon, authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.fn_conversation_accessible(uuid)
   TO authenticated;
+
+-- Dans un fil partagé, « Bloquer l'établissement » doit couper tous les
+-- auteurs de cette équipe, y compris si le contact canonique est remplacé.
+-- On reconnaît le contact historique du fil, les appartenances canoniques
+-- (même révoquées) et les fallbacks legacy encore rattachés à l'établissement.
+CREATE OR REPLACE FUNCTION private.fn_conversation_partagee_bloquee(
+  p_conversation_id uuid
+)
+RETURNS boolean
+LANGUAGE sql
+VOLATILE
+SECURITY DEFINER
+SET search_path TO ''
+AS $function$
+  SELECT COALESCE(EXISTS (
+    SELECT 1
+    FROM public.conversations c
+    JOIN public.utilisateurs_bloques b ON true
+    WHERE c.id = p_conversation_id
+      AND c.etablissement_id IS NOT NULL
+      AND c.soignant_id IS NOT NULL
+      AND (
+        (
+          b.bloqueur_id = c.soignant_id
+          AND (
+            b.bloque_id IN (c.participant_1_id, c.participant_2_id)
+            OR EXISTS (
+              SELECT 1
+              FROM public.membres_etablissement me
+              WHERE me.user_id = b.bloque_id
+                AND me.etablissement_id = c.etablissement_id
+                AND me.role IN ('PROPRIETAIRE', 'ADMIN_GROUPE', 'RH')
+            )
+            OR EXISTS (
+              SELECT 1
+              FROM auth.users u
+              WHERE u.id = b.bloque_id
+                AND (
+                  u.id = c.etablissement_id
+                  OR u.raw_app_meta_data ->> 'etablissement_id' =
+                     c.etablissement_id::text
+                )
+            )
+          )
+        )
+        OR (
+          b.bloque_id = c.soignant_id
+          AND (
+            b.bloqueur_id IN (c.participant_1_id, c.participant_2_id)
+            OR EXISTS (
+              SELECT 1
+              FROM public.membres_etablissement me
+              WHERE me.user_id = b.bloqueur_id
+                AND me.etablissement_id = c.etablissement_id
+                AND me.role IN ('PROPRIETAIRE', 'ADMIN_GROUPE', 'RH')
+            )
+            OR EXISTS (
+              SELECT 1
+              FROM auth.users u
+              WHERE u.id = b.bloqueur_id
+                AND (
+                  u.id = c.etablissement_id
+                  OR u.raw_app_meta_data ->> 'etablissement_id' =
+                     c.etablissement_id::text
+                )
+            )
+          )
+        )
+      )
+  ), false);
+$function$;
+
+REVOKE ALL ON FUNCTION private.fn_conversation_partagee_bloquee(uuid)
+  FROM PUBLIC, anon, authenticated, service_role;
 
 -- Le canal support reste une exception explicite, créée uniquement vers un
 -- administrateur actif disposant du groupe Messagerie.
@@ -1191,32 +1845,62 @@ BEGIN
 
   v_admin := COALESCE(p_admin_aal2, false)
     AND private.fn_support_messagerie_actif(p_acteur_id);
-  IF p_acteur_id = v_conv.participant_1_id THEN
-    v_autre := v_conv.participant_2_id;
-  ELSIF p_acteur_id = v_conv.participant_2_id THEN
-    v_autre := v_conv.participant_1_id;
-  ELSIF NOT v_admin THEN
-    RETURN pg_catalog.jsonb_build_object('error', 'Accès refusé');
+  IF v_conv.etablissement_id IS NOT NULL
+     AND v_conv.soignant_id IS NOT NULL THEN
+    IF private.fn_relation_conversation_partagee(
+         p_acteur_id,
+         p_conversation_id
+       ) THEN
+      v_autre := CASE
+        WHEN p_acteur_id = v_conv.soignant_id THEN
+          private.fn_interlocuteur_operationnel_id(
+            v_conv.etablissement_id
+          )
+        ELSE v_conv.soignant_id
+      END;
+    ELSIF NOT v_admin THEN
+      RETURN pg_catalog.jsonb_build_object('error', 'Accès refusé');
+    END IF;
+  ELSE
+    IF p_acteur_id = v_conv.participant_1_id THEN
+      v_autre := v_conv.participant_2_id;
+    ELSIF p_acteur_id = v_conv.participant_2_id THEN
+      v_autre := v_conv.participant_1_id;
+    ELSIF NOT v_admin THEN
+      RETURN pg_catalog.jsonb_build_object('error', 'Accès refusé');
+    END IF;
+
+    IF NOT v_admin
+       AND private.fn_relation_messagerie_autorisee(
+         p_acteur_id,
+         v_autre,
+         v_conv.mission_id
+       ) IS NOT TRUE THEN
+      RETURN pg_catalog.jsonb_build_object('error', 'Accès refusé');
+    END IF;
   END IF;
 
   IF NOT v_admin
-     AND private.fn_relation_messagerie_autorisee(
-       p_acteur_id,
-       v_autre,
-       v_conv.mission_id
-     ) IS NOT TRUE THEN
-    RETURN pg_catalog.jsonb_build_object('error', 'Accès refusé');
-  END IF;
-
-  IF v_autre IS NOT NULL AND EXISTS (
-    SELECT 1
-    FROM public.utilisateurs_bloques b
-    WHERE (b.bloqueur_id = p_acteur_id AND b.bloque_id = v_autre)
-       OR (b.bloqueur_id = v_autre AND b.bloque_id = p_acteur_id)
-  ) THEN
+     AND (
+       (
+         v_conv.etablissement_id IS NOT NULL
+         AND v_conv.soignant_id IS NOT NULL
+         AND private.fn_conversation_partagee_bloquee(p_conversation_id)
+       )
+       OR (
+         (v_conv.etablissement_id IS NULL OR v_conv.soignant_id IS NULL)
+         AND v_autre IS NOT NULL
+         AND EXISTS (
+           SELECT 1
+           FROM public.utilisateurs_bloques b
+           WHERE (b.bloqueur_id = p_acteur_id AND b.bloque_id = v_autre)
+              OR (b.bloqueur_id = v_autre AND b.bloque_id = p_acteur_id)
+         )
+       )
+     ) THEN
     RETURN pg_catalog.jsonb_build_object(
       'error',
-      'Vous ne pouvez plus échanger avec cet utilisateur (blocage actif).'
+      'Vous ne pouvez plus échanger dans cette conversation (blocage actif).'
     );
   END IF;
 
@@ -1396,13 +2080,10 @@ BEGIN
     RAISE EXCEPTION 'NON_AUTHENTIFIE' USING ERRCODE = '28000';
   END IF;
   IF public.fn_conversation_accessible(p_conversation_id) IS NOT TRUE
-     OR NOT EXISTS (
-       SELECT 1
-       FROM public.conversations c
-       WHERE c.id = p_conversation_id
-         AND c.archived_at IS NULL
-         AND v_uid IN (c.participant_1_id, c.participant_2_id)
-     ) THEN
+     OR private.fn_peut_ecrire_conversation(
+       v_uid,
+       p_conversation_id
+     ) IS NOT TRUE THEN
     RAISE EXCEPTION 'NON_AUTORISE' USING ERRCODE = '42501';
   END IF;
 
@@ -1468,37 +2149,78 @@ BEGIN
     RAISE EXCEPTION 'Accès refusé' USING ERRCODE = '42501';
   END IF;
 
-  IF v_uid = v_conv.participant_1_id THEN
-    v_autre := v_conv.participant_2_id;
-  ELSIF v_uid = v_conv.participant_2_id THEN
-    v_autre := v_conv.participant_1_id;
-  ELSIF public.est_admin() THEN
-    -- Un administrateur qui observe une conversation ne doit jamais modifier
-    -- l'état de lecture des participants.
-    RETURN;
+  IF v_conv.etablissement_id IS NOT NULL
+     AND v_conv.soignant_id IS NOT NULL THEN
+    IF private.fn_relation_conversation_partagee(
+         v_uid,
+         p_conversation_id
+       ) THEN
+      v_autre := CASE
+        WHEN v_uid = v_conv.soignant_id THEN
+          private.fn_interlocuteur_operationnel_id(
+            v_conv.etablissement_id
+          )
+        ELSE v_conv.soignant_id
+      END;
+    ELSIF public.est_admin() THEN
+      -- Un administrateur qui observe une conversation ne doit jamais modifier
+      -- l'état de lecture des participants.
+      RETURN;
+    ELSE
+      RAISE EXCEPTION 'Accès refusé' USING ERRCODE = '42501';
+    END IF;
   ELSE
-    RAISE EXCEPTION 'Accès refusé' USING ERRCODE = '42501';
+    IF v_uid = v_conv.participant_1_id THEN
+      v_autre := v_conv.participant_2_id;
+    ELSIF v_uid = v_conv.participant_2_id THEN
+      v_autre := v_conv.participant_1_id;
+    ELSIF public.est_admin() THEN
+      RETURN;
+    ELSE
+      RAISE EXCEPTION 'Accès refusé' USING ERRCODE = '42501';
+    END IF;
+
+    IF private.fn_relation_messagerie_autorisee(
+         v_uid,
+         v_autre,
+         v_conv.mission_id
+       ) IS NOT TRUE THEN
+      RAISE EXCEPTION 'Accès refusé' USING ERRCODE = '42501';
+    END IF;
   END IF;
 
-  IF public.est_admin() IS NOT TRUE
-     AND private.fn_relation_messagerie_autorisee(
-       v_uid, v_autre, v_conv.mission_id
-     ) IS NOT TRUE THEN
-    RAISE EXCEPTION 'Accès refusé' USING ERRCODE = '42501';
+  IF v_conv.soignant_id = v_uid THEN
+    -- Côté soignant, tous les auteurs établissement partagent le même côté du
+    -- fil et sont marqués lus ensemble.
+    UPDATE public.messages_chat
+    SET lu = true
+    WHERE conversation_id = p_conversation_id
+      AND auteur_id <> v_conv.soignant_id
+      AND lu IS FALSE;
+  ELSIF v_conv.soignant_id IS NOT NULL
+        AND private.fn_membre_equipe_conversation(
+          v_uid,
+          p_conversation_id
+        ) THEN
+    UPDATE public.messages_chat
+    SET lu = true
+    WHERE conversation_id = p_conversation_id
+      AND auteur_id = v_conv.soignant_id
+      AND lu IS FALSE;
+  ELSE
+    UPDATE public.messages_chat
+    SET lu = true
+    WHERE conversation_id = p_conversation_id
+      AND auteur_id <> v_uid
+      AND lu IS FALSE;
   END IF;
-
-  UPDATE public.messages_chat
-  SET lu = true
-  WHERE conversation_id = p_conversation_id
-    AND auteur_id <> v_uid
-    AND lu IS FALSE;
 END;
 $function$;
 
 CREATE OR REPLACE FUNCTION public.fn_messages_non_lus()
 RETURNS integer
 LANGUAGE sql
-STABLE
+VOLATILE
 SECURITY DEFINER
 SET search_path TO ''
 AS $function$
@@ -1506,10 +2228,25 @@ AS $function$
   FROM public.conversations c
   JOIN public.messages_chat mc ON mc.conversation_id = c.id
   WHERE c.archived_at IS NULL
-    AND auth.uid() IN (c.participant_1_id, c.participant_2_id)
     AND mc.lu IS FALSE
-    AND mc.auteur_id <> auth.uid()
-    AND public.fn_conversation_accessible(c.id);
+    AND public.fn_conversation_accessible(c.id)
+    AND (
+      (
+        c.soignant_id = auth.uid()
+        AND mc.auteur_id <> c.soignant_id
+      )
+      OR (
+        c.soignant_id IS NOT NULL
+        AND c.soignant_id IS DISTINCT FROM auth.uid()
+        AND private.fn_membre_equipe_conversation(auth.uid(), c.id)
+        AND mc.auteur_id = c.soignant_id
+      )
+      OR (
+        c.soignant_id IS NULL
+        AND auth.uid() IN (c.participant_1_id, c.participant_2_id)
+        AND mc.auteur_id <> auth.uid()
+      )
+    );
 $function$;
 
 REVOKE ALL ON FUNCTION public.fn_marquer_messages_lus(uuid)
@@ -1520,6 +2257,137 @@ REVOKE ALL ON FUNCTION public.fn_messages_non_lus()
   FROM PUBLIC, anon, authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.fn_messages_non_lus()
   TO authenticated;
+
+-- Aperçus exacts côté SQL : une conversation très bavarde ne peut plus
+-- consommer la limite PostgREST de 1000 lignes et masquer les non-lus des
+-- autres fils. Le curseur permet au frontend de charger toute la boîte par
+-- pages bornées, sans OFFSET instable.
+CREATE OR REPLACE FUNCTION public.fn_lister_conversations_messagerie(
+  p_avant timestamptz DEFAULT NULL,
+  p_avant_id uuid DEFAULT NULL,
+  p_limite integer DEFAULT 100
+)
+RETURNS TABLE (
+  id uuid,
+  participant_1_id uuid,
+  participant_2_id uuid,
+  mission_id uuid,
+  etablissement_id uuid,
+  soignant_id uuid,
+  dernier_message_le timestamptz,
+  cree_le timestamptz,
+  archived_at timestamptz,
+  autre_id uuid,
+  dernier_contenu text,
+  non_lus bigint,
+  mission_intitule text,
+  ordre_le timestamptz
+)
+LANGUAGE plpgsql
+VOLATILE
+SECURITY DEFINER
+SET search_path TO ''
+AS $function$
+DECLARE
+  v_uid uuid := auth.uid();
+  v_limite integer := LEAST(
+    GREATEST(COALESCE(p_limite, 100), 1),
+    100
+  );
+BEGIN
+  IF v_uid IS NULL OR public.fn_compte_auth_actif() IS NOT TRUE THEN
+    RAISE EXCEPTION 'Non authentifié' USING ERRCODE = '28000';
+  END IF;
+  IF (p_avant IS NULL) <> (p_avant_id IS NULL) THEN
+    RAISE EXCEPTION 'Curseur incomplet' USING ERRCODE = '22023';
+  END IF;
+
+  RETURN QUERY
+  WITH page AS (
+    SELECT
+      c.*,
+      COALESCE(c.dernier_message_le, c.cree_le) AS ordre
+    FROM public.conversations c
+    WHERE public.fn_conversation_accessible(c.id)
+      AND (
+        p_avant IS NULL
+        OR (
+          COALESCE(c.dernier_message_le, c.cree_le),
+          c.id
+        ) < (p_avant, p_avant_id)
+      )
+    ORDER BY
+      COALESCE(c.dernier_message_le, c.cree_le) DESC,
+      c.id DESC
+    LIMIT v_limite
+  )
+  SELECT
+    p.id,
+    p.participant_1_id,
+    p.participant_2_id,
+    p.mission_id,
+    p.etablissement_id,
+    p.soignant_id,
+    p.dernier_message_le,
+    p.cree_le,
+    p.archived_at,
+    CASE
+      WHEN public.est_admin() THEN p.participant_2_id
+      WHEN p.soignant_id = v_uid THEN
+        private.fn_interlocuteur_operationnel_id(p.etablissement_id)
+      WHEN p.soignant_id IS NOT NULL
+       AND private.fn_membre_equipe_conversation(v_uid, p.id)
+        THEN p.soignant_id
+      WHEN v_uid = p.participant_1_id THEN p.participant_2_id
+      WHEN v_uid = p.participant_2_id THEN p.participant_1_id
+      ELSE p.participant_1_id
+    END AS autre_id,
+    dernier.contenu,
+    CASE
+      WHEN p.soignant_id = v_uid THEN (
+        SELECT pg_catalog.count(*)
+        FROM public.messages_chat mc
+        WHERE mc.conversation_id = p.id
+          AND mc.lu IS FALSE
+          AND mc.auteur_id <> p.soignant_id
+      )
+      WHEN p.soignant_id IS NOT NULL
+       AND private.fn_membre_equipe_conversation(v_uid, p.id) THEN (
+        SELECT pg_catalog.count(*)
+        FROM public.messages_chat mc
+        WHERE mc.conversation_id = p.id
+          AND mc.lu IS FALSE
+          AND mc.auteur_id = p.soignant_id
+      )
+      ELSE (
+        SELECT pg_catalog.count(*)
+        FROM public.messages_chat mc
+        WHERE mc.conversation_id = p.id
+          AND mc.lu IS FALSE
+          AND mc.auteur_id <> v_uid
+      )
+    END AS non_lus,
+    mi.intitule::text,
+    p.ordre
+  FROM page p
+  LEFT JOIN LATERAL (
+    SELECT mc.contenu
+    FROM public.messages_chat mc
+    WHERE mc.conversation_id = p.id
+    ORDER BY mc.cree_le DESC, mc.id DESC
+    LIMIT 1
+  ) dernier ON true
+  LEFT JOIN public.missions mi ON mi.id = p.mission_id
+  ORDER BY p.ordre DESC, p.id DESC;
+END;
+$function$;
+
+REVOKE ALL ON FUNCTION public.fn_lister_conversations_messagerie(
+  timestamptz, uuid, integer
+) FROM PUBLIC, anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.fn_lister_conversations_messagerie(
+  timestamptz, uuid, integer
+) TO authenticated;
 
 CREATE OR REPLACE FUNCTION public.fn_interlocuteurs_conversations(
   p_conversation_ids uuid[]
@@ -1533,7 +2401,7 @@ RETURNS TABLE (
   est_jolene boolean
 )
 LANGUAGE plpgsql
-STABLE
+VOLATILE
 SECURITY DEFINER
 SET search_path TO ''
 AS $function$
@@ -1558,24 +2426,34 @@ BEGIN
     SELECT
       c.id,
       c.mission_id,
+      c.etablissement_id,
+      c.soignant_id,
       c.participant_1_id,
       c.participant_2_id
     FROM public.conversations c
     WHERE c.id = ANY(p_conversation_ids)
-      AND (
-        c.participant_1_id = v_uid
-        OR c.participant_2_id = v_uid
-      )
       AND public.fn_conversation_accessible(c.id)
   ), participants AS (
     SELECT
       c.id AS conversation_id,
       c.mission_id,
-      p.participant_id
+      c.etablissement_id,
+      COALESCE(c.soignant_id, c.participant_1_id) AS participant_id
     FROM conversations_autorisees c
-    CROSS JOIN LATERAL (
-      VALUES (c.participant_1_id), (c.participant_2_id)
-    ) AS p(participant_id)
+
+    UNION ALL
+
+    SELECT
+      c.id AS conversation_id,
+      c.mission_id,
+      c.etablissement_id,
+      CASE
+        WHEN c.etablissement_id IS NOT NULL
+         AND c.soignant_id IS NOT NULL THEN
+          private.fn_interlocuteur_operationnel_id(c.etablissement_id)
+        ELSE c.participant_2_id
+      END AS participant_id
+    FROM conversations_autorisees c
   )
   SELECT
     p.conversation_id,
@@ -1598,35 +2476,48 @@ BEGIN
     WHERE s.id IS NULL
       AND e0.supprime_le IS NULL
       AND (
-        e0.id = p.participant_id
-        OR EXISTS (
-          SELECT 1
-          FROM public.membres_etablissement me
-          WHERE me.user_id = p.participant_id
-            AND me.etablissement_id = e0.id
-            AND me.actif IS TRUE
+        (
+          p.etablissement_id IS NOT NULL
+          AND e0.id = p.etablissement_id
         )
-        OR EXISTS (
-          SELECT 1
-          FROM auth.users u
-          WHERE u.id = p.participant_id
-            AND u.raw_app_meta_data ->> 'etablissement_id' = e0.id::text
-            AND NOT EXISTS (
+        OR (
+          p.etablissement_id IS NULL
+          AND (
+            e0.id = p.participant_id
+            OR EXISTS (
               SELECT 1
               FROM public.membres_etablissement me
-              WHERE me.user_id = u.id
+              WHERE me.user_id = p.participant_id
+                AND me.etablissement_id = e0.id
+                AND me.actif IS TRUE
             )
+            OR EXISTS (
+              SELECT 1
+              FROM auth.users u
+              WHERE u.id = p.participant_id
+                AND u.raw_app_meta_data ->> 'etablissement_id' = e0.id::text
+                AND NOT EXISTS (
+                  SELECT 1
+                  FROM public.membres_etablissement me
+                  WHERE me.user_id = u.id
+                )
+            )
+          )
         )
       )
     ORDER BY
-      CASE WHEN e0.id = (
-        SELECT mi.etablissement_id
-        FROM public.missions mi
-        WHERE mi.id = p.mission_id
+      CASE WHEN e0.id = COALESCE(
+        p.etablissement_id,
+        (
+          SELECT mi.etablissement_id
+          FROM public.missions mi
+          WHERE mi.id = p.mission_id
+        )
       ) THEN 0 ELSE 1 END,
       e0.id
     LIMIT 1
   ) e ON true
+  WHERE p.participant_id IS NOT NULL
   ORDER BY p.conversation_id, p.participant_id;
 END;
 $function$;

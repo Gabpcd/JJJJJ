@@ -28,10 +28,6 @@ CREATE POLICY pol_typing_status_select
       FROM public.conversations c
       WHERE c.id = typing_status.conversation_id
         AND c.archived_at IS NULL
-        AND (SELECT auth.uid()) IN (
-          c.participant_1_id,
-          c.participant_2_id
-        )
     )
   );
 
@@ -45,13 +41,19 @@ CREATE POLICY pol_presence_status_select
     OR EXISTS (
       SELECT 1
       FROM public.conversations c
-      WHERE presence_status.user_id IN (
-        c.participant_1_id,
-        c.participant_2_id
-      )
-        AND (SELECT auth.uid()) IN (
-          c.participant_1_id,
-          c.participant_2_id
+      WHERE (
+          presence_status.user_id IN (
+            c.participant_1_id,
+            c.participant_2_id
+          )
+          OR presence_status.user_id = c.soignant_id
+          OR (
+            c.etablissement_id IS NOT NULL
+            AND private.fn_interlocuteur_operationnel_actif(
+              presence_status.user_id,
+              c.etablissement_id
+            )
+          )
         )
         AND c.archived_at IS NULL
         AND public.fn_conversation_accessible(c.id)
@@ -74,13 +76,10 @@ BEGIN
   END IF;
 
   IF public.fn_conversation_accessible(p_conversation_id) IS NOT TRUE
-     OR NOT EXISTS (
-       SELECT 1
-       FROM public.conversations c
-       WHERE c.id = p_conversation_id
-         AND c.archived_at IS NULL
-         AND v_uid IN (c.participant_1_id, c.participant_2_id)
-     ) THEN
+     OR private.fn_peut_ecrire_conversation(
+       v_uid,
+       p_conversation_id
+     ) IS NOT TRUE THEN
     RAISE EXCEPTION 'NON_AUTORISE' USING ERRCODE = '42501';
   END IF;
 

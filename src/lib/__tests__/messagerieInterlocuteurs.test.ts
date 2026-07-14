@@ -191,6 +191,10 @@ describe('résolution des interlocuteurs de messagerie', () => {
     expect(migrationQuotas).toContain('pg_advisory_xact_lock');
     expect(migrationQuotas).toContain('dec_borner_flood_message_contact');
     expect(migrationQuotas).toContain('dec_borner_flood_message_litige');
+    expect(migrationQuotas).toContain('dec_borner_flood_message_chat');
+    expect(migrationSupport).toContain('fn_destinataires_litige_etablissement');
+    expect(migrationSupport).toContain("type_ressource = 'message_litige'");
+    expect(migrationSupport).not.toContain('VALUES (\n      v_litige.etablissement_id,');
     expect(detail).not.toContain('ChatMission');
     expect(existsSync(resolve(process.cwd(), 'src/components/ChatMission.tsx'))).toBe(false);
     expect(adminSupport).toContain("'fn_admin_traiter_message_contact'");

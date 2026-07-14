@@ -147,6 +147,11 @@ DECLARE
   v_result jsonb;
   v_notification jsonb;
 BEGIN
+  IF p_decision IS NULL
+     OR p_decision NOT IN ('ACCEPTEE', 'REFUSEE') THEN
+    RETURN pg_catalog.jsonb_build_object('error', 'Décision invalide');
+  END IF;
+
   -- Ordre global de verrouillage : mission avant candidature. Deux candidats
   -- traités simultanément pour la même mission ne peuvent ainsi pas former le
   -- cycle candidature A -> mission -> candidature B.
@@ -209,8 +214,6 @@ BEGIN
       'SOIGNANT'
     );
     RETURN pg_catalog.jsonb_build_object('success', true);
-  ELSIF p_decision <> 'ACCEPTEE' THEN
-    RETURN pg_catalog.jsonb_build_object('error', 'Décision invalide');
   END IF;
 
   v_result := public.fn_finaliser_attribution_mission(

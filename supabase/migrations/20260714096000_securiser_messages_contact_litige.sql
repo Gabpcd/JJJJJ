@@ -255,33 +255,8 @@ GRANT EXECUTE ON FUNCTION public.fn_admin_traiter_message_contact(uuid)
 -- autorisé d'un établissement secondaire. Lecture et mutation utilisent
 -- désormais la même permission que les RPC de contrat/litige.
 DROP POLICY IF EXISTS pol_litige_insert ON public.litiges;
-CREATE POLICY pol_litige_insert
-ON public.litiges
-FOR INSERT TO authenticated
-WITH CHECK (
-  public.est_admin()
-  OR (
-    soignant_id = auth.uid()
-    AND EXISTS (
-      SELECT 1
-      FROM public.missions mi
-      WHERE mi.id = mission_id
-        AND mi.soignant_assigne_id = auth.uid()
-        AND mi.etablissement_id = etablissement_id
-    )
-  )
-  OR (
-    public.fn_a_permission_etablissement(
-      'contrats', etablissement_id
-    ) IS TRUE
-    AND EXISTS (
-      SELECT 1
-      FROM public.missions mi
-      WHERE mi.id = mission_id
-        AND mi.etablissement_id = etablissement_id
-    )
-  )
-);
+REVOKE INSERT ON TABLE public.litiges
+  FROM PUBLIC, anon, authenticated;
 
 DROP POLICY IF EXISTS pol_litige_select ON public.litiges;
 CREATE POLICY pol_litige_select
@@ -296,39 +271,8 @@ USING (
 );
 
 DROP POLICY IF EXISTS pol_litige_update ON public.litiges;
-CREATE POLICY pol_litige_update
-ON public.litiges
-FOR UPDATE TO authenticated
-USING (
-  public.est_admin()
-  OR (
-    initie_par = 'ETABLISSEMENT'
-    AND soignant_id = auth.uid()
-    AND statut IN ('OUVERT', 'EN_DISCUSSION')
-  )
-  OR (
-    initie_par = 'SOIGNANT'
-    AND public.fn_a_permission_etablissement(
-      'contrats', etablissement_id
-    ) IS TRUE
-    AND statut IN ('OUVERT', 'EN_DISCUSSION')
-  )
-)
-WITH CHECK (
-  public.est_admin()
-  OR (
-    initie_par = 'ETABLISSEMENT'
-    AND soignant_id = auth.uid()
-    AND statut IN ('OUVERT', 'EN_DISCUSSION')
-  )
-  OR (
-    initie_par = 'SOIGNANT'
-    AND public.fn_a_permission_etablissement(
-      'contrats', etablissement_id
-    ) IS TRUE
-    AND statut IN ('OUVERT', 'EN_DISCUSSION')
-  )
-);
+REVOKE UPDATE, DELETE ON TABLE public.litiges
+  FROM PUBLIC, anon, authenticated;
 
 DROP POLICY IF EXISTS pol_messages_litige_select
   ON public.messages_litige;
@@ -438,7 +382,7 @@ BEGIN
       'error', 'Litige introuvable ou accès refusé'
     );
   END IF;
-  IF v_litige.statut NOT IN (
+  IF v_litige.statut IS NULL OR v_litige.statut NOT IN (
     'OUVERT', 'EN_DISCUSSION', 'EN_MEDIATION', 'MEDIATION_EN_COURS',
     'REVUE_ADMIN'
   ) THEN
@@ -455,12 +399,12 @@ BEGIN
 
   IF v_uid = v_litige.soignant_id THEN
     v_type_auteur := 'SOIGNANT';
+  ELSIF v_est_admin THEN
+    v_type_auteur := 'ADMIN';
   ELSIF public.fn_a_permission_etablissement(
           'contrats', v_litige.etablissement_id
         ) IS TRUE THEN
     v_type_auteur := 'ETABLISSEMENT';
-  ELSIF v_est_admin THEN
-    v_type_auteur := 'ADMIN';
   ELSE
     RETURN pg_catalog.jsonb_build_object('error', 'Accès refusé');
   END IF;
@@ -557,6 +501,92 @@ $function$;
 REVOKE ALL ON FUNCTION public.fn_ajouter_message_litige(uuid, text)
   FROM PUBLIC, anon, authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.fn_ajouter_message_litige(uuid, text)
+  TO authenticated, service_role;
+
+-- Liste établissement explicitement bornée au scope choisi dans l'interface.
+-- Elle expose aussi le payload d'accord structuré et les UUID métier attendus
+-- par le composant ; l'ancienne RPC sans paramètre reste retirée aux clients.
+REVOKE ALL ON FUNCTION public.fn_litiges_etablissement()
+  FROM PUBLIC, anon, authenticated;
+
+CREATE OR REPLACE FUNCTION public.fn_litiges_etablissement(
+  p_etablissement_id uuid
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+VOLATILE
+SECURITY DEFINER
+SET search_path TO ''
+AS $function$
+BEGIN
+  IF auth.uid() IS NULL OR public.fn_compte_auth_actif() IS NOT TRUE THEN
+    RAISE EXCEPTION 'Non authentifié' USING ERRCODE = '28000';
+  END IF;
+  IF p_etablissement_id IS NULL
+     OR public.fn_a_permission_etablissement(
+       'contrats', p_etablissement_id
+     ) IS NOT TRUE THEN
+    RAISE EXCEPTION 'Accès refusé' USING ERRCODE = '42501';
+  END IF;
+
+  RETURN COALESCE((
+    SELECT pg_catalog.jsonb_agg(pg_catalog.to_jsonb(x))
+    FROM (
+      SELECT
+        l.id::text AS litige_id,
+        l.mission_id::text AS mission_id,
+        l.soignant_id::text AS soignant_id,
+        l.etablissement_id::text AS etablissement_id,
+        l.statut,
+        l.initie_par,
+        l.motif,
+        l.cree_le,
+        l.resolu_le,
+        l.resolution,
+        l.accord_soignant,
+        l.accord_etablissement,
+        l.accord_soignant_le,
+        l.accord_etablissement_le,
+        l.payload_modifications,
+        m.intitule AS mission_intitule,
+        m.debut_le AS mission_debut,
+        COALESCE(s.prenom, '') || ' ' || COALESCE(s.nom, '')
+          AS soignant_nom,
+        s.profession::text AS soignant_profession,
+        (
+          SELECT pg_catalog.count(*)
+          FROM public.messages_litige ml
+          WHERE ml.litige_id = l.id
+        ) AS nb_messages,
+        (
+          SELECT ml2.contenu
+          FROM public.messages_litige ml2
+          WHERE ml2.litige_id = l.id
+          ORDER BY ml2.cree_le DESC, ml2.id DESC
+          LIMIT 1
+        ) AS dernier_message
+      FROM public.litiges l
+      JOIN public.missions m ON m.id = l.mission_id
+      JOIN public.soignants s ON s.id = l.soignant_id
+      WHERE l.etablissement_id = p_etablissement_id
+      ORDER BY
+        CASE
+          WHEN l.statut IN (
+            'OUVERT', 'EN_DISCUSSION', 'EN_MEDIATION',
+            'MEDIATION_EN_COURS', 'REVUE_ADMIN'
+          ) THEN 0
+          ELSE 1
+        END,
+        l.cree_le DESC,
+        l.id DESC
+    ) AS x
+  ), '[]'::jsonb);
+END;
+$function$;
+
+REVOKE ALL ON FUNCTION public.fn_litiges_etablissement(uuid)
+  FROM PUBLIC, anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.fn_litiges_etablissement(uuid)
   TO authenticated, service_role;
 
 NOTIFY pgrst, 'reload schema';

@@ -85,7 +85,8 @@ describe('présence et saisie temps réel de la messagerie', () => {
     expect(page).toContain('messagesRecents =');
     expect(page).toContain('confirmerMessageEnvoye');
     expect(page).toContain('.reverse()');
-    expect(page).toContain('.limit(99)');
+    expect(page).toContain("'fn_lister_conversations_messagerie' as any");
+    expect(page).toContain('p_avant_id: avantId');
     expect(inline).toContain('key={convId}');
     expect(inline).toContain(".order('cree_le', { ascending: false })");
     expect(inline).toContain('setConvId(null)');
@@ -95,6 +96,30 @@ describe('présence et saisie temps réel de la messagerie', () => {
     expect(input).toContain('lastTypingSentAtRef');
     expect(input).toContain('envoiRef.current');
     expect(input).toContain('e.nativeEvent.isComposing');
+  });
+
+  it('partage les fils établissement et calcule les aperçus sans plafond de messages', () => {
+    const migration = lire(
+      'supabase/migrations/20260714090000_borner_creation_conversations.sql',
+    );
+    const page = lire('src/pages/PageMessagerie.tsx');
+    const resolver = lire('src/lib/messagerieInterlocuteurs.ts');
+    const presence = lire(
+      'supabase/migrations/20260714093000_durcir_presence_messagerie.sql',
+    );
+
+    expect(migration).toContain('ADD COLUMN IF NOT EXISTS etablissement_id uuid');
+    expect(migration).toContain('ADD COLUMN IF NOT EXISTS soignant_id uuid');
+    expect(migration).toContain('uq_conversation_mission_partagee');
+    expect(migration).toContain('private.fn_membre_equipe_conversation');
+    expect(migration).toContain('public.fn_lister_conversations_messagerie');
+    expect(migration).toContain('ORDER BY mc.cree_le DESC, mc.id DESC');
+    expect(migration).toContain('mc.auteur_id = p.soignant_id');
+    expect(page).toContain("'fn_lister_conversations_messagerie' as any");
+    expect(page).not.toContain(".in('conversation_id', convIds)");
+    expect(resolver).toContain('for (let index = 0; index < ids.length; index += 100)');
+    expect(resolver).not.toContain('.slice(0, 100)');
+    expect(presence).toContain('private.fn_peut_ecrire_conversation');
   });
 
   it('sérialise la dernière revalidation avant insertion du message', () => {
