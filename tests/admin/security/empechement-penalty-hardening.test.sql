@@ -529,26 +529,27 @@ BEGIN
   INSERT INTO public.missions (
     id, etablissement_id, intitule, profession_requise,
     debut_le, fin_le, duree_heures, taux_horaire_base, statut,
-    soignant_assigne_id, type_contrat_recherche, mode_attribution,
+    soignant_assigne_id, type_contrat_recherche, type_contrat_applique,
+    mode_attribution,
     est_urgente, garantie_remplacement, mode_remuneration,
     retrocession_pct, mission_source
   ) VALUES
     (
       v_mission_annulee, v_etablissement, 'Fixture annulation canonique',
       'IDE', now() + interval '18 years', now() + interval '18 years 8 hours',
-      8, 20, 'ANNULEE_PAR_SOIGNANT', v_soignant, 'SALARIE', 'CANDIDATURE',
+      8, 20, 'ANNULEE_PAR_SOIGNANT', v_soignant, 'SALARIE', 'SALARIE', 'CANDIDATURE',
       false, false, 'TAUX_HORAIRE', NULL, 'CANDIDATURE'
     ),
     (
       v_mission_audit, v_etablissement, 'Fixture audit seul',
       'IDE', now() + interval '19 years', now() + interval '19 years 8 hours',
-      8, 20, 'OUVERTE', NULL, 'SALARIE', 'CANDIDATURE', false, false,
+      8, 20, 'OUVERTE', NULL, 'SALARIE', NULL, 'CANDIDATURE', false, false,
       'TAUX_HORAIRE', NULL, 'CANDIDATURE'
     ),
     (
       v_mission_terminee, v_etablissement, 'Fixture score de base',
       'IDE', now() + interval '20 years', now() + interval '20 years 8 hours',
-      8, 20, 'LITIGE', v_soignant, 'SALARIE', 'CANDIDATURE', false, false,
+      8, 20, 'LITIGE', v_soignant, 'SALARIE', 'SALARIE', 'CANDIDATURE', false, false,
       'TAUX_HORAIRE', NULL, 'CANDIDATURE'
     ),
     (
@@ -556,7 +557,7 @@ BEGIN
       -- l'exécution et une nouvelle mission couvre seulement le temps restant.
       v_mission_rpc, v_etablissement, 'Fixture RPC empêchement en cours',
       'IDE', now() - interval '30 minutes', now() + interval '7 hours 30 minutes',
-      8, 20, 'EN_COURS', v_soignant, 'SALARIE', 'CANDIDATURE', false, true,
+      8, 20, 'EN_COURS', v_soignant, 'SALARIE', 'SALARIE', 'CANDIDATURE', false, true,
       'TAUX_HORAIRE', NULL, 'CANDIDATURE'
     ),
     (
@@ -565,7 +566,7 @@ BEGIN
       v_mission_assignee_reelle, v_etablissement_reel,
       'Fixture RPC empêchement assignée réelle',
       'IDE', now() + interval '20 hours', now() + interval '28 hours',
-      8, 20, 'ASSIGNEE', v_soignant_reel, 'SALARIE', 'CANDIDATURE', false, true,
+      8, 20, 'ASSIGNEE', v_soignant_reel, 'SALARIE', 'SALARIE', 'CANDIDATURE', false, true,
       'RETROCESSION', 45, 'CANDIDATURE'
     ),
     (
@@ -574,7 +575,7 @@ BEGIN
       v_mission_escrow, v_etablissement_reel,
       'Fixture RPC empêchement escrow',
       'IDE', now() + interval '44 hours', now() + interval '52 hours',
-      8, 20, 'ASSIGNEE', v_soignant_escrow, 'SALARIE', 'CANDIDATURE', false, true,
+      8, 20, 'ASSIGNEE', v_soignant_escrow, 'SALARIE', 'SALARIE', 'CANDIDATURE', false, true,
       'TAUX_HORAIRE', NULL, 'CANDIDATURE'
     ),
     (
@@ -583,14 +584,15 @@ BEGIN
       v_mission_assignee_demarree, v_etablissement_reel,
       'Fixture EPI assignée déjà démarrée',
       'IDE', now() - interval '45 minutes', now() + interval '7 hours 15 minutes',
-      8, 20, 'ASSIGNEE', v_soignant_escrow, 'SALARIE', 'CANDIDATURE', false, true,
+      8, 20, 'ASSIGNEE', v_soignant_escrow, 'SALARIE', 'SALARIE', 'CANDIDATURE', false, true,
       'TAUX_HORAIRE', NULL, 'CANDIDATURE'
     );
 
   INSERT INTO public.missions (
     id, etablissement_id, intitule, profession_requise,
     debut_le, fin_le, duree_heures, taux_horaire_base, statut,
-    soignant_assigne_id, type_contrat_recherche, mode_attribution,
+    soignant_assigne_id, type_contrat_recherche, type_contrat_applique,
+    mode_attribution,
     est_urgente, garantie_remplacement, mode_remuneration,
     retrocession_pct, mission_source, absence_sans_prevenir
   ) VALUES (
@@ -687,21 +689,21 @@ BEGIN
       v_mission_noshow_bloquee, v_etablissement_bloque,
       'Fixture no-show gate sans escrow',
       'IDE', now() - interval '60 minutes', now() + interval '6 hours',
-      7, 20, 'ASSIGNEE', v_soignant_noshow, 'SALARIE', 'CANDIDATURE',
+      7, 20, 'ASSIGNEE', v_soignant_noshow, 'SALARIE', 'SALARIE', 'CANDIDATURE',
       false, true, 'TAUX_HORAIRE', NULL, 'CANDIDATURE'
     ),
     (
       v_mission_noshow_initie, v_etablissement_bloque,
       'Fixture no-show gate escrow INITIE',
       'IDE', now() - interval '70 minutes', now() + interval '6 hours',
-      7.17, 20, 'ASSIGNEE', v_soignant_noshow, 'SALARIE', 'CANDIDATURE',
+      7.17, 20, 'ASSIGNEE', v_soignant_noshow, 'SALARIE', 'SALARIE', 'CANDIDATURE',
       false, true, 'TAUX_HORAIRE', NULL, 'CANDIDATURE'
     ),
     (
       v_mission_noshow_debite, v_etablissement_bloque,
       'Fixture no-show gate escrow DEBITE',
       'IDE', now() - interval '80 minutes', now() + interval '6 hours',
-      7.33, 20, 'ASSIGNEE', v_soignant_noshow, 'SALARIE', 'CANDIDATURE',
+      7.33, 20, 'ASSIGNEE', v_soignant_noshow, 'SALARIE', 'SALARIE', 'CANDIDATURE',
       false, true, 'TAUX_HORAIRE', NULL, 'CANDIDATURE'
     ),
     (
@@ -710,7 +712,7 @@ BEGIN
       v_mission_noshow_finance_ambigue, v_etablissement_reel,
       'Fixture no-show escrow RELEASE_PLANIFIE',
       'IDE', now() - interval '90 minutes', now() + interval '6 hours',
-      7.5, 20, 'ASSIGNEE', v_soignant_noshow, 'SALARIE', 'CANDIDATURE',
+      7.5, 20, 'ASSIGNEE', v_soignant_noshow, 'SALARIE', 'SALARIE', 'CANDIDATURE',
       false, true, 'TAUX_HORAIRE', NULL, 'CANDIDATURE'
     );
 
