@@ -180,9 +180,15 @@ BEGIN
     true, true, now(), now()
   );
 
-  UPDATE public.parametres_litiges
-     SET valeur = '100000'
-   WHERE cle = 'rate_limit_litiges_par_heure';
+  INSERT INTO public.parametres_litiges (cle, valeur, description)
+  VALUES (
+    'rate_limit_litiges_par_heure',
+    '100000',
+    'Fixture transactionnelle parcours RPC litige'
+  )
+  ON CONFLICT (cle) DO UPDATE
+    SET valeur = EXCLUDED.valeur,
+        modifie_le = now();
 
   PERFORM set_config('jolene.admin_seed_override_reason', '', true);
   PERFORM set_config('request.jwt.claim.role', '', true);
@@ -200,27 +206,27 @@ BEGIN
   v_result := public.fn_ouvrir_litige_rate_limited(
     v_mission_id, 'Tentative ouverture lecture seule interdite'
   );
-  IF v_result->>'error' <> 'Vous n''êtes pas partie prenante de cette mission.' THEN
+  IF v_result->>'error' IS DISTINCT FROM 'Vous n''êtes pas partie prenante de cette mission.' THEN
     RAISE EXCEPTION 'LECTURE_SEULE a ouvert un litige : %', v_result;
   END IF;
   v_result := public.fn_repondre_litige(
     v_litige_mediation, 'Réponse lecture seule interdite'
   );
-  IF v_result->>'error' <> 'Litige introuvable ou accès refusé' THEN
+  IF v_result->>'error' IS DISTINCT FROM 'Litige introuvable ou accès refusé' THEN
     RAISE EXCEPTION 'LECTURE_SEULE a répondu : %', v_result;
   END IF;
   v_result := public.fn_ajouter_message_litige(
     v_litige_mediation, 'Message lecture seule interdit'
   );
-  IF v_result->>'error' <> 'Litige introuvable ou accès refusé' THEN
+  IF v_result->>'error' IS DISTINCT FROM 'Litige introuvable ou accès refusé' THEN
     RAISE EXCEPTION 'LECTURE_SEULE a écrit un message : %', v_result;
   END IF;
   v_result := public.fn_proposer_accord_partie(v_litige_mediation);
-  IF v_result->>'success' <> 'false' THEN
+  IF v_result->>'success' IS DISTINCT FROM 'false' THEN
     RAISE EXCEPTION 'LECTURE_SEULE a proposé une médiation : %', v_result;
   END IF;
   v_result := public.fn_confirmer_accord_partie(v_litige_mediation);
-  IF v_result->>'success' <> 'false' THEN
+  IF v_result->>'success' IS DISTINCT FROM 'false' THEN
     RAISE EXCEPTION 'LECTURE_SEULE a confirmé un accord : %', v_result;
   END IF;
 
@@ -234,13 +240,13 @@ BEGIN
   v_result := public.fn_ouvrir_litige_rate_limited(
     v_mission_id, 'Tentative ouverture pointage interdite'
   );
-  IF v_result->>'error' <> 'Vous n''êtes pas partie prenante de cette mission.' THEN
+  IF v_result->>'error' IS DISTINCT FROM 'Vous n''êtes pas partie prenante de cette mission.' THEN
     RAISE EXCEPTION 'POINTAGE_ONLY a ouvert un litige : %', v_result;
   END IF;
   v_result := public.fn_repondre_litige(
     v_litige_mediation, 'Réponse pointage interdite'
   );
-  IF v_result->>'error' <> 'Litige introuvable ou accès refusé' THEN
+  IF v_result->>'error' IS DISTINCT FROM 'Litige introuvable ou accès refusé' THEN
     RAISE EXCEPTION 'POINTAGE_ONLY a répondu : %', v_result;
   END IF;
 
@@ -259,7 +265,7 @@ BEGIN
     'DESACCORD_HEURES_POINTAGE',
     'Les heures validées ne correspondent pas à ma présence'
   );
-  IF v_result->>'success' <> 'true' THEN
+  IF v_result->>'success' IS DISTINCT FROM 'true' THEN
     RAISE EXCEPTION 'Ouverture soignant refusée : %', v_result;
   END IF;
   v_litige_id := (v_result->>'litige_id')::uuid;
@@ -298,13 +304,13 @@ BEGIN
   v_result := public.fn_repondre_litige(
     v_litige_id, 'Réponse par un compte banni interdite'
   );
-  IF v_result->>'error' <> 'Accès refusé' THEN
+  IF v_result->>'error' IS DISTINCT FROM 'Accès refusé' THEN
     RAISE EXCEPTION 'Compte banni accepté sur réponse : %', v_result;
   END IF;
   v_result := public.fn_ajouter_message_litige(
     v_litige_id, 'Message par un compte banni interdit'
   );
-  IF v_result->>'error' <> 'Accès refusé' THEN
+  IF v_result->>'error' IS DISTINCT FROM 'Accès refusé' THEN
     RAISE EXCEPTION 'Compte banni accepté sur message : %', v_result;
   END IF;
   UPDATE auth.users SET banned_until = NULL WHERE id = v_rh;
@@ -313,7 +319,7 @@ BEGIN
   v_result := public.fn_repondre_litige(
     v_litige_id, 'Réponse légitime de l’établissement au soignant'
   );
-  IF v_result->>'success' <> 'true'
+  IF v_result->>'success' IS DISTINCT FROM 'true'
      OR NOT EXISTS (
        SELECT 1 FROM public.litiges l
        WHERE l.id = v_litige_id
@@ -325,7 +331,7 @@ BEGIN
   v_result := public.fn_ajouter_message_litige(
     v_litige_id, 'Message légitime de suivi du litige'
   );
-  IF v_result->>'success' <> 'true' THEN
+  IF v_result->>'success' IS DISTINCT FROM 'true' THEN
     RAISE EXCEPTION 'Message RH légitime refusé : %', v_result;
   END IF;
 
@@ -352,8 +358,8 @@ BEGIN
     'RESOLU_SOIGNANT',
     'Litige résolu en faveur du soignant.'
   );
-  IF v_result->>'success' <> 'true'
-     OR v_result->>'statut' <> 'RESOLU_SOIGNANT'
+  IF v_result->>'success' IS DISTINCT FROM 'true'
+     OR v_result->>'statut' IS DISTINCT FROM 'RESOLU_SOIGNANT'
      OR NOT EXISTS (
        SELECT 1 FROM public.litiges l
        WHERE l.id = v_litige_id
@@ -365,14 +371,14 @@ BEGIN
   v_result := public.fn_ajouter_message_litige(
     v_litige_id, 'Message tardif après résolution interdit'
   );
-  IF v_result->>'error' <> 'Ce litige est clôturé.' THEN
+  IF v_result->>'error' IS DISTINCT FROM 'Ce litige est clôturé.' THEN
     RAISE EXCEPTION 'Message accepté après résolution : %', v_result;
   END IF;
 
   -- L'admin ne peut ni confirmer à la place des parties ni utiliser
   -- l'arbitrage simple pour exécuter un accord financier en REVUE_ADMIN.
   v_result := public.fn_confirmer_accord_partie(v_litige_mediation);
-  IF v_result->>'success' <> 'false' THEN
+  IF v_result->>'success' IS DISTINCT FROM 'false' THEN
     RAISE EXCEPTION 'Admin a confirmé à la place des parties : %', v_result;
   END IF;
   v_result := public.fn_admin_trancher_litige(
@@ -380,7 +386,7 @@ BEGIN
     'PARTAGE',
     'Motif administrateur suffisamment détaillé pour ce test transactionnel financier.'
   );
-  IF v_result->>'success' <> 'false'
+  IF v_result->>'success' IS DISTINCT FROM 'false'
      OR NOT EXISTS (
        SELECT 1 FROM public.litiges l
        WHERE l.id = v_litige_financier
@@ -395,7 +401,7 @@ BEGIN
     'Tentative de contournement du parcours financier.'
   );
   IF v_result->>'error'
-       <> 'Accord structuré à traiter via le parcours financier administrateur'
+       IS DISTINCT FROM 'Accord structuré à traiter via le parcours financier administrateur'
      OR NOT EXISTS (
        SELECT 1 FROM public.litiges l
        WHERE l.id = v_litige_financier
@@ -410,8 +416,8 @@ BEGIN
     'PARTAGE',
     'Motif administrateur suffisamment détaillé pour arbitrer le litige non financier.'
   );
-  IF v_result->>'success' <> 'true'
-     OR v_result->>'statut_final' <> 'RESOLU_PARTAGE' THEN
+  IF v_result->>'success' IS DISTINCT FROM 'true'
+     OR v_result->>'statut_final' IS DISTINCT FROM 'RESOLU_PARTAGE' THEN
     RAISE EXCEPTION 'Arbitrage non financier légitime refusé : %', v_result;
   END IF;
 
