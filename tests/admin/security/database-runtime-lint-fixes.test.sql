@@ -36,13 +36,15 @@ BEGIN
     RAISE EXCEPTION 'Runtime lint: une signature ou un search_path a changé (%/12)', v_count;
   END IF;
 
-  -- Le contact utilise aussi net/http et conserve extensions dans son path.
+  -- Le contact qualifie désormais toutes ses dépendances et conserve donc le
+  -- search_path vide, plus strict que l'ancien "public, extensions".
   SELECT count(*)
     INTO v_count
     FROM pg_proc p
    WHERE p.oid = 'public.fn_envoyer_message_contact(text,text,text)'::regprocedure
      AND p.prosecdef
-     AND p.proconfig @> ARRAY['search_path=public, extensions']::text[];
+     AND p.proconfig
+       && ARRAY['search_path=', 'search_path=""']::text[];
   IF v_count IS DISTINCT FROM 1 THEN
     RAISE EXCEPTION 'Runtime lint: SECURITY DEFINER/search_path du contact altéré';
   END IF;
