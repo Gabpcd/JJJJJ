@@ -88,6 +88,7 @@ describe('P0 Edge security guards', () => {
     const roleFix = read('supabase/migrations/20260713165730_corriger_resolution_role_admin_avant_mfa.sql');
     const mfaRemoval = read('supabase/migrations/20260714125948_supprimer_mfa_admin.sql');
     const mfaScope = read('supabase/migrations/20260714130849_borner_exception_mfa_admin_principal.sql');
+    const gabrielleAccess = read('supabase/migrations/20260714154654_autoriser_admin_gabrielle_sans_mfa.sql');
     const protectedRoute = read('src/components/RouteProtegee.tsx');
     const edgeAuth = read('supabase/functions/_shared/admin-auth.ts');
 
@@ -100,7 +101,9 @@ describe('P0 Edge security guards', () => {
     expect(mfaRemoval).toContain('rôle ADMIN_PLATEFORME');
     expect(mfaScope).toContain("lower(COALESCE(u.email, '')) = 'admin@jolene.app'");
     expect(mfaScope).toContain("COALESCE(auth.jwt() ->> 'aal', '') = 'aal2'");
-    expect(protectedRoute).toContain("user.email?.trim().toLowerCase() !== 'admin@jolene.app'");
+    expect(gabrielleAccess).toContain("'gabrielle.pcd@outlook.com'");
+    expect(protectedRoute).toContain('ADMIN_EMAILS_SANS_MFA.has');
+    expect(protectedRoute).toContain("'gabrielle.pcd@outlook.com'");
     expect(protectedRoute).toContain('<AdminMfaGate>{children}</AdminMfaGate>');
     expect(edgeAuth).toContain("auth.aal !== 'aal2' && !estCompteFondateur");
     expect(edgeAuth).toContain('if (!isCanonicalPlatformAdminRole(role))');

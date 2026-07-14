@@ -7,8 +7,8 @@
  *   2. La fonction vérifie le JWT avec supabase.auth.getUser()
  *   3. La fonction exige app_metadata.role = ADMIN_PLATEFORME, AAL2, un e-mail
  *      confirmé et une ligne equipe_admin active portant les 8 groupes de
- *      lancement. Le compte fondateur admin@jolene.app est l'unique exception
- *      sans second facteur.
+ *      lancement. Les deux comptes fondateurs explicitement autorisés sont les
+ *      seules exceptions sans second facteur.
  *   4. Si admin OK, la fonction crée son propre client service_role en interne
  *      pour les opérations sensibles. La service_role NE SORT JAMAIS de l'edge.
  *
@@ -198,7 +198,10 @@ export async function verifyAdminOrServiceRole(req: Request): Promise<AdminAuthR
   if (!isConfirmedAuthUser({ email_confirmed_at: auth.emailConfirmedAt })) {
     return { ok: false, status: 403, error: 'Compte administrateur non confirme' };
   }
-  const estCompteFondateur = auth.userEmail?.trim().toLowerCase() === 'admin@jolene.app';
+  const estCompteFondateur = new Set([
+    'admin@jolene.app',
+    'gabrielle.pcd@outlook.com',
+  ]).has(auth.userEmail?.trim().toLowerCase() ?? '');
   if (auth.aal !== 'aal2' && !estCompteFondateur) {
     return { ok: false, status: 403, error: 'Authentification forte AAL2 requise' };
   }

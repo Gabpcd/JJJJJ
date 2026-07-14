@@ -30,7 +30,7 @@ const validateWorkflow = readFileSync(
   'utf8',
 );
 const penaltyMigration = readFileSync(
-  join(process.cwd(), 'supabase/migrations/20260714135000_appliquer_penalite_empechement.sql'),
+  join(process.cwd(), 'supabase/migrations/20260714154908_appliquer_penalite_empechement.sql'),
   'utf8',
 );
 const e2eSeedHelper = readFileSync(
