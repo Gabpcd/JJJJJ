@@ -1562,6 +1562,10 @@ BEGIN
       c.participant_2_id
     FROM public.conversations c
     WHERE c.id = ANY(p_conversation_ids)
+      AND (
+        c.participant_1_id = v_uid
+        OR c.participant_2_id = v_uid
+      )
       AND public.fn_conversation_accessible(c.id)
   ), participants AS (
     SELECT
