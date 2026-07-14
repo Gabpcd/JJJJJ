@@ -458,11 +458,13 @@ BEGIN
 
   -- La date d'expiration est exclusive : une piece valable jusqu'a aujourd'hui
   -- n'autorise deja plus une nouvelle activation liberale.
+  PERFORM set_config('jolene.document_server_update', 'true', true);
   UPDATE public.documents_soignants
   SET valide_jusqua = current_date,
       nom_extrait_ia = 'Revue',
       modifie_le = now()
   WHERE id = v_doc_identite;
+  PERFORM set_config('jolene.document_server_update', '', true);
   UPDATE public.file_revue_manuelle f
   SET donnees_originales = jsonb_set(
     f.donnees_originales, '{profil_modifie_le}', to_jsonb(s.modifie_le)
@@ -481,11 +483,13 @@ BEGIN
   EXCEPTION WHEN invalid_parameter_value THEN NULL;
   END;
 
+  PERFORM set_config('jolene.document_server_update', 'true', true);
   UPDATE public.documents_soignants
   SET valide_jusqua = current_date + 1,
       nom_extrait_ia = 'Autre',
       modifie_le = now()
   WHERE id = v_doc_identite;
+  PERFORM set_config('jolene.document_server_update', '', true);
   UPDATE public.file_revue_manuelle f
   SET donnees_originales = jsonb_set(
     f.donnees_originales, '{profil_modifie_le}', to_jsonb(s.modifie_le)
@@ -504,10 +508,12 @@ BEGIN
   EXCEPTION WHEN invalid_parameter_value THEN NULL;
   END;
 
+  PERFORM set_config('jolene.document_server_update', 'true', true);
   UPDATE public.documents_soignants
   SET nom_extrait_ia = 'Revue',
       modifie_le = now()
   WHERE id = v_doc_identite;
+  PERFORM set_config('jolene.document_server_update', '', true);
   UPDATE public.file_revue_manuelle f
   SET donnees_originales = jsonb_set(
     f.donnees_originales, '{profil_modifie_le}', to_jsonb(s.modifie_le)
@@ -561,11 +567,13 @@ BEGIN
 
   -- Une revocation (le mecanisme aussi utilise lors d'un remplacement) retire
   -- immediatement la provenance et rend toute nouvelle activation impossible.
+  PERFORM set_config('jolene.document_server_update', 'true', true);
   UPDATE public.documents_soignants
   SET revoque_le = now(),
       revoque_raison = 'REMPLACEMENT',
       modifie_le = now()
   WHERE id = v_doc_identite;
+  PERFORM set_config('jolene.document_server_update', '', true);
   IF NOT EXISTS (
     SELECT 1 FROM public.soignants
     WHERE id = '72000000-0000-4000-8000-000000000004'
