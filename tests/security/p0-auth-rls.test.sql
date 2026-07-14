@@ -181,7 +181,10 @@ BEGIN
   IF (v_definition ~ 'ON CONFLICT \(token\)') IS DISTINCT FROM true
      OR (v_definition ~ 'fn_compte_auth_actif') IS DISTINCT FROM true
      OR (v_definition ~ 'utilisateur_id = EXCLUDED.utilisateur_id') IS DISTINCT FROM true
-     OR (v_definition ~ 'push[.]services[.]mozilla') IS DISTINCT FROM true
+     OR (
+       position('push[.]services[.]mozilla' IN v_definition) = 0
+       AND position('push.services.mozilla' IN v_definition) = 0
+     )
      OR (v_definition ~ 'v_endpoint !~ ''\^https://''') IS DISTINCT FROM false THEN
     RAISE EXCEPTION 'P0: upsert push ne reaffecte pas surement un appareil';
   END IF;
