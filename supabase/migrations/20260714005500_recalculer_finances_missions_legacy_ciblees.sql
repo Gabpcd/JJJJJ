@@ -10,6 +10,8 @@
 -- supprimées : seules les colonnes financières des lignes ciblées sont
 -- recalculées par les fonctions de production.
 
+BEGIN;
+
 LOCK TABLE public.missions IN ACCESS EXCLUSIVE MODE;
 
 DO $verification_triggers$
@@ -103,3 +105,5 @@ BEGIN
   END IF;
 END;
 $verification_resultat$;
+
+COMMIT;
