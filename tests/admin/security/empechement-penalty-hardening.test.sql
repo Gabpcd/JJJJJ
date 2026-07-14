@@ -526,6 +526,43 @@ BEGIN
       );
   END LOOP;
 
+  -- Les trois IDE présents sur des missions ASSIGNEE doivent franchir le
+  -- même gate documentaire que les vrais utilisateurs. La fixture suit la
+  -- matrice active (TOUS + SALARIE_ONLY) afin de rester exhaustive si la
+  -- liste des preuves critiques évolue ; RPPS_ADELI est satisfait par le
+  -- drapeau registre vérifié du profil.
+  FOR v_doc IN
+    SELECT drp.type_document, drp.a_expiration
+    FROM public.documents_requis_par_profession drp
+    WHERE drp.profession = 'IDE'
+      AND drp.est_critique IS TRUE
+      AND drp.type_exercice_requis IN ('TOUS', 'SALARIE_ONLY')
+      AND drp.type_document <> 'RPPS_ADELI'
+  LOOP
+    INSERT INTO public.documents_soignants (
+      soignant_id, type_document, s3_cle, nom_fichier,
+      statut_verification, est_critique, valide_jusqua, resultat_ia
+    )
+    SELECT
+      fixture.soignant_id,
+      v_doc.type_document,
+      'tests/empechement/' || fixture.cle || '/'
+        || lower(v_doc.type_document::text),
+      fixture.cle || '-' || lower(v_doc.type_document::text) || '.pdf',
+      'VERIFIE',
+      true,
+      CASE WHEN v_doc.a_expiration THEN current_date + 365 ELSE NULL END,
+      CASE WHEN v_doc.type_document = 'DIPLOME'
+        THEN '{"profession_certifiee":"IDE"}'::jsonb
+        ELSE '{}'::jsonb
+      END
+    FROM (VALUES
+      (v_soignant_reel, 'ide-reel'),
+      (v_soignant_escrow, 'ide-escrow'),
+      (v_soignant_noshow, 'ide-noshow')
+    ) AS fixture(soignant_id, cle);
+  END LOOP;
+
   INSERT INTO public.missions (
     id, etablissement_id, intitule, profession_requise,
     debut_le, fin_le, duree_heures, taux_horaire_base, statut,
@@ -599,7 +636,7 @@ BEGIN
     v_mission_noshow_originale, v_etablissement_reel,
     'Fixture originale no-show sans audit EPI',
     'IDE', now() - interval '2 hours', now() + interval '6 hours',
-    8, 20, 'ABSENCE', v_soignant_reel, 'SALARIE', 'CANDIDATURE',
+    8, 20, 'ABSENCE', v_soignant_reel, 'SALARIE', 'SALARIE', 'CANDIDATURE',
     false, true, 'TAUX_HORAIRE', NULL, 'CANDIDATURE', true
   );
 
@@ -681,7 +718,8 @@ BEGIN
   INSERT INTO public.missions (
     id, etablissement_id, intitule, profession_requise,
     debut_le, fin_le, duree_heures, taux_horaire_base, statut,
-    soignant_assigne_id, type_contrat_recherche, mode_attribution,
+    soignant_assigne_id, type_contrat_recherche, type_contrat_applique,
+    mode_attribution,
     est_urgente, garantie_remplacement, mode_remuneration,
     retrocession_pct, mission_source
   ) VALUES
