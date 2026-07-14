@@ -11,7 +11,6 @@ interface EnrolementTotp {
   qrCode: string;
   secret: string;
 }
-
 export function AdminMfaGate({ children }: { children: ReactNode }) {
   const { user, deconnexion } = useAuth();
   const [etat, setEtat] = useState<Etat>('CHARGEMENT');

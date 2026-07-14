@@ -37,7 +37,12 @@ export function RouteProtegee({ rolesAutorises, children }: RouteProtegeeProps) 
     }
   }
 
-  if (roleServeur === 'ADMIN_PLATEFORME') {
+  // Le compte fondateur principal est l'unique exception sans second facteur.
+  // Les autres comptes administrateur conservent le gate TOTP.
+  if (
+    roleServeur === 'ADMIN_PLATEFORME'
+    && user.email?.trim().toLowerCase() !== 'admin@jolene.app'
+  ) {
     return <AdminMfaGate>{children}</AdminMfaGate>;
   }
 

@@ -5,6 +5,8 @@ import { describe, expect, it } from 'vitest';
 const read = (path: string) => readFileSync(join(process.cwd(), path), 'utf8');
 
 const migration = read('supabase/migrations/20260714004020_verrouiller_acces_admin_lancement.sql');
+const retraitMfa = read('supabase/migrations/20260714125948_supprimer_mfa_admin.sql');
+const exceptionMfa = read('supabase/migrations/20260714130849_borner_exception_mfa_admin_principal.sql');
 const app = read('src/App.tsx');
 const equipe = read('src/pages/admin/AdminEquipe.tsx');
 const accesHook = read('src/hooks/useAccesAdmin.ts');
@@ -35,11 +37,14 @@ describe('garde admin fail-closed de lancement', () => {
     expect(app).toContain('path="/acces-admin-indisponible"');
   });
 
-  it('exige côté serveur les huit groupes, AAL2 et un compte sain', () => {
+  it('exige côté serveur les huit groupes, un compte sain et borne l’exception MFA', () => {
     for (const groupe of groupesCanoniques) {
       expect(migration).toContain(`'${groupe}'`);
     }
-    expect(migration).toContain("COALESCE(auth.jwt() ->> 'aal', '') = 'aal2'");
+    expect(retraitMfa).toContain("'est_admin_valide'");
+    expect(retraitMfa).toContain('v_nombre_modifie <> 10');
+    expect(exceptionMfa).toContain("lower(COALESCE(u.email, '')) = 'admin@jolene.app'");
+    expect(exceptionMfa).toContain("COALESCE(auth.jwt() ->> 'aal', '') = 'aal2'");
     expect(migration).toContain(']::text[] <@ COALESCE(ea.acces_groupes, ARRAY[]::text[])');
     expect(migration).toContain('JOIN public.equipe_admin ea ON ea.user_id = u.id');
     expect(migration).not.toContain('admin historique hors equipe');

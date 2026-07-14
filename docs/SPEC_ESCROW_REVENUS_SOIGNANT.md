@@ -50,11 +50,13 @@ Calculés depuis `paiements_escrow.statut` + validation des présences.
 heures. Un paiement peut être « débité côté étab » (DEBITE) mais rester « En
 attente de validation des heures ».
 
-> **⚠️ « Versé partiellement » NON livrable (cf. §9.4).** Le backend n'a pas
-> d'état « payé partiel » : un remboursement partiel passe tout l'escrow en
-> `REMBOURSE`, et le reliquat pré-release n'est pas reversé (gap Lot 13). On
-> n'affiche donc PAS « Versé partiellement (X sur Y) » tant que le backend ne
-> le supporte pas honnêtement (I2). États 7/8 ci-dessus = comportement réel.
+> **⚠️ « Versé partiellement » NON livrable (cf. §9.4).** Avant release,
+> tout remboursement partiel est refusé avec l'erreur métier structurée
+> `REMBOURSEMENT_PARTIEL_PRE_RELEASE_INDISPONIBLE` : aucune ligne n'est mise en
+> queue et l'escrow ne change pas d'état. Après `PAYE`, un remboursement partiel
+> est possible, mais le soignant a déjà reçu 100 % et Jolene absorbe la reprise.
+> On n'affiche donc PAS « Versé partiellement (X sur Y) » (I2). Les états 7/8
+> ne s'appliquent qu'après confirmation du succès du remboursement par Stripe.
 
 ## 2. Logique de dates (jamais de promesse en dur)
 
@@ -153,7 +155,9 @@ ne recalcule). Le release verse `honoraires_cents` **intégralement** — PAS
 Aucune réduction automatique. **Plancher prévisionnel garanti** (`GREATEST`,
 règle #11) : le soignant touche le prévisionnel = tout l'escrow figé, peu
 importe la cause (étab ou soignant). Réduction possible **uniquement via litige**
-(admin → `fn_escrow_rembourser`). Pas d'asymétrie codée.
+(admin → `fn_escrow_rembourser`), dans les limites du garde-fou §9.4 : avant
+release, seule une annulation totale peut être mise en remboursement. Pas
+d'asymétrie codée.
 
 ### 9.3 Heures validées > publiées — SURPLUS (décision tranchée, NON implémentée)
 
@@ -167,26 +171,32 @@ top-up codé). **Ne rien implémenter dans cette salve** — TODO commentés tag
 `Lot 13` (déclencheur : flux de validation des présences) et `Lot 14`
 (mécanique : edge functions escrow).
 
-### 9.4 Remboursement partiel — sort du reliquat (gap à corriger)
+### 9.4 Remboursements — partiel pré-release verrouillé et succès Stripe requis
 
 `fn_escrow_rembourser(id, p_montant_honoraires_cts, p_annulation_totale, motif)`
-accepte `0 < montant ≤ honoraires_cents`, MAIS :
-- Il passe **tout** l'escrow en `REMBOURSE` (pas d'état « payé partiel »).
-  `paiements_escrow` n'a **aucune** colonne montant_remboursé/reliquat ; le
-  montant repris n'est traçable que via `stripe_refunds_queue.montant_cts −
-  refund_application_fee_cts`.
-- **Post-versement** (`paye_le` posé, `absorbe_plateforme=true`) : le soignant a
-  déjà touché 100 %, Jolene absorbe la reprise → côté soignant = **Versé** (état
-  7). Correct.
-- **Pré-release** (`reverse_transfer=true`, jamais PAYE) : le payout n'a jamais
-  lieu (release skippé dès REMBOURSE), la reprise partielle est prélevée sur le
-  solde connecté → **le reliquat (`honoraires − repris`) reste bloqué sur le
-  solde Stripe connecté, jamais reversé au soignant**. **GAP backend.**
-- Conséquence UI (I2) : on n'affiche **pas** « Versé partiellement (X sur Y) » —
-  ce serait faux (le reliquat n'a pas été versé). État 8 « Paiement annulé »
-  pour le pré-release. **TODO `Lot 13`** : re-release du reliquat après
-  remboursement partiel pré-release + colonne `montant_rembourse_cents` +
-  état `PAYE_PARTIEL`, pour un vrai « Versé partiellement » honnête.
+applique les règles suivantes :
+
+- **Pré-release** (`DEBITE` ou `DISPONIBLE`) : une annulation totale reste
+  supportée. Toute demande partielle renvoie le résultat métier structuré
+  `{ success: false, error:
+  "REMBOURSEMENT_PARTIEL_PRE_RELEASE_INDISPONIBLE",
+  manual_resolution_required: true }`. Elle ne crée aucune ligne dans
+  `stripe_refunds_queue` et ne modifie ni le statut de l'escrow ni son
+  exposition.
+- **Post-versement** (`PAYE`) : un remboursement total ou partiel reste
+  supporté. Le soignant a déjà touché 100 % ; `absorbe_plateforme=true` et
+  Jolene absorbe la reprise, sans reverse transfer sur son compte. Côté
+  soignant, après succès Stripe, l'état reste donc **Versé** (7).
+- **Cycle asynchrone commun aux remboursements supportés** : l'appel crée la
+  queue et place l'escrow en `REMBOURSE_EN_COURS`, en mémorisant son statut
+  antérieur. Seule une confirmation Stripe `succeeded` fait passer la queue à
+  `TRAITE`, l'escrow à `REMBOURSE` et l'exposition à `REGLE`. Un résultat
+  `failed` ou `canceled` place la queue en `ECHEC`, restaure exactement le
+  statut antérieur (`DEBITE`, `DISPONIBLE` ou `PAYE`) et laisse l'exposition
+  non soldée.
+- Conséquence UI (I2) : aucun état « Versé partiellement » n'est affiché.
+  L'état 8 « Paiement annulé » ne correspond qu'à un remboursement total
+  pré-release effectivement confirmé par Stripe.
 
 ### 9.5 CGU / mandat
 
@@ -205,4 +215,4 @@ heures sup validées, comportement en cas d'échec de débit.
 ## Hors salve (follow-up)
 
 - Notification push à la transition « Versé » (matrice B8).
-- Backend surplus (Lot 13/14) + re-release reliquat + état PAYE_PARTIEL (Lot 13).
+- Backend surplus (Lot 13/14).
