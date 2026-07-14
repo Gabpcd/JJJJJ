@@ -194,7 +194,7 @@ BEGIN
   ) VALUES (
     '70000000-0000-4000-8000-000000000006',
     v_medecin,
-    v_base + 7,
+    v_base + 14,
     5,
     'Employeur correction attribution',
     true
