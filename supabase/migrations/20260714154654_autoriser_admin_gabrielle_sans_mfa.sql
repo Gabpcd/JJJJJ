@@ -15,7 +15,11 @@ BEGIN
    FOR UPDATE;
 
   IF v_user_id IS NULL THEN
-    RAISE EXCEPTION 'Compte Auth gabrielle.pcd@outlook.com introuvable';
+    -- Le projet staging ne réplique volontairement aucune identité de
+    -- production. La garde SQL est tout de même installée plus bas ; l'upsert
+    -- nominatif ne s'exécute que là où le compte réel existe.
+    RAISE NOTICE 'Compte Auth gabrielle.pcd@outlook.com absent : upsert admin ignoré sur cet environnement';
+    RETURN;
   END IF;
 
   UPDATE auth.users
