@@ -12,6 +12,7 @@ DECLARE
   v_base date := date_trunc('week', current_date + interval '20 years')::date;
   v_debut timestamptz;
   v_message text;
+  v_doc record;
   i integer;
 BEGIN
   INSERT INTO auth.users (
@@ -34,12 +35,52 @@ BEGIN
     );
 
   INSERT INTO public.soignants (
-    id, prenom, nom, email, profession, est_compte_test
+    id, prenom, nom, email, profession, est_compte_test, rpps_verifie
   ) VALUES (
-    v_soignant, 'Moyenne', 'Test', 'moyenne44-soignant@test.local', 'IDE', true
+    v_soignant, 'Moyenne', 'Test', 'moyenne44-soignant@test.local', 'IDE',
+    true, true
   ), (
-    v_medecin, 'Médecin', 'Test', 'moyenne44-medecin@test.local', 'MEDECIN', true
+    v_medecin, 'Médecin', 'Test', 'moyenne44-medecin@test.local', 'MEDECIN',
+    true, true
   );
+
+  -- Les missions sont volontairement affectées dès leur création. La fixture
+  -- doit donc satisfaire le même gate documentaire que le parcours réel.
+  FOR v_doc IN
+    SELECT drp.type_document, drp.a_expiration
+    FROM public.documents_requis_par_profession drp
+    WHERE drp.profession = 'IDE'
+      AND drp.est_critique IS TRUE
+      AND drp.type_exercice_requis IN ('TOUS', 'SALARIE_ONLY')
+      AND drp.type_document <> 'RPPS_ADELI'
+  LOOP
+    INSERT INTO public.documents_soignants (
+      soignant_id,
+      type_document,
+      s3_cle,
+      nom_fichier,
+      statut_verification,
+      est_critique,
+      valide_jusqua,
+      resultat_ia
+    ) VALUES (
+      v_soignant,
+      v_doc.type_document,
+      'tests/moyenne-44h/' || lower(v_doc.type_document::text),
+      lower(v_doc.type_document::text) || '.pdf',
+      'VERIFIE',
+      true,
+      CASE
+        WHEN v_doc.a_expiration THEN current_date + (30 * 365)
+        ELSE NULL
+      END,
+      CASE
+        WHEN v_doc.type_document = 'DIPLOME'
+          THEN '{"profession_certifiee":"IDE"}'::jsonb
+        ELSE '{}'::jsonb
+      END
+    );
+  END LOOP;
 
   INSERT INTO public.etablissements (
     id, nom, siret, finess, type, adresse_rue, adresse_ville,
