@@ -49,57 +49,43 @@ export default function ImportHeuresExternes({ onDone }: ImportHeuresExternesPro
     setSubmitting(true);
 
     let documentCreeId: string | null = null;
+    let s3Cle: string | null = null;
     try {
       // 1. Upload document
       const sanitizedName = sanitiserNomFichier(fichier.name, validation.mime);
       // Tous les justificatifs d'un soignant restent sous ce préfixe. Il est
       // contrôlé à la fois par Storage, la base et l'Edge Function afin qu'une
       // ligne forgée ne puisse jamais pointer vers le document d'un tiers.
-      const s3Cle = `${user.id}/documents/${form.typePreuve}/${Date.now()}-${sanitizedName}`;
+      s3Cle = `${user.id}/documents/${form.typePreuve}/${Date.now()}-${sanitizedName}`;
       const { error: upErr } = await supabase.storage
         .from('jolene-documents')
         .upload(s3Cle, fichier, { contentType: validation.mime, upsert: false });
       if (upErr) throw upErr;
 
-      // 2. Create document entry
-      const { data: doc, error: docErr } = await supabase.from('documents_soignants').insert({
-        soignant_id: user.id,
-        type_document: form.typePreuve as any,
-        nom_fichier: fichier.name,
-        s3_cle: s3Cle,
-        taille_octets: fichier.size,
-        type_mime: validation.mime,
-      } as any).select('id').single();
-      if (docErr) throw docErr;
-      documentCreeId = doc!.id;
-
-      // 3. Insert heures_externes
-      const { error: heErr } = await supabase.from('heures_externes').insert({
-        soignant_id: user.id,
-        employeur_nom: form.employeur,
-        employeur_type: form.typeEmployeur,
-        date_debut: form.dateDebut,
-        date_fin: form.dateFin,
-        heures_declarees: heures,
-        document_id: doc!.id,
-        type_preuve: form.typePreuve,
-        statut: 'EN_ATTENTE',
+      // Le document, son remplacement éventuel et la déclaration d'heures sont
+      // enregistrés dans une transaction unique. Une panne ne peut plus laisser
+      // une preuve active orpheline ou une déclaration sans justificatif.
+      const { data, error } = await supabase.rpc('fn_declarer_heures_externes_avec_document' as any, {
+        p_employeur_nom: form.employeur,
+        p_employeur_type: form.typeEmployeur,
+        p_date_debut: form.dateDebut,
+        p_date_fin: form.dateFin,
+        p_heures_declarees: heures,
+        p_type_preuve: form.typePreuve,
+        p_s3_cle: s3Cle,
+        p_nom_fichier: fichier.name,
+        p_type_mime: validation.mime,
+        p_taille_octets: fichier.size,
       });
-      if (heErr) throw heErr;
+      const resultat = data as any;
+      if (error || !resultat?.success || !resultat?.document_id) {
+        throw error || new Error(resultat?.error_code || 'DECLARATION_INVALIDE');
+      }
+      documentCreeId = resultat.document_id;
 
-      // 4. Audit
-      await supabase.rpc('fn_ecrire_audit_safe', {
-        p_acteur_id: user.id, p_type_acteur: 'SOIGNANT',
-        p_action: 'HEURES_EXTERNES_DECLAREES',
-        p_type_ressource: 'soignant', p_id_ressource: user.id,
-        p_cle_s3: s3Cle,
-        p_details: { employeur: form.employeur, heures, periode: `${form.dateDebut} - ${form.dateFin}` },
-        p_ip: null, p_navigateur: navigator.userAgent,
-      });
-
-      if (doc?.id) {
+      if (documentCreeId) {
         supabase.functions.invoke('verify-document', {
-          body: { document_id: doc.id },
+          body: { document_id: documentCreeId },
         }).catch(() => {});
       }
       afficherNotification({ type: 'succes', message: 'Heures déclarées ! Vérification IA en cours…' });
@@ -108,13 +94,13 @@ export default function ImportHeuresExternes({ onDone }: ImportHeuresExternesPro
       setFichier(null);
       onDone();
     } catch (err: any) {
-      // Si la déclaration métier échoue après création du document, ne pas
-      // laisser ce dernier apparaître comme une preuve active sans contexte.
-      if (documentCreeId) {
-        await supabase.from('documents_soignants')
-          .update({ supprime_le: new Date().toISOString() })
-          .eq('id', documentCreeId)
-          .eq('soignant_id', user.id);
+      // La RPC est atomique. Si elle a refusé l'écriture, seul le fichier déjà
+      // envoyé dans Storage peut rester orphelin : l'Edge Function le supprime
+      // après avoir revérifié que son préfixe appartient bien à l'utilisateur.
+      if (!documentCreeId && s3Cle) {
+        await supabase.functions.invoke('verify-document', {
+          body: { action: 'cleanup_orphan', s3_cle: s3Cle },
+        });
       }
       capturerErreurSentry(err, 'ImportHeuresExternes', 'soumettre_heures');
       afficherNotification({ type: 'erreur', message: 'Erreur lors de la soumission. Veuillez réessayer.' });

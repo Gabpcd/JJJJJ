@@ -17,7 +17,7 @@
  * fait défiler / ouvre la première étape incomplète.
  */
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { messageErreurEdgeFn } from '@/lib/erreurs';
 import {
@@ -34,8 +34,9 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/contexts/AuthContext';
+import { useEtablissementScope } from '@/hooks/useEtablissementScope';
 import { verifierFichierDocument } from '@/lib/documentUpload';
+import { finaliserTeleversementPreuveEtablissement } from '@/lib/etablissementProofUpload';
 import { toast } from 'sonner';
 import SignatureCanvas from '@/components/SignatureCanvas';
 import { buildContratServiceTexte, CONTRAT_SERVICE_VERSION, hashContratTexte } from '@/constantes/contratServiceEtablissement';
@@ -73,6 +74,7 @@ function renderMarkdown(texte: string) {
 
 /* ─── Vérification : libellés + types (repris de VerificationEtablissement) ── */
 type EtabState = {
+  verification_source_version: number;
   nom: string | null;
   siret?: string | null;
   type?: string | null;
@@ -112,7 +114,7 @@ type EtatEtape = 'fait' | 'actuel' | 'a_faire';
 export default function ActiverEtablissement() {
   usePageTitle('Activer mon établissement');
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, etablissementId, loading: scopeLoading } = useEtablissementScope();
 
   const [loading, setLoading] = useState(true);
   const [etab, setEtab] = useState<EtabState | null>(null);
@@ -148,12 +150,12 @@ export default function ActiverEtablissement() {
   // Étape actuellement dépliée (1 = contrat, 2 = vérif, 3 = paiement)
   const [etapeOuverte, setEtapeOuverte] = useState<1 | 2 | 3 | null>(null);
 
-  const recharger = async () => {
-    if (!user) return;
+  const recharger = useCallback(async () => {
+    if (!etablissementId) return;
     const { data } = await supabase
       .from('etablissements')
-      .select('nom, siret, type, adresse_rue, adresse_code_postal, adresse_ville, email_contact, contrat_service_signe, contrat_service_signe_le, finess, finess_verifie, finess_raison_sociale, representant_nom, representant_prenom, representant_identite_verifiee, justificatif_fonction_verifie, email_contact_verifie, rattachement_methode, rattachement_verifie, mode_paiement_commission, stripe_sepa_payment_method_id, jour_paie_habituel')
-      .eq('id', user.id)
+      .select('verification_source_version, nom, siret, type, adresse_rue, adresse_code_postal, adresse_ville, email_contact, contrat_service_signe, contrat_service_signe_le, finess, finess_verifie, finess_raison_sociale, representant_nom, representant_prenom, representant_identite_verifiee, justificatif_fonction_verifie, email_contact_verifie, rattachement_methode, rattachement_verifie, mode_paiement_commission, stripe_sepa_payment_method_id, jour_paie_habituel')
+      .eq('id', etablissementId)
       .maybeSingle();
     if (data) {
       const d = data as unknown as EtabState;
@@ -164,16 +166,25 @@ export default function ActiverEtablissement() {
       setEmailInput(d.email_contact || '');
       setJourPaie(d.jour_paie_habituel != null ? String(d.jour_paie_habituel) : '');
     }
-  };
+  }, [etablissementId]);
 
   useEffect(() => {
-    if (!user) return;
-    (async () => {
-      await recharger();
+    if (scopeLoading) return;
+    if (!user || !etablissementId) {
       setLoading(false);
-    })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user]);
+      return;
+    }
+
+    let cancelled = false;
+    setLoading(true);
+    void recharger().finally(() => {
+      if (!cancelled) setLoading(false);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user, etablissementId, scopeLoading, recharger]);
 
   // ── États dérivés ──────────────────────────────────────────────────────────
   const contratSigne = !!etab?.contrat_service_signe;
@@ -183,11 +194,12 @@ export default function ActiverEtablissement() {
   const justifOk = !!etab?.justificatif_fonction_verifie;
   const estDirigeant = etab?.rattachement_methode === 'AUTO_DIRIGEANT';
   const emailOk = !!etab?.email_contact_verifie;
-  const toutActive = contratSigne && rattachOk && finessOk;
+  const verificationEtablissementOk = rattachOk && finessOk;
+  const toutActive = contratSigne && verificationEtablissementOk;
 
   // Première étape incomplète (1 contrat → 2 vérif). Le RIB (3) est différé,
   // jamais bloquant.
-  const premiereEtapeIncomplete: 1 | 2 | null = !contratSigne ? 1 : !rattachOk ? 2 : null;
+  const premiereEtapeIncomplete: 1 | 2 | null = !contratSigne ? 1 : !verificationEtablissementOk ? 2 : null;
 
   // Au chargement, ouvrir automatiquement la première étape incomplète.
   useEffect(() => {
@@ -205,7 +217,7 @@ export default function ActiverEtablissement() {
   const etatEtape = (index: 1 | 2 | 3): EtatEtape => {
     if (index === 1) return contratSigne ? 'fait' : premiereEtapeIncomplete === 1 ? 'actuel' : 'a_faire';
     if (index === 2) {
-      if (rattachOk) return 'fait';
+      if (verificationEtablissementOk) return 'fait';
       return premiereEtapeIncomplete === 2 ? 'actuel' : 'a_faire';
     }
     // Étape 3 (RIB) : différée → toujours « à renseigner plus tard ».
@@ -272,7 +284,7 @@ export default function ActiverEtablissement() {
 
   // ── Étape 2 : FINESS ───────────────────────────────────────────────────────
   const verifierFiness = async () => {
-    if (!user) return;
+    if (!user || !etablissementId) return;
     const finess = finessInput.replace(/\D/g, '');
     if (finess.length !== 9) {
       toast.error('Le numéro FINESS comporte 9 chiffres.');
@@ -281,7 +293,7 @@ export default function ActiverEtablissement() {
     setFinessLoading(true);
     try {
       const { data, error } = await supabase.functions.invoke('verify-finess', {
-        body: { finess, etablissement_id: user.id },
+        body: { finess, etablissement_id: etablissementId },
       });
       if (error) { toast.error(await messageErreurEdgeFn(error, 'Erreur lors de la vérification FINESS. Réessayez.')); return; }
       if (data?.fhir_indisponible) {
@@ -294,7 +306,9 @@ export default function ActiverEtablissement() {
         await recharger();
       } else if (data?.revue_manuelle) {
         toast.warning(data?.motif || 'FINESS trouvé, mais le lien avec votre établissement doit être vérifié manuellement.');
-        await recharger();
+        // Le candidat est conservé dans la revue sécurisée, sans promotion du
+        // FINESS canonique. Ne pas effacer la saisie utile à l'utilisateur.
+        setFinessInput(finess);
       } else {
         toast.error("Cet établissement n'est pas actif dans l'Annuaire Santé.");
         await recharger();
@@ -308,7 +322,7 @@ export default function ActiverEtablissement() {
 
   // ── Étape 2 : Représentant ─────────────────────────────────────────────────
   const verifierPiece = async () => {
-    if (!user || !pieceFile) return;
+    if (!user || !etablissementId || !pieceFile) return;
     if (pieceLockRef.current) return;
     if (!nom.trim() || !prenom.trim()) {
       toast.error('Veuillez renseigner le prénom et le nom du représentant.');
@@ -323,39 +337,46 @@ export default function ActiverEtablissement() {
     setPieceLoading(true);
     try {
       const mime = validation.mime;
-      const path = `${user.id}/representant-piece-${Date.now()}.${validation.extension}`;
+      const path = `${etablissementId}/representant-piece-${Date.now()}.${validation.extension}`;
       const { error: upErr } = await supabase.storage
         .from('jolene-documents')
         .upload(path, pieceFile, { upsert: false, contentType: mime });
       if (upErr) throw upErr;
 
-      const { error: updErr } = await supabase
-        .from('etablissements')
-        .update({
-          representant_nom: nom.trim(),
-          representant_prenom: prenom.trim() || null,
-          representant_piece_s3_key: path,
-          representant_piece_type_mime: mime,
-          representant_piece_type_document: typeDoc,
-        })
-        .eq('id', user.id);
-      if (updErr) throw updErr;
+      if (etab?.verification_source_version == null) {
+        throw new Error('Dossier obsolète. Rechargez la page avant de téléverser.');
+      }
+      await finaliserTeleversementPreuveEtablissement({
+        etablissementId,
+        preuve: 'IDENTITE',
+        nouvelleS3Key: path,
+        typeMime: mime,
+        typeDocument: typeDoc,
+        versionAttendue: etab.verification_source_version,
+        representantNom: nom.trim(),
+        representantPrenom: prenom.trim(),
+      });
 
       const { data, error } = await supabase.functions.invoke('verify-piece-identite-etab', {
-        body: { etablissement_id: user.id },
+        body: { etablissement_id: etablissementId },
       });
       if (error) { toast.error(await messageErreurEdgeFn(error, "Le document n'a pas pu être vérifié. Vérifiez qu'il s'agit bien d'une pièce d'identité officielle (CNI, passeport, titre de séjour), lisible et complète.")); return; }
+      if (data?.ok !== true) {
+        toast.error(data?.error || "Le document n'a pas pu être analysé. Il reste enregistré pour une nouvelle tentative.");
+        await recharger();
+        return;
+      }
 
       if (data?.identite_verifiee) {
         toast.success('Identité du représentant vérifiée.');
       } else if (data?.verdict === 'REJETE') {
         toast.error(data?.motif || "Le document n'a pas pu être validé. Vérifiez la lisibilité et la concordance du nom.");
       } else if (data?.verdict === 'EN_ATTENTE') {
-        toast('Vérification en cours d\'analyse. Le résultat sera mis à jour sous peu.');
+        toast('Analyse automatique non concluante. Une revue humaine est nécessaire.');
       } else if (data?.nom_correspond === false) {
         toast.error('Le nom du document ne correspond pas au représentant déclaré.');
       } else {
-        toast('Document reçu. Vérification en cours.');
+        toast('Document reçu, sans validation automatique. Une revue humaine est nécessaire.');
       }
       setPieceFile(null);
       await recharger();
@@ -369,7 +390,7 @@ export default function ActiverEtablissement() {
 
   // ── Étape 2 : justificatif de fonction (représentant non dirigeant) ────────
   const verifierJustificatif = async () => {
-    if (!user || !justifFile || !identiteOk || justifLockRef.current) return;
+    if (!user || !etablissementId || !justifFile || !identiteOk || justifLockRef.current) return;
     const validation = await verifierFichierDocument(justifFile);
     if (validation.ok === false) {
       toast.error(validation.message);
@@ -380,24 +401,34 @@ export default function ActiverEtablissement() {
     setJustifLoading(true);
     try {
       const mime = validation.mime;
-      const path = `${user.id}/justificatif-fonction-${Date.now()}.${validation.extension}`;
+      const path = `${etablissementId}/justificatif-fonction-${Date.now()}.${validation.extension}`;
       const { error: upErr } = await supabase.storage
         .from('jolene-documents')
         .upload(path, justifFile, { upsert: false, contentType: mime });
       if (upErr) throw upErr;
 
-      const { error: updErr } = await supabase.from('etablissements').update({
-        justificatif_fonction_s3_key: path,
-        justificatif_fonction_type_mime: mime,
-        justificatif_fonction_type: justifType,
-      }).eq('id', user.id);
-      if (updErr) throw updErr;
+      if (etab?.verification_source_version == null) {
+        throw new Error('Dossier obsolète. Rechargez la page avant de téléverser.');
+      }
+      await finaliserTeleversementPreuveEtablissement({
+        etablissementId,
+        preuve: 'FONCTION',
+        nouvelleS3Key: path,
+        typeMime: mime,
+        typeDocument: justifType,
+        versionAttendue: etab.verification_source_version,
+      });
 
       const { data, error } = await supabase.functions.invoke('verify-justificatif-fonction', {
-        body: { etablissement_id: user.id },
+        body: { etablissement_id: etablissementId },
       });
       if (error) {
         toast.error(await messageErreurEdgeFn(error, "Le justificatif n'a pas pu être vérifié."));
+        return;
+      }
+      if (data?.ok !== true) {
+        toast.error(data?.error || "Le justificatif n'a pas pu être analysé. Il reste enregistré pour une nouvelle tentative.");
+        await recharger();
         return;
       }
       if (data?.justificatif_verifie) {
@@ -419,7 +450,7 @@ export default function ActiverEtablissement() {
 
   // ── Étape 2 : E-mail professionnel ─────────────────────────────────────────
   const envoyerLienEmail = async () => {
-    if (!user) return;
+    if (!user || !etablissementId) return;
     const email = emailInput.trim();
     if (!/^[^@]+@[^@]+\.[^@]+$/.test(email)) {
       toast.error('Adresse e-mail invalide.');
@@ -428,7 +459,7 @@ export default function ActiverEtablissement() {
     setEmailLoading(true);
     try {
       const { data, error } = await supabase.rpc('fn_demander_confirmation_email_etab' as any, {
-        p_etablissement_id: user.id,
+        p_etablissement_id: etablissementId,
         p_email: email,
       } as any);
       if (error) throw error;
@@ -615,13 +646,13 @@ export default function ActiverEtablissement() {
               <EnTeteEtape index={2} etat={etatEtape(2)} />
             </div>
 
-            {rattachOk ? (
+            {verificationEtablissementOk ? (
               <div className="rounded-xl border border-jolene-cyan-200 bg-jolene-cyan-50 p-3 flex items-center gap-3">
                 <CheckCircle2 className="h-5 w-5 text-jolene-cyan-700 shrink-0" />
                 <div className="flex-1">
                   <p className="text-sm font-medium text-foreground">Établissement vérifié</p>
                   <p className="text-xs text-muted-foreground">
-                    Rattachement validé — {LIBELLE_METHODE[etab?.rattachement_methode || 'ADMIN'] || 'validé'}.
+                    FINESS et rattachement validés — {LIBELLE_METHODE[etab?.rattachement_methode || 'ADMIN'] || 'validé'}.
                   </p>
                 </div>
               </div>
@@ -932,12 +963,12 @@ export default function ActiverEtablissement() {
                   disabled={jourPaieSaving || !jourPaie || Number(jourPaie) < 1 || Number(jourPaie) > 31}
                   loading={jourPaieSaving}
                   onClick={async () => {
-                    if (!user) return;
+                    if (!user || !etablissementId) return;
                     setJourPaieSaving(true);
                     const { error } = await supabase
                       .from('etablissements')
                       .update({ jour_paie_habituel: Number(jourPaie) } as any)
-                      .eq('id', user.id);
+                      .eq('id', etablissementId);
                     setJourPaieSaving(false);
                     if (error) toast.error('Enregistrement impossible — réessayez.');
                     else toast.success(`Jour de paie enregistré : le ${jourPaie} du mois`);

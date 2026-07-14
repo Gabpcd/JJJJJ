@@ -1723,12 +1723,12 @@ Deno.serve(async (req) => {
       }
       if (shouldNotify === false) {
         // Audit le skip pour traçabilité, puis return 200 silent
-        await supabaseCheck.from('journaux_audit').insert({
+        await Promise.resolve(supabaseCheck.from('journaux_audit').insert({
           acteur_id: null, type_acteur: 'SYSTEME',
           action: 'NOTIFICATION_SKIPPED', type_ressource: 'email',
           id_ressource: destinataire_id,
           details: { type, type_evenement: typeEvenement, canal: 'EMAIL', raison: 'preference_user_off' },
-        }).then(() => {}).catch(() => {});
+        })).catch(() => {});
         return new Response(JSON.stringify({ success: true, skipped: true, reason: 'preference_user_off' }), {
           status: 200,
           headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },

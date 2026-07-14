@@ -134,7 +134,7 @@ Deno.serve(async (req: Request) => {
 
       // Alerte admin si échec définitif après 3 retries
       if (!success) {
-        await supabase.from('journaux_audit').insert({
+        const { error: auditError } = await supabase.from('journaux_audit').insert({
           acteur_id: null,
           type_acteur: 'SYSTEME',
           action: 'ADMIN_ACTION',
@@ -148,7 +148,10 @@ Deno.serve(async (req: Request) => {
             error: lastError,
             retries: MAX_RETRIES,
           },
-        }).then(() => {}).catch(e => console.error('[weekly-invoicing-cron] Audit error:', e));
+        });
+        if (auditError) {
+          console.error('[weekly-invoicing-cron] Audit error:', auditError);
+        }
       }
     }
 

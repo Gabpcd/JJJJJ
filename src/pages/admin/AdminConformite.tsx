@@ -15,6 +15,8 @@ import { AlertTriangle, ShieldAlert, Clock, FileWarning, FileQuestion, Repeat, U
 const LIBELLES_RESULTAT_CONTROLE: Record<string, string> = {
   'CONFORME': 'Conforme',
   'VIOLATION_BLOQUEE': 'Violation bloquée',
+  'VIOLATION_ALERTEE': 'Violation révélée — revue requise',
+  'DEROGATION_AUTORISEE': 'Dérogation autorisée',
 };
 
 function libelleResultat(valeur?: string): string {
@@ -76,7 +78,7 @@ const INDICATEURS: Indicateur[] = [
   {
     cle: 'violations_repos_11h',
     rpcCle: 'repos_11h_violations',
-    label: 'Violations repos 11h',
+    label: 'Violations du temps de travail (30 j)',
     icone: Clock,
     champs: [
       { titre: 'Soignant', primary: true, render: (i) => <LienSoignant id={i.soignant_id} nom={i.soignant_nom} /> },

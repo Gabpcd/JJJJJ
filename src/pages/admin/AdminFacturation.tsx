@@ -73,7 +73,7 @@ function FactureDetailContenu({ missions, loading, mode }: { missions: any[]; lo
             <div key={m.id} className="rounded-lg border border-border/60 bg-background p-2.5 space-y-1.5">
               <button
                 type="button"
-                onClick={(e) => { e.stopPropagation(); navigate(`/admin/missions?mission=${m.id}`); }}
+                onClick={(e) => { e.stopPropagation(); navigate(`/admin/missions/${m.id}`); }}
                 className="font-semibold text-primary hover:underline text-left inline-flex items-center gap-1 text-xs"
               >
                 {m.intitule}
@@ -128,7 +128,7 @@ function FactureDetailContenu({ missions, loading, mode }: { missions: any[]; lo
               <tr key={m.id} className="border-b border-border/40 hover:bg-muted/50">
                 <td className="py-1.5 pr-2">
                   <button
-                    onClick={(e) => { e.stopPropagation(); navigate(`/admin/missions?mission=${m.id}`); }}
+                    onClick={(e) => { e.stopPropagation(); navigate(`/admin/missions/${m.id}`); }}
                     className="font-medium text-primary hover:underline text-left inline-flex items-center gap-1"
                   >
                     {m.intitule}

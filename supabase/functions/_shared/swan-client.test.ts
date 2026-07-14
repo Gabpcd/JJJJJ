@@ -7,9 +7,22 @@
 // ECDSA) sans appel réseau réel à SWAN. Le cache token est testé via mock
 // fetch global.
 
-import { assertEquals, assertRejects, assert } from "https://deno.land/std@0.218.0/assert/mod.ts";
-import { getSwanAccessToken, resetSwanTokenCache, SwanAuthError, swanEnv } from "./swan-client.ts";
-import { signSwanS2S, resetSwanS2SKeyCache, SwanS2SSignError } from "./swan-sign-s2s.ts";
+import {
+  assert,
+  assertEquals,
+  assertRejects,
+} from "https://deno.land/std@0.218.0/assert/mod.ts";
+import {
+  getSwanAccessToken,
+  resetSwanTokenCache,
+  SwanAuthError,
+  swanEnv,
+} from "./swan-client.ts";
+import {
+  resetSwanS2SKeyCache,
+  signSwanS2S,
+  SwanS2SSignError,
+} from "./swan-sign-s2s.ts";
 
 const originalFetch = globalThis.fetch;
 const originalEnv = { ...Deno.env.toObject() };
@@ -60,10 +73,16 @@ Deno.test("getSwanAccessToken : cache le token entre 2 appels", async () => {
   let fetchCount = 0;
   globalThis.fetch = ((..._args: unknown[]) => {
     fetchCount++;
-    return Promise.resolve(new Response(
-      JSON.stringify({ access_token: "tok_abc", token_type: "Bearer", expires_in: 3600 }),
-      { status: 200, headers: { "Content-Type": "application/json" } },
-    ));
+    return Promise.resolve(
+      new Response(
+        JSON.stringify({
+          access_token: "tok_abc",
+          token_type: "Bearer",
+          expires_in: 3600,
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      ),
+    );
   }) as typeof fetch;
 
   try {
@@ -71,7 +90,11 @@ Deno.test("getSwanAccessToken : cache le token entre 2 appels", async () => {
     const t2 = await getSwanAccessToken();
     assertEquals(t1, "tok_abc");
     assertEquals(t2, "tok_abc");
-    assertEquals(fetchCount, 1, "Le token doit être servi depuis le cache au 2e appel");
+    assertEquals(
+      fetchCount,
+      1,
+      "Le token doit être servi depuis le cache au 2e appel",
+    );
   } finally {
     globalThis.fetch = originalFetch;
     resetSwanTokenCache();
@@ -83,10 +106,13 @@ Deno.test("getSwanAccessToken : erreur si OAuth endpoint répond 401", async () 
   Deno.env.set("SWAN_CLIENT_ID", "test_client");
   Deno.env.set("SWAN_CLIENT_SECRET", "wrong_secret");
 
-  globalThis.fetch = (() => Promise.resolve(new Response(
-    JSON.stringify({ error: "invalid_client" }),
-    { status: 401 },
-  ))) as typeof fetch;
+  globalThis.fetch = (() =>
+    Promise.resolve(
+      new Response(
+        JSON.stringify({ error: "invalid_client" }),
+        { status: 401 },
+      ),
+    )) as typeof fetch;
 
   try {
     await assertRejects(
@@ -104,7 +130,7 @@ Deno.test("signSwanS2S : erreur si clé manquante", async () => {
   resetSwanS2SKeyCache();
   Deno.env.delete("SWAN_S2S_PRIVATE_KEY_PEM");
   await assertRejects(
-    () => signSwanS2S("payload"),
+    () => signSwanS2S("challenge-valid"),
     SwanS2SSignError,
     "manquant",
   );
@@ -114,14 +140,14 @@ Deno.test("signSwanS2S : erreur si PEM invalide", async () => {
   resetSwanS2SKeyCache();
   Deno.env.set("SWAN_S2S_PRIVATE_KEY_PEM", "not a pem");
   await assertRejects(
-    () => signSwanS2S("payload"),
+    () => signSwanS2S("challenge-valid"),
     SwanS2SSignError,
     "PKCS#8",
   );
   Deno.env.delete("SWAN_S2S_PRIVATE_KEY_PEM");
 });
 
-Deno.test("signSwanS2S : signe correctement avec une clé PKCS#8 valide", async () => {
+Deno.test("signSwanS2S : produit le JWT ES256 du challenge officiel", async () => {
   resetSwanS2SKeyCache();
   // Génère une clé ECDSA P-256 PKCS#8 PEM via SubtleCrypto
   const pair = await crypto.subtle.generateKey(
@@ -133,25 +159,50 @@ Deno.test("signSwanS2S : signe correctement avec une clé PKCS#8 valide", async 
   const pkcs8B64 = btoa(String.fromCharCode(...new Uint8Array(pkcs8Buf)));
   // Découpe 64 char/ligne
   const lines: string[] = [];
-  for (let i = 0; i < pkcs8B64.length; i += 64) lines.push(pkcs8B64.slice(i, i + 64));
-  const pem = `-----BEGIN PRIVATE KEY-----\n${lines.join("\n")}\n-----END PRIVATE KEY-----\n`;
+  for (let i = 0; i < pkcs8B64.length; i += 64) {
+    lines.push(pkcs8B64.slice(i, i + 64));
+  }
+  const pem = `-----BEGIN PRIVATE KEY-----\n${
+    lines.join("\n")
+  }\n-----END PRIVATE KEY-----\n`;
 
   Deno.env.set("SWAN_S2S_PRIVATE_KEY_PEM", pem);
 
-  const sig = await signSwanS2S("mon-payload");
-  assert(typeof sig === "string");
-  assert(sig.length > 50, "La signature doit avoir une longueur raisonnable");
+  const challenge = "challenge-swan-de-test-123456";
+  const jwt = await signSwanS2S(challenge);
+  const [encodedHeader, encodedPayload, encodedSignature] = jwt.split(".");
+  const decodePart = (part: string) =>
+    atob(
+      part.replace(/-/g, "+").replace(/_/g, "/")
+        .padEnd(Math.ceil(part.length / 4) * 4, "="),
+    );
+  assertEquals(JSON.parse(decodePart(encodedHeader)), {
+    alg: "ES256",
+    typ: "JWT",
+  });
+  assertEquals(JSON.parse(decodePart(encodedPayload)), {
+    challenge,
+  });
 
   // Vérif round-trip : la signature doit être vérifiable avec la clé publique
-  const sigBytes = Uint8Array.from(atob(sig), c => c.charCodeAt(0));
+  const paddedSignature = encodedSignature.replace(/-/g, "+").replace(/_/g, "/")
+    .padEnd(Math.ceil(encodedSignature.length / 4) * 4, "=");
+  const sigBytes = Uint8Array.from(
+    atob(paddedSignature),
+    (c) => c.charCodeAt(0),
+  );
   const ok = await crypto.subtle.verify(
     { name: "ECDSA", hash: "SHA-256" },
     pair.publicKey,
     sigBytes,
-    new TextEncoder().encode("mon-payload"),
+    new TextEncoder().encode(`${encodedHeader}.${encodedPayload}`),
   );
   assertEquals(ok, true);
 
   Deno.env.delete("SWAN_S2S_PRIVATE_KEY_PEM");
   resetSwanS2SKeyCache();
+});
+
+Deno.test("signSwanS2S : refuse un challenge vide", async () => {
+  await assertRejects(() => signSwanS2S(""), SwanS2SSignError, "Challenge");
 });

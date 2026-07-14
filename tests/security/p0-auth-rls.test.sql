@@ -216,8 +216,24 @@ BEGIN
     v_admin, '00000000-0000-0000-0000-000000000000', 'p0-admin@test.local',
     'authenticated', 'authenticated', '{"role":"ADMIN_PLATEFORME"}', now()
   );
-  INSERT INTO public.equipe_admin(user_id, nom, prenom, email, actif)
-  VALUES (v_admin, 'P0', 'Admin', 'p0-admin@test.local', true);
+  INSERT INTO public.equipe_admin(user_id, nom, prenom, email, actif, acces_groupes)
+  VALUES (
+    v_admin,
+    'P0',
+    'Admin',
+    'p0-admin@test.local',
+    true,
+    ARRAY[
+      'Dashboard',
+      'Utilisateurs',
+      'Missions',
+      'Litiges & contrats',
+      'Finances',
+      'Messagerie',
+      'Conformité & Technique',
+      'Fondateur'
+    ]::text[]
+  );
 
   PERFORM set_config('request.jwt.claims', jsonb_build_object(
     'sub', v_admin, 'role', 'authenticated', 'aal', 'aal1'

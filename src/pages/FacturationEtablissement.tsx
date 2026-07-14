@@ -1,10 +1,10 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { capturerErreurSentry } from '@/lib/sentry';
 import { logger } from '@/lib/logger';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { SkeletonDashboard } from '@/components/SkeletonCard';
 import { FadeInView } from '@/components/FadeInView';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   CreditCard, Clock, CheckCircle, FileText, Loader2, Trophy, RefreshCw,
   Building2, AlertTriangle, Download, Banknote, Info, Eye, ChevronDown,
@@ -66,6 +66,38 @@ const isRefValid = (ref: string) => {
   return t.length >= 6 && /\d{2,}/.test(t) && /[A-Za-z]/.test(t);
 };
 
+type ReponseChargement = {
+  data: unknown;
+  error: unknown;
+};
+
+const estObjet = (value: unknown): value is Record<string, unknown> =>
+  value !== null && typeof value === 'object' && !Array.isArray(value);
+const estTableau = (value: unknown) => Array.isArray(value);
+
+function verifierReponseChargement(
+  nom: string,
+  response: ReponseChargement,
+  formatValide: (data: unknown) => boolean,
+) {
+  if (response.error) {
+    const message = estObjet(response.error) && 'message' in response.error
+      ? String(response.error.message)
+      : String(response.error);
+    throw new Error(`${nom}: ${message}`);
+  }
+
+  const payloadError = estObjet(response.data) && 'error' in response.data
+    ? response.data.error
+    : null;
+  if (payloadError) {
+    throw new Error(`${nom}: ${String(payloadError)}`);
+  }
+  if (!formatValide(response.data)) {
+    throw new Error(`${nom}: réponse incomplète ou invalide`);
+  }
+}
+
 const METHODE_LABELS: Record<MethodePaiement, string> = {
   VIREMENT: 'Virement bancaire',
   CHEQUE: 'Chèque',
@@ -107,7 +139,14 @@ function scrollTo(id: string) {
 
 export default function FacturationEtablissement() {
   usePageTitle('Facturation');
-  const { user, etablissementId } = useEtablissementScope();
+  const {
+    user,
+    etablissementId,
+    loading: scopeLoading,
+    resolved: scopeResolved,
+    error: scopeError,
+    retry: retryScope,
+  } = useEtablissementScope();
   const { afficherNotification } = useNotification();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -126,6 +165,7 @@ export default function FacturationEtablissement() {
   const [missionsNonFacturees, setMissionsNonFacturees] = useState<any[]>([]);
   const [prelevements, setPrelevements] = useState<any[]>([]);
   const [missionsPaidByStripe, setMissionsPaidByStripe] = useState<Set<string>>(new Set());
+  const [erreurChargement, setErreurChargement] = useState<string | null>(null);
 
   // ── UI state ──
   const [sectionsOpen, setSectionsOpen] = useState<Record<string, boolean>>({
@@ -168,7 +208,7 @@ export default function FacturationEtablissement() {
         [SECTIONS.exports]: true,
       });
     }
-  }, []);
+  }, [isMobile]);
 
   // Deep-link ?tab= vers une section de l'onglet facturation : ouvre la section
   // ciblée puis scroll smooth (une fois les données chargées, sinon scrollIntoView
@@ -193,9 +233,14 @@ export default function FacturationEtablissement() {
   }, [loading, searchParams]);
 
   // ── Data loading ──
-  const charger = async () => {
-    if (!user) return;
+  const charger = useCallback(async () => {
+    if (scopeLoading || !scopeResolved || scopeError) return;
+    if (!user || !etablissementId) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
+    setErreurChargement(null);
     try {
       const [resEtab, resObligations, resPaiements, resFactures, resMNF, resTransfers, resPrelev] = await Promise.all([
         supabase.rpc('fn_mon_etablissement_complet' as any),
@@ -204,35 +249,54 @@ export default function FacturationEtablissement() {
         supabase.rpc('fn_mes_factures' as any),
         supabase.from('missions')
           .select('id, intitule, fin_le, montant_commission_ht, montant_commission_ttc')
-          .eq('etablissement_id', user.id)
+          .eq('etablissement_id', etablissementId)
           .eq('statut', 'TERMINEE')
           .eq('commission_facturee', false)
           .order('fin_le', { ascending: false }),
         supabase.from('stripe_transfers')
           .select('mission_id, statut')
-          .eq('etablissement_id', user.id)
+          .eq('etablissement_id', etablissementId)
           .in('statut', ['TRANSFERE']),
         supabase.from('paiements_mission')
           .select('id, mission_id, montant_ttc, statut, capture_le, missions(intitule)')
-          .eq('etablissement_id', user.id)
+          .eq('etablissement_id', etablissementId)
           .order('capture_le', { ascending: false })
           .limit(20),
       ]);
 
-      if (resEtab.data) setEtab(resEtab.data);
-      if (resObligations.data && !(resObligations.data as any).error) setData(resObligations.data);
-      if (resPaiements.data && !(resPaiements.data as any).error) setPaiementsData(resPaiements.data);
-      setFactures(Array.isArray(resFactures.data) ? resFactures.data : []);
-      if (resMNF.data) setMissionsNonFacturees(resMNF.data);
-      if (resTransfers.data) setMissionsPaidByStripe(new Set(resTransfers.data.map((t: any) => t.mission_id)));
-      if (resPrelev.data) setPrelevements(resPrelev.data);
+      // Valider l'ensemble avant le moindre rendu : une seule erreur transport,
+      // RLS ou payload interdit d'afficher un agrégat financier partiel.
+      verifierReponseChargement('Profil établissement', resEtab, estObjet);
+      verifierReponseChargement('Obligations financières', resObligations, estObjet);
+      verifierReponseChargement('Paiements établissement', resPaiements, estObjet);
+      verifierReponseChargement('Factures', resFactures, estTableau);
+      verifierReponseChargement('Missions non facturées', resMNF, estTableau);
+      verifierReponseChargement('Transferts Stripe', resTransfers, estTableau);
+      verifierReponseChargement('Prélèvements', resPrelev, estTableau);
+
+      setEtab(resEtab.data);
+      setData(resObligations.data);
+      setPaiementsData(resPaiements.data);
+      setFactures(resFactures.data as any[]);
+      setMissionsNonFacturees(resMNF.data as any[]);
+      setMissionsPaidByStripe(new Set((resTransfers.data as any[]).map((t: any) => t.mission_id)));
+      setPrelevements(resPrelev.data as any[]);
     } catch (err) {
       logger.error('Facturation charger error', err);
+      setEtab(null);
+      setData(null);
+      setPaiementsData(null);
+      setFactures([]);
+      setMissionsNonFacturees([]);
+      setMissionsPaidByStripe(new Set());
+      setPrelevements([]);
+      setErreurChargement('Impossible de charger les données de facturation en toute sécurité.');
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
-  };
+  }, [user, etablissementId, scopeLoading, scopeResolved, scopeError]);
 
-  useEffect(() => { charger(); }, [user]);
+  useEffect(() => { void charger(); }, [charger]);
 
   // ── Handler : générer facture commission mensuelle ──
   const genererFactureMensuelle = async () => {
@@ -397,8 +461,62 @@ export default function FacturationEtablissement() {
     }
   };
 
-  // ── Loading ──
+  const erreurScope = scopeError
+    ? 'Impossible de vérifier votre établissement pour le moment.'
+    : scopeResolved && (!user || !etablissementId)
+      ? 'Aucun établissement autorisé n’est associé à cette session.'
+      : null;
+
+  const reessayerChargement = () => {
+    if (scopeError || !scopeResolved || !user || !etablissementId) {
+      retryScope();
+      return;
+    }
+    void charger();
+  };
+
+  // ── Loading / erreur fail-closed ──
+  if (scopeLoading || (!scopeResolved && !scopeError)) {
+    return <LayoutApp role="ADMIN_ETABLISSEMENT"><SkeletonDashboard /></LayoutApp>;
+  }
+
+  if (erreurScope) {
+    return (
+      <LayoutApp role="ADMIN_ETABLISSEMENT">
+        <div className="card-base max-w-xl mx-auto text-center space-y-4" role="alert" aria-live="assertive">
+          <AlertTriangle className="h-10 w-10 text-destructive mx-auto" aria-hidden="true" />
+          <div>
+            <h1 className="text-xl font-bold text-foreground">Facturation indisponible</h1>
+            <p className="text-sm text-muted-foreground mt-1">{erreurScope}</p>
+          </div>
+          <Button type="button" onClick={reessayerChargement}>
+            <RefreshCw className="h-4 w-4 mr-2" aria-hidden="true" />
+            Réessayer
+          </Button>
+        </div>
+      </LayoutApp>
+    );
+  }
+
   if (loading) return <LayoutApp role="ADMIN_ETABLISSEMENT"><SkeletonDashboard /></LayoutApp>;
+
+  if (erreurChargement) {
+    return (
+      <LayoutApp role="ADMIN_ETABLISSEMENT">
+        <div className="card-base max-w-xl mx-auto text-center space-y-4" role="alert" aria-live="assertive">
+          <AlertTriangle className="h-10 w-10 text-destructive mx-auto" aria-hidden="true" />
+          <div>
+            <h1 className="text-xl font-bold text-foreground">Facturation indisponible</h1>
+            <p className="text-sm text-muted-foreground mt-1">{erreurChargement}</p>
+          </div>
+          <Button type="button" onClick={reessayerChargement}>
+            <RefreshCw className="h-4 w-4 mr-2" aria-hidden="true" />
+            Réessayer
+          </Button>
+        </div>
+      </LayoutApp>
+    );
+  }
 
   // Derived data
   const missionsNonPayees = data?.missions_non_payees || [];
@@ -771,12 +889,19 @@ export default function FacturationEtablissement() {
                         )}
                         {!f.est_secteur_public && (
                         <div className="flex gap-2 flex-wrap">
-                          <BoutonY2K
-                            size="sm"
-                            onClick={() => { setCheckoutFactureId(f.facture_id); setShowCheckout(true); }}
-                          >
-                            <CreditCard className="w-4 h-4 mr-1" /> Payer par carte
-                          </BoutonY2K>
+                          {etab?.mode_paiement_commission !== 'SEPA_DEBIT' && (
+                            <BoutonY2K
+                              size="sm"
+                              onClick={() => { setCheckoutFactureId(f.facture_id); setShowCheckout(true); }}
+                            >
+                              <CreditCard className="w-4 h-4 mr-1" /> Payer par carte
+                            </BoutonY2K>
+                          )}
+                          {etab?.mode_paiement_commission === 'SEPA_DEBIT' && (
+                            <p className="w-full text-xs text-muted-foreground">
+                              Prélèvement SEPA automatique programmé — aucun paiement par carte requis.
+                            </p>
+                          )}
                           <BoutonY2K
                             size="sm"
                             variant="secondary"
@@ -863,10 +988,16 @@ export default function FacturationEtablissement() {
                               return (
                                 <tr
                                   key={f.facture_id}
-                                  onClick={() => navigate(`/etablissement/facturation/${f.facture_id}`)}
-                                  className="border-b last:border-0 cursor-pointer hover:bg-muted/40 transition-colors"
+                                  className="border-b last:border-0"
                                 >
-                                  <td className="py-2 pr-3 font-medium text-primary">{f.numero_facture}</td>
+                                  <td className="py-2 pr-3 font-medium">
+                                    <Link
+                                      to={`/etablissement/facturation/${f.facture_id}`}
+                                      className="text-primary hover:underline focus-visible:underline"
+                                    >
+                                      {f.numero_facture}
+                                    </Link>
+                                  </td>
                                   <td className="py-2 pr-3 text-xs">{f.date_emission && new Date(f.date_emission).toLocaleDateString('fr-FR')}</td>
                                   <td className="py-2 pr-3 text-xs">{f.date_paiement ? new Date(f.date_paiement).toLocaleDateString('fr-FR') : '—'}</td>
                                   <td className="py-2 pr-3 text-xs">{f.nombre_missions ?? '—'}</td>
@@ -886,10 +1017,7 @@ export default function FacturationEtablissement() {
                                         variant="ghost"
                                         className="h-9 w-9"
                                         title="Télécharger la facture PDF"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          telechargerFactureCommissionPDF(f.facture_id);
-                                        }}
+                                        onClick={() => telechargerFactureCommissionPDF(f.facture_id)}
                                       >
                                         <Download className="h-4 w-4 text-muted-foreground" />
                                       </Button>
@@ -907,11 +1035,15 @@ export default function FacturationEtablissement() {
                         {facturesCommissionHistorique.map((f: any) => (
                           <div
                             key={f.facture_id}
-                            onClick={() => navigate(`/etablissement/facturation/${f.facture_id}`)}
-                            className="rounded-lg border bg-card p-3 cursor-pointer active:bg-muted/40 transition-colors"
+                            className="rounded-lg border bg-card p-3"
                           >
                             <div className="flex items-center justify-between mb-2">
-                              <span className="text-sm font-medium text-primary">{f.numero_facture}</span>
+                              <Link
+                                to={`/etablissement/facturation/${f.facture_id}`}
+                                className="text-sm font-medium text-primary hover:underline focus-visible:underline"
+                              >
+                                {f.numero_facture}
+                              </Link>
                               {f.statut === 'PAYEE' ? (
                                 <BadgeY2K variant="success">Payée</BadgeY2K>
                               ) : (
@@ -925,10 +1057,7 @@ export default function FacturationEtablissement() {
                                 variant="ghost"
                                 className="h-9 w-9"
                                 title="Télécharger la facture PDF"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  telechargerFactureCommissionPDF(f.facture_id);
-                                }}
+                                onClick={() => telechargerFactureCommissionPDF(f.facture_id)}
                               >
                                 <Download className="h-4 w-4 text-muted-foreground" />
                               </Button>
@@ -979,11 +1108,17 @@ export default function FacturationEtablissement() {
                         {missionsNonFacturees.map((m: any) => (
                           <tr
                             key={m.id}
-                            onClick={() => navigate(`/etablissement/missions/${m.id}`)}
-                            className="border-b last:border-0 cursor-pointer hover:bg-muted/40 transition-colors"
+                            className="border-b last:border-0"
                           >
                             <td className="py-2 pr-3 text-xs">{m.fin_le && new Date(m.fin_le).toLocaleDateString('fr-FR')}</td>
-                            <td className="py-2 pr-3 text-primary">{m.intitule}</td>
+                            <td className="py-2 pr-3">
+                              <Link
+                                to={`/etablissement/missions/${m.id}`}
+                                className="text-primary hover:underline focus-visible:underline"
+                              >
+                                {m.intitule}
+                              </Link>
+                            </td>
                             <td className="py-2 pr-3 text-right font-medium">{fmt(m.montant_commission_ht)}</td>
                           </tr>
                         ))}
@@ -993,10 +1128,10 @@ export default function FacturationEtablissement() {
                   {/* Mobile cards */}
                   <div className="md:hidden space-y-2">
                     {missionsNonFacturees.map((m: any) => (
-                      <div
+                      <Link
                         key={m.id}
-                        onClick={() => navigate(`/etablissement/missions/${m.id}`)}
-                        className="rounded-lg border bg-card p-3 cursor-pointer active:bg-muted/40 transition-colors"
+                        to={`/etablissement/missions/${m.id}`}
+                        className="block rounded-lg border bg-card p-3 active:bg-muted/40 transition-colors focus-visible:ring-2 focus-visible:ring-ring"
                       >
                         <div className="flex items-center justify-between mb-1">
                           <span className="text-sm font-medium text-primary">{m.intitule}</span>
@@ -1005,7 +1140,7 @@ export default function FacturationEtablissement() {
                         <p className="text-xs text-muted-foreground">
                           Fin : {m.fin_le && new Date(m.fin_le).toLocaleDateString('fr-FR')}
                         </p>
-                      </div>
+                      </Link>
                     ))}
                   </div>
                   <p className="text-xs text-muted-foreground mt-2">
@@ -1108,11 +1243,21 @@ export default function FacturationEtablissement() {
                         {prelevements.map((p: any) => (
                           <tr
                             key={p.id}
-                            onClick={() => p.mission_id && navigate(`/etablissement/missions/${p.mission_id}`)}
-                            className={`border-b last:border-0 transition-colors ${p.mission_id ? 'cursor-pointer hover:bg-muted/40' : 'cursor-default'}`}
+                            className="border-b last:border-0"
                           >
                             <td className="py-2 pr-3 text-xs">{p.capture_le && new Date(p.capture_le).toLocaleDateString('fr-FR')}</td>
-                            <td className="py-2 pr-3 text-primary">{(p.missions as any)?.intitule || '—'}</td>
+                            <td className="py-2 pr-3">
+                              {p.mission_id ? (
+                                <Link
+                                  to={`/etablissement/missions/${p.mission_id}`}
+                                  className="text-primary hover:underline focus-visible:underline"
+                                >
+                                  {(p.missions as any)?.intitule || 'Voir la mission'}
+                                </Link>
+                              ) : (
+                                <span>—</span>
+                              )}
+                            </td>
                             <td className="py-2 pr-3 text-right font-medium">{fmt(p.montant_ttc)}</td>
                             <td className="py-2 pr-3">
                               {p.statut === 'PRELEVE' ? (
@@ -1131,11 +1276,19 @@ export default function FacturationEtablissement() {
                     {prelevements.map((p: any) => (
                       <div
                         key={p.id}
-                        onClick={() => p.mission_id ? navigate(`/etablissement/missions/${p.mission_id}`) : undefined}
-                        className={`rounded-lg border bg-card p-3 transition-colors ${p.mission_id ? 'cursor-pointer active:bg-muted/40' : 'cursor-default'}`}
+                        className="rounded-lg border bg-card p-3"
                       >
                         <div className="flex items-center justify-between mb-1">
-                          <span className="text-sm font-medium text-primary">{(p.missions as any)?.intitule || '—'}</span>
+                          {p.mission_id ? (
+                            <Link
+                              to={`/etablissement/missions/${p.mission_id}`}
+                              className="text-sm font-medium text-primary hover:underline focus-visible:underline"
+                            >
+                              {(p.missions as any)?.intitule || 'Voir la mission'}
+                            </Link>
+                          ) : (
+                            <span className="text-sm font-medium">—</span>
+                          )}
                           {p.statut === 'PRELEVE' ? (
                             <BadgeY2K variant="success">Prélevé</BadgeY2K>
                           ) : (
@@ -1201,12 +1354,22 @@ export default function FacturationEtablissement() {
                           {paiementsConfirmes.map((p: any) => (
                             <tr
                               key={p.paiement_id}
-                              onClick={() => p.mission_id && navigate(`/etablissement/missions/${p.mission_id}`)}
-                              className="border-b last:border-0 cursor-pointer hover:bg-muted/40 transition-colors"
+                              className="border-b last:border-0"
                             >
                               <td className="py-2 pr-3 text-xs">{p.confirme_par_soignant_le && new Date(p.confirme_par_soignant_le).toLocaleDateString('fr-FR')}</td>
                               <td className="py-2 pr-3">{p.soignant_nom}</td>
-                              <td className="py-2 pr-3 text-primary">{p.mission_intitule}</td>
+                              <td className="py-2 pr-3">
+                                {p.mission_id ? (
+                                  <Link
+                                    to={`/etablissement/missions/${p.mission_id}`}
+                                    className="text-primary hover:underline focus-visible:underline"
+                                  >
+                                    {p.mission_intitule}
+                                  </Link>
+                                ) : (
+                                  <span>{p.mission_intitule}</span>
+                                )}
+                              </td>
                               <td className="py-2 pr-3 text-right font-medium">{fmt(p.montant_net)}</td>
                               <td className="py-2 pr-3 text-xs text-muted-foreground">{p.reference_virement}</td>
                               <td className="py-2"><BadgeY2K variant="success" aria-label="Confirmé"><CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" /></BadgeY2K></td>
@@ -1218,10 +1381,7 @@ export default function FacturationEtablissement() {
                                       variant="ghost"
                                       className="h-9 w-9"
                                       title="Télécharger la facture honoraires PDF"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        telechargerFactureHonorairesPDF(p.facture_honoraires_id);
-                                      }}
+                                      onClick={() => telechargerFactureHonorairesPDF(p.facture_honoraires_id)}
                                     >
                                       <Download className="h-4 w-4 text-muted-foreground" />
                                     </Button>
@@ -1239,13 +1399,22 @@ export default function FacturationEtablissement() {
                       {paiementsConfirmes.map((p: any) => (
                         <div
                           key={p.paiement_id}
-                          onClick={() => p.mission_id && navigate(`/etablissement/missions/${p.mission_id}`)}
-                          className="rounded-lg border bg-card p-3 cursor-pointer active:bg-muted/40 transition-colors"
+                          className="rounded-lg border bg-card p-3"
                         >
                           <div className="flex items-center justify-between mb-1">
                             <div className="min-w-0">
                               <p className="text-sm font-medium truncate" title={p.soignant_nom}>{p.soignant_nom}</p>
-                              <p className="text-xs text-primary truncate" title={p.mission_intitule}>{p.mission_intitule}</p>
+                              {p.mission_id ? (
+                                <Link
+                                  to={`/etablissement/missions/${p.mission_id}`}
+                                  className="block text-xs text-primary truncate hover:underline focus-visible:underline"
+                                  title={p.mission_intitule}
+                                >
+                                  {p.mission_intitule}
+                                </Link>
+                              ) : (
+                                <p className="text-xs truncate" title={p.mission_intitule}>{p.mission_intitule}</p>
+                              )}
                             </div>
                             <div className="flex items-center gap-2 shrink-0 ml-2">
                               <span className="text-sm font-semibold">{fmt(p.montant_net)}</span>
@@ -1263,10 +1432,7 @@ export default function FacturationEtablissement() {
                                 variant="ghost"
                                 className="h-8 w-8"
                                 title="Télécharger la facture honoraires PDF"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  telechargerFactureHonorairesPDF(p.facture_honoraires_id);
-                                }}
+                                onClick={() => telechargerFactureHonorairesPDF(p.facture_honoraires_id)}
                               >
                                 <Download className="h-4 w-4 text-muted-foreground" />
                               </Button>

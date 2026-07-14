@@ -21,7 +21,7 @@ const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 const skip = !serviceRoleKey;
 
 describe.skipIf(skip)('generate-invoice auth & service_role bypass', () => {
-  const supabase = createClient(supabaseUrl, serviceRoleKey);
+  const supabase = createClient(supabaseUrl, serviceRoleKey || 'test-only-placeholder');
 
   // We need a valid TERMINEE mission for positive tests
   let testMissionId: string;

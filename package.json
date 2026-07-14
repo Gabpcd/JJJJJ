@@ -25,6 +25,8 @@
     "test:e2e:ui": "npx playwright test --ui",
     "screenshots:play": "node scripts/capture-google-play.mjs",
     "screenshots:play:check": "node --check scripts/capture-google-play.mjs && node scripts/capture-google-play.mjs --check",
+    "screenshots:app-store": "CAPTURE_STORE=app-store node scripts/capture-google-play.mjs",
+    "screenshots:app-store:check": "node --check scripts/capture-google-play.mjs && CAPTURE_STORE=app-store node scripts/capture-google-play.mjs --check",
     "test:invoicing": "vitest run tests/invoicing/",
     "test:chorus:sandbox": "vitest run tests/invoicing/chorus-submission.test.ts",
     "test:guards": "bash tests/non-regression/guards.sh",

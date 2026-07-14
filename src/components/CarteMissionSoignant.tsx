@@ -8,6 +8,7 @@ import { getLabelProfession, getLabelTypeEtablissement, extraireContratPreferenc
 import { getMissionMatchInfo } from '@/lib/profession-hierarchy';
 import { detecterMajorations, calculerTauxAvecMajorations } from '@/lib/majorationsCCN';
 import { formatDateMission, formatHorairesMission } from '@/lib/format-mission';
+import { netEstimeAfficheMission } from '@/lib/missionFinanceDisplay';
 
 interface CarteMissionSoignantProps {
   mission: any;
@@ -37,6 +38,7 @@ function fmt(v: number | null): string {
 
 export const CarteMissionSoignant = React.memo(function CarteMissionSoignant({ mission, soignant, onClick }: CarteMissionSoignantProps) {
   const m = mission;
+  const netEstimeAffiche = netEstimeAfficheMission(m);
   const temps = getTempsEcoule(m.cree_le);
   const profilComplet = soignant?.tous_documents_valides;
   const contratBadge = m.type_contrat_recherche
@@ -152,8 +154,8 @@ export const CarteMissionSoignant = React.memo(function CarteMissionSoignant({ m
         })()}
         {(m as any).mode_remuneration === 'RETROCESSION' ? (
           <span className="text-xs text-muted-foreground">Remplacement de cabinet</span>
-        ) : (m.net_estime ?? m.net_a_payer ?? 0) > 0 ? (
-          <span className="text-xs text-muted-foreground">Net estimé* : ~{fmt(m.net_estime ?? (m.net_a_payer != null ? m.net_a_payer * 0.78 : null))}</span>
+        ) : (netEstimeAffiche ?? 0) > 0 ? (
+          <span className="text-xs text-muted-foreground">Net estimé* : ~{fmt(netEstimeAffiche)}</span>
         ) : (
           <span className="text-xs text-muted-foreground/50">Calculé après assignation</span>
         )}

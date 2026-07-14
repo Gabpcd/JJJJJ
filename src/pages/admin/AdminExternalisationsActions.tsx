@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { Loader2, RefreshCw, XCircle, AlertTriangle, CheckCircle, Clock } from 'lucide-react';
 import { LayoutAdmin } from '@/components/LayoutAdmin';
 import { supabase } from '@/integrations/supabase/client';
@@ -9,6 +9,12 @@ import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { BadgeY2K } from '@/components/y2k/BadgeY2K';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
+import {
+  STATUTS_EXTERNALISATION,
+  libelleStatutExternalisation,
+  libelleTypeExternalisation,
+  type StatutExternalisation,
+} from '@/lib/adminExternalisations';
 
 interface Action {
   id: string;
@@ -25,8 +31,7 @@ interface Action {
   resultat: Record<string, any> | null;
 }
 
-const STATUTS = ['PENDING', 'PROCESSING', 'DONE', 'ERROR', 'PENDING_AIFE', 'CANCELLED', 'TOUS'] as const;
-type Filtre = typeof STATUTS[number];
+type Filtre = StatutExternalisation;
 
 const TYPES_ACTION = [
   'TOUS', 'STRIPE_REFUND_TOTAL', 'STRIPE_REFUND_PARTIEL', 'STRIPE_PAYMENT',
@@ -35,29 +40,48 @@ const TYPES_ACTION = [
 ];
 
 export default function AdminExternalisationsActions() {
-  usePageTitle('Worker externalisations');
+  usePageTitle('Traitement des externalisations');
   const { afficherNotification } = useNotification();
   const [filtreStatut, setFiltreStatut] = useState<Filtre>('PENDING');
   const [filtreType, setFiltreType] = useState<string>('TOUS');
   const [actions, setActions] = useState<Action[]>([]);
   const [loading, setLoading] = useState(true);
+  const [erreurChargement, setErreurChargement] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [details, setDetails] = useState<Action | null>(null);
   const detailsRef = useRef<HTMLDivElement>(null);
+  const [actionAAnnuler, setActionAAnnuler] = useState<Action | null>(null);
+  const [motifAnnulation, setMotifAnnulation] = useState('');
+  const [annulationEnCours, setAnnulationEnCours] = useState(false);
+  const annulationRef = useRef<HTMLDivElement>(null);
+  const titreAnnulationId = useId();
 
-  async function charger() {
+  const charger = useCallback(async () => {
     setLoading(true);
-    const { data, error } = await supabase.rpc('fn_admin_lister_externalisations' as any, {
-      p_statut: filtreStatut === 'TOUS' ? null : filtreStatut,
-      p_type_action: filtreType === 'TOUS' ? null : filtreType,
-      p_limit: 200,
-    });
-    if (error) afficherNotification({ type: 'erreur', message: error.message });
-    else if ((data as any)?.success) setActions(((data as any).actions || []) as Action[]);
-    setLoading(false);
-  }
+    setErreurChargement(null);
+    try {
+      const { data, error } = await supabase.rpc('fn_admin_lister_externalisations' as any, {
+        p_statut: filtreStatut === 'TOUS' ? null : filtreStatut,
+        p_type_action: filtreType === 'TOUS' ? null : filtreType,
+        p_limit: 200,
+      });
+      const payload = data as any;
+      if (error || !payload?.success) {
+        throw error || new Error(payload?.error || 'Erreur de chargement');
+      }
+      setActions((payload.actions || []) as Action[]);
+    } catch (error) {
+      const message = error instanceof Error && error.message
+        ? error.message
+        : 'Impossible de charger les actions externalisées.';
+      setErreurChargement(message);
+      afficherNotification({ type: 'erreur', message });
+    } finally {
+      setLoading(false);
+    }
+  }, [afficherNotification, filtreStatut, filtreType]);
 
-  useEffect(() => { charger(); }, [filtreStatut, filtreType]);
+  useEffect(() => { void charger(); }, [charger]);
 
   useEffect(() => {
     if (!details) return;
@@ -72,24 +96,40 @@ export default function AdminExternalisationsActions() {
   async function retry(id: string) {
     const { data, error } = await supabase.rpc('fn_admin_externalisation_retry' as any, { p_id: id });
     if (error || !(data as any)?.success) {
-      afficherNotification({ type: 'erreur', message: 'Erreur retry' });
+      afficherNotification({ type: 'erreur', message: 'Impossible de relancer cette action.' });
       return;
     }
-    afficherNotification({ type: 'succes', message: 'Action remise en queue' });
+    afficherNotification({ type: 'succes', message: 'Action remise en file d’attente.' });
     charger();
   }
 
-  async function cancel(id: string) {
-    const motif = prompt('Motif de l\'annulation ?');
-    if (!motif) return;
-    const { data, error } = await supabase.rpc('fn_admin_externalisation_cancel' as any, { p_id: id, p_motif: motif });
+  async function confirmerAnnulation() {
+    if (!actionAAnnuler || motifAnnulation.trim().length < 5) return;
+    setAnnulationEnCours(true);
+    const { data, error } = await supabase.rpc('fn_admin_externalisation_cancel' as any, {
+      p_id: actionAAnnuler.id,
+      p_motif: motifAnnulation.trim(),
+    });
+    setAnnulationEnCours(false);
     if (error || !(data as any)?.success) {
-      afficherNotification({ type: 'erreur', message: 'Erreur annulation' });
+      afficherNotification({ type: 'erreur', message: 'Impossible d’annuler cette action.' });
       return;
     }
-    afficherNotification({ type: 'succes', message: 'Action annulée' });
+    afficherNotification({ type: 'succes', message: 'Action annulée.' });
+    setActionAAnnuler(null);
+    setMotifAnnulation('');
     charger();
   }
+
+  useEffect(() => {
+    if (!actionAAnnuler) return;
+    annulationRef.current?.focus();
+    const fermerAvecEchap = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && !annulationEnCours) setActionAAnnuler(null);
+    };
+    document.addEventListener('keydown', fermerAvecEchap);
+    return () => document.removeEventListener('keydown', fermerAvecEchap);
+  }, [actionAAnnuler, annulationEnCours]);
 
   const filtered = actions.filter(a => {
     if (!search) return true;
@@ -110,7 +150,10 @@ export default function AdminExternalisationsActions() {
     <LayoutAdmin>
       <div className="max-w-7xl mx-auto p-4 space-y-4">
         <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold text-foreground">Worker externalisations</h1>
+          <div>
+            <h1 className="text-2xl font-bold text-foreground">Traitement des externalisations</h1>
+            <p className="text-sm text-muted-foreground">Suivez et relancez les actions envoyées aux services externes.</p>
+          </div>
           <BoutonY2K variant="secondary" size="sm" onClick={charger} iconeGauche={<RefreshCw className="h-4 w-4" />}>
             Rafraîchir
           </BoutonY2K>
@@ -119,11 +162,11 @@ export default function AdminExternalisationsActions() {
         {/* Stats */}
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
           {[
-            { label: 'PENDING', value: stats.pending, color: 'text-amber-600' },
-            { label: 'PROCESSING', value: stats.processing, color: 'text-blue-600' },
-            { label: 'DONE', value: stats.done, color: 'text-emerald-600' },
-            { label: 'ERROR', value: stats.error, color: 'text-destructive' },
-            { label: 'PENDING_AIFE', value: stats.pendingAife, color: 'text-purple-600' },
+            { label: 'En attente', value: stats.pending, color: 'text-amber-600' },
+            { label: 'En cours', value: stats.processing, color: 'text-blue-600' },
+            { label: 'Terminées', value: stats.done, color: 'text-emerald-600' },
+            { label: 'En échec', value: stats.error, color: 'text-destructive' },
+            { label: 'Attente AIFE', value: stats.pendingAife, color: 'text-purple-600' },
           ].map(s => (
             <div key={s.label} className="rounded-xl border border-border bg-card p-3 text-center">
               <p className="text-[10px] text-muted-foreground uppercase">{s.label}</p>
@@ -135,15 +178,15 @@ export default function AdminExternalisationsActions() {
         {/* Filtres */}
         <div className="flex flex-wrap gap-2">
           <select aria-label="Filtrer par statut" value={filtreStatut} onChange={e => setFiltreStatut(e.target.value as Filtre)} className="input-base">
-            {STATUTS.map(s => <option key={s} value={s}>{s}</option>)}
+            {STATUTS_EXTERNALISATION.map(s => <option key={s} value={s}>{libelleStatutExternalisation(s)}</option>)}
           </select>
           <select aria-label="Filtrer par type d’action" value={filtreType} onChange={e => setFiltreType(e.target.value)} className="input-base">
-            {TYPES_ACTION.map(t => <option key={t} value={t}>{t}</option>)}
+            {TYPES_ACTION.map(t => <option key={t} value={t}>{libelleTypeExternalisation(t)}</option>)}
           </select>
           <input
             aria-label="Rechercher une action externalisée"
             type="text"
-            placeholder="Rechercher (source_id, erreur, action ID)..."
+            placeholder="Rechercher un identifiant ou une erreur…"
             value={search} onChange={e => setSearch(e.target.value)}
             className="input-base flex-1 min-w-[200px]"
           />
@@ -151,6 +194,21 @@ export default function AdminExternalisationsActions() {
 
         {loading ? (
           <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
+        ) : erreurChargement ? (
+          <div role="alert" className="rounded-xl border border-destructive/30 bg-destructive/5 p-6 text-center">
+            <AlertTriangle className="mx-auto h-8 w-8 text-destructive" />
+            <h2 className="mt-3 text-base font-bold text-foreground">Actions indisponibles</h2>
+            <p className="mt-1 text-sm text-muted-foreground">{erreurChargement}</p>
+            <BoutonY2K
+              variant="secondary"
+              size="sm"
+              className="mt-4 min-h-[44px] gap-2"
+              onClick={() => void charger()}
+              iconeGauche={<RefreshCw className="h-4 w-4" />}
+            >
+              Réessayer
+            </BoutonY2K>
+          </div>
         ) : filtered.length === 0 ? (
           <EmptyState
             icone={<CheckCircle />}
@@ -167,7 +225,7 @@ export default function AdminExternalisationsActions() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <StatutBadge statut={a.statut} />
-                      <span className="font-semibold text-sm text-foreground">{a.type_action}</span>
+                      <span className="font-semibold text-sm text-foreground">{libelleTypeExternalisation(a.type_action)}</span>
                       <span className="text-xs text-muted-foreground font-mono">{a.source}</span>
                       {a.tentatives > 0 && (
                         <span className="text-xs px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900 text-amber-900 dark:text-amber-100">
@@ -180,7 +238,7 @@ export default function AdminExternalisationsActions() {
                     )}
                     <p className="text-[10px] text-muted-foreground mt-1">
                       Créée {format(new Date(a.cree_le), "d MMM HH:mm", { locale: fr })}
-                      {a.next_retry_at && ` • retry ${format(new Date(a.next_retry_at), "d MMM HH:mm", { locale: fr })}`}
+                      {a.next_retry_at && ` • prochaine tentative ${format(new Date(a.next_retry_at), "d MMM HH:mm", { locale: fr })}`}
                       {a.traite_le && ` • terminée ${format(new Date(a.traite_le), "d MMM HH:mm", { locale: fr })}`}
                     </p>
                   </div>
@@ -188,11 +246,11 @@ export default function AdminExternalisationsActions() {
                     <BoutonY2K variant="secondary" size="sm" onClick={() => setDetails(a)}>Détail</BoutonY2K>
                     {(a.statut === 'ERROR' || a.statut === 'PENDING_AIFE') && (
                       <BoutonY2K variant="primary" size="sm" onClick={() => retry(a.id)} iconeGauche={<RefreshCw className="h-3 w-3" />}>
-                        Retry
+                        Relancer
                       </BoutonY2K>
                     )}
                     {(a.statut === 'PENDING' || a.statut === 'PENDING_AIFE' || a.statut === 'ERROR') && (
-                      <BoutonY2K variant="destructive" size="sm" onClick={() => cancel(a.id)} iconeGauche={<XCircle className="h-3 w-3" />}>
+                      <BoutonY2K variant="destructive" size="sm" onClick={() => { setActionAAnnuler(a); setMotifAnnulation(''); }} iconeGauche={<XCircle className="h-3 w-3" />}>
                         Annuler
                       </BoutonY2K>
                     )}
@@ -214,10 +272,10 @@ export default function AdminExternalisationsActions() {
               className="bg-card border border-border rounded-xl max-w-2xl w-full p-6 space-y-3 max-h-[80vh] overflow-auto outline-none"
               onClick={e => e.stopPropagation()}
             >
-              <h2 id="externalisation-details-title" className="text-lg font-bold text-foreground">{details.type_action}</h2>
+              <h2 id="externalisation-details-title" className="text-lg font-bold text-foreground">{libelleTypeExternalisation(details.type_action)}</h2>
               <p className="text-xs text-muted-foreground font-mono">{details.id}</p>
               <div className="rounded-lg bg-muted/40 p-3">
-                <p className="text-xs font-semibold mb-1">Payload :</p>
+                <p className="text-xs font-semibold mb-1">Données envoyées :</p>
                 <pre className="text-[10px] font-mono whitespace-pre-wrap break-all">{JSON.stringify(details.payload, null, 2)}</pre>
               </div>
               {details.resultat && (
@@ -233,6 +291,46 @@ export default function AdminExternalisationsActions() {
                 </div>
               )}
               <BoutonY2K variant="secondary" size="md" onClick={() => setDetails(null)} className="w-full">Fermer</BoutonY2K>
+            </div>
+          </div>
+        )}
+
+        {actionAAnnuler && (
+          <div
+            className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4"
+            onClick={() => { if (!annulationEnCours) setActionAAnnuler(null); }}
+          >
+            <div
+              ref={annulationRef}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby={titreAnnulationId}
+              tabIndex={-1}
+              className="bg-card border border-border rounded-xl max-w-md w-full p-6 space-y-4 outline-none"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <div>
+                <h2 id={titreAnnulationId} className="text-lg font-bold text-foreground">Annuler l’action externe</h2>
+                <p className="mt-1 text-sm text-muted-foreground">{libelleTypeExternalisation(actionAAnnuler.type_action)}</p>
+              </div>
+              <label className="block">
+                <span className="mb-1 block text-sm font-medium text-foreground">Motif de l’annulation *</span>
+                <textarea
+                  autoFocus
+                  value={motifAnnulation}
+                  onChange={(event) => setMotifAnnulation(event.target.value)}
+                  className="input-base min-h-24"
+                  maxLength={1000}
+                  disabled={annulationEnCours}
+                />
+                <span className="mt-1 block text-xs text-muted-foreground">5 caractères minimum</span>
+              </label>
+              <div className="flex gap-2">
+                <BoutonY2K variant="secondary" className="flex-1" onClick={() => setActionAAnnuler(null)} disabled={annulationEnCours}>Retour</BoutonY2K>
+                <BoutonY2K variant="destructive" className="flex-1" onClick={confirmerAnnulation} disabled={annulationEnCours || motifAnnulation.trim().length < 5} loading={annulationEnCours}>
+                  Confirmer l’annulation
+                </BoutonY2K>
+              </div>
             </div>
           </div>
         )}
@@ -260,7 +358,7 @@ function StatutBadge({ statut }: { statut: Action['statut'] }) {
   };
   return (
     <BadgeY2K variant={variantMap[statut]} size="sm" icone={iconMap[statut]}>
-      {statut}
+      {libelleStatutExternalisation(statut)}
     </BadgeY2K>
   );
 }

@@ -63,7 +63,7 @@ export default function MonCompteEtablissement() {
         { icone: User, label: 'Mon établissement', route: '/etablissement/parametres?tab=profil' },
         { icone: CreditCard, label: 'Facturation & contrat', route: '/etablissement/parametres?tab=facturation' },
         { icone: FileText, label: 'Mes factures', route: '/etablissement/facturation' },
-        { icone: Star, label: 'Qualité', route: '/etablissement/litiges' },
+        { icone: Scale, label: 'Litiges & contestations', route: '/etablissement/litiges' },
         { icone: Settings, label: 'Opérations', route: '/etablissement/parametres?tab=operations' },
         { icone: Bell, label: 'Notifications', route: '/etablissement/parametres?tab=notifications' },
         { icone: ShieldCheck, label: 'Sécurité & RGPD', route: '/etablissement/parametres?tab=securite' },

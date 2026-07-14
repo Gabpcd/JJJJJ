@@ -1,4 +1,5 @@
-import { Link, useSearchParams } from 'react-router-dom';
+import { useEffect } from 'react';
+import { Link, useLocation, useSearchParams } from 'react-router-dom';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { LayoutApp } from '@/components/LayoutApp';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -37,11 +38,24 @@ const ONGLETS: Array<{ value: Tab; label: string; icone: typeof User }> = [
 
 export default function Parametres() {
   usePageTitle('Paramètres');
+  const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
   const tabParam = searchParams.get('tab');
   // Appliquer le mapping d'alias AVANT de sélectionner l'onglet.
   const tabResolu = tabParam ? (ALIAS_TABS[tabParam] ?? tabParam) : null;
   const currentTab: Tab = TABS.includes(tabResolu as Tab) ? (tabResolu as Tab) : 'profil';
+
+  // Les liens du hub compte peuvent cibler directement une section interne
+  // (ex. Sécurité & RGPD → suppression du compte). React Router ne réalise pas
+  // toujours le défilement d’ancre après le montage différé d’un onglet Radix.
+  useEffect(() => {
+    if (!location.hash) return;
+    const id = decodeURIComponent(location.hash.slice(1));
+    const frame = window.requestAnimationFrame(() => {
+      document.getElementById(id)?.scrollIntoView({ block: 'start' });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [currentTab, location.hash]);
 
   return (
     <LayoutApp role="ADMIN_ETABLISSEMENT">

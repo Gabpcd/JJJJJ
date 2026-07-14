@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { ChevronRight, ArrowLeft, Mail, Phone, MapPin, Calendar, Shield, Star, Award, FileText, Clock, Ban, RefreshCw, Trash2, KeyRound, UserCog, AlertTriangle, MessageCircle, Send } from 'lucide-react';
-import { supabase as supabaseClient, SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from '@/integrations/supabase/client';
+import { SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from '@/integrations/supabase/client';
 import { LayoutAdmin } from '@/components/LayoutAdmin';
 import { ChargementAdmin } from '@/components/admin/ChargementAdmin';
 import { supabase } from '@/integrations/supabase/client';
@@ -27,10 +27,12 @@ import { ModalConfirmation } from '@/components/ModalConfirmation';
 import { Textarea } from '@/components/ui/textarea';
 import { AdminMissionChatPanel } from '@/components/admin/AdminMissionChatPanel';
 import { sanitiserNomFichier, verifierFichierDocument } from '@/lib/documentUpload';
+import { useOuvrirConversation } from '@/hooks/useOuvrirConversation';
 
 export default function AdminDetailUtilisateur() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const ouvrirConversation = useOuvrirConversation('/admin/messagerie');
   const [type, setType] = useState<'soignant' | 'etablissement' | null>(null);
   const [soignant, setSoignant] = useState<any>(null);
   const [etablissement, setEtablissement] = useState<any>(null);
@@ -49,19 +51,17 @@ export default function AdminDetailUtilisateur() {
   const [dernierRappel, setDernierRappel] = useState<string | null>(null);
   const [envoiRappel, setEnvoiRappel] = useState(false);
 
-  usePageTitle('Détail utilisateur');
+  usePageTitle(
+    soignant
+      ? `${soignant.prenom ?? ''} ${soignant.nom ?? ''}`.trim() || 'Détail utilisateur'
+      : etablissement?.nom || 'Détail utilisateur',
+  );
 
-  useEffect(() => {
-    if (!id) return;
-    charger();
-  }, [id]);
-
-  /* Validation manuelle : l'admin téléverse un document reçu en privé au nom
-     du soignant (storage admin policy + RPC fn_admin_ajouter_document_soignant)
-     puis il est validé immédiatement — tous_documents_valides est recalculé. */
-  const [uploadDocType, setUploadDocType] = useState('CNI');
+  /* L'admin peut téléverser une preuve reçue en privé au nom du soignant.
+     Elle reste EN_ATTENTE : toute décision passe ensuite par la revue
+     contextualisée de l'écran Modération. */
+  const [uploadDocType, setUploadDocType] = useState('CARTE_IDENTITE');
   const [uploadEnCours, setUploadEnCours] = useState(false);
-  const [validationEnCours, setValidationEnCours] = useState<string | null>(null);
 
   const uploaderPourSoignant = async (fichier: File) => {
     if (!id) return;
@@ -84,7 +84,7 @@ export default function AdminDetailUtilisateur() {
         p_nom_fichier: fichier.name,
         p_type_mime: validation.mime,
         p_taille_octets: fichier.size,
-        p_valider: true,
+        p_valider: false,
       });
       if (error || (data as any)?.error) {
         await supabase.functions.invoke('verify-document', {
@@ -93,28 +93,14 @@ export default function AdminDetailUtilisateur() {
         toast.error((data as any)?.error || 'Enregistrement impossible.');
         return;
       }
-      toast.success(`Document ${TYPES_DOCUMENTS[uploadDocType] || uploadDocType} ajouté et validé`);
-      charger();
+      toast.success(`Document ${TYPES_DOCUMENTS[uploadDocType] || uploadDocType} ajouté à la file de revue`);
+      navigate('/admin/moderation?onglet=documents');
     } finally {
       setUploadEnCours(false);
     }
   };
 
-  const validerDocument = async (docId: string) => {
-    setValidationEnCours(docId);
-    try {
-      const { data, error } = await supabase.rpc('fn_admin_moderer_document' as any, {
-        p_document_id: docId, p_action: 'VALIDER',
-      });
-      if (error || (data as any)?.error) { toast.error((data as any)?.error || 'Validation impossible.'); return; }
-      toast.success('Document validé');
-      charger();
-    } finally {
-      setValidationEnCours(null);
-    }
-  };
-
-  const charger = async () => {
+  const charger = useCallback(async () => {
     setLoading(true);
 
     const { data: s } = await supabase
@@ -211,7 +197,12 @@ export default function AdminDetailUtilisateur() {
     }
 
     setLoading(false);
-  };
+  }, [id]);
+
+  useEffect(() => {
+    if (!id) return;
+    charger();
+  }, [charger, id]);
 
   const envoyerRappelDocuments = async () => {
     if (!soignant || !id) return;
@@ -385,19 +376,12 @@ export default function AdminDetailUtilisateur() {
             <h1 className="text-2xl font-bold text-foreground">{nom}</h1>
             <button
               type="button"
-              onClick={async () => {
-                const { data, error } = await supabaseClient.rpc('fn_obtenir_conversation', { p_autre_id: id!, p_mission_id: null });
-                logger.debug('fn_obtenir_conversation (admin):', { data, error });
-                if (data) navigate(`/admin/messagerie?conv=${data}`);
-                else {
-                  logger.error('fn_obtenir_conversation error:', error);
-                  toast.error("Impossible d'ouvrir la conversation.");
-                }
-              }}
+              onClick={() => ouvrirConversation(id!, undefined, type === 'etablissement')}
               className="h-8 w-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center hover:bg-primary/90 transition-colors shrink-0"
               title="Contacter"
+              aria-label={`Contacter ${nom}`}
             >
-              <MessageCircle className="h-4 w-4" />
+              <MessageCircle className="h-4 w-4" aria-hidden="true" />
             </button>
           </div>
           <div className="flex items-center gap-2 mt-1">
@@ -485,10 +469,10 @@ export default function AdminDetailUtilisateur() {
             <CardY2K noPadding>
               <CardY2KHeader><CardY2KTitle className="text-lg">Documents ({documents.length})</CardY2KTitle></CardY2KHeader>
               <CardY2KContent>
-                {/* Upload admin : documents reçus en privé, validés à l'ajout */}
+                {/* Upload admin : la preuve rejoint toujours la file de revue. */}
                 <div className="rounded-xl border border-primary/30 bg-primary/5 p-3 mb-4 flex flex-col sm:flex-row sm:items-center gap-2">
                   <p className="text-xs text-muted-foreground flex-1">
-                    Le soignant vous a envoyé un document en privé ? Ajoutez-le ici : il sera validé immédiatement.
+                    Le soignant vous a envoyé un document en privé ? Ajoutez-le ici : il restera en attente jusqu’à la revue détaillée dans Modération.
                   </p>
                   <select
                     aria-label="Type du document à ajouter"
@@ -555,11 +539,9 @@ export default function AdminDetailUtilisateur() {
                                     <BoutonY2K
                                       size="sm"
                                       variant="secondary"
-                                      onClick={() => validerDocument(doc.id)}
-                                      disabled={validationEnCours === doc.id}
-                                      loading={validationEnCours === doc.id}
+                                      onClick={() => navigate('/admin/moderation?onglet=documents')}
                                     >
-                                      Valider
+                                      Revoir dans Modération
                                     </BoutonY2K>
                                   )}
                                 </TableCell>
@@ -587,6 +569,16 @@ export default function AdminDetailUtilisateur() {
                               <span>Téléversé : {doc.televerse_le ? new Date(doc.televerse_le).toLocaleDateString('fr-FR') : '—'}</span>
                               <span>Validité : {doc.valide_jusqua ? new Date(doc.valide_jusqua).toLocaleDateString('fr-FR') : '—'}</span>
                             </div>
+                            {doc.statut_verification !== 'VERIFIE' && (
+                              <BoutonY2K
+                                size="sm"
+                                variant="secondary"
+                                className="w-full"
+                                onClick={() => navigate('/admin/moderation?onglet=documents')}
+                              >
+                                Revoir dans Modération
+                              </BoutonY2K>
+                            )}
                           </div>
                         );
                       })}

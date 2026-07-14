@@ -128,7 +128,7 @@ export default function PaiementsEscrowAVenir() {
     );
     // Litige → lien vers le détail de la mission (action).
     if (l.etat === 'LITIGE') {
-      return <Link to={`/soignant/mission/${l.mission_id}`} className="block active:opacity-80">{contenu}</Link>;
+      return <Link to={`/soignant/missions/${l.mission_id}`} className="block active:opacity-80">{contenu}</Link>;
     }
     return contenu;
   };

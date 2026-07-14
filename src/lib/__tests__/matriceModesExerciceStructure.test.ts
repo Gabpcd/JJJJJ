@@ -14,6 +14,10 @@ const correctionSources = readFileSync(
   resolve(process.cwd(), 'supabase/migrations/20260713164844_corriger_sources_modes_exercice_et_specialites_infirmieres.sql'),
   'utf8',
 );
+const correctionUrlSourcePrimaire = readFileSync(
+  resolve(process.cwd(), 'supabase/migrations/20260714053000_corriger_url_source_primaire_lettre_d21_031940.sql'),
+  'utf8',
+);
 const constantes = readFileSync(resolve(process.cwd(), 'src/lib/constantes.ts'), 'utf8');
 const formulaire = readFileSync(resolve(process.cwd(), 'src/components/FormulaireMission.tsx'), 'utf8');
 const recap = readFileSync(resolve(process.cwd(), 'src/components/mission/ModalRecapMission.tsx'), 'utf8');
@@ -45,8 +49,8 @@ describe('encodage table des modes d’exercice', () => {
   });
 
   it('renvoie les surfaces UI vers les sources primaires exactes', () => {
-    expect(correctionSources).toContain(
-      'https://www.fehap.fr/jcms/navigation-internet/upload/docs/application/pdf/2023-02/courrierconjointministeres_30decembre2021_.pdf',
+    expect(correctionUrlSourcePrimaire).toContain(
+      'https://www.fehap.fr/upload/docs/application/pdf/2023-02/courrierconjointministeres_30decembre2021_.pdf',
     );
     expect(correctionSources).toContain(
       'https://www.legifrance.gouv.fr/ceta/id/CETATEXT000051156546',

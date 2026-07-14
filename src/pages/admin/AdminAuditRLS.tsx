@@ -19,6 +19,7 @@ import {
   Lock,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { usePageTitle } from '@/hooks/usePageTitle';
 
 /**
  * Sprint 7 PR 3 — P1-11
@@ -66,6 +67,7 @@ function badgeProbleme(type: string) {
 }
 
 export default function AdminAuditRLS() {
+  usePageTitle('Admin · Audit RLS');
   const [refreshing, setRefreshing] = useState(false);
 
   const { data, isLoading, isError, error, refetch } = useQuery<AuditRLSResult>({

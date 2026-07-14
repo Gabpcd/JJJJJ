@@ -28,7 +28,7 @@ Date : 12/07/2026 · périmètre : section D après validation C1-C7.
 - Reframe : « La règle se lit sur la profession demandée par cette mission, pas sur les diplômes du soignant. Un profil IADE peut donc candidater à une mission IDE, qui suit les règles IDE. »
 - Reframe 3 200 h : « Tes missions salariées comptent dans les 3 200 h d'expérience requises pour l'installation en libéral. »
 
-Le seed complet relu est celui de `supabase/migrations/20260712161000_finaliser_matrice_modes_exercice.sql` ; la migration de cascade `20260712163000` aligne ensuite le libellé C7 exact sur les cellules de doctrine déjà seedées. La migration corrective `20260713164844` encode deux URL pour ces cellules — copie du texte original de la lettre puis arrêt CE n°491128 explicitement limité au cas aide-soignant — et verrouille la hiérarchie IADE/IBODE → IDE dans son seul sens valide. Aucune cellule `public` n'est seedée : elle tombe au défaut `NON_PROPOSE`, pour toutes les professions.
+Le seed complet relu est celui de `supabase/migrations/20260712161000_finaliser_matrice_modes_exercice.sql` ; la migration de cascade `20260712163000` aligne ensuite le libellé C7 exact sur les cellules de doctrine déjà seedées. La migration corrective `20260713164844` encode deux URL pour ces cellules — copie du texte original de la lettre puis arrêt CE n°491128 explicitement limité au cas aide-soignant — et verrouille la hiérarchie IADE/IBODE → IDE dans son seul sens valide. `20260714053000` corrige sans réécrire l'historique le chemin public effectif du PDF primaire FEHAP. Aucune cellule `public` n'est seedée : elle tombe au défaut `NON_PROPOSE`, pour toutes les professions.
 
 ## D4 — cascade structurelle finalisée
 

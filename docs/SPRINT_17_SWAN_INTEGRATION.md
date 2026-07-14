@@ -5,7 +5,7 @@
 Sprint 17 livre 3 chantiers majeurs :
 
 1. **Parrainage soignant double moteur** (prime cash 50€+50€)
-2. **Intégration SWAN API** (virements SEPA vers IBAN soignant)
+2. **Socle SWAN API** (lecture canonique et webhooks sécurisés ; émission automatique désactivée au lancement)
 3. **Vérification ADELI + allègement documents**
 
 ## Architecture versement primes
@@ -17,13 +17,15 @@ Commission facture PAYEE (trigger DB)
     → Anti-fraude check (même IP ?)
     → Action RECOMPENSE_PARRAINAGE_SOIGNANT créée
       → Worker process-externalisation-actions (cron 5min)
-        → Canal 1 : Stripe Connect (si stripe_account_id)
-        → Canal 2 : SWAN SCT (si iban_virement)
-        → Canal 3 : Notification "Renseignez votre IBAN"
-      → Webhook swan-webhook reçoit Transaction.Booked
-        → Parrainage → PRIME_VERSEE
-        → Notification soignant
+        → Stripe Connect uniquement si compte complet et identité exacte
+        → sinon prime conservée comme due + traitement manuel explicite
+      → PRIME_VERSEE seulement après deux transferts Stripe persistés et contrôlés
 ```
+
+> **État pré-lancement :** les virements automatiques Swan sont volontairement
+> désactivés. Une création de `Payment` peut rester `ConsentPending` et ne prouve
+> jamais un virement. Le webhook authentifie et relit la transaction canonique,
+> mais ne modifie aucun avoir ni parrainage sans liaison durable préalable.
 
 ## SWAN API — Configuration
 
@@ -37,8 +39,9 @@ Commission facture PAYEE (trigger DB)
 | `SWAN_GRAPHQL_URL` | `https://api.swan.io/sandbox-partner/graphql` (sandbox) ou `https://api.swan.io/live-partner/graphql` (live) |
 | `SWAN_ENVIRONMENT` | `sandbox` ou `live` |
 | `SWAN_ACCOUNT_ID` | ID du compte Jolene SASU chez SWAN |
-| `SWAN_S2S_PRIVATE_KEY_PEM` | Clé privée ECDSA P-256 PKCS#8 (S2S consent) |
-| `SWAN_WEBHOOK_SECRET` | Secret HMAC pour vérification signature webhook |
+| `SWAN_S2S_PRIVATE_KEY_PEM` | Clé privée ECDSA P-256 PKCS#8 servant à signer le JWT `{challenge}` du consentement S2S |
+| `SWAN_WEBHOOK_SECRET` | Secret partagé comparé au header officiel `x-swan-secret` (ce n'est pas une signature HMAC) |
+| `SWAN_PROJECT_ID` | Optionnel : verrou supplémentaire sur le `projectId` de l'enveloppe webhook |
 
 ### Bascule sandbox → live
 
@@ -47,7 +50,12 @@ Commission facture PAYEE (trigger DB)
 3. Mettre à jour `SWAN_ENVIRONMENT` → `live`
 4. Mettre à jour `SWAN_ACCOUNT_ID` → ID du compte live
 5. Installer la clé publique S2S dans SWAN Dashboard **live** (confirmation SMS représentant légal)
-6. Créer le webhook **live** avec la bonne URL
+6. Créer le webhook **live** avec la bonne URL et un secret partagé dédié
+7. Avant toute activation de l'émission automatique : configurer l'impersonation
+   autorisée du représentant légal, implémenter le cycle
+   `challenge → JWT ES256 → grantConsentWithServerSignature`, puis valider une
+   recette sandbox et live. Tant que ce point n'est pas validé, conserver le
+   traitement manuel.
 
 ### Rotation clés ECDSA (tous les 2 ans)
 
@@ -62,11 +70,11 @@ Commission facture PAYEE (trigger DB)
 | Fichier | Rôle |
 |---|---|
 | `supabase/functions/_shared/swan-client.ts` | OAuth2 token cache + GraphQL client |
-| `supabase/functions/_shared/swan-sign-s2s.ts` | Signature ECDSA P-256 S2S consent |
+| `supabase/functions/_shared/swan-sign-s2s.ts` | JWT ES256 du challenge de consentement S2S |
 | `supabase/functions/_shared/swan-client.test.ts` | Tests unitaires Deno |
 | `supabase/functions/swan-webhook/index.ts` | Réception webhooks SWAN |
-| `supabase/functions/process-externalisation-actions/index.ts` | Worker tri-canal (Stripe/SWAN/notification) |
-| `src/components/profil-soignant/SectionPaiements.tsx` | UI saisie IBAN soignant |
+| `supabase/functions/process-externalisation-actions/index.ts` | Worker Stripe Connect ou traitement manuel ; émission Swan neutralisée |
+| `src/components/profil-soignant/SectionPaiements.tsx` | Coordonnées bancaires liées à un RIB vérifié |
 
 ## Vérification ADELI
 

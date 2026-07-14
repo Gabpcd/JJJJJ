@@ -7,17 +7,20 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { NotificationProvider } from "@/contexts/NotificationContext";
 import { RouteProtegee } from "@/components/RouteProtegee";
+import { RouteAdminProtegee } from "@/components/RouteAdminProtegee";
 import { PageTransition } from "@/components/PageTransition";
 import { ChargementPage } from "@/components/ChargementPage";
 import { ScrollToTop } from "@/components/ScrollToTop";
 import { captureAttribution } from "@/lib/attribution";
 import { Toaster } from "sonner";
 import { BandeauCookies } from "@/components/BandeauCookies";
+import { ADMIN_ACCESS } from "@/lib/adminAccess";
 
 /* ─── Public pages ─── */
 const PageAccueil = lazy(() => import("./pages/PageAccueil"));
 const RacineApp = lazy(() => import("./pages/RacineApp"));
 const PageConnexion = lazy(() => import("./pages/PageConnexion"));
+const AccesAdminIndisponible = lazy(() => import("./pages/AccesAdminIndisponible"));
 const PageResetPassword = lazy(() => import("./pages/PageResetPassword"));
 const PscCallback = lazy(() => import("./pages/PscCallback"));
 const MandatFacturation = lazy(() => import("./pages/MandatFacturation"));
@@ -145,6 +148,7 @@ const AdminUtilisateurs = lazy(() => import("./pages/admin/AdminUtilisateurs"));
 const AdminModeration = lazy(() => import("./pages/admin/AdminModeration"));
 const AdminSignalements = lazy(() => import("./pages/admin/AdminSignalements"));
 const AdminVerificationEtablissements = lazy(() => import("./pages/admin/AdminVerificationEtablissements"));
+const AdminRevuesManuelles = lazy(() => import("./pages/admin/AdminRevuesManuelles"));
 const AdminLitiges = lazy(() => import("./pages/admin/AdminLitiges"));
 const AdminTemplatesContrats = lazy(() => import("./pages/admin/AdminTemplatesContrats"));
 const AdminEditerTemplateContrat = lazy(() => import("./pages/admin/AdminEditerTemplateContrat"));
@@ -260,6 +264,7 @@ function AppRoutes() {
           <Route path="/contact" element={<PageContact />} />
           <Route path="/telecharger" element={<Telecharger />} />
           <Route path="/connexion" element={<PageConnexion />} />
+          <Route path="/acces-admin-indisponible" element={<AccesAdminIndisponible />} />
           <Route path="/reset-password" element={<PageResetPassword />} />
           <Route path="/auth/psc/callback" element={<PscCallback />} />
           <Route path="/confirmer-email" element={<ConfirmerEmail />} />
@@ -414,58 +419,59 @@ function AppRoutes() {
           <Route path="/groupe/etablissements" element={<RouteProtegee rolesAutorises={['ADMIN_GROUPE']}><DashboardGroupe /></RouteProtegee>} />
 
           {/* Admin Plateforme */}
-          <Route path="/admin" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminDashboard /></RouteProtegee>} />
-          <Route path="/admin/utilisateurs" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminUtilisateurs /></RouteProtegee>} />
-          <Route path="/admin/utilisateurs/:id" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminDetailUtilisateur /></RouteProtegee>} />
-          <Route path="/admin/moderation" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminModeration /></RouteProtegee>} />
-          <Route path="/admin/signalements" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminSignalements /></RouteProtegee>} />
-          <Route path="/admin/verification-etablissements" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminVerificationEtablissements /></RouteProtegee>} />
-          <Route path="/admin/litiges" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminLitiges /></RouteProtegee>} />
-          <Route path="/admin/messages-contact" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminMessagesContact /></RouteProtegee>} />
-          <Route path="/admin/templates-contrats" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminTemplatesContrats /></RouteProtegee>} />
-          <Route path="/admin/templates-contrats/:id" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminEditerTemplateContrat /></RouteProtegee>} />
-          <Route path="/admin/contrats" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminContrats /></RouteProtegee>} />
-          <Route path="/admin/contrats/:id" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminDetailContrat /></RouteProtegee>} />
-          <Route path="/admin/alertes-pointage" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminAlertesPointage /></RouteProtegee>} />
-          <Route path="/admin/reclamations-score" element={<Navigate to="/admin/reclamations?tab=score" replace />} />
-          <Route path="/admin/heures-externes" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminHeuresExternes /></RouteProtegee>} />
-          <Route path="/admin/scores" element={<Navigate to="/admin/reclamations?tab=triage" replace />} />
-          <Route path="/admin/externalisations-actions" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminExternalisationsActions /></RouteProtegee>} />
-          <Route path="/admin/status" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminStatus /></RouteProtegee>} />
-          <Route path="/admin/facturation" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminFacturation /></RouteProtegee>} />
-          <Route path="/admin/impayees" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminImpayees /></RouteProtegee>} />
-          <Route path="/admin/conformite" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminConformite /></RouteProtegee>} />
-          <Route path="/admin/demo" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminDemo /></RouteProtegee>} />
-          <Route path="/admin/emails" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminEmails /></RouteProtegee>} />
-          <Route path="/admin/api" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminAPI /></RouteProtegee>} />
-          <Route path="/admin/groupes" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminGroupes /></RouteProtegee>} />
-          <Route path="/admin/mandats-facturation" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminMandatsFacturation /></RouteProtegee>} />
-          <Route path="/admin/bfa" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminBFA /></RouteProtegee>} />
-          <Route path="/admin/affacturage" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminAffacturage /></RouteProtegee>} />
-          <Route path="/admin/chorus-pro" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminChorusPro /></RouteProtegee>} />
-          <Route path="/admin/missions" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminMissions /></RouteProtegee>} />
-          <Route path="/admin/calendrier" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminCalendrier /></RouteProtegee>} />
-          <Route path="/admin/reclamations" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminReclamations /></RouteProtegee>} />
-          <Route path="/admin/pool-urgence" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><PoolUrgenceEtablissement isAdmin /></RouteProtegee>} />
-          <Route path="/admin/missions/:id" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><DetailMission role="ADMIN_PLATEFORME" /></RouteProtegee>} />
-          <Route path="/admin/presences/mission/:id" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><DetailPresencesMission role="ADMIN_PLATEFORME" /></RouteProtegee>} />
-          <Route path="/admin/messagerie" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><PageMessagerie role="ADMIN_PLATEFORME" /></RouteProtegee>} />
-          <Route path="/admin/finances" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminFinances /></RouteProtegee>} />
-          <Route path="/admin/taux-commission" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminTauxCommission /></RouteProtegee>} />
-          <Route path="/admin/config" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminConfig /></RouteProtegee>} />
-          <Route path="/admin/audit" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminAuditLogs /></RouteProtegee>} />
-          <Route path="/admin/dpia" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminDPIA /></RouteProtegee>} />
+          <Route path="/admin" element={<RouteAdminProtegee accesRequis={ADMIN_ACCESS.DASHBOARD}><AdminDashboard /></RouteAdminProtegee>} />
+          <Route path="/admin/utilisateurs" element={<RouteAdminProtegee accesRequis={ADMIN_ACCESS.UTILISATEURS}><AdminUtilisateurs /></RouteAdminProtegee>} />
+          <Route path="/admin/utilisateurs/:id" element={<RouteAdminProtegee accesRequis={ADMIN_ACCESS.UTILISATEURS}><AdminDetailUtilisateur /></RouteAdminProtegee>} />
+          <Route path="/admin/moderation" element={<RouteAdminProtegee accesRequis={ADMIN_ACCESS.UTILISATEURS}><AdminModeration /></RouteAdminProtegee>} />
+          <Route path="/admin/signalements" element={<RouteAdminProtegee accesRequis={ADMIN_ACCESS.UTILISATEURS}><AdminSignalements /></RouteAdminProtegee>} />
+          <Route path="/admin/verification-etablissements" element={<RouteAdminProtegee accesRequis={ADMIN_ACCESS.UTILISATEURS}><AdminVerificationEtablissements /></RouteAdminProtegee>} />
+          <Route path="/admin/revues-manuelles" element={<RouteAdminProtegee accesRequis={ADMIN_ACCESS.UTILISATEURS}><AdminRevuesManuelles /></RouteAdminProtegee>} />
+          <Route path="/admin/litiges" element={<RouteAdminProtegee accesRequis={ADMIN_ACCESS.LITIGES}><AdminLitiges /></RouteAdminProtegee>} />
+          <Route path="/admin/messages-contact" element={<RouteAdminProtegee accesRequis={ADMIN_ACCESS.MESSAGERIE}><AdminMessagesContact /></RouteAdminProtegee>} />
+          <Route path="/admin/templates-contrats" element={<RouteAdminProtegee accesRequis={ADMIN_ACCESS.LITIGES}><AdminTemplatesContrats /></RouteAdminProtegee>} />
+          <Route path="/admin/templates-contrats/:id" element={<RouteAdminProtegee accesRequis={ADMIN_ACCESS.LITIGES}><AdminEditerTemplateContrat /></RouteAdminProtegee>} />
+          <Route path="/admin/contrats" element={<RouteAdminProtegee accesRequis={ADMIN_ACCESS.LITIGES}><AdminContrats /></RouteAdminProtegee>} />
+          <Route path="/admin/contrats/:id" element={<RouteAdminProtegee accesRequis={ADMIN_ACCESS.LITIGES}><AdminDetailContrat /></RouteAdminProtegee>} />
+          <Route path="/admin/alertes-pointage" element={<RouteAdminProtegee accesRequis={ADMIN_ACCESS.MISSIONS}><AdminAlertesPointage /></RouteAdminProtegee>} />
+          <Route path="/admin/reclamations-score" element={<RouteAdminProtegee accesRequis={ADMIN_ACCESS.UTILISATEURS}><Navigate to="/admin/reclamations?tab=score" replace /></RouteAdminProtegee>} />
+          <Route path="/admin/heures-externes" element={<RouteAdminProtegee accesRequis={ADMIN_ACCESS.UTILISATEURS}><AdminHeuresExternes /></RouteAdminProtegee>} />
+          <Route path="/admin/scores" element={<RouteAdminProtegee accesRequis={ADMIN_ACCESS.UTILISATEURS}><Navigate to="/admin/reclamations?tab=triage" replace /></RouteAdminProtegee>} />
+          <Route path="/admin/externalisations-actions" element={<RouteAdminProtegee accesRequis={ADMIN_ACCESS.TECHNIQUE}><AdminExternalisationsActions /></RouteAdminProtegee>} />
+          <Route path="/admin/status" element={<RouteAdminProtegee accesRequis={ADMIN_ACCESS.TECHNIQUE}><AdminStatus /></RouteAdminProtegee>} />
+          <Route path="/admin/facturation" element={<RouteAdminProtegee accesRequis={ADMIN_ACCESS.FINANCES}><AdminFacturation /></RouteAdminProtegee>} />
+          <Route path="/admin/impayees" element={<RouteAdminProtegee accesRequis={ADMIN_ACCESS.FINANCES}><AdminImpayees /></RouteAdminProtegee>} />
+          <Route path="/admin/conformite" element={<RouteAdminProtegee accesRequis={ADMIN_ACCESS.TECHNIQUE}><AdminConformite /></RouteAdminProtegee>} />
+          <Route path="/admin/demo" element={<RouteAdminProtegee accesRequis={ADMIN_ACCESS.TECHNIQUE}><AdminDemo /></RouteAdminProtegee>} />
+          <Route path="/admin/emails" element={<RouteAdminProtegee accesRequis={ADMIN_ACCESS.TECHNIQUE}><AdminEmails /></RouteAdminProtegee>} />
+          <Route path="/admin/api" element={<RouteAdminProtegee accesRequis={ADMIN_ACCESS.TECHNIQUE}><AdminAPI /></RouteAdminProtegee>} />
+          <Route path="/admin/groupes" element={<RouteAdminProtegee accesRequis={ADMIN_ACCESS.UTILISATEURS}><AdminGroupes /></RouteAdminProtegee>} />
+          <Route path="/admin/mandats-facturation" element={<RouteAdminProtegee accesRequis={ADMIN_ACCESS.FINANCES}><AdminMandatsFacturation /></RouteAdminProtegee>} />
+          <Route path="/admin/bfa" element={<RouteAdminProtegee accesRequis={ADMIN_ACCESS.FINANCES}><AdminBFA /></RouteAdminProtegee>} />
+          <Route path="/admin/affacturage" element={<RouteAdminProtegee accesRequis={ADMIN_ACCESS.FINANCES}><AdminAffacturage /></RouteAdminProtegee>} />
+          <Route path="/admin/chorus-pro" element={<RouteAdminProtegee accesRequis={ADMIN_ACCESS.FINANCES}><AdminChorusPro /></RouteAdminProtegee>} />
+          <Route path="/admin/missions" element={<RouteAdminProtegee accesRequis={ADMIN_ACCESS.MISSIONS}><AdminMissions /></RouteAdminProtegee>} />
+          <Route path="/admin/calendrier" element={<RouteAdminProtegee accesRequis={ADMIN_ACCESS.MISSIONS}><AdminCalendrier /></RouteAdminProtegee>} />
+          <Route path="/admin/reclamations" element={<RouteAdminProtegee accesRequis={ADMIN_ACCESS.UTILISATEURS}><AdminReclamations /></RouteAdminProtegee>} />
+          <Route path="/admin/pool-urgence" element={<RouteAdminProtegee accesRequis={ADMIN_ACCESS.MISSIONS}><PoolUrgenceEtablissement isAdmin /></RouteAdminProtegee>} />
+          <Route path="/admin/missions/:id" element={<RouteAdminProtegee accesRequis={ADMIN_ACCESS.MISSIONS}><DetailMission role="ADMIN_PLATEFORME" /></RouteAdminProtegee>} />
+          <Route path="/admin/presences/mission/:id" element={<RouteAdminProtegee accesRequis={ADMIN_ACCESS.MISSIONS}><DetailPresencesMission role="ADMIN_PLATEFORME" /></RouteAdminProtegee>} />
+          <Route path="/admin/messagerie" element={<RouteAdminProtegee accesRequis={ADMIN_ACCESS.MESSAGERIE}><PageMessagerie role="ADMIN_PLATEFORME" /></RouteAdminProtegee>} />
+          <Route path="/admin/finances" element={<RouteAdminProtegee accesRequis={ADMIN_ACCESS.FINANCES}><AdminFinances /></RouteAdminProtegee>} />
+          <Route path="/admin/taux-commission" element={<RouteAdminProtegee accesRequis={ADMIN_ACCESS.FINANCES}><AdminTauxCommission /></RouteAdminProtegee>} />
+          <Route path="/admin/config" element={<RouteAdminProtegee accesRequis={ADMIN_ACCESS.TECHNIQUE}><AdminConfig /></RouteAdminProtegee>} />
+          <Route path="/admin/audit" element={<RouteAdminProtegee accesRequis={ADMIN_ACCESS.TECHNIQUE}><AdminAuditLogs /></RouteAdminProtegee>} />
+          <Route path="/admin/dpia" element={<RouteAdminProtegee accesRequis={ADMIN_ACCESS.TECHNIQUE}><AdminDPIA /></RouteAdminProtegee>} />
           {/* Lot 20 — Healthcheck fusionné dans « Statut système » (dédoublonnage IA admin). */}
-          <Route path="/admin/healthcheck" element={<Navigate to="/admin/status" replace />} />
-          <Route path="/admin/cohort" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminCohortEconomics /></RouteProtegee>} />
-          <Route path="/admin/audit-rls" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminAuditRLS /></RouteProtegee>} />
-          <Route path="/admin/rgpd-tools" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminRGPDTools /></RouteProtegee>} />
-          <Route path="/admin/planning-global" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminPlanningGlobal /></RouteProtegee>} />
-          <Route path="/admin/fondateur" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminCockpitFondateur /></RouteProtegee>} />
-          <Route path="/admin/fondateur/equipe" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminEquipe /></RouteProtegee>} />
-          <Route path="/admin/fondateur/levee" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminLevee /></RouteProtegee>} />
-          <Route path="/admin/fondateur/acquisition" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminAcquisition /></RouteProtegee>} />
-          <Route path="/admin/fondateur/sales" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminSales /></RouteProtegee>} />
+          <Route path="/admin/healthcheck" element={<RouteAdminProtegee accesRequis={ADMIN_ACCESS.TECHNIQUE}><Navigate to="/admin/status" replace /></RouteAdminProtegee>} />
+          <Route path="/admin/cohort" element={<RouteAdminProtegee accesRequis={ADMIN_ACCESS.FONDATEUR}><AdminCohortEconomics /></RouteAdminProtegee>} />
+          <Route path="/admin/audit-rls" element={<RouteAdminProtegee accesRequis={ADMIN_ACCESS.TECHNIQUE}><AdminAuditRLS /></RouteAdminProtegee>} />
+          <Route path="/admin/rgpd-tools" element={<RouteAdminProtegee accesRequis={ADMIN_ACCESS.TECHNIQUE}><AdminRGPDTools /></RouteAdminProtegee>} />
+          <Route path="/admin/planning-global" element={<RouteAdminProtegee accesRequis={ADMIN_ACCESS.MISSIONS}><AdminPlanningGlobal /></RouteAdminProtegee>} />
+          <Route path="/admin/fondateur" element={<RouteAdminProtegee accesRequis={ADMIN_ACCESS.FONDATEUR}><AdminCockpitFondateur /></RouteAdminProtegee>} />
+          <Route path="/admin/fondateur/equipe" element={<RouteAdminProtegee accesRequis={ADMIN_ACCESS.FONDATEUR}><AdminEquipe /></RouteAdminProtegee>} />
+          <Route path="/admin/fondateur/levee" element={<RouteAdminProtegee accesRequis={ADMIN_ACCESS.FONDATEUR}><AdminLevee /></RouteAdminProtegee>} />
+          <Route path="/admin/fondateur/acquisition" element={<RouteAdminProtegee accesRequis={ADMIN_ACCESS.FONDATEUR}><AdminAcquisition /></RouteAdminProtegee>} />
+          <Route path="/admin/fondateur/sales" element={<RouteAdminProtegee accesRequis={ADMIN_ACCESS.FONDATEUR}><AdminSales /></RouteAdminProtegee>} />
 
           {/* Widget public */}
           <Route path="/widget-recrutement" element={<WidgetRecrutement />} />

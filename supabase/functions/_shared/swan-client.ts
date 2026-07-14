@@ -63,7 +63,9 @@ export class SwanGraphQLError extends Error {
  * Récupère un access token SWAN via OAuth2 client_credentials.
  * Cache en mémoire jusqu'à 60s avant expiration.
  */
-export async function getSwanAccessToken(): Promise<string> {
+export async function getSwanAccessToken(
+  options?: { signal?: AbortSignal },
+): Promise<string> {
   const now = Date.now();
   if (_cachedToken && _cachedToken.expiresAt > now + TOKEN_REFRESH_MARGIN_MS) {
     return _cachedToken.token;
@@ -83,11 +85,15 @@ export async function getSwanAccessToken(): Promise<string> {
     method: "POST",
     headers: { Accept: "application/json" },
     body: formData,
+    signal: options?.signal ?? AbortSignal.timeout(2_500),
   });
 
   if (!res.ok) {
     const text = await res.text().catch(() => "");
-    throw new SwanAuthError(`OAuth2 token endpoint ${res.status}: ${text.slice(0, 500)}`, res.status);
+    throw new SwanAuthError(
+      `OAuth2 token endpoint ${res.status}: ${text.slice(0, 500)}`,
+      res.status,
+    );
   }
 
   const json: SwanTokenResponse = await res.json();
@@ -120,21 +126,21 @@ export interface SwanGraphQLResult<T = unknown> {
  * Exécute une mutation/query GraphQL contre l'API SWAN partner.
  * Authentification automatique via getSwanAccessToken (Bearer).
  *
- * Le bloc S2S signature (header X-Swan-Request-Signature) doit être ajouté
- * via `signature` quand on appelle des mutations soumises à S2S consent
- * (cf. swan-sign-s2s.ts).
+ * Les mutations sensibles exigent ensuite le flux de consentement Swan :
+ * challenge signé en JWT ES256 puis `grantConsentWithServerSignature`.
+ * Il ne s'agit pas d'une signature ajoutée au corps de cette requête.
  */
 export async function swanGraphQL<T = unknown>(
   query: string,
   variables: Record<string, unknown>,
-  options?: { extraHeaders?: Record<string, string> },
+  options?: { extraHeaders?: Record<string, string>; signal?: AbortSignal },
 ): Promise<SwanGraphQLResult<T>> {
   const env = swanEnv();
   if (!env.graphqlUrl) {
     throw new SwanGraphQLError("SWAN_GRAPHQL_URL manquant");
   }
 
-  const token = await getSwanAccessToken();
+  const token = await getSwanAccessToken({ signal: options?.signal });
 
   const res = await fetch(env.graphqlUrl, {
     method: "POST",
@@ -145,16 +151,28 @@ export async function swanGraphQL<T = unknown>(
       ...(options?.extraHeaders || {}),
     },
     body: JSON.stringify({ query, variables }),
+    signal: options?.signal,
   });
 
-  const json = await res.json().catch(() => ({ errors: [{ message: "Invalid JSON response" }] }));
+  const json = await res.json().catch(() => ({
+    errors: [{ message: "Invalid JSON response" }],
+  }));
 
   if (!res.ok) {
-    return { ok: false, errors: json?.errors || [{ message: `HTTP ${res.status}` }], httpStatus: res.status };
+    return {
+      ok: false,
+      errors: json?.errors || [{ message: `HTTP ${res.status}` }],
+      httpStatus: res.status,
+    };
   }
 
   if (json?.errors) {
-    return { ok: false, errors: json.errors, data: json.data as T, httpStatus: res.status };
+    return {
+      ok: false,
+      errors: json.errors,
+      data: json.data as T,
+      httpStatus: res.status,
+    };
   }
 
   return { ok: true, data: json.data as T, httpStatus: res.status };

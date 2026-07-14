@@ -45,7 +45,7 @@ BEGIN
     RAISE EXCEPTION 'D4-T3C: le défaut public Jolene ne doit pas afficher une interdiction juridique';
   END IF;
   IF public.fn_mode_exercice('IADE', 'CLINIQUE_PRIVEE', NULL)->>'source_url'
-     <> 'https://www.fehap.fr/jcms/navigation-internet/upload/docs/application/pdf/2023-02/courrierconjointministeres_30decembre2021_.pdf' THEN
+     <> 'https://www.fehap.fr/upload/docs/application/pdf/2023-02/courrierconjointministeres_30decembre2021_.pdf' THEN
     RAISE EXCEPTION 'D4-T3D: IADE doit pointer vers le texte original de la lettre D21-031940';
   END IF;
   IF public.fn_mode_exercice('IADE', 'CLINIQUE_PRIVEE', NULL)->>'source_url_complementaire'

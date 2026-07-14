@@ -133,6 +133,10 @@ export default function RechercheMissions() {
   // Alerte 1-tap (Session E-5) : flux « créer une alerte » ouvert via ?alerte=1
   // (deep link depuis SwipeMissions) ou via le CTA de l'état vide.
   const [searchParams, setSearchParams] = useSearchParams();
+  // Deep link depuis un établissement favori : n'afficher que ses missions
+  // ouvertes. Le filtre reste dans l'URL afin que retour/partage conservent le
+  // contexte de navigation.
+  const etablissementId = searchParams.get('etablissement');
   const [alerteOpen, setAlerteOpen] = useState(false);
   const [alerteEnCours, setAlerteEnCours] = useState(false);
   const [filtresVersion, setFiltresVersion] = useState(0);
@@ -336,6 +340,7 @@ export default function RechercheMissions() {
 
       if (tauxMin > 0) query = query.gte('taux_horaire_base', tauxMin);
       if (urgentesOnly) query = query.eq('est_urgente', true);
+      if (etablissementId) query = query.eq('etablissement_id', etablissementId);
 
       const { data, error } = await query;
       if (error) {
@@ -347,7 +352,7 @@ export default function RechercheMissions() {
       setLoading(false);
     };
     fetchMissions();
-  }, [user, soignant, profession, tauxMin, urgentesOnly, refreshTick]);
+  }, [user, soignant, profession, tauxMin, urgentesOnly, etablissementId, refreshTick]);
 
   const filtered = useMemo(() => {
     const villeSearch = debouncedVille.trim().toLowerCase();

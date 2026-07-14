@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Mail, Loader2, CheckCircle } from 'lucide-react';
+import { Mail, Loader2, CheckCircle, AlertTriangle, RefreshCw } from 'lucide-react';
 import { LayoutAdmin } from '@/components/LayoutAdmin';
 import { BreadcrumbAdmin } from '@/components/BreadcrumbAdmin';
 import { usePageTitle } from '@/hooks/usePageTitle';
@@ -7,6 +7,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { BadgeY2K } from '@/components/y2k/BadgeY2K';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 
 interface MessageContact {
   id: string;
@@ -26,21 +27,34 @@ const STATUT_BADGE: Record<string, { label: string; variant: 'warning' | 'info' 
   TRAITE: { label: 'Traité', variant: 'success' },
 };
 
+const LIBELLES_ROLE: Record<string, string> = {
+  SOIGNANT: 'Soignant',
+  ADMIN_ETABLISSEMENT: 'Établissement',
+  ADMIN_GROUPE: 'Groupe de santé',
+  ADMIN_PLATEFORME: 'Administration Jolene',
+};
+
 export default function AdminMessagesContact() {
   usePageTitle('Messages de contact — Admin');
   const [messages, setMessages] = useState<MessageContact[]>([]);
   const [loading, setLoading] = useState(true);
   const [maj, setMaj] = useState<string | null>(null);
+  const [erreurChargement, setErreurChargement] = useState(false);
 
   const charger = async () => {
     setLoading(true);
+    setErreurChargement(false);
     const { data, error } = await supabase
       .from('messages_contact' as any)
       .select('id, expediteur_role, expediteur_nom, expediteur_email, sujet, corps, source, statut, cree_le')
       .order('cree_le', { ascending: false })
       .limit(200);
-    if (error) toast.error('Erreur chargement messages');
-    setMessages((data as any) || []);
+    if (error) {
+      toast.error('Impossible de charger les messages de contact.');
+      setErreurChargement(true);
+    } else {
+      setMessages((data as any) || []);
+    }
     setLoading(false);
   };
 
@@ -69,7 +83,16 @@ export default function AdminMessagesContact() {
       </div>
 
       {loading ? (
-        <div className="flex justify-center py-16"><Loader2 className="h-7 w-7 animate-spin text-primary" /></div>
+        <div className="flex justify-center gap-2 py-16 text-sm text-muted-foreground" role="status"><Loader2 className="h-7 w-7 animate-spin text-primary" aria-hidden="true" /> Chargement des messages…</div>
+      ) : erreurChargement ? (
+        <div className="card-base flex flex-col items-center gap-3 py-10 text-center" role="alert">
+          <AlertTriangle className="h-7 w-7 text-destructive" aria-hidden="true" />
+          <div>
+            <p className="font-semibold text-foreground">Messages indisponibles</p>
+            <p className="text-sm text-muted-foreground">Le chargement a échoué. Aucune donnée n’a été modifiée.</p>
+          </div>
+          <BoutonY2K variant="secondary" size="sm" onClick={charger} iconeGauche={<RefreshCw className="h-4 w-4" />}>Réessayer</BoutonY2K>
+        </div>
       ) : messages.length === 0 ? (
         <EmptyState icone={<Mail />} mascotte="happy" titre="Aucun message" description="Les messages envoyés via « Contacter Jolene » apparaîtront ici." variant="info" />
       ) : (
@@ -82,7 +105,7 @@ export default function AdminMessagesContact() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap mb-1">
                       <BadgeY2K variant={badge.variant} size="sm">{badge.label}</BadgeY2K>
-                      {m.expediteur_role && <span className="text-[10px] badge-base bg-muted text-muted-foreground">{m.expediteur_role}</span>}
+                      {m.expediteur_role && <span className="text-[10px] badge-base bg-muted text-muted-foreground">{LIBELLES_ROLE[m.expediteur_role] ?? m.expediteur_role}</span>}
                       <span className="text-xs text-muted-foreground">{new Date(m.cree_le).toLocaleString('fr-FR')}</span>
                     </div>
                     <p className="font-semibold text-sm text-foreground">{m.sujet}</p>
@@ -94,6 +117,7 @@ export default function AdminMessagesContact() {
                   </div>
                   {m.statut !== 'TRAITE' && (
                     <button
+                      type="button"
                       onClick={() => marquerTraite(m.id)}
                       disabled={maj === m.id}
                       className="btn-secondary text-xs px-3 py-1.5 inline-flex items-center gap-1.5 shrink-0"

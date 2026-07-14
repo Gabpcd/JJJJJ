@@ -21,7 +21,7 @@ const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 const skip = !serviceRoleKey;
 
 describe.skipIf(skip)('GRANTs — factures_honoraires', () => {
-  const supabase = createClient(supabaseUrl, serviceRoleKey);
+  const supabase = createClient(supabaseUrl, serviceRoleKey || 'test-only-placeholder');
 
   it('authenticated a les GRANTs SELECT, INSERT, UPDATE (pas DELETE)', async () => {
     const { data } = await supabase.rpc('fn_check_grants' as any, {
@@ -48,7 +48,7 @@ describe.skipIf(skip)('GRANTs — factures_honoraires', () => {
 });
 
 describe.skipIf(skip)('GRANTs — invoice_audit_log (append-only)', () => {
-  const supabase = createClient(supabaseUrl, serviceRoleKey);
+  const supabase = createClient(supabaseUrl, serviceRoleKey || 'test-only-placeholder');
 
   it('service_role peut SELECT invoice_audit_log', async () => {
     const { error } = await supabase
@@ -71,7 +71,7 @@ describe.skipIf(skip)('GRANTs — invoice_audit_log (append-only)', () => {
 });
 
 describe.skipIf(skip)('GRANTs — chorus_submissions', () => {
-  const supabase = createClient(supabaseUrl, serviceRoleKey);
+  const supabase = createClient(supabaseUrl, serviceRoleKey || 'test-only-placeholder');
 
   it('service_role peut SELECT, INSERT, UPDATE chorus_submissions', async () => {
     const { error } = await supabase
@@ -83,7 +83,7 @@ describe.skipIf(skip)('GRANTs — chorus_submissions', () => {
 });
 
 describe.skipIf(skip)('GRANTs — factoring_partners', () => {
-  const supabase = createClient(supabaseUrl, serviceRoleKey);
+  const supabase = createClient(supabaseUrl, serviceRoleKey || 'test-only-placeholder');
 
   it('service_role peut toutes les opérations sur factoring_partners', async () => {
     const { error } = await supabase
@@ -95,7 +95,7 @@ describe.skipIf(skip)('GRANTs — factoring_partners', () => {
 });
 
 describe.skipIf(skip)('Régression — la 403 initiale est corrigée', () => {
-  const supabase = createClient(supabaseUrl, serviceRoleKey);
+  const supabase = createClient(supabaseUrl, serviceRoleKey || 'test-only-placeholder');
 
   it('SELECT direct sur factures_honoraires fonctionne (plus de permission denied)', async () => {
     const { data, error } = await supabase

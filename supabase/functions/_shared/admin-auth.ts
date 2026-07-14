@@ -5,8 +5,8 @@
  *   1. Le frontend envoie le JWT user normal via Authorization: Bearer
  *      (supabase.functions.invoke() le fait automatiquement)
  *   2. La fonction vérifie le JWT avec supabase.auth.getUser()
- *   3. La fonction vérifie que l'utilisateur a app_metadata.role = ADMIN_PLATEFORME
- *      (alias acceptés : ADMIN, ADMIN_PLATEFORME)
+ *   3. La fonction exige app_metadata.role = ADMIN_PLATEFORME, AAL2 et une
+ *      ligne equipe_admin active portant les 8 groupes de lancement
  *   4. Si admin OK, la fonction crée son propre client service_role en interne
  *      pour les opérations sensibles. La service_role NE SORT JAMAIS de l'edge.
  *
@@ -35,12 +35,43 @@ export type UserOrServiceAuthResult =
       isServiceRole: boolean;
       userId: string | null;
       userEmail: string | null;
+      emailConfirmedAt: string | null;
       role: string | null;
       aal: string | null;
     }
   | { ok: false; status: number; error: string };
 
-const ADMIN_ROLES = new Set(['ADMIN', 'ADMIN_PLATEFORME']);
+export const ADMIN_LAUNCH_ACCESS_GROUPS = Object.freeze([
+  'Dashboard',
+  'Utilisateurs',
+  'Missions',
+  'Litiges & contrats',
+  'Finances',
+  'Messagerie',
+  'Conformité & Technique',
+  'Fondateur',
+] as const);
+
+export function isCanonicalPlatformAdminRole(role: string | null): boolean {
+  return role === 'ADMIN_PLATEFORME';
+}
+
+export function isConfirmedAuthUser(
+  user: { email_confirmed_at?: unknown } | null | undefined,
+): boolean {
+  return typeof user?.email_confirmed_at === 'string'
+    && user.email_confirmed_at.length > 0;
+}
+
+export function hasFullLaunchAdminAccess(
+  equipe: { actif?: unknown; acces_groupes?: unknown } | null | undefined,
+): boolean {
+  if (equipe?.actif !== true || !Array.isArray(equipe.acces_groupes)) return false;
+  const groupes = new Set(
+    equipe.acces_groupes.filter((groupe): groupe is string => typeof groupe === 'string'),
+  );
+  return ADMIN_LAUNCH_ACCESS_GROUPS.every((groupe) => groupes.has(groupe));
+}
 
 // Cache mémoire du secret vault (sb_secret_*) lu via RPC fn_lire_secret_cron.
 // Pg_cron envoie ce secret comme Bearer ; il n'est pas auto-injecté en env var.
@@ -90,7 +121,7 @@ export async function verifyUserOrServiceRole(req: Request): Promise<UserOrServi
   // Match strict pour éviter la fuite par préfixe.
   if ((serviceRoleKey && bearer === serviceRoleKey) ||
       (newSecretKey && bearer === newSecretKey)) {
-    return { ok: true, isServiceRole: true, userId: null, userEmail: null, role: 'service_role', aal: 'aal2' };
+    return { ok: true, isServiceRole: true, userId: null, userEmail: null, emailConfirmedAt: null, role: 'service_role', aal: 'aal2' };
   }
 
   // Fallback vault : pg_cron envoie le sb_secret_* stocké dans vault.decrypted_secrets
@@ -99,11 +130,11 @@ export async function verifyUserOrServiceRole(req: Request): Promise<UserOrServi
   if (bearer.startsWith('sb_secret_')) {
     const vaultSecret = await fetchVaultCronSecret(supabaseUrl, serviceRoleKey);
     if (vaultSecret && bearer === vaultSecret) {
-      return { ok: true, isServiceRole: true, userId: null, userEmail: null, role: 'service_role', aal: 'aal2' };
+      return { ok: true, isServiceRole: true, userId: null, userEmail: null, emailConfirmedAt: null, role: 'service_role', aal: 'aal2' };
     }
   }
 
-  // ── JWT user + check rôle admin ──
+  // ── JWT utilisateur validé par Supabase Auth ──
   if (!supabaseUrl || !anonKey) {
     return { ok: false, status: 500, error: 'Configuration serveur incomplète (SUPABASE_URL/ANON_KEY)' };
   }
@@ -123,7 +154,6 @@ export async function verifyUserOrServiceRole(req: Request): Promise<UserOrServi
   if (bannedUntilRaw && (!Number.isFinite(bannedUntil) || bannedUntil > Date.now())) {
     return { ok: false, status: 403, error: 'Compte desactive' };
   }
-
   // getUser() a deja valide le token cote Auth. getClaims() fournit ensuite
   // le niveau AAL cryptographiquement verifie, sans decoder un payload non
   // fiable dans le code applicatif.
@@ -137,6 +167,9 @@ export async function verifyUserOrServiceRole(req: Request): Promise<UserOrServi
     isServiceRole: false,
     userId: userData.user.id,
     userEmail: userData.user.email || null,
+    emailConfirmedAt: typeof userData.user.email_confirmed_at === 'string'
+      ? userData.user.email_confirmed_at
+      : null,
     // app_metadata vient de la reponse Auth serveur. Ne jamais utiliser
     // user_metadata pour une autorisation.
     role: (userData.user.app_metadata?.role as string | undefined) || null,
@@ -154,16 +187,21 @@ export async function verifyAdminOrServiceRole(req: Request): Promise<AdminAuthR
 
   const role = auth.role || '';
 
-  if (!role || !ADMIN_ROLES.has(role)) {
+  if (!isCanonicalPlatformAdminRole(role)) {
     return { ok: false, status: 403, error: 'Accès réservé aux administrateurs Jolene' };
+  }
+  // La confirmation d'e-mail est une exigence du rôle administrateur. Elle ne
+  // doit pas être imposée par verifyUserOrServiceRole(), partagé avec les flux
+  // utilisateur dont l'onboarding peut légitimement précéder la confirmation.
+  if (!isConfirmedAuthUser({ email_confirmed_at: auth.emailConfirmedAt })) {
+    return { ok: false, status: 403, error: 'Compte administrateur non confirme' };
   }
   if (auth.aal !== 'aal2') {
     return { ok: false, status: 403, error: 'Authentification forte AAL2 requise' };
   }
 
-  // Un admin present dans equipe_admin mais marque inactif doit rester bloque,
-  // meme si son ancien JWT contient toujours ADMIN_PLATEFORME. Une erreur de
-  // lecture est elle aussi bloquante (fail closed).
+  // L'inscription equipe_admin est obligatoire et full-only au lancement.
+  // Absence, inactivite, droits incomplets et erreur de lecture echouent fermes.
   const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
   const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
   if (!serviceRoleKey) {
@@ -172,15 +210,15 @@ export async function verifyAdminOrServiceRole(req: Request): Promise<AdminAuthR
   const adminClient = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false } });
   const { data: equipe, error: equipeError } = await adminClient
     .from('equipe_admin')
-    .select('actif')
+    .select('actif, acces_groupes')
     .eq('user_id', auth.userId!)
     .maybeSingle();
   if (equipeError) {
     console.error('[admin-auth] verification equipe_admin impossible', equipeError.message);
     return { ok: false, status: 503, error: 'Verification des acces admin indisponible' };
   }
-  if (equipe && equipe.actif !== true) {
-    return { ok: false, status: 403, error: 'Compte administrateur desactive' };
+  if (!hasFullLaunchAdminAccess(equipe)) {
+    return { ok: false, status: 403, error: 'Acces administrateur complet requis' };
   }
 
   return {

@@ -19,7 +19,7 @@ export default function PageCGU() {
   return (
     <LayoutLegal
       titre="Conditions Générales d'Utilisation"
-      dateMaj="12 juillet 2026"
+      dateMaj="14 juillet 2026"
       toc={TOC}
       seoDescription="Conditions Générales d'Utilisation de Jolene, plateforme de staffing médical. Inscription, vérification, pointage, score de fiabilité et résiliation."
     >
@@ -67,7 +67,7 @@ export default function PageCGU() {
           <li><strong>Vérification automatisée par intelligence artificielle</strong> : certains documents téléversés (pièce d'identité, diplômes, attestations) peuvent être analysés par un système d'intelligence artificielle (IA) fourni par un prestataire tiers (Anthropic Claude). Cette analyse vise à vérifier l'authenticité, la lisibilité et la concordance des informations avec les données déclarées. Aucune décision automatisée n'est prise sans possibilité de recours : en cas de rejet automatique, le Soignant peut demander une revue manuelle par l'équipe Jolene. Les documents sont transmis de manière chiffrée ; les conditions de traitement et de conservation applicables sont celles du contrat et de la configuration en vigueur avec le prestataire.</li>
           <li><strong>Vérification d'identité</strong> : l'Éditeur se réserve le droit de demander une vérification d'identité complémentaire (vidéo, selfie avec pièce d'identité) en cas de doute.</li>
         </ul>
-        <p>Un Soignant dont les documents sont incomplets ou expirés ne peut pas postuler ni être affecté à une Mission.</p>
+        <p>Un dossier documentaire incomplet peut permettre au Soignant de candidater à certaines Missions salariées lorsque les informations minimales requises sont vérifiées. En revanche, aucune affectation définitive ni aucun démarrage de Mission ne sont possibles tant que toutes les preuves exigées pour la profession et le régime de la Mission ne sont pas vérifiées et en cours de validité.</p>
       </section>
 
       {/* Article 4 */}

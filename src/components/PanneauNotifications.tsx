@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useId, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Bell, X, Check, ExternalLink } from 'lucide-react';
+import { Bell, X, ExternalLink } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -22,28 +22,95 @@ interface NotificationItem {
 interface PanneauNotificationsProps {
   open: boolean;
   onClose: () => void;
+  onUnreadCountChange?: React.Dispatch<React.SetStateAction<number>>;
 }
 
-export function PanneauNotifications({ open, onClose }: PanneauNotificationsProps) {
+export function PanneauNotifications({ open, onClose, onUnreadCountChange }: PanneauNotificationsProps) {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const previousFocusRef = useRef<HTMLElement | null>(null);
+  const onCloseRef = useRef(onClose);
+  const titleId = useId();
+
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
+
+  useEffect(() => {
+    if (!open) return;
+    previousFocusRef.current = document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null;
+    const frame = window.requestAnimationFrame(() => closeButtonRef.current?.focus());
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        onCloseRef.current();
+        return;
+      }
+      if (event.key !== 'Tab') return;
+      const panel = panelRef.current;
+      if (!panel) return;
+      const focusables = Array.from(panel.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      ));
+      if (focusables.length === 0) {
+        event.preventDefault();
+        panel.focus();
+        return;
+      }
+      const first = focusables[0];
+      const last = focusables[focusables.length - 1];
+      if (!panel.contains(document.activeElement)) {
+        event.preventDefault();
+        first.focus();
+      } else if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      document.removeEventListener('keydown', handleKeyDown);
+      previousFocusRef.current?.focus();
+    };
+  }, [open]);
 
   useEffect(() => {
     if (!user || !open) return;
+    let cancelled = false;
     const load = async () => {
-      const { data } = await supabase
+      setLoading(true);
+      setError(null);
+      const { data, error: loadError } = await supabase
         .from('notifications')
         .select('id, titre, corps, type, lue, lien, cree_le')
         .eq('destinataire_id', user.id)
         .order('cree_le', { ascending: false })
         .limit(50);
-      setNotifications((data as unknown as NotificationItem[]) || []);
+      if (cancelled) return;
+      if (loadError) {
+        setError('Impossible de charger les notifications. Réessayez dans un instant.');
+        setLoading(false);
+        return;
+      }
+      const loaded = (data as unknown as NotificationItem[]) || [];
+      setNotifications(loaded);
+      onUnreadCountChange?.(loaded.filter((notification) => !notification.lue).length);
       setLoading(false);
     };
     load();
-  }, [user, open]);
+    return () => { cancelled = true; };
+  }, [user, open, onUnreadCountChange]);
 
   // Realtime
   useEffect(() => {
@@ -66,23 +133,41 @@ export function PanneauNotifications({ open, onClose }: PanneauNotificationsProp
     if (!user) return;
     const ids = notifications.filter(n => !n.lue).map(n => n.id);
     if (ids.length === 0) return;
-    await supabase.from('notifications').update({ lue: true, lue_le: new Date().toISOString() } as any).in('id', ids);
-    setNotifications(prev => prev.map(n => ({ ...n, lue: true })));
+    const { error: updateError } = await supabase.from('notifications')
+      .update({ lue: true, lue_le: new Date().toISOString() } as any)
+      .in('id', ids);
+    if (updateError) {
+      toast.error('Impossible de marquer les notifications comme lues');
+      return;
+    }
+    const idsMarques = new Set(ids);
+    setNotifications(prev => prev.map(n => idsMarques.has(n.id) ? { ...n, lue: true } : n));
+    onUnreadCountChange?.(prev => Math.max(0, prev - ids.length));
   };
 
-  const handleClick = async (n: NotificationItem) => {
-    if (!n.lue) {
-      await supabase.from('notifications').update({ lue: true, lue_le: new Date().toISOString() } as any).eq('id', n.id);
-      setNotifications(prev => prev.map(x => x.id === n.id ? { ...x, lue: true } : x));
+  const handleClick = (n: NotificationItem) => {
+    const route = n.lien ? normaliserLienJolene(n.lien) : null;
+    if (n.lien && !route) {
+      toast.error('Lien non autorisé');
     }
-    if (n.lien) {
-      const route = normaliserLienJolene(n.lien);
-      if (route) {
-        onClose();
-        navigate(route);
-      } else {
-        toast.error('Lien non autorisé');
-      }
+
+    if (!n.lue) {
+      setNotifications(prev => prev.map(x => x.id === n.id ? { ...x, lue: true } : x));
+      onUnreadCountChange?.(prev => Math.max(0, prev - 1));
+      void supabase.from('notifications')
+        .update({ lue: true, lue_le: new Date().toISOString() } as any)
+        .eq('id', n.id)
+        .then(({ error: updateError }) => {
+          if (!updateError) return;
+          setNotifications(prev => prev.map(x => x.id === n.id ? { ...x, lue: false } : x));
+          onUnreadCountChange?.(prev => prev + 1);
+          toast.error('Impossible de marquer cette notification comme lue');
+        });
+    }
+
+    if (route) {
+      onClose();
+      navigate(route);
     }
   };
 
@@ -90,21 +175,49 @@ export function PanneauNotifications({ open, onClose }: PanneauNotificationsProp
 
   return createPortal(
     <>
-      <div className="fixed inset-0 bg-foreground/30 z-[70]" onClick={onClose} />
-      <div className="fixed right-0 top-0 bottom-0 w-full max-w-md bg-card shadow-2xl z-[70] flex flex-col animate-slide-in">
+      <div className="fixed inset-0 bg-foreground/30 z-[70]" onClick={onClose} aria-hidden="true" />
+      <div
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        tabIndex={-1}
+        className="fixed right-0 top-0 bottom-0 !max-h-none w-full max-w-md !p-0 bg-card shadow-2xl z-[70] flex flex-col animate-slide-in"
+      >
         <div
           className="flex items-center justify-between p-4 border-b border-border"
           style={{ paddingTop: 'calc(env(safe-area-inset-top) + 1rem)' }}
         >
-          <h2 className="text-lg font-bold text-foreground">Notifications</h2>
+          <h2 id={titleId} className="text-lg font-bold text-foreground">Notifications</h2>
           <div className="flex items-center gap-2">
-            <button onClick={marquerToutLu} className="text-xs text-primary font-medium hover:underline">Tout marquer comme lu</button>
-            <button onClick={onClose} className="text-muted-foreground hover:text-foreground"><X className="h-5 w-5" /></button>
+            <button
+              type="button"
+              onClick={marquerToutLu}
+              disabled={!notifications.some((notification) => !notification.lue)}
+              className="min-h-[44px] rounded-lg px-2 text-xs text-primary font-medium hover:underline disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Tout marquer comme lu
+            </button>
+            <button
+              ref={closeButtonRef}
+              type="button"
+              onClick={onClose}
+              aria-label="Fermer les notifications"
+              className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground"
+            >
+              <X className="h-5 w-5" aria-hidden="true" />
+            </button>
           </div>
         </div>
-        <div className="flex-1 overflow-y-auto">
+        <div
+          className="flex-1 overflow-y-auto"
+          aria-busy={loading}
+          style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+        >
           {loading ? (
-            <div className="p-8 text-center text-muted-foreground text-sm">Chargement...</div>
+            <div className="p-8 text-center text-muted-foreground text-sm" role="status">Chargement...</div>
+          ) : error ? (
+            <div className="p-8 text-center text-destructive text-sm" role="alert">{error}</div>
           ) : notifications.length === 0 ? (
             <div className="p-8 text-center text-muted-foreground text-sm">Aucune notification</div>
           ) : (
@@ -112,6 +225,7 @@ export function PanneauNotifications({ open, onClose }: PanneauNotificationsProp
               {notifications.map(n => (
                 <button
                   key={n.id}
+                  type="button"
                   onClick={() => handleClick(n)}
                   className={`w-full text-left p-4 hover:bg-accent/50 transition-colors ${!n.lue ? 'bg-primary/5 border-l-4 border-l-primary' : ''}`}
                 >
@@ -119,10 +233,11 @@ export function PanneauNotifications({ open, onClose }: PanneauNotificationsProp
                     <div className="flex items-center gap-2">
                       <div className={`h-2 w-2 rounded-full shrink-0 ${!n.lue ? 'bg-destructive' : 'bg-muted-foreground/30'}`} />
                       <span className="text-sm font-semibold text-foreground">{n.titre}</span>
+                      {!n.lue && <span className="sr-only">Non lue</span>}
                     </div>
-                    <span className="text-[10px] text-muted-foreground whitespace-nowrap">
+                    <time dateTime={n.cree_le} className="text-[10px] text-muted-foreground whitespace-nowrap">
                       {formatDistanceToNow(new Date(n.cree_le), { addSuffix: true, locale: fr })}
-                    </span>
+                    </time>
                   </div>
                   <p className="text-xs text-muted-foreground mt-1 ml-4">{n.corps}</p>
                   {n.lien && normaliserLienJolene(n.lien) && <span className="text-[10px] text-primary ml-4 mt-1 inline-flex items-center gap-1">Voir <ExternalLink className="h-2.5 w-2.5" /></span>}
@@ -238,7 +353,7 @@ export function BadgeNotification() {
         aria-label={count > 0 ? `Notifications, ${count} non lue${count > 1 ? 's' : ''}` : 'Notifications'}
         aria-haspopup="dialog"
         aria-expanded={open}
-        className="relative text-sidebar-foreground/70 hover:text-sidebar-foreground transition-colors p-2"
+        className="relative inline-flex min-h-[44px] min-w-[44px] items-center justify-center text-sidebar-foreground/70 hover:text-sidebar-foreground transition-colors p-2"
       >
         <Bell className="h-5 w-5" aria-hidden="true" />
         {count > 0 && (
@@ -247,7 +362,11 @@ export function BadgeNotification() {
           </span>
         )}
       </button>
-      <PanneauNotifications open={open} onClose={() => { setOpen(false); setCount(0); }} />
+      <PanneauNotifications
+        open={open}
+        onClose={() => setOpen(false)}
+        onUnreadCountChange={setCount}
+      />
     </>
   );
 }

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { capturerErreurSentry } from '@/lib/sentry';
 import { usePageTitle } from '@/hooks/usePageTitle';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { LayoutApp } from '@/components/LayoutApp';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -188,9 +188,9 @@ export default function PageStripeConnect() {
 
             {/* Quick links */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div
-                className="card-base cursor-pointer hover:border-primary/30 transition-colors flex items-center gap-3"
-                onClick={() => navigate('/soignant/mes-gains')}
+              <Link
+                to="/soignant/mes-gains"
+                className="card-base hover:border-primary/30 transition-colors flex items-center gap-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
               >
                 <Banknote className="h-5 w-5 text-primary shrink-0" />
                 <div className="flex-1">
@@ -198,10 +198,10 @@ export default function PageStripeConnect() {
                   <p className="text-xs text-muted-foreground">Voir le détail de tes revenus</p>
                 </div>
                 <ArrowRight className="h-4 w-4 text-muted-foreground" />
-              </div>
-              <div
-                className="card-base cursor-pointer hover:border-primary/30 transition-colors flex items-center gap-3"
-                onClick={() => navigate('/soignant/presences')}
+              </Link>
+              <Link
+                to="/soignant/presences"
+                className="card-base hover:border-primary/30 transition-colors flex items-center gap-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
               >
                 <Clock className="h-5 w-5 text-info shrink-0" />
                 <div className="flex-1">
@@ -209,10 +209,10 @@ export default function PageStripeConnect() {
                   <p className="text-xs text-muted-foreground">Pointages et validations</p>
                 </div>
                 <ArrowRight className="h-4 w-4 text-muted-foreground" />
-              </div>
-              <div
-                className="card-base cursor-pointer hover:border-primary/30 transition-colors flex items-center gap-3"
-                onClick={() => navigate('/soignant/contrats')}
+              </Link>
+              <Link
+                to="/soignant/contrats"
+                className="card-base hover:border-primary/30 transition-colors flex items-center gap-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
               >
                 <FileText className="h-5 w-5 text-foreground shrink-0" />
                 <div className="flex-1">
@@ -220,10 +220,10 @@ export default function PageStripeConnect() {
                   <p className="text-xs text-muted-foreground">CDD et contrats de mission</p>
                 </div>
                 <ArrowRight className="h-4 w-4 text-muted-foreground" />
-              </div>
-              <div
-                className="card-base cursor-pointer hover:border-primary/30 transition-colors flex items-center gap-3"
-                onClick={() => navigate('/soignant/passer-en-liberal')}
+              </Link>
+              <Link
+                to="/soignant/passer-en-liberal"
+                className="card-base hover:border-primary/30 transition-colors flex items-center gap-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
               >
                 <Shield className="h-5 w-5 text-purple-600 shrink-0" />
                 <div className="flex-1">
@@ -231,7 +231,7 @@ export default function PageStripeConnect() {
                   <p className="text-xs text-muted-foreground">Reçois tes paiements directement</p>
                 </div>
                 <ArrowRight className="h-4 w-4 text-muted-foreground" />
-              </div>
+              </Link>
             </div>
 
             <div className="rounded-xl bg-info/5 border border-info/20 p-4 flex items-start gap-3">
@@ -341,22 +341,22 @@ export default function PageStripeConnect() {
 
                 {/* Quick links for liberal */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div className="card-base cursor-pointer hover:border-primary/30 transition-colors flex items-center gap-3" onClick={() => navigate('/soignant/mes-gains')}>
+                  <Link to="/soignant/mes-gains" className="card-base hover:border-primary/30 transition-colors flex items-center gap-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50">
                     <Banknote className="h-5 w-5 text-primary shrink-0" />
                     <div className="flex-1">
                       <p className="text-sm font-semibold text-foreground">Mes gains</p>
                       <p className="text-xs text-muted-foreground">Détail des revenus</p>
                     </div>
                     <ArrowRight className="h-4 w-4 text-muted-foreground" />
-                  </div>
-                  <div className="card-base cursor-pointer hover:border-primary/30 transition-colors flex items-center gap-3" onClick={() => navigate('/soignant/charges')}>
+                  </Link>
+                  <Link to="/soignant/charges" className="card-base hover:border-primary/30 transition-colors flex items-center gap-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50">
                     <FileText className="h-5 w-5 text-foreground shrink-0" />
                     <div className="flex-1">
                       <p className="text-sm font-semibold text-foreground">Mes charges</p>
                       <p className="text-xs text-muted-foreground">URSSAF, CARPIMKO, CFE</p>
                     </div>
                     <ArrowRight className="h-4 w-4 text-muted-foreground" />
-                  </div>
+                  </Link>
                 </div>
               </>
             )}

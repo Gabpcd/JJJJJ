@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FileText, Power, ChevronDown } from 'lucide-react';
 import { LayoutAdmin } from '@/components/LayoutAdmin';
@@ -35,7 +35,7 @@ export default function AdminTemplatesContrats() {
   const [templates, setTemplates] = useState<TemplateLigne[]>([]);
   const [inactifsOuverts, setInactifsOuverts] = useState(false);
 
-  async function charger() {
+  const charger = useCallback(async () => {
     setLoading(true);
     const { data, error } = await supabase.rpc('fn_admin_lister_templates_contrats' as any);
     if (error) {
@@ -51,9 +51,9 @@ export default function AdminTemplatesContrats() {
     }
     setTemplates(result.templates as TemplateLigne[]);
     setLoading(false);
-  }
+  }, [afficherNotification]);
 
-  useEffect(() => { charger(); }, []);
+  useEffect(() => { charger(); }, [charger]);
 
   async function toggle(t: TemplateLigne) {
     if (!confirm(`${t.est_actif ? 'Désactiver' : 'Activer'} le template "${t.nom}" ?`)) return;
@@ -178,7 +178,7 @@ export default function AdminTemplatesContrats() {
           <FileText className="h-6 w-6 text-primary" /> Templates contrats
         </h1>
         <p className="text-sm text-muted-foreground mt-1">
-          14 templates Sprint 2 : CDD master (18 professions) + REMPLACEMENT_LIBERAL + 12 LIBERAL spécifiques.
+          Modèles de CDD, de remplacement libéral et de contrats libéraux spécifiques.
           Les modifications s'appliquent aux nouveaux contrats. Les contrats existants ne sont pas impactés.
         </p>
       </div>
@@ -199,7 +199,7 @@ export default function AdminTemplatesContrats() {
       </div>
 
       {templates.length === 0 ? (
-        <EmptyState titre="Aucun template enregistré" description="Les 14 templates Sprint 2 devraient être présents." />
+        <EmptyState titre="Aucun modèle enregistré" description="Aucun modèle de contrat n’est actuellement disponible." />
       ) : (
         <div className="space-y-6">
           {/* ── Templates actifs : toujours visibles, en tête ── */}

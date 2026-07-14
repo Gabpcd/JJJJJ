@@ -21,6 +21,9 @@ import {
   validateDocumentFile,
 } from '../_shared/verification-rules.ts';
 import { corsHeaders } from '../_shared/cors.ts';
+import { resolveEstablishmentReview } from '../_shared/establishment-review.ts';
+
+type EstablishmentReviewClient = Parameters<typeof resolveEstablishmentReview>[0];
 
 function parseJsonFromText(text: string): any | null {
   try { return JSON.parse(text); } catch { /* try to extract */ }
@@ -48,43 +51,68 @@ Deno.serve(async (req) => {
   const json = (status: number, body: unknown) =>
     new Response(JSON.stringify(body), { status, headers: { ...cors, 'Content-Type': 'application/json' } });
 
+  let failureAdmin: EstablishmentReviewClient | null = null;
+  let failureEtablissementId = '';
+  let failureSourceSnapshot: Record<string, unknown> | null = null;
+
   try {
+    if (req.method !== 'POST') {
+      return json(405, { ok: false, code: 'METHOD_NOT_ALLOWED', error: 'Méthode non autorisée' });
+    }
     const auth = await verifyUserOrServiceRole(req);
-    if (!auth.ok) return json(auth.status, { error: auth.error });
+    if (!auth.ok) return json(auth.status, { ok: false, code: 'UNAUTHORIZED', error: auth.error });
     const body = await req.json().catch(() => ({}));
     if (body?.warm === true) {
       if (!auth.isServiceRole) {
         const adminAuth = await verifyAdminOrServiceRole(req);
-        if (!adminAuth.ok) return json(adminAuth.status, { error: adminAuth.error });
+        if (!adminAuth.ok) return json(adminAuth.status, { ok: false, code: 'FORBIDDEN', error: adminAuth.error });
       }
-      return json(200, { warm: true, configured: !!Deno.env.get('ANTHROPIC_API_KEY') });
+      return json(200, { ok: true, warm: true, configured: !!Deno.env.get('ANTHROPIC_API_KEY') });
     }
 
     const etablissementId = String(body?.etablissement_id || '').trim();
-    if (!etablissementId) return json(400, { error: 'etablissement_id requis' });
+    if (!etablissementId) return json(400, { ok: false, code: 'ETABLISSEMENT_ID_REQUIRED', error: 'etablissement_id requis' });
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    if (!supabaseUrl || !serviceKey) {
+      return json(503, { ok: false, code: 'SERVER_NOT_CONFIGURED', error: 'Service temporairement indisponible' });
+    }
     const admin = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
+    failureAdmin = admin as unknown as EstablishmentReviewClient;
+    failureEtablissementId = etablissementId;
 
     if (!auth.isServiceRole) {
       if (applyRateLimit('verify-justificatif-fonction', getClientIp(req), { max: 8, windowMs: 60_000 })) {
-        return json(429, { error: 'Trop de vérifications. Réessayez dans une minute.' });
+        return json(429, { ok: false, code: 'RATE_LIMITED', error: 'Trop de vérifications. Réessayez dans une minute.' });
       }
       if (!(await canManageEstablishment(admin, auth.userId, etablissementId))) {
         const adminAuth = await verifyAdminOrServiceRole(req);
-        if (!adminAuth.ok) return json(403, { error: 'Non autorisé pour cet établissement' });
+        if (!adminAuth.ok) return json(403, { ok: false, code: 'FORBIDDEN', error: 'Non autorisé pour cet établissement' });
       }
     }
-
-    const anthropicKey = Deno.env.get('ANTHROPIC_API_KEY');
-    if (!anthropicKey) return json(200, { ok: false, error: 'ANTHROPIC_API_KEY non configurée' });
 
     const { data: etab, error: etabErr } = await admin.from('etablissements')
       .select('verification_source_version, nom, siret, siret_raison_sociale, finess_raison_sociale, representant_nom, representant_prenom, justificatif_fonction_s3_key, justificatif_fonction_type, justificatif_fonction_type_mime')
       .eq('id', etablissementId).maybeSingle();
-    if (etabErr || !etab) return json(404, { error: 'Établissement introuvable' });
+    if (etabErr) {
+      console.error('[verify-justificatif-fonction] lecture établissement', etabErr.code || etabErr.message);
+      return json(503, { ok: false, code: 'ETABLISSEMENT_READ_FAILED', error: 'Vérification temporairement indisponible' });
+    }
+    if (!etab) return json(404, { ok: false, code: 'ETABLISSEMENT_NOT_FOUND', error: 'Établissement introuvable' });
     const e = etab as Record<string, any>;
+    failureSourceSnapshot = {
+      verification_source_version: Number(e.verification_source_version),
+      justificatif_fonction_s3_key: e.justificatif_fonction_s3_key ?? null,
+      justificatif_fonction_type: e.justificatif_fonction_type ?? null,
+      justificatif_fonction_type_mime: e.justificatif_fonction_type_mime ?? null,
+      representant_nom: e.representant_nom ?? null,
+      representant_prenom: e.representant_prenom ?? null,
+      nom: e.nom ?? null,
+      siret: e.siret ?? null,
+      siret_raison_sociale: e.siret_raison_sociale ?? null,
+      finess_raison_sociale: e.finess_raison_sociale ?? null,
+    };
     const appliquerVerdict = async (verifie: boolean, resultat: Record<string, unknown>) => {
       if (!auth.isServiceRole && !(await canManageEstablishment(admin, auth.userId, etablissementId))) {
         const adminAuth = await verifyAdminOrServiceRole(req);
@@ -116,7 +144,47 @@ Deno.serve(async (req) => {
       code: 'VERIFICATION_SOURCE_CHANGED',
       error: 'Le justificatif ou le profil a changé pendant la vérification. Relancez le contrôle.',
     });
-    if (!e.justificatif_fonction_s3_key) return json(400, { error: 'Aucun justificatif de fonction téléversé' });
+    const mettreEnRevue = async (
+      motif: string,
+      cause: string,
+      resultat: Record<string, unknown> = {},
+    ): Promise<Response> => {
+      if (!auth.isServiceRole && !(await canManageEstablishment(admin, auth.userId, etablissementId))) {
+        const adminAuth = await verifyAdminOrServiceRole(req);
+        if (!adminAuth.ok) return json(403, { ok: false, code: 'AUTHORIZATION_CHANGED', error: 'Autorisation modifiée pendant la vérification.' });
+      }
+      const { data, error } = await admin.rpc(
+        'fn_mettre_preuve_etablissement_en_revue_atomique',
+        {
+          p_etablissement_id: etablissementId,
+          p_service: 'VERIFY_JUSTIFICATIF_FONCTION',
+          p_source_snapshot: failureSourceSnapshot,
+          p_motif: motif,
+          p_cause: cause,
+          p_resultat: resultat,
+        },
+      );
+      const payload = data && typeof data === 'object' ? data as Record<string, unknown> : {};
+      if (error) {
+        console.error('[verify-justificatif-fonction] revue atomique', error.code || error.message);
+        return json(503, {
+          ok: false,
+          code: 'REVIEW_QUEUE_FAILED',
+          error: 'La vérification automatique a échoué et la revue n’a pas pu être enregistrée. Réessayez.',
+        });
+      }
+      if (payload.success !== true) return sourceChangee();
+      return json(202, {
+        ok: true,
+        verdict: 'EN_ATTENTE',
+        motif,
+        revue_manuelle: true,
+        revue_id: payload.revue_id,
+      });
+    };
+    if (!e.justificatif_fonction_s3_key) {
+      return json(400, { ok: false, code: 'DOCUMENT_REQUIRED', error: 'Aucun justificatif de fonction téléversé' });
+    }
     const justificatifPath = String(e.justificatif_fonction_s3_key);
     const proprietairesAutorises = new Set(
       [etablissementId, auth.userId].filter((value): value is string => !!value),
@@ -124,12 +192,17 @@ Deno.serve(async (req) => {
     const cheminAutorise = !justificatifPath.includes('..')
       && !justificatifPath.includes('\\')
       && [...proprietairesAutorises].some((ownerId) => justificatifPath.startsWith(`${ownerId}/`));
-    if (!cheminAutorise) return json(403, { error: 'Chemin de justificatif non autorisé' });
+    if (!cheminAutorise) return json(403, { ok: false, code: 'DOCUMENT_PATH_FORBIDDEN', error: 'Chemin de justificatif non autorisé' });
     if (!e.representant_nom || !e.representant_prenom) {
-      return json(400, { error: 'Nom et prénom du représentant requis' });
+      return json(400, { ok: false, code: 'REPRESENTATIVE_IDENTITY_REQUIRED', error: 'Nom et prénom du représentant requis' });
     }
     const { data: file, error: dlErr } = await admin.storage.from('jolene-documents').download(justificatifPath);
-    if (dlErr || !file) return json(200, { ok: false, error: 'Fichier introuvable dans le stockage' });
+    if (dlErr || !file) {
+      return mettreEnRevue(
+        'Le justificatif téléversé est momentanément inaccessible ; une revue humaine a été enregistrée.',
+        'STORAGE_READ_FAILED',
+      );
+    }
     const arrayBuffer = await file.arrayBuffer();
     const fileValidation = validateDocumentFile(
       new Uint8Array(arrayBuffer),
@@ -155,6 +228,14 @@ Deno.serve(async (req) => {
     const base64 = toBase64(arrayBuffer);
     const mime = fileValidation.mime;
     const isPdf = mime === 'application/pdf';
+
+    const anthropicKey = Deno.env.get('ANTHROPIC_API_KEY');
+    if (!anthropicKey) {
+      return mettreEnRevue(
+        'L’analyse automatique est momentanément indisponible ; le document a été transmis en revue humaine.',
+        'AI_NOT_CONFIGURED',
+      );
+    }
 
     const nomComplet = `${e.representant_prenom || ''} ${e.representant_nom}`.trim();
 
@@ -218,20 +299,22 @@ Analyse ce document : est-ce un justificatif de fonction valide, qui rattache bi
     } catch (err) {
       clearTimeout(aiTimeout);
       const estTimeout = (err as any)?.name === 'AbortError';
-      const applique = await appliquerVerdict(false, {
-        erreur_anthropic: { status: estTimeout ? 'timeout' : 'network', at: new Date().toISOString() },
-      });
-      if (!applique) return sourceChangee();
-      return json(200, { ok: true, verdict: 'EN_ATTENTE', reason: estTimeout ? 'AI timeout' : 'AI network error' });
+      return mettreEnRevue(
+        estTimeout
+          ? 'L’analyse automatique a dépassé le délai prévu ; le document a été transmis en revue humaine.'
+          : 'L’analyse automatique est momentanément indisponible ; le document a été transmis en revue humaine.',
+        estTimeout ? 'AI_TIMEOUT' : 'AI_NETWORK_ERROR',
+        { erreur_anthropic: { status: estTimeout ? 'timeout' : 'network', at: new Date().toISOString() } },
+      );
     }
     clearTimeout(aiTimeout);
 
     if (!ai.ok) {
-      const applique = await appliquerVerdict(false, {
-        erreur_anthropic: { status: ai.status, body_excerpt: ai.body.slice(0, 1000), at: new Date().toISOString() },
-      });
-      if (!applique) return sourceChangee();
-      return json(200, { ok: false, verdict: 'EN_ATTENTE', error: `Anthropic ${ai.status}` });
+      return mettreEnRevue(
+        'L’analyse automatique est momentanément indisponible ; le document a été transmis en revue humaine.',
+        'AI_UPSTREAM_ERROR',
+        { erreur_anthropic: { status: ai.status, at: new Date().toISOString() } },
+      );
     }
 
     const aiJson = ai.data;
@@ -299,25 +382,43 @@ Analyse ce document : est-ce un justificatif de fonction valide, qui rattache bi
       && typeHabilitant
       && result.autorise_representation === true;
 
-    const applique = await appliquerVerdict(justificatifVerifie, {
-        verdict_final: verdict,
-        motif,
-        type_detecte: result.type_detecte ?? null,
-        autorise_representation: result.autorise_representation === true,
-        nom_extrait: result.nom_extrait ?? null,
-        prenom_extrait: result.prenom_extrait ?? null,
-        fonction_detectee: result.fonction_detectee ?? null,
-        etablissement_extrait: result.etablissement_extrait ?? null,
-        siret_extrait: siretExtrait || null,
-        document_lisible: result.document_lisible === true,
-        document_complet: result.document_complet === true,
-        score_confiance: quality.score,
-        confiance: quality.confidence,
-        antifraude_complete: quality.antifraudComplete,
-        indices_falsification_count: indicesFalsif.length,
-        regle_version: '2026-07-14',
-    });
+    const resultatPersistant = {
+      verdict_final: verdict,
+      motif,
+      type_detecte: result.type_detecte ?? null,
+      autorise_representation: result.autorise_representation === true,
+      nom_extrait: result.nom_extrait ?? null,
+      prenom_extrait: result.prenom_extrait ?? null,
+      fonction_detectee: result.fonction_detectee ?? null,
+      etablissement_extrait: result.etablissement_extrait ?? null,
+      siret_extrait: siretExtrait || null,
+      document_lisible: result.document_lisible === true,
+      document_complet: result.document_complet === true,
+      score_confiance: quality.score,
+      confiance: quality.confidence,
+      antifraude_complete: quality.antifraudComplete,
+      indices_falsification_count: indicesFalsif.length,
+      regle_version: '2026-07-14',
+    };
+
+    if (verdict === 'EN_ATTENTE') {
+      return mettreEnRevue(
+        motif || 'Le document doit être confirmé par l’équipe Jolene avant validation.',
+        'AI_REQUIRES_HUMAN_REVIEW',
+        resultatPersistant,
+      );
+    }
+
+    const applique = await appliquerVerdict(justificatifVerifie, resultatPersistant);
     if (!applique) return sourceChangee();
+
+    if (justificatifVerifie) {
+      await resolveEstablishmentReview(
+        admin as unknown as EstablishmentReviewClient,
+        etablissementId,
+        'VERIFY_JUSTIFICATIF_FONCTION',
+      );
+    }
 
     // Ré-évalue le rattachement adaptatif (→ JUSTIFICATIF si OK).
     let rattachement: any = null;
@@ -338,6 +439,33 @@ Analyse ce document : est-ce un justificatif de fonction valide, qui rattache bi
       rattachement,
     });
   } catch (e) {
-    return json(200, { ok: false, error: String(e).slice(0, 300) });
+    console.error('[verify-justificatif-fonction] erreur inattendue', String(e).slice(0, 300));
+    if (failureAdmin && failureEtablissementId && failureSourceSnapshot) {
+      try {
+        const { data, error } = await failureAdmin.rpc(
+          'fn_mettre_preuve_etablissement_en_revue_atomique',
+          {
+            p_etablissement_id: failureEtablissementId,
+            p_service: 'VERIFY_JUSTIFICATIF_FONCTION',
+            p_source_snapshot: failureSourceSnapshot,
+            p_motif: 'La vérification automatique a rencontré une erreur inattendue ; une revue humaine a été enregistrée.',
+            p_cause: 'UNEXPECTED_ERROR',
+            p_resultat: {},
+          },
+        );
+        const payload = data && typeof data === 'object' ? data as Record<string, unknown> : {};
+        if (error || payload.success !== true) throw error || new Error('Revue atomique non appliquée');
+        return json(202, {
+          ok: true,
+          verdict: 'EN_ATTENTE',
+          motif: 'La vérification automatique a rencontré une erreur ; le document est en revue humaine.',
+          revue_manuelle: true,
+          revue_id: payload.revue_id,
+        });
+      } catch (reviewError) {
+        console.error('[verify-justificatif-fonction] revue après erreur', String(reviewError));
+      }
+    }
+    return json(500, { ok: false, code: 'INTERNAL_ERROR', error: 'Vérification temporairement indisponible. Réessayez.' });
   }
 });

@@ -6,6 +6,7 @@ import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { Input } from '@/components/ui/input';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { usePageTitle } from '@/hooks/usePageTitle';
 
 /**
  * Page dépubliée pré-lancement (Lot 1) : plus de liste de fonctionnalités non
@@ -15,6 +16,7 @@ import { toast } from 'sonner';
  * gratuitement depuis le menu — ils deviendront l'offre Pro après le lancement.
  */
 export default function PremiumEtablissement() {
+  usePageTitle('Offre Premium établissement');
   const [email, setEmail] = useState('');
   const [submitting, setSubmitting] = useState(false);
 

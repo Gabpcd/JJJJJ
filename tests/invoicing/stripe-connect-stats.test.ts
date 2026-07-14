@@ -15,7 +15,7 @@ const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 const skip = !serviceRoleKey;
 
 describe.skipIf(skip)('fn_admin_stripe_connect_stats', () => {
-  const supabase = createClient(supabaseUrl, serviceRoleKey);
+  const supabase = createClient(supabaseUrl, serviceRoleKey || 'test-only-placeholder');
 
   it('la RPC ne crash plus (ancien bug: column montant does not exist)', async () => {
     const { data, error } = await supabase.rpc('fn_admin_stripe_connect_stats' as any);

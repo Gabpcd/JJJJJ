@@ -22,7 +22,8 @@
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
-        android:theme="@style/AppTheme">
+        android:theme="@style/AppTheme"
+        android:usesCleartextTraffic="false">
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_icon"
             android:resource="@drawable/ic_stat_jolene_notification" />
@@ -54,7 +55,9 @@
                 <data android:pathPrefix="/mission/" />
                 <data android:pathPrefix="/contrat/" />
                 <data android:pathPrefix="/soignant/missions" />
+                <data android:pathPrefix="/soignant/stripe-connect" />
                 <data android:pathPrefix="/etablissement/missions" />
+                <data android:pathPrefix="/etablissement/facturation" />
             </intent-filter>
         </activity>
 

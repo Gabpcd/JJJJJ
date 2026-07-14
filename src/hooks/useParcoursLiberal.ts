@@ -125,61 +125,68 @@ export function useParcoursLiberal() {
     }) => {
       if (!user) throw new Error('Non authentifié');
 
+      if (!payload.attestation_file) {
+        throw new Error('Une attestation est obligatoire pour déclarer des heures externes.');
+      }
+
       let attestation_url: string | null = null;
       let attestation_nom_fichier: string | null = null;
 
-      if (payload.attestation_file) {
-        const file = payload.attestation_file;
-        const validation = await verifierFichierDocument(file, {
-          allowedMimes: ['application/pdf', 'image/jpeg', 'image/png'],
-        });
-        if (validation.ok === false) throw new Error(validation.message);
-        const safeName = sanitiserNomFichier(file.name, validation.mime);
-        const filename = `${Date.now()}_${safeName}`;
-        const path = `${user.id}/heures-externes/${filename}`;
+      const file = payload.attestation_file;
+      const validation = await verifierFichierDocument(file, {
+        allowedMimes: ['application/pdf', 'image/jpeg', 'image/png'],
+      });
+      if (validation.ok === false) throw new Error(validation.message);
+      const safeName = sanitiserNomFichier(file.name, validation.mime);
+      const filename = `${Date.now()}_${safeName}`;
+      const path = `${user.id}/heures-externes/${filename}`;
 
-        const { error: uploadErr } = await supabase.storage
-          .from('jolene-documents')
-          .upload(path, file, { contentType: validation.mime, upsert: false });
-        if (uploadErr) throw uploadErr;
+      const { error: uploadErr } = await supabase.storage
+        .from('jolene-documents')
+        .upload(path, file, { contentType: validation.mime, upsert: false });
+      if (uploadErr) throw uploadErr;
 
-        attestation_url = path;
-        attestation_nom_fichier = file.name;
-      }
+      attestation_url = path;
+      attestation_nom_fichier = file.name;
 
-      const { data, error: err } = await supabase
-        .from('heures_externes_soignants' as any)
-        .insert({
-          soignant_id: user.id,
-          etablissement_nom: payload.etablissement_nom,
-          etablissement_type: payload.etablissement_type ?? null,
-          date_debut: payload.date_debut,
-          date_fin: payload.date_fin,
-          heures_declarees: payload.heures_declarees,
-          attestation_url,
-          attestation_nom_fichier,
-        } as any)
-        .select()
-        .single();
+      // La RPC serveur vérifie que le chemin exact existe dans le bucket privé,
+      // appartient au compte courant, contient des octets, ne recouvre aucune
+      // période active, puis force tous les champs de verdict à EN_ATTENTE/NULL.
+      const { data, error: err } = await supabase.rpc(
+        'fn_declarer_heures_externes_soignant' as any,
+        {
+          p_etablissement_nom: payload.etablissement_nom,
+          p_etablissement_type: payload.etablissement_type ?? null,
+          p_date_debut: payload.date_debut,
+          p_date_fin: payload.date_fin,
+          p_heures_declarees: payload.heures_declarees,
+          p_attestation_url: attestation_url,
+          p_attestation_nom_fichier: attestation_nom_fichier,
+        },
+      );
 
-      if (err) {
+      const declaration = data as unknown as {
+        success?: boolean;
+        id?: string;
+        error?: string;
+      } | null;
+      if (err || !declaration?.success || !declaration.id) {
         if (attestation_url) {
           await supabase.functions.invoke('verify-heures-externes', {
             body: { action: 'cleanup_orphan', attestation_url },
           });
         }
-        throw err;
+        throw err || new Error(declaration?.error || 'Déclaration impossible');
       }
-      const ligne = data as unknown as HeureExterne;
 
       // Vérification IA de l'attestation (lecture du document, extraction des
-      // heures, cohérence vs déclaré). Best-effort : si l'IA échoue, la ligne
-      // reste EN_ATTENTE pour revue manuelle — on ne bloque pas la déclaration.
+      // heures, cohérence vs déclaré). Elle ne valide jamais automatiquement :
+      // tout document non conclusivement invalide reste en revue manuelle.
       let verification: ResultatVerifHeures | null = null;
       if (attestation_url) {
         try {
           const { data: vData } = await supabase.functions.invoke('verify-heures-externes', {
-            body: { heure_externe_id: ligne.id },
+            body: { heure_externe_id: declaration.id },
           });
           if (vData?.verdict) {
             verification = {

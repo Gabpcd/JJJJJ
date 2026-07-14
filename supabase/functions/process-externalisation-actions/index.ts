@@ -4,21 +4,25 @@
 // Lit fn_externalisations_a_traiter (pagination 50/run) pour récupérer
 // les actions à dispatcher selon leur type_action.
 //
-// Types supportés :
-//   STRIPE_REFUND_TOTAL / _PARTIEL → Stripe API refunds.create
-//   STRIPE_PAYMENT                  → Stripe Connect transfers.create
-//   STRIPE_PAYOUT                   → Stripe payouts.create
+// Types financiers :
+//   STRIPE_REFUND_TOTAL / _PARTIEL → Stripe API refunds.create avec reprise
+//   RECOMPENSE_PARRAINAGE_SOIGNANT → transferts Connect exacts et persistés
+//   STRIPE_PAYMENT / STRIPE_PAYOUT → désactivés tant qu'aucune source métier
+//                                     réconciliable ne les rend sûrs
 //   CHORUS_RECYCLER_FACTURE         → piste-client.ts (PENDING_AIFE si scope KO)
 //   DPAE_ANNULATION                 → email + push étab Net-Entreprises
 //   EMAIL_NOTIF                     → send-email
+//   SMS_NOTIF                       → send-sms (OTP téléphone)
 //   PUSH_NOTIF                      → send-push
-//   AVOIR_PDF_GENERATION            → génération PDF + upload Storage
+//   AVOIR_PDF_GENERATION            → bloqué : nécessite un AVOIR DB/Factur-X
+//   REMBOURSEMENT_AVOIR_SWAN        → bloqué : confirmation bancaire manuelle
 //
 // Sur succès → fn_externalisation_succes
 // Sur échec → fn_externalisation_echec avec backoff
 // Sur PENDING_AIFE → fn_externalisation_echec(..., 'PENDING_AIFE')
 
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import Stripe from "npm:stripe@20.4.1";
+import { createClient } from "npm:@supabase/supabase-js@2";
 import { assertStripeSecretMode } from "../_shared/stripe-production.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -92,38 +96,82 @@ Deno.serve(async (req) => {
   }
   const actions: ActionRow[] = (rpcData as any)?.actions || [];
 
-  let success = 0, failed = 0, pendingAife = 0;
+  let success = 0, failed = 0, pendingAife = 0, ackFailed = 0;
   const startTs = Date.now();
 
   for (const action of actions) {
+    let externalEffectSucceeded = false;
     try {
       const result = await dispatch(admin, action);
       if (result.ok) {
-        await admin.rpc("fn_externalisation_succes", { p_id: action.id, p_resultat: result.resultat || {} });
+        externalEffectSucceeded = true;
+        const { data: ack, error: ackError } = await admin.rpc(
+          "fn_externalisation_succes",
+          { p_id: action.id, p_resultat: result.resultat || {} },
+        );
+        if (ackError || ack?.success !== true) {
+          throw new Error(
+            `EXTERNALISATION_SUCCESS_ACK_FAILED:${ackError?.message || JSON.stringify(ack)}`,
+          );
+        }
         success++;
       } else if (result.pending_aife) {
-        await admin.rpc("fn_externalisation_echec", { p_id: action.id, p_erreur: result.erreur || "PENDING_AIFE", p_special_statut: "PENDING_AIFE" });
+        const { data: ack, error: ackError } = await admin.rpc(
+          "fn_externalisation_echec",
+          {
+            p_id: action.id,
+            p_erreur: result.erreur || "PENDING_AIFE",
+            p_special_statut: "PENDING_AIFE",
+          },
+        );
+        if (ackError || ack?.success !== true) {
+          throw new Error(
+            `EXTERNALISATION_PENDING_ACK_FAILED:${ackError?.message || JSON.stringify(ack)}`,
+          );
+        }
         pendingAife++;
       } else {
-        await admin.rpc("fn_externalisation_echec", { p_id: action.id, p_erreur: result.erreur || "Unknown error" });
+        const { data: ack, error: ackError } = await admin.rpc(
+          "fn_externalisation_echec",
+          { p_id: action.id, p_erreur: result.erreur || "Unknown error" },
+        );
+        if (ackError || ack?.success !== true) {
+          throw new Error(
+            `EXTERNALISATION_FAILURE_ACK_FAILED:${ackError?.message || JSON.stringify(ack)}`,
+          );
+        }
         failed++;
       }
     } catch (err) {
       console.error(`[worker] action ${action.id} threw:`, err);
-      await admin.rpc("fn_externalisation_echec",
-        { p_id: action.id, p_erreur: (err as Error).message?.slice(0, 500) || "Exception" });
-      failed++;
+      if (externalEffectSucceeded) {
+        // L'effet fournisseur a réussi : ne jamais le rétrograder en échec.
+        // Le lease relira l'action et sa clé d'idempotence retrouvera le même
+        // objet externe avant un nouvel acquittement.
+        ackFailed++;
+        continue;
+      }
+      const { data: failureAck, error: failureAckError } = await admin.rpc(
+        "fn_externalisation_echec",
+        {
+          p_id: action.id,
+          p_erreur: (err as Error).message?.slice(0, 500) || "Exception",
+        },
+      );
+      if (failureAckError || failureAck?.success !== true) ackFailed++;
+      else failed++;
     }
   }
 
   const durationMs = Date.now() - startTs;
-  console.log(`[worker] ${workerId}: ${actions.length} actions, ${success} success, ${failed} failed, ${pendingAife} pending_aife, ${durationMs}ms`);
+  console.log(`[worker] ${workerId}: ${actions.length} actions, ${success} success, ${failed} failed, ${pendingAife} pending_aife, ${ackFailed} ack_failed, ${durationMs}ms`);
 
   return new Response(JSON.stringify({
     worker_id: workerId,
     processed: actions.length,
-    success, failed, pending_aife: pendingAife, duration_ms: durationMs,
-  }), { headers: corsHeaders(req) });
+    success, failed, pending_aife: pendingAife, ack_failed: ackFailed,
+    duration_ms: durationMs,
+  }), { status: ackFailed > 0 ? 500 : 200, headers: corsHeaders(req) });
 });
 
 // ─── Dispatch principal ──────────────────────────────────────────────
@@ -146,6 +194,8 @@ async function dispatch(admin: any, action: ActionRow): Promise<DispatchResult> 
       return dispatchDpaeAnnulation(admin, action);
     case "EMAIL_NOTIF":
       return dispatchEmail(admin, action);
+    case "SMS_NOTIF":
+      return dispatchSmsOtp(admin, action);
     case "PUSH_NOTIF":
       return dispatchPush(admin, action);
     case "AVOIR_PDF_GENERATION":
@@ -164,88 +214,240 @@ async function dispatch(admin: any, action: ActionRow): Promise<DispatchResult> 
 async function dispatchStripeRefund(admin: any, action: ActionRow): Promise<DispatchResult> {
   const stripeKey = Deno.env.get("STRIPE_SECRET_KEY") || "";
   assertStripeSecretMode(stripeKey);
+  const stripe = new Stripe(stripeKey, { apiVersion: "2026-02-25.clover" });
+  const { mission_id: missionId, montant, pourcentage } = action.payload;
+  const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-  const { mission_id, montant, pourcentage } = action.payload;
-  if (!mission_id) return { ok: false, erreur: "mission_id missing in payload" };
+  // Certains anciens accords encodaient une indemnité SOIGNANT sous un type
+  // STRIPE_REFUND_PARTIEL. Ce n'est jamais un refund client : l'exécuter ici
+  // virerait de l'argent à la mauvaise partie.
+  if (Object.prototype.hasOwnProperty.call(action.payload, "beneficiaire_id")) {
+    return {
+      ok: false,
+      erreur: "ACTION_TYPE_MISMATCH: beneficiaire_id interdit sur un remboursement client",
+    };
+  }
+  if (typeof missionId !== "string" || !uuidPattern.test(missionId)) {
+    return { ok: false, erreur: "MISSION_ID_INVALIDE" };
+  }
 
-  // Récupérer le payment_intent_id depuis mission ou facture
-  const { data: mission } = await admin.from("missions")
-    .select("paiement_id, stripe_payment_intent_id, taux_horaire_base, duree_heures")
-    .eq("id", mission_id).maybeSingle();
+  const { data: mission, error: missionError } = await admin
+    .from("missions")
+    .select("id, etablissement_id, stripe_payment_intent_id")
+    .eq("id", missionId)
+    .maybeSingle();
+  if (missionError || !mission) {
+    return {
+      ok: false,
+      erreur: `MISSION_REFUND_INTROUVABLE: ${missionError?.message || missionId}`,
+    };
+  }
+  if (!mission.stripe_payment_intent_id) {
+    return { ok: false, erreur: `AUCUN_PAYMENT_INTENT: ${missionId}` };
+  }
 
-  const piId = mission?.stripe_payment_intent_id || mission?.paiement_id;
-  if (!piId) return { ok: false, erreur: `Aucun payment_intent pour mission ${mission_id}` };
+  const { data: etablissement, error: etablissementError } = await admin
+    .from("etablissements")
+    .select("id, stripe_customer_id")
+    .eq("id", mission.etablissement_id)
+    .maybeSingle();
+  if (etablissementError || !etablissement?.stripe_customer_id) {
+    return {
+      ok: false,
+      erreur: `STRIPE_CUSTOMER_ETABLISSEMENT_ABSENT: ${etablissementError?.message || mission.etablissement_id}`,
+    };
+  }
 
-  // Calculer montant remboursement (centimes)
-  let amountCents: number | undefined;
-  if (action.type_action === "STRIPE_REFUND_PARTIEL") {
-    if (pourcentage) {
-      const total = (mission?.taux_horaire_base || 0) * (mission?.duree_heures || 0) * 100;
-      amountCents = Math.round(total * (pourcentage / 100));
-    } else if (montant) {
-      amountCents = Math.round(montant * 100);
+  const objectId = (value: unknown): string | null => {
+    if (typeof value === "string") return value;
+    if (value && typeof value === "object" && "id" in value) {
+      const id = (value as { id?: unknown }).id;
+      return typeof id === "string" ? id : null;
     }
-  }
-  // TOTAL : ne pas spécifier amount = remboursement total
+    return null;
+  };
 
-  const body = new URLSearchParams({
-    payment_intent: piId,
+  const paymentIntent = await stripe.paymentIntents.retrieve(
+    mission.stripe_payment_intent_id,
+    { expand: ["latest_charge"] },
+  );
+  const sourceType = paymentIntent.metadata?.type || "";
+  if (sourceType === "CONNECT_MISSION_PAYMENT") {
+    return {
+      ok: false,
+      erreur: "CONNECT_TRANSFER_REVERSAL_REQUIRED: utiliser le circuit Connect dédié",
+    };
+  }
+  if (sourceType === "ESCROW_MISSION_PAYMENT") {
+    return {
+      ok: false,
+      erreur: "ESCROW_REFUND_QUEUE_REQUIRED: utiliser fn_escrow_rembourser",
+    };
+  }
+  if (sourceType !== "commission_reservation") {
+    return {
+      ok: false,
+      erreur: `PAYMENT_PROVENANCE_INCONNUE: ${sourceType || "metadata.type absent"}`,
+    };
+  }
+
+  const charge = typeof paymentIntent.latest_charge === "string"
+    ? await stripe.charges.retrieve(paymentIntent.latest_charge)
+    : paymentIntent.latest_charge;
+  const customer = await stripe.customers.retrieve(etablissement.stripe_customer_id);
+  const piCustomerId = objectId(paymentIntent.customer);
+  const chargeCustomerId = objectId(charge?.customer);
+  const chargePaymentIntentId = objectId(charge?.payment_intent);
+  const customerIsDeleted = "deleted" in customer && customer.deleted;
+
+  if (
+    paymentIntent.id !== mission.stripe_payment_intent_id
+    || paymentIntent.status !== "succeeded"
+    || paymentIntent.currency !== "eur"
+    || !Number.isSafeInteger(paymentIntent.amount)
+    || paymentIntent.amount <= 0
+    || paymentIntent.amount_received !== paymentIntent.amount
+    || paymentIntent.amount_capturable !== 0
+    || paymentIntent.metadata?.mission_id !== mission.id
+    || paymentIntent.metadata?.etablissement_id !== mission.etablissement_id
+    || piCustomerId !== etablissement.stripe_customer_id
+    || customerIsDeleted
+    || customer.metadata?.etablissement_id !== mission.etablissement_id
+    || !charge
+    || !charge.paid
+    || !charge.captured
+    || charge.status !== "succeeded"
+    || charge.disputed
+    || charge.currency !== "eur"
+    || charge.amount !== paymentIntent.amount_received
+    || charge.amount_refunded < 0
+    || charge.amount_refunded > charge.amount
+    || chargeCustomerId !== etablissement.stripe_customer_id
+    || chargePaymentIntentId !== paymentIntent.id
+  ) {
+    return { ok: false, erreur: "STRIPE_REFUND_SOURCE_IDENTITY_MISMATCH" };
+  }
+
+  // Un crash peut survenir après refunds.create mais avant l'acquittement de
+  // l'action. On retrouve alors l'objet exact par metadata, au lieu de déduire
+  // un succès d'un montant remboursé global au PaymentIntent.
+  const refundsPage = await stripe.refunds.list({
+    payment_intent: paymentIntent.id,
+    limit: 100,
+  });
+  if (refundsPage.has_more) {
+    return { ok: false, erreur: "REFUND_HISTORY_REQUIRES_MANUAL_REVIEW" };
+  }
+  const ownRefunds = refundsPage.data.filter(
+    (refund) => refund.metadata?.externalisation_action_id === action.id,
+  );
+  if (ownRefunds.length > 1) {
+    return { ok: false, erreur: "DUPLICATE_EXTERNALISATION_REFUNDS" };
+  }
+  const existingRefund = ownRefunds[0] ?? null;
+
+  let amountCents: number;
+  if (action.type_action === "STRIPE_REFUND_PARTIEL") {
+    const hasPercentage = pourcentage !== undefined && pourcentage !== null;
+    const hasAmount = montant !== undefined && montant !== null;
+    if (hasPercentage === hasAmount) {
+      return {
+        ok: false,
+        erreur: "PARTIAL_REFUND_REQUIRES_EXACTLY_ONE_OF_MONTANT_OR_POURCENTAGE",
+      };
+    }
+    if (hasPercentage) {
+      const percentage = Number(pourcentage);
+      if (!Number.isFinite(percentage) || percentage <= 0 || percentage > 100) {
+        return { ok: false, erreur: "POURCENTAGE_REMBOURSEMENT_INVALIDE" };
+      }
+      // Base réelle encaissée Stripe, jamais un taux × une durée métier.
+      amountCents = Math.round(paymentIntent.amount_received * percentage / 100);
+    } else {
+      const amountEuros = Number(montant);
+      amountCents = Math.round(amountEuros * 100);
+      if (
+        !Number.isFinite(amountEuros)
+        || amountEuros <= 0
+        || Math.abs(amountEuros * 100 - amountCents) > 0.000001
+      ) {
+        return { ok: false, erreur: "MONTANT_REMBOURSEMENT_INVALIDE" };
+      }
+    }
+  } else {
+    if (montant !== undefined || pourcentage !== undefined) {
+      return { ok: false, erreur: "TOTAL_REFUND_FORBIDS_PARTIAL_AMOUNT_FIELDS" };
+    }
+    amountCents = existingRefund
+      ? existingRefund.amount
+      : charge.amount - charge.amount_refunded;
+  }
+
+  if (!Number.isSafeInteger(amountCents) || amountCents <= 0) {
+    return { ok: false, erreur: "AUCUN_MONTANT_REMBOURSABLE" };
+  }
+  const ownSucceededAmount = existingRefund?.status === "succeeded"
+    ? existingRefund.amount
+    : 0;
+  const refundableForThisAction = charge.amount - charge.amount_refunded + ownSucceededAmount;
+  if (amountCents > refundableForThisAction) {
+    return { ok: false, erreur: "REFUND_AMOUNT_EXCEEDS_REMAINING_CHARGE" };
+  }
+
+  const refund = existingRefund ?? await stripe.refunds.create({
+    payment_intent: paymentIntent.id,
+    amount: amountCents,
     reason: "requested_by_customer",
-    ...(amountCents ? { amount: amountCents.toString() } : {}),
-  });
-
-  const res = await fetch("https://api.stripe.com/v1/refunds", {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${stripeKey}`,
-      "Content-Type": "application/x-www-form-urlencoded",
-      "Idempotency-Key": `externalisation_refund_${action.id}`,
+    metadata: {
+      externalisation_action_id: action.id,
+      externalisation_action_type: action.type_action,
+      mission_id: mission.id,
+      etablissement_id: mission.etablissement_id,
+      source: "process_externalisation_actions",
     },
-    body,
-  });
-  const json = await res.json();
-  if (res.ok) return { ok: true, resultat: { refund_id: json.id, amount: json.amount } };
+  }, { idempotencyKey: `externalisation_refund_${action.id}` });
 
-  // Balance insufficient → retry plus tard (pas FAILED définitif)
-  if (json.error?.code === "balance_insufficient") {
-    return { ok: false, erreur: "balance_insufficient (sera retenté)" };
+  if (
+    objectId(refund.payment_intent) !== paymentIntent.id
+    || objectId(refund.charge) !== charge.id
+    || refund.amount !== amountCents
+    || refund.currency !== "eur"
+    || refund.metadata?.externalisation_action_id !== action.id
+    || refund.metadata?.mission_id !== mission.id
+    || refund.metadata?.etablissement_id !== mission.etablissement_id
+  ) {
+    return { ok: false, erreur: "STRIPE_REFUND_RESULT_IDENTITY_MISMATCH" };
   }
-  return { ok: false, erreur: `Stripe ${res.status}: ${json.error?.message || JSON.stringify(json)}` };
+  if (refund.status !== "succeeded") {
+    return {
+      ok: false,
+      erreur: `STRIPE_REFUND_NOT_SUCCEEDED:${refund.id}:${refund.status || "unknown"}`,
+    };
+  }
+
+  return {
+    ok: true,
+    resultat: {
+      refund_id: refund.id,
+      amount: refund.amount,
+      status: refund.status,
+      payment_intent_id: paymentIntent.id,
+      charge_id: charge.id,
+    },
+  };
 }
 
 async function dispatchStripePayment(admin: any, action: ActionRow): Promise<DispatchResult> {
-  const stripeKey = Deno.env.get("STRIPE_SECRET_KEY") || "";
-  assertStripeSecretMode(stripeKey);
-  const { beneficiaire_id, montant, motif } = action.payload;
-  if (!beneficiaire_id || !montant) return { ok: false, erreur: "beneficiaire_id + montant requis" };
-
-  // Récupérer Stripe Connect account du soignant
-  const { data: soignant } = await admin.from("soignants")
-    .select("stripe_account_id").eq("id", beneficiaire_id).maybeSingle();
-  if (!soignant?.stripe_account_id) {
-    return { ok: false, erreur: `Soignant ${beneficiaire_id} sans Stripe Connect account` };
-  }
-
-  const res = await fetch("https://api.stripe.com/v1/transfers", {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${stripeKey}`,
-      "Content-Type": "application/x-www-form-urlencoded",
-      "Idempotency-Key": `externalisation_transfer_${action.id}`,
-    },
-    body: new URLSearchParams({
-      amount: Math.round(montant * 100).toString(),
-      currency: "eur",
-      destination: soignant.stripe_account_id,
-      description: motif || "Versement Jolene",
-    }),
-  });
-  const json = await res.json();
-  if (res.ok) return { ok: true, resultat: { transfer_id: json.id, amount: json.amount } };
-  if (json.error?.code === "balance_insufficient") {
-    return { ok: false, erreur: "balance_insufficient (sera retenté)" };
-  }
-  return { ok: false, erreur: `Stripe transfer ${res.status}: ${json.error?.message}` };
+  void admin;
+  // Aucun call site actif ne doit produire ce type générique : il ne porte ni
+  // objet métier source, ni montant recalculable côté DB, ni recovery durable.
+  // Les primes utilisent leur dispatcher exact; les missions Connect utilisent
+  // stripe-connect-pay-mission. On conserve le type legacy uniquement pour que
+  // les anciennes lignes deviennent ERROR visibles dans l'admin.
+  return {
+    ok: false,
+    erreur: `STRIPE_PAYMENT_GENERIQUE_DESACTIVE:${action.id}`,
+  };
 }
 
 async function dispatchStripePayout(admin: any, action: ActionRow): Promise<DispatchResult> {
@@ -290,111 +492,185 @@ async function dispatchRecompenseParrainage(admin: any, action: ActionRow): Prom
   if (!parrainage_id || !parrain_id || !filleul_id) {
     return { ok: false, erreur: "parrainage_id + parrain_id + filleul_id requis" };
   }
+  if (action.source !== "parrainage_soignant" || action.source_id !== parrainage_id) {
+    return { ok: false, erreur: "PARRAINAGE_ACTION_PROVENANCE_MISMATCH" };
+  }
 
-  // Prime configurable depuis /admin/config (parametres_systeme).
-  const { data: primeParam } = await admin.rpc("fn_param_num", { p_cle: "prime_parrainage_eur", p_defaut: 50 });
-  const primeDefaut = Number(primeParam) || 50;
+  const { data: parrainage, error: parrainageError } = await admin
+    .from("parrainages")
+    .select("id, parrain_id, filleul_id, statut, prime_versee_le")
+    .eq("id", parrainage_id)
+    .maybeSingle();
+  if (parrainageError || !parrainage) {
+    return { ok: false, erreur: `PARRAINAGE_INTROUVABLE:${parrainageError?.message || parrainage_id}` };
+  }
+  if (
+    parrainage.parrain_id !== parrain_id
+    || parrainage.filleul_id !== filleul_id
+  ) {
+    return { ok: false, erreur: "PARRAINAGE_BENEFICIAIRES_MISMATCH" };
+  }
+  if (parrainage.statut === "PRIME_VERSEE" && parrainage.prime_versee_le) {
+    return { ok: true, resultat: { skip: "deja_versee" } };
+  }
+  if (parrainage.statut !== "VALIDE_EN_ATTENTE_SEUIL") {
+    return { ok: false, erreur: `PARRAINAGE_STATUT_INVALIDE:${parrainage.statut}` };
+  }
+
+  const { data: primeParam, error: primeError } = await admin.rpc("fn_param_num", {
+    p_cle: "prime_parrainage_eur",
+    p_defaut: 25,
+  });
+  const prime = Number(primeParam);
+  if (
+    primeError
+    || !Number.isFinite(prime)
+    || prime <= 0
+    || Number(montant_parrain) !== prime
+    || Number(montant_filleul) !== prime
+  ) {
+    return { ok: false, erreur: `PARRAINAGE_MONTANT_MISMATCH:${primeError?.message || prime}` };
+  }
+
+  const { data: persistedAction, error: actionError } = await admin
+    .from("externalisation_actions")
+    .select("id, statut, resultat")
+    .eq("id", action.id)
+    .maybeSingle();
+  if (actionError || !persistedAction || persistedAction.statut !== "PROCESSING") {
+    return { ok: false, erreur: `PARRAINAGE_ACTION_STATE_MISMATCH:${actionError?.message || persistedAction?.statut}` };
+  }
 
   const stripeKey = Deno.env.get("STRIPE_SECRET_KEY") || "";
-  const results: Record<string, string> = {};
-  let allPaid = true;
+  assertStripeSecretMode(stripeKey);
+  const stripe = new Stripe(stripeKey, { apiVersion: "2026-02-25.clover" });
+  const results: Record<string, string> = {
+    ...((persistedAction.resultat && typeof persistedAction.resultat === "object")
+      ? persistedAction.resultat
+      : {}),
+  };
 
-  for (const [role, userId, montant] of [
-    ["parrain", parrain_id, montant_parrain || primeDefaut],
-    ["filleul", filleul_id, montant_filleul || primeDefaut],
+  const persistProgress = async () => {
+    const { data, error } = await admin
+      .from("externalisation_actions")
+      .update({ resultat: results, derniere_tentative_le: new Date().toISOString() })
+      .eq("id", action.id)
+      .eq("statut", "PROCESSING")
+      .select("id")
+      .maybeSingle();
+    if (error || !data) {
+      throw new Error(`PARRAINAGE_PROGRESS_PERSISTENCE_FAILED:${error?.message || "state conflict"}`);
+    }
+  };
+
+  for (const [role, userId] of [
+    ["parrain", parrain_id],
+    ["filleul", filleul_id],
   ] as const) {
-    const { data: soignant } = await admin.from("soignants")
-      .select("stripe_account_id, iban_virement, iban_titulaire, prenom, nom, email")
-      .eq("id", userId).maybeSingle();
+    const amountCents = Math.round(prime * 100);
+    const { data: soignant, error: soignantError } = await admin
+      .from("soignants")
+      .select("id, stripe_account_id, prenom, nom, email")
+      .eq("id", userId)
+      .maybeSingle();
+    const { data: onboarding, error: onboardingError } = await admin
+      .from("stripe_connect_onboarding")
+      .select("soignant_id, stripe_account_id, statut, onboarding_complete, charges_enabled, payouts_enabled")
+      .eq("soignant_id", userId)
+      .maybeSingle();
+    const connectedAccountId = soignant?.stripe_account_id || null;
 
-    // Canal 1 : Stripe Connect (libéraux)
-    if (soignant?.stripe_account_id && stripeKey) {
-      assertStripeSecretMode(stripeKey);
-      const res = await fetch("https://api.stripe.com/v1/transfers", {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${stripeKey}`,
-          "Content-Type": "application/x-www-form-urlencoded",
-          "Idempotency-Key": `parrainage_transfer_${parrainage_id}_${role}`,
-        },
-        body: new URLSearchParams({
-          amount: Math.round(montant * 100).toString(),
-          currency: "eur",
-          destination: soignant.stripe_account_id,
-          description: `Prime parrainage Jolene (${role})`,
-          "metadata[parrainage_id]": parrainage_id,
-          "metadata[role]": role,
-        }),
-      });
-      const json = await res.json();
-      if (!res.ok) {
-        if (json.error?.code === "balance_insufficient") {
-          return { ok: false, erreur: `balance_insufficient transfert ${role} (sera retenté)` };
+    // Jolene n'est pas payeur de paie : sans compte Connect libéral complet,
+    // la prime reste due et part en traitement manuel explicite. Aucun virement
+    // SWAN n'est déclaré « versé » sur la seule création d'un Payment pending.
+    if (
+      soignantError
+      || !soignant
+      || onboardingError
+      || !onboarding
+      || !connectedAccountId
+      || onboarding.stripe_account_id !== connectedAccountId
+      || onboarding.statut !== "COMPLET"
+      || onboarding.onboarding_complete !== true
+      || onboarding.charges_enabled !== true
+      || onboarding.payouts_enabled !== true
+    ) {
+      if (results[`${role}_canal`] !== "TRAITEMENT_MANUEL_REQUIS") {
+        results[`${role}_canal`] = "TRAITEMENT_MANUEL_REQUIS";
+        await persistProgress();
+        if (soignant) {
+          const { error: notificationError } = await admin.from("notifications").insert({
+            destinataire_id: userId,
+            type_destinataire: "SOIGNANT",
+            type: "PARRAINAGE",
+            titre: `${prime}€ de prime validée`,
+            corps: `Votre prime de ${prime}€ est due. Son mode de versement doit être validé par l'équipe Jolene.`,
+            lien: "/soignant/parrainage",
+          });
+          if (notificationError) throw new Error(`PARRAINAGE_DUE_NOTIFICATION_FAILED:${notificationError.message}`);
         }
-        return { ok: false, erreur: `Stripe transfer ${role} ${res.status}: ${json.error?.message}` };
       }
+      return {
+        ok: false,
+        erreur: `PARRAINAGE_TRAITEMENT_MANUEL_REQUIS:${role}:${soignantError?.message || onboardingError?.message || "Connect incomplet"}`,
+      };
+    }
+
+    let transfer: Stripe.Transfer;
+    const persistedTransferId = results[`${role}_ref`];
+    if (persistedTransferId) {
+      transfer = await stripe.transfers.retrieve(persistedTransferId);
+    } else {
+      transfer = await stripe.transfers.create({
+        amount: amountCents,
+        currency: "eur",
+        destination: connectedAccountId,
+        description: `Prime parrainage Jolene (${role})`,
+        metadata: {
+          externalisation_action_id: action.id,
+          parrainage_id,
+          role,
+          beneficiaire_id: userId,
+        },
+      }, { idempotencyKey: `parrainage_transfer_${parrainage_id}_${role}` });
+    }
+    if (
+      transfer.amount !== amountCents
+      || transfer.currency !== "eur"
+      || (typeof transfer.destination === "string"
+        ? transfer.destination
+        : transfer.destination?.id) !== connectedAccountId
+      || transfer.metadata?.externalisation_action_id !== action.id
+      || transfer.metadata?.parrainage_id !== parrainage_id
+      || transfer.metadata?.role !== role
+      || transfer.metadata?.beneficiaire_id !== userId
+      || transfer.reversed
+      || transfer.amount_reversed !== 0
+    ) {
+      return { ok: false, erreur: `PARRAINAGE_TRANSFER_IDENTITY_MISMATCH:${role}:${transfer.id}` };
+    }
+
+    if (!persistedTransferId) {
       results[`${role}_canal`] = "STRIPE_CONNECT";
-      results[`${role}_ref`] = json.id;
-      await notifierPrimeVersee(admin, userId, soignant, montant, "STRIPE_CONNECT");
-      continue;
+      results[`${role}_ref`] = transfer.id;
+      await persistProgress();
+      await notifierPrimeVersee(admin, userId, soignant, prime, "STRIPE_CONNECT");
     }
-
-    // Canal 2 : SWAN SCT (IBAN renseigné)
-    if (soignant?.iban_virement) {
-      const swanResult = await dispatchVersementSwan(
-        soignant.iban_virement,
-        soignant.iban_titulaire || `${soignant.prenom || ""} ${soignant.nom || ""}`.trim(),
-        montant,
-        `Prime parrainage Jolene (${role}) - ${parrainage_id}`,
-        parrainage_id,
-      );
-      if (!swanResult.ok) {
-        return { ok: false, erreur: `SWAN SCT ${role}: ${swanResult.erreur}` };
-      }
-      results[`${role}_canal`] = "SWAN_SCT";
-      results[`${role}_ref`] = swanResult.resultat?.payment_id || "initiated";
-      await notifierPrimeVersee(admin, userId, soignant, montant, "SWAN_SCT");
-      continue;
-    }
-
-    // Canal 3 : Aucun moyen de paiement → notification soignant + alerte admins (fallback)
-    await admin.from("notifications").insert({
-      destinataire_id: userId,
-      type_destinataire: "SOIGNANT",
-      type: "PARRAINAGE_PRIME_VERSEE",
-      titre: `${montant}€ de prime en attente !`,
-      corps: `Votre prime de parrainage de ${montant}€ est prête. Renseignez votre IBAN dans Profil > Paiements pour la recevoir.`,
-      lien: "/soignant/profil?tab=paiements",
-    });
-    // Admin awareness : prime bloquée faute d'IBAN/Stripe → l'admin peut relancer.
-    try {
-      const { data: adminIds } = await admin.rpc("fn_list_admin_user_ids");
-      const noms = `${soignant?.prenom || ""} ${soignant?.nom || ""}`.trim();
-      for (const a of (adminIds || []) as any[]) {
-        const adminId = typeof a === "string" ? a : a?.fn_list_admin_user_ids ?? a?.id;
-        if (!adminId) continue;
-        await admin.from("notifications").insert({
-          destinataire_id: adminId,
-          type_destinataire: "ADMIN_PLATEFORME",
-          type: "PARRAINAGE_PRIME_BLOQUEE",
-          titre: "⚠️ Prime de parrainage bloquée (pas d'IBAN)",
-          corps: `Prime de ${montant}€ (${role}) en attente pour ${noms || "un soignant"} : ni Stripe ni IBAN. Relancer le soignant pour qu'il renseigne son RIB.`,
-          lien: "/admin/utilisateurs",
-        });
-      }
-    } catch (_e) { /* best-effort */ }
-    results[`${role}_canal`] = "EN_ATTENTE_IBAN";
-    allPaid = false;
   }
 
-  if (allPaid) {
-    await admin.from("parrainages").update({
-      statut: "PRIME_VERSEE",
-      prime_versee_le: new Date().toISOString(),
-    }).eq("id", parrainage_id);
+  const { data: paid, error: paidError } = await admin.from("parrainages")
+    .update({ statut: "PRIME_VERSEE", prime_versee_le: new Date().toISOString() })
+    .eq("id", parrainage_id)
+    .eq("statut", "VALIDE_EN_ATTENTE_SEUIL")
+    .eq("parrain_id", parrain_id)
+    .eq("filleul_id", filleul_id)
+    .select("id")
+    .maybeSingle();
+  if (paidError || !paid) {
+    return { ok: false, erreur: `PARRAINAGE_FINALISATION_FAILED:${paidError?.message || "state conflict"}` };
   }
 
-  await admin.rpc("fn_ecrire_audit_safe", {
+  const { data: audit, error: auditError } = await admin.rpc("fn_ecrire_audit_safe", {
     p_acteur_id: parrain_id,
     p_type_acteur: "SYSTEME",
     p_action: "PARRAINAGE_SOIGNANT_PRIME_VERSEE",
@@ -402,136 +678,36 @@ async function dispatchRecompenseParrainage(admin: any, action: ActionRow): Prom
     p_id_ressource: parrainage_id,
     p_details: results,
   });
+  if (auditError || audit?.success !== true) {
+    return { ok: false, erreur: `PARRAINAGE_AUDIT_FAILED:${auditError?.message || JSON.stringify(audit)}` };
+  }
 
   return { ok: true, resultat: results };
 }
 
 // Remboursement d'un avoir par virement SEPA SWAN (auto, fallback manuel admin).
 async function dispatchRemboursementAvoirSwan(admin: any, action: ActionRow): Promise<DispatchResult> {
-  const { avoir_id, montant } = action.payload;
+  const { avoir_id } = action.payload;
   if (!avoir_id) return { ok: false, erreur: "avoir_id requis" };
 
-  const { data: avoir } = await admin.from("factures_honoraires")
-    .select("id, numero_facture, soignant_id, mode_remboursement, date_remboursement, montant_ttc, montant_ht, type_document")
+  const { data: avoir, error: avoirError } = await admin.from("factures_honoraires")
+    .select("id, numero_facture, soignant_id, mode_remboursement, date_remboursement, montant_ttc, type_document, statut")
     .eq("id", avoir_id).maybeSingle();
-  if (!avoir) return { ok: false, erreur: "Avoir introuvable" };
+  if (avoirError || !avoir) {
+    return { ok: false, erreur: `Avoir introuvable:${avoirError?.message || avoir_id}` };
+  }
   if (avoir.type_document !== "AVOIR") return { ok: false, erreur: "Document non-avoir" };
   if (avoir.date_remboursement) return { ok: true, resultat: { skip: "déjà remboursé" } }; // idempotent
 
-  const { data: sg } = await admin.from("soignants")
-    .select("iban_virement, iban_titulaire, prenom, nom, email")
-    .eq("id", avoir.soignant_id).maybeSingle();
-  if (!sg?.iban_virement) {
-    return { ok: false, erreur: "IBAN manquant — bascule virement manuel admin" };
-  }
-
-  const m = Number(montant) || Number(avoir.montant_ttc) || Number(avoir.montant_ht) || 0;
-  if (m <= 0) return { ok: false, erreur: "Montant avoir invalide" };
-
-  const swan = await dispatchVersementSwan(
-    sg.iban_virement,
-    sg.iban_titulaire || `${sg.prenom || ""} ${sg.nom || ""}`.trim(),
-    m,
-    `Remboursement avoir Jolene ${avoir.numero_facture || avoir_id}`,
-    `rembavoir_${avoir_id}`,
-  );
-  if (!swan.ok) {
-    return { ok: false, erreur: `SWAN remboursement: ${swan.erreur}` }; // retry → sinon fallback manuel
-  }
-
-  const ref = `SWAN:${swan.resultat?.payment_id || "initiated"}`;
-  await admin.from("factures_honoraires").update({
-    statut: "REMBOURSE",
-    date_remboursement: new Date().toISOString(),
-    reference_remboursement: ref,
-  }).eq("id", avoir_id);
-
-  await admin.from("notifications").insert({
-    destinataire_id: avoir.soignant_id,
-    type_destinataire: "SOIGNANT",
-    type: "REMBOURSEMENT_CONFIRME",
-    titre: "💸 Remboursement envoyé",
-    corps: `Votre remboursement de ${m}€ (avoir ${avoir.numero_facture || ""}) part en virement SEPA — réception sous 1 à 2 jours ouvrés.`,
-    lien: "/soignant/mes-factures-honoraires",
-  });
-  await admin.from("email_queue").insert({
-    type: "REMBOURSEMENT_CONFIRME",
-    destinataire_id: avoir.soignant_id,
-    destinataire_email: sg.email ?? null,
-    data: { prenom: sg.prenom ?? null, montant: m, numero: avoir.numero_facture ?? null, reference: ref },
-  });
-
-  return { ok: true, resultat: { payment_id: swan.resultat?.payment_id, reference: ref } };
-}
-
-async function dispatchVersementSwan(
-  iban: string,
-  beneficiaryName: string,
-  amountEur: number,
-  reference: string,
-  idempotencyKey: string,
-): Promise<DispatchResult> {
-  try {
-    const { swanGraphQL, swanEnv } = await import("../_shared/swan-client.ts");
-    const env = swanEnv();
-    if (!env.clientId || !env.graphqlUrl) {
-      return { ok: false, erreur: "SWAN non configuré (SWAN_CLIENT_ID ou SWAN_GRAPHQL_URL manquant)" };
-    }
-
-    const mutation = `
-      mutation InitierVersementPrime($input: InitiateCreditTransfersInput!) {
-        initiateCreditTransfers(input: $input) {
-          ... on InitiateCreditTransfersSuccessPayload {
-            payment { id statusInfo { __typename } }
-          }
-          ... on AccountNotFoundRejection { message }
-          ... on ForbiddenRejection { message }
-          ... on InternalErrorRejection { message }
-          ... on ValidationRejection { message }
-        }
-      }
-    `;
-
-    const variables = {
-      input: {
-        accountId: env.accountId,
-        idempotencyKey,
-        consentRedirectUrl: "https://jolene.app/swan-callback",
-        creditTransfers: [{
-          amount: { value: amountEur.toFixed(2), currency: "EUR" },
-          sepaBeneficiary: {
-            iban,
-            name: beneficiaryName,
-            isMyOwnIban: false,
-            save: false,
-          },
-          reference: reference.slice(0, 35),
-          label: `Prime parrainage Jolene ${amountEur}€`,
-        }],
-      },
-    };
-
-    const result = await swanGraphQL(mutation, variables);
-
-    if (!result.ok) {
-      const errMsg = JSON.stringify(result.errors).slice(0, 300);
-      return { ok: false, erreur: `SWAN GraphQL error: ${errMsg}` };
-    }
-
-    const payload = (result.data as any)?.initiateCreditTransfers;
-    if (payload?.payment?.id) {
-      return { ok: true, resultat: { payment_id: payload.payment.id, status: payload.payment.statusInfo?.__typename } };
-    }
-
-    const rejection = payload?.message;
-    if (rejection) {
-      return { ok: false, erreur: `SWAN rejection: ${rejection}` };
-    }
-
-    return { ok: false, erreur: "SWAN: réponse inattendue" };
-  } catch (err) {
-    return { ok: false, erreur: `SWAN exception: ${(err as Error).message?.slice(0, 300)}` };
-  }
+  // Initier un Payment SWAN peut ne produire que ConsentPending. Sans binding
+  // S2S durable + webhook Booked exact, ce n'est jamais une preuve de virement.
+  // L'avoir reste donc EMISE et doit être confirmé via le RPC admin manuel
+  // après preuve bancaire ; aucun IBAN brut ni montant de payload n'est utilisé.
+  return {
+    ok: false,
+    erreur:
+      `REMBOURSEMENT_AVOIR_MANUEL_REQUIS:${avoir.id}:${avoir.numero_facture || "sans_numero"}`,
+  };
 }
 
 // ─── Chorus Pro ──────────────────────────────────────────────────────
@@ -555,39 +731,111 @@ async function dispatchChorusRecycle(admin: any, action: ActionRow): Promise<Dis
 async function dispatchDpaeAnnulation(admin: any, action: ActionRow): Promise<DispatchResult> {
   const { contrat_id, mission_id, motif } = action.payload;
   if (!contrat_id) return { ok: false, erreur: "contrat_id missing" };
+  if (
+    action.source !== "ANNULATION_MISSION"
+    || !mission_id
+    || action.source_id !== mission_id
+  ) {
+    return { ok: false, erreur: "DPAE_ACTION_PROVENANCE_MISMATCH" };
+  }
 
-  // Récupérer l'étab
-  const { data: contrat } = await admin.from("contrats_mission")
-    .select("etablissement_id, numero_contrat, type_contrat, dpae_numero")
+  const { data: contrat, error: contratError } = await admin.from("contrats_mission")
+    .select("id, mission_id, etablissement_id, numero_contrat, type_contrat, statut, dpae_numero")
     .eq("id", contrat_id).maybeSingle();
-  if (!contrat) return { ok: false, erreur: "contrat introuvable" };
+  if (contratError || !contrat) {
+    return { ok: false, erreur: `contrat introuvable:${contratError?.message || contrat_id}` };
+  }
+  if (
+    contrat.mission_id !== mission_id
+    || !["CDD", "CDDU", "VACATION"].includes(contrat.type_contrat)
+    || contrat.statut !== "RUPTURE_ETAB"
+  ) {
+    return { ok: false, erreur: "DPAE_CONTRAT_SALARIE_IDENTITY_MISMATCH" };
+  }
+
+  const { data: actionState, error: actionStateError } = await admin
+    .from("externalisation_actions")
+    .select("id, statut, resultat")
+    .eq("id", action.id)
+    .maybeSingle();
+  if (actionStateError || !actionState || actionState.statut !== "PROCESSING") {
+    return { ok: false, erreur: `DPAE_ACTION_STATE_MISMATCH:${actionStateError?.message || actionState?.statut}` };
+  }
+  const progress: Record<string, unknown> = {
+    ...((actionState.resultat && typeof actionState.resultat === "object")
+      ? actionState.resultat
+      : {}),
+  };
+  const persistProgress = async () => {
+    const { data, error } = await admin
+      .from("externalisation_actions")
+      .update({ resultat: progress, derniere_tentative_le: new Date().toISOString() })
+      .eq("id", action.id)
+      .eq("statut", "PROCESSING")
+      .select("id")
+      .maybeSingle();
+    if (error || !data) {
+      throw new Error(`DPAE_PROGRESS_PERSISTENCE_FAILED:${error?.message || "state conflict"}`);
+    }
+  };
 
   // Option A : email + push étab pour annulation manuelle Net-Entreprises
   // (Option B API tiers déclarant URSSAF = Sprint 5+)
-  await fetch(`${SUPABASE_URL}/functions/v1/send-email`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "Authorization": `Bearer ${SERVICE_ROLE_KEY}` },
-    body: JSON.stringify({
-      type: "DPAE_ANNULATION_RAPPEL",
-      destinataire_id: contrat.etablissement_id,
-      data: { numero_contrat: contrat.numero_contrat, motif, dpae_numero: contrat.dpae_numero,
-              url: "https://www.net-entreprises.fr/declaration-prealable-embauche/",
-              echeance_legale_h: 48 },
-    }),
-  });
-  await fetch(`${SUPABASE_URL}/functions/v1/send-push`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "Authorization": `Bearer ${SERVICE_ROLE_KEY}` },
-    body: JSON.stringify({
-      destinataire_id: contrat.etablissement_id,
-      type_evenement: "DPAE_ANNULATION_RAPPEL",
-      titre: "⚠️ Annulation DPAE à effectuer",
-      corps: `Contrat ${contrat.numero_contrat || ""} annulé. Annulez la DPAE sur Net-Entreprises sous 48h.`,
-      lien: `/contrat/${contrat_id}`,
-    }),
-  });
+  if (progress.email_sent !== true) {
+    const emailResponse = await fetch(`${SUPABASE_URL}/functions/v1/send-email`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${SERVICE_ROLE_KEY}` },
+      body: JSON.stringify({
+        type: "DPAE_ANNULATION_RAPPEL",
+        destinataire_id: contrat.etablissement_id,
+        data: {
+          contrat_id: contrat.id,
+          mission_id,
+          numero_contrat: contrat.numero_contrat,
+          type_contrat: contrat.type_contrat,
+          motif,
+          dpae_numero: contrat.dpae_numero,
+          url: "https://www.net-entreprises.fr/declaration-prealable-embauche/",
+          echeance_legale_h: 48,
+        },
+      }),
+    });
+    if (!emailResponse.ok) {
+      return { ok: false, erreur: `DPAE_EMAIL_FAILED:${emailResponse.status}` };
+    }
+    progress.email_sent = true;
+    await persistProgress();
+  }
+  if (progress.push_sent !== true) {
+    const pushResponse = await fetch(`${SUPABASE_URL}/functions/v1/send-push`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${SERVICE_ROLE_KEY}` },
+      body: JSON.stringify({
+        destinataire_id: contrat.etablissement_id,
+        type_evenement: "DPAE_ANNULATION_RAPPEL",
+        titre: "⚠️ Annulation DPAE à effectuer",
+        corps: `Contrat ${contrat.numero_contrat || ""} annulé. Annulez la DPAE sur Net-Entreprises sous 48h.`,
+        lien: `/contrat/${contrat_id}`,
+      }),
+    });
+    if (!pushResponse.ok) {
+      return { ok: false, erreur: `DPAE_PUSH_FAILED:${pushResponse.status}` };
+    }
+    progress.push_sent = true;
+    await persistProgress();
+  }
 
-  return { ok: true, resultat: { mode: "OPTION_A_MANUEL", etablissement_id: contrat.etablissement_id } };
+  return {
+    ok: true,
+    resultat: {
+      ...progress,
+      mode: "OPTION_A_MANUEL",
+      contrat_id: contrat.id,
+      mission_id,
+      etablissement_id: contrat.etablissement_id,
+      type_contrat: contrat.type_contrat,
+    },
+  };
 }
 
 // ─── Emails + Push (relais simples) ──────────────────────────────────
@@ -600,6 +848,64 @@ async function dispatchEmail(admin: any, action: ActionRow): Promise<DispatchRes
   });
   if (res.ok) return { ok: true, resultat: { status: res.status } };
   return { ok: false, erreur: `send-email ${res.status}` };
+}
+
+async function dispatchSmsOtp(admin: any, action: ActionRow): Promise<DispatchResult> {
+  const p = action.payload;
+  const code = typeof p?.data?.code === "string" ? p.data.code : "";
+  const telephone = typeof p?.telephone === "string" ? p.telephone : "";
+  if (
+    action.source !== "AUTRE"
+    || !action.source_id
+    || p?.type !== "OTP_VERIFICATION_TELEPHONE"
+    || !/^\d{6}$/.test(code)
+    || !telephone
+  ) {
+    return { ok: false, erreur: "SMS_OTP_PAYLOAD_INVALIDE" };
+  }
+
+  // La ligne OTP est la source métier. Une action forgée, périmée, déjà
+  // utilisée ou visant un autre numéro ne déclenche jamais un SMS.
+  const { data: otp, error: otpError } = await admin
+    .from("otps_telephone")
+    .select("id, user_id, telephone, utilise, expire_le")
+    .eq("id", action.source_id)
+    .maybeSingle();
+  if (otpError || !otp) {
+    return { ok: false, erreur: `SMS_OTP_SOURCE_INTROUVABLE:${otpError?.message || action.source_id}` };
+  }
+  if (otp.telephone !== telephone) {
+    return { ok: false, erreur: "SMS_OTP_TELEPHONE_MISMATCH" };
+  }
+  if (otp.utilise || Date.parse(otp.expire_le) <= Date.now()) {
+    return { ok: true, resultat: { skipped: true, reason: otp.utilise ? "otp_used" : "otp_expired" } };
+  }
+
+  const res = await fetch(`${SUPABASE_URL}/functions/v1/send-sms`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${SERVICE_ROLE_KEY}`,
+    },
+    body: JSON.stringify({
+      telephone,
+      type: "OTP_VERIFICATION_TELEPHONE",
+      contenu: `Votre code de vérification est ${code}. Il expire dans 10 minutes. Ne le partagez jamais.`,
+      destinataire_id: otp.user_id,
+      prefix_type: "OTP_VERIFICATION_TELEPHONE",
+    }),
+  });
+  const responseBody = await res.json().catch(() => null) as Record<string, any> | null;
+  if (res.ok && responseBody?.success === true) {
+    return {
+      ok: true,
+      resultat: { status: res.status, provider_id: responseBody.sid || null },
+    };
+  }
+  return {
+    ok: false,
+    erreur: `send-sms OTP ${res.status}:${responseBody?.error || "provider_error"}`,
+  };
 }
 
 async function dispatchPush(admin: any, action: ActionRow): Promise<DispatchResult> {
@@ -625,73 +931,24 @@ async function dispatchPush(admin: any, action: ActionRow): Promise<DispatchResu
 // ─── AVOIR PDF ───────────────────────────────────────────────────────
 
 async function dispatchAvoirPdf(admin: any, action: ActionRow): Promise<DispatchResult> {
-  const { mission_id, type, motif_avoir, montant, pourcentage, nouveau_montant, montant_indemnite } = action.payload;
+  const { mission_id } = action.payload;
   if (!mission_id) return { ok: false, erreur: "mission_id missing" };
-
-  // Récupérer mission + facture
-  const { data: mission } = await admin.from("missions")
-    .select("id, intitule, etablissement_id, soignant_assigne_id, debut_le, fin_le, duree_heures, taux_horaire_base")
-    .eq("id", mission_id).maybeSingle();
-  if (!mission) return { ok: false, erreur: "mission introuvable" };
-
-  // Calculer montant avoir
-  let montantHt: number;
-  const total = (mission.taux_horaire_base || 0) * (mission.duree_heures || 0);
-  if (montant) montantHt = montant;
-  else if (pourcentage) montantHt = total * (pourcentage / 100);
-  else if (nouveau_montant) montantHt = total - nouveau_montant;
-  else if (montant_indemnite) montantHt = montant_indemnite;
-  else montantHt = total; // TOTAL par défaut
-
-  // Générer numéro avoir AV-YYYYMM-XXXX
-  const date = new Date();
-  const yymm = `${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, "0")}`;
-  const numero = `AV-${yymm}-${Math.floor(Math.random() * 9999).toString().padStart(4, "0")}`;
-
-  // HTML simple de l'avoir
-  const html = `<!doctype html><html><head><meta charset="utf-8"><title>Avoir ${numero}</title>
-<style>body{font-family:Arial;color:#222;line-height:1.6;padding:40px;max-width:800px;margin:0 auto}
-h1{color:#d6336c}.box{background:#fef3f7;padding:16px;border-radius:8px;margin:16px 0}</style>
-</head><body>
-<h1>AVOIR ${numero}</h1>
-<p><strong>Date :</strong> ${date.toLocaleDateString("fr-FR")}</p>
-<p><strong>Motif :</strong> ${motif_avoir || type || "AJUSTEMENT"}</p>
-<div class="box">
-<p><strong>Mission :</strong> ${mission.intitule || "—"}</p>
-<p><strong>Période :</strong> ${mission.debut_le?.slice(0, 10) || "—"} → ${mission.fin_le?.slice(0, 10) || "—"}</p>
-<p><strong>Montant avoir HT :</strong> ${montantHt.toFixed(2)} €</p>
-<p><strong>Action source :</strong> ${action.source}</p>
-</div>
-<p><em>Avoir généré automatiquement suite à ${action.source === "LITIGE_EXEC" ? "résolution d'un litige" : "annulation de mission"}. Document à conserver pour comptabilité.</em></p>
-</body></html>`;
-
-  // Hash SHA-256 du PDF (en pratique on stocke le HTML, jsPDF côté front pour PDF binaire)
-  const hashBuf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(html));
-  const hash = Array.from(new Uint8Array(hashBuf)).map(b => b.toString(16).padStart(2, "0")).join("");
-
-  // Upload Storage bucket avoirs (si existe)
-  const path = `avoirs/${mission_id}/${numero}.html`;
-  const { error: uploadErr } = await admin.storage.from("jolene-documents")
-    .upload(path, new Blob([html], { type: "text/html" }), { upsert: false });
-  if (uploadErr && !uploadErr.message?.includes("Bucket not found")) {
-    // Si bucket existe mais erreur autre, on log mais continue
-    console.warn("[worker] avoir upload warning:", uploadErr.message);
+  const { data: mission, error: missionError } = await admin
+    .from("missions")
+    .select("id")
+    .eq("id", mission_id)
+    .maybeSingle();
+  if (missionError || !mission) {
+    return { ok: false, erreur: `mission introuvable:${missionError?.message || mission_id}` };
   }
 
-  // INSERT avoirs row
-  const { error: insertErr } = await admin.from("avoirs").insert({
-    facture_origine_type: "FACTURE_ETAB",
-    numero,
-    montant_ht: montantHt,
-    montant_ttc: montantHt, // exo TVA art. 261-4-1 CGI pour soins
-    motif: motif_avoir || (action.source === "LITIGE_EXEC" ? "LITIGE_ACCORD_MUTUEL" : "AUTRE"),
-    source_litige_id: action.source === "LITIGE_EXEC" ? action.source_id : null,
-    source_mission_id: mission_id,
-    pdf_storage_path: path,
-    emis_par: "00000000-0000-0000-0000-000000000000",
-    details: { type, hash_document: hash, action_payload: action.payload },
-  });
-  if (insertErr) return { ok: false, erreur: `INSERT avoir failed: ${insertErr.message}` };
-
-  return { ok: true, resultat: { numero, montant_ht: montantHt, path, hash } };
+  // L'ancien code stockait du HTML avec une extension .html tout en le
+  // présentant comme PDF comptable, avec numéro aléatoire et montant recalculé
+  // depuis la mission. Seul generate-invoice/Factur-X peut émettre le document
+  // légal à partir d'un AVOIR DB exact. Sans avoir_id dans cette action legacy,
+  // l'automatisme est explicitement bloqué pour revue admin.
+  return {
+    ok: false,
+    erreur: `AVOIR_PDF_CONFORME_REQUIERT_AVOIR_DB:${mission_id}`,
+  };
 }

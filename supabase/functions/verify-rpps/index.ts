@@ -314,8 +314,8 @@ async function setVerificationFalse(
   type: IdentifierType,
 ): Promise<boolean> {
   const fields = type === 'RPPS'
-    ? { rpps_verifie: false, rpps_verifie_le: null }
-    : { adeli_verifie: false, adeli_verifie_le: null };
+    ? { rpps_verifie: false, rpps_verifie_le: null, tous_documents_valides: false }
+    : { adeli_verifie: false, adeli_verifie_le: null, tous_documents_valides: false };
   const numberColumn = type === 'RPPS' ? 'numero_rpps' : 'numero_adeli';
   const admin = createClient(supabaseUrl, serviceRoleKey, {
     auth: { autoRefreshToken: false, persistSession: false },
@@ -329,6 +329,15 @@ async function setVerificationFalse(
   if (error || !data) {
     console.error('[verify-rpps] révocation impossible:', error?.code || error?.message || 'ROW_NOT_FOUND');
     return false;
+  }
+  const { error: recalcError } = await admin.rpc(
+    'fn_calculer_tous_documents_valides',
+    { p_soignant_id: profile.id },
+  );
+  if (recalcError) {
+    // Le cache a deja ete positionne a false par l'UPDATE ci-dessus : une
+    // panne de recalcul reste donc fail-closed, sans restaurer une preuve radiee.
+    console.error('[verify-rpps] recalcul documentaire impossible:', recalcError.code || recalcError.message);
   }
   return true;
 }

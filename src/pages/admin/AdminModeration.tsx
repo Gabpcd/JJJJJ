@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useState, useEffect } from 'react';
 import { LayoutAdmin } from '@/components/LayoutAdmin';
 import { ChargementAdmin } from '@/components/admin/ChargementAdmin';
 import { BreadcrumbAdmin } from '@/components/BreadcrumbAdmin';
@@ -13,7 +13,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
 import { FileCheck, MessageSquare, Check, X, Eye, ShieldAlert, EyeOff, GitBranch, Plus } from 'lucide-react';
 import { usePageTitle } from '@/hooks/usePageTitle';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { LitigesFilters } from '@/components/admin/litiges/LitigesFilters';
 import { LitigesList, filtrerEtTrier } from '@/components/admin/litiges/LitigesList';
 import { LitigePreuvesPanel } from '@/components/admin/litiges/LitigePreuvesPanel';
@@ -23,13 +23,21 @@ import { LegacyRecategorisation } from '@/components/admin/litiges/LegacyRecateg
 import { MediationBanner } from '@/components/admin/litiges/MediationBanner';
 import { RefundsQueueWidget } from '@/components/admin/litiges/RefundsQueueWidget';
 import { telechargerCsv } from '@/components/admin/litiges/csv';
-import { Download, Receipt, Tag } from 'lucide-react';
+import { Download, Receipt, RefreshCw, Tag } from 'lucide-react';
 import {
   FILTRES_DEFAUT,
   type FiltresLitiges,
   type LitigeEnrichi,
 } from '@/components/admin/litiges/types';
 import { TYPES_DOCUMENTS } from '@/lib/documents';
+import {
+  buildDocumentCasSnapshot,
+  DocumentModerationCard,
+  DocumentValidationDialog,
+  type DocumentModerationEntry,
+  type DocumentModerationProfile,
+  type DocumentValidationPayload,
+} from '@/components/admin/DocumentModerationReview';
 
 // Libellés français affichés à l'écran — les valeurs envoyées aux RPCs restent inchangées.
 const LABELS_TYPE_LITIGE_FORCE: Record<string, string> = {
@@ -69,13 +77,17 @@ const formatDate = (d?: string | null) =>
 export default function AdminModeration() {
   usePageTitle('Modération');
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [litiges, setLitiges] = useState<LitigeEnrichi[]>([]);
   const [evaluations, setEvaluations] = useState<any[]>([]);
-  const [documents, setDocuments] = useState<any[]>([]);
-  const [documentARejeter, setDocumentARejeter] = useState<any | null>(null);
+  const [documents, setDocuments] = useState<DocumentModerationEntry[]>([]);
+  const [documentARejeter, setDocumentARejeter] = useState<DocumentModerationEntry | null>(null);
+  const [documentAValider, setDocumentAValider] = useState<DocumentModerationEntry | null>(null);
+  const [moderationDocumentLoading, setModerationDocumentLoading] = useState(false);
   const [motifRejetDocument, setMotifRejetDocument] = useState('');
   const [incoherences, setIncoherences] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [erreurChargement, setErreurChargement] = useState<string | null>(null);
 
   const [filtres, setFiltres] = useState<FiltresLitiges>(FILTRES_DEFAUT);
   const [mediationCount, setMediationCount] = useState<number>(0);
@@ -87,7 +99,9 @@ export default function AdminModeration() {
   const [resolutionLitige, setResolutionLitige] = useState<LitigeEnrichi | null>(null);
   const [resolutionOpen, setResolutionOpen] = useState(false);
 
-  const [activeTab, setActiveTab] = useState<string>('litiges');
+  const [activeTab, setActiveTab] = useState<string>(
+    searchParams.get('onglet') === 'documents' ? 'documents' : 'litiges',
+  );
 
   // Task 5 — masquer notation
   const [masquerNotationId, setMasquerNotationId] = useState<string | null>(null);
@@ -108,10 +122,12 @@ export default function AdminModeration() {
   const [gelScopeRaison, setGelScopeRaison] = useState('');
   const [gelScopeLoading, setGelScopeLoading] = useState(false);
 
-  const charger = async () => {
+  const charger = useCallback(async () => {
     setLoading(true);
+    setErreurChargement(null);
 
-    const [resLitiges, resEvals, resDocs, resIncoherences] = await Promise.all([
+    try {
+      const [resLitiges, resEvals, resDocs, resIncoherences] = await Promise.all([
       supabase
         .from('litiges')
         .select(
@@ -127,18 +143,18 @@ export default function AdminModeration() {
         .limit(50),
       supabase
         .from('documents_soignants')
-        .select('id, nom_fichier, type_document, soignant_id, televerse_le, s3_bucket, s3_cle, statut_verification, motif_rejet')
-        .in('statut_verification', ['EN_ATTENTE', 'REVUE_MANUELLE_REQUISE'])
+        .select('id, nom_fichier, type_document, soignant_id, televerse_le, modifie_le, s3_bucket, s3_cle, s3_version_id, type_mime, taille_octets, statut_verification, motif_rejet, resultat_ia, nom_extrait_ia, prenom_extrait_ia, score_confiance_ia, coherence_nom, valide_depuis, valide_jusqua')
+        .in('statut_verification', ['EN_ATTENTE', 'REVUE_MANUELLE_REQUISE', 'API_INDISPONIBLE'])
         .is('supprime_le', null)
         .order('televerse_le', { ascending: true })
         .limit(50),
       supabase.rpc('fn_admin_incoherences_identite' as any),
     ]);
 
-    if (resLitiges.error || resEvals.error || resDocs.error) {
-      toast.error('Impossible de charger les données de modération.');
-    }
-    if (resIncoherences.data) setIncoherences(resIncoherences.data as any[] || []);
+      if (resLitiges.error || resEvals.error || resDocs.error || resIncoherences.error) {
+        throw resLitiges.error || resEvals.error || resDocs.error || resIncoherences.error;
+      }
+      setIncoherences((resIncoherences.data as any[] | null) || []);
 
     const litigesBruts = (resLitiges.data ?? []) as LitigeEnrichi[];
 
@@ -158,6 +174,10 @@ export default function AdminModeration() {
           ? supabase.from('missions').select('id, intitule, profession_requise, service, debut_le, fin_le, statut').in('id', missionIds)
           : Promise.resolve({ data: [], error: null } as any),
       ]);
+
+      if (resSoignants.error || resEtablissements.error || resMissions.error) {
+        throw resSoignants.error || resEtablissements.error || resMissions.error;
+      }
 
       const soignantsMap = new Map<string, LitigeEnrichi['soignant']>((resSoignants.data ?? []).map((item: any) => [item.id, item]));
       const etablissementsMap = new Map<string, LitigeEnrichi['etablissement']>((resEtablissements.data ?? []).map((item: any) => [item.id, item]));
@@ -184,10 +204,14 @@ export default function AdminModeration() {
       const evalMissionIds = [...new Set(evalsBruts.map(e => e.mission_id).filter(Boolean))];
 
       const [resSg, resEt, resM] = await Promise.all([
-        allUserIds.length ? supabase.from('soignants').select('id, prenom, nom').in('id', allUserIds) : Promise.resolve({ data: [] } as any),
-        allUserIds.length ? supabase.from('etablissements').select('id, nom').in('id', allUserIds) : Promise.resolve({ data: [] } as any),
-        evalMissionIds.length ? supabase.from('missions').select('id, intitule').in('id', evalMissionIds) : Promise.resolve({ data: [] } as any),
+        allUserIds.length ? supabase.from('soignants').select('id, prenom, nom').in('id', allUserIds) : Promise.resolve({ data: [], error: null } as any),
+        allUserIds.length ? supabase.from('etablissements').select('id, nom').in('id', allUserIds) : Promise.resolve({ data: [], error: null } as any),
+        evalMissionIds.length ? supabase.from('missions').select('id, intitule').in('id', evalMissionIds) : Promise.resolve({ data: [], error: null } as any),
       ]);
+
+      if (resSg.error || resEt.error || resM.error) {
+        throw resSg.error || resEt.error || resM.error;
+      }
 
       const nameMap: Record<string, string> = {};
       for (const s of (resSg.data ?? [])) nameMap[s.id] = `${s.prenom || ''} ${s.nom || ''}`.trim();
@@ -204,7 +228,45 @@ export default function AdminModeration() {
     } else {
       setEvaluations([]);
     }
-    if (resDocs.data) setDocuments(resDocs.data);
+    const docsBruts = (resDocs.data ?? []) as Omit<DocumentModerationEntry, 'soignant' | 'exige_expiration'>[];
+    if (docsBruts.length > 0) {
+      const soignantIds = [...new Set(docsBruts.map((document) => document.soignant_id))];
+      const typesDocuments = [...new Set(docsBruts.map((document) => document.type_document))];
+      const { data: profils, error: profilsError } = await supabase
+        .from('soignants')
+        .select('id, prenom, nom, email, profession, date_naissance, numero_rpps, numero_adeli, rpps_verifie, adeli_verifie, modifie_le')
+        .in('id', soignantIds)
+        .is('supprime_le', null);
+      const professions = [...new Set((profils ?? []).map((profil: any) => profil.profession).filter(Boolean))];
+      const { data: regles, error: reglesError } = professions.length > 0
+        ? await supabase
+          .from('documents_requis_par_profession')
+          .select('profession, type_document, a_expiration')
+          .in('profession', professions)
+          .in('type_document', typesDocuments as any[])
+        : { data: [], error: null };
+
+      if (profilsError || reglesError) {
+        throw profilsError || reglesError;
+      }
+      const profilsMap = new Map<string, DocumentModerationProfile>(
+        ((profils ?? []) as DocumentModerationProfile[]).map((profil) => [profil.id, profil]),
+      );
+      const expirationMap = new Map<string, boolean>();
+      for (const regle of (regles ?? []) as any[]) {
+        const cle = `${regle.profession}:${regle.type_document}`;
+        expirationMap.set(cle, expirationMap.get(cle) === true || regle.a_expiration === true);
+      }
+      setDocuments(docsBruts.map((document) => {
+        const profil = profilsMap.get(document.soignant_id) ?? null;
+        const exigeExpiration = profil?.profession
+          ? expirationMap.get(`${profil.profession}:${document.type_document}`) === true
+          : false;
+        return { ...document, soignant: profil, exige_expiration: exigeExpiration };
+      }));
+    } else {
+      setDocuments([]);
+    }
 
     // Count litiges EN_MEDIATION depuis plus de 7 jours (escalade_auto_le < now - 7d).
     const seuilIso = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
@@ -213,14 +275,20 @@ export default function AdminModeration() {
       .select('id', { count: 'exact', head: true })
       .eq('statut', 'EN_MEDIATION')
       .lt('escalade_auto_le', seuilIso);
-    if (!errMed) setMediationCount(medCount ?? 0);
-
-    setLoading(false);
-  };
+    if (errMed) throw errMed;
+    setMediationCount(medCount ?? 0);
+    } catch {
+      const message = 'Les données de modération n’ont pas pu être chargées. Vérifiez votre connexion puis réessayez.';
+      setErreurChargement(message);
+      toast.error(message);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    charger();
-  }, []);
+    void charger();
+  }, [charger]);
 
   const publierEvaluation = async (id: string) => {
     const { data, error } = await supabase.rpc('fn_admin_moderer_evaluation' as any, { p_evaluation_id: id, p_action: 'PUBLIER' });
@@ -236,27 +304,52 @@ export default function AdminModeration() {
     charger();
   };
 
-  const validerDocument = async (id: string) => {
-    const { data, error } = await supabase.rpc('fn_admin_moderer_document' as any, { p_document_id: id, p_action: 'VALIDER' });
-    if (error || (data as any)?.error) { toast.error('Une erreur est survenue. Veuillez réessayer.'); return; }
-    toast.success('Document validé');
-    charger();
+  const validerDocument = async (document: DocumentModerationEntry, payload: DocumentValidationPayload) => {
+    setModerationDocumentLoading(true);
+    const { data, error } = await supabase.rpc('fn_admin_moderer_document' as any, {
+      p_document_id: document.id,
+      p_action: 'VALIDER',
+      p_motif: null,
+      p_validation_manuelle: payload.validation,
+      p_raison_override: payload.raisonOverride,
+    });
+    setModerationDocumentLoading(false);
+    if (error || (data as any)?.error) {
+      toast.error(error?.message || (data as any)?.error || 'La validation a été refusée. Rechargez le document et vérifiez tous les champs.');
+      return;
+    }
+    toast.success((data as any)?.source === 'ADMIN_OVERRIDE_EXCEPTIONNEL'
+      ? 'Document validé avec dérogation exceptionnelle tracée'
+      : 'Document validé après contrôles');
+    setDocumentAValider(null);
+    await charger();
   };
 
-  const rejeterDocument = async (id: string, motif: string) => {
+  const rejeterDocument = async (document: DocumentModerationEntry, motif: string) => {
     if (motif.trim().length < 10) {
       toast.error('Le motif doit contenir au moins 10 caractères.');
       return;
     }
-    const { data, error } = await supabase.rpc('fn_admin_moderer_document' as any, { p_document_id: id, p_action: 'REJETER', p_motif: motif.trim() });
-    if (error || (data as any)?.error) { toast.error('Une erreur est survenue. Veuillez réessayer.'); return; }
+    setModerationDocumentLoading(true);
+    const { data, error } = await supabase.rpc('fn_admin_moderer_document' as any, {
+      p_document_id: document.id,
+      p_action: 'REJETER',
+      p_motif: motif.trim(),
+      p_validation_manuelle: buildDocumentCasSnapshot(document),
+      p_raison_override: null,
+    });
+    setModerationDocumentLoading(false);
+    if (error || (data as any)?.error) {
+      toast.error(error?.message || (data as any)?.error || 'Le rejet a été refusé. Rechargez la file de modération.');
+      return;
+    }
     toast.success('Document rejeté');
     setDocumentARejeter(null);
     setMotifRejetDocument('');
     charger();
   };
 
-  const voirDocument = async (document: any) => {
+  const voirDocument = async (document: DocumentModerationEntry) => {
     const preview = window.open('about:blank', '_blank');
     if (!preview) {
       toast.error('Autorisez les fenêtres contextuelles pour consulter le document.');
@@ -278,7 +371,7 @@ export default function AdminModeration() {
   // Task 5 — masquer notation
   const masquerNotation = async () => {
     if (!masquerNotationId) return;
-    if (!masquerRaison.trim()) { toast.error('Raison obligatoire (RGPD audit).'); return; }
+    if (!masquerRaison.trim()) { toast.error('Raison obligatoire pour la traçabilité.'); return; }
     setMasquerLoading(true);
     const { data, error } = await supabase.rpc('fn_admin_masquer_notation' as any, {
       p_notation_id: masquerNotationId,
@@ -296,7 +389,7 @@ export default function AdminModeration() {
   const creerLitigeForce = async () => {
     if (!creerLitigeMissionId.trim()) { toast.error('ID de mission requis.'); return; }
     if (!creerLitigeMotif.trim()) { toast.error('Motif obligatoire.'); return; }
-    if (!creerLitigeRaison.trim()) { toast.error('Raison bypass obligatoire (RGPD audit).'); return; }
+    if (!creerLitigeRaison.trim()) { toast.error('Justification de la dérogation obligatoire.'); return; }
     setCreerLitigeLoading(true);
     const { data, error } = await supabase.rpc('fn_admin_creer_litige_force' as any, {
       p_mission_id: creerLitigeMissionId.trim(),
@@ -318,7 +411,7 @@ export default function AdminModeration() {
   const modifierGelScope = async () => {
     if (!gelScopeLitigeId) return;
     if (!gelScopeNouveauScope.trim()) { toast.error('Veuillez sélectionner un périmètre de gel.'); return; }
-    if (!gelScopeRaison.trim()) { toast.error('Raison obligatoire (RGPD audit).'); return; }
+    if (!gelScopeRaison.trim()) { toast.error('Raison obligatoire pour la traçabilité.'); return; }
     setGelScopeLoading(true);
     const { data, error } = await supabase.rpc('fn_admin_modifier_gel_scope_litige' as any, {
       p_litige_id: gelScopeLitigeId,
@@ -335,6 +428,28 @@ export default function AdminModeration() {
   };
 
   if (loading) return <LayoutAdmin><ChargementAdmin titre="Modération" /></LayoutAdmin>;
+
+  if (erreurChargement) {
+    return (
+      <LayoutAdmin>
+        <BreadcrumbAdmin pageName="Modération" />
+        <div role="alert" className="rounded-xl border border-destructive/30 bg-destructive/5 p-6 text-center">
+          <ShieldAlert className="mx-auto h-8 w-8 text-destructive" />
+          <h1 className="mt-3 text-lg font-bold text-foreground">Modération indisponible</h1>
+          <p className="mt-1 text-sm text-muted-foreground">{erreurChargement}</p>
+          <BoutonY2K
+            variant="secondary"
+            size="sm"
+            className="mt-4 min-h-[44px] gap-2"
+            onClick={() => void charger()}
+            iconeGauche={<RefreshCw className="h-4 w-4" />}
+          >
+            Réessayer
+          </BoutonY2K>
+        </div>
+      </LayoutAdmin>
+    );
+  }
 
   return (
     <LayoutAdmin>
@@ -381,10 +496,10 @@ export default function AdminModeration() {
                 size="sm"
                 variant="secondary"
                 onClick={() => { setShowCreerLitige(true); setCreerLitigeMissionId(''); setCreerLitigeMotif(''); setCreerLitigeRaison(''); }}
-                aria-label="Créer un litige en bypass admin"
+                aria-label="Créer un litige par dérogation admin"
                 iconeGauche={<Plus className="h-3.5 w-3.5" />}
               >
-                Créer litige (bypass)
+                Créer un litige par dérogation
               </BoutonY2K>
               <BoutonY2K
                 size="sm"
@@ -497,61 +612,29 @@ export default function AdminModeration() {
             )}
           </TabsContent>
 
-          <TabsContent value="documents">
-            {/* Desktop : table */}
-            <div className="hidden md:block overflow-x-auto rounded-lg border">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Fichier</TableHead>
-                    <TableHead>Type</TableHead>
-                    <TableHead>Date</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {documents.map((d) => (
-                    <TableRow key={d.id}>
-                      <TableCell className="max-w-[200px] truncate font-medium">{d.nom_fichier}</TableCell>
-                      <TableCell><BadgeY2K variant="info" size="sm">{libelleTypeDocument(d.type_document)}</BadgeY2K></TableCell>
-                      <TableCell className="text-xs text-muted-foreground">{d.televerse_le ? formatDate(d.televerse_le) : '—'}</TableCell>
-                      <TableCell className="space-x-1 text-right">
-                        <BoutonY2K size="sm" variant="ghost" onClick={() => voirDocument(d)} iconeGauche={<Eye className="h-3.5 w-3.5" />}>Voir</BoutonY2K>
-                        <BoutonY2K size="sm" variant="secondary" onClick={() => validerDocument(d.id)} iconeGauche={<Check className="h-3.5 w-3.5" />}>Valider</BoutonY2K>
-                        <BoutonY2K size="sm" variant="destructive" onClick={() => { setDocumentARejeter(d); setMotifRejetDocument(''); }} iconeGauche={<X className="h-3.5 w-3.5" />}>Rejeter</BoutonY2K>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                  {documents.length === 0 && <TableRow><TableCell colSpan={4} className="py-8 text-center text-muted-foreground">Aucun document en attente</TableCell></TableRow>}
-                </TableBody>
-              </Table>
+          <TabsContent value="documents" className="space-y-4">
+            <div className="rounded-xl border border-jolene-mauve-300 bg-jolene-mauve-100/60 p-3 text-sm text-jolene-mauve-800">
+              Une validation exige l’ouverture de la preuve, la comparaison avec l’identité et la profession du profil, puis la confirmation des contrôles propres au type de document. Toute modification concurrente bloque la décision.
             </div>
-
-            {/* Mobile : cards */}
-            <div className="md:hidden space-y-3">
-              {documents.length === 0 ? (
-                <p className="py-8 text-center text-sm text-muted-foreground">Aucun document en attente</p>
-              ) : documents.map((d) => (
-                <div key={d.id} className="rounded-xl border border-border bg-card p-3 space-y-2">
-                  <div className="flex items-start justify-between gap-2">
-                    <p className="font-medium text-sm break-words flex-1 min-w-0">{d.nom_fichier}</p>
-                    <BadgeY2K variant="info" size="sm" className="shrink-0">{libelleTypeDocument(d.type_document)}</BadgeY2K>
-                  </div>
-                  <p className="text-[11px] text-muted-foreground">{d.televerse_le ? `Téléversé le ${formatDate(d.televerse_le)}` : 'Date inconnue'}</p>
-                  <BoutonY2K size="sm" variant="ghost" className="w-full" onClick={() => voirDocument(d)} iconeGauche={<Eye className="h-3.5 w-3.5" />}>
-                    Ouvrir le document
-                  </BoutonY2K>
-                  <div className="grid grid-cols-2 gap-2">
-                    <BoutonY2K size="sm" variant="secondary" className="min-h-[36px]" onClick={() => validerDocument(d.id)} iconeGauche={<Check className="h-3.5 w-3.5" />}>
-                      Valider
-                    </BoutonY2K>
-                    <BoutonY2K size="sm" variant="destructive" className="min-h-[36px]" onClick={() => { setDocumentARejeter(d); setMotifRejetDocument(''); }} iconeGauche={<X className="h-3.5 w-3.5" />}>
-                      Rejeter
-                    </BoutonY2K>
-                  </div>
-                </div>
-              ))}
-            </div>
+            {documents.length === 0 ? (
+              <p className="py-8 text-center text-sm text-muted-foreground">Aucun document en attente</p>
+            ) : (
+              <div className="space-y-4">
+                {documents.map((document) => (
+                  <DocumentModerationCard
+                    key={document.id}
+                    document={document}
+                    typeLabel={libelleTypeDocument(document.type_document)}
+                    onOpen={voirDocument}
+                    onValidate={(entry) => setDocumentAValider(entry)}
+                    onReject={(entry) => {
+                      setDocumentARejeter(entry);
+                      setMotifRejetDocument('');
+                    }}
+                  />
+                ))}
+              </div>
+            )}
           </TabsContent>
 
           <TabsContent value="incoherences" className="space-y-4">
@@ -671,7 +754,16 @@ export default function AdminModeration() {
         </Tabs>
       </div>
 
-      {/* Task 5 — Modal masquer notation */}
+      {documentAValider && (
+        <DocumentValidationDialog
+          document={documentAValider}
+          typeLabel={libelleTypeDocument(documentAValider.type_document)}
+          loading={moderationDocumentLoading}
+          onCancel={() => !moderationDocumentLoading && setDocumentAValider(null)}
+          onConfirm={(payload) => validerDocument(documentAValider, payload)}
+        />
+      )}
+
       {documentARejeter && (
         <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={() => setDocumentARejeter(null)}>
           <div role="dialog" aria-modal="true" aria-labelledby="titre-rejet-document" className="bg-card border border-border rounded-2xl max-w-md w-full p-6 space-y-4" onClick={(e) => e.stopPropagation()}>
@@ -682,8 +774,8 @@ export default function AdminModeration() {
               <Textarea value={motifRejetDocument} onChange={(e) => setMotifRejetDocument(e.target.value)} rows={4} placeholder="Ex. : le document est illisible sur la page 2…" />
             </label>
             <div className="flex gap-2 justify-end">
-              <BoutonY2K variant="secondary" onClick={() => setDocumentARejeter(null)}>Annuler</BoutonY2K>
-              <BoutonY2K variant="destructive" disabled={motifRejetDocument.trim().length < 10} onClick={() => rejeterDocument(documentARejeter.id, motifRejetDocument)}>Confirmer le rejet</BoutonY2K>
+              <BoutonY2K variant="secondary" onClick={() => setDocumentARejeter(null)} disabled={moderationDocumentLoading}>Annuler</BoutonY2K>
+              <BoutonY2K variant="destructive" loading={moderationDocumentLoading} disabled={motifRejetDocument.trim().length < 10 || moderationDocumentLoading} onClick={() => rejeterDocument(documentARejeter, motifRejetDocument)}>Confirmer le rejet</BoutonY2K>
             </div>
           </div>
         </div>
@@ -691,11 +783,11 @@ export default function AdminModeration() {
 
       {masquerNotationId && (
         <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={() => setMasquerNotationId(null)}>
-          <div className="bg-card border border-border rounded-2xl max-w-md w-full p-6 space-y-4 max-h-[90dvh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <h2 className="text-lg font-bold text-foreground">Masquer la notation</h2>
+          <div role="dialog" aria-modal="true" aria-labelledby="titre-masquer-notation" className="bg-card border border-border rounded-2xl max-w-md w-full p-6 space-y-4 max-h-[90dvh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <h2 id="titre-masquer-notation" className="text-lg font-bold text-foreground">Masquer la notation</h2>
             <p className="text-xs text-muted-foreground">Masquer cette évaluation des vues publiques. La raison est tracée à des fins RGPD.</p>
             <label className="block">
-              <span className="text-xs font-medium text-foreground mb-1 block">Raison * (RGPD audit)</span>
+              <span className="text-xs font-medium text-foreground mb-1 block">Raison * (journalisée)</span>
               <Textarea value={masquerRaison} onChange={(e) => setMasquerRaison(e.target.value)} rows={3} placeholder="Raison du masquage…" disabled={masquerLoading} />
             </label>
             <div className="flex gap-2">
@@ -706,12 +798,12 @@ export default function AdminModeration() {
         </div>
       )}
 
-      {/* Task 7 — Modal créer litige (bypass) */}
+      {/* Création exceptionnelle d’un litige par un administrateur. */}
       {showCreerLitige && (
         <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={() => setShowCreerLitige(false)}>
-          <div className="bg-card border border-border rounded-2xl max-w-md w-full p-6 space-y-4 max-h-[90dvh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <h2 className="text-lg font-bold text-foreground">Créer un litige (bypass admin)</h2>
-            <p className="text-xs text-muted-foreground">Crée un litige sans validation normale. Raison de bypass tracée RGPD.</p>
+          <div role="dialog" aria-modal="true" aria-labelledby="titre-creer-litige-derogation" className="bg-card border border-border rounded-2xl max-w-md w-full p-6 space-y-4 max-h-[90dvh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <h2 id="titre-creer-litige-derogation" className="text-lg font-bold text-foreground">Créer un litige par dérogation</h2>
+            <p className="text-xs text-muted-foreground">Crée exceptionnellement un litige sans passer par le parcours habituel. La justification est journalisée.</p>
             <label className="block">
               <span className="text-xs font-medium text-foreground mb-1 block">ID de mission *</span>
               <Input value={creerLitigeMissionId} onChange={(e) => setCreerLitigeMissionId(e.target.value)} placeholder="Identifiant de la mission" disabled={creerLitigeLoading} />
@@ -729,8 +821,8 @@ export default function AdminModeration() {
               <Textarea value={creerLitigeMotif} onChange={(e) => setCreerLitigeMotif(e.target.value)} rows={2} placeholder="Motif du litige…" disabled={creerLitigeLoading} />
             </label>
             <label className="block">
-              <span className="text-xs font-medium text-foreground mb-1 block">Raison bypass * (RGPD audit)</span>
-              <Textarea value={creerLitigeRaison} onChange={(e) => setCreerLitigeRaison(e.target.value)} rows={2} placeholder="Pourquoi ce bypass est nécessaire…" disabled={creerLitigeLoading} />
+              <span className="text-xs font-medium text-foreground mb-1 block">Justification de la dérogation * (journalisée)</span>
+              <Textarea value={creerLitigeRaison} onChange={(e) => setCreerLitigeRaison(e.target.value)} rows={2} placeholder="Pourquoi cette dérogation est-elle nécessaire ?" disabled={creerLitigeLoading} />
             </label>
             <div className="flex gap-2">
               <BoutonY2K variant="secondary" onClick={() => setShowCreerLitige(false)} disabled={creerLitigeLoading}>Annuler</BoutonY2K>
@@ -743,8 +835,8 @@ export default function AdminModeration() {
       {/* Task 8 — Modal modifier gel scope litige */}
       {gelScopeLitigeId && (
         <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={() => setGelScopeLitigeId(null)}>
-          <div className="bg-card border border-border rounded-2xl max-w-md w-full p-6 space-y-4 max-h-[90dvh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <h2 className="text-lg font-bold text-foreground inline-flex items-center gap-2"><GitBranch className="h-5 w-5" />Modifier le périmètre de gel</h2>
+          <div role="dialog" aria-modal="true" aria-labelledby="titre-modifier-perimetre-gel" className="bg-card border border-border rounded-2xl max-w-md w-full p-6 space-y-4 max-h-[90dvh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <h2 id="titre-modifier-perimetre-gel" className="text-lg font-bold text-foreground inline-flex items-center gap-2"><GitBranch className="h-5 w-5" />Modifier le périmètre de gel</h2>
             <p className="text-xs text-muted-foreground">Modifie le périmètre de gel du litige. Action tracée RGPD.</p>
             <label className="block">
               <span className="text-xs font-medium text-foreground mb-1 block">Nouveau périmètre de gel *</span>
@@ -756,7 +848,7 @@ export default function AdminModeration() {
               </select>
             </label>
             <label className="block">
-              <span className="text-xs font-medium text-foreground mb-1 block">Raison * (RGPD audit)</span>
+              <span className="text-xs font-medium text-foreground mb-1 block">Raison * (journalisée)</span>
               <Textarea value={gelScopeRaison} onChange={(e) => setGelScopeRaison(e.target.value)} rows={2} placeholder="Raison de la modification…" disabled={gelScopeLoading} />
             </label>
             <div className="flex gap-2">

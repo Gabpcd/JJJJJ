@@ -35,6 +35,11 @@ export default function PrevoyanceSoignant() {
 
   // Calculateur
   const [revenuMensuel, setRevenuMensuel] = useState<number>(3500);
+  // Le calculateur ne propose pas « Indifférent » : son état doit donc être
+  // distinct du niveau de la liste d'attente, qui peut légitimement valoir
+  // INDIFFERENT. Sinon le navigateur affiche visuellement la première option
+  // (Bronze) tandis que React calcule encore avec INDIFFERENT (0 %).
+  const [niveauCalcul, setNiveauCalcul] = useState<Exclude<Niveau, 'INDIFFERENT'>>('BRONZE');
 
   useEffect(() => {
     if (!user) { setLoading(false); return; }
@@ -75,7 +80,7 @@ export default function PrevoyanceSoignant() {
     }
   };
 
-  const niveauChoisi = NIVEAUX.find(n => n.valeur === niveau);
+  const niveauChoisi = NIVEAUX.find(n => n.valeur === niveauCalcul);
   const perte30j = revenuMensuel; // perte sur 30j d'arrêt = 1 mois de revenu (simplification)
   const couvertureCalc = niveauChoisi && niveauChoisi.tauxRemplacement > 0
     ? Math.round((perte30j * niveauChoisi.tauxRemplacement) / 100)
@@ -134,8 +139,8 @@ export default function PrevoyanceSoignant() {
               <label htmlFor="prevoyance-niveau-calcul" className="text-xs font-medium text-foreground mb-1 block">Niveau de couverture</label>
               <select
                 id="prevoyance-niveau-calcul"
-                value={niveau}
-                onChange={(e) => setNiveau(e.target.value as Niveau)}
+                value={niveauCalcul}
+                onChange={(e) => setNiveauCalcul(e.target.value as Exclude<Niveau, 'INDIFFERENT'>)}
                 className="w-full px-3 py-2 text-sm rounded-lg border border-border bg-background"
               >
                 {NIVEAUX.filter(n => n.valeur !== 'INDIFFERENT').map(n => (

@@ -168,6 +168,14 @@ export function BlocContratTravailMission({
 
   const download = async () => {
     if (!contrat) return;
+
+    const preview = window.open('about:blank', '_blank');
+    if (!preview) {
+      toast.error('Autorisez les fenêtres contextuelles pour consulter le contrat.');
+      return;
+    }
+    preview.opener = null;
+
     setDownloading(true);
     try {
       // Le soignant n'est pas propriétaire du préfixe Storage de
@@ -178,8 +186,9 @@ export function BlocContratTravailMission({
       });
       if (error) throw error;
       if (!data?.signed_url) throw new Error('Lien de téléchargement indisponible');
-      window.open(data.signed_url, '_blank', 'noopener,noreferrer');
+      preview.location.replace(data.signed_url);
     } catch (err: any) {
+      preview.close();
       toast.error(err?.message || 'Erreur téléchargement');
     } finally {
       setDownloading(false);

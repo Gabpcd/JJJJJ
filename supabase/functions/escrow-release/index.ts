@@ -20,9 +20,13 @@
  * Auth : Bearer service_role (env) ou secret vault (pg_cron).
  * NO-OP si flag ⚡ = 0 (escrow_release_queue vide).
  */
-import Stripe from "npm:stripe@18.5.0";
+import Stripe from "npm:stripe@20.4.1";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { assertStripeSecretMode } from "../_shared/stripe-production.ts";
+import {
+  type EscrowPayoutExpectation,
+  requireExactEscrowPayout,
+} from "../_shared/stripe-escrow-payout.ts";
 
 let _vaultSecret: string | null = null;
 async function bearerAutorise(req: Request, admin: any): Promise<boolean> {
@@ -47,20 +51,102 @@ const BACKOFF_MS = 30 * 60 * 1000; // 30 min entre 2 essais si fonds pas encore 
 // run #11 du 09/07/2026). Le service_role bypasse la RLS : l'insert direct est
 // fiable. Les fonctions DB (triggers, RPC SQL) continuent d'utiliser le wrapper.
 async function auditEscrow(admin: any, action: string, missionId: string | null, details: unknown) {
-  try {
-    const { error } = await admin.from("journaux_audit").insert({
-      acteur_id: "00000000-0000-0000-0000-000000000000",
-      type_acteur: "SYSTEME",
-      action,
-      type_ressource: "mission",
-      id_ressource: missionId,
-      cle_s3_ressource: null,
-      details: details ?? null,
-      ip_acteur: null,
-      navigateur_acteur: "escrow-release",
-    });
-    if (error) console.error("audit escrow-release insert:", error.message);
-  } catch (e) { console.error("audit escrow-release throw:", e); }
+  const { error } = await admin.from("journaux_audit").insert({
+    acteur_id: "00000000-0000-0000-0000-000000000000",
+    type_acteur: "SYSTEME",
+    action,
+    type_ressource: "mission",
+    id_ressource: missionId,
+    cle_s3_ressource: null,
+    details: details ?? null,
+    ip_acteur: null,
+    navigateur_acteur: "escrow-release",
+  });
+  if (error) throw new Error(`audit escrow-release insert: ${error.message}`);
+}
+
+async function findEscrowPayoutsByMetadata(
+  stripe: Stripe,
+  stripeAccount: string,
+  paiementEscrowId: string,
+): Promise<Stripe.Payout[]> {
+  const matches: Stripe.Payout[] = [];
+  let startingAfter: string | undefined;
+  while (true) {
+    const page = await stripe.payouts.list(
+      {
+        limit: 100,
+        ...(startingAfter ? { starting_after: startingAfter } : {}),
+      },
+      { stripeAccount },
+    );
+    matches.push(...page.data.filter(
+      (payout) => payout.metadata?.paiement_escrow_id === paiementEscrowId,
+    ));
+    if (!page.has_more) break;
+    const last = page.data.at(-1);
+    if (!last) throw new Error("ESCROW_PAYOUT_PAGINATION_INCOMPLETE");
+    startingAfter = last.id;
+  }
+  return matches;
+}
+
+function selectEscrowPayoutForRecovery(
+  payouts: Stripe.Payout[],
+  expected: EscrowPayoutExpectation,
+): Stripe.Payout | null {
+  for (const payout of payouts) requireExactEscrowPayout(payout, expected);
+  const actifs = payouts.filter((payout) =>
+    ["pending", "in_transit", "paid"].includes(payout.status)
+  );
+  if (actifs.length > 1) {
+    throw new Error(`ESCROW_PAYOUT_DUPLICATE_ACTIVE:${actifs.map((p) => p.id).join(",")}`);
+  }
+  if (actifs.length === 1) return actifs[0];
+  return [...payouts].sort((a, b) => b.created - a.created)[0] || null;
+}
+
+async function persistExactEscrowPayout(
+  admin: any,
+  expected: EscrowPayoutExpectation,
+  payout: Stripe.Payout,
+): Promise<void> {
+  requireExactEscrowPayout(payout, expected);
+  const maintenant = new Date().toISOString();
+  const { data, error } = await admin
+    .from("paiements_escrow")
+    .update({
+      statut: "RELEASE_PLANIFIE",
+      stripe_payout_id: payout.id,
+      available_on: maintenant,
+      disponible_le: maintenant,
+      release_planifie_le: maintenant,
+      erreur: null,
+      modifie_le: maintenant,
+    })
+    .eq("id", expected.paiementEscrowId)
+    .in("statut", ["DEBITE", "RELEASE_PLANIFIE"])
+    .or(`stripe_payout_id.is.null,stripe_payout_id.eq.${payout.id}`)
+    .select("id")
+    .maybeSingle();
+  if (error) throw new Error(`persistance payout impossible: ${error.message}`);
+  if (data) return;
+
+  const { data: current, error: currentError } = await admin
+    .from("paiements_escrow")
+    .select("statut, stripe_payout_id")
+    .eq("id", expected.paiementEscrowId)
+    .maybeSingle();
+  if (
+    currentError
+    || !current
+    || !["RELEASE_PLANIFIE", "PAYE"].includes(current.statut)
+    || current.stripe_payout_id !== payout.id
+  ) {
+    throw new Error(
+      `persistance payout concurrente impossible: ${currentError?.message || "identité divergente"}`,
+    );
+  }
 }
 
 Deno.serve(async (req) => {
@@ -81,7 +167,7 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify({ error: "stripe_not_configured" }), { status: 503 });
   }
   const stripe = new Stripe(stripeKey, {
-    apiVersion: "2025-08-27.basil",
+    apiVersion: "2026-02-25.clover",
   });
 
   const { data: dus, error: dusErr } = await admin.rpc("fn_escrow_releases_a_traiter", { p_limit: 50 });
@@ -94,12 +180,25 @@ Deno.serve(async (req) => {
 
   for (const rel of rows) {
     let releaseReservee = false;
-    // Lock optimiste EN_ATTENTE → EN_COURS.
+    let repriseAmbigue = false;
+    let payoutCallStarted = false;
+    let payoutObserve: Stripe.Payout | null = null;
+    let stripeAccount: string | null = null;
+    const payoutExpected: EscrowPayoutExpectation = {
+      paiementEscrowId: rel.paiement_escrow_id,
+      missionId: rel.mission_id,
+      soignantId: rel.soignant_id,
+      amountCents: Number(rel.honoraires_cents),
+    };
+    // Lock optimiste avec lease : un EN_COURS abandonné par un crash redevient
+    // récupérable une fois prochaine_tentative_le échue.
+    const leaseJusqua = new Date(Date.now() + BACKOFF_MS).toISOString();
     const { data: locked } = await admin
       .from("escrow_release_queue")
-      .update({ statut: "EN_COURS" })
+      .update({ statut: "EN_COURS", prochaine_tentative_le: leaseJusqua })
       .eq("id", rel.queue_id)
-      .eq("statut", "EN_ATTENTE")
+      .in("statut", ["EN_ATTENTE", "EN_COURS"])
+      .lte("prochaine_tentative_le", new Date().toISOString())
       .select("id")
       .maybeSingle();
     if (!locked) { ignores++; continue; }
@@ -131,7 +230,7 @@ Deno.serve(async (req) => {
         echecs++;
         continue;
       }
-      if (escrowCourant.statut !== "DEBITE") {
+      if (!["DEBITE", "RELEASE_PLANIFIE"].includes(escrowCourant.statut)) {
         // Défense en profondeur : la RPC SQL filtre déjà strictement DEBITE.
         // On ne promeut surtout jamais INITIE depuis ce consumer.
         await admin.from("escrow_release_queue")
@@ -144,6 +243,9 @@ Deno.serve(async (req) => {
         ignores++;
         continue;
       }
+      repriseAmbigue = escrowCourant.statut === "RELEASE_PLANIFIE"
+        || Boolean(escrowCourant.stripe_payout_id);
+      let escrowStatutCourant = escrowCourant.statut;
 
       // Compte connecté du soignant.
       const { data: onboarding } = await admin
@@ -153,39 +255,58 @@ Deno.serve(async (req) => {
         .maybeSingle();
       if (!onboarding?.stripe_account_id || onboarding.statut !== "COMPLET") {
         await admin.from("escrow_release_queue")
-          .update({ statut: "ECHEC", erreur: "compte connecté non COMPLET", traite_le: new Date().toISOString() })
+          .update(repriseAmbigue
+            ? {
+              statut: "EN_ATTENTE",
+              tentatives: Math.min((rel.tentatives ?? 0) + 1, 4),
+              prochaine_tentative_le: new Date(Date.now() + BACKOFF_MS).toISOString(),
+              erreur: "compte connecté non COMPLET — payout à réconcilier",
+            }
+            : {
+              statut: "ECHEC",
+              erreur: "compte connecté non COMPLET",
+              traite_le: new Date().toISOString(),
+            })
           .eq("id", rel.queue_id);
-        echecs++;
+        if (repriseAmbigue) ignores++;
+        else echecs++;
         continue;
       }
       const acct = onboarding.stripe_account_id;
+      stripeAccount = acct;
+
+      if (!Number.isSafeInteger(payoutExpected.amountCents) || payoutExpected.amountCents <= 0) {
+        throw new Error("ESCROW_PAYOUT_INVALID_AMOUNT");
+      }
 
       // Une tentative terminale connue reçoit une nouvelle version
       // déterministe. Une tentative encore active est récupérée, jamais doublée.
       let payoutIdempotencyKey = `release_${rel.paiement_escrow_id}`;
+      let precedent: Stripe.Payout | null = null;
       if (escrowCourant.stripe_payout_id) {
-        const precedent = await stripe.payouts.retrieve(
+        precedent = await stripe.payouts.retrieve(
           escrowCourant.stripe_payout_id,
           { stripeAccount: acct },
         );
-        if (["pending", "in_transit", "paid"].includes(precedent.status)) {
-          const maintenant = new Date().toISOString();
-          const { data: recupere } = await admin
-            .from("paiements_escrow")
-            .update({
-              statut: "RELEASE_PLANIFIE",
-              available_on: maintenant,
-              disponible_le: maintenant,
-              release_planifie_le: maintenant,
-              modifie_le: maintenant,
-            })
-            .eq("id", rel.paiement_escrow_id)
-            .eq("statut", "DEBITE")
-            .eq("stripe_payout_id", precedent.id)
-            .select("id")
-            .maybeSingle();
-          if (!recupere) throw new Error("récupération payout concurrente impossible");
+        requireExactEscrowPayout(precedent, payoutExpected);
+      } else {
+        // Crash possible entre payouts.create et le CAS local : parcourir toute
+        // la collection du compte connecté et récupérer uniquement l'identité
+        // metadata exacte avant d'envisager une nouvelle création.
+        precedent = selectEscrowPayoutForRecovery(
+          await findEscrowPayoutsByMetadata(
+            stripe,
+            acct,
+            rel.paiement_escrow_id,
+          ),
+          payoutExpected,
+        );
+      }
 
+      if (precedent) {
+        payoutObserve = precedent;
+        await persistExactEscrowPayout(admin, payoutExpected, precedent);
+        if (["pending", "in_transit", "paid"].includes(precedent.status)) {
           if (precedent.status === "paid") {
             const { error: confirmationErr } = await admin.rpc("fn_escrow_confirmer_payout", {
               p_paiement_escrow_id: rel.paiement_escrow_id,
@@ -198,7 +319,35 @@ Deno.serve(async (req) => {
           ignores++;
           continue;
         }
+
+        // On ne revient à DEBITE qu'après observation certaine d'un payout
+        // terminal failed/canceled et avec un CAS sur son identifiant exact.
+        const { data: terminalReouvert, error: terminalReouvertError } = await admin
+          .from("paiements_escrow")
+          .update({
+            statut: "DEBITE",
+            stripe_payout_id: null,
+            release_planifie_le: null,
+            erreur: `Payout ${precedent.status} ${precedent.id} — nouvelle version autorisée`,
+            modifie_le: new Date().toISOString(),
+          })
+          .eq("id", rel.paiement_escrow_id)
+          .eq("statut", "RELEASE_PLANIFIE")
+          .eq("stripe_payout_id", precedent.id)
+          .select("id")
+          .maybeSingle();
+        if (terminalReouvertError || !terminalReouvert) {
+          throw new Error(
+            `réouverture payout terminal impossible: ${terminalReouvertError?.message || "état concurrent"}`,
+          );
+        }
+        escrowStatutCourant = "DEBITE";
+        repriseAmbigue = false;
         payoutIdempotencyKey = `release_${rel.paiement_escrow_id}_after_${precedent.id}`;
+        // Le terminal est certain et son ID vient d'être archivé dans l'erreur :
+        // la future persistance doit pouvoir lier le nouveau payout, et un échec
+        // pré-appel ne doit pas re-promouvoir l'ancien terminal.
+        payoutObserve = null;
       }
 
       // A3 condition 2 : fonds `available` sur le solde connecté ?
@@ -225,26 +374,29 @@ Deno.serve(async (req) => {
 
       // Réservation atomique immédiatement avant Stripe : seule la transition
       // DEBITE -> RELEASE_PLANIFIE est autorisée. Un second worker perd le CAS.
-      const maintenant = new Date().toISOString();
-      const { data: reservee, error: reserveeErr } = await admin
-        .from("paiements_escrow")
-        .update({
-          statut: "RELEASE_PLANIFIE",
-          available_on: maintenant,
-          disponible_le: maintenant,
-          release_planifie_le: maintenant,
-          modifie_le: maintenant,
-        })
-        .eq("id", rel.paiement_escrow_id)
-        .eq("statut", "DEBITE")
-        .select("id")
-        .maybeSingle();
-      if (reserveeErr || !reservee) {
-        throw new Error(`réservation release impossible: ${reserveeErr?.message || "transition concurrente"}`);
+      if (escrowStatutCourant === "DEBITE") {
+        const maintenant = new Date().toISOString();
+        const { data: reservee, error: reserveeErr } = await admin
+          .from("paiements_escrow")
+          .update({
+            statut: "RELEASE_PLANIFIE",
+            available_on: maintenant,
+            disponible_le: maintenant,
+            release_planifie_le: maintenant,
+            modifie_le: maintenant,
+          })
+          .eq("id", rel.paiement_escrow_id)
+          .eq("statut", "DEBITE")
+          .select("id")
+          .maybeSingle();
+        if (reserveeErr || !reservee) {
+          throw new Error(`réservation release impossible: ${reserveeErr?.message || "transition concurrente"}`);
+        }
+        releaseReservee = true;
       }
-      releaseReservee = true;
 
       // PAYOUT manuel sur le compte connecté (idempotency key = release id).
+      payoutCallStarted = true;
       const payout = await stripe.payouts.create(
         {
           amount: rel.honoraires_cents,
@@ -258,40 +410,80 @@ Deno.serve(async (req) => {
         },
         { stripeAccount: acct, idempotencyKey: payoutIdempotencyKey },
       );
-
-      const { data: escrowPlanifie, error: escrowPlanifieErr } = await admin
-        .from("paiements_escrow")
-        .update({
-          statut: "RELEASE_PLANIFIE",
-          stripe_payout_id: payout.id,
-          erreur: null,
-          modifie_le: new Date().toISOString(),
-        })
-        .eq("id", rel.paiement_escrow_id)
-        .eq("statut", "RELEASE_PLANIFIE")
-        .select("id")
-        .maybeSingle();
-      if (escrowPlanifieErr || !escrowPlanifie) {
-        throw new Error(`persistance payout impossible: ${escrowPlanifieErr?.message || "escrow non modifiable"}`);
-      }
+      payoutObserve = requireExactEscrowPayout(payout, payoutExpected);
+      await persistExactEscrowPayout(admin, payoutExpected, payoutObserve);
       releaseReservee = false;
+
+      if (!["pending", "in_transit", "paid"].includes(payoutObserve.status)) {
+        throw new Error(`ESCROW_PAYOUT_TERMINAL_AT_CREATION:${payoutObserve.status}`);
+      }
 
       // La file reste EN_COURS : elle sera clôturée atomiquement par
       // fn_escrow_confirmer_payout ou fn_escrow_echouer_payout au webhook.
-      await auditEscrow(admin, "ESCROW_RELEASE_INITIE", rel.mission_id, {
-        paiement_escrow_id: rel.paiement_escrow_id,
-        stripe_payout_id: payout.id,
-        stripe_payout_status: payout.status,
-        honoraires_cents: rel.honoraires_cents,
-        destination: acct,
-      });
+      try {
+        await auditEscrow(admin, "ADMIN_ACTION", rel.mission_id, {
+          evenement: "ESCROW_RELEASE_INITIE",
+          paiement_escrow_id: rel.paiement_escrow_id,
+          stripe_payout_id: payoutObserve.id,
+          stripe_payout_status: payoutObserve.status,
+          honoraires_cents: rel.honoraires_cents,
+          destination: acct,
+        });
+      } catch (auditError) {
+        console.error("escrow-release: audit post-payout non bloquant", auditError);
+      }
       planifies++;
     } catch (err: any) {
       const code = err?.code || err?.raw?.code || null;
-      const msg = err?.message || String(err);
-      // Si Stripe a répondu de façon ambiguë, la même clé d'idempotence sera
-      // rejouée. Le rollback compare-and-set ne touche jamais PAYE/ECHOUE.
-      if (releaseReservee) {
+      let msg = err?.message || String(err);
+      const postPayoutAmbigu = payoutCallStarted || payoutObserve !== null || repriseAmbigue;
+
+      // Après l'appel Stripe (ou lors de la reprise d'un RELEASE_PLANIFIE), ne
+      // jamais revenir à DEBITE. On tente d'abord de retrouver puis rattacher le
+      // payout exact ; à défaut la file reste rejouable sans borne terminale.
+      if (postPayoutAmbigu && stripeAccount) {
+        try {
+          const recovered = payoutObserve || selectEscrowPayoutForRecovery(
+            await findEscrowPayoutsByMetadata(
+              stripe,
+              stripeAccount,
+              rel.paiement_escrow_id,
+            ),
+            payoutExpected,
+          );
+          if (recovered) {
+            payoutObserve = requireExactEscrowPayout(recovered, payoutExpected);
+            await persistExactEscrowPayout(admin, payoutExpected, payoutObserve);
+            if (["pending", "in_transit", "paid"].includes(payoutObserve.status)) {
+              if (payoutObserve.status === "paid") {
+                const { error: confirmationErr } = await admin.rpc(
+                  "fn_escrow_confirmer_payout",
+                  {
+                    p_paiement_escrow_id: rel.paiement_escrow_id,
+                    p_stripe_payout_id: payoutObserve.id,
+                    p_stripe_account_id: stripeAccount,
+                    p_paye_le: new Date(payoutObserve.arrival_date * 1000).toISOString(),
+                  },
+                );
+                if (confirmationErr) throw confirmationErr;
+              }
+              await admin.from("escrow_release_queue")
+                .update({ statut: "EN_COURS", erreur: null })
+                .eq("id", rel.queue_id);
+              planifies++;
+              continue;
+            }
+          }
+        } catch (recoveryError) {
+          msg = `${msg} — recovery: ${
+            recoveryError instanceof Error ? recoveryError.message : String(recoveryError)
+          }`;
+        }
+      }
+
+      // Rollback autorisé uniquement si ce worker vient de réserver DEBITE et
+      // qu'aucun appel Stripe n'a commencé. Il est interdit après ambiguïté.
+      if (releaseReservee && !postPayoutAmbigu) {
         const { error: rollbackErr } = await admin
           .from("paiements_escrow")
           .update({ statut: "DEBITE", modifie_le: new Date().toISOString() })
@@ -302,8 +494,12 @@ Deno.serve(async (req) => {
       await admin
         .from("escrow_release_queue")
         .update({
-          statut: (rel.tentatives ?? 0) + 1 >= 5 ? "ECHEC" : "EN_ATTENTE",
-          tentatives: (rel.tentatives ?? 0) + 1,
+          statut: postPayoutAmbigu
+            ? "EN_ATTENTE"
+            : (rel.tentatives ?? 0) + 1 >= 5 ? "ECHEC" : "EN_ATTENTE",
+          tentatives: postPayoutAmbigu
+            ? Math.min((rel.tentatives ?? 0) + 1, 4)
+            : (rel.tentatives ?? 0) + 1,
           prochaine_tentative_le: new Date(Date.now() + BACKOFF_MS).toISOString(),
           erreur: `${code || "erreur"} — ${msg}`.substring(0, 500),
         })

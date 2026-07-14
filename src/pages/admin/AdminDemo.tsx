@@ -26,14 +26,33 @@ export default function AdminDemo() {
 
   const chargerDemo = async () => {
     setLoading('charger');
-    const { error } = await supabase.rpc('fn_charger_demo_investisseur' as any);
+    const { data, error } = await supabase.rpc('fn_charger_demo_investisseur' as any);
     setLoading(null);
     if (error) {
       toast.error('Une erreur est survenue. Veuillez réessayer.');
-    } else {
-      toast.success("Données de démo chargées — L'état de la base a été actualisé");
-      chargerKpi();
+      return;
     }
+
+    const resultat = data as {
+      error?: string;
+      message?: string;
+      mode?: string;
+      etablissements?: number;
+      soignants?: number;
+      missions?: number;
+    } | null;
+    if (resultat?.error) {
+      toast.error(resultat.error);
+      return;
+    }
+
+    const inventaire = [
+      `${resultat?.etablissements ?? 0} établissement(s)`,
+      `${resultat?.soignants ?? 0} soignant(s)`,
+      `${resultat?.missions ?? 0} mission(s)`,
+    ].join(', ');
+    toast.success(`Données de démo conservées — ${inventaire}`);
+    void chargerKpi();
   };
 
   return (
@@ -42,13 +61,13 @@ export default function AdminDemo() {
       <div className="space-y-8">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Données de démonstration</h1>
-          <p className="text-muted-foreground mt-1">Charger un jeu de données réaliste pour les démos investisseurs et les captures stores.</p>
+          <p className="text-muted-foreground mt-1">Vérifier le jeu de données conservé pour les démos investisseurs et les captures stores.</p>
         </div>
 
         {/* Actions */}
         <div className="flex flex-wrap items-center gap-4">
           <BoutonY2K onClick={chargerDemo} disabled={loading !== null} loading={loading === 'charger'} size="lg" className="gap-2" iconeGauche={loading === 'charger' ? undefined : <Database className="h-5 w-5" />}>
-            Charger les données de démo
+            Vérifier les données de démo
           </BoutonY2K>
           <div className="rounded-xl border border-success/30 bg-success/10 px-4 py-3 text-sm text-foreground flex items-start gap-2 max-w-xl">
             <ShieldCheck className="h-5 w-5 text-success shrink-0" />

@@ -89,7 +89,7 @@ jobs:
             -d "enabled_events[]=payment_intent.payment_failed" \
             -d "enabled_events[]=charge.dispute.created" \
             -d "enabled_events[]=charge.refunded" \
-            -d "api_version=2025-08-27.basil" \
+            -d "api_version=2026-02-25.clover" \
             -d "description=recette-escrow plateforme ${{ inputs.branch_ref }} (éphémère)")
           WH_CONNECT=$(curl -sf https://api.stripe.com/v1/webhook_endpoints \
             -u "$STRIPE_TEST_SECRET_KEY:" \
@@ -100,7 +100,7 @@ jobs:
             -d "enabled_events[]=payout.paid" \
             -d "enabled_events[]=payout.failed" \
             -d "enabled_events[]=payout.canceled" \
-            -d "api_version=2025-08-27.basil" \
+            -d "api_version=2026-02-25.clover" \
             -d "description=recette-escrow Connect ${{ inputs.branch_ref }} (éphémère)")
           WH_PLATFORM_ID=$(echo "$WH_PLATFORM" | jq -r '.id')
           WH_PLATFORM_SECRET=$(echo "$WH_PLATFORM" | jq -r '.secret')

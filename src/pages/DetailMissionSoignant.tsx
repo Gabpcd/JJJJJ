@@ -45,6 +45,7 @@ import { DeclarationEmpechement } from '@/components/DeclarationEmpechement';
 import { BandeauActionPrioritaire, type ActionPrioritaire } from '@/components/BandeauActionPrioritaire';
 import { ModaleAnnulationCandidature } from '@/components/soignant/ModaleAnnulationCandidature';
 import { AnnulationCandidatureTimer } from '@/components/soignant/AnnulationCandidatureTimer';
+import { netEstimeAfficheMission } from '@/lib/missionFinanceDisplay';
 
 type SoignantData = Database['public']['Tables']['soignants']['Row'];
 
@@ -215,7 +216,7 @@ export default function DetailMissionSoignant() {
 
   // Session E-6 : net estimé de la mission (même source que la liste,
   // cf. CarteMissionSoignant) pour la barre sticky mobile.
-  const netEstimeMission: number | null = (mission.net_estime ?? mission.net_a_payer ?? null) as number | null;
+  const netEstimeMission = netEstimeAfficheMission(mission);
   const fmtEuroEntier = (v: number) =>
     new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(v);
   const champsManquants = resumeCompletion.items_obligatoires_manquants;

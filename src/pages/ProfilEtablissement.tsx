@@ -19,6 +19,7 @@ import { AvatarUpload } from '@/components/AvatarUpload';
 import { Switch } from '@/components/ui/switch';
 import { Elements, IbanElement, useStripe, useElements } from '@stripe/react-stripe-js';
 import { isStripeConfigured, stripePromise } from '@/lib/stripe';
+import { contratServiceEstSigne } from '@/lib/contratEtablissement';
 
 interface DeleteAccountResponse {
   success?: boolean;
@@ -306,6 +307,8 @@ export function ProfilEtablissementContent({ sections }: { sections?: SectionPro
   const [uploadingRib, setUploadingRib] = useState(false);
   const ribInputRef = React.useRef<HTMLInputElement>(null);
   const [contratValide, setContratValide] = useState(false);
+  const [contratServiceSigne, setContratServiceSigne] = useState(false);
+  const [contratServiceSigneLe, setContratServiceSigneLe] = useState<string | null>(null);
   const [contratUrl, setContratUrl] = useState<string | null>(null);
   const [contratUploadeLe, setContratUploadeLe] = useState<string | null>(null);
   const [uploadingContrat, setUploadingContrat] = useState(false);
@@ -332,6 +335,8 @@ export function ProfilEtablissementContent({ sections }: { sections?: SectionPro
         }
         setModePaiement((data as any).mode_paiement_commission || 'FACTURE_MENSUELLE');
         setContratValide(!!data.contrat_valide);
+        setContratServiceSigne(contratServiceEstSigne(data));
+        setContratServiceSigneLe(data.contrat_service_signe_le || null);
         setContratUrl(data.contrat_url || null);
         setContratUploadeLe(data.contrat_uploade_le || null);
         setRibKey(data.rib_s3_key || null);
@@ -516,7 +521,7 @@ export function ProfilEtablissementContent({ sections }: { sections?: SectionPro
       return;
     }
 
-    const { error } = await supabase.rpc('fn_modifier_mon_etablissement' as any, {
+    const { data: saveResult, error } = await supabase.rpc('fn_modifier_mon_etablissement' as any, {
       p_couleur_theme: couleurTheme,
       p_convention_collective: conventionCollective || null,
       p_nom: form.nom,
@@ -535,8 +540,15 @@ export function ProfilEtablissementContent({ sections }: { sections?: SectionPro
       p_mode_paiement_commission: modePaiement,
     });
 
-    if (error) {
-      afficherNotification({ type: 'erreur', message: extraireMessageErreur(error) });
+    const saveBusinessError = saveResult && typeof saveResult === 'object'
+      && 'error' in saveResult && typeof saveResult.error === 'string'
+      ? saveResult.error
+      : null;
+    if (error || saveBusinessError) {
+      afficherNotification({
+        type: 'erreur',
+        message: saveBusinessError || extraireMessageErreur(error),
+      });
     } else {
       const { error: auditError } = await supabase.rpc('fn_ecrire_audit_safe', {
         p_acteur_id: user.id, p_type_acteur: 'ADMIN_ETABLISSEMENT',
@@ -586,17 +598,22 @@ export function ProfilEtablissementContent({ sections }: { sections?: SectionPro
         </div>
       )}
 
-      {/* Bandeau contrat non validé */}
-      {visible('facturation') && !contratValide && (
+      {/* Même verrou canonique que la publication de mission. */}
+      {visible('facturation') && !contratServiceSigne && (
         <div className="max-w-2xl mb-6 rounded-xl border border-warning/30 bg-warning/10 p-4 flex items-start gap-3">
           <AlertTriangle className="h-5 w-5 text-warning mt-0.5 flex-shrink-0" />
           <div>
-            <p className="text-sm font-semibold text-foreground">Contrat de service non validé</p>
+            <p className="text-sm font-semibold text-foreground">Contrat de service à signer</p>
             <p className="text-xs text-muted-foreground mt-1">
-              {contratUrl
-                ? 'Votre contrat a été téléversé et est en attente de validation par Jolene. Vous ne pouvez pas publier de missions tant qu\'il n\'est pas validé.'
-                : 'Téléversez votre contrat de service signé pour pouvoir publier des missions.'}
+              La signature électronique du contrat de service est obligatoire avant de publier une mission.
             </p>
+            <button
+              type="button"
+              onClick={() => navigate('/etablissement/activer')}
+              className="mt-2 text-xs font-semibold text-primary hover:underline"
+            >
+              Signer le contrat →
+            </button>
           </div>
         </div>
       )}
@@ -776,7 +793,6 @@ export function ProfilEtablissementContent({ sections }: { sections?: SectionPro
           <h2 className="text-base font-semibold text-foreground mb-4">💳 Mode de paiement de la commission</h2>
           <div className="space-y-3">
             {[
-              { value: 'STRIPE_RESERVATION', icon: '💳', label: 'Carte bancaire', desc: 'Commission prélevée à chaque mission (autorisée à la réservation, capturée à la fin)' },
               { value: 'SEPA_DEBIT', icon: '🏦', label: 'Prélèvement SEPA automatique', desc: '', isSEPA: true },
               { value: 'FACTURE_MENSUELLE', icon: '📄', label: 'Facture mensuelle par virement', desc: 'Facture de commission émise chaque mois, à régler par virement sous 30 jours' },
               ...(['HOPITAL_PUBLIC', 'CHU', 'CENTRE_SANTE', 'HAD'].includes(type)
@@ -926,27 +942,43 @@ export function ProfilEtablissementContent({ sections }: { sections?: SectionPro
             <FileCheck className="h-5 w-5 text-primary" /> Contrat de service Jolene
           </h2>
 
-          {contratValide ? (
+          {contratServiceSigne ? (
             <div className="flex items-center gap-2 p-3 rounded-xl bg-success/10 border border-success/20">
               <FileCheck className="h-4 w-4 text-success" />
-              <span className="text-sm font-medium text-success">✅ Contrat validé par Jolene</span>
-            </div>
-          ) : contratUrl ? (
-            <div className="flex items-center gap-2 p-3 rounded-xl bg-warning/10 border border-warning/20">
-              <Clock className="h-4 w-4 text-warning" />
               <div>
-                <span className="text-sm font-medium text-foreground">⏳ En attente de validation</span>
-                {contratUploadeLe && <p className="text-xs text-muted-foreground mt-0.5">Téléversé le {new Date(contratUploadeLe).toLocaleDateString('fr-FR')}</p>}
+                <span className="text-sm font-medium text-success">Contrat de service signé</span>
+                {contratServiceSigneLe && (
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Signé le {new Date(contratServiceSigneLe).toLocaleDateString('fr-FR')}
+                  </p>
+                )}
               </div>
             </div>
           ) : (
-            <div className="flex items-center gap-2 p-3 rounded-xl bg-muted border border-border">
-              <AlertTriangle className="h-4 w-4 text-muted-foreground" />
-              <span className="text-sm font-medium text-muted-foreground">Non fourni</span>
+            <div className="flex items-center gap-2 p-3 rounded-xl bg-warning/10 border border-warning/20">
+              <AlertTriangle className="h-4 w-4 text-warning" />
+              <div>
+                <span className="text-sm font-medium text-foreground">Contrat de service à signer</span>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Cette signature est obligatoire avant de publier une mission.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => navigate('/etablissement/activer')}
+                  className="mt-2 text-xs font-semibold text-primary hover:underline"
+                >
+                  Signer le contrat →
+                </button>
+              </div>
             </div>
           )}
 
-          <div className="mt-4">
+          <div className="mt-4 border-t border-border pt-4">
+            <p className="mb-2 text-xs text-muted-foreground">
+              Document contractuel PDF complémentaire
+              {contratValide ? ' — contrôlé par Jolene' : contratUrl ? ' — en cours de contrôle' : ''}
+              {contratUploadeLe ? ` (téléversé le ${new Date(contratUploadeLe).toLocaleDateString('fr-FR')})` : ''}
+            </p>
             <input
               ref={contratInputRef}
               type="file"

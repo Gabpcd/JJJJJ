@@ -236,44 +236,44 @@ export default function AdminDashboard() {
         {/* Alertes et actions urgentes */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {nbEtabsAVerifier > 0 && (
-            <div className="rounded-xl border-2 border-primary/40 bg-primary/5 p-4 cursor-pointer hover:border-primary/60 transition-colors" onClick={() => navigate('/admin/verification-etablissements')}>
+            <button type="button" className="w-full rounded-xl border-2 border-primary/40 bg-primary/5 p-4 text-left cursor-pointer hover:border-primary/60 transition-colors" onClick={() => navigate('/admin/verification-etablissements')}>
               <div className="flex items-center gap-2 mb-2">
                 <ShieldCheck className="h-5 w-5 text-primary" />
                 <span className="font-bold text-foreground">{nbEtabsAVerifier} établissement{nbEtabsAVerifier > 1 ? 's' : ''} à valider</span>
               </div>
               <p className="text-xs text-muted-foreground">Vérification rattachement / cohérence →</p>
-            </div>
+            </button>
           )}
           {litiges.length > 0 && (
-            <div className="rounded-xl border-2 border-warning/40 bg-warning/5 p-4 cursor-pointer hover:border-warning/60 transition-colors" onClick={() => navigate('/admin/moderation')}>
+            <button type="button" className="w-full rounded-xl border-2 border-warning/40 bg-warning/5 p-4 text-left cursor-pointer hover:border-warning/60 transition-colors" onClick={() => navigate('/admin/moderation')}>
 
               <div className="flex items-center gap-2 mb-2">
                 <AlertTriangle className="h-5 w-5 text-warning" />
                 <span className="font-bold text-foreground">{litiges.length} litige{litiges.length > 1 ? 's' : ''} ouvert{litiges.length > 1 ? 's' : ''}</span>
               </div>
               <p className="text-xs text-muted-foreground">Requiert votre attention →</p>
-            </div>
+            </button>
           )}
           {facturesImpayees.length > 0 && (
-            <div className="rounded-xl border-2 border-destructive/40 bg-destructive/5 p-4 cursor-pointer hover:border-destructive/60 transition-colors" onClick={() => navigate('/admin/impayees')}>
+            <button type="button" className="w-full rounded-xl border-2 border-destructive/40 bg-destructive/5 p-4 text-left cursor-pointer hover:border-destructive/60 transition-colors" onClick={() => navigate('/admin/impayees')}>
               <div className="flex items-center gap-2 mb-2">
                 <CreditCard className="h-5 w-5 text-destructive" />
                 <span className="font-bold text-foreground">{facturesImpayees.length} facture{facturesImpayees.length > 1 ? 's' : ''} impayée{facturesImpayees.length > 1 ? 's' : ''}</span>
               </div>
               <p className="text-xs text-muted-foreground">En retard de paiement →</p>
-            </div>
+            </button>
           )}
-          <div className="rounded-xl border border-border bg-card p-4 cursor-pointer hover:border-primary/30 transition-colors" onClick={() => navigate('/admin/conformite')}>
+          <button type="button" className="w-full rounded-xl border border-border bg-card p-4 text-left cursor-pointer hover:border-primary/30 transition-colors" onClick={() => navigate('/admin/conformite')}>
             <div className="flex items-center gap-2 mb-2">
               <Target className="h-5 w-5 text-primary" />
               <span className="font-bold text-foreground">{kpi?.taux_acceptation_mois ?? 0}% d'acceptation</span>
             </div>
             <p className="text-xs text-muted-foreground">Taux ce mois · Conformité →</p>
-          </div>
+          </button>
         </div>
 
-        {/* Bandeau « données de test » : tant que la purge pré-lancement (phase 7)
-            n'est pas faite, les seeds sont exclus des montants ci-dessous et signalés ici. */}
+        {/* Les données de test restent visibles et identifiées, mais sont exclues
+            des montants de production présentés ci-dessous. */}
         {aDesDonneesTest && (
           <div className="rounded-lg border border-warning/40 bg-warning/5 px-3 py-2 text-xs text-foreground flex items-start gap-2">
             <FlaskConical className="h-4 w-4 text-warning shrink-0 mt-0.5" />
@@ -282,7 +282,7 @@ export default function AdminDashboard() {
               {nbMissionsTest > 0 && ` ${nbMissionsTest} mission${nbMissionsTest > 1 ? 's' : ''} test`}
               {commissionTestTotal > 0 && ` · commission test ${formatEur(commissionTestTotal)} HT`}
               {gmvTestTotal > 0 && ` · GMV test ${formatEur(gmvTestTotal)}`}
-              {'. Purge à la mise en production.'}
+              {'. Elles restent identifiées et exclues des indicateurs de production.'}
             </span>
           </div>
         )}
@@ -598,13 +598,13 @@ export default function AdminDashboard() {
             <CardY2KHeader><CardY2KTitle className="text-sm font-medium flex items-center gap-2"><AlertTriangle className="h-4 w-4 text-warning" /> Litiges ouverts</CardY2KTitle></CardY2KHeader>
             <CardY2KContent className="space-y-3">
               {litiges.map((l) => (
-                <div key={l.id} className="text-sm cursor-pointer hover:bg-muted/50 rounded p-1.5 -mx-1.5" onClick={() => navigate('/admin/moderation')}>
+                <button type="button" key={l.id} className="block w-full text-left text-sm cursor-pointer hover:bg-muted/50 rounded p-1.5 -mx-1.5" onClick={() => navigate('/admin/moderation')}>
                   <p className="font-medium text-foreground line-clamp-1">{l.motif}</p>
                   <div className="flex gap-2 mt-1">
                     <BadgeY2K variant={l.statut === 'OUVERT' ? 'error' : 'info'} size="sm">{STATUTS_LITIGE_LABELS[l.statut] ?? l.statut}</BadgeY2K>
                     <span className="text-muted-foreground text-xs">{formatDate(l.cree_le)}</span>
                   </div>
-                </div>
+                </button>
               ))}
               {litiges.length === 0 && <p className="text-sm text-muted-foreground">Aucun litige ouvert</p>}
             </CardY2KContent>
@@ -614,13 +614,13 @@ export default function AdminDashboard() {
             <CardY2KHeader><CardY2KTitle className="text-sm font-medium flex items-center gap-2"><FileText className="h-4 w-4 text-destructive" /> Factures impayées</CardY2KTitle></CardY2KHeader>
             <CardY2KContent className="space-y-3">
               {facturesImpayees.map((f: any) => (
-                <div key={f.id} className="text-sm cursor-pointer hover:bg-muted/50 rounded p-1.5 -mx-1.5" onClick={() => navigate('/admin/impayees')}>
+                <button type="button" key={f.id} className="block w-full text-left text-sm cursor-pointer hover:bg-muted/50 rounded p-1.5 -mx-1.5" onClick={() => navigate('/admin/impayees')}>
                   <div className="flex justify-between">
                     <span className="font-medium text-foreground">{f.numero_facture}</span>
                     <span className="font-semibold text-destructive">{formatEur(f.montant_ttc)} TTC</span>
                   </div>
                   <p className="text-xs text-muted-foreground mt-0.5">{(f.etablissements as any)?.nom ?? '—'} · Échue le {formatDate(f.date_echeance)}</p>
-                </div>
+                </button>
               ))}
               {facturesImpayees.length === 0 && <p className="text-sm text-muted-foreground">Aucune</p>}
             </CardY2KContent>

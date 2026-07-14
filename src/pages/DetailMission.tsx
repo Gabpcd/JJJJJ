@@ -56,6 +56,14 @@ import { toast } from 'sonner';
 import { capturerErreurSentry } from '@/lib/sentry';
 import { sanitiserNomFichier, verifierFichierDocument } from '@/lib/documentUpload';
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip';
+import { LayoutAdmin } from '@/components/LayoutAdmin';
+
+type DetailMissionRole = 'ADMIN_ETABLISSEMENT' | 'ADMIN_PLATEFORME';
+
+function DetailMissionLayout({ role, children }: { role: DetailMissionRole; children: React.ReactNode }) {
+  if (role === 'ADMIN_PLATEFORME') return <LayoutAdmin>{children}</LayoutAdmin>;
+  return <LayoutApp role={role}>{children}</LayoutApp>;
+}
 
 function scoreColor(score: number): string {
   if (score >= 70) return 'text-success';
@@ -374,7 +382,7 @@ function BoostEtGarantie({ mission, onMaj }: { mission: any; onMaj: (patch: any)
   );
 }
 
-export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?: 'ADMIN_ETABLISSEMENT' | 'ADMIN_PLATEFORME' }) {
+export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?: DetailMissionRole }) {
   usePageTitle('Détail mission');
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -567,13 +575,21 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
     if (window.history.length > 2) {
       navigate(-1);
     } else {
-      navigate(isAdmin ? '/admin/calendrier' : '/etablissement/missions');
+      navigate(isAdmin ? '/admin/missions' : '/etablissement/missions');
     }
   };
-  const backLabel = isAdmin ? '← Retour au calendrier' : '← Retour';
+  const backLabel = '← Retour';
 
-  if (loading) return <LayoutApp role={role}><ChargementPage /></LayoutApp>;
-  if (!loading && !mission) return <LayoutApp role={role}><div className="text-center py-20"><p className="text-lg font-semibold text-foreground">Mission introuvable</p><p className="text-sm text-muted-foreground mt-2">Cette mission n'existe pas ou a été supprimée.</p><button onClick={() => navigate(-1)} className="btn-primary mt-4">Retour</button></div></LayoutApp>;
+  if (loading) return <DetailMissionLayout role={role}><ChargementPage /></DetailMissionLayout>;
+  if (!loading && !mission) return (
+    <DetailMissionLayout role={role}>
+      <div className="text-center py-20">
+        <h1 className="text-lg font-semibold text-foreground">Mission introuvable</h1>
+        <p className="text-sm text-muted-foreground mt-2">Cette mission n'existe pas ou a été supprimée.</p>
+        <button onClick={handleBack} className="btn-primary mt-4">Retour</button>
+      </div>
+    </DetailMissionLayout>
+  );
 
   const m = mission;
   const debut = new Date(m.debut_le);
@@ -628,7 +644,7 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
   })();
 
   return (
-    <LayoutApp role={role}>
+    <DetailMissionLayout role={role}>
       <button onClick={handleBack} className="text-sm text-primary hover:underline mb-4 inline-block">
         {backLabel}
       </button>
@@ -837,16 +853,11 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
                 etablissement={m.etablissements}
                 role={isAdmin ? 'ADMIN' : 'ETAB'}
               />
-              {/* Payment mode indicator — ordre priorité :
-                  1. mode_paiement_soignant=STRIPE_CONNECT + commission_facturee : commission capturée à la source, déjà réglée
-                  2. etablissements.mode_paiement_commission (STRIPE_RESERVATION / CHORUS_PRO)
-                  3. fallback : facturée en fin de mois */}
+              {/* Payment mode indicator — Connect réglé, Chorus Pro, puis facture mensuelle. */}
               {m.montant_commission_ttc > 0 && (
                 <div className="card-base flex items-center gap-2 text-xs text-muted-foreground">
                   {m.mode_paiement_soignant === 'STRIPE_CONNECT' && m.commission_facturee ? (
                     <><CreditCard className="h-3.5 w-3.5 text-success" aria-hidden="true" /><span>Commission : {m.montant_commission_ttc?.toFixed(2)} € TTC — Capturée à la source par Stripe lors du paiement (déjà réglée)</span></>
-                  ) : (m.etablissements as any)?.mode_paiement_commission === 'STRIPE_RESERVATION' ? (
-                    <><CreditCard className="h-3.5 w-3.5 text-primary" aria-hidden="true" /><span>Commission : {m.montant_commission_ttc?.toFixed(2)} € TTC — Prélevée à la réservation</span></>
                   ) : (m.etablissements as any)?.mode_paiement_commission === 'CHORUS_PRO' ? (
                     <><Landmark className="h-3.5 w-3.5 shrink-0" aria-hidden="true" /><span>Commission : {m.montant_commission_ttc?.toFixed(2)} € TTC — Chorus Pro</span></>
                   ) : (
@@ -1216,6 +1227,6 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
           }}
         />
       )}
-    </LayoutApp>
+    </DetailMissionLayout>
   );
 }

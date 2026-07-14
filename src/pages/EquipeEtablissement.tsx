@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Users, UserPlus, Mail, Crown, Briefcase, ClipboardCheck, Eye, Trash2, Loader2, AlertCircle } from 'lucide-react';
 import { LayoutApp } from '@/components/LayoutApp';
@@ -9,6 +9,7 @@ import { useNotification } from '@/contexts/NotificationContext';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { estDernierProprietaireActif } from '@/lib/equipeEtablissement';
 import {
   DialogResponsive,
   DialogResponsiveContent,
@@ -72,7 +73,7 @@ export default function EquipeEtablissement() {
 
   const estProprietaire = roleCourant === 'PROPRIETAIRE';
 
-  async function recharger() {
+  const recharger = useCallback(async () => {
     setLoading(true);
     const { data, error } = await supabase.rpc('fn_lister_membres_etab' as any);
     if (error) {
@@ -90,9 +91,9 @@ export default function EquipeEtablissement() {
     setMembres(result.membres as Membre[]);
     setInvitations(result.invitations as Invitation[]);
     setLoading(false);
-  }
+  }, [afficherNotification]);
 
-  useEffect(() => { recharger(); }, []);
+  useEffect(() => { void recharger(); }, [recharger]);
 
   if (loading) return <LayoutApp role="ADMIN_ETABLISSEMENT"><ChargementPage /></LayoutApp>;
 
@@ -149,6 +150,7 @@ export default function EquipeEtablissement() {
             {membres.map((m) => {
               const info = ROLE_INFO[m.role];
               const Icon = info.icon;
+              const estProprietaireUnique = estDernierProprietaireActif(m, membres);
               return (
                 <li key={m.id} className="card-base flex flex-col sm:flex-row sm:items-center gap-3 sm:justify-between">
                   <div className="flex items-center gap-3 min-w-0 flex-1">
@@ -162,7 +164,12 @@ export default function EquipeEtablissement() {
                       </p>
                     </div>
                   </div>
-                  {estProprietaire && (
+                  {estProprietaire && estProprietaireUnique && (
+                    <span className="shrink-0 rounded-full bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary" role="status">
+                      Propriétaire unique
+                    </span>
+                  )}
+                  {estProprietaire && !estProprietaireUnique && (
                     <div className="flex gap-2 shrink-0">
                       <button
                         onClick={() => setModalModifierRole(m)}

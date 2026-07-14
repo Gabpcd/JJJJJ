@@ -25,6 +25,7 @@ import { useRole } from '@/hooks/useRole';
 import { useNotification } from '@/contexts/NotificationContext';
 import { supabase } from '@/integrations/supabase/client';
 import { extraireMessageErreur, estBlocageCodeTravail } from '@/lib/erreurs';
+import { contratServiceEstSigne } from '@/lib/contratEtablissement';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 
@@ -117,7 +118,9 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
   const [modalRecapOuvert, setModalRecapOuvert] = useState(false);
   const [explicationModeOuverte, setExplicationModeOuverte] = useState(false);
   const [siretInvalide, setSiretInvalide] = useState(false);
-  const [contratNonValide, setContratNonValide] = useState(false);
+  // `null` pendant le chargement : aucun faux avertissement visuel, mais le
+  // bouton reste bloqué jusqu'à confirmation explicite de la signature.
+  const [contratNonValide, setContratNonValide] = useState<boolean | null>(null);
 
   // Load rist_plafond_actif + commission info + type + siret validation
   const [estSecteurPublic, setEstSecteurPublic] = useState(false);
@@ -149,6 +152,7 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
     supabase.rpc('fn_mon_etablissement_complet' as any).then(({ data, error }: any) => {
       if (error) {
         console.warn('FormulaireMission: fn_mon_etablissement_complet error', error);
+        setContratNonValide(true);
         return;
       }
       if (data) {
@@ -163,8 +167,9 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
         // SIRET check: must exist and not be empty
         const s = (data.siret || '').trim();
         setSiretInvalide(!s || s.length === 0);
-        // Check contrat validation — explicit reset
-        setContratNonValide(data.contrat_service_signe !== true);
+        // Même source que fn_blocage_publication_etab : une signature active.
+        // `contrat_valide` est l'ancien statut d'un PDF et ne débloque rien.
+        setContratNonValide(!contratServiceEstSigne(data));
       }
     });
   }, [user]);
@@ -499,7 +504,7 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
   };
 
   const officineNonProposee = etablissementType === 'PHARMACIE_OFFICINE';
-  const canSubmit = !officineNonProposee && !siretInvalide && !contratNonValide && !erreurFactureImpayee && (modeRecurrent
+  const canSubmit = !officineNonProposee && !siretInvalide && contratNonValide === false && !erreurFactureImpayee && (modeRecurrent
     ? (!!intitule && !!profession && !!tauxHoraire && recurrenceValide && !publicationEnCours)
     : (!!intitule && !!profession && !!debutLe && !!finLe && !!tauxHoraire && !erreurDates && !loading));
 
@@ -536,10 +541,10 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
         </div>
       )}
 
-      {contratNonValide && (
+      {contratNonValide === true && (
         <div className="bg-warning/10 border border-warning/30 rounded-xl p-3 mb-4 flex items-center gap-2 text-sm">
           <AlertTriangle className="h-4 w-4 text-warning shrink-0" />
-          <span>Votre contrat de service n'est pas encore validé. <Link to="/etablissement/parametres?tab=contrats" className="text-primary hover:underline font-medium">Téléverser le contrat →</Link></span>
+          <span>Votre contrat de service n'est pas encore signé. <Link to="/etablissement/activer" className="text-primary hover:underline font-medium">Signer le contrat →</Link></span>
         </div>
       )}
 

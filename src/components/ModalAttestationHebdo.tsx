@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -7,7 +7,7 @@ import { Loader2 } from 'lucide-react';
 interface Props {
   semaineISO: string; // ISO date string of Monday of the week
   heuresJoleneSemaine: number;
-  onValidated: () => void;
+  onValidated: (peutContinuer: boolean) => void;
   onCancel: () => void;
 }
 
@@ -18,6 +18,45 @@ export function ModalAttestationHebdo({ semaineISO, heuresJoleneSemaine, onValid
   const [atteste, setAtteste] = useState(false);
   const [saving, setSaving] = useState(false);
   const [erreur, setErreur] = useState('');
+  const dialogRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const precedent = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const dialog = dialogRef.current;
+    const elements = () => Array.from(dialog?.querySelectorAll<HTMLElement>(
+      'button:not([disabled]), input:not([disabled]), [href], [tabindex]:not([tabindex="-1"])',
+    ) ?? []).filter((element) => !element.hasAttribute('aria-hidden'));
+
+    elements()[0]?.focus();
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && !saving) {
+        event.preventDefault();
+        onCancel();
+        return;
+      }
+      if (event.key !== 'Tab') return;
+      const focusables = elements();
+      if (focusables.length === 0) {
+        event.preventDefault();
+        dialog?.focus();
+        return;
+      }
+      const premier = focusables[0];
+      const dernier = focusables[focusables.length - 1];
+      if (event.shiftKey && document.activeElement === premier) {
+        event.preventDefault();
+        dernier.focus();
+      } else if (!event.shiftKey && document.activeElement === dernier) {
+        event.preventDefault();
+        premier.focus();
+      }
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('keydown', onKeyDown);
+      precedent?.focus();
+    };
+  }, [onCancel, saving]);
 
   const totalSemaine = heuresJoleneSemaine + heures;
   const depasse48h = totalSemaine > 48;
@@ -28,8 +67,8 @@ export function ModalAttestationHebdo({ semaineISO, heuresJoleneSemaine, onValid
       setErreur("Renseigne le nom de ton employeur.");
       return;
     }
-    if (depasse48h) {
-      setErreur(`Tu dépasserais le plafond de 48h/semaine (${heuresJoleneSemaine}h Jolene + ${heures}h ailleurs = ${totalSemaine}h).`);
+    if (!user) {
+      setErreur('Ta session a expiré. Reconnecte-toi avant d’enregistrer cette déclaration.');
       return;
     }
 
@@ -37,7 +76,7 @@ export function ModalAttestationHebdo({ semaineISO, heuresJoleneSemaine, onValid
     setErreur('');
 
     const { error } = await supabase.from('attestations_heures_externes').insert({
-      soignant_id: user!.id,
+      soignant_id: user.id,
       semaine_du: semaineISO,
       heures_salarie: heures,
       employeur_principal: employeur.trim() || null,
@@ -45,24 +84,33 @@ export function ModalAttestationHebdo({ semaineISO, heuresJoleneSemaine, onValid
     } as any);
 
     if (error) {
-      // Duplicate entry = already filled → proceed
       if (error.code === '23505') {
-        onValidated();
+        setErreur('Une déclaration existe déjà pour cette semaine. Ferme cette fenêtre puis relance l’acceptation pour utiliser les données enregistrées.');
       } else {
-        setErreur(error.message);
+        setErreur('Impossible d’enregistrer la déclaration. Vérifie les informations puis réessaie.');
       }
     } else {
-      onValidated();
+      // Une déclaration véridique est toujours conservée. Le dépassement
+      // bloque seulement l'acceptation et ouvre une revue de conformité.
+      onValidated(!depasse48h);
     }
     setSaving(false);
   };
 
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center">
-      <div className="absolute inset-0 bg-foreground/50 backdrop-blur-sm" onClick={onCancel} />
-      <div className="relative bg-card rounded-2xl shadow-xl p-6 mx-4 max-w-md w-full space-y-4">
-        <h3 className="text-lg font-bold text-foreground">📋 Déclaration hebdomadaire</h3>
-        <p className="text-sm text-muted-foreground">
+      <div className="absolute inset-0 bg-foreground/50 backdrop-blur-sm" onClick={saving ? undefined : onCancel} aria-hidden="true" />
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="attestation-hebdo-titre"
+        aria-describedby="attestation-hebdo-description"
+        tabIndex={-1}
+        className="relative bg-card rounded-2xl shadow-xl p-6 mx-4 max-w-md w-full max-h-[calc(100dvh-2rem)] overflow-y-auto space-y-4"
+      >
+        <h3 id="attestation-hebdo-titre" className="text-lg font-bold text-foreground">📋 Déclaration hebdomadaire</h3>
+        <p id="attestation-hebdo-description" className="text-sm text-muted-foreground">
           Déclare tes heures travaillées ailleurs cette semaine avant d'accepter cette mission.
         </p>
 
@@ -92,9 +140,9 @@ export function ModalAttestationHebdo({ semaineISO, heuresJoleneSemaine, onValid
         </div>
 
         {depasse48h && (
-          <div className="rounded-xl bg-destructive/10 border border-destructive/20 p-3">
+          <div className="rounded-xl bg-destructive/10 border border-destructive/20 p-3" role="alert">
             <p className="text-sm text-destructive font-medium">
-              ⛔ Tu dépasserais le plafond de 48h/semaine ({heuresJoleneSemaine}h Jolene + {heures}h ailleurs = {totalSemaine}h).
+              Ta déclaration sera enregistrée, mais cette mission ne pourra pas être acceptée : {heuresJoleneSemaine}h Jolene + {heures}h ailleurs = {totalSemaine}h, au-delà du plafond de 48h. Si une mission est déjà affectée, l'équipe Jolene vérifiera la situation.
             </p>
           </div>
         )}
@@ -110,23 +158,26 @@ export function ModalAttestationHebdo({ semaineISO, heuresJoleneSemaine, onValid
           </span>
         </label>
 
-        {erreur && !depasse48h && (
-          <p className="text-sm text-destructive">{erreur}</p>
+        {erreur && (
+          <p className="text-sm text-destructive" role="alert">{erreur}</p>
         )}
 
         <div className="flex gap-3 pt-2">
           <button
             onClick={onCancel}
-            className="flex-1 btn-secondary text-sm py-2.5"
+            disabled={saving}
+            className="flex-1 min-h-11 btn-secondary text-sm py-2.5"
           >
             Annuler
           </button>
           <button
             onClick={handleValider}
-            disabled={!atteste || depasse48h || saving}
-            className="flex-1 btn-primary text-sm py-2.5 disabled:opacity-50 flex items-center justify-center gap-2"
+            disabled={!atteste || saving}
+            className="flex-1 min-h-11 btn-primary text-sm py-2.5 disabled:opacity-50 flex items-center justify-center gap-2"
           >
-            {saving ? <><Loader2 className="h-4 w-4 animate-spin" /> Enregistrement…</> : '✅ Valider et continuer'}
+            {saving
+              ? <><Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> Enregistrement…</>
+              : depasse48h ? 'Enregistrer sans accepter' : 'Valider et continuer'}
           </button>
         </div>
       </div>

@@ -31,6 +31,7 @@ import { PROFESSIONS, BADGES_STATUT } from '@/lib/constantes';
 import { useEtablissementScope } from '@/hooks/useEtablissementScope';
 import { logger } from '@/lib/logger';
 import { cn } from '@/lib/utils';
+import { usePageTitle } from '@/hooks/usePageTitle';
 
 interface SoignantPool {
   id: string;
@@ -79,6 +80,7 @@ function PoolLayout({ isAdmin, children }: { isAdmin: boolean; children: React.R
 }
 
 export default function PoolUrgenceEtablissement({ isAdmin = false }: { isAdmin?: boolean }) {
+  usePageTitle(isAdmin ? "Admin · Pool d'urgence" : "Pool d'urgence");
   const { user, etablissementId: scopedEtablissementId } = useEtablissementScope();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();

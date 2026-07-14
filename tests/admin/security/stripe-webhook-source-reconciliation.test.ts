@@ -60,7 +60,7 @@ describe('Stripe webhook — frontières de source P0', () => {
 
 describe('Stripe webhook — réconciliation retryable après mouvement', () => {
   it('reprend la réconciliation locale d’un transfert déjà créé sans recréer les fonds', () => {
-    const lookupStart = handler.indexOf('const { data: transferExistant');
+    const lookupStart = handler.indexOf('const transferExistant = validatedTransferClaim;');
     const movementStart = handler.indexOf('let mouvementStripeConfirme', lookupStart);
     const createStart = handler.indexOf('stripe.transfers.create', movementStart);
     const paymentReconciliation = handler.indexOf('const { data: existingPayment', createStart);
@@ -91,10 +91,8 @@ describe('Stripe webhook — réconciliation retryable après mouvement', () => 
     for (const message of [
       'Transfer persistence failed after Stripe success',
       'Caregiver payment reconciliation lookup failed',
-      'Mission reconciliation lookup failed',
       'Caregiver payment persistence failed',
       'Mission payment reconciliation failed',
-      'Commission invoice lookup failed',
       'Commission invoice persistence failed',
       'Caregiver invoice reconciliation failed',
       'Caregiver invoice state lookup failed',
@@ -130,6 +128,39 @@ describe('Stripe webhook — réconciliation retryable après mouvement', () => 
     expect(gateBlock).toContain('payment_intent.succeeded');
     expect(gateBlock).toContain('await markEventProcessed()');
   });
+
+  it('valide le PaymentIntent et la Session Checkout avant tout update PAYEE', () => {
+    const standardFlowStart = handler.indexOf('// ── Standard facture payment flow ──');
+    const retrieve = handler.indexOf('stripe.paymentIntents.retrieve(', standardFlowStart);
+    const validation = handler.indexOf(
+      'const existingFacture = await loadAndValidateInvoicePayment(',
+      standardFlowStart,
+    );
+    const payeeUpdate = handler.indexOf('statut: "PAYEE"', validation);
+
+    expect(retrieve).toBeGreaterThan(standardFlowStart);
+    expect(validation).toBeGreaterThan(retrieve);
+    expect(payeeUpdate).toBeGreaterThan(validation);
+    const validationHelper = handler.slice(
+      handler.indexOf('const loadAndValidateInvoicePayment'),
+      handler.indexOf('const requireConnectedSoignantId'),
+    );
+    expect(validationHelper).toContain('findInvoicePaymentIntentInconsistencies');
+    expect(validationHelper).toContain('findInvoiceCheckoutSessionInconsistencies');
+    expect(validationHelper).toContain('paymentIntent.status !== "succeeded"');
+    expect(validationHelper).toContain('FACTURE_PAIEMENT_STRIPE_IDENTITE_INCOHERENTE');
+    expect(validationHelper).toContain('throw new Error(');
+  });
+
+  it('valide payment_intent.succeeded avant son CAS PAYEE de secours', () => {
+    const branchStart = handler.indexOf('// Handle payment_intent.succeeded (backup reconciliation)');
+    const validation = handler.indexOf('await loadAndValidateInvoicePayment(', branchStart);
+    const payeeUpdate = handler.indexOf('statut: "PAYEE"', validation);
+
+    expect(branchStart).toBeGreaterThan(0);
+    expect(validation).toBeGreaterThan(branchStart);
+    expect(payeeUpdate).toBeGreaterThan(validation);
+  });
 });
 
 describe('Stripe webhook — incidents financiers retryables', () => {
@@ -146,7 +177,8 @@ describe('Stripe webhook — incidents financiers retryables', () => {
 
     expect(block).toContain('failedChargeLookupError');
     expect(block).toContain('failedChargeUpdateError');
-    expect(block).toContain('failedChargeAuditError');
+    expect(block).toContain('writeRequiredFinancialAudit(supabaseAdmin');
+    expect(block).toContain('Failed charge audit failed');
     expect(block).toContain('throw new Error(`Failed charge');
     expect(block).toContain('catch (emailErr)');
   });
@@ -158,7 +190,8 @@ describe('Stripe webhook — incidents financiers retryables', () => {
     expect(block).toContain('escrowDisputeIncidentError');
     expect(block).toContain('disputeTransferLookupError');
     expect(block).toContain('disputeTransferUpdateError');
-    expect(block).toContain('disputeCreatedAuditError');
+    expect(block).toContain('writeRequiredFinancialAudit(supabaseAdmin');
+    expect(block).toContain('Dispute creation audit failed');
     expect(block).toContain('catch (emailErr)');
   });
 
@@ -167,7 +200,8 @@ describe('Stripe webhook — incidents financiers retryables', () => {
 
     expect(block).toContain('closedDisputeLookupError');
     expect(block).toContain('closedDisputeUpdateError');
-    expect(block).toContain('disputeClosedAuditError');
+    expect(block).toContain('writeRequiredFinancialAudit(supabaseAdmin');
+    expect(block).toContain('Dispute closure audit failed');
     expect(block).toContain('throw new Error(`Closed dispute');
     expect(block).toContain('catch (emailErr)');
   });

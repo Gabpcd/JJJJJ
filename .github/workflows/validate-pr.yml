@@ -1,11 +1,12 @@
-name: Validate PR (typecheck + build + drift detection)
+name: Validate PR (tests + typecheck + build + drift detection)
 
 # Vérifie la qualité de chaque PR avant merge :
 # 1. TypeScript strict compile
-# 2. Build Vite (repère les erreurs d'import et de bundling)
-# 3. Drift detection : cherche les patterns hérités de Lovable dans les
+# 2. Tests unitaires Vitest
+# 3. Build Vite (repère les erreurs d'import et de bundling)
+# 4. Drift detection : cherche les patterns hérités de Lovable dans les
 #    edge functions et le frontend, fail si détecté
-# 4. Contrat front ↔ back : échoue si le frontend appelle un RPC / une edge
+# 5. Contrat front ↔ back : échoue si le frontend appelle un RPC / une edge
 #    function / un bucket qui n'existe NI en prod NI dans le repo (anti-raccord
 #    mort — la classe de bug qui a tué fn_ma_streak, fn_soignant_score_breakdown,
 #    les buckets factures-honoraires/avoirs, etc.)
@@ -23,6 +24,7 @@ env:
 
 jobs:
   typecheck-and-build:
+    # Conserver ce nom : il peut être référencé par la protection de branche.
     name: Typecheck + build
     runs-on: ubuntu-latest
     steps:
@@ -43,6 +45,12 @@ jobs:
         # passer des "Cannot find name" en prod (cf. crash dashboard AS sur
         # getLabelProfession non importé).
         run: npx tsc -b
+
+      - name: Tests unitaires
+        run: npm test -- --reporter=dot
+
+      - name: Valider les formats de captures stores
+        run: npm run screenshots:play:check && npm run screenshots:app-store:check
 
       - name: Build
         run: npm run build
@@ -156,16 +164,145 @@ jobs:
         run: npm ci
       - name: test:regression:derivation (pur, toujours bloquant)
         run: npm run test:regression:derivation
-      - name: test:schema + invoicing (DB) — dégradation gracieuse si secret absent
+      - name: test:schema + invoicing
         env:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
         run: |
-          if [ -z "$SUPABASE_DB_URL" ]; then
-            echo "::warning::SUPABASE_DB_URL absent — schema+invoicing (DB) ignorés pour ne pas produire de faux négatif. Câbler ce secret pour rendre le check pleinement bloquant (B7)."
-            exit 0
-          fi
-          npm run test:schema
           npm run test:regression:invoicing
+          if [ -n "$SUPABASE_DB_URL" ]; then
+            npm run test:schema
+          else
+            echo "::warning::SUPABASE_DB_URL absent — garde-fou SQL direct ignoré; les tests de facturation purs ont bien été exécutés et les tests d'intégration restent explicitement signalés comme ignorés."
+          fi
+
+  sql-transaction:
+    name: Migrations + sécurité SQL (transaction annulée)
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: validate-sql-staging
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: 2.98.0
+
+      - name: Synchroniser le schéma main vers le staging
+        env:
+          STAGING_SUPABASE_ACCESS_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
+          STAGING_SUPABASE_PROJECT_REF: ${{ secrets.STAGING_SUPABASE_PROJECT_REF }}
+          STAGING_SUPABASE_DB_PASSWORD: ${{ secrets.STAGING_SUPABASE_DB_PASSWORD }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          if [ -z "$STAGING_SUPABASE_ACCESS_TOKEN" ] \
+             || [ -z "$STAGING_SUPABASE_PROJECT_REF" ] \
+             || [ -z "$STAGING_SUPABASE_DB_PASSWORD" ] \
+             || [ -z "$BASE_SHA" ]; then
+            echo "::error::Secrets Supabase STAGING ou SHA de base absents : le bootstrap SQL bloquant ne peut pas s'exécuter. Aucun repli production n'est autorisé."
+            exit 1
+          fi
+          if [ "$STAGING_SUPABASE_PROJECT_REF" != 'mejpriaetwgtcstbgfid' ] \
+             || [ "$STAGING_SUPABASE_PROJECT_REF" = 'flripxtsyegjshnhzjkz' ]; then
+            echo "::error::STAGING_SUPABASE_PROJECT_REF ne cible pas le staging Jolene autorisé : bootstrap SQL refusé."
+            exit 1
+          fi
+
+          git cat-file -e "${BASE_SHA}^{commit}"
+          BASE_WORKTREE="$RUNNER_TEMP/jolene-base-main"
+          git worktree add --detach "$BASE_WORKTREE" "$BASE_SHA"
+          trap 'git worktree remove --force "$BASE_WORKTREE" >/dev/null 2>&1 || true' EXIT
+
+          # Seules les migrations déjà revues et mergées dans le SHA de base
+          # peuvent persister sur le staging. Le code de la PR n'est jamais
+          # utilisé par db push ; il sera testé séparément sous ROLLBACK.
+          SUPABASE_ACCESS_TOKEN="$STAGING_SUPABASE_ACCESS_TOKEN" \
+            supabase link \
+              --project-ref "$STAGING_SUPABASE_PROJECT_REF" \
+              --password "$STAGING_SUPABASE_DB_PASSWORD" \
+              --workdir "$BASE_WORKTREE"
+          SUPABASE_ACCESS_TOKEN="$STAGING_SUPABASE_ACCESS_TOKEN" \
+            supabase db push \
+              --include-all \
+              --yes \
+              --password "$STAGING_SUPABASE_DB_PASSWORD" \
+              --workdir "$BASE_WORKTREE"
+
+      - name: Exécuter les migrations ajoutées et les régressions SQL sans persister
+        env:
+          STAGING_SUPABASE_ACCESS_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
+          STAGING_SUPABASE_PROJECT_REF: ${{ secrets.STAGING_SUPABASE_PROJECT_REF }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          if [ -z "$STAGING_SUPABASE_ACCESS_TOKEN" ] || [ -z "$STAGING_SUPABASE_PROJECT_REF" ] || [ -z "$BASE_SHA" ]; then
+            echo "::error::Secrets Supabase STAGING ou SHA de base absents : la validation SQL bloquante ne peut pas s'exécuter. Aucun repli production n'est autorisé."
+            exit 1
+          fi
+          if [ "$STAGING_SUPABASE_PROJECT_REF" != 'mejpriaetwgtcstbgfid' ] \
+             || [ "$STAGING_SUPABASE_PROJECT_REF" = 'flripxtsyegjshnhzjkz' ]; then
+            echo "::error::STAGING_SUPABASE_PROJECT_REF ne cible pas le staging Jolene autorisé : validation SQL refusée."
+            exit 1
+          fi
+
+          mapfile -t MIGRATIONS < <(
+            git diff --name-only --diff-filter=A "$BASE_SHA"...HEAD -- 'supabase/migrations/*.sql' | sort
+          )
+          SQL_TESTS=(
+            tests/admin/security/admin-launch-access-guard.test.sql
+            tests/admin/security/admin-document-moderation-hardening.test.sql
+            tests/admin/security/database-runtime-lint-fixes.test.sql
+            tests/admin/security/database-runtime-lint-residual.test.sql
+            tests/admin/security/database-establishment-rpc-rbac.test.sql
+            tests/admin/security/litige-rpc-flow.test.sql
+            tests/admin/security/litige-admin-financial-resolution.test.sql
+            tests/admin/security/mission-start-direct-insert-gate.test.sql
+            tests/admin/security/external-hours-p0-hardening.test.sql
+            tests/admin/security/etablissement-rib-review-queue.test.sql
+            tests/admin/security/manual-review-admin-queue.test.sql
+            tests/security/establishment-admin-review-hardening.test.sql
+            tests/security/etablissement-verification-source-replacement.test.sql
+            tests/security/admin-suspension-auth.test.sql
+            tests/security/moyenne-44h-12-semaines.test.sql
+            tests/security/p0-auth-rls.test.sql
+            tests/lot21/d4-cascade-profession-mission.test.sql
+          )
+
+          {
+            echo 'BEGIN;'
+            echo "SET LOCAL statement_timeout = '120s';"
+            echo "SET LOCAL lock_timeout = '10s';"
+            for file in "${MIGRATIONS[@]}"; do
+              printf '\n-- migration: %s\n' "$file"
+              sed -E '/^[[:space:]]*(BEGIN|COMMIT|ROLLBACK);[[:space:]]*$/d' "$file"
+            done
+            for file in "${SQL_TESTS[@]}"; do
+              test -f "$file" || { echo "::error::Suite SQL absente: $file" >&2; exit 1; }
+              printf '\n-- regression: %s\n' "$file"
+              sed -E '/^[[:space:]]*\\/d; /^[[:space:]]*(BEGIN|COMMIT|ROLLBACK);[[:space:]]*$/d' "$file"
+            done
+            echo 'ROLLBACK;'
+          } > /tmp/jolene-pr-validation.sql
+
+          jq -Rs '{query: .}' /tmp/jolene-pr-validation.sql > /tmp/jolene-pr-validation.json
+          code=$(curl -sS --connect-timeout 10 --max-time 180 \
+            -o /tmp/jolene-pr-validation-response.json -w '%{http_code}' \
+            -X POST "https://api.supabase.com/v1/projects/${STAGING_SUPABASE_PROJECT_REF}/database/query" \
+            -H "Authorization: Bearer ${STAGING_SUPABASE_ACCESS_TOKEN}" \
+            -H 'Content-Type: application/json' \
+            --data-binary @/tmp/jolene-pr-validation.json)
+          if [ "$code" -lt 200 ] || [ "$code" -ge 300 ]; then
+            echo "::error::Validation SQL transactionnelle refusée par Supabase (HTTP $code)."
+            jq -r '.message // .error // "Erreur SQL non détaillée"' \
+              /tmp/jolene-pr-validation-response.json 2>/dev/null || true
+            exit 1
+          fi
+          echo "✅ ${#MIGRATIONS[@]} migration(s) ajoutée(s) et ${#SQL_TESTS[@]} suites SQL validées sous ROLLBACK."
 
   escrow-gate:
     name: Escrow (recette si paiements touchés)
@@ -200,31 +337,22 @@ jobs:
         with:
           node-version: '24'
           cache: 'npm'
-      - name: Recette escrow (mode test Stripe)
+      - name: Régressions paiement/escrow sans accès production
         if: steps.scope.outputs.touche == 'true'
-        # Noms de variables attendus par e2e/helpers/db.ts : SUPABASE_URL +
-        # SUPABASE_SERVICE_ROLE_KEY + SUPABASE_PUBLISHABLE_KEY.
-        env:
-          SUPABASE_URL: ${{ secrets.E2E_SUPABASE_URL }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          SUPABASE_PUBLISHABLE_KEY: ${{ secrets.E2E_PUBLISHABLE_KEY }}
-          SUPABASE_ANON_KEY: ${{ secrets.E2E_ANON_KEY }}
-          E2E_TEST_PASSWORD: ${{ secrets.E2E_TEST_PASSWORD }}
-          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
-          STRIPE_SECRET_KEY_TEST: ${{ secrets.STRIPE_SECRET_KEY_TEST }}
-        # Dégradation gracieuse : si l'env recette est incomplet (notamment la clé
-        # Stripe test pas encore câblée), on NE FAIT PAS échouer le check — sinon
-        # toute PR touchant supabase/ serait bloquée avant que les secrets soient
-        # posés. Warning + exit 0. Le check devient pleinement bloquant une fois
-        # les 3 secrets présents (SUPABASE_URL, SERVICE_ROLE_KEY, STRIPE test).
+        # Ce check PR reste pur : il ne crée aucune fixture dans la base partagée
+        # et ne prétend pas appeler Stripe. La vraie recette Stripe test/Connect
+        # est le workflow manuel `recette-escrow-stripe.yml`, exécuté sur la
+        # branche Supabase de recette avec une clé sk_test.
         run: |
-          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_SERVICE_ROLE_KEY" ] || [ -z "$STRIPE_SECRET_KEY_TEST" ]; then
-            echo "::warning::Env recette escrow incomplet (SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY / STRIPE_SECRET_KEY_TEST) — recette ignorée pour ne pas produire de faux négatif. Câbler ces 3 secrets pour activer la recette escrow bloquante (B7)."
-            exit 0
-          fi
           npm ci
-          npx playwright install --with-deps chromium
-          npm run test:escrow
+          npx vitest run \
+            src/components/gains/PaiementsEscrowAVenir.test.tsx \
+            tests/admin/security/escrow-release-debite-gate.test.ts \
+            tests/admin/security/invoice-payment-state-cas.test.ts \
+            tests/admin/security/mission-payment-persistence.test.ts \
+            tests/admin/security/refund-queue-recovery.test.ts \
+            tests/admin/security/stripe-payment-rbac.test.ts \
+            tests/admin/security/stripe-webhook-source-reconciliation.test.ts
 
   # NB : le job supabase-advisors a été retiré parce que l'endpoint
   # /v1/projects/{ref}/advisors n'existe pas dans le Management API public.

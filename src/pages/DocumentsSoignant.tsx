@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useCallback, useState, useEffect, useMemo } from 'react';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { handleErrorSilent } from '@/lib/handleError';
 import { useNavigate } from 'react-router-dom';
@@ -119,7 +119,7 @@ function AttestationSante({ userId }: { userId: string }) {
         <button
           onClick={signer}
           disabled={!canSign || signing}
-          className="btn-primary w-full disabled:opacity-50 disabled:cursor-not-allowed"
+          className="btn-primary min-h-[44px] w-full disabled:cursor-not-allowed disabled:opacity-50"
         >
           {signing ? 'Signature en cours…' : '✅ Signer mon attestation'}
         </button>
@@ -148,6 +148,7 @@ export function DocumentsSoignantContent() {
   const [documentsRequis, setDocumentsRequis] = useState<any[]>([]);
   const [mesDocuments, setMesDocuments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [erreurChargement, setErreurChargement] = useState<string | null>(null);
   const [reverifyingId, setReverifyingId] = useState<string | null>(null);
 
   // Modal state
@@ -159,14 +160,32 @@ export function DocumentsSoignantContent() {
   const [docsEnVerification, setDocsEnVerification] = useState<string[]>([]);
   const [confettiActif, setConfettiActif] = useState(false);
 
-  const charger = async () => {
-    if (!user) return;
-    const [{ data: sg }, { data: dr }, { data: md }] = await Promise.all([
-      supabase.from('soignants').select('profession, prenom, nom, type_exercice, rpps_verifie, adeli_verifie').eq('id', user.id).maybeSingle(),
-      supabase.from('documents_requis_par_profession').select('id, profession, type_document, description, a_expiration, duree_validite_mois, est_critique, type_exercice_requis'),
-      supabase.from('documents_soignants').select('id, soignant_id, type_document, nom_fichier, statut_verification, valide_depuis, valide_jusqua, televerse_le, motif_rejet, est_critique, s3_cle, s3_bucket, type_mime, taille_octets, libelle').eq('soignant_id', user.id).is('supprime_le', null).order('televerse_le', { ascending: false }),
-    ]);
-    if (sg) {
+  const charger = useCallback(async (afficherChargement = false) => {
+    if (afficherChargement) setLoading(true);
+    setErreurChargement(null);
+
+    if (!user) {
+      setErreurChargement('Votre session n’a pas pu être identifiée. Reconnectez-vous puis réessayez.');
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const [profilResultat, reglesResultat, documentsResultat] = await Promise.all([
+        supabase.from('soignants').select('profession, prenom, nom, type_exercice, rpps_verifie, adeli_verifie').eq('id', user.id).maybeSingle(),
+        supabase.from('documents_requis_par_profession').select('id, profession, type_document, description, a_expiration, duree_validite_mois, est_critique, type_exercice_requis'),
+        supabase.from('documents_soignants').select('id, soignant_id, type_document, nom_fichier, statut_verification, valide_depuis, valide_jusqua, televerse_le, motif_rejet, est_critique, s3_cle, s3_bucket, type_mime, taille_octets, libelle').eq('soignant_id', user.id).is('supprime_le', null).order('televerse_le', { ascending: false }),
+      ]);
+
+      if (profilResultat.error || reglesResultat.error || documentsResultat.error) {
+        throw profilResultat.error || reglesResultat.error || documentsResultat.error;
+      }
+
+      const sg = profilResultat.data;
+      const dr = reglesResultat.data;
+      const md = documentsResultat.data;
+      if (!sg) throw new Error('Profil soignant introuvable');
+
       setSoignant(sg);
       // Filtrage par profession ET type_exercice :
       // LIBERAL/MIXTE → inclut les documents LIBERAL_ONLY (RCP/RIB/URSSAF)
@@ -176,28 +195,35 @@ export function DocumentsSoignantContent() {
       const estSalarie = (sg as any).type_exercice !== 'LIBERAL'; // SALARIE + MIXTE + null/CDD
       const rppsVerifie = !!(sg as any).rpps_verifie;
       const adeliVerifie = !!(sg as any).adeli_verifie;
-      const identiteVerifiee = rppsVerifie || adeliVerifie;
+      const registreProfessionnelVerifie = rppsVerifie || adeliVerifie;
       setDocumentsRequis(
         (dr || []).filter((d: any) => {
           if (d.profession !== (sg as any).profession) return false;
           if (TYPES_DOCUMENTS_EXCLUS_UPLOAD.includes(d.type_document)) return false;
-          if (identiteVerifiee && d.type_document === 'DIPLOME') return false;
-          if (identiteVerifiee && d.type_document === 'RPPS_ADELI') return false;
-          // RPPS/ADELI vérifié = profession française reconnue → l'autorisation
-          // d'exercice (diplôme étranger / PAE) n'a plus lieu d'être, comme le diplôme.
-          if (identiteVerifiee && d.type_document === 'AUTORISATION_EXERCICE') return false;
+          // Le registre RPPS/ADELI complète le contrôle documentaire mais ne
+          // remplace jamais le diplôme. C'est notamment indispensable pour
+          // distinguer IDE, IADE et IBODE, que les codes RPPS génériques ne
+          // permettent pas toujours de départager.
+          if (registreProfessionnelVerifie && d.type_document === 'RPPS_ADELI') return false;
+          // Une autorisation d'exercice reste une preuve distincte du diplôme.
+          // Elle n'est masquée que lorsque le registre officiel est déjà validé.
+          if (registreProfessionnelVerifie && d.type_document === 'AUTORISATION_EXERCICE') return false;
           const exReq = d.type_exercice_requis || 'TOUS';
           if (exReq === 'LIBERAL_ONLY') return estLiberal;
           if (exReq === 'SALARIE_ONLY') return estSalarie;
           return true; // TOUS
         })
       );
+      setMesDocuments(md || []);
+    } catch (error) {
+      handleErrorSilent(error, 'DocumentsSoignant.chargement');
+      setErreurChargement('Vos documents sont temporairement indisponibles. Vérifiez votre connexion puis réessayez.');
+    } finally {
+      setLoading(false);
     }
-    setMesDocuments(md || []);
-    setLoading(false);
-  };
+  }, [user]);
 
-  useEffect(() => { charger(); }, [user]);
+  useEffect(() => { void charger(true); }, [charger]);
 
   const docsRequis = useMemo(() => documentsRequis.filter(d => d.est_critique), [documentsRequis]);
   const docsValides = useMemo(() => docsRequis.filter(r =>
@@ -219,11 +245,10 @@ export function DocumentsSoignantContent() {
   const verificationActive = docsEnVerification.length > 0;
   useEffect(() => {
     if (!verificationActive) return;
-    const interval = window.setInterval(() => { charger(); }, 5000);
+    const interval = window.setInterval(() => { void charger(); }, 5000);
     const timeout = window.setTimeout(() => setDocsEnVerification([]), 60000);
     return () => { window.clearInterval(interval); window.clearTimeout(timeout); };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [verificationActive]);
+  }, [charger, verificationActive]);
 
   // Verdict IA inline : dès qu'un document suivi quitte EN_ATTENTE, on arrête son
   // suivi puis on enchaîne sur l'étape suivante (checklist) ou on célèbre le 100 %.
@@ -291,8 +316,10 @@ export function DocumentsSoignantContent() {
         toast.success('✅ Document vérifié automatiquement !');
       } else if (verifyData?.verdict === 'REJETE') {
         toast.error(`❌ Document rejeté : ${verifyData?.analysis?.motif_rejet || 'Non conforme'}`);
+      } else if (verifyData?.verdict === 'REVUE_MANUELLE_REQUISE') {
+        toast.info('Document reçu. Une revue humaine est en attente d’attribution.');
       } else {
-        toast.info('⏳ Vérification en cours de traitement...');
+        toast.info('⏳ Vérification en attente...');
       }
       await charger();
     } catch (err) {
@@ -343,38 +370,34 @@ export function DocumentsSoignantContent() {
       return;
     }
 
-    const insertData: any = {
-      soignant_id: user.id,
-      type_document: televersementType as any,
-      libelle: libelle || null,
-      s3_cle: chemin,
-      nom_fichier: fichier.name,
-      type_mime: validation.mime,
-      taille_octets: fichier.size,
-      // Les champs de validation, dates et criticité sont exclusivement
-      // calculés côté serveur : le client ne peut pas se déclarer vérifié.
-    };
+    // La ligne et le remplacement de l'ancienne preuve sont créés dans une
+    // seule transaction serveur. Le client ne peut fournir aucun verdict,
+    // aucune date de validité ni aucun indicateur de criticité.
+    const { data, error } = await supabase.rpc('fn_remplacer_document_soignant' as any, {
+      p_type_document: televersementType,
+      p_libelle: libelle || '',
+      p_s3_cle: chemin,
+      p_nom_fichier: fichier.name,
+      p_type_mime: validation.mime,
+      p_taille_octets: fichier.size,
+    });
+    const resultat = data as any;
 
-    const { data, error } = await supabase.from('documents_soignants').insert(insertData).select().single();
-
-    if (error) {
+    if (error || !resultat?.success || !resultat?.document_id) {
       const { error: cleanupError } = await supabase.functions.invoke('verify-document', {
         body: { action: 'cleanup_orphan', s3_cle: chemin },
       });
       if (cleanupError) handleErrorSilent(cleanupError, 'Nettoyage document non rattaché');
-      toast.error(extraireMessageErreur(error));
+      toast.error(
+        resultat?.error_code === 'CHEMIN_DOCUMENT_INVALIDE'
+          || resultat?.error_code === 'METADONNEES_DOCUMENT_INVALIDES'
+          ? 'Le document ne peut pas être enregistré. Vérifie son format puis réessaie.'
+          : extraireMessageErreur(error || resultat?.error_code || 'Enregistrement impossible'),
+      );
       return;
     }
 
-    const docId = (data as any).id;
-
-    const { error: auditError } = await supabase.rpc('fn_ecrire_audit_safe', {
-      p_acteur_id: user.id, p_type_acteur: 'SOIGNANT', p_action: 'DOCUMENT_TELEVERSEMENT',
-      p_type_ressource: 'document', p_id_ressource: docId, p_cle_s3: chemin,
-      p_details: { type_document: televersementType, nom_fichier: fichier.name, taille: fichier.size },
-      p_ip: null, p_navigateur: navigator.userAgent,
-    });
-    if (auditError) handleErrorSilent(auditError, 'Audit téléversement document');
+    const docId = resultat.document_id as string;
 
     // Verdict affiché inline sur la carte du document (spinner → Vérifié/Rejeté)
     setDocsEnVerification(prev => [...prev, docId]);
@@ -432,7 +455,14 @@ export function DocumentsSoignantContent() {
 
   const supprimerDocument = async () => {
     if (!suppDocId || !user) return;
-    await supabase.from('documents_soignants').update({ supprime_le: new Date().toISOString() } as any).eq('id', suppDocId);
+    const { error: suppressionError } = await supabase
+      .from('documents_soignants')
+      .update({ supprime_le: new Date().toISOString() } as any)
+      .eq('id', suppDocId);
+    if (suppressionError) {
+      toast.error(extraireMessageErreur(suppressionError));
+      return;
+    }
     await supabase.rpc('fn_ecrire_audit_safe', {
       p_acteur_id: user.id, p_type_acteur: 'SOIGNANT', p_action: 'DOCUMENT_SUPPRESSION',
       p_type_ressource: 'document', p_id_ressource: suppDocId, p_cle_s3: null,
@@ -444,6 +474,25 @@ export function DocumentsSoignantContent() {
   };
 
   if (loading) return <ChargementPage />;
+
+  if (erreurChargement) {
+    return (
+      <div role="alert" className="rounded-2xl border border-destructive/30 bg-destructive/5 p-5 text-center">
+        <AlertCircle className="mx-auto h-8 w-8 text-destructive" />
+        <h2 className="mt-3 text-base font-bold text-foreground">Documents indisponibles</h2>
+        <p className="mt-1 text-sm text-muted-foreground">{erreurChargement}</p>
+        <BoutonY2K
+          variant="secondary"
+          size="sm"
+          className="mt-4 min-h-[44px] gap-2"
+          onClick={() => void charger(true)}
+          iconeGauche={<RefreshCw className="h-4 w-4" />}
+        >
+          Réessayer
+        </BoutonY2K>
+      </div>
+    );
+  }
 
   // Organize: critiques first, then optionnels
   const typesOrdonnes = [
@@ -513,7 +562,7 @@ export function DocumentsSoignantContent() {
           <Clock className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
           <p className="text-xs text-destructive">
             ⏰ Ton {TYPES_DOCUMENTS[d.type_document] || d.type_document} expire dans {differenceInDays(new Date(d.valide_jusqua), new Date())} jour{differenceInDays(new Date(d.valide_jusqua), new Date()) > 1 ? 's' : ''} ({format(new Date(d.valide_jusqua), 'd MMM yyyy', { locale: fr })}).{' '}
-            <button onClick={() => setTeleversementType(d.type_document)} className="text-primary font-medium hover:underline">Mettre à jour →</button>
+            <button onClick={() => setTeleversementType(d.type_document)} className="inline-flex min-h-[44px] items-center rounded-lg px-2 font-medium text-primary hover:bg-primary/5 hover:underline">Mettre à jour →</button>
           </p>
         </div>
       ))}
@@ -606,12 +655,13 @@ export function DocumentsSoignantContent() {
                     )}
                     {doc.statut_verification === 'EN_ATTENTE' && (
                       <span className="inline-flex items-center gap-1 badge-base bg-amber-100 text-amber-700 text-[10px] mt-1">
-                        <Loader2 className="h-3 w-3 animate-spin" /> {enVerification ? 'Vérification en cours (~30 s)' : 'En attente de vérification ⏳'}
+                        {enVerification ? <Loader2 className="h-3 w-3 animate-spin" /> : <Clock className="h-3 w-3" />}
+                        {enVerification ? 'Vérification automatique en cours (~30 s)' : 'Analyse non conclue — revue humaine disponible'}
                       </span>
                     )}
                     {doc.statut_verification === 'REVUE_MANUELLE_REQUISE' && (
                       <span className="inline-flex items-center gap-1 badge-base bg-blue-100 text-blue-700 text-[10px] mt-1">
-                        <Clock className="h-3 w-3" /> En cours de vérification
+                        <Clock className="h-3 w-3" /> Demande reçue — en attente d’attribution
                       </span>
                     )}
                     {doc.statut_verification === 'API_INDISPONIBLE' && (
@@ -625,20 +675,29 @@ export function DocumentsSoignantContent() {
                     {doc.valide_jusqua && (
                       <p className="text-[10px] text-muted-foreground mt-1">Valide jusqu'au {format(new Date(doc.valide_jusqua), 'd MMM yyyy', { locale: fr })}</p>
                     )}
-                    <div className="flex gap-2 mt-2">
-                      <button onClick={() => voirDocument(doc)} className="text-xs text-primary font-medium hover:underline">Voir le document</button>
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      <button onClick={() => voirDocument(doc)} className="inline-flex min-h-[44px] items-center rounded-lg px-2 py-2 text-xs font-medium text-primary hover:bg-primary/5 hover:underline">Voir le document</button>
                       {doc.statut_verification !== 'VERIFIE' && (
                         <button
                           onClick={() => reverifier(doc.id)}
                           disabled={reverifyingId === doc.id}
-                          className="inline-flex items-center gap-1 text-xs text-primary font-medium hover:underline disabled:opacity-50"
+                          className="inline-flex min-h-[44px] items-center gap-1 rounded-lg px-2 py-2 text-xs font-medium text-primary hover:bg-primary/5 hover:underline disabled:opacity-50"
                         >
                           {reverifyingId === doc.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
                           Revérifier
                         </button>
                       )}
-                      <button onClick={() => setTeleversementType(requis.type_document)} className="text-xs text-primary font-medium hover:underline">Remplacer</button>
-                      <button onClick={() => setSuppDocId(doc.id)} className="text-xs text-destructive font-medium hover:underline">Supprimer</button>
+                      {['EN_ATTENTE', 'API_INDISPONIBLE'].includes(doc.statut_verification) && !enVerification && (
+                        <button
+                          onClick={() => demanderRevueHumaine(doc.id)}
+                          disabled={reviewRequestId === doc.id}
+                          className="inline-flex min-h-[44px] items-center rounded-lg px-2 py-2 text-xs font-semibold text-primary hover:bg-primary/5 hover:underline disabled:opacity-50"
+                        >
+                          {reviewRequestId === doc.id ? 'Demande en cours…' : 'Demander une revue humaine'}
+                        </button>
+                      )}
+                      <button onClick={() => setTeleversementType(requis.type_document)} className="inline-flex min-h-[44px] items-center rounded-lg px-2 py-2 text-xs font-medium text-primary hover:bg-primary/5 hover:underline">Remplacer</button>
+                      <button onClick={() => setSuppDocId(doc.id)} className="inline-flex min-h-[44px] items-center rounded-lg px-2 py-2 text-xs font-medium text-destructive hover:bg-destructive/5 hover:underline">Supprimer</button>
                     </div>
                   </div>
                 ) : estRejete ? (
@@ -655,13 +714,13 @@ export function DocumentsSoignantContent() {
                         <BadgeY2K variant="error" size="sm" className="mt-1">Rejeté</BadgeY2K>
                       </>
                     )}
-                    <div className="flex items-center gap-3 mt-2">
-                      <button onClick={() => setTeleversementType(requis.type_document)} className="btn-primary text-xs px-3 py-1.5">Réessayer</button>
-                      <button onClick={() => voirDocument(doc)} className="text-xs text-primary font-medium hover:underline">Voir</button>
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      <button onClick={() => setTeleversementType(requis.type_document)} className="btn-primary inline-flex min-h-[44px] items-center px-3 py-2 text-xs">Réessayer</button>
+                      <button onClick={() => voirDocument(doc)} className="inline-flex min-h-[44px] items-center rounded-lg px-2 py-2 text-xs font-medium text-primary hover:bg-primary/5 hover:underline">Voir</button>
                       <button
                         onClick={() => reverifier(doc.id)}
                         disabled={reverifyingId === doc.id}
-                        className="inline-flex items-center gap-1 text-xs text-primary font-medium hover:underline disabled:opacity-50"
+                        className="inline-flex min-h-[44px] items-center gap-1 rounded-lg px-2 py-2 text-xs font-medium text-primary hover:bg-primary/5 hover:underline disabled:opacity-50"
                       >
                         {reverifyingId === doc.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
                         Revérifier
@@ -669,7 +728,7 @@ export function DocumentsSoignantContent() {
                       <button
                         onClick={() => demanderRevueHumaine(doc.id)}
                         disabled={reviewRequestId === doc.id}
-                        className="text-xs text-primary font-semibold hover:underline disabled:opacity-50"
+                        className="inline-flex min-h-[44px] items-center rounded-lg px-2 py-2 text-xs font-semibold text-primary hover:bg-primary/5 hover:underline disabled:opacity-50"
                       >
                         {reviewRequestId === doc.id ? 'Demande en cours…' : 'Demander une revue humaine'}
                       </button>
@@ -679,12 +738,12 @@ export function DocumentsSoignantContent() {
                   <div className="mt-2">
                     <p className="text-xs text-amber-600">Document expiré depuis le {format(new Date(doc.valide_jusqua), 'd MMM yyyy', { locale: fr })}. Veuillez en téléverser un récent.</p>
                     <BadgeY2K variant="warning" size="sm" className="mt-1">Expiré</BadgeY2K>
-                    <div className="flex items-center gap-3 mt-2">
-                      <button onClick={() => setTeleversementType(requis.type_document)} className="btn-primary text-xs px-3 py-1.5">Téléverser un nouveau document</button>
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      <button onClick={() => setTeleversementType(requis.type_document)} className="btn-primary inline-flex min-h-[44px] items-center px-3 py-2 text-xs">Téléverser un nouveau document</button>
                       <button
                         onClick={() => reverifier(doc.id)}
                         disabled={reverifyingId === doc.id}
-                        className="inline-flex items-center gap-1 text-xs text-primary font-medium hover:underline disabled:opacity-50"
+                        className="inline-flex min-h-[44px] items-center gap-1 rounded-lg px-2 py-2 text-xs font-medium text-primary hover:bg-primary/5 hover:underline disabled:opacity-50"
                       >
                         {reverifyingId === doc.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
                         Revérifier
@@ -694,8 +753,8 @@ export function DocumentsSoignantContent() {
                 ) : (
                   <div className="mt-2">
                     <p className="text-xs text-amber-600">Document à téléverser — une photo suffit</p>
-                    <div className="flex gap-2 mt-2">
-                      <button onClick={() => setTeleversementType(requis.type_document)} className="btn-primary text-xs px-3 py-1.5">+ Téléverser</button>
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      <button onClick={() => setTeleversementType(requis.type_document)} className="btn-primary inline-flex min-h-[44px] items-center px-3 py-2 text-xs">+ Téléverser</button>
                     </div>
                   </div>
                 )}
@@ -752,7 +811,7 @@ export function DocumentsSoignantContent() {
         return (
           <div className="mt-6 space-y-2">
             <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wide mb-2">Étudiant / interne en santé</p>
-            <div className="card-base flex items-center justify-between gap-3">
+            <div className="card-base flex flex-col items-stretch justify-between gap-3 sm:flex-row sm:items-center">
               <div className="min-w-0">
                 <p className="text-sm font-medium text-foreground">🎓 Attestation de scolarité / passage en année supérieure</p>
                 <p className="text-xs text-muted-foreground">
@@ -763,11 +822,11 @@ export function DocumentsSoignantContent() {
                   <span className={`inline-block mt-1.5 text-[11px] px-2 py-0.5 rounded-full ${statScol.couleur}`}>{statScol.label}</span>
                 )}
               </div>
-              <button onClick={() => setTeleversementType('ATTESTATION_SCOLARITE')} className="btn-primary text-xs px-3 py-1.5 shrink-0">
+              <button onClick={() => setTeleversementType('ATTESTATION_SCOLARITE')} className="btn-primary min-h-[44px] shrink-0 px-3 py-2 text-xs">
                 {docScol ? 'Remplacer' : '+ Téléverser'}
               </button>
             </div>
-            <div className="card-base flex items-center justify-between gap-3">
+            <div className="card-base flex flex-col items-stretch justify-between gap-3 sm:flex-row sm:items-center">
               <div className="min-w-0">
                 <p className="text-sm font-medium text-foreground">🩺 Licence de remplacement (interne en médecine)</p>
                 <p className="text-xs text-muted-foreground">
@@ -778,7 +837,7 @@ export function DocumentsSoignantContent() {
                   <span className={`inline-block mt-1.5 text-[11px] px-2 py-0.5 rounded-full ${statLic.couleur}`}>{statLic.label}</span>
                 )}
               </div>
-              <button onClick={() => setTeleversementType('LICENCE_REMPLACEMENT')} className="btn-primary text-xs px-3 py-1.5 shrink-0">
+              <button onClick={() => setTeleversementType('LICENCE_REMPLACEMENT')} className="btn-primary min-h-[44px] shrink-0 px-3 py-2 text-xs">
                 {docLic ? 'Remplacer' : '+ Téléverser'}
               </button>
             </div>

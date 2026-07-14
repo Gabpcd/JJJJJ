@@ -46,13 +46,32 @@ interface Props {
 const DELAI_CONTESTATION_MS = 72 * 60 * 60 * 1000;
 
 const STATUT_CONFIG: Record<string, { label: string; icon: React.ReactNode; color: string }> = {
-  CONTESTEE: { label: 'Contestée', icon: <AlertTriangle className="h-3.5 w-3.5" />, color: 'text-warning' },
+  OUVERT: { label: 'Ouvert', icon: <AlertTriangle className="h-3.5 w-3.5" />, color: 'text-warning' },
   EN_DISCUSSION: { label: 'En discussion', icon: <MessageSquare className="h-3.5 w-3.5" />, color: 'text-primary' },
-  RESOLUE_SOIGNANT: { label: 'Résolue (soignant)', icon: <CheckCircle className="h-3.5 w-3.5" />, color: 'text-success' },
-  RESOLUE_ETABLISSEMENT: { label: 'Résolue (établissement)', icon: <CheckCircle className="h-3.5 w-3.5" />, color: 'text-success' },
-  RESOLUE_ADMIN: { label: 'Résolue (admin)', icon: <Shield className="h-3.5 w-3.5" />, color: 'text-primary' },
+  EN_MEDIATION: { label: 'En médiation', icon: <Handshake className="h-3.5 w-3.5" />, color: 'text-primary' },
+  MEDIATION_EN_COURS: { label: 'Médiation en cours', icon: <Handshake className="h-3.5 w-3.5" />, color: 'text-primary' },
+  REVUE_ADMIN: { label: 'Revue admin', icon: <Shield className="h-3.5 w-3.5" />, color: 'text-primary' },
+  RESOLU_SOIGNANT: { label: 'Résolu (soignant)', icon: <CheckCircle className="h-3.5 w-3.5" />, color: 'text-success' },
+  RESOLU_ETABLISSEMENT: { label: 'Résolu (établissement)', icon: <CheckCircle className="h-3.5 w-3.5" />, color: 'text-success' },
+  RESOLU_ADMIN: { label: 'Résolu (admin)', icon: <Shield className="h-3.5 w-3.5" />, color: 'text-primary' },
+  RESOLU_ACCORD_PARTIES: { label: 'Résolu par accord', icon: <Handshake className="h-3.5 w-3.5" />, color: 'text-success' },
+  RESOLU_FAVEUR_SOIGNANT: { label: 'Résolu en faveur du soignant', icon: <CheckCircle className="h-3.5 w-3.5" />, color: 'text-success' },
+  RESOLU_FAVEUR_ETAB: { label: 'Résolu en faveur de l’établissement', icon: <CheckCircle className="h-3.5 w-3.5" />, color: 'text-success' },
+  RESOLU_PARTAGE: { label: 'Résolution partagée', icon: <CheckCircle className="h-3.5 w-3.5" />, color: 'text-success' },
   FERME: { label: 'Fermé', icon: <Ban className="h-3.5 w-3.5" />, color: 'text-muted-foreground' },
 };
+
+const STATUTS_ACTIFS = ['OUVERT', 'EN_DISCUSSION', 'EN_MEDIATION', 'MEDIATION_EN_COURS'] as const;
+const STATUTS_RESOLUS = [
+  'RESOLU_SOIGNANT',
+  'RESOLU_ETABLISSEMENT',
+  'RESOLU_ADMIN',
+  'RESOLU_ACCORD_PARTIES',
+  'RESOLU_FAVEUR_SOIGNANT',
+  'RESOLU_FAVEUR_ETAB',
+  'RESOLU_PARTAGE',
+  'FERME',
+] as const;
 
 export function PanneauContestation({
   presenceId, missionId, etablissementId, soignantId, presenceValideeLe, role, onUpdate,
@@ -88,17 +107,14 @@ export function PanneauContestation({
   // Les deux rôles peuvent contester dans la fenêtre (72 h) si aucun litige.
   const peutContester = dansFenetre && !litige;
 
-  // The other party can respond when status is CONTESTEE or EN_DISCUSSION
+  // Les actions suivent exclusivement les statuts admis par la base.
   const estInitiateur = litige?.initie_par === (role === 'SOIGNANT' ? 'SOIGNANT' : 'ETABLISSEMENT');
   const estRepondant = litige && !estInitiateur;
-  const statutOuvert = litige?.statut === 'CONTESTEE' || litige?.statut === 'EN_DISCUSSION';
+  const statutOuvert = !!litige && STATUTS_ACTIFS.includes(litige.statut as typeof STATUTS_ACTIFS[number]);
   const peutRepondre = estRepondant && statutOuvert && !litige?.reponse;
   // Initiator can reply again if status moved to EN_DISCUSSION and there's a response
   const peutRelancer = estInitiateur && litige?.statut === 'EN_DISCUSSION' && !!litige?.reponse;
-  // Parties can move to EN_DISCUSSION, only admin can resolve/close
-  const peutPasserEnDiscussion = (peutRepondre || peutRelancer) && litige?.statut === 'CONTESTEE';
-
-  const estResolu = litige && ['RESOLUE_SOIGNANT', 'RESOLUE_ETABLISSEMENT', 'RESOLUE_ADMIN', 'FERME'].includes(litige.statut);
+  const estResolu = !!litige && STATUTS_RESOLUS.includes(litige.statut as typeof STATUTS_RESOLUS[number]);
 
   const roleActeur = role === 'SOIGNANT' ? 'SOIGNANT' : 'ADMIN_ETABLISSEMENT';
   const roleLabel = role === 'SOIGNANT' ? 'soignant' : 'établissement';
@@ -110,6 +126,7 @@ export function PanneauContestation({
     try {
       const { data: litigeResult, error } = await supabase.rpc('fn_ouvrir_litige_rate_limited' as any, {
         p_mission_id: missionId,
+        p_type_litige: 'DESACCORD_HEURES_POINTAGE',
         p_motif: sanitizeText(motif.trim()),
       });
       if (error) throw error;
@@ -172,12 +189,18 @@ export function PanneauContestation({
   };
 
   // Admin-only: resolve or close a litige via RPC
-  const resoudreAdmin = async (resolution: 'RESOLUE_SOIGNANT' | 'RESOLUE_ETABLISSEMENT' | 'FERME') => {
+  const resoudreAdmin = async (statut: 'RESOLU_SOIGNANT' | 'RESOLU_ETABLISSEMENT' | 'FERME') => {
     if (!user || !litige) return;
     setEnvoi(true);
     try {
+      const resolution = statut === 'RESOLU_SOIGNANT'
+        ? 'Litige résolu en faveur du soignant.'
+        : statut === 'RESOLU_ETABLISSEMENT'
+          ? 'Litige résolu en faveur de l’établissement.'
+          : 'Litige fermé par l’équipe Jolene.';
       const { data, error } = await supabase.rpc('fn_resoudre_litige' as any, {
         p_litige_id: litige.id,
+        p_statut: statut,
         p_resolution: resolution,
       });
       if (error) throw error;
@@ -281,7 +304,7 @@ export function PanneauContestation({
             )}
 
             {/* Step 3: Resolution */}
-            {litige.resolution && litige.statut !== 'RESOLUE_ADMIN' && (
+            {litige.resolution && litige.statut !== 'RESOLU_ADMIN' && (
               <div className="flex gap-2">
                 <div className="w-6 h-6 rounded-full bg-success/20 flex items-center justify-center flex-shrink-0 mt-0.5">
                   <CheckCircle className="h-3 w-3 text-success" />
@@ -299,7 +322,7 @@ export function PanneauContestation({
             )}
 
             {/* Admin decision */}
-            {litige.statut === 'RESOLUE_ADMIN' && litige.resolution && (
+            {litige.statut === 'RESOLU_ADMIN' && litige.resolution && (
               <div className="flex gap-2">
                 <div className="w-6 h-6 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0 mt-0.5">
                   <Shield className="h-3 w-3 text-primary" />
@@ -317,7 +340,7 @@ export function PanneauContestation({
             )}
 
             {/* Pending states */}
-            {litige.statut === 'CONTESTEE' && !litige.reponse && (
+            {litige.statut === 'OUVERT' && !litige.reponse && (
               <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/30 rounded-lg px-3 py-2">
                 <Clock className="h-3.5 w-3.5" />
                 En attente de la réponse {autreRoleLabel === 'soignant' ? 'du soignant' : "de l'établissement"}…
@@ -437,14 +460,14 @@ export function PanneauContestation({
             </p>
             <div className="flex flex-wrap gap-2">
               <button
-                onClick={() => resoudreAdmin('RESOLUE_SOIGNANT')}
+                onClick={() => resoudreAdmin('RESOLU_SOIGNANT')}
                 disabled={envoi}
                 className="flex items-center gap-1.5 bg-success/10 text-success text-xs font-semibold px-3 py-2 rounded-xl disabled:opacity-50 hover:bg-success/20 transition-colors border border-success/20"
               >
                 <CheckCircle className="h-3.5 w-3.5" /> Résoudre en faveur du soignant
               </button>
               <button
-                onClick={() => resoudreAdmin('RESOLUE_ETABLISSEMENT')}
+                onClick={() => resoudreAdmin('RESOLU_ETABLISSEMENT')}
                 disabled={envoi}
                 className="flex items-center gap-1.5 bg-primary/10 text-primary text-xs font-semibold px-3 py-2 rounded-xl disabled:opacity-50 hover:bg-primary/20 transition-colors border border-primary/20"
               >

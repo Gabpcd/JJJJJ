@@ -20,6 +20,10 @@ import {
   validateDocumentFile,
 } from '../_shared/verification-rules.ts';
 import { corsHeaders } from '../_shared/cors.ts';
+import {
+  openEstablishmentReview,
+  resolveEstablishmentReview,
+} from '../_shared/establishment-review.ts';
 
 const TYPE_LABELS: Record<string, string> = {
   CARTE_IDENTITE: "Carte d'identité ou Passeport",
@@ -53,43 +57,64 @@ Deno.serve(async (req) => {
   const json = (status: number, body: unknown) =>
     new Response(JSON.stringify(body), { status, headers: { ...cors, 'Content-Type': 'application/json' } });
 
+  let failureAdmin: Parameters<typeof openEstablishmentReview>[0] | null = null;
+  let failureEtablissementId = '';
+  let failureSourceSnapshot: Record<string, unknown> | null = null;
+
   try {
+    if (req.method !== 'POST') {
+      return json(405, { ok: false, code: 'METHOD_NOT_ALLOWED', error: 'Méthode non autorisée' });
+    }
     const auth = await verifyUserOrServiceRole(req);
-    if (!auth.ok) return json(auth.status, { error: auth.error });
+    if (!auth.ok) return json(auth.status, { ok: false, code: 'UNAUTHORIZED', error: auth.error });
     const body = await req.json().catch(() => ({}));
     if (body?.warm === true) {
       if (!auth.isServiceRole) {
         const adminAuth = await verifyAdminOrServiceRole(req);
-        if (!adminAuth.ok) return json(adminAuth.status, { error: adminAuth.error });
+        if (!adminAuth.ok) return json(adminAuth.status, { ok: false, code: 'FORBIDDEN', error: adminAuth.error });
       }
-      return json(200, { warm: true, configured: !!Deno.env.get('ANTHROPIC_API_KEY') });
+      return json(200, { ok: true, warm: true, configured: !!Deno.env.get('ANTHROPIC_API_KEY') });
     }
 
     const etablissementId = String(body?.etablissement_id || '').trim();
-    if (!etablissementId) return json(400, { error: 'etablissement_id requis' });
+    if (!etablissementId) return json(400, { ok: false, code: 'ETABLISSEMENT_ID_REQUIRED', error: 'etablissement_id requis' });
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    if (!supabaseUrl || !serviceKey) {
+      return json(503, { ok: false, code: 'SERVER_NOT_CONFIGURED', error: 'Service temporairement indisponible' });
+    }
     const admin = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
+    failureAdmin = admin as unknown as Parameters<typeof openEstablishmentReview>[0];
+    failureEtablissementId = etablissementId;
 
     if (!auth.isServiceRole) {
       if (applyRateLimit('verify-piece-identite-etab', getClientIp(req), { max: 8, windowMs: 60_000 })) {
-        return json(429, { error: 'Trop de vérifications. Réessayez dans une minute.' });
+        return json(429, { ok: false, code: 'RATE_LIMITED', error: 'Trop de vérifications. Réessayez dans une minute.' });
       }
       if (!(await canManageEstablishment(admin, auth.userId, etablissementId))) {
         const adminAuth = await verifyAdminOrServiceRole(req);
-        if (!adminAuth.ok) return json(403, { error: 'Non autorisé pour cet établissement' });
+        if (!adminAuth.ok) return json(403, { ok: false, code: 'FORBIDDEN', error: 'Non autorisé pour cet établissement' });
       }
     }
-
-    const anthropicKey = Deno.env.get('ANTHROPIC_API_KEY');
-    if (!anthropicKey) return json(200, { ok: false, error: 'ANTHROPIC_API_KEY non configurée' });
 
     const { data: etab, error: etabErr } = await admin.from('etablissements')
       .select('verification_source_version, representant_nom, representant_prenom, representant_piece_s3_key, representant_piece_type_mime, representant_piece_type_document')
       .eq('id', etablissementId).maybeSingle();
-    if (etabErr || !etab) return json(404, { error: 'Établissement introuvable' });
+    if (etabErr) {
+      console.error('[verify-piece-identite-etab] lecture établissement', etabErr.code || etabErr.message);
+      return json(503, { ok: false, code: 'ETABLISSEMENT_READ_FAILED', error: 'Vérification temporairement indisponible' });
+    }
+    if (!etab) return json(404, { ok: false, code: 'ETABLISSEMENT_NOT_FOUND', error: 'Établissement introuvable' });
     const e = etab as Record<string, any>;
+    failureSourceSnapshot = {
+      verification_source_version: Number(e.verification_source_version),
+      representant_piece_s3_key: e.representant_piece_s3_key ?? null,
+      representant_piece_type_mime: e.representant_piece_type_mime ?? null,
+      representant_piece_type_document: e.representant_piece_type_document ?? null,
+      representant_nom: e.representant_nom ?? null,
+      representant_prenom: e.representant_prenom ?? null,
+    };
     const appliquerVerdict = async (verifie: boolean, resultat: Record<string, unknown>) => {
       if (!auth.isServiceRole && !(await canManageEstablishment(admin, auth.userId, etablissementId))) {
         const adminAuth = await verifyAdminOrServiceRole(req);
@@ -117,7 +142,47 @@ Deno.serve(async (req) => {
       code: 'VERIFICATION_SOURCE_CHANGED',
       error: 'La pièce ou le profil a changé pendant la vérification. Relancez le contrôle.',
     });
-    if (!e.representant_piece_s3_key) return json(400, { error: 'Aucune pièce d\'identité téléversée' });
+    const mettreEnRevue = async (
+      motif: string,
+      cause: string,
+      resultat: Record<string, unknown> = {},
+    ): Promise<Response> => {
+      if (!auth.isServiceRole && !(await canManageEstablishment(admin, auth.userId, etablissementId))) {
+        const adminAuth = await verifyAdminOrServiceRole(req);
+        if (!adminAuth.ok) return json(403, { ok: false, code: 'AUTHORIZATION_CHANGED', error: 'Autorisation modifiée pendant la vérification.' });
+      }
+      const { data, error } = await admin.rpc(
+        'fn_mettre_preuve_etablissement_en_revue_atomique',
+        {
+          p_etablissement_id: etablissementId,
+          p_service: 'VERIFY_PIECE_IDENTITE_ETAB',
+          p_source_snapshot: failureSourceSnapshot,
+          p_motif: motif,
+          p_cause: cause,
+          p_resultat: resultat,
+        },
+      );
+      const payload = data && typeof data === 'object' ? data as Record<string, unknown> : {};
+      if (error) {
+        console.error('[verify-piece-identite-etab] revue atomique', error.code || error.message);
+        return json(503, {
+          ok: false,
+          code: 'REVIEW_QUEUE_FAILED',
+          error: 'La vérification automatique a échoué et la revue n’a pas pu être enregistrée. Réessayez.',
+        });
+      }
+      if (payload.success !== true) return sourceChangee();
+      return json(202, {
+        ok: true,
+        verdict: 'EN_ATTENTE',
+        motif,
+        revue_manuelle: true,
+        revue_id: payload.revue_id,
+      });
+    };
+    if (!e.representant_piece_s3_key) {
+      return json(400, { ok: false, code: 'DOCUMENT_REQUIRED', error: 'Aucune pièce d\'identité téléversée' });
+    }
     const piecePath = String(e.representant_piece_s3_key);
     const proprietairesAutorises = new Set(
       [etablissementId, auth.userId].filter((value): value is string => !!value),
@@ -125,13 +190,18 @@ Deno.serve(async (req) => {
     const cheminAutorise = !piecePath.includes('..')
       && !piecePath.includes('\\')
       && [...proprietairesAutorises].some((ownerId) => piecePath.startsWith(`${ownerId}/`));
-    if (!cheminAutorise) return json(403, { error: 'Chemin de pièce d\'identité non autorisé' });
+    if (!cheminAutorise) return json(403, { ok: false, code: 'DOCUMENT_PATH_FORBIDDEN', error: 'Chemin de pièce d\'identité non autorisé' });
     if (!e.representant_nom || !e.representant_prenom) {
-      return json(400, { error: 'Nom et prénom du représentant requis' });
+      return json(400, { ok: false, code: 'REPRESENTATIVE_IDENTITY_REQUIRED', error: 'Nom et prénom du représentant requis' });
     }
     // Téléchargement du fichier
     const { data: file, error: dlErr } = await admin.storage.from('jolene-documents').download(piecePath);
-    if (dlErr || !file) return json(200, { ok: false, error: 'Fichier introuvable dans le stockage' });
+    if (dlErr || !file) {
+      return mettreEnRevue(
+        'La pièce téléversée est momentanément inaccessible ; une revue humaine a été enregistrée.',
+        'STORAGE_READ_FAILED',
+      );
+    }
     const arrayBuffer = await file.arrayBuffer();
     const fileValidation = validateDocumentFile(
       new Uint8Array(arrayBuffer),
@@ -158,6 +228,14 @@ Deno.serve(async (req) => {
     const mime = fileValidation.mime;
     const isPdf = mime === 'application/pdf';
 
+    const anthropicKey = Deno.env.get('ANTHROPIC_API_KEY');
+    if (!anthropicKey) {
+      return mettreEnRevue(
+        'L’analyse automatique est momentanément indisponible ; le document a été transmis en revue humaine.',
+        'AI_NOT_CONFIGURED',
+      );
+    }
+
     const typeLabel = TYPE_LABELS[e.representant_piece_type_document] || "Pièce d'identité";
     const nomComplet = `${e.representant_prenom || ''} ${e.representant_nom}`.trim();
 
@@ -165,6 +243,7 @@ Deno.serve(async (req) => {
 {
   "type_correspond": true/false,
   "type_detecte": "string",
+  "date_naissance": "YYYY-MM-DD" ou null,
   "date_expiration": "YYYY-MM-DD" ou null,
   "nom_correspond": true/false/null,
   "nom_extrait": "le nom de famille lu sur le document" ou null,
@@ -211,19 +290,21 @@ Analyse ce document et vérifie sa conformité + la concordance du nom.`;
     // status 0 = erreur réseau / abort (timeout) interceptée par le module partagé.
     if (ai.status === 0) {
       const estTimeout = aiController.signal.aborted;
-      const applique = await appliquerVerdict(false, {
-        erreur_anthropic: { status: estTimeout ? 'timeout' : 'network', at: new Date().toISOString() },
-      });
-      if (!applique) return sourceChangee();
-      return json(200, { ok: true, verdict: 'EN_ATTENTE', reason: estTimeout ? 'AI timeout' : 'AI network error' });
+      return mettreEnRevue(
+        estTimeout
+          ? 'L’analyse automatique a dépassé le délai prévu ; le document a été transmis en revue humaine.'
+          : 'L’analyse automatique est momentanément indisponible ; le document a été transmis en revue humaine.',
+        estTimeout ? 'AI_TIMEOUT' : 'AI_NETWORK_ERROR',
+        { erreur_anthropic: { status: estTimeout ? 'timeout' : 'network', at: new Date().toISOString() } },
+      );
     }
 
     if (!ai.ok) {
-      const applique = await appliquerVerdict(false, {
-        erreur_anthropic: { status: ai.status, body_excerpt: ai.body.slice(0, 1000), at: new Date().toISOString() },
-      });
-      if (!applique) return sourceChangee();
-      return json(200, { ok: false, verdict: 'EN_ATTENTE', error: `Anthropic ${ai.status}` });
+      return mettreEnRevue(
+        'L’analyse automatique est momentanément indisponible ; le document a été transmis en revue humaine.',
+        'AI_UPSTREAM_ERROR',
+        { erreur_anthropic: { status: ai.status, at: new Date().toISOString() } },
+      );
     }
 
     const aiJson = ai.data;
@@ -239,6 +320,7 @@ Analyse ce document et vérifie sa conformité + la concordance du nom.`;
       result.prenom_extrait,
     );
     const dateExpiration = normalizeIsoCivilDate(result.date_expiration);
+    const dateNaissance = normalizeIsoCivilDate(result.date_naissance);
     const expiree = dateExpiration !== null && dateExpiration < new Date().toISOString().slice(0, 10);
     const verdictsAutorises = new Set(['VERIFIE', 'EN_ATTENTE', 'REJETE']);
     let verdict = typeof result.verdict === 'string' && verdictsAutorises.has(result.verdict)
@@ -273,22 +355,41 @@ Analyse ce document et vérifie sa conformité + la concordance du nom.`;
     const nomCorrespond = result.nom_correspond === true && nomDeterministe === true;
     const identiteVerifiee = verdict === 'VERIFIE' && nomCorrespond;
 
-    const applique = await appliquerVerdict(identiteVerifiee, {
-        verdict_final: verdict,
-        motif,
-        type_correspond: result.type_correspond === true,
-        nom_extrait: result.nom_extrait ?? null,
-        prenom_extrait: result.prenom_extrait ?? null,
-        date_expiration: dateExpiration,
-        document_lisible: result.document_lisible === true,
-        document_complet: result.document_complet === true,
-        score_confiance: quality.score,
-        confiance: quality.confidence,
-        antifraude_complete: quality.antifraudComplete,
-        indices_falsification_count: indicesFalsif.length,
-        regle_version: '2026-07-14',
-    });
+    const resultatPersistant = {
+      verdict_final: verdict,
+      motif,
+      type_correspond: result.type_correspond === true,
+      nom_extrait: result.nom_extrait ?? null,
+      prenom_extrait: result.prenom_extrait ?? null,
+      date_naissance_extraite: dateNaissance,
+      date_expiration: dateExpiration,
+      document_lisible: result.document_lisible === true,
+      document_complet: result.document_complet === true,
+      score_confiance: quality.score,
+      confiance: quality.confidence,
+      antifraude_complete: quality.antifraudComplete,
+      indices_falsification_count: indicesFalsif.length,
+      regle_version: '2026-07-14',
+    };
+
+    if (verdict === 'EN_ATTENTE') {
+      return mettreEnRevue(
+        motif || 'Le document doit être confirmé par l’équipe Jolene avant validation.',
+        'AI_REQUIRES_HUMAN_REVIEW',
+        resultatPersistant,
+      );
+    }
+
+    const applique = await appliquerVerdict(identiteVerifiee, resultatPersistant);
     if (!applique) return sourceChangee();
+
+    if (identiteVerifiee) {
+      await resolveEstablishmentReview(
+        admin,
+        etablissementId,
+        'VERIFY_PIECE_IDENTITE_ETAB',
+      );
+    }
 
     // Évalue le rattachement adaptatif (AUTO_DIRIGEANT / EMAIL_PRO / ADMIN)
     let rattachement: any = null;
@@ -305,10 +406,38 @@ Analyse ce document et vérifie sa conformité + la concordance du nom.`;
       nom_correspond: nomCorrespond,
       nom_extrait: result.nom_extrait ?? null,
       prenom_extrait: result.prenom_extrait ?? null,
+      date_naissance_extraite: dateNaissance,
       identite_verifiee: identiteVerifiee,
       rattachement,
     });
   } catch (e) {
-    return json(200, { ok: false, error: String(e).slice(0, 300) });
+    console.error('[verify-piece-identite-etab] erreur inattendue', String(e).slice(0, 300));
+    if (failureAdmin && failureEtablissementId && failureSourceSnapshot) {
+      try {
+        const { data, error } = await failureAdmin.rpc(
+          'fn_mettre_preuve_etablissement_en_revue_atomique',
+          {
+            p_etablissement_id: failureEtablissementId,
+            p_service: 'VERIFY_PIECE_IDENTITE_ETAB',
+            p_source_snapshot: failureSourceSnapshot,
+            p_motif: 'La vérification automatique a rencontré une erreur inattendue ; une revue humaine a été enregistrée.',
+            p_cause: 'UNEXPECTED_ERROR',
+            p_resultat: {},
+          },
+        );
+        const payload = data && typeof data === 'object' ? data as Record<string, unknown> : {};
+        if (error || payload.success !== true) throw error || new Error('Revue atomique non appliquée');
+        return json(202, {
+          ok: true,
+          verdict: 'EN_ATTENTE',
+          motif: 'La vérification automatique a rencontré une erreur ; le document est en revue humaine.',
+          revue_manuelle: true,
+          revue_id: payload.revue_id,
+        });
+      } catch (reviewError) {
+        console.error('[verify-piece-identite-etab] revue après erreur', String(reviewError));
+      }
+    }
+    return json(500, { ok: false, code: 'INTERNAL_ERROR', error: 'Vérification temporairement indisponible. Réessayez.' });
   }
 });

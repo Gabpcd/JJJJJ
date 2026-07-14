@@ -36,6 +36,7 @@ BEGIN
     justificatif_fonction_verifie_le, justificatif_fonction_resultat_ia,
     rattachement_verifie, rattachement_verifie_le, rattachement_methode,
     rib_s3_key, rib_ia_resultat, rib_ia_coherent, rib_ia_verifie_le, iban_last4,
+    verification_source_version, rib_verifie_s3_key, rib_verifie_source_version,
     contrat_url, contrat_uploade_le, contrat_valide, contrat_ia_resultat,
     contrat_ia_coherent, contrat_ia_verifie_le,
     siret_verifie, siret_verifie_le, siret_raison_sociale,
@@ -54,6 +55,7 @@ BEGIN
     true, now(), '{"verdict":"VERIFIE"}',
     true, now(), 'JUSTIFICATIF',
     v_etab::text || '/rib/ancien.pdf', '{"verdict":"CONFORME"}', true, now(), '1234',
+    0, v_etab::text || '/rib/ancien.pdf', 0,
     v_etab::text || '/contrat/ancien.pdf', now(), true, '{"verdict":"CONFORME"}', true, now(),
     true, now(), 'CLINIQUE TRIGGER', '5710', '8610Z', true,
     true, now(), 'CLINIQUE TRIGGER', '1100', 'PRIVE', false,
@@ -92,6 +94,8 @@ BEGIN
   SELECT * INTO v_row FROM public.etablissements WHERE id = v_etab;
   IF v_row.rib_ia_resultat IS NOT NULL OR v_row.rib_ia_coherent IS NOT NULL
      OR v_row.rib_ia_verifie_le IS NOT NULL OR v_row.iban_last4 IS NOT NULL
+     OR v_row.rib_verifie_s3_key IS NOT NULL
+     OR v_row.rib_verifie_source_version IS NOT NULL
      OR v_row.statut_verification <> 'EN_COURS'
      OR v_row.peut_publier_missions IS NOT FALSE
      OR v_row.verifie_le IS NOT NULL OR v_row.verifie_par IS NOT NULL THEN
@@ -107,6 +111,8 @@ BEGIN
   UPDATE public.etablissements
   SET rib_ia_resultat = '{"verdict":"CONFORME"}', rib_ia_coherent = true,
       rib_ia_verifie_le = now(), iban_last4 = '5678',
+      rib_verifie_s3_key = rib_s3_key,
+      rib_verifie_source_version = verification_source_version,
       statut_verification = 'VERIFIE', peut_publier_missions = true,
       verifie_le = now(), verifie_par = v_user
   WHERE id = v_etab;
@@ -129,6 +135,11 @@ BEGIN
      OR v_row.rattachement_verifie IS NOT FALSE
      OR v_row.rattachement_verifie_le IS NOT NULL
      OR v_row.rattachement_methode <> 'ADMIN'
+     OR v_row.rib_ia_resultat IS NOT NULL
+     OR v_row.rib_ia_coherent IS NOT NULL
+     OR v_row.rib_ia_verifie_le IS NOT NULL
+     OR v_row.rib_verifie_s3_key IS NOT NULL
+     OR v_row.rib_verifie_source_version IS NOT NULL
      OR v_row.statut_verification <> 'EN_COURS'
      OR v_row.peut_publier_missions IS NOT FALSE THEN
     RAISE EXCEPTION 'SIRET: remplacement non révoqué canoniquement';

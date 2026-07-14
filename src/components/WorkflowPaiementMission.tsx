@@ -81,25 +81,37 @@ export function WorkflowPaiementMission({ missionId, soignantAssigneId, etabliss
   }, [missionId]);
 
   const consulterRib = async () => {
+    const preview = window.open('about:blank', '_blank');
+    if (!preview) {
+      toast.error('Autorisez les fenêtres contextuelles pour consulter le RIB.');
+      return;
+    }
+    preview.opener = null;
+
     setRibLoading(true);
     try {
       const { data, error } = await supabase.rpc('fn_consulter_rib_soignant' as any, { p_mission_id: missionId });
       if (error) throw error;
       const result = data as any;
       if (result?.error) throw new Error(result.error);
-      if (result?.s3_cle && result?.s3_bucket) {
-        const { data: urlData } = await supabase.storage.from(result.s3_bucket).createSignedUrl(result.s3_cle, 300);
-        if (urlData?.signedUrl) {
-          window.open(urlData.signedUrl, '_blank');
-          setRibData('opened');
-          return;
-        }
+      if (result?.s3_cle || result?.s3_bucket) {
+        if (!result?.s3_cle || !result?.s3_bucket) throw new Error('Référence du RIB incomplète');
+        const { data: urlData, error: urlError } = await supabase.storage
+          .from(result.s3_bucket)
+          .createSignedUrl(result.s3_cle, 300);
+        if (urlError || !urlData?.signedUrl) throw urlError || new Error('Lien du RIB indisponible');
+        preview.location.replace(urlData.signedUrl);
+        setRibData('opened');
+        return;
       }
+      preview.close();
       setRibData(result?.iban || result);
     } catch (e: any) {
+      preview.close();
       toast.error(e?.message || 'Impossible de consulter le RIB');
+    } finally {
+      setRibLoading(false);
     }
-    setRibLoading(false);
   };
 
   const declarerPaiement = async () => {

@@ -221,9 +221,17 @@ export function CarteProposition({ proposition, onTraitee }: Props) {
         <ModalAttestationHebdo
           semaineISO={semaineISO}
           heuresJoleneSemaine={heuresJoleneSemaine}
-          onValidated={() => {
+          onValidated={(peutContinuer) => {
             setShowAttestation(false);
-            executeAction('ACCEPTEE');
+            if (peutContinuer) {
+              executeAction('ACCEPTEE');
+            } else {
+              toast({
+                title: 'Déclaration enregistrée',
+                description: 'La mission n’a pas été acceptée car elle dépasserait le plafond salarié de 48 h.',
+                variant: 'destructive',
+              });
+            }
           }}
           onCancel={() => setShowAttestation(false)}
         />

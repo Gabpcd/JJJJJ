@@ -25,12 +25,20 @@ describe('Lot 21 — mécanique admin', () => {
   it('conserve les données de test visibles et les badge sans filtre', () => {
     const missions = readFileSync(resolve(racine, 'src/pages/admin/AdminMissions.tsx'), 'utf8');
     const utilisateurs = readFileSync(resolve(racine, 'src/pages/admin/AdminUtilisateurs.tsx'), 'utf8');
+    const dashboard = readFileSync(resolve(racine, 'src/pages/admin/AdminDashboard.tsx'), 'utf8');
+    const demo = readFileSync(resolve(racine, 'src/pages/admin/AdminDemo.tsx'), 'utf8');
     expect(missions).toContain('estMissionTestAdmin(m)');
     expect(missions).toContain('Donnée de test');
     expect(missions).not.toContain('!estMissionTestAdmin');
     expect(utilisateurs).toContain('estUtilisateurTestAdmin');
     expect(utilisateurs).not.toContain('!estUtilisateurTestAdmin');
     expect(utilisateurs).not.toContain('Afficher les données de test');
+    expect(dashboard).toContain('Données de test présentes');
+    expect(dashboard).toContain('Elles restent identifiées');
+    expect(dashboard).not.toContain('Purge à la mise en production');
+    expect(demo).toContain('Données de démo conservées');
+    expect(demo).toContain('Vérifier les données de démo');
+    expect(demo).not.toContain('Données de démo chargées');
   });
 
   it('place les deux systèmes de notification en bas, hors des KPI du haut', () => {
@@ -51,5 +59,58 @@ describe('Lot 21 — mécanique admin', () => {
     expect(presentation).toContain('SIRET_INVALIDE');
     expect(verification).toContain("Annuaire des Entreprises");
     expect(verification).toContain('alertes-vetting-etablissement');
+  });
+
+  it('ne laisse aucune entrée de navigation admin sans route déclarée', () => {
+    const app = readFileSync(resolve(racine, 'src/App.tsx'), 'utf8');
+    const layout = readFileSync(resolve(racine, 'src/components/LayoutAdmin.tsx'), 'utf8');
+    const routesDeclarees = new Set(
+      [...app.matchAll(/<Route path="(\/admin[^"]*)"/g)].map((match) => match[1]),
+    );
+    const routesNavigation = [
+      ...layout.matchAll(/route: '(\/admin[^']*)'/g),
+    ].map((match) => match[1]);
+
+    expect(routesNavigation.length).toBeGreaterThan(0);
+    expect(routesNavigation.filter((route) => !routesDeclarees.has(route))).toEqual([]);
+    expect(routesNavigation).toContain('/admin/messages-contact');
+  });
+
+  it('ouvre les justificatifs privés avec une URL signée temporaire', () => {
+    const reclamations = readFileSync(resolve(racine, 'src/pages/admin/AdminReclamationsScore.tsx'), 'utf8');
+    expect(reclamations).toContain(".from('justificatifs')");
+    expect(reclamations).toContain('.createSignedUrl(');
+    expect(reclamations).not.toContain('/storage/v1/object/sign/justificatifs/');
+    expect(reclamations).not.toContain('flripxtsyegjshnhzjkz');
+  });
+
+  it('présente des wordings de production sans jalons de développement visibles', () => {
+    const emails = readFileSync(resolve(racine, 'src/pages/admin/AdminEmails.tsx'), 'utf8');
+    const templates = readFileSync(resolve(racine, 'src/pages/admin/AdminTemplatesContrats.tsx'), 'utf8');
+    const externalisations = readFileSync(resolve(racine, 'src/pages/admin/AdminExternalisationsActions.tsx'), 'utf8');
+    const cohortes = readFileSync(resolve(racine, 'src/pages/admin/AdminCohortEconomics.tsx'), 'utf8');
+
+    expect(emails).not.toContain('[DEV]');
+    expect(emails).not.toContain('aperçu de développement');
+    expect(templates).not.toContain('templates Sprint 2');
+    expect(externalisations).toContain('Traitement des externalisations');
+    expect(externalisations).not.toContain('Worker externalisations');
+    expect(cohortes).toContain('Cohortes & économie unitaire');
+    expect(cohortes).not.toContain('Cohort Analysis & Unit Economics');
+  });
+
+  it('résout le compte gestionnaire avant une conversation avec un établissement', () => {
+    const detail = readFileSync(resolve(racine, 'src/pages/admin/AdminDetailUtilisateur.tsx'), 'utf8');
+    const triage = readFileSync(resolve(racine, 'src/pages/admin/AdminScoreTriage.tsx'), 'utf8');
+    expect(detail).toContain("useOuvrirConversation('/admin/messagerie')");
+    expect(detail).toContain("type === 'etablissement'");
+    expect(triage).toContain("ligne.type === 'ETAB'");
+  });
+
+  it('ne présente pas une suppression RGPD reliée à une fonction serveur absente', () => {
+    const rgpd = readFileSync(resolve(racine, 'src/pages/admin/AdminRGPDTools.tsx'), 'utf8');
+    expect(rgpd).not.toContain('fn_admin_force_supprimer_compte');
+    expect(rgpd).not.toContain('Forcer la suppression définitive');
+    expect(rgpd).toContain("Suivi des demandes d'effacement");
   });
 });

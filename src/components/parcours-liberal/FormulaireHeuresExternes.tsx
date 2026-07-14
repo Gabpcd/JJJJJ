@@ -88,13 +88,12 @@ export function FormulaireHeuresExternes({ onSubmit, onCancel, isLoading }: Prop
         heures_declarees: Number(heures),
         attestation_file: file!,
       });
-      // Toast selon le verdict de la vérification IA de l'attestation.
-      if (res && res.verdict === 'VALIDE') {
-        toast.success(`✅ Attestation validée automatiquement (${res.heures_extraites ?? '—'}h lues). Ces heures sont comptées.`);
-      } else if (res && res.verdict === 'REJETE') {
+      // L'analyse automatique ne comptabilise jamais les heures : hors rejet
+      // concluant, la déclaration attend toujours une validation humaine.
+      if (res && res.verdict === 'REJETE') {
         toast.error('❌ Le document fourni ne semble pas être une attestation d\'heures. Vérifie le fichier.');
       } else {
-        toast.success('Heures ajoutées. Attestation en cours de vérification (revue sous 48h si besoin).');
+        toast.success('Heures ajoutées. Analyse automatique terminée ou en cours ; validation humaine requise avant comptabilisation.');
       }
       setEtabNom(''); setEtabType(''); setDateDebut(''); setDateFin(''); setHeures(''); setFile(null);
       if (fileRef.current) fileRef.current.value = '';

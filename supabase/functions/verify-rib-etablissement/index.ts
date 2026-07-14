@@ -5,6 +5,10 @@ import { verifyAdminOrServiceRole, verifyUserOrServiceRole } from "../_shared/ad
 import { canManageEstablishment } from "../_shared/etablissement-auth.ts";
 import { corsHeaders } from "../_shared/cors.ts";
 import {
+  openEstablishmentReview,
+  resolveEstablishmentReview,
+} from "../_shared/establishment-review.ts";
+import {
   corporateNameMatches,
   ibanLast4,
   isValidIban,
@@ -13,6 +17,16 @@ import {
   strictAiVerificationQuality,
   validateDocumentFile,
 } from "../_shared/verification-rules.ts";
+
+async function sha256Hex(value: string | ArrayBuffer): Promise<string> {
+  const source = typeof value === "string"
+    ? new TextEncoder().encode(value)
+    : value;
+  const digest = await crypto.subtle.digest("SHA-256", source);
+  return Array.from(new Uint8Array(digest))
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+}
 
 // Vérification IA du RIB d'un établissement (PDF ou image). Confirme que le document
 // est bien un RIB et que le titulaire du compte correspond à l'établissement.
@@ -146,6 +160,105 @@ Deno.serve(async (req) => {
         headers: { ...corsHeaders(req), "Content-Type": "application/json" },
       });
     }
+
+    const sourceVersion = Number(e.verification_source_version);
+    const sourceBytes = bytes.buffer.slice(
+      bytes.byteOffset,
+      bytes.byteOffset + bytes.byteLength,
+    ) as ArrayBuffer;
+    const ribSourceSha256 = await sha256Hex(sourceBytes);
+    const mettreEnRevue = async (
+      cause: string,
+      motif: string,
+      resultat: Record<string, unknown> = {},
+      ibanNormalise: string | null = null,
+    ): Promise<Response> => {
+      const applique = await appliquerVerdict(null, {
+        ...resultat,
+        verdict_final: "EN_ATTENTE",
+        motif,
+        revue_manuelle_requise: true,
+        cause_revue: cause,
+        regle_version: "2026-07-14",
+      });
+      if (!applique) return sourceChangee();
+
+      const ibanLastFour = ibanNormalise ? ibanLast4(ibanNormalise) : null;
+      const ibanFingerprint = ibanNormalise
+        ? await sha256Hex(
+          `${etablissement_id}|${sourceVersion}|${ribPath}|${ibanNormalise}`,
+        )
+        : null;
+      try {
+        const revueId = await openEstablishmentReview(
+          supabase as unknown as Parameters<typeof openEstablishmentReview>[0],
+          etablissement_id,
+          "VERIFY_RIB_ETABLISSEMENT",
+          motif,
+          {
+            cause,
+            verification_source_version: sourceVersion,
+            verification_source_version_apres_verdict: sourceVersion + 1,
+            rib_s3_key: ribPath,
+            rib_source_sha256_v1: ribSourceSha256,
+            source_snapshot: {
+              verification_source_version: sourceVersion,
+              rib_s3_key: ribPath,
+              nom: e.nom ?? null,
+              siret_raison_sociale: e.siret_raison_sociale ?? null,
+              finess_raison_sociale: e.finess_raison_sociale ?? null,
+            },
+            // Seuls un suffixe et une empreinte salée sont transmis à la file.
+            // L'IBAN complet ne quitte jamais la mémoire de cette invocation.
+            iban_last4: ibanLastFour,
+            iban_fingerprint_sha256_v1: ibanFingerprint,
+          },
+        );
+        await supabase.rpc("fn_ecrire_audit_safe" as any, {
+          p_acteur_id: etablissement_id,
+          p_type_acteur: "SYSTEME",
+          p_action: "VERIFICATION_DOCUMENT",
+          p_type_ressource: "etablissement",
+          p_id_ressource: etablissement_id,
+          p_cle_s3: ribPath,
+          p_details: {
+            sous_action: "RIB_ETABLISSEMENT_REVUE_OUVERTE",
+            cause,
+            revue_id: revueId,
+            verification_source_version: sourceVersion,
+            rib_source_sha256_v1: ribSourceSha256,
+            iban_last4: ibanLastFour,
+          },
+          p_ip: null,
+          p_navigateur: "edge-function/verify-rib-etablissement",
+        });
+        return new Response(JSON.stringify({
+          success: true,
+          coherent: null,
+          verdict: "EN_ATTENTE",
+          motif,
+          revue_manuelle: true,
+          revue_id: revueId,
+        }), {
+          status: 202,
+          headers: { ...corsHeaders(req), "Content-Type": "application/json" },
+        });
+      } catch (reviewError) {
+        console.error(
+          "[verify-rib-etablissement] ouverture revue impossible",
+          String(reviewError).slice(0, 300),
+        );
+        return new Response(JSON.stringify({
+          success: false,
+          code: "REVIEW_QUEUE_FAILED",
+          error: "La revue du RIB n'a pas pu être enregistrée. Réessayez.",
+        }), {
+          status: 503,
+          headers: { ...corsHeaders(req), "Content-Type": "application/json" },
+        });
+      }
+    };
+
     let binary = "";
     for (let i = 0; i < bytes.length; i += 8192) { const chunk = bytes.subarray(i, Math.min(i + 8192, bytes.length)); for (let j = 0; j < chunk.length; j++) binary += String.fromCharCode(chunk[j]); }
     const base64 = btoa(binary);
@@ -188,29 +301,46 @@ Règles:
     clearTimeout(aiTimeout);
     if (!ai.ok && ai.status === 0) {
       const estTimeout = aiController.signal.aborted;
-      const applique = await appliquerVerdict(null, {
-        erreur_anthropic: { status: estTimeout ? "timeout" : "network", at: new Date().toISOString() },
-      });
-      if (!applique) return sourceChangee();
-      return new Response(JSON.stringify({ success: true, coherent: null, reason: estTimeout ? "AI timeout" : "AI network error" }), { headers: { ...corsHeaders(req), "Content-Type": "application/json" } });
+      return mettreEnRevue(
+        estTimeout ? "AI_TIMEOUT" : "AI_NETWORK_ERROR",
+        estTimeout
+          ? "La vérification automatique du RIB a expiré — revue humaine requise."
+          : "Le service de vérification du RIB est momentanément inaccessible — revue humaine requise.",
+        {
+          erreur_anthropic: {
+            status: estTimeout ? "timeout" : "network",
+            at: new Date().toISOString(),
+          },
+        },
+      );
     }
     if (!ai.ok) {
-      const applique = await appliquerVerdict(null, {
-        erreur_anthropic: { status: ai.status, body_excerpt: ai.body.slice(0, 1500), at: new Date().toISOString() },
-      });
-      if (!applique) return sourceChangee();
-      return new Response(JSON.stringify({ success: true, coherent: null, reason: "AI unavailable" }), { headers: { ...corsHeaders(req), "Content-Type": "application/json" } });
+      return mettreEnRevue(
+        `AI_HTTP_${ai.status}`,
+        "Le service de vérification du RIB a refusé la demande — revue humaine requise.",
+        {
+          erreur_anthropic: {
+            status: ai.status,
+            at: new Date().toISOString(),
+          },
+        },
+      );
     }
     const aiData = ai.data;
     const rawContent = aiData.content?.[0]?.text || "";
     let analysis: any;
     try { const m = rawContent.match(/\{[\s\S]*\}/); analysis = m ? JSON.parse(m[0]) : null; } catch { analysis = null; }
     if (!analysis) {
-      const applique = await appliquerVerdict(null, {
-        erreur_parse: { raw_length: rawContent.length, at: new Date().toISOString() },
-      });
-      if (!applique) return sourceChangee();
-      return new Response(JSON.stringify({ success: true, coherent: null, reason: "Parse error" }), { headers: { ...corsHeaders(req), "Content-Type": "application/json" } });
+      return mettreEnRevue(
+        "AI_PARSE_ERROR",
+        "La réponse automatique sur le RIB était illisible — revue humaine requise.",
+        {
+          erreur_parse: {
+            raw_length: rawContent.length,
+            at: new Date().toISOString(),
+          },
+        },
+      );
     }
 
     const quality = strictAiVerificationQuality(analysis);
@@ -221,6 +351,7 @@ Règles:
     const raisonSocialeMatch = corporateNameMatches(raisonSociale, analysis.titulaire_extrait);
     let coherent: boolean | null = null;
     let motif: string | null = null;
+    let causeRevue: string | null = null;
 
     if (analysis.verdict === "REJETE" || analysis.est_rib === false || analysis.document_lisible === false) {
       coherent = false;
@@ -234,9 +365,11 @@ Règles:
     } else if (!quality.antifraudComplete) {
       coherent = null;
       motif = "Le contrôle antifraude est absent ou mal formé — vérification manuelle requise.";
+      causeRevue = "ANTIFRAUD_INCOMPLETE";
     } else if (indicesFalsif.length > 0) {
       coherent = null;
       motif = "Indices de falsification détectés — vérification manuelle requise.";
+      causeRevue = "FALSIFICATION_INDICATORS";
     } else if (
       analysis.verdict === "VERIFIE" && analysis.est_rib === true &&
       analysis.document_lisible === true && analysis.document_complet === true &&
@@ -248,6 +381,7 @@ Règles:
     } else {
       coherent = null;
       motif = analysis.motif || "L'IBAN ou le titulaire doit être confirmé manuellement.";
+      causeRevue = "AI_INCONCLUSIVE";
     }
 
     const analysisPersisted = sanitizeBankAnalysis({
@@ -257,12 +391,33 @@ Règles:
       indices_falsification: indicesFalsif,
       antifraude_complete: quality.antifraudComplete,
     });
+    if (coherent === null) {
+      return mettreEnRevue(
+        causeRevue || "AI_INCONCLUSIVE",
+        motif || "Le RIB doit être confirmé manuellement.",
+        analysisPersisted,
+        normalizedIban || null,
+      );
+    }
     const applique = await appliquerVerdict(
       coherent,
-      analysisPersisted,
+      {
+        ...analysisPersisted,
+        verdict_final: coherent ? "VERIFIE" : "REJETE",
+        motif_serveur: motif,
+        revue_manuelle_requise: false,
+        regle_version: "2026-07-14",
+      },
       coherent === true ? ibanLast4(normalizedIban) : null,
     );
     if (!applique) return sourceChangee();
+    if (coherent === true) {
+      await resolveEstablishmentReview(
+        supabase as unknown as Parameters<typeof resolveEstablishmentReview>[0],
+        etablissement_id,
+        "VERIFY_RIB_ETABLISSEMENT",
+      );
+    }
     await supabase.rpc("fn_ecrire_audit_safe" as any, { p_acteur_id: etablissement_id, p_type_acteur: "SYSTEME", p_action: "VERIFICATION_DOCUMENT", p_type_ressource: "etablissement", p_id_ressource: etablissement_id, p_cle_s3: ribPath, p_details: { sous_action: "RIB_ETABLISSEMENT_IA", coherent, verdict_ia: analysis.verdict, est_rib: analysis.est_rib, antifraude_complete: quality.antifraudComplete, falsification: indicesFalsif.length > 0 }, p_ip: null, p_navigateur: "edge-function/verify-rib-etablissement" });
 
     return new Response(JSON.stringify({ success: true, coherent, motif, analysis: analysisPersisted }), { headers: { ...corsHeaders(req), "Content-Type": "application/json" } });
