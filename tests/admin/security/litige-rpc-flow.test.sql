@@ -270,11 +270,17 @@ BEGIN
       AND l.initie_par = 'SOIGNANT'
       AND l.type_litige = 'DESACCORD_HEURES_POINTAGE'
   ) THEN
-    RAISE EXCEPTION 'Le panneau n''a pas créé le litige canonique : %', (
-      SELECT to_jsonb(l)
-      FROM public.litiges l
-      WHERE l.id = v_litige_id
-    );
+    RAISE EXCEPTION
+      'Le panneau n''a pas créé le litige canonique : result=%, id=%, row=%, current_user=%, uid=%',
+      v_result,
+      v_litige_id,
+      (
+        SELECT to_jsonb(l)
+        FROM public.litiges l
+        WHERE l.id = v_litige_id
+      ),
+      current_user,
+      auth.uid();
   END IF;
 
   -- Un compte RH banni est refusé avant toute lecture ou écriture.
