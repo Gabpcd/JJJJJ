@@ -29,6 +29,24 @@ BEGIN
   -- transactionnel ; les notifications en base restent vérifiées.
   PERFORM set_config('app.test_mode', 'true', true);
 
+  -- 0. Le référentiel de PROFIL est complet et distinct de la matrice mission.
+  IF EXISTS (
+    SELECT 1
+    FROM unnest(enum_range(NULL::public.type_profession)) AS p(profession)
+    LEFT JOIN public.regles_exercice_profession r
+      ON r.profession = p.profession
+    WHERE r.profession IS NULL
+  ) THEN
+    RAISE EXCEPTION 'D4-T0: référentiel de profil incomplet';
+  END IF;
+  IF public.fn_profession_peut_etre_liberal('MEDECIN') IS DISTINCT FROM true
+     OR public.fn_profession_peut_etre_liberal('DENTISTE') IS DISTINCT FROM true
+     OR public.fn_profession_peut_etre_liberal('PHARMACIEN') IS DISTINCT FROM false
+     OR public.fn_profession_peut_etre_liberal('MANIPULATEUR_RADIO') IS DISTINCT FROM false
+     OR public.fn_profession_peut_etre_liberal('AUXILIAIRE_PUERICULTURE') IS DISTINCT FROM false THEN
+    RAISE EXCEPTION 'D4-T0B: règles libérales du profil incohérentes';
+  END IF;
+
   -- 1. Matrice : cellule inconnue et établissements publics = salarié par défaut.
   IF public.fn_mode_exercice('PROFESSION_INCONNUE', 'CLINIQUE_PRIVEE', NULL)->>'niveau'
        IS DISTINCT FROM 'NON_PROPOSE' THEN
