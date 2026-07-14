@@ -126,21 +126,25 @@ BEGIN
     id, nom, siret, finess, type, adresse_rue, adresse_ville, adresse_code_postal,
     email_contact, statut_verification, peut_publier_missions, est_compte_test,
     siret_verifie, finess_verifie, contrat_service_signe, representant_identite_verifiee,
-    rattachement_verifie, coherence_identite
+    rattachement_verifie, coherence_identite,
+    mode_paiement_commission, stripe_sepa_payment_method_id
   ) VALUES (
     v_etab, 'D4 Etablissement', substr(md5(v_etab::text), 1, 14), '750000001', 'CLINIQUE_PRIVEE',
     '1 rue du Test', 'Paris', '75001', 'd4-etab-' || v_etab::text || '@test.local',
-    'VERIFIE', true, true, true, true, true, true, true, 'OK'
+    'VERIFIE', true, true, true, true, true, true, true, 'OK',
+    'SEPA_DEBIT', 'pm_d4_etablissement_test'
   );
   INSERT INTO public.etablissements(
     id, nom, siret, finess, type, adresse_rue, adresse_ville, adresse_code_postal,
     email_contact, statut_verification, peut_publier_missions, est_compte_test,
     siret_verifie, finess_verifie, contrat_service_signe, representant_identite_verifiee,
-    rattachement_verifie, coherence_identite
+    rattachement_verifie, coherence_identite,
+    mode_paiement_commission, stripe_sepa_payment_method_id
   ) VALUES (
     v_officine, 'D4 Officine', substr(md5(v_officine::text), 1, 14), '750000002', 'PHARMACIE_OFFICINE',
     '2 rue du Test', 'Paris', '75002', 'd4-officine-' || v_officine::text || '@test.local',
-    'VERIFIE', true, true, true, true, true, true, true, 'OK'
+    'VERIFIE', true, true, true, true, true, true, true, 'OK',
+    'SEPA_DEBIT', 'pm_d4_officine_test'
   );
 
   INSERT INTO auth.users(
