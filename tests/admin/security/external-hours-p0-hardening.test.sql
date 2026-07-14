@@ -8,11 +8,11 @@ DECLARE
   v_admin constant uuid := 'ee690000-0000-4000-8000-000000000001';
   v_soignant constant uuid := 'ee690000-0000-4000-8000-000000000002';
   v_path_1 constant text :=
-    'ee690000-0000-4000-8000-000000000002/heures-externes/1720936800000-preuve-1.pdf';
+    'ee690000-0000-4000-8000-000000000002/heures-externes/1720936800000_preuve-1.pdf';
   v_path_overlap constant text :=
-    'ee690000-0000-4000-8000-000000000002/heures-externes/1720936800001-preuve-overlap.pdf';
+    'ee690000-0000-4000-8000-000000000002/heures-externes/1720936800001_preuve-overlap.pdf';
   v_path_2 constant text :=
-    'ee690000-0000-4000-8000-000000000002/heures-externes/1720936800002-preuve-2.pdf';
+    'ee690000-0000-4000-8000-000000000002/heures-externes/1720936800002_preuve-2.pdf';
   v_hash constant text := repeat('a', 64);
   v_result jsonb;
   v_snapshot jsonb;
@@ -109,7 +109,7 @@ BEGIN
   v_result := public.fn_declarer_heures_externes_soignant(
     'CHU Test', 'HOPITAL_PUBLIC', DATE '2020-01-01', DATE '2020-12-31',
     1600,
-    v_soignant::text || '/heures-externes/1720936800099-absente.pdf',
+    v_soignant::text || '/heures-externes/1720936800099_absente.pdf',
     'absente.pdf'
   );
   IF v_result->>'error_code' IS DISTINCT FROM 'PREUVE_STORAGE_INVALIDE' THEN
