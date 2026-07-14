@@ -12,13 +12,11 @@ on:
     branches: [main]
   workflow_dispatch:
 
-# Un seul run E2E au total : la suite tourne contre la PROD PARTAGÉE
-# (seed/cleanup sur les mêmes comptes test). Une concurrence par ref laissait
-# main et une PR s'effacer mutuellement leurs seeds. On sérialise donc toutes
-# les refs et on ne supprime jamais le résultat bloquant d'un run déjà parti.
-concurrency:
-  group: e2e-shared-production
-  cancel-in-progress: false
+permissions:
+  contents: read
+  # Requis par les deux gates GitHub API : file FIFO Playwright et attente du
+  # déploiement Supabase portant exactement le SHA testé sur main.
+  actions: read
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
@@ -51,13 +49,20 @@ jobs:
     container:
       image: mcr.microsoft.com/playwright:v1.58.2-noble
       options: --user 1001
-    timeout-minutes: 25
+    # 45 min maximum de file FIFO + ~25 min de suite dans le pire cas.
+    timeout-minutes: 75
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
         with:
           node-version: '24'
           cache: 'npm'
+      - name: Attendre les runs Playwright plus anciens (FIFO)
+        timeout-minutes: 46
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          PLAYWRIGHT_FIFO_MAX_WAIT_MS: '2700000'
+        run: node scripts/ci/wait-for-older-playwright-runs.mjs
       - name: Install dependencies
         run: npm ci
       - name: Résoudre la clé service_role (Management API — autonome)
@@ -128,6 +133,10 @@ jobs:
           SUPABASE_PUBLISHABLE_KEY: ${{ env.E2E_PUBLISHABLE_KEY }}
           SUPABASE_ANON_KEY: ${{ env.E2E_ANON_KEY }}
           PLAYWRIGHT_TEST_PASSWORD: ${{ env.E2E_TEST_PASSWORD }}
+          # La PR précède nécessairement le déploiement de sa migration. Ce
+          # flag est volontairement absent du job main et le helper refuse de
+          # l'honorer pour tout événement autre que pull_request vers main.
+          E2E_ALLOW_PGRST202_ELIGIBILITY_FALLBACK: 'true'
           CI: 'true'
       - name: Détail a11y si échec (rapport court en fin de log)
         if: failure()
@@ -156,7 +165,8 @@ jobs:
     container:
       image: mcr.microsoft.com/playwright:v1.58.2-noble
       options: --user 1001
-    timeout-minutes: 30
+    # 45 min FIFO + 20 min deploy Supabase + ~30 min de suite au maximum.
+    timeout-minutes: 100
     strategy:
       fail-fast: false
       # chromium seul sur main : la matrice 5-navigateurs partageait la MÊME DB
@@ -175,6 +185,20 @@ jobs:
         with:
           node-version: '24'
           cache: 'npm'
+      - name: Attendre les runs Playwright plus anciens (FIFO)
+        timeout-minutes: 46
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          PLAYWRIGHT_FIFO_MAX_WAIT_MS: '2700000'
+        run: node scripts/ci/wait-for-older-playwright-runs.mjs
+      - name: Attendre Deploy Supabase du même SHA
+        if: github.event_name == 'push'
+        timeout-minutes: 21
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_EVENT_BEFORE: ${{ github.event.before }}
+          SUPABASE_DEPLOY_MAX_WAIT_MS: '1200000'
+        run: node scripts/ci/wait-for-supabase-deploy.mjs
       - name: Install dependencies
         run: npm ci
       - name: Résoudre la clé service_role (Management API — autonome)
@@ -216,6 +240,8 @@ jobs:
           SUPABASE_PUBLISHABLE_KEY: ${{ env.E2E_PUBLISHABLE_KEY }}
           SUPABASE_ANON_KEY: ${{ env.E2E_ANON_KEY }}
           PLAYWRIGHT_TEST_PASSWORD: ${{ env.E2E_TEST_PASSWORD }}
+          # Aucun flag de compatibilité PGRST202 sur main : la RPC canonique
+          # doit être déployée par le workflow du même SHA ci-dessus.
           CI: 'true'
       - name: Upload report
         if: ${{ !cancelled() }}

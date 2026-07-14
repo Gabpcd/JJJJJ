@@ -107,7 +107,8 @@ async function seedMissionLiberaleAssignee(intitule: string): Promise<{
 
   // Sur le schéma migré, cette RPC seede une vraie preuve externe validée.
   // Sur la production pré-déploiement, le helper n'autorise le repli cache
-  // que si PostgREST confirme précisément que la RPC n'existe pas encore.
+  // que si PostgREST confirme précisément que la RPC n'existe pas encore ET
+  // que le workflow PR a activé son flag de compatibilité (jamais sur main).
   const eligibilityIsCanonical = await fixture.ensureLiberalEligibility();
   const { data: acceptation, error: acceptationError } = await etab.rpc(
     'fn_traiter_candidature' as any,

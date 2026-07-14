@@ -14,6 +14,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { TEST_ACCOUNTS } from './auth';
 import { adminClient, userClient, userIdByEmail } from './db';
+import { isPgrst202EligibilityFallbackAllowed } from './liberal-eligibility-policy';
 
 export type CaregiverProfession = 'IDE' | 'IADE' | 'IBODE' | 'SAGE_FEMME';
 export type CaregiverExercise = 'SALARIE' | 'LIBERAL';
@@ -92,6 +93,12 @@ async function ensureEphemeralLiberalEligibility(
   if (rpcError.code !== 'PGRST202') {
     throw new Error(
       `[fixture caregiver] seed canonique des heures impossible: ${rpcError.code || 'RPC'} ${rpcError.message}`,
+    );
+  }
+
+  if (!isPgrst202EligibilityFallbackAllowed()) {
+    throw new Error(
+      '[fixture caregiver] RPC canonique fn_test_seed_heures_externes_validees absente (PGRST202) ; repli interdit hors PR pré-déploiement explicite',
     );
   }
 
