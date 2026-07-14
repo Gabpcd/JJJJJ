@@ -1730,6 +1730,30 @@ BEGIN
   IF v_result->>'success' IS DISTINCT FROM 'true' THEN
     RAISE EXCEPTION 'Envoi atomique ASSIGNEE refusé : %', v_result;
   END IF;
+
+  INSERT INTO public.contrats_mission (
+    mission_id,
+    etablissement_id,
+    soignant_id,
+    type_contrat,
+    numero_contrat,
+    signature_etablissement,
+    signature_etablissement_le,
+    signature_soignant,
+    signature_soignant_le,
+    statut
+  ) VALUES (
+    v_mission_inverse,
+    v_etab_a,
+    v_soignant_pool,
+    'CDDU',
+    'RBAC-INVERSE-' || v_mission_inverse::text,
+    true,
+    pg_catalog.now(),
+    true,
+    pg_catalog.now(),
+    'SIGNE_COMPLET'
+  );
   UPDATE public.missions
   SET statut = 'EN_COURS'
   WHERE id = v_mission_inverse;
