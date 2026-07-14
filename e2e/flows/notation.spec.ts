@@ -109,7 +109,11 @@ test.describe('Flow notation bidirectionnelle', () => {
     await expect(page).toHaveURL(/\/soignant\/tableau-de-bord/, { timeout: 15_000 });
 
     await page.goto(`/soignant/missions/${m!.id}`);
-    await page.waitForLoadState('networkidle');
+    // La messagerie Realtime garde volontairement une connexion réseau
+    // ouverte sur cette page. Attendre "networkidle" rendait donc le test
+    // dépendant d'un silence réseau qui n'arrive pas toujours, alors que le
+    // contenu et le CTA étaient déjà rendus.
+    await page.waitForLoadState('domcontentloaded');
 
     // La page charge avec un heading visible (h1 ou h2).
     const heading = page.locator('h1, h2').first();

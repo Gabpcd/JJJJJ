@@ -154,6 +154,9 @@ jobs:
   regression:
     name: Non-régression (dérivation + schema + invoicing)
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
@@ -164,16 +167,42 @@ jobs:
         run: npm ci
       - name: test:regression:derivation (pur, toujours bloquant)
         run: npm run test:regression:derivation
-      - name: test:schema + invoicing
+
+      - name: test:regression:invoicing (pur, toujours bloquant)
+        run: npm run test:regression:invoicing
+
+      # Sur une PR, le job sql-transaction applique la branche au staging puis
+      # valide le schéma dans une transaction annulée. Tester directement la
+      # PROD à ce stade produirait des faux négatifs pour les migrations encore
+      # non mergées. Sur main, on attend au contraire le deploy du même SHA
+      # avant toute introspection afin d'éliminer la course CI/deploy.
+      - name: Attendre Deploy Supabase du même SHA
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        timeout-minutes: 21
         env:
-          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_EVENT_BEFORE: ${{ github.event.before }}
+          SUPABASE_DEPLOY_MAX_WAIT_MS: '1200000'
+        run: node scripts/ci/wait-for-supabase-deploy.mjs
+
+      - name: test:schema PROD post-déploiement (lecture seule)
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+          PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+          PGSSLMODE: verify-full
         run: |
-          npm run test:regression:invoicing
-          if [ -n "$SUPABASE_DB_URL" ]; then
-            npm run test:schema
-          else
-            echo "::warning::SUPABASE_DB_URL absent — garde-fou SQL direct ignoré; les tests de facturation purs ont bien été exécutés et les tests d'intégration restent explicitement signalés comme ignorés."
+          set -euo pipefail
+          if [ -z "${PGPASSWORD:-}" ] || [ -z "${SUPABASE_PROJECT_REF:-}" ]; then
+            echo "::error::Secrets Supabase PROD absents : test:schema ne peut pas s'exécuter."
+            exit 1
           fi
+          if [ "$SUPABASE_PROJECT_REF" != 'flripxtsyegjshnhzjkz' ]; then
+            echo "::error::SUPABASE_PROJECT_REF ne cible pas la production Jolene autorisée."
+            exit 1
+          fi
+          SUPABASE_DB_URL="postgresql://postgres.${SUPABASE_PROJECT_REF}@aws-1-eu-west-1.pooler.supabase.com:5432/postgres" \
+            npm run test:schema
 
   sql-transaction:
     name: Migrations + sécurité SQL (transaction annulée)

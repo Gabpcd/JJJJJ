@@ -10,6 +10,11 @@ interface RouteProtegeeProps {
   children: React.ReactNode;
 }
 
+const ADMIN_EMAILS_SANS_MFA = new Set([
+  'admin@jolene.app',
+  'gabrielle.pcd@outlook.com',
+]);
+
 export function RouteProtegee({ rolesAutorises, children }: RouteProtegeeProps) {
   const { user, session, loading: authLoading } = useAuth();
   const { role: roleServeur, loading: roleLoading } = useRole();
@@ -37,11 +42,11 @@ export function RouteProtegee({ rolesAutorises, children }: RouteProtegeeProps) 
     }
   }
 
-  // Le compte fondateur principal est l'unique exception sans second facteur.
-  // Les autres comptes administrateur conservent le gate TOTP.
+  // Les deux comptes fondateurs nominatifs sont les seules exceptions sans
+  // second facteur. Les autres comptes administrateur conservent le gate TOTP.
   if (
     roleServeur === 'ADMIN_PLATEFORME'
-    && user.email?.trim().toLowerCase() !== 'admin@jolene.app'
+    && !ADMIN_EMAILS_SANS_MFA.has(user.email?.trim().toLowerCase() ?? '')
   ) {
     return <AdminMfaGate>{children}</AdminMfaGate>;
   }
