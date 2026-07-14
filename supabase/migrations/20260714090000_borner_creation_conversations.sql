@@ -412,9 +412,9 @@ BEGIN
        AND v_etab.adresse_lng IS NOT NULL THEN
         pg_catalog.round((
           6371 * pg_catalog.acos(pg_catalog.least(
-            1.0,
+            1.0::double precision,
             pg_catalog.greatest(
-              -1.0,
+              (-1.0)::double precision,
               pg_catalog.cos(pg_catalog.radians(v_etab.adresse_lat))
                 * pg_catalog.cos(pg_catalog.radians(s.adresse_lat))
                 * pg_catalog.cos(
@@ -499,9 +499,9 @@ BEGIN
        AND v_etab.adresse_lat IS NOT NULL
        AND v_etab.adresse_lng IS NOT NULL THEN
         6371 * pg_catalog.acos(pg_catalog.least(
-          1.0,
+          1.0::double precision,
           pg_catalog.greatest(
-            -1.0,
+            (-1.0)::double precision,
             pg_catalog.cos(pg_catalog.radians(v_etab.adresse_lat))
               * pg_catalog.cos(pg_catalog.radians(s.adresse_lat))
               * pg_catalog.cos(
