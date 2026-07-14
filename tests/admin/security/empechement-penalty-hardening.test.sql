@@ -886,6 +886,12 @@ BEGIN
   INSERT INTO pg_temp.empechement_rpc_results (branche, resultat)
   VALUES ('score_base', v_result);
 
+  -- La chaîne historique A(EPI) a été insérée directement pour tester
+  -- l'ascendance. Canonicaliser son compteur avant le snapshot évite de
+  -- comparer ensuite une valeur brute de trigger à la valeur resynchronisée
+  -- par la RPC ; l'empêchement autorisé doit rester neutre des deux côtés.
+  PERFORM private.fn_resynchroniser_compteurs_soignant(v_soignant_reel);
+
   INSERT INTO pg_temp.empechement_rpc_results (branche, resultat)
   SELECT 'source_reelle_avant', jsonb_build_object(
     'score', s.score_fiabilite,
