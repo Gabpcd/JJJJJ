@@ -983,6 +983,29 @@ SELECT
   );
 RESET ROLE;
 
+-- Les RPC de la première vague doivent rendre exactement les sentinelles
+-- qu'elles ont reçues. Ce contrôle précède volontairement l'UPDATE brut du
+-- hard-stop : le premier trigger missions efface ensuite tout sceau non validé,
+-- comportement anti-contournement attendu et distinct de la restauration RPC.
+DO $assert_contextes_premiere_vague$
+BEGIN
+  IF current_setting('jolene.system_update', true)
+       IS DISTINCT FROM 'sentinelle-epi'
+     OR current_setting('jolene.empechement_mission_context', true)
+       IS DISTINCT FROM 'sentinelle-contexte-epi'
+     OR current_setting('jolene.empechement_mission_validated', true)
+       IS DISTINCT FROM 'sentinelle-validation-epi'
+     OR current_setting('app.test_mode', true) IS DISTINCT FROM 'true' THEN
+    RAISE EXCEPTION
+      'EPI-T10CA : première vague sans restauration : system=%, contexte=%, validation=%, test=%',
+      current_setting('jolene.system_update', true),
+      current_setting('jolene.empechement_mission_context', true),
+      current_setting('jolene.empechement_mission_validated', true),
+      current_setting('app.test_mode', true);
+  END IF;
+END;
+$assert_contextes_premiere_vague$;
+
 -- Même service_role, cron ou admin : une mission interrompue ne peut pas
 -- déclencher la cascade financière TERMINEE tant que les heures effectives
 -- n'ont pas été réconciliées par un futur flux dédié.
@@ -1068,6 +1091,12 @@ BEGIN
   SET score_fiabilite = 62
   WHERE id = 'ec710000-0000-4000-8000-000000000002'::uuid;
   PERFORM set_config('jolene.system_update', 'sentinelle-epi', true);
+  PERFORM set_config(
+    'jolene.empechement_mission_context', 'sentinelle-contexte-epi', true
+  );
+  PERFORM set_config(
+    'jolene.empechement_mission_validated', 'sentinelle-validation-epi', true
+  );
 END;
 $preparer_depassement$;
 
@@ -1529,7 +1558,12 @@ BEGIN
      OR current_setting('jolene.empechement_mission_validated', true)
        IS DISTINCT FROM 'sentinelle-validation-epi'
      OR current_setting('app.test_mode', true) IS DISTINCT FROM 'true' THEN
-    RAISE EXCEPTION 'EPI-T11 : un contexte transactionnel n''a pas été restauré';
+    RAISE EXCEPTION
+      'EPI-T11 : contexte final non restauré : system=%, contexte=%, validation=%, test=%',
+      current_setting('jolene.system_update', true),
+      current_setting('jolene.empechement_mission_context', true),
+      current_setting('jolene.empechement_mission_validated', true),
+      current_setting('app.test_mode', true);
   END IF;
 
   SELECT statut, soignant_assigne_id, est_arret_maladie,
