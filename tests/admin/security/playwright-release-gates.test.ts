@@ -222,7 +222,6 @@ describe('gate déploiement Supabase main', () => {
     expect(finalRpc).toContain('RESOLUTION_FINANCIERE_MANUELLE_REQUISE');
     expect(finalRpc).toContain("v_context := 'REPLACEMENT:'");
   });
-
   it('purge le compteur 3 200 h avant le profil Playwright éphémère', () => {
     const counterCleanupIndex = e2eSeedHelper.indexOf(
       "['suivi_conversion_3200h', 'soignant_id']",
