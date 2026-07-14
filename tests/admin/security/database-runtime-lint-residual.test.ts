@@ -10,6 +10,14 @@ const migration = readFileSync(
   'utf8',
 );
 
+const runtimeRegression = readFileSync(
+  join(
+    process.cwd(),
+    'tests/admin/security/database-runtime-lint-residual.test.sql',
+  ),
+  'utf8',
+);
+
 const demoDefinition = migration.slice(
   migration.indexOf(
     'CREATE OR REPLACE FUNCTION public.fn_charger_demo_investisseur()',
@@ -77,6 +85,21 @@ describe('solde du lint PL/pgSQL pré-lancement', () => {
     ).toHaveLength(2);
     expect(migration).toMatch(
       /REVOKE ALL ON FUNCTION public\.fn_annuler_mission\(uuid, text\)[\s\S]*FROM PUBLIC, anon, authenticated, service_role;/,
+    );
+  });
+
+  it('construit ses fixtures BOLA dans la transaction sans seed de démonstration', () => {
+    expect(runtimeRegression).toContain('BEGIN;');
+    expect(runtimeRegression).toContain('INSERT INTO auth.users');
+    expect(runtimeRegression).toContain('INSERT INTO public.etablissements');
+    expect(runtimeRegression).toContain('INSERT INTO public.membres_etablissement');
+    expect(runtimeRegression).toContain('INSERT INTO public.missions');
+    expect(runtimeRegression).toContain('ROLLBACK;');
+    expect(runtimeRegression).not.toContain(
+      'Fixture BOLA impossible : aucune mission cible',
+    );
+    expect(runtimeRegression).not.toMatch(
+      /FROM public\.missions m\s+ORDER BY m\.id\s+LIMIT 1/,
     );
   });
 

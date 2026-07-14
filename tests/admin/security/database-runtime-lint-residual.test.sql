@@ -257,47 +257,79 @@ BEGIN
 END;
 $runtime_lecture_seule$;
 
--- Preuve adverse BOLA sur donnees existantes, sans ecriture : chaque appel
--- doit sortir par la garde d'autorisation avant la moindre mutation. Le tout
--- reste de surcroit englobe dans la transaction ROLLBACK de ce fichier.
+-- Preuve adverse BOLA sur fixtures autonomes. Les utilisateurs, les deux
+-- etablissements et la mission cible sont propres a ce test et integralement
+-- annules par le ROLLBACK final : aucune donnee de demonstration n'est requise
+-- ni modifiee.
 DO $bola_annulation$
 DECLARE
+  v_etab_cible_id uuid := 'b01a0000-0000-4000-8000-000000000001'::uuid;
+  v_etab_tiers_id uuid := 'b01a0000-0000-4000-8000-000000000002'::uuid;
+  v_mission_id uuid := 'b01a0000-0000-4000-8000-000000000003'::uuid;
+  v_soignant_id uuid := 'b01a0000-0000-4000-8000-000000000004'::uuid;
+  v_cross_etab_user_id uuid := 'b01a0000-0000-4000-8000-000000000005'::uuid;
   v_mission record;
-  v_soignant_id uuid;
-  v_cross_etab_user_id uuid;
-  v_candidate record;
   v_result jsonb;
   v_statut_apres public.statut_mission;
   v_modifie_apres timestamptz;
 BEGIN
+  -- L'insertion des fixtures s'effectue sans identite applicative. Les gardes
+  -- de creation de mission voient donc bien une operation SQL de test, jamais
+  -- un contournement accessible a un JWT utilisateur.
+  PERFORM set_config('request.jwt.claim.sub', '', true);
+  PERFORM set_config('request.jwt.claim.role', '', true);
+  PERFORM set_config('request.jwt.claims', '{}', true);
+
+  INSERT INTO auth.users (
+    id, instance_id, email, role, aud, raw_app_meta_data, email_confirmed_at
+  ) VALUES
+    (
+      v_soignant_id, '00000000-0000-0000-0000-000000000000',
+      'bola-soignant@runtime.test', 'authenticated', 'authenticated',
+      '{"role":"SOIGNANT"}'::jsonb, now()
+    ),
+    (
+      v_cross_etab_user_id, '00000000-0000-0000-0000-000000000000',
+      'bola-etablissement@runtime.test', 'authenticated', 'authenticated',
+      '{"role":"ADMIN_ETABLISSEMENT"}'::jsonb, now()
+    );
+
+  INSERT INTO public.etablissements (
+    id, nom, siret, type, adresse_rue, adresse_ville,
+    adresse_code_postal, email_contact
+  ) VALUES
+    (
+      v_etab_cible_id, 'Fixture BOLA cible', '99140000000001',
+      'CLINIQUE_PRIVEE', '1 rue du Test', 'Paris', '75001',
+      'bola-cible@runtime.test'
+    ),
+    (
+      v_etab_tiers_id, 'Fixture BOLA tiers', '99140000000002',
+      'CLINIQUE_PRIVEE', '2 rue du Test', 'Lyon', '69001',
+      'bola-tiers@runtime.test'
+    );
+
+  INSERT INTO public.membres_etablissement (
+    etablissement_id, user_id, role, actif
+  ) VALUES (
+    v_etab_tiers_id, v_cross_etab_user_id, 'RH', true
+  );
+
+  INSERT INTO public.missions (
+    id, etablissement_id, intitule, profession_requise,
+    debut_le, fin_le, duree_heures, taux_horaire_base,
+    statut, soignant_assigne_id
+  ) VALUES (
+    v_mission_id, v_etab_cible_id, 'Fixture anti-BOLA annulation', 'IDE',
+    now() + interval '7 days', now() + interval '7 days 8 hours',
+    8, 20, 'OUVERTE', NULL
+  );
+
   SELECT m.id, m.etablissement_id, m.soignant_assigne_id,
          m.statut, m.modifie_le
     INTO v_mission
     FROM public.missions m
-   ORDER BY m.id
-   LIMIT 1;
-
-  IF v_mission.id IS NULL THEN
-    RAISE EXCEPTION 'Fixture BOLA impossible : aucune mission cible';
-  END IF;
-
-  SELECT u.id
-    INTO v_soignant_id
-    FROM auth.users u
-   WHERE u.raw_app_meta_data ->> 'role' = 'SOIGNANT'
-     AND u.id IS DISTINCT FROM v_mission.soignant_assigne_id
-     AND NOT EXISTS (
-       SELECT 1
-       FROM public.membres_etablissement me
-       WHERE me.user_id = u.id
-         AND me.actif IS TRUE
-     )
-   ORDER BY u.id
-   LIMIT 1;
-
-  IF v_soignant_id IS NULL THEN
-    RAISE EXCEPTION 'Fixture BOLA impossible : aucun soignant tiers';
-  END IF;
+   WHERE m.id = v_mission_id;
 
   PERFORM set_config('request.jwt.claim.sub', v_soignant_id::text, true);
   PERFORM set_config('request.jwt.claim.role', 'authenticated', true);
@@ -337,30 +369,20 @@ BEGIN
     RAISE EXCEPTION 'BOLA soignant acceptee par fn_annuler_mission legacy : %', v_result;
   END IF;
 
-  FOR v_candidate IN
-    SELECT u.id
-      FROM auth.users u
-     WHERE u.raw_app_meta_data ->> 'role' IN (
-       'ADMIN_ETABLISSEMENT', 'ETABLISSEMENT'
-     )
-     ORDER BY u.id
-  LOOP
-    PERFORM set_config('request.jwt.claim.sub', v_candidate.id::text, true);
-    PERFORM set_config(
-      'request.jwt.claims',
-      jsonb_build_object('sub', v_candidate.id, 'role', 'authenticated')::text,
-      true
-    );
+  PERFORM set_config('request.jwt.claim.sub', v_cross_etab_user_id::text, true);
+  PERFORM set_config('request.jwt.claim.role', 'authenticated', true);
+  PERFORM set_config(
+    'request.jwt.claims',
+    jsonb_build_object(
+      'sub', v_cross_etab_user_id, 'role', 'authenticated'
+    )::text,
+    true
+  );
 
-    IF public.mon_etablissement_id() IS NOT NULL
-       AND public.mon_etablissement_id() IS DISTINCT FROM v_mission.etablissement_id THEN
-      v_cross_etab_user_id := v_candidate.id;
-      EXIT;
-    END IF;
-  END LOOP;
-
-  IF v_cross_etab_user_id IS NULL THEN
-    RAISE EXCEPTION 'Fixture BOLA impossible : aucun etablissement tiers';
+  IF auth.uid() IS DISTINCT FROM v_cross_etab_user_id
+     OR public.mon_etablissement_id() IS DISTINCT FROM v_etab_tiers_id
+     OR public.mon_etablissement_id() IS NOT DISTINCT FROM v_mission.etablissement_id THEN
+    RAISE EXCEPTION 'Contexte JWT etablissement adverse invalide';
   END IF;
 
   v_result := public.fn_annuler_mission_etab(
