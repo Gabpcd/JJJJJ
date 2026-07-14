@@ -373,22 +373,17 @@ Deno.serve(async (req) => {
       }
 
       // Réservation atomique immédiatement avant Stripe : seule la transition
-      // DEBITE -> RELEASE_PLANIFIE est autorisée. Un second worker perd le CAS.
+      // DEBITE -> RELEASE_PLANIFIE est autorisée, après revalidation DB de la
+      // mission TERMINEE, du même soignant et des présences. Un second worker
+      // ou une mission interrompue perd le CAS avant tout payout.
       if (escrowStatutCourant === "DEBITE") {
-        const maintenant = new Date().toISOString();
-        const { data: reservee, error: reserveeErr } = await admin
-          .from("paiements_escrow")
-          .update({
-            statut: "RELEASE_PLANIFIE",
-            available_on: maintenant,
-            disponible_le: maintenant,
-            release_planifie_le: maintenant,
-            modifie_le: maintenant,
-          })
-          .eq("id", rel.paiement_escrow_id)
-          .eq("statut", "DEBITE")
-          .select("id")
-          .maybeSingle();
+        const { data: reservee, error: reserveeErr } = await admin.rpc(
+          "fn_escrow_reserver_release",
+          {
+            p_queue_id: rel.queue_id,
+            p_paiement_escrow_id: rel.paiement_escrow_id,
+          },
+        );
         if (reserveeErr || !reservee) {
           throw new Error(`réservation release impossible: ${reserveeErr?.message || "transition concurrente"}`);
         }

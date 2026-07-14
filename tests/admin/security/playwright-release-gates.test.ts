@@ -105,19 +105,100 @@ describe('gate déploiement Supabase main', () => {
     expect(deployPathWasChanged([{ filename: 'src/App.tsx' }])).toBe(false);
   });
 
-  it('autorise uniquement la mutation interne bornée de la pénalité empêchement', () => {
-    const openIndex = penaltyMigration.indexOf(
+  it('borne les phases empêchement et isole le pool réel des comptes démo', () => {
+    const rpcStart = penaltyMigration.indexOf(
+      'CREATE OR REPLACE FUNCTION public.fn_declarer_empechement_imperieux',
+    );
+    const penaltyRpc = penaltyMigration.slice(rpcStart);
+    const guardStart = penaltyMigration.indexOf(
+      'CREATE OR REPLACE FUNCTION private.fn_guard_contexte_empechement_mission',
+    );
+    const guardEnd = penaltyMigration.indexOf(
+      'DROP TRIGGER IF EXISTS dec_00_guard_empechement',
+      guardStart,
+    );
+    const contextGuard = penaltyMigration.slice(guardStart, guardEnd);
+    const lockIndex = penaltyRpc.indexOf('pg_advisory_xact_lock');
+    const rowLockIndex = penaltyRpc.indexOf('FOR UPDATE');
+    const quotaIndex = penaltyRpc.indexOf('SELECT count(*) INTO v_n12');
+    const openIndex = penaltyRpc.indexOf(
       "set_config('jolene.system_update', 'true', true)",
     );
-    const penaltyIndex = penaltyMigration.indexOf('score_fiabilite = GREATEST');
-    const closeIndex = penaltyMigration.indexOf(
-      "set_config('jolene.system_update', '', true)",
+    const penaltyIndex = penaltyRpc.indexOf('score_fiabilite = GREATEST');
+    const closeIndex = penaltyRpc.indexOf(
+      "'jolene.system_update', v_previous_system_update, true",
+    );
+    const exceptionIndex = penaltyRpc.indexOf('EXCEPTION WHEN OTHERS', closeIndex);
+    const exceptionCloseIndex = penaltyRpc.indexOf(
+      "'jolene.system_update', v_previous_system_update, true",
+      exceptionIndex,
     );
 
+    expect(rpcStart).toBeGreaterThan(-1);
+    expect(lockIndex).toBeGreaterThan(-1);
+    expect(rowLockIndex).toBeGreaterThan(lockIndex);
+    expect(quotaIndex).toBeGreaterThan(rowLockIndex);
     expect(openIndex).toBeGreaterThan(-1);
     expect(penaltyIndex).toBeGreaterThan(openIndex);
     expect(closeIndex).toBeGreaterThan(penaltyIndex);
-    expect(penaltyMigration).toContain('WHERE id = auth.uid()');
+    expect(exceptionIndex).toBeGreaterThan(closeIndex);
+    expect(exceptionCloseIndex).toBeGreaterThan(exceptionIndex);
+    expect(penaltyRpc).toContain('WHERE id = v_soignant_id');
+    expect(penaltyRpc).toContain('v_audit_result := fn_ecrire_audit_safe');
+    expect(penaltyRpc).toContain('private.fn_resynchroniser_compteurs_soignant');
+    expect(penaltyRpc).toContain('v_notifications_avant');
+    expect(penaltyRpc).toContain("n.type IN ('MISSION_URGENTE', 'POOL_URGENCE')");
+    expect(penaltyRpc).toContain("v_m.statut = 'ASSIGNEE'");
+    expect(penaltyRpc).toContain("v_context := 'FLAG:'");
+    expect(penaltyRpc).toContain("v_context := 'CLOSE:'");
+    expect(penaltyRpc).toContain("v_context := 'REPLACEMENT:'");
+    expect(penaltyRpc).toContain('INSERT INTO public.missions');
+    expect(penaltyRpc).toContain('remplacement_de_mission_id');
+    expect(penaltyRpc).toContain("'mission_remplacement_id', v_remplacement_id");
+    expect(penaltyRpc).toContain('v_previous_empechement_context');
+    expect(penaltyRpc).toContain('v_previous_empechement_validated');
+    expect(penaltyRpc).not.toContain('debut_le = GREATEST(debut_le');
+    expect(penaltyRpc).not.toContain("set_config('jolene.system_update', '', true)");
+    expect(guardStart).toBeGreaterThan(-1);
+    expect(guardEnd).toBeGreaterThan(guardStart);
+    expect(contextGuard).toContain("PERFORM set_config('jolene.empechement_mission_validated', '', true)");
+    expect(contextGuard).toContain("v_expected := 'FLAG:'");
+    expect(contextGuard).toContain("v_expected := 'CLOSE:'");
+    expect(contextGuard).toContain("v_expected := 'REPLACEMENT:'");
+    expect(contextGuard).toContain('to_jsonb(NEW) - ARRAY[');
+    expect(penaltyMigration).toContain('CREATE TRIGGER dec_00_guard_empechement');
+    expect(penaltyMigration).toContain(
+      'v_soignant.est_compte_test IS DISTINCT FROM v_mission.est_compte_test',
+    );
+    expect(penaltyMigration).toContain("ja.action = 'ANNULATION_EMPECHEMENT_IMPERIEUX'");
+    expect(penaltyMigration).toContain("ja.details @> '{\"depassement\": true}'::jsonb");
+    expect(penaltyMigration).toContain('count(DISTINCT ja.id_ressource)');
+    expect(penaltyMigration).toContain(
+      "current_setting('app.test_bypass_protections', true) = 'true'",
+    );
+    expect(penaltyMigration).toContain(
+      'CREATE OR REPLACE FUNCTION public.fn_escrow_reserver_tentative_debit',
+    );
+    expect(penaltyMigration).toContain(
+      'CREATE OR REPLACE FUNCTION public.fn_escrow_reserver_release',
+    );
+    expect(penaltyMigration).toContain(
+      'CREATE OR REPLACE FUNCTION public.fn_trg_bloquer_paiement_manuel_escrow',
+    );
+    expect(penaltyMigration).toContain("'RECONCILIATION_HEURES_REQUISE'");
+    expect(penaltyRpc).toContain("SET statut = 'ANNULEE_PAR_SOIGNANT'");
+    expect(penaltyRpc).toContain('soignant_assigne_id = v_soignant_id');
+    expect(penaltyRpc).toContain('public.fn_blocage_publication_etab');
+    expect(penaltyRpc).toContain("cm.type_contrat IN ('CDD', 'CDDU', 'VACATION')");
+    expect(penaltyMigration).toContain(
+      "'No-show — rapprochement financier requis ⚠️'",
+    );
+    expect(penaltyMigration).toContain('WITH RECURSIVE ascendance AS');
+    expect(penaltyMigration).toContain(
+      'est_urgente, niveau_urgence, garantie_remplacement,',
+    );
+    expect(penaltyMigration).toContain("statut IN ('EMISE', 'EN_RETARD')");
+    expect(penaltyMigration).toContain('date_echeance < current_date');
     expect(penaltyMigration).toContain('FROM PUBLIC, anon');
   });
 

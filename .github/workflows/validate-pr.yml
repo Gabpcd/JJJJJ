@@ -171,11 +171,11 @@ jobs:
       - name: test:regression:invoicing (pur, toujours bloquant)
         run: npm run test:regression:invoicing
 
-      # Sur une PR, le job sql-transaction applique la branche au staging puis
-      # valide le schéma dans une transaction annulée. Tester directement la
-      # PROD à ce stade produirait des faux négatifs pour les migrations encore
-      # non mergées. Sur main, on attend au contraire le deploy du même SHA
-      # avant toute introspection afin d'éliminer la course CI/deploy.
+      # Sur une PR, le job sql-transaction applique les nouvelles migrations au
+      # staging et exécute les suites SQL de sécurité dans une transaction
+      # annulée. Le schema-guard JSON, lui, introspecte la PROD uniquement sur
+      # main, après le deploy du même SHA, afin d'éviter tout faux négatif et la
+      # course historique entre validation et déploiement.
       - name: Attendre Deploy Supabase du même SHA
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         timeout-minutes: 21
@@ -325,6 +325,7 @@ jobs:
             tests/admin/security/mission-start-direct-insert-gate.test.sql
             tests/admin/security/external-hours-p0-hardening.test.sql
             tests/admin/security/heures-compteurs-coherence.test.sql
+            tests/admin/security/empechement-penalty-hardening.test.sql
             tests/admin/security/etablissement-rib-review-queue.test.sql
             tests/admin/security/manual-review-admin-queue.test.sql
             tests/security/establishment-admin-review-hardening.test.sql

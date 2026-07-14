@@ -108,7 +108,8 @@ describe('Stripe — garde production et idempotence P0', () => {
     expect(facture).toContain('invoice_checkout_${facture.id}_after_${existingSession.id}');
     expect(facture).toContain('resumed: true');
     expect(debit).toContain('escrow_debit_${esc.id}_after_${precedent.id}');
-    expect(debit).toContain('.eq("tentatives_debit", esc.tentatives_debit ?? 0)');
+    expect(debit).toContain('"fn_escrow_reserver_tentative_debit"');
+    expect(debit).toContain('p_tentatives_attendues: esc.tentatives_debit ?? 0');
     expect(debit).toContain('err?.paymentIntentId');
     expect(debit).toContain('err?.raw?.payment_intent');
     expect(debit).toContain('stripe_payment_intent_id: failedIntentId');
