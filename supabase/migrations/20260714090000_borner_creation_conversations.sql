@@ -580,26 +580,7 @@ AS $function$
         )
     )
     ELSE
-      EXISTS (
-        SELECT 1
-        FROM public.missions mi
-        WHERE (
-          private.fn_soignant_lie_mission(p_acteur_id, mi.id)
-          AND private.fn_soignant_messagerie_actif(p_acteur_id)
-          AND private.fn_interlocuteur_operationnel_actif(
-            p_autre_id,
-            mi.etablissement_id
-          )
-        ) OR (
-          private.fn_soignant_lie_mission(p_autre_id, mi.id)
-          AND private.fn_soignant_messagerie_actif(p_autre_id)
-          AND private.fn_interlocuteur_operationnel_actif(
-            p_acteur_id,
-            mi.etablissement_id
-          )
-        )
-      )
-      OR private.fn_soignant_visible_pool(p_acteur_id, p_autre_id)
+      private.fn_soignant_visible_pool(p_acteur_id, p_autre_id)
       OR private.fn_soignant_visible_pool(p_autre_id, p_acteur_id)
       OR private.fn_support_messagerie_actif(p_autre_id)
   END;
