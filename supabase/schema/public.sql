@@ -505,7 +505,7 @@ COMMENT ON COLUMN "public"."heures_externes_soignants"."empreinte_preuve_sha256"
 
 
 
-COMMENT ON COLUMN "public"."heures_externes_soignants"."source_validation_serveur" IS 'Provenance du dernier verdict serveur. Seules ADMIN_AAL2 et ADMIN_LEGACY_AUDITE peuvent alimenter le compteur.';
+COMMENT ON COLUMN "public"."heures_externes_soignants"."source_validation_serveur" IS 'Provenance serveur du verdict. ADMIN_AAL2 et ADMIN_LEGACY_AUDITE alimentent les comptes reels ; TEST_FIXTURE_SERVICE_ROLE est limite aux profils Playwright ephemeres par le compteur et sa RPC service_role.';
 
 
 
@@ -970,23 +970,22 @@ CREATE OR REPLACE FUNCTION "public"."dec_bloquer_si_facture_impayee"() RETURNS "
     SET "search_path" TO 'public'
     AS $$
 DECLARE
-    v_nb_impayees INTEGER;
-    v_delai_jours NUMERIC;
+  v_nb_impayees integer;
 BEGIN
-    IF TG_OP = 'INSERT' THEN
-        v_delai_jours := public.fn_param_num('gel_publication_impaye_jours', 15);
+  IF TG_OP = 'INSERT' THEN
+    SELECT count(*) INTO v_nb_impayees
+    FROM public.factures
+    WHERE etablissement_id = NEW.etablissement_id
+      AND statut IN ('EMISE', 'EN_RETARD')
+      AND date_echeance < current_date;
 
-        SELECT COUNT(*) INTO v_nb_impayees
-        FROM factures
-        WHERE etablissement_id = NEW.etablissement_id
-          AND statut = 'EMISE'
-          AND cree_le + make_interval(days => v_delai_jours::int) < NOW();
-
-        IF v_nb_impayees > 0 AND NOT est_admin() THEN
-            RAISE EXCEPTION 'Vous avez % facture(s) impayée(s) depuis plus de % jours : les nouvelles publications sont suspendues (vos missions en cours ne sont pas affectées). Régularisez depuis Facturation pour republier.', v_nb_impayees, v_delai_jours::int;
-        END IF;
+    IF v_nb_impayees > 0 AND NOT public.est_admin() THEN
+      RAISE EXCEPTION
+        'Vous avez % facture(s) échue(s) impayée(s) : les nouvelles publications sont suspendues (vos missions en cours ne sont pas affectées). Régularisez depuis Facturation pour republier.',
+        v_nb_impayees;
     END IF;
-    RETURN NEW;
+  END IF;
+  RETURN NEW;
 END;
 $$;
 
@@ -1880,25 +1879,31 @@ ALTER FUNCTION "public"."dec_machine_etats_mission"() OWNER TO "postgres";
 
 CREATE OR REPLACE FUNCTION "public"."dec_maj_compteurs_soignant"() RETURNS "trigger"
     LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO 'public'
+    SET "search_path" TO 'pg_catalog', 'public', 'private'
     AS $$
 DECLARE
-    v_soignant_id UUID;
+  v_old_soignant_id uuid;
+  v_new_soignant_id uuid;
 BEGIN
-    v_soignant_id := COALESCE(NEW.soignant_assigne_id, OLD.soignant_assigne_id);
-    IF v_soignant_id IS NULL THEN RETURN NEW; END IF;
+  IF TG_OP <> 'INSERT' THEN
+    v_old_soignant_id := OLD.soignant_assigne_id;
+  END IF;
+  IF TG_OP <> 'DELETE' THEN
+    v_new_soignant_id := NEW.soignant_assigne_id;
+  END IF;
 
-    PERFORM set_config('jolene.system_update', 'true', true);
+  IF v_old_soignant_id IS NOT NULL THEN
+    PERFORM private.fn_resynchroniser_compteurs_soignant(v_old_soignant_id);
+  END IF;
+  IF v_new_soignant_id IS NOT NULL
+     AND v_new_soignant_id IS DISTINCT FROM v_old_soignant_id THEN
+    PERFORM private.fn_resynchroniser_compteurs_soignant(v_new_soignant_id);
+  END IF;
 
-    UPDATE soignants SET
-        total_missions_terminees = (SELECT COUNT(*) FROM missions WHERE soignant_assigne_id = v_soignant_id AND statut = 'TERMINEE'),
-        total_missions_annulees = (SELECT COUNT(*) FROM missions WHERE soignant_assigne_id = v_soignant_id AND statut IN ('ANNULEE_PAR_SOIGNANT')),
-        total_absences = (SELECT COUNT(*) FROM missions WHERE soignant_assigne_id = v_soignant_id AND statut = 'ABSENCE'),
-        heures_cumulees = COALESCE((SELECT SUM(duree_heures) FROM missions WHERE soignant_assigne_id = v_soignant_id AND statut = 'TERMINEE'), 0),
-        modifie_le = NOW()
-    WHERE id = v_soignant_id;
-
-    RETURN NEW;
+  IF TG_OP = 'DELETE' THEN
+    RETURN OLD;
+  END IF;
+  RETURN NEW;
 END;
 $$;
 
@@ -1995,83 +2000,84 @@ ALTER FUNCTION "public"."dec_maj_tous_documents_valides"() OWNER TO "postgres";
 
 CREATE OR REPLACE FUNCTION "public"."dec_mettre_a_jour_fiabilite"() RETURNS "trigger"
     LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO 'public'
+    SET "search_path" TO 'pg_catalog', 'public'
     AS $$
 DECLARE
-  v_parrain_id UUID;
-  v_nb_filleuls_valides INT;
-  v_parrain_avait_badge BOOLEAN;
-  v_filleul_prenom TEXT;
-  v_heures_mission NUMERIC;
+  v_parrain_id uuid;
+  v_nb_filleuls_valides integer;
+  v_parrain_avait_badge boolean;
+  v_filleul_prenom text;
+  v_previous_system_update text := COALESCE(
+    current_setting('jolene.system_update', true), ''
+  );
 BEGIN
-    IF NEW.soignant_assigne_id IS NULL THEN RETURN NEW; END IF;
-
-    IF NEW.statut = 'TERMINEE' AND OLD.statut != 'TERMINEE' THEN
-        v_heures_mission := COALESCE(
-            (SELECT SUM(pr.heures_reelles) FROM public.presences pr
-              WHERE pr.mission_id = NEW.id AND pr.heures_reelles IS NOT NULL),
-            EXTRACT(EPOCH FROM (NEW.fin_le - NEW.debut_le)) / 3600.0
-        );
-
-        UPDATE soignants SET
-            total_missions_terminees = total_missions_terminees + 1,
-            heures_cumulees = heures_cumulees + v_heures_mission,
-            eligible_conversion_3200h = (heures_cumulees + v_heures_mission) >= 3200,
-            premiere_mission_le = COALESCE(premiere_mission_le, NOW()),
-            derniere_activite_le = NOW(), modifie_le = NOW()
-        WHERE id = NEW.soignant_assigne_id;
-
-        UPDATE suivi_conversion_3200h SET
-            heures_actuelles = (SELECT heures_cumulees FROM soignants WHERE id = NEW.soignant_assigne_id),
-            jalon_800h_atteint  = heures_actuelles >= 800,
-            jalon_1600h_atteint = heures_actuelles >= 1600,
-            jalon_2400h_atteint = heures_actuelles >= 2400,
-            jalon_3200h_atteint = heures_actuelles >= 3200,
-            modifie_le = NOW()
-        WHERE soignant_id = NEW.soignant_assigne_id;
-
-        SELECT parraine_par, prenom INTO v_parrain_id, v_filleul_prenom
-        FROM soignants WHERE id = NEW.soignant_assigne_id;
-
-        IF v_parrain_id IS NOT NULL THEN
-          SELECT COUNT(*) INTO v_nb_filleuls_valides
-          FROM soignants
-          WHERE parraine_par = v_parrain_id
-            AND premiere_mission_le IS NOT NULL
-            AND supprime_le IS NULL;
-
-          IF v_nb_filleuls_valides >= 3 THEN
-            SELECT badge_ambassadeur INTO v_parrain_avait_badge
-            FROM soignants WHERE id = v_parrain_id;
-
-            IF NOT COALESCE(v_parrain_avait_badge, false) THEN
-              UPDATE soignants SET badge_ambassadeur = true, modifie_le = NOW()
-              WHERE id = v_parrain_id;
-
-              INSERT INTO notifications (destinataire_id, type_destinataire, type, titre, corps, lien)
-              VALUES (
-                v_parrain_id, 'SOIGNANT', 'PARRAINAGE',
-                '🛡️ Badge Ambassadeur débloqué !',
-                'Bravo ! ' || COALESCE(v_filleul_prenom, 'Votre filleul')
-                  || ' vient de terminer sa 1ère mission. Vous avez 3 filleuls validés et obtenez le badge Ambassadeur, visible sur votre profil.',
-                '/soignant/parrainage'
-              );
-            END IF;
-          END IF;
-        END IF;
-    END IF;
-
-    IF NEW.statut = 'ABSENCE' AND OLD.statut != 'ABSENCE' THEN
-        UPDATE soignants SET total_absences = total_absences + 1, modifie_le = NOW()
-        WHERE id = NEW.soignant_assigne_id;
-    END IF;
-
-    IF NEW.statut = 'ANNULEE_PAR_SOIGNANT' AND OLD.statut != 'ANNULEE_PAR_SOIGNANT' THEN
-        UPDATE soignants SET total_missions_annulees = total_missions_annulees + 1, modifie_le = NOW()
-        WHERE id = NEW.soignant_assigne_id;
-    END IF;
-
+  IF NEW.soignant_assigne_id IS NULL THEN
     RETURN NEW;
+  END IF;
+
+  IF NEW.statut = 'TERMINEE'
+     AND (
+       OLD.statut IS DISTINCT FROM NEW.statut
+       OR OLD.soignant_assigne_id IS DISTINCT FROM NEW.soignant_assigne_id
+     ) THEN
+    PERFORM set_config('jolene.system_update', 'true', true);
+    UPDATE public.soignants
+    SET premiere_mission_le = COALESCE(premiere_mission_le, now()),
+        derniere_activite_le = now(),
+        modifie_le = now()
+    WHERE id = NEW.soignant_assigne_id;
+
+    SELECT s.parraine_par, s.prenom
+    INTO v_parrain_id, v_filleul_prenom
+    FROM public.soignants s
+    WHERE s.id = NEW.soignant_assigne_id;
+
+    IF v_parrain_id IS NOT NULL THEN
+      SELECT count(*)::integer
+      INTO v_nb_filleuls_valides
+      FROM public.soignants s
+      WHERE s.parraine_par = v_parrain_id
+        AND COALESCE(s.total_missions_terminees, 0) > 0
+        AND s.supprime_le IS NULL;
+
+      IF v_nb_filleuls_valides >= 3 THEN
+        SELECT s.badge_ambassadeur
+        INTO v_parrain_avait_badge
+        FROM public.soignants s
+        WHERE s.id = v_parrain_id;
+
+        IF NOT COALESCE(v_parrain_avait_badge, false) THEN
+          UPDATE public.soignants
+          SET badge_ambassadeur = true,
+              modifie_le = now()
+          WHERE id = v_parrain_id;
+
+          INSERT INTO public.notifications (
+            destinataire_id, type_destinataire, type, titre, corps, lien
+          ) VALUES (
+            v_parrain_id,
+            'SOIGNANT',
+            'PARRAINAGE',
+            'Badge Ambassadeur debloque !',
+            'Bravo ! ' || COALESCE(v_filleul_prenom, 'Votre filleul')
+              || ' vient de terminer sa 1re mission. Vous avez 3 filleuls valides et obtenez le badge Ambassadeur, visible sur votre profil.',
+            '/soignant/parrainage'
+          );
+        END IF;
+      END IF;
+    END IF;
+
+    PERFORM set_config(
+      'jolene.system_update', v_previous_system_update, true
+    );
+  END IF;
+
+  RETURN NEW;
+EXCEPTION WHEN OTHERS THEN
+  PERFORM set_config(
+    'jolene.system_update', v_previous_system_update, true
+  );
+  RAISE;
 END;
 $$;
 
@@ -2171,54 +2177,69 @@ CREATE OR REPLACE FUNCTION "public"."dec_notifier_changement_mission"() RETURNS 
     SET "search_path" TO 'public'
     AS $$
 DECLARE
-    v_etab_nom TEXT;
-    v_soignant_nom TEXT;
+  v_etab_nom text;
+  v_soignant_nom text;
+  v_context text := COALESCE(
+    current_setting('jolene.empechement_mission_context', true), ''
+  );
 BEGIN
-    SELECT nom INTO v_etab_nom FROM etablissements WHERE id = NEW.etablissement_id;
-
-    IF NEW.statut = 'ASSIGNEE' AND (OLD.statut IS NULL OR OLD.statut = 'OUVERTE') THEN
-        SELECT COALESCE(prenom, '') || ' ' || COALESCE(nom, '') INTO v_soignant_nom 
-        FROM soignants WHERE id = NEW.soignant_assigne_id;
-        
-        PERFORM fn_creer_notification(
-            NEW.etablissement_id, 'ETABLISSEMENT', 'CANDIDATURE_ACCEPTEE',
-            'Mission acceptée',
-            COALESCE(v_soignant_nom, 'Un soignant') || ' a accepté la mission "' || COALESCE(NEW.intitule, 'Mission') || '".',
-            '/etablissement/missions/' || NEW.id::TEXT,
-            'mission', NEW.id
-        );
-    END IF;
-
-    IF NEW.statut IN ('ANNULEE_PAR_ETABLISSEMENT', 'ANNULEE_PAR_SOIGNANT') 
-       AND OLD.statut NOT IN ('ANNULEE_PAR_ETABLISSEMENT', 'ANNULEE_PAR_SOIGNANT') THEN
-        IF NEW.soignant_assigne_id IS NOT NULL THEN
-            PERFORM fn_creer_notification(
-                NEW.soignant_assigne_id, 'SOIGNANT', 'MISSION_ANNULEE',
-                'Mission annulée',
-                'La mission "' || COALESCE(NEW.intitule, 'Mission') || '" chez ' || COALESCE(v_etab_nom, 'un établissement') || ' a été annulée.',
-                '/soignant/missions', 'mission', NEW.id
-            );
-        END IF;
-        PERFORM fn_creer_notification(
-            NEW.etablissement_id, 'ETABLISSEMENT', 'MISSION_ANNULEE',
-            'Mission annulée',
-            'La mission "' || COALESCE(NEW.intitule, 'Mission') || '" a été annulée.',
-            '/etablissement/missions/' || NEW.id::TEXT, 'mission', NEW.id
-        );
-    END IF;
-
-    IF NEW.statut = 'TERMINEE' AND OLD.statut != 'TERMINEE' THEN
-        IF NEW.soignant_assigne_id IS NOT NULL THEN
-            PERFORM fn_creer_notification(
-                NEW.soignant_assigne_id, 'SOIGNANT', 'MISSION_TERMINEE',
-                'Mission terminée',
-                'Votre mission "' || COALESCE(NEW.intitule, 'Mission') || '" chez ' || COALESCE(v_etab_nom, 'un établissement') || ' est terminée.',
-                '/soignant/missions', 'mission', NEW.id
-            );
-        END IF;
-    END IF;
-
+  IF v_context = COALESCE(
+       current_setting('jolene.empechement_mission_validated', true), ''
+     )
+     AND v_context = 'CLOSE:' || OLD.id::text || ':' || auth.uid()::text THEN
     RETURN NEW;
+  END IF;
+
+  SELECT nom INTO v_etab_nom
+  FROM public.etablissements WHERE id = NEW.etablissement_id;
+
+  IF NEW.statut = 'ASSIGNEE'
+     AND (OLD.statut IS NULL OR OLD.statut = 'OUVERTE') THEN
+    SELECT COALESCE(prenom, '') || ' ' || COALESCE(nom, '')
+      INTO v_soignant_nom
+      FROM public.soignants WHERE id = NEW.soignant_assigne_id;
+    PERFORM public.fn_creer_notification(
+      NEW.etablissement_id, 'ETABLISSEMENT', 'CANDIDATURE_ACCEPTEE',
+      'Mission acceptée',
+      COALESCE(v_soignant_nom, 'Un soignant') || ' a accepté la mission "'
+        || COALESCE(NEW.intitule, 'Mission') || '".',
+      '/etablissement/missions/' || NEW.id::text, 'mission', NEW.id
+    );
+  END IF;
+
+  IF NEW.statut IN ('ANNULEE_PAR_ETABLISSEMENT', 'ANNULEE_PAR_SOIGNANT')
+     AND OLD.statut NOT IN (
+       'ANNULEE_PAR_ETABLISSEMENT', 'ANNULEE_PAR_SOIGNANT'
+     ) THEN
+    IF NEW.soignant_assigne_id IS NOT NULL THEN
+      PERFORM public.fn_creer_notification(
+        NEW.soignant_assigne_id, 'SOIGNANT', 'MISSION_ANNULEE',
+        'Mission annulée',
+        'La mission "' || COALESCE(NEW.intitule, 'Mission') || '" chez '
+          || COALESCE(v_etab_nom, 'un établissement') || ' a été annulée.',
+        '/soignant/missions', 'mission', NEW.id
+      );
+    END IF;
+    PERFORM public.fn_creer_notification(
+      NEW.etablissement_id, 'ETABLISSEMENT', 'MISSION_ANNULEE',
+      'Mission annulée',
+      'La mission "' || COALESCE(NEW.intitule, 'Mission')
+        || '" a été annulée.',
+      '/etablissement/missions/' || NEW.id::text, 'mission', NEW.id
+    );
+  END IF;
+
+  IF NEW.statut = 'TERMINEE' AND OLD.statut <> 'TERMINEE'
+     AND NEW.soignant_assigne_id IS NOT NULL THEN
+    PERFORM public.fn_creer_notification(
+      NEW.soignant_assigne_id, 'SOIGNANT', 'MISSION_TERMINEE',
+      'Mission terminée',
+      'Votre mission "' || COALESCE(NEW.intitule, 'Mission') || '" chez '
+        || COALESCE(v_etab_nom, 'un établissement') || ' est terminée.',
+      '/soignant/missions', 'mission', NEW.id
+    );
+  END IF;
+  RETURN NEW;
 END;
 $$;
 
@@ -2456,34 +2477,42 @@ CREATE OR REPLACE FUNCTION "public"."dec_penalite_annulation_tardive"() RETURNS 
     SET "search_path" TO 'public'
     AS $$
 DECLARE
-    v_heures_avant NUMERIC;
-    v_penalite INTEGER;
+  v_heures_avant numeric;
+  v_penalite integer;
+  v_context text := COALESCE(
+    current_setting('jolene.empechement_mission_context', true), ''
+  );
 BEGIN
-    -- Annulation par le soignant
-    IF NEW.statut = 'ANNULEE_PAR_SOIGNANT' AND OLD.statut = 'ASSIGNEE' THEN
-        v_heures_avant := EXTRACT(EPOCH FROM (OLD.debut_le - NOW())) / 3600;
+  IF v_context = COALESCE(
+       current_setting('jolene.empechement_mission_validated', true), ''
+     )
+     AND v_context = 'CLOSE:' || OLD.id::text || ':' || auth.uid()::text
+     AND OLD.statut = 'ASSIGNEE'
+     AND NEW.statut = 'ANNULEE_PAR_SOIGNANT'
+     AND OLD.est_arret_maladie IS TRUE THEN
+    RETURN NEW;
+  END IF;
 
-        IF v_heures_avant < 4 THEN
-            v_penalite := 25;
-        ELSIF v_heures_avant < 24 THEN
-            v_penalite := 15;
-        ELSE
-            v_penalite := 8; -- pénalité standard déjà en place
-        END IF;
-
-        -- Appliquer la pénalité au score
-        UPDATE soignants SET
-            score_fiabilite = GREATEST(0, score_fiabilite - v_penalite),
-            total_missions_annulees = total_missions_annulees + 1,
-            modifie_le = NOW()
-        WHERE id = OLD.soignant_assigne_id;
-
-        -- Remettre la mission en OUVERTE pour qu'un autre soignant puisse la prendre
-        NEW.soignant_assigne_id := NULL;
-        NEW.statut := 'OUVERTE';
+  IF NEW.statut = 'ANNULEE_PAR_SOIGNANT' AND OLD.statut = 'ASSIGNEE' THEN
+    v_heures_avant := extract(epoch FROM (OLD.debut_le - now())) / 3600;
+    IF v_heures_avant < 4 THEN
+      v_penalite := 25;
+    ELSIF v_heures_avant < 24 THEN
+      v_penalite := 15;
+    ELSE
+      v_penalite := 8;
     END IF;
 
-    RETURN NEW;
+    UPDATE public.soignants
+       SET score_fiabilite = greatest(0, score_fiabilite - v_penalite),
+           total_missions_annulees = total_missions_annulees + 1,
+           modifie_le = now()
+     WHERE id = OLD.soignant_assigne_id;
+
+    NEW.soignant_assigne_id := NULL;
+    NEW.statut := 'OUVERTE';
+  END IF;
+  RETURN NEW;
 END;
 $$;
 
@@ -2617,11 +2646,29 @@ CREATE OR REPLACE FUNCTION "public"."dec_proteger_mission_soignant"() RETURNS "t
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
     AS $$
+DECLARE
+  v_context text := COALESCE(
+    current_setting('jolene.empechement_mission_context', true), ''
+  );
 BEGIN
+  -- Conserver le bypass étroit du helper de seed E2E installé le 10/07/2026.
+  -- Sans cet early-return, la présente redéfinition rendrait de nouveau
+  -- fn_test_update_mission silencieusement inopérant pour service_role.
+  IF current_setting('app.test_bypass_protections', true) = 'true' THEN
+    RETURN NEW;
+  END IF;
+
   IF current_setting('jolene.assignment_rpc_soignant_id', true) = COALESCE(NEW.soignant_assigne_id::text, '')
      AND OLD.statut = 'OUVERTE'
      AND NEW.statut = 'ASSIGNEE'
      AND OLD.soignant_assigne_id IS NULL THEN
+    RETURN NEW;
+  END IF;
+
+  IF v_context = COALESCE(
+       current_setting('jolene.empechement_mission_validated', true), ''
+     )
+     AND v_context = 'CLOSE:' || OLD.id::text || ':' || auth.uid()::text THEN
     RETURN NEW;
   END IF;
 
@@ -3074,6 +3121,90 @@ $$;
 ALTER FUNCTION "public"."dec_refuser_mission_passee"() OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."dec_resynchroniser_compteurs_heures_externes"() RETURNS "trigger"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'pg_catalog', 'public', 'private'
+    AS $$
+DECLARE
+  v_old_soignant_id uuid;
+  v_new_soignant_id uuid;
+BEGIN
+  IF TG_OP <> 'INSERT' THEN
+    v_old_soignant_id := OLD.soignant_id;
+    PERFORM private.fn_resynchroniser_compteurs_soignant(v_old_soignant_id);
+  END IF;
+  IF TG_OP <> 'DELETE' THEN
+    v_new_soignant_id := NEW.soignant_id;
+    IF v_new_soignant_id IS DISTINCT FROM v_old_soignant_id THEN
+      PERFORM private.fn_resynchroniser_compteurs_soignant(v_new_soignant_id);
+    END IF;
+  END IF;
+
+  IF TG_OP = 'DELETE' THEN
+    RETURN OLD;
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."dec_resynchroniser_compteurs_heures_externes"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."dec_resynchroniser_compteurs_presence"() RETURNS "trigger"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'pg_catalog', 'public', 'private'
+    AS $$
+DECLARE
+  v_old_mission_id uuid;
+  v_new_mission_id uuid;
+  v_soignant_id uuid;
+BEGIN
+  IF TG_OP <> 'INSERT' THEN
+    v_old_mission_id := OLD.mission_id;
+    SELECT m.soignant_assigne_id
+    INTO v_soignant_id
+    FROM public.missions m
+    WHERE m.id = v_old_mission_id;
+    PERFORM private.fn_resynchroniser_compteurs_soignant(
+      COALESCE(v_soignant_id, OLD.soignant_id)
+    );
+  END IF;
+
+  IF TG_OP <> 'DELETE' THEN
+    v_new_mission_id := NEW.mission_id;
+    IF v_new_mission_id IS DISTINCT FROM v_old_mission_id
+       OR NEW.soignant_id IS DISTINCT FROM (
+         CASE
+           WHEN TG_OP = 'INSERT' THEN NULL::uuid
+           ELSE OLD.soignant_id
+         END
+       )
+       OR TG_OP = 'INSERT' THEN
+      SELECT m.soignant_assigne_id
+      INTO v_soignant_id
+      FROM public.missions m
+      WHERE m.id = v_new_mission_id;
+      PERFORM private.fn_resynchroniser_compteurs_soignant(
+        COALESCE(v_soignant_id, NEW.soignant_id)
+      );
+    ELSIF v_soignant_id IS NOT NULL THEN
+      -- Meme mission : la premiere branche a deja recalcule avec NEW visible.
+      NULL;
+    END IF;
+  END IF;
+
+  IF TG_OP = 'DELETE' THEN
+    RETURN OLD;
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."dec_resynchroniser_compteurs_presence"() OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."dec_sanitiser_contrat"() RETURNS "trigger"
     LANGUAGE "plpgsql"
     SET "search_path" TO 'public'
@@ -3378,10 +3509,11 @@ ALTER FUNCTION "public"."dec_verifier_docs_jusqua_fin"() OWNER TO "postgres";
 
 CREATE OR REPLACE FUNCTION "public"."dec_verifier_eligibilite_liberal"() RETURNS "trigger"
     LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO 'pg_catalog', 'public'
+    SET "search_path" TO 'pg_catalog', 'public', 'private'
     AS $$
 DECLARE
   v_heures_cumulees numeric;
+  v_seuil_heures numeric;
   v_etablissement record;
   v_mode jsonb;
   v_verifier boolean := false;
@@ -3404,17 +3536,18 @@ BEGIN
 
   IF upper(COALESCE(NEW.type_contrat_recherche::text, 'SALARIE'))
        NOT IN ('LIBERAL', 'TOUS') THEN
-    RAISE EXCEPTION 'La mission n''est pas ouverte à un contrat libéral.'
+    RAISE EXCEPTION 'La mission n''est pas ouverte a un contrat liberal.'
       USING ERRCODE = 'check_violation';
   END IF;
 
   SELECT e.type::text AS type_etablissement,
          COALESCE(e.est_secteur_public, false) AS est_public
-    INTO v_etablissement
+  INTO v_etablissement
   FROM public.etablissements e
-  WHERE e.id = NEW.etablissement_id AND e.supprime_le IS NULL;
+  WHERE e.id = NEW.etablissement_id
+    AND e.supprime_le IS NULL;
   IF NOT FOUND THEN
-    RAISE EXCEPTION 'Établissement introuvable pour la mission.'
+    RAISE EXCEPTION 'Etablissement introuvable pour la mission.'
       USING ERRCODE = 'check_violation';
   END IF;
 
@@ -3426,30 +3559,53 @@ BEGIN
   IF COALESCE(v_mode->>'niveau', 'NON_PROPOSE') <> 'AUTORISE' THEN
     RAISE EXCEPTION '%', COALESCE(
       v_mode->>'source_libelle',
-      'Cette profession est proposée en salarié pour cet établissement.'
+      'Cette profession est proposee en salarie pour cet etablissement.'
     ) USING ERRCODE = 'check_violation';
   END IF;
 
-  IF NOT public.fn_soignant_liberal_actif_verifie(NEW.soignant_assigne_id) THEN
-    RAISE EXCEPTION 'Le profil libéral doit être actif, avec SIRET et identité vérifiés.'
+  IF NOT public.fn_soignant_liberal_actif_verifie(
+    NEW.soignant_assigne_id
+  ) THEN
+    RAISE EXCEPTION 'Le profil liberal doit etre actif, avec SIRET et identite verifies.'
       USING ERRCODE = 'check_violation';
   END IF;
 
-  IF NOT public.fn_documents_ok_pour_mission(NEW.soignant_assigne_id, 'LIBERAL') THEN
-    RAISE EXCEPTION 'Les documents requis pour la mission libérale ne sont pas tous vérifiés.'
+  IF NOT public.fn_documents_ok_pour_mission(
+    NEW.soignant_assigne_id, 'LIBERAL'
+  ) THEN
+    RAISE EXCEPTION 'Les documents requis pour la mission liberale ne sont pas tous verifies.'
       USING ERRCODE = 'check_violation';
   END IF;
 
-  SELECT COALESCE(s.heures_cumulees, 0)
-    INTO v_heures_cumulees
-  FROM public.soignants s
-  WHERE s.id = NEW.soignant_assigne_id AND s.supprime_le IS NULL;
-  IF NOT FOUND THEN
-    RAISE EXCEPTION 'Profil soignant introuvable.' USING ERRCODE = 'check_violation';
+  IF NOT EXISTS (
+    SELECT 1
+    FROM public.soignants s
+    WHERE s.id = NEW.soignant_assigne_id
+      AND s.supprime_le IS NULL
+  ) THEN
+    RAISE EXCEPTION 'Profil soignant introuvable.'
+      USING ERRCODE = 'check_violation';
   END IF;
-  IF v_heures_cumulees < 3200 THEN
-    RAISE EXCEPTION 'Vous devez cumuler 3 200 heures d''exercice pour accepter une mission libérale. Vous avez actuellement % heures.',
-      round(v_heures_cumulees)
+
+  SELECT h.heures_totales
+  INTO v_heures_cumulees
+  FROM private.fn_heures_exercice_verifiees(
+    NEW.soignant_assigne_id
+  ) h;
+
+  SELECT private.fn_seuil_heures_liberal(
+    NEW.soignant_assigne_id,
+    NEW.profession_requise::text
+  )
+  INTO v_seuil_heures;
+  IF v_seuil_heures IS NULL THEN
+    RAISE EXCEPTION 'Le parcours kine (2 240 heures ou zone sous-dotee) doit etre choisi avant une mission liberale.'
+      USING ERRCODE = 'check_violation';
+  END IF;
+  IF COALESCE(v_heures_cumulees, 0) < v_seuil_heures THEN
+    RAISE EXCEPTION 'Vous devez cumuler % heures d''exercice pour accepter cette mission liberale. Vous avez actuellement % heures.',
+      v_seuil_heures,
+      round(COALESCE(v_heures_cumulees, 0), 2)
       USING ERRCODE = 'check_violation';
   END IF;
 
@@ -4122,9 +4278,13 @@ CREATE OR REPLACE FUNCTION "public"."est_admin_valide"() RETURNS boolean
       AND u.deleted_at IS NULL
       AND (u.banned_until IS NULL OR u.banned_until <= now())
       AND u.email_confirmed_at IS NOT NULL
-      AND COALESCE(auth.jwt() ->> 'aal', '') = 'aal2'
-      -- Au lancement public, l'inscription explicite dans equipe_admin est
-      -- obligatoire : aucune compatibilite implicite hors registre.
+      AND (
+        COALESCE(auth.jwt() ->> 'aal', '') = 'aal2'
+        OR lower(COALESCE(u.email, '')) IN (
+          'admin@jolene.app',
+          'gabrielle.pcd@outlook.com'
+        )
+      )
       AND EXISTS (
         SELECT 1
         FROM public.equipe_admin ea
@@ -4148,7 +4308,7 @@ $$;
 ALTER FUNCTION "public"."est_admin_valide"() OWNER TO "postgres";
 
 
-COMMENT ON FUNCTION "public"."est_admin_valide"() IS 'Garde admin de lancement : AAL2, compte actif et ligne equipe_admin active avec les 8 groupes canoniques.';
+COMMENT ON FUNCTION "public"."est_admin_valide"() IS 'Garde admin de lancement : rôle canonique, compte sain, registre 8/8 et AAL2, sauf les deux comptes fondateurs explicitement autorisés sans MFA.';
 
 
 
@@ -4426,14 +4586,20 @@ ALTER FUNCTION "public"."fn_activer_garantie_mission"("p_mission_id" "uuid", "p_
 
 CREATE OR REPLACE FUNCTION "public"."fn_activer_liberal"() RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO 'pg_catalog', 'public'
+    SET "search_path" TO 'pg_catalog', 'public', 'private'
     AS $_$
 DECLARE
   v_uid uuid := auth.uid();
   v_soignant record;
+  v_compteur record;
+  v_seuil_heures numeric;
   v_taux jsonb;
-  v_previous_system_update text := COALESCE(current_setting('jolene.system_update', true), '');
-  v_previous_liberal_transition text := COALESCE(current_setting('jolene.liberal_transition', true), '');
+  v_previous_system_update text := COALESCE(
+    current_setting('jolene.system_update', true), ''
+  );
+  v_previous_liberal_transition text := COALESCE(
+    current_setting('jolene.liberal_transition', true), ''
+  );
 BEGIN
   IF v_uid IS NULL OR NOT public.fn_compte_auth_actif() THEN
     RETURN jsonb_build_object(
@@ -4443,7 +4609,8 @@ BEGIN
     );
   END IF;
 
-  SELECT * INTO v_soignant
+  SELECT *
+  INTO v_soignant
   FROM public.soignants
   WHERE id = v_uid AND supprime_le IS NULL
   FOR UPDATE;
@@ -4473,7 +4640,8 @@ BEGIN
     );
   END IF;
   IF v_soignant.profession NOT IN (
-    SELECT profession FROM public.professions_liberal_eligible
+    SELECT p.profession
+    FROM public.professions_liberal_eligible p
   ) THEN
     RETURN jsonb_build_object(
       'success', false,
@@ -4482,6 +4650,31 @@ BEGIN
     );
   END IF;
 
+  SELECT *
+  INTO v_compteur
+  FROM private.fn_heures_exercice_verifiees(v_uid);
+
+  SELECT private.fn_seuil_heures_liberal(v_uid, v_soignant.profession::text)
+  INTO v_seuil_heures;
+  IF v_seuil_heures IS NULL THEN
+    RETURN jsonb_build_object(
+      'success', false,
+      'error_code', 'PARCOURS_KINE_REQUIS',
+      'error', 'Choisissez le parcours kine 2 240 heures ou zone sous-dotee avant l activation.'
+    );
+  END IF;
+  IF v_compteur.heures_totales < v_seuil_heures THEN
+    RETURN jsonb_build_object(
+      'success', false,
+      'error_code', 'HEURES_EXERCICE_INSUFFISANTES',
+      'error', 'Le seuil d heures d exercice requis pour votre profession n est pas atteint.',
+      'heures_requises', v_seuil_heures,
+      'heures_totales', v_compteur.heures_totales
+    );
+  END IF;
+
+  -- Free Transition reste volontairement fonde sur les seules heures Jolene.
+  PERFORM private.fn_resynchroniser_compteurs_soignant(v_uid);
   v_taux := public.fn_calculer_taux_free_transition(v_uid);
   PERFORM set_config('jolene.liberal_transition', 'true', true);
   PERFORM set_config('jolene.system_update', 'true', true);
@@ -4491,37 +4684,56 @@ BEGIN
       statut_liberal = 'ACTIF',
       date_passage_liberal = current_date,
       code_ape = (
-        SELECT code_ape
-        FROM public.professions_liberal_eligible
-        WHERE profession = v_soignant.profession
+        SELECT p.code_ape
+        FROM public.professions_liberal_eligible p
+        WHERE p.profession = v_soignant.profession
       ),
       modifie_le = now()
   WHERE id = v_uid;
 
   PERFORM public.fn_calculer_tous_documents_valides(v_uid);
-  PERFORM set_config('jolene.system_update', v_previous_system_update, true);
-  PERFORM set_config('jolene.liberal_transition', v_previous_liberal_transition, true);
+  PERFORM set_config(
+    'jolene.system_update', v_previous_system_update, true
+  );
+  PERFORM set_config(
+    'jolene.liberal_transition', v_previous_liberal_transition, true
+  );
 
   INSERT INTO public.conversions_liberal (
-    soignant_id, heures_plateforme_au_demarrage, heures_externes_validees,
-    heures_totales, statut, free_transition_eligible,
-    taux_prise_en_charge, montant_pris_en_charge, complete_le
+    soignant_id,
+    heures_plateforme_au_demarrage,
+    heures_externes_validees,
+    heures_totales,
+    statut,
+    free_transition_eligible,
+    taux_prise_en_charge,
+    montant_pris_en_charge,
+    complete_le
   ) VALUES (
     v_uid,
-    v_soignant.heures_plateforme,
-    COALESCE((
-      SELECT sum(heures_declarees)
-      FROM public.heures_externes
-      WHERE soignant_id = v_uid AND statut = 'VALIDEE'
-    ), 0),
-    v_soignant.heures_cumulees,
+    v_compteur.heures_jolene,
+    v_compteur.heures_externes_validees,
+    v_compteur.heures_totales,
     'COMPLET',
     (v_taux ->> 'eligible')::boolean,
     (v_taux ->> 'taux_prise_en_charge')::integer,
     (v_taux ->> 'montant_pris_en_charge')::numeric,
     now()
   ) ON CONFLICT DO NOTHING;
-  RETURN jsonb_build_object('success', true, 'taux', v_taux);
+
+  RETURN jsonb_build_object(
+    'success', true,
+    'taux', v_taux,
+    'heures_totales', v_compteur.heures_totales
+  );
+EXCEPTION WHEN OTHERS THEN
+  PERFORM set_config(
+    'jolene.system_update', v_previous_system_update, true
+  );
+  PERFORM set_config(
+    'jolene.liberal_transition', v_previous_liberal_transition, true
+  );
+  RAISE;
 END;
 $_$;
 
@@ -5554,9 +5766,8 @@ DECLARE
   v_motif text := NULLIF(btrim(p_motif), '');
 BEGIN
   IF v_uid IS NULL
-     OR COALESCE(auth.jwt() ->> 'aal', '') IS DISTINCT FROM 'aal2'
      OR NOT public.est_admin_valide() THEN
-    RAISE EXCEPTION 'Administrateur AAL2 autorisé requis'
+    RAISE EXCEPTION 'Administrateur autorisé requis'
       USING ERRCODE = '42501';
   END IF;
   IF p_preuve NOT IN ('IDENTITE', 'FONCTION')
@@ -5758,9 +5969,8 @@ DECLARE
   v_rows integer;
 BEGIN
   IF v_uid IS NULL
-     OR COALESCE(auth.jwt() ->> 'aal', '') IS DISTINCT FROM 'aal2'
      OR NOT public.est_admin_valide() THEN
-    RAISE EXCEPTION 'Administrateur AAL2 autorise requis'
+    RAISE EXCEPTION 'Administrateur autorise requis'
       USING ERRCODE = '42501';
   END IF;
   IF p_revue_id IS NULL
@@ -6511,9 +6721,8 @@ DECLARE
   v_snapshot jsonb;
 BEGIN
   IF v_uid IS NULL
-     OR COALESCE(auth.jwt() ->> 'aal', '') IS DISTINCT FROM 'aal2'
      OR NOT public.est_admin_valide() THEN
-    RAISE EXCEPTION 'Administrateur AAL2 autorisé requis'
+    RAISE EXCEPTION 'Administrateur autorisé requis'
       USING ERRCODE = '42501';
   END IF;
 
@@ -7217,9 +7426,8 @@ DECLARE
   v_resultat jsonb;
 BEGIN
   IF auth.uid() IS NULL
-     OR COALESCE(auth.jwt() ->> 'aal', '') IS DISTINCT FROM 'aal2'
      OR NOT public.est_admin_valide() THEN
-    RAISE EXCEPTION 'Administrateur AAL2 autorisé requis'
+    RAISE EXCEPTION 'Administrateur autorisé requis'
       USING ERRCODE = '42501';
   END IF;
 
@@ -7498,9 +7706,8 @@ DECLARE
   v_resultat jsonb;
 BEGIN
   IF auth.uid() IS NULL
-     OR COALESCE(auth.jwt() ->> 'aal', '') IS DISTINCT FROM 'aal2'
      OR NOT public.est_admin_valide() THEN
-    RAISE EXCEPTION 'Administrateur AAL2 autorise requis'
+    RAISE EXCEPTION 'Administrateur autorise requis'
       USING ERRCODE = '42501';
   END IF;
 
@@ -7956,48 +8163,58 @@ BEGIN
     LEFT JOIN soignants s ON s.id = pe.soignant_id
   )
   SELECT jsonb_build_object(
-    -- ══ COMMISSION JOLENE (CA) — HT — accrual sur missions TERMINEE ══
     'commission', jsonb_build_object(
       'unite', 'HT',
       'total_reel', (SELECT COALESCE(SUM(montant_commission_ht),0) FROM m WHERE est_reel),
       'total_test', (SELECT COALESCE(SUM(montant_commission_ht),0) FROM m WHERE NOT est_reel),
-      'mois_reel',  (SELECT COALESCE(SUM(montant_commission_ht),0) FROM m WHERE est_reel     AND fin_le>=debut_mois AND fin_le<fin_mois),
+      'mois_reel',  (SELECT COALESCE(SUM(montant_commission_ht),0) FROM m WHERE est_reel AND fin_le>=debut_mois AND fin_le<fin_mois),
       'mois_test',  (SELECT COALESCE(SUM(montant_commission_ht),0) FROM m WHERE NOT est_reel AND fin_le>=debut_mois AND fin_le<fin_mois),
       'tva_reel',   (SELECT COALESCE(SUM(montant_commission_tva),0) FROM m WHERE est_reel)
     ),
-    -- ══ ENCAISSÉ (commission réellement perçue) — cash : factures PAYEE + escrow débité ══
-    -- escrow.commission_cents compté en HT (la TVA sur commission est portée par la facture émise séparément).
     'encaisse', jsonb_build_object(
-      'ht_reel',  ROUND((SELECT COALESCE(SUM(montant_ht),0)  FROM f   WHERE statut='PAYEE' AND est_reel)
+      'ht_reel',  ROUND((SELECT COALESCE(SUM(montant_ht),0) FROM f WHERE statut='PAYEE' AND est_reel)
                 + (SELECT COALESCE(SUM(commission_cents),0)/100.0 FROM esc WHERE debite_le IS NOT NULL AND est_reel), 2),
-      'ttc_reel', ROUND((SELECT COALESCE(SUM(montant_ttc),0) FROM f   WHERE statut='PAYEE' AND est_reel)
+      'ttc_reel', ROUND((SELECT COALESCE(SUM(montant_ttc),0) FROM f WHERE statut='PAYEE' AND est_reel)
                 + (SELECT COALESCE(SUM(commission_cents),0)/100.0 FROM esc WHERE debite_le IS NOT NULL AND est_reel), 2),
-      'ht_test',  ROUND((SELECT COALESCE(SUM(montant_ht),0)  FROM f   WHERE statut='PAYEE' AND NOT est_reel)
+      'ht_test',  ROUND((SELECT COALESCE(SUM(montant_ht),0) FROM f WHERE statut='PAYEE' AND NOT est_reel)
                 + (SELECT COALESCE(SUM(commission_cents),0)/100.0 FROM esc WHERE debite_le IS NOT NULL AND NOT est_reel), 2)
     ),
-    -- ══ FACTURABLE (plafond commission encaissable, HT) = commission des missions TERMINEE ══
     'facturable', jsonb_build_object(
       'unite', 'HT',
       'ht_reel', (SELECT COALESCE(SUM(montant_commission_ht),0) FROM m WHERE est_reel),
       'ht_test', (SELECT COALESCE(SUM(montant_commission_ht),0) FROM m WHERE NOT est_reel)
     ),
-    -- ══ GMV (volume brut transité = honoraires bruts des missions) ══
     'gmv', jsonb_build_object(
       'unite', 'brut',
       'total_reel', (SELECT COALESCE(SUM(total_brut),0) FROM m WHERE est_reel),
       'total_test', (SELECT COALESCE(SUM(total_brut),0) FROM m WHERE NOT est_reel),
-      'mois_reel',  (SELECT COALESCE(SUM(total_brut),0) FROM m WHERE est_reel     AND fin_le>=debut_mois AND fin_le<fin_mois),
-      'mois_test',  (SELECT COALESCE(SUM(total_brut),0) FROM m WHERE NOT est_reel AND fin_le>=debut_mois AND fin_le<fin_mois)
+      'mois_reel', (SELECT COALESCE(SUM(total_brut),0) FROM m WHERE est_reel AND fin_le>=debut_mois AND fin_le<fin_mois),
+      'mois_test', (SELECT COALESCE(SUM(total_brut),0) FROM m WHERE NOT est_reel AND fin_le>=debut_mois AND fin_le<fin_mois)
     ),
-    -- ══ Divers cockpit ══
     'nb_missions_terminees_reel', (SELECT COUNT(*) FROM m WHERE est_reel),
     'nb_missions_terminees_test', (SELECT COUNT(*) FROM m WHERE NOT est_reel),
-    -- Compteur « établissements à valider » = MÊME filtre que la file de travail
-    -- (fn_admin_lister_etablissements_a_verifier) — source unique du KPI et de l'alerte.
-    'etab_a_valider', (SELECT COUNT(*) FROM etablissements
-        WHERE supprime_le IS NULL AND COALESCE(rattachement_verifie,false)=false AND COALESCE(statut_verification,'')<>'REJETE'),
-    'a_des_donnees_test', (SELECT EXISTS(SELECT 1 FROM etablissements WHERE COALESCE(est_compte_test,false))
-                              OR EXISTS(SELECT 1 FROM soignants WHERE COALESCE(est_compte_test,false)))
+    'etab_a_valider', (
+      SELECT COUNT(*)
+      FROM etablissements e
+      WHERE e.supprime_le IS NULL
+        AND (
+          COALESCE(e.statut_verification, 'EN_ATTENTE') IN ('EN_ATTENTE', 'EN_COURS')
+          OR (
+            e.statut_verification = 'VERIFIE'
+            AND (
+              e.siret_verifie IS NOT TRUE
+              OR e.finess_verifie IS NOT TRUE
+              OR e.representant_identite_verifiee IS NOT TRUE
+              OR e.rattachement_verifie IS NOT TRUE
+              OR e.contrat_service_signe IS NOT TRUE
+            )
+          )
+        )
+    ),
+    'a_des_donnees_test', (
+      SELECT EXISTS(SELECT 1 FROM etablissements WHERE COALESCE(est_compte_test,false))
+        OR EXISTS(SELECT 1 FROM soignants WHERE COALESCE(est_compte_test,false))
+    )
   ) INTO result;
 
   RETURN result;
@@ -8014,9 +8231,8 @@ CREATE OR REPLACE FUNCTION "public"."fn_admin_moderer_document"("p_document_id" 
     AS $$
 BEGIN
   IF auth.uid() IS NULL
-     OR COALESCE(auth.jwt() ->> 'aal', '') IS DISTINCT FROM 'aal2'
      OR NOT public.est_admin() THEN
-    RAISE EXCEPTION 'Administrateur AAL2 autorisé requis'
+    RAISE EXCEPTION 'Administrateur autorisé requis'
       USING ERRCODE = '42501';
   END IF;
   RAISE EXCEPTION 'Contexte documentaire obligatoire : rechargez la modération et utilisez la revue détaillée'
@@ -8079,9 +8295,8 @@ BEGIN
   -- equipe_admin complet et AAL2. Le contrôle AAL explicite protège aussi
   -- contre une future régression de cette fonction partagée.
   IF v_uid IS NULL
-     OR COALESCE(auth.jwt() ->> 'aal', '') IS DISTINCT FROM 'aal2'
      OR NOT public.est_admin() THEN
-    RAISE EXCEPTION 'Administrateur AAL2 autorisé requis'
+    RAISE EXCEPTION 'Administrateur autorisé requis'
       USING ERRCODE = '42501';
   END IF;
   IF p_document_id IS NULL OR v_action NOT IN ('VALIDER', 'REJETER') THEN
@@ -9289,9 +9504,8 @@ DECLARE
   v_snapshot jsonb;
 BEGIN
   IF v_uid IS NULL
-     OR COALESCE(auth.jwt()->>'aal', '') IS DISTINCT FROM 'aal2'
      OR NOT public.est_admin_valide() THEN
-    RAISE EXCEPTION 'Administrateur AAL2 autorise requis'
+    RAISE EXCEPTION 'Administrateur autorise requis'
       USING ERRCODE = '42501';
   END IF;
   IF p_etablissement_id IS NULL OR p_version_attendue IS NULL
@@ -11595,9 +11809,8 @@ DECLARE
 BEGIN
   IF v_uid IS NULL
      OR NOT public.fn_compte_auth_actif()
-     OR COALESCE(auth.jwt() ->> 'aal', '') IS DISTINCT FROM 'aal2'
      OR NOT public.est_admin_valide() THEN
-    RAISE EXCEPTION 'Administrateur AAL2 valide requis'
+    RAISE EXCEPTION 'Administrateur valide requis'
       USING ERRCODE = '42501';
   END IF;
 
@@ -15026,16 +15239,15 @@ CREATE OR REPLACE FUNCTION "public"."fn_auto_terminer_missions"() RETURNS "jsonb
     SET "search_path" TO 'public'
     AS $$
 DECLARE
-    v_count INT;
+  v_count integer;
 BEGIN
-    UPDATE missions
-    SET statut = 'TERMINEE',
-        modifie_le = now()
-    WHERE statut = 'EN_COURS'
-    AND fin_le < now() - INTERVAL '15 minutes'; -- petite marge pour éviter les race conditions
-    
-    GET DIAGNOSTICS v_count = ROW_COUNT;
-    RETURN jsonb_build_object('success', true, 'missions_terminees', v_count);
+  UPDATE public.missions
+     SET statut = 'TERMINEE', modifie_le = now()
+   WHERE statut = 'EN_COURS'
+     AND fin_le < now() - interval '15 minutes'
+     AND COALESCE(est_arret_maladie, false) IS FALSE;
+  GET DIAGNOSTICS v_count = ROW_COUNT;
+  RETURN jsonb_build_object('success', true, 'missions_terminees', v_count);
 END;
 $$;
 
@@ -15048,76 +15260,78 @@ CREATE OR REPLACE FUNCTION "public"."fn_auto_transitions_missions"() RETURNS "js
     SET "search_path" TO 'public'
     AS $$
 DECLARE
-    v_assignee_to_en_cours INT := 0;
-    v_assignee_to_terminee INT := 0;
-    v_en_cours_to_terminee INT := 0;
-    v_ouverte_to_expiree INT := 0;
-    v_candidatures_refusees INT := 0;
-    v_rows INT;
-    v_mission RECORD;
+  v_assignee_to_en_cours integer := 0;
+  v_assignee_to_terminee integer := 0;
+  v_en_cours_to_terminee integer := 0;
+  v_ouverte_to_expiree integer := 0;
+  v_candidatures_refusees integer := 0;
+  v_rows integer;
+  v_mission record;
 BEGIN
-    UPDATE missions
-    SET statut = 'EN_COURS', modifie_le = now()
-    WHERE statut = 'ASSIGNEE'
-    AND debut_le <= now()
-    AND fin_le > now();
-    GET DIAGNOSTICS v_assignee_to_en_cours = ROW_COUNT;
+  UPDATE public.missions
+     SET statut = 'EN_COURS', modifie_le = now()
+   WHERE statut = 'ASSIGNEE'
+     AND debut_le <= now()
+     AND fin_le > now()
+     AND COALESCE(est_arret_maladie, false) IS FALSE;
+  GET DIAGNOSTICS v_assignee_to_en_cours = ROW_COUNT;
 
-    UPDATE missions
-    SET statut = 'TERMINEE', modifie_le = now()
-    WHERE statut = 'ASSIGNEE'
-    AND fin_le < now() - INTERVAL '15 minutes';
-    GET DIAGNOSTICS v_assignee_to_terminee = ROW_COUNT;
+  UPDATE public.missions
+     SET statut = 'TERMINEE', modifie_le = now()
+   WHERE statut = 'ASSIGNEE'
+     AND fin_le < now() - interval '15 minutes'
+     AND COALESCE(est_arret_maladie, false) IS FALSE;
+  GET DIAGNOSTICS v_assignee_to_terminee = ROW_COUNT;
 
-    UPDATE missions
-    SET statut = 'TERMINEE', modifie_le = now()
-    WHERE statut = 'EN_COURS'
-    AND fin_le < now() - INTERVAL '15 minutes';
-    GET DIAGNOSTICS v_en_cours_to_terminee = ROW_COUNT;
+  UPDATE public.missions
+     SET statut = 'TERMINEE', modifie_le = now()
+   WHERE statut = 'EN_COURS'
+     AND fin_le < now() - interval '15 minutes'
+     AND COALESCE(est_arret_maladie, false) IS FALSE;
+  GET DIAGNOSTICS v_en_cours_to_terminee = ROW_COUNT;
 
-    FOR v_mission IN
-        SELECT id, intitule, etablissement_id, debut_le
-        FROM missions
-        WHERE statut = 'OUVERTE'
-        AND debut_le < now() - INTERVAL '1 hour'
-    LOOP
-        UPDATE missions
-        SET statut = 'EXPIREE', modifie_le = now()
-        WHERE id = v_mission.id;
-        v_ouverte_to_expiree := v_ouverte_to_expiree + 1;
+  FOR v_mission IN
+    SELECT id, intitule, etablissement_id, debut_le
+    FROM public.missions
+    WHERE statut = 'OUVERTE'
+      AND debut_le < now() - interval '1 hour'
+  LOOP
+    UPDATE public.missions
+       SET statut = 'EXPIREE', modifie_le = now()
+     WHERE id = v_mission.id;
+    v_ouverte_to_expiree := v_ouverte_to_expiree + 1;
 
-        UPDATE candidatures
-        SET statut = 'REFUSEE',
-            motif_refus = 'Mission expiree (non pourvue)',
-            traite_le = NOW()
-        WHERE mission_id = v_mission.id
-        AND statut IN ('EN_ATTENTE', 'PROPOSEE');
-        GET DIAGNOSTICS v_rows = ROW_COUNT;
-        v_candidatures_refusees := v_candidatures_refusees + v_rows;
+    UPDATE public.candidatures
+       SET statut = 'REFUSEE',
+           motif_refus = 'Mission expiree (non pourvue)',
+           traite_le = now()
+     WHERE mission_id = v_mission.id
+       AND statut IN ('EN_ATTENTE', 'PROPOSEE');
+    GET DIAGNOSTICS v_rows = ROW_COUNT;
+    v_candidatures_refusees := v_candidatures_refusees + v_rows;
 
-        INSERT INTO notifications (
-            destinataire_id, type_destinataire, type, titre, corps, lien,
-            type_ressource, id_ressource
-        ) VALUES (
-            v_mission.etablissement_id,
-            'ETABLISSEMENT',
-            'MISSION_NON_POURVUE',
-            'Mission expiree (non pourvue)',
-            'Votre mission "' || v_mission.intitule || '" n''a trouve aucun soignant et est passee en expiree. Vous pouvez la republier depuis votre espace.',
-            '/etablissement/missions/' || v_mission.id,
-            'mission',
-            v_mission.id
-        );
-    END LOOP;
-
-    RETURN jsonb_build_object(
-        'success', true,
-        'assignee_to_en_cours', v_assignee_to_en_cours,
-        'assignee_to_terminee', v_assignee_to_terminee,
-        'en_cours_to_terminee', v_en_cours_to_terminee,
-        'ouverte_to_expiree', v_ouverte_to_expiree,
-        'candidatures_refusees', v_candidatures_refusees
+    INSERT INTO public.notifications (
+      destinataire_id, type_destinataire, type, titre, corps, lien,
+      type_ressource, id_ressource
+    ) VALUES (
+      v_mission.etablissement_id, 'ETABLISSEMENT',
+      'MISSION_NON_POURVUE', 'Mission expiree (non pourvue)',
+      'Votre mission "' || v_mission.intitule
+        || '" n''a trouve aucun soignant et est passee en expiree. '
+        || 'Vous pouvez la republier depuis votre espace.',
+      '/etablissement/missions/' || v_mission.id,
+      'mission', v_mission.id
     );
+  END LOOP;
+
+  RETURN jsonb_build_object(
+    'success', true,
+    'assignee_to_en_cours', v_assignee_to_en_cours,
+    'assignee_to_terminee', v_assignee_to_terminee,
+    'en_cours_to_terminee', v_en_cours_to_terminee,
+    'ouverte_to_expiree', v_ouverte_to_expiree,
+    'candidatures_refusees', v_candidatures_refusees
+  );
 END;
 $$;
 
@@ -16069,35 +16283,26 @@ ALTER FUNCTION "public"."fn_calculer_heures_majorees"("p_debut" timestamp with t
 
 
 CREATE OR REPLACE FUNCTION "public"."fn_calculer_heures_totales"("p_soignant_id" "uuid") RETURNS "jsonb"
-    LANGUAGE "plpgsql"
-    SET "search_path" TO 'public'
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'pg_catalog', 'public', 'private'
     AS $$
 DECLARE
-    v_heures_plateforme NUMERIC;
-    v_heures_externes NUMERIC;
-    v_heures_totales NUMERIC;
+  v_compteur record;
 BEGIN
-    SELECT COALESCE(heures_plateforme, 0) INTO v_heures_plateforme
-    FROM soignants WHERE id = p_soignant_id;
-
-    SELECT COALESCE(SUM(heures_declarees), 0) INTO v_heures_externes
-    FROM heures_externes
-    WHERE soignant_id = p_soignant_id AND statut = 'VALIDEE';
-
-    v_heures_totales := v_heures_plateforme + v_heures_externes;
-
-    -- Mettre à jour heures_cumulees
-    UPDATE soignants SET
-        heures_cumulees = v_heures_totales,
-        modifie_le = NOW()
-    WHERE id = p_soignant_id;
-
-    RETURN jsonb_build_object(
-        'heures_plateforme', v_heures_plateforme,
-        'heures_externes_validees', v_heures_externes,
-        'heures_totales', v_heures_totales,
-        'eligible_3200h', v_heures_totales >= 3200
-    );
+  IF auth.role() <> 'service_role' THEN
+    RAISE EXCEPTION 'Fonction reservee au service_role'
+      USING ERRCODE = '42501';
+  END IF;
+  PERFORM private.fn_resynchroniser_compteurs_soignant(p_soignant_id);
+  SELECT *
+  INTO v_compteur
+  FROM private.fn_heures_exercice_verifiees(p_soignant_id);
+  RETURN jsonb_build_object(
+    'heures_plateforme', v_compteur.heures_jolene,
+    'heures_externes_validees', v_compteur.heures_externes_validees,
+    'heures_totales', v_compteur.heures_totales,
+    'eligible_3200h', v_compteur.heures_totales >= 3200
+  );
 END;
 $$;
 
@@ -16604,6 +16809,7 @@ DECLARE
   v_litiges_malus NUMERIC := 0;
   v_absence_malus NUMERIC := 0;
   v_fraude_gps_malus NUMERIC := 0;
+  v_empechement_malus NUMERIC := 0;
   v_bonus_super_actif NUMERIC := 0;
   v_bonus_urgence NUMERIC := 0;
   v_score NUMERIC := 0;
@@ -16620,10 +16826,16 @@ DECLARE
   v_nb_notations INT;
   v_nb_notations_par_soignant INT;
   v_pct_notations_donnees NUMERIC;
+  v_previous_system_update text := COALESCE(
+    current_setting('jolene.system_update', true), ''
+  );
 BEGIN
   v_since := NOW() - INTERVAL '12 months';
 
-  SELECT id, prevoyance_inscrit INTO v_soignant FROM soignants WHERE id = p_soignant_id;
+  SELECT id, prevoyance_inscrit INTO v_soignant
+  FROM soignants
+  WHERE id = p_soignant_id
+  FOR UPDATE;
   IF v_soignant IS NULL THEN
     RETURN jsonb_build_object('error', 'Soignant introuvable');
   END IF;
@@ -16658,10 +16870,24 @@ BEGIN
   ELSE
     DECLARE v_total_engagements INT;
     BEGIN
-      SELECT COUNT(*) INTO v_total_engagements FROM missions
-      WHERE soignant_assigne_id = p_soignant_id
-        AND statut IN ('TERMINEE','ANNULEE_PAR_SOIGNANT','ABSENCE')
-        AND COALESCE(fin_le, debut_le) >= v_since;
+      SELECT count(*) INTO v_total_engagements
+      FROM missions m_engagement
+      WHERE m_engagement.soignant_assigne_id = p_soignant_id
+        AND m_engagement.statut IN (
+          'TERMINEE', 'ANNULEE_PAR_SOIGNANT', 'ABSENCE'
+        )
+        AND COALESCE(m_engagement.fin_le, m_engagement.debut_le) >= v_since
+        AND NOT (
+          m_engagement.statut = 'ANNULEE_PAR_SOIGNANT'
+          AND EXISTS (
+            SELECT 1
+            FROM public.journaux_audit ja_epi
+            WHERE ja_epi.acteur_id = p_soignant_id
+              AND ja_epi.action = 'ANNULATION_EMPECHEMENT_IMPERIEUX'
+              AND ja_epi.type_ressource = 'mission'
+              AND ja_epi.id_ressource = m_engagement.id
+          )
+        );
       IF v_total_engagements > 0 THEN
         v_presentisme := (v_nb_terminees_12m::NUMERIC / v_total_engagements) * 100;
       ELSE v_presentisme := NULL; END IF;
@@ -16781,6 +17007,20 @@ BEGIN
   WHERE soignant_id = p_soignant_id AND type_evenement = 'FRAUDE_GPS' AND cree_le >= v_since;
   v_fraude_gps_malus := COALESCE(v_fraude_gps_malus, 0);
 
+  -- Le journal immuable est le registre canonique des dépassements. DISTINCT
+  -- protège le score contre une éventuelle répétition historique sur une même
+  -- mission ; le prédicat JSON tolère les anciennes lignes sans ce champ.
+  SELECT (-8 * count(DISTINCT ja.id_ressource))::numeric
+  INTO v_empechement_malus
+  FROM public.journaux_audit ja
+  WHERE ja.acteur_id = p_soignant_id
+    AND ja.action = 'ANNULATION_EMPECHEMENT_IMPERIEUX'
+    AND ja.type_ressource = 'mission'
+    AND ja.id_ressource IS NOT NULL
+    AND ja.cree_le >= v_since
+    AND ja.details @> '{"depassement": true}'::jsonb;
+  v_empechement_malus := COALESCE(v_empechement_malus, 0);
+
   IF v_nb_terminees_12m > 50 THEN v_bonus_super_actif := 5; END IF;
 
   IF EXISTS (
@@ -16798,7 +17038,9 @@ BEGIN
     v_bonus_urgence := 5;
   END IF;
 
-  v_score := v_score + v_litiges_malus + v_absence_malus + v_fraude_gps_malus + v_bonus_super_actif + v_bonus_urgence;
+  v_score := v_score + v_litiges_malus + v_absence_malus
+           + v_fraude_gps_malus + v_empechement_malus
+           + v_bonus_super_actif + v_bonus_urgence;
   v_score := GREATEST(0, LEAST(100, v_score));
 
   v_score := ROUND(v_score, 2);
@@ -16831,25 +17073,36 @@ BEGIN
     v_notation_par_soignant, v_pe_notation_par_soignant,
     v_litiges_malus, v_absence_malus, v_bonus_super_actif,
     v_inactives_json, v_actives_count,
-    jsonb_build_object('facteur', v_facteur_redistribution, 'total_poids_actifs', v_total_poids_actifs, 'bonus_urgence', v_bonus_urgence, 'fraude_gps_malus', v_fraude_gps_malus),
+    jsonb_build_object('facteur', v_facteur_redistribution, 'total_poids_actifs', v_total_poids_actifs, 'bonus_urgence', v_bonus_urgence, 'fraude_gps_malus', v_fraude_gps_malus, 'empechement_malus', v_empechement_malus),
     p_raison
   ) RETURNING id INTO v_breakdown_id;
 
-  UPDATE soignants SET
-    score_fiabilite = CASE WHEN v_total_missions_terminees = 0 THEN NULL ELSE v_score END, niveau = v_niveau,
-    en_periode_probatoire = v_probatoire,
-    score_breakdown_id = v_breakdown_id, modifie_le = NOW()
-  WHERE id = p_soignant_id;
+  BEGIN
+    PERFORM set_config('jolene.system_update', 'true', true);
+    UPDATE soignants SET
+      score_fiabilite = CASE WHEN v_total_missions_terminees = 0 THEN NULL ELSE v_score END, niveau = v_niveau,
+      en_periode_probatoire = v_probatoire,
+      score_breakdown_id = v_breakdown_id, modifie_le = NOW()
+    WHERE id = p_soignant_id;
+    PERFORM set_config(
+      'jolene.system_update', v_previous_system_update, true
+    );
+  EXCEPTION WHEN OTHERS THEN
+    PERFORM set_config(
+      'jolene.system_update', v_previous_system_update, true
+    );
+    RAISE;
+  END;
 
   PERFORM public.fn_ecrire_audit_safe(
     p_acteur_id := p_soignant_id, p_type_acteur := 'SYSTEME',
     p_action := 'SCORE_RECALCULE_V2', p_type_ressource := 'soignant', p_id_ressource := p_soignant_id,
-    p_details := jsonb_build_object('score', v_score, 'niveau', v_niveau::text, 'breakdown_id', v_breakdown_id, 'raison', p_raison, 'bonus_urgence', v_bonus_urgence, 'fraude_gps_malus', v_fraude_gps_malus)
+    p_details := jsonb_build_object('score', v_score, 'niveau', v_niveau::text, 'breakdown_id', v_breakdown_id, 'raison', p_raison, 'bonus_urgence', v_bonus_urgence, 'fraude_gps_malus', v_fraude_gps_malus, 'empechement_malus', v_empechement_malus)
   );
 
   RETURN jsonb_build_object('success', true, 'score', CASE WHEN v_total_missions_terminees = 0 THEN NULL ELSE v_score END, 'niveau', v_niveau,
     'breakdown_id', v_breakdown_id, 'en_periode_probatoire', v_probatoire,
-    'composantes_actives', v_actives_count, 'bonus_urgence', v_bonus_urgence, 'fraude_gps_malus', v_fraude_gps_malus);
+    'composantes_actives', v_actives_count, 'bonus_urgence', v_bonus_urgence, 'fraude_gps_malus', v_fraude_gps_malus, 'empechement_malus', v_empechement_malus);
 END;
 $$;
 
@@ -18144,65 +18397,31 @@ $$;
 ALTER FUNCTION "public"."fn_compter_nouveaux_pour_filtre"("p_filtre_id" "uuid", "p_since" timestamp with time zone) OWNER TO "postgres";
 
 
-CREATE OR REPLACE FUNCTION "public"."fn_compteur_heures_soignant"("p_soignant_id" "uuid") RETURNS TABLE("heures_jolene" integer, "heures_externes_validees" integer, "heures_externes_en_attente" integer, "heures_totales" integer, "eligible_free_transition" boolean)
+CREATE OR REPLACE FUNCTION "public"."fn_compteur_heures_soignant"("p_soignant_id" "uuid") RETURNS TABLE("heures_jolene" numeric, "heures_externes_validees" numeric, "heures_externes_en_attente" numeric, "heures_totales" numeric, "eligible_free_transition" boolean)
     LANGUAGE "plpgsql" STABLE SECURITY DEFINER
-    SET "search_path" TO 'pg_catalog', 'public'
+    SET "search_path" TO 'pg_catalog', 'public', 'private'
     AS $$
 DECLARE
-  v_heures_jolene integer := 0;
-  v_heures_ext_val integer := 0;
-  v_heures_ext_att integer := 0;
+  v_compteur record;
 BEGIN
   IF auth.uid() IS NULL OR NOT public.fn_compte_auth_actif() THEN
-    RAISE EXCEPTION 'Compte authentifié actif requis' USING ERRCODE = '42501';
+    RAISE EXCEPTION 'Compte authentifie actif requis'
+      USING ERRCODE = '42501';
   END IF;
   IF auth.uid() <> p_soignant_id AND NOT public.est_admin_valide() THEN
-    RAISE EXCEPTION 'Accès non autorisé' USING ERRCODE = '42501';
+    RAISE EXCEPTION 'Acces non autorise' USING ERRCODE = '42501';
   END IF;
 
-  SELECT COALESCE(sum(
-    COALESCE(
-      (
-        SELECT sum(pr.heures_reelles)
-        FROM public.presences pr
-        WHERE pr.mission_id = m.id
-          AND pr.heures_reelles IS NOT NULL
-      ),
-      m.duree_heures_effective,
-      m.duree_heures
-    )
-  )::integer, 0)
-  INTO v_heures_jolene
-  FROM public.missions m
-  WHERE m.soignant_assigne_id = p_soignant_id
-    AND m.statut = 'TERMINEE';
+  SELECT *
+  INTO v_compteur
+  FROM private.fn_heures_exercice_verifiees(p_soignant_id);
 
-  SELECT COALESCE(sum(h.heures_declarees)::integer, 0)
-  INTO v_heures_ext_val
-  FROM public.heures_externes_soignants h
-  WHERE h.soignant_id = p_soignant_id
-    AND h.statut_validation = 'VALIDE'
-    AND h.source_validation_serveur IN ('ADMIN_AAL2', 'ADMIN_LEGACY_AUDITE')
-    AND h.empreinte_snapshot_source =
-        private.fn_empreinte_snapshot_heures_externes(h)
-    AND (
-      h.source_validation_serveur = 'ADMIN_LEGACY_AUDITE'
-      OR h.empreinte_preuve_sha256 IS NOT NULL
-    );
-
-  SELECT COALESCE(sum(h.heures_declarees)::integer, 0)
-  INTO v_heures_ext_att
-  FROM public.heures_externes_soignants h
-  WHERE h.soignant_id = p_soignant_id
-    AND h.statut_validation = 'EN_ATTENTE';
-
-  RETURN QUERY
-  SELECT
-    v_heures_jolene,
-    v_heures_ext_val,
-    v_heures_ext_att,
-    v_heures_jolene + v_heures_ext_val,
-    v_heures_jolene + v_heures_ext_val >= 3200;
+  RETURN QUERY SELECT
+    v_compteur.heures_jolene,
+    v_compteur.heures_externes_validees,
+    v_compteur.heures_externes_en_attente,
+    v_compteur.heures_totales,
+    v_compteur.heures_jolene >= 3200;
 END;
 $$;
 
@@ -20304,20 +20523,63 @@ CREATE OR REPLACE FUNCTION "public"."fn_declarer_empechement_imperieux"("p_missi
     SET "search_path" TO 'public'
     AS $$
 DECLARE
-  v_m RECORD;
-  v_nb int := 0;
-  v_max int := GREATEST(0, fn_param_num('annulations_justifiees_max_12m', 2)::int);
-  v_n12 int;
+  v_m public.missions%ROWTYPE;
+  v_escrow public.paiements_escrow%ROWTYPE;
+  v_nb integer := 0;
+  v_max integer := greatest(
+    0, fn_param_num('annulations_justifiees_max_12m', 2)::integer
+  );
+  v_n12 integer;
   v_depasse boolean;
   v_admin uuid;
+  v_soignant_id uuid := auth.uid();
+  v_audit_result jsonb;
+  v_refund_result jsonb;
+  v_blocage_publication jsonb;
+  v_notifications_avant integer := 0;
+  v_rows integer := 0;
+  v_context text;
+  v_est_future boolean;
+  v_originale_cloturee boolean := false;
+  v_remplacement_en_revue boolean := false;
+  v_finance_resolution text := 'AUCUNE';
+  v_previous_empechement_context text := COALESCE(
+    current_setting('jolene.empechement_mission_context', true), ''
+  );
+  v_previous_empechement_validated text := COALESCE(
+    current_setting('jolene.empechement_mission_validated', true), ''
+  );
+  v_mission_diffusee_id uuid := p_mission_id;
+  v_remplacement_id uuid;
+  v_previous_system_update text := COALESCE(
+    current_setting('jolene.system_update', true), ''
+  );
 BEGIN
-  SELECT * INTO v_m FROM missions WHERE id = p_mission_id AND soignant_assigne_id = auth.uid();
-  IF NOT FOUND THEN RETURN jsonb_build_object('error', 'Mission introuvable'); END IF;
-  IF v_m.statut NOT IN ('ASSIGNEE', 'EN_COURS') THEN
-    RETURN jsonb_build_object('error', 'Cette mission n''est plus active.');
+  -- Un verrou par soignant sérialise le quota même si deux missions distinctes
+  -- sont déclarées en parallèle. Le verrou de ligne empêche en plus une double
+  -- déclaration de la même mission.
+  IF v_soignant_id IS NOT NULL THEN
+    PERFORM pg_catalog.pg_advisory_xact_lock(
+      pg_catalog.hashtextextended(
+        'jolene.empechement.' || v_soignant_id::text,
+        0
+      )
+    );
+  END IF;
+
+  SELECT * INTO v_m
+  FROM public.missions
+  WHERE id = p_mission_id AND soignant_assigne_id = v_soignant_id
+  FOR UPDATE;
+
+  IF NOT FOUND THEN
+    RETURN jsonb_build_object('error', 'Mission introuvable');
   END IF;
   IF v_m.est_arret_maladie THEN
     RETURN jsonb_build_object('error', 'Un empêchement est déjà déclaré sur cette mission.');
+  END IF;
+  IF v_m.statut NOT IN ('ASSIGNEE', 'EN_COURS') THEN
+    RETURN jsonb_build_object('error', 'Cette mission n''est plus active.');
   END IF;
   IF p_indispo_debut IS NULL OR p_indispo_fin IS NULL OR p_indispo_fin < p_indispo_debut THEN
     RETURN jsonb_build_object('error', 'Dates d''indisponibilité invalides.');
@@ -20325,75 +20587,496 @@ BEGIN
   IF p_indispo_fin - p_indispo_debut > 90 THEN
     RETURN jsonb_build_object('error', 'Période d''indisponibilité trop longue (90 jours max).');
   END IF;
+  IF p_indispo_fin < (v_m.debut_le AT TIME ZONE 'Europe/Paris')::date
+     OR p_indispo_debut > (v_m.fin_le AT TIME ZONE 'Europe/Paris')::date THEN
+    RETURN jsonb_build_object(
+      'error_code', 'INDISPONIBILITE_HORS_MISSION',
+      'error', 'La période d''indisponibilité doit chevaucher la mission.'
+    );
+  END IF;
 
-  -- Anti-abus : N attestations max / 12 mois glissants (param).
-  SELECT count(*) INTO v_n12 FROM journaux_audit
-   WHERE acteur_id = auth.uid()
-     AND action = 'ANNULATION_EMPECHEMENT_IMPERIEUX'
-     AND cree_le > NOW() - INTERVAL '12 months';
+  v_est_future := v_m.statut = 'ASSIGNEE' AND v_m.debut_le > now();
+
+  -- Une mission future doit pouvoir être annulée sans jamais payer l'ancien
+  -- soignant. Les situations déjà externalisées ou ambiguës sont arrêtées
+  -- avant le moindre flag/audit : aucune demi-transaction n'est possible.
+  IF v_est_future THEN
+    IF EXISTS (
+      SELECT 1 FROM public.stripe_transfers st
+      WHERE st.mission_id = p_mission_id
+        AND st.statut NOT IN ('ECHOUE', 'ANNULEE', 'REMBOURSE')
+    ) OR EXISTS (
+      SELECT 1 FROM public.paiements_soignant ps
+      WHERE ps.mission_id = p_mission_id
+    ) OR EXISTS (
+      SELECT 1 FROM public.factures_honoraires fh
+      WHERE fh.mission_id = p_mission_id
+        AND fh.statut NOT IN ('ANNULEE', 'REMPLACEE', 'ERREUR_GENERATION')
+    ) THEN
+      RETURN jsonb_build_object(
+        'error_code', 'RESOLUTION_FINANCIERE_MANUELLE_REQUISE',
+        'error', 'Une opération financière existe déjà pour cette mission. Le support doit la rapprocher avant l''annulation.'
+      );
+    END IF;
+
+    SELECT pe.* INTO v_escrow
+    FROM public.paiements_escrow pe
+    WHERE pe.mission_id = p_mission_id
+    ORDER BY pe.cree_le DESC
+    LIMIT 1
+    FOR UPDATE;
+
+    IF FOUND THEN
+      IF v_escrow.statut IN ('RELEASE_PLANIFIE', 'PAYE', 'DISPUTE')
+         OR (
+           v_escrow.statut = 'INITIE'
+           AND (
+             v_escrow.stripe_payment_intent_id IS NOT NULL
+             OR v_escrow.stripe_charge_id IS NOT NULL
+             OR v_escrow.stripe_payout_id IS NOT NULL
+             OR COALESCE(v_escrow.tentatives_debit, 0) > 0
+           )
+         ) THEN
+        RETURN jsonb_build_object(
+          'error_code', 'RESOLUTION_FINANCIERE_MANUELLE_REQUISE',
+          'error', 'Le paiement rapide est déjà en cours d''externalisation. Le support doit le rapprocher avant l''annulation.',
+          'escrow_statut', v_escrow.statut
+        );
+      END IF;
+    END IF;
+  END IF;
+
+  SELECT count(*) INTO v_n12
+  FROM public.journaux_audit
+  WHERE acteur_id = v_soignant_id
+    AND action = 'ANNULATION_EMPECHEMENT_IMPERIEUX'
+    AND cree_le > NOW() - INTERVAL '12 months';
   v_depasse := (v_n12 + 1) > v_max;
 
-  UPDATE missions SET est_arret_maladie = TRUE, arret_maladie_declare_le = NOW(), modifie_le = NOW()
-   WHERE id = p_mission_id;
+  -- Phase FLAG : le garde alphabétiquement premier vérifie que ces trois
+  -- colonnes sont les seules mutées. La phase est nécessaire aussi pour un
+  -- profil soignant qui possède parallèlement un rôle établissement faible.
+  v_context := 'FLAG:' || p_mission_id::text || ':' || v_soignant_id::text;
+  BEGIN
+    PERFORM set_config(
+      'jolene.empechement_mission_context', v_context, true
+    );
+    PERFORM set_config('jolene.empechement_mission_validated', '', true);
+    UPDATE missions
+    SET est_arret_maladie = TRUE,
+        arret_maladie_declare_le = NOW(),
+        modifie_le = NOW()
+    WHERE id = p_mission_id;
+    GET DIAGNOSTICS v_rows = ROW_COUNT;
+    IF v_rows <> 1
+       OR NOT EXISTS (
+         SELECT 1
+         FROM public.missions m_flag
+         WHERE m_flag.id = p_mission_id
+           AND m_flag.est_arret_maladie IS TRUE
+           AND m_flag.arret_maladie_declare_le IS NOT NULL
+       ) THEN
+      RAISE EXCEPTION 'Phase interne FLAG incomplète.'
+        USING ERRCODE = 'P0001';
+    END IF;
+    PERFORM set_config(
+      'jolene.empechement_mission_validated',
+      v_previous_empechement_validated,
+      true
+    );
+    PERFORM set_config(
+      'jolene.empechement_mission_context',
+      v_previous_empechement_context,
+      true
+    );
+  EXCEPTION WHEN OTHERS THEN
+    PERFORM set_config(
+      'jolene.empechement_mission_validated',
+      v_previous_empechement_validated,
+      true
+    );
+    PERFORM set_config(
+      'jolene.empechement_mission_context',
+      v_previous_empechement_context,
+      true
+    );
+    RAISE;
+  END;
 
-  -- Trace horodatée : dates + sur l'honneur. JAMAIS de motif/catégorie (RGPD art. 9).
-  PERFORM fn_ecrire_audit_safe(
-    auth.uid(), 'SOIGNANT', 'ANNULATION_EMPECHEMENT_IMPERIEUX', 'mission', p_mission_id, NULL,
-    jsonb_build_object('sur_honneur', true,
-                       'indispo_debut', p_indispo_debut, 'indispo_fin', p_indispo_fin,
-                       'n_12_mois', v_n12 + 1, 'max_12_mois', v_max, 'depassement', v_depasse));
+  v_audit_result := fn_ecrire_audit_safe(
+    v_soignant_id, 'SOIGNANT', 'ANNULATION_EMPECHEMENT_IMPERIEUX',
+    'mission', p_mission_id, NULL,
+    jsonb_build_object(
+      'sur_honneur', true,
+      'indispo_debut', p_indispo_debut,
+      'indispo_fin', p_indispo_fin,
+      'n_12_mois', v_n12 + 1,
+      'max_12_mois', v_max,
+      'depassement', v_depasse
+    )
+  );
+  IF COALESCE((v_audit_result->>'success')::boolean, false) IS NOT TRUE THEN
+    RAISE EXCEPTION 'La déclaration ne peut pas être journalisée.'
+      USING ERRCODE = 'P0001';
+  END IF;
 
-  -- Au-delà du compteur : la pénalité s'applique malgré l'attestation
-  -- (même barème que l'annulation tardive) + passage en revue admin.
+  -- Le compteur est intégralement dérivé de ses sources canoniques.
+  PERFORM private.fn_resynchroniser_compteurs_soignant(v_soignant_id);
+
   IF v_depasse THEN
-    UPDATE soignants SET
-      total_missions_annulees = COALESCE(total_missions_annulees, 0) + 1,
-      score_fiabilite = GREATEST(0, COALESCE(score_fiabilite, 50) - 8),
-      modifie_le = NOW()
-    WHERE id = auth.uid();
+    BEGIN
+      PERFORM set_config('jolene.system_update', 'true', true);
+      UPDATE soignants
+      SET score_fiabilite = GREATEST(
+            0, COALESCE(score_fiabilite, 50) - 8
+          ),
+          modifie_le = NOW()
+      WHERE id = v_soignant_id;
+      PERFORM set_config(
+        'jolene.system_update', v_previous_system_update, true
+      );
+    EXCEPTION WHEN OTHERS THEN
+      PERFORM set_config(
+        'jolene.system_update', v_previous_system_update, true
+      );
+      RAISE;
+    END;
 
-    FOR v_admin IN SELECT user_id FROM equipe_admin WHERE actif AND user_id IS NOT NULL
+    FOR v_admin IN
+      SELECT user_id FROM equipe_admin WHERE actif AND user_id IS NOT NULL
     LOOP
-      INSERT INTO notifications (destinataire_id, type, titre, corps, lien, type_destinataire)
-      VALUES (v_admin, 'SYSTEM', 'Empêchements répétés — revue soignant ⚠️',
-        'Un soignant vient de déclarer son ' || (v_n12 + 1) || 'e empêchement impérieux sur 12 mois (max toléré : ' ||
-        v_max || '). Pénalité de score appliquée. Détails dans le journal d''audit (action ANNULATION_EMPECHEMENT_IMPERIEUX).',
-        '/admin/audit', 'ADMIN');
+      INSERT INTO notifications (
+        destinataire_id, type, titre, corps, lien, type_destinataire
+      ) VALUES (
+        v_admin,
+        'SYSTEM',
+        'Empêchements répétés — revue soignant ⚠️',
+        'Un soignant vient de déclarer son ' || (v_n12 + 1) ||
+          'e empêchement impérieux sur 12 mois (max toléré : ' || v_max ||
+          '). Pénalité de score appliquée. Détails dans le journal d''audit ' ||
+          '(action ANNULATION_EMPECHEMENT_IMPERIEUX).',
+        '/admin/audit',
+        'ADMIN'
+      );
     END LOOP;
   END IF;
 
-  -- Étab : wording générique, aucune mention médicale.
-  INSERT INTO notifications (destinataire_id, type, titre, corps, lien, type_destinataire)
-  VALUES (v_m.etablissement_id, 'SYSTEM', 'Empêchement impérieux déclaré ⚠️',
-    'Le soignant assigné à "' || fn_html_escape(v_m.intitule) || '" atteste sur l''honneur d''un empêchement impérieux ' ||
-    'et sera indisponible du ' || TO_CHAR(p_indispo_debut, 'DD/MM') || ' au ' || TO_CHAR(p_indispo_fin, 'DD/MM') || '.' ||
-    CASE WHEN v_m.garantie_remplacement
-      THEN ' Garantie remplacement : le pool d''urgence est alerté automatiquement.'
-      ELSE ' Vous pouvez alerter le pool d''urgence depuis la mission.' END,
-    '/etablissement/missions/' || v_m.id, 'ETABLISSEMENT');
+  -- Neutraliser l'ancien rail financier puis clôturer toute mission future,
+  -- garantie ou non. L'originale conserve l'assigné pour la preuve et les
+  -- compteurs ; le remplacement aura toujours un nouvel id.
+  IF v_est_future THEN
+    IF v_escrow.id IS NOT NULL THEN
+      IF v_escrow.statut = 'INITIE' THEN
+        UPDATE public.paiements_escrow
+           SET statut = 'REMBOURSE',
+               erreur = 'Annulé avant tout débit : empêchement impérieux',
+               modifie_le = now()
+         WHERE id = v_escrow.id
+           AND statut = 'INITIE'
+           AND stripe_payment_intent_id IS NULL
+           AND stripe_charge_id IS NULL
+           AND stripe_payout_id IS NULL
+           AND tentatives_debit = 0;
+        GET DIAGNOSTICS v_rows = ROW_COUNT;
+        IF v_rows <> 1 THEN
+          RAISE EXCEPTION 'Neutralisation escrow concurrente refusée.'
+            USING ERRCODE = 'P0001';
+        END IF;
+        UPDATE public.escrow_exposition_releases
+           SET statut = 'REGLE'
+         WHERE paiement_escrow_id = v_escrow.id AND statut = 'ACTIF';
+        UPDATE public.escrow_release_queue
+           SET statut = 'ECHEC',
+               erreur = 'Mission annulée avant débit',
+               traite_le = now()
+         WHERE paiement_escrow_id = v_escrow.id
+           AND statut IN ('EN_ATTENTE', 'EN_COURS');
+        INSERT INTO public.journaux_audit (
+          acteur_id, type_acteur, action, type_ressource, id_ressource,
+          details, navigateur_acteur
+        ) VALUES (
+          '00000000-0000-0000-0000-000000000000'::uuid,
+          'SYSTEME', 'ADMIN_ACTION', 'paiement_escrow', v_escrow.id,
+          jsonb_build_object(
+            'evenement', 'ESCROW_ANNULE_AVANT_DEBIT',
+            'mission_id', p_mission_id,
+            'motif', 'EMPECHEMENT_IMPERIEUX'
+          ),
+          'fn_declarer_empechement_imperieux'
+        );
+        v_finance_resolution := 'ESCROW_ANNULE_AVANT_DEBIT';
+      ELSIF v_escrow.statut IN ('DEBITE', 'DISPONIBLE') THEN
+        v_refund_result := public.fn_escrow_rembourser(
+          v_escrow.id,
+          v_escrow.honoraires_cents,
+          true,
+          'Empêchement impérieux avant mission'
+        );
+        IF COALESCE((v_refund_result->>'success')::boolean, false) IS NOT TRUE THEN
+          RAISE EXCEPTION 'Remboursement escrow impossible: %', v_refund_result
+            USING ERRCODE = 'P0001';
+        END IF;
+        v_finance_resolution := 'ESCROW_REMBOURSEMENT_ENFILE';
+      ELSIF v_escrow.statut = 'REMBOURSE_EN_COURS' THEN
+        v_finance_resolution := 'ESCROW_REMBOURSEMENT_DEJA_EN_COURS';
+      ELSIF v_escrow.statut IN ('REMBOURSE', 'ECHOUE') THEN
+        v_finance_resolution := 'ESCROW_TERMINAL';
+      ELSE
+        RAISE EXCEPTION 'Etat escrow non annulable: %', v_escrow.statut
+          USING ERRCODE = 'P0001';
+      END IF;
+    END IF;
 
-  INSERT INTO notifications (destinataire_id, type, titre, corps, lien, type_destinataire)
-  VALUES (auth.uid(), 'SYSTEM', 'Empêchement enregistré',
-    'Votre attestation sur l''honneur est enregistrée — aucun justificatif à fournir.' ||
-    CASE WHEN v_depasse
-      THEN ' Attention : au-delà de ' || v_max || ' empêchements sur 12 mois, la pénalité de score s''applique (c''est le cas ici).'
-      ELSE ' Aucune pénalité de score.' END ||
-    ' Une fausse déclaration engage votre responsabilité (CGU).',
-    '/soignant/missions/' || v_m.id, 'SOIGNANT');
+    v_context := 'CLOSE:' || p_mission_id::text || ':' || v_soignant_id::text;
+    BEGIN
+      PERFORM set_config('jolene.empechement_mission_context', v_context, true);
+      PERFORM set_config('jolene.empechement_mission_validated', '', true);
+      UPDATE public.missions
+         SET statut = 'ANNULEE_PAR_SOIGNANT', modifie_le = now()
+       WHERE id = p_mission_id;
+      GET DIAGNOSTICS v_rows = ROW_COUNT;
+      IF v_rows <> 1 OR NOT EXISTS (
+        SELECT 1 FROM public.missions m_close
+        WHERE m_close.id = p_mission_id
+          AND m_close.statut = 'ANNULEE_PAR_SOIGNANT'
+          AND m_close.soignant_assigne_id = v_soignant_id
+          AND m_close.est_arret_maladie IS TRUE
+      ) THEN
+        RAISE EXCEPTION 'Phase interne CLOSE incomplète.'
+          USING ERRCODE = 'P0001';
+      END IF;
+      PERFORM set_config(
+        'jolene.empechement_mission_validated',
+        v_previous_empechement_validated, true
+      );
+      PERFORM set_config(
+        'jolene.empechement_mission_context',
+        v_previous_empechement_context, true
+      );
+    EXCEPTION WHEN OTHERS THEN
+      PERFORM set_config(
+        'jolene.empechement_mission_validated',
+        v_previous_empechement_validated, true
+      );
+      PERFORM set_config(
+        'jolene.empechement_mission_context',
+        v_previous_empechement_context, true
+      );
+      RAISE;
+    END;
+    v_originale_cloturee := true;
 
-  -- Remplacement garanti : mécanique inchangée (reprise de la définition LIVE).
-  IF v_m.garantie_remplacement AND v_m.fin_le > NOW() + INTERVAL '1 hour' THEN
-    UPDATE missions SET statut = 'OUVERTE', soignant_assigne_id = NULL,
-        mode_attribution = 'PREMIER_ARRIVE', est_urgente = TRUE, niveau_urgence = 3,
-        presence_confirmee_le = NULL,
-        debut_le = GREATEST(debut_le, NOW() + INTERVAL '15 minutes'),
-        modifie_le = NOW()
-     WHERE id = p_mission_id;
-    v_nb := fn_diffuser_pool_urgence(p_mission_id);
+    -- Le contrat signé reste une preuve immuable. Si une DPAE a été faite,
+    -- on enfile explicitement son annulation au lieu de falsifier le contrat.
+    INSERT INTO public.externalisation_actions (
+      type_action, payload, source, source_id
+    )
+    SELECT 'DPAE_ANNULATION',
+           jsonb_build_object(
+             'contrat_id', cm.id,
+             'mission_id', p_mission_id,
+             'motif', 'EMPECHEMENT_IMPERIEUX',
+             'echeance_legale_h', 48
+           ),
+           'ANNULATION_MISSION', p_mission_id
+    FROM public.contrats_mission cm
+    WHERE cm.mission_id = p_mission_id
+      AND cm.statut = 'SIGNE_COMPLET'
+      AND cm.type_contrat IN ('CDD', 'CDDU', 'VACATION')
+      AND (
+        COALESCE(cm.dpae_effectuee, false) IS TRUE
+        OR NULLIF(btrim(COALESCE(cm.dpae_numero, '')), '') IS NOT NULL
+      );
   END IF;
 
-  RETURN jsonb_build_object('success', TRUE, 'pool_alerte', v_nb,
-                            'depassement', v_depasse, 'n_12_mois', v_n12 + 1, 'max_12_mois', v_max);
+  INSERT INTO public.notifications (
+    destinataire_id, type, titre, corps, lien, type_destinataire
+  ) VALUES (
+    v_m.etablissement_id,
+    'SYSTEM',
+    'Empêchement impérieux déclaré ⚠️',
+    'Le soignant assigné à "' || fn_html_escape(v_m.intitule) ||
+      '" atteste sur l''honneur d''un empêchement impérieux et sera indisponible du ' ||
+      TO_CHAR(p_indispo_debut, 'DD/MM') || ' au ' || TO_CHAR(p_indispo_fin, 'DD/MM') || '.' ||
+      CASE
+        WHEN v_m.garantie_remplacement AND v_m.fin_le > now() + interval '1 hour'
+          THEN ' Garantie remplacement : Jolene traite la demande. Vous serez informé dès sa diffusion.'
+        WHEN v_est_future
+          THEN ' La mission originale est clôturée. Publiez un remplacement depuis vos missions.'
+        ELSE ' La mission est suspendue jusqu''à validation des heures réellement effectuées.'
+      END,
+    '/etablissement/missions/' || v_m.id,
+    'ETABLISSEMENT'
+  );
+
+  INSERT INTO notifications (
+    destinataire_id, type, titre, corps, lien, type_destinataire
+  ) VALUES (
+    v_soignant_id,
+    'SYSTEM',
+    'Empêchement enregistré',
+    'Votre attestation sur l''honneur est enregistrée — aucun justificatif à fournir.' ||
+      CASE
+        WHEN v_depasse
+          THEN ' Attention : au-delà de ' || v_max ||
+            ' empêchements sur 12 mois, la pénalité de score s''applique (c''est le cas ici).'
+        ELSE ' Aucune pénalité de score.'
+      END ||
+      ' Une fausse déclaration engage votre responsabilité (CGU).',
+    '/soignant/missions/' || v_m.id,
+    'SOIGNANT'
+  );
+
+  IF v_m.garantie_remplacement AND v_m.fin_le > now() + interval '1 hour' THEN
+    v_blocage_publication := public.fn_blocage_publication_etab(
+      v_m.etablissement_id
+    );
+    IF v_blocage_publication IS NOT NULL THEN
+      v_remplacement_en_revue := true;
+      FOR v_admin IN
+        SELECT user_id FROM public.equipe_admin
+        WHERE actif AND user_id IS NOT NULL
+      LOOP
+        INSERT INTO public.notifications (
+          destinataire_id, type_destinataire, type, titre, corps, lien,
+          type_ressource, id_ressource
+        ) VALUES (
+          v_admin, 'ADMIN', 'SYSTEM',
+          'Garantie remplacement à traiter manuellement ⚠️',
+          'L''empêchement est enregistré mais la publication automatique est bloquée : '
+            || COALESCE(
+              v_blocage_publication->>'message',
+              v_blocage_publication->>'error', 'gate établissement'
+            ) || '.',
+          '/admin/missions', 'mission', p_mission_id
+        );
+      END LOOP;
+    ELSE
+      v_context := 'REPLACEMENT:' || p_mission_id::text || ':'
+        || v_soignant_id::text;
+      BEGIN
+        PERFORM set_config(
+          'jolene.empechement_mission_context', v_context, true
+        );
+        PERFORM set_config('jolene.empechement_mission_validated', '', true);
+        INSERT INTO public.missions (
+          etablissement_id, intitule, description, service,
+          profession_requise, specialite_medicale_requise,
+          accepte_non_specialises, debut_le, fin_le, duree_heures,
+          taux_horaire_base, type_contrat_recherche,
+          mode_remuneration, retrocession_pct, mission_source, statut,
+          mode_attribution, est_urgente, niveau_urgence,
+          garantie_remplacement, remplacement_de_mission_id
+        ) VALUES (
+          v_m.etablissement_id,
+          'REMPLACEMENT URGENT — ' || v_m.intitule,
+          COALESCE(v_m.description, '')
+            || E'\n\n[Mission de remplacement générée automatiquement — garantie Jolene]',
+          v_m.service,
+          v_m.profession_requise,
+          v_m.specialite_medicale_requise,
+          v_m.accepte_non_specialises,
+          GREATEST(v_m.debut_le, now() + interval '15 minutes'),
+          v_m.fin_le,
+          round(extract(epoch FROM (
+            v_m.fin_le - GREATEST(
+              v_m.debut_le, now() + interval '15 minutes'
+            )
+          )) / 3600.0, 2),
+          v_m.taux_horaire_base,
+          v_m.type_contrat_recherche,
+          v_m.mode_remuneration,
+          v_m.retrocession_pct,
+          'REMPLACEMENT',
+          'OUVERTE',
+          'PREMIER_ARRIVE',
+          true,
+          3,
+          true,
+          v_m.id
+        ) RETURNING id INTO v_remplacement_id;
+        IF NOT EXISTS (
+          SELECT 1
+          FROM public.missions m_replacement
+          WHERE m_replacement.id = v_remplacement_id
+            AND m_replacement.remplacement_de_mission_id = p_mission_id
+            AND m_replacement.statut = 'OUVERTE'
+            AND m_replacement.soignant_assigne_id IS NULL
+            AND m_replacement.est_urgente IS TRUE
+            AND m_replacement.niveau_urgence = 3
+            AND m_replacement.mode_attribution = 'PREMIER_ARRIVE'
+            AND m_replacement.debut_le > now()
+        ) THEN
+          RAISE EXCEPTION 'Phase interne REPLACEMENT incomplète.'
+            USING ERRCODE = 'P0001';
+        END IF;
+        PERFORM set_config(
+          'jolene.empechement_mission_validated',
+          v_previous_empechement_validated,
+          true
+        );
+        PERFORM set_config(
+          'jolene.empechement_mission_context',
+          v_previous_empechement_context,
+          true
+        );
+      EXCEPTION WHEN OTHERS THEN
+        PERFORM set_config(
+          'jolene.empechement_mission_validated',
+          v_previous_empechement_validated,
+          true
+        );
+        PERFORM set_config(
+          'jolene.empechement_mission_context',
+          v_previous_empechement_context,
+          true
+        );
+        RAISE;
+      END;
+      v_mission_diffusee_id := v_remplacement_id;
+
+      INSERT INTO notifications (
+        destinataire_id, type, titre, corps, lien, type_destinataire,
+        type_ressource, id_ressource
+      ) VALUES (
+        v_m.etablissement_id,
+        'SYSTEM',
+        'Mission de remplacement urgente créée 🚨',
+        'La mission de remplacement pour « '
+          || fn_html_escape(v_m.intitule)
+          || ' » est publiée pour le temps restant et le pool vient d''être alerté.',
+        '/etablissement/missions/' || v_remplacement_id,
+        'ETABLISSEMENT',
+        'mission',
+        v_remplacement_id
+      );
+
+      -- Le trigger urgent est l'unique fan-out externe.
+      SELECT greatest(0, count(*)::integer - v_notifications_avant)
+      INTO v_nb
+      FROM public.notifications n
+      WHERE n.type IN ('MISSION_URGENTE', 'POOL_URGENCE')
+        AND n.type_ressource = 'mission'
+        AND n.id_ressource = v_mission_diffusee_id;
+    END IF;
+  END IF;
+
+  -- Les AFTER triggers historiques peuvent avoir touché les compteurs pendant
+  -- CLOSE ; le résultat final est toujours recalé sur les sources canoniques.
+  PERFORM private.fn_resynchroniser_compteurs_soignant(v_soignant_id);
+
+  RETURN jsonb_build_object(
+    'success', true,
+    'pool_alerte', v_nb,
+    'mission_diffusee_id', v_mission_diffusee_id,
+    'mission_remplacement_id', v_remplacement_id,
+    'mission_originale_cloturee', v_originale_cloturee,
+    'remplacement_en_revue', v_remplacement_en_revue,
+    'finance_resolution', v_finance_resolution,
+    'depassement', v_depasse,
+    'n_12_mois', v_n12 + 1,
+    'max_12_mois', v_max
+  );
 END;
 $$;
 
@@ -21721,6 +22404,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_detecter_noshow_et_remplacer"() RETURNS 
     AS $$
 DECLARE
   v_m record;
+  v_escrow public.paiements_escrow%ROWTYPE;
   v_remplacement_id uuid;
   v_traites integer := 0;
   v_remplacements integer := 0;
@@ -21728,6 +22412,12 @@ DECLARE
   v_token text;
   v_s uuid;
   v_corps text;
+  v_rows integer;
+  v_constraint text;
+  v_admin uuid;
+  v_blocage_publication jsonb;
+  v_refund_result jsonb;
+  v_finance_en_revue boolean;
 BEGIN
   BEGIN
     v_token := (
@@ -21744,6 +22434,7 @@ BEGIN
       JOIN public.etablissements e ON e.id = m.etablissement_id
      WHERE m.statut IN ('ASSIGNEE', 'EN_COURS')
        AND m.soignant_assigne_id IS NOT NULL
+       AND COALESCE(m.est_arret_maladie, false) = false
        AND m.debut_le < now() - interval '30 minutes'
        AND m.debut_le > now() - interval '4 hours'
        AND m.fin_le > now() + interval '1 hour'
@@ -21761,30 +22452,294 @@ BEGIN
             AND n.titre LIKE 'Aucun pointage%'
             AND n.cree_le > now() - interval '6 hours'
        )
+     ORDER BY m.id
+     FOR UPDATE OF m SKIP LOCKED
   LOOP
-    v_traites := v_traites + 1;
-    IF v_m.garantie_remplacement THEN
-      INSERT INTO public.missions(
-        etablissement_id, intitule, description, service,
-        profession_requise, specialite_medicale_requise, accepte_non_specialises,
-        debut_le, fin_le, duree_heures, taux_horaire_base,
-        type_contrat_recherche, statut, mode_attribution,
-        est_urgente, niveau_urgence, remplacement_de_mission_id
-      ) VALUES (
-        v_m.etablissement_id,
-        'REMPLACEMENT URGENT — ' || v_m.intitule,
-        COALESCE(v_m.description, '') || E'\n\n[Mission de remplacement générée automatiquement — garantie Jolene]',
-        v_m.service,
-        v_m.profession_requise, v_m.specialite_medicale_requise,
-        v_m.accepte_non_specialises,
-        greatest(v_m.debut_le, now() + interval '15 minutes'), v_m.fin_le,
-        round(extract(epoch FROM (
-          v_m.fin_le - greatest(v_m.debut_le, now() + interval '15 minutes')
-        )) / 3600.0, 2),
-        v_m.taux_horaire_base, v_m.type_contrat_recherche,
-        'OUVERTE', 'PREMIER_ARRIVE', true, 3, v_m.id
-      ) RETURNING id INTO v_remplacement_id;
+    v_remplacement_id := NULL;
+    v_escrow := NULL;
+    v_blocage_publication := NULL;
+    v_refund_result := NULL;
+    v_finance_en_revue := false;
 
+    -- Ces contrôles utilisent un nouveau snapshot après l'acquisition du
+    -- verrou et couvrent les écritures concurrentes de présence/EPI/remplacement.
+    IF COALESCE(v_m.est_arret_maladie, false)
+       OR v_m.statut NOT IN ('ASSIGNEE', 'EN_COURS')
+       OR EXISTS (
+         SELECT 1 FROM public.presences p
+          WHERE p.mission_id = v_m.id
+            AND p.soignant_id = v_m.soignant_assigne_id
+       )
+       OR EXISTS (
+         SELECT 1 FROM public.missions r
+          WHERE r.remplacement_de_mission_id = v_m.id
+       ) THEN
+      CONTINUE;
+    END IF;
+
+    IF COALESCE(v_m.garantie_remplacement, false) THEN
+      BEGIN
+      -- Le verrou mission est déjà détenu. Verrouiller ensuite l'escrow dans
+      -- le même ordre que les RPC de débit empêche un nouveau claim concurrent.
+      -- Un débit certain est remboursé avec reverse_transfer ; un appel Stripe
+      -- déjà ambigu reste gelé pour rapprochement humain, jamais silencieux.
+      SELECT pe.*
+        INTO v_escrow
+        FROM public.paiements_escrow pe
+       WHERE pe.mission_id = v_m.id
+       ORDER BY pe.cree_le DESC
+       LIMIT 1
+       FOR UPDATE;
+
+      IF FOUND THEN
+        IF v_escrow.statut = 'INITIE'
+           AND v_escrow.stripe_payment_intent_id IS NULL
+           AND v_escrow.stripe_charge_id IS NULL
+           AND v_escrow.stripe_payout_id IS NULL
+           AND COALESCE(v_escrow.tentatives_debit, 0) = 0 THEN
+          UPDATE public.paiements_escrow
+             SET statut = 'REMBOURSE',
+                 erreur = 'No-show avant débit Stripe',
+                 modifie_le = now()
+           WHERE id = v_escrow.id
+             AND statut = 'INITIE'
+             AND stripe_payment_intent_id IS NULL
+             AND stripe_charge_id IS NULL
+             AND stripe_payout_id IS NULL
+             AND COALESCE(tentatives_debit, 0) = 0;
+          GET DIAGNOSTICS v_rows = ROW_COUNT;
+          IF v_rows <> 1 THEN
+            RAISE EXCEPTION 'Neutralisation escrow no-show concurrente refusée.'
+              USING ERRCODE = 'P0001';
+          END IF;
+          UPDATE public.escrow_exposition_releases
+             SET statut = 'REGLE'
+           WHERE paiement_escrow_id = v_escrow.id AND statut = 'ACTIF';
+          UPDATE public.escrow_release_queue
+             SET statut = 'ECHEC',
+                 erreur = 'Mission classée no-show avant débit',
+                 traite_le = now()
+           WHERE paiement_escrow_id = v_escrow.id
+             AND statut IN ('EN_ATTENTE', 'EN_COURS');
+          INSERT INTO public.journaux_audit (
+            acteur_id, type_acteur, action, type_ressource, id_ressource,
+            details, navigateur_acteur
+          ) VALUES (
+            '00000000-0000-0000-0000-000000000000'::uuid,
+            'SYSTEME', 'ADMIN_ACTION', 'paiement_escrow', v_escrow.id,
+            jsonb_build_object(
+              'evenement', 'ESCROW_ANNULE_NO_SHOW_AVANT_DEBIT',
+              'mission_id', v_m.id
+            ),
+            'fn_detecter_noshow_et_remplacer'
+          );
+        ELSIF v_escrow.statut IN ('DEBITE', 'DISPONIBLE') THEN
+          v_refund_result := public.fn_escrow_rembourser(
+            v_escrow.id,
+            v_escrow.honoraires_cents,
+            true,
+            'No-show constaté avant remplacement garanti'
+          );
+          IF COALESCE((v_refund_result->>'success')::boolean, false) IS NOT TRUE THEN
+            RAISE EXCEPTION 'Remboursement escrow no-show impossible: %',
+              v_refund_result USING ERRCODE = 'P0001';
+          END IF;
+        ELSIF v_escrow.statut NOT IN (
+          'REMBOURSE_EN_COURS', 'REMBOURSE', 'ECHOUE'
+        ) THEN
+          v_finance_en_revue := true;
+        END IF;
+      END IF;
+
+      IF EXISTS (
+        SELECT 1 FROM public.stripe_transfers st
+        WHERE st.mission_id = v_m.id
+          AND st.statut NOT IN ('ECHOUE', 'ANNULEE', 'REMBOURSE')
+      ) OR EXISTS (
+        SELECT 1 FROM public.paiements_soignant ps
+        WHERE ps.mission_id = v_m.id
+      ) OR EXISTS (
+        SELECT 1 FROM public.factures_honoraires fh
+        WHERE fh.mission_id = v_m.id
+          AND fh.statut NOT IN ('ANNULEE', 'REMPLACEE', 'ERREUR_GENERATION')
+      ) THEN
+        v_finance_en_revue := true;
+      END IF;
+
+      IF v_finance_en_revue THEN
+        INSERT INTO public.journaux_audit (
+          acteur_id, type_acteur, action, type_ressource, id_ressource,
+          details, navigateur_acteur
+        ) VALUES (
+          '00000000-0000-0000-0000-000000000000'::uuid,
+          'SYSTEME', 'ADMIN_ACTION', 'mission', v_m.id,
+          jsonb_build_object(
+            'evenement', 'NO_SHOW_RAPPROCHEMENT_FINANCIER_REQUIS',
+            'paiement_escrow_id', v_escrow.id,
+            'escrow_statut', v_escrow.statut
+          ),
+          'fn_detecter_noshow_et_remplacer'
+        );
+      END IF;
+
+      -- Le cron est exécuté avec service_role, que le trigger onboarding laisse
+      -- volontairement passer. La vérification explicite est donc obligatoire.
+      v_blocage_publication := public.fn_blocage_publication_etab(
+        v_m.etablissement_id
+      );
+
+      IF v_blocage_publication IS NOT NULL OR v_finance_en_revue THEN
+        UPDATE public.missions m
+           SET statut = 'ABSENCE',
+               absence_sans_prevenir = true,
+               modifie_le = now()
+         WHERE m.id = v_m.id
+           AND m.statut = v_m.statut
+           AND m.soignant_assigne_id = v_m.soignant_assigne_id
+           AND COALESCE(m.est_arret_maladie, false) = false
+           AND m.debut_le < now() - interval '30 minutes'
+           AND m.debut_le > now() - interval '4 hours'
+           AND m.fin_le > now() + interval '1 hour'
+           AND NOT EXISTS (
+             SELECT 1 FROM public.presences p
+              WHERE p.mission_id = m.id
+                AND p.soignant_id = m.soignant_assigne_id
+           )
+           AND NOT EXISTS (
+             SELECT 1 FROM public.missions r
+              WHERE r.remplacement_de_mission_id = m.id
+           );
+        GET DIAGNOSTICS v_rows = ROW_COUNT;
+        IF v_rows <> 1 THEN
+          RAISE EXCEPTION 'Classification no-show concurrente refusée.'
+            USING ERRCODE = 'P0004';
+        END IF;
+
+        v_traites := v_traites + 1;
+        IF v_blocage_publication IS NOT NULL THEN
+          FOR v_admin IN
+            SELECT ea.user_id FROM public.equipe_admin ea
+            WHERE ea.actif AND ea.user_id IS NOT NULL
+          LOOP
+            INSERT INTO public.notifications (
+              destinataire_id, type_destinataire, type, titre, corps, lien,
+              type_ressource, id_ressource
+            ) VALUES (
+              v_admin, 'ADMIN', 'SYSTEM',
+              'No-show — remplacement à traiter manuellement ⚠️',
+              'Le no-show est enregistré mais la publication automatique est bloquée : '
+                || COALESCE(
+                  v_blocage_publication->>'message',
+                  v_blocage_publication->>'error', 'gate établissement'
+                ) || '.',
+              '/admin/missions', 'mission', v_m.id
+            );
+          END LOOP;
+        END IF;
+        IF v_finance_en_revue THEN
+          FOR v_admin IN
+            SELECT ea.user_id FROM public.equipe_admin ea
+            WHERE ea.actif AND ea.user_id IS NOT NULL
+          LOOP
+            INSERT INTO public.notifications (
+              destinataire_id, type_destinataire, type, titre, corps, lien,
+              type_ressource, id_ressource
+            ) VALUES (
+              v_admin, 'ADMIN', 'SYSTEM',
+              'No-show — rapprochement financier requis ⚠️',
+              'Le no-show est enregistré, mais le rail financier de la mission originale doit être rapproché avant tout remplacement. Escrow : '
+                || COALESCE(v_escrow.statut, 'artefact financier externe') || '.',
+              '/admin/finances', 'mission', v_m.id
+            );
+          END LOOP;
+        END IF;
+        INSERT INTO public.notifications (
+          destinataire_id, type, titre, corps, lien, type_destinataire
+        ) VALUES (
+          v_m.etablissement_id, 'SYSTEM',
+          'Aucun pointage — remplacement en revue ⚠️',
+          'Aucun pointage détecté 30 min après le début de « '
+            || public.fn_html_escape(v_m.intitule)
+            || ' ». Le no-show est enregistré ; la publication automatique du remplacement est suspendue '
+            || CASE
+                 WHEN v_blocage_publication IS NOT NULL AND v_finance_en_revue
+                   THEN 'par un contrôle de conformité et un rapprochement financier.'
+                 WHEN v_blocage_publication IS NOT NULL
+                   THEN 'par un contrôle de conformité.'
+                 ELSE 'dans l’attente du rapprochement financier.'
+               END
+            || ' L’équipe admin est alertée.',
+          '/etablissement/missions/' || v_m.id, 'ETABLISSEMENT'
+        );
+      ELSE
+      -- Le sous-bloc est un sous-transaction : si l'index unique arbitre une
+      -- course, le passage temporaire à ABSENCE est lui aussi annulé.
+      BEGIN
+        UPDATE public.missions m
+           SET statut = 'ABSENCE',
+               absence_sans_prevenir = true,
+               modifie_le = now()
+         WHERE m.id = v_m.id
+           AND m.statut = v_m.statut
+           AND m.soignant_assigne_id = v_m.soignant_assigne_id
+           AND COALESCE(m.est_arret_maladie, false) = false
+           AND m.debut_le < now() - interval '30 minutes'
+           AND m.debut_le > now() - interval '4 hours'
+           AND m.fin_le > now() + interval '1 hour'
+           AND NOT EXISTS (
+             SELECT 1 FROM public.presences p
+              WHERE p.mission_id = m.id
+                AND p.soignant_id = m.soignant_assigne_id
+           )
+           AND NOT EXISTS (
+             SELECT 1 FROM public.missions r
+              WHERE r.remplacement_de_mission_id = m.id
+           );
+        GET DIAGNOSTICS v_rows = ROW_COUNT;
+        IF v_rows <> 1 THEN
+          RAISE EXCEPTION 'Classification no-show concurrente refusée.'
+            USING ERRCODE = 'P0004';
+        END IF;
+
+        INSERT INTO public.missions(
+          etablissement_id, intitule, description, service,
+          profession_requise, specialite_medicale_requise, accepte_non_specialises,
+          debut_le, fin_le, duree_heures, taux_horaire_base,
+          type_contrat_recherche, mode_remuneration, retrocession_pct,
+          mission_source, statut, mode_attribution,
+          est_urgente, niveau_urgence, garantie_remplacement,
+          remplacement_de_mission_id
+        ) VALUES (
+          v_m.etablissement_id,
+          'REMPLACEMENT URGENT — ' || v_m.intitule,
+          COALESCE(v_m.description, '') || E'\n\n[Mission de remplacement générée automatiquement — garantie Jolene]',
+          v_m.service,
+          v_m.profession_requise, v_m.specialite_medicale_requise,
+          v_m.accepte_non_specialises,
+          greatest(v_m.debut_le, now() + interval '15 minutes'), v_m.fin_le,
+          round(extract(epoch FROM (
+            v_m.fin_le - greatest(v_m.debut_le, now() + interval '15 minutes')
+          )) / 3600.0, 2),
+          v_m.taux_horaire_base, v_m.type_contrat_recherche,
+          v_m.mode_remuneration, v_m.retrocession_pct,
+          'REMPLACEMENT', 'OUVERTE', 'PREMIER_ARRIVE',
+          true, 3, true, v_m.id
+        ) RETURNING id INTO v_remplacement_id;
+      EXCEPTION WHEN unique_violation THEN
+        GET STACKED DIAGNOSTICS v_constraint = CONSTRAINT_NAME;
+        IF v_constraint = 'uniq_missions_remplacement_direct'
+           AND EXISTS (
+             SELECT 1 FROM public.missions r
+              WHERE r.remplacement_de_mission_id = v_m.id
+           ) THEN
+          RAISE EXCEPTION 'Remplacement no-show concurrent déjà publié.'
+            USING ERRCODE = 'P0004';
+        END IF;
+        RAISE;
+      END;
+
+      v_traites := v_traites + 1;
+      v_remplacements := v_remplacements + 1;
       v_corps := public.fn_html_escape(v_m.intitule) || ' — ' ||
         COALESCE(v_m.etab_ville, '') || ', MAINTENANT à ' ||
         COALESCE(v_m.taux_horaire_base::text, '?') || ' €/h. Acceptez en 1 clic.';
@@ -21887,11 +22842,14 @@ BEGIN
           ' ». Garantie remplacement activée : une mission urgente vient d’être diffusée.',
         '/etablissement/missions/' || v_m.id, 'ETABLISSEMENT'
       );
-      UPDATE public.missions
-         SET statut = 'ABSENCE', absence_sans_prevenir = true, modifie_le = now()
-       WHERE id = v_m.id;
-      v_remplacements := v_remplacements + 1;
+      END IF;
+      EXCEPTION WHEN SQLSTATE 'P0004' THEN
+        -- Le sous-bloc annule aussi toute neutralisation/refund préparé avant
+        -- que le CAS ne découvre une présence ou une mutation concurrente.
+        CONTINUE;
+      END;
     ELSE
+      v_traites := v_traites + 1;
       INSERT INTO public.notifications(destinataire_id, type, titre, corps, lien, type_destinataire)
       VALUES (
         v_m.etablissement_id, 'SYSTEM', 'Aucun pointage détecté ⚠️',
@@ -22224,55 +23182,27 @@ ALTER FUNCTION "public"."fn_diagnostic_coherence_financiere"() OWNER TO "postgre
 
 CREATE OR REPLACE FUNCTION "public"."fn_diffuser_pool_urgence"("p_mission_id" "uuid") RETURNS integer
     LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO 'public'
+    SET "search_path" TO 'pg_catalog', 'public', 'private'
     AS $$
 DECLARE
-  v_mission record;
-  v_nb integer := 0;
+  v_etablissement_id uuid;
 BEGIN
-  SELECT m.*, e.adresse_lat AS etab_lat, e.adresse_lng AS etab_lng,
-         e.adresse_ville AS etab_ville
-    INTO v_mission
-    FROM public.missions m
-    JOIN public.etablissements e ON e.id = m.etablissement_id
-   WHERE m.id = p_mission_id;
-  IF NOT FOUND THEN RETURN 0; END IF;
-  IF NOT (public.est_admin() OR v_mission.etablissement_id = public.mon_etablissement_id()) THEN
+  SELECT m.etablissement_id
+  INTO v_etablissement_id
+  FROM public.missions m
+  WHERE m.id = p_mission_id;
+
+  IF NOT FOUND THEN
+    RETURN 0;
+  END IF;
+  IF NOT (
+    public.est_admin()
+    OR v_etablissement_id = public.mon_etablissement_id()
+  ) THEN
     RETURN 0;
   END IF;
 
-  INSERT INTO public.notifications(
-    destinataire_id, type, titre, corps, lien, type_destinataire,
-    type_ressource, id_ressource
-  )
-  SELECT s.id, 'POOL_URGENCE',
-    '🚨 Mission urgente à pourvoir — premier arrivé, premier servi',
-    public.fn_html_escape(v_mission.intitule) || ' — ' || COALESCE(v_mission.etab_ville, '') ||
-      ', le ' || to_char(v_mission.debut_le AT TIME ZONE 'Europe/Paris', 'DD/MM à HH24:MI') ||
-      ' à ' || COALESCE(v_mission.taux_horaire_base::text, '?') || ' €/h.',
-    '/soignant/missions/' || v_mission.id, 'SOIGNANT', 'mission', v_mission.id
-  FROM public.soignants s
-  WHERE public.fn_soignant_eligible_mission(s.id, v_mission.id, true)
-    AND COALESCE(s.disponible_urgence, false)
-    AND NOT public.fn_est_exclu(s.id, v_mission.etablissement_id)
-    AND (v_mission.soignant_assigne_id IS NULL OR s.id <> v_mission.soignant_assigne_id)
-    AND NOT EXISTS (
-      SELECT 1 FROM public.notifications n
-      WHERE n.destinataire_id = s.id
-        AND n.type = 'POOL_URGENCE'
-        AND n.type_ressource = 'mission'
-        AND n.id_ressource = v_mission.id
-        AND n.cree_le > now() - interval '12 hours'
-    )
-    AND (
-      s.adresse_lat IS NULL OR v_mission.etab_lat IS NULL
-      OR public.fn_haversine_distance_m(
-        s.adresse_lat, s.adresse_lng, v_mission.etab_lat, v_mission.etab_lng
-      ) <= COALESCE(s.urgence_rayon_km, s.rayon_deplacement_km, 50) * 1000
-    )
-  LIMIT 50;
-  GET DIAGNOSTICS v_nb = ROW_COUNT;
-  RETURN v_nb;
+  RETURN private.fn_diffuser_pool_urgence_interne(p_mission_id);
 END;
 $$;
 
@@ -22845,24 +23775,50 @@ DECLARE
   v_etab_id uuid;
   v_mission_id uuid;
   v_permission text := TG_ARGV[0];
+  v_context text := COALESCE(
+    current_setting('jolene.empechement_mission_context', true), ''
+  );
 BEGIN
   IF auth.uid() IS NULL OR public.est_admin() THEN
     IF TG_OP = 'DELETE' THEN RETURN OLD; ELSE RETURN NEW; END IF;
   END IF;
 
-  -- Conserver les transitions Lot 21 protegees par
-  -- fn_protect_candidature_statut. Un soignant peut repondre a sa propre
-  -- proposition et la RPC peut refuser atomiquement les candidatures
-  -- concurrentes, meme pour un rare compte historique aussi membre d'un etab.
+  IF TG_TABLE_NAME = 'missions'
+     AND v_context <> ''
+     AND v_context = COALESCE(
+       current_setting('jolene.empechement_mission_validated', true), ''
+     )
+     AND (
+       (
+         TG_OP = 'UPDATE'
+         AND v_context IN (
+           'FLAG:' || (to_jsonb(OLD)->>'id') || ':' || auth.uid()::text,
+           'CLOSE:' || (to_jsonb(OLD)->>'id') || ':' || auth.uid()::text
+         )
+       )
+       OR (
+         TG_OP = 'INSERT'
+         AND to_jsonb(NEW)->>'remplacement_de_mission_id' IS NOT NULL
+         AND v_context = 'REPLACEMENT:'
+           || (to_jsonb(NEW)->>'remplacement_de_mission_id')
+           || ':' || auth.uid()::text
+       )
+     ) THEN
+    RETURN NEW;
+  END IF;
+
+  -- Conserver les transitions Lot 21 protégées par
+  -- fn_protect_candidature_statut. Un soignant peut répondre à sa propre
+  -- proposition, y compris pour un profil aussi membre d'un établissement.
   IF TG_TABLE_NAME = 'candidatures' THEN
     v_row := CASE WHEN TG_OP = 'DELETE' THEN to_jsonb(OLD) ELSE to_jsonb(NEW) END;
     IF v_row ->> 'soignant_id' = auth.uid()::text
-       OR current_setting('jolene.candidature_rpc_mission_id', true) = v_row ->> 'mission_id' THEN
+       OR current_setting('jolene.candidature_rpc_mission_id', true)
+            = v_row ->> 'mission_id' THEN
       IF TG_OP = 'DELETE' THEN RETURN OLD; ELSE RETURN NEW; END IF;
     END IF;
   END IF;
 
-  -- Un soignant sans appartenance etablissement conserve ses propres RPCs.
   IF public.fn_role_etablissement_courant(NULL) IS NULL THEN
     IF TG_OP = 'DELETE' THEN RETURN OLD; ELSE RETURN NEW; END IF;
   END IF;
@@ -24400,11 +25356,22 @@ CREATE OR REPLACE FUNCTION "public"."fn_escrow_debits_a_echeance"("p_limit" inte
     LANGUAGE "sql" STABLE SECURITY DEFINER
     SET "search_path" TO 'public'
     AS $$
-  SELECT * FROM paiements_escrow
-  WHERE statut = 'INITIE'
-    AND debit_prevu_le <= now()
-    AND tentatives_debit < 3
-  ORDER BY debit_prevu_le ASC
+  SELECT pe.*
+  FROM public.paiements_escrow pe
+  JOIN public.missions m
+    ON m.id = pe.mission_id
+   AND m.etablissement_id = pe.etablissement_id
+   AND m.soignant_assigne_id = pe.soignant_id
+  WHERE pe.statut = 'INITIE'
+    AND pe.debit_prevu_le <= now()
+    AND pe.tentatives_debit < 3
+    AND m.statut IN ('ASSIGNEE', 'EN_COURS')
+    AND COALESCE(m.est_arret_maladie, false) IS FALSE
+    AND NOT EXISTS (
+      SELECT 1 FROM public.missions r
+      WHERE r.remplacement_de_mission_id = m.id
+    )
+  ORDER BY pe.debit_prevu_le, pe.id
   LIMIT p_limit;
 $$;
 
@@ -24725,23 +25692,43 @@ CREATE OR REPLACE FUNCTION "public"."fn_escrow_releases_a_traiter"("p_limit" int
     LANGUAGE "sql" STABLE SECURITY DEFINER
     SET "search_path" TO 'public'
     AS $$
-  SELECT q.id,
-         q.paiement_escrow_id,
-         q.mission_id,
-         pe.soignant_id,
-         pe.etablissement_id,
-         pe.honoraires_cents,
-         pe.statut,
-         q.tentatives
+  SELECT q.id, q.paiement_escrow_id, q.mission_id,
+         pe.soignant_id, pe.etablissement_id, pe.honoraires_cents,
+         pe.statut, q.tentatives
   FROM public.escrow_release_queue q
-  JOIN public.paiements_escrow pe ON pe.id = q.paiement_escrow_id
+  JOIN public.paiements_escrow pe
+    ON pe.id = q.paiement_escrow_id
+   AND pe.mission_id = q.mission_id
+  LEFT JOIN public.missions m ON m.id = pe.mission_id
   WHERE q.statut IN ('EN_ATTENTE', 'EN_COURS')
     AND q.prochaine_tentative_le <= now()
     AND (
-      (pe.statut = 'DEBITE' AND q.tentatives < 5)
-      OR pe.statut = 'RELEASE_PLANIFIE'
+      pe.statut = 'RELEASE_PLANIFIE'
+      OR (
+        pe.statut = 'DEBITE'
+        AND q.tentatives < 5
+        AND m.statut = 'TERMINEE'
+        AND m.soignant_assigne_id = pe.soignant_id
+        AND m.etablissement_id = pe.etablissement_id
+        AND COALESCE(m.est_arret_maladie, false) IS FALSE
+        AND NOT EXISTS (
+          SELECT 1 FROM public.missions r
+          WHERE r.remplacement_de_mission_id = m.id
+        )
+        AND EXISTS (
+          SELECT 1 FROM public.presences p
+          WHERE p.mission_id = m.id
+            AND COALESCE(p.valide_par_etablissement, false) IS TRUE
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM public.presences p
+          WHERE p.mission_id = m.id
+            AND COALESCE(p.valide_par_etablissement, false) IS FALSE
+            AND (p.pointage_depart_le IS NOT NULL OR p.motif_litige IS NOT NULL)
+        )
+      )
     )
-  ORDER BY q.prochaine_tentative_le ASC
+  ORDER BY q.prochaine_tentative_le, q.id
   LIMIT p_limit;
 $$;
 
@@ -24946,6 +25933,131 @@ $$;
 
 
 ALTER FUNCTION "public"."fn_escrow_rembourser"("p_paiement_escrow_id" "uuid", "p_montant_honoraires_cts" integer, "p_annulation_totale" boolean, "p_motif" "text") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."fn_escrow_reserver_release"("p_queue_id" "uuid", "p_paiement_escrow_id" "uuid") RETURNS boolean
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'pg_catalog', 'public', 'auth'
+    AS $$
+DECLARE
+  v_autorise boolean;
+  v_rows integer;
+BEGIN
+  IF COALESCE(
+       auth.jwt()->>'role',
+       current_setting('request.jwt.claim.role', true),
+       ''
+     ) <> 'service_role'
+     AND session_user NOT IN ('postgres', 'supabase_admin') THEN
+    RAISE EXCEPTION 'Service role requis' USING ERRCODE = '42501';
+  END IF;
+
+  SELECT (
+      q.statut IN ('EN_ATTENTE', 'EN_COURS')
+      AND pe.statut = 'DEBITE'
+      AND q.mission_id = pe.mission_id
+      AND m.statut = 'TERMINEE'
+      AND m.soignant_assigne_id = pe.soignant_id
+      AND m.etablissement_id = pe.etablissement_id
+      AND COALESCE(m.est_arret_maladie, false) IS FALSE
+      AND NOT EXISTS (
+        SELECT 1 FROM public.missions r
+        WHERE r.remplacement_de_mission_id = m.id
+      )
+      AND EXISTS (
+        SELECT 1 FROM public.presences p
+        WHERE p.mission_id = m.id
+          AND COALESCE(p.valide_par_etablissement, false) IS TRUE
+      )
+      AND NOT EXISTS (
+        SELECT 1 FROM public.presences p
+        WHERE p.mission_id = m.id
+          AND COALESCE(p.valide_par_etablissement, false) IS FALSE
+          AND (p.pointage_depart_le IS NOT NULL OR p.motif_litige IS NOT NULL)
+      )
+    )
+    INTO v_autorise
+  FROM public.escrow_release_queue q
+  JOIN public.paiements_escrow pe ON pe.id = q.paiement_escrow_id
+  JOIN public.missions m ON m.id = pe.mission_id
+  WHERE q.id = p_queue_id
+    AND pe.id = p_paiement_escrow_id
+  FOR UPDATE OF q, pe, m;
+
+  IF COALESCE(v_autorise, false) IS NOT TRUE THEN
+    RETURN false;
+  END IF;
+
+  UPDATE public.paiements_escrow
+     SET statut = 'RELEASE_PLANIFIE',
+         available_on = now(),
+         disponible_le = now(),
+         release_planifie_le = now(),
+         modifie_le = now()
+   WHERE id = p_paiement_escrow_id
+     AND statut = 'DEBITE';
+  GET DIAGNOSTICS v_rows = ROW_COUNT;
+  RETURN v_rows = 1;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_escrow_reserver_release"("p_queue_id" "uuid", "p_paiement_escrow_id" "uuid") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."fn_escrow_reserver_tentative_debit"("p_paiement_escrow_id" "uuid", "p_tentatives_attendues" integer) RETURNS boolean
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'pg_catalog', 'public', 'auth'
+    AS $$
+DECLARE
+  v_rows integer;
+  v_autorise boolean;
+BEGIN
+  IF COALESCE(
+       auth.jwt()->>'role',
+       current_setting('request.jwt.claim.role', true),
+       ''
+     ) <> 'service_role'
+     AND session_user NOT IN ('postgres', 'supabase_admin') THEN
+    RAISE EXCEPTION 'Service role requis' USING ERRCODE = '42501';
+  END IF;
+
+  SELECT (
+      pe.statut = 'INITIE'
+      AND pe.tentatives_debit = COALESCE(p_tentatives_attendues, 0)
+      AND m.statut IN ('ASSIGNEE', 'EN_COURS')
+      AND m.soignant_assigne_id = pe.soignant_id
+      AND m.etablissement_id = pe.etablissement_id
+      AND COALESCE(m.est_arret_maladie, false) IS FALSE
+      AND NOT EXISTS (
+        SELECT 1 FROM public.missions r
+        WHERE r.remplacement_de_mission_id = m.id
+      )
+    )
+    INTO v_autorise
+  FROM public.paiements_escrow pe
+  JOIN public.missions m ON m.id = pe.mission_id
+  WHERE pe.id = p_paiement_escrow_id
+  FOR UPDATE OF m, pe;
+
+  IF COALESCE(v_autorise, false) IS NOT TRUE THEN
+    RETURN false;
+  END IF;
+
+  UPDATE public.paiements_escrow
+     SET tentatives_debit = tentatives_debit + 1,
+         derniere_tentative_le = now(),
+         modifie_le = now()
+   WHERE id = p_paiement_escrow_id
+     AND statut = 'INITIE'
+     AND tentatives_debit = COALESCE(p_tentatives_attendues, 0);
+  GET DIAGNOSTICS v_rows = ROW_COUNT;
+  RETURN v_rows = 1;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_escrow_reserver_tentative_debit"("p_paiement_escrow_id" "uuid", "p_tentatives_attendues" integer) OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."fn_est_bloque"("p_cible_id" "uuid") RETURNS boolean
@@ -29658,7 +30770,6 @@ DECLARE
   v_finales jsonb;
   v_hebdo jsonb;
 BEGIN
-  -- 1. Missions TERMINEE non encore facturées en finale.
   SELECT COALESCE(jsonb_agg(jsonb_build_object(
     'mode', 'FINALE',
     'mission_id', m.id,
@@ -29672,72 +30783,81 @@ BEGIN
     'est_facture_finale_mission', true
   )), '[]'::jsonb)
   INTO v_finales
-  FROM missions m
-  JOIN soignants s ON s.id = m.soignant_assigne_id
+  FROM public.missions m
+  JOIN public.soignants s ON s.id = m.soignant_assigne_id
   WHERE m.statut = 'TERMINEE'
+    AND COALESCE(m.est_arret_maladie, false) IS FALSE
     AND m.fin_le::date < p_today
     AND m.type_contrat_applique = 'LIBERAL'
-    AND COALESCE(s.mandat_facturation_signe, false) = true
+    AND COALESCE(s.mandat_facturation_signe, false) IS TRUE
     AND NOT EXISTS (
-      SELECT 1 FROM factures_honoraires fh
+      SELECT 1 FROM public.missions r
+      WHERE r.remplacement_de_mission_id = m.id
+    )
+    AND NOT EXISTS (
+      SELECT 1 FROM public.factures_honoraires fh
       WHERE fh.mission_id = m.id
-        AND fh.est_facture_finale_mission = true
-        AND fh.statut NOT IN ('ANNULEE','REMPLACEE','ERREUR_GENERATION')
+        AND fh.est_facture_finale_mission IS TRUE
+        AND fh.statut NOT IN ('ANNULEE', 'REMPLACEE', 'ERREUR_GENERATION')
     )
     AND EXISTS (
-      SELECT 1 FROM mission_creneaux mc
+      SELECT 1 FROM public.mission_creneaux mc
       WHERE mc.mission_id = m.id
         AND (
           (mc.type_creneau = 'EFFECTIF' AND mc.fin IS NOT NULL)
           OR mc.type_creneau = 'PREVISIONNEL'
         )
     )
-    -- 7b-B : gate validation des présences (voir en-tête de la migration).
     AND NOT EXISTS (
-      SELECT 1 FROM presences p
+      SELECT 1 FROM public.presences p
       WHERE p.mission_id = m.id
-        AND COALESCE(p.valide_par_etablissement, false) = false
+        AND COALESCE(p.valide_par_etablissement, false) IS FALSE
         AND (p.pointage_depart_le IS NOT NULL OR p.motif_litige IS NOT NULL)
     );
 
-  -- 2. Missions HEBDO_ET_FINALE → semaines ISO closes non facturées.
   WITH semaines AS (
-    SELECT
-      m.id AS mission_id,
-      m.soignant_assigne_id,
-      m.etablissement_id,
-      m.debut_le, m.fin_le,
-      m.strategie_facturation,
-      gs.lundi_semaine
-    FROM missions m
-    JOIN soignants s ON s.id = m.soignant_assigne_id
+    SELECT m.id AS mission_id,
+           m.soignant_assigne_id,
+           m.etablissement_id,
+           m.debut_le,
+           m.fin_le,
+           m.strategie_facturation,
+           gs.lundi_semaine
+    FROM public.missions m
+    JOIN public.soignants s ON s.id = m.soignant_assigne_id
     CROSS JOIN LATERAL generate_series(
       date_trunc('week', m.debut_le)::date,
-      LEAST(m.fin_le::date, p_today - INTERVAL '1 day')::date,
+      least(m.fin_le::date, p_today - interval '1 day')::date,
       '7 days'::interval
     ) AS gs(lundi_semaine)
-    WHERE m.statut IN ('EN_COURS','TERMINEE')
+    WHERE m.statut IN ('EN_COURS', 'TERMINEE')
+      AND COALESCE(m.est_arret_maladie, false) IS FALSE
       AND m.strategie_facturation = 'HEBDO_ET_FINALE'
       AND m.type_contrat_applique = 'LIBERAL'
-      AND COALESCE(s.mandat_facturation_signe, false) = true
-      -- 7b-B : une présence contestée gèle aussi les factures hebdo.
+      AND COALESCE(s.mandat_facturation_signe, false) IS TRUE
       AND NOT EXISTS (
-        SELECT 1 FROM presences p
+        SELECT 1 FROM public.missions r
+        WHERE r.remplacement_de_mission_id = m.id
+      )
+      AND NOT EXISTS (
+        SELECT 1 FROM public.presences p
         WHERE p.mission_id = m.id
-          AND COALESCE(p.valide_par_etablissement, false) = false
+          AND COALESCE(p.valide_par_etablissement, false) IS FALSE
           AND p.motif_litige IS NOT NULL
       )
   ),
   semaines_closes AS (
-    SELECT
-      sm.*,
-      (sm.lundi_semaine + INTERVAL '6 days')::date AS dimanche_semaine,
-      EXTRACT(WEEK FROM sm.lundi_semaine)::smallint AS num_sem,
-      EXTRACT(ISOYEAR FROM sm.lundi_semaine)::smallint AS ann_iso,
-      GREATEST(sm.lundi_semaine::date, sm.debut_le::date) AS periode_d,
-      LEAST((sm.lundi_semaine + INTERVAL '6 days')::date, sm.fin_le::date) AS periode_f
+    SELECT sm.*,
+           (sm.lundi_semaine + interval '6 days')::date AS dimanche_semaine,
+           extract(week FROM sm.lundi_semaine)::smallint AS num_sem,
+           extract(isoyear FROM sm.lundi_semaine)::smallint AS ann_iso,
+           greatest(sm.lundi_semaine::date, sm.debut_le::date) AS periode_d,
+           least(
+             (sm.lundi_semaine + interval '6 days')::date,
+             sm.fin_le::date
+           ) AS periode_f
     FROM semaines sm
-    WHERE (sm.lundi_semaine + INTERVAL '6 days')::date < p_today
+    WHERE (sm.lundi_semaine + interval '6 days')::date < p_today
   )
   SELECT COALESCE(jsonb_agg(jsonb_build_object(
     'mode', 'HEBDO',
@@ -29754,23 +30874,23 @@ BEGIN
   INTO v_hebdo
   FROM semaines_closes sa
   WHERE NOT EXISTS (
-    SELECT 1 FROM factures_honoraires fh
+    SELECT 1 FROM public.factures_honoraires fh
     WHERE fh.mission_id = sa.mission_id
       AND fh.annee_iso = sa.ann_iso
       AND fh.numero_semaine_iso = sa.num_sem
-      AND fh.est_facture_finale_mission = false
-      AND fh.statut NOT IN ('ANNULEE','REMPLACEE','ERREUR_GENERATION')
+      AND fh.est_facture_finale_mission IS FALSE
+      AND fh.statut NOT IN ('ANNULEE', 'REMPLACEE', 'ERREUR_GENERATION')
   )
-  AND EXISTS (
-    SELECT 1 FROM mission_creneaux mc
-    WHERE mc.mission_id = sa.mission_id
-      AND (
-        (mc.type_creneau = 'EFFECTIF' AND mc.fin IS NOT NULL)
-        OR mc.type_creneau = 'PREVISIONNEL'
-      )
-      AND mc.debut::date <= sa.periode_f
-      AND COALESCE(mc.fin::date, mc.debut::date) >= sa.periode_d
-  );
+    AND EXISTS (
+      SELECT 1 FROM public.mission_creneaux mc
+      WHERE mc.mission_id = sa.mission_id
+        AND (
+          (mc.type_creneau = 'EFFECTIF' AND mc.fin IS NOT NULL)
+          OR mc.type_creneau = 'PREVISIONNEL'
+        )
+        AND mc.debut::date <= sa.periode_f
+        AND COALESCE(mc.fin::date, mc.debut::date) >= sa.periode_d
+    );
 
   RETURN jsonb_build_object(
     'today', p_today,
@@ -42759,22 +43879,61 @@ DECLARE
   v_type text;
   v_resolution jsonb;
 BEGIN
-  SELECT profession_requise, specialite_medicale_requise,
-         COALESCE(accepte_non_specialises, true) AS accepte_non_specialises,
-         COALESCE(type_contrat_recherche::text, 'SALARIE') AS type_contrat_recherche
+  SELECT m.profession_requise, m.specialite_medicale_requise,
+         COALESCE(m.accepte_non_specialises, true) AS accepte_non_specialises,
+         COALESCE(m.type_contrat_recherche::text, 'SALARIE') AS type_contrat_recherche,
+         m.remplacement_de_mission_id,
+         COALESCE(e.est_compte_test, false) AS est_compte_test
     INTO v_mission
-    FROM public.missions
-   WHERE id = p_mission_id AND statut = 'OUVERTE';
+    FROM public.missions m
+    JOIN public.etablissements e ON e.id = m.etablissement_id
+   WHERE m.id = p_mission_id AND m.statut = 'OUVERTE';
   IF NOT FOUND THEN RETURN false; END IF;
 
   SELECT profession, specialite_medicale,
-         COALESCE(type_exercice, 'SALARIE') AS type_exercice
+         COALESCE(type_exercice, 'SALARIE') AS type_exercice,
+         COALESCE(est_compte_test, false) AS est_compte_test
     INTO v_soignant
     FROM public.soignants
    WHERE id = p_soignant_id
      AND supprime_le IS NULL
      AND COALESCE(statut_compte::text, 'ACTIF') = 'ACTIF';
   IF NOT FOUND THEN RETURN false; END IF;
+
+  IF v_soignant.est_compte_test IS DISTINCT FROM v_mission.est_compte_test THEN
+    RETURN false;
+  END IF;
+
+  -- Aucun assigné remplacé, ni auteur d'une attestation EPI, ne peut revenir
+  -- par un descendant de la chaîne. L'ascendance récursive couvre aussi
+  -- EPI(A) -> remplacement B -> no-show(B) -> remplacement C.
+  IF v_mission.remplacement_de_mission_id IS NOT NULL
+     AND EXISTS (
+       WITH RECURSIVE ascendance AS (
+         SELECT m.id, m.soignant_assigne_id, m.remplacement_de_mission_id
+         FROM public.missions m
+         WHERE m.id = v_mission.remplacement_de_mission_id
+         UNION
+         SELECT parent.id, parent.soignant_assigne_id,
+                parent.remplacement_de_mission_id
+         FROM public.missions parent
+         JOIN ascendance enfant
+           ON parent.id = enfant.remplacement_de_mission_id
+       )
+       SELECT 1
+       FROM ascendance a
+       WHERE a.soignant_assigne_id = p_soignant_id
+          OR EXISTS (
+            SELECT 1
+            FROM public.journaux_audit ja
+            WHERE ja.acteur_id = p_soignant_id
+              AND ja.action = 'ANNULATION_EMPECHEMENT_IMPERIEUX'
+              AND ja.type_ressource = 'mission'
+              AND ja.id_ressource = a.id
+          )
+     ) THEN
+    RETURN false;
+  END IF;
 
   IF NOT public.fn_soignant_compatible_mission(
     v_soignant.profession, v_soignant.specialite_medicale,
@@ -45017,44 +46176,51 @@ CREATE OR REPLACE FUNCTION "public"."fn_terminer_mission"("p_mission_id" "uuid")
     SET "search_path" TO 'public'
     AS $$
 DECLARE
-    v_mission RECORD;
-    v_nb_presences INTEGER;
+  v_mission record;
+  v_nb_presences integer;
 BEGIN
-    SELECT * INTO v_mission FROM missions WHERE id = p_mission_id;
-    IF v_mission IS NULL THEN RETURN '{"error":"Mission introuvable"}'::JSONB; END IF;
-
-    IF NOT est_admin() AND v_mission.etablissement_id != mon_etablissement_id() THEN
-        RETURN '{"error":"Accès refusé"}'::JSONB;
-    END IF;
-
-    IF v_mission.statut != 'EN_COURS' THEN
-        RETURN jsonb_build_object('error', 'La mission doit être EN_COURS pour être terminée. Statut actuel : ' || v_mission.statut);
-    END IF;
-
-    -- ★ Vérifier qu'il y a au moins une présence enregistrée
-    SELECT COUNT(*) INTO v_nb_presences FROM presences WHERE mission_id = p_mission_id;
-    IF v_nb_presences = 0 AND NOT est_admin() THEN
-        RETURN jsonb_build_object('error', 'Impossible de terminer : aucune présence enregistrée. Le soignant doit pointer son arrivée et son départ.');
-    END IF;
-
-    UPDATE missions SET
-        statut = 'TERMINEE',
-        terminee_le = NOW(),
-        modifie_le = NOW()
-    WHERE id = p_mission_id;
-
-    -- Notifier le soignant (colonne = corps, pas message)
-    IF v_mission.soignant_assigne_id IS NOT NULL THEN
-        INSERT INTO notifications (destinataire_id, type, titre, corps, lien, type_destinataire)
-        VALUES (v_mission.soignant_assigne_id, 'SYSTEM',
-            'Mission terminée ✅',
-            'La mission "' || v_mission.intitule || '" est terminée. Consultez vos gains.',
-            '/soignant/mes-gains', 'SOIGNANT');
-    END IF;
-
-    -- ★ Les cotisations sont calculées automatiquement via trg_auto_cotisations
-
-    RETURN '{"success":true}'::JSONB;
+  SELECT * INTO v_mission
+  FROM public.missions WHERE id = p_mission_id;
+  IF v_mission IS NULL THEN
+    RETURN jsonb_build_object('error', 'Mission introuvable');
+  END IF;
+  IF NOT public.est_admin()
+     AND v_mission.etablissement_id <> public.mon_etablissement_id() THEN
+    RETURN jsonb_build_object('error', 'Accès refusé');
+  END IF;
+  IF v_mission.statut <> 'EN_COURS' THEN
+    RETURN jsonb_build_object(
+      'error', 'La mission doit être EN_COURS pour être terminée. Statut actuel : '
+        || v_mission.statut
+    );
+  END IF;
+  IF v_mission.est_arret_maladie IS TRUE THEN
+    RETURN jsonb_build_object(
+      'error_code', 'RECONCILIATION_HEURES_REQUISE',
+      'error', 'Mission interrompue : validation admin des heures effectives requise avant clôture.'
+    );
+  END IF;
+  SELECT count(*) INTO v_nb_presences
+  FROM public.presences WHERE mission_id = p_mission_id;
+  IF v_nb_presences = 0 AND NOT public.est_admin() THEN
+    RETURN jsonb_build_object(
+      'error', 'Impossible de terminer : aucune présence enregistrée. Le soignant doit pointer son arrivée et son départ.'
+    );
+  END IF;
+  UPDATE public.missions
+     SET statut = 'TERMINEE', terminee_le = now(), modifie_le = now()
+   WHERE id = p_mission_id;
+  IF v_mission.soignant_assigne_id IS NOT NULL THEN
+    INSERT INTO public.notifications (
+      destinataire_id, type, titre, corps, lien, type_destinataire
+    ) VALUES (
+      v_mission.soignant_assigne_id, 'SYSTEM', 'Mission terminée ✅',
+      'La mission "' || v_mission.intitule
+        || '" est terminée. Consultez vos gains.',
+      '/soignant/mes-gains', 'SOIGNANT'
+    );
+  END IF;
+  RETURN jsonb_build_object('success', true);
 END;
 $$;
 
@@ -45097,6 +46263,123 @@ $_$;
 
 
 ALTER FUNCTION "public"."fn_test_purge_mission"("p_mission_id" "uuid") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."fn_test_seed_heures_externes_validees"("p_soignant_id" "uuid", "p_heures" numeric) RETURNS "uuid"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'pg_catalog', 'public', 'private', 'extensions'
+    AS $$
+DECLARE
+  v_soignant record;
+  v_id uuid;
+  v_previous_server_update text := COALESCE(
+    current_setting('jolene.heures_externes_server_update', true), ''
+  );
+BEGIN
+  IF auth.role() <> 'service_role' THEN
+    RAISE EXCEPTION 'Seed heures externes reserve au service_role'
+      USING ERRCODE = '42501';
+  END IF;
+  IF p_heures IS NULL OR p_heures <= 0 OR p_heures > 10000
+     OR p_heures <> trunc(p_heures) THEN
+    RAISE EXCEPTION 'Les heures de fixture doivent etre un entier entre 1 et 10000'
+      USING ERRCODE = '22023';
+  END IF;
+
+  SELECT s.id, s.email, s.est_compte_test, s.type_exercice
+  INTO v_soignant
+  FROM public.soignants s
+  WHERE s.id = p_soignant_id
+  FOR UPDATE;
+  IF NOT FOUND
+     OR COALESCE(v_soignant.est_compte_test, false) IS NOT TRUE
+     OR lower(v_soignant.email) NOT LIKE 'playwright-test-caregiver-%@jolene.app'
+     OR COALESCE(v_soignant.type_exercice, 'SALARIE') NOT IN ('LIBERAL', 'MIXTE') THEN
+    RAISE EXCEPTION 'Seed refuse : profil Playwright liberal ephemere requis'
+      USING ERRCODE = '42501';
+  END IF;
+
+  SELECT h.id
+  INTO v_id
+  FROM public.heures_externes_soignants h
+  WHERE h.soignant_id = p_soignant_id
+    AND h.source_validation_serveur = 'TEST_FIXTURE_SERVICE_ROLE'
+    AND h.statut_validation = 'VALIDE'
+    AND h.heures_declarees = p_heures::integer
+    AND h.empreinte_snapshot_source =
+        private.fn_empreinte_snapshot_heures_externes(h)
+  LIMIT 1;
+  IF FOUND THEN
+    PERFORM private.fn_resynchroniser_compteurs_soignant(p_soignant_id);
+    RETURN v_id;
+  END IF;
+
+  -- Les lignes de fixtures sont liees au profil ephemere (ON DELETE CASCADE).
+  -- Remplacer une ancienne valeur technique ne touche donc jamais les donnees
+  -- de demo ni une preuve reelle.
+  DELETE FROM public.heures_externes_soignants h
+  WHERE h.soignant_id = p_soignant_id
+    AND h.source_validation_serveur = 'TEST_FIXTURE_SERVICE_ROLE';
+
+  PERFORM set_config(
+    'jolene.heures_externes_server_update', 'true', true
+  );
+  INSERT INTO public.heures_externes_soignants (
+    soignant_id,
+    etablissement_nom,
+    etablissement_type,
+    date_debut,
+    date_fin,
+    heures_declarees,
+    attestation_url,
+    attestation_nom_fichier,
+    statut_validation,
+    source_validation_serveur
+  ) VALUES (
+    p_soignant_id,
+    'Fixture Playwright ephemere',
+    'HOPITAL_PUBLIC',
+    date '2018-01-01',
+    date '2021-12-31',
+    p_heures::integer,
+    p_soignant_id::text || '/heures-externes/fixture-playwright.pdf',
+    'fixture-playwright.pdf',
+    'EN_ATTENTE',
+    'TEST_FIXTURE_SERVICE_ROLE'
+  )
+  RETURNING id INTO v_id;
+
+  UPDATE public.heures_externes_soignants h
+  SET statut_validation = 'VALIDE',
+      valide_le = now(),
+      commentaire_validation = 'Fixture E2E service_role ephemere',
+      empreinte_preuve_sha256 = encode(
+        extensions.digest(
+          convert_to('playwright:' || p_soignant_id::text, 'UTF8'),
+          'sha256'
+        ),
+        'hex'
+      ),
+      empreinte_snapshot_source =
+        private.fn_empreinte_snapshot_heures_externes(h),
+      mis_a_jour_le = now()
+  WHERE h.id = v_id;
+
+  PERFORM set_config(
+    'jolene.heures_externes_server_update', v_previous_server_update, true
+  );
+  PERFORM private.fn_resynchroniser_compteurs_soignant(p_soignant_id);
+  RETURN v_id;
+EXCEPTION WHEN OTHERS THEN
+  PERFORM set_config(
+    'jolene.heures_externes_server_update', v_previous_server_update, true
+  );
+  RAISE;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_test_seed_heures_externes_validees"("p_soignant_id" "uuid", "p_heures" numeric) OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."fn_test_seed_mission"("p_data" "jsonb") RETURNS "uuid"
@@ -45875,11 +47158,20 @@ CREATE OR REPLACE FUNCTION "public"."fn_trg_bloquer_paiement_manuel_escrow"() RE
     AS $$
 BEGIN
   IF NEW.mission_id IS NOT NULL AND EXISTS (
-    SELECT 1 FROM paiements_escrow pe
+    SELECT 1 FROM public.missions m
+    WHERE m.id = NEW.mission_id
+      AND m.est_arret_maladie IS TRUE
+  ) THEN
+    RAISE EXCEPTION
+      'Mission interrompue : paiement bloqué jusqu''à validation admin des heures effectives.';
+  END IF;
+  IF NEW.mission_id IS NOT NULL AND EXISTS (
+    SELECT 1 FROM public.paiements_escrow pe
     WHERE pe.mission_id = NEW.mission_id
       AND pe.statut <> 'REMBOURSE'
   ) THEN
-    RAISE EXCEPTION 'Le paiement de cette mission passe par le circuit sécurisé (paiement rapide) : il sera versé automatiquement à la validation des présences. La déclaration manuelle est indisponible (décision D4 — cf. docs/PLAYBOOK_ESCROW.md) ; en cas de désaccord, ouvrez un litige depuis la mission.';
+    RAISE EXCEPTION
+      'Le paiement de cette mission passe par le circuit sécurisé (paiement rapide) : la déclaration manuelle est indisponible.';
   END IF;
   RETURN NEW;
 END;
@@ -46090,20 +47382,34 @@ ALTER FUNCTION "public"."fn_trg_defaut_mode_paiement_secteur"() OWNER TO "postgr
 
 CREATE OR REPLACE FUNCTION "public"."fn_trg_desistement_garanti"() RETURNS "trigger"
     LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO 'public'
+    SET "search_path" TO 'pg_catalog', 'public', 'private'
     AS $$
 BEGIN
-  IF OLD.statut = 'ASSIGNEE' AND NEW.statut = 'OUVERTE'
+  IF OLD.statut = 'ASSIGNEE'
+     AND NEW.statut = 'OUVERTE'
      AND NEW.garantie_remplacement IS TRUE
      AND NEW.est_arret_maladie IS NOT TRUE
-     AND NEW.debut_le < NOW() + INTERVAL '48 hours'
-     AND NEW.debut_le > NOW() - INTERVAL '4 hours' THEN
-    PERFORM fn_diffuser_pool_urgence(NEW.id);
-    INSERT INTO notifications (destinataire_id, type, titre, corps, lien, type_destinataire)
-    VALUES (NEW.etablissement_id, 'SYSTEM', 'Désistement — pool urgence alerté 🚨',
-      'Le soignant s''est désisté de "' || fn_html_escape(NEW.intitule) ||
-      '" à moins de 48h du début. Garantie remplacement : le pool d''urgence vient d''être alerté automatiquement.',
-      '/etablissement/missions/' || NEW.id, 'ETABLISSEMENT');
+     AND NEW.debut_le < now() + interval '48 hours'
+     AND NEW.debut_le > now() - interval '4 hours' THEN
+    -- Une mission déjà urgente est diffusée par trg_auto_notify_mission_urgente.
+    -- Pour un désistement garanti non urgent, ce helper assure le fan-out qui
+    -- manquerait autrement. Les deux chemins restent mutuellement exclusifs.
+    IF COALESCE(NEW.est_urgente, false) IS NOT TRUE THEN
+      PERFORM private.fn_diffuser_pool_urgence_interne(NEW.id);
+    END IF;
+    INSERT INTO public.notifications (
+      destinataire_id, type, titre, corps, lien, type_destinataire
+    ) VALUES (
+      NEW.etablissement_id,
+      'SYSTEM',
+      'Désistement — pool urgence alerté 🚨',
+      'Le soignant s''est désisté de "'
+        || public.fn_html_escape(NEW.intitule)
+        || '" à moins de 48h du début. Garantie remplacement : le pool '
+        || 'd''urgence vient d''être alerté automatiquement.',
+      '/etablissement/missions/' || NEW.id,
+      'ETABLISSEMENT'
+    );
   END IF;
   RETURN NEW;
 END;
@@ -46311,40 +47617,85 @@ CREATE OR REPLACE FUNCTION "public"."fn_trg_escrow_enqueue_on_debite"() RETURNS 
     SET "search_path" TO 'public'
     AS $$
 BEGIN
-  IF NEW.statut <> 'DEBITE' OR NEW.statut = OLD.statut THEN
-    RETURN NEW;
-  END IF;
-
-  -- Gate 7b-B, miroir de fn_trg_escrow_release_check :
-  -- au moins une présence validée…
+  IF NEW.statut <> 'DEBITE' OR NEW.statut = OLD.statut THEN RETURN NEW; END IF;
   IF NOT EXISTS (
-    SELECT 1 FROM presences p
+    SELECT 1 FROM public.missions m
+    WHERE m.id = NEW.mission_id
+      AND m.statut = 'TERMINEE'
+      AND m.soignant_assigne_id = NEW.soignant_id
+      AND m.etablissement_id = NEW.etablissement_id
+      AND COALESCE(m.est_arret_maladie, false) IS FALSE
+      AND NOT EXISTS (
+        SELECT 1 FROM public.missions r
+        WHERE r.remplacement_de_mission_id = m.id
+      )
+  ) THEN RETURN NEW; END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM public.presences p
     WHERE p.mission_id = NEW.mission_id
-      AND COALESCE(p.valide_par_etablissement, false) = true
-  ) THEN
-    RETURN NEW; -- validation pas encore faite : le trigger présences prendra le relais
-  END IF;
-
-  -- … et aucune présence bloquante.
-  IF EXISTS (
-    SELECT 1 FROM presences p
+      AND COALESCE(p.valide_par_etablissement, false) IS TRUE
+  ) OR EXISTS (
+    SELECT 1 FROM public.presences p
     WHERE p.mission_id = NEW.mission_id
-      AND COALESCE(p.valide_par_etablissement, false) = false
+      AND COALESCE(p.valide_par_etablissement, false) IS FALSE
       AND (p.pointage_depart_le IS NOT NULL OR p.motif_litige IS NOT NULL)
-  ) THEN
-    RETURN NEW;
-  END IF;
+  ) THEN RETURN NEW; END IF;
 
-  INSERT INTO escrow_release_queue (paiement_escrow_id, mission_id)
+  INSERT INTO public.escrow_release_queue (paiement_escrow_id, mission_id)
   VALUES (NEW.id, NEW.mission_id)
   ON CONFLICT (paiement_escrow_id) DO NOTHING;
-
   RETURN NEW;
 END;
 $$;
 
 
 ALTER FUNCTION "public"."fn_trg_escrow_enqueue_on_debite"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."fn_trg_escrow_enqueue_on_terminee"() RETURNS "trigger"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+DECLARE
+  v_escrow_id uuid;
+BEGIN
+  IF NEW.statut <> 'TERMINEE' OR OLD.statut = 'TERMINEE'
+     OR NEW.soignant_assigne_id IS NULL
+     OR COALESCE(NEW.est_arret_maladie, false) IS TRUE
+     OR EXISTS (
+       SELECT 1 FROM public.missions r
+       WHERE r.remplacement_de_mission_id = NEW.id
+     ) THEN
+    RETURN NEW;
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM public.presences p
+    WHERE p.mission_id = NEW.id
+      AND COALESCE(p.valide_par_etablissement, false) IS TRUE
+  ) OR EXISTS (
+    SELECT 1 FROM public.presences p
+    WHERE p.mission_id = NEW.id
+      AND COALESCE(p.valide_par_etablissement, false) IS FALSE
+      AND (p.pointage_depart_le IS NOT NULL OR p.motif_litige IS NOT NULL)
+  ) THEN RETURN NEW; END IF;
+
+  SELECT pe.id INTO v_escrow_id
+  FROM public.paiements_escrow pe
+  WHERE pe.mission_id = NEW.id
+    AND pe.soignant_id = NEW.soignant_assigne_id
+    AND pe.etablissement_id = NEW.etablissement_id
+    AND pe.statut = 'DEBITE';
+  IF v_escrow_id IS NOT NULL THEN
+    INSERT INTO public.escrow_release_queue (paiement_escrow_id, mission_id)
+    VALUES (v_escrow_id, NEW.id)
+    ON CONFLICT (paiement_escrow_id) DO NOTHING;
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_trg_escrow_enqueue_on_terminee"() OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."fn_trg_escrow_release_check"() RETURNS "trigger"
@@ -46354,32 +47705,32 @@ CREATE OR REPLACE FUNCTION "public"."fn_trg_escrow_release_check"() RETURNS "tri
 DECLARE
   v_escrow_id uuid;
 BEGIN
-  -- Pas de paiement escrow en séquestre pour cette mission → no-op total
-  -- (tout le trafic actuel, flag ⚡ à 0). Antipattern record-NULL évité :
-  -- on sélectionne l'id directement.
-  SELECT id INTO v_escrow_id
-  FROM paiements_escrow
-  WHERE mission_id = NEW.mission_id
-    AND statut IN ('DEBITE', 'DISPONIBLE');
+  SELECT pe.id INTO v_escrow_id
+  FROM public.paiements_escrow pe
+  JOIN public.missions m
+    ON m.id = pe.mission_id
+   AND m.soignant_assigne_id = pe.soignant_id
+   AND m.etablissement_id = pe.etablissement_id
+  WHERE pe.mission_id = NEW.mission_id
+    AND pe.statut = 'DEBITE'
+    AND m.statut = 'TERMINEE'
+    AND COALESCE(m.est_arret_maladie, false) IS FALSE
+    AND NOT EXISTS (
+      SELECT 1 FROM public.missions r
+      WHERE r.remplacement_de_mission_id = m.id
+    );
+  IF v_escrow_id IS NULL THEN RETURN NEW; END IF;
 
-  IF v_escrow_id IS NULL THEN
-    RETURN NEW;
-  END IF;
-
-  -- Gate 7b-B : une présence bloquante subsiste → pas de release.
   IF EXISTS (
-    SELECT 1 FROM presences p
+    SELECT 1 FROM public.presences p
     WHERE p.mission_id = NEW.mission_id
-      AND COALESCE(p.valide_par_etablissement, false) = false
+      AND COALESCE(p.valide_par_etablissement, false) IS FALSE
       AND (p.pointage_depart_le IS NOT NULL OR p.motif_litige IS NOT NULL)
-  ) THEN
-    RETURN NEW;
-  END IF;
+  ) THEN RETURN NEW; END IF;
 
-  INSERT INTO escrow_release_queue (paiement_escrow_id, mission_id)
+  INSERT INTO public.escrow_release_queue (paiement_escrow_id, mission_id)
   VALUES (v_escrow_id, NEW.mission_id)
   ON CONFLICT (paiement_escrow_id) DO NOTHING;
-
   RETURN NEW;
 END;
 $$;
@@ -46393,61 +47744,96 @@ CREATE OR REPLACE FUNCTION "public"."fn_trg_favori_nouvelle_mission"() RETURNS "
     SET "search_path" TO 'public', 'extensions'
     AS $$
 DECLARE
-  v_etab RECORD;
-  v_soignant_id UUID;
-  v_url TEXT := 'https://flripxtsyegjshnhzjkz.supabase.co';
-  v_token TEXT;
+  v_etab record;
+  v_soignant_id uuid;
+  v_url text := 'https://flripxtsyegjshnhzjkz.supabase.co';
+  v_token text;
 BEGIN
-  IF TG_OP <> 'INSERT' OR NEW.statut <> 'OUVERTE' THEN RETURN NEW; END IF;
+  IF TG_OP <> 'INSERT'
+     OR NEW.statut <> 'OUVERTE'
+     OR NEW.remplacement_de_mission_id IS NOT NULL THEN
+    RETURN NEW;
+  END IF;
 
-  SELECT id, nom, adresse_ville INTO v_etab FROM etablissements WHERE id = NEW.etablissement_id;
+  SELECT id, nom, adresse_ville
+  INTO v_etab
+  FROM public.etablissements
+  WHERE id = NEW.etablissement_id;
 
   BEGIN
-    v_token := (SELECT decrypted_secret FROM vault.decrypted_secrets WHERE name = 'service_role_key' LIMIT 1);
+    v_token := (
+      SELECT decrypted_secret
+      FROM vault.decrypted_secrets
+      WHERE name = 'service_role_key'
+      LIMIT 1
+    );
   EXCEPTION WHEN OTHERS THEN
     v_token := NULL;
   END;
+  IF COALESCE(current_setting('app.test_mode', true), '') = 'true' THEN
+    v_token := NULL;
+  END IF;
 
   FOR v_soignant_id IN
-    SELECT f.soignant_id FROM favoris_soignant_etab f
-    JOIN soignants s ON s.id = f.soignant_id AND s.supprime_le IS NULL
+    SELECT f.soignant_id
+    FROM public.favoris_soignant_etab f
+    JOIN public.soignants s
+      ON s.id = f.soignant_id
+     AND s.supprime_le IS NULL
     WHERE f.etablissement_id = NEW.etablissement_id
-      AND public.fn_soignant_compatible_mission(
-        s.profession, s.specialite_medicale,
-        NEW.profession_requise, NEW.specialite_medicale_requise,
-        COALESCE(NEW.accepte_non_specialises, true)
-      ) = true
+      AND public.fn_soignant_eligible_mission(s.id, NEW.id, false)
   LOOP
-    IF public.fn_doit_notifier(v_soignant_id, 'FAVORI_NOUVELLE_MISSION'::type_evenement_notification, 'IN_APP'::canal_notification) THEN
-      INSERT INTO notifications (
-        destinataire_id, type_destinataire, type, titre, corps, lien, type_ressource, id_ressource
+    IF public.fn_doit_notifier(
+      v_soignant_id,
+      'FAVORI_NOUVELLE_MISSION'::type_evenement_notification,
+      'IN_APP'::canal_notification
+    ) THEN
+      INSERT INTO public.notifications (
+        destinataire_id, type_destinataire, type, titre, corps, lien,
+        type_ressource, id_ressource
       ) VALUES (
-        v_soignant_id, 'SOIGNANT', 'FAVORI_NOUVELLE_MISSION',
+        v_soignant_id,
+        'SOIGNANT',
+        'FAVORI_NOUVELLE_MISSION',
         '⭐ Nouvelle mission chez ' || v_etab.nom,
-        v_etab.nom || ' a publié "' || COALESCE(NEW.intitule, NEW.profession_requise::text)
+        v_etab.nom || ' a publié "'
+          || COALESCE(NEW.intitule, NEW.profession_requise::text)
           || '" à ' || COALESCE(v_etab.adresse_ville, 'votre zone')
           || ' · ' || COALESCE(NEW.taux_horaire_base::text, '?') || '€/h.',
-        '/soignant/missions/' || NEW.id::text, 'mission', NEW.id
+        '/soignant/missions/' || NEW.id::text,
+        'mission',
+        NEW.id
       );
     END IF;
 
     IF v_token IS NOT NULL
-       AND public.fn_doit_notifier(v_soignant_id, 'FAVORI_NOUVELLE_MISSION'::type_evenement_notification, 'EMAIL'::canal_notification) THEN
+       AND public.fn_doit_notifier(
+         v_soignant_id,
+         'FAVORI_NOUVELLE_MISSION'::type_evenement_notification,
+         'EMAIL'::canal_notification
+       ) THEN
       BEGIN
         PERFORM net.http_post(
           url := v_url || '/functions/v1/send-email',
-          headers := jsonb_build_object('Content-Type', 'application/json', 'Authorization', 'Bearer ' || v_token),
+          headers := jsonb_build_object(
+            'Content-Type', 'application/json',
+            'Authorization', 'Bearer ' || v_token
+          ),
           body := jsonb_build_object(
             'type', 'FAVORI_NOUVELLE_MISSION',
             'destinataire_id', v_soignant_id,
             'data', jsonb_build_object(
-              'mission_id', NEW.id, 'mission_intitule', NEW.intitule,
-              'etab_nom', v_etab.nom, 'etab_ville', v_etab.adresse_ville,
-              'taux_horaire', NEW.taux_horaire_base, 'debut_le', NEW.debut_le
+              'mission_id', NEW.id,
+              'mission_intitule', NEW.intitule,
+              'etab_nom', v_etab.nom,
+              'etab_ville', v_etab.adresse_ville,
+              'taux_horaire', NEW.taux_horaire_base,
+              'debut_le', NEW.debut_le
             )
           )
         );
-      EXCEPTION WHEN OTHERS THEN NULL; END;
+      EXCEPTION WHEN OTHERS THEN NULL;
+      END;
     END IF;
   END LOOP;
 
@@ -47251,8 +48637,10 @@ BEGIN
 
   v_blocage := public.fn_blocage_publication_etab(NEW.etablissement_id);
   IF v_blocage IS NOT NULL THEN
-    RAISE EXCEPTION '%', COALESCE(v_blocage->>'message', v_blocage->>'error', 'Publication de mission interdite')
-      USING ERRCODE = 'check_violation', DETAIL = v_blocage::text;
+    RAISE EXCEPTION '%', COALESCE(
+      v_blocage->>'message', v_blocage->>'error',
+      'Publication de mission interdite'
+    ) USING ERRCODE = 'check_violation', DETAIL = v_blocage::text;
   END IF;
   RETURN NEW;
 END;
@@ -55063,12 +56451,12 @@ ALTER TABLE ONLY "public"."heures_externes_soignants"
 
 
 ALTER TABLE "public"."heures_externes_soignants"
-    ADD CONSTRAINT "heures_externes_source_validation_serveur_check" CHECK ((("source_validation_serveur" IS NULL) OR ("source_validation_serveur" = ANY (ARRAY['ADMIN_LEGACY_AUDITE'::"text", 'ADMIN_AAL2'::"text", 'IA_REVUE'::"text", 'IA_REJET_CONCLUSIF'::"text"])))) NOT VALID;
+    ADD CONSTRAINT "heures_externes_source_validation_serveur_check" CHECK ((("source_validation_serveur" IS NULL) OR ("source_validation_serveur" = ANY (ARRAY['ADMIN_LEGACY_AUDITE'::"text", 'ADMIN_AAL2'::"text", 'IA_REVUE'::"text", 'IA_REJET_CONCLUSIF'::"text", 'TEST_FIXTURE_SERVICE_ROLE'::"text"])))) NOT VALID;
 
 
 
 ALTER TABLE "public"."heures_externes_soignants"
-    ADD CONSTRAINT "heures_externes_valide_provenance_check" CHECK ((("statut_validation" <> 'VALIDE'::"text") OR (("source_validation_serveur" = ANY (ARRAY['ADMIN_LEGACY_AUDITE'::"text", 'ADMIN_AAL2'::"text"])) AND ("empreinte_snapshot_source" IS NOT NULL) AND (("source_validation_serveur" = 'ADMIN_LEGACY_AUDITE'::"text") OR ("empreinte_preuve_sha256" IS NOT NULL))))) NOT VALID;
+    ADD CONSTRAINT "heures_externes_valide_provenance_check" CHECK ((("statut_validation" <> 'VALIDE'::"text") OR (("source_validation_serveur" = ANY (ARRAY['ADMIN_LEGACY_AUDITE'::"text", 'ADMIN_AAL2'::"text", 'TEST_FIXTURE_SERVICE_ROLE'::"text"])) AND ("empreinte_snapshot_source" IS NOT NULL) AND (("source_validation_serveur" = 'ADMIN_LEGACY_AUDITE'::"text") OR ("empreinte_preuve_sha256" IS NOT NULL))))) NOT VALID;
 
 
 
@@ -57040,6 +58428,10 @@ CREATE UNIQUE INDEX "uniq_fh_mission_semaine_active" ON "public"."factures_honor
 
 
 
+CREATE UNIQUE INDEX "uniq_missions_remplacement_direct" ON "public"."missions" USING "btree" ("remplacement_de_mission_id") WHERE ("remplacement_de_mission_id" IS NOT NULL);
+
+
+
 CREATE UNIQUE INDEX "uniq_paiements_mission_stripe_pi" ON "public"."paiements_mission" USING "btree" ("stripe_payment_intent_id") WHERE ("stripe_payment_intent_id" IS NOT NULL);
 
 
@@ -57101,6 +58493,10 @@ CREATE UNIQUE INDEX "uq_notif_message_litige_dest" ON "public"."notifications" U
 
 
 CREATE UNIQUE INDEX "uq_sales_contacts_finess" ON "public"."sales_contacts" USING "btree" ("finess");
+
+
+
+CREATE OR REPLACE TRIGGER "dec_00_guard_empechement" BEFORE INSERT OR UPDATE ON "public"."missions" FOR EACH ROW EXECUTE FUNCTION "private"."fn_guard_contexte_empechement_mission"();
 
 
 
@@ -57184,10 +58580,6 @@ CREATE OR REPLACE TRIGGER "dec_fenetre_pointage" BEFORE INSERT ON "public"."pres
 
 
 
-CREATE OR REPLACE TRIGGER "dec_heures_plateforme" AFTER INSERT OR UPDATE ON "public"."missions" FOR EACH ROW EXECUTE FUNCTION "public"."dec_incrementer_heures_plateforme"();
-
-
-
 CREATE OR REPLACE TRIGGER "dec_idempotence_facture" BEFORE UPDATE ON "public"."factures" FOR EACH ROW EXECUTE FUNCTION "public"."dec_idempotence_facture_payee"();
 
 
@@ -57200,7 +58592,7 @@ CREATE OR REPLACE TRIGGER "dec_litige_48h" BEFORE INSERT ON "public"."litiges" F
 
 
 
-CREATE OR REPLACE TRIGGER "dec_maj_compteurs" AFTER UPDATE ON "public"."missions" FOR EACH ROW EXECUTE FUNCTION "public"."dec_maj_compteurs_soignant"();
+CREATE OR REPLACE TRIGGER "dec_maj_compteurs" AFTER INSERT OR DELETE OR UPDATE OF "statut", "soignant_assigne_id", "duree_heures", "duree_heures_effective", "debut_le", "fin_le" ON "public"."missions" FOR EACH ROW EXECUTE FUNCTION "public"."dec_maj_compteurs_soignant"();
 
 
 
@@ -57341,6 +58733,10 @@ CREATE OR REPLACE TRIGGER "dec_xss_contrat" BEFORE INSERT OR UPDATE ON "public".
 
 
 CREATE OR REPLACE TRIGGER "dec_xss_template" BEFORE INSERT OR UPDATE ON "public"."templates_contrat" FOR EACH ROW EXECUTE FUNCTION "public"."dec_sanitiser_contrat"();
+
+
+
+CREATE OR REPLACE TRIGGER "trg_00_bloquer_cloture_empechement" BEFORE UPDATE OF "statut" ON "public"."missions" FOR EACH ROW EXECUTE FUNCTION "private"."fn_bloquer_cloture_empechement_non_reconcilie"();
 
 
 
@@ -57625,6 +59021,10 @@ CREATE OR REPLACE TRIGGER "trg_escrow_creer_a_confirmation" AFTER UPDATE OF "sta
 
 
 CREATE OR REPLACE TRIGGER "trg_escrow_enqueue_on_debite" AFTER UPDATE OF "statut" ON "public"."paiements_escrow" FOR EACH ROW EXECUTE FUNCTION "public"."fn_trg_escrow_enqueue_on_debite"();
+
+
+
+CREATE OR REPLACE TRIGGER "trg_escrow_release_on_terminee" AFTER UPDATE OF "statut" ON "public"."missions" FOR EACH ROW EXECUTE FUNCTION "public"."fn_trg_escrow_enqueue_on_terminee"();
 
 
 
@@ -58021,6 +59421,14 @@ CREATE OR REPLACE TRIGGER "trg_recalculer_preuves_etudiant_profession" AFTER UPD
 
 
 CREATE OR REPLACE TRIGGER "trg_recompute_score_urgence" AFTER INSERT OR UPDATE ON "public"."candidatures" FOR EACH ROW EXECUTE FUNCTION "public"."fn_trg_recompute_score_urgence"();
+
+
+
+CREATE OR REPLACE TRIGGER "trg_resynchroniser_compteurs_heures_externes" AFTER INSERT OR DELETE OR UPDATE ON "public"."heures_externes_soignants" FOR EACH ROW EXECUTE FUNCTION "public"."dec_resynchroniser_compteurs_heures_externes"();
+
+
+
+CREATE OR REPLACE TRIGGER "trg_resynchroniser_compteurs_presence" AFTER INSERT OR DELETE OR UPDATE OF "mission_id", "soignant_id", "pointage_arrivee_le", "pointage_depart_le", "pause_debut_le", "pause_fin_le", "duree_pause_min", "duree_nette_min", "heures_reelles", "heures_ajustees_litige" ON "public"."presences" FOR EACH ROW EXECUTE FUNCTION "public"."dec_resynchroniser_compteurs_presence"();
 
 
 
@@ -61716,7 +63124,6 @@ GRANT ALL ON FUNCTION "public"."dec_idempotence_facture_payee"() TO "service_rol
 
 
 REVOKE ALL ON FUNCTION "public"."dec_incrementer_heures_plateforme"() FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."dec_incrementer_heures_plateforme"() TO "service_role";
 
 
 
@@ -61877,6 +63284,16 @@ GRANT ALL ON FUNCTION "public"."dec_refuser_chevauchement_soignant"() TO "servic
 
 REVOKE ALL ON FUNCTION "public"."dec_refuser_mission_passee"() FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."dec_refuser_mission_passee"() TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."dec_resynchroniser_compteurs_heures_externes"() FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."dec_resynchroniser_compteurs_heures_externes"() TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."dec_resynchroniser_compteurs_presence"() FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."dec_resynchroniser_compteurs_presence"() TO "service_role";
 
 
 
@@ -63690,6 +65107,16 @@ GRANT ALL ON FUNCTION "public"."fn_escrow_releases_a_traiter"("p_limit" integer)
 
 REVOKE ALL ON FUNCTION "public"."fn_escrow_rembourser"("p_paiement_escrow_id" "uuid", "p_montant_honoraires_cts" integer, "p_annulation_totale" boolean, "p_motif" "text") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_escrow_rembourser"("p_paiement_escrow_id" "uuid", "p_montant_honoraires_cts" integer, "p_annulation_totale" boolean, "p_motif" "text") TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."fn_escrow_reserver_release"("p_queue_id" "uuid", "p_paiement_escrow_id" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_escrow_reserver_release"("p_queue_id" "uuid", "p_paiement_escrow_id" "uuid") TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."fn_escrow_reserver_tentative_debit"("p_paiement_escrow_id" "uuid", "p_tentatives_attendues" integer) FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_escrow_reserver_tentative_debit"("p_paiement_escrow_id" "uuid", "p_tentatives_attendues" integer) TO "service_role";
 
 
 
@@ -65645,6 +67072,11 @@ GRANT ALL ON FUNCTION "public"."fn_test_purge_mission"("p_mission_id" "uuid") TO
 
 
 
+REVOKE ALL ON FUNCTION "public"."fn_test_seed_heures_externes_validees"("p_soignant_id" "uuid", "p_heures" numeric) FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_test_seed_heures_externes_validees"("p_soignant_id" "uuid", "p_heures" numeric) TO "service_role";
+
+
+
 REVOKE ALL ON FUNCTION "public"."fn_test_seed_mission"("p_data" "jsonb") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_test_seed_mission"("p_data" "jsonb") TO "service_role";
 
@@ -65805,6 +67237,11 @@ GRANT ALL ON FUNCTION "public"."fn_trg_escrow_creer_a_confirmation"() TO "servic
 
 REVOKE ALL ON FUNCTION "public"."fn_trg_escrow_enqueue_on_debite"() FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_trg_escrow_enqueue_on_debite"() TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."fn_trg_escrow_enqueue_on_terminee"() FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_trg_escrow_enqueue_on_terminee"() TO "service_role";
 
 
 
