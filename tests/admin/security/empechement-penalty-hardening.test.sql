@@ -563,6 +563,12 @@ BEGIN
     ) AS fixture(soignant_id, cle);
   END LOOP;
 
+  -- Le setup reconstruit plus bas quatre no-shows concurrents du même profil,
+  -- état volontairement impossible à créer via l'application. Seul le garde
+  -- de chevauchement est suspendu pendant la construction des missions ; les
+  -- documents, contrats, dates et contrôles de temps de travail restent actifs.
+  EXECUTE 'ALTER TABLE public.missions DISABLE TRIGGER dec_chevauchement';
+
   INSERT INTO public.missions (
     id, etablissement_id, intitule, profession_requise,
     debut_le, fin_le, duree_heures, taux_horaire_base, statut,
@@ -716,18 +722,14 @@ BEGIN
   -- ABSENCE sans publier d'enfant ; les deux derniers couvrent en plus la
   -- neutralisation financière sûre avant la revue admin. Ces quatre lignes
   -- simulent un lot concurrent impossible à créer via l'application pour un
-  -- même soignant : le bypass est limité au multi-insert et immédiatement
-  -- restauré. La conformité documentaire est vérifiée explicitement avant de
-  -- construire cet état historique ; les appels métier testés ensuite
-  -- s'exécutent avec tous les triggers actifs.
+  -- même soignant. La conformité documentaire est vérifiée explicitement
+  -- avant de construire cet état historique ; le garde de chevauchement est
+  -- réactivé avant les appels métier testés ensuite.
   IF NOT public.fn_documents_ok_pour_mission(v_soignant_noshow, 'SALARIE') THEN
     RAISE EXCEPTION 'Fixture no-show : justificatifs IDE salariés incomplets';
   END IF;
 
-  BEGIN
-    PERFORM set_config('session_replication_role', 'replica', true);
-
-    INSERT INTO public.missions (
+  INSERT INTO public.missions (
       id, etablissement_id, intitule, profession_requise,
       debut_le, fin_le, duree_heures, taux_horaire_base, statut,
       soignant_assigne_id, type_contrat_recherche, type_contrat_applique,
@@ -766,11 +768,7 @@ BEGIN
         false, true, 'TAUX_HORAIRE', NULL, 'CANDIDATURE'
       );
 
-    PERFORM set_config('session_replication_role', 'origin', true);
-  EXCEPTION WHEN OTHERS THEN
-    PERFORM set_config('session_replication_role', 'origin', true);
-    RAISE;
-  END;
+  EXECUTE 'ALTER TABLE public.missions ENABLE TRIGGER dec_chevauchement';
 
   IF (
     SELECT count(*)
