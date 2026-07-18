@@ -22,7 +22,6 @@ import {
 } from '@/lib/biometric';
 import { hapticNotification } from '@/lib/haptics';
 import { BoutonProSanteConnect } from '@/components/BoutonProSanteConnect';
-import { CaptchaTurnstile, TURNSTILE_REQUIRED } from '@/components/CaptchaTurnstile';
 
 export default function PageConnexion() {
   usePageTitle('Connexion');
@@ -37,9 +36,7 @@ export default function PageConnexion() {
   const [bioAvailable, setBioAvailable] = useState(false);
   const [bioLoading, setBioLoading] = useState(false);
   const [resetMode, setResetMode] = useState(false);
-  const [resetTurnstileToken, setResetTurnstileToken] = useState<string | null>(null);
   const [resetSubmitting, setResetSubmitting] = useState(false);
-  const [loginTurnstileToken, setLoginTurnstileToken] = useState<string | null>(null);
 
   useEffect(() => {
     if (isNative()) {
@@ -177,13 +174,9 @@ export default function PageConnexion() {
       afficherNotification({ type: 'erreur', message: 'Veuillez remplir tous les champs.' });
       return;
     }
-    if (TURNSTILE_REQUIRED && !loginTurnstileToken) {
-      afficherNotification({ type: 'erreur', message: 'Vérification de sécurité en cours, réessayez dans un instant.' });
-      return;
-    }
     setSubmitting(true);
     try {
-      await connexion(email, motDePasse, loginTurnstileToken || undefined);
+      await connexion(email, motDePasse);
       if (await navigateToRole()) {
         afficherNotification({ type: 'succes', message: 'Connexion réussie !' });
       }
@@ -231,15 +224,6 @@ export default function PageConnexion() {
                 </button>
               </div>
             </div>
-
-            {/* Widget Turnstile visible (mode `normal`) — le mode `invisible`
-                lançait un challenge silencieux qui crée des iframes srcdoc
-                nichés, sensibles à la CSP `about:srcdoc` + extensions anti-
-                fingerprint + Service Workers. Symptôme : "Blocked a frame with
-                origin challenges.cloudflare.com" en mode normal du navigateur
-                (OK en incognito sans extensions). Mode visible = iframe direct,
-                pas d'imbrication srcdoc, robuste. */}
-            <CaptchaTurnstile className="flex justify-center" onVerify={setLoginTurnstileToken} onExpire={() => setLoginTurnstileToken(null)} onError={() => setLoginTurnstileToken(null)} />
 
             <button type="submit" disabled={submitting} className="btn-primary w-full disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2" data-testid="login-submit">
               {submitting && <Loader2 className="h-4 w-4 animate-spin" />}
@@ -316,11 +300,10 @@ export default function PageConnexion() {
                     />
                   </label>
                 )}
-                <CaptchaTurnstile className="flex justify-center" onVerify={setResetTurnstileToken} onExpire={() => setResetTurnstileToken(null)} onError={() => setResetTurnstileToken(null)} />
                 <div className="flex gap-2 justify-center">
                   <button
                     type="button"
-                    onClick={() => { setResetMode(false); setResetTurnstileToken(null); }}
+                    onClick={() => setResetMode(false)}
                     className="text-xs text-muted-foreground hover:underline"
                   >
                     Annuler
@@ -336,10 +319,9 @@ export default function PageConnexion() {
                       setResetSubmitting(true);
                       try {
                         const { supabase } = await import('@/integrations/supabase/client');
-                        const opts: { redirectTo: string; captchaToken?: string } = {
+                        const opts = {
                           redirectTo: urlCallbackPublique('/reset-password'),
                         };
-                        if (resetTurnstileToken) opts.captchaToken = resetTurnstileToken;
                         const { error } = await supabase.auth.resetPasswordForEmail(email, opts);
                         if (error) {
                           afficherNotification({ type: 'erreur', message: 'Erreur lors de l\'envoi. Vérifiez votre email.' });
@@ -349,7 +331,6 @@ export default function PageConnexion() {
                         }
                       } finally {
                         setResetSubmitting(false);
-                        setResetTurnstileToken(null);
                       }
                     }}
                     className="text-xs text-primary hover:underline disabled:opacity-50"

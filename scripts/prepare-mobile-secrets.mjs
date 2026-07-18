@@ -17,7 +17,6 @@ const PUBLIC_MOBILE_ENV_NAMES = [
   'VITE_STRIPE_PUBLISHABLE_KEY',
   'VITE_SUPABASE_URL',
   'VITE_SUPABASE_PUBLISHABLE_KEY',
-  'VITE_TURNSTILE_SITE_KEY',
   'VITE_SENTRY_DSN',
 ];
 
@@ -185,18 +184,6 @@ export function validateSupabaseConfiguration(env, runtimeClientSource) {
   return true;
 }
 
-export function validateTurnstileConfiguration(env) {
-  const key = requiredValue(env, 'VITE_TURNSTILE_SITE_KEY');
-
-  // Les clés de test officielles Cloudflare commencent par 1x, 2x ou 3x.
-  // Une release doit embarquer la site key du widget Jolene, au format 0x4…
-  if (!/^0x4[A-Za-z0-9_-]{16,}$/.test(key)) {
-    fail('VITE_TURNSTILE_SITE_KEY doit être une site key Cloudflare Turnstile de production.');
-  }
-
-  return true;
-}
-
 export function validateSentryConfiguration(env) {
   const dsn = requiredValue(env, 'VITE_SENTRY_DSN');
 
@@ -223,7 +210,6 @@ export function validatePublicMobileConfiguration(env, runtimeClientSource) {
 
   validateStripeConfiguration(env);
   validateSupabaseConfiguration(env, runtimeClientSource);
-  validateTurnstileConfiguration(env);
   validateSentryConfiguration(env);
   return true;
 }
@@ -263,7 +249,7 @@ export function prepareMobileSecrets({ env, rootDirectory = process.cwd() }) {
     if (existsSync(publicSupabaseClientPath)) {
       validateSupabaseConfiguration(env, readFileSync(publicSupabaseClientPath, 'utf8'));
     }
-    console.log('Préflight mobile validé : Firebase, Supabase, Stripe, Turnstile et Sentry sont configurés pour la production.');
+    console.log('Préflight mobile validé : Firebase, Supabase, Stripe et Sentry sont configurés pour la production.');
   }
 }
 

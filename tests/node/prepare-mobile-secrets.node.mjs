@@ -44,7 +44,6 @@ const validEnvironment = {
   VITE_STRIPE_PUBLISHABLE_KEY: `pk_live_${'a'.repeat(24)}`,
   VITE_SUPABASE_URL: EXPECTED_SUPABASE_URL,
   VITE_SUPABASE_PUBLISHABLE_KEY: publicSupabaseKey,
-  VITE_TURNSTILE_SITE_KEY: `0x4${'A'.repeat(24)}`,
   VITE_SENTRY_DSN: 'https://public@o123.ingest.sentry.io/456',
 };
 
@@ -72,6 +71,17 @@ const validGoogleServices = {
 test('accepte une configuration publique de production complète', () => {
   assert.equal(validatePublicMobileConfiguration(validEnvironment, validRuntimeClient), true);
   assert.equal(validateGoogleServices(validGoogleServices), true);
+});
+
+test('un build mobile ne dépend pas de Cloudflare Turnstile', () => {
+  assert.equal(validatePublicMobileConfiguration({
+    ...validEnvironment,
+    VITE_TURNSTILE_SITE_KEY: undefined,
+  }, validRuntimeClient), true);
+
+  const packageJson = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8'));
+  assert.match(packageJson.scripts['build:mobile'], /VITE_NATIVE_BUILD=true/);
+  assert.match(packageJson.scripts['build:mobile'], /VITE_TURNSTILE_SITE_KEY=/);
 });
 
 test('refuse une clé Stripe absente ou de test dans un build store', () => {

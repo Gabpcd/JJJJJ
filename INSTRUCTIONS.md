@@ -140,15 +140,18 @@ Cloudflare Turnstile est intégré sur :
 - Inscription Soignant (`InscriptionSoignant`)
 - Inscription Établissement (`InscriptionEtablissement`)
 - Wizard RPPS (`SectionProfilPrincipal` → `RppsVerifierInline`)
-- Mot de passe oublié (`PageConnexion`)
+- Formulaires de contact publics
 
-Côté backend, le helper `supabase/functions/_shared/verify-turnstile.ts` 
-valide le token via l'API Cloudflare. Tant que la secret 
-`TURNSTILE_SECRET_KEY` n'est pas configurée, la vérification 
-retourne success=true (mode dev), de sorte que le code peut 
-être déployé avant l'activation côté Cloudflare. Idem côté 
-frontend : sans `VITE_TURNSTILE_SITE_KEY`, le widget 
-`<CaptchaTurnstile />` ne rend rien et appelle `onVerify('')` 
+Il est volontairement absent de la connexion et du mot de passe oublié :
+Supabase applique ses propres limites de tentatives et un CAPTCHA Web ne doit
+jamais rendre l'authentification indisponible. Il est également désactivé dans
+les builds Capacitor iOS/Android (`VITE_NATIVE_BUILD=true`).
+
+Côté backend, le helper `supabase/functions/_shared/verify-turnstile.ts`
+valide le token via l'API Cloudflare et reste fail-closed. Le seul bypass
+possible exige explicitement `TURNSTILE_ALLOW_DEV_BYPASS=true` avec une origine
+HTTP locale. Côté frontend, sans `VITE_TURNSTILE_SITE_KEY`, ou dans une app
+native, le widget `<CaptchaTurnstile />` ne rend rien et appelle `onVerify('')`
 immédiatement.
 
 Variables à configurer pour activer en prod :
