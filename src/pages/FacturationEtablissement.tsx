@@ -351,16 +351,27 @@ export default function FacturationEtablissement() {
       return;
     }
 
-    setDeclaringId(missionId);
+    const factureHonorairesId = declarerDialogMission.facture_honoraires_id || null;
+    const declarationKey = factureHonorairesId || missionId;
+    setDeclaringId(declarationKey);
     try {
-      const { data, error } = await supabase.rpc('fn_declarer_paiement_soignant' as any, {
-        p_mission_id: missionId,
-        p_montant: montantNum,
-        p_methode: declarerMethode,
-        p_reference: declarerReference.trim(),
-        p_date_paiement: declarerDatePaiement,
-        p_attestation_sur_l_honneur: true,
-      });
+      const { data, error } = factureHonorairesId
+        ? await supabase.rpc('fn_declarer_paiement_facture_soignant' as any, {
+            p_facture_honoraire_id: factureHonorairesId,
+            p_montant: montantNum,
+            p_methode: declarerMethode,
+            p_reference: declarerReference.trim(),
+            p_date_paiement: declarerDatePaiement,
+            p_attestation_sur_l_honneur: true,
+          })
+        : await supabase.rpc('fn_declarer_paiement_soignant' as any, {
+            p_mission_id: missionId,
+            p_montant: montantNum,
+            p_methode: declarerMethode,
+            p_reference: declarerReference.trim(),
+            p_date_paiement: declarerDatePaiement,
+            p_attestation_sur_l_honneur: true,
+          });
       if (error) throw error;
       const res = data as any;
       if (res?.error === 'ATTESTATION_REQUISE') {
@@ -408,8 +419,9 @@ export default function FacturationEtablissement() {
     }
   };
 
-  const payerStripeConnect = async (missionId: string) => {
-    setConnectPayingId(missionId);
+  const payerStripeConnect = async (missionId: string, factureHonoraireId?: string) => {
+    const paymentKey = factureHonoraireId || missionId;
+    setConnectPayingId(paymentKey);
     const loadingToastId = toast.loading('Préparation du paiement…');
     try {
       const { data: sessionData } = await supabase.auth.getSession();
@@ -420,7 +432,12 @@ export default function FacturationEtablissement() {
       }
 
       const { result, error, code, message, factureGenereeAuto } =
-        await payerMissionStripeConnectAvecGenerationAuto(missionId, accessToken, (msg) => toast.loading(msg, { id: loadingToastId }));
+        await payerMissionStripeConnectAvecGenerationAuto(
+          missionId,
+          accessToken,
+          (msg) => toast.loading(msg, { id: loadingToastId }),
+          factureHonoraireId,
+        );
 
       if (code === 'CONTRAT_SALARIE_NON_STRIPE') {
         toast.error(message || 'Les missions salariées doivent être payées par virement SEPA (bulletin de paie).', { id: loadingToastId, duration: 8000 });
@@ -639,7 +656,7 @@ export default function FacturationEtablissement() {
                 <div className="flex items-center justify-between">
                   <CardY2KTitle className="flex items-center gap-2 text-base">
                     <AlertTriangle className="h-5 w-5 text-destructive" />
-                    Missions à payer aux soignants ({missionsNonPayees.length})
+                    Échéances à payer aux soignants ({missionsNonPayees.length})
                   </CardY2KTitle>
                   <ChevronDown className={`h-5 w-5 text-muted-foreground transition-transform ${sectionsOpen[SECTIONS.payer] ? 'rotate-180' : ''}`} />
                 </div>
@@ -651,7 +668,7 @@ export default function FacturationEtablissement() {
               {missionsNonPayees.length === 0 ? (
                 <CardY2K noPadding>
                   <CardY2KContent className="py-6 text-center text-sm text-muted-foreground">
-                    Aucune mission en attente de paiement soignant.
+                    Aucune échéance en attente de paiement soignant.
                   </CardY2KContent>
                 </CardY2K>
               ) : (
@@ -662,16 +679,13 @@ export default function FacturationEtablissement() {
                   const modePaiementLabel = isSalarie
                     ? 'Bulletin de paie (virement SEPA)'
                     : isLiberal
-                    ? (m.mode_paiement_soignant === 'STRIPE_CONNECT' ? 'Note d\'honoraires (Stripe Connect)' : 'Note d\'honoraires (virement)')
+                    ? (m.soignant_stripe_connect ? 'Note d\'honoraires (Stripe Connect)' : 'Note d\'honoraires (virement)')
                     : null;
-                  const peutPayerStripeBase =
-                    isLiberal
-                    && m.mode_paiement_soignant === 'STRIPE_CONNECT'
-                    && m.soignant_stripe_connect;
+                  const peutPayerStripeBase = isLiberal && m.soignant_stripe_connect;
                   const enLitige = Boolean(m.a_paiement_conteste);
                   const peutPayerStripe = peutPayerStripeBase && !enLitige;
                   return (
-                    <div key={m.mission_id} className="card-base space-y-3">
+                    <div key={m.payment_key || m.facture_honoraires_id || m.mission_id} className="card-base space-y-3">
                       <div className="flex items-start justify-between gap-3">
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
@@ -696,8 +710,11 @@ export default function FacturationEtablissement() {
                             {m.soignant_profession} · {Math.round(m.heures || 0)}h pointées
                           </p>
                           <p className="text-xs text-muted-foreground">
-                            {m.debut_le && new Date(m.debut_le).toLocaleDateString('fr-FR')} → {m.fin_le && new Date(m.fin_le).toLocaleDateString('fr-FR')}
+                            {(m.periode_debut || m.debut_le) && new Date(m.periode_debut || m.debut_le).toLocaleDateString('fr-FR')} → {(m.periode_fin || m.fin_le) && new Date(m.periode_fin || m.fin_le).toLocaleDateString('fr-FR')}
                           </p>
+                          {m.facture_honoraires_id && !m.est_facture_finale_mission && (
+                            <p className="mt-1 text-xs font-medium text-primary">Paiement hebdomadaire — période close</p>
+                          )}
                           {typeContratMission && (
                             <div className="flex items-center gap-2 mt-2 flex-wrap">
                               <BadgeY2K variant="info" className={isSalarie
@@ -748,18 +765,18 @@ export default function FacturationEtablissement() {
                       {peutPayerStripe ? (
                         <BoutonY2K
                           size="sm"
-                          onClick={() => payerStripeConnect(m.mission_id)}
-                          disabled={connectPayingId === m.mission_id || enLitige}
+                          onClick={() => payerStripeConnect(m.mission_id, m.facture_honoraires_id)}
+                          disabled={connectPayingId === (m.facture_honoraires_id || m.mission_id) || enLitige}
                           className="w-full"
                         >
                           <CreditCard className="w-4 h-4 mr-2" />
-                          {connectPayingId === m.mission_id ? 'Redirection…' : 'Payer via Stripe'}
+                          {connectPayingId === (m.facture_honoraires_id || m.mission_id) ? 'Préparation…' : 'Payer via Stripe'}
                         </BoutonY2K>
                       ) : (
                         <BoutonY2K
                           size="sm"
                           onClick={() => ouvrirDialogDeclarer(m)}
-                          disabled={declaringId === m.mission_id || enLitige}
+                          disabled={declaringId === (m.facture_honoraires_id || m.mission_id) || enLitige}
                           className="w-full"
                         >
                           <Banknote className="w-4 h-4 mr-2" />

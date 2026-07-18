@@ -485,6 +485,10 @@ Deno.serve(async (req) => {
 
     const token = authHeader.replace('Bearer ', '');
     const isServiceRole = token === serviceRoleKey;
+    let authenticatedUserId: string | null = null;
+    // Le client porte le JWT utilisateur pour que le RPC RBAC évalue son rôle,
+    // et non le service_role utilisé pour la génération des artefacts.
+    let authenticatedClient: any = null;
 
     const body = await req.json();
     const {
@@ -528,6 +532,8 @@ Deno.serve(async (req) => {
       });
       const { data: userData, error: authError } = await supabaseUser.auth.getUser(token);
       if (authError || !userData?.user) return json(req, { error: 'Token invalide' }, 401);
+      authenticatedUserId = userData.user.id;
+      authenticatedClient = supabaseUser;
     }
 
     // ═══════════════════════════════════════════════════════════
@@ -538,10 +544,20 @@ Deno.serve(async (req) => {
     if (facture_id && !mission_id) {
       const { data: facture, error: fErr } = await supabaseAdmin
         .from('factures_honoraires')
-        .select('id, numero_facture, soignant_id, etablissement_id, mission_id, montant_ht, montant_tva, montant_ttc, taux_tva, exoneration_tva, date_emission, date_echeance, statut, mandat_version, type_document, facture_precedente_id, litige_id, is_public_sector, service_code_chorus')
+        .select('id, numero_facture, soignant_id, etablissement_id, mission_id, montant_ht, montant_tva, montant_ttc, taux_tva, exoneration_tva, date_emission, date_echeance, statut, mandat_version, type_document, facture_precedente_id, litige_id, is_public_sector, service_code_chorus, periode_debut, periode_fin, numero_semaine_iso, annee_iso, est_facture_finale_mission')
         .eq('id', facture_id)
         .single();
       if (fErr || !facture) return json(req, { error: 'Facture introuvable' }, 404);
+
+      if (!isServiceRole) {
+        const { data: canManagePayment, error: permissionError } = await authenticatedClient!.rpc(
+          'fn_a_permission_etablissement',
+          { p_permission: 'paiement', p_etablissement_id: facture.etablissement_id },
+        );
+        if (permissionError || (!canManagePayment && authenticatedUserId !== facture.soignant_id)) {
+          return json(req, { error: 'Accès refusé à cette facture' }, 403);
+        }
+      }
 
       // Charger soignant + etab + mission (lookup pour description)
       const [{ data: sg }, { data: et }, { data: ms }] = await Promise.all([
@@ -595,6 +611,10 @@ Deno.serve(async (req) => {
       const buyerAddress = [et.adresse_rue, et.adresse_code_postal, et.adresse_ville].filter(Boolean).join(', ');
       const description = isAvoir
         ? `Avoir sur facture ${precedingNumero ?? ''}${motifAvoir ? ' — ' + motifAvoir.substring(0, 100) : ''}`
+        : facture.est_facture_finale_mission === false && facture.numero_semaine_iso
+        ? `Facture hebdomadaire S${facture.numero_semaine_iso}/${facture.annee_iso} — ${ms?.intitule || 'Mission'} — Periode du ${facture.periode_debut} au ${facture.periode_fin}`
+        : facture.est_facture_finale_mission && facture.periode_debut && facture.periode_fin
+        ? `Facture finale — ${ms?.intitule || 'Mission'} — Periode du ${facture.periode_debut} au ${facture.periode_fin}`
         : `Honoraires — ${ms?.intitule || 'Mission'} (${ms?.service || ''}) du ${ms?.debut_le || ''} au ${ms?.fin_le || ''} — ${ms?.duree_heures || 0}h`;
 
       const subrogationMention = buildSubrogationMention(sg);
@@ -664,10 +684,15 @@ Deno.serve(async (req) => {
       const storagePath = `${subDir}/${sg.id}/${facture.numero_facture}.pdf`;
       const xmlPath = `${subDir}/${sg.id}/${facture.numero_facture}.xml`;
 
-      await supabaseAdmin.storage.from('jolene-documents')
+      const { error: regenPdfUploadError } = await supabaseAdmin.storage.from('jolene-documents')
         .upload(storagePath, creerBlobPdf(pdfBytes), { upsert: true });
-      await supabaseAdmin.storage.from('jolene-documents')
+      const { error: regenXmlUploadError } = await supabaseAdmin.storage.from('jolene-documents')
         .upload(xmlPath, new Blob([xmlCii], { type: 'application/xml' }), { upsert: true });
+      if (regenPdfUploadError || regenXmlUploadError) {
+        return json(req, {
+          error: `Échec régénération stockage : ${regenPdfUploadError?.message || regenXmlUploadError?.message}`,
+        }, 500);
+      }
 
       const { error: upErr } = await supabaseAdmin
         .from('factures_honoraires')
@@ -702,15 +727,55 @@ Deno.serve(async (req) => {
 
     if (!mission_id) return json(req, { error: 'mission_id requis' }, 400);
 
-    // 1. Vérifier mission TERMINEE
+    // 1. Vérifier l'état de la mission. Une facture hebdomadaire intermédiaire
+    // est volontairement émise pendant que la mission longue est EN_COURS ;
+    // une facture unique/finale exige toujours TERMINEE.
     const { data: mission, error: mErr } = await supabaseAdmin
       .from('missions')
-      .select('id, intitule, service, debut_le, fin_le, duree_heures, taux_horaire_base, total_brut, net_a_payer, montant_commission_ht, soignant_assigne_id, etablissement_id, statut, type_contrat_applique')
+      .select('id, intitule, service, debut_le, fin_le, duree_heures, taux_horaire_base, total_brut, net_a_payer, montant_commission_ht, soignant_assigne_id, etablissement_id, statut, type_contrat_applique, strategie_facturation')
       .eq('id', mission_id)
       .single();
 
     if (mErr || !mission) return json(req, { error: 'Mission introuvable' }, 404);
-    if (mission.statut !== 'TERMINEE') return json(req, { error: `Mission en statut ${mission.statut}, doit être TERMINEE` }, 400);
+    if (!isServiceRole) {
+      const { data: canManagePayment, error: permissionError } = await authenticatedClient!.rpc(
+        'fn_a_permission_etablissement',
+        { p_permission: 'paiement', p_etablissement_id: mission.etablissement_id },
+      );
+      if (permissionError || (!canManagePayment && authenticatedUserId !== mission.soignant_assigne_id)) {
+        return json(req, { error: 'Accès refusé à cette mission' }, 403);
+      }
+    }
+    if (!isHebdoMode && mission.statut !== 'TERMINEE') {
+      return json(req, { error: `Mission en statut ${mission.statut}, doit être TERMINEE` }, 400);
+    }
+    if (isHebdoMode) {
+      const debutMission = String(mission.debut_le || '').slice(0, 10);
+      const finMission = String(mission.fin_le || '').slice(0, 10);
+      const periodeValide = /^\d{4}-\d{2}-\d{2}$/.test(String(periode_debut))
+        && /^\d{4}-\d{2}-\d{2}$/.test(String(periode_fin))
+        && periode_debut <= periode_fin
+        && periode_debut >= debutMission
+        && periode_fin <= finMission;
+      if (
+        mission.strategie_facturation !== 'HEBDO_ET_FINALE'
+        || !['EN_COURS', 'TERMINEE'].includes(mission.statut)
+        || !periodeValide
+      ) {
+        return json(req, {
+          error: 'PERIODE_HEBDOMADAIRE_INVALIDE',
+          message: 'La période doit appartenir à une mission longue en cours ou terminée.',
+        }, 400);
+      }
+      const aujourdHui = new Date().toISOString().slice(0, 10);
+      if (est_facture_finale_mission === true) {
+        if (mission.statut !== 'TERMINEE') {
+          return json(req, { error: 'La facture finale exige une mission terminée.' }, 400);
+        }
+      } else if (periode_fin >= aujourdHui) {
+        return json(req, { error: 'Une semaine doit être close avant facturation.' }, 400);
+      }
+    }
 
     // Fix E — garde type_contrat_applique selon docs/logique-paiements-v1 §1.
     // Jolene est mandataire de facturation UNIQUEMENT pour les missions LIBERAL
@@ -780,6 +845,19 @@ Deno.serve(async (req) => {
       }
       const { data: existing } = await q.maybeSingle();
       if (existing) {
+        // Un retry du cron peut intervenir après l'émission de la note mais
+        // avant la création de la facture de commission. Réparer ce second
+        // artefact avant de répondre idempotent.
+        const { error: commissionRepairError } = await supabaseAdmin.rpc(
+          'fn_preparer_facture_commission_periode',
+          { p_facture_honoraire_id: existing.id },
+        );
+        if (commissionRepairError) {
+          return json(req, {
+            error: `Facture honoraires existante mais commission non préparée : ${commissionRepairError.message}`,
+            facture_id: existing.id,
+          }, 500);
+        }
         return json(req, { error: `Une facture existe déjà : ${existing.numero_facture}`, facture_id: existing.id }, 409);
       }
     }
@@ -1005,14 +1083,41 @@ Deno.serve(async (req) => {
       .eq('id', facture!.id);
     if (updErr) {
       console.error('Update EMISE error:', updErr);
+      // Ne jamais laisser un slot EN_GENERATION bloquer toutes les reprises du
+      // cron. Le retry suivant pourra régénérer une facture proprement.
+      await supabaseAdmin
+        .from('factures_honoraires')
+        .update({ statut: 'ERREUR_GENERATION' })
+        .eq('id', facture!.id)
+        .eq('statut', 'EN_GENERATION');
       return json(req, { error: `Erreur passage EMISE : ${updErr.message}`, facture_id: facture!.id }, 500);
     }
 
-    // 13. If public sector, trigger Chorus submission (stub)
+    // D6 — la commission Jolene suit exactement la même période que la note
+    // d'honoraires. Cette facture est celle qui sera payée par Stripe (privé)
+    // ou déposée sur Chorus Pro (public).
+    const { data: commissionPrepared, error: commissionPrepareError } = await supabaseAdmin
+      .rpc('fn_preparer_facture_commission_periode', {
+        p_facture_honoraire_id: facture!.id,
+      });
+    if (commissionPrepareError || !(commissionPrepared as any)?.facture_id) {
+      console.error('Commission invoice preparation error:', commissionPrepareError);
+      return json(req, {
+        error: `Erreur génération facture commission : ${commissionPrepareError?.message || 'réponse invalide'}`,
+        facture_id: facture!.id,
+      }, 500);
+    }
+
+    // 13. Secteur public : la note d'honoraires et la facture de commission
+    // sont deux documents distincts. La seconde est bien la facture Jolene
+    // déposée via chorus-pro-deposit.
     if (etab.est_secteur_public) {
       try {
         await supabaseAdmin.functions.invoke('submit-to-chorus', {
           body: { facture_honoraire_id: facture!.id },
+        });
+        await supabaseAdmin.functions.invoke('chorus-pro-deposit', {
+          body: { facture_id: (commissionPrepared as any).facture_id, action: 'deposer' },
         });
       } catch (e) {
         console.warn('Chorus submission deferred:', e);
@@ -1035,6 +1140,7 @@ Deno.serve(async (req) => {
     return json(req, {
       success: true,
       facture_id: facture!.id,
+      facture_commission_id: (commissionPrepared as any).facture_id,
       numero_facture: facture!.numero_facture,
       is_public_sector: etab.est_secteur_public || false,
       pdf_path: storagePath,

@@ -33,6 +33,10 @@ const connectReconciliationMigration = readFileSync(
   'supabase/migrations/20260714034156_rapprocher_paiement_connect_atomique.sql',
   'utf8',
 );
+const weeklyInvoiceMigration = readFileSync(
+  'supabase/migrations/20260718122441_fiabiliser_pointage_facturation_hebdo_chorus.sql',
+  'utf8',
+);
 
 describe('Stripe Connect — aucune seconde charge après capture', () => {
   it('réserve atomiquement la mission avant tout Checkout standard ou Connect', () => {
@@ -51,6 +55,7 @@ describe('Stripe Connect — aucune seconde charge après capture', () => {
 
     expect(flowClaimMigration).toContain('resource_key text PRIMARY KEY');
     expect(flowClaimMigration).toContain("'CHECKOUT_INVOICE', 'SEPA_INVOICE', 'CONNECT_MISSION', 'LEGACY_UNKNOWN'");
+    expect(weeklyInvoiceMigration).toContain("'CONNECT_INVOICE'");
     expect(flowClaim).toContain('.rpc("fn_stripe_payment_flow_claim"');
     expect(standardAcquire).toBeGreaterThan(0);
     expect(standardAcquire).toBeLessThan(standardCreate);
@@ -93,8 +98,13 @@ describe('Stripe Connect — aucune seconde charge après capture', () => {
     expect(sepaInvoice).toContain('facture_id: f.id');
     expect(sepaInvoice).toContain('flow: "SEPA_INVOICE"');
     expect(sepaInvoice).toContain('bindStripePaymentFlowClaimIntent(');
-    expect(connect).toContain('mission_id,\n      facture_id: null');
+    expect(connect).toContain('facture_id: null');
     expect(connect).toContain('flow: "CONNECT_MISSION"');
+    expect(connect).toContain('facture_id: factureCommission!.id');
+    expect(connect).toContain('flow: "CONNECT_INVOICE"');
+    expect(weeklyInvoiceMigration).toContain(
+      "v_resources := ARRAY['FACTURE:' || p_facture_id::text]",
+    );
     expect(standardAcquire).toBeLessThan(standardCreate);
     expect(sepaAcquire).toBeLessThan(sepaCreate);
   });

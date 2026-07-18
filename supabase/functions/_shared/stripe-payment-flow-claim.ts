@@ -1,7 +1,8 @@
 export type StripePaymentFlow =
   | "CHECKOUT_INVOICE"
   | "SEPA_INVOICE"
-  | "CONNECT_MISSION";
+  | "CONNECT_MISSION"
+  | "CONNECT_INVOICE";
 export type StripePaymentClaimFlow = StripePaymentFlow | "LEGACY_UNKNOWN";
 
 export type StripePaymentFlowClaimExpected = {

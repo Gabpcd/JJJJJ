@@ -75,7 +75,7 @@ describe('Stripe — garde production et idempotence P0', () => {
         'parrainage_transfer_${parrainage_id}_${role}',
       ],
       'process-stripe-refunds': ['refund_queue_${item.id}'],
-      'stripe-connect-pay-mission': ['connect_checkout_${mission_id}'],
+      'stripe-connect-pay-mission': ['connect_checkout_${checkoutScopeId}'],
     };
 
     for (const [name, keys] of Object.entries(expectedKeys)) {
@@ -114,7 +114,7 @@ describe('Stripe — garde production et idempotence P0', () => {
     expect(debit).toContain('err?.raw?.payment_intent');
     expect(debit).toContain('stripe_payment_intent_id: failedIntentId');
     expect(release).toContain('release_${rel.paiement_escrow_id}_after_${precedent.id}');
-    expect(connect).toContain('connect_checkout_${mission_id}_after_${versionPrecedente}');
+    expect(connect).toContain('connect_checkout_${checkoutScopeId}_after_${versionPrecedente}');
     expect(connect).toContain('stripe_checkout_session_id: session.id');
     expect(connect).toContain('cree_le: new Date().toISOString()');
   });
@@ -130,7 +130,7 @@ describe('Stripe — garde production et idempotence P0', () => {
     expect(connect).toContain('candidate.metadata?.mission_id === mission_id');
     expect(connect).toContain('derniereSessionMission.status === "open"');
     expect(connect).toContain('resumed: true');
-    expect(connect).toContain('connect_checkout_${mission_id}_after_${derniereSessionMission.id}');
+    expect(connect).toContain('connect_checkout_${checkoutScopeId}_after_${derniereSessionMission.id}');
     expect(migration).toContain('stripe_checkout_session_id text');
     expect(migration).toContain('CREATE UNIQUE INDEX IF NOT EXISTS uniq_stripe_transfers_checkout_session');
   });
@@ -160,7 +160,7 @@ describe('Stripe — garde production et idempotence P0', () => {
     expect(connect).toContain('transfer_${session.id}');
     expect(connect).toContain('source_transaction: chargeId');
     expect(connect).toContain('CONNECT_TRANSFER_RETRY_SANS_NOUVELLE_CHARGE');
-    expect(connect).toContain('connect_checkout_${mission_id}_after_${derniereSessionMission.id}');
+    expect(connect).toContain('connect_checkout_${checkoutScopeId}_after_${derniereSessionMission.id}');
   });
 
   it('ne crée pas un second paiement de facture tant qu’un PI est actif et versionne après échec Checkout', () => {
