@@ -184,7 +184,7 @@ Liste détaillée dans `docs/dpa-template.md`.
 - **Authentification** : Supabase Auth, MFA disponible, rate-limit anti brute-force.
 - **RLS** : 87 tables, 100 % couvertes (cf. `docs/audit-rls.md`).
 - **Audit** : append-only sur `journaux_audit` et `invoice_audit_log`.
-- **Captcha** : Turnstile sur inscription, login, reset password, wizard RPPS.
+- **Captcha** : Turnstile sur les formulaires Web publics à risque ; jamais sur la connexion ni dans les apps natives.
 - **Anti-bot** : rate-limit 8 edge functions (verify-rpps, verify-siret, etc.).
 - **Source maps Sentry** : symbolisation prod activée si `SENTRY_AUTH_TOKEN`.
 - **Hardening anti-seed** : triggers `fn_anti_seed_*` bloquent les INSERT incohérents.

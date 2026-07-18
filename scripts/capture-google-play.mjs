@@ -315,29 +315,6 @@ async function ensureCaptureStyle(page) {
   }, { css: CAPTURE_CSS, styleId: CAPTURE_STYLE_ID });
 }
 
-async function waitForTurnstile(page) {
-  const widget = page.locator('iframe[src*="challenges.cloudflare.com"], [name="cf-turnstile-response"]');
-  await widget.first().waitFor({ state: 'attached', timeout: 3_000 }).catch(() => {});
-  if ((await widget.count()) === 0) return;
-
-  const responseField = page.locator('[name="cf-turnstile-response"]');
-  await responseField.first().waitFor({ state: 'attached', timeout: 10_000 }).catch(() => {});
-  if ((await responseField.count()) === 0) {
-    throw new Error('Le widget Turnstile est présent mais son champ de validation ne s’est pas initialisé.');
-  }
-
-  try {
-    await page.waitForFunction(() => {
-      const input = document.querySelector('[name="cf-turnstile-response"]');
-      return input instanceof HTMLInputElement || input instanceof HTMLTextAreaElement
-        ? input.value.length > 0
-        : false;
-    }, undefined, { timeout: 240_000 });
-  } catch {
-    throw new Error('Turnstile n’a pas validé la connexion. Relancer avec HEADLESS=false pour traiter un éventuel challenge.');
-  }
-}
-
 async function dismissCookieConsent(page) {
   const acceptButton = page.getByRole('button', { name: /^Accepter$/i });
   await acceptButton.waitFor({ state: 'visible', timeout: 1_800 }).catch(() => {});
@@ -355,7 +332,6 @@ async function login(page, baseUrl, account) {
   await email.waitFor({ state: 'visible', timeout: 20_000 });
   await email.fill(account.email);
   await password.fill(account.password);
-  await waitForTurnstile(page);
   await page.getByTestId('login-submit').click();
 
   try {
@@ -364,7 +340,7 @@ async function login(page, baseUrl, account) {
       { timeout: 45_000 },
     );
   } catch {
-    throw new Error('La connexion n’a pas atteint le tableau de bord attendu. Vérifier le compte, le rôle et Turnstile.');
+    throw new Error('La connexion n’a pas atteint le tableau de bord attendu. Vérifier le compte et le rôle.');
   }
 }
 

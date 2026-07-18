@@ -23,6 +23,12 @@ test.describe('Authentification', () => {
       await expect(page.getByTestId('login-submit')).toBeVisible();
     });
 
+    test('la connexion ne dépend d’aucun challenge Cloudflare', async ({ page }) => {
+      await expect(page.locator('iframe[src*="challenges.cloudflare.com"]')).toHaveCount(0);
+      await expect(page.locator('[name="cf-turnstile-response"]')).toHaveCount(0);
+      await expect(page.getByText('Vérification de sécurité en cours')).toHaveCount(0);
+    });
+
     test('affiche les liens d\'inscription soignant et etablissement', async ({ page }) => {
       await expect(page.getByRole('button', { name: /Créer un compte soignant/i })).toBeVisible();
       await expect(page.getByRole('button', { name: /Créer un compte établissement/i })).toBeVisible();

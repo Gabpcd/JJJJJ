@@ -1,14 +1,15 @@
 import { Turnstile } from '@marsidev/react-turnstile';
 import { useEffect, useRef } from 'react';
+import { isNative } from '@/lib/platform';
 
 const SITE_KEY = import.meta.env.VITE_TURNSTILE_SITE_KEY as string | undefined;
+const NATIVE_BUILD = import.meta.env.VITE_NATIVE_BUILD === 'true';
 
 /**
- * `true` quand un site key Turnstile est configuré (prod). Utilisez ce flag
- * pour conditionner l'activation du bouton submit : en prod le user doit avoir
- * un token, en dev sans clé le composant fournit un token "skip" automatique.
+ * `true` uniquement sur le Web lorsqu'une site key Turnstile est configurée.
+ * Les formulaires peuvent ainsi exiger un jeton Web sans bloquer Capacitor.
  */
-export const TURNSTILE_REQUIRED = !!SITE_KEY;
+export const TURNSTILE_REQUIRED = !!SITE_KEY && !NATIVE_BUILD && !isNative();
 
 interface Props {
   onVerify: (token: string) => void;
@@ -20,29 +21,25 @@ interface Props {
 }
 
 /**
- * Wrapper Cloudflare Turnstile avec fallback no-op en dev.
+ * Wrapper Cloudflare Turnstile réservé au site Web public.
  *
- * Si `VITE_TURNSTILE_SITE_KEY` n'est pas définie en développement local, le
- * composant fournit un marqueur de développement et ne rend rien. Les Edge
- * Functions publiques restent fail-closed : leur éventuel bypass exige
- * explicitement TURNSTILE_ALLOW_DEV_BYPASS=true et une origine HTTP locale.
+ * Dans les apps Capacitor iOS/Android, le composant ne charge jamais l'iframe
+ * Cloudflare. Une WebView native ne doit pas dépendre d'un challenge Web tiers
+ * pour permettre à un utilisateur déjà inscrit de se connecter.
  *
- * En production, dès que les clés sont présentes des deux côtés, le widget
- * apparaît et bloque la soumission tant que l'utilisateur n'a pas validé.
+ * Sur le Web, le widget apparaît uniquement lorsqu'une site key est configurée.
  */
 export function CaptchaTurnstile({ onVerify, onError, onExpire, invisible, className }: Props) {
   const verifiedRef = useRef(false);
 
   useEffect(() => {
-    if (!SITE_KEY && !verifiedRef.current) {
+    if (!TURNSTILE_REQUIRED && !verifiedRef.current) {
       verifiedRef.current = true;
-      // Marqueur non vide pour les parcours locaux. Il n'est jamais accepte
-      // automatiquement par une Edge Function de production.
-      onVerify('dev-no-key');
+      onVerify('');
     }
   }, [onVerify]);
 
-  if (!SITE_KEY) return null;
+  if (!TURNSTILE_REQUIRED || !SITE_KEY) return null;
 
   return (
     <div className={className}>
