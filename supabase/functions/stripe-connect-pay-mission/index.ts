@@ -81,8 +81,14 @@ Deno.serve(async (req) => {
       global: { headers: { Authorization: authHeader } },
     });
 
-    const body = await req.json().catch(() => null) as { mission_id?: unknown } | null;
+    const body = await req.json().catch(() => null) as {
+      mission_id?: unknown;
+      facture_honoraire_id?: unknown;
+    } | null;
     const mission_id = typeof body?.mission_id === "string" ? body.mission_id : "";
+    const requestedFactureHonorairesId = typeof body?.facture_honoraire_id === "string"
+      ? body.facture_honoraire_id
+      : "";
     if (!mission_id) {
       return new Response(JSON.stringify({ error: "mission_id requis" }), {
         status: 400,
@@ -94,7 +100,7 @@ Deno.serve(async (req) => {
     const { data: mission, error: missionError } = await supabaseAdmin
       .from("missions")
       .select(
-        "id, etablissement_id, soignant_assigne_id, statut, montant_commission_ttc, net_a_payer, type_contrat_applique, commission_facturee, mode_paiement_soignant"
+        "id, etablissement_id, soignant_assigne_id, statut, montant_commission_ttc, net_a_payer, type_contrat_applique, commission_facturee, mode_paiement_soignant, strategie_facturation"
       )
       .eq("id", mission_id)
       .maybeSingle();
@@ -124,9 +130,42 @@ Deno.serve(async (req) => {
       );
     }
 
-    if (mission.statut !== "TERMINEE") {
+    const { data: requestedFactureHonoraires, error: requestedFactureHonorairesError } =
+      requestedFactureHonorairesId
+        ? await supabaseAdmin
+          .from("factures_honoraires")
+          .select("id, statut, montant_ttc, mission_id, soignant_id, etablissement_id, stripe_payment_intent_id, periode_debut, periode_fin, est_facture_finale_mission")
+          .eq("id", requestedFactureHonorairesId)
+          .maybeSingle()
+        : { data: null, error: null };
+    if (requestedFactureHonorairesError) {
+      throw new Error(`Lecture facture d'honoraires impossible: ${requestedFactureHonorairesError.message}`);
+    }
+    if (
+      requestedFactureHonorairesId
+      && (
+        !requestedFactureHonoraires
+        || requestedFactureHonoraires.mission_id !== mission_id
+        || requestedFactureHonoraires.etablissement_id !== mission.etablissement_id
+        || requestedFactureHonoraires.soignant_id !== mission.soignant_assigne_id
+      )
+    ) {
+      return new Response(JSON.stringify({ error: "Facture d'honoraires introuvable pour cette mission" }), {
+        status: 404,
+        headers: { ...corsHeaders(req), "Content-Type": "application/json" },
+      });
+    }
+    const invoiceScopedPayment = Boolean(requestedFactureHonoraires);
+    const weeklyInvoicePayable = Boolean(
+      requestedFactureHonoraires
+      && mission.strategie_facturation === "HEBDO_ET_FINALE"
+      && requestedFactureHonoraires.est_facture_finale_mission === false
+      && requestedFactureHonoraires.periode_fin < new Date().toISOString().slice(0, 10)
+      && ["EN_COURS", "TERMINEE"].includes(mission.statut),
+    );
+    if (mission.statut !== "TERMINEE" && !weeklyInvoicePayable) {
       return new Response(
-        JSON.stringify({ error: "La mission doit être terminée" }),
+        JSON.stringify({ error: "La mission doit être terminée, ou la facture doit porter sur une semaine close" }),
         {
           status: 400,
           headers: { ...corsHeaders(req), "Content-Type": "application/json" },
@@ -150,12 +189,19 @@ Deno.serve(async (req) => {
       );
     }
 
-    const { data: paiementConnectDejaFinal, error: paiementConnectDejaFinalError } =
-      await supabaseAdmin
+    let paiementFinalQuery = supabaseAdmin
         .from("stripe_transfers")
         .select("id, statut")
         .eq("mission_id", mission_id)
-        .in("statut", ["TRANSFERE", "CHARGE_REUSSI", "PAYE"])
+        .in("statut", ["TRANSFERE", "CHARGE_REUSSI", "PAYE"]);
+    if (invoiceScopedPayment) {
+      paiementFinalQuery = paiementFinalQuery.eq(
+        "facture_honoraire_id",
+        requestedFactureHonoraires!.id,
+      );
+    }
+    const { data: paiementConnectDejaFinal, error: paiementConnectDejaFinalError } =
+      await paiementFinalQuery
         .order("cree_le", { ascending: false })
         .limit(1)
         .maybeSingle();
@@ -164,7 +210,7 @@ Deno.serve(async (req) => {
         `Lecture paiement Connect final impossible: ${paiementConnectDejaFinalError.message}`,
       );
     }
-    if (mission.commission_facturee && !paiementConnectDejaFinal) {
+    if (!invoiceScopedPayment && mission.commission_facturee && !paiementConnectDejaFinal) {
       return new Response(JSON.stringify({
         error: "COMMISSION_DEJA_REGLEE",
         message: "La commission de cette mission est déjà facturée ou réglée.",
@@ -188,7 +234,7 @@ Deno.serve(async (req) => {
         `Lecture réservation commission impossible: ${paiementCommissionActifError.message}`,
       );
     }
-    if (paiementCommissionActif && !paiementConnectDejaFinal) {
+    if (!invoiceScopedPayment && paiementCommissionActif && !paiementConnectDejaFinal) {
       return new Response(JSON.stringify({
         error: "COMMISSION_DEJA_REVENDIQUEE",
         message:
@@ -248,12 +294,19 @@ Deno.serve(async (req) => {
     // contrôle doit précéder les factures, car celles-ci sont normalement déjà
     // PAYEE après succès : un simple rafraîchissement ne doit alors ni produire
     // une erreur de facture, ni ouvrir une nouvelle tentative de paiement.
-    const { data: existingTransfer, error: existingTransferError } = await supabaseAdmin
+    let existingTransferQuery = supabaseAdmin
       .from("stripe_transfers")
       .select(
         "id, statut, cree_le, stripe_checkout_session_id, stripe_payment_intent_id, stripe_transfer_id",
       )
-      .eq("mission_id", mission_id)
+      .eq("mission_id", mission_id);
+    if (invoiceScopedPayment) {
+      existingTransferQuery = existingTransferQuery.eq(
+        "facture_honoraire_id",
+        requestedFactureHonoraires!.id,
+      );
+    }
+    const { data: existingTransfer, error: existingTransferError } = await existingTransferQuery
       .order("cree_le", { ascending: false })
       .limit(1)
       .maybeSingle();
@@ -272,16 +325,18 @@ Deno.serve(async (req) => {
     // update le bon row, (2) éviter les sessions orphelines si la facture
     // n'a jamais été générée, (3) supporter les avoirs AUTO_STRIPE futurs
     // qui nécessitent un stripe_payment_intent_id sur la facture d'origine.
-    const { data: factureHonoraires } = await supabaseAdmin
-      .from("factures_honoraires")
-      .select("id, statut, montant_ttc, mission_id, soignant_id, etablissement_id, stripe_payment_intent_id")
-      .eq("mission_id", mission_id)
-      .eq("soignant_id", soignantId)
-      .eq("etablissement_id", mission.etablissement_id)
-      .in("statut", ["EMISE", "EN_RETARD", "PAYEE"])
-      .order("date_emission", { ascending: true })
-      .limit(1)
-      .maybeSingle();
+    const factureHonoraires = requestedFactureHonoraires || (
+      await supabaseAdmin
+        .from("factures_honoraires")
+        .select("id, statut, montant_ttc, mission_id, soignant_id, etablissement_id, stripe_payment_intent_id, periode_debut, periode_fin, est_facture_finale_mission")
+        .eq("mission_id", mission_id)
+        .eq("soignant_id", soignantId)
+        .eq("etablissement_id", mission.etablissement_id)
+        .in("statut", ["EMISE", "EN_RETARD", "PAYEE"])
+        .order("date_emission", { ascending: true })
+        .limit(1)
+        .maybeSingle()
+    ).data;
 
     if (!factureHonoraires) {
       return new Response(
@@ -313,15 +368,51 @@ Deno.serve(async (req) => {
       });
     }
 
-    const { data: factureCommission, error: factureCommissionError } = await supabaseAdmin
+    // D6 : la facture de commission est liée à la facture d'honoraires exacte.
+    // Le fallback mission_id ne sert qu'aux anciennes missions déjà facturées.
+    let { data: factureCommission, error: factureCommissionError } = await supabaseAdmin
       .from("factures")
       .select(
-        "id, statut, montant_ttc, stripe_payment_intent_id, stripe_hosted_url, mission_id, etablissement_id",
+        "id, statut, montant_ttc, montant_ht, montant_tva, stripe_payment_intent_id, stripe_hosted_url, mission_id, etablissement_id, facture_honoraire_id",
       )
-      .eq("mission_id", mission_id)
+      .eq("facture_honoraire_id", factureHonoraires.id)
       .eq("type_document", "FACTURE")
       .neq("statut", "ANNULEE")
       .maybeSingle();
+    if (!factureCommission && !factureCommissionError && !invoiceScopedPayment) {
+      const legacyCommission = await supabaseAdmin
+        .from("factures")
+        .select(
+          "id, statut, montant_ttc, montant_ht, montant_tva, stripe_payment_intent_id, stripe_hosted_url, mission_id, etablissement_id, facture_honoraire_id",
+        )
+        .eq("mission_id", mission_id)
+        .is("facture_honoraire_id", null)
+        .eq("type_document", "FACTURE")
+        .neq("statut", "ANNULEE")
+        .maybeSingle();
+      factureCommission = legacyCommission.data;
+      factureCommissionError = legacyCommission.error;
+    }
+    if (!factureCommission && !factureCommissionError) {
+      const { error: prepareCommissionError } = await supabaseAdmin.rpc(
+        "fn_preparer_facture_commission_periode",
+        { p_facture_honoraire_id: factureHonoraires.id },
+      );
+      if (prepareCommissionError) {
+        throw new Error(`Préparation facture commission impossible: ${prepareCommissionError.message}`);
+      }
+      const preparedCommission = await supabaseAdmin
+        .from("factures")
+        .select(
+          "id, statut, montant_ttc, montant_ht, montant_tva, stripe_payment_intent_id, stripe_hosted_url, mission_id, etablissement_id, facture_honoraire_id",
+        )
+        .eq("facture_honoraire_id", factureHonoraires.id)
+        .eq("type_document", "FACTURE")
+        .neq("statut", "ANNULEE")
+        .maybeSingle();
+      factureCommission = preparedCommission.data;
+      factureCommissionError = preparedCommission.error;
+    }
     if (factureCommissionError) {
       throw new Error(`Lecture facture commission impossible: ${factureCommissionError.message}`);
     }
@@ -431,8 +522,8 @@ Deno.serve(async (req) => {
       apiVersion: "2026-02-25.clover",
     });
 
-    const commissionCents = Math.round(Number(mission.montant_commission_ttc ?? 0) * 100);
-    const soignantCents = Math.round(Number(mission.net_a_payer ?? 0) * 100);
+    const commissionCents = Math.round(Number(factureCommission?.montant_ttc ?? 0) * 100);
+    const soignantCents = Math.round(Number(factureHonoraires.montant_ttc ?? 0) * 100);
     const totalCents = commissionCents + soignantCents;
     const factureHonorairesCents = Math.round(Number(factureHonoraires.montant_ttc ?? 0) * 100);
     const factureCommissionCents = factureCommission
@@ -446,6 +537,10 @@ Deno.serve(async (req) => {
       || factureHonorairesCents !== soignantCents
       || !Number.isSafeInteger(factureCommissionCents)
       || factureCommissionCents !== commissionCents
+      || (!invoiceScopedPayment && (
+        commissionCents !== Math.round(Number(mission.montant_commission_ttc ?? 0) * 100)
+        || soignantCents !== Math.round(Number(mission.net_a_payer ?? 0) * 100)
+      ))
     ) {
       return new Response(JSON.stringify({
         error: "MONTANTS_PAIEMENT_INCOHERENTS",
@@ -492,12 +587,19 @@ Deno.serve(async (req) => {
     // claims, sans laisser derrière lui un claim CONNECT qui bloquerait ensuite
     // la reprise du Checkout standard. Le CAS par PK mission ferme la course
     // pour toutes les créations nouvelles.
-    const paymentFlowClaimExpected = {
-      mission_id,
-      facture_id: null,
-      flow: "CONNECT_MISSION" as const,
-      owner_token: `connect:${mission_id}`,
-    };
+    const paymentFlowClaimExpected = invoiceScopedPayment
+      ? {
+        mission_id: null,
+        facture_id: factureCommission!.id,
+        flow: "CONNECT_INVOICE" as const,
+        owner_token: `connect-invoice:${factureHonoraires.id}`,
+      }
+      : {
+        mission_id,
+        facture_id: null,
+        flow: "CONNECT_MISSION" as const,
+        owner_token: `connect:${mission_id}`,
+      };
     const paymentFlowClaim = await acquireStripePaymentFlowClaim(
       supabaseAdmin,
       paymentFlowClaimExpected,
@@ -549,6 +651,12 @@ Deno.serve(async (req) => {
       if ((metadata.facture_commission_id || "") !== (factureCommission?.id || "")) {
         incoherences.push("session.facture_commission_id");
       }
+      if (
+        metadata.payment_scope !== (invoiceScopedPayment ? "INVOICE" : "MISSION")
+        && (invoiceScopedPayment || metadata.payment_scope !== undefined)
+      ) {
+        incoherences.push("session.payment_scope");
+      }
 
       const paymentIntentId = objectId(session.payment_intent);
       if (paymentIntentId) {
@@ -583,6 +691,12 @@ Deno.serve(async (req) => {
           incoherences.push("payment_intent.facture_commission_id");
         }
         if (
+          piMetadata.payment_scope !== (invoiceScopedPayment ? "INVOICE" : "MISSION")
+          && (invoiceScopedPayment || piMetadata.payment_scope !== undefined)
+        ) {
+          incoherences.push("payment_intent.payment_scope");
+        }
+        if (
           requireSucceededIntent
           && (paymentIntent.status !== "succeeded" || paymentIntent.amount_received !== totalCents)
         ) {
@@ -601,12 +715,15 @@ Deno.serve(async (req) => {
         .maybeSingle();
       if (
         missionActuelleError || !missionActuelle
-        || missionActuelle.statut !== "TERMINEE"
+        || (!invoiceScopedPayment && missionActuelle.statut !== "TERMINEE")
+        || (invoiceScopedPayment && !["EN_COURS", "TERMINEE"].includes(missionActuelle.statut))
         || missionActuelle.type_contrat_applique !== "LIBERAL"
         || missionActuelle.soignant_assigne_id !== soignantId
         || missionActuelle.etablissement_id !== mission.etablissement_id
-        || Math.round(Number(missionActuelle.montant_commission_ttc ?? 0) * 100) !== commissionCents
-        || Math.round(Number(missionActuelle.net_a_payer ?? 0) * 100) !== soignantCents
+        || (!invoiceScopedPayment
+          && Math.round(Number(missionActuelle.montant_commission_ttc ?? 0) * 100) !== commissionCents)
+        || (!invoiceScopedPayment
+          && Math.round(Number(missionActuelle.net_a_payer ?? 0) * 100) !== soignantCents)
       ) {
         incoherences.push("database.mission_state");
       }
@@ -636,7 +753,7 @@ Deno.serve(async (req) => {
         await supabaseAdmin
           .from("factures")
           .select("id, statut, montant_ttc, stripe_payment_intent_id")
-          .eq("mission_id", mission_id)
+          .eq("id", factureCommission?.id || "00000000-0000-0000-0000-000000000000")
           .eq("type_document", "FACTURE")
           .neq("statut", "ANNULEE")
           .maybeSingle();
@@ -731,7 +848,9 @@ Deno.serve(async (req) => {
           currency: "eur",
           destination: connectOnboarding.stripe_account_id,
           source_transaction: chargeId,
-          transfer_group: `mission_${mission_id}`,
+          transfer_group: invoiceScopedPayment
+            ? `facture_${factureHonoraires.id}`
+            : `mission_${mission_id}`,
           metadata: { mission_id, soignant_id: soignantId },
         }, { idempotencyKey: `transfer_${session.id}` });
       const destinationId = objectId(transfer.destination);
@@ -859,7 +978,9 @@ Deno.serve(async (req) => {
       }
 
       const { data: rapprochement, error: rapprochementError } = await supabaseAdmin.rpc(
-        "fn_stripe_connect_rapprocher_local",
+        invoiceScopedPayment
+          ? "fn_stripe_connect_rapprocher_facture"
+          : "fn_stripe_connect_rapprocher_local",
         {
           p_mission_id: mission_id,
           p_soignant_id: soignantId,
@@ -885,10 +1006,17 @@ Deno.serve(async (req) => {
       return { transferRetried, transferId: transfer.id };
     };
 
-    let checkoutIdempotencyKey = `connect_checkout_${mission_id}`;
+    const checkoutScopeId = invoiceScopedPayment ? factureHonoraires.id : mission_id;
+    const sessionMatchesScope = (candidate: Stripe.Checkout.Session) => (
+      candidate.metadata?.type === "CONNECT_MISSION_PAYMENT"
+      && candidate.metadata?.mission_id === mission_id
+      && (!invoiceScopedPayment
+        || candidate.metadata?.facture_honoraires_id === factureHonoraires.id)
+    );
+    let checkoutIdempotencyKey = `connect_checkout_${checkoutScopeId}`;
     if (existingTransfer) {
       const versionPrecedente = existingTransfer.stripe_checkout_session_id || existingTransfer.id;
-      checkoutIdempotencyKey = `connect_checkout_${mission_id}_after_${versionPrecedente}`;
+      checkoutIdempotencyKey = `connect_checkout_${checkoutScopeId}_after_${versionPrecedente}`;
     }
 
     if (existingTransfer?.stripe_checkout_session_id) {
@@ -937,10 +1065,7 @@ Deno.serve(async (req) => {
         limit: 100,
         ...(completeStartingAfter ? { starting_after: completeStartingAfter } : {}),
       });
-      sessionCompleteHistorique = pageComplete.data.find((candidate) => (
-        candidate.metadata?.type === "CONNECT_MISSION_PAYMENT"
-        && candidate.metadata?.mission_id === mission_id
-      )) ?? null;
+      sessionCompleteHistorique = pageComplete.data.find(sessionMatchesScope) ?? null;
       if (sessionCompleteHistorique || !pageComplete.has_more) break;
       const last = pageComplete.data.at(-1);
       if (!last) throw new Error("Pagination Checkout Connect incomplète");
@@ -949,10 +1074,7 @@ Deno.serve(async (req) => {
 
     const sessionsConnues = await stripe.checkout.sessions.list({ customer: customerId, limit: 100 });
     const sessionsMission = sessionsConnues.data
-      .filter((candidate) => (
-        candidate.metadata?.type === "CONNECT_MISSION_PAYMENT"
-        && candidate.metadata?.mission_id === mission_id
-      ))
+      .filter(sessionMatchesScope)
       .sort((a, b) => b.created - a.created);
     const sessionCompleteMission = sessionCompleteHistorique ?? sessionsMission.find(
       (candidate) => candidate.status === "complete",
@@ -998,7 +1120,7 @@ Deno.serve(async (req) => {
           await stripe.checkout.sessions.expire(derniereSessionMission.id);
           await releaseStripePaymentFlowClaimForExpiredSession(
             supabaseAdmin,
-            "CONNECT_MISSION",
+            paymentFlowClaimExpected.flow,
             derniereSessionMission.id,
           );
           await auditerSessionConnectIncoherente(derniereSessionMission, incoherences);
@@ -1044,6 +1166,8 @@ Deno.serve(async (req) => {
         } else {
           const { error: repriseErr } = await supabaseAdmin.from("stripe_transfers").insert({
             mission_id,
+            facture_id: factureCommission?.id || null,
+            facture_honoraire_id: factureHonoraires.id,
             soignant_id: soignantId,
             etablissement_id: mission.etablissement_id,
             montant_soignant: soignantCents / 100,
@@ -1060,7 +1184,7 @@ Deno.serve(async (req) => {
           .from("missions")
           .update({ mode_paiement_soignant: "STRIPE_CONNECT" })
           .eq("id", mission_id)
-          .eq("statut", "TERMINEE")
+          .in("statut", invoiceScopedPayment ? ["EN_COURS", "TERMINEE"] : ["TERMINEE"])
           .eq("type_contrat_applique", "LIBERAL")
           .eq("montant_commission_ttc", mission.montant_commission_ttc)
           .eq("net_a_payer", mission.net_a_payer)
@@ -1088,7 +1212,7 @@ Deno.serve(async (req) => {
       }
       // Expirée (y compris compensation après INSERT raté) : la génération
       // suivante dépend de l'ID Stripe, donc reste fraîche et concurrent-safe.
-      checkoutIdempotencyKey = `connect_checkout_${mission_id}_after_${derniereSessionMission.id}`;
+      checkoutIdempotencyKey = `connect_checkout_${checkoutScopeId}_after_${derniereSessionMission.id}`;
     }
 
     // Create Checkout Session (embedded)
@@ -1118,7 +1242,9 @@ Deno.serve(async (req) => {
         },
       ],
       payment_intent_data: {
-        transfer_group: `mission_${mission_id}`,
+        transfer_group: invoiceScopedPayment
+          ? `facture_${factureHonoraires.id}`
+          : `mission_${mission_id}`,
         statement_descriptor: "JOLENE",
         metadata: {
           type: "CONNECT_MISSION_PAYMENT",
@@ -1130,6 +1256,7 @@ Deno.serve(async (req) => {
           commission_cents: commissionCents.toString(),
           facture_honoraires_id: factureHonoraires.id,
           facture_commission_id: factureCommission?.id || "",
+          payment_scope: invoiceScopedPayment ? "INVOICE" : "MISSION",
         },
       },
       metadata: {
@@ -1149,6 +1276,7 @@ Deno.serve(async (req) => {
         commission_cents: commissionCents.toString(),
         facture_honoraires_id: factureHonoraires.id,
         facture_commission_id: factureCommission?.id || "",
+        payment_scope: invoiceScopedPayment ? "INVOICE" : "MISSION",
       },
       return_url: `${origin}/etablissement/facturation?paiement=succes`,
     }, { idempotencyKey: checkoutIdempotencyKey });
@@ -1170,7 +1298,7 @@ Deno.serve(async (req) => {
       await stripe.checkout.sessions.expire(session.id);
       await releaseStripePaymentFlowClaimForExpiredSession(
         supabaseAdmin,
-        "CONNECT_MISSION",
+        paymentFlowClaimExpected.flow,
         session.id,
       );
       await auditerSessionConnectIncoherente(session, nouvelleSessionIncoherences);
@@ -1230,6 +1358,8 @@ Deno.serve(async (req) => {
       } else {
         const { error: insErr } = await supabaseAdmin.from("stripe_transfers").insert({
           mission_id,
+          facture_id: factureCommission?.id || null,
+          facture_honoraire_id: factureHonoraires.id,
           soignant_id: soignantId,
           etablissement_id: mission.etablissement_id,
           montant_soignant: soignantCents / 100,
@@ -1270,7 +1400,7 @@ Deno.serve(async (req) => {
         .from("missions")
         .update({ mode_paiement_soignant: "STRIPE_CONNECT" })
         .eq("id", mission_id)
-        .eq("statut", "TERMINEE")
+          .in("statut", invoiceScopedPayment ? ["EN_COURS", "TERMINEE"] : ["TERMINEE"])
         .eq("type_contrat_applique", "LIBERAL")
         .eq("montant_commission_ttc", mission.montant_commission_ttc)
         .eq("net_a_payer", mission.net_a_payer)
@@ -1291,7 +1421,7 @@ Deno.serve(async (req) => {
           await stripe.checkout.sessions.expire(session.id);
           await releaseStripePaymentFlowClaimForExpiredSession(
             supabaseAdmin,
-            "CONNECT_MISSION",
+            paymentFlowClaimExpected.flow,
             session.id,
           );
           console.log(`Stripe session ${session.id} expired (compensation)`);

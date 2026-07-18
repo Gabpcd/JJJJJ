@@ -20,6 +20,7 @@
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { getPisteConfig, getAccessToken, deposerFlux, consulterFacture } from '../_shared/piste-client.ts';
 import { generateCiiXml } from '../_shared/facturx-builder.ts';
+import { verifyUserOrServiceRole } from '../_shared/admin-auth.ts';
 
 function getCorsOrigin(req: Request): string {
   const origin = req.headers.get('origin') || '';
@@ -61,30 +62,38 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
       { auth: { persistSession: false } },
     );
-    const supabaseUser = createClient(
-      Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_ANON_KEY')!,
-      { global: { headers: { Authorization: authHeader } } },
-    );
-    const token = authHeader.replace('Bearer ', '');
-    const { data: userData, error: authError } = await supabaseUser.auth.getUser(token);
-    if (authError || !userData?.user) return jsonResponse(req, { error: 'Token invalide' }, 401);
-
-    const userId = userData.user.id;
+    const auth = await verifyUserOrServiceRole(req);
+    if (!auth.ok) return jsonResponse(req, { error: auth.error }, auth.status);
     const { facture_id, action } = await req.json();
     if (!facture_id || !action) return jsonResponse(req, { error: 'facture_id et action requis' }, 400);
 
     const { data: facture, error: factError } = await supabaseAdmin
       .from('factures')
-      .select('id, numero_facture, montant_ht, montant_ttc, montant_tva, taux_tva, statut, chorus_pro_statut, chorus_pro_id, est_secteur_public, etablissement_id, date_emission, date_echeance, description')
+      .select('id, numero_facture, montant_ht, montant_ttc, montant_tva, taux_tva, statut, chorus_pro_statut, chorus_pro_id, est_secteur_public, etablissement_id, date_emission, date_echeance')
       .eq('id', facture_id).single();
     if (factError || !facture) return jsonResponse(req, { error: 'Facture introuvable' }, 404);
-    if (facture.etablissement_id !== userId) return jsonResponse(req, { error: 'Acces interdit' }, 403);
+    if (!facture.est_secteur_public) {
+      return jsonResponse(req, { error: 'Chorus Pro est reserve aux etablissements publics' }, 400);
+    }
+    if (!auth.isServiceRole) {
+      const supabaseUser = createClient(
+        Deno.env.get('SUPABASE_URL')!,
+        Deno.env.get('SUPABASE_ANON_KEY')!,
+        { global: { headers: { Authorization: authHeader } } },
+      );
+      const { data: allowed, error: permissionError } = await supabaseUser.rpc(
+        'fn_a_permission_etablissement',
+        { p_permission: 'paiement', p_etablissement_id: facture.etablissement_id },
+      );
+      if (permissionError || allowed !== true) {
+        return jsonResponse(req, { error: 'Acces interdit' }, 403);
+      }
+    }
 
     const { data: chorusConfig } = await supabaseAdmin
-      .from('chorus_pro_config').select('*').eq('etablissement_id', userId).eq('actif', true).maybeSingle();
+      .from('chorus_pro_config').select('*').eq('etablissement_id', facture.etablissement_id).eq('actif', true).maybeSingle();
     const { data: etab } = await supabaseAdmin
-      .from('etablissements').select('siret, nom, adresse_rue, adresse_code_postal, adresse_ville').eq('id', userId).single();
+      .from('etablissements').select('siret, nom, adresse_rue, adresse_code_postal, adresse_ville').eq('id', facture.etablissement_id).single();
 
     const pisteConfig = getPisteConfig();
     const isSimulation = !pisteConfig;
@@ -134,7 +143,7 @@ Deno.serve(async (req) => {
         buyerCity: etab.adresse_ville ?? '',
         buyerPostalCode: etab.adresse_code_postal ?? '',
         serviceCode: chorusConfig.code_service ?? '',
-        description: facture.description || `Facture ${facture.numero_facture} commission Jolene`,
+        description: `Commission Jolene — facture ${facture.numero_facture}`,
         amountHt: Number(facture.montant_ht) || Number(facture.montant_ttc) || 0,
         amountTva: Number(facture.montant_tva) || 0,
         amountTtc: Number(facture.montant_ttc) || 0,
@@ -203,14 +212,14 @@ Deno.serve(async (req) => {
 
       const statutMapping: Record<string, string> = {
         DEPOSEE: 'DEPOSEE', A_RECYCLER: 'REJETEE', REJETEE: 'REJETEE',
-        MISE_A_DISPOSITION: 'EN_TRAITEMENT', PRISE_EN_COMPTE: 'EN_TRAITEMENT',
-        MANDATEE: 'ACCEPTEE', MISE_EN_PAIEMENT: 'PAYEE', COMPTABILISEE: 'PAYEE',
+        MISE_A_DISPOSITION: 'RECUE', PRISE_EN_COMPTE: 'RECUE',
+        MANDATEE: 'MANDATEE', MISE_EN_PAIEMENT: 'PAYEE', COMPTABILISEE: 'PAYEE',
       };
       const nouveauStatut = statutMapping[statusResult.statutFacture ?? ''] || facture.chorus_pro_statut || 'DEPOSEE';
 
       if (nouveauStatut !== facture.chorus_pro_statut) {
         const updateData: any = { chorus_pro_statut: nouveauStatut };
-        if (nouveauStatut === 'ACCEPTEE' || nouveauStatut === 'PAYEE') {
+        if (nouveauStatut === 'MANDATEE' || nouveauStatut === 'PAYEE') {
           updateData.chorus_pro_date_acceptation = statusResult.dateStatut || new Date().toISOString();
         }
         await supabaseAdmin.from('factures').update(updateData).eq('id', facture_id);

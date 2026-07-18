@@ -30,11 +30,15 @@ export async function payerMissionStripeConnectAvecGenerationAuto(
   missionId: string,
   accessToken: string,
   onProgressMessage?: (msg: string) => void,
+  factureHonoraireId?: string,
 ): Promise<PayMissionOutcome> {
   const authHeaders = { Authorization: `Bearer ${accessToken}` };
 
   let { data: result, error } = await supabase.functions.invoke('stripe-connect-pay-mission', {
-    body: { mission_id: missionId },
+    body: {
+      mission_id: missionId,
+      ...(factureHonoraireId ? { facture_honoraire_id: factureHonoraireId } : {}),
+    },
     headers: authHeaders,
   });
   let payload = await extraireErreurEdgeFn(result, error);
@@ -42,7 +46,7 @@ export async function payerMissionStripeConnectAvecGenerationAuto(
   let message = payload?.message as string | undefined;
   let factureGenereeAuto = false;
 
-  if (code === 'FACTURE_NON_GENEREE') {
+  if (code === 'FACTURE_NON_GENEREE' && !factureHonoraireId) {
     onProgressMessage?.('Génération de la facture honoraires…');
     const genResp = await supabase.functions.invoke('generate-invoice', {
       body: { mission_id: missionId },

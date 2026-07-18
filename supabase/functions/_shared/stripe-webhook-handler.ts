@@ -697,7 +697,7 @@ export async function handleStripeWebhook(
           await supabaseAdmin
             .from("stripe_transfers")
             .select(
-              "id, mission_id, soignant_id, etablissement_id, statut, montant_soignant, montant_commission, montant_total, stripe_checkout_session_id, stripe_payment_intent_id, stripe_transfer_id",
+              "id, mission_id, facture_id, facture_honoraire_id, soignant_id, etablissement_id, statut, montant_soignant, montant_commission, montant_total, stripe_checkout_session_id, stripe_payment_intent_id, stripe_transfer_id",
             )
             .eq("mission_id", missionId)
             .eq("stripe_checkout_session_id", session.id)
@@ -706,7 +706,7 @@ export async function handleStripeWebhook(
         const { data: validatedMission, error: validatedMissionError } = await supabaseAdmin
           .from("missions")
           .select(
-            "id, etablissement_id, soignant_assigne_id, statut, type_contrat_applique, net_a_payer, montant_commission_ht, montant_commission_tva, montant_commission_ttc, intitule",
+            "id, etablissement_id, soignant_assigne_id, statut, type_contrat_applique, net_a_payer, montant_commission_ht, montant_commission_tva, montant_commission_ttc, commission_facturee, intitule",
           )
           .eq("id", missionId)
           .maybeSingle();
@@ -729,29 +729,30 @@ export async function handleStripeWebhook(
             .eq("soignant_id", soignantId)
             .maybeSingle();
         const factureHonorairesId = session.metadata?.facture_honoraires_id || null;
+        const invoiceScopedPayment = session.metadata?.payment_scope === "INVOICE";
+        const sessionFactureCommissionId = session.metadata?.facture_commission_id || "";
         const { data: validatedFactureHonoraires, error: validatedFactureHonorairesError } =
           factureHonorairesId
             ? await supabaseAdmin
               .from("factures_honoraires")
-              .select("id, statut, montant_ttc, mission_id, soignant_id, etablissement_id, stripe_payment_intent_id")
+              .select("id, statut, montant_ttc, mission_id, soignant_id, etablissement_id, stripe_payment_intent_id, periode_debut, periode_fin, est_facture_finale_mission")
               .eq("id", factureHonorairesId)
               .maybeSingle()
             : { data: null, error: null };
+        const commissionQuery = supabaseAdmin
+          .from("factures")
+          .select("id, statut, montant_ht, montant_tva, montant_ttc, mission_id, facture_honoraire_id, etablissement_id, stripe_payment_intent_id")
+          .eq("type_document", "FACTURE")
+          .neq("statut", "ANNULEE");
         const { data: validatedFactureCommission, error: validatedFactureCommissionError } =
-          await supabaseAdmin
-            .from("factures")
-            .select("id, statut, montant_ttc, mission_id, etablissement_id, stripe_payment_intent_id")
-            .eq("mission_id", missionId)
-            .eq("type_document", "FACTURE")
-            .neq("statut", "ANNULEE")
-            .maybeSingle();
+          sessionFactureCommissionId
+            ? await commissionQuery.eq("id", sessionFactureCommissionId).maybeSingle()
+            : await commissionQuery.eq("mission_id", missionId).maybeSingle();
 
         const connectedAccountId = validatedOnboarding?.stripe_account_id || "";
         const customerId = validatedEtablissement?.stripe_customer_id || "";
-        const soignantCents = Math.round(Number(validatedMission.net_a_payer ?? 0) * 100);
-        const commissionCents = Math.round(
-          Number(validatedMission.montant_commission_ttc ?? 0) * 100,
-        );
+        const soignantCents = Math.round(Number(validatedFactureHonoraires?.montant_ttc ?? 0) * 100);
+        const commissionCents = Math.round(Number(validatedFactureCommission?.montant_ttc ?? 0) * 100);
         const totalCents = soignantCents + commissionCents;
         const chargeId = connectPaymentIntent.latest_charge
           ? typeof connectPaymentIntent.latest_charge === "string"
@@ -774,6 +775,10 @@ export async function handleStripeWebhook(
           || validatedTransferClaim.mission_id !== missionId
           || validatedTransferClaim.soignant_id !== soignantId
           || validatedTransferClaim.etablissement_id !== validatedMission.etablissement_id
+          || (invoiceScopedPayment
+            && validatedTransferClaim.facture_honoraire_id !== factureHonorairesId)
+          || (invoiceScopedPayment
+            && validatedTransferClaim.facture_id !== sessionFactureCommissionId)
           || !["EN_ATTENTE", "TRANSFERE", "CHARGE_REUSSI", "PAYE"].includes(
             validatedTransferClaim.statut,
           )
@@ -786,7 +791,8 @@ export async function handleStripeWebhook(
           )
         ) incoherences.push("transfer_claim.identity");
         if (
-          validatedMission.statut !== "TERMINEE"
+          (!invoiceScopedPayment && validatedMission.statut !== "TERMINEE")
+          || (invoiceScopedPayment && !["EN_COURS", "TERMINEE"].includes(validatedMission.statut))
           || validatedMission.type_contrat_applique !== "LIBERAL"
           || !soignantId
         ) incoherences.push("mission.state_or_contract");
@@ -802,8 +808,11 @@ export async function handleStripeWebhook(
           || validatedFactureHonoraires.soignant_id !== soignantId
           || validatedFactureHonoraires.etablissement_id !== validatedMission.etablissement_id
           || Math.round(Number(validatedFactureHonoraires.montant_ttc ?? 0) * 100) !== soignantCents
+          || (invoiceScopedPayment
+            && validatedMission.statut === "EN_COURS"
+            && (validatedFactureHonoraires.est_facture_finale_mission
+              || validatedFactureHonoraires.periode_fin >= new Date().toISOString().slice(0, 10)))
         ) incoherences.push("facture_honoraires.identity");
-        const sessionFactureCommissionId = session.metadata?.facture_commission_id || "";
         if (
           validatedFactureCommissionError
           || (validatedFactureCommission
@@ -815,6 +824,8 @@ export async function handleStripeWebhook(
                   && validatedFactureCommission.stripe_payment_intent_id === paymentIntentId)
               )
               || validatedFactureCommission.etablissement_id !== validatedMission.etablissement_id
+              || (invoiceScopedPayment
+                && validatedFactureCommission.facture_honoraire_id !== factureHonorairesId)
               || Math.round(Number(validatedFactureCommission.montant_ttc ?? 0) * 100) !== commissionCents
               || (sessionFactureCommissionId !== validatedFactureCommission.id
                 && !(sessionFactureCommissionId === ""
@@ -841,6 +852,12 @@ export async function handleStripeWebhook(
         if (session.metadata?.commission_cents !== String(commissionCents)) {
           incoherences.push("session.commission_cents");
         }
+        if (
+          session.metadata?.payment_scope !== (invoiceScopedPayment ? "INVOICE" : "MISSION")
+          && (invoiceScopedPayment || session.metadata?.payment_scope !== undefined)
+        ) {
+          incoherences.push("session.payment_scope");
+        }
         if (session.amount_total !== totalCents || session.currency !== "eur") {
           incoherences.push("session.amount_or_currency");
         }
@@ -862,6 +879,10 @@ export async function handleStripeWebhook(
           || connectPaymentIntent.metadata?.connected_account_id !== connectedAccountId
           || connectPaymentIntent.metadata?.soignant_cents !== String(soignantCents)
           || connectPaymentIntent.metadata?.commission_cents !== String(commissionCents)
+          || (
+            connectPaymentIntent.metadata?.payment_scope !== (invoiceScopedPayment ? "INVOICE" : "MISSION")
+            && (invoiceScopedPayment || connectPaymentIntent.metadata?.payment_scope !== undefined)
+          )
           || connectPaymentIntent.metadata?.facture_honoraires_id !== factureHonorairesId
           || (connectPaymentIntent.metadata?.facture_commission_id || "")
             !== sessionFactureCommissionId
@@ -935,8 +956,14 @@ export async function handleStripeWebhook(
                 currency: "eur",
                 destination: connectedAccountId,
                 source_transaction: chargeId,
-                transfer_group: `mission_${missionId}`,
-                metadata: { mission_id: missionId, soignant_id: soignantId || "" },
+                transfer_group: invoiceScopedPayment
+                  ? `facture_${factureHonorairesId}`
+                  : `mission_${missionId}`,
+                metadata: {
+                  mission_id: missionId,
+                  soignant_id: soignantId || "",
+                  facture_honoraires_id: factureHonorairesId || "",
+                },
               }, { idempotencyKey: `transfer_${session.id}` });
             const transferDestinationId = typeof transfer.destination === "string"
               ? transfer.destination
@@ -1010,6 +1037,7 @@ export async function handleStripeWebhook(
                 .from("paiements_soignant")
                 .insert({
                   mission_id: missionId,
+                  facture_honoraire_id: factureHonorairesId,
                   soignant_id: soignantId,
                   etablissement_id: missionRow?.etablissement_id,
                   montant_net: soignantCents / 100,
@@ -1028,20 +1056,23 @@ export async function handleStripeWebhook(
               }
             }
 
-            // Mark mission: soignant paid via Connect + commission included in same payment
+            // Le mode de paiement est mission-level, mais une semaine payée ne
+            // solde pas la mission entière. commission_facturee ne passe à true
+            // qu'avec la facture finale.
             const { data: missionUpdated, error: missionUpdateError } = await supabaseAdmin
               .from("missions")
               .update({
                 mode_paiement_soignant: "STRIPE_CONNECT",
-                commission_facturee: true,
+                commission_facturee: invoiceScopedPayment
+                  ? Boolean(validatedFactureHonoraires?.est_facture_finale_mission)
+                    || Boolean(validatedMission.commission_facturee)
+                  : true,
                 modifie_le: new Date().toISOString(),
               })
               .eq("id", missionId)
-              .eq("statut", "TERMINEE")
+              .in("statut", invoiceScopedPayment ? ["EN_COURS", "TERMINEE"] : ["TERMINEE"])
               .eq("type_contrat_applique", "LIBERAL")
               .eq("soignant_assigne_id", soignantId)
-              .eq("montant_commission_ttc", validatedMission.montant_commission_ttc)
-              .eq("net_a_payer", validatedMission.net_a_payer)
               .select("id")
               .maybeSingle();
             if (missionUpdateError || !missionUpdated) {
@@ -1060,9 +1091,9 @@ export async function handleStripeWebhook(
             // Idempotent : numero_facture déterministe FACT-STRIPE-YYYY-MM-DD-<mission8>
             // garantit unicité par mission ; ON CONFLICT numero_facture DO NOTHING
             // côté PostgreSQL via le check préalable.
-            const commissionTtc = Number(missionRow?.montant_commission_ttc || 0);
-            const commissionHt = Number(missionRow?.montant_commission_ht || 0);
-            const commissionTva = Number(missionRow?.montant_commission_tva || 0);
+            const commissionTtc = Number(validatedFactureCommission?.montant_ttc || 0);
+            const commissionHt = Number(validatedFactureCommission?.montant_ht || 0);
+            const commissionTva = Number(validatedFactureCommission?.montant_tva || 0);
             if (commissionTtc > 0 && missionRow?.etablissement_id) {
               const numeroFactureCommission = `FACT-STRIPE-${nowIso.split("T")[0]}-${missionId.split("-")[0]}`;
               if (validatedFactureCommission) {
@@ -1101,6 +1132,7 @@ export async function handleStripeWebhook(
                   .insert({
                     etablissement_id: missionRow.etablissement_id,
                     mission_id: missionId,
+                    facture_honoraire_id: factureHonorairesId,
                     numero_facture: numeroFactureCommission,
                     montant_ht: commissionHt,
                     montant_tva: commissionTva,

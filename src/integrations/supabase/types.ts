@@ -2893,6 +2893,7 @@ export type Database = {
           date_paiement: string | null
           est_secteur_public: boolean | null
           etablissement_id: string
+          facture_honoraire_id: string | null
           facture_precedente_id: string | null
           id: string
           mission_id: string | null
@@ -2932,6 +2933,7 @@ export type Database = {
           date_paiement?: string | null
           est_secteur_public?: boolean | null
           etablissement_id: string
+          facture_honoraire_id?: string | null
           facture_precedente_id?: string | null
           id?: string
           mission_id?: string | null
@@ -2971,6 +2973,7 @@ export type Database = {
           date_paiement?: string | null
           est_secteur_public?: boolean | null
           etablissement_id?: string
+          facture_honoraire_id?: string | null
           facture_precedente_id?: string | null
           id?: string
           mission_id?: string | null
@@ -3002,6 +3005,13 @@ export type Database = {
             columns: ["etablissement_id"]
             isOneToOne: false
             referencedRelation: "etablissements"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "factures_facture_honoraire_id_fkey"
+            columns: ["facture_honoraire_id"]
+            isOneToOne: false
+            referencedRelation: "factures_honoraires"
             referencedColumns: ["id"]
           },
           {
@@ -4986,6 +4996,7 @@ export type Database = {
           date_paiement: string | null
           echeance_le: string | null
           etablissement_id: string
+          facture_honoraire_id: string | null
           id: string
           methode: string
           mission_id: string
@@ -5009,6 +5020,7 @@ export type Database = {
           date_paiement?: string | null
           echeance_le?: string | null
           etablissement_id: string
+          facture_honoraire_id?: string | null
           id?: string
           methode: string
           mission_id: string
@@ -5032,6 +5044,7 @@ export type Database = {
           date_paiement?: string | null
           echeance_le?: string | null
           etablissement_id?: string
+          facture_honoraire_id?: string | null
           id?: string
           methode?: string
           mission_id?: string
@@ -5051,6 +5064,13 @@ export type Database = {
             columns: ["etablissement_id"]
             isOneToOne: false
             referencedRelation: "etablissements"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "paiements_soignant_facture_honoraire_id_fkey"
+            columns: ["facture_honoraire_id"]
+            isOneToOne: false
+            referencedRelation: "factures_honoraires"
             referencedColumns: ["id"]
           },
           {
@@ -7822,6 +7842,7 @@ export type Database = {
           dispute_statut: string | null
           erreur: string | null
           etablissement_id: string
+          facture_honoraire_id: string | null
           facture_id: string | null
           id: string
           mission_id: string
@@ -7848,6 +7869,7 @@ export type Database = {
           dispute_statut?: string | null
           erreur?: string | null
           etablissement_id: string
+          facture_honoraire_id?: string | null
           facture_id?: string | null
           id?: string
           mission_id: string
@@ -7874,6 +7896,7 @@ export type Database = {
           dispute_statut?: string | null
           erreur?: string | null
           etablissement_id?: string
+          facture_honoraire_id?: string | null
           facture_id?: string | null
           id?: string
           mission_id?: string
@@ -7897,6 +7920,13 @@ export type Database = {
             columns: ["etablissement_id"]
             isOneToOne: false
             referencedRelation: "etablissements"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "stripe_transfers_facture_honoraire_id_fkey"
+            columns: ["facture_honoraire_id"]
+            isOneToOne: false
+            referencedRelation: "factures_honoraires"
             referencedColumns: ["id"]
           },
           {
@@ -8976,6 +9006,17 @@ export type Database = {
           p_justificatif_cle?: string
           p_mission_id: string
           p_montant_honoraires: number
+        }
+        Returns: Json
+      }
+      fn_declarer_paiement_facture_soignant: {
+        Args: {
+          p_attestation_sur_l_honneur?: boolean
+          p_date_paiement?: string
+          p_facture_honoraire_id: string
+          p_methode?: string
+          p_montant: number
+          p_reference?: string
         }
         Returns: Json
       }
