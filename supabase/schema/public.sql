@@ -1058,40 +1058,73 @@ CREATE OR REPLACE FUNCTION "public"."dec_calculer_duree_presence"() RETURNS "tri
     SET "search_path" TO 'public'
     AS $$
 DECLARE
-    v_debut_mission TIMESTAMPTZ;
-    v_fin_mission TIMESTAMPTZ;
-    v_total_pauses NUMERIC;
+  v_debut_mission timestamptz;
+  v_fin_mission timestamptz;
+  v_total_pauses numeric := 0;
+  v_effectif_minutes numeric;
+  v_effectif_premier timestamptz;
+  v_effectif_dernier timestamptz;
+  v_effectif_count integer := 0;
 BEGIN
-    IF NEW.pointage_depart_le IS NOT NULL AND NEW.pointage_arrivee_le IS NOT NULL THEN
-        -- Durée brute
-        NEW.duree_brute_min := ROUND(EXTRACT(EPOCH FROM (NEW.pointage_depart_le - NEW.pointage_arrivee_le)) / 60, 2);
-        
-        -- Total pauses depuis la table pauses_presence
-        SELECT COALESCE(SUM(
-            CASE WHEN fin_le IS NOT NULL THEN EXTRACT(EPOCH FROM (fin_le - debut_le)) / 60
-            ELSE 0 END
-        ), 0) INTO v_total_pauses FROM pauses_presence WHERE presence_id = NEW.id;
-        
-        NEW.duree_pause_min := ROUND(v_total_pauses, 2);
-        NEW.duree_nette_min := GREATEST(0, NEW.duree_brute_min - NEW.duree_pause_min);
-        NEW.heures_reelles := ROUND(NEW.duree_nette_min / 60, 2);
+  IF NEW.pointage_depart_le IS NOT NULL AND NEW.pointage_arrivee_le IS NOT NULL THEN
+    SELECT
+      count(*),
+      COALESCE(sum(EXTRACT(EPOCH FROM (mc.fin - mc.debut)) / 60.0)
+        FILTER (WHERE mc.fin IS NOT NULL AND NOT mc.est_pause), 0),
+      min(mc.debut) FILTER (WHERE NOT mc.est_pause),
+      max(mc.fin) FILTER (WHERE mc.fin IS NOT NULL AND NOT mc.est_pause)
+    INTO v_effectif_count, v_effectif_minutes, v_effectif_premier, v_effectif_dernier
+    FROM public.mission_creneaux mc
+    WHERE mc.mission_id = NEW.mission_id
+      AND mc.type_creneau = 'EFFECTIF';
 
-        -- Retard / départ anticipé
-        SELECT debut_le, fin_le INTO v_debut_mission, v_fin_mission FROM missions WHERE id = NEW.mission_id;
-        
-        IF v_debut_mission IS NOT NULL AND NEW.pointage_arrivee_le > v_debut_mission THEN
-            NEW.retard_min := ROUND(EXTRACT(EPOCH FROM (NEW.pointage_arrivee_le - v_debut_mission)) / 60, 2);
-        ELSE
-            NEW.retard_min := 0;
-        END IF;
-        
-        IF v_fin_mission IS NOT NULL AND NEW.pointage_depart_le < v_fin_mission THEN
-            NEW.depart_anticipe_min := ROUND(EXTRACT(EPOCH FROM (v_fin_mission - NEW.pointage_depart_le)) / 60, 2);
-        ELSE
-            NEW.depart_anticipe_min := 0;
-        END IF;
+    IF v_effectif_count > 0 THEN
+      NEW.duree_brute_min := round(
+        EXTRACT(EPOCH FROM (COALESCE(v_effectif_dernier, NEW.pointage_depart_le)
+          - COALESCE(v_effectif_premier, NEW.pointage_arrivee_le))) / 60.0,
+        2
+      );
+      NEW.duree_nette_min := round(GREATEST(v_effectif_minutes, 0), 2);
+      NEW.duree_pause_min := round(
+        GREATEST(NEW.duree_brute_min - NEW.duree_nette_min, 0),
+        2
+      );
+      NEW.heures_reelles := round(NEW.duree_nette_min / 60.0, 2);
+    ELSE
+      NEW.duree_brute_min := round(
+        EXTRACT(EPOCH FROM (NEW.pointage_depart_le - NEW.pointage_arrivee_le)) / 60.0,
+        2
+      );
+      SELECT COALESCE(sum(
+        CASE WHEN pp.fin_le IS NOT NULL
+          THEN EXTRACT(EPOCH FROM (pp.fin_le - pp.debut_le)) / 60.0
+          ELSE 0 END
+      ), 0)
+      INTO v_total_pauses
+      FROM public.pauses_presence pp
+      WHERE pp.presence_id = NEW.id;
+      NEW.duree_pause_min := round(v_total_pauses, 2);
+      NEW.duree_nette_min := GREATEST(0, NEW.duree_brute_min - NEW.duree_pause_min);
+      NEW.heures_reelles := round(NEW.duree_nette_min / 60.0, 2);
     END IF;
-    RETURN NEW;
+
+    SELECT m.debut_le, m.fin_le
+    INTO v_debut_mission, v_fin_mission
+    FROM public.missions m
+    WHERE m.id = NEW.mission_id;
+
+    NEW.retard_min := CASE
+      WHEN v_debut_mission IS NOT NULL AND NEW.pointage_arrivee_le > v_debut_mission
+        THEN round(EXTRACT(EPOCH FROM (NEW.pointage_arrivee_le - v_debut_mission)) / 60.0, 2)
+      ELSE 0
+    END;
+    NEW.depart_anticipe_min := CASE
+      WHEN v_fin_mission IS NOT NULL AND NEW.pointage_depart_le < v_fin_mission
+        THEN round(EXTRACT(EPOCH FROM (v_fin_mission - NEW.pointage_depart_le)) / 60.0, 2)
+      ELSE 0
+    END;
+  END IF;
+  RETURN NEW;
 END;
 $$;
 
@@ -13645,10 +13678,13 @@ ALTER FUNCTION "public"."fn_anonymiser_gps_anciennes"() OWNER TO "postgres";
 
 CREATE OR REPLACE FUNCTION "public"."fn_anti_seed_facture_honoraire"() RETURNS "trigger"
     LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO 'public'
+    SET "search_path" TO 'public', 'pg_temp'
     AS $$
 DECLARE
   v_mission_net numeric;
+  v_strategie public.strategie_facturation;
+  v_montant_attendu numeric;
+  v_calcul_periode jsonb;
   v_ecart numeric;
   v_ctx text;
   v_admin_reason text;
@@ -13660,40 +13696,75 @@ BEGIN
 
   v_admin_reason := NULLIF(current_setting('jolene.admin_seed_override_reason', true), '');
   IF v_admin_reason IS NOT NULL THEN
-    INSERT INTO journaux_audit
-      (acteur_id, type_acteur, action, type_ressource, id_ressource, details)
-    VALUES (
+    INSERT INTO public.journaux_audit (
+      acteur_id, type_acteur, action, type_ressource, id_ressource, details
+    ) VALUES (
       auth.uid(), 'ADMIN_PLATEFORME', 'OVERRIDE_ANTI_SEED',
       'factures_honoraires', NEW.id,
-      jsonb_build_object('reason', v_admin_reason, 'mission_id', NEW.mission_id,
-        'montant_ht', NEW.montant_ht, 'numero_facture', NEW.numero_facture)
+      jsonb_build_object(
+        'reason', v_admin_reason,
+        'mission_id', NEW.mission_id,
+        'montant_ht', NEW.montant_ht,
+        'numero_facture', NEW.numero_facture
+      )
     );
     RETURN NEW;
   END IF;
 
   IF public.est_admin() THEN
-    INSERT INTO journaux_audit
-      (acteur_id, type_acteur, action, type_ressource, id_ressource, details)
-    VALUES (
+    INSERT INTO public.journaux_audit (
+      acteur_id, type_acteur, action, type_ressource, id_ressource, details
+    ) VALUES (
       auth.uid(), 'ADMIN_PLATEFORME', 'OVERRIDE_ANTI_SEED',
       'factures_honoraires', NEW.id,
-      jsonb_build_object('reason', 'admin_context (résolution litige / ajustement financier)',
-        'mission_id', NEW.mission_id, 'montant_ht', NEW.montant_ht, 'numero_facture', NEW.numero_facture)
+      jsonb_build_object(
+        'reason', 'admin_context (résolution litige / ajustement financier)',
+        'mission_id', NEW.mission_id,
+        'montant_ht', NEW.montant_ht,
+        'numero_facture', NEW.numero_facture
+      )
     );
     RETURN NEW;
   END IF;
 
-  SELECT net_a_payer INTO v_mission_net FROM missions WHERE id = NEW.mission_id;
+  SELECT m.net_a_payer, m.strategie_facturation
+  INTO v_mission_net, v_strategie
+  FROM public.missions m
+  WHERE m.id = NEW.mission_id;
 
   IF v_mission_net IS NULL THEN
     RAISE EXCEPTION 'anti-seed facture: mission % sans snapshot financier (net_a_payer=NULL). Utilisez generate-invoice ou définissez jolene.admin_seed_override_reason.',
       NEW.mission_id USING ERRCODE = 'check_violation';
   END IF;
 
-  v_ecart := ABS(COALESCE(NEW.montant_ht, 0) - v_mission_net);
+  IF v_strategie = 'HEBDO_ET_FINALE'
+     AND NEW.periode_debut IS NOT NULL
+     AND NEW.periode_fin IS NOT NULL THEN
+    v_calcul_periode := public.fn_calculer_montant_periode(
+      NEW.mission_id,
+      NEW.periode_debut,
+      NEW.periode_fin
+    );
+    v_montant_attendu := NULLIF(v_calcul_periode->>'montant_ht_periode', '')::numeric;
+  ELSE
+    v_montant_attendu := v_mission_net;
+  END IF;
+
+  IF v_montant_attendu IS NULL THEN
+    RAISE EXCEPTION 'anti-seed facture: montant attendu indéterminable pour mission % et période %–%.',
+      NEW.mission_id, NEW.periode_debut, NEW.periode_fin
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  v_ecart := abs(COALESCE(NEW.montant_ht, 0) - v_montant_attendu);
   IF v_ecart > 0.50 THEN
-    RAISE EXCEPTION 'anti-seed facture: montant_ht % incoherent avec mission.net_a_payer % (ecart=%€ > 0.50€). Utilisez generate-invoice ou jolene.admin_seed_override_reason.',
-      NEW.montant_ht, v_mission_net, v_ecart USING ERRCODE = 'check_violation';
+    RAISE EXCEPTION 'anti-seed facture: montant_ht % incohérent avec le montant attendu % pour la période %–% (écart=%€ > 0.50€).',
+      NEW.montant_ht,
+      v_montant_attendu,
+      NEW.periode_debut,
+      NEW.periode_fin,
+      v_ecart
+      USING ERRCODE = 'check_violation';
   END IF;
 
   RETURN NEW;
@@ -18592,45 +18663,57 @@ ALTER FUNCTION "public"."fn_confirmer_honoraires_retrocession"("p_mission_id" "u
 
 CREATE OR REPLACE FUNCTION "public"."fn_confirmer_paiement_soignant"("p_paiement_id" "uuid") RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO 'public'
+    SET "search_path" TO 'public', 'pg_temp'
     AS $$
 DECLARE
-    v_uid UUID := auth.uid();
-    v_paiement RECORD;
+  v_uid uuid := auth.uid();
+  v_paiement public.paiements_soignant%ROWTYPE;
 BEGIN
-    IF v_uid IS NULL THEN
-        RETURN jsonb_build_object('error', 'Non authentifié');
-    END IF;
+  IF v_uid IS NULL THEN
+    RETURN jsonb_build_object('error', 'Non authentifié');
+  END IF;
 
-    SELECT * INTO v_paiement FROM paiements_soignant WHERE id = p_paiement_id;
-    IF v_paiement IS NULL THEN
-        RETURN jsonb_build_object('error', 'Paiement introuvable');
-    END IF;
+  SELECT * INTO v_paiement
+  FROM public.paiements_soignant
+  WHERE id = p_paiement_id
+  FOR UPDATE;
+  IF v_paiement.id IS NULL THEN
+    RETURN jsonb_build_object('error', 'Paiement introuvable');
+  END IF;
+  IF v_paiement.soignant_id <> v_uid THEN
+    RETURN jsonb_build_object('error', 'Accès refusé');
+  END IF;
+  IF v_paiement.confirme_par_soignant THEN
+    RETURN jsonb_build_object('error', 'Paiement déjà confirmé');
+  END IF;
+  IF v_paiement.statut NOT IN ('DECLARE', 'EN_ATTENTE') THEN
+    RETURN jsonb_build_object(
+      'error',
+      'Ce paiement ne peut plus être confirmé (statut: ' || v_paiement.statut || ')'
+    );
+  END IF;
 
-    -- Seul le soignant destinataire peut confirmer
-    IF v_paiement.soignant_id != v_uid THEN
-        RETURN jsonb_build_object('error', 'Accès refusé');
-    END IF;
+  UPDATE public.paiements_soignant
+  SET statut = 'CONFIRME',
+      confirme_par_soignant = true,
+      confirme_par_soignant_le = now(),
+      modifie_le = now()
+  WHERE id = p_paiement_id;
 
-    -- Ne pas reconfirmer si déjà confirmé
-    IF v_paiement.confirme_par_soignant = TRUE THEN
-        RETURN jsonb_build_object('error', 'Paiement déjà confirmé');
-    END IF;
+  IF v_paiement.facture_honoraire_id IS NOT NULL THEN
+    UPDATE public.factures_honoraires
+    SET statut = 'PAYEE',
+        date_paiement = COALESCE(v_paiement.date_paiement, CURRENT_DATE),
+        modifie_le = now()
+    WHERE id = v_paiement.facture_honoraire_id
+      AND statut IN ('EMISE', 'EN_RETARD');
+  END IF;
 
-    -- Ne pas confirmer un paiement annulé ou contesté
-    IF v_paiement.statut NOT IN ('DECLARE', 'EN_ATTENTE') THEN
-        RETURN jsonb_build_object('error', 'Ce paiement ne peut plus être confirmé (statut: ' || v_paiement.statut || ')');
-    END IF;
-
-    UPDATE paiements_soignant
-    SET
-        statut = 'CONFIRME',
-        confirme_par_soignant = TRUE,
-        confirme_par_soignant_le = NOW(),
-        modifie_le = NOW()
-    WHERE id = p_paiement_id;
-
-    RETURN jsonb_build_object('success', true, 'confirme_le', NOW());
+  RETURN jsonb_build_object(
+    'success', true,
+    'confirme_le', now(),
+    'facture_honoraires_id', v_paiement.facture_honoraire_id
+  );
 END;
 $$;
 
@@ -21521,6 +21604,178 @@ $$;
 
 
 ALTER FUNCTION "public"."fn_declarer_honoraires_retrocession"("p_mission_id" "uuid", "p_montant_honoraires" numeric, "p_justificatif_cle" "text") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."fn_declarer_paiement_facture_soignant"("p_facture_honoraire_id" "uuid", "p_montant" numeric, "p_methode" "text" DEFAULT NULL::"text", "p_reference" "text" DEFAULT NULL::"text", "p_date_paiement" "date" DEFAULT CURRENT_DATE, "p_attestation_sur_l_honneur" boolean DEFAULT false) RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public', 'pg_temp'
+    AS $$
+DECLARE
+  v_fh public.factures_honoraires%ROWTYPE;
+  v_mission public.missions%ROWTYPE;
+  v_soignant public.soignants%ROWTYPE;
+  v_etab public.etablissements%ROWTYPE;
+  v_etab_id uuid := public.mon_etablissement_id();
+  v_methode text;
+  v_ref text;
+  v_echeance date;
+  v_paiement_id uuid;
+BEGIN
+  IF NOT p_attestation_sur_l_honneur THEN
+    RETURN jsonb_build_object(
+      'error', 'ATTESTATION_REQUISE',
+      'message', 'L''attestation sur l''honneur est obligatoire pour déclarer un paiement soignant.'
+    );
+  END IF;
+
+  SELECT * INTO v_fh
+  FROM public.factures_honoraires
+  WHERE id = p_facture_honoraire_id
+  FOR UPDATE;
+  IF v_fh.id IS NULL OR v_fh.type_document <> 'FACTURE' THEN
+    RETURN jsonb_build_object('error', 'Facture d''honoraires introuvable');
+  END IF;
+
+  SELECT * INTO v_mission
+  FROM public.missions
+  WHERE id = v_fh.mission_id
+  FOR UPDATE;
+  IF v_mission.id IS NULL
+     OR v_fh.etablissement_id <> v_mission.etablissement_id
+     OR v_fh.soignant_id <> v_mission.soignant_assigne_id THEN
+    RETURN jsonb_build_object('error', 'Facture et mission incohérentes');
+  END IF;
+
+  IF v_etab_id IS NULL
+     OR v_etab_id <> v_mission.etablissement_id
+     OR public.fn_a_permission_etablissement('paiement', v_etab_id) IS NOT TRUE THEN
+    RETURN jsonb_build_object('error', 'Accès refusé');
+  END IF;
+
+  IF v_mission.type_contrat_applique <> 'LIBERAL' THEN
+    RETURN jsonb_build_object(
+      'error', 'CONTRAT_INCOMPATIBLE',
+      'message', 'Le paiement par facture est réservé aux missions libérales.'
+    );
+  END IF;
+  IF v_fh.statut NOT IN ('EMISE', 'EN_RETARD') THEN
+    RETURN jsonb_build_object('error', 'Cette facture n''est plus payable');
+  END IF;
+  IF v_mission.statut NOT IN ('EN_COURS', 'TERMINEE')
+     OR (
+       v_mission.statut = 'EN_COURS'
+       AND (
+         v_mission.strategie_facturation <> 'HEBDO_ET_FINALE'
+         OR v_fh.est_facture_finale_mission
+         OR v_fh.periode_fin >= CURRENT_DATE
+       )
+     ) THEN
+    RETURN jsonb_build_object(
+      'error', 'PERIODE_NON_PAYABLE',
+      'message', 'Seule une période hebdomadaire close ou une mission terminée peut être payée.'
+    );
+  END IF;
+
+  IF EXISTS (
+    SELECT 1 FROM public.paiements_soignant p
+    WHERE p.facture_honoraire_id = v_fh.id
+      AND p.statut IN ('DECLARE', 'CONFIRME', 'RESOLU')
+  ) OR EXISTS (
+    SELECT 1 FROM public.stripe_transfers st
+    WHERE st.facture_honoraire_id = v_fh.id
+      AND st.statut IN ('CHARGE_REUSSI', 'TRANSFERE', 'PAYE')
+  ) THEN
+    RETURN jsonb_build_object('error', 'Paiement déjà déclaré pour cette période');
+  END IF;
+
+  IF p_montant IS NULL OR p_montant <= 0 THEN
+    RETURN jsonb_build_object('error', 'Le montant doit être supérieur à 0.');
+  END IF;
+  IF abs(round(p_montant, 2) - round(v_fh.montant_ttc, 2)) > 0.01 THEN
+    RETURN jsonb_build_object(
+      'error', 'MONTANT_FACTURE_INCOHERENT',
+      'message', 'Le montant déclaré doit correspondre au montant exact de la facture (' || v_fh.montant_ttc || ' €).'
+    );
+  END IF;
+  IF p_date_paiement > CURRENT_DATE THEN
+    RETURN jsonb_build_object('error', 'La date de paiement ne peut pas être dans le futur.');
+  END IF;
+
+  IF p_methode IS NOT NULL
+     AND p_methode NOT IN ('VIREMENT', 'CHEQUE', 'NOTE_HONORAIRES') THEN
+    RETURN jsonb_build_object(
+      'error', 'METHODE_INVALIDE',
+      'message', 'Pour une note d''honoraires, utilisez VIREMENT, CHEQUE ou NOTE_HONORAIRES.'
+    );
+  END IF;
+  v_methode := COALESCE(p_methode, 'NOTE_HONORAIRES');
+  v_ref := btrim(COALESCE(p_reference, ''));
+  IF length(v_ref) < 5 OR v_ref !~ '[0-9]' THEN
+    RETURN jsonb_build_object(
+      'error', 'REFERENCE_INVALIDE',
+      'message', 'La référence doit contenir au moins 5 caractères et un chiffre.'
+    );
+  END IF;
+
+  SELECT * INTO v_soignant FROM public.soignants WHERE id = v_fh.soignant_id;
+  SELECT * INTO v_etab FROM public.etablissements WHERE id = v_etab_id;
+  v_echeance := p_date_paiement + COALESCE(v_etab.delai_paiement_jours, 30);
+
+  INSERT INTO public.paiements_soignant (
+    mission_id, facture_honoraire_id, soignant_id, etablissement_id,
+    montant_net, methode, reference_virement, date_paiement, echeance_le,
+    statut, confirme_par_etablissement, confirme_par_etablissement_le
+  ) VALUES (
+    v_mission.id, v_fh.id, v_fh.soignant_id, v_etab_id,
+    round(p_montant, 2), v_methode, v_ref, p_date_paiement, v_echeance,
+    'DECLARE', true, now()
+  )
+  RETURNING id INTO v_paiement_id;
+
+  INSERT INTO public.notifications (
+    destinataire_id, type, titre, corps, lien, type_destinataire
+  ) VALUES (
+    v_fh.soignant_id,
+    'SYSTEM',
+    'Paiement hebdomadaire déclaré',
+    'Paiement de ' || round(p_montant, 2) || ' € déclaré pour la période du '
+      || to_char(v_fh.periode_debut, 'DD/MM/YYYY') || ' au '
+      || to_char(v_fh.periode_fin, 'DD/MM/YYYY') || ' de « '
+      || public.fn_html_escape(v_mission.intitule) || ' » (réf. ' || v_ref || ').',
+    '/soignant/mes-gains',
+    'SOIGNANT'
+  );
+
+  PERFORM public.fn_ecrire_audit_safe(
+    auth.uid(), 'ETABLISSEMENT', 'PAIEMENT_SOIGNANT_DECLARE_ETAB',
+    'factures_honoraires', v_fh.id, NULL,
+    jsonb_build_object(
+      'mission_id', v_mission.id,
+      'facture_honoraire_id', v_fh.id,
+      'periode_debut', v_fh.periode_debut,
+      'periode_fin', v_fh.periode_fin,
+      'montant_net', round(p_montant, 2),
+      'methode', v_methode,
+      'reference_virement', v_ref,
+      'date_paiement', p_date_paiement,
+      'attestation_sur_l_honneur', true
+    ),
+    NULL, NULL
+  );
+
+  RETURN jsonb_build_object(
+    'success', true,
+    'paiement_id', v_paiement_id,
+    'facture_honoraires_id', v_fh.id,
+    'soignant_id', v_fh.soignant_id,
+    'mission_intitule', v_mission.intitule,
+    'echeance', v_echeance
+  );
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_declarer_paiement_facture_soignant"("p_facture_honoraire_id" "uuid", "p_montant" numeric, "p_methode" "text", "p_reference" "text", "p_date_paiement" "date", "p_attestation_sur_l_honneur" boolean) OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."fn_declarer_paiement_soignant"("p_mission_id" "uuid", "p_montant" numeric, "p_methode" "text" DEFAULT NULL::"text", "p_reference" "text" DEFAULT NULL::"text", "p_date_paiement" "date" DEFAULT CURRENT_DATE, "p_attestation_sur_l_honneur" boolean DEFAULT false) RETURNS "jsonb"
@@ -35263,129 +35518,202 @@ CREATE OR REPLACE FUNCTION "public"."fn_obligations_financieres"() RETURNS "json
     SET "search_path" TO 'public'
     AS $$
 DECLARE
-    v_etab_id UUID := mon_etablissement_id();
-    v_total_soignants_du NUMERIC;
-    v_total_commissions_du NUMERIC;
+  v_etab_id uuid := mon_etablissement_id();
+  v_total_soignants_du numeric := 0;
+  v_total_commissions_du numeric := 0;
+  v_lignes jsonb := '[]'::jsonb;
 BEGIN
-    IF v_etab_id IS NULL THEN RETURN jsonb_build_object('error', 'Etablissement introuvable'); END IF;
+  IF v_etab_id IS NULL THEN
+    RETURN jsonb_build_object('error', 'Etablissement introuvable');
+  END IF;
 
-    v_total_soignants_du := COALESCE((
-        SELECT SUM(m.net_a_payer) FROM missions m
-        WHERE m.etablissement_id = v_etab_id AND m.statut = 'TERMINEE' AND m.soignant_assigne_id IS NOT NULL
-        AND NOT EXISTS (SELECT 1 FROM paiements_soignant p WHERE p.mission_id = m.id AND p.statut IN ('DECLARE','CONFIRME','RESOLU'))
-        AND NOT EXISTS (SELECT 1 FROM stripe_transfers st WHERE st.mission_id = m.id AND st.statut IN ('TRANSFERE','CHARGE_REUSSI','PAYE'))
-    ), 0);
+  WITH obligations AS (
+    SELECT
+      ('facture:' || fh.id::text) AS payment_key,
+      m.id::text AS mission_id,
+      fh.id::text AS facture_honoraires_id,
+      m.intitule,
+      m.debut_le,
+      m.fin_le,
+      fh.periode_debut,
+      fh.periode_fin,
+      fh.est_facture_finale_mission,
+      fh.montant_ttc AS total_brut,
+      fh.montant_ttc AS net_a_payer,
+      COALESCE(fc.montant_ttc, 0) AS montant_commission_ttc,
+      m.soignant_assigne_id::text AS soignant_id,
+      GREATEST(0, EXTRACT(EPOCH FROM (
+        LEAST(m.fin_le, (fh.periode_fin + 1)::timestamptz)
+        - GREATEST(m.debut_le, fh.periode_debut::timestamptz)
+      )) / 3600) AS heures,
+      (CURRENT_DATE - fh.periode_fin)::integer AS jours_depuis_fin,
+      COALESCE(s.prenom, '') || ' ' || COALESCE(s.nom, '') AS soignant_nom,
+      s.profession::text AS soignant_profession,
+      s.type_exercice AS soignant_type_exercice,
+      m.type_contrat_applique::text AS type_contrat_applique,
+      m.type_paiement_soignant AS type_paiement_soignant,
+      COALESCE(m.mode_paiement_soignant, 'STRIPE_CONNECT') AS mode_paiement_soignant,
+      (s.stripe_account_id IS NOT NULL AND EXISTS (
+        SELECT 1 FROM public.stripe_connect_onboarding sco
+        WHERE sco.soignant_id = s.id
+          AND sco.charges_enabled = true
+          AND sco.payouts_enabled = true
+      )) AS soignant_stripe_connect,
+      EXISTS (
+        SELECT 1 FROM public.paiements_soignant p
+        WHERE p.mission_id = m.id AND p.statut = 'CONTESTE'
+      ) AS a_paiement_conteste,
+      (
+        SELECT p.id::text FROM public.paiements_soignant p
+        WHERE p.mission_id = m.id AND p.statut = 'CONTESTE'
+        ORDER BY p.cree_le DESC LIMIT 1
+      ) AS paiement_conteste_id,
+      fh.periode_fin::timestamptz AS ordre_fin
+    FROM public.factures_honoraires fh
+    JOIN public.missions m ON m.id = fh.mission_id
+    JOIN public.soignants s ON s.id = fh.soignant_id
+    LEFT JOIN public.factures fc
+      ON fc.facture_honoraire_id = fh.id
+     AND fc.type_document = 'FACTURE'
+     AND fc.statut NOT IN ('ANNULEE', 'REMPLACEE', 'ERREUR_GENERATION')
+    WHERE fh.etablissement_id = v_etab_id
+      AND fh.type_document = 'FACTURE'
+      AND fh.statut IN ('EMISE', 'EN_RETARD')
+      AND m.type_contrat_applique = 'LIBERAL'
+      AND m.statut IN ('EN_COURS', 'TERMINEE')
+      AND (m.statut = 'TERMINEE' OR (NOT fh.est_facture_finale_mission AND fh.periode_fin < CURRENT_DATE))
+      AND NOT EXISTS (
+        SELECT 1 FROM public.paiements_soignant p
+        WHERE p.facture_honoraire_id = fh.id
+          AND p.statut IN ('DECLARE', 'CONFIRME', 'RESOLU')
+      )
+      AND NOT EXISTS (
+        SELECT 1 FROM public.stripe_transfers st
+        WHERE st.facture_honoraire_id = fh.id
+          AND st.statut IN ('TRANSFERE', 'CHARGE_REUSSI', 'PAYE')
+      )
 
-    v_total_commissions_du := COALESCE((
-        SELECT SUM(montant_ttc) FROM factures WHERE etablissement_id = v_etab_id AND statut IN ('EMISE', 'EN_RETARD')
-    ), 0);
+    UNION ALL
 
-    RETURN jsonb_build_object(
-        'total_du', v_total_soignants_du + v_total_commissions_du,
-        'total_soignants_du', v_total_soignants_du,
-        'total_commissions_du', v_total_commissions_du,
-        'nb_missions_non_payees', (SELECT COUNT(*) FROM missions m WHERE m.etablissement_id = v_etab_id AND m.statut = 'TERMINEE' AND m.soignant_assigne_id IS NOT NULL
-            AND NOT EXISTS (SELECT 1 FROM paiements_soignant p WHERE p.mission_id = m.id AND p.statut IN ('DECLARE','CONFIRME','RESOLU'))
-            AND NOT EXISTS (SELECT 1 FROM stripe_transfers st WHERE st.mission_id = m.id AND st.statut IN ('TRANSFERE','CHARGE_REUSSI','PAYE'))),
-        'nb_paiements_en_attente', (SELECT COUNT(*) FROM paiements_soignant WHERE etablissement_id = v_etab_id AND statut = 'DECLARE'),
-        'nb_factures_impayees', (SELECT COUNT(*) FROM factures WHERE etablissement_id = v_etab_id AND statut IN ('EMISE', 'EN_RETARD')),
-        'nb_factures_commission_historique', (SELECT COUNT(*) FROM factures WHERE etablissement_id = v_etab_id AND statut IN ('PAYEE', 'ANNULEE')),
-        'missions_non_payees', COALESCE((
-            SELECT jsonb_agg(row_to_json(x)) FROM (
-                SELECT m.id::TEXT AS mission_id, m.intitule, m.debut_le, m.fin_le,
-                    m.total_brut, m.net_a_payer, m.montant_commission_ttc,
-                    m.soignant_assigne_id::TEXT AS soignant_id,
-                    EXTRACT(EPOCH FROM (m.fin_le - m.debut_le))/3600 AS heures,
-                    EXTRACT(DAY FROM NOW() - m.fin_le)::INT AS jours_depuis_fin,
-                    COALESCE(s.prenom, '') || ' ' || COALESCE(s.nom, '') AS soignant_nom,
-                    s.profession::TEXT AS soignant_profession,
-                    s.type_exercice AS soignant_type_exercice,
-                    m.type_contrat_applique::TEXT AS type_contrat_applique,
-                    m.type_paiement_soignant AS type_paiement_soignant,
-                    m.mode_paiement_soignant AS mode_paiement_soignant,
-                    (s.stripe_account_id IS NOT NULL AND EXISTS(
-                        SELECT 1 FROM stripe_connect_onboarding sco
-                        WHERE sco.soignant_id = s.id AND sco.charges_enabled = TRUE AND sco.payouts_enabled = TRUE
-                    )) AS soignant_stripe_connect,
-                    EXISTS (SELECT 1 FROM paiements_soignant p WHERE p.mission_id = m.id AND p.statut = 'CONTESTE') AS a_paiement_conteste,
-                    (SELECT p.id::TEXT FROM paiements_soignant p WHERE p.mission_id = m.id AND p.statut = 'CONTESTE' ORDER BY p.cree_le DESC LIMIT 1) AS paiement_conteste_id
-                FROM missions m
-                JOIN soignants s ON s.id = m.soignant_assigne_id
-                WHERE m.etablissement_id = v_etab_id AND m.statut = 'TERMINEE' AND m.soignant_assigne_id IS NOT NULL
-                AND NOT EXISTS (SELECT 1 FROM paiements_soignant p WHERE p.mission_id = m.id AND p.statut IN ('DECLARE','CONFIRME','RESOLU'))
-                AND NOT EXISTS (SELECT 1 FROM stripe_transfers st WHERE st.mission_id = m.id AND st.statut IN ('TRANSFERE','CHARGE_REUSSI','PAYE'))
-                ORDER BY m.fin_le ASC
-            ) x
-        ), '[]'::JSONB),
-        'paiements_soignants_en_attente', COALESCE((
-            SELECT jsonb_agg(row_to_json(x)) FROM (
-                SELECT p.id::TEXT AS paiement_id, p.mission_id::TEXT, p.montant_net, p.methode,
-                    p.reference_virement, p.date_paiement, p.statut,
-                    m.intitule AS mission_intitule,
-                    COALESCE(s.prenom, '') || ' ' || COALESCE(s.nom, '') AS soignant_nom,
-                    s.profession::TEXT AS soignant_profession,
-                    (SELECT fh.id::TEXT FROM factures_honoraires fh WHERE fh.mission_id = m.id ORDER BY fh.date_emission DESC LIMIT 1) AS facture_honoraires_id
-                FROM paiements_soignant p
-                JOIN missions m ON m.id = p.mission_id
-                JOIN soignants s ON s.id = p.soignant_id
-                WHERE p.etablissement_id = v_etab_id AND p.statut = 'DECLARE'
-                ORDER BY p.date_paiement DESC
-            ) x
-        ), '[]'::JSONB),
-        'paiements_soignants_confirmes', COALESCE((
-            SELECT jsonb_agg(row_to_json(x)) FROM (
-                SELECT p.id::TEXT AS paiement_id, p.mission_id::TEXT, p.montant_net, p.methode, p.reference_virement,
-                    p.date_paiement, p.confirme_par_soignant_le,
-                    m.intitule AS mission_intitule,
-                    COALESCE(s.prenom, '') || ' ' || COALESCE(s.nom, '') AS soignant_nom,
-                    (SELECT fh.id::TEXT FROM factures_honoraires fh WHERE fh.mission_id = m.id ORDER BY fh.date_emission DESC LIMIT 1) AS facture_honoraires_id
-                FROM paiements_soignant p
-                JOIN missions m ON m.id = p.mission_id
-                JOIN soignants s ON s.id = p.soignant_id
-                WHERE p.etablissement_id = v_etab_id AND p.statut = 'CONFIRME'
-                ORDER BY p.confirme_par_soignant_le DESC LIMIT 10
-            ) x
-        ), '[]'::JSONB),
-        'factures_impayees', COALESCE((
-            SELECT jsonb_agg(row_to_json(x)) FROM (
-                SELECT f.id::TEXT AS facture_id, f.numero_facture, f.montant_ht, f.montant_tva, f.montant_ttc,
-                    f.nombre_missions, f.date_echeance, f.statut,
-                    f.stripe_hosted_url,
-                    f.est_secteur_public,
-                    f.chorus_pro_statut,
-                    f.chorus_pro_numero_flux
-                FROM factures f
-                WHERE f.etablissement_id = v_etab_id AND f.statut IN ('EMISE', 'EN_RETARD', 'VIREMENT_DECLARE')
-                ORDER BY f.date_echeance ASC
-            ) x
-        ), '[]'::JSONB),
-        'factures_commission_historique', COALESCE((
-            SELECT jsonb_agg(row_to_json(x)) FROM (
-                SELECT f.id::TEXT AS facture_id, f.numero_facture, f.statut,
-                    f.montant_ttc, f.nombre_missions,
-                    f.date_emission, f.date_paiement,
-                    f.mode_paiement, f.virement_reference, f.stripe_payment_intent_id,
-                    f.mission_id::TEXT AS mission_id,
-                    f.est_secteur_public,
-                    f.chorus_pro_statut
-                FROM factures f
-                WHERE f.etablissement_id = v_etab_id
-                  AND f.statut IN ('PAYEE', 'ANNULEE')
-                ORDER BY f.date_paiement DESC NULLS LAST, f.date_emission DESC
-                LIMIT 10
-            ) x
-        ), '[]'::JSONB),
-        'missions_non_facturees', COALESCE((
-            SELECT jsonb_agg(row_to_json(x)) FROM (
-                SELECT m.id::TEXT AS mission_id, m.intitule, m.fin_le,
-                    m.montant_commission_ht, m.montant_commission_ttc
-                FROM missions m
-                WHERE m.etablissement_id = v_etab_id AND m.statut = 'TERMINEE' AND m.commission_facturee = FALSE
-                  AND NOT EXISTS (SELECT 1 FROM factures f WHERE f.mission_id = m.id)
-                ORDER BY m.fin_le DESC
-            ) x
-        ), '[]'::JSONB)
-    );
+    SELECT
+      ('mission:' || m.id::text), m.id::text, NULL::text, m.intitule,
+      m.debut_le, m.fin_le, m.debut_le::date, m.fin_le::date, true,
+      m.total_brut, m.net_a_payer, m.montant_commission_ttc,
+      m.soignant_assigne_id::text,
+      EXTRACT(EPOCH FROM (m.fin_le - m.debut_le)) / 3600,
+      EXTRACT(DAY FROM now() - m.fin_le)::integer,
+      COALESCE(s.prenom, '') || ' ' || COALESCE(s.nom, ''),
+      s.profession::text, s.type_exercice,
+      m.type_contrat_applique::text, m.type_paiement_soignant,
+      m.mode_paiement_soignant, false,
+      EXISTS (
+        SELECT 1 FROM public.paiements_soignant p
+        WHERE p.mission_id = m.id AND p.statut = 'CONTESTE'
+      ),
+      (
+        SELECT p.id::text FROM public.paiements_soignant p
+        WHERE p.mission_id = m.id AND p.statut = 'CONTESTE'
+        ORDER BY p.cree_le DESC LIMIT 1
+      ),
+      m.fin_le
+    FROM public.missions m
+    JOIN public.soignants s ON s.id = m.soignant_assigne_id
+    WHERE m.etablissement_id = v_etab_id
+      AND m.statut = 'TERMINEE'
+      AND m.type_contrat_applique = 'SALARIE'
+      AND NOT EXISTS (
+        SELECT 1 FROM public.paiements_soignant p
+        WHERE p.mission_id = m.id AND p.statut IN ('DECLARE', 'CONFIRME', 'RESOLU')
+      )
+  )
+  SELECT
+    COALESCE(sum(o.net_a_payer), 0),
+    COALESCE(jsonb_agg(to_jsonb(o) - 'ordre_fin' ORDER BY o.ordre_fin), '[]'::jsonb)
+  INTO v_total_soignants_du, v_lignes
+  FROM obligations o;
+
+  SELECT COALESCE(sum(f.montant_ttc), 0)
+  INTO v_total_commissions_du
+  FROM public.factures f
+  WHERE f.etablissement_id = v_etab_id
+    AND f.statut IN ('EMISE', 'EN_RETARD');
+
+  RETURN jsonb_build_object(
+    'total_du', v_total_soignants_du + v_total_commissions_du,
+    'total_soignants_du', v_total_soignants_du,
+    'total_commissions_du', v_total_commissions_du,
+    'nb_missions_non_payees', jsonb_array_length(v_lignes),
+    'nb_paiements_en_attente', (
+      SELECT count(*) FROM public.paiements_soignant
+      WHERE etablissement_id = v_etab_id AND statut = 'DECLARE'
+    ),
+    'nb_factures_impayees', (
+      SELECT count(*) FROM public.factures
+      WHERE etablissement_id = v_etab_id AND statut IN ('EMISE', 'EN_RETARD')
+    ),
+    'nb_factures_commission_historique', (
+      SELECT count(*) FROM public.factures
+      WHERE etablissement_id = v_etab_id AND statut IN ('PAYEE', 'ANNULEE')
+    ),
+    'missions_non_payees', v_lignes,
+    'paiements_soignants_en_attente', COALESCE((
+      SELECT jsonb_agg(row_to_json(x)) FROM (
+        SELECT p.id::text AS paiement_id, p.mission_id::text, p.montant_net,
+          p.methode, p.reference_virement, p.date_paiement, p.statut,
+          m.intitule AS mission_intitule,
+          COALESCE(s.prenom, '') || ' ' || COALESCE(s.nom, '') AS soignant_nom,
+          s.profession::text AS soignant_profession,
+          COALESCE(p.facture_honoraire_id::text, (
+            SELECT fh.id::text FROM public.factures_honoraires fh
+            WHERE fh.mission_id = m.id ORDER BY fh.date_emission DESC LIMIT 1
+          )) AS facture_honoraires_id
+        FROM public.paiements_soignant p
+        JOIN public.missions m ON m.id = p.mission_id
+        JOIN public.soignants s ON s.id = p.soignant_id
+        WHERE p.etablissement_id = v_etab_id AND p.statut = 'DECLARE'
+        ORDER BY p.date_paiement DESC
+      ) x
+    ), '[]'::jsonb),
+    'paiements_soignants_confirmes', COALESCE((
+      SELECT jsonb_agg(row_to_json(x)) FROM (
+        SELECT p.id::text AS paiement_id, p.mission_id::text, p.montant_net,
+          p.methode, p.reference_virement, p.date_paiement,
+          p.confirme_par_soignant_le, m.intitule AS mission_intitule,
+          COALESCE(s.prenom, '') || ' ' || COALESCE(s.nom, '') AS soignant_nom,
+          p.facture_honoraire_id::text AS facture_honoraires_id
+        FROM public.paiements_soignant p
+        JOIN public.missions m ON m.id = p.mission_id
+        JOIN public.soignants s ON s.id = p.soignant_id
+        WHERE p.etablissement_id = v_etab_id AND p.statut = 'CONFIRME'
+        ORDER BY p.confirme_par_soignant_le DESC LIMIT 10
+      ) x
+    ), '[]'::jsonb),
+    'factures_impayees', COALESCE((
+      SELECT jsonb_agg(row_to_json(x)) FROM (
+        SELECT f.id::text AS facture_id, f.numero_facture, f.montant_ht,
+          f.montant_tva, f.montant_ttc, f.nombre_missions, f.date_echeance,
+          f.statut, f.stripe_hosted_url, f.est_secteur_public,
+          f.chorus_pro_statut, f.chorus_pro_numero_flux
+        FROM public.factures f
+        WHERE f.etablissement_id = v_etab_id
+          AND f.statut IN ('EMISE', 'EN_RETARD', 'VIREMENT_DECLARE')
+        ORDER BY f.date_echeance
+      ) x
+    ), '[]'::jsonb),
+    'factures_commission_historique', COALESCE((
+      SELECT jsonb_agg(row_to_json(x)) FROM (
+        SELECT f.id::text AS facture_id, f.numero_facture, f.statut,
+          f.montant_ttc, f.nombre_missions, f.date_emission, f.date_paiement,
+          f.mode_paiement, f.virement_reference, f.stripe_payment_intent_id,
+          f.mission_id::text AS mission_id, f.facture_honoraire_id::text,
+          f.est_secteur_public, f.chorus_pro_statut
+        FROM public.factures f
+        WHERE f.etablissement_id = v_etab_id AND f.statut IN ('PAYEE', 'ANNULEE')
+        ORDER BY f.date_paiement DESC NULLS LAST, f.date_emission DESC LIMIT 10
+      ) x
+    ), '[]'::jsonb),
+    'missions_non_facturees', '[]'::jsonb
+  );
 END;
 $$;
 
@@ -37363,6 +37691,128 @@ $$;
 
 
 ALTER FUNCTION "public"."fn_pre_request_compte_actif"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."fn_preparer_facture_commission_periode"("p_facture_honoraire_id" "uuid") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public', 'pg_temp'
+    AS $$
+DECLARE
+  v_fh public.factures_honoraires%ROWTYPE;
+  v_mission public.missions%ROWTYPE;
+  v_etab public.etablissements%ROWTYPE;
+  v_existing public.factures%ROWTYPE;
+  v_total_precedent numeric := 0;
+  v_ttc numeric(10,2);
+  v_ht numeric(10,2);
+  v_tva numeric(10,2);
+  v_numero text;
+BEGIN
+  IF COALESCE(auth.jwt()->>'role', current_setting('request.jwt.claim.role', true), '') <> 'service_role' THEN
+    RAISE EXCEPTION 'Accès refusé' USING ERRCODE = '42501';
+  END IF;
+
+  SELECT * INTO v_fh
+  FROM public.factures_honoraires
+  WHERE id = p_facture_honoraire_id
+    AND type_document = 'FACTURE'
+    AND statut IN ('EMISE', 'EN_RETARD', 'PAYEE')
+  FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Facture d''honoraires introuvable ou non payable' USING ERRCODE = 'P0002';
+  END IF;
+
+  SELECT * INTO v_existing
+  FROM public.factures
+  WHERE facture_honoraire_id = v_fh.id
+    AND type_document = 'FACTURE'
+    AND statut NOT IN ('ANNULEE', 'REMPLACEE', 'ERREUR_GENERATION')
+  FOR UPDATE;
+  IF FOUND THEN
+    RETURN jsonb_build_object(
+      'success', true,
+      'facture_id', v_existing.id,
+      'numero_facture', v_existing.numero_facture,
+      'montant_ttc', v_existing.montant_ttc,
+      'existing', true
+    );
+  END IF;
+
+  SELECT * INTO v_mission FROM public.missions WHERE id = v_fh.mission_id FOR UPDATE;
+  SELECT * INTO v_etab FROM public.etablissements WHERE id = v_fh.etablissement_id;
+  IF NOT FOUND OR v_mission.id IS NULL OR v_etab.id IS NULL
+     OR v_mission.type_contrat_applique <> 'LIBERAL'
+     OR v_mission.soignant_assigne_id <> v_fh.soignant_id
+     OR v_mission.etablissement_id <> v_fh.etablissement_id
+     OR COALESCE(v_mission.net_a_payer, 0) <= 0
+     OR COALESCE(v_mission.montant_commission_ttc, 0) <= 0 THEN
+    RAISE EXCEPTION 'Mission incohérente pour la facture de commission' USING ERRCODE = '23514';
+  END IF;
+
+  SELECT COALESCE(sum(f.montant_ttc), 0)
+  INTO v_total_precedent
+  FROM public.factures f
+  WHERE f.mission_id = v_mission.id
+    AND f.facture_honoraire_id IS NOT NULL
+    AND f.type_document = 'FACTURE'
+    AND f.statut NOT IN ('ANNULEE', 'REMPLACEE', 'ERREUR_GENERATION');
+
+  IF v_fh.est_facture_finale_mission THEN
+    v_ttc := round(GREATEST(v_mission.montant_commission_ttc - v_total_precedent, 0), 2);
+  ELSE
+    v_ttc := round(
+      LEAST(
+        v_mission.montant_commission_ttc - v_total_precedent,
+        v_mission.montant_commission_ttc * v_fh.montant_ttc / v_mission.net_a_payer
+      ),
+      2
+    );
+  END IF;
+  IF v_ttc <= 0 THEN
+    RAISE EXCEPTION 'Commission de période nulle ou déjà intégralement facturée' USING ERRCODE = '23514';
+  END IF;
+
+  v_ht := round(v_ttc / 1.20, 2);
+  v_tva := v_ttc - v_ht;
+  v_numero := 'JOL-' || to_char(CURRENT_DATE, 'YYYY') || '-H-' || upper(left(replace(v_fh.id::text, '-', ''), 10));
+
+  INSERT INTO public.factures (
+    etablissement_id, mission_id, facture_honoraire_id, numero_facture,
+    periode_debut, periode_fin, montant_ht, taux_tva, montant_tva, montant_ttc,
+    nombre_missions, statut, date_emission, date_echeance,
+    est_secteur_public, mode_paiement, chorus_pro_statut, type_document
+  ) VALUES (
+    v_fh.etablissement_id, v_fh.mission_id, v_fh.id, v_numero,
+    v_fh.periode_debut, v_fh.periode_fin, v_ht, 20, v_tva, v_ttc,
+    1, 'EMISE', now(), CURRENT_DATE + 30,
+    COALESCE(v_etab.est_secteur_public, false),
+    CASE WHEN COALESCE(v_etab.est_secteur_public, false) THEN 'CHORUS_PRO' ELSE 'STRIPE' END,
+    CASE WHEN COALESCE(v_etab.est_secteur_public, false) THEN 'A_DEPOSER' ELSE 'NON_APPLICABLE' END,
+    'FACTURE'
+  )
+  RETURNING * INTO v_existing;
+
+  IF v_fh.est_facture_finale_mission THEN
+    UPDATE public.missions
+    SET commission_facturee = true,
+        facture_id = v_existing.id,
+        modifie_le = now()
+    WHERE id = v_mission.id;
+  END IF;
+
+  RETURN jsonb_build_object(
+    'success', true,
+    'facture_id', v_existing.id,
+    'numero_facture', v_existing.numero_facture,
+    'montant_ttc', v_existing.montant_ttc,
+    'est_secteur_public', v_existing.est_secteur_public,
+    'existing', false
+  );
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_preparer_facture_commission_periode"("p_facture_honoraire_id" "uuid") OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."fn_preparer_identite_document"("p_soignant_id" "uuid", "p_date_naissance" "date", "p_sexe" "text" DEFAULT NULL::"text", "p_lieu_naissance" "text" DEFAULT NULL::"text") RETURNS "jsonb"
@@ -44520,6 +44970,146 @@ $$;
 ALTER FUNCTION "public"."fn_stats_rh_etablissement"() OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."fn_stripe_connect_rapprocher_facture"("p_mission_id" "uuid", "p_soignant_id" "uuid", "p_etablissement_id" "uuid", "p_facture_honoraires_id" "uuid", "p_facture_commission_id" "uuid", "p_stripe_checkout_session_id" "text", "p_stripe_payment_intent_id" "text", "p_stripe_charge_id" "text", "p_stripe_transfer_id" "text", "p_montant_soignant_cts" integer, "p_montant_commission_cts" integer, "p_montant_total_cts" integer, "p_rapproche_le" timestamp with time zone DEFAULT "now"()) RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public', 'pg_temp'
+    AS $$
+DECLARE
+  v_mission public.missions%ROWTYPE;
+  v_fh public.factures_honoraires%ROWTYPE;
+  v_commission public.factures%ROWTYPE;
+  v_transfer public.stripe_transfers%ROWTYPE;
+BEGIN
+  IF COALESCE(auth.jwt()->>'role', current_setting('request.jwt.claim.role', true), '') <> 'service_role' THEN
+    RAISE EXCEPTION 'Accès refusé' USING ERRCODE = '42501';
+  END IF;
+  IF p_montant_soignant_cts <= 0
+     OR p_montant_commission_cts <= 0
+     OR p_montant_total_cts <> p_montant_soignant_cts + p_montant_commission_cts
+     OR NULLIF(p_stripe_checkout_session_id, '') IS NULL
+     OR NULLIF(p_stripe_payment_intent_id, '') IS NULL
+     OR NULLIF(p_stripe_charge_id, '') IS NULL
+     OR NULLIF(p_stripe_transfer_id, '') IS NULL THEN
+    RAISE EXCEPTION 'Paramètres de rapprochement invalides' USING ERRCODE = '22023';
+  END IF;
+
+  SELECT * INTO v_mission FROM public.missions WHERE id = p_mission_id FOR UPDATE;
+  SELECT * INTO v_fh FROM public.factures_honoraires WHERE id = p_facture_honoraires_id FOR UPDATE;
+  SELECT * INTO v_commission FROM public.factures WHERE id = p_facture_commission_id FOR UPDATE;
+  SELECT * INTO v_transfer
+  FROM public.stripe_transfers
+  WHERE mission_id = p_mission_id
+    AND facture_honoraire_id = p_facture_honoraires_id
+    AND stripe_checkout_session_id = p_stripe_checkout_session_id
+  FOR UPDATE;
+
+  IF v_mission.id IS NULL
+     OR v_mission.statut NOT IN ('EN_COURS', 'TERMINEE')
+     OR v_mission.type_contrat_applique <> 'LIBERAL'
+     OR v_mission.soignant_assigne_id <> p_soignant_id
+     OR v_mission.etablissement_id <> p_etablissement_id
+     OR v_fh.id IS NULL
+     OR v_fh.mission_id <> p_mission_id
+     OR v_fh.soignant_id <> p_soignant_id
+     OR v_fh.etablissement_id <> p_etablissement_id
+     OR v_fh.statut NOT IN ('EMISE', 'EN_RETARD', 'PAYEE')
+     OR round(v_fh.montant_ttc * 100)::integer <> p_montant_soignant_cts
+     OR v_commission.id IS NULL
+     OR v_commission.facture_honoraire_id <> v_fh.id
+     OR v_commission.mission_id <> p_mission_id
+     OR v_commission.etablissement_id <> p_etablissement_id
+     OR v_commission.statut NOT IN ('EMISE', 'EN_RETARD', 'PAYEE')
+     OR round(v_commission.montant_ttc * 100)::integer <> p_montant_commission_cts
+     OR v_transfer.id IS NULL
+     OR v_transfer.statut NOT IN ('TRANSFERE', 'CHARGE_REUSSI', 'PAYE')
+     OR v_transfer.stripe_payment_intent_id <> p_stripe_payment_intent_id
+     OR v_transfer.stripe_transfer_id <> p_stripe_transfer_id
+     OR (v_transfer.stripe_charge_id IS NOT NULL AND v_transfer.stripe_charge_id <> p_stripe_charge_id)
+     OR round(v_transfer.montant_soignant * 100)::integer <> p_montant_soignant_cts
+     OR round(v_transfer.montant_commission * 100)::integer <> p_montant_commission_cts
+     OR round(v_transfer.montant_total * 100)::integer <> p_montant_total_cts THEN
+    RAISE EXCEPTION 'Identité du rapprochement Connect incohérente' USING ERRCODE = '23514';
+  END IF;
+  IF v_mission.statut = 'EN_COURS'
+     AND (v_fh.est_facture_finale_mission OR v_fh.periode_fin >= CURRENT_DATE) THEN
+    RAISE EXCEPTION 'Période hebdomadaire non close' USING ERRCODE = '23514';
+  END IF;
+
+  UPDATE public.stripe_transfers
+  SET statut = 'TRANSFERE',
+      stripe_charge_id = p_stripe_charge_id,
+      transfere_le = COALESCE(transfere_le, p_rapproche_le),
+      erreur = NULL
+  WHERE id = v_transfer.id;
+
+  INSERT INTO public.paiements_soignant (
+    mission_id, facture_honoraire_id, soignant_id, etablissement_id,
+    montant_net, methode, reference_virement, date_paiement, statut,
+    confirme_par_etablissement, confirme_par_etablissement_le,
+    confirme_par_soignant, confirme_par_soignant_le, stripe_transfer_id
+  ) VALUES (
+    p_mission_id, v_fh.id, p_soignant_id, p_etablissement_id,
+    p_montant_soignant_cts::numeric / 100, 'NOTE_HONORAIRES',
+    'STRIPE-' || p_stripe_transfer_id, p_rapproche_le::date, 'CONFIRME',
+    true, p_rapproche_le, true, p_rapproche_le, p_stripe_transfer_id
+  )
+  ON CONFLICT (stripe_transfer_id) WHERE stripe_transfer_id IS NOT NULL
+  DO NOTHING;
+
+  UPDATE public.factures_honoraires
+  SET statut = 'PAYEE',
+      date_paiement = p_rapproche_le::date,
+      stripe_payment_intent_id = p_stripe_payment_intent_id,
+      modifie_le = now()
+  WHERE id = v_fh.id
+    AND (stripe_payment_intent_id IS NULL OR stripe_payment_intent_id = p_stripe_payment_intent_id);
+
+  UPDATE public.factures
+  SET statut = 'PAYEE',
+      date_paiement = p_rapproche_le,
+      stripe_payment_intent_id = p_stripe_payment_intent_id,
+      mode_paiement = 'STRIPE',
+      modifie_le = now()
+  WHERE id = v_commission.id
+    AND (stripe_payment_intent_id IS NULL OR stripe_payment_intent_id = p_stripe_payment_intent_id);
+
+  UPDATE public.missions
+  SET mode_paiement_soignant = 'STRIPE_CONNECT',
+      commission_facturee = commission_facturee OR v_fh.est_facture_finale_mission,
+      facture_id = CASE WHEN v_fh.est_facture_finale_mission THEN v_commission.id ELSE facture_id END,
+      modifie_le = now()
+  WHERE id = p_mission_id;
+
+  INSERT INTO public.journaux_audit (
+    acteur_id, type_acteur, action, type_ressource, id_ressource, details, navigateur_acteur
+  ) VALUES (
+    p_soignant_id, 'SYSTEME', 'FINANCE_TRANSFER_CONNECT', 'facture_honoraires', v_fh.id,
+    jsonb_build_object(
+      'mission_id', p_mission_id,
+      'stripe_transfer_id', p_stripe_transfer_id,
+      'stripe_charge_id', p_stripe_charge_id,
+      'stripe_payment_intent_id', p_stripe_payment_intent_id,
+      'stripe_session_id', p_stripe_checkout_session_id,
+      'facture_commission_id', v_commission.id,
+      'montant_cents', p_montant_soignant_cts,
+      'evenement', 'CONNECT_FACTURE_RAPPROCHEMENT_ATOMIQUE'
+    ),
+    'fn_stripe_connect_rapprocher_facture'
+  );
+
+  RETURN jsonb_build_object(
+    'success', true,
+    'stripe_transfer_id', p_stripe_transfer_id,
+    'facture_honoraires_id', v_fh.id,
+    'facture_commission_id', v_commission.id
+  );
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_stripe_connect_rapprocher_facture"("p_mission_id" "uuid", "p_soignant_id" "uuid", "p_etablissement_id" "uuid", "p_facture_honoraires_id" "uuid", "p_facture_commission_id" "uuid", "p_stripe_checkout_session_id" "text", "p_stripe_payment_intent_id" "text", "p_stripe_charge_id" "text", "p_stripe_transfer_id" "text", "p_montant_soignant_cts" integer, "p_montant_commission_cts" integer, "p_montant_total_cts" integer, "p_rapproche_le" timestamp with time zone) OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."fn_stripe_connect_rapprocher_local"("p_mission_id" "uuid", "p_soignant_id" "uuid", "p_etablissement_id" "uuid", "p_facture_honoraires_id" "uuid", "p_facture_commission_id" "uuid", "p_stripe_checkout_session_id" "text", "p_stripe_payment_intent_id" "text", "p_stripe_charge_id" "text", "p_stripe_transfer_id" "text", "p_montant_soignant_cts" integer, "p_montant_commission_cts" integer, "p_montant_total_cts" integer, "p_rapproche_le" timestamp with time zone DEFAULT "now"()) RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public', 'pg_temp'
@@ -45065,7 +45655,7 @@ BEGIN
   IF COALESCE(auth.jwt()->>'role', current_setting('request.jwt.claim.role', true), '') <> 'service_role' THEN
     RAISE EXCEPTION 'Accès refusé' USING ERRCODE = '42501';
   END IF;
-  IF p_flow NOT IN ('CHECKOUT_INVOICE', 'SEPA_INVOICE', 'CONNECT_MISSION')
+  IF p_flow NOT IN ('CHECKOUT_INVOICE', 'SEPA_INVOICE', 'CONNECT_MISSION', 'CONNECT_INVOICE')
      OR NULLIF(btrim(p_owner_token), '') IS NULL
      OR ((p_facture_id IS NULL) = (p_mission_id IS NULL)) THEN
     RAISE EXCEPTION 'Paramètres de claim Stripe invalides' USING ERRCODE = '22023';
@@ -45074,23 +45664,29 @@ BEGIN
   IF p_facture_id IS NOT NULL THEN
     IF NOT EXISTS (
       SELECT 1 FROM public.factures f
-      WHERE f.id = p_facture_id AND f.type_document = 'FACTURE' AND f.statut <> 'ANNULEE'
+      WHERE f.id = p_facture_id
+        AND f.type_document = 'FACTURE'
+        AND f.statut <> 'ANNULEE'
     ) THEN
       RAISE EXCEPTION 'Facture de claim introuvable ou non payable' USING ERRCODE = 'P0002';
     END IF;
-    SELECT array_agg(DISTINCT r.resource_key ORDER BY r.resource_key)
-    INTO v_resources
-    FROM (
-      SELECT 'FACTURE:' || p_facture_id::text AS resource_key
-      UNION ALL
-      SELECT 'MISSION:' || f.mission_id::text
-      FROM public.factures f
-      WHERE f.id = p_facture_id AND f.mission_id IS NOT NULL
-      UNION ALL
-      SELECT 'MISSION:' || m.id::text
-      FROM public.missions m
-      WHERE m.facture_id = p_facture_id
-    ) r;
+    IF p_flow = 'CONNECT_INVOICE' THEN
+      v_resources := ARRAY['FACTURE:' || p_facture_id::text];
+    ELSE
+      SELECT array_agg(DISTINCT r.resource_key ORDER BY r.resource_key)
+      INTO v_resources
+      FROM (
+        SELECT 'FACTURE:' || p_facture_id::text AS resource_key
+        UNION ALL
+        SELECT 'MISSION:' || f.mission_id::text
+        FROM public.factures f
+        WHERE f.id = p_facture_id AND f.mission_id IS NOT NULL
+        UNION ALL
+        SELECT 'MISSION:' || m.id::text
+        FROM public.missions m
+        WHERE m.facture_id = p_facture_id
+      ) r;
+    END IF;
   ELSE
     IF NOT EXISTS (SELECT 1 FROM public.missions m WHERE m.id = p_mission_id) THEN
       RAISE EXCEPTION 'Mission de claim introuvable' USING ERRCODE = 'P0002';
@@ -45098,9 +45694,6 @@ BEGIN
     v_resources := ARRAY['MISSION:' || p_mission_id::text];
   END IF;
 
-  -- Toutes les fonctions prennent les verrous dans le même ordre lexical.
-  -- Une facture agrégée et deux missions concurrentes ne peuvent donc ni se
-  -- doubler, ni se deadlocker entre les inserts de claims.
   FOREACH v_resource IN ARRAY v_resources LOOP
     PERFORM pg_advisory_xact_lock(hashtextextended(v_resource, 0));
   END LOOP;
@@ -45142,11 +45735,6 @@ BEGIN
      OR COALESCE(array_length(v_intent_ids, 1), 0) > 1 THEN
     RAISE EXCEPTION 'Claims Stripe du même flux incohérents' USING ERRCODE = '23514';
   END IF;
-
-  -- Si de nouvelles missions ont été rattachées à une facture après le bind,
-  -- leurs claims viennent d'être insérés sans identifiant. Propager l'unique
-  -- Session/PI existant garde toutes les ressources réconciliables et libérables
-  -- par le même CAS.
   IF COALESCE(array_length(v_session_ids, 1), 0) = 1 THEN
     UPDATE public.stripe_payment_flow_claims c
     SET stripe_checkout_session_id = v_session_ids[1], modifie_le = now()
@@ -47325,29 +47913,45 @@ CREATE OR REPLACE FUNCTION "public"."fn_trg_defacto_auto_cession"() RETURNS "tri
     AS $$
 DECLARE
   v_opt_in boolean;
-  v_soignant RECORD;
 BEGIN
-  IF NEW.statut = 'EMISE' AND (OLD.statut IS DISTINCT FROM 'EMISE')
+  IF NEW.statut = 'EMISE'
+     AND OLD.statut IS DISTINCT FROM 'EMISE'
      AND NEW.type_document = 'FACTURE' THEN
-    SELECT defacto_opt_in, mandat_facturation_signe
-    INTO v_opt_in, v_soignant.mandat_facturation_signe
-    FROM soignants WHERE id = NEW.soignant_id;
+    SELECT s.defacto_opt_in
+    INTO v_opt_in
+    FROM public.soignants s
+    WHERE s.id = NEW.soignant_id;
 
-    IF COALESCE(v_opt_in, false) = true THEN
-      IF NOT EXISTS (SELECT 1 FROM cessions_creance WHERE facture_honoraire_id = NEW.id) THEN
-        INSERT INTO cessions_creance (
+    IF COALESCE(v_opt_in, false) THEN
+      IF NOT EXISTS (
+        SELECT 1
+        FROM public.cessions_creance c
+        WHERE c.facture_honoraire_id = NEW.id
+      ) THEN
+        INSERT INTO public.cessions_creance (
           soignant_id, facture_honoraire_id, montant,
           version_texte, contenu_hash, signed_at, ip_address, user_agent
         ) VALUES (
           NEW.soignant_id, NEW.id, NEW.montant_ttc,
-          'auto_defacto_opt_in_v1', 'auto', NOW(), 'system', 'weekly-invoicing-cron'
+          'auto_defacto_opt_in_v1', 'auto', now(), 'system',
+          'weekly-invoicing-cron'
         );
-        UPDATE factures_honoraires SET factor_assigned = true WHERE id = NEW.id;
+
+        UPDATE public.factures_honoraires
+        SET factor_assigned = true
+        WHERE id = NEW.id;
+
         PERFORM public.fn_ecrire_audit_safe(
-          p_acteur_id := NEW.soignant_id, p_type_acteur := 'SYSTEME',
-          p_action := 'FACTURATION', p_type_ressource := 'facture_honoraire',
+          p_acteur_id := NEW.soignant_id,
+          p_type_acteur := 'SYSTEME',
+          p_action := 'FACTURATION',
+          p_type_ressource := 'facture_honoraire',
           p_id_ressource := NEW.id,
-          p_details := jsonb_build_object('event','DEFACTO_AUTO_CESSION','montant_ttc',NEW.montant_ttc,'opt_in',true)
+          p_details := jsonb_build_object(
+            'event', 'DEFACTO_AUTO_CESSION',
+            'montant_ttc', NEW.montant_ttc,
+            'opt_in', true
+          )
         );
       END IF;
     END IF;
@@ -53539,6 +54143,7 @@ END) STORED,
     "relance_1_le" timestamp with time zone,
     "relance_2_le" timestamp with time zone,
     "bloque_le" timestamp with time zone,
+    "facture_honoraire_id" "uuid",
     CONSTRAINT "factures_chorus_pro_statut_check" CHECK (("chorus_pro_statut" = ANY (ARRAY['NON_APPLICABLE'::"text", 'A_DEPOSER'::"text", 'DEPOSEE'::"text", 'RECUE'::"text", 'MANDATEE'::"text", 'PAYEE'::"text", 'REJETEE'::"text"]))),
     CONSTRAINT "factures_mode_paiement_check" CHECK (("mode_paiement" = ANY (ARRAY['STRIPE'::"text", 'VIREMENT'::"text", 'CHORUS_PRO'::"text"]))),
     CONSTRAINT "factures_statut_check" CHECK (("statut" = ANY (ARRAY['BROUILLON'::"text", 'EMISE'::"text", 'VIREMENT_DECLARE'::"text", 'PAYEE'::"text", 'EN_RETARD'::"text", 'ANNULEE'::"text"]))),
@@ -53560,6 +54165,10 @@ COMMENT ON COLUMN "public"."factures"."relance_2_le" IS 'CP-C-2 : J+21 post date
 
 
 COMMENT ON COLUMN "public"."factures"."bloque_le" IS 'CP-C-3 : J+45 blocage auto publication etab';
+
+
+
+COMMENT ON COLUMN "public"."factures"."facture_honoraire_id" IS 'Facture de commission Jolene correspondant exactement à cette facture d''honoraires (hebdomadaire ou finale).';
 
 
 
@@ -54583,6 +55192,7 @@ CREATE TABLE IF NOT EXISTS "public"."paiements_soignant" (
     "relance_1_le" timestamp with time zone,
     "relance_2_le" timestamp with time zone,
     "stripe_transfer_id" "text",
+    "facture_honoraire_id" "uuid",
     CONSTRAINT "paiements_soignant_methode_check" CHECK (("methode" = ANY (ARRAY['VIREMENT'::"text", 'STRIPE_CONNECT'::"text", 'CHEQUE'::"text", 'NOTE_HONORAIRES'::"text", 'BULLETIN_PAIE'::"text"]))),
     CONSTRAINT "paiements_soignant_statut_check" CHECK (("statut" = ANY (ARRAY['EN_ATTENTE'::"text", 'DECLARE'::"text", 'CONFIRME'::"text", 'CONTESTE'::"text", 'RESOLU'::"text"])))
 );
@@ -55579,7 +56189,7 @@ CREATE TABLE IF NOT EXISTS "public"."stripe_payment_flow_claims" (
     "stripe_payment_intent_id" "text",
     "cree_le" timestamp with time zone DEFAULT "now"() NOT NULL,
     "modifie_le" timestamp with time zone DEFAULT "now"() NOT NULL,
-    CONSTRAINT "stripe_payment_flow_claims_flow_check" CHECK (("flow" = ANY (ARRAY['CHECKOUT_INVOICE'::"text", 'SEPA_INVOICE'::"text", 'CONNECT_MISSION'::"text", 'LEGACY_UNKNOWN'::"text"]))),
+    CONSTRAINT "stripe_payment_flow_claims_flow_check" CHECK (("flow" = ANY (ARRAY['CHECKOUT_INVOICE'::"text", 'SEPA_INVOICE'::"text", 'CONNECT_MISSION'::"text", 'CONNECT_INVOICE'::"text", 'LEGACY_UNKNOWN'::"text"]))),
     CONSTRAINT "stripe_payment_flow_claims_owner_token_check" CHECK (("length"("owner_token") > 0)),
     CONSTRAINT "stripe_payment_flow_claims_resource_key_check" CHECK (("resource_key" ~ '^(FACTURE|MISSION):[0-9a-f-]{36}$'::"text"))
 );
@@ -55657,6 +56267,7 @@ CREATE TABLE IF NOT EXISTS "public"."stripe_transfers" (
     "stripe_checkout_session_id" "text",
     "stripe_amount_reversed_cents" integer DEFAULT 0 NOT NULL,
     "stripe_reversal_statut" "text" DEFAULT 'AUCUN'::"text" NOT NULL,
+    "facture_honoraire_id" "uuid",
     CONSTRAINT "stripe_transfers_amount_reversed_check" CHECK (("stripe_amount_reversed_cents" >= 0)),
     CONSTRAINT "stripe_transfers_dispute_statut_check" CHECK ((("dispute_statut" IS NULL) OR ("dispute_statut" = ANY (ARRAY['OUVERT'::"text", 'CLOS_won'::"text", 'CLOS_lost'::"text", 'CLOS_warning_closed'::"text", 'CLOS_warning_needs_response'::"text", 'CLOS_charge_refunded'::"text"])))),
     CONSTRAINT "stripe_transfers_reversal_statut_check" CHECK (("stripe_reversal_statut" = ANY (ARRAY['AUCUN'::"text", 'PARTIEL'::"text", 'TOTAL'::"text"]))),
@@ -57516,6 +58127,10 @@ CREATE INDEX "idx_factures_etablissement_statut" ON "public"."factures" USING "b
 
 
 
+CREATE INDEX "idx_factures_facture_honoraire" ON "public"."factures" USING "btree" ("facture_honoraire_id") WHERE ("facture_honoraire_id" IS NOT NULL);
+
+
+
 CREATE INDEX "idx_factures_facture_precedente" ON "public"."factures" USING "btree" ("facture_precedente_id") WHERE ("facture_precedente_id" IS NOT NULL);
 
 
@@ -57917,6 +58532,10 @@ CREATE INDEX "idx_paiements_etab" ON "public"."paiements_mission" USING "btree" 
 
 
 CREATE INDEX "idx_paiements_mission" ON "public"."paiements_mission" USING "btree" ("mission_id");
+
+
+
+CREATE INDEX "idx_paiements_soignant_facture_honoraire" ON "public"."paiements_soignant" USING "btree" ("facture_honoraire_id") WHERE ("facture_honoraire_id" IS NOT NULL);
 
 
 
@@ -58324,6 +58943,10 @@ CREATE INDEX "idx_stripe_transfers_facture" ON "public"."stripe_transfers" USING
 
 
 
+CREATE INDEX "idx_stripe_transfers_facture_honoraire" ON "public"."stripe_transfers" USING "btree" ("facture_honoraire_id") WHERE ("facture_honoraire_id" IS NOT NULL);
+
+
+
 CREATE INDEX "idx_super_swipes_quota_soignant_date" ON "public"."super_swipes_quota" USING "btree" ("soignant_id", "date");
 
 
@@ -58416,11 +59039,15 @@ CREATE UNIQUE INDEX "uniq_externalisation_recompense_parrainage" ON "public"."ex
 
 
 
+CREATE UNIQUE INDEX "uniq_factures_honoraire_active" ON "public"."factures" USING "btree" ("facture_honoraire_id") WHERE (("facture_honoraire_id" IS NOT NULL) AND ("type_document" = 'FACTURE'::"text") AND ("statut" <> ALL (ARRAY['ANNULEE'::"text", 'REMPLACEE'::"text", 'ERREUR_GENERATION'::"text"])));
+
+
+
 CREATE UNIQUE INDEX "uniq_factures_honoraires_stripe_pi" ON "public"."factures_honoraires" USING "btree" ("stripe_payment_intent_id") WHERE ("stripe_payment_intent_id" IS NOT NULL);
 
 
 
-CREATE UNIQUE INDEX "uniq_factures_mission_active" ON "public"."factures" USING "btree" ("mission_id") WHERE (("mission_id" IS NOT NULL) AND ("type_document" = 'FACTURE'::"text") AND ("statut" <> ALL (ARRAY['ANNULEE'::"text", 'REMPLACEE'::"text", 'ERREUR_GENERATION'::"text"])));
+CREATE UNIQUE INDEX "uniq_factures_mission_active" ON "public"."factures" USING "btree" ("mission_id") WHERE (("mission_id" IS NOT NULL) AND ("facture_honoraire_id" IS NULL) AND ("type_document" = 'FACTURE'::"text") AND ("statut" <> ALL (ARRAY['ANNULEE'::"text", 'REMPLACEE'::"text", 'ERREUR_GENERATION'::"text"])));
 
 
 
@@ -59873,6 +60500,11 @@ ALTER TABLE ONLY "public"."factures"
 
 
 ALTER TABLE ONLY "public"."factures"
+    ADD CONSTRAINT "factures_facture_honoraire_id_fkey" FOREIGN KEY ("facture_honoraire_id") REFERENCES "public"."factures_honoraires"("id") ON DELETE RESTRICT;
+
+
+
+ALTER TABLE ONLY "public"."factures"
     ADD CONSTRAINT "factures_facture_precedente_id_fkey" FOREIGN KEY ("facture_precedente_id") REFERENCES "public"."factures"("id") ON DELETE SET NULL;
 
 
@@ -60143,6 +60775,11 @@ ALTER TABLE ONLY "public"."paiements_soignant"
 
 
 ALTER TABLE ONLY "public"."paiements_soignant"
+    ADD CONSTRAINT "paiements_soignant_facture_honoraire_id_fkey" FOREIGN KEY ("facture_honoraire_id") REFERENCES "public"."factures_honoraires"("id") ON DELETE RESTRICT;
+
+
+
+ALTER TABLE ONLY "public"."paiements_soignant"
     ADD CONSTRAINT "paiements_soignant_mission_id_fkey" FOREIGN KEY ("mission_id") REFERENCES "public"."missions"("id");
 
 
@@ -60409,6 +61046,11 @@ ALTER TABLE ONLY "public"."stripe_refunds_queue"
 
 ALTER TABLE ONLY "public"."stripe_transfers"
     ADD CONSTRAINT "stripe_transfers_etablissement_id_fkey" FOREIGN KEY ("etablissement_id") REFERENCES "public"."etablissements"("id");
+
+
+
+ALTER TABLE ONLY "public"."stripe_transfers"
+    ADD CONSTRAINT "stripe_transfers_facture_honoraire_id_fkey" FOREIGN KEY ("facture_honoraire_id") REFERENCES "public"."factures_honoraires"("id") ON DELETE RESTRICT;
 
 
 
@@ -64788,6 +65430,12 @@ GRANT ALL ON FUNCTION "public"."fn_declarer_honoraires_retrocession"("p_mission_
 
 
 
+REVOKE ALL ON FUNCTION "public"."fn_declarer_paiement_facture_soignant"("p_facture_honoraire_id" "uuid", "p_montant" numeric, "p_methode" "text", "p_reference" "text", "p_date_paiement" "date", "p_attestation_sur_l_honneur" boolean) FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_declarer_paiement_facture_soignant"("p_facture_honoraire_id" "uuid", "p_montant" numeric, "p_methode" "text", "p_reference" "text", "p_date_paiement" "date", "p_attestation_sur_l_honneur" boolean) TO "service_role";
+GRANT ALL ON FUNCTION "public"."fn_declarer_paiement_facture_soignant"("p_facture_honoraire_id" "uuid", "p_montant" numeric, "p_methode" "text", "p_reference" "text", "p_date_paiement" "date", "p_attestation_sur_l_honneur" boolean) TO "authenticated";
+
+
+
 REVOKE ALL ON FUNCTION "public"."fn_declarer_paiement_soignant"("p_mission_id" "uuid", "p_montant" numeric, "p_methode" "text", "p_reference" "text", "p_date_paiement" "date", "p_attestation_sur_l_honneur" boolean) FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_declarer_paiement_soignant"("p_mission_id" "uuid", "p_montant" numeric, "p_methode" "text", "p_reference" "text", "p_date_paiement" "date", "p_attestation_sur_l_honneur" boolean) TO "authenticated";
 GRANT ALL ON FUNCTION "public"."fn_declarer_paiement_soignant"("p_mission_id" "uuid", "p_montant" numeric, "p_methode" "text", "p_reference" "text", "p_date_paiement" "date", "p_attestation_sur_l_honneur" boolean) TO "service_role";
@@ -66267,6 +66915,11 @@ GRANT ALL ON FUNCTION "public"."fn_pre_request_compte_actif"() TO "authenticated
 
 
 
+REVOKE ALL ON FUNCTION "public"."fn_preparer_facture_commission_periode"("p_facture_honoraire_id" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_preparer_facture_commission_periode"("p_facture_honoraire_id" "uuid") TO "service_role";
+
+
+
 REVOKE ALL ON FUNCTION "public"."fn_preparer_identite_document"("p_soignant_id" "uuid", "p_date_naissance" "date", "p_sexe" "text", "p_lieu_naissance" "text") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_preparer_identite_document"("p_soignant_id" "uuid", "p_date_naissance" "date", "p_sexe" "text", "p_lieu_naissance" "text") TO "service_role";
 
@@ -66955,6 +67608,11 @@ GRANT ALL ON FUNCTION "public"."fn_stats_etab_complements"() TO "service_role";
 REVOKE ALL ON FUNCTION "public"."fn_stats_rh_etablissement"() FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_stats_rh_etablissement"() TO "authenticated";
 GRANT ALL ON FUNCTION "public"."fn_stats_rh_etablissement"() TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."fn_stripe_connect_rapprocher_facture"("p_mission_id" "uuid", "p_soignant_id" "uuid", "p_etablissement_id" "uuid", "p_facture_honoraires_id" "uuid", "p_facture_commission_id" "uuid", "p_stripe_checkout_session_id" "text", "p_stripe_payment_intent_id" "text", "p_stripe_charge_id" "text", "p_stripe_transfer_id" "text", "p_montant_soignant_cts" integer, "p_montant_commission_cts" integer, "p_montant_total_cts" integer, "p_rapproche_le" timestamp with time zone) FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_stripe_connect_rapprocher_facture"("p_mission_id" "uuid", "p_soignant_id" "uuid", "p_etablissement_id" "uuid", "p_facture_honoraires_id" "uuid", "p_facture_commission_id" "uuid", "p_stripe_checkout_session_id" "text", "p_stripe_payment_intent_id" "text", "p_stripe_charge_id" "text", "p_stripe_transfer_id" "text", "p_montant_soignant_cts" integer, "p_montant_commission_cts" integer, "p_montant_total_cts" integer, "p_rapproche_le" timestamp with time zone) TO "service_role";
 
 
 
