@@ -2,6 +2,7 @@ import { cloneElement, isValidElement, useCallback, useEffect, useId, useMemo, u
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { LayoutAdmin } from '@/components/LayoutAdmin';
 import { ChargementAdmin, ChargementSectionAdmin } from '@/components/admin/ChargementAdmin';
+import { AdminCrmAutomation } from '@/components/admin/AdminCrmAutomation';
 import { supabase } from '@/integrations/supabase/client';
 import { PROFESSIONS, getLabelProfession, getLabelTypeEtablissement } from '@/lib/constantes';
 import { CardY2K, CardY2KContent } from '@/components/y2k/CardY2K';
@@ -13,7 +14,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
 import {
   Megaphone, Plus, ExternalLink, Phone, Mail, MessageCircle, Copy, Save, X, Trash2,
-  Users, Building2, FileText, Search, Star, Archive, RotateCcw, Send, Pencil,
+  Users, Building2, FileText, Search, Star, Archive, RotateCcw, Send, Pencil, Bot,
 } from 'lucide-react';
 
 /* ── Constantes UI ── */
@@ -137,7 +138,7 @@ function useTemplateProspectionSoignant(): TemplateProspection {
 export default function AdminSales() {
   usePageTitle('Recruter des soignants et des établissements');
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<'groupes' | 'soignants' | 'etablissements' | 'prospection' | 'prospection_soignants' | 'etab_jolene' | 'templates' | 'posts' | 'backlinks'>('groupes');
+  const [tab, setTab] = useState<'crm' | 'groupes' | 'soignants' | 'etablissements' | 'prospection' | 'prospection_soignants' | 'etab_jolene' | 'templates' | 'posts' | 'backlinks'>('crm');
 
   const [groupes, setGroupes] = useState<any[]>([]);
   const [contacts, setContacts] = useState<any[]>([]);
@@ -348,6 +349,7 @@ export default function AdminSales() {
 
         {/* Tabs */}
         <div className="flex gap-2 flex-wrap">
+          <BoutonY2K variant={tab === 'crm' ? 'primary' : 'secondary'} size="sm" onClick={() => setTab('crm')} iconeGauche={<Bot className="h-4 w-4" />}>CRM du jour</BoutonY2K>
           <BoutonY2K variant={tab === 'groupes' ? 'primary' : 'secondary'} size="sm" onClick={() => setTab('groupes')} iconeGauche={<Megaphone className="h-4 w-4" />}>Groupes ({groupes.length})</BoutonY2K>
           <BoutonY2K variant={tab === 'soignants' ? 'primary' : 'secondary'} size="sm" onClick={() => setTab('soignants')} iconeGauche={<Users className="h-4 w-4" />}>Soignants ({soignants.length})</BoutonY2K>
           <BoutonY2K variant={tab === 'etablissements' ? 'primary' : 'secondary'} size="sm" onClick={() => setTab('etablissements')} iconeGauche={<Building2 className="h-4 w-4" />}>Étab. sourcés ({etablissements.length})</BoutonY2K>
@@ -358,6 +360,9 @@ export default function AdminSales() {
           <BoutonY2K variant={tab === 'posts' ? 'primary' : 'secondary'} size="sm" onClick={() => setTab('posts')} iconeGauche={<Send className="h-4 w-4" />}>Posts de la semaine</BoutonY2K>
           <BoutonY2K variant={tab === 'backlinks' ? 'primary' : 'secondary'} size="sm" onClick={() => setTab('backlinks')} iconeGauche={<ExternalLink className="h-4 w-4" />}>Backlinks / Annuaires</BoutonY2K>
         </div>
+
+        {/* ── CRM AUTOMATISÉ : file, séquences, attribution et historique ── */}
+        {tab === 'crm' && <AdminCrmAutomation onContactsChanged={charger} />}
 
         {/* ── GROUPES ── */}
         {tab === 'groupes' && (
