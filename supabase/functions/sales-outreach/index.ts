@@ -74,26 +74,42 @@ Deno.serve(async (req) => {
     // (étab via finess, soignant via cle). Le contact passe automatiquement en
     // « sourcé / CONTACTÉ » avec une note explicite (anti double-relance).
     const horodatage = new Date().toISOString();
+    let crmContactId: string | null = null;
     if (contact_id) {
       await admin.from("sales_contacts").update({ statut: "CONTACTE", maj_le: horodatage }).eq("id", contact_id);
+      crmContactId = contact_id;
     } else if (finess) {
       const { data: p } = await admin.from("prospects_etablissements").select("*").eq("finess", finess).maybeSingle();
       if (p) {
-        await admin.from("sales_contacts").upsert({
+        const { data: contact } = await admin.from("sales_contacts").upsert({
           type: "ETABLISSEMENT", nom: (p as any).nom, ville: (p as any).ville,
           telephone: (p as any).telephone, email, finess,
           departement: (p as any).departement, type_etab: (p as any).type_jolene,
           statut: "CONTACTE", notes: `Sourcé automatiquement : email envoyé via Jolene le ${horodatage.slice(0, 10)} · FINESS ${finess}`,
-        } as any, { onConflict: "finess", ignoreDuplicates: false });
+        } as any, { onConflict: "finess", ignoreDuplicates: false }).select("id").single();
+        crmContactId = (contact as any)?.id || null;
       }
       await admin.from("prospects_etablissements").update({ email_envoye_le: horodatage }).eq("finess", finess);
     } else if (cle) {
-      await admin.from("sales_contacts").insert({
+      const { data: contact } = await admin.from("sales_contacts").insert({
         type: "SOIGNANT", nom: nom || email, ville: ville || null,
         telephone: telephone || null, email, profession: profession || null, departement: departement || null,
         statut: "CONTACTE", notes: `Sourcé automatiquement : email envoyé via Jolene le ${horodatage.slice(0, 10)}`,
-      } as any);
+      } as any).select("id").single();
+      crmContactId = (contact as any)?.id || null;
       await admin.from("prospects_soignants").update({ email_envoye_le: horodatage }).eq("cle", cle);
+    }
+
+    // Le CRM reprend automatiquement la main : journal, anti-doublon et
+    // prochaine relance datée. Un échec de journalisation ne transforme pas un
+    // email déjà accepté par Resend en faux échec d'envoi.
+    if (crmContactId) {
+      const { error: crmError } = await admin.rpc("fn_crm_enregistrer_email_envoye", {
+        p_contact_id: crmContactId,
+        p_automatisee: false,
+        p_details: `Email envoyé via sales-outreach à ${email}`,
+      });
+      if (crmError) console.error("CRM journalisation email:", crmError.message);
     }
 
     return new Response(JSON.stringify({ success: true }), { headers: corsHeaders(req) });

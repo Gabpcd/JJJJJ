@@ -100,19 +100,30 @@ Deno.serve(async (req) => {
       if (r.ok) {
         envoyes++;
         await admin.from(table).update({ email_envoye_le: new Date().toISOString() }).eq(pk, p[pk]);
+        let crmContactId: string | null = null;
         if (cible === "ETABLISSEMENT") {
-          await admin.from("sales_contacts").upsert({
+          const { data: contact } = await admin.from("sales_contacts").upsert({
             type: "ETABLISSEMENT", nom: p.nom, ville: p.ville,
             telephone: p.telephone, email: dest, finess: p.finess,
             departement: p.departement, type_etab: p.type_jolene,
             statut: "CONTACTE", notes: `Sourcé automatiquement : email template envoyé en masse · FINESS ${p.finess}`,
-          } as any, { onConflict: "finess", ignoreDuplicates: false });
+          } as any, { onConflict: "finess", ignoreDuplicates: false }).select("id").single();
+          crmContactId = (contact as any)?.id || null;
         } else {
-          await admin.from("sales_contacts").insert({
+          const { data: contact } = await admin.from("sales_contacts").insert({
             type: "SOIGNANT", nom: `${p.prenom || ""} ${p.nom || ""}`.trim() || dest, ville: p.ville,
             telephone: p.telephone, email: dest, profession: p.profession, departement: p.departement,
             statut: "CONTACTE", notes: `Sourcé automatiquement : email template envoyé en masse`,
-          } as any);
+          } as any).select("id").single();
+          crmContactId = (contact as any)?.id || null;
+        }
+        if (crmContactId) {
+          const { error: crmError } = await admin.rpc("fn_crm_enregistrer_email_envoye", {
+            p_contact_id: crmContactId,
+            p_automatisee: true,
+            p_details: `Email de prospection groupé envoyé à ${dest}`,
+          });
+          if (crmError) console.error("CRM journalisation batch:", crmError.message);
         }
       } else {
         echecs++;

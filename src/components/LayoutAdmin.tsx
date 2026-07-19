@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { LucideIcon, Gift, BarChart3, Users, Shield, CreditCard, LogOut, HeartPulse, ShieldCheck, Mail, Code2, Building2, CalendarDays, Flame, ClipboardList, MessageCircle, Menu, X, Home, Coins, AlertTriangle, FileCheck, FileSearch, Zap, TrendingUp, ChevronDown, FileStack, Scale, Star, FileSignature, Activity, Flag, Rocket, UserPlus, Megaphone, Settings, Search, Trash2 } from 'lucide-react';
+import { LucideIcon, Gift, BarChart3, Users, Shield, CreditCard, LogOut, HeartPulse, ShieldCheck, Mail, Code2, Building2, CalendarDays, Flame, ClipboardList, MessageCircle, Menu, X, Home, Coins, AlertTriangle, FileCheck, FileSearch, Zap, TrendingUp, ChevronDown, FileStack, Scale, Star, FileSignature, Activity, Flag, Rocket, Target, UserPlus, Megaphone, Settings, Search, Trash2 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { RechercheGlobaleAdmin } from '@/components/admin/RechercheGlobaleAdmin';
@@ -68,6 +68,7 @@ const NAV_ADMIN_GROUPED: SidebarEntry[] = [
   {
     icone: Rocket, label: 'Croissance', items: [
       { icone: Rocket, label: 'Cockpit fondateur', route: '/admin/fondateur', acces: ACCES.FONDATEUR },
+      { icone: Target, label: 'Pilotage lancement', route: '/admin/fondateur/lancement', acces: ACCES.FONDATEUR },
       { icone: Megaphone, label: 'Acquisition', route: '/admin/fondateur/acquisition', acces: ACCES.FONDATEUR },
       { icone: MessageCircle, label: 'Prospection', route: '/admin/fondateur/sales', acces: ACCES.FONDATEUR },
       { icone: TrendingUp, label: 'Cohortes & économie', route: '/admin/cohort', acces: ACCES.FONDATEUR },
