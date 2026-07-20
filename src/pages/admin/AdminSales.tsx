@@ -3,6 +3,7 @@ import { usePageTitle } from '@/hooks/usePageTitle';
 import { LayoutAdmin } from '@/components/LayoutAdmin';
 import { ChargementAdmin, ChargementSectionAdmin } from '@/components/admin/ChargementAdmin';
 import { AdminCrmAutomation } from '@/components/admin/AdminCrmAutomation';
+import { AdminSourcingCockpit } from '@/components/admin/AdminSourcingCockpit';
 import { supabase } from '@/integrations/supabase/client';
 import { PROFESSIONS, getLabelProfession, getLabelTypeEtablissement } from '@/lib/constantes';
 import { CardY2K, CardY2KContent } from '@/components/y2k/CardY2K';
@@ -138,7 +139,7 @@ function useTemplateProspectionSoignant(): TemplateProspection {
 export default function AdminSales() {
   usePageTitle('Recruter des soignants et des établissements');
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<'crm' | 'groupes' | 'soignants' | 'etablissements' | 'prospection' | 'prospection_soignants' | 'etab_jolene' | 'templates' | 'posts' | 'backlinks'>('crm');
+  const [tab, setTab] = useState<'sourcing' | 'crm' | 'groupes' | 'soignants' | 'etablissements' | 'prospection' | 'prospection_soignants' | 'etab_jolene' | 'templates' | 'posts' | 'backlinks'>('sourcing');
 
   const [groupes, setGroupes] = useState<any[]>([]);
   const [contacts, setContacts] = useState<any[]>([]);
@@ -349,6 +350,7 @@ export default function AdminSales() {
 
         {/* Tabs */}
         <div className="flex gap-2 flex-wrap">
+          <BoutonY2K variant={tab === 'sourcing' ? 'primary' : 'secondary'} size="sm" onClick={() => setTab('sourcing')} iconeGauche={<Search className="h-4 w-4" />}>Nouveaux contacts</BoutonY2K>
           <BoutonY2K variant={tab === 'crm' ? 'primary' : 'secondary'} size="sm" onClick={() => setTab('crm')} iconeGauche={<Bot className="h-4 w-4" />}>CRM du jour</BoutonY2K>
           <BoutonY2K variant={tab === 'groupes' ? 'primary' : 'secondary'} size="sm" onClick={() => setTab('groupes')} iconeGauche={<Megaphone className="h-4 w-4" />}>Groupes ({groupes.length})</BoutonY2K>
           <BoutonY2K variant={tab === 'soignants' ? 'primary' : 'secondary'} size="sm" onClick={() => setTab('soignants')} iconeGauche={<Users className="h-4 w-4" />}>Soignants ({soignants.length})</BoutonY2K>
@@ -360,6 +362,9 @@ export default function AdminSales() {
           <BoutonY2K variant={tab === 'posts' ? 'primary' : 'secondary'} size="sm" onClick={() => setTab('posts')} iconeGauche={<Send className="h-4 w-4" />}>Posts de la semaine</BoutonY2K>
           <BoutonY2K variant={tab === 'backlinks' ? 'primary' : 'secondary'} size="sm" onClick={() => setTab('backlinks')} iconeGauche={<ExternalLink className="h-4 w-4" />}>Backlinks / Annuaires</BoutonY2K>
         </div>
+
+        {/* ── SOURCING : découverte et qualification, sans aucun envoi ── */}
+        {tab === 'sourcing' && <AdminSourcingCockpit onContactsChanged={charger} />}
 
         {/* ── CRM AUTOMATISÉ : file, séquences, attribution et historique ── */}
         {tab === 'crm' && <AdminCrmAutomation onContactsChanged={charger} />}

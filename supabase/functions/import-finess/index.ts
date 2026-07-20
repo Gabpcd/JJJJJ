@@ -1,30 +1,17 @@
-// Import de la base FINESS (établissements de santé, ~270k lignes, AVEC téléphone)
-// dans prospects_etablissements. Le fichier officiel data.gouv (~90 Mo) est lu par
-// tranches HTTP Range ; la fonction s'auto-relance jusqu'à la fin du fichier.
-// Déclenchement : POST { offset?: number } + Authorization Bearer service_role/vault.
+// Import de la réexposition officielle FINESS data.gouv dans
+// prospects_etablissements. Le fichier stable est actualisé par data.gouv à
+// chaque publication ministérielle ; aucune URL datée n'est figée ici.
+// Cette fonction ne contacte jamais les prospects.
+// Déclenchement : POST { offset?: number, run_id?: uuid } + Bearer service_role/vault.
 
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { verifyAdminOrServiceRole } from "../_shared/admin-auth.ts";
+import { jsonResponse, preflightResponse } from "../_shared/cors.ts";
 
-const FICHIER = "https://www.data.gouv.fr/fr/datasets/r/2ce43ade-8d2c-4d1d-81da-ca06c82abc68";
+const FICHIER = "https://data-pipeline-open.s3.sbg.io.cloud.ovh.net/finess/finess_etablissements.csv";
+const SOURCE_PAGE = "https://www.data.gouv.fr/datasets/reexposition-des-donnees-finess";
 const TRANCHE = 4 * 1024 * 1024;       // 4 Mo par requête Range
 const BUDGET_MS = 150_000;             // ~150 s puis auto-relance
-
-// Auth cron : Bearer = service_role (env) ou secret vault sb_secret_* envoyé par
-// pg_cron (cf. CLAUDE.md "Auth crons pg_cron"). Plus de secret en dur dans le repo.
-let _vaultSecret: string | null = null;
-async function bearerAutorise(req: Request): Promise<boolean> {
-  const bearer = (req.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "").trim();
-  if (!bearer) return false;
-  const svc = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
-  if (svc && bearer === svc) return true;
-  if (_vaultSecret) return bearer === _vaultSecret;
-  try {
-    const admin = createClient(Deno.env.get("SUPABASE_URL")!, svc, { auth: { persistSession: false } });
-    const { data } = await admin.rpc("fn_lire_secret_cron");
-    if (data && typeof data === "string") { _vaultSecret = data; return bearer === data; }
-  } catch { /* ignore */ }
-  return false;
-}
 
 // libcategetab / libcategagretab → type Jolene (null = ignoré)
 function mapType(libCateg: string, libAgr: string): string | null {
@@ -49,25 +36,54 @@ function mapType(libCateg: string, libAgr: string): string | null {
 }
 
 Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") return preflightResponse(req);
+  let runId: string | null = null;
   try {
-    if (!(await bearerAutorise(req))) return new Response(JSON.stringify({ error: "forbidden" }), { status: 403 });
-    const { offset = 0 } = await req.json().catch(() => ({}));
+    const auth = await verifyAdminOrServiceRole(req);
+    if (!auth.ok) return jsonResponse(req, { error: auth.error }, auth.status);
+    const { offset = 0, run_id = null, lignes_lues = 0, lignes_importees = 0 } = await req.json().catch(() => ({}));
 
     const url = Deno.env.get("SUPABASE_URL")!;
     const admin = createClient(url, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } });
 
+    runId = typeof run_id === "string" ? run_id : null;
+    if (!runId) {
+      const { data: actif } = await admin.from("sourcing_imports")
+        .select("id, demarre_le")
+        .eq("source_code", "FINESS_DATA_GOUV")
+        .eq("statut", "EN_COURS")
+        .gte("demarre_le", new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString())
+        .order("demarre_le", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (actif?.id) return jsonResponse(req, { success: true, already_running: true, run_id: actif.id });
+
+      const { data: run, error: runErr } = await admin.from("sourcing_imports").insert({
+        source_code: "FINESS_DATA_GOUV",
+        cible: "ETABLISSEMENT",
+        source_url: SOURCE_PAGE,
+        details: { fichier: FICHIER, silencieux: true },
+      }).select("id").single();
+      if (runErr) throw new Error(runErr.message);
+      runId = run.id;
+    }
+
     const debut = Date.now();
     let pos = Number(offset) || 0;
     let totalInsere = 0;
+    let totalLues = 0;
     let done = false;
+    let sourceMajLe: string | null = null;
 
     while (Date.now() - debut < BUDGET_MS) {
       const r = await fetch(FICHIER, { headers: { Range: `bytes=${pos}-${pos + TRANCHE - 1}` } });
       if (r.status === 416) { done = true; break; }            // au-delà de la fin
       if (!r.ok && r.status !== 206 && r.status !== 200) {
-        return new Response(JSON.stringify({ error: `fetch ${r.status}`, offset: pos }), { status: 502 });
+        throw new Error(`Téléchargement FINESS impossible (${r.status}) à l'octet ${pos}`);
       }
       const buf = new Uint8Array(await r.arrayBuffer());
+      const lastModified = r.headers.get("last-modified");
+      if (lastModified) sourceMajLe = new Date(lastModified).toISOString();
       // Le fichier FINESS est encodé en UTF-8 (vérifié sur les libellés accentués)
       const texte = new TextDecoder("utf-8").decode(buf);
       const finFichier = r.status === 200 || buf.byteLength < TRANCHE;
@@ -85,36 +101,41 @@ Deno.serve(async (req) => {
       // les guillemets parasites et on normalise les espaces sur tout champ texte.
       const nettoie = (s: string) => (s || "").replace(/"/g, "").replace(/\s+/g, " ").trim();
       for (const ligne of lignes) {
-        if (!ligne.startsWith("structureet;")) continue;
         const f = ligne.split(";");
-        if (f.length < 23) continue;
-        const type = mapType(f[19], f[21]);
+        // Réexposition data.gouv : 35 colonnes, en-tête nofinesset;...
+        if (f.length < 35 || f[0] === "nofinesset") continue;
+        totalLues++;
+        const type = mapType(f[18], f[20]);
         if (!type) continue;
-        const finess = (f[1] || "").trim();
-        if (!/^\d{2}/.test(finess)) continue;   // saute l'en-tête / lignes invalides
-        const achemine = (f[15] || "").trim();          // "75014 PARIS"
+        const finess = (f[0] || "").trim();
+        if (!/^\d{9}$/.test(finess)) continue;
+        const achemine = (f[14] || "").trim();          // "75014 PARIS"
         const cp = achemine.slice(0, 5);
         const ville = nettoie(achemine.slice(6));
-        const adresse = [f[7], f[8], f[9]].map(s => nettoie(s)).filter(Boolean).join(" ");
+        const adresse = [f[6], f[7], f[8], f[9], f[10]].map(s => nettoie(s)).filter(Boolean).join(" ");
         rows.push({
           finess,
-          siret: (f[22] || "").trim() || null,
-          nom: nettoie((f[4] || f[3])) || "—",
+          siret: (f[21] || "").trim() || null,
+          nom: nettoie((f[2] || f[3])) || "—",
           type_jolene: type,
-          categorie_lib: nettoie(f[19]) || null,
-          telephone: (f[16] || "").trim() || null,
+          categorie_lib: nettoie(f[18]) || null,
+          telephone: (f[15] || "").trim() || null,
           adresse: adresse || null,
           code_postal: /^\d{5}$/.test(cp) ? cp : null,
           ville: ville || null,
-          departement: (f[13] || "").trim().toUpperCase() || null,
+          departement: (f[12] || "").trim().toUpperCase() || null,
+          source_code: "FINESS_DATA_GOUV",
+          source_url: SOURCE_PAGE,
+          source_maj_le: sourceMajLe,
         });
       }
 
       for (let i = 0; i < rows.length; i += 500) {
-        const { error } = await admin.from("prospects_etablissements")
-          .upsert(rows.slice(i, i + 500), { onConflict: "finess" });
-        if (error) return new Response(JSON.stringify({ error: error.message, offset: pos }), { status: 500 });
-        totalInsere += Math.min(500, rows.length - i);
+        const { data: upserts, error } = await admin.rpc("fn_sourcing_upsert_etablissements", {
+          p_rows: rows.slice(i, i + 500),
+        });
+        if (error) throw new Error(`${error.message} (octet ${pos})`);
+        totalInsere += Number(upserts) || 0;
       }
 
       if (finFichier) { done = true; break; }
@@ -129,15 +150,38 @@ Deno.serve(async (req) => {
           "Content-Type": "application/json",
           "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
         },
-        body: JSON.stringify({ offset: pos }),
+        body: JSON.stringify({
+          offset: pos,
+          run_id: runId,
+          lignes_lues: Number(lignes_lues) + totalLues,
+          lignes_importees: Number(lignes_importees) + totalInsere,
+        }),
       }).catch(() => {});
       (globalThis as any).EdgeRuntime?.waitUntil?.(relance);
     }
 
-    return new Response(JSON.stringify({ done, next_offset: pos, inseres_cette_passe: totalInsere }), {
-      headers: { "Content-Type": "application/json" },
+    await admin.from("sourcing_imports").update({
+      statut: done ? "TERMINE" : "EN_COURS",
+      termine_le: done ? new Date().toISOString() : null,
+      source_maj_le: sourceMajLe,
+      lignes_lues: Number(lignes_lues) + totalLues,
+      lignes_importees: Number(lignes_importees) + totalInsere,
+    }).eq("id", runId);
+
+    return jsonResponse(req, {
+      done,
+      run_id: runId,
+      next_offset: pos,
+      lues_cette_passe: totalLues,
+      inserees_cette_passe: totalInsere,
     });
   } catch (e) {
-    return new Response(JSON.stringify({ error: (e as Error)?.message || "erreur" }), { status: 500 });
+    if (runId) {
+      await createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } })
+        .from("sourcing_imports")
+        .update({ statut: "ERREUR", termine_le: new Date().toISOString(), erreur: ((e as Error)?.message || "erreur").slice(0, 1000) })
+        .eq("id", runId);
+    }
+    return jsonResponse(req, { error: (e as Error)?.message || "erreur" }, 500);
   }
 });

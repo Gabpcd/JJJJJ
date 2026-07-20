@@ -212,6 +212,11 @@ verify_jwt = false
 [functions.import-annuaire-cnam]
 verify_jwt = false
 
+# Import RPPS officiel : accès protégé dans la fonction par JWT admin ou
+# service_role/Vault. L'import alimente uniquement le sourcing silencieux.
+[functions.import-annuaire-rpps]
+verify_jwt = false
+
 [functions.sales-outreach-batch]
 verify_jwt = false
 
