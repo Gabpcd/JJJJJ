@@ -37,6 +37,39 @@ const ALLOWLIST = new Set([
   'fn_xxx', // placeholder de doc (JSDoc useApiCall + docs/*), pas un vrai appel
 ]);
 
+const ATTENTES_RELANCE_MS = [1_000, 3_000, 7_000];
+
+const attendre = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * La Management API peut répondre 429/5xx pendant un redémarrage PostgREST ou
+ * une opération de maintenance. Ces états transitoires ne sont pas un contrat
+ * front/back cassé : on les relance, sans jamais transformer l'échec final en
+ * succès silencieux.
+ */
+async function fetchManagementApi(url, init, label) {
+  let derniereErreur;
+  for (let tentative = 0; tentative <= ATTENTES_RELANCE_MS.length; tentative += 1) {
+    try {
+      const res = await fetch(url, {
+        ...init,
+        signal: AbortSignal.timeout(45_000),
+      });
+      if (res.ok || (res.status !== 429 && res.status < 500)) return res;
+      derniereErreur = new Error(`${label} ${res.status}: ${await res.text()}`);
+    } catch (error) {
+      derniereErreur = error;
+    }
+
+    if (tentative < ATTENTES_RELANCE_MS.length) {
+      const delai = ATTENTES_RELANCE_MS[tentative];
+      console.warn(`⚠️  ${label} temporairement indisponible — relance ${tentative + 1}/${ATTENTES_RELANCE_MS.length} dans ${delai / 1000}s.`);
+      await attendre(delai);
+    }
+  }
+  throw derniereErreur;
+}
+
 // ── 1. Extraction des références frontend ────────────────────────────────────
 function walk(dir, acc = []) {
   for (const entry of readdirSync(dir)) {
@@ -136,17 +169,17 @@ async function prodIntrospection() {
                   FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='public'),
     'buckets', (SELECT coalesce(json_agg(id), '[]'::json) FROM storage.buckets)
   ) AS r;`;
-  const dbRes = await fetch(`${api}/v1/projects/${ref}/database/query`, {
+  const dbRes = await fetchManagementApi(`${api}/v1/projects/${ref}/database/query`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({ query: sql }),
-  });
+  }, 'Management API /database/query');
   if (!dbRes.ok) throw new Error(`Management API /database/query ${dbRes.status}: ${await dbRes.text()}`);
   const dbJson = await dbRes.json();
   const row = (Array.isArray(dbJson) ? dbJson[0] : dbJson?.result?.[0])?.r || {};
-  const fnRes = await fetch(`${api}/v1/projects/${ref}/functions`, {
+  const fnRes = await fetchManagementApi(`${api}/v1/projects/${ref}/functions`, {
     headers: { Authorization: `Bearer ${token}` },
-  });
+  }, 'Management API /functions');
   if (!fnRes.ok) throw new Error(`Management API /functions ${fnRes.status}: ${await fnRes.text()}`);
   const fnJson = await fnRes.json();
   return {
