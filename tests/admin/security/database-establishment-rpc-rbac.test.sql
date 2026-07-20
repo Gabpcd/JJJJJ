@@ -1505,8 +1505,30 @@ BEGIN
     WHERE c.id = v_conversation_support
       AND c.mission_id IS NULL
       AND v_soignant IN (c.participant_1_id, c.participant_2_id)
-      AND v_admin_plateforme IN (c.participant_1_id, c.participant_2_id)
       AND v_admin_partiel NOT IN (c.participant_1_id, c.participant_2_id)
+      AND EXISTS (
+        SELECT 1
+        FROM public.equipe_admin ea
+        JOIN auth.users u ON u.id = ea.user_id
+        WHERE ea.user_id = CASE
+          WHEN c.participant_1_id = v_soignant THEN c.participant_2_id
+          ELSE c.participant_1_id
+        END
+          AND ea.actif IS TRUE
+          AND u.deleted_at IS NULL
+          AND u.email_confirmed_at IS NOT NULL
+          AND u.raw_app_meta_data ->> 'role' = 'ADMIN_PLATEFORME'
+          AND ARRAY[
+            'Dashboard',
+            'Utilisateurs',
+            'Missions',
+            'Litiges & contrats',
+            'Finances',
+            'Messagerie',
+            'Conformité & Technique',
+            'Fondateur'
+          ]::text[] <@ COALESCE(ea.acces_groupes, ARRAY[]::text[])
+      )
   ) THEN
     RAISE EXCEPTION 'Le support n''a pas choisi l''admin complet canonique';
   END IF;
