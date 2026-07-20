@@ -13,12 +13,10 @@ const SOURCE_PAGE = "https://www.data.gouv.fr/datasets/annuaire-sante-extraction
 // centaines de milliers de lignes et partage les ressources de la base avec
 // l'application. On privilégie des passes courtes et auto-reprises.
 const TRANCHE = 1024 * 1024;
-// La table historique porte plusieurs index de recherche (dont trois GIN
-// trigrammes). En production, un lot de 100 lignes peut donc dépasser le
-// statement_timeout lors d'une première synchronisation. Des micro-lots et
-// des passes de 20 s gardent une marge suffisante pour enregistrer le curseur
-// puis relancer la suite, sans recommencer le fichier depuis le début.
-const TAILLE_UPSERT = 25;
+// La fonction SQL n'écrit désormais que les nouvelles clés officielles : les
+// doublons d'une reprise ou d'une synchronisation hebdomadaire sont ignorés et
+// ne réindexent plus toute la table historique.
+const TAILLE_UPSERT = 100;
 const BUDGET_MS = 20_000;
 
 function sansAccents(value: string): string {
