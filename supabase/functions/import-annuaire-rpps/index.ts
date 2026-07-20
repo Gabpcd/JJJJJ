@@ -9,8 +9,16 @@ import { jsonResponse, preflightResponse } from "../_shared/cors.ts";
 
 const FICHIER = "https://www.data.gouv.fr/api/1/datasets/r/fffda7e9-0ea2-4c35-bba0-4496f3af935d";
 const SOURCE_PAGE = "https://www.data.gouv.fr/datasets/annuaire-sante-extractions-des-donnees-en-libre-acces-des-professionnels-intervenant-dans-le-systeme-de-sante-rpps";
-const TRANCHE = 4 * 1024 * 1024;
-const BUDGET_MS = 150_000;
+// Lots volontairement modestes : la première synchronisation ajoute plusieurs
+// centaines de milliers de lignes et partage les ressources de la base avec
+// l'application. On privilégie des passes courtes et auto-reprises.
+const TRANCHE = 1024 * 1024;
+// La fonction SQL n'écrit désormais que les nouvelles clés officielles : les
+// doublons d'une reprise ou d'une synchronisation hebdomadaire sont ignorés et
+// ne réindexent plus toute la table historique.
+const TAILLE_UPSERT = 25;
+const BUDGET_MS = 20_000;
+const MAX_REPRISES_TIMEOUT = 12;
 
 function sansAccents(value: string): string {
   return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
@@ -98,12 +106,17 @@ Deno.serve(async (req) => {
   const url = Deno.env.get("SUPABASE_URL")!;
   const admin = createClient(url, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } });
   let runId: string | null = null;
+  let repriseOffset = 0;
+  let repriseLues = 0;
+  let repriseImportees = 0;
+  let reprisesTimeout = 0;
 
   try {
     const body = await req.json().catch(() => ({}));
-    const offset = Number(body.offset) || 0;
-    const luesAvant = Number(body.lignes_lues) || 0;
-    const importeesAvant = Number(body.lignes_importees) || 0;
+    let offset = Number(body.offset) || 0;
+    let luesAvant = Number(body.lignes_lues) || 0;
+    let importeesAvant = Number(body.lignes_importees) || 0;
+    reprisesTimeout = Number(body.reprises_timeout) || 0;
     runId = typeof body.run_id === "string" ? body.run_id : null;
 
     if (!runId) {
@@ -117,15 +130,45 @@ Deno.serve(async (req) => {
         .maybeSingle();
       if (actif?.id) return jsonResponse(req, { success: true, already_running: true, run_id: actif.id });
 
-      const { data: run, error: runErr } = await admin.from("sourcing_imports").insert({
-        source_code: "ANNUAIRE_SANTE_RPPS",
-        cible: "SOIGNANT",
-        source_url: SOURCE_PAGE,
-        details: { fichier: FICHIER, silencieux: true, format: "PS_LibreAcces_Personne_activite" },
-      }).select("id").single();
-      if (runErr) throw new Error(runErr.message);
-      runId = run.id;
+      // Un clic/cron après une coupure réseau reprend la dernière exécution au
+      // curseur validé, à condition qu'elle concerne exactement le même
+      // fichier officiel. Il n'y a donc jamais besoin de rescanner 812 Mo.
+      const { data: interrompu } = await admin.from("sourcing_imports")
+        .select("id, details, lignes_lues, lignes_importees")
+        .eq("source_code", "ANNUAIRE_SANTE_RPPS")
+        .eq("statut", "ERREUR")
+        .gte("demarre_le", new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString())
+        .order("demarre_le", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      const detailsInterrompu = interrompu?.details as Record<string, unknown> | null;
+      const offsetInterrompu = Number(detailsInterrompu?.next_offset) || 0;
+
+      if (interrompu?.id && detailsInterrompu?.fichier === FICHIER && offsetInterrompu > 0) {
+        runId = interrompu.id;
+        offset = offsetInterrompu;
+        luesAvant = Number(interrompu.lignes_lues) || 0;
+        importeesAvant = Number(interrompu.lignes_importees) || 0;
+        await admin.from("sourcing_imports").update({
+          statut: "EN_COURS",
+          termine_le: null,
+          erreur: null,
+        }).eq("id", runId);
+      } else {
+        const { data: run, error: runErr } = await admin.from("sourcing_imports").insert({
+          source_code: "ANNUAIRE_SANTE_RPPS",
+          cible: "SOIGNANT",
+          source_url: SOURCE_PAGE,
+          details: { fichier: FICHIER, silencieux: true, format: "PS_LibreAcces_Personne_activite" },
+        }).select("id").single();
+        if (runErr) throw new Error(runErr.message);
+        runId = run.id;
+      }
     }
+
+    repriseOffset = offset;
+    repriseLues = luesAvant;
+    repriseImportees = importeesAvant;
 
     const debut = Date.now();
     let pos = offset;
@@ -205,13 +248,38 @@ Deno.serve(async (req) => {
       }
 
       const rows = [...prospects.values()];
-      for (let i = 0; i < rows.length; i += 500) {
+      // Une tranche qui a expiré est rejouée avec des lots progressivement
+      // divisés (25, 12, 6, 3, 1). Une ligne/index atypique ne peut ainsi plus
+      // bloquer l'ensemble du référentiel national.
+      const tailleUpsertEffective = Math.max(
+        1,
+        Math.floor(TAILLE_UPSERT / (2 ** reprisesTimeout)),
+      );
+      for (let i = 0; i < rows.length; i += tailleUpsertEffective) {
         const { data: upserts, error } = await admin.rpc("fn_sourcing_upsert_soignants", {
-          p_rows: rows.slice(i, i + 500),
+          p_rows: rows.slice(i, i + tailleUpsertEffective),
         });
         if (error) throw new Error(error.message);
         totalImportees += Number(upserts) || 0;
       }
+
+      // Le curseur ne progresse qu'une fois toute la tranche écrite. Si une
+      // requête suivante expire, la reprise rejoue au plus cette tranche ; les
+      // doublons sont ignorés par la fonction SQL idempotente.
+      repriseOffset = pos;
+      repriseLues = luesAvant + totalLues;
+      repriseImportees = importeesAvant + totalImportees;
+      reprisesTimeout = 0;
+      await admin.from("sourcing_imports").update({
+        lignes_lues: repriseLues,
+        lignes_importees: repriseImportees,
+        details: {
+          fichier: FICHIER,
+          silencieux: true,
+          format: "PS_LibreAcces_Personne_activite",
+          next_offset: repriseOffset,
+        },
+      }).eq("id", runId);
       if (finFichier) { done = true; break; }
     }
 
@@ -248,13 +316,64 @@ Deno.serve(async (req) => {
       ...compteurs,
     });
   } catch (error) {
+    const message = (error as Error).message;
+    const erreurReprenable = [
+      "statement timeout",
+      "connection reset",
+      "error sending request",
+      "Téléchargement Annuaire Santé impossible",
+    ].some((motif) => message.includes(motif));
+    if (runId && erreurReprenable && reprisesTimeout < MAX_REPRISES_TIMEOUT) {
+      const prochainEssai = reprisesTimeout + 1;
+      await admin.from("sourcing_imports").update({
+        statut: "EN_COURS",
+        termine_le: null,
+        erreur: null,
+        lignes_lues: repriseLues,
+        lignes_importees: repriseImportees,
+        details: {
+          fichier: FICHIER,
+          silencieux: true,
+          format: "PS_LibreAcces_Personne_activite",
+          next_offset: repriseOffset,
+          reprise_timeout: prochainEssai,
+        },
+      }).eq("id", runId);
+
+      const relance = new Promise((resolve) => setTimeout(resolve, 1_500)).then(() => fetch(
+        `${url}/functions/v1/import-annuaire-rpps`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+          },
+          body: JSON.stringify({
+            offset: repriseOffset,
+            run_id: runId,
+            lignes_lues: repriseLues,
+            lignes_importees: repriseImportees,
+            reprises_timeout: prochainEssai,
+          }),
+        },
+      )).catch(() => undefined);
+      (globalThis as any).EdgeRuntime?.waitUntil?.(relance);
+      return jsonResponse(req, {
+        success: true,
+        retrying: true,
+        run_id: runId,
+        next_offset: repriseOffset,
+        reprise_timeout: prochainEssai,
+      }, 202);
+    }
+
     if (runId) {
       await admin.from("sourcing_imports").update({
         statut: "ERREUR",
         termine_le: new Date().toISOString(),
-        erreur: (error as Error).message.slice(0, 1000),
+        erreur: message.slice(0, 1000),
       }).eq("id", runId);
     }
-    return jsonResponse(req, { error: (error as Error).message }, 500);
+    return jsonResponse(req, { error: message }, 500);
   }
 });

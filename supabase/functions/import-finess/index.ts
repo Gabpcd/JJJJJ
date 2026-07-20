@@ -10,8 +10,10 @@ import { jsonResponse, preflightResponse } from "../_shared/cors.ts";
 
 const FICHIER = "https://data-pipeline-open.s3.sbg.io.cloud.ovh.net/finess/finess_etablissements.csv";
 const SOURCE_PAGE = "https://www.data.gouv.fr/datasets/reexposition-des-donnees-finess";
-const TRANCHE = 4 * 1024 * 1024;       // 4 Mo par requête Range
-const BUDGET_MS = 150_000;             // ~150 s puis auto-relance
+// Passes courtes pour ne pas saturer la base pendant la première charge.
+const TRANCHE = 1024 * 1024;            // 1 Mo par requête Range
+const TAILLE_UPSERT = 100;
+const BUDGET_MS = 90_000;               // puis auto-relance
 
 // libcategetab / libcategagretab → type Jolene (null = ignoré)
 function mapType(libCateg: string, libAgr: string): string | null {
@@ -130,9 +132,9 @@ Deno.serve(async (req) => {
         });
       }
 
-      for (let i = 0; i < rows.length; i += 500) {
+      for (let i = 0; i < rows.length; i += TAILLE_UPSERT) {
         const { data: upserts, error } = await admin.rpc("fn_sourcing_upsert_etablissements", {
-          p_rows: rows.slice(i, i + 500),
+          p_rows: rows.slice(i, i + TAILLE_UPSERT),
         });
         if (error) throw new Error(`${error.message} (octet ${pos})`);
         totalInsere += Number(upserts) || 0;

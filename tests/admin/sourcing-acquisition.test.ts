@@ -22,6 +22,14 @@ describe('sourcing acquisition silencieux', () => {
     expect(finess).toContain('finess_etablissements.csv');
     expect(finess).toContain('FINESS_DATA_GOUV');
     expect(finess).not.toContain('2ce43ade-8d2c-4d1d-81da-ca06c82abc68');
+    expect(rpps).toContain('const TAILLE_UPSERT = 25');
+    expect(rpps).toContain('const BUDGET_MS = 20_000');
+    expect(rpps).toContain('"statement timeout"');
+    expect(rpps).toContain('retrying: true');
+    expect(rpps).toContain('2 ** reprisesTimeout');
+    expect(rpps).toContain('detailsInterrompu?.fichier === FICHIER');
+    expect(rpps).toContain('"connection reset"');
+    expect(finess).toContain('const TAILLE_UPSERT = 100');
   });
 
   it('covers mission professions and retains stable official identifiers', () => {
