@@ -16,8 +16,9 @@ const TRANCHE = 1024 * 1024;
 // La fonction SQL n'écrit désormais que les nouvelles clés officielles : les
 // doublons d'une reprise ou d'une synchronisation hebdomadaire sont ignorés et
 // ne réindexent plus toute la table historique.
-const TAILLE_UPSERT = 100;
+const TAILLE_UPSERT = 25;
 const BUDGET_MS = 20_000;
+const MAX_REPRISES_TIMEOUT = 12;
 
 function sansAccents(value: string): string {
   return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
@@ -105,12 +106,20 @@ Deno.serve(async (req) => {
   const url = Deno.env.get("SUPABASE_URL")!;
   const admin = createClient(url, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } });
   let runId: string | null = null;
+  let repriseOffset = 0;
+  let repriseLues = 0;
+  let repriseImportees = 0;
+  let reprisesTimeout = 0;
 
   try {
     const body = await req.json().catch(() => ({}));
     const offset = Number(body.offset) || 0;
     const luesAvant = Number(body.lignes_lues) || 0;
     const importeesAvant = Number(body.lignes_importees) || 0;
+    reprisesTimeout = Number(body.reprises_timeout) || 0;
+    repriseOffset = offset;
+    repriseLues = luesAvant;
+    repriseImportees = importeesAvant;
     runId = typeof body.run_id === "string" ? body.run_id : null;
 
     if (!runId) {
@@ -219,6 +228,24 @@ Deno.serve(async (req) => {
         if (error) throw new Error(error.message);
         totalImportees += Number(upserts) || 0;
       }
+
+      // Le curseur ne progresse qu'une fois toute la tranche écrite. Si une
+      // requête suivante expire, la reprise rejoue au plus cette tranche ; les
+      // doublons sont ignorés par la fonction SQL idempotente.
+      repriseOffset = pos;
+      repriseLues = luesAvant + totalLues;
+      repriseImportees = importeesAvant + totalImportees;
+      reprisesTimeout = 0;
+      await admin.from("sourcing_imports").update({
+        lignes_lues: repriseLues,
+        lignes_importees: repriseImportees,
+        details: {
+          fichier: FICHIER,
+          silencieux: true,
+          format: "PS_LibreAcces_Personne_activite",
+          next_offset: repriseOffset,
+        },
+      }).eq("id", runId);
       if (finFichier) { done = true; break; }
     }
 
@@ -255,13 +282,58 @@ Deno.serve(async (req) => {
       ...compteurs,
     });
   } catch (error) {
+    const message = (error as Error).message;
+    if (runId && message.includes("statement timeout") && reprisesTimeout < MAX_REPRISES_TIMEOUT) {
+      const prochainEssai = reprisesTimeout + 1;
+      await admin.from("sourcing_imports").update({
+        statut: "EN_COURS",
+        termine_le: null,
+        erreur: null,
+        lignes_lues: repriseLues,
+        lignes_importees: repriseImportees,
+        details: {
+          fichier: FICHIER,
+          silencieux: true,
+          format: "PS_LibreAcces_Personne_activite",
+          next_offset: repriseOffset,
+          reprise_timeout: prochainEssai,
+        },
+      }).eq("id", runId);
+
+      const relance = new Promise((resolve) => setTimeout(resolve, 1_500)).then(() => fetch(
+        `${url}/functions/v1/import-annuaire-rpps`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+          },
+          body: JSON.stringify({
+            offset: repriseOffset,
+            run_id: runId,
+            lignes_lues: repriseLues,
+            lignes_importees: repriseImportees,
+            reprises_timeout: prochainEssai,
+          }),
+        },
+      )).catch(() => undefined);
+      (globalThis as any).EdgeRuntime?.waitUntil?.(relance);
+      return jsonResponse(req, {
+        success: true,
+        retrying: true,
+        run_id: runId,
+        next_offset: repriseOffset,
+        reprise_timeout: prochainEssai,
+      }, 202);
+    }
+
     if (runId) {
       await admin.from("sourcing_imports").update({
         statut: "ERREUR",
         termine_le: new Date().toISOString(),
-        erreur: (error as Error).message.slice(0, 1000),
+        erreur: message.slice(0, 1000),
       }).eq("id", runId);
     }
-    return jsonResponse(req, { error: (error as Error).message }, 500);
+    return jsonResponse(req, { error: message }, 500);
   }
 });

@@ -22,8 +22,10 @@ describe('sourcing acquisition silencieux', () => {
     expect(finess).toContain('finess_etablissements.csv');
     expect(finess).toContain('FINESS_DATA_GOUV');
     expect(finess).not.toContain('2ce43ade-8d2c-4d1d-81da-ca06c82abc68');
-    expect(rpps).toContain('const TAILLE_UPSERT = 100');
+    expect(rpps).toContain('const TAILLE_UPSERT = 25');
     expect(rpps).toContain('const BUDGET_MS = 20_000');
+    expect(rpps).toContain('message.includes("statement timeout")');
+    expect(rpps).toContain('retrying: true');
     expect(finess).toContain('const TAILLE_UPSERT = 100');
   });
 
