@@ -26,6 +26,8 @@ describe('hygiène des sessions Auth Playwright', () => {
     expect(migration).toMatch(/GRANT EXECUTE[\s\S]+TO service_role;/);
     expect(migration).toContain("'jolene_nettoyer_sessions_playwright'");
     expect(migration).toContain("interval '2 hours'");
+    expect(migration).toContain('LIMIT 500');
+    expect(migration).toContain("'3-59/5 * * * *'");
   });
 
   it('nettoie avant le run et au teardown sans bloquer une PR précédant le déploiement', () => {

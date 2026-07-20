@@ -16,6 +16,7 @@ SET statement_timeout TO '120s'
 AS $fonction$
 DECLARE
   v_seuil timestamptz;
+  v_sessions_cibles uuid[] := ARRAY[]::uuid[];
   v_tokens_supprimes integer := 0;
   v_sessions_supprimees integer := 0;
 BEGIN
@@ -25,10 +26,11 @@ BEGIN
 
   v_seuil := clock_timestamp() - p_anciennete;
 
-  -- Supprimer d'abord les refresh tokens évite de faire supporter leur cascade
-  -- une ligne à la fois au DELETE des sessions lorsque la CI a accumulé un
-  -- historique important.
-  WITH sessions_cibles AS MATERIALIZED (
+  -- Une petite transaction régulière vaut mieux qu'une purge monolithique :
+  -- elle n'immobilise pas Auth pendant le rattrapage du stock historique.
+  SELECT COALESCE(array_agg(cible.id), ARRAY[]::uuid[])
+  INTO v_sessions_cibles
+  FROM (
     SELECT s.id
     FROM auth.sessions AS s
     JOIN auth.users AS u ON u.id = s.user_id
@@ -37,10 +39,25 @@ BEGIN
       'playwright-etab@jolene.app'
     )
       AND s.created_at < v_seuil
-  ), tokens_supprimes AS (
+    ORDER BY s.created_at
+    LIMIT 500
+  ) AS cible;
+
+  IF cardinality(v_sessions_cibles) = 0 THEN
+    RETURN jsonb_build_object(
+      'sessions_supprimees', 0,
+      'refresh_tokens_supprimes', 0,
+      'avant', v_seuil,
+      'limite_par_passage', 500
+    );
+  END IF;
+
+  -- Supprimer d'abord les refresh tokens évite de faire supporter leur cascade
+  -- une ligne à la fois au DELETE des sessions lorsque la CI a accumulé un
+  -- historique important.
+  WITH tokens_supprimes AS (
     DELETE FROM auth.refresh_tokens AS rt
-    USING sessions_cibles AS cible
-    WHERE rt.session_id = cible.id
+    WHERE rt.session_id = ANY(v_sessions_cibles)
     RETURNING 1
   )
   SELECT count(*)::integer INTO v_tokens_supprimes
@@ -48,13 +65,7 @@ BEGIN
 
   WITH sessions_supprimees AS (
     DELETE FROM auth.sessions AS s
-    USING auth.users AS u
-    WHERE u.id = s.user_id
-      AND u.email IN (
-        'playwright-soignant@jolene.app',
-        'playwright-etab@jolene.app'
-      )
-      AND s.created_at < v_seuil
+    WHERE s.id = ANY(v_sessions_cibles)
     RETURNING 1
   )
   SELECT count(*)::integer INTO v_sessions_supprimees
@@ -63,7 +74,8 @@ BEGIN
   RETURN jsonb_build_object(
     'sessions_supprimees', v_sessions_supprimees,
     'refresh_tokens_supprimes', v_tokens_supprimes,
-    'avant', v_seuil
+    'avant', v_seuil,
+    'limite_par_passage', 500
   );
 END;
 $fonction$;
@@ -78,6 +90,8 @@ COMMENT ON FUNCTION public.fn_test_nettoyer_sessions_playwright(interval) IS
 
 -- Filet de sécurité pour les jobs annulés avant leur teardown. Deux heures
 -- laissent largement finir le run actif ; le teardown normal purge sans délai.
+-- Le passage toutes les cinq minutes rattrape progressivement un éventuel
+-- historique sans créer de pic de charge.
 DO $cron$
 DECLARE
   v_job record;
@@ -91,7 +105,7 @@ BEGIN
 
   PERFORM cron.schedule(
     'jolene_nettoyer_sessions_playwright',
-    '23 * * * *',
+    '3-59/5 * * * *',
     $job$SELECT public.fn_test_nettoyer_sessions_playwright(interval '2 hours');$job$
   );
 EXCEPTION
