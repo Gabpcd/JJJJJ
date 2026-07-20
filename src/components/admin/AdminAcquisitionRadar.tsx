@@ -386,7 +386,7 @@ export function AdminAcquisitionRadar() {
         <CarteKPIY2K icone={<Activity className="h-4 w-4" />} valeur={data?.stats.signaux_actifs || 0} label="Signaux actifs" variant="holographic" />
         <CarteKPIY2K icone={<Building2 className="h-4 w-4" />} valeur={data?.stats.etablissements_a_potentiel || 0} label="Établ. à potentiel" variant="default" />
         <CarteKPIY2K icone={<UserCheck className="h-4 w-4" />} valeur={data?.stats.disponibles_14j || 0} label="Disponibles à 14 j" variant="default" />
-        <CarteKPIY2K icone={<CircleDollarSign className="h-4 w-4" />} valeur={fmtEuro(data?.stats.potentiel_commission_mensuel_ht || 0)} label="Potentiel mensuel HT" variant="success" />
+        <CarteKPIY2K icone={<CircleDollarSign className="h-4 w-4" />} valeur={fmtEuro(data?.stats.potentiel_commission_mensuel_ht || 0)} label="Potentiel mensuel HT" variant="soft" />
       </div>
 
       {!data && !loading ? (
