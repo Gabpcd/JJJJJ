@@ -39,15 +39,11 @@ ALTER TABLE public.sales_contacts
   ADD COLUMN IF NOT EXISTS source_donnees text,
   ADD COLUMN IF NOT EXISTS score_sourcing smallint;
 
-UPDATE public.prospects_etablissements
-   SET source_maj_le = COALESCE(source_maj_le, maj_le),
-       dernier_controle_le = COALESCE(dernier_controle_le, enrichi_le, maj_le)
- WHERE source_maj_le IS NULL OR dernier_controle_le IS NULL;
-
-UPDATE public.prospects_soignants
-   SET source_maj_le = COALESCE(source_maj_le, maj_le),
-       dernier_controle_le = COALESCE(dernier_controle_le, enrichi_le, maj_le)
- WHERE source_maj_le IS NULL OR dernier_controle_le IS NULL;
+-- Pas de backfill massif ici : la production contient plusieurs centaines de
+-- milliers de prospects historiques et une réécriture en migration dépasse le
+-- statement_timeout. Les imports officiels remplissent ces dates au fil de la
+-- synchronisation ; les lignes historiques restent simplement moins bien
+-- classées jusqu'à leur premier contrôle.
 
 DO $do$
 BEGIN

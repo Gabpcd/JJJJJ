@@ -36,6 +36,7 @@ describe('sourcing acquisition silencieux', () => {
     expect(migration).toContain('ADD COLUMN IF NOT EXISTS numero_rpps text');
     expect(migration).toContain('ADD COLUMN IF NOT EXISTS finess_structure text');
     expect(migration).toContain('uq_sales_contacts_source_prospect');
+    expect(migration).not.toMatch(/UPDATE public\.prospects_(soignants|etablissements)[\s\S]*SET source_maj_le/);
   });
 
   it('never turns discovery into automatic outreach', () => {
