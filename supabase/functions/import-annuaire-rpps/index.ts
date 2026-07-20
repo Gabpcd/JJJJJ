@@ -9,8 +9,12 @@ import { jsonResponse, preflightResponse } from "../_shared/cors.ts";
 
 const FICHIER = "https://www.data.gouv.fr/api/1/datasets/r/fffda7e9-0ea2-4c35-bba0-4496f3af935d";
 const SOURCE_PAGE = "https://www.data.gouv.fr/datasets/annuaire-sante-extractions-des-donnees-en-libre-acces-des-professionnels-intervenant-dans-le-systeme-de-sante-rpps";
-const TRANCHE = 4 * 1024 * 1024;
-const BUDGET_MS = 150_000;
+// Lots volontairement modestes : la première synchronisation ajoute plusieurs
+// centaines de milliers de lignes et partage les ressources de la base avec
+// l'application. On privilégie des passes courtes et auto-reprises.
+const TRANCHE = 1024 * 1024;
+const TAILLE_UPSERT = 100;
+const BUDGET_MS = 90_000;
 
 function sansAccents(value: string): string {
   return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
@@ -205,9 +209,9 @@ Deno.serve(async (req) => {
       }
 
       const rows = [...prospects.values()];
-      for (let i = 0; i < rows.length; i += 500) {
+      for (let i = 0; i < rows.length; i += TAILLE_UPSERT) {
         const { data: upserts, error } = await admin.rpc("fn_sourcing_upsert_soignants", {
-          p_rows: rows.slice(i, i + 500),
+          p_rows: rows.slice(i, i + TAILLE_UPSERT),
         });
         if (error) throw new Error(error.message);
         totalImportees += Number(upserts) || 0;

@@ -22,6 +22,8 @@ describe('sourcing acquisition silencieux', () => {
     expect(finess).toContain('finess_etablissements.csv');
     expect(finess).toContain('FINESS_DATA_GOUV');
     expect(finess).not.toContain('2ce43ade-8d2c-4d1d-81da-ca06c82abc68');
+    expect(rpps).toContain('const TAILLE_UPSERT = 100');
+    expect(finess).toContain('const TAILLE_UPSERT = 100');
   });
 
   it('covers mission professions and retains stable official identifiers', () => {
