@@ -1,8 +1,12 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
-const migration = readFileSync(
+const migrationInitiale = readFileSync(
   'supabase/migrations/20260720172500_hygiene_sessions_playwright.sql',
+  'utf8',
+);
+const migration = readFileSync(
+  'supabase/migrations/20260720173000_accelerer_hygiene_sessions_playwright.sql',
   'utf8',
 );
 const config = readFileSync('playwright.config.ts', 'utf8');
@@ -19,6 +23,7 @@ describe('hygiène des sessions Auth Playwright', () => {
     expect(migration).not.toMatch(/DELETE\s+FROM\s+auth\.users/i);
     expect(migration).not.toContain('marie.lefevre@jolene-demo.dev');
     expect(migration).not.toContain('admin@jolene.app');
+    expect(migrationInitiale).not.toMatch(/DELETE\s+FROM\s+auth\.users/i);
   });
 
   it('réserve la RPC au service role et garde un filet de sécurité pour les jobs annulés', () => {
@@ -26,8 +31,8 @@ describe('hygiène des sessions Auth Playwright', () => {
     expect(migration).toMatch(/GRANT EXECUTE[\s\S]+TO service_role;/);
     expect(migration).toContain("'jolene_nettoyer_sessions_playwright'");
     expect(migration).toContain("interval '2 hours'");
-    expect(migration).toContain('LIMIT 500');
-    expect(migration).toContain("'3-59/5 * * * *'");
+    expect(migration).toContain('LIMIT 100');
+    expect(migration).toContain("'* * * * *'");
   });
 
   it('nettoie avant le run et au teardown sans bloquer une PR précédant le déploiement', () => {
@@ -39,5 +44,8 @@ describe('hygiène des sessions Auth Playwright', () => {
     );
     expect(workflow).toContain('auth/v1/logout');
     expect(workflow).toContain('access_token');
+    expect(workflow).toContain('::add-mask::$E2E_TEST_PASSWORD');
+    expect(workflow).toContain('steps.playwright-tests.outcome');
+    expect(workflow).toContain('for tentative in 1 2 3');
   });
 });
