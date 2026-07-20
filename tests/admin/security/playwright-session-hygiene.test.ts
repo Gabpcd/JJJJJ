@@ -26,13 +26,13 @@ describe('hygiène des sessions Auth Playwright', () => {
     expect(migrationInitiale).not.toMatch(/DELETE\s+FROM\s+auth\.users/i);
   });
 
-  it('réserve la RPC au service role et garde un filet de sécurité pour les jobs annulés', () => {
+  it('réserve la RPC au service role et retire le cron concurrent de production', () => {
     expect(migration).toMatch(/REVOKE ALL[\s\S]+FROM PUBLIC, anon, authenticated;/);
     expect(migration).toMatch(/GRANT EXECUTE[\s\S]+TO service_role;/);
     expect(migration).toContain("'jolene_nettoyer_sessions_playwright'");
-    expect(migration).toContain("interval '2 hours'");
+    expect(migration).toContain('cron.unschedule');
+    expect(migration).not.toContain('cron.schedule(');
     expect(migration).toContain('LIMIT 100');
-    expect(migration).toContain("'* * * * *'");
   });
 
   it('nettoie avant le run et au teardown sans bloquer une PR précédant le déploiement', () => {

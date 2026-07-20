@@ -1,7 +1,7 @@
 -- Le premier rattrapage a montré qu'un lot de 500 tokens pouvait dépasser le
 -- timeout HTTP de maintenance sur la base actuelle. On réduit le verrouillage
--- à 100 sessions et on passe chaque minute : même débit moyen, transactions
--- courtes, Auth reste disponible pendant le rattrapage.
+-- à 100 sessions. Le setup/teardown Playwright appelle la fonction ; aucun cron
+-- permanent ne doit concurrencer Auth en production.
 CREATE OR REPLACE FUNCTION public.fn_test_nettoyer_sessions_playwright(
   p_anciennete interval DEFAULT interval '6 hours'
 )
@@ -88,13 +88,8 @@ BEGIN
     PERFORM cron.unschedule(v_job.jobid);
   END LOOP;
 
-  PERFORM cron.schedule(
-    'jolene_nettoyer_sessions_playwright',
-    '* * * * *',
-    $job$SELECT public.fn_test_nettoyer_sessions_playwright(interval '2 hours');$job$
-  );
 EXCEPTION
   WHEN undefined_table OR invalid_schema_name OR insufficient_privilege THEN
-    RAISE NOTICE 'pg_cron indisponible : purge de secours Playwright non planifiee';
+    RAISE NOTICE 'pg_cron indisponible : aucun job Playwright a retirer';
 END;
 $cron$;
