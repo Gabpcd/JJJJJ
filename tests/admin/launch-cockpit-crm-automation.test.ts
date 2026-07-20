@@ -46,10 +46,11 @@ describe('Cockpit de lancement et CRM automatisé', () => {
     expect(crm).toContain('L’envoi reste validé par un humain.');
   });
 
-  it('journalise les emails existants et ouvre le CRM en premier dans Prospection', () => {
+  it('journalise les emails existants et garde le CRM accessible après le sourcing', () => {
     expect(outreach).toContain('fn_crm_enregistrer_email_envoye');
     expect(outreachBatch).toContain('fn_crm_enregistrer_email_envoye');
-    expect(sales).toMatch(/useState<[^>]*'crm'[^>]*>\('crm'\)/);
+    expect(sales).toMatch(/useState<[^>]*'sourcing'[^>]*'crm'[^>]*>\('sourcing'\)/);
+    expect(sales).toContain('Nouveaux contacts');
     expect(sales).toContain('<AdminCrmAutomation');
   });
 });

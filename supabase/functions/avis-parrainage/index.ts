@@ -31,6 +31,22 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
       { auth: { persistSession: false } },
     );
+    const { data: gardeFou, error: gardeFouError } = await admin
+      .from("growth_config")
+      .select("valeur")
+      .eq("cle", "automatisations_marketing_actives")
+      .maybeSingle();
+    if (gardeFouError) {
+      return new Response(JSON.stringify({ error: gardeFouError.message }), { status: 500 });
+    }
+    if (gardeFou?.valeur !== "true") {
+      return new Response(JSON.stringify({
+        success: true,
+        skipped: true,
+        reason: "PRELANCEMENT_AUTOMATISATIONS_MARKETING_DESACTIVEES",
+        envoyes: 0,
+      }), { headers: { "Content-Type": "application/json" } });
+    }
     const RESEND = Deno.env.get("RESEND_API_KEY");
     if (!RESEND) return new Response(JSON.stringify({ error: "RESEND_API_KEY manquante" }), { status: 500 });
 
