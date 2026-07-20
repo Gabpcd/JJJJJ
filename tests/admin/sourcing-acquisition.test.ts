@@ -13,6 +13,8 @@ const relanceInactifs = read('supabase/functions/relance-inactifs/index.ts');
 const digestHebdo = read('supabase/functions/digest-hebdo/index.ts');
 const avisParrainage = read('supabase/functions/avis-parrainage/index.ts');
 const enrichissementAnnuaire = read('supabase/functions/enrich-prospects-annuaire/index.ts');
+const enrichissementCron = read('supabase/migrations/20260720171500_enrichissement_annuaire_borne.sql');
+const postgrestCache = read('supabase/migrations/20260720172000_postgrest_cache_timeout.sql');
 
 describe('sourcing acquisition silencieux', () => {
   it('uses current official directories instead of the deprecated CNAM export', () => {
@@ -84,6 +86,14 @@ describe('sourcing acquisition silencieux', () => {
     expect(enrichissementAnnuaire).toContain('.order("maj_le", { ascending: true })');
     expect(enrichissementAnnuaire).toContain('reste_a_traiter: resteATraiter');
     expect(enrichissementAnnuaire).not.toContain('count: "exact"');
+    expect(enrichissementCron).toContain("'enrich-prospects-etab'");
+    expect(enrichissementCron).toContain("'enrich-prospects-soignant'");
+    expect(enrichissementCron).not.toContain('sales-outreach');
     expect(sales).toContain('d.reste_a_traiter');
+  });
+
+  it('gives only the PostgREST cache builder a longer startup window', () => {
+    expect(postgrestCache).toContain("ALTER ROLE authenticator SET statement_timeout = ''120s''");
+    expect(postgrestCache).not.toMatch(/ALTER ROLE (anon|authenticated)/);
   });
 });
