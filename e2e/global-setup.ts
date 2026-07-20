@@ -13,6 +13,7 @@
  * setup se contente d'un avertissement : les tests qui en dépendent géreront.
  */
 import { createClient } from '@supabase/supabase-js';
+import { nettoyerSessionsPlaywright } from './helpers/nettoyage-sessions-playwright';
 
 const PREFIXES = ['[playwright-test]%', '[pw-test%'];
 
@@ -49,6 +50,10 @@ export default async function globalSetup() {
   }
 
   const admin = createClient(url, serviceKey, { auth: { persistSession: false } });
+
+  // Un run interrompu ne passe pas par global-teardown. Purger ses anciennes
+  // sessions avant toute autre requête empêche Auth/PostgREST de se saturer.
+  await nettoyerSessionsPlaywright(admin, '2 hours');
 
   // 1. Missions de test orphelines (tous préfixes confondus)
   const orFiltre = PREFIXES.map((p) => `intitule.like.${p}`).join(',');

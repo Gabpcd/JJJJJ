@@ -31,6 +31,7 @@ export default defineConfig({
     '**/non-regression/**',
   ],
   globalSetup: './e2e/global-setup.ts',
+  globalTeardown: './e2e/global-teardown.ts',
   timeout: 30_000,
   expect: { timeout: 10_000 },
   fullyParallel: true,

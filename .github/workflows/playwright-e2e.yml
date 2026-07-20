@@ -105,7 +105,9 @@ jobs:
           fi
           echo "service_role OK (admin GoTrue 200)"
           # 2) Login compte test (publishable key + mot de passe fixe)
-          code=$(curl -s -o /dev/null -w '%{http_code}' \
+          auth_response=$(mktemp)
+          trap 'rm -f "$auth_response"' EXIT
+          code=$(curl -s -o "$auth_response" -w '%{http_code}' \
             "$E2E_SUPABASE_URL/auth/v1/token?grant_type=password" \
             -H "apikey: $E2E_PUBLISHABLE_KEY" -H "Content-Type: application/json" \
             -d "{\"email\":\"playwright-soignant@jolene.app\",\"password\":\"$E2E_TEST_PASSWORD\"}")
@@ -114,6 +116,14 @@ jobs:
             exit 1
           fi
           echo "login compte test OK"
+          # Le préflight ne doit pas laisser une session Auth à chaque run.
+          access_token=$(node -e 'const fs=require("fs");try{const d=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));process.stdout.write(d.access_token||"")}catch{}' "$auth_response")
+          if [ -n "$access_token" ]; then
+            curl -s -o /dev/null -X POST \
+              "$E2E_SUPABASE_URL/auth/v1/logout" \
+              -H "apikey: $E2E_PUBLISHABLE_KEY" \
+              -H "Authorization: Bearer $access_token" || true
+          fi
       - name: Build app
         run: npm run build
         env:
