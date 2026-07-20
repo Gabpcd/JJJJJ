@@ -26,6 +26,7 @@ describe('sourcing acquisition silencieux', () => {
     expect(rpps).toContain('const BUDGET_MS = 20_000');
     expect(rpps).toContain('message.includes("statement timeout")');
     expect(rpps).toContain('retrying: true');
+    expect(rpps).toContain('2 ** reprisesTimeout');
     expect(finess).toContain('const TAILLE_UPSERT = 100');
   });
 

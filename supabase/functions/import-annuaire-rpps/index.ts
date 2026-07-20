@@ -221,9 +221,16 @@ Deno.serve(async (req) => {
       }
 
       const rows = [...prospects.values()];
-      for (let i = 0; i < rows.length; i += TAILLE_UPSERT) {
+      // Une tranche qui a expiré est rejouée avec des lots progressivement
+      // divisés (25, 12, 6, 3, 1). Une ligne/index atypique ne peut ainsi plus
+      // bloquer l'ensemble du référentiel national.
+      const tailleUpsertEffective = Math.max(
+        1,
+        Math.floor(TAILLE_UPSERT / (2 ** reprisesTimeout)),
+      );
+      for (let i = 0; i < rows.length; i += tailleUpsertEffective) {
         const { data: upserts, error } = await admin.rpc("fn_sourcing_upsert_soignants", {
-          p_rows: rows.slice(i, i + TAILLE_UPSERT),
+          p_rows: rows.slice(i, i + tailleUpsertEffective),
         });
         if (error) throw new Error(error.message);
         totalImportees += Number(upserts) || 0;
