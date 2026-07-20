@@ -113,13 +113,10 @@ Deno.serve(async (req) => {
 
   try {
     const body = await req.json().catch(() => ({}));
-    const offset = Number(body.offset) || 0;
-    const luesAvant = Number(body.lignes_lues) || 0;
-    const importeesAvant = Number(body.lignes_importees) || 0;
+    let offset = Number(body.offset) || 0;
+    let luesAvant = Number(body.lignes_lues) || 0;
+    let importeesAvant = Number(body.lignes_importees) || 0;
     reprisesTimeout = Number(body.reprises_timeout) || 0;
-    repriseOffset = offset;
-    repriseLues = luesAvant;
-    repriseImportees = importeesAvant;
     runId = typeof body.run_id === "string" ? body.run_id : null;
 
     if (!runId) {
@@ -133,15 +130,45 @@ Deno.serve(async (req) => {
         .maybeSingle();
       if (actif?.id) return jsonResponse(req, { success: true, already_running: true, run_id: actif.id });
 
-      const { data: run, error: runErr } = await admin.from("sourcing_imports").insert({
-        source_code: "ANNUAIRE_SANTE_RPPS",
-        cible: "SOIGNANT",
-        source_url: SOURCE_PAGE,
-        details: { fichier: FICHIER, silencieux: true, format: "PS_LibreAcces_Personne_activite" },
-      }).select("id").single();
-      if (runErr) throw new Error(runErr.message);
-      runId = run.id;
+      // Un clic/cron après une coupure réseau reprend la dernière exécution au
+      // curseur validé, à condition qu'elle concerne exactement le même
+      // fichier officiel. Il n'y a donc jamais besoin de rescanner 812 Mo.
+      const { data: interrompu } = await admin.from("sourcing_imports")
+        .select("id, details, lignes_lues, lignes_importees")
+        .eq("source_code", "ANNUAIRE_SANTE_RPPS")
+        .eq("statut", "ERREUR")
+        .gte("demarre_le", new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString())
+        .order("demarre_le", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      const detailsInterrompu = interrompu?.details as Record<string, unknown> | null;
+      const offsetInterrompu = Number(detailsInterrompu?.next_offset) || 0;
+
+      if (interrompu?.id && detailsInterrompu?.fichier === FICHIER && offsetInterrompu > 0) {
+        runId = interrompu.id;
+        offset = offsetInterrompu;
+        luesAvant = Number(interrompu.lignes_lues) || 0;
+        importeesAvant = Number(interrompu.lignes_importees) || 0;
+        await admin.from("sourcing_imports").update({
+          statut: "EN_COURS",
+          termine_le: null,
+          erreur: null,
+        }).eq("id", runId);
+      } else {
+        const { data: run, error: runErr } = await admin.from("sourcing_imports").insert({
+          source_code: "ANNUAIRE_SANTE_RPPS",
+          cible: "SOIGNANT",
+          source_url: SOURCE_PAGE,
+          details: { fichier: FICHIER, silencieux: true, format: "PS_LibreAcces_Personne_activite" },
+        }).select("id").single();
+        if (runErr) throw new Error(runErr.message);
+        runId = run.id;
+      }
     }
+
+    repriseOffset = offset;
+    repriseLues = luesAvant;
+    repriseImportees = importeesAvant;
 
     const debut = Date.now();
     let pos = offset;
@@ -290,7 +317,13 @@ Deno.serve(async (req) => {
     });
   } catch (error) {
     const message = (error as Error).message;
-    if (runId && message.includes("statement timeout") && reprisesTimeout < MAX_REPRISES_TIMEOUT) {
+    const erreurReprenable = [
+      "statement timeout",
+      "connection reset",
+      "error sending request",
+      "Téléchargement Annuaire Santé impossible",
+    ].some((motif) => message.includes(motif));
+    if (runId && erreurReprenable && reprisesTimeout < MAX_REPRISES_TIMEOUT) {
       const prochainEssai = reprisesTimeout + 1;
       await admin.from("sourcing_imports").update({
         statut: "EN_COURS",
