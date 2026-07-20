@@ -12,6 +12,7 @@ const sales = read('src/pages/admin/AdminSales.tsx');
 const relanceInactifs = read('supabase/functions/relance-inactifs/index.ts');
 const digestHebdo = read('supabase/functions/digest-hebdo/index.ts');
 const avisParrainage = read('supabase/functions/avis-parrainage/index.ts');
+const enrichissementAnnuaire = read('supabase/functions/enrich-prospects-annuaire/index.ts');
 
 describe('sourcing acquisition silencieux', () => {
   it('uses current official directories instead of the deprecated CNAM export', () => {
@@ -77,5 +78,12 @@ describe('sourcing acquisition silencieux', () => {
     expect(migration).toContain("'jolene_sourcing_rpps_hebdo'");
     expect(migration).toContain("'jolene_sourcing_finess_hebdo'");
     expect(migration).toContain("'silencieux', true");
+  });
+
+  it('keeps background directory enrichment bounded on the full RPPS dataset', () => {
+    expect(enrichissementAnnuaire).toContain('.order("maj_le", { ascending: true })');
+    expect(enrichissementAnnuaire).toContain('reste_a_traiter: resteATraiter');
+    expect(enrichissementAnnuaire).not.toContain('count: "exact"');
+    expect(sales).toContain('d.reste_a_traiter');
   });
 });

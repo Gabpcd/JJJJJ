@@ -1153,7 +1153,7 @@ function EnvoiMasseBar({ cible }: { cible: 'ETABLISSEMENT' | 'SOIGNANT' }) {
       });
       if (error || (data as any)?.error) { toast.error((data as any)?.error || 'Enrichissement impossible.'); return; }
       const d = data as any;
-      toast.success(`${d.traites} fiche(s) passée(s) à l'Annuaire Santé : ${d.emails} email(s) + ${d.telephones} téléphone(s) trouvés${d.ambigus ? ` · ${d.ambigus} homonyme(s) ignoré(s) par sécurité` : ''}${d.restants ? ` — ${d.restants.toLocaleString('fr-FR')} restantes, recliquez pour continuer` : ''}`);
+      toast.success(`${d.traites} fiche(s) passée(s) à l'Annuaire Santé : ${d.emails} email(s) + ${d.telephones} téléphone(s) trouvés${d.ambigus ? ` · ${d.ambigus} homonyme(s) ignoré(s) par sécurité` : ''}${d.reste_a_traiter ? ' — d’autres fiches restent à traiter, recliquez pour continuer' : ''}`);
       chargerEtat();
     } finally {
       setEnrichissement(false);
