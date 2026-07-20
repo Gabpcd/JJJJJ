@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { LayoutAdmin } from '@/components/LayoutAdmin';
 import { ChargementAdmin } from '@/components/admin/ChargementAdmin';
@@ -8,8 +8,10 @@ import { CardY2K, CardY2KHeader, CardY2KTitle, CardY2KContent } from '@/componen
 import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { BadgeY2K } from '@/components/y2k/BadgeY2K';
 import { Input } from '@/components/ui/input';
-import { Users, Building2, Megaphone, RefreshCw, TrendingUp, Info } from 'lucide-react';
+import { Users, Building2, Megaphone, RefreshCw, TrendingUp, Info, Save } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, PieChart, Pie, Cell } from 'recharts';
+import { AdminAcquisitionRadar } from '@/components/admin/AdminAcquisitionRadar';
+import { toast } from 'sonner';
 
 const fmt = (v: number) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(isFinite(v) ? v : 0);
 
@@ -33,15 +35,57 @@ export default function AdminAcquisition() {
   const [periode, setPeriode] = useState(90);
   // Dépense pub par canal (saisie manuelle) → CAC réel
   const [depenses, setDepenses] = useState<Record<string, number>>({});
+  const [savingCanal, setSavingCanal] = useState<string | null>(null);
 
-  const charger = async () => {
+  const charger = useCallback(async () => {
     setLoading(true);
-    const { data: res } = await supabase.rpc('fn_admin_acquisition_canaux' as any, { p_jours: periode });
+    const debut = new Date();
+    debut.setDate(debut.getDate() - periode);
+    const [canauxResultat, depensesResultat] = await Promise.all([
+      supabase.rpc('fn_admin_acquisition_canaux' as never, { p_jours: periode } as never),
+      supabase.from('acquisition_depenses' as any)
+        .select('canal, montant_ht')
+        .gte('periode_fin', debut.toISOString().slice(0, 10)),
+    ]);
+    const res = canauxResultat.data;
     if (res) setData(res);
+    if (!depensesResultat.error) {
+      const parCanal = ((depensesResultat.data || []) as unknown as Array<{ canal: string; montant_ht: number }>).reduce<Record<string, number>>(
+        (acc, ligne) => {
+          const cle = ligne.canal.toUpperCase();
+          acc[cle] = (acc[cle] || 0) + Number(ligne.montant_ht || 0);
+          return acc;
+        },
+        {},
+      );
+      setDepenses(parCanal);
+    }
     setLoading(false);
-  };
+  }, [periode]);
 
-  useEffect(() => { charger(); }, [periode]);
+  useEffect(() => { void charger(); }, [charger]);
+
+  const enregistrerDepense = async (canal: string) => {
+    const cle = canal.toUpperCase();
+    const fin = new Date();
+    const debut = new Date(fin);
+    debut.setDate(debut.getDate() - periode);
+    setSavingCanal(cle);
+    const { error } = await supabase.rpc('fn_admin_acquisition_enregistrer_depense' as never, {
+      p_canal: cle,
+      p_campagne: '',
+      p_periode_debut: debut.toISOString().slice(0, 10),
+      p_periode_fin: fin.toISOString().slice(0, 10),
+      p_montant_ht: depenses[cle] || 0,
+      p_notes: `Saisie admin — fenêtre ${periode} jours`,
+    } as never);
+    setSavingCanal(null);
+    if (error) {
+      toast.error(`Dépense non enregistrée : ${error.message}`);
+      return;
+    }
+    toast.success(`Dépense ${libelle(cle)} enregistrée.`);
+  };
 
   const canaux = useMemo(() => (data?.par_canal || []) as any[], [data]);
   const campagnes = useMemo(() => (data?.par_campagne || []) as any[], [data]);
@@ -56,9 +100,12 @@ export default function AdminAcquisition() {
   return (
     <LayoutAdmin>
       <div className="space-y-6">
+        <AdminAcquisitionRadar />
+
+        <div className="border-t border-border pt-6">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div>
-            <h1 className="text-xl font-bold text-foreground">Acquisition par canal</h1>
+            <h1 className="text-xl font-bold text-foreground">Attribution et coût d’acquisition</h1>
             <p className="text-sm text-muted-foreground">D'où viennent vos inscrits — {periode} derniers jours</p>
           </div>
           <div className="flex gap-2">
@@ -150,12 +197,14 @@ export default function AdminAcquisition() {
                         <th className="py-2 px-2 text-right">Activés</th>
                         <th className="py-2 px-2 text-right">Dépense (€)</th>
                         <th className="py-2 pl-2 text-right">CAC</th>
+                        <th className="py-2 pl-2"><span className="sr-only">Enregistrer</span></th>
                       </tr>
                     </thead>
                     <tbody>
                       {canaux.map((c) => {
                         const inscrits = (c.soignants || 0) + (c.etablissements || 0);
-                        const depense = depenses[c.canal] || 0;
+                        const canalCle = String(c.canal).toUpperCase();
+                        const depense = depenses[canalCle] || 0;
                         const cac = depense > 0 && inscrits > 0 ? depense / inscrits : 0;
                         const tauxActiv = c.soignants > 0 ? Math.round((c.soignants_actifs / c.soignants) * 100) : 0;
                         return (
@@ -173,13 +222,26 @@ export default function AdminAcquisition() {
                               <Input
                                 aria-label={`Dépense publicitaire pour le canal ${libelle(c.canal)}`}
                                 type="number"
-                                value={depenses[c.canal] ?? ''}
-                                onChange={e => setDepenses(prev => ({ ...prev, [c.canal]: Number(e.target.value) }))}
+                                min="0"
+                                step="0.01"
+                                value={depenses[canalCle] ?? ''}
+                                onChange={e => setDepenses(prev => ({ ...prev, [canalCle]: Number(e.target.value) }))}
                                 className="h-8 w-24 ml-auto text-right"
                                 placeholder="0"
                               />
                             </td>
                             <td className="py-2 pl-2 text-right font-semibold">{cac > 0 ? fmt(cac) : '—'}</td>
+                            <td className="py-2 pl-2">
+                              <BoutonY2K
+                                size="sm"
+                                variant="ghost"
+                                aria-label={`Enregistrer la dépense du canal ${libelle(c.canal)}`}
+                                disabled={savingCanal === canalCle}
+                                onClick={() => void enregistrerDepense(canalCle)}
+                              >
+                                <Save className="h-4 w-4" />
+                              </BoutonY2K>
+                            </td>
                           </tr>
                         );
                       })}
@@ -210,6 +272,7 @@ export default function AdminAcquisition() {
             )}
           </>
         )}
+        </div>
       </div>
     </LayoutAdmin>
   );

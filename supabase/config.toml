@@ -217,6 +217,11 @@ verify_jwt = false
 [functions.import-annuaire-rpps]
 verify_jwt = false
 
+# Radar de demande France Travail : JWT admin ou appel service_role verifie
+# dans la fonction. Aucun contact sortant, seulement des signaux internes.
+[functions.import-signaux-acquisition]
+verify_jwt = false
+
 [functions.sales-outreach-batch]
 verify_jwt = false
 
