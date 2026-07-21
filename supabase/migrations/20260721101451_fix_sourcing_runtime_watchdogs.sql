@@ -96,7 +96,10 @@ BEGIN
              p.source_maj_le, p.importe_le, p.statut_sourcing
       FROM public.prospects_soignants p
       WHERE p.statut_sourcing NOT IN ('IGNORE', 'OPPOSITION')
-        AND (v_departement IS NULL OR p.departement = lpad(v_departement, 2, '0'))
+        AND (v_departement IS NULL OR p.departement = CASE
+          WHEN v_departement ~ '^\d$' THEN lpad(v_departement, 2, '0')
+          ELSE v_departement
+        END)
         AND (v_profession IS NULL OR p.profession = v_profession)
         AND (NOT p_nouveaux OR p.importe_le >= now() - interval '30 days')
         AND (NOT p_contactables OR NULLIF(btrim(p.email), '') IS NOT NULL OR NULLIF(btrim(p.telephone), '') IS NOT NULL)

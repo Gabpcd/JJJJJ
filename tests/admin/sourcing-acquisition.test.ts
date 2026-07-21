@@ -129,6 +129,13 @@ describe('sourcing acquisition silencieux', () => {
     expect(sales).not.toContain("count: 'exact', head: true");
   });
 
+  it('preserves Corsica and overseas department codes in every prospect filter', () => {
+    expect(compteursTempsReel).toContain("WHEN v_departement ~ '^\\d$' THEN lpad(v_departement, 2, '0')");
+    expect(runtimeSourcing).toContain("WHEN v_departement ~ '^\\d$' THEN lpad(v_departement, 2, '0')");
+    expect(compteursTempsReel).not.toContain("p.departement = lpad(v_departement, 2, '0')");
+    expect(runtimeSourcing).not.toContain("p.departement = lpad(v_departement, 2, '0')");
+  });
+
   it('gives only the PostgREST cache builder a longer startup window', () => {
     expect(postgrestCache).toContain("ALTER ROLE authenticator SET statement_timeout = ''120s''");
     expect(postgrestCache).not.toMatch(/ALTER ROLE (anon|authenticated)/);

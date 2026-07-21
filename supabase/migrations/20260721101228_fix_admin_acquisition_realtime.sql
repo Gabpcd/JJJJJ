@@ -405,7 +405,10 @@ BEGIN
     SELECT count(*) INTO v_total
     FROM public.prospects_soignants p
     WHERE (v_profession IS NULL OR p.profession = v_profession)
-      AND (v_departement IS NULL OR p.departement = lpad(v_departement, 2, '0'))
+      AND (v_departement IS NULL OR p.departement = CASE
+        WHEN v_departement ~ '^\d$' THEN lpad(v_departement, 2, '0')
+        ELSE v_departement
+      END)
       AND (NOT p_favoris OR p.favori)
       AND (NOT p_avec_email OR NULLIF(btrim(p.email), '') IS NOT NULL)
       AND (NOT p_avec_tel OR NULLIF(btrim(p.telephone), '') IS NOT NULL)
@@ -423,7 +426,10 @@ BEGIN
            p.statut_sourcing
     FROM public.prospects_soignants p
     WHERE (v_profession IS NULL OR p.profession = v_profession)
-      AND (v_departement IS NULL OR p.departement = lpad(v_departement, 2, '0'))
+      AND (v_departement IS NULL OR p.departement = CASE
+        WHEN v_departement ~ '^\d$' THEN lpad(v_departement, 2, '0')
+        ELSE v_departement
+      END)
       AND (NOT p_favoris OR p.favori)
       AND (NOT p_avec_email OR NULLIF(btrim(p.email), '') IS NOT NULL)
       AND (NOT p_avec_tel OR NULLIF(btrim(p.telephone), '') IS NOT NULL)
@@ -573,7 +579,10 @@ BEGIN
         AND NULLIF(btrim(p.numero_rpps), '') IS NOT NULL
         AND (NULLIF(btrim(p.email), '') IS NULL OR NULLIF(btrim(p.telephone), '') IS NULL)
         AND (p.dernier_controle_le IS NULL OR p.dernier_controle_le < now() - interval '15 minutes')
-        AND (v_departement IS NULL OR p.departement = lpad(v_departement, 2, '0'))
+        AND (v_departement IS NULL OR p.departement = CASE
+          WHEN v_departement ~ '^\d$' THEN lpad(v_departement, 2, '0')
+          ELSE v_departement
+        END)
       ORDER BY p.maj_le, p.cle
       FOR UPDATE SKIP LOCKED
       LIMIT v_limite
