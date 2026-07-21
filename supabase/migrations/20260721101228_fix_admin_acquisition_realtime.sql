@@ -249,6 +249,12 @@ SET search_path = pg_catalog, public, auth
 AS $fn$
 DECLARE v_soignants bigint; v_etablissements bigint;
 BEGIN
+  -- Le snapshot puis l'UPSERT doivent former un recalcul atomique. Sans ce
+  -- verrou, un import concurrent pourrait incrementer le trigger entre les
+  -- deux et voir ensuite sa valeur ecrasee par le snapshot plus ancien.
+  LOCK TABLE public.prospects_soignants, public.prospects_etablissements
+    IN SHARE ROW EXCLUSIVE MODE;
+
   INSERT INTO public.prospection_compteurs (
     cible, total, avec_email, avec_email_non_contacte, avec_telephone,
     contactables, nouveaux_30j, maj_le

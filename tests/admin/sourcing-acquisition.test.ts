@@ -127,6 +127,8 @@ describe('sourcing acquisition silencieux', () => {
     expect(sales).toContain('Base établissements');
     expect(sales).toContain("return estNombreCompteur(value) ? value.toLocaleString('fr-FR') : '—'");
     expect(sales).not.toContain("count: 'exact', head: true");
+    const locks = compteursTempsReel.match(/LOCK TABLE public\.prospects_soignants, public\.prospects_etablissements/g) ?? [];
+    expect(locks).toHaveLength(2);
   });
 
   it('preserves Corsica and overseas department codes in every prospect filter', () => {
