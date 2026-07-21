@@ -4579,6 +4579,69 @@ $$;
 ALTER FUNCTION "public"."fn_accepter_mission_urgence"("p_mission_id" "uuid") OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."fn_acquisition_upsert_bmo"("p_rows" "jsonb") RETURNS integer
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'pg_catalog', 'public', 'auth'
+    AS $_$
+DECLARE v_count integer := 0;
+BEGIN
+  IF NOT (
+    public.est_admin()
+    OR COALESCE(auth.role(), '') = 'service_role'
+    OR COALESCE(current_setting('request.jwt.claim.role', true), '') = 'service_role'
+  ) THEN
+    RAISE EXCEPTION 'Acces refuse' USING ERRCODE = '42501';
+  END IF;
+
+  INSERT INTO public.acquisition_territoires (
+    departement, profession, bmo_annee, bmo_projets_recrutement,
+    bmo_difficulte_pct, bmo_saisonnier_pct, bmo_code_metier,
+    bmo_libelle_metier, bmo_precision, bmo_source_maj_le, source_url, maj_le
+  )
+  SELECT
+    upper(btrim(r.departement)), upper(btrim(r.profession)), r.bmo_annee,
+    GREATEST(COALESCE(r.bmo_projets_recrutement, 0), 0),
+    CASE WHEN r.bmo_difficulte_pct IS NULL THEN NULL
+      ELSE LEAST(GREATEST(r.bmo_difficulte_pct, 0), 100) END,
+    CASE WHEN r.bmo_saisonnier_pct IS NULL THEN NULL
+      ELSE LEAST(GREATEST(r.bmo_saisonnier_pct, 0), 100) END,
+    NULLIF(btrim(r.bmo_code), ''), NULLIF(btrim(r.bmo_libelle), ''),
+    CASE WHEN upper(r.precision) = 'EXACT' THEN 'EXACT' ELSE 'AGREGAT' END,
+    COALESCE(r.bmo_source_maj_le, now()), NULLIF(btrim(r.source_url), ''), now()
+  FROM jsonb_to_recordset(COALESCE(p_rows, '[]'::jsonb)) AS r(
+    departement text, profession text, bmo_annee smallint,
+    bmo_projets_recrutement integer, bmo_difficulte_pct numeric,
+    bmo_saisonnier_pct numeric, bmo_code text, bmo_libelle text,
+    precision text, bmo_source_maj_le timestamptz, source_url text
+  )
+  WHERE upper(btrim(COALESCE(r.departement, ''))) ~ '^([0-9]{2,3}|2A|2B)$'
+    AND upper(btrim(COALESCE(r.profession, ''))) IN (
+      'IDE', 'AS', 'AES', 'AUXILIAIRE_PUERICULTURE', 'SAGE_FEMME',
+      'KINE', 'MEDECIN', 'DENTISTE', 'PREPARATEUR_PHARMA',
+      'DIETETICIEN', 'ERGOTHERAPEUTE', 'PSYCHOMOTRICIEN', 'ORTHOPHONISTE'
+    )
+    AND r.bmo_annee BETWEEN 2024 AND 2100
+  ON CONFLICT (departement, profession) DO UPDATE SET
+    bmo_annee = EXCLUDED.bmo_annee,
+    bmo_projets_recrutement = EXCLUDED.bmo_projets_recrutement,
+    bmo_difficulte_pct = EXCLUDED.bmo_difficulte_pct,
+    bmo_saisonnier_pct = EXCLUDED.bmo_saisonnier_pct,
+    bmo_code_metier = EXCLUDED.bmo_code_metier,
+    bmo_libelle_metier = EXCLUDED.bmo_libelle_metier,
+    bmo_precision = EXCLUDED.bmo_precision,
+    bmo_source_maj_le = EXCLUDED.bmo_source_maj_le,
+    source_url = EXCLUDED.source_url,
+    maj_le = now();
+
+  GET DIAGNOSTICS v_count = ROW_COUNT;
+  RETURN v_count;
+END;
+$_$;
+
+
+ALTER FUNCTION "public"."fn_acquisition_upsert_bmo"("p_rows" "jsonb") OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."fn_acquisition_upsert_signaux"("p_rows" "jsonb") RETURNS integer
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'pg_catalog', 'public', 'auth'
@@ -4980,6 +5043,279 @@ $$;
 
 
 ALTER FUNCTION "public"."fn_admin_acquisition_changer_action"("p_action_id" "uuid", "p_statut" "text") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."fn_admin_acquisition_cibles"("p_departement" "text" DEFAULT NULL::"text", "p_profession" "text" DEFAULT NULL::"text", "p_limit" integer DEFAULT 100) RETURNS "jsonb"
+    LANGUAGE "plpgsql" STABLE SECURITY DEFINER
+    SET "search_path" TO 'pg_catalog', 'public', 'auth'
+    AS $$
+DECLARE
+  v_departement text := NULLIF(upper(btrim(COALESCE(p_departement, ''))), '');
+  v_profession text := NULLIF(upper(btrim(COALESCE(p_profession, ''))), '');
+  v_limit integer := LEAST(GREATEST(COALESCE(p_limit, 100), 10), 200);
+  v_resultats jsonb := '[]'::jsonb;
+  v_total integer := 0;
+BEGIN
+  IF NOT public.est_admin() THEN
+    RAISE EXCEPTION 'Acces admin requis' USING ERRCODE = '42501';
+  END IF;
+
+  WITH compatibilites AS MATERIALIZED (
+    SELECT type_jolene, unnest(professions) AS profession
+    FROM (VALUES
+      ('HOPITAL', ARRAY[
+        'IDE', 'IADE', 'IBODE', 'AS', 'AES', 'AUXILIAIRE_PUERICULTURE',
+        'SAGE_FEMME', 'KINE', 'MEDECIN', 'DENTISTE', 'PREPARATEUR_PHARMA',
+        'DIETETICIEN', 'ERGOTHERAPEUTE', 'PSYCHOMOTRICIEN', 'ORTHOPHONISTE'
+      ]::text[]),
+      ('EHPAD', ARRAY[
+        'IDE', 'AS', 'AES', 'KINE', 'MEDECIN', 'DIETETICIEN',
+        'ERGOTHERAPEUTE', 'PSYCHOMOTRICIEN', 'ORTHOPHONISTE'
+      ]::text[]),
+      ('DOMICILE', ARRAY[
+        'IDE', 'AS', 'AES', 'KINE', 'DIETETICIEN', 'ERGOTHERAPEUTE',
+        'PSYCHOMOTRICIEN', 'ORTHOPHONISTE'
+      ]::text[]),
+      ('HANDICAP', ARRAY[
+        'IDE', 'AS', 'AES', 'KINE', 'DIETETICIEN', 'ERGOTHERAPEUTE',
+        'PSYCHOMOTRICIEN', 'ORTHOPHONISTE'
+      ]::text[]),
+      ('CENTRE_SANTE', ARRAY[
+        'IDE', 'AS', 'SAGE_FEMME', 'KINE', 'MEDECIN', 'DENTISTE',
+        'DIETETICIEN', 'ERGOTHERAPEUTE', 'PSYCHOMOTRICIEN', 'ORTHOPHONISTE'
+      ]::text[]),
+      ('DIALYSE', ARRAY['IDE', 'AS', 'MEDECIN', 'DIETETICIEN']::text[]),
+      ('LABO', ARRAY['IDE', 'AS', 'MEDECIN']::text[])
+    ) AS mapping(type_jolene, professions)
+  ), etablissements_externes AS MATERIALIZED (
+    SELECT p.*
+    FROM public.prospects_etablissements p
+    WHERE p.statut_sourcing IN ('A_QUALIFIER', 'QUALIFIE')
+      AND p.type_jolene NOT IN ('PHARMACIE', 'ECOLE_SANTE')
+      AND (NULLIF(btrim(p.telephone), '') IS NOT NULL OR NULLIF(btrim(p.email), '') IS NOT NULL)
+      AND (v_departement IS NULL OR p.departement = v_departement)
+      AND NOT EXISTS (
+        SELECT 1 FROM public.sales_contacts sc
+        WHERE sc.type = 'ETABLISSEMENT'
+          AND (
+            sc.finess = p.finess
+            OR (p.email IS NOT NULL AND lower(sc.email) = lower(p.email))
+            OR (p.telephone IS NOT NULL
+              AND length(regexp_replace(p.telephone, '[^0-9]', '', 'g')) >= 9
+              AND regexp_replace(sc.telephone, '[^0-9]', '', 'g') = regexp_replace(p.telephone, '[^0-9]', '', 'g'))
+          )
+      )
+      AND NOT EXISTS (
+        SELECT 1 FROM public.etablissements e
+        WHERE e.supprime_le IS NULL
+          AND COALESCE(e.est_compte_test, false) IS FALSE
+          AND (e.finess = p.finess OR (p.siret IS NOT NULL AND e.siret = p.siret))
+      )
+  ), territoires_scores AS MATERIALIZED (
+    SELECT t.*,
+      LEAST(100, GREATEST(0,
+        round(COALESCE(t.bmo_difficulte_pct, 0) * 0.65)
+        + CASE WHEN t.bmo_precision = 'EXACT'
+            THEN LEAST(COALESCE(t.bmo_projets_recrutement, 0), 700) / 20
+            ELSE 0
+          END
+      ))::integer AS score_tension
+    FROM public.acquisition_territoires t
+    WHERE t.bmo_annee IS NOT NULL
+      AND COALESCE(t.bmo_projets_recrutement, 0) > 0
+  ), tensions AS MATERIALIZED (
+    SELECT t.*
+    FROM territoires_scores t
+    WHERE (v_departement IS NULL OR t.departement = v_departement)
+      AND (v_profession IS NULL OR t.profession = v_profession)
+    ORDER BY t.score_tension DESC,
+      CASE WHEN t.bmo_precision = 'EXACT' THEN t.bmo_projets_recrutement ELSE 0 END DESC
+    LIMIT CASE
+      WHEN v_departement IS NOT NULL AND v_profession IS NOT NULL THEN 1
+      WHEN v_departement IS NOT NULL THEN 20
+      ELSE 100
+    END
+  ), signaux_directs AS MATERIALIZED (
+    SELECT s.finess, s.siret, s.profession,
+      count(*)::integer AS nb_signaux,
+      COALESCE(sum(s.volume_estime), 0)::integer AS volume,
+      max(s.score_demande)::integer AS score_max,
+      max(COALESCE(s.publie_le, s.maj_le)) AS dernier_signal_le,
+      (array_agg(s.intitule ORDER BY s.score_demande DESC, s.maj_le DESC))[1] AS intitule_signal,
+      (array_agg(s.source_code ORDER BY s.score_demande DESC, s.maj_le DESC))[1] AS source_signal,
+      (array_agg(s.source_url ORDER BY s.score_demande DESC, s.maj_le DESC))[1] AS source_signal_url
+    FROM public.acquisition_signaux s
+    WHERE s.source_code IN ('BOAMP_API', 'FRANCE_TRAVAIL_OFFRES')
+      AND s.statut IN ('NOUVEAU', 'QUALIFIE', 'CRM')
+      AND (s.expire_le IS NULL OR s.expire_le >= now())
+      AND s.profession IN (
+        'IDE', 'IADE', 'IBODE', 'AS', 'AES', 'AUXILIAIRE_PUERICULTURE',
+        'SAGE_FEMME', 'KINE', 'MEDECIN', 'DENTISTE', 'PREPARATEUR_PHARMA',
+        'DIETETICIEN', 'ERGOTHERAPEUTE', 'PSYCHOMOTRICIEN', 'ORTHOPHONISTE'
+      )
+      AND (v_profession IS NULL OR s.profession = v_profession)
+      AND (s.finess IS NOT NULL OR s.siret IS NOT NULL)
+    GROUP BY s.finess, s.siret, s.profession
+  ), candidats_directs AS MATERIALIZED (
+    SELECT
+      p.finess, p.siret, p.nom, p.type_jolene, p.categorie_lib,
+      p.telephone, p.email, p.adresse, p.code_postal, p.ville, p.departement,
+      p.source_url AS finess_source_url, p.source_maj_le,
+      d.profession, t.bmo_annee, t.bmo_projets_recrutement,
+      t.bmo_difficulte_pct, t.bmo_saisonnier_pct, t.bmo_code_metier,
+      t.bmo_libelle_metier, t.bmo_precision, t.source_url AS bmo_source_url,
+      COALESCE(t.score_tension, 0) AS score_tension,
+      d.nb_signaux AS signaux_directs, d.volume AS volume_direct,
+      d.score_max AS score_signal, d.dernier_signal_le,
+      d.intitule_signal, d.source_signal, d.source_signal_url
+    FROM signaux_directs d
+    JOIN etablissements_externes p
+      ON (d.finess IS NOT NULL AND d.finess = p.finess)
+      OR (d.siret IS NOT NULL AND p.siret IS NOT NULL AND d.siret = p.siret)
+    JOIN compatibilites c
+      ON c.type_jolene = p.type_jolene AND c.profession = d.profession
+    LEFT JOIN territoires_scores t
+      ON t.departement = p.departement AND t.profession = d.profession
+  ), candidats_tension AS MATERIALIZED (
+    SELECT
+      p.finess, p.siret, p.nom, p.type_jolene, p.categorie_lib,
+      p.telephone, p.email, p.adresse, p.code_postal, p.ville, p.departement,
+      p.source_url AS finess_source_url, p.source_maj_le,
+      t.profession, t.bmo_annee, t.bmo_projets_recrutement,
+      t.bmo_difficulte_pct, t.bmo_saisonnier_pct, t.bmo_code_metier,
+      t.bmo_libelle_metier, t.bmo_precision, t.source_url AS bmo_source_url,
+      t.score_tension,
+      COALESCE(sig.nb_signaux, 0) AS signaux_directs,
+      COALESCE(sig.volume, 0) AS volume_direct,
+      COALESCE(sig.score_max, 0) AS score_signal,
+      sig.dernier_signal_le, sig.intitule_signal, sig.source_signal,
+      sig.source_signal_url
+    FROM tensions t
+    JOIN LATERAL (
+      SELECT pe.*
+      FROM etablissements_externes pe
+      WHERE pe.departement = t.departement
+        AND EXISTS (
+          SELECT 1 FROM compatibilites c
+          WHERE c.type_jolene = pe.type_jolene AND c.profession = t.profession
+        )
+      ORDER BY
+        CASE pe.type_jolene
+          WHEN 'HOPITAL' THEN 6 WHEN 'EHPAD' THEN 6 WHEN 'DIALYSE' THEN 5
+          WHEN 'DOMICILE' THEN 5 WHEN 'HANDICAP' THEN 4
+          WHEN 'CENTRE_SANTE' THEN 3 ELSE 1
+        END DESC,
+        (CASE WHEN NULLIF(btrim(pe.email), '') IS NOT NULL THEN 1 ELSE 0 END
+          + CASE WHEN NULLIF(btrim(pe.telephone), '') IS NOT NULL THEN 1 ELSE 0 END) DESC,
+        pe.source_maj_le DESC NULLS LAST,
+        pe.nom
+      LIMIT CASE
+        WHEN v_departement IS NOT NULL AND v_profession IS NOT NULL THEN 60
+        WHEN v_departement IS NOT NULL THEN 10
+        WHEN v_profession IS NOT NULL THEN 4
+        ELSE 3
+      END
+    ) p ON true
+    LEFT JOIN signaux_directs sig
+      ON sig.profession = t.profession
+      AND (
+        (sig.finess IS NOT NULL AND sig.finess = p.finess)
+        OR (sig.siret IS NOT NULL AND p.siret IS NOT NULL AND sig.siret = p.siret)
+      )
+  ), candidats AS MATERIALIZED (
+    SELECT * FROM candidats_directs
+    UNION ALL
+    SELECT * FROM candidats_tension
+  ), scores AS (
+    SELECT c.*,
+      LEAST(100, GREATEST(0,
+        c.score_tension
+        + CASE c.type_jolene
+            WHEN 'HOPITAL' THEN 14 WHEN 'EHPAD' THEN 14 WHEN 'DIALYSE' THEN 12
+            WHEN 'DOMICILE' THEN 10 WHEN 'HANDICAP' THEN 9
+            WHEN 'CENTRE_SANTE' THEN 6 ELSE 3
+          END
+        + CASE WHEN NULLIF(btrim(c.email), '') IS NOT NULL THEN 4 ELSE 0 END
+        + CASE WHEN NULLIF(btrim(c.telephone), '') IS NOT NULL THEN 4 ELSE 0 END
+        + CASE WHEN c.signaux_directs > 0 THEN 50 + LEAST(c.signaux_directs, 4) * 2 ELSE 0 END
+      ))::integer AS score,
+      CASE
+        WHEN c.signaux_directs > 0 THEN
+          'Besoin public explicite : ' || COALESCE(c.intitule_signal, 'signal officiel')
+          || '.'
+          || CASE WHEN c.bmo_annee IS NULL THEN '' ELSE
+            ' Tension BMO ' || c.bmo_annee
+            || CASE WHEN c.bmo_precision = 'AGREGAT'
+              THEN ' — catégorie agrégée « ' || COALESCE(c.bmo_libelle_metier, 'métiers de santé') || ' » tous métiers confondus'
+              ELSE '' END
+            || ' : ' || c.bmo_projets_recrutement || ' projet(s)'
+            || CASE WHEN c.bmo_difficulte_pct IS NULL THEN '' ELSE
+              ', ' || trim(to_char(c.bmo_difficulte_pct, 'FM990D0')) || ' % jugés difficiles' END
+            || '.' END
+        WHEN c.bmo_precision = 'AGREGAT' THEN
+          'Priorité territoriale BMO ' || c.bmo_annee || ' — catégorie agrégée « '
+          || COALESCE(c.bmo_libelle_metier, 'métiers de santé') || ' » : '
+          || c.bmo_projets_recrutement || ' projet(s) tous métiers confondus'
+          || CASE WHEN c.bmo_difficulte_pct IS NULL THEN '' ELSE
+            ', ' || trim(to_char(c.bmo_difficulte_pct, 'FM990D0')) || ' % jugés difficiles' END
+          || '. Établissement FINESS contactable ; besoin inféré, à qualifier humainement.'
+        ELSE
+          'Priorité territoriale BMO ' || c.bmo_annee || ' : '
+          || c.bmo_projets_recrutement || ' projet(s), '
+          || CASE WHEN c.bmo_difficulte_pct IS NULL THEN 'difficulté non publiée' ELSE
+            trim(to_char(c.bmo_difficulte_pct, 'FM990D0')) || ' % jugés difficiles' END
+          || '. Établissement FINESS contactable ; besoin inféré, à qualifier humainement.'
+      END AS raison_priorite
+    FROM candidats c
+  ), dedup AS (
+    SELECT s.*,
+      row_number() OVER (
+        PARTITION BY s.finess
+        ORDER BY (s.signaux_directs > 0) DESC, s.score DESC,
+          s.bmo_projets_recrutement DESC, s.profession
+      ) AS rang
+    FROM scores s
+  ), selection AS (
+    SELECT
+      finess AS id, finess, siret, nom, type_jolene, categorie_lib,
+      telephone, email, adresse, code_postal, ville, departement,
+      profession, score, raison_priorite,
+      CASE WHEN signaux_directs > 0 THEN 'DIRECT' ELSE 'INFERENCE_TERRITORIALE' END AS force_signal,
+      signaux_directs, volume_direct, score_signal, dernier_signal_le,
+      intitule_signal, source_signal,
+      COALESCE(source_signal_url, bmo_source_url) AS source_demande_url,
+      finess_source_url, source_maj_le,
+      bmo_annee, bmo_projets_recrutement, bmo_difficulte_pct,
+      bmo_saisonnier_pct, bmo_code_metier, bmo_libelle_metier, bmo_precision
+    FROM dedup
+    WHERE rang = 1
+    ORDER BY (signaux_directs > 0) DESC, score DESC,
+      bmo_projets_recrutement DESC, nom
+    LIMIT v_limit
+  )
+  SELECT count(*)::integer,
+    COALESCE(jsonb_agg(to_jsonb(selection) ORDER BY
+      (signaux_directs > 0) DESC, score DESC, bmo_projets_recrutement DESC, nom), '[]'::jsonb)
+  INTO v_total, v_resultats
+  FROM selection;
+
+  RETURN jsonb_build_object(
+    'genere_le', now(),
+    'contact_automatique', false,
+    'total_classe', v_total,
+    'resultats', v_resultats,
+    'methode', 'Besoins nommés BOAMP/France Travail puis tension territoriale BMO croisée avec FINESS',
+    'limite', v_limit
+  );
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_admin_acquisition_cibles"("p_departement" "text", "p_profession" "text", "p_limit" integer) OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "public"."fn_admin_acquisition_cibles"("p_departement" "text", "p_profession" "text", "p_limit" integer) IS 'Etablissements externes FINESS priorises par signaux nommes directs et tension BMO. Aucun contact automatique.';
+
 
 
 CREATE OR REPLACE FUNCTION "public"."fn_admin_acquisition_configurer_territoire"("p_departement" "text", "p_profession" "text", "p_statut" "text", "p_objectif_ancres" integer, "p_objectif_soignants" integer, "p_objectif_missions" integer, "p_notes" "text" DEFAULT NULL::"text") RETURNS "jsonb"
@@ -5673,6 +6009,75 @@ ALTER FUNCTION "public"."fn_admin_acquisition_radar"("p_scope" "text", "p_jours"
 
 
 COMMENT ON FUNCTION "public"."fn_admin_acquisition_radar"("p_scope" "text", "p_jours" integer, "p_departement" "text", "p_profession" "text") IS 'Radar fondateur temps reel : besoins internes + signaux externes, liquidite et potentiel de commission mensualise. Aucun contact automatique.';
+
+
+
+CREATE OR REPLACE FUNCTION "public"."fn_admin_acquisition_radar_externe"("p_scope" "text" DEFAULT 'REEL'::"text", "p_jours" integer DEFAULT 90, "p_departement" "text" DEFAULT NULL::"text", "p_profession" "text" DEFAULT NULL::"text") RETURNS "jsonb"
+    LANGUAGE "plpgsql" STABLE SECURITY DEFINER
+    SET "search_path" TO 'pg_catalog', 'public', 'auth'
+    AS $$
+DECLARE
+  v_resultat jsonb;
+  v_segments jsonb;
+BEGIN
+  v_resultat := public.fn_admin_acquisition_radar(
+    p_scope, p_jours, p_departement, p_profession
+  );
+
+  WITH calc AS (
+    SELECT element,
+      COALESCE(NULLIF(element->>'score_priorite', '')::integer, 0) AS score_initial,
+      CASE
+        WHEN NULLIF(element->>'bmo_projets_recrutement', '') IS NULL THEN 0
+        ELSE LEAST(35,
+          round(COALESCE(NULLIF(element->>'bmo_difficulte_pct', '')::numeric, 0) * 0.25)::integer
+          + CASE WHEN t.bmo_precision = 'EXACT'
+              THEN LEAST(COALESCE(NULLIF(element->>'bmo_projets_recrutement', '')::integer, 0), 500) / 40
+              ELSE 0
+            END
+        )
+      END AS score_bmo,
+      t.bmo_precision,
+      t.bmo_code_metier,
+      t.bmo_libelle_metier
+    FROM jsonb_array_elements(COALESCE(v_resultat->'segments', '[]'::jsonb)) element
+    LEFT JOIN public.acquisition_territoires t
+      ON upper(COALESCE(p_scope, 'REEL')) <> 'TEST'
+      AND t.departement = element->>'departement'
+      AND t.profession = element->>'profession'
+  ), enrichi AS (
+    SELECT element || jsonb_build_object(
+      'score_bmo', score_bmo,
+      'bmo_precision', bmo_precision,
+      'bmo_code_metier', bmo_code_metier,
+      'bmo_libelle_metier', bmo_libelle_metier,
+      'score_priorite', LEAST(100, score_initial + score_bmo)
+    ) AS segment,
+    LEAST(100, score_initial + score_bmo) AS score_final
+    FROM calc
+  )
+  SELECT COALESCE(jsonb_agg(segment ORDER BY score_final DESC), '[]'::jsonb)
+  INTO v_segments
+  FROM enrichi;
+
+  v_resultat := jsonb_set(v_resultat, '{segments}', v_segments, true);
+  v_resultat := jsonb_set(
+    v_resultat,
+    '{hypotheses}',
+    COALESCE(v_resultat->'hypotheses', '{}'::jsonb) || jsonb_build_object(
+      'bmo', 'tension territoriale annuelle, boost du score uniquement ; les volumes agrégés restent ceux de la catégorie entière, jamais de la profession ; ni demande directe ni revenu'
+    ),
+    true
+  );
+  RETURN v_resultat;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_admin_acquisition_radar_externe"("p_scope" "text", "p_jours" integer, "p_departement" "text", "p_profession" "text") OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "public"."fn_admin_acquisition_radar_externe"("p_scope" "text", "p_jours" integer, "p_departement" "text", "p_profession" "text") IS 'Radar acquisition avec score BMO explicite, sans transformer BMO en demande ou revenu.';
 
 
 
@@ -55424,7 +55829,12 @@ CREATE TABLE IF NOT EXISTS "public"."acquisition_territoires" (
     "notes" "text",
     "maj_le" timestamp with time zone DEFAULT "now"() NOT NULL,
     "maj_par" "uuid",
+    "bmo_code_metier" "text",
+    "bmo_libelle_metier" "text",
+    "bmo_precision" "text",
+    "bmo_source_maj_le" timestamp with time zone,
     CONSTRAINT "acquisition_territoires_bmo_difficulte_pct_check" CHECK ((("bmo_difficulte_pct" IS NULL) OR (("bmo_difficulte_pct" >= (0)::numeric) AND ("bmo_difficulte_pct" <= (100)::numeric)))),
+    CONSTRAINT "acquisition_territoires_bmo_precision_check" CHECK ((("bmo_precision" IS NULL) OR ("bmo_precision" = ANY (ARRAY['EXACT'::"text", 'AGREGAT'::"text"])))),
     CONSTRAINT "acquisition_territoires_bmo_projets_recrutement_check" CHECK ((("bmo_projets_recrutement" IS NULL) OR ("bmo_projets_recrutement" >= 0))),
     CONSTRAINT "acquisition_territoires_bmo_saisonnier_pct_check" CHECK ((("bmo_saisonnier_pct" IS NULL) OR (("bmo_saisonnier_pct" >= (0)::numeric) AND ("bmo_saisonnier_pct" <= (100)::numeric)))),
     CONSTRAINT "acquisition_territoires_objectif_etablissements_ancres_check" CHECK ((("objectif_etablissements_ancres" >= 0) AND ("objectif_etablissements_ancres" <= 1000))),
@@ -60585,6 +60995,10 @@ CREATE INDEX "idx_acquisition_actions_file" ON "public"."acquisition_actions" US
 
 
 
+CREATE INDEX "idx_acquisition_signaux_actifs_identite" ON "public"."acquisition_signaux" USING "btree" ("finess", "siret", "profession", "score_demande" DESC) WHERE ("statut" = ANY (ARRAY['NOUVEAU'::"text", 'QUALIFIE'::"text", 'CRM'::"text"]));
+
+
+
 CREATE INDEX "idx_acquisition_signaux_identifiants" ON "public"."acquisition_signaux" USING "btree" ("finess", "siret");
 
 
@@ -60594,6 +61008,10 @@ CREATE INDEX "idx_acquisition_signaux_radar" ON "public"."acquisition_signaux" U
 
 
 CREATE INDEX "idx_acquisition_signaux_territoire" ON "public"."acquisition_signaux" USING "btree" ("departement", "profession", "statut");
+
+
+
+CREATE INDEX "idx_acquisition_territoires_tension" ON "public"."acquisition_territoires" USING "btree" ("profession", "bmo_difficulte_pct" DESC, "bmo_projets_recrutement" DESC, "departement") WHERE ("bmo_annee" IS NOT NULL);
 
 
 
@@ -61569,6 +61987,14 @@ CREATE INDEX "idx_prospects_etab_ville_trgm" ON "public"."prospects_etablissemen
 
 
 
+CREATE INDEX "idx_prospects_etablissements_acquisition" ON "public"."prospects_etablissements" USING "btree" ("departement", "type_jolene", "source_maj_le" DESC, "nom") WHERE (("statut_sourcing" = ANY (ARRAY['A_QUALIFIER'::"text", 'QUALIFIE'::"text"])) AND (("telephone" IS NOT NULL) OR ("email" IS NOT NULL)));
+
+
+
+CREATE INDEX "idx_prospects_etablissements_siret_non_null" ON "public"."prospects_etablissements" USING "btree" ("siret") WHERE ("siret" IS NOT NULL);
+
+
+
 CREATE INDEX "idx_prospects_soign_enseigne_trgm" ON "public"."prospects_soignants" USING "gin" ("enseigne" "extensions"."gin_trgm_ops");
 
 
@@ -62102,6 +62528,10 @@ CREATE UNIQUE INDEX "uq_sales_contacts_finess" ON "public"."sales_contacts" USIN
 
 
 CREATE UNIQUE INDEX "uq_sales_contacts_source_prospect" ON "public"."sales_contacts" USING "btree" ("source_prospect_type", "source_prospect_id") WHERE (("source_prospect_type" IS NOT NULL) AND ("source_prospect_id" IS NOT NULL));
+
+
+
+CREATE UNIQUE INDEX "uq_sourcing_imports_source_en_cours" ON "public"."sourcing_imports" USING "btree" ("source_code") WHERE ("statut" = 'EN_COURS'::"text");
 
 
 
@@ -67211,6 +67641,11 @@ GRANT ALL ON FUNCTION "public"."fn_accepter_mission_urgence"("p_mission_id" "uui
 
 
 
+REVOKE ALL ON FUNCTION "public"."fn_acquisition_upsert_bmo"("p_rows" "jsonb") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_acquisition_upsert_bmo"("p_rows" "jsonb") TO "service_role";
+
+
+
 REVOKE ALL ON FUNCTION "public"."fn_acquisition_upsert_signaux"("p_rows" "jsonb") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_acquisition_upsert_signaux"("p_rows" "jsonb") TO "service_role";
 
@@ -67252,6 +67687,12 @@ GRANT ALL ON FUNCTION "public"."fn_admin_acquisition_changer_action"("p_action_i
 
 
 
+REVOKE ALL ON FUNCTION "public"."fn_admin_acquisition_cibles"("p_departement" "text", "p_profession" "text", "p_limit" integer) FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_admin_acquisition_cibles"("p_departement" "text", "p_profession" "text", "p_limit" integer) TO "service_role";
+GRANT ALL ON FUNCTION "public"."fn_admin_acquisition_cibles"("p_departement" "text", "p_profession" "text", "p_limit" integer) TO "authenticated";
+
+
+
 REVOKE ALL ON FUNCTION "public"."fn_admin_acquisition_configurer_territoire"("p_departement" "text", "p_profession" "text", "p_statut" "text", "p_objectif_ancres" integer, "p_objectif_soignants" integer, "p_objectif_missions" integer, "p_notes" "text") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_admin_acquisition_configurer_territoire"("p_departement" "text", "p_profession" "text", "p_statut" "text", "p_objectif_ancres" integer, "p_objectif_soignants" integer, "p_objectif_missions" integer, "p_notes" "text") TO "service_role";
 GRANT ALL ON FUNCTION "public"."fn_admin_acquisition_configurer_territoire"("p_departement" "text", "p_profession" "text", "p_statut" "text", "p_objectif_ancres" integer, "p_objectif_soignants" integer, "p_objectif_missions" integer, "p_notes" "text") TO "authenticated";
@@ -67279,6 +67720,12 @@ GRANT ALL ON FUNCTION "public"."fn_admin_acquisition_qualifier_signal"("p_signal
 REVOKE ALL ON FUNCTION "public"."fn_admin_acquisition_radar"("p_scope" "text", "p_jours" integer, "p_departement" "text", "p_profession" "text") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_admin_acquisition_radar"("p_scope" "text", "p_jours" integer, "p_departement" "text", "p_profession" "text") TO "service_role";
 GRANT ALL ON FUNCTION "public"."fn_admin_acquisition_radar"("p_scope" "text", "p_jours" integer, "p_departement" "text", "p_profession" "text") TO "authenticated";
+
+
+
+REVOKE ALL ON FUNCTION "public"."fn_admin_acquisition_radar_externe"("p_scope" "text", "p_jours" integer, "p_departement" "text", "p_profession" "text") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_admin_acquisition_radar_externe"("p_scope" "text", "p_jours" integer, "p_departement" "text", "p_profession" "text") TO "service_role";
+GRANT ALL ON FUNCTION "public"."fn_admin_acquisition_radar_externe"("p_scope" "text", "p_jours" integer, "p_departement" "text", "p_profession" "text") TO "authenticated";
 
 
 
