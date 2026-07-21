@@ -3,6 +3,12 @@
 -- statement (un seul ajustement par lot importé) et ne dépendent plus d'un
 -- count(*) PostgREST sur 1,6 million de lignes.
 
+-- Supabase CLI n'enveloppe pas automatiquement ce fichier dans une
+-- transaction. Le verrou d'amorçage et les SET LOCAL exigent donc une
+-- transaction explicite, qui garantit aussi qu'une erreur ne laisse pas une
+-- installation partielle en production.
+BEGIN;
+
 -- Les comptes clients restent bornés à 8 s. Seule cette migration de
 -- maintenance bénéficie d'une fenêtre plus longue pour construire les index
 -- nationaux une fois, sans relever le timeout de l'application.
@@ -680,3 +686,5 @@ REVOKE ALL ON FUNCTION public.fn_reclamer_prospects_enrichissement(text, text, i
 REVOKE ALL ON FUNCTION public.fn_terminer_prospects_enrichissement(text, jsonb) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.fn_reclamer_prospects_enrichissement(text, text, integer) TO authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.fn_terminer_prospects_enrichissement(text, jsonb) TO authenticated, service_role;
+
+COMMIT;

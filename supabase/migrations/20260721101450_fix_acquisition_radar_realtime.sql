@@ -5,6 +5,8 @@
 -- externes éventuellement configurés. La commission observée reste strictement
 -- limitée aux missions terminées.
 
+BEGIN;
+
 CREATE OR REPLACE FUNCTION public.fn_admin_acquisition_radar(
   p_scope text DEFAULT 'REEL',
   p_jours integer DEFAULT 90,
@@ -323,3 +325,5 @@ GRANT EXECUTE ON FUNCTION public.fn_admin_acquisition_radar(text, integer, text,
 
 COMMENT ON FUNCTION public.fn_admin_acquisition_radar(text, integer, text, text) IS
   'Radar fondateur temps reel : besoins internes + signaux externes, liquidite et potentiel de commission mensualise. Aucun contact automatique.';
+
+COMMIT;
