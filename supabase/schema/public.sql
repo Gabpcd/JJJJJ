@@ -4938,13 +4938,42 @@ CREATE OR REPLACE FUNCTION "public"."fn_admin_acquisition_changer_action"("p_act
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'pg_catalog', 'public', 'auth'
     AS $$
+DECLARE
+  v_statut_actuel text;
 BEGIN
-  IF NOT public.est_admin() THEN RAISE EXCEPTION 'Acces admin requis' USING ERRCODE = '42501'; END IF;
-  IF p_statut NOT IN ('BROUILLON', 'PRIORISEE', 'EN_COURS', 'TERMINEE', 'IGNORE') THEN
-    RAISE EXCEPTION 'Statut invalide';
+  IF NOT public.est_admin() THEN
+    RAISE EXCEPTION 'Acces admin requis' USING ERRCODE = '42501';
   END IF;
-  UPDATE public.acquisition_actions SET statut = p_statut, maj_le = now() WHERE id = p_action_id;
+  IF p_statut IS NULL OR p_statut NOT IN ('BROUILLON', 'PRIORISEE', 'EN_COURS', 'TERMINEE', 'IGNORE') THEN
+    RAISE EXCEPTION 'Statut invalide' USING ERRCODE = '22023';
+  END IF;
+
+  SELECT statut
+    INTO v_statut_actuel
+    FROM public.acquisition_actions
+   WHERE id = p_action_id
+   FOR UPDATE;
   IF NOT FOUND THEN RAISE EXCEPTION 'Action introuvable'; END IF;
+
+  -- Autoriser le meme statut rend un retry reseau idempotent sans rouvrir le
+  -- cycle. Toutes les autres transitions doivent suivre la matrice ci-dessous.
+  IF p_statut <> v_statut_actuel
+     AND NOT (
+       (v_statut_actuel = 'BROUILLON' AND p_statut IN ('PRIORISEE', 'IGNORE'))
+       OR (v_statut_actuel = 'PRIORISEE' AND p_statut IN ('EN_COURS', 'IGNORE'))
+       OR (v_statut_actuel = 'EN_COURS' AND p_statut = 'TERMINEE')
+     ) THEN
+    RAISE EXCEPTION 'Transition invalide (% -> %)', v_statut_actuel, p_statut
+      USING ERRCODE = '22023';
+  END IF;
+
+  IF p_statut <> v_statut_actuel THEN
+    UPDATE public.acquisition_actions
+       SET statut = p_statut,
+           maj_le = now()
+     WHERE id = p_action_id;
+  END IF;
+
   RETURN jsonb_build_object('success', true, 'statut', p_statut);
 END;
 $$;
@@ -5355,6 +5384,8 @@ BEGIN
     FROM public.missions m
     JOIN public.etablissements e ON e.id = m.etablissement_id
    WHERE m.cree_le >= now() - make_interval(days => v_jours)
+     AND m.statut NOT IN ('ANNULEE_PAR_ETABLISSEMENT', 'ANNULEE_PAR_SOIGNANT', 'EXPIREE')
+     AND (m.statut <> 'OUVERTE' OR m.fin_le >= now())
      AND (v_scope = 'TOUS' OR (v_scope = 'TEST' AND e.est_compte_test) OR (v_scope = 'REEL' AND NOT e.est_compte_test));
 
   RETURN (
@@ -5363,7 +5394,10 @@ BEGIN
         CASE WHEN s.adresse_code_postal LIKE '97%' THEN left(s.adresse_code_postal, 3) ELSE left(s.adresse_code_postal, 2) END AS departement,
         s.profession::text AS profession,
         count(DISTINCT s.id) FILTER (WHERE s.tous_documents_valides)::integer AS verifies,
-        count(DISTINCT ds.soignant_id) FILTER (WHERE ds.jour BETWEEN current_date AND current_date + 14)::integer AS disponibles_14j
+        count(DISTINCT ds.soignant_id) FILTER (
+          WHERE ds.jour BETWEEN current_date AND current_date + 14
+            AND s.tous_documents_valides
+        )::integer AS disponibles_14j
       FROM public.soignants s
       LEFT JOIN public.disponibilites_soignant ds ON ds.soignant_id = s.id
       WHERE s.supprime_le IS NULL
@@ -5375,14 +5409,25 @@ BEGIN
       SELECT e.adresse_departement AS departement, m.profession_requise::text AS profession,
         count(*)::integer AS missions,
         count(*) FILTER (WHERE m.statut = 'OUVERTE')::integer AS ouvertes,
+        count(*) FILTER (WHERE m.statut IN ('ASSIGNEE', 'EN_COURS'))::integer AS pipeline,
         count(*) FILTER (WHERE m.soignant_assigne_id IS NOT NULL)::integer AS pourvues,
         count(DISTINCT m.etablissement_id)::integer AS etablissements,
-        COALESCE(sum(COALESCE(m.montant_commission_ht,
+        COALESCE(sum(COALESCE(NULLIF(m.montant_commission_ht, 0),
           COALESCE(NULLIF(m.net_a_payer, 0), m.duree_heures * m.taux_horaire_base, 0)
-            * COALESCE(m.taux_commission, v_taux) / 100)), 0)::numeric AS commission_ht
+            * COALESCE(m.taux_commission, v_taux) / 100))
+          FILTER (WHERE m.statut = 'TERMINEE'), 0)::numeric AS commission_observee_ht,
+        COALESCE(sum(COALESCE(NULLIF(m.montant_commission_ht, 0),
+          COALESCE(NULLIF(m.net_a_payer, 0), m.duree_heures * m.taux_horaire_base, 0)
+            * COALESCE(m.taux_commission, v_taux) / 100))
+          FILTER (WHERE m.statut IN ('ASSIGNEE', 'EN_COURS')), 0)::numeric AS commission_pipeline_ht,
+        COALESCE(sum(COALESCE(NULLIF(m.montant_commission_ht, 0),
+          COALESCE(NULLIF(m.net_a_payer, 0), m.duree_heures * m.taux_horaire_base, 0)
+            * COALESCE(m.taux_commission, v_taux) / 100)) FILTER (WHERE m.statut = 'OUVERTE'), 0)::numeric AS commission_ouverte_ht
       FROM public.missions m
       JOIN public.etablissements e ON e.id = m.etablissement_id
       WHERE m.cree_le >= now() - make_interval(days => v_jours)
+        AND m.statut NOT IN ('ANNULEE_PAR_ETABLISSEMENT', 'ANNULEE_PAR_SOIGNANT', 'EXPIREE')
+        AND (m.statut <> 'OUVERTE' OR m.fin_le >= now())
         AND (v_scope = 'TOUS' OR (v_scope = 'TEST' AND e.est_compte_test) OR (v_scope = 'REEL' AND NOT e.est_compte_test))
       GROUP BY 1, 2
     ),
@@ -5394,13 +5439,18 @@ BEGIN
       FROM public.acquisition_signaux s
       WHERE s.statut IN ('NOUVEAU', 'QUALIFIE', 'CRM')
         AND (s.expire_le IS NULL OR s.expire_le >= now())
+        -- Un signal déjà rapproché d'un établissement Jolene ne doit pas être
+        -- recompté comme demande externe. Les données externes sont réelles et
+        -- n'ont pas de scope test : elles sont donc absentes de TEST.
+        AND s.etablissement_id IS NULL
+        AND v_scope <> 'TEST'
       GROUP BY 1, 2
     ),
     cles AS (
       SELECT departement, profession FROM offre
       UNION SELECT departement, profession FROM demande_interne
       UNION SELECT departement, profession FROM demande_externe
-      UNION SELECT departement, profession FROM public.acquisition_territoires
+      UNION SELECT departement, profession FROM public.acquisition_territoires WHERE v_scope <> 'TEST'
     ),
     segments AS (
       SELECT
@@ -5409,6 +5459,7 @@ BEGIN
         COALESCE(o.disponibles_14j, 0) AS disponibles_14j,
         COALESCE(di.missions, 0) AS missions_90j,
         COALESCE(di.ouvertes, 0) AS missions_ouvertes,
+        COALESCE(di.pipeline, 0) AS missions_pipeline,
         COALESCE(di.pourvues, 0) AS missions_pourvues,
         COALESCE(di.etablissements, 0) AS etablissements_actifs,
         COALESCE(de.signaux, 0) AS signaux_externes,
@@ -5423,15 +5474,28 @@ BEGIN
           20 + COALESCE(de.score_moyen, 0) * 0.35
           + LEAST(COALESCE(de.volume, 0), 20) * 2
           + LEAST(COALESCE(di.ouvertes, 0), 10) * 2
+          + LEAST(COALESCE(di.missions, 0), 20)
           - LEAST(COALESCE(o.disponibles_14j, 0), 20)
         ))::integer AS score_priorite,
-        round((COALESCE(de.volume, 0) * 8 * v_taux_horaire * v_taux / 100)::numeric, 2) AS potentiel_commission_mensuel_ht,
-        COALESCE(di.commission_ht, 0) AS commission_observee_ht
+        round((
+          COALESCE(de.volume, 0) * 8 * v_taux_horaire * v_taux / 100
+          + GREATEST(
+              COALESCE(di.commission_pipeline_ht, 0) / GREATEST(v_jours, 1) * 30,
+              COALESCE(di.commission_ouverte_ht, 0)
+            )
+        )::numeric, 2) AS potentiel_commission_mensuel_ht,
+        round((COALESCE(di.commission_observee_ht, 0) / GREATEST(v_jours, 1) * 30)::numeric, 2) AS commission_observee_mensuelle_ht,
+        COALESCE(di.commission_observee_ht, 0) AS commission_observee_ht,
+        round((COALESCE(di.commission_pipeline_ht, 0) / GREATEST(v_jours, 1) * 30)::numeric, 2) AS commission_pipeline_mensuelle_ht,
+        COALESCE(di.commission_pipeline_ht, 0) AS commission_pipeline_ht,
+        COALESCE(di.commission_ouverte_ht, 0) AS commission_ouverte_ht
       FROM cles c
       LEFT JOIN offre o ON o.departement IS NOT DISTINCT FROM c.departement AND o.profession IS NOT DISTINCT FROM c.profession
       LEFT JOIN demande_interne di ON di.departement IS NOT DISTINCT FROM c.departement AND di.profession IS NOT DISTINCT FROM c.profession
       LEFT JOIN demande_externe de ON de.departement IS NOT DISTINCT FROM c.departement AND de.profession IS NOT DISTINCT FROM c.profession
-      LEFT JOIN public.acquisition_territoires t ON t.departement IS NOT DISTINCT FROM c.departement AND t.profession IS NOT DISTINCT FROM c.profession
+      LEFT JOIN public.acquisition_territoires t ON v_scope <> 'TEST'
+        AND t.departement IS NOT DISTINCT FROM c.departement
+        AND t.profession IS NOT DISTINCT FROM c.profession
       WHERE c.departement IS NOT NULL AND c.profession IS NOT NULL
         AND (v_departement IS NULL OR c.departement = v_departement)
         AND (v_profession IS NULL OR c.profession = v_profession)
@@ -5451,10 +5515,25 @@ BEGIN
       FROM public.acquisition_signaux s
       WHERE s.statut IN ('NOUVEAU', 'QUALIFIE', 'CRM')
         AND (s.expire_le IS NULL OR s.expire_le >= now())
+        AND s.etablissement_id IS NULL
+        AND v_scope <> 'TEST'
         AND (v_departement IS NULL OR s.departement = v_departement)
         AND (v_profession IS NULL OR s.profession = v_profession)
     ),
-    ancres AS (
+    cibles_potentielles AS (
+      SELECT 'JOLENE:' || e.id::text AS cible_id
+      FROM public.missions m
+      JOIN public.etablissements e ON e.id = m.etablissement_id
+      WHERE m.cree_le >= now() - make_interval(days => v_jours)
+        AND m.statut NOT IN ('ANNULEE_PAR_ETABLISSEMENT', 'ANNULEE_PAR_SOIGNANT', 'EXPIREE')
+        AND (m.statut <> 'OUVERTE' OR m.fin_le >= now())
+        AND (v_scope = 'TOUS' OR (v_scope = 'TEST' AND e.est_compte_test) OR (v_scope = 'REEL' AND NOT e.est_compte_test))
+        AND (v_departement IS NULL OR e.adresse_departement = v_departement)
+        AND (v_profession IS NULL OR m.profession_requise::text = v_profession)
+      UNION
+      SELECT 'EXTERNE:' || cible_id FROM signaux_identifies WHERE cible_id IS NOT NULL
+    ),
+    ancres_externes AS (
       SELECT
         max(s.nom_etablissement) AS nom,
         max(s.departement) AS departement,
@@ -5471,18 +5550,77 @@ BEGIN
       WHERE s.cible_id IS NOT NULL
       GROUP BY s.cible_id
     ),
+    ancres_internes AS (
+      SELECT
+        e.nom,
+        e.adresse_departement AS departement,
+        e.adresse_ville AS ville,
+        e.finess,
+        e.siret,
+        count(m.id)::integer AS nb_signaux,
+        count(m.id)::integer AS volume,
+        LEAST(100, 50 + count(m.id) * 5)::integer AS score,
+        jsonb_agg(DISTINCT m.profession_requise::text) AS professions,
+        true AS deja_inscrit,
+        round(GREATEST(
+          COALESCE(sum(COALESCE(NULLIF(m.montant_commission_ht, 0),
+            COALESCE(NULLIF(m.net_a_payer, 0), m.duree_heures * m.taux_horaire_base, 0)
+              * COALESCE(m.taux_commission, v_taux) / 100))
+            FILTER (WHERE m.statut IN ('ASSIGNEE', 'EN_COURS')), 0) / GREATEST(v_jours, 1) * 30,
+          COALESCE(sum(COALESCE(NULLIF(m.montant_commission_ht, 0),
+            COALESCE(NULLIF(m.net_a_payer, 0), m.duree_heures * m.taux_horaire_base, 0)
+              * COALESCE(m.taux_commission, v_taux) / 100)) FILTER (WHERE m.statut = 'OUVERTE'), 0)
+        )::numeric, 2) AS potentiel_commission_mensuel_ht
+      FROM public.etablissements e
+      JOIN public.missions m ON m.etablissement_id = e.id
+      WHERE m.cree_le >= now() - make_interval(days => v_jours)
+        AND m.statut NOT IN ('ANNULEE_PAR_ETABLISSEMENT', 'ANNULEE_PAR_SOIGNANT', 'EXPIREE')
+        AND (m.statut <> 'OUVERTE' OR m.fin_le >= now())
+        AND (v_scope = 'TOUS' OR (v_scope = 'TEST' AND e.est_compte_test) OR (v_scope = 'REEL' AND NOT e.est_compte_test))
+        AND (v_departement IS NULL OR e.adresse_departement = v_departement)
+        AND (v_profession IS NULL OR m.profession_requise::text = v_profession)
+      GROUP BY e.id, e.nom, e.adresse_departement, e.adresse_ville, e.finess, e.siret
+      HAVING count(m.id) >= 2
+    ),
+    ancres AS (
+      SELECT * FROM ancres_internes
+      UNION ALL
+      SELECT * FROM ancres_externes
+    ),
     recurrence AS (
       SELECT e.id, e.nom, e.adresse_departement AS departement,
         count(m.id)::integer AS missions,
         count(DISTINCT m.serie_id) FILTER (WHERE m.serie_id IS NOT NULL)::integer AS series,
         count(DISTINCT m.profession_requise)::integer AS professions,
-        round((COALESCE(sum(COALESCE(m.montant_commission_ht,
+        round(GREATEST(
+          COALESCE(sum(COALESCE(NULLIF(m.montant_commission_ht, 0),
+            COALESCE(NULLIF(m.net_a_payer, 0), m.duree_heures * m.taux_horaire_base, 0)
+              * COALESCE(m.taux_commission, v_taux) / 100))
+            FILTER (WHERE m.statut IN ('ASSIGNEE', 'EN_COURS')), 0)
+            / GREATEST(v_jours, 1) * 30,
+          COALESCE(sum(COALESCE(NULLIF(m.montant_commission_ht, 0),
+            COALESCE(NULLIF(m.net_a_payer, 0), m.duree_heures * m.taux_horaire_base, 0)
+              * COALESCE(m.taux_commission, v_taux) / 100))
+            FILTER (WHERE m.statut = 'OUVERTE'), 0)
+        )::numeric, 2) AS commission_mensuelle_estimee_ht,
+        round((COALESCE(sum(COALESCE(NULLIF(m.montant_commission_ht, 0),
           COALESCE(NULLIF(m.net_a_payer, 0), m.duree_heures * m.taux_horaire_base, 0)
-            * COALESCE(m.taux_commission, v_taux) / 100)), 0)
-          / GREATEST(v_jours, 1) * 30)::numeric, 2) AS commission_mensuelle_estimee_ht
+            * COALESCE(m.taux_commission, v_taux) / 100))
+          FILTER (WHERE m.statut = 'TERMINEE'), 0)
+          / GREATEST(v_jours, 1) * 30)::numeric, 2) AS commission_observee_mensuelle_ht,
+        COALESCE(sum(COALESCE(NULLIF(m.montant_commission_ht, 0),
+          COALESCE(NULLIF(m.net_a_payer, 0), m.duree_heures * m.taux_horaire_base, 0)
+            * COALESCE(m.taux_commission, v_taux) / 100))
+          FILTER (WHERE m.statut IN ('ASSIGNEE', 'EN_COURS')), 0)::numeric AS commission_pipeline_ht,
+        COALESCE(sum(COALESCE(NULLIF(m.montant_commission_ht, 0),
+          COALESCE(NULLIF(m.net_a_payer, 0), m.duree_heures * m.taux_horaire_base, 0)
+            * COALESCE(m.taux_commission, v_taux) / 100))
+          FILTER (WHERE m.statut = 'OUVERTE'), 0)::numeric AS commission_ouverte_ht
       FROM public.etablissements e
       JOIN public.missions m ON m.etablissement_id = e.id
       WHERE m.cree_le >= now() - make_interval(days => v_jours)
+        AND m.statut NOT IN ('ANNULEE_PAR_ETABLISSEMENT', 'ANNULEE_PAR_SOIGNANT', 'EXPIREE')
+        AND (m.statut <> 'OUVERTE' OR m.fin_le >= now())
         AND (v_scope = 'TOUS' OR (v_scope = 'TEST' AND e.est_compte_test) OR (v_scope = 'REEL' AND NOT e.est_compte_test))
         AND (v_departement IS NULL OR e.adresse_departement = v_departement)
         AND (v_profession IS NULL OR m.profession_requise::text = v_profession)
@@ -5499,21 +5637,29 @@ BEGIN
         'taux_commission_pct', round(v_taux, 2),
         'taux_horaire_moyen', round(v_taux_horaire, 2),
         'duree_signal_heures', 8,
-        'caractere', 'estimation, pas revenu garanti'
+        'caractere', 'estimation, pas revenu garanti',
+        'commission_observee', 'missions terminees uniquement',
+        'pipeline_interne', 'missions assignees ou en cours, distinctes du realise',
+        'potentiel_interne', 'maximum entre pipeline attribue/en cours mensualise et stock des missions ouvertes non expirees',
+        'scope_test', 'missions, etablissements et soignants de test uniquement; signaux externes et territoires non scopes exclus'
       ),
       'stats', jsonb_build_object(
-        'signaux_actifs', (SELECT count(*) FROM public.acquisition_signaux s WHERE s.statut IN ('NOUVEAU', 'QUALIFIE', 'CRM') AND (s.expire_le IS NULL OR s.expire_le >= now())),
-        'etablissements_a_potentiel', (SELECT count(*) FROM ancres),
+        'signaux_actifs', (SELECT COALESCE(sum(missions_90j + signaux_externes), 0) FROM segments),
+        'etablissements_a_potentiel', (SELECT count(*) FROM cibles_potentielles),
         'soignants_verifies', (SELECT COALESCE(sum(soignants_verifies), 0) FROM segments),
         'disponibles_14j', (SELECT COALESCE(sum(disponibles_14j), 0) FROM segments),
         'potentiel_commission_mensuel_ht', (SELECT COALESCE(sum(potentiel_commission_mensuel_ht), 0) FROM segments),
         'commission_observee_ht', (SELECT COALESCE(sum(commission_observee_ht), 0) FROM segments),
+        'commission_observee_mensuelle_ht', (SELECT COALESCE(sum(commission_observee_mensuelle_ht), 0) FROM segments),
+        'commission_pipeline_ht', (SELECT COALESCE(sum(commission_pipeline_ht), 0) FROM segments),
+        'commission_pipeline_mensuelle_ht', (SELECT COALESCE(sum(commission_pipeline_mensuelle_ht), 0) FROM segments),
+        'commission_ouverte_ht', (SELECT COALESCE(sum(commission_ouverte_ht), 0) FROM segments),
         'actions_brouillon', (SELECT count(*) FROM public.acquisition_actions WHERE statut = 'BROUILLON')
       ),
-      'segments', COALESCE((SELECT jsonb_agg(to_jsonb(s) ORDER BY s.score_priorite DESC, s.volume_externe DESC) FROM segments s), '[]'::jsonb),
+      'segments', COALESCE((SELECT jsonb_agg(to_jsonb(s) ORDER BY s.score_priorite DESC, s.volume_externe DESC, s.missions_ouvertes DESC) FROM segments s), '[]'::jsonb),
       'ancres', COALESCE((SELECT jsonb_agg(to_jsonb(a) ORDER BY a.score DESC, a.volume DESC) FROM (SELECT * FROM ancres ORDER BY score DESC, volume DESC LIMIT 50) a), '[]'::jsonb),
       'recurrence', COALESCE((SELECT jsonb_agg(to_jsonb(r) ORDER BY r.missions DESC) FROM (SELECT * FROM recurrence ORDER BY missions DESC LIMIT 30) r), '[]'::jsonb),
-      'signaux', COALESCE((SELECT jsonb_agg(to_jsonb(s) ORDER BY s.score_demande DESC, s.maj_le DESC) FROM (SELECT * FROM public.acquisition_signaux s WHERE s.statut IN ('NOUVEAU', 'QUALIFIE', 'CRM') AND (s.expire_le IS NULL OR s.expire_le >= now()) AND (v_departement IS NULL OR s.departement = v_departement) AND (v_profession IS NULL OR s.profession = v_profession) ORDER BY s.score_demande DESC, s.maj_le DESC LIMIT 100) s), '[]'::jsonb),
+      'signaux', COALESCE((SELECT jsonb_agg(to_jsonb(s) ORDER BY s.score_demande DESC, s.maj_le DESC) FROM (SELECT * FROM public.acquisition_signaux s WHERE v_scope <> 'TEST' AND s.etablissement_id IS NULL AND s.statut IN ('NOUVEAU', 'QUALIFIE', 'CRM') AND (s.expire_le IS NULL OR s.expire_le >= now()) AND (v_departement IS NULL OR s.departement = v_departement) AND (v_profession IS NULL OR s.profession = v_profession) ORDER BY s.score_demande DESC, s.maj_le DESC LIMIT 100) s), '[]'::jsonb),
       'actions', COALESCE((SELECT jsonb_agg(to_jsonb(a) ORDER BY a.score DESC, a.cree_le DESC) FROM (SELECT * FROM public.acquisition_actions WHERE statut IN ('BROUILLON', 'PRIORISEE', 'EN_COURS') ORDER BY score DESC, cree_le DESC LIMIT 100) a), '[]'::jsonb),
       'sources', COALESCE((SELECT jsonb_agg(to_jsonb(src) ORDER BY src.type_source, src.libelle) FROM public.acquisition_sources src), '[]'::jsonb),
       'depenses', COALESCE((SELECT jsonb_agg(to_jsonb(d) ORDER BY d.periode_fin DESC, d.canal) FROM public.acquisition_depenses d WHERE d.periode_fin >= current_date - make_interval(days => v_jours)), '[]'::jsonb)
@@ -5526,7 +5672,7 @@ $$;
 ALTER FUNCTION "public"."fn_admin_acquisition_radar"("p_scope" "text", "p_jours" integer, "p_departement" "text", "p_profession" "text") OWNER TO "postgres";
 
 
-COMMENT ON FUNCTION "public"."fn_admin_acquisition_radar"("p_scope" "text", "p_jours" integer, "p_departement" "text", "p_profession" "text") IS 'Radar fondateur : demande, offre verifiee, liquidite, comptes ancres, recurrence et potentiel de commission HT.';
+COMMENT ON FUNCTION "public"."fn_admin_acquisition_radar"("p_scope" "text", "p_jours" integer, "p_departement" "text", "p_profession" "text") IS 'Radar fondateur temps reel : besoins internes + signaux externes, liquidite et potentiel de commission mensualise. Aucun contact automatique.';
 
 
 
@@ -5740,46 +5886,64 @@ ALTER FUNCTION "public"."fn_admin_bfa_marquer_verse"("p_suivi_id" "uuid", "p_dat
 
 
 CREATE OR REPLACE FUNCTION "public"."fn_admin_chercher_prospects"("p_type" "text" DEFAULT NULL::"text", "p_departement" "text" DEFAULT NULL::"text", "p_q" "text" DEFAULT NULL::"text", "p_favoris" boolean DEFAULT false, "p_page" integer DEFAULT 1, "p_avec_email" boolean DEFAULT false, "p_avec_tel" boolean DEFAULT false) RETURNS "jsonb"
-    LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO 'public'
+    LANGUAGE "plpgsql" STABLE SECURITY DEFINER
+    SET "search_path" TO 'pg_catalog', 'public', 'auth'
     AS $$
 DECLARE
   v_total bigint;
   v_resultats jsonb;
-  v_par_page int := 30;
-  v_offset int := (greatest(p_page,1)-1) * 30;
+  v_page integer := GREATEST(COALESCE(p_page, 1), 1);
+  v_type text := NULLIF(upper(btrim(COALESCE(p_type, ''))), '');
+  v_departement text := NULLIF(upper(btrim(COALESCE(p_departement, ''))), '');
+  v_q text := NULLIF(btrim(COALESCE(p_q, '')), '');
 BEGIN
-  IF NOT public.est_admin() THEN RAISE EXCEPTION 'Accès admin requis'; END IF;
+  IF NOT public.est_admin() THEN
+    RAISE EXCEPTION 'Acces admin requis' USING ERRCODE = '42501';
+  END IF;
 
-  SELECT count(*) INTO v_total
-  FROM prospects_etablissements p
-  WHERE (p_type IS NULL OR p_type = '' OR p.type_jolene = p_type)
-    AND (p_departement IS NULL OR p_departement = '' OR p.departement = upper(p_departement))
-    AND (NOT p_favoris OR p.favori)
-    AND (NOT p_avec_email OR (p.email IS NOT NULL AND p.email <> ''))
-    AND (NOT p_avec_tel OR (p.telephone IS NOT NULL AND p.telephone <> ''))
-    AND (p_q IS NULL OR p_q = '' OR p.nom ILIKE '%'||p_q||'%' OR p.ville ILIKE '%'||p_q||'%');
-
-  SELECT coalesce(jsonb_agg(row_to_json(t)::jsonb), '[]'::jsonb) INTO v_resultats
-  FROM (
-    SELECT p.finess, p.siret, p.nom, p.type_jolene, p.categorie_lib, p.telephone,
-           p.email, p.adresse, p.code_postal, p.ville, p.departement, p.favori
-    FROM prospects_etablissements p
-    WHERE (p_type IS NULL OR p_type = '' OR p.type_jolene = p_type)
-      AND (p_departement IS NULL OR p_departement = '' OR p.departement = upper(p_departement))
+  IF v_type IS NULL AND v_departement IS NULL AND v_q IS NULL
+     AND NOT p_favoris AND NOT p_avec_email AND NOT p_avec_tel THEN
+    SELECT total INTO v_total FROM public.prospection_compteurs WHERE cible = 'ETABLISSEMENT';
+  ELSIF v_type IS NULL AND v_departement IS NULL AND v_q IS NULL
+     AND NOT p_favoris AND p_avec_email AND NOT p_avec_tel THEN
+    SELECT avec_email INTO v_total FROM public.prospection_compteurs WHERE cible = 'ETABLISSEMENT';
+  ELSIF v_type IS NULL AND v_departement IS NULL AND v_q IS NULL
+     AND NOT p_favoris AND NOT p_avec_email AND p_avec_tel THEN
+    SELECT avec_telephone INTO v_total FROM public.prospection_compteurs WHERE cible = 'ETABLISSEMENT';
+  ELSE
+    SELECT count(*) INTO v_total
+    FROM public.prospects_etablissements p
+    WHERE (v_type IS NULL OR p.type_jolene = v_type)
+      AND (v_departement IS NULL OR p.departement = v_departement)
       AND (NOT p_favoris OR p.favori)
-      AND (NOT p_avec_email OR (p.email IS NOT NULL AND p.email <> ''))
-      AND (NOT p_avec_tel OR (p.telephone IS NOT NULL AND p.telephone <> ''))
-      AND (p_q IS NULL OR p_q = '' OR p.nom ILIKE '%'||p_q||'%' OR p.ville ILIKE '%'||p_q||'%')
-    ORDER BY p.favori DESC, p.nom
-    LIMIT v_par_page OFFSET v_offset
+      AND (NOT p_avec_email OR NULLIF(btrim(p.email), '') IS NOT NULL)
+      AND (NOT p_avec_tel OR NULLIF(btrim(p.telephone), '') IS NOT NULL)
+      AND (v_q IS NULL OR p.nom ILIKE '%' || v_q || '%' OR p.ville ILIKE '%' || v_q || '%');
+  END IF;
+
+  SELECT COALESCE(jsonb_agg(to_jsonb(t)), '[]'::jsonb) INTO v_resultats
+  FROM (
+    SELECT p.finess, p.siret, p.nom, p.type_jolene, p.categorie_lib,
+           p.telephone, p.email, p.adresse, p.code_postal, p.ville,
+           p.departement, p.favori, p.source_code, p.source_url,
+           p.source_maj_le, p.importe_le, p.statut_sourcing
+    FROM public.prospects_etablissements p
+    WHERE (v_type IS NULL OR p.type_jolene = v_type)
+      AND (v_departement IS NULL OR p.departement = v_departement)
+      AND (NOT p_favoris OR p.favori)
+      AND (NOT p_avec_email OR NULLIF(btrim(p.email), '') IS NOT NULL)
+      AND (NOT p_avec_tel OR NULLIF(btrim(p.telephone), '') IS NOT NULL)
+      AND (v_q IS NULL OR p.nom ILIKE '%' || v_q || '%' OR p.ville ILIKE '%' || v_q || '%')
+    ORDER BY p.favori DESC, p.departement, p.nom, p.finess
+    LIMIT 30 OFFSET (v_page - 1) * 30
   ) t;
 
   RETURN jsonb_build_object(
-    'total', v_total,
-    'page', greatest(p_page,1),
-    'total_pages', ceil(v_total::numeric / v_par_page),
-    'resultats', v_resultats
+    'total', COALESCE(v_total, 0),
+    'page', v_page,
+    'total_pages', CEIL(COALESCE(v_total, 0)::numeric / 30),
+    'resultats', v_resultats,
+    'compteur_exact', true
   );
 END;
 $$;
@@ -5790,34 +5954,76 @@ ALTER FUNCTION "public"."fn_admin_chercher_prospects"("p_type" "text", "p_depart
 
 CREATE OR REPLACE FUNCTION "public"."fn_admin_chercher_prospects_soignants"("p_profession" "text" DEFAULT NULL::"text", "p_departement" "text" DEFAULT NULL::"text", "p_q" "text" DEFAULT NULL::"text", "p_favoris" boolean DEFAULT false, "p_page" integer DEFAULT 1, "p_avec_email" boolean DEFAULT false, "p_avec_tel" boolean DEFAULT false, "p_etudiants" boolean DEFAULT false) RETURNS "jsonb"
     LANGUAGE "plpgsql" STABLE SECURITY DEFINER
-    SET "search_path" TO 'public'
-    AS $$
-DECLARE v_total bigint; v_res jsonb; v_page int := GREATEST(p_page, 1);
+    SET "search_path" TO 'pg_catalog', 'public', 'auth'
+    AS $_$
+DECLARE
+  v_total bigint;
+  v_res jsonb;
+  v_page integer := GREATEST(COALESCE(p_page, 1), 1);
+  v_profession text := NULLIF(upper(btrim(COALESCE(p_profession, ''))), '');
+  v_departement text := NULLIF(upper(btrim(COALESCE(p_departement, ''))), '');
+  v_q text := NULLIF(btrim(COALESCE(p_q, '')), '');
 BEGIN
-  IF NOT public.est_admin() THEN RETURN jsonb_build_object('error', 'Accès refusé'); END IF;
-  SELECT count(*) INTO v_total FROM prospects_soignants p
-   WHERE (p_profession IS NULL OR p.profession = p_profession)
-     AND (p_departement IS NULL OR p.departement = lpad(p_departement, 2, '0'))
-     AND (NOT p_favoris OR p.favori)
-     AND (NOT p_avec_email OR (p.email IS NOT NULL AND p.email <> ''))
-     AND (NOT p_avec_tel OR (p.telephone IS NOT NULL AND p.telephone <> ''))
-     AND (NOT p_etudiants OR p.est_etudiant)
-     AND (p_q IS NULL OR p.nom ILIKE '%' || p_q || '%' OR p.ville ILIKE '%' || p_q || '%' OR p.enseigne ILIKE '%' || p_q || '%');
-  SELECT coalesce(jsonb_agg(row_to_json(t)::jsonb), '[]'::jsonb) INTO v_res FROM (
-    SELECT p.* FROM prospects_soignants p
-     WHERE (p_profession IS NULL OR p.profession = p_profession)
-       AND (p_departement IS NULL OR p.departement = lpad(p_departement, 2, '0'))
-       AND (NOT p_favoris OR p.favori)
-       AND (NOT p_avec_email OR (p.email IS NOT NULL AND p.email <> ''))
-       AND (NOT p_avec_tel OR (p.telephone IS NOT NULL AND p.telephone <> ''))
-       AND (NOT p_etudiants OR p.est_etudiant)
-       AND (p_q IS NULL OR p.nom ILIKE '%' || p_q || '%' OR p.ville ILIKE '%' || p_q || '%' OR p.enseigne ILIKE '%' || p_q || '%')
-     ORDER BY p.favori DESC, p.departement, p.ville, p.nom
-     LIMIT 30 OFFSET (v_page - 1) * 30
+  IF NOT public.est_admin() THEN
+    RAISE EXCEPTION 'Acces admin requis' USING ERRCODE = '42501';
+  END IF;
+
+  IF v_profession IS NULL AND v_departement IS NULL AND v_q IS NULL
+     AND NOT p_favoris AND NOT p_avec_email AND NOT p_avec_tel AND NOT p_etudiants THEN
+    SELECT total INTO v_total FROM public.prospection_compteurs WHERE cible = 'SOIGNANT';
+  ELSIF v_profession IS NULL AND v_departement IS NULL AND v_q IS NULL
+     AND NOT p_favoris AND p_avec_email AND NOT p_avec_tel AND NOT p_etudiants THEN
+    SELECT avec_email INTO v_total FROM public.prospection_compteurs WHERE cible = 'SOIGNANT';
+  ELSIF v_profession IS NULL AND v_departement IS NULL AND v_q IS NULL
+     AND NOT p_favoris AND NOT p_avec_email AND p_avec_tel AND NOT p_etudiants THEN
+    SELECT avec_telephone INTO v_total FROM public.prospection_compteurs WHERE cible = 'SOIGNANT';
+  ELSE
+    SELECT count(*) INTO v_total
+    FROM public.prospects_soignants p
+    WHERE (v_profession IS NULL OR p.profession = v_profession)
+      AND (v_departement IS NULL OR p.departement = CASE
+        WHEN v_departement ~ '^\d$' THEN lpad(v_departement, 2, '0')
+        ELSE v_departement
+      END)
+      AND (NOT p_favoris OR p.favori)
+      AND (NOT p_avec_email OR NULLIF(btrim(p.email), '') IS NOT NULL)
+      AND (NOT p_avec_tel OR NULLIF(btrim(p.telephone), '') IS NOT NULL)
+      AND (NOT p_etudiants OR p.est_etudiant)
+      AND (v_q IS NULL OR p.nom ILIKE '%' || v_q || '%' OR p.ville ILIKE '%' || v_q || '%' OR p.enseigne ILIKE '%' || v_q || '%');
+  END IF;
+
+  SELECT COALESCE(jsonb_agg(to_jsonb(t)), '[]'::jsonb) INTO v_res
+  FROM (
+    SELECT p.cle, p.nom, p.prenom, p.profession, p.enseigne, p.telephone,
+           p.email, p.adresse, p.code_postal, p.ville, p.departement,
+           p.favori, p.est_etudiant, p.ecole, p.formation, p.numero_rpps,
+           p.mode_exercice, p.finess_structure, p.siret_structure,
+           p.source_code, p.source_url, p.source_maj_le, p.importe_le,
+           p.statut_sourcing
+    FROM public.prospects_soignants p
+    WHERE (v_profession IS NULL OR p.profession = v_profession)
+      AND (v_departement IS NULL OR p.departement = CASE
+        WHEN v_departement ~ '^\d$' THEN lpad(v_departement, 2, '0')
+        ELSE v_departement
+      END)
+      AND (NOT p_favoris OR p.favori)
+      AND (NOT p_avec_email OR NULLIF(btrim(p.email), '') IS NOT NULL)
+      AND (NOT p_avec_tel OR NULLIF(btrim(p.telephone), '') IS NOT NULL)
+      AND (NOT p_etudiants OR p.est_etudiant)
+      AND (v_q IS NULL OR p.nom ILIKE '%' || v_q || '%' OR p.ville ILIKE '%' || v_q || '%' OR p.enseigne ILIKE '%' || v_q || '%')
+    ORDER BY p.favori DESC, p.departement, p.ville, p.nom, p.cle
+    LIMIT 30 OFFSET (v_page - 1) * 30
   ) t;
-  RETURN jsonb_build_object('total', v_total, 'page', v_page, 'total_pages', CEIL(v_total / 30.0), 'resultats', v_res);
+
+  RETURN jsonb_build_object(
+    'total', COALESCE(v_total, 0),
+    'page', v_page,
+    'total_pages', CEIL(COALESCE(v_total, 0) / 30.0),
+    'resultats', v_res,
+    'compteur_exact', true
+  );
 END;
-$$;
+$_$;
 
 
 ALTER FUNCTION "public"."fn_admin_chercher_prospects_soignants"("p_profession" "text", "p_departement" "text", "p_q" "text", "p_favoris" boolean, "p_page" integer, "p_avec_email" boolean, "p_avec_tel" boolean, "p_etudiants" boolean) OWNER TO "postgres";
@@ -10537,6 +10743,29 @@ $$;
 ALTER FUNCTION "public"."fn_admin_planning_global"("p_debut" "date", "p_fin" "date") OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."fn_admin_prospection_stats"() RETURNS "jsonb"
+    LANGUAGE "plpgsql" STABLE SECURITY DEFINER
+    SET "search_path" TO 'pg_catalog', 'public', 'auth'
+    AS $$
+BEGIN
+  IF NOT public.est_admin() THEN
+    RAISE EXCEPTION 'Acces admin requis' USING ERRCODE = '42501';
+  END IF;
+  RETURN jsonb_build_object(
+    'soignants', COALESCE((SELECT to_jsonb(c) - 'cible' FROM public.prospection_compteurs c WHERE cible = 'SOIGNANT'), '{}'::jsonb),
+    'etablissements', COALESCE((SELECT to_jsonb(c) - 'cible' FROM public.prospection_compteurs c WHERE cible = 'ETABLISSEMENT'), '{}'::jsonb),
+    'crm_soignants', (SELECT count(*) FROM public.sales_contacts WHERE type = 'SOIGNANT' AND NOT COALESCE(archive, false)),
+    'crm_etablissements', (SELECT count(*) FROM public.sales_contacts WHERE type = 'ETABLISSEMENT' AND NOT COALESCE(archive, false)),
+    'exact', true,
+    'genere_le', now()
+  );
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_admin_prospection_stats"() OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."fn_admin_recategoriser_litige_legacy"("p_litige_id" "uuid", "p_nouveau_type" "public"."type_litige") RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
@@ -11952,7 +12181,9 @@ BEGIN
   END IF;
 
   IF v_cible = 'ETABLISSEMENT' THEN
-    SELECT * INTO v_etab FROM public.prospects_etablissements WHERE finess = p_prospect_id;
+    SELECT * INTO v_etab
+      FROM public.prospects_etablissements
+     WHERE finess = p_prospect_id;
     IF NOT FOUND THEN RAISE EXCEPTION 'Prospect etablissement introuvable'; END IF;
 
     INSERT INTO public.sales_contacts (
@@ -11973,24 +12204,33 @@ BEGIN
       source_prospect_id = COALESCE(sales_contacts.source_prospect_id, EXCLUDED.source_prospect_id),
       source_donnees = COALESCE(sales_contacts.source_donnees, EXCLUDED.source_donnees),
       score_sourcing = COALESCE(EXCLUDED.score_sourcing, sales_contacts.score_sourcing),
+      sequence_active = false,
+      prochaine_action_le = NULL,
       maj_le = now()
     RETURNING id INTO v_contact_id;
 
     UPDATE public.prospects_etablissements
-       SET ajoute_crm_le = COALESCE(ajoute_crm_le, now()), statut_sourcing = 'QUALIFIE'
+       SET ajoute_crm_le = COALESCE(ajoute_crm_le, now()),
+           statut_sourcing = 'QUALIFIE'
      WHERE finess = p_prospect_id;
   ELSIF v_cible = 'SOIGNANT' THEN
-    SELECT * INTO v_soignant FROM public.prospects_soignants WHERE cle = p_prospect_id;
+    SELECT * INTO v_soignant
+      FROM public.prospects_soignants
+     WHERE cle = p_prospect_id;
     IF NOT FOUND THEN RAISE EXCEPTION 'Prospect soignant introuvable'; END IF;
 
     SELECT c.id INTO v_contact_id
       FROM public.sales_contacts c
-     WHERE (c.source_prospect_type = 'SOIGNANT' AND c.source_prospect_id = v_soignant.cle)
-        OR (v_soignant.email IS NOT NULL AND lower(c.email) = lower(v_soignant.email))
-        OR (v_soignant.telephone IS NOT NULL
-            AND length(regexp_replace(v_soignant.telephone, '\\D', '', 'g')) >= 9
-            AND regexp_replace(c.telephone, '\\D', '', 'g') = regexp_replace(v_soignant.telephone, '\\D', '', 'g'))
-     ORDER BY c.cree_le LIMIT 1;
+     WHERE c.type = 'SOIGNANT'
+       AND (
+         (c.source_prospect_type = 'SOIGNANT' AND c.source_prospect_id = v_soignant.cle)
+         OR (v_soignant.email IS NOT NULL AND lower(c.email) = lower(v_soignant.email))
+         OR (v_soignant.telephone IS NOT NULL
+             AND length(regexp_replace(v_soignant.telephone, '\\D', '', 'g')) >= 9
+             AND regexp_replace(c.telephone, '\\D', '', 'g') = regexp_replace(v_soignant.telephone, '\\D', '', 'g'))
+       )
+     ORDER BY c.cree_le
+     LIMIT 1;
 
     IF v_contact_id IS NULL THEN
       INSERT INTO public.sales_contacts (
@@ -12011,18 +12251,35 @@ BEGIN
              source_prospect_id = COALESCE(source_prospect_id, v_soignant.cle),
              source_donnees = COALESCE(source_donnees, v_soignant.source_code),
              score_sourcing = COALESCE(p_score, score_sourcing),
+             sequence_active = false,
+             prochaine_action_le = NULL,
              maj_le = now()
        WHERE id = v_contact_id;
     END IF;
 
     UPDATE public.prospects_soignants
-       SET ajoute_crm_le = COALESCE(ajoute_crm_le, now()), statut_sourcing = 'QUALIFIE'
+       SET ajoute_crm_le = COALESCE(ajoute_crm_le, now()),
+           statut_sourcing = 'QUALIFIE'
      WHERE cle = p_prospect_id;
   ELSE
     RAISE EXCEPTION 'Cible invalide';
   END IF;
 
-  RETURN jsonb_build_object('success', true, 'contact_id', v_contact_id, 'sequence_active', false);
+  -- Le trigger d'initialisation historique peut poser une echeance sur INSERT.
+  -- Ce verrou final garantit le meme etat silencieux sur insert et deduplication.
+  UPDATE public.sales_contacts
+     SET sequence_active = false,
+         prochaine_action_le = NULL,
+         maj_le = now()
+   WHERE id = v_contact_id;
+
+  RETURN jsonb_build_object(
+    'success', true,
+    'contact_id', v_contact_id,
+    'sequence_active', false,
+    'prochaine_action_le', NULL,
+    'contact_automatique', false
+  );
 END;
 $$;
 
@@ -12059,18 +12316,22 @@ ALTER FUNCTION "public"."fn_admin_sourcing_qualifier"("p_cible" "text", "p_prosp
 CREATE OR REPLACE FUNCTION "public"."fn_admin_sourcing_tableau"("p_cible" "text" DEFAULT 'SOIGNANT'::"text", "p_departement" "text" DEFAULT NULL::"text", "p_profession" "text" DEFAULT NULL::"text", "p_type_etab" "text" DEFAULT NULL::"text", "p_nouveaux" boolean DEFAULT false, "p_contactables" boolean DEFAULT true, "p_hors_crm" boolean DEFAULT true, "p_page" integer DEFAULT 1, "p_par_page" integer DEFAULT 30) RETURNS "jsonb"
     LANGUAGE "plpgsql" STABLE SECURITY DEFINER
     SET "search_path" TO 'pg_catalog', 'public', 'auth'
-    AS $$
+    AS $_$
 DECLARE
   v_cible text := upper(COALESCE(p_cible, 'SOIGNANT'));
   v_page integer := greatest(COALESCE(p_page, 1), 1);
   v_par_page integer := least(greatest(COALESCE(p_par_page, 30), 10), 100);
+  v_pool integer;
   v_total bigint := 0;
+  v_total_pool bigint := 0;
   v_nouveaux bigint := 0;
   v_contactables bigint := 0;
-  v_hors_crm bigint := 0;
   v_resultats jsonb := '[]'::jsonb;
   v_besoins jsonb := '[]'::jsonb;
   v_imports jsonb := '[]'::jsonb;
+  v_departement text := NULLIF(upper(btrim(COALESCE(p_departement, ''))), '');
+  v_profession text := NULLIF(upper(btrim(COALESCE(p_profession, ''))), '');
+  v_type_etab text := NULLIF(upper(btrim(COALESCE(p_type_etab, ''))), '');
 BEGIN
   IF NOT public.est_admin() THEN
     RAISE EXCEPTION 'Acces admin requis' USING ERRCODE = '42501';
@@ -12078,6 +12339,15 @@ BEGIN
   IF v_cible NOT IN ('SOIGNANT', 'ETABLISSEMENT') THEN
     RAISE EXCEPTION 'Cible invalide';
   END IF;
+
+  -- Pool assez large pour absorber les rares doublons sans exposer la base à
+  -- une agrégation nationale. Le plafond garde un temps de réponse constant.
+  v_pool := LEAST(5000, GREATEST(600, (v_page * v_par_page) + 300));
+
+  SELECT c.total, c.nouveaux_30j, c.contactables
+    INTO v_total, v_nouveaux, v_contactables
+    FROM public.prospection_compteurs c
+   WHERE c.cible = v_cible;
 
   IF v_cible = 'SOIGNANT' THEN
     WITH demandes AS (
@@ -12088,32 +12358,53 @@ BEGIN
       JOIN public.etablissements e ON e.id = m.etablissement_id
       WHERE m.statut = 'OUVERTE'::public.statut_mission
         AND m.fin_le >= now() AND e.supprime_le IS NULL
+        AND COALESCE(e.est_compte_test, false) IS FALSE
       GROUP BY 1, 2
+    ), candidats AS MATERIALIZED (
+      SELECT p.cle, p.nom, p.prenom, p.profession, p.enseigne, p.telephone,
+             p.email, p.ville, p.departement, p.code_postal, p.numero_rpps,
+             p.mode_exercice, p.finess_structure, p.source_code, p.source_url,
+             p.source_maj_le, p.importe_le, p.statut_sourcing
+      FROM public.prospects_soignants p
+      WHERE p.statut_sourcing NOT IN ('IGNORE', 'OPPOSITION')
+        AND (v_departement IS NULL OR p.departement = CASE
+          WHEN v_departement ~ '^\d$' THEN lpad(v_departement, 2, '0')
+          ELSE v_departement
+        END)
+        AND (v_profession IS NULL OR p.profession = v_profession)
+        AND (NOT p_nouveaux OR p.importe_le >= now() - interval '30 days')
+        AND (NOT p_contactables OR NULLIF(btrim(p.email), '') IS NOT NULL OR NULLIF(btrim(p.telephone), '') IS NOT NULL)
+      -- Sans filtre, le pool national doit contenir les fiches les plus
+      -- recentes, pas seulement les premieres professions alphabetiques.
+      ORDER BY p.importe_le DESC, p.cle
+      LIMIT v_pool
     ), calc AS (
       SELECT p.*,
         EXISTS (
           SELECT 1 FROM public.sales_contacts c
-          WHERE c.source_prospect_type = 'SOIGNANT' AND c.source_prospect_id = p.cle
-             OR (p.numero_rpps IS NOT NULL AND c.notes ILIKE '%' || p.numero_rpps || '%')
-             OR (p.email IS NOT NULL AND lower(c.email) = lower(p.email))
-             OR (p.telephone IS NOT NULL AND length(regexp_replace(p.telephone, '\\D', '', 'g')) >= 9
-                 AND regexp_replace(c.telephone, '\\D', '', 'g') = regexp_replace(p.telephone, '\\D', '', 'g'))
+          WHERE c.type = 'SOIGNANT'
+            AND (
+              (c.source_prospect_type = 'SOIGNANT' AND c.source_prospect_id = p.cle)
+              OR (p.numero_rpps IS NOT NULL AND c.notes ILIKE '%' || p.numero_rpps || '%')
+              OR (p.email IS NOT NULL AND lower(c.email) = lower(p.email))
+              OR (p.telephone IS NOT NULL AND length(regexp_replace(p.telephone, '\\D', '', 'g')) >= 9
+                  AND regexp_replace(c.telephone, '\\D', '', 'g') = regexp_replace(p.telephone, '\\D', '', 'g'))
+            )
         ) AS deja_crm,
         EXISTS (
           SELECT 1 FROM public.soignants s
-          WHERE s.supprime_le IS NULL AND (
-            (p.numero_rpps IS NOT NULL AND s.numero_rpps = p.numero_rpps)
-            OR (p.email IS NOT NULL AND lower(s.email) = lower(p.email))
-            OR (p.telephone IS NOT NULL AND length(regexp_replace(p.telephone, '\\D', '', 'g')) >= 9
-                AND regexp_replace(s.telephone::text, '\\D', '', 'g') = regexp_replace(p.telephone, '\\D', '', 'g'))
-          )
+          WHERE s.supprime_le IS NULL
+            AND COALESCE(s.est_compte_test, false) IS FALSE
+            AND (
+              (p.numero_rpps IS NOT NULL AND s.numero_rpps = p.numero_rpps)
+              OR (p.email IS NOT NULL AND lower(s.email) = lower(p.email))
+              OR (p.telephone IS NOT NULL AND length(regexp_replace(p.telephone, '\\D', '', 'g')) >= 9
+                  AND regexp_replace(s.telephone::text, '\\D', '', 'g') = regexp_replace(p.telephone, '\\D', '', 'g'))
+            )
         ) AS deja_inscrit,
         COALESCE(d.nb, 0) AS missions_ouvertes
-      FROM public.prospects_soignants p
+      FROM candidats p
       LEFT JOIN demandes d ON d.profession = p.profession AND d.departement = p.departement
-      WHERE p.statut_sourcing NOT IN ('IGNORE', 'OPPOSITION')
-        AND (p_departement IS NULL OR p_departement = '' OR p.departement = lpad(upper(p_departement), 2, '0'))
-        AND (p_profession IS NULL OR p_profession = '' OR p.profession = upper(p_profession))
     ), scores AS (
       SELECT c.*,
         least(100, greatest(0,
@@ -12128,46 +12419,58 @@ BEGIN
         ))::smallint AS score
       FROM calc c
     ), filtres AS (
-      SELECT * FROM scores s
-      WHERE (NOT p_nouveaux OR s.importe_le >= now() - interval '30 days')
-        AND (NOT p_contactables OR NULLIF(btrim(s.email), '') IS NOT NULL OR NULLIF(btrim(s.telephone), '') IS NOT NULL)
-        AND (NOT p_hors_crm OR (NOT s.deja_crm AND NOT s.deja_inscrit))
+      SELECT * FROM scores WHERE NOT p_hors_crm OR (NOT deja_crm AND NOT deja_inscrit)
     )
-    SELECT count(*),
-           count(*) FILTER (WHERE importe_le >= now() - interval '30 days'),
-           count(*) FILTER (WHERE NULLIF(btrim(email), '') IS NOT NULL OR NULLIF(btrim(telephone), '') IS NOT NULL),
-           count(*) FILTER (WHERE NOT deja_crm AND NOT deja_inscrit),
-           COALESCE((
-             SELECT jsonb_agg(to_jsonb(x) ORDER BY x.score DESC, x.missions_ouvertes DESC, x.nom)
-             FROM (
-               SELECT cle AS id, 'SOIGNANT'::text AS cible, nom, prenom,
-                      profession, enseigne AS sous_titre, telephone, email,
-                      ville, departement, code_postal, numero_rpps,
-                      mode_exercice, finess_structure, NULL::text AS type_etab,
-                      source_code, source_url, source_maj_le, importe_le,
-                      statut_sourcing, deja_crm, deja_inscrit,
-                      missions_ouvertes, score
-               FROM filtres
-               ORDER BY score DESC, missions_ouvertes DESC, nom
-               LIMIT v_par_page OFFSET (v_page - 1) * v_par_page
-             ) x
-           ), '[]'::jsonb)
-      INTO v_total, v_nouveaux, v_contactables, v_hors_crm, v_resultats
-      FROM filtres;
+    SELECT (SELECT count(*) FROM filtres),
+           COALESCE(jsonb_agg(to_jsonb(x) ORDER BY x.score DESC, x.missions_ouvertes DESC, x.nom), '[]'::jsonb)
+      INTO v_total_pool, v_resultats
+    FROM (
+      SELECT cle AS id, 'SOIGNANT'::text AS cible, nom, prenom, profession,
+             enseigne AS sous_titre, telephone, email, ville, departement,
+             code_postal, numero_rpps, mode_exercice, finess_structure,
+             NULL::text AS type_etab, source_code, source_url, source_maj_le,
+             importe_le, statut_sourcing, deja_crm, deja_inscrit,
+             missions_ouvertes, score
+      FROM filtres
+      ORDER BY score DESC, missions_ouvertes DESC, nom, id
+      LIMIT v_par_page OFFSET (v_page - 1) * v_par_page
+    ) x;
   ELSE
-    WITH calc AS (
-      SELECT p.*,
-        EXISTS (SELECT 1 FROM public.sales_contacts c WHERE c.finess = p.finess
-          OR (p.email IS NOT NULL AND lower(c.email) = lower(p.email))
-          OR (p.telephone IS NOT NULL AND length(regexp_replace(p.telephone, '\\D', '', 'g')) >= 9
-              AND regexp_replace(c.telephone, '\\D', '', 'g') = regexp_replace(p.telephone, '\\D', '', 'g'))) AS deja_crm,
-        EXISTS (SELECT 1 FROM public.etablissements e WHERE e.supprime_le IS NULL AND (
-          e.finess = p.finess OR (p.siret IS NOT NULL AND e.siret = p.siret)
-          OR (p.email IS NOT NULL AND lower(e.email_contact) = lower(p.email)))) AS deja_inscrit
+    WITH candidats AS MATERIALIZED (
+      SELECT p.finess, p.siret, p.nom, p.type_jolene, p.categorie_lib,
+             p.telephone, p.email, p.ville, p.departement, p.code_postal,
+             p.source_code, p.source_url, p.source_maj_le, p.importe_le,
+             p.statut_sourcing
       FROM public.prospects_etablissements p
       WHERE p.statut_sourcing NOT IN ('IGNORE', 'OPPOSITION')
-        AND (p_departement IS NULL OR p_departement = '' OR p.departement = upper(p_departement))
-        AND (p_type_etab IS NULL OR p_type_etab = '' OR p.type_jolene = upper(p_type_etab))
+        AND (v_departement IS NULL OR p.departement = v_departement)
+        AND (v_type_etab IS NULL OR p.type_jolene = v_type_etab)
+        AND (NOT p_nouveaux OR p.importe_le >= now() - interval '30 days')
+        AND (NOT p_contactables OR NULLIF(btrim(p.email), '') IS NOT NULL OR NULLIF(btrim(p.telephone), '') IS NOT NULL)
+      ORDER BY p.importe_le DESC, p.finess
+      LIMIT v_pool
+    ), calc AS (
+      SELECT p.*,
+        EXISTS (
+          SELECT 1 FROM public.sales_contacts c
+          WHERE c.type = 'ETABLISSEMENT'
+            AND (
+              c.finess = p.finess
+              OR (p.email IS NOT NULL AND lower(c.email) = lower(p.email))
+              OR (p.telephone IS NOT NULL AND length(regexp_replace(p.telephone, '\\D', '', 'g')) >= 9
+                  AND regexp_replace(c.telephone, '\\D', '', 'g') = regexp_replace(p.telephone, '\\D', '', 'g'))
+            )
+        ) AS deja_crm,
+        EXISTS (
+          SELECT 1 FROM public.etablissements e
+          WHERE e.supprime_le IS NULL
+            AND COALESCE(e.est_compte_test, false) IS FALSE
+            AND (
+              e.finess = p.finess OR (p.siret IS NOT NULL AND e.siret = p.siret)
+              OR (p.email IS NOT NULL AND lower(e.email_contact) = lower(p.email))
+            )
+        ) AS deja_inscrit
+      FROM candidats p
     ), scores AS (
       SELECT c.*,
         least(100, greatest(0,
@@ -12182,33 +12485,23 @@ BEGIN
         ))::smallint AS score
       FROM calc c
     ), filtres AS (
-      SELECT * FROM scores s
-      WHERE (NOT p_nouveaux OR s.importe_le >= now() - interval '30 days')
-        AND (NOT p_contactables OR NULLIF(btrim(s.email), '') IS NOT NULL OR NULLIF(btrim(s.telephone), '') IS NOT NULL)
-        AND (NOT p_hors_crm OR (NOT s.deja_crm AND NOT s.deja_inscrit))
+      SELECT * FROM scores WHERE NOT p_hors_crm OR (NOT deja_crm AND NOT deja_inscrit)
     )
-    SELECT count(*),
-           count(*) FILTER (WHERE importe_le >= now() - interval '30 days'),
-           count(*) FILTER (WHERE NULLIF(btrim(email), '') IS NOT NULL OR NULLIF(btrim(telephone), '') IS NOT NULL),
-           count(*) FILTER (WHERE NOT deja_crm AND NOT deja_inscrit),
-           COALESCE((
-             SELECT jsonb_agg(to_jsonb(x) ORDER BY x.score DESC, x.nom)
-             FROM (
-               SELECT finess AS id, 'ETABLISSEMENT'::text AS cible, nom,
-                      NULL::text AS prenom, NULL::text AS profession,
-                      categorie_lib AS sous_titre, telephone, email, ville,
-                      departement, code_postal, NULL::text AS numero_rpps,
-                      NULL::text AS mode_exercice, finess AS finess_structure,
-                      type_jolene AS type_etab, source_code, source_url,
-                      source_maj_le, importe_le, statut_sourcing, deja_crm,
-                      deja_inscrit, 0::integer AS missions_ouvertes, score
-               FROM filtres
-               ORDER BY score DESC, nom
-               LIMIT v_par_page OFFSET (v_page - 1) * v_par_page
-             ) x
-           ), '[]'::jsonb)
-      INTO v_total, v_nouveaux, v_contactables, v_hors_crm, v_resultats
-      FROM filtres;
+    SELECT (SELECT count(*) FROM filtres),
+           COALESCE(jsonb_agg(to_jsonb(x) ORDER BY x.score DESC, x.nom), '[]'::jsonb)
+      INTO v_total_pool, v_resultats
+    FROM (
+      SELECT finess AS id, 'ETABLISSEMENT'::text AS cible, nom,
+             NULL::text AS prenom, NULL::text AS profession,
+             categorie_lib AS sous_titre, telephone, email, ville, departement,
+             code_postal, NULL::text AS numero_rpps, NULL::text AS mode_exercice,
+             finess AS finess_structure, type_jolene AS type_etab, source_code,
+             source_url, source_maj_le, importe_le, statut_sourcing, deja_crm,
+             deja_inscrit, 0::integer AS missions_ouvertes, score
+      FROM filtres
+      ORDER BY score DESC, nom, id
+      LIMIT v_par_page OFFSET (v_page - 1) * v_par_page
+    ) x;
   END IF;
 
   SELECT COALESCE(jsonb_agg(to_jsonb(b) ORDER BY b.missions_ouvertes DESC), '[]'::jsonb)
@@ -12221,9 +12514,8 @@ BEGIN
     JOIN public.etablissements e ON e.id = m.etablissement_id
     WHERE m.statut = 'OUVERTE'::public.statut_mission
       AND m.fin_le >= now() AND e.supprime_le IS NULL
-    GROUP BY 1, 2
-    ORDER BY 3 DESC
-    LIMIT 12
+      AND COALESCE(e.est_compte_test, false) IS FALSE
+    GROUP BY 1, 2 ORDER BY 3 DESC LIMIT 12
   ) b;
 
   SELECT COALESCE(jsonb_agg(to_jsonb(i) ORDER BY i.demarre_le DESC), '[]'::jsonb)
@@ -12231,25 +12523,35 @@ BEGIN
   FROM (
     SELECT id, source_code, cible, statut, source_maj_le, demarre_le,
            termine_le, lignes_lues, lignes_importees, erreur
-    FROM public.sourcing_imports
-    ORDER BY demarre_le DESC LIMIT 6
+    FROM public.sourcing_imports ORDER BY demarre_le DESC LIMIT 6
   ) i;
 
   RETURN jsonb_build_object(
     'stats', jsonb_build_object(
-      'total', v_total, 'nouveaux_30j', v_nouveaux,
-      'contactables', v_contactables, 'hors_crm', v_hors_crm
+      'total', COALESCE(v_total, 0),
+      'nouveaux_30j', COALESCE(v_nouveaux, 0),
+      'contactables', COALESCE(v_contactables, 0),
+      -- Valeur exacte uniquement dans le pool classe. Soustraire le nombre de
+      -- lignes CRM au volume national produisait un faux chiffre (doublons,
+      -- contacts archives et fiches non issues des annuaires).
+      'hors_crm', CASE WHEN p_hors_crm THEN COALESCE(v_total_pool, 0) ELSE NULL END,
+      'hors_crm_global', false,
+      'compteurs_globaux', true
     ),
     'resultats', v_resultats,
     'besoins', v_besoins,
     'imports', v_imports,
     'page', v_page,
     'par_page', v_par_page,
-    'total_pages', ceil(v_total::numeric / v_par_page),
-    'genere_le', now()
+    -- Le cockpit est une file priorisee, volontairement bornee. La recherche
+    -- exhaustive reste disponible dans l'onglet Prospection.
+    'total_pages', ceil(COALESCE(v_total_pool, 0)::numeric / v_par_page),
+    'genere_le', now(),
+    'pool_evalue', v_pool,
+    'pool_resultats', COALESCE(v_total_pool, 0)
   );
 END;
-$$;
+$_$;
 
 
 ALTER FUNCTION "public"."fn_admin_sourcing_tableau"("p_cible" "text", "p_departement" "text", "p_profession" "text", "p_type_etab" "text", "p_nouveaux" boolean, "p_contactables" boolean, "p_hors_crm" boolean, "p_page" integer, "p_par_page" integer) OWNER TO "postgres";
@@ -39905,6 +40207,141 @@ COMMENT ON FUNCTION "public"."fn_proposer_mission_soignant"("p_mission_id" "uuid
 
 
 
+CREATE OR REPLACE FUNCTION "public"."fn_prospection_compteur_delete"() RETURNS "trigger"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'pg_catalog', 'public'
+    AS $$
+DECLARE
+  v_cible text := CASE TG_TABLE_NAME
+    WHEN 'prospects_soignants' THEN 'SOIGNANT'
+    ELSE 'ETABLISSEMENT'
+  END;
+  v_total bigint;
+  v_email bigint;
+  v_email_non_contacte bigint;
+  v_telephone bigint;
+  v_contactables bigint;
+  v_nouveaux bigint;
+BEGIN
+  SELECT count(*),
+         count(*) FILTER (WHERE NULLIF(btrim(email), '') IS NOT NULL),
+         count(*) FILTER (WHERE NULLIF(btrim(email), '') IS NOT NULL AND email_envoye_le IS NULL),
+         count(*) FILTER (WHERE NULLIF(btrim(telephone), '') IS NOT NULL),
+         count(*) FILTER (WHERE NULLIF(btrim(email), '') IS NOT NULL OR NULLIF(btrim(telephone), '') IS NOT NULL),
+         count(*) FILTER (WHERE importe_le >= now() - interval '30 days')
+    INTO v_total, v_email, v_email_non_contacte, v_telephone, v_contactables, v_nouveaux
+    FROM old_rows;
+
+  UPDATE public.prospection_compteurs SET
+    total = GREATEST(0, total - v_total),
+    avec_email = GREATEST(0, avec_email - v_email),
+    avec_email_non_contacte = GREATEST(0, avec_email_non_contacte - v_email_non_contacte),
+    avec_telephone = GREATEST(0, avec_telephone - v_telephone),
+    contactables = GREATEST(0, contactables - v_contactables),
+    nouveaux_30j = GREATEST(0, nouveaux_30j - v_nouveaux),
+    maj_le = now()
+  WHERE cible = v_cible;
+  RETURN NULL;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_prospection_compteur_delete"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."fn_prospection_compteur_insert"() RETURNS "trigger"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'pg_catalog', 'public'
+    AS $$
+DECLARE
+  v_cible text := CASE TG_TABLE_NAME
+    WHEN 'prospects_soignants' THEN 'SOIGNANT'
+    ELSE 'ETABLISSEMENT'
+  END;
+  v_total bigint;
+  v_email bigint;
+  v_email_non_contacte bigint;
+  v_telephone bigint;
+  v_contactables bigint;
+  v_nouveaux bigint;
+BEGIN
+  SELECT count(*),
+         count(*) FILTER (WHERE NULLIF(btrim(email), '') IS NOT NULL),
+         count(*) FILTER (WHERE NULLIF(btrim(email), '') IS NOT NULL AND email_envoye_le IS NULL),
+         count(*) FILTER (WHERE NULLIF(btrim(telephone), '') IS NOT NULL),
+         count(*) FILTER (WHERE NULLIF(btrim(email), '') IS NOT NULL OR NULLIF(btrim(telephone), '') IS NOT NULL),
+         count(*) FILTER (WHERE importe_le >= now() - interval '30 days')
+    INTO v_total, v_email, v_email_non_contacte, v_telephone, v_contactables, v_nouveaux
+    FROM new_rows;
+
+  INSERT INTO public.prospection_compteurs (
+    cible, total, avec_email, avec_email_non_contacte, avec_telephone,
+    contactables, nouveaux_30j, maj_le
+  ) VALUES (
+    v_cible, v_total, v_email, v_email_non_contacte, v_telephone,
+    v_contactables, v_nouveaux, now()
+  )
+  ON CONFLICT (cible) DO UPDATE SET
+    total = prospection_compteurs.total + EXCLUDED.total,
+    avec_email = prospection_compteurs.avec_email + EXCLUDED.avec_email,
+    avec_email_non_contacte = prospection_compteurs.avec_email_non_contacte + EXCLUDED.avec_email_non_contacte,
+    avec_telephone = prospection_compteurs.avec_telephone + EXCLUDED.avec_telephone,
+    contactables = prospection_compteurs.contactables + EXCLUDED.contactables,
+    nouveaux_30j = prospection_compteurs.nouveaux_30j + EXCLUDED.nouveaux_30j,
+    maj_le = now();
+  RETURN NULL;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_prospection_compteur_insert"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."fn_prospection_compteur_update"() RETURNS "trigger"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'pg_catalog', 'public'
+    AS $$
+DECLARE
+  v_cible text := CASE TG_TABLE_NAME
+    WHEN 'prospects_soignants' THEN 'SOIGNANT'
+    ELSE 'ETABLISSEMENT'
+  END;
+  v_email_delta bigint;
+  v_email_non_contacte_delta bigint;
+  v_telephone_delta bigint;
+  v_contactables_delta bigint;
+  v_nouveaux_delta bigint;
+BEGIN
+  SELECT
+    (SELECT count(*) FILTER (WHERE NULLIF(btrim(email), '') IS NOT NULL) FROM new_rows)
+      - (SELECT count(*) FILTER (WHERE NULLIF(btrim(email), '') IS NOT NULL) FROM old_rows),
+    (SELECT count(*) FILTER (WHERE NULLIF(btrim(email), '') IS NOT NULL AND email_envoye_le IS NULL) FROM new_rows)
+      - (SELECT count(*) FILTER (WHERE NULLIF(btrim(email), '') IS NOT NULL AND email_envoye_le IS NULL) FROM old_rows),
+    (SELECT count(*) FILTER (WHERE NULLIF(btrim(telephone), '') IS NOT NULL) FROM new_rows)
+      - (SELECT count(*) FILTER (WHERE NULLIF(btrim(telephone), '') IS NOT NULL) FROM old_rows),
+    (SELECT count(*) FILTER (WHERE NULLIF(btrim(email), '') IS NOT NULL OR NULLIF(btrim(telephone), '') IS NOT NULL) FROM new_rows)
+      - (SELECT count(*) FILTER (WHERE NULLIF(btrim(email), '') IS NOT NULL OR NULLIF(btrim(telephone), '') IS NOT NULL) FROM old_rows),
+    (SELECT count(*) FILTER (WHERE importe_le >= now() - interval '30 days') FROM new_rows)
+      - (SELECT count(*) FILTER (WHERE importe_le >= now() - interval '30 days') FROM old_rows)
+    INTO v_email_delta, v_email_non_contacte_delta, v_telephone_delta,
+         v_contactables_delta, v_nouveaux_delta;
+
+  UPDATE public.prospection_compteurs SET
+    avec_email = GREATEST(0, avec_email + v_email_delta),
+    avec_email_non_contacte = GREATEST(0, avec_email_non_contacte + v_email_non_contacte_delta),
+    avec_telephone = GREATEST(0, avec_telephone + v_telephone_delta),
+    contactables = GREATEST(0, contactables + v_contactables_delta),
+    nouveaux_30j = GREATEST(0, nouveaux_30j + v_nouveaux_delta),
+    maj_le = now()
+  WHERE cible = v_cible;
+  RETURN NULL;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_prospection_compteur_update"() OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."fn_protect_adeli_verification"() RETURNS "trigger"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'pg_catalog', 'public'
@@ -41692,6 +42129,66 @@ $$;
 ALTER FUNCTION "public"."fn_rafraichir_donnees_matching"() OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."fn_rafraichir_prospection_compteurs"() RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'pg_catalog', 'public', 'auth'
+    AS $$
+DECLARE v_soignants bigint; v_etablissements bigint;
+BEGIN
+  -- Le snapshot puis l'UPSERT doivent former un recalcul atomique. Sans ce
+  -- verrou, un import concurrent pourrait incrementer le trigger entre les
+  -- deux et voir ensuite sa valeur ecrasee par le snapshot plus ancien.
+  LOCK TABLE public.prospects_soignants, public.prospects_etablissements
+    IN SHARE ROW EXCLUSIVE MODE;
+
+  INSERT INTO public.prospection_compteurs (
+    cible, total, avec_email, avec_email_non_contacte, avec_telephone,
+    contactables, nouveaux_30j, maj_le
+  )
+  SELECT 'SOIGNANT', count(*),
+         count(*) FILTER (WHERE NULLIF(btrim(email), '') IS NOT NULL),
+         count(*) FILTER (WHERE NULLIF(btrim(email), '') IS NOT NULL AND email_envoye_le IS NULL),
+         count(*) FILTER (WHERE NULLIF(btrim(telephone), '') IS NOT NULL),
+         count(*) FILTER (WHERE NULLIF(btrim(email), '') IS NOT NULL OR NULLIF(btrim(telephone), '') IS NOT NULL),
+         count(*) FILTER (WHERE importe_le >= now() - interval '30 days'), now()
+  FROM public.prospects_soignants
+  ON CONFLICT (cible) DO UPDATE SET
+    total = EXCLUDED.total, avec_email = EXCLUDED.avec_email,
+    avec_email_non_contacte = EXCLUDED.avec_email_non_contacte,
+    avec_telephone = EXCLUDED.avec_telephone, contactables = EXCLUDED.contactables,
+    nouveaux_30j = EXCLUDED.nouveaux_30j, maj_le = now()
+  RETURNING total INTO v_soignants;
+
+  INSERT INTO public.prospection_compteurs (
+    cible, total, avec_email, avec_email_non_contacte, avec_telephone,
+    contactables, nouveaux_30j, maj_le
+  )
+  SELECT 'ETABLISSEMENT', count(*),
+         count(*) FILTER (WHERE NULLIF(btrim(email), '') IS NOT NULL),
+         count(*) FILTER (WHERE NULLIF(btrim(email), '') IS NOT NULL AND email_envoye_le IS NULL),
+         count(*) FILTER (WHERE NULLIF(btrim(telephone), '') IS NOT NULL),
+         count(*) FILTER (WHERE NULLIF(btrim(email), '') IS NOT NULL OR NULLIF(btrim(telephone), '') IS NOT NULL),
+         count(*) FILTER (WHERE importe_le >= now() - interval '30 days'), now()
+  FROM public.prospects_etablissements
+  ON CONFLICT (cible) DO UPDATE SET
+    total = EXCLUDED.total, avec_email = EXCLUDED.avec_email,
+    avec_email_non_contacte = EXCLUDED.avec_email_non_contacte,
+    avec_telephone = EXCLUDED.avec_telephone, contactables = EXCLUDED.contactables,
+    nouveaux_30j = EXCLUDED.nouveaux_30j, maj_le = now()
+  RETURNING total INTO v_etablissements;
+
+  RETURN jsonb_build_object(
+    'soignants', COALESCE(v_soignants, 0),
+    'etablissements', COALESCE(v_etablissements, 0),
+    'maj_le', now()
+  );
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_rafraichir_prospection_compteurs"() OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."fn_rappel_dpae_quotidien"() RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
@@ -42624,6 +43121,77 @@ $$;
 
 
 ALTER FUNCTION "public"."fn_rechercher_utilisateurs"("p_query" "text") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."fn_reclamer_prospects_enrichissement"("p_cible" "text", "p_departement" "text" DEFAULT NULL::"text", "p_limite" integer DEFAULT 40) RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'pg_catalog', 'public', 'auth'
+    AS $_$
+DECLARE
+  v_cible text := upper(COALESCE(p_cible, ''));
+  v_departement text := NULLIF(upper(btrim(COALESCE(p_departement, ''))), '');
+  v_limite integer := LEAST(GREATEST(COALESCE(p_limite, 40), 1), 60);
+  v_resultat jsonb;
+BEGIN
+  IF NOT (public.est_admin() OR COALESCE(auth.role(), '') = 'service_role'
+    OR COALESCE(current_setting('request.jwt.claim.role', true), '') = 'service_role') THEN
+    RAISE EXCEPTION 'Acces refuse' USING ERRCODE = '42501';
+  END IF;
+
+  IF v_cible = 'ETABLISSEMENT' THEN
+    WITH candidats AS (
+      SELECT p.finess
+      FROM public.prospects_etablissements p
+      WHERE p.enrichi_le IS NULL
+        AND (NULLIF(btrim(p.email), '') IS NULL OR NULLIF(btrim(p.telephone), '') IS NULL)
+        AND (p.dernier_controle_le IS NULL OR p.dernier_controle_le < now() - interval '15 minutes')
+        AND (v_departement IS NULL OR p.departement = v_departement)
+      ORDER BY p.maj_le, p.finess
+      FOR UPDATE SKIP LOCKED
+      LIMIT v_limite
+    ), reclames AS (
+      UPDATE public.prospects_etablissements p
+         SET dernier_controle_le = now()
+        FROM candidats c
+       WHERE p.finess = c.finess
+      RETURNING p.finess AS identifiant, p.finess, NULL::text AS cle,
+                p.nom, NULL::text AS prenom, NULL::text AS numero_rpps,
+                p.email, p.telephone
+    )
+    SELECT COALESCE(jsonb_agg(to_jsonb(r)), '[]'::jsonb) INTO v_resultat FROM reclames r;
+  ELSIF v_cible = 'SOIGNANT' THEN
+    WITH candidats AS (
+      SELECT p.cle
+      FROM public.prospects_soignants p
+      WHERE p.enrichi_le IS NULL
+        AND NULLIF(btrim(p.numero_rpps), '') IS NOT NULL
+        AND (NULLIF(btrim(p.email), '') IS NULL OR NULLIF(btrim(p.telephone), '') IS NULL)
+        AND (p.dernier_controle_le IS NULL OR p.dernier_controle_le < now() - interval '15 minutes')
+        AND (v_departement IS NULL OR p.departement = CASE
+          WHEN v_departement ~ '^\d$' THEN lpad(v_departement, 2, '0')
+          ELSE v_departement
+        END)
+      ORDER BY p.maj_le, p.cle
+      FOR UPDATE SKIP LOCKED
+      LIMIT v_limite
+    ), reclames AS (
+      UPDATE public.prospects_soignants p
+         SET dernier_controle_le = now()
+        FROM candidats c
+       WHERE p.cle = c.cle
+      RETURNING p.cle AS identifiant, NULL::text AS finess, p.cle,
+                p.nom, p.prenom, p.numero_rpps, p.email, p.telephone
+    )
+    SELECT COALESCE(jsonb_agg(to_jsonb(r)), '[]'::jsonb) INTO v_resultat FROM reclames r;
+  ELSE
+    RAISE EXCEPTION 'Cible invalide';
+  END IF;
+  RETURN COALESCE(v_resultat, '[]'::jsonb);
+END;
+$_$;
+
+
+ALTER FUNCTION "public"."fn_reclamer_prospects_enrichissement"("p_cible" "text", "p_departement" "text", "p_limite" integer) OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."fn_recommander_soignants"("p_mission_id" "uuid", "p_limit" integer DEFAULT 20) RETURNS TABLE("id" "uuid", "prenom" "text", "nom" "text", "profession" "public"."type_profession", "score_fiabilite" integer, "distance_km" numeric, "missions_etab" integer, "missions_etablissement" integer, "score_matching" numeric, "est_favori" boolean, "type_exercice" "text", "note_moyenne" numeric, "nb_evaluations" integer, "tous_documents_valides" boolean)
@@ -48631,6 +49199,73 @@ $$;
 
 
 ALTER FUNCTION "public"."fn_terminer_mission"("p_mission_id" "uuid") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."fn_terminer_prospects_enrichissement"("p_cible" "text", "p_resultats" "jsonb") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'pg_catalog', 'public', 'auth'
+    AS $$
+DECLARE
+  v_cible text := upper(COALESCE(p_cible, ''));
+  v_traites integer := 0;
+  v_emails integer := 0;
+  v_telephones integer := 0;
+BEGIN
+  IF NOT (public.est_admin() OR COALESCE(auth.role(), '') = 'service_role'
+    OR COALESCE(current_setting('request.jwt.claim.role', true), '') = 'service_role') THEN
+    RAISE EXCEPTION 'Acces refuse' USING ERRCODE = '42501';
+  END IF;
+
+  IF v_cible = 'ETABLISSEMENT' THEN
+    WITH r AS (
+      SELECT * FROM jsonb_to_recordset(COALESCE(p_resultats, '[]'::jsonb)) AS x(
+        identifiant text, email text, telephone text, termine boolean
+      )
+    ), maj AS (
+      UPDATE public.prospects_etablissements p SET
+        email = CASE WHEN NULLIF(btrim(p.email), '') IS NULL THEN NULLIF(lower(btrim(r.email)), '') ELSE p.email END,
+        telephone = CASE WHEN NULLIF(btrim(p.telephone), '') IS NULL THEN NULLIF(btrim(r.telephone), '') ELSE p.telephone END,
+        enrichi_le = CASE WHEN COALESCE(r.termine, false) THEN now() ELSE p.enrichi_le END,
+        dernier_controle_le = now(),
+        maj_le = CASE WHEN (NULLIF(btrim(p.email), '') IS NULL AND NULLIF(btrim(r.email), '') IS NOT NULL)
+                        OR (NULLIF(btrim(p.telephone), '') IS NULL AND NULLIF(btrim(r.telephone), '') IS NOT NULL)
+                      THEN now() ELSE p.maj_le END
+      FROM r WHERE p.finess = r.identifiant
+      RETURNING (NULLIF(btrim(r.email), '') IS NOT NULL)::integer AS email_ajoute,
+                (NULLIF(btrim(r.telephone), '') IS NOT NULL)::integer AS telephone_ajoute
+    )
+    SELECT count(*), COALESCE(sum(email_ajoute), 0), COALESCE(sum(telephone_ajoute), 0)
+      INTO v_traites, v_emails, v_telephones FROM maj;
+  ELSIF v_cible = 'SOIGNANT' THEN
+    WITH r AS (
+      SELECT * FROM jsonb_to_recordset(COALESCE(p_resultats, '[]'::jsonb)) AS x(
+        identifiant text, email text, telephone text, termine boolean
+      )
+    ), maj AS (
+      UPDATE public.prospects_soignants p SET
+        email = CASE WHEN NULLIF(btrim(p.email), '') IS NULL THEN NULLIF(lower(btrim(r.email)), '') ELSE p.email END,
+        telephone = CASE WHEN NULLIF(btrim(p.telephone), '') IS NULL THEN NULLIF(btrim(r.telephone), '') ELSE p.telephone END,
+        enrichi_le = CASE WHEN COALESCE(r.termine, false) THEN now() ELSE p.enrichi_le END,
+        dernier_controle_le = now(),
+        maj_le = CASE WHEN (NULLIF(btrim(p.email), '') IS NULL AND NULLIF(btrim(r.email), '') IS NOT NULL)
+                        OR (NULLIF(btrim(p.telephone), '') IS NULL AND NULLIF(btrim(r.telephone), '') IS NOT NULL)
+                      THEN now() ELSE p.maj_le END
+      FROM r WHERE p.cle = r.identifiant
+      RETURNING (NULLIF(btrim(r.email), '') IS NOT NULL)::integer AS email_ajoute,
+                (NULLIF(btrim(r.telephone), '') IS NOT NULL)::integer AS telephone_ajoute
+    )
+    SELECT count(*), COALESCE(sum(email_ajoute), 0), COALESCE(sum(telephone_ajoute), 0)
+      INTO v_traites, v_emails, v_telephones FROM maj;
+  ELSE
+    RAISE EXCEPTION 'Cible invalide';
+  END IF;
+
+  RETURN jsonb_build_object('traites', v_traites, 'emails', v_emails, 'telephones', v_telephones);
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_terminer_prospects_enrichissement"("p_cible" "text", "p_resultats" "jsonb") OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."fn_test_nettoyer_sessions_playwright"("p_anciennete" interval DEFAULT '06:00:00'::interval) RETURNS "jsonb"
@@ -57572,6 +58207,28 @@ ALTER TABLE ONLY "public"."professions_liberal_eligible" FORCE ROW LEVEL SECURIT
 ALTER TABLE "public"."professions_liberal_eligible" OWNER TO "postgres";
 
 
+CREATE TABLE IF NOT EXISTS "public"."prospection_compteurs" (
+    "cible" "text" NOT NULL,
+    "total" bigint DEFAULT 0 NOT NULL,
+    "avec_email" bigint DEFAULT 0 NOT NULL,
+    "avec_email_non_contacte" bigint DEFAULT 0 NOT NULL,
+    "avec_telephone" bigint DEFAULT 0 NOT NULL,
+    "contactables" bigint DEFAULT 0 NOT NULL,
+    "nouveaux_30j" bigint DEFAULT 0 NOT NULL,
+    "maj_le" timestamp with time zone DEFAULT "now"() NOT NULL,
+    CONSTRAINT "prospection_compteurs_avec_email_check" CHECK (("avec_email" >= 0)),
+    CONSTRAINT "prospection_compteurs_avec_email_non_contacte_check" CHECK (("avec_email_non_contacte" >= 0)),
+    CONSTRAINT "prospection_compteurs_avec_telephone_check" CHECK (("avec_telephone" >= 0)),
+    CONSTRAINT "prospection_compteurs_cible_check" CHECK (("cible" = ANY (ARRAY['SOIGNANT'::"text", 'ETABLISSEMENT'::"text"]))),
+    CONSTRAINT "prospection_compteurs_contactables_check" CHECK (("contactables" >= 0)),
+    CONSTRAINT "prospection_compteurs_nouveaux_30j_check" CHECK (("nouveaux_30j" >= 0)),
+    CONSTRAINT "prospection_compteurs_total_check" CHECK (("total" >= 0))
+);
+
+
+ALTER TABLE "public"."prospection_compteurs" OWNER TO "postgres";
+
+
 CREATE TABLE IF NOT EXISTS "public"."prospects_etablissements" (
     "finess" "text" NOT NULL,
     "siret" "text",
@@ -59544,6 +60201,11 @@ ALTER TABLE ONLY "public"."professions_liberal_eligible"
 
 
 
+ALTER TABLE ONLY "public"."prospection_compteurs"
+    ADD CONSTRAINT "prospection_compteurs_pkey" PRIMARY KEY ("cible");
+
+
+
 ALTER TABLE ONLY "public"."prospects_etablissements"
     ADD CONSTRAINT "prospects_etablissements_pkey" PRIMARY KEY ("finess");
 
@@ -60851,11 +61513,19 @@ CREATE INDEX "idx_prospects_etab_a_enrichir" ON "public"."prospects_etablissemen
 
 
 
+CREATE INDEX "idx_prospects_etab_browse" ON "public"."prospects_etablissements" USING "btree" ("favori" DESC, "departement", "nom", "finess");
+
+
+
 CREATE INDEX "idx_prospects_etab_dept" ON "public"."prospects_etablissements" USING "btree" ("departement");
 
 
 
 CREATE INDEX "idx_prospects_etab_email_a_envoyer" ON "public"."prospects_etablissements" USING "btree" ("email") WHERE (("email" IS NOT NULL) AND ("email_envoye_le" IS NULL));
+
+
+
+CREATE INDEX "idx_prospects_etab_enrichissables" ON "public"."prospects_etablissements" USING "btree" ("maj_le", "finess") WHERE (("enrichi_le" IS NULL) AND ((NULLIF("btrim"("email"), ''::"text") IS NULL) OR (NULLIF("btrim"("telephone"), ''::"text") IS NULL)));
 
 
 
@@ -60871,7 +61541,27 @@ CREATE INDEX "idx_prospects_etab_sourcing" ON "public"."prospects_etablissements
 
 
 
+CREATE INDEX "idx_prospects_etab_sourcing_departement" ON "public"."prospects_etablissements" USING "btree" ("departement", "importe_le" DESC, "finess") WHERE ("statut_sourcing" <> ALL (ARRAY['IGNORE'::"text", 'OPPOSITION'::"text"]));
+
+
+
+CREATE INDEX "idx_prospects_etab_sourcing_recent" ON "public"."prospects_etablissements" USING "btree" ("importe_le" DESC, "finess") WHERE ("statut_sourcing" <> ALL (ARRAY['IGNORE'::"text", 'OPPOSITION'::"text"]));
+
+
+
+CREATE INDEX "idx_prospects_etab_sourcing_type" ON "public"."prospects_etablissements" USING "btree" ("type_jolene", "importe_le" DESC, "finess") WHERE ("statut_sourcing" <> ALL (ARRAY['IGNORE'::"text", 'OPPOSITION'::"text"]));
+
+
+
+CREATE INDEX "idx_prospects_etab_sourcing_type_dept" ON "public"."prospects_etablissements" USING "btree" ("type_jolene", "departement", "importe_le" DESC, "finess") WHERE ("statut_sourcing" <> ALL (ARRAY['IGNORE'::"text", 'OPPOSITION'::"text"]));
+
+
+
 CREATE INDEX "idx_prospects_etab_type" ON "public"."prospects_etablissements" USING "btree" ("type_jolene");
+
+
+
+CREATE INDEX "idx_prospects_etab_type_browse" ON "public"."prospects_etablissements" USING "btree" ("type_jolene", "favori" DESC, "departement", "nom", "finess");
 
 
 
@@ -60895,11 +61585,27 @@ CREATE INDEX "idx_prospects_soignants_a_enrichir" ON "public"."prospects_soignan
 
 
 
+CREATE INDEX "idx_prospects_soignants_browse" ON "public"."prospects_soignants" USING "btree" ("favori" DESC, "departement", "ville", "nom", "cle");
+
+
+
 CREATE INDEX "idx_prospects_soignants_email_a_envoyer" ON "public"."prospects_soignants" USING "btree" ("email") WHERE (("email" IS NOT NULL) AND ("email_envoye_le" IS NULL));
 
 
 
+CREATE INDEX "idx_prospects_soignants_email_filtre" ON "public"."prospects_soignants" USING "btree" ("profession", "departement", "cle") WHERE (NULLIF("btrim"("email"), ''::"text") IS NOT NULL);
+
+
+
+CREATE INDEX "idx_prospects_soignants_enrichissables" ON "public"."prospects_soignants" USING "btree" ("maj_le", "cle") WHERE (("enrichi_le" IS NULL) AND (NULLIF("btrim"("numero_rpps"), ''::"text") IS NOT NULL) AND ((NULLIF("btrim"("email"), ''::"text") IS NULL) OR (NULLIF("btrim"("telephone"), ''::"text") IS NULL)));
+
+
+
 CREATE INDEX "idx_prospects_soignants_etudiant" ON "public"."prospects_soignants" USING "btree" ("est_etudiant") WHERE "est_etudiant";
+
+
+
+CREATE INDEX "idx_prospects_soignants_prof_browse" ON "public"."prospects_soignants" USING "btree" ("profession", "favori" DESC, "departement", "ville", "nom", "cle");
 
 
 
@@ -60912,6 +61618,26 @@ CREATE INDEX "idx_prospects_soignants_rpps" ON "public"."prospects_soignants" US
 
 
 CREATE INDEX "idx_prospects_soignants_sourcing" ON "public"."prospects_soignants" USING "btree" ("statut_sourcing", "departement", "profession", "importe_le" DESC);
+
+
+
+CREATE INDEX "idx_prospects_soignants_sourcing_departement" ON "public"."prospects_soignants" USING "btree" ("departement", "importe_le" DESC, "cle") WHERE ("statut_sourcing" <> ALL (ARRAY['IGNORE'::"text", 'OPPOSITION'::"text"]));
+
+
+
+CREATE INDEX "idx_prospects_soignants_sourcing_prof_dept" ON "public"."prospects_soignants" USING "btree" ("profession", "departement", "importe_le" DESC, "cle") WHERE ("statut_sourcing" <> ALL (ARRAY['IGNORE'::"text", 'OPPOSITION'::"text"]));
+
+
+
+CREATE INDEX "idx_prospects_soignants_sourcing_profession" ON "public"."prospects_soignants" USING "btree" ("profession", "importe_le" DESC, "cle") WHERE ("statut_sourcing" <> ALL (ARRAY['IGNORE'::"text", 'OPPOSITION'::"text"]));
+
+
+
+CREATE INDEX "idx_prospects_soignants_sourcing_recent" ON "public"."prospects_soignants" USING "btree" ("importe_le" DESC, "cle") WHERE ("statut_sourcing" <> ALL (ARRAY['IGNORE'::"text", 'OPPOSITION'::"text"]));
+
+
+
+CREATE INDEX "idx_prospects_soignants_tel_filtre" ON "public"."prospects_soignants" USING "btree" ("profession", "departement", "cle") WHERE (NULLIF("btrim"("telephone"), ''::"text") IS NOT NULL);
 
 
 
@@ -62164,6 +62890,30 @@ CREATE OR REPLACE TRIGGER "trg_pnpe_updated_at" BEFORE UPDATE ON "public"."prefe
 
 
 CREATE OR REPLACE TRIGGER "trg_propage_stripe_payment_intent" AFTER INSERT OR UPDATE OF "stripe_payment_intent_id", "mission_id" ON "public"."stripe_transfers" FOR EACH ROW EXECUTE FUNCTION "public"."fn_propage_stripe_payment_intent_trg"();
+
+
+
+CREATE OR REPLACE TRIGGER "trg_prospects_etablissements_compteur_delete" AFTER DELETE ON "public"."prospects_etablissements" REFERENCING OLD TABLE AS "old_rows" FOR EACH STATEMENT EXECUTE FUNCTION "public"."fn_prospection_compteur_delete"();
+
+
+
+CREATE OR REPLACE TRIGGER "trg_prospects_etablissements_compteur_insert" AFTER INSERT ON "public"."prospects_etablissements" REFERENCING NEW TABLE AS "new_rows" FOR EACH STATEMENT EXECUTE FUNCTION "public"."fn_prospection_compteur_insert"();
+
+
+
+CREATE OR REPLACE TRIGGER "trg_prospects_etablissements_compteur_update" AFTER UPDATE ON "public"."prospects_etablissements" REFERENCING OLD TABLE AS "old_rows" NEW TABLE AS "new_rows" FOR EACH STATEMENT EXECUTE FUNCTION "public"."fn_prospection_compteur_update"();
+
+
+
+CREATE OR REPLACE TRIGGER "trg_prospects_soignants_compteur_delete" AFTER DELETE ON "public"."prospects_soignants" REFERENCING OLD TABLE AS "old_rows" FOR EACH STATEMENT EXECUTE FUNCTION "public"."fn_prospection_compteur_delete"();
+
+
+
+CREATE OR REPLACE TRIGGER "trg_prospects_soignants_compteur_insert" AFTER INSERT ON "public"."prospects_soignants" REFERENCING NEW TABLE AS "new_rows" FOR EACH STATEMENT EXECUTE FUNCTION "public"."fn_prospection_compteur_insert"();
+
+
+
+CREATE OR REPLACE TRIGGER "trg_prospects_soignants_compteur_update" AFTER UPDATE ON "public"."prospects_soignants" REFERENCING OLD TABLE AS "old_rows" NEW TABLE AS "new_rows" FOR EACH STATEMENT EXECUTE FUNCTION "public"."fn_prospection_compteur_update"();
 
 
 
@@ -63498,11 +64248,11 @@ CREATE POLICY "admin_all_investisseurs" ON "public"."investisseurs_pipeline" USI
 
 
 
-CREATE POLICY "admin_all_prospects_etab" ON "public"."prospects_etablissements" USING ("public"."est_admin"()) WITH CHECK ("public"."est_admin"());
+CREATE POLICY "admin_all_prospects_etab" ON "public"."prospects_etablissements" TO "authenticated" USING (( SELECT "public"."est_admin"() AS "est_admin")) WITH CHECK (( SELECT "public"."est_admin"() AS "est_admin"));
 
 
 
-CREATE POLICY "admin_all_prospects_soignants" ON "public"."prospects_soignants" USING ("public"."est_admin"()) WITH CHECK ("public"."est_admin"());
+CREATE POLICY "admin_all_prospects_soignants" ON "public"."prospects_soignants" TO "authenticated" USING (( SELECT "public"."est_admin"() AS "est_admin")) WITH CHECK (( SELECT "public"."est_admin"() AS "est_admin"));
 
 
 
@@ -63514,7 +64264,7 @@ CREATE POLICY "admin_all_sales_activites" ON "public"."sales_activites" TO "auth
 
 
 
-CREATE POLICY "admin_all_sales_contacts" ON "public"."sales_contacts" USING ("public"."est_admin"()) WITH CHECK ("public"."est_admin"());
+CREATE POLICY "admin_all_sales_contacts" ON "public"."sales_contacts" TO "authenticated" USING (( SELECT "public"."est_admin"() AS "est_admin")) WITH CHECK (( SELECT "public"."est_admin"() AS "est_admin"));
 
 
 
@@ -65634,6 +66384,9 @@ ALTER TABLE "public"."prevoyance_liste_attente" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "public"."professions_liberal_eligible" ENABLE ROW LEVEL SECURITY;
 
 
+ALTER TABLE "public"."prospection_compteurs" ENABLE ROW LEVEL SECURITY;
+
+
 ALTER TABLE "public"."prospects_etablissements" ENABLE ROW LEVEL SECURITY;
 
 
@@ -66958,6 +67711,12 @@ GRANT ALL ON FUNCTION "public"."fn_admin_modifier_template_contrat"("p_template_
 REVOKE ALL ON FUNCTION "public"."fn_admin_planning_global"("p_debut" "date", "p_fin" "date") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_admin_planning_global"("p_debut" "date", "p_fin" "date") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."fn_admin_planning_global"("p_debut" "date", "p_fin" "date") TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."fn_admin_prospection_stats"() FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_admin_prospection_stats"() TO "service_role";
+GRANT ALL ON FUNCTION "public"."fn_admin_prospection_stats"() TO "authenticated";
 
 
 
@@ -69441,6 +70200,21 @@ GRANT ALL ON FUNCTION "public"."fn_proposer_mission_soignant"("p_mission_id" "uu
 
 
 
+REVOKE ALL ON FUNCTION "public"."fn_prospection_compteur_delete"() FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_prospection_compteur_delete"() TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."fn_prospection_compteur_insert"() FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_prospection_compteur_insert"() TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."fn_prospection_compteur_update"() FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_prospection_compteur_update"() TO "service_role";
+
+
+
 REVOKE ALL ON FUNCTION "public"."fn_protect_adeli_verification"() FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_protect_adeli_verification"() TO "service_role";
 
@@ -69625,6 +70399,11 @@ GRANT ALL ON FUNCTION "public"."fn_rafraichir_donnees_matching"() TO "service_ro
 
 
 
+REVOKE ALL ON FUNCTION "public"."fn_rafraichir_prospection_compteurs"() FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_rafraichir_prospection_compteurs"() TO "service_role";
+
+
+
 REVOKE ALL ON FUNCTION "public"."fn_rappel_dpae_quotidien"() FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_rappel_dpae_quotidien"() TO "service_role";
 
@@ -69702,6 +70481,12 @@ GRANT ALL ON FUNCTION "public"."fn_rechercher_soignants_etab"("p_profession" "te
 REVOKE ALL ON FUNCTION "public"."fn_rechercher_utilisateurs"("p_query" "text") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_rechercher_utilisateurs"("p_query" "text") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."fn_rechercher_utilisateurs"("p_query" "text") TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."fn_reclamer_prospects_enrichissement"("p_cible" "text", "p_departement" "text", "p_limite" integer) FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_reclamer_prospects_enrichissement"("p_cible" "text", "p_departement" "text", "p_limite" integer) TO "service_role";
+GRANT ALL ON FUNCTION "public"."fn_reclamer_prospects_enrichissement"("p_cible" "text", "p_departement" "text", "p_limite" integer) TO "authenticated";
 
 
 
@@ -70206,6 +70991,12 @@ GRANT ALL ON FUNCTION "public"."fn_sync_mission_creneaux"() TO "service_role";
 REVOKE ALL ON FUNCTION "public"."fn_terminer_mission"("p_mission_id" "uuid") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_terminer_mission"("p_mission_id" "uuid") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."fn_terminer_mission"("p_mission_id" "uuid") TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."fn_terminer_prospects_enrichissement"("p_cible" "text", "p_resultats" "jsonb") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_terminer_prospects_enrichissement"("p_cible" "text", "p_resultats" "jsonb") TO "service_role";
+GRANT ALL ON FUNCTION "public"."fn_terminer_prospects_enrichissement"("p_cible" "text", "p_resultats" "jsonb") TO "authenticated";
 
 
 
@@ -71456,6 +72247,10 @@ GRANT ALL ON TABLE "public"."professions_liberal_eligible" TO "service_role";
 
 
 
+GRANT ALL ON TABLE "public"."prospection_compteurs" TO "service_role";
+
+
+
 GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE "public"."prospects_etablissements" TO "authenticated";
 GRANT ALL ON TABLE "public"."prospects_etablissements" TO "service_role";
 
@@ -71709,7 +72504,3 @@ ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON FUN
 
 
 ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON TABLES TO "service_role";
-
-
-
-

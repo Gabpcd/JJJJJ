@@ -112,8 +112,11 @@ interface ActionRadar {
   profession: string | null;
   score: number;
   revenu_mensuel_estime_ht: number;
-  statut: 'BROUILLON' | 'PRIORISEE' | 'EN_COURS';
+  statut: ActionStatut;
 }
+
+type ActionStatut = 'BROUILLON' | 'PRIORISEE' | 'EN_COURS' | 'TERMINEE' | 'IGNORE';
+type ActionStatutCible = Exclude<ActionStatut, 'BROUILLON'>;
 
 interface SourceRadar {
   code: string;
@@ -158,6 +161,36 @@ const ACTION_LABELS: Record<string, string> = {
   PARTENARIAT_ECOLE: 'École',
   QUALIFIER_SIGNAL: 'Qualification',
 };
+
+const ACTION_STATUTS: Record<ActionStatut, {
+  label: string;
+  variant: 'success' | 'warning' | 'error' | 'info';
+}> = {
+  BROUILLON: { label: 'Brouillon', variant: 'info' },
+  PRIORISEE: { label: 'Priorisée', variant: 'warning' },
+  EN_COURS: { label: 'En cours', variant: 'info' },
+  TERMINEE: { label: 'Terminée', variant: 'success' },
+  IGNORE: { label: 'Ignorée', variant: 'error' },
+};
+
+const ACTION_TRANSITIONS: Record<ActionStatut, readonly ActionStatutCible[]> = {
+  BROUILLON: ['PRIORISEE', 'IGNORE'],
+  PRIORISEE: ['EN_COURS', 'IGNORE'],
+  EN_COURS: ['TERMINEE'],
+  TERMINEE: [],
+  IGNORE: [],
+};
+
+const ACTION_CONFIRMATIONS: Record<ActionStatutCible, string> = {
+  PRIORISEE: 'Action priorisée. Aucun message envoyé.',
+  EN_COURS: 'Action démarrée. Aucun message envoyé.',
+  TERMINEE: 'Action marquée comme terminée. Aucun message envoyé.',
+  IGNORE: 'Action ignorée. Aucun message envoyé.',
+};
+
+function peutChangerStatutAction(statut: ActionStatut, cible: ActionStatutCible): boolean {
+  return ACTION_TRANSITIONS[statut].includes(cible);
+}
 
 const fmtEuro = (value: number) => new Intl.NumberFormat('fr-FR', {
   style: 'currency',
@@ -299,19 +332,25 @@ export function AdminAcquisitionRadar() {
     await charger();
   };
 
-  const changerAction = async (action: ActionRadar, statut: 'PRIORISEE' | 'IGNORE') => {
+  const changerAction = async (action: ActionRadar, statut: ActionStatutCible) => {
+    if (actionLoading !== null || !peutChangerStatutAction(action.statut, statut)) return;
     setActionLoading(action.id);
-    const { error } = await supabase.rpc('fn_admin_acquisition_changer_action' as never, {
-      p_action_id: action.id,
-      p_statut: statut,
-    } as never);
-    setActionLoading(null);
-    if (error) {
-      toast.error(error.message);
-      return;
+    try {
+      const { error } = await supabase.rpc('fn_admin_acquisition_changer_action' as never, {
+        p_action_id: action.id,
+        p_statut: statut,
+      } as never);
+      if (error) {
+        toast.error(error.message);
+        return;
+      }
+      toast.success(ACTION_CONFIRMATIONS[statut]);
+      await charger();
+    } catch (cause) {
+      toast.error(cause instanceof Error ? cause.message : 'Le changement d’état a échoué. Réessayez.');
+    } finally {
+      setActionLoading(null);
     }
-    toast.success(statut === 'PRIORISEE' ? 'Action priorisée. Aucun message envoyé.' : 'Action ignorée.');
-    await charger();
   };
 
   const changerTerritoire = async (segment: SegmentRadar, statut: SegmentRadar['statut_territoire']) => {
@@ -543,7 +582,10 @@ export function AdminAcquisitionRadar() {
               </CardY2KHeader>
               <CardY2KContent>
                 <div className="mb-3 flex items-center justify-between gap-3">
-                  <p className="text-xs text-muted-foreground">Générées en brouillon uniquement, jamais envoyées.</p>
+                  <p className="text-xs text-muted-foreground">
+                    Générées en brouillon uniquement. Leur suivi est manuel et aucun changement d’état ne déclenche de contact.
+                    Étapes : Brouillon → Priorisée → En cours → Terminée.
+                  </p>
                   <BoutonY2K size="sm" variant="secondary" onClick={genererActions} disabled={actionLoading === 'GENERER_ACTIONS'} iconeGauche={<PlayCircle className="h-4 w-4" />}>
                     Préparer
                   </BoutonY2K>
@@ -564,13 +606,43 @@ export function AdminAcquisitionRadar() {
                           <p className="font-medium text-foreground">{action.titre}</p>
                           <p className="mt-1 text-xs text-muted-foreground">{action.description}</p>
                         </div>
-                        <BadgeY2K variant={action.statut === 'PRIORISEE' ? 'warning' : 'info'}>{action.statut.toLowerCase()}</BadgeY2K>
+                        <BadgeY2K variant={ACTION_STATUTS[action.statut].variant}>{ACTION_STATUTS[action.statut].label}</BadgeY2K>
                       </div>
-                      <div className="mt-3 flex items-center gap-2">
-                        <BoutonY2K size="sm" variant="secondary" onClick={() => void changerAction(action, 'PRIORISEE')} disabled={actionLoading === action.id || action.statut === 'PRIORISEE'}>
+                      <div className="mt-3 flex flex-wrap items-center gap-2">
+                        <BoutonY2K
+                          size="sm"
+                          variant="secondary"
+                          onClick={() => void changerAction(action, 'PRIORISEE')}
+                          disabled={actionLoading !== null || !peutChangerStatutAction(action.statut, 'PRIORISEE')}
+                          title="Disponible pour une recommandation au statut Brouillon"
+                        >
                           Prioriser
                         </BoutonY2K>
-                        <BoutonY2K size="sm" variant="ghost" onClick={() => void changerAction(action, 'IGNORE')} disabled={actionLoading === action.id}>
+                        <BoutonY2K
+                          size="sm"
+                          variant="secondary"
+                          onClick={() => void changerAction(action, 'EN_COURS')}
+                          disabled={actionLoading !== null || !peutChangerStatutAction(action.statut, 'EN_COURS')}
+                          title="Disponible après avoir priorisé la recommandation"
+                        >
+                          Démarrer
+                        </BoutonY2K>
+                        <BoutonY2K
+                          size="sm"
+                          variant="secondary"
+                          onClick={() => void changerAction(action, 'TERMINEE')}
+                          disabled={actionLoading !== null || !peutChangerStatutAction(action.statut, 'TERMINEE')}
+                          title="Disponible lorsque la recommandation est en cours"
+                        >
+                          Terminer
+                        </BoutonY2K>
+                        <BoutonY2K
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => void changerAction(action, 'IGNORE')}
+                          disabled={actionLoading !== null || !peutChangerStatutAction(action.statut, 'IGNORE')}
+                          title="Disponible avant le démarrage de la recommandation"
+                        >
                           Ignorer
                         </BoutonY2K>
                         <span className="ml-auto text-xs font-medium">score {action.score}</span>
