@@ -14,6 +14,8 @@ const digestHebdo = read('supabase/functions/digest-hebdo/index.ts');
 const avisParrainage = read('supabase/functions/avis-parrainage/index.ts');
 const enrichissementAnnuaire = read('supabase/functions/enrich-prospects-annuaire/index.ts');
 const enrichissementCron = read('supabase/migrations/20260720171500_enrichissement_annuaire_borne.sql');
+const compteursTempsReel = read('supabase/migrations/20260721101228_fix_admin_acquisition_realtime.sql');
+const runtimeSourcing = read('supabase/migrations/20260721101451_fix_sourcing_runtime_watchdogs.sql');
 const postgrestCache = read('supabase/migrations/20260720172000_postgrest_cache_timeout.sql');
 
 describe('sourcing acquisition silencieux', () => {
@@ -32,6 +34,10 @@ describe('sourcing acquisition silencieux', () => {
     expect(rpps).toContain('2 ** reprisesTimeout');
     expect(rpps).toContain('detailsInterrompu?.fichier === FICHIER');
     expect(rpps).toContain('"connection reset"');
+    expect(rpps).toContain('const HEARTBEAT_STALE_MS = 5 * 60 * 1000');
+    expect(rpps).toContain('const watchdog = body.watchdog === true');
+    expect(runtimeSourcing).toContain("'jolene_sourcing_rpps_watchdog'");
+    expect(runtimeSourcing).toContain("body := '{\"watchdog\":true}'::jsonb");
     expect(finess).toContain('const TAILLE_UPSERT = 100');
   });
 
@@ -83,13 +89,53 @@ describe('sourcing acquisition silencieux', () => {
   });
 
   it('keeps background directory enrichment bounded on the full RPPS dataset', () => {
-    expect(enrichissementAnnuaire).toContain('.order("maj_le", { ascending: true })');
+    expect(enrichissementAnnuaire).toContain('fn_reclamer_prospects_enrichissement');
+    expect(enrichissementAnnuaire).toContain('fn_terminer_prospects_enrichissement');
+    expect(enrichissementAnnuaire).toContain('avecConcurrenceBornee');
+    expect(enrichissementAnnuaire).toContain('prospects,\n      6,');
+    expect(enrichissementAnnuaire).toContain('SYSTEMES_FINESS_ACCEPTES');
+    expect(enrichissementAnnuaire).toContain('https://finess.esante.gouv.fr');
+    expect(enrichissementAnnuaire).toContain('http://finess.esante.gouv.fr');
+    expect(enrichissementAnnuaire).toContain('estIdentifiantFinessExact');
+    expect(enrichissementAnnuaire).toContain('correspondances.length === 1');
+    expect(enrichissementAnnuaire).toContain('correspondances.length > 1');
+    expect(enrichissementAnnuaire).toContain('champEstVide(prospect.email)');
+    expect(enrichissementAnnuaire).toContain('champEstVide(prospect.telephone)');
+    expect(enrichissementAnnuaire).not.toContain('includes("finess")');
+    expect(enrichissementAnnuaire).toContain('urn:oid:1.2.250.1.71.4.2.1');
+    expect(enrichissementAnnuaire).toContain('praticiensRppsExacts');
+    expect(enrichissementAnnuaire).toContain('resource?.resourceType === "Practitioner"');
+    expect(enrichissementAnnuaire).toContain('`${IDNPS_SYSTEM}|8${rpps}`');
+    expect(enrichissementAnnuaire).toContain('telephone.replace(/\\D/g, "").length >= 9');
     expect(enrichissementAnnuaire).toContain('reste_a_traiter: resteATraiter');
     expect(enrichissementAnnuaire).not.toContain('count: "exact"');
+    expect(enrichissementAnnuaire).not.toContain('.from(table).update');
+    expect(compteursTempsReel).toContain('FOR UPDATE SKIP LOCKED');
+    expect(compteursTempsReel).toContain('REFERENCING OLD TABLE AS old_rows NEW TABLE AS new_rows');
     expect(enrichissementCron).toContain("'enrich-prospects-etab'");
     expect(enrichissementCron).toContain("'enrich-prospects-soignant'");
+    expect(runtimeSourcing).toContain("'3,13,23,33,43,53 * * * *'");
     expect(enrichissementCron).not.toContain('sales-outreach');
     expect(sales).toContain('d.reste_a_traiter');
+  });
+
+  it('uses maintained exact counters instead of national count queries', () => {
+    expect(compteursTempsReel).toContain('CREATE TABLE IF NOT EXISTS public.prospection_compteurs');
+    expect(compteursTempsReel).toContain('CREATE OR REPLACE FUNCTION public.fn_admin_prospection_stats()');
+    expect(sales).toContain("supabase.rpc('fn_admin_prospection_stats'");
+    expect(sales).toContain('Base soignants');
+    expect(sales).toContain('Base établissements');
+    expect(sales).toContain("return estNombreCompteur(value) ? value.toLocaleString('fr-FR') : '—'");
+    expect(sales).not.toContain("count: 'exact', head: true");
+    const locks = compteursTempsReel.match(/LOCK TABLE public\.prospects_soignants, public\.prospects_etablissements/g) ?? [];
+    expect(locks).toHaveLength(2);
+  });
+
+  it('preserves Corsica and overseas department codes in every prospect filter', () => {
+    expect(compteursTempsReel).toContain("WHEN v_departement ~ '^\\d$' THEN lpad(v_departement, 2, '0')");
+    expect(runtimeSourcing).toContain("WHEN v_departement ~ '^\\d$' THEN lpad(v_departement, 2, '0')");
+    expect(compteursTempsReel).not.toContain("p.departement = lpad(v_departement, 2, '0')");
+    expect(runtimeSourcing).not.toContain("p.departement = lpad(v_departement, 2, '0')");
   });
 
   it('gives only the PostgREST cache builder a longer startup window', () => {

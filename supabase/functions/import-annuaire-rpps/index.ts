@@ -9,6 +9,7 @@ import { jsonResponse, preflightResponse } from "../_shared/cors.ts";
 
 const FICHIER = "https://www.data.gouv.fr/api/1/datasets/r/fffda7e9-0ea2-4c35-bba0-4496f3af935d";
 const SOURCE_PAGE = "https://www.data.gouv.fr/datasets/annuaire-sante-extractions-des-donnees-en-libre-acces-des-professionnels-intervenant-dans-le-systeme-de-sante-rpps";
+const SOURCE_CODE = "ANNUAIRE_SANTE_RPPS";
 // Lots volontairement modestes : la première synchronisation ajoute plusieurs
 // centaines de milliers de lignes et partage les ressources de la base avec
 // l'application. On privilégie des passes courtes et auto-reprises.
@@ -19,6 +20,52 @@ const TRANCHE = 1024 * 1024;
 const TAILLE_UPSERT = 25;
 const BUDGET_MS = 20_000;
 const MAX_REPRISES_TIMEOUT = 12;
+// Le watchdog tourne toutes les cinq minutes. Une passe normale dure environ
+// vingt secondes : au-delà de ce délai, l'absence de heartbeat signifie que
+// l'auto-relance n'est pas partie ou que l'instance Edge a été interrompue.
+const HEARTBEAT_STALE_MS = 5 * 60 * 1000;
+
+type AdminClient = ReturnType<typeof createClient>;
+
+async function fetchAvecTimeout(
+  input: string,
+  init: RequestInit,
+  timeoutMs = 25_000,
+): Promise<Response> {
+  const controleur = new AbortController();
+  const minuteur = setTimeout(() => controleur.abort(), timeoutMs);
+  try {
+    return await fetch(input, { ...init, signal: controleur.signal });
+  } finally {
+    clearTimeout(minuteur);
+  }
+}
+
+function erreurReprenable(message: string): boolean {
+  const messageNormalise = message.toLowerCase();
+  return [
+    "statement timeout",
+    "connection reset",
+    "error sending request",
+    "telechargement annuaire sante impossible",
+    "téléchargement annuaire santé impossible",
+    "abort",
+  ].some((motif) => messageNormalise.includes(motif));
+}
+
+async function majSource(
+  admin: AdminClient,
+  valeurs: Record<string, unknown>,
+): Promise<void> {
+  const { error } = await admin.from("acquisition_sources").update({
+    actif: true,
+    automatique: true,
+    ...valeurs,
+    maj_le: new Date().toISOString(),
+  }).eq("code", SOURCE_CODE);
+  // Le suivi du radar ne doit jamais interrompre l'import officiel lui-même.
+  if (error) console.error("acquisition_sources RPPS:", error.message);
+}
 
 function sansAccents(value: string): string {
   return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
@@ -109,57 +156,146 @@ Deno.serve(async (req) => {
   let repriseOffset = 0;
   let repriseLues = 0;
   let repriseImportees = 0;
+  let repriseSourceMajLe: string | null = null;
   let reprisesTimeout = 0;
 
   try {
     const body = await req.json().catch(() => ({}));
+    const watchdog = body.watchdog === true;
     let offset = Number(body.offset) || 0;
     let luesAvant = Number(body.lignes_lues) || 0;
     let importeesAvant = Number(body.lignes_importees) || 0;
+    let sourceMajAvant = typeof body.source_maj_le === "string" ? body.source_maj_le : null;
+    repriseSourceMajLe = sourceMajAvant;
     reprisesTimeout = Number(body.reprises_timeout) || 0;
     runId = typeof body.run_id === "string" ? body.run_id : null;
 
     if (!runId) {
-      const { data: actif } = await admin.from("sourcing_imports")
-        .select("id, demarre_le")
-        .eq("source_code", "ANNUAIRE_SANTE_RPPS")
+      const { data: actif, error: actifErr } = await admin.from("sourcing_imports")
+        .select("id, demarre_le, details, lignes_lues, lignes_importees, source_maj_le")
+        .eq("source_code", SOURCE_CODE)
         .eq("statut", "EN_COURS")
-        .gte("demarre_le", new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString())
         .order("demarre_le", { ascending: false })
         .limit(1)
         .maybeSingle();
-      if (actif?.id) return jsonResponse(req, { success: true, already_running: true, run_id: actif.id });
+      if (actifErr) throw new Error(actifErr.message);
+
+      if (actif?.id) {
+        const detailsActif = actif.details as Record<string, unknown> | null;
+        const heartbeatBrut = typeof detailsActif?.heartbeat_le === "string"
+          ? detailsActif.heartbeat_le
+          : actif.demarre_le;
+        const heartbeatMs = Date.parse(heartbeatBrut || "");
+        const stale = !Number.isFinite(heartbeatMs) || Date.now() - heartbeatMs > HEARTBEAT_STALE_MS;
+
+        if (!stale) {
+          return jsonResponse(req, {
+            success: true,
+            already_running: true,
+            run_id: actif.id,
+            heartbeat_le: heartbeatBrut,
+          });
+        }
+
+        // Une instance Edge peut être coupée entre deux auto-relances. Le
+        // watchdog reprend alors le même run et le dernier curseur validé ; il
+        // ne crée jamais un second import concurrent.
+        if (detailsActif?.fichier === FICHIER) {
+          runId = actif.id;
+          offset = Number(detailsActif.next_offset) || 0;
+          luesAvant = Number(actif.lignes_lues) || 0;
+          importeesAvant = Number(actif.lignes_importees) || 0;
+          reprisesTimeout = Number(detailsActif.reprise_timeout) || 0;
+          sourceMajAvant = typeof detailsActif.source_maj_le === "string"
+            ? detailsActif.source_maj_le
+            : typeof actif.source_maj_le === "string"
+            ? actif.source_maj_le
+            : null;
+          repriseSourceMajLe = sourceMajAvant;
+        }
+      }
 
       // Un clic/cron après une coupure réseau reprend la dernière exécution au
       // curseur validé, à condition qu'elle concerne exactement le même
       // fichier officiel. Il n'y a donc jamais besoin de rescanner 812 Mo.
-      const { data: interrompu } = await admin.from("sourcing_imports")
-        .select("id, details, lignes_lues, lignes_importees")
-        .eq("source_code", "ANNUAIRE_SANTE_RPPS")
-        .eq("statut", "ERREUR")
-        .gte("demarre_le", new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString())
-        .order("demarre_le", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      const detailsInterrompu = interrompu?.details as Record<string, unknown> | null;
-      const offsetInterrompu = Number(detailsInterrompu?.next_offset) || 0;
+      if (!runId) {
+        const { data: interrompu, error: interrompuErr } = await admin.from("sourcing_imports")
+          .select("id, details, lignes_lues, lignes_importees, source_maj_le, erreur")
+          .eq("source_code", SOURCE_CODE)
+          .eq("statut", "ERREUR")
+          .gte("demarre_le", new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString())
+          .order("demarre_le", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (interrompuErr) throw new Error(interrompuErr.message);
+        const detailsInterrompu = interrompu?.details as Record<string, unknown> | null;
+        const erreurInterrompue = typeof interrompu?.erreur === "string" ? interrompu.erreur : "";
 
-      if (interrompu?.id && detailsInterrompu?.fichier === FICHIER && offsetInterrompu > 0) {
-        runId = interrompu.id;
-        offset = offsetInterrompu;
-        luesAvant = Number(interrompu.lignes_lues) || 0;
-        importeesAvant = Number(interrompu.lignes_importees) || 0;
-        await admin.from("sourcing_imports").update({
+        // Un watchdog ne réessaie que les incidents transitoires ; un clic
+        // admin peut toujours reprendre explicitement un run en erreur.
+        if (
+          interrompu?.id &&
+          detailsInterrompu?.fichier === FICHIER &&
+          (!watchdog || erreurReprenable(erreurInterrompue))
+        ) {
+          runId = interrompu.id;
+          offset = Number(detailsInterrompu.next_offset) || 0;
+          luesAvant = Number(interrompu.lignes_lues) || 0;
+          importeesAvant = Number(interrompu.lignes_importees) || 0;
+          reprisesTimeout = Number(detailsInterrompu.reprise_timeout) || 0;
+          sourceMajAvant = typeof detailsInterrompu.source_maj_le === "string"
+            ? detailsInterrompu.source_maj_le
+            : typeof interrompu.source_maj_le === "string"
+            ? interrompu.source_maj_le
+            : null;
+          repriseSourceMajLe = sourceMajAvant;
+        }
+      }
+
+      if (runId) {
+        const heartbeatLe = new Date().toISOString();
+        const { error: repriseErr } = await admin.from("sourcing_imports").update({
           statut: "EN_COURS",
           termine_le: null,
           erreur: null,
+          details: {
+            fichier: FICHIER,
+            silencieux: true,
+            contact_automatique: false,
+            format: "PS_LibreAcces_Personne_activite",
+            next_offset: offset,
+            heartbeat_le: heartbeatLe,
+            source_maj_le: sourceMajAvant,
+            reprise_timeout: reprisesTimeout,
+            reprise_watchdog: watchdog,
+          },
         }).eq("id", runId);
+        if (repriseErr) throw new Error(repriseErr.message);
+      } else if (watchdog) {
+        // Le watchdog assure uniquement la continuité d'un import existant.
+        // Une source à jour/idle reste idle jusqu'au prochain lancement hebdo
+        // ou manuel : aucun import national n'est créé toutes les cinq minutes.
+        return jsonResponse(req, {
+          success: true,
+          idle: true,
+          started: false,
+          contacted: 0,
+          contact_automatique: false,
+        });
       } else {
+        const heartbeatLe = new Date().toISOString();
         const { data: run, error: runErr } = await admin.from("sourcing_imports").insert({
-          source_code: "ANNUAIRE_SANTE_RPPS",
+          source_code: SOURCE_CODE,
           cible: "SOIGNANT",
           source_url: SOURCE_PAGE,
-          details: { fichier: FICHIER, silencieux: true, format: "PS_LibreAcces_Personne_activite" },
+          details: {
+            fichier: FICHIER,
+            silencieux: true,
+            contact_automatique: false,
+            format: "PS_LibreAcces_Personne_activite",
+            next_offset: 0,
+            heartbeat_le: heartbeatLe,
+          },
         }).select("id").single();
         if (runErr) throw new Error(runErr.message);
         runId = run.id;
@@ -170,15 +306,37 @@ Deno.serve(async (req) => {
     repriseLues = luesAvant;
     repriseImportees = importeesAvant;
 
+    const heartbeatInitial = new Date().toISOString();
+    const { error: heartbeatErr } = await admin.from("sourcing_imports").update({
+      details: {
+        fichier: FICHIER,
+        silencieux: true,
+        contact_automatique: false,
+        format: "PS_LibreAcces_Personne_activite",
+        next_offset: offset,
+        heartbeat_le: heartbeatInitial,
+        source_maj_le: sourceMajAvant,
+        reprise_timeout: reprisesTimeout,
+      },
+    }).eq("id", runId);
+    if (heartbeatErr) throw new Error(heartbeatErr.message);
+    await majSource(admin, {
+      dernier_statut: "OK",
+      dernier_message: `Import RPPS en cours — ${luesAvant} lignes lues, ${importeesAvant} ajoutees`,
+    });
+
     const debut = Date.now();
     let pos = offset;
     let totalLues = 0;
     let totalImportees = 0;
     let done = false;
-    let sourceMajLe: string | null = null;
+    let sourceMajLe: string | null = sourceMajAvant;
+    let dernierHeartbeatMs = Date.now();
 
     while (Date.now() - debut < BUDGET_MS) {
-      const response = await fetch(FICHIER, { headers: { Range: `bytes=${pos}-${pos + TRANCHE - 1}` } });
+      const response = await fetchAvecTimeout(FICHIER, {
+        headers: { Range: `bytes=${pos}-${pos + TRANCHE - 1}` },
+      });
       if (response.status === 416) { done = true; break; }
       if (!response.ok && response.status !== 206 && response.status !== 200) {
         throw new Error(`Téléchargement Annuaire Santé impossible (${response.status})`);
@@ -186,6 +344,7 @@ Deno.serve(async (req) => {
 
       const lastModified = response.headers.get("last-modified");
       if (lastModified) sourceMajLe = new Date(lastModified).toISOString();
+      repriseSourceMajLe = sourceMajLe;
       const buffer = new Uint8Array(await response.arrayBuffer());
       const texte = new TextDecoder("utf-8").decode(buffer);
       const finFichier = response.status === 200 || buffer.byteLength < TRANCHE;
@@ -261,6 +420,27 @@ Deno.serve(async (req) => {
         });
         if (error) throw new Error(error.message);
         totalImportees += Number(upserts) || 0;
+
+        // Une grosse tranche peut dépasser le budget nominal lorsque la base
+        // est chargée. Le heartbeat garde alors le lease vivant sans avancer
+        // le curseur tant que toute la tranche n'est pas validée.
+        if (Date.now() - dernierHeartbeatMs >= 60_000) {
+          const heartbeatLe = new Date().toISOString();
+          const { error: heartbeatLongErr } = await admin.from("sourcing_imports").update({
+            details: {
+              fichier: FICHIER,
+              silencieux: true,
+              contact_automatique: false,
+              format: "PS_LibreAcces_Personne_activite",
+              next_offset: repriseOffset,
+              heartbeat_le: heartbeatLe,
+              source_maj_le: sourceMajLe,
+              reprise_timeout: reprisesTimeout,
+            },
+          }).eq("id", runId);
+          if (heartbeatLongErr) throw new Error(heartbeatLongErr.message);
+          dernierHeartbeatMs = Date.now();
+        }
       }
 
       // Le curseur ne progresse qu'une fois toute la tranche écrite. Si une
@@ -270,16 +450,27 @@ Deno.serve(async (req) => {
       repriseLues = luesAvant + totalLues;
       repriseImportees = importeesAvant + totalImportees;
       reprisesTimeout = 0;
-      await admin.from("sourcing_imports").update({
+      const heartbeatLe = new Date().toISOString();
+      const { error: progressionErr } = await admin.from("sourcing_imports").update({
         lignes_lues: repriseLues,
         lignes_importees: repriseImportees,
         details: {
           fichier: FICHIER,
           silencieux: true,
+          contact_automatique: false,
           format: "PS_LibreAcces_Personne_activite",
           next_offset: repriseOffset,
+          heartbeat_le: heartbeatLe,
+          source_maj_le: sourceMajLe,
+          reprise_timeout: 0,
         },
       }).eq("id", runId);
+      if (progressionErr) throw new Error(progressionErr.message);
+      dernierHeartbeatMs = Date.now();
+      await majSource(admin, {
+        dernier_statut: "OK",
+        dernier_message: `Import RPPS en cours — ${repriseLues} lignes lues, ${repriseImportees} ajoutees`,
+      });
       if (finFichier) { done = true; break; }
     }
 
@@ -287,12 +478,35 @@ Deno.serve(async (req) => {
       lignes_lues: luesAvant + totalLues,
       lignes_importees: importeesAvant + totalImportees,
     };
-    await admin.from("sourcing_imports").update({
+    const etatLe = new Date().toISOString();
+    const { error: etatErr } = await admin.from("sourcing_imports").update({
       statut: done ? "TERMINE" : "EN_COURS",
-      termine_le: done ? new Date().toISOString() : null,
+      termine_le: done ? etatLe : null,
       source_maj_le: sourceMajLe,
       ...compteurs,
+      details: {
+        fichier: FICHIER,
+        silencieux: true,
+        contact_automatique: false,
+        format: "PS_LibreAcces_Personne_activite",
+        next_offset: pos,
+        heartbeat_le: etatLe,
+        source_maj_le: sourceMajLe,
+        reprise_timeout: 0,
+      },
     }).eq("id", runId);
+    if (etatErr) throw new Error(etatErr.message);
+
+    await majSource(admin, done
+      ? {
+        dernier_import_le: etatLe,
+        dernier_statut: "OK",
+        dernier_message: `Import RPPS termine — ${compteurs.lignes_lues} lignes lues, ${compteurs.lignes_importees} ajoutees`,
+      }
+      : {
+        dernier_statut: "OK",
+        dernier_message: `Import RPPS en cours — ${compteurs.lignes_lues} lignes lues, ${compteurs.lignes_importees} ajoutees`,
+      });
 
     if (!done) {
       const relance = fetch(`${url}/functions/v1/import-annuaire-rpps`, {
@@ -301,7 +515,13 @@ Deno.serve(async (req) => {
           "Content-Type": "application/json",
           "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
         },
-        body: JSON.stringify({ offset: pos, run_id: runId, ...compteurs }),
+        body: JSON.stringify({
+          offset: pos,
+          run_id: runId,
+          source_maj_le: sourceMajLe,
+          reprises_timeout: 0,
+          ...compteurs,
+        }),
       }).catch(() => undefined);
       (globalThis as any).EdgeRuntime?.waitUntil?.(relance);
     }
@@ -313,19 +533,16 @@ Deno.serve(async (req) => {
       next_offset: pos,
       lues_cette_passe: totalLues,
       importees_cette_passe: totalImportees,
+      contacted: 0,
+      contact_automatique: false,
       ...compteurs,
     });
   } catch (error) {
     const message = (error as Error).message;
-    const erreurReprenable = [
-      "statement timeout",
-      "connection reset",
-      "error sending request",
-      "Téléchargement Annuaire Santé impossible",
-    ].some((motif) => message.includes(motif));
-    if (runId && erreurReprenable && reprisesTimeout < MAX_REPRISES_TIMEOUT) {
+    if (runId && erreurReprenable(message) && reprisesTimeout < MAX_REPRISES_TIMEOUT) {
       const prochainEssai = reprisesTimeout + 1;
-      await admin.from("sourcing_imports").update({
+      const heartbeatLe = new Date().toISOString();
+      const { error: retryErr } = await admin.from("sourcing_imports").update({
         statut: "EN_COURS",
         termine_le: null,
         erreur: null,
@@ -334,11 +551,19 @@ Deno.serve(async (req) => {
         details: {
           fichier: FICHIER,
           silencieux: true,
+          contact_automatique: false,
           format: "PS_LibreAcces_Personne_activite",
           next_offset: repriseOffset,
+          heartbeat_le: heartbeatLe,
+          source_maj_le: repriseSourceMajLe,
           reprise_timeout: prochainEssai,
         },
       }).eq("id", runId);
+      if (retryErr) console.error("heartbeat reprise RPPS:", retryErr.message);
+      await majSource(admin, {
+        dernier_statut: "OK",
+        dernier_message: `Import RPPS en reprise automatique (${prochainEssai}/${MAX_REPRISES_TIMEOUT})`,
+      });
 
       const relance = new Promise((resolve) => setTimeout(resolve, 1_500)).then(() => fetch(
         `${url}/functions/v1/import-annuaire-rpps`,
@@ -353,6 +578,7 @@ Deno.serve(async (req) => {
             run_id: runId,
             lignes_lues: repriseLues,
             lignes_importees: repriseImportees,
+            source_maj_le: repriseSourceMajLe,
             reprises_timeout: prochainEssai,
           }),
         },
@@ -364,16 +590,39 @@ Deno.serve(async (req) => {
         run_id: runId,
         next_offset: repriseOffset,
         reprise_timeout: prochainEssai,
+        contacted: 0,
+        contact_automatique: false,
       }, 202);
     }
 
     if (runId) {
+      const erreurLe = new Date().toISOString();
       await admin.from("sourcing_imports").update({
         statut: "ERREUR",
-        termine_le: new Date().toISOString(),
+        termine_le: erreurLe,
         erreur: message.slice(0, 1000),
+        lignes_lues: repriseLues,
+        lignes_importees: repriseImportees,
+        details: {
+          fichier: FICHIER,
+          silencieux: true,
+          contact_automatique: false,
+          format: "PS_LibreAcces_Personne_activite",
+          next_offset: repriseOffset,
+          heartbeat_le: erreurLe,
+          source_maj_le: repriseSourceMajLe,
+          reprise_timeout: reprisesTimeout,
+        },
       }).eq("id", runId);
     }
-    return jsonResponse(req, { error: message }, 500);
+    await majSource(admin, {
+      dernier_statut: "ERREUR",
+      dernier_message: message.slice(0, 500),
+    });
+    return jsonResponse(req, {
+      error: message,
+      contacted: 0,
+      contact_automatique: false,
+    }, 500);
   }
 });

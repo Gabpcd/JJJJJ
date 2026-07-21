@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Activity,
   Building2,
@@ -182,6 +182,14 @@ function sourceVariant(source: SourceRadar): 'success' | 'warning' | 'error' | '
   return 'info';
 }
 
+function messageErreurRadar(message: string): string {
+  const normalise = message.toLowerCase();
+  if (normalise.includes('statement timeout') || normalise.includes('canceling statement')) {
+    return 'Le calcul a dépassé le délai de sécurité. Réessayez dans un instant ; les dernières données affichées ont été conservées.';
+  }
+  return 'Le radar est momentanément indisponible. Réessayez dans un instant ; les dernières données affichées ont été conservées.';
+}
+
 export function AdminAcquisitionRadar() {
   const [scope, setScope] = useState<Scope>('REEL');
   const [jours, setJours] = useState(90);
@@ -189,27 +197,38 @@ export function AdminAcquisitionRadar() {
   const [profession, setProfession] = useState('');
   const [data, setData] = useState<RadarData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [erreurChargement, setErreurChargement] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const requeteCourante = useRef(0);
 
-  const charger = useCallback(async () => {
-    setLoading(true);
+  const charger = useCallback(async (silencieux = false) => {
+    const numeroRequete = ++requeteCourante.current;
+    if (!silencieux) setLoading(true);
     const { data: resultat, error } = await supabase.rpc('fn_admin_acquisition_radar' as never, {
       p_scope: scope,
       p_jours: jours,
       p_departement: departement.trim() || null,
       p_profession: profession || null,
     } as never);
+    if (numeroRequete !== requeteCourante.current) return;
     setLoading(false);
     if (error) {
-      toast.error(`Radar d’acquisition indisponible : ${error.message}`);
-      setData(null);
+      const message = messageErreurRadar(error.message);
+      setErreurChargement(message);
+      if (!silencieux) toast.error(message);
       return;
     }
+    setErreurChargement(null);
     setData(resultat as unknown as RadarData);
   }, [departement, jours, profession, scope]);
 
   useEffect(() => {
     void charger();
+    const intervalle = window.setInterval(() => void charger(true), 60_000);
+    return () => {
+      window.clearInterval(intervalle);
+      requeteCourante.current += 1;
+    };
   }, [charger]);
 
   const franceTravail = useMemo(
@@ -376,22 +395,31 @@ export function AdminAcquisitionRadar() {
               {valeur}j
             </BoutonY2K>
           ))}
-          <BoutonY2K size="sm" variant="ghost" onClick={charger} disabled={loading} aria-label="Rafraîchir le radar">
+          <BoutonY2K size="sm" variant="ghost" onClick={() => void charger()} disabled={loading} aria-label="Rafraîchir le radar">
             <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
           </BoutonY2K>
         </div>
       </div>
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <CarteKPIY2K icone={<Activity className="h-4 w-4" />} valeur={data?.stats.signaux_actifs || 0} label="Signaux actifs" variant="holographic" />
-        <CarteKPIY2K icone={<Building2 className="h-4 w-4" />} valeur={data?.stats.etablissements_a_potentiel || 0} label="Établ. à potentiel" variant="default" />
-        <CarteKPIY2K icone={<UserCheck className="h-4 w-4" />} valeur={data?.stats.disponibles_14j || 0} label="Disponibles à 14 j" variant="default" />
-        <CarteKPIY2K icone={<CircleDollarSign className="h-4 w-4" />} valeur={fmtEuro(data?.stats.potentiel_commission_mensuel_ht || 0)} label="Potentiel mensuel HT" variant="soft" />
+        <CarteKPIY2K icone={<Activity className="h-4 w-4" />} valeur={data?.stats.signaux_actifs || 0} label="Besoins détectés" variant="holographic" />
+        <CarteKPIY2K icone={<Building2 className="h-4 w-4" />} valeur={data?.stats.etablissements_a_potentiel || 0} label="Établ. avec demande" variant="default" />
+        <CarteKPIY2K icone={<UserCheck className="h-4 w-4" />} valeur={data?.stats.disponibles_14j || 0} label="Soignants Jolene dispo. J+14" variant="default" />
+        <CarteKPIY2K icone={<CircleDollarSign className="h-4 w-4" />} valeur={fmtEuro(data?.stats.potentiel_commission_mensuel_ht || 0)} label="Potentiel mensuel estimé HT" variant="soft" />
       </div>
 
-      {!data && !loading ? (
+      <div className="flex flex-col gap-1 text-xs text-muted-foreground sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+        <p className="max-w-4xl">
+          Le radar rapproche les missions Jolene actives avec les besoins externes importés. Le potentiel estimé additionne la projection des signaux externes et, pour Jolene, la meilleure estimation entre le pipeline attribué/en cours mensualisé et le stock des missions encore ouvertes. Les commissions réalisées proviennent uniquement des missions terminées. Aucun contact n’est déclenché par ce calcul.
+        </p>
+        <p className="shrink-0 tabular-nums">
+          {data ? `Dernier calcul : ${fmtDate(data.genere_le)}` : 'Calcul en attente'} · actualisation toutes les 60 s
+        </p>
+      </div>
+
+      {erreurChargement ? (
         <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-5 text-sm text-destructive" role="alert">
-          Le radar n’a pas pu être chargé. La page d’attribution par canal reste disponible plus bas.
+          {erreurChargement}
         </div>
       ) : null}
 
@@ -491,7 +519,7 @@ export function AdminAcquisitionRadar() {
           <div className="grid gap-4 xl:grid-cols-2">
             <CardY2K hoverLift={false}>
               <CardY2KHeader>
-                <CardY2KTitle className="flex items-center gap-2 text-sm"><Repeat2 className="h-4 w-4" /> Récurrence et revenu observé</CardY2KTitle>
+                <CardY2KTitle className="flex items-center gap-2 text-sm"><Repeat2 className="h-4 w-4" /> Récurrence et pipeline estimé</CardY2KTitle>
               </CardY2KHeader>
               <CardY2KContent>
                 <div className="space-y-2">
