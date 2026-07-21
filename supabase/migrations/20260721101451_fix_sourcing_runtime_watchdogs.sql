@@ -2,6 +2,8 @@
 -- seule requête. On borne d'abord un pool indexé, puis on calcule le score et
 -- les correspondances CRM uniquement sur ce pool.
 
+BEGIN;
+
 SET LOCAL statement_timeout = '10min';
 SET LOCAL lock_timeout = '30s';
 
@@ -350,3 +352,5 @@ EXCEPTION
     RAISE NOTICE 'pg_cron, pg_net ou vault indisponible : planification differee';
 END;
 $cron$;
+
+COMMIT;
