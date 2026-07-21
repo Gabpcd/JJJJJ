@@ -37,6 +37,19 @@ const AUDIENCES = [
 ];
 const STATUTS_GROUPE = ['ACTIF', 'A_VERIFIER', 'INACTIF'];
 const STATUTS_CONTACT = ['PROSPECT', 'CONTACTE', 'RELANCE', 'INSCRIT', 'PERDU'];
+const CONTACTS_PAGE_SIZE = 100;
+const SALES_CONTACTS_SELECT = [
+  'id', 'type', 'nom', 'profession', 'telephone', 'email', 'ville', 'departement',
+  'type_etab', 'groupe_id', 'statut', 'notes', 'maj_le', 'cree_le', 'favori',
+  'archive', 'reponse', 'a_rappeler',
+].join(',');
+
+type TypeContact = 'SOIGNANT' | 'ETABLISSEMENT';
+
+interface PaginationContacts {
+  page: number;
+  total: number | null;
+}
 /** Libellés français des statuts contact (les valeurs envoyées en base restent inchangées). */
 const LABELS_STATUT_CONTACT: Record<string, string> = {
   PROSPECT: 'Prospect',
@@ -193,6 +206,10 @@ export default function AdminSales() {
 
   const [groupes, setGroupes] = useState<any[]>([]);
   const [contacts, setContacts] = useState<any[]>([]);
+  const [paginationContacts, setPaginationContacts] = useState<Record<TypeContact, PaginationContacts>>({
+    SOIGNANT: { page: 1, total: null },
+    ETABLISSEMENT: { page: 1, total: null },
+  });
   const [templates, setTemplates] = useState<any[]>([]);
   const [statsProspection, setStatsProspection] = useState<StatsProspectionAdmin | null>(null);
   const [erreurCompteurs, setErreurCompteurs] = useState<string | null>(null);
@@ -255,9 +272,23 @@ export default function AdminSales() {
   const charger = useCallback(async () => {
     const chargementId = ++chargementIdRef.current;
     setLoading(true);
-    const [g, c, t, stats] = await Promise.all([
+    const requeteContacts = (type: TypeContact, page: number) => {
+      const from = (page - 1) * CONTACTS_PAGE_SIZE;
+      let requete = supabase.from('sales_contacts' as any)
+        .select(SALES_CONTACTS_SELECT, { count: 'exact' })
+        .eq('type', type);
+      if (!voirArchives) requete = requete.eq('archive', false);
+      return requete
+        .order('favori', { ascending: false })
+        .order('cree_le', { ascending: false })
+        .order('id', { ascending: true })
+        .range(from, from + CONTACTS_PAGE_SIZE - 1);
+    };
+
+    const [g, contactsSoignants, contactsEtablissements, t, stats] = await Promise.all([
       supabase.from('sales_groupes' as any).select('*').order('favori', { ascending: false }).order('plateforme').order('profession'),
-      supabase.from('sales_contacts' as any).select('*').order('favori', { ascending: false }).order('cree_le', { ascending: false }),
+      requeteContacts('SOIGNANT', paginationContacts.SOIGNANT.page),
+      requeteContacts('ETABLISSEMENT', paginationContacts.ETABLISSEMENT.page),
       supabase.from('sales_templates' as any).select('*').order('cible'),
       supabase.rpc('fn_admin_prospection_stats' as any),
     ]);
@@ -266,7 +297,24 @@ export default function AdminSales() {
     // En cas d'échec, conserver les dernières données valides plutôt que
     // d'afficher un faux zéro issu d'un tableau/count nul.
     if (!g.error && Array.isArray(g.data)) setGroupes(g.data as any[]);
-    if (!c.error && Array.isArray(c.data)) setContacts(c.data as any[]);
+    setContacts((contactsActuels) => [
+      ...(!contactsSoignants.error && Array.isArray(contactsSoignants.data)
+        ? contactsSoignants.data as any[]
+        : contactsActuels.filter((contact) => contact.type === 'SOIGNANT')),
+      ...(!contactsEtablissements.error && Array.isArray(contactsEtablissements.data)
+        ? contactsEtablissements.data as any[]
+        : contactsActuels.filter((contact) => contact.type === 'ETABLISSEMENT')),
+    ]);
+    setPaginationContacts((paginationActuelle) => ({
+      SOIGNANT: {
+        ...paginationActuelle.SOIGNANT,
+        total: contactsSoignants.error ? paginationActuelle.SOIGNANT.total : contactsSoignants.count,
+      },
+      ETABLISSEMENT: {
+        ...paginationActuelle.ETABLISSEMENT,
+        total: contactsEtablissements.error ? paginationActuelle.ETABLISSEMENT.total : contactsEtablissements.count,
+      },
+    }));
     if (!t.error && Array.isArray(t.data)) setTemplates(t.data as any[]);
 
     const statsValides = !stats.error ? normaliserStatsProspection(stats.data) : null;
@@ -281,7 +329,7 @@ export default function AdminSales() {
       erreurCompteursSignaleeRef.current = true;
     }
     setLoading(false);
-  }, []);
+  }, [paginationContacts.ETABLISSEMENT.page, paginationContacts.SOIGNANT.page, voirArchives]);
 
   useEffect(() => { charger(); }, [charger]);
 
@@ -385,12 +433,29 @@ export default function AdminSales() {
     charger();
   };
 
-  // Réponse du prospect au contact : POSITIVE (intéressé) → passe aussi en INSCRIT,
-  // NEGATIVE (pas intéressé) → PERDU, EN_ATTENTE → on garde le statut courant.
+  // Une réponse positive correspond à l'état CRM canonique « intéressé » :
+  // réponse POSITIVE + rappel manuel. INSCRIT reste une action explicite distincte.
   const majReponseContact = async (c: any, reponse: string | null) => {
-    const patch: any = { reponse, maj_le: new Date().toISOString(), a_rappeler: false };
-    if (reponse === 'POSITIVE') patch.statut = 'INSCRIT';
-    else if (reponse === 'NEGATIVE') patch.statut = 'PERDU';
+    const maintenant = new Date();
+    const patch: any = { reponse, maj_le: maintenant.toISOString(), a_rappeler: false };
+    if (reponse === 'POSITIVE') {
+      // Une correction depuis PERDU/RELANCE redevient un contact intéressé.
+      // Seule l'inscription déjà confirmée reste au statut INSCRIT.
+      if (c.statut !== 'INSCRIT') patch.statut = 'CONTACTE';
+      patch.a_rappeler = true;
+      patch.ne_plus_contacter = false;
+      patch.sequence_active = false;
+      patch.prochaine_action_le = null;
+      patch.dernier_contact_le = maintenant.toISOString();
+      patch.derniere_action_type = 'INTERESSE';
+    } else if (reponse === 'NEGATIVE') {
+      patch.statut = 'PERDU';
+      patch.ne_plus_contacter = true;
+      patch.sequence_active = false;
+      patch.prochaine_action_le = null;
+      patch.dernier_contact_le = maintenant.toISOString();
+      patch.derniere_action_type = 'PAS_INTERESSE';
+    }
     const { error } = await supabase.from('sales_contacts' as any).update(patch).eq('id', c.id);
     if (error) { toast.error(error.message); return; }
     toast.success(reponse === 'POSITIVE' ? 'Marqué intéressé' : reponse === 'NEGATIVE' ? 'Marqué pas intéressé.' : 'Réponse mise à jour.');
@@ -404,6 +469,21 @@ export default function AdminSales() {
       .eq('id', c.id);
     if (error) { toast.error(error.message); return; }
     charger();
+  };
+
+  const changerPageContacts = (type: TypeContact, page: number) => {
+    setPaginationContacts((paginationActuelle) => ({
+      ...paginationActuelle,
+      [type]: { ...paginationActuelle[type], page: Math.max(1, page) },
+    }));
+  };
+
+  const basculerArchivesContacts = () => {
+    setVoirArchives((archivesVisibles) => !archivesVisibles);
+    setPaginationContacts((paginationActuelle) => ({
+      SOIGNANT: { ...paginationActuelle.SOIGNANT, page: 1 },
+      ETABLISSEMENT: { ...paginationActuelle.ETABLISSEMENT, page: 1 },
+    }));
   };
 
   if (loading) return <LayoutAdmin><ChargementAdmin titre="Recruter des soignants et des établissements" /></LayoutAdmin>;
@@ -548,7 +628,9 @@ export default function AdminSales() {
             type={tab === 'soignants' ? 'SOIGNANT' : 'ETABLISSEMENT'}
             contacts={tab === 'soignants' ? soignants : etablissements}
             voirArchives={voirArchives}
-            onToggleArchives={() => setVoirArchives(!voirArchives)}
+            pagination={paginationContacts[tab === 'soignants' ? 'SOIGNANT' : 'ETABLISSEMENT']}
+            onPageChange={(page) => changerPageContacts(tab === 'soignants' ? 'SOIGNANT' : 'ETABLISSEMENT', page)}
+            onToggleArchives={basculerArchivesContacts}
             onAdd={() => setEditContact({ type: tab === 'soignants' ? 'SOIGNANT' : 'ETABLISSEMENT', statut: 'PROSPECT' })}
             onImport={() => setImportCible('CONTACTS')}
             onEdit={c => setEditContact({ ...c })}
@@ -563,7 +645,7 @@ export default function AdminSales() {
         {/* ── PROSPECTION (base nationale) ── */}
         {tab === 'prospection' && (<><EnvoiMasseBar cible="ETABLISSEMENT" /><ProspectionEtab onAjouter={charger} /></>)}
 
-        {/* ── PROSPECTION SOIGNANTS (Annuaire Santé CNAM, libéraux + tél cabinet) ── */}
+        {/* ── PROSPECTION SOIGNANTS (Annuaire Santé / RPPS) ── */}
         {tab === 'prospection_soignants' && (<><EnvoiMasseBar cible="SOIGNANT" /><ProspectionSoignants onAjouter={charger} /></>)}
 
         {/* ── ÉTABLISSEMENTS JOLENE (inscrits) ── */}
@@ -715,10 +797,12 @@ function badgeReponse(r: string): 'success' | 'error' | 'warning' { return r ===
 function labelReponse(r: string): string { return r === 'POSITIVE' ? 'Intéressé(e)' : r === 'NEGATIVE' ? 'Pas intéressé(e)' : 'Réponse en attente'; }
 
 /* ── Sous-composant liste contacts sourcés (CRM) ── */
-function ListeContacts({ type, contacts, voirArchives, onToggleArchives, onAdd, onImport, onEdit, onStatut, onReponse, onARappeler, onFavori, onArchive }: {
+function ListeContacts({ type, contacts, voirArchives, pagination, onPageChange, onToggleArchives, onAdd, onImport, onEdit, onStatut, onReponse, onARappeler, onFavori, onArchive }: {
   type: 'SOIGNANT' | 'ETABLISSEMENT';
   contacts: any[];
   voirArchives: boolean;
+  pagination: PaginationContacts;
+  onPageChange: (page: number) => void;
   onToggleArchives: () => void;
   onAdd: () => void;
   onImport: () => void;
@@ -739,6 +823,9 @@ function ListeContacts({ type, contacts, voirArchives, onToggleArchives, onAdd, 
   const [tri, setTri] = useState('recent');
 
   const nbRappels = useMemo(() => contacts.filter(c => c.a_rappeler).length, [contacts]);
+  const totalPages = pagination.total === null
+    ? null
+    : Math.max(1, Math.ceil(pagination.total / CONTACTS_PAGE_SIZE));
 
   const liste = useMemo(() => {
     const l = contacts.filter(c =>
@@ -809,7 +896,12 @@ function ListeContacts({ type, contacts, voirArchives, onToggleArchives, onAdd, 
         </div>
       </div>
 
-      <p className="text-xs text-muted-foreground">{liste.length} contact(s) affiché(s){fARappeler ? ' · file « à rappeler »' : ''}</p>
+      <p className="text-xs text-muted-foreground">
+        {liste.length} contact(s) affiché(s) sur cette page
+        {pagination.total !== null ? ` · ${pagination.total.toLocaleString('fr-FR')} au total` : ''}
+        {fARappeler ? ' · file « à rappeler »' : ''}
+        {(fStatut || fReponse || fARappeler || fProfType || fDept) ? ' · filtres appliqués à la page courante' : ''}
+      </p>
 
       {liste.length === 0 ? (
         <CardY2K hoverLift={false}><CardY2KContent><p className="text-sm text-muted-foreground text-center py-6">Aucun contact pour ces filtres.</p></CardY2KContent></CardY2K>
@@ -883,6 +975,14 @@ function ListeContacts({ type, contacts, voirArchives, onToggleArchives, onAdd, 
             </CardY2K>
           ))}
         </div>
+      )}
+
+      {totalPages !== null && totalPages > 1 && (
+        <nav aria-label={`Pagination du CRM ${type === 'SOIGNANT' ? 'soignants' : 'établissements'}`} className="flex justify-center gap-2 pt-2">
+          <BoutonY2K size="sm" variant="secondary" disabled={pagination.page <= 1} onClick={() => onPageChange(pagination.page - 1)}>← Précédent</BoutonY2K>
+          <span className="text-xs text-muted-foreground self-center">Page {pagination.page}/{totalPages}</span>
+          <BoutonY2K size="sm" variant="secondary" disabled={pagination.page >= totalPages} onClick={() => onPageChange(pagination.page + 1)}>Suivant →</BoutonY2K>
+        </nav>
       )}
     </div>
   );
@@ -1066,14 +1166,21 @@ function ProspectionEtab({ onAjouter }: { onAjouter: () => void }) {
     }
   };
 
+  const ajouterProspectAuCrm = async (pr: any): Promise<string | null> => {
+    const { data: resultat, error } = await supabase.rpc('fn_admin_sourcing_ajouter_crm' as any, {
+      p_cible: 'ETABLISSEMENT',
+      p_prospect_id: pr.finess,
+      p_score: null,
+    });
+    if (error) { toast.error(error.message); return null; }
+    const contactId = (resultat as { contact_id?: string } | null)?.contact_id;
+    if (!contactId) { toast.error('Le contact CRM créé est introuvable.'); return null; }
+    return contactId;
+  };
+
   const ajouterAuPipeline = async (pr: any) => {
-    const { error } = await supabase.from('sales_contacts' as any).upsert({
-      type: 'ETABLISSEMENT', nom: pr.nom, ville: pr.ville || null,
-      telephone: pr.telephone || null, email: pr.email || null, finess: pr.finess,
-      departement: pr.departement || null, type_etab: pr.type_jolene || null,
-      statut: 'PROSPECT', notes: `Prospection FINESS ${pr.finess}${pr.siret ? ` · SIRET ${pr.siret}` : ''}`,
-    } as any, { onConflict: 'finess' });
-    if (error) { toast.error(error.message); return; }
+    const contactId = await ajouterProspectAuCrm(pr);
+    if (!contactId) return;
     toast.success('Ajouté aux établissements sourcés.');
     onAjouter();
   };
@@ -1081,14 +1188,13 @@ function ProspectionEtab({ onAjouter }: { onAjouter: () => void }) {
   // « Appelé » → a décroché ? Oui = sourcé (réponse en attente) / Non = à rappeler.
   const enregistrerAppel = async (pr: any, aDecroche: boolean) => {
     const jour = new Date().toISOString().slice(0, 10);
-    const { error } = await supabase.from('sales_contacts' as any).upsert({
-      type: 'ETABLISSEMENT', nom: pr.nom, ville: pr.ville || null,
-      telephone: pr.telephone || null, email: pr.email || null, finess: pr.finess,
-      departement: pr.departement || null, type_etab: pr.type_jolene || null,
+    const contactId = await ajouterProspectAuCrm(pr);
+    if (!contactId) return;
+    const { error } = await supabase.from('sales_contacts' as any).update({
       statut: 'CONTACTE', reponse: aDecroche ? 'EN_ATTENTE' : null, a_rappeler: !aDecroche,
       dernier_contact_le: new Date().toISOString(),
       notes: aDecroche ? `Appelé le ${jour} — a décroché` : `Appelé le ${jour} — pas de réponse, à rappeler`,
-    } as any, { onConflict: 'finess' });
+    } as any).eq('id', contactId);
     if (error) { toast.error(error.message); return; }
     setAppel(null);
     toast.success(aDecroche ? 'Sourcé — à suivre.' : 'Ajouté à « À rappeler ».');
@@ -1227,8 +1333,8 @@ function ProspectionEtab({ onAjouter }: { onAjouter: () => void }) {
 }
 
 /* ── Envoi EN MASSE du template aux prospects avec email jamais contactés ──
-   Les bases officielles (FINESS, CNAM) fournissent les téléphones mais aucun
-   email : le flux = appel → email saisi sur la carte → ce bouton envoie le
+   Les bases officielles (FINESS, Annuaire Santé / RPPS) publient des coordonnées
+   de façon inégale : le flux = appel → email saisi sur la carte → ce bouton envoie le
    template à tous ceux qui en ont un, sans repasser un par un. Garde
    anti-doublon : email_envoye_le. 100 max par clic (limite Resend). */
 function EnvoiMasseBar({ cible }: { cible: 'ETABLISSEMENT' | 'SOIGNANT' }) {
@@ -1562,12 +1668,10 @@ function PostsGenerateur() {
   );
 }
 
-/* ── Prospection soignants (base Annuaire Santé CNAM : professionnels
-   conventionnés avec téléphone de cabinet). Les titulaires d'officine sont
-   exclus : Jolene ne propose pas leur remplacement. ── */
+/* ── Prospection soignants (base officielle Annuaire Santé / RPPS). ── */
 const PROFESSIONS_PROSPECTION_SOIGNANTS = [
   { v: '', label: 'Toutes les professions' },
-  { v: 'IDE', label: 'Infirmiers (IDEL)' },
+  { v: 'IDE', label: 'Infirmiers (IDE)' },
   { v: 'DENTISTE', label: 'Chirurgiens-dentistes' },
   { v: 'KINE', label: 'Kinésithérapeutes' },
   { v: 'MEDECIN', label: 'Médecins généralistes' },
@@ -1663,14 +1767,21 @@ function ProspectionSoignants({ onAjouter }: { onAjouter: () => void }) {
     }
   };
 
+  const ajouterProspectAuCrm = async (pr: any): Promise<string | null> => {
+    const { data: resultat, error } = await supabase.rpc('fn_admin_sourcing_ajouter_crm' as any, {
+      p_cible: 'SOIGNANT',
+      p_prospect_id: pr.cle,
+      p_score: null,
+    });
+    if (error) { toast.error(error.message); return null; }
+    const contactId = (resultat as { contact_id?: string } | null)?.contact_id;
+    if (!contactId) { toast.error('Le contact CRM créé est introuvable.'); return null; }
+    return contactId;
+  };
+
   const ajouterAuPipeline = async (pr: any) => {
-    const { error } = await supabase.from('sales_contacts' as any).insert({
-      type: 'SOIGNANT', nom: `${pr.prenom || ''} ${pr.nom}`.trim(), ville: pr.ville || null,
-      telephone: pr.telephone || null, email: pr.email || null, profession: pr.profession,
-      departement: pr.departement || null,
-      statut: 'PROSPECT', notes: `Prospection Annuaire Santé CNAM${pr.enseigne ? ` · ${pr.enseigne}` : ''}`,
-    } as any);
-    if (error) { toast.error(error.message); return; }
+    const contactId = await ajouterProspectAuCrm(pr);
+    if (!contactId) return;
     toast.success('Ajouté aux soignants sourcés.');
     onAjouter();
   };
@@ -1678,14 +1789,13 @@ function ProspectionSoignants({ onAjouter }: { onAjouter: () => void }) {
   // « Appelé » → a décroché ? Oui = sourcé (réponse en attente) / Non = à rappeler.
   const enregistrerAppel = async (pr: any, aDecroche: boolean) => {
     const jour = new Date().toISOString().slice(0, 10);
-    const { error } = await supabase.from('sales_contacts' as any).insert({
-      type: 'SOIGNANT', nom: `${pr.prenom || ''} ${pr.nom}`.trim(), ville: pr.ville || null,
-      telephone: pr.telephone || null, email: pr.email || null, profession: pr.profession,
-      departement: pr.departement || null,
+    const contactId = await ajouterProspectAuCrm(pr);
+    if (!contactId) return;
+    const { error } = await supabase.from('sales_contacts' as any).update({
       statut: 'CONTACTE', reponse: aDecroche ? 'EN_ATTENTE' : null, a_rappeler: !aDecroche,
       dernier_contact_le: new Date().toISOString(),
       notes: aDecroche ? `Appelé le ${jour} — a décroché` : `Appelé le ${jour} — pas de réponse, à rappeler`,
-    } as any);
+    } as any).eq('id', contactId);
     if (error) { toast.error(error.message); return; }
     setAppel(null);
     toast.success(aDecroche ? 'Sourcé — à suivre.' : 'Ajouté à « À rappeler ».');
@@ -1704,9 +1814,9 @@ function ProspectionSoignants({ onAjouter }: { onAjouter: () => void }) {
       <CardY2K hoverLift={false}>
         <CardY2KContent>
           <p className="text-[11px] text-muted-foreground mb-2">
-            Base officielle Annuaire Santé (CNAM) : professionnels <strong>libéraux</strong> conventionnés
-            avec téléphone de cabinet. Recherche <strong>nationale</strong> — département optionnel.
-            (Les salariés n'apparaissent dans aucune base publique : pour eux, groupes + SEO + parrainage.)
+            Base officielle Annuaire Santé / RPPS : professionnels <strong>salariés, libéraux et étudiants</strong>,
+            avec rattachement à une structure lorsqu'il est publié. Recherche <strong>nationale</strong> — département optionnel.
+            Les coordonnées de contact ne sont pas renseignées pour tous les professionnels.
           </p>
           <div className="flex flex-col sm:flex-row gap-2 sm:items-end flex-wrap">
             <div className="flex-1 min-w-[170px]">

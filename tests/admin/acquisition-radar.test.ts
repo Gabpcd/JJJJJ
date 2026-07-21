@@ -123,4 +123,27 @@ describe('moteur acquisition silencieux', () => {
     expect(strategies).not.toMatch(/net\.http|resend\.com|send-email|send-sms|sales-outreach/i);
     expect(strategies).toContain('NULLIF(m.net_a_payer, 0)');
   });
+
+  it('suit manuellement chaque recommandation sans declencher de contact', () => {
+    expect(radar).toContain("BROUILLON: ['PRIORISEE', 'IGNORE']");
+    expect(radar).toContain("PRIORISEE: ['EN_COURS', 'IGNORE']");
+    expect(radar).toContain("EN_COURS: ['TERMINEE']");
+    expect(radar).toContain("TERMINEE: []");
+    expect(radar).toContain("IGNORE: []");
+    expect(radar).toContain("fn_admin_acquisition_changer_action");
+    expect(migration).toContain("p_statut NOT IN ('BROUILLON', 'PRIORISEE', 'EN_COURS', 'TERMINEE', 'IGNORE')");
+    for (const label of ['Prioriser', 'Démarrer', 'Terminer', 'Ignorer']) {
+      expect(radar).toContain(label);
+    }
+    for (const confirmation of [
+      'Action priorisée. Aucun message envoyé.',
+      'Action démarrée. Aucun message envoyé.',
+      'Action marquée comme terminée. Aucun message envoyé.',
+      'Action ignorée. Aucun message envoyé.',
+    ]) {
+      expect(radar).toContain(confirmation);
+    }
+    expect(radar).toContain("actionLoading !== null || !peutChangerStatutAction(action.statut, 'TERMINEE')");
+    expect(radar).not.toMatch(/send-email|send-sms|sales-outreach|resend\.com/i);
+  });
 });
