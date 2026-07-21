@@ -1,6 +1,6 @@
 # Stratégie de lancement pilote Jolene
 
-Mise à jour : 19/07/2026. Cette stratégie transforme les outils déjà présents
+Mise à jour : 20/07/2026. Cette stratégie transforme les outils déjà présents
 dans l'admin en une cadence opérationnelle mesurable. Elle complète
 `STRATEGIE_PRODUIT_ACQUISITION.md` et ne remplace pas la recette stores de
 `store-readiness.md`.
@@ -25,6 +25,7 @@ review des stores. Ils ne sont ni masqués ni supprimés. Le cockpit les sépare
 | Besoin | Surface admin | Usage |
 |---|---|---|
 | Décider GO/NO-GO | Croissance → Pilotage lancement | Liquidité, conversion, qualité, filtres département/profession |
+| Détecter la demande | Croissance → Acquisition → Radar | Offres France Travail, signaux publics, comptes ancres et tension locale |
 | Traiter l'acquisition | Croissance → Prospection → CRM du jour | File priorisée, attribution, relances et journal |
 | Sourcer | Prospection | Annuaire Santé, FINESS, groupes, établissements et soignants sourcés |
 | Convertir | Utilisateurs, Vérification établissements, Revues manuelles | Lever les blocages d'identité et de documents |
@@ -32,9 +33,11 @@ review des stores. Ils ne sont ni masqués ni supprimés. Le cockpit les sépare
 | Fermer la boucle financière | Finances, Impayés, Chorus Pro | Paiement soignant et encaissement de la commission |
 | Protéger la qualité | Litiges, Signalements, Audit | No-show, contestations et traçabilité |
 
-Le manque principal de l'ancienne interface était une lecture de liquidité
-locale séparant le réel du test, ainsi qu'une vraie file CRM anti-oubli. Ces deux
-manques sont couverts par le cockpit de lancement et le CRM automatisé.
+Le radar rapproche désormais demande externe, missions, soignants vérifiés et
+disponibilités à J+14 sur le couple **département × profession requise par la
+mission**. Il prépare aussi les comptes ancres, la récurrence, l'expansion des
+groupes, les partenariats écoles et le reverse marketplace. Les revenus affichés
+sont des estimations de commission HT, jamais une prévision garantie.
 
 ## Seuils avant extension d'un marché
 
@@ -67,13 +70,15 @@ recette ni le service concierge auprès des premiers utilisateurs.
 
 ### 09 h 00 — acquisition, 45 à 60 minutes
 
-1. Ouvrir **CRM du jour** et traiter les urgences puis les retards.
-2. Priorité aux établissements : 10 appels ciblés par jour dans le marché pilote.
-3. Proposer aux dix premiers établissements un accompagnement concierge : la
+1. Ouvrir **Acquisition**, importer les signaux officiels et préparer la file de
+   recommandations ; qualifier les comptes ancres avant de les ajouter au CRM.
+2. Ouvrir **CRM du jour** et traiter les urgences puis les retards.
+3. Priorité aux établissements : 10 appels ciblés par jour dans le marché pilote.
+4. Proposer aux dix premiers établissements un accompagnement concierge : la
    première mission est publiée avec eux au téléphone.
-4. Sourcer les soignants uniquement sur les professions réellement demandées
+5. Sourcer les soignants uniquement sur les professions réellement demandées
    dans le cockpit, puis compléter via groupes locaux et parrainage.
-5. Marquer immédiatement le résultat de chaque action ; ne jamais conserver une
+6. Marquer immédiatement le résultat de chaque action ; ne jamais conserver une
    relance dans un carnet parallèle.
 
 ### 16 h 30 — liquidité et matching, 20 minutes
@@ -101,6 +106,14 @@ prépare, attribue, date, priorise et trace ; Gabrielle valide l'appel, WhatsApp
 l'email. Cette limite protège la délivrabilité, le consentement et la réputation
 de Jolene au lancement.
 
+Le mode pré-lancement force `automatisations_marketing_actives=false`. Les
+imports FINESS/RPPS/France Travail et le calcul quotidien du radar peuvent donc
+continuer, mais ils ne font qu'alimenter des données internes. Les contacts créés
+depuis un signal du radar entrent avec `sequence_active=false`, sans prochaine
+action, et les recommandations restent au statut `BROUILLON`. Les campagnes de
+réactivation, digest hebdomadaire et avis/parrainage répondent « ignoré » avec
+zéro envoi tant que le drapeau n'est pas activé volontairement après lancement.
+
 ## Cadence hebdomadaire
 
 Chaque vendredi, lire la vue Réel par marché local :
@@ -119,6 +132,8 @@ Chaque vendredi, lire la vue Réel par marché local :
 - installer les builds stores et faire la recette sur appareils réels ;
 - confirmer les intégrations externes en production (PSC, Stripe, Chorus Pro,
   push) avec de vrais comptes et de petits montants ;
+- obtenir l'habilitation API Offres d'emploi de France Travail et renseigner
+  `FRANCE_TRAVAIL_CLIENT_ID` / `FRANCE_TRAVAIL_CLIENT_SECRET` ;
 - décider d'un budget publicitaire seulement après une activation saine et une
   liquidité locale démontrée.
 

@@ -66,10 +66,10 @@ Deno.serve(async (req) => {
     const pk = cible === "ETABLISSEMENT" ? "finess" : "cle";
     const max = Math.min(Number(limite) || 40, 60);
 
-    // Ordre alphabétique par nom : l'enrichissement suit l'ordre de navigation
-    // de l'admin (la liste prospection est triée par nom) → la page 1 se remplit
-    // en premier, l'admin voit les emails apparaître là où il regarde.
-    let q = admin.from(table).select("*").is("enrichi_le", null).order("nom", { ascending: true }).limit(max);
+    // Les deux tables possèdent un index partiel (maj_le) WHERE enrichi_le IS
+    // NULL. L'utiliser évite de trier plus d'un million de soignants par nom à
+    // chaque tranche d'enrichissement.
+    let q = admin.from(table).select("*").is("enrichi_le", null).order("maj_le", { ascending: true }).limit(max);
     if (departement) q = q.eq("departement", String(departement).toUpperCase());
     const { data: prospects, error: qErr } = await q;
     if (qErr) return new Response(JSON.stringify({ error: qErr.message }), { status: 500, headers: corsHeaders(req) });
@@ -121,10 +121,20 @@ Deno.serve(async (req) => {
       await new Promise((res) => setTimeout(res, 200));
     }
 
-    const { count: restants } = await admin.from(table)
-      .select(pk, { count: "exact", head: true }).is("enrichi_le", null);
-
-    return new Response(JSON.stringify({ success: true, traites, emails, telephones, ambigus, restants: restants ?? 0 }), { headers: corsHeaders(req) });
+    // Ne jamais lancer un count exact de toute la file ici : la table RPPS
+    // dépasse le million de lignes et ce comptage répété saturait PostgREST.
+    // Une tranche pleine suffit à signaler qu'une autre passe est probablement
+    // utile ; la passe suivante conclura proprement avec traites=0 si nécessaire.
+    const resteATraiter = prospects.length === max;
+    return new Response(JSON.stringify({
+      success: true,
+      traites,
+      emails,
+      telephones,
+      ambigus,
+      restants: null,
+      reste_a_traiter: resteATraiter,
+    }), { headers: corsHeaders(req) });
   } catch (e) {
     return new Response(JSON.stringify({ error: (e as Error)?.message || "Erreur interne" }), { status: 500, headers: corsHeaders(req) });
   }

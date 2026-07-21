@@ -1,0 +1,4 @@
+-- Registre de l'application opérationnelle anticipée de la migration
+-- 20260720173000_accelerer_hygiene_sessions_playwright.sql via l'API Supabase.
+-- Le DDL canonique reste dans le fichier d'origine ; ce jalon empêche tout
+-- drift du registre sans recréer une seconde fois le cron de rattrapage.

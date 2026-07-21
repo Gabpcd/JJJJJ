@@ -13,6 +13,8 @@
 | Outreach email 1-clic (Resend, passage auto en CONTACTÉ) | Sales → Prospection → « Via Jolene » | ✅ livré |
 | Pipeline CRM (statuts, archive douce, relance auto J+7) | Sales → Étab./Soignants sourcés + cron 8h | ✅ livré |
 | Attribution acquisition (UTM/referrer/parrainage → CAC réel) | Fondateur → Acquisition | ✅ livré |
+| Radar de demande (France Travail, FINESS, BMO, liquidité locale) | Fondateur → Acquisition | ✅ livré, API FT à habiliter |
+| Comptes ancres, récurrence, groupes, écoles, reverse marketplace | Fondateur → Acquisition → Recommandations | ✅ livré en brouillons internes |
 | Simulateur levée + stratégie d'allocation | Fondateur → Levée | ✅ livré |
 | Parrainage viral (prime cash soignant, crédits étab) | en prod (Sprint J5) | ✅ existant |
 
@@ -63,6 +65,16 @@ dense convertit mieux et crée le bouche-à-oreille.
     `growth_config.lien_avis_google`, bloc omis tant que vide) + son code
     parrainage (UTM `parrainage-post-mission`). Dédupliqué par mission
     (`emails_post_mission`).
+11. **Radar de demande et comptes ancres** ✅ livré : rapproche les signaux
+    publics, missions, disponibilité à J+14 et soignants vérifiés par département
+    et profession demandée. Les stratégies `COMPTE_ANCRE`, `RENFORCER_VIVIER`,
+    `REVERSE_MARKETPLACE`, `RECURRENCE`, `CIBLER_GROUPE` et
+    `PARTENARIAT_ECOLE` sont préparées en brouillons, jamais envoyées.
+
+> Pré-lancement : `automatisations_marketing_actives=false`. Les crons de
+> réactivation, digest et avis n'envoient rien ; le sourcing et le radar restent
+> actifs car ils n'effectuent aucun contact. Toute prospection reste déclenchée
+> manuellement depuis l'admin.
 
 ### Playbook IFSI/IFAS (manuel, 0 dev)
 - Cible : 10 IFSI/IFAS du département de densification (annuaire ARS public).

@@ -92,28 +92,49 @@ jobs:
       - name: Préflight credentials (échec immédiat si credential invalide)
         run: |
           set -e
+          echo "::add-mask::$E2E_TEST_PASSWORD"
           # 1) La clé résolue doit être un VRAI service_role : seul lui passe
           # l'endpoint admin GoTrue (une clé anon répond 401/403 ici alors
           # qu'elle répond 200 sur le REST public).
-          code=$(curl -s -o /dev/null -w '%{http_code}' \
-            "$E2E_SUPABASE_URL/auth/v1/admin/users?per_page=1" \
-            -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
-            -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY")
+          code=000
+          for tentative in 1 2 3; do
+            code=$(curl -s --max-time 45 -o /dev/null -w '%{http_code}' \
+              "$E2E_SUPABASE_URL/auth/v1/admin/users?per_page=1" \
+              -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
+              -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" || true)
+            [ "$code" = "200" ] && break
+            case "$code" in 429|5??|000) sleep $((tentative * 3));; *) break;; esac
+          done
           if [ "$code" != "200" ]; then
             echo "::error::La clé service_role résolue est invalide (admin GoTrue → HTTP $code). Vérifier SUPABASE_ACCESS_TOKEN (Dashboard → Account → Access Tokens) ou le secret SUPABASE_SERVICE_ROLE_KEY de fallback."
             exit 1
           fi
           echo "service_role OK (admin GoTrue 200)"
           # 2) Login compte test (publishable key + mot de passe fixe)
-          code=$(curl -s -o /dev/null -w '%{http_code}' \
-            "$E2E_SUPABASE_URL/auth/v1/token?grant_type=password" \
-            -H "apikey: $E2E_PUBLISHABLE_KEY" -H "Content-Type: application/json" \
-            -d "{\"email\":\"playwright-soignant@jolene.app\",\"password\":\"$E2E_TEST_PASSWORD\"}")
+          auth_response=$(mktemp)
+          trap 'rm -f "$auth_response"' EXIT
+          code=000
+          for tentative in 1 2 3; do
+            code=$(curl -s --max-time 45 -o "$auth_response" -w '%{http_code}' \
+              "$E2E_SUPABASE_URL/auth/v1/token?grant_type=password" \
+              -H "apikey: $E2E_PUBLISHABLE_KEY" -H "Content-Type: application/json" \
+              -d "{\"email\":\"playwright-soignant@jolene.app\",\"password\":\"$E2E_TEST_PASSWORD\"}" || true)
+            [ "$code" = "200" ] && break
+            case "$code" in 429|5??|000) sleep $((tentative * 3));; *) break;; esac
+          done
           if [ "$code" != "200" ]; then
             echo "::error::Login compte test playwright-soignant impossible (HTTP $code) — mot de passe DB désynchronisé."
             exit 1
           fi
           echo "login compte test OK"
+          # Le préflight ne doit pas laisser une session Auth à chaque run.
+          access_token=$(node -e 'const fs=require("fs");try{const d=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));process.stdout.write(d.access_token||"")}catch{}' "$auth_response")
+          if [ -n "$access_token" ]; then
+            curl -s -o /dev/null -X POST \
+              "$E2E_SUPABASE_URL/auth/v1/logout" \
+              -H "apikey: $E2E_PUBLISHABLE_KEY" \
+              -H "Authorization: Bearer $access_token" || true
+          fi
       - name: Build app
         run: npm run build
         env:
@@ -124,6 +145,7 @@ jobs:
           npx vite preview --port 4173 --host 0.0.0.0 &
           npx wait-on http://127.0.0.1:4173 -t 30000 || true
       - name: Run Playwright tests (chromium)
+        id: playwright-tests
         # SUPABASE_SERVICE_ROLE_KEY arrive via GITHUB_ENV (step « Résoudre la
         # clé ») — ne PAS la remapper ici depuis secrets (valeur fausse).
         run: npx playwright test --project=chromium
@@ -139,7 +161,7 @@ jobs:
           E2E_ALLOW_PGRST202_ELIGIBILITY_FALLBACK: 'true'
           CI: 'true'
       - name: Détail a11y si échec (rapport court en fin de log)
-        if: failure()
+        if: failure() && steps.playwright-tests.outcome == 'failure'
         run: npx playwright test e2e/a11y.spec.ts --project=chromium --reporter=line --retries=0 || true
         env:
           PLAYWRIGHT_BASE_URL: http://127.0.0.1:4173
