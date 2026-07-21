@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Building2,
   CheckCircle2,
@@ -80,6 +80,7 @@ interface TableauSourcing {
     nouveaux_30j: number;
     contactables: number;
     hors_crm: number;
+    compteurs_globaux?: boolean;
   };
   resultats: ProspectSourcing[];
   besoins: BesoinSourcing[];
@@ -88,6 +89,8 @@ interface TableauSourcing {
   par_page: number;
   total_pages: number;
   genere_le: string;
+  pool_evalue?: number;
+  pool_resultats?: number;
 }
 
 const TYPES_ETAB = [
@@ -131,6 +134,14 @@ function scoreVariant(score: number): 'success' | 'warning' | 'info' {
   return 'info';
 }
 
+function messageErreurSourcing(message: string): string {
+  const normalise = message.toLowerCase();
+  if (normalise.includes('statement timeout') || normalise.includes('canceling statement')) {
+    return 'La recherche a dépassé le délai de sécurité. Réduisez éventuellement les filtres ou réessayez ; les derniers résultats affichés ont été conservés.';
+  }
+  return 'La recherche est momentanément indisponible. Réessayez dans un instant ; les derniers résultats affichés ont été conservés.';
+}
+
 export function AdminSourcingCockpit({ onContactsChanged }: { onContactsChanged?: () => void }) {
   const [cible, setCible] = useState<CibleSourcing>('SOIGNANT');
   const [departement, setDepartement] = useState('');
@@ -142,10 +153,13 @@ export function AdminSourcingCockpit({ onContactsChanged }: { onContactsChanged?
   const [page, setPage] = useState(1);
   const [data, setData] = useState<TableauSourcing | null>(null);
   const [loading, setLoading] = useState(true);
+  const [erreurChargement, setErreurChargement] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [importLoading, setImportLoading] = useState(false);
+  const requeteCourante = useRef(0);
 
   const charger = useCallback(async (pageDemandee = 1) => {
+    const numeroRequete = ++requeteCourante.current;
     setLoading(true);
     const { data: resultat, error } = await supabase.rpc('fn_admin_sourcing_tableau' as never, {
       p_cible: cible,
@@ -158,18 +172,24 @@ export function AdminSourcingCockpit({ onContactsChanged }: { onContactsChanged?
       p_page: pageDemandee,
       p_par_page: 30,
     } as never);
+    if (numeroRequete !== requeteCourante.current) return;
     setLoading(false);
     if (error) {
-      toast.error(`Sourcing indisponible : ${error.message}`);
-      setData(null);
+      const message = messageErreurSourcing(error.message);
+      setErreurChargement(message);
+      toast.error(message);
       return;
     }
+    setErreurChargement(null);
     setData(resultat as unknown as TableauSourcing);
     setPage(pageDemandee);
   }, [cible, contactables, departement, horsCrm, nouveaux, profession, typeEtab]);
 
   useEffect(() => {
     void charger(1);
+    return () => {
+      requeteCourante.current += 1;
+    };
   }, [charger]);
 
   const ajouterAuCrm = async (prospect: ProspectSourcing) => {
@@ -232,7 +252,7 @@ export function AdminSourcingCockpit({ onContactsChanged }: { onContactsChanged?
   }
 
   if (!data) {
-    return <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-destructive" role="alert">Le cockpit de sourcing n’a pas pu être chargé.</div>;
+    return <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-destructive" role="alert">{erreurChargement || 'Le cockpit de sourcing n’a pas pu être chargé.'}</div>;
   }
 
   return (
@@ -255,11 +275,21 @@ export function AdminSourcingCockpit({ onContactsChanged }: { onContactsChanged?
       </div>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <CarteKPIY2K icone={<Target className="h-4 w-4" />} label="Prospects ciblés" valeur={formatNombre(data.stats.total)} contexte="selon les filtres" variant="holographic" />
-        <CarteKPIY2K icone={<Sparkles className="h-4 w-4" />} label="Nouveaux / 30 j" valeur={formatNombre(data.stats.nouveaux_30j)} contexte="nouvellement importés" variant="soft" />
-        <CarteKPIY2K icone={<Phone className="h-4 w-4" />} label="Contactables" valeur={formatNombre(data.stats.contactables)} contexte="email ou téléphone public" />
-        <CarteKPIY2K icone={<Database className="h-4 w-4" />} label="Hors CRM" valeur={formatNombre(data.stats.hors_crm)} contexte="et non inscrits" />
+        <CarteKPIY2K icone={<Target className="h-4 w-4" />} label="Base officielle" valeur={formatNombre(data.stats.total)} contexte={`volume national · ${cible === 'SOIGNANT' ? 'soignants' : 'établissements'}`} variant="holographic" />
+        <CarteKPIY2K icone={<Sparkles className="h-4 w-4" />} label="Nouveaux / 30 j" valeur={formatNombre(data.stats.nouveaux_30j)} contexte="compteur national maintenu" variant="soft" />
+        <CarteKPIY2K icone={<Phone className="h-4 w-4" />} label="Contactables" valeur={formatNombre(data.stats.contactables)} contexte="national · email ou téléphone public" />
+        <CarteKPIY2K icone={<Database className="h-4 w-4" />} label="Cibles classées" valeur={formatNombre(data.pool_resultats ?? data.resultats.length)} contexte={`dans un pool borné à ${formatNombre(data.pool_evalue ?? 0)}`} />
       </div>
+
+      <p className="text-xs text-muted-foreground">
+        Les trois premiers compteurs donnent le volume national exact de la base officielle. « Cibles classées » correspond uniquement au pool borné analysé avec les filtres et les exclusions CRM ; l’onglet Prospection reste la recherche exhaustive.
+      </p>
+
+      {erreurChargement ? (
+        <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive" role="alert">
+          {erreurChargement}
+        </div>
+      ) : null}
 
       <CardY2K hoverLift={false} noPadding>
         <CardY2KContent className="pt-6">

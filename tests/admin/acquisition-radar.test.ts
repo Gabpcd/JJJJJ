@@ -6,6 +6,7 @@ const migration = read('supabase/migrations/20260720150152_moteur_acquisition_ra
 const strategies = read('supabase/migrations/20260720153644_acquisition_actions_strategies.sql');
 const silentCrm = read('supabase/migrations/20260720155145_acquisition_crm_silencieux.sql');
 const precision = read('supabase/migrations/20260720155955_acquisition_metrics_precision.sql');
+const realtime = read('supabase/migrations/20260721101450_fix_acquisition_radar_realtime.sql');
 const edge = read('supabase/functions/import-signaux-acquisition/index.ts');
 const radar = read('src/components/admin/AdminAcquisitionRadar.tsx');
 const page = read('src/pages/admin/AdminAcquisition.tsx');
@@ -78,13 +79,31 @@ describe('moteur acquisition silencieux', () => {
     expect(migration).toContain("'estimation, pas revenu garanti'");
     expect(radar).toContain('Liquidité locale');
     expect(radar).toContain('Comptes ancres');
-    expect(radar).toContain('Récurrence et revenu observé');
+    expect(radar).toContain('Récurrence et pipeline estimé');
     expect(radar).toContain('Reverse marketplace');
     expect(radar).toContain('revenu_mensuel_estime_ht');
     expect(radar).toContain('Ces montants ne sont pas des revenus garantis');
     expect(precision).toContain('count(DISTINCT s.id) FILTER (WHERE s.tous_documents_valides)');
     expect(precision).toContain("'employeur non communique'");
     expect(precision).toContain('WHERE s.cible_id IS NOT NULL');
+    expect(realtime).toContain('demande_interne AS');
+    expect(realtime).toContain('commission_observee_mensuelle_ht');
+    expect(realtime).toContain('NULLIF(m.montant_commission_ht, 0)');
+    expect(realtime).toContain("FILTER (WHERE m.statut = 'TERMINEE')");
+    expect(realtime).toContain("FILTER (WHERE m.statut IN ('ASSIGNEE', 'EN_COURS'))");
+    expect(realtime).toContain('commission_pipeline_mensuelle_ht');
+    expect(realtime).toContain("'commission_observee', 'missions terminees uniquement'");
+    expect(realtime).toContain("'pipeline_interne', 'missions assignees ou en cours, distinctes du realise'");
+    expect(realtime).toContain('COALESCE(di.commission_pipeline_ht, 0) / GREATEST(v_jours, 1) * 30');
+    expect(realtime).not.toContain("FILTER (WHERE m.statut <> 'OUVERTE')");
+    expect(realtime).toContain('AND s.etablissement_id IS NULL');
+    expect(realtime).toContain("AND v_scope <> 'TEST'");
+    expect(realtime).toContain("FROM public.acquisition_territoires WHERE v_scope <> 'TEST'");
+    expect(realtime).toContain("LEFT JOIN public.acquisition_territoires t ON v_scope <> 'TEST'");
+    expect(realtime).toContain("'scope_test', 'missions, etablissements et soignants de test uniquement; signaux externes et territoires non scopes exclus'");
+    expect(realtime).toContain("'contact_automatique', false");
+    expect(radar).toContain('actualisation toutes les 60 s');
+    expect(radar).toContain('Besoins détectés');
   });
 
   it('prepare toutes les strategies commerciales sans executer de campagne', () => {

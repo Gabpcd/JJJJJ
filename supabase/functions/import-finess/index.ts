@@ -10,10 +10,42 @@ import { jsonResponse, preflightResponse } from "../_shared/cors.ts";
 
 const FICHIER = "https://data-pipeline-open.s3.sbg.io.cloud.ovh.net/finess/finess_etablissements.csv";
 const SOURCE_PAGE = "https://www.data.gouv.fr/datasets/reexposition-des-donnees-finess";
+const SOURCE_CODE = "FINESS_DATA_GOUV";
 // Passes courtes pour ne pas saturer la base pendant la première charge.
 const TRANCHE = 1024 * 1024;            // 1 Mo par requête Range
 const TAILLE_UPSERT = 100;
 const BUDGET_MS = 90_000;               // puis auto-relance
+
+type AdminClient = ReturnType<typeof createClient>;
+
+async function fetchAvecTimeout(
+  input: string,
+  init: RequestInit,
+  timeoutMs = 30_000,
+): Promise<Response> {
+  const controleur = new AbortController();
+  const minuteur = setTimeout(() => controleur.abort(), timeoutMs);
+  try {
+    return await fetch(input, { ...init, signal: controleur.signal });
+  } finally {
+    clearTimeout(minuteur);
+  }
+}
+
+async function majSource(
+  admin: AdminClient,
+  valeurs: Record<string, unknown>,
+): Promise<void> {
+  const { error } = await admin.from("acquisition_sources").update({
+    actif: true,
+    automatique: true,
+    ...valeurs,
+    maj_le: new Date().toISOString(),
+  }).eq("code", SOURCE_CODE);
+  // L'état du radar est informatif et ne doit pas faire échouer la charge
+  // officielle si sa mise à jour rencontre un incident indépendant.
+  if (error) console.error("acquisition_sources FINESS:", error.message);
+}
 
 // libcategetab / libcategagretab → type Jolene (null = ignoré)
 function mapType(libCateg: string, libAgr: string): string | null {
@@ -43,7 +75,13 @@ Deno.serve(async (req) => {
   try {
     const auth = await verifyAdminOrServiceRole(req);
     if (!auth.ok) return jsonResponse(req, { error: auth.error }, auth.status);
-    const { offset = 0, run_id = null, lignes_lues = 0, lignes_importees = 0 } = await req.json().catch(() => ({}));
+    const {
+      offset = 0,
+      run_id = null,
+      lignes_lues = 0,
+      lignes_importees = 0,
+      source_maj_le = null,
+    } = await req.json().catch(() => ({}));
 
     const url = Deno.env.get("SUPABASE_URL")!;
     const admin = createClient(url, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } });
@@ -52,19 +90,27 @@ Deno.serve(async (req) => {
     if (!runId) {
       const { data: actif } = await admin.from("sourcing_imports")
         .select("id, demarre_le")
-        .eq("source_code", "FINESS_DATA_GOUV")
+        .eq("source_code", SOURCE_CODE)
         .eq("statut", "EN_COURS")
         .gte("demarre_le", new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString())
         .order("demarre_le", { ascending: false })
         .limit(1)
         .maybeSingle();
-      if (actif?.id) return jsonResponse(req, { success: true, already_running: true, run_id: actif.id });
+      if (actif?.id) {
+        return jsonResponse(req, {
+          success: true,
+          already_running: true,
+          run_id: actif.id,
+          contacted: 0,
+          contact_automatique: false,
+        });
+      }
 
       const { data: run, error: runErr } = await admin.from("sourcing_imports").insert({
-        source_code: "FINESS_DATA_GOUV",
+        source_code: SOURCE_CODE,
         cible: "ETABLISSEMENT",
         source_url: SOURCE_PAGE,
-        details: { fichier: FICHIER, silencieux: true },
+        details: { fichier: FICHIER, silencieux: true, contact_automatique: false },
       }).select("id").single();
       if (runErr) throw new Error(runErr.message);
       runId = run.id;
@@ -75,10 +121,12 @@ Deno.serve(async (req) => {
     let totalInsere = 0;
     let totalLues = 0;
     let done = false;
-    let sourceMajLe: string | null = null;
+    let sourceMajLe: string | null = typeof source_maj_le === "string" ? source_maj_le : null;
 
     while (Date.now() - debut < BUDGET_MS) {
-      const r = await fetch(FICHIER, { headers: { Range: `bytes=${pos}-${pos + TRANCHE - 1}` } });
+      const r = await fetchAvecTimeout(FICHIER, {
+        headers: { Range: `bytes=${pos}-${pos + TRANCHE - 1}` },
+      });
       if (r.status === 416) { done = true; break; }            // au-delà de la fin
       if (!r.ok && r.status !== 206 && r.status !== 200) {
         throw new Error(`Téléchargement FINESS impossible (${r.status}) à l'octet ${pos}`);
@@ -140,8 +188,44 @@ Deno.serve(async (req) => {
         totalInsere += Number(upserts) || 0;
       }
 
+      await majSource(admin, {
+        dernier_statut: "OK",
+        dernier_message: `Import FINESS en cours — ${Number(lignes_lues) + totalLues} lignes lues, ${Number(lignes_importees) + totalInsere} ajoutees`,
+      });
+
       if (finFichier) { done = true; break; }
     }
+
+    const etatLe = new Date().toISOString();
+    const compteurs = {
+      lignes_lues: Number(lignes_lues) + totalLues,
+      lignes_importees: Number(lignes_importees) + totalInsere,
+    };
+    const { error: etatErr } = await admin.from("sourcing_imports").update({
+      statut: done ? "TERMINE" : "EN_COURS",
+      termine_le: done ? etatLe : null,
+      source_maj_le: sourceMajLe,
+      ...compteurs,
+      details: {
+        fichier: FICHIER,
+        silencieux: true,
+        contact_automatique: false,
+        next_offset: pos,
+        source_maj_le: sourceMajLe,
+      },
+    }).eq("id", runId);
+    if (etatErr) throw new Error(etatErr.message);
+
+    await majSource(admin, done
+      ? {
+        dernier_import_le: etatLe,
+        dernier_statut: "OK",
+        dernier_message: `Import FINESS termine — ${compteurs.lignes_lues} lignes lues, ${compteurs.lignes_importees} ajoutees`,
+      }
+      : {
+        dernier_statut: "OK",
+        dernier_message: `Import FINESS en cours — ${compteurs.lignes_lues} lignes lues, ${compteurs.lignes_importees} ajoutees`,
+      });
 
     if (!done) {
       // Auto-relance pour la suite du fichier — waitUntil garantit que la
@@ -155,35 +239,46 @@ Deno.serve(async (req) => {
         body: JSON.stringify({
           offset: pos,
           run_id: runId,
-          lignes_lues: Number(lignes_lues) + totalLues,
-          lignes_importees: Number(lignes_importees) + totalInsere,
+          source_maj_le: sourceMajLe,
+          ...compteurs,
         }),
       }).catch(() => {});
       (globalThis as any).EdgeRuntime?.waitUntil?.(relance);
     }
 
-    await admin.from("sourcing_imports").update({
-      statut: done ? "TERMINE" : "EN_COURS",
-      termine_le: done ? new Date().toISOString() : null,
-      source_maj_le: sourceMajLe,
-      lignes_lues: Number(lignes_lues) + totalLues,
-      lignes_importees: Number(lignes_importees) + totalInsere,
-    }).eq("id", runId);
-
     return jsonResponse(req, {
+      success: true,
       done,
       run_id: runId,
       next_offset: pos,
       lues_cette_passe: totalLues,
       inserees_cette_passe: totalInsere,
+      contacted: 0,
+      contact_automatique: false,
+      ...compteurs,
     });
   } catch (e) {
+    const message = ((e as Error)?.message || "erreur").slice(0, 1000);
+    const erreurLe = new Date().toISOString();
+    const admin = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+      { auth: { persistSession: false } },
+    );
     if (runId) {
-      await createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } })
-        .from("sourcing_imports")
+      await admin.from("sourcing_imports")
         .update({ statut: "ERREUR", termine_le: new Date().toISOString(), erreur: ((e as Error)?.message || "erreur").slice(0, 1000) })
         .eq("id", runId);
     }
-    return jsonResponse(req, { error: (e as Error)?.message || "erreur" }, 500);
+    await majSource(admin, {
+      dernier_statut: "ERREUR",
+      dernier_message: message.slice(0, 500),
+      maj_le: erreurLe,
+    });
+    return jsonResponse(req, {
+      error: message,
+      contacted: 0,
+      contact_automatique: false,
+    }, 500);
   }
 });

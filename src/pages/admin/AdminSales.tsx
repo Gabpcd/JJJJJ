@@ -1,4 +1,4 @@
-import { cloneElement, isValidElement, useCallback, useEffect, useId, useMemo, useState } from 'react';
+import { cloneElement, isValidElement, useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { LayoutAdmin } from '@/components/LayoutAdmin';
 import { ChargementAdmin, ChargementSectionAdmin } from '@/components/admin/ChargementAdmin';
@@ -54,6 +54,56 @@ function badgeStatutContact(s: string): 'success' | 'warning' | 'error' | 'info'
   if (s === 'PERDU') return 'error';
   if (s === 'CONTACTE' || s === 'RELANCE') return 'info';
   return 'warning';
+}
+
+interface CompteursBaseProspection {
+  total: number;
+  avec_email: number;
+  avec_email_non_contacte: number;
+  avec_telephone: number;
+  contactables: number;
+  nouveaux_30j: number;
+  maj_le: string;
+}
+
+interface StatsProspectionAdmin {
+  soignants: CompteursBaseProspection;
+  etablissements: CompteursBaseProspection;
+  crm_soignants: number;
+  crm_etablissements: number;
+  exact: boolean;
+  genere_le: string;
+}
+
+function estNombreCompteur(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0;
+}
+
+function afficherCompteur(value: unknown): string {
+  return estNombreCompteur(value) ? value.toLocaleString('fr-FR') : '—';
+}
+
+function normaliserStatsProspection(value: unknown): StatsProspectionAdmin | null {
+  if (!value || typeof value !== 'object') return null;
+  const stats = value as Partial<StatsProspectionAdmin>;
+  if (
+    stats.exact !== true
+    || !estNombreCompteur(stats.crm_soignants)
+    || !estNombreCompteur(stats.crm_etablissements)
+    || !estNombreCompteur(stats.soignants?.total)
+    || !estNombreCompteur(stats.soignants?.avec_email_non_contacte)
+    || !estNombreCompteur(stats.etablissements?.total)
+    || !estNombreCompteur(stats.etablissements?.avec_email_non_contacte)
+  ) return null;
+  return stats as StatsProspectionAdmin;
+}
+
+function messageErreurProspection(error?: { message?: string | null } | null): string {
+  const message = error?.message?.toLowerCase() || '';
+  if (message.includes('statement timeout') || message.includes('canceling statement') || message.includes('timeout')) {
+    return 'La recherche a pris trop de temps. Les résultats déjà affichés sont conservés ; ajoutez un filtre ou relancez dans un instant.';
+  }
+  return 'La recherche est momentanément indisponible. Les résultats déjà affichés sont conservés ; vous pouvez réessayer.';
 }
 
 /** Lien WhatsApp wa.me depuis un numéro FR (0X… → 33X…). */
@@ -144,6 +194,10 @@ export default function AdminSales() {
   const [groupes, setGroupes] = useState<any[]>([]);
   const [contacts, setContacts] = useState<any[]>([]);
   const [templates, setTemplates] = useState<any[]>([]);
+  const [statsProspection, setStatsProspection] = useState<StatsProspectionAdmin | null>(null);
+  const [erreurCompteurs, setErreurCompteurs] = useState<string | null>(null);
+  const chargementIdRef = useRef(0);
+  const erreurCompteursSignaleeRef = useRef(false);
 
   // filtres annuaire
   const [fPlateforme, setFPlateforme] = useState('');
@@ -199,15 +253,33 @@ export default function AdminSales() {
   };
 
   const charger = useCallback(async () => {
+    const chargementId = ++chargementIdRef.current;
     setLoading(true);
-    const [g, c, t] = await Promise.all([
+    const [g, c, t, stats] = await Promise.all([
       supabase.from('sales_groupes' as any).select('*').order('favori', { ascending: false }).order('plateforme').order('profession'),
       supabase.from('sales_contacts' as any).select('*').order('favori', { ascending: false }).order('cree_le', { ascending: false }),
       supabase.from('sales_templates' as any).select('*').order('cible'),
+      supabase.rpc('fn_admin_prospection_stats' as any),
     ]);
-    setGroupes((g.data as any[]) || []);
-    setContacts((c.data as any[]) || []);
-    setTemplates((t.data as any[]) || []);
+    if (chargementId !== chargementIdRef.current) return;
+
+    // En cas d'échec, conserver les dernières données valides plutôt que
+    // d'afficher un faux zéro issu d'un tableau/count nul.
+    if (!g.error && Array.isArray(g.data)) setGroupes(g.data as any[]);
+    if (!c.error && Array.isArray(c.data)) setContacts(c.data as any[]);
+    if (!t.error && Array.isArray(t.data)) setTemplates(t.data as any[]);
+
+    const statsValides = !stats.error ? normaliserStatsProspection(stats.data) : null;
+    if (statsValides) {
+      setStatsProspection(statsValides);
+      setErreurCompteurs(null);
+      erreurCompteursSignaleeRef.current = false;
+    } else {
+      const message = 'Les compteurs des bases officielles sont momentanément indisponibles. Les dernières valeurs connues sont conservées.';
+      setErreurCompteurs(message);
+      if (!erreurCompteursSignaleeRef.current) toast.error(message);
+      erreurCompteursSignaleeRef.current = true;
+    }
     setLoading(false);
   }, []);
 
@@ -353,15 +425,21 @@ export default function AdminSales() {
           <BoutonY2K variant={tab === 'sourcing' ? 'primary' : 'secondary'} size="sm" onClick={() => setTab('sourcing')} iconeGauche={<Search className="h-4 w-4" />}>Nouveaux contacts</BoutonY2K>
           <BoutonY2K variant={tab === 'crm' ? 'primary' : 'secondary'} size="sm" onClick={() => setTab('crm')} iconeGauche={<Bot className="h-4 w-4" />}>CRM du jour</BoutonY2K>
           <BoutonY2K variant={tab === 'groupes' ? 'primary' : 'secondary'} size="sm" onClick={() => setTab('groupes')} iconeGauche={<Megaphone className="h-4 w-4" />}>Groupes ({groupes.length})</BoutonY2K>
-          <BoutonY2K variant={tab === 'soignants' ? 'primary' : 'secondary'} size="sm" onClick={() => setTab('soignants')} iconeGauche={<Users className="h-4 w-4" />}>Soignants ({soignants.length})</BoutonY2K>
-          <BoutonY2K variant={tab === 'etablissements' ? 'primary' : 'secondary'} size="sm" onClick={() => setTab('etablissements')} iconeGauche={<Building2 className="h-4 w-4" />}>Étab. sourcés ({etablissements.length})</BoutonY2K>
-          <BoutonY2K variant={tab === 'prospection' ? 'primary' : 'secondary'} size="sm" onClick={() => setTab('prospection')} iconeGauche={<Search className="h-4 w-4" />}>Prospection étab.</BoutonY2K>
-          <BoutonY2K variant={tab === 'prospection_soignants' ? 'primary' : 'secondary'} size="sm" onClick={() => setTab('prospection_soignants')} iconeGauche={<Users className="h-4 w-4" />}>Prospection soignants</BoutonY2K>
+          <BoutonY2K variant={tab === 'soignants' ? 'primary' : 'secondary'} size="sm" onClick={() => setTab('soignants')} iconeGauche={<Users className="h-4 w-4" />}>CRM soignants ({afficherCompteur(statsProspection?.crm_soignants)})</BoutonY2K>
+          <BoutonY2K variant={tab === 'etablissements' ? 'primary' : 'secondary'} size="sm" onClick={() => setTab('etablissements')} iconeGauche={<Building2 className="h-4 w-4" />}>CRM établissements ({afficherCompteur(statsProspection?.crm_etablissements)})</BoutonY2K>
+          <BoutonY2K variant={tab === 'prospection' ? 'primary' : 'secondary'} size="sm" onClick={() => setTab('prospection')} iconeGauche={<Search className="h-4 w-4" />}>Base établissements ({afficherCompteur(statsProspection?.etablissements?.total)})</BoutonY2K>
+          <BoutonY2K variant={tab === 'prospection_soignants' ? 'primary' : 'secondary'} size="sm" onClick={() => setTab('prospection_soignants')} iconeGauche={<Users className="h-4 w-4" />}>Base soignants ({afficherCompteur(statsProspection?.soignants?.total)})</BoutonY2K>
           <BoutonY2K variant={tab === 'etab_jolene' ? 'primary' : 'secondary'} size="sm" onClick={() => setTab('etab_jolene')} iconeGauche={<Building2 className="h-4 w-4" />}>Étab. Jolene</BoutonY2K>
           <BoutonY2K variant={tab === 'templates' ? 'primary' : 'secondary'} size="sm" onClick={() => setTab('templates')} iconeGauche={<FileText className="h-4 w-4" />}>Modèles ({templates.length})</BoutonY2K>
           <BoutonY2K variant={tab === 'posts' ? 'primary' : 'secondary'} size="sm" onClick={() => setTab('posts')} iconeGauche={<Send className="h-4 w-4" />}>Posts de la semaine</BoutonY2K>
           <BoutonY2K variant={tab === 'backlinks' ? 'primary' : 'secondary'} size="sm" onClick={() => setTab('backlinks')} iconeGauche={<ExternalLink className="h-4 w-4" />}>Backlinks / Annuaires</BoutonY2K>
         </div>
+
+        {erreurCompteurs && (
+          <p role="alert" className="text-xs text-amber-700 dark:text-amber-300 rounded-lg border border-amber-300/60 bg-amber-50/70 dark:bg-amber-950/20 px-3 py-2">
+            {erreurCompteurs}
+          </p>
+        )}
 
         {/* ── SOURCING : découverte et qualification, sans aucun envoi ── */}
         {tab === 'sourcing' && <AdminSourcingCockpit onContactsChanged={charger} />}
@@ -922,35 +1000,46 @@ function ProspectionEtab({ onAjouter }: { onAjouter: () => void }) {
   const [type, setType] = useState('');
   const [departement, setDepartement] = useState('');
   const [q, setQ] = useState('');
+  const qRef = useRef('');
   const [favoris, setFavoris] = useState(false);
   const [avecEmail, setAvecEmail] = useState(false);
   const [avecTel, setAvecTel] = useState(false);
   const [page, setPage] = useState(1);
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
+  const [erreurRecherche, setErreurRecherche] = useState<string | null>(null);
+  const rechercheIdRef = useRef(0);
   const [emailEdit, setEmailEdit] = useState<{ finess: string; valeur: string; prospect?: any } | null>(null);
   const [outreach, setOutreach] = useState<any | null>(null);
   const [appel, setAppel] = useState<any | null>(null);
   const tpl = useTemplateProspection();
 
   const rechercher = useCallback(async (p = 1) => {
+    const rechercheId = ++rechercheIdRef.current;
     setLoading(true);
     const { data: res, error } = await supabase.rpc('fn_admin_chercher_prospects' as any, {
       p_type: type || null,
       p_departement: departement.trim() || null,
-      p_q: q.trim() || null,
+      p_q: qRef.current.trim() || null,
       p_favoris: favoris,
       p_page: p,
       p_avec_email: avecEmail,
       p_avec_tel: avecTel,
     });
+    if (rechercheId !== rechercheIdRef.current) return;
     setLoading(false);
-    if (error) { toast.error(error.message); return; }
+    if (error) {
+      const message = messageErreurProspection(error);
+      setErreurRecherche(message);
+      toast.error(message);
+      return;
+    }
+    setErreurRecherche(null);
     setData(res);
     setPage(p);
-  }, [type, departement, q, favoris, avecEmail, avecTel]);
+  }, [type, departement, favoris, avecEmail, avecTel]);
 
-  useEffect(() => { rechercher(1); }, [type, departement, favoris, avecEmail, avecTel]); // recherche live (q via bouton/Enter)
+  useEffect(() => { void rechercher(1); }, [rechercher]); // recherche live (q via bouton/Enter)
 
   const toggleFavori = async (pr: any) => {
     const { error } = await supabase.from('prospects_etablissements' as any)
@@ -1006,7 +1095,7 @@ function ProspectionEtab({ onAjouter }: { onAjouter: () => void }) {
     onAjouter();
   };
 
-  const total = data?.total ?? 0;
+  const total = estNombreCompteur(data?.total) ? data.total : null;
 
   return (
     <div className="space-y-4">
@@ -1029,7 +1118,7 @@ function ProspectionEtab({ onAjouter }: { onAjouter: () => void }) {
             </div>
             <div className="flex-1 min-w-[160px]">
               <Label className="text-xs">Nom ou ville</Label>
-              <Input aria-label="Nom ou ville de l’établissement à prospecter" value={q} onChange={e => setQ(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') rechercher(1); }} placeholder="Korian, Marseille…" className="h-9" />
+              <Input aria-label="Nom ou ville de l’établissement à prospecter" value={q} onChange={e => { qRef.current = e.target.value; setQ(e.target.value); }} onKeyDown={e => { if (e.key === 'Enter') rechercher(1); }} placeholder="Korian, Marseille…" className="h-9" />
             </div>
             <BoutonY2K size="sm" variant={avecEmail ? 'primary' : 'secondary'} onClick={() => setAvecEmail(!avecEmail)} iconeGauche={<Mail className="h-4 w-4" />}>Avec email</BoutonY2K>
             <BoutonY2K size="sm" variant={avecTel ? 'primary' : 'secondary'} onClick={() => setAvecTel(!avecTel)} iconeGauche={<Phone className="h-4 w-4" />}>Avec tél.</BoutonY2K>
@@ -1041,10 +1130,16 @@ function ProspectionEtab({ onAjouter }: { onAjouter: () => void }) {
         </CardY2KContent>
       </CardY2K>
 
+      {erreurRecherche && (
+        <p role="alert" className="text-xs text-amber-700 dark:text-amber-300 rounded-lg border border-amber-300/60 bg-amber-50/70 dark:bg-amber-950/20 px-3 py-2">
+          {erreurRecherche}
+        </p>
+      )}
+
       {data && (
         <>
           <p className="text-xs text-muted-foreground">
-            {total.toLocaleString('fr-FR')} établissement(s) — page {data.page}/{Math.max(data.total_pages, 1)}
+            {total === null ? 'Total momentanément indisponible' : `${total.toLocaleString('fr-FR')} établissement(s)`} — page {data.page}/{Math.max(data.total_pages, 1)}
             {total === 0 && ' · Si la base semble vide, l\'import FINESS est peut-être encore en cours (quelques minutes).'}
           </p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -1141,6 +1236,40 @@ function EnvoiMasseBar({ cible }: { cible: 'ETABLISSEMENT' | 'SOIGNANT' }) {
   const [template, setTemplate] = useState<{ sujet: string; contenu: string } | null>(null);
   const [envoi, setEnvoi] = useState(false);
   const [enrichissement, setEnrichissement] = useState(false);
+  const [erreurEtat, setErreurEtat] = useState<string | null>(null);
+  const chargementIdRef = useRef(0);
+
+  const chargerEtat = useCallback(async () => {
+    const chargementId = ++chargementIdRef.current;
+    const [statsResult, templateResult] = await Promise.all([
+      supabase.rpc('fn_admin_prospection_stats' as any),
+      cible === 'ETABLISSEMENT'
+        ? supabase.from('sales_templates' as any).select('sujet, contenu').eq('nom', TEMPLATE_PROSPECTION_NOM).maybeSingle()
+        : supabase.from('sales_templates' as any).select('sujet, contenu').eq('cible', 'SOIGNANT').limit(1).maybeSingle(),
+    ]);
+    if (chargementId !== chargementIdRef.current) return;
+
+    const stats = !statsResult.error ? normaliserStatsProspection(statsResult.data) : null;
+    const compteur = cible === 'ETABLISSEMENT'
+      ? stats?.etablissements?.avec_email_non_contacte
+      : stats?.soignants?.avec_email_non_contacte;
+
+    if (estNombreCompteur(compteur)) {
+      setAEnvoyer(compteur);
+      setErreurEtat(null);
+    } else {
+      // Ne jamais convertir un timeout ou un count nul en « 0 prospect ».
+      // Une valeur précédente reste visible jusqu'à la prochaine réponse valide.
+      setErreurEtat('Le compteur exact est momentanément indisponible. La dernière valeur connue est conservée.');
+    }
+
+    if (!templateResult.error) setTemplate((templateResult.data as any) || null);
+  }, [cible]);
+
+  useEffect(() => {
+    void chargerEtat();
+    return () => { chargementIdRef.current += 1; };
+  }, [chargerEtat]);
 
   // Enrichissement Annuaire Santé (FHIR ANS) : remplit email/telephone depuis
   // le registre officiel — étabs par FINESS (exact), soignants par nom+prénom
@@ -1154,31 +1283,15 @@ function EnvoiMasseBar({ cible }: { cible: 'ETABLISSEMENT' | 'SOIGNANT' }) {
       if (error || (data as any)?.error) { toast.error((data as any)?.error || 'Enrichissement impossible.'); return; }
       const d = data as any;
       toast.success(`${d.traites} fiche(s) passée(s) à l'Annuaire Santé : ${d.emails} email(s) + ${d.telephones} téléphone(s) trouvés${d.ambigus ? ` · ${d.ambigus} homonyme(s) ignoré(s) par sécurité` : ''}${d.reste_a_traiter ? ' — d’autres fiches restent à traiter, recliquez pour continuer' : ''}`);
-      chargerEtat();
+      void chargerEtat();
     } finally {
       setEnrichissement(false);
     }
   };
 
-  const table = cible === 'ETABLISSEMENT' ? 'prospects_etablissements' : 'prospects_soignants';
-
-  const chargerEtat = async () => {
-    const [{ count }, { data: tpl }] = await Promise.all([
-      supabase.from(table as any).select('email', { count: 'exact', head: true })
-        .not('email', 'is', null).neq('email', '').is('email_envoye_le', null),
-      cible === 'ETABLISSEMENT'
-        ? supabase.from('sales_templates' as any).select('sujet, contenu').eq('nom', TEMPLATE_PROSPECTION_NOM).maybeSingle()
-        : supabase.from('sales_templates' as any).select('sujet, contenu').eq('cible', 'SOIGNANT').limit(1).maybeSingle(),
-    ]);
-    setAEnvoyer(count ?? 0);
-    setTemplate((tpl as any) || null);
-  };
-
-  useEffect(() => { chargerEtat(); }, [cible]);
-
   const envoyerTous = async () => {
-    if (!template) return;
-    if (!window.confirm(`Envoyer le template officiel aux ${Math.min(aEnvoyer ?? 0, 100)} prospect(s) avec email jamais contactés ? (max 100 par clic — recliquez pour la tranche suivante)`)) return;
+    if (!template || !estNombreCompteur(aEnvoyer) || aEnvoyer === 0) return;
+    if (!window.confirm(`Envoyer le template officiel aux ${Math.min(aEnvoyer, 100)} prospect(s) avec email jamais contactés ? (max 100 par clic — recliquez pour la tranche suivante)`)) return;
     setEnvoi(true);
     try {
       const { data, error } = await supabase.functions.invoke('sales-outreach-batch', {
@@ -1187,21 +1300,26 @@ function EnvoiMasseBar({ cible }: { cible: 'ETABLISSEMENT' | 'SOIGNANT' }) {
       if (error || (data as any)?.error) { toast.error((data as any)?.error || 'Envoi en masse impossible.'); return; }
       const d = data as any;
       toast.success(`${d.envoyes} email(s) envoyé(s)${d.echecs ? `, ${d.echecs} échec(s)` : ''}${d.restants ? ` — ${d.restants} restant(s), recliquez pour continuer` : ' — tous les prospects avec email sont contactés'}`);
-      chargerEtat();
+      void chargerEtat();
     } finally {
       setEnvoi(false);
     }
   };
 
-  if (aEnvoyer === null) return null;
   return (
     <div className="rounded-xl border border-primary/30 bg-primary/5 p-3 mb-4 flex flex-col sm:flex-row sm:items-center gap-2">
       <p className="text-xs text-muted-foreground flex-1">
-        <strong className="text-foreground">{aEnvoyer}</strong> prospect(s) <strong>avec un email collecté</strong>, jamais contacté(s) — prêts pour l'envoi groupé.
-        {' '}<span className="text-muted-foreground/80">(Ce compteur ne montre QUE ceux qui ont déjà un email, pas le total de la base. L'enrichissement Annuaire Santé tourne automatiquement en fond et le fera monter.)</span>
+        <strong className="text-foreground">{afficherCompteur(aEnvoyer)}</strong> prospect(s) <strong>avec un email collecté</strong>, jamais contacté(s) — prêts pour l'envoi groupé.
+        {' '}<span className="text-muted-foreground/80">(Compteur exact maintenu par la base : il ne montre que les fiches avec email, pas le total de l'annuaire.)</span>
         {aEnvoyer === 0 && ' Pour l’instant aucun email collecté : l’enrichissement auto les remplit progressivement, ou saisissez-les via « + Email » sur chaque carte.'}
+        {erreurEtat && <> <span role="alert" className="text-amber-700 dark:text-amber-300">{erreurEtat}</span></>}
         {!template && ' Aucun template trouvé (onglet Modèles).'}
       </p>
+      {erreurEtat && (
+        <BoutonY2K size="sm" variant="ghost" onClick={() => void chargerEtat()} className="whitespace-nowrap">
+          Réessayer
+        </BoutonY2K>
+      )}
       <BoutonY2K
         size="sm"
         variant="secondary"
@@ -1215,7 +1333,7 @@ function EnvoiMasseBar({ cible }: { cible: 'ETABLISSEMENT' | 'SOIGNANT' }) {
       <BoutonY2K
         size="sm"
         onClick={envoyerTous}
-        disabled={envoi || aEnvoyer === 0 || !template}
+        disabled={envoi || aEnvoyer === null || aEnvoyer === 0 || !template}
         loading={envoi}
         iconeGauche={envoi ? undefined : <Send className="h-4 w-4" />}
         className="whitespace-nowrap"
@@ -1477,12 +1595,15 @@ function ProspectionSoignants({ onAjouter }: { onAjouter: () => void }) {
   const [profession, setProfessionP] = useState('');
   const [departement, setDepartement] = useState('');
   const [q, setQ] = useState('');
+  const qRef = useRef('');
   const [favoris, setFavoris] = useState(false);
   const [avecEmail, setAvecEmail] = useState(false);
   const [avecTel, setAvecTel] = useState(false);
   const [page, setPage] = useState(1);
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
+  const [erreurRecherche, setErreurRecherche] = useState<string | null>(null);
+  const rechercheIdRef = useRef(0);
   const [emailEdit, setEmailEdit] = useState<{ cle: string; valeur: string; prospect?: any } | null>(null);
   const [outreach, setOutreach] = useState<any | null>(null);
   const [appel, setAppel] = useState<any | null>(null);
@@ -1490,24 +1611,32 @@ function ProspectionSoignants({ onAjouter }: { onAjouter: () => void }) {
   const [etudiants, setEtudiants] = useState(false);
 
   const rechercher = useCallback(async (p = 1) => {
+    const rechercheId = ++rechercheIdRef.current;
     setLoading(true);
     const { data: res, error } = await supabase.rpc('fn_admin_chercher_prospects_soignants' as any, {
       p_profession: profession || null,
       p_departement: departement.trim() || null,
-      p_q: q.trim() || null,
+      p_q: qRef.current.trim() || null,
       p_favoris: favoris,
       p_page: p,
       p_avec_email: avecEmail,
       p_avec_tel: avecTel,
       p_etudiants: etudiants,
     });
+    if (rechercheId !== rechercheIdRef.current) return;
     setLoading(false);
-    if (error) { toast.error(error.message); return; }
+    if (error) {
+      const message = messageErreurProspection(error);
+      setErreurRecherche(message);
+      toast.error(message);
+      return;
+    }
+    setErreurRecherche(null);
     setData(res);
     setPage(p);
-  }, [profession, departement, q, favoris, avecEmail, avecTel, etudiants]);
+  }, [profession, departement, favoris, avecEmail, avecTel, etudiants]);
 
-  useEffect(() => { rechercher(1); }, [profession, departement, favoris, avecEmail, avecTel, etudiants]); // q via Enter/bouton
+  useEffect(() => { void rechercher(1); }, [rechercher]); // q via Enter/bouton
 
   const toggleFavori = async (pr: any) => {
     const { error } = await supabase.from('prospects_soignants' as any)
@@ -1568,7 +1697,7 @@ function ProspectionSoignants({ onAjouter }: { onAjouter: () => void }) {
     composerGmail(pr.email, remplirTemplate(tpl.sujet, { ...pr, nom: nomAffiche }), remplirTemplate(tpl.contenu, { ...pr, nom: nomAffiche }));
   };
 
-  const total = data?.total ?? 0;
+  const total = estNombreCompteur(data?.total) ? data.total : null;
 
   return (
     <div className="space-y-4">
@@ -1592,7 +1721,7 @@ function ProspectionSoignants({ onAjouter }: { onAjouter: () => void }) {
             </div>
             <div className="flex-1 min-w-[160px]">
               <Label className="text-xs">Nom, ville ou cabinet</Label>
-              <Input aria-label="Nom, ville ou cabinet du soignant à prospecter" value={q} onChange={e => setQ(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') rechercher(1); }} placeholder="Dupont, Lorient…" className="h-9" />
+              <Input aria-label="Nom, ville ou cabinet du soignant à prospecter" value={q} onChange={e => { qRef.current = e.target.value; setQ(e.target.value); }} onKeyDown={e => { if (e.key === 'Enter') rechercher(1); }} placeholder="Dupont, Lorient…" className="h-9" />
             </div>
             <BoutonY2K size="sm" variant={avecEmail ? 'primary' : 'secondary'} onClick={() => setAvecEmail(!avecEmail)} iconeGauche={<Mail className="h-4 w-4" />}>Avec email</BoutonY2K>
             <BoutonY2K size="sm" variant={avecTel ? 'primary' : 'secondary'} onClick={() => setAvecTel(!avecTel)} iconeGauche={<Phone className="h-4 w-4" />}>Avec tél.</BoutonY2K>
@@ -1605,10 +1734,16 @@ function ProspectionSoignants({ onAjouter }: { onAjouter: () => void }) {
         </CardY2KContent>
       </CardY2K>
 
+      {erreurRecherche && (
+        <p role="alert" className="text-xs text-amber-700 dark:text-amber-300 rounded-lg border border-amber-300/60 bg-amber-50/70 dark:bg-amber-950/20 px-3 py-2">
+          {erreurRecherche}
+        </p>
+      )}
+
       {data && (
         <>
           <p className="text-xs text-muted-foreground">
-            {total.toLocaleString('fr-FR')} soignant(s) — page {data.page}/{Math.max(data.total_pages, 1)}
+            {total === null ? 'Total momentanément indisponible' : `${total.toLocaleString('fr-FR')} soignant(s)`} — page {data.page}/{Math.max(data.total_pages, 1)}
             {total === 0 && " · Si la base semble vide, l'import Annuaire Santé est peut-être encore en cours (10-15 min)."}
           </p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
