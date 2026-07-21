@@ -1,5 +1,8 @@
 import { createClient } from '@supabase/supabase-js';
-import { nettoyerSessionsPlaywright } from './helpers/nettoyage-sessions-playwright';
+import {
+  nettoyerSessionsPlaywright,
+  reactiverSoignantPlaywright,
+} from './helpers/nettoyage-sessions-playwright';
 
 /** Libère les sessions Auth techniques créées par le run qui vient de finir. */
 export default async function globalTeardown() {
@@ -8,5 +11,6 @@ export default async function globalTeardown() {
   if (!url || !serviceKey) return;
 
   const admin = createClient(url, serviceKey, { auth: { persistSession: false } });
+  await reactiverSoignantPlaywright(admin);
   await nettoyerSessionsPlaywright(admin, '0 seconds');
 }

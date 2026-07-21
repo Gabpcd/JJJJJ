@@ -13,7 +13,10 @@
  * setup se contente d'un avertissement : les tests qui en dépendent géreront.
  */
 import { createClient } from '@supabase/supabase-js';
-import { nettoyerSessionsPlaywright } from './helpers/nettoyage-sessions-playwright';
+import {
+  nettoyerSessionsPlaywright,
+  reactiverSoignantPlaywright,
+} from './helpers/nettoyage-sessions-playwright';
 
 const PREFIXES = ['[playwright-test]%', '[pw-test%'];
 
@@ -50,6 +53,11 @@ export default async function globalSetup() {
   }
 
   const admin = createClient(url, serviceKey, { auth: { persistSession: false } });
+
+  // Le test de suspension admin bannit volontairement le compte technique. Si
+  // GitHub interrompt le worker avant son finally, le run suivant doit réparer
+  // Auth ET le profil avant le moindre login.
+  await reactiverSoignantPlaywright(admin);
 
   // Un run interrompu ne passe pas par global-teardown. Purger ses anciennes
   // sessions avant toute autre requête empêche Auth/PostgREST de se saturer.

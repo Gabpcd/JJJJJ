@@ -43,6 +43,10 @@ describe('hygiène des sessions Auth Playwright', () => {
     expect(helper).toContain('console.warn');
     expect(helper).toContain('AbortController');
     expect(helper).toContain('20_000');
+    expect(helper).toContain("ban_duration: 'none'");
+    expect(helper).toContain('suspensions_auth_admin');
+    expect(setup).toContain('reactiverSoignantPlaywright(admin)');
+    expect(teardown).toContain('reactiverSoignantPlaywright(admin)');
     expect(workflow).toContain('auth/v1/logout');
     expect(workflow).toContain('access_token');
     expect(workflow).toContain('::add-mask::$E2E_TEST_PASSWORD');
