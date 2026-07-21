@@ -222,6 +222,16 @@ verify_jwt = false
 [functions.import-signaux-acquisition]
 verify_jwt = false
 
+# Tensions BMO officielles : JWT admin ou appel service_role verifie dans la
+# fonction. Import strictement silencieux, sans aucun contact externe.
+[functions.import-bmo-acquisition]
+verify_jwt = false
+
+# Avis BOAMP publics de besoins en personnel de santé. L'API officielle ne
+# requiert aucune clé ; l'Edge Function exige néanmoins un admin/service-role.
+[functions.import-boamp-acquisition]
+verify_jwt = false
+
 [functions.sales-outreach-batch]
 verify_jwt = false
 

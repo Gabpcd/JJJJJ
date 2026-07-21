@@ -1,11 +1,16 @@
+// deno-lint-ignore-file no-import-prefix no-explicit-any
 // Importe l'extraction officielle en libre accès de l'Annuaire Santé (RPPS).
 // Elle couvre les professionnels salariés, libéraux et étudiants, avec leur
 // structure d'exercice et ses coordonnées publiques. Le traitement est un
 // sourcing silencieux : aucune donnée n'est utilisée pour envoyer un message.
 
-import { createClient } from "npm:@supabase/supabase-js@2";
+import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
 import { verifyAdminOrServiceRole } from "../_shared/admin-auth.ts";
 import { jsonResponse, preflightResponse } from "../_shared/cors.ts";
+import {
+  erreurRppsReprenable,
+  peutPublierStatutSource,
+} from "./helpers.ts";
 
 const FICHIER = "https://www.data.gouv.fr/api/1/datasets/r/fffda7e9-0ea2-4c35-bba0-4496f3af935d";
 const SOURCE_PAGE = "https://www.data.gouv.fr/datasets/annuaire-sante-extractions-des-donnees-en-libre-acces-des-professionnels-intervenant-dans-le-systeme-de-sante-rpps";
@@ -25,46 +30,78 @@ const MAX_REPRISES_TIMEOUT = 12;
 // l'auto-relance n'est pas partie ou que l'instance Edge a été interrompue.
 const HEARTBEAT_STALE_MS = 5 * 60 * 1000;
 
-type AdminClient = ReturnType<typeof createClient>;
+// Le client service-role n'utilise pas les types générés de l'application dans
+// l'Edge Runtime ; le schéma est validé par les migrations et les RPC.
+type AdminClient = SupabaseClient<any>;
 
-async function fetchAvecTimeout(
+interface ReponseAvecCorps {
+  status: number;
+  headers: Headers;
+  buffer: Uint8Array;
+}
+
+async function fetchAvecCorpsEtTimeout(
   input: string,
   init: RequestInit,
   timeoutMs = 25_000,
-): Promise<Response> {
+): Promise<ReponseAvecCorps> {
   const controleur = new AbortController();
   const minuteur = setTimeout(() => controleur.abort(), timeoutMs);
   try {
-    return await fetch(input, { ...init, signal: controleur.signal });
+    const response = await fetch(input, { ...init, signal: controleur.signal });
+    if (response.status === 416) {
+      if (response.body) await response.body.cancel().catch(() => undefined);
+      return { status: response.status, headers: response.headers, buffer: new Uint8Array() };
+    }
+    // L'export officiel supporte Range. Accepter un 200 téléchargerait le
+    // fichier national complet (plus de 800 Mo) dans une seule instance Edge.
+    if (!response.ok || response.status !== 206) {
+      if (response.body) await response.body.cancel().catch(() => undefined);
+      throw new Error(`Téléchargement Annuaire Santé impossible (${response.status}, Range ignorée)`);
+    }
+    // Le minuteur reste actif pendant la lecture : fetch() peut résoudre dès
+    // les en-têtes alors que le CDN coupe ensuite le corps de la tranche.
+    const buffer = new Uint8Array(await response.arrayBuffer());
+    return { status: response.status, headers: response.headers, buffer };
   } finally {
     clearTimeout(minuteur);
   }
 }
 
-function erreurReprenable(message: string): boolean {
-  const messageNormalise = message.toLowerCase();
-  return [
-    "statement timeout",
-    "connection reset",
-    "error sending request",
-    "telechargement annuaire sante impossible",
-    "téléchargement annuaire santé impossible",
-    "abort",
-  ].some((motif) => messageNormalise.includes(motif));
-}
-
 async function majSource(
   admin: AdminClient,
+  runId: string | null,
   valeurs: Record<string, unknown>,
 ): Promise<void> {
-  const { error } = await admin.from("acquisition_sources").update({
-    actif: true,
-    automatique: true,
-    ...valeurs,
-    maj_le: new Date().toISOString(),
-  }).eq("code", SOURCE_CODE);
-  // Le suivi du radar ne doit jamais interrompre l'import officiel lui-même.
-  if (error) console.error("acquisition_sources RPPS:", error.message);
+  try {
+    if (runId) {
+      const { data: runLePlusRecent, error: runLePlusRecentErr } = await admin
+        .from("sourcing_imports")
+        .select("id")
+        .eq("source_code", SOURCE_CODE)
+        .order("demarre_le", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (runLePlusRecentErr) {
+        // Le suivi ne doit ni interrompre l'import, ni publier un statut
+        // possiblement obsolète lorsque l'ordre des runs est inconnu.
+        console.error("ordre runs RPPS:", runLePlusRecentErr.message);
+        return;
+      }
+      if (!peutPublierStatutSource(runId, runLePlusRecent?.id ?? null)) return;
+    }
+
+    const { error } = await admin.from("acquisition_sources").update({
+      actif: true,
+      automatique: true,
+      ...valeurs,
+      maj_le: new Date().toISOString(),
+    }).eq("code", SOURCE_CODE);
+    if (error) console.error("acquisition_sources RPPS:", error.message);
+  } catch (error) {
+    // Le suivi du radar ne doit jamais interrompre l'import officiel lui-même.
+    console.error("suivi acquisition_sources RPPS:", (error as Error).message);
+  }
 }
 
 function sansAccents(value: string): string {
@@ -236,7 +273,7 @@ Deno.serve(async (req) => {
         if (
           interrompu?.id &&
           detailsInterrompu?.fichier === FICHIER &&
-          (!watchdog || erreurReprenable(erreurInterrompue))
+          (!watchdog || erreurRppsReprenable(erreurInterrompue))
         ) {
           runId = interrompu.id;
           offset = Number(detailsInterrompu.next_offset) || 0;
@@ -320,7 +357,7 @@ Deno.serve(async (req) => {
       },
     }).eq("id", runId);
     if (heartbeatErr) throw new Error(heartbeatErr.message);
-    await majSource(admin, {
+    await majSource(admin, runId, {
       dernier_statut: "OK",
       dernier_message: `Import RPPS en cours — ${luesAvant} lignes lues, ${importeesAvant} ajoutees`,
     });
@@ -334,20 +371,16 @@ Deno.serve(async (req) => {
     let dernierHeartbeatMs = Date.now();
 
     while (Date.now() - debut < BUDGET_MS) {
-      const response = await fetchAvecTimeout(FICHIER, {
+      const { status, headers, buffer } = await fetchAvecCorpsEtTimeout(FICHIER, {
         headers: { Range: `bytes=${pos}-${pos + TRANCHE - 1}` },
       });
-      if (response.status === 416) { done = true; break; }
-      if (!response.ok && response.status !== 206 && response.status !== 200) {
-        throw new Error(`Téléchargement Annuaire Santé impossible (${response.status})`);
-      }
+      if (status === 416) { done = true; break; }
 
-      const lastModified = response.headers.get("last-modified");
+      const lastModified = headers.get("last-modified");
       if (lastModified) sourceMajLe = new Date(lastModified).toISOString();
       repriseSourceMajLe = sourceMajLe;
-      const buffer = new Uint8Array(await response.arrayBuffer());
       const texte = new TextDecoder("utf-8").decode(buffer);
-      const finFichier = response.status === 200 || buffer.byteLength < TRANCHE;
+      const finFichier = buffer.byteLength < TRANCHE;
       const dernierNL = texte.lastIndexOf("\n");
       if (dernierNL < 0) {
         pos += buffer.byteLength;
@@ -467,7 +500,7 @@ Deno.serve(async (req) => {
       }).eq("id", runId);
       if (progressionErr) throw new Error(progressionErr.message);
       dernierHeartbeatMs = Date.now();
-      await majSource(admin, {
+      await majSource(admin, runId, {
         dernier_statut: "OK",
         dernier_message: `Import RPPS en cours — ${repriseLues} lignes lues, ${repriseImportees} ajoutees`,
       });
@@ -497,7 +530,7 @@ Deno.serve(async (req) => {
     }).eq("id", runId);
     if (etatErr) throw new Error(etatErr.message);
 
-    await majSource(admin, done
+    await majSource(admin, runId, done
       ? {
         dernier_import_le: etatLe,
         dernier_statut: "OK",
@@ -539,7 +572,7 @@ Deno.serve(async (req) => {
     });
   } catch (error) {
     const message = (error as Error).message;
-    if (runId && erreurReprenable(message) && reprisesTimeout < MAX_REPRISES_TIMEOUT) {
+    if (runId && erreurRppsReprenable(message) && reprisesTimeout < MAX_REPRISES_TIMEOUT) {
       const prochainEssai = reprisesTimeout + 1;
       const heartbeatLe = new Date().toISOString();
       const { error: retryErr } = await admin.from("sourcing_imports").update({
@@ -560,7 +593,7 @@ Deno.serve(async (req) => {
         },
       }).eq("id", runId);
       if (retryErr) console.error("heartbeat reprise RPPS:", retryErr.message);
-      await majSource(admin, {
+      await majSource(admin, runId, {
         dernier_statut: "OK",
         dernier_message: `Import RPPS en reprise automatique (${prochainEssai}/${MAX_REPRISES_TIMEOUT})`,
       });
@@ -615,7 +648,7 @@ Deno.serve(async (req) => {
         },
       }).eq("id", runId);
     }
-    await majSource(admin, {
+    await majSource(admin, runId, {
       dernier_statut: "ERREUR",
       dernier_message: message.slice(0, 500),
     });
