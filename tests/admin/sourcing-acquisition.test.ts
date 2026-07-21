@@ -23,6 +23,7 @@ const compteursTempsReel = read('supabase/migrations/20260721101228_fix_admin_ac
 const runtimeSourcing = read('supabase/migrations/20260721101451_fix_sourcing_runtime_watchdogs.sql');
 const postgrestCache = read('supabase/migrations/20260720172000_postgrest_cache_timeout.sql');
 const acquisitionExterne = read('supabase/migrations/20260721141157_acquisition_externe_operationnelle.sql');
+const bmoServiceRole = read('supabase/migrations/20260721152400_autoriser_import_bmo_service_role.sql');
 const boampMapping = read('supabase/functions/import-boamp-acquisition/mapping.ts');
 const boampImport = read('supabase/functions/import-boamp-acquisition/index.ts');
 const bmoImport = read('supabase/functions/import-bmo-acquisition/index.ts');
@@ -44,6 +45,8 @@ describe('sourcing acquisition silencieux', () => {
     expect(boampMapping).not.toContain('professions.add("MANIPULATEUR_RADIO")');
     expect(boampImport).toContain('contacted: 0');
     expect(bmoImport).toContain('contacted: 0');
+    expect(bmoServiceRole).toContain("COALESCE(auth.role(), '') = 'service_role'");
+    expect(bmoServiceRole).toContain('TO service_role');
     expect(acquisitionRadar).toContain('CRM silencieux');
     expect(acquisitionRadar).toContain('0 contact auto');
   });

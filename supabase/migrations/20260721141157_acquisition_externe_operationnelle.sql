@@ -151,6 +151,7 @@ DECLARE v_count integer := 0;
 BEGIN
   IF NOT (
     public.est_admin()
+    OR COALESCE(auth.role(), '') = 'service_role'
     OR COALESCE(current_setting('request.jwt.claim.role', true), '') = 'service_role'
   ) THEN
     RAISE EXCEPTION 'Acces refuse' USING ERRCODE = '42501';
