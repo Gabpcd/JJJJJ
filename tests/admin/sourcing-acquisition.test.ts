@@ -1,11 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import {
+  erreurRppsReprenable,
+  peutPublierStatutSource,
+} from '../../supabase/functions/import-annuaire-rpps/helpers';
 
 const read = (path: string) => readFileSync(resolve(process.cwd(), path), 'utf8');
 
 const migration = read('supabase/migrations/20260720112022_sourcing_officiel_et_priorisation.sql');
 const rpps = read('supabase/functions/import-annuaire-rpps/index.ts');
+const rppsHelpers = read('supabase/functions/import-annuaire-rpps/helpers.ts');
 const finess = read('supabase/functions/import-finess/index.ts');
 const cockpit = read('src/components/admin/AdminSourcingCockpit.tsx');
 const sales = read('src/pages/admin/AdminSales.tsx');
@@ -17,8 +22,40 @@ const enrichissementCron = read('supabase/migrations/20260720171500_enrichisseme
 const compteursTempsReel = read('supabase/migrations/20260721101228_fix_admin_acquisition_realtime.sql');
 const runtimeSourcing = read('supabase/migrations/20260721101451_fix_sourcing_runtime_watchdogs.sql');
 const postgrestCache = read('supabase/migrations/20260720172000_postgrest_cache_timeout.sql');
+const acquisitionExterne = read('supabase/migrations/20260721141157_acquisition_externe_operationnelle.sql');
+const boampMapping = read('supabase/functions/import-boamp-acquisition/mapping.ts');
+const boampImport = read('supabase/functions/import-boamp-acquisition/index.ts');
+const bmoImport = read('supabase/functions/import-bmo-acquisition/index.ts');
+const acquisitionRadar = read('src/components/admin/AdminAcquisitionRadar.tsx');
 
 describe('sourcing acquisition silencieux', () => {
+  it('alimente le radar externe sans contact automatique ni professions hors périmètre', () => {
+    expect(acquisitionExterne).toContain("'BMO_FRANCE_TRAVAIL'");
+    expect(acquisitionExterne).toContain("'BOAMP_API'");
+    expect(acquisitionExterne).toContain('fn_admin_acquisition_cibles');
+    expect(acquisitionExterne).toContain("s.source_code IN ('BOAMP_API', 'FRANCE_TRAVAIL_OFFRES')");
+    expect(acquisitionExterne).toContain('sig.profession = t.profession');
+    expect(acquisitionExterne).not.toContain('s.profession IS NULL OR s.profession = t.profession');
+    expect(acquisitionExterne).toContain("profession IN ('PHARMACIEN', 'MANIPULATEUR_RADIO')");
+    expect(acquisitionExterne).toContain("'contact_automatique', false");
+    expect(acquisitionExterne).toContain("valeur = 'false'");
+    expect(boampMapping).toContain('professionHorsPerimetreNomme');
+    expect(boampMapping).not.toContain('professions.add("PHARMACIEN")');
+    expect(boampMapping).not.toContain('professions.add("MANIPULATEUR_RADIO")');
+    expect(boampImport).toContain('contacted: 0');
+    expect(bmoImport).toContain('contacted: 0');
+    expect(acquisitionRadar).toContain('CRM silencieux');
+    expect(acquisitionRadar).toContain('0 contact auto');
+  });
+
+  it('retries RPPS body transport failures without publishing an older run status', () => {
+    expect(erreurRppsReprenable('error reading a body from connection')).toBe(true);
+    expect(erreurRppsReprenable('end of file before message length reached')).toBe(true);
+    expect(erreurRppsReprenable('Acces admin refuse')).toBe(false);
+    expect(peutPublierStatutSource('run-recent', 'run-recent')).toBe(true);
+    expect(peutPublierStatutSource('run-ancien', 'run-recent')).toBe(false);
+  });
+
   it('uses current official directories instead of the deprecated CNAM export', () => {
     expect(rpps).toContain('annuaire-sante-extractions-des-donnees-en-libre-acces');
     expect(rpps).toContain('ANNUAIRE_SANTE_RPPS');
@@ -29,11 +66,15 @@ describe('sourcing acquisition silencieux', () => {
     expect(finess).not.toContain('2ce43ade-8d2c-4d1d-81da-ca06c82abc68');
     expect(rpps).toContain('const TAILLE_UPSERT = 25');
     expect(rpps).toContain('const BUDGET_MS = 20_000');
-    expect(rpps).toContain('"statement timeout"');
+    expect(rppsHelpers).toContain('"statement timeout"');
     expect(rpps).toContain('retrying: true');
     expect(rpps).toContain('2 ** reprisesTimeout');
     expect(rpps).toContain('detailsInterrompu?.fichier === FICHIER');
-    expect(rpps).toContain('"connection reset"');
+    expect(rppsHelpers).toContain('"connection reset"');
+    expect(rppsHelpers).toContain('"error reading a body from connection"');
+    expect(rppsHelpers).toContain('"end of file before message length"');
+    expect(rpps).toContain('fetchAvecCorpsEtTimeout');
+    expect(rpps).toContain('peutPublierStatutSource');
     expect(rpps).toContain('const HEARTBEAT_STALE_MS = 5 * 60 * 1000');
     expect(rpps).toContain('const watchdog = body.watchdog === true');
     expect(runtimeSourcing).toContain("'jolene_sourcing_rpps_watchdog'");
