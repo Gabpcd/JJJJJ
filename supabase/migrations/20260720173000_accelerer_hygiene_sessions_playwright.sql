@@ -1,7 +1,9 @@
 -- Le premier rattrapage a montré qu'un lot de 500 tokens pouvait dépasser le
 -- timeout HTTP de maintenance sur la base actuelle. On réduit le verrouillage
--- à 100 sessions. Le setup/teardown Playwright appelle la fonction ; aucun cron
--- permanent ne doit concurrencer Auth en production.
+-- à 1 000 sessions. Une exécution couvre ainsi un run E2E complet sans laisser
+-- de reliquat, maintenant que le stock historique a été purgé hors ligne. Le
+-- setup/teardown Playwright appelle la fonction ; aucun cron permanent ne doit
+-- concurrencer Auth en production.
 CREATE OR REPLACE FUNCTION public.fn_test_nettoyer_sessions_playwright(
   p_anciennete interval DEFAULT interval '6 hours'
 )
@@ -35,7 +37,7 @@ BEGIN
     )
       AND s.created_at < v_seuil
     ORDER BY s.created_at
-    LIMIT 100
+    LIMIT 1000
   ) AS cible;
 
   IF cardinality(v_sessions_cibles) = 0 THEN
@@ -43,7 +45,7 @@ BEGIN
       'sessions_supprimees', 0,
       'refresh_tokens_supprimes', 0,
       'avant', v_seuil,
-      'limite_par_passage', 100
+      'limite_par_passage', 1000
     );
   END IF;
 
@@ -67,7 +69,7 @@ BEGIN
     'sessions_supprimees', v_sessions_supprimees,
     'refresh_tokens_supprimes', v_tokens_supprimes,
     'avant', v_seuil,
-    'limite_par_passage', 100
+    'limite_par_passage', 1000
   );
 END;
 $fonction$;

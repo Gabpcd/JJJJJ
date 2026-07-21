@@ -1,0 +1,4 @@
+-- Registre de l'application opérationnelle anticipée de la version dimensionnée
+-- de 20260720173000_accelerer_hygiene_sessions_playwright.sql via l'API Supabase.
+-- Le DDL canonique reste dans le fichier d'origine ; ce jalon empêche le drift
+-- du registre sans rejouer inutilement la maintenance Auth.
