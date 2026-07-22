@@ -1,7 +1,8 @@
 // Envoi 1-clic d'un email de prospection (Resend) depuis l'onglet Sales admin.
 // Passe automatiquement le contact lié en CONTACTE. Réservé ADMIN_PLATEFORME.
 
-import { createClient } from "npm:@supabase/supabase-js@2";
+import { createClient } from "npm:@supabase/supabase-js@2.99.2";
+import { verifyAdminOrServiceRole } from "../_shared/admin-auth.ts";
 import { corsHeaders } from "../_shared/cors.ts";
 
 /** Enrobe le corps texte dans un email HTML chaleureux : bandeau marque dégradé,
@@ -31,17 +32,12 @@ function emailHtmlProspection(corps: string): string {
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders(req) });
   try {
-    const auth = req.headers.get("Authorization");
-    if (!auth?.startsWith("Bearer ")) return new Response(JSON.stringify({ error: "Non autorisé" }), { status: 401, headers: corsHeaders(req) });
+    const auth = await verifyAdminOrServiceRole(req);
+    if (!auth.ok) {
+      return new Response(JSON.stringify({ error: auth.error }), { status: auth.status, headers: corsHeaders(req) });
+    }
     const url = Deno.env.get("SUPABASE_URL")!;
     const admin = createClient(url, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } });
-    const authClient = createClient(url, Deno.env.get("SUPABASE_ANON_KEY")!);
-    const { data: { user } } = await authClient.auth.getUser(auth.replace("Bearer ", ""));
-    if (!user) return new Response(JSON.stringify({ error: "Token invalide" }), { status: 401, headers: corsHeaders(req) });
-    const { data: u } = await admin.auth.admin.getUserById(user.id);
-    if ((u?.user?.app_metadata as any)?.role !== "ADMIN_PLATEFORME") {
-      return new Response(JSON.stringify({ error: "Accès admin requis" }), { status: 403, headers: corsHeaders(req) });
-    }
 
     const { email, sujet, corps, contact_id, finess, cle, nom, ville, telephone, profession, departement } = await req.json().catch(() => ({}));
     if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
@@ -49,6 +45,22 @@ Deno.serve(async (req) => {
     }
     if (!sujet?.trim() || !corps?.trim()) {
       return new Response(JSON.stringify({ error: "Sujet et message requis." }), { status: 400, headers: corsHeaders(req) });
+    }
+
+    const cible = finess ? "ETABLISSEMENT" : "SOIGNANT";
+    const prospectId = finess || cle || null;
+    const { data: contactInterdit, error: stopError } = await admin.rpc("fn_sales_outreach_est_interdit", {
+      p_contact_id: contact_id || null,
+      p_cible: cible,
+      p_prospect_id: prospectId,
+      p_email: email,
+      p_telephone: telephone || null,
+    });
+    if (stopError) {
+      return new Response(JSON.stringify({ error: stopError.message, reason: "VERIFICATION_STOP_IMPOSSIBLE" }), { status: 500, headers: corsHeaders(req) });
+    }
+    if (contactInterdit) {
+      return new Response(JSON.stringify({ error: "Ce contact ne doit plus être contacté.", reason: "CONTACT_INTERDIT_STOP" }), { status: 409, headers: corsHeaders(req) });
     }
 
     const RESEND = Deno.env.get("RESEND_API_KEY");

@@ -24,60 +24,59 @@ function isGroup(e: SidebarEntry): e is NavGroup { return 'items' in e; }
 /* ── Périmètres RBAC historiques (ne pas renommer sans migrer equipe_admin) ── */
 const ACCES = ADMIN_ACCESS;
 
-/* ── Sidebar 5 domaines (Lot 20) : Opérations, Argent, Croissance, Conformité & légal, Système ──
-   Re-groupement de l'IA admin (feuille de route Lots 19-21). Le `acces` RBAC de
-   chaque item est PRÉSERVÉ tel quel : regrouper visuellement ne change aucun droit
-   (Externalisations reste Conformité & Technique, Contrats reste Litiges & contrats…).
-   Dédoublonnage : Healthcheck fusionné dans « Statut système » (redirect App.tsx).
-   Français : « Sales / Sourcing »→Prospection, « Cohortes & economics »→Cohortes & économie. ── */
+/* La navigation décrit le travail à accomplir. Les anciennes routes et les
+   périmètres RBAC restent inchangés : ce regroupement est uniquement visuel. */
 const NAV_ADMIN_GROUPED: SidebarEntry[] = [
+  { icone: Home, label: 'Tableau de bord', route: '/admin', acces: ACCES.DASHBOARD },
   {
-    icone: ClipboardList, label: 'Opérations', items: [
-      { icone: Home, label: 'Tableau de bord', route: '/admin', acces: ACCES.DASHBOARD },
-      { icone: Users, label: 'Tous les utilisateurs', route: '/admin/utilisateurs', acces: ACCES.UTILISATEURS },
-      { icone: ShieldCheck, label: 'Vérif. établissements', route: '/admin/verification-etablissements', acces: ACCES.UTILISATEURS },
-      { icone: FileSearch, label: 'Revues manuelles', route: '/admin/revues-manuelles', acces: ACCES.UTILISATEURS },
+    icone: ClipboardList, label: 'Missions & support', items: [
       { icone: ClipboardList, label: 'Toutes les missions', route: '/admin/missions', acces: ACCES.MISSIONS },
-      { icone: Flame, label: 'Pool urgence', route: '/admin/pool-urgence', acces: ACCES.MISSIONS },
       { icone: CalendarDays, label: 'Calendrier', route: '/admin/calendrier', acces: ACCES.MISSIONS },
       { icone: CalendarDays, label: 'Planning global', route: '/admin/planning-global', acces: ACCES.MISSIONS },
+      { icone: Flame, label: 'Pool urgence', route: '/admin/pool-urgence', acces: ACCES.MISSIONS },
       { icone: AlertTriangle, label: 'Alertes pointage', route: '/admin/alertes-pointage', acces: ACCES.MISSIONS },
       { icone: Scale, label: 'Litiges', route: '/admin/litiges', acces: ACCES.LITIGES },
+      { icone: MessageCircle, label: 'Messagerie', route: '/admin/messagerie', acces: ACCES.MESSAGERIE },
+    ],
+  },
+  {
+    icone: Users, label: 'Comptes & qualité', items: [
+      { icone: Users, label: 'Tous les utilisateurs', route: '/admin/utilisateurs', acces: ACCES.UTILISATEURS },
+      { icone: ShieldCheck, label: 'Vérifier les établissements', route: '/admin/verification-etablissements', acces: ACCES.UTILISATEURS },
+      { icone: FileSearch, label: 'Revues manuelles', route: '/admin/revues-manuelles', acces: ACCES.UTILISATEURS },
       { icone: Shield, label: 'Modération', route: '/admin/moderation', acces: ACCES.UTILISATEURS },
       { icone: Flag, label: 'Signalements', route: '/admin/signalements', acces: ACCES.UTILISATEURS },
       { icone: MessageCircle, label: 'Réclamations & scores', route: '/admin/reclamations', acces: ACCES.UTILISATEURS },
       { icone: FileCheck, label: 'Heures externes (3200h)', route: '/admin/heures-externes', acces: ACCES.UTILISATEURS },
       { icone: Building2, label: 'Groupes santé', route: '/admin/groupes', acces: ACCES.UTILISATEURS },
-      { icone: MessageCircle, label: 'Messagerie', route: '/admin/messagerie', acces: ACCES.MESSAGERIE },
       { icone: Mail, label: 'Messages de contact', route: '/admin/messages-contact', acces: ACCES.MESSAGERIE },
     ],
   },
   {
-    icone: Coins, label: 'Argent', items: [
+    icone: Coins, label: 'Finances', items: [
       { icone: Coins, label: 'Vue d\'ensemble', route: '/admin/finances', acces: ACCES.FINANCES },
       { icone: CreditCard, label: 'Facturation', route: '/admin/facturation', acces: ACCES.FINANCES },
       { icone: AlertTriangle, label: 'Impayées', route: '/admin/impayees', acces: ACCES.FINANCES },
       { icone: FileCheck, label: 'Mandats facturation', route: '/admin/mandats-facturation', acces: ACCES.FINANCES },
       { icone: FileStack, label: 'Chorus Pro', route: '/admin/chorus-pro', acces: ACCES.FINANCES },
       { icone: Zap, label: 'Affacturage', route: '/admin/affacturage', acces: ACCES.FINANCES },
-      { icone: Zap, label: 'Externalisations', route: '/admin/externalisations-actions', acces: ACCES.TECHNIQUE },
       { icone: Coins, label: 'Taux commission', route: '/admin/taux-commission', acces: ACCES.FINANCES },
       { icone: Gift, label: 'Paliers BFA', route: '/admin/bfa', acces: ACCES.FINANCES },
     ],
   },
   {
-    icone: Rocket, label: 'Croissance', items: [
-      { icone: Rocket, label: 'Cockpit fondateur', route: '/admin/fondateur', acces: ACCES.FONDATEUR },
-      { icone: Target, label: 'Pilotage lancement', route: '/admin/fondateur/lancement', acces: ACCES.FONDATEUR },
-      { icone: Megaphone, label: 'Acquisition', route: '/admin/fondateur/acquisition', acces: ACCES.FONDATEUR },
-      { icone: MessageCircle, label: 'Prospection', route: '/admin/fondateur/sales', acces: ACCES.FONDATEUR },
-      { icone: TrendingUp, label: 'Cohortes & économie', route: '/admin/cohort', acces: ACCES.FONDATEUR },
+    icone: Rocket, label: 'Développement', items: [
+      { icone: Rocket, label: 'Vue croissance', route: '/admin/fondateur', acces: ACCES.FONDATEUR },
+      { icone: Target, label: 'Plan de lancement', route: '/admin/fondateur/lancement', acces: ACCES.FONDATEUR },
+      { icone: Megaphone, label: 'Opportunités', route: '/admin/fondateur/acquisition', acces: ACCES.FONDATEUR },
+      { icone: MessageCircle, label: 'Prospects & actions', route: '/admin/fondateur/sales', acces: ACCES.FONDATEUR },
+      { icone: TrendingUp, label: 'Résultats', route: '/admin/cohort', acces: ACCES.FONDATEUR },
       { icone: UserPlus, label: 'Équipe', route: '/admin/fondateur/equipe', acces: ACCES.FONDATEUR },
-      { icone: FileStack, label: 'Levée & documents', route: '/admin/fondateur/levee', acces: ACCES.FONDATEUR },
+      { icone: FileStack, label: 'Investisseurs', route: '/admin/fondateur/levee', acces: ACCES.FONDATEUR },
     ],
   },
   {
-    icone: Scale, label: 'Conformité & légal', items: [
+    icone: Scale, label: 'Risques & conformité', items: [
       { icone: ShieldCheck, label: 'Conformité', route: '/admin/conformite', acces: ACCES.TECHNIQUE },
       { icone: FileCheck, label: 'DPIA', route: '/admin/dpia', acces: ACCES.TECHNIQUE },
       { icone: Shield, label: 'Outils RGPD', route: '/admin/rgpd-tools', acces: ACCES.TECHNIQUE },
@@ -88,11 +87,12 @@ const NAV_ADMIN_GROUPED: SidebarEntry[] = [
     ],
   },
   {
-    icone: Settings, label: 'Système', items: [
+    icone: Settings, label: 'Paramètres', items: [
       { icone: Activity, label: 'Statut système', route: '/admin/status', acces: ACCES.TECHNIQUE },
       { icone: Settings, label: 'Configuration', route: '/admin/config', acces: ACCES.TECHNIQUE },
       { icone: Mail, label: 'Emails', route: '/admin/emails', acces: ACCES.TECHNIQUE },
       { icone: Code2, label: 'API', route: '/admin/api', acces: ACCES.TECHNIQUE },
+      { icone: Zap, label: 'Externalisations', route: '/admin/externalisations-actions', acces: ACCES.TECHNIQUE },
       { icone: Code2, label: 'Démo', route: '/admin/demo', acces: ACCES.TECHNIQUE },
     ],
   },

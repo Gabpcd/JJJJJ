@@ -44,8 +44,13 @@ describe('moteur acquisition silencieux', () => {
     expect(edge).toContain('contacted: 0');
     expect(edge).toContain('contact_automatique: false');
     expect(edge).not.toMatch(/send-email|send-sms|sales-outreach|resend\.com/i);
-    expect(radar).toContain('0 contact auto');
-    expect(radar).toContain('CRM silencieux');
+    expect(radar).toContain('Envois automatiques désactivés');
+    expect(radar).toContain('Ajouter aux prospects');
+    expect(radar).toContain('sequence_active !== false');
+    expect(radar).toContain('prochaine_action_le != null');
+    expect(radar).toContain('contact_automatique !== false');
+    expect(radar).not.toContain('href={`tel:${cible.telephone}`}');
+    expect(radar).not.toContain('href={`mailto:${cible.email}`}');
   });
 
   it('importe la demande France Travail avec habilitation explicite', () => {
@@ -103,7 +108,7 @@ describe('moteur acquisition silencieux', () => {
     expect(realtime).toContain("'scope_test', 'missions, etablissements et soignants de test uniquement; signaux externes et territoires non scopes exclus'");
     expect(realtime).toContain("'contact_automatique', false");
     expect(radar).toContain('actualisation toutes les 60 s');
-    expect(radar).toContain('Besoins détectés');
+    expect(radar).toContain('Besoins publics');
   });
 
   it('prepare toutes les strategies commerciales sans executer de campagne', () => {

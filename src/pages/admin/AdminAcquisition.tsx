@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { LayoutAdmin } from '@/components/LayoutAdmin';
 import { ChargementAdmin } from '@/components/admin/ChargementAdmin';
@@ -11,6 +12,8 @@ import { Input } from '@/components/ui/input';
 import { Users, Building2, Megaphone, RefreshCw, TrendingUp, Info, Save } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, PieChart, Pie, Cell } from 'recharts';
 import { AdminAcquisitionRadar } from '@/components/admin/AdminAcquisitionRadar';
+import { AdminGrowthWorkspaceNav } from '@/components/admin/AdminGrowthWorkspaceNav';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
 
 const fmt = (v: number) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(isFinite(v) ? v : 0);
@@ -29,7 +32,9 @@ function couleur(canal: string) { return COULEURS_CANAL[canal] || '#A0A0B0'; }
 function libelle(canal: string) { return LIBELLE_CANAL[canal] || canal; }
 
 export default function AdminAcquisition() {
-  usePageTitle('Acquisition');
+  usePageTitle('Opportunités commerciales');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const vue = searchParams.get('vue') === 'performance' ? 'performance' : 'priorites';
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<any>(null);
   const [periode, setPeriode] = useState(90);
@@ -95,17 +100,44 @@ export default function AdminAcquisition() {
     [canaux],
   );
 
-  if (loading) return <LayoutAdmin><ChargementAdmin titre="Acquisition par canal" /></LayoutAdmin>;
+  const changerVue = (prochaineVue: string) => {
+    const params = new URLSearchParams(searchParams);
+    if (prochaineVue === 'performance') params.set('vue', 'performance');
+    else params.delete('vue');
+    setSearchParams(params, { replace: true });
+  };
 
   return (
     <LayoutAdmin>
       <div className="space-y-6">
-        <AdminAcquisitionRadar />
+        <header>
+          <h1 className="text-2xl font-bold text-foreground">Développement commercial</h1>
+          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
+            Repérez les marchés prioritaires, ajoutez les bonnes cibles à votre liste, puis suivez chaque action au même endroit.
+          </p>
+        </header>
 
-        <div className="border-t border-border pt-6">
+        <AdminGrowthWorkspaceNav active="opportunites" />
+
+        <Tabs value={vue} onValueChange={changerVue}>
+          <TabsList className="grid w-full grid-cols-2 sm:w-auto">
+            <TabsTrigger value="priorites">Priorités externes</TabsTrigger>
+            <TabsTrigger value="performance">Résultats d’acquisition</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="priorites" className="mt-5">
+            <AdminAcquisitionRadar />
+          </TabsContent>
+
+          <TabsContent value="performance" className="mt-5">
+            {loading ? (
+              <ChargementAdmin titre="Calcul des résultats d’acquisition" />
+            ) : (
+
+        <div>
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div>
-            <h1 className="text-xl font-bold text-foreground">Attribution et coût d’acquisition</h1>
+            <h2 className="text-xl font-bold text-foreground">Attribution et coût d’acquisition</h2>
             <p className="text-sm text-muted-foreground">D'où viennent vos inscrits — {periode} derniers jours</p>
           </div>
           <div className="flex gap-2">
@@ -273,6 +305,9 @@ export default function AdminAcquisition() {
           </>
         )}
         </div>
+            )}
+          </TabsContent>
+        </Tabs>
       </div>
     </LayoutAdmin>
   );

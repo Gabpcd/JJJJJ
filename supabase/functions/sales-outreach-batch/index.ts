@@ -4,7 +4,8 @@
 // Rythme : 1 envoi / 600 ms (limite Resend), max 100 par exécution — relancer
 // le bouton pour la tranche suivante. Réservé ADMIN_PLATEFORME.
 
-import { createClient } from "npm:@supabase/supabase-js@2";
+import { createClient } from "npm:@supabase/supabase-js@2.99.2";
+import { verifyAdminOrServiceRole } from "../_shared/admin-auth.ts";
 import { corsHeaders } from "../_shared/cors.ts";
 
 /** Enrobe le corps texte dans un email HTML chaleureux : bandeau marque dégradé,
@@ -43,16 +44,29 @@ function remplir(tpl: string, p: Record<string, unknown>): string {
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders(req) });
   try {
-    const auth = req.headers.get("Authorization");
-    if (!auth?.startsWith("Bearer ")) return new Response(JSON.stringify({ error: "Non autorisé" }), { status: 401, headers: corsHeaders(req) });
+    const auth = await verifyAdminOrServiceRole(req);
+    if (!auth.ok) {
+      return new Response(JSON.stringify({ error: auth.error }), { status: auth.status, headers: corsHeaders(req) });
+    }
     const url = Deno.env.get("SUPABASE_URL")!;
     const admin = createClient(url, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } });
-    const authClient = createClient(url, Deno.env.get("SUPABASE_ANON_KEY")!);
-    const { data: { user } } = await authClient.auth.getUser(auth.replace("Bearer ", ""));
-    if (!user) return new Response(JSON.stringify({ error: "Token invalide" }), { status: 401, headers: corsHeaders(req) });
-    const { data: u } = await admin.auth.admin.getUserById(user.id);
-    if ((u?.user?.app_metadata as any)?.role !== "ADMIN_PLATEFORME") {
-      return new Response(JSON.stringify({ error: "Accès admin requis" }), { status: 403, headers: corsHeaders(req) });
+
+    // Garde-fou serveur : l'interface ne peut pas être la seule barrière avant
+    // un appel externe à Resend. Toute erreur de lecture échoue fermée.
+    const { data: gardeFou, error: gardeFouError } = await admin
+      .from("growth_config")
+      .select("valeur")
+      .eq("cle", "automatisations_marketing_actives")
+      .maybeSingle();
+    if (gardeFouError) {
+      return new Response(JSON.stringify({ error: gardeFouError.message, envoyes: 0 }), { status: 500, headers: corsHeaders(req) });
+    }
+    if (gardeFou?.valeur !== "true") {
+      return new Response(JSON.stringify({
+        error: "Envois groupés désactivés avant le lancement.",
+        reason: "PRELANCEMENT_AUTOMATISATIONS_MARKETING_DESACTIVEES",
+        envoyes: 0,
+      }), { status: 409, headers: corsHeaders(req) });
     }
 
     const { cible, sujet, corps, departement, limite } = await req.json().catch(() => ({}));
@@ -80,10 +94,27 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ success: true, envoyes: 0, echecs: 0, message: "Aucun prospect avec email non encore contacté." }), { headers: corsHeaders(req) });
     }
 
-    let envoyes = 0; let echecs = 0;
+    let envoyes = 0; let echecs = 0; let ignoresStop = 0;
     for (const p of prospects as any[]) {
       const dest = String(p.email).trim();
       if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(dest)) { echecs++; continue; }
+      const { data: contactInterdit, error: stopError } = await admin.rpc("fn_sales_outreach_est_interdit", {
+        p_contact_id: null,
+        p_cible: cible,
+        p_prospect_id: String(p[pk] || ""),
+        p_email: dest,
+        p_telephone: p.telephone || null,
+      });
+      if (stopError) {
+        return new Response(JSON.stringify({ error: stopError.message, reason: "VERIFICATION_STOP_IMPOSSIBLE", envoyes, echecs }), {
+          status: 500,
+          headers: corsHeaders(req),
+        });
+      }
+      if (contactInterdit) {
+        ignoresStop++;
+        continue;
+      }
       const sujetFinal = remplir(String(sujet), p).slice(0, 150);
       const corpsFinal = remplir(String(corps), p);
       const r = await fetch("https://api.resend.com/emails", {
@@ -135,7 +166,14 @@ Deno.serve(async (req) => {
       .select(pk, { count: "exact", head: true })
       .not("email", "is", null).neq("email", "").is("email_envoye_le", null);
 
-    return new Response(JSON.stringify({ success: true, envoyes, echecs, restants: restants ?? 0 }), { headers: corsHeaders(req) });
+    return new Response(JSON.stringify({
+      success: true,
+      envoyes,
+      echecs,
+      ignores_stop: ignoresStop,
+      reason: ignoresStop > 0 ? "CONTACT_INTERDIT_STOP" : null,
+      restants: restants ?? 0,
+    }), { headers: corsHeaders(req) });
   } catch (e) {
     return new Response(JSON.stringify({ error: (e as Error)?.message || "Erreur interne" }), { status: 500, headers: corsHeaders(req) });
   }

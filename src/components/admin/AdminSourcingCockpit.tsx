@@ -193,8 +193,9 @@ export function AdminSourcingCockpit({ onContactsChanged }: { onContactsChanged?
   }, [charger]);
 
   const ajouterAuCrm = async (prospect: ProspectSourcing) => {
+    if (!window.confirm(`Ajouter ${prospect.prenom ? `${prospect.prenom} ` : ''}${prospect.nom} à votre liste de prospects ?\n\nCette action crée uniquement une fiche interne. Aucun message ne sera envoyé.`)) return;
     setActionLoading(prospect.id);
-    const { error } = await supabase.rpc('fn_admin_sourcing_ajouter_crm' as never, {
+    const { data: resultat, error } = await supabase.rpc('fn_admin_sourcing_ajouter_crm' as never, {
       p_cible: prospect.cible,
       p_prospect_id: prospect.id,
       p_score: prospect.score,
@@ -204,7 +205,16 @@ export function AdminSourcingCockpit({ onContactsChanged }: { onContactsChanged?
       toast.error(error.message);
       return;
     }
-    toast.success('Prospect ajouté au CRM, sans séquence de contact active.');
+    const securite = resultat as unknown as {
+      sequence_active?: boolean;
+      prochaine_action_le?: string | null;
+      contact_automatique?: boolean;
+    };
+    if (securite.sequence_active !== false || securite.prochaine_action_le != null || securite.contact_automatique !== false) {
+      toast.error('Ajout interrompu : le garde-fou sans envoi n’a pas été confirmé.');
+      return;
+    }
+    toast.success('Ajouté à votre liste de prospects. Aucun message envoyé.');
     onContactsChanged?.();
     await charger(page);
   };
@@ -228,7 +238,7 @@ export function AdminSourcingCockpit({ onContactsChanged }: { onContactsChanged?
 
   const actualiserSource = async () => {
     const source = cible === 'SOIGNANT' ? 'l’Annuaire Santé / RPPS' : 'FINESS';
-    if (!window.confirm(`Démarrer l’actualisation silencieuse depuis ${source} ? Aucun message ne sera envoyé.`)) return;
+    if (!window.confirm(`Actualiser les données depuis ${source} ? Cette opération importe uniquement des données publiques et ne contacte personne.`)) return;
     setImportLoading(true);
     const { data: resultat, error } = await supabase.rpc('fn_sourcing_lancer_import' as never, { p_cible: cible } as never);
     setImportLoading(false);
@@ -242,7 +252,7 @@ export function AdminSourcingCockpit({ onContactsChanged }: { onContactsChanged?
       return;
     }
     toast.success(lancement?.already_running
-      ? 'Une actualisation silencieuse est déjà en cours.'
+      ? 'Une actualisation des données est déjà en cours.'
       : 'Actualisation démarrée en arrière-plan. Aucun contact ne sera envoyé.');
     await charger(1);
   };
@@ -263,7 +273,7 @@ export function AdminSourcingCockpit({ onContactsChanged }: { onContactsChanged?
             <UserRoundSearch className="h-5 w-5 text-primary" aria-hidden="true" /> Nouveaux contacts à recruter
           </h2>
           <p className="max-w-3xl text-xs text-muted-foreground">
-            Annuaire officiel, dédoublonné des comptes Jolene et du CRM, classé selon la contactabilité, la fraîcheur et les besoins ouverts. La découverte et l’ajout au CRM sont silencieux.
+            Annuaire officiel dédoublonné, classé selon la contactabilité, la fraîcheur et les besoins ouverts. Ajouter une cible crée seulement une fiche de suivi interne.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -282,7 +292,7 @@ export function AdminSourcingCockpit({ onContactsChanged }: { onContactsChanged?
       </div>
 
       <p className="text-xs text-muted-foreground">
-        Les trois premiers compteurs donnent le volume national exact de la base officielle. « Cibles classées » correspond uniquement au pool borné analysé avec les filtres et les exclusions CRM ; l’onglet Prospection reste la recherche exhaustive.
+        Les trois premiers compteurs donnent le volume national exact de la base officielle. « Cibles classées » correspond au pool analysé avec les filtres ; les annuaires permettent ensuite une recherche exhaustive.
       </p>
 
       {erreurChargement ? (
@@ -329,7 +339,7 @@ export function AdminSourcingCockpit({ onContactsChanged }: { onContactsChanged?
             </div>
           </div>
           <div className="mt-3 flex flex-wrap gap-2">
-            <BoutonY2K size="sm" variant={horsCrm ? 'primary' : 'secondary'} aria-pressed={horsCrm} onClick={() => setHorsCrm((value) => !value)}>Exclure CRM + inscrits</BoutonY2K>
+            <BoutonY2K size="sm" variant={horsCrm ? 'primary' : 'secondary'} aria-pressed={horsCrm} onClick={() => setHorsCrm((value) => !value)}>Masquer les prospects déjà suivis</BoutonY2K>
             <BoutonY2K size="sm" variant={contactables ? 'primary' : 'secondary'} aria-pressed={contactables} onClick={() => setContactables((value) => !value)}>Avec coordonnées</BoutonY2K>
             <BoutonY2K size="sm" variant={nouveaux ? 'primary' : 'secondary'} aria-pressed={nouveaux} onClick={() => setNouveaux((value) => !value)}>Nouveaux depuis 30 jours</BoutonY2K>
           </div>
@@ -438,7 +448,7 @@ export function AdminSourcingCockpit({ onContactsChanged }: { onContactsChanged?
                   </dl>
 
                   <div className="mt-3 flex flex-wrap gap-2 border-t border-border pt-3">
-                    <BoutonY2K size="sm" onClick={() => ajouterAuCrm(prospect)} loading={busy} iconeGauche={<Plus className="h-4 w-4" />}>Ajouter au CRM</BoutonY2K>
+                    <BoutonY2K size="sm" onClick={() => ajouterAuCrm(prospect)} loading={busy} iconeGauche={<Plus className="h-4 w-4" />}>Ajouter aux prospects</BoutonY2K>
                     <BoutonY2K size="sm" variant="ghost" onClick={() => ignorer(prospect)} disabled={busy} iconeGauche={<EyeOff className="h-4 w-4" />}>Ignorer</BoutonY2K>
                     {prospect.source_url && (
                       <a href={prospect.source_url} target="_blank" rel="noreferrer" className="inline-flex min-h-[44px] items-center rounded-xl px-3 text-xs font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
@@ -466,7 +476,7 @@ export function AdminSourcingCockpit({ onContactsChanged }: { onContactsChanged?
           <div className="mb-3 flex items-start justify-between gap-2">
             <div>
               <h3 className="font-bold text-foreground">Fraîcheur des sources</h3>
-              <p className="text-xs text-muted-foreground">Historique des imports silencieux. « Importé » ne signifie jamais « contacté ».</p>
+              <p className="text-sm text-muted-foreground">Historique des actualisations de données. « Importé » ne signifie jamais « contacté ».</p>
             </div>
             <BadgeY2K variant="info">{data.imports.length} dernières exécutions</BadgeY2K>
           </div>
