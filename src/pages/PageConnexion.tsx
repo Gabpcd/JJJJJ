@@ -37,6 +37,8 @@ export default function PageConnexion() {
   const [bioLoading, setBioLoading] = useState(false);
   const [resetMode, setResetMode] = useState(false);
   const [resetSubmitting, setResetSubmitting] = useState(false);
+  const [resetEnvoyeA, setResetEnvoyeA] = useState<string | null>(null);
+  const [resetDisponibleDans, setResetDisponibleDans] = useState(0);
 
   useEffect(() => {
     if (isNative()) {
@@ -45,6 +47,15 @@ export default function PageConnexion() {
       }).then(undefined, () => {});
     }
   }, []);
+
+  useEffect(() => {
+    if (resetDisponibleDans <= 0) return;
+    const minuteur = window.setTimeout(
+      () => setResetDisponibleDans((secondes) => Math.max(0, secondes - 1)),
+      1_000,
+    );
+    return () => window.clearTimeout(minuteur);
+  }, [resetDisponibleDans]);
 
   // Retour de PSC end_session : finaliser le signOut Supabase local et notifier
   useEffect(() => {
@@ -189,6 +200,35 @@ export default function PageConnexion() {
     }
   };
 
+  const demanderReinitialisation = async () => {
+    const emailNormalise = email.trim().toLowerCase();
+    if (!EMAIL_REGEX.test(emailNormalise)) {
+      afficherNotification({ type: 'erreur', message: 'Saisissez une adresse email valide.' });
+      return;
+    }
+
+    setResetSubmitting(true);
+    try {
+      const { supabase } = await import('@/integrations/supabase/client');
+      const resultat = await supabase.auth.resetPasswordForEmail(emailNormalise, {
+        redirectTo: urlCallbackPublique('/reset-password'),
+      });
+      if (resultat.error) throw resultat.error;
+
+      setEmail(emailNormalise);
+      setResetEnvoyeA(emailNormalise);
+      setResetDisponibleDans(60);
+      afficherNotification({
+        type: 'succes',
+        message: 'Demande envoyée. Vérifiez votre boîte mail et les courriers indésirables.',
+      });
+    } catch (err) {
+      afficherNotification({ type: 'erreur', message: extraireMessageErreur(err) });
+    } finally {
+      setResetSubmitting(false);
+    }
+  };
+
   return (
     <AuthLayout showBack={false}>
         <div className="card-base max-w-md w-full">
@@ -283,59 +323,56 @@ export default function PageConnexion() {
                 Mot de passe oublié ?
               </button>
             ) : (
-              <div className="space-y-2">
-                {email ? (
-                  <p className="text-xs text-muted-foreground">Email de réinitialisation envoyé à <strong>{email}</strong></p>
-                ) : (
-                  <label className="block text-left">
-                    <span className="text-xs font-medium text-foreground mb-1 block">Email de votre compte</span>
-                    <input
-                      type="email"
-                      autoComplete="email"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      placeholder="votre@email.com"
-                      className="input-base text-sm"
-                      required
-                    />
-                  </label>
+              <div className="space-y-3 text-left">
+                <label className="block">
+                  <span className="text-xs font-medium text-foreground mb-1 block">Email de votre compte</span>
+                  <input
+                    type="email"
+                    autoComplete="email"
+                    value={email}
+                    onChange={(e) => {
+                      setEmail(e.target.value);
+                      setResetEnvoyeA(null);
+                    }}
+                    placeholder="votre@email.com"
+                    className="input-base text-sm"
+                    required
+                  />
+                </label>
+
+                {resetEnvoyeA && (
+                  <p className="text-xs text-muted-foreground" role="status">
+                    Si un compte existe pour <strong>{resetEnvoyeA}</strong>, le lien vient d’être envoyé.
+                    Vérifiez aussi les courriers indésirables.
+                  </p>
                 )}
-                <div className="flex gap-2 justify-center">
+
+                <button
+                  type="button"
+                  disabled={resetSubmitting || !email.trim() || resetDisponibleDans > 0}
+                  onClick={() => void demanderReinitialisation()}
+                  className="btn-primary w-full text-sm disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2"
+                >
+                  {resetSubmitting && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
+                  {resetSubmitting
+                    ? 'Envoi…'
+                    : resetDisponibleDans > 0
+                      ? `Renvoyer dans ${resetDisponibleDans} s`
+                      : resetEnvoyeA
+                        ? 'Renvoyer le lien'
+                        : 'Envoyer le lien'}
+                </button>
+
+                <div className="text-center">
                   <button
                     type="button"
-                    onClick={() => setResetMode(false)}
+                    onClick={() => {
+                      setResetMode(false);
+                      setResetEnvoyeA(null);
+                    }}
                     className="text-xs text-muted-foreground hover:underline"
                   >
-                    Annuler
-                  </button>
-                  <button
-                    type="button"
-                    disabled={resetSubmitting || !email}
-                    onClick={async () => {
-                      if (!email) {
-                        afficherNotification({ type: 'erreur', message: 'Saisissez votre email avant de demander une réinitialisation.' });
-                        return;
-                      }
-                      setResetSubmitting(true);
-                      try {
-                        const { supabase } = await import('@/integrations/supabase/client');
-                        const opts = {
-                          redirectTo: urlCallbackPublique('/reset-password'),
-                        };
-                        const { error } = await supabase.auth.resetPasswordForEmail(email, opts);
-                        if (error) {
-                          afficherNotification({ type: 'erreur', message: 'Erreur lors de l\'envoi. Vérifiez votre email.' });
-                        } else {
-                          afficherNotification({ type: 'succes', message: 'Email de réinitialisation envoyé. Vérifiez votre boîte mail.' });
-                          setResetMode(false);
-                        }
-                      } finally {
-                        setResetSubmitting(false);
-                      }
-                    }}
-                    className="text-xs text-primary hover:underline disabled:opacity-50"
-                  >
-                    {resetSubmitting ? 'Envoi…' : 'Envoyer'}
+                    Retour à la connexion
                   </button>
                 </div>
               </div>
@@ -346,3 +383,5 @@ export default function PageConnexion() {
     </AuthLayout>
   );
 }
+
+const EMAIL_REGEX = /^[^\s@]{1,64}@[^\s@]{1,255}\.[a-z]{2,}$/i;

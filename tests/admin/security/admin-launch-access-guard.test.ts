@@ -8,6 +8,7 @@ const migration = read('supabase/migrations/20260714004020_verrouiller_acces_adm
 const retraitMfa = read('supabase/migrations/20260714125948_supprimer_mfa_admin.sql');
 const exceptionMfa = read('supabase/migrations/20260714130849_borner_exception_mfa_admin_principal.sql');
 const accesGabrielle = read('supabase/migrations/20260714154654_autoriser_admin_gabrielle_sans_mfa.sql');
+const familleGabrielle = read('supabase/migrations/20260722163518_completer_type_compte_admin_gabrielle.sql');
 const app = read('src/App.tsx');
 const routeProtegee = read('src/components/RouteProtegee.tsx');
 const equipe = read('src/pages/admin/AdminEquipe.tsx');
@@ -51,6 +52,9 @@ describe('garde admin fail-closed de lancement', () => {
     expect(accesGabrielle).toContain("'ADMIN_PLATEFORME'");
     expect(accesGabrielle).toContain('INSERT INTO public.equipe_admin');
     expect(accesGabrielle).toContain('DELETE FROM auth.mfa_factors');
+    expect(familleGabrielle).toContain('INSERT INTO public.types_comptes_auth');
+    expect(familleGabrielle).toContain("'ADMIN'");
+    expect(familleGabrielle).toContain("'gabrielle.pcd@outlook.com'");
     expect(routeProtegee).toContain("'gabrielle.pcd@outlook.com'");
     expect(migration).toContain(']::text[] <@ COALESCE(ea.acces_groupes, ARRAY[]::text[])');
     expect(migration).toContain('JOIN public.equipe_admin ea ON ea.user_id = u.id');

@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   afficherNotification: vi.fn(),
   rpc: vi.fn(),
   signOut: vi.fn(),
+  resetPasswordForEmail: vi.fn(),
 }));
 
 vi.mock('@/hooks/usePageTitle', () => ({ usePageTitle: () => undefined }));
@@ -25,7 +26,7 @@ vi.mock('@/integrations/supabase/client', () => ({
       signOut: mocks.signOut,
       getSession: vi.fn().mockResolvedValue({ data: { session: null } }),
       refreshSession: vi.fn(),
-      resetPasswordForEmail: vi.fn(),
+      resetPasswordForEmail: mocks.resetPasswordForEmail,
     },
   },
 }));
@@ -75,6 +76,7 @@ describe('PageConnexion — résolution sûre du rôle', () => {
     vi.clearAllMocks();
     mocks.connexion.mockResolvedValue(undefined);
     mocks.signOut.mockResolvedValue({ error: null });
+    mocks.resetPasswordForEmail.mockResolvedValue({ error: null });
   });
 
   it('conserve la session et ne redirige pas vers l’inscription si la RPC de rôle échoue', async () => {
@@ -108,5 +110,27 @@ describe('PageConnexion — résolution sûre du rôle', () => {
       type: 'erreur',
       message: expect.stringContaining('inscription n\'est pas complète'),
     }));
+  });
+
+  it('n’annonce un envoi qu’après la vraie demande et normalise l’adresse', async () => {
+    renderConnexion();
+    fireEvent.change(screen.getByLabelText('Email'), {
+      target: { value: '  Gabrielle.PCD@Outlook.COM  ' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Mot de passe oublié ?' }));
+
+    expect(screen.queryByText(/le lien vient d’être envoyé/i)).not.toBeInTheDocument();
+    expect(mocks.resetPasswordForEmail).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Envoyer le lien' }));
+
+    await waitFor(() => {
+      expect(mocks.resetPasswordForEmail).toHaveBeenCalledWith(
+        'gabrielle.pcd@outlook.com',
+        { redirectTo: expect.stringMatching(/\/reset-password$/) },
+      );
+    });
+    expect(await screen.findByText(/le lien vient d’être envoyé/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Renvoyer dans 60 s/i })).toBeDisabled();
   });
 });

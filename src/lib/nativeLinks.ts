@@ -54,18 +54,25 @@ export function extraireRecoveryCredentials(url: Pick<Location, 'search' | 'hash
   const search = new URLSearchParams(url.search);
   const hash = new URLSearchParams(url.hash.startsWith('#') ? url.hash.slice(1) : url.hash);
   const type = hash.get('type') ?? search.get('type');
-  const isRecovery = !type || type === 'recovery';
-  if (!isRecovery) return null;
 
   const accessToken = hash.get('access_token');
   const refreshToken = hash.get('refresh_token');
-  if (accessToken && refreshToken) return { kind: 'implicit', accessToken, refreshToken };
+  // Un flux implicit expose directement une session : le marqueur recovery
+  // explicite est donc obligatoire pour ne jamais accepter un callback OAuth.
+  if (accessToken && refreshToken) {
+    return type === 'recovery'
+      ? { kind: 'implicit', accessToken, refreshToken }
+      : null;
+  }
 
+  // Le lien PKCE Supabase ne contient pas toujours `type=recovery`. Sa nature
+  // est vérifiée après échange grâce au `redirectType` stocké avec le verifier.
+  if (type && type !== 'recovery') return null;
   const code = search.get('code');
   if (code) return { kind: 'pkce', code };
 
   const tokenHash = search.get('token_hash');
-  if (tokenHash) return { kind: 'token_hash', tokenHash };
+  if (tokenHash && type === 'recovery') return { kind: 'token_hash', tokenHash };
 
   return null;
 }

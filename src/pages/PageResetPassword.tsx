@@ -7,8 +7,7 @@ import { extraireMessageErreur } from '@/lib/erreurs';
 import { FooterLegal } from '@/components/FooterLegal';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { extraireRecoveryCredentials, nettoyerCallbackRecovery } from '@/lib/nativeLinks';
-
-const EMAIL_REGEX = /^[^\s@]{1,64}@[^\s@]{1,255}\.[a-z]{2,}$/i;
+import { logger } from '@/lib/logger';
 
 export default function PageResetPassword() {
   usePageTitle('Réinitialiser le mot de passe');
@@ -22,13 +21,12 @@ export default function PageResetPassword() {
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
 
-  // Sur le web, Supabase consomme généralement le callback au chargement du
-  // SDK. Dans une coquille native, l'Universal Link arrive après l'initialisation
-  // du client : on prend donc explicitement en charge implicit, PKCE et token_hash.
+  // Cette page est l'unique propriétaire du callback recovery. Une session
+  // ordinaire déjà ouverte ne constitue jamais une preuve de récupération.
   useEffect(() => {
     let actif = true;
     const { data: subscription } = supabase.auth.onAuthStateChange((event, session) => {
-      if (actif && (event === 'PASSWORD_RECOVERY' || (session && window.location.hash.includes('type=recovery')))) {
+      if (actif && event === 'PASSWORD_RECOVERY' && session) {
         setRecoverySession(true);
       }
     });
@@ -43,7 +41,14 @@ export default function PageResetPassword() {
           refresh_token: credentials.refreshToken,
         }));
       } else if (credentials?.kind === 'pkce') {
-        ({ error } = await supabase.auth.exchangeCodeForSession(credentials.code));
+        const resultat = await supabase.auth.exchangeCodeForSession(credentials.code);
+        error = resultat.error;
+        const redirectType = 'redirectType' in resultat.data
+          ? resultat.data.redirectType
+          : null;
+        if (!error && redirectType !== 'recovery') {
+          error = { message: 'Ce code ne correspond pas à une récupération de mot de passe.' };
+        }
       } else if (credentials?.kind === 'token_hash') {
         ({ error } = await supabase.auth.verifyOtp({
           token_hash: credentials.tokenHash,
@@ -64,8 +69,10 @@ export default function PageResetPassword() {
         return;
       }
 
-      const { data } = await supabase.auth.getSession();
-      if (actif) setRecoverySession(Boolean(data.session));
+      // Sans preuve recovery explicite, même une session connectée doit être
+      // refusée : sinon visiter cette URL permettrait de modifier le mot de
+      // passe du compte actuellement ouvert.
+      setRecoverySession(false);
     };
 
     void finaliserCallback();
@@ -85,6 +92,15 @@ export default function PageResetPassword() {
       const { error } = await supabase.auth.updateUser({ password: motDePasse });
       if (error) {
         afficherNotification({ type: 'erreur', message: extraireMessageErreur(error) });
+        return;
+      }
+      const { error: signOutError } = await supabase.auth.signOut();
+      if (signOutError) {
+        logger.warn('[RESET_PASSWORD] Déconnexion post-récupération incomplète', signOutError);
+        afficherNotification({
+          type: 'erreur',
+          message: 'Le mot de passe est modifié, mais la session n’a pas pu être fermée. Fermez l’application puis reconnectez-vous.',
+        });
         return;
       }
       setSuccess(true);
@@ -199,6 +215,3 @@ export default function PageResetPassword() {
     </div>
   );
 }
-
-// Helper exporté pour validation au cas où
-export { EMAIL_REGEX };
