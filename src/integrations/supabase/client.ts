@@ -17,5 +17,11 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABL
     storage: typeof window !== 'undefined' ? window.sessionStorage : undefined,
     persistSession: true,
     autoRefreshToken: true,
+    // La page de récupération valide elle-même les trois formats de callback
+    // (implicit, PKCE, token_hash). La laisser aussi au SDK créerait une course
+    // où le code peut être consommé deux fois ou confondu avec une session
+    // ordinaire déjà présente dans le navigateur.
+    detectSessionInUrl:
+      typeof window === 'undefined' || window.location.pathname !== '/reset-password',
   }
 });

@@ -27,6 +27,8 @@ import { ModalConfirmation } from '@/components/ModalConfirmation';
 import { Textarea } from '@/components/ui/textarea';
 import { sanitiserNomFichier, verifierFichierDocument } from '@/lib/documentUpload';
 import { useOuvrirConversation } from '@/hooks/useOuvrirConversation';
+import { urlCallbackPublique } from '@/lib/nativeLinks';
+import { extraireMessageErreur } from '@/lib/erreurs';
 
 export default function AdminDetailUtilisateur() {
   const { id } = useParams<{ id: string }>();
@@ -298,11 +300,18 @@ export default function AdminDetailUtilisateur() {
   };
 
   const reinitialiserMdp = async () => {
-    const email = type === 'soignant' ? soignant?.email : etablissement?.email_contact;
+    const emailBrut = type === 'soignant' ? soignant?.email : etablissement?.email_contact;
+    const email = typeof emailBrut === 'string' ? emailBrut.trim().toLowerCase() : '';
     if (!email) { toast.error('Aucun email trouvé'); return; }
-    const { error } = await supabase.auth.resetPasswordForEmail(email);
-    if (error) { toast.error('Erreur lors de l\'envoi. Vérifiez l\'email.'); return; }
-    toast.success(`Email de réinitialisation envoyé à ${email}`);
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: urlCallbackPublique('/reset-password'),
+      });
+      if (error) throw error;
+      toast.success(`Demande envoyée à ${email}`);
+    } catch (error) {
+      toast.error(extraireMessageErreur(error));
+    }
   };
 
   const promouvoirAdmin = async () => {

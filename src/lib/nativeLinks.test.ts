@@ -41,9 +41,26 @@ describe('extraireRecoveryCredentials', () => {
   });
 
   it('extrait PKCE et token_hash depuis la query string', () => {
+    expect(extraireRecoveryCredentials({ search: '?code=pkce', hash: '' } as Location))
+      .toEqual({ kind: 'pkce', code: 'pkce' });
     expect(extraireRecoveryCredentials({ search: '?code=pkce&type=recovery', hash: '' } as Location))
       .toEqual({ kind: 'pkce', code: 'pkce' });
     expect(extraireRecoveryCredentials({ search: '?token_hash=hash&type=recovery', hash: '' } as Location))
       .toEqual({ kind: 'token_hash', tokenHash: 'hash' });
+  });
+
+  it('refuse les identifiants de session qui ne sont pas explicitement recovery', () => {
+    expect(extraireRecoveryCredentials({
+      search: '',
+      hash: '#access_token=access&refresh_token=refresh',
+    } as Location)).toBeNull();
+    expect(extraireRecoveryCredentials({
+      search: '?token_hash=hash',
+      hash: '',
+    } as Location)).toBeNull();
+    expect(extraireRecoveryCredentials({
+      search: '?code=oauth&type=signup',
+      hash: '',
+    } as Location)).toBeNull();
   });
 });
