@@ -1,9 +1,11 @@
 import { cloneElement, isValidElement, useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { LayoutAdmin } from '@/components/LayoutAdmin';
 import { ChargementAdmin, ChargementSectionAdmin } from '@/components/admin/ChargementAdmin';
 import { AdminCrmAutomation } from '@/components/admin/AdminCrmAutomation';
 import { AdminSourcingCockpit } from '@/components/admin/AdminSourcingCockpit';
+import { AdminGrowthWorkspaceNav, type AdminGrowthWorkspaceStep } from '@/components/admin/AdminGrowthWorkspaceNav';
 import { supabase } from '@/integrations/supabase/client';
 import { PROFESSIONS, getLabelProfession, getLabelTypeEtablissement } from '@/lib/constantes';
 import { CardY2K, CardY2KContent } from '@/components/y2k/CardY2K';
@@ -15,7 +17,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
 import {
   Megaphone, Plus, ExternalLink, Phone, Mail, MessageCircle, Copy, Save, X, Trash2,
-  Users, Building2, FileText, Search, Star, Archive, RotateCcw, Send, Pencil, Bot,
+  Users, Building2, FileText, Search, Star, Archive, RotateCcw, Send, Pencil,
 } from 'lucide-react';
 
 /* ── Constantes UI ── */
@@ -41,10 +43,26 @@ const CONTACTS_PAGE_SIZE = 100;
 const SALES_CONTACTS_SELECT = [
   'id', 'type', 'nom', 'profession', 'telephone', 'email', 'ville', 'departement',
   'type_etab', 'groupe_id', 'statut', 'notes', 'maj_le', 'cree_le', 'favori',
-  'archive', 'reponse', 'a_rappeler',
+  'archive', 'reponse', 'a_rappeler', 'ne_plus_contacter',
 ].join(',');
 
 type TypeContact = 'SOIGNANT' | 'ETABLISSEMENT';
+type SalesTab = 'sourcing' | 'crm' | 'groupes' | 'soignants' | 'etablissements' | 'prospection' | 'prospection_soignants' | 'etab_jolene' | 'templates' | 'posts' | 'backlinks';
+
+const SALES_TABS = new Set<SalesTab>([
+  'sourcing', 'crm', 'groupes', 'soignants', 'etablissements', 'prospection',
+  'prospection_soignants', 'etab_jolene', 'templates', 'posts', 'backlinks',
+]);
+
+function estSalesTab(value: string | null): value is SalesTab {
+  return value !== null && SALES_TABS.has(value as SalesTab);
+}
+
+function etapePourTab(tab: SalesTab): AdminGrowthWorkspaceStep {
+  if (['crm', 'soignants', 'etablissements', 'etab_jolene'].includes(tab)) return 'actions';
+  if (['groupes', 'templates', 'posts', 'backlinks'].includes(tab)) return 'ressources';
+  return 'cibles';
+}
 
 interface PaginationContacts {
   page: number;
@@ -200,9 +218,11 @@ function useTemplateProspectionSoignant(): TemplateProspection {
 }
 
 export default function AdminSales() {
-  usePageTitle('Recruter des soignants et des établissements');
+  usePageTitle('Prospects et actions commerciales');
+  const [searchParams] = useSearchParams();
+  const tabParam = searchParams.get('tab');
+  const tab: SalesTab = estSalesTab(tabParam) ? tabParam : 'sourcing';
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<'sourcing' | 'crm' | 'groupes' | 'soignants' | 'etablissements' | 'prospection' | 'prospection_soignants' | 'etab_jolene' | 'templates' | 'posts' | 'backlinks'>('sourcing');
 
   const [groupes, setGroupes] = useState<any[]>([]);
   const [contacts, setContacts] = useState<any[]>([]);
@@ -486,33 +506,68 @@ export default function AdminSales() {
     }));
   };
 
-  if (loading) return <LayoutAdmin><ChargementAdmin titre="Recruter des soignants et des établissements" /></LayoutAdmin>;
+  const etapeActive = etapePourTab(tab);
+  const ongletsContexte: Array<{ id: SalesTab; label: string }> = etapeActive === 'cibles'
+    ? [
+      { id: 'sourcing', label: 'Cibles prioritaires' },
+      { id: 'prospection', label: `Annuaire établissements · ${afficherCompteur(statsProspection?.etablissements?.total)}` },
+      { id: 'prospection_soignants', label: `Annuaire soignants · ${afficherCompteur(statsProspection?.soignants?.total)}` },
+    ]
+    : etapeActive === 'actions'
+      ? [
+        { id: 'crm', label: 'Actions du jour' },
+        { id: 'etablissements', label: `Suivi établissements · ${afficherCompteur(statsProspection?.crm_etablissements)}` },
+        { id: 'soignants', label: `Suivi soignants · ${afficherCompteur(statsProspection?.crm_soignants)}` },
+        { id: 'etab_jolene', label: 'Clients Jolene' },
+      ]
+      : [
+        { id: 'groupes', label: `Groupes · ${groupes.length}` },
+        { id: 'templates', label: `Modèles · ${templates.length}` },
+        { id: 'posts', label: 'Publications' },
+        { id: 'backlinks', label: 'Référencement' },
+      ];
+
+  if (loading) return <LayoutAdmin><ChargementAdmin titre="Chargement de l’espace commercial" /></LayoutAdmin>;
 
   return (
     <LayoutAdmin>
-      <div className="space-y-5">
-        <div>
-          <h1 className="text-xl font-bold text-foreground flex items-center gap-2">
-            <Megaphone className="h-5 w-5 text-primary" /> Recruter des soignants et des établissements
+      <div className="space-y-6">
+        <header>
+          <h1 className="flex items-center gap-2 text-2xl font-bold text-foreground">
+            <Megaphone className="h-6 w-6 text-primary" aria-hidden="true" /> Prospects et actions commerciales
           </h1>
-          <p className="text-sm text-muted-foreground">
-            Groupes de recrutement (WhatsApp, Facebook, LinkedIn…), contacts sourcés & publication assistée.
+          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
+            Un parcours unique pour qualifier une cible, préparer une action humaine et conserver son historique.
           </p>
-        </div>
+        </header>
 
-        {/* Tabs */}
-        <div className="flex gap-2 flex-wrap">
-          <BoutonY2K variant={tab === 'sourcing' ? 'primary' : 'secondary'} size="sm" onClick={() => setTab('sourcing')} iconeGauche={<Search className="h-4 w-4" />}>Nouveaux contacts</BoutonY2K>
-          <BoutonY2K variant={tab === 'crm' ? 'primary' : 'secondary'} size="sm" onClick={() => setTab('crm')} iconeGauche={<Bot className="h-4 w-4" />}>CRM du jour</BoutonY2K>
-          <BoutonY2K variant={tab === 'groupes' ? 'primary' : 'secondary'} size="sm" onClick={() => setTab('groupes')} iconeGauche={<Megaphone className="h-4 w-4" />}>Groupes ({groupes.length})</BoutonY2K>
-          <BoutonY2K variant={tab === 'soignants' ? 'primary' : 'secondary'} size="sm" onClick={() => setTab('soignants')} iconeGauche={<Users className="h-4 w-4" />}>CRM soignants ({afficherCompteur(statsProspection?.crm_soignants)})</BoutonY2K>
-          <BoutonY2K variant={tab === 'etablissements' ? 'primary' : 'secondary'} size="sm" onClick={() => setTab('etablissements')} iconeGauche={<Building2 className="h-4 w-4" />}>CRM établissements ({afficherCompteur(statsProspection?.crm_etablissements)})</BoutonY2K>
-          <BoutonY2K variant={tab === 'prospection' ? 'primary' : 'secondary'} size="sm" onClick={() => setTab('prospection')} iconeGauche={<Search className="h-4 w-4" />}>Base établissements ({afficherCompteur(statsProspection?.etablissements?.total)})</BoutonY2K>
-          <BoutonY2K variant={tab === 'prospection_soignants' ? 'primary' : 'secondary'} size="sm" onClick={() => setTab('prospection_soignants')} iconeGauche={<Users className="h-4 w-4" />}>Base soignants ({afficherCompteur(statsProspection?.soignants?.total)})</BoutonY2K>
-          <BoutonY2K variant={tab === 'etab_jolene' ? 'primary' : 'secondary'} size="sm" onClick={() => setTab('etab_jolene')} iconeGauche={<Building2 className="h-4 w-4" />}>Étab. Jolene</BoutonY2K>
-          <BoutonY2K variant={tab === 'templates' ? 'primary' : 'secondary'} size="sm" onClick={() => setTab('templates')} iconeGauche={<FileText className="h-4 w-4" />}>Modèles ({templates.length})</BoutonY2K>
-          <BoutonY2K variant={tab === 'posts' ? 'primary' : 'secondary'} size="sm" onClick={() => setTab('posts')} iconeGauche={<Send className="h-4 w-4" />}>Posts de la semaine</BoutonY2K>
-          <BoutonY2K variant={tab === 'backlinks' ? 'primary' : 'secondary'} size="sm" onClick={() => setTab('backlinks')} iconeGauche={<ExternalLink className="h-4 w-4" />}>Backlinks / Annuaires</BoutonY2K>
+        <AdminGrowthWorkspaceNav active={etapeActive} />
+
+        <div className="rounded-xl border border-border bg-card p-3">
+          <p className="mb-3 text-sm text-muted-foreground">
+            {etapeActive === 'cibles' && 'Sélectionnez les personnes et établissements à ajouter à votre liste de travail.'}
+            {etapeActive === 'actions' && 'Traitez les rappels et mettez à jour le suivi après chaque action humaine.'}
+            {etapeActive === 'ressources' && 'Préparez les relais, modèles et contenus utilisés pour développer Jolene.'}
+          </p>
+          <nav aria-label="Vues de l’étape commerciale" className="grid w-full grid-cols-2 gap-1 rounded-xl border border-primary/20 bg-primary/5 p-1 lg:flex lg:w-auto lg:justify-start">
+            {ongletsContexte.map((onglet) => {
+              const estActif = onglet.id === tab;
+              return (
+                <Link
+                  key={onglet.id}
+                  to={`/admin/fondateur/sales?tab=${onglet.id}`}
+                  aria-current={estActif ? 'page' : undefined}
+                  className={`inline-flex min-h-[44px] items-center justify-center rounded-lg px-3 py-2 text-center text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${
+                    estActif
+                      ? 'bg-gradient-to-r from-pink-500 to-violet-500 text-white shadow-sm'
+                      : 'text-muted-foreground hover:bg-card hover:text-foreground'
+                  }`}
+                >
+                  {onglet.label}
+                </Link>
+              );
+            })}
+          </nav>
         </div>
 
         {erreurCompteurs && (
@@ -643,10 +698,10 @@ export default function AdminSales() {
         )}
 
         {/* ── PROSPECTION (base nationale) ── */}
-        {tab === 'prospection' && (<><EnvoiMasseBar cible="ETABLISSEMENT" /><ProspectionEtab onAjouter={charger} /></>)}
+        {tab === 'prospection' && <ProspectionEtab onAjouter={charger} />}
 
         {/* ── PROSPECTION SOIGNANTS (Annuaire Santé / RPPS) ── */}
-        {tab === 'prospection_soignants' && (<><EnvoiMasseBar cible="SOIGNANT" /><ProspectionSoignants onAjouter={charger} /></>)}
+        {tab === 'prospection_soignants' && <ProspectionSoignants onAjouter={charger} />}
 
         {/* ── ÉTABLISSEMENTS JOLENE (inscrits) ── */}
         {tab === 'etab_jolene' && <EtablissementsJolene />}
@@ -657,6 +712,16 @@ export default function AdminSales() {
             <p className="text-xs text-muted-foreground">
               Publication assistée : copiez le message et ouvrez le groupe pour le coller (l'auto-post natif est interdit par WhatsApp/Facebook).
             </p>
+            <details className="rounded-xl border border-border bg-card p-3">
+              <summary className="cursor-pointer text-sm font-semibold text-foreground">
+                Campagnes groupées après lancement
+              </summary>
+              <p className="mb-3 mt-2 text-xs text-muted-foreground">
+                Ces commandes restent verrouillées tant que les automatisations marketing ne sont pas activées.
+              </p>
+              <EnvoiMasseBar cible="ETABLISSEMENT" />
+              <EnvoiMasseBar cible="SOIGNANT" />
+            </details>
             {templates.map(t => (
               <CardY2K key={t.id} hoverLift={false}>
                 <CardY2KContent>
@@ -924,6 +989,7 @@ function ListeContacts({ type, contacts, voirArchives, pagination, onPageChange,
                     </div>
                   </div>
                   <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                    {c.ne_plus_contacter && <BadgeY2K variant="error">Ne plus contacter</BadgeY2K>}
                     {c.a_rappeler && <BadgeY2K variant="warning">À rappeler</BadgeY2K>}
                     {c.reponse && <BadgeY2K variant={badgeReponse(c.reponse)}>{labelReponse(c.reponse)}</BadgeY2K>}
                     {c.archive && <BadgeY2K variant="warning">Archivé</BadgeY2K>}
@@ -931,30 +997,42 @@ function ListeContacts({ type, contacts, voirArchives, pagination, onPageChange,
                   </div>
                 </div>
                 {/* Contacter */}
-                <div className="flex gap-2 mt-3 flex-wrap">
-                  {c.telephone && (
+                {c.ne_plus_contacter ? (
+                  <p role="status" className="mt-3 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive">
+                    Contact bloqué. Marquez la fiche comme intéressée uniquement si la personne a explicitement changé d’avis.
+                  </p>
+                ) : (
+                  <div className="flex gap-2 mt-3 flex-wrap">
+                    {c.telephone && (
                     <>
                       <BoutonY2K size="sm" onClick={() => { window.location.href = `tel:${c.telephone}`; }} iconeGauche={<Phone className="h-4 w-4" />}>Appeler</BoutonY2K>
                       <BoutonY2K size="sm" variant="secondary" onClick={() => window.open(lienWhatsApp(c.telephone), '_blank', 'noopener')} iconeGauche={<MessageCircle className="h-4 w-4" />}>WhatsApp</BoutonY2K>
                     </>
-                  )}
-                  {c.email && (
+                    )}
+                    {c.email && (
                     <BoutonY2K size="sm" variant="secondary"
                       onClick={() => ouvrirMailto(c.email, type === 'ETABLISSEMENT' ? tpl : tplSoignant, c)}
                       iconeGauche={<Mail className="h-4 w-4" />}>Gmail</BoutonY2K>
-                  )}
-                </div>
+                    )}
+                  </div>
+                )}
                 {(c.telephone || c.email) && (
                   <p className="text-[11px] mt-1.5 flex flex-wrap gap-x-2">
-                    {c.telephone && <a href={`tel:${c.telephone}`} className="text-primary font-medium hover:underline">{c.telephone}</a>}
-                    {c.email && <a href={`mailto:${c.email}`} className="text-primary font-medium hover:underline break-all">{c.email}</a>}
+                    {c.ne_plus_contacter ? (
+                      <>{c.telephone || ''}{c.telephone && c.email ? ' · ' : ''}{c.email || ''}</>
+                    ) : (
+                      <>
+                        {c.telephone && <a href={`tel:${c.telephone}`} className="text-primary font-medium hover:underline">{c.telephone}</a>}
+                        {c.email && <a href={`mailto:${c.email}`} className="text-primary font-medium hover:underline break-all">{c.email}</a>}
+                      </>
+                    )}
                   </p>
                 )}
                 {/* Suivi : réponse + à rappeler */}
                 <div className="flex gap-1.5 mt-2 flex-wrap items-center">
                   <BoutonY2K size="sm" variant={c.reponse === 'POSITIVE' ? 'primary' : 'secondary'} onClick={() => onReponse(c, 'POSITIVE')}>Intéressé(e)</BoutonY2K>
-                  <BoutonY2K size="sm" variant="ghost" onClick={() => onReponse(c, 'NEGATIVE')}>Non</BoutonY2K>
-                  <BoutonY2K size="sm" variant={c.a_rappeler ? 'primary' : 'ghost'} onClick={() => onARappeler(c)} iconeGauche={<RotateCcw className="h-4 w-4" />}>
+                  <BoutonY2K size="sm" variant="ghost" onClick={() => onReponse(c, 'NEGATIVE')}>Ne plus contacter</BoutonY2K>
+                  <BoutonY2K size="sm" variant={c.a_rappeler ? 'primary' : 'ghost'} disabled={c.ne_plus_contacter} onClick={() => onARappeler(c)} iconeGauche={<RotateCcw className="h-4 w-4" />}>
                     {c.a_rappeler ? 'Rappel programmé' : 'À rappeler'}
                   </BoutonY2K>
                 </div>
@@ -1109,10 +1187,7 @@ function ProspectionEtab({ onAjouter }: { onAjouter: () => void }) {
   const [loading, setLoading] = useState(false);
   const [erreurRecherche, setErreurRecherche] = useState<string | null>(null);
   const rechercheIdRef = useRef(0);
-  const [emailEdit, setEmailEdit] = useState<{ finess: string; valeur: string; prospect?: any } | null>(null);
-  const [outreach, setOutreach] = useState<any | null>(null);
-  const [appel, setAppel] = useState<any | null>(null);
-  const tpl = useTemplateProspection();
+  const [emailEdit, setEmailEdit] = useState<{ finess: string; valeur: string } | null>(null);
 
   const rechercher = useCallback(async (p = 1) => {
     const rechercheId = ++rechercheIdRef.current;
@@ -1154,16 +1229,9 @@ function ProspectionEtab({ onAjouter }: { onAjouter: () => void }) {
     const { error } = await supabase.from('prospects_etablissements' as any)
       .update({ email: valeur || null } as any).eq('finess', emailEdit.finess);
     if (error) { toast.error(error.message); return; }
-    const prospect = emailEdit.prospect;
     setEmailEdit(null);
     rechercher(page);
-    // Enchaîne directement sur l'envoi : email saisi → modal d'envoi pré-remplie.
-    if (valeur && prospect) {
-      toast.success('Email enregistré — envoi prêt.');
-      setOutreach({ ...prospect, email: valeur });
-    } else {
-      toast.success('Email enregistré.');
-    }
+    toast.success('Email enregistré. Aucun message envoyé.');
   };
 
   const ajouterProspectAuCrm = async (pr: any): Promise<string | null> => {
@@ -1181,23 +1249,7 @@ function ProspectionEtab({ onAjouter }: { onAjouter: () => void }) {
   const ajouterAuPipeline = async (pr: any) => {
     const contactId = await ajouterProspectAuCrm(pr);
     if (!contactId) return;
-    toast.success('Ajouté aux établissements sourcés.');
-    onAjouter();
-  };
-
-  // « Appelé » → a décroché ? Oui = sourcé (réponse en attente) / Non = à rappeler.
-  const enregistrerAppel = async (pr: any, aDecroche: boolean) => {
-    const jour = new Date().toISOString().slice(0, 10);
-    const contactId = await ajouterProspectAuCrm(pr);
-    if (!contactId) return;
-    const { error } = await supabase.from('sales_contacts' as any).update({
-      statut: 'CONTACTE', reponse: aDecroche ? 'EN_ATTENTE' : null, a_rappeler: !aDecroche,
-      dernier_contact_le: new Date().toISOString(),
-      notes: aDecroche ? `Appelé le ${jour} — a décroché` : `Appelé le ${jour} — pas de réponse, à rappeler`,
-    } as any).eq('id', contactId);
-    if (error) { toast.error(error.message); return; }
-    setAppel(null);
-    toast.success(aDecroche ? 'Sourcé — à suivre.' : 'Ajouté à « À rappeler ».');
+    toast.success('Ajouté aux prospects. Aucun message envoyé.');
     onAjouter();
   };
 
@@ -1267,32 +1319,17 @@ function ProspectionEtab({ onAjouter }: { onAjouter: () => void }) {
                     </div>
                   </div>
 
-                  <div className="flex gap-2 mt-3 flex-wrap">
-                    {pr.telephone ? (
-                      <>
-                        <BoutonY2K size="sm" onClick={() => { window.location.href = `tel:${pr.telephone}`; }} iconeGauche={<Phone className="h-4 w-4" />}>
-                          Appeler
-                        </BoutonY2K>
-                        <BoutonY2K size="sm" variant="secondary" onClick={() => window.open(lienWhatsApp(pr.telephone), '_blank', 'noopener')} iconeGauche={<MessageCircle className="h-4 w-4" />}>WhatsApp</BoutonY2K>
-                      </>
-                    ) : (
-                      <BadgeY2K variant="warning">Tél. non renseigné</BadgeY2K>
+                  <div className="flex gap-2 mt-3 flex-wrap items-center">
+                    <BoutonY2K size="sm" onClick={() => ajouterAuPipeline(pr)} iconeGauche={<Plus className="h-4 w-4" />}>Ajouter aux prospects</BoutonY2K>
+                    {!pr.email && (
+                      <BoutonY2K size="sm" variant="ghost" onClick={() => setEmailEdit({ finess: pr.finess, valeur: '' })} iconeGauche={<Pencil className="h-4 w-4" />}>Renseigner l’email</BoutonY2K>
                     )}
-                    {pr.email ? (
-                      <>
-                        <BoutonY2K size="sm" onClick={() => setOutreach(pr)} iconeGauche={<Send className="h-4 w-4" />}>Envoyer via Jolene</BoutonY2K>
-                        <BoutonY2K size="sm" variant="secondary" onClick={() => ouvrirMailto(pr.email, tpl, pr)} iconeGauche={<Mail className="h-4 w-4" />}>Gmail</BoutonY2K>
-                      </>
-                    ) : (
-                      <BoutonY2K size="sm" variant="ghost" onClick={() => setEmailEdit({ finess: pr.finess, valeur: '', prospect: pr })} iconeGauche={<Pencil className="h-4 w-4" />}>+ Email</BoutonY2K>
-                    )}
-                    {pr.telephone && <BoutonY2K size="sm" variant="ghost" onClick={() => setAppel(pr)} iconeGauche={<Phone className="h-4 w-4" />}>Appelé</BoutonY2K>}
-                    <BoutonY2K size="sm" variant="ghost" onClick={() => ajouterAuPipeline(pr)} iconeGauche={<Plus className="h-4 w-4" />}>Pipeline</BoutonY2K>
+                    <span className="text-[11px] text-muted-foreground">Qualification interne uniquement</span>
                   </div>
                   {(pr.telephone || pr.email) && (
                     <p className="text-[11px] mt-1.5 flex flex-wrap gap-x-2">
-                      {pr.telephone && <a href={`tel:${pr.telephone}`} className="text-primary font-medium hover:underline">{pr.telephone}</a>}
-                      {pr.email && <a href={`mailto:${pr.email}`} className="text-primary font-medium hover:underline break-all">{pr.email}</a>}
+                      {pr.telephone && <span>{pr.telephone}</span>}
+                      {pr.email && <span className="break-all">{pr.email}</span>}
                     </p>
                   )}
                 </CardY2KContent>
@@ -1314,8 +1351,7 @@ function ProspectionEtab({ onAjouter }: { onAjouter: () => void }) {
       {emailEdit && (
         <FormPanel titre="Email de l'établissement" onClose={() => setEmailEdit(null)} onSave={sauverEmail}>
           <p className="text-xs text-muted-foreground mb-2">
-            L'enrichissement Annuaire Santé remplit automatiquement les emails trouvables (en fond, en continu).
-            Pour ceux qu'il ne trouve pas, demandez-le à l'appel — une fois saisi, l'envoi se fait en 1 clic.
+            Complétez uniquement une adresse publique vérifiée. L’enregistrement ne déclenche aucun message.
           </p>
           <Champ label="Adresse email">
             <Input type="email" value={emailEdit.valeur} onChange={e => setEmailEdit({ ...emailEdit, valeur: e.target.value })} placeholder="ex : direction@nom-etablissement.fr" />
@@ -1323,11 +1359,6 @@ function ProspectionEtab({ onAjouter }: { onAjouter: () => void }) {
         </FormPanel>
       )}
 
-      {/* Envoi email via Jolene */}
-      {outreach && <OutreachModal prospect={outreach} template={tpl} onClose={() => { setOutreach(null); rechercher(page); onAjouter(); }} />}
-
-      {/* Suivi d'appel : a décroché ? */}
-      {appel && <AppelModal prospect={appel} onChoix={(aDecroche) => enregistrerAppel(appel, aDecroche)} onClose={() => setAppel(null)} />}
     </div>
   );
 }
@@ -1343,15 +1374,17 @@ function EnvoiMasseBar({ cible }: { cible: 'ETABLISSEMENT' | 'SOIGNANT' }) {
   const [envoi, setEnvoi] = useState(false);
   const [enrichissement, setEnrichissement] = useState(false);
   const [erreurEtat, setErreurEtat] = useState<string | null>(null);
+  const [marketingActif, setMarketingActif] = useState<boolean | null>(null);
   const chargementIdRef = useRef(0);
 
   const chargerEtat = useCallback(async () => {
     const chargementId = ++chargementIdRef.current;
-    const [statsResult, templateResult] = await Promise.all([
+    const [statsResult, templateResult, marketingResult] = await Promise.all([
       supabase.rpc('fn_admin_prospection_stats' as any),
       cible === 'ETABLISSEMENT'
         ? supabase.from('sales_templates' as any).select('sujet, contenu').eq('nom', TEMPLATE_PROSPECTION_NOM).maybeSingle()
         : supabase.from('sales_templates' as any).select('sujet, contenu').eq('cible', 'SOIGNANT').limit(1).maybeSingle(),
+      supabase.from('growth_config' as any).select('valeur').eq('cle', 'automatisations_marketing_actives').maybeSingle(),
     ]);
     if (chargementId !== chargementIdRef.current) return;
 
@@ -1370,6 +1403,7 @@ function EnvoiMasseBar({ cible }: { cible: 'ETABLISSEMENT' | 'SOIGNANT' }) {
     }
 
     if (!templateResult.error) setTemplate((templateResult.data as any) || null);
+    setMarketingActif(!marketingResult.error && (marketingResult.data as any)?.valeur === 'true');
   }, [cible]);
 
   useEffect(() => {
@@ -1396,6 +1430,10 @@ function EnvoiMasseBar({ cible }: { cible: 'ETABLISSEMENT' | 'SOIGNANT' }) {
   };
 
   const envoyerTous = async () => {
+    if (!marketingActif) {
+      toast.error('Envoi groupé désactivé avant le lancement.');
+      return;
+    }
     if (!template || !estNombreCompteur(aEnvoyer) || aEnvoyer === 0) return;
     if (!window.confirm(`Envoyer le template officiel aux ${Math.min(aEnvoyer, 100)} prospect(s) avec email jamais contactés ? (max 100 par clic — recliquez pour la tranche suivante)`)) return;
     setEnvoi(true);
@@ -1414,10 +1452,10 @@ function EnvoiMasseBar({ cible }: { cible: 'ETABLISSEMENT' | 'SOIGNANT' }) {
 
   return (
     <div className="rounded-xl border border-primary/30 bg-primary/5 p-3 mb-4 flex flex-col sm:flex-row sm:items-center gap-2">
-      <p className="text-xs text-muted-foreground flex-1">
-        <strong className="text-foreground">{afficherCompteur(aEnvoyer)}</strong> prospect(s) <strong>avec un email collecté</strong>, jamais contacté(s) — prêts pour l'envoi groupé.
-        {' '}<span className="text-muted-foreground/80">(Compteur exact maintenu par la base : il ne montre que les fiches avec email, pas le total de l'annuaire.)</span>
-        {aEnvoyer === 0 && ' Pour l’instant aucun email collecté : l’enrichissement auto les remplit progressivement, ou saisissez-les via « + Email » sur chaque carte.'}
+      <p className="text-sm text-muted-foreground flex-1" aria-live="polite">
+        <strong className="text-foreground">Emails prêts : {afficherCompteur(aEnvoyer)}</strong>. Ce nombre compte uniquement les fiches avec une adresse email, jamais le total de l’annuaire.
+        {aEnvoyer === 0 && ' L’enrichissement peut compléter progressivement les coordonnées publiques.'}
+        {marketingActif === false && ' Les envois groupés sont verrouillés avant le lancement.'}
         {erreurEtat && <> <span role="alert" className="text-amber-700 dark:text-amber-300">{erreurEtat}</span></>}
         {!template && ' Aucun template trouvé (onglet Modèles).'}
       </p>
@@ -1439,82 +1477,13 @@ function EnvoiMasseBar({ cible }: { cible: 'ETABLISSEMENT' | 'SOIGNANT' }) {
       <BoutonY2K
         size="sm"
         onClick={envoyerTous}
-        disabled={envoi || aEnvoyer === null || aEnvoyer === 0 || !template}
+        disabled={!marketingActif || envoi || aEnvoyer === null || aEnvoyer === 0 || !template}
         loading={envoi}
         iconeGauche={envoi ? undefined : <Send className="h-4 w-4" />}
         className="whitespace-nowrap"
       >
-        Envoyer le template à tous
+        {marketingActif ? 'Envoyer le template à tous' : 'Envoi groupé désactivé'}
       </BoutonY2K>
-    </div>
-  );
-}
-
-/* ── Modal d'envoi email 1-clic via Jolene (Resend) ──
-   Pré-remplie avec le template officiel (onglet Templates) — modifiable avant envoi. */
-function OutreachModal({ prospect, template, onClose }: { prospect: any; template: TemplateProspection; onClose: () => void }) {
-  const titleId = useId();
-  // Nom d'affichage : étab = nom ; soignant = prénom + nom.
-  const nomAffiche = prospect.prenom ? `${prospect.prenom} ${prospect.nom}`.trim() : prospect.nom;
-  const [sujet, setSujet] = useState(remplirTemplate(template.sujet, { ...prospect, nom: nomAffiche }));
-  const [corps, setCorps] = useState(remplirTemplate(template.contenu, { ...prospect, nom: nomAffiche }));
-  const [envoi, setEnvoi] = useState(false);
-
-  const envoyer = async () => {
-    setEnvoi(true);
-    const { data, error } = await supabase.functions.invoke('sales-outreach', {
-      body: {
-        email: prospect.email, sujet, corps,
-        finess: prospect.finess, cle: prospect.cle,
-        nom: nomAffiche, ville: prospect.ville, departement: prospect.departement,
-        telephone: prospect.telephone, profession: prospect.profession,
-      },
-    });
-    setEnvoi(false);
-    if (error || (data as any)?.error) { toast.error((data as any)?.error || 'Envoi impossible.'); return; }
-    toast.success(`Email envoyé à ${prospect.email} — prospect sourcé (CONTACTÉ).`);
-    onClose();
-  };
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-foreground/40 p-0 sm:p-4" onClick={onClose}>
-      <div className="bg-card w-full sm:max-w-lg rounded-t-2xl sm:rounded-2xl p-5 max-h-[90vh] overflow-y-auto space-y-3" role="dialog" aria-modal="true" aria-labelledby={titleId} onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between">
-          <h2 id={titleId} className="font-bold text-foreground">Email à {nomAffiche}</h2>
-          <button aria-label={`Fermer l’email à ${nomAffiche}`} onClick={onClose} className="text-muted-foreground hover:text-foreground"><X className="h-5 w-5" aria-hidden="true" /></button>
-        </div>
-        <p className="text-xs text-muted-foreground">À : {prospect.email} · De : Gabrielle de Jolene (réponses → votre boîte perso)</p>
-        <Champ label="Sujet"><Input value={sujet} onChange={e => setSujet(e.target.value)} /></Champ>
-        <Champ label="Message"><Textarea value={corps} onChange={e => setCorps(e.target.value)} rows={9} /></Champ>
-        <div className="flex gap-2 pt-1">
-          <BoutonY2K onClick={envoyer} disabled={envoi} iconeGauche={<Send className="h-4 w-4" />} className="flex-1">
-            {envoi ? 'Envoi…' : 'Envoyer'}
-          </BoutonY2K>
-          <BoutonY2K variant="secondary" onClick={onClose}>Annuler</BoutonY2K>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/* ── Modal suivi d'appel : a décroché ? ── */
-function AppelModal({ prospect, onChoix, onClose }: { prospect: any; onChoix: (aDecroche: boolean) => void; onClose: () => void }) {
-  const titleId = useId();
-  const nom = prospect.prenom ? `${prospect.prenom} ${prospect.nom}`.trim() : prospect.nom;
-  return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-foreground/40 p-0 sm:p-4" onClick={onClose}>
-      <div className="bg-card w-full sm:max-w-sm rounded-t-2xl sm:rounded-2xl p-5 space-y-4" role="dialog" aria-modal="true" aria-labelledby={titleId} onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between">
-          <h2 id={titleId} className="font-bold text-foreground">Appel à {nom}</h2>
-          <button aria-label={`Fermer le suivi d’appel de ${nom}`} onClick={onClose} className="text-muted-foreground hover:text-foreground"><X className="h-5 w-5" aria-hidden="true" /></button>
-        </div>
-        <p className="text-sm text-muted-foreground">Cette personne a-t-elle décroché ?</p>
-        <div className="flex gap-2">
-          <BoutonY2K onClick={() => onChoix(true)} className="flex-1">Oui, a décroché</BoutonY2K>
-          <BoutonY2K variant="secondary" onClick={() => onChoix(false)} className="flex-1" iconeGauche={<RotateCcw className="h-4 w-4" />}>Non — à rappeler</BoutonY2K>
-        </div>
-        <p className="text-[11px] text-muted-foreground">« Oui » source le contact (réponse à suivre). « Non » l'ajoute à la file « À rappeler ».</p>
-      </div>
     </div>
   );
 }
@@ -1708,10 +1677,7 @@ function ProspectionSoignants({ onAjouter }: { onAjouter: () => void }) {
   const [loading, setLoading] = useState(false);
   const [erreurRecherche, setErreurRecherche] = useState<string | null>(null);
   const rechercheIdRef = useRef(0);
-  const [emailEdit, setEmailEdit] = useState<{ cle: string; valeur: string; prospect?: any } | null>(null);
-  const [outreach, setOutreach] = useState<any | null>(null);
-  const [appel, setAppel] = useState<any | null>(null);
-  const tpl = useTemplateProspectionSoignant();
+  const [emailEdit, setEmailEdit] = useState<{ cle: string; valeur: string } | null>(null);
   const [etudiants, setEtudiants] = useState(false);
 
   const rechercher = useCallback(async (p = 1) => {
@@ -1755,16 +1721,9 @@ function ProspectionSoignants({ onAjouter }: { onAjouter: () => void }) {
     const { error } = await supabase.from('prospects_soignants' as any)
       .update({ email: valeur || null } as any).eq('cle', emailEdit.cle);
     if (error) { toast.error(error.message); return; }
-    const prospect = emailEdit.prospect;
     setEmailEdit(null);
     rechercher(page);
-    // Enchaîne directement sur l'envoi : email saisi → brouillon pré-rempli dans la boîte mail.
-    if (valeur && prospect) {
-      toast.success('Email enregistré — message prêt dans votre boîte mail.');
-      mailtoSoignant({ ...prospect, email: valeur });
-    } else {
-      toast.success('Email enregistré.');
-    }
+    toast.success('Email enregistré. Aucun message envoyé.');
   };
 
   const ajouterProspectAuCrm = async (pr: any): Promise<string | null> => {
@@ -1782,29 +1741,8 @@ function ProspectionSoignants({ onAjouter }: { onAjouter: () => void }) {
   const ajouterAuPipeline = async (pr: any) => {
     const contactId = await ajouterProspectAuCrm(pr);
     if (!contactId) return;
-    toast.success('Ajouté aux soignants sourcés.');
+    toast.success('Ajouté aux prospects. Aucun message envoyé.');
     onAjouter();
-  };
-
-  // « Appelé » → a décroché ? Oui = sourcé (réponse en attente) / Non = à rappeler.
-  const enregistrerAppel = async (pr: any, aDecroche: boolean) => {
-    const jour = new Date().toISOString().slice(0, 10);
-    const contactId = await ajouterProspectAuCrm(pr);
-    if (!contactId) return;
-    const { error } = await supabase.from('sales_contacts' as any).update({
-      statut: 'CONTACTE', reponse: aDecroche ? 'EN_ATTENTE' : null, a_rappeler: !aDecroche,
-      dernier_contact_le: new Date().toISOString(),
-      notes: aDecroche ? `Appelé le ${jour} — a décroché` : `Appelé le ${jour} — pas de réponse, à rappeler`,
-    } as any).eq('id', contactId);
-    if (error) { toast.error(error.message); return; }
-    setAppel(null);
-    toast.success(aDecroche ? 'Sourcé — à suivre.' : 'Ajouté à « À rappeler ».');
-    onAjouter();
-  };
-
-  const mailtoSoignant = (pr: any) => {
-    const nomAffiche = `${pr.prenom || ''} ${pr.nom || ''}`.trim();
-    composerGmail(pr.email, remplirTemplate(tpl.sujet, { ...pr, nom: nomAffiche }), remplirTemplate(tpl.contenu, { ...pr, nom: nomAffiche }));
   };
 
   const total = estNombreCompteur(data?.total) ? data.total : null;
@@ -1873,32 +1811,17 @@ function ProspectionSoignants({ onAjouter }: { onAjouter: () => void }) {
                       </p>
                     </div>
                   </div>
-                  <div className="flex gap-2 mt-3 flex-wrap">
-                    {pr.telephone ? (
-                      <>
-                        <BoutonY2K size="sm" onClick={() => { window.location.href = `tel:${pr.telephone}`; }} iconeGauche={<Phone className="h-4 w-4" />}>
-                          Appeler
-                        </BoutonY2K>
-                        <BoutonY2K size="sm" variant="secondary" onClick={() => window.open(lienWhatsApp(pr.telephone), '_blank', 'noopener')} iconeGauche={<MessageCircle className="h-4 w-4" />}>WhatsApp</BoutonY2K>
-                      </>
-                    ) : (
-                      <BadgeY2K variant="warning">Tél. non renseigné</BadgeY2K>
+                  <div className="flex gap-2 mt-3 flex-wrap items-center">
+                    <BoutonY2K size="sm" onClick={() => ajouterAuPipeline(pr)} iconeGauche={<Plus className="h-4 w-4" />}>Ajouter aux prospects</BoutonY2K>
+                    {!pr.email && (
+                      <BoutonY2K size="sm" variant="ghost" onClick={() => setEmailEdit({ cle: pr.cle, valeur: '' })} iconeGauche={<Pencil className="h-4 w-4" />}>Renseigner l’email</BoutonY2K>
                     )}
-                    {pr.email ? (
-                      <>
-                        <BoutonY2K size="sm" onClick={() => setOutreach(pr)} iconeGauche={<Send className="h-4 w-4" />}>Envoyer via Jolene</BoutonY2K>
-                        <BoutonY2K size="sm" variant="secondary" onClick={() => mailtoSoignant(pr)} iconeGauche={<Mail className="h-4 w-4" />}>Gmail</BoutonY2K>
-                      </>
-                    ) : (
-                      <BoutonY2K size="sm" variant="ghost" onClick={() => setEmailEdit({ cle: pr.cle, valeur: '', prospect: pr })} iconeGauche={<Pencil className="h-4 w-4" />}>+ Email</BoutonY2K>
-                    )}
-                    {pr.telephone && <BoutonY2K size="sm" variant="ghost" onClick={() => setAppel(pr)} iconeGauche={<Phone className="h-4 w-4" />}>Appelé</BoutonY2K>}
-                    <BoutonY2K size="sm" variant="ghost" onClick={() => ajouterAuPipeline(pr)} iconeGauche={<Plus className="h-4 w-4" />}>Pipeline</BoutonY2K>
+                    <span className="text-[11px] text-muted-foreground">Qualification interne uniquement</span>
                   </div>
                   {(pr.telephone || pr.email) && (
                     <p className="text-[11px] mt-1.5 flex flex-wrap gap-x-2">
-                      {pr.telephone && <a href={`tel:${pr.telephone}`} className="text-primary font-medium hover:underline">{pr.telephone}</a>}
-                      {pr.email && <a href={`mailto:${pr.email}`} className="text-primary font-medium hover:underline break-all">{pr.email}</a>}
+                      {pr.telephone && <span>{pr.telephone}</span>}
+                      {pr.email && <span className="break-all">{pr.email}</span>}
                     </p>
                   )}
                 </CardY2KContent>
@@ -1918,8 +1841,7 @@ function ProspectionSoignants({ onAjouter }: { onAjouter: () => void }) {
       {emailEdit && (
         <FormPanel titre="Email du soignant" onClose={() => setEmailEdit(null)} onSave={sauverEmail}>
           <p className="text-xs text-muted-foreground mb-2">
-            L'enrichissement Annuaire Santé remplit en fond les emails trouvables (faible taux pour les
-            soignants : homonymes ignorés par sécurité). Sinon, demandez-le à l'appel — puis tout devient 1-clic.
+            Complétez uniquement une adresse publique vérifiée. L’enregistrement ne déclenche aucun message.
           </p>
           <Champ label="Adresse email">
             <Input type="email" value={emailEdit.valeur} onChange={e => setEmailEdit({ ...emailEdit, valeur: e.target.value })} placeholder="ex : prenom.nom@gmail.com" />
@@ -1927,11 +1849,6 @@ function ProspectionSoignants({ onAjouter }: { onAjouter: () => void }) {
         </FormPanel>
       )}
 
-      {/* Envoi email via Jolene (Resend) — parité avec les établissements */}
-      {outreach && <OutreachModal prospect={outreach} template={tpl} onClose={() => { setOutreach(null); rechercher(page); onAjouter(); }} />}
-
-      {/* Suivi d'appel : a décroché ? */}
-      {appel && <AppelModal prospect={appel} onChoix={(aDecroche) => enregistrerAppel(appel, aDecroche)} onClose={() => setAppel(null)} />}
     </div>
   );
 }

@@ -49,6 +49,7 @@ interface TacheCrm {
   ville: string | null;
   departement: string | null;
   contact_statut: string;
+  ne_plus_contacter: boolean;
   reponse: string | null;
 }
 
@@ -110,8 +111,12 @@ function lienWhatsApp(telephone: string): string {
   return `https://wa.me/${international}`;
 }
 
+function contactCrmBloque(tache: TacheCrm): boolean {
+  return tache.ne_plus_contacter || tache.contact_statut === 'PERDU';
+}
+
 function ouvrirGmail(tache: TacheCrm) {
-  if (!tache.email) return;
+  if (!tache.email || contactCrmBloque(tache)) return;
   const cible = tache.contact_type === 'ETABLISSEMENT' ? 'votre établissement' : 'vos prochaines missions';
   const sujet = tache.contact_type === 'ETABLISSEMENT'
     ? `Jolene — un point rapide pour ${tache.nom}`
@@ -138,7 +143,7 @@ export function AdminCrmAutomation({ onContactsChanged }: AdminCrmAutomationProp
     setLoading(true);
     if (regenerer) {
       const { error: erreurGeneration } = await supabase.rpc('fn_crm_generer_taches' as never);
-      if (erreurGeneration) toast.error(`Automatisation CRM : ${erreurGeneration.message}`);
+      if (erreurGeneration) toast.error(`Préparation des actions : ${erreurGeneration.message}`);
     }
     const { data: resultat, error } = await supabase.rpc('fn_admin_crm_tableau' as never, { p_limit: 200 } as never);
     setLoading(false);
@@ -157,7 +162,8 @@ export function AdminCrmAutomation({ onContactsChanged }: AdminCrmAutomationProp
   const taches = useMemo(() => {
     const source = data?.taches || [];
     return source.filter((tache) =>
-      (filtreCible === 'TOUS' || tache.contact_type === filtreCible)
+      !contactCrmBloque(tache)
+      && (filtreCible === 'TOUS' || tache.contact_type === filtreCible)
       && (!filtreResponsable || tache.assignee_a === filtreResponsable)
       && (voirFutures || new Date(tache.echeance_le).getTime() <= Date.now()),
     );
@@ -169,6 +175,10 @@ export function AdminCrmAutomation({ onContactsChanged }: AdminCrmAutomationProp
   }, [charger, onContactsChanged]);
 
   const effectuerAction = async (tache: TacheCrm, resultat: keyof typeof RESULTATS) => {
+    if (contactCrmBloque(tache)) {
+      toast.error('Contact bloqué : aucune action autorisée.');
+      return;
+    }
     if ((resultat === 'PAS_INTERESSE' || resultat === 'STOP')
       && !window.confirm(`${RESULTATS[resultat]} : arrêter définitivement la séquence pour ${tache.nom} ?`)) return;
     setActionLoading(tache.id);
@@ -183,11 +193,15 @@ export function AdminCrmAutomation({ onContactsChanged }: AdminCrmAutomationProp
       toast.error(error.message);
       return;
     }
-    toast.success(`CRM mis à jour : ${RESULTATS[resultat]}.`);
+    toast.success(`Suivi mis à jour : ${RESULTATS[resultat]}.`);
     await rafraichirApresAction();
   };
 
   const marquerEmailEnvoye = async (tache: TacheCrm) => {
+    if (contactCrmBloque(tache)) {
+      toast.error('Contact bloqué : aucun email ne peut être journalisé.');
+      return;
+    }
     setActionLoading(tache.id);
     const { error } = await supabase.rpc('fn_admin_crm_effectuer_action' as never, {
       p_tache_id: tache.id,
@@ -205,6 +219,10 @@ export function AdminCrmAutomation({ onContactsChanged }: AdminCrmAutomationProp
   };
 
   const reporter = async (tache: TacheCrm, jours: number) => {
+    if (contactCrmBloque(tache)) {
+      toast.error('Contact bloqué : aucun rappel ne peut être programmé.');
+      return;
+    }
     setActionLoading(tache.id);
     const nouvelleDate = new Date();
     nouvelleDate.setDate(nouvelleDate.getDate() + jours);
@@ -240,13 +258,13 @@ export function AdminCrmAutomation({ onContactsChanged }: AdminCrmAutomationProp
   if (loading && !data) {
     return (
       <div className="rounded-xl border border-border bg-card p-8 text-center text-sm text-muted-foreground" role="status">
-        Préparation de la file CRM…
+        Préparation des actions du jour…
       </div>
     );
   }
 
   if (!data) {
-    return <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-destructive" role="alert">Le CRM n’a pas pu être chargé.</div>;
+    return <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-destructive" role="alert">Les actions commerciales n’ont pas pu être chargées.</div>;
   }
 
   return (
@@ -254,14 +272,14 @@ export function AdminCrmAutomation({ onContactsChanged }: AdminCrmAutomationProp
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h2 id="crm-title" className="flex items-center gap-2 font-bold text-foreground">
-            <Bot className="h-5 w-5 text-primary" aria-hidden="true" /> CRM du jour
+            <Bot className="h-5 w-5 text-primary" aria-hidden="true" /> Actions du jour
           </h2>
           <p className="text-xs text-muted-foreground">
-            La file, les priorités, l’attribution et les prochaines relances sont automatiques. L’envoi reste validé par un humain.
+            Jolene prépare les priorités et les rappels. Depuis cet écran, aucun appel, email ou message n’est envoyé sans une action humaine explicite.
           </p>
         </div>
         <BoutonY2K variant="ghost" size="sm" onClick={() => charger(true)} loading={loading} iconeGauche={<RefreshCw className="h-4 w-4" />}>
-          Recalculer la file
+          Recalculer les priorités
         </BoutonY2K>
       </div>
 
@@ -312,6 +330,7 @@ export function AdminCrmAutomation({ onContactsChanged }: AdminCrmAutomationProp
           {taches.map((tache) => {
             const responsable = data.responsables.find((item) => item.user_id === tache.assignee_a);
             const busy = actionLoading === tache.id;
+            const contactBloque = contactCrmBloque(tache);
             return (
               <CardY2K key={tache.id} hoverLift={false} noPadding className={estEnRetard(tache.echeance_le) ? 'border-destructive/40' : ''}>
                 <CardY2KContent className="pt-6">
@@ -321,6 +340,7 @@ export function AdminCrmAutomation({ onContactsChanged }: AdminCrmAutomationProp
                         <BadgeY2K variant={badgePriorite(tache.priorite)}>{tache.priorite === 'URGENTE' ? 'Urgent' : tache.priorite === 'HAUTE' ? 'Prioritaire' : 'Planifié'}</BadgeY2K>
                         <BadgeY2K variant="info">{tache.canal === 'TELEPHONE' ? 'Téléphone' : tache.canal === 'EMAIL' ? 'Email' : tache.canal}</BadgeY2K>
                         {estEnRetard(tache.echeance_le) && <BadgeY2K variant="error">En retard</BadgeY2K>}
+                        {contactBloque && <BadgeY2K variant="error">Contact bloqué</BadgeY2K>}
                       </div>
                       <h3 className="mt-2 font-bold text-foreground">{tache.nom}</h3>
                       <p className="text-xs text-muted-foreground">
@@ -337,6 +357,12 @@ export function AdminCrmAutomation({ onContactsChanged }: AdminCrmAutomationProp
                     </div>
                   </div>
 
+                  {contactBloque ? (
+                    <p className="mt-3 rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm font-medium text-destructive" role="alert">
+                      Contact bloqué — aucune action ni prise de contact autorisée.
+                    </p>
+                  ) : (
+                    <>
                   <div className="mt-3 flex flex-wrap gap-2">
                     {tache.telephone && (
                       <>
@@ -386,6 +412,8 @@ export function AdminCrmAutomation({ onContactsChanged }: AdminCrmAutomationProp
                       <BoutonY2K size="sm" variant="destructive" onClick={() => effectuerAction(tache, 'STOP')} disabled={busy}>STOP</BoutonY2K>
                     </div>
                   </details>
+                    </>
+                  )}
                 </CardY2KContent>
               </CardY2K>
             );

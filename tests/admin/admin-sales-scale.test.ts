@@ -41,12 +41,14 @@ describe('CRM admin à grande échelle', () => {
     expect(prospectionSoignants).not.toContain("from('sales_contacts' as any).insert");
   });
 
-  it('dédoublonne aussi les établissements avant tout ajout ou suivi d’appel', () => {
+  it('dédoublonne les établissements et réserve l’annuaire à la qualification', () => {
     const prospectionEtablissements = entre('function ProspectionEtab', 'function EnvoiMasseBar');
     expect(prospectionEtablissements).toContain("supabase.rpc('fn_admin_sourcing_ajouter_crm'");
     expect(prospectionEtablissements).toContain("p_cible: 'ETABLISSEMENT'");
     expect(prospectionEtablissements).toContain('p_prospect_id: pr.finess');
-    expect(prospectionEtablissements).toContain(".eq('id', contactId)");
+    expect(prospectionEtablissements).toContain('Qualification interne uniquement');
+    expect(prospectionEtablissements).not.toContain("supabase.functions.invoke('sales-outreach'");
+    expect(prospectionEtablissements).not.toContain('lienWhatsApp(pr.telephone)');
     expect(prospectionEtablissements).not.toContain("from('sales_contacts' as any).upsert");
     expect(prospectionEtablissements).not.toContain("from('sales_contacts' as any).insert");
   });

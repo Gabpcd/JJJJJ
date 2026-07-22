@@ -6,7 +6,6 @@ import {
   CircleDollarSign,
   DatabaseZap,
   ExternalLink,
-  EyeOff,
   Factory,
   Mail,
   MapPinned,
@@ -24,7 +23,6 @@ import {
 import { BadgeY2K } from '@/components/y2k/BadgeY2K';
 import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { CardY2K, CardY2KContent, CardY2KHeader, CardY2KTitle } from '@/components/y2k/CardY2K';
-import { CarteKPIY2K } from '@/components/y2k/CarteKPIY2K';
 import { Label } from '@/components/ui/label';
 import { PROFESSIONS, getLabelProfession } from '@/lib/constantes';
 import { supabase } from '@/integrations/supabase/client';
@@ -307,6 +305,7 @@ export function AdminAcquisitionRadar() {
   const [erreurChargement, setErreurChargement] = useState<string | null>(null);
   const [erreurCibles, setErreurCibles] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [nombreCiblesAffichees, setNombreCiblesAffichees] = useState(20);
   const requeteCourante = useRef(0);
 
   const charger = useCallback(async (silencieux = false, rechargerCibles = true) => {
@@ -371,13 +370,17 @@ export function AdminAcquisitionRadar() {
     };
   }, [charger]);
 
+  useEffect(() => {
+    setNombreCiblesAffichees(20);
+  }, [departement, profession, scope]);
+
   const franceTravail = useMemo(
     () => data?.sources.find((source) => source.code === 'FRANCE_TRAVAIL_OFFRES'),
     [data?.sources],
   );
 
   const synchroniserSourcesPubliques = async () => {
-    if (!window.confirm('Synchroniser BMO et BOAMP en mode silencieux ? Aucun établissement ni soignant ne sera contacté.')) return;
+    if (!window.confirm('Actualiser les données BMO et BOAMP ? Cette opération importe uniquement des données publiques et ne contacte personne.')) return;
     setActionLoading('IMPORT_PUBLIC');
     try {
       const executions = await Promise.allSettled([
@@ -404,9 +407,10 @@ export function AdminAcquisitionRadar() {
   };
 
   const ajouterCibleAuCrm = async (cible: CibleExterne) => {
+    if (!window.confirm(`Ajouter ${cible.nom} à votre liste de prospects ?\n\nCette action crée uniquement une fiche interne. Aucun message ne sera envoyé.`)) return;
     const key = `CIBLE:${cible.id}`;
     setActionLoading(key);
-    const { error } = await supabase.rpc('fn_admin_sourcing_ajouter_crm' as never, {
+    const { data: resultat, error } = await supabase.rpc('fn_admin_sourcing_ajouter_crm' as never, {
       p_cible: 'ETABLISSEMENT',
       p_prospect_id: cible.finess,
       p_score: cible.score,
@@ -416,12 +420,21 @@ export function AdminAcquisitionRadar() {
       toast.error(error.message);
       return;
     }
-    toast.success('Établissement ajouté manuellement au CRM, séquence désactivée.');
+    const securite = resultat as unknown as {
+      sequence_active?: boolean;
+      prochaine_action_le?: string | null;
+      contact_automatique?: boolean;
+    };
+    if (securite.sequence_active !== false || securite.prochaine_action_le != null || securite.contact_automatique !== false) {
+      toast.error('Ajout interrompu : le garde-fou sans envoi n’a pas été confirmé.');
+      return;
+    }
+    toast.success('Ajouté à Prospects & actions. Aucun message envoyé.');
     await charger();
   };
 
   const importerFranceTravail = async () => {
-    if (!window.confirm('Importer silencieusement les offres France Travail ? Aucun employeur ni soignant ne sera contacté.')) return;
+    if (!window.confirm('Importer les offres France Travail ? Cette opération importe uniquement des données publiques et ne contacte personne.')) return;
     setActionLoading('IMPORT_FRANCE_TRAVAIL');
     const { data: resultat, error } = await supabase.functions.invoke('import-signaux-acquisition', {
       body: { silencieux: true },
@@ -465,6 +478,7 @@ export function AdminAcquisitionRadar() {
   };
 
   const ajouterCrm = async (signal: SignalRadar) => {
+    if (!window.confirm(`Ajouter ${signal.nom_etablissement} à votre liste de prospects ?\n\nCette action crée uniquement une fiche interne. Aucun message ne sera envoyé.`)) return;
     setActionLoading(signal.id);
     const { data: resultat, error } = await supabase.rpc('fn_admin_acquisition_ajouter_crm' as never, {
       p_signal_id: signal.id,
@@ -474,12 +488,16 @@ export function AdminAcquisitionRadar() {
       toast.error(error.message);
       return;
     }
-    const res = resultat as unknown as { sequence_active?: boolean };
-    if (res.sequence_active) {
-      toast.error('Garde-fou : la séquence CRM ne devait pas être active.');
+    const res = resultat as unknown as {
+      sequence_active?: boolean;
+      prochaine_action_le?: string | null;
+      contact_automatique?: boolean;
+    };
+    if (res.sequence_active !== false || res.prochaine_action_le != null || res.contact_automatique !== false) {
+      toast.error('Ajout interrompu : le garde-fou sans envoi n’a pas été confirmé.');
       return;
     }
-    toast.success('Ajouté au CRM en mode silencieux : aucune séquence active.');
+    toast.success('Ajouté à Prospects & actions. Aucun message envoyé.');
     await charger();
   };
 
@@ -524,27 +542,37 @@ export function AdminAcquisitionRadar() {
     await charger();
   };
 
+  if (loading && !data) {
+    return (
+      <section aria-labelledby="acquisition-radar-title" aria-busy="true">
+        <h2 id="acquisition-radar-title" className="sr-only">Opportunités externes</h2>
+        <div className="rounded-xl border border-border bg-card p-8 text-center text-sm text-muted-foreground" role="status" aria-live="polite">
+          Analyse des opportunités externes en cours…
+        </div>
+      </section>
+    );
+  }
+
   return (
     <section className="space-y-5" aria-labelledby="acquisition-radar-title" aria-busy={loading}>
-      <div className="rounded-xl border-2 border-emerald-500/40 bg-emerald-500/5 p-4" role="status">
-        <div className="flex items-start gap-3">
-          <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" aria-hidden="true" />
-          <div>
-            <h2 id="acquisition-radar-title" className="font-bold text-foreground">Radar d’acquisition — mode silencieux</h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Les sources, scores et recommandations sont automatisés. Aucun email, SMS, appel, WhatsApp ou notification n’est envoyé.
-              Le passage au CRM conserve la séquence désactivée jusqu’à une décision humaine après lancement.
-            </p>
-          </div>
-          <BadgeY2K variant={data?.marketing_actif ? 'error' : 'success'} className="ml-auto shrink-0">
-            {data?.marketing_actif ? 'Marketing actif' : '0 contact auto'}
+      <div className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h2 id="acquisition-radar-title" className="text-lg font-bold text-foreground">Opportunités externes</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            FINESS, BMO et BOAMP servent uniquement à établir cette liste de travail.
+          </p>
+        </div>
+        <div className="flex items-center gap-2" role="status">
+          <ShieldCheck className="h-5 w-5 text-emerald-600" aria-hidden="true" />
+          <BadgeY2K variant={data?.marketing_actif ? 'error' : 'success'}>
+            {data?.marketing_actif ? 'Automatisations actives ailleurs' : 'Envois automatiques désactivés'}
           </BadgeY2K>
         </div>
       </div>
 
       <div className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4 lg:flex-row lg:items-end">
         <div className="space-y-1.5">
-          <Label htmlFor="radar-scope">Données</Label>
+          <Label htmlFor="radar-scope">Jeu de données</Label>
           <select
             id="radar-scope"
             value={scope}
@@ -557,7 +585,7 @@ export function AdminAcquisitionRadar() {
           </select>
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor="radar-departement">Département</Label>
+          <Label htmlFor="radar-departement">Zone</Label>
           <input
             id="radar-departement"
             value={departement}
@@ -579,35 +607,51 @@ export function AdminAcquisitionRadar() {
             {PROFESSIONS.map((item) => <option key={item.valeur} value={item.valeur}>{item.label}</option>)}
           </select>
         </div>
-        <div className="flex gap-2 lg:ml-auto">
+        <fieldset className="lg:ml-auto">
+          <legend className="mb-1.5 text-sm font-medium text-foreground">Horizon analysé</legend>
+          <div className="flex gap-2">
           {[30, 90, 180].map((valeur) => (
-            <BoutonY2K key={valeur} size="sm" variant={jours === valeur ? 'primary' : 'secondary'} onClick={() => setJours(valeur)}>
+            <BoutonY2K
+              key={valeur}
+              size="sm"
+              variant={jours === valeur ? 'primary' : 'secondary'}
+              aria-pressed={jours === valeur}
+              onClick={() => setJours(valeur)}
+            >
               {valeur}j
             </BoutonY2K>
           ))}
           <BoutonY2K size="sm" variant="ghost" onClick={() => void charger()} disabled={loading} aria-label="Rafraîchir le radar">
             <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
           </BoutonY2K>
+          </div>
+        </fieldset>
+      </div>
+
+      <dl className="grid overflow-hidden rounded-xl border border-border bg-card sm:grid-cols-2 xl:grid-cols-4" aria-live="polite">
+        <div className="border-b border-border p-4 sm:border-r xl:border-b-0">
+          <dt className="flex items-center gap-2 text-sm text-muted-foreground"><Activity className="h-4 w-4" aria-hidden="true" /> Besoins publics</dt>
+          <dd className="mt-1 text-2xl font-bold text-foreground">{data?.stats.signaux_actifs ?? '—'}</dd>
         </div>
-      </div>
+        <div className="border-b border-border p-4 xl:border-b-0 xl:border-r">
+          <dt className="flex items-center gap-2 text-sm text-muted-foreground"><Building2 className="h-4 w-4" aria-hidden="true" /> {scope === 'TEST' ? 'Établissements test' : 'Cibles proposées'}</dt>
+          <dd className="mt-1 text-2xl font-bold text-foreground">{scope === 'TEST' ? data?.stats.etablissements_a_potentiel ?? '—' : ciblesExternes?.total_classe ?? '—'}</dd>
+        </div>
+        <div className="border-b border-border p-4 sm:border-b-0 sm:border-r">
+          <dt className="flex items-center gap-2 text-sm text-muted-foreground"><UserCheck className="h-4 w-4" aria-hidden="true" /> Soignants disponibles J+14</dt>
+          <dd className="mt-1 text-2xl font-bold text-foreground">{data?.stats.disponibles_14j ?? '—'}</dd>
+        </div>
+        <div className="p-4">
+          <dt className="flex items-center gap-2 text-sm text-muted-foreground"><CircleDollarSign className="h-4 w-4" aria-hidden="true" /> Potentiel vérifié HT/mois</dt>
+          <dd className="mt-1 text-2xl font-bold text-foreground">{data ? fmtEuro(data.stats.potentiel_commission_mensuel_ht || 0) : '—'}</dd>
+        </div>
+      </dl>
 
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <CarteKPIY2K icone={<Activity className="h-4 w-4" />} valeur={data?.stats.signaux_actifs || 0} label="Besoins détectés" variant="holographic" />
-        <CarteKPIY2K
-          icone={<Building2 className="h-4 w-4" />}
-          valeur={scope === 'TEST' ? data?.stats.etablissements_a_potentiel || 0 : ciblesExternes?.total_classe || 0}
-          label={scope === 'TEST' ? 'Établ. test avec demande' : 'Établ. externes classés'}
-          variant="default"
-        />
-        <CarteKPIY2K icone={<UserCheck className="h-4 w-4" />} valeur={data?.stats.disponibles_14j || 0} label="Soignants Jolene dispo. J+14" variant="default" />
-        <CarteKPIY2K icone={<CircleDollarSign className="h-4 w-4" />} valeur={fmtEuro(data?.stats.potentiel_commission_mensuel_ht || 0)} label="Potentiel mensuel estimé HT" variant="soft" />
-      </div>
-
-      <div className="flex flex-col gap-1 text-xs text-muted-foreground sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+      <div className="flex flex-col gap-1 text-sm text-muted-foreground sm:flex-row sm:items-start sm:justify-between sm:gap-4">
         <p className="max-w-4xl">
-          Le radar rapproche les missions Jolene, les tensions territoriales BMO, les avis BOAMP et l’annuaire FINESS. BMO sert à prioriser une zone, jamais à prétendre qu’un établissement recrute précisément ; un avis BOAMP est signalé séparément comme preuve directe. Le potentiel financier n’intègre pas les simples inférences BMO. Aucun contact n’est déclenché par ce calcul.
+          Un besoin public identifié est une preuve directe. Une tension BMO indique seulement une zone à qualifier : elle ne prouve pas que chaque établissement recrute.
         </p>
-        <p className="shrink-0 tabular-nums">
+        <p className="shrink-0 text-xs tabular-nums">
           {data ? `Dernier calcul : ${fmtDate(data.genere_le)}` : 'Calcul en attente'} · actualisation toutes les 60 s
         </p>
       </div>
@@ -630,18 +674,18 @@ export function AdminAcquisitionRadar() {
             <CardY2K hoverLift={false}>
               <CardY2KHeader>
                 <CardY2KTitle className="flex items-center gap-2 text-sm">
-                  <Building2 className="h-4 w-4" /> Établissements externes à contacter en priorité
+                  <Building2 className="h-4 w-4" /> Établissements à qualifier
                 </CardY2KTitle>
               </CardY2KHeader>
               <CardY2KContent>
-                <div className="mb-3 flex flex-col gap-2 text-xs text-muted-foreground sm:flex-row sm:items-start sm:justify-between">
+                <div className="mb-4 flex flex-col gap-2 text-sm text-muted-foreground sm:flex-row sm:items-start sm:justify-between">
                   <p className="max-w-3xl">
-                    Cibles FINESS hors comptes Jolene et hors CRM, avec coordonnées publiques. « Direct » signifie qu’un besoin BOAMP ou France Travail nommé a été rapproché ; « tension territoriale » reste une piste à qualifier humainement.
+                    La liste exclut les comptes Jolene et les prospects déjà suivis. Ajoutez uniquement les établissements que vous souhaitez réellement travailler.
                   </p>
-                  <span className="shrink-0">{ciblesExternes?.methode || 'Synchronisation externe en attente'}</span>
+                  <span className="shrink-0 text-xs">{ciblesExternes ? `${ciblesExternes.total_classe} cible(s) proposée(s)` : 'Synchronisation en attente'}</span>
                 </div>
-                <div className="max-h-[620px] space-y-3 overflow-auto pr-1">
-                  {(ciblesExternes?.resultats || []).map((cible) => {
+                <div className="space-y-3">
+                  {(ciblesExternes?.resultats || []).slice(0, nombreCiblesAffichees).map((cible, index) => {
                     const sourceDemandeUrl = urlSourceOfficielle(cible.source_demande_url);
                     const finessSourceUrl = urlSourceOfficielle(cible.finess_source_url);
                     return (
@@ -650,24 +694,24 @@ export function AdminAcquisitionRadar() {
                         <div className="min-w-0">
                           <div className="flex flex-wrap items-center gap-2">
                             <h3 className="font-semibold text-foreground">{cible.nom}</h3>
-                            <BadgeY2K variant={scoreVariant(cible.score)}>priorité {cible.score}/100</BadgeY2K>
+                            <BadgeY2K variant={index < 10 || cible.force_signal === 'DIRECT' ? 'success' : 'info'}>priorité #{index + 1}</BadgeY2K>
                             <BadgeY2K variant={cible.force_signal === 'DIRECT' ? 'success' : 'info'}>
-                              {cible.force_signal === 'DIRECT' ? 'besoin public direct' : 'tension territoriale'}
+                              {cible.force_signal === 'DIRECT' ? 'besoin public identifié' : 'besoin territorial inféré'}
                             </BadgeY2K>
                             {cible.bmo_precision === 'AGREGAT' ? <BadgeY2K variant="warning">métier BMO agrégé</BadgeY2K> : null}
                           </div>
                           <p className="mt-1 text-sm text-foreground">
                             {cible.type_jolene} · {getLabelProfession(cible.profession)} · {[cible.ville, cible.departement].filter(Boolean).join(' · ')}
                           </p>
-                          <p className="mt-2 text-xs text-muted-foreground">{cible.raison_priorite}</p>
+                          <p className="mt-2 text-sm text-muted-foreground">{cible.raison_priorite}</p>
                           {cible.type_jolene === 'CENTRE_SANTE' ? (
-                            <p className="mt-1 text-[11px] font-medium text-amber-700 dark:text-amber-400">Centre de santé : exercice salarié uniquement.</p>
+                            <p className="mt-1 text-sm font-medium text-amber-700 dark:text-amber-400">Centre de santé : exercice salarié uniquement.</p>
                           ) : null}
                           {cible.profession === 'IADE' || cible.profession === 'IBODE' ? (
-                            <p className="mt-1 text-[11px] font-medium text-amber-700 dark:text-amber-400">Mission IADE/IBODE : contrat salarié uniquement.</p>
+                            <p className="mt-1 text-sm font-medium text-amber-700 dark:text-amber-400">Mission IADE/IBODE : contrat salarié uniquement.</p>
                           ) : null}
                         </div>
-                        <div className="flex shrink-0 flex-wrap gap-2">
+                        <div className="flex shrink-0 flex-col items-start gap-1 sm:items-end">
                           <BoutonY2K
                             size="sm"
                             variant="primary"
@@ -675,30 +719,31 @@ export function AdminAcquisitionRadar() {
                             disabled={actionLoading === `CIBLE:${cible.id}`}
                             iconeGauche={<Plus className="h-4 w-4" />}
                           >
-                            CRM silencieux
+                            Ajouter aux prospects
                           </BoutonY2K>
+                          <span className="text-xs text-muted-foreground">Fiche interne, aucun envoi</span>
                         </div>
                       </div>
-                      <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-border pt-3 text-xs">
+                      <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-border pt-3 text-sm">
                         {cible.telephone ? (
-                          <a href={`tel:${cible.telephone}`} className="inline-flex min-h-8 items-center gap-1 text-primary hover:underline">
+                          <span className="inline-flex min-h-[44px] items-center gap-1 text-muted-foreground">
                             <Phone className="h-3.5 w-3.5" /> {cible.telephone}
-                          </a>
+                          </span>
                         ) : null}
                         {cible.email ? (
-                          <a href={`mailto:${cible.email}`} className="inline-flex min-h-8 items-center gap-1 text-primary hover:underline">
+                          <span className="inline-flex min-h-[44px] items-center gap-1 break-all text-muted-foreground">
                             <Mail className="h-3.5 w-3.5" /> {cible.email}
-                          </a>
+                          </span>
                         ) : null}
                         <span className="font-mono text-muted-foreground">FINESS {cible.finess}</span>
                         {sourceDemandeUrl ? (
                           <a href={sourceDemandeUrl} target="_blank" rel="noreferrer" className="inline-flex min-h-8 items-center gap-1 text-primary hover:underline">
-                            Preuve / tension <ExternalLink className="h-3 w-3" />
+                            Voir la preuve <ExternalLink className="h-3 w-3" />
                           </a>
                         ) : null}
                         {finessSourceUrl ? (
                           <a href={finessSourceUrl} target="_blank" rel="noreferrer" className="inline-flex min-h-8 items-center gap-1 text-primary hover:underline">
-                            Fiche source <ExternalLink className="h-3 w-3" />
+                            Fiche FINESS <ExternalLink className="h-3 w-3" />
                           </a>
                         ) : null}
                       </div>
@@ -715,11 +760,30 @@ export function AdminAcquisitionRadar() {
                       Aucune cible externe classée pour l’instant. Lancez « Synchroniser BMO + BOAMP » ci-dessous ; aucun contact ne sera envoyé.
                     </div>
                   ) : null}
+                  {ciblesExternes && nombreCiblesAffichees < ciblesExternes.resultats.length ? (
+                    <div className="pt-2 text-center">
+                      <BoutonY2K
+                        size="sm"
+                        variant="secondary"
+                        onClick={() => setNombreCiblesAffichees((valeur) => valeur + 20)}
+                      >
+                        Afficher 20 cibles supplémentaires
+                      </BoutonY2K>
+                    </div>
+                  ) : null}
                 </div>
               </CardY2KContent>
             </CardY2K>
           ) : null}
 
+          <details className="rounded-xl border border-border bg-card p-4">
+            <summary className="min-h-[44px] cursor-pointer py-2 font-semibold text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
+              Analyses, recommandations et sources
+            </summary>
+            <p className="mb-4 text-sm text-muted-foreground">
+              Ouvrez cette section seulement pour piloter les territoires, vérifier les imports ou consulter les hypothèses détaillées.
+            </p>
+            <div className="space-y-4">
           <div className="grid gap-4 xl:grid-cols-2">
             <CardY2K hoverLift={false}>
               <CardY2KHeader>
@@ -920,7 +984,7 @@ export function AdminAcquisitionRadar() {
 
           <CardY2K hoverLift={false}>
             <CardY2KHeader>
-              <CardY2KTitle className="flex items-center gap-2 text-sm"><DatabaseZap className="h-4 w-4" /> Sources de nouveaux besoins et contacts</CardY2KTitle>
+              <CardY2KTitle className="flex items-center gap-2 text-sm"><DatabaseZap className="h-4 w-4" /> Sources publiques utilisées</CardY2KTitle>
             </CardY2KHeader>
             <CardY2KContent>
               <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
@@ -982,7 +1046,7 @@ export function AdminAcquisitionRadar() {
                         <div className="flex flex-wrap items-center gap-2">
                           <h3 className="font-medium text-foreground">{signal.nom_etablissement}</h3>
                           <BadgeY2K variant={scoreVariant(signal.score_demande)}>score {signal.score_demande}</BadgeY2K>
-                          {signal.statut === 'CRM' ? <BadgeY2K variant="success">CRM silencieux</BadgeY2K> : null}
+                          {signal.statut === 'CRM' ? <BadgeY2K variant="success">Dans les prospects</BadgeY2K> : null}
                         </div>
                         <p className="mt-1 text-sm text-foreground">{signal.intitule}</p>
                         <p className="mt-1 text-xs text-muted-foreground">
@@ -998,8 +1062,8 @@ export function AdminAcquisitionRadar() {
                         <BoutonY2K size="sm" variant="secondary" onClick={() => void qualifierSignal(signal, 'QUALIFIE')} disabled={actionLoading === signal.id || signal.statut === 'QUALIFIE'} iconeGauche={<CheckCircle2 className="h-4 w-4" />}>
                           Qualifier
                         </BoutonY2K>
-                        <BoutonY2K size="sm" variant="primary" onClick={() => void ajouterCrm(signal)} disabled={actionLoading === signal.id || signal.statut === 'CRM'} iconeGauche={<EyeOff className="h-4 w-4" />}>
-                          CRM silencieux
+                        <BoutonY2K size="sm" variant="primary" onClick={() => void ajouterCrm(signal)} disabled={actionLoading === signal.id || signal.statut === 'CRM'} iconeGauche={<Plus className="h-4 w-4" />}>
+                          Ajouter aux prospects
                         </BoutonY2K>
                         <BoutonY2K size="sm" variant="ghost" onClick={() => void qualifierSignal(signal, 'IGNORE')} disabled={actionLoading === signal.id} aria-label={`Ignorer le signal ${signal.intitule}`}>
                           <XCircle className="h-4 w-4" />
@@ -1013,9 +1077,11 @@ export function AdminAcquisitionRadar() {
             </CardY2KContent>
           </CardY2K>
 
-          <p className="text-[11px] text-muted-foreground">
+          <p className="text-sm text-muted-foreground">
             Estimations : {data.hypotheses.duree_signal_heures} h par poste signalé, taux horaire moyen {fmtEuro(data.hypotheses.taux_horaire_moyen)}, commission moyenne {data.hypotheses.taux_commission_pct} %. Ces montants ne sont pas des revenus garantis.
           </p>
+            </div>
+          </details>
         </>
       ) : null}
     </section>

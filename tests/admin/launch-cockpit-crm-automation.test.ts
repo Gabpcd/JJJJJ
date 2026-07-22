@@ -8,6 +8,7 @@ const crm = read('src/components/admin/AdminCrmAutomation.tsx');
 const sales = read('src/pages/admin/AdminSales.tsx');
 const outreach = read('supabase/functions/sales-outreach/index.ts');
 const outreachBatch = read('supabase/functions/sales-outreach-batch/index.ts');
+const stopGuard = read('supabase/migrations/20260722134000_sales_outreach_stop_guard.sql');
 
 describe('Cockpit de lancement et CRM automatisé', () => {
   it('sépare explicitement le réel, le test et la vue combinée sans supprimer les démos', () => {
@@ -43,14 +44,52 @@ describe('Cockpit de lancement et CRM automatisé', () => {
     expect(migration).toContain('PERFORM cron.unschedule(v_job.jobid)');
     expect(migration).toContain('$job$SELECT public.fn_crm_generer_taches();$job$');
     expect(migration).not.toMatch(/net\.http|resend\.com|api\.resend/i);
-    expect(crm).toContain('L’envoi reste validé par un humain.');
+    expect(crm).toContain('Depuis cet écran, aucun appel, email ou message n’est envoyé sans une action humaine explicite.');
   });
 
   it('journalise les emails existants et garde le CRM accessible après le sourcing', () => {
     expect(outreach).toContain('fn_crm_enregistrer_email_envoye');
     expect(outreachBatch).toContain('fn_crm_enregistrer_email_envoye');
-    expect(sales).toMatch(/useState<[^>]*'sourcing'[^>]*'crm'[^>]*>\('sourcing'\)/);
-    expect(sales).toContain('Nouveaux contacts');
+    expect(outreachBatch).toContain('verifyAdminOrServiceRole');
+    expect(outreachBatch).toContain('automatisations_marketing_actives');
+    expect(outreachBatch).toContain('PRELANCEMENT_AUTOMATISATIONS_MARKETING_DESACTIVEES');
+    expect(outreachBatch.indexOf('automatisations_marketing_actives')).toBeLessThan(outreachBatch.indexOf('https://api.resend.com/emails'));
+    expect(sales).toContain("type SalesTab = 'sourcing' | 'crm'");
+    expect(sales).toContain("const tab: SalesTab = estSalesTab(tabParam) ? tabParam : 'sourcing'");
+    expect(sales).toContain('Cibles prioritaires');
+    expect(sales).toContain('Actions du jour');
     expect(sales).toContain('<AdminCrmAutomation');
+  });
+
+  it('bloque STOP et OPPOSITION avant tout appel à Resend', () => {
+    expect(stopGuard).toContain('fn_sales_outreach_est_interdit');
+    expect(stopGuard).toContain('ne_plus_contacter');
+    expect(stopGuard).toContain("c.statut = 'PERDU'");
+    expect(stopGuard).toContain("p.statut_sourcing = 'OPPOSITION'");
+    expect(stopGuard).toContain('lower(btrim(c.email))');
+    expect(stopGuard).toContain('regexp_replace');
+    expect(stopGuard).toContain('FROM PUBLIC, anon, authenticated');
+    expect(stopGuard).toContain('TO service_role');
+    expect(stopGuard).toContain('CREATE OR REPLACE FUNCTION public.fn_admin_crm_tableau');
+    expect(stopGuard).toContain('AND sc.ne_plus_contacter IS FALSE');
+    expect(stopGuard).toContain("AND sc.statut <> 'PERDU'");
+
+    for (const source of [outreach, outreachBatch]) {
+      expect(source).toContain('fn_sales_outreach_est_interdit');
+      expect(source.indexOf('fn_sales_outreach_est_interdit'))
+        .toBeLessThan(source.indexOf('https://api.resend.com/emails'));
+      expect(source).toContain('CONTACT_INTERDIT_STOP');
+    }
+  });
+
+  it('réserve les annuaires à la qualification et bloque les actions d’un contact STOP', () => {
+    expect(sales).toContain("'a_rappeler', 'ne_plus_contacter'");
+    expect(sales).toContain('Qualification interne uniquement');
+    expect(sales).toContain('Ajouter aux prospects');
+    expect(sales).toContain('Contact bloqué.');
+    expect(sales).toContain('disabled={c.ne_plus_contacter}');
+    expect(crm).toContain('ne_plus_contacter: boolean');
+    expect(crm).toContain('!contactCrmBloque(tache)');
+    expect(crm).toContain('Contact bloqué — aucune action ni prise de contact autorisée.');
   });
 });

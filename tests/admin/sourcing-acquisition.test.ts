@@ -47,8 +47,8 @@ describe('sourcing acquisition silencieux', () => {
     expect(bmoImport).toContain('contacted: 0');
     expect(bmoServiceRole).toContain("COALESCE(auth.role(), '') = 'service_role'");
     expect(bmoServiceRole).toContain('TO service_role');
-    expect(acquisitionRadar).toContain('CRM silencieux');
-    expect(acquisitionRadar).toContain('0 contact auto');
+    expect(acquisitionRadar).toContain('Ajouter aux prospects');
+    expect(acquisitionRadar).toContain('Envois automatiques désactivés');
   });
 
   it('retries RPPS body transport failures without publishing an older run status', () => {
@@ -105,7 +105,10 @@ describe('sourcing acquisition silencieux', () => {
     expect(migration).toMatch(/p_score,\s*false, NULL/);
     expect(migration).toContain("'sequence_active', false");
     expect(cockpit).toContain('Aucun envoi automatique');
-    expect(cockpit).toContain('sans séquence de contact active');
+    expect(cockpit).toContain('Ajouter aux prospects');
+    expect(cockpit).toContain('sequence_active !== false');
+    expect(cockpit).toContain('prochaine_action_le != null');
+    expect(cockpit).toContain('contact_automatique !== false');
     expect(cockpit).toContain("fn_sourcing_lancer_import");
     expect(migration).toContain("'automatisations_marketing_actives', 'false'");
     for (const campagne of [relanceInactifs, digestHebdo, avisParrainage]) {
@@ -120,9 +123,11 @@ describe('sourcing acquisition silencieux', () => {
   });
 
   it('makes acquisition the first admin sales view with dedupe and demand scoring', () => {
-    expect(sales).toContain(">('sourcing')");
+    expect(sales).toContain('useSearchParams');
+    expect(sales).toContain('estSalesTab');
+    expect(sales).toContain('AdminGrowthWorkspaceNav');
     expect(sales).toContain('<AdminSourcingCockpit');
-    expect(cockpit).toContain('Exclure CRM + inscrits');
+    expect(cockpit).toContain('Masquer les prospects déjà suivis');
     expect(cockpit).toContain('Nouveaux depuis 30 jours');
     expect(migration).toContain('missions_ouvertes');
     expect(migration).toContain('deja_inscrit');
@@ -167,8 +172,8 @@ describe('sourcing acquisition silencieux', () => {
     expect(compteursTempsReel).toContain('CREATE TABLE IF NOT EXISTS public.prospection_compteurs');
     expect(compteursTempsReel).toContain('CREATE OR REPLACE FUNCTION public.fn_admin_prospection_stats()');
     expect(sales).toContain("supabase.rpc('fn_admin_prospection_stats'");
-    expect(sales).toContain('Base soignants');
-    expect(sales).toContain('Base établissements');
+    expect(sales).toContain('Annuaire soignants');
+    expect(sales).toContain('Annuaire établissements');
     expect(sales).toContain("return estNombreCompteur(value) ? value.toLocaleString('fr-FR') : '—'");
     expect(sales).not.toContain("count: 'exact', head: true");
     const locks = compteursTempsReel.match(/LOCK TABLE public\.prospects_soignants, public\.prospects_etablissements/g) ?? [];
