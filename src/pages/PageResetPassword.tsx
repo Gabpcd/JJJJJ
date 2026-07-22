@@ -43,7 +43,10 @@ export default function PageResetPassword() {
       } else if (credentials?.kind === 'pkce') {
         const resultat = await supabase.auth.exchangeCodeForSession(credentials.code);
         error = resultat.error;
-        if (!error && resultat.data.redirectType !== 'recovery') {
+        const redirectType = 'redirectType' in resultat.data
+          ? resultat.data.redirectType
+          : null;
+        if (!error && redirectType !== 'recovery') {
           error = { message: 'Ce code ne correspond pas à une récupération de mot de passe.' };
         }
       } else if (credentials?.kind === 'token_hash') {
