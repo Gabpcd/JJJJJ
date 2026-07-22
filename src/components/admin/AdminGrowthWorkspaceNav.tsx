@@ -7,33 +7,29 @@ export type AdminGrowthWorkspaceStep = 'opportunites' | 'cibles' | 'actions' | '
 const ETAPES = [
   {
     id: 'opportunites',
-    numero: '1',
-    libelle: 'Opportunités',
-    aide: 'Où prospecter',
+    libelle: 'Besoins externes',
+    aide: 'Où la demande existe',
     route: '/admin/fondateur/acquisition',
     icone: MapPinned,
   },
   {
     id: 'cibles',
-    numero: '2',
-    libelle: 'Cibles',
-    aide: 'Qui qualifier',
+    libelle: 'Cibles à qualifier',
+    aide: 'Qui ajouter à la liste',
     route: '/admin/fondateur/sales?tab=sourcing',
     icone: Target,
   },
   {
     id: 'actions',
-    numero: '3',
-    libelle: 'Actions',
+    libelle: 'Suivi',
     aide: 'Que faire aujourd’hui',
     route: '/admin/fondateur/sales?tab=crm',
     icone: ListChecks,
   },
   {
     id: 'ressources',
-    numero: '4',
-    libelle: 'Canaux',
-    aide: 'Contenus et relais',
+    libelle: 'Ressources',
+    aide: 'Canaux et contenus',
     route: '/admin/fondateur/sales?tab=groupes',
     icone: Megaphone,
   },
@@ -45,8 +41,11 @@ interface AdminGrowthWorkspaceNavProps {
 
 export function AdminGrowthWorkspaceNav({ active }: AdminGrowthWorkspaceNavProps) {
   return (
-    <nav aria-label="Parcours de développement commercial">
-      <ol className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+    <nav
+      aria-label="Parcours de développement commercial"
+      className="overflow-x-auto rounded-xl border border-border bg-muted/30 p-1"
+    >
+      <ol className="flex min-w-max items-center gap-1">
         {ETAPES.map((etape) => {
           const estActive = etape.id === active;
           const Icone = etape.icone;
@@ -54,30 +53,18 @@ export function AdminGrowthWorkspaceNav({ active }: AdminGrowthWorkspaceNavProps
             <li key={etape.id}>
               <Link
                 to={etape.route}
-                aria-current={estActive ? 'step' : undefined}
+                aria-current={estActive ? 'page' : undefined}
                 className={cn(
-                  'flex min-h-[64px] items-center gap-3 rounded-xl border px-3 py-2 text-left transition-colors',
-                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2',
+                  'inline-flex min-h-[44px] items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium whitespace-nowrap transition-colors',
+                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1',
                   estActive
-                    ? 'border-primary bg-primary/10 text-foreground shadow-sm'
-                    : 'border-border bg-card text-muted-foreground hover:border-primary/40 hover:bg-muted/50 hover:text-foreground',
+                    ? 'bg-card text-primary shadow-sm'
+                    : 'text-muted-foreground hover:bg-card/70 hover:text-foreground',
                 )}
               >
-                <span
-                  className={cn(
-                    'flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-bold',
-                    estActive ? 'bg-primary text-primary-foreground' : 'bg-muted text-foreground',
-                  )}
-                  aria-hidden="true"
-                >
-                  {etape.numero}
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="flex items-center gap-1.5 font-semibold">
-                    <Icone className="h-4 w-4" aria-hidden="true" /> {etape.libelle}
-                  </span>
-                  <span className="block text-sm">{etape.aide}</span>
-                </span>
+                <Icone className="h-4 w-4 shrink-0" aria-hidden="true" />
+                <span>{etape.libelle}</span>
+                <span className="sr-only"> — {etape.aide}</span>
               </Link>
             </li>
           );

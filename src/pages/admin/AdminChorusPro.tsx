@@ -2,7 +2,8 @@ import { useState, useEffect, useMemo } from 'react';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { LayoutAdmin } from '@/components/LayoutAdmin';
 import { BreadcrumbAdmin } from '@/components/BreadcrumbAdmin';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { Tabs, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { AdminTabsList } from '@/components/admin/AdminTabs';
 import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
@@ -140,11 +141,11 @@ export default function AdminChorusPro() {
       </div>
 
       <Tabs value={tab} onValueChange={setTab}>
-        <TabsList className="mb-4">
+        <AdminTabsList containerClassName="mb-4" aria-label="Sections Chorus Pro">
           <TabsTrigger value="dashboard">Tableau de bord</TabsTrigger>
           <TabsTrigger value="submissions">Soumissions</TabsTrigger>
           <TabsTrigger value="config">Config établissements</TabsTrigger>
-        </TabsList>
+        </AdminTabsList>
 
         <TabsContent value="dashboard"><DashboardChorus /></TabsContent>
         <TabsContent value="submissions"><SubmissionsChorus /></TabsContent>

@@ -3,6 +3,8 @@ import { useSearchParams } from 'react-router-dom';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { LayoutAdmin } from '@/components/LayoutAdmin';
 import { ChargementAdmin } from '@/components/admin/ChargementAdmin';
+import { AdminPageHeader } from '@/components/admin/AdminPageHeader';
+import { AdminTabsList } from '@/components/admin/AdminTabs';
 import { supabase } from '@/integrations/supabase/client';
 import { CarteKPIY2K } from '@/components/y2k/CarteKPIY2K';
 import { CardY2K, CardY2KHeader, CardY2KTitle, CardY2KContent } from '@/components/y2k/CardY2K';
@@ -13,7 +15,7 @@ import { Users, Building2, Megaphone, RefreshCw, TrendingUp, Info, Save } from '
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, PieChart, Pie, Cell } from 'recharts';
 import { AdminAcquisitionRadar } from '@/components/admin/AdminAcquisitionRadar';
 import { AdminGrowthWorkspaceNav } from '@/components/admin/AdminGrowthWorkspaceNav';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tabs, TabsContent, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
 
 const fmt = (v: number) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(isFinite(v) ? v : 0);
@@ -110,20 +112,20 @@ export default function AdminAcquisition() {
   return (
     <LayoutAdmin>
       <div className="space-y-6">
-        <header>
-          <h1 className="text-2xl font-bold text-foreground">Développement commercial</h1>
-          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            Repérez les marchés prioritaires, ajoutez les bonnes cibles à votre liste, puis suivez chaque action au même endroit.
-          </p>
-        </header>
+        <AdminPageHeader
+          eyebrow="Acquisition"
+          title="Besoins externes"
+          description="Repérez les marchés prioritaires, ajoutez les bonnes cibles à votre liste, puis suivez chaque action au même endroit."
+          icon={<Megaphone className="h-6 w-6" />}
+        />
 
         <AdminGrowthWorkspaceNav active="opportunites" />
 
         <Tabs value={vue} onValueChange={changerVue}>
-          <TabsList className="grid w-full grid-cols-2 sm:w-auto">
+          <AdminTabsList disposition="grid" colonnes={2} className="sm:w-fit" aria-label="Vues de l’acquisition">
             <TabsTrigger value="priorites">Priorités externes</TabsTrigger>
             <TabsTrigger value="performance">Résultats d’acquisition</TabsTrigger>
-          </TabsList>
+          </AdminTabsList>
 
           <TabsContent value="priorites" className="mt-5">
             <AdminAcquisitionRadar />

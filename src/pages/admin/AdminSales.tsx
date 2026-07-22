@@ -4,8 +4,10 @@ import { usePageTitle } from '@/hooks/usePageTitle';
 import { LayoutAdmin } from '@/components/LayoutAdmin';
 import { ChargementAdmin, ChargementSectionAdmin } from '@/components/admin/ChargementAdmin';
 import { AdminCrmAutomation } from '@/components/admin/AdminCrmAutomation';
+import { AdminFilterBar } from '@/components/admin/AdminFilterBar';
 import { AdminSourcingCockpit } from '@/components/admin/AdminSourcingCockpit';
 import { AdminGrowthWorkspaceNav, type AdminGrowthWorkspaceStep } from '@/components/admin/AdminGrowthWorkspaceNav';
+import { AdminPageHeader } from '@/components/admin/AdminPageHeader';
 import { supabase } from '@/integrations/supabase/client';
 import { PROFESSIONS, getLabelProfession, getLabelTypeEtablissement } from '@/lib/constantes';
 import { CardY2K, CardY2KContent } from '@/components/y2k/CardY2K';
@@ -532,43 +534,48 @@ export default function AdminSales() {
   return (
     <LayoutAdmin>
       <div className="space-y-6">
-        <header>
-          <h1 className="flex items-center gap-2 text-2xl font-bold text-foreground">
-            <Megaphone className="h-6 w-6 text-primary" aria-hidden="true" /> Prospects et actions commerciales
-          </h1>
-          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            Un parcours unique pour qualifier une cible, préparer une action humaine et conserver son historique.
-          </p>
-        </header>
+        <AdminPageHeader
+          title="Prospects et actions commerciales"
+          description="Un parcours unique pour qualifier une cible, préparer une action humaine et conserver son historique."
+          icon={<Megaphone className="h-6 w-6" />}
+        />
 
         <AdminGrowthWorkspaceNav active={etapeActive} />
 
-        <div className="rounded-xl border border-border bg-card p-3">
-          <p className="mb-3 text-sm text-muted-foreground">
-            {etapeActive === 'cibles' && 'Sélectionnez les personnes et établissements à ajouter à votre liste de travail.'}
-            {etapeActive === 'actions' && 'Traitez les rappels et mettez à jour le suivi après chaque action humaine.'}
-            {etapeActive === 'ressources' && 'Préparez les relais, modèles et contenus utilisés pour développer Jolene.'}
-          </p>
-          <nav aria-label="Vues de l’étape commerciale" className="grid w-full grid-cols-2 gap-1 rounded-xl border border-primary/20 bg-primary/5 p-1 lg:flex lg:w-auto lg:justify-start">
-            {ongletsContexte.map((onglet) => {
-              const estActif = onglet.id === tab;
-              return (
-                <Link
-                  key={onglet.id}
-                  to={`/admin/fondateur/sales?tab=${onglet.id}`}
-                  aria-current={estActif ? 'page' : undefined}
-                  className={`inline-flex min-h-[44px] items-center justify-center rounded-lg px-3 py-2 text-center text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${
-                    estActif
-                      ? 'bg-gradient-to-r from-pink-500 to-violet-500 text-white shadow-sm'
-                      : 'text-muted-foreground hover:bg-card hover:text-foreground'
-                  }`}
-                >
-                  {onglet.label}
-                </Link>
-              );
-            })}
+        <section className="border-t border-border pt-4" aria-labelledby="admin-sales-context-nav-title">
+          <div className="flex flex-col gap-1">
+            <h2 id="admin-sales-context-nav-title" className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Vues de l’étape
+            </h2>
+            <p className="text-sm text-muted-foreground">
+              {etapeActive === 'cibles' && 'Sélectionnez les personnes et établissements à ajouter à votre liste de travail.'}
+              {etapeActive === 'actions' && 'Traitez les rappels et mettez à jour le suivi après chaque action humaine.'}
+              {etapeActive === 'ressources' && 'Préparez les relais, modèles et contenus utilisés pour développer Jolene.'}
+            </p>
+          </div>
+          <nav aria-labelledby="admin-sales-context-nav-title" className="mt-2 overflow-x-auto">
+            <ul className="flex min-w-max gap-1 border-b border-border">
+              {ongletsContexte.map((onglet) => {
+                const estActif = onglet.id === tab;
+                return (
+                  <li key={onglet.id}>
+                    <Link
+                      to={`/admin/fondateur/sales?tab=${onglet.id}`}
+                      aria-current={estActif ? 'page' : undefined}
+                      className={`inline-flex min-h-[44px] items-center justify-center border-b-2 px-3 py-2 text-center text-sm font-medium whitespace-nowrap transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset ${
+                        estActif
+                          ? 'border-primary bg-muted/40 text-primary'
+                          : 'border-transparent text-muted-foreground hover:border-border hover:bg-muted/30 hover:text-foreground'
+                      }`}
+                    >
+                      {onglet.label}
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
           </nav>
-        </div>
+        </section>
 
         {erreurCompteurs && (
           <p role="alert" className="text-xs text-amber-700 dark:text-amber-300 rounded-lg border border-amber-300/60 bg-amber-50/70 dark:bg-amber-950/20 px-3 py-2">
@@ -585,33 +592,54 @@ export default function AdminSales() {
         {/* ── GROUPES ── */}
         {tab === 'groupes' && (
           <div className="space-y-4">
-            <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-end">
-              <div className="flex-1">
+            <AdminFilterBar
+              ariaLabel="Filtres des groupes de recrutement"
+              advancedLabel="Plateforme, profession et favoris"
+              advancedActiveCount={(fPlateforme ? 1 : 0) + (fProfession ? 1 : 0) + (fFavorisGroupes ? 1 : 0)}
+              onResetAdvanced={() => {
+                setFPlateforme('');
+                setFProfession('');
+                setFFavorisGroupes(false);
+              }}
+              actions={(
+                <BoutonY2K size="sm" onClick={() => setEditGroupe({ plateforme: 'FACEBOOK', profession: 'TOUTES', audience: 'MIXTE', statut: 'A_VERIFIER' })} iconeGauche={<Plus className="h-4 w-4" />}>
+                  Ajouter
+                </BoutonY2K>
+              )}
+              advanced={(
+                <>
+                  <div>
+                    <Label htmlFor="admin-sales-plateforme" className="text-xs">Plateforme</Label>
+                    <select id="admin-sales-plateforme" value={fPlateforme} onChange={e => setFPlateforme(e.target.value)} className="input-base h-9 w-full">
+                      <option value="">Toutes</option>
+                      {PLATEFORMES.map(p => <option key={p.v} value={p.v}>{p.label}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <Label htmlFor="admin-sales-profession" className="text-xs">Profession</Label>
+                    <select id="admin-sales-profession" value={fProfession} onChange={e => setFProfession(e.target.value)} className="input-base h-9 w-full">
+                      <option value="">Toutes</option>
+                      <option value="TOUTES">Toutes professions</option>
+                      {PROFESSIONS.map(p => <option key={p.valeur} value={p.valeur}>{p.label}</option>)}
+                    </select>
+                  </div>
+                  <BoutonY2K size="sm" variant={fFavorisGroupes ? 'primary' : 'secondary'} onClick={() => setFFavorisGroupes(!fFavorisGroupes)} iconeGauche={<Star className="h-4 w-4" />}>
+                    Favoris
+                  </BoutonY2K>
+                  <BoutonY2K size="sm" variant="ghost" onClick={() => setImportCible('GROUPES')} iconeGauche={<FileText className="h-4 w-4" />}>
+                    Importer CSV
+                  </BoutonY2K>
+                </>
+              )}
+            >
+              <div className="w-full sm:min-w-72 sm:flex-1">
                 <Label htmlFor="admin-sales-recherche-groupes" className="text-xs">Recherche</Label>
                 <div className="relative">
                   <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
                   <Input id="admin-sales-recherche-groupes" value={recherche} onChange={e => setRecherche(e.target.value)} placeholder="Nom, région, note…" className="pl-8 h-9" />
                 </div>
               </div>
-              <div>
-                <Label htmlFor="admin-sales-plateforme" className="text-xs">Plateforme</Label>
-                <select id="admin-sales-plateforme" value={fPlateforme} onChange={e => setFPlateforme(e.target.value)} className="input-base h-9 w-full">
-                  <option value="">Toutes</option>
-                  {PLATEFORMES.map(p => <option key={p.v} value={p.v}>{p.label}</option>)}
-                </select>
-              </div>
-              <div>
-                <Label htmlFor="admin-sales-profession" className="text-xs">Profession</Label>
-                <select id="admin-sales-profession" value={fProfession} onChange={e => setFProfession(e.target.value)} className="input-base h-9 w-full">
-                  <option value="">Toutes</option>
-                  <option value="TOUTES">Toutes professions</option>
-                  {PROFESSIONS.map(p => <option key={p.valeur} value={p.valeur}>{p.label}</option>)}
-                </select>
-              </div>
-              <BoutonY2K size="sm" variant={fFavorisGroupes ? 'primary' : 'secondary'} onClick={() => setFFavorisGroupes(!fFavorisGroupes)} iconeGauche={<Star className="h-4 w-4" />}>Favoris</BoutonY2K>
-              <BoutonY2K size="sm" onClick={() => setEditGroupe({ plateforme: 'FACEBOOK', profession: 'TOUTES', audience: 'MIXTE', statut: 'A_VERIFIER' })} iconeGauche={<Plus className="h-4 w-4" />}>Ajouter</BoutonY2K>
-              <BoutonY2K size="sm" variant="ghost" onClick={() => setImportCible('GROUPES')} iconeGauche={<FileText className="h-4 w-4" />}>Importer CSV</BoutonY2K>
-            </div>
+            </AdminFilterBar>
 
             {groupesFiltres.length === 0 ? (
               <CardY2K hoverLift={false}><CardY2KContent><p className="text-sm text-muted-foreground text-center py-6">Aucun groupe. Ajoutez vos vrais liens — ils deviennent cliquables.</p></CardY2KContent></CardY2K>

@@ -14,6 +14,7 @@
  *   <BadgeY2K variant="premium" icone={<Star />}>Niveau PLATINE</BadgeY2K>
  */
 import { HTMLAttributes } from 'react';
+import { useAdminInterface } from '@/contexts/AdminInterfaceContext';
 import { cn } from '@/lib/utils';
 
 type Variant = 'success' | 'warning' | 'error' | 'info' | 'premium';
@@ -55,12 +56,16 @@ const VARIANTS: Record<Variant, string> = {
 };
 
 export function BadgeY2K({ variant = 'info', size = 'md', icone, className, children, ...rest }: Props) {
+  const admin = useAdminInterface();
   return (
     <span
       className={cn(
-        'inline-flex items-center gap-1 rounded-full font-medium whitespace-nowrap',
+        'inline-flex items-center gap-1 font-medium whitespace-nowrap',
+        admin ? 'rounded-md shadow-none' : 'rounded-full',
         TAILLES[size],
-        VARIANTS[variant],
+        admin && variant === 'premium'
+          ? 'border border-primary/25 bg-primary/10 text-primary'
+          : VARIANTS[variant],
         className,
       )}
       {...rest}

@@ -7,7 +7,7 @@ const migration = readFileSync(
 );
 const page = readFileSync('src/pages/admin/AdminRevuesManuelles.tsx', 'utf8');
 const app = readFileSync('src/App.tsx', 'utf8');
-const layout = readFileSync('src/components/LayoutAdmin.tsx', 'utf8');
+const navigation = readFileSync('src/lib/adminNavigation.ts', 'utf8');
 const siretEdge = readFileSync('supabase/functions/verify-siret/index.ts', 'utf8');
 const workflow = readFileSync('.github/workflows/validate-pr.yml', 'utf8');
 
@@ -100,7 +100,7 @@ describe('file admin de revue manuelle durable', () => {
     expect(page).toContain('Donnée de test');
     expect(migration).toContain('est_compte_test');
     expect(app).toContain('path="/admin/revues-manuelles"');
-    expect(layout).toContain("route: '/admin/revues-manuelles'");
+    expect(navigation).toContain("route: '/admin/revues-manuelles'");
     expect(workflow).toContain('tests/admin/security/manual-review-admin-queue.test.sql');
   });
 

@@ -63,12 +63,12 @@ describe('Lot 21 — mécanique admin', () => {
 
   it('ne laisse aucune entrée de navigation admin sans route déclarée', () => {
     const app = readFileSync(resolve(racine, 'src/App.tsx'), 'utf8');
-    const layout = readFileSync(resolve(racine, 'src/components/LayoutAdmin.tsx'), 'utf8');
+    const navigation = readFileSync(resolve(racine, 'src/lib/adminNavigation.ts'), 'utf8');
     const routesDeclarees = new Set(
       [...app.matchAll(/<Route path="(\/admin[^"]*)"/g)].map((match) => match[1]),
     );
     const routesNavigation = [
-      ...layout.matchAll(/route: '(\/admin[^']*)'/g),
+      ...navigation.matchAll(/route: '(\/admin[^']*)'/g),
     ].map((match) => match[1]);
 
     expect(routesNavigation.length).toBeGreaterThan(0);

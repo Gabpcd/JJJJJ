@@ -4,6 +4,8 @@ import { LayoutAdmin } from '@/components/LayoutAdmin';
 import { BreadcrumbAdmin } from '@/components/BreadcrumbAdmin';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { ChargementAdmin } from '@/components/admin/ChargementAdmin';
+import { AdminPageHeader } from '@/components/admin/AdminPageHeader';
+import { AdminSummaryStrip } from '@/components/admin/AdminSummaryStrip';
 import { supabase } from '@/integrations/supabase/client';
 import {
   CardY2K,
@@ -16,7 +18,7 @@ import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { BadgeY2K } from '@/components/y2k/BadgeY2K';
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
-import { TrendingUp, TrendingDown, Download, AlertTriangle, ExternalLink, Building2, CheckCircle2, Stethoscope } from 'lucide-react';
+import { TrendingUp, TrendingDown, Download, AlertTriangle, ExternalLink, Building2, CheckCircle2, Stethoscope, ChevronDown } from 'lucide-react';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 import { getLabelTypeEtablissement } from '@/lib/constantes';
@@ -335,84 +337,45 @@ export default function AdminFinances() {
     <LayoutAdmin>
       <BreadcrumbAdmin pageName="Finances" />
       <div className="space-y-6">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <h1 className="text-2xl font-bold text-foreground">Piloter les finances Jolene</h1>
-          <div className="flex gap-2">
+        <AdminPageHeader
+          eyebrow="Pilotage financier"
+          title="Finances Jolene"
+          description="Suivez l’encaissement, les commissions et les établissements sur une période cohérente."
+          icon={<TrendingUp className="h-6 w-6" />}
+          actions={(
+            <>
             <BoutonY2K variant="secondary" onClick={exporterCSV} className="gap-2" iconeGauche={<Download className="h-4 w-4" />}>
               Export CSV
             </BoutonY2K>
-            <BoutonY2K variant="secondary" onClick={() => navigate('/admin/facturation')} className="gap-2">
-              Facturation
+            <BoutonY2K onClick={() => navigate('/admin/facturation')} className="gap-2">
+              Ouvrir la facturation
             </BoutonY2K>
-          </div>
-        </div>
-
-        {/* KPIs du mois */}
-        <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
-          <CardY2K noPadding className="cursor-pointer hover:border-primary/30 transition-colors" onClick={() => navigate('/admin/facturation')}>
-            <CardY2KContent className="pt-4 pb-3">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-[10px] text-muted-foreground uppercase">Commissions HT du mois</p>
-                  <p className="text-xl font-bold text-foreground">{formatEur(commHTMois)}</p>
-                </div>
-                <div className={`flex items-center gap-1 text-xs font-medium ${variationPositive ? 'text-success' : 'text-destructive'}`}>
-                  {variationPct !== 0 && (variationPositive ? <TrendingUp className="h-3.5 w-3.5" /> : <TrendingDown className="h-3.5 w-3.5" />)}
-                  {variationPct !== 0 ? `${variationPositive ? '+' : ''}${variationPct.toFixed(0)}%` : '—'}
-                </div>
-              </div>
-            </CardY2KContent>
-          </CardY2K>
-          <CardY2K noPadding className="cursor-pointer hover:border-primary/30 transition-colors" onClick={() => navigate('/admin/facturation')}>
-            <CardY2KContent className="pt-4 pb-3">
-              <p className="text-[10px] text-muted-foreground uppercase">TTC du mois</p>
-              <p className="text-xl font-bold text-foreground">{formatEur(commTTCMois)}</p>
-            </CardY2KContent>
-          </CardY2K>
-          <CardY2K noPadding className="cursor-pointer hover:border-primary/30 transition-colors" onClick={() => navigate('/admin/facturation')}>
-            <CardY2KContent className="pt-4 pb-3">
-              <p className="text-[10px] text-muted-foreground uppercase">TVA collectée du mois</p>
-              <p className="text-xl font-bold text-foreground">{formatEur(tvaMois)}</p>
-            </CardY2KContent>
-          </CardY2K>
-          <CardY2K
-            noPadding
-            className={`cursor-pointer hover:border-destructive/50 transition-colors ${nbImpayees > 0 ? 'border-destructive/30 bg-destructive/5' : ''}`}
-            onClick={() => navigate('/admin/impayees')}
-          >
-            <CardY2KContent className="pt-4 pb-3">
-              <p className="text-[10px] text-muted-foreground uppercase">Factures impayées</p>
-              <p className={`text-xl font-bold ${nbImpayees > 0 ? 'text-destructive' : 'text-foreground'}`}>{nbImpayees}</p>
-              {nbImpayees > 0 && <p className="text-[10px] text-destructive">{formatEur(montantImpayees)} en attente</p>}
-            </CardY2KContent>
-          </CardY2K>
-          <CardY2K noPadding>
-            <CardY2KContent className="pt-4 pb-3">
-              <p className="text-[10px] text-muted-foreground uppercase">Taux de commission moyen</p>
-              <p className="text-xl font-bold text-foreground">{tauxParEtab != null ? `${tauxParEtab.toFixed(1)}%` : '—'}</p>
-            </CardY2KContent>
-          </CardY2K>
-        </div>
+            </>
+          )}
+        />
 
         {/* Sélecteur de période — pilote le récap « sur la période » + le détail par établissement */}
         <div className="space-y-2">
-          <div className="flex flex-wrap items-center gap-2">
-            {(['mois', 'mois_precedent', 'trimestre', 'annee', 'tout', 'perso'] as Periode[]).map(p => (
-              <BoutonY2K
-                key={p}
-                size="sm"
-                variant={periode === p ? 'primary' : 'secondary'}
-                onClick={() => setPeriode(p)}
-                aria-pressed={periode === p}
-              >
-                {p === 'mois' ? 'Ce mois'
-                  : p === 'mois_precedent' ? 'Mois dernier'
-                  : p === 'trimestre' ? '3 mois'
-                  : p === 'annee' ? 'Cette année'
-                  : p === 'tout' ? 'Tout'
-                  : 'Période…'}
-              </BoutonY2K>
-            ))}
+          <div className="-mx-1 overflow-x-auto pb-1" aria-label="Période financière">
+            <div className="flex w-max min-w-full items-center gap-2 px-1">
+              {(['mois', 'mois_precedent', 'trimestre', 'annee', 'tout', 'perso'] as Periode[]).map(p => (
+                <BoutonY2K
+                  key={p}
+                  size="sm"
+                  variant={periode === p ? 'primary' : 'secondary'}
+                  onClick={() => setPeriode(p)}
+                  aria-pressed={periode === p}
+                  className="shrink-0"
+                >
+                  {p === 'mois' ? 'Ce mois'
+                    : p === 'mois_precedent' ? 'Mois dernier'
+                    : p === 'trimestre' ? '3 mois'
+                    : p === 'annee' ? 'Cette année'
+                    : p === 'tout' ? 'Tout'
+                    : 'Période…'}
+                </BoutonY2K>
+              ))}
+            </div>
           </div>
           {periode === 'perso' && (
             <div className="flex flex-wrap items-end gap-3 rounded-xl border border-border bg-card p-3">
@@ -443,31 +406,90 @@ export default function AdminFinances() {
           </p>
         </div>
 
-        {/* Récap « sur la période » (rewiré sur la période sélectionnée) */}
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-          {[
-            { label: 'CA HT sur la période', value: formatEur(totalHT), click: () => navigate('/admin/facturation') },
-            { label: 'TVA sur la période', value: formatEur(totalTVA) },
-            { label: 'CA TTC sur la période', value: formatEur(totalTTC) },
-            { label: 'Encaissé TTC', value: formatEur(payesTTC), color: 'text-success' },
-            { label: 'Volume brut soignants', value: formatEur(volumeBrut) },
-            { label: 'Soignants mobilisés', value: String(nbSoignantsTotal) },
-          ].map(item => (
-            <div
-              key={item.label}
-              className={`p-3 rounded-xl border border-border bg-card ${item.click ? 'cursor-pointer hover:border-primary/30' : ''}`}
-              onClick={item.click}
-            >
-              <p className="text-[10px] text-muted-foreground">{item.label}</p>
-              <p className={`text-lg font-bold ${item.color || 'text-foreground'}`}>{item.value}</p>
+        <AdminSummaryStrip
+          ariaLabel={`Résumé financier — ${libellePeriode}`}
+          items={[
+            {
+              id: 'ca-ht',
+              label: `CA HT · ${libellePeriode}`,
+              value: formatEur(totalHT),
+              detail: `${facturesFiltrees.length} facture${facturesFiltrees.length > 1 ? 's' : ''}`,
+              icon: <TrendingUp className="h-4 w-4" />,
+              tone: 'primary',
+            },
+            {
+              id: 'ca-ttc',
+              label: 'CA TTC',
+              value: formatEur(totalTTC),
+              detail: `dont ${formatEur(totalTVA)} de TVA`,
+            },
+            {
+              id: 'encaisse',
+              label: 'Encaissé TTC',
+              value: formatEur(payesTTC),
+              icon: <CheckCircle2 className="h-4 w-4" />,
+              tone: 'success',
+            },
+            {
+              id: 'volume',
+              label: 'Volume brut soignants',
+              value: formatEur(volumeBrut),
+              detail: `${nbSoignantsTotal} soignant${nbSoignantsTotal > 1 ? 's' : ''} mobilisé${nbSoignantsTotal > 1 ? 's' : ''}`,
+              icon: <Building2 className="h-4 w-4" />,
+            },
+            {
+              id: 'impayes',
+              label: 'Factures impayées',
+              value: nbImpayees,
+              detail: nbImpayees > 0 ? `${formatEur(montantImpayees)} en attente` : 'Aucun impayé',
+              icon: <AlertTriangle className="h-4 w-4" />,
+              tone: nbImpayees > 0 ? 'danger' : 'success',
+            },
+          ]}
+        />
+
+        <details className="group rounded-xl border border-border bg-card">
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-4 p-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary [&::-webkit-details-marker]:hidden">
+            <span>
+              <span className="block font-semibold text-foreground">Repères du mois courant</span>
+              <span className="block text-sm text-muted-foreground">Commissions, TVA et taux moyen</span>
+            </span>
+            <ChevronDown className="h-5 w-5 text-muted-foreground transition-transform group-open:rotate-180" aria-hidden="true" />
+          </summary>
+          <dl className="grid gap-px border-t border-border bg-border sm:grid-cols-4">
+            <div className="bg-card p-4">
+              <dt className="text-xs text-muted-foreground">Commissions HT du mois</dt>
+              <dd className="mt-1 text-xl font-bold text-foreground">{formatEur(commHTMois)}</dd>
+              <dd className={`mt-1 flex items-center gap-1 text-xs font-medium ${variationPositive ? 'text-success' : 'text-destructive'}`}>
+                {variationPct !== 0 && (variationPositive ? <TrendingUp className="h-3.5 w-3.5" /> : <TrendingDown className="h-3.5 w-3.5" />)}
+                {variationPct !== 0 ? `${variationPositive ? '+' : ''}${variationPct.toFixed(0)}% vs mois précédent` : 'Pas de comparaison disponible'}
+              </dd>
             </div>
-          ))}
-        </div>
+            <div className="bg-card p-4">
+              <dt className="text-xs text-muted-foreground">TTC du mois</dt>
+              <dd className="mt-1 text-xl font-bold text-foreground">{formatEur(commTTCMois)}</dd>
+            </div>
+            <div className="bg-card p-4">
+              <dt className="text-xs text-muted-foreground">TVA collectée du mois</dt>
+              <dd className="mt-1 text-xl font-bold text-foreground">{formatEur(tvaMois)}</dd>
+            </div>
+            <div className="bg-card p-4">
+              <dt className="text-xs text-muted-foreground">Taux de commission moyen</dt>
+              <dd className="mt-1 text-xl font-bold text-foreground">{tauxParEtab != null ? `${tauxParEtab.toFixed(1)}%` : '—'}</dd>
+            </div>
+          </dl>
+        </details>
 
         {/* Chart */}
-        <CardY2K noPadding>
-          <CardY2KHeader><CardY2KTitle className="text-base">Commissions — 6 derniers mois</CardY2KTitle></CardY2KHeader>
-          <CardY2KContent>
+        <details className="group rounded-xl border border-border bg-card">
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-4 p-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary [&::-webkit-details-marker]:hidden">
+            <span>
+              <span className="block font-semibold text-foreground">Évolution des commissions</span>
+              <span className="block text-sm text-muted-foreground">Comparaison HT et TTC sur les 6 derniers mois</span>
+            </span>
+            <ChevronDown className="h-5 w-5 text-muted-foreground transition-transform group-open:rotate-180" aria-hidden="true" />
+          </summary>
+          <div className="border-t border-border p-4">
             <ChartContainer config={chartConfig} className="h-[280px] w-full">
               <BarChart data={chartData}>
                 <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
@@ -478,23 +500,27 @@ export default function AdminFinances() {
                 <Bar dataKey="ttc" fill="var(--color-ttc)" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ChartContainer>
-          </CardY2KContent>
-        </CardY2K>
+          </div>
+        </details>
 
         {/* Task 12 — Diagnostic de cohérence financière */}
-        <CardY2K noPadding>
-          <CardY2KHeader>
-            <div className="flex items-center justify-between flex-wrap gap-2">
-              <CardY2KTitle className="text-base inline-flex items-center gap-2">
-                <Stethoscope className="h-5 w-5 text-primary" />
-                Diagnostic de cohérence financière
-              </CardY2KTitle>
+        <details className="group rounded-xl border border-border bg-card">
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-4 p-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary [&::-webkit-details-marker]:hidden">
+            <span className="flex items-center gap-3">
+              <Stethoscope className="h-5 w-5 text-primary" aria-hidden="true" />
+              <span>
+                <span className="block font-semibold text-foreground">Diagnostic de cohérence financière</span>
+                <span className="block text-sm text-muted-foreground">Missions, factures et transferts Stripe</span>
+              </span>
+            </span>
+            <ChevronDown className="h-5 w-5 text-muted-foreground transition-transform group-open:rotate-180" aria-hidden="true" />
+          </summary>
+          <div className="space-y-4 border-t border-border p-4">
+            <div className="flex justify-end">
               <BoutonY2K size="sm" variant="secondary" onClick={lancerDiagnostic} disabled={diagLoading} loading={diagLoading}>
                 {diagLoading ? 'Analyse en cours…' : 'Lancer le diagnostic'}
               </BoutonY2K>
             </div>
-          </CardY2KHeader>
-          <CardY2KContent>
             {!diagResult && !diagLoading && (
               <p className="text-sm text-muted-foreground">Lancez l'analyse de cohérence entre missions, factures et transferts Stripe.</p>
             )}
@@ -565,8 +591,8 @@ export default function AdminFinances() {
                 )}
               </div>
             )}
-          </CardY2KContent>
-        </CardY2K>
+          </div>
+        </details>
 
         {/* Table par établissement */}
         <CardY2K noPadding>
