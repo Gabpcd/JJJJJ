@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import * as Sentry from '@sentry/react';
 import { LayoutAdmin } from '@/components/LayoutAdmin';
 import { ChargementAdmin } from '@/components/admin/ChargementAdmin';
+import { AdminPageHeader } from '@/components/admin/AdminPageHeader';
 import { supabase } from '@/integrations/supabase/client';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { Activity, AlertCircle, AlertTriangle, Bug, CheckCircle, Clock, ExternalLink, RefreshCw } from 'lucide-react';
@@ -88,8 +89,11 @@ export default function AdminStatus() {
   if (loading) return <LayoutAdmin><ChargementAdmin titre="État du système" /></LayoutAdmin>;
   if (!data) return (
     <LayoutAdmin>
-      <div className="space-y-4">
-        <h1 className="text-xl font-bold text-foreground">État du système</h1>
+      <div className="space-y-5">
+        <AdminPageHeader
+          title="État du système"
+          icon={<Activity className="h-6 w-6" />}
+        />
         <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-destructive" role="alert">
           Impossible de charger l’état du système. Réessayez avec le bouton d’actualisation du navigateur.
         </div>
@@ -113,23 +117,21 @@ export default function AdminStatus() {
 
   return (
     <LayoutAdmin>
-      <div className="flex items-start justify-between mb-6">
-        <div>
-          <h1 className="text-xl font-bold flex items-center gap-2">
-            <Activity className="h-6 w-6 text-primary" /> État du système
-          </h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Dernière vérification : {format(new Date(data.timestamp), 'd MMM yyyy HH:mm:ss', { locale: fr })}
-          </p>
-        </div>
-        <BoutonY2K onClick={charger} disabled={refreshing} variant="secondary" size="sm" className="gap-1.5" iconeGauche={<RefreshCw className={`h-3.5 w-3.5 ${refreshing ? 'animate-spin' : ''}`} />}>
-          Actualiser
-        </BoutonY2K>
-      </div>
+      <div className="space-y-5">
+        <AdminPageHeader
+          title="État du système"
+          description={`Dernière vérification : ${format(new Date(data.timestamp), 'd MMM yyyy HH:mm:ss', { locale: fr })}`}
+          icon={<Activity className="h-6 w-6" />}
+          actions={(
+            <BoutonY2K onClick={charger} disabled={refreshing} variant="secondary" size="sm" className="gap-1.5" iconeGauche={<RefreshCw className={`h-3.5 w-3.5 ${refreshing ? 'animate-spin' : ''}`} />}>
+              Actualiser
+            </BoutonY2K>
+          )}
+        />
 
-      {/* Alertes actives */}
-      {data.alertes_actives.length > 0 && (
-        <CardY2K noPadding className="mb-4 border-destructive/30">
+        {/* Alertes actives */}
+        {data.alertes_actives.length > 0 && (
+        <CardY2K noPadding className="border-destructive/30">
           <CardY2KHeader className="pb-2">
             <CardY2KTitle className="text-base flex items-center gap-2 text-destructive">
               <AlertCircle className="h-4 w-4" /> Alertes actives ({data.alertes_actives.length})
@@ -151,10 +153,10 @@ export default function AdminStatus() {
             ))}
           </CardY2KContent>
         </CardY2K>
-      )}
+        )}
 
-      {/* Health checks systèmes */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
+        {/* Health checks systèmes */}
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
         <CardY2K noPadding>
           <CardY2KHeader className="pb-2"><CardY2KTitle className="text-sm flex items-center gap-2"><CheckCircle className="h-4 w-4 text-success" /> Database</CardY2KTitle></CardY2KHeader>
           <CardY2KContent><p className="text-xs text-muted-foreground">PG {data.database.version.split(' ')[0]}</p></CardY2KContent>
@@ -175,10 +177,10 @@ export default function AdminStatus() {
             <p className="text-xs">{data.stripe_webhooks.total_24h} reçus · {data.stripe_webhooks.taux_erreur_pct}% erreur</p>
           </CardY2KContent>
         </CardY2K>
-      </div>
+        </div>
 
-      {/* Stats temps réel */}
-      <CardY2K noPadding className="mb-4">
+        {/* Stats temps réel */}
+        <CardY2K noPadding>
         <CardY2KHeader className="pb-2"><CardY2KTitle className="text-base">Stats temps réel</CardY2KTitle></CardY2KHeader>
         <CardY2KContent className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 text-xs">
           {[
@@ -195,10 +197,10 @@ export default function AdminStatus() {
             </div>
           ))}
         </CardY2KContent>
-      </CardY2K>
+        </CardY2K>
 
-      {/* Logs 24h */}
-      <CardY2K noPadding className="mb-4">
+        {/* Logs 24h */}
+        <CardY2K noPadding>
         <CardY2KHeader className="pb-2"><CardY2KTitle className="text-base">Logs 24h</CardY2KTitle></CardY2KHeader>
         <CardY2KContent className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
           {[
@@ -213,10 +215,10 @@ export default function AdminStatus() {
             </div>
           ))}
         </CardY2KContent>
-      </CardY2K>
+        </CardY2K>
 
-      {/* Crons détail */}
-      <CardY2K noPadding className="mb-4">
+        {/* Crons détail */}
+        <CardY2K noPadding>
         <CardY2KHeader className="pb-2"><CardY2KTitle className="text-base">Crons ({data.crons.crons.length} actifs)</CardY2KTitle></CardY2KHeader>
         <CardY2KContent>
           {/* Desktop table */}
@@ -267,10 +269,10 @@ export default function AdminStatus() {
             ))}
           </div>
         </CardY2KContent>
-      </CardY2K>
+        </CardY2K>
 
-      {/* Liens dashboards externes */}
-      <CardY2K noPadding>
+        {/* Liens dashboards externes */}
+        <CardY2K noPadding>
         <CardY2KHeader className="pb-2"><CardY2KTitle className="text-base">Dashboards externes</CardY2KTitle></CardY2KHeader>
         <CardY2KContent className="grid grid-cols-2 md:grid-cols-3 gap-2 text-xs">
           {[
@@ -287,10 +289,10 @@ export default function AdminStatus() {
             </a>
           ))}
         </CardY2KContent>
-      </CardY2K>
+        </CardY2K>
 
-      {/* Outils diagnostic */}
-      <CardY2K noPadding className="mb-4 border-warning/30">
+        {/* Outils diagnostic */}
+        <CardY2K noPadding className="border-warning/30">
         <CardY2KHeader className="pb-2">
           <CardY2KTitle className="text-base flex items-center gap-2">
             <Bug className="h-4 w-4 text-warning" /> Outils diagnostic
@@ -326,11 +328,12 @@ export default function AdminStatus() {
             Si la VITE_SENTRY_DSN n'est pas configurée côté Vercel, ce bouton est inactif silencieusement.
           </p>
         </CardY2KContent>
-      </CardY2K>
+        </CardY2K>
 
-      {/* ── Vérification des services (ex-page /admin/healthcheck, fusionnée Lot 20/21) ── */}
-      <div className="mt-6 pt-6 border-t border-border">
-        <PanneauxHealthcheck />
+        {/* ── Vérification des services (ex-page /admin/healthcheck, fusionnée Lot 20/21) ── */}
+        <div className="border-t border-border pt-5">
+          <PanneauxHealthcheck />
+        </div>
       </div>
     </LayoutAdmin>
   );

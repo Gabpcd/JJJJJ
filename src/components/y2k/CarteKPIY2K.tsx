@@ -20,6 +20,7 @@
  */
 import { HTMLAttributes } from 'react';
 import { ArrowDown, ArrowUp, Minus } from 'lucide-react';
+import { useAdminInterface } from '@/contexts/AdminInterfaceContext';
 import { cn } from '@/lib/utils';
 
 type Variant = 'default' | 'holographic' | 'soft';
@@ -62,6 +63,12 @@ const VARIANTS: Record<Variant, string> = {
   ),
 };
 
+const ADMIN_VARIANTS: Record<Variant, string> = {
+  default: 'border border-border bg-card text-foreground shadow-sm',
+  holographic: 'border border-primary/25 bg-primary/[0.04] text-foreground shadow-sm',
+  soft: 'border border-border bg-muted/30 text-foreground shadow-sm',
+};
+
 const SENS_STYLES: Record<NonNullable<NonNullable<Props['variation']>['sens']>, { icone: typeof ArrowUp; color: string }> = {
   up: { icone: ArrowUp, color: 'text-jolene-cyan-700' },
   down: { icone: ArrowDown, color: 'text-destructive' },
@@ -79,9 +86,10 @@ export function CarteKPIY2K({
   className,
   ...rest
 }: Props) {
+  const admin = useAdminInterface();
   const sens = variation?.sens ?? 'neutral';
   const SensIcone = SENS_STYLES[sens].icone;
-  const sensColor = variant === 'holographic' ? 'text-white/90' : SENS_STYLES[sens].color;
+  const sensColor = !admin && variant === 'holographic' ? 'text-white/90' : SENS_STYLES[sens].color;
   const Component = onClick ? 'button' : 'div';
 
   return (
@@ -91,10 +99,10 @@ export function CarteKPIY2K({
       className={cn(
         // Sprint 12-D : transition-bouncy (cubic-bezier overshoot doux) pour KPIs cliquables.
         // prefers-reduced-motion géré dans .transition-bouncy (src/index.css).
-        'rounded-2xl md:rounded-3xl p-4 md:p-5 text-left transition-bouncy',
-        onClick && 'hover:-translate-y-1 hover:shadow-holographic motion-reduce:hover:translate-y-0 cursor-pointer',
+        admin ? 'rounded-xl p-3 text-left transition-colors' : 'rounded-2xl md:rounded-3xl p-4 md:p-5 text-left transition-bouncy',
+        onClick && (admin ? 'cursor-pointer hover:border-primary/35' : 'hover:-translate-y-1 hover:shadow-holographic motion-reduce:hover:translate-y-0 cursor-pointer'),
         onClick && 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-jolene-rose focus-visible:ring-offset-2',
-        VARIANTS[variant],
+        admin ? ADMIN_VARIANTS[variant] : VARIANTS[variant],
         className,
       )}
       {...(rest as any)}
@@ -103,8 +111,9 @@ export function CarteKPIY2K({
         {icone && (
           <span
             className={cn(
-              'inline-flex items-center justify-center rounded-xl p-2',
-              variant === 'holographic' ? 'bg-white/20' : 'bg-jolene-rose-100 text-jolene-rose-700',
+              'inline-flex items-center justify-center',
+              admin ? 'rounded-lg bg-muted p-1.5 text-muted-foreground' : 'rounded-xl p-2',
+              !admin && (variant === 'holographic' ? 'bg-white/20' : 'bg-jolene-rose-100 text-jolene-rose-700'),
             )}
             aria-hidden="true"
           >
@@ -114,7 +123,7 @@ export function CarteKPIY2K({
         <span
           className={cn(
             'text-xs font-medium',
-            variant === 'holographic' ? 'text-white/90' : 'text-jolene-bubblegum',
+            admin ? 'text-muted-foreground' : variant === 'holographic' ? 'text-white/90' : 'text-jolene-bubblegum',
           )}
         >
           {label}
@@ -123,8 +132,8 @@ export function CarteKPIY2K({
 
       <p
         className={cn(
-          'text-2xl md:text-3xl font-bold tabular-nums leading-tight',
-          variant === 'holographic' ? 'text-white' : 'text-jolene-midnight',
+          admin ? 'text-2xl font-semibold tabular-nums leading-tight text-foreground' : 'text-2xl md:text-3xl font-bold tabular-nums leading-tight',
+          !admin && (variant === 'holographic' ? 'text-white' : 'text-jolene-midnight'),
         )}
       >
         {valeur}
@@ -147,7 +156,7 @@ export function CarteKPIY2K({
           {contexte && (
             <span
               className={cn(
-                variant === 'holographic' ? 'text-white/70' : 'text-jolene-bubblegum',
+                admin ? 'text-muted-foreground' : variant === 'holographic' ? 'text-white/70' : 'text-jolene-bubblegum',
               )}
             >
               {contexte}

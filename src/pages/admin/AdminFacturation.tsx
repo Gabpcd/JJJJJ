@@ -4,6 +4,8 @@ import { LayoutAdmin } from '@/components/LayoutAdmin';
 import { BreadcrumbAdmin } from '@/components/BreadcrumbAdmin';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { ChargementAdmin } from '@/components/admin/ChargementAdmin';
+import { AdminPageHeader } from '@/components/admin/AdminPageHeader';
+import { AdminSummaryStrip } from '@/components/admin/AdminSummaryStrip';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { BoutonY2K } from '@/components/y2k/BoutonY2K';
@@ -11,7 +13,6 @@ import { BadgeY2K } from '@/components/y2k/BadgeY2K';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { CardY2K, CardY2KContent } from '@/components/y2k/CardY2K';
 import { toast } from 'sonner';
 import { Loader2, Search, Zap, Download, FileText, ChevronDown, ChevronRight, ExternalLink, CheckCircle, CheckCircle2, XCircle, CreditCard, History } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -487,17 +488,32 @@ export default function AdminFacturation() {
     <LayoutAdmin>
       <BreadcrumbAdmin pageName="Facturation" />
       <div className="space-y-6">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <h1 className="text-2xl font-bold text-foreground">Facturation</h1>
-          <div className="flex flex-wrap gap-2">
+        <AdminPageHeader
+          eyebrow="Encaissement"
+          title="Facturation"
+          description="Traitez les virements et retards en priorité, puis consultez ou exportez l’historique."
+          icon={<FileText className="h-6 w-6" />}
+          actions={(
+            <BoutonY2K onClick={genererFactures} disabled={generating} loading={generating} className="gap-2" iconeGauche={generating ? undefined : <Zap className="h-4 w-4" />}>
+              Générer les factures du mois
+            </BoutonY2K>
+          )}
+        />
+
+        <details className="group rounded-xl border border-border bg-card">
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-4 p-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary [&::-webkit-details-marker]:hidden">
+            <span>
+              <span className="block font-semibold text-foreground">Exports et prélèvements</span>
+              <span className="block text-sm text-muted-foreground">FEC, rapport PDF et prélèvement SEPA</span>
+            </span>
+            <ChevronDown className="h-5 w-5 text-muted-foreground transition-transform group-open:rotate-180" aria-hidden="true" />
+          </summary>
+          <div className="flex flex-wrap gap-2 border-t border-border p-4">
             <BoutonY2K variant="secondary" onClick={exporterFEC} className="gap-2" iconeGauche={<Download className="h-4 w-4" />}>
               Exporter FEC {new Date().getFullYear()}
             </BoutonY2K>
             <BoutonY2K variant="secondary" onClick={genererRapportPDF} className="gap-2" iconeGauche={<FileText className="h-4 w-4" />}>
               Rapport PDF
-            </BoutonY2K>
-            <BoutonY2K onClick={genererFactures} disabled={generating} loading={generating} className="gap-2" iconeGauche={generating ? undefined : <Zap className="h-4 w-4" />}>
-              Générer les factures du mois
             </BoutonY2K>
             <BoutonY2K
               variant="secondary"
@@ -514,12 +530,42 @@ export default function AdminFacturation() {
               Prélever SEPA
             </BoutonY2K>
           </div>
-        </div>
+        </details>
 
-        <div className="grid grid-cols-2 gap-4 max-w-md">
-          <CardY2K noPadding><CardY2KContent className="pt-4"><p className="text-xs text-muted-foreground">Total HT</p><p className="text-xl font-bold text-foreground">{formatEur(totaux.ht)}</p></CardY2KContent></CardY2K>
-          <CardY2K noPadding><CardY2KContent className="pt-4"><p className="text-xs text-muted-foreground">Total TTC</p><p className="text-xl font-bold text-foreground">{formatEur(totaux.ttc)}</p></CardY2KContent></CardY2K>
-        </div>
+        <AdminSummaryStrip
+          ariaLabel="Résumé de la facturation"
+          items={[
+            {
+              id: 'total-ht',
+              label: 'Total HT',
+              value: formatEur(totaux.ht),
+              detail: `${filtered.length} facture${filtered.length > 1 ? 's' : ''} dans le périmètre`,
+              icon: <FileText className="h-4 w-4" />,
+              tone: 'primary',
+            },
+            {
+              id: 'total-ttc',
+              label: 'Total TTC',
+              value: formatEur(totaux.ttc),
+              icon: <CreditCard className="h-4 w-4" />,
+            },
+            {
+              id: 'a-traiter',
+              label: 'À traiter',
+              value: aTraiter.length,
+              detail: 'Virements déclarés et retards',
+              icon: aTraiter.length > 0 ? <History className="h-4 w-4" /> : <CheckCircle2 className="h-4 w-4" />,
+              tone: aTraiter.length > 0 ? 'danger' : 'success',
+            },
+            {
+              id: 'historique',
+              label: 'Dans l’historique',
+              value: historique.length,
+              detail: filtreStatut === 'TOUS' ? 'Tous statuts' : statutLabel[filtreStatut] ?? filtreStatut,
+              icon: <History className="h-4 w-4" />,
+            },
+          ]}
+        />
 
         {/* ── Section « À traiter » : virements déclarés puis factures en retard ── */}
         <section aria-label="À traiter">

@@ -16,6 +16,7 @@
  *   </BoutonY2K>
  */
 import { ButtonHTMLAttributes, forwardRef } from 'react';
+import { useAdminInterface } from '@/contexts/AdminInterfaceContext';
 import { cn } from '@/lib/utils';
 
 type Variant = 'primary' | 'secondary' | 'ghost' | 'destructive';
@@ -69,23 +70,32 @@ const VARIANTS: Record<Variant, string> = {
   ),
 };
 
+const ADMIN_VARIANTS: Record<Variant, string> = {
+  primary: 'bg-primary text-primary-foreground font-medium hover:bg-primary/90 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2',
+  secondary: 'border border-border bg-card text-foreground font-medium hover:bg-muted focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2',
+  ghost: 'bg-transparent text-foreground font-medium hover:bg-muted focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2',
+  destructive: 'bg-destructive text-destructive-foreground font-medium hover:bg-destructive/90 focus-visible:ring-2 focus-visible:ring-destructive focus-visible:ring-offset-2',
+};
+
 export const BoutonY2K = forwardRef<HTMLButtonElement, Props>(function BoutonY2K(
   { variant = 'primary', size = 'md', loading, iconeGauche, iconeDroite, className, children, disabled, ...rest },
   ref,
 ) {
+  const admin = useAdminInterface();
   return (
     <button
       ref={ref}
       type={rest.type ?? 'button'}
       disabled={disabled || loading}
       className={cn(
-        'inline-flex items-center justify-center gap-2 rounded-2xl',
+        'inline-flex items-center justify-center gap-2',
+        admin ? 'rounded-lg' : 'rounded-2xl',
         // Sprint 12-D : transition-snap (cubic-bezier overshoot court) pour boutons.
         // prefers-reduced-motion géré dans .transition-snap (src/index.css).
-        'transition-snap',
+        admin ? 'transition-colors' : 'transition-snap',
         'disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100',
         TAILLES[size],
-        VARIANTS[variant],
+        admin ? ADMIN_VARIANTS[variant] : VARIANTS[variant],
         className,
       )}
       {...rest}

@@ -1,11 +1,11 @@
 import React, { useCallback, useState, useEffect } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
-import { ChevronRight, ArrowLeft, Mail, Phone, MapPin, Calendar, Shield, Star, Award, FileText, Clock, Ban, RefreshCw, Trash2, KeyRound, UserCog, AlertTriangle, MessageCircle, Send } from 'lucide-react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { ArrowLeft, Mail, Phone, MapPin, Calendar, Shield, Star, Award, FileText, Clock, Ban, RefreshCw, Trash2, KeyRound, UserCog, AlertTriangle, MessageCircle, Send } from 'lucide-react';
 import { SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from '@/integrations/supabase/client';
 import { LayoutAdmin } from '@/components/LayoutAdmin';
 import { ChargementAdmin } from '@/components/admin/ChargementAdmin';
+import { AdminPageHeader } from '@/components/admin/AdminPageHeader';
 import { supabase } from '@/integrations/supabase/client';
-import { Button } from '@/components/ui/button';
 import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { BadgeY2K } from '@/components/y2k/BadgeY2K';
 import {
@@ -357,41 +357,40 @@ export default function AdminDetailUtilisateur() {
 
   return (
     <LayoutAdmin>
-      {/* Breadcrumb */}
-      <nav className="flex items-center gap-1.5 text-sm text-muted-foreground mb-4" aria-label="Fil d'Ariane">
-        <Link to="/admin" className="hover:text-foreground transition-colors">Admin</Link>
-        <ChevronRight className="h-3.5 w-3.5" />
-        <Link to="/admin/utilisateurs" className="hover:text-foreground transition-colors">Utilisateurs</Link>
-        <ChevronRight className="h-3.5 w-3.5" />
-        <span className="text-foreground font-medium">{nom}</span>
-      </nav>
-
-      <div className="flex items-center gap-3 mb-6">
-        <Button aria-label="Retour à la liste des utilisateurs" variant="ghost" size="icon" onClick={() => navigate('/admin/utilisateurs')}>
-          <ArrowLeft className="h-5 w-5" aria-hidden="true" />
-        </Button>
-        <div className="flex-1">
-          <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-bold text-foreground">{nom}</h1>
-            <button
-              type="button"
-              onClick={() => ouvrirConversation(id!, undefined, type === 'etablissement')}
-              className="h-8 w-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center hover:bg-primary/90 transition-colors shrink-0"
-              title="Contacter"
-              aria-label={`Contacter ${nom}`}
-            >
-              <MessageCircle className="h-4 w-4" aria-hidden="true" />
-            </button>
-          </div>
-          <div className="flex items-center gap-2 mt-1">
-            <BadgeY2K variant="info">{type === 'soignant' ? 'Soignant' : 'Établissement'}</BadgeY2K>
-            {isSuspended ? (
-              <BadgeY2K variant="error">Suspendu</BadgeY2K>
-            ) : (
-              <BadgeY2K variant="success">Actif</BadgeY2K>
-            )}
-          </div>
-        </div>
+      <div className="mb-5">
+        <AdminPageHeader
+          eyebrow={type === 'soignant' ? 'Compte soignant' : 'Compte établissement'}
+          title={nom}
+          description={(
+            <div className="flex flex-wrap items-center gap-2">
+              <BadgeY2K variant="info">{type === 'soignant' ? 'Soignant' : 'Établissement'}</BadgeY2K>
+              {isSuspended ? (
+                <BadgeY2K variant="error">Suspendu</BadgeY2K>
+              ) : (
+                <BadgeY2K variant="success">Actif</BadgeY2K>
+              )}
+            </div>
+          )}
+          actions={(
+            <>
+              <BoutonY2K
+                size="sm"
+                variant="secondary"
+                onClick={() => navigate('/admin/utilisateurs')}
+                iconeGauche={<ArrowLeft className="h-4 w-4" aria-hidden="true" />}
+              >
+                Retour
+              </BoutonY2K>
+              <BoutonY2K
+                size="sm"
+                onClick={() => ouvrirConversation(id!, undefined, type === 'etablissement')}
+                iconeGauche={<MessageCircle className="h-4 w-4" aria-hidden="true" />}
+              >
+                Contacter
+              </BoutonY2K>
+            </>
+          )}
+        />
       </div>
 
       {/* Documents alert banner */}
@@ -417,14 +416,16 @@ export default function AdminDetailUtilisateur() {
       )}
 
       <Tabs defaultValue="infos" className="space-y-4">
-        <TabsList className="flex-wrap">
-          <TabsTrigger value="infos">Informations</TabsTrigger>
-          {type === 'soignant' && <TabsTrigger value="documents">Documents</TabsTrigger>}
-          <TabsTrigger value="missions">Missions</TabsTrigger>
-          {type === 'soignant' && <TabsTrigger value="score">Score & Badges</TabsTrigger>}
-          <TabsTrigger value="profil">Profil complet</TabsTrigger>
-          <TabsTrigger value="actions">Actions admin</TabsTrigger>
-        </TabsList>
+        <div className="overflow-x-auto pb-1">
+          <TabsList className="h-auto min-w-max justify-start">
+            <TabsTrigger value="infos">Vue d’ensemble</TabsTrigger>
+            {type === 'soignant' && <TabsTrigger value="documents">Documents</TabsTrigger>}
+            <TabsTrigger value="missions">Missions</TabsTrigger>
+            {type === 'soignant' && <TabsTrigger value="score">Fiabilité</TabsTrigger>}
+            <TabsTrigger value="profil">Fiche complète</TabsTrigger>
+            <TabsTrigger value="actions">Actions admin</TabsTrigger>
+          </TabsList>
+        </div>
 
         {/* ── 1. Informations personnelles ── */}
         <TabsContent value="infos">

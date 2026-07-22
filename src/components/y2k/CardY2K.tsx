@@ -29,6 +29,7 @@
  * le double padding (sous-composants ont leur propre `p-6`).
  */
 import { HTMLAttributes, KeyboardEvent, forwardRef } from 'react';
+import { useAdminInterface } from '@/contexts/AdminInterfaceContext';
 import { cn } from '@/lib/utils';
 
 type Variant = 'default' | 'holographic' | 'glass';
@@ -60,6 +61,12 @@ const VARIANTS: Record<Variant, string> = {
   ),
 };
 
+const ADMIN_VARIANTS: Record<Variant, string> = {
+  default: 'border border-border bg-card text-foreground shadow-sm',
+  holographic: 'border border-primary/25 bg-primary/[0.04] text-foreground shadow-sm',
+  glass: 'border border-border bg-card/95 text-foreground shadow-sm',
+};
+
 export const CardY2K = forwardRef<HTMLDivElement, Props>(function CardY2K(
   {
     variant = 'default',
@@ -75,6 +82,7 @@ export const CardY2K = forwardRef<HTMLDivElement, Props>(function CardY2K(
   },
   ref,
 ) {
+  const admin = useAdminInterface();
   const estInteractive = Boolean(onClick);
 
   const gererClavier = (event: KeyboardEvent<HTMLDivElement>) => {
@@ -94,14 +102,16 @@ export const CardY2K = forwardRef<HTMLDivElement, Props>(function CardY2K(
       onClick={onClick}
       onKeyDown={gererClavier}
       className={cn(
-        'rounded-3xl',
-        !noPadding && 'p-5',
+        admin ? 'rounded-xl' : 'rounded-3xl',
+        !noPadding && (admin ? 'p-4' : 'p-5'),
         // Sprint 12-D : transition-bouncy (cubic-bezier overshoot doux) pour cards.
         // prefers-reduced-motion géré dans .transition-bouncy (src/index.css).
-        'transition-bouncy',
-        hoverLift && 'hover:-translate-y-1 hover:shadow-holographic motion-reduce:hover:translate-y-0',
+        admin ? 'transition-colors' : 'transition-bouncy',
+        hoverLift && (admin
+          ? 'hover:border-primary/30'
+          : 'hover:-translate-y-1 hover:shadow-holographic motion-reduce:hover:translate-y-0'),
         estInteractive && 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2',
-        VARIANTS[variant],
+        admin ? ADMIN_VARIANTS[variant] : VARIANTS[variant],
         className,
       )}
       {...rest}
@@ -115,16 +125,18 @@ export const CardY2K = forwardRef<HTMLDivElement, Props>(function CardY2K(
 
 export const CardY2KHeader = forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElement>>(
   function CardY2KHeader({ className, ...rest }, ref) {
-    return <div ref={ref} className={cn('flex flex-col space-y-1.5 p-6', className)} {...rest} />;
+    const admin = useAdminInterface();
+    return <div ref={ref} className={cn('flex flex-col space-y-1.5', admin ? 'p-4' : 'p-6', className)} {...rest} />;
   },
 );
 
 export const CardY2KTitle = forwardRef<HTMLHeadingElement, HTMLAttributes<HTMLHeadingElement>>(
   function CardY2KTitle({ className, ...rest }, ref) {
+    const admin = useAdminInterface();
     return (
       <h3
         ref={ref}
-        className={cn('text-2xl font-semibold leading-none tracking-tight', className)}
+        className={cn(admin ? 'text-base font-semibold leading-snug' : 'text-2xl font-semibold leading-none tracking-tight', className)}
         {...rest}
       />
     );
@@ -133,19 +145,22 @@ export const CardY2KTitle = forwardRef<HTMLHeadingElement, HTMLAttributes<HTMLHe
 
 export const CardY2KDescription = forwardRef<HTMLParagraphElement, HTMLAttributes<HTMLParagraphElement>>(
   function CardY2KDescription({ className, ...rest }, ref) {
-    return <p ref={ref} className={cn('text-sm text-jolene-bubblegum', className)} {...rest} />;
+    const admin = useAdminInterface();
+    return <p ref={ref} className={cn('text-sm', admin ? 'text-muted-foreground' : 'text-jolene-bubblegum', className)} {...rest} />;
   },
 );
 
 export const CardY2KContent = forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElement>>(
   function CardY2KContent({ className, ...rest }, ref) {
-    return <div ref={ref} className={cn('p-6 pt-0', className)} {...rest} />;
+    const admin = useAdminInterface();
+    return <div ref={ref} className={cn(admin ? 'p-4 pt-0' : 'p-6 pt-0', className)} {...rest} />;
   },
 );
 
 export const CardY2KFooter = forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElement>>(
   function CardY2KFooter({ className, ...rest }, ref) {
-    return <div ref={ref} className={cn('flex items-center p-6 pt-0', className)} {...rest} />;
+    const admin = useAdminInterface();
+    return <div ref={ref} className={cn('flex items-center', admin ? 'p-4 pt-0' : 'p-6 pt-0', className)} {...rest} />;
   },
 );
 

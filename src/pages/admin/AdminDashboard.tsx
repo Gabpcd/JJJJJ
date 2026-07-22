@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { usePageTitle } from '@/hooks/usePageTitle';
-import { Users, Building2, CheckCircle, Clock, Banknote, TrendingUp, Target, Star, AlertTriangle, FileText, UserPlus, CreditCard, ExternalLink, ShieldCheck, FlaskConical } from 'lucide-react';
+import { Users, Building2, CheckCircle, Clock, Banknote, TrendingUp, Target, AlertTriangle, FileText, UserPlus, CreditCard, ExternalLink, ShieldCheck, FlaskConical, ChevronDown } from 'lucide-react';
 import { LayoutAdmin } from '@/components/LayoutAdmin';
 import { CarteKPIY2K } from '@/components/y2k/CarteKPIY2K';
 import { ChargementAdmin } from '@/components/admin/ChargementAdmin';
@@ -194,47 +194,70 @@ export default function AdminDashboard() {
   return (
     <LayoutAdmin>
       <div className="space-y-6">
-        <h1 className="text-2xl font-bold text-foreground">Tableau de bord</h1>
+        <header className="flex flex-col gap-3 border-b border-border pb-5 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-primary">Pilotage quotidien</p>
+            <h1 className="mt-1 text-2xl font-bold text-foreground">Tableau de bord</h1>
+            <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
+              Suivez l’activité, traitez les urgences, puis ouvrez les analyses détaillées seulement quand vous en avez besoin.
+            </p>
+          </div>
+          <div className="inline-flex w-fit items-center gap-2 rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
+            <UserPlus className="h-4 w-4 text-primary" aria-hidden="true" />
+            <strong className="text-foreground">{(kpi?.soignants_semaine ?? 0) + (kpi?.etablissements_semaine ?? 0)}</strong>
+            nouveaux comptes cette semaine
+          </div>
+        </header>
 
         <BandeauAlertesAntiTricheAdmin />
 
-        {/* KPI Grid */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <CarteKPIY2K
-            icone={<Users className="h-4 w-4" />}
-            valeur={kpi?.soignants_total ?? '—'}
-            label="Soignants inscrits"
-            contexte={`+${kpi?.soignants_semaine ?? 0} cette semaine`}
-            variant="holographic"
-            onClick={() => navigate('/admin/utilisateurs')}
-          />
-          <CarteKPIY2K
-            icone={<Building2 className="h-4 w-4" />}
-            valeur={kpi?.etablissements_total ?? '—'}
-            label="Établissements"
-            contexte={`+${kpi?.etablissements_semaine ?? 0} cette semaine`}
-            variant="default"
-            onClick={() => navigate('/admin/utilisateurs')}
-          />
-          <CarteKPIY2K
-            icone={<CheckCircle className="h-4 w-4" />}
-            valeur={kpi?.missions_terminees_total ?? '—'}
-            label="Missions terminées"
-            contexte={`${kpi?.missions_terminees_mois ?? 0} ce mois`}
-            variant="default"
-            onClick={() => navigate('/admin/missions?filtre=TERMINEE')}
-          />
-          <CarteKPIY2K
-            icone={<Clock className="h-4 w-4" />}
-            valeur={kpi?.missions_ouvertes ?? '—'}
-            label="Missions ouvertes"
-            variant="default"
-            onClick={() => navigate('/admin/missions?filtre=OUVERTE')}
-          />
-        </div>
+        <section aria-labelledby="dashboard-activity-title" className="space-y-3">
+          <div>
+            <h2 id="dashboard-activity-title" className="text-lg font-semibold text-foreground">Activité principale</h2>
+            <p className="text-sm text-muted-foreground">Les quatre indicateurs utiles pour piloter l’offre et la demande.</p>
+          </div>
+          <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+            <CarteKPIY2K
+              icone={<Clock className="h-4 w-4" />}
+              valeur={kpi?.missions_ouvertes ?? '—'}
+              label="Missions ouvertes"
+              variant="holographic"
+              onClick={() => navigate('/admin/missions?filtre=OUVERTE')}
+            />
+            <CarteKPIY2K
+              icone={<CheckCircle className="h-4 w-4" />}
+              valeur={kpi?.missions_terminees_total ?? '—'}
+              label="Missions terminées"
+              contexte={`${kpi?.missions_terminees_mois ?? 0} ce mois`}
+              variant="default"
+              onClick={() => navigate('/admin/missions?filtre=TERMINEE')}
+            />
+            <CarteKPIY2K
+              icone={<Users className="h-4 w-4" />}
+              valeur={kpi?.soignants_total ?? '—'}
+              label="Soignants inscrits"
+              contexte={`+${kpi?.soignants_semaine ?? 0} cette semaine`}
+              variant="default"
+              onClick={() => navigate('/admin/utilisateurs')}
+            />
+            <CarteKPIY2K
+              icone={<Building2 className="h-4 w-4" />}
+              valeur={kpi?.etablissements_total ?? '—'}
+              label="Établissements"
+              contexte={`+${kpi?.etablissements_semaine ?? 0} cette semaine`}
+              variant="default"
+              onClick={() => navigate('/admin/utilisateurs')}
+            />
+          </div>
+        </section>
 
         {/* Alertes et actions urgentes */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <section aria-labelledby="dashboard-actions-title" className="space-y-3">
+          <div>
+            <h2 id="dashboard-actions-title" className="text-lg font-semibold text-foreground">À traiter maintenant</h2>
+            <p className="text-sm text-muted-foreground">Les éléments qui nécessitent une décision ou une vérification.</p>
+          </div>
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
           {nbEtabsAVerifier > 0 && (
             <button type="button" className="w-full rounded-xl border-2 border-primary/40 bg-primary/5 p-4 text-left cursor-pointer hover:border-primary/60 transition-colors" onClick={() => navigate('/admin/verification-etablissements')}>
               <div className="flex items-center gap-2 mb-2">
@@ -263,6 +286,15 @@ export default function AdminDashboard() {
               <p className="text-xs text-muted-foreground">En retard de paiement →</p>
             </button>
           )}
+          {nbEtabsAVerifier === 0 && litiges.length === 0 && facturesImpayees.length === 0 && (
+            <div className="rounded-xl border border-success/30 bg-success/5 p-4">
+              <div className="mb-2 flex items-center gap-2">
+                <CheckCircle className="h-5 w-5 text-success" aria-hidden="true" />
+                <span className="font-bold text-foreground">Aucune urgence détectée</span>
+              </div>
+              <p className="text-xs text-muted-foreground">Les files prioritaires sont à jour.</p>
+            </div>
+          )}
           <button type="button" className="w-full rounded-xl border border-border bg-card p-4 text-left cursor-pointer hover:border-primary/30 transition-colors" onClick={() => navigate('/admin/conformite')}>
             <div className="flex items-center gap-2 mb-2">
               <Target className="h-5 w-5 text-primary" />
@@ -270,7 +302,8 @@ export default function AdminDashboard() {
             </div>
             <p className="text-xs text-muted-foreground">Taux ce mois · Conformité →</p>
           </button>
-        </div>
+          </div>
+        </section>
 
         {/* Les données de test restent visibles et identifiées, mais sont exclues
             des montants de production présentés ci-dessous. */}
@@ -287,83 +320,100 @@ export default function AdminDashboard() {
           </div>
         )}
 
-        {/* CA */}
-        <div className="rounded-lg bg-muted/30 border border-border px-3 py-2 text-xs text-muted-foreground">
-          <strong className="text-foreground">Commission Jolene</strong> = ce que vous gardez (commission facturée aux établissements, HT).
-          <strong className="text-foreground"> GMV</strong> = volume brut des missions (argent qui passe par la plateforme mais va aux soignants — vous ne le touchez pas).
-        </div>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <CarteKPIY2K
-            icone={<Banknote className="h-4 w-4" />}
-            valeur={formatEur(argent?.commission?.mois_reel ?? 0)}
-            label="Commission Jolene ce mois (HT)"
-            contexte={`Facturable au total : ${formatEur(argent?.facturable?.ht_reel ?? 0)} HT`}
-            variant="holographic"
-            onClick={() => navigate('/admin/finances')}
-          />
-          <CarteKPIY2K
-            icone={<TrendingUp className="h-4 w-4" />}
-            valeur={formatEur(caEncaisse)}
-            label="Encaissé (commission, HT)"
-            contexte={`${formatEur(caEncaisseTTC)} TTC · sur compte`}
-            variant="default"
-            onClick={() => navigate('/admin/facturation')}
-          />
-          <CarteKPIY2K
-            icone={<FileText className="h-4 w-4" />}
-            valeur={formatEur(argent?.gmv?.total_reel ?? 0)}
-            label="GMV (volume brut transité)"
-            contexte={`Ce mois : ${formatEur(argent?.gmv?.mois_reel ?? 0)}`}
-            variant="default"
-            onClick={() => navigate('/admin/missions')}
-          />
-          <CarteKPIY2K
-            icone={<UserPlus className="h-4 w-4" />}
-            valeur={`${(kpi?.soignants_semaine ?? 0) + (kpi?.etablissements_semaine ?? 0)}`}
-            label="Nouveaux cette semaine"
-            variant="default"
-            onClick={() => navigate('/admin/utilisateurs')}
-          />
-        </div>
+        <section aria-labelledby="dashboard-details-title" className="space-y-3">
+          <div>
+            <h2 id="dashboard-details-title" className="text-lg font-semibold text-foreground">Analyses et détails</h2>
+            <p className="text-sm text-muted-foreground">Ouvrez seulement le volet nécessaire à votre analyse.</p>
+          </div>
 
-        {/* Charts */}
-        <div className="grid md:grid-cols-2 gap-6">
-          <CardY2K noPadding>
-            <CardY2KHeader><CardY2KTitle className="text-sm font-medium">Missions terminées / semaine</CardY2KTitle></CardY2KHeader>
-            <CardY2KContent>
-              <ChartContainer config={missionChartConfig} className="h-[250px] w-full">
-                <LineChart data={graphiques?.missions_par_semaine ?? []}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="semaine" tickFormatter={(v) => formatDate(v)} fontSize={11} />
-                  <YAxis fontSize={11} />
-                  <ChartTooltip content={<ChartTooltipContent />} />
-                  <Line type="monotone" dataKey="total" stroke="hsl(var(--primary))" strokeWidth={2} dot={{ r: 3 }} />
-                </LineChart>
-              </ChartContainer>
-            </CardY2KContent>
-          </CardY2K>
-          <CardY2K noPadding>
-            <CardY2KHeader><CardY2KTitle className="text-sm font-medium">CA mensuel HT</CardY2KTitle></CardY2KHeader>
-            <CardY2KContent>
-              <ChartContainer config={caChartConfig} className="h-[250px] w-full">
-                <BarChart data={graphiques?.ca_par_mois ?? []}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="mois" tickFormatter={(v) => new Date(v).toLocaleDateString('fr-FR', { month: 'short' })} fontSize={11} />
-                  <YAxis fontSize={11} tickFormatter={(v) => `${v}€`} />
-                  <ChartTooltip content={<ChartTooltipContent />} />
-                  <Bar dataKey="ca_ht" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ChartContainer>
-            </CardY2KContent>
-          </CardY2K>
-        </div>
+          <details className="group rounded-xl border border-border bg-card">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-4 p-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary [&::-webkit-details-marker]:hidden">
+              <span className="flex min-w-0 items-center gap-3">
+                <Banknote className="h-5 w-5 shrink-0 text-primary" aria-hidden="true" />
+                <span>
+                  <span className="block font-semibold text-foreground">Finances et volume d’activité</span>
+                  <span className="block text-sm text-muted-foreground">Commission ce mois : {formatEur(argent?.commission?.mois_reel ?? 0)} HT</span>
+                </span>
+              </span>
+              <ChevronDown className="h-5 w-5 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" aria-hidden="true" />
+            </summary>
+            <div className="space-y-4 border-t border-border p-4">
+              <p className="rounded-lg bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+                <strong className="text-foreground">Commission Jolene</strong> = ce que vous gardez (commission facturée aux établissements, HT).
+                <strong className="text-foreground"> GMV</strong> = volume brut des missions (argent qui passe par la plateforme mais va aux soignants — vous ne le touchez pas).
+              </p>
+              <div className="grid overflow-hidden rounded-lg border border-border sm:grid-cols-3">
+                <button type="button" className="p-4 text-left transition-colors hover:bg-muted/40 sm:border-r sm:border-border" onClick={() => navigate('/admin/finances')}>
+                  <span className="block text-xs text-muted-foreground">Commission Jolene ce mois (HT)</span>
+                  <strong className="mt-1 block text-xl text-foreground">{formatEur(argent?.commission?.mois_reel ?? 0)}</strong>
+                  <span className="mt-1 block text-xs text-muted-foreground">Facturable : {formatEur(argent?.facturable?.ht_reel ?? 0)} HT</span>
+                </button>
+                <button type="button" className="border-t border-border p-4 text-left transition-colors hover:bg-muted/40 sm:border-l-0 sm:border-t-0 sm:border-r" onClick={() => navigate('/admin/facturation')}>
+                  <span className="block text-xs text-muted-foreground">Encaissé (commission, HT)</span>
+                  <strong className="mt-1 block text-xl text-foreground">{formatEur(caEncaisse)}</strong>
+                  <span className="mt-1 block text-xs text-muted-foreground">{formatEur(caEncaisseTTC)} TTC · sur compte</span>
+                </button>
+                <button type="button" className="border-t border-border p-4 text-left transition-colors hover:bg-muted/40 sm:border-t-0" onClick={() => navigate('/admin/missions')}>
+                  <span className="block text-xs text-muted-foreground">GMV (volume brut transité)</span>
+                  <strong className="mt-1 block text-xl text-foreground">{formatEur(argent?.gmv?.total_reel ?? 0)}</strong>
+                  <span className="mt-1 block text-xs text-muted-foreground">Ce mois : {formatEur(argent?.gmv?.mois_reel ?? 0)}</span>
+                </button>
+              </div>
+            </div>
+          </details>
 
-        {/* Rentabilité */}
-        <CardY2K noPadding className="border-primary/30">
-          <CardY2KHeader>
-            <CardY2KTitle className="text-lg font-bold flex items-center gap-2"><TrendingUp className="h-5 w-5 text-primary" /> Rentabilité estimée</CardY2KTitle>
-          </CardY2KHeader>
-          <CardY2KContent className="space-y-6">
+          <details className="group rounded-xl border border-border bg-card">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-4 p-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary [&::-webkit-details-marker]:hidden">
+              <span className="flex min-w-0 items-center gap-3">
+                <TrendingUp className="h-5 w-5 shrink-0 text-primary" aria-hidden="true" />
+                <span>
+                  <span className="block font-semibold text-foreground">Tendances d’activité</span>
+                  <span className="block text-sm text-muted-foreground">Missions terminées et chiffre d’affaires mensuel</span>
+                </span>
+              </span>
+              <ChevronDown className="h-5 w-5 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" aria-hidden="true" />
+            </summary>
+            <div className="grid gap-6 border-t border-border p-4 md:grid-cols-2">
+              <div>
+                <h3 className="mb-3 text-sm font-medium text-foreground">Missions terminées / semaine</h3>
+                <ChartContainer config={missionChartConfig} className="h-[250px] w-full">
+                  <LineChart data={graphiques?.missions_par_semaine ?? []}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="semaine" tickFormatter={(v) => formatDate(v)} fontSize={11} />
+                    <YAxis fontSize={11} />
+                    <ChartTooltip content={<ChartTooltipContent />} />
+                    <Line type="monotone" dataKey="total" stroke="hsl(var(--primary))" strokeWidth={2} dot={{ r: 3 }} />
+                  </LineChart>
+                </ChartContainer>
+              </div>
+              <div>
+                <h3 className="mb-3 text-sm font-medium text-foreground">CA mensuel HT</h3>
+                <ChartContainer config={caChartConfig} className="h-[250px] w-full">
+                  <BarChart data={graphiques?.ca_par_mois ?? []}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="mois" tickFormatter={(v) => new Date(v).toLocaleDateString('fr-FR', { month: 'short' })} fontSize={11} />
+                    <YAxis fontSize={11} tickFormatter={(v) => `${v}€`} />
+                    <ChartTooltip content={<ChartTooltipContent />} />
+                    <Bar dataKey="ca_ht" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ChartContainer>
+              </div>
+            </div>
+          </details>
+
+          {/* Rentabilité */}
+          <details className="group rounded-xl border border-primary/30 bg-card">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-4 p-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary [&::-webkit-details-marker]:hidden">
+              <span className="flex min-w-0 items-center gap-3">
+                <TrendingUp className="h-5 w-5 shrink-0 text-primary" aria-hidden="true" />
+                <span>
+                  <span className="block font-semibold text-foreground">Rentabilité estimée</span>
+                  <span className="block text-sm text-muted-foreground">CA annualisé : {formatEur(rentabilite.caAnnualise)} · seuil {Math.round(rentabilite.progressionSeuil)}%</span>
+                </span>
+              </span>
+              <ChevronDown className="h-5 w-5 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" aria-hidden="true" />
+            </summary>
+            <div className="space-y-6 border-t border-border p-4">
             {/* CA — mêmes chiffres que les KPI ci-dessus (source unique fn_admin_metriques_argent) */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="rounded-lg bg-muted/50 p-4">
@@ -488,82 +538,84 @@ export default function AdminDashboard() {
             <p className="text-xs text-muted-foreground">
               Estimation indicative SASU, à confirmer avec votre expert-comptable.
             </p>
-          </CardY2KContent>
-        </CardY2K>
+            </div>
+          </details>
 
-        {/* Stripe paiements — vue opérationnelle brute (TTC), distincte de « Encaissé commission ». */}
-        <CardY2K noPadding>
-          <CardY2KHeader>
-            <CardY2KTitle className="text-sm font-medium flex items-center gap-2">
-              <CreditCard className="h-4 w-4 text-primary" /> Paiements Stripe (bruts, TTC)
-            </CardY2KTitle>
-          </CardY2KHeader>
-          <CardY2KContent>
-            {stripeMoisNb > 0 ? (
-              <div className="space-y-3">
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <div className="rounded-lg bg-muted/50 p-3 text-center">
-                    <p className="text-xs text-muted-foreground">Paiements ce mois</p>
-                    <p className="text-xl font-bold text-foreground">{stripeMoisNb}</p>
+          {/* Stripe paiements — vue opérationnelle brute (TTC), distincte de « Encaissé commission ». */}
+          <details className="group rounded-xl border border-border bg-card">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-4 p-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary [&::-webkit-details-marker]:hidden">
+              <span className="flex min-w-0 items-center gap-3">
+                <CreditCard className="h-5 w-5 shrink-0 text-primary" aria-hidden="true" />
+                <span>
+                  <span className="block font-semibold text-foreground">Paiements Stripe et Connect</span>
+                  <span className="block text-sm text-muted-foreground">{stripeMoisNb} paiement{stripeMoisNb > 1 ? 's' : ''} ce mois · {formatEur(stripeMoisCapture)} capturé TTC</span>
+                </span>
+              </span>
+              <ChevronDown className="h-5 w-5 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" aria-hidden="true" />
+            </summary>
+            <div className="space-y-6 border-t border-border p-4">
+              <section aria-labelledby="dashboard-stripe-payments-title">
+                <h3 id="dashboard-stripe-payments-title" className="mb-3 text-sm font-semibold text-foreground">Paiements Stripe bruts (TTC)</h3>
+                {stripeMoisNb > 0 ? (
+                  <div className="space-y-3">
+                    <div className="grid overflow-hidden rounded-lg border border-border sm:grid-cols-3">
+                      <div className="p-3 text-center sm:border-r sm:border-border">
+                        <p className="text-xs text-muted-foreground">Paiements ce mois</p>
+                        <p className="text-xl font-bold text-foreground">{stripeMoisNb}</p>
+                      </div>
+                      <div className="border-t border-border p-3 text-center sm:border-t-0 sm:border-r">
+                        <p className="text-xs text-muted-foreground">Capturé (TTC brut)</p>
+                        <p className="text-xl font-bold text-success">{formatEur(stripeMoisCapture)}</p>
+                      </div>
+                      <div className="border-t border-border p-3 text-center sm:border-t-0">
+                        <p className="text-xs text-muted-foreground">En attente (TTC)</p>
+                        <p className="text-xl font-bold text-warning">{formatEur(stripeMoisAttente)}</p>
+                      </div>
+                    </div>
+                    <a href="https://dashboard.stripe.com" target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 text-sm font-medium text-primary hover:underline">
+                      Ouvrir Stripe Dashboard → <ExternalLink className="h-3.5 w-3.5" />
+                    </a>
                   </div>
-                  <div className="rounded-lg bg-muted/50 p-3 text-center">
-                    <p className="text-xs text-muted-foreground">Capturé (TTC brut)</p>
-                    <p className="text-xl font-bold text-success">{formatEur(stripeMoisCapture)}</p>
+                ) : (
+                  <div className="py-3">
+                    <p className="text-sm text-muted-foreground">Aucun paiement pour le moment — les paiements apparaîtront quand des missions seront terminées.</p>
+                    <a href="https://dashboard.stripe.com" target="_blank" rel="noopener noreferrer" className="mt-2 inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline">
+                      Ouvrir Stripe Dashboard → <ExternalLink className="h-3.5 w-3.5" />
+                    </a>
                   </div>
-                  <div className="rounded-lg bg-muted/50 p-3 text-center">
-                    <p className="text-xs text-muted-foreground">En attente (TTC)</p>
-                    <p className="text-xl font-bold text-warning">{formatEur(stripeMoisAttente)}</p>
-                  </div>
-                </div>
-                <a href="https://dashboard.stripe.com" target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 text-sm text-primary font-medium hover:underline">
-                  Ouvrir Stripe Dashboard → <ExternalLink className="h-3.5 w-3.5" />
-                </a>
-              </div>
-            ) : (
-              <div className="text-center py-4">
-                <p className="text-sm text-muted-foreground">Aucun paiement pour le moment — les paiements apparaîtront quand des missions seront terminées.</p>
-                <a href="https://dashboard.stripe.com" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-sm text-primary font-medium hover:underline mt-2">
-                  Ouvrir Stripe Dashboard → <ExternalLink className="h-3.5 w-3.5" />
-                </a>
-              </div>
-            )}
-          </CardY2KContent>
-        </CardY2K>
+                )}
+              </section>
 
-        {/* Stripe Connect — versements soignants + commission retenue (le GMV canonique est
-            le KPI ci-dessus ; pas de second « GMV » ici pour éviter les homonymes). */}
-        {connectStats && (
-          <CardY2K noPadding>
-            <CardY2KHeader>
-              <CardY2KTitle className="text-sm font-medium flex items-center gap-2">
-                <CreditCard className="h-4 w-4 text-primary" /> Stripe Connect
-              </CardY2KTitle>
-            </CardY2KHeader>
-            <CardY2KContent className="space-y-3">
-              <div className="rounded-lg bg-muted/50 p-3 text-center mb-3">
-                <p className="text-xs text-muted-foreground">Comptes Connect</p>
-                <p className="text-xl font-bold text-foreground">{connectStats.total_comptes}</p>
-                <p className="text-[10px] text-muted-foreground">{connectStats.complets} complets · {connectStats.en_cours} en cours</p>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="rounded-lg bg-success/5 border border-success/20 p-3 text-center" title="Montant net effectivement versé aux soignants via Stripe Connect (hors commission Jolene)">
-                  <p className="text-xs text-muted-foreground">Versé aux soignants (net)</p>
-                  <p className="text-xl font-bold text-success">{formatEur(connectStats.total_verse_soignants ?? 0)}</p>
-                  {(connectStats.en_attente_soignants ?? 0) > 0 && (
-                    <p className="text-[10px] text-warning">En attente : {formatEur(connectStats.en_attente_soignants)}</p>
-                  )}
-                </div>
-                <div className="rounded-lg bg-primary/5 border border-primary/20 p-3 text-center" title="Commission Jolene retenue sur chaque paiement Connect (versée réellement)">
-                  <p className="text-xs text-muted-foreground">Commission retenue (Connect)</p>
-                  <p className="text-xl font-bold text-primary">{formatEur(connectStats.total_commission_jolene ?? 0)}</p>
-                  {(connectStats.en_attente_commission ?? 0) > 0 && (
-                    <p className="text-[10px] text-warning">En attente : {formatEur(connectStats.en_attente_commission)}</p>
-                  )}
-                </div>
-              </div>
-            </CardY2KContent>
-          </CardY2K>
-        )}
+              {/* Stripe Connect — versements soignants + commission retenue. */}
+              {connectStats && (
+                <section aria-labelledby="dashboard-stripe-connect-title" className="border-t border-border pt-5">
+                  <h3 id="dashboard-stripe-connect-title" className="mb-3 text-sm font-semibold text-foreground">Stripe Connect</h3>
+                  <div className="grid overflow-hidden rounded-lg border border-border sm:grid-cols-3">
+                    <div className="p-3 text-center sm:border-r sm:border-border">
+                      <p className="text-xs text-muted-foreground">Comptes Connect</p>
+                      <p className="text-xl font-bold text-foreground">{connectStats.total_comptes}</p>
+                      <p className="text-[10px] text-muted-foreground">{connectStats.complets} complets · {connectStats.en_cours} en cours</p>
+                    </div>
+                    <div className="border-t border-success/20 bg-success/5 p-3 text-center sm:border-t-0 sm:border-r" title="Montant net effectivement versé aux soignants via Stripe Connect (hors commission Jolene)">
+                      <p className="text-xs text-muted-foreground">Versé aux soignants (net)</p>
+                      <p className="text-xl font-bold text-success">{formatEur(connectStats.total_verse_soignants ?? 0)}</p>
+                      {(connectStats.en_attente_soignants ?? 0) > 0 && (
+                        <p className="text-[10px] text-warning">En attente : {formatEur(connectStats.en_attente_soignants)}</p>
+                      )}
+                    </div>
+                    <div className="border-t border-primary/20 bg-primary/5 p-3 text-center sm:border-t-0" title="Commission Jolene retenue sur chaque paiement Connect (versée réellement)">
+                      <p className="text-xs text-muted-foreground">Commission retenue (Connect)</p>
+                      <p className="text-xl font-bold text-primary">{formatEur(connectStats.total_commission_jolene ?? 0)}</p>
+                      {(connectStats.en_attente_commission ?? 0) > 0 && (
+                        <p className="text-[10px] text-warning">En attente : {formatEur(connectStats.en_attente_commission)}</p>
+                      )}
+                    </div>
+                  </div>
+                </section>
+              )}
+            </div>
+          </details>
+        </section>
 
         {/* Lists */}
         <div className="grid md:grid-cols-3 gap-6">

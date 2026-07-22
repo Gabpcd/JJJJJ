@@ -1,6 +1,8 @@
 import React, { useCallback, useState, useEffect } from 'react';
 import { LayoutAdmin } from '@/components/LayoutAdmin';
 import { ChargementAdmin } from '@/components/admin/ChargementAdmin';
+import { AdminFilterBar } from '@/components/admin/AdminFilterBar';
+import { AdminPageHeader } from '@/components/admin/AdminPageHeader';
 import { BreadcrumbAdmin } from '@/components/BreadcrumbAdmin';
 import { supabase } from '@/integrations/supabase/client';
 import { BoutonY2K } from '@/components/y2k/BoutonY2K';
@@ -433,19 +435,26 @@ export default function AdminModeration() {
     return (
       <LayoutAdmin>
         <BreadcrumbAdmin pageName="Modération" />
-        <div role="alert" className="rounded-xl border border-destructive/30 bg-destructive/5 p-6 text-center">
-          <ShieldAlert className="mx-auto h-8 w-8 text-destructive" />
-          <h1 className="mt-3 text-lg font-bold text-foreground">Modération indisponible</h1>
-          <p className="mt-1 text-sm text-muted-foreground">{erreurChargement}</p>
-          <BoutonY2K
-            variant="secondary"
-            size="sm"
-            className="mt-4 min-h-[44px] gap-2"
-            onClick={() => void charger()}
-            iconeGauche={<RefreshCw className="h-4 w-4" />}
-          >
-            Réessayer
-          </BoutonY2K>
+        <div className="space-y-5">
+          <AdminPageHeader
+            title="Modération"
+            description="Litiges, évaluations, documents et contrôles d’identité."
+            icon={<ShieldAlert className="h-6 w-6" />}
+          />
+          <div role="alert" className="rounded-xl border border-destructive/30 bg-destructive/5 p-6 text-center">
+            <ShieldAlert className="mx-auto h-8 w-8 text-destructive" />
+            <h2 className="mt-3 text-lg font-bold text-foreground">Modération indisponible</h2>
+            <p className="mt-1 text-sm text-muted-foreground">{erreurChargement}</p>
+            <BoutonY2K
+              variant="secondary"
+              size="sm"
+              className="mt-4 min-h-[44px] gap-2"
+              onClick={() => void charger()}
+              iconeGauche={<RefreshCw className="h-4 w-4" />}
+            >
+              Réessayer
+            </BoutonY2K>
+          </div>
         </div>
       </LayoutAdmin>
     );
@@ -454,11 +463,13 @@ export default function AdminModeration() {
   return (
     <LayoutAdmin>
       <BreadcrumbAdmin pageName="Modération" />
-      <div className="space-y-6">
-        <div className="flex items-start justify-between gap-3">
-          <h1 className="text-2xl font-bold text-foreground">Modération</h1>
-          <RefundsQueueWidget />
-        </div>
+      <div className="space-y-5">
+        <AdminPageHeader
+          title="Modération"
+          description="Litiges, évaluations, documents et contrôles d’identité à traiter."
+          icon={<ShieldAlert className="h-6 w-6" />}
+          actions={<RefundsQueueWidget />}
+        />
 
         <MediationBanner
           count={mediationCount}
@@ -474,45 +485,50 @@ export default function AdminModeration() {
 
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <div className="overflow-x-auto -mx-4 px-4 md:mx-0 md:px-0">
-            <TabsList className="w-max md:w-auto">
-              <TabsTrigger value="litiges" className="gap-1.5"><MessageSquare className="h-4 w-4" />Litiges ({litiges.length})</TabsTrigger>
-              <TabsTrigger value="avoirs" className="gap-1.5"><Receipt className="h-4 w-4" />Avoirs</TabsTrigger>
-              <TabsTrigger value="legacy" className="gap-1.5">
+            <TabsList className="h-auto w-max p-1 md:w-auto">
+              <TabsTrigger value="litiges" className="min-h-10 gap-1.5 px-3 text-xs sm:text-sm"><MessageSquare className="h-4 w-4" />Litiges ({litiges.length})</TabsTrigger>
+              <TabsTrigger value="avoirs" className="min-h-10 gap-1.5 px-3 text-xs sm:text-sm"><Receipt className="h-4 w-4" />Avoirs</TabsTrigger>
+              <TabsTrigger value="legacy" className="min-h-10 gap-1.5 px-3 text-xs sm:text-sm">
                 <Tag className="h-4 w-4" />À recatégoriser{legacyCount > 0 ? ` (${legacyCount})` : ''}
               </TabsTrigger>
-              <TabsTrigger value="evaluations" className="gap-1.5"><Eye className="h-4 w-4" />Évaluations ({evaluations.length})</TabsTrigger>
-              <TabsTrigger value="documents" className="gap-1.5"><FileCheck className="h-4 w-4" />Documents ({documents.length})</TabsTrigger>
-              <TabsTrigger value="incoherences" className="gap-1.5"><ShieldAlert className="h-4 w-4" />Identité ({incoherences.length})</TabsTrigger>
+              <TabsTrigger value="evaluations" className="min-h-10 gap-1.5 px-3 text-xs sm:text-sm"><Eye className="h-4 w-4" />Évaluations ({evaluations.length})</TabsTrigger>
+              <TabsTrigger value="documents" className="min-h-10 gap-1.5 px-3 text-xs sm:text-sm"><FileCheck className="h-4 w-4" />Documents ({documents.length})</TabsTrigger>
+              <TabsTrigger value="incoherences" className="min-h-10 gap-1.5 px-3 text-xs sm:text-sm"><ShieldAlert className="h-4 w-4" />Identité ({incoherences.length})</TabsTrigger>
             </TabsList>
           </div>
 
           <TabsContent value="litiges" className="space-y-4" data-testid="tab-litiges">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <LitigesFilters filtres={filtres} onChange={setFiltres} />
-            </div>
-
-            <div className="flex items-center justify-end gap-2 flex-wrap">
-              <BoutonY2K
-                size="sm"
-                variant="secondary"
-                onClick={() => { setShowCreerLitige(true); setCreerLitigeMissionId(''); setCreerLitigeMotif(''); setCreerLitigeRaison(''); }}
-                aria-label="Créer un litige par dérogation admin"
-                iconeGauche={<Plus className="h-3.5 w-3.5" />}
-              >
-                Créer un litige par dérogation
-              </BoutonY2K>
-              <BoutonY2K
-                size="sm"
-                variant="secondary"
-                onClick={() => telechargerCsv(filtrerEtTrier(litiges, filtres))}
-                disabled={litiges.length === 0}
-                aria-label="Exporter les litiges filtrés en CSV"
-                data-testid="btn-export-csv"
-                iconeGauche={<Download className="h-3.5 w-3.5" />}
-              >
-                Exporter CSV
-              </BoutonY2K>
-            </div>
+            <AdminFilterBar
+              ariaLabel="Filtres des litiges"
+              actions={(
+                <>
+                  <BoutonY2K
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => { setShowCreerLitige(true); setCreerLitigeMissionId(''); setCreerLitigeMotif(''); setCreerLitigeRaison(''); }}
+                    aria-label="Créer un litige par dérogation admin"
+                    iconeGauche={<Plus className="h-3.5 w-3.5" />}
+                  >
+                    Créer un litige par dérogation
+                  </BoutonY2K>
+                  <BoutonY2K
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => telechargerCsv(filtrerEtTrier(litiges, filtres))}
+                    disabled={litiges.length === 0}
+                    aria-label="Exporter les litiges filtrés en CSV"
+                    data-testid="btn-export-csv"
+                    iconeGauche={<Download className="h-3.5 w-3.5" />}
+                  >
+                    Exporter CSV
+                  </BoutonY2K>
+                </>
+              )}
+            >
+              <div className="w-full">
+                <LitigesFilters filtres={filtres} onChange={setFiltres} />
+              </div>
+            </AdminFilterBar>
 
             <LitigesList
               litiges={litiges}

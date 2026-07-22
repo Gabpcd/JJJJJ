@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tabs, TabsContent, TabsTrigger } from '@/components/ui/tabs';
+import { AdminTabsList } from '@/components/admin/AdminTabs';
 import { ReclamationsScoreContent } from './AdminReclamationsScore';
 import { ScoreTriageContent } from './AdminScoreTriage';
 import { LayoutAdmin } from '@/components/LayoutAdmin';
@@ -103,11 +104,11 @@ export default function AdminReclamations() {
       </div>
 
       <Tabs value={onglet} onValueChange={(v) => setSearchParams({ tab: v }, { replace: true })}>
-        <TabsList className="mb-4">
+        <AdminTabsList containerClassName="mb-4" aria-label="Types de réclamations">
           <TabsTrigger value="generales">Réclamations</TabsTrigger>
           <TabsTrigger value="score">Contestations score</TabsTrigger>
           <TabsTrigger value="triage">Triage des scores</TabsTrigger>
-        </TabsList>
+        </AdminTabsList>
 
         <TabsContent value="generales" className="mt-0">
       <div className="space-y-4">
