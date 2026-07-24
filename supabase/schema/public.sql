@@ -7521,12 +7521,57 @@ BEGIN
 
   SELECT jsonb_build_object(
     'stats', jsonb_build_object(
-      'a_traiter', (SELECT count(*) FROM public.sales_taches WHERE statut IN ('A_FAIRE', 'EN_COURS') AND echeance_le <= now()),
-      'en_retard', (SELECT count(*) FROM public.sales_taches WHERE statut IN ('A_FAIRE', 'EN_COURS') AND echeance_le < date_trunc('day', now())),
-      'sept_jours', (SELECT count(*) FROM public.sales_taches WHERE statut IN ('A_FAIRE', 'EN_COURS') AND echeance_le <= now() + interval '7 days'),
-      'sans_responsable', (SELECT count(*) FROM public.sales_contacts WHERE archive IS FALSE AND sequence_active IS TRUE AND responsable_id IS NULL),
-      'contacts_actifs', (SELECT count(*) FROM public.sales_contacts WHERE archive IS FALSE AND statut NOT IN ('INSCRIT', 'PERDU')),
-      'taux_conversion', (SELECT CASE WHEN count(*) = 0 THEN 0 ELSE round(100.0 * count(*) FILTER (WHERE statut = 'INSCRIT') / count(*), 1) END FROM public.sales_contacts WHERE archive IS FALSE),
+      'a_traiter', (
+        SELECT count(*)
+        FROM public.sales_taches st
+        JOIN public.sales_contacts sc ON sc.id = st.contact_id
+        WHERE st.statut IN ('A_FAIRE', 'EN_COURS')
+          AND st.echeance_le <= now()
+          AND sc.ne_plus_contacter IS FALSE
+          AND sc.statut <> 'PERDU'
+      ),
+      'en_retard', (
+        SELECT count(*)
+        FROM public.sales_taches st
+        JOIN public.sales_contacts sc ON sc.id = st.contact_id
+        WHERE st.statut IN ('A_FAIRE', 'EN_COURS')
+          AND st.echeance_le < date_trunc('day', now())
+          AND sc.ne_plus_contacter IS FALSE
+          AND sc.statut <> 'PERDU'
+      ),
+      'sept_jours', (
+        SELECT count(*)
+        FROM public.sales_taches st
+        JOIN public.sales_contacts sc ON sc.id = st.contact_id
+        WHERE st.statut IN ('A_FAIRE', 'EN_COURS')
+          AND st.echeance_le <= now() + interval '7 days'
+          AND sc.ne_plus_contacter IS FALSE
+          AND sc.statut <> 'PERDU'
+      ),
+      'sans_responsable', (
+        SELECT count(*)
+        FROM public.sales_contacts
+        WHERE archive IS FALSE
+          AND sequence_active IS TRUE
+          AND responsable_id IS NULL
+          AND ne_plus_contacter IS FALSE
+          AND statut <> 'PERDU'
+      ),
+      'contacts_actifs', (
+        SELECT count(*)
+        FROM public.sales_contacts
+        WHERE archive IS FALSE
+          AND statut NOT IN ('INSCRIT', 'PERDU')
+          AND ne_plus_contacter IS FALSE
+      ),
+      'taux_conversion', (
+        SELECT CASE
+          WHEN count(*) = 0 THEN 0
+          ELSE round(100.0 * count(*) FILTER (WHERE statut = 'INSCRIT') / count(*), 1)
+        END
+        FROM public.sales_contacts
+        WHERE archive IS FALSE AND ne_plus_contacter IS FALSE
+      ),
       'emails_7j', (SELECT count(*) FROM public.sales_activites WHERE action_type = 'EMAIL_ENVOYE' AND cree_le >= now() - interval '7 days'),
       'actions_7j', (SELECT count(*) FROM public.sales_activites WHERE cree_le >= now() - interval '7 days')
     ),
@@ -7542,6 +7587,8 @@ BEGIN
         FROM public.sales_taches st
         JOIN public.sales_contacts sc ON sc.id = st.contact_id
         WHERE st.statut IN ('A_FAIRE', 'EN_COURS')
+          AND sc.ne_plus_contacter IS FALSE
+          AND sc.statut <> 'PERDU'
         ORDER BY st.echeance_le,
                  CASE st.priorite WHEN 'URGENTE' THEN 0 WHEN 'HAUTE' THEN 1 WHEN 'NORMALE' THEN 2 ELSE 3 END
         LIMIT LEAST(GREATEST(p_limit, 1), 300)
@@ -45821,6 +45868,76 @@ $$;
 ALTER FUNCTION "public"."fn_role_etablissement_courant"("p_etablissement_id" "uuid") OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."fn_sales_outreach_est_interdit"("p_contact_id" "uuid" DEFAULT NULL::"uuid", "p_cible" "text" DEFAULT NULL::"text", "p_prospect_id" "text" DEFAULT NULL::"text", "p_email" "text" DEFAULT NULL::"text", "p_telephone" "text" DEFAULT NULL::"text") RETURNS boolean
+    LANGUAGE "plpgsql" STABLE
+    SET "search_path" TO 'pg_catalog', 'public'
+    AS $$
+DECLARE
+  v_cible text := upper(btrim(COALESCE(p_cible, '')));
+  v_prospect_id text := NULLIF(btrim(COALESCE(p_prospect_id, '')), '');
+  v_email text := NULLIF(lower(btrim(COALESCE(p_email, ''))), '');
+  v_telephone text := NULLIF(regexp_replace(COALESCE(p_telephone, ''), '\D', '', 'g'), '');
+BEGIN
+  IF v_cible NOT IN ('ETABLISSEMENT', 'SOIGNANT') THEN
+    RETURN true;
+  END IF;
+
+  IF p_contact_id IS NULL
+     AND v_prospect_id IS NULL
+     AND v_email IS NULL
+     AND (v_telephone IS NULL OR length(v_telephone) < 9) THEN
+    RETURN true;
+  END IF;
+
+  IF EXISTS (
+    SELECT 1
+    FROM public.sales_contacts c
+    WHERE (c.ne_plus_contacter IS TRUE OR c.statut = 'PERDU')
+      AND (
+        (p_contact_id IS NOT NULL AND c.id = p_contact_id)
+        OR (
+          v_cible = 'ETABLISSEMENT'
+          AND v_prospect_id IS NOT NULL
+          AND c.finess = v_prospect_id
+        )
+        OR (
+          v_prospect_id IS NOT NULL
+          AND c.source_prospect_type = v_cible
+          AND c.source_prospect_id = v_prospect_id
+        )
+        OR (v_email IS NOT NULL AND lower(btrim(c.email)) = v_email)
+        OR (
+          v_telephone IS NOT NULL
+          AND length(v_telephone) >= 9
+          AND regexp_replace(COALESCE(c.telephone, ''), '\D', '', 'g') = v_telephone
+        )
+      )
+  ) THEN
+    RETURN true;
+  END IF;
+
+  IF v_prospect_id IS NOT NULL AND (
+    (v_cible = 'ETABLISSEMENT' AND EXISTS (
+      SELECT 1 FROM public.prospects_etablissements p
+      WHERE p.finess = v_prospect_id AND p.statut_sourcing = 'OPPOSITION'
+    ))
+    OR
+    (v_cible = 'SOIGNANT' AND EXISTS (
+      SELECT 1 FROM public.prospects_soignants p
+      WHERE p.cle = v_prospect_id AND p.statut_sourcing = 'OPPOSITION'
+    ))
+  ) THEN
+    RETURN true;
+  END IF;
+
+  RETURN false;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_sales_outreach_est_interdit"("p_contact_id" "uuid", "p_cible" "text", "p_prospect_id" "text", "p_email" "text", "p_telephone" "text") OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."fn_sanitiser_html"("p_html" "text") RETURNS "text"
     LANGUAGE "plpgsql" IMMUTABLE
     SET "search_path" TO 'public'
@@ -71125,6 +71242,11 @@ GRANT ALL ON FUNCTION "public"."fn_rib_etablissement_courant_verifie"("p_etablis
 REVOKE ALL ON FUNCTION "public"."fn_role_etablissement_courant"("p_etablissement_id" "uuid") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_role_etablissement_courant"("p_etablissement_id" "uuid") TO "service_role";
 GRANT ALL ON FUNCTION "public"."fn_role_etablissement_courant"("p_etablissement_id" "uuid") TO "authenticated";
+
+
+
+REVOKE ALL ON FUNCTION "public"."fn_sales_outreach_est_interdit"("p_contact_id" "uuid", "p_cible" "text", "p_prospect_id" "text", "p_email" "text", "p_telephone" "text") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_sales_outreach_est_interdit"("p_contact_id" "uuid", "p_cible" "text", "p_prospect_id" "text", "p_email" "text", "p_telephone" "text") TO "service_role";
 
 
 
