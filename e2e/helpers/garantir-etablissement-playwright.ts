@@ -2,6 +2,8 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 
 const EMAIL_ETABLISSEMENT_PLAYWRIGHT = 'playwright-etab@jolene.app';
 const SIRET_ETABLISSEMENT_PLAYWRIGHT = '90000000000001';
+const STRIPE_CUSTOMER_PLAYWRIGHT = 'cus_playwrightfixture';
+const STRIPE_SEPA_PLAYWRIGHT = 'pm_playwrightfixture';
 
 /**
  * Garantit la présence du compte établissement technique partagé par la CI.
@@ -93,6 +95,12 @@ export async function garantirEtablissementPlaywright(
         adresse_lng: 2.3322,
         email_contact: EMAIL_ETABLISSEMENT_PLAYWRIGHT,
         telephone_contact: '+33100000001',
+        // Identifiants volontairement fictifs et réservés au compte CI. Les
+        // scénarios d'acceptation doivent franchir le garde-fou du mandat sans
+        // jamais pouvoir débiter un moyen de paiement Stripe réel.
+        mode_paiement_commission: 'SEPA_DEBIT',
+        stripe_customer_id: STRIPE_CUSTOMER_PLAYWRIGHT,
+        stripe_sepa_payment_method_id: STRIPE_SEPA_PLAYWRIGHT,
         contrat_service_signe: true,
         contrat_service_signe_le: maintenant,
         rib_s3_key: 'playwright-test/seed/rib-fictif.pdf',
