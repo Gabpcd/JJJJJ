@@ -87,25 +87,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const u = data.user;
 
-    // Get verified role from server — never trust client metadata
-    let verifiedRole = 'INCONNU';
-    try {
-      const { data: roleData } = await supabase.rpc('fn_get_my_role');
-      if (roleData && (roleData as any).role) {
-        verifiedRole = (roleData as any).role;
-      }
-    } catch { /* fallback */ }
-
-    const { error: auditError } = await supabase.rpc('fn_audit_connexion', {
-      p_action: 'CONNEXION',
-    });
-    if (auditError) logger.error('Audit connexion échoué', auditError);
-
     // Sentry user identification
     Sentry.setUser({ id: u.id });
 
-    if (verifiedRole === 'SOIGNANT') {
-      supabase.rpc('fn_maj_activite_soignant' as any).then(() => {});
+    // Une connexion Auth réussie ne doit jamais être retransformée en échec
+    // utilisateur parce qu'un audit ou une mise à jour d'activité est lent.
+    // Ces écritures restent best-effort et les autorisations sont toujours
+    // imposées côté serveur par les RLS/RPC.
+    void supabase.rpc('fn_audit_connexion', {
+      p_action: 'CONNEXION',
+    }).then(({ error: auditError }) => {
+      if (auditError) logger.error('Audit connexion échoué', auditError);
+    }, (auditError) => {
+      logger.error('Audit connexion indisponible', auditError);
+    });
+
+    if (u.app_metadata?.role === 'SOIGNANT') {
+      void supabase.rpc('fn_maj_activite_soignant' as any).then(
+        () => undefined,
+        (activityError) => logger.warn('Mise à jour activité soignant ignorée', activityError),
+      );
     }
   }, []);
 

@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   afficherNotification: vi.fn(),
   rpc: vi.fn(),
   signOut: vi.fn(),
+  getSession: vi.fn(),
   resetPasswordForEmail: vi.fn(),
 }));
 
@@ -24,7 +25,7 @@ vi.mock('@/integrations/supabase/client', () => ({
     rpc: mocks.rpc,
     auth: {
       signOut: mocks.signOut,
-      getSession: vi.fn().mockResolvedValue({ data: { session: null } }),
+      getSession: mocks.getSession,
       refreshSession: vi.fn(),
       resetPasswordForEmail: mocks.resetPasswordForEmail,
     },
@@ -76,7 +77,25 @@ describe('PageConnexion — résolution sûre du rôle', () => {
     vi.clearAllMocks();
     mocks.connexion.mockResolvedValue(undefined);
     mocks.signOut.mockResolvedValue({ error: null });
+    mocks.getSession.mockResolvedValue({ data: { session: null } });
     mocks.resetPasswordForEmail.mockResolvedValue({ error: null });
+  });
+
+  it('ouvre immédiatement l’espace depuis le rôle signé sans attendre la RPC', async () => {
+    mocks.getSession.mockResolvedValue({
+      data: { session: { user: { app_metadata: { role: 'SOIGNANT' } } } },
+    });
+    mocks.rpc.mockImplementation(() => new Promise(() => undefined));
+
+    renderConnexion();
+    await soumettreConnexion();
+
+    expect(await screen.findByText('Tableau de bord soignant')).toBeInTheDocument();
+    expect(mocks.rpc).not.toHaveBeenCalledWith('fn_get_my_role');
+    expect(mocks.afficherNotification).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'succes',
+      message: 'Connexion réussie !',
+    }));
   });
 
   it('conserve la session et ne redirige pas vers l’inscription si la RPC de rôle échoue', async () => {
