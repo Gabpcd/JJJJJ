@@ -80,44 +80,51 @@ export default function PageConnexion() {
 
   const navigateToRole = async (): Promise<boolean> => {
     const { supabase } = await import('@/integrations/supabase/client');
-    let roleResponse: Awaited<ReturnType<typeof supabase.rpc>>;
-    try {
-      roleResponse = await avecDelai(
-        supabase.rpc('fn_get_my_role'),
-        10_000,
-        'La résolution de votre espace a pris trop de temps',
-      );
-    } catch (roleRequestError) {
-      logger.error('[CONNEXION] Résolution du rôle expirée, session conservée', roleRequestError);
-      afficherNotification({
-        type: 'erreur',
-        message: 'Votre session est active, mais votre espace ne répond pas. Veuillez réessayer.',
-      });
-      return false;
+    // app_metadata est émis et signé par Supabase Auth (contrairement à
+    // user_metadata, modifiable par l'utilisateur). Il suffit donc pour choisir
+    // une route d'interface ; chaque donnée/action reste protégée par RLS/RPC.
+    // Cela évite qu'une base momentanément chargée bloque une authentification
+    // déjà réussie, comme lors de la review Apple du 27/07/2026.
+    const { data: sessionData } = await supabase.auth.getSession();
+    const roleSigne = sessionData.session?.user.app_metadata?.role;
+    let destination = destinationPourRole(roleSigne);
+    let roleData: unknown = roleSigne;
+
+    // Compatibilité avec les anciens comptes qui n'ont pas encore de rôle
+    // signé dans app_metadata.
+    if (!destination) {
+      let roleResponse: Awaited<ReturnType<typeof supabase.rpc>>;
+      try {
+        roleResponse = await avecDelai(
+          supabase.rpc('fn_get_my_role'),
+          10_000,
+          'La résolution de votre espace a pris trop de temps',
+        );
+      } catch (roleRequestError) {
+        logger.error('[CONNEXION] Résolution du rôle expirée, session conservée', roleRequestError);
+        afficherNotification({
+          type: 'erreur',
+          message: 'Votre session est active, mais votre espace ne répond pas. Veuillez réessayer.',
+        });
+        return false;
+      }
+      const { data, error: roleError } = roleResponse;
+      roleData = data;
+      logger.debug('[CONNEXION] fn_get_my_role result:', JSON.stringify(data), 'error:', roleError);
+
+      // Une erreur réseau/serveur ne signifie jamais que le profil est absent.
+      if (roleError) {
+        logger.error('[CONNEXION] Résolution du rôle indisponible, session conservée', roleError);
+        afficherNotification({
+          type: 'erreur',
+          message: 'Votre session est active, mais votre espace est momentanément indisponible. Veuillez réessayer.',
+        });
+        return false;
+      }
+
+      const role = typeof data === 'string' ? data : (data as any)?.role;
+      destination = destinationPourRole(role);
     }
-    const { data: roleData, error: roleError } = roleResponse;
-    logger.debug('[CONNEXION] fn_get_my_role result:', JSON.stringify(roleData), 'error:', roleError);
-
-    // Une erreur réseau/serveur ne signifie jamais que le profil est absent.
-    // La session créée par connexion() reste active pour permettre une nouvelle
-    // tentative sans demander à l'utilisateur de se réauthentifier.
-    if (roleError) {
-      logger.error('[CONNEXION] Résolution du rôle indisponible, session conservée', roleError);
-      afficherNotification({
-        type: 'erreur',
-        message: 'Votre session est active, mais votre espace est momentanément indisponible. Veuillez réessayer.',
-      });
-      return false;
-    }
-
-    const role = typeof roleData === 'string' ? roleData : (roleData as any)?.role;
-    logger.debug('[CONNEXION] Resolved role:', role);
-
-    let destination: string | null = null;
-    if (role === 'ADMIN_PLATEFORME' || role === 'ADMIN') destination = '/admin';
-    else if (role === 'ADMIN_ETABLISSEMENT' || role === 'ETABLISSEMENT') destination = '/etablissement/tableau-de-bord';
-    else if (role === 'ADMIN_GROUPE') destination = '/groupe/tableau-de-bord';
-    else if (role === 'SOIGNANT') destination = '/soignant/tableau-de-bord';
 
     // Ici seulement, la RPC a répondu avec succès mais aucun rôle n'existe :
     // il s'agit bien d'une inscription incomplète, pas d'un incident transitoire.
@@ -385,3 +392,13 @@ export default function PageConnexion() {
 }
 
 const EMAIL_REGEX = /^[^\s@]{1,64}@[^\s@]{1,255}\.[a-z]{2,}$/i;
+
+function destinationPourRole(role: unknown): string | null {
+  if (role === 'ADMIN_PLATEFORME' || role === 'ADMIN') return '/admin';
+  if (role === 'ADMIN_ETABLISSEMENT' || role === 'ETABLISSEMENT') {
+    return '/etablissement/tableau-de-bord';
+  }
+  if (role === 'ADMIN_GROUPE') return '/groupe/tableau-de-bord';
+  if (role === 'SOIGNANT') return '/soignant/tableau-de-bord';
+  return null;
+}

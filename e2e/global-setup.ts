@@ -17,6 +17,7 @@ import {
   nettoyerSessionsPlaywright,
   reactiverSoignantPlaywright,
 } from './helpers/nettoyage-sessions-playwright';
+import { garantirEtablissementPlaywright } from './helpers/garantir-etablissement-playwright';
 
 const PREFIXES = ['[playwright-test]%', '[pw-test%'];
 
@@ -58,6 +59,12 @@ export default async function globalSetup() {
   // GitHub interrompt le worker avant son finally, le run suivant doit réparer
   // Auth ET le profil avant le moindre login.
   await reactiverSoignantPlaywright(admin);
+
+  // Le compte établissement est une fixture CI fixe. Le recréer
+  // automatiquement s'il a été supprimé évite qu'un état de recette externe
+  // fasse échouer toute la suite avant le premier test.
+  const etablissementPlaywrightId =
+    await garantirEtablissementPlaywright(admin);
 
   // Un run interrompu ne passe pas par global-teardown. Purger ses anciennes
   // sessions avant toute autre requête empêche Auth/PostgREST de se saturer.
@@ -209,21 +216,10 @@ export default async function globalSetup() {
   //    ancien déclenche légitimement le gel J+15 et fait ensuite échouer toutes
   //    les créations de missions du run suivant. On annule donc uniquement les
   //    factures impayées de ce compte technique, sans toucher aux données démo.
-  const { data: etablissementTestIdBrut, error: etablissementError } = await admin.rpc(
-    'fn_admin_get_user_id_by_email',
-    { p_email: 'playwright-etab@jolene.app' },
-  );
-  const etablissementTestId = etablissementTestIdBrut as string | null;
-  if (etablissementError || !etablissementTestId) {
-    throw new Error(
-      `[global-setup] compte établissement Playwright introuvable : ${etablissementError?.message || 'aucune ligne'}`,
-    );
-  }
-
   const { data: facturesAnnulees, error: facturesError } = await admin
     .from('factures')
     .update({ statut: 'ANNULEE' })
-    .eq('etablissement_id', etablissementTestId)
+    .eq('etablissement_id', etablissementPlaywrightId)
     .eq('statut', 'EMISE')
     .select('id');
   if (facturesError) {
