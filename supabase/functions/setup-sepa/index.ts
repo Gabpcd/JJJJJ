@@ -8,6 +8,7 @@ import {
   StripeCustomerConfigurationError,
 } from "../_shared/stripe-customer.ts";
 import { assertStripeSecretMode } from "../_shared/stripe-production.ts";
+import { resolveOperationalTestAccount } from "../_shared/test-account.ts";
 
 type SepaAction =
   | "create_setup_intent"
@@ -147,6 +148,20 @@ Deno.serve(async (req) => {
       .maybeSingle();
     if (etabError) throw new PublicError(503, "Le profil de paiement est temporairement indisponible.");
     if (!etab) return jsonResponse(req, { error: "Établissement introuvable" }, 404);
+
+    const testAccount = await resolveOperationalTestAccount(
+      supabaseAdmin,
+      etablissementId,
+    );
+    if (!testAccount.ok) {
+      throw new PublicError(
+        503,
+        "La classification du compte est temporairement indisponible.",
+      );
+    }
+    if (testAccount.isTest) {
+      return jsonResponse(req, { error: "TEST_ACCOUNT_PAYMENT_DISABLED" }, 403);
+    }
 
     const stripe = new Stripe(stripeSecretKey, { apiVersion: "2026-02-25.clover" });
     const currentEtab = etab as EtablissementSepa;

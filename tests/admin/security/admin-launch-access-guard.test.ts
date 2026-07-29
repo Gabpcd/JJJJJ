@@ -5,9 +5,7 @@ import { describe, expect, it } from 'vitest';
 const read = (path: string) => readFileSync(join(process.cwd(), path), 'utf8');
 
 const migration = read('supabase/migrations/20260714004020_verrouiller_acces_admin_lancement.sql');
-const retraitMfa = read('supabase/migrations/20260714125948_supprimer_mfa_admin.sql');
-const exceptionMfa = read('supabase/migrations/20260714130849_borner_exception_mfa_admin_principal.sql');
-const accesGabrielle = read('supabase/migrations/20260714154654_autoriser_admin_gabrielle_sans_mfa.sql');
+const sansMfa = read('supabase/migrations/20260729121419_requalifier_donnees_prelaunch_et_supprimer_mfa_admin.sql');
 const familleGabrielle = read('supabase/migrations/20260722163518_completer_type_compte_admin_gabrielle.sql');
 const app = read('src/App.tsx');
 const routeProtegee = read('src/components/RouteProtegee.tsx');
@@ -40,23 +38,22 @@ describe('garde admin fail-closed de lancement', () => {
     expect(app).toContain('path="/acces-admin-indisponible"');
   });
 
-  it('exige côté serveur les huit groupes, un compte sain et borne l’exception MFA', () => {
+  it('exige côté serveur les huit groupes et un compte sain, sans MFA', () => {
     for (const groupe of groupesCanoniques) {
-      expect(migration).toContain(`'${groupe}'`);
+      expect(sansMfa).toContain(`'${groupe}'`);
     }
-    expect(retraitMfa).toContain("'est_admin_valide'");
-    expect(retraitMfa).toContain('v_nombre_modifie <> 10');
-    expect(exceptionMfa).toContain("lower(COALESCE(u.email, '')) = 'admin@jolene.app'");
-    expect(exceptionMfa).toContain("COALESCE(auth.jwt() ->> 'aal', '') = 'aal2'");
-    expect(accesGabrielle).toContain("'gabrielle.pcd@outlook.com'");
-    expect(accesGabrielle).toContain("'ADMIN_PLATEFORME'");
-    expect(accesGabrielle).toContain('INSERT INTO public.equipe_admin');
-    expect(accesGabrielle).toContain('DELETE FROM auth.mfa_factors');
+    expect(sansMfa).toContain('CREATE OR REPLACE FUNCTION public.est_admin_valide()');
+    expect(sansMfa).toContain("u.raw_app_meta_data ->> 'role' = 'ADMIN_PLATEFORME'");
+    expect(sansMfa).toContain('u.email_confirmed_at IS NOT NULL');
+    expect(sansMfa).toContain('ea.actif IS TRUE');
+    expect(sansMfa).toContain('DELETE FROM auth.mfa_factors');
+    expect(sansMfa).not.toContain("auth.jwt() ->> 'aal'");
     expect(familleGabrielle).toContain('INSERT INTO public.types_comptes_auth');
     expect(familleGabrielle).toContain("'ADMIN'");
     expect(familleGabrielle).toContain("'gabrielle.pcd@outlook.com'");
-    expect(routeProtegee).toContain("'gabrielle.pcd@outlook.com'");
-    expect(migration).toContain(']::text[] <@ COALESCE(ea.acces_groupes, ARRAY[]::text[])');
+    expect(routeProtegee).not.toContain('AdminMfaGate');
+    expect(routeProtegee).not.toContain('ADMIN_EMAILS_SANS_MFA');
+    expect(sansMfa).toContain(']::text[] <@ COALESCE(ea.acces_groupes, ARRAY[]::text[])');
     expect(migration).toContain('JOIN public.equipe_admin ea ON ea.user_id = u.id');
     expect(migration).not.toContain('admin historique hors equipe');
     expect(migration).not.toMatch(/NOT EXISTS \([\s\S]*?equipe_admin ea_any/);
@@ -83,6 +80,8 @@ describe('garde admin fail-closed de lancement', () => {
     expect(adminGuard).toContain(
       'if (!isConfirmedAuthUser({ email_confirmed_at: auth.emailConfirmedAt }))',
     );
+    expect(edgeAuth).not.toContain('getClaims(');
+    expect(edgeAuth).not.toContain("auth.aal !== 'aal2'");
     expect(edgeAuth).toContain("status: 403, error: 'Acces administrateur complet requis'");
   });
 

@@ -1,7 +1,8 @@
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Loader2, CheckCircle, XCircle, HeartPulse, ExternalLink } from 'lucide-react';
+import { Loader2, CheckCircle, XCircle, ExternalLink } from 'lucide-react';
+import { LogoJolene } from '@/components/LogoJolene';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { ouvrirUrlPsc } from '@/lib/pscNavigation';
@@ -101,10 +102,11 @@ export default function PscCallback() {
   return (
     <div className="min-h-[100dvh] gradient-hero flex flex-col items-center justify-center px-4">
       <div className="card-base max-w-md w-full text-center space-y-6">
-        <div className="flex items-center justify-center gap-2">
-          <HeartPulse className="h-8 w-8 text-rose" />
-          <span className="text-2xl font-bold text-rose">Jolene</span>
-        </div>
+        <LogoJolene
+          className="mx-auto flex w-fit"
+          imageClassName="h-8 w-8"
+          nomClassName="text-2xl text-rose"
+        />
 
         {status === 'loading' && (
           <>

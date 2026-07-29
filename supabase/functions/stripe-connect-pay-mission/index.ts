@@ -15,6 +15,7 @@ import {
 } from "../_shared/stripe-customer.ts";
 import { assertStripeSecretMode } from "../_shared/stripe-production.ts";
 import { requireAcquiredStripeSourceCharge } from "../_shared/stripe-source-charge.ts";
+import { resolveOperationalTestAccount } from "../_shared/test-account.ts";
 
 function objectId(value: unknown): string | null {
   if (typeof value === "string") return value;
@@ -128,6 +129,38 @@ Deno.serve(async (req) => {
           headers: { ...corsHeaders(req), "Content-Type": "application/json" },
         },
       );
+    }
+
+    const [etablissementTest, soignantTest] = await Promise.all([
+      resolveOperationalTestAccount(
+        supabaseAdmin,
+        mission.etablissement_id,
+      ),
+      mission.soignant_assigne_id
+        ? resolveOperationalTestAccount(
+          supabaseAdmin,
+          mission.soignant_assigne_id,
+        )
+        : Promise.resolve({
+          ok: false as const,
+          error: "soignant non assigné",
+        }),
+    ]);
+    if (!etablissementTest.ok || !soignantTest.ok) {
+      return new Response(JSON.stringify({
+        error: "TEST_ACCOUNT_CLASSIFICATION_UNAVAILABLE",
+      }), {
+        status: 503,
+        headers: { ...corsHeaders(req), "Content-Type": "application/json" },
+      });
+    }
+    if (etablissementTest.isTest || soignantTest.isTest) {
+      return new Response(JSON.stringify({
+        error: "TEST_ACCOUNT_PAYMENT_DISABLED",
+      }), {
+        status: 403,
+        headers: { ...corsHeaders(req), "Content-Type": "application/json" },
+      });
     }
 
     const { data: requestedFactureHonoraires, error: requestedFactureHonorairesError } =

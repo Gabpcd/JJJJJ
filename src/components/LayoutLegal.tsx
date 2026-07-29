@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { HeartPulse, ArrowUp, Printer, ChevronDown } from 'lucide-react';
+import { ArrowUp, Printer, ChevronDown } from 'lucide-react';
 import { FooterLegal } from '@/components/FooterLegal';
 import { SEOHead } from '@/components/SEOHead';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { LogoJolene } from '@/components/LogoJolene';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 
 interface TocItem {
@@ -67,8 +68,10 @@ export default function LayoutLegal({ titre, dateMaj, toc, children, seoDescript
         />
         <div className="max-w-3xl mx-auto px-4 sm:px-8 py-4 flex items-center justify-between">
           <Link to="/" className="flex items-center gap-2">
-            <HeartPulse className="h-6 w-6 text-primary" />
-            <span className="text-lg font-bold text-primary">Jolene</span>
+            <LogoJolene
+              imageClassName="h-6 w-6"
+              nomClassName="text-lg"
+            />
           </Link>
           <button
             onClick={() => window.print()}

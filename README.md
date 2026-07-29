@@ -15,7 +15,10 @@ Le produit comprend trois espaces distincts :
   observabilité.
 
 Jolene est un outil professionnel de staffing. Il ne fournit ni diagnostic ni
-soin médical aux patients et ne collecte pas de données de santé.
+soin médical aux patients. Il conserve uniquement certaines déclarations de
+conformité professionnelle susceptibles de révéler une information liée à la
+santé, avec un accès restreint ; aucun dossier patient ni certificat médical
+n'est demandé.
 
 ## Stack
 

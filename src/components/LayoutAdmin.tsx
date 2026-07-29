@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { HeartPulse, LogOut, Menu, Search, X } from 'lucide-react';
+import { LogOut, Menu, Search, X } from 'lucide-react';
 import { RechercheGlobaleAdmin } from '@/components/admin/RechercheGlobaleAdmin';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { AdminInterfaceProvider } from '@/contexts/AdminInterfaceContext';
+import { LogoJolene } from '@/components/LogoJolene';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAccesAdmin } from '@/hooks/useAccesAdmin';
 import { useScrollDirection } from '@/hooks/useScrollDirection';
@@ -173,7 +174,11 @@ export function LayoutAdmin({ children }: { children: ReactNode }) {
           <div className="flex h-16 items-center justify-between border-b border-border px-4">
             <Link to="/admin" className="flex items-center gap-2 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
               <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                <HeartPulse className="h-5 w-5" aria-hidden="true" />
+                <LogoJolene
+                  afficherNom={false}
+                  decoratif
+                  imageClassName="h-5 w-5"
+                />
               </span>
               <span>
                 <span className="block text-sm font-semibold leading-tight text-foreground">Jolene</span>

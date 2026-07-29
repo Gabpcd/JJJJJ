@@ -482,7 +482,7 @@ export default function DashboardEtablissement() {
         </div>
       )}
 
-      {/* Sprint 9-C PR 4 — Header Y2K avec mascotte cœur Jolene */}
+      {/* Header Y2K avec l'identité visuelle Jolene */}
       {etab ? (
         <div className="mb-6 flex items-start gap-4">
           <Mascotte etat="happy" taille="md" className="shrink-0" />

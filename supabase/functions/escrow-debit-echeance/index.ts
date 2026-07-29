@@ -38,20 +38,12 @@ import {
   requireAcquiredStripeSourceCharge,
   StripeSourceChargeValidationError,
 } from "../_shared/stripe-source-charge.ts";
-
-let _vaultSecret: string | null = null;
-async function bearerAutorise(req: Request, admin: any): Promise<boolean> {
-  const bearer = (req.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "").trim();
-  if (!bearer) return false;
-  const svc = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
-  if (svc && bearer === svc) return true;
-  if (_vaultSecret) return bearer === _vaultSecret;
-  try {
-    const { data } = await admin.rpc("fn_lire_secret_cron");
-    if (data && typeof data === "string") { _vaultSecret = data; return bearer === data; }
-  } catch { /* ignore */ }
-  return false;
-}
+import {
+  cronAuthErrorResponse,
+  cronAuthProbeResponse,
+  isCronAuthProbe,
+  verifyCronServiceAuth,
+} from "../_shared/cron-service-auth.ts";
 
 // Audit DIRECT en table (pas via le rpc fn_ecrire_audit_safe) : le binding
 // PostgREST de ce RPC 9-params sérialise les uuid en « null » → l'audit edge
@@ -107,9 +99,22 @@ Deno.serve(async (req) => {
     { auth: { persistSession: false } },
   );
 
-  if (!(await bearerAutorise(req, admin))) {
-    return new Response(JSON.stringify({ error: "forbidden" }), { status: 403 });
+  const auth = await verifyCronServiceAuth(req, admin);
+  if (!auth.ok) return cronAuthErrorResponse(auth);
+  if (isCronAuthProbe(req)) return cronAuthProbeResponse(auth);
+
+  const { data: excluded, error: excludedError } = await admin.rpc(
+    "fn_compter_files_finance_exclues_test",
+  );
+  if (excludedError) {
+    return new Response(
+      JSON.stringify({ error: "test_account_filter_unavailable" }),
+      { status: 503, headers: { "Content-Type": "application/json" } },
+    );
   }
+  console.info("escrow-debit-echeance: files test exclues", {
+    count: Number(excluded?.escrow_debits || 0),
+  });
 
   const stripeKey = Deno.env.get("STRIPE_SECRET_KEY") || "";
   try {
@@ -605,8 +610,18 @@ Deno.serve(async (req) => {
     }
   }
 
+  const success = echoues === 0;
   return new Response(
-    JSON.stringify({ ok: true, examined: rows.length, debites, echoues, retry_plus_tard: ignores }),
-    { status: 200, headers: { "Content-Type": "application/json" } },
+    JSON.stringify({
+      success,
+      examined: rows.length,
+      debites,
+      echoues,
+      retry_plus_tard: ignores,
+    }),
+    {
+      status: success ? 200 : 500,
+      headers: { "Content-Type": "application/json" },
+    },
   );
 });

@@ -4,7 +4,7 @@ import { SEOHead } from '@/components/SEOHead';
 import { SEOPageLayout } from '@/components/SEOPageLayout';
 import { PROFESSIONS_SEO, getVilleBySlug, VILLES_SEO } from '@/lib/seo-data';
 import { MissionsPubliquesSEO } from '@/components/MissionsPubliquesSEO';
-import { MapPin, Users, Building2, Clock, ArrowRight, Stethoscope, HeartPulse, Activity } from 'lucide-react';
+import { MapPin, Users, Building2, Clock, ArrowRight, Stethoscope, Activity } from 'lucide-react';
 
 function AnimatedCounter({ target, suffix = '' }: { target: number; suffix?: string }) {
   const [count, setCount] = useState(0);

@@ -22,7 +22,11 @@ export const TEST_ACCOUNTS = {
   },
   admin: {
     email: 'admin@jolene.app',
-    password: process.env.PLAYWRIGHT_ADMIN_PASSWORD || 'Playwright!Test2026',
+    // Aucun mot de passe admin de secours dans le dépôt : la recette utilise
+    // exclusivement le secret canonique fourni par l'environnement.
+    password: process.env.JOLENE_ADMIN_CANONICAL_PASSWORD
+      || process.env.PLAYWRIGHT_ADMIN_PASSWORD
+      || '',
     role: 'ADMIN_PLATEFORME' as const,
   },
 };
@@ -35,6 +39,9 @@ export type TestAccountKey = keyof typeof TEST_ACCOUNTS;
  */
 export async function loginAs(page: Page, account: TestAccountKey): Promise<void> {
   const creds = TEST_ACCOUNTS[account];
+  if (!creds.password) {
+    throw new Error(`Secret de recette absent pour le compte ${account}.`);
+  }
   await page.goto('/connexion');
   await page.locator('input[type="email"]').fill(creds.email);
   await page.locator('input[type="password"]').first().fill(creds.password);

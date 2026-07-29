@@ -8,6 +8,7 @@ import { PROFESSIONS } from '@/lib/constantes';
 import { ENTREPRISE } from '@/constantes/entreprise';
 import { ChargementPage } from '@/components/ChargementPage';
 import { LayoutApp } from '@/components/LayoutApp';
+import { LogoJolene } from '@/components/LogoJolene';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { BoutonY2K } from '@/components/y2k/BoutonY2K';
@@ -230,7 +231,11 @@ export default function AttestationHeures() {
       <div className="attestation max-w-3xl mx-auto p-8 md:p-12">
         {/* Header */}
         <div className="text-center mb-8">
-          <p className="text-2xl font-bold mb-1">❤️ Jolene</p>
+          <LogoJolene
+            className="mx-auto mb-1 flex w-fit"
+            imageClassName="h-8 w-8"
+            nomClassName="text-2xl"
+          />
           <h1 className="text-xl font-bold uppercase tracking-wide">Attestation d'heures travaillées</h1>
         </div>
 

@@ -149,15 +149,63 @@ else
 fi
 
 echo "── Garde-fou 11 : aucun mot de passe de compte Store versionné"
-if grep -rnE "JoleneDemo[0-9]{4}|TestJolene[0-9]{4}|const[[:space:]]+DEMO_PASSWORD[[:space:]]*=[[:space:]]*['\"]" \
-  scripts docs src --include='*.ts' --include='*.tsx' --include='*.md'; then
+if grep -rnE "Jolene(Test|Demo)[0-9]{4}!|TestJolene[0-9]{4}|const[[:space:]]+DEMO_PASSWORD[[:space:]]*=[[:space:]]*['\"]" \
+  scripts docs src e2e --include='*.ts' --include='*.tsx' --include='*.md'; then
   FAIL=1
 else
   echo "   OK"
 fi
 
+echo "── Garde-fou 12 : identité Jolene unique, sans ancien cœur"
+if node scripts/check-brand-assets.mjs; then
+  echo "   OK"
+else
+  FAIL=1
+fi
+
+echo "── Garde-fou 13 : aucun MFA administrateur ne peut être réintroduit"
+if node scripts/check-no-admin-mfa.mjs; then
+  echo "   OK"
+else
+  FAIL=1
+fi
+
+echo "── Garde-fou 14 : aucune fixture ne peut réinitialiser un compte administrateur"
+if node scripts/check-admin-password-fixtures.mjs; then
+  echo "   OK"
+else
+  FAIL=1
+fi
+
+echo "── Garde-fou 15 : iOS et Android partagent exactement la même version"
+if node scripts/check-mobile-build-alignment.mjs; then
+  echo "   OK"
+else
+  FAIL=1
+fi
+
+echo "── Garde-fou 16 : promesses santé et contact RGPD cohérents"
+LEGAL_CLAIMS_FAIL=0
+LEGACY_DPO_EMAIL="dpo@"'jolene.app'
+if grep -rni "$LEGACY_DPO_EMAIL" src README.md db/migrations_archive supabase/migrations; then
+  echo "   ancienne adresse DPO réintroduite"
+  LEGAL_CLAIMS_FAIL=1
+fi
+if grep -niE "certif(icat)? médical" \
+  src/components/soignant/ModaleAnnulationCandidature.tsx \
+  src/components/score/ModaleReclamationScore.tsx \
+  | grep -v "N'envoyez aucun certificat médical"; then
+  echo "   une modale propose à nouveau un certificat médical"
+  LEGAL_CLAIMS_FAIL=1
+fi
+if grep -ni "0 donnée de santé" src/pages/APropos.tsx; then
+  echo "   la page À propos promet à nouveau zéro donnée de santé"
+  LEGAL_CLAIMS_FAIL=1
+fi
+if [ "$LEGAL_CLAIMS_FAIL" -ne 0 ]; then FAIL=1; else echo "   OK"; fi
+
 if [ "$FAIL" -ne 0 ]; then
   echo "✗ guards.sh : au moins un garde-fou a échoué (voir ci-dessus)."
   exit 1
 fi
-echo "✓ guards.sh : les 11 garde-fous passent."
+echo "✓ guards.sh : les 16 garde-fous passent."

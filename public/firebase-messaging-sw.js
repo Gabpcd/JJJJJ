@@ -1,14 +1,16 @@
 // ─── Cache Configuration ───
+// v7 (2026-07-29) : identité visuelle canonique disponible hors connexion.
 // v6 (2026-05-04) : ne plus intercepter les requêtes cross-origin (corrige
 // l'iframe Turnstile bloqué par SOP en mode normal — incognito OK car pas
 // de SW persistant).
-const CACHE_VERSION = 'jolene-v6';
+const CACHE_VERSION = 'jolene-v7';
 const STATIC_CACHE = `static-${CACHE_VERSION}`;
 const API_CACHE = `api-${CACHE_VERSION}`;
 
 // Only cache offline fallback — everything else network-only for instant updates
 const STATIC_ASSETS = [
   '/offline.html',
+  '/icon-192x192.png',
 ];
 
 // ─── Web Push (VAPID, no Firebase) ───

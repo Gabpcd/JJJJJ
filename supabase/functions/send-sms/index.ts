@@ -15,6 +15,10 @@ import { createClient } from "npm:@supabase/supabase-js@2.99.2";
 import { applyRateLimit, getClientIp } from '../_shared/rate-limit.ts';
 import { corsHeaders, jsonResponse, preflightResponse } from '../_shared/cors.ts';
 import { verifyAdminOrServiceRole, verifyUserOrServiceRole } from '../_shared/admin-auth.ts';
+import {
+  resolveOperationalTestAccount,
+  resolveOperationalTestSource,
+} from '../_shared/test-account.ts';
 
 // ═══ [FIX 20] Préfixe SMS configurable ═══════════════════════════
 // Appelé par le handler et testé unitairement (export via globalThis).
@@ -45,6 +49,18 @@ export function resolveSmsPrefix(
 }
 
 const SMS_MAX_LENGTH = 160;
+const IDEMPOTENCY_KEY_PATTERN =
+  /^[A-Za-z0-9][A-Za-z0-9._:-]{7,199}$/;
+
+async function sha256Hex(value: string): Promise<string> {
+  const digest = await crypto.subtle.digest(
+    'SHA-256',
+    new TextEncoder().encode(value),
+  );
+  return Array.from(new Uint8Array(digest))
+    .map((byte) => byte.toString(16).padStart(2, '0'))
+    .join('');
+}
 
 function toE164(raw: string): string | null {
   let value = raw.replace(/[\s().-]/g, '');
@@ -95,6 +111,9 @@ Deno.serve(async (req) => {
       ? body.contenu
       : (typeof body.message === 'string' ? body.message : '');
     const prefixType = typeof body.prefix_type === 'string' ? body.prefix_type.slice(0, 80) : null;
+    const idempotencyKey = typeof body.idempotency_key === 'string'
+      ? body.idempotency_key.trim()
+      : null;
     const telephone = toE164(telephoneRaw);
 
     if (!telephone || !contenuRaw.trim()) {
@@ -102,6 +121,18 @@ Deno.serve(async (req) => {
     }
     if (contenuRaw.length > 1000) {
       return jsonResponse(req, { error: 'contenu trop long' }, 413);
+    }
+    const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (destinataireId && !UUID_REGEX.test(destinataireId)) {
+      return jsonResponse(req, { error: 'destinataire_id invalide' }, 400);
+    }
+    if (idempotencyKey && !IDEMPOTENCY_KEY_PATTERN.test(idempotencyKey)) {
+      return jsonResponse(req, { error: 'idempotency_key invalide' }, 400);
+    }
+    if (auth.isServiceRole && !idempotencyKey) {
+      return jsonResponse(req, {
+        error: 'idempotency_key requise pour un appel interne',
+      }, 400);
     }
 
     // Les appels navigateur sont limites a deux cas metier explicites. Les
@@ -185,6 +216,76 @@ Deno.serve(async (req) => {
           return jsonResponse(req, { error: 'Ce destinataire a deja ete alerte recemment' }, 429);
         }
       }
+    }
+
+    // Aucun canal SMS externe pour les fixtures, OTP compris. Le test admin
+    // sans destinataire explicite se classe avec l'identité de l'appelant ;
+    // tout autre appel sans compte opérationnel identifiable échoue fermé.
+    const classificationUserId = destinataireId
+      || (estAdminActif ? auth.userId : null);
+    if (!classificationUserId) {
+      return jsonResponse(req, {
+        error: 'Classification du destinataire indisponible',
+      }, 503);
+    }
+    const testAccount = await resolveOperationalTestAccount(
+      supabaseAdmin,
+      classificationUserId,
+    );
+    if (!testAccount.ok) {
+      console.error('[send-sms] classification test indisponible');
+      return jsonResponse(req, {
+        error: 'Classification du destinataire indisponible',
+      }, 503);
+    }
+    if (testAccount.isTest) {
+      await Promise.resolve(supabaseAdmin.from('journaux_audit').insert({
+        acteur_id: null,
+        type_acteur: 'SYSTEME',
+        action: 'NOTIFICATION_SKIPPED',
+        type_ressource: 'sms',
+        id_ressource: classificationUserId,
+        details: {
+          type,
+          canal: 'SMS',
+          raison: 'test_account',
+        },
+      })).catch(() => {});
+      return jsonResponse(req, {
+        success: true,
+        skipped: true,
+        reason: 'test_account',
+      });
+    }
+
+    const sourceAccount = await resolveOperationalTestSource(
+      supabaseAdmin,
+      body,
+    );
+    if (!sourceAccount.ok) {
+      console.error('[send-sms] classification source test indisponible');
+      return jsonResponse(req, {
+        error: 'Classification de la source indisponible',
+      }, 503);
+    }
+    if (sourceAccount.isTest) {
+      await Promise.resolve(supabaseAdmin.from('journaux_audit').insert({
+        acteur_id: null,
+        type_acteur: 'SYSTEME',
+        action: 'NOTIFICATION_SKIPPED',
+        type_ressource: 'sms',
+        id_ressource: classificationUserId,
+        details: {
+          type,
+          canal: 'SMS',
+          raison: 'test_source',
+        },
+      })).catch(() => {});
+      return jsonResponse(req, {
+        success: true,
+        skipped: true,
+        reason: 'test_source',
+      });
     }
 
     const accountSid = Deno.env.get("TWILIO_ACCOUNT_SID");
@@ -290,51 +391,207 @@ Deno.serve(async (req) => {
       : contenu;
     const fullBody = `${prefix}${smsBody}`;
 
-    const twilioRes = await fetch(twilioUrl, {
-      method: "POST",
-      headers: {
-        "Authorization": `Basic ${credentials}`,
-        "Content-Type": "application/x-www-form-urlencoded",
-      },
-      body: new URLSearchParams({
-        To: to,
-        From: fromNumber,
-        Body: fullBody,
-      }),
-    });
-
-    const twilioData = await twilioRes.json();
-
-    // Logger dans sms_envoyes. Un OTP ne doit jamais rester en clair dans les
-    // journaux applicatifs après son envoi ; Twilio reçoit le message réel,
-    // tandis que la base ne conserve qu'une trace expurgée.
-    const contenuJournal = type === 'OTP_VERIFICATION_TELEPHONE'
-      ? `${prefix}[CODE OTP MASQUÉ]`
-      : fullBody;
-    try {
-      await supabaseAdmin.from("sms_envoyes").insert({
-        destinataire_id: destinataireId || null,
+    let requestFingerprint: string | null = null;
+    if (idempotencyKey) {
+      requestFingerprint = await sha256Hex(JSON.stringify({
+        type,
+        destinataire_id: destinataireId,
         telephone: to,
-        type: type || "CUSTOM",
-        contenu: contenuJournal,
-        provider_id: twilioData.sid || null,
-        statut: twilioRes.ok ? "ENVOYE" : "ERREUR",
-        erreur: twilioRes.ok ? null : (twilioData.message || JSON.stringify(twilioData)),
-        cout_eur: twilioData.price ? Math.abs(parseFloat(twilioData.price)) : 0.07,
-      } as any);
-    } catch (_) { /* audit log best-effort */ }
+        contenu: fullBody,
+      }));
+      const { data: reservation, error: reservationError } =
+        await supabaseAdmin.rpc('fn_reserver_envoi_sms_idempotent', {
+          p_idempotency_key: idempotencyKey,
+          p_request_fingerprint: requestFingerprint,
+        });
+      if (reservationError) {
+        console.error('[send-sms] réservation idempotente indisponible');
+        return jsonResponse(req, {
+          error: 'Réservation SMS indisponible',
+        }, 503);
+      }
+
+      const reservationStatus = (reservation as Record<string, unknown> | null)
+        ?.statut;
+      if (reservationStatus === 'CONFLIT') {
+        return jsonResponse(req, {
+          error: 'idempotency_key déjà utilisée avec un autre SMS',
+        }, 409);
+      }
+      if (reservationStatus === 'DEJA_ENVOYE') {
+        return jsonResponse(req, {
+          success: true,
+          skipped: true,
+          idempotent: true,
+          sid: (reservation as Record<string, unknown>)?.provider_id ?? null,
+          to,
+        });
+      }
+      if (
+        reservationStatus === 'EN_COURS'
+        || reservationStatus === 'INDETERMINE'
+      ) {
+        return jsonResponse(req, {
+          success: false,
+          pending: true,
+          reason: String(reservationStatus).toLowerCase(),
+        }, 202);
+      }
+      if (reservationStatus !== 'RESERVE') {
+        console.error('[send-sms] statut de réservation inattendu');
+        return jsonResponse(req, {
+          error: 'Réservation SMS incohérente',
+        }, 503);
+      }
+    }
+
+    const finalizeIdempotency = async (
+      status: 'ENVOYE' | 'ERREUR' | 'INDETERMINE',
+      providerId: string | null,
+      error: string | null,
+    ): Promise<void> => {
+      if (!idempotencyKey || !requestFingerprint) return;
+      const { error: finalizationError } = await supabaseAdmin.rpc(
+        'fn_finaliser_envoi_sms_idempotent',
+        {
+          p_idempotency_key: idempotencyKey,
+          p_request_fingerprint: requestFingerprint,
+          p_statut: status,
+          p_provider_id: providerId,
+          p_erreur: error,
+        },
+      );
+      if (finalizationError) {
+        throw new Error(
+          `SMS_IDEMPOTENCY_FINALIZATION_FAILED:${finalizationError.message}`,
+        );
+      }
+    };
+
+    let twilioRes: Response;
+    let twilioData: Record<string, any>;
+    try {
+      twilioRes = await fetch(twilioUrl, {
+        method: "POST",
+        headers: {
+          "Authorization": `Basic ${credentials}`,
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        body: new URLSearchParams({
+          To: to,
+          From: fromNumber,
+          Body: fullBody,
+        }),
+      });
+      twilioData = await twilioRes.json();
+    } catch (twilioError) {
+      const message = twilioError instanceof Error
+        ? twilioError.message
+        : 'réponse Twilio indéterminée';
+      try {
+        await finalizeIdempotency('INDETERMINE', null, message);
+      } catch (finalizationError) {
+        console.error('[send-sms] finalisation indéterminée impossible', finalizationError);
+      }
+      return jsonResponse(req, {
+        success: false,
+        pending: true,
+        error: 'Résultat Twilio indéterminé, aucun renvoi automatique',
+      }, 503);
+    }
 
     if (!twilioRes.ok) {
+      const providerError = twilioData.message || JSON.stringify(twilioData);
+      const ambiguousProviderFailure = twilioRes.status >= 500;
+      try {
+        await finalizeIdempotency(
+          ambiguousProviderFailure ? 'INDETERMINE' : 'ERREUR',
+          null,
+          providerError,
+        );
+      } catch (finalizationError) {
+        console.error('[send-sms] finalisation échec impossible', finalizationError);
+        return jsonResponse(req, {
+          success: false,
+          pending: true,
+          error: 'Échec Twilio non finalisé',
+        }, 503);
+      }
       console.error("Twilio error:", twilioData);
+      if (ambiguousProviderFailure) {
+        return jsonResponse(req, {
+          success: false,
+          pending: true,
+          error: 'Résultat Twilio 5xx indéterminé, aucun renvoi automatique',
+        }, 503);
+      }
       return jsonResponse(req, {
         success: false,
         error: twilioData.message || "Erreur envoi SMS",
       }, 502);
     }
 
+    const providerId = typeof twilioData.sid === 'string' && twilioData.sid
+      ? twilioData.sid
+      : null;
+    if (!providerId) {
+      try {
+        await finalizeIdempotency(
+          'INDETERMINE',
+          null,
+          'Réponse Twilio 2xx sans SID',
+        );
+      } catch (finalizationError) {
+        console.error('[send-sms] finalisation sans SID impossible', finalizationError);
+      }
+      return jsonResponse(req, {
+        success: false,
+        pending: true,
+        error: 'Réponse Twilio sans identifiant fournisseur',
+      }, 503);
+    }
+
+    try {
+      await finalizeIdempotency('ENVOYE', providerId, null);
+    } catch (finalizationError) {
+      // Twilio a accepté le SMS, mais la réservation reste EN_COURS. Les
+      // tentatives suivantes renverront pending et ne rappelleront pas Twilio.
+      console.error('[send-sms] succès Twilio non finalisé', finalizationError);
+      return jsonResponse(req, {
+        success: false,
+        pending: true,
+        error: 'SMS accepté mais acquittement interne incomplet',
+      }, 503);
+    }
+
+    // Logger dans sms_envoyes. Un OTP ne doit jamais rester en clair dans les
+    // journaux applicatifs après son envoi ; Twilio reçoit le message réel,
+    // tandis que la base ne conserve qu'une trace expurgée. Le registre privé
+    // ci-dessus reste la source d'idempotence si cet audit échoue.
+    const contenuJournal = type === 'OTP_VERIFICATION_TELEPHONE'
+      ? `${prefix}[CODE OTP MASQUÉ]`
+      : fullBody;
+    const { error: auditError } = await supabaseAdmin.from("sms_envoyes")
+      .insert({
+        destinataire_id: destinataireId || null,
+        telephone: to,
+        type: type || "CUSTOM",
+        contenu: contenuJournal,
+        provider_id: providerId,
+        statut: "ENVOYE",
+        erreur: null,
+        cout_eur: twilioData.price
+          ? Math.abs(parseFloat(twilioData.price))
+          : 0.07,
+        idempotency_key: idempotencyKey,
+      } as any);
+    if (auditError) {
+      console.error('[send-sms] audit sms_envoyes non écrit', auditError.message);
+    }
+
     return jsonResponse(req, {
       success: true,
-      sid: twilioData.sid,
+      sid: providerId,
       to,
     });
   } catch (err: unknown) {

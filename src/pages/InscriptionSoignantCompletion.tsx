@@ -1,7 +1,8 @@
 import { usePageTitle } from '@/hooks/usePageTitle';
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { HeartPulse, Check, Loader2, ShieldCheck, Eye, EyeOff } from 'lucide-react';
+import { Check, Loader2, ShieldCheck, Eye, EyeOff } from 'lucide-react';
+import { LogoJolene } from '@/components/LogoJolene';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
 import { extraireMessageErreur } from '@/lib/erreurs';
@@ -191,10 +192,11 @@ export default function InscriptionSoignantCompletion() {
     <div className="min-h-[100dvh] gradient-hero flex flex-col">
       <div className="flex-1 flex items-center justify-center px-4 py-8">
         <div className="card-base max-w-lg w-full">
-          <div className="flex items-center justify-center gap-2 mb-4">
-            <HeartPulse className="h-7 w-7 text-rose" />
-            <span className="text-xl font-bold text-rose">Jolene</span>
-          </div>
+          <LogoJolene
+            className="mx-auto mb-4 flex w-fit"
+            imageClassName="h-7 w-7"
+            nomClassName="text-xl text-rose"
+          />
 
           <StepperCompletion />
 

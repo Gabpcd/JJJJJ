@@ -6,8 +6,8 @@
  * à facturer (finales + hebdo), puis invoque generate-invoice pour chacune
  * avec les périodes appropriées. 3 retries max par mission en cas d'échec.
  *
- * AUTH : service_role uniquement (verify_jwt = false, raison validée par
- * generate-invoice via le pattern cron_auto_generation).
+ * AUTH : secret d'automatisation dédié Vault (verify_jwt = false), puis appel
+ * interne à generate-invoice avec service_role_reason=cron_auto_generation.
  *
  * Idempotence : la contrainte unique partielle sur factures_honoraires
  * (mission_id, annee_iso, numero_semaine_iso, type_document) WHERE
@@ -17,6 +17,12 @@
  */
 
 import { createClient } from 'npm:@supabase/supabase-js@2';
+import {
+  cronAuthErrorResponse,
+  cronAuthProbeResponse,
+  isCronAuthProbe,
+  verifyCronServiceAuth,
+} from '../_shared/cron-service-auth.ts';
 
 const MAX_RETRIES = 3;
 const RETRY_DELAY_MS = 2000;
@@ -36,20 +42,9 @@ Deno.serve(async (req: Request) => {
     const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false } });
 
-    // Auth résiliente : legacy JWT OU nouveau secret asymétrique (env / vault).
-    const authHeader = req.headers.get('authorization') || req.headers.get('Authorization') || '';
-    const token = authHeader.replace('Bearer ', '');
-    const newSecretKey = Deno.env.get('SUPABASE_SECRET_KEY') || Deno.env.get('SB_SECRET_KEY') || '';
-    let isServiceRole = (token === serviceRoleKey) || (!!newSecretKey && token === newSecretKey);
-    if (!isServiceRole) {
-      try {
-        const { data: vaultSecret } = await supabase.rpc('fn_lire_secret_cron');
-        if (vaultSecret && token === vaultSecret) isServiceRole = true;
-      } catch { /* ignore */ }
-    }
-    if (!isServiceRole) {
-      return new Response(JSON.stringify({ error: 'Service role requis' }), { status: 403, headers: corsHeaders });
-    }
+    const auth = await verifyCronServiceAuth(req, supabase);
+    if (!auth.ok) return cronAuthErrorResponse(auth, corsHeaders);
+    if (isCronAuthProbe(req)) return cronAuthProbeResponse(auth);
 
     // 1. Obtenir la liste des missions à facturer
     const { data: liste, error: listeErr } = await supabase.rpc('fn_lister_missions_a_facturer');
@@ -73,6 +68,31 @@ Deno.serve(async (req: Request) => {
     for (const entry of all) {
       let lastError: string | null = null;
       let success = false;
+
+      const { data: missionReelle, error: missionReelleError } =
+        await supabase.rpc('fn_mission_est_reelle_pour_service', {
+          p_mission_id: entry.mission_id,
+        });
+      if (missionReelleError) {
+        results.push({
+          mission_id: entry.mission_id,
+          mode: entry.mode,
+          success: false,
+          skipped: false,
+          error: `test_account_filter_unavailable: ${missionReelleError.message}`,
+        });
+        continue;
+      }
+      if (missionReelle !== true) {
+        results.push({
+          mission_id: entry.mission_id,
+          mode: entry.mode,
+          success: false,
+          skipped: true,
+          reason: 'test_account',
+        });
+        continue;
+      }
 
       for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
         try {
@@ -109,6 +129,9 @@ Deno.serve(async (req: Request) => {
               break;
             }
             throw new Error(data.error);
+          }
+          if (data?.success !== true || !data?.facture_id) {
+            throw new Error('generate-invoice a retourné une réponse de succès invalide');
           }
 
           console.log(`[weekly-invoicing-cron] OK: mission=${entry.mission_id} mode=${entry.mode} facture=${data?.numero_facture}`);
@@ -155,16 +178,24 @@ Deno.serve(async (req: Request) => {
       }
     }
 
+    const failed = results.filter(r => !r.success && !r.skipped).length;
     const summary = {
-      success: true,
+      success: failed === 0,
       total: all.length,
       ok: results.filter(r => r.success).length,
-      failed: results.filter(r => !r.success).length,
+      skipped: results.filter(r => r.skipped).length,
+      failed,
       details: results,
     };
 
-    console.log(`[weekly-invoicing-cron] Terminé: ${summary.ok}/${summary.total} OK, ${summary.failed} failed`);
-    return new Response(JSON.stringify(summary), { headers: corsHeaders });
+    console.log(
+      `[weekly-invoicing-cron] Terminé: ${summary.ok}/${summary.total} OK, ` +
+      `${summary.skipped} test ignorée(s), ${summary.failed} échec(s)`,
+    );
+    return new Response(JSON.stringify(summary), {
+      status: summary.success ? 200 : 500,
+      headers: corsHeaders,
+    });
 
   } catch (err) {
     console.error('[weekly-invoicing-cron] Fatal error:', err);

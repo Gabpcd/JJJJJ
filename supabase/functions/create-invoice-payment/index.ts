@@ -23,6 +23,7 @@ import {
   requireAcquiredStripeSourceCharge,
   StripeSourceChargeValidationError,
 } from "../_shared/stripe-source-charge.ts";
+import { resolveOperationalTestAccount } from "../_shared/test-account.ts";
 
 async function findMatchingPaymentIntent(
   stripe: Stripe,
@@ -237,6 +238,27 @@ Deno.serve(async (req) => {
     }
     if (hasPaymentPermission !== true) {
       return new Response(JSON.stringify({ error: "Vous n'avez pas les droits de paiement sur cet établissement" }), {
+        status: 403,
+        headers: { ...corsHeaders(req), "Content-Type": "application/json" },
+      });
+    }
+
+    const testAccount = await resolveOperationalTestAccount(
+      supabaseAdmin,
+      facture.etablissement_id,
+    );
+    if (!testAccount.ok) {
+      return new Response(JSON.stringify({
+        error: "TEST_ACCOUNT_CLASSIFICATION_UNAVAILABLE",
+      }), {
+        status: 503,
+        headers: { ...corsHeaders(req), "Content-Type": "application/json" },
+      });
+    }
+    if (testAccount.isTest) {
+      return new Response(JSON.stringify({
+        error: "TEST_ACCOUNT_PAYMENT_DISABLED",
+      }), {
         status: 403,
         headers: { ...corsHeaders(req), "Content-Type": "application/json" },
       });

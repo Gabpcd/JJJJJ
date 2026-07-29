@@ -59,6 +59,10 @@
                      Jolene, puis le routeur applique ses propres garde-fous. -->
                 <data android:pathPrefix="/soignant/" />
                 <data android:pathPrefix="/etablissement/" />
+                <data android:pathPrefix="/groupe/" />
+                <data android:pathPrefix="/admin/" />
+                <data android:pathPrefix="/connexion" />
+                <data android:pathPrefix="/inscription/" />
                 <data android:pathPrefix="/soignant/missions" />
                 <data android:pathPrefix="/soignant/stripe-connect" />
                 <data android:pathPrefix="/etablissement/missions" />

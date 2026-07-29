@@ -68,4 +68,22 @@ describe('Stripe Connect onboarding — URL de retour de confiance', () => {
     expect(paths).toContain('/soignant/*');
     expect(paths).toContain('/etablissement/*');
   });
+
+  it('conserve la parité des familles de liens universels iOS et Android', () => {
+    const association = JSON.parse(appleAppSiteAssociation);
+    const paths = association.applinks.details
+      .filter((detail: { appID?: string }) => detail.appID === 'FPQ78HDF4Y.app.jolene')
+      .flatMap((detail: { paths?: string[] }) => detail.paths ?? []);
+    const sharedFamilies = [
+      ['/groupe/*', 'android:pathPrefix="/groupe/"'],
+      ['/admin/*', 'android:pathPrefix="/admin/"'],
+      ['/connexion', 'android:pathPrefix="/connexion"'],
+      ['/inscription/*', 'android:pathPrefix="/inscription/"'],
+    ] as const;
+
+    for (const [iosPath, androidPath] of sharedFamilies) {
+      expect(paths).toContain(iosPath);
+      expect(androidManifest).toContain(androidPath);
+    }
+  });
 });

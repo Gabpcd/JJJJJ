@@ -24,23 +24,16 @@
 import Stripe from "npm:stripe@20.4.1";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { assertStripeSecretMode } from "../_shared/stripe-production.ts";
+import {
+  cronAuthErrorResponse,
+  cronAuthProbeResponse,
+  isCronAuthProbe,
+  verifyCronServiceAuth,
+} from "../_shared/cron-service-auth.ts";
+import { ADMIN_LAUNCH_ACCESS_GROUPS } from "../_shared/admin-auth.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const SUPABASE_SECRET_KEY = Deno.env.get("SUPABASE_SECRET_KEY") ?? Deno.env.get("SB_SECRET_KEY") ?? "";
-
-// Cache mémoire du secret vault (sb_secret_*) utilisé par pg_cron.
-// fn_lire_secret_cron lit vault.decrypted_secrets where name='service_role_key'.
-let _cachedVaultSecret: string | null = null;
-async function getVaultCronSecret(sb: any): Promise<string> {
-  if (_cachedVaultSecret) return _cachedVaultSecret;
-  if (SUPABASE_SECRET_KEY) { _cachedVaultSecret = SUPABASE_SECRET_KEY; return SUPABASE_SECRET_KEY; }
-  try {
-    const { data } = await sb.rpc("fn_lire_secret_cron");
-    if (data && typeof data === "string") { _cachedVaultSecret = data; return data; }
-  } catch { /* ignore */ }
-  return "";
-}
 
 function corsHeaders(req: Request) {
   return {
@@ -72,17 +65,9 @@ Deno.serve(async (req) => {
 
   const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
-  // Auth : service_role only — accepte legacy JWT (env var), nouveau sb_secret_*
-  // (env var ou vault.decrypted_secrets via fn_lire_secret_cron pour pg_cron).
-  const authHeader = req.headers.get("Authorization") || "";
-  const bearer = authHeader.replace(/^Bearer\s+/i, "").trim();
-  const vaultSecret = await getVaultCronSecret(admin);
-  const matchesLegacy = SERVICE_ROLE_KEY && bearer === SERVICE_ROLE_KEY;
-  const matchesNew = vaultSecret && bearer === vaultSecret;
-  if (!matchesLegacy && !matchesNew) {
-    return new Response(JSON.stringify({ error: "Service role required" }),
-      { status: 401, headers: corsHeaders(req) });
-  }
+  const auth = await verifyCronServiceAuth(req, admin);
+  if (!auth.ok) return cronAuthErrorResponse(auth, corsHeaders(req));
+  if (isCronAuthProbe(req)) return cronAuthProbeResponse(auth);
 
   const workerId = `worker_${crypto.randomUUID().slice(0, 8)}`;
 
@@ -95,6 +80,10 @@ Deno.serve(async (req) => {
       { status: 500, headers: corsHeaders(req) });
   }
   const actions: ActionRow[] = (rpcData as any)?.actions || [];
+  const excludedNonReal = Number((rpcData as any)?.excluded_non_real || 0);
+  console.info("[worker] actions non réelles exclues", {
+    count: excludedNonReal,
+  });
 
   let success = 0, failed = 0, pendingAife = 0, ackFailed = 0;
   const startTs = Date.now();
@@ -164,14 +153,20 @@ Deno.serve(async (req) => {
   }
 
   const durationMs = Date.now() - startTs;
+  const runSucceeded = failed === 0 && ackFailed === 0;
   console.log(`[worker] ${workerId}: ${actions.length} actions, ${success} success, ${failed} failed, ${pendingAife} pending_aife, ${ackFailed} ack_failed, ${durationMs}ms`);
 
   return new Response(JSON.stringify({
+    run_success: runSucceeded,
     worker_id: workerId,
     processed: actions.length,
+    excluded_non_real: excludedNonReal,
     success, failed, pending_aife: pendingAife, ack_failed: ackFailed,
     duration_ms: durationMs,
-  }), { status: ackFailed > 0 ? 500 : 200, headers: corsHeaders(req) });
+  }), {
+    status: runSucceeded ? 200 : 500,
+    headers: corsHeaders(req),
+  });
 });
 
 // ─── Dispatch principal ──────────────────────────────────────────────
@@ -728,14 +723,53 @@ async function dispatchChorusRecycle(admin: any, action: ActionRow): Promise<Dis
 
 // ─── DPAE ────────────────────────────────────────────────────────────
 
+async function validatePushResponse(
+  response: Response,
+): Promise<{ ok: true; data: Record<string, any> } | { ok: false; error: string }> {
+  const data = await response.json().catch(() => null) as
+    | Record<string, any>
+    | null;
+  const delivered = Number(data?.sent) > 0;
+  const intentionallySkipped = data?.skipped === true;
+  const fallbackDelivered = data?.email_fallback === true;
+  if (
+    response.ok
+    && data?.success === true
+    && (delivered || intentionallySkipped || fallbackDelivered)
+  ) {
+    return { ok: true, data: data || {} };
+  }
+  return {
+    ok: false,
+    error: data?.pending === true
+      ? `PUSH_RESULT_INDETERMINATE:${response.status}`
+      : `PUSH_NOT_DELIVERED:${response.status}:${data?.error || "invalid_response"}`,
+  };
+}
+
 async function dispatchDpaeAnnulation(admin: any, action: ActionRow): Promise<DispatchResult> {
   const { contrat_id, mission_id, motif } = action.payload;
   if (!contrat_id) return { ok: false, erreur: "contrat_id missing" };
-  if (
-    action.source !== "ANNULATION_MISSION"
-    || !mission_id
-    || action.source_id !== mission_id
-  ) {
+  if (action.source !== "ANNULATION_MISSION" || !mission_id || !action.source_id) {
+    return { ok: false, erreur: "DPAE_ACTION_PROVENANCE_MISMATCH" };
+  }
+
+  let sourceMatchesMission = action.source_id === mission_id;
+  if (!sourceMatchesMission) {
+    const { data: candidature, error: candidatureError } = await admin
+      .from("candidatures")
+      .select("id, mission_id")
+      .eq("id", action.source_id)
+      .maybeSingle();
+    if (candidatureError) {
+      return {
+        ok: false,
+        erreur: `DPAE_CANDIDATURE_LOOKUP_FAILED:${candidatureError.message}`,
+      };
+    }
+    sourceMatchesMission = candidature?.mission_id === mission_id;
+  }
+  if (!sourceMatchesMission) {
     return { ok: false, erreur: "DPAE_ACTION_PROVENANCE_MISMATCH" };
   }
 
@@ -788,6 +822,7 @@ async function dispatchDpaeAnnulation(admin: any, action: ActionRow): Promise<Di
       body: JSON.stringify({
         type: "DPAE_ANNULATION_RAPPEL",
         destinataire_id: contrat.etablissement_id,
+        idempotency_key: `externalisation.${action.id}.dpae-email`,
         data: {
           contrat_id: contrat.id,
           mission_id,
@@ -816,10 +851,12 @@ async function dispatchDpaeAnnulation(admin: any, action: ActionRow): Promise<Di
         titre: "⚠️ Annulation DPAE à effectuer",
         corps: `Contrat ${contrat.numero_contrat || ""} annulé. Annulez la DPAE sur Net-Entreprises sous 48h.`,
         lien: `/contrat/${contrat_id}`,
+        idempotency_key: `externalisation.${action.id}.dpae-push`,
       }),
     });
-    if (!pushResponse.ok) {
-      return { ok: false, erreur: `DPAE_PUSH_FAILED:${pushResponse.status}` };
+    const pushOutcome = await validatePushResponse(pushResponse);
+    if (!pushOutcome.ok) {
+      return { ok: false, erreur: `DPAE_PUSH_FAILED:${pushOutcome.error}` };
     }
     progress.push_sent = true;
     await persistProgress();
@@ -841,10 +878,106 @@ async function dispatchDpaeAnnulation(admin: any, action: ActionRow): Promise<Di
 // ─── Emails + Push (relais simples) ──────────────────────────────────
 
 async function dispatchEmail(admin: any, action: ActionRow): Promise<DispatchResult> {
+  if (action.payload?.destinataire_role !== undefined) {
+    if (
+      action.payload.destinataire_role !== "ADMIN"
+      || action.source !== "AUTRE"
+      || !action.source_id
+      || action.payload.type !== "RECLAMATION_SCORE_NOUVELLE"
+      || action.payload?.data?.reclamation_id !== action.source_id
+    ) {
+      return { ok: false, erreur: "EMAIL_ROLE_SYSTEME_NON_AUTORISE" };
+    }
+
+    // Seule classe système sans UUID admise : la réclamation score historique.
+    // Relecture de la source puis résolution explicite des admins actifs ayant
+    // l'intégralité des groupes de lancement; aucun email/UUID du payload.
+    const { data: reclamation, error: reclamationError } = await admin
+      .from("reclamations_score")
+      .select("id, contesteur_id, evenement_type, motif_categorie")
+      .eq("id", action.source_id)
+      .maybeSingle();
+    if (
+      reclamationError
+      || !reclamation
+      || reclamation.contesteur_id !== action.payload?.data?.contesteur_id
+      || reclamation.evenement_type !== action.payload?.data?.evenement_type
+      || reclamation.motif_categorie !== action.payload?.data?.motif_categorie
+    ) {
+      return {
+        ok: false,
+        erreur:
+          `EMAIL_RECLAMATION_SOURCE_INCOHERENTE:${reclamationError?.message || "binding"}`,
+      };
+    }
+
+    const { data: adminRows, error: adminsError } = await admin
+      .from("equipe_admin")
+      .select("user_id, actif, acces_groupes")
+      .eq("actif", true)
+      .not("user_id", "is", null);
+    if (adminsError) {
+      return { ok: false, erreur: `EMAIL_ADMINS_INDISPONIBLES:${adminsError.message}` };
+    }
+    const admins = (adminRows || []).filter((candidate: any) => {
+      if (
+        typeof candidate.user_id !== "string"
+        || !Array.isArray(candidate.acces_groupes)
+      ) return false;
+      const groupes = new Set(
+        candidate.acces_groupes.filter(
+          (groupe: unknown): groupe is string => typeof groupe === "string",
+        ),
+      );
+      return ADMIN_LAUNCH_ACCESS_GROUPS.every((groupe) => groupes.has(groupe));
+    });
+    if (admins.length === 0) {
+      return { ok: false, erreur: "EMAIL_AUCUN_ADMIN_ACTIF_COMPLET" };
+    }
+
+    for (const adminRow of admins) {
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/send-email`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${SERVICE_ROLE_KEY}`,
+        },
+        body: JSON.stringify({
+          destinataire_id: adminRow.user_id,
+          type: "ADMIN_BROADCAST",
+          data: {
+            subject: "Nouvelle réclamation de score — action requise",
+            body:
+              `Une réclamation ${reclamation.evenement_type} (${reclamation.motif_categorie}) `
+              + `doit être examinée dans l’administration Jolene. Référence : ${reclamation.id}.`,
+            groupe: "Conformité & Technique",
+          },
+          idempotency_key: `externalisation.${action.id}.${adminRow.user_id}`,
+        }),
+      });
+      if (!res.ok) {
+        return {
+          ok: false,
+          erreur: `send-email admin ${res.status}`,
+        };
+      }
+    }
+    return {
+      ok: true,
+      resultat: {
+        classe: "SYSTEM_ADMIN_RECLAMATION",
+        admins_notifies: admins.length,
+      },
+    };
+  }
+
   const res = await fetch(`${SUPABASE_URL}/functions/v1/send-email`, {
     method: "POST",
     headers: { "Content-Type": "application/json", "Authorization": `Bearer ${SERVICE_ROLE_KEY}` },
-    body: JSON.stringify(action.payload),
+    body: JSON.stringify({
+      ...action.payload,
+      idempotency_key: `externalisation.${action.id}.email`,
+    }),
   });
   if (res.ok) return { ok: true, resultat: { status: res.status } };
   return { ok: false, erreur: `send-email ${res.status}` };
@@ -893,6 +1026,7 @@ async function dispatchSmsOtp(admin: any, action: ActionRow): Promise<DispatchRe
       contenu: `Votre code de vérification est ${code}. Il expire dans 10 minutes. Ne le partagez jamais.`,
       destinataire_id: otp.user_id,
       prefix_type: "OTP_VERIFICATION_TELEPHONE",
+      idempotency_key: `externalisation.${action.id}.sms`,
     }),
   });
   const responseBody = await res.json().catch(() => null) as Record<string, any> | null;
@@ -918,14 +1052,21 @@ async function dispatchPush(admin: any, action: ActionRow): Promise<DispatchResu
     lien: p.lien || p.data?.lien,
     data: p.data,
     type_evenement: p.type_evenement,
+    idempotency_key: `externalisation.${action.id}.push`,
   };
   const res = await fetch(`${SUPABASE_URL}/functions/v1/send-push`, {
     method: "POST",
     headers: { "Content-Type": "application/json", "Authorization": `Bearer ${SERVICE_ROLE_KEY}` },
     body: JSON.stringify(body),
   });
-  if (res.ok) return { ok: true, resultat: { status: res.status } };
-  return { ok: false, erreur: `send-push ${res.status}` };
+  const outcome = await validatePushResponse(res);
+  if (outcome.ok) {
+    return {
+      ok: true,
+      resultat: { status: res.status, push: outcome.data },
+    };
+  }
+  return { ok: false, erreur: `send-push ${outcome.error}` };
 }
 
 // ─── AVOIR PDF ───────────────────────────────────────────────────────

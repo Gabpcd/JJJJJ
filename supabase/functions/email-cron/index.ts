@@ -1,35 +1,81 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
+import {
+  cronAuthErrorResponse,
+  cronAuthProbeResponse,
+  isCronAuthProbe,
+  verifyCronServiceAuth,
+} from "../_shared/cron-service-auth.ts";
 const URL = Deno.env.get("SUPABASE_URL")!;
 const KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-// Cache du secret attendu (lu depuis vault au premier appel)
-let expectedSecret: string | null = null;
-async function loadExpectedSecret(sb: any): Promise<string> {
-  if (expectedSecret) return expectedSecret;
-  // Essayer plusieurs noms d'env (legacy + new asymmetric)
-  const envSecret = Deno.env.get("SUPABASE_SECRET_KEY")
-    || Deno.env.get("SB_SECRET_KEY")
-    || Deno.env.get("CRON_SECRET")
-    || "";
-  if (envSecret) { expectedSecret = envSecret; return envSecret; }
-  // Fallback : lire le secret depuis vault.decrypted_secrets
-  // (nécessite que KEY puisse query vault — ce qui est le cas pour service_role)
-  try {
-    const { data } = await sb.from('vault.decrypted_secrets')
-      .select('decrypted_secret')
-      .eq('name', 'service_role_key')
-      .maybeSingle();
-    if (data?.decrypted_secret) { expectedSecret = data.decrypted_secret; return data.decrypted_secret; }
-  } catch (_e) { /* ignore */ }
-  // Dernier recours : RPC qui lit vault (à créer si besoin)
-  try {
-    const { data } = await sb.rpc('fn_lire_secret_cron');
-    if (data) { expectedSecret = data; return data; }
-  } catch (_e) { /* ignore */ }
-  return "";
+function canonicalizeJson(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(canonicalizeJson);
+  if (value !== null && typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    return Object.fromEntries(
+      Object.keys(record)
+        .sort()
+        .filter((key) => record[key] !== undefined)
+        .map((key) => [key, canonicalizeJson(record[key])]),
+    );
+  }
+  return value;
+}
+
+async function emailIdempotencyKey(
+  scope: string,
+  identity: unknown,
+  body: Record<string, unknown>,
+): Promise<string> {
+  const serialized = JSON.stringify(canonicalizeJson({ identity, body }));
+  const digest = await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(serialized),
+  );
+  const hex = Array.from(new Uint8Array(digest))
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+  return `cron.${scope}.${hex}`;
+}
+
+async function invokeIdempotentEmail(
+  sb: any,
+  scope: string,
+  identity: unknown,
+  body: Record<string, unknown>,
+): Promise<"sent" | "skipped" | "pending"> {
+  const idempotencyKey = await emailIdempotencyKey(scope, identity, body);
+  const { data, error } = await sb.functions.invoke("send-email", {
+    body: { ...body, idempotency_key: idempotencyKey },
+  });
+  if (error) throw new Error(`send-email ${scope}: ${error.message}`);
+  if (data?.pending === true) return "pending";
+  if (data?.success !== true) {
+    throw new Error(`send-email ${scope}: réponse invalide`);
+  }
+  return data?.skipped === true ? "skipped" : "sent";
+}
+
+async function invokeIdempotentSms(
+  sb: any,
+  idempotencyKey: string,
+  body: Record<string, unknown>,
+): Promise<"sent" | "skipped" | "pending"> {
+  const { data, error } = await sb.functions.invoke("send-sms", {
+    body: { ...body, idempotency_key: idempotencyKey },
+    headers: { Authorization: `Bearer ${KEY}` },
+  });
+  if (error) throw new Error(`send-sms: ${error.message}`);
+  if (data?.pending === true) return "pending";
+  if (data?.success !== true) {
+    throw new Error("send-sms: réponse invalide");
+  }
+  return data?.skipped === true ? "skipped" : "sent";
 }
 
 Deno.serve(async (req) => {
+  const requestId = crypto.randomUUID();
+  const startedAt = Date.now();
   try {
     // Les appels Edge -> Edge doivent toujours porter explicitement le secret
     // interne. Sans cet en-tete, functions.invoke peut n'envoyer que `apikey`
@@ -39,123 +85,194 @@ Deno.serve(async (req) => {
       global: { headers: { Authorization: `Bearer ${KEY}` } },
     });
 
-    // Auth: service_role only — accepte legacy JWT (KEY) OU le secret stocké en vault
-    const authHeader = req.headers.get('Authorization') || '';
-    const bearer = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
-    const vaultSecret = await loadExpectedSecret(sb);
-    const validBearers = [KEY, vaultSecret].filter(Boolean);
-    if (!bearer || !validBearers.includes(bearer)) {
-      return new Response(JSON.stringify({ error: 'Non autorisé' }), {
-        status: 401,
-        headers: { 'Content-Type': 'application/json' },
-      });
-    }
+    const auth = await verifyCronServiceAuth(req, sb);
+    if (!auth.ok) return cronAuthErrorResponse(auth);
+    if (isCronAuthProbe(req)) return cronAuthProbeResponse(auth);
 
-    const results: Record<string, number> = {};
-    const { data: r1 } = await sb.rpc("fn_email_rappels_j1");
+    const payload = await req.json().catch(() => ({})) as { mode?: unknown };
+    const mode = payload.mode === "hourly" || payload.mode === "daily"
+      ? payload.mode
+      : "all";
+    const runHourly = mode !== "daily";
+    const runDaily = mode !== "hourly";
+    const results: Record<string, unknown> = {};
+    if (runDaily) {
+    const { data: r1, error: r1Error } = await sb.rpc("fn_email_rappels_j1");
+    if (r1Error) throw new Error(`fn_email_rappels_j1: ${r1Error.message}`);
     let c = 0;
     let smsJ1 = 0;
+    let smsJ1Errors = 0;
     for (const r of r1 || []) {
       // Email rappel J-1 (existant)
-      await sb.functions.invoke("send-email", { body: { type: "RAPPEL_MISSION", destinataire_id: r.soignant_id, data: { prenom: r.prenom, mission: r.mission, etablissement: r.etablissement, heure_debut: r.heure_debut } } });
-      c++;
+      const rappelBody = {
+        type: "RAPPEL_MISSION",
+        destinataire_id: r.soignant_id,
+        data: {
+          prenom: r.prenom,
+          mission: r.mission,
+          etablissement: r.etablissement,
+          heure_debut: r.heure_debut,
+        },
+      };
+      const emailOutcome = await invokeIdempotentEmail(
+        sb,
+        "rappel_mission_j1",
+        {
+          soignant_id: r.soignant_id,
+          jour: new Date().toISOString().slice(0, 10),
+        },
+        rappelBody,
+      );
+      if (emailOutcome !== "pending") c++;
 
       // SMS rappel J-1 en parallèle, best-effort. send-sms vérifie sms_actif AND
       // sms_alertes_actives côté serveur — on filtre déjà ici sur la présence
       // du téléphone pour éviter un appel inutile.
       try {
         const { data: soignant } = await sb.from('soignants')
-          .select('telephone, sms_actif, sms_alertes_actives')
+          .select('telephone, sms_actif, sms_alertes_actives, est_compte_test')
           .eq('id', r.soignant_id)
           .maybeSingle();
         const optedIn = !!soignant?.telephone
           && soignant?.sms_actif !== false
-          && soignant?.sms_alertes_actives !== false;
+          && soignant?.sms_alertes_actives !== false
+          && soignant?.est_compte_test !== true;
         if (optedIn) {
           const intitule = (r.mission || '').toString().slice(0, 40);
           const etab = (r.etablissement || '').toString().slice(0, 30);
           const smsBody = `📅 Rappel : votre mission ${intitule} démarre demain à ${r.heure_debut} chez ${etab}. Bonne journée !`;
-          const { error: smsError } = await sb.functions.invoke('send-sms', {
-            body: {
+          const smsPayload = {
               type: 'RAPPEL_MISSION_J1',
               destinataire_id: r.soignant_id,
               telephone: soignant.telephone,
               contenu: smsBody,
               prefix_type: 'RAPPEL_MISSION_J1',
+          };
+          const smsIdempotencyKey = await emailIdempotencyKey(
+            'sms_rappel_mission_j1',
+            {
+              soignant_id: r.soignant_id,
+              jour: new Date().toISOString().slice(0, 10),
+              mission: r.mission,
+              etablissement: r.etablissement,
+              heure_debut: r.heure_debut,
             },
-            headers: { Authorization: `Bearer ${KEY}` },
-          });
-          if (smsError) throw new Error(`send-sms: ${smsError.message}`);
+            smsPayload,
+          );
+          const smsOutcome = await invokeIdempotentSms(
+            sb,
+            smsIdempotencyKey,
+            smsPayload,
+          );
+          if (smsOutcome === 'pending') {
+            throw new Error('send-sms: acquittement indéterminé');
+          }
           smsJ1++;
         }
       } catch (e) {
+        smsJ1Errors++;
         console.warn('[email-cron] SMS rappel J-1 failed for', r.soignant_id, e);
       }
     }
     results.rappels_j1 = c;
     results.rappels_j1_sms = smsJ1;
-    const { data: v2 } = await sb.rpc("fn_verifier_documents_expirants");
+    results.rappels_j1_sms_erreurs = smsJ1Errors;
+    const { data: v2, error: v2Error } = await sb.rpc("fn_verifier_documents_expirants");
+    if (v2Error) throw new Error(`fn_verifier_documents_expirants: ${v2Error.message}`);
     results.docs_expirants = v2 || 0;
-    const { data: v3 } = await sb.rpc("fn_auto_facturation_mensuelle");
+    const { data: v3, error: v3Error } = await sb.rpc("fn_auto_facturation_mensuelle");
+    if (v3Error) throw new Error(`fn_auto_facturation_mensuelle: ${v3Error.message}`);
     results.factures = v3 || 0;
-    const { data: v4 } = await sb.rpc("fn_purger_gps_ancien");
+    const { data: v4, error: v4Error } = await sb.rpc("fn_purger_gps_ancien");
+    if (v4Error) throw new Error(`fn_purger_gps_ancien: ${v4Error.message}`);
     results.purge_gps = v4 || 0;
-    const { data: v5 } = await sb.rpc("fn_nettoyer_tokens_push");
+    const { data: v5, error: v5Error } = await sb.rpc("fn_nettoyer_tokens_push");
+    if (v5Error) throw new Error(`fn_nettoyer_tokens_push: ${v5Error.message}`);
     results.tokens_push = v5 || 0;
 
     // [J2.1.B.2.3.B] Rappels J-1 contrat de travail SALARIE
     let contratTravailRappels = 0;
+    let contratTravailErreurs = 0;
     try {
-      const { data: missionsManquantes } = await sb.rpc("fn_lister_missions_contrat_travail_manquant");
+      const { data: missionsManquantes, error: missionsManquantesError } =
+        await sb.rpc("fn_lister_missions_contrat_travail_manquant");
+      if (missionsManquantesError) throw missionsManquantesError;
       for (const mission of (missionsManquantes as any[]) || []) {
         const dateDebut = mission.debut_le ? new Date(mission.debut_le).toLocaleDateString('fr-FR') : 'demain';
         const intitule = mission.intitule || 'mission';
+        let etabEnvoye = false;
+        let soignantEnvoye = false;
         // Email étab
         try {
-          await sb.functions.invoke('send-email', {
-            body: {
-              type: 'CONTRAT_TRAVAIL_RAPPEL_ETAB',
-              destinataire_id: mission.etablissement_id,
-              data: {
-                intitule_mission: intitule,
-                prenom_soignant: mission.prenom_soignant,
-                nom_soignant: mission.nom_soignant,
-                date_debut: dateDebut,
-                mission_id: mission.mission_id,
-              },
+          const etabBody = {
+            type: 'CONTRAT_TRAVAIL_RAPPEL_ETAB',
+            destinataire_id: mission.etablissement_id,
+            data: {
+              intitule_mission: intitule,
+              prenom_soignant: mission.prenom_soignant,
+              nom_soignant: mission.nom_soignant,
+              date_debut: dateDebut,
+              mission_id: mission.mission_id,
             },
-          });
-        } catch (e) { console.warn('email étab fail', e); }
+          };
+          const etabOutcome = await invokeIdempotentEmail(
+            sb,
+            "contrat_travail_etab",
+            { mission_id: mission.mission_id, cible: "etablissement" },
+            etabBody,
+          );
+          etabEnvoye = etabOutcome !== "pending";
+        } catch (e) {
+          contratTravailErreurs++;
+          console.warn('email étab fail', e);
+        }
         // Email soignant
         try {
-          await sb.functions.invoke('send-email', {
-            body: {
-              type: 'CONTRAT_TRAVAIL_MANQUANT_SOIGNANT',
-              destinataire_id: mission.soignant_id,
-              data: {
-                prenom: mission.prenom_soignant,
-                nom_etablissement: mission.nom_etablissement,
-                intitule_mission: intitule,
-                date_debut: dateDebut,
-                mission_id: mission.mission_id,
-              },
+          const soignantBody = {
+            type: 'CONTRAT_TRAVAIL_MANQUANT_SOIGNANT',
+            destinataire_id: mission.soignant_id,
+            data: {
+              prenom: mission.prenom_soignant,
+              nom_etablissement: mission.nom_etablissement,
+              intitule_mission: intitule,
+              date_debut: dateDebut,
+              mission_id: mission.mission_id,
             },
-          });
-        } catch (e) { console.warn('email soignant fail', e); }
-        // Marquer comme envoyé (idempotence)
-        await sb.rpc('fn_marquer_rappel_contrat_travail_envoye', {
-          p_mission_id: mission.mission_id,
-          p_cible_etab: true,
-          p_cible_soignant: true,
-        });
-        contratTravailRappels++;
+          };
+          const soignantOutcome = await invokeIdempotentEmail(
+            sb,
+            "contrat_travail_soignant",
+            { mission_id: mission.mission_id, cible: "soignant" },
+            soignantBody,
+          );
+          soignantEnvoye = soignantOutcome !== "pending";
+        } catch (e) {
+          contratTravailErreurs++;
+          console.warn('email soignant fail', e);
+        }
+        if (etabEnvoye || soignantEnvoye) {
+          const { error: marquageError } = await sb.rpc(
+            'fn_marquer_rappel_contrat_travail_envoye',
+            {
+              p_mission_id: mission.mission_id,
+              p_cible_etab: etabEnvoye,
+              p_cible_soignant: soignantEnvoye,
+            },
+          );
+          if (marquageError) throw marquageError;
+          contratTravailRappels++;
+        }
       }
     } catch (err) {
+      contratTravailErreurs++;
       console.error('Erreur rappels contrat travail:', err);
     }
     results.contrat_travail_rappels = contratTravailRappels;
+    results.contrat_travail_erreurs = contratTravailErreurs;
+    }
 
     // [J2.3.B.2] Cron envoi série email onboarding J0-J7
+    if (runHourly) {
     let serieEnvoyes = 0, serieSkipped = 0, serieErreurs = 0;
     try {
       const { data: aTraiter } = await sb
@@ -214,15 +331,18 @@ Deno.serve(async (req) => {
           const emailType = `SERIE_${audience}_${envoi.etape}`;
 
           // 5. Invoke send-email
-          const { error: emailErr } = await sb.functions.invoke('send-email', {
-            body: {
-              type: emailType,
-              destinataire_id: envoi.utilisateur_id,
-              data: tplData || {},
-            },
-          });
-
-          if (emailErr) throw new Error(emailErr.message || 'invoke error');
+          const onboardingBody = {
+            type: emailType,
+            destinataire_id: envoi.utilisateur_id,
+            data: tplData || {},
+          };
+          const onboardingOutcome = await invokeIdempotentEmail(
+            sb,
+            "serie_onboarding",
+            { envoi_id: envoi.id },
+            onboardingBody,
+          );
+          if (onboardingOutcome === "pending") continue;
 
           await sb.from('serie_email_envois').update({
             statut: 'ENVOYE',
@@ -258,6 +378,7 @@ Deno.serve(async (req) => {
         }
       }
     } catch (err) {
+      serieErreurs++;
       console.error('[email-cron] Erreur globale série email:', err);
     }
     results.serie_envoyes = serieEnvoyes;
@@ -272,7 +393,9 @@ Deno.serve(async (req) => {
     try {
       // Param p_frequence = NULL → toutes fréquences (la fenêtre de marge
       // dans la fonction filtre par elle-même : QUOTIDIENNE>23h, etc.).
-      const { data: filtresMatchants } = await sb.rpc('fn_evaluer_alertes_filtres', { p_frequence: null });
+      const { data: filtresMatchants, error: filtresError } =
+        await sb.rpc('fn_evaluer_alertes_filtres', { p_frequence: null });
+      if (filtresError) throw filtresError;
       for (const fm of ((filtresMatchants as any[]) || [])) {
         try {
           // Récupérer aperçu top 5 résultats
@@ -300,14 +423,21 @@ Deno.serve(async (req) => {
             payload.soignants = items;
           }
 
-          const { error: emailErr } = await sb.functions.invoke('send-email', {
-            body: {
-              type: emailType,
-              destinataire_id: fm.utilisateur_id,
-              data: payload,
+          const filtreBody = {
+            type: emailType,
+            destinataire_id: fm.utilisateur_id,
+            data: payload,
+          };
+          const filtreOutcome = await invokeIdempotentEmail(
+            sb,
+            "alerte_filtre",
+            {
+              filtre_id: fm.filtre_id,
+              fenetre_heure: new Date().toISOString().slice(0, 13),
             },
-          });
-          if (emailErr) throw new Error(emailErr.message || 'invoke error');
+            filtreBody,
+          );
+          if (filtreOutcome === "pending") continue;
 
           await sb.from('journaux_audit').insert({
             acteur_id: null, type_acteur: 'SYSTEME',
@@ -322,14 +452,19 @@ Deno.serve(async (req) => {
         }
       }
     } catch (err) {
+      alertesErreurs++;
       console.error('[email-cron] Erreur globale alertes filtres:', err);
     }
     results.alertes_filtres_envoyees = alertesEnvoyees;
     results.alertes_filtres_erreurs = alertesErreurs;
+    }
 
     // [Refonte.D.1] Médiation litiges : transition automatique MEDIATION_EN_COURS > 7j → REVUE_ADMIN
+    if (runDaily) {
     try {
-      const { data: medRes } = await sb.rpc('fn_basculer_litiges_revue_admin_timeout');
+      const { data: medRes, error: medError } =
+        await sb.rpc('fn_basculer_litiges_revue_admin_timeout');
+      if (medError) throw medError;
       results.litiges_basculer_revue_admin = (medRes as any)?.count ?? 0;
     } catch (err: any) {
       console.error('[email-cron] Erreur fn_basculer_litiges_revue_admin_timeout:', err?.message || err);
@@ -339,7 +474,9 @@ Deno.serve(async (req) => {
     // [Refonte.D.3] Email J+1 post-mission notation : scan missions TERMINEE 24-48h
     // sans notation pour rappel email aux 2 parties (idempotence via notifications_notation_j1).
     try {
-      const { data: rappRes } = await sb.rpc('fn_envoyer_rappels_notation_j1');
+      const { data: rappRes, error: rappError } =
+        await sb.rpc('fn_envoyer_rappels_notation_j1');
+      if (rappError) throw rappError;
       results.rappels_notation_etab = (rappRes as any)?.count_etab ?? 0;
       results.rappels_notation_soignant = (rappRes as any)?.count_soignant ?? 0;
     } catch (err: any) {
@@ -347,16 +484,27 @@ Deno.serve(async (req) => {
       results.rappels_notation_etab = -1;
       results.rappels_notation_soignant = -1;
     }
+    }
 
     // Traiter la queue d'emails ET SMS (notifications automatiques des triggers DB)
     // [CP-C-3 D] Source de vérité : statut='EN_ATTENTE' (colonne envoye deprecated)
+    if (runHourly) {
     let emailQueueCount = 0;
     let smsQueueCount = 0;
-    const { data: pendingEmails } = await sb.from('email_queue').select('*').eq('statut', 'EN_ATTENTE').order('cree_le').limit(50);
+    let queueErrors = 0;
+    const { data: pendingEmails, error: pendingEmailsError } = await sb
+      .from('email_queue')
+      .select('*')
+      .eq('statut', 'EN_ATTENTE')
+      .order('cree_le')
+      .limit(50);
+    if (pendingEmailsError) throw pendingEmailsError;
     for (const email of (pendingEmails || [])) {
+      const isSmsQueueItem =
+        email.type?.startsWith('SMS_') && Boolean(email.data?.telephone);
       try {
         // Si c'est un SMS (type commence par SMS_), envoyer via send-sms
-        if (email.type?.startsWith('SMS_') && email.data?.telephone) {
+        if (isSmsQueueItem) {
           const smsContenu = email.data.contenu
             ? String(email.data.contenu)
             : email.type === 'SMS_MISSION_URGENTE'
@@ -365,40 +513,125 @@ Deno.serve(async (req) => {
             ? `Annulation tardive sur "${email.data.mission}". Trouvez un remplaçant sur jolene.app`
             : `Notification Jolene: ${email.data.mission || 'Voir l\'app'}`;
 
-          const { error: smsError } = await sb.functions.invoke('send-sms', {
-            body: {
+          const smsOutcome = await invokeIdempotentSms(
+            sb,
+            `email-queue.sms.${email.id}`,
+            {
               telephone: email.data.telephone,
               type: email.type,
               contenu: smsContenu,
               destinataire_id: email.destinataire_id,
-            },
-            headers: { Authorization: `Bearer ${KEY}` },
-          });
-          if (smsError) throw new Error(`send-sms: ${smsError.message}`);
-          smsQueueCount++;
-        } else {
-          // Email classique
-          await sb.functions.invoke('send-email', {
-            body: {
-              type: email.type,
-              destinataire_id: email.destinataire_id,
-              destinataire_email: email.destinataire_email,
               data: email.data,
             },
-          });
-          emailQueueCount++;
+          );
+          if (smsOutcome === 'pending') {
+            queueErrors++;
+            console.error(
+              '[email-cron] SMS queue en état idempotent indéterminé',
+              email.id,
+            );
+            continue;
+          }
+        } else {
+          // Email classique
+          const queueBody = {
+            type: email.type,
+            destinataire_id: email.destinataire_id,
+            destinataire_email: email.destinataire_email,
+            data: email.data,
+          };
+          const queueOutcome = await invokeIdempotentEmail(
+            sb,
+            "email_queue",
+            { email_queue_id: email.id },
+            queueBody,
+          );
+          if (queueOutcome === "pending") continue;
         }
-        await sb.from('email_queue').update({ statut: 'ENVOYE', envoye: true, envoye_le: new Date().toISOString() }).eq('id', email.id);
+        const { data: markedSent, error: markSentError } = await sb
+          .from('email_queue')
+          .update({
+            statut: 'ENVOYE',
+            envoye: true,
+            envoye_le: new Date().toISOString(),
+          })
+          .eq('id', email.id)
+          .eq('statut', 'EN_ATTENTE')
+          .select('id')
+          .maybeSingle();
+        if (markSentError || !markedSent) {
+          queueErrors++;
+          console.error(
+            '[email-cron] envoi effectué mais marquage ENVOYE impossible; ' +
+              'la ligne reste EN_ATTENTE pour une reprise idempotente',
+            email.id,
+            markSentError?.message || 'state conflict',
+          );
+          continue;
+        }
+        if (isSmsQueueItem) smsQueueCount++;
+        else emailQueueCount++;
       } catch (err: any) {
-        await sb.from('email_queue').update({ statut: 'ERREUR', erreur: err?.message || 'Erreur envoi' }).eq('id', email.id);
+        queueErrors++;
+        const { error: markErrorError } = await sb
+          .from('email_queue')
+          .update({
+            statut: 'ERREUR',
+            erreur: err?.message || 'Erreur envoi',
+          })
+          .eq('id', email.id)
+          .eq('statut', 'EN_ATTENTE');
+        if (markErrorError) {
+          console.error(
+            '[email-cron] marquage ERREUR email_queue impossible',
+            email.id,
+            markErrorError.message,
+          );
+        }
       }
     }
     results.email_queue = emailQueueCount;
     results.sms_queue = smsQueueCount;
+    results.email_queue_erreurs = queueErrors;
+    }
 
-    return new Response(JSON.stringify({ success: true, results }), { headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": (Deno.env.get("APP_URL") || "https://jolene.app") } });
+    const failures = Object.entries(results)
+      .filter(([key, value]) =>
+        (key.endsWith("_erreurs") && Number(value) > 0) ||
+        Number(value) < 0
+      )
+      .map(([key]) => key);
+    const success = failures.length === 0;
+    const durationMs = Date.now() - startedAt;
+    console.log("[email-cron] terminé", {
+      request_id: requestId,
+      success,
+      failures,
+      duration_ms: durationMs,
+      results,
+    });
+    return new Response(
+      JSON.stringify({
+        success,
+        request_id: requestId,
+        failures,
+        duration_ms: durationMs,
+        results,
+      }),
+      {
+        status: success ? 200 : 500,
+        headers: {
+          "Content-Type": "application/json",
+          "Cache-Control": "no-store",
+          "Access-Control-Allow-Origin": (Deno.env.get("APP_URL") || "https://jolene.app"),
+        },
+      },
+    );
   } catch (err) {
-    console.error("email-cron error:", err);
-    return new Response(JSON.stringify({ error: "Une erreur interne est survenue." }), { status: 500, headers: { "Content-Type": "application/json" } });
+    console.error("email-cron error:", { request_id: requestId, error: err });
+    return new Response(
+      JSON.stringify({ error: "Une erreur interne est survenue.", request_id: requestId }),
+      { status: 500, headers: { "Content-Type": "application/json", "Cache-Control": "no-store" } },
+    );
   }
 });

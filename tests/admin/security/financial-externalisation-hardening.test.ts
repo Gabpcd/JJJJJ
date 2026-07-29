@@ -23,7 +23,10 @@ describe('Externalisations financières — identité, reprise et acquittement',
     expect(worker).toContain('EXTERNALISATION_FAILURE_ACK_FAILED');
     expect(worker).toContain('if (externalEffectSucceeded)');
     expect(worker).toContain('ackFailed++');
-    expect(worker).toContain('status: ackFailed > 0 ? 500 : 200');
+    expect(worker).toContain(
+      'const runSucceeded = failed === 0 && ackFailed === 0',
+    );
+    expect(worker).toContain('status: runSucceeded ? 200 : 500');
 
     expect(refundsMigration).toContain(
       'CREATE OR REPLACE FUNCTION public.fn_externalisation_succes',
@@ -134,14 +137,18 @@ describe('Externalisations financières — identité, reprise et acquittement',
     const dpae = worker.slice(start, end);
 
     expect(dpae).toContain('action.source !== "ANNULATION_MISSION"');
-    expect(dpae).toContain('action.source_id !== mission_id');
+    expect(dpae).toContain('let sourceMatchesMission = action.source_id === mission_id');
+    expect(dpae).toContain('.from("candidatures")');
+    expect(dpae).toContain('sourceMatchesMission = candidature?.mission_id === mission_id');
+    expect(dpae).toContain('if (!sourceMatchesMission)');
     expect(dpae).toContain('contrat.mission_id !== mission_id');
     expect(dpae).toContain('["CDD", "CDDU", "VACATION"]');
     expect(dpae).toContain('contrat.statut !== "RUPTURE_ETAB"');
     expect(dpae).toContain('progress.email_sent !== true');
     expect(dpae).toContain('progress.push_sent !== true');
     expect(dpae).toContain('if (!emailResponse.ok)');
-    expect(dpae).toContain('if (!pushResponse.ok)');
+    expect(dpae).toContain('await validatePushResponse(pushResponse)');
+    expect(dpae).toContain('if (!pushOutcome.ok)');
     expect(dpae).toContain('await persistProgress()');
   });
 });

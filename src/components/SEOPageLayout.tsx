@@ -1,8 +1,9 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { HeartPulse, ArrowRight } from 'lucide-react';
+import { ArrowRight } from 'lucide-react';
 import { FooterLegal } from '@/components/FooterLegal';
 import { BoutonY2K } from '@/components/y2k/BoutonY2K';
+import { LogoJolene } from '@/components/LogoJolene';
 
 interface SEOPageLayoutProps {
   children: React.ReactNode;
@@ -21,8 +22,10 @@ export function SEOPageLayout({ children, heroTitle, heroSubtitle, ctaText, ctaH
       <header className="sticky top-0 z-50 bg-card/80 backdrop-blur-lg border-b border-border">
         <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
           <a href="/" className="flex items-center gap-2">
-            <HeartPulse className="h-7 w-7 text-rose" />
-            <span className="text-xl font-bold text-rose">Jolene</span>
+            <LogoJolene
+              imageClassName="h-7 w-7"
+              nomClassName="text-xl text-rose"
+            />
           </a>
           <div className="flex items-center gap-4">
 <a href="/a-propos" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors hidden sm:inline">À propos</a>
@@ -76,10 +79,11 @@ export function SEOPageLayout({ children, heroTitle, heroSubtitle, ctaText, ctaH
         <div className="max-w-6xl mx-auto px-4">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
             <div className="col-span-2 md:col-span-1">
-              <div className="flex items-center gap-2 mb-3">
-                <HeartPulse className="h-5 w-5 text-rose" />
-                <span className="font-bold text-rose">Jolene</span>
-              </div>
+              <LogoJolene
+                className="mb-3"
+                imageClassName="h-5 w-5"
+                nomClassName="text-rose"
+              />
               <p className="text-sm text-muted-foreground leading-relaxed">La plateforme de confiance pour le remplacement et le staffing en santé.</p>
             </div>
             <div>

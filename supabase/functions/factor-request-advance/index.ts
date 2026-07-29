@@ -12,6 +12,7 @@
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
+import { resolveOperationalTestAccount } from "../_shared/test-account.ts";
 
 // Interface générique provider
 interface FactorProvider {
@@ -180,15 +181,46 @@ Deno.serve(async (req) => {
     }
 
     // Vérifier la facture
-    const { data: facture } = await supabaseAdmin
+    const { data: facture, error: factureError } = await supabaseAdmin
       .from("factures_honoraires")
       .select("*")
       .eq("id", factureId)
       .eq("soignant_id", user.id)
       .maybeSingle();
 
+    if (factureError) {
+      return new Response(
+        JSON.stringify({ error: "Classification de la facture indisponible" }),
+        { status: 503, headers: corsHeaders(req) },
+      );
+    }
     if (!facture) {
       return new Response(JSON.stringify({ error: "Facture introuvable" }), { status: 404, headers: corsHeaders(req) });
+    }
+
+    // Défense canonique avant toute écriture factor_advances et avant Defacto.
+    // Les IDs proviennent de la facture relue côté serveur, jamais du body.
+    for (const accountId of [facture.soignant_id, facture.etablissement_id]) {
+      const classification = await resolveOperationalTestAccount(
+        supabaseAdmin,
+        accountId,
+      );
+      if (!classification.ok) {
+        return new Response(
+          JSON.stringify({ error: "Classification du compte indisponible" }),
+          { status: 503, headers: corsHeaders(req) },
+        );
+      }
+      if (classification.isTest) {
+        return new Response(
+          JSON.stringify({
+            success: true,
+            test_skipped: true,
+            message: "Affacturage désactivé pour les données de test.",
+          }),
+          { status: 200, headers: corsHeaders(req) },
+        );
+      }
     }
 
     if (facture.statut !== "EMISE" && facture.statut !== "EN_RETARD") {

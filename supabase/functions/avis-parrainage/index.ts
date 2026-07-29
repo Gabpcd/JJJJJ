@@ -4,6 +4,7 @@
 // Déclenché par pg_cron (tous les jours 11h UTC) : Authorization Bearer service_role/vault.
 
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { resolveOperationalTestAccount } from "../_shared/test-account.ts";
 
 // Auth cron : Bearer = service_role (env) ou secret vault sb_secret_* envoyé par
 // pg_cron (cf. CLAUDE.md "Auth crons pg_cron"). Plus de secret en dur dans le repo.
@@ -57,8 +58,40 @@ Deno.serve(async (req) => {
     if (error) return new Response(JSON.stringify({ error: error.message }), { status: 500 });
 
     let envoyes = 0;
+    let ignoresTest = 0;
     for (const m of (missions as any[]) || []) {
       if (!m.soignant_email) continue;
+      if (typeof m.soignant_id !== "string") {
+        return new Response(JSON.stringify({
+          error: "Classification du destinataire indisponible",
+        }), { status: 503, headers: { "Content-Type": "application/json" } });
+      }
+      const testAccount = await resolveOperationalTestAccount(
+        admin,
+        m.soignant_id,
+      );
+      if (!testAccount.ok) {
+        return new Response(JSON.stringify({
+          error: "Classification du destinataire indisponible",
+        }), { status: 503, headers: { "Content-Type": "application/json" } });
+      }
+      if (testAccount.isTest) {
+        ignoresTest++;
+        await Promise.resolve(admin.from("journaux_audit").insert({
+          acteur_id: null,
+          type_acteur: "SYSTEME",
+          action: "NOTIFICATION_SKIPPED",
+          type_ressource: "email",
+          id_ressource: m.soignant_id,
+          details: {
+            fonction: "avis-parrainage",
+            canal: "EMAIL",
+            raison: "test_account",
+            mission_id: m.mission_id,
+          },
+        })).catch(() => {});
+        continue;
+      }
       const lienParrainage = `https://jolene.app/inscription/soignant?parrain=${encodeURIComponent(m.code_parrainage || "")}&utm_source=email&utm_medium=crm&utm_campaign=parrainage-post-mission`;
       const blocAvis = lienAvis
         ? `<p>Si Jolene vous a été utile, <a href="${lienAvis}">un avis Google</a> nous aide énormément à nous faire connaître (2 minutes).</p>`
@@ -93,7 +126,12 @@ Deno.serve(async (req) => {
       }
     }
 
-    return new Response(JSON.stringify({ missions: (missions as any[])?.length || 0, envoyes, avis_actif: !!lienAvis }), {
+    return new Response(JSON.stringify({
+      missions: (missions as any[])?.length || 0,
+      envoyes,
+      ignores_test: ignoresTest,
+      avis_actif: !!lienAvis,
+    }), {
       headers: { "Content-Type": "application/json" },
     });
   } catch (e) {

@@ -1,13 +1,19 @@
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { Link } from "react-router-dom";
-import { HeartPulse, Home } from "lucide-react";
+import { Home } from "lucide-react";
+import { LogoJolene } from '@/components/LogoJolene';
 
 const NotFound = () => {
   usePageTitle('Page introuvable');
   return (
     <div className="flex min-h-[100dvh] items-center justify-center bg-background px-4">
       <div className="text-center max-w-md">
-        <HeartPulse className="h-14 w-14 text-primary mx-auto mb-6" />
+        <LogoJolene
+          afficherNom={false}
+          decoratif
+          className="mx-auto mb-6"
+          imageClassName="h-14 w-14"
+        />
         <h1 className="mb-2 text-6xl font-bold text-foreground tracking-tight">404</h1>
         <p className="mb-2 text-lg font-medium text-foreground">Page introuvable</p>
         <p className="mb-8 text-sm text-muted-foreground">

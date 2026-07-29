@@ -1,4 +1,4 @@
-import { HeartPulse } from 'lucide-react';
+import { LogoJolene } from '@/components/LogoJolene';
 
 interface ChargementAdminProps {
   titre: string;
@@ -14,7 +14,11 @@ export function ChargementAdmin({ titre }: ChargementAdminProps) {
         role="status"
         aria-live="polite"
       >
-        <HeartPulse className="h-10 w-10 animate-pulse text-primary" aria-hidden="true" />
+        <LogoJolene
+          afficherNom={false}
+          decoratif
+          imageClassName="h-10 w-10 animate-pulse"
+        />
         <p className="text-sm font-medium">Chargement en cours…</p>
       </div>
     </div>
@@ -24,7 +28,11 @@ export function ChargementAdmin({ titre }: ChargementAdminProps) {
 export function ChargementSectionAdmin({ label = 'Chargement en cours…' }: { label?: string }) {
   return (
     <div className="min-h-48 flex flex-col items-center justify-center gap-3 text-muted-foreground" role="status" aria-live="polite">
-      <HeartPulse className="h-8 w-8 animate-pulse text-primary" aria-hidden="true" />
+      <LogoJolene
+        afficherNom={false}
+        decoratif
+        imageClassName="h-8 w-8 animate-pulse"
+      />
       <p className="text-sm font-medium">{label}</p>
     </div>
   );

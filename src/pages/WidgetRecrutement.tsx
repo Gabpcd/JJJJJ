@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
-import { Clock, HeartPulse } from 'lucide-react';
+import { Clock } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { LogoJolene } from '@/components/LogoJolene';
 
 export default function WidgetRecrutement() {
   const [searchParams] = useSearchParams();
@@ -47,7 +48,11 @@ export default function WidgetRecrutement() {
     <main className="max-w-lg mx-auto font-sans" aria-busy={loading}>
       {/* Header */}
       <div className="bg-primary text-primary-foreground px-4 py-3 rounded-t-xl flex items-center gap-2">
-        <HeartPulse className="h-5 w-5" />
+        <LogoJolene
+          afficherNom={false}
+          decoratif
+          imageClassName="h-5 w-5"
+        />
         <div>
           <h1 className="font-semibold text-sm">{etabNom || 'Établissement'}</h1>
           <p className="text-[11px] opacity-80">Missions disponibles sur Jolene</p>

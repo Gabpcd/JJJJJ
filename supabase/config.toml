@@ -60,9 +60,6 @@ verify_jwt = false
 [functions.verify-contrat-travail]
 verify_jwt = false
 
-[functions.admin-2fa]
-verify_jwt = false
-
 [functions.prospects-etablissements]
 verify_jwt = false
 

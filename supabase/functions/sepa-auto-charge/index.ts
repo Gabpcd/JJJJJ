@@ -17,6 +17,7 @@ import {
   requireAcquiredStripeSourceCharge,
   StripeSourceChargeValidationError,
 } from "../_shared/stripe-source-charge.ts";
+import { resolveOperationalTestAccount } from "../_shared/test-account.ts";
 
 const PAYMENT_INTENT_ID = /^pi_[A-Za-z0-9]+$/;
 const PAYMENT_INTENT_STATUSES = new Set([
@@ -113,9 +114,35 @@ Deno.serve(async (req) => {
 
     let charged = 0;
     let failed = 0;
+    let skippedTest = 0;
     const results: any[] = [];
 
     for (const f of sepaFactures) {
+      const testAccount = await resolveOperationalTestAccount(
+        supabaseAdmin,
+        f.etablissement_id,
+      );
+      if (!testAccount.ok) {
+        throw new Error("TEST_ACCOUNT_CLASSIFICATION_UNAVAILABLE");
+      }
+      if (testAccount.isTest) {
+        skippedTest++;
+        continue;
+      }
+      if (f.mission_id) {
+        const { data: missionReelle, error: missionReelleError } =
+          await supabaseAdmin.rpc("fn_mission_est_reelle_pour_service", {
+            p_mission_id: f.mission_id,
+          });
+        if (missionReelleError) {
+          throw new Error("TEST_MISSION_CLASSIFICATION_UNAVAILABLE");
+        }
+        if (missionReelle !== true) {
+          skippedTest++;
+          continue;
+        }
+      }
+
       const etab = (f as any).etablissements;
       const amountCents = Math.round((f.montant_ttc ?? 0) * 100);
       if (!Number.isSafeInteger(amountCents) || amountCents <= 0) {
@@ -535,6 +562,7 @@ Deno.serve(async (req) => {
       total_sepa_factures: sepaFactures.length,
       charged,
       failed,
+      skipped_test: skippedTest,
       results,
     });
   } catch (error: unknown) {

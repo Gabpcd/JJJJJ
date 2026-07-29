@@ -484,7 +484,7 @@ Pour limiter temporairement le traitement de vos données (ex : enquête en cour
 
 ## DPO Jolene
 
-**dpo@jolene.app** — Délai de réponse 1 mois maximum (RGPD article 12.3).
+**support@jolene.app** — Délai de réponse 1 mois maximum (RGPD article 12.3).
 
 ## Plainte CNIL
 
@@ -1080,7 +1080,7 @@ Détail : `docs/procedure-backup.md`.
 ## Plainte
 
 Si vous estimez que Jolene ne respecte pas vos droits :
-- **DPO Jolene** : dpo@jolene.app
+- **DPO Jolene** : support@jolene.app
 - **CNIL** : cnil.fr/plaintes
 
 ## Liens utiles

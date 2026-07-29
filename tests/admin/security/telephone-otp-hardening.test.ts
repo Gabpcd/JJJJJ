@@ -65,6 +65,12 @@ describe('OTP téléphone — émission et expurgation fail-closed', () => {
     expect(sendSms).toContain("type !== 'OTP_VERIFICATION_TELEPHONE'");
     expect(sendSms).toContain("type === 'OTP_VERIFICATION_TELEPHONE'");
     expect(sendSms).toContain('[CODE OTP MASQUÉ]');
-    expect(sendSms).not.toContain('contenu: fullBody,');
+    expect(sendSms).toContain('requestFingerprint = await sha256Hex');
+    const auditStart = sendSms.indexOf('.from("sms_envoyes")');
+    const auditEnd = sendSms.indexOf('return jsonResponse(req, {', auditStart);
+    const auditInsert = sendSms.slice(auditStart, auditEnd);
+    expect(auditStart).toBeGreaterThan(0);
+    expect(auditInsert).toContain('contenu: contenuJournal,');
+    expect(auditInsert).not.toContain('contenu: fullBody,');
   });
 });

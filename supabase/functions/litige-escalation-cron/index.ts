@@ -1,50 +1,36 @@
 // litige-escalation-cron
 //
-// Cron quotidien (08h UTC) qui appelle les 4 RPCs du système litiges :
+// Cron quotidien (horaire piloté par pg_cron) qui appelle les 4 RPCs du
+// système litiges :
 //   1. fn_auto_creation_litiges_presence()
 //   2. fn_envoyer_rappels_litiges()
 //   3. fn_litiges_escalader_auto()
 //   4. fn_alerter_mediation_prioritaire()
 //
-// Auth : Bearer <service_role_key> (cf. pattern email-cron).
+// Auth : secret d'automatisation dédié Vault, avec compatibilité transitoire
+// service_role centralisée dans _shared/cron-service-auth.ts.
 // Pas de body requis.
 //
 // Déploiement : cf. docs/cron-litiges.md.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import {
+  cronAuthErrorResponse,
+  cronAuthProbeResponse,
+  isCronAuthProbe,
+  verifyCronServiceAuth,
+} from "../_shared/cron-service-auth.ts";
 
 const URL = Deno.env.get("SUPABASE_URL")!;
 const KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-// Auth résiliente : accepte legacy JWT (KEY env) ou nouveau secret asymétrique
-// (sb_secret_…) stocké en vault. Cf. docs/audit-infrastructure-production.md.
-let _vaultSecret: string | null = null;
-async function getVaultSecret(sb: any): Promise<string> {
-  if (_vaultSecret) return _vaultSecret;
-  const env = Deno.env.get("SUPABASE_SECRET_KEY") || Deno.env.get("SB_SECRET_KEY") || "";
-  if (env) { _vaultSecret = env; return env; }
-  try {
-    const { data } = await sb.rpc('fn_lire_secret_cron');
-    if (data) { _vaultSecret = data; return data; }
-  } catch { /* ignore */ }
-  return "";
-}
-
 Deno.serve(async (req) => {
+  const requestId = crypto.randomUUID();
   try {
-    const sb = createClient(URL, KEY);
-
-    // Auth service_role : legacy JWT OU vault secret
-    const authHeader = req.headers.get("Authorization") || "";
-    const bearer = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
-    const vaultSecret = await getVaultSecret(sb);
-    const validBearers = [KEY, vaultSecret].filter(Boolean);
-    if (!bearer || !validBearers.includes(bearer)) {
-      return new Response(JSON.stringify({ error: "Non autorisé" }), {
-        status: 401,
-        headers: { "Content-Type": "application/json" },
-      });
-    }
+    const sb = createClient(URL, KEY, { auth: { persistSession: false } });
+    const auth = await verifyCronServiceAuth(req, sb);
+    if (!auth.ok) return cronAuthErrorResponse(auth);
+    if (isCronAuthProbe(req)) return cronAuthProbeResponse(auth);
 
     const results: Record<string, unknown> = {};
     const t0 = Date.now();
@@ -93,39 +79,109 @@ Deno.serve(async (req) => {
 
     // ── 5. Regen PDF/XML pour les factures flag pdf_a_regenerer=TRUE (CP-LITIGES-6) ──
     try {
-      const { data: pending } = await sb.rpc("fn_lister_factures_a_regenerer", { p_limit: 50 });
+      const { data: pending, error: pendingError } = await sb.rpc(
+        "fn_lister_factures_a_regenerer",
+        { p_limit: 50 },
+      );
+      if (pendingError) {
+        throw new Error(
+          `fn_lister_factures_a_regenerer: ${pendingError.message}`,
+        );
+      }
       let regen_ok = 0, regen_fail = 0;
+      let regen_test_skipped = 0;
       for (const row of (pending || []) as Array<{ id: string; numero_facture: string; type_document: string }>) {
         try {
-          await sb.functions.invoke("generate-invoice", {
-            body: {
-              facture_id: row.id,
-              service_role_reason: `cron_auto_generation`,
-            },
-          });
+          const { data: facture, error: factureError } = await sb
+            .from("factures_honoraires")
+            .select("mission_id")
+            .eq("id", row.id)
+            .maybeSingle();
+          if (factureError || !facture?.mission_id) {
+            throw new Error(
+              `classification facture impossible: ${factureError?.message || row.id}`,
+            );
+          }
+          const { data: missionReelle, error: missionReelleError } = await sb.rpc(
+            "fn_mission_est_reelle_pour_service",
+            { p_mission_id: facture.mission_id },
+          );
+          if (missionReelleError) {
+            throw new Error(
+              `classification mission impossible: ${missionReelleError.message}`,
+            );
+          }
+          if (missionReelle !== true) {
+            regen_test_skipped++;
+            continue;
+          }
+          const { data: generated, error: generationError } =
+            await sb.functions.invoke(
+              "generate-invoice",
+              {
+                body: {
+                  facture_id: row.id,
+                  service_role_reason: `cron_auto_generation`,
+                },
+              },
+            );
+          if (generationError) {
+            throw new Error(
+              `generate-invoice invoke: ${generationError.message}`,
+            );
+          }
+          if (
+            generated?.success !== true ||
+            generated?.mode !== "regen" ||
+            generated?.facture_id !== row.id
+          ) {
+            throw new Error(
+              `generate-invoice réponse invalide: ${
+                generated?.error || JSON.stringify(generated)
+              }`,
+            );
+          }
           regen_ok++;
         } catch (e) {
           console.error(`regen ${row.numero_facture} failed:`, e);
           regen_fail++;
         }
       }
-      results.regen = { ok: regen_ok, fail: regen_fail, total: (pending || []).length };
+      results.regen = {
+        ok: regen_ok,
+        fail: regen_fail,
+        test_skipped: regen_test_skipped,
+        total: (pending || []).length,
+      };
     } catch (err) {
       console.error("regen scan error:", err);
       results.regen_error = (err as Error).message;
     }
 
     const duration_ms = Date.now() - t0;
-    console.log("litige-escalation-cron done:", { duration_ms, results });
+    const failures = Object.keys(results).filter((key) => key.endsWith("_error"));
+    const regen = results.regen as { fail?: number } | undefined;
+    if ((regen?.fail ?? 0) > 0) failures.push("regen");
+    const success = failures.length === 0;
+    console.log("litige-escalation-cron done:", {
+      request_id: requestId,
+      success,
+      failures,
+      duration_ms,
+      results,
+    });
 
     return new Response(
-      JSON.stringify({ success: true, duration_ms, results }),
-      { headers: { "Content-Type": "application/json" } },
+      JSON.stringify({ success, request_id: requestId, failures, duration_ms, results }),
+      {
+        status: success ? 200 : 500,
+        headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
+      },
     );
   } catch (err) {
-    console.error("litige-escalation-cron fatal:", err);
+    console.error("litige-escalation-cron fatal:", { request_id: requestId, error: err });
     return new Response(
-      JSON.stringify({ error: "Une erreur interne est survenue." }),
+      JSON.stringify({ error: "Une erreur interne est survenue.", request_id: requestId }),
       { status: 500, headers: { "Content-Type": "application/json" } },
     );
   }

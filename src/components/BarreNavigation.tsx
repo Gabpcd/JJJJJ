@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useId, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { LucideIcon, Home, Search, FileText, User, PlusCircle, List, ClipboardCheck, Settings, HeartPulse, LogOut, MapPin, Banknote, CreditCard, Rocket, Bell, Flame, MessageCircle, ClipboardList, Users, Scale, ChevronDown, Activity, Shield, Menu, X, Star, Gift, ShieldCheck, ArrowLeft } from 'lucide-react';
+import { LucideIcon, Home, Search, FileText, User, PlusCircle, List, ClipboardCheck, Settings, LogOut, MapPin, Banknote, CreditCard, Rocket, Bell, Flame, MessageCircle, ClipboardList, Users, Scale, ChevronDown, Activity, Shield, Menu, X, Star, Gift, ShieldCheck, ArrowLeft } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { UserRole } from '@/lib/types';
 import { estEligibleLiberal } from '@/lib/regles-installation-liberal';
+import { LogoJolene } from '@/components/LogoJolene';
 import { supabase } from '@/integrations/supabase/client';
 import { BadgeNotification } from '@/components/PanneauNotifications';
 import { AvatarDisplay } from '@/components/AvatarUpload';
@@ -371,8 +372,10 @@ export function BarreNavigation({ role }: { role: UserRole }) {
             </>
           )}
           <button onClick={() => navigate(role === 'SOIGNANT' ? '/soignant/tableau-de-bord' : role === 'ADMIN_ETABLISSEMENT' ? '/etablissement/tableau-de-bord' : '/groupe/tableau-de-bord')} className="flex min-h-[44px] items-center gap-2" aria-label="Accueil">
-            <HeartPulse className="h-6 w-6 text-primary" />
-            <span className="text-lg font-bold text-primary">Jolene</span>
+            <LogoJolene
+              imageClassName="h-6 w-6"
+              nomClassName="text-lg"
+            />
           </button>
         </div>
         <div className="flex items-center gap-1">
@@ -424,10 +427,10 @@ export function BarreNavigation({ role }: { role: UserRole }) {
             tabIndex={-1}
           >
             <div className="p-4 flex items-center justify-between border-b border-sidebar-border">
-              <div className="flex items-center gap-2">
-                <HeartPulse className="h-6 w-6 text-primary" />
-                <span className="text-lg font-bold text-primary">Jolene</span>
-              </div>
+              <LogoJolene
+                imageClassName="h-6 w-6"
+                nomClassName="text-lg"
+              />
               <button
                 ref={mobileMenuCloseRef}
                 onClick={() => setMobileMenuOpen(false)}
@@ -531,10 +534,11 @@ export function BarreNavigation({ role }: { role: UserRole }) {
       {/* ── Desktop sidebar ── */}
       <aside className="hidden md:flex fixed left-0 top-0 bottom-0 w-[260px] flex-col z-40 no-print" style={{ paddingTop: 'env(safe-area-inset-top)', background: 'linear-gradient(180deg, hsl(270 40% 97%) 0%, hsl(330 50% 96%) 100%)' }} role="navigation" aria-label="Sidebar">
         <div className="p-4 flex items-center justify-between gap-1">
-          <div className="flex items-center gap-2 min-w-0">
-            <HeartPulse className="h-7 w-7 text-primary flex-shrink-0" />
-            <span className="text-xl font-bold text-primary truncate">Jolene</span>
-          </div>
+          <LogoJolene
+            className="min-w-0"
+            imageClassName="h-7 w-7"
+            nomClassName="truncate text-xl"
+          />
           <div className="flex items-center gap-1 flex-shrink-0">
             <BadgeNotification />
             <ThemeToggle className="text-sidebar-foreground hover:bg-sidebar-accent" />

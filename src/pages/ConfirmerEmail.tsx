@@ -1,6 +1,7 @@
 import { usePageTitle } from '@/hooks/usePageTitle';
 import React from 'react';
-import { HeartPulse, Mail } from 'lucide-react';
+import { Mail } from 'lucide-react';
+import { LogoJolene } from '@/components/LogoJolene';
 import { useAuth } from '@/contexts/AuthContext';
 
 export default function ConfirmerEmail() {
@@ -10,10 +11,11 @@ export default function ConfirmerEmail() {
   return (
     <div className="min-h-[100dvh] gradient-hero flex items-center justify-center px-4">
       <div className="card-base max-w-md w-full text-center">
-        <div className="flex items-center justify-center gap-2 mb-6">
-          <HeartPulse className="h-8 w-8 text-rose" />
-          <span className="text-2xl font-bold text-rose">Jolene</span>
-        </div>
+        <LogoJolene
+          className="mx-auto mb-6 flex w-fit"
+          imageClassName="h-8 w-8"
+          nomClassName="text-2xl text-rose"
+        />
 
         <Mail className="h-16 w-16 text-primary mx-auto mb-4" />
 
