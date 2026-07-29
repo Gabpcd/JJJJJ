@@ -363,6 +363,13 @@ jobs:
           psql "${{ steps.staging-url.outputs.url }}" -v ON_ERROR_STOP=1 \
             -f supabase/migrations/20260714084802_synchroniser_regles_profil_exercice.sql
 
+          # La matrice juridique profession × établissement est elle aussi une
+          # donnée de référence absente du dump schema-only.
+          psql "${{ steps.staging-url.outputs.url }}" -v ON_ERROR_STOP=1 \
+            -f supabase/migrations/20260712161000_finaliser_matrice_modes_exercice.sql
+          psql "${{ steps.staging-url.outputs.url }}" -v ON_ERROR_STOP=1 \
+            -f supabase/migrations/20260713164844_corriger_sources_modes_exercice_et_specialites_infirmieres.sql
+
           # L'inventaire de sécurité contient 422 lignes de contrôle.
           psql "${{ steps.staging-url.outputs.url }}" -v ON_ERROR_STOP=1 \
             -f supabase/migrations/20260729121443_figer_inventaire_security_definer.sql
@@ -393,6 +400,9 @@ jobs:
           ")
           PROFILE_RULES=$(psql "$URL" -t -A -v ON_ERROR_STOP=1 -c "
             SELECT count(*) FROM public.regles_exercice_profession;
+          ")
+          EXERCISE_MATRIX_RULES=$(psql "$URL" -t -A -v ON_ERROR_STOP=1 -c "
+            SELECT count(*) FROM public.matrice_modes_exercice;
           ")
           PRIVATE_SERVICE_ACCESS=$(psql "$URL" -t -A -v ON_ERROR_STOP=1 -c "
             SELECT CASE
@@ -513,6 +523,10 @@ jobs:
             echo "::error::Référentiel des professions staging incomplet ($PROFILE_RULES/17)."
             exit 1
           fi
+          if [ "$EXERCISE_MATRIX_RULES" != '43' ]; then
+            echo "::error::Matrice des modes d'exercice staging incomplète ($EXERCISE_MATRIX_RULES/43)."
+            exit 1
+          fi
           if [ "$PRIVATE_SERVICE_ACCESS" != '1' ]; then
             echo "::error::Accès service_role au schéma private incomplet."
             exit 1
@@ -541,6 +555,7 @@ jobs:
           echo "Migrations lancement : $LAUNCH_MIGRATIONS/5"
           echo "Inventaire SECURITY DEFINER : $INVENTORY_COUNT"
           echo "Référentiel des professions : $PROFILE_RULES/17"
+          echo "Matrice des modes d'exercice : $EXERCISE_MATRIX_RULES/43"
           echo "Accès service_role/private : OK"
           echo "Dépendances gérées : 8 policies, 4 buckets, 5 tables Realtime, trigger Auth et vue OK"
           echo "Crons critiques : $CRITICAL_COUNT/9 présents, $ACTIVE_CRITICAL actif"
