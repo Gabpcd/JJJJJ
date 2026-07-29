@@ -170,7 +170,7 @@ describe("déploiement fail-closed des crons critiques", () => {
       "supabase db query --linked --agent=no --output csv",
     );
     expect(stagingWorkflow).toContain(
-      "SELECT version, statements, name",
+      "SELECT version, statements::text AS statements, name",
     );
     expect(stagingWorkflow).toContain(
       "\\\\copy supabase_migrations.schema_migrations(version, statements, name)",

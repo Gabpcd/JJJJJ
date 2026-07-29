@@ -137,7 +137,7 @@ jobs:
           # projets (par exemple `created_by`). Ces trois colonnes constituent
           # le contrat commun utilisé par `supabase db push`.
           supabase db query --linked --agent=no --output csv \
-            "SELECT version, statements, name
+            "SELECT version, statements::text AS statements, name
                FROM supabase_migrations.schema_migrations
               ORDER BY version" \
             > /tmp/migrations-data.csv
