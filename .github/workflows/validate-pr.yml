@@ -249,16 +249,16 @@ jobs:
           git worktree add --detach "$BASE_WORKTREE" "$BASE_SHA"
           trap 'git worktree remove --force "$BASE_WORKTREE" >/dev/null 2>&1 || true' EXIT
 
-          # Une PR de hotfix peut devoir corriger une migration déjà mergée mais
-          # encore pending (sinon le bootstrap de main échoue avant de pouvoir
-          # tester le correctif). On superpose uniquement les fichiers de
-          # migration EXISTANTS modifiés par la PR ; les nouvelles migrations
-          # restent testées séparément sous ROLLBACK à l'étape suivante.
-          mapfile -t MIGRATIONS_EXISTANTES_MODIFIEES < <(
-            git diff --name-only --diff-filter=M "$BASE_SHA"...HEAD \
+          # Une PR peut modifier une migration pending ou avoir déjà été
+          # déployée sur le staging de recette. Le worktree de base doit alors
+          # connaître aussi les versions ajoutées par la PR, sinon la CLI refuse
+          # la synchronisation dès qu'elle voit une version distante inconnue.
+          # Leur comportement reste testé sous ROLLBACK à l'étape suivante.
+          mapfile -t MIGRATIONS_PR < <(
+            git diff --name-only --diff-filter=AM "$BASE_SHA"...HEAD \
               -- 'supabase/migrations/*.sql' | sort
           )
-          for migration in "${MIGRATIONS_EXISTANTES_MODIFIEES[@]}"; do
+          for migration in "${MIGRATIONS_PR[@]}"; do
             install -m 0644 "$migration" "$BASE_WORKTREE/$migration"
           done
 
