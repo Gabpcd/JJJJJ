@@ -18,6 +18,10 @@ const stagingWorkflow = readFileSync(
   `${root}/.github/workflows/deploy-supabase-staging.yml`,
   "utf8",
 );
+const validationWorkflow = readFileSync(
+  `${root}/.github/workflows/validate-pr.yml`,
+  "utf8",
+);
 
 const criticalJobs = [
   "litige-escalation-cron",
@@ -143,6 +147,12 @@ describe("déploiement fail-closed des crons critiques", () => {
   });
 
   it("reconstruit le staging sans toucher la prod ni perdre les dépendances gérées", () => {
+    expect(stagingWorkflow).toContain(
+      "group: jolene-supabase-staging-writes",
+    );
+    expect(validationWorkflow).toContain(
+      "group: jolene-supabase-staging-writes",
+    );
     expect(stagingWorkflow).toContain(
       "Ce bootstrap exige la confirmation explicite reset_first=true",
     );

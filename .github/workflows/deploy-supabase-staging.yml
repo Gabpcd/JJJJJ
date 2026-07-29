@@ -53,7 +53,9 @@ env:
   RETIRED_EDGE_FUNCTIONS: 'admin-2fa'
 
 concurrency:
-  group: deploy-supabase-staging
+  # Partagé avec le job SQL des PR : une seule écriture à la fois sur le
+  # projet staging, même lorsque les opérations viennent de workflows distincts.
+  group: jolene-supabase-staging-writes
   cancel-in-progress: false
 
 jobs:

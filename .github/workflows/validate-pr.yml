@@ -209,7 +209,9 @@ jobs:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     concurrency:
-      group: validate-sql-staging
+      # Même verrou que le bootstrap staging : leurs écritures ne doivent
+      # jamais s'exécuter simultanément sur la base partagée.
+      group: jolene-supabase-staging-writes
       cancel-in-progress: false
     steps:
       - uses: actions/checkout@v5

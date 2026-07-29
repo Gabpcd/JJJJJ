@@ -23,6 +23,7 @@ b7a54986a616e6e4f5919289b1488d706e6564f8fa8ed52ca3afffbfbb6d6764  android/app/sr
 34f4982a9e522da00bb6e95ee1b35914ec5df83c035939234252cc4615bab9ea  android/app/src/main/res/drawable-port-xhdpi/splash.png
 735a7001e5db3ee8d277c9c84b03fe674d4d97770da45c976dbef0958f07a647  android/app/src/main/res/drawable-port-xxhdpi/splash.png
 676f2dbd32d18193c0a91c4e72e5fa8272f96bca396cec63afbfeb8c4a879f43  android/app/src/main/res/drawable-port-xxxhdpi/splash.png
+cfb618a6b8c7a2bb802fac3be8804e5ddf77be6dcb56365341e16a552c77f837  android/app/src/main/res/drawable/ic_stat_jolene_notification.xml
 35a3e9129f1f089ccc6a3b65278212851cdf15571971b484f1c656473ac208f4  android/app/src/main/res/drawable/splash.png
 420ec728bccc30206c96bd9d4f1b542ce387ea3eb74a1bb8a0e8c11935dc24a2  android/app/src/main/res/mipmap-hdpi/ic_launcher.png
 1b6f11d4e890b889991c15f6de21026d26003a6eada879a285dbc82151d23b04  android/app/src/main/res/mipmap-hdpi/ic_launcher_background.png
