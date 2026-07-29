@@ -357,6 +357,12 @@ jobs:
       - name: Rejouer la réconciliation idempotente hors dump
         run: |
           set -euo pipefail
+          # Le dump de production est volontairement schema-only : la table
+          # d'inventaire existe après restauration, mais ses 422 lignes de
+          # contrôle doivent être rejouées explicitement.
+          psql "${{ steps.staging-url.outputs.url }}" -v ON_ERROR_STOP=1 \
+            -f supabase/migrations/20260729121443_figer_inventaire_security_definer.sql
+
           # Ce fichier est une migration normale en production et un script
           # volontairement rejouable après chaque reset staging.
           psql "${{ steps.staging-url.outputs.url }}" -v ON_ERROR_STOP=1 \

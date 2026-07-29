@@ -172,6 +172,14 @@ describe("déploiement fail-closed des crons critiques", () => {
     expect(stagingWorkflow).toContain(
       "SELECT version, statements::text AS statements, name",
     );
+    const inventoryReplayIndex = stagingWorkflow.indexOf(
+      "20260729121443_figer_inventaire_security_definer.sql",
+    );
+    const launchAssertionsIndex = stagingWorkflow.indexOf(
+      "Assert launch migrations on STAGING without cron activation",
+    );
+    expect(inventoryReplayIndex).toBeGreaterThanOrEqual(0);
+    expect(launchAssertionsIndex).toBeGreaterThan(inventoryReplayIndex);
     expect(stagingWorkflow).toContain(
       "\\\\copy supabase_migrations.schema_migrations(version, statements, name)",
     );
