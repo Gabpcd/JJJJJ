@@ -8,6 +8,8 @@ const inventoryMigrationPath =
   `${root}/supabase/migrations/20260729121443_figer_inventaire_security_definer.sql`;
 const prelaunchMigrationPath =
   `${root}/supabase/migrations/20260729121419_requalifier_donnees_prelaunch_et_supprimer_mfa_admin.sql`;
+const hardeningMigrationPath =
+  `${root}/supabase/migrations/20260729121442_securiser_auth_et_crons_critiques.sql`;
 const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as {
   snapshot: {
     unique_functions: number;
@@ -23,6 +25,7 @@ const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as {
   }>;
 };
 const inventorySql = readFileSync(inventoryMigrationPath, "utf8");
+const hardeningSql = readFileSync(hardeningMigrationPath, "utf8");
 
 function sqlLiteral(value: string): string {
   return value.replace(/''/g, "'");
@@ -146,6 +149,36 @@ describe("inventaire versionné des SECURITY DEFINER exposées", () => {
       "fn_generer_numero_contrat_safe(text)",
       "fn_sms_doit_envoyer(uuid,text,integer)",
     ]);
+  });
+
+  it("rétablit les ACL service-only absentes des migrations historiques", () => {
+    const internalFunctions = [
+      "fn_auto_resoudre_alertes_crons",
+      "fn_publier_notations_echues",
+      "fn_recalculer_scores_etablissements",
+      "fn_trg_escrow_enqueue_on_terminee",
+    ];
+
+    for (const functionName of internalFunctions) {
+      expect(
+        hardeningSql,
+        `${functionName}: révocation anon/auth absente`,
+      ).toMatch(
+        new RegExp(
+          `REVOKE ALL ON FUNCTION public\\.${functionName}\\(\\)`
+            + "[\\s\\S]{0,100}?FROM PUBLIC, anon, authenticated",
+        ),
+      );
+      expect(
+        hardeningSql,
+        `${functionName}: grant service_role absent`,
+      ).toMatch(
+        new RegExp(
+          `GRANT EXECUTE ON FUNCTION public\\.${functionName}\\(\\)`
+            + "[\\s\\S]{0,100}?TO service_role",
+        ),
+      );
+    }
   });
 
   it("calcule les hash de toutes les fonctions réellement redéfinies en 21419", () => {

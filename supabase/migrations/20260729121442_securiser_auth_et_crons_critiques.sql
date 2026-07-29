@@ -2971,6 +2971,30 @@ GRANT EXECUTE ON FUNCTION public.fn_ops_inventorier_objets_stripe_test()
 COMMENT ON FUNCTION public.fn_ops_inventorier_objets_stripe_test() IS
   'Inventaire read-only des IDs Stripe liés aux fixtures; toute action Stripe exige une revue séparée.';
 
+-- Ces quatre primitives internes sont déjà bornées à service_role dans le
+-- schéma de production, mais leurs migrations historiques les créaient avec
+-- l'ACL PostgreSQL implicite accordée à PUBLIC. Une reconstruction complète
+-- doit retrouver exactement la même protection avant de figer l'inventaire.
+REVOKE ALL ON FUNCTION public.fn_auto_resoudre_alertes_crons()
+  FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.fn_auto_resoudre_alertes_crons()
+  TO service_role;
+
+REVOKE ALL ON FUNCTION public.fn_publier_notations_echues()
+  FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.fn_publier_notations_echues()
+  TO service_role;
+
+REVOKE ALL ON FUNCTION public.fn_recalculer_scores_etablissements()
+  FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.fn_recalculer_scores_etablissements()
+  TO service_role;
+
+REVOKE ALL ON FUNCTION public.fn_trg_escrow_enqueue_on_terminee()
+  FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.fn_trg_escrow_enqueue_on_terminee()
+  TO service_role;
+
 -- ACL ciblées : ces helpers SECURITY DEFINER sont des primitives internes,
 -- jamais des RPC client. Les retirer aux utilisateurs supprime cinq alertes
 -- réelles sans casser les RPC publiques dont ils sont les sous-routines.
