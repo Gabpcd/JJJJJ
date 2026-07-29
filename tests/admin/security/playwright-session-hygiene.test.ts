@@ -14,6 +14,10 @@ const setup = readFileSync('e2e/global-setup.ts', 'utf8');
 const teardown = readFileSync('e2e/global-teardown.ts', 'utf8');
 const helper = readFileSync('e2e/helpers/nettoyage-sessions-playwright.ts', 'utf8');
 const workflow = readFileSync('.github/workflows/playwright-e2e.yml', 'utf8');
+const seed = readFileSync(
+  'db/migrations_archive/20260503050000_playwright_seed_test_accounts.sql',
+  'utf8',
+);
 
 describe('hygiène des sessions Auth Playwright', () => {
   it('borne strictement la purge aux deux comptes CI sans supprimer leurs utilisateurs', () => {
@@ -52,5 +56,13 @@ describe('hygiène des sessions Auth Playwright', () => {
     expect(workflow).toContain('::add-mask::$E2E_TEST_PASSWORD');
     expect(workflow).toContain('steps.playwright-tests.outcome');
     expect(workflow).toContain('for tentative in 1 2 3');
+  });
+
+  it('reseed les profils avec les valeurs canoniques et les marque comme tests', () => {
+    expect(seed).toContain("'IDE', 'CDD', 'CDD,VACATION'");
+    expect(seed).not.toContain("'INFIRMIER'");
+    expect(seed).not.toContain("'CDDU'");
+    expect(seed).toContain('est_compte_test = true');
+    expect(seed).toContain('is_test = true');
   });
 });
