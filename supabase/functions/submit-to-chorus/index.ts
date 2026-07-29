@@ -23,6 +23,7 @@ import { createClient } from 'npm:@supabase/supabase-js@2';
 import { getPisteConfig, getAccessToken, deposerFlux } from '../_shared/piste-client.ts';
 import { corsHeaders, preflightResponse } from '../_shared/cors.ts';
 import { verifyAdminOrServiceRole } from '../_shared/admin-auth.ts';
+import { resolveOperationalTestAccount } from '../_shared/test-account.ts';
 
 function json(req: Request, body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -74,6 +75,25 @@ Deno.serve(async (req) => {
       .single();
 
     if (fhErr || !fh) return json(req, { error: 'Facture honoraire introuvable', detail: fhErr?.message }, 404);
+
+    // La facture canonique lie les deux parties. Cette garde précède toute
+    // écriture chorus_submissions, lecture Storage et requête OAuth/PISTE.
+    for (const accountId of [fh.soignant_id, fh.etablissement_id]) {
+      const classification = await resolveOperationalTestAccount(
+        supabaseAdmin,
+        accountId,
+      );
+      if (!classification.ok) {
+        return json(req, { error: 'Classification du compte indisponible' }, 503);
+      }
+      if (classification.isTest) {
+        return json(req, {
+          accepted: true,
+          test_skipped: true,
+          message: 'Dépôt Chorus neutralisé pour les données de test.',
+        }, 200);
+      }
+    }
 
     // Idempotence : ne pas re-soumettre si déjà en cours
     if (fh.chorus_submission_id && ['submitted', 'accepted'].includes(fh.chorus_submission_status ?? '')) {

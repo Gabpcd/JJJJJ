@@ -1,6 +1,10 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.99.2';
 import { applyRateLimit, getClientIp } from '../_shared/rate-limit.ts';
 import { verifyAdminOrServiceRole } from '../_shared/admin-auth.ts';
+import {
+  resolveOperationalTestAccount,
+  resolveOperationalTestSource,
+} from '../_shared/test-account.ts';
 
 function getCorsOrigin(req: Request): string {
   const origin = req.headers.get("origin") || "";
@@ -27,6 +31,7 @@ function corsHeaders(req: Request) {
 }
 
 const APP_URL = Deno.env.get('APP_URL') || 'https://jolene.app';
+const BRAND_LOGO_URL = 'https://jolene.app/logo-jolene-carre.png';
 // URL publique des edge functions (pour les liens cliquables qui doivent atteindre
 // une fonction directement, ex. confirmation e-mail pro de l'établissement).
 const FUNCTIONS_URL = (Deno.env.get('SUPABASE_URL') || '').replace(/\/$/, '') + '/functions/v1';
@@ -43,6 +48,32 @@ function escapeHtml(str: unknown): string {
     .replace(/'/g, '&#39;');
 }
 
+function canonicalizeJson(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map(canonicalizeJson);
+  }
+  if (value !== null && typeof value === 'object') {
+    const objectValue = value as Record<string, unknown>;
+    return Object.fromEntries(
+      Object.keys(objectValue)
+        .sort()
+        .filter((key) => objectValue[key] !== undefined)
+        .map((key) => [key, canonicalizeJson(objectValue[key])]),
+    );
+  }
+  return value;
+}
+
+async function sha256Hex(value: unknown): Promise<string> {
+  const bytes = new TextEncoder().encode(
+    JSON.stringify(canonicalizeJson(value)),
+  );
+  const digest = await crypto.subtle.digest('SHA-256', bytes);
+  return Array.from(new Uint8Array(digest))
+    .map((byte) => byte.toString(16).padStart(2, '0'))
+    .join('');
+}
+
 // ─── Email template helpers ──────────────────────────────
 
 const WRAPPER = (content: string, opts?: { hasAttachment?: boolean }) => `
@@ -52,7 +83,8 @@ const WRAPPER = (content: string, opts?: { hasAttachment?: boolean }) => `
 <body style="margin:0;padding:0;background:#F8FAFC;font-family:'Segoe UI',Arial,sans-serif;">
   <div style="max-width:600px;margin:0 auto;background:white;border-radius:0 0 12px 12px;overflow:hidden;">
     <div style="background:#0F172A;padding:28px 24px;text-align:center;">
-      <span style="color:#E04590;font-size:30px;font-weight:bold;letter-spacing:-0.5px;">❤️ Jolene</span>
+      <img src="${BRAND_LOGO_URL}" alt="Jolene" width="72" height="72" style="display:block;width:72px;height:72px;margin:0 auto 10px;border:0;border-radius:16px;object-fit:cover;" />
+      <span style="display:block;color:#FFFFFF;font-size:25px;font-weight:bold;letter-spacing:-0.5px;">Jolene</span>
     </div>
     <div style="padding:36px 28px 24px;">
       ${content}
@@ -106,7 +138,8 @@ const ALLOWED_TYPES = new Set([
   'DOCUMENT_EXPIRANT', 'RAPPEL_FACTURE',
   'ELIGIBLE_LIBERAL', 'RECAP_HEBDO',
   'RAPPEL_DOCUMENTS', 'MISSION_URGENTE', 'MISSION_PROPOSEE',
-  'EVALUATION_RECUE', 'PAIEMENT_CONFIRME', 'ADMIN_BROADCAST',
+  'EVALUATION_RECUE', 'PAIEMENT_CONFIRME', 'PARRAINAGE_PRIME_VERSEE',
+  'ADMIN_BROADCAST',
   'MISSION_NON_POURVUE', 'PAIEMENT_RAPIDE_RECU',
   'LITIGE_OUVERTURE', 'LITIGE_NOUVEAU_MESSAGE', 'LITIGE_ESCALADE_ADMIN',
   'LITIGE_RESOLU_AJUSTE', 'AVOIR_EMIS', 'REMBOURSEMENT_CONFIRME',
@@ -144,7 +177,11 @@ const ALLOWED_TYPES = new Set([
   // [Sprint 5.7 PR 4 → Sprint 6 PR 1] invitation équipe étab multi-utilisateurs
   'INVITATION_EQUIPE_ETAB',
   // [Sprint 15 PR 3] DPAE déclarée par l'étab → notif soignant avec n° URSSAF
-  'DPAE_DECLAREE_SOIGNANT',
+  'DPAE_DECLAREE_SOIGNANT', 'DPAE_ANNULATION_RAPPEL',
+  // Fallback idempotent lorsque tous les abonnements push sont invalides
+  'NOTIFICATION_PUSH_FALLBACK',
+  // Confirmation de l'adresse professionnelle d'un établissement
+  'CONFIRMATION_EMAIL_PRO_ETAB',
 ]);
 
 // Ces messages sont indispensables a la securite du compte, a une obligation
@@ -159,7 +196,7 @@ const ALWAYS_SEND_TRANSACTIONAL_TYPES = new Set([
   'DISPUTE_OUVERTE_ADMIN', 'DISPUTE_CLOSE_ADMIN',
   'PAYOUT_FAILED_ADMIN', 'PAYOUT_FAILED_SOIGNANT', 'PAYOUT_CANCELED_ADMIN',
   'REFUND_ECHEC_ADMIN',
-  'DPAE_DECLAREE_SOIGNANT',
+  'DPAE_DECLAREE_SOIGNANT', 'DPAE_ANNULATION_RAPPEL',
 ]);
 
 interface TemplateResult { subject: string; html: string; hasAttachment?: boolean }
@@ -1479,6 +1516,34 @@ function renderTemplate(type: string, rawData: Record<string, unknown>): Templat
         `),
       };
 
+    case 'DPAE_ANNULATION_RAPPEL':
+      return {
+        subject: `Action requise — annuler la DPAE du contrat ${data.numero_contrat || ''}`,
+        html: WRAPPER(`
+          <h2 style="color:#DC2626;margin:0 0 12px;">Annulation DPAE à effectuer</h2>
+          <p style="color:#334155;">Le contrat <strong>${escapeHtml(data.numero_contrat || '—')}</strong> a été annulé.</p>
+          ${CARD_BOX(`
+            <strong>Type :</strong> ${escapeHtml(data.type_contrat || '—')}<br/>
+            <strong>DPAE :</strong> ${escapeHtml(data.dpae_numero || '—')}<br/>
+            <strong>Délai :</strong> ${escapeHtml(data.echeance_legale_h || 48)} heures
+          `)}
+          ${INFO_BOX('Effectuez l’annulation sur Net-Entreprises et conservez la preuve dans votre dossier.')}
+          ${BUTTON('Ouvrir Net-Entreprises →', 'https://www.net-entreprises.fr/declaration-prealable-embauche/')}
+          ${SECURITY_NOTE}
+        `),
+      };
+
+    case 'NOTIFICATION_PUSH_FALLBACK':
+      return {
+        subject: `Notification Jolene — ${data.titre || 'nouvelle information'}`,
+        html: WRAPPER(`
+          <h2 style="color:#0F172A;margin:0 0 12px;">${data.titre || 'Nouvelle notification'}</h2>
+          <p style="color:#334155;">${data.corps || 'Une nouvelle information vous attend dans Jolene.'}</p>
+          ${BUTTON('Ouvrir Jolene →', APP_URL)}
+          ${SECURITY_NOTE}
+        `),
+      };
+
     case 'CONFIRMATION_EMAIL_PRO_ETAB': {
       const confirmUrl = `${FUNCTIONS_URL}/confirm-email-etab?token=${encodeURIComponent(String(data.token || ''))}`;
       return {
@@ -1525,14 +1590,6 @@ Deno.serve(async (req) => {
     }
   } catch { /* fallthrough to normal flow */ }
 
-  // Rate-limit IP : 5 envois email par minute par IP (anti-spam).
-  if (applyRateLimit('send-email', getClientIp(req), { max: 5, windowMs: 60_000 })) {
-    return new Response(JSON.stringify({ error: 'Trop d\'emails envoyés. Réessayez dans 1 minute.' }), {
-      status: 429,
-      headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
-    });
-  }
-
   // Vérification stricte du JWT
   const authHeader = req.headers.get('Authorization');
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -1578,9 +1635,33 @@ Deno.serve(async (req) => {
     isPlatformAdmin = user.app_metadata?.role === 'ADMIN_PLATEFORME';
   }
 
+  // Les crons service_role peuvent légitimement envoyer des lots de plus de
+  // cinq messages. Les utilisateurs et admins restent limités, mais seulement
+  // après validation du JWT afin qu'un appel anonyme ne consomme pas leur quota.
+  if (
+    !isServiceRole
+    && applyRateLimit('send-email', getClientIp(req), {
+      max: 5,
+      windowMs: 60_000,
+    })
+  ) {
+    return new Response(JSON.stringify({
+      error: 'Trop d\'emails envoyés. Réessayez dans 1 minute.',
+    }), {
+      status: 429,
+      headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
+    });
+  }
+
   try {
     const body = await req.json();
-    const { type, data: templateData, destinataire_id, destinataire_email: bodyEmail } = body;
+    const {
+      type,
+      data: templateData,
+      destinataire_id,
+      destinataire_email: bodyEmail,
+      idempotency_key: idempotencyKey,
+    } = body;
 
     if (isPlatformAdmin) {
       const adminAuth = await verifyAdminOrServiceRole(req);
@@ -1620,6 +1701,22 @@ Deno.serve(async (req) => {
       });
     }
 
+    const IDEMPOTENCY_KEY_REGEX = /^[A-Za-z0-9][A-Za-z0-9._:-]{7,199}$/;
+    if (
+      idempotencyKey !== undefined
+      && (
+        typeof idempotencyKey !== 'string'
+        || !IDEMPOTENCY_KEY_REGEX.test(idempotencyKey)
+      )
+    ) {
+      return new Response(JSON.stringify({
+        error: 'idempotency_key invalide (8 à 200 caractères sûrs)',
+      }), {
+        status: 400,
+        headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
+      });
+    }
+
     if (isExternalInviteFlow) {
       const EMAIL_REGEX = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
       if (!EMAIL_REGEX.test(bodyEmail)) {
@@ -1633,6 +1730,77 @@ Deno.serve(async (req) => {
     if (!ALLOWED_TYPES.has(type)) {
       return new Response(JSON.stringify({ error: 'Type inconnu' }), {
         status: 400,
+        headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
+      });
+    }
+
+    const supabaseService = createClient(supabaseUrl, serviceRoleKey);
+
+    // Les fixtures conservent leurs notifications in-app mais ne déclenchent
+    // jamais un fournisseur email réel. Une erreur de classification bloque
+    // également l'envoi (fail-closed).
+    if (destinataire_id) {
+      const testAccount = await resolveOperationalTestAccount(
+        supabaseService,
+        destinataire_id,
+      );
+      if (!testAccount.ok) {
+        console.error('[send-email] classification test indisponible');
+        return new Response(JSON.stringify({
+          error: 'Classification du destinataire indisponible',
+        }), {
+          status: 503,
+          headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
+        });
+      }
+      if (testAccount.isTest) {
+        await Promise.resolve(supabaseService.from('journaux_audit').insert({
+          acteur_id: null,
+          type_acteur: 'SYSTEME',
+          action: 'NOTIFICATION_SKIPPED',
+          type_ressource: 'email',
+          id_ressource: destinataire_id,
+          details: { type, canal: 'EMAIL', raison: 'test_account' },
+        })).catch(() => {});
+        return new Response(JSON.stringify({
+          success: true,
+          skipped: true,
+          reason: 'test_account',
+        }), {
+          status: 200,
+          headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
+        });
+      }
+    }
+
+    const sourceAccount = await resolveOperationalTestSource(
+      supabaseService,
+      templateData,
+    );
+    if (!sourceAccount.ok) {
+      console.error('[send-email] classification source test indisponible');
+      return new Response(JSON.stringify({
+        error: 'Classification de la source indisponible',
+      }), {
+        status: 503,
+        headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
+      });
+    }
+    if (sourceAccount.isTest) {
+      await Promise.resolve(supabaseService.from('journaux_audit').insert({
+        acteur_id: null,
+        type_acteur: 'SYSTEME',
+        action: 'NOTIFICATION_SKIPPED',
+        type_ressource: 'email',
+        id_ressource: destinataire_id || null,
+        details: { type, canal: 'EMAIL', raison: 'test_source' },
+      })).catch(() => {});
+      return new Response(JSON.stringify({
+        success: true,
+        skipped: true,
+        reason: 'test_source',
+      }), {
+        status: 200,
         headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
       });
     }
@@ -1742,7 +1910,6 @@ Deno.serve(async (req) => {
     //   1. soignants.email (table denormalisée)
     //   2. etablissements.email_contact
     //   3. auth.users.email (via SQL direct, plus auth.admin)
-    const supabaseService = createClient(supabaseUrl, serviceRoleKey);
     let resolvedEmail: string | null = null;
 
     if (isExternalInviteFlow) {
@@ -1877,10 +2044,82 @@ Deno.serve(async (req) => {
 
     const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY');
     if (!RESEND_API_KEY) {
-      console.log('RESEND_API_KEY not configured — email skipped');
-      return new Response(JSON.stringify({ success: true, skipped: true }), {
+      console.error('RESEND_API_KEY not configured');
+      return new Response(JSON.stringify({
+        success: false,
+        error: 'Fournisseur email non configuré',
+      }), {
+        status: 503,
         headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
       });
+    }
+
+    let requestFingerprint: string | null = null;
+    if (idempotencyKey) {
+      requestFingerprint = await sha256Hex({
+        type,
+        destinataire_id: destinataire_id || null,
+        destinataire_email: resolvedEmail.trim().toLowerCase(),
+        data: templateData || {},
+      });
+
+      const { data: reservation, error: reservationError } =
+        await supabaseService.rpc('fn_reserver_envoi_email_idempotent' as any, {
+          p_idempotency_key: idempotencyKey,
+          p_request_fingerprint: requestFingerprint,
+        });
+
+      if (reservationError || !reservation || typeof reservation !== 'object') {
+        console.error(
+          '[send-email] réservation idempotente indisponible',
+          reservationError?.message,
+        );
+        return new Response(JSON.stringify({
+          error: 'Réservation idempotente indisponible',
+        }), {
+          status: 503,
+          headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
+        });
+      }
+
+      const reservationStatus = (reservation as Record<string, unknown>).statut;
+      if (reservationStatus === 'CONFLIT') {
+        return new Response(JSON.stringify({
+          error: 'idempotency_key déjà utilisée pour une autre requête',
+        }), {
+          status: 409,
+          headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
+        });
+      }
+      if (reservationStatus === 'DEJA_ENVOYE') {
+        return new Response(JSON.stringify({
+          success: true,
+          skipped: true,
+          reason: 'idempotency_already_sent',
+        }), {
+          status: 200,
+          headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
+        });
+      }
+      if (reservationStatus === 'EN_COURS') {
+        return new Response(JSON.stringify({
+          success: true,
+          pending: true,
+          reason: 'idempotency_in_progress',
+        }), {
+          status: 202,
+          headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
+        });
+      }
+      if (reservationStatus !== 'RESERVE') {
+        console.error('[send-email] état de réservation idempotente inconnu');
+        return new Response(JSON.stringify({
+          error: 'Réservation idempotente invalide',
+        }), {
+          status: 503,
+          headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
+        });
+      }
     }
 
     const emailPayload: Record<string, unknown> = {
@@ -1896,29 +2135,93 @@ Deno.serve(async (req) => {
       emailPayload.attachments = attachments;
     }
 
-    const response = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${RESEND_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(emailPayload),
-    });
+    const resendHeaders: Record<string, string> = {
+      'Authorization': `Bearer ${RESEND_API_KEY}`,
+      'Content-Type': 'application/json',
+    };
+    if (idempotencyKey) {
+      resendHeaders['Idempotency-Key'] = idempotencyKey;
+    }
 
-    const resData = await response.json();
+    let response: Response;
+    let resData: Record<string, unknown>;
+    try {
+      response = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: resendHeaders,
+        body: JSON.stringify(emailPayload),
+      });
+      const responseText = await response.text();
+      try {
+        resData = responseText
+          ? JSON.parse(responseText) as Record<string, unknown>
+          : {};
+      } catch {
+        resData = { error: 'Réponse fournisseur non JSON' };
+      }
+    } catch {
+      if (idempotencyKey && requestFingerprint) {
+        await supabaseService.rpc(
+          'fn_finaliser_envoi_email_idempotent' as any,
+          {
+            p_idempotency_key: idempotencyKey,
+            p_request_fingerprint: requestFingerprint,
+            p_succes: false,
+            p_provider_id: null,
+            p_erreur: 'Erreur réseau fournisseur',
+          },
+        );
+      }
+      return new Response(JSON.stringify({
+        success: false,
+        error: 'Fournisseur email indisponible',
+      }), {
+        status: 502,
+        headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
+      });
+    }
+
+    if (idempotencyKey && requestFingerprint) {
+      const { error: finalizationError } = await supabaseService.rpc(
+        'fn_finaliser_envoi_email_idempotent' as any,
+        {
+          p_idempotency_key: idempotencyKey,
+          p_request_fingerprint: requestFingerprint,
+          p_succes: response.ok,
+          p_provider_id: typeof resData.id === 'string' ? resData.id : null,
+          p_erreur: response.ok ? null : JSON.stringify(resData).slice(0, 2000),
+        },
+      );
+      if (finalizationError) {
+        console.error(
+          '[send-email] finalisation idempotente indisponible',
+          finalizationError.message,
+        );
+      }
+    }
 
     // Log in emails_envoyes
-    await supabaseService.from('emails_envoyes').insert({
+    const emailAudit = {
       destinataire_email: resolvedEmail,
       destinataire_id: destinataire_id || null,
       type,
       sujet: subject,
-      provider_id: resData.id || null,
+      provider_id: typeof resData.id === 'string' ? resData.id : null,
       statut: response.ok ? 'ENVOYE' : 'ERREUR',
       erreur: response.ok ? null : JSON.stringify(resData),
-    });
+      idempotency_key: idempotencyKey || null,
+    };
+    const { error: auditError } = idempotencyKey
+      ? await supabaseService
+        .from('emails_envoyes')
+        .upsert(emailAudit, { onConflict: 'idempotency_key' })
+      : await supabaseService.from('emails_envoyes').insert(emailAudit);
+    if (auditError) {
+      console.error('[send-email] journal email indisponible', auditError.message);
+    }
 
     return new Response(JSON.stringify({ success: response.ok }), {
+      status: response.ok ? 200 : 502,
       headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
     });
   } catch (error) {

@@ -4,7 +4,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { SEOHead } from '@/components/SEOHead';
 import { FooterLegal } from '@/components/FooterLegal';
 import { getLabelProfession } from '@/lib/constantes';
-import { HeartPulse, MapPin, Clock, Building2, Flame, ArrowRight } from 'lucide-react';
+import { MapPin, Clock, Building2, Flame, ArrowRight } from 'lucide-react';
+import { LogoJolene } from '@/components/LogoJolene';
 
 function libelleContrat(type: string | null | undefined) {
   if (type === 'LIBERAL') return 'Mission libérale · note d’honoraires';
@@ -86,8 +87,10 @@ export default function MissionPublique() {
       <header className="sticky top-0 z-50 bg-card/80 backdrop-blur-lg border-b border-border">
         <div className="max-w-4xl mx-auto px-4 h-16 flex items-center justify-between">
           <a href="/" className="flex items-center gap-2">
-            <HeartPulse className="h-7 w-7 text-rose" />
-            <span className="text-xl font-bold text-rose">Jolene</span>
+            <LogoJolene
+              imageClassName="h-7 w-7"
+              nomClassName="text-xl text-rose"
+            />
           </a>
           <button onClick={() => navigate('/connexion')} className="text-sm font-semibold text-primary hover:text-primary/80 transition-colors">
             Se connecter

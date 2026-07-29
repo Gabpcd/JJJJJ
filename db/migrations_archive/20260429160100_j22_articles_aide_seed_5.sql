@@ -82,7 +82,7 @@ Le RGPD vous garantit plusieurs droits sur vos données personnelles :
 - **Droit de rectification (art. 16)** : modifier vos données depuis votre profil.
 - **Droit à l''effacement (art. 17)** : supprimer votre compte. Bouton **Supprimer mon compte** dans **Profil → Confidentialité**.
 - **Droit à la portabilité (art. 20)** : récupérer vos données au format JSON via l''export RGPD.
-- **Droit d''opposition (art. 21)** : contactez le DPO Jolene à dpo@jolene.app.
+- **Droit d''opposition (art. 21)** : contactez le DPO Jolene à support@jolene.app.
 
 ## Conservation
 
@@ -101,7 +101,7 @@ Si vous estimez que Jolene ne respecte pas vos droits, vous pouvez déposer plai
 
 ## Contact
 
-DPO Jolene : **dpo@jolene.app**'),
+DPO Jolene : **support@jolene.app**'),
 
 ('contacter-support', 'Contacter le support Jolene', 'COMMUN', 'Légal', 100,
 '## Avant de contacter le support
@@ -112,7 +112,7 @@ Cherchez d''abord dans le **centre d''aide** : la plupart des questions courante
 
 - **Email général** : contact@jolene.app
 - **Support technique** : support@jolene.app
-- **DPO (RGPD)** : dpo@jolene.app
+- **DPO (RGPD)** : support@jolene.app
 - **Litiges et incidents graves** : signalement@jolene.app
 
 ## Délai de réponse
@@ -131,6 +131,6 @@ Pour accélérer la résolution :
 
 ## Urgences
 
-Pour les **urgences sécurité** (perte d''accès, fuite de données suspectée), contactez directement **dpo@jolene.app** avec mention "URGENT" en objet.')
+Pour les **urgences sécurité** (perte d''accès, fuite de données suspectée), contactez directement **support@jolene.app** avec mention "URGENT" en objet.')
 
 ON CONFLICT (slug) DO NOTHING;

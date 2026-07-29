@@ -49,6 +49,7 @@ on:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+  RETIRED_EDGE_FUNCTIONS: 'admin-2fa'
 
 concurrency:
   group: deploy-supabase-staging
@@ -159,6 +160,100 @@ jobs:
           psql "${{ steps.staging-url.outputs.url }}" -v ON_ERROR_STOP=1 -c "DELETE FROM supabase_migrations.schema_migrations;" || true
           psql "${{ steps.staging-url.outputs.url }}" -v ON_ERROR_STOP=1 -f /tmp/migrations-data.sql
 
+      # Le dump représente la prod au début du run. Il faut ensuite appliquer
+      # les migrations locales plus récentes, sinon staging testerait les
+      # nouvelles Edge Functions contre l'ancien schéma de production.
+      - name: Link to STAGING and push pending local migrations
+        run: |
+          set -euo pipefail
+          supabase link \
+            --project-ref "$STAGING_REF" \
+            --password "$STAGING_DB_PASSWORD"
+          supabase db push \
+            --include-all \
+            --password "$STAGING_DB_PASSWORD"
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
+          STAGING_REF: ${{ secrets.STAGING_SUPABASE_PROJECT_REF }}
+          STAGING_DB_PASSWORD: ${{ secrets.STAGING_SUPABASE_DB_PASSWORD }}
+
+      - name: Assert launch migrations on STAGING without cron activation
+        run: |
+          set -euo pipefail
+          URL="${{ steps.staging-url.outputs.url }}"
+
+          LAUNCH_MIGRATIONS=$(psql "$URL" -t -A -v ON_ERROR_STOP=1 -c "
+            SELECT count(*)
+              FROM supabase_migrations.schema_migrations
+             WHERE version IN (
+               '20260729121419',
+               '20260729121442',
+               '20260729121443'
+             );
+          ")
+          INVENTORY_COUNT=$(psql "$URL" -t -A -v ON_ERROR_STOP=1 -c "
+            SELECT count(*) FROM private.security_definer_inventory;
+          ")
+          PRIVATE_SERVICE_ACCESS=$(psql "$URL" -t -A -v ON_ERROR_STOP=1 -c "
+            SELECT CASE
+              WHEN has_schema_privilege('service_role', 'private', 'USAGE')
+               AND has_function_privilege(
+                 'service_role',
+                 'private.fn_mission_est_reelle(uuid)',
+                 'EXECUTE'
+               )
+               AND has_function_privilege(
+                 'service_role',
+                 'private.fn_externalisation_est_reelle(public.externalisation_actions)',
+                 'EXECUTE'
+               )
+              THEN 1 ELSE 0
+            END;
+          ")
+          HAS_CRON=$(psql "$URL" -t -A -v ON_ERROR_STOP=1 -c "
+            SELECT count(*) FROM pg_extension WHERE extname = 'pg_cron';
+          ")
+          ACTIVE_CRITICAL=0
+          if [ "$HAS_CRON" = '1' ]; then
+            ACTIVE_CRITICAL=$(psql "$URL" -t -A -v ON_ERROR_STOP=1 -c "
+              SELECT count(*) FROM cron.job
+               WHERE jobname IN (
+                 'litige-escalation-cron',
+                 'email-cron-hourly-immediate',
+                 'email-cron-daily',
+                 'process-stripe-refunds-15min',
+                 'escrow-debit-echeance',
+                 'escrow-release',
+                 'jolene_process_externalisations',
+                 'weekly-invoicing-cron',
+                 'jolene-monitor-crons-edge-critiques'
+               )
+                 AND active IS TRUE;
+            ")
+          fi
+
+          if [ "$LAUNCH_MIGRATIONS" != '3' ]; then
+            echo "::error::Migrations lancement incomplètes sur staging ($LAUNCH_MIGRATIONS/3)."
+            exit 1
+          fi
+          if [ "$INVENTORY_COUNT" != '422' ]; then
+            echo "::error::Inventaire SECURITY DEFINER staging incomplet ($INVENTORY_COUNT/422)."
+            exit 1
+          fi
+          if [ "$PRIVATE_SERVICE_ACCESS" != '1' ]; then
+            echo "::error::Accès service_role au schéma private incomplet."
+            exit 1
+          fi
+          if [ "$ACTIVE_CRITICAL" != '0' ]; then
+            echo "::error::$ACTIVE_CRITICAL cron(s) critique(s) actifs sur staging avant sondes."
+            exit 1
+          fi
+
+          echo "Migrations lancement : $LAUNCH_MIGRATIONS/3"
+          echo "Inventaire SECURITY DEFINER : $INVENTORY_COUNT"
+          echo "Accès service_role/private : OK"
+          echo "Crons critiques actifs : $ACTIVE_CRITICAL"
+
       # ─── 3. Seed comptes test Playwright (auth schema pas dans le dump) ─
       - name: Re-execute playwright seed migration
         run: |
@@ -237,6 +332,40 @@ jobs:
                 --project-ref "$SUPABASE_PROJECT_REF" \
                 --use-api
               echo "::endgroup::"
+            fi
+          done
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: ${{ secrets.STAGING_SUPABASE_PROJECT_REF }}
+
+      - name: Supprimer les Edge Functions retirées
+        run: |
+          set -euo pipefail
+          remote_functions="$(supabase functions list \
+            --project-ref "$SUPABASE_PROJECT_REF" \
+            --output json)"
+
+          for fn in $RETIRED_EDGE_FUNCTIONS; do
+            if jq -e --arg fn "$fn" \
+              '(.functions // .) | any(.[]; ((.slug // .name // "") == $fn))' \
+              <<<"$remote_functions" >/dev/null; then
+              supabase functions delete "$fn" \
+                --project-ref "$SUPABASE_PROJECT_REF" \
+                --yes
+            else
+              echo "$fn déjà absent du projet distant."
+            fi
+          done
+
+          remote_functions="$(supabase functions list \
+            --project-ref "$SUPABASE_PROJECT_REF" \
+            --output json)"
+          for fn in $RETIRED_EDGE_FUNCTIONS; do
+            if jq -e --arg fn "$fn" \
+              '(.functions // .) | any(.[]; ((.slug // .name // "") == $fn))' \
+              <<<"$remote_functions" >/dev/null; then
+              echo "::error::La fonction retirée $fn existe encore à distance."
+              exit 1
             fi
           done
         env:

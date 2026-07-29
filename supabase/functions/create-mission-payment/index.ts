@@ -1,6 +1,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { verifyUserOrServiceRole } from "../_shared/admin-auth.ts";
 import { corsHeaders } from "../_shared/cors.ts";
+import { resolveOperationalTestAccount } from "../_shared/test-account.ts";
 
 // Pré-lancement public : STRIPE_RESERVATION est volontairement désactivé.
 // L'ancien flux créait une autorisation capture_method=manual sans mécanisme
@@ -87,6 +88,27 @@ Deno.serve(async (req) => {
           headers: { ...corsHeaders(req), "Content-Type": "application/json" },
         },
       );
+    }
+
+    const testAccount = await resolveOperationalTestAccount(
+      supabaseAdmin,
+      mission.etablissement_id,
+    );
+    if (!testAccount.ok) {
+      return new Response(JSON.stringify({
+        error: "TEST_ACCOUNT_CLASSIFICATION_UNAVAILABLE",
+      }), {
+        status: 503,
+        headers: { ...corsHeaders(req), "Content-Type": "application/json" },
+      });
+    }
+    if (testAccount.isTest) {
+      return new Response(JSON.stringify({
+        error: "TEST_ACCOUNT_PAYMENT_DISABLED",
+      }), {
+        status: 403,
+        headers: { ...corsHeaders(req), "Content-Type": "application/json" },
+      });
     }
 
     return new Response(JSON.stringify({

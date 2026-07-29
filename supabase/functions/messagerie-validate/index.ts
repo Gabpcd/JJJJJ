@@ -136,7 +136,7 @@ Deno.serve(async (req) => {
       );
     }
 
-    const { data: estAdminAal2, error: adminErr } = await supabase.rpc("est_admin");
+    const { data: estAdminAutorise, error: adminErr } = await supabase.rpc("est_admin");
     if (adminErr) {
       return new Response(
         JSON.stringify({ success: false, error: "AUTORISATION_INDISPONIBLE" }),
@@ -181,7 +181,7 @@ Deno.serve(async (req) => {
 
         const { error: auditError } = await supabaseAdmin.from("journaux_audit").insert({
           acteur_id: userId,
-          type_acteur: estAdminAal2
+          type_acteur: estAdminAutorise
             ? "ADMIN_PLATEFORME"
             : userData.user.app_metadata?.role === "SOIGNANT"
             ? "SOIGNANT"
@@ -300,7 +300,9 @@ Deno.serve(async (req) => {
         p_conversation_id: conversation_id,
         p_contenu: sanitized,
         p_acteur_id: userId,
-        p_admin_aal2: estAdminAal2 === true,
+        // Nom SQL historique uniquement : la valeur vient de est_admin(),
+        // dont la garde de lancement ne requiert aucun MFA/AAL2.
+        p_admin_aal2: estAdminAutorise === true,
         p_detected_type: detection.blocked ? detection.type : null,
       },
     );

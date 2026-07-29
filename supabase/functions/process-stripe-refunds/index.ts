@@ -7,6 +7,12 @@
 
 import Stripe from "npm:stripe@20.4.1";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import {
+  cronAuthErrorResponse,
+  cronAuthProbeResponse,
+  isCronAuthProbe,
+  verifyCronServiceAuth,
+} from "../_shared/cron-service-auth.ts";
 import { assertStripeSecretMode } from "../_shared/stripe-production.ts";
 
 const URL = Deno.env.get("SUPABASE_URL")!;
@@ -73,30 +79,6 @@ function isDeletedCustomer(
   customer: Stripe.Customer | Stripe.DeletedCustomer,
 ): customer is Stripe.DeletedCustomer {
   return "deleted" in customer && customer.deleted === true;
-}
-
-// Auth résiliente : accepte le JWT service_role historique ou le nouveau
-// secret asymétrique stocké dans l'environnement/vault.
-let vaultSecretCache: string | null = null;
-async function getVaultSecret(sb: any): Promise<string> {
-  if (vaultSecretCache) return vaultSecretCache;
-  const env = Deno.env.get("SUPABASE_SECRET_KEY")
-    || Deno.env.get("SB_SECRET_KEY")
-    || "";
-  if (env) {
-    vaultSecretCache = env;
-    return env;
-  }
-  try {
-    const { data, error } = await sb.rpc("fn_lire_secret_cron");
-    if (!error && typeof data === "string" && data) {
-      vaultSecretCache = data;
-      return data;
-    }
-  } catch {
-    // L'auth échouera fermée ci-dessous.
-  }
-  return "";
 }
 
 async function retrieveCharge(
@@ -632,28 +614,30 @@ Deno.serve(async (req) => {
   const sb = createClient(URL, KEY);
 
   try {
-    const authHeader = req.headers.get("Authorization") || "";
-    const bearer = authHeader.replace(/^Bearer\s+/i, "").trim();
-    const vaultSecret = await getVaultSecret(sb);
-    if (!bearer || ![KEY, vaultSecret].filter(Boolean).includes(bearer)) {
-      return new Response(JSON.stringify({ error: "Non autorisé" }), {
-        status: 401,
-        headers: { "Content-Type": "application/json" },
-      });
-    }
+    const auth = await verifyCronServiceAuth(req, sb);
+    if (!auth.ok) return cronAuthErrorResponse(auth);
+    if (isCronAuthProbe(req)) return cronAuthProbeResponse(auth);
 
     assertStripeSecretMode(STRIPE_KEY);
     const stripe = new Stripe(STRIPE_KEY, { apiVersion: "2026-02-25.clover" });
     const leaseBefore = new Date(Date.now() - LEASE_MS).toISOString();
-    const { data: rows, error: selectError } = await sb
-      .from("stripe_refunds_queue")
-      .select(
-        "id, avoir_id, facture_origine_id, stripe_payment_intent_id, stripe_refund_id, montant_cts, tentatives, paiement_escrow_id, reverse_transfer, refund_application_fee_cts, absorbe_plateforme, escrow_statut_avant_remboursement",
-      )
-      .in("statut", ["EN_ATTENTE", "EN_COURS"])
-      .or(`dernier_essai_le.is.null,dernier_essai_le.lt.${leaseBefore}`)
-      .order("cree_le", { ascending: true })
-      .limit(MAX_BATCH);
+    const { data: excluded, error: excludedError } = await sb.rpc(
+      "fn_compter_files_finance_exclues_test",
+    );
+    if (excludedError) {
+      throw new Error(`TEST_ACCOUNT_FILTER_UNAVAILABLE:${excludedError.message}`);
+    }
+    console.info("[process-stripe-refunds] files test exclues", {
+      count: Number((excluded as Record<string, unknown>)?.stripe_refunds || 0),
+    });
+
+    const { data: rows, error: selectError } = await sb.rpc(
+      "fn_stripe_refunds_reels_a_traiter",
+      {
+        p_lease_before: leaseBefore,
+        p_limit: MAX_BATCH,
+      },
+    );
     if (selectError) throw new Error(`REFUND_QUEUE_READ_FAILED:${selectError.message}`);
 
     const queue = (rows || []) as QueueRow[];
@@ -769,15 +753,19 @@ Deno.serve(async (req) => {
       }
     }
 
+    const success = failed === 0;
     return new Response(JSON.stringify({
-      success: true,
+      success,
       processed: queue.length,
       succeeded,
       pending,
       failed,
       skipped,
       duration_ms: Date.now() - startedAt,
-    }), { headers: { "Content-Type": "application/json" } });
+    }), {
+      status: success ? 200 : 500,
+      headers: { "Content-Type": "application/json" },
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     console.error("process-stripe-refunds fatal:", message);

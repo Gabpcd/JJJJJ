@@ -23,6 +23,10 @@ import { apnsConfigured, sendApns } from "../_shared/apns-client.ts";
 import { corsHeaders, jsonResponse, preflightResponse } from "../_shared/cors.ts";
 import { verifyAdminOrServiceRole, verifyUserOrServiceRole } from "../_shared/admin-auth.ts";
 import { applyRateLimit, getClientIp } from "../_shared/rate-limit.ts";
+import {
+  resolveOperationalTestAccount,
+  resolveOperationalTestSource,
+} from "../_shared/test-account.ts";
 
 type SafeLinkResult =
   | { provided: false; value: null }
@@ -73,6 +77,18 @@ const ALLOWED_DATA_KEYS = new Set([
   'presence_id', 'conversation_id', 'etablissement_id', 'soignant_id',
   'notification_id', 'action', 'statut', 'tab', 'source',
 ]);
+const IDEMPOTENCY_KEY_PATTERN =
+  /^[A-Za-z0-9][A-Za-z0-9._:-]{7,199}$/;
+
+async function sha256Hex(value: string): Promise<string> {
+  const digest = await crypto.subtle.digest(
+    'SHA-256',
+    new TextEncoder().encode(value),
+  );
+  return Array.from(new Uint8Array(digest))
+    .map((byte) => byte.toString(16).padStart(2, '0'))
+    .join('');
+}
 
 function safeScalarData(raw: Record<string, unknown>): Record<string, string> {
   const result: Record<string, string> = {};
@@ -294,6 +310,9 @@ Deno.serve(async (req) => {
     const lien = linkResult.value;
     const safeDataPayload = safeScalarData(dataPayload);
     const channel_id = typeof requestBody.channel_id === 'string' ? requestBody.channel_id : undefined;
+    const idempotencyKey = typeof requestBody.idempotency_key === 'string'
+      ? requestBody.idempotency_key.trim()
+      : null;
 
     if (!/^[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(destinataire_id) || !titre) {
       return jsonResponse(req, { error: 'destinataire_id UUID et titre requis' }, 400);
@@ -306,6 +325,41 @@ Deno.serve(async (req) => {
     }
     if (type_evenement && !/^[A-Z0-9_:-]{1,100}$/.test(type_evenement)) {
       return jsonResponse(req, { error: 'type_evenement invalide' }, 400);
+    }
+    if (idempotencyKey && !IDEMPOTENCY_KEY_PATTERN.test(idempotencyKey)) {
+      return jsonResponse(req, { error: 'idempotency_key invalide' }, 400);
+    }
+
+    // Un compte de recette garde la notification en base pour tester l'UI,
+    // mais aucun token APNs/FCM/Web Push réel ne doit être contacté.
+    const testAccount = await resolveOperationalTestAccount(
+      supabaseAdmin,
+      destinataire_id,
+    );
+    if (!testAccount.ok) {
+      console.error('[send-push] classification test indisponible');
+      return jsonResponse(req, {
+        error: 'Classification du destinataire indisponible',
+      }, 503);
+    }
+    if (testAccount.isTest) {
+      await Promise.resolve(supabaseAdmin.from('journaux_audit').insert({
+        acteur_id: null,
+        type_acteur: 'SYSTEME',
+        action: 'NOTIFICATION_SKIPPED',
+        type_ressource: 'push',
+        id_ressource: destinataire_id,
+        details: {
+          type_evenement,
+          canal: 'PUSH',
+          raison: 'test_account',
+        },
+      })).catch(() => {});
+      return jsonResponse(req, {
+        success: true,
+        skipped: true,
+        reason: 'test_account',
+      });
     }
 
     // Depuis le navigateur, seuls un admin actif ou un membre etablissement
@@ -359,6 +413,36 @@ Deno.serve(async (req) => {
       if (callerLimitError || targetLimitError || callerAllowed !== true || targetAllowed !== true) {
         return jsonResponse(req, { error: 'Limite de notifications atteinte' }, 429);
       }
+    }
+
+    const sourceAccount = await resolveOperationalTestSource(
+      supabaseAdmin,
+      dataPayload,
+    );
+    if (!sourceAccount.ok) {
+      console.error('[send-push] classification source test indisponible');
+      return jsonResponse(req, {
+        error: 'Classification de la source indisponible',
+      }, 503);
+    }
+    if (sourceAccount.isTest) {
+      await Promise.resolve(supabaseAdmin.from('journaux_audit').insert({
+        acteur_id: null,
+        type_acteur: 'SYSTEME',
+        action: 'NOTIFICATION_SKIPPED',
+        type_ressource: 'push',
+        id_ressource: destinataire_id,
+        details: {
+          type_evenement,
+          canal: 'PUSH',
+          raison: 'test_source',
+        },
+      })).catch(() => {});
+      return jsonResponse(req, {
+        success: true,
+        skipped: true,
+        reason: 'test_source',
+      });
     }
 
     // Préférences notifications canal PUSH. Même un type absent/hors enum
@@ -425,7 +509,18 @@ Deno.serve(async (req) => {
     let skippedFcm = 0;
     let skippedApns = 0;
     const totalTokens = tokens?.length || 0;
+    if (totalTokens === 0) {
+      return jsonResponse(req, {
+        success: true,
+        skipped: true,
+        reason: 'no_active_token',
+        sent: 0,
+        total: 0,
+        email_fallback: false,
+      });
+    }
     const expiredTokenIds: string[] = [];
+    const providerErrors: string[] = [];
     const apnsReady = apnsConfigured();
 
     // ─── Configuration VAPID Web Push ──────────────────────────
@@ -451,6 +546,124 @@ Deno.serve(async (req) => {
         console.error("[send-push] FIREBASE_SERVICE_ACCOUNT_JSON parse/auth failed:", e);
       }
     }
+
+    // Une configuration manquante est un échec avant tout effet : on ne livre
+    // pas seulement certains appareils pour acquitter ensuite l'action.
+    const requiresWeb = (tokens || []).some((token) => {
+      const platform = (token.plateforme || '').toUpperCase();
+      return (
+        platform === 'WEB'
+        || (!platform && token.endpoint && token.p256dh && token.auth_key)
+      )
+        && isAllowedWebPushEndpoint(token.endpoint)
+        && Boolean(token.p256dh && token.auth_key);
+    });
+    const requiresApns = (tokens || []).some(
+      (token) =>
+        (token.plateforme || '').toUpperCase() === 'IOS'
+        && Boolean(token.token),
+    );
+    const requiresFcm = (tokens || []).some(
+      (token) =>
+        (token.plateforme || '').toUpperCase() === 'ANDROID'
+        && Boolean(token.token),
+    );
+    const configurationErrors = [
+      requiresWeb && !vapidConfigured ? 'VAPID' : null,
+      requiresApns && !apnsReady ? 'APNS' : null,
+      requiresFcm && !(fcmAccessToken && firebaseProjectId) ? 'FCM' : null,
+    ].filter((value): value is string => value !== null);
+    if (configurationErrors.length > 0) {
+      return jsonResponse(req, {
+        success: false,
+        error: 'Configuration push incomplète',
+        code: 'PUSH_PROVIDER_NOT_CONFIGURED',
+        providers: configurationErrors,
+      }, 503);
+    }
+
+    const requestFingerprint = await sha256Hex(JSON.stringify({
+      destinataire_id,
+      titre,
+      corps,
+      type_evenement,
+      lien,
+      data: safeDataPayload,
+      channel_id: auth.isServiceRole ? channel_id ?? null : null,
+    }));
+
+    if (idempotencyKey) {
+      const { data: reservation, error: reservationError } =
+        await supabaseAdmin.rpc('fn_reserver_envoi_push_idempotent', {
+          p_idempotency_key: idempotencyKey,
+          p_request_fingerprint: requestFingerprint,
+        });
+      if (reservationError) {
+        console.error('[send-push] réservation idempotente indisponible');
+        return jsonResponse(req, {
+          success: false,
+          error: 'Réservation push indisponible',
+        }, 503);
+      }
+
+      const reservationStatus = (reservation as Record<string, unknown> | null)
+        ?.statut;
+      if (reservationStatus === 'CONFLIT') {
+        return jsonResponse(req, {
+          success: false,
+          error: 'idempotency_key déjà utilisée avec un autre push',
+        }, 409);
+      }
+      if (reservationStatus === 'DEJA_ENVOYE') {
+        return jsonResponse(req, {
+          success: true,
+          skipped: true,
+          idempotent: true,
+          provider_result:
+            (reservation as Record<string, unknown>)?.provider_id ?? null,
+        });
+      }
+      if (
+        reservationStatus === 'EN_COURS'
+        || reservationStatus === 'INDETERMINE'
+      ) {
+        return jsonResponse(req, {
+          success: false,
+          pending: true,
+          reason: String(reservationStatus).toLowerCase(),
+        }, 202);
+      }
+      if (reservationStatus !== 'RESERVE') {
+        console.error('[send-push] statut de réservation inattendu');
+        return jsonResponse(req, {
+          success: false,
+          error: 'Réservation push incohérente',
+        }, 503);
+      }
+    }
+
+    const finalizeIdempotency = async (
+      status: 'ENVOYE' | 'ERREUR' | 'INDETERMINE',
+      providerId: string | null,
+      error: string | null,
+    ): Promise<void> => {
+      if (!idempotencyKey) return;
+      const { error: finalizationError } = await supabaseAdmin.rpc(
+        'fn_finaliser_envoi_push_idempotent',
+        {
+          p_idempotency_key: idempotencyKey,
+          p_request_fingerprint: requestFingerprint,
+          p_statut: status,
+          p_provider_id: providerId,
+          p_erreur: error,
+        },
+      );
+      if (finalizationError) {
+        throw new Error(
+          `PUSH_IDEMPOTENCY_FINALIZATION_FAILED:${finalizationError.message}`,
+        );
+      }
+    };
 
     // Payload Web Push
     const webData: Record<string, string> = {
@@ -493,6 +706,8 @@ Deno.serve(async (req) => {
               { TTL: 86400 },
             );
             sentWeb++;
+          } else {
+            expiredTokenIds.push(t.id);
           }
         } else if (plat === "IOS") {
           // Capacitor iOS fournit un token APNs brut. Il ne faut jamais le
@@ -506,9 +721,10 @@ Deno.serve(async (req) => {
             });
             if (result.ok) sentApnsCount++;
             else if (result.expired) expiredTokenIds.push(t.id);
-            else console.warn("[send-push] APNs error:", result.error);
+            else providerErrors.push(result.error || 'APNs provider error');
           } else {
             skippedApns++;
+            expiredTokenIds.push(t.id);
           }
         } else if (plat === "ANDROID") {
           // FCM HTTP v1 — Android uniquement.
@@ -524,17 +740,22 @@ Deno.serve(async (req) => {
             });
             if (result.ok) sentFcm++;
             else if (result.expired) expiredTokenIds.push(t.id);
-            else console.warn("[send-push] FCM error:", result.error);
+            else providerErrors.push(result.error || 'FCM provider error');
           } else {
-            // FIREBASE_SERVICE_ACCOUNT_JSON pas configuré → skip propre Android
             skippedFcm++;
+            expiredTokenIds.push(t.id);
           }
+        } else {
+          expiredTokenIds.push(t.id);
         }
       } catch (err: unknown) {
         if (err instanceof Error && (err.message.includes("404") || err.message.includes("410") || err.message.includes("expired"))) {
           expiredTokenIds.push(t.id);
         } else {
           console.error("[send-push] dispatch error:", err);
+          providerErrors.push(
+            err instanceof Error ? err.message : 'Push provider error',
+          );
         }
       }
     }
@@ -546,45 +767,160 @@ Deno.serve(async (req) => {
         .in("id", expiredTokenIds);
       if (cleanupTokensError) {
         console.error('[send-push] Desactivation tokens invalides impossible:', cleanupTokensError.code);
+        try {
+          await finalizeIdempotency(
+            'INDETERMINE',
+            null,
+            'Nettoyage des abonnements push impossible après dispatch',
+          );
+        } catch (finalizationError) {
+          console.error('[send-push] finalisation cleanup impossible', finalizationError);
+        }
         return jsonResponse(req, {
+          success: false,
+          pending: true,
           error: 'Nettoyage des abonnements push momentanément indisponible',
           code: 'PUSH_TOKEN_CLEANUP_UNAVAILABLE',
         }, 503);
       }
     }
 
-    if (skippedFcm > 0) {
-      console.warn(`[send-push] FCM not configured, ${skippedFcm} Android tokens skipped`);
-    }
-    if (skippedApns > 0) {
-      console.warn(`[send-push] APNs not configured, ${skippedApns} iOS tokens skipped`);
-    }
-
     const sent = sentWeb + sentFcm + sentApnsCount;
+    const providerSummary = JSON.stringify({
+      sent,
+      sentWeb,
+      sentFcm,
+      sentApns: sentApnsCount,
+    });
 
-    // Fallback email si aucun push livré
-    if (sent === 0 && totalTokens > 0) {
+    if (providerErrors.length > 0) {
       try {
-        const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-        await fetch(`${supabaseUrl}/functions/v1/send-email`, {
+        await finalizeIdempotency(
+          'INDETERMINE',
+          sent > 0 ? providerSummary : null,
+          providerErrors.join(' | ').slice(0, 1800),
+        );
+      } catch (finalizationError) {
+        console.error('[send-push] finalisation fournisseur impossible', finalizationError);
+      }
+      return jsonResponse(req, {
+        success: false,
+        pending: true,
+        error: 'Résultat push partiel ou indéterminé, aucun renvoi automatique',
+        sent,
+        total: totalTokens,
+        provider_errors: providerErrors.length,
+      }, 503);
+    }
+
+    if (sent > 0) {
+      try {
+        await finalizeIdempotency('ENVOYE', providerSummary, null);
+      } catch (finalizationError) {
+        console.error('[send-push] succès fournisseur non finalisé', finalizationError);
+        return jsonResponse(req, {
+          success: false,
+          pending: true,
+          error: 'Push livré mais acquittement interne incomplet',
+          sent,
+          total: totalTokens,
+        }, 503);
+      }
+      return jsonResponse(req, {
+        success: true,
+        sent,
+        sentWeb,
+        sentFcm,
+        sentApns: sentApnsCount,
+        total: totalTokens,
+        skippedFcm,
+        skippedApns,
+        apns_configured: apnsReady,
+        fcm_configured: Boolean(fcmAccessToken),
+        email_fallback: false,
+      });
+    }
+
+    // Tous les tokens étaient invalides/expirés : fallback email avec sa
+    // propre clé Resend, puis acquittement du dispatch push.
+    const fallbackIdempotencyKey = `push-fallback.${requestFingerprint}`;
+    let fallbackResponse: Response;
+    let fallbackData: Record<string, any> | null;
+    try {
+      fallbackResponse = await fetch(
+        `${supabaseUrl}/functions/v1/send-email`,
+        {
           method: "POST",
           headers: { "Content-Type": "application/json", "Authorization": `Bearer ${serviceRoleKey}` },
           body: JSON.stringify({
             type: "NOTIFICATION_PUSH_FALLBACK",
             destinataire_id,
+            idempotency_key: fallbackIdempotencyKey,
             data: { titre, corps: corps || "", ...(lien ? { lien } : {}) },
           }),
-        });
-      } catch { /* email fallback failed silently */ }
+        },
+      );
+      fallbackData = await fallbackResponse.json().catch(() => null);
+    } catch (fallbackError) {
+      try {
+        await finalizeIdempotency(
+          'ERREUR',
+          null,
+          fallbackError instanceof Error
+            ? fallbackError.message
+            : 'Fallback email inaccessible',
+        );
+      } catch (finalizationError) {
+        console.error('[send-push] finalisation fallback impossible', finalizationError);
+      }
+      return jsonResponse(req, {
+        success: false,
+        error: 'Fallback email indisponible',
+      }, 502);
+    }
+
+    if (
+      !fallbackResponse.ok
+      || fallbackData?.success !== true
+      || fallbackData?.pending === true
+    ) {
+      const fallbackError =
+        fallbackData?.error || `send-email HTTP ${fallbackResponse.status}`;
+      try {
+        await finalizeIdempotency('ERREUR', null, fallbackError);
+      } catch (finalizationError) {
+        console.error('[send-push] finalisation fallback échec impossible', finalizationError);
+      }
+      return jsonResponse(req, {
+        success: false,
+        error: 'Fallback email non confirmé',
+      }, 502);
+    }
+
+    try {
+      await finalizeIdempotency('ENVOYE', 'email-fallback', null);
+    } catch (finalizationError) {
+      console.error('[send-push] fallback livré non finalisé', finalizationError);
+      return jsonResponse(req, {
+        success: false,
+        pending: true,
+        error: 'Fallback livré mais acquittement interne incomplet',
+      }, 503);
     }
 
     return jsonResponse(req, {
-        sent, sentWeb, sentFcm, sentApns: sentApnsCount,
-        total: totalTokens, skippedFcm, skippedApns,
-        apns_configured: apnsReady,
-        fcm_configured: Boolean(fcmAccessToken),
-        email_fallback: sent === 0 && totalTokens > 0,
-      });
+      success: true,
+      sent: 0,
+      sentWeb: 0,
+      sentFcm: 0,
+      sentApns: 0,
+      total: totalTokens,
+      skippedFcm,
+      skippedApns,
+      apns_configured: apnsReady,
+      fcm_configured: Boolean(fcmAccessToken),
+      email_fallback: true,
+    });
   } catch (err) {
     console.error("send-push error:", err);
     return jsonResponse(req, { error: "Erreur interne" }, 500);

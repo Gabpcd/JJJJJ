@@ -17,7 +17,7 @@ export default function PageConfidentialite() {
   return (
     <LayoutLegal
       titre="Politique de Confidentialité"
-      dateMaj="12 juillet 2026"
+      dateMaj="29 juillet 2026"
       toc={TOC}
       seoDescription="Politique de confidentialité de Jolene : données collectées, sous-traitants, durées de conservation et exercice de vos droits RGPD."
     >
@@ -63,7 +63,7 @@ export default function PageConfidentialite() {
           <li>Facturation, obligations sociales, fiscales et demandes des autorités : obligation légale (article 6.1.c).</li>
           <li>Sécurité, prévention de la fraude, preuve des opérations, modération et amélioration du service : intérêt légitime de Jolene et des utilisateurs (article 6.1.f), mis en balance avec leurs droits.</li>
           <li>Géolocalisation au pointage, localisation volontaire du profil ou de l'adresse, et communications facultatives : consentement lorsque celui-ci est requis (article 6.1.a), retirable pour l'avenir depuis les réglages concernés.</li>
-          <li>Les déclarations professionnelles susceptibles de révéler une information liée à la santé ne sont traitées que pour la conformité d'exercice et dans le cadre d'une exception applicable de l'article 9.2 du RGPD. Les justificatifs médicaux originaux ne sont pas téléversés sur Jolene.</li>
+          <li>Les déclarations professionnelles susceptibles de révéler une information liée à la santé ne sont traitées que pour la conformité d'exercice et dans le cadre d'une exception applicable de l'article 9.2 du RGPD. Jolene ne demande aucun certificat médical ni document mentionnant un diagnostic. Les champs de justificatif des écrans d'annulation et de réclamation sont réservés aux preuves non médicales ; l'utilisateur est expressément invité à ne pas y joindre d'information de santé.</li>
         </ul>
       </section>
 

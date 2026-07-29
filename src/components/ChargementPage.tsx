@@ -1,11 +1,15 @@
-import { HeartPulse } from 'lucide-react';
+import { LogoJolene } from '@/components/LogoJolene';
 
 export function ChargementPage() {
   return (
     <div className="min-h-[100dvh] flex items-center justify-center bg-background" role="status" aria-label="Chargement en cours">
       <div className="flex flex-col items-center gap-3">
-        <HeartPulse className="h-10 w-10 text-rose animate-pulse" aria-hidden="true" />
-        <span className="text-lg font-bold text-rose">Jolene</span>
+        <LogoJolene
+          decoratif
+          className="flex-col gap-3"
+          imageClassName="h-10 w-10 animate-pulse"
+          nomClassName="text-lg text-rose"
+        />
       </div>
     </div>
   );

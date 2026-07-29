@@ -15,6 +15,7 @@ import {
   escrowPayoutInconsistencies,
   type EscrowPayoutExpectation,
 } from "./stripe-escrow-payout.ts";
+import { resolveOperationalTestAccount } from "./test-account.ts";
 
 export type StripeWebhookSource = "PLATFORM" | "CONNECT";
 
@@ -178,6 +179,272 @@ function stripeObjectId(value: unknown): string | null {
   return null;
 }
 
+type StripeTestClassification =
+  | { ok: true; isTest: boolean; matchedCanonicalSource: boolean }
+  | { ok: false; error: string };
+
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function stripeMetadata(value: unknown): Record<string, string> {
+  if (!value || typeof value !== "object" || !("metadata" in value)) return {};
+  const metadata = (value as { metadata?: unknown }).metadata;
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return {};
+  return Object.fromEntries(
+    Object.entries(metadata as Record<string, unknown>).filter(
+      (entry): entry is [string, string] => typeof entry[1] === "string",
+    ),
+  );
+}
+
+function objectString(value: unknown, key: string): string | null {
+  if (!value || typeof value !== "object" || !(key in value)) return null;
+  const raw = (value as Record<string, unknown>)[key];
+  return typeof raw === "string" && raw.length > 0 ? raw : stripeObjectId(raw);
+}
+
+/**
+ * Classification serveur des webhooks liés à une fixture.
+ *
+ * Les metadata Stripe ne servent qu'à retrouver une ligne canonique. La
+ * décision finale relit toujours est_compte_test en base; une erreur de lecture
+ * échoue fermée (500/retry Stripe), tandis qu'un événement sans provenance
+ * reconnue poursuit les validations métier strictes déjà présentes plus bas.
+ */
+async function classifyStripeWebhookTestAccount(
+  admin: ReturnType<typeof createClient>,
+  event: Stripe.Event,
+  source: StripeWebhookSource,
+): Promise<StripeTestClassification> {
+  const object = event.data.object as unknown;
+  const metadata = stripeMetadata(object);
+  const accountIds = new Set<string>();
+  let matchedCanonicalSource = false;
+
+  const addAccountId = (candidate: unknown) => {
+    if (typeof candidate === "string" && UUID_PATTERN.test(candidate)) {
+      accountIds.add(candidate);
+    }
+  };
+  const addCanonicalRowAccounts = (
+    row: Record<string, unknown> | null,
+  ) => {
+    if (!row) return;
+    matchedCanonicalSource = true;
+    addAccountId(row.etablissement_id);
+    addAccountId(row.soignant_id);
+    addAccountId(row.soignant_assigne_id);
+  };
+  const queryMaybeSingle = async (
+    table: string,
+    select: string,
+    column: string,
+    value: string,
+  ): Promise<Record<string, unknown> | null> => {
+    const { data, error } = await admin
+      .from(table)
+      .select(select)
+      .eq(column, value)
+      .maybeSingle();
+    if (error) {
+      throw new Error(`${table}.${column}: ${error.message}`);
+    }
+    return data as Record<string, unknown> | null;
+  };
+
+  try {
+    // Identifiants métier issus des metadata : ils sont revalidés par lookup.
+    const missionIds = new Set<string>();
+    for (const candidate of [
+      metadata.mission_id,
+      objectString(object, "client_reference_id"),
+    ]) {
+      if (candidate && UUID_PATTERN.test(candidate)) missionIds.add(candidate);
+    }
+    for (const missionId of missionIds) {
+      addCanonicalRowAccounts(
+        await queryMaybeSingle(
+          "missions",
+          "etablissement_id,soignant_assigne_id",
+          "id",
+          missionId,
+        ),
+      );
+    }
+
+    for (const [metadataKey, table, select] of [
+      ["facture_id", "factures", "etablissement_id,mission_id"],
+      ["facture_commission_id", "factures", "etablissement_id,mission_id"],
+      [
+        "facture_honoraires_id",
+        "factures_honoraires",
+        "etablissement_id,soignant_id,mission_id",
+      ],
+      [
+        "avoir_id",
+        "factures_honoraires",
+        "etablissement_id,soignant_id,mission_id",
+      ],
+      [
+        "facture_origine_id",
+        "factures_honoraires",
+        "etablissement_id,soignant_id,mission_id",
+      ],
+    ] as const) {
+      const rowId = metadata[metadataKey];
+      if (!rowId || !UUID_PATTERN.test(rowId)) continue;
+      addCanonicalRowAccounts(
+        await queryMaybeSingle(
+          table,
+          select,
+          "id",
+          rowId,
+        ),
+      );
+    }
+
+    const escrowId = metadata.paiement_escrow_id;
+    if (escrowId && UUID_PATTERN.test(escrowId)) {
+      addCanonicalRowAccounts(
+        await queryMaybeSingle(
+          "paiements_escrow",
+          "etablissement_id,soignant_id,mission_id",
+          "id",
+          escrowId,
+        ),
+      );
+    }
+
+    const queueId = metadata.queue_id;
+    if (queueId && UUID_PATTERN.test(queueId)) {
+      const queue = await queryMaybeSingle(
+        "stripe_refunds_queue",
+        "paiement_escrow_id,avoir_id,facture_origine_id",
+        "id",
+        queueId,
+      );
+      if (queue) {
+        matchedCanonicalSource = true;
+        const queueEscrowId = queue.paiement_escrow_id;
+        if (typeof queueEscrowId === "string") {
+          addCanonicalRowAccounts(
+            await queryMaybeSingle(
+              "paiements_escrow",
+              "etablissement_id,soignant_id,mission_id",
+              "id",
+              queueEscrowId,
+            ),
+          );
+        }
+        const queueInvoiceId = queue.avoir_id || queue.facture_origine_id;
+        if (typeof queueInvoiceId === "string") {
+          addCanonicalRowAccounts(
+            await queryMaybeSingle(
+              "factures_honoraires",
+              "etablissement_id,soignant_id,mission_id",
+              "id",
+              queueInvoiceId,
+            ),
+          );
+        }
+      }
+    }
+
+    // PaymentIntent/Transfer Stripe -> lignes métier. Aucun metadata n'est
+    // nécessaire pour reconnaître un ancien objet live déjà enregistré.
+    let paymentIntentId: string | null = null;
+    if (event.type.startsWith("payment_intent.")) {
+      paymentIntentId = objectString(object, "id");
+    } else {
+      paymentIntentId = objectString(object, "payment_intent");
+    }
+    if (paymentIntentId?.startsWith("pi_")) {
+      for (const [table, select] of [
+        ["paiements_escrow", "etablissement_id,soignant_id,mission_id"],
+        ["factures", "etablissement_id,mission_id"],
+        ["factures_honoraires", "etablissement_id,soignant_id,mission_id"],
+        ["paiements_mission", "etablissement_id,mission_id"],
+        ["stripe_transfers", "etablissement_id,soignant_id,mission_id"],
+      ] as const) {
+        addCanonicalRowAccounts(
+          await queryMaybeSingle(
+            table,
+            select,
+            "stripe_payment_intent_id",
+            paymentIntentId,
+          ),
+        );
+      }
+    }
+
+    const transferId = event.type.startsWith("transfer.")
+      ? objectString(object, "id")
+      : null;
+    if (transferId?.startsWith("tr_")) {
+      addCanonicalRowAccounts(
+        await queryMaybeSingle(
+          "stripe_transfers",
+          "etablissement_id,soignant_id,mission_id",
+          "stripe_transfer_id",
+          transferId,
+        ),
+      );
+    }
+
+    // Customer plateforme et compte Connect sont résolus par les mappings DB,
+    // jamais par les noms/emails portés par Stripe.
+    const customerId = objectString(object, "customer");
+    if (customerId?.startsWith("cus_")) {
+      addCanonicalRowAccounts(
+        await queryMaybeSingle(
+          "etablissements",
+          "id",
+          "stripe_customer_id",
+          customerId,
+        ).then((row) =>
+          row ? { etablissement_id: row.id } : null
+        ),
+      );
+    }
+    if (source === "CONNECT" && event.account) {
+      addCanonicalRowAccounts(
+        await queryMaybeSingle(
+          "stripe_connect_onboarding",
+          "soignant_id",
+          "stripe_account_id",
+          event.account,
+        ),
+      );
+    }
+
+    // Les IDs de compte contenus dans les metadata restent uniquement des
+    // pointeurs de lookup; resolveOperationalTestAccount relit la base.
+    addAccountId(metadata.etablissement_id);
+    addAccountId(metadata.soignant_id);
+
+    for (const accountId of accountIds) {
+      const classification = await resolveOperationalTestAccount(
+        admin,
+        accountId,
+      );
+      if (!classification.ok) {
+        return { ok: false, error: classification.error };
+      }
+      matchedCanonicalSource = true;
+      if (classification.isTest) {
+        return { ok: true, isTest: true, matchedCanonicalSource: true };
+      }
+    }
+
+    return { ok: true, isTest: false, matchedCanonicalSource };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "classification indisponible",
+    };
+  }
+}
+
 // Audit escrow DIRECT en table (pas via le rpc fn_ecrire_audit_safe) : le
 // binding PostgREST de ce RPC 9-params sérialise les uuid en « null » →
 // « invalid input syntax for type uuid » → l'audit edge échouait silencieusement
@@ -287,6 +554,20 @@ export async function handleStripeWebhook(
       });
     }
 
+    // Classification canonique avant la première écriture (y compris le claim
+    // idempotent). Une indisponibilité DB fait réessayer Stripe; aucun événement
+    // ne passe « réel par défaut ».
+    const testClassification = await classifyStripeWebhookTestAccount(
+      supabaseAdmin,
+      event,
+      verified.source,
+    );
+    if (!testClassification.ok) {
+      throw new Error(
+        `Stripe test-account classification failed: ${testClassification.error}`,
+      );
+    }
+
     console.log(`Stripe webhook received: source=${verified.source} type=${event.type} livemode=${event.livemode}`);
 
     // Idempotence stricte par event.id (iter4 audit fix)
@@ -343,6 +624,41 @@ export async function handleStripeWebhook(
       }
       claimedEventId = null;
     };
+
+    // Les objets Stripe live historiques créés pendant la phase de test
+    // peuvent encore émettre des webhooks. Après claim idempotent mais avant
+    // toute mutation métier, transfert, notification ou lecture Stripe
+    // supplémentaire, neutraliser ceux rattachés canoniquement à une fixture.
+    if (testClassification.isTest) {
+      await writeRequiredFinancialAudit(supabaseAdmin, {
+        p_acteur_id: "00000000-0000-0000-0000-000000000000",
+        p_type_acteur: "SYSTEME",
+        p_action: "ADMIN_ACTION",
+        p_type_ressource: "stripe_webhook_event",
+        p_id_ressource: null,
+        p_cle_s3: null,
+        p_details: {
+          evenement: "STRIPE_WEBHOOK_TEST_SKIPPED",
+          test_skipped: true,
+          source_webhook: verified.source,
+          stripe_event_id: event.id,
+          stripe_event_type: event.type,
+        },
+        p_ip: null,
+        p_navigateur: "stripe-webhook",
+      }, "Stripe test webhook skip audit failed");
+      await markEventProcessed();
+      console.info(
+        `Stripe webhook test_skipped: source=${verified.source} type=${event.type}`,
+      );
+      return new Response(
+        JSON.stringify({ received: true, test_skipped: true }),
+        {
+          status: 200,
+          headers: { ...corsHeaders(req), "Content-Type": "application/json" },
+        },
+      );
+    }
 
     const loadAndValidateInvoicePayment = async (
       factureId: string,

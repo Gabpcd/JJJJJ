@@ -5,10 +5,9 @@
  *   1. Le frontend envoie le JWT user normal via Authorization: Bearer
  *      (supabase.functions.invoke() le fait automatiquement)
  *   2. La fonction vérifie le JWT avec supabase.auth.getUser()
- *   3. La fonction exige app_metadata.role = ADMIN_PLATEFORME, AAL2, un e-mail
+ *   3. La fonction exige app_metadata.role = ADMIN_PLATEFORME, un e-mail
  *      confirmé et une ligne equipe_admin active portant les 8 groupes de
- *      lancement. Les deux comptes fondateurs explicitement autorisés sont les
- *      seules exceptions sans second facteur.
+ *      lancement. Jolene n'impose aucun MFA/TOTP aux administrateurs.
  *   4. Si admin OK, la fonction crée son propre client service_role en interne
  *      pour les opérations sensibles. La service_role NE SORT JAMAIS de l'edge.
  *
@@ -39,7 +38,6 @@ export type UserOrServiceAuthResult =
       userEmail: string | null;
       emailConfirmedAt: string | null;
       role: string | null;
-      aal: string | null;
     }
   | { ok: false; status: number; error: string };
 
@@ -123,7 +121,7 @@ export async function verifyUserOrServiceRole(req: Request): Promise<UserOrServi
   // Match strict pour éviter la fuite par préfixe.
   if ((serviceRoleKey && bearer === serviceRoleKey) ||
       (newSecretKey && bearer === newSecretKey)) {
-    return { ok: true, isServiceRole: true, userId: null, userEmail: null, emailConfirmedAt: null, role: 'service_role', aal: 'aal2' };
+    return { ok: true, isServiceRole: true, userId: null, userEmail: null, emailConfirmedAt: null, role: 'service_role' };
   }
 
   // Fallback vault : pg_cron envoie le sb_secret_* stocké dans vault.decrypted_secrets
@@ -132,7 +130,7 @@ export async function verifyUserOrServiceRole(req: Request): Promise<UserOrServi
   if (bearer.startsWith('sb_secret_')) {
     const vaultSecret = await fetchVaultCronSecret(supabaseUrl, serviceRoleKey);
     if (vaultSecret && bearer === vaultSecret) {
-      return { ok: true, isServiceRole: true, userId: null, userEmail: null, emailConfirmedAt: null, role: 'service_role', aal: 'aal2' };
+      return { ok: true, isServiceRole: true, userId: null, userEmail: null, emailConfirmedAt: null, role: 'service_role' };
     }
   }
 
@@ -156,14 +154,6 @@ export async function verifyUserOrServiceRole(req: Request): Promise<UserOrServi
   if (bannedUntilRaw && (!Number.isFinite(bannedUntil) || bannedUntil > Date.now())) {
     return { ok: false, status: 403, error: 'Compte desactive' };
   }
-  // getUser() a deja valide le token cote Auth. getClaims() fournit ensuite
-  // le niveau AAL cryptographiquement verifie, sans decoder un payload non
-  // fiable dans le code applicatif.
-  const { data: claimsData, error: claimsError } = await supabaseAuth.auth.getClaims(bearer);
-  if (claimsError || !claimsData?.claims) {
-    return { ok: false, status: 401, error: 'Claims du token invalides' };
-  }
-
   return {
     ok: true,
     isServiceRole: false,
@@ -175,7 +165,6 @@ export async function verifyUserOrServiceRole(req: Request): Promise<UserOrServi
     // app_metadata vient de la reponse Auth serveur. Ne jamais utiliser
     // user_metadata pour une autorisation.
     role: (userData.user.app_metadata?.role as string | undefined) || null,
-    aal: typeof claimsData.claims.aal === 'string' ? claimsData.claims.aal : null,
   };
 }
 
@@ -198,14 +187,6 @@ export async function verifyAdminOrServiceRole(req: Request): Promise<AdminAuthR
   if (!isConfirmedAuthUser({ email_confirmed_at: auth.emailConfirmedAt })) {
     return { ok: false, status: 403, error: 'Compte administrateur non confirme' };
   }
-  const estCompteFondateur = new Set([
-    'admin@jolene.app',
-    'gabrielle.pcd@outlook.com',
-  ]).has(auth.userEmail?.trim().toLowerCase() ?? '');
-  if (auth.aal !== 'aal2' && !estCompteFondateur) {
-    return { ok: false, status: 403, error: 'Authentification forte AAL2 requise' };
-  }
-
   // L'inscription equipe_admin est obligatoire et full-only au lancement.
   // Absence, inactivite, droits incomplets et erreur de lecture echouent fermes.
   const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';

@@ -32,8 +32,8 @@ const MOTIFS = [
  * Modale de réclamation contre un événement de score (Sprint 3.5 PR 7).
  *
  * Permet à un soignant ou un étab de contester un événement de score qui
- * le pénalise. Upload de justificatif (PDF, image) optionnel mais
- * fortement recommandé.
+ * le pénalise. Un justificatif non médical (PDF, image) peut être joint
+ * de manière facultative.
  *
  * La réclamation est créée en statut PENDING et examinée par un admin
  * Jolene (PR 8 Sprint 3.5).
@@ -141,7 +141,7 @@ export function ModaleReclamationScore({
         </label>
 
         <div className="block">
-          <span id="reclamation-justificatif-label" className="text-xs font-medium text-foreground mb-1 block">Justificatif (PDF, image, max 5 Mo)</span>
+          <span id="reclamation-justificatif-label" className="text-xs font-medium text-foreground mb-1 block">Justificatif non médical (optionnel — PDF, image, max 5 Mo)</span>
           <label className="flex items-center gap-2 cursor-pointer rounded-lg border border-dashed border-border bg-muted/20 p-3 hover:bg-muted/40 transition">
             <Upload className="h-4 w-4 text-muted-foreground" />
             <span className="text-xs text-muted-foreground flex-1">
@@ -166,8 +166,8 @@ export function ModaleReclamationScore({
               }}
             />
           </label>
-          <p className="text-[10px] text-muted-foreground mt-1">
-            Un justificatif (certif médical, attestation, etc.) facilite la décision admin.
+          <p className="text-[10px] text-warning mt-1">
+            N'envoyez aucun certificat médical ni document mentionnant un diagnostic ou une information de santé. Vous pouvez joindre uniquement une preuve non médicale, par exemple un justificatif de transport ou une attestation employeur ne contenant aucune donnée de santé.
           </p>
         </div>
 

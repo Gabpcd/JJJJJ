@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { HeartPulse, Eye, EyeOff, Loader2, CheckCircle, AlertCircle } from 'lucide-react';
+import { Eye, EyeOff, Loader2, CheckCircle, AlertCircle } from 'lucide-react';
+import { LogoJolene } from '@/components/LogoJolene';
 import { supabase } from '@/integrations/supabase/client';
 import { useNotification } from '@/contexts/NotificationContext';
 import { extraireMessageErreur } from '@/lib/erreurs';
@@ -116,7 +117,12 @@ export default function PageResetPassword() {
       <div className="flex-1 flex items-center justify-center p-4">
         <div className="w-full max-w-md">
           <div className="text-center mb-6">
-            <HeartPulse className="h-10 w-10 text-primary mx-auto mb-2" />
+            <LogoJolene
+              afficherNom={false}
+              decoratif
+              className="mx-auto mb-2"
+              imageClassName="h-10 w-10"
+            />
             <h1 className="text-xl font-bold text-foreground">Réinitialiser le mot de passe</h1>
           </div>
 

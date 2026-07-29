@@ -26,6 +26,7 @@ on:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+  RETIRED_EDGE_FUNCTIONS: 'admin-2fa'
 
 concurrency:
   # Empêche deux déploiements simultanés (évite race conditions sur les migrations)
@@ -133,6 +134,51 @@ jobs:
         with:
           version: 2.98.0
 
+      - name: Désactiver les crons critiques avant le déploiement Edge
+        run: |
+          set -euo pipefail
+          ready=false
+          code=000
+          echo '{}' > /tmp/cron-disable.json
+
+          # La migration n'est appliquée qu'une fois. Cette RPC remet donc les
+          # 8 jobs + le monitor en pause à chaque redéploiement, avant que les
+          # fonctions soient remplacées une par une.
+          for attempt in 1 2 3; do
+            if ! code=$(curl -sS --connect-timeout 10 --max-time 45 \
+              -o /tmp/cron-disable.json -w '%{http_code}' \
+              -X POST \
+              "$SUPABASE_URL/rest/v1/rpc/fn_ops_desactiver_crons_edge_critiques" \
+              -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
+              -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
+              -H 'Content-Type: application/json' \
+              --data '{}'); then
+              code=000
+            fi
+
+            if [ "$code" = '200' ] \
+              && jq -e '
+                .success == true
+                and (.critiques_desactives | length) == 9
+              ' /tmp/cron-disable.json >/dev/null 2>&1; then
+              ready=true
+              break
+            fi
+
+            echo "::warning::Mise en pause des crons non confirmée (tentative $attempt/3, HTTP $code)."
+            [ "$attempt" = '3' ] || sleep $((attempt * 5))
+          done
+
+          if [ "$ready" != 'true' ]; then
+            echo "::error::Déploiement Edge refusé : les crons critiques ne sont pas tous inactifs."
+            jq . /tmp/cron-disable.json 2>/dev/null || true
+            exit 1
+          fi
+          jq . /tmp/cron-disable.json
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
       - name: Deploy every function listed in supabase/config.toml
         # Retry par fonction (3 essais, backoff) : l'API de déploiement Supabase
         # renvoie parfois un 502 transitoire (souvent un faux échec — le déploiement
@@ -183,6 +229,40 @@ jobs:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
 
+      - name: Supprimer les Edge Functions retirées
+        run: |
+          set -euo pipefail
+          remote_functions="$(supabase functions list \
+            --project-ref "$SUPABASE_PROJECT_REF" \
+            --output json)"
+
+          for fn in $RETIRED_EDGE_FUNCTIONS; do
+            if jq -e --arg fn "$fn" \
+              '(.functions // .) | any(.[]; ((.slug // .name // "") == $fn))' \
+              <<<"$remote_functions" >/dev/null; then
+              supabase functions delete "$fn" \
+                --project-ref "$SUPABASE_PROJECT_REF" \
+                --yes
+            else
+              echo "$fn déjà absent du projet distant."
+            fi
+          done
+
+          remote_functions="$(supabase functions list \
+            --project-ref "$SUPABASE_PROJECT_REF" \
+            --output json)"
+          for fn in $RETIRED_EDGE_FUNCTIONS; do
+            if jq -e --arg fn "$fn" \
+              '(.functions // .) | any(.[]; ((.slug // .name // "") == $fn))' \
+              <<<"$remote_functions" >/dev/null; then
+              echo "::error::La fonction retirée $fn existe encore à distance."
+              exit 1
+            fi
+          done
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+
       - name: Vérifier la configuration Stripe production
         run: |
           set -euo pipefail
@@ -223,12 +303,136 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
 
+      - name: Sonder puis activer les crons Edge critiques
+        run: |
+          set -euo pipefail
+
+          rpc() {
+            local function_name="$1"
+            local payload="$2"
+            local output_file="$3"
+            local http_code
+
+            http_code=$(curl -sS --connect-timeout 10 --max-time 45 \
+              -o "$output_file" -w '%{http_code}' \
+              -X POST "$SUPABASE_URL/rest/v1/rpc/$function_name" \
+              -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
+              -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
+              -H 'Content-Type: application/json' \
+              --data "$payload")
+
+            if [ "$http_code" != '200' ]; then
+              echo "::error::RPC $function_name en échec (HTTP $http_code). Les crons restent inactifs."
+              jq . "$output_file" 2>/dev/null || true
+              return 1
+            fi
+          }
+
+          # La migration a recapturé les jobs en active=false. Chaque sonde
+          # appelle le code Edge réellement déployé avec le secret cron dédié,
+          # mais le header auth-only interdit tout effet métier.
+          rpc fn_ops_sonder_crons_edge_critiques '{}' /tmp/cron-probes.json
+          if ! jq -e '
+            type == "object"
+            and length == 8
+            and all(.[]; type == "number")
+          ' /tmp/cron-probes.json >/dev/null; then
+            echo "::error::La sonde n'a pas retourné exactement 8 request_id."
+            jq . /tmp/cron-probes.json 2>/dev/null || true
+            exit 1
+          fi
+
+          probes_payload=$(jq -cn \
+            --slurpfile probes /tmp/cron-probes.json \
+            '{p_sondes: $probes[0]}')
+          probes_ready=false
+
+          # pg_net est asynchrone. Polling borné à 90 secondes : aucune
+          # activation sur timeout, 401, 429 ou 5xx.
+          for attempt in $(seq 1 18); do
+            rpc fn_ops_etat_sondes_crons_edge_critiques \
+              "$probes_payload" /tmp/cron-probe-status.json
+
+            if jq -e '.ready == true' /tmp/cron-probe-status.json >/dev/null; then
+              if ! jq -e '
+                .success == true
+                and .ok == 8
+                and .echecs == 0
+                and .en_attente == 0
+              ' /tmp/cron-probe-status.json >/dev/null; then
+                echo "::error::Au moins une des 8 sondes Edge n'est pas HTTP 2xx."
+                jq . /tmp/cron-probe-status.json
+                exit 1
+              fi
+              probes_ready=true
+              break
+            fi
+
+            echo "Sondes Edge en attente ($attempt/18)."
+            [ "$attempt" = '18' ] || sleep 5
+          done
+
+          if [ "$probes_ready" != 'true' ]; then
+            echo "::error::Délai dépassé pour les 8 sondes Edge. Les crons restent inactifs."
+            jq . /tmp/cron-probe-status.json 2>/dev/null || true
+            exit 1
+          fi
+
+          # Le contrôleur persiste les statuts et émet les alertes éventuelles
+          # avant l'activation atomique liée aux request_id exacts de ce run.
+          rpc fn_ops_controler_crons_edge_critiques \
+            '{}' /tmp/cron-controller.json
+          if ! jq -e '
+            .success == true
+            and .echecs == 0
+          ' /tmp/cron-controller.json >/dev/null; then
+            echo "::error::Le contrôleur des crons a détecté un échec."
+            jq . /tmp/cron-controller.json
+            exit 1
+          fi
+
+          activation_payload=$(jq -cn \
+            --slurpfile probes /tmp/cron-probes.json \
+            '{
+              p_sondes: $probes[0],
+              p_confirmation: "AUTH_PROBES_OK"
+            }')
+          rpc fn_ops_activer_crons_edge_critiques \
+            "$activation_payload" /tmp/cron-activation.json
+          if ! jq -e '
+            .success == true
+            and (.jobs_actives | length) == 9
+          ' /tmp/cron-activation.json >/dev/null; then
+            echo "::error::Activation atomique des crons critiques refusée."
+            jq . /tmp/cron-activation.json
+            exit 1
+          fi
+
+          rpc fn_ops_etat_activation_crons_edge_critiques \
+            '{}' /tmp/cron-final-state.json
+          if ! jq -e '
+            .success == true
+            and (.critiques_actifs | length) == 9
+            and (.critiques_manquants | length) == 0
+            and (.acquisition_active | length) == 0
+          ' /tmp/cron-final-state.json >/dev/null; then
+            echo "::error::État final invalide : 8 jobs + monitor doivent être actifs et l'acquisition inactive."
+            jq . /tmp/cron-final-state.json
+            exit 1
+          fi
+
+          jq . /tmp/cron-final-state.json
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
       - name: Summary
         run: |
           echo "### Deploy Supabase ✅" >> "$GITHUB_STEP_SUMMARY"
           echo "- Migrations SQL appliquées (ou already-applied skip)" >> "$GITHUB_STEP_SUMMARY"
           echo "- Edge functions redéployées depuis le repo" >> "$GITHUB_STEP_SUMMARY"
           echo "- Configuration Stripe live et webhooks vérifiée" >> "$GITHUB_STEP_SUMMARY"
+          echo "- 8 crons Edge critiques + monitor activés après sondes HTTP 2xx ; acquisition inactive" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "Projet : \`${{ secrets.SUPABASE_PROJECT_REF }}\`" >> "$GITHUB_STEP_SUMMARY"
 

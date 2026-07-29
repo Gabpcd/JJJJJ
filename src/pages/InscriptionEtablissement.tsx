@@ -1,7 +1,8 @@
 import { usePageTitle } from '@/hooks/usePageTitle';
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { HeartPulse, Eye, EyeOff, Check, AlertCircle, CheckCircle2, Loader2, ShieldCheck, ShieldAlert, ShieldX, AlertTriangle, XCircle, Info, Clock } from 'lucide-react';
+import { Eye, EyeOff, Check, AlertCircle, CheckCircle2, Loader2, ShieldCheck, ShieldAlert, ShieldX, AlertTriangle, XCircle, Info, Clock } from 'lucide-react';
+import { LogoJolene } from '@/components/LogoJolene';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
 import { handleErrorSilent } from '@/lib/handleError';
@@ -196,10 +197,11 @@ export default function InscriptionEtablissement() {
   return (
     <AuthLayout backTo="/connexion">
       <div className="card-base max-w-lg w-full">
-        <div className="flex items-center justify-center gap-2 mb-6">
-          <HeartPulse className="h-7 w-7 text-rose" />
-          <span className="text-xl font-bold text-rose">Jolene</span>
-        </div>
+        <LogoJolene
+          className="mx-auto mb-6 flex w-fit"
+          imageClassName="h-7 w-7"
+          nomClassName="text-xl text-rose"
+        />
         <h1 className="text-xl font-bold text-foreground text-center mb-2">Inscription Établissement</h1>
         <SwitchTypeInscription actif="etablissement" />
 

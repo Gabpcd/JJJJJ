@@ -245,7 +245,7 @@ BEGIN
 END;
 $catalogue$;
 
-DO $admin_aal$
+DO $admin_sans_mfa$
 DECLARE
   v_admin uuid := 'ffffffff-1111-4000-8000-000000000001';
 BEGIN
@@ -277,15 +277,16 @@ BEGIN
   PERFORM set_config('request.jwt.claims', jsonb_build_object(
     'sub', v_admin, 'role', 'authenticated', 'aal', 'aal1'
   )::text, true);
-  IF public.est_admin() IS DISTINCT FROM false THEN
-    RAISE EXCEPTION 'P0: admin aal1 accepte';
+  IF public.est_admin() IS DISTINCT FROM true THEN
+    RAISE EXCEPTION 'P0: admin actif refuse sans MFA';
   END IF;
 
+  -- Le niveau AAL ne doit modifier aucune autorisation Jolene.
   PERFORM set_config('request.jwt.claims', jsonb_build_object(
     'sub', v_admin, 'role', 'authenticated', 'aal', 'aal2'
   )::text, true);
   IF public.est_admin() IS DISTINCT FROM true THEN
-    RAISE EXCEPTION 'P0: admin actif aal2 refuse';
+    RAISE EXCEPTION 'P0: admin actif refuse avec une session AAL2 existante';
   END IF;
 
   UPDATE public.equipe_admin SET actif = false WHERE user_id = v_admin;
@@ -293,7 +294,7 @@ BEGIN
     RAISE EXCEPTION 'P0: admin equipe_admin inactif accepte';
   END IF;
 END;
-$admin_aal$;
+$admin_sans_mfa$;
 
 DO $membre_revoque$
 DECLARE

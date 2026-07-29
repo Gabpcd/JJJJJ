@@ -3,7 +3,10 @@ import { test, expect } from '@playwright/test';
 import { loginAs } from '../helpers/auth';
 import { expectNoCriticalA11y, runAxe } from '../helpers/axe';
 
-const ACTIF = !!process.env.PLAYWRIGHT_ADMIN_PASSWORD;
+const ACTIF = !!(
+  process.env.JOLENE_ADMIN_CANONICAL_PASSWORD
+  || process.env.PLAYWRIGHT_ADMIN_PASSWORD
+);
 const PAGES = [
   '/admin',
   '/admin/utilisateurs',
@@ -15,7 +18,10 @@ const PAGES = [
 
 test.describe('Lot 21 — contraste AA admin en mode sombre', () => {
   test.beforeEach(() => {
-    test.skip(!ACTIF, 'PLAYWRIGHT_ADMIN_PASSWORD requis pour la recette admin authentifiée');
+    test.skip(
+      !ACTIF,
+      'JOLENE_ADMIN_CANONICAL_PASSWORD requis pour la recette admin authentifiée',
+    );
   });
 
   test('les six écrans principaux passent axe en sombre', async ({ page }, testInfo) => {

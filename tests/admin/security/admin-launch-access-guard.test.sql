@@ -130,10 +130,12 @@ BEGIN
   PERFORM set_config('request.jwt.claims', jsonb_build_object(
     'sub', v_full, 'role', 'authenticated', 'aal', 'aal1'
   )::text, true);
-  IF public.est_admin() IS DISTINCT FROM false THEN
-    RAISE EXCEPTION 'Launch guard: un membre complet AAL1 a ete accepte';
+  IF public.est_admin() IS DISTINCT FROM true THEN
+    RAISE EXCEPTION 'Launch guard: un membre complet sans MFA a ete refuse';
   END IF;
 
+  -- Une ancienne session AAL2 reste valable mais ne reçoit aucun droit
+  -- supplémentaire par rapport à une session standard.
   PERFORM set_config('request.jwt.claims', jsonb_build_object(
     'sub', v_full, 'role', 'authenticated', 'aal', 'aal2'
   )::text, true);

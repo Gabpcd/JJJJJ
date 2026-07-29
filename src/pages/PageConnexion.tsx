@@ -1,7 +1,8 @@
 import { usePageTitle } from '@/hooks/usePageTitle';
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { HeartPulse, Mail, Lock, Eye, EyeOff, Fingerprint } from 'lucide-react';
+import { Mail, Lock, Eye, EyeOff, Fingerprint } from 'lucide-react';
+import { LogoJolene } from '@/components/LogoJolene';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
 import { urlCallbackPublique } from '@/lib/nativeLinks';
@@ -239,10 +240,11 @@ export default function PageConnexion() {
   return (
     <AuthLayout showBack={false}>
         <div className="card-base max-w-md w-full">
-          <div className="flex items-center justify-center gap-2 mb-8">
-            <HeartPulse className="h-8 w-8 text-rose" />
-            <span className="text-2xl font-bold text-rose">Jolene</span>
-          </div>
+          <LogoJolene
+            className="mx-auto mb-8 flex w-fit"
+            imageClassName="h-8 w-8"
+            nomClassName="text-2xl text-rose"
+          />
 
           <h1 className="text-xl font-bold text-foreground text-center mb-6">Connexion</h1>
 

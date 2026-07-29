@@ -10,7 +10,7 @@ const chiffres = [
   { icon: Stethoscope, label: '15+ professions', sub: 'de santé couvertes' },
   { icon: ShieldCheck, label: 'Marque déposée INPI', sub: 'N°5186614' },
   { icon: Scale, label: 'Code du travail', sub: 'Conformité intégrée' },
-  { icon: DatabaseZap, label: '0 donnée de santé', sub: 'stockée sur la plateforme' },
+  { icon: DatabaseZap, label: 'Données sensibles limitées', sub: 'déclarations professionnelles protégées' },
 ];
 
 export default function APropos() {

@@ -3,6 +3,7 @@
 // Authorization Bearer service_role/vault.
 
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { resolveOperationalTestAccount } from "../_shared/test-account.ts";
 
 const MAX_PAR_RUN = 500;
 
@@ -61,7 +62,35 @@ Deno.serve(async (req) => {
     if (error) return new Response(JSON.stringify({ error: error.message }), { status: 500 });
 
     let envoyes = 0;
+    let ignoresTest = 0;
     for (const s of (cibles as any[]) || []) {
+      if (typeof s.id !== "string") {
+        return new Response(JSON.stringify({
+          error: "Classification du destinataire indisponible",
+        }), { status: 503, headers: { "Content-Type": "application/json" } });
+      }
+      const testAccount = await resolveOperationalTestAccount(admin, s.id);
+      if (!testAccount.ok) {
+        return new Response(JSON.stringify({
+          error: "Classification du destinataire indisponible",
+        }), { status: 503, headers: { "Content-Type": "application/json" } });
+      }
+      if (testAccount.isTest) {
+        ignoresTest++;
+        await Promise.resolve(admin.from("journaux_audit").insert({
+          acteur_id: null,
+          type_acteur: "SYSTEME",
+          action: "NOTIFICATION_SKIPPED",
+          type_ressource: "email",
+          id_ressource: s.id,
+          details: {
+            fonction: "digest-hebdo",
+            canal: "EMAIL",
+            raison: "test_account",
+          },
+        })).catch(() => {});
+        continue;
+      }
       const nb = Number(s.nb_missions) || 0;
       if (nb === 0) continue;
       const metier = LIBELLES[s.profession] || "votre profession";
@@ -88,7 +117,11 @@ Deno.serve(async (req) => {
       if (r.ok) envoyes++;
     }
 
-    return new Response(JSON.stringify({ cibles: (cibles as any[])?.length || 0, envoyes }), {
+    return new Response(JSON.stringify({
+      cibles: (cibles as any[])?.length || 0,
+      envoyes,
+      ignores_test: ignoresTest,
+    }), {
       headers: { "Content-Type": "application/json" },
     });
   } catch (e) {

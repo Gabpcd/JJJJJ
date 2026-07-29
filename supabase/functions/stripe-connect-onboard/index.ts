@@ -3,6 +3,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders, getCorsOrigin } from "../_shared/cors.ts";
 import { mapStripeError } from "../_shared/stripe-errors.ts";
 import { assertStripeSecretMode } from "../_shared/stripe-production.ts";
+import { resolveOperationalTestAccount } from "../_shared/test-account.ts";
 
 const STRIPE_WEB_RETURN_ORIGINS = new Set([
   "https://jolene.app",
@@ -86,6 +87,27 @@ Deno.serve(async (req) => {
     if (!soignant) {
       return new Response(JSON.stringify({ error: "Soignant introuvable" }), {
         status: 404,
+        headers: { ...corsHeaders(req), "Content-Type": "application/json" },
+      });
+    }
+
+    const testAccount = await resolveOperationalTestAccount(
+      supabaseAdmin,
+      soignantId,
+    );
+    if (!testAccount.ok) {
+      return new Response(JSON.stringify({
+        error: "TEST_ACCOUNT_CLASSIFICATION_UNAVAILABLE",
+      }), {
+        status: 503,
+        headers: { ...corsHeaders(req), "Content-Type": "application/json" },
+      });
+    }
+    if (testAccount.isTest) {
+      return new Response(JSON.stringify({
+        error: "TEST_ACCOUNT_PAYMENT_DISABLED",
+      }), {
+        status: 403,
         headers: { ...corsHeaders(req), "Content-Type": "application/json" },
       });
     }

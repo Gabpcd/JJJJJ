@@ -32,8 +32,16 @@ const URL = process.env.SUPABASE_URL || '';
 const SERVICE = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 const ANON = process.env.SUPABASE_PUBLISHABLE_KEY || process.env.SUPABASE_ANON_KEY || '';
 
-const DEMO_EMAIL = process.env.JOLENE_STORE_SOIGNANT_EMAIL || 'marie.lefevre@jolene-demo.dev';
+const DEMO_EMAIL = (
+  process.env.JOLENE_STORE_SOIGNANT_EMAIL
+  || 'marie.lefevre@jolene-demo.dev'
+).trim().toLowerCase();
 const DEMO_PASSWORD = process.env.JOLENE_STORE_SOIGNANT_PASSWORD || '';
+const PROTECTED_ADMIN_EMAILS = new Set([
+  'admin@jolene.app',
+  'gabrielle.pcd@outlook.com',
+  'ops-test@jolene.app',
+]);
 
 if (!URL || !SERVICE || !ANON || !DEMO_PASSWORD) {
   console.error(
@@ -41,6 +49,11 @@ if (!URL || !SERVICE || !ANON || !DEMO_PASSWORD) {
       + 'SUPABASE_PUBLISHABLE_KEY, JOLENE_STORE_SOIGNANT_PASSWORD',
   );
   process.exit(1);
+}
+if (PROTECTED_ADMIN_EMAILS.has(DEMO_EMAIL)) {
+  throw new Error(
+    'Le script de démonstration refuse toute adresse administrateur protégée.',
+  );
 }
 
 const admin: SupabaseClient = createClient(URL, SERVICE, {
@@ -53,6 +66,25 @@ async function ensureDemoUser(): Promise<string> {
   const { data: list } = await admin.auth.admin.listUsers({ page: 1, perPage: 200 });
   const existing = list?.users?.find((u) => u.email?.toLowerCase() === DEMO_EMAIL);
   if (existing) {
+    const { data: adminRows, error: adminLookupError } = await admin
+      .from('equipe_admin')
+      .select('id')
+      .eq('user_id', existing.id)
+      .limit(1);
+    if (adminLookupError) {
+      throw new Error(
+        `Impossible de prouver que le compte cible n'est pas administrateur : ${adminLookupError.message}`,
+      );
+    }
+    if (
+      existing.app_metadata?.role === 'ADMIN_PLATEFORME'
+      || existing.user_metadata?.role === 'ADMIN_PLATEFORME'
+      || (adminRows?.length ?? 0) > 0
+    ) {
+      throw new Error(
+        'Le script de démonstration ne modifie jamais un compte administrateur.',
+      );
+    }
     // Reset password pour garantir l'accès du relecteur.
     await admin.auth.admin.updateUserById(existing.id, { password: DEMO_PASSWORD, email_confirm: true });
     console.log(`Compte démo existant réutilisé : ${existing.id}`);
@@ -163,7 +195,7 @@ async function main() {
 
   console.log('\n✅ Compte démo prêt.');
   console.log(`   Email    : ${DEMO_EMAIL}`);
-  console.log(`   Password : ${DEMO_PASSWORD}`);
+  console.log('   Password : fourni par JOLENE_STORE_SOIGNANT_PASSWORD');
   console.log('   Le relecteur browse les vraies missions ouvertes via les écrans réels.');
   console.log('   Aucune mission/candidature/facture fabriquée à la main.');
 }

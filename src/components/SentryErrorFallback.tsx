@@ -1,4 +1,4 @@
-import { HeartPulse } from "lucide-react";
+import { LogoJolene } from '@/components/LogoJolene';
 
 interface Props {
   resetError: () => void;
@@ -8,7 +8,12 @@ export function SentryErrorFallback({ resetError }: Props) {
   return (
     <div className="min-h-[100dvh] flex items-center justify-center bg-background p-6">
       <div className="text-center max-w-md space-y-4">
-        <HeartPulse className="h-12 w-12 text-primary mx-auto" />
+        <LogoJolene
+          afficherNom={false}
+          decoratif
+          className="mx-auto"
+          imageClassName="h-12 w-12"
+        />
         <h1 className="text-2xl font-bold text-foreground">
           Une erreur est survenue
         </h1>

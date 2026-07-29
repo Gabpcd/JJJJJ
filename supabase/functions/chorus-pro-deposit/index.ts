@@ -21,6 +21,7 @@ import { createClient } from 'npm:@supabase/supabase-js@2';
 import { getPisteConfig, getAccessToken, deposerFlux, consulterFacture } from '../_shared/piste-client.ts';
 import { generateCiiXml } from '../_shared/facturx-builder.ts';
 import { verifyUserOrServiceRole } from '../_shared/admin-auth.ts';
+import { resolveOperationalTestAccount } from '../_shared/test-account.ts';
 
 function getCorsOrigin(req: Request): string {
   const origin = req.headers.get('origin') || '';
@@ -88,6 +89,24 @@ Deno.serve(async (req) => {
       if (permissionError || allowed !== true) {
         return jsonResponse(req, { error: 'Acces interdit' }, 403);
       }
+    }
+
+    // `etablissement_id` vient de la facture canonique. La classification est
+    // obligatoire avant tout changement de statut et avant tout appel PISTE,
+    // pour les actions dépôt comme consultation.
+    const classification = await resolveOperationalTestAccount(
+      supabaseAdmin,
+      facture.etablissement_id,
+    );
+    if (!classification.ok) {
+      return jsonResponse(req, { error: 'Classification du compte indisponible' }, 503);
+    }
+    if (classification.isTest) {
+      return jsonResponse(req, {
+        success: true,
+        test_skipped: true,
+        message: 'Chorus Pro neutralisé pour les données de test.',
+      }, 200);
     }
 
     const { data: chorusConfig } = await supabaseAdmin

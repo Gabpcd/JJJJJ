@@ -44,7 +44,7 @@ const MOTIFS = [
  *
  * Affiche les conséquences AVANT confirmation via AnnulationCandidatureTimer,
  * collecte un motif structuré + texte libre obligatoire (min 20 chars) +
- * justificatif optionnel (PDF/image, max 5 MB).
+ * justificatif non médical optionnel (PDF/image, max 5 MB).
  *
  * Coche obligatoire "J'ai compris les conséquences" pour activer le bouton
  * confirmer.
@@ -189,9 +189,9 @@ export function ModaleAnnulationCandidature({
             <span className="text-[10px] text-muted-foreground">{texte.length} / 20+</span>
           </label>
 
-          {/* Justificatif optionnel */}
+          {/* Justificatif non médical optionnel */}
           <div className="block">
-            <span id="annulation-justificatif-label" className="text-xs font-medium text-foreground mb-1 block">Justificatif (optionnel — PDF, image, max 5 Mo)</span>
+            <span id="annulation-justificatif-label" className="text-xs font-medium text-foreground mb-1 block">Justificatif non médical (optionnel — PDF, image, max 5 Mo)</span>
             <label className="flex items-center gap-2 cursor-pointer rounded-lg border border-dashed border-border bg-muted/20 p-3 hover:bg-muted/40 transition">
               <Upload className="h-4 w-4 text-muted-foreground" />
               <span className="text-xs text-muted-foreground flex-1">
@@ -216,8 +216,8 @@ export function ModaleAnnulationCandidature({
                 }}
               />
             </label>
-            <p className="text-[10px] text-muted-foreground mt-1">
-              Un justificatif (certif médical, billet de train annulé…) facilite la contestation si vous le souhaitez.
+            <p className="text-[10px] text-warning mt-1">
+              N'envoyez aucun certificat médical ni document mentionnant un diagnostic ou une information de santé. Vous pouvez joindre uniquement une preuve non médicale, par exemple un billet de transport annulé ou une attestation employeur ne contenant aucune donnée de santé.
             </p>
           </div>
 
