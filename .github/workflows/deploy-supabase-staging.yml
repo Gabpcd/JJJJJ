@@ -9,10 +9,11 @@ name: Deploy Supabase STAGING (bootstrap from prod schema dump)
 # Stratégie :
 #   1. Dump du schéma prod via `supabase db dump` (schéma seul, pas de data).
 #   2. Dump des données de `supabase_migrations.schema_migrations` (tracking).
-#   3. Apply sur staging via `psql` direct (db.$REF.supabase.co:5432).
-#   4. Re-exécution de la migration `20260503050000_playwright_seed_test_accounts.sql`
+#   3. Reset borné de public/private, puis apply sur staging via `psql`.
+#   4. Réconciliation des dépendances auth/storage/realtime/crons hors dump.
+#   5. Re-exécution de la migration `20260503050000_playwright_seed_test_accounts.sql`
 #      pour seeder les comptes test (auth schema exclu du dump par défaut).
-#   5. Optionnel : seed 500 missions [loadtest] pour scenario F.
+#   6. Optionnel : seed 500 missions [loadtest] pour scenario F.
 #
 # Trigger MANUEL uniquement (workflow_dispatch).
 #
@@ -32,7 +33,7 @@ on:
   workflow_dispatch:
     inputs:
       reset_first:
-        description: "Reset staging public + supabase_migrations schemas avant bootstrap (DESTRUCTIF)"
+        description: "Reset staging public + private et crons avant bootstrap (DESTRUCTIF, staging uniquement)"
         type: boolean
         required: false
         default: false
@@ -83,6 +84,30 @@ jobs:
       - name: Show CLI version
         run: supabase --version
 
+      - name: Refuser toute confusion PROD / STAGING
+        run: |
+          set -euo pipefail
+          if [ "$PROD_REF" != 'flripxtsyegjshnhzjkz' ]; then
+            echo "::error::SUPABASE_PROJECT_REF ne désigne pas la production Jolene attendue."
+            exit 1
+          fi
+          if [ "$STAGING_REF" != 'mejpriaetwgtcstbgfid' ]; then
+            echo "::error::STAGING_SUPABASE_PROJECT_REF ne désigne pas le staging Jolene attendu."
+            exit 1
+          fi
+          if [ "$PROD_REF" = "$STAGING_REF" ]; then
+            echo "::error::Production et staging ne peuvent jamais partager le même project ref."
+            exit 1
+          fi
+          if [ "$RESET_FIRST" != 'true' ]; then
+            echo "::error::Ce bootstrap exige la confirmation explicite reset_first=true."
+            exit 1
+          fi
+        env:
+          PROD_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+          STAGING_REF: ${{ secrets.STAGING_SUPABASE_PROJECT_REF }}
+          RESET_FIRST: ${{ inputs.reset_first }}
+
       # ─── 1. Dump du schéma prod ──────────────────────────────────────
       - name: Link to PROD
         run: supabase link --project-ref "$PROD_REF" --password "$PROD_DB_PASSWORD"
@@ -94,9 +119,9 @@ jobs:
       - name: Dump prod schema (public + custom)
         run: |
           set -e
-          # `db dump` par défaut = schema-only (pas de data) du schéma public
-          # + schémas custom user-defined. Exclut auth/storage/realtime/etc.
-          supabase db dump --linked -f /tmp/prod-schema.sql
+          # Liste explicite : aucun schéma géré auth/storage/vault/cron n'est
+          # exporté et aucun secret de production n'entre dans l'artefact.
+          supabase db dump --linked --schema public,private -f /tmp/prod-schema.sql
           echo "Schema dump : $(wc -l < /tmp/prod-schema.sql) lignes, $(stat -c %s /tmp/prod-schema.sql) bytes"
           head -20 /tmp/prod-schema.sql
         env:
@@ -121,28 +146,61 @@ jobs:
       - name: Build staging DB URL
         id: staging-url
         run: |
+          set -euo pipefail
           # Format direct : db.<REF>.supabase.co:5432 (pas le pooler).
           # On URL-encode le password pour gérer les caractères spéciaux.
           ENCODED_PWD=$(python3 -c "import urllib.parse,os; print(urllib.parse.quote(os.environ['STAGING_DB_PASSWORD'], safe=''))")
-          REF="${{ secrets.STAGING_SUPABASE_PROJECT_REF }}"
+          REF="$STAGING_REF"
+          if [ "$REF" != 'mejpriaetwgtcstbgfid' ] \
+             || [ "$REF" = 'flripxtsyegjshnhzjkz' ]; then
+            echo "::error::URL destructive refusée : project ref staging invalide."
+            exit 1
+          fi
           URL="postgres://postgres:${ENCODED_PWD}@db.${REF}.supabase.co:5432/postgres?sslmode=require"
           echo "::add-mask::$URL"
           echo "url=$URL" >> "$GITHUB_OUTPUT"
           echo "ref=$REF" >> "$GITHUB_OUTPUT"
         env:
           STAGING_DB_PASSWORD: ${{ secrets.STAGING_SUPABASE_DB_PASSWORD }}
+          STAGING_REF: ${{ secrets.STAGING_SUPABASE_PROJECT_REF }}
 
-      - name: Reset staging schemas (optional, DESTRUCTIF)
+      - name: Reset staging applicatif (optional, DESTRUCTIF)
         if: inputs.reset_first
         run: |
-          set -e
-          echo "::warning::Reset staging public + supabase_migrations schemas"
+          set -euo pipefail
+          echo "::warning::Reset strictement limité au staging : crons + private + public"
           psql "${{ steps.staging-url.outputs.url }}" -v ON_ERROR_STOP=1 <<'SQL'
+          DO $desinscrire_crons$
+          DECLARE
+            v_job_id bigint;
+          BEGIN
+            IF to_regclass('cron.job') IS NOT NULL THEN
+              FOR v_job_id IN EXECUTE 'SELECT jobid FROM cron.job'
+              LOOP
+                PERFORM cron.unschedule(v_job_id);
+              END LOOP;
+            END IF;
+          END
+          $desinscrire_crons$;
+
+          DROP SCHEMA IF EXISTS private CASCADE;
           DROP SCHEMA IF EXISTS public CASCADE;
-          DROP SCHEMA IF EXISTS supabase_migrations CASCADE;
           CREATE SCHEMA public;
+          REVOKE ALL ON SCHEMA public FROM PUBLIC;
+          REVOKE CREATE ON SCHEMA public FROM PUBLIC;
           GRANT USAGE ON SCHEMA public TO postgres, anon, authenticated, service_role;
           GRANT ALL ON SCHEMA public TO postgres, service_role;
+
+          ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public
+            REVOKE ALL ON TABLES FROM anon, authenticated;
+          ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public
+            REVOKE ALL ON SEQUENCES FROM anon, authenticated;
+          ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public
+            REVOKE ALL ON FUNCTIONS FROM anon, authenticated;
+
+          -- Supabase gère ce schéma : on conserve sa structure et on ne purge
+          -- que les versions staging avant d'importer l'historique prod.
+          TRUNCATE TABLE supabase_migrations.schema_migrations;
           SQL
 
       - name: Apply prod schema dump on staging
@@ -153,11 +211,12 @@ jobs:
 
       - name: Apply schema_migrations tracking data
         run: |
-          set -e
+          set -euo pipefail
           # Le dump --data-only contient des INSERTS qui peuvent dupliquer si
           # la table existe déjà avec des rows. On purge avant pour rester
           # idempotent.
-          psql "${{ steps.staging-url.outputs.url }}" -v ON_ERROR_STOP=1 -c "DELETE FROM supabase_migrations.schema_migrations;" || true
+          psql "${{ steps.staging-url.outputs.url }}" -v ON_ERROR_STOP=1 -c \
+            "TRUNCATE TABLE supabase_migrations.schema_migrations;"
           psql "${{ steps.staging-url.outputs.url }}" -v ON_ERROR_STOP=1 -f /tmp/migrations-data.sql
 
       # Le dump représente la prod au début du run. Il faut ensuite appliquer
@@ -177,6 +236,110 @@ jobs:
           STAGING_REF: ${{ secrets.STAGING_SUPABASE_PROJECT_REF }}
           STAGING_DB_PASSWORD: ${{ secrets.STAGING_SUPABASE_DB_PASSWORD }}
 
+      - name: Aligner le routage Vault sur le staging sans copier de secret PROD
+        run: |
+          set -euo pipefail
+          api_keys_json="$(supabase projects api-keys \
+            --project-ref "$STAGING_REF" \
+            --output json)"
+          service_role_key="$(jq -er '
+            (if type == "array" then .
+             elif (.api_keys | type) == "array" then .api_keys
+             elif (.data | type) == "array" then .data
+             else error("format de clés API Supabase inattendu")
+             end)
+            | map(select(
+                (.name // .type // "") == "service_role"
+              ))
+            | first
+            | (.api_key // .key // .value)
+            | select(type == "string" and length >= 32)
+          ' <<<"$api_keys_json")"
+          echo "::add-mask::$service_role_key"
+
+          psql "${{ steps.staging-url.outputs.url }}" -v ON_ERROR_STOP=1 <<'SQL'
+          SELECT vault.update_secret(
+            id,
+            'https://mejpriaetwgtcstbgfid.supabase.co',
+            'supabase_url',
+            'URL du projet Jolene staging'
+          )
+          FROM vault.secrets
+          WHERE name = 'supabase_url';
+
+          SELECT vault.create_secret(
+            'https://mejpriaetwgtcstbgfid.supabase.co',
+            'supabase_url',
+            'URL du projet Jolene staging'
+          )
+          WHERE NOT EXISTS (
+            SELECT 1 FROM vault.secrets WHERE name = 'supabase_url'
+          );
+          SQL
+
+          psql "${{ steps.staging-url.outputs.url }}" \
+            -v ON_ERROR_STOP=1 \
+            -v service_role_key="$service_role_key" <<'SQL'
+          SELECT vault.update_secret(
+            id,
+            :'service_role_key',
+            'service_role_key',
+            'Clé service_role du projet Jolene staging'
+          )
+          FROM vault.secrets
+          WHERE name = 'service_role_key';
+
+          SELECT vault.create_secret(
+            :'service_role_key',
+            'service_role_key',
+            'Clé service_role du projet Jolene staging'
+          )
+          WHERE NOT EXISTS (
+            SELECT 1 FROM vault.secrets WHERE name = 'service_role_key'
+          );
+          SQL
+
+          VAULT_READY=$(psql "${{ steps.staging-url.outputs.url }}" \
+            -t -A -v ON_ERROR_STOP=1 -c "
+              SELECT CASE
+                WHEN count(*) FILTER (
+                  WHERE name = 'supabase_url'
+                    AND decrypted_secret = 'https://mejpriaetwgtcstbgfid.supabase.co'
+                ) = 1
+                 AND count(*) FILTER (
+                  WHERE name = 'cron_automations_key'
+                    AND length(decrypted_secret) >= 32
+                ) = 1
+                 AND count(*) FILTER (
+                  WHERE name = 'service_role_key'
+                    AND length(decrypted_secret) >= 32
+                ) = 1
+                THEN 1 ELSE 0
+              END
+              FROM vault.decrypted_secrets
+              WHERE name IN (
+                'supabase_url',
+                'cron_automations_key',
+                'service_role_key'
+              );
+            ")
+          if [ "$VAULT_READY" != '1' ]; then
+            echo "::error::Vault staging incomplet ou mal routé (valeurs non affichées)."
+            exit 1
+          fi
+          echo "Vault staging : noms requis présents et URL isolée."
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
+          STAGING_REF: ${{ secrets.STAGING_SUPABASE_PROJECT_REF }}
+
+      - name: Rejouer la réconciliation idempotente hors dump
+        run: |
+          set -euo pipefail
+          # Ce fichier est une migration normale en production et un script
+          # volontairement rejouable après chaque reset staging.
+          psql "${{ steps.staging-url.outputs.url }}" -v ON_ERROR_STOP=1 \
+            -f supabase/migrations/20260729143000_reinstaller_dependances_auth_storage_apres_bootstrap.sql
+
       - name: Assert launch migrations on STAGING without cron activation
         run: |
           set -euo pipefail
@@ -188,7 +351,9 @@ jobs:
              WHERE version IN (
                '20260729121419',
                '20260729121442',
-               '20260729121443'
+               '20260729121443',
+               '20260729134515',
+               '20260729143000'
              );
           ")
           INVENTORY_COUNT=$(psql "$URL" -t -A -v ON_ERROR_STOP=1 -c "
@@ -214,9 +379,12 @@ jobs:
             SELECT count(*) FROM pg_extension WHERE extname = 'pg_cron';
           ")
           ACTIVE_CRITICAL=0
+          CRITICAL_COUNT=0
           if [ "$HAS_CRON" = '1' ]; then
-            ACTIVE_CRITICAL=$(psql "$URL" -t -A -v ON_ERROR_STOP=1 -c "
-              SELECT count(*) FROM cron.job
+            read -r CRITICAL_COUNT ACTIVE_CRITICAL < <(
+              psql "$URL" -t -A -F ' ' -v ON_ERROR_STOP=1 -c "
+              SELECT count(*), count(*) FILTER (WHERE active IS TRUE)
+                FROM cron.job
                WHERE jobname IN (
                  'litige-escalation-cron',
                  'email-cron-hourly-immediate',
@@ -227,13 +395,79 @@ jobs:
                  'jolene_process_externalisations',
                  'weekly-invoicing-cron',
                  'jolene-monitor-crons-edge-critiques'
-               )
-                 AND active IS TRUE;
+               );
             ")
           fi
+          STORAGE_POLICIES=$(psql "$URL" -t -A -v ON_ERROR_STOP=1 -c "
+            SELECT count(*)
+              FROM pg_catalog.pg_policies
+             WHERE schemaname = 'storage'
+               AND tablename = 'objects'
+               AND policyname IN (
+                 'pol_storage_jolene_insert',
+                 'pol_storage_jolene_select',
+                 'justificatifs_insert_auth',
+                 'justificatifs_select_auth',
+                 'pol_contrats_signes_select',
+                 'soignant_lit_ses_attestations',
+                 'soignant_supprime_ses_attestations',
+                 'soignant_upload_ses_attestations'
+               );
+          ")
+          PRIVATE_BUCKETS=$(psql "$URL" -t -A -v ON_ERROR_STOP=1 -c "
+            SELECT count(*) FROM storage.buckets
+             WHERE id IN (
+               'attestations-heures-externes',
+               'contrats-signes',
+               'jolene-documents',
+               'justificatifs'
+             )
+               AND public IS FALSE;
+          ")
+          REALTIME_TABLES=$(psql "$URL" -t -A -v ON_ERROR_STOP=1 -c "
+            SELECT count(*) FROM pg_catalog.pg_publication_tables
+             WHERE pubname = 'supabase_realtime'
+               AND schemaname = 'public'
+               AND tablename IN (
+                 'messages_chat',
+                 'messages_mission',
+                 'notifications',
+                 'presence_status',
+                 'typing_status'
+               );
+          ")
+          AUTH_TRIGGER=$(psql "$URL" -t -A -v ON_ERROR_STOP=1 -c "
+            SELECT count(*)
+              FROM pg_catalog.pg_trigger t
+              JOIN pg_catalog.pg_class c ON c.oid = t.tgrelid
+              JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+             WHERE n.nspname = 'auth'
+               AND c.relname = 'users'
+               AND t.tgname = 'trg_auth_user_deleted_cleanup'
+               AND t.tgisinternal IS FALSE;
+          ")
+          RELIABILITY_VIEW=$(psql "$URL" -t -A -v ON_ERROR_STOP=1 -c "
+            SELECT CASE
+              WHEN to_regclass('extensions.vm_fiabilite_soignants') IS NULL
+              THEN 0 ELSE 1
+            END;
+          ")
+          GHOST_MIGRATIONS=$(psql "$URL" -t -A -v ON_ERROR_STOP=1 -c "
+            SELECT count(*)
+              FROM supabase_migrations.schema_migrations
+             WHERE version IN (
+               '20260728142033', '20260728143731', '20260728153500',
+               '20260728160000', '20260728170000', '20260728171000',
+               '20260728172000', '20260728180000', '20260728190000',
+               '20260728203000', '20260728204000', '20260728205000',
+               '20260728205500', '20260728206000', '20260728211000',
+               '20260728212000', '20260728213000', '20260728214000',
+               '20260728215000', '20260728220000', '20260728223500'
+             );
+          ")
 
-          if [ "$LAUNCH_MIGRATIONS" != '3' ]; then
-            echo "::error::Migrations lancement incomplètes sur staging ($LAUNCH_MIGRATIONS/3)."
+          if [ "$LAUNCH_MIGRATIONS" != '5' ]; then
+            echo "::error::Migrations lancement incomplètes sur staging ($LAUNCH_MIGRATIONS/5)."
             exit 1
           fi
           if [ "$INVENTORY_COUNT" != '422' ]; then
@@ -248,11 +482,29 @@ jobs:
             echo "::error::$ACTIVE_CRITICAL cron(s) critique(s) actifs sur staging avant sondes."
             exit 1
           fi
+          if [ "$CRITICAL_COUNT" != '9' ]; then
+            echo "::error::Crons critiques staging incomplets ($CRITICAL_COUNT/9)."
+            exit 1
+          fi
+          if [ "$STORAGE_POLICIES" != '8' ] \
+             || [ "$PRIVATE_BUCKETS" != '4' ] \
+             || [ "$REALTIME_TABLES" != '5' ] \
+             || [ "$AUTH_TRIGGER" != '1' ] \
+             || [ "$RELIABILITY_VIEW" != '1' ]; then
+            echo "::error::Dépendances gérées non restaurées (policies=$STORAGE_POLICIES, buckets=$PRIVATE_BUCKETS, realtime=$REALTIME_TABLES, auth_trigger=$AUTH_TRIGGER, vue=$RELIABILITY_VIEW)."
+            exit 1
+          fi
+          if [ "$GHOST_MIGRATIONS" != '0' ]; then
+            echo "::error::$GHOST_MIGRATIONS/21 migrations fantômes subsistent sur staging."
+            exit 1
+          fi
 
-          echo "Migrations lancement : $LAUNCH_MIGRATIONS/3"
+          echo "Migrations lancement : $LAUNCH_MIGRATIONS/5"
           echo "Inventaire SECURITY DEFINER : $INVENTORY_COUNT"
           echo "Accès service_role/private : OK"
-          echo "Crons critiques actifs : $ACTIVE_CRITICAL"
+          echo "Dépendances gérées : 8 policies, 4 buckets, 5 tables Realtime, trigger Auth et vue OK"
+          echo "Crons critiques : $CRITICAL_COUNT/9 présents, $ACTIVE_CRITICAL actif"
+          echo "Migrations fantômes : $GHOST_MIGRATIONS/21"
 
       # ─── 3. Seed comptes test Playwright (auth schema pas dans le dump) ─
       - name: Re-execute playwright seed migration
@@ -262,7 +514,7 @@ jobs:
           # playwright-etab@jolene.app dans auth.users (idempotent via DO blocks).
           # Indispensable pour scenarios B/D/E qui en dépendent.
           psql "${{ steps.staging-url.outputs.url }}" -v ON_ERROR_STOP=1 \
-            -f supabase/migrations/20260503050000_playwright_seed_test_accounts.sql
+            -f db/migrations_archive/20260503050000_playwright_seed_test_accounts.sql
 
       # ─── 4. Seed load test data (optional) ──────────────────────────
       - name: Seed [loadtest] missions
@@ -320,6 +572,38 @@ jobs:
         with:
           version: 2.98.0
 
+      - name: Install postgresql-client
+        run: |
+          set -e
+          if ! command -v psql >/dev/null 2>&1; then
+            sudo apt-get update -qq
+            sudo apt-get install -y -qq postgresql-client
+          fi
+
+      - name: Refuser tout déploiement Edge hors staging Jolene
+        run: |
+          set -euo pipefail
+          if [ "$STAGING_REF" != 'mejpriaetwgtcstbgfid' ] \
+             || [ "$STAGING_REF" = 'flripxtsyegjshnhzjkz' ] \
+             || [ "$STAGING_REF" != "$BOOTSTRAP_REF" ]; then
+            echo "::error::Project ref Edge staging invalide."
+            exit 1
+          fi
+        env:
+          STAGING_REF: ${{ secrets.STAGING_SUPABASE_PROJECT_REF }}
+          BOOTSTRAP_REF: ${{ needs.bootstrap-staging.outputs.staging_ref }}
+
+      - name: Build staging DB URL for post-deploy probes
+        id: staging-db
+        run: |
+          set -euo pipefail
+          ENCODED_PWD=$(python3 -c "import urllib.parse,os; print(urllib.parse.quote(os.environ['STAGING_DB_PASSWORD'], safe=''))")
+          URL="postgres://postgres:${ENCODED_PWD}@db.mejpriaetwgtcstbgfid.supabase.co:5432/postgres?sslmode=require"
+          echo "::add-mask::$URL"
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+        env:
+          STAGING_DB_PASSWORD: ${{ secrets.STAGING_SUPABASE_DB_PASSWORD }}
+
       - name: Deploy every function from supabase/functions
         run: |
           set -euo pipefail
@@ -372,6 +656,81 @@ jobs:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
           SUPABASE_PROJECT_REF: ${{ secrets.STAGING_SUPABASE_PROJECT_REF }}
 
+      - name: Sonder les huit crons Edge sans les activer
+        run: |
+          set -euo pipefail
+          URL="${{ steps.staging-db.outputs.url }}"
+          probes="$(psql "$URL" -t -A -v ON_ERROR_STOP=1 \
+            -c "SELECT private.fn_sonder_crons_edge_critiques();")"
+          if ! jq -e '
+            type == "object"
+            and length == 8
+            and all(.[]; type == "number")
+          ' <<<"$probes" >/dev/null; then
+            echo "::error::La sonde staging n'a pas retourné huit request_id."
+            exit 1
+          fi
+
+          probes_ready=false
+          for attempt in $(seq 1 18); do
+            status="$(psql "$URL" -t -A -v ON_ERROR_STOP=1 \
+              -v probes="$probes" \
+              -c "SELECT private.fn_etat_sondes_crons_edge_critiques(:'probes'::jsonb);")"
+            if jq -e '.ready == true' <<<"$status" >/dev/null; then
+              if ! jq -e '
+                .success == true
+                and .ok == 8
+                and .echecs == 0
+                and .en_attente == 0
+              ' <<<"$status" >/dev/null; then
+                echo "::error::Au moins une sonde auth-only staging a échoué."
+                jq . <<<"$status"
+                exit 1
+              fi
+              probes_ready=true
+              break
+            fi
+            echo "Sondes staging en attente ($attempt/18)."
+            [ "$attempt" = '18' ] || sleep 5
+          done
+
+          if [ "$probes_ready" != 'true' ]; then
+            echo "::error::Délai dépassé pour les sondes staging."
+            exit 1
+          fi
+
+          controller="$(psql "$URL" -t -A -v ON_ERROR_STOP=1 \
+            -c "SELECT private.fn_controler_crons_edge_critiques();")"
+          if ! jq -e '.success == true and .echecs == 0' \
+            <<<"$controller" >/dev/null; then
+            echo "::error::Le contrôleur staging a détecté un échec."
+            jq . <<<"$controller"
+            exit 1
+          fi
+
+          read -r cron_count active_count < <(
+            psql "$URL" -t -A -F ' ' -v ON_ERROR_STOP=1 -c "
+              SELECT count(*), count(*) FILTER (WHERE active IS TRUE)
+                FROM cron.job
+               WHERE jobname IN (
+                 'litige-escalation-cron',
+                 'email-cron-hourly-immediate',
+                 'email-cron-daily',
+                 'process-stripe-refunds-15min',
+                 'escrow-debit-echeance',
+                 'escrow-release',
+                 'jolene_process_externalisations',
+                 'weekly-invoicing-cron',
+                 'jolene-monitor-crons-edge-critiques'
+               );
+            "
+          )
+          if [ "$cron_count" != '9' ] || [ "$active_count" != '0' ]; then
+            echo "::error::Les sondes staging ont altéré les crons ($cron_count/9, $active_count actif)."
+            exit 1
+          fi
+          echo "Sondes auth-only : 8/8 HTTP 2xx ; crons staging laissés inactifs."
+
       - name: Summary
         run: |
           echo "### Deploy Supabase STAGING ✅" >> "$GITHUB_STEP_SUMMARY"
@@ -386,6 +745,7 @@ jobs:
           fi
           if [ "${{ inputs.skip_functions }}" != "true" ]; then
             echo "- Edge functions déployées" >> "$GITHUB_STEP_SUMMARY"
+            echo "- 8 sondes auth-only réussies ; 9 crons staging laissés inactifs" >> "$GITHUB_STEP_SUMMARY"
           fi
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "Projet staging : \`${{ secrets.STAGING_SUPABASE_PROJECT_REF }}\`" >> "$GITHUB_STEP_SUMMARY"

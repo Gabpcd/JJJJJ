@@ -6,6 +6,10 @@ const migration = readFileSync(
   `${root}/supabase/migrations/20260729121442_securiser_auth_et_crons_critiques.sql`,
   "utf8",
 );
+const bootstrapDependencies = readFileSync(
+  `${root}/supabase/migrations/20260729143000_reinstaller_dependances_auth_storage_apres_bootstrap.sql`,
+  "utf8",
+);
 const productionWorkflow = readFileSync(
   `${root}/.github/workflows/deploy-supabase.yml`,
   "utf8",
@@ -60,6 +64,9 @@ describe("déploiement fail-closed des crons critiques", () => {
     );
     expect(migration).toContain("'jolene_acquisition_bmo_mensuel'");
     expect(migration).toContain("'jolene_acquisition_boamp_quotidien'");
+    expect(
+      migration.match(/'jolene_crm_generer_taches'/g),
+    ).toHaveLength(3);
     expect(migration).toContain("GRANT USAGE ON SCHEMA private TO service_role");
     expect(migration).toContain(
       "has_schema_privilege('service_role', 'private', 'USAGE')",
@@ -122,9 +129,62 @@ describe("déploiement fail-closed des crons critiques", () => {
     expect(stagingWorkflow).toContain("'20260729121419'");
     expect(stagingWorkflow).toContain("'20260729121442'");
     expect(stagingWorkflow).toContain("'20260729121443'");
+    expect(stagingWorkflow).toContain("'20260729134515'");
+    expect(stagingWorkflow).toContain("'20260729143000'");
     expect(stagingWorkflow).toContain("ACTIVE_CRITICAL");
+    expect(stagingWorkflow).toContain(
+      "private.fn_sonder_crons_edge_critiques()",
+    );
+    expect(stagingWorkflow).toContain(".ok == 8");
+    expect(stagingWorkflow).toContain("active_count");
     expect(stagingWorkflow).not.toContain(
       "fn_ops_activer_crons_edge_critiques",
+    );
+  });
+
+  it("reconstruit le staging sans toucher la prod ni perdre les dépendances gérées", () => {
+    expect(stagingWorkflow).toContain(
+      "Ce bootstrap exige la confirmation explicite reset_first=true",
+    );
+    expect(stagingWorkflow.match(/mejpriaetwgtcstbgfid/g)?.length)
+      .toBeGreaterThanOrEqual(5);
+    expect(stagingWorkflow.match(/flripxtsyegjshnhzjkz/g)?.length)
+      .toBeGreaterThanOrEqual(3);
+    expect(stagingWorkflow).toContain(
+      "DROP SCHEMA IF EXISTS private CASCADE",
+    );
+    expect(stagingWorkflow).toContain(
+      "TRUNCATE TABLE supabase_migrations.schema_migrations",
+    );
+    expect(stagingWorkflow).not.toContain(
+      "DROP SCHEMA IF EXISTS supabase_migrations",
+    );
+    expect(stagingWorkflow).toContain("GHOST_MIGRATIONS");
+    expect(stagingWorkflow).toContain("STORAGE_POLICIES");
+    expect(stagingWorkflow).toContain("PRIVATE_BUCKETS");
+    expect(stagingWorkflow).toContain("REALTIME_TABLES");
+    expect(stagingWorkflow).toContain("AUTH_TRIGGER");
+    expect(stagingWorkflow).toContain("RELIABILITY_VIEW");
+
+    expect(
+      bootstrapDependencies.trimStart().startsWith(
+        "-- DROP SCHEMA public CASCADE",
+      ),
+    ).toBe(true);
+    expect(bootstrapDependencies).toContain("\nBEGIN;\n");
+    expect(bootstrapDependencies.trimEnd().endsWith("COMMIT;")).toBe(true);
+    expect(bootstrapDependencies.match(/CREATE POLICY /g)).toHaveLength(8);
+    expect(bootstrapDependencies).toContain(
+      "CREATE TRIGGER trg_auth_user_deleted_cleanup",
+    );
+    expect(bootstrapDependencies).toContain(
+      "ALTER PUBLICATION supabase_realtime ADD TABLE",
+    );
+    expect(bootstrapDependencies).toContain(
+      "private.fn_reconcilier_crons_edge_critiques_inactifs()",
+    );
+    expect(bootstrapDependencies).toContain(
+      "CREATE OR REPLACE VIEW extensions.vm_fiabilite_soignants",
     );
   });
 

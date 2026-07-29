@@ -330,38 +330,6 @@ Deno.serve(async (req) => {
       return jsonResponse(req, { error: 'idempotency_key invalide' }, 400);
     }
 
-    // Un compte de recette garde la notification en base pour tester l'UI,
-    // mais aucun token APNs/FCM/Web Push réel ne doit être contacté.
-    const testAccount = await resolveOperationalTestAccount(
-      supabaseAdmin,
-      destinataire_id,
-    );
-    if (!testAccount.ok) {
-      console.error('[send-push] classification test indisponible');
-      return jsonResponse(req, {
-        error: 'Classification du destinataire indisponible',
-      }, 503);
-    }
-    if (testAccount.isTest) {
-      await Promise.resolve(supabaseAdmin.from('journaux_audit').insert({
-        acteur_id: null,
-        type_acteur: 'SYSTEME',
-        action: 'NOTIFICATION_SKIPPED',
-        type_ressource: 'push',
-        id_ressource: destinataire_id,
-        details: {
-          type_evenement,
-          canal: 'PUSH',
-          raison: 'test_account',
-        },
-      })).catch(() => {});
-      return jsonResponse(req, {
-        success: true,
-        skipped: true,
-        reason: 'test_account',
-      });
-    }
-
     // Depuis le navigateur, seuls un admin actif ou un membre etablissement
     // autorise a gerer les missions peuvent cibler un tiers. La cible d'un
     // etablissement doit appartenir a son pool urgence calcule en base.
@@ -413,6 +381,40 @@ Deno.serve(async (req) => {
       if (callerLimitError || targetLimitError || callerAllowed !== true || targetAllowed !== true) {
         return jsonResponse(req, { error: 'Limite de notifications atteinte' }, 429);
       }
+    }
+
+    // La classification est volontairement placée après l'autorisation et les
+    // quotas : un appelant ne peut ni sonder les UUID de recette, ni remplir
+    // journaux_audit sans limite. Les fixtures gardent leur notification in-app
+    // mais aucun token APNs/FCM/Web Push réel n'est contacté.
+    const testAccount = await resolveOperationalTestAccount(
+      supabaseAdmin,
+      destinataire_id,
+    );
+    if (!testAccount.ok) {
+      console.error('[send-push] classification test indisponible');
+      return jsonResponse(req, {
+        error: 'Classification du destinataire indisponible',
+      }, 503);
+    }
+    if (testAccount.isTest) {
+      await Promise.resolve(supabaseAdmin.from('journaux_audit').insert({
+        acteur_id: null,
+        type_acteur: 'SYSTEME',
+        action: 'NOTIFICATION_SKIPPED',
+        type_ressource: 'push',
+        id_ressource: destinataire_id,
+        details: {
+          type_evenement,
+          canal: 'PUSH',
+          raison: 'test_account',
+        },
+      })).catch(() => {});
+      return jsonResponse(req, {
+        success: true,
+        skipped: true,
+        reason: 'test_account',
+      });
     }
 
     const sourceAccount = await resolveOperationalTestSource(

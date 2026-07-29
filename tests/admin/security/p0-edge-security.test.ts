@@ -47,10 +47,22 @@ describe('P0 Edge security guards', () => {
 
   it('authenticates internal SMS invocations and never counts failed sends', () => {
     const cron = read('supabase/functions/email-cron/index.ts');
+    const smsHelper = cron.slice(
+      cron.indexOf('async function invokeIdempotentSms'),
+      cron.indexOf('Deno.serve(async (req) =>'),
+    );
     expect(cron).toContain('global: { headers: { Authorization: `Bearer ${KEY}` } }');
-    expect(cron.match(/headers: \{ Authorization: `Bearer \$\{KEY\}` \}/g)).toHaveLength(3);
-    expect(cron.match(/if \(smsError\) throw new Error/g)).toHaveLength(2);
-    expect(cron.indexOf('if (smsError) throw new Error')).toBeLessThan(cron.indexOf('smsJ1++;'));
+    expect(smsHelper).toContain('headers: { Authorization: `Bearer ${KEY}` }');
+    expect(cron.match(/functions\.invoke\("send-sms"/g)).toHaveLength(1);
+    expect(cron.match(/invokeIdempotentSms\(/g)).toHaveLength(3);
+    expect(smsHelper).toContain('if (error) throw new Error');
+    expect(smsHelper).toContain('if (data?.pending === true) return "pending"');
+    const firstSmsCall = cron.indexOf(
+      'const smsOutcome = await invokeIdempotentSms(',
+    );
+    expect(firstSmsCall).toBeGreaterThan(0);
+    expect(cron.indexOf("if (smsOutcome === 'pending')", firstSmsCall))
+      .toBeLessThan(cron.indexOf('smsJ1++;', firstSmsCall));
   });
 
   it('keeps public health probes shallow and detailed health admin-only', () => {

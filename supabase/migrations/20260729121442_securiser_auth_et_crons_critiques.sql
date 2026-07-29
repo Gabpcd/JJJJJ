@@ -531,6 +531,7 @@ DECLARE
     'enrich-prospects-soignant',
     'jolene_sourcing_rpps_watchdog',
     'jolene_prospection_compteurs_quotidien',
+    'jolene_crm_generer_taches',
     'jolene_acquisition_bmo_mensuel',
     'jolene_acquisition_boamp_quotidien'
   ]::text[];
@@ -610,6 +611,7 @@ DECLARE
     'enrich-prospects-soignant',
     'jolene_sourcing_rpps_watchdog',
     'jolene_prospection_compteurs_quotidien',
+    'jolene_crm_generer_taches',
     'jolene_acquisition_bmo_mensuel',
     'jolene_acquisition_boamp_quotidien'
   ]::text[];
@@ -772,9 +774,17 @@ GRANT EXECUTE ON FUNCTION public.fn_ops_activer_crons_edge_critiques(jsonb, text
 GRANT EXECUTE ON FUNCTION public.fn_ops_etat_activation_crons_edge_critiques()
   TO service_role;
 
--- Recapture idempotente : aucun appel HTTP ne peut partir avant l'activation
--- explicite, car chaque job est rendu inactif dans la même transaction.
-DO $cron_jobs$
+-- Recapture idempotente réutilisable par le bootstrap staging. Aucun appel
+-- HTTP ne peut partir avant l'activation explicite : chaque job est recréé
+-- inactif dans la même transaction. La fonction reste dans le dump prod afin
+-- qu'un futur reset staging puisse la rappeler même lorsque cette migration
+-- figure déjà dans l'historique importé.
+CREATE OR REPLACE FUNCTION private.fn_reconcilier_crons_edge_critiques_inactifs()
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO ''
+AS $cron_jobs$
 DECLARE
   v_spec record;
   v_job_id bigint;
@@ -782,8 +792,10 @@ BEGIN
   IF NOT EXISTS (
     SELECT 1 FROM pg_catalog.pg_extension WHERE extname = 'pg_cron'
   ) THEN
-    RAISE NOTICE 'pg_cron absent : recapture des jobs différée';
-    RETURN;
+    RETURN jsonb_build_object(
+      'success', false,
+      'reason', 'pg_cron_absent'
+    );
   END IF;
 
   FOR v_spec IN
@@ -851,6 +863,7 @@ BEGIN
        'enrich-prospects-soignant',
        'jolene_sourcing_rpps_watchdog',
        'jolene_prospection_compteurs_quotidien',
+       'jolene_crm_generer_taches',
        'jolene_acquisition_bmo_mensuel',
        'jolene_acquisition_boamp_quotidien'
      )
@@ -876,11 +889,37 @@ BEGIN
   ) THEN
     RAISE EXCEPTION 'Un job Edge critique a été activé avant les sondes';
   END IF;
+
+  RETURN jsonb_build_object(
+    'success', true,
+    'jobs_critiques', 9,
+    'jobs_actifs', 0
+  );
 EXCEPTION
   WHEN undefined_table OR invalid_schema_name OR insufficient_privilege THEN
-    RAISE NOTICE 'pg_cron indisponible : recapture des jobs différée';
-END
+    RETURN jsonb_build_object(
+      'success', false,
+      'reason', 'pg_cron_indisponible',
+      'sqlstate', SQLSTATE
+    );
+END;
 $cron_jobs$;
+
+REVOKE ALL ON FUNCTION private.fn_reconcilier_crons_edge_critiques_inactifs()
+  FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION private.fn_reconcilier_crons_edge_critiques_inactifs()
+  TO service_role;
+
+DO $initialiser_crons$
+DECLARE
+  v_resultat jsonb;
+BEGIN
+  v_resultat := private.fn_reconcilier_crons_edge_critiques_inactifs();
+  IF (v_resultat ->> 'success')::boolean IS DISTINCT FROM true THEN
+    RAISE NOTICE 'Recapture initiale des crons différée : %', v_resultat;
+  END IF;
+END
+$initialiser_crons$;
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Exclusion fail-closed des comptes test avant tout effet financier/externe

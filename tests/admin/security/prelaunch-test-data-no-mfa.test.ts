@@ -215,6 +215,16 @@ describe('pré-lancement : données test, effets externes et absence de MFA', ()
     expect(sendEmail.indexOf('const sourceAccount = await resolveOperationalTestSource('))
       .toBeLessThan(sendEmail.indexOf("fetch('https://api.resend.com/emails'"));
     expect(sendEmail).toContain("reason: 'test_source'");
+    const emailTargetAuthorization = sendEmail.indexOf(
+      'if (!isServiceRole && !isPlatformAdmin && !isExternalInviteFlow && destinataire_id !== userId)',
+    );
+    expect(emailTargetAuthorization).toBeGreaterThan(0);
+    expect(emailTargetAuthorization)
+      .toBeLessThan(sendEmail.indexOf('const testAccount = await resolveOperationalTestAccount('));
+    expect(emailTargetAuthorization)
+      .toBeLessThan(sendEmail.indexOf('const TYPE_TO_EVENT: Record<string, string>'));
+    expect(emailTargetAuthorization)
+      .toBeLessThan(sendEmail.indexOf('let resolvedEmail: string | null = null'));
 
     expect(sendPush).toContain('resolveOperationalTestAccount(');
     expect(sendPush).toContain("reason: 'test_account'");
@@ -223,6 +233,18 @@ describe('pré-lancement : données test, effets externes et absence de MFA', ()
     expect(sendPush.indexOf('const sourceAccount = await resolveOperationalTestSource('))
       .toBeLessThan(sendPush.indexOf('.from("tokens_push")'));
     expect(sendPush).toContain("reason: 'test_source'");
+    const pushTargetAuthorization = sendPush.indexOf(
+      'if (!auth.isServiceRole)',
+    );
+    const pushRateLimit = sendPush.indexOf(
+      "applyRateLimit('send-push'",
+    );
+    const pushTargetClassification = sendPush.indexOf(
+      'const testAccount = await resolveOperationalTestAccount(',
+    );
+    expect(pushTargetAuthorization).toBeGreaterThan(0);
+    expect(pushRateLimit).toBeGreaterThan(pushTargetAuthorization);
+    expect(pushTargetClassification).toBeGreaterThan(pushRateLimit);
 
     expect(sendSms).toContain('resolveOperationalTestAccount(');
     expect(sendSms).toContain("reason: 'test_account'");
@@ -230,9 +252,9 @@ describe('pré-lancement : données test, effets externes et absence de MFA', ()
     expect(sendSms.indexOf('const testAccount = await resolveOperationalTestAccount('))
       .toBeLessThan(sendSms.indexOf('const accountSid = Deno.env.get("TWILIO_ACCOUNT_SID")'));
     expect(sendSms.indexOf('const testAccount = await resolveOperationalTestAccount('))
-      .toBeLessThan(sendSms.indexOf('const twilioRes = await fetch(twilioUrl'));
+      .toBeLessThan(sendSms.indexOf('twilioRes = await fetch(twilioUrl'));
     expect(sendSms.indexOf('const sourceAccount = await resolveOperationalTestSource('))
-      .toBeLessThan(sendSms.indexOf('const twilioRes = await fetch(twilioUrl'));
+      .toBeLessThan(sendSms.indexOf('twilioRes = await fetch(twilioUrl'));
     expect(sendSms).toContain("reason: 'test_source'");
     expect(sendSms).not.toMatch(
       /type\s*!==\s*['"]OTP_VERIFICATION_TELEPHONE['"][\s\S]{0,200}resolveOperationalTestAccount/,
@@ -330,7 +352,7 @@ describe('pré-lancement : données test, effets externes et absence de MFA', ()
     expect(otp).toContain("'otp-signature.'");
     expect(otp).toContain("'idempotency_key', v_idempotency_key");
     expect(otp.indexOf('v_idempotency_key :='))
-      .toBeLessThan(otp.indexOf("'/functions/v1/send-sms'"));
+      .toBeLessThan(otp.indexOf('/functions/v1/send-sms'));
 
     expect(urgent).toContain(
       'v_etab.est_compte_test IS DISTINCT FROM false',
