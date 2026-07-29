@@ -61,8 +61,6 @@ jobs:
     name: Bootstrap staging from prod schema dump
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    outputs:
-      staging_ref: ${{ steps.staging-url.outputs.ref }}
     steps:
       - name: Checkout repo
         uses: actions/checkout@v5
@@ -147,8 +145,9 @@ jobs:
         id: staging-url
         run: |
           set -euo pipefail
-          # Format direct : db.<REF>.supabase.co:5432 (pas le pooler).
-          # On URL-encode le password pour gérer les caractères spéciaux.
+          # Les runners GitHub sont IPv4-only tandis que la connexion directe
+          # Supabase est IPv6. Le Session Pooler conserve une session Postgres
+          # complète et supporte donc les DDL du bootstrap.
           ENCODED_PWD=$(python3 -c "import urllib.parse,os; print(urllib.parse.quote(os.environ['STAGING_DB_PASSWORD'], safe=''))")
           REF="$STAGING_REF"
           if [ "$REF" != 'mejpriaetwgtcstbgfid' ] \
@@ -156,11 +155,19 @@ jobs:
             echo "::error::URL destructive refusée : project ref staging invalide."
             exit 1
           fi
-          URL="postgres://postgres:${ENCODED_PWD}@db.${REF}.supabase.co:5432/postgres?sslmode=require"
+          projects_json="$(supabase projects list --output json)"
+          REGION="$(jq -er --arg ref "$REF" '
+            .[] | select(.id == $ref) | .region
+            | select(type == "string" and test("^[a-z0-9-]+$"))
+          ' <<<"$projects_json")"
+          URL="postgres://postgres.${REF}:${ENCODED_PWD}@aws-0-${REGION}.pooler.supabase.com:5432/postgres?sslmode=require"
           echo "::add-mask::$URL"
           echo "url=$URL" >> "$GITHUB_OUTPUT"
-          echo "ref=$REF" >> "$GITHUB_OUTPUT"
+          psql "$URL" -v ON_ERROR_STOP=1 -c \
+            "SELECT CASE WHEN current_database() = 'postgres' THEN 1 ELSE 0 END;" \
+            >/dev/null
         env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
           STAGING_DB_PASSWORD: ${{ secrets.STAGING_SUPABASE_DB_PASSWORD }}
           STAGING_REF: ${{ secrets.STAGING_SUPABASE_PROJECT_REF }}
 
@@ -584,25 +591,33 @@ jobs:
         run: |
           set -euo pipefail
           if [ "$STAGING_REF" != 'mejpriaetwgtcstbgfid' ] \
-             || [ "$STAGING_REF" = 'flripxtsyegjshnhzjkz' ] \
-             || [ "$STAGING_REF" != "$BOOTSTRAP_REF" ]; then
+             || [ "$STAGING_REF" = 'flripxtsyegjshnhzjkz' ]; then
             echo "::error::Project ref Edge staging invalide."
             exit 1
           fi
         env:
           STAGING_REF: ${{ secrets.STAGING_SUPABASE_PROJECT_REF }}
-          BOOTSTRAP_REF: ${{ needs.bootstrap-staging.outputs.staging_ref }}
 
       - name: Build staging DB URL for post-deploy probes
         id: staging-db
         run: |
           set -euo pipefail
+          projects_json="$(supabase projects list --output json)"
+          REGION="$(jq -er --arg ref "$STAGING_REF" '
+            .[] | select(.id == $ref) | .region
+            | select(type == "string" and test("^[a-z0-9-]+$"))
+          ' <<<"$projects_json")"
           ENCODED_PWD=$(python3 -c "import urllib.parse,os; print(urllib.parse.quote(os.environ['STAGING_DB_PASSWORD'], safe=''))")
-          URL="postgres://postgres:${ENCODED_PWD}@db.mejpriaetwgtcstbgfid.supabase.co:5432/postgres?sslmode=require"
+          URL="postgres://postgres.${STAGING_REF}:${ENCODED_PWD}@aws-0-${REGION}.pooler.supabase.com:5432/postgres?sslmode=require"
           echo "::add-mask::$URL"
           echo "url=$URL" >> "$GITHUB_OUTPUT"
+          psql "$URL" -v ON_ERROR_STOP=1 -c \
+            "SELECT CASE WHEN current_database() = 'postgres' THEN 1 ELSE 0 END;" \
+            >/dev/null
         env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
           STAGING_DB_PASSWORD: ${{ secrets.STAGING_SUPABASE_DB_PASSWORD }}
+          STAGING_REF: ${{ secrets.STAGING_SUPABASE_PROJECT_REF }}
 
       - name: Deploy every function from supabase/functions
         run: |

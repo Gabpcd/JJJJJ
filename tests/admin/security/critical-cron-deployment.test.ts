@@ -156,6 +156,12 @@ describe("déploiement fail-closed des crons critiques", () => {
     expect(stagingWorkflow).toContain(
       "TRUNCATE TABLE supabase_migrations.schema_migrations",
     );
+    expect(stagingWorkflow).toContain(
+      "aws-0-${REGION}.pooler.supabase.com:5432",
+    );
+    expect(stagingWorkflow).not.toContain(
+      "@db.${REF}.supabase.co:5432",
+    );
     expect(stagingWorkflow).not.toContain(
       "DROP SCHEMA IF EXISTS supabase_migrations",
     );
