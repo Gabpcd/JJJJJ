@@ -62,7 +62,9 @@ describe('hygiène des sessions Auth Playwright', () => {
     expect(seed).toContain("'IDE', 'CDD', 'CDD,VACATION'");
     expect(seed).not.toContain("'INFIRMIER'");
     expect(seed).not.toContain("'CDDU'");
+    expect(seed).toContain("'CLINIQUE_PRIVEE'");
+    expect(seed).not.toMatch(/\bsecteur,/);
     expect(seed).toContain('est_compte_test = true');
-    expect(seed).toContain('is_test = true');
+    expect(seed).not.toContain('is_test = true');
   });
 });

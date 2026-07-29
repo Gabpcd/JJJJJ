@@ -153,17 +153,17 @@ BEGIN
 
   -- Profil étab complet + onboarding marqué fait
   INSERT INTO public.etablissements (
-    id, nom, siret, type, secteur,
+    id, nom, siret, type,
     adresse_rue, adresse_ville, adresse_code_postal, adresse_lat, adresse_lng,
     email_contact, telephone_contact,
     contrat_service_signe, contrat_service_signe_le,
-    rib_s3_key, is_test,
+    rib_s3_key, est_compte_test,
     cree_le
   ) VALUES (
     v_etab_id,
     'Clinique Playwright Test',
     '99999999999999',
-    'CLINIQUE', 'PRIVE',
+    'CLINIQUE_PRIVEE',
     '1 rue de Test', 'Paris', '75002', 48.8666, 2.3322,
     'playwright-etab@jolene.app', '+33100000001',
     true, now(),
@@ -176,7 +176,7 @@ BEGIN
     type = EXCLUDED.type,
     contrat_service_signe = true,
     contrat_service_signe_le = COALESCE(public.etablissements.contrat_service_signe_le, now()),
-    is_test = true,
+    est_compte_test = true,
     rib_s3_key = COALESCE(NULLIF(public.etablissements.rib_s3_key, 'legacy/auto-backfill'), 'playwright-test/seed/rib-fictif.pdf');
 END $$;
 
