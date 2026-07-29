@@ -709,9 +709,12 @@ jobs:
 
           probes_ready=false
           for attempt in $(seq 1 18); do
-            status="$(psql "$URL" -t -A -v ON_ERROR_STOP=1 \
-              -v probes="$probes" \
-              -c "SELECT private.fn_etat_sondes_crons_edge_critiques(:'probes'::jsonb);")"
+            status="$(
+              psql "$URL" -t -A -v ON_ERROR_STOP=1 \
+                -v probes="$probes" <<'SQL'
+              SELECT private.fn_etat_sondes_crons_edge_critiques(:'probes'::jsonb);
+          SQL
+            )"
             if jq -e '.ready == true' <<<"$status" >/dev/null; then
               if ! jq -e '
                 .success == true
