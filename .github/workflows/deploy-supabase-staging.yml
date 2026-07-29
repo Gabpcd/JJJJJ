@@ -357,9 +357,13 @@ jobs:
       - name: Rejouer la réconciliation idempotente hors dump
         run: |
           set -euo pipefail
-          # Le dump de production est volontairement schema-only : la table
-          # d'inventaire existe après restauration, mais ses 422 lignes de
-          # contrôle doivent être rejouées explicitement.
+          # Le dump de production est volontairement schema-only : les tables
+          # de référence existent après restauration, mais leurs données
+          # canoniques doivent être rejouées explicitement.
+          psql "${{ steps.staging-url.outputs.url }}" -v ON_ERROR_STOP=1 \
+            -f supabase/migrations/20260714084802_synchroniser_regles_profil_exercice.sql
+
+          # L'inventaire de sécurité contient 422 lignes de contrôle.
           psql "${{ steps.staging-url.outputs.url }}" -v ON_ERROR_STOP=1 \
             -f supabase/migrations/20260729121443_figer_inventaire_security_definer.sql
 
@@ -386,6 +390,9 @@ jobs:
           ")
           INVENTORY_COUNT=$(psql "$URL" -t -A -v ON_ERROR_STOP=1 -c "
             SELECT count(*) FROM private.security_definer_inventory;
+          ")
+          PROFILE_RULES=$(psql "$URL" -t -A -v ON_ERROR_STOP=1 -c "
+            SELECT count(*) FROM public.regles_exercice_profession;
           ")
           PRIVATE_SERVICE_ACCESS=$(psql "$URL" -t -A -v ON_ERROR_STOP=1 -c "
             SELECT CASE
@@ -502,6 +509,10 @@ jobs:
             echo "::error::Inventaire SECURITY DEFINER staging incomplet ($INVENTORY_COUNT/422)."
             exit 1
           fi
+          if [ "$PROFILE_RULES" != '17' ]; then
+            echo "::error::Référentiel des professions staging incomplet ($PROFILE_RULES/17)."
+            exit 1
+          fi
           if [ "$PRIVATE_SERVICE_ACCESS" != '1' ]; then
             echo "::error::Accès service_role au schéma private incomplet."
             exit 1
@@ -529,6 +540,7 @@ jobs:
 
           echo "Migrations lancement : $LAUNCH_MIGRATIONS/5"
           echo "Inventaire SECURITY DEFINER : $INVENTORY_COUNT"
+          echo "Référentiel des professions : $PROFILE_RULES/17"
           echo "Accès service_role/private : OK"
           echo "Dépendances gérées : 8 policies, 4 buckets, 5 tables Realtime, trigger Auth et vue OK"
           echo "Crons critiques : $CRITICAL_COUNT/9 présents, $ACTIVE_CRITICAL actif"
