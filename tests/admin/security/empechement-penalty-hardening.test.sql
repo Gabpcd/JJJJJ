@@ -332,6 +332,14 @@ BEGIN
     ]::text[]
   );
 
+  -- La recette doit couvrir simultanément les cohortes test et réelle. Le
+  -- verrou pré-lancement est neutralisé uniquement pendant la création de ces
+  -- fixtures explicites, puis réactivé avant tout appel métier.
+  ALTER TABLE public.etablissements
+    DISABLE TRIGGER trg_forcer_compte_test_prelaunch;
+  ALTER TABLE public.soignants
+    DISABLE TRIGGER trg_forcer_compte_test_prelaunch;
+
   INSERT INTO public.etablissements (
     id, nom, siret, finess, type, adresse_rue, adresse_ville,
     adresse_code_postal, email_contact, est_compte_test,
@@ -471,6 +479,12 @@ BEGIN
       false,
       'ACTIF'
     );
+
+  SET CONSTRAINTS ALL IMMEDIATE;
+  ALTER TABLE public.soignants
+    ENABLE TRIGGER trg_forcer_compte_test_prelaunch;
+  ALTER TABLE public.etablissements
+    ENABLE TRIGGER trg_forcer_compte_test_prelaunch;
 
   UPDATE auth.users
   SET raw_app_meta_data = '{"role":"SOIGNANT"}'::jsonb
