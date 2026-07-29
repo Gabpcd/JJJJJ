@@ -1262,9 +1262,11 @@ BEGIN
   INTO STRICT v_score_apres, v_total_annulees
   FROM public.soignants
   WHERE id = v_soignant;
+  -- En pré-lancement, les missions de test créent bien leur remplacement mais
+  -- le trigger urgent coupe tout fan-out, y compris vers les comptes de test.
   IF COALESCE((v_result_test->>'success')::boolean, false) IS NOT TRUE
      OR COALESCE((v_result_test->>'depassement')::boolean, false) IS NOT TRUE
-     OR (v_result_test->>'pool_alerte')::integer < 1
+     OR (v_result_test->>'pool_alerte')::integer IS DISTINCT FROM 0
      OR v_remplacement_id IS NULL
      OR (v_result_test->>'mission_diffusee_id')::uuid
           IS DISTINCT FROM v_remplacement_id
@@ -1709,7 +1711,7 @@ BEGIN
 
   IF v_notification_reel_reel IS DISTINCT FROM 1
      OR v_notification_reel_test IS DISTINCT FROM 0
-     OR v_notification_test_test IS DISTINCT FROM 1
+     OR v_notification_test_test IS DISTINCT FROM 0
      OR v_notification_test_reel IS DISTINCT FROM 0
      OR v_notifications_cross_class IS DISTINCT FROM 0 THEN
     RAISE EXCEPTION
