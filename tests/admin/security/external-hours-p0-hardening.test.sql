@@ -234,31 +234,13 @@ BEGIN
     RAISE EXCEPTION 'HEX-P0-T8 : snapshot périmé accepté : %', v_result;
   END IF;
 
-  -- AAL1 ne peut pas rendre une décision, même avec un compte admin enregistré.
+  -- Le compte admin complet rend la décision avec sa session standard, sans
+  -- MFA ni niveau AAL2.
   PERFORM set_config('request.jwt.claim.role', 'authenticated', true);
   PERFORM set_config(
     'request.jwt.claims',
     jsonb_build_object(
       'sub', v_admin, 'role', 'authenticated', 'aal', 'aal1'
-    )::text,
-    true
-  );
-  v_failed := false;
-  BEGIN
-    PERFORM public.fn_admin_valider_heures_externes(
-      v_id_1, 'VALIDE', 'Preuve examinée manuellement'
-    );
-  EXCEPTION WHEN insufficient_privilege THEN
-    v_failed := true;
-  END;
-  IF v_failed IS DISTINCT FROM TRUE THEN
-    RAISE EXCEPTION 'HEX-P0-T9 : un admin AAL1 a validé les heures';
-  END IF;
-
-  PERFORM set_config(
-    'request.jwt.claims',
-    jsonb_build_object(
-      'sub', v_admin, 'role', 'authenticated', 'aal', 'aal2'
     )::text,
     true
   );
@@ -274,7 +256,7 @@ BEGIN
          AND h.source_validation_serveur = 'ADMIN_AAL2'
          AND h.valide_par = v_admin
      ) THEN
-    RAISE EXCEPTION 'HEX-P0-T10 : décision AAL2 refusée : %', v_result;
+    RAISE EXCEPTION 'HEX-P0-T10 : décision admin sans MFA refusée : %', v_result;
   END IF;
 
   -- Une copie binaire sur une autre période reste visible mais ne peut jamais
@@ -315,7 +297,7 @@ BEGIN
   PERFORM set_config(
     'request.jwt.claims',
     jsonb_build_object(
-      'sub', v_admin, 'role', 'authenticated', 'aal', 'aal2'
+      'sub', v_admin, 'role', 'authenticated', 'aal', 'aal1'
     )::text,
     true
   );

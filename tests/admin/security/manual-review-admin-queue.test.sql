@@ -1,4 +1,4 @@
--- File de revue manuelle admin : AAL2, CAS, idempotence et trois services.
+-- File de revue manuelle admin : RBAC sans MFA, CAS, idempotence et trois services.
 -- Toutes les fixtures et mutations sont annulees.
 BEGIN;
 
@@ -221,17 +221,6 @@ BEGIN
   PERFORM set_config(
     'request.jwt.claims',
     '{"sub":"72000000-0000-4000-8000-000000000001","role":"authenticated","aal":"aal1"}',
-    true
-  );
-  BEGIN
-    PERFORM public.fn_admin_lister_revues_manuelles(500);
-    RAISE EXCEPTION 'Une session AAL1 a lu la file de revue';
-  EXCEPTION WHEN insufficient_privilege THEN NULL;
-  END;
-
-  PERFORM set_config(
-    'request.jwt.claims',
-    '{"sub":"72000000-0000-4000-8000-000000000001","role":"authenticated","aal":"aal2"}',
     true
   );
   -- Les fixtures ont la priorité maximale et `cree_le = -infinity` : elles
@@ -600,7 +589,7 @@ BEGIN
 
   PERFORM set_config(
     'request.jwt.claims',
-    '{"sub":"72000000-0000-4000-8000-000000000001","role":"authenticated","aal":"aal2"}',
+    '{"sub":"72000000-0000-4000-8000-000000000001","role":"authenticated","aal":"aal1"}',
     true
   );
 
