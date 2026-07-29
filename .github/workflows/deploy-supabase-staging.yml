@@ -130,18 +130,23 @@ jobs:
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
 
-      - name: Dump prod schema_migrations data (tracking)
+      - name: Export prod schema_migrations compatible avec le staging
         run: |
-          set -e
-          # Sans cette donnée, `supabase db push` futur tenterait de
-          # rejouer toutes les migrations (toutes "manquantes" côté staging
-          # tracking), ce qui crasherait sur les anciennes Lovable.
-          supabase db dump --linked --schema supabase_migrations --data-only -f /tmp/migrations-data.sql
-          echo "Migrations tracking : $(wc -l < /tmp/migrations-data.sql) lignes"
-          # Sanity check : doit contenir des INSERT INTO supabase_migrations.schema_migrations
-          if ! grep -q "supabase_migrations" /tmp/migrations-data.sql; then
-            echo "::warning::Pas de données schema_migrations dans le dump"
+          set -euo pipefail
+          # La table gérée peut évoluer à des rythmes différents entre deux
+          # projets (par exemple `created_by`). Ces trois colonnes constituent
+          # le contrat commun utilisé par `supabase db push`.
+          supabase db query --linked --agent=no --output csv \
+            "SELECT version, statements, name
+               FROM supabase_migrations.schema_migrations
+              ORDER BY version" \
+            > /tmp/migrations-data.csv
+          header="$(head -n 1 /tmp/migrations-data.csv | tr -d '\r')"
+          if [ "$header" != 'version,statements,name' ]; then
+            echo "::error::Export schema_migrations inattendu : $header"
+            exit 1
           fi
+          echo "Historique migrations exporté dans un CSV compatible."
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
 
@@ -228,15 +233,13 @@ jobs:
       - name: Apply schema_migrations tracking data
         run: |
           set -euo pipefail
-          # Le dump --data-only contient des INSERTS qui peuvent dupliquer si
-          # la table existe déjà avec des rows. On purge avant pour rester
-          # idempotent.
-          psql "${{ steps.staging-url.outputs.url }}" -v ON_ERROR_STOP=1 -c \
-            "TRUNCATE TABLE supabase_migrations.schema_migrations;"
+          # Importer uniquement les colonnes communes évite de dépendre des
+          # colonnes gérées ajoutées progressivement par Supabase.
           psql "${{ steps.staging-url.outputs.url }}" \
             --single-transaction \
             -v ON_ERROR_STOP=1 \
-            -f /tmp/migrations-data.sql
+            -c "TRUNCATE TABLE supabase_migrations.schema_migrations;" \
+            -c "\\copy supabase_migrations.schema_migrations(version, statements, name) FROM '/tmp/migrations-data.csv' WITH (FORMAT csv, HEADER true)"
 
       # Le dump représente la prod au début du run. Il faut ensuite appliquer
       # les migrations locales plus récentes, sinon staging testerait les

@@ -167,6 +167,19 @@ describe("déploiement fail-closed des crons critiques", () => {
       "TRUNCATE TABLE supabase_migrations.schema_migrations",
     );
     expect(stagingWorkflow).toContain(
+      "supabase db query --linked --agent=no --output csv",
+    );
+    expect(stagingWorkflow).toContain(
+      "SELECT version, statements, name",
+    );
+    expect(stagingWorkflow).toContain(
+      "\\\\copy supabase_migrations.schema_migrations(version, statements, name)",
+    );
+    expect(stagingWorkflow).not.toContain("migrations-data.sql");
+    expect(stagingWorkflow).not.toContain(
+      "schema_migrations(version, statements, name, created_by)",
+    );
+    expect(stagingWorkflow).toContain(
       "aws-0-${REGION}.pooler.supabase.com:5432",
     );
     expect(
