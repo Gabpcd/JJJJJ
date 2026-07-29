@@ -159,6 +159,9 @@ describe("déploiement fail-closed des crons critiques", () => {
     expect(stagingWorkflow).toContain(
       "aws-0-${REGION}.pooler.supabase.com:5432",
     );
+    expect(
+      stagingWorkflow.match(/--single-transaction/g),
+    ).toHaveLength(2);
     expect(stagingWorkflow).not.toContain(
       "@db.${REF}.supabase.co:5432",
     );

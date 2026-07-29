@@ -212,9 +212,13 @@ jobs:
 
       - name: Apply prod schema dump on staging
         run: |
-          set -e
-          # ON_ERROR_STOP : crash le step au premier échec SQL pour debug clair.
-          psql "${{ steps.staging-url.outputs.url }}" -v ON_ERROR_STOP=1 -f /tmp/prod-schema.sql
+          set -euo pipefail
+          # Une transaction unique évite un commit réseau par objet via le
+          # pooler IPv4 et garantit un rollback complet au premier échec.
+          psql "${{ steps.staging-url.outputs.url }}" \
+            --single-transaction \
+            -v ON_ERROR_STOP=1 \
+            -f /tmp/prod-schema.sql
 
       - name: Apply schema_migrations tracking data
         run: |
@@ -224,7 +228,10 @@ jobs:
           # idempotent.
           psql "${{ steps.staging-url.outputs.url }}" -v ON_ERROR_STOP=1 -c \
             "TRUNCATE TABLE supabase_migrations.schema_migrations;"
-          psql "${{ steps.staging-url.outputs.url }}" -v ON_ERROR_STOP=1 -f /tmp/migrations-data.sql
+          psql "${{ steps.staging-url.outputs.url }}" \
+            --single-transaction \
+            -v ON_ERROR_STOP=1 \
+            -f /tmp/migrations-data.sql
 
       # Le dump représente la prod au début du run. Il faut ensuite appliquer
       # les migrations locales plus récentes, sinon staging testerait les
