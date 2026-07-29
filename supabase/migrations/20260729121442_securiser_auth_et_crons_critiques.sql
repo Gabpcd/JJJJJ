@@ -2331,7 +2331,7 @@ BEGIN
                'data', jsonb_build_object(
                  'count', v_alertes_count,
                  'lien_admin',
-                   'https://app.jolene.app/admin/journaux-audit?evenement=TELEPORTATION_DETECTED'
+                   'https://jolene.app/admin/journaux-audit?evenement=TELEPORTATION_DETECTED'
                )
              ),
              'CRON_ANTI_TRICHE',
