@@ -224,6 +224,12 @@ describe("déploiement fail-closed des crons critiques", () => {
       "private.fn_reconcilier_crons_edge_critiques_inactifs()",
     );
     expect(bootstrapDependencies).toContain(
+      "REVOKE ALL ON SCHEMA private FROM PUBLIC, anon, authenticated",
+    );
+    expect(bootstrapDependencies).toContain(
+      "GRANT USAGE ON SCHEMA private TO service_role",
+    );
+    expect(bootstrapDependencies).toContain(
       "to_regclass('extensions.vm_fiabilite_soignants') IS NULL",
     );
     expect(bootstrapDependencies).toContain(

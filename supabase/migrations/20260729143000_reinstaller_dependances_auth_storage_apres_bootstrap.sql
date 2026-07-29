@@ -7,6 +7,12 @@
 
 BEGIN;
 
+-- Les implémentations internes ne sont jamais directement accessibles aux
+-- sessions utilisateur. Les wrappers publics SECURITY DEFINER assurent les
+-- contrôles d'identité et de rôle avant tout appel interne.
+REVOKE ALL ON SCHEMA private FROM PUBLIC, anon, authenticated;
+GRANT USAGE ON SCHEMA private TO service_role;
+
 -- Le bucket n'est jamais rendu public et aucun objet n'est copié.
 INSERT INTO storage.buckets (
   id,
