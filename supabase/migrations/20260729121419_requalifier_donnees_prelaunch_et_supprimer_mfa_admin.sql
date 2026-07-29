@@ -3702,7 +3702,11 @@ BEGIN
     FROM pg_proc p
     JOIN pg_namespace n ON n.oid = p.pronamespace
    WHERE n.nspname IN ('public', 'private')
-     AND pg_get_functiondef(p.oid) ILIKE '%auth.jwt()%aal%aal2%';
+     AND CASE
+           WHEN p.prokind IN ('f', 'p')
+             THEN pg_get_functiondef(p.oid) ILIKE '%auth.jwt()%aal%aal2%'
+           ELSE FALSE
+         END;
 
   IF v_fonctions IS NOT NULL THEN
     RAISE EXCEPTION 'Une exigence AAL2 admin subsiste dans : %', v_fonctions;
