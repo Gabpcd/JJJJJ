@@ -60,7 +60,10 @@ jobs:
   bootstrap-staging:
     name: Bootstrap staging from prod schema dump
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # Le dump prod contient ~75 000 lignes / plusieurs milliers d'objets.
+    # Son application via le Session Pooler IPv4 dépasse à elle seule 15 min.
+    # Garder une marge bornée pour les assertions et les migrations suivantes.
+    timeout-minutes: 45
     steps:
       - name: Checkout repo
         uses: actions/checkout@v5
@@ -213,8 +216,8 @@ jobs:
       - name: Apply prod schema dump on staging
         run: |
           set -euo pipefail
-          # Une transaction unique évite un commit réseau par objet via le
-          # pooler IPv4 et garantit un rollback complet au premier échec.
+          # Une transaction unique garantit un rollback complet au premier
+          # échec ou si GitHub interrompt le job.
           psql "${{ steps.staging-url.outputs.url }}" \
             --single-transaction \
             -v ON_ERROR_STOP=1 \
