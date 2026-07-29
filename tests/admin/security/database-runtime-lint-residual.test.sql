@@ -85,9 +85,25 @@ BEGIN
   SELECT pg_get_functiondef(
     'public.fn_envoyer_rappels_notation_j1()'::regprocedure
   ) INTO v_definition;
-  IF regexp_count(v_definition, 'IF v_send_email_called THEN')
-       IS DISTINCT FROM 2 THEN
-    RAISE EXCEPTION 'Marqueurs de rappel non conditionnes par le succes HTTP';
+  IF (v_definition ~ 'private[.]fn_controler_rappels_notation_j1[(][)]')
+       IS DISTINCT FROM true
+     OR (v_definition ~ 'INSERT INTO public[.]notifications_notation_j1')
+       IS DISTINCT FROM false THEN
+    RAISE EXCEPTION 'Rappels notation hors du contrôleur HTTP canonique';
+  END IF;
+
+  SELECT pg_get_functiondef(
+    'private.fn_controler_rappels_notation_j1()'::regprocedure
+  ) INTO v_definition;
+  IF (v_definition ~ 'status_code BETWEEN 200 AND 299')
+       IS DISTINCT FROM true
+     OR (v_definition ~ 'COALESCE[(]v_dispatch[.]timed_out, false[)] IS FALSE')
+       IS DISTINCT FROM true
+     OR (v_definition ~ 'v_dispatch[.]error_msg IS NULL')
+       IS DISTINCT FROM true
+     OR (v_definition ~ 'INSERT INTO public[.]notifications_notation_j1')
+       IS DISTINCT FROM true THEN
+    RAISE EXCEPTION 'Succès des rappels non conditionné par une réponse HTTP 2xx';
   END IF;
 
   SELECT pg_get_functiondef(
