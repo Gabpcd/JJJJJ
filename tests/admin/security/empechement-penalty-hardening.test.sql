@@ -917,9 +917,30 @@ BEGIN
   PERFORM set_config('request.jwt.claim.sub', '', true);
   PERFORM set_config('request.jwt.claim.role', 'service_role', true);
   PERFORM set_config('request.jwt.claims', '{"role":"service_role"}', true);
-  UPDATE public.parametres_systeme
-  SET valeur = 2
-  WHERE cle = 'annulations_justifiees_max_12m';
+  INSERT INTO public.parametres_systeme (
+    cle,
+    valeur,
+    label,
+    description,
+    unite,
+    categorie,
+    val_min,
+    val_max,
+    cablee
+  )
+  VALUES (
+    'annulations_justifiees_max_12m',
+    2,
+    'Fixture empêchements impérieux',
+    'Paramètre transactionnel de la recette empêchement.',
+    'annulations',
+    'GENERAL',
+    0,
+    20,
+    true
+  )
+  ON CONFLICT (cle) DO UPDATE
+  SET valeur = EXCLUDED.valeur;
 
   -- Les trois sentinelles doivent survivre aux deux appels et à leurs
   -- sous-blocs EXCEPTION. app.test_mode neutralise push/email/SMS.
