@@ -478,7 +478,15 @@ BEGIN
     RAISE EXCEPTION 'Garde ADMIN test trop permissive ou trop large';
   END IF;
 
-  UPDATE public.soignants SET est_compte_test = false WHERE id = v_soignant_id;
+  -- Simule la bascule post-lancement sans affaiblir le verrou pré-lancement :
+  -- le trigger est neutralisé uniquement pour cette ligne sous ROLLBACK.
+  ALTER TABLE public.soignants
+    DISABLE TRIGGER trg_forcer_compte_test_prelaunch;
+  UPDATE public.soignants
+     SET est_compte_test = false
+   WHERE id = v_soignant_id;
+  ALTER TABLE public.soignants
+    ENABLE TRIGGER trg_forcer_compte_test_prelaunch;
   INSERT INTO public.notifications(
     destinataire_id, type_destinataire, type, titre, corps
   ) VALUES (
