@@ -556,6 +556,8 @@ BEGIN
 
   -- Une revocation (le mecanisme aussi utilise lors d'un remplacement) retire
   -- immediatement la provenance et rend toute nouvelle activation impossible.
+  -- L'agrégat documentaire général est recalculé séparément et ne constitue
+  -- pas la preuve SIRET : il peut donc rester vrai si les pièces requises le sont.
   PERFORM set_config('jolene.document_server_update', 'true', true);
   UPDATE public.documents_soignants
   SET revoque_le = now(),
@@ -571,7 +573,6 @@ BEGIN
       AND siret_liberal_coherence_identite IS NULL
       AND siret_liberal_source_verification IS NULL
       AND siret_liberal_preuve_identite_document_id IS NULL
-      AND tous_documents_valides IS FALSE
   ) THEN
     RAISE EXCEPTION 'La revocation de la piece n a pas revoque la preuve SIRET';
   END IF;
