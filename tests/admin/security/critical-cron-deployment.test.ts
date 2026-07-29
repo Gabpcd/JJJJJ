@@ -216,6 +216,12 @@ describe("déploiement fail-closed des crons critiques", () => {
       "private.fn_reconcilier_crons_edge_critiques_inactifs()",
     );
     expect(bootstrapDependencies).toContain(
+      "to_regclass('extensions.vm_fiabilite_soignants') IS NULL",
+    );
+    expect(bootstrapDependencies).toContain(
+      "CREATE VIEW extensions.vm_fiabilite_soignants",
+    );
+    expect(bootstrapDependencies).not.toContain(
       "CREATE OR REPLACE VIEW extensions.vm_fiabilite_soignants",
     );
   });

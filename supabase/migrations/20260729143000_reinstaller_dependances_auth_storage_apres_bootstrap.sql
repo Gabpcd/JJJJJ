@@ -168,45 +168,55 @@ WITH CHECK (
 );
 
 -- Vue hors public également supprimée par la cascade. Elle n'est exposée à
--- aucun rôle applicatif, conformément à l'état de production.
-CREATE OR REPLACE VIEW extensions.vm_fiabilite_soignants AS
-SELECT
-  s.id AS soignant_id,
-  s.prenom,
-  s.nom,
-  s.profession,
-  s.total_missions_terminees,
-  s.total_missions_annulees,
-  s.total_retards_pointage,
-  s.total_absences,
-  greatest(
-    0::numeric,
-    least(
-      100::numeric,
-      50.0
-      + s.total_missions_terminees::numeric * 2.0
-      - s.total_missions_annulees::numeric * 8.0
-      - s.total_absences::numeric * 25.0
-      - s.total_retards_pointage::numeric * 3.0
-      + CASE WHEN s.total_missions_terminees > 20 THEN 10.0 ELSE 0::numeric END
-      + CASE
-          WHEN s.total_absences = 0
-           AND s.total_missions_terminees > 5
-          THEN 5.0
-          ELSE 0::numeric
-        END
-      + CASE WHEN s.prevoyance_inscrit THEN 3.0 ELSE 0::numeric END
-    )
-  ) AS score_calcule,
-  CASE
-    WHEN s.total_absences >= 3 THEN 'LISTE_NOIRE'::text
-    WHEN s.total_missions_terminees < 3 THEN 'NOUVEAU'::text
-    ELSE 'ACTIF'::text
-  END AS categorie_soignant,
-  s.tous_documents_valides,
-  s.derniere_activite_le
-FROM public.soignants s
-WHERE s.supprime_le IS NULL;
+-- aucun rôle applicatif, conformément à l'état de production. En production,
+-- l'objet canonique est une vue matérialisée : on le conserve. Après un
+-- bootstrap staging il est absent, donc on recrée une vue équivalente.
+DO $reinstaller_vue_fiabilite$
+BEGIN
+  IF to_regclass('extensions.vm_fiabilite_soignants') IS NULL THEN
+    EXECUTE $view$
+      CREATE VIEW extensions.vm_fiabilite_soignants AS
+      SELECT
+        s.id AS soignant_id,
+        s.prenom,
+        s.nom,
+        s.profession,
+        s.total_missions_terminees,
+        s.total_missions_annulees,
+        s.total_retards_pointage,
+        s.total_absences,
+        greatest(
+          0::numeric,
+          least(
+            100::numeric,
+            50.0
+            + s.total_missions_terminees::numeric * 2.0
+            - s.total_missions_annulees::numeric * 8.0
+            - s.total_absences::numeric * 25.0
+            - s.total_retards_pointage::numeric * 3.0
+            + CASE WHEN s.total_missions_terminees > 20 THEN 10.0 ELSE 0::numeric END
+            + CASE
+                WHEN s.total_absences = 0
+                 AND s.total_missions_terminees > 5
+                THEN 5.0
+                ELSE 0::numeric
+              END
+            + CASE WHEN s.prevoyance_inscrit THEN 3.0 ELSE 0::numeric END
+          )
+        ) AS score_calcule,
+        CASE
+          WHEN s.total_absences >= 3 THEN 'LISTE_NOIRE'::text
+          WHEN s.total_missions_terminees < 3 THEN 'NOUVEAU'::text
+          ELSE 'ACTIF'::text
+        END AS categorie_soignant,
+        s.tous_documents_valides,
+        s.derniere_activite_le
+      FROM public.soignants s
+      WHERE s.supprime_le IS NULL
+    $view$;
+  END IF;
+END
+$reinstaller_vue_fiabilite$;
 
 REVOKE ALL ON extensions.vm_fiabilite_soignants
   FROM PUBLIC, anon, authenticated;
