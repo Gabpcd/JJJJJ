@@ -480,6 +480,7 @@ BEGIN
 
   -- Simule la bascule post-lancement sans affaiblir le verrou pré-lancement :
   -- le trigger est neutralisé uniquement pour cette ligne sous ROLLBACK.
+  SET CONSTRAINTS ALL IMMEDIATE;
   ALTER TABLE public.soignants
     DISABLE TRIGGER trg_forcer_compte_test_prelaunch;
   UPDATE public.soignants
