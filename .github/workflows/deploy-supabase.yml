@@ -238,7 +238,8 @@ jobs:
 
           for fn in $RETIRED_EDGE_FUNCTIONS; do
             if jq -e --arg fn "$fn" \
-              '(.functions // .) | any(.[]; ((.slug // .name // "") == $fn))' \
+              'if type == "array" then . else (.functions // []) end
+               | any(.[]; ((.slug // .name // "") == $fn))' \
               <<<"$remote_functions" >/dev/null; then
               supabase functions delete "$fn" \
                 --project-ref "$SUPABASE_PROJECT_REF" \
@@ -253,7 +254,8 @@ jobs:
             --output json)"
           for fn in $RETIRED_EDGE_FUNCTIONS; do
             if jq -e --arg fn "$fn" \
-              '(.functions // .) | any(.[]; ((.slug // .name // "") == $fn))' \
+              'if type == "array" then . else (.functions // []) end
+               | any(.[]; ((.slug // .name // "") == $fn))' \
               <<<"$remote_functions" >/dev/null; then
               echo "::error::La fonction retirée $fn existe encore à distance."
               exit 1
