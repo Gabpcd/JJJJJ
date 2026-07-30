@@ -26,14 +26,28 @@ BEGIN
        'public.fn_trg_litige_accord_mutuel()'::regprocedure,
        'public.fn_trg_litige_gel_degel_facture()'::regprocedure,
        'public.fn_admin_resoudre_alerte(uuid)'::regprocedure,
-       'public.fn_detecter_teleportations()'::regprocedure,
-       'public.fn_escalade_remplacement_non_pourvu()'::regprocedure,
-       'public.fn_alerte_reclamations_pending_old()'::regprocedure
+       'public.fn_escalade_remplacement_non_pourvu()'::regprocedure
      ]::oid[])
      AND p.prosecdef
      AND p.proconfig @> ARRAY['search_path=public']::text[];
-  IF v_count IS DISTINCT FROM 12 THEN
-    RAISE EXCEPTION 'Runtime lint: une signature ou un search_path a changé (%/12)', v_count;
+  IF v_count IS DISTINCT FROM 10 THEN
+    RAISE EXCEPTION 'Runtime lint: une signature ou un search_path a changé (%/10)', v_count;
+  END IF;
+
+  -- Ces deux tâches qualifient désormais toutes leurs dépendances et utilisent
+  -- donc un search_path vide, plus strict que l'ancien "public".
+  SELECT count(*)
+    INTO v_count
+    FROM pg_proc p
+   WHERE p.oid = ANY(ARRAY[
+       'public.fn_detecter_teleportations()'::regprocedure,
+       'public.fn_alerte_reclamations_pending_old()'::regprocedure
+     ]::oid[])
+     AND p.prosecdef
+     AND p.proconfig
+       && ARRAY['search_path=', 'search_path=""']::text[];
+  IF v_count IS DISTINCT FROM 2 THEN
+    RAISE EXCEPTION 'Runtime lint: search_path vide des tâches réelles altéré (%/2)', v_count;
   END IF;
 
   -- Le contact qualifie désormais toutes ses dépendances et conserve donc le

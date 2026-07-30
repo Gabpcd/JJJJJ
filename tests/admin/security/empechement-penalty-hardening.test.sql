@@ -332,6 +332,14 @@ BEGIN
     ]::text[]
   );
 
+  -- La recette doit couvrir simultanément les cohortes test et réelle. Le
+  -- verrou pré-lancement est neutralisé uniquement pendant la création de ces
+  -- fixtures explicites, puis réactivé avant tout appel métier.
+  ALTER TABLE public.etablissements
+    DISABLE TRIGGER trg_forcer_compte_test_prelaunch;
+  ALTER TABLE public.soignants
+    DISABLE TRIGGER trg_forcer_compte_test_prelaunch;
+
   INSERT INTO public.etablissements (
     id, nom, siret, finess, type, adresse_rue, adresse_ville,
     adresse_code_postal, email_contact, est_compte_test,
@@ -471,6 +479,12 @@ BEGIN
       false,
       'ACTIF'
     );
+
+  SET CONSTRAINTS ALL IMMEDIATE;
+  ALTER TABLE public.soignants
+    ENABLE TRIGGER trg_forcer_compte_test_prelaunch;
+  ALTER TABLE public.etablissements
+    ENABLE TRIGGER trg_forcer_compte_test_prelaunch;
 
   UPDATE auth.users
   SET raw_app_meta_data = '{"role":"SOIGNANT"}'::jsonb
@@ -903,9 +917,30 @@ BEGIN
   PERFORM set_config('request.jwt.claim.sub', '', true);
   PERFORM set_config('request.jwt.claim.role', 'service_role', true);
   PERFORM set_config('request.jwt.claims', '{"role":"service_role"}', true);
-  UPDATE public.parametres_systeme
-  SET valeur = 2
-  WHERE cle = 'annulations_justifiees_max_12m';
+  INSERT INTO public.parametres_systeme (
+    cle,
+    valeur,
+    label,
+    description,
+    unite,
+    categorie,
+    val_min,
+    val_max,
+    cablee
+  )
+  VALUES (
+    'annulations_justifiees_max_12m',
+    2,
+    'Fixture empêchements impérieux',
+    'Paramètre transactionnel de la recette empêchement.',
+    'annulations',
+    'GENERAL',
+    0,
+    20,
+    true
+  )
+  ON CONFLICT (cle) DO UPDATE
+  SET valeur = EXCLUDED.valeur;
 
   -- Les trois sentinelles doivent survivre aux deux appels et à leurs
   -- sous-blocs EXCEPTION. app.test_mode neutralise push/email/SMS.
@@ -1227,9 +1262,11 @@ BEGIN
   INTO STRICT v_score_apres, v_total_annulees
   FROM public.soignants
   WHERE id = v_soignant;
+  -- En pré-lancement, les missions de test créent bien leur remplacement mais
+  -- le trigger urgent coupe tout fan-out, y compris vers les comptes de test.
   IF COALESCE((v_result_test->>'success')::boolean, false) IS NOT TRUE
      OR COALESCE((v_result_test->>'depassement')::boolean, false) IS NOT TRUE
-     OR (v_result_test->>'pool_alerte')::integer < 1
+     OR (v_result_test->>'pool_alerte')::integer IS DISTINCT FROM 0
      OR v_remplacement_id IS NULL
      OR (v_result_test->>'mission_diffusee_id')::uuid
           IS DISTINCT FROM v_remplacement_id
@@ -1674,7 +1711,7 @@ BEGIN
 
   IF v_notification_reel_reel IS DISTINCT FROM 1
      OR v_notification_reel_test IS DISTINCT FROM 0
-     OR v_notification_test_test IS DISTINCT FROM 1
+     OR v_notification_test_test IS DISTINCT FROM 0
      OR v_notification_test_reel IS DISTINCT FROM 0
      OR v_notifications_cross_class IS DISTINCT FROM 0 THEN
     RAISE EXCEPTION

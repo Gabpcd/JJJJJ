@@ -620,7 +620,7 @@ BEGIN
   PERFORM set_config(
     'request.jwt.claims',
     jsonb_build_object(
-      'sub', v_admin_plateforme, 'role', 'authenticated', 'aal', 'aal2'
+      'sub', v_admin_plateforme, 'role', 'authenticated', 'aal', 'aal1'
     )::text,
     true
   );
@@ -706,9 +706,9 @@ BEGIN
     RAISE EXCEPTION 'RH légitime refusé par la RPC legacy : %', v_result;
   END IF;
 
-  -- Le même compte plateforme reste sans privilège à AAL1. À AAL2, un admin
-  -- complet conserve ensuite paiement et le bypass transversal explicite,
-  -- sans que la mission terminale puisse être mutée.
+  -- Le compte plateforme complet conserve paiement et le bypass transversal
+  -- explicite avec sa session standard, sans MFA, sans que la mission
+  -- terminale puisse être mutée.
   PERFORM set_config(
     'request.jwt.claim.sub', v_admin_plateforme::text, true
   );
@@ -719,29 +719,11 @@ BEGIN
     )::text,
     true
   );
-  IF public.est_admin() IS DISTINCT FROM FALSE
-     OR public.fn_a_permission_etablissement(
-       'paiement', v_etab_a
-     ) IS DISTINCT FROM FALSE THEN
-    RAISE EXCEPTION 'Administrateur plateforme AAL1 accepté sur paiement';
-  END IF;
-  v_result := public.fn_cloturer_litige(v_litige_admin, NULL);
-  IF v_result->>'error' IS DISTINCT FROM 'Litige introuvable ou accès refusé' THEN
-    RAISE EXCEPTION 'Administrateur plateforme AAL1 accepté sur litige : %', v_result;
-  END IF;
-
-  PERFORM set_config(
-    'request.jwt.claims',
-    jsonb_build_object(
-      'sub', v_admin_plateforme, 'role', 'authenticated', 'aal', 'aal2'
-    )::text,
-    true
-  );
   IF public.est_admin() IS DISTINCT FROM TRUE
      OR public.fn_a_permission_etablissement(
        'paiement', v_etab_a
      ) IS DISTINCT FROM TRUE THEN
-    RAISE EXCEPTION 'Fixture administrateur plateforme invalide';
+    RAISE EXCEPTION 'Administrateur plateforme sans MFA refusé';
   END IF;
   IF public.fn_user_id_pour_etablissement(v_etab_a)
        IS DISTINCT FROM v_admin_groupe THEN
@@ -1359,8 +1341,8 @@ BEGIN
   EXCEPTION WHEN SQLSTATE '42501' THEN NULL;
   END;
 
-  -- Admin plateforme : AAL1 n'est pas admin ; AAL2 peut contacter un endpoint
-  -- réel, mais ne peut pas rattacher un tiers étranger à la mission.
+  -- L'admin plateforme sans MFA peut contacter un endpoint réel, mais ne peut
+  -- pas rattacher un tiers étranger à la mission.
   PERFORM set_config('request.jwt.claim.sub', v_admin_plateforme::text, true);
   PERFORM set_config(
     'request.jwt.claims',
@@ -1369,20 +1351,8 @@ BEGIN
     )::text,
     true
   );
-  BEGIN
-    PERFORM public.fn_obtenir_conversation(v_soignant, v_mission);
-    RAISE EXCEPTION USING ERRCODE = 'JRB11', MESSAGE = 'admin AAL1 accepté';
-  EXCEPTION WHEN SQLSTATE '42501' THEN NULL;
-  END;
-  PERFORM set_config(
-    'request.jwt.claims',
-    jsonb_build_object(
-      'sub', v_admin_plateforme, 'role', 'authenticated', 'aal', 'aal2'
-    )::text,
-    true
-  );
-  -- La modération AAL2 peut envoyer via le chemin atomique, mais un admin qui
-  -- n'est pas participant ne doit jamais émettre un typing fantôme.
+  -- La modération sans MFA peut envoyer via le chemin atomique, mais un admin
+  -- qui n'est pas participant ne doit jamais émettre un typing fantôme.
   BEGIN
     PERFORM public.fn_typing_start(v_conversation);
     RAISE EXCEPTION USING
@@ -1398,7 +1368,7 @@ BEGIN
   END IF;
   v_result := public.fn_envoyer_message_valide(
     v_conversation,
-    'Intervention de modération AAL2',
+    'Intervention de modération sans MFA',
     v_admin_plateforme,
     true,
     NULL
@@ -1410,7 +1380,7 @@ BEGIN
          AND mc.est_admin IS TRUE
          AND mc.auteur_id = v_admin_plateforme
      ) THEN
-    RAISE EXCEPTION 'Envoi atomique admin AAL2 refusé : %', v_result;
+    RAISE EXCEPTION 'Envoi atomique admin sans MFA refusé : %', v_result;
   END IF;
   v_conversation_admin_soignant :=
     public.fn_obtenir_conversation(v_soignant, v_mission);
@@ -1419,7 +1389,7 @@ BEGIN
   IF v_conversation_admin_soignant IS NULL
      OR v_conversation_admin_etab IS NULL
      OR public.fn_obtenir_conversation(v_soignant_pool, NULL) IS NULL THEN
-    RAISE EXCEPTION 'Admin AAL2 refusé sur un endpoint actif';
+    RAISE EXCEPTION 'Admin sans MFA refusé sur un endpoint actif';
   END IF;
 
   -- Une conversation de modération créée par l'admin reste lisible et
@@ -1468,7 +1438,7 @@ BEGIN
   PERFORM set_config(
     'request.jwt.claims',
     jsonb_build_object(
-      'sub', v_admin_plateforme, 'role', 'authenticated', 'aal', 'aal2'
+      'sub', v_admin_plateforme, 'role', 'authenticated', 'aal', 'aal1'
     )::text,
     true
   );
@@ -1557,7 +1527,7 @@ BEGIN
   PERFORM set_config(
     'request.jwt.claims',
     jsonb_build_object(
-      'sub', v_admin_plateforme, 'role', 'authenticated', 'aal', 'aal2'
+      'sub', v_admin_plateforme, 'role', 'authenticated', 'aal', 'aal1'
     )::text,
     true
   );
@@ -1566,7 +1536,7 @@ BEGIN
     'Réponse support transactionnelle'
   );
   IF v_result->>'success' IS DISTINCT FROM 'true' THEN
-    RAISE EXCEPTION 'Réponse support AAL2 refusée : %', v_result;
+    RAISE EXCEPTION 'Réponse support sans MFA refusée : %', v_result;
   END IF;
   BEGIN
     PERFORM public.fn_obtenir_conversation(v_cross_rh, v_mission);

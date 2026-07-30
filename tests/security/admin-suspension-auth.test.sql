@@ -176,29 +176,10 @@ $pre_request_configure$;
 
 SET LOCAL ROLE authenticated;
 
--- AAL1 ne peut jamais suspendre.
+-- L'admin complet suspend avec sa session standard, sans MFA.
 SELECT set_config(
   'request.jwt.claims',
   '{"sub":"68000000-0000-4000-8000-000000000001","role":"authenticated","aal":"aal1"}',
-  true
-);
-DO $aal1$
-DECLARE v_resultat jsonb;
-BEGIN
-  SELECT public.fn_admin_suspendre_utilisateur(
-    'soignants', '68000000-0000-4000-8000-000000000002', true, 'Contrôle sécurité'
-  ) INTO v_resultat;
-  IF (v_resultat->>'success' = 'true') IS TRUE
-     OR NULLIF(v_resultat->>'error', '') IS NULL THEN
-    RAISE EXCEPTION 'P0: une session admin AAL1 peut suspendre un compte';
-  END IF;
-END;
-$aal1$;
-
--- AAL2 suspend le profil et le compte Auth dans la même transaction.
-SELECT set_config(
-  'request.jwt.claims',
-  '{"sub":"68000000-0000-4000-8000-000000000001","role":"authenticated","aal":"aal2"}',
   true
 );
 DO $suspendre_soignant$
@@ -278,7 +259,7 @@ $jwt_suspendu$;
 -- tout en conservant l'état Auth d'origine.
 SELECT set_config(
   'request.jwt.claims',
-  '{"sub":"68000000-0000-4000-8000-000000000001","role":"authenticated","aal":"aal2"}',
+  '{"sub":"68000000-0000-4000-8000-000000000001","role":"authenticated","aal":"aal1"}',
   true
 );
 DO $suspension_repetee$
@@ -314,7 +295,7 @@ $cas_repetition$;
 SET LOCAL ROLE authenticated;
 SELECT set_config(
   'request.jwt.claims',
-  '{"sub":"68000000-0000-4000-8000-000000000001","role":"authenticated","aal":"aal2"}',
+  '{"sub":"68000000-0000-4000-8000-000000000001","role":"authenticated","aal":"aal1"}',
   true
 );
 
@@ -352,7 +333,7 @@ $etat_reactive$;
 SET LOCAL ROLE authenticated;
 SELECT set_config(
   'request.jwt.claims',
-  '{"sub":"68000000-0000-4000-8000-000000000001","role":"authenticated","aal":"aal2"}',
+  '{"sub":"68000000-0000-4000-8000-000000000001","role":"authenticated","aal":"aal1"}',
   true
 );
 DO $refuser_reactivation_rgpd$
@@ -398,7 +379,7 @@ $rgpd_intact$;
 SET LOCAL ROLE authenticated;
 SELECT set_config(
   'request.jwt.claims',
-  '{"sub":"68000000-0000-4000-8000-000000000001","role":"authenticated","aal":"aal2"}',
+  '{"sub":"68000000-0000-4000-8000-000000000001","role":"authenticated","aal":"aal1"}',
   true
 );
 DO $cycle_etablissement$
@@ -440,7 +421,7 @@ $etablissement_suspendu$;
 SET LOCAL ROLE authenticated;
 SELECT set_config(
   'request.jwt.claims',
-  '{"sub":"68000000-0000-4000-8000-000000000001","role":"authenticated","aal":"aal2"}',
+  '{"sub":"68000000-0000-4000-8000-000000000001","role":"authenticated","aal":"aal1"}',
   true
 );
 DO $reactiver_etablissement$

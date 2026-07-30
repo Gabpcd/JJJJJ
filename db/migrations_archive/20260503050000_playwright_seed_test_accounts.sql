@@ -77,18 +77,18 @@ BEGIN
     rayon_deplacement_km, annees_experience,
     tous_documents_valides, identite_verifiee, rpps_verifie, numero_rpps,
     score_fiabilite, total_missions_terminees, heures_cumulees,
-    bio, date_naissance,
+    bio, date_naissance, est_compte_test,
     cree_le
   ) VALUES (
     v_soignant_id,
     'Playwright', 'TestSoignant', 'playwright-soignant@jolene.app', '+33600000001',
-    'INFIRMIER', 'CDDU', 'CDDU,VACATION',
+    'IDE', 'CDD', 'CDD,VACATION',
     '1 rue de Test', 'Paris', '75001', 48.8566, 2.3522,
     20, 5,
     true, true, true, '99999999999',
     50, 0, 0,
     'Compte test généré par migration Playwright (NE PAS UTILISER pour vraies missions).',
-    '1990-01-01',
+    '1990-01-01', true,
     now()
   )
   ON CONFLICT (id) DO UPDATE SET
@@ -99,6 +99,7 @@ BEGIN
     tous_documents_valides = true,
     identite_verifiee = true,
     rpps_verifie = true,
+    est_compte_test = true,
     bio = EXCLUDED.bio;
 END $$;
 
@@ -152,21 +153,21 @@ BEGIN
 
   -- Profil étab complet + onboarding marqué fait
   INSERT INTO public.etablissements (
-    id, nom, siret, type, secteur,
+    id, nom, siret, type,
     adresse_rue, adresse_ville, adresse_code_postal, adresse_lat, adresse_lng,
     email_contact, telephone_contact,
     contrat_service_signe, contrat_service_signe_le,
-    rib_s3_key,
+    rib_s3_key, est_compte_test,
     cree_le
   ) VALUES (
     v_etab_id,
     'Clinique Playwright Test',
     '99999999999999',
-    'CLINIQUE', 'PRIVE',
+    'CLINIQUE_PRIVEE',
     '1 rue de Test', 'Paris', '75002', 48.8666, 2.3322,
     'playwright-etab@jolene.app', '+33100000001',
     true, now(),
-    'playwright-test/seed/rib-fictif.pdf',
+    'playwright-test/seed/rib-fictif.pdf', true,
     now()
   )
   ON CONFLICT (id) DO UPDATE SET
@@ -175,6 +176,7 @@ BEGIN
     type = EXCLUDED.type,
     contrat_service_signe = true,
     contrat_service_signe_le = COALESCE(public.etablissements.contrat_service_signe_le, now()),
+    est_compte_test = true,
     rib_s3_key = COALESCE(NULLIF(public.etablissements.rib_s3_key, 'legacy/auto-backfill'), 'playwright-test/seed/rib-fictif.pdf');
 END $$;
 

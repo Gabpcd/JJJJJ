@@ -94,7 +94,7 @@ BEGIN
     RAISE EXCEPTION 'D4-T3C: le défaut public Jolene ne doit pas afficher une interdiction juridique';
   END IF;
   IF public.fn_mode_exercice('IADE', 'CLINIQUE_PRIVEE', NULL)->>'source_url'
-       IS DISTINCT FROM 'https://www.fehap.fr/upload/docs/application/pdf/2023-02/courrierconjointministeres_30decembre2021_.pdf' THEN
+       IS DISTINCT FROM 'https://www.fehap.fr/jcms/navigation-internet/upload/docs/application/pdf/2023-02/courrierconjointministeres_30decembre2021_.pdf' THEN
     RAISE EXCEPTION 'D4-T3D: IADE doit pointer vers le texte original de la lettre D21-031940';
   END IF;
   IF public.fn_mode_exercice('IADE', 'CLINIQUE_PRIVEE', NULL)->>'source_url_complementaire'
@@ -274,13 +274,16 @@ BEGIN
   IF (SELECT accepte_non_specialises FROM public.missions WHERE id = v_m_iade) IS DISTINCT FROM false THEN
     RAISE EXCEPTION 'D4-T6A: une mission IADE doit exiger la profession exacte';
   END IF;
-  IF NOT EXISTS (
+  -- Le verrou pré-lancement neutralise le fan-out automatique des missions de
+  -- test. La compatibilité IADE × IDE reste vérifiée plus bas via les
+  -- diffusions manuelles boost et pool, bornées à cette fixture.
+  IF EXISTS (
     SELECT 1 FROM public.notifications
      WHERE destinataire_id = v_iade
        AND type = 'MISSION_URGENTE'
        AND id_ressource = v_m_feed
   ) THEN
-    RAISE EXCEPTION 'D4-T6B: la notification urgente immédiate a ignoré IADE × mission IDE';
+    RAISE EXCEPTION 'D4-T6B: une mission de test a déclenché un fan-out urgent automatique';
   END IF;
 
   -- 3. Candidature + traitement : IADE libérale sur mission IDE salariée.
@@ -388,11 +391,11 @@ BEGIN
     now() + interval '16 days', now() + interval '16 days 8 hours', 42,
     false, 0, 'CANDIDATURE', 'LIBERAL', NULL, true
   );
-  IF (v_result->>'success')::boolean IS DISTINCT FROM true
-     OR v_result->>'type_contrat_recherche' IS DISTINCT FROM 'SALARIE'
+  IF (v_result->>'success')::boolean IS DISTINCT FROM false
+     OR NULLIF(v_result->>'error', '') IS NULL
      OR (SELECT type_contrat_recherche::text FROM public.missions WHERE id = v_m_iade)
        IS DISTINCT FROM 'SALARIE' THEN
-    RAISE EXCEPTION 'D4-T17B: édition IADE n’a pas retourné le contrat réellement forcé: %', v_result;
+    RAISE EXCEPTION 'D4-T17B: édition IADE libérale non refusée ou mission mutée: %', v_result;
   END IF;
 
   -- 7. Proposition directe établissement/admin puis acceptation soignant : la

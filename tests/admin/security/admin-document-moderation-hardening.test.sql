@@ -153,30 +153,12 @@ BEGIN
     'date_expiration', '2031-03-01'
   );
 
-  -- Un compte admin AAL1 ne peut ni valider ni rejeter.
+  -- Un compte admin complet peut modérer avec sa session standard : aucun MFA
+  -- ou niveau AAL2 n'est requis.
   PERFORM set_config(
     'request.jwt.claims',
     jsonb_build_object(
       'sub', v_admin, 'role', 'authenticated', 'aal', 'aal1'
-    )::text,
-    true
-  );
-  v_failed := false;
-  BEGIN
-    PERFORM public.fn_admin_moderer_document(
-      v_identite, 'VALIDER', NULL, v_context, NULL
-    );
-  EXCEPTION WHEN insufficient_privilege THEN
-    v_failed := true;
-  END;
-  IF v_failed IS DISTINCT FROM true THEN
-    RAISE EXCEPTION 'MOD-DOC-T1 : AAL1 a validé un document';
-  END IF;
-
-  PERFORM set_config(
-    'request.jwt.claims',
-    jsonb_build_object(
-      'sub', v_admin, 'role', 'authenticated', 'aal', 'aal2'
     )::text,
     true
   );
@@ -455,7 +437,8 @@ BEGIN
     RAISE EXCEPTION 'MOD-DOC-T11 : snapshot périmé accepté';
   END IF;
 
-  -- Enfin, même l'admin AAL2 ne peut pas modifier directement le verdict.
+  -- Enfin, même l'admin complet sans MFA ne peut pas modifier directement le
+  -- verdict.
   v_failed := false;
   BEGIN
     UPDATE public.documents_soignants

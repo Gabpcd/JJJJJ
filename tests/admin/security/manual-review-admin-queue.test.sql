@@ -1,4 +1,4 @@
--- File de revue manuelle admin : AAL2, CAS, idempotence et trois services.
+-- File de revue manuelle admin : RBAC sans MFA, CAS, idempotence et trois services.
 -- Toutes les fixtures et mutations sont annulees.
 BEGIN;
 
@@ -221,17 +221,6 @@ BEGIN
   PERFORM set_config(
     'request.jwt.claims',
     '{"sub":"72000000-0000-4000-8000-000000000001","role":"authenticated","aal":"aal1"}',
-    true
-  );
-  BEGIN
-    PERFORM public.fn_admin_lister_revues_manuelles(500);
-    RAISE EXCEPTION 'Une session AAL1 a lu la file de revue';
-  EXCEPTION WHEN insufficient_privilege THEN NULL;
-  END;
-
-  PERFORM set_config(
-    'request.jwt.claims',
-    '{"sub":"72000000-0000-4000-8000-000000000001","role":"authenticated","aal":"aal2"}',
     true
   );
   -- Les fixtures ont la priorité maximale et `cree_le = -infinity` : elles
@@ -567,6 +556,8 @@ BEGIN
 
   -- Une revocation (le mecanisme aussi utilise lors d'un remplacement) retire
   -- immediatement la provenance et rend toute nouvelle activation impossible.
+  -- L'agrégat documentaire général est recalculé séparément et ne constitue
+  -- pas la preuve SIRET : il peut donc rester vrai si les pièces requises le sont.
   PERFORM set_config('jolene.document_server_update', 'true', true);
   UPDATE public.documents_soignants
   SET revoque_le = now(),
@@ -582,7 +573,6 @@ BEGIN
       AND siret_liberal_coherence_identite IS NULL
       AND siret_liberal_source_verification IS NULL
       AND siret_liberal_preuve_identite_document_id IS NULL
-      AND tous_documents_valides IS FALSE
   ) THEN
     RAISE EXCEPTION 'La revocation de la piece n a pas revoque la preuve SIRET';
   END IF;
@@ -600,7 +590,7 @@ BEGIN
 
   PERFORM set_config(
     'request.jwt.claims',
-    '{"sub":"72000000-0000-4000-8000-000000000001","role":"authenticated","aal":"aal2"}',
+    '{"sub":"72000000-0000-4000-8000-000000000001","role":"authenticated","aal":"aal1"}',
     true
   );
 

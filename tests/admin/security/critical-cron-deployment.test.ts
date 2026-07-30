@@ -170,8 +170,16 @@ describe("déploiement fail-closed des crons critiques", () => {
       "supabase db query --linked --agent=no --output csv",
     );
     expect(stagingWorkflow).toContain(
-      "SELECT version, statements, name",
+      "SELECT version, statements::text AS statements, name",
     );
+    const inventoryReplayIndex = stagingWorkflow.indexOf(
+      "20260729121443_figer_inventaire_security_definer.sql",
+    );
+    const launchAssertionsIndex = stagingWorkflow.indexOf(
+      "Assert launch migrations on STAGING without cron activation",
+    );
+    expect(inventoryReplayIndex).toBeGreaterThanOrEqual(0);
+    expect(launchAssertionsIndex).toBeGreaterThan(inventoryReplayIndex);
     expect(stagingWorkflow).toContain(
       "\\\\copy supabase_migrations.schema_migrations(version, statements, name)",
     );
@@ -216,6 +224,18 @@ describe("déploiement fail-closed des crons critiques", () => {
       "private.fn_reconcilier_crons_edge_critiques_inactifs()",
     );
     expect(bootstrapDependencies).toContain(
+      "REVOKE ALL ON SCHEMA private FROM PUBLIC, anon, authenticated",
+    );
+    expect(bootstrapDependencies).toContain(
+      "GRANT USAGE ON SCHEMA private TO service_role",
+    );
+    expect(bootstrapDependencies).toContain(
+      "to_regclass('extensions.vm_fiabilite_soignants') IS NULL",
+    );
+    expect(bootstrapDependencies).toContain(
+      "CREATE VIEW extensions.vm_fiabilite_soignants",
+    );
+    expect(bootstrapDependencies).not.toContain(
       "CREATE OR REPLACE VIEW extensions.vm_fiabilite_soignants",
     );
   });

@@ -85,9 +85,25 @@ BEGIN
   SELECT pg_get_functiondef(
     'public.fn_envoyer_rappels_notation_j1()'::regprocedure
   ) INTO v_definition;
-  IF regexp_count(v_definition, 'IF v_send_email_called THEN')
-       IS DISTINCT FROM 2 THEN
-    RAISE EXCEPTION 'Marqueurs de rappel non conditionnes par le succes HTTP';
+  IF (v_definition ~ 'private[.]fn_controler_rappels_notation_j1[(][)]')
+       IS DISTINCT FROM true
+     OR (v_definition ~ 'INSERT INTO public[.]notifications_notation_j1')
+       IS DISTINCT FROM false THEN
+    RAISE EXCEPTION 'Rappels notation hors du contrôleur HTTP canonique';
+  END IF;
+
+  SELECT pg_get_functiondef(
+    'private.fn_controler_rappels_notation_j1()'::regprocedure
+  ) INTO v_definition;
+  IF (v_definition ~ 'status_code BETWEEN 200 AND 299')
+       IS DISTINCT FROM true
+     OR (v_definition ~ 'COALESCE[(]v_dispatch[.]timed_out, false[)] IS FALSE')
+       IS DISTINCT FROM true
+     OR (v_definition ~ 'v_dispatch[.]error_msg IS NULL')
+       IS DISTINCT FROM true
+     OR (v_definition ~ 'INSERT INTO public[.]notifications_notation_j1')
+       IS DISTINCT FROM true THEN
+    RAISE EXCEPTION 'Succès des rappels non conditionné par une réponse HTTP 2xx';
   END IF;
 
   SELECT pg_get_functiondef(
@@ -462,7 +478,16 @@ BEGIN
     RAISE EXCEPTION 'Garde ADMIN test trop permissive ou trop large';
   END IF;
 
-  UPDATE public.soignants SET est_compte_test = false WHERE id = v_soignant_id;
+  -- Simule la bascule post-lancement sans affaiblir le verrou pré-lancement :
+  -- le trigger est neutralisé uniquement pour cette ligne sous ROLLBACK.
+  SET CONSTRAINTS ALL IMMEDIATE;
+  ALTER TABLE public.soignants
+    DISABLE TRIGGER trg_forcer_compte_test_prelaunch;
+  UPDATE public.soignants
+     SET est_compte_test = false
+   WHERE id = v_soignant_id;
+  ALTER TABLE public.soignants
+    ENABLE TRIGGER trg_forcer_compte_test_prelaunch;
   INSERT INTO public.notifications(
     destinataire_id, type_destinataire, type, titre, corps
   ) VALUES (
