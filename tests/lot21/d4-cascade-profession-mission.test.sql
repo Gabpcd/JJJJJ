@@ -274,13 +274,16 @@ BEGIN
   IF (SELECT accepte_non_specialises FROM public.missions WHERE id = v_m_iade) IS DISTINCT FROM false THEN
     RAISE EXCEPTION 'D4-T6A: une mission IADE doit exiger la profession exacte';
   END IF;
-  IF NOT EXISTS (
+  -- Le verrou pré-lancement neutralise le fan-out automatique des missions de
+  -- test. La compatibilité IADE × IDE reste vérifiée plus bas via les
+  -- diffusions manuelles boost et pool, bornées à cette fixture.
+  IF EXISTS (
     SELECT 1 FROM public.notifications
      WHERE destinataire_id = v_iade
        AND type = 'MISSION_URGENTE'
        AND id_ressource = v_m_feed
   ) THEN
-    RAISE EXCEPTION 'D4-T6B: la notification urgente immédiate a ignoré IADE × mission IDE';
+    RAISE EXCEPTION 'D4-T6B: une mission de test a déclenché un fan-out urgent automatique';
   END IF;
 
   -- 3. Candidature + traitement : IADE libérale sur mission IDE salariée.
