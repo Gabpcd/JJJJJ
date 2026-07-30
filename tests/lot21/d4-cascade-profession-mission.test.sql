@@ -391,11 +391,11 @@ BEGIN
     now() + interval '16 days', now() + interval '16 days 8 hours', 42,
     false, 0, 'CANDIDATURE', 'LIBERAL', NULL, true
   );
-  IF (v_result->>'success')::boolean IS DISTINCT FROM true
-     OR v_result->>'type_contrat_recherche' IS DISTINCT FROM 'SALARIE'
+  IF (v_result->>'success')::boolean IS DISTINCT FROM false
+     OR NULLIF(v_result->>'error', '') IS NULL
      OR (SELECT type_contrat_recherche::text FROM public.missions WHERE id = v_m_iade)
        IS DISTINCT FROM 'SALARIE' THEN
-    RAISE EXCEPTION 'D4-T17B: édition IADE n’a pas retourné le contrat réellement forcé: %', v_result;
+    RAISE EXCEPTION 'D4-T17B: édition IADE libérale non refusée ou mission mutée: %', v_result;
   END IF;
 
   -- 7. Proposition directe établissement/admin puis acceptation soignant : la
