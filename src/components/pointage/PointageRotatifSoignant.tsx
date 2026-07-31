@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { QrCode, Loader2, Clock, CheckCircle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { SheetNotationRapide } from '@/components/NotationRapide';
@@ -9,8 +9,7 @@ import { obtenirPosition } from '@/lib/platform';
 import { genererIdTerminal } from '@/lib/terminal';
 import { scannerQr } from '@/lib/camera';
 import { toast } from 'sonner';
-import { format } from 'date-fns';
-import { fr } from 'date-fns/locale';
+import { cleJourParis, formatParis, memeJourParis } from '@/lib/date-heure-paris';
 
 /**
  * Pointage rotatif (PR 2/3) — côté SOIGNANT.
@@ -38,6 +37,7 @@ export function PointageRotatifSoignant({
   missionId: string;
   consentementGPS: boolean | null;
 }) {
+  const queryClient = useQueryClient();
   const [code, setCode] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [scanning, setScanning] = useState(false);
@@ -45,7 +45,7 @@ export function PointageRotatifSoignant({
   // (fin prévue atteinte). Skippable : le bandeau évaluations rattrape.
   const [notationOpen, setNotationOpen] = useState(false);
 
-  const { data, refetch, isLoading } = useQuery({
+  const { data, refetch, isLoading, isError, error: queryError } = useQuery({
     queryKey: ['etat-pointage-soignant', missionId],
     queryFn: async () => {
       const { data, error } = await supabase.rpc('fn_etat_pointage_mission' as any, { p_mission_id: missionId });
@@ -55,12 +55,45 @@ export function PointageRotatifSoignant({
     refetchInterval: 15000,
   });
 
-  if (isLoading || !data || data.error) return null;
-  if (!['ASSIGNEE', 'EN_COURS'].includes(data.statut)) return null;
+  if (isLoading) {
+    return (
+      <div className="card-base flex items-center gap-2 text-sm text-muted-foreground" role="status">
+        <Loader2 className="h-4 w-4 animate-spin" /> Chargement du pointage…
+      </div>
+    );
+  }
+  if (isError || !data || data.error) {
+    return (
+      <div className="card-base border-destructive/30" role="alert">
+        <p className="text-sm font-semibold text-destructive">Pointage momentanément indisponible</p>
+        <p className="text-xs text-muted-foreground mt-1">
+          {data?.error || (queryError ? extraireMessageErreur(queryError) : 'Impossible de charger son état.')}
+        </p>
+        <BoutonY2K size="sm" variant="secondary" className="mt-3" onClick={() => refetch()}>
+          Réessayer
+        </BoutonY2K>
+      </div>
+    );
+  }
+  if (!['ASSIGNEE', 'EN_COURS'].includes(data.statut)) {
+    return (
+      <div className="card-base text-sm text-muted-foreground" role="status">
+        Le pointage n'est pas disponible pour le statut actuel de cette mission.
+      </div>
+    );
+  }
 
   const ouvert = data.segment_ouvert;
-  const actionLabel = ouvert ? 'Pointer mon départ / pause' : (data.segments.length === 0 ? "Pointer mon arrivée" : 'Pointer ma reprise');
+  const aDejaPointeAujourdHui = data.segments.some((segment) => (
+    memeJourParis(segment.debut, new Date())
+  ));
+  const actionLabel = ouvert
+    ? 'Pointer mon départ / pause'
+    : (aDejaPointeAujourdHui ? 'Pointer mon arrivée / ma reprise' : "Pointer mon arrivée");
   const segmentEnCours = data.segments.find((s) => s.fin === null);
+  const segmentsSurPlusieursJours = new Set(
+    data.segments.map((segment) => cleJourParis(segment.debut)),
+  ).size > 1;
 
   const envoyer = async (codeSaisi: string) => {
     const c = codeSaisi.trim();
@@ -86,7 +119,11 @@ export function PointageRotatifSoignant({
     if ('vibrate' in navigator) navigator.vibrate(type === 'OUVERTURE' ? 200 : [200, 100, 200]);
     toast.success(type === 'OUVERTURE' ? '✅ Pointage enregistré — segment ouvert' : '✅ Pointage enregistré — segment fermé');
     setCode('');
-    refetch();
+    await Promise.all([
+      refetch(),
+      queryClient.invalidateQueries({ queryKey: ['presences-soignant'] }),
+      queryClient.invalidateQueries({ queryKey: ['dashboard-soignant'] }),
+    ]);
 
     // F4 : au check-out FINAL (fermeture alors que la fin prévue est atteinte),
     // proposer la note 1-tap — une seule fois par mission.
@@ -123,7 +160,7 @@ export function PointageRotatifSoignant({
         <h3 className="font-semibold text-foreground text-sm">Pointage</h3>
         {ouvert && segmentEnCours && (
           <span className="ml-auto inline-flex items-center gap-1 text-xs text-success font-semibold">
-            <Clock className="h-3.5 w-3.5" /> En service depuis {format(new Date(segmentEnCours.debut), "HH'h'mm", { locale: fr })}
+            <Clock className="h-3.5 w-3.5" /> En service depuis {formatParis(segmentEnCours.debut, "HH'h'mm")}
           </span>
         )}
       </div>
@@ -167,8 +204,11 @@ export function PointageRotatifSoignant({
             <div key={s.id} className="flex items-center justify-between text-xs text-muted-foreground">
               <span>Segment {i + 1}</span>
               <span>
-                {format(new Date(s.debut), "HH'h'mm", { locale: fr })}
-                {s.fin ? ` → ${format(new Date(s.fin), "HH'h'mm", { locale: fr })}` : ' → en cours'}
+                {formatParis(
+                  s.debut,
+                  segmentsSurPlusieursJours ? "d MMM · HH'h'mm" : "HH'h'mm",
+                )}
+                {s.fin ? ` → ${formatParis(s.fin, "HH'h'mm")}` : ' → en cours'}
               </span>
             </div>
           ))}

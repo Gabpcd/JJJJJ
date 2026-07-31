@@ -5,11 +5,14 @@ export function useEtablissementScope() {
   const { user } = useAuth();
   const { role, etablissement_id, loading, resolved, error, retry } = useRole();
 
-  // La RPC actuelle fournit toujours etablissement_id pour les comptes et
-  // membres ADMIN_ETABLISSEMENT. Le seul fallback toléré couvre l'ancien rôle
-  // ETABLISSEMENT, après une résolution serveur explicitement réussie.
-  const legacyEtablissementId = resolved && !error && role === 'ETABLISSEMENT'
-    ? user?.id ?? null
+  // Les anciens comptes mono-établissement utilisaient leur user.id comme
+  // établissement et un rôle signé ETABLISSEMENT, sans métadonnée de scope.
+  // On garde ce repli strictement borné à cet ancien alias signé.
+  const legacyEtablissementId = resolved
+    && !error
+    && role === 'ADMIN_ETABLISSEMENT'
+    && user?.app_metadata?.role === 'ETABLISSEMENT'
+    ? user.id
     : null;
   const etablissementId = resolved && !error
     ? etablissement_id ?? legacyEtablissementId

@@ -4,14 +4,22 @@ import { BreadcrumbAdmin } from '@/components/BreadcrumbAdmin';
 import { ChargementAdmin } from '@/components/admin/ChargementAdmin';
 import { supabase } from '@/integrations/supabase/client';
 import { usePageTitle } from '@/hooks/usePageTitle';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
-import {
-  format, startOfMonth, endOfMonth, startOfWeek, endOfWeek,
-  addMonths, addDays, isSameMonth, isSameDay, isToday
-} from 'date-fns';
-import { fr } from 'date-fns/locale';
+import { AlertTriangle, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { BADGES_STATUT } from '@/lib/constantes';
+import { extraireMessageErreur } from '@/lib/erreurs';
+import {
+  ajouterJoursCivilsParis,
+  ajouterMoisCivilsParis,
+  cleJourParis,
+  debutJourParis,
+  debutMoisParis,
+  debutSemaineParis,
+  finMoisParis,
+  formatParis,
+  memeJourParis,
+  memeMoisParis,
+} from '@/lib/date-heure-paris';
 
 const JOURS_SEMAINE = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
 
@@ -26,8 +34,17 @@ type MissionCal = {
   profession_requise: string;
   service: string | null;
   est_urgente: boolean;
+  nb_creneaux?: number | null;
   etab_nom?: string;
   soignant_nom?: string;
+  creneaux: CreneauCal[];
+  planningManquant?: boolean;
+};
+
+type CreneauCal = {
+  mission_id: string;
+  debut: string;
+  fin: string;
 };
 
 function getStatutStyle(m: MissionCal): { bg: string; text: string; label: string } {
@@ -37,7 +54,7 @@ function getStatutStyle(m: MissionCal): { bg: string; text: string; label: strin
   switch (m.statut) {
     case 'OUVERTE': return { bg: 'bg-warning', text: 'text-warning-foreground', label: 'Ouverte' };
     case 'ASSIGNEE': return { bg: 'bg-info', text: 'text-info-foreground', label: 'Assignée' };
-    case 'EN_COURS': return { bg: 'bg-success', text: 'text-success-foreground', label: 'En cours' };
+    case 'EN_COURS': return { bg: 'bg-success', text: 'text-success-foreground', label: 'Active' };
     case 'TERMINEE': return { bg: 'bg-muted-foreground/40', text: 'text-foreground', label: 'Terminée' };
     case 'ANNULEE_PAR_ETABLISSEMENT':
     case 'ANNULEE_PAR_SOIGNANT': return { bg: 'bg-destructive/60', text: 'text-destructive-foreground', label: 'Annulée' };
@@ -46,74 +63,149 @@ function getStatutStyle(m: MissionCal): { bg: string; text: string; label: strin
 }
 
 function getHorairePourJour(m: MissionCal, d: Date): string {
-  const debut = new Date(m.debut_le);
-  const fin = new Date(m.fin_le);
+  if (m.planningManquant) return 'Planning détaillé à confirmer';
+  const creneaux = m.creneaux.filter(creneau => creneauChevaucheJour(creneau, d));
+  if (creneaux.length === 0) return 'Horaire non renseigné';
 
-  if (isSameDay(debut, fin)) return `${format(debut, 'HH:mm')}–${format(fin, 'HH:mm')}`;
-  if (isSameDay(d, debut)) return `Débute à ${format(debut, 'HH:mm')}`;
-  if (isSameDay(d, fin)) return `Se termine à ${format(fin, 'HH:mm')}`;
-  return 'Mission en cours toute la journée';
+  const debutJour = `${cleJourParis(d)}T00:00:00`;
+  const debutLendemain = `${cleJourParis(ajouterJoursCivilsParis(d, 1))}T00:00:00`;
+  return creneaux
+    .map(creneau => {
+      const debutCreneau = formatParis(creneau.debut, "yyyy-MM-dd'T'HH:mm:ss");
+      const finCreneau = formatParis(creneau.fin, "yyyy-MM-dd'T'HH:mm:ss");
+      const heureDebut = debutCreneau < debutJour ? '00:00' : formatParis(creneau.debut, 'HH:mm');
+      const heureFin = finCreneau > debutLendemain ? '00:00' : formatParis(creneau.fin, 'HH:mm');
+      return `${heureDebut}–${heureFin}`;
+    })
+    .join(' · ');
+}
+
+function creneauChevaucheJour(creneau: CreneauCal, d: Date): boolean {
+  const jourDebut = `${cleJourParis(debutJourParis(d))}T00:00:00`;
+  const lendemain = `${cleJourParis(ajouterJoursCivilsParis(d, 1))}T00:00:00`;
+  const debutCreneau = formatParis(creneau.debut, "yyyy-MM-dd'T'HH:mm:ss");
+  const finCreneau = formatParis(creneau.fin, "yyyy-MM-dd'T'HH:mm:ss");
+  return debutCreneau < lendemain && finCreneau > jourDebut;
 }
 
 export default function AdminCalendrier() {
   usePageTitle('Calendrier missions');
   const navigate = useNavigate();
-  const [moisCourant, setMoisCourant] = useState(new Date());
+  const [moisCourant, setMoisCourant] = useState(() => debutMoisParis(new Date()));
   const [missions, setMissions] = useState<MissionCal[]>([]);
   const [loading, setLoading] = useState(true);
+  const [erreurChargement, setErreurChargement] = useState<string | null>(null);
+  const [tentativeChargement, setTentativeChargement] = useState(0);
   const [filtreStatut, setFiltreStatut] = useState<string | null>(null);
 
-  const { debutGrille, finGrille } = useMemo(() => ({
-    debutGrille: startOfWeek(startOfMonth(moisCourant), { weekStartsOn: 1 }),
-    finGrille: endOfWeek(endOfMonth(moisCourant), { weekStartsOn: 1 }),
-  }), [moisCourant]);
+  const { debutGrille, finGrille, finGrilleExclusive } = useMemo(() => {
+    const debut = debutSemaineParis(debutMoisParis(moisCourant));
+    const finExclusive = ajouterJoursCivilsParis(debutSemaineParis(finMoisParis(moisCourant)), 7);
+    return {
+      debutGrille: debut,
+      finGrille: new Date(finExclusive.getTime() - 1),
+      finGrilleExclusive: finExclusive,
+    };
+  }, [moisCourant]);
 
   const jours: Date[] = [];
   let jour = debutGrille;
-  while (jour <= finGrille) {
+  while (jour < finGrilleExclusive) {
     jours.push(jour);
-    jour = addDays(jour, 1);
+    jour = ajouterJoursCivilsParis(jour, 1);
   }
 
   useEffect(() => {
+    let actif = true;
     setLoading(true);
-    supabase
+    setErreurChargement(null);
+    void Promise.resolve(supabase
       .from('missions')
-      .select('id, intitule, debut_le, fin_le, statut, soignant_assigne_id, etablissement_id, profession_requise, service, est_urgente')
+      .select('id, intitule, debut_le, fin_le, statut, soignant_assigne_id, etablissement_id, profession_requise, service, est_urgente, nb_creneaux')
       .gte('fin_le', debutGrille.toISOString())
       .lte('debut_le', finGrille.toISOString())
       .order('debut_le')
-      .then(async ({ data }) => {
-        const items = (data || []) as MissionCal[];
+      .then(async ({ data, error }) => {
+        if (error) throw error;
+        const items = (data || []).map(mission => ({
+          ...(mission as Omit<MissionCal, 'creneaux'>),
+          creneaux: [],
+        }));
         if (items.length > 0) {
           const etabIds = [...new Set(items.map(m => m.etablissement_id))];
           const soignantIds = [...new Set(items.map(m => m.soignant_assigne_id).filter(Boolean))] as string[];
+          const missionIds = items.map(m => m.id);
 
-          const [resEtabs, resSoignants] = await Promise.all([
+          const [resEtabs, resSoignants, resCreneaux] = await Promise.all([
             etabIds.length ? supabase.from('etablissements').select('id, nom').in('id', etabIds) : Promise.resolve({ data: [] } as any),
             soignantIds.length ? supabase.from('soignants').select('id, prenom, nom').in('id', soignantIds) : Promise.resolve({ data: [] } as any),
+            supabase
+              .from('mission_creneaux')
+              .select('mission_id, debut, fin')
+              .in('mission_id', missionIds)
+              .eq('type_creneau', 'PREVISIONNEL')
+              .eq('est_pause', false)
+              .not('fin', 'is', null)
+              .gte('fin', debutGrille.toISOString())
+              .lte('debut', finGrille.toISOString())
+              .order('debut'),
           ]);
+
+          const erreurDependance = (resEtabs as any).error
+            || (resSoignants as any).error
+            || (resCreneaux as any).error;
+          if (erreurDependance) throw erreurDependance;
 
           const etabMap = new Map<string, string>((resEtabs.data || []).map((e: any) => [e.id, e.nom]));
           const soignantMap = new Map<string, string>((resSoignants.data || []).map((s: any) => [s.id, `${s.prenom || ''} ${s.nom || ''}`.trim()]));
+          const creneauxMap = new Map<string, CreneauCal[]>();
+          (resCreneaux.data || []).forEach((creneau: { mission_id: string; debut: string; fin: string | null }) => {
+            if (!creneau.fin) return;
+            const creneauxMission = creneauxMap.get(creneau.mission_id) || [];
+            creneauxMission.push({ ...creneau, fin: creneau.fin });
+            creneauxMap.set(creneau.mission_id, creneauxMission);
+          });
 
           items.forEach(m => {
             m.etab_nom = etabMap.get(m.etablissement_id) || '';
             m.soignant_nom = m.soignant_assigne_id ? soignantMap.get(m.soignant_assigne_id) || '' : '';
+            const creneauxMission = creneauxMap.get(m.id) || [];
+            if (creneauxMission.length > 0) {
+              m.creneaux = creneauxMission;
+              return;
+            }
+
+            const debutMs = new Date(m.debut_le).getTime();
+            const finMs = new Date(m.fin_le).getTime();
+            const dureeMs = finMs - debutMs;
+            if (Number.isFinite(dureeMs) && dureeMs > 0 && dureeMs <= 24 * 60 * 60_000) {
+              // Compatibilité avec les missions ponctuelles créées avant que
+              // la table mission_creneaux devienne systématique.
+              m.creneaux = [{ mission_id: m.id, debut: m.debut_le, fin: m.fin_le }];
+            } else if (!m.nb_creneaux) {
+              // Une mission longue sans détail ne doit surtout pas être
+              // étalée sur chaque jour de sa plage globale.
+              m.creneaux = [];
+              m.planningManquant = true;
+            }
           });
         }
-        setMissions(items);
-        setLoading(false);
-      });
-  }, [debutGrille, finGrille]);
+        if (actif) setMissions(items);
+      }))
+      .catch((error) => {
+        if (!actif) return;
+        setMissions([]);
+        setErreurChargement(extraireMessageErreur(error));
+      })
+      .finally(() => { if (actif) setLoading(false); });
+    return () => { actif = false; };
+  }, [debutGrille, finGrille, tentativeChargement]);
 
   function getMissionsDuJour(d: Date) {
     return missions.filter(m => {
-      const debut = new Date(m.debut_le);
-      const fin = new Date(m.fin_le);
-      const jourDebut = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-      const jourFin = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59);
-      const dansJour = debut <= jourFin && fin >= jourDebut;
+      const dansJour = m.planningManquant
+        ? memeJourParis(m.debut_le, d)
+        : m.creneaux.some(creneau => creneauChevaucheJour(creneau, d));
       if (!dansJour) return false;
       if (!filtreStatut) return true;
       if (filtreStatut === 'NON_POURVUE') return m.statut === 'OUVERTE' && !m.soignant_assigne_id;
@@ -126,6 +218,7 @@ export default function AdminCalendrier() {
   const assignees = missions.filter(m => m.statut === 'ASSIGNEE').length;
   const enCours = missions.filter(m => m.statut === 'EN_COURS').length;
   const terminees = missions.filter(m => m.statut === 'TERMINEE').length;
+  const planningsManquants = missions.filter(m => m.planningManquant).length;
 
   const filtresRapides: Array<{
     valeur: string | null;
@@ -144,7 +237,7 @@ export default function AdminCalendrier() {
     },
     {
       valeur: 'EN_COURS',
-      libelle: `${enCours} en cours`,
+      libelle: `${enCours} active${enCours > 1 ? 's' : ''}`,
       classeActive: 'border-success/50 bg-success/10 text-success',
     },
     {
@@ -160,7 +253,7 @@ export default function AdminCalendrier() {
   ];
 
   const joursAgenda = jours
-    .filter(d => isSameMonth(d, moisCourant))
+    .filter(d => memeMoisParis(d, moisCourant))
     .map(d => ({ date: d, missions: getMissionsDuJour(d) }))
     .filter(groupe => groupe.missions.length > 0);
 
@@ -168,12 +261,36 @@ export default function AdminCalendrier() {
     { label: 'Non pourvue', cls: 'bg-destructive' },
     { label: 'Ouverte', cls: 'bg-warning' },
     { label: 'Assignée', cls: 'bg-info' },
-    { label: 'En cours', cls: 'bg-success' },
+    { label: 'Active', cls: 'bg-success' },
     { label: 'Terminée', cls: 'bg-muted-foreground/40' },
     { label: 'Annulée', cls: 'bg-destructive/60' },
   ];
 
   if (loading) return <LayoutAdmin><ChargementAdmin titre="Calendrier des missions" /></LayoutAdmin>;
+
+  if (erreurChargement) {
+    return (
+      <LayoutAdmin>
+        <BreadcrumbAdmin pageName="Calendrier" />
+        <div className="mx-auto max-w-xl rounded-2xl border border-destructive/30 bg-card p-5" role="alert">
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="h-5 w-5 shrink-0 text-destructive" />
+            <div>
+              <h1 className="font-semibold text-foreground">Impossible de charger le calendrier</h1>
+              <p className="mt-1 text-sm text-muted-foreground">{erreurChargement}</p>
+              <button
+                type="button"
+                className="btn-primary mt-4"
+                onClick={() => setTentativeChargement((tentative) => tentative + 1)}
+              >
+                Réessayer
+              </button>
+            </div>
+          </div>
+        </div>
+      </LayoutAdmin>
+    );
+  }
 
   return (
     <LayoutAdmin>
@@ -206,20 +323,29 @@ export default function AdminCalendrier() {
           })}
         </fieldset>
 
+        {planningsManquants > 0 && (
+          <div className="flex items-start gap-2 rounded-xl border border-warning/30 bg-warning/10 p-3 text-sm text-warning" role="status">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+            <p>
+              {planningsManquants} mission{planningsManquants > 1 ? 's ont' : ' a'} une période active, mais aucun créneau détaillé. {planningsManquants > 1 ? 'Elles ne sont affichées' : "Elle n'est affichée"} qu'à leur date de début avec la mention « planning à confirmer ».
+            </p>
+          </div>
+        )}
+
         {/* Navigation */}
         <div className="flex items-center justify-between">
-          <button type="button" onClick={() => setMoisCourant(addMonths(moisCourant, -1))} className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg p-2 transition-colors hover:bg-muted" aria-label="Mois précédent">
+          <button type="button" onClick={() => setMoisCourant(ajouterMoisCivilsParis(moisCourant, -1))} className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg p-2 transition-colors hover:bg-muted" aria-label="Mois précédent">
             <ChevronLeft className="h-5 w-5 text-muted-foreground" />
           </button>
           <div className="text-center">
             <h2 className="text-lg font-bold text-foreground capitalize">
-              {format(moisCourant, 'MMMM yyyy', { locale: fr })}
+              {formatParis(moisCourant, 'MMMM yyyy')}
             </h2>
-            <button type="button" onClick={() => setMoisCourant(new Date())} className="mt-0.5 inline-flex min-h-[44px] items-center px-2 text-sm font-medium text-primary hover:underline">
+            <button type="button" onClick={() => setMoisCourant(debutMoisParis(new Date()))} className="mt-0.5 inline-flex min-h-[44px] items-center px-2 text-sm font-medium text-primary hover:underline">
               Aujourd'hui
             </button>
           </div>
-          <button type="button" onClick={() => setMoisCourant(addMonths(moisCourant, 1))} className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg p-2 transition-colors hover:bg-muted" aria-label="Mois suivant">
+          <button type="button" onClick={() => setMoisCourant(ajouterMoisCivilsParis(moisCourant, 1))} className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg p-2 transition-colors hover:bg-muted" aria-label="Mois suivant">
             <ChevronRight className="h-5 w-5 text-muted-foreground" />
           </button>
         </div>
@@ -235,7 +361,7 @@ export default function AdminCalendrier() {
         </div>
 
         {/* Agenda mobile */}
-        <div className="space-y-3 md:hidden" aria-label="Agenda des missions du mois">
+        <div className="space-y-3 lg:hidden" aria-label="Agenda des missions du mois">
           {joursAgenda.length === 0 ? (
             <div className="rounded-xl border border-border bg-card px-4 py-8 text-center">
               <p className="text-sm font-medium text-foreground">Aucune mission à afficher</p>
@@ -244,12 +370,12 @@ export default function AdminCalendrier() {
               </p>
             </div>
           ) : joursAgenda.map(groupe => (
-            <section key={groupe.date.toISOString()} className="rounded-2xl border border-border bg-card p-3" aria-labelledby={`agenda-${format(groupe.date, 'yyyy-MM-dd')}`}>
-              <h3 id={`agenda-${format(groupe.date, 'yyyy-MM-dd')}`} className="mb-2 text-sm font-bold capitalize text-foreground">
-                <time dateTime={format(groupe.date, 'yyyy-MM-dd')} aria-current={isToday(groupe.date) ? 'date' : undefined}>
-                  {format(groupe.date, 'EEEE d MMMM', { locale: fr })}
+            <section key={groupe.date.toISOString()} className="rounded-2xl border border-border bg-card p-3" aria-labelledby={`agenda-${cleJourParis(groupe.date)}`}>
+              <h3 id={`agenda-${cleJourParis(groupe.date)}`} className="mb-2 text-sm font-bold capitalize text-foreground">
+                <time dateTime={cleJourParis(groupe.date)} aria-current={memeJourParis(groupe.date, new Date()) ? 'date' : undefined}>
+                  {formatParis(groupe.date, 'EEEE d MMMM')}
                 </time>
-                {isToday(groupe.date) && <span className="ml-2 text-primary">Aujourd'hui</span>}
+                {memeJourParis(groupe.date, new Date()) && <span className="ml-2 text-primary">Aujourd'hui</span>}
               </h3>
               <div className="space-y-2">
                 {groupe.missions.map(m => {
@@ -285,7 +411,7 @@ export default function AdminCalendrier() {
         </div>
 
         {/* Days header desktop */}
-        <div className="hidden grid-cols-7 gap-px md:grid">
+        <div className="hidden grid-cols-7 gap-px lg:grid">
           {JOURS_SEMAINE.map(j => (
             <div key={j} className="text-center text-xs font-semibold text-muted-foreground py-2">
               {j}
@@ -294,10 +420,10 @@ export default function AdminCalendrier() {
         </div>
 
         {/* Calendar grid desktop */}
-        <div className="hidden grid-cols-7 gap-px md:grid">
+        <div className="hidden grid-cols-7 gap-px lg:grid">
           {jours.map((d, i) => {
-            const dansLeMois = isSameMonth(d, moisCourant);
-            const estAujourdhui = isToday(d);
+            const dansLeMois = memeMoisParis(d, moisCourant);
+            const estAujourdhui = memeJourParis(d, new Date());
             const msDuJour = getMissionsDuJour(d);
             const hasNonPourvue = msDuJour.some(m => m.statut === 'OUVERTE' && !m.soignant_assigne_id);
 
@@ -310,7 +436,7 @@ export default function AdminCalendrier() {
                 <span className={`text-[11px] font-medium block text-center mb-0.5
                   ${estAujourdhui ? 'text-primary font-bold' : dansLeMois ? 'text-foreground' : 'text-muted-foreground/40'}
                 `}>
-                  {format(d, 'd')}
+                  {formatParis(d, 'd')}
                 </span>
 
                 <div className="space-y-0.5">

@@ -10,8 +10,13 @@ interface RouteProtegeeProps {
 }
 
 export function RouteProtegee({ rolesAutorises, children }: RouteProtegeeProps) {
-  const { user, session, loading: authLoading } = useAuth();
-  const { role: roleServeur, loading: roleLoading } = useRole();
+  const { user, session, loading: authLoading, deconnexion } = useAuth();
+  const {
+    role: roleServeur,
+    loading: roleLoading,
+    error: erreurRole,
+    retry: reessayerRole,
+  } = useRole();
 
   if (authLoading || roleLoading) return <ChargementPage />;
   if (!user || !session) return <Navigate to="/connexion" replace />;
@@ -21,8 +26,36 @@ export function RouteProtegee({ rolesAutorises, children }: RouteProtegeeProps) 
     return <Navigate to="/confirmer-email" replace />;
   }
 
+  if (erreurRole) {
+    return (
+      <main className="min-h-[100dvh] flex items-center justify-center bg-background px-4">
+        <div className="card-base max-w-md w-full text-center space-y-4" role="alert" aria-live="assertive">
+          <h1 className="text-xl font-bold text-foreground">Votre espace est momentanément indisponible</h1>
+          <p className="text-sm text-muted-foreground">
+            Votre session est toujours active. Réessayez dans un instant.
+          </p>
+          <button type="button" className="btn-primary w-full" onClick={reessayerRole}>
+            Réessayer
+          </button>
+        </div>
+      </main>
+    );
+  }
+
   if (!roleServeur || roleServeur === 'INCONNU') {
-    return <Navigate to="/" replace />;
+    return (
+      <main className="min-h-[100dvh] flex items-center justify-center bg-background px-4">
+        <div className="card-base max-w-md w-full text-center space-y-4" role="alert" aria-live="assertive">
+          <h1 className="text-xl font-bold text-foreground">Accès à cet espace non autorisé</h1>
+          <p className="text-sm text-muted-foreground">
+            Votre session ne correspond plus à un compte actif pour cet espace.
+          </p>
+          <button type="button" className="btn-primary w-full" onClick={() => void deconnexion()}>
+            Se reconnecter
+          </button>
+        </div>
+      </main>
+    );
   }
 
   if (!rolesAutorises.includes(roleServeur)) {

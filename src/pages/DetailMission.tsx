@@ -47,8 +47,6 @@ import { getLabelProfession } from '@/lib/constantes';
 import { extraireMessageErreur } from '@/lib/erreurs';
 import { payerMissionStripeConnectAvecGenerationAuto } from '@/lib/stripeMissionPay';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
-import { format } from 'date-fns';
-import { fr } from 'date-fns/locale';
 import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { BandeauActionPrioritaire, type ActionPrioritaire } from '@/components/BandeauActionPrioritaire';
 import { toast } from 'sonner';
@@ -56,6 +54,13 @@ import { capturerErreurSentry } from '@/lib/sentry';
 import { sanitiserNomFichier, verifierFichierDocument } from '@/lib/documentUpload';
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip';
 import { LayoutAdmin } from '@/components/LayoutAdmin';
+import {
+  ajouterRepliMissionPonctuelle,
+  creneauxPrevisionnels,
+  evaluerTerminaisonMission,
+  type CreneauPointage,
+} from '@/lib/disponibilite-pointage';
+import { formatParis, instantJolene, memeJourParis } from '@/lib/date-heure-paris';
 
 type DetailMissionRole = 'ADMIN_ETABLISSEMENT' | 'ADMIN_PLATEFORME';
 
@@ -82,6 +87,21 @@ function scoreBadgeClasses(score: number): string {
   return 'bg-destructive/10 text-destructive';
 }
 
+function dureeCreneauHeures(creneau: CreneauPointage): number {
+  if (!creneau.fin) return 0;
+  return Math.max(0, (instantJolene(creneau.fin).getTime() - instantJolene(creneau.debut).getTime()) / 3_600_000);
+}
+
+function formatDuree(heures: number): string {
+  return Number.isInteger(heures) ? String(heures) : heures.toFixed(1).replace('.', ',');
+}
+
+function formatFinCreneau(creneau: CreneauPointage): string {
+  return memeJourParis(creneau.debut, creneau.fin!)
+    ? formatParis(creneau.fin!, 'HH:mm')
+    : formatParis(creneau.fin!, 'EEE d MMM · HH:mm');
+}
+
 function AlerterPoolUrgence({ missionId, mission, user, afficherNotification }: { missionId: string; mission: any; user: any; afficherNotification: (n: any) => void }) {
   const [alerting, setAlerting] = useState(false);
   const [alerted, setAlerted] = useState(false);
@@ -100,9 +120,6 @@ function AlerterPoolUrgence({ missionId, mission, user, afficherNotification }: 
 
       const { data: session } = await supabase.auth.getSession();
       const token = session?.session?.access_token;
-      const debut = new Date(mission.debut_le);
-      const fin = new Date(mission.fin_le);
-
       // Send notification + email to all soignants in parallel
       const supabaseUrl = SUPABASE_URL;
       const results = await Promise.allSettled(
@@ -112,7 +129,7 @@ function AlerterPoolUrgence({ missionId, mission, user, afficherNotification }: 
             p_type_destinataire: 'SOIGNANT',
             p_type: 'MISSION_URGENTE',
             p_titre: `🚨 Mission urgente : ${mission.intitule}`,
-            p_corps: `${mission.intitule} — ${format(debut, 'dd/MM à HH:mm', { locale: fr })}. Premier arrivé, premier servi !`,
+            p_corps: `${mission.intitule} — ${formatParis(mission.debut_le, 'dd/MM à HH:mm')}. Premier arrivé, premier servi !`,
             p_lien: `/soignant/missions/${missionId}`,
             p_type_ressource: 'MISSION',
             p_id_ressource: missionId,
@@ -128,9 +145,9 @@ function AlerterPoolUrgence({ missionId, mission, user, afficherNotification }: 
                   prenom: s.prenom,
                   mission: mission.intitule,
                   etablissement: mission.etablissements?.nom || '',
-                  date: format(debut, 'dd/MM/yyyy', { locale: fr }),
-                  heure_debut: format(debut, 'HH:mm'),
-                  heure_fin: format(fin, 'HH:mm'),
+                  date: formatParis(mission.debut_le, 'dd/MM/yyyy'),
+                  heure_debut: formatParis(mission.debut_le, 'HH:mm'),
+                  heure_fin: formatParis(mission.fin_le, 'HH:mm'),
                   taux_horaire: String(mission.taux_horaire_base),
                   mission_id: missionId,
                 },
@@ -141,7 +158,7 @@ function AlerterPoolUrgence({ missionId, mission, user, afficherNotification }: 
             // L'edge function send-sms vérifie sms_actif AND sms_alertes_actives
             // côté serveur — pas besoin de check ici. Si pas de téléphone, skip.
             if (s.telephone) {
-              const smsBody = `🚨 Mission urgente : ${mission.intitule.slice(0, 40)} le ${format(debut, 'dd/MM', { locale: fr })} à ${format(debut, 'HH:mm')}. Voir l'app pour postuler.`;
+              const smsBody = `🚨 Mission urgente : ${mission.intitule.slice(0, 40)} le ${formatParis(mission.debut_le, 'dd/MM')} à ${formatParis(mission.debut_le, 'HH:mm')}. Voir l'app pour postuler.`;
               fetch(`${supabaseUrl}/functions/v1/send-sms`, {
                 method: 'POST',
                 headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
@@ -374,7 +391,7 @@ function BoostEtGarantie({ mission, onMaj }: { mission: any; onMaj: (patch: any)
       {/* Présence confirmée */}
       {mission.statut === 'ASSIGNEE' && mission.presence_confirmee_le && (
         <p className="text-xs text-success pt-2 border-t border-border">
-          ✓ Présence confirmée par le soignant le {format(new Date(mission.presence_confirmee_le), 'dd/MM à HH:mm', { locale: fr })}
+          ✓ Présence confirmée par le soignant le {formatParis(mission.presence_confirmee_le, 'dd/MM à HH:mm')}
         </p>
       )}
     </div>
@@ -392,6 +409,8 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
   const ouvrirConv = useOuvrirConversation(baseMsg);
   const [mission, setMission] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [erreurPlanning, setErreurPlanning] = useState<string | null>(null);
+  const [maintenantMs, setMaintenantMs] = useState(() => Date.now());
   const [modalAnnuler, setModalAnnuler] = useState(false);
   const [modalDupliquer, setModalDupliquer] = useState(false);
   const [modalTerminer, setModalTerminer] = useState(false);
@@ -404,6 +423,11 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
   const [loadingReco, setLoadingReco] = useState(false);
   const [proposing, setProposing] = useState<string | null>(null);
   const [nbCandidatures, setNbCandidatures] = useState(0);
+
+  useEffect(() => {
+    const intervalle = window.setInterval(() => setMaintenantMs(Date.now()), 30_000);
+    return () => window.clearInterval(intervalle);
+  }, []);
 
   // Litige existant
   const [litigeExistant, setLitigeExistant] = useState<any>(null);
@@ -445,31 +469,58 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
   useEffect(() => {
     if (!id) return;
     const load = async () => {
-      const { data: m } = await supabase
-        .from('missions')
-        .select(`
-          id, intitule, description, service, profession_requise,
-          specialite_medicale_requise, accepte_non_specialises,
-          debut_le, fin_le, duree_heures, taux_horaire_base, taux_rist_plafonne, rist_plafond_applique,
-          total_brut, net_a_payer, net_estime, montant_ifm, montant_icp, montant_majoration_nuit,
-          montant_majoration_dimanche, montant_majoration_ferie,
-          heures_nuit, heures_dimanche, heures_ferie,
-          montant_commission_ttc, commission_facturee,
-          statut, est_urgente, niveau_urgence, soignant_assigne_id, etablissement_id,
-          mode_attribution, boostee_le, garantie_remplacement, presence_confirmee_le,
-          mode_remuneration, retrocession_pct, montant_honoraires_bruts, honoraires_confirmes_le,
-          type_contrat_recherche, type_contrat_applique, type_paiement_soignant, mode_paiement_soignant, choix_contrat_soignant,
-          cree_le, modifie_le,
-          etablissements(nom, type, est_secteur_public, adresse_ville, adresse_departement,
-            taux_majoration_nuit_pourcent, taux_majoration_dimanche_pourcent,
-            taux_majoration_ferie_pourcent, mode_paiement_commission)
-        `)
-        .eq('id', id)
-        .single();
+      const [missionResult, creneauxResult] = await Promise.all([
+        supabase
+          .from('missions')
+          .select(`
+            id, intitule, description, service, profession_requise,
+            specialite_medicale_requise, accepte_non_specialises,
+            debut_le, fin_le, duree_heures, taux_horaire_base, taux_rist_plafonne, rist_plafond_applique,
+            total_brut, net_a_payer, net_estime, montant_ifm, montant_icp, montant_majoration_nuit,
+            montant_majoration_dimanche, montant_majoration_ferie,
+            heures_nuit, heures_dimanche, heures_ferie,
+            montant_commission_ttc, commission_facturee,
+            statut, est_urgente, niveau_urgence, soignant_assigne_id, etablissement_id,
+            mode_attribution, boostee_le, garantie_remplacement, presence_confirmee_le,
+            mode_remuneration, retrocession_pct, montant_honoraires_bruts, honoraires_confirmes_le,
+            type_contrat_recherche, type_contrat_applique, type_paiement_soignant, mode_paiement_soignant, choix_contrat_soignant,
+            cree_le, modifie_le,
+            presences(id, pointage_arrivee_le, pointage_depart_le),
+            etablissements(nom, type, est_secteur_public, adresse_ville, adresse_departement,
+              taux_majoration_nuit_pourcent, taux_majoration_dimanche_pourcent,
+              taux_majoration_ferie_pourcent, mode_paiement_commission)
+          `)
+          .eq('id', id)
+          .single(),
+        supabase
+          .from('mission_creneaux')
+          .select('id, mission_id, debut, fin, est_pause, type_creneau')
+          .eq('mission_id', id)
+          .order('debut', { ascending: true }),
+      ]);
+
+      const m = missionResult.data;
+      if (missionResult.error) {
+        logger.warn('[DetailMission] Mission indisponible', missionResult.error);
+        setMission(null);
+        setLoading(false);
+        return;
+      }
+
+      setErreurPlanning(creneauxResult.error ? extraireMessageErreur(creneauxResult.error) : null);
+      const missionAvecPlanning = m
+        ? {
+          ...m,
+          creneaux: ajouterRepliMissionPonctuelle(
+            creneauxResult.error ? [] : (creneauxResult.data || []),
+            m,
+          ),
+        }
+        : null;
 
       if (m && m.soignant_assigne_id) {
         const { data: sg } = await supabase.rpc('fn_soignant_pour_etablissement', { p_soignant_id: m.soignant_assigne_id });
-        setMission({ ...m, soignants: sg || null });
+        setMission({ ...missionAvecPlanning, soignants: sg || null });
 
         const { data: alerteData } = await supabase.rpc('fn_alerte_cddu_repetitif' as any, {
           p_soignant_id: m.soignant_assigne_id,
@@ -477,7 +528,7 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
         });
         if (alerteData) setAlerteRequalif(alerteData);
       } else {
-        setMission(m ? { ...m, soignants: null } : null);
+        setMission(missionAvecPlanning ? { ...missionAvecPlanning, soignants: null } : null);
       }
 
       // Count candidatures for tab badge
@@ -591,14 +642,35 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
   );
 
   const m = mission;
-  const debut = new Date(m.debut_le);
-  const fin = new Date(m.fin_le);
-  // Mission multi-jours : « 8 h/jour · 120 h au total » est lisible là où
-  // « 13:00 → 21:00 (120h) » ne l'est pas (même logique que CarteMission).
-  const dureeMission = m.duree_heures ?? ((fin.getTime() - debut.getTime()) / 3600000);
-  const nbJoursMission = Math.max(1, Math.round((fin.getTime() - debut.getTime()) / 86400000));
-  const estMultiJours = dureeMission > 24 && nbJoursMission > 1;
-  const heuresParJour = estMultiJours ? Math.round((dureeMission / nbJoursMission) * 10) / 10 : 0;
+  const debut = instantJolene(m.debut_le);
+  const fin = instantJolene(m.fin_le);
+  const creneauxBruts = (m.creneaux ?? []) as CreneauPointage[];
+  const creneauxPlanifies = creneauxPrevisionnels(creneauxBruts);
+  const creneauxComplets = creneauxPlanifies.filter(
+    (creneau): creneau is CreneauPointage & { fin: string } => Boolean(creneau.fin),
+  );
+  const planningIncomplet = creneauxBruts.some((creneau) => (
+    creneau.type_creneau === 'PREVISIONNEL'
+    && !creneau.est_pause
+    && !creneau.fin
+  ));
+  const dureePlanifiee = creneauxComplets.reduce(
+    (total, creneau) => total + dureeCreneauHeures(creneau),
+    0,
+  );
+  const creneauActuel = creneauxComplets.find((creneau) => (
+    maintenantMs >= instantJolene(creneau.debut).getTime()
+    && maintenantMs < instantJolene(creneau.fin).getTime()
+  ));
+  const terminaison = evaluerTerminaisonMission({
+    creneaux: creneauxBruts,
+    finMission: m.fin_le,
+    presences: m.presences ?? [],
+    maintenant: new Date(maintenantMs),
+  });
+  const peutTerminer = terminaison.peutTerminer;
+  const finReferenceTerminaison = terminaison.finReference;
+  const estPeriodeEtendue = fin.getTime() - debut.getTime() > 24 * 60 * 60_000 || creneauxComplets.length > 1;
   const estAnnulee = m.statut === 'ANNULEE_PAR_ETABLISSEMENT' || m.statut === 'ANNULEE_PAR_SOIGNANT';
 
   /* Hiérarchisation : LA prochaine action attendue de l'établissement —
@@ -631,7 +703,7 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
         cibleId: 'bloc-candidatures',
       };
     }
-    if (m.statut === 'EN_COURS' && fin.getTime() < Date.now()) {
+    if (m.statut === 'EN_COURS' && peutTerminer) {
       return {
         titre: 'Terminez la mission',
         description: 'La mission est arrivée à son terme — clôturez-la pour déclencher la facturation et le paiement.',
@@ -695,6 +767,11 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
                 <h1 className="text-2xl font-bold text-foreground mb-2">{m.intitule}</h1>
                 <div className="flex items-center gap-2 flex-wrap mb-3">
                   <BadgeStatut statut={m.statut} />
+                  {m.statut === 'EN_COURS' && (
+                    <span className="text-xs text-muted-foreground">
+                      Période active · {creneauActuel ? 'créneau en cours' : 'hors créneau actuellement'}
+                    </span>
+                  )}
                   {m.est_urgente && (
                     <span className="badge-base bg-destructive/10 text-destructive text-[10px] inline-flex items-center gap-1">
                       {m.niveau_urgence === 3 ? (
@@ -717,14 +794,44 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
                 <hr className="my-3 border-border" />
                 <p className="text-sm text-foreground flex items-center gap-1.5">
                   <CalendarDays className="h-4 w-4 text-muted-foreground shrink-0" aria-hidden="true" />
-                  {format(debut, 'EEEE d MMMM yyyy', { locale: fr })}
+                  {estPeriodeEtendue
+                    ? `${m.statut === 'EN_COURS' ? 'Période active' : 'Période prévue'} : ${formatParis(m.debut_le, 'd MMMM yyyy')} → ${formatParis(m.fin_le, 'd MMMM yyyy')}`
+                    : formatParis(m.debut_le, 'EEEE d MMMM yyyy')}
                 </p>
-                <p className="text-sm text-foreground flex items-center gap-1.5">
-                  <Clock className="h-4 w-4 text-muted-foreground shrink-0" aria-hidden="true" />
-                  {estMultiJours
-                    ? `${heuresParJour} h/jour · ${Math.round(dureeMission * 10) / 10} h au total`
-                    : `${format(debut, 'HH:mm')} → ${format(fin, 'HH:mm')} (${m.duree_heures?.toFixed(1)}h)`}
-                </p>
+                <div className="mt-3 rounded-xl border border-border bg-muted/20 p-3" aria-label="Créneaux prévisionnels">
+                  <div className="flex items-center gap-2">
+                    <Clock className="h-4 w-4 text-muted-foreground shrink-0" aria-hidden="true" />
+                    <h2 className="text-sm font-semibold text-foreground">Planning prévu</h2>
+                  </div>
+                  {erreurPlanning ? (
+                    <p className="mt-2 text-xs text-warning" role="alert">
+                      Planning détaillé momentanément indisponible : {erreurPlanning}
+                    </p>
+                  ) : creneauxComplets.length > 0 ? (
+                    <>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {creneauxComplets.length} créneau{creneauxComplets.length > 1 ? 'x' : ''} · {formatDuree(dureePlanifiee)} h planifiées au total
+                      </p>
+                      <ul className="mt-2 divide-y divide-border">
+                        {creneauxComplets.map((creneau) => (
+                          <li key={creneau.id} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 py-2 text-sm">
+                            <span className="font-medium text-foreground">
+                              {formatParis(creneau.debut, 'EEEE d MMMM yyyy')}
+                            </span>
+                            <span className="text-muted-foreground">
+                              {formatParis(creneau.debut, 'HH:mm')} → {formatFinCreneau(creneau)} · {formatDuree(dureeCreneauHeures(creneau))} h
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                      {planningIncomplet && (
+                        <p className="mt-2 text-xs text-warning">Un créneau incomplet reste à confirmer.</p>
+                      )}
+                    </>
+                  ) : (
+                    <p className="mt-2 text-xs text-warning">Planning détaillé à confirmer.</p>
+                  )}
+                </div>
               </div>
 
               <div className="card-base">
@@ -834,12 +941,12 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
                 <div className="space-y-3 text-sm">
                   <div className="flex items-center gap-3">
                     <PlusCircle className="h-4 w-4 text-primary flex-shrink-0" />
-                    <span className="text-muted-foreground">Créée le {format(new Date(m.cree_le), "d MMM yyyy 'à' HH:mm", { locale: fr })}</span>
+                    <span className="text-muted-foreground">Créée le {formatParis(m.cree_le, "d MMM yyyy 'à' HH:mm")}</span>
                   </div>
                   {m.modifie_le && m.modifie_le !== m.cree_le && (
                     <div className="flex items-center gap-3">
                       <PlusCircle className="h-4 w-4 text-info flex-shrink-0" />
-                      <span className="text-muted-foreground">Modifiée le {format(new Date(m.modifie_le), "d MMM yyyy 'à' HH:mm", { locale: fr })}</span>
+                      <span className="text-muted-foreground">Modifiée le {formatParis(m.modifie_le, "d MMM yyyy 'à' HH:mm")}</span>
                     </div>
                   )}
                 </div>
@@ -1133,10 +1240,29 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
           </button>
         )}
         {m.statut === 'EN_COURS' && (
-          <button onClick={() => setModalTerminer(true)} className="text-sm font-semibold flex items-center gap-1 px-4 py-2 rounded-xl bg-success text-success-foreground hover:bg-success/90 transition flex-1 md:flex-none justify-center">
-            <CheckCircle className="h-4 w-4 shrink-0" aria-hidden="true" />
-            Terminer la mission
-          </button>
+          <div className="flex flex-1 flex-col md:flex-none">
+            <button
+              type="button"
+              onClick={() => setModalTerminer(true)}
+              disabled={!peutTerminer}
+              aria-describedby={!peutTerminer ? 'aide-terminer-mission' : undefined}
+              className="text-sm font-semibold flex items-center gap-1 px-4 py-2 rounded-xl bg-success text-success-foreground hover:bg-success/90 transition justify-center disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <CheckCircle className="h-4 w-4 shrink-0" aria-hidden="true" />
+              Terminer la mission
+            </button>
+            {!peutTerminer && (
+              <span id="aide-terminer-mission" className="mt-1 max-w-xs text-[10px] text-muted-foreground">
+                {terminaison.motif === 'SEGMENT_OUVERT'
+                  ? 'Le soignant doit d’abord pointer son départ.'
+                  : terminaison.motif === 'AUCUN_DEPART'
+                    ? 'Aucun départ n’est encore enregistré pour cette mission.'
+                    : terminaison.motif === 'PLANNING_INCOMPLET'
+                      ? 'Complétez le planning avant de terminer la mission.'
+                      : `Disponible après le dernier créneau, le ${formatParis(finReferenceTerminaison, "d MMM 'à' HH:mm")}.`}
+              </span>
+            )}
+          </div>
         )}
         <button onClick={() => setModalDupliquer(true)} className="text-sm font-medium text-muted-foreground hover:text-foreground flex items-center gap-1 px-3">
           <Copy className="h-4 w-4" /> Dupliquer
@@ -1194,6 +1320,16 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
         ouvert={modalTerminer}
         onFermer={() => setModalTerminer(false)}
         onConfirmer={async () => {
+          if (!peutTerminer) {
+            setModalTerminer(false);
+            afficherNotification({
+              type: 'erreur',
+              message: terminaison.motif === 'SEGMENT_OUVERT'
+                ? 'Le soignant doit pointer son départ avant la terminaison.'
+                : 'La mission ne peut pas encore être terminée : vérifiez le planning et les départs.',
+            });
+            return;
+          }
           setTerminating(true);
           const { data, error } = await supabase.rpc('fn_terminer_mission' as any, { p_mission_id: id! });
           if (error) {

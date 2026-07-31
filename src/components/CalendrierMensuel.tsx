@@ -1,14 +1,25 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { AlertTriangle, ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { fetchEtablissementsSafe } from '@/lib/etablissements';
 import {
-  format, startOfMonth, endOfMonth, startOfWeek, endOfWeek,
-  addMonths, addDays, isSameMonth, isSameDay, isToday
-} from 'date-fns';
-import { fr } from 'date-fns/locale';
+  construireOccurrencesPlanning,
+  decouperOccurrencesParJour,
+  missionsLonguesSansPlanning,
+  type CreneauMissionPlanifiable,
+} from '@/lib/occurrences-planning';
+import {
+  ajouterJoursCivilsParis,
+  ajouterMoisCivilsParis,
+  debutMoisParis,
+  debutSemaineParis,
+  finMoisParis,
+  formatParis,
+  memeJourParis,
+  memeMoisParis,
+} from '@/lib/date-heure-paris';
 
 const JOURS_SEMAINE = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
 
@@ -26,76 +37,157 @@ function getStatutClasses(statut: string) {
 export function CalendrierMensuel() {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const [moisCourant, setMoisCourant] = useState(new Date());
+  const [moisCourant, setMoisCourant] = useState(() => debutMoisParis(new Date()));
   const [missions, setMissions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [erreur, setErreur] = useState<string | null>(null);
+  const [nbPlanningsManquants, setNbPlanningsManquants] = useState(0);
+  const [tentative, setTentative] = useState(0);
 
-  const debutMois = startOfMonth(moisCourant);
-  const finMois = endOfMonth(moisCourant);
-  const debutGrille = startOfWeek(debutMois, { weekStartsOn: 1 });
-  const finGrille = endOfWeek(finMois, { weekStartsOn: 1 });
+  const debutMois = debutMoisParis(moisCourant);
+  const finMois = finMoisParis(moisCourant);
+  const debutGrille = debutSemaineParis(debutMois);
+  const finGrilleExclusive = ajouterJoursCivilsParis(debutSemaineParis(finMois), 7);
+  const finGrille = new Date(finGrilleExclusive.getTime() - 1);
+  const debutGrilleIso = debutGrille.toISOString();
+  const finGrilleIso = finGrille.toISOString();
+  const debutGrilleMs = debutGrille.getTime();
+  const finGrilleMs = finGrille.getTime();
 
   // Build array of days for the grid
   const jours: Date[] = [];
   let jour = debutGrille;
-  while (jour <= finGrille) {
+  while (jour < finGrilleExclusive) {
     jours.push(jour);
-    jour = addDays(jour, 1);
+    jour = ajouterJoursCivilsParis(jour, 1);
   }
 
   useEffect(() => {
     if (!user) return;
-    setLoading(true);
-    supabase
-      .from('missions')
-      .select('id, intitule, debut_le, fin_le, statut, etablissement_id, service')
-      .eq('soignant_assigne_id', user.id)
-      .in('statut', ['ASSIGNEE', 'EN_COURS', 'TERMINEE', 'ANNULEE_PAR_ETABLISSEMENT', 'ANNULEE_PAR_SOIGNANT'])
-      .gte('fin_le', debutGrille.toISOString())
-      .lte('debut_le', finGrille.toISOString())
-      .order('debut_le')
-      .then(async ({ data }) => {
-        const items = data || [];
-        if (items.length > 0) {
-          const etabMap = await fetchEtablissementsSafe(items.map((m: any) => m.etablissement_id));
-          items.forEach((m: any) => { m.etablissements = etabMap[m.etablissement_id] || null; });
-        }
-        setMissions(items);
+    let actif = true;
+
+    const charger = async () => {
+      setLoading(true);
+      setErreur(null);
+
+      const { data, error: missionsError } = await supabase
+        .from('missions')
+        .select('id, intitule, debut_le, fin_le, duree_heures, statut, etablissement_id, service')
+        .eq('soignant_assigne_id', user.id)
+        .in('statut', ['ASSIGNEE', 'EN_COURS', 'TERMINEE', 'ANNULEE_PAR_ETABLISSEMENT', 'ANNULEE_PAR_SOIGNANT'])
+        .gte('fin_le', debutGrilleIso)
+        .lte('debut_le', finGrilleIso)
+        .order('debut_le');
+
+      if (!actif) return;
+      if (missionsError) {
+        setMissions([]);
+        setErreur('Impossible de charger le planning.');
         setLoading(false);
-      });
-  }, [user, moisCourant]);
+        return;
+      }
+
+      const items = data || [];
+      if (items.length === 0) {
+        setMissions([]);
+        setNbPlanningsManquants(0);
+        setLoading(false);
+        return;
+      }
+
+      const [etabMap, creneauxResult] = await Promise.all([
+        fetchEtablissementsSafe(items.map((mission: any) => mission.etablissement_id)),
+        supabase
+          .from('mission_creneaux')
+          .select('id, mission_id, debut, fin, est_pause, type_creneau')
+          .in('mission_id', items.map((mission: any) => mission.id)),
+      ]);
+
+      if (!actif) return;
+      if (creneauxResult.error) {
+        setMissions([]);
+        setErreur('Impossible de charger les jours et horaires travaillés.');
+        setLoading(false);
+        return;
+      }
+
+      const missionsAvecEtablissement = items.map((mission: any) => ({
+        ...mission,
+        etablissements: etabMap[mission.etablissement_id] || null,
+      }));
+      const creneaux = (creneauxResult.data || []) as CreneauMissionPlanifiable[];
+      const occurrences = decouperOccurrencesParJour(
+        construireOccurrencesPlanning(missionsAvecEtablissement, creneaux),
+      )
+        .filter((occurrence) => (
+          new Date(occurrence.debut_le).getTime() <= finGrilleMs
+          && new Date(occurrence.fin_le).getTime() >= debutGrilleMs
+        ));
+
+      setMissions(occurrences);
+      setNbPlanningsManquants(
+        missionsLonguesSansPlanning(missionsAvecEtablissement, creneaux).length,
+      );
+      setLoading(false);
+    };
+
+    void charger();
+    return () => { actif = false; };
+  }, [user, moisCourant, tentative, debutGrilleIso, finGrilleIso, debutGrilleMs, finGrilleMs]);
 
   function getMissionsDuJour(d: Date) {
-    return missions.filter(m => isSameDay(new Date(m.debut_le), d));
+    return missions.filter(m => memeJourParis(m.debut_le, d));
   }
 
   return (
     <div className="card-base">
       {/* Header navigation */}
       <div className="flex items-center justify-between mb-4">
-        <button onClick={() => setMoisCourant(addMonths(moisCourant, -1))} className="p-1.5 hover:bg-muted rounded-lg transition-colors">
+        <button aria-label="Mois précédent" onClick={() => setMoisCourant(ajouterMoisCivilsParis(moisCourant, -1))} className="p-1.5 hover:bg-muted rounded-lg transition-colors">
           <ChevronLeft className="h-5 w-5 text-muted-foreground" />
         </button>
         <div className="text-center">
           <h3 className="text-base font-bold text-foreground capitalize">
-            {format(moisCourant, 'MMMM yyyy', { locale: fr })}
+            {formatParis(moisCourant, 'MMMM yyyy')}
           </h3>
         </div>
-        <button onClick={() => setMoisCourant(addMonths(moisCourant, 1))} className="p-1.5 hover:bg-muted rounded-lg transition-colors">
+        <button aria-label="Mois suivant" onClick={() => setMoisCourant(ajouterMoisCivilsParis(moisCourant, 1))} className="p-1.5 hover:bg-muted rounded-lg transition-colors">
           <ChevronRight className="h-5 w-5 text-muted-foreground" />
         </button>
       </div>
 
-      <button onClick={() => setMoisCourant(new Date())}
+      <button onClick={() => setMoisCourant(debutMoisParis(new Date()))}
         className="text-xs text-primary font-medium hover:underline mb-3 block mx-auto">
         Aujourd'hui
       </button>
+
+      {erreur && (
+        <div className="mb-4 rounded-xl border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive" role="alert">
+          <p>{erreur}</p>
+          <button
+            type="button"
+            onClick={() => setTentative((valeur) => valeur + 1)}
+            className="mt-2 inline-flex items-center gap-1.5 font-semibold hover:underline"
+          >
+            <RefreshCw className="h-3.5 w-3.5" /> Réessayer
+          </button>
+        </div>
+      )}
+
+      {nbPlanningsManquants > 0 && !erreur && (
+        <div className="mb-4 flex items-start gap-2 rounded-xl border border-warning/30 bg-warning/5 p-3 text-xs text-warning" role="status">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+          <span>
+            {nbPlanningsManquants} mission{nbPlanningsManquants > 1 ? 's actives ont' : ' active a'} un planning détaillé à confirmer.
+          </span>
+        </div>
+      )}
 
       {/* Légende */}
       <div className="flex flex-wrap gap-3 mb-4 justify-center">
         {[
           { label: 'Assignée', cls: 'bg-info' },
-          { label: 'En cours', cls: 'bg-success' },
+          { label: 'Active', cls: 'bg-success' },
           { label: 'Terminée', cls: 'bg-muted-foreground/40' },
           { label: 'Annulée', cls: 'bg-destructive' },
         ].map(l => (
@@ -118,8 +210,8 @@ export function CalendrierMensuel() {
       {/* Calendar grid */}
       <div className="grid grid-cols-7 gap-px min-w-[320px]">
         {jours.map((d, i) => {
-          const dansLeMois = isSameMonth(d, moisCourant);
-          const estAujourdhui = isToday(d);
+          const dansLeMois = memeMoisParis(d, moisCourant);
+          const estAujourdhui = memeJourParis(d, new Date());
           const msDuJour = getMissionsDuJour(d);
 
           return (
@@ -130,12 +222,12 @@ export function CalendrierMensuel() {
               <span className={`text-[11px] font-medium block text-center mb-0.5
                 ${estAujourdhui ? 'text-primary font-bold' : dansLeMois ? 'text-foreground' : 'text-muted-foreground/40'}
               `}>
-                {format(d, 'd')}
+                {formatParis(d, 'd')}
               </span>
 
               <div className="space-y-0.5">
                 {msDuJour.slice(0, 3).map(m => (
-                  <button key={m.id}
+                  <button key={m.segment_id ?? m.occurrence_id}
                     onClick={() => navigate(`/soignant/missions/${m.id}`)}
                     className={`w-full rounded px-1 py-0.5 text-[8px] leading-tight truncate block text-left transition-opacity hover:opacity-80 ${getStatutClasses(m.statut)}`}
                     title={`${m.intitule} — ${m.etablissements?.nom || ''}`}

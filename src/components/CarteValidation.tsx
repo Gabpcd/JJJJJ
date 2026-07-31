@@ -1,13 +1,27 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { format, differenceInMinutes } from 'date-fns';
-import { fr } from 'date-fns/locale';
 import { MapPin, Radio, AlertTriangle, Phone, Mail, CheckCircle, XCircle, Scale, Eye } from 'lucide-react';
 import { BadgeCertification } from './BadgeCertification';
 import { PanneauContestation } from './PanneauContestation';
 import { FilDiscussionLitige } from './FilDiscussionLitige';
 import { BadgesAntiTrichePresence } from './presence/BadgesAntiTrichePresence';
 import { EtoilesNotation, DetailCriteres } from './NotationRapide';
+import {
+  type CreneauPointage,
+} from '@/lib/disponibilite-pointage';
+import {
+  construireSynthesePresenceMission,
+  formatDureeMinutes,
+} from '@/lib/synthese-presence-mission';
+import { formatParis, memeJourParis } from '@/lib/date-heure-paris';
+
+function formatPlageExacte(debut: Date, fin: Date): string {
+  const debutFormate = formatParis(debut, 'EEE d MMM yyyy · HH:mm');
+  const finFormatee = memeJourParis(debut, fin)
+    ? formatParis(fin, 'HH:mm')
+    : formatParis(fin, 'EEE d MMM yyyy · HH:mm');
+  return `${debutFormate} → ${finFormatee}`;
+}
 
 interface CarteValidationProps {
   presence: any;
@@ -37,14 +51,16 @@ export function CarteValidation({ presence, litigeExistant, onValider, onContest
   const soignant = presence.soignants;
   if (!mission || !soignant) return null;
 
-  const debutPrevu = new Date(mission.debut_le);
-  const finPrevue = new Date(mission.fin_le);
-  const arriveeReelle = presence.pointage_arrivee_le ? new Date(presence.pointage_arrivee_le) : null;
-  const departReel = presence.pointage_depart_le ? new Date(presence.pointage_depart_le) : null;
-
-  const dureeReelleMin = arriveeReelle && departReel ? differenceInMinutes(departReel, arriveeReelle) : null;
-  const dureePrevueMin = (mission.duree_heures || 0) * 60;
-  const ecartMin = dureeReelleMin !== null ? dureeReelleMin - dureePrevueMin : null;
+  const creneaux = (mission.creneaux || []) as CreneauPointage[];
+  const synthese = construireSynthesePresenceMission(creneaux);
+  const premierPrevu = synthese.previsionnels[0] ?? null;
+  const dernierPrevu = synthese.previsionnels.at(-1) ?? null;
+  const premierEffectif = synthese.effectifsFermes[0] ?? synthese.effectifsOuverts[0] ?? null;
+  const dernierEffectifFerme = synthese.effectifsFermes.at(-1) ?? null;
+  const validationPossible = !mission.planning_indisponible && synthese.validationPossible;
+  const ecartMin = validationPossible
+    ? synthese.minutesTravaillees - synthese.minutesPlanifiees
+    : null;
 
   const aAlertes = presence.alerte_teleportation || !presence.perimetre_gps_valide;
 
@@ -91,17 +107,34 @@ export function CarteValidation({ presence, litigeExistant, onValider, onContest
       {/* Horaires */}
       <div className="grid grid-cols-2 gap-2 text-xs">
         <div>
-          <p className="text-muted-foreground">Prévu</p>
-          <p className="font-medium text-foreground">
-            {format(debutPrevu, "HH:mm")} → {format(finPrevue, "HH:mm")} ({mission.duree_heures}h)
-          </p>
-        </div>
-        {arriveeReelle && departReel && dureeReelleMin !== null && (
-          <div>
-            <p className="text-muted-foreground">Réel</p>
+          <p className="text-muted-foreground">Prévu · {synthese.previsionnels.length} créneau{synthese.previsionnels.length > 1 ? 'x' : ''}</p>
+          {premierPrevu?.fin && dernierPrevu?.fin ? (
             <p className="font-medium text-foreground">
-              {format(arriveeReelle, "HH:mm")} → {format(departReel, "HH:mm")} ({Math.floor(dureeReelleMin / 60)}h{String(dureeReelleMin % 60).padStart(2, '0')})
+              {formatPlageExacte(new Date(premierPrevu.debut), new Date(dernierPrevu.fin))}
+              {' · '}{formatDureeMinutes(synthese.minutesPlanifiees)}
             </p>
+          ) : (
+            <p className="font-medium text-muted-foreground">
+              {mission.planning_indisponible
+                ? 'Planning détaillé indisponible'
+                : 'Planning détaillé à confirmer'}
+            </p>
+          )}
+        </div>
+        {(premierEffectif || synthese.effectifsFermes.length > 0) && (
+          <div>
+            <p className="text-muted-foreground">
+              Réel · {synthese.effectifsFermes.length} segment{synthese.effectifsFermes.length > 1 ? 's' : ''} terminé{synthese.effectifsFermes.length > 1 ? 's' : ''}
+            </p>
+            <p className="font-medium text-foreground">
+              {formatDureeMinutes(synthese.minutesTravaillees)} travaillées
+              {synthese.effectifsOuverts.length > 0 ? ' · pointage ouvert' : ''}
+            </p>
+            {premierEffectif && dernierEffectifFerme?.fin && (
+              <p className="mt-1 text-muted-foreground">
+                Du {formatParis(premierEffectif.debut, 'dd/MM/yyyy HH:mm')} au {formatParis(dernierEffectifFerme.fin, 'dd/MM/yyyy HH:mm')}
+              </p>
+            )}
           </div>
         )}
       </div>
@@ -111,10 +144,23 @@ export function CarteValidation({ presence, litigeExistant, onValider, onContest
           Écart : {ecartMin >= 0 ? '+' : ''}{ecartMin} min
         </p>
       )}
+      {!presence.valide_par_etablissement && !validationPossible && (
+        <p className="text-xs text-muted-foreground">
+          {mission.planning_indisponible
+            ? 'Validation indisponible tant que le planning détaillé ne peut pas être vérifié.'
+            : synthese.effectifsOuverts.length > 0
+              ? 'Pointage en cours : la validation sera disponible après le départ et la fin du dernier créneau prévu.'
+              : synthese.dernierPrevisionnelFin && !synthese.planningTermine
+                ? `Mission en cours : validation après le dernier créneau, le ${formatParis(synthese.dernierPrevisionnelFin, 'dd/MM/yyyy à HH:mm')}.`
+                : synthese.effectifsFermes.length === 0
+                  ? 'Aucun segment de travail terminé à valider.'
+                  : 'Validation indisponible tant que le planning n’est pas confirmé.'}
+        </p>
+      )}
 
       {/* GPS info */}
       <div className="flex flex-wrap gap-3 text-xs">
-        {presence.distance_etablissement_m !== null && (
+        {typeof presence.distance_etablissement_m === 'number' && (
           <span className={`flex items-center gap-1 ${presence.perimetre_gps_valide ? 'text-success' : 'text-warning'}`}>
             <MapPin className="h-3.5 w-3.5" />
             Arrivée : {Math.round(presence.distance_etablissement_m)}m · {presence.perimetre_gps_valide ? '✅ OK' : '⚠️ Hors périmètre'}
@@ -162,7 +208,7 @@ export function CarteValidation({ presence, litigeExistant, onValider, onContest
       {/* Actions — F4 : valider = valider ET noter, un seul geste. La note 1-tap
           est obligatoire (cold start du système de notation, la donnée coule dès
           le jour 1) ; le détail 4 critères reste optionnel. */}
-      {!presence.valide_par_etablissement && departReel && (
+      {!presence.valide_par_etablissement && validationPossible && (
         <div className="space-y-2 pt-1">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-xs text-muted-foreground">Note {soignant.prenom} :</span>
@@ -262,7 +308,7 @@ export function CarteValidation({ presence, litigeExistant, onValider, onContest
         </div>
       ) : (
         <>
-          {onOuvrirLitige && presence.pointage_depart_le && (
+          {onOuvrirLitige && synthese.effectifsFermes.length > 0 && (
             <div className="border-t border-border pt-2">
               {showLitige ? (
                 <div className="space-y-2">

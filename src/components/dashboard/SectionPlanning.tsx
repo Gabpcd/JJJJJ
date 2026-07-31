@@ -1,19 +1,32 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import {
-  addDays, addMonths, endOfMonth, endOfWeek, format, isSameDay, isSameMonth,
-  isToday, isTomorrow, startOfDay, startOfMonth, startOfWeek, subMonths,
-} from 'date-fns';
-import { fr } from 'date-fns/locale';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { CalendarDays, ChevronLeft, ChevronRight, User } from 'lucide-react';
+import { AlertTriangle, CalendarDays, ChevronLeft, ChevronRight, RefreshCw, User } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import {
+  ajouterRepliMissionPonctuelle,
+  creneauxPrevisionnels,
+  type CreneauPointage,
+} from '@/lib/disponibilite-pointage';
+import {
+  ajouterJoursCivilsParis,
+  ajouterMoisCivilsParis,
+  cleJourParis,
+  debutMoisParis,
+  debutSemaineParis,
+  finMoisParis,
+  formatParis,
+  memeJourParis,
+  memeMoisParis,
+  semaineSuivanteParis,
+} from '@/lib/date-heure-paris';
+import { decouperOccurrencesParJour } from '@/lib/occurrences-planning';
 
-export interface MissionPlanning {
+export interface MissionPlanningSource {
   id: string;
   intitule: string;
   debut_le: string;
-  fin_le?: string | null;
+  fin_le: string;
   statut: 'OUVERTE' | 'ASSIGNEE' | 'EN_COURS' | string;
   duree_heures?: number | null;
   profession_requise?: string | null;
@@ -21,8 +34,73 @@ export interface MissionPlanning {
   soignant_nom?: string | null;
 }
 
+export interface CreneauPlanning extends CreneauPointage {
+  mission_id: string;
+}
+
+export interface MissionPlanning extends MissionPlanningSource {
+  occurrence_id: string;
+  creneau_debut: string;
+  creneau_fin: string;
+  duree_creneau_heures: number;
+}
+
+/**
+ * Transforme une mission contractuelle en occurrences réellement travaillées.
+ * `debut_le` / `fin_le` décrivent la période globale de la mission ; ils ne
+ * doivent jamais être étalés sur chaque jour du calendrier. Les anciennes
+ * missions ponctuelles sans PREVISIONNEL gardent un repli strict à 24 h.
+ */
+// Le helper reste ici pour garantir que le chargement et les trois vues
+// partagent exactement la même notion d'occurrence de planning.
+// eslint-disable-next-line react-refresh/only-export-components
+export function construireOccurrencesPlanning(
+  missions: MissionPlanningSource[],
+  creneaux: CreneauPlanning[],
+  debutPeriode: Date,
+  finPeriode: Date,
+): MissionPlanning[] {
+  const creneauxParMission = new Map<string, CreneauPointage[]>();
+  for (const creneau of creneaux) {
+    const liste = creneauxParMission.get(creneau.mission_id) ?? [];
+    liste.push(creneau);
+    creneauxParMission.set(creneau.mission_id, liste);
+  }
+
+  const debutMs = debutPeriode.getTime();
+  const finMs = finPeriode.getTime();
+
+  return missions
+    .flatMap((mission) => {
+      const planifies = creneauxPrevisionnels(ajouterRepliMissionPonctuelle(
+        creneauxParMission.get(mission.id) ?? [],
+        mission,
+      ));
+
+      return planifies
+        .filter((creneau) => {
+          if (!creneau.fin) return false;
+          return new Date(creneau.fin).getTime() >= debutMs
+            && new Date(creneau.debut).getTime() <= finMs;
+        })
+        .map((creneau) => ({
+          ...mission,
+          occurrence_id: `${mission.id}:${creneau.id ?? creneau.debut}`,
+          creneau_debut: creneau.debut,
+          creneau_fin: creneau.fin!,
+          duree_creneau_heures: Math.max(
+            0,
+            (new Date(creneau.fin!).getTime() - new Date(creneau.debut).getTime()) / 3_600_000,
+          ),
+        }));
+    })
+    .sort((a, b) => new Date(a.creneau_debut).getTime() - new Date(b.creneau_debut).getTime());
+}
+
 interface Props {
   missions: MissionPlanning[];
+  erreur?: string | null;
+  onRetry?: () => void;
 }
 
 type View = 'mois' | 'semaine' | 'liste';
@@ -30,21 +108,34 @@ type View = 'mois' | 'semaine' | 'liste';
 const STATUT_STYLE: Record<string, { dot: string; bg: string; text: string; label: string }> = {
   OUVERTE: { dot: 'bg-warning', bg: 'bg-warning/10 hover:bg-warning/20 border-warning/30', text: 'text-warning', label: 'Ouverte' },
   ASSIGNEE: { dot: 'bg-info', bg: 'bg-info/10 hover:bg-info/20 border-info/30', text: 'text-info', label: 'Assignée' },
-  EN_COURS: { dot: 'bg-success', bg: 'bg-success/10 hover:bg-success/20 border-success/30', text: 'text-success', label: 'En cours' },
+  EN_COURS: { dot: 'bg-success', bg: 'bg-success/10 hover:bg-success/20 border-success/30', text: 'text-success', label: 'Active' },
 };
 
 const styleFor = (statut: string) => STATUT_STYLE[statut] ?? STATUT_STYLE.OUVERTE;
 
-const fmtHeure = (iso: string) =>
-  new Date(iso).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+const fmtHeure = (iso: string) => formatParis(iso, 'HH:mm');
+
+function decouperMissionsPlanningParJour(missions: MissionPlanning[]): MissionPlanning[] {
+  return decouperOccurrencesParJour(missions.map((mission) => ({
+    ...mission,
+    debut_le: mission.creneau_debut,
+    fin_le: mission.creneau_fin,
+    duree_heures: mission.duree_creneau_heures,
+  }))).map((segment) => ({
+    ...segment,
+    occurrence_id: segment.segment_id,
+    creneau_debut: segment.debut_le,
+    creneau_fin: segment.fin_le,
+    duree_creneau_heures: segment.duree_heures,
+  }));
+}
 
 function bucketFor(date: Date, now: Date): 'today' | 'tomorrow' | 'thisWeek' | 'nextWeek' | 'later' {
-  if (isToday(date)) return 'today';
-  if (isTomorrow(date)) return 'tomorrow';
-  const endThisWeek = endOfWeek(now, { weekStartsOn: 1 });
-  if (date <= endThisWeek) return 'thisWeek';
-  const endNextWeek = endOfWeek(addDays(endThisWeek, 1), { weekStartsOn: 1 });
-  if (date <= endNextWeek) return 'nextWeek';
+  if (memeJourParis(date, now)) return 'today';
+  if (memeJourParis(date, ajouterJoursCivilsParis(now, 1))) return 'tomorrow';
+  const debutSemaineSuivante = semaineSuivanteParis(now);
+  if (date < debutSemaineSuivante) return 'thisWeek';
+  if (date < ajouterJoursCivilsParis(debutSemaineSuivante, 7)) return 'nextWeek';
   return 'later';
 }
 
@@ -56,12 +147,12 @@ const BUCKET_LABEL: Record<string, string> = {
   later: 'Plus tard',
 };
 
-export function SectionPlanning({ missions }: Props) {
+export function SectionPlanning({ missions, erreur, onRetry }: Props) {
   const navigate = useNavigate();
   const initialView: View = typeof window !== 'undefined' && window.matchMedia('(min-width: 768px)').matches ? 'mois' : 'liste';
   const [view, setView] = useState<View>(initialView);
-  const [moisCourant, setMoisCourant] = useState(() => startOfMonth(new Date()));
-  const [semaineCourante, setSemaineCourante] = useState(() => startOfWeek(new Date(), { weekStartsOn: 1 }));
+  const [moisCourant, setMoisCourant] = useState(() => debutMoisParis(new Date()));
+  const [semaineCourante, setSemaineCourante] = useState(() => debutSemaineParis(new Date()));
 
   const ouvrir = (id: string) => navigate(`/etablissement/missions/${id}`);
 
@@ -71,7 +162,9 @@ export function SectionPlanning({ missions }: Props) {
         <div className="flex items-center gap-2">
           <CalendarDays className="h-5 w-5 text-primary" />
           <h2 className="text-lg font-bold text-foreground">Planning missions à venir</h2>
-          <span className="text-xs text-muted-foreground">({missions.length})</span>
+          <span className="text-xs text-muted-foreground">
+            ({missions.length} créneau{missions.length > 1 ? 'x' : ''})
+          </span>
         </div>
 
         <Tabs value={view} onValueChange={(v) => setView(v as View)}>
@@ -83,24 +176,40 @@ export function SectionPlanning({ missions }: Props) {
         </Tabs>
       </div>
 
-      {missions.length === 0 ? (
+      {erreur ? (
+        <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm" role="alert">
+          <p className="flex items-center gap-2 font-medium text-destructive">
+            <AlertTriangle className="h-4 w-4 shrink-0" />
+            {erreur}
+          </p>
+          {onRetry && (
+            <button
+              type="button"
+              onClick={onRetry}
+              className="mt-3 inline-flex items-center gap-1.5 text-xs font-semibold text-primary hover:underline"
+            >
+              <RefreshCw className="h-3.5 w-3.5" /> Réessayer
+            </button>
+          )}
+        </div>
+      ) : missions.length === 0 ? (
         <p className="text-sm text-muted-foreground text-center py-8">
-          Aucune mission planifiée dans les 30 prochains jours.
+          Aucun créneau planifié dans les 31 prochains jours.
         </p>
       ) : view === 'mois' ? (
         <VueMois
           mois={moisCourant}
           missions={missions}
-          onPrev={() => setMoisCourant(subMonths(moisCourant, 1))}
-          onNext={() => setMoisCourant(addMonths(moisCourant, 1))}
+          onPrev={() => setMoisCourant(ajouterMoisCivilsParis(moisCourant, -1))}
+          onNext={() => setMoisCourant(ajouterMoisCivilsParis(moisCourant, 1))}
           onClickMission={ouvrir}
         />
       ) : view === 'semaine' ? (
         <VueSemaine
           debutSemaine={semaineCourante}
           missions={missions}
-          onPrev={() => setSemaineCourante(addDays(semaineCourante, -7))}
-          onNext={() => setSemaineCourante(addDays(semaineCourante, 7))}
+          onPrev={() => setSemaineCourante(ajouterJoursCivilsParis(semaineCourante, -7))}
+          onNext={() => setSemaineCourante(ajouterJoursCivilsParis(semaineCourante, 7))}
           onClickMission={ouvrir}
         />
       ) : (
@@ -118,15 +227,15 @@ function VueMois({
   onPrev: () => void; onNext: () => void;
   onClickMission: (id: string) => void;
 }) {
-  const debutGrille = startOfWeek(startOfMonth(mois), { weekStartsOn: 1 });
-  const finGrille = endOfWeek(endOfMonth(mois), { weekStartsOn: 1 });
+  const debutGrille = debutSemaineParis(debutMoisParis(mois));
+  const finGrilleExclusive = ajouterJoursCivilsParis(debutSemaineParis(finMoisParis(mois)), 7);
   const jours: Date[] = [];
-  for (let d = debutGrille; d <= finGrille; d = addDays(d, 1)) jours.push(d);
+  for (let d = debutGrille; d < finGrilleExclusive; d = ajouterJoursCivilsParis(d, 1)) jours.push(d);
 
   const missionsParJour = useMemo(() => {
     const map = new Map<string, MissionPlanning[]>();
-    for (const m of missions) {
-      const key = format(startOfDay(new Date(m.debut_le)), 'yyyy-MM-dd');
+    for (const m of decouperMissionsPlanningParJour(missions)) {
+      const key = cleJourParis(m.creneau_debut);
       const arr = map.get(key) ?? [];
       arr.push(m);
       map.set(key, arr);
@@ -141,7 +250,7 @@ function VueMois({
           <ChevronLeft className="h-4 w-4" />
         </button>
         <p className="text-sm font-semibold text-foreground capitalize">
-          {format(mois, 'MMMM yyyy', { locale: fr })}
+          {formatParis(mois, 'MMMM yyyy')}
         </p>
         <button onClick={onNext} className="p-1.5 hover:bg-muted rounded" aria-label="Mois suivant">
           <ChevronRight className="h-4 w-4" />
@@ -153,34 +262,35 @@ function VueMois({
           <div key={j} className="bg-muted/50 px-2 py-1.5 font-medium text-muted-foreground text-center">{j}</div>
         ))}
         {jours.map(jour => {
-          const key = format(jour, 'yyyy-MM-dd');
+          const key = cleJourParis(jour);
           const items = missionsParJour.get(key) ?? [];
-          const horsMois = !isSameMonth(jour, mois);
+          const horsMois = !memeMoisParis(jour, mois);
+          const estAujourdhui = memeJourParis(jour, new Date());
           return (
             <div
               key={key}
-              className={`bg-card min-h-[80px] p-1.5 ${horsMois ? 'opacity-40' : ''} ${isToday(jour) ? 'ring-2 ring-primary ring-inset' : ''}`}
+              className={`bg-card min-h-[80px] p-1.5 ${horsMois ? 'opacity-40' : ''} ${estAujourdhui ? 'ring-2 ring-primary ring-inset' : ''}`}
             >
-              <p className={`text-[11px] font-medium ${isToday(jour) ? 'text-primary' : 'text-foreground'}`}>
-                {format(jour, 'd')}
+              <p className={`text-[11px] font-medium ${estAujourdhui ? 'text-primary' : 'text-foreground'}`}>
+                {formatParis(jour, 'd')}
               </p>
               <TooltipProvider delayDuration={200}>
                 <div className="space-y-0.5 mt-1">
                   {items.slice(0, 3).map(m => {
                     const cfg = styleFor(m.statut);
                     return (
-                      <Tooltip key={m.id}>
+                      <Tooltip key={m.occurrence_id}>
                         <TooltipTrigger asChild>
                           <button
                             onClick={() => onClickMission(m.id)}
                             className={`w-full text-left px-1.5 py-0.5 rounded border ${cfg.bg} ${cfg.text} truncate text-[10px] font-medium`}
                           >
-                            {fmtHeure(m.debut_le)} {m.intitule}
+                            {fmtHeure(m.creneau_debut)} {m.intitule}
                           </button>
                         </TooltipTrigger>
                         <TooltipContent side="top" className="text-xs">
                           <p className="font-semibold">{m.intitule}</p>
-                          <p>{fmtHeure(m.debut_le)}{m.fin_le ? ` → ${fmtHeure(m.fin_le)}` : ''} {m.duree_heures ? `· ${m.duree_heures}h` : ''}</p>
+                          <p>{fmtHeure(m.creneau_debut)} → {fmtHeure(m.creneau_fin)} · {m.duree_creneau_heures.toLocaleString('fr-FR', { maximumFractionDigits: 2 })}h</p>
                           <p className="text-muted-foreground">
                             {m.soignant_nom ?? 'Non assignée'} · {cfg.label}
                           </p>
@@ -211,13 +321,13 @@ function VueSemaine({
   onPrev: () => void; onNext: () => void;
   onClickMission: (id: string) => void;
 }) {
-  const jours = useMemo(() => Array.from({ length: 7 }, (_, i) => addDays(debutSemaine, i)), [debutSemaine]);
+  const jours = useMemo(() => Array.from({ length: 7 }, (_, i) => ajouterJoursCivilsParis(debutSemaine, i)), [debutSemaine]);
   const missionsParJour = useMemo(() => {
     const map = new Map<string, MissionPlanning[]>();
-    for (const m of missions) {
-      const d = new Date(m.debut_le);
-      if (d < debutSemaine || d >= addDays(debutSemaine, 7)) continue;
-      const key = format(startOfDay(d), 'yyyy-MM-dd');
+    for (const m of decouperMissionsPlanningParJour(missions)) {
+      const d = new Date(m.creneau_debut);
+      if (d < debutSemaine || d >= ajouterJoursCivilsParis(debutSemaine, 7)) continue;
+      const key = cleJourParis(d);
       const arr = map.get(key) ?? [];
       arr.push(m);
       map.set(key, arr);
@@ -225,7 +335,7 @@ function VueSemaine({
     return map;
   }, [missions, debutSemaine]);
 
-  const finSemaine = addDays(debutSemaine, 6);
+  const finSemaine = ajouterJoursCivilsParis(debutSemaine, 6);
 
   return (
     <div>
@@ -234,7 +344,7 @@ function VueSemaine({
           <ChevronLeft className="h-4 w-4" />
         </button>
         <p className="text-sm font-semibold text-foreground">
-          {format(debutSemaine, 'd MMM', { locale: fr })} → {format(finSemaine, 'd MMM yyyy', { locale: fr })}
+          {formatParis(debutSemaine, 'd MMM')} → {formatParis(finSemaine, 'd MMM yyyy')}
         </p>
         <button onClick={onNext} className="p-1.5 hover:bg-muted rounded" aria-label="Semaine suivante">
           <ChevronRight className="h-4 w-4" />
@@ -243,12 +353,13 @@ function VueSemaine({
 
       <div className="grid grid-cols-1 md:grid-cols-7 gap-2">
         {jours.map(jour => {
-          const key = format(jour, 'yyyy-MM-dd');
+          const key = cleJourParis(jour);
           const items = missionsParJour.get(key) ?? [];
+          const estAujourdhui = memeJourParis(jour, new Date());
           return (
-            <div key={key} className={`border border-border rounded-lg p-2 ${isToday(jour) ? 'border-primary' : ''}`}>
-              <p className={`text-xs font-semibold mb-2 ${isToday(jour) ? 'text-primary' : 'text-foreground'}`}>
-                <span className="capitalize">{format(jour, 'EEE', { locale: fr })}</span> {format(jour, 'd MMM', { locale: fr })}
+            <div key={key} className={`border border-border rounded-lg p-2 ${estAujourdhui ? 'border-primary' : ''}`}>
+              <p className={`text-xs font-semibold mb-2 ${estAujourdhui ? 'text-primary' : 'text-foreground'}`}>
+                <span className="capitalize">{formatParis(jour, 'EEE')}</span> {formatParis(jour, 'd MMM')}
               </p>
               {items.length === 0 ? (
                 <p className="text-[10px] text-muted-foreground italic">—</p>
@@ -258,13 +369,13 @@ function VueSemaine({
                     const cfg = styleFor(m.statut);
                     return (
                       <button
-                        key={m.id}
+                        key={m.occurrence_id}
                         onClick={() => onClickMission(m.id)}
                         className={`w-full text-left p-2 rounded border ${cfg.bg} text-xs space-y-0.5`}
                       >
                         <p className="font-semibold text-foreground truncate">{m.intitule}</p>
                         <p className={`${cfg.text} text-[10px]`}>
-                          {fmtHeure(m.debut_le)}{m.fin_le ? ` → ${fmtHeure(m.fin_le)}` : ''}
+                          {fmtHeure(m.creneau_debut)} → {fmtHeure(m.creneau_fin)}
                         </p>
                         {m.soignant_nom && (
                           <p className="text-[10px] text-muted-foreground flex items-center gap-1 truncate">
@@ -288,11 +399,11 @@ function VueSemaine({
 
 /* ───────────── Vue Liste (mobile + desktop) ───────────── */
 function VueListe({ missions, onClickMission }: { missions: MissionPlanning[]; onClickMission: (id: string) => void }) {
-  const now = new Date();
   const groupes = useMemo(() => {
+    const now = new Date();
     const map = new Map<string, MissionPlanning[]>();
     for (const m of missions) {
-      const b = bucketFor(new Date(m.debut_le), now);
+      const b = bucketFor(new Date(m.creneau_debut), now);
       const arr = map.get(b) ?? [];
       arr.push(m);
       map.set(b, arr);
@@ -315,10 +426,10 @@ function VueListe({ missions, onClickMission }: { missions: MissionPlanning[]; o
             <div className="space-y-2">
               {items.map(m => {
                 const cfg = styleFor(m.statut);
-                const date = new Date(m.debut_le);
+                const date = new Date(m.creneau_debut);
                 return (
                   <button
-                    key={m.id}
+                    key={m.occurrence_id}
                     onClick={() => onClickMission(m.id)}
                     className="w-full text-left border border-border rounded-lg p-3 hover:bg-muted/50 transition-colors flex items-start gap-3"
                   >
@@ -329,9 +440,8 @@ function VueListe({ missions, onClickMission }: { missions: MissionPlanning[]; o
                         <span className={`text-[10px] font-medium ${cfg.text} shrink-0`}>{cfg.label}</span>
                       </div>
                       <p className="text-xs text-muted-foreground mt-0.5">
-                        {format(date, 'EEE d MMM', { locale: fr })} · {fmtHeure(m.debut_le)}
-                        {m.fin_le ? ` → ${fmtHeure(m.fin_le)}` : ''}
-                        {m.duree_heures ? ` · ${m.duree_heures}h` : ''}
+                        {formatParis(date, 'EEE d MMM')} · {fmtHeure(m.creneau_debut)} → {fmtHeure(m.creneau_fin)}
+                        {` · ${m.duree_creneau_heures.toLocaleString('fr-FR', { maximumFractionDigits: 2 })}h`}
                       </p>
                       <p className="text-[11px] text-muted-foreground mt-0.5 flex items-center gap-1">
                         <User className="h-3 w-3" />

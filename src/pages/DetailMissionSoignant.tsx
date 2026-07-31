@@ -35,8 +35,7 @@ import { extraireMessageErreur, estBlocageCodeTravail } from '@/lib/erreurs';
 import { calculerCompletionProfil, getMotifProfilIncomplet } from '@/lib/profil-soignant';
 import { estMultiJours, formatDateMission, formatHorairesMission } from '@/lib/format-mission';
 import { BoutonY2K } from '@/components/y2k/BoutonY2K';
-import { format } from 'date-fns';
-import { fr } from 'date-fns/locale';
+import { ajouterJoursCivilsParis, debutJourParis, formatParis } from '@/lib/date-heure-paris';
 import { toast } from 'sonner';
 import type { Database } from '@/integrations/supabase/types';
 import { BlocContratTravailMission } from '@/components/BlocContratTravailMission';
@@ -45,6 +44,11 @@ import { BandeauActionPrioritaire, type ActionPrioritaire } from '@/components/B
 import { ModaleAnnulationCandidature } from '@/components/soignant/ModaleAnnulationCandidature';
 import { AnnulationCandidatureTimer } from '@/components/soignant/AnnulationCandidatureTimer';
 import { netEstimeAfficheMission } from '@/lib/missionFinanceDisplay';
+import {
+  ajouterRepliMissionPonctuelle,
+  creneauChevauchePeriode,
+  type CreneauPointage,
+} from '@/lib/disponibilite-pointage';
 
 type SoignantData = Database['public']['Tables']['soignants']['Row'];
 
@@ -60,6 +64,8 @@ export default function DetailMissionSoignant() {
   const [soignant, setSoignant] = useState<SoignantData | null>(null);
   const [countMissions, setCountMissions] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [creneauxPlanifies, setCreneauxPlanifies] = useState<CreneauPointage[]>([]);
+  const [erreurCreneaux, setErreurCreneaux] = useState(false);
   const [acceptationEnCours, setAcceptationEnCours] = useState(false);
 
   // Modals
@@ -93,7 +99,7 @@ export default function DetailMissionSoignant() {
   useEffect(() => {
     if (!user || !id) return;
     const load = async () => {
-      const [{ data: m }, { data: s }] = await Promise.all([
+      const [{ data: m }, { data: s }, { data: creneaux, error: creneauxError }] = await Promise.all([
         supabase.from('missions').select(`
           id, intitule, description, service, profession_requise,
           debut_le, fin_le, duree_heures, nb_creneaux, taux_horaire_base, taux_rist_plafonne, rist_plafond_applique,
@@ -107,7 +113,18 @@ export default function DetailMissionSoignant() {
           mode_attribution, boostee_le, presence_confirmee_le, garantie_remplacement, est_arret_maladie, mode_remuneration, retrocession_pct, montant_honoraires_bruts, honoraires_confirmes_le
         `).eq('id', id).single(),
         supabase.rpc('fn_mon_profil_soignant_complet' as any),
+        supabase
+          .from('mission_creneaux')
+          .select('id, debut, fin, est_pause, type_creneau')
+          .eq('mission_id', id)
+          .eq('type_creneau', 'PREVISIONNEL')
+          .eq('est_pause', false)
+          .order('debut', { ascending: true }),
       ]);
+      setCreneauxPlanifies(m
+        ? ajouterRepliMissionPonctuelle((creneaux || []) as CreneauPointage[], m)
+        : []);
+      setErreurCreneaux(Boolean(creneauxError));
       if (m) {
         setMission(m);
         // Fetch etablissement via secure RPC (masque champs sensibles)
@@ -206,6 +223,14 @@ export default function DetailMissionSoignant() {
   const estTerminee = mission.statut === 'TERMINEE';
   const estAssigneAutre = !estOuverte && !estAssigne && mission.soignant_assigne_id;
   const estModeCandidature = mission.mode_attribution === 'CANDIDATURE';
+  const debutAujourdhui = debutJourParis(new Date());
+  const finAujourdhui = ajouterJoursCivilsParis(debutAujourdhui, 1);
+  const aCreneauAujourdhui = creneauxPlanifies.some((creneau) => (
+    creneauChevauchePeriode(creneau, debutAujourdhui, finAujourdhui)
+  ));
+  const ongletPresences = aCreneauAujourdhui
+    ? 'aujourdhui'
+    : mission.statut === 'EN_COURS' ? 'encours' : 'avenir';
   // Le régime financier se lit sur la mission, jamais sur le statut général du
   // profil. Un même soignant peut enchaîner des missions salariées et libérales.
   // En l'absence de valeur explicite, le défaut de sécurité reste SALARIE.
@@ -369,9 +394,9 @@ export default function DetailMissionSoignant() {
             prenom: soignant.prenom,
             mission: mission.intitule,
             etablissement: etablissement?.nom || '',
-            date: format(new Date(mission.debut_le), 'EEEE d MMMM yyyy', { locale: fr }),
-            heure_debut: format(new Date(mission.debut_le), "HH'h'mm", { locale: fr }),
-            heure_fin: format(new Date(mission.fin_le), "HH'h'mm", { locale: fr }),
+            date: formatParis(mission.debut_le, 'EEEE d MMMM yyyy'),
+            heure_debut: formatParis(mission.debut_le, "HH'h'mm"),
+            heure_fin: formatParis(mission.fin_le, "HH'h'mm"),
             taux_horaire: mission.taux_horaire_base,
             mission_id: id,
           },
@@ -388,7 +413,7 @@ export default function DetailMissionSoignant() {
               soignant_nom: `${soignant.prenom} ${soignant.nom}`,
               profession: soignant.profession,
               mission: mission.intitule,
-              date: format(new Date(mission.debut_le), 'EEEE d MMMM yyyy', { locale: fr }),
+              date: formatParis(mission.debut_le, 'EEEE d MMMM yyyy'),
               mission_id: id,
             },
             destinataire_id: mission.etablissement_id,
@@ -587,10 +612,43 @@ export default function DetailMissionSoignant() {
           {/* Horaires */}
           <div className="card-base">
             <h3 className="font-semibold text-sm text-foreground mb-2">🕐 Horaires</h3>
-            <p className="text-sm text-foreground">📅 {formatDateMission(mission)}</p>
-            <p className="text-sm text-foreground">
-              🕐 {formatHorairesMission(mission)}
-            </p>
+            {erreurCreneaux ? (
+              <p className="text-sm text-warning" role="alert">
+                Planning détaillé momentanément indisponible. Actualise la page avant de te déplacer.
+              </p>
+            ) : creneauxPlanifies.length > 0 ? (
+              <>
+                <p className="text-sm font-medium text-foreground">
+                  {creneauxPlanifies.length} créneau{creneauxPlanifies.length > 1 ? 'x' : ''} planifié{creneauxPlanifies.length > 1 ? 's' : ''} :
+                </p>
+                <ul className="mt-2 space-y-2" aria-label="Jours et horaires travaillés">
+                  {creneauxPlanifies.map((creneau) => (
+                    <li
+                      key={creneau.id ?? creneau.debut}
+                      className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-muted/40 px-3 py-2 text-sm"
+                    >
+                      <span className="font-medium text-foreground capitalize">
+                        {formatParis(creneau.debut, 'EEEE d MMMM yyyy')}
+                      </span>
+                      <span className="font-semibold text-primary">
+                        {formatParis(creneau.debut, "HH'h'mm")}
+                        {' → '}
+                        {creneau.fin ? formatParis(creneau.fin, "HH'h'mm") : 'fin à confirmer'}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+                <p className="text-xs text-muted-foreground mt-2">
+                  Total prévu : {mission.duree_heures || 0} h
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="text-sm text-foreground">📅 {formatDateMission(mission)}</p>
+                <p className="text-sm text-foreground">🕐 {formatHorairesMission(mission)}</p>
+                <p className="text-xs text-warning mt-2">Les journées détaillées ne sont pas encore planifiées.</p>
+              </>
+            )}
             <div className="flex flex-wrap gap-2 mt-2">
               {(mission.heures_nuit || 0) > 0 && <span className="badge-base bg-indigo-100 text-indigo-700">🌙 {mission.heures_nuit}h de nuit</span>}
               {(mission.heures_dimanche || 0) > 0 && <span className="badge-base bg-amber-100 text-amber-700">☀️ {mission.heures_dimanche}h de dimanche</span>}
@@ -908,6 +966,15 @@ export default function DetailMissionSoignant() {
                     role="SOIGNANT"
                   />
                 </div>
+                {(mission.statut === 'ASSIGNEE' || mission.statut === 'EN_COURS') && (
+                  <button
+                    type="button"
+                    onClick={() => navigate(`/soignant/presences?tab=${ongletPresences}`)}
+                    className="btn-primary w-full text-sm py-2.5 mb-3"
+                  >
+                    🕐 Présences et pointage
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={async () => {
@@ -1023,7 +1090,9 @@ export default function DetailMissionSoignant() {
         onFermer={() => setModalConfirm(false)}
         onConfirmer={() => accepterMission()}
         titre="Accepter cette mission ?"
-        message={`Tu t'engages à être présent(e) ${estMultiJours(mission) ? `du ${formatDateMission(mission)}` : `le ${format(new Date(mission.debut_le), 'EEEE d MMMM', { locale: fr })}`} (${formatHorairesMission(mission)}). Une annulation tardive impactera ton score de fiabilité.`}
+        message={`Tu t'engages à être présent(e) ${creneauxPlanifies.length > 0
+          ? creneauxPlanifies.map((creneau) => `${formatParis(creneau.debut, 'EEEE d MMMM')} de ${formatParis(creneau.debut, "HH'h'mm")} à ${creneau.fin ? formatParis(creneau.fin, "HH'h'mm") : 'une heure à confirmer'}`).join(', puis ')
+          : estMultiJours(mission) ? `du ${formatDateMission(mission)} (${formatHorairesMission(mission)})` : `le ${formatParis(mission.debut_le, 'EEEE d MMMM')} (${formatHorairesMission(mission)})`}. Une annulation tardive impactera ton score de fiabilité.`}
         labelConfirmer="Oui, j'accepte"
         labelAnnuler="Annuler"
       />
