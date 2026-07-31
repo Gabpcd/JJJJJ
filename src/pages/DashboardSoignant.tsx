@@ -103,6 +103,9 @@ export default function DashboardSoignant() {
   }, [dashboard?.documents]);
 
   const missionProchaine = useMemo(() => {
+    const missionEnCours = (mesMissions as any[]).find((m: any) => m.statut === 'EN_COURS');
+    if (missionEnCours) return missionEnCours;
+
     return (mesMissions as any[]).find((m: any) => {
       const mins = (new Date(m.debut_le).getTime() - Date.now()) / 60000;
       return mins > -30 && mins <= 60;

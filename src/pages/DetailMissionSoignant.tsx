@@ -908,6 +908,15 @@ export default function DetailMissionSoignant() {
                     role="SOIGNANT"
                   />
                 </div>
+                {(mission.statut === 'ASSIGNEE' || mission.statut === 'EN_COURS') && (
+                  <button
+                    type="button"
+                    onClick={() => navigate(`/soignant/presences?tab=${mission.statut === 'EN_COURS' ? 'encours' : 'aujourdhui'}`)}
+                    className="btn-primary w-full text-sm py-2.5 mb-3"
+                  >
+                    🕐 Présences et pointage
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={async () => {
