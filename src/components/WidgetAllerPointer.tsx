@@ -1,8 +1,8 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Clock, MapPin } from 'lucide-react';
-import { differenceInMinutes, format, isSameDay } from 'date-fns';
-import { fr } from 'date-fns/locale';
+import { differenceInMinutes } from 'date-fns';
+import { formatParis, memeJourParis } from '@/lib/date-heure-paris';
 
 interface WidgetAllerPointerProps {
   mission: any;
@@ -38,10 +38,10 @@ export function WidgetAllerPointer({ mission }: WidgetAllerPointerProps) {
       <h3 className="font-semibold text-foreground text-sm">{mission.intitule} — {etabNom}</h3>
       <p className="text-xs text-muted-foreground mt-1">
         {prochainDebut && prochaineFin
-          ? `${format(prochainDebut, 'EEEE d MMMM', { locale: fr })} · ${format(prochainDebut, 'HH:mm', { locale: fr })} → ${format(prochaineFin, 'HH:mm', { locale: fr })}`
-          : isSameDay(debut, fin)
-          ? `${format(debut, 'HH:mm', { locale: fr })} → ${format(fin, 'HH:mm', { locale: fr })}`
-          : `${format(debut, 'd MMM', { locale: fr })} → ${format(fin, 'd MMM yyyy', { locale: fr })}`}
+          ? `${formatParis(prochainDebut, 'EEEE d MMMM')} · ${formatParis(prochainDebut, 'HH:mm')} → ${formatParis(prochaineFin, 'HH:mm')}`
+          : memeJourParis(debut, fin)
+          ? `${formatParis(debut, 'HH:mm')} → ${formatParis(fin, 'HH:mm')}`
+          : `${formatParis(debut, 'd MMM')} → ${formatParis(fin, 'd MMM yyyy')}`}
       </p>
       <button
         onClick={() => navigate(mission.creneauActuel || !estEnCours ? '/soignant/presences?tab=aujourdhui' : '/soignant/presences?tab=encours')}

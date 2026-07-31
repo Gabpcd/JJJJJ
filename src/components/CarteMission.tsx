@@ -15,9 +15,14 @@ import {
   DialogResponsiveFooter,
 } from '@/components/ui/DialogResponsive';
 import { getLabelProfession, extraireContratPreference, getContratBadge } from '@/lib/constantes';
-import { format, isSameDay } from 'date-fns';
-import { fr } from 'date-fns/locale';
 import { netEstimeAfficheMission } from '@/lib/missionFinanceDisplay';
+import {
+  formatParis,
+  instantDepuisSaisieParis,
+  instantJolene,
+  memeJourParis,
+  valeurSaisieDateHeureParis,
+} from '@/lib/date-heure-paris';
 import {
   ajouterRepliMissionPonctuelle,
   creneauxPrevisionnels,
@@ -49,7 +54,7 @@ function formatMontant(v: number | null | undefined): string {
 }
 
 function tempsDepuis(dateStr: string): { texte: string; couleur: string; jours: number } {
-  const diff = Date.now() - new Date(dateStr).getTime();
+  const diff = Date.now() - instantJolene(dateStr).getTime();
   const minutes = Math.floor(diff / 60000);
   if (minutes < 60) return { texte: `Il y a ${minutes} min`, couleur: 'text-success', jours: 0 };
   const heures = Math.floor(minutes / 60);
@@ -66,7 +71,7 @@ function scoreColor(score: number): string {
 
 function dureeCreneauHeures(creneau: CreneauPointage): number {
   if (!creneau.fin) return 0;
-  return Math.max(0, (new Date(creneau.fin).getTime() - new Date(creneau.debut).getTime()) / 3_600_000);
+  return Math.max(0, (instantJolene(creneau.fin).getTime() - instantJolene(creneau.debut).getTime()) / 3_600_000);
 }
 
 function formatDuree(heures: number): string {
@@ -74,20 +79,18 @@ function formatDuree(heures: number): string {
 }
 
 function formatCreneau(creneau: CreneauPointage): string {
-  const debut = new Date(creneau.debut);
-  const fin = new Date(creneau.fin!);
-  const finFormatee = isSameDay(debut, fin)
-    ? format(fin, 'HH:mm')
-    : format(fin, 'EEE d MMM · HH:mm', { locale: fr });
-  return `${format(debut, 'EEE d MMM', { locale: fr })} · ${format(debut, 'HH:mm')}–${finFormatee} (${formatDuree(dureeCreneauHeures(creneau))} h)`;
+  const finFormatee = memeJourParis(creneau.debut, creneau.fin!)
+    ? formatParis(creneau.fin!, 'HH:mm')
+    : formatParis(creneau.fin!, 'EEE d MMM · HH:mm');
+  return `${formatParis(creneau.debut, 'EEE d MMM')} · ${formatParis(creneau.debut, 'HH:mm')}–${finFormatee} (${formatDuree(dureeCreneauHeures(creneau))} h)`;
 }
 
 export const CarteMission = React.memo(function CarteMission({ mission, afficherEtablissement, onDupliquer, onAnnuler, onRepublier }: CarteMissionProps) {
   const navigate = useNavigate();
   const m = mission;
   const netEstimeAffiche = netEstimeAfficheMission(m);
-  const debut = new Date(m.debut_le);
-  const fin = new Date(m.fin_le);
+  const debut = instantJolene(m.debut_le);
+  const fin = instantJolene(m.fin_le);
   const planningFourni = Array.isArray(m.creneaux);
   const creneaux = creneauxPrevisionnels(
     ajouterRepliMissionPonctuelle(m.creneaux ?? [], m),
@@ -100,8 +103,8 @@ export const CarteMission = React.memo(function CarteMission({ mission, afficher
   const nbCreneauxMasques = creneaux.length - apercuCreneaux.length;
   const estPeriodeEtendue = fin.getTime() - debut.getTime() > 24 * 60 * 60_000 || creneaux.length > 1;
   const dateFormatee = estPeriodeEtendue
-    ? `${m.statut === 'EN_COURS' ? 'Période active' : 'Période prévue'} : ${format(debut, 'd MMM', { locale: fr })} → ${format(fin, 'd MMM yyyy', { locale: fr })}`
-    : format(debut, 'EEEE d MMMM yyyy', { locale: fr });
+    ? `${m.statut === 'EN_COURS' ? 'Période active' : 'Période prévue'} : ${formatParis(m.debut_le, 'd MMM')} → ${formatParis(m.fin_le, 'd MMM yyyy')}`
+    : formatParis(m.debut_le, 'EEEE d MMMM yyyy');
   // Lot 11 : l'ancienneté seule n'est pas un signal — le rouge est réservé au
   // cas actionnable « ouverte, ancienne ET sans candidature ». Sinon, neutre.
   const anciennete = m.statut === 'OUVERTE' ? tempsDepuis(m.cree_le) : null;
@@ -136,14 +139,16 @@ export const CarteMission = React.memo(function CarteMission({ mission, afficher
     setRepublierOuvert(true);
   };
 
-  const datesRepublierValides = !!republierDebut && !!republierFin && new Date(republierFin) > new Date(republierDebut);
+  const datesRepublierValides = !!republierDebut
+    && !!republierFin
+    && instantDepuisSaisieParis(republierFin) > instantDepuisSaisieParis(republierDebut);
 
   const confirmerRepublier = () => {
     if (!onRepublier) return;
     if (republierDebut && republierFin && datesRepublierValides) {
       onRepublier(m, {
-        debut: new Date(republierDebut).toISOString(),
-        fin: new Date(republierFin).toISOString(),
+        debut: instantDepuisSaisieParis(republierDebut).toISOString(),
+        fin: instantDepuisSaisieParis(republierFin).toISOString(),
       });
     } else {
       // Aucune nouvelle date saisie : republication simple (l'établissement ajuste après).
@@ -348,7 +353,7 @@ export const CarteMission = React.memo(function CarteMission({ mission, afficher
                     id={`republier-debut-${m.id}`}
                     type="datetime-local"
                     value={republierDebut}
-                    min={format(new Date(), "yyyy-MM-dd'T'HH:mm")}
+                    min={valeurSaisieDateHeureParis()}
                     onChange={(e) => setRepublierDebut(e.target.value)}
                     className="input-base"
                   />
@@ -361,7 +366,7 @@ export const CarteMission = React.memo(function CarteMission({ mission, afficher
                     id={`republier-fin-${m.id}`}
                     type="datetime-local"
                     value={republierFin}
-                    min={republierDebut || format(new Date(), "yyyy-MM-dd'T'HH:mm")}
+                    min={republierDebut || valeurSaisieDateHeureParis()}
                     onChange={(e) => setRepublierFin(e.target.value)}
                     className="input-base"
                   />

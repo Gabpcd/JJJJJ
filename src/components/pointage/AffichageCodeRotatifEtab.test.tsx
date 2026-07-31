@@ -123,6 +123,133 @@ describe('AffichageCodeRotatifEtab — fenêtre du créneau', () => {
     expect(screen.queryByText('Code masqué hors créneau')).not.toBeInTheDocument();
   });
 
+  it('associe un EFFECTIF au shift qui contient son début lorsqu’il y en a deux le même jour', async () => {
+    vi.setSystemTime(new Date('2026-07-31T15:00:00+02:00'));
+    creneaux = [
+      {
+        id: 'creneau-matin',
+        mission_id: 'mission-1',
+        debut: '2026-07-31T08:00:00',
+        fin: '2026-07-31T12:00:00',
+        est_pause: false,
+        type_creneau: 'PREVISIONNEL',
+      },
+      {
+        id: 'creneau-apres-midi',
+        mission_id: 'mission-1',
+        debut: '2026-07-31T14:00:00',
+        fin: '2026-07-31T18:00:00',
+        est_pause: false,
+        type_creneau: 'PREVISIONNEL',
+      },
+    ];
+    mocks.rpc.mockResolvedValue({
+      data: {
+        statut: 'EN_COURS',
+        prochain_type_scan: 'FERMETURE',
+        segment_ouvert: true,
+        segments: [{ id: 'segment-apres-midi', debut: '2026-07-31T14:05:00', fin: null }],
+        code_pointage_actif: '654321',
+      },
+      error: null,
+    });
+
+    renderCode();
+
+    expect(await screen.findByText('654 321')).toBeInTheDocument();
+    expect(screen.getByText(/Créneau 2\/2 · vendredi 31 juillet 2026 à 14:00 → 18:00/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Créneau 1\/2/i)).not.toBeInTheDocument();
+  });
+
+  it('nomme reprise une nouvelle ouverture après un segment fermé le même jour', async () => {
+    vi.setSystemTime(new Date('2026-07-31T14:00:00+02:00'));
+    creneaux = [{
+      id: 'creneau-journee',
+      mission_id: 'mission-1',
+      debut: '2026-07-31T08:00:00+02:00',
+      fin: '2026-07-31T18:00:00+02:00',
+      est_pause: false,
+      type_creneau: 'PREVISIONNEL',
+    }];
+    mocks.rpc.mockResolvedValue({
+      data: {
+        statut: 'EN_COURS',
+        prochain_type_scan: 'OUVERTURE',
+        segment_ouvert: false,
+        segments: [{ id: 'segment-matin', debut: '2026-07-31T08:00:00+02:00', fin: '2026-07-31T12:00:00+02:00' }],
+        code_pointage_actif: '123456',
+      },
+      error: null,
+    });
+
+    renderCode();
+
+    expect(await screen.findByText('Reprise (fin de pause)')).toBeInTheDocument();
+  });
+
+  it('nomme arrivée le second PREVISIONNEL distinct du même jour', async () => {
+    vi.setSystemTime(new Date('2026-07-31T14:00:00+02:00'));
+    creneaux = [
+      {
+        id: 'creneau-matin',
+        mission_id: 'mission-1',
+        debut: '2026-07-31T08:00:00+02:00',
+        fin: '2026-07-31T12:00:00+02:00',
+        est_pause: false,
+        type_creneau: 'PREVISIONNEL',
+      },
+      {
+        id: 'creneau-apres-midi',
+        mission_id: 'mission-1',
+        debut: '2026-07-31T14:00:00+02:00',
+        fin: '2026-07-31T18:00:00+02:00',
+        est_pause: false,
+        type_creneau: 'PREVISIONNEL',
+      },
+    ];
+    mocks.rpc.mockResolvedValue({
+      data: {
+        statut: 'EN_COURS',
+        prochain_type_scan: 'OUVERTURE',
+        segment_ouvert: false,
+        segments: [{ id: 'segment-matin', debut: '2026-07-31T08:00:00+02:00', fin: '2026-07-31T12:00:00+02:00' }],
+        code_pointage_actif: '123456',
+      },
+      error: null,
+    });
+
+    renderCode();
+
+    expect(await screen.findByText('Arrivée')).toBeInTheDocument();
+    expect(screen.queryByText('Reprise (fin de pause)')).not.toBeInTheDocument();
+  });
+
+  it('nomme arrivée la première ouverture du jour malgré un segment la veille', async () => {
+    creneaux = [{
+      id: 'creneau-jour',
+      mission_id: 'mission-1',
+      debut: '2026-07-31T08:00:00+02:00',
+      fin: '2026-07-31T16:00:00+02:00',
+      est_pause: false,
+      type_creneau: 'PREVISIONNEL',
+    }];
+    mocks.rpc.mockResolvedValue({
+      data: {
+        statut: 'EN_COURS',
+        prochain_type_scan: 'OUVERTURE',
+        segment_ouvert: false,
+        segments: [{ id: 'segment-veille', debut: '2026-07-30T08:00:00+02:00', fin: '2026-07-30T16:00:00+02:00' }],
+        code_pointage_actif: '123456',
+      },
+      error: null,
+    });
+
+    renderCode();
+
+    expect(await screen.findByText('Arrivée')).toBeInTheDocument();
+    expect(screen.queryByText('Reprise (fin de pause)')).not.toBeInTheDocument();
+  });
+
   it('laisse toujours visible le code de sortie lorsqu’un segment est déjà ouvert', async () => {
     creneaux = [{
       id: 'creneau-1',

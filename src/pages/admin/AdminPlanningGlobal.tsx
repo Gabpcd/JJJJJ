@@ -21,8 +21,13 @@ import {
   creneauxPrevisionnels,
   type CreneauPointage,
 } from '@/lib/disponibilite-pointage';
-import { addDays, format, startOfWeek, endOfWeek, parseISO } from 'date-fns';
-import { fr } from 'date-fns/locale';
+import {
+  ajouterJoursCivilsParis,
+  cleJourParis,
+  debutSemaineParis,
+  formatParis,
+  instantDepuisSaisieParis,
+} from '@/lib/date-heure-paris';
 import {
   CalendarDays,
   Zap,
@@ -59,9 +64,9 @@ type MissionPlanning = MissionSource & {
   soignant_nom: string | null;
 };
 
-const getMonday = (d: Date) => startOfWeek(d, { weekStartsOn: 1 });
-const getSunday = (d: Date) => endOfWeek(d, { weekStartsOn: 1 });
-const toInputDate = (d: Date) => format(d, 'yyyy-MM-dd');
+const getMonday = (d: Date) => debutSemaineParis(d);
+const getSunday = (d: Date) => ajouterJoursCivilsParis(debutSemaineParis(d), 6);
+const toInputDate = (d: Date) => cleJourParis(d);
 
 const STATUT_LABEL: Record<string, string> = {
   OUVERTE: 'Ouverte',
@@ -83,13 +88,13 @@ function statutBadge(statut: string) {
 }
 
 function formatHeure(iso: string) {
-  return format(parseISO(iso), 'HH:mm');
+  return formatParis(iso, 'HH:mm');
 }
 
 function groupByDay(missions: MissionPlanning[]): Map<string, MissionPlanning[]> {
   const map = new Map<string, MissionPlanning[]>();
   for (const m of missions) {
-    const day = format(parseISO(m.creneau_debut), 'yyyy-MM-dd');
+    const day = cleJourParis(m.creneau_debut);
     if (!map.has(day)) map.set(day, []);
     map.get(day)!.push(m);
   }
@@ -111,8 +116,11 @@ export default function AdminPlanningGlobal() {
     setLoading(true);
     setErreurChargement(null);
     try {
-      const debutPeriode = parseISO(debut);
-      const finPeriodeExclusive = addDays(parseISO(fin), 1);
+      const debutPeriode = instantDepuisSaisieParis(`${debut}T00:00`);
+      const finPeriodeExclusive = ajouterJoursCivilsParis(
+        instantDepuisSaisieParis(`${fin}T00:00`),
+        1,
+      );
       if (!Number.isFinite(debutPeriode.getTime())
         || !Number.isFinite(finPeriodeExclusive.getTime())
         || debutPeriode >= finPeriodeExclusive) {
@@ -317,7 +325,7 @@ export default function AdminPlanningGlobal() {
                   >
                     {/* Date + horaires */}
                     <div className="text-xs font-mono text-muted-foreground min-w-[150px] shrink-0 capitalize">
-                      {format(parseISO(m.creneau_debut), 'EEE dd MMM', { locale: fr })} · {formatHeure(m.creneau_debut)} → {formatHeure(m.creneau_fin)}
+                      {formatParis(m.creneau_debut, 'EEE dd MMM')} · {formatHeure(m.creneau_debut)} → {formatHeure(m.creneau_fin)}
                     </div>
                     {/* Intitulé + établissement */}
                     <div className="flex-1 min-w-0">
@@ -366,7 +374,10 @@ export default function AdminPlanningGlobal() {
 
         {sortedDays.map((day) => {
           const dayMissions = grouped.get(day)!;
-          const label = format(parseISO(day), 'EEEE dd MMMM yyyy', { locale: fr });
+          const label = formatParis(
+            instantDepuisSaisieParis(`${day}T12:00`),
+            'EEEE dd MMMM yyyy',
+          );
           return (
             <CardY2K key={day} noPadding>
               <CardY2KHeader>

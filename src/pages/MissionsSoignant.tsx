@@ -22,8 +22,7 @@ import { enrichirEtablissements } from '@/lib/etablissements';
 import { calculerDistanceKm } from '@/lib/geo';
 import { getLabelProfession, extraireContratPreference, missionCompatibleContrat, getTypesContratSoignant } from '@/lib/constantes';
 import { getMissionsCompatiblesFilter } from '@/lib/profession-hierarchy';
-import { addDays, format, startOfWeek } from 'date-fns';
-import { fr } from 'date-fns/locale';
+import { ajouterJoursCivilsParis, debutSemaineParis, formatParis } from '@/lib/date-heure-paris';
 import { handleErrorSilent } from '@/lib/handleError';
 import { netEstimeAfficheMission } from '@/lib/missionFinanceDisplay';
 import {
@@ -137,8 +136,8 @@ export default function MissionsSoignant() {
       .eq('id', user.id).maybeSingle()
       .then(({ data }) => { if (data) setSoignant(data as any); }).then(undefined, (err) => handleErrorSilent(err, 'MissionsSoignant.soignant'));
 
-    const lundi = startOfWeek(new Date(), { weekStartsOn: 1 });
-    const finSemaine = addDays(lundi, 7);
+    const lundi = debutSemaineParis(new Date());
+    const finSemaine = ajouterJoursCivilsParis(lundi, 7);
     const chargerHeuresSemaine = async () => {
       const { data: missionsSemaine, error: missionsError } = await supabase
         .from('missions')
@@ -427,9 +426,9 @@ export default function MissionsSoignant() {
                       className="card-base hover:shadow-md cursor-pointer transition-all flex items-center gap-3 py-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
                     >
                       <div className="flex flex-col items-center justify-center rounded-xl bg-primary/10 px-3 py-1.5 min-w-[52px]">
-                        <span className="text-[10px] font-semibold text-primary uppercase">{format(new Date(dateAffichee), 'EEE', { locale: fr })}</span>
-                        <span className="text-lg font-bold text-primary leading-tight">{format(new Date(dateAffichee), 'd')}</span>
-                        <span className="text-[10px] text-primary">{format(new Date(dateAffichee), 'MMM', { locale: fr })}</span>
+                        <span className="text-[10px] font-semibold text-primary uppercase">{formatParis(dateAffichee, 'EEE')}</span>
+                        <span className="text-lg font-bold text-primary leading-tight">{formatParis(dateAffichee, 'd')}</span>
+                        <span className="text-[10px] text-primary">{formatParis(dateAffichee, 'MMM')}</span>
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
@@ -444,7 +443,7 @@ export default function MissionsSoignant() {
                         <div className="flex items-center gap-3 mt-0.5 text-xs text-muted-foreground">
                           <span>
                             🕐 {creneauAffiche?.fin
-                              ? `${format(new Date(creneauAffiche.debut), "d MMM · HH'h'mm", { locale: fr })} → ${format(new Date(creneauAffiche.fin), "HH'h'mm", { locale: fr })}`
+                              ? `${formatParis(creneauAffiche.debut, "d MMM · HH'h'mm")} → ${formatParis(creneauAffiche.fin, "HH'h'mm")}`
                               : 'Planning détaillé à confirmer'}
                           </span>
                           {m.taux_horaire_base && <span className="text-primary font-semibold">{m.taux_horaire_base} €/h</span>}
@@ -518,9 +517,9 @@ export default function MissionsSoignant() {
                       className="card-base hover:shadow-md cursor-pointer transition-all flex items-center gap-3 py-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
                     >
                       <div className="flex flex-col items-center justify-center rounded-xl bg-primary/10 px-3 py-1.5 min-w-[52px]">
-                        <span className="text-[10px] font-semibold text-primary uppercase">{format(new Date(dateAffichee), 'EEE', { locale: fr })}</span>
-                        <span className="text-lg font-bold text-primary leading-tight">{format(new Date(dateAffichee), 'd')}</span>
-                        <span className="text-[10px] text-primary">{format(new Date(dateAffichee), 'MMM', { locale: fr })}</span>
+                        <span className="text-[10px] font-semibold text-primary uppercase">{formatParis(dateAffichee, 'EEE')}</span>
+                        <span className="text-lg font-bold text-primary leading-tight">{formatParis(dateAffichee, 'd')}</span>
+                        <span className="text-[10px] text-primary">{formatParis(dateAffichee, 'MMM')}</span>
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-0.5">
@@ -534,7 +533,7 @@ export default function MissionsSoignant() {
                         <div className="flex items-center gap-3 mt-0.5 text-xs text-muted-foreground">
                           <span>
                             🕐 {creneauAffiche?.fin
-                              ? `Prochain créneau : ${format(new Date(creneauAffiche.debut), "d MMM · HH'h'mm", { locale: fr })} → ${format(new Date(creneauAffiche.fin), "HH'h'mm", { locale: fr })} (${dureeCreneau?.toLocaleString('fr-FR', { maximumFractionDigits: 2 })}h)`
+                              ? `Prochain créneau : ${formatParis(creneauAffiche.debut, "d MMM · HH'h'mm")} → ${formatParis(creneauAffiche.fin, "HH'h'mm")} (${dureeCreneau?.toLocaleString('fr-FR', { maximumFractionDigits: 2 })}h)`
                               : m.nb_creneaux_planifies > 0
                                 ? 'Tous les créneaux planifiés sont terminés'
                                 : 'Planning détaillé à confirmer'}
@@ -573,8 +572,8 @@ export default function MissionsSoignant() {
                         <BadgeStatut statut={m.statut} />
                         <span className="text-xs text-muted-foreground">
                           {estMultiJours(m)
-                            ? `${format(new Date(m.debut_le), 'd MMM', { locale: fr })} → ${format(new Date(m.fin_le), 'd MMM yyyy', { locale: fr })}`
-                            : format(new Date(m.debut_le), 'd MMM yyyy', { locale: fr })}
+                            ? `${formatParis(m.debut_le, 'd MMM')} → ${formatParis(m.fin_le, 'd MMM yyyy')}`
+                            : formatParis(m.debut_le, 'd MMM yyyy')}
                         </span>
                       </div>
                       <h3 className="font-semibold text-sm text-foreground">{m.intitule}</h3>

@@ -111,6 +111,47 @@ describe('planning établissement par créneaux', () => {
     expect(occurrences[0].duree_creneau_heures).toBe(8);
   });
 
+  it('affiche une garde de nuit sur ses deux jours civils Paris sans dupliquer la liste', () => {
+    const gardeDeNuit = construireOccurrencesPlanning(
+      [{
+        ...missionLongue,
+        id: 'mission-nuit',
+        intitule: 'Garde de nuit',
+        debut_le: '2026-07-30T20:00:00+02:00',
+        fin_le: '2026-07-31T06:00:00+02:00',
+        duree_heures: 10,
+      }],
+      [{
+        id: 'creneau-nuit',
+        mission_id: 'mission-nuit',
+        debut: '2026-07-30T20:00:00+02:00',
+        fin: '2026-07-31T06:00:00+02:00',
+        est_pause: false,
+        type_creneau: 'PREVISIONNEL',
+      }],
+      new Date('2026-07-01T00:00:00+02:00'),
+      new Date('2026-08-01T00:00:00+02:00'),
+    );
+
+    render(
+      <MemoryRouter>
+        <SectionPlanning missions={gardeDeNuit} />
+      </MemoryRouter>,
+    );
+
+    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Mois' }), { button: 0 });
+    expect(screen.getByRole('button', { name: '20:00 Garde de nuit' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '00:00 Garde de nuit' })).toBeInTheDocument();
+
+    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Semaine' }), { button: 0 });
+    expect(screen.getByRole('button', { name: /Garde de nuit 20:00 → 00:00/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Garde de nuit 00:00 → 06:00/ })).toBeInTheDocument();
+
+    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Liste' }), { button: 0 });
+    expect(screen.getAllByRole('button', { name: /Garde de nuit/ })).toHaveLength(1);
+    expect(screen.getByText(/jeu\. 30 juil\. · 20:00 → 06:00 · 10h/)).toBeInTheDocument();
+  });
+
   it('affiche une erreur explicite et permet de relancer', () => {
     const onRetry = vi.fn();
     render(

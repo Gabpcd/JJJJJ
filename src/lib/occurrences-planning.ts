@@ -3,7 +3,7 @@ import {
   creneauxPrevisionnels,
   type CreneauPointage,
 } from '@/lib/disponibilite-pointage';
-import { addDays, startOfDay } from 'date-fns';
+import { ajouterJoursCivilsParis, debutJourParis } from '@/lib/date-heure-paris';
 
 export interface MissionPlanifiable {
   id: string;
@@ -43,9 +43,9 @@ export function decouperOccurrencesParJour<T extends MissionPlanifiable>(
     }
 
     const segments: SegmentJournalierOccurrence<T>[] = [];
-    let jour = startOfDay(debut);
+    let jour = debutJourParis(debut);
     while (jour < fin) {
-      const lendemain = addDays(jour, 1);
+      const lendemain = ajouterJoursCivilsParis(jour, 1);
       const debutSegment = new Date(Math.max(debut.getTime(), jour.getTime()));
       const finSegment = new Date(Math.min(fin.getTime(), lendemain.getTime()));
       if (finSegment > debutSegment) {

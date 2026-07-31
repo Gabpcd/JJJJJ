@@ -9,8 +9,7 @@ import { obtenirPosition } from '@/lib/platform';
 import { genererIdTerminal } from '@/lib/terminal';
 import { scannerQr } from '@/lib/camera';
 import { toast } from 'sonner';
-import { format } from 'date-fns';
-import { fr } from 'date-fns/locale';
+import { cleJourParis, formatParis, memeJourParis } from '@/lib/date-heure-paris';
 
 /**
  * Pointage rotatif (PR 2/3) — côté SOIGNANT.
@@ -85,10 +84,15 @@ export function PointageRotatifSoignant({
   }
 
   const ouvert = data.segment_ouvert;
-  const actionLabel = ouvert ? 'Pointer mon départ / pause' : (data.segments.length === 0 ? "Pointer mon arrivée" : 'Pointer ma reprise');
+  const aDejaPointeAujourdHui = data.segments.some((segment) => (
+    memeJourParis(segment.debut, new Date())
+  ));
+  const actionLabel = ouvert
+    ? 'Pointer mon départ / pause'
+    : (aDejaPointeAujourdHui ? 'Pointer mon arrivée / ma reprise' : "Pointer mon arrivée");
   const segmentEnCours = data.segments.find((s) => s.fin === null);
   const segmentsSurPlusieursJours = new Set(
-    data.segments.map((segment) => format(new Date(segment.debut), 'yyyy-MM-dd')),
+    data.segments.map((segment) => cleJourParis(segment.debut)),
   ).size > 1;
 
   const envoyer = async (codeSaisi: string) => {
@@ -156,7 +160,7 @@ export function PointageRotatifSoignant({
         <h3 className="font-semibold text-foreground text-sm">Pointage</h3>
         {ouvert && segmentEnCours && (
           <span className="ml-auto inline-flex items-center gap-1 text-xs text-success font-semibold">
-            <Clock className="h-3.5 w-3.5" /> En service depuis {format(new Date(segmentEnCours.debut), "HH'h'mm", { locale: fr })}
+            <Clock className="h-3.5 w-3.5" /> En service depuis {formatParis(segmentEnCours.debut, "HH'h'mm")}
           </span>
         )}
       </div>
@@ -200,12 +204,11 @@ export function PointageRotatifSoignant({
             <div key={s.id} className="flex items-center justify-between text-xs text-muted-foreground">
               <span>Segment {i + 1}</span>
               <span>
-                {format(
-                  new Date(s.debut),
+                {formatParis(
+                  s.debut,
                   segmentsSurPlusieursJours ? "d MMM · HH'h'mm" : "HH'h'mm",
-                  { locale: fr },
                 )}
-                {s.fin ? ` → ${format(new Date(s.fin), "HH'h'mm", { locale: fr })}` : ' → en cours'}
+                {s.fin ? ` → ${formatParis(s.fin, "HH'h'mm")}` : ' → en cours'}
               </span>
             </div>
           ))}

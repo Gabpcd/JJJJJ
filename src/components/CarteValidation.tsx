@@ -1,7 +1,5 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { format, isSameDay } from 'date-fns';
-import { fr } from 'date-fns/locale';
 import { MapPin, Radio, AlertTriangle, Phone, Mail, CheckCircle, XCircle, Scale, Eye } from 'lucide-react';
 import { BadgeCertification } from './BadgeCertification';
 import { PanneauContestation } from './PanneauContestation';
@@ -15,12 +13,13 @@ import {
   construireSynthesePresenceMission,
   formatDureeMinutes,
 } from '@/lib/synthese-presence-mission';
+import { formatParis, memeJourParis } from '@/lib/date-heure-paris';
 
 function formatPlageExacte(debut: Date, fin: Date): string {
-  const debutFormate = format(debut, 'EEE d MMM yyyy · HH:mm', { locale: fr });
-  const finFormatee = isSameDay(debut, fin)
-    ? format(fin, 'HH:mm', { locale: fr })
-    : format(fin, 'EEE d MMM yyyy · HH:mm', { locale: fr });
+  const debutFormate = formatParis(debut, 'EEE d MMM yyyy · HH:mm');
+  const finFormatee = memeJourParis(debut, fin)
+    ? formatParis(fin, 'HH:mm')
+    : formatParis(fin, 'EEE d MMM yyyy · HH:mm');
   return `${debutFormate} → ${finFormatee}`;
 }
 
@@ -133,7 +132,7 @@ export function CarteValidation({ presence, litigeExistant, onValider, onContest
             </p>
             {premierEffectif && dernierEffectifFerme?.fin && (
               <p className="mt-1 text-muted-foreground">
-                Du {format(new Date(premierEffectif.debut), 'dd/MM/yyyy HH:mm')} au {format(new Date(dernierEffectifFerme.fin), 'dd/MM/yyyy HH:mm')}
+                Du {formatParis(premierEffectif.debut, 'dd/MM/yyyy HH:mm')} au {formatParis(dernierEffectifFerme.fin, 'dd/MM/yyyy HH:mm')}
               </p>
             )}
           </div>
@@ -152,7 +151,7 @@ export function CarteValidation({ presence, litigeExistant, onValider, onContest
             : synthese.effectifsOuverts.length > 0
               ? 'Pointage en cours : la validation sera disponible après le départ et la fin du dernier créneau prévu.'
               : synthese.dernierPrevisionnelFin && !synthese.planningTermine
-                ? `Mission en cours : validation après le dernier créneau, le ${format(synthese.dernierPrevisionnelFin, 'dd/MM/yyyy à HH:mm')}.`
+                ? `Mission en cours : validation après le dernier créneau, le ${formatParis(synthese.dernierPrevisionnelFin, 'dd/MM/yyyy à HH:mm')}.`
                 : synthese.effectifsFermes.length === 0
                   ? 'Aucun segment de travail terminé à valider.'
                   : 'Validation indisponible tant que le planning n’est pas confirmé.'}

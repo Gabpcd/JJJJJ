@@ -5,14 +5,21 @@ import { ChargementAdmin } from '@/components/admin/ChargementAdmin';
 import { supabase } from '@/integrations/supabase/client';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { AlertTriangle, ChevronLeft, ChevronRight } from 'lucide-react';
-import {
-  format, startOfMonth, endOfMonth, startOfWeek, endOfWeek,
-  addMonths, addDays, isSameMonth, isSameDay, isToday
-} from 'date-fns';
-import { fr } from 'date-fns/locale';
 import { useNavigate } from 'react-router-dom';
 import { BADGES_STATUT } from '@/lib/constantes';
 import { extraireMessageErreur } from '@/lib/erreurs';
+import {
+  ajouterJoursCivilsParis,
+  ajouterMoisCivilsParis,
+  cleJourParis,
+  debutJourParis,
+  debutMoisParis,
+  debutSemaineParis,
+  finMoisParis,
+  formatParis,
+  memeJourParis,
+  memeMoisParis,
+} from '@/lib/date-heure-paris';
 
 const JOURS_SEMAINE = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
 
@@ -60,37 +67,52 @@ function getHorairePourJour(m: MissionCal, d: Date): string {
   const creneaux = m.creneaux.filter(creneau => creneauChevaucheJour(creneau, d));
   if (creneaux.length === 0) return 'Horaire non renseigné';
 
+  const debutJour = `${cleJourParis(d)}T00:00:00`;
+  const debutLendemain = `${cleJourParis(ajouterJoursCivilsParis(d, 1))}T00:00:00`;
   return creneaux
-    .map(creneau => `${format(new Date(creneau.debut), 'HH:mm')}–${format(new Date(creneau.fin), 'HH:mm')}`)
+    .map(creneau => {
+      const debutCreneau = formatParis(creneau.debut, "yyyy-MM-dd'T'HH:mm:ss");
+      const finCreneau = formatParis(creneau.fin, "yyyy-MM-dd'T'HH:mm:ss");
+      const heureDebut = debutCreneau < debutJour ? '00:00' : formatParis(creneau.debut, 'HH:mm');
+      const heureFin = finCreneau > debutLendemain ? '00:00' : formatParis(creneau.fin, 'HH:mm');
+      return `${heureDebut}–${heureFin}`;
+    })
     .join(' · ');
 }
 
 function creneauChevaucheJour(creneau: CreneauCal, d: Date): boolean {
-  const jourDebut = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-  const lendemain = addDays(jourDebut, 1);
-  return new Date(creneau.debut) < lendemain && new Date(creneau.fin) > jourDebut;
+  const jourDebut = `${cleJourParis(debutJourParis(d))}T00:00:00`;
+  const lendemain = `${cleJourParis(ajouterJoursCivilsParis(d, 1))}T00:00:00`;
+  const debutCreneau = formatParis(creneau.debut, "yyyy-MM-dd'T'HH:mm:ss");
+  const finCreneau = formatParis(creneau.fin, "yyyy-MM-dd'T'HH:mm:ss");
+  return debutCreneau < lendemain && finCreneau > jourDebut;
 }
 
 export default function AdminCalendrier() {
   usePageTitle('Calendrier missions');
   const navigate = useNavigate();
-  const [moisCourant, setMoisCourant] = useState(new Date());
+  const [moisCourant, setMoisCourant] = useState(() => debutMoisParis(new Date()));
   const [missions, setMissions] = useState<MissionCal[]>([]);
   const [loading, setLoading] = useState(true);
   const [erreurChargement, setErreurChargement] = useState<string | null>(null);
   const [tentativeChargement, setTentativeChargement] = useState(0);
   const [filtreStatut, setFiltreStatut] = useState<string | null>(null);
 
-  const { debutGrille, finGrille } = useMemo(() => ({
-    debutGrille: startOfWeek(startOfMonth(moisCourant), { weekStartsOn: 1 }),
-    finGrille: endOfWeek(endOfMonth(moisCourant), { weekStartsOn: 1 }),
-  }), [moisCourant]);
+  const { debutGrille, finGrille, finGrilleExclusive } = useMemo(() => {
+    const debut = debutSemaineParis(debutMoisParis(moisCourant));
+    const finExclusive = ajouterJoursCivilsParis(debutSemaineParis(finMoisParis(moisCourant)), 7);
+    return {
+      debutGrille: debut,
+      finGrille: new Date(finExclusive.getTime() - 1),
+      finGrilleExclusive: finExclusive,
+    };
+  }, [moisCourant]);
 
   const jours: Date[] = [];
   let jour = debutGrille;
-  while (jour <= finGrille) {
+  while (jour < finGrilleExclusive) {
     jours.push(jour);
-    jour = addDays(jour, 1);
+    jour = ajouterJoursCivilsParis(jour, 1);
   }
 
   useEffect(() => {
@@ -182,7 +204,7 @@ export default function AdminCalendrier() {
   function getMissionsDuJour(d: Date) {
     return missions.filter(m => {
       const dansJour = m.planningManquant
-        ? isSameDay(new Date(m.debut_le), d)
+        ? memeJourParis(m.debut_le, d)
         : m.creneaux.some(creneau => creneauChevaucheJour(creneau, d));
       if (!dansJour) return false;
       if (!filtreStatut) return true;
@@ -231,7 +253,7 @@ export default function AdminCalendrier() {
   ];
 
   const joursAgenda = jours
-    .filter(d => isSameMonth(d, moisCourant))
+    .filter(d => memeMoisParis(d, moisCourant))
     .map(d => ({ date: d, missions: getMissionsDuJour(d) }))
     .filter(groupe => groupe.missions.length > 0);
 
@@ -312,18 +334,18 @@ export default function AdminCalendrier() {
 
         {/* Navigation */}
         <div className="flex items-center justify-between">
-          <button type="button" onClick={() => setMoisCourant(addMonths(moisCourant, -1))} className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg p-2 transition-colors hover:bg-muted" aria-label="Mois précédent">
+          <button type="button" onClick={() => setMoisCourant(ajouterMoisCivilsParis(moisCourant, -1))} className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg p-2 transition-colors hover:bg-muted" aria-label="Mois précédent">
             <ChevronLeft className="h-5 w-5 text-muted-foreground" />
           </button>
           <div className="text-center">
             <h2 className="text-lg font-bold text-foreground capitalize">
-              {format(moisCourant, 'MMMM yyyy', { locale: fr })}
+              {formatParis(moisCourant, 'MMMM yyyy')}
             </h2>
-            <button type="button" onClick={() => setMoisCourant(new Date())} className="mt-0.5 inline-flex min-h-[44px] items-center px-2 text-sm font-medium text-primary hover:underline">
+            <button type="button" onClick={() => setMoisCourant(debutMoisParis(new Date()))} className="mt-0.5 inline-flex min-h-[44px] items-center px-2 text-sm font-medium text-primary hover:underline">
               Aujourd'hui
             </button>
           </div>
-          <button type="button" onClick={() => setMoisCourant(addMonths(moisCourant, 1))} className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg p-2 transition-colors hover:bg-muted" aria-label="Mois suivant">
+          <button type="button" onClick={() => setMoisCourant(ajouterMoisCivilsParis(moisCourant, 1))} className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg p-2 transition-colors hover:bg-muted" aria-label="Mois suivant">
             <ChevronRight className="h-5 w-5 text-muted-foreground" />
           </button>
         </div>
@@ -348,12 +370,12 @@ export default function AdminCalendrier() {
               </p>
             </div>
           ) : joursAgenda.map(groupe => (
-            <section key={groupe.date.toISOString()} className="rounded-2xl border border-border bg-card p-3" aria-labelledby={`agenda-${format(groupe.date, 'yyyy-MM-dd')}`}>
-              <h3 id={`agenda-${format(groupe.date, 'yyyy-MM-dd')}`} className="mb-2 text-sm font-bold capitalize text-foreground">
-                <time dateTime={format(groupe.date, 'yyyy-MM-dd')} aria-current={isToday(groupe.date) ? 'date' : undefined}>
-                  {format(groupe.date, 'EEEE d MMMM', { locale: fr })}
+            <section key={groupe.date.toISOString()} className="rounded-2xl border border-border bg-card p-3" aria-labelledby={`agenda-${cleJourParis(groupe.date)}`}>
+              <h3 id={`agenda-${cleJourParis(groupe.date)}`} className="mb-2 text-sm font-bold capitalize text-foreground">
+                <time dateTime={cleJourParis(groupe.date)} aria-current={memeJourParis(groupe.date, new Date()) ? 'date' : undefined}>
+                  {formatParis(groupe.date, 'EEEE d MMMM')}
                 </time>
-                {isToday(groupe.date) && <span className="ml-2 text-primary">Aujourd'hui</span>}
+                {memeJourParis(groupe.date, new Date()) && <span className="ml-2 text-primary">Aujourd'hui</span>}
               </h3>
               <div className="space-y-2">
                 {groupe.missions.map(m => {
@@ -400,8 +422,8 @@ export default function AdminCalendrier() {
         {/* Calendar grid desktop */}
         <div className="hidden grid-cols-7 gap-px lg:grid">
           {jours.map((d, i) => {
-            const dansLeMois = isSameMonth(d, moisCourant);
-            const estAujourdhui = isToday(d);
+            const dansLeMois = memeMoisParis(d, moisCourant);
+            const estAujourdhui = memeJourParis(d, new Date());
             const msDuJour = getMissionsDuJour(d);
             const hasNonPourvue = msDuJour.some(m => m.statut === 'OUVERTE' && !m.soignant_assigne_id);
 
@@ -414,7 +436,7 @@ export default function AdminCalendrier() {
                 <span className={`text-[11px] font-medium block text-center mb-0.5
                   ${estAujourdhui ? 'text-primary font-bold' : dansLeMois ? 'text-foreground' : 'text-muted-foreground/40'}
                 `}>
-                  {format(d, 'd')}
+                  {formatParis(d, 'd')}
                 </span>
 
                 <div className="space-y-0.5">

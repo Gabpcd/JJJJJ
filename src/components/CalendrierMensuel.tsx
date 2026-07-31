@@ -11,10 +11,15 @@ import {
   type CreneauMissionPlanifiable,
 } from '@/lib/occurrences-planning';
 import {
-  format, startOfMonth, endOfMonth, startOfWeek, endOfWeek,
-  addMonths, addDays, isSameMonth, isSameDay, isToday
-} from 'date-fns';
-import { fr } from 'date-fns/locale';
+  ajouterJoursCivilsParis,
+  ajouterMoisCivilsParis,
+  debutMoisParis,
+  debutSemaineParis,
+  finMoisParis,
+  formatParis,
+  memeJourParis,
+  memeMoisParis,
+} from '@/lib/date-heure-paris';
 
 const JOURS_SEMAINE = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
 
@@ -32,17 +37,18 @@ function getStatutClasses(statut: string) {
 export function CalendrierMensuel() {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const [moisCourant, setMoisCourant] = useState(new Date());
+  const [moisCourant, setMoisCourant] = useState(() => debutMoisParis(new Date()));
   const [missions, setMissions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [erreur, setErreur] = useState<string | null>(null);
   const [nbPlanningsManquants, setNbPlanningsManquants] = useState(0);
   const [tentative, setTentative] = useState(0);
 
-  const debutMois = startOfMonth(moisCourant);
-  const finMois = endOfMonth(moisCourant);
-  const debutGrille = startOfWeek(debutMois, { weekStartsOn: 1 });
-  const finGrille = endOfWeek(finMois, { weekStartsOn: 1 });
+  const debutMois = debutMoisParis(moisCourant);
+  const finMois = finMoisParis(moisCourant);
+  const debutGrille = debutSemaineParis(debutMois);
+  const finGrilleExclusive = ajouterJoursCivilsParis(debutSemaineParis(finMois), 7);
+  const finGrille = new Date(finGrilleExclusive.getTime() - 1);
   const debutGrilleIso = debutGrille.toISOString();
   const finGrilleIso = finGrille.toISOString();
   const debutGrilleMs = debutGrille.getTime();
@@ -51,9 +57,9 @@ export function CalendrierMensuel() {
   // Build array of days for the grid
   const jours: Date[] = [];
   let jour = debutGrille;
-  while (jour <= finGrille) {
+  while (jour < finGrilleExclusive) {
     jours.push(jour);
-    jour = addDays(jour, 1);
+    jour = ajouterJoursCivilsParis(jour, 1);
   }
 
   useEffect(() => {
@@ -130,27 +136,27 @@ export function CalendrierMensuel() {
   }, [user, moisCourant, tentative, debutGrilleIso, finGrilleIso, debutGrilleMs, finGrilleMs]);
 
   function getMissionsDuJour(d: Date) {
-    return missions.filter(m => isSameDay(new Date(m.debut_le), d));
+    return missions.filter(m => memeJourParis(m.debut_le, d));
   }
 
   return (
     <div className="card-base">
       {/* Header navigation */}
       <div className="flex items-center justify-between mb-4">
-        <button aria-label="Mois précédent" onClick={() => setMoisCourant(addMonths(moisCourant, -1))} className="p-1.5 hover:bg-muted rounded-lg transition-colors">
+        <button aria-label="Mois précédent" onClick={() => setMoisCourant(ajouterMoisCivilsParis(moisCourant, -1))} className="p-1.5 hover:bg-muted rounded-lg transition-colors">
           <ChevronLeft className="h-5 w-5 text-muted-foreground" />
         </button>
         <div className="text-center">
           <h3 className="text-base font-bold text-foreground capitalize">
-            {format(moisCourant, 'MMMM yyyy', { locale: fr })}
+            {formatParis(moisCourant, 'MMMM yyyy')}
           </h3>
         </div>
-        <button aria-label="Mois suivant" onClick={() => setMoisCourant(addMonths(moisCourant, 1))} className="p-1.5 hover:bg-muted rounded-lg transition-colors">
+        <button aria-label="Mois suivant" onClick={() => setMoisCourant(ajouterMoisCivilsParis(moisCourant, 1))} className="p-1.5 hover:bg-muted rounded-lg transition-colors">
           <ChevronRight className="h-5 w-5 text-muted-foreground" />
         </button>
       </div>
 
-      <button onClick={() => setMoisCourant(new Date())}
+      <button onClick={() => setMoisCourant(debutMoisParis(new Date()))}
         className="text-xs text-primary font-medium hover:underline mb-3 block mx-auto">
         Aujourd'hui
       </button>
@@ -204,8 +210,8 @@ export function CalendrierMensuel() {
       {/* Calendar grid */}
       <div className="grid grid-cols-7 gap-px min-w-[320px]">
         {jours.map((d, i) => {
-          const dansLeMois = isSameMonth(d, moisCourant);
-          const estAujourdhui = isToday(d);
+          const dansLeMois = memeMoisParis(d, moisCourant);
+          const estAujourdhui = memeJourParis(d, new Date());
           const msDuJour = getMissionsDuJour(d);
 
           return (
@@ -216,7 +222,7 @@ export function CalendrierMensuel() {
               <span className={`text-[11px] font-medium block text-center mb-0.5
                 ${estAujourdhui ? 'text-primary font-bold' : dansLeMois ? 'text-foreground' : 'text-muted-foreground/40'}
               `}>
-                {format(d, 'd')}
+                {formatParis(d, 'd')}
               </span>
 
               <div className="space-y-0.5">

@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { CarteMission } from './CarteMission';
 
@@ -55,5 +55,47 @@ describe('CarteMission — planning établissement', () => {
 
     expect(screen.getByText('Planning détaillé à confirmer')).toBeInTheDocument();
     expect(screen.queryByText(/h\/jour/i)).not.toBeInTheDocument();
+  });
+
+  it('affiche les instants absolus dans le fuseau métier Europe/Paris', () => {
+    render(<CarteMission mission={{
+      ...missionLongue,
+      debut_le: '2026-07-06T06:00:00.000Z',
+      fin_le: '2026-08-31T14:00:00.000Z',
+      creneaux: [{
+        id: 'creneau-paris',
+        debut: '2026-07-06T06:00:00.000Z',
+        fin: '2026-07-06T14:00:00.000Z',
+        est_pause: false,
+        type_creneau: 'PREVISIONNEL',
+      }],
+    }} />);
+
+    expect(screen.getByText(/lun\. 6 juil\. · 08:00–16:00 \(8 h\)/i)).toBeInTheDocument();
+  });
+
+  it('convertit les dates de republication depuis l’heure de Paris', () => {
+    const onRepublier = vi.fn();
+    render(<CarteMission
+      mission={{ ...missionLongue, statut: 'TERMINEE' }}
+      onRepublier={onRepublier}
+    />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Republier cette mission' }));
+    fireEvent.change(screen.getByLabelText('Nouvelle date et heure de début *'), {
+      target: { value: '2026-08-31T08:00' },
+    });
+    fireEvent.change(screen.getByLabelText('Nouvelle date et heure de fin *'), {
+      target: { value: '2026-08-31T16:00' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Republier' }));
+
+    expect(onRepublier).toHaveBeenCalledWith(
+      expect.objectContaining({ id: missionLongue.id }),
+      {
+        debut: '2026-08-31T06:00:00.000Z',
+        fin: '2026-08-31T14:00:00.000Z',
+      },
+    );
   });
 });

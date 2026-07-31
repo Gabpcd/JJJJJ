@@ -36,12 +36,14 @@ function creerBuilder(data: unknown[]) {
 
 describe('AdminCalendrier', () => {
   let creneauxBuilder: Record<string, any>;
+  let missionsData: unknown[];
+  let creneauxData: unknown[];
 
   beforeEach(() => {
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(new Date(2026, 6, 31, 12));
     mocks.from.mockReset();
-    creneauxBuilder = creerBuilder([
+    creneauxData = [
       {
         mission_id: 'mission-longue',
         debut: '2026-07-06T08:00:00.000Z',
@@ -52,24 +54,26 @@ describe('AdminCalendrier', () => {
         debut: '2026-08-31T08:00:00.000Z',
         fin: '2026-08-31T16:00:00.000Z',
       },
-    ]);
+    ];
+    missionsData = [{
+      id: 'mission-longue',
+      intitule: 'Mission IDE — médecine polyvalente',
+      debut_le: '2026-07-06T08:00:00.000Z',
+      fin_le: '2026-08-31T16:00:00.000Z',
+      statut: 'EN_COURS',
+      soignant_assigne_id: 'soignant-1',
+      etablissement_id: 'etablissement-1',
+      profession_requise: 'IDE',
+      service: null,
+      est_urgente: false,
+    }];
 
     mocks.from.mockImplementation((table: string) => {
       if (table === 'missions') {
-        return creerBuilder([{
-          id: 'mission-longue',
-          intitule: 'Mission IDE — médecine polyvalente',
-          debut_le: '2026-07-06T08:00:00.000Z',
-          fin_le: '2026-08-31T16:00:00.000Z',
-          statut: 'EN_COURS',
-          soignant_assigne_id: 'soignant-1',
-          etablissement_id: 'etablissement-1',
-          profession_requise: 'IDE',
-          service: null,
-          est_urgente: false,
-        }]);
+        return creerBuilder(missionsData);
       }
       if (table === 'mission_creneaux') {
+        creneauxBuilder = creerBuilder(creneauxData);
         return creneauxBuilder;
       }
       if (table === 'etablissements') {
@@ -102,5 +106,30 @@ describe('AdminCalendrier', () => {
     expect(screen.queryByText('Mission en cours toute la journée')).not.toBeInTheDocument();
     expect(creneauxBuilder.eq).toHaveBeenCalledWith('type_creneau', 'PREVISIONNEL');
     expect(creneauxBuilder.eq).toHaveBeenCalledWith('est_pause', false);
+  });
+
+  it('découpe une garde de nuit à minuit dans chacun des deux jours', async () => {
+    missionsData = [{
+      ...(missionsData[0] as Record<string, unknown>),
+      id: 'mission-nuit',
+      intitule: 'Garde IDE de nuit',
+      debut_le: '2026-07-06T18:00:00.000Z',
+      fin_le: '2026-07-07T04:00:00.000Z',
+    }];
+    creneauxData = [{
+      mission_id: 'mission-nuit',
+      debut: '2026-07-06T18:00:00.000Z',
+      fin: '2026-07-07T04:00:00.000Z',
+    }];
+
+    render(
+      <MemoryRouter>
+        <AdminCalendrier />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText(/20:00–00:00/)).toBeInTheDocument();
+    expect(screen.getByText(/00:00–06:00/)).toBeInTheDocument();
+    expect(screen.queryByText('20:00–06:00')).not.toBeInTheDocument();
   });
 });

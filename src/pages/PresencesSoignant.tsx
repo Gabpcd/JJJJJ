@@ -30,8 +30,7 @@ import {
   filtrerMissionsEnCours,
   type CreneauPointage,
 } from '@/lib/disponibilite-pointage';
-import { format } from 'date-fns';
-import { fr } from 'date-fns/locale';
+import { ajouterJoursCivilsParis, debutJourParis, formatParis } from '@/lib/date-heure-paris';
 import { CalendarDays, Clock, CheckCircle, History, AlertTriangle, MapPin, Hash, Eye, Activity } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { BadgeY2K } from '@/components/y2k/BadgeY2K';
@@ -109,13 +108,9 @@ export default function PresencesSoignant() {
   } = useQuery({
     queryKey: ['presences-soignant', user?.id],
     queryFn: async () => {
-      const aujourdhui = new Date();
-      aujourdhui.setHours(0, 0, 0, 0);
-      const demain = new Date(aujourdhui);
-      demain.setDate(demain.getDate() + 1);
-
-      const il7jours = new Date();
-      il7jours.setDate(il7jours.getDate() - 7);
+      const aujourdhui = debutJourParis(new Date());
+      const demain = ajouterJoursCivilsParis(aujourdhui, 1);
+      const il7jours = ajouterJoursCivilsParis(new Date(), -7);
       const [missionsResult, valideesResult, historiqueResult] = await Promise.all([
         supabase
           .from('missions')
@@ -558,9 +553,9 @@ export default function PresencesSoignant() {
                     </div>
                   ) : (
                     <div className="flex flex-col items-center justify-center rounded-xl bg-primary/10 px-3 py-1.5 min-w-[52px]">
-                      <span className="text-[10px] font-semibold text-primary uppercase">{format(new Date(m.dateAffichage), 'EEE', { locale: fr })}</span>
-                      <span className="text-lg font-bold text-primary leading-tight">{format(new Date(m.dateAffichage), 'd')}</span>
-                      <span className="text-[10px] text-primary">{format(new Date(m.dateAffichage), 'MMM', { locale: fr })}</span>
+                      <span className="text-[10px] font-semibold text-primary uppercase">{formatParis(m.dateAffichage, 'EEE')}</span>
+                      <span className="text-lg font-bold text-primary leading-tight">{formatParis(m.dateAffichage, 'd')}</span>
+                      <span className="text-[10px] text-primary">{formatParis(m.dateAffichage, 'MMM')}</span>
                     </div>
                   )}
                   <div className="flex-1 min-w-0">
@@ -573,7 +568,7 @@ export default function PresencesSoignant() {
                       <p className="text-xs font-medium text-warning mt-0.5">Planning détaillé à confirmer avec l’établissement</p>
                     ) : (
                       <p className="text-xs text-muted-foreground mt-0.5">
-                        🕐 {format(new Date(m.dateAffichage), "HH'h'mm", { locale: fr })} → {format(new Date(m.prochainCreneau.fin), "HH'h'mm", { locale: fr })}
+                        🕐 {formatParis(m.dateAffichage, "HH'h'mm")} → {formatParis(m.prochainCreneau.fin, "HH'h'mm")}
                         {m.dureeAffichageHeures ? ` (${m.dureeAffichageHeures}h)` : ''}
                       </p>
                     )}
@@ -657,7 +652,7 @@ export default function PresencesSoignant() {
                         </span>
                       </div>
                       <p className="text-xs text-muted-foreground mb-2">
-                        {p.valide_le && format(new Date(p.valide_le), "d MMM yyyy 'à' HH:mm", { locale: fr })}
+                        {p.valide_le && formatParis(p.valide_le, "d MMM yyyy 'à' HH:mm")}
                       </p>
                       <PanneauContestation
                         presenceId={p.id}
@@ -713,7 +708,7 @@ export default function PresencesSoignant() {
                         <p className="font-semibold text-sm text-foreground">{m?.intitule}</p>
                         <p className="text-xs text-muted-foreground">🏥 {m?.etablissements?.nom || 'Établissement'}</p>
                         <p className="text-xs text-muted-foreground mt-0.5">
-                          📅 {m?.debut_le && format(new Date(m.debut_le), 'd MMM yyyy', { locale: fr })}
+                          📅 {m?.debut_le && formatParis(m.debut_le, 'd MMM yyyy')}
                         </p>
                       </div>
                       <div className="flex items-center gap-2">
@@ -731,12 +726,12 @@ export default function PresencesSoignant() {
                     <div className="grid grid-cols-3 gap-2 text-xs text-muted-foreground bg-muted/30 rounded-lg p-2">
                       <div>
                         <span className="font-medium text-foreground">Arrivée :</span>{' '}
-                        {arrivee ? format(arrivee, "d MMM · HH'h'mm", { locale: fr }) : '—'}
+                        {arrivee ? formatParis(arrivee, "d MMM · HH'h'mm") : '—'}
                         <span className="ml-1 text-[10px]">{getMethodeLabel(p.methode_pointage_arrivee)}</span>
                       </div>
                       <div>
                         <span className="font-medium text-foreground">Départ :</span>{' '}
-                        {depart ? format(depart, "d MMM · HH'h'mm", { locale: fr }) : '—'}
+                        {depart ? formatParis(depart, "d MMM · HH'h'mm") : '—'}
                         <span className="ml-1 text-[10px]">{getMethodeLabel(p.methode_pointage_depart)}</span>
                       </div>
                       <div>

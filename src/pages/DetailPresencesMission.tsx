@@ -1,7 +1,6 @@
 import { useState, useEffect, type ReactNode } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { addDays, differenceInMinutes, format, isSameDay, startOfDay } from 'date-fns';
-import { fr } from 'date-fns/locale';
+import { differenceInMinutes } from 'date-fns';
 import { ArrowLeft, Clock, MapPin, Radio, AlertTriangle, CheckCircle, XCircle } from 'lucide-react';
 import { LayoutApp } from '@/components/LayoutApp';
 import { LayoutAdmin } from '@/components/LayoutAdmin';
@@ -21,6 +20,13 @@ import {
   construireSynthesePresenceMission,
   formatDureeMinutes,
 } from '@/lib/synthese-presence-mission';
+import {
+  ajouterJoursCivilsParis,
+  cleJourParis,
+  debutJourParis,
+  formatParis,
+  memeJourParis,
+} from '@/lib/date-heure-paris';
 
 function fmt(v: number) {
   return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(v);
@@ -48,8 +54,8 @@ function trouverCreneauDuJour(
 ): CreneauAssocie | null {
   if (!datePresence) return null;
 
-  const debutJour = startOfDay(datePresence);
-  const finJour = addDays(debutJour, 1);
+  const debutJour = debutJourParis(datePresence);
+  const finJour = ajouterJoursCivilsParis(debutJour, 1);
   const creneau = creneaux
     .filter((item) => creneauChevauchePeriode(item, debutJour, finJour))
     .sort((a, b) => (
@@ -62,10 +68,10 @@ function trouverCreneauDuJour(
 }
 
 function formatPlageExacte(debut: Date, fin: Date): string {
-  const debutFormate = format(debut, 'EEE d MMM yyyy · HH:mm', { locale: fr });
-  const finFormatee = isSameDay(debut, fin)
-    ? format(fin, 'HH:mm', { locale: fr })
-    : format(fin, 'EEE d MMM yyyy · HH:mm', { locale: fr });
+  const debutFormate = formatParis(debut, 'EEE d MMM yyyy · HH:mm');
+  const finFormatee = memeJourParis(debut, fin)
+    ? formatParis(fin, 'HH:mm')
+    : formatParis(fin, 'EEE d MMM yyyy · HH:mm');
   return `${debutFormate} → ${finFormatee}`;
 }
 
@@ -192,7 +198,7 @@ export default function DetailPresencesMission({ role = 'ADMIN_ETABLISSEMENT' }:
     .sort((a, b) => new Date(a.debut).getTime() - new Date(b.debut).getTime());
   const effectifsByDay: Record<string, CreneauPointage[]> = {};
   for (const effectif of effectifs) {
-    const dateKey = format(new Date(effectif.debut), 'yyyy-MM-dd');
+    const dateKey = cleJourParis(effectif.debut);
     (effectifsByDay[dateKey] ||= []).push(effectif);
   }
 
@@ -223,7 +229,7 @@ export default function DetailPresencesMission({ role = 'ADMIN_ETABLISSEMENT' }:
           <span>
             📅 {planifies.length > 0 && planifies[0].fin
               ? formatPlageExacte(new Date(planifies[0].debut), new Date(planifies.at(-1)!.fin!))
-              : `${format(new Date(mission.debut_le), 'dd/MM/yyyy HH:mm')} → ${format(new Date(mission.fin_le), 'dd/MM/yyyy HH:mm')}`}
+              : `${formatParis(mission.debut_le, 'dd/MM/yyyy HH:mm')} → ${formatParis(mission.fin_le, 'dd/MM/yyyy HH:mm')}`}
           </span>
           <span>
             ⏱ {planifies.length > 0
@@ -343,7 +349,7 @@ export default function DetailPresencesMission({ role = 'ADMIN_ETABLISSEMENT' }:
                 {synthese.effectifsOuverts.length > 0
                   ? 'Bilan définitif après la fermeture du pointage en cours.'
                   : dernierCreneauFin
-                    ? `Bilan définitif après le dernier créneau, le ${format(dernierCreneauFin, 'dd/MM/yyyy à HH:mm')}. Aucun déficit n’est signalé avant cette échéance.`
+                    ? `Bilan définitif après le dernier créneau, le ${formatParis(dernierCreneauFin, 'dd/MM/yyyy à HH:mm')}. Aucun déficit n’est signalé avant cette échéance.`
                     : 'Bilan définitif indisponible tant que le planning détaillé n’est pas confirmé.'}
               </p>
             )}
@@ -381,7 +387,7 @@ export default function DetailPresencesMission({ role = 'ADMIN_ETABLISSEMENT' }:
           {sortedDays.map(day => (
             <div key={day} className="card-base">
               <h3 className="font-semibold text-foreground text-sm mb-3 border-b border-border pb-2">
-                📅 {day !== 'sans-date' ? format(new Date(day), 'EEEE d MMMM yyyy', { locale: fr }) : 'Date inconnue'}
+                📅 {day !== 'sans-date' ? formatParis(`${day}T12:00:00+02:00`, 'EEEE d MMMM yyyy') : 'Date inconnue'}
               </h3>
               <div className="space-y-3">
                 {effectifsByDay[day].map((effectif, idx) => {
@@ -430,7 +436,7 @@ export default function DetailPresencesMission({ role = 'ADMIN_ETABLISSEMENT' }:
                             {departAnticipe > 0 && <span className="text-warning">Départ anticipé : -{departAnticipe} min</span>}
                             {comparaisonEnAttente && (
                               <span className="text-muted-foreground">
-                                Bilan après l’échéance de {format(finPrevue, 'HH:mm')}
+                                Bilan après l’échéance de {formatParis(finPrevue, 'HH:mm')}
                               </span>
                             )}
                           </div>
@@ -450,7 +456,7 @@ export default function DetailPresencesMission({ role = 'ADMIN_ETABLISSEMENT' }:
                         <div className="flex items-center gap-2">
                           <span className="text-success text-xs font-medium">▶ Arrivée</span>
                           <span className="text-sm font-semibold text-foreground">
-                            {format(arrivee, 'dd/MM/yyyy HH:mm:ss', { locale: fr })}
+                            {formatParis(arrivee, 'dd/MM/yyyy HH:mm:ss')}
                           </span>
                         </div>
                       </div>
@@ -461,7 +467,7 @@ export default function DetailPresencesMission({ role = 'ADMIN_ETABLISSEMENT' }:
                           <div className="flex items-center gap-2">
                             <span className="text-destructive text-xs font-medium">■ Départ</span>
                             <span className="text-sm font-semibold text-foreground">
-                              {format(depart, 'dd/MM/yyyy HH:mm:ss', { locale: fr })}
+                              {formatParis(depart, 'dd/MM/yyyy HH:mm:ss')}
                             </span>
                           </div>
                         </div>
@@ -480,7 +486,7 @@ export default function DetailPresencesMission({ role = 'ADMIN_ETABLISSEMENT' }:
                       <div className="text-[11px] pt-1 border-t border-border/50">
                         {presenceReference?.valide_par_etablissement ? (
                           <span className="text-success font-medium">
-                            ✅ Validé{presenceReference.valide_le ? ` le ${format(new Date(presenceReference.valide_le), 'dd/MM/yyyy HH:mm')}` : ''}
+                            ✅ Validé{presenceReference.valide_le ? ` le ${formatParis(presenceReference.valide_le, 'dd/MM/yyyy HH:mm')}` : ''}
                           </span>
                         ) : synthese.validationPossible ? (
                           <span className="text-warning">⏳ En attente de validation</span>

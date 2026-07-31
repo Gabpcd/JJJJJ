@@ -47,8 +47,6 @@ import { getLabelProfession } from '@/lib/constantes';
 import { extraireMessageErreur } from '@/lib/erreurs';
 import { payerMissionStripeConnectAvecGenerationAuto } from '@/lib/stripeMissionPay';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
-import { format, isSameDay } from 'date-fns';
-import { fr } from 'date-fns/locale';
 import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { BandeauActionPrioritaire, type ActionPrioritaire } from '@/components/BandeauActionPrioritaire';
 import { toast } from 'sonner';
@@ -62,6 +60,7 @@ import {
   evaluerTerminaisonMission,
   type CreneauPointage,
 } from '@/lib/disponibilite-pointage';
+import { formatParis, instantJolene, memeJourParis } from '@/lib/date-heure-paris';
 
 type DetailMissionRole = 'ADMIN_ETABLISSEMENT' | 'ADMIN_PLATEFORME';
 
@@ -90,7 +89,7 @@ function scoreBadgeClasses(score: number): string {
 
 function dureeCreneauHeures(creneau: CreneauPointage): number {
   if (!creneau.fin) return 0;
-  return Math.max(0, (new Date(creneau.fin).getTime() - new Date(creneau.debut).getTime()) / 3_600_000);
+  return Math.max(0, (instantJolene(creneau.fin).getTime() - instantJolene(creneau.debut).getTime()) / 3_600_000);
 }
 
 function formatDuree(heures: number): string {
@@ -98,11 +97,9 @@ function formatDuree(heures: number): string {
 }
 
 function formatFinCreneau(creneau: CreneauPointage): string {
-  const debut = new Date(creneau.debut);
-  const fin = new Date(creneau.fin!);
-  return isSameDay(debut, fin)
-    ? format(fin, 'HH:mm')
-    : format(fin, 'EEE d MMM · HH:mm', { locale: fr });
+  return memeJourParis(creneau.debut, creneau.fin!)
+    ? formatParis(creneau.fin!, 'HH:mm')
+    : formatParis(creneau.fin!, 'EEE d MMM · HH:mm');
 }
 
 function AlerterPoolUrgence({ missionId, mission, user, afficherNotification }: { missionId: string; mission: any; user: any; afficherNotification: (n: any) => void }) {
@@ -123,9 +120,6 @@ function AlerterPoolUrgence({ missionId, mission, user, afficherNotification }: 
 
       const { data: session } = await supabase.auth.getSession();
       const token = session?.session?.access_token;
-      const debut = new Date(mission.debut_le);
-      const fin = new Date(mission.fin_le);
-
       // Send notification + email to all soignants in parallel
       const supabaseUrl = SUPABASE_URL;
       const results = await Promise.allSettled(
@@ -135,7 +129,7 @@ function AlerterPoolUrgence({ missionId, mission, user, afficherNotification }: 
             p_type_destinataire: 'SOIGNANT',
             p_type: 'MISSION_URGENTE',
             p_titre: `🚨 Mission urgente : ${mission.intitule}`,
-            p_corps: `${mission.intitule} — ${format(debut, 'dd/MM à HH:mm', { locale: fr })}. Premier arrivé, premier servi !`,
+            p_corps: `${mission.intitule} — ${formatParis(mission.debut_le, 'dd/MM à HH:mm')}. Premier arrivé, premier servi !`,
             p_lien: `/soignant/missions/${missionId}`,
             p_type_ressource: 'MISSION',
             p_id_ressource: missionId,
@@ -151,9 +145,9 @@ function AlerterPoolUrgence({ missionId, mission, user, afficherNotification }: 
                   prenom: s.prenom,
                   mission: mission.intitule,
                   etablissement: mission.etablissements?.nom || '',
-                  date: format(debut, 'dd/MM/yyyy', { locale: fr }),
-                  heure_debut: format(debut, 'HH:mm'),
-                  heure_fin: format(fin, 'HH:mm'),
+                  date: formatParis(mission.debut_le, 'dd/MM/yyyy'),
+                  heure_debut: formatParis(mission.debut_le, 'HH:mm'),
+                  heure_fin: formatParis(mission.fin_le, 'HH:mm'),
                   taux_horaire: String(mission.taux_horaire_base),
                   mission_id: missionId,
                 },
@@ -164,7 +158,7 @@ function AlerterPoolUrgence({ missionId, mission, user, afficherNotification }: 
             // L'edge function send-sms vérifie sms_actif AND sms_alertes_actives
             // côté serveur — pas besoin de check ici. Si pas de téléphone, skip.
             if (s.telephone) {
-              const smsBody = `🚨 Mission urgente : ${mission.intitule.slice(0, 40)} le ${format(debut, 'dd/MM', { locale: fr })} à ${format(debut, 'HH:mm')}. Voir l'app pour postuler.`;
+              const smsBody = `🚨 Mission urgente : ${mission.intitule.slice(0, 40)} le ${formatParis(mission.debut_le, 'dd/MM')} à ${formatParis(mission.debut_le, 'HH:mm')}. Voir l'app pour postuler.`;
               fetch(`${supabaseUrl}/functions/v1/send-sms`, {
                 method: 'POST',
                 headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
@@ -397,7 +391,7 @@ function BoostEtGarantie({ mission, onMaj }: { mission: any; onMaj: (patch: any)
       {/* Présence confirmée */}
       {mission.statut === 'ASSIGNEE' && mission.presence_confirmee_le && (
         <p className="text-xs text-success pt-2 border-t border-border">
-          ✓ Présence confirmée par le soignant le {format(new Date(mission.presence_confirmee_le), 'dd/MM à HH:mm', { locale: fr })}
+          ✓ Présence confirmée par le soignant le {formatParis(mission.presence_confirmee_le, 'dd/MM à HH:mm')}
         </p>
       )}
     </div>
@@ -648,8 +642,8 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
   );
 
   const m = mission;
-  const debut = new Date(m.debut_le);
-  const fin = new Date(m.fin_le);
+  const debut = instantJolene(m.debut_le);
+  const fin = instantJolene(m.fin_le);
   const creneauxBruts = (m.creneaux ?? []) as CreneauPointage[];
   const creneauxPlanifies = creneauxPrevisionnels(creneauxBruts);
   const creneauxComplets = creneauxPlanifies.filter(
@@ -665,8 +659,8 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
     0,
   );
   const creneauActuel = creneauxComplets.find((creneau) => (
-    maintenantMs >= new Date(creneau.debut).getTime()
-    && maintenantMs < new Date(creneau.fin).getTime()
+    maintenantMs >= instantJolene(creneau.debut).getTime()
+    && maintenantMs < instantJolene(creneau.fin).getTime()
   ));
   const terminaison = evaluerTerminaisonMission({
     creneaux: creneauxBruts,
@@ -801,8 +795,8 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
                 <p className="text-sm text-foreground flex items-center gap-1.5">
                   <CalendarDays className="h-4 w-4 text-muted-foreground shrink-0" aria-hidden="true" />
                   {estPeriodeEtendue
-                    ? `${m.statut === 'EN_COURS' ? 'Période active' : 'Période prévue'} : ${format(debut, 'd MMMM yyyy', { locale: fr })} → ${format(fin, 'd MMMM yyyy', { locale: fr })}`
-                    : format(debut, 'EEEE d MMMM yyyy', { locale: fr })}
+                    ? `${m.statut === 'EN_COURS' ? 'Période active' : 'Période prévue'} : ${formatParis(m.debut_le, 'd MMMM yyyy')} → ${formatParis(m.fin_le, 'd MMMM yyyy')}`
+                    : formatParis(m.debut_le, 'EEEE d MMMM yyyy')}
                 </p>
                 <div className="mt-3 rounded-xl border border-border bg-muted/20 p-3" aria-label="Créneaux prévisionnels">
                   <div className="flex items-center gap-2">
@@ -822,10 +816,10 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
                         {creneauxComplets.map((creneau) => (
                           <li key={creneau.id} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 py-2 text-sm">
                             <span className="font-medium text-foreground">
-                              {format(new Date(creneau.debut), 'EEEE d MMMM yyyy', { locale: fr })}
+                              {formatParis(creneau.debut, 'EEEE d MMMM yyyy')}
                             </span>
                             <span className="text-muted-foreground">
-                              {format(new Date(creneau.debut), 'HH:mm')} → {formatFinCreneau(creneau)} · {formatDuree(dureeCreneauHeures(creneau))} h
+                              {formatParis(creneau.debut, 'HH:mm')} → {formatFinCreneau(creneau)} · {formatDuree(dureeCreneauHeures(creneau))} h
                             </span>
                           </li>
                         ))}
@@ -947,12 +941,12 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
                 <div className="space-y-3 text-sm">
                   <div className="flex items-center gap-3">
                     <PlusCircle className="h-4 w-4 text-primary flex-shrink-0" />
-                    <span className="text-muted-foreground">Créée le {format(new Date(m.cree_le), "d MMM yyyy 'à' HH:mm", { locale: fr })}</span>
+                    <span className="text-muted-foreground">Créée le {formatParis(m.cree_le, "d MMM yyyy 'à' HH:mm")}</span>
                   </div>
                   {m.modifie_le && m.modifie_le !== m.cree_le && (
                     <div className="flex items-center gap-3">
                       <PlusCircle className="h-4 w-4 text-info flex-shrink-0" />
-                      <span className="text-muted-foreground">Modifiée le {format(new Date(m.modifie_le), "d MMM yyyy 'à' HH:mm", { locale: fr })}</span>
+                      <span className="text-muted-foreground">Modifiée le {formatParis(m.modifie_le, "d MMM yyyy 'à' HH:mm")}</span>
                     </div>
                   )}
                 </div>
@@ -1265,7 +1259,7 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
                     ? 'Aucun départ n’est encore enregistré pour cette mission.'
                     : terminaison.motif === 'PLANNING_INCOMPLET'
                       ? 'Complétez le planning avant de terminer la mission.'
-                      : `Disponible après le dernier créneau, le ${format(finReferenceTerminaison, "d MMM 'à' HH:mm", { locale: fr })}.`}
+                      : `Disponible après le dernier créneau, le ${formatParis(finReferenceTerminaison, "d MMM 'à' HH:mm")}.`}
               </span>
             )}
           </div>

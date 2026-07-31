@@ -35,8 +35,7 @@ import { extraireMessageErreur, estBlocageCodeTravail } from '@/lib/erreurs';
 import { calculerCompletionProfil, getMotifProfilIncomplet } from '@/lib/profil-soignant';
 import { estMultiJours, formatDateMission, formatHorairesMission } from '@/lib/format-mission';
 import { BoutonY2K } from '@/components/y2k/BoutonY2K';
-import { format } from 'date-fns';
-import { fr } from 'date-fns/locale';
+import { ajouterJoursCivilsParis, debutJourParis, formatParis } from '@/lib/date-heure-paris';
 import { toast } from 'sonner';
 import type { Database } from '@/integrations/supabase/types';
 import { BlocContratTravailMission } from '@/components/BlocContratTravailMission';
@@ -224,10 +223,8 @@ export default function DetailMissionSoignant() {
   const estTerminee = mission.statut === 'TERMINEE';
   const estAssigneAutre = !estOuverte && !estAssigne && mission.soignant_assigne_id;
   const estModeCandidature = mission.mode_attribution === 'CANDIDATURE';
-  const debutAujourdhui = new Date();
-  debutAujourdhui.setHours(0, 0, 0, 0);
-  const finAujourdhui = new Date(debutAujourdhui);
-  finAujourdhui.setDate(finAujourdhui.getDate() + 1);
+  const debutAujourdhui = debutJourParis(new Date());
+  const finAujourdhui = ajouterJoursCivilsParis(debutAujourdhui, 1);
   const aCreneauAujourdhui = creneauxPlanifies.some((creneau) => (
     creneauChevauchePeriode(creneau, debutAujourdhui, finAujourdhui)
   ));
@@ -397,9 +394,9 @@ export default function DetailMissionSoignant() {
             prenom: soignant.prenom,
             mission: mission.intitule,
             etablissement: etablissement?.nom || '',
-            date: format(new Date(mission.debut_le), 'EEEE d MMMM yyyy', { locale: fr }),
-            heure_debut: format(new Date(mission.debut_le), "HH'h'mm", { locale: fr }),
-            heure_fin: format(new Date(mission.fin_le), "HH'h'mm", { locale: fr }),
+            date: formatParis(mission.debut_le, 'EEEE d MMMM yyyy'),
+            heure_debut: formatParis(mission.debut_le, "HH'h'mm"),
+            heure_fin: formatParis(mission.fin_le, "HH'h'mm"),
             taux_horaire: mission.taux_horaire_base,
             mission_id: id,
           },
@@ -416,7 +413,7 @@ export default function DetailMissionSoignant() {
               soignant_nom: `${soignant.prenom} ${soignant.nom}`,
               profession: soignant.profession,
               mission: mission.intitule,
-              date: format(new Date(mission.debut_le), 'EEEE d MMMM yyyy', { locale: fr }),
+              date: formatParis(mission.debut_le, 'EEEE d MMMM yyyy'),
               mission_id: id,
             },
             destinataire_id: mission.etablissement_id,
@@ -631,12 +628,12 @@ export default function DetailMissionSoignant() {
                       className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-muted/40 px-3 py-2 text-sm"
                     >
                       <span className="font-medium text-foreground capitalize">
-                        {format(new Date(creneau.debut), 'EEEE d MMMM yyyy', { locale: fr })}
+                        {formatParis(creneau.debut, 'EEEE d MMMM yyyy')}
                       </span>
                       <span className="font-semibold text-primary">
-                        {format(new Date(creneau.debut), "HH'h'mm", { locale: fr })}
+                        {formatParis(creneau.debut, "HH'h'mm")}
                         {' → '}
-                        {creneau.fin ? format(new Date(creneau.fin), "HH'h'mm", { locale: fr }) : 'fin à confirmer'}
+                        {creneau.fin ? formatParis(creneau.fin, "HH'h'mm") : 'fin à confirmer'}
                       </span>
                     </li>
                   ))}
@@ -1094,8 +1091,8 @@ export default function DetailMissionSoignant() {
         onConfirmer={() => accepterMission()}
         titre="Accepter cette mission ?"
         message={`Tu t'engages à être présent(e) ${creneauxPlanifies.length > 0
-          ? creneauxPlanifies.map((creneau) => `${format(new Date(creneau.debut), 'EEEE d MMMM', { locale: fr })} de ${format(new Date(creneau.debut), "HH'h'mm", { locale: fr })} à ${creneau.fin ? format(new Date(creneau.fin), "HH'h'mm", { locale: fr }) : 'une heure à confirmer'}`).join(', puis ')
-          : estMultiJours(mission) ? `du ${formatDateMission(mission)} (${formatHorairesMission(mission)})` : `le ${format(new Date(mission.debut_le), 'EEEE d MMMM', { locale: fr })} (${formatHorairesMission(mission)})`}. Une annulation tardive impactera ton score de fiabilité.`}
+          ? creneauxPlanifies.map((creneau) => `${formatParis(creneau.debut, 'EEEE d MMMM')} de ${formatParis(creneau.debut, "HH'h'mm")} à ${creneau.fin ? formatParis(creneau.fin, "HH'h'mm") : 'une heure à confirmer'}`).join(', puis ')
+          : estMultiJours(mission) ? `du ${formatDateMission(mission)} (${formatHorairesMission(mission)})` : `le ${formatParis(mission.debut_le, 'EEEE d MMMM')} (${formatHorairesMission(mission)})`}. Une annulation tardive impactera ton score de fiabilité.`}
         labelConfirmer="Oui, j'accepte"
         labelAnnuler="Annuler"
       />

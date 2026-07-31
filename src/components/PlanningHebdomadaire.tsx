@@ -11,8 +11,13 @@ import {
   missionsLonguesSansPlanning,
   type CreneauMissionPlanifiable,
 } from '@/lib/occurrences-planning';
-import { format, addDays, startOfWeek, isSameDay } from 'date-fns';
-import { fr } from 'date-fns/locale';
+import {
+  ajouterJoursCivilsParis,
+  debutSemaineParis,
+  formatParis,
+  heureDecimaleParis,
+  memeJourParis,
+} from '@/lib/date-heure-paris';
 
 const HEURE_MIN = 0;
 const HEURE_MAX = 24;
@@ -37,7 +42,7 @@ export function PlanningHebdomadaire({ missionCandidate }: PlanningHebdomadaireP
   const [searchParams] = useSearchParams();
   const highlightId = searchParams.get('highlight');
   const serieParam = searchParams.get('serie');
-  const [semaine, setSemaine] = useState(() => startOfWeek(new Date(), { weekStartsOn: 1 }));
+  const [semaine, setSemaine] = useState(() => debutSemaineParis(new Date()));
   const [missions, setMissions] = useState<any[]>([]);
   const [serieCandidates, setSerieCandidates] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -45,8 +50,8 @@ export function PlanningHebdomadaire({ missionCandidate }: PlanningHebdomadaireP
   const [nbPlanningsManquants, setNbPlanningsManquants] = useState(0);
   const [tentative, setTentative] = useState(0);
 
-  const jours = Array.from({ length: 7 }, (_, i) => addDays(semaine, i));
-  const finSemaine = addDays(semaine, 7);
+  const jours = Array.from({ length: 7 }, (_, i) => ajouterJoursCivilsParis(semaine, i));
+  const finSemaine = ajouterJoursCivilsParis(semaine, 7);
   const semaineIso = semaine.toISOString();
   const finSemaineIso = finSemaine.toISOString();
   const semaineMs = semaine.getTime();
@@ -176,7 +181,7 @@ export function PlanningHebdomadaire({ missionCandidate }: PlanningHebdomadaireP
       );
       setSerieCandidates(decouperOccurrencesParJour(occurrences));
       if (occurrences.length > 0) {
-        setSemaine(startOfWeek(new Date(occurrences[0].debut_le), { weekStartsOn: 1 }));
+        setSemaine(debutSemaineParis(occurrences[0].debut_le));
       }
     };
 
@@ -185,21 +190,21 @@ export function PlanningHebdomadaire({ missionCandidate }: PlanningHebdomadaireP
   }, [serieParam, tentative]);
 
   const heuresParJour = jours.map(jour => {
-    const msDuJour = missions.filter(m => isSameDay(new Date(m.debut_le), jour));
+    const msDuJour = missions.filter(m => memeJourParis(m.debut_le, jour));
     return msDuJour.reduce((t, m) => t + (m.duree_heures || 0), 0);
   });
   const totalSemaine = heuresParJour.reduce((a, b) => a + b, 0);
 
   function getMissionBlocs(jour: Date) {
     const blocs: any[] = [];
-    const msDuJour = missions.filter(m => isSameDay(new Date(m.debut_le), jour));
+    const msDuJour = missions.filter(m => memeJourParis(m.debut_le, jour));
 
     for (const m of msDuJour) {
       const debut = new Date(m.debut_le);
-      let heureDebut = debut.getHours() + debut.getMinutes() / 60;
+      let heureDebut = heureDecimaleParis(debut);
       const fin = new Date(m.fin_le);
-      let heureFin = isSameDay(debut, fin)
-        ? fin.getHours() + fin.getMinutes() / 60
+      let heureFin = memeJourParis(debut, fin)
+        ? heureDecimaleParis(fin)
         : HEURE_MAX;
       if (heureDebut < HEURE_MIN) heureDebut = HEURE_MIN;
       if (heureFin > HEURE_MAX) heureFin = HEURE_MAX;
@@ -212,12 +217,12 @@ export function PlanningHebdomadaire({ missionCandidate }: PlanningHebdomadaireP
 
     // Mission candidate ponctuelle, découpée si elle traverse minuit.
     for (const candidate of segmentsMissionCandidate) {
-      if (!isSameDay(new Date(candidate.debut_le), jour)) continue;
+      if (!memeJourParis(candidate.debut_le, jour)) continue;
       const debut = new Date(candidate.debut_le);
-      let heureDebut = debut.getHours() + debut.getMinutes() / 60;
+      let heureDebut = heureDecimaleParis(debut);
       const fin = new Date(candidate.fin_le);
-      let heureFin = isSameDay(debut, fin)
-        ? fin.getHours() + fin.getMinutes() / 60
+      let heureFin = memeJourParis(debut, fin)
+        ? heureDecimaleParis(fin)
         : HEURE_MAX;
       if (heureDebut < HEURE_MIN) heureDebut = HEURE_MIN;
       if (heureFin > HEURE_MAX) heureFin = HEURE_MAX;
@@ -232,12 +237,12 @@ export function PlanningHebdomadaire({ missionCandidate }: PlanningHebdomadaireP
 
     // Serie candidates
     for (const sc of serieCandidates) {
-      if (isSameDay(new Date(sc.debut_le), jour)) {
+      if (memeJourParis(sc.debut_le, jour)) {
         const debut = new Date(sc.debut_le);
-        let heureDebut = debut.getHours() + debut.getMinutes() / 60;
+        let heureDebut = heureDecimaleParis(debut);
         const fin = new Date(sc.fin_le);
-        let heureFin = isSameDay(debut, fin)
-          ? fin.getHours() + fin.getMinutes() / 60
+        let heureFin = memeJourParis(debut, fin)
+          ? heureDecimaleParis(fin)
           : HEURE_MAX;
         if (heureDebut < HEURE_MIN) heureDebut = HEURE_MIN;
         if (heureFin > HEURE_MAX) heureFin = HEURE_MAX;
@@ -257,21 +262,21 @@ export function PlanningHebdomadaire({ missionCandidate }: PlanningHebdomadaireP
   return (
     <div className="card-base">
       <div className="flex items-center justify-between mb-4">
-        <button aria-label="Semaine précédente" onClick={() => setSemaine(addDays(semaine, -7))} className="p-1.5 hover:bg-muted rounded-lg transition-colors">
+        <button aria-label="Semaine précédente" onClick={() => setSemaine(ajouterJoursCivilsParis(semaine, -7))} className="p-1.5 hover:bg-muted rounded-lg transition-colors">
           <ChevronLeft className="h-5 w-5 text-muted-foreground" />
         </button>
         <div className="text-center">
           <h3 className="text-sm font-bold text-foreground">
-            {format(jours[0], 'd MMM', { locale: fr })} — {format(jours[6], 'd MMM yyyy', { locale: fr })}
+            {formatParis(jours[0], 'd MMM')} — {formatParis(jours[6], 'd MMM yyyy')}
           </h3>
           <p className="text-xs text-muted-foreground">Total : <strong>{totalSemaine.toFixed(0)}h</strong> / 48h</p>
         </div>
-        <button aria-label="Semaine suivante" onClick={() => setSemaine(addDays(semaine, 7))} className="p-1.5 hover:bg-muted rounded-lg transition-colors">
+        <button aria-label="Semaine suivante" onClick={() => setSemaine(ajouterJoursCivilsParis(semaine, 7))} className="p-1.5 hover:bg-muted rounded-lg transition-colors">
           <ChevronRight className="h-5 w-5 text-muted-foreground" />
         </button>
       </div>
 
-      <button onClick={() => setSemaine(startOfWeek(new Date(), { weekStartsOn: 1 }))}
+      <button onClick={() => setSemaine(debutSemaineParis(new Date()))}
         className="text-xs text-primary font-medium hover:underline mb-3 block mx-auto">
         Aujourd'hui
       </button>
@@ -303,8 +308,8 @@ export function PlanningHebdomadaire({ missionCandidate }: PlanningHebdomadaireP
           <div className="grid grid-cols-8 gap-px mb-1">
             <div className="text-[10px] text-muted-foreground" />
             {jours.map((j, i) => (
-              <div key={i} className={`text-center text-[10px] font-semibold p-1 rounded ${isSameDay(j, new Date()) ? 'bg-primary/10 text-primary' : 'text-muted-foreground'}`}>
-                {format(j, 'EEE d', { locale: fr })}
+              <div key={i} className={`text-center text-[10px] font-semibold p-1 rounded ${memeJourParis(j, new Date()) ? 'bg-primary/10 text-primary' : 'text-muted-foreground'}`}>
+                {formatParis(j, 'EEE d')}
               </div>
             ))}
           </div>

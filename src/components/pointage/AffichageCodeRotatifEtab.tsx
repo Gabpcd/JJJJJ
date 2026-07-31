@@ -6,8 +6,6 @@ import { supabase } from '@/integrations/supabase/client';
 import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { extraireMessageErreur } from '@/lib/erreurs';
 import { toast } from 'sonner';
-import { format, isSameDay } from 'date-fns';
-import { fr } from 'date-fns/locale';
 import {
   ajouterRepliMissionPonctuelle,
   choisirContratPointage,
@@ -16,12 +14,17 @@ import {
   FENETRE_OUVERTURE_POINTAGE_MINUTES,
   type CreneauPointage,
 } from '@/lib/disponibilite-pointage';
+import {
+  formatParis,
+  instantJolene,
+  instantDepuisSaisieParis,
+  memeJourParis,
+  valeurSaisieDateHeureParis,
+} from '@/lib/date-heure-paris';
 
 /** Valeur "datetime-local" (heure locale) pour le défaut "maintenant". */
 function nowLocalInput(): string {
-  const d = new Date();
-  d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
-  return d.toISOString().slice(0, 16);
+  return valeurSaisieDateHeureParis();
 }
 
 /**
@@ -44,9 +47,32 @@ interface EtatPointage {
   error?: string;
 }
 
+function trouverCreneauAssocie(
+  planifies: CreneauPointage[],
+  debutEffectif: string,
+): CreneauPointage | null {
+  const debutEffectifMs = instantJolene(debutEffectif).getTime();
+  if (!Number.isFinite(debutEffectifMs)) return null;
+
+  const contenant = planifies.find((creneau) => {
+    if (!creneau.fin) return false;
+    const debutMs = instantJolene(creneau.debut).getTime();
+    const finMs = instantJolene(creneau.fin).getTime();
+    // Borne de fin exclusive : à l'heure exacte où un second shift démarre,
+    // celui-ci doit être choisi plutôt que le shift précédent qui se termine.
+    return debutEffectifMs >= debutMs && debutEffectifMs < finMs;
+  });
+  if (contenant) return contenant;
+
+  return [...planifies].sort((a, b) => (
+    Math.abs(instantJolene(a.debut).getTime() - debutEffectifMs)
+    - Math.abs(instantJolene(b.debut).getTime() - debutEffectifMs)
+  ))[0] ?? null;
+}
+
 function dureeSegment(debut: string, fin: string | null): string {
-  const d = new Date(debut).getTime();
-  const f = fin ? new Date(fin).getTime() : Date.now();
+  const d = instantJolene(debut).getTime();
+  const f = fin ? instantJolene(fin).getTime() : Date.now();
   const min = Math.max(0, Math.round((f - d) / 60000));
   const h = Math.floor(min / 60);
   return h > 0 ? `${h}h${String(min % 60).padStart(2, '0')}` : `${min} min`;
@@ -115,7 +141,7 @@ export function AffichageCodeRotatifEtab({ missionId }: { missionId: string }) {
     setEnvoiFallback(true);
     const { error } = await supabase.rpc('fn_declarer_fin_retroactive' as any, {
       p_mission_id: missionId,
-      p_heure_fin: new Date(heureFin).toISOString(),
+      p_heure_fin: instantDepuisSaisieParis(heureFin).toISOString(),
       p_raison: "Clôture par l'établissement (oubli de scan / sans téléphone)",
     });
     setEnvoiFallback(false);
@@ -180,15 +206,28 @@ export function AffichageCodeRotatifEtab({ missionId }: { missionId: string }) {
   const afficherCode = Boolean(code && disponibilite.peutPointer);
   const segmentOuvert = segmentsOuverts[0] ?? null;
   const creneauActif = segmentOuvert
-    ? planifies.find((creneau) => isSameDay(new Date(creneau.debut), new Date(segmentOuvert.debut))) ?? null
+    ? trouverCreneauAssocie(planifies, segmentOuvert.debut)
     : disponibilite.creneauCourant;
   const indexCreneauActif = creneauActif ? planifies.indexOf(creneauActif) : -1;
   const indexProchainCreneau = disponibilite.prochainCreneau
     ? planifies.indexOf(disponibilite.prochainCreneau)
     : -1;
   const formatCode = (c: string) => `${c.slice(0, 3)} ${c.slice(3)}`;
+  const dernierSegmentFerme = [...data.segments]
+    .filter((segment) => Boolean(segment.fin))
+    .sort((a, b) => instantJolene(a.debut).getTime() - instantJolene(b.debut).getTime())
+    .at(-1) ?? null;
+  const creneauDuDernierSegment = dernierSegmentFerme
+    ? trouverCreneauAssocie(planifies, dernierSegmentFerme.debut)
+    : null;
+  const estRepriseDuMemeCreneau = Boolean(
+    dernierSegmentFerme
+    && memeJourParis(dernierSegmentFerme.debut, maintenant)
+    && disponibilite.creneauCourant
+    && creneauDuDernierSegment === disponibilite.creneauCourant,
+  );
   const prochainLabel = data.prochain_type_scan === 'OUVERTURE'
-    ? (data.segments.length === 0 ? 'Arrivée' : 'Reprise (fin de pause)')
+    ? (estRepriseDuMemeCreneau ? 'Reprise (fin de pause)' : 'Arrivée')
     : 'Départ ou pause';
 
   return (
@@ -213,8 +252,8 @@ export function AffichageCodeRotatifEtab({ missionId }: { missionId: string }) {
       {creneauActif?.fin && (
         <p className="mb-3 text-xs font-medium text-foreground">
           Créneau {indexCreneauActif + 1}/{planifies.length} ·{' '}
-          {format(new Date(creneauActif.debut), 'EEEE d MMMM yyyy à HH:mm', { locale: fr })}
-          {' → '}{format(new Date(creneauActif.fin), 'HH:mm', { locale: fr })}
+          {formatParis(creneauActif.debut, 'EEEE d MMMM yyyy à HH:mm')}
+          {' → '}{formatParis(creneauActif.fin, 'HH:mm')}
         </p>
       )}
 
@@ -246,7 +285,7 @@ export function AffichageCodeRotatifEtab({ missionId }: { missionId: string }) {
                   : planifies.length === 0
                   ? 'Aucun créneau détaillé n’est planifié pour cette mission. Le code sera disponible après confirmation du planning.'
                   : disponibilite.prochainCreneau?.fin
-                    ? `Le code sera affiché ${FENETRE_OUVERTURE_POINTAGE_MINUTES} minutes avant le créneau ${indexProchainCreneau + 1}/${planifies.length}, le ${format(new Date(disponibilite.prochainCreneau.debut), 'EEEE d MMMM yyyy à HH:mm', { locale: fr })}.`
+                    ? `Le code sera affiché ${FENETRE_OUVERTURE_POINTAGE_MINUTES} minutes avant le créneau ${indexProchainCreneau + 1}/${planifies.length}, le ${formatParis(disponibilite.prochainCreneau.debut, 'EEEE d MMMM yyyy à HH:mm')}.`
                     : 'Tous les créneaux planifiés sont terminés.'}
               </p>
             </div>
@@ -260,8 +299,8 @@ export function AffichageCodeRotatifEtab({ missionId }: { missionId: string }) {
           {data.segments.map((s, i) => (
             <div key={s.id} className="flex items-center justify-between text-xs text-foreground rounded-lg bg-muted/40 px-3 py-1.5">
               <span>
-                Segment {i + 1} · {format(new Date(s.debut), "dd/MM/yyyy HH'h'mm", { locale: fr })}
-                {s.fin ? ` → ${format(new Date(s.fin), "dd/MM/yyyy HH'h'mm", { locale: fr })}` : ' → en cours'}
+                Segment {i + 1} · {formatParis(s.debut, "dd/MM/yyyy HH'h'mm")}
+                {s.fin ? ` → ${formatParis(s.fin, "dd/MM/yyyy HH'h'mm")}` : ' → en cours'}
               </span>
               <span className="font-semibold">{dureeSegment(s.debut, s.fin)}</span>
             </div>

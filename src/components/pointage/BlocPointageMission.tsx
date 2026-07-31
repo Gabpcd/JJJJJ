@@ -1,7 +1,5 @@
 import { useEffect, useState } from 'react';
 import { AlertTriangle, CalendarClock } from 'lucide-react';
-import { format, isSameDay } from 'date-fns';
-import { fr } from 'date-fns/locale';
 import { useNavigate } from 'react-router-dom';
 import { PointageRotatifSoignant } from '@/components/pointage/PointageRotatifSoignant';
 import { Button } from '@/components/ui/button';
@@ -11,6 +9,7 @@ import {
   FENETRE_OUVERTURE_POINTAGE_MINUTES,
   type CreneauPointage,
 } from '@/lib/disponibilite-pointage';
+import { formatParis, memeJourParis } from '@/lib/date-heure-paris';
 
 interface MissionPointage {
   id: string;
@@ -82,10 +81,10 @@ export function BlocPointageMission({
                   <p className="text-xs text-muted-foreground mt-1">
                     Le contrat doit être signé par les deux parties avant le premier pointage.
                   </p>
-                  {prochainDebut && !isSameDay(prochainDebut, maintenant) && (
+                  {prochainDebut && !memeJourParis(prochainDebut, maintenant) && (
                     <p className="text-xs text-muted-foreground mt-1">
                       Aucun créneau à pointer aujourd’hui. Prochain créneau le{' '}
-                      {format(prochainDebut, "EEEE d MMMM 'à' HH'h'mm", { locale: fr })}.
+                      {formatParis(prochainDebut, "EEEE d MMMM 'à' HH'h'mm")}.
                     </p>
                   )}
                   {contrat && (
@@ -109,15 +108,15 @@ export function BlocPointageMission({
               ) : (
                 <>
                   <p className="font-semibold text-sm text-foreground">
-                    {prochainDebut && isSameDay(prochainDebut, maintenant)
+                    {prochainDebut && memeJourParis(prochainDebut, maintenant)
                       ? 'Pointage pas encore ouvert'
                       : 'Aucun créneau à pointer aujourd’hui'}
                   </p>
                   <p className="text-xs text-muted-foreground mt-1">
-                    {prochainDebut && isSameDay(prochainDebut, maintenant)
-                      ? `Le pointage ouvrira ${FENETRE_OUVERTURE_POINTAGE_MINUTES} minutes avant le créneau de ${format(prochainDebut, "HH'h'mm", { locale: fr })}.`
+                    {prochainDebut && memeJourParis(prochainDebut, maintenant)
+                      ? `Le pointage ouvrira ${FENETRE_OUVERTURE_POINTAGE_MINUTES} minutes avant le créneau de ${formatParis(prochainDebut, "HH'h'mm")}.`
                       : prochainDebut
-                        ? `Prochain créneau le ${format(prochainDebut, "EEEE d MMMM 'à' HH'h'mm", { locale: fr })}.`
+                        ? `Prochain créneau le ${formatParis(prochainDebut, "EEEE d MMMM 'à' HH'h'mm")}.`
                         : 'Tous les créneaux planifiés sont terminés.'}
                   </p>
                 </>
