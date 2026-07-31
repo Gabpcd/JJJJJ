@@ -15,9 +15,14 @@ import {
   DialogResponsiveFooter,
 } from '@/components/ui/DialogResponsive';
 import { getLabelProfession, extraireContratPreference, getContratBadge } from '@/lib/constantes';
-import { format } from 'date-fns';
+import { format, isSameDay } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { netEstimeAfficheMission } from '@/lib/missionFinanceDisplay';
+import {
+  ajouterRepliMissionPonctuelle,
+  creneauxPrevisionnels,
+  type CreneauPointage,
+} from '@/lib/disponibilite-pointage';
 
 /** Nouvelles dates choisies lors d'une republication (F3). */
 export interface RepublierDates {
@@ -59,16 +64,44 @@ function scoreColor(score: number): string {
   return 'text-destructive';
 }
 
+function dureeCreneauHeures(creneau: CreneauPointage): number {
+  if (!creneau.fin) return 0;
+  return Math.max(0, (new Date(creneau.fin).getTime() - new Date(creneau.debut).getTime()) / 3_600_000);
+}
+
+function formatDuree(heures: number): string {
+  return Number.isInteger(heures) ? String(heures) : heures.toFixed(1).replace('.', ',');
+}
+
+function formatCreneau(creneau: CreneauPointage): string {
+  const debut = new Date(creneau.debut);
+  const fin = new Date(creneau.fin!);
+  const finFormatee = isSameDay(debut, fin)
+    ? format(fin, 'HH:mm')
+    : format(fin, 'EEE d MMM · HH:mm', { locale: fr });
+  return `${format(debut, 'EEE d MMM', { locale: fr })} · ${format(debut, 'HH:mm')}–${finFormatee} (${formatDuree(dureeCreneauHeures(creneau))} h)`;
+}
+
 export const CarteMission = React.memo(function CarteMission({ mission, afficherEtablissement, onDupliquer, onAnnuler, onRepublier }: CarteMissionProps) {
   const navigate = useNavigate();
   const m = mission;
   const netEstimeAffiche = netEstimeAfficheMission(m);
   const debut = new Date(m.debut_le);
   const fin = new Date(m.fin_le);
-  const duree = m.duree_heures ?? ((fin.getTime() - debut.getTime()) / 3600000);
-  const heureDebut = format(debut, 'HH:mm');
-  const heureFin = format(fin, 'HH:mm');
-  const dateFormatee = format(debut, 'EEEE d MMMM yyyy', { locale: fr });
+  const planningFourni = Array.isArray(m.creneaux);
+  const creneaux = creneauxPrevisionnels(
+    ajouterRepliMissionPonctuelle(m.creneaux ?? [], m),
+  ).filter((creneau) => Boolean(creneau.fin));
+  const dureePlanifiee = creneaux.reduce((total, creneau) => total + dureeCreneauHeures(creneau), 0);
+  const dureeMission = dureePlanifiee > 0
+    ? dureePlanifiee
+    : Math.max(0, Number(m.duree_heures) || 0);
+  const apercuCreneaux = creneaux.slice(0, 3);
+  const nbCreneauxMasques = creneaux.length - apercuCreneaux.length;
+  const estPeriodeEtendue = fin.getTime() - debut.getTime() > 24 * 60 * 60_000 || creneaux.length > 1;
+  const dateFormatee = estPeriodeEtendue
+    ? `${m.statut === 'EN_COURS' ? 'Période active' : 'Période prévue'} : ${format(debut, 'd MMM', { locale: fr })} → ${format(fin, 'd MMM yyyy', { locale: fr })}`
+    : format(debut, 'EEEE d MMMM yyyy', { locale: fr });
   // Lot 11 : l'ancienneté seule n'est pas un signal — le rouge est réservé au
   // cas actionnable « ouverte, ancienne ET sans candidature ». Sinon, neutre.
   const anciennete = m.statut === 'OUVERTE' ? tempsDepuis(m.cree_le) : null;
@@ -77,11 +110,6 @@ export const CarteMission = React.memo(function CarteMission({ mission, afficher
   const tempsInfo = anciennete && sansCandidatureDepuis == null
     ? { texte: `Publiée ${anciennete.texte.toLowerCase()}`, couleur: 'text-muted-foreground' }
     : null;
-  // Mission multi-jours : « 8 h/jour · 120 h au total » est lisible là où
-  // « 13:00 → 21:00 (120h) » ne l'est pas.
-  const nbJoursMission = Math.max(1, Math.round((fin.getTime() - debut.getTime()) / 86400000));
-  const estMultiJours = duree > 24 && nbJoursMission > 1;
-  const heuresParJour = estMultiJours ? Math.round((duree / nbJoursMission) * 10) / 10 : 0;
   const estAnnulee = m.statut === 'ANNULEE_PAR_ETABLISSEMENT' || m.statut === 'ANNULEE_PAR_SOIGNANT';
   const estTerminee = m.statut === 'TERMINEE';
   // F3 — « Republier » disponible sur les missions passées : annulées ET terminées.
@@ -178,13 +206,25 @@ export const CarteMission = React.memo(function CarteMission({ mission, afficher
       <div className="flex items-center gap-4 text-xs text-muted-foreground mb-2">
         <span className="flex items-center gap-1"><Calendar className="h-3.5 w-3.5" />{dateFormatee}</span>
       </div>
-      <div className="flex items-center gap-4 text-xs text-muted-foreground mb-3">
-        <span className="flex items-center gap-1">
-          <Clock className="h-3.5 w-3.5" />
-          {estMultiJours
-            ? `${heuresParJour} h/jour · ${Math.round(duree * 10) / 10} h au total`
-            : `${heureDebut} → ${heureFin} (${Math.round(duree * 10) / 10}h)`}
-        </span>
+      <div className="flex items-start gap-1 text-xs text-muted-foreground mb-3">
+        <Clock className="h-3.5 w-3.5 mt-0.5 shrink-0" aria-hidden="true" />
+        {creneaux.length > 0 ? (
+          <div aria-label="Créneaux prévisionnels">
+            <p className="font-medium text-foreground">
+              {creneaux.length} créneau{creneaux.length > 1 ? 'x' : ''} · {formatDuree(dureePlanifiee)} h planifiées
+            </p>
+            <ul className="mt-1 space-y-0.5">
+              {apercuCreneaux.map((creneau) => (
+                <li key={creneau.id}>{formatCreneau(creneau)}</li>
+              ))}
+            </ul>
+            {nbCreneauxMasques > 0 && (
+              <p className="mt-1 text-primary">+ {nbCreneauxMasques} autre{nbCreneauxMasques > 1 ? 's' : ''} · voir le détail</p>
+            )}
+          </div>
+        ) : (
+          <span>{planningFourni ? 'Planning détaillé à confirmer' : 'Voir le planning détaillé'}</span>
+        )}
       </div>
 
       <div className="flex items-center gap-2 text-xs mb-2">
@@ -295,7 +335,7 @@ export const CarteMission = React.memo(function CarteMission({ mission, afficher
                 </p>
                 <p className="text-muted-foreground flex items-center gap-1">
                   <Clock className="h-3.5 w-3.5" />
-                  Durée d'origine : {Math.round(duree * 10) / 10}h
+                  Durée d'origine : {formatDuree(dureeMission)} h
                 </p>
               </div>
 

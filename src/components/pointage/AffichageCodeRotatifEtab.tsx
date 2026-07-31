@@ -1,13 +1,21 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { QRCodeSVG } from 'qrcode.react';
-import { Hash, RefreshCw, Clock } from 'lucide-react';
+import { CalendarClock, Hash, RefreshCw, Clock } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { extraireMessageErreur } from '@/lib/erreurs';
 import { toast } from 'sonner';
-import { format } from 'date-fns';
+import { format, isSameDay } from 'date-fns';
 import { fr } from 'date-fns/locale';
+import {
+  ajouterRepliMissionPonctuelle,
+  choisirContratPointage,
+  creneauxPrevisionnels,
+  evaluerDisponibilitePointage,
+  FENETRE_OUVERTURE_POINTAGE_MINUTES,
+  type CreneauPointage,
+} from '@/lib/disponibilite-pointage';
 
 /** Valeur "datetime-local" (heure locale) pour le défaut "maintenant". */
 function nowLocalInput(): string {
@@ -45,15 +53,57 @@ function dureeSegment(debut: string, fin: string | null): string {
 }
 
 export function AffichageCodeRotatifEtab({ missionId }: { missionId: string }) {
-  const { data, isLoading, refetch } = useQuery({
+  const [maintenant, setMaintenant] = useState(() => new Date());
+  useEffect(() => {
+    const intervalle = window.setInterval(() => setMaintenant(new Date()), 15_000);
+    return () => window.clearInterval(intervalle);
+  }, []);
+
+  const { data, isLoading, isError, error: etatErreur, refetch } = useQuery({
     queryKey: ['etat-pointage-rotatif', missionId],
     queryFn: async () => {
-      const { data, error } = await supabase.rpc('fn_etat_pointage_mission' as any, { p_mission_id: missionId });
+      const { data: etat, error } = await supabase.rpc('fn_etat_pointage_mission' as any, { p_mission_id: missionId });
       if (error) throw error;
-      return data as EtatPointage;
+      return etat as EtatPointage;
     },
     refetchInterval: 5000,
     staleTime: 0,
+  });
+  const { data: planning, isLoading: planningLoading, isError: planningErreur } = useQuery({
+    queryKey: ['planning-pointage-rotatif', missionId],
+    queryFn: async () => {
+      const [missionResult, creneauxResult, contratsResult] = await Promise.all([
+        supabase
+          .from('missions')
+          .select('id, debut_le, fin_le')
+          .eq('id', missionId)
+          .single(),
+        supabase
+          .from('mission_creneaux')
+          .select('id, mission_id, debut, fin, est_pause, type_creneau')
+          .eq('mission_id', missionId)
+          .eq('type_creneau', 'PREVISIONNEL')
+          .eq('est_pause', false)
+          .not('fin', 'is', null)
+          .order('debut', { ascending: true }),
+        supabase
+          .from('contrats_mission')
+          .select('id, mission_id, statut, cree_le')
+          .eq('mission_id', missionId),
+      ]);
+      if (missionResult.error) throw missionResult.error;
+      if (creneauxResult.error) throw creneauxResult.error;
+      if (contratsResult.error) throw contratsResult.error;
+
+      return {
+        creneaux: ajouterRepliMissionPonctuelle(
+          (creneauxResult.data || []) as CreneauPointage[],
+          missionResult.data,
+        ),
+        contratStatut: choisirContratPointage(contratsResult.data || [])?.statut ?? null,
+      };
+    },
+    staleTime: 60_000,
   });
 
   const [fallbackOuvert, setFallbackOuvert] = useState(false);
@@ -76,10 +126,66 @@ export function AffichageCodeRotatifEtab({ missionId }: { missionId: string }) {
     refetch();
   };
 
-  if (isLoading || !data || data.error) return null;
+  if (isLoading || planningLoading) {
+    return <div className="card-base text-sm text-muted-foreground" role="status">Chargement du code de pointage…</div>;
+  }
+  if (isError || !data || data.error) {
+    return (
+      <div className="card-base border-destructive/30" role="alert">
+        <p className="font-semibold text-destructive">Code de pointage indisponible</p>
+        <p className="mt-1 text-xs text-muted-foreground">
+          {data?.error || (etatErreur ? extraireMessageErreur(etatErreur) : 'Impossible de charger l’état du pointage.')}
+        </p>
+        <BoutonY2K size="sm" variant="secondary" className="mt-3" onClick={() => refetch()}>
+          Réessayer
+        </BoutonY2K>
+      </div>
+    );
+  }
   if (!['ASSIGNEE', 'EN_COURS'].includes(data.statut)) return null;
+  if (planningErreur || !planning) {
+    return (
+      <div className="card-base" role="alert">
+        <div className="flex items-center gap-2">
+          <Hash className="h-5 w-5 text-primary" />
+          <h2 className="font-semibold text-foreground">Code de pointage</h2>
+        </div>
+        <div className="mt-3 flex items-start gap-3 rounded-xl border border-dashed border-warning/40 bg-warning/5 p-4">
+          <CalendarClock className="mt-0.5 h-5 w-5 shrink-0 text-warning" />
+          <div>
+            <p className="text-sm font-semibold text-foreground">Code masqué</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Le planning détaillé est momentanément indisponible. Réessayez avant de présenter un code au soignant.
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const code = data.code_pointage_actif;
+  const planifies = creneauxPrevisionnels(planning.creneaux);
+  const segmentsOuverts: CreneauPointage[] = data.segments
+    .filter((segment) => !segment.fin)
+    .map((segment) => ({
+      ...segment,
+      est_pause: false,
+      type_creneau: 'EFFECTIF',
+    }));
+  const disponibilite = evaluerDisponibilitePointage({
+    creneaux: [...planning.creneaux, ...segmentsOuverts],
+    contratStatut: planning.contratStatut,
+    maintenant,
+  });
+  const afficherCode = Boolean(code && disponibilite.peutPointer);
+  const segmentOuvert = segmentsOuverts[0] ?? null;
+  const creneauActif = segmentOuvert
+    ? planifies.find((creneau) => isSameDay(new Date(creneau.debut), new Date(segmentOuvert.debut))) ?? null
+    : disponibilite.creneauCourant;
+  const indexCreneauActif = creneauActif ? planifies.indexOf(creneauActif) : -1;
+  const indexProchainCreneau = disponibilite.prochainCreneau
+    ? planifies.indexOf(disponibilite.prochainCreneau)
+    : -1;
   const formatCode = (c: string) => `${c.slice(0, 3)} ${c.slice(3)}`;
   const prochainLabel = data.prochain_type_scan === 'OUVERTURE'
     ? (data.segments.length === 0 ? 'Arrivée' : 'Reprise (fin de pause)')
@@ -90,17 +196,29 @@ export function AffichageCodeRotatifEtab({ missionId }: { missionId: string }) {
       <div className="flex items-center gap-2 mb-3">
         <Hash className="h-5 w-5 text-primary" />
         <h2 className="font-semibold text-foreground">Code de pointage</h2>
-        <span className="ml-auto inline-flex items-center gap-1 text-[11px] text-muted-foreground">
-          <RefreshCw className="h-3 w-3" /> change à chaque scan
-        </span>
+        {afficherCode ? (
+          <span className="ml-auto inline-flex items-center gap-1 text-[11px] text-muted-foreground">
+            <RefreshCw className="h-3 w-3" /> change à chaque scan
+          </span>
+        ) : null}
       </div>
 
-      <p className="text-xs text-muted-foreground mb-4">
-        Montrez ce code (ou le QR) au soignant à chaque pointage. Prochain pointage attendu :{' '}
-        <span className="font-semibold text-foreground">{prochainLabel}</span>.
-      </p>
+      {afficherCode ? (
+        <p className="text-xs text-muted-foreground mb-4">
+          Montrez ce code (ou le QR) au soignant à chaque pointage. Prochain pointage attendu :{' '}
+          <span className="font-semibold text-foreground">{prochainLabel}</span>.
+        </p>
+      ) : null}
 
-      {code ? (
+      {creneauActif?.fin && (
+        <p className="mb-3 text-xs font-medium text-foreground">
+          Créneau {indexCreneauActif + 1}/{planifies.length} ·{' '}
+          {format(new Date(creneauActif.debut), 'EEEE d MMMM yyyy à HH:mm', { locale: fr })}
+          {' → '}{format(new Date(creneauActif.fin), 'HH:mm', { locale: fr })}
+        </p>
+      )}
+
+      {afficherCode && code ? (
         <div className="flex flex-col items-center gap-3 rounded-2xl border border-primary/20 bg-primary/5 p-4">
           <p className="text-4xl font-mono font-black text-foreground tracking-[0.3em]">{formatCode(code)}</p>
           <div className="bg-card p-3 rounded-xl">
@@ -112,8 +230,28 @@ export function AffichageCodeRotatifEtab({ missionId }: { missionId: string }) {
             </span>
           )}
         </div>
+      ) : disponibilite.peutPointer ? (
+        <p className="text-sm text-muted-foreground">Code momentanément indisponible. Actualisez dans quelques secondes.</p>
       ) : (
-        <p className="text-sm text-muted-foreground">Code indisponible.</p>
+        <div className="rounded-xl border border-dashed border-primary/30 bg-primary/5 p-4" role="status">
+          <div className="flex items-start gap-3">
+            <CalendarClock className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
+            <div>
+              <p className="text-sm font-semibold text-foreground">
+                {disponibilite.motif === 'CONTRAT' ? 'Code masqué — contrat non signé' : 'Code masqué hors créneau'}
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {disponibilite.motif === 'CONTRAT'
+                  ? 'Le code d’arrivée sera disponible lorsque le contrat aura été signé par les deux parties.'
+                  : planifies.length === 0
+                  ? 'Aucun créneau détaillé n’est planifié pour cette mission. Le code sera disponible après confirmation du planning.'
+                  : disponibilite.prochainCreneau?.fin
+                    ? `Le code sera affiché ${FENETRE_OUVERTURE_POINTAGE_MINUTES} minutes avant le créneau ${indexProchainCreneau + 1}/${planifies.length}, le ${format(new Date(disponibilite.prochainCreneau.debut), 'EEEE d MMMM yyyy à HH:mm', { locale: fr })}.`
+                    : 'Tous les créneaux planifiés sont terminés.'}
+              </p>
+            </div>
+          </div>
+        </div>
       )}
 
       {data.segments.length > 0 && (
@@ -122,8 +260,8 @@ export function AffichageCodeRotatifEtab({ missionId }: { missionId: string }) {
           {data.segments.map((s, i) => (
             <div key={s.id} className="flex items-center justify-between text-xs text-foreground rounded-lg bg-muted/40 px-3 py-1.5">
               <span>
-                Segment {i + 1} · {format(new Date(s.debut), "HH'h'mm", { locale: fr })}
-                {s.fin ? ` → ${format(new Date(s.fin), "HH'h'mm", { locale: fr })}` : ' → en cours'}
+                Segment {i + 1} · {format(new Date(s.debut), "dd/MM/yyyy HH'h'mm", { locale: fr })}
+                {s.fin ? ` → ${format(new Date(s.fin), "dd/MM/yyyy HH'h'mm", { locale: fr })}` : ' → en cours'}
               </span>
               <span className="font-semibold">{dureeSegment(s.debut, s.fin)}</span>
             </div>

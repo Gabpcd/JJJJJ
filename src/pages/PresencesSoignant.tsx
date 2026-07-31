@@ -23,8 +23,10 @@ import { stockerPointageHorsLigne } from '@/lib/horsLigne';
 import { extraireMessageErreur } from '@/lib/erreurs';
 import { handleErrorSilent } from '@/lib/handleError';
 import {
+  ajouterRepliMissionPonctuelle,
   creneauChevauchePeriode,
   creneauxPrevisionnels,
+  choisirContratPointage,
   filtrerMissionsEnCours,
   type CreneauPointage,
 } from '@/lib/disponibilite-pointage';
@@ -98,7 +100,13 @@ export default function PresencesSoignant() {
     afficherNotification({ type: 'info', message: 'Pointage sans GPS activé — ton pointage sera validé manuellement par l\'établissement, rien à faire de ton côté.' });
   };
 
-  const { data: presencesData, isLoading: loading } = useQuery({
+  const {
+    data: presencesData,
+    isLoading: loading,
+    isError: chargementEnErreur,
+    error: erreurChargement,
+    refetch: rechargerPresences,
+  } = useQuery({
     queryKey: ['presences-soignant', user?.id],
     queryFn: async () => {
       const aujourdhui = new Date();
@@ -154,19 +162,24 @@ export default function PresencesSoignant() {
       const missionIds = missionsActives.map((mission: any) => mission.id);
       const presencesValideesBrutes = valideesResult.data || [];
       const historiqueBrut = historiqueResult.data || [];
+      const tousMissionIds = [...new Set([
+        ...missionIds,
+        ...presencesValideesBrutes.map((presence: any) => presence.mission_id),
+        ...historiqueBrut.map((presence: any) => presence.mission_id),
+      ].filter(Boolean))];
 
       const [creneauxResult, contratsResult, etabMap, etabMapValidees, etabMapHistorique] = await Promise.all([
-        missionIds.length > 0
+        tousMissionIds.length > 0
           ? supabase
             .from('mission_creneaux')
             .select('id, mission_id, debut, fin, est_pause, type_creneau')
-            .in('mission_id', missionIds)
+            .in('mission_id', tousMissionIds)
             .order('debut', { ascending: true })
           : Promise.resolve({ data: [], error: null }),
         missionIds.length > 0
           ? supabase
             .from('contrats_mission')
-            .select('id, mission_id, statut')
+            .select('id, mission_id, statut, cree_le')
             .in('mission_id', missionIds)
           : Promise.resolve({ data: [], error: null }),
         fetchEtablissementsSafe(missionsActives.map((mission: any) => mission.etablissement_id)),
@@ -186,14 +199,19 @@ export default function PresencesSoignant() {
         (creneauxParMission[creneau.mission_id] ||= []).push(creneau);
       });
 
-      const contratsMap: Record<string, any> = {};
+      const contratsParMission: Record<string, any[]> = {};
       (contratsResult.data || []).forEach((contrat: any) => {
-        contratsMap[contrat.mission_id] = contrat;
+        (contratsParMission[contrat.mission_id] ||= []).push(contrat);
+      });
+      const contratsMap: Record<string, any> = {};
+      Object.entries(contratsParMission).forEach(([missionId, contratsMission]) => {
+        const contrat = choisirContratPointage(contratsMission);
+        if (contrat) contratsMap[missionId] = contrat;
       });
 
       const missionsEnrichies = missionsActives.map((mission: any) => ({
         ...mission,
-        creneaux: creneauxParMission[mission.id] || [],
+        creneaux: ajouterRepliMissionPonctuelle(creneauxParMission[mission.id] || [], mission),
         etablissements: etabMap[mission.etablissement_id] || null,
       }));
 
@@ -206,24 +224,39 @@ export default function PresencesSoignant() {
         const aUnCreneauAujourdhui = planifies.some((creneau) => (
           creneauChevauchePeriode(creneau, aujourdhui, demain)
         ));
-        const missionChevaucheAujourdhui = new Date(mission.debut_le) < demain
-          && new Date(mission.fin_le) >= aujourdhui;
         return aUnSegmentOuvert
-          || aUnCreneauAujourdhui
-          || (planifies.length === 0 && missionChevaucheAujourdhui);
+          || aUnCreneauAujourdhui;
       });
 
       const aVenirList = missionsEnrichies
         .map((mission: any) => {
           const prochain = creneauxPrevisionnels(mission.creneaux)
             .find((creneau) => new Date(creneau.debut) >= demain);
-          const dateAffichage = prochain?.debut
-            ?? (new Date(mission.debut_le) >= demain ? mission.debut_le : null);
-          return dateAffichage ? { ...mission, dateAffichage, prochainCreneau: prochain } : null;
+          const dateAffichage = prochain?.debut ?? null;
+          const dureeAffichageHeures = prochain?.fin
+            ? (new Date(prochain.fin).getTime() - new Date(prochain.debut).getTime()) / 3_600_000
+            : mission.duree_heures;
+          return dateAffichage
+            ? { ...mission, dateAffichage, prochainCreneau: prochain, dureeAffichageHeures }
+            : null;
         })
         .filter(Boolean)
+        .concat(missionsEnrichies
+          .filter((mission: any) => (
+            mission.statut === 'ASSIGNEE'
+            && creneauxPrevisionnels(mission.creneaux).length === 0
+          ))
+          .map((mission: any) => ({
+            ...mission,
+            dateAffichage: null,
+            prochainCreneau: null,
+            dureeAffichageHeures: null,
+            planningAConfirmer: true,
+          })))
         .sort((a: any, b: any) => (
-          new Date(a.dateAffichage).getTime() - new Date(b.dateAffichage).getTime()
+          a.dateAffichage && b.dateAffichage
+            ? new Date(a.dateAffichage).getTime() - new Date(b.dateAffichage).getTime()
+            : a.dateAffichage ? -1 : b.dateAffichage ? 1 : 0
         ))
         .slice(0, 20);
 
@@ -236,6 +269,7 @@ export default function PresencesSoignant() {
         missions: {
           ...presence.missions,
           etablissements: etabMapValidees[presence.missions?.etablissement_id] || null,
+          creneaux: creneauxParMission[presence.mission_id] || [],
         },
       }));
 
@@ -244,6 +278,7 @@ export default function PresencesSoignant() {
         missions: {
           ...presence.missions,
           etablissements: etabMapHistorique[presence.missions?.etablissement_id] || null,
+          creneaux: creneauxParMission[presence.mission_id] || [],
         },
       }));
 
@@ -272,7 +307,7 @@ export default function PresencesSoignant() {
   // « À venir » (defaultValue) — vide — au lieu des présences en attente.
   const [searchParams] = useSearchParams();
   const tabInitial = searchParams.get('tab')
-    || (missionsEnCours.length > 0 ? 'encours' : missions.length > 0 ? 'aujourdhui' : 'avenir');
+    || (missions.length > 0 ? 'aujourdhui' : missionsEnCours.length > 0 ? 'encours' : 'avenir');
   const filtreAValider = searchParams.get('filtre') === 'a_valider';
 
   // Filtre « à valider » = miroir EXACT du gate 7b-B : présence à pointage
@@ -446,6 +481,27 @@ export default function PresencesSoignant() {
 
   if (loading || !consentementCharge) return <LayoutApp role="SOIGNANT"><ChargementPage /></LayoutApp>;
 
+  if (chargementEnErreur) {
+    return (
+      <LayoutApp role="SOIGNANT">
+        <div className="card-base border-destructive/30 max-w-xl mx-auto" role="alert">
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="h-5 w-5 shrink-0 text-destructive" />
+            <div>
+              <h1 className="font-semibold text-foreground">Impossible de charger tes présences</h1>
+              <p className="text-sm text-muted-foreground mt-1">
+                {extraireMessageErreur(erreurChargement)}
+              </p>
+              <Button type="button" className="mt-4" onClick={() => rechargerPresences()}>
+                Réessayer
+              </Button>
+            </div>
+          </div>
+        </div>
+      </LayoutApp>
+    );
+  }
+
   // Show GPS consent screen if first time
   if (showConsentementGPS) {
     return <ConsentementGPS onAccepter={handleAccepterGPS} onRefuser={handleRefuserGPS} />;
@@ -486,7 +542,7 @@ export default function PresencesSoignant() {
       <Tabs defaultValue={tabInitial}>
         <TabsList className="w-full max-w-lg mb-4">
           <TabsTrigger value="avenir" className="flex-1 gap-1.5"><CalendarDays className="h-4 w-4" />À venir{missionsAVenir.length > 0 && <BadgeY2K variant="info" size="sm" className="ml-1 h-5 min-w-[20px] justify-center px-1" aria-label={`${missionsAVenir.length} mission${missionsAVenir.length > 1 ? 's' : ''} à venir`}>{missionsAVenir.length}</BadgeY2K>}</TabsTrigger>
-          <TabsTrigger value="encours" className="flex-1 gap-1.5"><Activity className="h-4 w-4" />En cours</TabsTrigger>
+          <TabsTrigger value="encours" className="flex-1 gap-1.5"><Activity className="h-4 w-4" />Actives</TabsTrigger>
           <TabsTrigger value="aujourdhui" className="flex-1 gap-1.5"><Clock className="h-4 w-4" />Aujourd'hui</TabsTrigger>
           <TabsTrigger value="historique" className="flex-1 gap-1.5"><History className="h-4 w-4" />Historique</TabsTrigger>
         </TabsList>
@@ -496,21 +552,31 @@ export default function PresencesSoignant() {
             <div className="space-y-3">
               {missionsAVenir.map((m: any) => (
                 <div key={m.id} onClick={() => navigate(`/soignant/missions/${m.id}`)} className="card-base hover:shadow-md cursor-pointer transition-all flex items-center gap-3 py-3">
-                  <div className="flex flex-col items-center justify-center rounded-xl bg-primary/10 px-3 py-1.5 min-w-[52px]">
-                    <span className="text-[10px] font-semibold text-primary uppercase">{format(new Date(m.dateAffichage || m.debut_le), 'EEE', { locale: fr })}</span>
-                    <span className="text-lg font-bold text-primary leading-tight">{format(new Date(m.dateAffichage || m.debut_le), 'd')}</span>
-                    <span className="text-[10px] text-primary">{format(new Date(m.dateAffichage || m.debut_le), 'MMM', { locale: fr })}</span>
-                  </div>
+                  {m.planningAConfirmer ? (
+                    <div className="flex h-[56px] min-w-[52px] items-center justify-center rounded-xl bg-warning/10 text-warning">
+                      <AlertTriangle className="h-5 w-5" />
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center justify-center rounded-xl bg-primary/10 px-3 py-1.5 min-w-[52px]">
+                      <span className="text-[10px] font-semibold text-primary uppercase">{format(new Date(m.dateAffichage), 'EEE', { locale: fr })}</span>
+                      <span className="text-lg font-bold text-primary leading-tight">{format(new Date(m.dateAffichage), 'd')}</span>
+                      <span className="text-[10px] text-primary">{format(new Date(m.dateAffichage), 'MMM', { locale: fr })}</span>
+                    </div>
+                  )}
                   <div className="flex-1 min-w-0">
                     <BadgeStatut statut={m.statut} />
                     <h3 className="font-semibold text-sm text-foreground truncate mt-1" title={m.intitule}>{m.intitule}</h3>
                     <p className="text-xs text-muted-foreground mt-0.5">
                       🏥 {m.etablissements?.nom || 'Établissement'}{m.etablissements?.adresse_ville ? ` · ${m.etablissements.adresse_ville}` : ''}
                     </p>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      🕐 {format(new Date(m.dateAffichage || m.debut_le), "HH'h'mm", { locale: fr })} → {format(new Date(m.prochainCreneau?.fin || m.fin_le), "HH'h'mm", { locale: fr })}
-                      {m.duree_heures ? ` (${m.duree_heures}h)` : ''}
-                    </p>
+                    {m.planningAConfirmer ? (
+                      <p className="text-xs font-medium text-warning mt-0.5">Planning détaillé à confirmer avec l’établissement</p>
+                    ) : (
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        🕐 {format(new Date(m.dateAffichage), "HH'h'mm", { locale: fr })} → {format(new Date(m.prochainCreneau.fin), "HH'h'mm", { locale: fr })}
+                        {m.dureeAffichageHeures ? ` (${m.dureeAffichageHeures}h)` : ''}
+                      </p>
+                    )}
                   </div>
                 </div>
               ))}
@@ -542,7 +608,7 @@ export default function PresencesSoignant() {
             <EmptyState
               icone={<Activity />}
               mascotte="empty"
-              titre="Aucune mission en cours"
+              titre="Aucune mission active"
               description="Tes missions actives apparaîtront ici, même entre deux créneaux."
               cta={{ label: 'Trouver une mission', onClick: () => navigate('/soignant/recherche-missions') }}
             />
@@ -620,9 +686,25 @@ export default function PresencesSoignant() {
             <div className="space-y-3">
               {historiqueAffiche.map((p: any) => {
                 const m = p.missions;
-                const arrivee = p.pointage_arrivee_le ? new Date(p.pointage_arrivee_le) : null;
-                const depart = p.pointage_depart_le ? new Date(p.pointage_depart_le) : null;
-                const heuresTravaillees = arrivee && depart ? ((depart.getTime() - arrivee.getTime()) / 3600000).toFixed(1) : null;
+                const segmentsEffectifs = ((m?.creneaux || []) as CreneauPointage[])
+                  .filter((creneau) => (
+                    creneau.type_creneau === 'EFFECTIF'
+                    && !creneau.est_pause
+                    && Boolean(creneau.fin)
+                  ))
+                  .sort((a, b) => new Date(a.debut).getTime() - new Date(b.debut).getTime());
+                const arrivee = segmentsEffectifs[0]?.debut
+                  ? new Date(segmentsEffectifs[0].debut)
+                  : p.pointage_arrivee_le ? new Date(p.pointage_arrivee_le) : null;
+                const depart = segmentsEffectifs.at(-1)?.fin
+                  ? new Date(segmentsEffectifs.at(-1)!.fin!)
+                  : p.pointage_depart_le ? new Date(p.pointage_depart_le) : null;
+                const heuresEffectives = segmentsEffectifs.reduce((total, segment) => (
+                  total + (new Date(segment.fin!).getTime() - new Date(segment.debut).getTime()) / 3_600_000
+                ), 0);
+                const heuresTravaillees = segmentsEffectifs.length > 0
+                  ? heuresEffectives.toFixed(1)
+                  : arrivee && depart ? ((depart.getTime() - arrivee.getTime()) / 3_600_000).toFixed(1) : null;
 
                 return (
                   <div key={p.id} className="card-base cursor-pointer hover:border-primary/30 transition-colors" onClick={() => navigate(`/soignant/presences/mission/${p.mission_id}`)}>
@@ -649,12 +731,12 @@ export default function PresencesSoignant() {
                     <div className="grid grid-cols-3 gap-2 text-xs text-muted-foreground bg-muted/30 rounded-lg p-2">
                       <div>
                         <span className="font-medium text-foreground">Arrivée :</span>{' '}
-                        {arrivee ? format(arrivee, "HH'h'mm", { locale: fr }) : '—'}
+                        {arrivee ? format(arrivee, "d MMM · HH'h'mm", { locale: fr }) : '—'}
                         <span className="ml-1 text-[10px]">{getMethodeLabel(p.methode_pointage_arrivee)}</span>
                       </div>
                       <div>
                         <span className="font-medium text-foreground">Départ :</span>{' '}
-                        {depart ? format(depart, "HH'h'mm", { locale: fr }) : '—'}
+                        {depart ? format(depart, "d MMM · HH'h'mm", { locale: fr }) : '—'}
                         <span className="ml-1 text-[10px]">{getMethodeLabel(p.methode_pointage_depart)}</span>
                       </div>
                       <div>

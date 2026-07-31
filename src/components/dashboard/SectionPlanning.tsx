@@ -1,19 +1,24 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  addDays, addMonths, endOfMonth, endOfWeek, format, isSameDay, isSameMonth,
+  addDays, addMonths, endOfMonth, endOfWeek, format, isSameMonth,
   isToday, isTomorrow, startOfDay, startOfMonth, startOfWeek, subMonths,
 } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { CalendarDays, ChevronLeft, ChevronRight, User } from 'lucide-react';
+import { AlertTriangle, CalendarDays, ChevronLeft, ChevronRight, RefreshCw, User } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import {
+  ajouterRepliMissionPonctuelle,
+  creneauxPrevisionnels,
+  type CreneauPointage,
+} from '@/lib/disponibilite-pointage';
 
-export interface MissionPlanning {
+export interface MissionPlanningSource {
   id: string;
   intitule: string;
   debut_le: string;
-  fin_le?: string | null;
+  fin_le: string;
   statut: 'OUVERTE' | 'ASSIGNEE' | 'EN_COURS' | string;
   duree_heures?: number | null;
   profession_requise?: string | null;
@@ -21,8 +26,73 @@ export interface MissionPlanning {
   soignant_nom?: string | null;
 }
 
+export interface CreneauPlanning extends CreneauPointage {
+  mission_id: string;
+}
+
+export interface MissionPlanning extends MissionPlanningSource {
+  occurrence_id: string;
+  creneau_debut: string;
+  creneau_fin: string;
+  duree_creneau_heures: number;
+}
+
+/**
+ * Transforme une mission contractuelle en occurrences réellement travaillées.
+ * `debut_le` / `fin_le` décrivent la période globale de la mission ; ils ne
+ * doivent jamais être étalés sur chaque jour du calendrier. Les anciennes
+ * missions ponctuelles sans PREVISIONNEL gardent un repli strict à 24 h.
+ */
+// Le helper reste ici pour garantir que le chargement et les trois vues
+// partagent exactement la même notion d'occurrence de planning.
+// eslint-disable-next-line react-refresh/only-export-components
+export function construireOccurrencesPlanning(
+  missions: MissionPlanningSource[],
+  creneaux: CreneauPlanning[],
+  debutPeriode: Date,
+  finPeriode: Date,
+): MissionPlanning[] {
+  const creneauxParMission = new Map<string, CreneauPointage[]>();
+  for (const creneau of creneaux) {
+    const liste = creneauxParMission.get(creneau.mission_id) ?? [];
+    liste.push(creneau);
+    creneauxParMission.set(creneau.mission_id, liste);
+  }
+
+  const debutMs = debutPeriode.getTime();
+  const finMs = finPeriode.getTime();
+
+  return missions
+    .flatMap((mission) => {
+      const planifies = creneauxPrevisionnels(ajouterRepliMissionPonctuelle(
+        creneauxParMission.get(mission.id) ?? [],
+        mission,
+      ));
+
+      return planifies
+        .filter((creneau) => {
+          if (!creneau.fin) return false;
+          return new Date(creneau.fin).getTime() >= debutMs
+            && new Date(creneau.debut).getTime() <= finMs;
+        })
+        .map((creneau) => ({
+          ...mission,
+          occurrence_id: `${mission.id}:${creneau.id ?? creneau.debut}`,
+          creneau_debut: creneau.debut,
+          creneau_fin: creneau.fin!,
+          duree_creneau_heures: Math.max(
+            0,
+            (new Date(creneau.fin!).getTime() - new Date(creneau.debut).getTime()) / 3_600_000,
+          ),
+        }));
+    })
+    .sort((a, b) => new Date(a.creneau_debut).getTime() - new Date(b.creneau_debut).getTime());
+}
+
 interface Props {
   missions: MissionPlanning[];
+  erreur?: string | null;
+  onRetry?: () => void;
 }
 
 type View = 'mois' | 'semaine' | 'liste';
@@ -30,7 +100,7 @@ type View = 'mois' | 'semaine' | 'liste';
 const STATUT_STYLE: Record<string, { dot: string; bg: string; text: string; label: string }> = {
   OUVERTE: { dot: 'bg-warning', bg: 'bg-warning/10 hover:bg-warning/20 border-warning/30', text: 'text-warning', label: 'Ouverte' },
   ASSIGNEE: { dot: 'bg-info', bg: 'bg-info/10 hover:bg-info/20 border-info/30', text: 'text-info', label: 'Assignée' },
-  EN_COURS: { dot: 'bg-success', bg: 'bg-success/10 hover:bg-success/20 border-success/30', text: 'text-success', label: 'En cours' },
+  EN_COURS: { dot: 'bg-success', bg: 'bg-success/10 hover:bg-success/20 border-success/30', text: 'text-success', label: 'Active' },
 };
 
 const styleFor = (statut: string) => STATUT_STYLE[statut] ?? STATUT_STYLE.OUVERTE;
@@ -56,7 +126,7 @@ const BUCKET_LABEL: Record<string, string> = {
   later: 'Plus tard',
 };
 
-export function SectionPlanning({ missions }: Props) {
+export function SectionPlanning({ missions, erreur, onRetry }: Props) {
   const navigate = useNavigate();
   const initialView: View = typeof window !== 'undefined' && window.matchMedia('(min-width: 768px)').matches ? 'mois' : 'liste';
   const [view, setView] = useState<View>(initialView);
@@ -71,7 +141,9 @@ export function SectionPlanning({ missions }: Props) {
         <div className="flex items-center gap-2">
           <CalendarDays className="h-5 w-5 text-primary" />
           <h2 className="text-lg font-bold text-foreground">Planning missions à venir</h2>
-          <span className="text-xs text-muted-foreground">({missions.length})</span>
+          <span className="text-xs text-muted-foreground">
+            ({missions.length} créneau{missions.length > 1 ? 'x' : ''})
+          </span>
         </div>
 
         <Tabs value={view} onValueChange={(v) => setView(v as View)}>
@@ -83,9 +155,25 @@ export function SectionPlanning({ missions }: Props) {
         </Tabs>
       </div>
 
-      {missions.length === 0 ? (
+      {erreur ? (
+        <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm" role="alert">
+          <p className="flex items-center gap-2 font-medium text-destructive">
+            <AlertTriangle className="h-4 w-4 shrink-0" />
+            {erreur}
+          </p>
+          {onRetry && (
+            <button
+              type="button"
+              onClick={onRetry}
+              className="mt-3 inline-flex items-center gap-1.5 text-xs font-semibold text-primary hover:underline"
+            >
+              <RefreshCw className="h-3.5 w-3.5" /> Réessayer
+            </button>
+          )}
+        </div>
+      ) : missions.length === 0 ? (
         <p className="text-sm text-muted-foreground text-center py-8">
-          Aucune mission planifiée dans les 30 prochains jours.
+          Aucun créneau planifié dans les 31 prochains jours.
         </p>
       ) : view === 'mois' ? (
         <VueMois
@@ -126,7 +214,7 @@ function VueMois({
   const missionsParJour = useMemo(() => {
     const map = new Map<string, MissionPlanning[]>();
     for (const m of missions) {
-      const key = format(startOfDay(new Date(m.debut_le)), 'yyyy-MM-dd');
+      const key = format(startOfDay(new Date(m.creneau_debut)), 'yyyy-MM-dd');
       const arr = map.get(key) ?? [];
       arr.push(m);
       map.set(key, arr);
@@ -169,18 +257,18 @@ function VueMois({
                   {items.slice(0, 3).map(m => {
                     const cfg = styleFor(m.statut);
                     return (
-                      <Tooltip key={m.id}>
+                      <Tooltip key={m.occurrence_id}>
                         <TooltipTrigger asChild>
                           <button
                             onClick={() => onClickMission(m.id)}
                             className={`w-full text-left px-1.5 py-0.5 rounded border ${cfg.bg} ${cfg.text} truncate text-[10px] font-medium`}
                           >
-                            {fmtHeure(m.debut_le)} {m.intitule}
+                            {fmtHeure(m.creneau_debut)} {m.intitule}
                           </button>
                         </TooltipTrigger>
                         <TooltipContent side="top" className="text-xs">
                           <p className="font-semibold">{m.intitule}</p>
-                          <p>{fmtHeure(m.debut_le)}{m.fin_le ? ` → ${fmtHeure(m.fin_le)}` : ''} {m.duree_heures ? `· ${m.duree_heures}h` : ''}</p>
+                          <p>{fmtHeure(m.creneau_debut)} → {fmtHeure(m.creneau_fin)} · {m.duree_creneau_heures.toLocaleString('fr-FR', { maximumFractionDigits: 2 })}h</p>
                           <p className="text-muted-foreground">
                             {m.soignant_nom ?? 'Non assignée'} · {cfg.label}
                           </p>
@@ -215,7 +303,7 @@ function VueSemaine({
   const missionsParJour = useMemo(() => {
     const map = new Map<string, MissionPlanning[]>();
     for (const m of missions) {
-      const d = new Date(m.debut_le);
+      const d = new Date(m.creneau_debut);
       if (d < debutSemaine || d >= addDays(debutSemaine, 7)) continue;
       const key = format(startOfDay(d), 'yyyy-MM-dd');
       const arr = map.get(key) ?? [];
@@ -258,13 +346,13 @@ function VueSemaine({
                     const cfg = styleFor(m.statut);
                     return (
                       <button
-                        key={m.id}
+                        key={m.occurrence_id}
                         onClick={() => onClickMission(m.id)}
                         className={`w-full text-left p-2 rounded border ${cfg.bg} text-xs space-y-0.5`}
                       >
                         <p className="font-semibold text-foreground truncate">{m.intitule}</p>
                         <p className={`${cfg.text} text-[10px]`}>
-                          {fmtHeure(m.debut_le)}{m.fin_le ? ` → ${fmtHeure(m.fin_le)}` : ''}
+                          {fmtHeure(m.creneau_debut)} → {fmtHeure(m.creneau_fin)}
                         </p>
                         {m.soignant_nom && (
                           <p className="text-[10px] text-muted-foreground flex items-center gap-1 truncate">
@@ -288,11 +376,11 @@ function VueSemaine({
 
 /* ───────────── Vue Liste (mobile + desktop) ───────────── */
 function VueListe({ missions, onClickMission }: { missions: MissionPlanning[]; onClickMission: (id: string) => void }) {
-  const now = new Date();
   const groupes = useMemo(() => {
+    const now = new Date();
     const map = new Map<string, MissionPlanning[]>();
     for (const m of missions) {
-      const b = bucketFor(new Date(m.debut_le), now);
+      const b = bucketFor(new Date(m.creneau_debut), now);
       const arr = map.get(b) ?? [];
       arr.push(m);
       map.set(b, arr);
@@ -315,10 +403,10 @@ function VueListe({ missions, onClickMission }: { missions: MissionPlanning[]; o
             <div className="space-y-2">
               {items.map(m => {
                 const cfg = styleFor(m.statut);
-                const date = new Date(m.debut_le);
+                const date = new Date(m.creneau_debut);
                 return (
                   <button
-                    key={m.id}
+                    key={m.occurrence_id}
                     onClick={() => onClickMission(m.id)}
                     className="w-full text-left border border-border rounded-lg p-3 hover:bg-muted/50 transition-colors flex items-start gap-3"
                   >
@@ -329,9 +417,8 @@ function VueListe({ missions, onClickMission }: { missions: MissionPlanning[]; o
                         <span className={`text-[10px] font-medium ${cfg.text} shrink-0`}>{cfg.label}</span>
                       </div>
                       <p className="text-xs text-muted-foreground mt-0.5">
-                        {format(date, 'EEE d MMM', { locale: fr })} · {fmtHeure(m.debut_le)}
-                        {m.fin_le ? ` → ${fmtHeure(m.fin_le)}` : ''}
-                        {m.duree_heures ? ` · ${m.duree_heures}h` : ''}
+                        {format(date, 'EEE d MMM', { locale: fr })} · {fmtHeure(m.creneau_debut)} → {fmtHeure(m.creneau_fin)}
+                        {` · ${m.duree_creneau_heures.toLocaleString('fr-FR', { maximumFractionDigits: 2 })}h`}
                       </p>
                       <p className="text-[11px] text-muted-foreground mt-0.5 flex items-center gap-1">
                         <User className="h-3 w-3" />

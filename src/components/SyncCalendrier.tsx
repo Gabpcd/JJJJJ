@@ -4,42 +4,11 @@ import { useAuth } from '@/contexts/AuthContext';
 import { supabase, SUPABASE_URL } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { format } from 'date-fns';
 import { telechargerOuPartager } from '@/lib/telechargement';
-
-/** Generate a single-event .ics file for adding to any calendar app */
-export function generateMissionIcs(mission: { intitule: string; debut_le: string; fin_le: string; etablissements?: { nom?: string; adresse_ville?: string; adresse_rue?: string } | null }): string {
-  const start = new Date(mission.debut_le).toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
-  const end = new Date(mission.fin_le).toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
-  const location = [mission.etablissements?.adresse_rue, mission.etablissements?.adresse_ville].filter(Boolean).join(', ');
-  const summary = mission.intitule.replace(/[,;\\]/g, ' ');
-  const desc = `Mission Jolene — ${mission.etablissements?.nom || ''}`;
-
-  return [
-    'BEGIN:VCALENDAR',
-    'VERSION:2.0',
-    'PRODID:-//Jolene//Missions//FR',
-    'BEGIN:VEVENT',
-    `DTSTART:${start}`,
-    `DTEND:${end}`,
-    `SUMMARY:${summary}`,
-    `DESCRIPTION:${desc}`,
-    location ? `LOCATION:${location}` : '',
-    `UID:${mission.debut_le}-jolene@app.jolene.app`,
-    'END:VEVENT',
-    'END:VCALENDAR',
-  ].filter(Boolean).join('\r\n');
-}
-
-/** Ajoute une mission au calendrier (.ics). Web → download ; natif → ouvre
- *  la feuille de partage iOS/Android ("Ajouter à Calendrier"), façon Doctolib. */
-export async function downloadMissionIcs(mission: Parameters<typeof generateMissionIcs>[0]) {
-  const ics = generateMissionIcs(mission);
-  await telechargerOuPartager(ics, `mission-jolene-${format(new Date(mission.debut_le), 'yyyy-MM-dd')}.ics`, 'text/calendar');
-}
+import { downloadMissionIcs, type MissionCalendrier } from '@/lib/ics-mission';
 
 /** Small button to add a single mission to calendar */
-export function BoutonAjouterCalendrier({ mission }: { mission: Parameters<typeof generateMissionIcs>[0] }) {
+export function BoutonAjouterCalendrier({ mission }: { mission: MissionCalendrier }) {
   return (
     <button
       onClick={(e) => { e.stopPropagation(); void downloadMissionIcs(mission); }}

@@ -31,7 +31,12 @@ import { extraireMessageErreur } from '@/lib/erreurs';
 import { useEtablissementScope } from '@/hooks/useEtablissementScope';
 
 import { TopSoignants } from '@/components/dashboard/TopSoignants';
-import { SectionPlanning } from '@/components/dashboard/SectionPlanning';
+import {
+  construireOccurrencesPlanning,
+  SectionPlanning,
+  type CreneauPlanning,
+  type MissionPlanningSource,
+} from '@/components/dashboard/SectionPlanning';
 import { GraphiqueEvolutionMissions } from '@/components/dashboard/GraphiqueEvolutionMissions';
 import { CarteBFAInfo } from '@/components/dashboard/CarteBFAInfo';
 import { IndicateursAvancesEtab } from '@/components/dashboard/IndicateursAvancesEtab';
@@ -118,6 +123,7 @@ export default function DashboardEtablissement() {
       };
       let topSoignantsResult: any[] = [];
       let prochainesResult: any[] = [];
+      let erreurPlanningResult: string | null = null;
       // Lot 11 : évaluations en attente — converge dans « À faire maintenant »
       // (remplace le BandeauEvaluationsEnAttente, même logique de données :
       // missions TERMINEE − évaluations ETABLISSEMENT − notations ETAB_VERS_SOIGNANT).
@@ -189,19 +195,29 @@ export default function DashboardEtablissement() {
           partialError = true;
         }
 
-        // --- Minimal secondary queries (top soignants + prochaines missions) ---
+        // --- Minimal secondary queries (top soignants + prochains créneaux) ---
         try {
+          // Un mois glissant inclut, par exemple, le créneau du 31 août vu le
+          // 31 juillet. Les dates globales bornent uniquement les candidates ;
+          // l'affichage est ensuite construit depuis mission_creneaux.
+          const finFenetrePlanning = new Date(now.getTime() + 31 * 24 * 60 * 60 * 1000);
           const [resCout, resProchaines] = await Promise.all([
             supabase.from('missions').select('id, total_brut, duree_heures, soignant_assigne_id, fin_le')
               .eq('etablissement_id', etablissementId).eq('statut', 'TERMINEE').gte('fin_le', debutMois),
             supabase.from('missions')
               .select('id, intitule, debut_le, fin_le, statut, duree_heures, profession_requise, soignant_assigne_id')
               .eq('etablissement_id', etablissementId)
-              .gte('debut_le', now.toISOString())
-              .lte('debut_le', new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString())
+              .gte('fin_le', now.toISOString())
+              .lte('debut_le', finFenetrePlanning.toISOString())
               .in('statut', ['OUVERTE', 'ASSIGNEE', 'EN_COURS'])
               .order('debut_le', { ascending: true }),
           ]);
+
+          if (resCout.error) {
+            logger.warn('[DashboardEtab] Erreur coût/top soignants', resCout.error);
+            partialError = true;
+          }
+          if (resProchaines.error) throw resProchaines.error;
 
           if (resCout.data) {
             const counts: Record<string, number> = {};
@@ -228,15 +244,40 @@ export default function DashboardEtablissement() {
           }
 
           if (resProchaines.data) {
-            prochainesResult = resProchaines.data.map((m: any) => ({
+            const missionsPlanning = resProchaines.data.map((m: any) => ({
               ...m,
               soignant_nom: m.soignant_assigne_id && sgMap[m.soignant_assigne_id]
                 ? `${sgMap[m.soignant_assigne_id].prenom} ${sgMap[m.soignant_assigne_id].nom}`
                 : null,
-            }));
+            })) as MissionPlanningSource[];
+
+            let creneauxPlanning: CreneauPlanning[] = [];
+            if (missionsPlanning.length > 0) {
+              const { data: creneauxData, error: creneauxError } = await supabase
+                .from('mission_creneaux')
+                .select('id, mission_id, debut, fin, est_pause, type_creneau')
+                .in('mission_id', missionsPlanning.map((mission) => mission.id))
+                .eq('type_creneau', 'PREVISIONNEL')
+                .eq('est_pause', false)
+                .not('fin', 'is', null)
+                .gte('fin', now.toISOString())
+                .lte('debut', finFenetrePlanning.toISOString())
+                .order('debut', { ascending: true });
+              if (creneauxError) throw creneauxError;
+              creneauxPlanning = (creneauxData ?? []) as CreneauPlanning[];
+            }
+
+            prochainesResult = construireOccurrencesPlanning(
+              missionsPlanning,
+              creneauxPlanning,
+              now,
+              finFenetrePlanning,
+            );
           }
         } catch (err) {
-          logger.warn('[DashboardEtab] Erreur secondaire (top soignants / prochaines)', err);
+          logger.warn('[DashboardEtab] Erreur chargement planning', err);
+          partialError = true;
+          erreurPlanningResult = 'Le planning n\'a pas pu être chargé. Réessayez dans un instant.';
         }
 
         // --- Évaluations en attente (ex-BandeauEvaluationsEnAttente) ---
@@ -291,6 +332,7 @@ export default function DashboardEtablissement() {
         stats: statsResult,
         topSoignants: topSoignantsResult,
         prochaines: prochainesResult,
+        erreurPlanning: erreurPlanningResult,
         evaluationsEnAttente: evaluationsEnAttenteResult,
         erreurPartielle: partialError,
       };
@@ -312,6 +354,7 @@ export default function DashboardEtablissement() {
   }, [dashData]);
   const topSoignants = useMemo(() => dashData?.topSoignants ?? [], [dashData]);
   const prochaines = useMemo(() => dashData?.prochaines ?? [], [dashData]);
+  const erreurPlanning = useMemo(() => dashData?.erreurPlanning ?? null, [dashData]);
   const evaluationsEnAttente = useMemo(() => dashData?.evaluationsEnAttente ?? { count: 0, premiereMissionId: null }, [dashData]);
   const erreurPartielle = useMemo(() => dashData?.erreurPartielle ?? false, [dashData]);
 
@@ -637,7 +680,11 @@ export default function DashboardEtablissement() {
 
       {/* Planning missions à venir (30j) */}
       <FadeInView delay={600}>
-        <SectionPlanning missions={prochaines} />
+        <SectionPlanning
+          missions={prochaines}
+          erreur={erreurPlanning}
+          onRetry={() => queryClient.invalidateQueries({ queryKey: ['dashboard-etablissement'] })}
+        />
       </FadeInView>
 
       {/* Statistiques détaillées — repliées par défaut (densité). Le manager

@@ -30,6 +30,14 @@ import { format, differenceInDays } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { toast } from 'sonner';
 import { hapticNotification } from '@/lib/haptics';
+import { extraireMessageErreur } from '@/lib/erreurs';
+import { logger } from '@/lib/logger';
+import {
+  ajouterRepliMissionPonctuelle,
+  FENETRE_OUVERTURE_POINTAGE_MINUTES,
+  prochainCreneauPointage,
+  type CreneauPointage,
+} from '@/lib/disponibilite-pointage';
 /** 6c.5 : salutation heure-aware — « Hiii » → Bonjour/Bonsoir selon l'heure. */
 function salutationHeure(): string {
   const h = new Date().getHours();
@@ -48,6 +56,13 @@ interface SoignantData {
   type_exercice: string | null;
 }
 
+const EMPTY_SOIGNANT = {
+  prenom: '', nom: '', telephone: '', profession: null, rpps_verifie: false,
+  adresse_lat: null, adresse_lng: null, tous_documents_valides: false,
+  identite_verifiee: false, score_fiabilite: 0, total_missions_terminees: 0,
+  heures_cumulees: 0, type_exercice: 'SALARIE',
+} as unknown as SoignantData;
+
 export default function DashboardSoignant() {
   usePageTitle('Dashboard');
   const navigate = useNavigate();
@@ -58,19 +73,85 @@ export default function DashboardSoignant() {
   // Postuler 1-tap depuis l'accueil : mission_id → candidature_id (pour l'undo).
   const [candidatingId, setCandidatingId] = useState<string | null>(null);
   const [postulees, setPostulees] = useState<Record<string, string>>({});
+  const [maintenant, setMaintenant] = useState(() => new Date());
 
-  const { data: dashboard, isLoading } = useQuery({
+  useEffect(() => {
+    const intervalle = window.setInterval(() => setMaintenant(new Date()), 30_000);
+    return () => window.clearInterval(intervalle);
+  }, []);
+
+  const {
+    data: dashboard,
+    isLoading,
+    isError,
+    error: erreurDashboard,
+    refetch: rechargerDashboard,
+  } = useQuery({
     queryKey: ['dashboard-soignant', user?.id],
     queryFn: async () => {
-      const { data } = await supabase.rpc('fn_dashboard_soignant_complet' as any);
+      const [{ data, error }, { data: connectData, error: connectError }] = await Promise.all([
+        supabase.rpc('fn_dashboard_soignant_complet' as any),
+        supabase
+          .from('stripe_connect_onboarding')
+          .select('statut')
+          .eq('soignant_id', user!.id)
+          .maybeSingle(),
+      ]);
+      if (error) throw error;
+      if (connectError) logger.warn('[DashboardSoignant] Stripe Connect indisponible', connectError);
       if (!data) return { profil: null, missions_ouvertes: [], mes_missions: [], documents: [], heures_semaine: 0, gains_mois: { net_total: 0, brut_total: 0, nb_missions: 0 }, gains_6mois: [], missions_semaine_cal: [], propositions: [], heures_totales_terminees: 0, missions_oubliees_count: 0, notifs_non_lues: 0, hasStripeConnect: true };
 
-      // Vérifier Stripe Connect
-      const { data: connectData } = await supabase.from('stripe_connect_onboarding').select('statut').eq('soignant_id', user!.id).maybeSingle();
+      const missions = Array.isArray((data as any).mes_missions)
+        ? (data as any).mes_missions
+        : [];
+      const missionIds = missions.map((mission: any) => mission.id);
+      const { data: creneaux, error: creneauxError } = missionIds.length > 0
+        ? await supabase
+          .from('mission_creneaux')
+          .select('id, mission_id, debut, fin, est_pause, type_creneau')
+          .in('mission_id', missionIds)
+          .eq('type_creneau', 'PREVISIONNEL')
+          .eq('est_pause', false)
+          .order('debut', { ascending: true })
+        : { data: [], error: null };
+      if (creneauxError) logger.warn('[DashboardSoignant] Planning détaillé indisponible', creneauxError);
 
-      return { ...data, hasStripeConnect: connectData?.statut === 'COMPLET' };
+      const creneauxParMission: Record<string, CreneauPointage[]> = {};
+      (creneaux || []).forEach((creneau: any) => {
+        (creneauxParMission[creneau.mission_id] ||= []).push(creneau);
+      });
+      const maintenant = new Date();
+      const missionsAvecPlanning = missions.map((mission: any) => {
+        const planning = ajouterRepliMissionPonctuelle(
+          creneauxParMission[mission.id] || [],
+          mission,
+        );
+        const prochain = prochainCreneauPointage(planning, maintenant);
+        const debutAffiche = prochain?.debut ?? mission.debut_le;
+        const finAffichee = prochain?.fin ?? mission.fin_le;
+        const dureeCreneauHeures = prochain?.fin
+          ? (new Date(prochain.fin).getTime() - new Date(prochain.debut).getTime()) / 3_600_000
+          : null;
+        return {
+          ...mission,
+          creneaux: planning,
+          prochainCreneau: prochain,
+          debut_affiche: debutAffiche,
+          fin_affichee: finAffichee,
+          duree_creneau_heures: dureeCreneauHeures,
+        };
+      });
+
+      return {
+        ...data,
+        mes_missions: missionsAvecPlanning,
+        // En cas d'échec du module facultatif, ne pas afficher à tort un CTA
+        // d'onboarding Stripe sur un compte potentiellement déjà configuré.
+        hasStripeConnect: connectError ? true : connectData?.statut === 'COMPLET',
+      };
     },
     staleTime: 60_000,
+    refetchInterval: 60_000,
     enabled: !!user,
   });
 
@@ -87,7 +168,10 @@ export default function DashboardSoignant() {
 
   // Derive all values from the dashboard RPC response
   const soignant = dashboard?.profil as SoignantData | undefined ?? null;
-  const mesMissions = (dashboard?.mes_missions ?? []) as any[];
+  const mesMissions = useMemo(
+    () => (dashboard?.mes_missions ?? []) as any[],
+    [dashboard?.mes_missions],
+  );
   // Lot 1 — opportunités à montrer en page d'accueil (valeur avant l'effort).
   const missionsOuvertes = (dashboard?.missions_ouvertes ?? []) as any[];
   const heuresSemaine = (dashboard?.heures_semaine ?? 0) as number;
@@ -103,14 +187,41 @@ export default function DashboardSoignant() {
   }, [dashboard?.documents]);
 
   const missionProchaine = useMemo(() => {
-    const missionEnCours = (mesMissions as any[]).find((m: any) => m.statut === 'EN_COURS');
-    if (missionEnCours) return missionEnCours;
+    const maintenantMs = maintenant.getTime();
+    const missionsActualisees = (mesMissions as any[]).map((mission: any) => {
+      const planning = mission.creneaux || [];
+      const prochainCreneau = prochainCreneauPointage(planning, maintenant);
+      const creneauActuel = planning.some((creneau: CreneauPointage) => (
+        creneau.type_creneau === 'PREVISIONNEL'
+        && !creneau.est_pause
+        && Boolean(creneau.fin)
+        && maintenantMs >= new Date(creneau.debut).getTime() - FENETRE_OUVERTURE_POINTAGE_MINUTES * 60_000
+        && maintenantMs <= new Date(creneau.fin!).getTime()
+      ));
+      return {
+        ...mission,
+        prochainCreneau,
+        creneauActuel,
+        debut_affiche: prochainCreneau?.debut ?? mission.debut_affiche ?? mission.debut_le,
+        fin_affichee: prochainCreneau?.fin ?? mission.fin_affichee ?? mission.fin_le,
+      };
+    });
 
-    return (mesMissions as any[]).find((m: any) => {
-      const mins = (new Date(m.debut_le).getTime() - Date.now()) / 60000;
+    const aPointer = missionsActualisees.find((mission: any) => mission.creneauActuel);
+    if (aPointer) return aPointer;
+
+    const missionProche = missionsActualisees.find((m: any) => {
+      const mins = (new Date(m.debut_affiche || m.debut_le).getTime() - maintenantMs) / 60000;
       return mins > -30 && mins <= 60;
-    }) || null;
-  }, [mesMissions]);
+    });
+    if (missionProche) return missionProche;
+
+    return missionsActualisees
+      .filter((mission: any) => mission.statut === 'EN_COURS')
+      .sort((a: any, b: any) => (
+        new Date(a.debut_affiche).getTime() - new Date(b.debut_affiche).getTime()
+      ))[0] || null;
+  }, [mesMissions, maintenant]);
 
   const missionsOubliDepartCount = Math.max(0, Number(dashboard?.missions_oubliees_count) || 0);
 
@@ -130,9 +241,8 @@ export default function DashboardSoignant() {
   }, [dashboard?.heures_totales_terminees, soignant]);
 
   // Override soignant counts with real computed values
-  const emptySoignant = { prenom: '', nom: '', telephone: '', profession: null, rpps_verifie: false, adresse_lat: null, adresse_lng: null, tous_documents_valides: false, identite_verifiee: false, score_fiabilite: 0, total_missions_terminees: 0, heures_cumulees: 0, type_exercice: 'SALARIE' } as unknown as SoignantData;
   const soignantWithCounts = useMemo(() => ({
-    ...(soignant ?? emptySoignant),
+    ...(soignant ?? EMPTY_SOIGNANT),
     total_missions_terminees: missionsTermineesCount,
     heures_cumulees: heuresCumuleesTotal,
   }) as SoignantData, [soignant, missionsTermineesCount, heuresCumuleesTotal]);
@@ -195,6 +305,33 @@ export default function DashboardSoignant() {
   };
 
   if (isLoading) return <LayoutApp role="SOIGNANT"><SkeletonDashboard /></LayoutApp>;
+
+  if (isError) {
+    return (
+      <LayoutApp role="SOIGNANT">
+        <div className="card-base mx-auto max-w-xl border-destructive/30" role="alert">
+          <div className="flex items-start gap-3">
+            <AlertCircle className="h-5 w-5 shrink-0 text-destructive" />
+            <div>
+              <h1 className="font-semibold text-foreground">Impossible de charger ton tableau de bord</h1>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {extraireMessageErreur(erreurDashboard)}
+              </p>
+              <BoutonY2K
+                type="button"
+                size="sm"
+                variant="secondary"
+                className="mt-4"
+                onClick={() => rechargerDashboard()}
+              >
+                Réessayer
+              </BoutonY2K>
+            </div>
+          </div>
+        </div>
+      </LayoutApp>
+    );
+  }
 
 
   return (
@@ -268,9 +405,9 @@ export default function DashboardSoignant() {
                   aria-label={`Voir la mission ${m.intitule}`}
                 >
                   <div className="flex flex-col items-center justify-center rounded-xl bg-primary/10 px-3 py-1.5 min-w-[52px]">
-                    <span className="text-[10px] font-semibold text-primary uppercase">{format(new Date(m.debut_le), 'EEE', { locale: fr })}</span>
-                    <span className="text-lg font-bold text-primary leading-tight">{format(new Date(m.debut_le), 'd')}</span>
-                    <span className="text-[10px] text-primary">{format(new Date(m.debut_le), 'MMM', { locale: fr })}</span>
+                    <span className="text-[10px] font-semibold text-primary uppercase">{format(new Date(m.debut_affiche || m.debut_le), 'EEE', { locale: fr })}</span>
+                    <span className="text-lg font-bold text-primary leading-tight">{format(new Date(m.debut_affiche || m.debut_le), 'd')}</span>
+                    <span className="text-[10px] text-primary">{format(new Date(m.debut_affiche || m.debut_le), 'MMM', { locale: fr })}</span>
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-0.5">
@@ -279,11 +416,12 @@ export default function DashboardSoignant() {
                     </div>
                     <h3 className="font-semibold text-sm text-foreground truncate" title={m.intitule}>{m.intitule}</h3>
                     <p className="text-xs text-muted-foreground mt-0.5">
-                      🏥 {m.etablissements?.nom || 'Établissement'}{m.etablissements?.adresse_ville ? ` · ${m.etablissements.adresse_ville}` : ''}
+                      🏥 {m.etablissements?.nom || m.etab_nom || 'Établissement'}{m.etablissements?.adresse_ville ? ` · ${m.etablissements.adresse_ville}` : ''}
                     </p>
                     <div className="flex items-center gap-3 mt-0.5">
                       <p className="text-xs text-muted-foreground">
-                        🕐 {format(new Date(m.debut_le), "HH'h'mm", { locale: fr })} → {format(new Date(m.fin_le), "HH'h'mm", { locale: fr })}
+                        🕐 {format(new Date(m.debut_affiche || m.debut_le), "HH'h'mm", { locale: fr })} → {format(new Date(m.fin_affichee || m.fin_le), "HH'h'mm", { locale: fr })}
+                        {m.duree_creneau_heures ? ` · ${m.duree_creneau_heures} h` : ''}
                       </p>
                     </div>
                   </div>

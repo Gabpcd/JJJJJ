@@ -24,6 +24,14 @@ import { toast } from 'sonner';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { useSearchParams } from 'react-router-dom';
 import { useEtablissementScope } from '@/hooks/useEtablissementScope';
+import {
+  ajouterRepliMissionPonctuelle,
+  type CreneauPointage,
+} from '@/lib/disponibilite-pointage';
+import {
+  construireSynthesePresenceMission,
+  formatDureeMinutes,
+} from '@/lib/synthese-presence-mission';
 
 export default function PresencesEtablissement() {
   usePageTitle('Présences');
@@ -34,6 +42,7 @@ export default function PresencesEtablissement() {
   const [presences, setPresences] = useState<any[]>([]);
   const [litiges, setLitiges] = useState<Record<string, any>>({});
   const [loading, setLoading] = useState(true);
+  const [maintenant, setMaintenant] = useState(() => new Date());
   const [modalLot, setModalLot] = useState(false);
   const tabParam = searchParams.get('tab');
   const [activeTab, setActiveTab] = useState(['a_valider', 'en_cours', 'validees', 'alertes'].includes(tabParam || '') ? tabParam! : 'a_valider');
@@ -52,7 +61,7 @@ export default function PresencesEtablissement() {
           alerte_teleportation, alertes_fraude,
           arrivee_mock_detected, depart_mock_detected, coherence_incidents,
           valide_par_etablissement, valide_le, motif_litige,
-          missions!inner(intitule, service, debut_le, fin_le, duree_heures, etablissement_id)
+          missions!inner(id, intitule, service, debut_le, fin_le, duree_heures, etablissement_id)
         `)
         .eq('missions.etablissement_id', etablissementId)
         .not('pointage_arrivee_le', 'is', null)
@@ -78,23 +87,60 @@ export default function PresencesEtablissement() {
       for (const s of soignantsData) sgMap[s.id] = s;
     }
 
-    if (Object.keys(sgMap).length === 0 && Array.isArray(presData)) {
-      const soignantIds = [...new Set(presData.map((p: any) => p.soignant_id).filter(Boolean))];
-      if (soignantIds.length > 0) {
-        const { data: soignantsDirect } = await supabase
+    const donneesPresences = Array.isArray(presData) ? presData : [];
+    const missionIds = [...new Set(donneesPresences.map((p: any) => p.mission_id).filter(Boolean))];
+    const soignantIds = Object.keys(sgMap).length === 0
+      ? [...new Set(donneesPresences.map((p: any) => p.soignant_id).filter(Boolean))]
+      : [];
+
+    const [creneauxResult, soignantsDirectResult] = await Promise.all([
+      missionIds.length > 0
+        ? supabase
+          .from('mission_creneaux')
+          .select('id, mission_id, debut, fin, est_pause, type_creneau')
+          .in('mission_id', missionIds)
+          .eq('est_pause', false)
+          .order('debut', { ascending: true })
+        : Promise.resolve({ data: [], error: null }),
+      soignantIds.length > 0
+        ? supabase
           .from('soignants')
           .select('id, prenom, nom, profession, telephone')
-          .in('id', soignantIds);
-        if (Array.isArray(soignantsDirect)) {
-          for (const s of soignantsDirect) sgMap[s.id] = s;
-        }
+          .in('id', soignantIds)
+        : Promise.resolve({ data: [], error: null }),
+    ]);
+
+    if (Array.isArray(soignantsDirectResult.data)) {
+      for (const s of soignantsDirectResult.data) sgMap[s.id] = s;
+    }
+
+    const creneauxParMission: Record<string, CreneauPointage[]> = {};
+    if (!creneauxResult.error && Array.isArray(creneauxResult.data)) {
+      for (const creneau of creneauxResult.data) {
+        (creneauxParMission[creneau.mission_id] ||= []).push(creneau as CreneauPointage);
       }
     }
 
-    setPresences((presData || []).map((p: any) => ({
-      ...p,
-      soignants: sgMap[p.soignant_id] || null,
-    })));
+    setPresences(donneesPresences.map((p: any) => {
+      const mission = p.missions;
+      const creneaux = mission && !creneauxResult.error
+        ? ajouterRepliMissionPonctuelle(creneauxParMission[p.mission_id] || [], {
+          id: p.mission_id,
+          debut_le: mission.debut_le,
+          fin_le: mission.fin_le,
+        })
+        : [];
+
+      return {
+        ...p,
+        missions: mission ? {
+          ...mission,
+          creneaux,
+          planning_indisponible: Boolean(creneauxResult.error),
+        } : mission,
+        soignants: sgMap[p.soignant_id] || null,
+      };
+    }));
     setLoading(false);
   }, [user, etablissementId]);
 
@@ -106,14 +152,57 @@ export default function PresencesEtablissement() {
     }
   }, [charger, tabParam]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const aValider = presences.filter(p => !p.valide_par_etablissement && p.pointage_depart_le);
+  useEffect(() => {
+    const timer = window.setInterval(() => setMaintenant(new Date()), 30_000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  const synthesePresence = (presence: any) => construireSynthesePresenceMission(
+    (presence.missions?.creneaux || []) as CreneauPointage[],
+    maintenant,
+  );
+  const aValider = presences.filter(p => (
+    !p.valide_par_etablissement
+    && !p.missions?.planning_indisponible
+    && synthesePresence(p).validationPossible
+  ));
   const validees = presences.filter(p => p.valide_par_etablissement);
-  const enCours = presences.filter(p => !p.pointage_depart_le);
+  // Une mission multi-jours reste « en cours » entre deux shifts : le départ
+  // legacy ne représente que le dernier scan et ne clôt pas la mission.
+  const enCours = presences.filter(p => (
+    !p.valide_par_etablissement
+    && (p.missions?.planning_indisponible || !synthesePresence(p).validationPossible)
+  ));
   const alertes = presences.filter(p => p.alerte_teleportation || !p.perimetre_gps_valide);
 
   const presencesSansAlerte = aValider.filter(p =>
     p.perimetre_gps_valide === true && !p.alerte_teleportation
   );
+
+  const verifierEligibiliteActuelle = async (presence: any): Promise<boolean> => {
+    const mission = presence?.missions;
+    if (!mission || mission.planning_indisponible) return false;
+
+    // Relecture juste avant la mutation : une autre session peut avoir ouvert
+    // un EFFECTIF depuis le chargement de la page.
+    const { data, error } = await supabase
+      .from('mission_creneaux')
+      .select('id, mission_id, debut, fin, est_pause, type_creneau')
+      .eq('mission_id', presence.mission_id)
+      .eq('est_pause', false)
+      .order('debut', { ascending: true });
+    if (error) return false;
+
+    const creneauxActuels = ajouterRepliMissionPonctuelle(
+      (data || []) as CreneauPointage[],
+      {
+        id: presence.mission_id,
+        debut_le: mission.debut_le,
+        fin_le: mission.fin_le,
+      },
+    );
+    return construireSynthesePresenceMission(creneauxActuels, new Date()).validationPossible;
+  };
 
   // F4 : présence en cours de notation depuis le bouton « Valider » du tableau.
   const [presenceANoter, setPresenceANoter] = useState<any | null>(null);
@@ -126,6 +215,16 @@ export default function PresencesEtablissement() {
     // Optimistic: immediately move presence to "validées"
     const prevPresences = presences;
     const presence = presences.find(p => p.id === presenceId);
+    const toujoursEligible = presence
+      ? await verifierEligibiliteActuelle(presence)
+      : false;
+    if (!presence || !toujoursEligible) {
+      afficherNotification({
+        type: 'avertissement',
+        message: 'Cette mission ne peut être validée qu’après son dernier créneau et la fermeture de tous les pointages.',
+      });
+      return;
+    }
     setPresences(prev =>
       prev.map(p => p.id === presenceId ? { ...p, valide_par_etablissement: true, valide_le: new Date().toISOString() } : p)
     );
@@ -200,7 +299,23 @@ export default function PresencesEtablissement() {
       return;
     }
 
-    const ids = presencesSansAlerte.map(p => p.id);
+    const eligibilites = await Promise.all(
+      presencesSansAlerte.map(async (presence) => ({
+        presence,
+        eligible: await verifierEligibiliteActuelle(presence),
+      })),
+    );
+    const ids = eligibilites
+      .filter(({ eligible }) => eligible)
+      .map(({ presence }) => presence.id);
+    if (ids.length === 0) {
+      afficherNotification({
+        type: 'avertissement',
+        message: 'Aucune présence n’est encore éligible : vérifiez la fin du planning et les pointages ouverts.',
+      });
+      charger();
+      return;
+    }
 
     const { data, error } = await supabase.rpc('fn_valider_presences_lot', { p_ids: ids });
     const result = data as unknown as RpcValiderPresencesLot | null;
@@ -249,9 +364,9 @@ export default function PresencesEtablissement() {
   ];
 
   const calculHeures = (p: any): string => {
-    if (!p.pointage_arrivee_le || !p.pointage_depart_le) return '—';
-    const h = (new Date(p.pointage_depart_le).getTime() - new Date(p.pointage_arrivee_le).getTime()) / 3600000;
-    return `${h.toFixed(1)}h`;
+    if (p.missions?.planning_indisponible) return '—';
+    const synthese = synthesePresence(p);
+    return formatDureeMinutes(synthese.minutesTravaillees);
   };
 
   const renduCellulePresence = (p: any, col: ColonneTableau<any>) => {
@@ -268,11 +383,15 @@ export default function PresencesEtablissement() {
       case 'mission':
         return <span className="text-sm text-muted-foreground line-clamp-1" title={p.missions?.intitule || undefined}>{p.missions?.intitule || '—'}</span>;
       case 'date':
-        return (
-          <span className="text-xs whitespace-nowrap">
-            {p.pointage_arrivee_le && new Date(p.pointage_arrivee_le).toLocaleDateString('fr-FR')}
-          </span>
-        );
+        {
+          const synthese = synthesePresence(p);
+          const premierEffectif = synthese.effectifsFermes[0] ?? synthese.effectifsOuverts[0];
+          return (
+            <span className="text-xs whitespace-nowrap">
+              {premierEffectif ? new Date(premierEffectif.debut).toLocaleDateString('fr-FR') : '—'}
+            </span>
+          );
+        }
       case 'heures':
         return <span className="text-sm tabular-nums">{calculHeures(p)}</span>;
       case 'alertes':
@@ -282,12 +401,12 @@ export default function PresencesEtablissement() {
             {p.perimetre_gps_valide === false && <BadgeY2K variant="warning" size="sm" icone={<MapPin className="h-3 w-3" />}>Hors zone</BadgeY2K>}
             {(p.arrivee_mock_detected || p.depart_mock_detected) && <BadgeY2K variant="error" size="sm" icone={<Bot className="h-3 w-3" />}>GPS truqué</BadgeY2K>}
             {p.valide_par_etablissement && <BadgeY2K variant="success" size="sm" icone={<CheckCircle2 className="h-3 w-3" />}>Validée</BadgeY2K>}
-            {!p.valide_par_etablissement && p.pointage_depart_le && !p.alerte_teleportation && p.perimetre_gps_valide && <BadgeY2K variant="info" size="sm" className="bg-muted text-muted-foreground border-muted">À valider</BadgeY2K>}
-            {!p.pointage_depart_le && <BadgeY2K variant="info" size="sm" icone={<Clock className="h-3 w-3" />}>En cours</BadgeY2K>}
+            {!p.valide_par_etablissement && synthesePresence(p).validationPossible && !p.alerte_teleportation && p.perimetre_gps_valide && <BadgeY2K variant="info" size="sm" className="bg-muted text-muted-foreground border-muted">À valider</BadgeY2K>}
+            {!p.valide_par_etablissement && !synthesePresence(p).validationPossible && <BadgeY2K variant="info" size="sm" icone={<Clock className="h-3 w-3" />}>En cours</BadgeY2K>}
           </div>
         );
       case 'actions':
-        if (!p.valide_par_etablissement && p.pointage_depart_le) {
+        if (!p.valide_par_etablissement && synthesePresence(p).validationPossible) {
           // F4 : la validation embarque une note 1-tap → le bouton du tableau
           // ouvre un mini-dialog étoiles + Valider (pas de validation sans note).
           return (

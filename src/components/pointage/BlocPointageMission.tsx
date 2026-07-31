@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { AlertTriangle, CalendarClock } from 'lucide-react';
 import { format, isSameDay } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -5,7 +6,9 @@ import { useNavigate } from 'react-router-dom';
 import { PointageRotatifSoignant } from '@/components/pointage/PointageRotatifSoignant';
 import { Button } from '@/components/ui/button';
 import {
+  ajouterRepliMissionPonctuelle,
   evaluerDisponibilitePointage,
+  FENETRE_OUVERTURE_POINTAGE_MINUTES,
   type CreneauPointage,
 } from '@/lib/disponibilite-pointage';
 
@@ -13,6 +16,7 @@ interface MissionPointage {
   id: string;
   intitule: string;
   debut_le: string;
+  fin_le: string;
   etablissements?: { nom?: string | null } | null;
   creneaux?: CreneauPointage[];
 }
@@ -32,9 +36,14 @@ export function BlocPointageMission({
   consentementGPS: boolean | null;
 }) {
   const navigate = useNavigate();
-  const maintenant = new Date();
+  const [maintenant, setMaintenant] = useState(() => new Date());
+  useEffect(() => {
+    const intervalle = window.setInterval(() => setMaintenant(new Date()), 30_000);
+    return () => window.clearInterval(intervalle);
+  }, []);
+  const creneauxPointage = ajouterRepliMissionPonctuelle(mission.creneaux ?? [], mission);
   const disponibilite = evaluerDisponibilitePointage({
-    creneaux: mission.creneaux ?? [],
+    creneaux: creneauxPointage,
     contratStatut: contrat?.statut,
     maintenant,
   });
@@ -106,7 +115,7 @@ export function BlocPointageMission({
                   </p>
                   <p className="text-xs text-muted-foreground mt-1">
                     {prochainDebut && isSameDay(prochainDebut, maintenant)
-                      ? `Le pointage ouvrira 30 minutes avant le créneau de ${format(prochainDebut, "HH'h'mm", { locale: fr })}.`
+                      ? `Le pointage ouvrira ${FENETRE_OUVERTURE_POINTAGE_MINUTES} minutes avant le créneau de ${format(prochainDebut, "HH'h'mm", { locale: fr })}.`
                       : prochainDebut
                         ? `Prochain créneau le ${format(prochainDebut, "EEEE d MMMM 'à' HH'h'mm", { locale: fr })}.`
                         : 'Tous les créneaux planifiés sont terminés.'}

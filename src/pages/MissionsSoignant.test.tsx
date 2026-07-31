@@ -29,7 +29,7 @@ vi.mock('@/integrations/supabase/client', () => {
   const pending = new Promise<never>(() => undefined);
   const createBuilder = () => {
     const builder: Record<string, unknown> = {};
-    for (const method of ['select', 'eq', 'in', 'gte', 'lte', 'order', 'or', 'range']) {
+    for (const method of ['select', 'eq', 'in', 'gt', 'gte', 'lt', 'lte', 'order', 'or', 'range']) {
       builder[method] = () => builder;
     }
     builder.maybeSingle = () => pending;

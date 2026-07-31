@@ -1,15 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { AlertTriangle, ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { fetchEtablissementsSafe } from '@/lib/etablissements';
 import { extraireSerieId } from '@/components/CarteSerie';
+import {
+  construireOccurrencesPlanning,
+  decouperOccurrencesParJour,
+  missionsLonguesSansPlanning,
+  type CreneauMissionPlanifiable,
+} from '@/lib/occurrences-planning';
 import { format, addDays, startOfWeek, isSameDay } from 'date-fns';
 import { fr } from 'date-fns/locale';
 
-const HEURE_MIN = 6;
-const HEURE_MAX = 30;
+const HEURE_MIN = 0;
+const HEURE_MAX = 24;
 const TOTAL_HEURES = HEURE_MAX - HEURE_MIN;
 
 function getStatutCouleur(statut: string) {
@@ -35,55 +41,148 @@ export function PlanningHebdomadaire({ missionCandidate }: PlanningHebdomadaireP
   const [missions, setMissions] = useState<any[]>([]);
   const [serieCandidates, setSerieCandidates] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [erreur, setErreur] = useState<string | null>(null);
+  const [nbPlanningsManquants, setNbPlanningsManquants] = useState(0);
+  const [tentative, setTentative] = useState(0);
 
   const jours = Array.from({ length: 7 }, (_, i) => addDays(semaine, i));
   const finSemaine = addDays(semaine, 7);
+  const semaineIso = semaine.toISOString();
+  const finSemaineIso = finSemaine.toISOString();
+  const semaineMs = semaine.getTime();
+  const finSemaineMs = finSemaine.getTime();
+  const segmentsMissionCandidate = missionCandidate
+    ? decouperOccurrencesParJour(construireOccurrencesPlanning([missionCandidate], []))
+    : [];
 
   useEffect(() => {
     if (!user) return;
-    setLoading(true);
-    supabase
-      .from('missions')
-      .select('id, intitule, debut_le, fin_le, duree_heures, statut, etablissement_id')
-      .eq('soignant_assigne_id', user.id)
-      .in('statut', ['ASSIGNEE', 'EN_COURS', 'TERMINEE'])
-      .gte('fin_le', semaine.toISOString())
-      .lt('debut_le', finSemaine.toISOString())
-      .order('debut_le', { ascending: true })
-      .then(async ({ data }) => {
-        const items = data || [];
-        if (items.length > 0) {
-          const etabMap = await fetchEtablissementsSafe(items.map((m: any) => m.etablissement_id));
-          items.forEach((m: any) => { m.etablissements = etabMap[m.etablissement_id] || null; });
-        }
-        setMissions(items);
+    let actif = true;
+
+    const charger = async () => {
+      setLoading(true);
+      setErreur(null);
+      const { data, error: missionsError } = await supabase
+        .from('missions')
+        .select('id, intitule, debut_le, fin_le, duree_heures, statut, etablissement_id')
+        .eq('soignant_assigne_id', user.id)
+        .in('statut', ['ASSIGNEE', 'EN_COURS', 'TERMINEE'])
+        .gte('fin_le', semaineIso)
+        .lt('debut_le', finSemaineIso)
+        .order('debut_le', { ascending: true });
+
+      if (!actif) return;
+      if (missionsError) {
+        setMissions([]);
+        setErreur('Impossible de charger cette semaine.');
         setLoading(false);
-      });
-  }, [user, semaine]);
+        return;
+      }
+
+      const items = data || [];
+      if (items.length === 0) {
+        setMissions([]);
+        setNbPlanningsManquants(0);
+        setLoading(false);
+        return;
+      }
+
+      const [etabMap, creneauxResult] = await Promise.all([
+        fetchEtablissementsSafe(items.map((mission: any) => mission.etablissement_id)),
+        supabase
+          .from('mission_creneaux')
+          .select('id, mission_id, debut, fin, est_pause, type_creneau')
+          .in('mission_id', items.map((mission: any) => mission.id)),
+      ]);
+
+      if (!actif) return;
+      if (creneauxResult.error) {
+        setMissions([]);
+        setErreur('Impossible de charger les jours et horaires travaillés.');
+        setLoading(false);
+        return;
+      }
+
+      const missionsAvecEtablissement = items.map((mission: any) => ({
+        ...mission,
+        etablissements: etabMap[mission.etablissement_id] || null,
+      }));
+      const creneaux = (creneauxResult.data || []) as CreneauMissionPlanifiable[];
+      setMissions(
+        decouperOccurrencesParJour(
+          construireOccurrencesPlanning(missionsAvecEtablissement, creneaux),
+        )
+          .filter((occurrence) => (
+            new Date(occurrence.debut_le).getTime() < finSemaineMs
+            && new Date(occurrence.fin_le).getTime() > semaineMs
+          )),
+      );
+      setNbPlanningsManquants(
+        missionsLonguesSansPlanning(missionsAvecEtablissement, creneaux).length,
+      );
+      setLoading(false);
+    };
+
+    void charger();
+    return () => { actif = false; };
+  }, [user, semaine, tentative, semaineIso, finSemaineIso, semaineMs, finSemaineMs]);
 
   // Load serie candidates
   useEffect(() => {
     if (!serieParam) { setSerieCandidates([]); return; }
+    let actif = true;
     const decoded = decodeURIComponent(serieParam);
-    supabase
-      .from('missions')
-      .select('id, intitule, debut_le, fin_le, duree_heures, statut, etablissement_id')
-      .ilike('description', `%[SERIE_ID:${decoded}]%`)
-      .eq('statut', 'OUVERTE')
-      .order('debut_le')
-      .then(async ({ data }) => {
-        const items = data || [];
-        if (items.length > 0) {
-          const etabMap = await fetchEtablissementsSafe(items.map((m: any) => m.etablissement_id));
-          items.forEach((m: any) => { m.etablissements = etabMap[m.etablissement_id] || null; });
-        }
-        setSerieCandidates(items);
-        // Navigate to first week of serie
-        if (data && data.length > 0) {
-          setSemaine(startOfWeek(new Date(data[0].debut_le), { weekStartsOn: 1 }));
-        }
-      });
-  }, [serieParam]);
+
+    const chargerSerie = async () => {
+      const { data, error: missionsError } = await supabase
+        .from('missions')
+        .select('id, intitule, debut_le, fin_le, duree_heures, statut, etablissement_id')
+        .ilike('description', `%[SERIE_ID:${decoded}]%`)
+        .eq('statut', 'OUVERTE')
+        .order('debut_le');
+      if (!actif) return;
+      if (missionsError) {
+        setSerieCandidates([]);
+        setErreur('Impossible de charger la série de missions.');
+        return;
+      }
+
+      const items = data || [];
+      if (items.length === 0) {
+        setSerieCandidates([]);
+        return;
+      }
+      const [etabMap, creneauxResult] = await Promise.all([
+        fetchEtablissementsSafe(items.map((mission: any) => mission.etablissement_id)),
+        supabase
+          .from('mission_creneaux')
+          .select('id, mission_id, debut, fin, est_pause, type_creneau')
+          .in('mission_id', items.map((mission: any) => mission.id)),
+      ]);
+      if (!actif) return;
+      if (creneauxResult.error) {
+        setSerieCandidates([]);
+        setErreur('Impossible de charger les horaires de la série.');
+        return;
+      }
+
+      const avecEtablissements = items.map((mission: any) => ({
+        ...mission,
+        etablissements: etabMap[mission.etablissement_id] || null,
+      }));
+      const occurrences = construireOccurrencesPlanning(
+        avecEtablissements,
+        (creneauxResult.data || []) as CreneauMissionPlanifiable[],
+      );
+      setSerieCandidates(decouperOccurrencesParJour(occurrences));
+      if (occurrences.length > 0) {
+        setSemaine(startOfWeek(new Date(occurrences[0].debut_le), { weekStartsOn: 1 }));
+      }
+    };
+
+    void chargerSerie();
+    return () => { actif = false; };
+  }, [serieParam, tentative]);
 
   const heuresParJour = jours.map(jour => {
     const msDuJour = missions.filter(m => isSameDay(new Date(m.debut_le), jour));
@@ -99,8 +198,9 @@ export function PlanningHebdomadaire({ missionCandidate }: PlanningHebdomadaireP
       const debut = new Date(m.debut_le);
       let heureDebut = debut.getHours() + debut.getMinutes() / 60;
       const fin = new Date(m.fin_le);
-      let heureFin = fin.getHours() + fin.getMinutes() / 60;
-      if (heureFin <= heureDebut) heureFin += 24;
+      let heureFin = isSameDay(debut, fin)
+        ? fin.getHours() + fin.getMinutes() / 60
+        : HEURE_MAX;
       if (heureDebut < HEURE_MIN) heureDebut = HEURE_MIN;
       if (heureFin > HEURE_MAX) heureFin = HEURE_MAX;
 
@@ -110,18 +210,20 @@ export function PlanningHebdomadaire({ missionCandidate }: PlanningHebdomadaireP
       blocs.push({ ...m, top: `${top}%`, height: `${Math.max(height, 2)}%`, isHighlight: m.id === highlightId });
     }
 
-    // Single mission candidate
-    if (missionCandidate && isSameDay(new Date(missionCandidate.debut_le), jour)) {
-      const debut = new Date(missionCandidate.debut_le);
+    // Mission candidate ponctuelle, découpée si elle traverse minuit.
+    for (const candidate of segmentsMissionCandidate) {
+      if (!isSameDay(new Date(candidate.debut_le), jour)) continue;
+      const debut = new Date(candidate.debut_le);
       let heureDebut = debut.getHours() + debut.getMinutes() / 60;
-      const fin = new Date(missionCandidate.fin_le);
-      let heureFin = fin.getHours() + fin.getMinutes() / 60;
-      if (heureFin <= heureDebut) heureFin += 24;
+      const fin = new Date(candidate.fin_le);
+      let heureFin = isSameDay(debut, fin)
+        ? fin.getHours() + fin.getMinutes() / 60
+        : HEURE_MAX;
       if (heureDebut < HEURE_MIN) heureDebut = HEURE_MIN;
       if (heureFin > HEURE_MAX) heureFin = HEURE_MAX;
 
       blocs.push({
-        ...missionCandidate,
+        ...candidate,
         top: `${((heureDebut - HEURE_MIN) / TOTAL_HEURES) * 100}%`,
         height: `${Math.max(((heureFin - heureDebut) / TOTAL_HEURES) * 100, 2)}%`,
         isCandidate: true,
@@ -134,8 +236,9 @@ export function PlanningHebdomadaire({ missionCandidate }: PlanningHebdomadaireP
         const debut = new Date(sc.debut_le);
         let heureDebut = debut.getHours() + debut.getMinutes() / 60;
         const fin = new Date(sc.fin_le);
-        let heureFin = fin.getHours() + fin.getMinutes() / 60;
-        if (heureFin <= heureDebut) heureFin += 24;
+        let heureFin = isSameDay(debut, fin)
+          ? fin.getHours() + fin.getMinutes() / 60
+          : HEURE_MAX;
         if (heureDebut < HEURE_MIN) heureDebut = HEURE_MIN;
         if (heureFin > HEURE_MAX) heureFin = HEURE_MAX;
 
@@ -154,7 +257,7 @@ export function PlanningHebdomadaire({ missionCandidate }: PlanningHebdomadaireP
   return (
     <div className="card-base">
       <div className="flex items-center justify-between mb-4">
-        <button onClick={() => setSemaine(addDays(semaine, -7))} className="p-1.5 hover:bg-muted rounded-lg transition-colors">
+        <button aria-label="Semaine précédente" onClick={() => setSemaine(addDays(semaine, -7))} className="p-1.5 hover:bg-muted rounded-lg transition-colors">
           <ChevronLeft className="h-5 w-5 text-muted-foreground" />
         </button>
         <div className="text-center">
@@ -163,7 +266,7 @@ export function PlanningHebdomadaire({ missionCandidate }: PlanningHebdomadaireP
           </h3>
           <p className="text-xs text-muted-foreground">Total : <strong>{totalSemaine.toFixed(0)}h</strong> / 48h</p>
         </div>
-        <button onClick={() => setSemaine(addDays(semaine, 7))} className="p-1.5 hover:bg-muted rounded-lg transition-colors">
+        <button aria-label="Semaine suivante" onClick={() => setSemaine(addDays(semaine, 7))} className="p-1.5 hover:bg-muted rounded-lg transition-colors">
           <ChevronRight className="h-5 w-5 text-muted-foreground" />
         </button>
       </div>
@@ -172,6 +275,28 @@ export function PlanningHebdomadaire({ missionCandidate }: PlanningHebdomadaireP
         className="text-xs text-primary font-medium hover:underline mb-3 block mx-auto">
         Aujourd'hui
       </button>
+
+      {erreur && (
+        <div className="mb-4 rounded-xl border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive" role="alert">
+          <p>{erreur}</p>
+          <button
+            type="button"
+            onClick={() => setTentative((valeur) => valeur + 1)}
+            className="mt-2 inline-flex items-center gap-1.5 font-semibold hover:underline"
+          >
+            <RefreshCw className="h-3.5 w-3.5" /> Réessayer
+          </button>
+        </div>
+      )}
+
+      {nbPlanningsManquants > 0 && !erreur && (
+        <div className="mb-4 flex items-start gap-2 rounded-xl border border-warning/30 bg-warning/5 p-3 text-xs text-warning" role="status">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+          <span>
+            {nbPlanningsManquants} mission{nbPlanningsManquants > 1 ? 's actives ont' : ' active a'} un planning détaillé à confirmer.
+          </span>
+        </div>
+      )}
 
       <div className="overflow-x-auto -mx-4 md:-mx-6 px-4 md:px-6">
         <div className="min-w-[600px]">
@@ -204,7 +329,7 @@ export function PlanningHebdomadaire({ missionCandidate }: PlanningHebdomadaireP
                   ))}
 
                   {blocs.map((b, bi) => (
-                    <button key={bi}
+                    <button key={b.occurrence_id ?? `${b.id}:${bi}`}
                       onClick={() => !b.isCandidate && navigate(`/soignant/missions/${b.id}`)}
                       className={`absolute left-0.5 right-0.5 rounded-md px-1 py-0.5 text-[9px] leading-tight overflow-hidden transition-all
                         ${b.isCandidate

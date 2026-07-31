@@ -18,6 +18,7 @@ const mission = (creneaux: Array<{
   id: 'mission-longue',
   intitule: 'Mission IDE longue',
   debut_le: '2026-07-06T08:00:00+02:00',
+  fin_le: '2026-08-31T16:00:00+02:00',
   etablissements: { nom: 'Clinique Jolene' },
   creneaux,
 });
@@ -62,6 +63,27 @@ describe('BlocPointageMission', () => {
             est_pause: false,
             type_creneau: 'PREVISIONNEL',
           }])}
+          contrat={{ id: 'contrat', statut: 'SIGNE_COMPLET' }}
+          consentementGPS={false}
+        />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByTestId('pointage-mission-longue')).toBeInTheDocument();
+  });
+
+  it('conserve le pointage des missions ponctuelles legacy sans ligne PREVISIONNEL', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-07-31T10:00:00+02:00'));
+
+    render(
+      <MemoryRouter>
+        <BlocPointageMission
+          mission={{
+            ...mission([]),
+            debut_le: '2026-07-31T08:00:00+02:00',
+            fin_le: '2026-07-31T16:00:00+02:00',
+          }}
           contrat={{ id: 'contrat', statut: 'SIGNE_COMPLET' }}
           consentementGPS={false}
         />

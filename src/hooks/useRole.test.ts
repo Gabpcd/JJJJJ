@@ -53,6 +53,62 @@ describe('useRole — résolution fail-closed', () => {
     vi.useRealTimers();
   });
 
+  it('conserve le rôle signé si la revalidation RPC est indisponible', async () => {
+    mocks.getSession.mockResolvedValue({
+      data: {
+        session: {
+          user: {
+            id: 'utilisateur-id',
+            app_metadata: {
+              role: 'ADMIN_ETABLISSEMENT',
+              etablissement_id: 'etablissement-signe',
+            },
+          },
+        },
+      },
+      error: null,
+    });
+
+    mocks.rpc.mockReturnValue(requeteRpc({
+      data: null,
+      error: { message: 'service indisponible' },
+    }));
+
+    const { result } = renderHook(() => useRole());
+
+    await waitFor(() => expect(result.current.resolved).toBe(true));
+    expect(result.current).toMatchObject({
+      role: 'ADMIN_ETABLISSEMENT',
+      etablissement_id: 'etablissement-signe',
+      loading: false,
+      error: null,
+    });
+    expect(mocks.rpc).toHaveBeenCalledTimes(1);
+  });
+
+  it('normalise un ancien rôle établissement signé', async () => {
+    mocks.getSession.mockResolvedValue({
+      data: {
+        session: {
+          user: {
+            id: 'utilisateur-id',
+            app_metadata: { role: 'ETABLISSEMENT' },
+          },
+        },
+      },
+      error: null,
+    });
+    mocks.rpc.mockReturnValue(requeteRpc({
+      data: null,
+      error: { message: 'service indisponible' },
+    }));
+
+    const { result } = renderHook(() => useRole());
+
+    await waitFor(() => expect(result.current.resolved).toBe(true));
+    expect(result.current.role).toBe('ADMIN_ETABLISSEMENT');
+  });
+
   it('expose uniquement un scope explicitement résolu par la RPC', async () => {
     const query = requeteRpc({
       data: { role: 'ADMIN_ETABLISSEMENT', etablissement_id: 'etablissement-id' },

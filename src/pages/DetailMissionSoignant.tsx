@@ -45,6 +45,11 @@ import { BandeauActionPrioritaire, type ActionPrioritaire } from '@/components/B
 import { ModaleAnnulationCandidature } from '@/components/soignant/ModaleAnnulationCandidature';
 import { AnnulationCandidatureTimer } from '@/components/soignant/AnnulationCandidatureTimer';
 import { netEstimeAfficheMission } from '@/lib/missionFinanceDisplay';
+import {
+  ajouterRepliMissionPonctuelle,
+  creneauChevauchePeriode,
+  type CreneauPointage,
+} from '@/lib/disponibilite-pointage';
 
 type SoignantData = Database['public']['Tables']['soignants']['Row'];
 
@@ -60,6 +65,8 @@ export default function DetailMissionSoignant() {
   const [soignant, setSoignant] = useState<SoignantData | null>(null);
   const [countMissions, setCountMissions] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [creneauxPlanifies, setCreneauxPlanifies] = useState<CreneauPointage[]>([]);
+  const [erreurCreneaux, setErreurCreneaux] = useState(false);
   const [acceptationEnCours, setAcceptationEnCours] = useState(false);
 
   // Modals
@@ -93,7 +100,7 @@ export default function DetailMissionSoignant() {
   useEffect(() => {
     if (!user || !id) return;
     const load = async () => {
-      const [{ data: m }, { data: s }] = await Promise.all([
+      const [{ data: m }, { data: s }, { data: creneaux, error: creneauxError }] = await Promise.all([
         supabase.from('missions').select(`
           id, intitule, description, service, profession_requise,
           debut_le, fin_le, duree_heures, nb_creneaux, taux_horaire_base, taux_rist_plafonne, rist_plafond_applique,
@@ -107,7 +114,18 @@ export default function DetailMissionSoignant() {
           mode_attribution, boostee_le, presence_confirmee_le, garantie_remplacement, est_arret_maladie, mode_remuneration, retrocession_pct, montant_honoraires_bruts, honoraires_confirmes_le
         `).eq('id', id).single(),
         supabase.rpc('fn_mon_profil_soignant_complet' as any),
+        supabase
+          .from('mission_creneaux')
+          .select('id, debut, fin, est_pause, type_creneau')
+          .eq('mission_id', id)
+          .eq('type_creneau', 'PREVISIONNEL')
+          .eq('est_pause', false)
+          .order('debut', { ascending: true }),
       ]);
+      setCreneauxPlanifies(m
+        ? ajouterRepliMissionPonctuelle((creneaux || []) as CreneauPointage[], m)
+        : []);
+      setErreurCreneaux(Boolean(creneauxError));
       if (m) {
         setMission(m);
         // Fetch etablissement via secure RPC (masque champs sensibles)
@@ -206,6 +224,16 @@ export default function DetailMissionSoignant() {
   const estTerminee = mission.statut === 'TERMINEE';
   const estAssigneAutre = !estOuverte && !estAssigne && mission.soignant_assigne_id;
   const estModeCandidature = mission.mode_attribution === 'CANDIDATURE';
+  const debutAujourdhui = new Date();
+  debutAujourdhui.setHours(0, 0, 0, 0);
+  const finAujourdhui = new Date(debutAujourdhui);
+  finAujourdhui.setDate(finAujourdhui.getDate() + 1);
+  const aCreneauAujourdhui = creneauxPlanifies.some((creneau) => (
+    creneauChevauchePeriode(creneau, debutAujourdhui, finAujourdhui)
+  ));
+  const ongletPresences = aCreneauAujourdhui
+    ? 'aujourdhui'
+    : mission.statut === 'EN_COURS' ? 'encours' : 'avenir';
   // Le régime financier se lit sur la mission, jamais sur le statut général du
   // profil. Un même soignant peut enchaîner des missions salariées et libérales.
   // En l'absence de valeur explicite, le défaut de sécurité reste SALARIE.
@@ -587,10 +615,43 @@ export default function DetailMissionSoignant() {
           {/* Horaires */}
           <div className="card-base">
             <h3 className="font-semibold text-sm text-foreground mb-2">🕐 Horaires</h3>
-            <p className="text-sm text-foreground">📅 {formatDateMission(mission)}</p>
-            <p className="text-sm text-foreground">
-              🕐 {formatHorairesMission(mission)}
-            </p>
+            {erreurCreneaux ? (
+              <p className="text-sm text-warning" role="alert">
+                Planning détaillé momentanément indisponible. Actualise la page avant de te déplacer.
+              </p>
+            ) : creneauxPlanifies.length > 0 ? (
+              <>
+                <p className="text-sm font-medium text-foreground">
+                  {creneauxPlanifies.length} créneau{creneauxPlanifies.length > 1 ? 'x' : ''} planifié{creneauxPlanifies.length > 1 ? 's' : ''} :
+                </p>
+                <ul className="mt-2 space-y-2" aria-label="Jours et horaires travaillés">
+                  {creneauxPlanifies.map((creneau) => (
+                    <li
+                      key={creneau.id ?? creneau.debut}
+                      className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-muted/40 px-3 py-2 text-sm"
+                    >
+                      <span className="font-medium text-foreground capitalize">
+                        {format(new Date(creneau.debut), 'EEEE d MMMM yyyy', { locale: fr })}
+                      </span>
+                      <span className="font-semibold text-primary">
+                        {format(new Date(creneau.debut), "HH'h'mm", { locale: fr })}
+                        {' → '}
+                        {creneau.fin ? format(new Date(creneau.fin), "HH'h'mm", { locale: fr }) : 'fin à confirmer'}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+                <p className="text-xs text-muted-foreground mt-2">
+                  Total prévu : {mission.duree_heures || 0} h
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="text-sm text-foreground">📅 {formatDateMission(mission)}</p>
+                <p className="text-sm text-foreground">🕐 {formatHorairesMission(mission)}</p>
+                <p className="text-xs text-warning mt-2">Les journées détaillées ne sont pas encore planifiées.</p>
+              </>
+            )}
             <div className="flex flex-wrap gap-2 mt-2">
               {(mission.heures_nuit || 0) > 0 && <span className="badge-base bg-indigo-100 text-indigo-700">🌙 {mission.heures_nuit}h de nuit</span>}
               {(mission.heures_dimanche || 0) > 0 && <span className="badge-base bg-amber-100 text-amber-700">☀️ {mission.heures_dimanche}h de dimanche</span>}
@@ -911,7 +972,7 @@ export default function DetailMissionSoignant() {
                 {(mission.statut === 'ASSIGNEE' || mission.statut === 'EN_COURS') && (
                   <button
                     type="button"
-                    onClick={() => navigate(`/soignant/presences?tab=${mission.statut === 'EN_COURS' ? 'encours' : 'aujourdhui'}`)}
+                    onClick={() => navigate(`/soignant/presences?tab=${ongletPresences}`)}
                     className="btn-primary w-full text-sm py-2.5 mb-3"
                   >
                     🕐 Présences et pointage
@@ -1032,7 +1093,9 @@ export default function DetailMissionSoignant() {
         onFermer={() => setModalConfirm(false)}
         onConfirmer={() => accepterMission()}
         titre="Accepter cette mission ?"
-        message={`Tu t'engages à être présent(e) ${estMultiJours(mission) ? `du ${formatDateMission(mission)}` : `le ${format(new Date(mission.debut_le), 'EEEE d MMMM', { locale: fr })}`} (${formatHorairesMission(mission)}). Une annulation tardive impactera ton score de fiabilité.`}
+        message={`Tu t'engages à être présent(e) ${creneauxPlanifies.length > 0
+          ? creneauxPlanifies.map((creneau) => `${format(new Date(creneau.debut), 'EEEE d MMMM', { locale: fr })} de ${format(new Date(creneau.debut), "HH'h'mm", { locale: fr })} à ${creneau.fin ? format(new Date(creneau.fin), "HH'h'mm", { locale: fr }) : 'une heure à confirmer'}`).join(', puis ')
+          : estMultiJours(mission) ? `du ${formatDateMission(mission)} (${formatHorairesMission(mission)})` : `le ${format(new Date(mission.debut_le), 'EEEE d MMMM', { locale: fr })} (${formatHorairesMission(mission)})`}. Une annulation tardive impactera ton score de fiabilité.`}
         labelConfirmer="Oui, j'accepte"
         labelAnnuler="Annuler"
       />

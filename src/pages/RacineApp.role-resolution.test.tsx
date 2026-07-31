@@ -42,6 +42,31 @@ describe('RacineApp — résolution sûre du rôle natif', () => {
     mocks.authState.loading = false;
   });
 
+  it('redirige depuis le rôle signé de la session sans appeler la RPC', async () => {
+    mocks.authState.session = {
+      user: {
+        id: 'utilisateur-actif',
+        app_metadata: { role: 'SOIGNANT' },
+      },
+    } as any;
+    mocks.rpc.mockResolvedValue({ data: null, error: { message: 'network unavailable' } });
+
+    renderRacine();
+
+    expect(await screen.findByText('Tableau de bord soignant')).toBeInTheDocument();
+    expect(mocks.rpc).not.toHaveBeenCalled();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('utilise la RPC en fallback quand la session ne contient pas de rôle signé', async () => {
+    mocks.rpc.mockResolvedValue({ data: { role: 'SOIGNANT' }, error: null });
+
+    renderRacine();
+
+    expect(await screen.findByText('Tableau de bord soignant')).toBeInTheDocument();
+    expect(mocks.rpc).toHaveBeenCalledTimes(1);
+  });
+
   it('préserve la session dans un état d’erreur réessayable au lieu d’afficher la connexion', async () => {
     mocks.rpc
       .mockResolvedValueOnce({ data: null, error: { message: 'network unavailable' } })

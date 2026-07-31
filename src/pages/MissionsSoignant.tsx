@@ -3,7 +3,7 @@ import { usePageTitle } from '@/hooks/usePageTitle';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { SkeletonList } from '@/components/SkeletonCard';
 import { FadeInView } from '@/components/FadeInView';
-import { Briefcase, History } from 'lucide-react';
+import { AlertTriangle, Briefcase, History, RefreshCw } from 'lucide-react';
 import { LayoutApp } from '@/components/LayoutApp';
 import { EmptyState, IllustrationBoussole } from '@/components/ui/EmptyState';
 import { CarteMissionSoignant } from '@/components/CarteMissionSoignant';
@@ -22,10 +22,21 @@ import { enrichirEtablissements } from '@/lib/etablissements';
 import { calculerDistanceKm } from '@/lib/geo';
 import { getLabelProfession, extraireContratPreference, missionCompatibleContrat, getTypesContratSoignant } from '@/lib/constantes';
 import { getMissionsCompatiblesFilter } from '@/lib/profession-hierarchy';
-import { format, startOfWeek, endOfWeek } from 'date-fns';
+import { addDays, format, startOfWeek } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { handleErrorSilent } from '@/lib/handleError';
 import { netEstimeAfficheMission } from '@/lib/missionFinanceDisplay';
+import {
+  ajouterRepliMissionPonctuelle,
+  creneauxPrevisionnels,
+  prochainCreneauPointage,
+  type CreneauPointage,
+} from '@/lib/disponibilite-pointage';
+import {
+  construireOccurrencesPlanning,
+  decouperOccurrencesParJour,
+  type CreneauMissionPlanifiable,
+} from '@/lib/occurrences-planning';
 
 type Onglet = 'candidatures' | 'disponibles' | 'mes_missions' | 'historique';
 
@@ -40,6 +51,50 @@ interface SoignantData {
 }
 
 type GroupeItem = { type: 'single'; mission: any } | { type: 'serie'; serieId: string; missions: any[] };
+
+async function enrichirAvecPlanning<T extends { id: string; debut_le: string; fin_le: string }>(
+  missions: T[],
+): Promise<Array<T & {
+  creneaux: CreneauPointage[];
+  prochainCreneau: CreneauPointage | null;
+  nb_creneaux_planifies: number;
+  duree_planifiee_heures: number;
+}>> {
+  if (missions.length === 0) return [];
+
+  const { data, error } = await supabase
+    .from('mission_creneaux')
+    .select('id, mission_id, debut, fin, est_pause, type_creneau')
+    .in('mission_id', missions.map((mission) => mission.id))
+    .eq('type_creneau', 'PREVISIONNEL')
+    .eq('est_pause', false)
+    .order('debut', { ascending: true });
+  if (error) throw error;
+
+  const parMission: Record<string, CreneauPointage[]> = {};
+  (data || []).forEach((creneau) => {
+    (parMission[creneau.mission_id] ||= []).push(creneau);
+  });
+  const maintenant = new Date();
+
+  return missions.map((mission) => {
+    const creneaux = ajouterRepliMissionPonctuelle(parMission[mission.id] || [], mission);
+    const planifies = creneauxPrevisionnels(creneaux);
+    return {
+      ...mission,
+      creneaux,
+      prochainCreneau: prochainCreneauPointage(creneaux, maintenant),
+      nb_creneaux_planifies: planifies.length,
+      duree_planifiee_heures: planifies.reduce((total, creneau) => {
+        if (!creneau.fin) return total;
+        return total + Math.max(
+          0,
+          (new Date(creneau.fin).getTime() - new Date(creneau.debut).getTime()) / 3_600_000,
+        );
+      }, 0),
+    };
+  });
+}
 
 export default function MissionsSoignant() {
   usePageTitle('Missions');
@@ -62,6 +117,7 @@ export default function MissionsSoignant() {
   const [missions, setMissions] = useState<any[]>([]);
   const [candidatures, setCandidatures] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [erreurChargement, setErreurChargement] = useState<string | null>(null);
   const [page, setPage] = useState(0);
   const PAGE_SIZE = 50;
   const [filtres, setFiltres] = useState<FiltresMissionsState | null>(null);
@@ -82,82 +138,120 @@ export default function MissionsSoignant() {
       .then(({ data }) => { if (data) setSoignant(data as any); }).then(undefined, (err) => handleErrorSilent(err, 'MissionsSoignant.soignant'));
 
     const lundi = startOfWeek(new Date(), { weekStartsOn: 1 });
-    const dimanche = endOfWeek(new Date(), { weekStartsOn: 1 });
-    supabase.from('missions')
-      .select('duree_heures')
-      .eq('soignant_assigne_id', user.id)
-      .in('statut', ['ASSIGNEE', 'EN_COURS'])
-      .gte('debut_le', lundi.toISOString())
-      .lte('debut_le', dimanche.toISOString())
-      .then(({ data }) => {
-        const total = (data ?? []).reduce((s: number, m: any) => s + (m.duree_heures ?? 0), 0);
-        setHeuresSemaine(total);
-      }).then(undefined, (err) => handleErrorSilent(err, 'MissionsSoignant.heuresSemaine'));
+    const finSemaine = addDays(lundi, 7);
+    const chargerHeuresSemaine = async () => {
+      const { data: missionsSemaine, error: missionsError } = await supabase
+        .from('missions')
+        .select('id, debut_le, fin_le, duree_heures')
+        .eq('soignant_assigne_id', user.id)
+        .in('statut', ['ASSIGNEE', 'EN_COURS', 'TERMINEE'])
+        .gt('fin_le', lundi.toISOString())
+        .lt('debut_le', finSemaine.toISOString());
+      if (missionsError) throw missionsError;
+      if (!missionsSemaine?.length) {
+        setHeuresSemaine(0);
+        return;
+      }
+      const { data: creneauxSemaine, error: creneauxError } = await supabase
+        .from('mission_creneaux')
+        .select('id, mission_id, debut, fin, est_pause, type_creneau')
+        .in('mission_id', missionsSemaine.map((mission) => mission.id));
+      if (creneauxError) throw creneauxError;
+      const occurrences = decouperOccurrencesParJour(construireOccurrencesPlanning(
+        missionsSemaine,
+        (creneauxSemaine || []) as CreneauMissionPlanifiable[],
+      )).filter((occurrence) => (
+        new Date(occurrence.debut_le) >= lundi
+        && new Date(occurrence.debut_le) < finSemaine
+      ));
+      setHeuresSemaine(occurrences.reduce((total, occurrence) => total + occurrence.duree_heures, 0));
+    };
+    void chargerHeuresSemaine().catch((err) => handleErrorSilent(err, 'MissionsSoignant.heuresSemaine'));
   }, [user]);
 
   useEffect(() => {
     if (!user) return;
     if (!soignant && onglet !== 'disponibles' && onglet !== 'candidatures') { setLoading(false); setMissions([]); return; }
     setLoading(true);
+    setErreurChargement(null);
     const fetchMissions = async () => {
-      const maintenantIso = new Date().toISOString();
+      try {
+        const maintenantIso = new Date().toISOString();
 
-      // Onglet Candidatures : candidatures en attente de réponse de l'établissement.
-      if (onglet === 'candidatures') {
-        const { data } = await supabase
-          .from('candidatures')
-          .select('id, statut, message, type_contrat_choisi, cree_le, missions(id, intitule, debut_le, fin_le, taux_horaire_base, net_estime, etablissements(nom, adresse_ville))')
-          .eq('soignant_id', user.id)
-          .in('statut', ['EN_ATTENTE', 'EN_ATTENTE_VALIDATION_ETAB'])
-          .order('cree_le', { ascending: false });
-        setCandidatures((data ?? []).filter((c: any) => c.missions));
-        setLoading(false);
-        return;
-      }
-
-      let query = supabase.from('missions').select(`
-        id, intitule, description, service, profession_requise,
-        specialite_medicale_requise, accepte_non_specialises,
-        debut_le, fin_le, duree_heures, taux_horaire_base, taux_rist_plafonne, rist_plafond_applique,
-        total_brut, net_a_payer, net_estime, est_urgente, niveau_urgence, statut,
-        soignant_assigne_id, cree_le, etablissement_id, type_contrat_recherche,
-        type_contrat_applique, choix_contrat_soignant
-      `);
-
-      if (onglet === 'disponibles') {
-        query = query.eq('statut', 'OUVERTE').gte('debut_le', maintenantIso);
-        if (soignant?.profession) {
-          const orFiltre = getMissionsCompatiblesFilter(soignant.profession);
-          if (orFiltre) {
-            query = query.or(orFiltre);
-          } else {
-            query = query.eq('profession_requise', soignant.profession as any);
-          }
+        // Onglet Candidatures : candidatures en attente de réponse de l'établissement.
+        if (onglet === 'candidatures') {
+          const { data, error } = await supabase
+            .from('candidatures')
+            .select('id, statut, message, type_contrat_choisi, cree_le, missions(id, intitule, debut_le, fin_le, taux_horaire_base, net_estime, etablissements(nom, adresse_ville))')
+            .eq('soignant_id', user.id)
+            .in('statut', ['EN_ATTENTE', 'EN_ATTENTE_VALIDATION_ETAB'])
+            .order('cree_le', { ascending: false });
+          if (error) throw error;
+          const candidaturesValides = (data ?? []).filter((c: any) => c.missions);
+          const missionsCandidatures = await enrichirAvecPlanning(
+            candidaturesValides.map((candidature: any) => candidature.missions),
+          );
+          const planningParMission = new Map(
+            missionsCandidatures.map((mission) => [mission.id, mission]),
+          );
+          setCandidatures(candidaturesValides.map((candidature: any) => ({
+            ...candidature,
+            missions: planningParMission.get(candidature.missions.id) ?? candidature.missions,
+          })));
+          return;
         }
-        // Contract type compatibility is handled client-side via missionCompatibleContrat
-        query = query.order('est_urgente', { ascending: false }).order('niveau_urgence', { ascending: false }).order('debut_le', { ascending: true });
-        if (filtres?.dateDebut) query = query.gte('debut_le', filtres.dateDebut);
-        if (filtres?.dateFin) query = query.lte('debut_le', filtres.dateFin);
-        if (filtres?.tauxMin && filtres.tauxMin > 0) query = query.gte('taux_horaire_base', filtres.tauxMin);
-      } else if (onglet === 'mes_missions') {
-        query = query.eq('soignant_assigne_id', user.id)
-          .in('statut', ['ASSIGNEE', 'EN_COURS']).gte('fin_le', maintenantIso).order('debut_le', { ascending: true });
-      } else {
-        query = query.eq('soignant_assigne_id', user.id)
-          .in('statut', ['TERMINEE', 'ANNULEE_PAR_SOIGNANT', 'ANNULEE_PAR_ETABLISSEMENT', 'ABSENCE'])
-          .order('debut_le', { ascending: false });
+
+        let query = supabase.from('missions').select(`
+          id, intitule, description, service, profession_requise,
+          specialite_medicale_requise, accepte_non_specialises,
+          debut_le, fin_le, duree_heures, taux_horaire_base, taux_rist_plafonne, rist_plafond_applique,
+          total_brut, net_a_payer, net_estime, est_urgente, niveau_urgence, statut,
+          soignant_assigne_id, cree_le, etablissement_id, type_contrat_recherche,
+          type_contrat_applique, choix_contrat_soignant
+        `);
+
+        if (onglet === 'disponibles') {
+          query = query.eq('statut', 'OUVERTE').gte('debut_le', maintenantIso);
+          if (soignant?.profession) {
+            const orFiltre = getMissionsCompatiblesFilter(soignant.profession);
+            if (orFiltre) {
+              query = query.or(orFiltre);
+            } else {
+              query = query.eq('profession_requise', soignant.profession as any);
+            }
+          }
+          // Contract type compatibility is handled client-side via missionCompatibleContrat
+          query = query.order('est_urgente', { ascending: false }).order('niveau_urgence', { ascending: false }).order('debut_le', { ascending: true });
+          if (filtres?.dateDebut) query = query.gte('debut_le', filtres.dateDebut);
+          if (filtres?.dateFin) query = query.lte('debut_le', filtres.dateFin);
+          if (filtres?.tauxMin && filtres.tauxMin > 0) query = query.gte('taux_horaire_base', filtres.tauxMin);
+        } else if (onglet === 'mes_missions') {
+          query = query.eq('soignant_assigne_id', user.id)
+            .in('statut', ['ASSIGNEE', 'EN_COURS']).gte('fin_le', maintenantIso).order('debut_le', { ascending: true });
+        } else {
+          query = query.eq('soignant_assigne_id', user.id)
+            .in('statut', ['TERMINEE', 'ANNULEE_PAR_SOIGNANT', 'ANNULEE_PAR_ETABLISSEMENT', 'ABSENCE'])
+            .order('debut_le', { ascending: false });
+        }
+
+        // M1: la requête est cumulative ; remplacer la liste évite les doublons
+        // quand l'utilisateur demande la page suivante.
+        query = query.range(0, (page + 1) * PAGE_SIZE - 1);
+
+        const { data, error } = await query;
+        if (error) throw error;
+        const enriched = data ? await enrichirEtablissements(data as any[]) : [];
+        setMissions(await enrichirAvecPlanning(enriched as any[]));
+      } catch (err) {
+        handleErrorSilent(err, 'MissionsSoignant.chargement');
+        setMissions([]);
+        setCandidatures([]);
+        setErreurChargement('Impossible de charger les missions et leurs horaires.');
+      } finally {
+        setLoading(false);
       }
-
-      // M1: Cursor-based pagination to prevent silently capped data
-      query = query.range(0, (page + 1) * PAGE_SIZE - 1);
-
-      const { data } = await query;
-      const enriched = data ? await enrichirEtablissements(data as any) : [];
-      if (page === 0) setMissions(enriched);
-      else setMissions(prev => [...prev, ...enriched]);
-      setLoading(false);
     };
-    fetchMissions();
+    void fetchMissions();
   }, [user, soignant, onglet, filtres, page, refreshTick]);
 
   // Reset pagination when tab/filters change
@@ -286,7 +380,24 @@ export default function MissionsSoignant() {
           </>
         )}
 
-        {loading ? <SkeletonList count={4} /> : (
+        {loading ? <SkeletonList count={4} /> : erreurChargement ? (
+          <div className="card-base border-destructive/30" role="alert">
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="h-5 w-5 shrink-0 text-destructive" aria-hidden="true" />
+              <div>
+                <p className="font-semibold text-foreground">Missions momentanément indisponibles</p>
+                <p className="mt-1 text-sm text-muted-foreground">{erreurChargement}</p>
+                <button
+                  type="button"
+                  onClick={() => setRefreshTick((valeur) => valeur + 1)}
+                  className="mt-3 inline-flex items-center gap-1.5 text-sm font-semibold text-primary hover:underline"
+                >
+                  <RefreshCw className="h-4 w-4" /> Réessayer
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : (
           <>
           {onglet === 'disponibles' && (
             <p className="text-sm text-muted-foreground mb-3">{missionsAvecDistance.length} mission{missionsAvecDistance.length !== 1 ? 's' : ''} trouvée{missionsAvecDistance.length !== 1 ? 's' : ''}</p>
@@ -296,6 +407,10 @@ export default function MissionsSoignant() {
               <div className="space-y-2">
                 {candidatures.map((c: any) => {
                   const m = c.missions;
+                  const creneauAffiche = m.prochainCreneau
+                    ?? creneauxPrevisionnels(m.creneaux || [])[0]
+                    ?? null;
+                  const dateAffichee = creneauAffiche?.debut ?? m.debut_le;
                   const estSuperLike = (c.message || '').toLowerCase().includes('super-like');
                   return (
                     <div
@@ -312,9 +427,9 @@ export default function MissionsSoignant() {
                       className="card-base hover:shadow-md cursor-pointer transition-all flex items-center gap-3 py-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
                     >
                       <div className="flex flex-col items-center justify-center rounded-xl bg-primary/10 px-3 py-1.5 min-w-[52px]">
-                        <span className="text-[10px] font-semibold text-primary uppercase">{format(new Date(m.debut_le), 'EEE', { locale: fr })}</span>
-                        <span className="text-lg font-bold text-primary leading-tight">{format(new Date(m.debut_le), 'd')}</span>
-                        <span className="text-[10px] text-primary">{format(new Date(m.debut_le), 'MMM', { locale: fr })}</span>
+                        <span className="text-[10px] font-semibold text-primary uppercase">{format(new Date(dateAffichee), 'EEE', { locale: fr })}</span>
+                        <span className="text-lg font-bold text-primary leading-tight">{format(new Date(dateAffichee), 'd')}</span>
+                        <span className="text-[10px] text-primary">{format(new Date(dateAffichee), 'MMM', { locale: fr })}</span>
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
@@ -327,7 +442,11 @@ export default function MissionsSoignant() {
                           🏥 {m.etablissements?.nom || 'Établissement'}{m.etablissements?.adresse_ville ? ` · ${m.etablissements.adresse_ville}` : ''}
                         </p>
                         <div className="flex items-center gap-3 mt-0.5 text-xs text-muted-foreground">
-                          <span>🕐 {format(new Date(m.debut_le), "d MMM", { locale: fr })} · {format(new Date(m.debut_le), "HH'h'mm", { locale: fr })}</span>
+                          <span>
+                            🕐 {creneauAffiche?.fin
+                              ? `${format(new Date(creneauAffiche.debut), "d MMM · HH'h'mm", { locale: fr })} → ${format(new Date(creneauAffiche.fin), "HH'h'mm", { locale: fr })}`
+                              : 'Planning détaillé à confirmer'}
+                          </span>
                           {m.taux_horaire_base && <span className="text-primary font-semibold">{m.taux_horaire_base} €/h</span>}
                         </div>
                       </div>
@@ -379,7 +498,11 @@ export default function MissionsSoignant() {
             missionsAvecDistance.length > 0 ? (
               <div className="space-y-2">
                 {missionsAvecDistance.map(m => {
-                  const dureeH = m.duree_heures ?? ((new Date(m.fin_le).getTime() - new Date(m.debut_le).getTime()) / 3600000);
+                  const creneauAffiche = m.prochainCreneau;
+                  const dateAffichee = creneauAffiche?.debut ?? m.debut_le;
+                  const dureeCreneau = creneauAffiche?.fin
+                    ? (new Date(creneauAffiche.fin).getTime() - new Date(creneauAffiche.debut).getTime()) / 3_600_000
+                    : null;
                   return (
                     <div
                       key={m.id}
@@ -395,9 +518,9 @@ export default function MissionsSoignant() {
                       className="card-base hover:shadow-md cursor-pointer transition-all flex items-center gap-3 py-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
                     >
                       <div className="flex flex-col items-center justify-center rounded-xl bg-primary/10 px-3 py-1.5 min-w-[52px]">
-                        <span className="text-[10px] font-semibold text-primary uppercase">{format(new Date(m.debut_le), 'EEE', { locale: fr })}</span>
-                        <span className="text-lg font-bold text-primary leading-tight">{format(new Date(m.debut_le), 'd')}</span>
-                        <span className="text-[10px] text-primary">{format(new Date(m.debut_le), 'MMM', { locale: fr })}</span>
+                        <span className="text-[10px] font-semibold text-primary uppercase">{format(new Date(dateAffichee), 'EEE', { locale: fr })}</span>
+                        <span className="text-lg font-bold text-primary leading-tight">{format(new Date(dateAffichee), 'd')}</span>
+                        <span className="text-[10px] text-primary">{format(new Date(dateAffichee), 'MMM', { locale: fr })}</span>
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-0.5">
@@ -409,7 +532,13 @@ export default function MissionsSoignant() {
                           🏥 {m.etablissements?.nom || 'Établissement'}{m.etablissements?.adresse_ville ? ` · ${m.etablissements.adresse_ville}` : ''}
                         </p>
                         <div className="flex items-center gap-3 mt-0.5 text-xs text-muted-foreground">
-                          <span>🕐 {format(new Date(m.debut_le), "HH'h'mm", { locale: fr })} → {format(new Date(m.fin_le), "HH'h'mm", { locale: fr })} ({Math.round(dureeH)}h)</span>
+                          <span>
+                            🕐 {creneauAffiche?.fin
+                              ? `Prochain créneau : ${format(new Date(creneauAffiche.debut), "d MMM · HH'h'mm", { locale: fr })} → ${format(new Date(creneauAffiche.fin), "HH'h'mm", { locale: fr })} (${dureeCreneau?.toLocaleString('fr-FR', { maximumFractionDigits: 2 })}h)`
+                              : m.nb_creneaux_planifies > 0
+                                ? 'Tous les créneaux planifiés sont terminés'
+                                : 'Planning détaillé à confirmer'}
+                          </span>
                           {m.taux_horaire_base && <span className="text-primary font-semibold">{m.taux_horaire_base} €/h</span>}
                         </div>
                       </div>

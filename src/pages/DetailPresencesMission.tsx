@@ -1,18 +1,26 @@
 import { useState, useEffect, type ReactNode } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { format, differenceInMinutes } from 'date-fns';
+import { addDays, differenceInMinutes, format, isSameDay, startOfDay } from 'date-fns';
 import { fr } from 'date-fns/locale';
-import { ArrowLeft, Clock, MapPin, Radio, AlertTriangle, Keyboard, Wifi, CheckCircle, XCircle } from 'lucide-react';
+import { ArrowLeft, Clock, MapPin, Radio, AlertTriangle, CheckCircle, XCircle } from 'lucide-react';
 import { LayoutApp } from '@/components/LayoutApp';
 import { LayoutAdmin } from '@/components/LayoutAdmin';
 import { ChargementPage } from '@/components/ChargementPage';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { BoutonY2K } from '@/components/y2k/BoutonY2K';
-import { BadgeY2K } from '@/components/y2k/BadgeY2K';
 import { AffichageCodeRotatifEtab } from '@/components/pointage/AffichageCodeRotatifEtab';
 import { toast } from 'sonner';
 import { usePageTitle } from '@/hooks/usePageTitle';
+import {
+  ajouterRepliMissionPonctuelle,
+  creneauChevauchePeriode,
+  type CreneauPointage,
+} from '@/lib/disponibilite-pointage';
+import {
+  construireSynthesePresenceMission,
+  formatDureeMinutes,
+} from '@/lib/synthese-presence-mission';
 
 function fmt(v: number) {
   return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(v);
@@ -28,31 +36,37 @@ function formatHours(value: number): string {
   return value.toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 }
 
-function computeRealHoursFromPresences(presences: any[] | null | undefined): number | null {
-  if (!presences || presences.length === 0) return null;
-  const totalMinutes = presences.reduce((sum, presence) => {
-    const dureeNette = toNumberOrNull(presence.duree_nette_min);
-    if (dureeNette !== null) return sum + dureeNette;
-
-    if (!presence.pointage_arrivee_le || !presence.pointage_depart_le) return sum;
-
-    const arrivee = new Date(presence.pointage_arrivee_le);
-    const depart = new Date(presence.pointage_depart_le);
-    const dureeBrute = differenceInMinutes(depart, arrivee);
-    const pauseMinutes = toNumberOrNull(presence.duree_pause_min) ?? 0;
-
-    return sum + Math.max(dureeBrute - pauseMinutes, 0);
-  }, 0);
-
-  if (totalMinutes <= 0) return null;
-  return Number((totalMinutes / 60).toFixed(2));
+interface CreneauAssocie {
+  creneau: CreneauPointage;
+  index: number;
+  total: number;
 }
 
-function MethodeBadge({ methode }: { methode: string | null }) {
-  if (!methode) return <BadgeY2K variant="info" size="sm" icone={<Wifi className="h-3 w-3" />}>GPS</BadgeY2K>;
-  if (methode === 'CODE') return <BadgeY2K variant="info" size="sm" icone={<Keyboard className="h-3 w-3" />}>Code</BadgeY2K>;
-  if (methode === 'QR') return <BadgeY2K variant="info" size="sm" icone={<Keyboard className="h-3 w-3" />}>Code</BadgeY2K>;
-  return <BadgeY2K variant="info" size="sm">{methode}</BadgeY2K>;
+function trouverCreneauDuJour(
+  creneaux: CreneauPointage[],
+  datePresence: Date | null,
+): CreneauAssocie | null {
+  if (!datePresence) return null;
+
+  const debutJour = startOfDay(datePresence);
+  const finJour = addDays(debutJour, 1);
+  const creneau = creneaux
+    .filter((item) => creneauChevauchePeriode(item, debutJour, finJour))
+    .sort((a, b) => (
+      Math.abs(new Date(a.debut).getTime() - datePresence.getTime())
+      - Math.abs(new Date(b.debut).getTime() - datePresence.getTime())
+    ))[0];
+
+  if (!creneau) return null;
+  return { creneau, index: creneaux.indexOf(creneau), total: creneaux.length };
+}
+
+function formatPlageExacte(debut: Date, fin: Date): string {
+  const debutFormate = format(debut, 'EEE d MMM yyyy · HH:mm', { locale: fr });
+  const finFormatee = isSameDay(debut, fin)
+    ? format(fin, 'HH:mm', { locale: fr })
+    : format(fin, 'EEE d MMM yyyy · HH:mm', { locale: fr });
+  return `${debutFormate} → ${finFormatee}`;
 }
 
 interface Props {
@@ -71,15 +85,12 @@ export default function DetailPresencesMission({ role = 'ADMIN_ETABLISSEMENT' }:
   const [loading, setLoading] = useState(true);
   const [mission, setMission] = useState<any>(null);
   const [presences, setPresences] = useState<any[]>([]);
+  const [creneaux, setCreneaux] = useState<CreneauPointage[]>([]);
+  const [planningIndisponible, setPlanningIndisponible] = useState(false);
   const [soignant, setSoignant] = useState<any>(null);
   const [relancing, setRelancing] = useState(false);
   usePageTitle(mission?.intitule ? `Présences · ${mission.intitule}` : 'Détail des présences');
 
-  // 9.1 — le soignant peut relancer l'établissement quand une présence à
-  // pointage complet attend encore sa validation (miroir gate 7b-B).
-  const presenceEnAttente = presences.some(
-    (p: any) => !p.valide_par_etablissement && p.pointage_depart_le,
-  );
   const relancerEtablissement = async () => {
     if (!missionId) return;
     setRelancing(true);
@@ -94,7 +105,7 @@ export default function DetailPresencesMission({ role = 'ADMIN_ETABLISSEMENT' }:
   useEffect(() => {
     if (!missionId || !user) return;
     const load = async () => {
-      const [{ data: missionData }, { data: presData }, detailRes] = await Promise.all([
+      const [{ data: missionData }, { data: presData }, detailRes, creneauxRes] = await Promise.all([
         supabase
           .from('missions')
           .select('id, intitule, service, debut_le, fin_le, duree_heures, taux_horaire_base, heures_nuit, heures_dimanche, heures_ferie, montant_majoration_nuit, montant_majoration_dimanche, montant_majoration_ferie, montant_ifm, montant_icp, total_brut, net_estime, soignant_assigne_id, code_arrivee, code_depart, type_paiement_soignant, etablissement_id')
@@ -106,6 +117,12 @@ export default function DetailPresencesMission({ role = 'ADMIN_ETABLISSEMENT' }:
           .eq('mission_id', missionId)
           .order('pointage_arrivee_le', { ascending: true }),
         supabase.rpc('fn_presences_detail_mission' as any, { p_mission_id: missionId }),
+        supabase
+          .from('mission_creneaux')
+          .select('id, mission_id, debut, fin, est_pause, type_creneau')
+          .eq('mission_id', missionId)
+          .eq('est_pause', false)
+          .order('debut', { ascending: true }),
       ]);
 
       // Store detail data for enhanced display
@@ -113,6 +130,10 @@ export default function DetailPresencesMission({ role = 'ADMIN_ETABLISSEMENT' }:
 
       if (missionData) {
         setMission({ ...missionData, _detail: detailData });
+        setPlanningIndisponible(Boolean(creneauxRes.error));
+        setCreneaux(creneauxRes.error
+          ? []
+          : ajouterRepliMissionPonctuelle((creneauxRes.data || []) as CreneauPointage[], missionData));
         if (missionData.soignant_assigne_id) {
           const { data: sg } = await supabase
             .from('soignants')
@@ -142,18 +163,40 @@ export default function DetailPresencesMission({ role = 'ADMIN_ETABLISSEMENT' }:
   const brut = mission.total_brut || 0;
   const cotis = brut * 0.22;
   const net = mission.net_estime || brut - cotis;
+  const maintenant = new Date();
+  const synthese = construireSynthesePresenceMission(creneaux, maintenant);
+  const planifies = synthese.previsionnels;
+  const dernierCreneauFin = synthese.dernierPrevisionnelFin;
+  const planningEchu = !planningIndisponible && synthese.planningTermine;
+  const creneauxEchus = planifies.filter((creneau) => (
+    Boolean(creneau.fin) && new Date(creneau.fin!).getTime() <= maintenant.getTime()
+  )).length;
+  const prochainCreneau = planifies.find((creneau) => (
+    Boolean(creneau.fin) && new Date(creneau.fin!).getTime() > maintenant.getTime()
+  )) ?? null;
+  const heuresPlanifieesCreneaux = synthese.minutesPlanifiees / 60;
+  const heuresTravaillees = synthese.minutesTravaillees / 60;
+  const presenceReference = presences[0] ?? null;
+  // 9.1 — la relance ne devient possible qu'au même moment que la validation :
+  // après le dernier PREVISIONNEL et sans aucun EFFECTIF encore ouvert.
+  const presenceEnAttente = Boolean(
+    presenceReference
+    && !presenceReference.valide_par_etablissement
+    && !planningIndisponible
+    && synthese.validationPossible,
+  );
 
-  // Group presences by day
-  const presencesByDay: Record<string, any[]> = {};
-  for (const p of presences) {
-    const dateKey = p.pointage_arrivee_le
-      ? format(new Date(p.pointage_arrivee_le), 'yyyy-MM-dd')
-      : 'sans-date';
-    if (!presencesByDay[dateKey]) presencesByDay[dateKey] = [];
-    presencesByDay[dateKey].push(p);
+  // Le détail de temps est construit depuis les segments EFFECTIF. La ligne
+  // `presences` reste uniquement le support de validation et des métadonnées.
+  const effectifs = [...synthese.effectifsFermes, ...synthese.effectifsOuverts]
+    .sort((a, b) => new Date(a.debut).getTime() - new Date(b.debut).getTime());
+  const effectifsByDay: Record<string, CreneauPointage[]> = {};
+  for (const effectif of effectifs) {
+    const dateKey = format(new Date(effectif.debut), 'yyyy-MM-dd');
+    (effectifsByDay[dateKey] ||= []).push(effectif);
   }
 
-  const sortedDays = Object.keys(presencesByDay).sort();
+  const sortedDays = Object.keys(effectifsByDay).sort();
 
   return (
     <DetailPresencesLayout role={role}>
@@ -177,10 +220,30 @@ export default function DetailPresencesMission({ role = 'ADMIN_ETABLISSEMENT' }:
         <h1 className="text-lg font-bold text-foreground">{mission.intitule}</h1>
         {mission.service && <p className="text-sm text-muted-foreground">{mission.service}</p>}
         <div className="flex flex-wrap gap-x-6 gap-y-1 mt-2 text-sm text-muted-foreground">
-          <span>📅 {format(new Date(mission.debut_le), 'dd/MM/yyyy HH:mm')} → {format(new Date(mission.fin_le), 'dd/MM/yyyy HH:mm')}</span>
-          <span>⏱ {mission.duree_heures}h prévues</span>
+          <span>
+            📅 {planifies.length > 0 && planifies[0].fin
+              ? formatPlageExacte(new Date(planifies[0].debut), new Date(planifies.at(-1)!.fin!))
+              : `${format(new Date(mission.debut_le), 'dd/MM/yyyy HH:mm')} → ${format(new Date(mission.fin_le), 'dd/MM/yyyy HH:mm')}`}
+          </span>
+          <span>
+            ⏱ {planifies.length > 0
+              ? `${formatHours(heuresPlanifieesCreneaux)}h sur ${planifies.length} créneau${planifies.length > 1 ? 'x' : ''}`
+              : `${mission.duree_heures}h prévues`}
+          </span>
           <span>💰 {fmt(mission.taux_horaire_base)}/h</span>
         </div>
+        {planifies.length > 0 ? (
+          <p className="mt-2 text-xs text-muted-foreground">
+            Progression : {creneauxEchus}/{planifies.length} {planifies.length > 1 ? 'créneaux échus' : 'créneau échu'}
+            {prochainCreneau?.fin
+              ? ` · prochain : ${formatPlageExacte(new Date(prochainCreneau.debut), new Date(prochainCreneau.fin))}`
+              : ' · planning terminé'}
+          </p>
+        ) : (
+          <p className="mt-2 text-xs text-muted-foreground">
+            {planningIndisponible ? 'Planning détaillé indisponible.' : 'Planning détaillé à confirmer.'}
+          </p>
+        )}
         {soignant && role !== 'SOIGNANT' && (
           <p className="text-sm font-medium text-foreground mt-2">
             👤 {soignant.prenom} {soignant.nom} · {soignant.profession}
@@ -192,14 +255,37 @@ export default function DetailPresencesMission({ role = 'ADMIN_ETABLISSEMENT' }:
       {/* Synthèse présences via fn_presences_detail_mission */}
       {mission._detail && (() => {
         const d = mission._detail;
-        const heuresReelles = toNumberOrNull(d.heures_reelles) ?? computeRealHoursFromPresences(presences);
-        const heuresPlanifiees = toNumberOrNull(d.heures_planifiees) ?? toNumberOrNull(mission.duree_heures) ?? 0;
-        const retardMinutes = toNumberOrNull(d.retard_minutes ?? d.retard_min);
-        const departAnticipeMinutes = toNumberOrNull(d.depart_anticipe_minutes ?? d.depart_anticipe_min);
+        // La valeur RPC/legacy `heures_reelles` n'est volontairement pas
+        // utilisée : elle peut couvrir toute la période entre première arrivée
+        // et dernier départ. Les EFFECTIF fermés sont la seule source canonique.
+        const heuresReelles = heuresTravaillees;
+        const heuresPlanifiees = planifies.length > 0
+          ? heuresPlanifieesCreneaux
+          : toNumberOrNull(mission.duree_heures) ?? 0;
+        const comparaisons = synthese.effectifsFermes.flatMap((effectif) => {
+          const arrivee = new Date(effectif.debut);
+          const depart = new Date(effectif.fin!);
+          const associe = trouverCreneauDuJour(planifies, arrivee);
+          if (!associe?.creneau.fin) return [];
+
+          const debutPrevu = new Date(associe.creneau.debut);
+          const finPrevue = new Date(associe.creneau.fin);
+          return [{
+            retard: Math.max(differenceInMinutes(arrivee, debutPrevu), 0),
+            departAnticipe: finPrevue.getTime() <= maintenant.getTime()
+              ? Math.max(differenceInMinutes(finPrevue, depart), 0)
+              : 0,
+          }];
+        });
+        const retardMinutes = comparaisons.reduce((total, item) => total + item.retard, 0);
+        const departAnticipeMinutes = comparaisons.reduce((total, item) => total + item.departAnticipe, 0);
         const dureePauseMinutes = toNumberOrNull(d.duree_pause_minutes ?? d.duree_pause_min);
         const distanceGps = toNumberOrNull(d.distance_gps_m ?? d.distance_m);
         const methodePointage = d.methode_pointage ?? d.methode_arrivee ?? d.methode_depart ?? null;
-        const deficit = heuresReelles !== null && heuresReelles < heuresPlanifiees * 0.9;
+        const bilanFinalisable = planningEchu && synthese.effectifsOuverts.length === 0;
+        const deficit = bilanFinalisable
+          && heuresReelles < heuresPlanifiees * 0.9;
+        const bilanEnAttente = !bilanFinalisable;
         const alerteTelep = d.alerte_teleportation === true;
 
         return (
@@ -210,12 +296,12 @@ export default function DetailPresencesMission({ role = 'ADMIN_ETABLISSEMENT' }:
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-sm">
               <div>
                 <p className="text-xs text-muted-foreground">Heures planifiées</p>
-                <p className="font-semibold text-foreground">{heuresPlanifiees}h</p>
+                <p className="font-semibold text-foreground">{formatHours(heuresPlanifiees)}h</p>
               </div>
               <div>
                 <p className="text-xs text-muted-foreground">Heures réelles</p>
                 <p className={`font-semibold ${deficit ? 'text-destructive' : 'text-foreground'}`}>
-                  {heuresReelles !== null ? `${formatHours(heuresReelles)}h` : '—'}
+                  {formatHours(heuresReelles)}h
                 </p>
               </div>
               {retardMinutes !== null && retardMinutes > 0 && (
@@ -252,6 +338,16 @@ export default function DetailPresencesMission({ role = 'ADMIN_ETABLISSEMENT' }:
               )}
             </div>
 
+            {bilanEnAttente && (
+              <p className="mt-3 border-t border-border pt-3 text-xs text-muted-foreground">
+                {synthese.effectifsOuverts.length > 0
+                  ? 'Bilan définitif après la fermeture du pointage en cours.'
+                  : dernierCreneauFin
+                    ? `Bilan définitif après le dernier créneau, le ${format(dernierCreneauFin, 'dd/MM/yyyy à HH:mm')}. Aucun déficit n’est signalé avant cette échéance.`
+                    : 'Bilan définitif indisponible tant que le planning détaillé n’est pas confirmé.'}
+              </p>
+            )}
+
             {(alerteTelep || deficit) && (
               <div className="mt-3 pt-3 border-t border-destructive/20 flex items-center gap-2 text-sm text-destructive font-medium">
                 <AlertTriangle className="h-4 w-4" />
@@ -264,19 +360,21 @@ export default function DetailPresencesMission({ role = 'ADMIN_ETABLISSEMENT' }:
       })()}
 
       {/* Code de pointage rotatif (système ②) — l'ancien affichage statique est retiré. */}
-      <div className="mb-6">
-        <AffichageCodeRotatifEtab missionId={missionId} />
-      </div>
+      {role === 'ADMIN_ETABLISSEMENT' ? (
+        <div className="mb-6">
+          <AffichageCodeRotatifEtab missionId={missionId} />
+        </div>
+      ) : null}
 
-      {/* Détail des pointages par jour */}
+      {/* Détail des créneaux EFFECTIF par jour */}
       <h2 className="text-base font-bold text-foreground mb-3 flex items-center gap-2">
-        <Clock className="h-5 w-5 text-primary" /> Détail des pointages ({presences.length} enregistrement{presences.length > 1 ? 's' : ''})
+        <Clock className="h-5 w-5 text-primary" /> Détail des créneaux travaillés ({effectifs.length} segment{effectifs.length > 1 ? 's' : ''})
       </h2>
 
-      {presences.length === 0 ? (
+      {effectifs.length === 0 ? (
         <div className="card-base text-center py-8">
           <Clock className="h-8 w-8 text-muted-foreground/40 mx-auto mb-2" />
-          <p className="text-sm text-muted-foreground">Aucun pointage enregistré pour cette mission.</p>
+          <p className="text-sm text-muted-foreground">Aucun créneau de travail effectif enregistré pour cette mission.</p>
         </div>
       ) : (
         <div className="space-y-4 mb-6">
@@ -286,22 +384,64 @@ export default function DetailPresencesMission({ role = 'ADMIN_ETABLISSEMENT' }:
                 📅 {day !== 'sans-date' ? format(new Date(day), 'EEEE d MMMM yyyy', { locale: fr }) : 'Date inconnue'}
               </h3>
               <div className="space-y-3">
-                {presencesByDay[day].map((p: any, idx: number) => {
-                  const arrivee = p.pointage_arrivee_le ? new Date(p.pointage_arrivee_le) : null;
-                  const depart = p.pointage_depart_le ? new Date(p.pointage_depart_le) : null;
-                  const dureeMin = arrivee && depart ? differenceInMinutes(depart, arrivee) : null;
+                {effectifsByDay[day].map((effectif, idx) => {
+                  const arrivee = new Date(effectif.debut);
+                  const depart = effectif.fin ? new Date(effectif.fin) : null;
+                  const dureeMin = depart ? differenceInMinutes(depart, arrivee) : null;
+                  const associe = trouverCreneauDuJour(planifies, arrivee);
+                  const debutPrevu = associe ? new Date(associe.creneau.debut) : null;
+                  const finPrevue = associe?.creneau.fin ? new Date(associe.creneau.fin) : null;
+                  const retard = debutPrevu
+                    ? Math.max(differenceInMinutes(arrivee, debutPrevu), 0)
+                    : 0;
+                  const finPrevueEchue = finPrevue !== null && finPrevue.getTime() <= maintenant.getTime();
+                  const departAnticipe = depart && finPrevue && finPrevueEchue
+                    ? Math.max(differenceInMinutes(finPrevue, depart), 0)
+                    : 0;
+                  const comparaisonEnAttente = depart !== null
+                    && finPrevue !== null
+                    && depart.getTime() < finPrevue.getTime()
+                    && !finPrevueEchue;
 
                   return (
-                    <div key={p.id} className={`rounded-xl border p-3 space-y-2 ${
-                      p.alerte_teleportation ? 'border-destructive/40 bg-destructive/5' :
-                      !p.perimetre_gps_valide && p.distance_etablissement_m !== null ? 'border-warning/40 bg-warning/5' :
-                      p.valide_par_etablissement ? 'border-success/30 bg-success/5' :
+                    <div key={effectif.id ?? `${effectif.debut}-${idx}`} className={`rounded-xl border p-3 space-y-2 ${
+                      presenceReference?.alerte_teleportation ? 'border-destructive/40 bg-destructive/5' :
+                      presenceReference?.perimetre_gps_valide === false && presenceReference?.distance_etablissement_m !== null ? 'border-warning/40 bg-warning/5' :
+                      presenceReference?.valide_par_etablissement ? 'border-success/30 bg-success/5' :
                       'border-border'
                     }`}>
-                      {presencesByDay[day].length > 1 && (
+                      {associe ? (
                         <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">
-                          Créneau {idx + 1} / {presencesByDay[day].length}
+                          Créneau planifié {associe.index + 1} / {associe.total}
+                        </p>
+                      ) : effectifsByDay[day].length > 1 ? (
+                        <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">
+                          Segment travaillé {idx + 1} / {effectifsByDay[day].length}
                           {idx > 0 && ' (reprise après pause)'}
+                        </p>
+                      ) : null}
+
+                      {debutPrevu && finPrevue ? (
+                        <div className="rounded-lg bg-muted/40 px-3 py-2 text-xs">
+                          <p className="text-muted-foreground">Horaire prévu</p>
+                          <p className="font-medium text-foreground">{formatPlageExacte(debutPrevu, finPrevue)}</p>
+                          <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1">
+                            {retard > 0 && <span className="text-warning">Retard : +{retard} min</span>}
+                            {departAnticipe > 0 && <span className="text-warning">Départ anticipé : -{departAnticipe} min</span>}
+                            {comparaisonEnAttente && (
+                              <span className="text-muted-foreground">
+                                Bilan après l’échéance de {format(finPrevue, 'HH:mm')}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      ) : (
+                        <p className="text-xs text-muted-foreground">
+                          {planningIndisponible
+                            ? 'Planning détaillé indisponible.'
+                            : planifies.length > 0
+                              ? 'Aucun créneau planifié ne correspond à ce jour.'
+                              : 'Planning détaillé à confirmer.'}
                         </p>
                       )}
 
@@ -309,20 +449,10 @@ export default function DetailPresencesMission({ role = 'ADMIN_ETABLISSEMENT' }:
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
                           <span className="text-success text-xs font-medium">▶ Arrivée</span>
-                          {arrivee && (
-                            <span className="text-sm font-semibold text-foreground">
-                              {format(arrivee, 'HH:mm:ss', { locale: fr })}
-                            </span>
-                          )}
-                          <MethodeBadge methode={p.methode_pointage_arrivee} />
-                        </div>
-                        {p.distance_etablissement_m !== null && (
-                          <span className={`flex items-center gap-1 text-xs ${p.perimetre_gps_valide ? 'text-success' : 'text-warning'}`}>
-                            <MapPin className="h-3 w-3" />
-                            {Math.round(p.distance_etablissement_m)}m
-                            {p.perimetre_gps_valide ? <CheckCircle className="h-3 w-3" /> : <XCircle className="h-3 w-3" />}
+                          <span className="text-sm font-semibold text-foreground">
+                            {format(arrivee, 'dd/MM/yyyy HH:mm:ss', { locale: fr })}
                           </span>
-                        )}
+                        </div>
                       </div>
 
                       {/* Départ */}
@@ -331,9 +461,8 @@ export default function DetailPresencesMission({ role = 'ADMIN_ETABLISSEMENT' }:
                           <div className="flex items-center gap-2">
                             <span className="text-destructive text-xs font-medium">■ Départ</span>
                             <span className="text-sm font-semibold text-foreground">
-                              {format(depart, 'HH:mm:ss', { locale: fr })}
+                              {format(depart, 'dd/MM/yyyy HH:mm:ss', { locale: fr })}
                             </span>
-                            <MethodeBadge methode={p.methode_pointage_depart} />
                           </div>
                         </div>
                       ) : (
@@ -347,41 +476,16 @@ export default function DetailPresencesMission({ role = 'ADMIN_ETABLISSEMENT' }:
                         </p>
                       )}
 
-                      {/* GPS details */}
-                      <div className="flex flex-wrap gap-3 text-[11px] text-muted-foreground">
-                        {p.arrivee_precision_gps_m && (
-                          <span className="flex items-center gap-1">
-                            <Radio className="h-3 w-3" />
-                            Précision arrivée : {Math.round(p.arrivee_precision_gps_m)}m
-                          </span>
-                        )}
-                        {p.depart_precision_gps_m && (
-                          <span className="flex items-center gap-1">
-                            <Radio className="h-3 w-3" />
-                            Précision départ : {Math.round(p.depart_precision_gps_m)}m
-                          </span>
-                        )}
-                        {p.arrivee_id_terminal && (
-                          <span>Terminal : {p.arrivee_id_terminal.substring(0, 8)}…</span>
-                        )}
-                      </div>
-
-                      {/* Alerts */}
-                      {p.alerte_teleportation && (
-                        <div className="flex items-center gap-1 text-xs text-destructive font-medium">
-                          <AlertTriangle className="h-3.5 w-3.5" />
-                          🚨 Alerte téléportation détectée
-                        </div>
-                      )}
-
                       {/* Validation status */}
                       <div className="text-[11px] pt-1 border-t border-border/50">
-                        {p.valide_par_etablissement ? (
+                        {presenceReference?.valide_par_etablissement ? (
                           <span className="text-success font-medium">
-                            ✅ Validé{p.valide_le ? ` le ${format(new Date(p.valide_le), 'dd/MM/yyyy HH:mm')}` : ''}
+                            ✅ Validé{presenceReference.valide_le ? ` le ${format(new Date(presenceReference.valide_le), 'dd/MM/yyyy HH:mm')}` : ''}
                           </span>
-                        ) : depart ? (
+                        ) : synthese.validationPossible ? (
                           <span className="text-warning">⏳ En attente de validation</span>
+                        ) : synthese.effectifsOuverts.length > 0 ? (
+                          <span className="text-warning">Pointage en cours</span>
                         ) : (
                           <span className="text-muted-foreground">Mission en cours</span>
                         )}
@@ -392,6 +496,42 @@ export default function DetailPresencesMission({ role = 'ADMIN_ETABLISSEMENT' }:
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Métadonnées legacy conservées comme contrôles anti-fraude, jamais
+          comme source de durée. Elles décrivent la première arrivée et le
+          dernier départ globaux de la mission. */}
+      {presenceReference && (
+        <div className="card-base mb-6">
+          <h2 className="font-semibold text-foreground mb-3">Contrôles du pointage</h2>
+          <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
+            {presenceReference.distance_etablissement_m !== null && (
+              <span className={`flex items-center gap-1 ${presenceReference.perimetre_gps_valide ? 'text-success' : 'text-warning'}`}>
+                <MapPin className="h-3.5 w-3.5" />
+                Première arrivée : {Math.round(presenceReference.distance_etablissement_m)}m
+                {presenceReference.perimetre_gps_valide ? <CheckCircle className="h-3 w-3" /> : <XCircle className="h-3 w-3" />}
+              </span>
+            )}
+            {presenceReference.arrivee_precision_gps_m && (
+              <span className="flex items-center gap-1">
+                <Radio className="h-3.5 w-3.5" />
+                Précision première arrivée : {Math.round(presenceReference.arrivee_precision_gps_m)}m
+              </span>
+            )}
+            {presenceReference.depart_precision_gps_m && (
+              <span className="flex items-center gap-1">
+                <Radio className="h-3.5 w-3.5" />
+                Précision dernier départ : {Math.round(presenceReference.depart_precision_gps_m)}m
+              </span>
+            )}
+          </div>
+          {presenceReference.alerte_teleportation && (
+            <div className="mt-3 flex items-center gap-1 text-xs text-destructive font-medium">
+              <AlertTriangle className="h-3.5 w-3.5" />
+              Alerte téléportation détectée
+            </div>
+          )}
         </div>
       )}
 
@@ -409,17 +549,21 @@ export default function DetailPresencesMission({ role = 'ADMIN_ETABLISSEMENT' }:
       {/* Récapitulatif financier */}
       <div className="card-base">
         <h2 className="font-semibold text-foreground mb-3">💶 Récapitulatif financier</h2>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 text-sm">
           <div>
             <p className="text-xs text-muted-foreground">Taux horaire</p>
             <p className="font-semibold text-foreground">{fmt(mission.taux_horaire_base)}</p>
           </div>
           <div>
-            <p className="text-xs text-muted-foreground">Heures</p>
-            <p className="font-semibold text-foreground">{mission.duree_heures}h</p>
+            <p className="text-xs text-muted-foreground">Heures planifiées</p>
+            <p className="font-semibold text-foreground">{formatDureeMinutes(synthese.minutesPlanifiees)}</p>
           </div>
           <div>
-            <p className="text-xs text-muted-foreground">Base brut</p>
+            <p className="text-xs text-muted-foreground">Heures travaillées fermées</p>
+            <p className="font-semibold text-foreground">{formatDureeMinutes(synthese.minutesTravaillees)}</p>
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground">Base brut contractuelle</p>
             <p className="font-semibold text-foreground">{fmt((mission.duree_heures || 0) * mission.taux_horaire_base)}</p>
           </div>
           <div>

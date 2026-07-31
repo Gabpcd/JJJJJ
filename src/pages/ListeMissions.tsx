@@ -6,7 +6,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { SkeletonList } from '@/components/SkeletonCard';
 import { useEtablissementScope } from '@/hooks/useEtablissementScope';
 import { FadeInView } from '@/components/FadeInView';
-import { Search, X } from 'lucide-react';
+import { AlertTriangle, Search, X } from 'lucide-react';
 import { LayoutApp } from '@/components/LayoutApp';
 import { CarteMission } from '@/components/CarteMission';
 import { CarteSerie, extraireSerieId } from '@/components/CarteSerie';
@@ -18,12 +18,16 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
 import { supabase } from '@/integrations/supabase/client';
 import { extraireMessageErreur } from '@/lib/erreurs';
+import {
+  ajouterRepliMissionPonctuelle,
+  type CreneauPointage,
+} from '@/lib/disponibilite-pointage';
 
 const STATUTS_FILTRES = [
   { valeur: '', label: 'Toutes' },
   { valeur: 'OUVERTE', label: 'Ouvertes' },
   { valeur: 'ASSIGNEE', label: 'Assignées' },
-  { valeur: 'EN_COURS', label: 'En cours' },
+  { valeur: 'EN_COURS', label: 'Actives' },
   { valeur: 'TERMINEE', label: 'Terminées' },
   { valeur: 'EXPIREE', label: 'Expirées' },
   { valeur: 'ANNULEE_PAR_ETABLISSEMENT', label: 'Annulées' },
@@ -55,14 +59,20 @@ export default function ListeMissions() {
 
   useEffect(() => {
     const nextStatut = STATUTS_FILTRES.some((s) => s.valeur === statutParam) ? statutParam : '';
-    if (nextStatut !== filtreStatut) setFiltreStatut(nextStatut);
-    if (periodeParam !== filtrePeriode) setFiltrePeriode(periodeParam);
+    setFiltreStatut((precedent) => precedent === nextStatut ? precedent : nextStatut);
+    setFiltrePeriode((precedent) => precedent === periodeParam ? precedent : periodeParam);
   }, [statutParam, periodeParam]);
 
   // Reset pagination when filters change
   useEffect(() => { setNbAffiche(20); }, [filtreStatut, filtrePeriode, debouncedRecherche]);
 
-  const { data: listData, isLoading: loading } = useQuery({
+  const {
+    data: listData,
+    isLoading: loading,
+    isError: chargementEnErreur,
+    error: erreurChargement,
+    refetch: rechargerMissions,
+  } = useQuery({
     queryKey: ['liste-missions', user?.id, etablissementId, filtreStatut, filtrePeriode, debouncedRecherche],
     queryFn: async () => {
       const debutMois = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString();
@@ -79,11 +89,32 @@ export default function ListeMissions() {
       if (filtrePeriode === 'mois') query = query.gte('fin_le', debutMois).lt('fin_le', finMois);
       if (debouncedRecherche) query = query.ilike('intitule', `%${debouncedRecherche}%`);
 
-      const [{ data }, { data: sgData }, { data: litigesData }] = await Promise.all([
+      const [missionsResult, soignantsResult, litigesResult] = await Promise.all([
         query,
         supabase.rpc('fn_mes_soignants_etablissement'),
         supabase.from('litiges').select('mission_id').eq('etablissement_id', etabId),
       ]);
+      if (missionsResult.error) throw missionsResult.error;
+
+      const data = missionsResult.data || [];
+      const sgData = soignantsResult.data;
+      const litigesData = litigesResult.data;
+      const missionIds = data.map((mission) => mission.id);
+      const { data: creneauxData, error: creneauxError } = missionIds.length > 0
+        ? await supabase
+          .from('mission_creneaux')
+          .select('id, mission_id, debut, fin, est_pause, type_creneau')
+          .in('mission_id', missionIds)
+          .eq('type_creneau', 'PREVISIONNEL')
+          .eq('est_pause', false)
+          .order('debut', { ascending: true })
+        : { data: [], error: null };
+      if (creneauxError) throw creneauxError;
+
+      const creneauxParMission: Record<string, CreneauPointage[]> = {};
+      (creneauxData || []).forEach((creneau) => {
+        (creneauxParMission[creneau.mission_id] ||= []).push(creneau);
+      });
 
       // Map soignant data by ID
       const sgMap: Record<string, any> = {};
@@ -97,7 +128,7 @@ export default function ListeMissions() {
       // Pas de count par mission dans le fetch missions : on agrège ici à la volée
       // (count + dernière candidature) à partir de la table `candidatures`, restreint
       // aux missions OUVERTE de la page courante (requête légère, pas de N+1).
-      const missionsOuvertesIds = (data || [])
+      const missionsOuvertesIds = data
         .filter((m: any) => m.statut === 'OUVERTE')
         .map((m: any) => m.id);
       const candidaturesParMission: Record<string, { count: number; derniere: string | null }> = {};
@@ -115,8 +146,9 @@ export default function ListeMissions() {
         }
       }
 
-      const missions = (data || []).map((m: any) => ({
+      const missions = data.map((m: any) => ({
         ...m,
+        creneaux: ajouterRepliMissionPonctuelle(creneauxParMission[m.id] || [], m),
         soignants: m.soignant_assigne_id ? sgMap[m.soignant_assigne_id] || null : null,
         has_litige: litigesMissionIds.has(m.id),
         nb_candidatures_attente: candidaturesParMission[m.id]?.count ?? 0,
@@ -198,6 +230,27 @@ export default function ListeMissions() {
   };
 
   if (loading) return <LayoutApp role="ADMIN_ETABLISSEMENT"><SkeletonList count={4} /></LayoutApp>;
+
+  if (chargementEnErreur) {
+    return (
+      <LayoutApp role="ADMIN_ETABLISSEMENT">
+        <div className="card-base border-destructive/30 max-w-xl mx-auto" role="alert">
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="h-5 w-5 shrink-0 text-destructive" aria-hidden="true" />
+            <div>
+              <h1 className="font-semibold text-foreground">Impossible de charger les missions</h1>
+              <p className="text-sm text-muted-foreground mt-1">
+                {extraireMessageErreur(erreurChargement)}
+              </p>
+              <button type="button" className="btn-primary mt-4" onClick={() => void rechargerMissions()}>
+                Réessayer
+              </button>
+            </div>
+          </div>
+        </div>
+      </LayoutApp>
+    );
+  }
 
   return (
     <LayoutApp role="ADMIN_ETABLISSEMENT">
@@ -284,7 +337,7 @@ export default function ListeMissions() {
           titre={
             filtreStatut === 'OUVERTE' ? 'Aucune mission ouverte' :
             filtreStatut === 'ASSIGNEE' ? 'Aucune mission assignée' :
-            filtreStatut === 'EN_COURS' ? 'Aucune mission en cours' :
+            filtreStatut === 'EN_COURS' ? 'Aucune mission active' :
             filtreStatut === 'TERMINEE' ? 'Aucune mission terminée' :
             filtreStatut === 'EXPIREE' ? 'Aucune mission expirée' :
             filtreStatut === 'ANNULEE_PAR_ETABLISSEMENT' ? 'Aucune mission annulée' :

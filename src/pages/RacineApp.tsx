@@ -52,6 +52,24 @@ export default function RacineApp() {
     let cancelled = false;
     const sessionEnCours = session.user.id;
     setResolutionRole({ sessionId: sessionEnCours, statut: 'chargement', chemin: null });
+
+    // Le rôle placé dans app_metadata est signé par Supabase Auth et ne
+    // peut pas être modifié par l'utilisateur. Il suffit pour choisir la route
+    // d'interface ; les données et actions restent protégées par RLS/RPC.
+    // Surtout, une indisponibilité momentanée de la base ne doit pas bloquer
+    // une session native déjà authentifiée (cas constaté pendant l'App Review).
+    const cheminRoleSigne = cheminPourRole(session.user.app_metadata?.role);
+    if (cheminRoleSigne) {
+      setResolutionRole({
+        sessionId: sessionEnCours,
+        statut: 'resolu',
+        chemin: cheminRoleSigne,
+      });
+      return;
+    }
+
+    // Compatibilité avec les comptes anciens qui n'ont pas encore de rôle
+    // signé dans app_metadata.
     (async () => {
       try {
         const { data, error } = await avecDelai(

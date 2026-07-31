@@ -46,9 +46,7 @@ export default function CertificatSignaturePage() {
   const { role: serverRole } = useRole();
   const { afficherNotification } = useNotification();
   const navigate = useNavigate();
-  const role: UserRole = serverRole === 'ETABLISSEMENT'
-    ? 'ADMIN_ETABLISSEMENT'
-    : serverRole === 'INCONNU'
+  const role: UserRole = serverRole === 'INCONNU'
       ? 'SOIGNANT'
       : serverRole;
 

@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
+  ajouterRepliMissionPonctuelle,
   creneauChevauchePeriode,
+  creneauxPrevisionnels,
+  choisirContratPointage,
   evaluerDisponibilitePointage,
+  evaluerTerminaisonMission,
   filtrerMissionsEnCours,
   prochainCreneauPointage,
   type CreneauPointage,
@@ -14,13 +18,37 @@ const creneau = (
 ): CreneauPointage => ({ debut, fin, type_creneau, est_pause: false });
 
 describe('disponibilité du pointage', () => {
+  it('utilise la plage globale uniquement pour une mission ponctuelle sans créneau', () => {
+    const ponctuelle = ajouterRepliMissionPonctuelle([], {
+      id: 'ponctuelle',
+      debut_le: '2026-07-31T08:00:00+02:00',
+      fin_le: '2026-07-31T16:00:00+02:00',
+    });
+    const longue = ajouterRepliMissionPonctuelle([], {
+      id: 'longue',
+      debut_le: '2026-07-06T08:00:00+02:00',
+      fin_le: '2026-08-31T16:00:00+02:00',
+    });
+
+    expect(creneauxPrevisionnels(ponctuelle)).toHaveLength(1);
+    expect(longue).toEqual([]);
+  });
+
+  it('privilégie le contrat signé et ignore les anciennes versions annulées', () => {
+    expect(choisirContratPointage([
+      { id: 'annule', statut: 'ANNULE', cree_le: '2026-07-31T10:00:00Z' },
+      { id: 'attente', statut: 'EN_ATTENTE_SIGNATURES', cree_le: '2026-07-30T10:00:00Z' },
+      { id: 'signe', statut: 'SIGNE_COMPLET', cree_le: '2026-07-01T10:00:00Z' },
+    ])?.id).toBe('signe');
+  });
+
   it('conserve une mission EN_COURS même sans présence legacy', () => {
     const mission = { id: 'mission-longue', statut: 'EN_COURS', presences: [] };
 
     expect(filtrerMissionsEnCours([mission])).toEqual([mission]);
   });
 
-  it('autorise une arrivée dans les 30 minutes avant un créneau signé', () => {
+  it('autorise une arrivée dans les 15 minutes avant un créneau signé', () => {
     const resultat = evaluerDisponibilitePointage({
       creneaux: [creneau('2026-07-31T08:00:00.000Z', '2026-07-31T16:00:00.000Z')],
       contratStatut: 'SIGNE_COMPLET',
@@ -29,6 +57,16 @@ describe('disponibilité du pointage', () => {
 
     expect(resultat.peutPointer).toBe(true);
     expect(resultat.action).toBe('OUVERTURE');
+  });
+
+  it('n’affiche pas un pointage que le serveur refuserait avant H-15', () => {
+    const resultat = evaluerDisponibilitePointage({
+      creneaux: [creneau('2026-07-31T08:00:00.000Z', '2026-07-31T16:00:00.000Z')],
+      contratStatut: 'SIGNE_COMPLET',
+      maintenant: new Date('2026-07-31T07:44:59.000Z'),
+    });
+
+    expect(resultat).toMatchObject({ peutPointer: false, motif: 'HORS_CRENEAU' });
   });
 
   it('bloque explicitement une mission longue entre deux créneaux', () => {
@@ -81,5 +119,31 @@ describe('disponibilité du pointage', () => {
     )).toBe(true);
     expect(prochainCreneauPointage([nuit, lendemain], new Date('2026-07-31T12:00:00.000Z')))
       .toBe(lendemain);
+  });
+
+  it('refuse de terminer tant qu’un segment effectif reste ouvert', () => {
+    const resultat = evaluerTerminaisonMission({
+      creneaux: [
+        creneau('2026-07-31T08:00:00.000Z', '2026-07-31T16:00:00.000Z'),
+        creneau('2026-07-31T08:05:00.000Z', null, 'EFFECTIF'),
+      ],
+      finMission: '2026-07-31T16:00:00.000Z',
+      maintenant: new Date('2026-07-31T17:00:00.000Z'),
+    });
+
+    expect(resultat).toMatchObject({ peutTerminer: false, motif: 'SEGMENT_OUVERT' });
+  });
+
+  it('autorise la terminaison après le dernier créneau et un départ fermé', () => {
+    const resultat = evaluerTerminaisonMission({
+      creneaux: [
+        creneau('2026-07-31T08:00:00.000Z', '2026-07-31T16:00:00.000Z'),
+        creneau('2026-07-31T08:05:00.000Z', '2026-07-31T15:55:00.000Z', 'EFFECTIF'),
+      ],
+      finMission: '2026-07-31T16:00:00.000Z',
+      maintenant: new Date('2026-07-31T17:00:00.000Z'),
+    });
+
+    expect(resultat).toMatchObject({ peutTerminer: true, motif: null });
   });
 });

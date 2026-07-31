@@ -66,7 +66,9 @@ export const PROFESSIONS_PHARMACIE = ['PHARMACIEN', 'PREPARATEUR_PHARMA'];
 export const BADGES_STATUT: Record<string, { label: string; classes: string }> = {
   'OUVERTE': { label: 'Ouverte', classes: 'bg-primary/10 text-primary' },
   'ASSIGNEE': { label: 'Assignée', classes: 'bg-warning/10 text-warning' },
-  'EN_COURS': { label: 'En cours', classes: 'bg-info/10 text-info' },
+  // « Active » décrit la période contractuelle. Cela n'affirme pas que le
+  // soignant est actuellement en service entre deux créneaux d'une mission longue.
+  'EN_COURS': { label: 'Active', classes: 'bg-info/10 text-info' },
   'TERMINEE': { label: 'Terminée', classes: 'bg-success/10 text-success' },
   'EXPIREE': { label: 'Expirée (non pourvue)', classes: 'bg-amber-500/10 text-amber-600 dark:text-amber-400' },
   'ANNULEE_PAR_ETABLISSEMENT': { label: 'Annulée', classes: 'bg-muted text-muted-foreground' },

@@ -3,7 +3,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useEtablissementScope } from './useEtablissementScope';
 
 const mocks = vi.hoisted(() => ({
-  auth: { user: { id: 'utilisateur-id' } as { id: string } | null },
+  auth: {
+    user: { id: 'utilisateur-id', app_metadata: {} } as {
+      id: string;
+      app_metadata: { role?: string };
+    } | null,
+  },
   role: {
     role: 'INCONNU',
     etablissement_id: null as string | null,
@@ -20,7 +25,7 @@ vi.mock('@/hooks/useRole', () => ({ useRole: () => mocks.role }));
 describe('useEtablissementScope — aucun fallback ambigu', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.auth.user = { id: 'utilisateur-id' };
+    mocks.auth.user = { id: 'utilisateur-id', app_metadata: {} };
     Object.assign(mocks.role, {
       role: 'INCONNU',
       etablissement_id: null,
@@ -62,7 +67,15 @@ describe('useEtablissementScope — aucun fallback ambigu', () => {
   });
 
   it('tolère user.id uniquement pour l’ancien rôle ETABLISSEMENT confirmé', () => {
-    Object.assign(mocks.role, { role: 'ETABLISSEMENT', resolved: true, error: null });
+    mocks.auth.user = {
+      id: 'utilisateur-id',
+      app_metadata: { role: 'ETABLISSEMENT' },
+    };
+    Object.assign(mocks.role, {
+      role: 'ADMIN_ETABLISSEMENT',
+      resolved: true,
+      error: null,
+    });
 
     const { result } = renderHook(() => useEtablissementScope());
 
