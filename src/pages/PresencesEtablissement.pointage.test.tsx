@@ -7,10 +7,15 @@ import PresencesEtablissement from './PresencesEtablissement';
 const mocks = vi.hoisted(() => ({
   from: vi.fn(),
   rpc: vi.fn(),
+  chargerCreneaux: vi.fn(),
 }));
 
 vi.mock('@/integrations/supabase/client', () => ({
   supabase: { from: mocks.from, rpc: mocks.rpc },
+}));
+
+vi.mock('@/lib/mission-creneaux-pagines', () => ({
+  chargerCreneauxMissionsPagines: mocks.chargerCreneaux,
 }));
 
 vi.mock('@/hooks/useEtablissementScope', () => ({
@@ -51,13 +56,13 @@ vi.mock('@/components/ui/TableOuCartes', () => ({
     : etatVide}</>,
 }));
 
-function creerBuilder(data: unknown) {
+function creerBuilder(data: unknown, error: unknown = null) {
   const builder: Record<string, any> = {};
   for (const methode of ['select', 'eq', 'not', 'order', 'in']) {
     builder[methode] = vi.fn(() => builder);
   }
   builder.then = (resolve: (value: unknown) => unknown, reject: (reason: unknown) => unknown) => (
-    Promise.resolve({ data, error: null }).then(resolve, reject)
+    Promise.resolve({ data, error }).then(resolve, reject)
   );
   return builder;
 }
@@ -82,7 +87,6 @@ const previsionnels = [
 ];
 
 describe('PresencesEtablissement — statut multi-créneaux', () => {
-  let creneauxBuilder: Record<string, any>;
   let creneauxData: any[];
 
   beforeEach(() => {
@@ -100,6 +104,8 @@ describe('PresencesEtablissement — statut multi-créneaux', () => {
     ];
     mocks.from.mockReset();
     mocks.rpc.mockReset();
+    mocks.chargerCreneaux.mockReset();
+    mocks.chargerCreneaux.mockImplementation(async () => creneauxData);
     mocks.rpc.mockResolvedValue({
       data: [{ id: 'soignant-1', prenom: 'Marie', nom: 'Lefèvre', profession: 'IDE' }],
       error: null,
@@ -121,15 +127,12 @@ describe('PresencesEtablissement — statut multi-créneaux', () => {
             debut_le: '2026-07-06T08:00:00+02:00',
             fin_le: '2026-08-31T16:00:00+02:00',
             duree_heures: 16,
+            nb_creneaux: 2,
             etablissement_id: 'etablissement-1',
           },
         }]);
       }
       if (table === 'litiges') return creerBuilder([]);
-      if (table === 'mission_creneaux') {
-        creneauxBuilder = creerBuilder(creneauxData);
-        return creneauxBuilder;
-      }
       return creerBuilder([]);
     });
   });
@@ -143,8 +146,10 @@ describe('PresencesEtablissement — statut multi-créneaux', () => {
 
     expect(await screen.findByRole('tab', { name: 'À valider: 0 présences' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'En cours: 1 présences' })).toBeInTheDocument();
-    expect(creneauxBuilder.eq).toHaveBeenCalledWith('est_pause', false);
-    expect(creneauxBuilder.eq).not.toHaveBeenCalledWith('type_creneau', 'PREVISIONNEL');
+    expect(mocks.chargerCreneaux).toHaveBeenCalledWith(
+      ['mission-1'],
+      { exclurePauses: true },
+    );
   });
 
   it('passe « à valider » seulement après le dernier prévu', async () => {
@@ -166,6 +171,16 @@ describe('PresencesEtablissement — statut multi-créneaux', () => {
       est_pause: false,
       type_creneau: 'EFFECTIF',
     });
+
+    render(<MemoryRouter><PresencesEtablissement /></MemoryRouter>);
+
+    expect(await screen.findByRole('tab', { name: 'À valider: 0 présences' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'En cours: 1 présences' })).toBeInTheDocument();
+  });
+
+  it('reste « en cours » si un des créneaux attendus manque après l’échéance', async () => {
+    vi.setSystemTime(new Date('2026-09-01T12:00:00+02:00'));
+    creneauxData = creneauxData.filter((creneau) => creneau.id !== 'prev-2');
 
     render(<MemoryRouter><PresencesEtablissement /></MemoryRouter>);
 
@@ -209,5 +224,29 @@ describe('PresencesEtablissement — statut multi-créneaux', () => {
     render(<MemoryRouter><PresencesEtablissement /></MemoryRouter>);
 
     expect(await screen.findByRole('tab', { name: 'À valider: 1 présences' })).toBeInTheDocument();
+  });
+
+  it('affiche une erreur explicite au lieu d’un faux état vide', async () => {
+    const originalImplementation = mocks.from.getMockImplementation();
+    mocks.from.mockImplementation((table: string) => (
+      table === 'presences'
+        ? creerBuilder(null, { message: 'Réseau indisponible' })
+        : originalImplementation!(table)
+    ));
+
+    render(<MemoryRouter><PresencesEtablissement /></MemoryRouter>);
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Impossible de charger les présences');
+    expect(screen.queryByText('Aucune présence à valider')).not.toBeInTheDocument();
+  });
+
+  it('affiche une erreur explicite si le planning des présences est indisponible', async () => {
+    mocks.chargerCreneaux.mockRejectedValueOnce(new Error('Planning indisponible'));
+
+    render(<MemoryRouter><PresencesEtablissement /></MemoryRouter>);
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Impossible de charger les présences');
+    expect(screen.queryByRole('tab', { name: /En cours/ })).not.toBeInTheDocument();
+    expect(screen.queryByText('Aucune présence à valider')).not.toBeInTheDocument();
   });
 });

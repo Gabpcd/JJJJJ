@@ -8,10 +8,15 @@
  *
  *   <CardMissionSwipe mission={mission} onTap={() => setDetailOpen(true)} />
  */
-import { CalendarDays, MapPin, Sparkles, Star } from 'lucide-react';
+import { MapPin, Sparkles, Star } from 'lucide-react';
 import { BadgeY2K } from '@/components/y2k/BadgeY2K';
 import { cn } from '@/lib/utils';
-import { estMissionDeNuit, estMultiJours, formatDureeCompacte } from '@/lib/format-mission';
+import { PlanningMissionCandidat } from '@/components/planning/PlanningMissionCandidat';
+import {
+  construirePlanningCandidat,
+  creneauContientNuit,
+  type CreneauMissionCandidat,
+} from '@/components/planning/planning-candidat';
 
 export interface MissionSwipePayload {
   mission_id: string;
@@ -35,6 +40,9 @@ export interface MissionSwipePayload {
   type_contrat_applique: string | null;
   type_contrat_recherche: string | null;
   nb_creneaux?: number | null;
+  creneaux_planifies?: CreneauMissionCandidat[];
+  planning_exact?: boolean;
+  erreur_planning?: boolean;
   duree_heures: number | null;
   debut_le: string | null;
   fin_le: string | null;
@@ -54,24 +62,6 @@ interface Props {
   className?: string;
 }
 
-function formatJour(iso: string | null): string {
-  if (!iso) return '—';
-  try {
-    return new Date(iso).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' });
-  } catch {
-    return '—';
-  }
-}
-
-function formatHeure(iso: string | null): string {
-  if (!iso) return '';
-  try {
-    return new Date(iso).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
-  } catch {
-    return '';
-  }
-}
-
 /** Quartier lisible : « Paris 16e » pour les CP parisiens, sinon « Ville CP ». */
 function formatQuartier(ville: string | null, cp: string | null): string {
   if (ville && cp && /^75\d{3}$/.test(cp)) {
@@ -89,7 +79,9 @@ function formatQuartier(ville: string | null, cp: string | null): string {
 function momentLabel(m: MissionSwipePayload): string {
   if ((m.montant_majoration_ferie ?? 0) > 0) return '🎉 férié';
   if ((m.montant_majoration_dimanche ?? 0) > 0) return '☀️ dimanche';
-  return estMissionDeNuit(m.debut_le) ? '🌙 nuit' : '☀️ jour';
+  const planning = construirePlanningCandidat(m);
+  if (!planning.exact) return 'planning à confirmer';
+  return planning.creneaux.some(creneauContientNuit) ? '🌙 nuit' : '☀️ jour';
 }
 
 /** 6c.2 : libellé du type de contrat recherché — information de régime au
@@ -137,15 +129,21 @@ export function CardMissionSwipe({ mission, onTap, className }: Props) {
   const scoreEleve = mission.score >= 80;
   const quartier = formatQuartier(mission.etablissement_ville, mission.etablissement_code_postal);
   const moment = momentLabel(mission);
+  const planning = construirePlanningCandidat(mission);
   const raisons = raisonsScore(mission.breakdown);
-  const heureDebut = formatHeure(mission.debut_le);
-  const heureFin = formatHeure(mission.fin_le);
   const initiale = (mission.etablissement_nom || '?').trim().charAt(0).toUpperCase();
 
   return (
-    <button
-      type="button"
+    <div
+      role="button"
+      tabIndex={0}
       onClick={onTap}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          onTap?.();
+        }
+      }}
       className={cn(
         'relative w-full h-full rounded-3xl overflow-hidden flex flex-col',
         'border-2 border-jolene-rose-200 shadow-holographic bg-jolene-cloud',
@@ -258,23 +256,15 @@ export function CardMissionSwipe({ mission, onTap, className }: Props) {
           )}
         </div>
         <p className="text-base font-bold text-jolene-rose-700 mt-1">
-          {formatDureeCompacte(mission)} · {moment}
+          {planning.exact ? `${planning.totalHeures.toLocaleString('fr-FR', { maximumFractionDigits: 2 })} h` : 'Horaires non vérifiés'} · {moment}
         </p>
-        <div className="flex items-center gap-1.5 text-sm font-medium text-jolene-midnight mt-2">
-          <CalendarDays className="h-4 w-4 text-jolene-rose-600 shrink-0" aria-hidden="true" />
-          {estMultiJours(mission) ? (
-            <span className="capitalize">
-              {formatJour(mission.debut_le)} → {formatJour(mission.fin_le)}
-            </span>
-          ) : (
-            <span className="capitalize">{formatJour(mission.debut_le)}</span>
-          )}
-          {heureDebut && (
-            <span className="text-jolene-bubblegum">
-              · {heureDebut}{heureFin && `–${heureFin}`}
-            </span>
-          )}
-        </div>
+        <PlanningMissionCandidat
+          mission={mission}
+          compact
+          limite={2}
+          afficherMentionJoursNonTravailles={false}
+          className="mt-2"
+        />
 
         {/* Tags spécialité */}
         <div className="flex flex-wrap gap-1.5 mt-3">
@@ -307,7 +297,7 @@ export function CardMissionSwipe({ mission, onTap, className }: Props) {
 
         <p className="text-[11px] text-jolene-bubblegum text-center mt-2">Toucher pour voir le détail</p>
       </div>
-    </button>
+    </div>
   );
 }
 

@@ -1,13 +1,11 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, CheckCircle2, XCircle } from 'lucide-react';
 import { LayoutApp } from '@/components/LayoutApp';
 import { ChargementPage } from '@/components/ChargementPage';
 import { BadgeStatut } from '@/components/BadgeStatut';
 import { BadgeDistance } from '@/components/BadgeDistance';
-import { ModalConfirmation } from '@/components/ModalConfirmation';
 import { ModalCodeTravail } from '@/components/ModalCodeTravail';
-import { ModalPerduDeVitesse } from '@/components/ModalPerduDeVitesse';
 import { AnimationSuccesMission } from '@/components/AnimationSuccesMission';
 import { ARTICLES_CODE_TRAVAIL } from '@/constantes/loi';
 import { useAuth } from '@/contexts/AuthContext';
@@ -15,9 +13,34 @@ import { supabase } from '@/integrations/supabase/client';
 import { enrichirEtablissements } from '@/lib/etablissements';
 import { calculerDistanceKm } from '@/lib/geo';
 import { getLabelProfession } from '@/lib/constantes';
-import { extraireMessageErreur, estBlocageCodeTravail } from '@/lib/erreurs';
-import { format, startOfWeek } from 'date-fns';
-import { fr } from 'date-fns/locale';
+import { estBlocageCodeTravail } from '@/lib/erreurs';
+import { chargerCreneauxMissionsPagines } from '@/lib/mission-creneaux-pagines';
+import { PlanningMissionCandidat } from '@/components/planning/PlanningMissionCandidat';
+import {
+  associerCreneauxAuxMissions,
+  construirePlanningCandidat,
+  construirePlanningConformite,
+  creneauxConfirmesPourAction,
+  trouverChevauchementPlannings,
+  trouverReposInsuffisant,
+} from '@/components/planning/planning-candidat';
+import {
+  DialogResponsive,
+  DialogResponsiveBody,
+  DialogResponsiveContent,
+  DialogResponsiveDescription,
+  DialogResponsiveFooter,
+  DialogResponsiveHeader,
+  DialogResponsiveTitle,
+} from '@/components/ui/DialogResponsive';
+import { BoutonY2K } from '@/components/y2k/BoutonY2K';
+import { formatParis } from '@/lib/date-heure-paris';
+import {
+  additionnerHeuresSalarieesParSemaine,
+  heuresMissionParSemaine,
+  missionComptePourPlafond48h,
+} from '@/lib/heures-hebdomadaires-mission';
+import { analyserSelectionSerie } from '@/components/planning/selection-serie-candidat';
 import { toast } from 'sonner';
 
 function fmt(v: number | null): string {
@@ -44,6 +67,7 @@ export default function DetailSerieSoignant() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [conflits, setConflits] = useState<Conflit[]>([]);
   const [detailsOuverts, setDetailsOuverts] = useState<Record<string, boolean>>({});
+  const [erreurPlanning, setErreurPlanning] = useState(false);
 
   // Modals
   const [modalConfirm, setModalConfirm] = useState(false);
@@ -56,28 +80,45 @@ export default function DetailSerieSoignant() {
     if (!user || !serieId) return;
     const load = async () => {
       const decoded = decodeURIComponent(serieId);
-      const [{ data: allMissions }, { data: s }, { data: existantes }] = await Promise.all([
+      const [missionsResult, soignantResult, existantesResult] = await Promise.all([
         supabase.from('missions').select(`
           id, intitule, description, service, profession_requise,
-          debut_le, fin_le, duree_heures, taux_horaire_base, net_a_payer,
-          est_urgente, niveau_urgence, statut, soignant_assigne_id, cree_le, etablissement_id
+          debut_le, fin_le, duree_heures, nb_creneaux, taux_horaire_base, net_a_payer,
+          est_urgente, niveau_urgence, statut, soignant_assigne_id, cree_le, etablissement_id,
+          type_contrat_applique, choix_contrat_soignant, type_contrat_recherche
         `).ilike('description', `%[SERIE_ID:${decoded}]%`).order('debut_le', { ascending: true }),
         supabase.from('soignants').select('profession, adresse_lat, adresse_lng, rayon_deplacement_km, tous_documents_valides').eq('id', user.id).maybeSingle(),
-        supabase.from('missions').select('id, intitule, debut_le, fin_le, duree_heures, statut')
+        supabase.from('missions').select('id, intitule, debut_le, fin_le, duree_heures, nb_creneaux, statut, type_contrat_applique, choix_contrat_soignant, type_contrat_recherche')
           .eq('soignant_assigne_id', user.id).in('statut', ['ASSIGNEE', 'EN_COURS', 'TERMINEE']).order('debut_le'),
       ]);
+      const allMissions = missionsResult.data;
+      const s = soignantResult.data;
+      const existantes = existantesResult.data;
+
+      const ids = [...(allMissions ?? []), ...(existantes ?? [])].map((mission: any) => mission.id);
+      let creneaux: any[] = [];
+      let planningEnErreur = Boolean(missionsResult.error || existantesResult.error);
+      try {
+        creneaux = await chargerCreneauxMissionsPagines(ids, {
+          exclurePauses: true,
+        });
+      } catch {
+        planningEnErreur = true;
+      }
 
       const enriched = allMissions ? await enrichirEtablissements(allMissions as any) : [];
       const mWithDist = enriched.map((m: any) => ({
         ...m,
         distance_km: calculerDistanceKm(s?.adresse_lat, s?.adresse_lng, m.etablissements?.adresse_lat, m.etablissements?.adresse_lng),
       }));
-      setMissions(mWithDist);
+      const missionsPlanifiees = associerCreneauxAuxMissions(mWithDist, creneaux, planningEnErreur);
+      setMissions(missionsPlanifiees);
       setSoignant(s);
-      setMissionsExistantes(existantes || []);
+      setMissionsExistantes(associerCreneauxAuxMissions((existantes ?? []) as any[], creneaux, planningEnErreur));
+      setErreurPlanning(planningEnErreur);
 
       // Auto-select all open
-      const openIds = new Set(mWithDist.filter((m: any) => m.statut === 'OUVERTE').map((m: any) => m.id));
+      const openIds = new Set(missionsPlanifiees.filter((m: any) => m.statut === 'OUVERTE' && m.planning_exact).map((m: any) => m.id));
       setSelectedIds(openIds);
 
       setLoading(false);
@@ -90,38 +131,66 @@ export default function DetailSerieSoignant() {
     if (!missions.length || !missionsExistantes) return;
     const ouvertes = missions.filter(m => selectedIds.has(m.id));
     const toutesLesMissions = [...missionsExistantes, ...ouvertes];
+    const tousLesCreneaux = [...new Map(
+      toutesLesMissions
+        .flatMap((mission) => mission.creneaux_planifies ?? [])
+        .map((creneau: any) => [creneau.id ?? `${creneau.mission_id}:${creneau.debut}`, creneau]),
+    ).values()] as any[];
+    const heuresParSemaine = additionnerHeuresSalarieesParSemaine(
+      toutesLesMissions,
+      tousLesCreneaux,
+    );
     const newConflits: Conflit[] = [];
 
     for (const mission of ouvertes) {
-      const debut = new Date(mission.debut_le).getTime();
-      const fin = new Date(mission.fin_le).getTime();
+      const planningCible = construirePlanningCandidat(mission);
+      if (!planningCible.exact) continue;
 
       for (const existante of toutesLesMissions) {
         if (existante.id === mission.id) continue;
-        const debutE = new Date(existante.debut_le).getTime();
-        const finE = new Date(existante.fin_le).getTime();
+        const planningExistant = construirePlanningConformite(existante);
+        if (!planningExistant.exact) continue;
 
-        if (debutE < fin && finE > debut) {
-          newConflits.push({ missionId: mission.id, date: mission.debut_le, type: 'CHEVAUCHEMENT', detail: `Chevauchement le ${format(new Date(mission.debut_le), 'd MMM', { locale: fr })}` });
+        const chevauchement = trouverChevauchementPlannings(planningCible, planningExistant);
+        if (chevauchement) {
+          newConflits.push({
+            missionId: mission.id,
+            date: chevauchement.cible.debut,
+            type: 'CHEVAUCHEMENT',
+            detail: `Chevauchement le ${formatParis(chevauchement.cible.debut, 'd MMM')}`,
+          });
         }
-        if (finE <= debut && (debut - finE) < 11 * 3600000 && (debut - finE) >= 0) {
-          newConflits.push({ missionId: mission.id, date: mission.debut_le, type: 'REPOS_11H', detail: `Repos insuffisant le ${format(new Date(mission.debut_le), 'd MMM', { locale: fr })} (${((debut - finE) / 3600000).toFixed(1)}h < 11h)`, article: 'L3131-1' });
-        }
-        if (debutE >= fin && (debutE - fin) < 11 * 3600000 && (debutE - fin) >= 0) {
-          newConflits.push({ missionId: mission.id, date: mission.debut_le, type: 'REPOS_11H', detail: `Repos insuffisant après le ${format(new Date(mission.debut_le), 'd MMM', { locale: fr })}`, article: 'L3131-1' });
+        const repos = trouverReposInsuffisant(planningCible, planningExistant);
+        if (repos) {
+          newConflits.push({
+            missionId: mission.id,
+            date: mission.debut_le,
+            type: 'REPOS_11H',
+            detail: `Repos insuffisant autour du ${formatParis(mission.debut_le, 'd MMM')} (${repos.heures.toFixed(1)}h < 11h)`,
+            article: 'L3131-1',
+          });
         }
       }
 
-      // 48h check
-      const debutSemaine = startOfWeek(new Date(mission.debut_le), { weekStartsOn: 1 });
-      const finSemaine = new Date(debutSemaine.getTime() + 7 * 24 * 3600000);
-      const heuresSemaine = toutesLesMissions
-        .filter(m => new Date(m.debut_le) >= debutSemaine && new Date(m.debut_le) < finSemaine)
-        .reduce((t, m) => t + (m.duree_heures || 0), 0);
-      if (heuresSemaine > 48) {
+      // 48 h : somme des créneaux exacts, répartie sur les vraies semaines civiles.
+      const semaineDepassee = missionComptePourPlafond48h(mission)
+        ? heuresMissionParSemaine(mission, tousLesCreneaux)
+        .map((semaine) => ({
+          ...semaine,
+          total: heuresParSemaine.get(semaine.cleSemaine)?.heures ?? 0,
+        }))
+        .find((semaine) => semaine.total > 48)
+        : undefined;
+      if (semaineDepassee) {
         const alreadyAdded = newConflits.find(c => c.missionId === mission.id && c.type === 'PLAFOND_48H');
         if (!alreadyAdded) {
-          newConflits.push({ missionId: mission.id, date: mission.debut_le, type: 'PLAFOND_48H', detail: `Plafond 48h dépassé semaine du ${format(debutSemaine, 'd MMM', { locale: fr })} (${heuresSemaine.toFixed(0)}h)`, article: 'L3121-20' });
+          newConflits.push({
+            missionId: mission.id,
+            date: mission.debut_le,
+            type: 'PLAFOND_48H',
+            detail: `Plafond 48h dépassé semaine du ${formatParis(semaineDepassee.debutSemaine, 'd MMM')} (${semaineDepassee.total.toFixed(0)}h)`,
+            article: 'L3121-20',
+          });
         }
       }
     }
@@ -141,7 +210,12 @@ export default function DetailSerieSoignant() {
   const distance = first?.distance_km;
   const netTotal = missions.filter(m => selectedIds.has(m.id)).reduce((t: number, m: any) => t + (m.net_a_payer || 0), 0);
   const conflitMissionIds = new Set(conflits.map(c => c.missionId));
-  const selectablesCompatibles = ouvertes.filter(m => !conflitMissionIds.has(m.id));
+  const planningEngagementsDisponibles = !erreurPlanning
+    && missionsExistantes.every((mission) => construirePlanningConformite(mission).exact);
+  const planningTousDisponibles = !erreurPlanning
+    && planningEngagementsDisponibles
+    && ouvertes.every(m => construirePlanningCandidat(m).exact);
+  const analyseSelection = analyserSelectionSerie(ouvertes, selectedIds, conflitMissionIds);
   const toutCompatible = conflits.length === 0;
 
   const toggleSelect = (id: string) => {
@@ -152,20 +226,33 @@ export default function DetailSerieSoignant() {
     });
   };
 
-  const selectAllCompatibles = () => {
-    setSelectedIds(new Set(selectablesCompatibles.map(m => m.id)));
-  };
-
   const accepterSerie = async () => {
-    const toAccept = ouvertes.filter(m => selectedIds.has(m.id) && !conflitMissionIds.has(m.id));
-    if (toAccept.length === 0) return;
+    if (!analyseSelection.peutAccepter || !planningEngagementsDisponibles) {
+      toast.error('Corrige la sélection : aucune mission en conflit ou au planning incomplet ne sera omise automatiquement.');
+      return;
+    }
+    const toAccept = analyseSelection.missionsSelectionnees;
 
     setAcceptationEnCours(true);
+    setModalConfirm(false);
     let reussies = 0;
     let echouees = 0;
+    const acceptees: any[] = [];
 
     for (const mission of toAccept) {
-      const { data, error } = await supabase.rpc('fn_accepter_mission' as any, { p_mission_id: mission.id });
+      const creneauxConfirmes = creneauxConfirmesPourAction(mission);
+      if (!creneauxConfirmes) {
+        echouees++;
+        continue;
+      }
+      const { data, error } = await supabase.rpc('fn_confirmer_action_planning_v1' as any, {
+        p_mission_id: mission.id,
+        p_action: 'ACCEPTER',
+        p_creneaux_confirmes: creneauxConfirmes as any,
+        p_message: null,
+        p_choix_contrat: null,
+        p_candidature_id: null,
+      });
 
       if (error) {
         echouees++;
@@ -184,11 +271,12 @@ export default function DetailSerieSoignant() {
         echouees++;
       } else {
         reussies++;
+        acceptees.push(mission);
       }
     }
 
     // Audit HDS — un log par mission acceptée
-    for (const mission of toAccept) {
+    for (const mission of acceptees) {
       await supabase.rpc('fn_ecrire_audit_safe', {
         p_acteur_id: user!.id, p_type_acteur: 'SOIGNANT', p_action: 'MISSION_ASSIGNATION',
         p_type_ressource: 'mission', p_id_ressource: mission.id, p_cle_s3: null,
@@ -231,17 +319,35 @@ export default function DetailSerieSoignant() {
           </>
         )}
         <p className="text-xs text-muted-foreground mt-2">
-          📅 Du {format(new Date(first?.debut_le), 'd MMM', { locale: fr })} au {format(new Date(last?.debut_le), 'd MMM yyyy', { locale: fr })}
+          📅 Du {formatParis(first?.debut_le, 'd MMM')} au {formatParis(last?.debut_le, 'd MMM yyyy')}
         </p>
         <p className="text-xs text-muted-foreground">
-          📋 {ouvertes.length} créneau{ouvertes.length > 1 ? 'x' : ''} disponible{ouvertes.length > 1 ? 's' : ''} sur {missions.length}
+          📋 {ouvertes.length} mission{ouvertes.length > 1 ? 's' : ''} disponible{ouvertes.length > 1 ? 's' : ''} sur {missions.length}
         </p>
       </div>
 
       {/* Conformity bloc */}
       <div className={`rounded-2xl p-4 border mb-4 ${toutCompatible ? 'bg-success/5 border-success/20' : 'bg-destructive/5 border-destructive/20'}`}>
         <h3 className="text-sm font-bold text-foreground mb-3">🔍 Vérification de compatibilité — Pack complet</h3>
-        {toutCompatible ? (
+        {!planningEngagementsDisponibles ? (
+          <div className="space-y-1">
+            <p className="text-xs font-semibold text-destructive">
+              Le planning exact de tes engagements existants ne peut pas être vérifié.
+            </p>
+            <p className="text-xs text-muted-foreground">
+              L’acceptation du pack est bloquée pour éviter un chevauchement ou un repos insuffisant non détecté.
+            </p>
+          </div>
+        ) : !planningTousDisponibles ? (
+          <div className="space-y-1">
+            <p className="text-xs font-semibold text-destructive">
+              Le planning détaillé ne peut pas être vérifié pour toutes les missions.
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Les missions dont le planning exact est disponible restent sélectionnables ; les autres sont bloquées.
+            </p>
+          </div>
+        ) : toutCompatible ? (
           <div className="space-y-1">
             <p className="text-xs text-success flex items-center gap-1"><CheckCircle2 className="h-3.5 w-3.5" /> Repos 11h respecté entre chaque créneau</p>
             <p className="text-xs text-success flex items-center gap-1"><CheckCircle2 className="h-3.5 w-3.5" /> Plafond 48h respecté chaque semaine</p>
@@ -250,7 +356,7 @@ export default function DetailSerieSoignant() {
           </div>
         ) : (
           <div className="space-y-2">
-            <p className="text-xs text-destructive font-semibold">❌ Conflit détecté sur {conflits.length} créneau{conflits.length > 1 ? 'x' : ''} :</p>
+            <p className="text-xs text-destructive font-semibold">❌ Conflit détecté sur {conflits.length} mission{conflits.length > 1 ? 's' : ''} :</p>
             {conflits.slice(0, 5).map((c, i) => (
               <div key={i} className="text-xs text-muted-foreground ml-4">
                 <p>• {c.detail}</p>
@@ -281,9 +387,8 @@ export default function DetailSerieSoignant() {
           {missions.map(m => {
             const isOpen = m.statut === 'OUVERTE';
             const hasConflict = conflitMissionIds.has(m.id);
+            const planningExact = construirePlanningCandidat(m).exact;
             const isSelected = selectedIds.has(m.id);
-            const duree = m.duree_heures || ((new Date(m.fin_le).getTime() - new Date(m.debut_le).getTime()) / 3600000);
-
             return (
               <div key={m.id}
                 className={`flex items-center gap-3 p-2.5 rounded-xl border transition-colors ${
@@ -292,7 +397,7 @@ export default function DetailSerieSoignant() {
                   isSelected ? 'bg-primary/5 border-primary/20' : 'border-border'
                 }`}
               >
-                {isOpen && !hasConflict && (
+                {isOpen && planningExact && (
                   <input
                     type="checkbox"
                     checked={isSelected}
@@ -301,18 +406,25 @@ export default function DetailSerieSoignant() {
                   />
                 )}
                 {isOpen && hasConflict && <XCircle className="h-4 w-4 text-destructive shrink-0" />}
+                {isOpen && !planningExact && <XCircle className="h-4 w-4 text-destructive shrink-0" />}
                 {!isOpen && <span className="text-muted-foreground text-sm">⬜</span>}
 
                 <div className="flex-1 min-w-0">
-                  <p className="text-xs font-medium text-foreground">
-                    {format(new Date(m.debut_le), 'EEE d MMM', { locale: fr })} — {format(new Date(m.debut_le), "HH'h'mm", { locale: fr })} → {format(new Date(m.fin_le), "HH'h'mm", { locale: fr })} ({Math.round(duree)}h)
-                  </p>
+                  <PlanningMissionCandidat
+                    mission={m}
+                    compact
+                    limite={3}
+                    afficherMentionJoursNonTravailles={false}
+                  />
                   {!isOpen && (
                     <p className="text-[10px] text-muted-foreground">
                       {m.soignant_assigne_id ? 'Déjà pourvue' : m.statut}
                     </p>
                   )}
                   {hasConflict && <p className="text-[10px] text-destructive">⚠️ Conflit détecté</p>}
+                  {isOpen && !planningExact && (
+                    <p className="text-[10px] text-destructive">⚠️ Planning détaillé indisponible</p>
+                  )}
                 </div>
 
                 <div className="shrink-0">
@@ -340,29 +452,18 @@ export default function DetailSerieSoignant() {
 
       {/* Action buttons */}
       <div className="space-y-3">
-        {toutCompatible && ouvertes.length > 0 ? (
+        {ouvertes.length > 0 ? (
           <button
             onClick={() => setModalConfirm(true)}
-            disabled={acceptationEnCours || selectedIds.size === 0}
+            disabled={acceptationEnCours || !planningEngagementsDisponibles || !analyseSelection.peutAccepter}
             className="btn-primary w-full text-base py-3.5 disabled:opacity-50"
           >
-            {acceptationEnCours ? 'Acceptation en cours…' : `★ Tout accepter (${selectedIds.size} créneau${selectedIds.size > 1 ? 'x' : ''})`}
+            {acceptationEnCours
+              ? 'Acceptation en cours…'
+              : analyseSelection.idsEnConflit.length > 0
+                ? 'Décoche les missions en conflit pour continuer'
+                : `★ Accepter la sélection (${analyseSelection.missionsSelectionnees.length})`}
           </button>
-        ) : ouvertes.length > 0 ? (
-          <>
-            <button disabled className="w-full py-3 rounded-xl bg-destructive/10 text-destructive text-sm font-medium cursor-not-allowed">
-              ⛔ Tout accepter — Incompatible avec ton planning
-            </button>
-            {selectablesCompatibles.length > 0 && (
-              <button
-                onClick={() => { selectAllCompatibles(); setModalConfirm(true); }}
-                disabled={acceptationEnCours}
-                className="btn-secondary w-full text-sm"
-              >
-                Accepter les créneaux compatibles ({selectablesCompatibles.length}/{ouvertes.length})
-              </button>
-            )}
-          </>
         ) : null}
 
         <button onClick={() => navigate(`/soignant/planning?serie=${serieId}`)} className="text-xs text-primary font-medium hover:underline block text-center">
@@ -371,15 +472,37 @@ export default function DetailSerieSoignant() {
       </div>
 
       {/* Modals */}
-      <ModalConfirmation
-        ouvert={modalConfirm}
-        onFermer={() => setModalConfirm(false)}
-        onConfirmer={accepterSerie}
-        titre={`Accepter ${selectedIds.size} mission${selectedIds.size > 1 ? 's' : ''} ?`}
-        message={`Tu t'engages sur ${selectedIds.size} créneau${selectedIds.size > 1 ? 'x' : ''}.`}
-        labelConfirmer="Oui, tout accepter"
-        labelAnnuler="Annuler"
-      />
+      <DialogResponsive open={modalConfirm} onOpenChange={(open) => { if (!acceptationEnCours) setModalConfirm(open); }}>
+        <DialogResponsiveContent maxWidth="lg">
+          <DialogResponsiveHeader>
+            <DialogResponsiveTitle>Vérifie tous tes engagements</DialogResponsiveTitle>
+            <DialogResponsiveDescription>
+              Confirme uniquement si tu peux assurer chacun des créneaux exacts sélectionnés.
+            </DialogResponsiveDescription>
+          </DialogResponsiveHeader>
+          <DialogResponsiveBody>
+            <div className="max-h-[60vh] space-y-4 overflow-y-auto">
+              {analyseSelection.missionsSelectionnees.map(mission => (
+                <section key={mission.id} className="rounded-xl border border-border p-3">
+                  <h4 className="mb-2 text-sm font-semibold text-foreground">{mission.intitule}</h4>
+                  <PlanningMissionCandidat mission={mission} compact />
+                </section>
+              ))}
+            </div>
+          </DialogResponsiveBody>
+          <DialogResponsiveFooter>
+            <BoutonY2K variant="ghost" onClick={() => setModalConfirm(false)} disabled={acceptationEnCours}>Annuler</BoutonY2K>
+            <BoutonY2K
+              variant="primary"
+              onClick={() => void accepterSerie()}
+              loading={acceptationEnCours}
+              disabled={acceptationEnCours || !planningEngagementsDisponibles || !analyseSelection.peutAccepter}
+            >
+              Accepter tous ces créneaux
+            </BoutonY2K>
+          </DialogResponsiveFooter>
+        </DialogResponsiveContent>
+      </DialogResponsive>
 
       {modalCodeTravail && <ModalCodeTravail erreur={modalCodeTravail} onFermer={() => setModalCodeTravail(null)} />}
 

@@ -3,6 +3,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   construireOccurrencesPlanning,
+  finFenetrePlanningParis,
   SectionPlanning,
   type CreneauPlanning,
   type MissionPlanningSource,
@@ -65,11 +66,15 @@ describe('planning établissement par créneaux', () => {
   });
 
   it('ne conserve que le prochain créneau au 31 août depuis le 31 juillet', () => {
+    const debutFenetre = new Date('2026-07-31T16:00:00+02:00');
+    const finFenetre = finFenetrePlanningParis(debutFenetre);
+    expect(finFenetre.toISOString()).toBe('2026-08-31T21:59:59.999Z');
+
     const occurrences = construireOccurrencesPlanning(
       [missionLongue],
       creneauxLongs,
-      new Date(2026, 6, 31, 16),
-      new Date(2026, 7, 31, 23, 59, 59),
+      debutFenetre,
+      finFenetre,
     );
 
     expect(occurrences).toHaveLength(1);
@@ -149,7 +154,49 @@ describe('planning établissement par créneaux', () => {
 
     fireEvent.mouseDown(screen.getByRole('tab', { name: 'Liste' }), { button: 0 });
     expect(screen.getAllByRole('button', { name: /Garde de nuit/ })).toHaveLength(1);
-    expect(screen.getByText(/jeu\. 30 juil\. · 20:00 → 06:00 · 10h/)).toBeInTheDocument();
+    expect(screen.getByText(/jeu\. 30 juil\. · 20:00 → ven\. 31 juil\. · 06:00 \(lendemain\) · 10h/)).toBeInTheDocument();
+  });
+
+  it('garde visible une mission sans créneau prévisionnel et la signale à confirmer', () => {
+    render(
+      <MemoryRouter>
+        <SectionPlanning missions={[]} missionsSansPlanning={[missionLongue]} />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByRole('alert')).toHaveTextContent('Planning détaillé à confirmer');
+    expect(screen.getByRole('button', { name: /Mission IDE — médecine polyvalente/i })).toBeInTheDocument();
+    expect(screen.queryByText('Aucun créneau planifié dans les 31 prochains jours.')).not.toBeInTheDocument();
+  });
+
+  it('borne la navigation aux 31 jours réellement chargés', () => {
+    const debutFenetre = new Date('2026-07-31T16:00:00+02:00');
+    const finFenetre = finFenetrePlanningParis(debutFenetre);
+    const occurrences = construireOccurrencesPlanning(
+      [missionLongue],
+      creneauxLongs,
+      debutFenetre,
+      finFenetre,
+    );
+
+    render(
+      <MemoryRouter>
+        <SectionPlanning
+          missions={occurrences}
+          debutFenetre={debutFenetre}
+          finFenetre={finFenetre}
+        />
+      </MemoryRouter>,
+    );
+
+    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Mois' }), { button: 0 });
+    expect(screen.getByRole('button', { name: 'Mois précédent' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Mois suivant' })).not.toBeDisabled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Mois suivant' }));
+    expect(screen.getByText('août 2026')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Mois précédent' })).not.toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Mois suivant' })).toBeDisabled();
   });
 
   it('affiche une erreur explicite et permet de relancer', () => {

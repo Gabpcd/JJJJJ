@@ -1,12 +1,19 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Flame, MapPin, Clock, Euro, CheckCircle2, AlertCircle, Loader2, ArrowRight } from 'lucide-react';
+import { Flame, MapPin, Euro, CheckCircle2, AlertCircle, Loader2, ArrowRight } from 'lucide-react';
 import { LayoutApp } from '@/components/LayoutApp';
 import { ChargementPage } from '@/components/ChargementPage';
 import { PoolUrgenceToggle } from '@/components/PoolUrgenceToggle';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { supabase } from '@/integrations/supabase/client';
 import { getLabelProfession } from '@/lib/constantes';
+import { chargerCreneauxMissionsPagines } from '@/lib/mission-creneaux-pagines';
+import { PlanningMissionCandidat } from '@/components/planning/PlanningMissionCandidat';
+import { RecapitulatifCandidatureDialog } from '@/components/planning/RecapitulatifCandidatureDialog';
+import {
+  associerCreneauxAuxMissions,
+  creneauxConfirmesPourAction,
+} from '@/components/planning/planning-candidat';
 import { toast } from 'sonner';
 
 interface MissionUrgente {
@@ -23,6 +30,11 @@ interface MissionUrgente {
   distance_km: number | null;
   deja_candidate: boolean;
   statut_candidature: string | null;
+  nb_creneaux?: number | null;
+  duree_heures?: number | null;
+  creneaux_planifies?: any[];
+  planning_exact?: boolean;
+  erreur_planning?: boolean;
 }
 
 interface PoolMeta {
@@ -38,6 +50,7 @@ export default function PoolUrgenceSoignant() {
   const [missions, setMissions] = useState<MissionUrgente[]>([]);
   const [meta, setMeta] = useState<PoolMeta>({ pool_actif: false, rayon_km: 30, sms_opt_in: false });
   const [accepting, setAccepting] = useState<string | null>(null);
+  const [missionAConfirmer, setMissionAConfirmer] = useState<MissionUrgente | null>(null);
 
   const charger = async () => {
     setLoading(true);
@@ -53,7 +66,26 @@ export default function PoolUrgenceSoignant() {
       setLoading(false);
       return;
     }
-    setMissions(payload?.missions ?? []);
+    const missionsPool = (payload?.missions ?? []) as MissionUrgente[];
+    try {
+      const ids = missionsPool.map((mission) => mission.id);
+      const [{ data: metadonnees, error: erreurMetadonnees }, creneaux] = await Promise.all([
+        ids.length > 0
+          ? supabase.from('missions').select('id, nb_creneaux, duree_heures').in('id', ids)
+          : Promise.resolve({ data: [], error: null }),
+        chargerCreneauxMissionsPagines(ids, { typeCreneau: 'PREVISIONNEL', exclurePauses: true }),
+      ]);
+      if (erreurMetadonnees) throw erreurMetadonnees;
+      const metaParId = new Map((metadonnees ?? []).map((mission: any) => [mission.id, mission]));
+      const completees = missionsPool.map((mission) => ({
+        ...mission,
+        ...metaParId.get(mission.id),
+      }));
+      setMissions(associerCreneauxAuxMissions(completees, creneaux));
+    } catch (erreur: any) {
+      setMissions(associerCreneauxAuxMissions(missionsPool, [], true));
+      toast.error(erreur?.message ?? 'Le planning détaillé ne peut pas être vérifié.');
+    }
     setMeta({
       pool_actif: payload?.pool_actif ?? false,
       rayon_km: payload?.rayon_km ?? 30,
@@ -65,26 +97,33 @@ export default function PoolUrgenceSoignant() {
   useEffect(() => { charger(); }, []);
 
   const accepter = async (mission: MissionUrgente) => {
-    if (!confirm(`Accepter cette mission urgente "${mission.intitule}" ?\n\nL'établissement validera ou refusera ton acceptation sous 1h.`)) return;
+    const creneauxConfirmes = creneauxConfirmesPourAction(mission);
+    if (!creneauxConfirmes) {
+      toast.error('Le planning exact doit être rechargé avant d’accepter.');
+      return;
+    }
     setAccepting(mission.id);
-    const { data, error } = await supabase.rpc('fn_accepter_mission_urgence' as any, { p_mission_id: mission.id });
+    const { data, error } = await supabase.rpc('fn_confirmer_action_planning_v1' as any, {
+      p_mission_id: mission.id,
+      p_action: 'URGENCE',
+      p_creneaux_confirmes: creneauxConfirmes as any,
+      p_message: null,
+      p_choix_contrat: null,
+      p_candidature_id: null,
+    });
     setAccepting(null);
     if (error) {
       toast.error(error.message ?? 'Erreur lors de l\'acceptation');
       return;
     }
     const result = data as any;
-    if (result?.success) {
+    if (result?.success || result?.ok) {
       toast.success(result.message ?? 'Acceptation enregistrée');
+      setMissionAConfirmer(null);
       charger();
     } else {
       toast.error(result?.error ?? 'Erreur inconnue');
     }
-  };
-
-  const formatDate = (iso: string) => {
-    const d = new Date(iso);
-    return d.toLocaleString('fr-FR', { weekday: 'short', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
   };
 
   return (
@@ -148,10 +187,9 @@ export default function PoolUrgenceSoignant() {
                     </span>
                   </div>
 
+                  <PlanningMissionCandidat mission={m} compact limite={3} className="mb-3" />
+
                   <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground mb-3">
-                    <span className="inline-flex items-center gap-1">
-                      <Clock className="h-3.5 w-3.5" /> {formatDate(m.debut_le)} → {new Date(m.fin_le).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
-                    </span>
                     <span className="inline-flex items-center gap-1">
                       <Euro className="h-3.5 w-3.5" /> {Number(m.taux_horaire_base).toFixed(2)} €/h
                     </span>
@@ -200,8 +238,8 @@ export default function PoolUrgenceSoignant() {
                       </button>
                       <button
                         type="button"
-                        onClick={() => accepter(m)}
-                        disabled={accepting === m.id}
+                        onClick={() => setMissionAConfirmer(m)}
+                        disabled={accepting === m.id || !m.planning_exact}
                         className="btn-primary text-sm inline-flex items-center gap-2"
                       >
                         {accepting === m.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Flame className="h-4 w-4" />}
@@ -215,6 +253,15 @@ export default function PoolUrgenceSoignant() {
           )}
         </section>
       </div>
+
+      <RecapitulatifCandidatureDialog
+        mission={missionAConfirmer}
+        ouvert={Boolean(missionAConfirmer)}
+        onFermer={() => setMissionAConfirmer(null)}
+        onConfirmer={() => { if (missionAConfirmer) void accepter(missionAConfirmer); }}
+        chargement={Boolean(missionAConfirmer && accepting === missionAConfirmer.id)}
+        actionLabel="Confirmer mon acceptation urgente"
+      />
     </LayoutApp>
   );
 }

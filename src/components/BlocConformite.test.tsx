@@ -20,15 +20,7 @@ vi.mock('react-router-dom', async () => {
 
 vi.mock('@/integrations/supabase/client', () => ({
   supabase: {
-    from: (table: string) => {
-      if (table === 'mission_creneaux') {
-        const builder = {
-          select: () => builder,
-          in: () => Promise.resolve(reponses.creneaux),
-        };
-        return builder;
-      }
-
+    from: () => {
       const builder = {
         select: () => builder,
         eq: () => builder,
@@ -39,6 +31,13 @@ vi.mock('@/integrations/supabase/client', () => ({
       return builder;
     },
   },
+}));
+
+vi.mock('@/lib/mission-creneaux-pagines', () => ({
+  chargerCreneauxMissionsPagines: vi.fn(async () => {
+    if (reponses.creneaux.error) throw reponses.creneaux.error;
+    return reponses.creneaux.data;
+  }),
 }));
 
 const missionSalariee = {
@@ -185,5 +184,115 @@ describe('BlocConformite — plafond salarié', () => {
     expect(await screen.findByText('⚠️ Plafond 48h selon le contrat')).toBeInTheDocument();
     expect(screen.getByText(/Dépassement si contrat salarié ; le régime libéral n'est pas concerné/i)).toBeInTheDocument();
     await waitFor(() => expect(onResultat).toHaveBeenLastCalledWith(true));
+  });
+
+  it('ne détecte pas de faux chevauchement dans les jours non travaillés d’une période longue', async () => {
+    reponses.mission = {
+      data: {
+        ...missionSalariee,
+        debut_le: '2026-07-06T08:00:00+02:00',
+        fin_le: '2026-08-31T16:00:00+02:00',
+        duree_heures: 16,
+        nb_creneaux: 2,
+      },
+      error: null,
+    };
+    reponses.existantes = {
+      data: [{
+        id: 'entre-les-deux',
+        intitule: 'Mission du 20 juillet',
+        debut_le: '2026-07-20T08:00:00+02:00',
+        fin_le: '2026-07-20T16:00:00+02:00',
+        duree_heures: 8,
+        nb_creneaux: 1,
+        statut: 'ASSIGNEE',
+        etablissement_id: 'hopital',
+        type_contrat_applique: 'SALARIE',
+        choix_contrat_soignant: 'SALARIE',
+        type_contrat_recherche: 'SALARIE',
+      }],
+      error: null,
+    };
+    reponses.creneaux = {
+      data: [
+        {
+          mission_id: 'candidate',
+          debut: '2026-07-06T08:00:00+02:00',
+          fin: '2026-07-06T16:00:00+02:00',
+          est_pause: false,
+          type_creneau: 'PREVISIONNEL',
+        },
+        {
+          mission_id: 'candidate',
+          debut: '2026-08-31T08:00:00+02:00',
+          fin: '2026-08-31T16:00:00+02:00',
+          est_pause: false,
+          type_creneau: 'PREVISIONNEL',
+        },
+        {
+          mission_id: 'entre-les-deux',
+          debut: '2026-07-20T08:00:00+02:00',
+          fin: '2026-07-20T16:00:00+02:00',
+          est_pause: false,
+          type_creneau: 'PREVISIONNEL',
+        },
+      ],
+      error: null,
+    };
+    const onResultat = vi.fn();
+
+    render(<BlocConformite missionId="candidate" onResultat={onResultat} />);
+
+    expect(await screen.findByText('✅ Pas de chevauchement')).toBeInTheDocument();
+    await waitFor(() => expect(onResultat).toHaveBeenLastCalledWith(true));
+  });
+
+  it('compare le repos aux heures EFFECTIF d’une mission terminée', async () => {
+    reponses.existantes = {
+      data: [{
+        id: 'terminee',
+        intitule: 'Mission terminée',
+        debut_le: '2026-07-24T00:00:00+02:00',
+        fin_le: '2026-07-24T01:00:00+02:00',
+        duree_heures: 1,
+        nb_creneaux: 1,
+        statut: 'TERMINEE',
+        etablissement_id: 'hopital',
+        type_contrat_applique: 'SALARIE',
+        choix_contrat_soignant: 'SALARIE',
+        type_contrat_recherche: 'SALARIE',
+      }],
+      error: null,
+    };
+    reponses.creneaux = {
+      data: [
+        {
+          mission_id: 'candidate',
+          debut: missionSalariee.debut_le,
+          fin: missionSalariee.fin_le,
+          est_pause: false,
+          type_creneau: 'PREVISIONNEL',
+        },
+        {
+          mission_id: 'terminee',
+          debut: '2026-07-24T00:00:00+02:00',
+          fin: '2026-07-24T01:00:00+02:00',
+          est_pause: false,
+          type_creneau: 'PREVISIONNEL',
+        },
+        {
+          mission_id: 'terminee',
+          debut: '2026-07-24T04:00:00+02:00',
+          fin: '2026-07-24T05:00:00+02:00',
+          est_pause: false,
+          type_creneau: 'EFFECTIF',
+        },
+      ],
+      error: null,
+    };
+
+    render(<BlocConformite missionId="candidate" onResultat={vi.fn()} />);
+
+    expect(await screen.findByText(/Seulement 8.0h de repos après/i)).toBeInTheDocument();
   });
 });

@@ -41,4 +41,21 @@ describe('date-heure-paris', () => {
     const finJourLong = ajouterJoursCivilsParis(debutJourLong, 1);
     expect((finJourLong.getTime() - debutJourLong.getTime()) / 3_600_000).toBe(25);
   });
+
+  it("rejette explicitement une heure de Paris inexistante au passage a l'heure d'ete", () => {
+    expect(() => instantDepuisSaisieParis('2026-03-29T02:30')).toThrow(
+      /Date\/heure inexistante dans le fuseau Europe\/Paris/,
+    );
+  });
+
+  it("rejette une heure d'hiver répétée sans offset explicite", () => {
+    expect(() => instantDepuisSaisieParis('2026-10-25T02:30')).toThrow('ambiguë');
+  });
+
+  it("accepte les heures qui encadrent le passage a l'heure d'ete", () => {
+    expect(instantDepuisSaisieParis('2026-03-29T01:59').toISOString())
+      .toBe('2026-03-29T00:59:00.000Z');
+    expect(instantDepuisSaisieParis('2026-03-29T03:00').toISOString())
+      .toBe('2026-03-29T01:00:00.000Z');
+  });
 });

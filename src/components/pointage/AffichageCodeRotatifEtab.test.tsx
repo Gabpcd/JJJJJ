@@ -1,11 +1,13 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AffichageCodeRotatifEtab } from './AffichageCodeRotatifEtab';
 
 const mocks = vi.hoisted(() => ({
   from: vi.fn(),
   rpc: vi.fn(),
+  toastError: vi.fn(),
+  toastSuccess: vi.fn(),
 }));
 
 vi.mock('@/integrations/supabase/client', () => ({
@@ -14,6 +16,13 @@ vi.mock('@/integrations/supabase/client', () => ({
 
 vi.mock('qrcode.react', () => ({
   QRCodeSVG: ({ value }: { value: string }) => <div data-testid="qr-code">{value}</div>,
+}));
+
+vi.mock('sonner', () => ({
+  toast: {
+    error: mocks.toastError,
+    success: mocks.toastSuccess,
+  },
 }));
 
 function creerBuilder(data: unknown, single = false) {
@@ -44,11 +53,13 @@ describe('AffichageCodeRotatifEtab — fenêtre du créneau', () => {
   let creneauxBuilder: Record<string, any>;
   let creneaux: unknown[];
   let contrats: unknown[];
+  let nbCreneaux: number;
 
   beforeEach(() => {
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(new Date('2026-07-31T10:00:00+02:00'));
     creneaux = [];
+    nbCreneaux = 1;
     contrats = [{
       id: 'contrat-1',
       mission_id: 'mission-1',
@@ -57,6 +68,8 @@ describe('AffichageCodeRotatifEtab — fenêtre du créneau', () => {
     }];
     mocks.from.mockReset();
     mocks.rpc.mockReset();
+    mocks.toastError.mockReset();
+    mocks.toastSuccess.mockReset();
     mocks.rpc.mockResolvedValue({
       data: {
         statut: 'EN_COURS',
@@ -73,6 +86,7 @@ describe('AffichageCodeRotatifEtab — fenêtre du créneau', () => {
           id: 'mission-1',
           debut_le: '2026-07-06T08:00:00+02:00',
           fin_le: '2026-08-31T16:00:00+02:00',
+          nb_creneaux: nbCreneaux,
         }, true);
       }
       if (table === 'contrats_mission') return creerBuilder(contrats);
@@ -125,6 +139,7 @@ describe('AffichageCodeRotatifEtab — fenêtre du créneau', () => {
 
   it('associe un EFFECTIF au shift qui contient son début lorsqu’il y en a deux le même jour', async () => {
     vi.setSystemTime(new Date('2026-07-31T15:00:00+02:00'));
+    nbCreneaux = 2;
     creneaux = [
       {
         id: 'creneau-matin',
@@ -189,6 +204,7 @@ describe('AffichageCodeRotatifEtab — fenêtre du créneau', () => {
 
   it('nomme arrivée le second PREVISIONNEL distinct du même jour', async () => {
     vi.setSystemTime(new Date('2026-07-31T14:00:00+02:00'));
+    nbCreneaux = 2;
     creneaux = [
       {
         id: 'creneau-matin',
@@ -251,6 +267,7 @@ describe('AffichageCodeRotatifEtab — fenêtre du créneau', () => {
   });
 
   it('laisse toujours visible le code de sortie lorsqu’un segment est déjà ouvert', async () => {
+    nbCreneaux = 2;
     creneaux = [{
       id: 'creneau-1',
       mission_id: 'mission-1',
@@ -275,6 +292,58 @@ describe('AffichageCodeRotatifEtab — fenêtre du créneau', () => {
     expect(await screen.findByText('654 321')).toBeInTheDocument();
     expect(screen.getByText('Segment en cours')).toBeInTheDocument();
     expect(screen.queryByText('Code masqué hors créneau')).not.toBeInTheDocument();
+  });
+
+  it('masque une arrivée lorsque le nombre de créneaux reçu est incomplet', async () => {
+    nbCreneaux = 2;
+    creneaux = [{
+      id: 'creneau-partiel',
+      mission_id: 'mission-1',
+      debut: '2026-07-31T08:00:00+02:00',
+      fin: '2026-07-31T16:00:00+02:00',
+      est_pause: false,
+      type_creneau: 'PREVISIONNEL',
+    }];
+
+    renderCode();
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/planning détaillé est incomplet/i);
+    expect(screen.queryByText('123 456')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('qr-code')).not.toBeInTheDocument();
+  });
+
+  it("signale une heure rétroactive inexistante et réactive toujours le bouton", async () => {
+    vi.setSystemTime(new Date('2026-03-29T01:30:00+01:00'));
+    creneaux = [{
+      id: 'creneau-dst',
+      mission_id: 'mission-1',
+      debut: '2026-03-29T00:00:00+01:00',
+      fin: '2026-03-29T06:00:00+02:00',
+      est_pause: false,
+      type_creneau: 'PREVISIONNEL',
+    }];
+    mocks.rpc.mockResolvedValue({
+      data: {
+        statut: 'EN_COURS',
+        prochain_type_scan: 'FERMETURE',
+        segment_ouvert: true,
+        segments: [{ id: 'segment-dst', debut: '2026-03-29T00:15:00+01:00', fin: null }],
+        code_pointage_actif: '654321',
+      },
+      error: null,
+    });
+
+    renderCode();
+    fireEvent.click(await screen.findByRole('button', { name: /clôturer le segment/i }));
+    const saisie = screen.getByLabelText('Heure de fin réelle');
+    fireEvent.change(saisie, { target: { value: '2026-03-29T02:30' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Clôturer le segment' }));
+
+    await waitFor(() => {
+      expect(mocks.toastError).toHaveBeenCalledWith(expect.stringMatching(/n’existe pas à Paris/i));
+      expect(screen.getByRole('button', { name: 'Clôturer le segment' })).not.toBeDisabled();
+    });
+    expect(mocks.rpc).toHaveBeenCalledTimes(1);
   });
 
   it('masque le code d’arrivée tant que le contrat n’est pas signé', async () => {

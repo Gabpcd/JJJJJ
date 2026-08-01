@@ -2,11 +2,9 @@
  * ModalDetailMissionSwipe — Sprint 13-B PR 5
  *
  * Modal détail mission complet déclenché par tap sur CardMissionSwipe.
- * Glassmorphism Y2K. Bouton "Postuler maintenant" déclenche LIKE direct
- * + ferme la modal.
+ * Glassmorphism Y2K. La candidature passe toujours par un récapitulatif exact.
  */
-import { useState } from 'react';
-import { Calendar, Clock, Euro, MapPin, Sparkles, Star, Tag } from 'lucide-react';
+import { Clock, Euro, MapPin, Sparkles, Star, Tag } from 'lucide-react';
 import {
   DialogResponsive,
   DialogResponsiveContent,
@@ -18,7 +16,9 @@ import {
 } from '@/components/ui/DialogResponsive';
 import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { BadgeY2K } from '@/components/y2k/BadgeY2K';
-import { estMultiJours, formatDureeCompacte, formatHorairesMission } from '@/lib/format-mission';
+import { formatDureeCompacte } from '@/lib/format-mission';
+import { PlanningMissionCandidat } from '@/components/planning/PlanningMissionCandidat';
+import { construirePlanningCandidat } from '@/components/planning/planning-candidat';
 import type { MissionSwipePayload } from './CardMissionSwipe';
 
 interface Props {
@@ -27,29 +27,6 @@ interface Props {
   onOpenChange: (open: boolean) => void;
   onPostuler: () => void;
   onSuivant: () => void;
-}
-
-function formatDateFull(iso: string | null): string {
-  if (!iso) return '—';
-  try {
-    return new Date(iso).toLocaleDateString('fr-FR', {
-      weekday: 'long',
-      day: 'numeric',
-      month: 'long',
-      year: 'numeric',
-    });
-  } catch {
-    return '—';
-  }
-}
-
-function formatHeure(iso: string | null): string {
-  if (!iso) return '';
-  try {
-    return new Date(iso).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
-  } catch {
-    return '';
-  }
 }
 
 function formatMontant(v: number | null | undefined): string {
@@ -62,19 +39,10 @@ function formatMontant(v: number | null | undefined): string {
 }
 
 export function ModalDetailMissionSwipe({ mission, open, onOpenChange, onPostuler, onSuivant }: Props) {
-  const [posting, setPosting] = useState(false);
   if (!mission) return null;
 
-  const handlePostuler = () => {
-    setPosting(true);
-    onPostuler();
-    // La modal se ferme via onOpenChange depuis le parent après succès.
-    setTimeout(() => setPosting(false), 800);
-  };
-
   const scoreEleve = mission.score >= 80;
-  const heureDebut = formatHeure(mission.debut_le);
-  const heureFin = formatHeure(mission.fin_le);
+  const planning = construirePlanningCandidat(mission);
   const breakdown = mission.breakdown as Record<string, number | undefined> | undefined;
   const totalMajorations =
     (mission.montant_majoration_nuit || 0) +
@@ -242,29 +210,13 @@ export function ModalDetailMissionSwipe({ mission, open, onOpenChange, onPostule
             )}
           </section>
 
-          {/* Dates */}
+          {/* Planning contractuel exact */}
           <section className="space-y-3 mt-5">
             <h3 className="text-sm font-semibold text-jolene-bubblegum uppercase tracking-wider">
-              Dates
+              Dates et horaires travaillés
             </h3>
-            <div className="rounded-2xl bg-jolene-lavender-50 p-4 space-y-2">
-              <div className="flex items-center gap-3">
-                <Calendar className="h-5 w-5 text-jolene-mauve-700 shrink-0" aria-hidden="true" />
-                <div className="flex-1">
-                  <p className="font-semibold text-jolene-midnight capitalize">
-                    {estMultiJours(mission)
-                      ? `${formatDateFull(mission.debut_le)} → ${formatDateFull(mission.fin_le)}`
-                      : formatDateFull(mission.debut_le)}
-                  </p>
-                  {heureDebut && (
-                    <p className="text-sm text-jolene-bubblegum">
-                      {estMultiJours(mission)
-                        ? formatHorairesMission(mission)
-                        : `${heureDebut}${heureFin ? ` → ${heureFin}` : ''}`}
-                    </p>
-                  )}
-                </div>
-              </div>
+            <div className="rounded-2xl bg-jolene-lavender-50 p-4">
+              <PlanningMissionCandidat mission={mission} />
             </div>
           </section>
 
@@ -331,8 +283,8 @@ export function ModalDetailMissionSwipe({ mission, open, onOpenChange, onPostule
           <BoutonY2K variant="ghost" onClick={onSuivant}>
             Suivant
           </BoutonY2K>
-          <BoutonY2K variant="primary" onClick={handlePostuler} loading={posting}>
-            Postuler maintenant
+          <BoutonY2K variant="primary" onClick={onPostuler} disabled={!planning.exact}>
+            Vérifier et postuler
           </BoutonY2K>
         </DialogResponsiveFooter>
       </DialogResponsiveContent>

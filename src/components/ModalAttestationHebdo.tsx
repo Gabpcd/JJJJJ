@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Loader2 } from 'lucide-react';
+import { formatParis } from '@/lib/date-heure-paris';
 
 interface Props {
   semaineISO: string; // ISO date string of Monday of the week
@@ -111,7 +112,7 @@ export function ModalAttestationHebdo({ semaineISO, heuresJoleneSemaine, onValid
       >
         <h3 id="attestation-hebdo-titre" className="text-lg font-bold text-foreground">📋 Déclaration hebdomadaire</h3>
         <p id="attestation-hebdo-description" className="text-sm text-muted-foreground">
-          Déclare tes heures travaillées ailleurs cette semaine avant d'accepter cette mission.
+          Semaine du {formatParis(`${semaineISO}T12:00:00+02:00`, 'd MMMM yyyy')} — déclare tes heures travaillées ailleurs avant d'accepter cette mission.
         </p>
 
         <div>

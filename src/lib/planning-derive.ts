@@ -1,238 +1,373 @@
-// Dérivation pure du planning de mission (formulaire Publier établissement).
-//
-// PRINCIPE — État dérivé (cf. CLAUDE.md) : la période « Du / Au » est la SEULE
-// source de vérité. Les jours travaillés proposés, leur ordre, leurs libellés,
-// et le garde-fou 48h sont DÉRIVÉS de la période en temps réel — jamais un
-// défaut statique (semaine lundi-first, tout coché) qui contredit la plage.
-//
-// Fonctions PURES (aucun état React, aucun effet) → couvertes par
-// planning-derive.test.ts. Le composant FormulaireRecurrence ne fait que les
-// consommer et afficher.
+import {
+  ajouterJoursCivilsParis,
+  cleJourParis,
+  cleSemaineParis,
+  debutJourParis,
+  debutSemaineParis,
+  formatParis,
+  instantDateHeureParis,
+  instantDepuisSaisieParis,
+  instantJolene,
+  partiesDateHeureParis,
+  semaineSuivanteParis,
+} from '@/lib/date-heure-paris';
 
-import { format } from 'date-fns';
-import { fr } from 'date-fns/locale';
-import type { HorairesJour } from '@/components/LigneHoraireJour';
-
-const NOMS_JOURS: Record<number, string> = {
-  1: 'Lundi', 2: 'Mardi', 3: 'Mercredi', 4: 'Jeudi',
-  5: 'Vendredi', 6: 'Samedi', 7: 'Dimanche',
-};
-
-// ≤ 14 jours : la plage tient sur ≤ 2 semaines → on affiche les VRAIES dates
-// (« Mer. 22/07 ») plutôt que des jours abstraits. Au-delà, motif hebdomadaire
-// répété → libellés abstraits (« Mercredi »).
-export const SEUIL_LIBELLES_DATES = 14;
-
-/** Parse "YYYY-MM-DD" en date LOCALE (jamais UTC — évite le décalage de jour). */
-export function parseDateLocale(str: string): Date {
-  const [y, m, d] = str.split('-').map(Number);
-  return new Date(y, m - 1, d);
+export interface CreneauPlanningDate {
+  clientId: string;
+  id?: string;
+  heureDebut: string;
+  heureFin: string;
+  finJourSuivant: boolean;
+  /**
+   * Instants contractuels chargés depuis la base. Ils permettent de conserver
+   * l'occurrence exacte d'une heure murale répétée au passage à l'heure
+   * d'hiver tant que la borne visible correspondante n'a pas été modifiée.
+   */
+  debutInitial?: string;
+  finInitial?: string;
 }
 
-export function fmtDateLocale(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
+export interface JourPlanningDate {
+  date: string;
+  actif: boolean;
+  creneaux: CreneauPlanningDate[];
 }
 
-/** Jour ISO 1=lundi … 7=dimanche à partir d'un Date. */
-function isoDe(d: Date): number {
-  const r = d.getDay();
-  return r === 0 ? 7 : r;
-}
-
-/** Lundi (00:00) de la semaine civile contenant `d`. */
-export function lundiDe(d: Date): Date {
-  const r = d.getDay(); // 0=dim … 6=sam
-  const diff = r === 0 ? -6 : 1 - r;
-  const m = new Date(d);
-  m.setDate(m.getDate() + diff);
-  return m;
-}
-
-/** « Mer. 22/07 » — abréviation du jour capitalisée + date. */
-export function libelleDate(dateStr: string): string {
-  const d = parseDateLocale(dateStr);
-  const abbr = format(d, 'EEE', { locale: fr }).replace('.', ''); // 'mer'
-  const cap = abbr.charAt(0).toUpperCase() + abbr.slice(1);
-  return `${cap}. ${format(d, 'dd/MM')}`;
-}
-
-export interface JourPlanifie {
-  jourISO: number;        // 1..7
-  premiereDate: string;   // 'YYYY-MM-DD' — 1ère occurrence dans la plage
-  occurrences: string[];  // toutes les dates de ce jour-de-semaine dans la plage
-  label: string;          // daté « Mer. 22/07 » si datesLabels, sinon « Mercredi »
-  labelCourt: string;     // « Mer. 22/07 » ou « Mer »
-}
-
-export interface Planning {
-  jours: JourPlanifie[];  // ordonné À PARTIR du premier jour de la mission
-  datesLabels: boolean;   // plage ≤ 14 jours
-  nbJours: number;        // nb de jours calendaires dans la plage
-}
-
-/**
- * Dérive, depuis la période [debut, fin], la liste ORDONNÉE des jours-de-semaine
- * réellement présents. Ordre = première apparition chronologique à partir de
- * `debut` (une mission qui commence un mercredi commence par mercredi). Un jour
- * absent de la plage n'est pas retourné (donc ni affiché ni cochable côté UI).
- */
-export function derivePlanning(debut: string, fin: string): Planning {
-  if (!debut || !fin) return { jours: [], datesLabels: false, nbJours: 0 };
-  const d = parseDateLocale(debut);
-  const f = parseDateLocale(fin);
-  if (f < d) return { jours: [], datesLabels: false, nbJours: 0 };
-
-  const ordre: number[] = [];
-  const parISO = new Map<number, string[]>();
-  const cur = new Date(d);
-  let guard = 0;
-  let nb = 0;
-  while (cur <= f && guard < 400) {
-    const iso = isoDe(cur);
-    if (!parISO.has(iso)) { parISO.set(iso, []); ordre.push(iso); }
-    parISO.get(iso)!.push(fmtDateLocale(cur));
-    cur.setDate(cur.getDate() + 1);
-    guard++; nb++;
-  }
-
-  const datesLabels = nb <= SEUIL_LIBELLES_DATES;
-  const jours: JourPlanifie[] = ordre.map((iso) => {
-    const occ = parISO.get(iso)!;
-    return {
-      jourISO: iso,
-      premiereDate: occ[0],
-      occurrences: occ,
-      label: datesLabels ? libelleDate(occ[0]) : NOMS_JOURS[iso],
-      labelCourt: datesLabels ? libelleDate(occ[0]) : NOMS_JOURS[iso].slice(0, 3),
-    };
-  });
-  return { jours, datesLabels, nbJours: nb };
+export interface CreneauPlanningMaterialise {
+  clientId: string;
+  id?: string;
+  date: string;
+  dateFin: string;
+  debut: string;
+  fin: string;
+  dureeHeures: number;
 }
 
 export interface SemaineCivile {
-  cleLundi: string;     // 'YYYY-MM-DD' du lundi
-  labelCourt: string;   // '20/07'
-  label: string;        // 'Semaine du 20/07'
-  totalHeures: number;  // heures des occurrences ACTIVES cette semaine-là
+  cleLundi: string;
+  labelCourt: string;
+  label: string;
+  totalHeures: number;
   nbOccurrences: number;
   depasse48: boolean;
 }
 
-/**
- * Regroupe les occurrences RÉELLES des jours ACTIFS par semaine CIVILE
- * (lundi→dimanche). Une plage à cheval sur deux semaines produit deux entrées :
- * le total 48h est ainsi contrôlé semaine par semaine, pas sur une semaine
- * canonique fictive.
- */
-export function semainesCiviles(
-  debut: string, fin: string, horairesParJour: HorairesJour[],
-): SemaineCivile[] {
-  const plan = derivePlanning(debut, fin);
-  const dureeParISO = new Map<number, number>();
-  const actifISO = new Set<number>();
-  for (const h of horairesParJour) {
-    dureeParISO.set(h.jourISO, h.dureeHeures);
-    if (h.actif) actifISO.add(h.jourISO);
-  }
-
-  const map = new Map<string, SemaineCivile>();
-  for (const j of plan.jours) {
-    if (!actifISO.has(j.jourISO)) continue;
-    const duree = dureeParISO.get(j.jourISO) ?? 0;
-    for (const dateStr of j.occurrences) {
-      const cle = fmtDateLocale(lundiDe(parseDateLocale(dateStr)));
-      let s = map.get(cle);
-      if (!s) {
-        const lc = format(parseDateLocale(cle), 'dd/MM');
-        s = { cleLundi: cle, labelCourt: lc, label: `Semaine du ${lc}`, totalHeures: 0, nbOccurrences: 0, depasse48: false };
-        map.set(cle, s);
-      }
-      s.totalHeures += duree;
-      s.nbOccurrences += 1;
-    }
-  }
-  const arr = [...map.values()].sort((a, b) => a.cleLundi.localeCompare(b.cleLundi));
-  for (const s of arr) s.depasse48 = s.totalHeures > 48;
-  return arr;
-}
-
 export interface ErreurPlanning {
-  type: 'PLAFOND_48H' | 'REPOS_11H' | 'DUREE_LONGUE';
+  type:
+    | 'PLAGE_INVALIDE'
+    | 'CRENEAU_MANQUANT'
+    | 'CRENEAU_INVALIDE'
+    | 'CHEVAUCHEMENT'
+    | 'PLAFOND_48H'
+    | 'REPOS_11H'
+    | 'DUREE_LONGUE';
   message: string;
   gravite: 'bloquant' | 'avertissement';
-  joursAffectes?: number[];
+  datesAffectees?: string[];
+  creneauxAffectes?: string[];
   semaine?: string;
 }
 
 export interface ValidationPlanning {
   valide: boolean;
   erreurs: ErreurPlanning[];
-  totalHebdo: number;        // total de la semaine civile la PLUS chargée
+  totalHebdo: number;
   semaines: SemaineCivile[];
 }
 
-function parseHeure(heure: string): number {
-  const [h, m] = heure.split(':').map(Number);
-  return h + m / 60;
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+const HEURE_RE = /^(?:[01]\d|2[0-3]):[0-5]\d$/;
+
+function instantMidiParis(date: string): Date {
+  return instantDepuisSaisieParis(`${date}T12:00`);
 }
 
-/**
- * Valide le planning sur les occurrences RÉELLES : plafond 48h par semaine
- * civile, repos 11h entre jours consécutifs, journées > 12h. `valide` est faux
- * dès qu'une erreur bloquante existe.
- */
-export function validerPlanning(
-  debut: string, fin: string, horairesParJour: HorairesJour[],
-): ValidationPlanning {
-  const erreurs: ErreurPlanning[] = [];
-  const semaines = semainesCiviles(debut, fin, horairesParJour);
-  const joursActifs = horairesParJour.filter((j) => j.actif);
+export function ajouterJoursDate(date: string, nombre: number): string {
+  return cleJourParis(ajouterJoursCivilsParis(instantMidiParis(date), nombre));
+}
 
-  // Plafond 48h — PAR semaine civile réelle.
-  for (const s of semaines) {
-    if (s.depasse48) {
-      erreurs.push({
-        type: 'PLAFOND_48H',
-        gravite: 'bloquant',
-        semaine: s.labelCourt,
-        message: `${s.label} : ${s.totalHeures}h travaillées. Maximum légal : 48h/semaine (Art. L3121-20). Retirez un jour ou réduisez les horaires de cette semaine.`,
+export function datesDansPlage(dateDebut: string, dateFin: string): string[] {
+  if (!DATE_RE.test(dateDebut) || !DATE_RE.test(dateFin) || dateFin < dateDebut) return [];
+  const dates: string[] = [];
+  let date = dateDebut;
+  while (date <= dateFin && dates.length <= 366) {
+    dates.push(date);
+    date = ajouterJoursDate(date, 1);
+  }
+  return dates;
+}
+
+export function jourSemaineISO(date: string): number {
+  const [annee, mois, jour] = date.split('-').map(Number);
+  const js = new Date(Date.UTC(annee, mois - 1, jour, 12)).getUTCDay();
+  return js === 0 ? 7 : js;
+}
+
+export function libelleDate(date: string): string {
+  return formatParis(instantMidiParis(date), 'EEEE d MMMM yyyy');
+}
+
+export function libelleDateCourte(date: string): string {
+  return formatParis(instantMidiParis(date), 'EEE d MMM');
+}
+
+export function dateFinCreneau(date: string, creneau: Pick<CreneauPlanningDate, 'finJourSuivant'>): string {
+  return creneau.finJourSuivant ? ajouterJoursDate(date, 1) : date;
+}
+
+function resoudreBorneCreneau(
+  date: string,
+  heure: string,
+  instantInitial?: string,
+): { instant: Date; valeur: string } {
+  if (instantInitial) {
+    const instant = instantJolene(instantInitial);
+    if (cleJourParis(instant) === date && formatParis(instant, 'HH:mm') === heure) {
+      return { instant, valeur: instantInitial };
+    }
+  }
+
+  const instant = instantDepuisSaisieParis(`${date}T${heure}`);
+  return { instant, valeur: instant.toISOString() };
+}
+
+export function materialiserCreneau(
+  date: string,
+  creneau: CreneauPlanningDate,
+): { valeur: CreneauPlanningMaterialise | null; erreur: string | null } {
+  if (!DATE_RE.test(date) || !HEURE_RE.test(creneau.heureDebut) || !HEURE_RE.test(creneau.heureFin)) {
+    return { valeur: null, erreur: 'Renseignez une heure de début et une heure de fin valides.' };
+  }
+
+  const dateFin = dateFinCreneau(date, creneau);
+  let debut: { instant: Date; valeur: string };
+  let fin: { instant: Date; valeur: string };
+  try {
+    debut = resoudreBorneCreneau(date, creneau.heureDebut, creneau.debutInitial);
+    fin = resoudreBorneCreneau(dateFin, creneau.heureFin, creneau.finInitial);
+  } catch (error) {
+    if (error instanceof RangeError) {
+      return {
+        valeur: null,
+        erreur: error.message.includes('ambiguë')
+          ? 'Cette heure existe deux fois à Paris lors du passage à l’heure d’hiver. Choisissez un horaire non ambigu.'
+          : 'Cette heure n\u2019existe pas à Paris en raison du passage à l\u2019heure d’été.',
+      };
+    }
+    throw error;
+  }
+  const dureeHeures = (fin.instant.getTime() - debut.instant.getTime()) / 3_600_000;
+
+  if (!creneau.finJourSuivant && fin.instant <= debut.instant) {
+    return {
+      valeur: null,
+      erreur: 'La fin doit être après le début. Pour une garde de nuit, choisissez « lendemain ».',
+    };
+  }
+  if (!Number.isFinite(dureeHeures) || dureeHeures <= 0 || dureeHeures > 24) {
+    return { valeur: null, erreur: 'Un créneau doit durer plus de 0 h et au maximum 24 h.' };
+  }
+
+  return {
+    valeur: {
+      clientId: creneau.clientId,
+      id: creneau.id,
+      date,
+      dateFin,
+      debut: debut.valeur,
+      fin: fin.valeur,
+      dureeHeures,
+    },
+    erreur: null,
+  };
+}
+
+export function materialiserPlanning(jours: JourPlanningDate[]): CreneauPlanningMaterialise[] {
+  return jours
+    .filter((jour) => jour.actif)
+    .flatMap((jour) => jour.creneaux.map((creneau) => materialiserCreneau(jour.date, creneau).valeur))
+    .filter((creneau): creneau is CreneauPlanningMaterialise => Boolean(creneau))
+    .sort((a, b) => new Date(a.debut).getTime() - new Date(b.debut).getTime());
+}
+
+/** Calcule l'intersection exacte avec les périodes de nuit 21 h–06 h à Paris. */
+export function calculerHeuresNuitParis(
+  creneaux: Array<Pick<CreneauPlanningMaterialise, 'debut' | 'fin'>>,
+): number {
+  let totalMillisecondes = 0;
+
+  for (const creneau of creneaux) {
+    const debut = instantJolene(creneau.debut);
+    const fin = instantJolene(creneau.fin);
+    if (fin <= debut) continue;
+
+    // Inclure la nuit commencée la veille pour un créneau situé avant 06 h.
+    let jour = ajouterJoursCivilsParis(debutJourParis(debut), -1);
+    while (jour < fin) {
+      const lendemain = ajouterJoursCivilsParis(jour, 1);
+      const debutNuit = instantDateHeureParis({
+        ...partiesDateHeureParis(jour),
+        heure: 21,
+        minute: 0,
+        seconde: 0,
       });
-    }
-  }
-
-  // Repos 11h entre jours-de-semaine consécutifs actifs.
-  const joursTries = [...joursActifs].sort((a, b) => a.jourISO - b.jourISO);
-  for (let i = 0; i < joursTries.length - 1; i++) {
-    const actuel = joursTries[i];
-    const suivant = joursTries[i + 1];
-    if (suivant.jourISO - actuel.jourISO === 1) {
-      const repos = (24 - parseHeure(actuel.heureFin)) + parseHeure(suivant.heureDebut);
-      if (repos < 11) {
-        erreurs.push({
-          type: 'REPOS_11H',
-          gravite: 'bloquant',
-          joursAffectes: [actuel.jourISO, suivant.jourISO],
-          message: `Repos insuffisant entre ${actuel.label} (fin ${actuel.heureFin}) et ${suivant.label} (début ${suivant.heureDebut}) : ${repos.toFixed(1)}h au lieu de 11h`,
-        });
+      const finNuit = instantDateHeureParis({
+        ...partiesDateHeureParis(lendemain),
+        heure: 6,
+        minute: 0,
+        seconde: 0,
+      });
+      const debutIntersection = Math.max(debut.getTime(), debutNuit.getTime());
+      const finIntersection = Math.min(fin.getTime(), finNuit.getTime());
+      if (finIntersection > debutIntersection) {
+        totalMillisecondes += finIntersection - debutIntersection;
       }
+      jour = lendemain;
     }
   }
 
-  // Journées > 12h (avertissement).
-  for (const jour of joursActifs) {
-    if (jour.dureeHeures > 12) {
+  return totalMillisecondes / 3_600_000;
+}
+
+function semainesDepuisCreneaux(creneaux: CreneauPlanningMaterialise[]): SemaineCivile[] {
+  const semaines = new Map<string, SemaineCivile & { occurrences: Set<string> }>();
+
+  for (const creneau of creneaux) {
+    let curseur = new Date(creneau.debut);
+    const fin = new Date(creneau.fin);
+    while (curseur < fin) {
+      const lundi = debutSemaineParis(curseur);
+      const lundiSuivant = semaineSuivanteParis(curseur);
+      const finSegment = new Date(Math.min(fin.getTime(), lundiSuivant.getTime()));
+      const cle = cleSemaineParis(curseur);
+      const semaine = semaines.get(cle) ?? {
+        cleLundi: cle,
+        labelCourt: formatParis(lundi, 'dd/MM'),
+        label: `Semaine du ${formatParis(lundi, 'dd/MM')}`,
+        totalHeures: 0,
+        nbOccurrences: 0,
+        depasse48: false,
+        occurrences: new Set<string>(),
+      };
+      semaine.totalHeures += (finSegment.getTime() - curseur.getTime()) / 3_600_000;
+      semaine.occurrences.add(creneau.clientId);
+      semaines.set(cle, semaine);
+      curseur = finSegment;
+    }
+  }
+
+  return [...semaines.values()]
+    .sort((a, b) => a.cleLundi.localeCompare(b.cleLundi))
+    .map(({ occurrences, ...semaine }) => ({
+      ...semaine,
+      totalHeures: Math.round(semaine.totalHeures * 100) / 100,
+      nbOccurrences: occurrences.size,
+      depasse48: semaine.totalHeures > 48,
+    }));
+}
+
+export function validerPlanningDates(jours: JourPlanningDate[]): ValidationPlanning {
+  const erreurs: ErreurPlanning[] = [];
+  const creneauxValides: CreneauPlanningMaterialise[] = [];
+
+  for (const jour of jours.filter((item) => item.actif)) {
+    if (jour.creneaux.length === 0) {
+      erreurs.push({
+        type: 'CRENEAU_MANQUANT',
+        gravite: 'bloquant',
+        datesAffectees: [jour.date],
+        message: `${libelleDate(jour.date)} est travaillé mais ne contient aucun créneau.`,
+      });
+      continue;
+    }
+
+    let dureeJour = 0;
+    for (const creneau of jour.creneaux) {
+      const resultat = materialiserCreneau(jour.date, creneau);
+      if (!resultat.valeur) {
+        erreurs.push({
+          type: 'CRENEAU_INVALIDE',
+          gravite: 'bloquant',
+          datesAffectees: [jour.date],
+          creneauxAffectes: [creneau.clientId],
+          message: `${libelleDate(jour.date)} : ${resultat.erreur}`,
+        });
+        continue;
+      }
+      creneauxValides.push(resultat.valeur);
+      dureeJour += resultat.valeur.dureeHeures;
+    }
+
+    if (dureeJour > 12) {
       erreurs.push({
         type: 'DUREE_LONGUE',
         gravite: 'avertissement',
-        joursAffectes: [jour.jourISO],
-        message: `${jour.label} : créneau de ${jour.dureeHeures}h (recommandation : max 12h)`,
+        datesAffectees: [jour.date],
+        message: `${libelleDate(jour.date)} : ${dureeJour.toLocaleString('fr-FR', { maximumFractionDigits: 2 })} h planifiées (recommandation : max 12 h).`,
       });
     }
   }
 
-  const totalHebdo = semaines.reduce((max, s) => Math.max(max, s.totalHeures), 0);
-  return { valide: !erreurs.some((e) => e.gravite === 'bloquant'), erreurs, totalHebdo, semaines };
+  creneauxValides.sort((a, b) => new Date(a.debut).getTime() - new Date(b.debut).getTime());
+  for (let index = 1; index < creneauxValides.length; index += 1) {
+    const precedent = creneauxValides[index - 1];
+    const courant = creneauxValides[index];
+    if (new Date(courant.debut) < new Date(precedent.fin)) {
+      erreurs.push({
+        type: 'CHEVAUCHEMENT',
+        gravite: 'bloquant',
+        datesAffectees: [precedent.date, courant.date],
+        creneauxAffectes: [precedent.clientId, courant.clientId],
+        message: `Chevauchement entre les créneaux des ${libelleDateCourte(precedent.date)} et ${libelleDateCourte(courant.date)}.`,
+      });
+    }
+  }
+
+  const bornesParDate = new Map<string, { debut: Date; fin: Date; ids: string[] }>();
+  for (const creneau of creneauxValides) {
+    const debut = new Date(creneau.debut);
+    const fin = new Date(creneau.fin);
+    const bornes = bornesParDate.get(creneau.date);
+    if (!bornes) {
+      bornesParDate.set(creneau.date, { debut, fin, ids: [creneau.clientId] });
+    } else {
+      if (debut < bornes.debut) bornes.debut = debut;
+      if (fin > bornes.fin) bornes.fin = fin;
+      bornes.ids.push(creneau.clientId);
+    }
+  }
+
+  const datesTravaillees = [...bornesParDate.entries()].sort((a, b) => a[1].debut.getTime() - b[1].debut.getTime());
+  for (let index = 1; index < datesTravaillees.length; index += 1) {
+    const [datePrecedente, precedent] = datesTravaillees[index - 1];
+    const [dateCourante, courant] = datesTravaillees[index];
+    const reposHeures = (courant.debut.getTime() - precedent.fin.getTime()) / 3_600_000;
+    if (reposHeures >= 0 && reposHeures < 11) {
+      erreurs.push({
+        type: 'REPOS_11H',
+        gravite: 'bloquant',
+        datesAffectees: [datePrecedente, dateCourante],
+        creneauxAffectes: [...precedent.ids, ...courant.ids],
+        message: `Repos insuffisant entre ${libelleDateCourte(datePrecedente)} et ${libelleDateCourte(dateCourante)} : ${reposHeures.toLocaleString('fr-FR', { maximumFractionDigits: 2 })} h au lieu de 11 h.`,
+      });
+    }
+  }
+
+  const semaines = semainesDepuisCreneaux(creneauxValides);
+  for (const semaine of semaines.filter((item) => item.depasse48)) {
+    erreurs.push({
+      type: 'PLAFOND_48H',
+      gravite: 'bloquant',
+      semaine: semaine.labelCourt,
+      message: `${semaine.label} : ${semaine.totalHeures.toLocaleString('fr-FR')} h travaillées. Maximum légal : 48 h/semaine.`,
+    });
+  }
+
+  const totalHebdo = semaines.reduce((maximum, semaine) => Math.max(maximum, semaine.totalHeures), 0);
+  return {
+    valide: !erreurs.some((erreur) => erreur.gravite === 'bloquant'),
+    erreurs,
+    totalHebdo,
+    semaines,
+  };
 }

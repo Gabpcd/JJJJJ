@@ -8,13 +8,13 @@
  * - Drag horizontal : translation + rotation max 15deg
  * - Threshold 30% largeur → trigger onSwipe(direction)
  * - Bounce back si swipe pas assez fort
- * - Indicateurs LIKE (rose) / DISLIKE (gris) overlay selon direction
+ * - Indicateurs VÉRIFIER (rose) / SUIVANT (gris) selon la direction
  *
  * Pas de framer-motion : transform inline + transition CSS (perf léger bundle).
  * `prefers-reduced-motion` respecté.
  */
 import { useState, useRef, useCallback, useEffect, type ReactNode } from 'react';
-import { Heart, X } from 'lucide-react';
+import { CalendarCheck2, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export type SwipeDirection = 'left' | 'right';
@@ -144,15 +144,15 @@ export function StackCards({ items, onSwipe, thresholdRatio = 0.3, className }: 
       >
         {topCard.content}
 
-        {/* Overlay indicateurs LIKE / DISLIKE */}
+        {/* Overlay indicateurs planning / suivant */}
         <div
           className="pointer-events-none absolute top-8 left-8 rounded-2xl border-4 border-jolene-rose-500 bg-jolene-rose-100/90 px-4 py-2 transition-snap"
           style={{ opacity: likeOpacity, transform: `rotate(-12deg) scale(${0.8 + likeOpacity * 0.2})` }}
           aria-hidden="true"
         >
           <span className="flex items-center gap-2 text-2xl font-extrabold text-jolene-rose-700">
-            <Heart className="h-7 w-7 fill-current" />
-            J'AIME
+            <CalendarCheck2 className="h-7 w-7" />
+            VÉRIFIER
           </span>
         </div>
         <div

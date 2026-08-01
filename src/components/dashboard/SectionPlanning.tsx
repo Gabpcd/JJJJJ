@@ -16,6 +16,7 @@ import {
   debutSemaineParis,
   finMoisParis,
   formatParis,
+  instantJolene,
   memeJourParis,
   memeMoisParis,
   semaineSuivanteParis,
@@ -30,6 +31,7 @@ export interface MissionPlanningSource {
   statut: 'OUVERTE' | 'ASSIGNEE' | 'EN_COURS' | string;
   duree_heures?: number | null;
   profession_requise?: string | null;
+  nb_creneaux?: number | null;
   soignant_assigne_id?: string | null;
   soignant_nom?: string | null;
 }
@@ -43,6 +45,12 @@ export interface MissionPlanning extends MissionPlanningSource {
   creneau_debut: string;
   creneau_fin: string;
   duree_creneau_heures: number;
+}
+
+/** Dernière milliseconde du jour civil Paris situé `jours` jours plus loin. */
+// eslint-disable-next-line react-refresh/only-export-components
+export function finFenetrePlanningParis(debut: Date, jours = 31): Date {
+  return new Date(ajouterJoursCivilsParis(debut, jours + 1).getTime() - 1);
 }
 
 /**
@@ -80,8 +88,8 @@ export function construireOccurrencesPlanning(
       return planifies
         .filter((creneau) => {
           if (!creneau.fin) return false;
-          return new Date(creneau.fin).getTime() >= debutMs
-            && new Date(creneau.debut).getTime() <= finMs;
+          return instantJolene(creneau.fin).getTime() >= debutMs
+            && instantJolene(creneau.debut).getTime() <= finMs;
         })
         .map((creneau) => ({
           ...mission,
@@ -90,17 +98,20 @@ export function construireOccurrencesPlanning(
           creneau_fin: creneau.fin!,
           duree_creneau_heures: Math.max(
             0,
-            (new Date(creneau.fin!).getTime() - new Date(creneau.debut).getTime()) / 3_600_000,
+            (instantJolene(creneau.fin!).getTime() - instantJolene(creneau.debut).getTime()) / 3_600_000,
           ),
         }));
     })
-    .sort((a, b) => new Date(a.creneau_debut).getTime() - new Date(b.creneau_debut).getTime());
+    .sort((a, b) => instantJolene(a.creneau_debut).getTime() - instantJolene(b.creneau_debut).getTime());
 }
 
 interface Props {
   missions: MissionPlanning[];
+  missionsSansPlanning?: MissionPlanningSource[];
   erreur?: string | null;
   onRetry?: () => void;
+  debutFenetre?: Date | string;
+  finFenetre?: Date | string;
 }
 
 type View = 'mois' | 'semaine' | 'liste';
@@ -114,6 +125,12 @@ const STATUT_STYLE: Record<string, { dot: string; bg: string; text: string; labe
 const styleFor = (statut: string) => STATUT_STYLE[statut] ?? STATUT_STYLE.OUVERTE;
 
 const fmtHeure = (iso: string) => formatParis(iso, 'HH:mm');
+
+function formatFinAvecDate(debut: string, fin: string): string {
+  if (memeJourParis(debut, fin)) return fmtHeure(fin);
+  const estLendemain = memeJourParis(ajouterJoursCivilsParis(instantJolene(debut), 1), fin);
+  return `${formatParis(fin, 'EEE d MMM · HH:mm')}${estLendemain ? ' (lendemain)' : ''}`;
+}
 
 function decouperMissionsPlanningParJour(missions: MissionPlanning[]): MissionPlanning[] {
   return decouperOccurrencesParJour(missions.map((mission) => ({
@@ -147,12 +164,55 @@ const BUCKET_LABEL: Record<string, string> = {
   later: 'Plus tard',
 };
 
-export function SectionPlanning({ missions, erreur, onRetry }: Props) {
+export function SectionPlanning({
+  missions,
+  missionsSansPlanning = [],
+  erreur,
+  onRetry,
+  debutFenetre,
+  finFenetre,
+}: Props) {
   const navigate = useNavigate();
   const initialView: View = typeof window !== 'undefined' && window.matchMedia('(min-width: 768px)').matches ? 'mois' : 'liste';
   const [view, setView] = useState<View>(initialView);
   const [moisCourant, setMoisCourant] = useState(() => debutMoisParis(new Date()));
   const [semaineCourante, setSemaineCourante] = useState(() => debutSemaineParis(new Date()));
+
+  const bornes = useMemo(() => {
+    try {
+      return {
+        debut: debutFenetre == null ? null : instantJolene(debutFenetre),
+        fin: finFenetre == null ? null : instantJolene(finFenetre),
+      };
+    } catch {
+      return { debut: null, fin: null };
+    }
+  }, [debutFenetre, finFenetre]);
+
+  const intersecteFenetreChargee = (debut: Date, finExclusive: Date): boolean => (
+    (!bornes.debut || finExclusive.getTime() > bornes.debut.getTime())
+    && (!bornes.fin || debut.getTime() <= bornes.fin.getTime())
+  );
+  const moisPrecedent = ajouterMoisCivilsParis(moisCourant, -1);
+  const moisSuivant = ajouterMoisCivilsParis(moisCourant, 1);
+  const peutMoisPrecedent = intersecteFenetreChargee(
+    moisPrecedent,
+    ajouterMoisCivilsParis(moisPrecedent, 1),
+  );
+  const peutMoisSuivant = intersecteFenetreChargee(
+    moisSuivant,
+    ajouterMoisCivilsParis(moisSuivant, 1),
+  );
+  const semainePrecedente = ajouterJoursCivilsParis(semaineCourante, -7);
+  const semaineSuivante = ajouterJoursCivilsParis(semaineCourante, 7);
+  const peutSemainePrecedente = intersecteFenetreChargee(
+    semainePrecedente,
+    ajouterJoursCivilsParis(semainePrecedente, 7),
+  );
+  const peutSemaineSuivante = intersecteFenetreChargee(
+    semaineSuivante,
+    ajouterJoursCivilsParis(semaineSuivante, 7),
+  );
 
   const ouvrir = (id: string) => navigate(`/etablissement/missions/${id}`);
 
@@ -163,7 +223,8 @@ export function SectionPlanning({ missions, erreur, onRetry }: Props) {
           <CalendarDays className="h-5 w-5 text-primary" />
           <h2 className="text-lg font-bold text-foreground">Planning missions à venir</h2>
           <span className="text-xs text-muted-foreground">
-            ({missions.length} créneau{missions.length > 1 ? 'x' : ''})
+            ({missions.length} créneau{missions.length > 1 ? 'x' : ''}
+            {missionsSansPlanning.length > 0 ? ` · ${missionsSansPlanning.length} à confirmer` : ''})
           </span>
         </div>
 
@@ -192,28 +253,65 @@ export function SectionPlanning({ missions, erreur, onRetry }: Props) {
             </button>
           )}
         </div>
-      ) : missions.length === 0 ? (
-        <p className="text-sm text-muted-foreground text-center py-8">
-          Aucun créneau planifié dans les 31 prochains jours.
-        </p>
-      ) : view === 'mois' ? (
-        <VueMois
-          mois={moisCourant}
-          missions={missions}
-          onPrev={() => setMoisCourant(ajouterMoisCivilsParis(moisCourant, -1))}
-          onNext={() => setMoisCourant(ajouterMoisCivilsParis(moisCourant, 1))}
-          onClickMission={ouvrir}
-        />
-      ) : view === 'semaine' ? (
-        <VueSemaine
-          debutSemaine={semaineCourante}
-          missions={missions}
-          onPrev={() => setSemaineCourante(ajouterJoursCivilsParis(semaineCourante, -7))}
-          onNext={() => setSemaineCourante(ajouterJoursCivilsParis(semaineCourante, 7))}
-          onClickMission={ouvrir}
-        />
       ) : (
-        <VueListe missions={missions} onClickMission={ouvrir} />
+        <>
+          {missionsSansPlanning.length > 0 && (
+            <div className="mb-4 rounded-xl border border-warning/30 bg-warning/5 p-4" role="alert">
+              <p className="flex items-center gap-2 text-sm font-semibold text-warning">
+                <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden="true" />
+                Planning détaillé à confirmer
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Ces missions restent visibles mais aucun créneau prévisionnel complet n’est enregistré.
+              </p>
+              <div className="mt-3 space-y-2">
+                {missionsSansPlanning.map((mission) => (
+                  <button
+                    key={mission.id}
+                    type="button"
+                    onClick={() => ouvrir(mission.id)}
+                    className="w-full rounded-lg border border-warning/20 bg-card px-3 py-2 text-left hover:bg-warning/5"
+                  >
+                    <span className="block text-sm font-medium text-foreground">{mission.intitule}</span>
+                    <span className="block text-xs text-muted-foreground">
+                      Période prévue : {formatParis(mission.debut_le, 'd MMM yyyy')} → {formatParis(mission.fin_le, 'd MMM yyyy')}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {missions.length === 0 ? (
+            missionsSansPlanning.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-8">
+                Aucun créneau planifié dans les 31 prochains jours.
+              </p>
+            ) : null
+          ) : view === 'mois' ? (
+            <VueMois
+              mois={moisCourant}
+              missions={missions}
+              onPrev={() => setMoisCourant(ajouterMoisCivilsParis(moisCourant, -1))}
+              onNext={() => setMoisCourant(ajouterMoisCivilsParis(moisCourant, 1))}
+              peutPrecedent={peutMoisPrecedent}
+              peutSuivant={peutMoisSuivant}
+              onClickMission={ouvrir}
+            />
+          ) : view === 'semaine' ? (
+            <VueSemaine
+              debutSemaine={semaineCourante}
+              missions={missions}
+              onPrev={() => setSemaineCourante(ajouterJoursCivilsParis(semaineCourante, -7))}
+              onNext={() => setSemaineCourante(ajouterJoursCivilsParis(semaineCourante, 7))}
+              peutPrecedent={peutSemainePrecedente}
+              peutSuivant={peutSemaineSuivante}
+              onClickMission={ouvrir}
+            />
+          ) : (
+            <VueListe missions={missions} onClickMission={ouvrir} />
+          )}
+        </>
       )}
     </div>
   );
@@ -221,10 +319,11 @@ export function SectionPlanning({ missions, erreur, onRetry }: Props) {
 
 /* ───────────── Vue Mois (desktop) ───────────── */
 function VueMois({
-  mois, missions, onPrev, onNext, onClickMission,
+  mois, missions, onPrev, onNext, peutPrecedent, peutSuivant, onClickMission,
 }: {
   mois: Date; missions: MissionPlanning[];
   onPrev: () => void; onNext: () => void;
+  peutPrecedent: boolean; peutSuivant: boolean;
   onClickMission: (id: string) => void;
 }) {
   const debutGrille = debutSemaineParis(debutMoisParis(mois));
@@ -246,13 +345,13 @@ function VueMois({
   return (
     <div className="hidden md:block">
       <div className="flex items-center justify-between mb-3">
-        <button onClick={onPrev} className="p-1.5 hover:bg-muted rounded" aria-label="Mois précédent">
+        <button disabled={!peutPrecedent} onClick={onPrev} className="p-1.5 hover:bg-muted rounded disabled:cursor-not-allowed disabled:opacity-30" aria-label="Mois précédent">
           <ChevronLeft className="h-4 w-4" />
         </button>
         <p className="text-sm font-semibold text-foreground capitalize">
           {formatParis(mois, 'MMMM yyyy')}
         </p>
-        <button onClick={onNext} className="p-1.5 hover:bg-muted rounded" aria-label="Mois suivant">
+        <button disabled={!peutSuivant} onClick={onNext} className="p-1.5 hover:bg-muted rounded disabled:cursor-not-allowed disabled:opacity-30" aria-label="Mois suivant">
           <ChevronRight className="h-4 w-4" />
         </button>
       </div>
@@ -315,17 +414,18 @@ function VueMois({
 
 /* ───────────── Vue Semaine (desktop + mobile) ───────────── */
 function VueSemaine({
-  debutSemaine, missions, onPrev, onNext, onClickMission,
+  debutSemaine, missions, onPrev, onNext, peutPrecedent, peutSuivant, onClickMission,
 }: {
   debutSemaine: Date; missions: MissionPlanning[];
   onPrev: () => void; onNext: () => void;
+  peutPrecedent: boolean; peutSuivant: boolean;
   onClickMission: (id: string) => void;
 }) {
   const jours = useMemo(() => Array.from({ length: 7 }, (_, i) => ajouterJoursCivilsParis(debutSemaine, i)), [debutSemaine]);
   const missionsParJour = useMemo(() => {
     const map = new Map<string, MissionPlanning[]>();
     for (const m of decouperMissionsPlanningParJour(missions)) {
-      const d = new Date(m.creneau_debut);
+      const d = instantJolene(m.creneau_debut);
       if (d < debutSemaine || d >= ajouterJoursCivilsParis(debutSemaine, 7)) continue;
       const key = cleJourParis(d);
       const arr = map.get(key) ?? [];
@@ -340,13 +440,13 @@ function VueSemaine({
   return (
     <div>
       <div className="flex items-center justify-between mb-3">
-        <button onClick={onPrev} className="p-1.5 hover:bg-muted rounded" aria-label="Semaine précédente">
+        <button disabled={!peutPrecedent} onClick={onPrev} className="p-1.5 hover:bg-muted rounded disabled:cursor-not-allowed disabled:opacity-30" aria-label="Semaine précédente">
           <ChevronLeft className="h-4 w-4" />
         </button>
         <p className="text-sm font-semibold text-foreground">
           {formatParis(debutSemaine, 'd MMM')} → {formatParis(finSemaine, 'd MMM yyyy')}
         </p>
-        <button onClick={onNext} className="p-1.5 hover:bg-muted rounded" aria-label="Semaine suivante">
+        <button disabled={!peutSuivant} onClick={onNext} className="p-1.5 hover:bg-muted rounded disabled:cursor-not-allowed disabled:opacity-30" aria-label="Semaine suivante">
           <ChevronRight className="h-4 w-4" />
         </button>
       </div>
@@ -403,7 +503,7 @@ function VueListe({ missions, onClickMission }: { missions: MissionPlanning[]; o
     const now = new Date();
     const map = new Map<string, MissionPlanning[]>();
     for (const m of missions) {
-      const b = bucketFor(new Date(m.creneau_debut), now);
+      const b = bucketFor(instantJolene(m.creneau_debut), now);
       const arr = map.get(b) ?? [];
       arr.push(m);
       map.set(b, arr);
@@ -426,7 +526,7 @@ function VueListe({ missions, onClickMission }: { missions: MissionPlanning[]; o
             <div className="space-y-2">
               {items.map(m => {
                 const cfg = styleFor(m.statut);
-                const date = new Date(m.creneau_debut);
+                const date = instantJolene(m.creneau_debut);
                 return (
                   <button
                     key={m.occurrence_id}
@@ -440,7 +540,7 @@ function VueListe({ missions, onClickMission }: { missions: MissionPlanning[]; o
                         <span className={`text-[10px] font-medium ${cfg.text} shrink-0`}>{cfg.label}</span>
                       </div>
                       <p className="text-xs text-muted-foreground mt-0.5">
-                        {formatParis(date, 'EEE d MMM')} · {fmtHeure(m.creneau_debut)} → {fmtHeure(m.creneau_fin)}
+                        {formatParis(date, 'EEE d MMM')} · {fmtHeure(m.creneau_debut)} → {formatFinAvecDate(m.creneau_debut, m.creneau_fin)}
                         {` · ${m.duree_creneau_heures.toLocaleString('fr-FR', { maximumFractionDigits: 2 })}h`}
                       </p>
                       <p className="text-[11px] text-muted-foreground mt-0.5 flex items-center gap-1">

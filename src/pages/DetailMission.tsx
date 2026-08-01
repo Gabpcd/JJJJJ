@@ -409,6 +409,7 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
   const ouvrirConv = useOuvrirConversation(baseMsg);
   const [mission, setMission] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [erreurMission, setErreurMission] = useState<string | null>(null);
   const [erreurPlanning, setErreurPlanning] = useState<string | null>(null);
   const [maintenantMs, setMaintenantMs] = useState(() => Date.now());
   const [modalAnnuler, setModalAnnuler] = useState(false);
@@ -475,7 +476,7 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
           .select(`
             id, intitule, description, service, profession_requise,
             specialite_medicale_requise, accepte_non_specialises,
-            debut_le, fin_le, duree_heures, taux_horaire_base, taux_rist_plafonne, rist_plafond_applique,
+            debut_le, fin_le, duree_heures, nb_creneaux, taux_horaire_base, taux_rist_plafonne, rist_plafond_applique,
             total_brut, net_a_payer, net_estime, montant_ifm, montant_icp, montant_majoration_nuit,
             montant_majoration_dimanche, montant_majoration_ferie,
             heures_nuit, heures_dimanche, heures_ferie,
@@ -502,10 +503,17 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
       const m = missionResult.data;
       if (missionResult.error) {
         logger.warn('[DetailMission] Mission indisponible', missionResult.error);
+        setErreurMission(
+          missionResult.error.code === 'PGRST116'
+            ? null
+            : extraireMessageErreur(missionResult.error),
+        );
         setMission(null);
         setLoading(false);
         return;
       }
+
+      setErreurMission(null);
 
       setErreurPlanning(creneauxResult.error ? extraireMessageErreur(creneauxResult.error) : null);
       const missionAvecPlanning = m
@@ -631,6 +639,30 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
   const backLabel = '← Retour';
 
   if (loading) return <DetailMissionLayout role={role}><ChargementPage /></DetailMissionLayout>;
+  if (erreurMission) return (
+    <DetailMissionLayout role={role}>
+      <div className="card-base mx-auto max-w-xl border-destructive/30" role="alert">
+        <div className="flex items-start gap-3">
+          <AlertTriangle className="h-5 w-5 shrink-0 text-destructive" aria-hidden="true" />
+          <div>
+            <h1 className="font-semibold text-foreground">Impossible de charger la mission</h1>
+            <p className="mt-1 text-sm text-muted-foreground">{erreurMission}</p>
+            <button
+              type="button"
+              className="btn-primary mt-4"
+              onClick={() => {
+                setLoading(true);
+                setErreurMission(null);
+                refresh();
+              }}
+            >
+              Réessayer
+            </button>
+          </div>
+        </div>
+      </div>
+    </DetailMissionLayout>
+  );
   if (!loading && !mission) return (
     <DetailMissionLayout role={role}>
       <div className="text-center py-20">
@@ -743,6 +775,10 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
           <h2 className="text-lg font-bold text-foreground mb-3">Candidatures {nbCandidatures > 0 ? `(${nbCandidatures})` : ''}</h2>
           <ListeCandidatures
             missionId={m.id}
+            missionIntitule={m.intitule}
+            missionCreneaux={creneauxBruts}
+            missionNbCreneaux={m.nb_creneaux}
+            planningIndisponible={Boolean(erreurPlanning)}
             missionProfession={m.profession_requise}
             missionSpecialiteMedicale={(m as any).specialite_medicale_requise}
             missionAccepteNonSpecialises={(m as any).accepte_non_specialises}

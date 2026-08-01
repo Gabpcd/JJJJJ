@@ -26,18 +26,17 @@ import { SectionErrorBoundary } from '@/components/SectionErrorBoundary';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { TYPES_DOCUMENTS } from '@/lib/documents';
-import { format, differenceInDays } from 'date-fns';
-import { fr } from 'date-fns/locale';
-import { toast } from 'sonner';
-import { hapticNotification } from '@/lib/haptics';
+import { differenceInDays } from 'date-fns';
 import { extraireMessageErreur } from '@/lib/erreurs';
 import { logger } from '@/lib/logger';
 import {
-  ajouterRepliMissionPonctuelle,
   FENETRE_OUVERTURE_POINTAGE_MINUTES,
   prochainCreneauPointage,
   type CreneauPointage,
 } from '@/lib/disponibilite-pointage';
+import { analyserCompletudePlanningMission } from '@/lib/completude-planning-mission';
+import { chargerCreneauxMissionsPagines } from '@/lib/mission-creneaux-pagines';
+import { formatParis, instantJolene } from '@/lib/date-heure-paris';
 /** 6c.5 : salutation heure-aware — « Hiii » → Bonjour/Bonsoir selon l'heure. */
 function salutationHeure(): string {
   const h = new Date().getHours();
@@ -70,9 +69,6 @@ export default function DashboardSoignant() {
   // 7f : consomme le code parrainage capté (?ref=/?parrain=) à la 1ʳᵉ session.
   useAppliquerParrainage(user?.id);
   const [propositions, setPropositions] = useState<PropositionMission[]>([]);
-  // Postuler 1-tap depuis l'accueil : mission_id → candidature_id (pour l'undo).
-  const [candidatingId, setCandidatingId] = useState<string | null>(null);
-  const [postulees, setPostulees] = useState<Record<string, string>>({});
   const [maintenant, setMaintenant] = useState(() => new Date());
 
   useEffect(() => {
@@ -101,50 +97,93 @@ export default function DashboardSoignant() {
       if (connectError) logger.warn('[DashboardSoignant] Stripe Connect indisponible', connectError);
       if (!data) return { profil: null, missions_ouvertes: [], mes_missions: [], documents: [], heures_semaine: 0, gains_mois: { net_total: 0, brut_total: 0, nb_missions: 0 }, gains_6mois: [], missions_semaine_cal: [], propositions: [], heures_totales_terminees: 0, missions_oubliees_count: 0, notifs_non_lues: 0, hasStripeConnect: true };
 
-      const missions = Array.isArray((data as any).mes_missions)
-        ? (data as any).mes_missions
-        : [];
-      const missionIds = missions.map((mission: any) => mission.id);
-      const { data: creneaux, error: creneauxError } = missionIds.length > 0
-        ? await supabase
-          .from('mission_creneaux')
-          .select('id, mission_id, debut, fin, est_pause, type_creneau')
-          .in('mission_id', missionIds)
-          .eq('type_creneau', 'PREVISIONNEL')
-          .eq('est_pause', false)
-          .order('debut', { ascending: true })
-        : { data: [], error: null };
-      if (creneauxError) logger.warn('[DashboardSoignant] Planning détaillé indisponible', creneauxError);
+      const missions = Array.isArray((data as any).mes_missions) ? (data as any).mes_missions : [];
+      const missionsOuvertes = Array.isArray((data as any).missions_ouvertes) ? (data as any).missions_ouvertes : [];
+      const missionIds = [...new Set(
+        [...missions, ...missionsOuvertes]
+          .map((mission: any) => mission.id)
+          .filter(Boolean),
+      )] as string[];
+
+      let creneaux: CreneauPointage[] = [];
+      let nombreCreneauxParMission = new Map<string, number | null>();
+      let planningErreur = false;
+      if (missionIds.length > 0) {
+        try {
+          const [creneauxCharges, missionsResult] = await Promise.all([
+            chargerCreneauxMissionsPagines(missionIds, {
+              typeCreneau: 'PREVISIONNEL',
+              exclurePauses: true,
+            }),
+            supabase
+              .from('missions')
+              .select('id, nb_creneaux')
+              .in('id', missionIds),
+          ]);
+          if (missionsResult.error) throw missionsResult.error;
+          const metas = missionsResult.data ?? [];
+          if (metas.length !== missionIds.length) {
+            throw new Error('Le nombre de créneaux attendu ne peut pas être vérifié pour toutes les missions.');
+          }
+          creneaux = creneauxCharges as CreneauPointage[];
+          nombreCreneauxParMission = new Map(
+            metas.map((mission: any) => [mission.id, mission.nb_creneaux]),
+          );
+        } catch (erreurPlanning) {
+          planningErreur = true;
+          logger.warn('[DashboardSoignant] Planning détaillé indisponible', erreurPlanning);
+        }
+      }
 
       const creneauxParMission: Record<string, CreneauPointage[]> = {};
-      (creneaux || []).forEach((creneau: any) => {
+      creneaux.forEach((creneau: any) => {
         (creneauxParMission[creneau.mission_id] ||= []).push(creneau);
       });
       const maintenant = new Date();
-      const missionsAvecPlanning = missions.map((mission: any) => {
-        const planning = ajouterRepliMissionPonctuelle(
-          creneauxParMission[mission.id] || [],
-          mission,
-        );
-        const prochain = prochainCreneauPointage(planning, maintenant);
-        const debutAffiche = prochain?.debut ?? mission.debut_le;
-        const finAffichee = prochain?.fin ?? mission.fin_le;
+      const enrichirPlanning = (mission: any) => {
+        const analyse = planningErreur
+          ? null
+          : analyserCompletudePlanningMission(
+              { ...mission, nb_creneaux: nombreCreneauxParMission.get(mission.id) },
+              creneauxParMission[mission.id] || [],
+            );
+        if (!analyse?.complet) {
+          return {
+            ...mission,
+            creneaux: [],
+            planning_indisponible: true,
+            prochainCreneau: null,
+            debut_affiche: null,
+            fin_affichee: null,
+            duree_creneau_heures: null,
+            duree_planifiee_heures: null,
+            nb_creneaux_planifies: 0,
+          };
+        }
+
+        const prochain = prochainCreneauPointage(analyse.creneauxPlanifies, maintenant);
+        const indexProchain = prochain ? analyse.creneauxPlanifies.indexOf(prochain) + 1 : null;
         const dureeCreneauHeures = prochain?.fin
-          ? (new Date(prochain.fin).getTime() - new Date(prochain.debut).getTime()) / 3_600_000
+          ? (instantJolene(prochain.fin).getTime() - instantJolene(prochain.debut).getTime()) / 3_600_000
           : null;
         return {
           ...mission,
-          creneaux: planning,
+          creneaux: analyse.creneauxPlanifies,
+          planning_indisponible: false,
           prochainCreneau: prochain,
-          debut_affiche: debutAffiche,
-          fin_affichee: finAffichee,
+          index_prochain_creneau: indexProchain,
+          debut_affiche: prochain?.debut ?? null,
+          fin_affichee: prochain?.fin ?? null,
           duree_creneau_heures: dureeCreneauHeures,
+          duree_planifiee_heures: analyse.dureeTotaleHeures,
+          nb_creneaux_planifies: analyse.nombrePlanifie,
         };
-      });
+      };
 
       return {
         ...data,
-        mes_missions: missionsAvecPlanning,
+        mes_missions: missions.map(enrichirPlanning),
+        missions_ouvertes: missionsOuvertes.map(enrichirPlanning),
         // En cas d'échec du module facultatif, ne pas afficher à tort un CTA
         // d'onboarding Stripe sur un compte potentiellement déjà configuré.
         hasStripeConnect: connectError ? true : connectData?.statut === 'COMPLET',
@@ -188,38 +227,41 @@ export default function DashboardSoignant() {
 
   const missionProchaine = useMemo(() => {
     const maintenantMs = maintenant.getTime();
-    const missionsActualisees = (mesMissions as any[]).map((mission: any) => {
-      const planning = mission.creneaux || [];
-      const prochainCreneau = prochainCreneauPointage(planning, maintenant);
-      const creneauActuel = planning.some((creneau: CreneauPointage) => (
-        creneau.type_creneau === 'PREVISIONNEL'
-        && !creneau.est_pause
-        && Boolean(creneau.fin)
-        && maintenantMs >= new Date(creneau.debut).getTime() - FENETRE_OUVERTURE_POINTAGE_MINUTES * 60_000
-        && maintenantMs <= new Date(creneau.fin!).getTime()
-      ));
-      return {
-        ...mission,
-        prochainCreneau,
-        creneauActuel,
-        debut_affiche: prochainCreneau?.debut ?? mission.debut_affiche ?? mission.debut_le,
-        fin_affichee: prochainCreneau?.fin ?? mission.fin_affichee ?? mission.fin_le,
-      };
-    });
+    const missionsActualisees = (mesMissions as any[])
+      .filter((mission: any) => !mission.planning_indisponible)
+      .map((mission: any) => {
+        const planning = mission.creneaux || [];
+        const prochainCreneau = prochainCreneauPointage(planning, maintenant);
+        const creneauActuel = planning.some((creneau: CreneauPointage) => (
+          creneau.type_creneau === 'PREVISIONNEL'
+          && !creneau.est_pause
+          && Boolean(creneau.fin)
+          && maintenantMs >= instantJolene(creneau.debut).getTime() - FENETRE_OUVERTURE_POINTAGE_MINUTES * 60_000
+          && maintenantMs <= instantJolene(creneau.fin!).getTime()
+        ));
+        return {
+          ...mission,
+          prochainCreneau,
+          creneauActuel,
+          debut_affiche: prochainCreneau?.debut ?? null,
+          fin_affichee: prochainCreneau?.fin ?? null,
+        };
+      });
 
     const aPointer = missionsActualisees.find((mission: any) => mission.creneauActuel);
     if (aPointer) return aPointer;
 
     const missionProche = missionsActualisees.find((m: any) => {
-      const mins = (new Date(m.debut_affiche || m.debut_le).getTime() - maintenantMs) / 60000;
+      if (!m.debut_affiche) return false;
+      const mins = (instantJolene(m.debut_affiche).getTime() - maintenantMs) / 60000;
       return mins > -30 && mins <= 60;
     });
     if (missionProche) return missionProche;
 
     return missionsActualisees
-      .filter((mission: any) => mission.statut === 'EN_COURS')
+      .filter((mission: any) => mission.statut === 'EN_COURS' && mission.debut_affiche)
       .sort((a: any, b: any) => (
-        new Date(a.debut_affiche).getTime() - new Date(b.debut_affiche).getTime()
+        instantJolene(a.debut_affiche).getTime() - instantJolene(b.debut_affiche).getTime()
       ))[0] || null;
   }, [mesMissions, maintenant]);
 
@@ -260,49 +302,6 @@ export default function DashboardSoignant() {
     hasStripeConnect,
     aRib,
   });
-
-  // Postuler directement depuis la carte d'accueil (funnel candidature). Feedback
-  // inline immédiat + annulation « dans la foulée » (fn_retirer_candidature) sans
-  // page de confirmation. Si la mission exige un choix de contrat → on bascule sur
-  // le détail (le dialogue de choix y vit déjà).
-  const retirerCandidature = async (missionId: string, candidatureId: string) => {
-    const { data, error } = await supabase.rpc('fn_retirer_candidature' as any, { p_candidature_id: candidatureId });
-    if (error || !(data as any)?.success) {
-      toast.error((data as any)?.error ?? error?.message ?? 'Retrait impossible');
-      return;
-    }
-    setPostulees(prev => { const n = { ...prev }; delete n[missionId]; return n; });
-    toast.success('Candidature retirée');
-  };
-
-  const postulerDepuisAccueil = async (m: any) => {
-    if (candidatingId) return;
-    setCandidatingId(m.id);
-    const { data, error } = await supabase.rpc('fn_postuler_mission_rate_limited' as any, {
-      p_mission_id: m.id,
-      p_message: "Candidature rapide depuis l'accueil",
-      p_choix_contrat: null,
-    });
-    setCandidatingId(null);
-    if (error) { toast.error(error.message); return; }
-    const r = data as any;
-    if (r?.choix_requis) {
-      toast('Choisis ton type de contrat pour postuler');
-      navigate(`/soignant/missions/${m.id}`);
-      return;
-    }
-    if (r?.success || r?.candidature_id) {
-      const candId = (r.candidature_id as string | undefined) ?? '';
-      setPostulees(prev => ({ ...prev, [m.id]: candId }));
-      void hapticNotification('success');
-      toast.success('Candidature envoyée ✓', candId ? {
-        action: { label: 'Annuler', onClick: () => retirerCandidature(m.id, candId) },
-        duration: 8000,
-      } : undefined);
-    } else {
-      toast.error(r?.error ?? 'Candidature impossible');
-    }
-  };
 
   if (isLoading) return <LayoutApp role="SOIGNANT"><SkeletonDashboard /></LayoutApp>;
 
@@ -364,7 +363,7 @@ export default function DashboardSoignant() {
           ) : (
             <p className="text-sm text-muted-foreground mt-1">
               {missionsOuvertes.length > 0
-                ? `${missionsOuvertes.length} mission${missionsOuvertes.length > 1 ? 's' : ''} pour toi aujourd'hui 🔥`
+                ? `${missionsOuvertes.length} mission${missionsOuvertes.length > 1 ? 's' : ''} pour toi 🔥`
                 : 'On trouve ta prochaine mission ? 🔥'}
             </p>
           )}
@@ -397,38 +396,56 @@ export default function DashboardSoignant() {
             <button onClick={() => navigate('/soignant/missions?onglet=mes_missions')} className="text-xs text-primary font-medium hover:underline">Voir tout →</button>
           </div>
           <div className="space-y-2">
-            {mesMissions.map((m: any) => (
-              <div key={m.id} className="card-base hover:shadow-md transition-all flex items-center gap-3 py-3">
-                <Link
-                  to={`/soignant/missions/${m.id}`}
-                  className="flex flex-1 min-w-0 items-center gap-3 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
-                  aria-label={`Voir la mission ${m.intitule}`}
-                >
-                  <div className="flex flex-col items-center justify-center rounded-xl bg-primary/10 px-3 py-1.5 min-w-[52px]">
-                    <span className="text-[10px] font-semibold text-primary uppercase">{format(new Date(m.debut_affiche || m.debut_le), 'EEE', { locale: fr })}</span>
-                    <span className="text-lg font-bold text-primary leading-tight">{format(new Date(m.debut_affiche || m.debut_le), 'd')}</span>
-                    <span className="text-[10px] text-primary">{format(new Date(m.debut_affiche || m.debut_le), 'MMM', { locale: fr })}</span>
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-0.5">
-                      <BadgeStatut statut={m.statut} />
-                      {m.est_urgente && <span className="badge-base bg-destructive/10 text-destructive text-[10px]">🔥 Urgent</span>}
+            {mesMissions.map((m: any) => {
+              const planningAffichable = !m.planning_indisponible && m.debut_affiche && m.fin_affichee;
+              return (
+                <div key={m.id} className="card-base hover:shadow-md transition-all flex items-center gap-3 py-3">
+                  <Link
+                    to={`/soignant/missions/${m.id}`}
+                    className="flex flex-1 min-w-0 items-center gap-3 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+                    aria-label={`Voir la mission ${m.intitule}`}
+                  >
+                    <div className="flex flex-col items-center justify-center rounded-xl bg-primary/10 px-3 py-1.5 min-w-[52px] min-h-[58px]">
+                      {planningAffichable ? (
+                        <>
+                          <span className="text-[10px] font-semibold text-primary uppercase">{formatParis(m.debut_affiche, 'EEE')}</span>
+                          <span className="text-lg font-bold text-primary leading-tight">{formatParis(m.debut_affiche, 'd')}</span>
+                          <span className="text-[10px] text-primary">{formatParis(m.debut_affiche, 'MMM')}</span>
+                        </>
+                      ) : (
+                        <CalendarDays className="h-5 w-5 text-warning" aria-hidden="true" />
+                      )}
                     </div>
-                    <h3 className="font-semibold text-sm text-foreground truncate" title={m.intitule}>{m.intitule}</h3>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      🏥 {m.etablissements?.nom || m.etab_nom || 'Établissement'}{m.etablissements?.adresse_ville ? ` · ${m.etablissements.adresse_ville}` : ''}
-                    </p>
-                    <div className="flex items-center gap-3 mt-0.5">
-                      <p className="text-xs text-muted-foreground">
-                        🕐 {format(new Date(m.debut_affiche || m.debut_le), "HH'h'mm", { locale: fr })} → {format(new Date(m.fin_affichee || m.fin_le), "HH'h'mm", { locale: fr })}
-                        {m.duree_creneau_heures ? ` · ${m.duree_creneau_heures} h` : ''}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-0.5">
+                        <BadgeStatut statut={m.statut} />
+                        {m.est_urgente && <span className="badge-base bg-destructive/10 text-destructive text-[10px]">🔥 Urgent</span>}
+                      </div>
+                      <h3 className="font-semibold text-sm text-foreground truncate" title={m.intitule}>{m.intitule}</h3>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        🏥 {m.etablissements?.nom || m.etab_nom || 'Établissement'}{m.etablissements?.adresse_ville ? ` · ${m.etablissements.adresse_ville}` : ''}
                       </p>
+                      {planningAffichable ? (
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          🕐 {formatParis(m.debut_affiche, "EEEE d MMM · HH'h'mm")} → {formatParis(m.fin_affichee, "HH'h'mm")}
+                          {m.duree_creneau_heures ? ` · ${m.duree_creneau_heures.toLocaleString('fr-FR')} h` : ''}
+                          {m.nb_creneaux_planifies > 1 && m.index_prochain_creneau
+                            ? ` · créneau ${m.index_prochain_creneau}/${m.nb_creneaux_planifies}`
+                            : ''}
+                        </p>
+                      ) : (
+                        <p className="text-xs font-medium text-warning mt-1">Planning détaillé à confirmer</p>
+                      )}
                     </div>
-                  </div>
-                </Link>
-                <BoutonAjouterCalendrier mission={m} />
-              </div>
-            ))}
+                  </Link>
+                  {planningAffichable ? (
+                    <BoutonAjouterCalendrier
+                      mission={{ ...m, debut_le: m.debut_affiche, fin_le: m.fin_affichee }}
+                    />
+                  ) : null}
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
@@ -450,7 +467,8 @@ export default function DashboardSoignant() {
         {missionsOuvertes.length > 0 ? (
           <div className="space-y-2">
             {missionsOuvertes.slice(0, 2).map((m: any) => {
-              const duree = Number(m.duree_heures) > 0 ? Number(m.duree_heures) : 0;
+              const planningAffichable = !m.planning_indisponible && m.debut_affiche && m.fin_affichee;
+              const duree = Number(m.duree_planifiee_heures) > 0 ? Number(m.duree_planifiee_heures) : 0;
               const netDirect = Number(m.net_estime ?? m.net_a_payer);
               const brutDirect = Number(m.total_brut ?? m.brut_estime);
               const estimation = Number.isFinite(netDirect) && netDirect > 0
@@ -467,34 +485,46 @@ export default function DashboardSoignant() {
                     className="flex flex-1 min-w-0 items-center gap-3 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
                     aria-label={`Voir la mission ${m.intitule}`}
                   >
-                    <div className="flex flex-col items-center justify-center rounded-xl bg-primary/10 px-3 py-1.5 min-w-[52px]">
-                      <span className="text-[10px] font-semibold text-primary uppercase">{format(new Date(m.debut_le), 'EEE', { locale: fr })}</span>
-                      <span className="text-lg font-bold text-primary leading-tight">{format(new Date(m.debut_le), 'd')}</span>
-                      <span className="text-[10px] text-primary">{format(new Date(m.debut_le), 'MMM', { locale: fr })}</span>
+                    <div className="flex flex-col items-center justify-center rounded-xl bg-primary/10 px-3 py-1.5 min-w-[52px] min-h-[58px]">
+                      {planningAffichable ? (
+                        <>
+                          <span className="text-[10px] font-semibold text-primary uppercase">{formatParis(m.debut_affiche, 'EEE')}</span>
+                          <span className="text-lg font-bold text-primary leading-tight">{formatParis(m.debut_affiche, 'd')}</span>
+                          <span className="text-[10px] text-primary">{formatParis(m.debut_affiche, 'MMM')}</span>
+                        </>
+                      ) : (
+                        <CalendarDays className="h-5 w-5 text-warning" aria-hidden="true" />
+                      )}
                     </div>
                     <div className="flex-1 min-w-0">
                       {m.est_urgente && <span className="badge-base bg-destructive/10 text-destructive text-[10px] mb-0.5 inline-block">🔥 Urgent</span>}
                       <h3 className="font-semibold text-sm text-foreground truncate" title={m.intitule}>{m.intitule}</h3>
                       <p className="text-xs text-muted-foreground mt-0.5 truncate">🏥 {m.etab_nom || 'Établissement'}{m.service ? ` · ${m.service}` : ''}</p>
                       <div className="flex items-center gap-3 mt-0.5 text-[11px] text-muted-foreground">
-                        <span>🕐 {format(new Date(m.debut_le), "HH'h'mm", { locale: fr })} → {format(new Date(m.fin_le), "HH'h'mm", { locale: fr })}</span>
+                        {planningAffichable ? (
+                          <span>
+                            🕐 {formatParis(m.debut_affiche, "EEEE d MMM · HH'h'mm")} → {formatParis(m.fin_affichee, "HH'h'mm")}
+                            {m.nb_creneaux_planifies > 1 ? ` · ${m.nb_creneaux_planifies} créneaux au total` : ''}
+                          </span>
+                        ) : (
+                          <span className="font-medium text-warning">Planning détaillé à confirmer</span>
+                        )}
                         {m.taux_horaire_base && <span className="font-semibold text-primary">{m.taux_horaire_base} €/h</span>}
                         {estimation && <span>~{estimation.montant} € {estimation.libelle}</span>}
                       </div>
                     </div>
                   </Link>
-                  {m.id in postulees ? (
-                    <div className="shrink-0 flex flex-col items-end gap-0.5">
-                      <span className="text-xs font-semibold text-success inline-flex items-center gap-1">✓ Envoyée</span>
-                      {postulees[m.id] && (
-                        <button onClick={() => retirerCandidature(m.id, postulees[m.id])} className="text-[10px] text-muted-foreground hover:text-destructive hover:underline">Annuler</button>
-                      )}
-                    </div>
-                  ) : (
-                    <BoutonY2K size="sm" variant="primary" className="shrink-0" loading={candidatingId === m.id} disabled={candidatingId === m.id} onClick={(e: React.MouseEvent) => { e.stopPropagation(); postulerDepuisAccueil(m); }}>
-                      Postuler
-                    </BoutonY2K>
-                  )}
+                  <BoutonY2K
+                    size="sm"
+                    variant="primary"
+                    className="shrink-0"
+                    onClick={(e: React.MouseEvent) => {
+                      e.stopPropagation();
+                      navigate(`/soignant/missions/${m.id}`);
+                    }}
+                  >
+                    Voir le planning et postuler
+                  </BoutonY2K>
                 </div>
               );
             })}

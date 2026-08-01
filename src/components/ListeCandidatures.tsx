@@ -1,11 +1,22 @@
 import React, { useState, useEffect } from 'react';
-import { CheckCircle, XCircle, Clock, Send, Loader2, Scale } from 'lucide-react';
+import { AlertTriangle, CheckCircle, Clock, RefreshCw, Scale, XCircle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { extraireMessageErreur } from '@/lib/erreurs';
 import { PopoverScoreSoignant } from '@/components/score/PopoverScoreSoignant';
 import { getLabelProfession } from '@/lib/constantes';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { BoutonY2K } from '@/components/y2k/BoutonY2K';
+import {
+  DialogResponsive,
+  DialogResponsiveBody,
+  DialogResponsiveContent,
+  DialogResponsiveDescription,
+  DialogResponsiveFooter,
+  DialogResponsiveHeader,
+  DialogResponsiveTitle,
+} from '@/components/ui/DialogResponsive';
+import { creneauxPrevisionnels, type CreneauPointage } from '@/lib/disponibilite-pointage';
+import { formatParis, instantJolene, memeJourParis } from '@/lib/date-heure-paris';
 
 function scoreBadge(score: number) {
   if (score >= 70) return 'bg-success/10 text-success';
@@ -15,6 +26,10 @@ function scoreBadge(score: number) {
 
 interface ListeCandidaturesProps {
   missionId: string;
+  missionIntitule?: string;
+  missionCreneaux?: CreneauPointage[];
+  missionNbCreneaux?: number | null;
+  planningIndisponible?: boolean;
   /** Profession requise par la mission — sert à signaler les candidats hors profession exacte (hiérarchie/souplesse). */
   missionProfession?: string | null;
   /** Spécialité médicale requise (code) — sert à signaler les médecins sans la spécialité exacte. */
@@ -25,6 +40,61 @@ interface ListeCandidaturesProps {
   onAccepted: () => void;
   onError: (msg: string) => void;
   onSuccess: (msg: string) => void;
+}
+
+type CreneauExact = CreneauPointage & { fin: string };
+
+interface VerificationPlanningExact {
+  creneaux: CreneauExact[];
+  erreur: string | null;
+}
+
+function verifierPlanningExact(
+  creneaux: CreneauPointage[],
+  nbCreneauxAttendus: number | null | undefined,
+  indisponible = false,
+): VerificationPlanningExact {
+  if (indisponible) {
+    return { creneaux: [], erreur: 'Le planning détaillé est momentanément indisponible.' };
+  }
+
+  const attendus = Number(nbCreneauxAttendus);
+  if (!Number.isInteger(attendus) || attendus <= 0) {
+    return { creneaux: [], erreur: 'Le nombre de créneaux contractuels doit être confirmé.' };
+  }
+
+  const planifies = creneaux.filter((creneau) => (
+    creneau.type_creneau === 'PREVISIONNEL' && !creneau.est_pause
+  ));
+  if (planifies.length !== attendus) {
+    return {
+      creneaux: [],
+      erreur: `Planning incomplet : ${attendus} créneau${attendus > 1 ? 'x' : ''} attendu${attendus > 1 ? 's' : ''}, ${planifies.length} chargé${planifies.length > 1 ? 's' : ''}.`,
+    };
+  }
+  if (planifies.some((creneau) => !creneau.fin)) {
+    return { creneaux: [], erreur: 'Chaque créneau doit comporter une date et une heure de fin exactes.' };
+  }
+
+  try {
+    const complets = creneauxPrevisionnels(planifies) as CreneauExact[];
+    if (complets.length !== attendus || complets.some((creneau) => (
+      instantJolene(creneau.fin).getTime() <= instantJolene(creneau.debut).getTime()
+    ))) {
+      return { creneaux: [], erreur: 'Le planning contient un créneau dont les horaires sont invalides.' };
+    }
+    return { creneaux: complets, erreur: null };
+  } catch {
+    return { creneaux: [], erreur: 'Le planning contient une date ou une heure invalide.' };
+  }
+}
+
+function empreintePlanning(creneaux: CreneauExact[]): string {
+  return JSON.stringify(creneaux.map((creneau) => ({
+    id: creneau.id ?? null,
+    debut: creneau.debut,
+    fin: creneau.fin,
+  })));
 }
 
 function getCandidatMatchBadge(
@@ -61,10 +131,35 @@ function getCandidatMatchBadge(
   return null;
 }
 
-export function ListeCandidatures({ missionId, missionProfession, missionSpecialiteMedicale, missionAccepteNonSpecialises, onAccepted, onError, onSuccess }: ListeCandidaturesProps) {
+export function ListeCandidatures({
+  missionId,
+  missionIntitule,
+  missionCreneaux = [],
+  missionNbCreneaux,
+  planningIndisponible = false,
+  missionProfession,
+  missionSpecialiteMedicale,
+  onAccepted,
+  onError,
+  onSuccess,
+}: ListeCandidaturesProps) {
   const [candidatures, setCandidatures] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [erreurChargement, setErreurChargement] = useState<string | null>(null);
   const [traitement, setTraitement] = useState<string | null>(null);
+  const [candidatureAConfirmer, setCandidatureAConfirmer] = useState<any | null>(null);
+  const [planningConfirmation, setPlanningConfirmation] = useState<CreneauExact[]>([]);
+  const [alerteReconfirmation, setAlerteReconfirmation] = useState<string | null>(null);
+
+  const verificationInitiale = verifierPlanningExact(
+    missionCreneaux,
+    missionNbCreneaux,
+    planningIndisponible,
+  );
+  const planningPretPourAcceptation = verificationInitiale.erreur === null;
+  const dureeTotaleConfirmation = planningConfirmation.reduce((total, creneau) => (
+    total + Math.max(0, (instantJolene(creneau.fin).getTime() - instantJolene(creneau.debut).getTime()) / 3_600_000)
+  ), 0);
 
   useEffect(() => {
     charger();
@@ -72,72 +167,160 @@ export function ListeCandidatures({ missionId, missionProfession, missionSpecial
 
   const charger = async () => {
     setLoading(true);
-    const { data } = await supabase
-      .from('candidatures')
-      .select('id, soignant_id, message, statut, cree_le')
-      .eq('mission_id', missionId)
-      .order('cree_le', { ascending: true });
+    setErreurChargement(null);
+    try {
+      const { data, error } = await supabase
+        .from('candidatures')
+        .select('id, soignant_id, message, statut, cree_le')
+        .eq('mission_id', missionId)
+        .order('cree_le', { ascending: true });
+      if (error) throw error;
 
-    if (data && data.length > 0) {
       const enriched = await Promise.all(
-        data.map(async (c: any) => {
-          const { data: sg } = await supabase.rpc('fn_soignant_pour_etablissement' as any, { p_soignant_id: c.soignant_id });
+        (data ?? []).map(async (c: any) => {
+          const { data: sg, error: erreurSoignant } = await supabase.rpc(
+            'fn_soignant_pour_etablissement' as any,
+            { p_soignant_id: c.soignant_id },
+          );
+          if (erreurSoignant) throw erreurSoignant;
           return { ...c, soignant: sg || null };
-        })
+        }),
       );
       setCandidatures(enriched);
-    } else {
-      setCandidatures([]);
+    } catch (err) {
+      setErreurChargement(extraireMessageErreur(err));
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
-  const accepterAvecPaiement = async (candidatureId: string) => {
-    await finaliserAcceptation(candidatureId);
+  const chargerPlanningExactServeur = async (): Promise<CreneauExact[]> => {
+    const { data, error } = await supabase
+      .from('mission_creneaux')
+      .select('id, mission_id, debut, fin, est_pause, type_creneau')
+      .eq('mission_id', missionId)
+      .eq('type_creneau', 'PREVISIONNEL')
+      .eq('est_pause', false)
+      .order('debut', { ascending: true });
+    if (error) throw error;
+
+    const verification = verifierPlanningExact(
+      (data ?? []) as CreneauPointage[],
+      missionNbCreneaux,
+    );
+    if (verification.erreur) throw new Error(verification.erreur);
+    return verification.creneaux;
   };
 
-  const finaliserAcceptation = async (candidatureId: string) => {
+  const fermerConfirmation = () => {
+    setCandidatureAConfirmer(null);
+    setPlanningConfirmation([]);
+    setAlerteReconfirmation(null);
+  };
+
+  const ouvrirConfirmationAcceptation = async (candidatureId: string) => {
+    if (!planningPretPourAcceptation) {
+      onError(verificationInitiale.erreur ?? 'Le planning détaillé doit être confirmé avant d’accepter une candidature.');
+      return;
+    }
+
     setTraitement(candidatureId);
     try {
-      const { data, error } = await supabase.rpc('fn_traiter_candidature' as any, {
+      const planningRelu = await chargerPlanningExactServeur();
+      const candidature = candidatures.find((item) => item.id === candidatureId);
+      setPlanningConfirmation(planningRelu);
+      setAlerteReconfirmation(null);
+      setCandidatureAConfirmer(candidature ?? { id: candidatureId });
+    } catch (err) {
+      onError(extraireMessageErreur(err));
+    } finally {
+      setTraitement(null);
+    }
+  };
+
+  const confirmerAcceptation = async () => {
+    const candidatureId = candidatureAConfirmer?.id;
+    if (!candidatureId || traitement) return;
+
+    setTraitement(candidatureId);
+    setAlerteReconfirmation(null);
+    try {
+      // Une deuxième lecture juste avant la mutation évite de confirmer un
+      // récapitulatif devenu obsolète pendant que la boîte de dialogue était ouverte.
+      const planningRelu = await chargerPlanningExactServeur();
+      if (empreintePlanning(planningRelu) !== empreintePlanning(planningConfirmation)) {
+        setPlanningConfirmation(planningRelu);
+        setAlerteReconfirmation(
+          'Le planning a changé depuis l’ouverture. Vérifiez les nouveaux horaires puis confirmez de nouveau.',
+        );
+        return;
+      }
+
+      const { data, error } = await supabase.rpc('fn_traiter_candidature_planning_v1' as any, {
         p_candidature_id: candidatureId,
         p_decision: 'ACCEPTEE',
+        p_creneaux_confirmes: planningRelu.map(({ debut, fin }) => ({ debut, fin })) as any,
         p_motif: null,
       });
       if (error) throw error;
-      if (data?.error) { onError(data.error); return; }
+      if (data?.error) {
+        setAlerteReconfirmation(data.error);
+        onError(data.error);
+        return;
+      }
+
+      fermerConfirmation();
       onSuccess('Candidature acceptée ! Le soignant est assigné.');
       onAccepted();
       await charger();
-    } catch (err: any) {
+    } catch (err) {
       onError(extraireMessageErreur(err));
+    } finally {
+      setTraitement(null);
     }
-    setTraitement(null);
   };
 
   const traiterCandidature = async (candidatureId: string, decision: 'ACCEPTEE' | 'REFUSEE') => {
     if (decision === 'ACCEPTEE') {
-      await accepterAvecPaiement(candidatureId);
+      await ouvrirConfirmationAcceptation(candidatureId);
       return;
     }
+
     setTraitement(candidatureId);
     try {
-      const { data, error } = await supabase.rpc('fn_traiter_candidature' as any, {
+      const { data, error } = await supabase.rpc('fn_traiter_candidature_planning_v1' as any, {
         p_candidature_id: candidatureId,
-        p_decision: decision,
+        p_decision: 'REFUSEE',
+        p_creneaux_confirmes: null,
         p_motif: 'Refusé par l\'établissement',
       });
       if (error) throw error;
       if (data?.error) { onError(data.error); return; }
       onSuccess('Candidature refusée.');
       await charger();
-    } catch (err: any) {
+    } catch (err) {
       onError(extraireMessageErreur(err));
+    } finally {
+      setTraitement(null);
     }
-    setTraitement(null);
   };
 
   if (loading) return <p className="text-sm text-muted-foreground text-center py-6">Chargement des candidatures…</p>;
+
+  if (erreurChargement) {
+    return (
+      <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4" role="alert">
+        <p className="flex items-center gap-2 text-sm font-semibold text-destructive">
+          <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden="true" />
+          Impossible de charger les candidatures
+        </p>
+        <p className="mt-1 text-xs text-muted-foreground">{erreurChargement}</p>
+        <button type="button" onClick={() => void charger()} className="mt-3 inline-flex items-center gap-1.5 text-xs font-semibold text-primary hover:underline">
+          <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" /> Réessayer
+        </button>
+      </div>
+    );
+  }
 
   if (candidatures.length === 0) {
     return (
@@ -164,6 +347,17 @@ export function ListeCandidatures({ missionId, missionProfession, missionSpecial
       {enAttente.length > 0 && (
         <div className="space-y-3">
           <p className="text-sm font-semibold text-foreground">En attente ({enAttente.length})</p>
+          {!planningPretPourAcceptation && (
+            <div className="rounded-xl border border-warning/30 bg-warning/5 p-3 text-xs text-warning" role="alert">
+              <p className="font-semibold">Planning détaillé à confirmer avant toute acceptation.</p>
+              <p className="mt-1 text-muted-foreground">
+                Aucun candidat ne sera assigné tant que chaque créneau ne comporte pas une date et une heure de fin exactes.
+              </p>
+              {verificationInitiale.erreur && (
+                <p className="mt-1 font-medium">{verificationInitiale.erreur}</p>
+              )}
+            </div>
+          )}
           {/* Lot 16 (Couche 2) : rappel contractuel au moment de la sélection —
               les clauses existent (CGV art. 8.2/8.3) mais n'étaient jamais
               surfacées dans le flux. Ton factuel, pas de mur. */}
@@ -261,7 +455,7 @@ export function ListeCandidatures({ missionId, missionProfession, missionSpecial
                     size="sm"
                     variant="primary"
                     onClick={() => traiterCandidature(c.id, 'ACCEPTEE')}
-                    disabled={traitement === c.id}
+                    disabled={Boolean(traitement) || !planningPretPourAcceptation}
                     loading={traitement === c.id}
                     iconeGauche={<CheckCircle className="h-4 w-4" />}
                     className="flex-1 sm:flex-none"
@@ -273,7 +467,7 @@ export function ListeCandidatures({ missionId, missionProfession, missionSpecial
                     size="sm"
                     variant="destructive"
                     onClick={() => traiterCandidature(c.id, 'REFUSEE')}
-                    disabled={traitement === c.id}
+                    disabled={Boolean(traitement)}
                     iconeGauche={<XCircle className="h-4 w-4" />}
                     className="flex-1 sm:flex-none"
                     aria-label="Refuser cette candidature"
@@ -302,6 +496,68 @@ export function ListeCandidatures({ missionId, missionProfession, missionSpecial
           ))}
         </div>
       )}
+
+      <DialogResponsive
+        open={Boolean(candidatureAConfirmer)}
+        onOpenChange={(open) => { if (!open && !traitement) fermerConfirmation(); }}
+      >
+        <DialogResponsiveContent maxWidth="lg">
+          <DialogResponsiveHeader>
+            <DialogResponsiveTitle>Confirmer l’acceptation</DialogResponsiveTitle>
+            <DialogResponsiveDescription>
+              Vérifiez le planning contractuel avant d’assigner définitivement ce candidat.
+            </DialogResponsiveDescription>
+          </DialogResponsiveHeader>
+          <DialogResponsiveBody>
+            <div className="space-y-3">
+              <div className="rounded-xl border border-border bg-muted/30 p-3 text-sm">
+                <p className="font-semibold text-foreground">
+                  {candidatureAConfirmer?.soignant?.prenom} {candidatureAConfirmer?.soignant?.nom}
+                </p>
+                {missionIntitule && <p className="text-xs text-muted-foreground">{missionIntitule}</p>}
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-foreground">
+                  {planningConfirmation.length} créneau{planningConfirmation.length > 1 ? 'x' : ''} · {dureeTotaleConfirmation.toLocaleString('fr-FR', { maximumFractionDigits: 2 })} h au total
+                </p>
+                <ul className="mt-2 divide-y divide-border rounded-xl border border-border px-3">
+                  {planningConfirmation.map((creneau) => (
+                    <li key={creneau.id ?? creneau.debut} className="py-2 text-xs">
+                      <span className="font-medium text-foreground">{formatParis(creneau.debut, 'EEEE d MMMM yyyy')}</span>
+                      <span className="mt-0.5 block text-muted-foreground">
+                        {formatParis(creneau.debut, 'HH:mm')} → {memeJourParis(creneau.debut, creneau.fin)
+                          ? formatParis(creneau.fin, 'HH:mm')
+                          : formatParis(creneau.fin, 'EEE d MMM · HH:mm')}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                En confirmant, ce soignant sera assigné à l’ensemble de ce planning.
+              </p>
+              {alerteReconfirmation && (
+                <div className="rounded-xl border border-warning/30 bg-warning/5 p-3 text-xs font-medium text-warning" role="alert">
+                  {alerteReconfirmation}
+                </div>
+              )}
+            </div>
+          </DialogResponsiveBody>
+          <DialogResponsiveFooter>
+            <BoutonY2K variant="secondary" onClick={fermerConfirmation} disabled={Boolean(traitement)}>
+              Annuler
+            </BoutonY2K>
+            <BoutonY2K
+              variant="primary"
+              onClick={() => void confirmerAcceptation()}
+              disabled={Boolean(traitement) || planningConfirmation.length === 0}
+              loading={Boolean(traitement)}
+            >
+              Confirmer et assigner
+            </BoutonY2K>
+          </DialogResponsiveFooter>
+        </DialogResponsiveContent>
+      </DialogResponsive>
 
     </div>
   );

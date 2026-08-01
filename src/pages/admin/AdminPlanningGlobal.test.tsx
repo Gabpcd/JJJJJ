@@ -7,6 +7,7 @@ import AdminPlanningGlobal from './AdminPlanningGlobal';
 const mocks = vi.hoisted(() => ({
   from: vi.fn(),
   toastError: vi.fn(),
+  chargerCreneaux: vi.fn(),
 }));
 
 vi.mock('@/components/LayoutAdmin', () => ({
@@ -16,6 +17,9 @@ vi.mock('@/components/LayoutAdmin', () => ({
 vi.mock('@/components/BreadcrumbAdmin', () => ({ BreadcrumbAdmin: () => null }));
 vi.mock('@/hooks/usePageTitle', () => ({ usePageTitle: vi.fn() }));
 vi.mock('@/integrations/supabase/client', () => ({ supabase: { from: mocks.from } }));
+vi.mock('@/lib/mission-creneaux-pagines', () => ({
+  chargerCreneauxMissionsPagines: mocks.chargerCreneaux,
+}));
 vi.mock('sonner', () => ({ toast: { error: mocks.toastError } }));
 
 type ResultatBuilder = { data: unknown[] | null; error: { message: string } | null };
@@ -41,19 +45,20 @@ const missionLongue = {
   est_urgente: false,
   etablissement_id: 'etablissement-1',
   soignant_assigne_id: 'soignant-1',
+  nb_creneaux: 2,
 };
 
 describe('AdminPlanningGlobal', () => {
   let missionsData: unknown[];
   let creneauxData: unknown[];
   let erreurMissions: { message: string } | null;
-  let creneauxBuilder: Record<string, any>;
 
   beforeEach(() => {
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(new Date(2026, 6, 31, 12));
     mocks.from.mockReset();
     mocks.toastError.mockReset();
+    mocks.chargerCreneaux.mockReset();
     erreurMissions = null;
     missionsData = [missionLongue];
     creneauxData = [
@@ -74,14 +79,11 @@ describe('AdminPlanningGlobal', () => {
         type_creneau: 'PREVISIONNEL',
       },
     ];
+    mocks.chargerCreneaux.mockImplementation(async () => creneauxData);
 
     mocks.from.mockImplementation((table: string) => {
       if (table === 'missions') {
         return creerBuilder({ data: erreurMissions ? null : missionsData, error: erreurMissions });
-      }
-      if (table === 'mission_creneaux') {
-        creneauxBuilder = creerBuilder({ data: creneauxData, error: null });
-        return creneauxBuilder;
       }
       if (table === 'etablissements') {
         return creerBuilder({
@@ -120,13 +122,14 @@ describe('AdminPlanningGlobal', () => {
     expect(screen.getByText('Active')).toBeInTheDocument();
     expect(screen.getAllByText(missionLongue.intitule)).toHaveLength(1);
     expect(screen.queryByText(/31 août/)).not.toBeInTheDocument();
-    expect(creneauxBuilder.eq).toHaveBeenCalledWith('type_creneau', 'PREVISIONNEL');
-    expect(creneauxBuilder.eq).toHaveBeenCalledWith('est_pause', false);
+    expect(mocks.chargerCreneaux).toHaveBeenCalledWith(
+      ['mission-longue'],
+      { typeCreneau: 'PREVISIONNEL', exclurePauses: true },
+    );
   });
 
   it('réutilise la plage globale uniquement pour une ancienne mission ponctuelle de 24 h maximum', async () => {
     missionsData = [
-      { ...missionLongue, id: 'longue-sans-creneau', intitule: 'Longue sans planning' },
       {
         ...missionLongue,
         id: 'ponctuelle-legacy',
@@ -135,6 +138,7 @@ describe('AdminPlanningGlobal', () => {
         debut_le: '2026-07-31T09:00:00',
         fin_le: '2026-07-31T17:00:00',
         soignant_assigne_id: null,
+        nb_creneaux: null,
       },
     ];
     creneauxData = [];
@@ -144,7 +148,17 @@ describe('AdminPlanningGlobal', () => {
     expect(await screen.findByText('vendredi 31 juillet 2026')).toBeInTheDocument();
     expect(screen.getAllByText('Mission ponctuelle legacy').length).toBeGreaterThan(0);
     expect(screen.getAllByText('09:00 → 17:00').length).toBeGreaterThan(0);
-    expect(screen.queryByText('Longue sans planning')).not.toBeInTheDocument();
+  });
+
+  it('échoue fermé si un planning paginé reste incomplet par rapport à nb_creneaux', async () => {
+    creneauxData = creneauxData.slice(0, 1);
+
+    rendreEtCharger();
+
+    const alerte = await screen.findByRole('alert');
+    expect(alerte).toHaveTextContent('Impossible de charger le planning');
+    expect(alerte).toHaveTextContent(/planning détaillé.*incomplet/i);
+    expect(screen.queryByText('jeudi 30 juillet 2026')).not.toBeInTheDocument();
   });
 
   it('affiche une erreur explicite et permet de relancer', async () => {

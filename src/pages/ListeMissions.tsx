@@ -19,9 +19,10 @@ import { useNotification } from '@/contexts/NotificationContext';
 import { supabase } from '@/integrations/supabase/client';
 import { extraireMessageErreur } from '@/lib/erreurs';
 import {
-  ajouterRepliMissionPonctuelle,
   type CreneauPointage,
 } from '@/lib/disponibilite-pointage';
+import { analyserCompletudePlanningMission } from '@/lib/completude-planning-mission';
+import { chargerCreneauxMissionsPagines } from '@/lib/mission-creneaux-pagines';
 
 const STATUTS_FILTRES = [
   { valeur: '', label: 'Toutes' },
@@ -81,7 +82,7 @@ export default function ListeMissions() {
       const etabId = etablissementId || user!.id;
       let query = supabase
         .from('missions')
-        .select('id, intitule, description, service, profession_requise, debut_le, fin_le, duree_heures, taux_horaire_base, taux_rist_plafonne, rist_plafond_applique, total_brut, net_a_payer, statut, est_urgente, niveau_urgence, soignant_assigne_id, cree_le')
+        .select('id, intitule, description, service, profession_requise, debut_le, fin_le, duree_heures, nb_creneaux, taux_horaire_base, taux_rist_plafonne, rist_plafond_applique, total_brut, net_a_payer, statut, est_urgente, niveau_urgence, soignant_assigne_id, cree_le')
         .eq('etablissement_id', etabId)
         .order('debut_le', { ascending: false });
 
@@ -100,19 +101,13 @@ export default function ListeMissions() {
       const sgData = soignantsResult.data;
       const litigesData = litigesResult.data;
       const missionIds = data.map((mission) => mission.id);
-      const { data: creneauxData, error: creneauxError } = missionIds.length > 0
-        ? await supabase
-          .from('mission_creneaux')
-          .select('id, mission_id, debut, fin, est_pause, type_creneau')
-          .in('mission_id', missionIds)
-          .eq('type_creneau', 'PREVISIONNEL')
-          .eq('est_pause', false)
-          .order('debut', { ascending: true })
-        : { data: [], error: null };
-      if (creneauxError) throw creneauxError;
+      const creneauxData = await chargerCreneauxMissionsPagines(missionIds, {
+        typeCreneau: 'PREVISIONNEL',
+        exclurePauses: true,
+      });
 
       const creneauxParMission: Record<string, CreneauPointage[]> = {};
-      (creneauxData || []).forEach((creneau) => {
+      creneauxData.forEach((creneau) => {
         (creneauxParMission[creneau.mission_id] ||= []).push(creneau);
       });
 
@@ -146,14 +141,21 @@ export default function ListeMissions() {
         }
       }
 
-      const missions = data.map((m: any) => ({
-        ...m,
-        creneaux: ajouterRepliMissionPonctuelle(creneauxParMission[m.id] || [], m),
-        soignants: m.soignant_assigne_id ? sgMap[m.soignant_assigne_id] || null : null,
-        has_litige: litigesMissionIds.has(m.id),
-        nb_candidatures_attente: candidaturesParMission[m.id]?.count ?? 0,
-        derniere_candidature_le: candidaturesParMission[m.id]?.derniere ?? null,
-      }));
+      const missions = data.map((m: any) => {
+        const planning = analyserCompletudePlanningMission(
+          m,
+          creneauxParMission[m.id] || [],
+        );
+        return {
+          ...m,
+          creneaux: planning.creneauxPlanifies,
+          planning_incomplet: !planning.complet,
+          soignants: m.soignant_assigne_id ? sgMap[m.soignant_assigne_id] || null : null,
+          has_litige: litigesMissionIds.has(m.id),
+          nb_candidatures_attente: candidaturesParMission[m.id]?.count ?? 0,
+          derniere_candidature_le: candidaturesParMission[m.id]?.derniere ?? null,
+        };
+      });
 
       // M2: Single count query with status grouping instead of 7 parallel queries
       const { data: allData } = await supabase.from('missions').select('statut', { count: 'exact' }).eq('etablissement_id', etabId);
@@ -308,9 +310,11 @@ export default function ListeMissions() {
                 <FadeInView key={g.mission.id} delay={i * 100}>
                   <CarteMission
                     mission={g.mission}
-                    onDupliquer={(m) => setModalDupliquer(m)}
+                    onDupliquer={g.mission.planning_incomplet
+                      ? undefined
+                      : (m) => setModalDupliquer(m)}
                     onAnnuler={(m) => setModalAnnuler(m)}
-                    onRepublier={(m, dates) => {
+                    onRepublier={g.mission.planning_incomplet ? undefined : (m, dates) => {
                       // Session F (F3) — republier avec nouvelles dates optionnelles.
                       const params = new URLSearchParams({ dupliquer: m.id });
                       if (dates?.debut) params.set('debut', dates.debut);
