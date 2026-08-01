@@ -35,6 +35,47 @@ export interface RepublierDates {
   fin: string;
 }
 
+interface ValidationDatesRepublication {
+  saisieCommencee: boolean;
+  dates: RepublierDates | null;
+  erreur: string | null;
+}
+
+function validerDatesRepublication(debutSaisi: string, finSaisie: string): ValidationDatesRepublication {
+  const saisieCommencee = Boolean(debutSaisi || finSaisie);
+  if (!saisieCommencee) return { saisieCommencee: false, dates: null, erreur: null };
+  if (!debutSaisi || !finSaisie) {
+    return {
+      saisieCommencee: true,
+      dates: null,
+      erreur: 'Renseignez la nouvelle date de début et la nouvelle date de fin.',
+    };
+  }
+
+  try {
+    const debut = instantDepuisSaisieParis(debutSaisi);
+    const fin = instantDepuisSaisieParis(finSaisie);
+    if (fin <= debut) {
+      return { saisieCommencee: true, dates: null, erreur: 'La fin doit être après le début.' };
+    }
+    return {
+      saisieCommencee: true,
+      dates: { debut: debut.toISOString(), fin: fin.toISOString() },
+      erreur: null,
+    };
+  } catch (error) {
+    return {
+      saisieCommencee: true,
+      dates: null,
+      erreur: error instanceof RangeError
+        ? error.message.includes('ambiguë')
+          ? 'Cette heure existe deux fois à Paris lors du passage à l’heure d’hiver. Choisissez un horaire non ambigu.'
+          : 'Cette date et cette heure n’existent pas à Paris en raison du passage à l’heure d’été.'
+        : 'La date ou l’heure saisie est invalide.',
+    };
+  }
+}
+
 interface CarteMissionProps {
   mission: any;
   afficherEtablissement?: boolean;
@@ -132,6 +173,7 @@ export const CarteMission = React.memo(function CarteMission({ mission, afficher
   const [republierOuvert, setRepublierOuvert] = useState(false);
   const [republierDebut, setRepublierDebut] = useState('');
   const [republierFin, setRepublierFin] = useState('');
+  const republicationRapideAutorisee = creneaux.length <= 1;
 
   const ouvrirRepublier = () => {
     setRepublierDebut('');
@@ -139,17 +181,14 @@ export const CarteMission = React.memo(function CarteMission({ mission, afficher
     setRepublierOuvert(true);
   };
 
-  const datesRepublierValides = !!republierDebut
-    && !!republierFin
-    && instantDepuisSaisieParis(republierFin) > instantDepuisSaisieParis(republierDebut);
+  const validationDatesRepublication = validerDatesRepublication(republierDebut, republierFin);
 
   const confirmerRepublier = () => {
     if (!onRepublier) return;
-    if (republierDebut && republierFin && datesRepublierValides) {
-      onRepublier(m, {
-        debut: instantDepuisSaisieParis(republierDebut).toISOString(),
-        fin: instantDepuisSaisieParis(republierFin).toISOString(),
-      });
+    if (republicationRapideAutorisee && validationDatesRepublication.dates) {
+      onRepublier(m, validationDatesRepublication.dates);
+    } else if (republicationRapideAutorisee && validationDatesRepublication.saisieCommencee) {
+      return;
     } else {
       // Aucune nouvelle date saisie : republication simple (l'établissement ajuste après).
       onRepublier(m);
@@ -344,6 +383,7 @@ export const CarteMission = React.memo(function CarteMission({ mission, afficher
                 </p>
               </div>
 
+              {republicationRapideAutorisee ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label htmlFor={`republier-debut-${m.id}`} className="text-xs text-muted-foreground mb-1 block">
@@ -372,9 +412,16 @@ export const CarteMission = React.memo(function CarteMission({ mission, afficher
                   />
                 </div>
               </div>
+              ) : (
+                <div className="rounded-xl border border-primary/20 bg-primary/5 p-3 text-xs text-foreground">
+                  Cette mission contient {creneaux.length} créneaux distincts. Son planning exact sera repris dans le formulaire pour modifier chaque date sans le réduire à une période continue.
+                </div>
+              )}
 
-              {republierDebut && republierFin && !datesRepublierValides && (
-                <p className="text-xs text-destructive font-medium">La fin doit être après le début.</p>
+              {republicationRapideAutorisee && validationDatesRepublication.erreur && (
+                <p className="text-xs text-destructive font-medium" role="alert">
+                  {validationDatesRepublication.erreur}
+                </p>
               )}
               <p className="text-[10px] text-muted-foreground">
                 Vous pourrez ajuster tous les détails sur la page de création avant de publier.
@@ -388,7 +435,9 @@ export const CarteMission = React.memo(function CarteMission({ mission, afficher
               <BoutonY2K
                 variant="primary"
                 onClick={confirmerRepublier}
-                disabled={!!republierDebut && !!republierFin && !datesRepublierValides}
+                disabled={republicationRapideAutorisee
+                  && validationDatesRepublication.saisieCommencee
+                  && !validationDatesRepublication.dates}
                 iconeGauche={<RotateCcw className="h-4 w-4" />}
               >
                 Republier

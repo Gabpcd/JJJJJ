@@ -13,6 +13,7 @@ import {
   DialogResponsiveBody,
   DialogResponsiveFooter,
 } from '@/components/ui/DialogResponsive';
+import { formatParis } from '@/lib/date-heure-paris';
 
 export interface RecapMissionData {
   intitule: string;
@@ -21,9 +22,18 @@ export interface RecapMissionData {
   service?: string | null;
   debutLe: string;
   finLe: string;
+  creneaux?: Array<{
+    id?: string;
+    clientId: string;
+    debut: string;
+    fin: string;
+    dureeHeures: number;
+  }>;
   dureeHeures: number;
   heuresNuit: number;
   tauxHoraire: number;
+  modeRemuneration?: 'TAUX_HORAIRE' | 'RETROCESSION';
+  retrocessionPct?: number | null;
   contratPreference: 'TOUS' | 'SALARIE' | 'LIBERAL';
   modeAttribution: 'PREMIER_ARRIVE' | 'CANDIDATURE';
   estUrgente: boolean;
@@ -42,6 +52,7 @@ interface ModalRecapMissionProps {
   onModifier: () => void;
   onConfirmer: () => void;
   loading?: boolean;
+  labelConfirmer?: 'Publier' | 'Enregistrer';
 }
 
 /**
@@ -55,6 +66,7 @@ export function ModalRecapMission({
   onModifier,
   onConfirmer,
   loading = false,
+  labelConfirmer = 'Publier',
 }: ModalRecapMissionProps) {
   const {
     intitule,
@@ -63,9 +75,12 @@ export function ModalRecapMission({
     service,
     debutLe,
     finLe,
+    creneaux = [],
     dureeHeures,
     heuresNuit,
     tauxHoraire,
+    modeRemuneration = 'TAUX_HORAIRE',
+    retrocessionPct = null,
     contratPreference,
     modeAttribution,
     estUrgente,
@@ -77,6 +92,7 @@ export function ModalRecapMission({
     modeExerciceMission,
   } = data;
 
+  const estRetrocession = modeRemuneration === 'RETROCESSION';
   const brutSoignant = tauxHoraire * dureeHeures;
   const commissionMontant = brutSoignant * (tauxCommission / 100);
   const totalHT = brutSoignant + commissionMontant;
@@ -87,14 +103,7 @@ export function ModalRecapMission({
   const formaterDateHeure = (iso: string) => {
     if (!iso) return '—';
     try {
-      const d = new Date(iso);
-      return d.toLocaleString('fr-FR', {
-        weekday: 'short',
-        day: '2-digit',
-        month: 'short',
-        hour: '2-digit',
-        minute: '2-digit',
-      });
+      return formatParis(iso, "EEE dd MMM 'à' HH:mm");
     } catch {
       return iso;
     }
@@ -129,10 +138,10 @@ export function ModalRecapMission({
       <DialogResponsiveContent maxWidth="2xl" aria-labelledby="modal-recap-titre">
         <DialogResponsiveHeader>
           <DialogResponsiveTitle id="modal-recap-titre">
-            📋 Récapitulatif avant publication
+            📋 Récapitulatif avant {labelConfirmer === 'Publier' ? 'publication' : 'enregistrement'}
           </DialogResponsiveTitle>
           <DialogResponsiveDescription>
-            Vérifiez les informations avant de publier la mission.
+            Vérifiez les informations et chaque créneau avant de {labelConfirmer === 'Publier' ? 'publier' : 'modifier'} la mission.
           </DialogResponsiveDescription>
         </DialogResponsiveHeader>
         <DialogResponsiveBody className="space-y-5">
@@ -171,6 +180,23 @@ export function ModalRecapMission({
                   {String(Math.round((dureeHeures % 1) * 60)).padStart(2, '0')}
                 </span>
               </div>
+              {creneaux.length > 0 && (
+                <div className="border-t border-border pt-2">
+                  <p className="mb-2 text-xs font-semibold text-foreground">
+                    Planning exact · {creneaux.length} créneau{creneaux.length > 1 ? 'x' : ''}
+                  </p>
+                  <div className="max-h-48 space-y-1 overflow-y-auto">
+                    {creneaux.map((creneau) => (
+                      <p key={creneau.clientId} className="text-xs text-foreground">
+                        <span className="capitalize">{formatParis(creneau.debut, 'EEEE d MMMM yyyy')}</span>
+                        {' · '}{formatParis(creneau.debut, 'HH:mm')} →{' '}
+                        <span className="capitalize">{formatParis(creneau.fin, 'EEEE d MMMM yyyy')}</span>
+                        {' · '}{formatParis(creneau.fin, 'HH:mm')}
+                      </p>
+                    ))}
+                  </div>
+                </div>
+              )}
               <div className="flex justify-between gap-3">
                 <span className="text-muted-foreground shrink-0">Type de profil</span>
                 <span className="font-medium text-foreground text-right">{labelContrat}</span>
@@ -200,6 +226,18 @@ export function ModalRecapMission({
               2. Coût estimé
             </h3>
             <div className="bg-gradient-to-r from-primary/5 to-info/5 border border-primary/20 rounded-xl p-4 space-y-2 text-sm">
+              {estRetrocession ? (
+                <>
+                  <div className="flex justify-between gap-3">
+                    <span className="text-muted-foreground">Rétrocession au remplaçant</span>
+                    <span className="font-bold text-primary">{retrocessionPct ?? '—'} % des honoraires</span>
+                  </div>
+                  <p className="border-t border-border pt-2 text-[10px] italic text-muted-foreground">
+                    Le montant sera calculé sur les honoraires réellement encaissés et confirmés. Aucun taux horaire ne détermine la rémunération contractuelle.
+                  </p>
+                </>
+              ) : (
+                <>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">
                   Brut soignant ({tauxHoraire.toFixed(2)} €/h × {dureeHeures.toFixed(1)}h)
@@ -222,6 +260,8 @@ export function ModalRecapMission({
                 Estimation indicative. Le montant final inclura majorations CCN (nuit, dimanche,
                 fériés), IFM 10% et ICP 10% pour les CDD.
               </p>
+                </>
+              )}
             </div>
           </section>
 
@@ -304,7 +344,7 @@ export function ModalRecapMission({
             className="btn-primary flex-1 min-h-[44px] flex items-center justify-center gap-2 disabled:opacity-50"
           >
             {loading && <Loader2 className="h-4 w-4 animate-spin" />}
-            📤 Publier
+            {labelConfirmer === 'Publier' ? '📤 Publier' : '💾 Enregistrer'}
           </button>
         </DialogResponsiveFooter>
       </DialogResponsiveContent>

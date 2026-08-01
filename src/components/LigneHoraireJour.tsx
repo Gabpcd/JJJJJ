@@ -1,78 +1,103 @@
 import React from 'react';
-import { Wand2 } from 'lucide-react';
-
-export interface HorairesJour {
-  jourISO: number;
-  label: string;
-  heureDebut: string;
-  heureFin: string;
-  dureeHeures: number;
-  actif: boolean;
-}
+import { Trash2 } from 'lucide-react';
+import {
+  dateFinCreneau,
+  libelleDateCourte,
+  materialiserCreneau,
+  type CreneauPlanningDate,
+} from '@/lib/planning-derive';
 
 interface LigneHoraireJourProps {
-  jour: HorairesJour;
-  onChange: (heureDebut: string, heureFin: string) => void;
-  estPremierJour: boolean;
-  onAppliquerATous?: () => void;
+  date: string;
+  creneau: CreneauPlanningDate;
+  index: number;
+  onChange: (creneau: CreneauPlanningDate) => void;
+  onRemove: () => void;
   enErreur: boolean;
-  messageErreur?: string;
 }
 
-export function parseHeure(heure: string): number {
-  const [h, m] = heure.split(':').map(Number);
-  return h + m / 60;
-}
-
-export function calculerDuree(heureDebut: string, heureFin: string): number {
-  let diff = parseHeure(heureFin) - parseHeure(heureDebut);
-  if (diff <= 0) diff += 24;
-  return Math.round(diff * 10) / 10;
-}
-
-export function LigneHoraireJour({ jour, onChange, estPremierJour, onAppliquerATous, enErreur }: LigneHoraireJourProps) {
-  const dureeColor = jour.dureeHeures <= 10
-    ? 'text-teal-600'
-    : jour.dureeHeures <= 12
-      ? 'text-amber-600'
-      : 'text-destructive font-bold';
+export function LigneHoraireJour({
+  date,
+  creneau,
+  index,
+  onChange,
+  onRemove,
+  enErreur,
+}: LigneHoraireJourProps) {
+  const resultat = materialiserCreneau(date, creneau);
+  const duree = resultat.valeur?.dureeHeures ?? null;
+  const dateFin = dateFinCreneau(date, creneau);
+  const dureeColor = duree == null
+    ? 'text-destructive'
+    : duree <= 10
+      ? 'text-teal-600'
+      : duree <= 12
+        ? 'text-amber-600'
+        : 'text-destructive font-bold';
 
   return (
-    <div className={`flex flex-col sm:flex-row sm:items-center gap-2 p-3 rounded-xl transition-colors ${
-      enErreur ? 'bg-destructive/5 border border-destructive/20' : 'bg-card'
-    }`}>
-      <span className="font-semibold text-foreground w-24 shrink-0">{jour.label}</span>
+    <div
+      className={`rounded-xl border p-3 ${
+        enErreur ? 'border-destructive/40 bg-destructive/5' : 'border-border bg-card'
+      }`}
+      data-testid={`creneau-${date}-${index}`}
+    >
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_auto_1fr_1.35fr_auto] sm:items-end">
+        <label className="text-xs text-muted-foreground">
+          Début
+          <input
+            aria-label={`Début du créneau ${index + 1} du ${date}`}
+            type="time"
+            value={creneau.heureDebut}
+            onChange={(event) => onChange({ ...creneau, heureDebut: event.target.value })}
+            className="input-base mt-1 w-full text-center"
+          />
+        </label>
 
-      <div className="flex items-center gap-2 flex-1">
-        <input
-          type="time"
-          value={jour.heureDebut}
-          onChange={e => onChange(e.target.value, jour.heureFin)}
-          className="input-base w-[7rem] text-center"
-        />
-        <span className="text-muted-foreground text-sm">→</span>
-        <input
-          type="time"
-          value={jour.heureFin}
-          onChange={e => onChange(jour.heureDebut, e.target.value)}
-          className="input-base w-[7rem] text-center"
-        />
-        <span className={`text-sm font-medium min-w-[3rem] ${dureeColor}`}>
-          ({jour.dureeHeures}h)
-        </span>
-      </div>
+        <span className="hidden pb-2 text-sm text-muted-foreground sm:block">→</span>
 
-      {estPremierJour && onAppliquerATous && (
+        <label className="text-xs text-muted-foreground">
+          Fin
+          <input
+            aria-label={`Fin du créneau ${index + 1} du ${date}`}
+            type="time"
+            value={creneau.heureFin}
+            onChange={(event) => onChange({ ...creneau, heureFin: event.target.value })}
+            className="input-base mt-1 w-full text-center"
+          />
+        </label>
+
+        <label className="text-xs text-muted-foreground">
+          Date de fin
+          <select
+            aria-label={`Date de fin du créneau ${index + 1} du ${date}`}
+            value={creneau.finJourSuivant ? 'LENDEMAIN' : 'MEME_JOUR'}
+            onChange={(event) => onChange({
+              ...creneau,
+              finJourSuivant: event.target.value === 'LENDEMAIN',
+            })}
+            className="input-base mt-1 w-full"
+          >
+            <option value="MEME_JOUR">Même jour · {libelleDateCourte(date)}</option>
+            <option value="LENDEMAIN">Lendemain · {libelleDateCourte(dateFinCreneau(date, { finJourSuivant: true }))}</option>
+          </select>
+        </label>
+
         <button
           type="button"
-          onClick={onAppliquerATous}
-          className="text-sm text-primary hover:text-primary/80 font-medium flex items-center gap-1 shrink-0"
+          onClick={onRemove}
+          className="mb-1 inline-flex min-h-10 items-center justify-center rounded-lg px-2 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+          aria-label={`Supprimer le créneau ${index + 1} du ${date}`}
         >
-          <Wand2 className="h-3.5 w-3.5" />
-          <span className="hidden sm:inline">Appliquer à tous</span>
-          <span className="sm:hidden">À tous</span>
+          <Trash2 className="h-4 w-4" />
         </button>
-      )}
+      </div>
+
+      <p className={`mt-2 text-xs ${dureeColor}`}>
+        {duree == null
+          ? resultat.erreur
+          : `${libelleDateCourte(date)} ${creneau.heureDebut} → ${libelleDateCourte(dateFin)} ${creneau.heureFin} · ${duree.toLocaleString('fr-FR', { maximumFractionDigits: 2 })} h`}
+      </p>
     </div>
   );
 }

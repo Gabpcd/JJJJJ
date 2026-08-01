@@ -8,6 +8,8 @@ import { AlertTriangle, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { BADGES_STATUT } from '@/lib/constantes';
 import { extraireMessageErreur } from '@/lib/erreurs';
+import { analyserCompletudePlanningMission } from '@/lib/completude-planning-mission';
+import { chargerCreneauxMissionsPagines } from '@/lib/mission-creneaux-pagines';
 import {
   ajouterJoursCivilsParis,
   ajouterMoisCivilsParis,
@@ -38,7 +40,6 @@ type MissionCal = {
   etab_nom?: string;
   soignant_nom?: string;
   creneaux: CreneauCal[];
-  planningManquant?: boolean;
 };
 
 type CreneauCal = {
@@ -63,7 +64,6 @@ function getStatutStyle(m: MissionCal): { bg: string; text: string; label: strin
 }
 
 function getHorairePourJour(m: MissionCal, d: Date): string {
-  if (m.planningManquant) return 'Planning détaillé à confirmer';
   const creneaux = m.creneaux.filter(creneau => creneauChevaucheJour(creneau, d));
   if (creneaux.length === 0) return 'Horaire non renseigné';
 
@@ -136,33 +136,30 @@ export default function AdminCalendrier() {
           const soignantIds = [...new Set(items.map(m => m.soignant_assigne_id).filter(Boolean))] as string[];
           const missionIds = items.map(m => m.id);
 
-          const [resEtabs, resSoignants, resCreneaux] = await Promise.all([
+          const [resEtabs, resSoignants, creneauxCharges] = await Promise.all([
             etabIds.length ? supabase.from('etablissements').select('id, nom').in('id', etabIds) : Promise.resolve({ data: [] } as any),
             soignantIds.length ? supabase.from('soignants').select('id, prenom, nom').in('id', soignantIds) : Promise.resolve({ data: [] } as any),
-            supabase
-              .from('mission_creneaux')
-              .select('mission_id, debut, fin')
-              .in('mission_id', missionIds)
-              .eq('type_creneau', 'PREVISIONNEL')
-              .eq('est_pause', false)
-              .not('fin', 'is', null)
-              .gte('fin', debutGrille.toISOString())
-              .lte('debut', finGrille.toISOString())
-              .order('debut'),
+            chargerCreneauxMissionsPagines(missionIds, {
+              typeCreneau: 'PREVISIONNEL',
+              exclurePauses: true,
+            }),
           ]);
 
           const erreurDependance = (resEtabs as any).error
-            || (resSoignants as any).error
-            || (resCreneaux as any).error;
+            || (resSoignants as any).error;
           if (erreurDependance) throw erreurDependance;
 
           const etabMap = new Map<string, string>((resEtabs.data || []).map((e: any) => [e.id, e.nom]));
           const soignantMap = new Map<string, string>((resSoignants.data || []).map((s: any) => [s.id, `${s.prenom || ''} ${s.nom || ''}`.trim()]));
           const creneauxMap = new Map<string, CreneauCal[]>();
-          (resCreneaux.data || []).forEach((creneau: { mission_id: string; debut: string; fin: string | null }) => {
+          creneauxCharges.forEach((creneau) => {
             if (!creneau.fin) return;
             const creneauxMission = creneauxMap.get(creneau.mission_id) || [];
-            creneauxMission.push({ ...creneau, fin: creneau.fin });
+            creneauxMission.push({
+              mission_id: creneau.mission_id,
+              debut: creneau.debut,
+              fin: creneau.fin,
+            });
             creneauxMap.set(creneau.mission_id, creneauxMission);
           });
 
@@ -170,24 +167,21 @@ export default function AdminCalendrier() {
             m.etab_nom = etabMap.get(m.etablissement_id) || '';
             m.soignant_nom = m.soignant_assigne_id ? soignantMap.get(m.soignant_assigne_id) || '' : '';
             const creneauxMission = creneauxMap.get(m.id) || [];
-            if (creneauxMission.length > 0) {
-              m.creneaux = creneauxMission;
-              return;
+            const analyse = analyserCompletudePlanningMission(m, creneauxMission.map(creneau => ({
+              ...creneau,
+              est_pause: false,
+              type_creneau: 'PREVISIONNEL',
+            })));
+            if (!analyse.complet) {
+              throw new Error(
+                `Le planning détaillé de la mission « ${m.intitule} » est incomplet ou ne correspond pas au nombre de créneaux attendu.`,
+              );
             }
-
-            const debutMs = new Date(m.debut_le).getTime();
-            const finMs = new Date(m.fin_le).getTime();
-            const dureeMs = finMs - debutMs;
-            if (Number.isFinite(dureeMs) && dureeMs > 0 && dureeMs <= 24 * 60 * 60_000) {
-              // Compatibilité avec les missions ponctuelles créées avant que
-              // la table mission_creneaux devienne systématique.
-              m.creneaux = [{ mission_id: m.id, debut: m.debut_le, fin: m.fin_le }];
-            } else if (!m.nb_creneaux) {
-              // Une mission longue sans détail ne doit surtout pas être
-              // étalée sur chaque jour de sa plage globale.
-              m.creneaux = [];
-              m.planningManquant = true;
-            }
+            m.creneaux = analyse.creneauxPlanifies.map(creneau => ({
+              mission_id: m.id,
+              debut: creneau.debut,
+              fin: creneau.fin!,
+            }));
           });
         }
         if (actif) setMissions(items);
@@ -203,9 +197,7 @@ export default function AdminCalendrier() {
 
   function getMissionsDuJour(d: Date) {
     return missions.filter(m => {
-      const dansJour = m.planningManquant
-        ? memeJourParis(m.debut_le, d)
-        : m.creneaux.some(creneau => creneauChevaucheJour(creneau, d));
+      const dansJour = m.creneaux.some(creneau => creneauChevaucheJour(creneau, d));
       if (!dansJour) return false;
       if (!filtreStatut) return true;
       if (filtreStatut === 'NON_POURVUE') return m.statut === 'OUVERTE' && !m.soignant_assigne_id;
@@ -218,7 +210,6 @@ export default function AdminCalendrier() {
   const assignees = missions.filter(m => m.statut === 'ASSIGNEE').length;
   const enCours = missions.filter(m => m.statut === 'EN_COURS').length;
   const terminees = missions.filter(m => m.statut === 'TERMINEE').length;
-  const planningsManquants = missions.filter(m => m.planningManquant).length;
 
   const filtresRapides: Array<{
     valeur: string | null;
@@ -322,15 +313,6 @@ export default function AdminCalendrier() {
             );
           })}
         </fieldset>
-
-        {planningsManquants > 0 && (
-          <div className="flex items-start gap-2 rounded-xl border border-warning/30 bg-warning/10 p-3 text-sm text-warning" role="status">
-            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-            <p>
-              {planningsManquants} mission{planningsManquants > 1 ? 's ont' : ' a'} une période active, mais aucun créneau détaillé. {planningsManquants > 1 ? 'Elles ne sont affichées' : "Elle n'est affichée"} qu'à leur date de début avec la mention « planning à confirmer ».
-            </p>
-          </div>
-        )}
 
         {/* Navigation */}
         <div className="flex items-center justify-between">

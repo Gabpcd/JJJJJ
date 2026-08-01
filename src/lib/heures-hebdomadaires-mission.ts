@@ -126,29 +126,38 @@ function creneauxDeReference(
   mission: MissionPourCalculHebdomadaire,
   creneaux: CreneauMissionPourCalculHebdomadaire[],
 ): CreneauMissionPourCalculHebdomadaire[] {
-  const valides = creneaux.filter((c) => c.mission_id === mission.id && c.fin);
-  const previsionnels = valides.filter((c) => c.type_creneau === 'PREVISIONNEL');
-  const effectifs = valides.filter((c) => c.type_creneau === 'EFFECTIF');
+  const lignesMission = creneaux.filter((c) => c.mission_id === mission.id);
+  const previsionnels = lignesMission.filter((c) => c.type_creneau === 'PREVISIONNEL');
+  const effectifs = lignesMission.filter((c) => c.type_creneau === 'EFFECTIF');
   const reference = mission.statut === 'TERMINEE' && effectifs.some((c) => !c.est_pause)
     ? effectifs
     : previsionnels.some((c) => !c.est_pause)
       ? previsionnels
       : effectifs;
 
-  // nb_creneaux inclut les pauses explicites. Elles comptent donc pour
-  // vérifier que le planning est complet, mais jamais dans les heures.
-  if ((mission.nb_creneaux ?? 0) > 1 && reference.length < (mission.nb_creneaux ?? 0)) {
+  const travail = reference.filter((c) => !c.est_pause);
+  // nb_creneaux désigne uniquement les périodes travaillées : une pause ne
+  // doit jamais masquer un créneau de travail absent.
+  if (travail.some((creneau) => !creneau.fin)) return [];
+  if ((mission.nb_creneaux ?? 0) > 1 && travail.length < (mission.nb_creneaux ?? 0)) {
     return [];
   }
 
-  return reference.filter((c) => !c.est_pause);
+  return travail;
 }
 
 export function planningMissionHebdomadaireDisponible(
   mission: MissionPourCalculHebdomadaire,
   creneaux: CreneauMissionPourCalculHebdomadaire[],
 ): boolean {
-  if ((mission.nb_creneaux ?? 0) <= 1) return true;
+  if ((mission.nb_creneaux ?? 0) <= 1) {
+    const lignesTravail = creneaux.filter((creneau) => (
+      creneau.mission_id === mission.id && !creneau.est_pause
+    ));
+    // Le repli enveloppe reste autorisé uniquement pour une mission ponctuelle
+    // legacy sans aucune ligne ; une ligne ouverte/incomplète échoue fermé.
+    if (lignesTravail.length === 0) return true;
+  }
   return creneauxDeReference(mission, creneaux).length > 0;
 }
 

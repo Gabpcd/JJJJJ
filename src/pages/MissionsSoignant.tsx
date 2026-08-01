@@ -26,11 +26,11 @@ import { ajouterJoursCivilsParis, debutSemaineParis, formatParis } from '@/lib/d
 import { handleErrorSilent } from '@/lib/handleError';
 import { netEstimeAfficheMission } from '@/lib/missionFinanceDisplay';
 import {
-  ajouterRepliMissionPonctuelle,
-  creneauxPrevisionnels,
   prochainCreneauPointage,
   type CreneauPointage,
 } from '@/lib/disponibilite-pointage';
+import { analyserCompletudePlanningMission } from '@/lib/completude-planning-mission';
+import { chargerCreneauxMissionsPagines } from '@/lib/mission-creneaux-pagines';
 import {
   construireOccurrencesPlanning,
   decouperOccurrencesParJour,
@@ -51,46 +51,48 @@ interface SoignantData {
 
 type GroupeItem = { type: 'single'; mission: any } | { type: 'serie'; serieId: string; missions: any[] };
 
-async function enrichirAvecPlanning<T extends { id: string; debut_le: string; fin_le: string }>(
+async function enrichirAvecPlanning<T extends {
+  id: string;
+  debut_le: string;
+  fin_le: string;
+  nb_creneaux?: number | null;
+}>(
   missions: T[],
 ): Promise<Array<T & {
   creneaux: CreneauPointage[];
   prochainCreneau: CreneauPointage | null;
   nb_creneaux_planifies: number;
   duree_planifiee_heures: number;
+  planning_incomplet: boolean;
 }>> {
   if (missions.length === 0) return [];
 
-  const { data, error } = await supabase
-    .from('mission_creneaux')
-    .select('id, mission_id, debut, fin, est_pause, type_creneau')
-    .in('mission_id', missions.map((mission) => mission.id))
-    .eq('type_creneau', 'PREVISIONNEL')
-    .eq('est_pause', false)
-    .order('debut', { ascending: true });
-  if (error) throw error;
+  const data = await chargerCreneauxMissionsPagines(
+    missions.map((mission) => mission.id),
+    { typeCreneau: 'PREVISIONNEL', exclurePauses: true },
+  );
 
   const parMission: Record<string, CreneauPointage[]> = {};
-  (data || []).forEach((creneau) => {
+  data.forEach((creneau) => {
     (parMission[creneau.mission_id] ||= []).push(creneau);
   });
   const maintenant = new Date();
 
   return missions.map((mission) => {
-    const creneaux = ajouterRepliMissionPonctuelle(parMission[mission.id] || [], mission);
-    const planifies = creneauxPrevisionnels(creneaux);
+    const planning = analyserCompletudePlanningMission(
+      mission,
+      parMission[mission.id] || [],
+    );
+    const planifies = planning.creneauxPlanifies;
     return {
       ...mission,
-      creneaux,
-      prochainCreneau: prochainCreneauPointage(creneaux, maintenant),
-      nb_creneaux_planifies: planifies.length,
-      duree_planifiee_heures: planifies.reduce((total, creneau) => {
-        if (!creneau.fin) return total;
-        return total + Math.max(
-          0,
-          (new Date(creneau.fin).getTime() - new Date(creneau.debut).getTime()) / 3_600_000,
-        );
-      }, 0),
+      creneaux: planifies,
+      prochainCreneau: planning.complet
+        ? prochainCreneauPointage(planifies, maintenant)
+        : null,
+      nb_creneaux_planifies: planning.nombrePlanifie,
+      duree_planifiee_heures: planning.dureeTotaleHeures,
+      planning_incomplet: !planning.complet,
     };
   });
 }
@@ -181,7 +183,7 @@ export default function MissionsSoignant() {
         if (onglet === 'candidatures') {
           const { data, error } = await supabase
             .from('candidatures')
-            .select('id, statut, message, type_contrat_choisi, cree_le, missions(id, intitule, debut_le, fin_le, taux_horaire_base, net_estime, etablissements(nom, adresse_ville))')
+            .select('id, statut, message, type_contrat_choisi, cree_le, missions(id, intitule, debut_le, fin_le, nb_creneaux, taux_horaire_base, net_estime, etablissements(nom, adresse_ville))')
             .eq('soignant_id', user.id)
             .in('statut', ['EN_ATTENTE', 'EN_ATTENTE_VALIDATION_ETAB'])
             .order('cree_le', { ascending: false });
@@ -204,6 +206,7 @@ export default function MissionsSoignant() {
           id, intitule, description, service, profession_requise,
           specialite_medicale_requise, accepte_non_specialises,
           debut_le, fin_le, duree_heures, taux_horaire_base, taux_rist_plafonne, rist_plafond_applique,
+          nb_creneaux,
           total_brut, net_a_payer, net_estime, est_urgente, niveau_urgence, statut,
           soignant_assigne_id, cree_le, etablissement_id, type_contrat_recherche,
           type_contrat_applique, choix_contrat_soignant

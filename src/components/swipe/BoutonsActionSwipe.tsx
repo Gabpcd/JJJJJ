@@ -6,7 +6,7 @@
  * - ⭐ FAVORI  : sauvegarder la mission pour y revenir — ILLIMITÉ, aucune
  *   candidature envoyée. (L'ex super-like « candidature prioritaire 5/jour »
  *   est reporté v2 : trigger = médiane candidatures/mission > 3 sur 30 j.)
- * - ❤️ LIKE   : candidature IMMÉDIATE et ferme (undo 5 s côté parent)
+ * - ❤️ LIKE   : ouvre le récapitulatif exact avant toute candidature
  *
  * Haptic feedback web (navigator.vibrate) + natif (Capacitor).
  * Touch targets 56px (au-dessus du minimum 44px pour confort tactile).
@@ -98,12 +98,12 @@ export function BoutonsActionSwipe({
         <Star className="h-7 w-7 sm:h-8 sm:w-8 text-jolene-butter-600 fill-jolene-butter-400" aria-hidden="true" />
       </button>
 
-      {/* LIKE — candidature immédiate */}
+      {/* LIKE — ouverture du récapitulatif obligatoire */}
       <button
         type="button"
         onClick={handleLike}
         disabled={disabled}
-        aria-label="Postuler à cette mission"
+        aria-label="Vérifier le planning avant de postuler à cette mission"
         className={cn(
           'group h-16 w-16 sm:h-20 sm:w-20 rounded-full transition-bouncy',
           'bg-gradient-hero shadow-holographic',

@@ -96,8 +96,9 @@ describe('heuresMissionParSemaine', () => {
     expect(heuresMissionParSemaine({ ...mission, nb_creneaux: 10 }, [])).toEqual([]);
   });
 
-  it('compte une pause explicite pour la complétude sans l’ajouter aux heures', () => {
+  it('exclut une pause explicite du compteur de complétude et des heures', () => {
     const travail = creneau('2026-07-20');
+    const secondTravail = creneau('2026-07-21');
     const pause: CreneauMissionPourCalculHebdomadaire = {
       mission_id: mission.id,
       debut: '2026-07-20T16:00:00+02:00',
@@ -107,10 +108,11 @@ describe('heuresMissionParSemaine', () => {
     };
     const missionAvecPause = { ...mission, nb_creneaux: 2 };
 
-    expect(planningMissionHebdomadaireDisponible(missionAvecPause, [travail, pause])).toBe(true);
-    expect(heuresMissionParSemaine(missionAvecPause, [travail, pause]))
-      .toMatchObject([{ cleSemaine: '2026-07-20', heures: 8 }]);
-    expect(planningMissionHebdomadaireDisponible(missionAvecPause, [travail])).toBe(false);
+    expect(planningMissionHebdomadaireDisponible(missionAvecPause, [travail, pause])).toBe(false);
+    expect(heuresMissionParSemaine(missionAvecPause, [travail, pause])).toEqual([]);
+    expect(planningMissionHebdomadaireDisponible(missionAvecPause, [travail, secondTravail, pause])).toBe(true);
+    expect(heuresMissionParSemaine(missionAvecPause, [travail, secondTravail, pause]))
+      .toMatchObject([{ cleSemaine: '2026-07-20', heures: 16 }]);
   });
 
   it('applique le même ordre de résolution du régime que le SQL', () => {

@@ -16,11 +16,11 @@ import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
 import { getLabelProfession } from '@/lib/constantes';
 import { extraireMessageErreur } from '@/lib/erreurs';
+import { analyserCompletudePlanningMission } from '@/lib/completude-planning-mission';
 import {
-  ajouterRepliMissionPonctuelle,
-  creneauxPrevisionnels,
-  type CreneauPointage,
-} from '@/lib/disponibilite-pointage';
+  chargerCreneauxMissionsPagines,
+  type CreneauMissionCharge,
+} from '@/lib/mission-creneaux-pagines';
 import {
   ajouterJoursCivilsParis,
   cleJourParis,
@@ -49,10 +49,7 @@ type MissionSource = {
   est_urgente: boolean;
   etablissement_id: string;
   soignant_assigne_id: string | null;
-};
-
-type CreneauPlanning = CreneauPointage & {
-  mission_id: string;
+  nb_creneaux?: number | null;
 };
 
 type MissionPlanning = MissionSource & {
@@ -132,7 +129,7 @@ export default function AdminPlanningGlobal() {
       // créneaux PREVISIONNEL, sauf repli legacy d'une mission <= 24 h.
       const { data: missionsData, error: missionsError } = await supabase
         .from('missions')
-        .select('id, intitule, statut, profession_requise, service, debut_le, fin_le, est_urgente, etablissement_id, soignant_assigne_id')
+        .select('id, intitule, statut, profession_requise, service, debut_le, fin_le, est_urgente, etablissement_id, soignant_assigne_id, nb_creneaux')
         .gt('fin_le', debutPeriode.toISOString())
         .lt('debut_le', finPeriodeExclusive.toISOString())
         .order('debut_le');
@@ -153,15 +150,11 @@ export default function AdminPlanningGlobal() {
           .filter((id): id is string => Boolean(id)),
       )];
 
-      const [resCreneaux, resEtablissements, resSoignants] = await Promise.all([
-        supabase
-          .from('mission_creneaux')
-          .select('id, mission_id, debut, fin, est_pause, type_creneau')
-          .in('mission_id', missionIds)
-          .eq('type_creneau', 'PREVISIONNEL')
-          .eq('est_pause', false)
-          .not('fin', 'is', null)
-          .order('debut'),
+      const [creneauxCharges, resEtablissements, resSoignants] = await Promise.all([
+        chargerCreneauxMissionsPagines(missionIds, {
+          typeCreneau: 'PREVISIONNEL',
+          exclurePauses: true,
+        }),
         supabase
           .from('etablissements')
           .select('id, nom, adresse_ville')
@@ -171,13 +164,12 @@ export default function AdminPlanningGlobal() {
           : Promise.resolve({ data: [], error: null }),
       ]);
 
-      const erreurDependance = resCreneaux.error
-        || resEtablissements.error
+      const erreurDependance = resEtablissements.error
         || resSoignants.error;
       if (erreurDependance) throw erreurDependance;
 
-      const creneauxParMission = new Map<string, CreneauPointage[]>();
-      for (const creneau of (resCreneaux.data ?? []) as CreneauPlanning[]) {
+      const creneauxParMission = new Map<string, CreneauMissionCharge[]>();
+      for (const creneau of creneauxCharges) {
         const liste = creneauxParMission.get(creneau.mission_id) ?? [];
         liste.push(creneau);
         creneauxParMission.set(creneau.mission_id, liste);
@@ -191,10 +183,16 @@ export default function AdminPlanningGlobal() {
 
       const occurrences = sources
         .flatMap((mission) => {
-          const creneaux = creneauxPrevisionnels(ajouterRepliMissionPonctuelle(
-            creneauxParMission.get(mission.id) ?? [],
+          const analyse = analyserCompletudePlanningMission(
             mission,
-          ));
+            creneauxParMission.get(mission.id) ?? [],
+          );
+          if (!analyse.complet) {
+            throw new Error(
+              `Le planning détaillé de la mission « ${mission.intitule} » est incomplet ou ne correspond pas au nombre de créneaux attendu.`,
+            );
+          }
+          const creneaux = analyse.creneauxPlanifies;
           const etablissement = etablissements.get(mission.etablissement_id);
           const soignant = mission.soignant_assigne_id
             ? soignants.get(mission.soignant_assigne_id)

@@ -14,7 +14,6 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { TableOuCartes, type ColonneTableau } from '@/components/ui/TableOuCartes';
 import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { BadgeY2K } from '@/components/y2k/BadgeY2K';
-import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
 import { supabase } from '@/integrations/supabase/client';
 import { extraireMessageErreur } from '@/lib/erreurs';
@@ -25,53 +24,68 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { useSearchParams } from 'react-router-dom';
 import { useEtablissementScope } from '@/hooks/useEtablissementScope';
 import {
-  ajouterRepliMissionPonctuelle,
   type CreneauPointage,
 } from '@/lib/disponibilite-pointage';
 import {
   construireSynthesePresenceMission,
   formatDureeMinutes,
 } from '@/lib/synthese-presence-mission';
+import { formatParis } from '@/lib/date-heure-paris';
+import { chargerCreneauxMissionsPagines } from '@/lib/mission-creneaux-pagines';
+import { analyserCompletudePlanningMission } from '@/lib/completude-planning-mission';
 
 export default function PresencesEtablissement() {
   usePageTitle('Présences');
   const { user, etablissementId } = useEtablissementScope();
+  const userId = user?.id;
   const { afficherNotification } = useNotification();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [presences, setPresences] = useState<any[]>([]);
   const [litiges, setLitiges] = useState<Record<string, any>>({});
   const [loading, setLoading] = useState(true);
+  const [erreurChargement, setErreurChargement] = useState<string | null>(null);
   const [maintenant, setMaintenant] = useState(() => new Date());
   const [modalLot, setModalLot] = useState(false);
   const tabParam = searchParams.get('tab');
   const [activeTab, setActiveTab] = useState(['a_valider', 'en_cours', 'validees', 'alertes'].includes(tabParam || '') ? tabParam! : 'a_valider');
 
   const charger = useCallback(async () => {
-    if (!user || !etablissementId) return;
-    const [{ data: presData }, { data: soignantsData }, { data: litigesData }] = await Promise.all([
-      supabase
-        .from('presences')
-        .select(`
-          id, mission_id, soignant_id,
-          pointage_arrivee_le, pointage_depart_le,
-          arrivee_lat, arrivee_lng, arrivee_precision_gps_m,
-          depart_lat, depart_lng, depart_precision_gps_m,
-          distance_etablissement_m, perimetre_gps_valide,
-          alerte_teleportation, alertes_fraude,
-          arrivee_mock_detected, depart_mock_detected, coherence_incidents,
-          valide_par_etablissement, valide_le, motif_litige,
-          missions!inner(id, intitule, service, debut_le, fin_le, duree_heures, etablissement_id)
-        `)
-        .eq('missions.etablissement_id', etablissementId)
-        .not('pointage_arrivee_le', 'is', null)
-        .order('pointage_arrivee_le', { ascending: false }),
-      supabase.rpc('fn_mes_soignants_etablissement'),
-      supabase
-        .from('litiges')
-        .select('id, mission_id, soignant_id, etablissement_id, motif, statut, initie_par, cree_le, resolution, accord_soignant, accord_etablissement, accord_soignant_le, accord_etablissement_le, payload_modifications')
-        .eq('etablissement_id', etablissementId),
-    ]);
+    if (!userId || !etablissementId) return;
+    setLoading(true);
+    setErreurChargement(null);
+
+    try {
+      const [presencesResult, soignantsResult, litigesResult] = await Promise.all([
+        supabase
+          .from('presences')
+          .select(`
+            id, mission_id, soignant_id,
+            pointage_arrivee_le, pointage_depart_le,
+            arrivee_lat, arrivee_lng, arrivee_precision_gps_m,
+            depart_lat, depart_lng, depart_precision_gps_m,
+            distance_etablissement_m, perimetre_gps_valide,
+            alerte_teleportation, alertes_fraude,
+            arrivee_mock_detected, depart_mock_detected, coherence_incidents,
+            valide_par_etablissement, valide_le, motif_litige,
+            missions!inner(id, intitule, service, debut_le, fin_le, duree_heures, nb_creneaux, etablissement_id)
+          `)
+          .eq('missions.etablissement_id', etablissementId)
+          .not('pointage_arrivee_le', 'is', null)
+          .order('pointage_arrivee_le', { ascending: false }),
+        supabase.rpc('fn_mes_soignants_etablissement'),
+        supabase
+          .from('litiges')
+          .select('id, mission_id, soignant_id, etablissement_id, motif, statut, initie_par, cree_le, resolution, accord_soignant, accord_etablissement, accord_soignant_le, accord_etablissement_le, payload_modifications')
+          .eq('etablissement_id', etablissementId),
+      ]);
+
+      const erreurPrincipale = presencesResult.error || soignantsResult.error || litigesResult.error;
+      if (erreurPrincipale) throw erreurPrincipale;
+
+      const presData = presencesResult.data;
+      const soignantsData = soignantsResult.data;
+      const litigesData = litigesResult.data;
 
     // Build litiges map by mission_id
     const litigesMap: Record<string, any> = {};
@@ -93,15 +107,8 @@ export default function PresencesEtablissement() {
       ? [...new Set(donneesPresences.map((p: any) => p.soignant_id).filter(Boolean))]
       : [];
 
-    const [creneauxResult, soignantsDirectResult] = await Promise.all([
-      missionIds.length > 0
-        ? supabase
-          .from('mission_creneaux')
-          .select('id, mission_id, debut, fin, est_pause, type_creneau')
-          .in('mission_id', missionIds)
-          .eq('est_pause', false)
-          .order('debut', { ascending: true })
-        : Promise.resolve({ data: [], error: null }),
+    const [creneaux, soignantsDirectResult] = await Promise.all([
+      chargerCreneauxMissionsPagines(missionIds, { exclurePauses: true }),
       soignantIds.length > 0
         ? supabase
           .from('soignants')
@@ -110,39 +117,46 @@ export default function PresencesEtablissement() {
         : Promise.resolve({ data: [], error: null }),
     ]);
 
-    if (Array.isArray(soignantsDirectResult.data)) {
-      for (const s of soignantsDirectResult.data) sgMap[s.id] = s;
-    }
+      if (soignantsDirectResult.error) throw soignantsDirectResult.error;
+      if (Array.isArray(soignantsDirectResult.data)) {
+        for (const s of soignantsDirectResult.data) sgMap[s.id] = s;
+      }
 
     const creneauxParMission: Record<string, CreneauPointage[]> = {};
-    if (!creneauxResult.error && Array.isArray(creneauxResult.data)) {
-      for (const creneau of creneauxResult.data) {
-        (creneauxParMission[creneau.mission_id] ||= []).push(creneau as CreneauPointage);
-      }
+    for (const creneau of creneaux) {
+      (creneauxParMission[creneau.mission_id] ||= []).push(creneau as CreneauPointage);
     }
 
-    setPresences(donneesPresences.map((p: any) => {
-      const mission = p.missions;
-      const creneaux = mission && !creneauxResult.error
-        ? ajouterRepliMissionPonctuelle(creneauxParMission[p.mission_id] || [], {
-          id: p.mission_id,
-          debut_le: mission.debut_le,
-          fin_le: mission.fin_le,
-        })
-        : [];
+      setPresences(donneesPresences.map((p: any) => {
+        const mission = p.missions;
+        const creneauxBruts = creneauxParMission[p.mission_id] || [];
+        const analysePlanning = mission
+          ? analyserCompletudePlanningMission(
+              { ...mission, id: p.mission_id },
+              creneauxBruts,
+            )
+          : null;
+        const effectifs = creneauxBruts.filter((creneau) => creneau.type_creneau === 'EFFECTIF');
+        const creneaux = analysePlanning?.complet
+          ? [...analysePlanning.creneauxPlanifies, ...effectifs]
+          : creneauxBruts;
 
-      return {
-        ...p,
-        missions: mission ? {
-          ...mission,
-          creneaux,
-          planning_indisponible: Boolean(creneauxResult.error),
-        } : mission,
-        soignants: sgMap[p.soignant_id] || null,
-      };
-    }));
-    setLoading(false);
-  }, [user, etablissementId]);
+        return {
+          ...p,
+          missions: mission ? {
+            ...mission,
+            creneaux,
+            planning_indisponible: !analysePlanning?.complet,
+          } : mission,
+          soignants: sgMap[p.soignant_id] || null,
+        };
+      }));
+    } catch (err) {
+      setErreurChargement(extraireMessageErreur(err));
+    } finally {
+      setLoading(false);
+    }
+  }, [userId, etablissementId]);
 
   // Combined data loading + tab sync to avoid race conditions between URL param and state
   useEffect(() => {
@@ -185,22 +199,28 @@ export default function PresencesEtablissement() {
 
     // Relecture juste avant la mutation : une autre session peut avoir ouvert
     // un EFFECTIF depuis le chargement de la page.
-    const { data, error } = await supabase
-      .from('mission_creneaux')
-      .select('id, mission_id, debut, fin, est_pause, type_creneau')
-      .eq('mission_id', presence.mission_id)
-      .eq('est_pause', false)
-      .order('debut', { ascending: true });
-    if (error) return false;
+    let creneauxRelus: CreneauPointage[];
+    try {
+      creneauxRelus = await chargerCreneauxMissionsPagines(
+        [presence.mission_id],
+        { exclurePauses: true },
+      ) as CreneauPointage[];
+    } catch {
+      return false;
+    }
 
-    const creneauxActuels = ajouterRepliMissionPonctuelle(
-      (data || []) as CreneauPointage[],
+    const analysePlanning = analyserCompletudePlanningMission(
       {
         id: presence.mission_id,
         debut_le: mission.debut_le,
         fin_le: mission.fin_le,
+        nb_creneaux: mission.nb_creneaux,
       },
+      creneauxRelus,
     );
+    if (!analysePlanning.complet) return false;
+    const effectifs = creneauxRelus.filter((creneau) => creneau.type_creneau === 'EFFECTIF');
+    const creneauxActuels = [...analysePlanning.creneauxPlanifies, ...effectifs];
     return construireSynthesePresenceMission(creneauxActuels, new Date()).validationPossible;
   };
 
@@ -353,6 +373,25 @@ export default function PresencesEtablissement() {
 
   if (loading) return <LayoutApp role="ADMIN_ETABLISSEMENT"><ChargementPage /></LayoutApp>;
 
+  if (erreurChargement) {
+    return (
+      <LayoutApp role="ADMIN_ETABLISSEMENT">
+        <div className="card-base mx-auto max-w-xl border-destructive/30" role="alert">
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="h-5 w-5 shrink-0 text-destructive" aria-hidden="true" />
+            <div>
+              <h1 className="font-semibold text-foreground">Impossible de charger les présences</h1>
+              <p className="mt-1 text-sm text-muted-foreground">{erreurChargement}</p>
+              <button type="button" className="btn-primary mt-4" onClick={() => void charger()}>
+                Réessayer
+              </button>
+            </div>
+          </div>
+        </div>
+      </LayoutApp>
+    );
+  }
+
   // Helpers pour rendu TableOuCartes
   const colonnesPresences: ColonneTableau<any>[] = [
     { cle: 'soignant', titre: 'Soignant' },
@@ -388,7 +427,7 @@ export default function PresencesEtablissement() {
           const premierEffectif = synthese.effectifsFermes[0] ?? synthese.effectifsOuverts[0];
           return (
             <span className="text-xs whitespace-nowrap">
-              {premierEffectif ? new Date(premierEffectif.debut).toLocaleDateString('fr-FR') : '—'}
+              {premierEffectif ? formatParis(premierEffectif.debut, 'dd/MM/yyyy') : '—'}
             </span>
           );
         }
@@ -401,12 +440,12 @@ export default function PresencesEtablissement() {
             {p.perimetre_gps_valide === false && <BadgeY2K variant="warning" size="sm" icone={<MapPin className="h-3 w-3" />}>Hors zone</BadgeY2K>}
             {(p.arrivee_mock_detected || p.depart_mock_detected) && <BadgeY2K variant="error" size="sm" icone={<Bot className="h-3 w-3" />}>GPS truqué</BadgeY2K>}
             {p.valide_par_etablissement && <BadgeY2K variant="success" size="sm" icone={<CheckCircle2 className="h-3 w-3" />}>Validée</BadgeY2K>}
-            {!p.valide_par_etablissement && synthesePresence(p).validationPossible && !p.alerte_teleportation && p.perimetre_gps_valide && <BadgeY2K variant="info" size="sm" className="bg-muted text-muted-foreground border-muted">À valider</BadgeY2K>}
-            {!p.valide_par_etablissement && !synthesePresence(p).validationPossible && <BadgeY2K variant="info" size="sm" icone={<Clock className="h-3 w-3" />}>En cours</BadgeY2K>}
+            {!p.valide_par_etablissement && !p.missions?.planning_indisponible && synthesePresence(p).validationPossible && !p.alerte_teleportation && p.perimetre_gps_valide && <BadgeY2K variant="info" size="sm" className="bg-muted text-muted-foreground border-muted">À valider</BadgeY2K>}
+            {!p.valide_par_etablissement && (p.missions?.planning_indisponible || !synthesePresence(p).validationPossible) && <BadgeY2K variant="info" size="sm" icone={<Clock className="h-3 w-3" />}>En cours</BadgeY2K>}
           </div>
         );
       case 'actions':
-        if (!p.valide_par_etablissement && synthesePresence(p).validationPossible) {
+        if (!p.valide_par_etablissement && !p.missions?.planning_indisponible && synthesePresence(p).validationPossible) {
           // F4 : la validation embarque une note 1-tap → le bouton du tableau
           // ouvre un mini-dialog étoiles + Valider (pas de validation sans note).
           return (

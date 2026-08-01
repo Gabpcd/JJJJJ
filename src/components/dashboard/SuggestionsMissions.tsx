@@ -1,10 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Sparkles, MapPin, Star, Flame, ArrowRight, Loader2 } from 'lucide-react';
+import { Sparkles, MapPin, Star, Flame, ArrowRight } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
-import { toast } from 'sonner';
-import { format } from 'date-fns';
-import { fr } from 'date-fns/locale';
 import { getLabelProfession } from '@/lib/constantes';
 
 interface Suggestion {
@@ -27,7 +24,6 @@ export function SuggestionsMissions() {
   const navigate = useNavigate();
   const [items, setItems] = useState<Suggestion[]>([]);
   const [loading, setLoading] = useState(true);
-  const [candidating, setCandidating] = useState<string | null>(null);
 
   const charger = async () => {
     setLoading(true);
@@ -37,32 +33,6 @@ export function SuggestionsMissions() {
   };
 
   useEffect(() => { charger(); }, []);
-
-  const candidater = async (s: Suggestion) => {
-    setCandidating(s.id);
-    const { data, error } = await supabase.rpc('fn_postuler_mission_rate_limited' as any, {
-      p_mission_id: s.id,
-      p_message: 'Candidature rapide depuis suggestions dashboard',
-      p_choix_contrat: null,
-    });
-    setCandidating(null);
-    if (error) {
-      toast.error(error.message);
-      return;
-    }
-    const r = data as any;
-    if (r?.choix_requis) {
-      toast('Choisis ton type de contrat sur le détail de la mission');
-      navigate(`/soignant/missions/${s.id}`);
-      return;
-    }
-    if (r?.success || r?.candidature_id) {
-      toast.success('Candidature envoyée ✨');
-      charger();
-    } else {
-      toast.error(r?.error ?? 'Erreur de candidature');
-    }
-  };
 
   if (loading || items.length === 0) return null;
 
@@ -97,7 +67,7 @@ export function SuggestionsMissions() {
             </div>
 
             <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground mb-2">
-              <span>{format(new Date(s.debut_le), "EEE d MMM HH'h'mm", { locale: fr })} → {format(new Date(s.fin_le), "HH'h'mm", { locale: fr })}</span>
+              <span>Dates et horaires exacts sur la fiche</span>
               {s.distance_km != null && (
                 <span className="inline-flex items-center gap-1"><MapPin className="h-3 w-3" /> {s.distance_km} km</span>
               )}
@@ -118,12 +88,11 @@ export function SuggestionsMissions() {
               <div className="ml-auto">
                 <button
                   type="button"
-                  onClick={() => candidater(s)}
-                  disabled={candidating === s.id}
+                  onClick={() => navigate(`/soignant/missions/${s.id}`)}
                   className="btn-primary text-xs inline-flex items-center gap-1.5"
                 >
-                  {candidating === s.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
-                  {candidating === s.id ? 'Envoi…' : 'Candidater'}
+                  <Sparkles className="h-3.5 w-3.5" />
+                  Voir et candidater
                 </button>
               </div>
             </div>

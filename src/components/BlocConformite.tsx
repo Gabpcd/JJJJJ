@@ -15,6 +15,15 @@ import {
   type CreneauMissionPourCalculHebdomadaire,
   type MissionPourCalculHebdomadaire,
 } from '@/lib/heures-hebdomadaires-mission';
+import { formatParis, instantJolene } from '@/lib/date-heure-paris';
+import {
+  construirePlanningCandidat,
+  construirePlanningConformite,
+  trouverChevauchementPlannings,
+  trouverReposInsuffisant,
+  type CreneauMissionCandidat,
+} from '@/components/planning/planning-candidat';
+import { chargerCreneauxMissionsPagines } from '@/lib/mission-creneaux-pagines';
 
 interface ControleSemaine48h {
   cle: string;
@@ -58,7 +67,7 @@ interface BlocConformiteProps {
 }
 
 function formatHeure(d: string) {
-  return format(new Date(d), "HH'h'mm", { locale: fr });
+  return formatParis(d, "HH'h'mm");
 }
 
 function labelSemaine(cle: string) {
@@ -119,46 +128,6 @@ export function BlocConformite({ missionId, onResultat }: BlocConformiteProps) {
         chevauchement: { ok: true, detail: '', missionConflictuelle: null },
       };
 
-      const debutCible = new Date(missionCible.debut_le).getTime();
-      const finCible = new Date(missionCible.fin_le).getTime();
-
-      for (const m of missionsExistantes) {
-        const debutM = new Date(m.debut_le).getTime();
-        const finM = new Date(m.fin_le).getTime();
-
-        if (debutM < finCible && finM > debutCible) {
-          res.chevauchement = {
-            ok: false,
-            detail: `Chevauchement avec "${m.intitule}" (${formatHeure(m.debut_le)}→${formatHeure(m.fin_le)})`,
-            missionConflictuelle: m,
-          };
-        }
-
-        if (finM <= debutCible) {
-          const ecart = (debutCible - finM) / 3600000;
-          if (ecart < 11 && ecart >= 0) {
-            const heureMin = new Date(finM + 11 * 3600000);
-            res.repos11h = {
-              ok: false,
-              detail: `Seulement ${ecart.toFixed(1)}h de repos après "${m.intitule}" (fin ${formatHeure(m.fin_le)}). Minimum légal : 11h.`,
-              missionConflictuelle: m,
-              suggestion: `Compatible si début après ${format(heureMin, "HH'h'mm", { locale: fr })}`,
-            };
-          }
-        }
-
-        if (debutM >= finCible) {
-          const ecart = (debutM - finCible) / 3600000;
-          if (ecart < 11 && ecart >= 0) {
-            res.repos11h = {
-              ok: false,
-              detail: `Seulement ${ecart.toFixed(1)}h de repos avant "${m.intitule}" (début ${formatHeure(m.debut_le)}). Minimum légal : 11h.`,
-              missionConflictuelle: m,
-            };
-          }
-        }
-      }
-
       const missionPourCalcul: MissionPourCalculHebdomadaire = {
         id: missionId,
         debut_le: missionCible.debut_le,
@@ -169,6 +138,61 @@ export function BlocConformite({ missionId, onResultat }: BlocConformiteProps) {
         choix_contrat_soignant: missionCible.choix_contrat_soignant,
         type_contrat_recherche: missionCible.type_contrat_recherche,
       };
+
+      const idsCreneaux = [...new Set([missionId, ...missionsExistantes.map((m) => m.id)])];
+      let creneaux: CreneauMissionPourCalculHebdomadaire[];
+      try {
+        creneaux = await chargerCreneauxMissionsPagines(idsCreneaux);
+      } catch {
+        marquerIndisponible('Impossible de vérifier les dates et horaires exacts. Réessayez avant de postuler.');
+        return;
+      }
+      const planningCible = construirePlanningCandidat(
+        { ...missionPourCalcul, mission_id: missionId },
+        creneaux.filter((creneau) => creneau.mission_id === missionId) as CreneauMissionCandidat[],
+      );
+      if (!planningCible.exact) {
+        marquerIndisponible('Le planning détaillé de cette mission est incomplet. Impossible de vérifier la compatibilité avant de postuler.');
+        return;
+      }
+
+      const planningsExistants = missionsExistantes.map((missionExistante) => ({
+        mission: missionExistante,
+        planning: construirePlanningConformite(
+          missionExistante,
+          creneaux.filter((creneau) => creneau.mission_id === missionExistante.id) as CreneauMissionCandidat[],
+        ),
+      }));
+      if (planningsExistants.some(({ planning }) => !planning.exact)) {
+        marquerIndisponible('Le planning détaillé d’une mission déjà attribuée est incomplet. Impossible de vérifier les conflits avec certitude.');
+        return;
+      }
+
+      for (const { mission: missionExistante, planning } of planningsExistants) {
+        const conflit = trouverChevauchementPlannings(planningCible, planning);
+        if (conflit && res.chevauchement.ok) {
+          res.chevauchement = {
+            ok: false,
+            detail: `Chevauchement avec "${missionExistante.intitule}" le ${formatParis(conflit.existant.debut, 'EEEE d MMMM')} (${formatHeure(conflit.existant.debut)}→${conflit.existant.fin ? formatHeure(conflit.existant.fin) : '—'})`,
+            missionConflictuelle: missionExistante,
+          };
+        }
+
+        const repos = trouverReposInsuffisant(planningCible, planning);
+        if (repos && res.repos11h.ok) {
+          const borneCompatible = repos.position === 'APRES'
+            ? new Date(instantJolene(repos.creneauExistant.fin!).getTime() + 11 * 3_600_000)
+            : new Date(instantJolene(repos.creneauExistant.debut).getTime() - 11 * 3_600_000);
+          res.repos11h = {
+            ok: false,
+            detail: `Seulement ${repos.heures.toFixed(1)}h de repos ${repos.position === 'APRES' ? 'après' : 'avant'} "${missionExistante.intitule}". Minimum légal : 11h.`,
+            missionConflictuelle: missionExistante,
+            suggestion: repos.position === 'APRES'
+              ? `Compatible si le créneau débute après ${formatParis(borneCompatible, "EEEE d MMMM · HH'h'mm")}`
+              : `Compatible si le créneau se termine avant ${formatParis(borneCompatible, "EEEE d MMMM · HH'h'mm")}`,
+          };
+        }
+      }
 
       if (!missionComptePourPlafond48h(missionPourCalcul)) {
         res.plafond48h.applicable = false;
@@ -182,14 +206,7 @@ export function BlocConformite({ missionId, onResultat }: BlocConformiteProps) {
 
       // Plafond 48h : les créneaux salariés sont regroupés par semaine civile
       // réelle. Les missions libérales existantes sont exclues comme en SQL.
-      const idsCreneaux = [...new Set([missionId, ...missionsExistantes.map((m) => m.id)])];
-      const { data: creneauxData, error: creneauxError } = await supabase
-        .from('mission_creneaux')
-        .select('mission_id, debut, fin, est_pause, type_creneau')
-        .in('mission_id', idsCreneaux);
-      const creneaux = (creneauxData || []) as CreneauMissionPourCalculHebdomadaire[];
-      const planningsDisponibles = !creneauxError
-        && planningMissionHebdomadaireDisponible(missionPourCalcul, creneaux)
+      const planningsDisponibles = planningMissionHebdomadaireDisponible(missionPourCalcul, creneaux)
         && missionsExistantes
           .filter((mission) => missionComptePourPlafond48h(mission))
           .every((mission) => planningMissionHebdomadaireDisponible(mission, creneaux));

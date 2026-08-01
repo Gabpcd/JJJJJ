@@ -29,10 +29,13 @@ import { useNotification } from '@/contexts/NotificationContext';
 import { supabase } from '@/integrations/supabase/client';
 import { extraireMessageErreur } from '@/lib/erreurs';
 import { useEtablissementScope } from '@/hooks/useEtablissementScope';
+import { debutMoisParis } from '@/lib/date-heure-paris';
+import { chargerCreneauxMissionsPagines } from '@/lib/mission-creneaux-pagines';
 
 import { TopSoignants } from '@/components/dashboard/TopSoignants';
 import {
   construireOccurrencesPlanning,
+  finFenetrePlanningParis,
   SectionPlanning,
   type CreneauPlanning,
   type MissionPlanningSource,
@@ -108,7 +111,8 @@ export default function DashboardEtablissement() {
     queryFn: async () => {
       let partialError = false;
       const now = new Date();
-      const debutMois = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+      const debutMois = debutMoisParis(now).toISOString();
+      const finFenetrePlanning = finFenetrePlanningParis(now, 31);
 
       let etabResult: EtabInfo | null = null;
       let missionsResult: MissionSummary[] = [];
@@ -123,7 +127,9 @@ export default function DashboardEtablissement() {
       };
       let topSoignantsResult: any[] = [];
       let prochainesResult: any[] = [];
+      let missionsSansPlanningResult: MissionPlanningSource[] = [];
       let erreurPlanningResult: string | null = null;
+      let erreurMissionsRecentesResult: string | null = null;
       // Lot 11 : évaluations en attente — converge dans « À faire maintenant »
       // (remplace le BandeauEvaluationsEnAttente, même logique de données :
       // missions TERMINEE − évaluations ETABLISSEMENT − notations ETAB_VERS_SOIGNANT).
@@ -159,11 +165,41 @@ export default function DashboardEtablissement() {
           }
         }
 
-        if (resMissions.error) { logger.error('[DashboardEtab] Erreur missions', resMissions.error); partialError = true; }
+        if (resMissions.error) {
+          logger.error('[DashboardEtab] Erreur missions', resMissions.error);
+          partialError = true;
+          erreurMissionsRecentesResult = 'Les dernières missions n’ont pas pu être chargées.';
+        }
         if (resMissions.data) {
+          const idsMissionsRecentes = resMissions.data.map((mission: any) => mission.id);
+          const creneauxRecentsParMission = new Map<string, CreneauPlanning[]>();
+          let creneauxRecentsDisponibles = true;
+
+          if (idsMissionsRecentes.length > 0) {
+            try {
+              const creneauxRecents = await chargerCreneauxMissionsPagines(
+                idsMissionsRecentes,
+                { typeCreneau: 'PREVISIONNEL', exclurePauses: true },
+              );
+              for (const creneau of creneauxRecents as CreneauPlanning[]) {
+                const liste = creneauxRecentsParMission.get(creneau.mission_id) ?? [];
+                liste.push(creneau);
+                creneauxRecentsParMission.set(creneau.mission_id, liste);
+              }
+            } catch (erreurCreneauxRecents) {
+              logger.warn('[DashboardEtab] Erreur planning des dernières missions', erreurCreneauxRecents);
+              partialError = true;
+              creneauxRecentsDisponibles = false;
+              erreurMissionsRecentesResult = 'Le planning des dernières missions n’a pas pu être chargé.';
+            }
+          }
+
           missionsResult = resMissions.data.map((m: any) => ({
             ...m,
             soignants: m.soignant_assigne_id ? sgMap[m.soignant_assigne_id] || null : null,
+            ...(creneauxRecentsDisponibles
+              ? { creneaux: creneauxRecentsParMission.get(m.id) ?? [] }
+              : {}),
           }));
           aDejaPublieResult = resMissions.data.length > 0;
         }
@@ -200,12 +236,11 @@ export default function DashboardEtablissement() {
           // Un mois glissant inclut, par exemple, le créneau du 31 août vu le
           // 31 juillet. Les dates globales bornent uniquement les candidates ;
           // l'affichage est ensuite construit depuis mission_creneaux.
-          const finFenetrePlanning = new Date(now.getTime() + 31 * 24 * 60 * 60 * 1000);
           const [resCout, resProchaines] = await Promise.all([
             supabase.from('missions').select('id, total_brut, duree_heures, soignant_assigne_id, fin_le')
               .eq('etablissement_id', etablissementId).eq('statut', 'TERMINEE').gte('fin_le', debutMois),
             supabase.from('missions')
-              .select('id, intitule, debut_le, fin_le, statut, duree_heures, profession_requise, soignant_assigne_id')
+              .select('id, intitule, debut_le, fin_le, statut, duree_heures, profession_requise, nb_creneaux, soignant_assigne_id')
               .eq('etablissement_id', etablissementId)
               .gte('fin_le', now.toISOString())
               .lte('debut_le', finFenetrePlanning.toISOString())
@@ -253,19 +288,28 @@ export default function DashboardEtablissement() {
 
             let creneauxPlanning: CreneauPlanning[] = [];
             if (missionsPlanning.length > 0) {
-              const { data: creneauxData, error: creneauxError } = await supabase
-                .from('mission_creneaux')
-                .select('id, mission_id, debut, fin, est_pause, type_creneau')
-                .in('mission_id', missionsPlanning.map((mission) => mission.id))
-                .eq('type_creneau', 'PREVISIONNEL')
-                .eq('est_pause', false)
-                .not('fin', 'is', null)
-                .gte('fin', now.toISOString())
-                .lte('debut', finFenetrePlanning.toISOString())
-                .order('debut', { ascending: true });
-              if (creneauxError) throw creneauxError;
-              creneauxPlanning = (creneauxData ?? []) as CreneauPlanning[];
+              creneauxPlanning = await chargerCreneauxMissionsPagines(
+                missionsPlanning.map((mission) => mission.id),
+                { typeCreneau: 'PREVISIONNEL', exclurePauses: true },
+              ) as CreneauPlanning[];
             }
+
+            const creneauxParMission = new Map<string, CreneauPlanning[]>();
+            for (const creneau of creneauxPlanning) {
+              const liste = creneauxParMission.get(creneau.mission_id) ?? [];
+              liste.push(creneau);
+              creneauxParMission.set(creneau.mission_id, liste);
+            }
+            missionsSansPlanningResult = missionsPlanning.filter(
+              (mission) => {
+                const attendus = Number(mission.nb_creneaux);
+                const recus = creneauxParMission.get(mission.id) ?? [];
+                return !Number.isInteger(attendus)
+                  || attendus <= 0
+                  || recus.length !== attendus
+                  || recus.some((creneau) => !creneau.fin);
+              },
+            );
 
             prochainesResult = construireOccurrencesPlanning(
               missionsPlanning,
@@ -332,7 +376,11 @@ export default function DashboardEtablissement() {
         stats: statsResult,
         topSoignants: topSoignantsResult,
         prochaines: prochainesResult,
+        missionsSansPlanning: missionsSansPlanningResult,
         erreurPlanning: erreurPlanningResult,
+        debutFenetrePlanning: now.toISOString(),
+        finFenetrePlanning: finFenetrePlanning.toISOString(),
+        erreurMissionsRecentes: erreurMissionsRecentesResult,
         evaluationsEnAttente: evaluationsEnAttenteResult,
         erreurPartielle: partialError,
       };
@@ -354,7 +402,11 @@ export default function DashboardEtablissement() {
   }, [dashData]);
   const topSoignants = useMemo(() => dashData?.topSoignants ?? [], [dashData]);
   const prochaines = useMemo(() => dashData?.prochaines ?? [], [dashData]);
+  const missionsSansPlanning = useMemo(() => dashData?.missionsSansPlanning ?? [], [dashData]);
   const erreurPlanning = useMemo(() => dashData?.erreurPlanning ?? null, [dashData]);
+  const debutFenetrePlanning = useMemo(() => dashData?.debutFenetrePlanning, [dashData]);
+  const finFenetrePlanning = useMemo(() => dashData?.finFenetrePlanning, [dashData]);
+  const erreurMissionsRecentes = useMemo(() => dashData?.erreurMissionsRecentes ?? null, [dashData]);
   const evaluationsEnAttente = useMemo(() => dashData?.evaluationsEnAttente ?? { count: 0, premiereMissionId: null }, [dashData]);
   const erreurPartielle = useMemo(() => dashData?.erreurPartielle ?? false, [dashData]);
 
@@ -682,7 +734,10 @@ export default function DashboardEtablissement() {
       <FadeInView delay={600}>
         <SectionPlanning
           missions={prochaines}
+          missionsSansPlanning={missionsSansPlanning}
           erreur={erreurPlanning}
+          debutFenetre={debutFenetrePlanning}
+          finFenetre={finFenetrePlanning}
           onRetry={() => queryClient.invalidateQueries({ queryKey: ['dashboard-etablissement'] })}
         />
       </FadeInView>
@@ -752,7 +807,21 @@ export default function DashboardEtablissement() {
           <button onClick={() => navigate('/etablissement/missions')} className="text-sm text-primary font-medium hover:underline">Voir tout →</button>
         </div>
 
-        {missions.length > 0 ? (
+        {erreurMissionsRecentes ? (
+          <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4" role="alert">
+            <p className="flex items-center gap-2 text-sm font-medium text-destructive">
+              <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden="true" />
+              {erreurMissionsRecentes}
+            </p>
+            <button
+              type="button"
+              onClick={() => queryClient.invalidateQueries({ queryKey: ['dashboard-etablissement'] })}
+              className="mt-3 text-xs font-semibold text-primary hover:underline"
+            >
+              Réessayer
+            </button>
+          </div>
+        ) : missions.length > 0 ? (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             {missions.map((m, i) => (
               <FadeInView key={m.id} delay={i * 100}>

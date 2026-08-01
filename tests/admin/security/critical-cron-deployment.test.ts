@@ -172,14 +172,17 @@ describe("déploiement fail-closed des crons critiques", () => {
     expect(stagingWorkflow).toContain(
       "SELECT version, statements::text AS statements, name",
     );
-    const inventoryReplayIndex = stagingWorkflow.indexOf(
-      "20260729121443_figer_inventaire_security_definer.sql",
+    const inventoryRestoreIndex = stagingWorkflow.indexOf(
+      "Restaurer l'inventaire SECURITY DEFINER avant les migrations locales",
     );
     const launchAssertionsIndex = stagingWorkflow.indexOf(
       "Assert launch migrations on STAGING without cron activation",
     );
-    expect(inventoryReplayIndex).toBeGreaterThanOrEqual(0);
-    expect(launchAssertionsIndex).toBeGreaterThan(inventoryReplayIndex);
+    expect(inventoryRestoreIndex).toBeGreaterThanOrEqual(0);
+    expect(launchAssertionsIndex).toBeGreaterThan(inventoryRestoreIndex);
+    expect(stagingWorkflow).not.toContain(
+      "-f supabase/migrations/20260729121443_figer_inventaire_security_definer.sql",
+    );
     expect(stagingWorkflow).toContain(
       "\\\\copy supabase_migrations.schema_migrations(version, statements, name)",
     );
@@ -192,7 +195,7 @@ describe("déploiement fail-closed des crons critiques", () => {
     );
     expect(
       stagingWorkflow.match(/--single-transaction/g),
-    ).toHaveLength(2);
+    ).toHaveLength(3);
     expect(stagingWorkflow).not.toContain(
       "@db.${REF}.supabase.co:5432",
     );

@@ -7,17 +7,36 @@ const missionAVenir = {
   id: 'mission-a-venir',
   intitule: 'Mission de nuit',
   statut: 'ASSIGNEE',
-  debut_le: '2030-01-10T20:00:00.000Z',
-  fin_le: '2030-01-11T08:00:00.000Z',
+  debut_le: '2030-01-01T00:00:00.000Z',
+  fin_le: '2030-01-31T23:00:00.000Z',
+  debut_affiche: '2030-01-10T20:00:00.000Z',
+  fin_affichee: '2030-01-11T08:00:00.000Z',
+  planning_indisponible: false,
+  duree_creneau_heures: 12,
+  nb_creneaux_planifies: 2,
+  index_prochain_creneau: 2,
+  creneaux: [{
+    id: 'creneau-a-venir',
+    debut: '2030-01-10T20:00:00.000Z',
+    fin: '2030-01-11T08:00:00.000Z',
+    est_pause: false,
+    type_creneau: 'PREVISIONNEL',
+  }],
   etablissements: { nom: 'Clinique Jolene', adresse_ville: 'Paris' },
 };
 
 const missionOuverte = {
   id: 'mission-ouverte',
   intitule: 'Renfort IDE',
-  debut_le: '2030-02-10T08:00:00.000Z',
-  fin_le: '2030-02-10T20:00:00.000Z',
-  duree_heures: 12,
+  debut_le: '2030-02-01T00:00:00.000Z',
+  fin_le: '2030-02-28T23:00:00.000Z',
+  debut_affiche: '2030-02-10T08:00:00.000Z',
+  fin_affichee: '2030-02-10T20:00:00.000Z',
+  planning_indisponible: false,
+  duree_creneau_heures: 12,
+  duree_planifiee_heures: 12,
+  nb_creneaux_planifies: 1,
+  index_prochain_creneau: 1,
   taux_horaire_base: 30,
   etab_nom: 'Hôpital Jolene',
 };
@@ -92,6 +111,9 @@ describe('DashboardSoignant — cartes accessibles', () => {
       .toHaveAttribute('href', '/soignant/missions/mission-a-venir');
     expect(screen.getByRole('link', { name: 'Voir la mission Renfort IDE' }))
       .toHaveAttribute('href', '/soignant/missions/mission-ouverte');
+    expect(screen.getByText(/jeudi 10 janv\. · 21h00 → 09h00/i)).toBeInTheDocument();
+    expect(screen.getByText(/dimanche 10 févr\. · 09h00 → 21h00/i)).toBeInTheDocument();
+    expect(screen.queryByText(/mardi 1 janv\./i)).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Ce mois : 234,00\s*€ net estimé/i })).toHaveAttribute('type', 'button');
   });
 });

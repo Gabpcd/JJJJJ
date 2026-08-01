@@ -7,13 +7,13 @@ import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { extraireMessageErreur } from '@/lib/erreurs';
 import { toast } from 'sonner';
 import {
-  ajouterRepliMissionPonctuelle,
   choisirContratPointage,
   creneauxPrevisionnels,
   evaluerDisponibilitePointage,
   FENETRE_OUVERTURE_POINTAGE_MINUTES,
   type CreneauPointage,
 } from '@/lib/disponibilite-pointage';
+import { analyserCompletudePlanningMission } from '@/lib/completude-planning-mission';
 import {
   formatParis,
   instantJolene,
@@ -101,7 +101,7 @@ export function AffichageCodeRotatifEtab({ missionId }: { missionId: string }) {
       const [missionResult, creneauxResult, contratsResult] = await Promise.all([
         supabase
           .from('missions')
-          .select('id, debut_le, fin_le')
+          .select('id, debut_le, fin_le, nb_creneaux')
           .eq('id', missionId)
           .single(),
         supabase
@@ -110,7 +110,6 @@ export function AffichageCodeRotatifEtab({ missionId }: { missionId: string }) {
           .eq('mission_id', missionId)
           .eq('type_creneau', 'PREVISIONNEL')
           .eq('est_pause', false)
-          .not('fin', 'is', null)
           .order('debut', { ascending: true }),
         supabase
           .from('contrats_mission')
@@ -121,11 +120,13 @@ export function AffichageCodeRotatifEtab({ missionId }: { missionId: string }) {
       if (creneauxResult.error) throw creneauxResult.error;
       if (contratsResult.error) throw contratsResult.error;
 
+      const analysePlanning = analyserCompletudePlanningMission(
+        missionResult.data,
+        (creneauxResult.data || []) as CreneauPointage[],
+      );
       return {
-        creneaux: ajouterRepliMissionPonctuelle(
-          (creneauxResult.data || []) as CreneauPointage[],
-          missionResult.data,
-        ),
+        creneaux: analysePlanning.creneauxPlanifies,
+        planningComplet: analysePlanning.complet,
         contratStatut: choisirContratPointage(contratsResult.data || [])?.statut ?? null,
       };
     },
@@ -139,17 +140,28 @@ export function AffichageCodeRotatifEtab({ missionId }: { missionId: string }) {
   const cloturerRetroactif = async () => {
     if (!heureFin || envoiFallback) return;
     setEnvoiFallback(true);
-    const { error } = await supabase.rpc('fn_declarer_fin_retroactive' as any, {
-      p_mission_id: missionId,
-      p_heure_fin: instantDepuisSaisieParis(heureFin).toISOString(),
-      p_raison: "Clôture par l'établissement (oubli de scan / sans téléphone)",
-    });
-    setEnvoiFallback(false);
-    if (error) { toast.error(extraireMessageErreur(error)); return; }
-    toast.success('Segment clôturé.');
-    setFallbackOuvert(false);
-    setHeureFin('');
-    refetch();
+    try {
+      const heureFinInstant = instantDepuisSaisieParis(heureFin);
+      const { error } = await supabase.rpc('fn_declarer_fin_retroactive' as any, {
+        p_mission_id: missionId,
+        p_heure_fin: heureFinInstant.toISOString(),
+        p_raison: "Clôture par l'établissement (oubli de scan / sans téléphone)",
+      });
+      if (error) throw error;
+
+      toast.success('Segment clôturé.');
+      setFallbackOuvert(false);
+      setHeureFin('');
+      void refetch();
+    } catch (error) {
+      toast.error(
+        error instanceof RangeError
+          ? 'Cette heure n’existe pas à Paris en raison du passage à l’heure d’été. Choisissez une autre heure.'
+          : extraireMessageErreur(error),
+      );
+    } finally {
+      setEnvoiFallback(false);
+    }
   };
 
   if (isLoading || planningLoading) {
@@ -169,7 +181,21 @@ export function AffichageCodeRotatifEtab({ missionId }: { missionId: string }) {
     );
   }
   if (!['ASSIGNEE', 'EN_COURS'].includes(data.statut)) return null;
-  if (planningErreur || !planning) {
+
+  const code = data.code_pointage_actif;
+  const segmentsOuverts: CreneauPointage[] = data.segments
+    .filter((segment) => !segment.fin)
+    .map((segment) => ({
+      ...segment,
+      est_pause: false,
+      type_creneau: 'EFFECTIF',
+    }));
+  const departToujoursPossible = segmentsOuverts.length > 0;
+  const planningInutilisable = planningErreur || !planning || !planning.planningComplet;
+
+  // Une arrivée ne doit jamais être autorisée depuis un planning incomplet.
+  // Un départ reste toutefois possible lorsqu'un EFFECTIF est déjà ouvert.
+  if (planningInutilisable && !departToujoursPossible) {
     return (
       <div className="card-base" role="alert">
         <div className="flex items-center gap-2">
@@ -181,7 +207,9 @@ export function AffichageCodeRotatifEtab({ missionId }: { missionId: string }) {
           <div>
             <p className="text-sm font-semibold text-foreground">Code masqué</p>
             <p className="mt-1 text-xs text-muted-foreground">
-              Le planning détaillé est momentanément indisponible. Réessayez avant de présenter un code au soignant.
+              {planningErreur || !planning
+                ? 'Le planning détaillé est momentanément indisponible. Réessayez avant de présenter un code au soignant.'
+                : 'Le planning détaillé est incomplet ou ne correspond pas au nombre de créneaux prévu. Confirmez-le avant de présenter un code d’arrivée.'}
             </p>
           </div>
         </div>
@@ -189,18 +217,11 @@ export function AffichageCodeRotatifEtab({ missionId }: { missionId: string }) {
     );
   }
 
-  const code = data.code_pointage_actif;
-  const planifies = creneauxPrevisionnels(planning.creneaux);
-  const segmentsOuverts: CreneauPointage[] = data.segments
-    .filter((segment) => !segment.fin)
-    .map((segment) => ({
-      ...segment,
-      est_pause: false,
-      type_creneau: 'EFFECTIF',
-    }));
+  const creneauxPlanning = planning?.creneaux ?? [];
+  const planifies = creneauxPrevisionnels(creneauxPlanning);
   const disponibilite = evaluerDisponibilitePointage({
-    creneaux: [...planning.creneaux, ...segmentsOuverts],
-    contratStatut: planning.contratStatut,
+    creneaux: [...creneauxPlanning, ...segmentsOuverts],
+    contratStatut: planning?.contratStatut,
     maintenant,
   });
   const afficherCode = Boolean(code && disponibilite.peutPointer);

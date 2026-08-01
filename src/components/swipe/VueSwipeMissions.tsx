@@ -5,8 +5,8 @@
  *
  * Gestes :
  * - ✕  passer · ⭐ SAUVEGARDER (favoris illimités, aucune candidature)
- * - ❤️ candidature IMMÉDIATE et ferme : haptic + toast + « Annuler » 5 s.
- *   Sheet pédagogique à la toute première candidature (une seule fois) :
+ * - ❤️ ouvre un récapitulatif exact avant toute candidature.
+ *   Sheet pédagogique à la toute première confirmation (une seule fois) :
  *   l'établissement peut accepter directement → mission confirmée.
  * - Conflit de planning : blocage backend avec message clair ; missions
  *   adjacentes < 1 h : warning non bloquant.
@@ -15,7 +15,7 @@
 import { useState, useCallback, useEffect, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { Loader2, Star, ChevronRight } from 'lucide-react';
+import { AlertTriangle, Loader2, RefreshCw, Star, ChevronRight } from 'lucide-react';
 import { toast } from 'sonner';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { CardMissionSwipe, type MissionSwipePayload } from '@/components/swipe/CardMissionSwipe';
@@ -24,6 +24,14 @@ import { BoutonsActionSwipe } from '@/components/swipe/BoutonsActionSwipe';
 import { ModalDetailMissionSwipe } from '@/components/swipe/ModalDetailMissionSwipe';
 import { ChoixContratDialog } from '@/components/ChoixContratDialog';
 import { BoutonY2K } from '@/components/y2k/BoutonY2K';
+import { RecapitulatifCandidatureDialog } from '@/components/planning/RecapitulatifCandidatureDialog';
+import { PlanningMissionCandidat } from '@/components/planning/PlanningMissionCandidat';
+import {
+  associerCreneauxAuxMissions,
+  construirePlanningCandidat,
+  creneauxConfirmesPourAction,
+  planningCorrespondAuFiltre,
+} from '@/components/planning/planning-candidat';
 import {
   DialogResponsive,
   DialogResponsiveContent,
@@ -33,9 +41,9 @@ import {
   DialogResponsiveBody,
   DialogResponsiveFooter,
 } from '@/components/ui/DialogResponsive';
-import { estMissionDeNuit, formatDateMission, formatDureeCompacte } from '@/lib/format-mission';
 import { supabase } from '@/integrations/supabase/client';
 import { useNotification } from '@/contexts/NotificationContext';
+import { chargerCreneauxMissionsPagines } from '@/lib/mission-creneaux-pagines';
 
 type SwipeDirEnum = 'LIKE' | 'DISLIKE' | 'FAVORI';
 
@@ -82,6 +90,7 @@ export function VueSwipeMissions({ onBasculerListe, onCreerAlerte, onElargirRayo
   // Modal détail mission (tap sur la card ou bouton « Voir le détail »)
   const [detailMission, setDetailMission] = useState<MissionSwipePayload | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
+  const [recapCandidature, setRecapCandidature] = useState<MissionSwipePayload | null>(null);
 
   // Sheet pédagogique 1ʳᵉ candidature : intercepte le LIKE avant envoi.
   const [premiereCandidature, setPremiereCandidature] = useState<{
@@ -98,13 +107,22 @@ export function VueSwipeMissions({ onBasculerListe, onCreerAlerte, onElargirRayo
   } | null>(null);
 
   // Fetch missions swipe
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError: missionsEnErreur, refetch: rechargerMissions } = useQuery({
     queryKey: ['swipe-missions'],
     queryFn: async () => {
       const { data, error } = await supabase.rpc('fn_obtenir_missions_swipe' as any, { p_limit: 20 });
       if (error) throw error;
       const missions = ((data as any)?.missions ?? []) as MissionSwipePayload[];
-      return missions;
+      if (missions.length === 0) return missions;
+      const creneaux = await chargerCreneauxMissionsPagines(
+        missions.map((mission) => mission.mission_id),
+        { typeCreneau: 'PREVISIONNEL', exclurePauses: true },
+      );
+      return associerCreneauxAuxMissions(
+        missions,
+        creneaux,
+        false,
+      ) as MissionSwipePayload[];
     },
     staleTime: 60_000,
   });
@@ -113,14 +131,25 @@ export function VueSwipeMissions({ onBasculerListe, onCreerAlerte, onElargirRayo
   const { data: sauvegardees } = useQuery({
     queryKey: ['missions-sauvegardees'],
     queryFn: async () => {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('missions_sauvegardees' as any)
         .select('mission_id, missions(id, intitule, debut_le, fin_le, duree_heures, nb_creneaux, taux_horaire_base, net_estime, statut)')
         .order('cree_le', { ascending: false })
         .limit(10);
-      return ((data ?? []) as any[])
+      if (error) throw error;
+      const missions = ((data ?? []) as any[])
         .map((r) => r.missions)
         .filter((m) => m && m.statut === 'OUVERTE' && new Date(m.debut_le) > new Date());
+      if (missions.length === 0) return missions;
+      const creneaux = await chargerCreneauxMissionsPagines(
+        missions.map((mission) => mission.id),
+        { typeCreneau: 'PREVISIONNEL', exclurePauses: true },
+      );
+      return associerCreneauxAuxMissions(
+        missions,
+        creneaux,
+        false,
+      );
     },
     staleTime: 60_000,
   });
@@ -146,6 +175,7 @@ export function VueSwipeMissions({ onBasculerListe, onCreerAlerte, onElargirRayo
     mutationFn: async ({
       missionId,
       direction,
+      mission,
       choixContrat,
     }: {
       missionId: string;
@@ -153,22 +183,39 @@ export function VueSwipeMissions({ onBasculerListe, onCreerAlerte, onElargirRayo
       mission: MissionSwipePayload;
       choixContrat?: string;
     }) => {
-      const { data, error } = await supabase.rpc('fn_enregistrer_swipe' as any, {
-        p_mission_id: missionId,
-        p_direction: direction,
-        ...(choixContrat ? { p_choix_contrat: choixContrat } : {}),
-      });
+      const creneauxConfirmes = direction === 'LIKE'
+        ? creneauxConfirmesPourAction(mission)
+        : null;
+      if (direction === 'LIKE' && !creneauxConfirmes) {
+        throw new Error('Le planning exact doit être rechargé avant de postuler.');
+      }
+      const { data, error } = direction === 'LIKE'
+        ? await supabase.rpc('fn_confirmer_action_planning_v1' as any, {
+            p_mission_id: missionId,
+            p_action: 'SWIPE_LIKE',
+            p_creneaux_confirmes: creneauxConfirmes as any,
+            p_message: null,
+            p_choix_contrat: choixContrat || null,
+            p_candidature_id: null,
+          })
+        : await supabase.rpc('fn_enregistrer_swipe' as any, {
+            p_mission_id: missionId,
+            p_direction: direction,
+            ...(choixContrat ? { p_choix_contrat: choixContrat } : {}),
+          });
       if (error) throw error;
       return data as SwipeRpcResult;
     },
     onSuccess: (result, vars) => {
       if (!result.ok) {
+        setLocalStack((prev) => (
+          prev.some((m) => m.mission_id === vars.missionId)
+            ? prev
+            : [vars.mission, ...prev]
+        ));
         // Choix de contrat requis : la card revient dans la pile, le swipe sera
         // rejoué avec p_choix_contrat.
         if (result.choix_requis) {
-          setLocalStack((prev) =>
-            prev.some((m) => m.mission_id === vars.missionId) ? prev : [vars.mission, ...prev],
-          );
           setChoixContrat({
             options: result.options ?? [
               { value: 'SALARIE', label: 'Salarié (CDD)' },
@@ -182,11 +229,6 @@ export function VueSwipeMissions({ onBasculerListe, onCreerAlerte, onElargirRayo
         }
         // D2 garde-fou : conflit de planning → la card revient dans la pile
         // (le soignant doit voir pourquoi ; il pourra la passer lui-même).
-        if (result.conflit_planning) {
-          setLocalStack((prev) =>
-            prev.some((m) => m.mission_id === vars.missionId) ? prev : [vars.mission, ...prev],
-          );
-        }
         afficherNotification({ type: 'erreur', message: result.error || 'Action impossible' });
         return;
       }
@@ -230,7 +272,12 @@ export function VueSwipeMissions({ onBasculerListe, onCreerAlerte, onElargirRayo
         }
       }
     },
-    onError: (err: any) => {
+    onError: (err: any, vars) => {
+      setLocalStack((prev) => (
+        prev.some((m) => m.mission_id === vars.missionId)
+          ? prev
+          : [vars.mission, ...prev]
+      ));
       afficherNotification({
         type: 'erreur',
         message: err?.message || 'Une erreur est survenue, veuillez réessayer.',
@@ -243,50 +290,56 @@ export function VueSwipeMissions({ onBasculerListe, onCreerAlerte, onElargirRayo
     setDetailOpen(true);
   }, []);
 
+  const envoyerCandidature = useCallback((mission: MissionSwipePayload) => {
+    swipeMut.mutate({ missionId: mission.mission_id, direction: 'LIKE', mission });
+  }, [swipeMut]);
+
   const handleSwipe = useCallback((dir: SwipeDirEnum, missionId: string) => {
     const mission = localStack.find((m) => m.mission_id === missionId);
     if (!mission) return;
 
-    // Sheet pédagogique : à la TOUTE PREMIÈRE candidature uniquement, on
-    // explique l'engagement avant d'envoyer (une candidature n'est pas un like).
     if (dir === 'LIKE') {
-      let dejaVue = false;
-      try { dejaVue = localStorage.getItem(CLE_SHEET_PREMIERE_CANDIDATURE) === '1'; } catch { dejaVue = true; }
-      if (!dejaVue) {
-        setPremiereCandidature({ missionId, mission });
-        return;
-      }
+      setRecapCandidature(mission);
+      return;
     }
 
     setLocalStack((prev) => prev.filter((m) => m.mission_id !== missionId));
     swipeMut.mutate({ missionId, direction: dir, mission });
   }, [swipeMut, localStack]);
 
+  const confirmerRecapitulatif = useCallback(() => {
+    const mission = recapCandidature;
+    if (!mission || !construirePlanningCandidat(mission).exact) return;
+    setRecapCandidature(null);
+    let dejaVue = false;
+    try { dejaVue = localStorage.getItem(CLE_SHEET_PREMIERE_CANDIDATURE) === '1'; } catch { dejaVue = true; }
+    if (!dejaVue) {
+      setPremiereCandidature({ missionId: mission.mission_id, mission });
+      return;
+    }
+    envoyerCandidature(mission);
+  }, [envoyerCandidature, recapCandidature]);
+
   const confirmerPremiereCandidature = useCallback(() => {
-    setPremiereCandidature((cur) => {
-      if (cur) {
-        try { localStorage.setItem(CLE_SHEET_PREMIERE_CANDIDATURE, '1'); } catch { /* ignore */ }
-        setLocalStack((prev) => prev.filter((m) => m.mission_id !== cur.missionId));
-        swipeMut.mutate({ missionId: cur.missionId, direction: 'LIKE', mission: cur.mission });
-      }
-      return null;
-    });
-  }, [swipeMut]);
+    const courante = premiereCandidature;
+    if (!courante) return;
+    setPremiereCandidature(null);
+    try { localStorage.setItem(CLE_SHEET_PREMIERE_CANDIDATURE, '1'); } catch { /* ignore */ }
+    envoyerCandidature(courante.mission);
+  }, [envoyerCandidature, premiereCandidature]);
 
   // Confirmation du choix de contrat (rejoue le swipe avec p_choix_contrat).
   const confirmerChoixContrat = useCallback((value: string) => {
-    setChoixContrat((cur) => {
-      if (cur) {
-        swipeMut.mutate({
-          missionId: cur.missionId,
-          direction: cur.direction,
-          mission: cur.mission,
-          choixContrat: value,
-        });
-      }
-      return cur;
+    const courant = choixContrat;
+    if (!courant) return;
+    setChoixContrat(null);
+    swipeMut.mutate({
+      missionId: courant.missionId,
+      direction: courant.direction,
+      mission: courant.mission,
+      choixContrat: value,
     });
-  }, [swipeMut]);
+  }, [choixContrat, swipeMut]);
 
   const handleGestureSwipe = useCallback((direction: SwipeDirection, itemKey: string) => {
     handleSwipe(direction === 'right' ? 'LIKE' : 'DISLIKE', itemKey);
@@ -308,12 +361,7 @@ export function VueSwipeMissions({ onBasculerListe, onCreerAlerte, onElargirRayo
       if (filtreDeck.typeContrat === 'CDD' && m.type_contrat_recherche === 'LIBERAL') return false;
       if (filtreDeck.typeContrat === 'LIBERAL' && m.type_contrat_recherche === 'SALARIE') return false;
       if (filtreDeck.urgentesOnly && !m.est_urgente) return false;
-      if (filtreDeck.horaire === 'NUIT' && !estMissionDeNuit(m.debut_le)) return false;
-      if (filtreDeck.horaire === 'JOUR' && estMissionDeNuit(m.debut_le)) return false;
-      if (filtreDeck.horaire === 'WEEKEND') {
-        const j = m.debut_le ? new Date(m.debut_le).getDay() : -1;
-        if (j !== 0 && j !== 6) return false;
-      }
+      if (!planningCorrespondAuFiltre(m, filtreDeck.horaire)) return false;
       return true;
     });
   }, [localStack, filtreDeck]);
@@ -338,6 +386,23 @@ export function VueSwipeMissions({ onBasculerListe, onCreerAlerte, onElargirRayo
             <div className="m-auto flex flex-col items-center gap-3 text-jolene-bubblegum">
               <Loader2 className="h-8 w-8 animate-spin" />
               <span className="text-sm">Calcul de ton matching...</span>
+            </div>
+          ) : missionsEnErreur ? (
+            <div className="m-auto w-full rounded-2xl border border-destructive/30 bg-destructive/5 p-5 text-center" role="alert">
+              <AlertTriangle className="mx-auto h-7 w-7 text-destructive" aria-hidden="true" />
+              <p className="mt-2 font-semibold text-foreground">Planning des missions indisponible</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Les missions ne sont pas affichées tant que leurs dates et horaires exacts ne peuvent pas être vérifiés.
+              </p>
+              <BoutonY2K
+                variant="secondary"
+                size="sm"
+                className="mt-4"
+                onClick={() => { void rechargerMissions(); }}
+                iconeGauche={<RefreshCw className="h-4 w-4" />}
+              >
+                Réessayer
+              </BoutonY2K>
             </div>
           ) : stackFiltre.length === 0 ? (
             <div className="m-auto w-full space-y-4">
@@ -385,27 +450,43 @@ export function VueSwipeMissions({ onBasculerListe, onCreerAlerte, onElargirRayo
                 </h3>
                 <div className="space-y-1.5">
                   {missionsSauvegardees.slice(0, 5).map((m: any) => (
-                    <button
+                    <div
                       key={m.id}
-                      type="button"
+                      role="button"
+                      tabIndex={0}
                       onClick={() => navigate(`/soignant/missions/${m.id}`)}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter' || event.key === ' ') {
+                          event.preventDefault();
+                          navigate(`/soignant/missions/${m.id}`);
+                        }
+                      }}
                       className="w-full flex items-center gap-2 rounded-xl border border-jolene-rose-100 bg-card px-3 py-2.5 text-left hover:border-jolene-rose-300 transition-colors min-h-[44px]"
                     >
-                      <span className="flex-1 min-w-0">
+                      <div className="flex-1 min-w-0">
                         <span className="block text-sm font-medium text-foreground truncate">{m.intitule}</span>
-                        <span className="block text-xs text-muted-foreground truncate">
-                          {formatDateMission(m)} · {formatDureeCompacte(m)}
-                        </span>
-                      </span>
+                        <PlanningMissionCandidat
+                          mission={m}
+                          compact
+                          limite={1}
+                          afficherMentionJoursNonTravailles={false}
+                          className="mt-1"
+                        />
+                      </div>
                       <ChevronRight className="h-4 w-4 text-primary shrink-0" aria-hidden="true" />
-                    </button>
+                    </div>
                   ))}
                 </div>
               </section>
             )}
             </div>
           ) : (
-            <StackCards className="flex-1 min-h-0" items={stackItems} onSwipe={handleGestureSwipe} />
+            <StackCards
+              key={`${topMission?.mission_id ?? 'vide'}-${recapCandidature?.mission_id ?? 'repos'}`}
+              className="flex-1 min-h-0"
+              items={stackItems}
+              onSwipe={handleGestureSwipe}
+            />
           )}
         </div>
 
@@ -427,12 +508,20 @@ export function VueSwipeMissions({ onBasculerListe, onCreerAlerte, onElargirRayo
         onOpenChange={setDetailOpen}
         onPostuler={() => {
           setDetailOpen(false);
-          if (detailMission) handleSwipe('LIKE', detailMission.mission_id);
+          if (detailMission) setRecapCandidature(detailMission);
         }}
         onSuivant={() => {
           setDetailOpen(false);
           if (detailMission) handleSwipe('DISLIKE', detailMission.mission_id);
         }}
+      />
+
+      <RecapitulatifCandidatureDialog
+        mission={recapCandidature}
+        ouvert={recapCandidature !== null}
+        onFermer={() => setRecapCandidature(null)}
+        onConfirmer={confirmerRecapitulatif}
+        chargement={swipeMut.isPending}
       />
 
       {/* Sheet pédagogique — une seule fois, à la toute première candidature */}

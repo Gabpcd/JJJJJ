@@ -6,9 +6,8 @@ import { BadgeStatut } from '@/components/BadgeStatut';
 import { BoutonSauvegarderMission } from '@/components/BoutonSauvegarderMission';
 import { getLabelProfession, getLabelTypeEtablissement, extraireContratPreference, getContratBadge, getTypeContratRechercheBadge } from '@/lib/constantes';
 import { getMissionMatchInfo } from '@/lib/profession-hierarchy';
-import { detecterMajorations, calculerTauxAvecMajorations } from '@/lib/majorationsCCN';
-import { formatDateMission, formatHorairesMission } from '@/lib/format-mission';
 import { netEstimeAfficheMission } from '@/lib/missionFinanceDisplay';
+import { PlanningMissionCandidat } from '@/components/planning/PlanningMissionCandidat';
 
 interface CarteMissionSoignantProps {
   mission: any;
@@ -121,32 +120,35 @@ export const CarteMissionSoignant = React.memo(function CarteMissionSoignant({ m
         </p>
       )}
 
-      <div className="mt-2 text-xs text-muted-foreground">
-        <p>📅 {formatDateMission(m)}</p>
-        <p>🕐 {formatHorairesMission(m)}</p>
-      </div>
+      <PlanningMissionCandidat mission={m} compact limite={3} className="mt-2" />
 
       <div className="mt-2 flex items-center justify-between">
         {(m as any).mode_remuneration === 'RETROCESSION' ? (
           <span className="text-primary font-bold text-sm">🤝 Rétrocession {(m as any).retrocession_pct ?? '—'}% des honoraires</span>
         ) : (() => {
-          const majos = m.debut_le && m.fin_le ? detecterMajorations(m.debut_le, m.fin_le) : [];
-          const tauxBase = m.taux_horaire_base ?? 0;
-          const tauxFinal = majos.length > 0 ? calculerTauxAvecMajorations(tauxBase, majos) : tauxBase;
-          const tooltip = majos.length > 0
-            ? majos.map((maj) => `${maj.libelle} : +${maj.pourcentage}% (${maj.reference})`).join('\n')
-                + `\n${tauxBase.toFixed(2)} €/h base + majorations = ${tauxFinal.toFixed(2)} €/h estimé`
+          const tauxBase = Number(m.taux_horaire_base ?? 0);
+          const majorationsServeurBrutes: Array<[string, number]> = [
+            ['nuit', Number(m.montant_majoration_nuit ?? 0)],
+            ['dimanche', Number(m.montant_majoration_dimanche ?? 0)],
+            ['jour férié', Number(m.montant_majoration_ferie ?? 0)],
+          ];
+          const majorationsServeur = majorationsServeurBrutes
+            .filter(([, montant]) => montant > 0);
+          const tooltip = majorationsServeur.length > 0
+            ? `Majorations calculées sur les créneaux exacts :\n${majorationsServeur
+                .map(([libelle, montant]) => `${libelle} : ${fmt(montant)}`)
+                .join('\n')}`
             : undefined;
           return (
             <span
               className="text-primary font-bold text-sm inline-flex items-center gap-1"
               title={tooltip}
-              aria-label={tooltip ? `Taux horaire avec majorations CCN : ${tooltip}` : undefined}
+              aria-label={tooltip ? `Taux horaire et majorations : ${tooltip}` : undefined}
             >
               💰 {tauxBase.toFixed(2)} €/h
-              {majos.length > 0 && (
+              {majorationsServeur.length > 0 && (
                 <span className="text-[10px] font-semibold text-warning bg-warning/10 px-1.5 py-0.5 rounded-full" aria-hidden="true">
-                  +{majos.reduce((s, m) => s + m.pourcentage, 0)}% CCN
+                  majorations calculées
                 </span>
               )}
             </span>

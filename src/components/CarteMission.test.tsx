@@ -77,7 +77,7 @@ describe('CarteMission — planning établissement', () => {
   it('convertit les dates de republication depuis l’heure de Paris', () => {
     const onRepublier = vi.fn();
     render(<CarteMission
-      mission={{ ...missionLongue, statut: 'TERMINEE' }}
+      mission={{ ...missionLongue, statut: 'TERMINEE', creneaux: [missionLongue.creneaux[0]] }}
       onRepublier={onRepublier}
     />);
 
@@ -97,5 +97,41 @@ describe('CarteMission — planning établissement', () => {
         fin: '2026-08-31T14:00:00.000Z',
       },
     );
+  });
+
+  it("refuse explicitement une heure de republication inexistante sans faire tomber le rendu", () => {
+    const onRepublier = vi.fn();
+    render(<CarteMission
+      mission={{ ...missionLongue, statut: 'TERMINEE', creneaux: [missionLongue.creneaux[0]] }}
+      onRepublier={onRepublier}
+    />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Republier cette mission' }));
+    fireEvent.change(screen.getByLabelText('Nouvelle date et heure de début *'), {
+      target: { value: '2026-03-29T02:30' },
+    });
+    fireEvent.change(screen.getByLabelText('Nouvelle date et heure de fin *'), {
+      target: { value: '2026-03-29T05:00' },
+    });
+
+    expect(screen.getByRole('alert')).toHaveTextContent(/n’existent pas à Paris/i);
+    expect(screen.getByRole('button', { name: 'Republier' })).toBeDisabled();
+    expect(onRepublier).not.toHaveBeenCalled();
+  });
+
+  it('ne remplace jamais un planning multi-creneaux par une enveloppe de republication', () => {
+    const onRepublier = vi.fn();
+    render(<CarteMission
+      mission={{ ...missionLongue, statut: 'TERMINEE' }}
+      onRepublier={onRepublier}
+    />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Republier cette mission' }));
+    expect(screen.queryByLabelText('Nouvelle date et heure de début *')).not.toBeInTheDocument();
+    expect(screen.getByText(/planning exact sera repris dans le formulaire/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Republier' }));
+
+    expect(onRepublier).toHaveBeenCalledWith(expect.objectContaining({ id: missionLongue.id }));
+    expect(onRepublier).not.toHaveBeenCalledWith(expect.anything(), expect.anything());
   });
 });

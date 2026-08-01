@@ -38,10 +38,15 @@ import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
 import { BadgeY2K } from '@/components/y2k/BadgeY2K';
 import { BoutonY2K } from '@/components/y2k/BoutonY2K';
-import { format } from 'date-fns';
-import { fr } from 'date-fns/locale';
 import { FiltresSauvegardes } from '@/components/FiltresSauvegardes';
 import { VueSwipeMissions } from '@/components/swipe/VueSwipeMissions';
+import {
+  associerCreneauxAuxMissions,
+  construirePlanningCandidat,
+  planningCorrespondAuFiltre,
+} from '@/components/planning/planning-candidat';
+import { formatParis } from '@/lib/date-heure-paris';
+import { chargerCreneauxMissionsPagines } from '@/lib/mission-creneaux-pagines';
 import type { Json } from '@/integrations/supabase/types';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -71,16 +76,6 @@ interface SoignantData {
 
 type Horaire = 'TOUS' | 'JOUR' | 'NUIT' | 'WEEKEND';
 
-function isNuit(debut: string): boolean {
-  const h = new Date(debut).getHours();
-  return h >= 20 || h < 7;
-}
-
-function isWeekend(debut: string): boolean {
-  const day = new Date(debut).getDay();
-  return day === 0 || day === 6;
-}
-
 const VIEW_PREF_KEY = 'jolene_missions_view_pref'; // 'swipe' | 'liste'
 
 export default function RechercheMissions() {
@@ -109,6 +104,7 @@ export default function RechercheMissions() {
   const [soignant, setSoignant] = useState<SoignantData | null>(null);
   const [missions, setMissions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const sequenceChargementMissions = useRef(0);
   // Pull-to-refresh (Lot 6b.3) : tirer en haut de page relance le fetch.
   const [refreshTick, setRefreshTick] = useState(0);
   const { pullDistance, refreshing } = usePullToRefresh(async () => {
@@ -307,51 +303,68 @@ export default function RechercheMissions() {
 
   useEffect(() => {
     if (!user) return;
+    const controller = new AbortController();
+    const sequence = ++sequenceChargementMissions.current;
+    const estChargementCourant = () => (
+      !controller.signal.aborted && sequence === sequenceChargementMissions.current
+    );
     setLoading(true);
     const fetchMissions = async () => {
-      let query = supabase.from('missions').select(`
-        id, intitule, description, service, profession_requise,
-        specialite_medicale_requise, accepte_non_specialises,
-        debut_le, fin_le, duree_heures, taux_horaire_base, taux_rist_plafonne, rist_plafond_applique,
-        total_brut, net_a_payer, est_urgente, niveau_urgence, statut,
-        soignant_assigne_id, cree_le, etablissement_id, type_contrat_recherche, boostee_le, mode_remuneration, retrocession_pct
-      `)
-        .eq('statut', 'OUVERTE')
-        .gte('debut_le', new Date().toISOString())
-        .order('boostee_le', { ascending: false, nullsFirst: false })
-        .order('est_urgente', { ascending: false })
-        .order('debut_le', { ascending: true })
-        .limit(500);
+      try {
+        let query = supabase.from('missions').select(`
+          id, intitule, description, service, profession_requise,
+          specialite_medicale_requise, accepte_non_specialises,
+          debut_le, fin_le, duree_heures, nb_creneaux, taux_horaire_base, taux_rist_plafonne, rist_plafond_applique,
+          total_brut, net_a_payer, est_urgente, niveau_urgence, statut,
+          soignant_assigne_id, cree_le, etablissement_id, type_contrat_recherche, boostee_le, mode_remuneration, retrocession_pct
+        `)
+          .eq('statut', 'OUVERTE')
+          .gte('debut_le', new Date().toISOString())
+          .order('boostee_le', { ascending: false, nullsFirst: false })
+          .order('est_urgente', { ascending: false })
+          .order('debut_le', { ascending: true })
+          .limit(500);
 
-      const professionFiltre = profession || soignant?.profession;
-      if (professionFiltre) {
-        // Si l'utilisateur n'a pas explicitement choisi une profession dans le
-        // filtre (utilise sa propre profession), on élargit la recherche aux
-        // missions hiérarchiquement compatibles : IBODE/IADE peuvent voir les
-        // missions IDE. Le sens inverse reste interdit car la mission exige la
-        // profession spécialisée qu'elle annonce.
-        const orFiltre = !profession ? getMissionsCompatiblesFilter(professionFiltre) : null;
-        if (orFiltre) {
-          query = query.or(orFiltre);
-        } else {
-          query = query.eq('profession_requise', professionFiltre as any);
+        const professionFiltre = profession || soignant?.profession;
+        if (professionFiltre) {
+          // Si l'utilisateur n'a pas explicitement choisi une profession dans le
+          // filtre (utilise sa propre profession), on élargit la recherche aux
+          // missions hiérarchiquement compatibles : IBODE/IADE peuvent voir les
+          // missions IDE. Le sens inverse reste interdit car la mission exige la
+          // profession spécialisée qu'elle annonce.
+          const orFiltre = !profession ? getMissionsCompatiblesFilter(professionFiltre) : null;
+          if (orFiltre) {
+            query = query.or(orFiltre);
+          } else {
+            query = query.eq('profession_requise', professionFiltre as any);
+          }
         }
-      }
 
-      if (tauxMin > 0) query = query.gte('taux_horaire_base', tauxMin);
-      if (urgentesOnly) query = query.eq('est_urgente', true);
-      if (etablissementId) query = query.eq('etablissement_id', etablissementId);
+        if (tauxMin > 0) query = query.gte('taux_horaire_base', tauxMin);
+        if (urgentesOnly) query = query.eq('est_urgente', true);
+        if (etablissementId) query = query.eq('etablissement_id', etablissementId);
 
-      const { data, error } = await query;
-      if (error) {
-        logger.warn('[RechercheMissions] Erreur requête missions:', error.message);
-        toast.error('Impossible de charger les missions. Vérifie ta connexion.');
+        const { data, error } = await query.abortSignal(controller.signal);
+        if (error) throw error;
+        const missionsChargees = data ?? [];
+        const creneaux = await chargerCreneauxMissionsPagines(
+          missionsChargees.map((mission) => mission.id),
+          { typeCreneau: 'PREVISIONNEL', exclurePauses: true, signal: controller.signal },
+        );
+        const avecPlanning = associerCreneauxAuxMissions(missionsChargees as any[], creneaux, false);
+        const enriched = await enrichirEtablissements(avecPlanning as any);
+        if (estChargementCourant()) setMissions(enriched);
+      } catch (error: any) {
+        if (!estChargementCourant() || error?.name === 'AbortError') return;
+        logger.warn('[RechercheMissions] Chargement incomplet:', error?.message ?? error);
+        setMissions([]);
+        toast.error('Impossible de charger tous les plannings. Vérifie ta connexion puis réessaie.');
+      } finally {
+        if (estChargementCourant()) setLoading(false);
       }
-      const enriched = data ? await enrichirEtablissements(data as any) : [];
-      setMissions(enriched);
-      setLoading(false);
     };
-    fetchMissions();
+    void fetchMissions();
+    return () => controller.abort();
   }, [user, soignant, profession, tauxMin, urgentesOnly, etablissementId, refreshTick]);
 
   const filtered = useMemo(() => {
@@ -386,9 +399,7 @@ export default function RechercheMissions() {
           if (typeContrat === 'CDD' && mType === 'LIBERAL') return false;
           if (typeContrat === 'LIBERAL' && mType === 'SALARIE') return false;
         }
-        if (horaire === 'NUIT' && !isNuit(m.debut_le)) return false;
-        if (horaire === 'JOUR' && isNuit(m.debut_le)) return false;
-        if (horaire === 'WEEKEND' && !isWeekend(m.debut_le)) return false;
+        if (!planningCorrespondAuFiltre(m, horaire)) return false;
         return true;
       })
       .sort((a, b) => (a.distance_km ?? 999) - (b.distance_km ?? 999));
@@ -451,9 +462,16 @@ export default function RechercheMissions() {
           etablissement.textContent = `🏥 ${String(m.etablissements?.nom ?? '—')}`;
           popup.appendChild(etablissement);
 
+          const planning = construirePlanningCandidat(m);
           const date = document.createElement('p');
-          date.style.cssText = 'font-size:11px;color:#666;margin:0 0 2px;';
-          date.textContent = `📅 ${format(new Date(m.debut_le), "d MMM · HH'h'mm", { locale: fr })}`;
+          date.style.cssText = 'font-size:11px;color:#666;margin:0 0 2px;white-space:pre-line;';
+          const creneauxVisibles = planning.creneaux.slice(0, 3);
+          const restants = planning.creneaux.length - creneauxVisibles.length;
+          date.textContent = planning.exact
+            ? `📅 ${creneauxVisibles.map((creneau) => (
+                `${formatParis(creneau.debut, 'EEE d MMM')} · ${formatParis(creneau.debut, "HH'h'mm")}→${creneau.fin ? formatParis(creneau.fin, "EEE d MMM HH'h'mm") : '—'}`
+              )).join('\n')}${restants > 0 ? `\n+ ${restants} autre${restants > 1 ? 's' : ''} créneau${restants > 1 ? 'x' : ''}` : ''}`
+            : '⚠️ Planning exact à confirmer';
           popup.appendChild(date);
 
           const taux = document.createElement('p');
@@ -553,7 +571,7 @@ export default function RechercheMissions() {
         <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 shrink-0">
           {[
             { actif: urgentesOnly, label: '🔥 Urgentes', toggle: () => setUrgentesOnly(v => !v) },
-            { actif: horaire === 'WEEKEND', label: '📅 Ce weekend', toggle: () => setHoraire(h => h === 'WEEKEND' ? 'TOUS' : 'WEEKEND') },
+            { actif: horaire === 'WEEKEND', label: '📅 Week-end', toggle: () => setHoraire(h => h === 'WEEKEND' ? 'TOUS' : 'WEEKEND') },
             { actif: horaire === 'NUIT', label: '🌙 Nuit', toggle: () => setHoraire(h => h === 'NUIT' ? 'TOUS' : 'NUIT') },
             { actif: horaire === 'JOUR', label: '☀️ Jour', toggle: () => setHoraire(h => h === 'JOUR' ? 'TOUS' : 'JOUR') },
           ].map((chip) => (

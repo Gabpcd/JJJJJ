@@ -33,7 +33,6 @@ import { calculerDistanceKm } from '@/lib/geo';
 import { getLabelProfession, getLabelTypeEtablissement } from '@/lib/constantes';
 import { extraireMessageErreur, estBlocageCodeTravail } from '@/lib/erreurs';
 import { calculerCompletionProfil, getMotifProfilIncomplet } from '@/lib/profil-soignant';
-import { estMultiJours, formatDateMission, formatHorairesMission } from '@/lib/format-mission';
 import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { ajouterJoursCivilsParis, debutJourParis, formatParis } from '@/lib/date-heure-paris';
 import { toast } from 'sonner';
@@ -49,6 +48,12 @@ import {
   creneauChevauchePeriode,
   type CreneauPointage,
 } from '@/lib/disponibilite-pointage';
+import { PlanningMissionCandidat } from '@/components/planning/PlanningMissionCandidat';
+import { RecapitulatifCandidatureDialog } from '@/components/planning/RecapitulatifCandidatureDialog';
+import {
+  construirePlanningCandidat,
+  creneauxConfirmesPourAction,
+} from '@/components/planning/planning-candidat';
 
 type SoignantData = Database['public']['Tables']['soignants']['Row'];
 
@@ -77,7 +82,6 @@ export default function DetailMissionSoignant() {
   // Fail-closed : les CTA restent désactivés jusqu'à la fin des vérifications.
   const [conformiteOk, setConformiteOk] = useState(false);
   const [showEvaluation, setShowEvaluation] = useState(true);
-  const [chevauchement, setChevauchement] = useState(false);
   const [noteMoyenne, setNoteMoyenne] = useState<{ moyenne: number; total: number } | null>(null);
 
   // Candidature mode
@@ -168,21 +172,6 @@ export default function DetailMissionSoignant() {
     load();
   }, [user, id]);
 
-  // Check for overlapping missions (must be before early return)
-  useEffect(() => {
-    if (!mission || mission.statut !== 'OUVERTE' || !user) return;
-    supabase
-      .from('missions')
-      .select('id')
-      .eq('soignant_assigne_id', user.id)
-      .in('statut', ['ASSIGNEE', 'EN_COURS'])
-      .lt('debut_le', mission.fin_le)
-      .gt('fin_le', mission.debut_le)
-      .then(({ data }) => {
-        setChevauchement((data || []).length > 0);
-      }).then(undefined, (err) => handleErrorSilent(err, 'DetailMissionSoignant.chevauchement'));
-  }, [mission, user]);
-
   // Fetch average rating for the establishment
   useEffect(() => {
     if (!mission?.etablissement_id) return;
@@ -237,6 +226,11 @@ export default function DetailMissionSoignant() {
   const typeContratEffectif = mission.type_contrat_applique
     ?? (mission.type_contrat_recherche === 'LIBERAL' ? 'LIBERAL' : 'SALARIE');
   const missionEstLiberale = typeContratEffectif === 'LIBERAL';
+  const planningCandidat = construirePlanningCandidat({
+    ...mission,
+    creneaux_planifies: creneauxPlanifies,
+    erreur_planning: erreurCreneaux,
+  });
 
   // Session E-6 : net estimé de la mission (même source que la liste,
   // cf. CarteMissionSoignant) pour la barre sticky mobile.
@@ -285,7 +279,7 @@ export default function DetailMissionSoignant() {
         variante: 'warning',
       };
     }
-    if (estOuverte && peutPostuler && !candidatureEnvoyee && !chevauchement) {
+    if (estOuverte && peutPostuler && !candidatureEnvoyee && planningCandidat.exact) {
       return {
         titre: estModeCandidature ? 'Postule à cette mission' : 'Accepte cette mission',
         description: estModeCandidature
@@ -299,13 +293,27 @@ export default function DetailMissionSoignant() {
   })();
 
   const postulerMission = async (choixContrat?: string) => {
+    const creneauxConfirmes = creneauxConfirmesPourAction({
+      ...mission,
+      creneaux_planifies: creneauxPlanifies,
+      erreur_planning: erreurCreneaux,
+    });
+    if (!creneauxConfirmes) {
+      toast.error(planningCandidat.messageBlocage ?? 'Le planning exact doit être confirmé avant de postuler.');
+      return;
+    }
     if (postulationLockRef.current) return;
     postulationLockRef.current = true;
     setPostulationEnCours(true);
     try {
-      const params: any = { p_mission_id: id!, p_message: messageCandidature || null };
-      if (choixContrat) params.p_choix_contrat = choixContrat;
-      const { data, error } = await supabase.rpc('fn_postuler_mission_rate_limited' as any, params);
+      const { data, error } = await supabase.rpc('fn_confirmer_action_planning_v1' as any, {
+        p_mission_id: id!,
+        p_action: 'POSTULER',
+        p_creneaux_confirmes: creneauxConfirmes as any,
+        p_message: messageCandidature || null,
+        p_choix_contrat: choixContrat || null,
+        p_candidature_id: null,
+      });
       if (error) { toast.error(extraireMessageErreur(error)); return; }
       if (data?.choix_requis) {
         setChoixContratDialog({ open: true, options: data.options || [], action: 'postuler' });
@@ -331,13 +339,27 @@ export default function DetailMissionSoignant() {
   };
 
   const accepterMission = async (choixContrat?: string) => {
+    const creneauxConfirmes = creneauxConfirmesPourAction({
+      ...mission,
+      creneaux_planifies: creneauxPlanifies,
+      erreur_planning: erreurCreneaux,
+    });
+    if (!creneauxConfirmes) {
+      toast.error(planningCandidat.messageBlocage ?? 'Le planning exact doit être confirmé avant d’accepter.');
+      return;
+    }
     if (acceptationLockRef.current) return;
     acceptationLockRef.current = true;
     setAcceptationEnCours(true);
     try {
-      const params: any = { p_mission_id: id! };
-      if (choixContrat) params.p_choix_contrat = choixContrat;
-      const { data, error } = await supabase.rpc('fn_accepter_mission' as any, params);
+      const { data, error } = await supabase.rpc('fn_confirmer_action_planning_v1' as any, {
+        p_mission_id: id!,
+        p_action: 'ACCEPTER',
+        p_creneaux_confirmes: creneauxConfirmes as any,
+        p_message: null,
+        p_choix_contrat: choixContrat || null,
+        p_candidature_id: null,
+      });
 
       if (error) {
         if (estBlocageCodeTravail(error)) {
@@ -612,43 +634,13 @@ export default function DetailMissionSoignant() {
           {/* Horaires */}
           <div className="card-base">
             <h3 className="font-semibold text-sm text-foreground mb-2">🕐 Horaires</h3>
-            {erreurCreneaux ? (
-              <p className="text-sm text-warning" role="alert">
-                Planning détaillé momentanément indisponible. Actualise la page avant de te déplacer.
-              </p>
-            ) : creneauxPlanifies.length > 0 ? (
-              <>
-                <p className="text-sm font-medium text-foreground">
-                  {creneauxPlanifies.length} créneau{creneauxPlanifies.length > 1 ? 'x' : ''} planifié{creneauxPlanifies.length > 1 ? 's' : ''} :
-                </p>
-                <ul className="mt-2 space-y-2" aria-label="Jours et horaires travaillés">
-                  {creneauxPlanifies.map((creneau) => (
-                    <li
-                      key={creneau.id ?? creneau.debut}
-                      className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-muted/40 px-3 py-2 text-sm"
-                    >
-                      <span className="font-medium text-foreground capitalize">
-                        {formatParis(creneau.debut, 'EEEE d MMMM yyyy')}
-                      </span>
-                      <span className="font-semibold text-primary">
-                        {formatParis(creneau.debut, "HH'h'mm")}
-                        {' → '}
-                        {creneau.fin ? formatParis(creneau.fin, "HH'h'mm") : 'fin à confirmer'}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-                <p className="text-xs text-muted-foreground mt-2">
-                  Total prévu : {mission.duree_heures || 0} h
-                </p>
-              </>
-            ) : (
-              <>
-                <p className="text-sm text-foreground">📅 {formatDateMission(mission)}</p>
-                <p className="text-sm text-foreground">🕐 {formatHorairesMission(mission)}</p>
-                <p className="text-xs text-warning mt-2">Les journées détaillées ne sont pas encore planifiées.</p>
-              </>
-            )}
+            <PlanningMissionCandidat
+              mission={{
+                ...mission,
+                creneaux_planifies: creneauxPlanifies,
+                erreur_planning: erreurCreneaux,
+              }}
+            />
             <div className="flex flex-wrap gap-2 mt-2">
               {(mission.heures_nuit || 0) > 0 && <span className="badge-base bg-indigo-100 text-indigo-700">🌙 {mission.heures_nuit}h de nuit</span>}
               {(mission.heures_dimanche || 0) > 0 && <span className="badge-base bg-amber-100 text-amber-700">☀️ {mission.heures_dimanche}h de dimanche</span>}
@@ -795,12 +787,6 @@ export default function DetailMissionSoignant() {
             {estOuverte && (
               <>
                 <BlocagePostulation completionProfil={completionProfil} documentsValides={!!soignant.tous_documents_valides} premiereMissionLe={premiereMissionLe} missionDebutLe={mission.debut_le} champsManquants={champsManquants.map((i) => i.label)} />
-                {chevauchement && (
-                  <div className="bg-warning/10 border border-warning/30 rounded-xl p-3 mb-3 text-center">
-                    <p className="text-sm font-semibold text-warning">⚠️ Tu as déjà une mission sur ce créneau</p>
-                    <p className="text-xs text-warning/80 mt-1">Tu ne peux pas accepter deux missions qui se chevauchent.</p>
-                  </div>
-                )}
                 {/* Session E-6 : profil incomplet → la complétion devient l'action
                     primaire de l'écran (pas de dead-end), avec les champs nommés. */}
                 {!peutPostuler && !candidatureEnvoyee && (
@@ -841,11 +827,11 @@ export default function DetailMissionSoignant() {
                           <p className="text-[10px] text-muted-foreground text-right mt-0.5">{messageCandidature.length}/300</p>
                         </div>
                         <button
-                          onClick={() => postulerMission()}
-                          disabled={postulationEnCours || !conformiteOk || chevauchement}
+                          onClick={() => setModalConfirm(true)}
+                          disabled={postulationEnCours || !conformiteOk || !planningCandidat.exact}
                           className="btn-primary w-full text-base py-3.5 disabled:opacity-50 active:scale-[0.97] transition-transform"
                         >
-                          {postulationEnCours ? 'Envoi en cours…' : '📨 Postuler à cette mission'}
+                          {postulationEnCours ? 'Envoi en cours…' : '📨 Vérifier et postuler'}
                         </button>
                         <p className="text-[10px] text-muted-foreground text-center mt-2">
                           L'établissement examinera ta candidature. Tu seras notifié(e) de sa décision.
@@ -855,9 +841,9 @@ export default function DetailMissionSoignant() {
                       <>
                         <button
                           onClick={() => setModalConfirm(true)}
-                          disabled={acceptationEnCours || !conformiteOk || chevauchement}
+                          disabled={acceptationEnCours || !conformiteOk || !planningCandidat.exact}
                           className="btn-primary w-full text-base py-3.5 disabled:opacity-50 active:scale-[0.97] transition-transform"
-                          title={chevauchement ? 'Mission chevauchante détectée' : !conformiteOk ? 'Résous les conflits ci-dessus pour accepter' : undefined}
+                          title={!planningCandidat.exact ? 'Planning exact à confirmer' : !conformiteOk ? 'Résous les conflits ci-dessus pour accepter' : undefined}
                         >
                           {acceptationEnCours ? 'Acceptation en cours…' : '★ Accepter cette mission'}
                         </button>
@@ -1075,8 +1061,8 @@ export default function DetailMissionSoignant() {
             <BoutonY2K
               className="shrink-0"
               loading={postulationEnCours || acceptationEnCours}
-              disabled={!conformiteOk || chevauchement}
-              onClick={() => (estModeCandidature ? postulerMission() : setModalConfirm(true))}
+              disabled={!conformiteOk || !planningCandidat.exact}
+              onClick={() => setModalConfirm(true)}
             >
               {estModeCandidature ? '📨 Postuler' : '★ Accepter'}
             </BoutonY2K>
@@ -1085,16 +1071,22 @@ export default function DetailMissionSoignant() {
       )}
 
       {/* Modals */}
-      <ModalConfirmation
+      <RecapitulatifCandidatureDialog
+        mission={{
+          ...mission,
+          creneaux_planifies: creneauxPlanifies,
+          erreur_planning: erreurCreneaux,
+        }}
         ouvert={modalConfirm}
         onFermer={() => setModalConfirm(false)}
-        onConfirmer={() => accepterMission()}
-        titre="Accepter cette mission ?"
-        message={`Tu t'engages à être présent(e) ${creneauxPlanifies.length > 0
-          ? creneauxPlanifies.map((creneau) => `${formatParis(creneau.debut, 'EEEE d MMMM')} de ${formatParis(creneau.debut, "HH'h'mm")} à ${creneau.fin ? formatParis(creneau.fin, "HH'h'mm") : 'une heure à confirmer'}`).join(', puis ')
-          : estMultiJours(mission) ? `du ${formatDateMission(mission)} (${formatHorairesMission(mission)})` : `le ${formatParis(mission.debut_le, 'EEEE d MMMM')} (${formatHorairesMission(mission)})`}. Une annulation tardive impactera ton score de fiabilité.`}
-        labelConfirmer="Oui, j'accepte"
-        labelAnnuler="Annuler"
+        onConfirmer={() => {
+          setModalConfirm(false);
+          if (estModeCandidature) void postulerMission();
+          else void accepterMission();
+        }}
+        chargement={postulationEnCours || acceptationEnCours}
+        actionLabel={estModeCandidature ? 'Envoyer ma candidature' : 'Accepter tous ces créneaux'}
+        retraitPossible={estModeCandidature}
       />
 
       <ModalConfirmation

@@ -150,6 +150,26 @@ jobs:
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
 
+      - name: Exporter l'inventaire SECURITY DEFINER de production
+        run: |
+          set -euo pipefail
+          # Le dump est volontairement schema-only. Cet inventaire ne contient
+          # aucun secret ni donnée métier, mais il doit précéder les migrations
+          # locales qui ajoutent ou requalifient une fonction.
+          supabase db query --linked --agent=no --output csv \
+            "SELECT signature, categorie, definition_md5, justification, recense_le
+               FROM private.security_definer_inventory
+              ORDER BY signature" \
+            > /tmp/security-definer-inventory.csv
+          header="$(head -n 1 /tmp/security-definer-inventory.csv | tr -d '\r')"
+          if [ "$header" != 'signature,categorie,definition_md5,justification,recense_le' ]; then
+            echo "::error::Export de l'inventaire SECURITY DEFINER inattendu : $header"
+            exit 1
+          fi
+          echo "Inventaire SECURITY DEFINER production exporté sans donnée sensible."
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+
       # ─── 2. Apply sur staging ────────────────────────────────────────
       - name: Build staging DB URL
         id: staging-url
@@ -240,6 +260,15 @@ jobs:
             -v ON_ERROR_STOP=1 \
             -c "TRUNCATE TABLE supabase_migrations.schema_migrations;" \
             -c "\\copy supabase_migrations.schema_migrations(version, statements, name) FROM '/tmp/migrations-data.csv' WITH (FORMAT csv, HEADER true)"
+
+      - name: Restaurer l'inventaire SECURITY DEFINER avant les migrations locales
+        run: |
+          set -euo pipefail
+          psql "${{ steps.staging-url.outputs.url }}" \
+            --single-transaction \
+            -v ON_ERROR_STOP=1 \
+            -c "TRUNCATE TABLE private.security_definer_inventory;" \
+            -c "\\copy private.security_definer_inventory(signature, categorie, definition_md5, justification, recense_le) FROM '/tmp/security-definer-inventory.csv' WITH (FORMAT csv, HEADER true)"
 
       # Le dump représente la prod au début du run. Il faut ensuite appliquer
       # les migrations locales plus récentes, sinon staging testerait les
@@ -369,10 +398,6 @@ jobs:
             -f supabase/migrations/20260712161000_finaliser_matrice_modes_exercice.sql
           psql "${{ steps.staging-url.outputs.url }}" -v ON_ERROR_STOP=1 \
             -f supabase/migrations/20260713164844_corriger_sources_modes_exercice_et_specialites_infirmieres.sql
-
-          # L'inventaire de sécurité contient 422 lignes de contrôle.
-          psql "${{ steps.staging-url.outputs.url }}" -v ON_ERROR_STOP=1 \
-            -f supabase/migrations/20260729121443_figer_inventaire_security_definer.sql
 
           # Ce fichier est une migration normale en production et un script
           # volontairement rejouable après chaque reset staging.
@@ -515,8 +540,8 @@ jobs:
             echo "::error::Migrations lancement incomplètes sur staging ($LAUNCH_MIGRATIONS/5)."
             exit 1
           fi
-          if [ "$INVENTORY_COUNT" != '422' ]; then
-            echo "::error::Inventaire SECURITY DEFINER staging incomplet ($INVENTORY_COUNT/422)."
+          if [ "$INVENTORY_COUNT" != '426' ]; then
+            echo "::error::Inventaire SECURITY DEFINER staging incomplet ($INVENTORY_COUNT/426)."
             exit 1
           fi
           if [ "$PROFILE_RULES" != '17' ]; then

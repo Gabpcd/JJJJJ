@@ -11,8 +11,13 @@ import { liberalEstProposable, liensSourcesModeExercice } from '@/lib/modeExerci
 import { professionMissionExigeSpecialisationExacte } from '@/lib/profession-hierarchy';
 import { EncartCommissionDegressif } from '@/components/EncartCommissionDegressif';
 import { ModalCodeTravail } from '@/components/ModalCodeTravail';
-import { FormulaireRecurrence, type RecurrenceFlexConfig, type CreneauFlex, type ValidationFlexResult } from '@/components/FormulaireRecurrence';
-import { VivierDisponibilitesHint } from '@/components/VivierDisponibilitesHint';
+import {
+  FormulaireRecurrence,
+  type RecurrenceFlexConfig,
+  type CreneauFlex,
+  type PlanningInitialCreneau,
+  type ValidationFlexResult,
+} from '@/components/FormulaireRecurrence';
 import type { RecapMissionData } from '@/components/mission/ModalRecapMission';
 // Sprint 8 ter-G PR 3 — lazy load modal récap (code splitting, ~8KB)
 const ModalRecapMission = lazy(() =>
@@ -21,13 +26,13 @@ const ModalRecapMission = lazy(() =>
   })),
 );
 import { useAuth } from '@/contexts/AuthContext';
-import { useRole } from '@/hooks/useRole';
 import { useNotification } from '@/contexts/NotificationContext';
 import { supabase } from '@/integrations/supabase/client';
 import { extraireMessageErreur, estBlocageCodeTravail } from '@/lib/erreurs';
 import { contratServiceEstSigne } from '@/lib/contratEtablissement';
-import { format } from 'date-fns';
-import { fr } from 'date-fns/locale';
+import { cleJourParis, formatParis, instantJolene } from '@/lib/date-heure-paris';
+import { calculerHeuresNuitParis } from '@/lib/planning-derive';
+import { construirePlanningCandidat } from '@/components/planning/planning-candidat';
 
 interface FormulaireMissionProps {
   missionSource?: any;
@@ -69,16 +74,18 @@ function getTauxConseille(profession: string): [number, number] {
  */
 function versDateHeureLocale(value?: string | null): string {
   if (!value) return '';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '';
-  return format(date, "yyyy-MM-dd'T'HH:mm");
+  try {
+    const date = instantJolene(value);
+    return `${cleJourParis(date)}T${formatParis(date, 'HH:mm')}`;
+  } catch {
+    return '';
+  }
 }
 
 export function FormulaireMission({ missionSource, modeEdition }: FormulaireMissionProps) {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { user } = useAuth();
-  const { role } = useRole();
   const { afficherNotification } = useNotification();
 
   const [intitule, setIntitule] = useState('');
@@ -104,11 +111,12 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
   const [tauxCommission, setTauxCommission] = useState(15);
   const [palierNom, setPalierNom] = useState('Découverte');
 
-  // Sélecteur jours/dates : toujours actif pour une NOUVELLE mission (multi-jours
-  // = 1 mission). En édition, on garde l'ancien créneau unique début/fin.
-  const [modeRecurrent] = useState(!modeEdition);
   const [creneaux, setCreneaux] = useState<CreneauFlex[]>([]);
   const [recurrenceValidation, setRecurrenceValidation] = useState<ValidationFlexResult | null>(null);
+  const [creneauxRepublication, setCreneauxRepublication] = useState<PlanningInitialCreneau[]>([]);
+  const [sourceRepublication, setSourceRepublication] = useState<any>(null);
+  const [planningRepublicationCharge, setPlanningRepublicationCharge] = useState(false);
+  const [erreurPlanningRepublication, setErreurPlanningRepublication] = useState<string | null>(null);
   const [publicationEnCours, setPublicationEnCours] = useState(false);
 
   const [etablissementType, setEtablissementType] = useState<string | null>(null);
@@ -193,12 +201,14 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
       if (debutParam) setDebutLe(versDateHeureLocale(debutParam));
       if (finParam) setFinLe(versDateHeureLocale(finParam));
 
-      supabase.from('missions').select('intitule, description, profession_requise, service, taux_horaire_base, est_urgente, niveau_urgence, type_contrat_recherche, specialite_medicale_requise').eq('id', dupId).single().then(({ data, error }) => {
+      supabase.from('missions').select('id, intitule, description, profession_requise, service, taux_horaire_base, est_urgente, niveau_urgence, type_contrat_recherche, specialite_medicale_requise, debut_le, fin_le, nb_creneaux').eq('id', dupId).single().then(({ data, error }) => {
         if (error) {
           console.warn('FormulaireMission: mission duplication fetch error', error);
+          setErreurPlanningRepublication('La mission source ne peut pas être vérifiée.');
           return;
         }
         if (data) {
+          setSourceRepublication(data);
           setIntitule(data.intitule);
           setDescription(data.description || '');
           setContratPreference(((data as any).type_contrat_recherche as any) || extraireContratPreference(data.description));
@@ -211,6 +221,28 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
           setDupliquerInfo(data.intitule);
         }
       });
+      // Toujours charger le planning source. Les query params debut/fin ne
+      // peuvent remplacer qu'un planning reellement mono-creneau : une mission
+      // multi-creneaux ne doit jamais etre reduite a son enveloppe globale.
+      supabase
+        .from('mission_creneaux')
+        .select('debut, fin, ordre')
+        .eq('mission_id', dupId)
+        .eq('est_pause', false)
+        .eq('type_creneau', 'PREVISIONNEL')
+        .order('ordre', { ascending: true })
+        .then(({ data, error }) => {
+          setPlanningRepublicationCharge(true);
+          if (error) {
+            console.warn('FormulaireMission: créneaux de republication introuvables', error);
+            setErreurPlanningRepublication('Le planning exact de la mission source ne peut pas être chargé.');
+            return;
+          }
+          setCreneauxRepublication((data ?? []).map((item: any) => ({
+            debut: item.debut,
+            fin: item.fin,
+          })));
+        });
     }
   }, [searchParams, missionSource]);
 
@@ -235,53 +267,92 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
     }
   }, [missionSource]);
 
+  const planningSourceRepublication = useMemo(() => {
+    if (!sourceRepublication || !planningRepublicationCharge) return null;
+    return construirePlanningCandidat(sourceRepublication, creneauxRepublication.map((creneau) => ({
+      ...creneau,
+      mission_id: sourceRepublication.id,
+      est_pause: false,
+      type_creneau: 'PREVISIONNEL',
+    })));
+  }, [creneauxRepublication, planningRepublicationCharge, sourceRepublication]);
+  const republicationDemandee = Boolean(searchParams.get('dupliquer')) && !missionSource;
+  const republicationBloquee = republicationDemandee && (
+    Boolean(erreurPlanningRepublication)
+    || !planningRepublicationCharge
+    || !sourceRepublication
+    || !planningSourceRepublication?.exact
+  );
+
+  const planningInitial = useMemo<PlanningInitialCreneau[]>(() => {
+    const source = Array.isArray(missionSource?.creneaux)
+      ? missionSource.creneaux
+          .filter((item: any) => item && item.debut && item.fin && item.est_pause !== true && item.type_creneau !== 'PAUSE')
+          .map((item: any) => ({ id: item.id, debut: item.debut, fin: item.fin }))
+      : [];
+    if (source.length > 0) return source;
+
+    const debutParam = searchParams.get('debut');
+    const finParam = searchParams.get('fin');
+    if (republicationDemandee) {
+      if (!planningSourceRepublication?.exact) return [];
+      const sourceExacte = planningSourceRepublication.creneaux.map((creneau) => ({
+        id: creneau.id,
+        debut: creneau.debut,
+        fin: creneau.fin!,
+      }));
+      if (sourceExacte.length > 1) return sourceExacte;
+      if (debutParam && finParam) return [{ debut: debutParam, fin: finParam }];
+      return sourceExacte;
+    }
+    if (missionSource?.debut_le && missionSource?.fin_le) {
+      return [{ debut: missionSource.debut_le, fin: missionSource.fin_le }];
+    }
+    return [];
+  }, [missionSource, planningSourceRepublication, republicationDemandee, searchParams]);
+
   const taux = parseFloat(tauxHoraire) || 0;
+  const estRetrocession = contratPreference === 'LIBERAL'
+    && modeRemuneration === 'RETROCESSION'
+    && !modeEdition;
+  // Le schema financier exige un taux de reference positif lors de la
+  // creation, avant que la RPC de retrocession ne bascule la mission sur le
+  // pourcentage d'honoraires. Il n'est jamais presente comme la remuneration
+  // contractuelle du remplacant.
+  const tauxCreation = estRetrocession
+    ? (taux > 0 ? taux : getTauxConseille(profession)[0])
+    : taux;
+  const retrocessionNombre = Number(retrocessionPct);
+  const retrocessionValide = !estRetrocession
+    || (Number.isFinite(retrocessionNombre) && retrocessionNombre > 0 && retrocessionNombre <= 100);
 
   const { dureeEstimee, heuresNuitEstimees } = useMemo(() => {
-    if (modeRecurrent || !debutLe || !finLe) return { dureeEstimee: 0, heuresNuitEstimees: 0 };
-    const d = new Date(debutLe);
-    const f = new Date(finLe);
-    const dur = Math.max(0, (f.getTime() - d.getTime()) / 3600000);
-    let nuit = 0;
-    const cursor = new Date(d);
-    while (cursor < f) {
-      const h = cursor.getHours();
-      if (h >= 21 || h < 6) nuit += Math.min(1, (f.getTime() - cursor.getTime()) / 3600000);
-      cursor.setTime(cursor.getTime() + 3600000);
-    }
-    return { dureeEstimee: dur, heuresNuitEstimees: Math.min(nuit, dur) };
-  }, [debutLe, finLe, modeRecurrent]);
-
-  const erreurDates = useMemo(() => {
-    if (modeRecurrent) return null;
-    if (!debutLe || !finLe) return null;
-    const d = new Date(debutLe);
-    const f = new Date(finLe);
-    if (f <= d) return 'La fin doit être après le début';
-    if (!modeEdition && d < new Date()) return 'La mission ne peut pas commencer dans le passé';
-    return null;
-  }, [debutLe, finLe, modeEdition, modeRecurrent]);
-
-  const warningDureeLongue = !modeRecurrent && dureeEstimee > 12 && dureeEstimee <= 24;
-  const warningDureeTresLongue = !modeRecurrent && dureeEstimee > 24;
+    const duree = creneaux.reduce((somme, creneau) => somme + creneau.dureeHeures, 0);
+    const nuit = calculerHeuresNuitParis(creneaux);
+    return { dureeEstimee: duree, heuresNuitEstimees: Math.min(nuit, duree) };
+  }, [creneaux]);
 
   // Recurrence validation
-  const recurrenceBlocante = modeRecurrent && recurrenceValidation && !recurrenceValidation.valide;
-  const recurrenceValide = modeRecurrent && creneaux.length > 0 && recurrenceValidation && recurrenceValidation.valide;
+  const recurrenceBlocante = recurrenceValidation && !recurrenceValidation.valide;
+  const contientCreneauPasse = !modeEdition && creneaux.some((creneau) => new Date(creneau.debut) < new Date());
+  const recurrenceValide = creneaux.length > 0
+    && recurrenceValidation
+    && recurrenceValidation.valide
+    && !contientCreneauPasse;
 
   const handleRecurrenceChange = (_config: RecurrenceFlexConfig, creneauxGen: CreneauFlex[], validation: ValidationFlexResult) => {
     setCreneaux(creneauxGen);
     setRecurrenceValidation(validation);
+    setDebutLe(creneauxGen[0]?.debut ?? '');
+    setFinLe(creneauxGen.reduce((maximum, creneau) => (
+      !maximum || new Date(creneau.fin) > new Date(maximum) ? creneau.fin : maximum
+    ), ''));
   };
 
   // Publication d'UNE mission multi-jours (1 mission + N créneaux PREVISIONNEL).
   // Le pointage QR, la paie et la facturation gèrent déjà le multi-créneaux.
   const publierMissionMultiJours = async () => {
     if (!user || creneaux.length === 0) return;
-    if (creneaux.length > 366) {
-      afficherNotification({ type: 'erreur', message: 'Maximum 366 jours par mission.' });
-      return;
-    }
     setPublicationEnCours(true);
     try {
       // Sanitize description — strip injected tags, puis ré-inject le tag contrat.
@@ -289,22 +360,25 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
       const descriptionFinale = injecterContratTag(cleanDesc, contratPreference);
 
       const creneauxPayload = creneaux.map(c => ({
-        debut: new Date(c.debut).toISOString(),
-        fin: new Date(c.fin).toISOString(),
+        debut: c.debut,
+        fin: c.fin,
       }));
 
-      const { data: rpcResult, error } = await supabase.rpc('fn_creer_mission_multi_jours' as any, {
+      const { data: rpcResult, error } = await supabase.rpc('fn_creer_mission_multi_jours_v2' as any, {
         p_intitule: intitule,
         p_description: descriptionFinale || null,
         p_profession_requise: profession,
         p_service: service || null,
-        p_taux_horaire_base: parseFloat(tauxHoraire) || 0,
+        p_taux_horaire_base: tauxCreation,
         p_est_urgente: estUrgente,
         p_niveau_urgence: estUrgente ? niveauUrgence : 0,
         p_mode_attribution: modeAttribution,
         p_specialite_medicale_requise: profession === 'MEDECIN' ? (specialiteMedicaleRequise || null) : null,
         p_accepte_non_specialises: !professionMissionExigeSpecialisationExacte(profession),
         p_creneaux: creneauxPayload as any,
+        p_type_contrat_recherche: contratPreference,
+        p_mode_remuneration: estRetrocession ? 'RETROCESSION' : 'TAUX_HORAIRE',
+        p_retrocession_pct: estRetrocession ? retrocessionNombre : null,
       });
 
       if (error) {
@@ -321,19 +395,8 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
 
       const missionId = (rpcResult as any)?.mission_id;
 
-      // Parité libéral : type de contrat + rétrocession posés par mission_id.
-      if (missionId && contratPreference === 'LIBERAL' && modeRemuneration === 'RETROCESSION') {
-        await supabase.rpc('fn_definir_retrocession_mission' as any, {
-          p_mission_id: missionId,
-          p_pct: Math.min(100, Math.max(1, parseFloat(retrocessionPct) || 50)),
-        });
-      }
-      if (missionId && contratPreference !== 'TOUS') {
-        await supabase.rpc('fn_modifier_type_contrat_mission' as any, {
-          p_mission_id: missionId,
-          p_type_contrat: contratPreference,
-        });
-      }
+      // Le planning, le type de contrat et l'éventuelle rétrocession sont déjà
+      // posés atomiquement par fn_creer_mission_multi_jours_v2.
       // Lot 17 (F2) : une mission issue d'un « Republier »/« Dupliquer » est
       // tracée mission_source=REPUBLICATION (best-effort, ne bloque jamais).
       if (missionId && searchParams.get('dupliquer')) {
@@ -341,13 +404,6 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
           p_mission_id: missionId, p_source: 'REPUBLICATION',
         }).then(() => {}, () => {});
       }
-      await supabase.rpc('fn_ecrire_audit_safe', {
-        p_acteur_id: user.id, p_type_acteur: role, p_action: 'MISSION_CREATION',
-        p_type_ressource: 'mission', p_id_ressource: missionId || user.id, p_cle_s3: null,
-        p_details: { intitule, profession, taux: tauxHoraire, nb_jours: creneaux.length },
-        p_ip: null, p_navigateur: navigator.userAgent,
-      });
-
       afficherNotification({ type: 'succes', message: 'Mission publiée ! Les soignants à proximité sont prévenus 🔔' });
       navigate('/etablissement/missions');
     } finally {
@@ -355,158 +411,75 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
     }
   };
 
-  // Sprint 7 PR 1 — Submit intercepté pour afficher le modal récap avant publication.
-  // En mode édition ou récurrent, on garde le flow direct (pas de modal).
-  const handleSubmit = async (e: React.FormEvent) => {
+  // Création et édition passent toutes les deux par le même récapitulatif exact.
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;
+    if (recurrenceBlocante || creneaux.length === 0 || !recurrenceValide) return;
+    setModalRecapOuvert(true);
+  };
 
-    if (modeRecurrent) {
-      if (recurrenceBlocante) return;
-      if (creneaux.length === 0) return;
+  const enregistrerMission = async () => {
+    if (!user) return;
+    if (!modeEdition || !missionSource) {
       await publierMissionMultiJours();
       return;
     }
 
-    if (erreurDates || !intitule || !profession || !debutLe || !finLe || !tauxHoraire) return;
-
-    // Mode édition : pas de modal récap, on enregistre directement
-    if (modeEdition && missionSource) {
-      await publierMissionPonctuelle();
-      return;
-    }
-
-    // Mode création ponctuelle : on ouvre le modal récap
-    setModalRecapOuvert(true);
-  };
-
-  // Publication ponctuelle (création ou édition) — appelée par le modal en mode création,
-  // ou directement par handleSubmit en mode édition.
-  const publierMissionPonctuelle = async () => {
-    if (!user) return;
     setLoading(true);
     try {
-      // C6: Sanitize description — strip injected tags
       const cleanDescription = (description || '').replace(/\[SERIE_ID:[^\]]*\]/g, '').replace(/\[CONTRAT:[^\]]*\]/g, '').trim();
       const descriptionFinale = injecterContratTag(cleanDescription, contratPreference);
-      const payload = {
-        intitule,
-        description: descriptionFinale || null,
-        profession_requise: profession,
-        service: service || null,
-        debut_le: new Date(debutLe).toISOString(),
-        fin_le: new Date(finLe).toISOString(),
-        taux_horaire_base: parseFloat(tauxHoraire),
-        est_urgente: estUrgente,
-        niveau_urgence: estUrgente ? niveauUrgence : 0,
-        specialite_medicale_requise: profession === 'MEDECIN' ? (specialiteMedicaleRequise || null) : null,
-        accepte_non_specialises: !professionMissionExigeSpecialisationExacte(profession),
-      };
+      const { data: rpcResult, error } = await supabase.rpc('fn_modifier_mission_etablissement_v3' as any, {
+        p_mission_id: missionSource.id,
+        p_intitule: intitule,
+        p_description: descriptionFinale || null,
+        p_service: service || null,
+        p_profession_requise: profession,
+        p_taux_horaire_base: parseFloat(tauxHoraire),
+        p_est_urgente: estUrgente,
+        p_niveau_urgence: estUrgente ? niveauUrgence : 0,
+        p_mode_attribution: modeAttribution,
+        p_type_contrat_recherche: contratPreference,
+        p_specialite_medicale_requise: profession === 'MEDECIN' ? (specialiteMedicaleRequise || null) : null,
+        p_accepte_non_specialises: !professionMissionExigeSpecialisationExacte(profession),
+        p_creneaux: creneaux.map((creneau) => ({
+          debut: creneau.debut,
+          fin: creneau.fin,
+        })) as any,
+      });
 
-      if (modeEdition && missionSource) {
-        const { data: rpcResult, error } = await supabase.rpc('fn_modifier_mission_etablissement_v2' as any, {
-          p_mission_id: missionSource.id,
-          p_intitule: intitule,
-          p_description: descriptionFinale || null,
-          p_service: service || null,
-          p_profession_requise: profession,
-          p_debut_le: payload.debut_le,
-          p_fin_le: payload.fin_le,
-          p_taux_horaire_base: payload.taux_horaire_base,
-          p_est_urgente: payload.est_urgente,
-          p_niveau_urgence: payload.niveau_urgence,
-          p_mode_attribution: modeAttribution,
-          p_type_contrat_recherche: contratPreference,
-          p_specialite_medicale_requise: payload.specialite_medicale_requise,
-          p_accepte_non_specialises: payload.accepte_non_specialises,
-        });
-
-        if (error) {
-          if (estBlocageCodeTravail(error)) { setErreurCodeTravail(error); }
-          else afficherNotification({ type: 'erreur', message: extraireMessageErreur(error) });
-          return;
-        }
-        if ((rpcResult as any)?.success === false) {
-          afficherNotification({ type: 'erreur', message: (rpcResult as any).error });
-          return;
-        }
-
-        afficherNotification({ type: 'succes', message: 'Mission mise à jour !' });
-        navigate(`/etablissement/missions/${missionSource.id}`);
-      } else {
-        // C1: Use secure RPC instead of direct INSERT
-        const { data: rpcResult, error } = await supabase.rpc('fn_creer_mission' as any, {
-          p_intitule: payload.intitule,
-          p_description: payload.description,
-          p_profession_requise: payload.profession_requise,
-          p_service: payload.service,
-          p_debut_le: payload.debut_le,
-          p_fin_le: payload.fin_le,
-          p_taux_horaire_base: payload.taux_horaire_base,
-          p_est_urgente: payload.est_urgente,
-          p_niveau_urgence: payload.niveau_urgence,
-          p_mode_attribution: modeAttribution,
-          p_specialite_medicale_requise: payload.specialite_medicale_requise,
-          p_accepte_non_specialises: payload.accepte_non_specialises,
-        });
-
-        if (error) {
-          if (estBlocageCodeTravail(error)) { setErreurCodeTravail(error); }
-          else {
-            afficherNotification({ type: 'erreur', message: extraireMessageErreur(error) });
-          }
-          return;
-        }
-
-        if (rpcResult && !(rpcResult as any).success) {
-          const msg = (rpcResult as any).error || 'Erreur lors de la création.';
-          if (msg.includes('facture') || msg.includes('impayée')) setErreurFactureImpayee(true);
-          afficherNotification({ type: 'erreur', message: msg });
-          return;
-        }
-
-        const missionId = (rpcResult as any)?.mission_id;
-
-        // type_contrat_recherche : passe par RPC dédiée (audit log)
-        if (missionId && contratPreference === 'LIBERAL' && modeRemuneration === 'RETROCESSION') {
-          await supabase.rpc('fn_definir_retrocession_mission' as any, {
-            p_mission_id: missionId,
-            p_pct: Math.min(100, Math.max(1, parseFloat(retrocessionPct) || 50)),
-          });
-        }
-        if (missionId && contratPreference !== 'TOUS') {
-          await supabase.rpc('fn_modifier_type_contrat_mission' as any, {
-            p_mission_id: missionId,
-            p_type_contrat: contratPreference,
-          });
-        }
-        // Lot 17 (F2) : une mission issue d'un « Republier »/« Dupliquer » est
-        // tracée mission_source=REPUBLICATION (best-effort, ne bloque jamais).
-        if (missionId && searchParams.get('dupliquer')) {
-          await supabase.rpc('fn_marquer_source_mission' as any, {
-            p_mission_id: missionId, p_source: 'REPUBLICATION',
-          }).then(() => {}, () => {});
-        }
-        await supabase.rpc('fn_ecrire_audit_safe', {
-          p_acteur_id: user.id, p_type_acteur: role, p_action: 'MISSION_CREATION',
-          p_type_ressource: 'mission', p_id_ressource: missionId || user.id, p_cle_s3: null,
-          p_details: { intitule, profession, taux: tauxHoraire, debut: debutLe, fin: finLe },
-          p_ip: null, p_navigateur: navigator.userAgent,
-        });
-
-        afficherNotification({ type: 'succes', message: 'Mission publiée ! Les soignants à proximité sont prévenus 🔔' });
-        setModalRecapOuvert(false);
-        navigate('/etablissement/missions');
+      if (error) {
+        if (estBlocageCodeTravail(error)) setErreurCodeTravail(error);
+        else afficherNotification({ type: 'erreur', message: extraireMessageErreur(error) });
+        return;
       }
+      if ((rpcResult as any)?.success === false) {
+        afficherNotification({ type: 'erreur', message: (rpcResult as any).error || 'La mission n’a pas pu être mise à jour.' });
+        return;
+      }
+
+      afficherNotification({ type: 'succes', message: 'Mission et planning mis à jour !' });
+      setModalRecapOuvert(false);
+      navigate(`/etablissement/missions/${missionSource.id}`);
     } finally {
       setLoading(false);
     }
   };
 
   const officineNonProposee = etablissementType === 'PHARMACIE_OFFICINE';
-  const canSubmit = !officineNonProposee && !siretInvalide && contratNonValide === false && !erreurFactureImpayee && (modeRecurrent
-    ? (!!intitule && !!profession && !!tauxHoraire && recurrenceValide && !publicationEnCours)
-    : (!!intitule && !!profession && !!debutLe && !!finLe && !!tauxHoraire && !erreurDates && !loading));
+  const canSubmit = !officineNonProposee
+    && !siretInvalide
+    && contratNonValide === false
+    && !erreurFactureImpayee
+    && !!intitule
+    && !!profession
+    && tauxCreation > 0
+    && retrocessionValide
+    && !republicationBloquee
+    && !!recurrenceValide
+    && !publicationEnCours
+    && !loading;
 
   // Sprint 7 PR 1 — Données récap pour le modal (P1-4)
   const liberalRestreint = !!modeExerciceMission && !liberalAutoriseMission;
@@ -517,9 +490,12 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
     service,
     debutLe,
     finLe,
+    creneaux,
     dureeHeures: dureeEstimee,
     heuresNuit: heuresNuitEstimees,
     tauxHoraire: taux,
+    modeRemuneration: estRetrocession ? 'RETROCESSION' : 'TAUX_HORAIRE',
+    retrocessionPct: estRetrocession ? retrocessionNombre : null,
     contratPreference,
     modeAttribution,
     estUrgente,
@@ -551,6 +527,17 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
       {dupliquerInfo && (
         <div className="bg-info/10 border border-info/20 rounded-xl p-3 mb-4 text-sm text-info">
           <ClipboardList aria-hidden="true" className="inline-block h-4 w-4 mr-1 -mt-0.5" />Vous dupliquez la mission « {dupliquerInfo} ». Ajustez les dates ci-dessous.
+        </div>
+      )}
+
+      {republicationDemandee && erreurPlanningRepublication && (
+        <div className="mb-4 rounded-xl border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive" role="alert">
+          {erreurPlanningRepublication} La republication est bloquée pour éviter de reprendre un planning partiel.
+        </div>
+      )}
+      {republicationDemandee && planningRepublicationCharge && sourceRepublication && !planningSourceRepublication?.exact && !erreurPlanningRepublication && (
+        <div className="mb-4 rounded-xl border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive" role="alert">
+          Le nombre de créneaux détaillés ne correspond pas au planning contractuel. La republication est bloquée.
         </div>
       )}
 
@@ -723,57 +710,24 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
           </div>
         </div>
 
-        {/* Mode ponctuel: horaires */}
-        {!modeRecurrent && (
-          <div className="border border-primary/20 rounded-xl p-4 bg-primary/5 space-y-3">
-            <p className="text-sm font-semibold text-foreground flex items-center gap-1.5"><CalendarDays aria-hidden="true" className="h-4 w-4" />Horaires de la mission</p>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <div>
-                <label htmlFor="mission-debut-le" className="text-xs text-muted-foreground mb-1 block">Date et heure de début *</label>
-                <input
-                  id="mission-debut-le"
-                  type="datetime-local"
-                  value={debutLe}
-                  onChange={(e) => setDebutLe(e.target.value)}
-                  min={!modeEdition ? versDateHeureLocale(new Date().toISOString()) : undefined}
-                  required
-                  className="input-base"
-                />
-              </div>
-              <div>
-                <label htmlFor="mission-fin-le" className="text-xs text-muted-foreground mb-1 block">Date et heure de fin *</label>
-                <input id="mission-fin-le" type="datetime-local" value={finLe} onChange={(e) => setFinLe(e.target.value)} required className="input-base" />
-              </div>
-            </div>
-            {erreurDates && <p className="text-xs text-destructive font-medium flex items-center gap-1"><Ban aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />{erreurDates === 'La mission ne peut pas commencer dans le passé' ? 'La mission doit commencer dans le futur.' : erreurDates}</p>}
-            {warningDureeLongue && <p className="text-xs text-warning font-medium flex items-center gap-1"><AlertTriangle aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />Mission longue — assurez-vous que les repos légaux sont respectés</p>}
-            {warningDureeTresLongue && <p className="text-xs text-destructive font-medium flex items-center gap-1"><AlertTriangle aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />Pour un remplacement de plusieurs jours, utilisez le mode récurrent ci-dessous</p>}
-            {dureeEstimee > 0 && !erreurDates && (
-              <div className="text-center">
-                <span className="badge-base bg-primary/10 text-primary inline-flex items-center gap-1">
-                  <Timer aria-hidden="true" className="h-3.5 w-3.5" />Durée estimée : {Math.floor(dureeEstimee)}h{String(Math.round((dureeEstimee % 1) * 60)).padStart(2, '0')}
-                </span>
-                {heuresNuitEstimees > 0 && (
-                  <p className="text-[10px] text-muted-foreground mt-1">dont ~{heuresNuitEstimees.toFixed(0)}h de nuit (21h-6h)</p>
-                )}
-              </div>
-            )}
-            {/* Lot 17 (F5) : vivier de disponibilités déclarées ce jour-là */}
-            {!modeEdition && <VivierDisponibilitesHint jour={debutLe || null} profession={profession || null} />}
-          </div>
-        )}
-
-        {/* Planification jours/dates — toujours affichée pour une nouvelle mission.
-            Une mission de plusieurs jours = UNE seule mission (plusieurs créneaux). */}
-        {!modeEdition && (
-          <div>
-            <p className="text-sm font-semibold text-foreground mb-1 flex items-center gap-1.5"><CalendarDays aria-hidden="true" className="h-4 w-4" />Jours et horaires de la mission</p>
-            <p className="text-xs text-muted-foreground mb-3">
-              Choisissez la période, puis ajustez les jours travaillés. Tout est publié en <strong>une seule mission</strong>.
+        {/* Source unique création + édition : créneaux datés réels. */}
+        <div>
+          <p className="text-sm font-semibold text-foreground mb-1 flex items-center gap-1.5"><CalendarDays aria-hidden="true" className="h-4 w-4" />Planning exact de la mission</p>
+          <p className="text-xs text-muted-foreground mb-3">
+            Vérifiez chaque date travaillée et chaque horaire. Les jours de repos et les gardes de nuit sont enregistrés tels qu’affichés.
+          </p>
+          <FormulaireRecurrence
+            key={planningInitial.map((item) => `${item.id ?? 'new'}:${item.debut}:${item.fin}`).join('|') || 'planning-vide'}
+            onChange={handleRecurrenceChange}
+            initialCreneaux={planningInitial}
+          />
+          {contientCreneauPasse && (
+            <p className="mt-2 flex items-center gap-1 text-xs font-medium text-destructive" role="alert">
+              <Ban aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />
+              Une mission à publier ne peut pas contenir un créneau déjà commencé.
             </p>
-            <FormulaireRecurrence onChange={handleRecurrenceChange} />
-          </div>
-        )}
+          )}
+        </div>
 
         {/* Mode de rémunération — rétrocession réservée au libéral pur (remplacement
             de cabinet : dentistes, médecins), création de mission ponctuelle uniquement */}
@@ -790,7 +744,14 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
             </label>
             <label className="flex items-start gap-3 cursor-pointer">
               <input type="radio" name="modeRemuneration" checked={modeRemuneration === 'RETROCESSION'}
-                onChange={() => { setModeRemuneration('RETROCESSION'); setTauxHoraire('0'); }} className="mt-0.5 accent-primary" />
+                onChange={() => {
+                  setModeRemuneration('RETROCESSION');
+                  setTauxHoraire((valeur) => (
+                    Number.isFinite(Number(valeur)) && Number(valeur) > 0
+                      ? valeur
+                      : String(getTauxConseille(profession)[0])
+                  ));
+                }} className="mt-0.5 accent-primary" />
               <div>
                 <span className="text-sm font-medium text-foreground">Rétrocession d'honoraires — remplacement de cabinet</span>
                 <p className="text-xs text-muted-foreground">
@@ -807,6 +768,11 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
                     onChange={(e) => setRetrocessionPct(e.target.value)} placeholder="50" className="input-base pr-9" />
                   <span aria-hidden="true" className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">%</span>
                 </div>
+                {!retrocessionValide && (
+                  <p className="mt-1 text-xs font-medium text-destructive" role="alert">
+                    Le pourcentage de rétrocession doit être compris entre 1 et 100 %.
+                  </p>
+                )}
               </div>
             )}
           </div>
@@ -881,53 +847,8 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
           </div>
         </div>
 
-        {/* Estimation (ponctuel) — D5 : le COÛT TOTAL EMPLOYEUR est la métrique
-            primaire (c'est sur lui que l'acheteur décide — l'afficher évite les
-            surprises de facturation, donc les litiges). Net soignant en
-            secondaire (argument d'attractivité du taux). */}
-        {!modeRecurrent && dureeEstimee > 0 && taux > 0 && (() => {
-          const base = taux * dureeEstimee;
-          const estSalarie = contratPreference !== 'LIBERAL';
-          const indemnites = estSalarie ? base * 0.21 : 0; // IFM 10 % + ICP 10 % (salarié)
-          const commission = (base + indemnites) * (tauxCommission / 100);
-          const coutTotal = base + indemnites + commission;
-          return (
-          <div className="bg-gradient-to-r from-primary/5 to-info/5 border border-primary/20 rounded-2xl p-5">
-            <p className="font-bold text-foreground mb-3 flex items-center gap-1.5"><Calculator aria-hidden="true" className="h-4 w-4" />Coût total employeur estimé</p>
-            <div className="space-y-2 text-sm">
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Base ({taux.toFixed(2)} €/h × ~{dureeEstimee.toFixed(1)} h)</span>
-                <span className="font-medium">~{base.toFixed(2)} €</span>
-              </div>
-              {estSalarie && (
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">IFM 10 % + ICP 10 %</span>
-                  <span className="font-medium">~{indemnites.toFixed(2)} €</span>
-                </div>
-              )}
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Commission Jolene ({tauxCommission} %)</span>
-                <span className="font-medium">~{commission.toFixed(2)} €</span>
-              </div>
-              <div className="border-t border-border pt-2 flex justify-between">
-                <span className="text-foreground font-semibold">Coût total estimé</span>
-                <span className="font-bold text-primary">~{coutTotal.toFixed(2)} €</span>
-              </div>
-              <div className="flex justify-between text-xs">
-                <span className="text-muted-foreground">Net estimé soignant (indicatif)</span>
-                <span className="text-muted-foreground font-medium">~{(base * (estSalarie ? 0.78 : 1)).toFixed(2)} €</span>
-              </div>
-            </div>
-            <p className="mt-3 text-xs text-muted-foreground flex items-start gap-1">
-              <Info aria-hidden="true" className="h-3.5 w-3.5 shrink-0 mt-0.5" />
-              Hors majorations nuit (21h-6h), dimanche et jours fériés, ajoutées automatiquement au réel selon vos taux. Le décompte exact est calculé après la création.
-            </p>
-          </div>
-          );
-        })()}
-
-        {/* Estimation (récurrent) */}
-        {modeRecurrent && taux > 0 && recurrenceValidation && recurrenceValidation.totalHebdo > 0 && (() => {
+        {/* Estimation de l'ensemble des créneaux exacts. */}
+        {taux > 0 && recurrenceValidation && recurrenceValidation.totalHebdo > 0 && (() => {
           const totalH = creneaux.length > 0
             ? creneaux.reduce((s, c) => s + c.dureeHeures, 0)
             : recurrenceValidation.totalHebdo;
@@ -936,7 +857,7 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
             : `${recurrenceValidation.totalHebdo}h / semaine (renseignez les dates pour le total)`;
           return (
             <div className="bg-gradient-to-r from-primary/5 to-info/5 border border-primary/20 rounded-2xl p-5">
-              <p className="font-bold text-foreground mb-3 flex items-center gap-1.5"><Calculator aria-hidden="true" className="h-4 w-4" />Estimation de rémunération (série)</p>
+              <p className="font-bold text-foreground mb-3 flex items-center gap-1.5"><Calculator aria-hidden="true" className="h-4 w-4" />Estimation de rémunération du planning</p>
               <div className="space-y-2 text-sm">
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Taux de base</span>
@@ -956,9 +877,9 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
         })()}
 
         {/* Encart commission dégressive */}
-        {taux > 0 && ((dureeEstimee > 0 && !modeRecurrent) || (modeRecurrent && recurrenceValidation && recurrenceValidation.totalHebdo > 0)) && (
+        {taux > 0 && dureeEstimee > 0 && (
           <EncartCommissionDegressif
-            netEstime={taux * (modeRecurrent ? creneaux.reduce((s, c) => s + c.dureeHeures, 0) : dureeEstimee) * 1.21}
+            netEstime={taux * dureeEstimee * 1.21}
             tauxActuel={tauxCommission}
             palierNom={palierNom}
           />
@@ -973,7 +894,7 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
           className="btn-primary w-full flex items-center justify-center gap-2 disabled:opacity-50">
           {loading && <Loader2 className="h-4 w-4 animate-spin" />}
           {modeEdition ? <><Save aria-hidden="true" className="h-4 w-4" />Enregistrer les modifications</> :
-            <><Send aria-hidden="true" className="h-4 w-4" />Publier la mission{modeRecurrent && creneaux.length > 1 ? ` (${creneaux.length} jours)` : ''}</>}
+            <><Send aria-hidden="true" className="h-4 w-4" />Publier la mission{creneaux.length > 1 ? ` (${creneaux.length} créneaux)` : ''}</>}
         </button>
         {/* Lot 11 : plus de doublon d'erreur ici — la zone unique d'erreurs 48h
             vit dans le bloc récurrence (scroll auto), le bouton est désactivé. */}
@@ -1000,8 +921,9 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
             ouvert={true}
             data={recapData}
             onModifier={() => setModalRecapOuvert(false)}
-            onConfirmer={publierMissionPonctuelle}
-            loading={loading}
+            onConfirmer={enregistrerMission}
+            loading={loading || publicationEnCours}
+            labelConfirmer={modeEdition ? 'Enregistrer' : 'Publier'}
           />
         </Suspense>
       )}

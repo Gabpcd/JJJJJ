@@ -1,110 +1,181 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import {
-  derivePlanning, libelleDate, semainesCiviles, validerPlanning,
+  calculerHeuresNuitParis,
+  datesDansPlage,
+  materialiserCreneau,
+  materialiserPlanning,
+  validerPlanningDates,
+  type CreneauPlanningDate,
+  type JourPlanningDate,
 } from './planning-derive';
-import type { HorairesJour } from '@/components/LigneHoraireJour';
 
-// Helper : un jour-de-semaine ISO avec sa durée.
-function hj(jourISO: number, actif: boolean, duree = 12, hd = '07:00', hf = '19:00'): HorairesJour {
-  return { jourISO, label: `J${jourISO}`, heureDebut: hd, heureFin: hf, dureeHeures: duree, actif };
+function creneau(
+  clientId: string,
+  heureDebut = '07:00',
+  heureFin = '19:00',
+  finJourSuivant = false,
+): CreneauPlanningDate {
+  return { clientId, heureDebut, heureFin, finJourSuivant };
 }
-const semaineComplete = (duree = 12): HorairesJour[] => [1, 2, 3, 4, 5, 6, 7].map((i) => hj(i, true, duree));
 
-// Repère : 22/07/2026 est un MERCREDI (confirmé par le rapport de bug).
-describe('derivePlanning — ordre & libellés dérivés de la période', () => {
-  it('mer 22/07 → mer 29/07 : première entrée = mercredi 22/07, lundi daté du 27 seulement', () => {
-    const p = derivePlanning('2026-07-22', '2026-07-29');
-    expect(p.datesLabels).toBe(true);
-    // (2) une mission qui commence un mercredi commence par mercredi
-    expect(p.jours[0].jourISO).toBe(3);
-    expect(p.jours[0].label).toBe('Mer. 22/07');
-    // le lundi n'apparaît QUE daté du 27, et jamais en première position
-    const idxLundi = p.jours.findIndex((j) => j.jourISO === 1);
-    expect(idxLundi).toBeGreaterThan(0);
-    expect(p.jours[idxLundi].label).toBe('Lun. 27/07');
-    // aucun autre libellé « Lun. » (une seule occurrence de lundi dans la plage)
-    expect(p.jours.filter((j) => j.label.startsWith('Lun.')).length).toBe(1);
+function jour(date: string, actif = true, creneaux: CreneauPlanningDate[] = [creneau(date)]): JourPlanningDate {
+  return { date, actif, creneaux };
+}
+
+describe('planning exact par date', () => {
+  it('conserve chaque date réelle et exclut explicitement les dates de repos', () => {
+    const dates = datesDansPlage('2026-07-22', '2026-07-29');
+    expect(dates).toEqual([
+      '2026-07-22', '2026-07-23', '2026-07-24', '2026-07-25',
+      '2026-07-26', '2026-07-27', '2026-07-28', '2026-07-29',
+    ]);
+
+    const resultat = materialiserPlanning([
+      jour('2026-07-22'),
+      jour('2026-07-23', false),
+      jour('2026-07-29', true, [creneau('dernier', '09:00', '13:00')]),
+    ]);
+    expect(resultat.map((item) => item.date)).toEqual(['2026-07-22', '2026-07-29']);
   });
 
-  it('plage sans lundi : zéro Lundi (ni affiché ni cochable)', () => {
-    const p = derivePlanning('2026-07-21', '2026-07-24'); // mardi → vendredi
-    expect(p.jours.some((j) => j.jourISO === 1)).toBe(false);
-    expect(p.jours.every((j) => !j.label.startsWith('Lun'))).toBe(true);
-    expect(p.jours[0].label).toBe('Mar. 21/07');
+  it('autorise plusieurs créneaux non chevauchants sur la même date', () => {
+    const planning = [jour('2026-08-03', true, [
+      creneau('matin', '07:00', '11:00'),
+      creneau('soir', '15:00', '19:00'),
+    ])];
+    const validation = validerPlanningDates(planning);
+    expect(validation.valide).toBe(true);
+    expect(materialiserPlanning(planning)).toHaveLength(2);
+    expect(validation.semaines[0].totalHeures).toBe(8);
   });
 
-  it("mission d'un seul jour", () => {
-    const p = derivePlanning('2026-07-22', '2026-07-22');
-    expect(p.nbJours).toBe(1);
-    expect(p.jours).toHaveLength(1);
-    expect(p.jours[0].label).toBe('Mer. 22/07');
-  });
-
-  it('chevauchement de mois', () => {
-    const p = derivePlanning('2026-07-30', '2026-08-03');
-    expect(p.jours[0].label).toBe('Jeu. 30/07');
-    const dates = p.jours.flatMap((j) => j.occurrences);
-    expect(dates).toContain('2026-07-31');
-    expect(dates).toContain('2026-08-01');
-    expect(dates).toContain('2026-08-03');
-  });
-
-  it("chevauchement d'année", () => {
-    const p = derivePlanning('2026-12-30', '2027-01-02');
-    expect(p.nbJours).toBe(4);
-    const dates = p.jours.flatMap((j) => j.occurrences);
-    expect(dates).toContain('2026-12-31');
-    expect(dates).toContain('2027-01-01');
-  });
-
-  it('plage > 14 jours : libellés abstraits (motif hebdomadaire)', () => {
-    const p = derivePlanning('2026-07-01', '2026-07-20'); // 20 jours
-    expect(p.datesLabels).toBe(false);
-    expect(p.jours[0].label).toBe('Mercredi'); // 01/07/2026 = mercredi
-  });
-
-  it('plage invalide (fin < début) ou vide → rien', () => {
-    expect(derivePlanning('2026-07-29', '2026-07-22').jours).toHaveLength(0);
-    expect(derivePlanning('', '').jours).toHaveLength(0);
+  it('bloque deux créneaux qui se chevauchent', () => {
+    const validation = validerPlanningDates([jour('2026-08-03', true, [
+      creneau('un', '07:00', '12:00'),
+      creneau('deux', '11:30', '16:00'),
+    ])]);
+    expect(validation.valide).toBe(false);
+    expect(validation.erreurs.some((erreur) => erreur.type === 'CHEVAUCHEMENT')).toBe(true);
   });
 });
 
-describe('libelleDate', () => {
-  it('formate « Mer. 22/07 »', () => {
-    expect(libelleDate('2026-07-22')).toBe('Mer. 22/07');
-    expect(libelleDate('2026-07-27')).toBe('Lun. 27/07');
+describe('nuits, fuseau Europe/Paris et repos réel', () => {
+  it('calcule exactement les fractions de nuit aux bornes 21 h et 06 h', () => {
+    expect(calculerHeuresNuitParis([
+      { debut: '2026-08-03T18:45:00.000Z', fin: '2026-08-03T19:15:00.000Z' },
+      { debut: '2026-08-04T03:45:00.000Z', fin: '2026-08-04T04:15:00.000Z' },
+    ])).toBe(0.5);
+  });
+
+  it("respecte la durée absolue de la nuit lors du passage à l'heure d'été", () => {
+    expect(calculerHeuresNuitParis([
+      { debut: '2026-03-28T20:00:00.000Z', fin: '2026-03-29T04:00:00.000Z' },
+    ])).toBe(8);
+  });
+
+  it('exige explicitement « lendemain » lorsque la fin est avant le début', () => {
+    const invalide = materialiserCreneau('2026-08-02', creneau('nuit', '20:00', '08:00', false));
+    const valide = materialiserCreneau('2026-08-02', creneau('nuit', '20:00', '08:00', true));
+    expect(invalide.valeur).toBeNull();
+    expect(valide.valeur?.dateFin).toBe('2026-08-03');
+    expect(valide.valeur?.dureeHeures).toBe(12);
+  });
+
+  it('détecte le repos insuffisant du dimanche soir au lundi matin', () => {
+    const validation = validerPlanningDates([
+      jour('2026-08-02', true, [creneau('dimanche-nuit', '20:00', '08:00', true)]),
+      jour('2026-08-03', true, [creneau('lundi', '09:00', '17:00')]),
+    ]);
+    const erreur = validation.erreurs.find((item) => item.type === 'REPOS_11H');
+    expect(validation.valide).toBe(false);
+    expect(erreur?.datesAffectees).toEqual(['2026-08-02', '2026-08-03']);
+    expect(erreur?.message).toContain('1 h');
+  });
+
+  it("calcule la durée absolue lors du passage à l'heure d'été à Paris", () => {
+    const resultat = materialiserCreneau('2026-03-29', creneau('dst', '01:00', '05:00'));
+    expect(resultat.erreur).toBeNull();
+    expect(resultat.valeur?.dureeHeures).toBe(3);
+    expect(resultat.valeur?.debut).toBe('2026-03-29T00:00:00.000Z');
+    expect(resultat.valeur?.fin).toBe('2026-03-29T03:00:00.000Z');
+  });
+
+  it("refuse un creneau dont l'heure saisie n'existe pas a Paris", () => {
+    const resultat = materialiserCreneau('2026-03-29', creneau('trou-dst', '02:30', '05:00'));
+
+    expect(resultat.valeur).toBeNull();
+    expect(resultat.erreur).toContain("n\u2019existe pas à Paris");
+    const validation = validerPlanningDates([
+      jour('2026-03-29', true, [creneau('trou-dst', '02:30', '05:00')]),
+    ]);
+    expect(validation.valide).toBe(false);
+    expect(validation.erreurs).toEqual(expect.arrayContaining([
+      expect.objectContaining({ type: 'CRENEAU_INVALIDE', gravite: 'bloquant' }),
+    ]));
+  });
+
+  it("conserve l'occurrence initiale exacte pendant l'heure répétée d'automne", () => {
+    const resultat = materialiserCreneau('2026-10-25', {
+      clientId: 'heure-repetee',
+      heureDebut: '02:30',
+      heureFin: '03:30',
+      finJourSuivant: false,
+      debutInitial: '2026-10-25T00:30:00.000Z',
+      finInitial: '2026-10-25T02:30:00.000Z',
+    });
+
+    expect(resultat.erreur).toBeNull();
+    expect(resultat.valeur).toEqual(expect.objectContaining({
+      debut: '2026-10-25T00:30:00.000Z',
+      fin: '2026-10-25T02:30:00.000Z',
+      dureeHeures: 2,
+    }));
+  });
+
+  it("bloque une nouvelle saisie ambiguë pendant l'heure répétée d'automne", () => {
+    const resultat = materialiserCreneau('2026-10-25', creneau('heure-repetee-nouvelle', '02:30', '03:30'));
+
+    expect(resultat.valeur).toBeNull();
+    expect(resultat.erreur).toContain('existe deux fois');
+  });
+
+  it("préserve séparément une borne initiale ambiguë quand l'autre est modifiée", () => {
+    const resultat = materialiserCreneau('2026-10-25', {
+      clientId: 'heure-repetee-modifiee',
+      heureDebut: '02:30',
+      heureFin: '04:30',
+      finJourSuivant: false,
+      debutInitial: '2026-10-25T00:30:00.000Z',
+      finInitial: '2026-10-25T02:30:00.000Z',
+    });
+
+    expect(resultat.erreur).toBeNull();
+    expect(resultat.valeur).toEqual(expect.objectContaining({
+      debut: '2026-10-25T00:30:00.000Z',
+      fin: '2026-10-25T03:30:00.000Z',
+      dureeHeures: 3,
+    }));
   });
 });
 
-describe('validerPlanning — garde-fou 48h par semaine CIVILE réelle', () => {
-  it('22→29/07 tout coché à 12h : semaine du 20/07 = 60h (dépasse), 27/07 = 36h, invalide', () => {
-    const v = validerPlanning('2026-07-22', '2026-07-29', semaineComplete(12));
-    const s2007 = v.semaines.find((s) => s.labelCourt === '20/07');
-    const s2707 = v.semaines.find((s) => s.labelCourt === '27/07');
-    expect(s2007?.totalHeures).toBe(60); // 22,23,24,25,26 → 5 × 12h
-    expect(s2007?.depasse48).toBe(true);
-    expect(s2707?.totalHeures).toBe(36); // 27,28,29 → 3 × 12h
-    expect(s2707?.depasse48).toBe(false);
-    expect(v.valide).toBe(false);
-    expect(v.erreurs.some((e) => e.type === 'PLAFOND_48H' && e.semaine === '20/07')).toBe(true);
-    expect(v.totalHebdo).toBe(60);
+describe('plafond de 48 h par semaine civile réelle', () => {
+  it('bloque 50 h réparties sur cinq dates de la même semaine', () => {
+    const planning = ['2026-07-20', '2026-07-21', '2026-07-22', '2026-07-23', '2026-07-24']
+      .map((date) => jour(date, true, [creneau(date, '07:00', '17:00')]));
+    const validation = validerPlanningDates(planning);
+    expect(validation.semaines).toHaveLength(1);
+    expect(validation.semaines[0].totalHeures).toBe(50);
+    expect(validation.semaines[0].depasse48).toBe(true);
+    expect(validation.valide).toBe(false);
   });
 
-  it('semaine à cheval contrôlée séparément — une seule semaine ≤ 48h est valide', () => {
-    // lun 20 → dim 26 juillet, 4 jours à 10h = 40h, une seule semaine
-    const h = [1, 2, 3, 4].map((i) => hj(i, true, 10)).concat([5, 6, 7].map((i) => hj(i, false, 10)));
-    const v = validerPlanning('2026-07-20', '2026-07-26', h);
-    expect(v.semaines).toHaveLength(1);
-    expect(v.semaines[0].totalHeures).toBe(40);
-    expect(v.valide).toBe(true);
-  });
-});
-
-describe('semainesCiviles — occurrences réelles regroupées lundi-dimanche', () => {
-  it('compte chaque occurrence réelle (mercredi présent deux fois)', () => {
-    const s = semainesCiviles('2026-07-22', '2026-07-29', semaineComplete(12));
-    // total sur les deux semaines = 8 jours × 12h
-    expect(s.reduce((t, w) => t + w.totalHeures, 0)).toBe(96);
-    expect(s.map((w) => w.labelCourt)).toEqual(['20/07', '27/07']);
+  it('répartit une garde dimanche→lundi entre les deux semaines civiles', () => {
+    const validation = validerPlanningDates([
+      jour('2026-08-02', true, [creneau('nuit', '22:00', '06:00', true)]),
+    ]);
+    expect(validation.semaines.map((semaine) => [semaine.cleLundi, semaine.totalHeures])).toEqual([
+      ['2026-07-27', 2],
+      ['2026-08-03', 6],
+    ]);
   });
 });

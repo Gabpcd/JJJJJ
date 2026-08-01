@@ -152,6 +152,47 @@ export function instantDateHeureParis({
   for (let iteration = 0; iteration < 3; iteration += 1) {
     instant = new Date(cibleUtc - decalageParisMinutes(instant) * 60_000);
   }
+
+  // `Date` normalise silencieusement les dates civiles impossibles. C'est
+  // particulièrement dangereux au passage a l'heure d'ete : 02:30 n'existe
+  // pas a Paris le 29/03/2026 et etait auparavant transformee en une autre
+  // heure. Un planning doit conserver exactement l'heure saisie ou la refuser.
+  const obtenue = partiesDateHeureParis(instant);
+  if (
+    obtenue.annee !== annee
+    || obtenue.mois !== mois
+    || obtenue.jour !== jour
+    || obtenue.heure !== heure
+    || obtenue.minute !== minute
+    || obtenue.seconde !== seconde
+  ) {
+    throw new RangeError(
+      `Date/heure inexistante dans le fuseau ${FUSEAU_HORAIRE_JOLENE}: `
+      + `${String(annee).padStart(4, '0')}-${String(mois).padStart(2, '0')}-${String(jour).padStart(2, '0')}T`
+      + `${String(heure).padStart(2, '0')}:${String(minute).padStart(2, '0')}:${String(seconde).padStart(2, '0')}`,
+    );
+  }
+
+  // Au retour à l'heure d'hiver, une heure telle que 02:30 désigne deux
+  // instants différents. Sans offset ou choix explicite de l'occurrence, en
+  // sélectionner une arbitrairement rendrait le planning contractuel ambigu.
+  const correspondA = (candidate: Date) => {
+    const parties = partiesDateHeureParis(candidate);
+    return parties.annee === annee
+      && parties.mois === mois
+      && parties.jour === jour
+      && parties.heure === heure
+      && parties.minute === minute
+      && parties.seconde === seconde;
+  };
+  if (correspondA(new Date(instant.getTime() - 3_600_000))
+    || correspondA(new Date(instant.getTime() + 3_600_000))) {
+    throw new RangeError(
+      `Date/heure ambiguë dans le fuseau ${FUSEAU_HORAIRE_JOLENE}: `
+      + `${String(annee).padStart(4, '0')}-${String(mois).padStart(2, '0')}-${String(jour).padStart(2, '0')}T`
+      + `${String(heure).padStart(2, '0')}:${String(minute).padStart(2, '0')}:${String(seconde).padStart(2, '0')}`,
+    );
+  }
   return instant;
 }
 
