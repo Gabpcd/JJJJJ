@@ -4,7 +4,10 @@ import { BadgeDistance } from '@/components/BadgeDistance';
 import type { CreneauPointage } from '@/lib/disponibilite-pointage';
 import { formatParis, instantJolene, memeJourParis } from '@/lib/date-heure-paris';
 import { construirePlanningCandidat } from '@/components/planning/planning-candidat';
-import { montantFinanceAfficheMission } from '@/lib/missionFinanceDisplay';
+import {
+  montantFinanceAfficheMission,
+  type NatureMontantMissionAffiche,
+} from '@/lib/missionFinanceDisplay';
 
 interface CarteSerieProps {
   missions: any[];
@@ -50,7 +53,7 @@ export function CarteSerie({ missions, role, soignant, onAnnulerSerie }: CarteSe
   const apercuCreneaux = creneauxSerie.slice(0, 3);
   const tauxUniques = new Set(missions.map((mission) => Number(mission.taux_horaire_base)).filter(Number.isFinite));
 
-  const montantsParNature = missions.reduce((totaux, mission) => {
+  const montantsParNature = missions.reduce<Record<NatureMontantMissionAffiche, number>>((totaux, mission) => {
     const finance = montantFinanceAfficheMission(mission);
     if (finance) totaux[finance.nature] += finance.montant;
     return totaux;
