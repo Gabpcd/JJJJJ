@@ -104,7 +104,12 @@ describe('planning exact de bout en bout', () => {
 
   it('élargit la précision de durée dans une migration courte préalable', () => {
     expect(migrationDuree.trimStart()).toMatch(/^--[\s\S]*\nBEGIN;/);
+    expect(migrationDuree).toContain('pg_get_triggerdef');
+    expect(migrationDuree).toContain('pg_catalog.pg_depend');
+    expect(migrationDuree).toContain('DROP TRIGGER %I ON public.missions');
     expect(migrationDuree).toContain('ALTER COLUMN duree_heures TYPE numeric(7, 2)');
+    expect(migrationDuree).toContain('EXECUTE v_trigger.definition');
+    expect(migrationDuree).toContain("n''a pas été restauré");
     expect(migrationDuree).toContain('numeric_precision');
     expect(migrationDuree).toContain('numeric_scale');
     expect(migrationDuree.trimEnd()).toMatch(/COMMIT;$/);
