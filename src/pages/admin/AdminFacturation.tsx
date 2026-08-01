@@ -7,7 +7,6 @@ import { ChargementAdmin } from '@/components/admin/ChargementAdmin';
 import { AdminPageHeader } from '@/components/admin/AdminPageHeader';
 import { AdminSummaryStrip } from '@/components/admin/AdminSummaryStrip';
 import { supabase } from '@/integrations/supabase/client';
-import { Button } from '@/components/ui/button';
 import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { BadgeY2K } from '@/components/y2k/BadgeY2K';
 import { Input } from '@/components/ui/input';
@@ -20,6 +19,7 @@ import jsPDF from 'jspdf';
 import { BoutonsBulkFactures } from '@/components/admin/BoutonsBulkFactures';
 import { Checkbox } from '@/components/ui/checkbox';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { estDocumentComptabilise, montantDocumentComptable } from '@/lib/adminInvoiceAccounting';
 
 const formatEur = (v: number) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(v);
 const formatDate = (d: string) => new Date(d).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' }).replace(/ /g, '\u00a0');
@@ -51,13 +51,19 @@ const statutLabel: Record<string, string> = {
  * Bloc détail factures rattachées — utilisé en desktop (TableRow colSpan)
  * et mobile (div standalone à l'intérieur d'une card).
  */
-function FactureDetailContenu({ missions, loading, mode }: { missions: any[]; loading: boolean; mode: 'desktop' | 'mobile' }) {
+function FactureDetailContenu({ missions, loading, error, mode }: { missions: any[]; loading: boolean; error: string | null; mode: 'desktop' | 'mobile' }) {
   const navigate = useNavigate();
 
   if (loading) return (
     <div className="py-4">
       <Loader2 className="h-4 w-4 animate-spin mx-auto text-muted-foreground" />
     </div>
+  );
+
+  if (error) return (
+    <p className="py-4 text-center text-xs font-medium text-destructive" role="alert">
+      Missions indisponibles : {error}
+    </p>
   );
 
   if (missions.length === 0) return (
@@ -170,46 +176,61 @@ function FactureDetailContenu({ missions, loading, mode }: { missions: any[]; lo
 function useMissionsFacture(factureId: string) {
   const [missions, setMissions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    (supabase
-      .from('missions')
-      .select('id, intitule, profession_requise, debut_le, fin_le, duree_heures, taux_horaire_base, total_brut, montant_commission_ht, montant_commission_ttc, soignant_assigne_id')
-      .eq('facture_id', factureId)
-      .order('debut_le', { ascending: true }) as any)
-      .then(async ({ data }: any) => {
+    let actif = true;
+    void (async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const { data, error: missionsError } = await (supabase
+          .from('missions')
+          .select('id, intitule, profession_requise, debut_le, fin_le, duree_heures, taux_horaire_base, total_brut, montant_commission_ht, montant_commission_ttc, soignant_assigne_id')
+          .eq('facture_id', factureId)
+          .order('debut_le', { ascending: true }) as any);
+        if (missionsError) throw missionsError;
         const mList = (data as any[]) || [];
         const sgIds = [...new Set(mList.map((m: any) => m.soignant_assigne_id).filter(Boolean))];
         const sgMap: Record<string, any> = {};
         if (sgIds.length > 0) {
-          const { data: sgData } = await supabase.from('soignants').select('id, prenom, nom').in('id', sgIds);
+          const { data: sgData, error: soignantsError } = await supabase.from('soignants').select('id, prenom, nom').in('id', sgIds);
+          if (soignantsError) throw soignantsError;
           if (sgData) for (const s of sgData) sgMap[s.id] = s;
         }
-        setMissions(mList.map((m: any) => ({ ...m, soignants: m.soignant_assigne_id ? sgMap[m.soignant_assigne_id] || null : null })));
-        setLoading(false);
-      })
-      .catch((err: any) => { console.warn('useMissionsFacture fetch error:', err); setLoading(false); });
+        if (actif) setMissions(mList.map((m: any) => ({ ...m, soignants: m.soignant_assigne_id ? sgMap[m.soignant_assigne_id] || null : null })));
+      } catch (fetchError: any) {
+        console.error('useMissionsFacture fetch error', fetchError);
+        if (actif) {
+          setMissions([]);
+          setError(fetchError?.message || 'chargement impossible');
+        }
+      } finally {
+        if (actif) setLoading(false);
+      }
+    })();
+    return () => { actif = false; };
   }, [factureId]);
 
-  return { missions, loading };
+  return { missions, loading, error };
 }
 
 function FactureDetailRow({ factureId }: { factureId: string }) {
-  const { missions, loading } = useMissionsFacture(factureId);
+  const { missions, loading, error } = useMissionsFacture(factureId);
   return (
     <TableRow>
       <TableCell colSpan={10} className="bg-muted/30 p-0">
-        <FactureDetailContenu missions={missions} loading={loading} mode="desktop" />
+        <FactureDetailContenu missions={missions} loading={loading} error={error} mode="desktop" />
       </TableCell>
     </TableRow>
   );
 }
 
 function FactureDetailMobile({ factureId }: { factureId: string }) {
-  const { missions, loading } = useMissionsFacture(factureId);
+  const { missions, loading, error } = useMissionsFacture(factureId);
   return (
     <div className="bg-muted/30 rounded-lg p-3 -mx-1">
-      <FactureDetailContenu missions={missions} loading={loading} mode="mobile" />
+      <FactureDetailContenu missions={missions} loading={loading} error={error} mode="mobile" />
     </div>
   );
 }
@@ -219,90 +240,33 @@ function FactureDetailMobile({ factureId }: { factureId: string }) {
  * un seul fetch, rendu desktop sur md+ et rendu mobile en dessous.
  */
 function FactureDetailATraiter({ factureId }: { factureId: string }) {
-  const { missions, loading } = useMissionsFacture(factureId);
+  const { missions, loading, error } = useMissionsFacture(factureId);
   return (
     <div className="bg-muted/30 rounded-lg">
       <div className="hidden md:block">
-        <FactureDetailContenu missions={missions} loading={loading} mode="desktop" />
+        <FactureDetailContenu missions={missions} loading={loading} error={error} mode="desktop" />
       </div>
       <div className="md:hidden p-3">
-        <FactureDetailContenu missions={missions} loading={loading} mode="mobile" />
+        <FactureDetailContenu missions={missions} loading={loading} error={error} mode="mobile" />
       </div>
     </div>
   );
 }
 
-// Jolene brand teal — used in PDF generation where CSS vars are unavailable
+// Jolene brand teal — used in the accounting report where CSS vars are unavailable.
 const PDF_BRAND_COLOR = { r: 23, g: 162, b: 184 } as const;
 
-function genererFacturePDF(facture: any) {
-  const doc = new jsPDF();
-  const etab = (facture.etablissements as any)?.nom ?? 'Établissement';
-
-  // Header
-  doc.setFillColor(PDF_BRAND_COLOR.r, PDF_BRAND_COLOR.g, PDF_BRAND_COLOR.b);
-  doc.rect(0, 0, 210, 35, 'F');
-  doc.setTextColor(255, 255, 255);
-  doc.setFontSize(20);
-  doc.text('FACTURE', 14, 18);
-  doc.setFontSize(11);
-  doc.text(facture.numero_facture || '—', 14, 28);
-
-  // Company info
-  doc.setTextColor(0, 0, 0);
-  doc.setFontSize(10);
-  doc.text('Jolene SAS', 14, 46);
-  doc.text('Plateforme de mise en relation soignants', 14, 52);
-
-  // Client
-  doc.setFontSize(10);
-  doc.text('Facturé à :', 120, 46);
-  doc.setFont('helvetica', 'bold');
-  doc.text(etab, 120, 52);
-  doc.setFont('helvetica', 'normal');
-
-  // Details
-  let y = 70;
-  doc.setFontSize(9);
-  const addLine = (label: string, value: string) => {
-    doc.text(label, 14, y);
-    doc.text(value, 100, y);
-    y += 7;
-  };
-
-  addLine('Date d\'émission :', facture.date_emission ? formatDate(facture.date_emission) : '—');
-  addLine('Date d\'échéance :', facture.date_echeance ? formatDate(facture.date_echeance) : '—');
-  addLine('Nombre de missions :', String(facture.nombre_missions || 0));
-  addLine('Statut :', facture.statut || '—');
-
-  y += 5;
-  doc.setDrawColor(200, 200, 200);
-  doc.line(14, y, 196, y);
-  y += 10;
-
-  // Amounts
-  doc.setFontSize(11);
-  doc.setFont('helvetica', 'bold');
-  doc.text('Montant HT', 14, y); doc.text(formatEur(facture.montant_ht), 160, y, { align: 'right' }); y += 8;
-  doc.setFont('helvetica', 'normal');
-  doc.text(`TVA (${facture.taux_tva ?? 20}%)`, 14, y); doc.text(formatEur(facture.montant_tva), 160, y, { align: 'right' }); y += 8;
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(13);
-  doc.text('Total TTC', 14, y); doc.text(formatEur(facture.montant_ttc), 160, y, { align: 'right' });
-
-  // Footer
-  doc.setFontSize(7);
-  doc.setFont('helvetica', 'normal');
-  doc.setTextColor(120, 120, 120);
-  doc.text('Jolene SAS — Document généré automatiquement', 14, 285);
-
-  void telechargerOuPartagerPdf(doc, `facture_${facture.numero_facture || facture.id}.pdf`);
-  toast.success(`Facture ${facture.numero_facture} téléchargée`);
+export function libellePerimetreRapport(filtreStatut: string, recherche: string): string {
+  const segments = [filtreStatut === 'TOUS' ? 'tous statuts' : `statut ${statutLabel[filtreStatut] ?? filtreStatut}`];
+  const terme = recherche.trim();
+  if (terme) segments.push(`recherche « ${terme} »`);
+  return segments.join(' · ');
 }
 export default function AdminFacturation() {
   usePageTitle('Facturation');
   const [factures, setFactures] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [generating, setGenerating] = useState(false);
   const [actionId, setActionId] = useState<string | null>(null);
   const [filtreStatut, setFiltreStatut] = useState('TOUS');
@@ -321,14 +285,30 @@ export default function AdminFacturation() {
 
   const charger = async () => {
     setLoading(true);
+    setLoadError(null);
     try {
-      const { data } = await supabase.from('factures')
-        .select('id, numero_facture, montant_ht, montant_tva, montant_ttc, statut, date_emission, date_echeance, nombre_missions, etablissement_id, virement_reference, etablissements(nom)')
-        .order('date_emission', { ascending: false })
-        .limit(500);
-      if (data) setFactures(data);
-    } catch (err) { console.warn('charger factures error:', err); }
-    setLoading(false);
+      const toutes: any[] = [];
+      const taillePage = 1000;
+      for (let offset = 0; ; offset += taillePage) {
+        const { data, error } = await supabase.from('factures')
+          .select('id, numero_facture, montant_ht, montant_tva, montant_ttc, montant_signe, type_document, statut, date_emission, date_echeance, nombre_missions, etablissement_id, virement_reference, etablissements(nom)')
+          .order('date_emission', { ascending: false })
+          .order('id', { ascending: false })
+          .range(offset, offset + taillePage - 1);
+        if (error) throw error;
+        if (!data) throw new Error('Réponse factures absente');
+        const page = data;
+        toutes.push(...page);
+        if (page.length < taillePage) break;
+      }
+      setFactures(toutes);
+    } catch (error: any) {
+      console.error('charger factures error', error);
+      setFactures([]);
+      setLoadError(error?.message || 'Impossible de charger la facturation.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => { charger(); }, []);
@@ -362,10 +342,16 @@ export default function AdminFacturation() {
     [filtered]
   );
 
+  const documentsComptabilises = useMemo(
+    () => filtered.filter(estDocumentComptabilise),
+    [filtered],
+  );
+
   const totaux = useMemo(() => ({
-    ht: filtered.reduce((s, f) => s + (f.montant_ht || 0), 0),
-    ttc: filtered.reduce((s, f) => s + (f.montant_ttc || 0), 0),
-  }), [filtered]);
+    ht: documentsComptabilises.reduce((s, f) => s + montantDocumentComptable(f, 'ht'), 0),
+    tva: documentsComptabilises.reduce((s, f) => s + montantDocumentComptable(f, 'tva'), 0),
+    ttc: documentsComptabilises.reduce((s, f) => s + montantDocumentComptable(f, 'ttc'), 0),
+  }), [documentsComptabilises]);
 
   // Sélection bulk : factures cochées parmi celles actuellement visibles
   // (cartes « À traiter » + liste historique filtrée).
@@ -375,7 +361,7 @@ export default function AdminFacturation() {
       .map((f: any) => ({
         id: f.id,
         numero: f.numero_facture,
-        montant_ttc: f.montant_ttc,
+        montant_ttc: montantDocumentComptable(f, 'ttc'),
         statut: f.statut,
         date_emission: f.date_emission,
         etablissement_nom: (f.etablissements as any)?.nom ?? null,
@@ -455,34 +441,57 @@ export default function AdminFacturation() {
     doc.rect(0, 0, 210, 30, 'F');
     doc.setTextColor(255, 255, 255);
     doc.setFontSize(18);
-    doc.text('Jolene — Rapport mensuel', 14, 20);
+    doc.text('Jolene — Rapport de facturation', 14, 20);
     doc.setTextColor(0, 0, 0);
     doc.setFontSize(11);
-    const mois = new Date().toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
-    doc.text(`Période : ${mois}`, 14, 42);
-    doc.text(`Factures : ${filtered.length}`, 14, 50);
+    const libellePerimetre = libellePerimetreRapport(filtreStatut, recherche);
+    doc.text(`Périmètre : ${libellePerimetre}`, 14, 42);
+    doc.text(`Documents comptabilisés : ${documentsComptabilises.length}`, 14, 50);
     doc.text(`Total HT : ${formatEur(totaux.ht)}`, 14, 58);
-    doc.text(`Total TTC : ${formatEur(totaux.ttc)}`, 14, 66);
+    doc.text(`TVA : ${formatEur(totaux.tva)} · Total TTC : ${formatEur(totaux.ttc)}`, 14, 66);
     let y = 80;
     doc.setFontSize(9);
     doc.setFont('helvetica', 'bold');
-    doc.text('N° Facture', 14, y); doc.text('Établissement', 55, y); doc.text('HT', 130, y); doc.text('TTC', 155, y); doc.text('Statut', 180, y);
-    y += 6;
-    doc.setFont('helvetica', 'normal');
-    filtered.slice(0, 50).forEach((f: any) => {
-      if (y > 275) { doc.addPage(); y = 20; }
+    const dessinerEntete = () => {
+      doc.setFont('helvetica', 'bold');
+      doc.text('N° document', 14, y); doc.text('Type', 50, y); doc.text('Établissement', 70, y); doc.text('HT', 138, y); doc.text('TTC', 163, y); doc.text('Statut', 187, y);
+      y += 6;
+      doc.setFont('helvetica', 'normal');
+    };
+    dessinerEntete();
+    documentsComptabilises.forEach((f: any) => {
+      if (y > 275) {
+        doc.addPage();
+        y = 20;
+        dessinerEntete();
+      }
       doc.text(f.numero_facture || '—', 14, y);
-      doc.text(((f.etablissements as any)?.nom ?? '—').substring(0, 30), 55, y);
-      doc.text(formatEur(f.montant_ht), 130, y);
-      doc.text(formatEur(f.montant_ttc), 155, y);
-      doc.text(f.statut || '—', 180, y);
+      doc.text(f.type_document === 'AVOIR' ? 'Avoir' : 'Facture', 50, y);
+      doc.text(((f.etablissements as any)?.nom ?? '—').substring(0, 27), 70, y);
+      doc.text(formatEur(montantDocumentComptable(f, 'ht')), 138, y);
+      doc.text(formatEur(montantDocumentComptable(f, 'ttc')), 163, y);
+      doc.text(f.statut || '—', 187, y);
       y += 5;
     });
-    await telechargerOuPartagerPdf(doc, `rapport_mensuel_${new Date().toISOString().slice(0, 7)}.pdf`);
+    await telechargerOuPartagerPdf(doc, `rapport_facturation_${new Date().toISOString().slice(0, 10)}.pdf`);
     toast.success('Rapport PDF généré');
   };
 
   if (loading) return <LayoutAdmin><ChargementAdmin titre="Facturation" /></LayoutAdmin>;
+
+  if (loadError) {
+    return (
+      <LayoutAdmin>
+        <BreadcrumbAdmin pageName="Facturation" />
+        <div className="mx-auto max-w-2xl rounded-xl border border-destructive/40 bg-destructive/5 p-6 text-center">
+          <XCircle className="mx-auto h-8 w-8 text-destructive" />
+          <h1 className="mt-3 text-lg font-bold text-foreground">Facturation indisponible</h1>
+          <p className="mt-1 text-sm text-muted-foreground">{loadError}</p>
+          <BoutonY2K className="mt-4" onClick={charger}>Réessayer</BoutonY2K>
+        </div>
+      </LayoutAdmin>
+    );
+  }
 
   return (
     <LayoutAdmin>
@@ -519,9 +528,19 @@ export default function AdminFacturation() {
               variant="secondary"
               onClick={async () => {
                 const { data, error } = await supabase.functions.invoke('sepa-auto-charge');
-                if (error) { toast.error('Erreur prélèvement SEPA'); return; }
-                if (data?.charged > 0) toast.success(`${data.charged} facture(s) prélevée(s) par SEPA`);
-                else toast.info('Aucune facture SEPA à prélever');
+                if (error || data?.success !== true) { toast.error(data?.error || 'Erreur prélèvement SEPA'); return; }
+                const charged = Number(data.charged ?? 0);
+                const failed = Number(data.failed ?? 0);
+                const skippedTest = Number(data.skipped_test ?? 0);
+                if (charged > 0 && failed === 0) {
+                  toast.success(`${charged} facture(s) prélevée(s) par SEPA${skippedTest > 0 ? ` · ${skippedTest} donnée(s) de test neutralisée(s)` : ''}`);
+                } else if (charged > 0 || failed > 0) {
+                  toast.warning(`${charged} prélèvement(s) confirmé(s), ${failed} échec(s), ${skippedTest} donnée(s) de test neutralisée(s).`);
+                } else if (skippedTest > 0) {
+                  toast.info(`${skippedTest} facture(s) de test neutralisée(s) — aucun prélèvement réel.`);
+                } else {
+                  toast.info('Aucune facture SEPA à prélever');
+                }
                 charger();
               }}
               className="gap-2"
@@ -539,7 +558,7 @@ export default function AdminFacturation() {
               id: 'total-ht',
               label: 'Total HT',
               value: formatEur(totaux.ht),
-              detail: `${filtered.length} facture${filtered.length > 1 ? 's' : ''} dans le périmètre`,
+              detail: `${documentsComptabilises.length} document${documentsComptabilises.length > 1 ? 's' : ''} comptabilisé${documentsComptabilises.length > 1 ? 's' : ''}`,
               icon: <FileText className="h-4 w-4" />,
               tone: 'primary',
             },
@@ -547,6 +566,7 @@ export default function AdminFacturation() {
               id: 'total-ttc',
               label: 'Total TTC',
               value: formatEur(totaux.ttc),
+              detail: `dont ${formatEur(totaux.tva)} de TVA`,
               icon: <CreditCard className="h-4 w-4" />,
             },
             {
@@ -624,13 +644,13 @@ export default function AdminFacturation() {
                         </button>
                       </div>
                       <div className="text-right shrink-0">
-                        <p className="font-semibold text-sm">{formatEur(f.montant_ttc)}</p>
+                        <p className="font-semibold text-sm">{formatEur(montantDocumentComptable(f, 'ttc'))}</p>
                         <p className="text-[10px] text-muted-foreground">TTC</p>
                       </div>
                     </div>
 
                     <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground pl-7">
-                      <span>HT : <span className="text-foreground font-medium">{formatEur(f.montant_ht)}</span></span>
+                      <span>HT : <span className="text-foreground font-medium">{formatEur(montantDocumentComptable(f, 'ht'))}</span></span>
                       <span>Missions : <span className="text-foreground font-medium">{f.nombre_missions}</span></span>
                       <span>Émise le : <span className="text-foreground font-medium">{f.date_emission ? formatDate(f.date_emission) : '—'}</span></span>
                       <span>Échéance : <span className={enRetard ? 'text-destructive font-semibold' : 'text-foreground font-medium'}>{f.date_echeance ? formatDate(f.date_echeance) : '—'}</span></span>
@@ -672,16 +692,6 @@ export default function AdminFacturation() {
                         iconeGauche={isExpanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
                       >
                         {isExpanded ? 'Masquer missions' : 'Voir missions'}
-                      </BoutonY2K>
-                      <BoutonY2K
-                        variant="ghost"
-                        size="sm"
-                        className="min-h-[36px] px-3"
-                        title="Télécharger la facture PDF"
-                        aria-label="Télécharger la facture PDF"
-                        onClick={() => genererFacturePDF(f)}
-                      >
-                        <Download className="h-4 w-4" />
                       </BoutonY2K>
                     </div>
 
@@ -792,8 +802,8 @@ export default function AdminFacturation() {
                                 <ExternalLink className="h-3 w-3 shrink-0" />
                               </button>
                             </TableCell>
-                            <TableCell>{formatEur(f.montant_ht)}</TableCell>
-                            <TableCell className="font-medium">{formatEur(f.montant_ttc)}</TableCell>
+                            <TableCell>{formatEur(montantDocumentComptable(f, 'ht'))}</TableCell>
+                            <TableCell className="font-medium">{formatEur(montantDocumentComptable(f, 'ttc'))}</TableCell>
                             <TableCell>{f.nombre_missions}</TableCell>
                             <TableCell className="text-xs text-muted-foreground">{f.date_emission ? formatDate(f.date_emission) : '—'}</TableCell>
                             <TableCell>
@@ -801,17 +811,7 @@ export default function AdminFacturation() {
                                 {statutLabel[f.statut] ?? f.statut}
                               </BadgeY2K>
                             </TableCell>
-                            <TableCell className="w-auto pr-2">
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8"
-                                title="Télécharger la facture PDF"
-                                onClick={(e) => { e.stopPropagation(); genererFacturePDF(f); }}
-                              >
-                                <Download className="h-4 w-4" />
-                              </Button>
-                            </TableCell>
+                            <TableCell className="w-auto pr-2" />
                           </TableRow>
                           {isExpanded && <FactureDetailRow factureId={f.id} />}
                         </React.Fragment>
@@ -900,11 +900,11 @@ export default function AdminFacturation() {
                           <div className="grid grid-cols-2 gap-2 text-xs pl-7">
                             <div>
                               <p className="text-muted-foreground">HT</p>
-                              <p className="font-medium">{formatEur(f.montant_ht)}</p>
+                              <p className="font-medium">{formatEur(montantDocumentComptable(f, 'ht'))}</p>
                             </div>
                             <div>
                               <p className="text-muted-foreground">TTC</p>
-                              <p className="font-semibold">{formatEur(f.montant_ttc)}</p>
+                              <p className="font-semibold">{formatEur(montantDocumentComptable(f, 'ttc'))}</p>
                             </div>
                             <div>
                               <p className="text-muted-foreground">Missions</p>
@@ -925,16 +925,6 @@ export default function AdminFacturation() {
                               iconeGauche={isExpanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
                             >
                               {isExpanded ? 'Masquer missions' : 'Voir missions'}
-                            </BoutonY2K>
-                            <BoutonY2K
-                              variant="ghost"
-                              size="sm"
-                              className="min-h-[36px] px-3"
-                              title="Télécharger la facture PDF"
-                              aria-label="Télécharger la facture PDF"
-                              onClick={() => genererFacturePDF(f)}
-                            >
-                              <Download className="h-4 w-4" />
                             </BoutonY2K>
                           </div>
 

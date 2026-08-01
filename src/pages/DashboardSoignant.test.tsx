@@ -62,6 +62,14 @@ const dashboardData = {
   heures_totales_terminees: 12,
   missions_oubliees_count: 0,
   gains_mois: { net_total: 234, brut_total: 300, nb_missions: 1 },
+  gains_missions: [{
+    id: 'mission-terminee',
+    type_contrat_applique: 'SALARIE',
+    type_contrat_recherche: 'SALARIE',
+    total_brut: 300,
+    net_a_payer: 300,
+    net_estime: 234,
+  }],
   hasStripeConnect: true,
 };
 
@@ -114,6 +122,6 @@ describe('DashboardSoignant — cartes accessibles', () => {
     expect(screen.getByText(/jeudi 10 janv\. · 21h00 → 09h00/i)).toBeInTheDocument();
     expect(screen.getByText(/dimanche 10 févr\. · 09h00 → 21h00/i)).toBeInTheDocument();
     expect(screen.queryByText(/mardi 1 janv\./i)).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Ce mois : 234,00\s*€ net estimé/i })).toHaveAttribute('type', 'button');
+    expect(screen.getByRole('button', { name: /Ce mois : 234,00\s*€ net salarié estimé/i })).toHaveAttribute('type', 'button');
   });
 });

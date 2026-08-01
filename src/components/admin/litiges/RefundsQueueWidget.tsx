@@ -9,6 +9,19 @@ type StatsRefunds = {
   plus_ancienne_iso: string | null;
 };
 
+export function construireStatsRefunds(
+  count: number | null,
+  rows: Array<{ cree_le: string }>,
+): StatsRefunds {
+  if (typeof count !== 'number') {
+    throw new Error('Comptage exact des remboursements indisponible');
+  }
+  return {
+    count,
+    plus_ancienne_iso: rows[0]?.cree_le ?? null,
+  };
+}
+
 const SEUIL_ALERTE_COUNT = 10;
 const SEUIL_ALERTE_HEURES = 48;
 
@@ -27,12 +40,15 @@ export function alerteConditions(stats: StatsRefunds): boolean {
 export function RefundsQueueWidget() {
   const [stats, setStats] = useState<StatsRefunds>({ count: 0, plus_ancienne_iso: null });
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     let annule = false;
     (async () => {
       setLoading(true);
-      const { data, error } = await supabase
+      setLoadError(null);
+      const { data, error, count } = await supabase
         .from('stripe_refunds_queue' as any)
         .select('id, cree_le', { count: 'exact' })
         .in('statut', ['EN_ATTENTE', 'EN_COURS'])
@@ -42,30 +58,45 @@ export function RefundsQueueWidget() {
       if (annule) return;
       if (error) {
         logger.error('stripe_refunds_queue read error', error);
+        setLoadError(error.message || 'Suivi des remboursements indisponible');
         setLoading(false);
         return;
       }
-      const rows = (data ?? []) as unknown as Array<{ cree_le: string }>;
-      const count = (data as any)?.length != null && (data as any)?.count == null
-        ? rows.length
-        : ((data as any)?.count ?? rows.length);
-
-      setStats({
-        count,
-        plus_ancienne_iso: rows[0]?.cree_le ?? null,
-      });
+      try {
+        const rows = (data ?? []) as unknown as Array<{ cree_le: string }>;
+        setStats(construireStatsRefunds(count, rows));
+      } catch (statsError: any) {
+        logger.error('stripe_refunds_queue count error', statsError);
+        setLoadError(statsError?.message || 'Comptage des remboursements indisponible');
+      }
       setLoading(false);
     })();
     return () => {
       annule = true;
     };
-  }, []);
+  }, [reloadKey]);
 
   if (loading) {
     return (
       <div className="inline-flex items-center gap-2 rounded-md border bg-muted/30 px-3 py-1.5 text-xs text-muted-foreground">
         <RefreshCcw className="h-3.5 w-3.5 animate-spin" />
         Remboursements Stripe…
+      </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div className="inline-flex items-center gap-2 rounded-md border border-red-300 bg-red-50 px-3 py-1.5 text-xs text-red-900" role="alert">
+        <AlertTriangle className="h-3.5 w-3.5" />
+        <span>Suivi remboursements indisponible</span>
+        <button
+          type="button"
+          className="font-semibold underline underline-offset-2"
+          onClick={() => setReloadKey((value) => value + 1)}
+        >
+          Réessayer
+        </button>
       </div>
     );
   }

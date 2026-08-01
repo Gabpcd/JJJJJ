@@ -23,6 +23,7 @@ import type {
   CreneauMissionPourCalculHebdomadaire,
   MissionPourCalculHebdomadaire,
 } from '@/lib/heures-hebdomadaires-mission';
+import { montantFinanceAfficheMission } from '@/lib/missionFinanceDisplay';
 
 const EXPIRATION_MINUTES = 120; // 2h
 
@@ -34,6 +35,9 @@ interface MissionProposee {
   duree_heures?: number | null;
   taux_horaire_base?: number | null;
   net_estime?: number | null;
+  net_a_payer?: number | null;
+  total_brut?: number | null;
+  type_contrat_applique?: string | null;
   type_contrat_recherche?: string | null;
   etablissement_id?: string;
   est_urgente?: boolean | null;
@@ -110,7 +114,7 @@ export function CarteProposition({ proposition, onTraitee }: Props) {
       try {
         const [{ data: metadata, error }, creneaux] = await Promise.all([
           supabase.from('missions')
-            .select('id, debut_le, fin_le, duree_heures, nb_creneaux, taux_horaire_base')
+            .select('id, debut_le, fin_le, duree_heures, nb_creneaux, taux_horaire_base, total_brut, net_a_payer, net_estime, type_contrat_recherche, type_contrat_applique')
             .eq('id', proposition.mission_id)
             .single(),
           chargerCreneauxMissionsPagines([proposition.mission_id], {
@@ -136,11 +140,16 @@ export function CarteProposition({ proposition, onTraitee }: Props) {
   if (expiree || !mission.intitule || !mission.debut_le || !mission.fin_le) return null;
 
   const planning = construirePlanningCandidat(mission as any);
-  const netEstime = mission.net_estime ?? (
-    planning.exact && mission.taux_horaire_base
-      ? mission.taux_horaire_base * planning.totalHeures * 0.78
-      : null
-  );
+  const brutPlanifie = planning.exact && mission.taux_horaire_base
+    ? mission.taux_horaire_base * planning.totalHeures
+    : null;
+  const financeAffichee = montantFinanceAfficheMission({
+    ...mission,
+    type_contrat_applique: contratPropose === 'LIBERAL' || contratPropose === 'SALARIE'
+      ? contratPropose
+      : mission.type_contrat_applique,
+    total_brut: mission.total_brut ?? (contratPropose === 'LIBERAL' ? brutPlanifie : null),
+  });
 
   const preparerAttestations = async (): Promise<'CONTINUER' | 'ATTESTER' | 'BLOQUER'> => {
     // Lot 21 D4 : l'attestation de temps de travail dépend du contrat de la
@@ -326,9 +335,9 @@ export function CarteProposition({ proposition, onTraitee }: Props) {
 
         <div className="flex items-center justify-between">
           <span className="text-sm font-bold text-primary">{mission.taux_horaire_base} €/h</span>
-          {netEstime && (
+          {financeAffichee && (
             <span className="text-xs text-muted-foreground">
-              Net estimé* : {new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(netEstime)}
+              {financeAffichee.libelle} : {financeAffichee.approximatif ? '~' : ''}{new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(financeAffichee.montant)}
             </span>
           )}
         </div>

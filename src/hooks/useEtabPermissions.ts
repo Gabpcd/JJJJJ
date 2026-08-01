@@ -9,6 +9,7 @@ export interface PermissionsEtab {
   supprimer_compte: boolean;
   profil_etab: boolean;
   paiement: boolean;
+  lecture_paiement: boolean;
   missions: boolean;
   candidatures: boolean;
   contrats: boolean;
@@ -22,6 +23,7 @@ const PERMISSIONS_VIDES: PermissionsEtab = {
   supprimer_compte: false,
   profil_etab: false,
   paiement: false,
+  lecture_paiement: false,
   missions: false,
   candidatures: false,
   contrats: false,
@@ -51,7 +53,10 @@ interface State {
  *
  * Cache 30 secondes par défaut pour éviter trop de roundtrips.
  */
-export function useEtabPermissions(etablissementId?: string): State & { recharger: () => Promise<void> } {
+export function useEtabPermissions(
+  etablissementId?: string,
+  enabled = true,
+): State & { recharger: () => Promise<void> } {
   const { user } = useAuth();
   const [state, setState] = useState<State>({
     loading: true,
@@ -62,7 +67,7 @@ export function useEtabPermissions(etablissementId?: string): State & { recharge
   });
 
   const recharger = useCallback(async () => {
-    if (!user) {
+    if (!enabled || !user) {
       setState({ loading: false, role: null, permissions: PERMISSIONS_VIDES, etablissementId: null, error: null });
       return;
     }
@@ -100,7 +105,7 @@ export function useEtabPermissions(etablissementId?: string): State & { recharge
       etablissementId: etablissementId ?? null,
       error: null,
     });
-  }, [user, etablissementId]);
+  }, [user, etablissementId, enabled]);
 
   useEffect(() => {
     void recharger();

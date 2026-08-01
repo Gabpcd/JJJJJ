@@ -11,6 +11,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { telechargerBulletinPaiePdf } from '@/lib/bulletin-paie-pdf';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
+import { MENTION_SIMULATION_PAIE, totauxBulletinsPayes } from '@/lib/bulletinPaieUi';
 
 const fmt = (v: number) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(Number(v) || 0);
 
@@ -40,7 +41,7 @@ interface BulletinRow {
 }
 
 export default function BulletinsPaie() {
-  usePageTitle('Mes bulletins de paie');
+  usePageTitle('Mes simulations de paie');
   return (
     <LayoutApp role="SOIGNANT">
       <BulletinsPaieContent />
@@ -56,15 +57,26 @@ export function BulletinsPaieContent() {
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [filtreStatut, setFiltreStatut] = useState<string>('tous');
   const [filtreAnnee, setFiltreAnnee] = useState<string>('toutes');
+  const [erreurChargement, setErreurChargement] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     if (!user) return;
+    let actif = true;
     (async () => {
-      const { data } = await supabase.rpc('fn_mes_bulletins_paie' as any);
-      setBulletins((data as unknown as BulletinRow[]) || []);
-      setLoading(false);
+      setErreurChargement(null);
+      try {
+        const { data, error } = await supabase.rpc('fn_mes_bulletins_paie' as any);
+        if (error) throw error;
+        if (actif) setBulletins((data as unknown as BulletinRow[]) || []);
+      } catch (error: any) {
+        if (actif) setErreurChargement(error?.message || 'Impossible de charger les bulletins.');
+      } finally {
+        if (actif) setLoading(false);
+      }
     })();
-  }, [user]);
+    return () => { actif = false; };
+  }, [user, reloadKey]);
 
   const anneesDisponibles = useMemo(() => {
     const annees = new Set<string>();
@@ -86,9 +98,7 @@ export function BulletinsPaieContent() {
   const filtreActif = filtreStatut !== 'tous' || filtreAnnee !== 'toutes';
   const reinitialiserFiltres = () => { setFiltreStatut('tous'); setFiltreAnnee('toutes'); };
 
-  const totalBrut = bulletinsFiltres.reduce((s, b) => s + Number(b.salaire_brut || 0), 0);
-  const totalNet = bulletinsFiltres.reduce((s, b) => s + Number(b.net_avant_impot || 0), 0);
-  const totalCotisations = bulletinsFiltres.reduce((s, b) => s + Number(b.total_cotisations_salariales || 0), 0);
+  const totauxPayes = totauxBulletinsPayes(bulletinsFiltres);
 
   const telecharger = async (id: string) => {
     setDownloadingId(id);
@@ -111,22 +121,31 @@ export function BulletinsPaieContent() {
 
   return (
     <div className="space-y-5">
+        {erreurChargement && (
+          <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4" role="alert">
+            <p className="font-semibold text-destructive">Impossible de charger les simulations de paie</p>
+            <p className="mt-1 text-sm text-muted-foreground">{erreurChargement}</p>
+            <BoutonY2K size="sm" variant="secondary" className="mt-3" onClick={() => { setLoading(true); setReloadKey(key => key + 1); }}>
+              Réessayer
+            </BoutonY2K>
+          </div>
+        )}
         <p className="text-xs text-muted-foreground">
-          Bulletins émis automatiquement à chaque mission terminée — conformes art. R3243-1 CTW
+          {MENTION_SIMULATION_PAIE}
         </p>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div className="card-base">
-            <p className="text-xs text-muted-foreground">Brut total</p>
-            <p className="text-xl font-bold text-foreground">{fmt(totalBrut)}</p>
+            <p className="text-xs text-muted-foreground">Brut des simulations payées</p>
+            <p className="text-xl font-bold text-foreground">{fmt(totauxPayes.brut)}</p>
           </div>
           <div className="card-base bg-success/5 border-success/20">
-            <p className="text-xs text-muted-foreground">Net total perçu</p>
-            <p className="text-xl font-bold text-success">{fmt(totalNet)}</p>
+            <p className="text-xs text-muted-foreground">Net avant impôt · simulations payées</p>
+            <p className="text-xl font-bold text-success">{fmt(totauxPayes.netAvantImpot)}</p>
           </div>
           <div className="card-base bg-warning/5 border-warning/20">
             <p className="text-xs text-muted-foreground">Cotisations salariales</p>
-            <p className="text-xl font-bold text-warning">{fmt(totalCotisations)}</p>
+            <p className="text-xl font-bold text-warning">{fmt(totauxPayes.cotisations)}</p>
           </div>
         </div>
 
@@ -161,21 +180,23 @@ export function BulletinsPaieContent() {
               </button>
             )}
             <span className="text-[10px] text-muted-foreground ml-auto">
-              {bulletinsFiltres.length} / {bulletins.length} bulletin{bulletins.length > 1 ? 's' : ''}
+              {bulletinsFiltres.length} / {bulletins.length} simulation{bulletins.length > 1 ? 's' : ''}
             </span>
           </div>
         )}
 
         {(() => {
-          const etatVide = bulletins.length === 0
-            ? <EmptyState icone={<FileText />} mascotte="empty" titre="Aucun bulletin de paie pour le moment" description="Les bulletins apparaîtront ici dès que tes missions salariées seront terminées." cta={{ label: 'Trouver une mission', onClick: () => navigate('/soignant/recherche-missions') }} />
-            : <EmptyState icone={<FileText />} mascotte="thinking" titre="Aucun bulletin ne correspond aux filtres" cta={{ label: 'Réinitialiser les filtres', onClick: reinitialiserFiltres, variant: 'secondary' }} compact />;
+          const etatVide = erreurChargement
+            ? <></>
+            : bulletins.length === 0
+            ? <EmptyState icone={<FileText />} mascotte="empty" titre="Aucune simulation de paie pour le moment" description="Les simulations apparaîtront ici dès que tes missions salariées seront terminées. Le bulletin officiel reste fourni par l'employeur." cta={{ label: 'Trouver une mission', onClick: () => navigate('/soignant/recherche-missions') }} />
+            : <EmptyState icone={<FileText />} mascotte="thinking" titre="Aucune simulation ne correspond aux filtres" cta={{ label: 'Réinitialiser les filtres', onClick: reinitialiserFiltres, variant: 'secondary' }} compact />;
 
           const colonnes: ColonneTableau<BulletinRow>[] = [
             { cle: 'periode', titre: 'Mois' },
             { cle: 'mission', titre: 'Mission' },
             { cle: 'brut', titre: 'Brut', align: 'right' },
-            { cle: 'net', titre: 'Net', align: 'right' },
+            { cle: 'net', titre: 'Net avant impôt', align: 'right' },
             { cle: 'statut', titre: 'Statut' },
             { cle: 'actions', titre: '', align: 'right', largeur: 'w-32' },
           ];
@@ -187,7 +208,7 @@ export function BulletinsPaieContent() {
               getId={(b) => b.id}
               etatVide={etatVide}
               renduCellule={(b, col) => {
-                const config = STATUT_CONFIG[b.statut] || STATUT_CONFIG.EMIS;
+                const config = STATUT_CONFIG[b.statut] || { label: `Inconnu (${b.statut})`, classes: 'bg-destructive/10 text-destructive' };
                 const downloading = downloadingId === b.id;
                 switch (col.cle) {
                   case 'periode':
@@ -231,7 +252,7 @@ export function BulletinsPaieContent() {
                 }
               }}
               renduCarte={(b) => {
-                const config = STATUT_CONFIG[b.statut] || STATUT_CONFIG.EMIS;
+                const config = STATUT_CONFIG[b.statut] || { label: `Inconnu (${b.statut})`, classes: 'bg-destructive/10 text-destructive' };
                 const downloading = downloadingId === b.id;
                 return (
                   <div className="space-y-3">
@@ -252,7 +273,7 @@ export function BulletinsPaieContent() {
                         </p>
                       </div>
                       <div className="text-right shrink-0">
-                        <p className="text-[10px] text-muted-foreground">Net à payer</p>
+                        <p className="text-[10px] text-muted-foreground">Net avant impôt</p>
                         <p className="text-lg font-bold text-foreground tabular-nums">{fmt(b.net_avant_impot)}</p>
                         <p className="text-[10px] text-muted-foreground">
                           Brut {fmt(b.salaire_brut)}
@@ -267,7 +288,7 @@ export function BulletinsPaieContent() {
                       onClick={(e) => { e.stopPropagation(); telecharger(b.id); }}
                     >
                       {downloading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-                      Télécharger PDF
+                      Télécharger la simulation PDF
                     </BoutonY2K>
                   </div>
                 );
@@ -278,10 +299,9 @@ export function BulletinsPaieContent() {
 
         <div className="card-base bg-muted/30 text-xs text-muted-foreground">
           <p>
-            <strong className="text-foreground">Conservation :</strong> les bulletins sont conservés
-            indéfiniment dans ton espace Jolene. Conformément à l'art. L3243-4 du Code du travail,
-            l'employeur doit conserver son double 5 ans minimum. Le salarié doit conserver les siens
-            sans limitation de durée (preuve d'activité pour la retraite).
+            <strong className="text-foreground">Important :</strong> ces simulations Jolene ne sont pas
+            des bulletins de paie et n'ont aucune valeur de justificatif. Télécharge et conserve les
+            bulletins officiels que ton employeur doit te remettre.
           </p>
         </div>
     </div>

@@ -1233,7 +1233,9 @@ Deno.serve(async (req) => {
           client_secret: derniereSessionMission.client_secret,
           total: totalCents / 100,
           commission: commissionCents / 100,
+          commission_ttc: commissionCents / 100,
           soignant: soignantCents / 100,
+          montant_soignant: soignantCents / 100,
         }), {
           status: 200,
           headers: { ...corsHeaders(req), "Content-Type": "application/json" },
@@ -1250,6 +1252,11 @@ Deno.serve(async (req) => {
 
     // Create Checkout Session (embedded)
     const origin = getApplicationReturnOrigin(req);
+    const returnParams = new URLSearchParams({
+      paiement: "succes",
+      mission: mission_id,
+      facture_honoraire: factureHonoraires.id,
+    });
     const session = await stripe.checkout.sessions.create({
       customer: customerId,
       client_reference_id: mission_id,
@@ -1311,7 +1318,7 @@ Deno.serve(async (req) => {
         facture_commission_id: factureCommission?.id || "",
         payment_scope: invoiceScopedPayment ? "INVOICE" : "MISSION",
       },
-      return_url: `${origin}/etablissement/facturation?paiement=succes`,
+      return_url: `${origin}/etablissement/facturation?${returnParams.toString()}`,
     }, { idempotencyKey: checkoutIdempotencyKey });
 
     try {
@@ -1502,7 +1509,9 @@ Deno.serve(async (req) => {
         client_secret: session.client_secret,
         total: totalCents / 100,
         commission: commissionCents / 100,
+        commission_ttc: commissionCents / 100,
         soignant: soignantCents / 100,
+        montant_soignant: soignantCents / 100,
       }),
       {
         status: 200,

@@ -35,6 +35,7 @@ import { CalendarDays, Clock, CheckCircle, History, AlertTriangle, MapPin, Hash,
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { BadgeY2K } from '@/components/y2k/BadgeY2K';
 import { Button } from '@/components/ui/button';
+import { montantFinanceAfficheMission } from '@/lib/missionFinanceDisplay';
 
 export default function PresencesSoignant() {
   usePageTitle('Présences');
@@ -116,6 +117,7 @@ export default function PresencesSoignant() {
           .from('missions')
           .select(`
             id, intitule, service, debut_le, fin_le, duree_heures, statut, etablissement_id,
+            type_contrat_applique, type_contrat_recherche, total_brut, net_a_payer, net_estime,
             presences(id, pointage_arrivee_le, pointage_depart_le,
               perimetre_gps_valide, alerte_teleportation, distance_etablissement_m,
               arrivee_precision_gps_m, depart_precision_gps_m, valide_par_etablissement, valide_le,
@@ -447,6 +449,7 @@ export default function PresencesSoignant() {
 
     const missionData = missions.find((m: any) => m.id === missionId) as any;
     if (missionData) {
+      const finance = montantFinanceAfficheMission(missionData);
       supabase.functions.invoke('send-email', {
         body: {
           type: 'MISSION_TERMINEE',
@@ -455,7 +458,7 @@ export default function PresencesSoignant() {
             mission: missionData.intitule || 'Mission',
             etablissement: missionData.etablissements?.nom || '',
             heures: missionData.duree_heures || 0,
-            net: missionData.net_a_payer || 0,
+            net: finance?.montant || 0,
           },
           destinataire_id: user.id,
         },

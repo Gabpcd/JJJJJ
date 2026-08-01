@@ -37,19 +37,33 @@ export function MesAvancesContent() {
   const [loading, setLoading] = useState(true);
   const [avances, setAvances] = useState<any[]>([]);
   const [typeExercice, setTypeExercice] = useState<string | null>(null);
+  const [erreurChargement, setErreurChargement] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     if (!user) return;
+    let actif = true;
     (async () => {
-      const [{ data: profil }, { data }] = await Promise.all([
-        supabase.from('soignants').select('type_exercice').eq('id', user.id).maybeSingle(),
-        supabase.rpc('fn_mes_avances_factor' as any),
-      ]);
-      setTypeExercice((profil as any)?.type_exercice || null);
-      setAvances(data || []);
-      setLoading(false);
+      setLoading(true);
+      setErreurChargement(null);
+      try {
+        const [profilResult, avancesResult] = await Promise.all([
+          supabase.from('soignants').select('type_exercice').eq('id', user.id).maybeSingle(),
+          supabase.rpc('fn_mes_avances_factor' as any),
+        ]);
+        if (profilResult.error) throw profilResult.error;
+        if (avancesResult.error) throw avancesResult.error;
+        if (!actif) return;
+        setTypeExercice((profilResult.data as any)?.type_exercice || null);
+        setAvances(avancesResult.data || []);
+      } catch (error: any) {
+        if (actif) setErreurChargement(error?.message || 'Impossible de charger les avances.');
+      } finally {
+        if (actif) setLoading(false);
+      }
     })();
-  }, [user]);
+    return () => { actif = false; };
+  }, [user, reloadKey]);
 
   if (loading) {
     return (
@@ -78,6 +92,15 @@ export function MesAvancesContent() {
 
   return (
     <div className="space-y-5">
+        {erreurChargement && (
+          <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4" role="alert">
+            <p className="font-semibold text-destructive">Impossible de charger les avances</p>
+            <p className="mt-1 text-sm text-muted-foreground">{erreurChargement}</p>
+            <button type="button" className="mt-3 text-sm font-semibold text-primary hover:underline" onClick={() => setReloadKey(key => key + 1)}>
+              Réessayer
+            </button>
+          </div>
+        )}
         <p className="text-xs text-muted-foreground">Historique de vos demandes d'affacturage Defacto</p>
 
         {/* KPIs */}
@@ -106,7 +129,7 @@ export function MesAvancesContent() {
           </p>
         </div>
 
-        {avances.length === 0 ? (
+        {erreurChargement ? null : avances.length === 0 ? (
           <EmptyState
             icone={<Zap />}
             mascotte="thinking"

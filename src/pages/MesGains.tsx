@@ -31,14 +31,18 @@ import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { telechargerOuPartager } from '@/lib/telechargement';
 import { promptParrainage } from '@/lib/prompt-parrainage';
+import { montantFinanceAfficheMission } from '@/lib/missionFinanceDisplay';
+import {
+  enrichirFacturesHonoraires,
+  factureEstAvoir,
+  regrouperFacturesParMission,
+  resumerFacturesMission,
+} from '@/lib/factureHonorairesUi';
+import { indexerDernierPaiementParMission } from '@/lib/paiementSoignantUi';
 
 function fmt(v: number | null | undefined) {
   if (v == null) return '—';
   return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(v);
-}
-
-function netEstime(m: any): number | null {
-  return m.net_estime ?? (m.net_a_payer != null ? m.net_a_payer * 0.78 : (m.total_brut != null ? m.total_brut * 0.78 : null));
 }
 
 export function MesGainsApercuContent() {
@@ -53,54 +57,92 @@ export function MesGainsApercuContent() {
   const [cotisationsMissionId, setCotisationsMissionId] = useState<string | null>(null);
   const [soignant, setSoignant] = useState<any>(null);
   const [paiementsMap, setPaiementsMap] = useState<Record<string, any>>({});
-  const [facturesMap, setFacturesMap] = useState<Record<string, any>>({});
+  const [facturesMap, setFacturesMap] = useState<Record<string, any[]>>({});
   const [recherche, setRecherche] = useState('');
+  const [hasMore, setHasMore] = useState(false);
+  const [erreurChargement, setErreurChargement] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     if (!user) return;
+    let actif = true;
     const load = async () => {
-      const [{ data: ms }, { data: sg }, { data: paiements }, { data: facts }] = await Promise.all([
-        supabase
-          .from('missions')
-          .select('id, intitule, debut_le, fin_le, duree_heures, taux_horaire_base, net_a_payer, net_estime, total_brut, statut, etablissement_id, service, type_contrat_applique')
-          .eq('soignant_assigne_id', user.id)
-          .eq('statut', 'TERMINEE')
-          .order('debut_le', { ascending: false })
-          .range(0, (page + 1) * PAGE_SIZE - 1),
-        supabase.from('soignants').select('type_exercice, statut_liberal, regime_fiscal, regime_fiscal_confirme' as any).eq('id', user.id).maybeSingle(),
-        supabase.from('paiements_soignant' as any)
-          .select('mission_id, statut, montant_net, methode, reference_virement, date_paiement')
-          .eq('soignant_id', user.id) as any,
-        // 6d.1 : MÊME source que l'onglet Factures — l'Aperçu et Factures ne
-        // peuvent plus diverger (l'écart « 234 € en attente » vs « 0 € »).
-        supabase.rpc('fn_mes_factures_honoraires' as any),
-      ]);
-      const enriched = ms ? await enrichirEtablissements(ms as any) : [];
-      if (page === 0) setAllMissions(enriched as any[]);
-      else setAllMissions(prev => [...prev, ...enriched as any[]]);
-      setSoignant(sg);
+      setErreurChargement(null);
+      setLoading(true);
+      try {
+        const [missionsResult, soignantResult, paiementsResult, facturesResult, metadonneesFacturesResult] = await Promise.all([
+          supabase
+            .from('missions')
+            .select('id, intitule, debut_le, fin_le, duree_heures, taux_horaire_base, net_a_payer, net_estime, total_brut, statut, etablissement_id, service, type_contrat_applique, type_contrat_recherche')
+            .eq('soignant_assigne_id', user.id)
+            .eq('statut', 'TERMINEE')
+            .order('debut_le', { ascending: false })
+            .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1),
+          supabase.from('soignants').select('type_exercice, statut_liberal, regime_fiscal, regime_fiscal_confirme' as any).eq('id', user.id).maybeSingle(),
+          supabase.from('paiements_soignant' as any)
+            .select('id, mission_id, facture_honoraire_id, statut, montant_net, methode, reference_virement, date_paiement, modifie_le, cree_le')
+            .eq('soignant_id', user.id)
+            .order('modifie_le', { ascending: false, nullsFirst: false })
+            .order('cree_le', { ascending: false, nullsFirst: false })
+            .order('date_paiement', { ascending: false, nullsFirst: false })
+            .order('id', { ascending: false }) as any,
+          // MÊME source que l'onglet Factures pour éviter les états divergents.
+          supabase.rpc('fn_mes_factures_honoraires' as any),
+          // Le RPC historique n'expose pas le type_document. Cette lecture RLS
+          // empêche qu'un AVOIR `EMISE` soit interprété comme un revenu attendu.
+          supabase
+            .from('factures_honoraires')
+            .select('id, type_document, montant_signe, cree_le, template_version, numero_semaine_iso, periode_debut, periode_fin, facture_precedente_id, date_remboursement')
+            .eq('soignant_id', user.id),
+        ]);
+        if (missionsResult.error) throw missionsResult.error;
+        if (soignantResult.error) throw soignantResult.error;
+        if (paiementsResult.error) throw paiementsResult.error;
+        if (facturesResult.error) throw facturesResult.error;
+        if (metadonneesFacturesResult.error) throw metadonneesFacturesResult.error;
 
-      // Index paiements by mission_id
-      const map: Record<string, any> = {};
-      (paiements || []).forEach((p: any) => { if (p.mission_id) map[p.mission_id] = p; });
-      setPaiementsMap(map);
+        const pageMissions = (missionsResult.data ?? []) as any[];
+        const enriched = await enrichirEtablissements(pageMissions as any);
+        if (!actif) return;
+        setHasMore(pageMissions.length === PAGE_SIZE);
+        if (page === 0) {
+          setAllMissions(enriched as any[]);
+        } else {
+          setAllMissions(prev => {
+            const parId = new Map(prev.map(mission => [mission.id, mission]));
+            (enriched as any[]).forEach(mission => parId.set(mission.id, mission));
+            return Array.from(parId.values());
+          });
+        }
+        setSoignant(soignantResult.data);
 
-      const fmap: Record<string, any> = {};
-      ((facts || []) as any[]).forEach((f: any) => { if (f.mission_id) fmap[f.mission_id] = f; });
-      setFacturesMap(fmap);
+        setPaiementsMap(indexerDernierPaiementParMission(
+          (paiementsResult.data || []) as any[],
+        ));
 
-      setLoading(false);
+        const facturesEnrichies = enrichirFacturesHonoraires(
+          (facturesResult.data || []) as any[],
+          (metadonneesFacturesResult.data || []) as any[],
+        );
+        setFacturesMap(regrouperFacturesParMission(facturesEnrichies));
 
-      supabase.rpc('fn_ecrire_audit_safe', {
-        p_acteur_id: user.id, p_type_acteur: 'SOIGNANT',
-        p_action: 'DONNEES_PERSO_CONSULTATION',
-        p_type_ressource: 'soignant', p_id_ressource: user.id,
-        p_cle_s3: null, p_details: { page: 'mes_gains' },
-        p_ip: null, p_navigateur: navigator.userAgent,
-      }).then(undefined, (err) => handleErrorSilent(err, 'MesGains.audit'));
+        supabase.rpc('fn_ecrire_audit_safe', {
+          p_acteur_id: user.id, p_type_acteur: 'SOIGNANT',
+          p_action: 'DONNEES_PERSO_CONSULTATION',
+          p_type_ressource: 'soignant', p_id_ressource: user.id,
+          p_cle_s3: null, p_details: { page: 'mes_gains' },
+          p_ip: null, p_navigateur: navigator.userAgent,
+        }).then(undefined, (err) => handleErrorSilent(err, 'MesGains.audit'));
+      } catch (error: any) {
+        if (!actif) return;
+        setErreurChargement(error?.message || 'Impossible de charger les revenus.');
+      } finally {
+        if (actif) setLoading(false);
+      }
     };
-    load();
-  }, [user, page]);
+    void load();
+    return () => { actif = false; };
+  }, [user, page, reloadKey]);
 
   const moisDisponibles = useMemo(() => {
     const set = new Set<string>();
@@ -121,9 +163,7 @@ export function MesGainsApercuContent() {
     return allMissions.filter(m => typeof m.debut_le === 'string' && m.debut_le.startsWith(moisFiltre));
   }, [allMissions, moisFiltre]);
 
-  const totalNetFiltre = useMemo(() => missions.reduce((s, m) => s + (netEstime(m) ?? 0), 0), [missions]);
   const totalBrutFiltre = useMemo(() => missions.reduce((s, m) => s + (Number(m.total_brut) || 0), 0), [missions]);
-  const totalNetToutTemps = useMemo(() => allMissions.reduce((s, m) => s + (netEstime(m) ?? 0), 0), [allMissions]);
   const totalHeures = useMemo(() => missions.reduce((s, m) => s + (Number(m.duree_heures) || 0), 0), [missions]);
   const tauxMoyen = useMemo(() => {
     if (totalHeures === 0) return 0;
@@ -149,9 +189,9 @@ export function MesGainsApercuContent() {
   const salMissions = useMemo(() => missions.filter(m => m.type_contrat_applique === 'SALARIE'), [missions]);
   const indetCount = useMemo(() => missions.filter(m => !m.type_contrat_applique).length, [missions]);
   // Libéral : honoraires réellement encaissés (après commission Jolene), PAS ×0,78.
-  const honorairesLib = useMemo(() => libMissions.reduce((s, m) => s + (m.net_estime ?? m.net_a_payer ?? Number(m.total_brut ?? 0)), 0), [libMissions]);
+  const honorairesLib = useMemo(() => libMissions.reduce((s, m) => s + (montantFinanceAfficheMission(m)?.montant ?? 0), 0), [libMissions]);
   // Salarié : net estimé après cotisations salariales (~22 %).
-  const netSal = useMemo(() => salMissions.reduce((s, m) => s + (netEstime(m) ?? 0), 0), [salMissions]);
+  const netSal = useMemo(() => salMissions.reduce((s, m) => s + (montantFinanceAfficheMission(m)?.montant ?? 0), 0), [salMissions]);
 
   // 6d.1 — Pipeline UNIQUE « À valider → En attente de paiement → Payé ».
   // Mêmes sources que l'onglet Factures (fn_mes_factures_honoraires) + paiements :
@@ -165,26 +205,45 @@ export function MesGainsApercuContent() {
       enAttente: { montant: 0, nb: 0 },
       paye: { montant: 0, nb: 0 },
     };
+
+    // Les factures hebdomadaires peuvent exister avant que la mission longue
+    // passe à TERMINEE. On part donc de toutes les factures du RPC, pas seulement
+    // des missions terminées actuellement chargées/paginées.
+    Object.values(facturesMap).forEach((documents) => {
+      const resume = resumerFacturesMission(documents);
+      etapes.paye.montant += resume.montantPaye;
+      etapes.paye.nb += resume.nbPayees;
+      etapes.enAttente.montant += resume.montantEnAttente;
+      etapes.enAttente.nb += resume.nbEnAttente;
+    });
+
     allMissions.forEach(m => {
       const p = paiementsMap[m.id];
-      const f = facturesMap[m.id];
-      // Facture remboursée (litige/avoir) : sortie du pipeline, ni due ni payée.
-      if (f && f.statut === 'REMBOURSE') return;
-      const montantDefaut = isSalariePur ? (Number(m.total_brut) || 0) : (netEstime(m) ?? 0);
-      const paye = (p && (p.statut === 'CONFIRME' || p.statut === 'RESOLU'))
-        || (f && (f.statut === 'PAYEE' || f.statut === 'FACTORISEE'));
+      const documents = facturesMap[m.id] ?? [];
+      const resumeFactures = resumerFacturesMission(documents);
+      const finance = montantFinanceAfficheMission(m);
+      const montantDefaut = finance?.montant ?? 0;
+      const montantPaiement = Number(p?.montant_net) || montantDefaut;
+
+      // Déjà agrégé ci-dessus facture par facture (y compris mission longue
+      // encore en cours) : ne jamais recompter via le paiement de mission.
+      if (resumeFactures.nbFacturesValides > 0) return;
+
+      const paye = p && (p.statut === 'CONFIRME' || p.statut === 'RESOLU');
       if (paye) {
-        etapes.paye.montant += f ? Number(f.montant_ttc) || montantDefaut : montantDefaut;
+        etapes.paye.montant += montantPaiement;
         etapes.paye.nb += 1;
         return;
       }
-      // Facture émise (= présences validées, en attente de règlement) OU
-      // paiement déclaré non confirmé → « En attente de paiement ».
-      if ((f && (f.statut === 'EMISE' || f.statut === 'EN_RETARD')) || p) {
-        etapes.enAttente.montant += f ? Number(f.montant_ttc) || montantDefaut : montantDefaut;
+      // Paiement déclaré non confirmé → « En attente de paiement ».
+      if (p) {
+        etapes.enAttente.montant += montantPaiement;
         etapes.enAttente.nb += 1;
         return;
       }
+      // Un document financier non comptabilisable (notamment un AVOIR ou une
+      // erreur de génération) ne redevient pas artificiellement une paie à valider.
+      if (documents.length > 0) return;
       // Mission terminée, pas de facture, pas de paiement → validation des
       // présences par l'établissement encore en cours.
       etapes.aValider.montant += montantDefaut;
@@ -192,7 +251,17 @@ export function MesGainsApercuContent() {
       etapes.aValider.ids.push(m.id);
     });
     return etapes;
-  }, [allMissions, paiementsMap, facturesMap, isSalariePur]);
+  }, [allMissions, paiementsMap, facturesMap]);
+
+  const regimesHistorique = useMemo(() => ({
+    salarie: allMissions.some(mission => mission.type_contrat_applique === 'SALARIE'),
+    liberal: allMissions.some(mission => mission.type_contrat_applique === 'LIBERAL'),
+  }), [allMissions]);
+  const destinationPaiements = regimesHistorique.salarie && regimesHistorique.liberal
+    ? '/soignant/mes-gains?tab=apercu'
+    : regimesHistorique.salarie
+      ? '/soignant/mes-gains?tab=bulletins'
+      : '/soignant/mes-gains?tab=factures';
 
   // 7f (§5) : pic d'émotion — le PREMIER paiement reçu est le meilleur moment
   // pour suggérer le parrainage (une seule fois, throttle 30 j global).
@@ -204,21 +273,30 @@ export function MesGainsApercuContent() {
   }, [loading, pipeline.paye.nb]);
 
   const exporterCSV = () => {
-    const header = 'Date,Mission,Service,Établissement,Heures,Taux horaire,Brut,Net estimé\n';
+    const header = 'Date,Mission,Service,Établissement,Heures,Taux horaire,Brut,Montant affiché,Nature\n';
     const rows = missions.map(m => {
-      const net = netEstime(m) ?? 0;
+      const finance = montantFinanceAfficheMission(m);
       const dateStr = m.debut_le ? format(new Date(m.debut_le), 'dd/MM/yyyy') : '—';
       const brut = Number(m.total_brut) || 0;
-      return `${dateStr},"${(m.intitule || '').replace(/"/g, '""')}","${(m.service || '').replace(/"/g, '""')}","${(m.etablissements?.nom || '').replace(/"/g, '""')}",${Number(m.duree_heures) || 0},${Number(m.taux_horaire_base) || 0},${brut.toFixed(2)},${net.toFixed(2)}`;
+      return `${dateStr},"${(m.intitule || '').replace(/"/g, '""')}","${(m.service || '').replace(/"/g, '""')}","${(m.etablissements?.nom || '').replace(/"/g, '""')}",${Number(m.duree_heures) || 0},${Number(m.taux_horaire_base) || 0},${brut.toFixed(2)},${(finance?.montant ?? 0).toFixed(2)},"${finance?.libelle ?? 'Indisponible'}"`;
     }).join('\n');
     const nom = `gains-jolene-${moisFiltre === 'CE_MOIS' ? new Date().toISOString().slice(0, 7) : moisFiltre}-${new Date().toISOString().slice(0, 10)}.csv`;
     void telechargerOuPartager(header + rows, nom, 'text/csv');
   };
 
-  if (loading) return <ChargementPage />;
+  if (loading && allMissions.length === 0) return <ChargementPage />;
 
   return (
     <>
+      {erreurChargement && (
+        <div className="mb-5 rounded-xl border border-destructive/30 bg-destructive/5 p-4" role="alert">
+          <p className="font-semibold text-destructive">Impossible de charger tous les revenus</p>
+          <p className="mt-1 text-sm text-muted-foreground">{erreurChargement}</p>
+          <BoutonY2K size="sm" variant="secondary" className="mt-3" onClick={() => setReloadKey(key => key + 1)}>
+            Réessayer
+          </BoutonY2K>
+        </div>
+      )}
       <BandeauPaiementDeclare />
 
       {/* Paiement rapide ⚡ (escrow) — bloc « À venir » en tête. Masqué si aucun
@@ -233,7 +311,7 @@ export function MesGainsApercuContent() {
           <div className="flex items-center gap-2 mb-3">
             <Clock className="h-4 w-4 text-primary" />
             <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              {isSalariePur ? 'Ta rémunération, étape par étape' : 'Ton paiement, étape par étape'}
+              Tes rémunérations, étape par étape
             </p>
           </div>
           <div className="grid grid-cols-3 gap-2">
@@ -253,15 +331,15 @@ export function MesGainsApercuContent() {
               },
               {
                 label: 'En attente de paiement',
-                detail: isSalariePur ? 'sur ta paie établissement' : 'facture émise',
+                detail: 'facture ou paie en cours',
                 etape: pipeline.enAttente,
-                onClick: () => navigate(isSalariePur ? '/soignant/mes-gains?tab=bulletins' : '/soignant/mes-gains?tab=factures'),
+                onClick: () => navigate(destinationPaiements),
               },
               {
                 label: 'Payé',
                 detail: 'règlement confirmé',
                 etape: pipeline.paye,
-                onClick: () => navigate(isSalariePur ? '/soignant/mes-gains?tab=bulletins' : '/soignant/mes-gains?tab=factures'),
+                onClick: () => navigate(destinationPaiements),
               },
             ].map(({ label, detail, etape, onClick }, i) => (
               <button
@@ -277,15 +355,13 @@ export function MesGainsApercuContent() {
                   {fmt(etape.montant)}
                 </p>
                 <p className="text-[10px] text-muted-foreground leading-tight">
-                  {etape.nb} mission{etape.nb > 1 ? 's' : ''} · {detail}
+                  {etape.nb} rémunération{etape.nb > 1 ? 's' : ''} · {detail}
                 </p>
               </button>
             ))}
           </div>
           <p className="text-[10px] text-muted-foreground italic mt-2">
-            {isSalariePur
-              ? 'Montants bruts. Le versement est effectué par l\'établissement employeur selon son calendrier de paie — Jolene ne verse pas cette somme.'
-              : 'Montants nets estimés (TTC facturé pour les étapes facturées). Le règlement intervient après validation des présences par l\'établissement.'}
+            Honoraires libéraux et nets salariés estimés restent séparés dans le détail. Le versement salarié est effectué par l'établissement employeur.
           </p>
         </div>
       )}
@@ -301,14 +377,14 @@ export function MesGainsApercuContent() {
           <CarteKPIY2K
             icone={<Banknote className="h-4 w-4" />}
             valeur={fmt(honorairesLib)}
-            label={`Honoraires encaissés · ${labelPeriode}`}
+            label={`Honoraires · missions terminées · ${labelPeriode}`}
             variant="holographic"
             onClick={() => navigate('/soignant/mes-gains?tab=factures')}
           />
         )}
         {/* D3 : salarié pur → PAS d'estimation ~22 % (le net exact vient du
             bulletin de paie de l'établissement) ; le Brut devient le KPI primaire. */}
-        {!isSalariePur && salMissions.length > 0 && (
+        {salMissions.length > 0 && (
           <CarteKPIY2K
             icone={<Banknote className="h-4 w-4" />}
             valeur={fmt(netSal)}
@@ -317,21 +393,12 @@ export function MesGainsApercuContent() {
             onClick={() => navigate('/soignant/mes-gains?tab=bulletins')}
           />
         )}
-        {!isSalariePur && libMissions.length === 0 && salMissions.length === 0 && (
-          <CarteKPIY2K
-            icone={<Banknote className="h-4 w-4" />}
-            valeur={fmt(totalNetFiltre)}
-            label={`Net estimé* · ${labelPeriode}`}
-            variant="holographic"
-            onClick={() => navigate('/soignant/mes-gains?tab=factures')}
-          />
-        )}
         <CarteKPIY2K
           icone={<TrendingUp className="h-4 w-4" />}
           valeur={fmt(totalBrutFiltre)}
           label={`Brut · ${labelPeriode}`}
           variant={isSalariePur ? 'holographic' : 'default'}
-          onClick={() => navigate(isSalariePur ? '/soignant/mes-gains?tab=bulletins' : '/soignant/mes-gains?tab=factures')}
+          onClick={() => navigate(destinationPaiements)}
         />
         <CarteKPIY2K
           icone={<Clock className="h-4 w-4" />}
@@ -343,14 +410,13 @@ export function MesGainsApercuContent() {
         {/* 6d.1 : « Total tout temps » retiré de la grille (redondant avec le
             pipeline « Payé » et le graphique) — grille 2×2 compacte. */}
       </div>
-      {isSalariePur ? (
+      {isSalariePur && salMissions.length === 0 ? (
         <p className="text-[11px] text-muted-foreground mb-6">
-          💼 Montants bruts. Ton net exact figure sur ton <strong>bulletin de paie, fourni par
-          l'établissement employeur</strong> — le versement suit son calendrier de paie.
+          💼 Le net exact figure sur le <strong>bulletin de paie fourni par l'établissement employeur</strong>.
         </p>
-      ) : (
+      ) : salMissions.length > 0 ? (
         <NoteNetEstime className="mb-6" />
-      )}
+      ) : null}
       {indetCount > 0 && (
         <p className="text-xs text-muted-foreground mb-6">
           {indetCount} mission{indetCount > 1 ? 's' : ''} en cours de qualification de régime — non comptée{indetCount > 1 ? 's' : ''} ci-dessus.
@@ -366,7 +432,7 @@ export function MesGainsApercuContent() {
           seule = du bruit, pas une tendance. */}
       {moisDisponibles.length >= 2 && (
         <Suspense fallback={<div className="h-64 animate-pulse bg-muted rounded-lg" />}>
-          <GraphiqueGains6Mois missions={allMissions.map(m => ({ debut_le: m.debut_le, net_a_payer: netEstime(m) }))} />
+          <GraphiqueGains6Mois missions={allMissions.map(m => ({ debut_le: m.debut_le, net_a_payer: montantFinanceAfficheMission(m)?.montant ?? null }))} />
         </Suspense>
       )}
 
@@ -431,17 +497,15 @@ export function MesGainsApercuContent() {
             </div>
             {/* D3/§7.3 : salarié pur → pas d'estimation de prélèvements (le net
                 exact vient du bulletin de l'employeur) ; on affiche le brut total. */}
-            {isSalariePur ? (
-              <div>
-                <span className="text-muted-foreground">Brut total</span>
-                <p className="font-bold text-foreground">{fmt(totalBrutFiltre)}</p>
-              </div>
-            ) : (
-              <div>
-                <span className="text-muted-foreground">Prélèvements estimés</span>
-                <p className="font-bold text-foreground">~{fmt(totalBrutFiltre - totalNetFiltre)}</p>
-              </div>
-            )}
+            <div>
+              <span className="text-muted-foreground">Montants par régime</span>
+              <p className="font-bold text-foreground">
+                {[
+                  honorairesLib > 0 ? `${fmt(honorairesLib)} honoraires` : null,
+                  netSal > 0 ? `${fmt(netSal)} net salarié*` : null,
+                ].filter(Boolean).join(' + ') || '—'}
+              </p>
+            </div>
           </div>
         </div>
       )}
@@ -449,7 +513,7 @@ export function MesGainsApercuContent() {
       <p className="text-[10px] text-muted-foreground italic mb-3">
         {salMissions.length > 0 && '* Net salarié estimé après cotisations salariales (~22 %). '}
         {libMissions.length > 0 && '* Honoraires libéraux hors charges URSSAF/CARPIMKO (annualisées). '}
-        {libMissions.length === 0 && salMissions.length === 0 && '* Estimation après cotisations (~22 %). '}
+        {libMissions.length === 0 && salMissions.length === 0 && '* Aucun montant net n’est inventé tant que le régime n’est pas qualifié. '}
         Seuls les montants calculés par le moteur de paie / la facture font foi.
       </p>
 
@@ -478,7 +542,7 @@ export function MesGainsApercuContent() {
               || (m.etablissements?.nom || '').toLowerCase().includes(q)
               || (m.service || '').toLowerCase().includes(q);
           }).map(m => {
-            const net = netEstime(m);
+            const finance = montantFinanceAfficheMission(m);
             const duree = m.duree_heures ?? ((new Date(m.fin_le).getTime() - new Date(m.debut_le).getTime()) / 3600000);
             return (
               <div
@@ -512,17 +576,42 @@ export function MesGainsApercuContent() {
                   </div>
                   {/* Net amount + payment status */}
                   <div className="text-right shrink-0 ml-2">
-                    <button
-                      className="text-primary font-bold text-sm hover:underline"
-                      onClick={(e) => { e.stopPropagation(); setCotisationsMissionId(m.id); }}
-                      aria-label="Voir le détail des cotisations"
-                    >
-                      {fmt(net)}
-                    </button>
+                    {finance?.nature === 'NET_SALARIE_ESTIME' ? (
+                      <button
+                        className="text-primary font-bold text-sm hover:underline"
+                        onClick={(e) => { e.stopPropagation(); setCotisationsMissionId(m.id); }}
+                        aria-label="Voir le détail de l'estimation salariale"
+                      >
+                        ~{fmt(finance.montant)}
+                      </button>
+                    ) : (
+                      <p className="text-primary font-bold text-sm">
+                        {finance ? `${finance.approximatif ? '~' : ''}${fmt(finance.montant)}` : '—'}
+                      </p>
+                    )}
+                    {finance && <p className="text-[10px] text-muted-foreground">{finance.libelle}</p>}
                     {m.total_brut != null && (
                       <p className="text-[10px] text-muted-foreground">brut : {fmt(m.total_brut)}</p>
                     )}
                     {(() => {
+                      const resume = resumerFacturesMission(facturesMap[m.id] ?? []);
+                      if (resume.nbEnAttente > 0) {
+                        return (
+                          <p className="text-[10px] text-warning flex items-center justify-end gap-0.5">
+                            <AlertTriangle className="h-3 w-3" />
+                            {resume.nbPayees > 0 && `${resume.nbPayees} payée${resume.nbPayees > 1 ? 's' : ''} · `}
+                            {resume.nbEnRetard > 0
+                              ? `${resume.nbEnRetard} en retard`
+                              : `${resume.nbEnAttente} en attente`}
+                          </p>
+                        );
+                      }
+                      if (resume.nbPayees > 0) {
+                        return <p className="text-[10px] text-success flex items-center justify-end gap-0.5"><CheckCircle className="h-3 w-3" />{resume.nbPayees} facture{resume.nbPayees > 1 ? 's' : ''} payée{resume.nbPayees > 1 ? 's' : ''}</p>;
+                      }
+                      if ((facturesMap[m.id] ?? []).some(factureEstAvoir)) {
+                        return <p className="text-[10px] text-muted-foreground">Avoir enregistré</p>;
+                      }
                       const p = paiementsMap[m.id];
                       if (!p) return <p className="text-[10px] text-muted-foreground/50">En attente</p>;
                       if (p.statut === 'CONFIRME') return <p className="text-[10px] text-success flex items-center justify-end gap-0.5"><CheckCircle className="h-3 w-3" />Payé</p>;
@@ -536,11 +625,13 @@ export function MesGainsApercuContent() {
               </div>
             );
           })}
-          {allMissions.length === (page + 1) * PAGE_SIZE && (
-            <button onClick={() => setPage(p => p + 1)} className="btn-secondary w-full mt-4">Charger plus de missions</button>
+          {hasMore && (
+            <button disabled={loading} onClick={() => setPage(p => p + 1)} className="btn-secondary w-full mt-4">
+              {loading ? 'Chargement…' : 'Charger plus de missions'}
+            </button>
           )}
         </div>
-      ) : allMissions.length === 0 ? (
+      ) : erreurChargement ? null : allMissions.length === 0 ? (
         <EmptyState illustration={<IllustrationTirelire />} titre="Pas encore de gains" description="Tes gains apparaîtront ici après ta première mission terminée." cta={{ label: 'Trouver une mission', onClick: () => navigate('/soignant/recherche-missions') }} />
       ) : (
         /* 6d.1 : historique existant mais période vide → message scopé, pas un
@@ -578,19 +669,42 @@ export default function MesGains() {
   const { user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const [exercice, setExercice] = useState<{ type: string | null; liberalActif: boolean } | null>(null);
+  const [aDesBulletins, setADesBulletins] = useState(false);
+  const [aDesFacturesHonoraires, setADesFacturesHonoraires] = useState(false);
+  const [erreurMetaFinances, setErreurMetaFinances] = useState<string | null>(null);
   // Affacturage Defacto pas en prod → onglet « Avances » masqué tant que le flag
   // affacturage_actif est off (défaut). Flippable à chaud côté param système.
   const affacturageActif = useAffacturageActif();
 
   useEffect(() => {
     if (!user) return;
-    supabase.from('soignants').select('type_exercice, statut_liberal').eq('id', user.id).maybeSingle()
-      .then(({ data }) => {
-        setExercice({
-          type: (data as any)?.type_exercice ?? null,
-          liberalActif: (data as any)?.statut_liberal === 'ACTIF',
-        });
-      }, (err) => { handleErrorSilent(err, 'MesGains.hub.exercice'); setExercice({ type: null, liberalActif: false }); });
+    let actif = true;
+    void (async () => {
+      const [profilResult, bulletinsResult, facturesResult] = await Promise.all([
+        supabase.from('soignants').select('type_exercice, statut_liberal').eq('id', user.id).maybeSingle(),
+        supabase.rpc('fn_mes_bulletins_paie' as any),
+        supabase.rpc('fn_mes_factures_honoraires' as any),
+      ]);
+      if (!actif) return;
+      if (profilResult.error || bulletinsResult.error || facturesResult.error) {
+        setErreurMetaFinances(
+          profilResult.error?.message
+          || bulletinsResult.error?.message
+          || facturesResult.error?.message
+          || 'Impossible de vérifier tout l’historique financier.',
+        );
+      } else {
+        setErreurMetaFinances(null);
+      }
+      const data = profilResult.data;
+      setADesBulletins(Array.isArray(bulletinsResult.data) && bulletinsResult.data.length > 0);
+      setADesFacturesHonoraires(Array.isArray(facturesResult.data) && facturesResult.data.length > 0);
+      setExercice({
+        type: (data as any)?.type_exercice ?? null,
+        liberalActif: (data as any)?.statut_liberal === 'ACTIF',
+      });
+    })();
+    return () => { actif = false; };
   }, [user]);
 
   // Tant que le statut n'est pas chargé (exercice == null), on reste permissif et
@@ -602,8 +716,8 @@ export default function MesGains() {
   const estSalarie = type === 'SALARIE' || type === 'MIXTE' || (type == null ? false : !estLiberal);
   // Si le type est inconnu (null) on reste permissif : on garde l'onglet ciblé par
   // ?tab= accessible afin de ne jamais casser un lien profond.
-  const showFactures = estLiberal || (exercice == null);
-  const showBulletins = estSalarie || (type == null && exercice != null) || (exercice == null);
+  const showFactures = aDesFacturesHonoraires || estLiberal || (exercice == null);
+  const showBulletins = aDesBulletins || estSalarie || (type == null && exercice != null) || (exercice == null);
   // Avances = affacturage Defacto → uniquement si le flag est actif.
   const showAvances = (estLiberal || (exercice == null)) && affacturageActif;
 
@@ -626,8 +740,15 @@ export default function MesGains() {
     <LayoutApp role="SOIGNANT">
       <div className="mb-4">
         <h1 className="text-xl font-bold text-foreground">💰 Revenus</h1>
-        <p className="text-sm text-muted-foreground mt-1">{affacturageActif ? 'Tes gains, factures, bulletins et avance de trésorerie au même endroit' : 'Tes gains, factures et bulletins au même endroit'}</p>
+        <p className="text-sm text-muted-foreground mt-1">{affacturageActif ? 'Tes gains, factures, simulations de paie et avance de trésorerie au même endroit' : 'Tes gains, factures et simulations de paie au même endroit'}</p>
       </div>
+
+      {erreurMetaFinances && (
+        <div className="mb-4 rounded-xl border border-warning/30 bg-warning/5 p-3" role="alert">
+          <p className="text-sm font-medium text-warning">Historique financier partiellement indisponible</p>
+          <p className="mt-1 text-xs text-muted-foreground">{erreurMetaFinances}</p>
+        </div>
+      )}
 
       <Tabs value={currentTab} onValueChange={(v) => setSearchParams({ tab: v }, { replace: true })}>
         <TabsList className={`grid w-full mb-4 ${gridColsClass}`}>
@@ -644,7 +765,7 @@ export default function MesGains() {
           {showBulletins && (
             <TabsTrigger value="bulletins" className="flex items-center gap-1.5 text-xs sm:text-sm">
               <Receipt className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-              <span>Bulletins</span>
+              <span>Simulations</span>
             </TabsTrigger>
           )}
           {showAvances && (

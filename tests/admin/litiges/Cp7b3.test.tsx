@@ -23,10 +23,14 @@ import {
   litigeToRow,
 } from '@/components/admin/litiges/csv';
 import {
+  calculerMontantsAvoir,
   filtrerAvoirs,
   type AvoirEnrichi,
 } from '@/components/admin/litiges/AvoirsList';
-import { alerteConditions } from '@/components/admin/litiges/RefundsQueueWidget';
+import {
+  alerteConditions,
+  construireStatsRefunds,
+} from '@/components/admin/litiges/RefundsQueueWidget';
 import { MediationBanner } from '@/components/admin/litiges/MediationBanner';
 import type { LitigeEnrichi } from '@/components/admin/litiges/types';
 
@@ -116,6 +120,7 @@ describe('AvoirsList — filtrerAvoirs', () => {
     statut: p.statut ?? 'BROUILLON',
     mode_remboursement: p.mode_remboursement ?? 'N_A',
     montant_ht: null,
+    montant_tva: null,
     montant_ttc: null,
     date_emission: null,
     date_remboursement: null,
@@ -144,6 +149,19 @@ describe('AvoirsList — filtrerAvoirs', () => {
   it('filtre REMBOURSE', () => {
     expect(filtrerAvoirs(avoirs, 'REMBOURSE').map((a) => a.id)).toEqual(['3']);
   });
+
+  it('retient le TTC comme montant réellement remboursé et détaille la TVA', () => {
+    expect(calculerMontantsAvoir({ montant_ht: 100, montant_tva: 20, montant_ttc: 120 })).toEqual({
+      ht: 100,
+      tva: 20,
+      ttc: 120,
+      montantRemboursement: 120,
+    });
+  });
+
+  it('conserve le repli historique HT si le TTC est absent', () => {
+    expect(calculerMontantsAvoir({ montant_ht: 100, montant_tva: null, montant_ttc: null }).montantRemboursement).toBeNull();
+  });
 });
 
 // ─────────────────────────────────────────────────────────────
@@ -151,6 +169,15 @@ describe('AvoirsList — filtrerAvoirs', () => {
 // ─────────────────────────────────────────────────────────────
 
 describe('RefundsQueueWidget — alerteConditions', () => {
+  it('utilise le count exact même si une seule ligne est chargée', () => {
+    expect(construireStatsRefunds(17, [{ cree_le: '2026-07-01T08:00:00Z' }])).toEqual({
+      count: 17,
+      plus_ancienne_iso: '2026-07-01T08:00:00Z',
+    });
+  });
+  it('refuse un count absent au lieu de retomber sur rows.length', () => {
+    expect(() => construireStatsRefunds(null, [{ cree_le: '2026-07-01T08:00:00Z' }])).toThrow(/Comptage exact/);
+  });
   it('count <= 0 → false', () => {
     expect(alerteConditions({ count: 0, plus_ancienne_iso: null })).toBe(false);
   });

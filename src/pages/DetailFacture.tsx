@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Printer, CreditCard, Loader2, CheckCircle, Clock, Download, ChevronDown, ChevronRight } from 'lucide-react';
+import { ArrowLeft, Printer, CreditCard, Loader2, CheckCircle, Clock, Download, ChevronDown, ChevronRight, AlertTriangle, RefreshCw } from 'lucide-react';
 import { LayoutApp } from '@/components/LayoutApp';
 import { ChargementPage } from '@/components/ChargementPage';
 import { useEtablissementScope } from '@/hooks/useEtablissementScope';
@@ -9,13 +9,13 @@ import { useNotification } from '@/contexts/NotificationContext';
 import { supabase } from '@/integrations/supabase/client';
 import { StripeEmbeddedCheckout } from '@/components/StripeEmbeddedCheckout';
 import { PaiementVirement } from '@/components/PaiementVirement';
-import { format, differenceInHours, differenceInMinutes } from 'date-fns';
+import { format, differenceInMinutes } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { ENTREPRISE } from '@/constantes/entreprise';
 import { capturerErreurSentry } from '@/lib/sentry';
 import { logger } from '@/lib/logger';
-import { toast } from 'sonner';
 import { telechargerFactureCommissionPDF } from '@/lib/facture-commission-pdf';
+import { useEtabPermissions } from '@/hooks/useEtabPermissions';
 
 const STATUT_COLORS: Record<string, string> = {
   BROUILLON: 'bg-muted text-muted-foreground',
@@ -42,13 +42,6 @@ const MODE_LABELS: Record<string, string> = {
 };
 
 const formatEur = (v: number) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(v);
-
-function calcHeures(debut: string, fin: string): string {
-  const mins = differenceInMinutes(new Date(fin), new Date(debut));
-  const h = Math.floor(Math.abs(mins) / 60);
-  const m = Math.abs(mins) % 60;
-  return m > 0 ? `${h}h${String(m).padStart(2, '0')}` : `${h}h`;
-}
 
 const formatHeure = (d: string) => format(new Date(d), 'HH:mm', { locale: fr });
 const formatDateCourte = (d: string) => format(new Date(d), 'EEEE dd/MM/yyyy', { locale: fr });
@@ -248,7 +241,25 @@ export default function DetailFacture() {
   usePageTitle('Détail facture');
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { user, etablissementId } = useEtablissementScope();
+  const {
+    user,
+    etablissementId,
+    loading: scopeLoading,
+    resolved: scopeResolved,
+    error: scopeError,
+    retry: retryScope,
+  } = useEtablissementScope();
+  const permissionCheckEnabled = Boolean(
+    !scopeLoading && scopeResolved && !scopeError && user && etablissementId,
+  );
+  const {
+    loading: permissionsLoading,
+    permissions,
+    error: permissionsError,
+    recharger: rechargerPermissions,
+  } = useEtabPermissions(etablissementId ?? undefined, permissionCheckEnabled);
+  const canReadFinance = permissions.lecture_paiement || permissions.paiement;
+  const canManagePayments = permissions.paiement;
   const { afficherNotification } = useNotification();
   const [loading, setLoading] = useState(true);
   const [facture, setFacture] = useState<any>(null);
@@ -256,47 +267,71 @@ export default function DetailFacture() {
   const [etab, setEtab] = useState<any>(null);
   const [showCheckout, setShowCheckout] = useState(false);
   const [generatingPdf, setGeneratingPdf] = useState(false);
+  const [erreurChargement, setErreurChargement] = useState<string | null>(null);
+  const requeteCourante = useRef(0);
 
-  const charger = async () => {
-    if (!user || !id || !etablissementId) return;
+  const charger = useCallback(async () => {
+    if (scopeLoading || !scopeResolved || scopeError || permissionsLoading) return;
+    if (!user || !id || !etablissementId || !canReadFinance) {
+      setLoading(false);
+      return;
+    }
+    const numeroRequete = ++requeteCourante.current;
     setLoading(true);
+    setErreurChargement(null);
+    setFacture(null);
+    setMissions([]);
+    setEtab(null);
 
-    const [resDetail, resE] = await Promise.all([
-      supabase.rpc('fn_detail_facture' as any, { p_facture_id: id }),
-      supabase.rpc('fn_mon_etablissement_complet' as any),
-    ]);
+    try {
+      const [resDetail, resE] = await Promise.all([
+        supabase.rpc('fn_detail_facture' as any, { p_facture_id: id }),
+        supabase.rpc('fn_mon_etablissement_complet' as any),
+      ]);
+      if (numeroRequete !== requeteCourante.current) return;
+      if (resDetail.error) throw resDetail.error;
+      if (resE.error) throw resE.error;
+      if ((resDetail.data as any)?.error) throw new Error((resDetail.data as any).error);
+      if ((resE.data as any)?.error) throw new Error((resE.data as any).error);
 
-    if (resDetail.error) {
-      toast.error('Erreur chargement facture');
-      setLoading(false);
-      return;
-    }
-    if ((resDetail.data as any)?.error) {
-      toast.error((resDetail.data as any).error);
-      setLoading(false);
-      return;
-    }
+      let detail = resDetail.data as any;
+      if (typeof detail === 'string') {
+        try { detail = JSON.parse(detail); } catch { throw new Error('Réponse facture invalide'); }
+      }
+      if (Array.isArray(detail) && detail.length === 1) detail = detail[0];
+      if (!detail?.facture || !Array.isArray(detail?.missions) || !resE.data) {
+        logger.warn('[DetailFacture] réponse incomplète', detail ? Object.keys(detail) : 'null');
+        throw new Error('Réponse facture incomplète');
+      }
 
-    let detail = resDetail.data as any;
-    // Handle case where RPC returns stringified JSON
-    if (typeof detail === 'string') {
-      try { detail = JSON.parse(detail); } catch { /* keep as-is */ }
-    }
-    // Handle case where data is wrapped in an array
-    if (Array.isArray(detail) && detail.length === 1) {
-      detail = detail[0];
-    }
-    if (detail?.facture) setFacture(detail.facture);
-    if (Array.isArray(detail?.missions)) {
+      setFacture(detail.facture);
       setMissions(detail.missions);
-    } else {
-      logger.warn('[DetailFacture] missions not found in response, keys:', detail ? Object.keys(detail) : 'null');
+      setEtab(resE.data);
+    } catch (error) {
+      if (numeroRequete !== requeteCourante.current) return;
+      capturerErreurSentry(error, 'DetailFacture', 'charger');
+      setFacture(null);
+      setMissions([]);
+      setEtab(null);
+      setErreurChargement('Impossible de charger cette facture en toute sécurité.');
+    } finally {
+      if (numeroRequete === requeteCourante.current) setLoading(false);
     }
-    if (resE.data) setEtab(resE.data);
-    setLoading(false);
-  };
+  }, [
+    canReadFinance,
+    etablissementId,
+    id,
+    permissionsLoading,
+    scopeError,
+    scopeLoading,
+    scopeResolved,
+    user,
+  ]);
 
-  useEffect(() => { charger(); }, [user, id, etablissementId]);
+  useEffect(() => {
+    void charger();
+    return () => { requeteCourante.current += 1; };
+  }, [charger]);
 
   const genererPDF = async () => {
     if (!facture) return;
@@ -311,14 +346,71 @@ export default function DetailFacture() {
     }
   };
 
-  if (loading) return <LayoutApp role="ADMIN_ETABLISSEMENT"><ChargementPage /></LayoutApp>;
+  if (
+    scopeLoading
+    || (!scopeResolved && !scopeError)
+    || (permissionCheckEnabled && permissionsLoading)
+    || loading
+  ) {
+    return <LayoutApp role="ADMIN_ETABLISSEMENT"><ChargementPage /></LayoutApp>;
+  }
+  if (scopeError || !scopeResolved || !user || !etablissementId) {
+    return (
+      <LayoutApp role="ADMIN_ETABLISSEMENT">
+        <div className="card-base max-w-xl mx-auto text-center space-y-4" role="alert">
+          <AlertTriangle className="h-10 w-10 text-destructive mx-auto" />
+          <h1 className="text-xl font-bold">Facture indisponible</h1>
+          <p className="text-sm text-muted-foreground">Impossible de vérifier votre établissement.</p>
+          <button type="button" onClick={retryScope} className="btn-primary text-sm inline-flex items-center gap-2">
+            <RefreshCw className="h-4 w-4" /> Réessayer
+          </button>
+        </div>
+      </LayoutApp>
+    );
+  }
+  if (permissionsError || !canReadFinance) {
+    return (
+      <LayoutApp role="ADMIN_ETABLISSEMENT">
+        <div className="card-base max-w-xl mx-auto text-center space-y-4" role="alert">
+          <AlertTriangle className="h-10 w-10 text-destructive mx-auto" />
+          <h1 className="text-xl font-bold">Accès à la facture refusé</h1>
+          <p className="text-sm text-muted-foreground">
+            Votre rôle ne dispose pas de la permission de lecture des paiements.
+          </p>
+          {permissionsError && (
+            <button type="button" onClick={() => void rechargerPermissions()} className="btn-primary text-sm inline-flex items-center gap-2">
+              <RefreshCw className="h-4 w-4" /> Réessayer
+            </button>
+          )}
+        </div>
+      </LayoutApp>
+    );
+  }
+  if (erreurChargement) {
+    return (
+      <LayoutApp role="ADMIN_ETABLISSEMENT">
+        <div className="card-base max-w-xl mx-auto text-center space-y-4" role="alert">
+          <AlertTriangle className="h-10 w-10 text-destructive mx-auto" />
+          <h1 className="text-xl font-bold">Facture indisponible</h1>
+          <p className="text-sm text-muted-foreground">{erreurChargement}</p>
+          <button type="button" onClick={() => void charger()} className="btn-primary text-sm inline-flex items-center gap-2">
+            <RefreshCw className="h-4 w-4" /> Réessayer
+          </button>
+        </div>
+      </LayoutApp>
+    );
+  }
   if (!facture) return (
     <LayoutApp role="ADMIN_ETABLISSEMENT">
       <p className="text-center text-muted-foreground py-12">Facture introuvable.</p>
     </LayoutApp>
   );
 
-  const canPay = facture.statut === 'EMISE' || facture.statut === 'EN_RETARD';
+  const estSepaAutomatique = etab?.mode_paiement_commission === 'SEPA_DEBIT';
+  const canPay = canManagePayments
+    && (facture.statut === 'EMISE' || facture.statut === 'EN_RETARD')
+    && !facture.est_secteur_public
+    && !estSepaAutomatique;
 
   return (
     <LayoutApp role="ADMIN_ETABLISSEMENT">
@@ -335,7 +427,7 @@ export default function DetailFacture() {
           <button onClick={() => window.print()} className="btn-secondary text-sm flex items-center gap-1.5">
             <Printer className="h-4 w-4" /> Imprimer
           </button>
-          {canPay && !facture.est_secteur_public && (
+          {canPay && (
             <button onClick={() => setShowCheckout(true)} className="btn-primary text-sm flex items-center gap-1.5">
               <CreditCard className="h-4 w-4" /> Payer
             </button>
@@ -445,7 +537,13 @@ export default function DetailFacture() {
           </div>
         )}
 
-        {canPay && !facture.est_secteur_public && (
+        {(facture.statut === 'EMISE' || facture.statut === 'EN_RETARD') && estSepaAutomatique && !facture.est_secteur_public && (
+          <div className="mt-6 rounded-xl border border-primary/20 bg-primary/5 p-3 text-sm text-muted-foreground no-print">
+            Prélèvement SEPA automatique programmé : aucune carte ni déclaration de virement n’est nécessaire.
+          </div>
+        )}
+
+        {canPay && (
           <div className="mt-6 no-print">
             <PaiementVirement facture={facture} onUpdate={charger} />
           </div>
@@ -457,7 +555,7 @@ export default function DetailFacture() {
         </div>
       </div>
 
-      {showCheckout && facture && (
+      {canManagePayments && showCheckout && facture && !estSepaAutomatique && !facture.est_secteur_public && (
         <StripeEmbeddedCheckout
           factureId={facture.id}
           open={showCheckout}

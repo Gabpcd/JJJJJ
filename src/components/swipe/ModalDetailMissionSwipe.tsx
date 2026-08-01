@@ -19,6 +19,7 @@ import { BadgeY2K } from '@/components/y2k/BadgeY2K';
 import { formatDureeCompacte } from '@/lib/format-mission';
 import { PlanningMissionCandidat } from '@/components/planning/PlanningMissionCandidat';
 import { construirePlanningCandidat } from '@/components/planning/planning-candidat';
+import { montantFinanceAfficheMission } from '@/lib/missionFinanceDisplay';
 import type { MissionSwipePayload } from './CardMissionSwipe';
 
 interface Props {
@@ -53,8 +54,9 @@ export function ModalDetailMissionSwipe({ mission, open, onOpenChange, onPostule
   const ifm = mission.montant_ifm || 0;
   const icp = mission.montant_icp || 0;
   const totalAvantCharges = mission.net_a_payer ?? (totalBrut != null ? totalBrut + ifm + icp : null);
-  const netEstime = mission.net_estime ?? (totalAvantCharges != null ? totalAvantCharges * 0.78 : null);
-  const afficherFinance = totalBrut != null || totalAvantCharges != null || netEstime != null;
+  const financeAffichee = montantFinanceAfficheMission(mission);
+  const missionEstLiberale = financeAffichee?.nature === 'HONORAIRES_LIBERAUX';
+  const afficherFinance = totalBrut != null || totalAvantCharges != null || financeAffichee != null;
 
   return (
     <DialogResponsive open={open} onOpenChange={onOpenChange}>
@@ -151,11 +153,11 @@ export function ModalDetailMissionSwipe({ mission, open, onOpenChange, onPostule
               <div className="mt-3 rounded-2xl bg-jolene-cloud border border-jolene-rose-100 p-4 space-y-2">
                 <div className="flex items-center justify-between gap-3">
                   <p className="text-xs font-semibold text-jolene-bubblegum uppercase tracking-wider">
-                    Gain net estimé
+                    {financeAffichee?.libelle ?? 'Rémunération indicative'}
                   </p>
-                  {netEstime != null && netEstime > 0 && (
+                  {financeAffichee && financeAffichee.montant > 0 && (
                     <p className="text-2xl font-extrabold text-jolene-midnight">
-                      ~{formatMontant(netEstime)}
+                      {financeAffichee.approximatif ? '~' : ''}{formatMontant(financeAffichee.montant)}
                     </p>
                   )}
                 </div>
@@ -176,32 +178,39 @@ export function ModalDetailMissionSwipe({ mission, open, onOpenChange, onPostule
                       <dd className="font-semibold text-jolene-midnight">{formatMontant(totalBrut)}</dd>
                     </div>
                   )}
-                  <div className="flex justify-between gap-3">
-                    <dt className="text-jolene-bubblegum">IFM + ICP</dt>
-                    <dd className="font-semibold text-jolene-midnight">
-                      {ifm + icp > 0 ? `+${formatMontant(ifm + icp)}` : formatMontant(0)}
-                    </dd>
-                  </div>
-                  {totalAvantCharges != null && (
+                  {!missionEstLiberale && (
+                    <div className="flex justify-between gap-3">
+                      <dt className="text-jolene-bubblegum">IFM + ICP</dt>
+                      <dd className="font-semibold text-jolene-midnight">
+                        {ifm + icp > 0 ? `+${formatMontant(ifm + icp)}` : formatMontant(0)}
+                      </dd>
+                    </div>
+                  )}
+                  {!missionEstLiberale && totalAvantCharges != null && (
                     <div className="flex justify-between gap-3 border-t border-jolene-rose-100 pt-1.5">
                       <dt className="text-jolene-bubblegum">Total avant cotisations</dt>
                       <dd className="font-bold text-jolene-midnight">{formatMontant(totalAvantCharges)}</dd>
                     </div>
                   )}
                 </dl>
-                {totalAvantCharges != null && netEstime != null && (
+                {!missionEstLiberale && totalAvantCharges != null && financeAffichee?.nature === 'NET_SALARIE_ESTIME' && (
                   <p className="text-[11px] text-jolene-bubblegum">
-                    Net estimé = {formatMontant(totalAvantCharges)} x 0,78. Le montant final dépend des cotisations applicables.
+                    Le net salarié est une estimation du moteur de paie. Le montant exact figurera sur le bulletin de l'employeur.
+                  </p>
+                )}
+                {missionEstLiberale && (
+                  <p className="text-[11px] text-jolene-bubblegum">
+                    Honoraires bruts avant les cotisations libérales déclarées séparément par le soignant.
                   </p>
                 )}
                 {/* 7c : délai de paiement — copy différenciée ⚡ vs standard,
                     uniquement sur le libéral (le salarié est payé par la paie
                     de l'employeur, Jolene ne verse rien). */}
-                {mission.paiement_rapide ? (
+                {missionEstLiberale && mission.paiement_rapide ? (
                   <p className="text-[11px] font-semibold text-success">
                     ⚡ Payée sous 24 à 72 h après validation des présences.
                   </p>
-                ) : mission.type_contrat_recherche === 'LIBERAL' ? (
+                ) : missionEstLiberale ? (
                   <p className="text-[11px] text-jolene-bubblegum">
                     Payée après règlement de l'établissement (~30 à 60 jours).
                   </p>

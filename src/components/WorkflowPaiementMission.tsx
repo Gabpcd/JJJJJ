@@ -9,6 +9,7 @@ import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { useNavigate } from 'react-router-dom';
+import { useEtabPermissions } from '@/hooks/useEtabPermissions';
 
 interface Props {
   missionId: string;
@@ -23,10 +24,12 @@ type ModeRecommande = 'STRIPE_CONNECT' | 'VIREMENT_PAIE' | 'VIREMENT_NOTE_HONORA
 interface InfoPaiement {
   mode_recommande: ModeRecommande;
   montant_soignant: number;
+  montant_soignant_estime?: boolean;
   commission_ttc: number;
   total: number;
-  iban_soignant?: string;
+  iban_last4?: string;
   type_exercice?: string;
+  type_contrat_applique?: string;
 }
 
 const isRefValid = (ref: string) => {
@@ -36,10 +39,21 @@ const isRefValid = (ref: string) => {
 
 export function WorkflowPaiementMission({ missionId, soignantAssigneId, etablissementId, onStartConnectPay, soignantHasConnect }: Props) {
   const navigate = useNavigate();
+  const {
+    loading: permissionsLoading,
+    permissions,
+    error: permissionsError,
+    recharger: rechargerPermissions,
+  } = useEtabPermissions(etablissementId);
+  const canReadFinance = permissions.lecture_paiement || permissions.paiement;
+  const canManagePayments = permissions.paiement;
   const [info, setInfo] = useState<InfoPaiement | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [reloadToken, setReloadToken] = useState(0);
   const [declaring, setDeclaring] = useState(false);
   const [reference, setReference] = useState('');
+  const [montantNetReel, setMontantNetReel] = useState('');
   const [attestation, setAttestation] = useState(false);
   const [ribLoading, setRibLoading] = useState(false);
   const [ribData, setRibData] = useState<string | null>(null);
@@ -50,37 +64,91 @@ export function WorkflowPaiementMission({ missionId, soignantAssigneId, etabliss
   const [stripeTransfer, setStripeTransfer] = useState<any>(null);
 
   useEffect(() => {
-    const load = async () => {
-      const [{ data: modeData, error: modeErr }, { data: paiementData }, { data: transferData }] = await Promise.all([
-        supabase.rpc('fn_mode_paiement_mission' as any, { p_mission_id: missionId }),
-        supabase.from('paiements_soignant')
-          .select('*')
-          .eq('mission_id', missionId)
-          .in('statut', ['DECLARE', 'CONFIRME', 'CONTESTE', 'RESOLU'])
-          .order('cree_le', { ascending: false })
-          .limit(1),
-        supabase.from('stripe_transfers')
-          .select('id, statut, montant_total, montant_soignant, montant_commission, charge_le')
-          .eq('mission_id', missionId)
-          .in('statut', ['EN_ATTENTE', 'TRANSFERE'])
-          .order('cree_le', { ascending: false })
-          .limit(1),
-      ]);
-      if (!modeErr && modeData) {
-        setInfo(modeData as unknown as InfoPaiement);
-      }
-      if (paiementData && paiementData.length > 0) {
-        setPaiementExistant(paiementData[0]);
-      }
-      if (transferData && transferData.length > 0) {
-        setStripeTransfer(transferData[0]);
-      }
+    if (permissionsLoading) return;
+    if (permissionsError) {
+      setInfo(null);
+      setPaiementExistant(null);
+      setStripeTransfer(null);
+      setLoadError('Impossible de vérifier vos droits de paiement.');
       setLoading(false);
+      return;
+    }
+    if (!canReadFinance) {
+      setInfo(null);
+      setPaiementExistant(null);
+      setStripeTransfer(null);
+      setLoadError(null);
+      setLoading(false);
+      return;
+    }
+    let cancelled = false;
+    const load = async () => {
+      setLoading(true);
+      setLoadError(null);
+      setInfo(null);
+      setPaiementExistant(null);
+      setStripeTransfer(null);
+      setRibData(null);
+      setMontantNetReel('');
+      try {
+        const [modeResponse, paiementResponse, transferResponse] = await Promise.all([
+          supabase.rpc('fn_mode_paiement_mission' as any, { p_mission_id: missionId }),
+          supabase.from('paiements_soignant')
+            .select('*')
+            .eq('mission_id', missionId)
+            .in('statut', ['DECLARE', 'CONFIRME', 'CONTESTE', 'RESOLU'])
+            .order('cree_le', { ascending: false })
+            .limit(1),
+          supabase.from('stripe_transfers')
+            .select('id, statut, montant_total, montant_soignant, montant_commission, charge_le')
+            .eq('mission_id', missionId)
+            .in('statut', ['EN_ATTENTE', 'CHARGE_REUSSI', 'TRANSFERE', 'PAYE'])
+            .order('cree_le', { ascending: false })
+            .limit(1),
+        ]);
+        if (modeResponse.error) throw modeResponse.error;
+        if (paiementResponse.error) throw paiementResponse.error;
+        if (transferResponse.error) throw transferResponse.error;
+        if (!Array.isArray(paiementResponse.data) || !Array.isArray(transferResponse.data)) {
+          throw new Error('Historique de paiement incomplet');
+        }
+        const modeData = modeResponse.data as (InfoPaiement & { error?: string }) | null;
+        if (!modeData || modeData.error || !modeData.mode_recommande) {
+          throw new Error(modeData?.error || 'Mode de paiement indisponible');
+        }
+        if (cancelled) return;
+        setInfo(modeData);
+        if (paiementResponse.data?.length) setPaiementExistant(paiementResponse.data[0]);
+        if (transferResponse.data?.length) setStripeTransfer(transferResponse.data[0]);
+      } catch (error) {
+        if (cancelled) return;
+        const message = error instanceof Error && error.message
+          ? error.message
+          : error && typeof error === 'object' && 'message' in error
+            ? String(error.message)
+            : 'Données de paiement indisponibles';
+        setLoadError(`Impossible de charger le paiement : ${message}`);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
     };
-    load();
-  }, [missionId]);
+    void load();
+    return () => { cancelled = true; };
+  }, [canReadFinance, missionId, permissionsError, permissionsLoading, reloadToken]);
+
+  const retryLoad = () => {
+    if (permissionsError) {
+      void rechargerPermissions();
+      return;
+    }
+    setReloadToken((value) => value + 1);
+  };
 
   const consulterRib = async () => {
+    if (!canManagePayments) {
+      toast.error('Votre rôle ne permet pas de consulter les coordonnées bancaires.');
+      return;
+    }
     const preview = window.open('about:blank', '_blank');
     if (!preview) {
       toast.error('Autorisez les fenêtres contextuelles pour consulter le RIB.');
@@ -115,6 +183,10 @@ export function WorkflowPaiementMission({ missionId, soignantAssigneId, etabliss
   };
 
   const declarerPaiement = async () => {
+    if (!canManagePayments) {
+      toast.error('Votre rôle ne permet pas de déclarer un paiement.');
+      return;
+    }
     if (!isRefValid(reference)) {
       toast.error('La référence doit contenir au moins 6 caractères, dont 2 chiffres et 1 lettre (ex : VIR-2026-001)');
       return;
@@ -123,11 +195,21 @@ export function WorkflowPaiementMission({ missionId, soignantAssigneId, etabliss
       toast.error('Veuillez cocher l\'attestation sur l\'honneur pour déclarer le paiement');
       return;
     }
+    const estPaiementSalarie = info?.mode_recommande === 'VIREMENT_PAIE';
+    const montantDeclare = estPaiementSalarie
+      ? Number(montantNetReel.replace(',', '.'))
+      : Number(info?.montant_soignant ?? 0);
+    if (!Number.isFinite(montantDeclare) || montantDeclare <= 0) {
+      toast.error(estPaiementSalarie
+        ? 'Saisissez le montant net exact figurant sur le bulletin officiel.'
+        : 'Montant de paiement invalide.');
+      return;
+    }
     setDeclaring(true);
     try {
       const { data, error } = await supabase.rpc('fn_declarer_paiement_soignant' as any, {
         p_mission_id: missionId,
-        p_montant: info?.montant_soignant || 0,
+        p_montant: montantDeclare,
         p_reference: reference.trim(),
         p_attestation_sur_l_honneur: attestation,
       });
@@ -143,6 +225,7 @@ export function WorkflowPaiementMission({ missionId, soignantAssigneId, etabliss
       }
       toast.success('Paiement déclaré — le soignant sera notifié');
       setReference('');
+      setMontantNetReel('');
       // Reload payment status
       const { data: pData } = await supabase.from('paiements_soignant')
         .select('*').eq('mission_id', missionId)
@@ -156,7 +239,7 @@ export function WorkflowPaiementMission({ missionId, soignantAssigneId, etabliss
   };
 
   const modifierReference = async () => {
-    if (!isRefValid(newRef) || !paiementExistant) return;
+    if (!canManagePayments || !isRefValid(newRef) || !paiementExistant) return;
     setModifLoading(true);
     try {
       const { data, error } = await supabase.rpc('fn_modifier_reference_paiement' as any, {
@@ -178,6 +261,23 @@ export function WorkflowPaiementMission({ missionId, soignantAssigneId, etabliss
     return (
       <div className="card-base flex items-center justify-center py-4">
         <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div className="card-base border-destructive/30 bg-destructive/5 space-y-3" role="alert">
+        <div className="flex items-start gap-2">
+          <AlertTriangle className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
+          <div>
+            <p className="text-sm font-semibold text-foreground">Paiement indisponible</p>
+            <p className="text-xs text-muted-foreground mt-1">{loadError}</p>
+          </div>
+        </div>
+        <BoutonY2K size="sm" variant="secondary" onClick={retryLoad}>
+          Réessayer
+        </BoutonY2K>
       </div>
     );
   }
@@ -309,12 +409,12 @@ export function WorkflowPaiementMission({ missionId, soignantAssigneId, etabliss
           </BoutonY2K>
         )}
 
-        {canModifyRef && (
+        {canManagePayments && canModifyRef && (
           <BoutonY2K size="sm" variant="secondary" className="gap-1.5 text-xs" onClick={() => { setNewRef(p.reference_virement || ''); setShowModifRef(true); }} iconeGauche={<Edit2 className="h-3 w-3" />}>
             Modifier la référence
           </BoutonY2K>
         )}
-        <Dialog open={showModifRef} onOpenChange={setShowModifRef}>
+        <Dialog open={canManagePayments && showModifRef} onOpenChange={setShowModifRef}>
           <DialogContent>
             <DialogHeader><DialogTitle>Modifier la référence de paiement</DialogTitle></DialogHeader>
             <div className="space-y-3 mt-2">
@@ -334,12 +434,15 @@ export function WorkflowPaiementMission({ missionId, soignantAssigneId, etabliss
 
   // Stripe transfer already exists (paid or in progress)
   if (stripeTransfer) {
-    const isTransfere = stripeTransfer.statut === 'TRANSFERE';
+    const isVerse = ['TRANSFERE', 'PAYE'].includes(stripeTransfer.statut);
+    const paiementConfirme = stripeTransfer.statut === 'CHARGE_REUSSI';
     return (
-      <div className={`card-base space-y-2 ${isTransfere ? 'border-success/20' : 'border-primary/20'}`}>
+      <div className={`card-base space-y-2 ${isVerse ? 'border-success/20' : 'border-primary/20'}`}>
         <p className="text-sm font-semibold text-foreground flex items-center gap-2">
-          {isTransfere ? (
+          {isVerse ? (
             <><CheckCircle className="h-4 w-4 text-success" /> Paiement Stripe effectué</>
+          ) : paiementConfirme ? (
+            <><Loader2 className="h-4 w-4 animate-spin text-primary" /> Paiement reçu — transfert en cours</>
           ) : (
             <><Loader2 className="h-4 w-4 animate-spin text-primary" /> Paiement Stripe en cours</>
           )}
@@ -352,8 +455,12 @@ export function WorkflowPaiementMission({ missionId, soignantAssigneId, etabliss
             <p className="text-muted-foreground">Date : <span className="text-foreground font-medium">{new Date(stripeTransfer.charge_le).toLocaleDateString('fr-FR')}</span></p>
           )}
         </div>
-        {!isTransfere && (
-          <p className="text-[10px] text-muted-foreground">Le transfert vers le soignant sera effectué automatiquement après confirmation du paiement.</p>
+        {!isVerse && (
+          <p className="text-[10px] text-muted-foreground">
+            {paiementConfirme
+              ? 'Le paiement est confirmé ; le transfert vers le soignant est encore en cours.'
+              : 'Le transfert vers le soignant sera effectué automatiquement après confirmation du paiement.'}
+          </p>
         )}
       </div>
     );
@@ -371,18 +478,27 @@ export function WorkflowPaiementMission({ missionId, soignantAssigneId, etabliss
           <p>Honoraires soignant : {fmt(info.montant_soignant)}</p>
           <p className="font-semibold text-foreground">Total : {fmt(info.total)}</p>
         </div>
-        <BoutonY2K size="sm" onClick={onStartConnectPay} className="gap-2" iconeGauche={<CreditCard className="h-4 w-4" />}>
-          💳 Payer via Stripe
-        </BoutonY2K>
+        {canManagePayments ? (
+          <BoutonY2K size="sm" onClick={onStartConnectPay} className="gap-2" iconeGauche={<CreditCard className="h-4 w-4" />}>
+            💳 Payer via Stripe
+          </BoutonY2K>
+        ) : (
+          <p className="text-xs text-muted-foreground">Consultation uniquement — paiement non autorisé pour votre rôle.</p>
+        )}
       </div>
     );
   }
 
-  // Manual payment with required reference
-  const methodeLabel = info.mode_recommande === 'VIREMENT_NOTE_HONORAIRES' ? "Note d'honoraires" : 'Bulletin de paie';
-  const icone = info.mode_recommande === 'VIREMENT_NOTE_HONORAIRES' ? FileText : Banknote;
+  // Paiement manuel avec référence obligatoire. Pour un salarié, la valeur
+  // remontée par le mode de paiement est seulement une estimation avant PAS :
+  // l'employeur doit saisir explicitement le net du bulletin officiel.
+  const estVirementSalarie = info.mode_recommande === 'VIREMENT_PAIE';
+  const methodeLabel = estVirementSalarie ? 'Virement de rémunération salariée' : "Note d'honoraires";
+  const icone = estVirementSalarie ? Banknote : FileText;
   const Icone = icone;
   const trimmedRef = reference.trim();
+  const montantNetReelNombre = Number(montantNetReel.replace(',', '.'));
+  const montantNetReelValide = Number.isFinite(montantNetReelNombre) && montantNetReelNombre > 0;
   // Feedback aligné sur isRefValid : ≥6 caractères, ≥2 chiffres, ≥1 lettre.
   const refTooShort = trimmedRef.length > 0 && trimmedRef.length < 6;
   const refNoDigit = trimmedRef.length >= 6 && !/\d{2,}/.test(trimmedRef);
@@ -391,18 +507,25 @@ export function WorkflowPaiementMission({ missionId, soignantAssigneId, etabliss
   return (
     <div className="card-base border-primary/20 space-y-3">
       <p className="text-sm font-semibold text-foreground flex items-center gap-2">
-        <Icone className="h-4 w-4 text-primary" /> Paiement par {methodeLabel.toLowerCase()}
+        <Icone className="h-4 w-4 text-primary" /> {methodeLabel}
       </p>
       <div className="text-xs text-muted-foreground space-y-1">
-        <p>Net à payer au soignant : {fmt(info.montant_soignant)}</p>
-        <p>Méthode : <span className="font-medium text-foreground">{methodeLabel}</span></p>
+        {estVirementSalarie ? (
+          <>
+            <p>Estimation indicative avant PAS : <span className="font-medium text-foreground">{fmt(info.montant_soignant)}</span></p>
+            <p>Le virement doit reprendre le net à payer exact du bulletin officiel établi par l'établissement employeur.</p>
+          </>
+        ) : (
+          <p>Honoraires à verser au soignant : <span className="font-medium text-foreground">{fmt(info.montant_soignant)}</span></p>
+        )}
+        <p>Méthode : <span className="font-medium text-foreground">{estVirementSalarie ? 'Virement SEPA' : methodeLabel}</span></p>
       </div>
 
       {/* RIB soignant — uniquement pour les missions salariées (bulletin de paie) */}
-      {info.mode_recommande === 'VIREMENT_PAIE' && (
-        info.iban_soignant ? (
+      {canManagePayments && info.mode_recommande === 'VIREMENT_PAIE' && (
+        info.iban_last4 ? (
           <p className="text-xs text-muted-foreground">
-            RIB : ****{info.iban_soignant}
+            RIB : ****{info.iban_last4}
           </p>
         ) : (
           <div className="flex items-center gap-2">
@@ -421,9 +544,34 @@ export function WorkflowPaiementMission({ missionId, soignantAssigneId, etabliss
         )
       )}
 
+      {canManagePayments ? (
+      <>
+      {estVirementSalarie && (
+        <div className="space-y-2">
+          <label htmlFor={`montant-net-reel-${missionId}`} className="text-xs font-medium text-foreground">
+            Montant net réellement versé (selon le bulletin officiel) *
+          </label>
+          <Input
+            id={`montant-net-reel-${missionId}`}
+            type="number"
+            inputMode="decimal"
+            min="0.01"
+            step="0.01"
+            placeholder="Ex : 346.85"
+            value={montantNetReel}
+            onChange={e => setMontantNetReel(e.target.value)}
+            aria-describedby={`montant-net-reel-aide-${missionId}`}
+            className="text-sm"
+          />
+          <p id={`montant-net-reel-aide-${missionId}`} className="text-[10px] text-muted-foreground">
+            Recopiez le net à payer du bulletin officiel. L'estimation affichée ci-dessus n'est jamais envoyée automatiquement.
+          </p>
+        </div>
+      )}
       <div className="space-y-2">
-        <label className="text-xs font-medium text-foreground">Référence de paiement *</label>
+        <label htmlFor={`reference-paiement-${missionId}`} className="text-xs font-medium text-foreground">Référence de paiement *</label>
         <Input
+          id={`reference-paiement-${missionId}`}
           placeholder="Ex: VIR-2026-03-001"
           value={reference}
           onChange={e => setReference(e.target.value)}
@@ -446,12 +594,26 @@ export function WorkflowPaiementMission({ missionId, soignantAssigneId, etabliss
       <label className="flex items-start gap-2 cursor-pointer">
         <Checkbox checked={attestation} onCheckedChange={v => setAttestation(!!v)} className="mt-0.5" />
         <span className="text-[11px] text-muted-foreground">
-          J'atteste sur l'honneur avoir effectué ce virement au soignant. Toute fausse déclaration engage ma responsabilité.
+          {estVirementSalarie
+            ? "J'atteste sur l'honneur avoir viré le montant net exact indiqué sur le bulletin officiel du soignant. Toute fausse déclaration engage ma responsabilité."
+            : "J'atteste sur l'honneur avoir effectué ce virement au soignant. Toute fausse déclaration engage ma responsabilité."}
         </span>
       </label>
-      <BoutonY2K size="sm" variant="secondary" onClick={declarerPaiement} disabled={declaring || !isRefValid(reference) || !attestation} loading={declaring} className="gap-2" iconeGauche={declaring ? undefined : <Banknote className="h-4 w-4" />}>
+      <BoutonY2K
+        size="sm"
+        variant="secondary"
+        onClick={declarerPaiement}
+        disabled={declaring || !isRefValid(reference) || !attestation || (estVirementSalarie && !montantNetReelValide)}
+        loading={declaring}
+        className="gap-2"
+        iconeGauche={declaring ? undefined : <Banknote className="h-4 w-4" />}
+      >
         {declaring ? 'Déclaration…' : 'Déclarer le paiement effectué'}
       </BoutonY2K>
+      </>
+      ) : (
+        <p className="text-xs text-muted-foreground">Consultation uniquement — paiement non autorisé pour votre rôle.</p>
+      )}
     </div>
   );
 }

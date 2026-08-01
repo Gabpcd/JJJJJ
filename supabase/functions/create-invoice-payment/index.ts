@@ -213,7 +213,7 @@ Deno.serve(async (req) => {
     const { data: facture, error: errF } = await supabaseAdmin
       .from("factures")
       .select(
-        "id, numero_facture, montant_ttc, nombre_missions, statut, etablissement_id, mission_id, type_document, stripe_payment_intent_id, stripe_hosted_url, etablissements(id, nom, email_contact, stripe_customer_id, mode_paiement_commission)",
+        "id, numero_facture, montant_ttc, nombre_missions, statut, etablissement_id, mission_id, type_document, est_secteur_public, chorus_pro_statut, stripe_payment_intent_id, stripe_hosted_url, etablissements(id, nom, email_contact, stripe_customer_id, mode_paiement_commission, est_secteur_public, chorus_pro_actif)",
       )
       .eq("id", facture_id)
       .single();
@@ -287,6 +287,24 @@ Deno.serve(async (req) => {
       });
     }
 
+    const etablissementFacture = Array.isArray(facture.etablissements)
+      ? facture.etablissements[0]
+      : facture.etablissements;
+    const estFacturePubliqueChorus = facture.est_secteur_public === true
+      || etablissementFacture?.est_secteur_public === true
+      || etablissementFacture?.chorus_pro_actif === true
+      || (facture.chorus_pro_statut != null && facture.chorus_pro_statut !== "NON_APPLICABLE");
+    if (estFacturePubliqueChorus) {
+      return new Response(JSON.stringify({
+        error: "FACTURE_PUBLIQUE_CHORUS",
+        message:
+          "Cette facture publique doit suivre le circuit Chorus Pro et ne peut pas ouvrir un paiement Stripe.",
+      }), {
+        status: 409,
+        headers: { ...corsHeaders(req), "Content-Type": "application/json" },
+      });
+    }
+
     // Une facture commission liée à une mission ne peut pas être encaissée via
     // ce Checkout standard si le flux Connect a déjà revendiqué la mission.
     // Cela évite de débiter séparément la commission pendant qu'un paiement
@@ -338,9 +356,6 @@ Deno.serve(async (req) => {
         headers: { ...corsHeaders(req), "Content-Type": "application/json" },
       });
     }
-    const etablissementFacture = Array.isArray(facture.etablissements)
-      ? facture.etablissements[0]
-      : facture.etablissements;
     if (etablissementFacture?.mode_paiement_commission === "SEPA_DEBIT") {
       return new Response(JSON.stringify({
         error: "FACTURE_RESERVEE_SEPA",

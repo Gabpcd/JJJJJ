@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { netEstimeAfficheMission } from './missionFinanceDisplay';
+import { montantFinanceAfficheMission, netEstimeAfficheMission } from './missionFinanceDisplay';
 
 describe('netEstimeAfficheMission', () => {
   it('rétablit le taux Médecin libéral publié à 90 €/h au lieu du plafond historique à 30 €/h', () => {
@@ -38,10 +38,58 @@ describe('netEstimeAfficheMission', () => {
     })).toBe(339.77);
   });
 
-  it('retombe sur net_a_payer lorsque net_estime est null', () => {
+  it('ne présente jamais net_a_payer comme un net salarié', () => {
     expect(netEstimeAfficheMission({
+      type_contrat_applique: 'SALARIE',
       net_estime: null,
       net_a_payer: 100,
-    })).toBe(78);
+    })).toBeNull();
+  });
+});
+
+describe('montantFinanceAfficheMission', () => {
+  it('affiche les honoraires libéraux sans abattement de 22 %', () => {
+    expect(montantFinanceAfficheMission({
+      type_contrat_applique: 'LIBERAL',
+      net_a_payer: 1_000,
+      net_estime: 780,
+      total_brut: 1_000,
+    })).toMatchObject({
+      montant: 1_000,
+      nature: 'HONORAIRES_LIBERAUX',
+      libelleCourt: 'honoraires',
+    });
+  });
+
+  it('utilise net_estime pour une mission salariée', () => {
+    expect(montantFinanceAfficheMission({
+      type_contrat_applique: 'SALARIE',
+      net_a_payer: 444.68,
+      net_estime: 346.85,
+    })).toMatchObject({
+      montant: 346.85,
+      nature: 'NET_SALARIE_ESTIME',
+    });
+  });
+
+  it('n\'invente pas de net salarié lorsque net_estime manque', () => {
+    expect(montantFinanceAfficheMission({
+      type_contrat_recherche: 'SALARIE',
+      net_a_payer: 444.68,
+      net_estime: null,
+    })).toBeNull();
+  });
+
+  it('nomme le brut lorsque le contrat reste à choisir', () => {
+    expect(montantFinanceAfficheMission({
+      type_contrat_recherche: 'TOUS',
+      total_brut: 500,
+      net_a_payer: 590,
+      net_estime: 460,
+    })).toMatchObject({
+      montant: 500,
+      nature: 'BRUT_INDICATIF',
+      libelleCourt: 'brut indicatif',
+    });
   });
 });

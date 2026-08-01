@@ -1,4 +1,5 @@
-// PDF du bulletin de paie SALARIE — conforme art. R3243-1 Code du travail.
+// Simulation de paie SALARIE — document non officiel tant que les données de
+// prélèvement à la source ne sont pas disponibles.
 //
 // Le calcul brut→net est fait en base via fn_calculer_cotisations() qui
 // peuple la table cotisations_sociales. Ce helper ne fait QUE le rendu :
@@ -21,6 +22,7 @@ import {
   TAUX_PATRONAL_CHOMAGE, TAUX_PATRONAL_FNAL, TAUX_PATRONAL_FORMATION,
   TAUX_PATRONAL_TRANSPORT, TAUX_IFM, TAUX_ICP, formatTaux, PMSS_2026,
 } from './cotisations-2026';
+import { MENTION_SIMULATION_PAIE } from './bulletinPaieUi';
 
 interface BulletinSnapshot {
   id: string;
@@ -131,7 +133,7 @@ export async function telechargerBulletinPaiePdf(bulletinId: string): Promise<vo
     mission as unknown as MissionSnapshot,
     (cumul as any) || null,
   );
-  await telechargerOuPartagerPdf(doc, `bulletin-${b.numero_bulletin}.pdf`);
+  await telechargerOuPartagerPdf(doc, `simulation-paie-${b.numero_bulletin}.pdf`);
 }
 
 interface CumulAnnuel {
@@ -161,11 +163,18 @@ export function genererBulletinPaiePdf(
   const contentWidth = PAGE.contentWidth;
 
   createHeader(doc, {
-    title: 'Bulletin de paie',
+    title: 'Simulation de paie — document non officiel',
     subtitle: `${b.numero_bulletin}  -  Période : ${formatPeriode(b.periode_debut, b.periode_fin)}`,
   });
 
-  let y = 36;
+  let y = 34;
+  doc.setFillColor(...JOLENE_COLORS.roseLight);
+  doc.roundedRect(margin, y, contentWidth, 10, 1.5, 1.5, 'F');
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(7.5);
+  doc.setTextColor(...JOLENE_COLORS.primaryDark);
+  doc.text(doc.splitTextToSize(sanitizeForPdf(MENTION_SIMULATION_PAIE), contentWidth - 6), margin + 3, y + 4);
+  y += 14;
 
   // ─── Bandeau employeur / salarié ──────────────────────────────────────
   doc.setFillColor(...JOLENE_COLORS.background);
@@ -191,7 +200,7 @@ export function genererBulletinPaiePdf(
   doc.text(sanitizeForPdf(`Convention collective : ${etab.convention_collective || 'CCN établissements de santé applicable'}`), margin + 3, y + 27);
   doc.setFont('helvetica', 'italic');
   doc.setTextColor(...JOLENE_COLORS.textMuted);
-  doc.text(sanitizeForPdf('Bulletin émis par Jolene SAS, mandataire de paie'), margin + 3, y + 32);
+  doc.text(sanitizeForPdf('Simulation préparée par Jolene SAS'), margin + 3, y + 32);
 
   // Colonne salarié (droite)
   const colX2 = margin + colW + 4;
@@ -259,11 +268,11 @@ export function genererBulletinPaiePdf(
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(11);
   doc.setTextColor(...JOLENE_COLORS.primaryDark);
-  doc.text('NET A PAYER (versé au salarié)', margin + 3, y + 5.5);
+  doc.text('NET AVANT IMPÔT — PAS NON INTÉGRÉ', margin + 3, y + 5.5);
   doc.text(sanitizeForPdf(fmtEur(b.net_avant_impot)), margin + contentWidth - 3, y + 5.5, { align: 'right' });
   y += 14;
 
-  // ─── Cumul annuel (mention R3243-1) ─────────────────────────────────
+  // ─── Cumul annuel indicatif ──────────────────────────────────────────
   if (cumul && Number(cumul.nombre_bulletins) > 0) {
     if (y > PAGE.height - 60) { doc.addPage(); y = margin; }
     doc.setFont('helvetica', 'bold');
@@ -277,7 +286,7 @@ export function genererBulletinPaiePdf(
     doc.setTextColor(...JOLENE_COLORS.text);
     const colWidth = contentWidth / 2;
     const rows: Array<[string, string]> = [
-      [`Bulletins émis (${cumul.annee})`, String(cumul.nombre_bulletins)],
+      [`Simulations générées (${cumul.annee})`, String(cumul.nombre_bulletins)],
       ['Cumul brut', fmtEur(Number(cumul.cumul_brut))],
       ['Cumul cotisations salariales', fmtEur(-Number(cumul.cumul_cotisations_salariales))],
       ['Cumul cotisations patronales', fmtEur(Number(cumul.cumul_cotisations_patronales))],
@@ -303,20 +312,20 @@ export function genererBulletinPaiePdf(
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(8.5);
   doc.setTextColor(...JOLENE_COLORS.primaryDark);
-  doc.text('MENTIONS LEGALES OBLIGATOIRES (art. R3243-1 CTW)', margin, y);
+  doc.text('INFORMATIONS DE SIMULATION — NON EXHAUSTIVES', margin, y);
   y += 4;
 
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(7);
   doc.setTextColor(...JOLENE_COLORS.text);
   const mentions = [
-    `Bulletin emis le ${formatDate(b.date_emission)} pour la periode du ${formatDate(b.periode_debut)} au ${formatDate(b.periode_fin)}.`,
-    `Conservation 5 ans minimum par l'employeur (art. L3243-4 CTW). Le salarie le conserve sans limitation de duree.`,
+    `Simulation generee le ${formatDate(b.date_emission)} pour la periode du ${formatDate(b.periode_debut)} au ${formatDate(b.periode_fin)}.`,
+    `Ce document ne remplace pas le bulletin de paie officiel remis par l'employeur.`,
+    `Le taux, la base et le montant du prelevement a la source ne sont pas integres. Le net affiche est donc un net avant impot.`,
     `Plafond mensuel SS 2026 (PMSS) : ${fmtEur(PMSS_2026)}.`,
     `Indemnites CDD : IFM ${formatTaux(TAUX_IFM)} (precarite, art. L1243-8) + ICP ${formatTaux(TAUX_ICP)} (conges payes, art. L3141-22).`,
     `Cotisations salariales = part deduite du brut. Cotisations patronales = a la charge de l'employeur, mentionnees a titre informatif.`,
-    `En cas de contestation, le salarie dispose de 3 ans pour reclamer (art. L3245-1 CTW).`,
-    `Pour acceder au site service-public.fr/particuliers concernant le bulletin de paie : verifier les mentions et conserver ce document.`,
+    `Les taux et montants restent indicatifs jusqu'a validation par l'employeur et son gestionnaire de paie.`,
   ];
   for (const m of mentions) {
     const wrapped = doc.splitTextToSize(sanitizeForPdf(m), contentWidth);
@@ -329,7 +338,7 @@ export function genererBulletinPaiePdf(
   for (let i = 1; i <= total; i++) {
     doc.setPage(i);
     createFooter(doc, {
-      companyLine: `Bulletin de paie Jolene SAS, mandataire de paie - art. R3243-1 CTW - page ${i}/${total}`,
+      companyLine: `Simulation de paie — document non officiel — page ${i}/${total}`,
       contactLine: 'jolene.app | support@jolene.app',
     });
   }

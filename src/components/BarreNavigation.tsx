@@ -11,6 +11,7 @@ import { AvatarDisplay } from '@/components/AvatarUpload';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { useMessagesNonLus } from '@/hooks/useMessagesNonLus';
 import { useNouvellesMissionsExplorer } from '@/hooks/useNouvellesMissionsExplorer';
+import { useEtabPermissions } from '@/hooks/useEtabPermissions';
 
 interface NavItem { icone: LucideIcon; label: string; route: string; }
 interface NavGroup { icone: LucideIcon; label: string; items: NavItem[]; }
@@ -95,7 +96,7 @@ function getSoignantSidebar(isLiberal: boolean, showLiberalPath: boolean): Sideb
   return entries;
 }
 
-function getEtablissementSidebar(): SidebarEntry[] {
+function getEtablissementSidebar(canReadFinance: boolean): SidebarEntry[] {
   return [
     { icone: Home, label: 'Accueil', route: '/etablissement/tableau-de-bord' },
     { icone: PlusCircle, label: 'Publier une mission', route: '/etablissement/missions/creer' },
@@ -115,7 +116,9 @@ function getEtablissementSidebar(): SidebarEntry[] {
         { icone: Scale, label: 'Litiges', route: '/etablissement/litiges' },
       ],
     },
-    { icone: CreditCard, label: 'Facturation', route: '/etablissement/facturation' },
+    ...(canReadFinance
+      ? [{ icone: CreditCard, label: 'Facturation', route: '/etablissement/facturation' } satisfies NavItem]
+      : []),
     {
       icone: Activity, label: 'Pilotage', items: [
         { icone: Activity, label: 'RH & statistiques', route: '/etablissement/rh' },
@@ -204,6 +207,11 @@ export function BarreNavigation({ role }: { role: UserRole }) {
   const location = useLocation();
   const navigate = useNavigate();
   const { deconnexion, user } = useAuth();
+  const { permissions: etabPermissions } = useEtabPermissions(
+    undefined,
+    role === 'ADMIN_ETABLISSEMENT',
+  );
+  const canReadFinance = etabPermissions.lecture_paiement || etabPermissions.paiement;
 
   // Routes "racine" (onglets de la bottom nav) : pas de bouton retour.
   // Toute autre route est une sous-page → on affiche un chevron retour.
@@ -276,7 +284,7 @@ export function BarreNavigation({ role }: { role: UserRole }) {
     const sidebar = role === 'SOIGNANT'
       ? getSoignantSidebar(isLiberal, showLiberalPath)
       : role === 'ADMIN_ETABLISSEMENT'
-        ? getEtablissementSidebar()
+        ? getEtablissementSidebar(canReadFinance)
         : [];
 
     for (const entry of sidebar) {
@@ -287,7 +295,7 @@ export function BarreNavigation({ role }: { role: UserRole }) {
         });
       }
     }
-  }, [location.pathname, role, isLiberal, showLiberalPath]);
+  }, [location.pathname, role, isLiberal, showLiberalPath, canReadFinance]);
 
   const toggleGroup = (label: string) => {
     setOpenGroups(prev => {
@@ -332,7 +340,7 @@ export function BarreNavigation({ role }: { role: UserRole }) {
   const sidebarEntries = role === 'SOIGNANT'
     ? getSoignantSidebar(isLiberal, showLiberalPath)
     : role === 'ADMIN_ETABLISSEMENT'
-      ? getEtablissementSidebar()
+      ? getEtablissementSidebar(canReadFinance)
       : NAV_GROUPE.map(i => i as SidebarEntry);
 
   const handleDeconnexion = async () => {

@@ -14,6 +14,12 @@ const mocks = vi.hoisted(() => ({
     error: null as Error | null,
     retry: vi.fn(),
   },
+  permissions: {
+    loading: false,
+    permissions: { lecture_paiement: true, paiement: true },
+    error: null as Error | null,
+    recharger: vi.fn(),
+  },
   rpc: vi.fn(),
   from: vi.fn(),
   filtres: [] as Array<{ table: string; colonne: string; valeur: unknown }>,
@@ -21,6 +27,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@/hooks/usePageTitle', () => ({ usePageTitle: () => undefined }));
 vi.mock('@/hooks/useEtablissementScope', () => ({ useEtablissementScope: () => mocks.scope }));
+vi.mock('@/hooks/useEtabPermissions', () => ({ useEtabPermissions: () => mocks.permissions }));
 vi.mock('@/contexts/NotificationContext', () => ({
   useNotification: () => ({ afficherNotification: vi.fn() }),
 }));
@@ -144,6 +151,9 @@ describe('FacturationEtablissement — périmètre des membres', () => {
     mocks.scope.loading = true;
     mocks.scope.resolved = false;
     mocks.scope.error = null;
+    mocks.permissions.loading = false;
+    mocks.permissions.permissions = { lecture_paiement: true, paiement: true };
+    mocks.permissions.error = null;
     mocks.rpc.mockImplementation(() => new Promise<never>(() => {}));
     mocks.from.mockImplementation((table: string) => requeteEnAttente(table));
   });
@@ -195,6 +205,90 @@ describe('FacturationEtablissement — périmètre des membres', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Réessayer' }));
     expect(mocks.scope.retry).toHaveBeenCalledTimes(1);
+  });
+
+  it('refuse les finances à un membre sans lecture_paiement sans lancer de requête', async () => {
+    activerScope();
+    mocks.permissions.permissions = { lecture_paiement: false, paiement: false };
+
+    render(
+      <MemoryRouter>
+        <FacturationEtablissement />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Accès à la facturation refusé');
+    expect(mocks.rpc).not.toHaveBeenCalled();
+    expect(mocks.from).not.toHaveBeenCalled();
+  });
+
+  it('autorise la consultation mais masque les actions au rôle lecture seule', async () => {
+    activerScope();
+    mocks.permissions.permissions = { lecture_paiement: true, paiement: false };
+    configurerChargement({
+      obligations: {
+        ...obligationsVides,
+        total_du: 78,
+        total_soignants_du: 78,
+        nb_missions_non_payees: 1,
+        missions_non_payees: [{
+          mission_id: 'mission-salariee-id',
+          intitule: 'Mission salariée',
+          type_contrat_applique: 'SALARIE',
+          net_a_payer: 78,
+          commission_ttc: 0,
+        }],
+      },
+    });
+
+    render(
+      <MemoryRouter>
+        <FacturationEtablissement />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText('Paiements soignants, commissions Jolene et exports comptables')).toBeInTheDocument();
+    expect(screen.getAllByText(/78,00/).length).toBeGreaterThan(0);
+    expect(screen.queryByRole('button', { name: /Déclarer le paiement/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Générer la facture/i })).not.toBeInTheDocument();
+  });
+
+  it('qualifie les montants salariés comme estimations et exige le net du bulletin employeur', async () => {
+    activerScope();
+    configurerChargement({
+      obligations: {
+        ...obligationsVides,
+        total_du: 346.85,
+        total_soignants_du: 346.85,
+        nb_missions_non_payees: 1,
+        missions_non_payees: [{
+          mission_id: 'mission-salariee-id',
+          intitule: 'Mission salariée',
+          soignant_nom: 'Marie Test',
+          type_contrat_applique: 'SALARIE',
+          net_a_payer: 346.85,
+          net_estime: 346.85,
+          montant_commission_ttc: 0,
+          jours_depuis_fin: 2,
+        }],
+      },
+    });
+
+    render(
+      <MemoryRouter>
+        <FacturationEtablissement />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText(/Inclut des estimations salariées avant paie et PAS/i)).toBeInTheDocument();
+    expect(screen.getByText(/Estimation avant paie\/PAS — le bulletin employeur fait foi/i)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Déclarer un paiement' }));
+
+    const montant = await screen.findByLabelText(/Montant net réellement versé/i);
+    expect(montant).toHaveValue(null);
+    expect(screen.getByText(/Estimation indicative avant paie\/PAS/i)).toHaveTextContent('346,85');
+    expect(screen.queryByText(/Net réellement dû/i)).not.toBeInTheDocument();
   });
 
   it.each([

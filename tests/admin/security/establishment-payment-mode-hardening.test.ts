@@ -51,4 +51,11 @@ describe('Établissement — mode de paiement commission', () => {
     expect(invoices).toContain("etab?.mode_paiement_commission !== 'SEPA_DEBIT'");
     expect(invoices).toContain("etab?.mode_paiement_commission === 'SEPA_DEBIT'");
   });
+
+  it('interdit aussi tout Checkout Stripe direct pour une facture publique Chorus', () => {
+    expect(createInvoice).toContain('est_secteur_public, chorus_pro_statut');
+    expect(createInvoice).toContain('FACTURE_PUBLIQUE_CHORUS');
+    expect(createInvoice).toContain('etablissementFacture?.chorus_pro_actif === true');
+    expect(createInvoice).toContain('facture.chorus_pro_statut !== "NON_APPLICABLE"');
+  });
 });
