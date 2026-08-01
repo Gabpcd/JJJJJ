@@ -95,23 +95,47 @@ BEGIN
     true, true, true, true
   );
 
-  -- Onze semaines futures à 44 h chacune. Chacune est conforme seule et le
-  -- total sur toute fenêtre existante reste sous 44 h de moyenne.
+  -- Onze semaines futures à 44 h chacune. Chaque semaine porte désormais son
+  -- planning daté exact (4 journées de 9 h puis une de 8 h), au lieu d'une
+  -- enveloppe legacy continue de 44 h devenue volontairement invalide.
   FOR i IN 1..11 LOOP
     v_mission := gen_random_uuid();
     v_debut := ((v_base + (i * 7))::timestamp + interval '8 hours')
       AT TIME ZONE 'Europe/Paris';
 
+    PERFORM set_config('jolene.planning_exact_managed', 'true', true);
     INSERT INTO public.missions (
       id, etablissement_id, intitule, profession_requise,
       debut_le, fin_le, duree_heures, taux_horaire_base,
-      statut, soignant_assigne_id, type_contrat_recherche,
-      type_contrat_applique, choix_contrat_soignant, mode_attribution
+      statut, type_contrat_recherche, type_contrat_applique,
+      choix_contrat_soignant, mode_attribution, nb_creneaux
     ) VALUES (
       v_mission, v_etab, 'Semaine salariée ' || i, 'IDE',
-      v_debut, v_debut + interval '44 hours', 44, 20,
-      'ASSIGNEE', v_soignant, 'SALARIE', 'SALARIE', 'SALARIE', 'CANDIDATURE'
+      v_debut, v_debut + interval '4 days 8 hours', 44, 20,
+      'OUVERTE', 'SALARIE', 'SALARIE', 'SALARIE', 'CANDIDATURE', 5
     );
+
+    INSERT INTO public.mission_creneaux (
+      mission_id, debut, fin, est_pause, ordre, type_creneau
+    )
+    SELECT
+      v_mission,
+      v_debut + make_interval(days => jours.n),
+      v_debut + make_interval(days => jours.n)
+        + CASE WHEN jours.n < 4 THEN interval '9 hours' ELSE interval '8 hours' END,
+      false,
+      jours.n + 1,
+      'PREVISIONNEL'
+    FROM generate_series(0, 4) AS jours(n);
+    PERFORM set_config('jolene.planning_exact_managed', 'false', true);
+
+    PERFORM set_config(
+      'jolene.assignment_rpc_soignant_id', v_soignant::text, true
+    );
+    UPDATE public.missions
+    SET statut = 'ASSIGNEE', soignant_assigne_id = v_soignant
+    WHERE id = v_mission;
+    PERFORM set_config('jolene.assignment_rpc_soignant_id', '', true);
   END LOOP;
 
   -- La mission de 45 h en semaine 0 respecte le plafond ponctuel de 48 h,
@@ -119,20 +143,44 @@ BEGIN
   -- (45 + 11*44) / 12 = 44,08 h : elle doit être bloquée.
   v_debut := (v_base::timestamp + interval '8 hours') AT TIME ZONE 'Europe/Paris';
   BEGIN
+    PERFORM set_config('jolene.planning_exact_managed', 'true', true);
     INSERT INTO public.missions (
       id, etablissement_id, intitule, profession_requise,
       debut_le, fin_le, duree_heures, taux_horaire_base,
-      statut, soignant_assigne_id, type_contrat_recherche,
-      type_contrat_applique, choix_contrat_soignant, mode_attribution
+      statut, type_contrat_recherche, type_contrat_applique,
+      choix_contrat_soignant, mode_attribution, nb_creneaux
     ) VALUES (
       '70000000-0000-4000-8000-000000000004',
       v_etab, 'Mission révélant la fenêtre future', 'IDE',
-      v_debut, v_debut + interval '45 hours', 45, 20,
-      'ASSIGNEE', v_soignant, 'SALARIE', 'SALARIE', 'SALARIE', 'CANDIDATURE'
+      v_debut, v_debut + interval '4 days 9 hours', 45, 20,
+      'OUVERTE', 'SALARIE', 'SALARIE', 'SALARIE', 'CANDIDATURE', 5
     );
+
+    INSERT INTO public.mission_creneaux (
+      mission_id, debut, fin, est_pause, ordre, type_creneau
+    )
+    SELECT
+      '70000000-0000-4000-8000-000000000004'::uuid,
+      v_debut + make_interval(days => jours.n),
+      v_debut + make_interval(days => jours.n) + interval '9 hours',
+      false,
+      jours.n + 1,
+      'PREVISIONNEL'
+    FROM generate_series(0, 4) AS jours(n);
+    PERFORM set_config('jolene.planning_exact_managed', 'false', true);
+
+    PERFORM set_config(
+      'jolene.assignment_rpc_soignant_id', v_soignant::text, true
+    );
+    UPDATE public.missions
+    SET statut = 'ASSIGNEE', soignant_assigne_id = v_soignant
+    WHERE id = '70000000-0000-4000-8000-000000000004';
+    PERFORM set_config('jolene.assignment_rpc_soignant_id', '', true);
     RAISE EXCEPTION 'P1: la fenêtre glissante future n’a pas été bloquée';
   EXCEPTION
     WHEN OTHERS THEN
+      PERFORM set_config('jolene.planning_exact_managed', 'false', true);
+      PERFORM set_config('jolene.assignment_rpc_soignant_id', '', true);
       GET STACKED DIAGNOSTICS v_message = MESSAGE_TEXT;
       IF position('[CODE DU TRAVAIL] Moyenne dépassée' IN v_message) = 0 THEN
         RAISE;
@@ -219,6 +267,7 @@ BEGIN
   -- en ouvrant une alerte (40 h prévues, 55 h réellement constatées).
   v_debut := ((v_base + (30 * 7))::timestamp + interval '8 hours')
     AT TIME ZONE 'Europe/Paris';
+  PERFORM set_config('jolene.planning_exact_managed', 'true', true);
   INSERT INTO public.missions (
     id, etablissement_id, intitule, profession_requise,
     debut_le, fin_le, duree_heures, taux_horaire_base,
@@ -232,6 +281,7 @@ BEGIN
     'TERMINEE', v_soignant, 'SALARIE', 'SALARIE', 'SALARIE', 'CANDIDATURE',
     v_debut, v_debut + interval '40 hours', 40
   );
+  PERFORM set_config('jolene.planning_exact_managed', 'false', true);
 
   UPDATE public.missions
   SET duree_heures_effective = 55,
@@ -268,6 +318,7 @@ BEGIN
   -- plafonds salariés, quelle que soit la profession portée par le profil.
   v_debut := ((v_base + (40 * 7))::timestamp + interval '8 hours')
     AT TIME ZONE 'Europe/Paris';
+  PERFORM set_config('jolene.planning_exact_managed', 'true', true);
   INSERT INTO public.missions (
     id, etablissement_id, intitule, profession_requise,
     debut_le, fin_le, duree_heures, taux_horaire_base,
@@ -281,6 +332,7 @@ BEGIN
     'TERMINEE', v_medecin, 'LIBERAL', 'LIBERAL', 'LIBERAL', 'CANDIDATURE',
     v_debut, v_debut + interval '40 hours', 40
   );
+  PERFORM set_config('jolene.planning_exact_managed', 'false', true);
 
   UPDATE public.missions
   SET duree_heures_effective = 80,
