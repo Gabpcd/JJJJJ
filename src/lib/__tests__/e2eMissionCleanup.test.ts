@@ -74,4 +74,24 @@ describe('purge des missions techniques E2E', () => {
     expect(purgeLocaleSoignant).toBeGreaterThan(validationSoignant);
     expect(suppressionProfil).toBeGreaterThan(purgeLocaleSoignant);
   });
+
+  it('ne retraite pas les missions escrow déjà gelées et mises en quarantaine', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'e2e/flows/escrow-revenus-soignant.spec.ts'),
+      'utf8',
+    );
+    const beforeAll = source.indexOf('test.beforeAll(async () => {');
+    const timeout = source.indexOf('test.setTimeout(120_000);', beforeAll);
+    const lectureResidus = source.indexOf(".like('intitule', '[pw-test:escrow%')", beforeAll);
+    const filtreNonGele = source.indexOf(".is('fige_le', null)", lectureResidus);
+    const verificationErreur = source.indexOf('if (oldMissionsError)', filtreNonGele);
+    const purge = source.indexOf('await purgeMissionsBounded(', verificationErreur);
+
+    expect(beforeAll).toBeGreaterThan(-1);
+    expect(timeout).toBeGreaterThan(beforeAll);
+    expect(lectureResidus).toBeGreaterThan(timeout);
+    expect(filtreNonGele).toBeGreaterThan(lectureResidus);
+    expect(verificationErreur).toBeGreaterThan(filtreNonGele);
+    expect(purge).toBeGreaterThan(verificationErreur);
+  });
 });
