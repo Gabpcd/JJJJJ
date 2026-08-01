@@ -9,7 +9,6 @@ function mission(id: string): MissionSerieCandidat {
     nb_creneaux: 1,
     creneaux_planifies: [{
       id: `c-${id}`,
-      mission_id: id,
       debut: `2026-08-0${id}T08:00:00+02:00`,
       fin: `2026-08-0${id}T16:00:00+02:00`,
       est_pause: false,

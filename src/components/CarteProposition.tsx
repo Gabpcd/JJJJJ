@@ -192,7 +192,7 @@ export function CarteProposition({ proposition, onTraitee }: Props) {
         missionsExistantes,
         tousLesCreneaux,
       );
-      if (!ventilation.ok) throw new Error(ventilation.erreur);
+      if ('erreur' in ventilation) throw new Error(ventilation.erreur);
 
       const semainesISO = ventilation.semaines.map((semaine) => semaine.semaineISO);
       const { data: attestations, error: attestationsError } = await supabase

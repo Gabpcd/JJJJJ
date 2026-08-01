@@ -26,6 +26,7 @@ import { ajouterJoursCivilsParis, debutSemaineParis, formatParis } from '@/lib/d
 import { handleErrorSilent } from '@/lib/handleError';
 import { netEstimeAfficheMission } from '@/lib/missionFinanceDisplay';
 import {
+  creneauxPrevisionnels,
   prochainCreneauPointage,
   type CreneauPointage,
 } from '@/lib/disponibilite-pointage';
