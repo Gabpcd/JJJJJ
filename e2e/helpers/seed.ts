@@ -15,6 +15,11 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { TEST_ACCOUNTS } from './auth';
 import { adminClient, userClient, userIdByEmail } from './db';
 import { isPgrst202EligibilityFallbackAllowed } from './liberal-eligibility-policy';
+import {
+  estBlocagePurgeTechniqueAttendu,
+  estQuarantainePurgeAutorisee,
+  preparerMissionTechniquePourPurge,
+} from './cleanup-mission-test';
 
 export type CaregiverProfession = 'IDE' | 'IADE' | 'IBODE' | 'SAGE_FEMME';
 export type CaregiverExercise = 'SALARIE' | 'LIBERAL';
@@ -34,6 +39,55 @@ export interface EphemeralVerifiedCaregiver {
 }
 
 const EPHEMERAL_CAREGIVER_EMAIL_PREFIX = 'playwright-test-caregiver-';
+
+/**
+ * Repli strictement E2E pour la PR qui tourne encore contre l'ancien purgeur
+ * SQL de production. Sur une mission gelée, cet ancien purgeur annule toute sa
+ * transaction au premier DELETE protégé (mission_creneaux) : ses suppressions
+ * précédentes ne sont donc jamais conservées. Cette liste reprend l'ordre du
+ * global-setup afin de détacher les fixtures soignants avant l'appel à la RPC.
+ *
+ * Elle n'est utilisée qu'après les contrôles stricts de
+ * preparerMissionTechniquePourPurge (mission préfixée, établissement test et
+ * tous les soignants liés marqués test).
+ */
+const ENFANTS_MISSION_AVANT_PURGE_RPC = [
+  'conformite_travail',
+  'cotisations_sociales',
+  'bulletins_paie',
+  'contrats_travail_missions',
+  'contrats_mission',
+  'rappels_contrat_travail',
+  'scans_pointage',
+  'presences',
+  'codes_secours_mission',
+  'qr_codes_mission',
+  'messages_mission',
+  'conversations',
+  'swipes',
+  'matching_scores',
+  'candidatures',
+] as const;
+
+/**
+ * Enfants directs d'une fixture soignant susceptibles de subsister si une
+ * mission gelée reste volontairement en quarantaine jusqu'au déploiement SQL.
+ * La validation id/email/est_compte_test de la fixture précède toujours cette
+ * purge de secours.
+ */
+const ENFANTS_SOIGNANT_AVANT_PROFIL = [
+  'partages_rib',
+  'conformite_travail',
+  'cotisations_sociales',
+  'bulletins_paie',
+  'contrats_travail_missions',
+  'contrats_mission',
+  'pauses_presence',
+  'presences',
+  'stripe_transfers',
+  'paiements_escrow',
+  'candidatures',
+] as const;
 
 /**
  * Seede l'éligibilité libérale uniquement sur un compte Playwright jetable.
@@ -344,6 +398,18 @@ export async function cleanupEphemeralVerifiedCaregiver(
         `purge mission ${missionId}: ${error instanceof Error ? error.message : String(error)}`,
       );
     }
+  }
+
+  // Une mission gelée peut rester en quarantaine sur le backend pré-
+  // déploiement, mais aucun de ses enfants ne doit conserver le compte
+  // Playwright. Cette seconde passe est volontairement liée au soignant :
+  // elle couvre aussi un cleanup mission interrompu entre deux DELETE.
+  for (const table of ENFANTS_SOIGNANT_AVANT_PROFIL) {
+    const { error } = await admin
+      .from(table as any)
+      .delete()
+      .eq('soignant_id', fixture.id);
+    if (error) erreurs.push(`purge ${table}: ${error.message}`);
   }
 
   for (const [table, colonne] of [
@@ -722,7 +788,7 @@ export async function cleanupMissionCascade(missionId?: string | null): Promise<
   const admin = adminClient();
   const { data: mission, error: missionReadError } = await admin
     .from('missions' as any)
-    .select('id, etablissement_id, soignant_assigne_id, intitule')
+    .select('id, etablissement_id, soignant_assigne_id, intitule, fige_le, statut')
     .eq('id', missionId)
     .maybeSingle();
   if (missionReadError) {
@@ -730,11 +796,12 @@ export async function cleanupMissionCascade(missionId?: string | null): Promise<
   }
   if (!mission) return;
   const intitule = String(mission.intitule ?? '');
-  if (!intitule.startsWith('[pw-test') && !intitule.startsWith('[playwright-test]')) {
+  if (!intitule.startsWith('[pw-test:') && !intitule.startsWith('[playwright-test]')) {
     throw new Error(
       `[cleanup mission] refus de purger une mission non technique ${missionId} (${intitule || 'sans intitulé'})`,
     );
   }
+  const preparation = await preparerMissionTechniquePourPurge(admin, mission);
 
   // La descendance financière a deux niveaux de FK : les trois files ci-dessous
   // doivent précéder paiements_escrow, lui-même enfant de la mission.
@@ -829,9 +896,61 @@ export async function cleanupMissionCascade(missionId?: string | null): Promise<
   if (emailQueueError) {
     throw new Error(`[cleanup mission] file email ${missionId}: ${emailQueueError.message}`);
   }
+
+  // conversations a un enfant indirect sans mission_id. Il doit disparaître
+  // avant la liste directe, sinon le DELETE conversations est bloqué.
+  const { data: conversations, error: conversationsReadError } = await admin
+    .from('conversations' as any)
+    .select('id')
+    .eq('mission_id', missionId);
+  if (conversationsReadError) {
+    throw new Error(
+      `[cleanup mission] lecture conversations ${missionId}: ${conversationsReadError.message}`,
+    );
+  }
+  const conversationIds = ((conversations ?? []) as Array<{ id: string }>).map(
+    (conversation) => conversation.id,
+  );
+  if (conversationIds.length > 0) {
+    const { error: messagesChatError } = await admin
+      .from('messages_chat' as any)
+      .delete()
+      .in('conversation_id', conversationIds);
+    if (messagesChatError) {
+      throw new Error(
+        `[cleanup mission] purge messages_chat ${missionId}: ${messagesChatError.message}`,
+      );
+    }
+  }
+
+  // Conserver l'ancienne RPC comme source de vérité pour supprimer la mission
+  // elle-même. Les enfants directs sont toutefois purgés avant son appel : si
+  // son unique blocage attendu est le planning gelé, la transaction annulée de
+  // la RPC ne recrée plus de FK vers la fixture soignant.
+  for (const table of ENFANTS_MISSION_AVANT_PURGE_RPC) {
+    const { error: childError } = await admin
+      .from(table as any)
+      .delete()
+      .eq('mission_id', missionId);
+    if (childError) {
+      throw new Error(
+        `[cleanup mission] purge ${table} ${missionId}: ${childError.message}`,
+      );
+    }
+  }
   const { error } = await admin
     .rpc('fn_test_purge_mission' as any, { p_mission_id: missionId });
   if (error) {
+    if (
+      preparation === 'QUARANTAINEE'
+      && estQuarantainePurgeAutorisee()
+      && estBlocagePurgeTechniqueAttendu(error)
+    ) {
+      console.warn(
+        `[cleanup mission] ${missionId} reste en quarantaine jusqu'au déploiement du purgeur durable.`,
+      );
+      return;
+    }
     throw new Error(`[cleanup mission] ${missionId}: ${error.message}`);
   }
 }

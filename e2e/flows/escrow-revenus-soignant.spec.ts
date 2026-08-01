@@ -254,11 +254,22 @@ async function purgeMissionsBounded(ids: Iterable<string>): Promise<void> {
 }
 
 test.beforeAll(async () => {
+  // Les hooks beforeAll conservent le timeout Playwright global de 30 s : la
+  // purge bornée des résidus encore purgeables peut le dépasser sur la DB CI.
+  test.setTimeout(120_000);
   const admin = adminClient();
 
-  // Purge des résidus escrow de TOUS les runs antérieurs (prod partagée) :
-  // sinon les deltas / états sont pollués.
-  const { data: oldMissions } = await admin.from('missions').select('id').like('intitule', '[pw-test:escrow%');
+  // Le global-setup a déjà détaché puis mis en quarantaine les missions gelées
+  // que l'ancien purgeur de production ne peut pas supprimer. Ne retraiter ici
+  // que les résidus encore purgeables évite des appels réseau sans effet.
+  const { data: oldMissions, error: oldMissionsError } = await admin
+    .from('missions')
+    .select('id')
+    .like('intitule', '[pw-test:escrow%')
+    .is('fige_le', null);
+  if (oldMissionsError) {
+    throw new Error(`lecture des résidus escrow impossible — ${oldMissionsError.message}`);
+  }
   await purgeMissionsBounded(
     ((oldMissions || []) as Array<{ id: string }>).map((mission) => mission.id),
   );

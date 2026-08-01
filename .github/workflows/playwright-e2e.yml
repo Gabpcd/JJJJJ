@@ -159,6 +159,10 @@ jobs:
           # flag est volontairement absent du job main et le helper refuse de
           # l'honorer pour tout événement autre que pull_request vers main.
           E2E_ALLOW_PGRST202_ELIGIBILITY_FALLBACK: 'true'
+          # La PR apporte le purgeur SQL durable, qui n'est pas encore déployé
+          # au moment où ce job interroge la production. Sur main ce repli est
+          # volontairement absent : toute régression de purge reste bloquante.
+          E2E_ALLOW_FROZEN_TEST_QUARANTINE: 'true'
           CI: 'true'
       - name: Détail a11y si échec (rapport court en fin de log)
         if: failure() && steps.playwright-tests.outcome == 'failure'
