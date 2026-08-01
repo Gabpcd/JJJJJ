@@ -22,6 +22,10 @@ const apiMigration = readFileSync(
   'supabase/migrations/20260801114528_api_v1_planning_exact.sql',
   'utf8',
 );
+const remplacementRbacMigration = readFileSync(
+  'supabase/migrations/20260801153000_securiser_rbac_sync_planning_remplacement.sql',
+  'utf8',
+);
 const apiV1 = readFileSync('supabase/functions/api-v1/index.ts', 'utf8');
 const formulaireMission = readFileSync('src/components/FormulaireMission.tsx', 'utf8');
 const modifierMission = readFileSync('src/pages/ModifierMission.tsx', 'utf8');
@@ -139,6 +143,34 @@ describe('planning exact de bout en bout', () => {
     expect(baseline).toMatch(
       /TRIGGER "dec_mission_repos_11h_before_update" BEFORE UPDATE[\s\S]*dec_verifier_repos_11h/,
     );
+  });
+
+  it('scelle étroitement le recalage RBAC des remplacements', () => {
+    expect(remplacementRbacMigration).toContain(
+      'CREATE OR REPLACE FUNCTION private.fn_guard_contexte_empechement_mission',
+    );
+    expect(remplacementRbacMigration).toContain(
+      "v_expected := 'REPLACEMENT:'",
+    );
+    expect(remplacementRbacMigration).toContain(
+      "current_setting('jolene.sync_in_progress', true) = 'true'",
+    );
+    expect(remplacementRbacMigration).toContain(
+      "'debut_le', 'fin_le', 'duree_heures', 'nb_creneaux'",
+    );
+    expect(remplacementRbacMigration).toContain(
+      'NEW.nb_creneaux = v_planning_nb',
+    );
+    expect(remplacementRbacMigration).toContain(
+      'NEW.duree_heures = v_planning_total',
+    );
+    expect(remplacementRbacMigration).toContain(
+      'CREATE OR REPLACE FUNCTION public.fn_enforce_etablissement_rbac_trigger',
+    );
+    expect(remplacementRbacMigration).not.toContain(
+      "set_config('jolene.system_update', 'true'",
+    );
+    expect(remplacementRbacMigration).not.toContain('session_replication_role');
   });
 
   it('ne compare plus les enveloppes globales pour les conflits', () => {
