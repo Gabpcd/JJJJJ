@@ -1279,6 +1279,7 @@ export async function handleStripeWebhook(
                   mission_id: missionId,
                   soignant_id: soignantId || "",
                   facture_honoraires_id: factureHonorairesId || "",
+                  payment_scope: invoiceScopedPayment ? "INVOICE" : "MISSION",
                 },
               }, { idempotencyKey: `transfer_${session.id}` });
             const transferDestinationId = typeof transfer.destination === "string"
@@ -3183,7 +3184,7 @@ export async function handleStripeWebhook(
       const { data: row, error: reversedTransferLookupError } = await supabaseAdmin
         .from("stripe_transfers")
         .select(
-          "id, mission_id, soignant_id, etablissement_id, montant_soignant, statut, stripe_charge_id, stripe_amount_reversed_cents, stripe_reversal_statut",
+          "id, mission_id, soignant_id, etablissement_id, facture_honoraire_id, montant_soignant, statut, stripe_charge_id, stripe_amount_reversed_cents, stripe_reversal_statut",
         )
         .eq("stripe_transfer_id", transfer.id)
         .maybeSingle();
@@ -3200,6 +3201,19 @@ export async function handleStripeWebhook(
         const expectedAmount = Math.round(Number(row.montant_soignant) * 100);
         const destinationId = stripeObjectId(transfer.destination);
         const sourceChargeId = stripeObjectId(transfer.source_transaction);
+        const missionTransferGroup = `mission_${row.mission_id}`;
+        const invoiceTransferGroup = row.facture_honoraire_id
+          ? `facture_${row.facture_honoraire_id}`
+          : null;
+        const paymentScope = transfer.metadata?.payment_scope || "";
+        const metadataFactureId = transfer.metadata?.facture_honoraires_id || "";
+        const missionGroupMatches = transfer.transfer_group === missionTransferGroup;
+        const invoiceGroupMatches = Boolean(
+          invoiceTransferGroup && transfer.transfer_group === invoiceTransferGroup
+        );
+        const metadataFactureMatches = Boolean(
+          row.facture_honoraire_id && metadataFactureId === row.facture_honoraire_id
+        );
         const incoherences: string[] = [];
         if (!Number.isSafeInteger(expectedAmount) || expectedAmount <= 0) {
           incoherences.push("db.amount");
@@ -3212,8 +3226,21 @@ export async function handleStripeWebhook(
         if (transfer.metadata?.soignant_id !== row.soignant_id) {
           incoherences.push("transfer.soignant_id");
         }
-        if (transfer.transfer_group !== `mission_${row.mission_id}`) {
-          incoherences.push("transfer.group");
+        // Les paiements historiques n'avaient pas payment_scope. Leur groupe
+        // canonique reste vérifiable depuis la ligne locale : mission_<id> ou,
+        // pour une facture hebdomadaire, facture_<facture_honoraire_id>.
+        let groupScopeValid = false;
+        if (paymentScope === "MISSION") {
+          groupScopeValid = missionGroupMatches
+            && (!metadataFactureId || metadataFactureMatches);
+        } else if (paymentScope === "INVOICE") {
+          groupScopeValid = invoiceGroupMatches && metadataFactureMatches;
+        } else if (!paymentScope) {
+          groupScopeValid = missionGroupMatches
+            || (invoiceGroupMatches && (!metadataFactureId || metadataFactureMatches));
+        }
+        if (!groupScopeValid) {
+          incoherences.push("transfer.group_scope");
         }
         if (onboardingError || destinationId !== onboarding?.stripe_account_id) {
           incoherences.push("transfer.destination");

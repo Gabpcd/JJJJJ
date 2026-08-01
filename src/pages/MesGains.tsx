@@ -39,6 +39,9 @@ import {
   resumerFacturesMission,
 } from '@/lib/factureHonorairesUi';
 import { indexerDernierPaiementParMission } from '@/lib/paiementSoignantUi';
+import { cleJourParis, cleMoisParis, formatParis } from '@/lib/date-heure-paris';
+import { chargerCreneauxMissionsPagines, type CreneauMissionCharge } from '@/lib/mission-creneaux-pagines';
+import { construireExportPaiePeriode } from '@/lib/export-paie-planning';
 
 function fmt(v: number | null | undefined) {
   if (v == null) return '—';
@@ -49,6 +52,7 @@ export function MesGainsApercuContent() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [allMissions, setAllMissions] = useState<any[]>([]);
+  const [creneauxMissions, setCreneauxMissions] = useState<CreneauMissionCharge[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(0);
   const PAGE_SIZE = 50;
@@ -73,7 +77,7 @@ export function MesGainsApercuContent() {
         const [missionsResult, soignantResult, paiementsResult, facturesResult, metadonneesFacturesResult] = await Promise.all([
           supabase
             .from('missions')
-            .select('id, intitule, debut_le, fin_le, duree_heures, taux_horaire_base, net_a_payer, net_estime, total_brut, statut, etablissement_id, service, type_contrat_applique, type_contrat_recherche')
+            .select('id, intitule, debut_le, fin_le, duree_heures, nb_creneaux, taux_horaire_base, net_a_payer, net_estime, total_brut, statut, etablissement_id, service, type_contrat_applique, type_contrat_recherche, presences(valide_par_etablissement, valide_auto_72h_le, valide_le)')
             .eq('soignant_assigne_id', user.id)
             .eq('statut', 'TERMINEE')
             .order('debut_le', { ascending: false })
@@ -102,15 +106,24 @@ export function MesGainsApercuContent() {
         if (metadonneesFacturesResult.error) throw metadonneesFacturesResult.error;
 
         const pageMissions = (missionsResult.data ?? []) as any[];
-        const enriched = await enrichirEtablissements(pageMissions as any);
+        const [enriched, creneauxPage] = await Promise.all([
+          enrichirEtablissements(pageMissions as any),
+          chargerCreneauxMissionsPagines(pageMissions.map((mission) => mission.id)),
+        ]);
         if (!actif) return;
         setHasMore(pageMissions.length === PAGE_SIZE);
         if (page === 0) {
           setAllMissions(enriched as any[]);
+          setCreneauxMissions(creneauxPage);
         } else {
           setAllMissions(prev => {
             const parId = new Map(prev.map(mission => [mission.id, mission]));
             (enriched as any[]).forEach(mission => parId.set(mission.id, mission));
+            return Array.from(parId.values());
+          });
+          setCreneauxMissions(prev => {
+            const parId = new Map(prev.map(creneau => [creneau.id, creneau]));
+            creneauxPage.forEach(creneau => parId.set(creneau.id, creneau));
             return Array.from(parId.values());
           });
         }
@@ -146,22 +159,56 @@ export function MesGainsApercuContent() {
 
   const moisDisponibles = useMemo(() => {
     const set = new Set<string>();
-    allMissions.forEach(m => {
-      if (typeof m.debut_le === 'string' && m.debut_le.length >= 7) {
-        set.add(m.debut_le.substring(0, 7));
+    const missionsAvecCreneaux = new Set(creneauxMissions.map(creneau => creneau.mission_id));
+    creneauxMissions.forEach(creneau => {
+      if (creneau.est_pause || !creneau.fin) return;
+      set.add(cleMoisParis(creneau.debut));
+      set.add(cleMoisParis(new Date(new Date(creneau.fin).getTime() - 1)));
+    });
+    allMissions.forEach(mission => {
+      if (!missionsAvecCreneaux.has(mission.id) && mission.debut_le) {
+        set.add(cleMoisParis(mission.debut_le));
       }
     });
     return Array.from(set).sort().reverse();
-  }, [allMissions]);
+  }, [allMissions, creneauxMissions]);
 
-  const missions = useMemo(() => {
-    if (moisFiltre === 'TOUS') return allMissions;
-    if (moisFiltre === 'CE_MOIS') {
-      const prefix = new Date().toISOString().substring(0, 7);
-      return allMissions.filter(m => typeof m.debut_le === 'string' && m.debut_le.startsWith(prefix));
+  const missionsGraphique = useMemo(() => {
+    try {
+      return moisDisponibles.flatMap((cleMois) => {
+        const [annee, mois] = cleMois.split('-').map(Number);
+        return construireExportPaiePeriode(allMissions, creneauxMissions, annee, mois)
+          .map((mission) => ({
+            debut_le: `${cleMois}-15T12:00:00`,
+            net_a_payer: montantFinanceAfficheMission(mission)?.montant ?? null,
+          }));
+      });
+    } catch {
+      // Un historique mensuel incomplet ne doit jamais produire une barre
+      // financière approximative. Les pipelines facture/paiement restent
+      // disponibles car ils reposent sur leurs propres périodes et statuts.
+      return [];
     }
-    return allMissions.filter(m => typeof m.debut_le === 'string' && m.debut_le.startsWith(moisFiltre));
-  }, [allMissions, moisFiltre]);
+  }, [allMissions, creneauxMissions, moisDisponibles]);
+
+  const periodeMissions = useMemo(() => {
+    if (moisFiltre === 'TOUS') return { missions: allMissions, erreur: null as string | null };
+    const cleMois = moisFiltre === 'CE_MOIS' ? cleMoisParis(new Date()) : moisFiltre;
+    const [annee, mois] = cleMois.split('-').map(Number);
+    try {
+      return {
+        missions: construireExportPaiePeriode(allMissions, creneauxMissions, annee, mois),
+        erreur: null as string | null,
+      };
+    } catch (error: any) {
+      return {
+        missions: [] as any[],
+        erreur: error?.message || 'Le planning exact de cette période ne peut pas être vérifié.',
+      };
+    }
+  }, [allMissions, creneauxMissions, moisFiltre]);
+  const missions = periodeMissions.missions;
+  const erreurAffichee = erreurChargement ?? periodeMissions.erreur;
 
   const totalBrutFiltre = useMemo(() => missions.reduce((s, m) => s + (Number(m.total_brut) || 0), 0), [missions]);
   const totalHeures = useMemo(() => missions.reduce((s, m) => s + (Number(m.duree_heures) || 0), 0), [missions]);
@@ -171,10 +218,10 @@ export function MesGainsApercuContent() {
   }, [totalBrutFiltre, totalHeures]);
 
   const labelPeriode = moisFiltre === 'CE_MOIS'
-    ? format(new Date(), 'MMMM yyyy', { locale: fr })
-    : moisFiltre === 'TOUS'
-      ? 'Tout temps'
-      : format(new Date(moisFiltre + '-01'), 'MMMM yyyy', { locale: fr });
+      ? format(new Date(), 'MMMM yyyy', { locale: fr })
+      : moisFiltre === 'TOUS'
+        ? 'Tout temps'
+        : formatParis(`${moisFiltre}-01T12:00:00`, 'MMMM yyyy');
 
   const isLiberal = soignant?.type_exercice === 'LIBERAL' || soignant?.statut_liberal === 'ACTIF';
   // D3 : profil 100 % salarié — le net exact vient du bulletin de paie de
@@ -188,7 +235,7 @@ export function MesGainsApercuContent() {
   const libMissions = useMemo(() => missions.filter(m => m.type_contrat_applique === 'LIBERAL'), [missions]);
   const salMissions = useMemo(() => missions.filter(m => m.type_contrat_applique === 'SALARIE'), [missions]);
   const indetCount = useMemo(() => missions.filter(m => !m.type_contrat_applique).length, [missions]);
-  // Libéral : honoraires réellement encaissés (après commission Jolene), PAS ×0,78.
+  // Libéral : honoraires bruts dus au soignant, sans retenue de commission Jolene, PAS ×0,78.
   const honorairesLib = useMemo(() => libMissions.reduce((s, m) => s + (montantFinanceAfficheMission(m)?.montant ?? 0), 0), [libMissions]);
   // Salarié : net estimé après cotisations salariales (~22 %).
   const netSal = useMemo(() => salMissions.reduce((s, m) => s + (montantFinanceAfficheMission(m)?.montant ?? 0), 0), [salMissions]);
@@ -273,14 +320,18 @@ export function MesGainsApercuContent() {
   }, [loading, pipeline.paye.nb]);
 
   const exporterCSV = () => {
-    const header = 'Date,Mission,Service,Établissement,Heures,Taux horaire,Brut,Montant affiché,Nature\n';
-    const rows = missions.map(m => {
+    if (erreurAffichee) return;
+    const header = 'Début,Fin,Mission,Service,Établissement,Heures,Taux horaire,Brut,Montant affiché,Nature\n';
+    const rows = missions.flatMap(m => {
       const finance = montantFinanceAfficheMission(m);
-      const dateStr = m.debut_le ? format(new Date(m.debut_le), 'dd/MM/yyyy') : '—';
-      const brut = Number(m.total_brut) || 0;
-      return `${dateStr},"${(m.intitule || '').replace(/"/g, '""')}","${(m.service || '').replace(/"/g, '""')}","${(m.etablissements?.nom || '').replace(/"/g, '""')}",${Number(m.duree_heures) || 0},${Number(m.taux_horaire_base) || 0},${brut.toFixed(2)},${(finance?.montant ?? 0).toFixed(2)},"${finance?.libelle ?? 'Indisponible'}"`;
+      const creneaux = Array.isArray(m.creneaux_export) && m.creneaux_export.length > 0
+        ? m.creneaux_export
+        : [{ debut: m.debut_le, fin: m.fin_le, duree_heures: Number(m.duree_heures) || 0 }];
+      return creneaux.map((creneau: any, index: number) => (
+        `${formatParis(creneau.debut, 'dd/MM/yyyy HH:mm')},${formatParis(creneau.fin, 'dd/MM/yyyy HH:mm')},"${(m.intitule || '').replace(/"/g, '""')}","${(m.service || '').replace(/"/g, '""')}","${(m.etablissements?.nom || '').replace(/"/g, '""')}",${Number(creneau.duree_heures) || 0},${Number(m.taux_horaire_base) || 0},${index === 0 ? (Number(m.total_brut) || 0).toFixed(2) : ''},${index === 0 ? (finance?.montant ?? 0).toFixed(2) : ''},"${finance?.libelle ?? 'Indisponible'}"`
+      ));
     }).join('\n');
-    const nom = `gains-jolene-${moisFiltre === 'CE_MOIS' ? new Date().toISOString().slice(0, 7) : moisFiltre}-${new Date().toISOString().slice(0, 10)}.csv`;
+    const nom = `gains-jolene-${moisFiltre === 'CE_MOIS' ? cleMoisParis(new Date()) : moisFiltre}-${cleJourParis(new Date())}.csv`;
     void telechargerOuPartager(header + rows, nom, 'text/csv');
   };
 
@@ -288,10 +339,10 @@ export function MesGainsApercuContent() {
 
   return (
     <>
-      {erreurChargement && (
+      {erreurAffichee && (
         <div className="mb-5 rounded-xl border border-destructive/30 bg-destructive/5 p-4" role="alert">
           <p className="font-semibold text-destructive">Impossible de charger tous les revenus</p>
-          <p className="mt-1 text-sm text-muted-foreground">{erreurChargement}</p>
+          <p className="mt-1 text-sm text-muted-foreground">{erreurAffichee}</p>
           <BoutonY2K size="sm" variant="secondary" className="mt-3" onClick={() => setReloadKey(key => key + 1)}>
             Réessayer
           </BoutonY2K>
@@ -372,7 +423,8 @@ export function MesGainsApercuContent() {
 
       {/* KPIs — séparés par régime (jamais de sous-bloc à zéro). Honoraires libéraux
           et net salarié ne sont pas le même concept : on ne les fusionne pas. */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+      {!periodeMissions.erreur && <>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
         {libMissions.length > 0 && (
           <CarteKPIY2K
             icone={<Banknote className="h-4 w-4" />}
@@ -409,30 +461,31 @@ export function MesGainsApercuContent() {
         />
         {/* 6d.1 : « Total tout temps » retiré de la grille (redondant avec le
             pipeline « Payé » et le graphique) — grille 2×2 compacte. */}
-      </div>
-      {isSalariePur && salMissions.length === 0 ? (
-        <p className="text-[11px] text-muted-foreground mb-6">
-          💼 Le net exact figure sur le <strong>bulletin de paie fourni par l'établissement employeur</strong>.
-        </p>
-      ) : salMissions.length > 0 ? (
-        <NoteNetEstime className="mb-6" />
-      ) : null}
-      {indetCount > 0 && (
-        <p className="text-xs text-muted-foreground mb-6">
-          {indetCount} mission{indetCount > 1 ? 's' : ''} en cours de qualification de régime — non comptée{indetCount > 1 ? 's' : ''} ci-dessus.
-        </p>
-      )}
-      {libMissions.length > 0 && (
-        <p className="text-[11px] text-muted-foreground mb-6">
-          👜 Honoraires libéraux = ce qui est encaissé. Les charges URSSAF/CARPIMKO sont <strong>annualisées</strong> (provisionnées, pas prélevées à chaque mission) — voir <button onClick={() => navigate('/soignant/charges')} className="text-primary hover:underline">Mes charges</button>.
-        </p>
-      )}
+        </div>
+        {isSalariePur && salMissions.length === 0 ? (
+          <p className="text-[11px] text-muted-foreground mb-6">
+            💼 Le net exact figure sur le <strong>bulletin de paie fourni par l'établissement employeur</strong>.
+          </p>
+        ) : salMissions.length > 0 ? (
+          <NoteNetEstime className="mb-6" />
+        ) : null}
+        {indetCount > 0 && (
+          <p className="text-xs text-muted-foreground mb-6">
+            {indetCount} mission{indetCount > 1 ? 's' : ''} en cours de qualification de régime — non comptée{indetCount > 1 ? 's' : ''} ci-dessus.
+          </p>
+        )}
+        {libMissions.length > 0 && (
+          <p className="text-[11px] text-muted-foreground mb-6">
+            👜 Honoraires libéraux bruts dus pour les missions terminées — ce montant ne signifie pas nécessairement qu'il est déjà encaissé. Les charges URSSAF/CARPIMKO sont <strong>annualisées</strong> (provisionnées, pas prélevées à chaque mission) — voir <button onClick={() => navigate('/soignant/charges')} className="text-primary hover:underline">Mes charges</button>.
+          </p>
+        )}
+      </>}
 
       {/* 6d.1 : graphique seulement à partir de 2 mois de données — une barre
           seule = du bruit, pas une tendance. */}
       {moisDisponibles.length >= 2 && (
         <Suspense fallback={<div className="h-64 animate-pulse bg-muted rounded-lg" />}>
-          <GraphiqueGains6Mois missions={allMissions.map(m => ({ debut_le: m.debut_le, net_a_payer: montantFinanceAfficheMission(m)?.montant ?? null }))} />
+          <GraphiqueGains6Mois missions={missionsGraphique} />
         </Suspense>
       )}
 
@@ -456,11 +509,11 @@ export function MesGainsApercuContent() {
             <SelectItem value="CE_MOIS">Ce mois</SelectItem>
             <SelectItem value="TOUS">Tous les mois</SelectItem>
             {moisDisponibles.map(m => (
-              <SelectItem key={m} value={m}>{format(new Date(m + '-01'), 'MMMM yyyy', { locale: fr })}</SelectItem>
+              <SelectItem key={m} value={m}>{formatParis(`${m}-01T12:00:00`, 'MMMM yyyy')}</SelectItem>
             ))}
           </SelectContent>
         </Select>
-        <BoutonY2K variant="secondary" size="sm" onClick={exporterCSV} className="gap-1.5">
+        <BoutonY2K variant="secondary" size="sm" onClick={exporterCSV} disabled={Boolean(erreurAffichee) || missions.length === 0} className="gap-1.5">
           <Download className="h-4 w-4" /> CSV
         </BoutonY2K>
         <BoutonY2K variant="secondary" size="sm" onClick={() => setModalAttestation(true)} className="gap-1.5">
@@ -544,6 +597,8 @@ export function MesGainsApercuContent() {
           }).map(m => {
             const finance = montantFinanceAfficheMission(m);
             const duree = m.duree_heures ?? ((new Date(m.fin_le).getTime() - new Date(m.debut_le).getTime()) / 3600000);
+            const creneauxPeriode = Array.isArray(m.creneaux_export) ? m.creneaux_export : [];
+            const debutAffiche = creneauxPeriode[0]?.debut ?? m.debut_le;
             return (
               <div
                 key={m.id}
@@ -557,9 +612,9 @@ export function MesGainsApercuContent() {
                 <div className="flex items-center gap-3 py-3 px-4">
                   {/* Date compact */}
                   <div className="flex flex-col items-center justify-center rounded-lg bg-muted/50 px-2.5 py-1 min-w-[44px]">
-                    <span className="text-[10px] font-semibold text-muted-foreground uppercase">{format(new Date(m.debut_le), 'EEE', { locale: fr })}</span>
-                    <span className="text-base font-bold text-foreground leading-tight">{format(new Date(m.debut_le), 'd')}</span>
-                    <span className="text-[10px] text-muted-foreground">{format(new Date(m.debut_le), 'MMM', { locale: fr })}</span>
+                    <span className="text-[10px] font-semibold text-muted-foreground uppercase">{formatParis(debutAffiche, 'EEE')}</span>
+                    <span className="text-base font-bold text-foreground leading-tight">{formatParis(debutAffiche, 'd')}</span>
+                    <span className="text-[10px] text-muted-foreground">{formatParis(debutAffiche, 'MMM')}</span>
                   </div>
                   {/* Mission info */}
                   <div className="flex-1 min-w-0">
@@ -569,7 +624,15 @@ export function MesGainsApercuContent() {
                       {m.service && ` · ${m.service}`}
                     </p>
                     <div className="flex items-center gap-3 mt-0.5 text-[11px] text-muted-foreground">
-                      <span>{format(new Date(m.debut_le), "HH'h'mm", { locale: fr })} → {format(new Date(m.fin_le), "HH'h'mm", { locale: fr })}</span>
+                      {creneauxPeriode.length > 0 ? (
+                        <span>
+                          {creneauxPeriode.map((creneau: any) => (
+                            `${formatParis(creneau.debut, "d MMM HH'h'mm")}→${formatParis(creneau.fin, "HH'h'mm")}`
+                          )).join(' · ')}
+                        </span>
+                      ) : (
+                        <span>{formatParis(m.debut_le, "HH'h'mm")} → {formatParis(m.fin_le, "HH'h'mm")}</span>
+                      )}
                       <span>{Math.round(duree * 10) / 10}h</span>
                       <span>{m.taux_horaire_base} €/h</span>
                     </div>
@@ -631,7 +694,7 @@ export function MesGainsApercuContent() {
             </button>
           )}
         </div>
-      ) : erreurChargement ? null : allMissions.length === 0 ? (
+      ) : erreurAffichee ? null : allMissions.length === 0 ? (
         <EmptyState illustration={<IllustrationTirelire />} titre="Pas encore de gains" description="Tes gains apparaîtront ici après ta première mission terminée." cta={{ label: 'Trouver une mission', onClick: () => navigate('/soignant/recherche-missions') }} />
       ) : (
         /* 6d.1 : historique existant mais période vide → message scopé, pas un

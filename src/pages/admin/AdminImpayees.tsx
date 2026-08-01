@@ -9,7 +9,7 @@ import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
-import { format, differenceInDays } from 'date-fns';
+import { format, differenceInCalendarDays } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { getEmailDeliveryStatus, type EmailDeliveryStatus } from '@/lib/adminEmailDelivery';
 import { estFactureRelancable } from '@/lib/adminInvoiceAccounting';
@@ -44,6 +44,7 @@ interface FactureImpayee {
     adresse_ville: string | null;
     taux_commission_negocie: number | null;
     groupe_sante_id: string | null;
+    est_compte_test: boolean;
   } | null;
   missions: MissionDetail[];
   joursRetard: number;
@@ -97,7 +98,7 @@ export default function AdminImpayees() {
       const etabIds = [...new Set(rawFactures.map(f => f.etablissement_id))];
       const { data: etabs, error: etabsError } = await supabase
         .from('etablissements')
-        .select('id, nom, email_contact, telephone_contact, type, adresse_ville, taux_commission_negocie, groupe_sante_id')
+        .select('id, nom, email_contact, telephone_contact, type, adresse_ville, taux_commission_negocie, groupe_sante_id, est_compte_test')
         .in('id', etabIds);
       if (etabsError) throw etabsError;
 
@@ -162,8 +163,9 @@ export default function AdminImpayees() {
       }
 
       const enriched: FactureImpayee[] = rawFactures.map(f => {
-        const echeance = f.date_echeance ? new Date(f.date_echeance) : null;
-        const joursRetard = echeance ? differenceInDays(new Date(), echeance) : 0;
+        const jourEcheance = f.date_echeance?.match(/^\d{4}-\d{2}-\d{2}/)?.[0];
+        const echeance = jourEcheance ? new Date(`${jourEcheance}T12:00:00`) : null;
+        const joursRetard = echeance ? differenceInCalendarDays(new Date(), echeance) : 0;
         return {
           ...f,
           etablissement: etabMap[f.etablissement_id] || null,
@@ -171,7 +173,10 @@ export default function AdminImpayees() {
           joursRetard: Math.max(0, joursRetard),
           relances: relanceCountMap[f.id] || 0,
         };
-      });
+      }).filter(f => (
+        f.etablissement?.est_compte_test === false
+        && estFactureRelancable(f)
+      ));
 
       enriched.sort((a, b) => b.joursRetard - a.joursRetard);
       setFactures(enriched);

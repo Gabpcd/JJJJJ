@@ -1443,6 +1443,20 @@ BEGIN
     true
   );
 
+  -- Dans un fil direct de support, l'admin est un vrai participant : sa
+  -- lecture doit acquitter uniquement les réponses entrantes. Ce cas diffère
+  -- de l'observation d'un fil établissement/soignant testée juste après.
+  PERFORM public.fn_marquer_messages_lus(v_conversation_admin_soignant);
+  IF EXISTS (
+    SELECT 1
+    FROM public.messages_chat mc
+    WHERE mc.conversation_id = v_conversation_admin_soignant
+      AND mc.auteur_id = v_soignant
+      AND mc.lu IS FALSE
+  ) THEN
+    RAISE EXCEPTION 'Admin participant ne peut pas acquitter une réponse support';
+  END IF;
+
   -- Un admin observateur peut consulter pour modération, sans modifier l'état
   -- de lecture des deux vrais participants.
   SELECT count(*) INTO v_nb_messages

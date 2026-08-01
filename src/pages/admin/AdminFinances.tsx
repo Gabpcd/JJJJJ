@@ -61,7 +61,7 @@ async function chargerToutesFactures() {
   const lignes: any[] = [];
   for (let offset = 0; ; offset += TAILLE_PAGE_SUPABASE) {
     const { data, error } = await supabase.from('factures')
-      .select('id, numero_facture, montant_ht, montant_tva, montant_ttc, montant_signe, type_document, statut, date_emission, etablissement_id, etablissements(nom, type)')
+      .select('id, numero_facture, montant_ht, montant_tva, montant_ttc, montant_signe, type_document, statut, date_emission, date_echeance, etablissement_id, etablissements(nom, type, est_compte_test)')
       .order('date_emission', { ascending: false })
       .range(offset, offset + TAILLE_PAGE_SUPABASE - 1);
     if (error) throw error;
@@ -75,7 +75,7 @@ async function chargerToutesMissionsFinancieres() {
   const lignes: any[] = [];
   for (let offset = 0; ; offset += TAILLE_PAGE_SUPABASE) {
     const { data, error } = await supabase.from('missions')
-      .select('id, total_brut, montant_commission_ht, montant_commission_ttc, statut, debut_le, etablissement_id, soignant_assigne_id, etablissements(nom, type, taux_commission_negocie)')
+      .select('id, total_brut, montant_commission_ht, montant_commission_ttc, statut, debut_le, etablissement_id, soignant_assigne_id, etablissements(nom, type, taux_commission_negocie, est_compte_test), soignants(est_compte_test)')
       .in('statut', ['TERMINEE', 'EN_COURS', 'ASSIGNEE'])
       .order('debut_le', { ascending: false })
       .range(offset, offset + TAILLE_PAGE_SUPABASE - 1);
@@ -132,10 +132,23 @@ export default function AdminFinances() {
   const moisPrecedent = moisCourant === 0 ? 11 : moisCourant - 1;
   const anneePrecedente = moisCourant === 0 ? anneeCourante - 1 : anneeCourante;
 
-  const facturesComptabilisees = useMemo(
-    () => factures.filter(estDocumentComptabilise),
+  const facturesProduction = useMemo(
+    () => factures.filter(f => (f.etablissements as any)?.est_compte_test === false),
     [factures],
   );
+  const missionsProduction = useMemo(
+    () => missions.filter(m => (
+      (m.etablissements as any)?.est_compte_test === false
+      && (m.soignants as any)?.est_compte_test === false
+    )),
+    [missions],
+  );
+  const facturesComptabilisees = useMemo(
+    () => facturesProduction.filter(estDocumentComptabilise),
+    [facturesProduction],
+  );
+  const nbDonneesTestExclues = (factures.length - facturesProduction.length)
+    + (missions.length - missionsProduction.length);
 
   const facturesMoisCourant = useMemo(() => facturesComptabilisees.filter(f => {
     if (!f.date_emission) return false;
@@ -189,8 +202,8 @@ export default function AdminFinances() {
     [facturesComptabilisees, dansLaPeriode],
   );
   const missionsFiltrees = useMemo(
-    () => missions.filter(m => dansLaPeriode(m.debut_le)),
-    [missions, dansLaPeriode],
+    () => missionsProduction.filter(m => dansLaPeriode(m.debut_le)),
+    [missionsProduction, dansLaPeriode],
   );
 
   const commHTMois = facturesMoisCourant.reduce((s, f) => s + montantDocumentComptable(f, 'ht'), 0);
@@ -201,7 +214,7 @@ export default function AdminFinances() {
   const variationPct = commHTMoisPrec > 0 ? ((commHTMois - commHTMoisPrec) / commHTMoisPrec) * 100 : 0;
   const variationPositive = variationPct >= 0;
 
-  const impayees = facturesFiltrees.filter(estFactureRelancable);
+  const impayees = facturesFiltrees.filter(facture => estFactureRelancable(facture));
   const nbImpayees = impayees.length;
   const montantImpayees = impayees.reduce((s, f) => s + montantDocumentComptable(f, 'ttc'), 0);
 
@@ -218,13 +231,13 @@ export default function AdminFinances() {
   // Global (sur tous les établissements actifs) — indicateur structurel, non scopé période.
   const tauxParEtab = useMemo(() => {
     const map = new Map<string, number>();
-    missions.forEach((m: any) => {
+    missionsProduction.forEach((m: any) => {
       const taux = (m.etablissements as any)?.taux_commission_negocie;
       if (taux != null && m.etablissement_id) map.set(m.etablissement_id, Number(taux));
     });
     const vals = [...map.values()];
     return vals.length > 0 ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
-  }, [missions]);
+  }, [missionsProduction]);
 
   // Chart data
   const chartData = useMemo(() => {
@@ -442,6 +455,7 @@ export default function AdminFinances() {
           )}
           <p className="text-xs text-muted-foreground">
             {facturesFiltrees.length} document{facturesFiltrees.length > 1 ? 's' : ''} comptabilisé{facturesFiltrees.length > 1 ? 's' : ''} sur la période
+            {nbDonneesTestExclues > 0 && ` · ${nbDonneesTestExclues} donnée${nbDonneesTestExclues > 1 ? 's' : ''} de test exclue${nbDonneesTestExclues > 1 ? 's' : ''}`}
           </p>
         </div>
 

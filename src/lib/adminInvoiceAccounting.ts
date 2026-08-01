@@ -1,6 +1,7 @@
 export interface AdminInvoiceAccountingRow {
   statut?: string | null;
   type_document?: string | null;
+  date_echeance?: string | null;
   montant_signe?: number | null;
   montant_ht?: number | null;
   montant_tva?: number | null;
@@ -19,10 +20,42 @@ export function estDocumentComptabilise(facture: AdminInvoiceAccountingRow): boo
   return !STATUTS_EXCLUS_COMPTABILITE.has(facture.statut ?? '');
 }
 
-/** Les relances ne concernent que les factures, jamais les avoirs. */
-export function estFactureRelancable(facture: AdminInvoiceAccountingRow): boolean {
-  return facture.type_document === 'FACTURE'
-    && (facture.statut === 'EMISE' || facture.statut === 'EN_RETARD');
+export function jourCivilParis(date: Date): string | null {
+  if (Number.isNaN(date.getTime())) return null;
+  const parts = new Intl.DateTimeFormat('fr-FR', {
+    timeZone: 'Europe/Paris',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(date);
+  const part = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find(item => item.type === type)?.value;
+  const annee = part('year');
+  const mois = part('month');
+  const jour = part('day');
+  return annee && mois && jour ? `${annee}-${mois}-${jour}` : null;
+}
+
+/**
+ * Une facture n'est relançable qu'après son échéance.
+ *
+ * `EMISE` signifie « envoyée », pas « impayée ». Le statut `EN_RETARD` reste
+ * accepté sans date d'échéance pour les anciennes lignes déjà qualifiées par
+ * le back-office, mais une date future gagne toujours sur ce statut afin de ne
+ * jamais relancer prématurément un établissement.
+ */
+export function estFactureRelancable(
+  facture: AdminInvoiceAccountingRow,
+  maintenant: Date = new Date(),
+): boolean {
+  if (facture.type_document !== 'FACTURE') return false;
+  if (facture.statut !== 'EMISE' && facture.statut !== 'EN_RETARD') return false;
+
+  if (!facture.date_echeance) return facture.statut === 'EN_RETARD';
+  const echeance = facture.date_echeance.match(/^\d{4}-\d{2}-\d{2}/)?.[0];
+  const aujourdhui = jourCivilParis(maintenant);
+  if (!echeance || !aujourdhui) return false;
+  return echeance < aujourdhui;
 }
 
 function signeDocument(facture: AdminInvoiceAccountingRow): 1 | -1 {

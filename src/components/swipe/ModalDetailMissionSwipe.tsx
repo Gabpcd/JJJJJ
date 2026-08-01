@@ -78,7 +78,7 @@ export function ModalDetailMissionSwipe({ mission, open, onOpenChange, onPostule
               {mission.est_urgente && (
                 <BadgeY2K variant="warning" size="sm">🔥 Urgent</BadgeY2K>
               )}
-              {mission.paiement_rapide && (
+              {missionEstLiberale && mission.paiement_rapide && (
                 <BadgeY2K variant="success" size="sm" title="Payée sous 24 à 72 h après validation des présences">
                   ⚡ Paiement rapide
                 </BadgeY2K>

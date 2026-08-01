@@ -1,7 +1,6 @@
 import { useMemo } from 'react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
-
-const MOIS = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Août', 'Sep', 'Oct', 'Nov', 'Déc'];
+import { cleMoisParis, formatParis } from '@/lib/date-heure-paris';
 
 interface Props {
   missions: { debut_le: string; net_a_payer: number | null }[];
@@ -9,21 +8,16 @@ interface Props {
 
 export function GraphiqueGains6Mois({ missions }: Props) {
   const data = useMemo(() => {
-    const now = new Date();
-    const result: { mois: string; gains: number }[] = [];
+    const [anneeCourante, moisCourant] = cleMoisParis(new Date()).split('-').map(Number);
+    const result: { cle: string; mois: string; gains: number }[] = [];
     for (let i = 5; i >= 0; i--) {
-      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      result.push({ mois: MOIS[d.getMonth()], gains: 0 });
+      const date = new Date(Date.UTC(anneeCourante, moisCourant - 1 - i, 1, 12));
+      const cle = `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}`;
+      result.push({ cle, mois: formatParis(`${cle}-01T12:00:00`, 'MMM'), gains: 0 });
     }
     missions.forEach(m => {
-      const d = new Date(m.debut_le);
-      const now2 = new Date();
-      for (let i = 5; i >= 0; i--) {
-        const ref = new Date(now2.getFullYear(), now2.getMonth() - i, 1);
-        if (d.getFullYear() === ref.getFullYear() && d.getMonth() === ref.getMonth()) {
-          result[5 - i].gains += m.net_a_payer || 0;
-        }
-      }
+      const index = result.findIndex((periode) => periode.cle === cleMoisParis(m.debut_le));
+      if (index >= 0) result[index].gains += m.net_a_payer || 0;
     });
     return result;
   }, [missions]);

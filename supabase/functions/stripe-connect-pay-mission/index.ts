@@ -884,7 +884,12 @@ Deno.serve(async (req) => {
           transfer_group: invoiceScopedPayment
             ? `facture_${factureHonoraires.id}`
             : `mission_${mission_id}`,
-          metadata: { mission_id, soignant_id: soignantId },
+          metadata: {
+            mission_id,
+            soignant_id: soignantId,
+            facture_honoraires_id: factureHonoraires.id,
+            payment_scope: invoiceScopedPayment ? "INVOICE" : "MISSION",
+          },
         }, { idempotencyKey: `transfer_${session.id}` });
       const destinationId = objectId(transfer.destination);
       const sourceTransactionId = objectId(transfer.source_transaction);
@@ -1231,6 +1236,7 @@ Deno.serve(async (req) => {
           success: true,
           resumed: true,
           client_secret: derniereSessionMission.client_secret,
+          checkout_session_id: derniereSessionMission.id,
           total: totalCents / 100,
           commission: commissionCents / 100,
           commission_ttc: commissionCents / 100,
@@ -1507,6 +1513,7 @@ Deno.serve(async (req) => {
       JSON.stringify({
         success: true,
         client_secret: session.client_secret,
+        checkout_session_id: session.id,
         total: totalCents / 100,
         commission: commissionCents / 100,
         commission_ttc: commissionCents / 100,

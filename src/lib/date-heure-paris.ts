@@ -268,6 +268,12 @@ export function cleJourParis(value: DateJolene): string {
   return `${annee}-${String(mois).padStart(2, '0')}-${String(jour).padStart(2, '0')}`;
 }
 
+/** Clé de mois civil français, indépendante du fuseau de l'appareil. */
+export function cleMoisParis(value: DateJolene): string {
+  const { annee, mois } = dateCivileParis(value);
+  return `${annee}-${String(mois).padStart(2, '0')}`;
+}
+
 export function cleSemaineParis(value: DateJolene): string {
   return cleJourParis(debutSemaineParis(value));
 }

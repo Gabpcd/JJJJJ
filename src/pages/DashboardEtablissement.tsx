@@ -694,7 +694,7 @@ export default function DashboardEtablissement() {
         </FadeInView>
       </div>
 
-      {/* KPI row 2 — Soignants ce mois + Impayés. « Candidatures en attente »
+      {/* KPI row 2 — Soignants ce mois + règlements à effectuer. « Candidatures en attente »
           retirée : doublon (même destination que « Missions ouvertes » et déjà
           surfacée dans la carte « À faire maintenant »). */}
       <div className="grid grid-cols-2 gap-3 mb-6">
@@ -710,17 +710,17 @@ export default function DashboardEtablissement() {
         </FadeInView>
         <FadeInView delay={300}>
           {(() => {
-            const totalImpayes = stats.missions_a_payer + stats.nb_factures_impayees;
-            const hasImpayes = totalImpayes > 0;
+            const totalARegler = stats.missions_a_payer + stats.nb_factures_impayees;
+            const aDesReglements = totalARegler > 0;
             const sousLabelParts: string[] = [];
-            if (stats.missions_a_payer > 0) sousLabelParts.push(`${stats.missions_a_payer} soignant(s)`);
-            if (stats.nb_factures_impayees > 0) sousLabelParts.push(`${stats.nb_factures_impayees} facture(s) Jolene`);
-            const IconeImpayes = hasImpayes ? CreditCard : CheckCircle;
+            if (stats.missions_a_payer > 0) sousLabelParts.push(`${stats.missions_a_payer} soignant(s) à payer`);
+            if (stats.nb_factures_impayees > 0) sousLabelParts.push(`${stats.nb_factures_impayees} facture(s) à régler`);
+            const IconeReglements = aDesReglements ? CreditCard : CheckCircle;
             return (
               <CarteKPIY2K
-                icone={<IconeImpayes className="h-4 w-4" />}
-                valeur={hasImpayes ? totalImpayes : 0}
-                label={hasImpayes ? 'Impayés — Cliquez pour payer' : 'Paiements à jour'}
+                icone={<IconeReglements className="h-4 w-4" />}
+                valeur={aDesReglements ? totalARegler : 0}
+                label={aDesReglements ? 'Règlements à effectuer' : 'Paiements à jour'}
                 contexte={sousLabelParts.length > 0 ? sousLabelParts.join(' + ') : undefined}
                 variant="default"
                 onClick={() => navigate('/etablissement/facturation')}

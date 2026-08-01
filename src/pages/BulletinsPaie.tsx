@@ -54,6 +54,7 @@ export function BulletinsPaieContent() {
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [bulletins, setBulletins] = useState<BulletinRow[]>([]);
+  const [missionsAvecCotisations, setMissionsAvecCotisations] = useState<Set<string>>(new Set());
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [filtreStatut, setFiltreStatut] = useState<string>('tous');
   const [filtreAnnee, setFiltreAnnee] = useState<string>('toutes');
@@ -68,7 +69,21 @@ export function BulletinsPaieContent() {
       try {
         const { data, error } = await supabase.rpc('fn_mes_bulletins_paie' as any);
         if (error) throw error;
-        if (actif) setBulletins((data as unknown as BulletinRow[]) || []);
+        const lignes = (data as unknown as BulletinRow[]) || [];
+        const missionIds = [...new Set(lignes.map(b => b.mission_id).filter(Boolean))];
+        let missionsDisponibles = new Set<string>();
+        if (missionIds.length > 0) {
+          const { data: cotisations, error: cotisationsError } = await supabase
+            .from('cotisations_sociales')
+            .select('mission_id')
+            .in('mission_id', missionIds);
+          if (cotisationsError) throw cotisationsError;
+          missionsDisponibles = new Set((cotisations ?? []).map(c => c.mission_id));
+        }
+        if (actif) {
+          setBulletins(lignes);
+          setMissionsAvecCotisations(missionsDisponibles);
+        }
       } catch (error: any) {
         if (actif) setErreurChargement(error?.message || 'Impossible de charger les bulletins.');
       } finally {
@@ -99,6 +114,7 @@ export function BulletinsPaieContent() {
   const reinitialiserFiltres = () => { setFiltreStatut('tous'); setFiltreAnnee('toutes'); };
 
   const totauxPayes = totauxBulletinsPayes(bulletinsFiltres);
+  const nbPdfIndisponibles = bulletins.filter(b => !missionsAvecCotisations.has(b.mission_id)).length;
 
   const telecharger = async (id: string) => {
     setDownloadingId(id);
@@ -133,6 +149,14 @@ export function BulletinsPaieContent() {
         <p className="text-xs text-muted-foreground">
           {MENTION_SIMULATION_PAIE}
         </p>
+        {nbPdfIndisponibles > 0 && (
+          <div className="rounded-xl border border-warning/30 bg-warning/5 p-3 text-sm" role="status">
+            <p className="font-semibold text-foreground">{nbPdfIndisponibles} simulation{nbPdfIndisponibles > 1 ? 's' : ''} sans PDF fiable</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Le téléchargement reste désactivé tant que la ventilation détaillée des cotisations n'est pas disponible. Aucun document comptable incomplet n'est généré.
+            </p>
+          </div>
+        )}
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div className="card-base">
@@ -210,6 +234,7 @@ export function BulletinsPaieContent() {
               renduCellule={(b, col) => {
                 const config = STATUT_CONFIG[b.statut] || { label: `Inconnu (${b.statut})`, classes: 'bg-destructive/10 text-destructive' };
                 const downloading = downloadingId === b.id;
+                const pdfDisponible = missionsAvecCotisations.has(b.mission_id);
                 switch (col.cle) {
                   case 'periode':
                     return (
@@ -240,11 +265,12 @@ export function BulletinsPaieContent() {
                         size="sm"
                         variant="secondary"
                         className="h-8 gap-1 text-xs"
-                        disabled={downloading}
+                        disabled={downloading || !pdfDisponible}
+                        title={pdfDisponible ? 'Télécharger la simulation PDF' : 'PDF indisponible : détail des cotisations manquant'}
                         onClick={(e) => { e.stopPropagation(); telecharger(b.id); }}
                       >
                         {downloading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
-                        PDF
+                        {pdfDisponible ? 'PDF' : 'PDF indisponible'}
                       </BoutonY2K>
                     );
                   default:
@@ -254,6 +280,7 @@ export function BulletinsPaieContent() {
               renduCarte={(b) => {
                 const config = STATUT_CONFIG[b.statut] || { label: `Inconnu (${b.statut})`, classes: 'bg-destructive/10 text-destructive' };
                 const downloading = downloadingId === b.id;
+                const pdfDisponible = missionsAvecCotisations.has(b.mission_id);
                 return (
                   <div className="space-y-3">
                     <div className="flex items-start justify-between gap-3">
@@ -284,11 +311,12 @@ export function BulletinsPaieContent() {
                       size="sm"
                       variant="primary"
                       className="w-full gap-1.5 min-h-[44px]"
-                      disabled={downloading}
+                      disabled={downloading || !pdfDisponible}
+                      title={pdfDisponible ? 'Télécharger la simulation PDF' : 'PDF indisponible : détail des cotisations manquant'}
                       onClick={(e) => { e.stopPropagation(); telecharger(b.id); }}
                     >
                       {downloading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-                      Télécharger la simulation PDF
+                      {pdfDisponible ? 'Télécharger la simulation PDF' : 'PDF indisponible — cotisations manquantes'}
                     </BoutonY2K>
                   </div>
                 );

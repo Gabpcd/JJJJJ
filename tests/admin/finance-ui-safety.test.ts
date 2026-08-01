@@ -34,7 +34,21 @@ describe('rapport et suivi financier admin', () => {
     expect(impayees).toContain(".eq('type_document', 'FACTURE')");
     expect(finances).toContain('montant_signe, type_document');
     expect(facturation).toContain('montant_signe, type_document');
-    expect(finances).toContain('filter(estFactureRelancable)');
+    expect(finances).toContain('filter(facture => estFactureRelancable(facture))');
+  });
+
+  it('exclut les comptes test et les factures non échues des urgences admin', () => {
+    const impayees = readFileSync('src/pages/admin/AdminImpayees.tsx', 'utf8');
+    const finances = readFileSync('src/pages/admin/AdminFinances.tsx', 'utf8');
+    const dashboard = readFileSync('src/pages/admin/AdminDashboard.tsx', 'utf8');
+
+    expect(finances).toContain('est_compte_test');
+    expect(finances).toContain('missionsProduction');
+    expect(impayees).toContain('f.etablissement?.est_compte_test === false');
+    expect(impayees).toContain('estFactureRelancable(f)');
+    expect(dashboard).toContain("etablissements!inner(nom, est_compte_test)");
+    expect(dashboard).toContain(".lt('date_echeance', aujourdhuiIso)");
+    expect(dashboard).toContain(".eq('etablissements.est_compte_test', false)");
   });
 
   it('identifie les états financiers nécessitant une alerte', () => {

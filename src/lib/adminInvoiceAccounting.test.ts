@@ -55,10 +55,33 @@ describe('règles comptables des factures admin', () => {
   });
 
   it('ne considère jamais un avoir comme une facture à relancer', () => {
-    expect(estFactureRelancable({ statut: 'EMISE', type_document: 'FACTURE' })).toBe(true);
+    const maintenant = new Date('2026-08-01T12:00:00Z');
+    expect(estFactureRelancable({ statut: 'EMISE', type_document: 'FACTURE', date_echeance: '2026-07-31' }, maintenant)).toBe(true);
+    expect(estFactureRelancable({ statut: 'EN_RETARD', type_document: 'FACTURE', date_echeance: '2026-07-31' }, maintenant)).toBe(true);
+    expect(estFactureRelancable({ statut: 'EMISE', type_document: 'AVOIR', date_echeance: '2026-07-31' }, maintenant)).toBe(false);
+    expect(estFactureRelancable({ statut: 'EN_RETARD', type_document: 'AVOIR', date_echeance: '2026-07-31' }, maintenant)).toBe(false);
+    expect(estFactureRelancable({ statut: 'PAYEE', type_document: 'FACTURE', date_echeance: '2026-07-31' }, maintenant)).toBe(false);
+  });
+
+  it('ne qualifie jamais une facture non échue comme impayée ou relançable', () => {
+    const maintenant = new Date('2026-08-01T12:00:00Z');
+    expect(estFactureRelancable({ statut: 'EMISE', type_document: 'FACTURE', date_echeance: '2026-08-17' }, maintenant)).toBe(false);
+    expect(estFactureRelancable({ statut: 'EN_RETARD', type_document: 'FACTURE', date_echeance: '2026-08-17' }, maintenant)).toBe(false);
+    expect(estFactureRelancable({ statut: 'EMISE', type_document: 'FACTURE', date_echeance: '2026-08-01' }, maintenant)).toBe(false);
+  });
+
+  it('bascule au retard selon le jour civil français, y compris autour de minuit', () => {
+    // 00 h 30 le 2 août à Paris, mais encore le 1er août en UTC.
+    const maintenant = new Date('2026-08-01T22:30:00Z');
+    expect(estFactureRelancable({
+      statut: 'EMISE',
+      type_document: 'FACTURE',
+      date_echeance: '2026-08-01',
+    }, maintenant)).toBe(true);
+  });
+
+  it('conserve les anciennes factures explicitement en retard sans échéance', () => {
     expect(estFactureRelancable({ statut: 'EN_RETARD', type_document: 'FACTURE' })).toBe(true);
-    expect(estFactureRelancable({ statut: 'EMISE', type_document: 'AVOIR' })).toBe(false);
-    expect(estFactureRelancable({ statut: 'EN_RETARD', type_document: 'AVOIR' })).toBe(false);
-    expect(estFactureRelancable({ statut: 'PAYEE', type_document: 'FACTURE' })).toBe(false);
+    expect(estFactureRelancable({ statut: 'EMISE', type_document: 'FACTURE' })).toBe(false);
   });
 });

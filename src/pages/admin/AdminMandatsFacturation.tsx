@@ -34,7 +34,7 @@ export default function AdminMandatsFacturation() {
 
   // Relance mandat : notification in-app + email (template ADMIN_BROADCAST).
   const relancer = async (s: any): Promise<RelanceOutcome> => {
-    const corps = `Bonjour ${s.prenom},\n\nVotre mandat de facturation n'est pas encore signé. Il permet à Jolene de générer automatiquement vos factures d'honoraires et vous donne accès au paiement rapide (24-48h).\n\nSignez-le en 2 minutes depuis votre espace : Mon profil → Mandat de facturation.\n\nL'équipe Jolene`;
+    const corps = `Bonjour ${s.prenom},\n\nVotre mandat de facturation n'est pas encore signé. Il permet à Jolene de générer automatiquement vos factures d'honoraires. Lorsqu'une mission est explicitement éligible au paiement accéléré, le mandat signé fait partie des prérequis.\n\nSignez-le en 2 minutes depuis votre espace : Mon profil → Mandat de facturation.\n\nL'équipe Jolene`;
     try {
       const emailRes = await supabase.functions.invoke('send-email', {
         body: {
@@ -51,7 +51,7 @@ export default function AdminMandatsFacturation() {
         p_type_destinataire: 'SOIGNANT',
         p_type: 'RAPPEL_DOCUMENTS',
         p_titre: 'Signez votre mandat de facturation',
-        p_corps: 'Votre mandat de facturation attend votre signature — il débloque la facturation automatique et le paiement rapide.',
+        p_corps: 'Votre mandat de facturation attend votre signature. Il permet la génération de vos factures d\'honoraires ; pour une mission explicitement éligible au paiement accéléré, il fait partie des prérequis.',
         p_lien: '/soignant/mandat-facturation',
         p_type_ressource: null,
         p_id_ressource: null,

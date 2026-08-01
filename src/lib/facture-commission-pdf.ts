@@ -350,15 +350,12 @@ export async function telechargerFactureCommissionPDF(factureId: string) {
           const ifm = Number(m.montant_ifm || 0);
           const icp = Number(m.montant_icp || 0);
           const superBrut = totalBrut + ifm + icp;
-          const net = Number(m.net_a_payer || m.net_estime || superBrut * 0.78);
-          const cotisations = superBrut - net;
           const tauxIFM = Number(m.taux_ifm || 10);
           const tauxICP = Number(m.taux_icp || 10);
           decompoRows.push([`IFM (${tauxIFM}%)`, '', `+${fmtEur(ifm)}`]);
           decompoRows.push([`ICP (${tauxICP}%)`, '', `+${fmtEur(icp)}`]);
           decompoRows.push(['Super brut', '', fmtEur(superBrut)]);
-          decompoRows.push(['Cotisations salariales (~22%)', '', `-${fmtEur(cotisations)}`]);
-          decompoRows.push(['NET a verser au soignant', '', fmtEur(net)]);
+          decompoRows.push(['Net salarié et cotisations', 'Déterminés par le bulletin de paie de l\'employeur', '—']);
           decompoRows.push(['', '', '']);
           assiette = superBrut;
           assietteLabel = `${tauxCommission}% x ${fmtEur(superBrut)} super brut (base + IFM + ICP)`;
