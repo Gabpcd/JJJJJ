@@ -15,6 +15,11 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { TEST_ACCOUNTS } from './auth';
 import { adminClient, userClient, userIdByEmail } from './db';
 import { isPgrst202EligibilityFallbackAllowed } from './liberal-eligibility-policy';
+import {
+  estBlocagePurgeTechniqueAttendu,
+  estQuarantainePurgeAutorisee,
+  preparerMissionTechniquePourPurge,
+} from './cleanup-mission-test';
 
 export type CaregiverProfession = 'IDE' | 'IADE' | 'IBODE' | 'SAGE_FEMME';
 export type CaregiverExercise = 'SALARIE' | 'LIBERAL';
@@ -722,7 +727,7 @@ export async function cleanupMissionCascade(missionId?: string | null): Promise<
   const admin = adminClient();
   const { data: mission, error: missionReadError } = await admin
     .from('missions' as any)
-    .select('id, etablissement_id, soignant_assigne_id, intitule')
+    .select('id, etablissement_id, soignant_assigne_id, intitule, fige_le, statut')
     .eq('id', missionId)
     .maybeSingle();
   if (missionReadError) {
@@ -730,11 +735,12 @@ export async function cleanupMissionCascade(missionId?: string | null): Promise<
   }
   if (!mission) return;
   const intitule = String(mission.intitule ?? '');
-  if (!intitule.startsWith('[pw-test') && !intitule.startsWith('[playwright-test]')) {
+  if (!intitule.startsWith('[pw-test:') && !intitule.startsWith('[playwright-test]')) {
     throw new Error(
       `[cleanup mission] refus de purger une mission non technique ${missionId} (${intitule || 'sans intitulé'})`,
     );
   }
+  const preparation = await preparerMissionTechniquePourPurge(admin, mission);
 
   // La descendance financière a deux niveaux de FK : les trois files ci-dessous
   // doivent précéder paiements_escrow, lui-même enfant de la mission.
@@ -832,6 +838,16 @@ export async function cleanupMissionCascade(missionId?: string | null): Promise<
   const { error } = await admin
     .rpc('fn_test_purge_mission' as any, { p_mission_id: missionId });
   if (error) {
+    if (
+      preparation === 'QUARANTAINEE'
+      && estQuarantainePurgeAutorisee()
+      && estBlocagePurgeTechniqueAttendu(error)
+    ) {
+      console.warn(
+        `[cleanup mission] ${missionId} reste en quarantaine jusqu'au déploiement du purgeur durable.`,
+      );
+      return;
+    }
     throw new Error(`[cleanup mission] ${missionId}: ${error.message}`);
   }
 }

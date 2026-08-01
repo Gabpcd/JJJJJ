@@ -12,21 +12,22 @@ describe('purge des missions techniques E2E', () => {
       'stripe_refunds_queue',
     ].map((table) => source.indexOf(`'${table}'`, escrow));
     const boucleEnfantsMission = source.indexOf('for (const table of ENFANTS_MISSION)', escrow);
-    const mission = source.indexOf(".from('missions').delete()", escrow);
+    const purgeRpc = source.indexOf("admin.rpc('fn_test_purge_mission'", boucleEnfantsMission);
 
     expect(escrow).toBeGreaterThan(-1);
     enfants.forEach((index) => expect(index).toBeGreaterThan(escrow));
     enfants.forEach((index) => expect(index).toBeLessThan(boucleEnfantsMission));
     expect(source).toContain("'stripe_transfers'");
     expect(source).toContain("'paiements_escrow'");
-    expect(boucleEnfantsMission).toBeLessThan(mission);
+    expect(purgeRpc).toBeGreaterThan(boucleEnfantsMission);
+    expect(source).not.toContain(".from('missions').delete()");
     expect(source).toContain('if (escrowsError)');
     expect(source).toContain('if (escrowChildError)');
   });
 
   it('refuse toute purge partielle d’une mission non préfixée test', () => {
     const helper = readFileSync(resolve(process.cwd(), 'e2e/helpers/seed.ts'), 'utf8');
-    const garde = helper.indexOf("intitule.startsWith('[pw-test')");
+    const garde = helper.indexOf("intitule.startsWith('[pw-test:')");
     const premiereSuppression = helper.indexOf(".from('paiements_escrow' as any)", garde);
 
     expect(garde).toBeGreaterThan(-1);

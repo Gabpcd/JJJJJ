@@ -18,8 +18,14 @@ import {
   reactiverSoignantPlaywright,
 } from './helpers/nettoyage-sessions-playwright';
 import { garantirEtablissementPlaywright } from './helpers/garantir-etablissement-playwright';
+import {
+  estBlocagePurgeTechniqueAttendu,
+  estQuarantainePurgeAutorisee,
+  preparerMissionTechniquePourPurge,
+  type PreparationPurgeMission,
+} from './helpers/cleanup-mission-test';
 
-const PREFIXES = ['[playwright-test]%', '[pw-test%'];
+const PREFIXES = ['[playwright-test]%', '[pw-test:%'];
 
 /** Tables enfants de missions en FK NO ACTION — ordre de purge obligatoire. */
 const ENFANTS_MISSION = [
@@ -74,13 +80,25 @@ export default async function globalSetup() {
   const orFiltre = PREFIXES.map((p) => `intitule.like.${p}`).join(',');
   const { data: missions, error } = await admin
     .from('missions')
-    .select('id, intitule, soignant_assigne_id')
+    .select('id, intitule, etablissement_id, soignant_assigne_id, fige_le, statut')
+    .eq('etablissement_id', etablissementPlaywrightId)
     .or(orFiltre)
     .limit(500);
   if (error) {
     throw new Error(`[global-setup] lecture missions impossible : ${error.message}`);
   }
-  const ids = (missions ?? []).map((m: { id: string }) => m.id);
+  const ids: string[] = [];
+  const preparations = new Map<string, PreparationPurgeMission>();
+  let nbQuarantainesRestantes = 0;
+  for (const mission of missions ?? []) {
+    const preparation = await preparerMissionTechniquePourPurge(
+      admin,
+      mission,
+      etablissementPlaywrightId,
+    );
+    ids.push(mission.id);
+    preparations.set(mission.id, preparation);
+  }
   if (ids.length > 0) {
     // Les files Stripe référencent l'escrow (et non directement la mission).
     // Elles doivent donc être supprimées avant paiements_escrow. Le périmètre
@@ -149,7 +167,7 @@ export default async function globalSetup() {
         `[global-setup] purge notifications par lien impossible : ${notificationsLienError.message}`,
       );
     }
-    for (const mission of missions ?? []) {
+    for (const mission of (missions ?? []).filter((m) => ids.includes(m.id))) {
       if (mission.soignant_assigne_id && mission.intitule) {
         const { error: evaluationError } = await admin
           .from('notifications')
@@ -182,20 +200,43 @@ export default async function globalSetup() {
         throw new Error(`[global-setup] purge ${table} impossible : ${e.message}`);
       }
     }
-    const { error: eM } = await admin.from('missions').delete().in('id', ids);
-    if (eM) {
-      throw new Error(`[global-setup] purge missions impossible : ${eM.message}`);
-    }
-    const { count: missionsRestantes, error: verificationMissionsError } = await admin
-      .from('missions')
-      .select('id', { count: 'exact', head: true })
-      .in('id', ids);
-    if (verificationMissionsError || (missionsRestantes ?? 0) !== 0) {
+    const idsRestesEnQuarantaine: string[] = [];
+    for (const missionId of ids) {
+      const { error: purgeError } = await admin.rpc('fn_test_purge_mission', {
+        p_mission_id: missionId,
+      });
+      if (!purgeError) continue;
+      if (
+        preparations.get(missionId) === 'QUARANTAINEE'
+        && estQuarantainePurgeAutorisee()
+        && estBlocagePurgeTechniqueAttendu(purgeError)
+      ) {
+        idsRestesEnQuarantaine.push(missionId);
+        continue;
+      }
       throw new Error(
-        `[global-setup] vérification purge missions impossible : ${verificationMissionsError?.message || `${missionsRestantes} restante(s)`}`,
+        `[global-setup] purge mission ${missionId} impossible : ${purgeError.message}`,
       );
     }
-    console.log(`[global-setup] ${ids.length} mission(s) de test orpheline(s) purgée(s).`);
+    const idsAVerifier = ids.filter((id) => !idsRestesEnQuarantaine.includes(id));
+    if (idsAVerifier.length > 0) {
+      const { count: missionsRestantes, error: verificationMissionsError } = await admin
+        .from('missions')
+        .select('id', { count: 'exact', head: true })
+        .in('id', idsAVerifier);
+      if (verificationMissionsError || (missionsRestantes ?? 0) !== 0) {
+        throw new Error(
+          `[global-setup] vérification purge missions impossible : ${verificationMissionsError?.message || `${missionsRestantes} restante(s)`}`,
+        );
+      }
+    }
+    nbQuarantainesRestantes = idsRestesEnQuarantaine.length;
+    console.log(
+      `[global-setup] ${ids.length - nbQuarantainesRestantes} mission(s) de test orpheline(s) purgée(s).`,
+    );
+  }
+  if (nbQuarantainesRestantes > 0) {
+    console.warn(`[global-setup] ${nbQuarantainesRestantes} mission(s) gelée(s) mise(s) en quarantaine.`);
   }
 
   // Fixtures établissement sans compte Auth utilisées uniquement pour vérifier
