@@ -48,6 +48,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
 import { supabase } from '@/integrations/supabase/client';
 import { extraireMessageErreur } from '@/lib/erreurs';
+import { estFactureRelancable } from '@/lib/adminInvoiceAccounting';
 import { payerMissionStripeConnectAvecGenerationAuto } from '@/lib/stripeMissionPay';
 import { telechargerFactureCommissionPDF } from '@/lib/facture-commission-pdf';
 import { telechargerFactureHonorairesPDF } from '@/lib/facture-honoraires-pdf';
@@ -59,6 +60,14 @@ import { useEtabPermissions } from '@/hooks/useEtabPermissions';
 
 const fmt = (v: number | null | undefined) =>
   v != null ? new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(v) : '—';
+
+const formatDateMetier = (value: unknown): string | null => {
+  if (typeof value !== 'string' || value.length === 0) return null;
+  const jourIso = value.match(/^\d{4}-\d{2}-\d{2}/)?.[0];
+  const date = jourIso ? new Date(`${jourIso}T12:00:00`) : new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return format(date, 'd MMMM yyyy', { locale: fr });
+};
 
 type MethodePaiement = 'VIREMENT' | 'CHEQUE' | 'BULLETIN_PAIE' | 'NOTE_HONORAIRES';
 
@@ -704,7 +713,17 @@ export default function FacturationEtablissement() {
   const missionsNonPayees = data?.missions_non_payees || [];
   const paiementsEnAttente = data?.paiements_soignants_en_attente || [];
   const paiementsConfirmes = data?.paiements_soignants_confirmes || [];
-  const facturesImpayees = data?.factures_impayees || [];
+  // Le RPC conserve sa clé historique `factures_impayees`, mais la liste
+  // contient aussi des factures non échues et des virements déjà déclarés.
+  // L'interface les présente donc comme des dossiers ouverts et qualifie
+  // chaque état individuellement, sans appeler une facture future « impayée ».
+  const facturesCommissionOuvertes = data?.factures_impayees || [];
+  const facturesCommissionARegler = facturesCommissionOuvertes.filter(
+    (facture: any) => facture.statut === 'EMISE' || facture.statut === 'EN_RETARD',
+  );
+  const detailsFacturesCommission = new Map<string, any>(
+    factures.map((facture: any) => [facture.id, facture]),
+  );
   const facturesCommissionHistorique = data?.factures_commission_historique || [];
   const nbFacturesHistorique = data?.nb_factures_commission_historique || 0;
   const missionsNonFactureesObligs = data?.missions_non_facturees || [];
@@ -748,7 +767,7 @@ export default function FacturationEtablissement() {
       {/* Session F (F7) : onglet « Obligations » retiré — cette page consolide déjà
           toutes les obligations financières (missions à payer, commissions, historique). */}
       {/* ── SECTION 0 : État vide si rien à payer ── */}
-      {data && data.total_du === 0 && missionsNonPayees.length === 0 && facturesImpayees.length === 0 && (
+      {data && data.total_du === 0 && missionsNonPayees.length === 0 && facturesCommissionOuvertes.length === 0 && (
         <FadeInView>
           <div className="card-base p-8 text-center mb-6">
             <CheckCircle className="h-12 w-12 text-success mx-auto mb-3" />
@@ -796,7 +815,7 @@ export default function FacturationEtablissement() {
           >
             <div>
               <p className="text-2xl font-bold text-foreground">{fmt(data?.total_commissions_du)}</p>
-              <p className="text-xs text-muted-foreground">Commissions Jolene · {data?.nb_factures_impayees || 0} facture{(data?.nb_factures_impayees || 0) > 1 ? 's' : ''}</p>
+              <p className="text-xs text-muted-foreground">Commissions Jolene · {facturesCommissionARegler.length} facture{facturesCommissionARegler.length > 1 ? 's' : ''} à régler</p>
             </div>
             <ChevronRight className="h-4 w-4 text-muted-foreground/60 shrink-0 mt-1" />
           </button>
@@ -808,7 +827,7 @@ export default function FacturationEtablissement() {
         {[
           { id: SECTIONS.payer, label: 'À payer', count: missionsNonPayees.length },
           { id: SECTIONS.attente, label: 'En attente', count: paiementsEnAttente.length },
-          { id: SECTIONS.commissions, label: 'Commissions', count: facturesImpayees.length },
+          { id: SECTIONS.commissions, label: 'Commissions', count: facturesCommissionOuvertes.length },
           { id: SECTIONS.historique, label: 'Historique', count: paiementsConfirmes.length },
           { id: SECTIONS.exports, label: 'Exports', count: 0 },
         ].map(s => (
@@ -1039,12 +1058,12 @@ export default function FacturationEtablissement() {
       <div id={SECTIONS.commissions} className="mb-4">
         <Collapsible open={sectionsOpen[SECTIONS.commissions]} onOpenChange={() => toggleSection(SECTIONS.commissions)}>
           <CollapsibleTrigger className="w-full">
-            <CardY2K noPadding className={facturesImpayees.length === 0 ? 'opacity-60' : undefined}>
+            <CardY2K noPadding className={facturesCommissionOuvertes.length === 0 ? 'opacity-60' : undefined}>
               <CardY2KHeader className="py-3">
                 <div className="flex items-center justify-between">
                   <CardY2KTitle className="flex items-center gap-2 text-base">
                     <FileText className="h-5 w-5 text-primary" />
-                    Commissions Jolene ({facturesImpayees.length} impayée{facturesImpayees.length > 1 ? 's' : ''})
+                    Commissions Jolene ({facturesCommissionOuvertes.length})
                   </CardY2KTitle>
                   <ChevronDown className={`h-5 w-5 text-muted-foreground transition-transform ${sectionsOpen[SECTIONS.commissions] ? 'rotate-180' : ''}`} />
                 </div>
@@ -1053,15 +1072,24 @@ export default function FacturationEtablissement() {
           </CollapsibleTrigger>
           <CollapsibleContent>
             <div className="mt-2 space-y-4">
-              {/* 4.1 — Factures Jolene impayées */}
-              {facturesImpayees.length > 0 ? (
+              {/* 4.1 — Factures Jolene à régler ou en cours de vérification */}
+              {facturesCommissionOuvertes.length > 0 ? (
                 <div>
                   <h3 className="text-sm font-semibold text-foreground mb-2 flex items-center gap-2">
-                    <FileText className="h-4 w-4 text-destructive" /> Factures impayées ({facturesImpayees.length})
+                    <FileText className="h-4 w-4 text-primary" /> Factures et règlements en cours ({facturesCommissionOuvertes.length})
                   </h3>
                   <div className="space-y-2">
-                    {facturesImpayees.map((f: any) => {
+                    {facturesCommissionOuvertes.map((f: any) => {
                       const chorusBadge = f.est_secteur_public && f.chorus_pro_statut ? getChorusStatutBadge(f.chorus_pro_statut) : null;
+                      const virementDeclare = f.statut === 'VIREMENT_DECLARE';
+                      const estEnRetard = estFactureRelancable({
+                        ...f,
+                        type_document: 'FACTURE',
+                      });
+                      const echeanceLisible = formatDateMetier(f.date_echeance);
+                      const factureComplete = detailsFacturesCommission.get(f.facture_id);
+                      const periodeDebutLisible = formatDateMetier(factureComplete?.periode_debut);
+                      const periodeFinLisible = formatDateMetier(factureComplete?.periode_fin);
                       return (
                       <div key={f.facture_id} className="p-4 rounded-lg border space-y-3">
                         <div className="flex items-center justify-between gap-3">
@@ -1074,11 +1102,29 @@ export default function FacturationEtablissement() {
                                   {chorusBadge.label}
                                 </span>
                               )}
+                              {virementDeclare ? (
+                                <BadgeY2K variant="info" icone={<Clock className="h-3 w-3" />}>
+                                  Virement déclaré · vérification en cours
+                                </BadgeY2K>
+                              ) : estEnRetard ? (
+                                <BadgeY2K variant="error" icone={<AlertTriangle className="h-3 w-3" />}>
+                                  {echeanceLisible ? `En retard depuis le ${echeanceLisible}` : 'En retard'}
+                                </BadgeY2K>
+                              ) : (
+                                <BadgeY2K variant="warning" icone={<Clock className="h-3 w-3" />}>
+                                  {echeanceLisible ? `À régler avant le ${echeanceLisible}` : 'À régler'}
+                                </BadgeY2K>
+                              )}
                             </div>
                             <p className="text-xs text-muted-foreground">
-                              {f.nombre_missions} mission{(f.nombre_missions ?? 0) > 1 ? 's' : ''} · Échéance : {f.date_echeance && new Date(f.date_echeance).toLocaleDateString('fr-FR')}
+                              {f.nombre_missions} mission{(f.nombre_missions ?? 0) > 1 ? 's' : ''}{echeanceLisible ? ` · Échéance : ${echeanceLisible}` : ''}
                               {f.est_secteur_public && f.chorus_pro_numero_flux && ` · Flux ${f.chorus_pro_numero_flux}`}
                             </p>
+                            {periodeDebutLisible && periodeFinLisible && (
+                              <p className="text-xs text-muted-foreground mt-1">
+                                Période facturée : {periodeDebutLisible} → {periodeFinLisible}. Le montant correspond à cette période, pas nécessairement à toute la mission.
+                              </p>
+                            )}
                           </div>
                           <div className="text-right shrink-0">
                             <p className="font-bold">{fmt(f.montant_ttc)}</p>
@@ -1093,7 +1139,7 @@ export default function FacturationEtablissement() {
                         )}
                         {!f.est_secteur_public && (
                         <div className="flex gap-2 flex-wrap">
-                          {canManagePayments && etab?.mode_paiement_commission !== 'SEPA_DEBIT' && (
+                          {canManagePayments && !virementDeclare && etab?.mode_paiement_commission !== 'SEPA_DEBIT' && (
                             <BoutonY2K
                               size="sm"
                               onClick={() => { setCheckoutFactureId(f.facture_id); setShowCheckout(true); }}
@@ -1101,12 +1147,12 @@ export default function FacturationEtablissement() {
                               <CreditCard className="w-4 h-4 mr-1" /> Payer par carte
                             </BoutonY2K>
                           )}
-                          {etab?.mode_paiement_commission === 'SEPA_DEBIT' && (
+                          {!virementDeclare && etab?.mode_paiement_commission === 'SEPA_DEBIT' && (
                             <p className="w-full text-xs text-muted-foreground">
                               Prélèvement SEPA automatique programmé — aucun paiement par carte requis.
                             </p>
                           )}
-                          {canManagePayments && etab?.mode_paiement_commission !== 'SEPA_DEBIT' && (
+                          {canManagePayments && !virementDeclare && etab?.mode_paiement_commission !== 'SEPA_DEBIT' && (
                             <BoutonY2K
                               size="sm"
                               variant="secondary"
@@ -1135,7 +1181,7 @@ export default function FacturationEtablissement() {
               ) : (
                 <CardY2K noPadding>
                   <CardY2KContent className="py-6 text-center text-sm text-muted-foreground">
-                    Aucune facture commission impayée.
+                    Aucune facture de commission à régler ou en cours.
                   </CardY2KContent>
                 </CardY2K>
               )}
@@ -1282,7 +1328,7 @@ export default function FacturationEtablissement() {
                   )}
                 </div>
               )}
-              {/* 4.3 — Missions à facturer (bouton générer facture mensuelle) */}
+              {/* 4.3 — Missions à regrouper sur une facture de commission */}
               {missionsNonFacturees.length > 0 && (
                 <div className="pt-4 border-t border-border">
                   <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-3">
@@ -1298,7 +1344,7 @@ export default function FacturationEtablissement() {
                         className="gap-1.5"
                       >
                         {generatingFacture ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
-                        {generatingFacture ? 'Génération…' : 'Générer la facture du mois'}
+                        {generatingFacture ? 'Génération…' : 'Générer une facture groupée'}
                       </BoutonY2K>
                     )}
                   </div>
@@ -1352,7 +1398,7 @@ export default function FacturationEtablissement() {
                     ))}
                   </div>
                   <p className="text-xs text-muted-foreground mt-2">
-                    Commissions non encore facturées à votre établissement. Le bouton génère une facture mensuelle groupée
+                    Commissions non encore facturées à votre établissement. Le bouton génère une facture groupée
                     pour toutes les missions terminées sans facture (hors LIBERAL+Stripe qui sont facturées à la source).
                   </p>
                 </div>
@@ -1365,7 +1411,7 @@ export default function FacturationEtablissement() {
                   <Info className="h-4 w-4 text-info shrink-0 mt-0.5" />
                   <div className="text-xs text-muted-foreground">
                     <p className="font-semibold text-info mb-0.5"><Banknote className="inline-block h-3.5 w-3.5 mr-1 align-text-bottom" aria-hidden="true" />Mandat SEPA actif</p>
-                    <p>Les factures commission sont prélevées automatiquement chaque mois sur le compte bancaire enregistré.</p>
+                    <p>Les factures éligibles sont présentées au prélèvement sur le compte bancaire enregistré après leur émission, lors du prochain traitement automatique.</p>
                   </div>
                 </div>
               )}
@@ -1382,8 +1428,8 @@ export default function FacturationEtablissement() {
                       <div>
                         <p className="text-sm font-semibold text-foreground">Activez le prélèvement automatique</p>
                         <p className="text-xs text-muted-foreground mt-0.5">
-                          Plus de virement à effectuer manuellement : la commission est prélevée
-                          automatiquement sur votre compte après chaque mission terminée.
+                          Plus de virement à effectuer manuellement : les factures éligibles sont
+                          présentées au prélèvement après leur émission, lors du prochain traitement automatique.
                         </p>
                       </div>
                     </div>

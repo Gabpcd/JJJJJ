@@ -2088,6 +2088,7 @@ export type Database = {
           email_contact_token_expire_le: string | null
           email_contact_verifie: boolean
           email_contact_verifie_le: string | null
+          est_compte_test: boolean
           est_secteur_public: boolean | null
           finess: string | null
           finess_categorie: string | null
@@ -2209,6 +2210,7 @@ export type Database = {
           email_contact_token_expire_le?: string | null
           email_contact_verifie?: boolean
           email_contact_verifie_le?: string | null
+          est_compte_test?: boolean
           est_secteur_public?: boolean | null
           finess?: string | null
           finess_categorie?: string | null
@@ -2330,6 +2332,7 @@ export type Database = {
           email_contact_token_expire_le?: string | null
           email_contact_verifie?: boolean
           email_contact_verifie_le?: string | null
+          est_compte_test?: boolean
           est_secteur_public?: boolean | null
           finess?: string | null
           finess_categorie?: string | null
@@ -7125,6 +7128,7 @@ export type Database = {
           en_periode_probatoire: boolean
           est_cumul_activite: boolean | null
           est_etudiant: boolean
+          est_compte_test: boolean
           est_salarie_etablissement: boolean | null
           etudiant_details: string | null
           heures_cumulees: number | null
@@ -7276,6 +7280,7 @@ export type Database = {
           en_periode_probatoire?: boolean
           est_cumul_activite?: boolean | null
           est_etudiant?: boolean
+          est_compte_test?: boolean
           est_salarie_etablissement?: boolean | null
           etudiant_details?: string | null
           heures_cumulees?: number | null
@@ -7427,6 +7432,7 @@ export type Database = {
           en_periode_probatoire?: boolean
           est_cumul_activite?: boolean | null
           est_etudiant?: boolean
+          est_compte_test?: boolean
           est_salarie_etablissement?: boolean | null
           etudiant_details?: string | null
           heures_cumulees?: number | null

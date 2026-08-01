@@ -170,7 +170,7 @@ export function useActivationSoignant({ soignant, documents, hasStripeConnect, a
         id: 'paiement',
         label: estLiberal ? 'Ton compte de paiement' : 'Ton RIB',
         detail: paiementFait ? undefined : (estLiberal
-          ? 'Stripe (paiement 24-48 h) ou RIB — pour recevoir tes gains'
+          ? 'Stripe ou RIB — le délai dépend du mode indiqué sur chaque mission'
           : 'Une photo de ton RIB suffit — pour recevoir ta rémunération'),
         faite: paiementFait,
         destination: estLiberal ? '/soignant/stripe-connect' : '/soignant/mes-documents',

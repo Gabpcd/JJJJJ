@@ -256,10 +256,10 @@ export default function PageStripeConnect() {
                 <CreditCard className="h-12 w-12 text-primary mx-auto" />
                 <h2 className="text-lg font-bold text-foreground">Reçois tes honoraires directement</h2>
                 <p className="text-sm text-muted-foreground max-w-md mx-auto">
-                  Connecte ton compte bancaire via Stripe pour recevoir tes paiements de missions directement, sans délai.
+                  Connecte ton compte bancaire via Stripe pour recevoir les règlements de tes missions selon le cycle indiqué sur chacune d'elles.
                 </p>
                 <div className="bg-muted/30 rounded-xl p-3 max-w-sm mx-auto space-y-1.5 text-left">
-                  <p className="text-xs text-muted-foreground flex items-center gap-2"><CheckCircle className="h-3.5 w-3.5 text-success" /> Virements automatiques après chaque mission</p>
+                  <p className="text-xs text-muted-foreground flex items-center gap-2"><CheckCircle className="h-3.5 w-3.5 text-success" /> Virements automatiques pour les périodes facturées</p>
                   <p className="text-xs text-muted-foreground flex items-center gap-2"><CheckCircle className="h-3.5 w-3.5 text-success" /> Sécurisé par Stripe (certifié PCI DSS)</p>
                   <p className="text-xs text-muted-foreground flex items-center gap-2"><CheckCircle className="h-3.5 w-3.5 text-success" /> Aucun frais pour le soignant</p>
                 </div>

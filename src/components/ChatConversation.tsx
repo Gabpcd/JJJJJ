@@ -51,6 +51,7 @@ interface ChatConversationProps {
   missionId: string;
   autreUserId: string;
   isEtablissement?: boolean;
+  marquerCommeLu?: boolean;
 }
 
 function formatGroupLabel(date: Date): string {
@@ -76,7 +77,12 @@ const PRESENCE_DOT_CLASS: Record<'ONLINE' | 'AWAY' | 'OFFLINE', string> = {
   OFFLINE: 'bg-muted-foreground/40',
 };
 
-export function ChatConversation({ missionId, autreUserId, isEtablissement }: ChatConversationProps) {
+export function ChatConversation({
+  missionId,
+  autreUserId,
+  isEtablissement,
+  marquerCommeLu = true,
+}: ChatConversationProps) {
   const { user } = useAuth();
   const [convId, setConvId] = useState<string | null>(null);
   const [resolvedAutreId, setResolvedAutreId] = useState<string | null>(null);
@@ -217,10 +223,12 @@ export function ChatConversation({ missionId, autreUserId, isEtablissement }: Ch
       });
       setLoading(false);
 
-      supabase.rpc('fn_marquer_messages_lus', { p_conversation_id: convId }).then(({ error }) => {
-        if (cancelled) return;
-        if (error) logger.error('ChatConversation: fn_marquer_messages_lus error', error);
-      });
+      if (marquerCommeLu) {
+        supabase.rpc('fn_marquer_messages_lus', { p_conversation_id: convId }).then(({ error }) => {
+          if (cancelled) return;
+          if (error) logger.error('ChatConversation: fn_marquer_messages_lus error', error);
+        });
+      }
     };
 
     load();
@@ -235,7 +243,7 @@ export function ChatConversation({ missionId, autreUserId, isEtablissement }: Ch
       }, (payload) => {
         const msg = payload.new as Message;
         setMessages(prev => prev.some(m => m.id === msg.id) ? prev : [...prev, msg]);
-        if (msg.auteur_id !== user?.id) {
+        if (marquerCommeLu && msg.auteur_id !== user?.id) {
           supabase.rpc('fn_marquer_messages_lus', { p_conversation_id: convId }).then(({ error }) => {
             if (error) logger.error('ChatConversation: fn_marquer_messages_lus error', error);
           });
@@ -256,7 +264,7 @@ export function ChatConversation({ missionId, autreUserId, isEtablissement }: Ch
       cancelled = true;
       supabase.removeChannel(channel);
     };
-  }, [convId, user]);
+  }, [convId, marquerCommeLu, user]);
 
   const confirmerMessageEnvoye = useCallback(async (messageId: string) => {
     if (!convId) return;

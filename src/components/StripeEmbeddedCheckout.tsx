@@ -10,7 +10,8 @@ interface Props {
   factureId: string;
   open: boolean;
   onClose: () => void;
-  onComplete?: () => void;
+  onComplete?: () => void | Promise<void>;
+  preparedClientSecret?: string | null;
 }
 
 interface FunctionPayload {
@@ -42,15 +43,21 @@ async function readFunctionErrorPayload(fnError: unknown): Promise<FunctionPaylo
   }
 }
 
-export function StripeEmbeddedCheckout({ factureId, open, onClose, onComplete }: Props) {
+export function StripeEmbeddedCheckout({
+  factureId,
+  open,
+  onClose,
+  onComplete,
+  preparedClientSecret,
+}: Props) {
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
   const [loadingCheckout, setLoadingCheckout] = useState(false);
 
-  const handleAlreadyPaid = useCallback(() => {
+  const handleAlreadyPaid = useCallback(async () => {
     toast.success('Cette facture est déjà payée !');
-    onComplete?.();
+    await onComplete?.();
     onClose();
   }, [onClose, onComplete]);
 
@@ -60,7 +67,7 @@ export function StripeEmbeddedCheckout({ factureId, open, onClose, onComplete }:
     });
 
     if (!fnError && (data?.confirmed || data?.status === 'PAYEE')) {
-      handleAlreadyPaid();
+      await handleAlreadyPaid();
       return true;
     }
 
@@ -82,6 +89,12 @@ export function StripeEmbeddedCheckout({ factureId, open, onClose, onComplete }:
       setLoadingCheckout(true);
       setClientSecret(null);
       setError(null);
+
+      if (preparedClientSecret) {
+        setClientSecret(preparedClientSecret);
+        setLoadingCheckout(false);
+        return;
+      }
 
       const { data, error: fnError } = await supabase.functions.invoke('create-invoice-payment', {
         body: { facture_id: factureId, embedded: Boolean(stripePromise) },
@@ -108,7 +121,7 @@ export function StripeEmbeddedCheckout({ factureId, open, onClose, onComplete }:
         if (cancelled) return;
         setLoadingCheckout(false);
         if (!synced) {
-          handleAlreadyPaid();
+          await handleAlreadyPaid();
         }
         return;
       }
@@ -122,45 +135,55 @@ export function StripeEmbeddedCheckout({ factureId, open, onClose, onComplete }:
     return () => {
       cancelled = true;
     };
-  }, [confirmExistingPayment, factureId, handleAlreadyPaid, open]);
+  }, [confirmExistingPayment, factureId, handleAlreadyPaid, open, preparedClientSecret]);
 
   const handleComplete = useCallback(() => {
     const confirmPayment = async () => {
       setConfirming(true);
       setError(null);
 
-      // Poll up to 8 times with increasing delays (total ~25s) to wait for webhook
-      const delays = [1500, 2000, 2500, 3000, 3000, 3500, 4000, 5000];
-      for (let attempt = 0; attempt < delays.length; attempt += 1) {
-        const { data, error: fnError } = await supabase.functions.invoke('confirm-invoice-payment', {
-          body: { facture_id: factureId },
-        });
-
-        if (!fnError && (data?.confirmed || data?.status === 'PAYEE')) {
-          toast.success('Paiement effectué avec succès !');
-          onComplete?.();
+      try {
+        if (preparedClientSecret) {
+          await onComplete?.();
           onClose();
-          setConfirming(false);
           return;
         }
 
-        if (attempt < delays.length - 1) {
-          await new Promise((resolve) => window.setTimeout(resolve, delays[attempt]));
-        }
-      }
+        // Poll up to 8 times with increasing delays (total ~25s) to wait for webhook
+        const delays = [1500, 2000, 2500, 3000, 3000, 3500, 4000, 5000];
+        for (let attempt = 0; attempt < delays.length; attempt += 1) {
+          const { data, error: fnError } = await supabase.functions.invoke('confirm-invoice-payment', {
+            body: { facture_id: factureId },
+          });
 
-      setConfirming(false);
-      // Payment went through on Stripe but webhook hasn't synced yet
-      toast.info('Paiement envoyé ! La confirmation peut prendre quelques instants.');
-      onComplete?.();
-      onClose();
+          if (!fnError && (data?.confirmed || data?.status === 'PAYEE')) {
+            toast.success('Paiement effectué avec succès !');
+            await onComplete?.();
+            onClose();
+            return;
+          }
+
+          if (attempt < delays.length - 1) {
+            await new Promise((resolve) => window.setTimeout(resolve, delays[attempt]));
+          }
+        }
+
+        // Payment went through on Stripe but webhook hasn't synced yet
+        toast.info('Paiement envoyé ! La confirmation peut prendre quelques instants.');
+        await onComplete?.();
+        onClose();
+      } catch {
+        setError('Impossible de finaliser la confirmation du paiement pour le moment.');
+      } finally {
+        setConfirming(false);
+      }
     };
 
     void confirmPayment();
-  }, [factureId, onComplete, onClose]);
+  }, [factureId, onComplete, onClose, preparedClientSecret]);
 
   return (
-    <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
+    <Dialog open={open} onOpenChange={(o) => { if (!o && !confirming) onClose(); }}>
       <DialogContent className="max-w-[calc(100%-1rem)] sm:max-w-2xl max-h-[90vh] overflow-y-auto p-0 gap-0">
         <DialogHeader className="p-4 border-b border-border space-y-1">
           <DialogTitle className="text-lg font-bold text-foreground">Paiement sécurisé</DialogTitle>

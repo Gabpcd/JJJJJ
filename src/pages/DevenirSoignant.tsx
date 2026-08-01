@@ -7,7 +7,7 @@ import { PROFESSIONS } from '@/lib/constantes';
 
 const FAQ = [
   { q: "L'inscription est-elle vraiment gratuite ?", r: "Oui, l'inscription est entièrement gratuite pour les soignants, sans aucune commission prélevée sur votre rémunération." },
-  { q: "Comment suis-je payé ?", r: "Le paiement de vos missions est garanti par Jolene Santé et versé après chaque mission, sans avoir à relancer l'établissement." },
+  { q: "Comment suis-je payé ?", r: "En libéral, l'établissement règle vos honoraires selon le délai indiqué sur la mission ; un paiement accéléré n'est proposé que lorsqu'il est explicitement affiché. En salarié, le salaire est versé par l'établissement employeur." },
   { q: "Quelles professions peuvent s'inscrire ?", r: "Infirmiers, aides-soignants, AES, kinésithérapeutes, pharmaciens, préparateurs en pharmacie, sages-femmes et d'autres professions de santé." },
   { q: "Quels documents dois-je fournir ?", r: "Selon votre profession : pièce d'identité, diplôme, et le cas échéant numéro RPPS et assurance. Tout est vérifié pour rassurer les établissements." },
   { q: "Suis-je obligé d'accepter des missions ?", r: "Non. Vous choisissez librement vos missions, vos dates et votre taux horaire, sans aucune obligation." },

@@ -794,7 +794,7 @@ export function ProfilEtablissementContent({ sections }: { sections?: SectionPro
           <div className="space-y-3">
             {[
               { value: 'SEPA_DEBIT', icon: '🏦', label: 'Prélèvement SEPA automatique', desc: '', isSEPA: true },
-              { value: 'FACTURE_MENSUELLE', icon: '📄', label: 'Facture mensuelle par virement', desc: 'Facture de commission émise chaque mois, à régler par virement sous 30 jours' },
+              { value: 'FACTURE_MENSUELLE', icon: '📄', label: 'Factures par virement', desc: 'Chaque facture de commission indique sa propre échéance et se règle par virement' },
               ...(['HOPITAL_PUBLIC', 'CHU', 'CENTRE_SANTE', 'HAD'].includes(type)
                 ? [{ value: 'CHORUS_PRO', icon: '🏛️', label: 'Chorus Pro', desc: 'Dépôt automatique pour les établissements publics' }]
                 : []),
@@ -818,7 +818,7 @@ export function ProfilEtablissementContent({ sections }: { sections?: SectionPro
                 <div className="flex-1">
                   <p className="text-sm font-medium text-foreground">{opt.icon} {opt.label}</p>
                   {opt.isSEPA ? (
-                    <p className="text-xs text-success mt-0.5">✅ Prélèvement automatique — votre facture mensuelle de commission est prélevée sans action de votre part. Plus rien à régler manuellement.</p>
+                    <p className="text-xs text-success mt-0.5">✅ Prélèvement automatique — les factures éligibles sont présentées au prélèvement après leur émission, lors du prochain traitement automatique.</p>
                   ) : (
                     <p className="text-xs text-muted-foreground mt-0.5">{opt.desc}</p>
                   )}

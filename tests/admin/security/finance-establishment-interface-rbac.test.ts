@@ -121,6 +121,14 @@ describe('Finances établissement — cohérence interface et RBAC', () => {
     expect(listPage).toContain('onComplete: () => void finaliserRetourConnect');
   });
 
+  it('facture la commission en plus et transfère 100 % des honoraires au soignant', () => {
+    expect(connectPayment).toContain('const totalCents = commissionCents + soignantCents');
+    expect(connectPayment).toContain('unit_amount: commissionCents');
+    expect(connectPayment).toContain('unit_amount: soignantCents');
+    expect(connectPayment).toContain('amount: soignantCents');
+    expect(connectPayment).toContain('transfer.amount !== soignantCents');
+  });
+
   it('recapture chaque SECURITY DEFINER avec le hash exact et des ACL vérifiées', () => {
     for (const functionName of reviewedFunctions) {
       const bodyHash = createHash('md5').update(finalFunctionBody(functionName)).digest('hex');

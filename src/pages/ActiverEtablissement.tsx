@@ -23,7 +23,7 @@ import { messageErreurEdgeFn } from '@/lib/erreurs';
 import {
   FileText, CheckCircle, CheckCircle2, Loader2, ArrowLeft, Shield, Upload,
   Building2, UserCheck, Mail, AlertTriangle, Clock, CreditCard, ChevronRight,
-  Check, Zap,
+  Check,
 } from 'lucide-react';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { LayoutApp } from '@/components/LayoutApp';
@@ -894,8 +894,8 @@ export default function ActiverEtablissement() {
               <div className="rounded-xl border border-success/30 bg-success/5 p-3 flex items-start gap-3">
                 <CheckCircle className="h-4 w-4 text-success shrink-0 mt-0.5" />
                 <p className="text-xs text-foreground">
-                  Votre mandat de prélèvement SEPA est actif : zéro action par mission,
-                  vos commissions sont prélevées automatiquement à réception de facture.
+                  Votre mandat de prélèvement SEPA est actif : les factures éligibles sont
+                  présentées au prélèvement après leur émission, lors du prochain traitement automatique.
                 </p>
               </div>
             ) : sepaMasque ? (
@@ -914,11 +914,9 @@ export default function ActiverEtablissement() {
                     Signez le mandat SEPA une fois — plus aucune action ensuite.
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    Vos factures de commission sont prélevées automatiquement, sans
-                    virement à faire ni relance. C'est aussi le prérequis du futur
-                    « <Zap className="inline-block h-3 w-3 align-text-bottom" aria-hidden="true" /> Paiement rapide » : les missions des établissements en
-                    prélèvement SEPA seront mises en avant auprès des soignants et
-                    pourvues en premier.
+                    Les factures éligibles sont présentées automatiquement au prélèvement
+                    après leur émission. Une éventuelle option de paiement accéléré reste
+                    propre à chaque mission et n'est jamais garantie par le seul mandat SEPA.
                   </p>
                 </div>
                 <div className="flex items-center gap-3 flex-wrap">

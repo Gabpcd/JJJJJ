@@ -21,6 +21,7 @@ import { Progress } from '@/components/ui/progress';
 import { Separator } from '@/components/ui/separator';
 import { BandeauAlertesAntiTricheAdmin } from '@/components/admin/BandeauAlertesAntiTricheAdmin';
 import { formatEuroAdmin } from '@/lib/adminPresentation';
+import { jourCivilParis } from '@/lib/adminInvoiceAccounting';
 
 const formatEur = (v: number) => formatEuroAdmin(v, { decimales: 0 });
 const formatEurPrecis = (v: number) => formatEuroAdmin(v, { decimales: 2 });
@@ -88,6 +89,9 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     async function charger() {
+      const maintenant = new Date();
+      const aujourdhuiIso = jourCivilParis(maintenant)
+        ?? maintenant.toISOString().slice(0, 10);
       const [resKpi, resArgent, resGraph, resSoignants, resEtabs, resLitiges, resFactures] = await Promise.all([
         supabase.rpc('fn_admin_kpi' as any),
         supabase.rpc('fn_admin_metriques_argent' as any),
@@ -97,8 +101,11 @@ export default function AdminDashboard() {
         supabase.from('litiges').select('id, motif, statut, cree_le, soignant_id, etablissement_id').in('statut', ['OUVERT', 'EN_DISCUSSION', 'EN_MEDIATION', 'CONTESTEE']).order('cree_le', { ascending: false }).limit(10),
         supabase
           .from('factures')
-          .select('id, numero_facture, montant_ttc, statut, date_echeance, etablissement_id, etablissements(nom)')
+          .select('id, numero_facture, montant_ttc, statut, date_echeance, etablissement_id, type_document, etablissements!inner(nom, est_compte_test)')
+          .eq('type_document', 'FACTURE')
           .in('statut', ['EMISE', 'EN_RETARD'])
+          .lt('date_echeance', aujourdhuiIso)
+          .eq('etablissements.est_compte_test', false)
           .order('date_echeance', { ascending: true })
           .limit(10),
       ]);
@@ -586,7 +593,7 @@ export default function AdminDashboard() {
                 )}
               </section>
 
-              {/* Stripe Connect — versements soignants + commission retenue. */}
+              {/* Stripe Connect — honoraires soignants + commission distincte facturée à l'établissement. */}
               {connectStats && (
                 <section aria-labelledby="dashboard-stripe-connect-title" className="border-t border-border pt-5">
                   <h3 id="dashboard-stripe-connect-title" className="mb-3 text-sm font-semibold text-foreground">Stripe Connect</h3>
@@ -596,15 +603,15 @@ export default function AdminDashboard() {
                       <p className="text-xl font-bold text-foreground">{connectStats.total_comptes}</p>
                       <p className="text-[10px] text-muted-foreground">{connectStats.complets} complets · {connectStats.en_cours} en cours</p>
                     </div>
-                    <div className="border-t border-success/20 bg-success/5 p-3 text-center sm:border-t-0 sm:border-r" title="Montant net effectivement versé aux soignants via Stripe Connect (hors commission Jolene)">
-                      <p className="text-xs text-muted-foreground">Versé aux soignants (net)</p>
+                    <div className="border-t border-success/20 bg-success/5 p-3 text-center sm:border-t-0 sm:border-r" title="Honoraires effectivement versés aux soignants via Stripe Connect ; la commission Jolene est facturée séparément à l'établissement">
+                      <p className="text-xs text-muted-foreground">Honoraires versés aux soignants</p>
                       <p className="text-xl font-bold text-success">{formatEur(connectStats.total_verse_soignants ?? 0)}</p>
                       {(connectStats.en_attente_soignants ?? 0) > 0 && (
                         <p className="text-[10px] text-warning">En attente : {formatEur(connectStats.en_attente_soignants)}</p>
                       )}
                     </div>
-                    <div className="border-t border-primary/20 bg-primary/5 p-3 text-center sm:border-t-0" title="Commission Jolene retenue sur chaque paiement Connect (versée réellement)">
-                      <p className="text-xs text-muted-foreground">Commission retenue (Connect)</p>
+                    <div className="border-t border-primary/20 bg-primary/5 p-3 text-center sm:border-t-0" title="Commission Jolene facturée à l'établissement en plus des honoraires soignants">
+                      <p className="text-xs text-muted-foreground">Commission facturée (Connect)</p>
                       <p className="text-xl font-bold text-primary">{formatEur(connectStats.total_commission_jolene ?? 0)}</p>
                       {(connectStats.en_attente_commission ?? 0) > 0 && (
                         <p className="text-[10px] text-warning">En attente : {formatEur(connectStats.en_attente_commission)}</p>

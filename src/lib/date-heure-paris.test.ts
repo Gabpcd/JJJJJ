@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   ajouterJoursCivilsParis,
+  cleMoisParis,
   debutJourParis,
   formatParis,
   instantJolene,
@@ -8,6 +9,10 @@ import {
 } from './date-heure-paris';
 
 describe('date-heure-paris', () => {
+  it('calcule le mois civil français sans basculer en UTC', () => {
+    expect(cleMoisParis('2026-07-31T22:30:00.000Z')).toBe('2026-08');
+  });
+
   it('conserve un affichage Europe/Paris stable quel que soit le fuseau du processus', () => {
     expect(formatParis('2026-08-31T06:00:00.000Z', "EEEE d MMMM yyyy 'à' HH:mm"))
       .toBe('lundi 31 août 2026 à 08:00');

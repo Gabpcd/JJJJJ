@@ -23,10 +23,10 @@ export function BadgeScoreEtabPublic({ etablissementId }: Props) {
   useEffect(() => {
     let alive = true;
     (async () => {
-      const { data: payload, error } = await supabase.rpc('fn_score_etab_public' as any, { p_etablissement_id: etablissementId });
+      const { data: payload, error } = await supabase.rpc('fn_score_etab_public', { p_etab_id: etablissementId });
       if (!alive) return;
       if (!error && payload && !(payload as any).error) {
-        setData(payload as ScorePub);
+        setData(payload as unknown as ScorePub);
       }
       setLoading(false);
     })();

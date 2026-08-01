@@ -103,7 +103,7 @@ export async function telechargerBulletinPaiePdf(bulletinId: string): Promise<vo
   if (bErr || !bulletin) throw new Error(bErr?.message || 'Bulletin introuvable');
   const b = bulletin as unknown as BulletinSnapshot;
 
-  const [{ data: cotisations }, { data: soignant }, { data: etablissement }, { data: mission }, { data: cumul }] = await Promise.all([
+  const [cotisationsResult, soignantResult, etablissementResult, missionResult, cumulResult] = await Promise.all([
     supabase.from('cotisations_sociales').select('*').eq('mission_id', b.mission_id).maybeSingle(),
     supabase.from('soignants')
       .select('prenom, nom, email, date_naissance, profession, adresse_rue, adresse_code_postal, adresse_ville, numero_securite_sociale')
@@ -120,7 +120,19 @@ export async function telechargerBulletinPaiePdf(bulletinId: string): Promise<vo
     }),
   ]);
 
-  if (!cotisations) throw new Error('Cotisations introuvables');
+  if (cotisationsResult.error) throw new Error(cotisationsResult.error.message || 'Cotisations indisponibles');
+  if (soignantResult.error) throw new Error(soignantResult.error.message || 'Soignant indisponible');
+  if (etablissementResult.error) throw new Error(etablissementResult.error.message || 'Établissement indisponible');
+  if (missionResult.error) throw new Error(missionResult.error.message || 'Mission indisponible');
+  if (cumulResult.error) throw new Error(cumulResult.error.message || 'Cumul annuel indisponible');
+
+  const cotisations = cotisationsResult.data;
+  const soignant = soignantResult.data;
+  const etablissement = etablissementResult.data;
+  const mission = missionResult.data;
+  const cumul = cumulResult.data;
+
+  if (!cotisations) throw new Error('Détail des cotisations indisponible : la simulation PDF ne peut pas être générée de façon fiable.');
   if (!soignant) throw new Error('Soignant introuvable');
   if (!etablissement) throw new Error('Établissement introuvable');
   if (!mission) throw new Error('Mission introuvable');

@@ -24,10 +24,21 @@ describe('Stripe transfer.reversed — total et partiel exacts', () => {
     expect(reversal).toContain('transfer.currency !== "eur"');
     expect(reversal).toContain('transfer.metadata?.mission_id !== row.mission_id');
     expect(reversal).toContain('transfer.metadata?.soignant_id !== row.soignant_id');
-    expect(reversal).toContain('transfer.transfer_group !== `mission_${row.mission_id}`');
+    expect(reversal).toContain('const missionTransferGroup = `mission_${row.mission_id}`');
+    expect(reversal).toContain('const invoiceTransferGroup = row.facture_honoraire_id');
+    expect(reversal).toContain('transfer.metadata?.payment_scope');
+    expect(reversal).toContain('transfer.metadata?.facture_honoraires_id');
+    expect(reversal).toContain('incoherences.push("transfer.group_scope")');
     expect(reversal).toContain('destinationId !== onboarding?.stripe_account_id');
     expect(reversal).toContain('sourceChargeId !== row.stripe_charge_id');
     expect(reversal).toContain('TRANSFER_REVERSAL_IDENTITE_INCOHERENTE');
+  });
+
+  it('accepte uniquement le groupe canonique de la portée facture', () => {
+    expect(reversal).toContain('paymentScope === "INVOICE"');
+    expect(reversal).toContain('groupScopeValid = invoiceGroupMatches && metadataFactureMatches');
+    expect(reversal).toContain('`facture_${row.facture_honoraire_id}`');
+    expect(reversal).toContain('metadataFactureId === row.facture_honoraire_id');
   });
 
   it('pagine et somme les objets TransferReversal au montant Stripe courant', () => {

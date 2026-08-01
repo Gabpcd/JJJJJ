@@ -137,6 +137,7 @@ export function CardMissionSwipe({ mission, onTap, className }: Props) {
   const raisons = raisonsScore(mission.breakdown);
   const initiale = (mission.etablissement_nom || '?').trim().charAt(0).toUpperCase();
   const financeAffichee = montantFinanceAfficheMission(mission);
+  const missionEstLiberale = financeAffichee?.nature === 'HONORAIRES_LIBERAUX';
 
   return (
     <div
@@ -211,7 +212,7 @@ export function CardMissionSwipe({ mission, onTap, className }: Props) {
                 🔥 Urgent
               </BadgeY2K>
             )}
-            {mission.paiement_rapide && (
+            {missionEstLiberale && mission.paiement_rapide && (
               <BadgeY2K
                 variant="success"
                 size="md"

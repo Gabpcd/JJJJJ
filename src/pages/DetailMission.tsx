@@ -461,11 +461,68 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
   const [connectPayLoading, setConnectPayLoading] = useState(false);
   const [showConnectCheckout, setShowConnectCheckout] = useState(false);
   const [connectClientSecret, setConnectClientSecret] = useState<string | null>(null);
+  const [connectCheckoutSessionId, setConnectCheckoutSessionId] = useState<string | null>(null);
   const [connectDecomposition, setConnectDecomposition] = useState<{ commission_ttc: number; salaire_brut: number; total: number } | null>(null);
   // Audit étab fix #3 : refreshTick remplace navigate(0) (full page reload).
   // Incrémente cet état pour re-fetcher les données ciblées sans perdre l'UI.
   const [refreshTick, setRefreshTick] = useState(0);
   const refresh = React.useCallback(() => setRefreshTick(t => t + 1), []);
+
+  const verifierStatutConnect = React.useCallback(async (
+    missionId: string,
+    etablissementId: string,
+    checkoutSessionId: string,
+  ): Promise<'CONFIRME' | 'ECHEC' | 'EN_ATTENTE'> => {
+    const { data, error } = await supabase
+      .from('stripe_transfers')
+      .select('statut')
+      .eq('mission_id', missionId)
+      .eq('etablissement_id', etablissementId)
+      .eq('stripe_checkout_session_id', checkoutSessionId)
+      .maybeSingle();
+
+    if (error) throw error;
+    const statut = data?.statut;
+    if (statut && ['CHARGE_REUSSI', 'TRANSFERE', 'PAYE'].includes(statut)) return 'CONFIRME';
+    if (statut === 'ECHOUE') return 'ECHEC';
+    return 'EN_ATTENTE';
+  }, []);
+
+  const finaliserRetourConnect = React.useCallback(async (
+    missionId: string,
+    etablissementId: string,
+    checkoutSessionId: string,
+  ) => {
+    const delais = [0, 1000, 1500, 2000, 2500, 3000, 4000, 5000];
+    try {
+      for (const delai of delais) {
+        if (delai > 0) {
+          await new Promise((resolve) => window.setTimeout(resolve, delai));
+        }
+        const statut = await verifierStatutConnect(
+          missionId,
+          etablissementId,
+          checkoutSessionId,
+        );
+        if (statut === 'CONFIRME') {
+          toast.success('Paiement confirmé et enregistré.');
+          refresh();
+          return;
+        }
+        if (statut === 'ECHEC') {
+          toast.error('Le paiement Stripe a échoué. Aucun paiement n’a été enregistré.');
+          refresh();
+          return;
+        }
+      }
+
+      toast.info('Paiement transmis à Stripe. La confirmation est encore en cours ; aucun paiement n’est déclaré tant que le serveur ne l’a pas confirmé.');
+      refresh();
+    } catch (error) {
+      capturerErreurSentry(error, 'DetailMission', 'confirmation_stripe_connect');
+      toast.error('Impossible de confirmer le paiement pour le moment. Son statut reste en attente, sans le déclarer payé.');
+    }
+  }, [refresh, verifierStatutConnect]);
 
   useEffect(() => {
     if (!id) return;
@@ -1061,7 +1118,7 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
                         return;
                       }
 
-                      if (fnErr || code || !data?.client_secret) {
+                      if (fnErr || code || !data?.client_secret || !data?.checkout_session_id) {
                         toast.error(message || code || fnErr?.message || 'Erreur lors du paiement', { id: loadingToastId });
                         return;
                       }
@@ -1071,6 +1128,7 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
                         toast.success('Facture honoraires générée automatiquement');
                       }
                       setConnectClientSecret(data.client_secret);
+                      setConnectCheckoutSessionId(data.checkout_session_id);
                       setConnectDecomposition({ commission_ttc: data.commission_ttc, salaire_brut: data.salaire_brut, total: data.total });
                       setShowConnectCheckout(true);
                     } finally {
@@ -1148,6 +1206,7 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
                     key={`${m.id}:${m.soignant_assigne_id}`}
                     missionId={m.id}
                     autreUserId={m.soignant_assigne_id}
+                    marquerCommeLu={!isAdmin}
                   />
                 </div>
               )}
@@ -1395,16 +1454,22 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
         </Suspense>
       )}
 
-      {!isAdmin && showConnectCheckout && connectClientSecret && (
+      {!isAdmin && showConnectCheckout && connectClientSecret && connectCheckoutSessionId && (
         <StripeEmbeddedCheckout
           factureId={m.id}
+          preparedClientSecret={connectClientSecret}
           open={showConnectCheckout}
-          onClose={() => setShowConnectCheckout(false)}
-          onComplete={() => {
+          onClose={() => {
             setShowConnectCheckout(false);
-            toast.success('Paiement effectué ! Le soignant recevra son salaire via Stripe.');
-            refresh();
+            setConnectClientSecret(null);
+            setConnectCheckoutSessionId(null);
+            setConnectDecomposition(null);
           }}
+          onComplete={() => finaliserRetourConnect(
+            m.id,
+            m.etablissement_id,
+            connectCheckoutSessionId,
+          )}
         />
       )}
     </DetailMissionLayout>
