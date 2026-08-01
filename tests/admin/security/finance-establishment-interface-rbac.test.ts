@@ -41,6 +41,25 @@ function finalFunctionBody(functionName: string): string {
 }
 
 describe('Finances établissement — cohérence interface et RBAC', () => {
+  it('reste idempotente lorsque la CI staging rejoue la migration', () => {
+    expect(migration).toContain('DO $rename_finance_internals$');
+    for (const internalName of [
+      'fn_obligations_financieres_internal_20260801()',
+      'fn_mes_factures_internal_20260801()',
+      'fn_paiements_etablissement_internal_20260801()',
+      'fn_detail_facture_internal_20260801(uuid)',
+      'fn_declarer_paiement_soignant_internal_20260801(uuid,numeric,text,text,date,boolean)',
+      'fn_modifier_reference_paiement_internal_20260801(uuid,text)',
+      'fn_consulter_rib_soignant_internal_20260801(uuid)',
+      'fn_generer_facture_mensuelle_internal_20260801(uuid)',
+    ]) {
+      expect(migration).toContain(`to_regprocedure('public.${internalName}') IS NULL`);
+    }
+    for (const functionName of reviewedFunctions) {
+      expect(migration).toContain(`CREATE OR REPLACE FUNCTION public.${functionName}`);
+    }
+  });
+
   it('sépare la consultation financière des mutations sur toutes les interfaces', () => {
     expect(migration).toContain("'lecture_paiement', public.fn_a_permission_etablissement('lecture_paiement'");
     expect(navigation).toContain('etabPermissions.lecture_paiement || etabPermissions.paiement');

@@ -57,15 +57,53 @@ GRANT EXECUTE ON FUNCTION public.fn_mes_permissions_etab(uuid) TO authenticated,
 -- internes SECURITY INVOKER. Les nouveaux points d'entrée vérifient d'abord
 -- lecture_paiement, puis appellent le corps historique avec les droits du
 -- propriétaire de la fonction wrapper.
-ALTER FUNCTION public.fn_obligations_financieres()
-  RENAME TO fn_obligations_financieres_internal_20260801;
+-- Le bootstrap CI rejoue la migration sous ROLLBACK après l'avoir appliquée
+-- au staging. Les renommages sont donc explicitement idempotents : on ne doit
+-- jamais renommer le wrapper lors du second passage.
+DO $rename_finance_internals$
+BEGIN
+  IF to_regprocedure('public.fn_obligations_financieres_internal_20260801()') IS NULL THEN
+    ALTER FUNCTION public.fn_obligations_financieres()
+      RENAME TO fn_obligations_financieres_internal_20260801;
+  END IF;
+  IF to_regprocedure('public.fn_mes_factures_internal_20260801()') IS NULL THEN
+    ALTER FUNCTION public.fn_mes_factures()
+      RENAME TO fn_mes_factures_internal_20260801;
+  END IF;
+  IF to_regprocedure('public.fn_paiements_etablissement_internal_20260801()') IS NULL THEN
+    ALTER FUNCTION public.fn_paiements_etablissement()
+      RENAME TO fn_paiements_etablissement_internal_20260801;
+  END IF;
+  IF to_regprocedure('public.fn_detail_facture_internal_20260801(uuid)') IS NULL THEN
+    ALTER FUNCTION public.fn_detail_facture(uuid)
+      RENAME TO fn_detail_facture_internal_20260801;
+  END IF;
+  IF to_regprocedure('public.fn_declarer_paiement_soignant_internal_20260801(uuid,numeric,text,text,date,boolean)') IS NULL THEN
+    ALTER FUNCTION public.fn_declarer_paiement_soignant(uuid, numeric, text, text, date, boolean)
+      RENAME TO fn_declarer_paiement_soignant_internal_20260801;
+  END IF;
+  IF to_regprocedure('public.fn_modifier_reference_paiement_internal_20260801(uuid,text)') IS NULL THEN
+    ALTER FUNCTION public.fn_modifier_reference_paiement(uuid, text)
+      RENAME TO fn_modifier_reference_paiement_internal_20260801;
+  END IF;
+  IF to_regprocedure('public.fn_consulter_rib_soignant_internal_20260801(uuid)') IS NULL THEN
+    ALTER FUNCTION public.fn_consulter_rib_soignant(uuid)
+      RENAME TO fn_consulter_rib_soignant_internal_20260801;
+  END IF;
+  IF to_regprocedure('public.fn_generer_facture_mensuelle_internal_20260801(uuid)') IS NULL THEN
+    ALTER FUNCTION public.fn_generer_facture_mensuelle(uuid)
+      RENAME TO fn_generer_facture_mensuelle_internal_20260801;
+  END IF;
+END;
+$rename_finance_internals$;
+
 ALTER FUNCTION public.fn_obligations_financieres_internal_20260801() SECURITY INVOKER;
 ALTER FUNCTION public.fn_obligations_financieres_internal_20260801()
   SET search_path = pg_catalog, public, auth;
 REVOKE ALL ON FUNCTION public.fn_obligations_financieres_internal_20260801()
   FROM PUBLIC, anon, authenticated, service_role;
 
-CREATE FUNCTION public.fn_obligations_financieres()
+CREATE OR REPLACE FUNCTION public.fn_obligations_financieres()
 RETURNS jsonb
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -133,14 +171,13 @@ BEGIN
 END;
 $$;
 
-ALTER FUNCTION public.fn_mes_factures() RENAME TO fn_mes_factures_internal_20260801;
 ALTER FUNCTION public.fn_mes_factures_internal_20260801() SECURITY INVOKER;
 ALTER FUNCTION public.fn_mes_factures_internal_20260801()
   SET search_path = pg_catalog, public, auth;
 REVOKE ALL ON FUNCTION public.fn_mes_factures_internal_20260801()
   FROM PUBLIC, anon, authenticated, service_role;
 
-CREATE FUNCTION public.fn_mes_factures()
+CREATE OR REPLACE FUNCTION public.fn_mes_factures()
 RETURNS jsonb
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -161,15 +198,13 @@ BEGIN
 END;
 $$;
 
-ALTER FUNCTION public.fn_paiements_etablissement()
-  RENAME TO fn_paiements_etablissement_internal_20260801;
 ALTER FUNCTION public.fn_paiements_etablissement_internal_20260801() SECURITY INVOKER;
 ALTER FUNCTION public.fn_paiements_etablissement_internal_20260801()
   SET search_path = pg_catalog, public, auth;
 REVOKE ALL ON FUNCTION public.fn_paiements_etablissement_internal_20260801()
   FROM PUBLIC, anon, authenticated, service_role;
 
-CREATE FUNCTION public.fn_paiements_etablissement()
+CREATE OR REPLACE FUNCTION public.fn_paiements_etablissement()
 RETURNS jsonb
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -228,14 +263,13 @@ BEGIN
 END;
 $$;
 
-ALTER FUNCTION public.fn_detail_facture(uuid) RENAME TO fn_detail_facture_internal_20260801;
 ALTER FUNCTION public.fn_detail_facture_internal_20260801(uuid) SECURITY INVOKER;
 ALTER FUNCTION public.fn_detail_facture_internal_20260801(uuid)
   SET search_path = pg_catalog, public, auth;
 REVOKE ALL ON FUNCTION public.fn_detail_facture_internal_20260801(uuid)
   FROM PUBLIC, anon, authenticated, service_role;
 
-CREATE FUNCTION public.fn_detail_facture(p_facture_id uuid)
+CREATE OR REPLACE FUNCTION public.fn_detail_facture(p_facture_id uuid)
 RETURNS jsonb
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -297,8 +331,6 @@ GRANT EXECUTE ON FUNCTION public.fn_detail_facture(uuid) TO authenticated, servi
 -- Mutations financières : paiement obligatoire, lecture seule non mutante.
 -- ---------------------------------------------------------------------------
 
-ALTER FUNCTION public.fn_declarer_paiement_soignant(uuid, numeric, text, text, date, boolean)
-  RENAME TO fn_declarer_paiement_soignant_internal_20260801;
 ALTER FUNCTION public.fn_declarer_paiement_soignant_internal_20260801(uuid, numeric, text, text, date, boolean)
   SECURITY INVOKER;
 ALTER FUNCTION public.fn_declarer_paiement_soignant_internal_20260801(uuid, numeric, text, text, date, boolean)
@@ -306,7 +338,7 @@ ALTER FUNCTION public.fn_declarer_paiement_soignant_internal_20260801(uuid, nume
 REVOKE ALL ON FUNCTION public.fn_declarer_paiement_soignant_internal_20260801(uuid, numeric, text, text, date, boolean)
   FROM PUBLIC, anon, authenticated, service_role;
 
-CREATE FUNCTION public.fn_declarer_paiement_soignant(
+CREATE OR REPLACE FUNCTION public.fn_declarer_paiement_soignant(
   p_mission_id uuid,
   p_montant numeric,
   p_methode text DEFAULT NULL,
@@ -383,15 +415,13 @@ BEGIN
 END;
 $$;
 
-ALTER FUNCTION public.fn_modifier_reference_paiement(uuid, text)
-  RENAME TO fn_modifier_reference_paiement_internal_20260801;
 ALTER FUNCTION public.fn_modifier_reference_paiement_internal_20260801(uuid, text) SECURITY INVOKER;
 ALTER FUNCTION public.fn_modifier_reference_paiement_internal_20260801(uuid, text)
   SET search_path = pg_catalog, public, auth;
 REVOKE ALL ON FUNCTION public.fn_modifier_reference_paiement_internal_20260801(uuid, text)
   FROM PUBLIC, anon, authenticated, service_role;
 
-CREATE FUNCTION public.fn_modifier_reference_paiement(p_paiement_id uuid, p_nouvelle_reference text)
+CREATE OR REPLACE FUNCTION public.fn_modifier_reference_paiement(p_paiement_id uuid, p_nouvelle_reference text)
 RETURNS jsonb
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -418,15 +448,13 @@ BEGIN
 END;
 $$;
 
-ALTER FUNCTION public.fn_consulter_rib_soignant(uuid)
-  RENAME TO fn_consulter_rib_soignant_internal_20260801;
 ALTER FUNCTION public.fn_consulter_rib_soignant_internal_20260801(uuid) SECURITY INVOKER;
 ALTER FUNCTION public.fn_consulter_rib_soignant_internal_20260801(uuid)
   SET search_path = pg_catalog, public, auth;
 REVOKE ALL ON FUNCTION public.fn_consulter_rib_soignant_internal_20260801(uuid)
   FROM PUBLIC, anon, authenticated, service_role;
 
-CREATE FUNCTION public.fn_consulter_rib_soignant(p_mission_id uuid)
+CREATE OR REPLACE FUNCTION public.fn_consulter_rib_soignant(p_mission_id uuid)
 RETURNS jsonb
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -453,15 +481,13 @@ BEGIN
 END;
 $$;
 
-ALTER FUNCTION public.fn_generer_facture_mensuelle(uuid)
-  RENAME TO fn_generer_facture_mensuelle_internal_20260801;
 ALTER FUNCTION public.fn_generer_facture_mensuelle_internal_20260801(uuid) SECURITY INVOKER;
 ALTER FUNCTION public.fn_generer_facture_mensuelle_internal_20260801(uuid)
   SET search_path = pg_catalog, public, auth;
 REVOKE ALL ON FUNCTION public.fn_generer_facture_mensuelle_internal_20260801(uuid)
   FROM PUBLIC, anon, authenticated, service_role;
 
-CREATE FUNCTION public.fn_generer_facture_mensuelle(p_etablissement_id uuid)
+CREATE OR REPLACE FUNCTION public.fn_generer_facture_mensuelle(p_etablissement_id uuid)
 RETURNS jsonb
 LANGUAGE plpgsql
 SECURITY DEFINER
