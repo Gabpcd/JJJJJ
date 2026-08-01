@@ -90,7 +90,7 @@ test('fn_valider_presences_72h_auto — présence départ >72h → validée (aud
     .eq('mission_id', mission.id)
     .eq('type_creneau', 'PREVISIONNEL')
     .eq('est_pause', false)
-    .select('id, debut, fin');
+    .select('id, debut, fin, ordre');
   expect(
     planningHistoriqueError,
     `planning historique: ${planningHistoriqueError?.message}`,
@@ -98,6 +98,9 @@ test('fn_valider_presences_72h_auto — présence départ >72h → validée (aud
   expect(planningHistorique, 'un unique créneau PREVISIONNEL historique').toHaveLength(1);
   expect(new Date((planningHistorique as any[])[0].debut).getTime()).toBe(debut.getTime());
   expect(new Date((planningHistorique as any[])[0].fin).getTime()).toBe(fin.getTime());
+  const ordreEffectif = Math.max(
+    ...(planningHistorique as Array<{ ordre: number }>).map(({ ordre }) => ordre),
+  ) + 1;
 
   const { data: missionAvantGel, error: missionAvantGelError } = await admin
     .from('missions')
@@ -160,7 +163,9 @@ test('fn_valider_presences_72h_auto — présence départ >72h → validée (aud
       debut: arrivee.toISOString(),
       fin: fin.toISOString(),
       est_pause: false,
-      ordre: 1,
+      // Même stratégie que fn_scanner_code_pointage : l'ordre est unique pour
+      // toute la mission, indépendamment de PREVISIONNEL/EFFECTIF.
+      ordre: ordreEffectif,
       type_creneau: 'EFFECTIF',
     })
     .select('id, debut, fin')

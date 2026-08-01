@@ -36,4 +36,42 @@ describe('purge des missions techniques E2E', () => {
     expect(helper).toContain('if (escrowsReadError)');
     expect(helper).toContain('if (financialError)');
   });
+
+  it('détache les enfants des fixtures avant la RPC historique et le profil', () => {
+    const helper = readFileSync(resolve(process.cwd(), 'e2e/helpers/seed.ts'), 'utf8');
+    const cleanupMission = helper.indexOf('export async function cleanupMissionCascade');
+    const validationMission = helper.indexOf(
+      'const preparation = await preparerMissionTechniquePourPurge',
+      cleanupMission,
+    );
+    const purgeLocaleMission = helper.indexOf(
+      'for (const table of ENFANTS_MISSION_AVANT_PURGE_RPC)',
+      validationMission,
+    );
+    const purgeRpc = helper.indexOf(".rpc('fn_test_purge_mission' as any", purgeLocaleMission);
+
+    expect(validationMission).toBeGreaterThan(cleanupMission);
+    expect(purgeLocaleMission).toBeGreaterThan(validationMission);
+    expect(purgeRpc).toBeGreaterThan(purgeLocaleMission);
+    expect(helper).toContain("'conformite_travail'");
+    expect(helper).toContain("'presences'");
+    expect(helper).toContain("'candidatures'");
+
+    const cleanupSoignant = helper.indexOf(
+      'export async function cleanupEphemeralVerifiedCaregiver',
+    );
+    const validationSoignant = helper.indexOf(
+      'profilValide.est_compte_test !== true',
+      cleanupSoignant,
+    );
+    const purgeLocaleSoignant = helper.indexOf(
+      'for (const table of ENFANTS_SOIGNANT_AVANT_PROFIL)',
+      validationSoignant,
+    );
+    const suppressionProfil = helper.indexOf(".from('soignants' as any)", purgeLocaleSoignant);
+
+    expect(validationSoignant).toBeGreaterThan(cleanupSoignant);
+    expect(purgeLocaleSoignant).toBeGreaterThan(validationSoignant);
+    expect(suppressionProfil).toBeGreaterThan(purgeLocaleSoignant);
+  });
 });
