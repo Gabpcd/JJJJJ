@@ -42,7 +42,7 @@ import { DeclarationEmpechement } from '@/components/DeclarationEmpechement';
 import { BandeauActionPrioritaire, type ActionPrioritaire } from '@/components/BandeauActionPrioritaire';
 import { ModaleAnnulationCandidature } from '@/components/soignant/ModaleAnnulationCandidature';
 import { AnnulationCandidatureTimer } from '@/components/soignant/AnnulationCandidatureTimer';
-import { netEstimeAfficheMission } from '@/lib/missionFinanceDisplay';
+import { montantFinanceAfficheMission } from '@/lib/missionFinanceDisplay';
 import {
   ajouterRepliMissionPonctuelle,
   creneauChevauchePeriode,
@@ -234,7 +234,7 @@ export default function DetailMissionSoignant() {
 
   // Session E-6 : net estimé de la mission (même source que la liste,
   // cf. CarteMissionSoignant) pour la barre sticky mobile.
-  const netEstimeMission = netEstimeAfficheMission(mission);
+  const financeAfficheeMission = montantFinanceAfficheMission(mission);
   const fmtEuroEntier = (v: number) =>
     new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(v);
   const champsManquants = resumeCompletion.items_obligatoires_manquants;
@@ -1047,10 +1047,16 @@ export default function DetailMissionSoignant() {
                 <p className="text-base font-bold text-primary leading-tight">
                   🤝 Rétrocession {(mission as any).retrocession_pct ?? '—'}%
                 </p>
-              ) : netEstimeMission != null && netEstimeMission > 0 ? (
+              ) : financeAfficheeMission != null && financeAfficheeMission.montant > 0 ? (
                 <>
-                  <p className="text-base font-bold text-foreground leading-tight">~{fmtEuroEntier(netEstimeMission)} net</p>
-                  <p className="text-[10px] text-muted-foreground leading-tight">estimé, figé à l'acceptation</p>
+                  <p className="text-base font-bold text-foreground leading-tight">
+                    {financeAfficheeMission.approximatif ? '~' : ''}{fmtEuroEntier(financeAfficheeMission.montant)} {financeAfficheeMission.libelleCourt}
+                  </p>
+                  <p className="text-[10px] text-muted-foreground leading-tight">
+                    {financeAfficheeMission.nature === 'HONORAIRES_LIBERAUX'
+                      ? 'avant cotisations libérales'
+                      : 'estimation figée à l’acceptation'}
+                  </p>
                 </>
               ) : (
                 <p className="text-base font-bold text-foreground leading-tight">

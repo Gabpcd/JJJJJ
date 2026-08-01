@@ -107,4 +107,64 @@ describe('DecompositionFinanciere avant attribution', () => {
     expect(screen.getByText(/Vérification du mode d'exercice/i)).toBeInTheDocument();
     expect(screen.queryByText(/selon le contrat retenu/i)).not.toBeInTheDocument();
   });
+
+  it('ne présente jamais le brut historique net_a_payer comme le net du soignant salarié', () => {
+    useModeExerciceMissionMock.mockReturnValue({ mode: null, loading: false, error: null });
+
+    render(
+      <DecompositionFinanciere
+        mission={{
+          ...missionBase,
+          type_contrat_applique: 'SALARIE',
+          net_a_payer: 444.68,
+          net_estime: 346.85,
+        }}
+        role="SOIGNANT"
+      />,
+    );
+
+    expect(screen.getByText('Net salarié estimé avant PAS*')).toBeInTheDocument();
+    expect(screen.getAllByText(/346,85/).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/444,68/)).not.toBeInTheDocument();
+    expect(screen.getAllByText(/bulletin officiel/i).length).toBeGreaterThan(0);
+  });
+
+  it.each(['ETAB', 'ADMIN'] as const)(
+    'présente aussi uniquement net_estime au rôle %s et renvoie au bulletin employeur',
+    (role) => {
+      useModeExerciceMissionMock.mockReturnValue({ mode: null, loading: false, error: null });
+
+      render(
+        <DecompositionFinanciere
+          mission={{
+            ...missionBase,
+            type_contrat_applique: 'SALARIE',
+            net_a_payer: 444.68,
+            net_estime: 346.85,
+          }}
+          role={role}
+        />,
+      );
+
+      expect(screen.getByText('Net salarié estimé avant PAS*')).toBeInTheDocument();
+      expect(screen.getAllByText(/346,85/).length).toBeGreaterThan(0);
+      expect(screen.queryByText(/444,68/)).not.toBeInTheDocument();
+      expect(screen.getByText(/reportez le net à payer du bulletin officiel/i)).toBeInTheDocument();
+      expect(screen.queryByText(/bulletin de paie généré par Jolene/i)).not.toBeInTheDocument();
+    },
+  );
+
+  it('présente un contrat encore indéterminé comme un brut indicatif', () => {
+    useModeExerciceMissionMock.mockReturnValue({ mode: null, loading: false, error: new Error('matrice indisponible') });
+
+    render(
+      <DecompositionFinanciere
+        mission={{ ...missionBase, total_brut: 240, net_a_payer: 187 }}
+        role="SOIGNANT"
+      />,
+    );
+
+    expect(screen.getByText('brut indicatif')).toBeInTheDocument();
+    expect(screen.queryByText(/net estimé/i)).not.toBeInTheDocument();
+  });
 });

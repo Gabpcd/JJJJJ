@@ -37,6 +37,7 @@ import {
 import { analyserCompletudePlanningMission } from '@/lib/completude-planning-mission';
 import { chargerCreneauxMissionsPagines } from '@/lib/mission-creneaux-pagines';
 import { formatParis, instantJolene } from '@/lib/date-heure-paris';
+import { montantFinanceAfficheMission } from '@/lib/missionFinanceDisplay';
 /** 6c.5 : salutation heure-aware — « Hiii » → Bonjour/Bonsoir selon l'heure. */
 function salutationHeure(): string {
   const h = new Date().getHours();
@@ -85,17 +86,34 @@ export default function DashboardSoignant() {
   } = useQuery({
     queryKey: ['dashboard-soignant', user?.id],
     queryFn: async () => {
-      const [{ data, error }, { data: connectData, error: connectError }] = await Promise.all([
+      const maintenantRequete = new Date();
+      const debutMois = new Date(
+        maintenantRequete.getFullYear(),
+        maintenantRequete.getMonth(),
+        1,
+      ).toISOString();
+      const [
+        { data, error },
+        { data: connectData, error: connectError },
+        { data: gainsMissionsData, error: gainsMissionsError },
+      ] = await Promise.all([
         supabase.rpc('fn_dashboard_soignant_complet' as any),
         supabase
           .from('stripe_connect_onboarding')
           .select('statut')
           .eq('soignant_id', user!.id)
           .maybeSingle(),
+        supabase
+          .from('missions')
+          .select('id, type_contrat_applique, type_contrat_recherche, total_brut, net_a_payer, net_estime')
+          .eq('soignant_assigne_id', user!.id)
+          .eq('statut', 'TERMINEE')
+          .gte('fin_le', debutMois),
       ]);
       if (error) throw error;
       if (connectError) logger.warn('[DashboardSoignant] Stripe Connect indisponible', connectError);
-      if (!data) return { profil: null, missions_ouvertes: [], mes_missions: [], documents: [], heures_semaine: 0, gains_mois: { net_total: 0, brut_total: 0, nb_missions: 0 }, gains_6mois: [], missions_semaine_cal: [], propositions: [], heures_totales_terminees: 0, missions_oubliees_count: 0, notifs_non_lues: 0, hasStripeConnect: true };
+      if (gainsMissionsError) logger.warn('[DashboardSoignant] Gains détaillés indisponibles', gainsMissionsError);
+      if (!data) return { profil: null, missions_ouvertes: [], mes_missions: [], documents: [], heures_semaine: 0, gains_mois: { net_total: 0, brut_total: 0, nb_missions: 0 }, gains_missions: [], gains_6mois: [], missions_semaine_cal: [], propositions: [], heures_totales_terminees: 0, missions_oubliees_count: 0, notifs_non_lues: 0, hasStripeConnect: true };
 
       const missions = Array.isArray((data as any).mes_missions) ? (data as any).mes_missions : [];
       const missionsOuvertes = Array.isArray((data as any).missions_ouvertes) ? (data as any).missions_ouvertes : [];
@@ -184,6 +202,9 @@ export default function DashboardSoignant() {
         ...data,
         mes_missions: missions.map(enrichirPlanning),
         missions_ouvertes: missionsOuvertes.map(enrichirPlanning),
+        // Le RPC historique agrégeait parfois le brut salarié sous le nom
+        // `net_total`. Les montants affichés sont recalculés mission par mission.
+        gains_missions: gainsMissionsError ? [] : (gainsMissionsData ?? []),
         // En cas d'échec du module facultatif, ne pas afficher à tort un CTA
         // d'onboarding Stripe sur un compte potentiellement déjà configuré.
         hasStripeConnect: connectError ? true : connectData?.statut === 'COMPLET',
@@ -268,10 +289,20 @@ export default function DashboardSoignant() {
   const missionsOubliDepartCount = Math.max(0, Number(dashboard?.missions_oubliees_count) || 0);
 
   const gainsCeMois = useMemo(() => {
-    // RPC returns { net_total, brut_total, nb_missions } as an object
-    const gm = (dashboard?.gains_mois ?? { net_total: 0, brut_total: 0, nb_missions: 0 }) as { net_total: number; brut_total: number; nb_missions: number };
-    return { net: Number(gm.net_total) || 0, nb: Number(gm.nb_missions) || 0 };
-  }, [dashboard?.gains_mois]);
+    const result = { honoraires: 0, netSalarie: 0, brutIndicatif: 0, nb: 0 };
+    const missionsGains = Array.isArray((dashboard as any)?.gains_missions)
+      ? (dashboard as any).gains_missions
+      : [];
+    missionsGains.forEach((mission: any) => {
+      const finance = montantFinanceAfficheMission(mission);
+      if (!finance) return;
+      result.nb += 1;
+      if (finance.nature === 'HONORAIRES_LIBERAUX') result.honoraires += finance.montant;
+      else if (finance.nature === 'NET_SALARIE_ESTIME') result.netSalarie += finance.montant;
+      else result.brutIndicatif += finance.montant;
+    });
+    return result;
+  }, [(dashboard as any)?.gains_missions]);
 
   const { missionsTermineesCount, heuresCumuleesTotal } = useMemo(() => {
     // RPC returns heures_totales_terminees as a number (SUM of duree_heures)
@@ -469,14 +500,14 @@ export default function DashboardSoignant() {
             {missionsOuvertes.slice(0, 2).map((m: any) => {
               const planningAffichable = !m.planning_indisponible && m.debut_affiche && m.fin_affichee;
               const duree = Number(m.duree_planifiee_heures) > 0 ? Number(m.duree_planifiee_heures) : 0;
-              const netDirect = Number(m.net_estime ?? m.net_a_payer);
+              const finance = montantFinanceAfficheMission(m);
               const brutDirect = Number(m.total_brut ?? m.brut_estime);
-              const estimation = Number.isFinite(netDirect) && netDirect > 0
-                ? { montant: Math.round(netDirect), libelle: 'net' }
+              const estimation = finance
+                ? { montant: Math.round(finance.montant), libelle: finance.libelleCourt, approximatif: finance.approximatif }
                 : Number.isFinite(brutDirect) && brutDirect > 0
-                  ? { montant: Math.round(brutDirect), libelle: 'brut' }
+                  ? { montant: Math.round(brutDirect), libelle: 'brut indicatif', approximatif: true }
                   : m.taux_horaire_base && duree
-                    ? { montant: Math.round(Number(m.taux_horaire_base) * duree), libelle: 'brut' }
+                    ? { montant: Math.round(Number(m.taux_horaire_base) * duree), libelle: 'brut indicatif', approximatif: true }
                     : null;
               return (
                 <div key={m.id} className="card-base hover:shadow-md transition-all flex items-center gap-3 py-3">
@@ -510,7 +541,7 @@ export default function DashboardSoignant() {
                           <span className="font-medium text-warning">Planning détaillé à confirmer</span>
                         )}
                         {m.taux_horaire_base && <span className="font-semibold text-primary">{m.taux_horaire_base} €/h</span>}
-                        {estimation && <span>~{estimation.montant} € {estimation.libelle}</span>}
+                        {estimation && <span>{estimation.approximatif ? '~' : ''}{estimation.montant} € {estimation.libelle}</span>}
                       </div>
                     </div>
                   </Link>
@@ -564,11 +595,23 @@ export default function DashboardSoignant() {
           <div className="flex items-center gap-3">
             <div className="rounded-xl p-2.5 bg-primary/10"><Banknote className="h-5 w-5 text-primary" /></div>
             <div className="flex-1">
-              <p className="text-sm font-semibold text-foreground">💰 Ce mois : {new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(gainsCeMois.net)} net estimé* sur {gainsCeMois.nb} mission{gainsCeMois.nb > 1 ? 's' : ''}</p>
+              <p className="text-sm font-semibold text-foreground">
+                💰 Ce mois : {[
+                  gainsCeMois.honoraires > 0
+                    ? `${new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(gainsCeMois.honoraires)} d’honoraires`
+                    : null,
+                  gainsCeMois.netSalarie > 0
+                    ? `${new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(gainsCeMois.netSalarie)} net salarié estimé*`
+                    : null,
+                  gainsCeMois.brutIndicatif > 0
+                    ? `${new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(gainsCeMois.brutIndicatif)} brut indicatif`
+                    : null,
+                ].filter(Boolean).join(' + ')} sur {gainsCeMois.nb} mission{gainsCeMois.nb > 1 ? 's' : ''}
+              </p>
               <p className="text-xs text-primary mt-0.5">Voir le détail →</p>
             </div>
           </div>
-          <NoteNetEstime className="mt-2" />
+          {(gainsCeMois.netSalarie > 0 || gainsCeMois.brutIndicatif > 0) && <NoteNetEstime className="mt-2" />}
         </button>
       )}
 

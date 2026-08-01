@@ -89,20 +89,42 @@ const TONE_CLASSES: Record<string, string> = {
 export default function PaiementsEscrowAVenir() {
   const [lignes, setLignes] = useState<LigneEscrow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [erreur, setErreur] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     let vivant = true;
     (async () => {
+      setLoading(true);
+      setErreur(null);
       const { data, error } = await supabase.rpc('fn_mes_paiements_escrow' as any);
       if (!vivant) return;
-      if (!error && Array.isArray(data)) setLignes(data as unknown as LigneEscrow[]);
+      if (error) {
+        setErreur(error.message || 'Impossible de charger les paiements rapides.');
+      } else if (Array.isArray(data)) {
+        setLignes(data as unknown as LigneEscrow[]);
+      }
       setLoading(false);
     })();
     return () => { vivant = false; };
-  }, []);
+  }, [reloadKey]);
+
+  if (loading) return null;
+
+  if (erreur) {
+    return (
+      <section className="mb-5 rounded-xl border border-destructive/30 bg-destructive/5 p-3" role="alert">
+        <p className="text-sm font-semibold text-destructive">Paiements rapides indisponibles</p>
+        <p className="mt-1 text-xs text-muted-foreground">{erreur}</p>
+        <button type="button" className="mt-2 text-xs font-semibold text-primary hover:underline" onClick={() => setReloadKey(key => key + 1)}>
+          Réessayer
+        </button>
+      </section>
+    );
+  }
 
   // I5 : rien à montrer → composant absent.
-  if (loading || lignes.length === 0) return null;
+  if (lignes.length === 0) return null;
 
   const aVenir = lignes.filter((l) => CONFIG[l.etat]?.aVenir);
   const verses = lignes.filter((l) => l.etat === 'VERSE');

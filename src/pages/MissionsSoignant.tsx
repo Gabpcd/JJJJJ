@@ -24,7 +24,7 @@ import { getLabelProfession, extraireContratPreference, missionCompatibleContrat
 import { getMissionsCompatiblesFilter } from '@/lib/profession-hierarchy';
 import { ajouterJoursCivilsParis, debutSemaineParis, formatParis } from '@/lib/date-heure-paris';
 import { handleErrorSilent } from '@/lib/handleError';
-import { netEstimeAfficheMission } from '@/lib/missionFinanceDisplay';
+import { montantFinanceAfficheMission } from '@/lib/missionFinanceDisplay';
 import {
   creneauxPrevisionnels,
   prochainCreneauPointage,
@@ -583,10 +583,10 @@ export default function MissionsSoignant() {
                       <h3 className="font-semibold text-sm text-foreground">{m.intitule}</h3>
                       <p className="text-xs text-muted-foreground mt-1">🏥 {m.etablissements?.nom || 'Établissement'}</p>
                       {(() => {
-                        const net = netEstimeAfficheMission(m);
-                        return net != null && net > 0 ? (
+                        const finance = montantFinanceAfficheMission(m);
+                        return finance != null && finance.montant > 0 ? (
                           <p className="text-sm font-bold text-primary mt-1">
-                            Net estimé* : {new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(net)}
+                            {finance.libelle} : {finance.approximatif ? '~' : ''}{new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(finance.montant)}
                           </p>
                         ) : null;
                       })()}

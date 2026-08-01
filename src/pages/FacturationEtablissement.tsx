@@ -55,6 +55,7 @@ import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { toast } from 'sonner';
 import { useEtablissementScope } from '@/hooks/useEtablissementScope';
+import { useEtabPermissions } from '@/hooks/useEtabPermissions';
 
 const fmt = (v: number | null | undefined) =>
   v != null ? new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(v) : '—';
@@ -101,7 +102,7 @@ function verifierReponseChargement(
 const METHODE_LABELS: Record<MethodePaiement, string> = {
   VIREMENT: 'Virement bancaire',
   CHEQUE: 'Chèque',
-  BULLETIN_PAIE: 'Bulletin de paie',
+  BULLETIN_PAIE: 'Virement de salaire (bulletin employeur)',
   NOTE_HONORAIRES: 'Note d\'honoraires',
 };
 
@@ -149,7 +150,18 @@ export default function FacturationEtablissement() {
   } = useEtablissementScope();
   const { afficherNotification } = useNotification();
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const permissionCheckEnabled = Boolean(
+    !scopeLoading && scopeResolved && !scopeError && user && etablissementId,
+  );
+  const {
+    loading: permissionsLoading,
+    permissions,
+    error: permissionsError,
+    recharger: rechargerPermissions,
+  } = useEtabPermissions(etablissementId ?? undefined, permissionCheckEnabled);
+  const canReadFinance = permissions.lecture_paiement || permissions.paiement;
+  const canManagePayments = permissions.paiement;
   // Session F (F7) : l'onglet « Obligations » a été retiré car il dupliquait à
   // l'identique le contenu de cette page (même RPC fn_obligations_financieres,
   // mêmes missions à payer / commissions, actions renvoyant vers ces sections).
@@ -180,7 +192,11 @@ export default function FacturationEtablissement() {
   const [connectClientSecret, setConnectClientSecret] = useState<string | null>(null);
   const [connectDecomposition, setConnectDecomposition] = useState<any>(null);
   const [showConnectCheckout, setShowConnectCheckout] = useState(false);
-  const [connectPayLoading, setConnectPayLoading] = useState(false);
+  const [connectConfirming, setConnectConfirming] = useState(false);
+  const [connectPaymentContext, setConnectPaymentContext] = useState<{
+    missionId: string;
+    factureHonoraireId?: string;
+  } | null>(null);
   const [checkoutFactureId, setCheckoutFactureId] = useState<string | null>(null);
   const [showCheckout, setShowCheckout] = useState(false);
   const [declarerDialogMission, setDeclarerDialogMission] = useState<any>(null);
@@ -234,8 +250,19 @@ export default function FacturationEtablissement() {
 
   // ── Data loading ──
   const charger = useCallback(async () => {
-    if (scopeLoading || !scopeResolved || scopeError) return;
+    if (scopeLoading || !scopeResolved || scopeError || permissionsLoading) return;
     if (!user || !etablissementId) {
+      setLoading(false);
+      return;
+    }
+    if (!canReadFinance) {
+      setEtab(null);
+      setData(null);
+      setPaiementsData(null);
+      setFactures([]);
+      setMissionsNonFacturees([]);
+      setMissionsPaidByStripe(new Set());
+      setPrelevements([]);
       setLoading(false);
       return;
     }
@@ -256,7 +283,7 @@ export default function FacturationEtablissement() {
         supabase.from('stripe_transfers')
           .select('mission_id, statut')
           .eq('etablissement_id', etablissementId)
-          .in('statut', ['TRANSFERE']),
+          .in('statut', ['CHARGE_REUSSI', 'TRANSFERE', 'PAYE']),
         supabase.from('paiements_mission')
           .select('id, mission_id, montant_ttc, statut, capture_le, missions(intitule)')
           .eq('etablissement_id', etablissementId)
@@ -294,12 +321,24 @@ export default function FacturationEtablissement() {
     } finally {
       setLoading(false);
     }
-  }, [user, etablissementId, scopeLoading, scopeResolved, scopeError]);
+  }, [
+    user,
+    etablissementId,
+    scopeLoading,
+    scopeResolved,
+    scopeError,
+    permissionsLoading,
+    canReadFinance,
+  ]);
 
   useEffect(() => { void charger(); }, [charger]);
 
   // ── Handler : générer facture commission mensuelle ──
   const genererFactureMensuelle = async () => {
+    if (!canManagePayments) {
+      toast.error('Votre rôle ne permet pas de générer une facture.');
+      return;
+    }
     setGeneratingFacture(true);
     try {
       const { data, error } = await supabase.rpc('fn_generer_facture_rate_limited' as any);
@@ -320,8 +359,15 @@ export default function FacturationEtablissement() {
 
   // ── Handlers dialogs paiement ──
   const ouvrirDialogDeclarer = (mission: any) => {
+    if (!canManagePayments) return;
     setDeclarerDialogMission(mission);
-    setDeclarerMontant(String(Number(mission.net_a_payer || 0).toFixed(2)));
+    // Un montant salarié remonté par la plateforme reste une estimation
+    // avant paie/PAS. Ne jamais le préremplir comme s'il s'agissait du net
+    // officiel : l'employeur doit recopier le bulletin qu'il a établi.
+    const montantInitial = mission.type_contrat_applique === 'SALARIE'
+      ? ''
+      : String(Number(mission.net_a_payer || 0).toFixed(2));
+    setDeclarerMontant(montantInitial);
     setDeclarerMethode('VIREMENT');
     setDeclarerReference('');
     setDeclarerDatePaiement(new Date().toISOString().split('T')[0]);
@@ -334,7 +380,7 @@ export default function FacturationEtablissement() {
   };
 
   const validerDeclarationPaiement = async () => {
-    if (!declarerDialogMission) return;
+    if (!declarerDialogMission || !canManagePayments) return;
     const missionId = declarerDialogMission.mission_id;
     const montantNum = Number(declarerMontant);
     if (!montantNum || montantNum <= 0) {
@@ -420,6 +466,10 @@ export default function FacturationEtablissement() {
   };
 
   const payerStripeConnect = async (missionId: string, factureHonoraireId?: string) => {
+    if (!canManagePayments) {
+      toast.error('Votre rôle ne permet pas d’effectuer un paiement.');
+      return;
+    }
     const paymentKey = factureHonoraireId || missionId;
     setConnectPayingId(paymentKey);
     const loadingToastId = toast.loading('Préparation du paiement…');
@@ -440,7 +490,7 @@ export default function FacturationEtablissement() {
         );
 
       if (code === 'CONTRAT_SALARIE_NON_STRIPE') {
-        toast.error(message || 'Les missions salariées doivent être payées par virement SEPA (bulletin de paie).', { id: loadingToastId, duration: 8000 });
+        toast.error(message || 'Les missions salariées doivent être payées par virement SEPA selon le bulletin établi par l’employeur.', { id: loadingToastId, duration: 8000 });
         return;
       }
 
@@ -462,10 +512,11 @@ export default function FacturationEtablissement() {
       if (result?.url) { window.location.href = result.url; return; }
       if (result?.client_secret) {
         setConnectClientSecret(result.client_secret);
+        setConnectPaymentContext({ missionId, factureHonoraireId });
         setShowConnectCheckout(true);
         setConnectDecomposition({
-          commission_ttc: result.commission_ttc,
-          salaire_brut: result.salaire_brut,
+          commission_ttc: result.commission_ttc ?? result.commission,
+          salaire_brut: result.salaire_brut ?? result.montant_soignant ?? result.soignant,
           total: result.total,
         });
         return;
@@ -478,6 +529,94 @@ export default function FacturationEtablissement() {
     }
   };
 
+  const verifierStatutConnect = useCallback(async (
+    missionId?: string,
+    factureHonoraireId?: string,
+  ): Promise<'CONFIRME' | 'ECHEC' | 'EN_ATTENTE'> => {
+    if (!etablissementId || (!missionId && !factureHonoraireId)) return 'EN_ATTENTE';
+
+    let requete = supabase
+      .from('stripe_transfers')
+      .select('statut')
+      .eq('etablissement_id', etablissementId)
+      .order('cree_le', { ascending: false })
+      .limit(1);
+    if (missionId) requete = requete.eq('mission_id', missionId);
+    if (factureHonoraireId) requete = requete.eq('facture_honoraire_id', factureHonoraireId);
+
+    const { data, error } = await requete.maybeSingle();
+    if (error) throw error;
+    const statut = data?.statut;
+    if (statut && ['CHARGE_REUSSI', 'TRANSFERE', 'PAYE'].includes(statut)) return 'CONFIRME';
+    if (statut === 'ECHOUE') return 'ECHEC';
+    return 'EN_ATTENTE';
+  }, [etablissementId]);
+
+  const finaliserRetourConnect = useCallback(async (
+    context?: { missionId?: string; factureHonoraireId?: string },
+  ) => {
+    setConnectConfirming(true);
+    const delais = [0, 1000, 1500, 2000, 2500, 3000, 4000, 5000];
+    try {
+      if (!context?.missionId && !context?.factureHonoraireId) {
+        toast.info('Retour Stripe reçu. Le paiement reste en attente tant que sa référence serveur ne peut pas être vérifiée.');
+        await charger();
+        return;
+      }
+      for (const delai of delais) {
+        if (delai > 0) {
+          await new Promise((resolve) => window.setTimeout(resolve, delai));
+        }
+        const statut = await verifierStatutConnect(context?.missionId, context?.factureHonoraireId);
+        if (statut === 'CONFIRME') {
+          toast.success('Paiement confirmé et enregistré.');
+          await charger();
+          return;
+        }
+        if (statut === 'ECHEC') {
+          toast.error('Le paiement Stripe a échoué. Aucun paiement n’a été enregistré.');
+          await charger();
+          return;
+        }
+      }
+      toast.info('Paiement transmis à Stripe. La confirmation est encore en cours ; la page sera actualisée automatiquement au prochain chargement.');
+      await charger();
+    } catch (error) {
+      capturerErreurSentry(error, 'FacturationEtablissement', 'confirmation_stripe_connect');
+      toast.error('Impossible de confirmer le paiement pour le moment. Son statut reste en attente, sans le déclarer payé.');
+    } finally {
+      setConnectConfirming(false);
+      setShowConnectCheckout(false);
+      setConnectClientSecret(null);
+      setConnectPaymentContext(null);
+    }
+  }, [charger, verifierStatutConnect]);
+
+  useEffect(() => {
+    if (
+      searchParams.get('paiement') !== 'succes'
+      || !canReadFinance
+      || permissionsLoading
+      || !etablissementId
+    ) return;
+
+    const missionId = searchParams.get('mission') || undefined;
+    const factureHonoraireId = searchParams.get('facture_honoraire') || undefined;
+    const nettoyes = new URLSearchParams(searchParams);
+    nettoyes.delete('paiement');
+    nettoyes.delete('mission');
+    nettoyes.delete('facture_honoraire');
+    setSearchParams(nettoyes, { replace: true });
+    void finaliserRetourConnect({ missionId, factureHonoraireId });
+  }, [
+    canReadFinance,
+    etablissementId,
+    finaliserRetourConnect,
+    permissionsLoading,
+    searchParams,
+    setSearchParams,
+  ]);
+
   const erreurScope = scopeError
     ? 'Impossible de vérifier votre établissement pour le moment.'
     : scopeResolved && (!user || !etablissementId)
@@ -489,11 +628,15 @@ export default function FacturationEtablissement() {
       retryScope();
       return;
     }
+    if (permissionsError || !canReadFinance) {
+      void rechargerPermissions();
+      return;
+    }
     void charger();
   };
 
   // ── Loading / erreur fail-closed ──
-  if (scopeLoading || (!scopeResolved && !scopeError)) {
+  if (scopeLoading || (!scopeResolved && !scopeError) || (permissionCheckEnabled && permissionsLoading)) {
     return <LayoutApp role="ADMIN_ETABLISSEMENT"><SkeletonDashboard /></LayoutApp>;
   }
 
@@ -510,6 +653,28 @@ export default function FacturationEtablissement() {
             <RefreshCw className="h-4 w-4 mr-2" aria-hidden="true" />
             Réessayer
           </Button>
+        </div>
+      </LayoutApp>
+    );
+  }
+
+  if (permissionsError || !canReadFinance) {
+    return (
+      <LayoutApp role="ADMIN_ETABLISSEMENT">
+        <div className="card-base max-w-xl mx-auto text-center space-y-4" role="alert" aria-live="assertive">
+          <AlertTriangle className="h-10 w-10 text-destructive mx-auto" aria-hidden="true" />
+          <div>
+            <h1 className="text-xl font-bold text-foreground">Accès à la facturation refusé</h1>
+            <p className="text-sm text-muted-foreground mt-1">
+              Votre rôle ne dispose pas de la permission de lecture des paiements de cet établissement.
+            </p>
+          </div>
+          {permissionsError && (
+            <Button type="button" onClick={() => void rechargerPermissions()}>
+              <RefreshCw className="h-4 w-4 mr-2" aria-hidden="true" />
+              Réessayer
+            </Button>
+          )}
         </div>
       </LayoutApp>
     );
@@ -543,6 +708,9 @@ export default function FacturationEtablissement() {
   const facturesCommissionHistorique = data?.factures_commission_historique || [];
   const nbFacturesHistorique = data?.nb_factures_commission_historique || 0;
   const missionsNonFactureesObligs = data?.missions_non_facturees || [];
+  const contientMissionSalarieeNonPayee = missionsNonPayees.some(
+    (mission: any) => mission.type_contrat_applique === 'SALARIE',
+  );
 
   const toggleSection = (id: string) =>
     setSectionsOpen(prev => ({ ...prev, [id]: !prev[id] }));
@@ -596,7 +764,12 @@ export default function FacturationEtablissement() {
           {/* KPI "Total à régler" — informatif uniquement (somme des 2 autres) */}
           <div className="card-base border-destructive/20">
             <p className="text-2xl font-bold text-foreground">{fmt(data?.total_du)}</p>
-            <p className="text-xs text-muted-foreground">Total à régler</p>
+            <p className="text-xs text-muted-foreground">
+              {contientMissionSalarieeNonPayee ? 'Total indicatif à régler' : 'Total à régler'}
+            </p>
+            {contientMissionSalarieeNonPayee && (
+              <p className="text-[10px] text-muted-foreground mt-1">Inclut des estimations salariées avant paie et PAS.</p>
+            )}
           </div>
 
           {/* KPI "Soignants" — cliquable → section Missions à payer */}
@@ -608,6 +781,9 @@ export default function FacturationEtablissement() {
             <div>
               <p className="text-2xl font-bold text-foreground">{fmt(data?.total_soignants_du)}</p>
               <p className="text-xs text-muted-foreground">Soignants à régler · {data?.nb_missions_non_payees || 0} mission{(data?.nb_missions_non_payees || 0) > 1 ? 's' : ''}</p>
+              {contientMissionSalarieeNonPayee && (
+                <p className="text-[10px] text-muted-foreground mt-1">Salariés : estimation avant paie/PAS, à confirmer sur le bulletin employeur.</p>
+              )}
             </div>
             <ChevronRight className="h-4 w-4 text-muted-foreground/60 shrink-0 mt-1" />
           </button>
@@ -677,7 +853,7 @@ export default function FacturationEtablissement() {
                   const isSalarie = typeContratMission === 'SALARIE';
                   const isLiberal = typeContratMission === 'LIBERAL';
                   const modePaiementLabel = isSalarie
-                    ? 'Bulletin de paie (virement SEPA)'
+                    ? 'Virement SEPA selon bulletin employeur'
                     : isLiberal
                     ? (m.soignant_stripe_connect ? 'Note d\'honoraires (Stripe Connect)' : 'Note d\'honoraires (virement)')
                     : null;
@@ -756,13 +932,24 @@ export default function FacturationEtablissement() {
                                 </p>
                               )}
                             </>
+                          ) : isSalarie ? (
+                            <div>
+                              <p className="font-bold">{fmt(m.net_estime ?? m.net_a_payer)}</p>
+                              <p className="text-[10px] text-muted-foreground max-w-[12rem]">
+                                Estimation avant paie/PAS — le bulletin employeur fait foi
+                              </p>
+                            </div>
                           ) : (
                             <p className="font-bold">{fmt(m.net_a_payer)}</p>
                           )}
                         </div>
                       </div>
 
-                      {peutPayerStripe ? (
+                      {!canManagePayments ? (
+                        <p className="text-xs text-muted-foreground text-center py-1">
+                          Consultation uniquement — votre rôle ne permet pas d’effectuer un paiement.
+                        </p>
+                      ) : peutPayerStripe ? (
                         <BoutonY2K
                           size="sm"
                           onClick={() => payerStripeConnect(m.mission_id, m.facture_honoraires_id)}
@@ -906,7 +1093,7 @@ export default function FacturationEtablissement() {
                         )}
                         {!f.est_secteur_public && (
                         <div className="flex gap-2 flex-wrap">
-                          {etab?.mode_paiement_commission !== 'SEPA_DEBIT' && (
+                          {canManagePayments && etab?.mode_paiement_commission !== 'SEPA_DEBIT' && (
                             <BoutonY2K
                               size="sm"
                               onClick={() => { setCheckoutFactureId(f.facture_id); setShowCheckout(true); }}
@@ -919,13 +1106,15 @@ export default function FacturationEtablissement() {
                               Prélèvement SEPA automatique programmé — aucun paiement par carte requis.
                             </p>
                           )}
-                          <BoutonY2K
-                            size="sm"
-                            variant="secondary"
-                            onClick={() => navigate(`/etablissement/facturation/${f.facture_id}`)}
-                          >
-                            <Banknote className="w-4 h-4 mr-1" /> Virement
-                          </BoutonY2K>
+                          {canManagePayments && etab?.mode_paiement_commission !== 'SEPA_DEBIT' && (
+                            <BoutonY2K
+                              size="sm"
+                              variant="secondary"
+                              onClick={() => navigate(`/etablissement/facturation/${f.facture_id}`)}
+                            >
+                              <Banknote className="w-4 h-4 mr-1" /> Virement
+                            </BoutonY2K>
+                          )}
                           <BoutonY2K size="sm" variant="secondary" onClick={() => telechargerFactureCommissionPDF(f.facture_id)}>
                             <Download className="w-4 h-4 mr-1" /> PDF
                           </BoutonY2K>
@@ -1101,15 +1290,17 @@ export default function FacturationEtablissement() {
                       <Clock className="h-4 w-4 text-warning" />
                       Missions à facturer ({missionsNonFacturees.length})
                     </h3>
-                    <BoutonY2K
-                      size="sm"
-                      onClick={genererFactureMensuelle}
-                      disabled={generatingFacture}
-                      className="gap-1.5"
-                    >
-                      {generatingFacture ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
-                      {generatingFacture ? 'Génération…' : 'Générer la facture du mois'}
-                    </BoutonY2K>
+                    {canManagePayments && (
+                      <BoutonY2K
+                        size="sm"
+                        onClick={genererFactureMensuelle}
+                        disabled={generatingFacture}
+                        className="gap-1.5"
+                      >
+                        {generatingFacture ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
+                        {generatingFacture ? 'Génération…' : 'Générer la facture du mois'}
+                      </BoutonY2K>
+                    )}
                   </div>
                   {/* Desktop table */}
                   <div className="hidden md:block overflow-x-auto">
@@ -1553,7 +1744,7 @@ export default function FacturationEtablissement() {
       {/* ── DIALOGS GLOBAUX ── */}
 
       {/* Dialog Stripe Checkout (paiement facture commission) */}
-      {showCheckout && checkoutFactureId && (
+      {canManagePayments && showCheckout && checkoutFactureId && (
         <StripeEmbeddedCheckout
           factureId={checkoutFactureId}
           open={showCheckout}
@@ -1562,8 +1753,18 @@ export default function FacturationEtablissement() {
       )}
 
       {/* Dialog Stripe Connect (paiement mission soignant) */}
-      {showConnectCheckout && connectClientSecret && (
-        <Dialog open={showConnectCheckout} onOpenChange={(open) => { if (!open) { setShowConnectCheckout(false); charger(); } }}>
+      {canManagePayments && showConnectCheckout && connectClientSecret && (
+        <Dialog
+          open={showConnectCheckout}
+          onOpenChange={(open) => {
+            if (!open && !connectConfirming) {
+              setShowConnectCheckout(false);
+              setConnectClientSecret(null);
+              setConnectPaymentContext(null);
+              void charger();
+            }
+          }}
+        >
           <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Paiement Stripe Connect</DialogTitle>
@@ -1576,15 +1777,28 @@ export default function FacturationEtablissement() {
                 <p className="font-semibold text-foreground">Total : {fmt(connectDecomposition.total)}</p>
               </div>
             )}
-            <EmbeddedCheckoutProvider stripe={stripePromise} options={{ clientSecret: connectClientSecret }}>
-              <EmbeddedCheckout />
-            </EmbeddedCheckoutProvider>
+            {connectConfirming ? (
+              <div className="py-8 text-center" role="status" aria-live="polite">
+                <Loader2 className="h-5 w-5 animate-spin mx-auto mb-3 text-primary" />
+                <p className="text-sm text-foreground">Confirmation du paiement en cours…</p>
+              </div>
+            ) : (
+              <EmbeddedCheckoutProvider
+                stripe={stripePromise}
+                options={{
+                  clientSecret: connectClientSecret,
+                  onComplete: () => void finaliserRetourConnect(connectPaymentContext ?? undefined),
+                }}
+              >
+                <EmbeddedCheckout />
+              </EmbeddedCheckoutProvider>
+            )}
           </DialogContent>
         </Dialog>
       )}
 
       {/* Dialog Déclaration paiement soignant (form complet OF-11, fullscreen mobile) */}
-      {declarerDialogMission && (
+      {canManagePayments && declarerDialogMission && (
         <DialogResponsive open={!!declarerDialogMission} onOpenChange={(open) => { if (!open) fermerDialogDeclarer(); }}>
           <DialogResponsiveContent>
             <DialogResponsiveHeader>
@@ -1596,7 +1810,11 @@ export default function FacturationEtablissement() {
 
             <DialogResponsiveBody className="space-y-4">
               <div>
-                <Label htmlFor="declarer-montant">Montant payé (€ net)</Label>
+                <Label htmlFor="declarer-montant">
+                  {declarerDialogMission.type_contrat_applique === 'SALARIE'
+                    ? 'Montant net réellement versé (selon bulletin officiel)'
+                    : 'Montant des honoraires versés'}
+                </Label>
                 <Input
                   id="declarer-montant"
                   type="number"
@@ -1605,9 +1823,20 @@ export default function FacturationEtablissement() {
                   onChange={(e) => setDeclarerMontant(e.target.value)}
                   placeholder="0.00"
                 />
-                <p className="text-xs text-muted-foreground mt-1">
-                  Montant estimé : {fmt(Number(declarerDialogMission.net_a_payer || 0))}
-                </p>
+                {declarerDialogMission.type_contrat_applique === 'SALARIE' ? (
+                  <div className="text-xs text-muted-foreground mt-1 space-y-1">
+                    <p>
+                      Estimation indicative avant paie/PAS : {fmt(Number(
+                        declarerDialogMission.net_estime ?? declarerDialogMission.net_a_payer ?? 0,
+                      ))}
+                    </p>
+                    <p>Recopiez le net à payer du bulletin officiel établi par votre établissement. L'estimation n'est pas utilisée automatiquement.</p>
+                  </div>
+                ) : (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Honoraires attendus : {fmt(Number(declarerDialogMission.net_a_payer ?? 0))}
+                  </p>
+                )}
               </div>
 
               <div>
@@ -1622,7 +1851,7 @@ export default function FacturationEtablissement() {
                   <SelectContent>
                     <SelectItem value="VIREMENT">Virement bancaire</SelectItem>
                     <SelectItem value="CHEQUE">Chèque</SelectItem>
-                    <SelectItem value="BULLETIN_PAIE">Bulletin de paie</SelectItem>
+                    <SelectItem value="BULLETIN_PAIE">Virement de salaire (bulletin employeur)</SelectItem>
                     <SelectItem value="NOTE_HONORAIRES">Note d'honoraires</SelectItem>
                   </SelectContent>
                 </Select>

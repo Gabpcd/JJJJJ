@@ -4,6 +4,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { Info, ChevronDown, ChevronRight, AlertTriangle, Ban } from 'lucide-react';
 import { useModeExerciceMission } from '@/hooks/useModeExerciceMission';
 import { resoudreTypeContratFinancier } from '@/lib/financeMission';
+import { montantFinanceAfficheMission } from '@/lib/missionFinanceDisplay';
 
 /**
  * DecompositionFinanciere — affichage selon type_contrat_applique
@@ -87,7 +88,12 @@ export function DecompositionFinanciere({ mission, etablissement, role = 'ETAB' 
   const icp = m.montant_icp || 0;
   const superBrut = totalBrut + ifm + icp;
   const cotisationsEstimees = superBrut * 0.22;
-  const netSalarie = m.net_a_payer ?? m.net_estime ?? (superBrut * 0.78);
+  // `net_a_payer` contient encore, pour certaines anciennes missions salariées,
+  // le brut augmenté des IFM/ICP. Il ne doit jamais être présenté comme un
+  // net, quel que soit le rôle. `net_estime` reste une simple estimation avant
+  // prélèvement à la source ; le montant à virer est celui du bulletin officiel
+  // établi par l'employeur.
+  const netSalarie = m.net_estime ?? null;
   const commissionTtc = m.montant_commission_ttc || 0;
   const commissionHt = m.montant_commission_ht || 0;
   const tauxCommission = Number(m.taux_commission_fige ?? m.taux_commission ?? 15);
@@ -157,24 +163,24 @@ export function DecompositionFinanciere({ mission, etablissement, role = 'ETAB' 
 
   // Placeholder : contrat réellement ouvert aux deux régimes et pas encore
   // choisi, ou contexte établissement indisponible.
-  // Côté SOIGNANT, on affiche quand même le net estimé (déjà calculé sur la
-  // mission et déjà montré en liste, cf. CarteMissionSoignant) : le soignant
-  // doit voir ce qu'il gagne AVANT de décider, comme en liste (standard Uber).
+  // Côté SOIGNANT, on affiche le montant selon le régime de la mission. Si le
+  // contrat n'est pas encore choisi, il reste explicitement présenté comme un
+  // brut indicatif et jamais comme un net.
   if (!typeContrat) {
-    const netEstime = (m.net_estime ?? m.net_a_payer ?? null) as number | null;
+    const montantSoignant = montantFinanceAfficheMission(m);
     const fmtEntier = (v: number) =>
       new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(v);
 
-    if (role === 'SOIGNANT' && netEstime != null && netEstime > 0) {
+    if (role === 'SOIGNANT' && montantSoignant != null && montantSoignant.montant > 0) {
       return (
         <div className="bg-muted/30 border border-border rounded-2xl p-5">
           <h3 className="text-lg font-bold text-foreground mb-3">💰 Décomposition financière</h3>
           <p className="text-3xl font-bold text-primary leading-tight">
-            ~{fmtEntier(netEstime)}{' '}
-            <span className="text-base font-semibold text-foreground">net estimé</span>
+            {montantSoignant.approximatif ? '~' : ''}{fmtEntier(montantSoignant.montant)}{' '}
+            <span className="text-base font-semibold text-foreground">{montantSoignant.libelleCourt}</span>
           </p>
           <p className="text-xs text-muted-foreground mt-1.5">
-            Montant estimé — figé à l'acceptation, selon le contrat retenu (salarié ou libéral).
+            Montant indicatif avant le choix du contrat. Les honoraires libéraux et le net salarié ne sont pas interchangeables.
           </p>
           <p className="text-xs text-muted-foreground border-t border-border pt-2 mt-3">
             Taux horaire : <span className="font-medium text-foreground">{tauxEffectif?.toFixed(2)} €/h</span> · Durée : <span className="font-medium text-foreground">{duree.toFixed(1)} h</span>
@@ -344,22 +350,18 @@ export function DecompositionFinanciere({ mission, etablissement, role = 'ETAB' 
           </span>
         </div>
 
-        {/* NET en évidence (mise en garde surpaiement) */}
+        {/* Estimation en évidence, jamais présentée comme le montant à virer. */}
         <div className="bg-blue-500/10 border-2 border-blue-500/40 rounded-xl p-4 mb-4">
           <div className="flex justify-between items-center">
-            <span className="font-bold text-foreground text-base">
-              {role === 'SOIGNANT' ? 'Votre NET' : 'À verser au soignant'}
-            </span>
+            <span className="font-bold text-foreground text-base">Net salarié estimé avant PAS*</span>
             <span className="text-3xl font-bold text-blue-600 dark:text-blue-400">{fmt(netSalarie)}</span>
           </div>
+          <p className="text-xs text-muted-foreground mt-2">
+            Estimation indicative avant prélèvement à la source. Le montant net exact à payer figure sur le bulletin officiel établi par l'établissement employeur.
+          </p>
           {isEtabOrAdmin && (
-            <p className="text-xs text-muted-foreground mt-2">
-              Virement SEPA direct au soignant. L'établissement déclare ensuite ses cotisations (salariales + patronales) à l'URSSAF.
-            </p>
-          )}
-          {role === 'SOIGNANT' && (
-            <p className="text-xs text-muted-foreground mt-2">
-              Montant versé par l'établissement (virement SEPA). Bulletin de paie généré par Jolene.
+            <p className="text-xs font-medium text-blue-700 dark:text-blue-300 mt-2">
+              Pour le virement, reportez le net à payer du bulletin officiel : cette estimation ne doit pas être utilisée automatiquement.
             </p>
           )}
         </div>
@@ -424,7 +426,7 @@ export function DecompositionFinanciere({ mission, etablissement, role = 'ETAB' 
                           <Info className="h-3 w-3 text-muted-foreground cursor-help" />
                         </TooltipTrigger>
                         <TooltipContent className="max-w-xs text-xs">
-                          Estimation à titre indicatif. Le détail exact figure sur le bulletin de paie généré par Jolene.
+                          Estimation à titre indicatif. Le détail exact figure sur le bulletin officiel fourni par l'établissement employeur.
                         </TooltipContent>
                       </Tooltip>
                     </TooltipProvider>
@@ -432,7 +434,7 @@ export function DecompositionFinanciere({ mission, etablissement, role = 'ETAB' 
                   <span className="font-medium">-{fmt(cotisationsEstimees)}</span>
                 </div>
                 <div className="flex justify-between border-t-2 border-blue-500/30 pt-2">
-                  <span className="font-bold text-foreground">= NET</span>
+                  <span className="font-bold text-foreground">= NET ESTIMÉ*</span>
                   <span className="font-bold text-blue-600 dark:text-blue-400">{fmt(netSalarie)}</span>
                 </div>
               </div>
@@ -466,7 +468,7 @@ export function DecompositionFinanciere({ mission, etablissement, role = 'ETAB' 
         )}
 
         <p className="text-[10px] text-muted-foreground/60 italic mt-4">
-          Bulletin de paie généré par Jolene (service prestation). Employeur URSSAF : {m.etablissements?.nom ? `« ${m.etablissements.nom} »` : "l'établissement"}.
+          Estimation non contractuelle. Le bulletin de paie officiel est établi et fourni par {m.etablissements?.nom ? `« ${m.etablissements.nom} »` : "l'établissement employeur"}.
         </p>
       </div>
     );

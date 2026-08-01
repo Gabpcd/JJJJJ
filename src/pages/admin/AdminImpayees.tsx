@@ -11,6 +11,8 @@ import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 import { format, differenceInDays } from 'date-fns';
 import { fr } from 'date-fns/locale';
+import { getEmailDeliveryStatus, type EmailDeliveryStatus } from '@/lib/adminEmailDelivery';
+import { estFactureRelancable } from '@/lib/adminInvoiceAccounting';
 import {
   AlertTriangle, ChevronDown, ChevronUp, Mail, Phone, Send, Clock,
   Building2,
@@ -33,6 +35,7 @@ interface FactureImpayee {
   etablissement_id: string;
   periode_debut: string | null;
   periode_fin: string | null;
+  type_document: string;
   etablissement: {
     nom: string;
     email_contact: string | null;
@@ -61,6 +64,8 @@ interface MissionDetail {
   profession_requise: string | null;
 }
 
+type RelanceOutcome = EmailDeliveryStatus | 'partial';
+
 export default function AdminImpayees() {
   usePageTitle('Factures impayées');
   const navigate = useNavigate();
@@ -69,110 +74,122 @@ export default function AdminImpayees() {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [sendingRelance, setSendingRelance] = useState<string | null>(null);
   const [sendingAll, setSendingAll] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const charger = async () => {
     setLoading(true);
+    setLoadError(null);
+    try {
+      const { data: rawFactures, error: facturesError } = await supabase
+        .from('factures')
+        .select('id, numero_facture, montant_ht, montant_tva, montant_ttc, statut, date_emission, date_echeance, nombre_missions, etablissement_id, periode_debut, periode_fin, type_document')
+        .eq('type_document', 'FACTURE')
+        .in('statut', ['EMISE', 'EN_RETARD'])
+        .order('date_echeance', { ascending: true });
+      if (facturesError) throw facturesError;
+      if (!rawFactures) throw new Error('Réponse factures absente');
 
-    const { data: rawFactures } = await supabase
-      .from('factures')
-      .select('id, numero_facture, montant_ht, montant_tva, montant_ttc, statut, date_emission, date_echeance, nombre_missions, etablissement_id, periode_debut, periode_fin')
-      .in('statut', ['EMISE', 'EN_RETARD'])
-      .order('date_echeance', { ascending: true });
+      if (rawFactures.length === 0) {
+        setFactures([]);
+        return;
+      }
 
-    if (!rawFactures || rawFactures.length === 0) {
-      setFactures([]);
-      setLoading(false);
-      return;
-    }
+      const etabIds = [...new Set(rawFactures.map(f => f.etablissement_id))];
+      const { data: etabs, error: etabsError } = await supabase
+        .from('etablissements')
+        .select('id, nom, email_contact, telephone_contact, type, adresse_ville, taux_commission_negocie, groupe_sante_id')
+        .in('id', etabIds);
+      if (etabsError) throw etabsError;
 
-    // Fetch établissements
-    const etabIds = [...new Set(rawFactures.map(f => f.etablissement_id))];
-    const { data: etabs } = await supabase
-      .from('etablissements')
-      .select('id, nom, email_contact, telephone_contact, type, adresse_ville, taux_commission_negocie, groupe_sante_id')
-      .in('id', etabIds);
+      const etabMap: Record<string, any> = {};
+      for (const e of (etabs ?? [])) etabMap[e.id] = e;
 
-    const etabMap: Record<string, any> = {};
-    for (const e of (etabs ?? [])) etabMap[e.id] = e;
+      const factureIds = rawFactures.map(f => f.id);
+      const { data: missions, error: missionsError } = await supabase
+        .from('missions')
+        .select('id, intitule, debut_le, fin_le, duree_heures, taux_horaire_base, total_brut, montant_commission_ht, montant_commission_ttc, soignant_assigne_id, profession_requise, facture_id')
+        .in('facture_id', factureIds);
+      if (missionsError) throw missionsError;
 
-    // Fetch missions liées aux factures
-    const factureIds = rawFactures.map(f => f.id);
-    const { data: missions } = await supabase
-      .from('missions')
-      .select('id, intitule, debut_le, fin_le, duree_heures, taux_horaire_base, total_brut, montant_commission_ht, montant_commission_ttc, soignant_assigne_id, profession_requise, facture_id')
-      .in('facture_id', factureIds);
+      const soignantIds = [...new Set((missions ?? []).map(m => m.soignant_assigne_id).filter(Boolean))];
+      let soignants: Array<{ id: string; prenom: string | null; nom: string | null }> = [];
+      if (soignantIds.length > 0) {
+        const { data, error } = await supabase
+          .from('soignants')
+          .select('id, prenom, nom')
+          .in('id', soignantIds);
+        if (error) throw error;
+        soignants = data ?? [];
+      }
 
-    // Fetch soignant names
-    const soignantIds = [...new Set((missions ?? []).map(m => m.soignant_assigne_id).filter(Boolean))];
-    const { data: soignants } = soignantIds.length > 0
-      ? await supabase.from('soignants').select('id, prenom, nom').in('id', soignantIds)
-      : { data: [] };
+      const soignantMap: Record<string, string> = {};
+      for (const s of soignants) soignantMap[s.id] = `${s.prenom || ''} ${s.nom || ''}`.trim();
 
-    const soignantMap: Record<string, string> = {};
-    for (const s of (soignants ?? [])) soignantMap[s.id] = `${s.prenom || ''} ${s.nom || ''}`.trim();
+      // Les relances sont journalisées comme messages admin liés à la facture.
+      // On conserve les anciens libellés en lecture pour ne pas perdre l'historique.
+      const { data: relances, error: relancesError } = await supabase
+        .from('notifications')
+        .select('id, destinataire_id, type, id_ressource')
+        .in('destinataire_id', etabIds)
+        .in('type', ['MESSAGE_ADMIN', 'RAPPEL_FACTURE', 'RELANCE_FACTURE']);
+      if (relancesError) throw relancesError;
 
-    // Fetch relance count from notifications
-    // Accepte l'ancien 'RELANCE_FACTURE' (pré-fix) pour préserver l'historique.
-    const { data: relances } = await supabase
-      .from('notifications')
-      .select('id, destinataire_id, type')
-      .in('destinataire_id', etabIds)
-      .in('type', ['RAPPEL_FACTURE', 'RELANCE_FACTURE']);
+      const relanceCountMap: Record<string, number> = {};
+      for (const r of (relances ?? [])) {
+        if (r.id_ressource && factureIds.includes(r.id_ressource)) {
+          relanceCountMap[r.id_ressource] = (relanceCountMap[r.id_ressource] || 0) + 1;
+        }
+      }
 
-    const relanceCountMap: Record<string, number> = {};
-    for (const r of (relances ?? [])) {
-      relanceCountMap[r.destinataire_id] = (relanceCountMap[r.destinataire_id] || 0) + 1;
-    }
+      const missionsByFacture: Record<string, MissionDetail[]> = {};
+      for (const m of (missions ?? [])) {
+        const fId = (m as any).facture_id;
+        if (!fId) continue;
+        if (!missionsByFacture[fId]) missionsByFacture[fId] = [];
+        missionsByFacture[fId].push({
+          id: m.id,
+          intitule: m.intitule,
+          debut_le: m.debut_le,
+          fin_le: m.fin_le,
+          duree_heures: m.duree_heures,
+          taux_horaire_base: m.taux_horaire_base,
+          total_brut: m.total_brut,
+          montant_commission_ht: m.montant_commission_ht,
+          montant_commission_ttc: m.montant_commission_ttc,
+          soignant_nom: m.soignant_assigne_id ? soignantMap[m.soignant_assigne_id] || '—' : '—',
+          profession_requise: m.profession_requise,
+        });
+      }
 
-    // Build mission map by facture_id
-    const missionsByFacture: Record<string, MissionDetail[]> = {};
-    for (const m of (missions ?? [])) {
-      const fId = (m as any).facture_id;
-      if (!fId) continue;
-      if (!missionsByFacture[fId]) missionsByFacture[fId] = [];
-      missionsByFacture[fId].push({
-        id: m.id,
-        intitule: m.intitule,
-        debut_le: m.debut_le,
-        fin_le: m.fin_le,
-        duree_heures: m.duree_heures,
-        taux_horaire_base: m.taux_horaire_base,
-        total_brut: m.total_brut,
-        montant_commission_ht: m.montant_commission_ht,
-        montant_commission_ttc: m.montant_commission_ttc,
-        soignant_nom: m.soignant_assigne_id ? soignantMap[m.soignant_assigne_id] || '—' : '—',
-        profession_requise: m.profession_requise,
+      const enriched: FactureImpayee[] = rawFactures.map(f => {
+        const echeance = f.date_echeance ? new Date(f.date_echeance) : null;
+        const joursRetard = echeance ? differenceInDays(new Date(), echeance) : 0;
+        return {
+          ...f,
+          etablissement: etabMap[f.etablissement_id] || null,
+          missions: missionsByFacture[f.id] || [],
+          joursRetard: Math.max(0, joursRetard),
+          relances: relanceCountMap[f.id] || 0,
+        };
       });
+
+      enriched.sort((a, b) => b.joursRetard - a.joursRetard);
+      setFactures(enriched);
+    } catch (error: any) {
+      console.error('charger factures impayées error', error);
+      setFactures([]);
+      setLoadError(error?.message || 'Impossible de charger les factures impayées.');
+    } finally {
+      setLoading(false);
     }
-
-    const enriched: FactureImpayee[] = rawFactures.map(f => {
-      const echeance = f.date_echeance ? new Date(f.date_echeance) : null;
-      const joursRetard = echeance ? differenceInDays(new Date(), echeance) : 0;
-      return {
-        ...f,
-        etablissement: etabMap[f.etablissement_id] || null,
-        missions: missionsByFacture[f.id] || [],
-        joursRetard: Math.max(0, joursRetard),
-        relances: relanceCountMap[f.etablissement_id] || 0,
-      };
-    });
-
-    // Sort: most overdue first
-    enriched.sort((a, b) => b.joursRetard - a.joursRetard);
-    setFactures(enriched);
-    setLoading(false);
   };
 
   useEffect(() => { charger(); }, []);
 
-  const envoyerRelance = async (facture: FactureImpayee) => {
-    if (!facture.etablissement?.email_contact) {
-      toast.error('Pas d\'email de contact pour cet établissement');
-      return;
-    }
-    setSendingRelance(facture.id);
+  const effectuerRelance = async (facture: FactureImpayee): Promise<RelanceOutcome> => {
+    if (!estFactureRelancable(facture) || !facture.etablissement?.email_contact) return 'failed';
     try {
-      await supabase.functions.invoke('send-email', {
+      const { data, error } = await supabase.functions.invoke('send-email', {
         body: {
           type: 'RAPPEL_FACTURE',
           data: {
@@ -183,26 +200,56 @@ export default function AdminImpayees() {
             jours_retard: facture.joursRetard,
             etablissement_nom: facture.etablissement.nom,
           },
-          destinataire_email: facture.etablissement.email_contact,
+          destinataire_id: facture.etablissement_id,
         },
       });
+      const deliveryStatus = getEmailDeliveryStatus(data, error);
+      if (deliveryStatus !== 'sent') return deliveryStatus;
 
-      // Log notification
-      await supabase.from('notifications').insert({
+      const { error: notificationError } = await supabase.from('notifications').insert({
         destinataire_id: facture.etablissement_id,
-        type: 'RAPPEL_FACTURE',
+        type: 'MESSAGE_ADMIN',
         type_destinataire: 'ETABLISSEMENT',
         titre: `Relance facture ${facture.numero_facture}`,
         corps: `Rappel : facture ${facture.numero_facture} de ${fmt(facture.montant_ttc)} en retard de ${facture.joursRetard} jour(s).`,
         lien: '/etablissement/facturation',
+        type_ressource: 'facture',
+        id_ressource: facture.id,
+        email_envoye: true,
+        email_envoye_le: new Date().toISOString(),
       } as any);
-
-      toast.success(`Relance envoyée à ${facture.etablissement.nom}`);
-      charger();
-    } catch {
-      toast.error('Erreur lors de l\'envoi');
+      if (notificationError) {
+        console.error('journalisation relance facture error', notificationError);
+        return 'partial';
+      }
+      return 'sent';
+    } catch (error) {
+      console.error('envoi relance facture error', error);
+      return 'failed';
     }
+  };
+
+  const envoyerRelance = async (facture: FactureImpayee) => {
+    if (!facture.etablissement?.email_contact) {
+      toast.error('Pas d\'email de contact pour cet établissement');
+      return;
+    }
+    setSendingRelance(facture.id);
+    const outcome = await effectuerRelance(facture);
     setSendingRelance(null);
+
+    if (outcome === 'sent') {
+      toast.success(`Relance envoyée à ${facture.etablissement.nom}`);
+      await charger();
+    } else if (outcome === 'skipped') {
+      toast.info('Relance neutralisée : destinataire ou données de test. Aucun email envoyé.');
+    } else if (outcome === 'pending') {
+      toast.info('Relance déjà en cours de traitement. Aucun nouvel envoi confirmé.');
+    } else if (outcome === 'partial') {
+      toast.error('Email envoyé, mais sa journalisation a échoué. Vérifiez le journal email avant toute relance.');
+    } else {
+      toast.error('Erreur lors de l\'envoi. Aucun succès n\'a été enregistré.');
+    }
   };
 
   const envoyerToutesRelances = async () => {
@@ -212,16 +259,22 @@ export default function AdminImpayees() {
       return;
     }
     setSendingAll(true);
-    let ok = 0;
+    const resultats: Record<RelanceOutcome, number> = {
+      sent: 0,
+      skipped: 0,
+      pending: 0,
+      failed: 0,
+      partial: 0,
+    };
     for (const f of facturesRelancables) {
-      try {
-        await envoyerRelance(f);
-        ok++;
-      } catch { /* continue */ }
+      const outcome = await effectuerRelance(f);
+      resultats[outcome]++;
     }
-    toast.success(`${ok} relance(s) envoyée(s)`);
     setSendingAll(false);
-    charger();
+    const detail = `${resultats.sent} envoyée(s), ${resultats.skipped} neutralisée(s), ${resultats.pending} en cours, ${resultats.partial + resultats.failed} à vérifier/échouée(s)`;
+    if (resultats.sent === facturesRelancables.length) toast.success(detail);
+    else toast.warning(`Relance groupée terminée : ${detail}.`);
+    if (resultats.sent > 0) await charger();
   };
 
   const marquerEnRetard = async (factureId: string) => {
@@ -235,6 +288,20 @@ export default function AdminImpayees() {
   };
 
   if (loading) return <LayoutAdmin><ChargementAdmin titre="Factures impayées" /></LayoutAdmin>;
+
+  if (loadError) {
+    return (
+      <LayoutAdmin>
+        <BreadcrumbAdmin pageName="Factures impayées" />
+        <div className="mx-auto max-w-2xl rounded-xl border border-destructive/40 bg-destructive/5 p-6 text-center">
+          <AlertTriangle className="mx-auto h-8 w-8 text-destructive" />
+          <h1 className="mt-3 text-lg font-bold text-foreground">Données financières indisponibles</h1>
+          <p className="mt-1 text-sm text-muted-foreground">{loadError}</p>
+          <BoutonY2K className="mt-4" onClick={charger}>Réessayer</BoutonY2K>
+        </div>
+      </LayoutAdmin>
+    );
+  }
 
   const totalImpaye = factures.reduce((s, f) => s + f.montant_ttc, 0);
   const nbEnRetard = factures.filter(f => f.joursRetard > 0).length;

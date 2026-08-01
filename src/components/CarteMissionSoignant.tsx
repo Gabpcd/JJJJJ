@@ -6,7 +6,7 @@ import { BadgeStatut } from '@/components/BadgeStatut';
 import { BoutonSauvegarderMission } from '@/components/BoutonSauvegarderMission';
 import { getLabelProfession, getLabelTypeEtablissement, extraireContratPreference, getContratBadge, getTypeContratRechercheBadge } from '@/lib/constantes';
 import { getMissionMatchInfo } from '@/lib/profession-hierarchy';
-import { netEstimeAfficheMission } from '@/lib/missionFinanceDisplay';
+import { montantFinanceAfficheMission } from '@/lib/missionFinanceDisplay';
 import { PlanningMissionCandidat } from '@/components/planning/PlanningMissionCandidat';
 
 interface CarteMissionSoignantProps {
@@ -37,7 +37,7 @@ function fmt(v: number | null): string {
 
 export const CarteMissionSoignant = React.memo(function CarteMissionSoignant({ mission, soignant, onClick }: CarteMissionSoignantProps) {
   const m = mission;
-  const netEstimeAffiche = netEstimeAfficheMission(m);
+  const financeAffichee = montantFinanceAfficheMission(m);
   const temps = getTempsEcoule(m.cree_le);
   const profilComplet = soignant?.tous_documents_valides;
   const contratBadge = m.type_contrat_recherche
@@ -156,8 +156,10 @@ export const CarteMissionSoignant = React.memo(function CarteMissionSoignant({ m
         })()}
         {(m as any).mode_remuneration === 'RETROCESSION' ? (
           <span className="text-xs text-muted-foreground">Remplacement de cabinet</span>
-        ) : (netEstimeAffiche ?? 0) > 0 ? (
-          <span className="text-xs text-muted-foreground">Net estimé* : ~{fmt(netEstimeAffiche)}</span>
+        ) : financeAffichee && financeAffichee.montant > 0 ? (
+          <span className="text-xs text-muted-foreground">
+            {financeAffichee.libelle} : {financeAffichee.approximatif ? '~' : ''}{fmt(financeAffichee.montant)}
+          </span>
         ) : (
           <span className="text-xs text-muted-foreground/50">Calculé après assignation</span>
         )}

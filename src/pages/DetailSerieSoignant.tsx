@@ -42,6 +42,7 @@ import {
 } from '@/lib/heures-hebdomadaires-mission';
 import { analyserSelectionSerie } from '@/components/planning/selection-serie-candidat';
 import { toast } from 'sonner';
+import { montantFinanceAfficheMission } from '@/lib/missionFinanceDisplay';
 
 function fmt(v: number | null): string {
   if (v == null || v === 0) return '—';
@@ -83,7 +84,7 @@ export default function DetailSerieSoignant() {
       const [missionsResult, soignantResult, existantesResult] = await Promise.all([
         supabase.from('missions').select(`
           id, intitule, description, service, profession_requise,
-          debut_le, fin_le, duree_heures, nb_creneaux, taux_horaire_base, net_a_payer,
+          debut_le, fin_le, duree_heures, nb_creneaux, taux_horaire_base, total_brut, net_a_payer, net_estime,
           est_urgente, niveau_urgence, statut, soignant_assigne_id, cree_le, etablissement_id,
           type_contrat_applique, choix_contrat_soignant, type_contrat_recherche
         `).ilike('description', `%[SERIE_ID:${decoded}]%`).order('debut_le', { ascending: true }),
@@ -208,7 +209,16 @@ export default function DetailSerieSoignant() {
   const first = missions[0];
   const last = missions[missions.length - 1];
   const distance = first?.distance_km;
-  const netTotal = missions.filter(m => selectedIds.has(m.id)).reduce((t: number, m: any) => t + (m.net_a_payer || 0), 0);
+  const montantsSelection = missions.filter(m => selectedIds.has(m.id)).reduce((totaux, mission) => {
+    const finance = montantFinanceAfficheMission(mission);
+    if (finance) totaux[finance.nature] += finance.montant;
+    return totaux;
+  }, { HONORAIRES_LIBERAUX: 0, NET_SALARIE_ESTIME: 0, BRUT_INDICATIF: 0 });
+  const resumeMontantsSelection = [
+    montantsSelection.HONORAIRES_LIBERAUX > 0 ? `${fmt(montantsSelection.HONORAIRES_LIBERAUX)} honoraires` : null,
+    montantsSelection.NET_SALARIE_ESTIME > 0 ? `~${fmt(montantsSelection.NET_SALARIE_ESTIME)} net salarié*` : null,
+    montantsSelection.BRUT_INDICATIF > 0 ? `~${fmt(montantsSelection.BRUT_INDICATIF)} brut indicatif` : null,
+  ].filter(Boolean);
   const conflitMissionIds = new Set(conflits.map(c => c.missionId));
   const planningEngagementsDisponibles = !erreurPlanning
     && missionsExistantes.every((mission) => construirePlanningConformite(mission).exact);
@@ -429,7 +439,15 @@ export default function DetailSerieSoignant() {
 
                 <div className="shrink-0">
                   {isOpen ? (
-                    <span className="text-xs font-medium text-foreground">{fmt(m.net_a_payer)}</span>
+                    (() => {
+                      const finance = montantFinanceAfficheMission(m);
+                      return (
+                        <span className="text-xs font-medium text-foreground">
+                          {finance ? `${finance.approximatif ? '~' : ''}${fmt(finance.montant)}` : '—'}
+                          {finance && <span className="block text-[9px] font-normal text-muted-foreground">{finance.libelleCourt}</span>}
+                        </span>
+                      );
+                    })()
                   ) : (
                     <BadgeStatut statut={m.statut} />
                   )}
@@ -440,10 +458,10 @@ export default function DetailSerieSoignant() {
         </div>
       </div>
 
-      {/* Net total */}
-      {netTotal > 0 && (
+      {/* Totaux séparés par régime : honoraires libéraux et net salarié ne se fusionnent pas. */}
+      {resumeMontantsSelection.length > 0 && (
         <div className="card-base bg-gradient-to-r from-primary/5 to-info/5 mb-4">
-          <p className="text-sm font-bold text-foreground">💰 Net estimé total : {fmt(netTotal)}</p>
+          <p className="text-sm font-bold text-foreground">💰 {resumeMontantsSelection.join(' · ')}</p>
           <p className="text-[10px] text-muted-foreground/60 italic mt-1">
             Simulation à titre indicatif. Seuls les montants calculés par le moteur de paie font foi.
           </p>

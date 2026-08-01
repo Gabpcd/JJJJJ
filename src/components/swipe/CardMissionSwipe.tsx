@@ -12,6 +12,7 @@ import { MapPin, Sparkles, Star } from 'lucide-react';
 import { BadgeY2K } from '@/components/y2k/BadgeY2K';
 import { cn } from '@/lib/utils';
 import { PlanningMissionCandidat } from '@/components/planning/PlanningMissionCandidat';
+import { montantFinanceAfficheMission } from '@/lib/missionFinanceDisplay';
 import {
   construirePlanningCandidat,
   creneauContientNuit,
@@ -39,6 +40,9 @@ export interface MissionSwipePayload {
   montant_majoration_ferie: number | null;
   type_contrat_applique: string | null;
   type_contrat_recherche: string | null;
+  soignant_assigne_id?: string | null;
+  taux_rist_plafonne?: number | null;
+  rist_plafond_applique?: boolean | null;
   nb_creneaux?: number | null;
   creneaux_planifies?: CreneauMissionCandidat[];
   planning_exact?: boolean;
@@ -132,6 +136,7 @@ export function CardMissionSwipe({ mission, onTap, className }: Props) {
   const planning = construirePlanningCandidat(mission);
   const raisons = raisonsScore(mission.breakdown);
   const initiale = (mission.etablissement_nom || '?').trim().charAt(0).toUpperCase();
+  const financeAffichee = montantFinanceAfficheMission(mission);
 
   return (
     <div
@@ -152,7 +157,9 @@ export function CardMissionSwipe({ mission, onTap, className }: Props) {
         className,
       )}
       aria-label={`Mission ${mission.profession_requise ?? ''} à ${mission.etablissement_nom}${
-        mission.net_estime ? `, environ ${Math.round(mission.net_estime)} euros net` : ''
+        financeAffichee
+          ? `, ${financeAffichee.approximatif ? 'environ ' : ''}${Math.round(financeAffichee.montant)} euros ${financeAffichee.libelleCourt}`
+          : ''
       }, score ${mission.score} sur 100. Toucher pour le détail.`}
     >
       {/* ── Visuel établissement (haut) ─────────────────────────────────── */}
@@ -243,10 +250,10 @@ export function CardMissionSwipe({ mission, onTap, className }: Props) {
       <div className="flex-1 flex flex-col p-5 min-h-0">
         {/* HOOK : l'élément le plus gros de la carte */}
         <div className="flex items-baseline gap-2 flex-wrap">
-          {mission.net_estime ? (
+          {financeAffichee ? (
             <span className="text-4xl font-black text-jolene-midnight tracking-tight">
-              ~{Math.round(mission.net_estime)}€
-              <span className="text-base font-bold text-jolene-bubblegum ml-1">net*</span>
+              {financeAffichee.approximatif ? '~' : ''}{Math.round(financeAffichee.montant)}€
+              <span className="text-base font-bold text-jolene-bubblegum ml-1">{financeAffichee.libelleCourt}</span>
             </span>
           ) : (
             <span className="text-4xl font-black text-jolene-midnight tracking-tight">

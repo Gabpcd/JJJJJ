@@ -22,6 +22,12 @@ import { TrendingUp, TrendingDown, Download, AlertTriangle, ExternalLink, Buildi
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 import { getLabelTypeEtablissement } from '@/lib/constantes';
+import { FinancialOperationsMonitor } from '@/components/admin/FinancialOperationsMonitor';
+import {
+  estDocumentComptabilise,
+  estFactureRelancable,
+  montantDocumentComptable,
+} from '@/lib/adminInvoiceAccounting';
 
 // Task 12 — diagnostic result type
 interface DiagResult {
@@ -55,7 +61,7 @@ async function chargerToutesFactures() {
   const lignes: any[] = [];
   for (let offset = 0; ; offset += TAILLE_PAGE_SUPABASE) {
     const { data, error } = await supabase.from('factures')
-      .select('id, numero_facture, montant_ht, montant_tva, montant_ttc, statut, date_emission, etablissement_id, etablissements(nom, type)')
+      .select('id, numero_facture, montant_ht, montant_tva, montant_ttc, montant_signe, type_document, statut, date_emission, etablissement_id, etablissements(nom, type)')
       .order('date_emission', { ascending: false })
       .range(offset, offset + TAILLE_PAGE_SUPABASE - 1);
     if (error) throw error;
@@ -86,6 +92,7 @@ export default function AdminFinances() {
   const [loading, setLoading] = useState(true);
   const [factures, setFactures] = useState<any[]>([]);
   const [missions, setMissions] = useState<any[]>([]);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [sortKey, setSortKey] = useState<SortKey>('commissions_ht');
   const [sortDir, setSortDir] = useState<SortDir>('desc');
 
@@ -98,16 +105,25 @@ export default function AdminFinances() {
   const [diagResult, setDiagResult] = useState<DiagResult | null>(null);
   const [diagLoading, setDiagLoading] = useState(false);
 
-  useEffect(() => {
-    Promise.all([chargerToutesFactures(), chargerToutesMissionsFinancieres()]).then(([fRes, mRes]) => {
+  const charger = async () => {
+    setLoading(true);
+    setLoadError(null);
+    try {
+      const [fRes, mRes] = await Promise.all([chargerToutesFactures(), chargerToutesMissionsFinancieres()]);
       setFactures(fRes);
       setMissions(mRes);
+    } catch (error: any) {
+      console.error('charger finances admin error', error);
+      setFactures([]);
+      setMissions([]);
+      setLoadError(error?.message || 'Impossible de charger les données financières.');
+    } finally {
       setLoading(false);
-    })
-      .catch((err) => {
-        setLoading(false);
-        toast.error(err?.message || 'Impossible de charger les données financières.');
-      });
+    }
+  };
+
+  useEffect(() => {
+    void charger();
   }, []);
 
   const now = new Date();
@@ -116,17 +132,22 @@ export default function AdminFinances() {
   const moisPrecedent = moisCourant === 0 ? 11 : moisCourant - 1;
   const anneePrecedente = moisCourant === 0 ? anneeCourante - 1 : anneeCourante;
 
-  const facturesMoisCourant = useMemo(() => factures.filter(f => {
+  const facturesComptabilisees = useMemo(
+    () => factures.filter(estDocumentComptabilise),
+    [factures],
+  );
+
+  const facturesMoisCourant = useMemo(() => facturesComptabilisees.filter(f => {
     if (!f.date_emission) return false;
     const d = new Date(f.date_emission);
     return d.getMonth() === moisCourant && d.getFullYear() === anneeCourante;
-  }), [factures, moisCourant, anneeCourante]);
+  }), [facturesComptabilisees, moisCourant, anneeCourante]);
 
-  const facturesMoisPrecedent = useMemo(() => factures.filter(f => {
+  const facturesMoisPrecedent = useMemo(() => facturesComptabilisees.filter(f => {
     if (!f.date_emission) return false;
     const d = new Date(f.date_emission);
     return d.getMonth() === moisPrecedent && d.getFullYear() === anneePrecedente;
-  }), [factures, moisPrecedent, anneePrecedente]);
+  }), [facturesComptabilisees, moisPrecedent, anneePrecedente]);
 
   // Prédicat de période réutilisable (factures via date_emission, missions via debut_le).
   const dansLaPeriode = useMemo(() => {
@@ -164,31 +185,33 @@ export default function AdminFinances() {
   }, [periode, dateDebut, dateFin, moisCourant, anneeCourante, moisPrecedent, anneePrecedente]);
 
   const facturesFiltrees = useMemo(
-    () => factures.filter(f => dansLaPeriode(f.date_emission)),
-    [factures, dansLaPeriode],
+    () => facturesComptabilisees.filter(f => dansLaPeriode(f.date_emission)),
+    [facturesComptabilisees, dansLaPeriode],
   );
   const missionsFiltrees = useMemo(
     () => missions.filter(m => dansLaPeriode(m.debut_le)),
     [missions, dansLaPeriode],
   );
 
-  const commHTMois = facturesMoisCourant.reduce((s, f) => s + (f.montant_ht || 0), 0);
-  const commTTCMois = facturesMoisCourant.reduce((s, f) => s + (f.montant_ttc || 0), 0);
-  const tvaMois = facturesMoisCourant.reduce((s, f) => s + (f.montant_tva || 0), 0);
-  const commHTMoisPrec = facturesMoisPrecedent.reduce((s, f) => s + (f.montant_ht || 0), 0);
+  const commHTMois = facturesMoisCourant.reduce((s, f) => s + montantDocumentComptable(f, 'ht'), 0);
+  const commTTCMois = facturesMoisCourant.reduce((s, f) => s + montantDocumentComptable(f, 'ttc'), 0);
+  const tvaMois = facturesMoisCourant.reduce((s, f) => s + montantDocumentComptable(f, 'tva'), 0);
+  const commHTMoisPrec = facturesMoisPrecedent.reduce((s, f) => s + montantDocumentComptable(f, 'ht'), 0);
 
   const variationPct = commHTMoisPrec > 0 ? ((commHTMois - commHTMoisPrec) / commHTMoisPrec) * 100 : 0;
   const variationPositive = variationPct >= 0;
 
-  const impayees = factures.filter(f => f.statut === 'EMISE' || f.statut === 'EN_RETARD');
+  const impayees = facturesFiltrees.filter(estFactureRelancable);
   const nbImpayees = impayees.length;
-  const montantImpayees = impayees.reduce((s, f) => s + (f.montant_ttc || 0), 0);
+  const montantImpayees = impayees.reduce((s, f) => s + montantDocumentComptable(f, 'ttc'), 0);
 
   // Recap « sur la période » (rewiré sur les données filtrées par période)
-  const totalHT = facturesFiltrees.reduce((s, f) => s + (f.montant_ht || 0), 0);
-  const totalTVA = facturesFiltrees.reduce((s, f) => s + (f.montant_tva || 0), 0);
-  const totalTTC = facturesFiltrees.reduce((s, f) => s + (f.montant_ttc || 0), 0);
-  const payesTTC = facturesFiltrees.filter(f => f.statut === 'PAYEE').reduce((s, f) => s + (f.montant_ttc || 0), 0);
+  const totalHT = facturesFiltrees.reduce((s, f) => s + montantDocumentComptable(f, 'ht'), 0);
+  const totalTVA = facturesFiltrees.reduce((s, f) => s + montantDocumentComptable(f, 'tva'), 0);
+  const totalTTC = facturesFiltrees.reduce((s, f) => s + montantDocumentComptable(f, 'ttc'), 0);
+  const payesTTC = facturesFiltrees
+    .filter(f => f.statut === 'PAYEE')
+    .reduce((s, f) => s + montantDocumentComptable(f, 'ttc'), 0);
   const volumeBrut = missionsFiltrees.reduce((s, m) => s + (m.total_brut || 0), 0);
 
   // Taux commission moyen = moyenne des taux de chaque établissement (pas HT/volume)
@@ -211,21 +234,21 @@ export default function AdminFinances() {
       const m = d.getMonth();
       const y = d.getFullYear();
       const label = d.toLocaleDateString('fr-FR', { month: 'short', year: '2-digit' });
-      const moisFactures = factures.filter(f => {
+      const moisFactures = facturesComptabilisees.filter(f => {
         if (!f.date_emission) return false;
         const fd = new Date(f.date_emission);
         return fd.getMonth() === m && fd.getFullYear() === y;
       });
       months.push({
         label,
-        ht: moisFactures.reduce((s, f) => s + (f.montant_ht || 0), 0),
-        ttc: moisFactures.reduce((s, f) => s + (f.montant_ttc || 0), 0),
+        ht: moisFactures.reduce((s, f) => s + montantDocumentComptable(f, 'ht'), 0),
+        ttc: moisFactures.reduce((s, f) => s + montantDocumentComptable(f, 'ttc'), 0),
       });
     }
     return months;
-  }, [factures, moisCourant, anneeCourante]);
+  }, [facturesComptabilisees, moisCourant, anneeCourante]);
 
-  // Per-establishment table — scopé sur la période sélectionnée (missions + impayés filtrés).
+  // Par établissement : volumes issus des missions, CA signé issu des documents comptables.
   const etabData = useMemo(() => {
     const map = new Map<string, {
       id: string; nom: string; type: string; nb_missions: number; soignants: Set<string>;
@@ -244,8 +267,6 @@ export default function AdminFinances() {
         commissions_ht: 0, commissions_ttc: 0, impayes: 0, derniere_mission: '',
       };
       existing.nb_missions++;
-      existing.commissions_ht += m.montant_commission_ht || 0;
-      existing.commissions_ttc += m.montant_commission_ttc || 0;
       if (m.soignant_assigne_id) existing.soignants.add(m.soignant_assigne_id);
       if (!existing.derniere_mission || (m.debut_le && m.debut_le > existing.derniere_mission)) existing.derniere_mission = m.debut_le;
       map.set(eid, existing);
@@ -267,8 +288,11 @@ export default function AdminFinances() {
           derniere_mission: '',
         });
       }
-      if (f.statut === 'EMISE' || f.statut === 'EN_RETARD') {
-        map.get(eid)!.impayes += f.montant_ttc || 0;
+      const etablissement = map.get(eid)!;
+      etablissement.commissions_ht += montantDocumentComptable(f, 'ht');
+      etablissement.commissions_ttc += montantDocumentComptable(f, 'ttc');
+      if (estFactureRelancable(f)) {
+        etablissement.impayes += montantDocumentComptable(f, 'ttc');
       }
     });
     return Array.from(map.values()).map(e => ({ ...e, nb_soignants: e.soignants.size }));
@@ -291,16 +315,17 @@ export default function AdminFinances() {
   }, [etabData, sortKey, sortDir]);
 
   const exporterCSV = () => {
-    const headers = ['Date émission', 'N° Facture', 'Établissement', 'Type', 'Montant HT', 'TVA', 'Montant TTC', 'Statut'];
+    const headers = ['Date émission', 'N° Document', 'Établissement', 'Type établissement', 'Type document', 'Montant HT signé', 'TVA signée', 'Montant TTC signé', 'Statut'];
     const escapeCSV = (v: string) => `"${v.replace(/"/g, '""')}"`;
     const rows = facturesFiltrees.map(f => [
       escapeCSV(f.date_emission ? formatDate(f.date_emission) : ''),
       escapeCSV(f.numero_facture || ''),
       escapeCSV((f.etablissements as any)?.nom || ''),
       escapeCSV((f.etablissements as any)?.type || ''),
-      (f.montant_ht || 0).toFixed(2),
-      (f.montant_tva || 0).toFixed(2),
-      (f.montant_ttc || 0).toFixed(2),
+      escapeCSV(f.type_document || 'FACTURE'),
+      montantDocumentComptable(f, 'ht').toFixed(2),
+      montantDocumentComptable(f, 'tva').toFixed(2),
+      montantDocumentComptable(f, 'ttc').toFixed(2),
       escapeCSV(f.statut || ''),
     ]);
     const csv = '\uFEFF' + [headers.map(escapeCSV).join(';'), ...rows.map(r => r.join(';'))].join('\n');
@@ -328,6 +353,20 @@ export default function AdminFinances() {
   };
 
   if (loading) return <LayoutAdmin><ChargementAdmin titre="Piloter les finances Jolene" /></LayoutAdmin>;
+
+  if (loadError) {
+    return (
+      <LayoutAdmin>
+        <BreadcrumbAdmin pageName="Finances" />
+        <div className="mx-auto max-w-2xl rounded-xl border border-destructive/40 bg-destructive/5 p-6 text-center">
+          <AlertTriangle className="mx-auto h-8 w-8 text-destructive" />
+          <h1 className="mt-3 text-lg font-bold text-foreground">Données financières indisponibles</h1>
+          <p className="mt-1 text-sm text-muted-foreground">{loadError}</p>
+          <BoutonY2K className="mt-4" onClick={charger}>Réessayer</BoutonY2K>
+        </div>
+      </LayoutAdmin>
+    );
+  }
 
   // Scopé période (cohérent avec « Volume brut soignants » du même bloc récap).
   const nbSoignantsTotal = new Set(missionsFiltrees.map((m: any) => m.soignant_assigne_id).filter(Boolean)).size;
@@ -402,7 +441,7 @@ export default function AdminFinances() {
             </div>
           )}
           <p className="text-xs text-muted-foreground">
-            {facturesFiltrees.length} facture{facturesFiltrees.length > 1 ? 's' : ''} sur la période
+            {facturesFiltrees.length} document{facturesFiltrees.length > 1 ? 's' : ''} comptabilisé{facturesFiltrees.length > 1 ? 's' : ''} sur la période
           </p>
         </div>
 
@@ -413,7 +452,7 @@ export default function AdminFinances() {
               id: 'ca-ht',
               label: `CA HT · ${libellePeriode}`,
               value: formatEur(totalHT),
-              detail: `${facturesFiltrees.length} facture${facturesFiltrees.length > 1 ? 's' : ''}`,
+              detail: `${facturesFiltrees.length} document${facturesFiltrees.length > 1 ? 's' : ''} comptabilisé${facturesFiltrees.length > 1 ? 's' : ''}`,
               icon: <TrendingUp className="h-4 w-4" />,
               tone: 'primary',
             },
@@ -447,6 +486,8 @@ export default function AdminFinances() {
             },
           ]}
         />
+
+        <FinancialOperationsMonitor />
 
         <details className="group rounded-xl border border-border bg-card">
           <summary className="flex cursor-pointer list-none items-center justify-between gap-4 p-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary [&::-webkit-details-marker]:hidden">

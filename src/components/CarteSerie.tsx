@@ -4,6 +4,7 @@ import { BadgeDistance } from '@/components/BadgeDistance';
 import type { CreneauPointage } from '@/lib/disponibilite-pointage';
 import { formatParis, instantJolene, memeJourParis } from '@/lib/date-heure-paris';
 import { construirePlanningCandidat } from '@/components/planning/planning-candidat';
+import { montantFinanceAfficheMission } from '@/lib/missionFinanceDisplay';
 
 interface CarteSerieProps {
   missions: any[];
@@ -49,7 +50,17 @@ export function CarteSerie({ missions, role, soignant, onAnnulerSerie }: CarteSe
   const apercuCreneaux = creneauxSerie.slice(0, 3);
   const tauxUniques = new Set(missions.map((mission) => Number(mission.taux_horaire_base)).filter(Number.isFinite));
 
-  const netTotal = missions.reduce((t: number, m: any) => t + (m.net_a_payer || 0), 0);
+  const montantsParNature = missions.reduce((totaux, mission) => {
+    const finance = montantFinanceAfficheMission(mission);
+    if (finance) totaux[finance.nature] += finance.montant;
+    return totaux;
+  }, { HONORAIRES_LIBERAUX: 0, NET_SALARIE_ESTIME: 0, BRUT_INDICATIF: 0 });
+  const aUnMontant = Object.values(montantsParNature).some(montant => montant > 0);
+  const resumeMontants = [
+    montantsParNature.HONORAIRES_LIBERAUX > 0 ? `${fmt(montantsParNature.HONORAIRES_LIBERAUX)} honoraires` : null,
+    montantsParNature.NET_SALARIE_ESTIME > 0 ? `~${fmt(montantsParNature.NET_SALARIE_ESTIME)} net salarié*` : null,
+    montantsParNature.BRUT_INDICATIF > 0 ? `~${fmt(montantsParNature.BRUT_INDICATIF)} brut indicatif` : null,
+  ].filter(Boolean).join(' · ');
 
   const serieId = extraireSerieId(first.description);
 
@@ -121,9 +132,9 @@ export function CarteSerie({ missions, role, soignant, onAnnulerSerie }: CarteSe
             ? 'Tarifs variables'
             : `${first.taux_horaire_base?.toFixed(2)} €/h`}
         </span>
-        {role === 'soignant' && netTotal > 0 && (
+        {role === 'soignant' && aUnMontant && (
           <span className="text-xs text-muted-foreground">
-            {missions.some(m => !m.net_a_payer) ? 'Net estimé partiel' : 'Net estimé total'} : ~{fmt(netTotal)}
+            {resumeMontants}
           </span>
         )}
       </div>
@@ -164,7 +175,7 @@ export function CarteSerie({ missions, role, soignant, onAnnulerSerie }: CarteSe
         </div>
       )}
 
-      {(role === 'soignant' && netTotal > 0) && (
+      {(role === 'soignant' && aUnMontant) && (
         <p className="text-[10px] text-muted-foreground/60 italic mt-1">
           Simulation à titre indicatif. Seuls les montants calculés par le moteur de paie font foi.
         </p>

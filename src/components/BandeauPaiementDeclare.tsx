@@ -71,17 +71,26 @@ export function BandeauPaiementDeclare() {
   const [processing, setProcessing] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [contesting, setContesting] = useState<string | null>(null);
+  const [erreurChargement, setErreurChargement] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     if (!user) return;
+    let actif = true;
     const load = async () => {
-      const { data } = await supabase
+      setErreurChargement(null);
+      try {
+      const { data, error } = await supabase
         .from('paiements_soignant' as any)
         .select('id, montant_net, mission_id, etablissement_id, reference_virement, methode, date_paiement')
         .eq('soignant_id', user.id)
         .eq('statut', 'DECLARE') as any;
+      if (error) throw error;
 
-      if (!data || data.length === 0) return;
+      if (!data || data.length === 0) {
+        if (actif) setPaiements([]);
+        return;
+      }
 
       // Enrich with establishment names
       const etabIds = [...new Set(data.map((p: any) => p.etablissement_id))] as string[];
@@ -95,19 +104,21 @@ export function BandeauPaiementDeclare() {
       const presenceMap: Record<string, any[]> = {};
 
       if (missionIds.length > 0) {
-        const { data: missions } = await supabase
+        const { data: missions, error: missionsError } = await supabase
           .from('missions')
           .select('id, intitule, debut_le, fin_le, duree_heures, taux_horaire_base, total_brut, net_a_payer')
           .in('id', missionIds);
+        if (missionsError) throw missionsError;
         if (missions) {
           missions.forEach((m: any) => { missionMap[m.id] = m; });
         }
 
-        const { data: presences } = await supabase
+        const { data: presences, error: presencesError } = await supabase
           .from('presences')
           .select('mission_id, pointage_arrivee_le, pointage_depart_le, methode_pointage_arrivee')
           .in('mission_id', missionIds)
           .order('pointage_arrivee_le', { ascending: true });
+        if (presencesError) throw presencesError;
         if (presences) {
           presences.forEach((p: any) => {
             if (!presenceMap[p.mission_id]) presenceMap[p.mission_id] = [];
@@ -116,6 +127,7 @@ export function BandeauPaiementDeclare() {
         }
       }
 
+      if (!actif) return;
       setPaiements(data.map((p: any) => ({
         id: p.id,
         montant: p.montant_net,
@@ -127,9 +139,13 @@ export function BandeauPaiementDeclare() {
         mission: p.mission_id ? missionMap[p.mission_id] || null : null,
         presences: p.mission_id ? presenceMap[p.mission_id] || [] : [],
       })));
+      } catch (error: any) {
+        if (actif) setErreurChargement(error?.message || 'Impossible de charger les paiements à confirmer.');
+      }
     };
-    load();
-  }, [user]);
+    void load();
+    return () => { actif = false; };
+  }, [user, reloadKey]);
 
   const traiter = async (paiementId: string, confirme: boolean, motif?: string) => {
     setProcessing(paiementId);
@@ -158,6 +174,17 @@ export function BandeauPaiementDeclare() {
     setProcessing(null);
   };
 
+  if (erreurChargement) {
+    return (
+      <div className="mb-4 rounded-xl border border-destructive/30 bg-destructive/5 p-4" role="alert">
+        <p className="text-sm font-semibold text-destructive">Paiements à confirmer indisponibles</p>
+        <p className="mt-1 text-xs text-muted-foreground">{erreurChargement}</p>
+        <BoutonY2K size="sm" variant="secondary" className="mt-3" onClick={() => setReloadKey(key => key + 1)}>
+          Réessayer
+        </BoutonY2K>
+      </div>
+    );
+  }
   if (paiements.length === 0) return null;
 
   const fmt = (v: number | null | undefined) =>
@@ -173,7 +200,16 @@ export function BandeauPaiementDeclare() {
             {/* Header — always visible */}
             <div
               className="p-4 cursor-pointer"
+              role="button"
+              tabIndex={0}
               onClick={() => setExpanded(isExpanded ? null : p.id)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                  event.preventDefault();
+                  setExpanded(isExpanded ? null : p.id);
+                }
+              }}
+              aria-expanded={isExpanded}
             >
               <div className="flex items-start gap-3">
                 <Banknote className="h-5 w-5 text-primary shrink-0 mt-0.5" />
@@ -242,7 +278,7 @@ export function BandeauPaiementDeclare() {
                     <div className="flex gap-4 text-xs">
                       <span className="text-muted-foreground">Taux : <strong className="text-foreground">{p.mission.taux_horaire_base} €/h</strong></span>
                       {p.mission.total_brut != null && <span className="text-muted-foreground">Brut : <strong className="text-foreground">{fmt(p.mission.total_brut)}</strong></span>}
-                      <span className="text-muted-foreground">Net : <strong className="text-primary">{fmt(p.mission.net_a_payer ?? p.montant)}</strong></span>
+                      <span className="text-muted-foreground">Montant déclaré : <strong className="text-primary">{fmt(p.montant)}</strong></span>
                     </div>
                   </div>
                 )}

@@ -15,8 +15,10 @@ import { useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { toast } from 'sonner';
+import { getEmailDeliveryStatus, type EmailDeliveryStatus } from '@/lib/adminEmailDelivery';
 
 const fmt = (v: number) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(Number(v) || 0);
+type RelanceOutcome = EmailDeliveryStatus | 'partial';
 
 export default function AdminMandatsFacturation() {
   usePageTitle('Mandats de facturation');
@@ -28,12 +30,23 @@ export default function AdminMandatsFacturation() {
   const [filtre, setFiltre] = useState<'TOUS' | 'SIGNE' | 'NON_SIGNE'>('TOUS');
   const [relanceEnCours, setRelanceEnCours] = useState<string | null>(null);
   const [relanceGroupee, setRelanceGroupee] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   // Relance mandat : notification in-app + email (template ADMIN_BROADCAST).
-  const relancer = async (s: any): Promise<boolean> => {
+  const relancer = async (s: any): Promise<RelanceOutcome> => {
     const corps = `Bonjour ${s.prenom},\n\nVotre mandat de facturation n'est pas encore signé. Il permet à Jolene de générer automatiquement vos factures d'honoraires et vous donne accès au paiement rapide (24-48h).\n\nSignez-le en 2 minutes depuis votre espace : Mon profil → Mandat de facturation.\n\nL'équipe Jolene`;
-    const [notifRes, emailRes] = await Promise.all([
-      supabase.rpc('fn_creer_notification', {
+    try {
+      const emailRes = await supabase.functions.invoke('send-email', {
+        body: {
+          type: 'ADMIN_BROADCAST',
+          destinataire_id: s.id,
+          data: { subject: 'Votre mandat de facturation attend votre signature', body: corps },
+        },
+      });
+      const deliveryStatus = getEmailDeliveryStatus(emailRes.data, emailRes.error);
+      if (deliveryStatus !== 'sent') return deliveryStatus;
+
+      const notifRes = await supabase.rpc('fn_creer_notification', {
         p_destinataire_id: s.id,
         p_type_destinataire: 'SOIGNANT',
         p_type: 'RAPPEL_DOCUMENTS',
@@ -42,24 +55,24 @@ export default function AdminMandatsFacturation() {
         p_lien: '/soignant/mandat-facturation',
         p_type_ressource: null,
         p_id_ressource: null,
-      } as any),
-      supabase.functions.invoke('send-email', {
-        body: {
-          type: 'ADMIN_BROADCAST',
-          destinataire_id: s.id,
-          data: { subject: 'Votre mandat de facturation attend votre signature', body: corps },
-        },
-      }),
-    ]);
-    return !notifRes.error && !emailRes.error;
+      } as any);
+      if (notifRes.error || (notifRes.data as any)?.error) return 'partial';
+      return 'sent';
+    } catch (error) {
+      console.error('relance mandat error', error);
+      return 'failed';
+    }
   };
 
   const relancerUn = async (s: any) => {
     setRelanceEnCours(s.id);
     try {
-      const ok = await relancer(s);
-      if (ok) toast.success(`${s.prenom} ${s.nom} relancé(e) — notification + email envoyés.`);
-      else toast.error('Relance partielle ou échouée — réessayez.');
+      const outcome = await relancer(s);
+      if (outcome === 'sent') toast.success(`${s.prenom} ${s.nom} relancé(e) — notification + email envoyés.`);
+      else if (outcome === 'skipped') toast.info('Relance neutralisée : compte de test ou préférences email. Aucun succès enregistré.');
+      else if (outcome === 'pending') toast.info('Un envoi est déjà en cours. Aucun nouvel email confirmé.');
+      else if (outcome === 'partial') toast.error('Email envoyé, mais la notification in-app a échoué. Vérifiez avant de relancer.');
+      else toast.error('Relance échouée. Aucun succès enregistré.');
     } finally {
       setRelanceEnCours(null);
     }
@@ -68,35 +81,57 @@ export default function AdminMandatsFacturation() {
   const relancerTous = async (liste: any[]) => {
     if (!window.confirm(`Relancer les ${liste.length} soignant${liste.length > 1 ? 's' : ''} sans mandat signé ? Chacun recevra une notification + un email.`)) return;
     setRelanceGroupee(true);
-    let ok = 0; let ko = 0;
+    const resultats: Record<RelanceOutcome, number> = {
+      sent: 0,
+      skipped: 0,
+      pending: 0,
+      failed: 0,
+      partial: 0,
+    };
     try {
       for (const s of liste) {
         // Envois séquentiels : évite le rate-limit Resend et garde l'UI réactive
-        const succes = await relancer(s);
-        if (succes) ok++; else ko++;
+        const outcome = await relancer(s);
+        resultats[outcome]++;
       }
-      toast.success(`Relance groupée terminée : ${ok} envoyée(s)${ko > 0 ? `, ${ko} échec(s)` : ''}.`);
+      const detail = `${resultats.sent} envoyée(s), ${resultats.skipped} neutralisée(s), ${resultats.pending} en cours, ${resultats.partial + resultats.failed} à vérifier/échouée(s)`;
+      if (resultats.sent === liste.length) toast.success(`Relance groupée terminée : ${detail}.`);
+      else toast.warning(`Relance groupée terminée : ${detail}.`);
     } finally {
       setRelanceGroupee(false);
     }
   };
 
-  useEffect(() => {
-    Promise.all([
+  const charger = async () => {
+    setLoading(true);
+    setLoadError(null);
+    try {
+      const [sRes, uRes] = await Promise.all([
       supabase.rpc('fn_admin_mandats_stats' as any),
       supabase.from('soignants')
         .select('id, prenom, nom, email, profession, mandat_facturation_signe, mandat_facturation_signe_le, mandat_facturation_version, cree_le')
         .is('supprime_le', null)
         .order('cree_le', { ascending: false }),
-    ]).then(([sRes, uRes]) => {
-      if (sRes.data) setStats(sRes.data);
-      if (uRes.data) setSoignants(uRes.data);
+      ]);
+      if (sRes.error) throw sRes.error;
+      if ((sRes.data as any)?.error) throw new Error((sRes.data as any).error);
+      if (uRes.error) throw uRes.error;
+      if (!sRes.data) throw new Error('Statistiques mandats indisponibles');
+      if (!Array.isArray(uRes.data)) throw new Error('Liste des mandats indisponible');
+      setStats(sRes.data);
+      setSoignants(uRes.data);
+    } catch (error: any) {
+      console.error('charger mandats error', error);
+      setStats(null);
+      setSoignants([]);
+      setLoadError(error?.message || 'Impossible de charger les mandats de facturation.');
+    } finally {
       setLoading(false);
-    })
-      .catch((err) => {
-        setLoading(false);
-        toast.error(err?.message || 'Erreur chargement mandats');
-      });
+    }
+  };
+
+  useEffect(() => {
+    void charger();
   }, []);
 
   const matchRecherche = (s: any) => {
@@ -120,6 +155,20 @@ export default function AdminMandatsFacturation() {
   const signes = soignants.filter((s) => s.mandat_facturation_signe && matchRecherche(s));
 
   if (loading) return <LayoutAdmin><ChargementAdmin titre="Mandats de facturation" /></LayoutAdmin>;
+
+  if (loadError) {
+    return (
+      <LayoutAdmin>
+        <BreadcrumbAdmin pageName="Mandats de facturation" />
+        <div className="mx-auto max-w-2xl rounded-xl border border-destructive/40 bg-destructive/5 p-6 text-center">
+          <AlertCircle className="mx-auto h-8 w-8 text-destructive" />
+          <h1 className="mt-3 text-lg font-bold text-foreground">Mandats indisponibles</h1>
+          <p className="mt-1 text-sm text-muted-foreground">{loadError}</p>
+          <BoutonY2K className="mt-4" onClick={charger}>Réessayer</BoutonY2K>
+        </div>
+      </LayoutAdmin>
+    );
+  }
 
   const tauxSignature = stats?.total_soignants > 0
     ? Math.round((stats.mandat_signe / stats.total_soignants) * 100)

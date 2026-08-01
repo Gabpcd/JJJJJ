@@ -24,6 +24,7 @@ import { toast } from 'sonner';
 import { telechargerOuPartager } from '@/lib/telechargement';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { BoutonY2K } from '@/components/y2k/BoutonY2K';
+import { montantFinanceAfficheMission } from '@/lib/missionFinanceDisplay';
 
 function fmt(v: number) {
   return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(v);
@@ -49,27 +50,50 @@ export function HistoriqueMissionsContent() {
   const [moisFiltre, setMoisFiltre] = useState('TOUS');
   const [cotisationsMissionId, setCotisationsMissionId] = useState<string | null>(null);
   const [wizardLitige, setWizardLitige] = useState<{ id: string; intitule: string } | null>(null);
+  const [hasMore, setHasMore] = useState(false);
+  const [erreurChargement, setErreurChargement] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     if (!user) return;
+    let actif = true;
     const load = async () => {
-      const [{ data: ms }, { data: lits }] = await Promise.all([
+      setLoading(true);
+      setErreurChargement(null);
+      try {
+      const [missionsResult, litigesResult] = await Promise.all([
         supabase.from('missions').select(`
           id, intitule, service, debut_le, fin_le, duree_heures,
           taux_horaire_base, net_a_payer, net_estime, total_brut, statut, etablissement_id,
+          type_contrat_applique, type_contrat_recherche,
           presences(pointage_arrivee_le, pointage_depart_le)
         `).eq('soignant_assigne_id', user.id).eq('statut', 'TERMINEE')
-          .order('debut_le', { ascending: false }).range(0, (page + 1) * PAGE_SIZE - 1),
+          .order('debut_le', { ascending: false }).range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1),
         supabase.from('litiges').select('mission_id').eq('soignant_id', user.id),
       ]);
-      const enriched = ms ? await enrichirEtablissements(ms as any) : [];
+      if (missionsResult.error) throw missionsResult.error;
+      if (litigesResult.error) throw litigesResult.error;
+      const pageMissions = (missionsResult.data ?? []) as any[];
+      const enriched = await enrichirEtablissements(pageMissions as any);
+      if (!actif) return;
+      setHasMore(pageMissions.length === PAGE_SIZE);
       if (page === 0) setMissions(enriched);
-      else setMissions(prev => [...prev, ...enriched]);
-      setLitiges(new Set((lits || []).map((l: any) => l.mission_id)));
-      setLoading(false);
+      else setMissions(prev => {
+        const parId = new Map(prev.map(mission => [mission.id, mission]));
+        enriched.forEach((mission: any) => parId.set(mission.id, mission));
+        return Array.from(parId.values());
+      });
+      setLitiges(new Set((litigesResult.data || []).map((l: any) => l.mission_id)));
+      } catch (error: any) {
+        if (!actif) return;
+        setErreurChargement(error?.message || 'Impossible de charger l’historique.');
+      } finally {
+        if (actif) setLoading(false);
+      }
     };
-    load();
-  }, [user, page]);
+    void load();
+    return () => { actif = false; };
+  }, [user, page, reloadKey]);
 
   const moisDisponibles = useMemo(() => {
     const set = new Set<string>();
@@ -88,10 +112,10 @@ export function HistoriqueMissionsContent() {
 
   const exporterCSV = async () => {
     if (filtered.length === 0) { toast('Aucune mission à exporter pour cette période.', { icon: 'ℹ️' }); return; }
-    const header = 'Date,Mission,Établissement,Heures,Montant net\n';
+    const header = 'Date,Mission,Établissement,Heures,Montant affiché,Nature\n';
     const rows = filtered.map(m => {
-      const net = m.net_estime || (m.net_a_payer ? m.net_a_payer * 0.78 : 0);
-      return `${format(new Date(m.debut_le), 'dd/MM/yyyy')},${m.intitule},${m.etablissements?.nom || ''},${m.duree_heures || 0},${net.toFixed(2)}`;
+      const finance = montantFinanceAfficheMission(m);
+      return `${format(new Date(m.debut_le), 'dd/MM/yyyy')},${m.intitule},${m.etablissements?.nom || ''},${m.duree_heures || 0},${(finance?.montant ?? 0).toFixed(2)},${finance?.libelle ?? 'Indisponible'}`;
     }).join('\n');
     await telechargerOuPartager(header + rows, `historique-missions-${new Date().toISOString().slice(0, 10)}.csv`, 'text/csv');
   };
@@ -116,10 +140,19 @@ export function HistoriqueMissionsContent() {
     }
   };
 
-  if (loading) return <ChargementPage />;
+  if (loading && missions.length === 0) return <ChargementPage />;
 
   return (
     <>
+      {erreurChargement && (
+        <div className="mb-5 rounded-xl border border-destructive/30 bg-destructive/5 p-4" role="alert">
+          <p className="font-semibold text-destructive">Impossible de charger tout l'historique</p>
+          <p className="mt-1 text-sm text-muted-foreground">{erreurChargement}</p>
+          <BoutonY2K size="sm" variant="secondary" className="mt-3" onClick={() => setReloadKey(key => key + 1)}>
+            Réessayer
+          </BoutonY2K>
+        </div>
+      )}
       <div className="mb-6">
         <h2 className="text-lg font-bold text-foreground">Historique des missions</h2>
         <p className="text-sm text-muted-foreground mt-1">{missions.length} mission{missions.length > 1 ? 's' : ''} terminée{missions.length > 1 ? 's' : ''}</p>
@@ -146,18 +179,18 @@ export function HistoriqueMissionsContent() {
           { cle: 'etab', titre: 'Établissement' },
           { cle: 'date', titre: 'Date' },
           { cle: 'heures', titre: 'Heures', align: 'right' },
-          { cle: 'net', titre: 'Net estimé', align: 'right' },
+          { cle: 'net', titre: 'Rémunération', align: 'right' },
           { cle: 'actions', titre: '', align: 'right', largeur: 'w-32' },
         ];
-
-        const netDe = (m: any) => m.net_estime || (m.net_a_payer ? m.net_a_payer * 0.78 : 0);
 
         return (
           <TableOuCartes
             colonnes={colonnes}
             donnees={filtered}
             getId={(m: any) => m.id}
-            etatVide={<EmptyState icone={<ClipboardList />} mascotte="empty" titre="Aucune mission terminée" description="Vos missions terminées apparaîtront ici." />}
+            etatVide={erreurChargement
+              ? <></>
+              : <EmptyState icone={<ClipboardList />} mascotte="empty" titre="Aucune mission terminée" description="Vos missions terminées apparaîtront ici." />}
             renduCellule={(m: any, col) => {
               switch (col.cle) {
                 case 'mission':
@@ -169,15 +202,20 @@ export function HistoriqueMissionsContent() {
                 case 'heures':
                   return <span className="text-sm">{m.duree_heures}h</span>;
                 case 'net':
-                  return (
+                  { const finance = montantFinanceAfficheMission(m); return finance?.nature === 'NET_SALARIE_ESTIME' ? (
                     <button
                       type="button"
                       onClick={(e) => { e.stopPropagation(); setCotisationsMissionId(m.id); }}
                       className="font-semibold text-primary hover:underline"
                     >
-                      {fmt(netDe(m))}
+                      ~{fmt(finance.montant)}
                     </button>
-                  );
+                  ) : (
+                    <span className="font-semibold text-primary">
+                      {finance ? `${finance.approximatif ? '~' : ''}${fmt(finance.montant)}` : '—'}
+                      {finance && <span className="block text-[10px] font-normal text-muted-foreground">{finance.libelle}</span>}
+                    </span>
+                  ); }
                 case 'actions': {
                   const aLitige = litiges.has(m.id);
                   return (
@@ -199,6 +237,7 @@ export function HistoriqueMissionsContent() {
                 ? ((new Date(presence.pointage_depart_le).getTime() - new Date(presence.pointage_arrivee_le).getTime()) / 3600000).toFixed(1)
                 : null;
               const aLitige = litiges.has(m.id);
+              const finance = montantFinanceAfficheMission(m);
               return (
                 <div className="space-y-3">
                   <div className="flex items-start justify-between gap-3">
@@ -213,13 +252,20 @@ export function HistoriqueMissionsContent() {
                       )}
                     </div>
                     <div className="text-right shrink-0">
-                      <button
-                        type="button"
-                        onClick={(e) => { e.stopPropagation(); setCotisationsMissionId(m.id); }}
-                        className="font-bold text-primary text-sm hover:underline"
-                      >
-                        {fmt(netDe(m))}
-                      </button>
+                      {finance?.nature === 'NET_SALARIE_ESTIME' ? (
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); setCotisationsMissionId(m.id); }}
+                          className="font-bold text-primary text-sm hover:underline"
+                        >
+                          ~{fmt(finance.montant)}
+                        </button>
+                      ) : (
+                        <p className="font-bold text-primary text-sm">
+                          {finance ? `${finance.approximatif ? '~' : ''}${fmt(finance.montant)}` : '—'}
+                        </p>
+                      )}
+                      {finance && <p className="text-[10px] text-muted-foreground">{finance.libelle}</p>}
                       <p className="text-[10px] text-muted-foreground">{m.duree_heures}h</p>
                     </div>
                   </div>
@@ -262,8 +308,10 @@ export function HistoriqueMissionsContent() {
         );
       })()}
 
-      {missions.length === (page + 1) * PAGE_SIZE && filtered.length > 0 && (
-        <button onClick={() => setPage(p => p + 1)} className="btn-secondary w-full mt-4">Charger plus de missions</button>
+      {hasMore && filtered.length > 0 && (
+        <button disabled={loading} onClick={() => setPage(p => p + 1)} className="btn-secondary w-full mt-4">
+          {loading ? 'Chargement…' : 'Charger plus de missions'}
+        </button>
       )}
 
       <ModalCotisations missionId={cotisationsMissionId} open={!!cotisationsMissionId} onClose={() => setCotisationsMissionId(null)} />
