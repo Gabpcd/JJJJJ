@@ -327,15 +327,15 @@ REVOKE ALL ON FUNCTION public.fn_enforce_etablissement_rbac_trigger()
 -- UPDATE qu'après comparaison intégrale avec le planning exact matérialisé.
 DO $assert_rbac_planning_remplacement$
 BEGIN
-  IF pg_catalog.position(
-       'NEW.nb_creneaux = v_planning_nb'
-       IN (
+  IF pg_catalog.strpos(
+       (
          SELECT p.prosrc
          FROM pg_catalog.pg_proc p
          JOIN pg_catalog.pg_namespace n ON n.oid = p.pronamespace
          WHERE n.nspname = 'private'
            AND p.proname = 'fn_guard_contexte_empechement_mission'
-       )
+       ),
+       'NEW.nb_creneaux = v_planning_nb'
      ) = 0 THEN
     RAISE EXCEPTION 'Le sceau RBAC du planning de remplacement est absent';
   END IF;
