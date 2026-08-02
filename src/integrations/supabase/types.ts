@@ -9314,21 +9314,24 @@ export type Database = {
       fn_export_fec: {
         Args: { p_annee: number }
         Returns: {
-          comp_aux_libelle: string
-          comp_aux_num: string
-          compte_libelle: string
-          compte_num: string
-          credit: number
-          debit: number
-          devise: string
-          ecriture_date: string
-          ecriture_libelle: string
-          ecriture_num: string
-          journal_code: string
-          journal_libelle: string
-          montant: number
-          piece_date: string
-          piece_ref: string
+          JournalCode: string
+          JournalLib: string
+          EcritureNum: string
+          EcritureDate: string
+          CompteNum: string
+          CompteLib: string
+          CompAuxNum: string
+          CompAuxLib: string
+          PieceRef: string
+          PieceDate: string
+          EcritureLib: string
+          Debit: number
+          Credit: number
+          EcritureLet: string
+          DateLet: string
+          ValidDate: string
+          Montantdevise: number | null
+          Idevise: string | null
         }[]
       }
       fn_exporter_rgpd_etablissement: { Args: never; Returns: Json }

@@ -167,4 +167,30 @@ describe('DecompositionFinanciere avant attribution', () => {
     expect(screen.getByText('brut indicatif')).toBeInTheDocument();
     expect(screen.queryByText(/net estimé/i)).not.toBeInTheDocument();
   });
+
+  it('affiche la commission HT, TTC et le taux réellement figé', () => {
+    useModeExerciceMissionMock.mockReturnValue({ mode: null, loading: false, error: null });
+
+    render(
+      <DecompositionFinanciere
+        mission={{
+          ...missionBase,
+          type_contrat_applique: 'LIBERAL',
+          total_brut: 1_200,
+          montant_commission_ht: 150,
+          montant_commission_tva: 30,
+          montant_commission_ttc: 180,
+          taux_commission_fige: 12.5,
+          taux_commission: 15,
+        }}
+        role="ETAB"
+      />,
+    );
+
+    const texteExact = (attendu: string) => (_contenu: string, element: Element | null) =>
+      element?.textContent?.replace(/\s+/g, ' ').trim() === attendu;
+    expect(screen.getByText(texteExact('180,00 € TTC'))).toBeInTheDocument();
+    expect(screen.getByText(texteExact('150,00 € HT + TVA 20 %'))).toBeInTheDocument();
+    expect(screen.getByText(texteExact('Calcul : 12.5% × 1 200,00 € honoraires bruts (taux de commission applicable)'))).toBeInTheDocument();
+  });
 });

@@ -42,3 +42,31 @@ describe('présence messagerie et score établissement', () => {
     expect(migration).toMatch(/IF public\.est_admin\(\) THEN[\s\S]*?RETURN;[\s\S]*?IF v_conv\.etablissement_id/);
   });
 });
+
+describe('état du système administrateur', () => {
+  it('calcule le dernier run de tous les crons en un seul scan exact', () => {
+    const migration = read(
+      'supabase/migrations/20260801230000_accelerer_admin_health_check.sql',
+    );
+
+    expect(migration).toContain('CREATE OR REPLACE FUNCTION public.fn_check_crons_health()');
+    expect(migration).toContain('private.cron_job_latest_run_cache');
+    expect(migration).toContain('WITH watermark AS');
+    expect(migration).toMatch(/SELECT r\.jobid, pg_catalog\.max\(r\.runid\) AS runid/);
+    expect(migration).toContain('WHERE r.runid > w.runid');
+    expect(migration).toContain('WHERE d.runid = cache.runid');
+    expect(migration).toContain('cache.status IS DISTINCT FROM d.status');
+    expect(migration).toContain("v_cron.dernier_statut IN ('starting', 'running')");
+    expect(migration).toContain('v_cron.dernier_demarrage < pg_catalog.now() - v_intervalle_attendu');
+    expect(migration).toContain('LEFT JOIN private.cron_job_latest_run_cache c ON c.jobid = j.jobid');
+    expect(migration).not.toMatch(/ORDER BY\s+end_time\s+DESC\s+LIMIT\s+1/i);
+    expect(migration).not.toMatch(/CREATE\s+(?:UNIQUE\s+)?INDEX/i);
+    expect(migration).not.toMatch(/SET\s+(?:LOCAL\s+)?statement_timeout/i);
+    expect(migration).not.toContain("ELSE interval '40 days'");
+    expect(migration).toContain("LIKE '%/5%' THEN interval '15 minutes'");
+    expect(migration).toContain("LIKE '%,%' THEN interval '45 minutes'");
+    expect(migration).toContain("ELSE interval '90 minutes'");
+    expect(migration).toContain("ELSE interval '26 hours'");
+    expect(migration).toContain("i.signature = 'fn_check_crons_health()'");
+  });
+});
