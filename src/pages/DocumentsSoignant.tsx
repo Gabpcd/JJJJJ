@@ -17,6 +17,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { TYPES_DOCUMENTS, TYPES_DOCUMENTS_EXCLUS_UPLOAD, STATUTS_VERIFICATION } from '@/lib/documents';
 import { sanitiserNomFichier, verifierFichierDocument } from '@/lib/documentUpload';
 import { extraireMessageErreur, messageErreurEdgeFn } from '@/lib/erreurs';
+import { PROFESSIONS_SANS_RPPS } from '@/lib/constantes';
 import { format, differenceInDays } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { toast } from 'sonner';
@@ -193,17 +194,17 @@ export function DocumentsSoignantContent() {
       // → un MIXTE cumule LES DEUX (obligations salariées + libérales).
       const estLiberal = (sg as any).type_exercice === 'LIBERAL' || (sg as any).type_exercice === 'MIXTE';
       const estSalarie = (sg as any).type_exercice !== 'LIBERAL'; // SALARIE + MIXTE + null/CDD
-      const rppsVerifie = !!(sg as any).rpps_verifie;
+      const professionAvecRpps = !PROFESSIONS_SANS_RPPS.includes((sg as any).profession);
+      const rppsVerifie = professionAvecRpps && !!(sg as any).rpps_verifie;
       const adeliVerifie = !!(sg as any).adeli_verifie;
       const registreProfessionnelVerifie = rppsVerifie || adeliVerifie;
       setDocumentsRequis(
         (dr || []).filter((d: any) => {
           if (d.profession !== (sg as any).profession) return false;
           if (TYPES_DOCUMENTS_EXCLUS_UPLOAD.includes(d.type_document)) return false;
-          // Le registre RPPS/ADELI complète le contrôle documentaire mais ne
-          // remplace jamais le diplôme. C'est notamment indispensable pour
-          // distinguer IDE, IADE et IBODE, que les codes RPPS génériques ne
-          // permettent pas toujours de départager.
+          // Le RPPS validé par l'API atteste le diplôme enregistré pour les
+          // professions concernées. Un ADELI seul ne donne pas cette dispense.
+          if (rppsVerifie && d.type_document === 'DIPLOME') return false;
           if (registreProfessionnelVerifie && d.type_document === 'RPPS_ADELI') return false;
           // Une autorisation d'exercice reste une preuve distincte du diplôme.
           // Elle n'est masquée que lorsque le registre officiel est déjà validé.

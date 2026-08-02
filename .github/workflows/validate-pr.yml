@@ -325,6 +325,7 @@ jobs:
             tests/admin/security/litige-rpc-flow.test.sql
             tests/admin/security/litige-admin-financial-resolution.test.sql
             tests/admin/security/mission-start-direct-insert-gate.test.sql
+            tests/admin/security/rpps-diploma-exemption.test.sql
             tests/admin/security/external-hours-p0-hardening.test.sql
             tests/admin/security/heures-compteurs-coherence.test.sql
             tests/admin/security/empechement-penalty-hardening.test.sql

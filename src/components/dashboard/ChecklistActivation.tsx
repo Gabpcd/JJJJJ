@@ -103,12 +103,17 @@ export function useActivationSoignant({ soignant, documents, hasStripeConnect, a
     if (!soignant?.profession || docsFaits || !extra) return null;
     const estLiberal = soignant.type_exercice === 'LIBERAL' || soignant.type_exercice === 'MIXTE';
     const estSalarie = soignant.type_exercice !== 'LIBERAL';
-    const identiteVerifiee = !!(soignant.rpps_verifie || extra.adeliVerifie);
+    const professionAvecRpps = !PROFESSIONS_SANS_RPPS.includes(soignant.profession);
+    const rppsVerifie = professionAvecRpps && !!soignant.rpps_verifie;
+    const identiteVerifiee = rppsVerifie || extra.adeliVerifie;
     const requis = extra.docsRequisRows.filter((d: any) => {
       if (d.profession !== soignant.profession) return false;
       if (!d.est_critique) return false;
       if (TYPES_DOCUMENTS_EXCLUS_UPLOAD.includes(d.type_document)) return false;
-      if (identiteVerifiee && (d.type_document === 'DIPLOME' || d.type_document === 'RPPS_ADELI')) return false;
+      if (identiteVerifiee && d.type_document === 'RPPS_ADELI') return false;
+      // Un RPPS validé par l'API atteste déjà le diplôme enregistré pour les
+      // professions concernées. Un ADELI seul ne dispense pas du diplôme.
+      if (rppsVerifie && d.type_document === 'DIPLOME') return false;
       const exReq = d.type_exercice_requis || 'TOUS';
       if (exReq === 'LIBERAL_ONLY') return estLiberal;
       if (exReq === 'SALARIE_ONLY') return estSalarie;

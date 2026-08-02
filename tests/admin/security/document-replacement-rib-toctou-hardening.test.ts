@@ -9,7 +9,15 @@ const startGateMigration = readFileSync(
   'supabase/migrations/20260714065000_securiser_documents_rib_et_demarrage_missions.sql',
   'utf8',
 );
+const rppsDiplomaMigration = readFileSync(
+  'supabase/migrations/20260802055000_aligner_dispense_diplome_rpps.sql',
+  'utf8',
+);
 const documentsPage = readFileSync('src/pages/DocumentsSoignant.tsx', 'utf8');
+const activationChecklist = readFileSync(
+  'src/components/dashboard/ChecklistActivation.tsx',
+  'utf8',
+);
 const externalHours = readFileSync('src/components/ImportHeuresExternes.tsx', 'utf8');
 const paymentsSection = readFileSync('src/components/profil-soignant/SectionPaiements.tsx', 'utf8');
 const verifier = readFileSync('supabase/functions/verify-document/index.ts', 'utf8');
@@ -45,18 +53,44 @@ describe('remplacement de preuve sans effacer les données existantes', () => {
   });
 });
 
-describe('diplôme obligatoire et spécialité exacte', () => {
-  it('ne masque jamais le diplôme quand RPPS ou ADELI est déjà vérifié', () => {
+describe('dispense documentaire RPPS et spécialité exacte', () => {
+  it('dispense du diplôme uniquement quand le RPPS est validé par l’API', () => {
+    expect(documentsPage).toContain("rppsVerifie && d.type_document === 'DIPLOME'");
+    expect(documentsPage).toContain('PROFESSIONS_SANS_RPPS.includes');
     expect(documentsPage).toContain("registreProfessionnelVerifie && d.type_document === 'RPPS_ADELI'");
     expect(documentsPage).not.toMatch(
-      /registreProfessionnelVerifie\s*&&\s*d\.type_document\s*===\s*['"]DIPLOME['"]/,
+      /adeliVerifie\s*&&\s*d\.type_document\s*===\s*['"]DIPLOME['"]/,
+    );
+    expect(activationChecklist).toContain(
+      "identiteVerifiee && d.type_document === 'RPPS_ADELI'",
+    );
+    expect(activationChecklist).toContain(
+      "rppsVerifie && d.type_document === 'DIPLOME'",
+    );
+    expect(rppsDiplomaMigration).toContain(
+      "drp.type_document = 'DIPLOME' AND v_rpps_verifie",
+    );
+    expect(rppsDiplomaMigration).toContain(
+      "profession::text NOT IN ('AS', 'AES', 'AUXILIAIRE_PUERICULTURE')",
+    );
+    expect(rppsDiplomaMigration).not.toMatch(
+      /drp\.type_document = 'DIPLOME' AND v_identifiant_officiel/,
+    );
+    expect(rppsDiplomaMigration).toContain(
+      'PERFORM public.fn_calculer_tous_documents_valides(v_soignant_id)',
+    );
+    expect(rppsDiplomaMigration).toContain(
+      'WHEN (OLD.rpps_verifie IS DISTINCT FROM NEW.rpps_verifie)',
+    );
+    expect(rppsDiplomaMigration).toContain(
+      'PERFORM public.fn_calculer_tous_documents_valides(NEW.id)',
     );
     expect(documentsMigration).toContain("'DIPLOME'::public.type_document");
     expect(documentsMigration).toContain('true,');
   });
 
   it('refuse un diplôme IDE pour un profil IADE ou IBODE', () => {
-    const gate = documentsMigration.match(
+    const gate = rppsDiplomaMigration.match(
       /CREATE OR REPLACE FUNCTION public\.fn_documents_ok_pour_mission[\s\S]*?\$function\$;/,
     )?.[0] ?? '';
     expect(gate).toContain("v_profession NOT IN ('IADE', 'IBODE')");
