@@ -42,3 +42,20 @@ describe('présence messagerie et score établissement', () => {
     expect(migration).toMatch(/IF public\.est_admin\(\) THEN[\s\S]*?RETURN;[\s\S]*?IF v_conv\.etablissement_id/);
   });
 });
+
+describe('état du système administrateur', () => {
+  it('calcule le dernier run de tous les crons en un seul scan exact', () => {
+    const migration = read(
+      'supabase/migrations/20260801230000_accelerer_admin_health_check.sql',
+    );
+
+    expect(migration).toContain('CREATE OR REPLACE FUNCTION public.fn_check_crons_health()');
+    expect(migration).toContain('WITH latest_ids AS MATERIALIZED');
+    expect(migration).toMatch(/SELECT r\.jobid, pg_catalog\.max\(r\.runid\) AS runid/);
+    expect(migration).toContain('LEFT JOIN cron.job_run_details d ON d.runid = l.runid');
+    expect(migration).not.toMatch(/ORDER BY\s+end_time\s+DESC\s+LIMIT\s+1/i);
+    expect(migration).not.toMatch(/CREATE\s+(?:UNIQUE\s+)?INDEX/i);
+    expect(migration).not.toMatch(/SET\s+(?:LOCAL\s+)?statement_timeout/i);
+    expect(migration).toContain("i.signature = 'fn_check_crons_health()'");
+  });
+});

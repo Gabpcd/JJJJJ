@@ -9,6 +9,18 @@ DECLARE
   v_bad text;
   v_definition text;
 BEGIN
+  SELECT pg_get_functiondef('public.fn_export_fec(integer)'::regprocedure)
+  INTO v_definition;
+  IF v_definition NOT LIKE '%e.est_compte_test IS FALSE%'
+     OR v_definition NOT LIKE '%f.statut NOT IN (''BROUILLON'', ''ANNULEE'')%'
+     OR v_definition NOT LIKE '%411000%'
+     OR v_definition NOT LIKE '%706000%'
+     OR v_definition NOT LIKE '%445710%'
+     OR pg_get_function_result('public.fn_export_fec(integer)'::regprocedure)
+        NOT LIKE '%"JournalCode" text%"Idevise" text%' THEN
+    RAISE EXCEPTION 'Export FEC incomplet, non équilibré ou non borné à la production';
+  END IF;
+
   WITH reviewed(signature) AS (VALUES
     ('public.fn_mes_permissions_etab(uuid)'::regprocedure),
     ('public.fn_obligations_financieres()'::regprocedure),

@@ -21,6 +21,7 @@ interface FactureLite {
   statut?: string | null;
   date_emission?: string | null;
   etablissement_nom?: string | null;
+  perimetre?: 'PRODUCTION' | 'TEST' | 'A_VERIFIER';
 }
 
 interface Props {
@@ -45,6 +46,7 @@ export function BoutonsBulkFactures({ selection, className }: Props) {
         'etablissement',
         'montant_ttc',
         'statut',
+        'perimetre',
       ];
       const lignes = selection.map((f) =>
         [
@@ -53,6 +55,7 @@ export function BoutonsBulkFactures({ selection, className }: Props) {
           f.etablissement_nom ?? '',
           (f.montant_ttc ?? 0).toFixed(2),
           f.statut ?? '',
+          f.perimetre ?? 'A_VERIFIER',
         ].map(encoderCelluleCsv).join(';'),
       );
       const csv = [entetes.map(encoderCelluleCsv).join(';'), ...lignes].join('\n');

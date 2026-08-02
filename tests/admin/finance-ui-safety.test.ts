@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { getEmailDeliveryStatus } from '@/lib/adminEmailDelivery';
 import { libellePerimetreRapport } from '@/pages/admin/AdminFacturation';
+import { estFactureProduction } from '@/lib/adminInvoiceScope';
 import { statutOperationCritique } from '@/components/admin/FinancialOperationsMonitor';
 
 describe('sécurité des retours send-email admin', () => {
@@ -22,8 +23,16 @@ describe('sécurité des retours send-email admin', () => {
 
 describe('rapport et suivi financier admin', () => {
   it('décrit le périmètre réellement affiché', () => {
-    expect(libellePerimetreRapport('TOUS', '')).toBe('tous statuts');
-    expect(libellePerimetreRapport('PAYEE', 'Clinique')).toBe('statut Payée · recherche « Clinique »');
+    expect(libellePerimetreRapport('TOUS', '')).toBe('production uniquement · tous statuts');
+    expect(libellePerimetreRapport('PAYEE', 'Clinique')).toBe('production uniquement · statut Payée · recherche « Clinique »');
+  });
+
+  it('échoue fermé pour le périmètre comptable de production', () => {
+    expect(estFactureProduction({ etablissements: { est_compte_test: false } })).toBe(true);
+    expect(estFactureProduction({ etablissements: { est_compte_test: true } })).toBe(false);
+    expect(estFactureProduction({ etablissements: { est_compte_test: null } })).toBe(false);
+    expect(estFactureProduction({ etablissements: null })).toBe(false);
+    expect(estFactureProduction({})).toBe(false);
   });
 
   it('charge les champs signés et interdit les relances sur les avoirs', () => {
@@ -34,6 +43,13 @@ describe('rapport et suivi financier admin', () => {
     expect(impayees).toContain(".eq('type_document', 'FACTURE')");
     expect(finances).toContain('montant_signe, type_document');
     expect(facturation).toContain('montant_signe, type_document');
+    expect(facturation).toContain('etablissements(nom, est_compte_test)');
+    expect(facturation).toContain('filtered.filter(estFactureProduction).filter(estDocumentComptabilise)');
+    expect(facturation).toContain("estFactureProduction(f) && STATUTS_A_TRAITER.includes(f.statut)");
+    expect(facturation).toContain("perimetre === 'TEST' ? 'TEST' : 'PÉRIMÈTRE À VÉRIFIER'");
+    const detailMission = readFileSync('src/pages/DetailMission.tsx', 'utf8');
+    expect(detailMission).toContain('montant_commission_ht, montant_commission_tva, montant_commission_ttc');
+    expect(detailMission).toContain('taux_commission_fige, taux_commission, commission_facturee');
     expect(finances).toContain('filter(facture => estFactureRelancable(facture))');
   });
 
@@ -49,6 +65,19 @@ describe('rapport et suivi financier admin', () => {
     expect(dashboard).toContain("etablissements!inner(nom, est_compte_test)");
     expect(dashboard).toContain(".lt('date_echeance', aujourdhuiIso)");
     expect(dashboard).toContain(".eq('etablissements.est_compte_test', false)");
+
+    const fec = readFileSync(
+      'supabase/migrations/20260801230100_exclure_donnees_test_export_fec.sql',
+      'utf8',
+    );
+    expect(fec).toContain('e.est_compte_test IS FALSE');
+    expect(fec).toContain("f.statut NOT IN ('BROUILLON', 'ANNULEE')");
+    expect(fec).toContain('"JournalCode" text');
+    expect(fec).toContain('"Idevise" text');
+    expect(fec).toContain("'411000'::text");
+    expect(fec).toContain("'706000'::text");
+    expect(fec).toContain("'445710'::text");
+    expect(fec).toContain('CASE WHEN d.est_avoir THEN');
   });
 
   it('identifie les états financiers nécessitant une alerte', () => {

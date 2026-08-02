@@ -47,6 +47,17 @@ DECLARE
   v_payload_b jsonb := '{"type":"MODIFICATION_MONTANT","modifications":{"montant_total_corrige":120},"justification":"Proposition B"}'::jsonb;
   v_payload_sans_impact jsonb := '{"type":"ACCORD_SANS_MODIFICATION","modifications":{},"justification":"Accord sans impact"}'::jsonb;
 BEGIN
+  IF pg_get_functiondef('public.fn_check_crons_health()'::regprocedure)
+       NOT LIKE '%WITH latest_ids AS MATERIALIZED%'
+     OR pg_get_functiondef('public.fn_check_crons_health()'::regprocedure)
+       NOT LIKE '%max(r.runid)%'
+     OR pg_get_functiondef('public.fn_check_crons_health()'::regprocedure)
+       LIKE '%ORDER BY end_time DESC LIMIT 1%'
+  THEN
+    RAISE EXCEPTION
+      'Health-check cron non optimisé ou incomplet';
+  END IF;
+
   -- Sous-transaction sentinelle : toute écriture (audit immuable et effets de
   -- bord inclus) est annulée avant qu'une suite SQL concaténée ne démarre.
   -- Seul le SQLSTATE privé de fin de test est absorbé ; toute assertion en

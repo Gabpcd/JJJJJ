@@ -20,6 +20,7 @@ import { BoutonsBulkFactures } from '@/components/admin/BoutonsBulkFactures';
 import { Checkbox } from '@/components/ui/checkbox';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { estDocumentComptabilise, montantDocumentComptable } from '@/lib/adminInvoiceAccounting';
+import { estFactureProduction, perimetreFacture, type FactureAvecPerimetre } from '@/lib/adminInvoiceScope';
 
 const formatEur = (v: number) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(v);
 const formatDate = (d: string) => new Date(d).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' }).replace(/ /g, '\u00a0');
@@ -46,6 +47,16 @@ const statutLabel: Record<string, string> = {
   EN_RETARD: 'En retard',
   ANNULEE: 'Annulée',
 };
+
+function BadgePerimetreFacture({ facture }: { facture: FactureAvecPerimetre }) {
+  const perimetre = perimetreFacture(facture);
+  if (perimetre === 'PRODUCTION') return null;
+  return (
+    <BadgeY2K variant={perimetre === 'TEST' ? 'warning' : 'error'} size="sm">
+      {perimetre === 'TEST' ? 'TEST' : 'PÉRIMÈTRE À VÉRIFIER'}
+    </BadgeY2K>
+  );
+}
 
 /**
  * Bloc détail factures rattachées — utilisé en desktop (TableRow colSpan)
@@ -257,7 +268,7 @@ function FactureDetailATraiter({ factureId }: { factureId: string }) {
 const PDF_BRAND_COLOR = { r: 23, g: 162, b: 184 } as const;
 
 export function libellePerimetreRapport(filtreStatut: string, recherche: string): string {
-  const segments = [filtreStatut === 'TOUS' ? 'tous statuts' : `statut ${statutLabel[filtreStatut] ?? filtreStatut}`];
+  const segments = ['production uniquement', filtreStatut === 'TOUS' ? 'tous statuts' : `statut ${statutLabel[filtreStatut] ?? filtreStatut}`];
   const terme = recherche.trim();
   if (terme) segments.push(`recherche « ${terme} »`);
   return segments.join(' · ');
@@ -291,7 +302,7 @@ export default function AdminFacturation() {
       const taillePage = 1000;
       for (let offset = 0; ; offset += taillePage) {
         const { data, error } = await supabase.from('factures')
-          .select('id, numero_facture, montant_ht, montant_tva, montant_ttc, montant_signe, type_document, statut, date_emission, date_echeance, nombre_missions, etablissement_id, virement_reference, etablissements(nom)')
+          .select('id, numero_facture, montant_ht, montant_tva, montant_ttc, montant_signe, type_document, statut, date_emission, date_echeance, nombre_missions, etablissement_id, virement_reference, etablissements(nom, est_compte_test)')
           .order('date_emission', { ascending: false })
           .order('id', { ascending: false })
           .range(offset, offset + taillePage - 1);
@@ -318,7 +329,7 @@ export default function AdminFacturation() {
   const aTraiter = useMemo(() => {
     const ts = (f: any) => (f.date_emission ? new Date(f.date_emission).getTime() : 0);
     return factures
-      .filter((f: any) => STATUTS_A_TRAITER.includes(f.statut))
+      .filter((f: any) => estFactureProduction(f) && STATUTS_A_TRAITER.includes(f.statut))
       .sort((a: any, b: any) => {
         if (a.statut !== b.statut) return a.statut === 'VIREMENT_DECLARE' ? -1 : 1;
         return ts(a) - ts(b);
@@ -338,12 +349,27 @@ export default function AdminFacturation() {
   }, [factures, filtreStatut, recherche]);
 
   const historique = useMemo(
-    () => filtered.filter((f: any) => !STATUTS_A_TRAITER.includes(f.statut)),
+    () => filtered.filter((f: any) => !estFactureProduction(f) || !STATUTS_A_TRAITER.includes(f.statut)),
     [filtered]
   );
 
+  const historiqueProduction = useMemo(
+    () => historique.filter(estFactureProduction),
+    [historique],
+  );
+
+  const donneesTestVisibles = useMemo(
+    () => historique.filter((f: any) => perimetreFacture(f) === 'TEST').length,
+    [historique],
+  );
+
+  const perimetresAVerifier = useMemo(
+    () => historique.filter((f: any) => perimetreFacture(f) === 'A_VERIFIER').length,
+    [historique],
+  );
+
   const documentsComptabilises = useMemo(
-    () => filtered.filter(estDocumentComptabilise),
+    () => filtered.filter(estFactureProduction).filter(estDocumentComptabilise),
     [filtered],
   );
 
@@ -365,6 +391,7 @@ export default function AdminFacturation() {
         statut: f.statut,
         date_emission: f.date_emission,
         etablissement_nom: (f.etablissements as any)?.nom ?? null,
+        perimetre: perimetreFacture(f),
       })),
   [aTraiter, historique, selectedIds]);
 
@@ -580,8 +607,12 @@ export default function AdminFacturation() {
             {
               id: 'historique',
               label: 'Dans l’historique',
-              value: historique.length,
-              detail: filtreStatut === 'TOUS' ? 'Tous statuts' : statutLabel[filtreStatut] ?? filtreStatut,
+              value: historiqueProduction.length,
+              detail: [
+                filtreStatut === 'TOUS' ? 'Production, tous statuts' : `Production, ${statutLabel[filtreStatut] ?? filtreStatut}`,
+                donneesTestVisibles > 0 ? `${donneesTestVisibles} test visible${donneesTestVisibles > 1 ? 's' : ''}` : null,
+                perimetresAVerifier > 0 ? `${perimetresAVerifier} périmètre${perimetresAVerifier > 1 ? 's' : ''} à vérifier` : null,
+              ].filter(Boolean).join(' · '),
               icon: <History className="h-4 w-4" />,
             },
           ]}
@@ -792,7 +823,12 @@ export default function AdminFacturation() {
                             <TableCell className="w-8 pr-0">
                               {isExpanded ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
                             </TableCell>
-                            <TableCell className="font-mono text-xs font-medium">{f.numero_facture}</TableCell>
+                            <TableCell className="font-mono text-xs font-medium">
+                              <div className="flex flex-wrap items-center gap-1.5">
+                                <span>{f.numero_facture}</span>
+                                <BadgePerimetreFacture facture={f} />
+                              </div>
+                            </TableCell>
                             <TableCell>
                               <button
                                 onClick={(e) => { e.stopPropagation(); navigate(`/admin/utilisateurs/${f.etablissement_id}`); }}
@@ -881,7 +917,10 @@ export default function AdminFacturation() {
                             />
                             <div className="flex-1 min-w-0">
                               <div className="flex items-start justify-between gap-2">
-                                <p className="font-mono text-xs font-semibold truncate">{f.numero_facture}</p>
+                                <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+                                  <p className="font-mono text-xs font-semibold truncate">{f.numero_facture}</p>
+                                  <BadgePerimetreFacture facture={f} />
+                                </div>
                                 <BadgeY2K variant={statutColor[f.statut] || 'info'} size="sm" className="shrink-0">
                                   {statutLabel[f.statut] ?? f.statut}
                                 </BadgeY2K>
