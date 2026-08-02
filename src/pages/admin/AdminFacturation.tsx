@@ -449,17 +449,17 @@ export default function AdminFacturation() {
     }
   };
 
-  const exporterFEC = async () => {
+  const exporterJournalVentes = async () => {
     const annee = new Date().getFullYear();
-    const result = await (supabase.rpc('fn_export_fec' as any, { p_annee: annee }) as any).catch((err: any) => { console.warn('exporterFEC error:', err); return { data: null, error: err }; });
+    const result = await (supabase.rpc('fn_export_fec' as any, { p_annee: annee }) as any).catch((err: any) => { console.warn('exporterJournalVentes error:', err); return { data: null, error: err }; });
     const { data, error } = result;
     if (error) { toast.error('Une erreur est survenue. Veuillez réessayer.'); return; }
     const lignes = Array.isArray(data) ? data : [];
-    if (lignes.length === 0) { toast.info('Aucune donnée FEC pour ' + annee); return; }
+    if (lignes.length === 0) { toast.info('Aucune vente de production pour ' + annee); return; }
     const cols = Object.keys(lignes[0]);
     const csv = [cols.join('\t'), ...lignes.map((l: any) => cols.map(c => l[c] ?? '').join('\t'))].join('\n');
-    await telechargerOuPartager('﻿' + csv, `FEC_${annee}.csv`, 'text/csv');
-    toast.success(`FEC ${annee} exporté`);
+    await telechargerOuPartager('﻿' + csv, `JOURNAL_VENTES_${annee}.tsv`, 'text/tab-separated-values');
+    toast.success(`Journal des ventes ${annee} exporté`);
   };
 
   const genererRapportPDF = async () => {
@@ -540,13 +540,13 @@ export default function AdminFacturation() {
           <summary className="flex cursor-pointer list-none items-center justify-between gap-4 p-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary [&::-webkit-details-marker]:hidden">
             <span>
               <span className="block font-semibold text-foreground">Exports et prélèvements</span>
-              <span className="block text-sm text-muted-foreground">FEC, rapport PDF et prélèvement SEPA</span>
+              <span className="block text-sm text-muted-foreground">Journal des ventes, rapport PDF et prélèvement SEPA</span>
             </span>
             <ChevronDown className="h-5 w-5 text-muted-foreground transition-transform group-open:rotate-180" aria-hidden="true" />
           </summary>
           <div className="flex flex-wrap gap-2 border-t border-border p-4">
-            <BoutonY2K variant="secondary" onClick={exporterFEC} className="gap-2" iconeGauche={<Download className="h-4 w-4" />}>
-              Exporter FEC {new Date().getFullYear()}
+            <BoutonY2K variant="secondary" onClick={exporterJournalVentes} className="gap-2" iconeGauche={<Download className="h-4 w-4" />}>
+              Journal des ventes {new Date().getFullYear()} (18 colonnes)
             </BoutonY2K>
             <BoutonY2K variant="secondary" onClick={genererRapportPDF} className="gap-2" iconeGauche={<FileText className="h-4 w-4" />}>
               Rapport PDF

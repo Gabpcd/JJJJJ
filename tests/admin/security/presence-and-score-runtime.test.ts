@@ -50,12 +50,23 @@ describe('état du système administrateur', () => {
     );
 
     expect(migration).toContain('CREATE OR REPLACE FUNCTION public.fn_check_crons_health()');
-    expect(migration).toContain('WITH latest_ids AS MATERIALIZED');
+    expect(migration).toContain('private.cron_job_latest_run_cache');
+    expect(migration).toContain('WITH watermark AS');
     expect(migration).toMatch(/SELECT r\.jobid, pg_catalog\.max\(r\.runid\) AS runid/);
-    expect(migration).toContain('LEFT JOIN cron.job_run_details d ON d.runid = l.runid');
+    expect(migration).toContain('WHERE r.runid > w.runid');
+    expect(migration).toContain('WHERE d.runid = cache.runid');
+    expect(migration).toContain('cache.status IS DISTINCT FROM d.status');
+    expect(migration).toContain("v_cron.dernier_statut IN ('starting', 'running')");
+    expect(migration).toContain('v_cron.dernier_demarrage < pg_catalog.now() - v_intervalle_attendu');
+    expect(migration).toContain('LEFT JOIN private.cron_job_latest_run_cache c ON c.jobid = j.jobid');
     expect(migration).not.toMatch(/ORDER BY\s+end_time\s+DESC\s+LIMIT\s+1/i);
     expect(migration).not.toMatch(/CREATE\s+(?:UNIQUE\s+)?INDEX/i);
     expect(migration).not.toMatch(/SET\s+(?:LOCAL\s+)?statement_timeout/i);
+    expect(migration).not.toContain("ELSE interval '40 days'");
+    expect(migration).toContain("LIKE '%/5%' THEN interval '15 minutes'");
+    expect(migration).toContain("LIKE '%,%' THEN interval '45 minutes'");
+    expect(migration).toContain("ELSE interval '90 minutes'");
+    expect(migration).toContain("ELSE interval '26 hours'");
     expect(migration).toContain("i.signature = 'fn_check_crons_health()'");
   });
 });

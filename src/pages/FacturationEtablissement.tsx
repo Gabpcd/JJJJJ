@@ -1741,9 +1741,9 @@ export default function FacturationEtablissement() {
                     >
                       <FileText className="h-5 w-5 text-primary shrink-0" />
                       <div className="text-left">
-                        <p className="font-medium text-sm">Export FEC / Paie</p>
+                        <p className="font-medium text-sm">Export comptable / Paie</p>
                         <p className="text-xs text-muted-foreground">
-                          Fichier comptable (Silae, Sage, ADP, FEC)
+                          Formats Standard, Silae et Sage
                         </p>
                       </div>
                     </BoutonY2K>

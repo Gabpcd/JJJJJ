@@ -57,6 +57,7 @@ describe('rapport et suivi financier admin', () => {
     const impayees = readFileSync('src/pages/admin/AdminImpayees.tsx', 'utf8');
     const finances = readFileSync('src/pages/admin/AdminFinances.tsx', 'utf8');
     const dashboard = readFileSync('src/pages/admin/AdminDashboard.tsx', 'utf8');
+    const facturation = readFileSync('src/pages/admin/AdminFacturation.tsx', 'utf8');
 
     expect(finances).toContain('est_compte_test');
     expect(finances).toContain('missionsProduction');
@@ -78,6 +79,16 @@ describe('rapport et suivi financier admin', () => {
     expect(fec).toContain("'706000'::text");
     expect(fec).toContain("'445710'::text");
     expect(fec).toContain('CASE WHEN d.est_avoir THEN');
+    expect(fec).toContain("AT TIME ZONE 'Europe/Paris'");
+    expect(fec).toContain('HT, TVA ou TTC incohérents');
+    expect(fec).toContain('pg_catalog.round(pg_catalog.abs(f.montant_ttc), 2) <= 0');
+    expect(fec).toContain('NULL::numeric');
+    expect(fec).toContain('NULL::text');
+    expect(fec).toContain("'VE-' || p_annee::text");
+
+    expect(facturation).toContain('Journal des ventes');
+    expect(facturation).toContain('JOURNAL_VENTES_');
+    expect(facturation).not.toContain('Exporter FEC');
   });
 
   it('identifie les états financiers nécessitant une alerte', () => {

@@ -47,12 +47,26 @@ DECLARE
   v_payload_b jsonb := '{"type":"MODIFICATION_MONTANT","modifications":{"montant_total_corrige":120},"justification":"Proposition B"}'::jsonb;
   v_payload_sans_impact jsonb := '{"type":"ACCORD_SANS_MODIFICATION","modifications":{},"justification":"Accord sans impact"}'::jsonb;
 BEGIN
-  IF pg_get_functiondef('public.fn_check_crons_health()'::regprocedure)
-       NOT LIKE '%WITH latest_ids AS MATERIALIZED%'
+  IF to_regclass('private.cron_job_latest_run_cache') IS NULL
+     OR has_table_privilege('authenticated', 'private.cron_job_latest_run_cache', 'SELECT')
+     OR pg_get_functiondef('public.fn_check_crons_health()'::regprocedure)
+       NOT LIKE '%WITH watermark AS%'
      OR pg_get_functiondef('public.fn_check_crons_health()'::regprocedure)
        NOT LIKE '%max(r.runid)%'
      OR pg_get_functiondef('public.fn_check_crons_health()'::regprocedure)
+       NOT LIKE '%WHERE r.runid > w.runid%'
+     OR pg_get_functiondef('public.fn_check_crons_health()'::regprocedure)
+       NOT LIKE '%WHERE d.runid = cache.runid%'
+     OR pg_get_functiondef('public.fn_check_crons_health()'::regprocedure)
+       NOT LIKE '%dernier_statut IN (''starting'', ''running'')%'
+     OR pg_get_functiondef('public.fn_check_crons_health()'::regprocedure)
        LIKE '%ORDER BY end_time DESC LIMIT 1%'
+     OR pg_get_functiondef('public.fn_check_crons_health()'::regprocedure)
+       LIKE '%ELSE interval ''40 days''%'
+     OR pg_get_functiondef('public.fn_check_crons_health()'::regprocedure)
+       NOT LIKE '%LIKE ''%/5%''%interval ''15 minutes''%'
+     OR pg_get_functiondef('public.fn_check_crons_health()'::regprocedure)
+       NOT LIKE '%LIKE ''%,%''%interval ''45 minutes''%'
   THEN
     RAISE EXCEPTION
       'Health-check cron non optimisé ou incomplet';

@@ -1,9 +1,9 @@
 BEGIN;
 
--- L'ancien export portait le nom FEC mais ne produisait qu'une ligne crédit
--- par facture. Il incluait en plus les comptes test et les documents annulés.
--- La nouvelle signature retourne les 18 colonnes réglementaires et des
--- écritures équilibrées client / produit / TVA pour factures comme avoirs.
+-- Compatibilité : le nom historique de la RPC est conservé, mais son résultat
+-- est explicitement un JOURNAL DES VENTES au format technique 18 colonnes.
+-- Il ne doit pas être présenté comme le FEC réglementaire complet, qui doit
+-- regrouper tous les journaux comptables de l'exercice.
 DROP FUNCTION IF EXISTS public.fn_export_fec(integer);
 
 CREATE FUNCTION public.fn_export_fec(p_annee integer)
@@ -36,44 +36,88 @@ BEGIN
     RETURN;
   END IF;
 
-  RETURN QUERY
-  WITH documents AS (
-    SELECT
-      f.numero_facture,
-      f.date_emission,
-      e.siret::text AS siret,
-      e.nom AS etablissement_nom,
-      f.type_document = 'AVOIR'
-        OR COALESCE(f.montant_signe, f.montant_ht, 0) < 0 AS est_avoir,
-      abs(COALESCE(f.montant_signe, f.montant_ht, 0))::numeric AS montant_ht,
-      abs(COALESCE(f.montant_ttc, 0))::numeric AS montant_ttc
+  -- Aucun export silencieusement déséquilibré : si une facture de production
+  -- comptabilisée ne respecte pas HT + TVA = TTC au centime, l'export s'arrête.
+  IF EXISTS (
+    SELECT 1
     FROM public.factures f
     JOIN public.etablissements e ON e.id = f.etablissement_id
-    WHERE EXTRACT(YEAR FROM f.date_emission) = p_annee
+    WHERE EXTRACT(
+            YEAR FROM f.date_emission AT TIME ZONE 'Europe/Paris'
+          ) = p_annee
       AND e.est_compte_test IS FALSE
       AND f.statut NOT IN ('BROUILLON', 'ANNULEE')
       AND f.numero_facture IS NOT NULL
       AND f.date_emission IS NOT NULL
+      AND (
+        f.montant_ht IS NULL
+        OR f.montant_tva IS NULL
+        OR f.montant_ttc IS NULL
+        OR pg_catalog.round(pg_catalog.abs(f.montant_ttc), 2) <= 0
+        OR pg_catalog.round(pg_catalog.abs(f.montant_ttc), 2)
+           <> pg_catalog.round(pg_catalog.abs(f.montant_ht), 2)
+              + pg_catalog.round(pg_catalog.abs(f.montant_tva), 2)
+      )
+  ) THEN
+    RAISE EXCEPTION USING
+      ERRCODE = '22000',
+      MESSAGE = 'Export journal des ventes interrompu : montants HT, TVA ou TTC incohérents.';
+  END IF;
+
+  RETURN QUERY
+  WITH documents_bruts AS (
+    SELECT
+      f.numero_facture,
+      (f.date_emission AT TIME ZONE 'Europe/Paris')::date AS date_comptable,
+      e.siret::text AS siret,
+      e.nom AS etablissement_nom,
+      f.type_document = 'AVOIR'
+        OR COALESCE(f.montant_signe, f.montant_ht, 0) < 0 AS est_avoir,
+      pg_catalog.round(pg_catalog.abs(f.montant_ht), 2)::numeric AS montant_ht,
+      pg_catalog.round(pg_catalog.abs(f.montant_tva), 2)::numeric AS montant_tva,
+      pg_catalog.round(pg_catalog.abs(f.montant_ttc), 2)::numeric AS montant_ttc
+    FROM public.factures f
+    JOIN public.etablissements e ON e.id = f.etablissement_id
+    WHERE EXTRACT(
+            YEAR FROM f.date_emission AT TIME ZONE 'Europe/Paris'
+          ) = p_annee
+      AND e.est_compte_test IS FALSE
+      AND f.statut NOT IN ('BROUILLON', 'ANNULEE')
+      AND f.numero_facture IS NOT NULL
+      AND f.date_emission IS NOT NULL
+  ),
+  documents AS (
+    SELECT
+      d.*,
+      'VE-' || p_annee::text || '-'
+        || pg_catalog.lpad(
+          pg_catalog.row_number() OVER (
+            ORDER BY d.date_comptable, d.numero_facture
+          )::text,
+          8,
+          '0'
+        ) AS ecriture_num
+    FROM documents_bruts d
   )
   SELECT
     'VE'::text,
     'Ventes'::text,
-    d.numero_facture,
-    pg_catalog.to_char(d.date_emission, 'YYYYMMDD'),
+    d.ecriture_num,
+    pg_catalog.to_char(d.date_comptable, 'YYYYMMDD'),
     l.compte_num,
     l.compte_lib,
     CASE WHEN l.ordre = 1 THEN d.siret ELSE ''::text END,
     CASE WHEN l.ordre = 1 THEN d.etablissement_nom ELSE ''::text END,
     d.numero_facture,
-    pg_catalog.to_char(d.date_emission, 'YYYYMMDD'),
+    pg_catalog.to_char(d.date_comptable, 'YYYYMMDD'),
     CASE WHEN d.est_avoir THEN 'Avoir commission Jolene' ELSE 'Commission Jolene' END,
     l.debit,
     l.credit,
     ''::text,
     ''::text,
-    pg_catalog.to_char(d.date_emission, 'YYYYMMDD'),
-    l.montant_devise,
-    'EUR'::text
+    pg_catalog.to_char(d.date_comptable, 'YYYYMMDD'),
+    NULL::numeric,
+    NULL::text
   FROM documents d
   CROSS JOIN LATERAL (
     VALUES
@@ -82,28 +126,25 @@ BEGIN
         '411000'::text,
         'Clients'::text,
         CASE WHEN d.est_avoir THEN 0::numeric ELSE d.montant_ttc END,
-        CASE WHEN d.est_avoir THEN d.montant_ttc ELSE 0::numeric END,
-        d.montant_ttc
+        CASE WHEN d.est_avoir THEN d.montant_ttc ELSE 0::numeric END
       ),
       (
         2,
         '706000'::text,
         'Prestations de services'::text,
         CASE WHEN d.est_avoir THEN d.montant_ht ELSE 0::numeric END,
-        CASE WHEN d.est_avoir THEN 0::numeric ELSE d.montant_ht END,
-        d.montant_ht
+        CASE WHEN d.est_avoir THEN 0::numeric ELSE d.montant_ht END
       ),
       (
         3,
         '445710'::text,
         'TVA collectée'::text,
-        CASE WHEN d.est_avoir THEN greatest(d.montant_ttc - d.montant_ht, 0::numeric) ELSE 0::numeric END,
-        CASE WHEN d.est_avoir THEN 0::numeric ELSE greatest(d.montant_ttc - d.montant_ht, 0::numeric) END,
-        greatest(d.montant_ttc - d.montant_ht, 0::numeric)
+        CASE WHEN d.est_avoir THEN d.montant_tva ELSE 0::numeric END,
+        CASE WHEN d.est_avoir THEN 0::numeric ELSE d.montant_tva END
       )
-  ) AS l(ordre, compte_num, compte_lib, debit, credit, montant_devise)
-  WHERE l.montant_devise > 0
-  ORDER BY d.date_emission, d.numero_facture, l.ordre;
+  ) AS l(ordre, compte_num, compte_lib, debit, credit)
+  WHERE l.debit <> 0 OR l.credit <> 0
+  ORDER BY d.date_comptable, d.ecriture_num, l.ordre;
 END;
 $function$;
 
@@ -112,7 +153,7 @@ GRANT EXECUTE ON FUNCTION public.fn_export_fec(integer)
   TO authenticated, service_role;
 
 COMMENT ON FUNCTION public.fn_export_fec(integer) IS
-  'FEC à 18 colonnes réservé aux administrateurs; écritures équilibrées et limitées aux documents comptabilisés des établissements de production.';
+  'Nom historique conservé pour compatibilité : export du seul journal des ventes au format 18 colonnes, non assimilable au FEC réglementaire complet; production uniquement.';
 
 INSERT INTO private.security_definer_inventory (
   signature,
@@ -125,7 +166,7 @@ SELECT
   'fn_export_fec(integer)',
   'ADMIN_EST_ADMIN_VALIDE',
   pg_catalog.md5(p.prosrc),
-  'RPC administrateur: FEC 18 colonnes équilibré, limité aux établissements de production et aux documents comptabilisés.',
+  'RPC administrateur: journal des ventes 18 colonnes équilibré, limité aux établissements de production et aux documents comptabilisés.',
   pg_catalog.now()
 FROM pg_catalog.pg_proc p
 WHERE p.oid = 'public.fn_export_fec(integer)'::pg_catalog.regprocedure

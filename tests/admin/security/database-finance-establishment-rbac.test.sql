@@ -16,9 +16,14 @@ BEGIN
      OR v_definition NOT LIKE '%411000%'
      OR v_definition NOT LIKE '%706000%'
      OR v_definition NOT LIKE '%445710%'
+     OR v_definition NOT LIKE '%AT TIME ZONE ''Europe/Paris''%'
+     OR v_definition NOT LIKE '%HT, TVA ou TTC incohérents%'
+     OR v_definition NOT LIKE '%round(pg_catalog.abs(f.montant_ttc), 2) <= 0%'
+     OR v_definition NOT LIKE '%NULL::numeric%NULL::text%'
+     OR v_definition NOT LIKE '%''VE-'' || p_annee::text%'
      OR pg_get_function_result('public.fn_export_fec(integer)'::regprocedure)
         NOT LIKE '%"JournalCode" text%"Idevise" text%' THEN
-    RAISE EXCEPTION 'Export FEC incomplet, non équilibré ou non borné à la production';
+    RAISE EXCEPTION 'Journal des ventes incomplet, non équilibré ou non borné à la production';
   END IF;
 
   WITH reviewed(signature) AS (VALUES
