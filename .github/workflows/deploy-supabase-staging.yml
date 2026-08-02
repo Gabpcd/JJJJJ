@@ -423,6 +423,11 @@ jobs:
           INVENTORY_COUNT=$(psql "$URL" -t -A -v ON_ERROR_STOP=1 -c "
             SELECT count(*) FROM private.security_definer_inventory;
           ")
+          EXPECTED_INVENTORY_COUNT=$(python3 -c "
+          import csv
+          with open('/tmp/security-definer-inventory.csv', newline='', encoding='utf-8-sig') as source:
+              print(sum(1 for _ in csv.DictReader(source)))
+          ")
           PROFILE_RULES=$(psql "$URL" -t -A -v ON_ERROR_STOP=1 -c "
             SELECT count(*) FROM public.regles_exercice_profession;
           ")
@@ -540,8 +545,12 @@ jobs:
             echo "::error::Migrations lancement incomplètes sur staging ($LAUNCH_MIGRATIONS/5)."
             exit 1
           fi
-          if [ "$INVENTORY_COUNT" != '426' ]; then
-            echo "::error::Inventaire SECURITY DEFINER staging incomplet ($INVENTORY_COUNT/426)."
+          if ! [[ "$EXPECTED_INVENTORY_COUNT" =~ ^[1-9][0-9]*$ ]]; then
+            echo "::error::Inventaire SECURITY DEFINER production illisible ($EXPECTED_INVENTORY_COUNT)."
+            exit 1
+          fi
+          if [ "$INVENTORY_COUNT" != "$EXPECTED_INVENTORY_COUNT" ]; then
+            echo "::error::Inventaire SECURITY DEFINER staging incomplet ($INVENTORY_COUNT/$EXPECTED_INVENTORY_COUNT)."
             exit 1
           fi
           if [ "$PROFILE_RULES" != '17' ]; then
@@ -578,7 +587,7 @@ jobs:
           fi
 
           echo "Migrations lancement : $LAUNCH_MIGRATIONS/5"
-          echo "Inventaire SECURITY DEFINER : $INVENTORY_COUNT"
+          echo "Inventaire SECURITY DEFINER : $INVENTORY_COUNT/$EXPECTED_INVENTORY_COUNT"
           echo "Référentiel des professions : $PROFILE_RULES/17"
           echo "Matrice des modes d'exercice : $EXERCISE_MATRIX_RULES/43"
           echo "Accès service_role/private : OK"

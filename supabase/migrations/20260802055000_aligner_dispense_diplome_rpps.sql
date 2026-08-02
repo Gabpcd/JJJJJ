@@ -3,6 +3,34 @@
 -- donc du DIPLOME et de l'attestation RPPS_ADELI. Un ADELI validé seul ne
 -- dispense que de l'attestation RPPS_ADELI.
 
+-- Le bootstrap de staging restaure le schéma sans les lignes de référence.
+-- Réaffirmer ici l'exigence garantit que l'absence de diplôme reste bloquante
+-- tant qu'aucun RPPS n'a effectivement été validé par l'API.
+INSERT INTO public.documents_requis_par_profession AS drp (
+  profession,
+  type_document,
+  est_critique,
+  a_expiration,
+  duree_validite_mois,
+  description,
+  type_exercice_requis
+)
+SELECT
+  p.profession,
+  'DIPLOME'::public.type_document,
+  true,
+  false,
+  NULL,
+  'Diplôme requis hors dispense accordée par un RPPS validé par l''API.',
+  'TOUS'
+FROM unnest(enum_range(NULL::public.type_profession)) AS p(profession)
+ON CONFLICT (profession, type_document) DO UPDATE
+SET est_critique = true,
+    a_expiration = false,
+    duree_validite_mois = NULL,
+    type_exercice_requis = 'TOUS',
+    description = COALESCE(NULLIF(drp.description, ''), EXCLUDED.description);
+
 CREATE OR REPLACE FUNCTION public.fn_document_requis_par_mission_active(
   p_document_id uuid
 )

@@ -7,6 +7,7 @@ BEGIN;
 DO $rpps_diploma$
 DECLARE
   v_ide uuid := gen_random_uuid();
+  v_adeli uuid := gen_random_uuid();
   v_as uuid := gen_random_uuid();
   v_rpps text := '1' || right(
     lpad(regexp_replace(gen_random_uuid()::text, '[^0-9]', '', 'g'), 10, '0'),
@@ -80,19 +81,68 @@ BEGIN
     RAISE EXCEPTION 'RPPS-DIPLOME-T2: le cache n''a pas été recalculé après validation RPPS';
   END IF;
 
-  -- ADELI seul dispense de la ligne RPPS_ADELI, mais pas du diplôme.
+  -- Une révocation serveur du RPPS rétablit immédiatement l'exigence du
+  -- diplôme. La GUC reproduit le chemin privilégié utilisé par les services
+  -- internes sans dépendre de l'identité SQL du runner de test.
+  PERFORM set_config('jolene.system_update', 'true', true);
   UPDATE public.soignants
   SET rpps_verifie = false,
-      rpps_verifie_le = NULL,
-      adeli_verifie = true,
-      adeli_verifie_le = now()
+      rpps_verifie_le = NULL
   WHERE id = v_ide;
+  PERFORM set_config('jolene.system_update', '', true);
+
+  IF (SELECT rpps_verifie FROM public.soignants WHERE id = v_ide) IS NOT FALSE THEN
+    RAISE EXCEPTION 'RPPS-DIPLOME-T3: la révocation serveur du RPPS n''a pas été persistée';
+  END IF;
 
   IF public.fn_documents_ok_pour_mission(v_ide, 'SALARIE') IS NOT FALSE THEN
-    RAISE EXCEPTION 'RPPS-DIPLOME-T3: ADELI seul a dispensé du diplôme';
+    RAISE EXCEPTION 'RPPS-DIPLOME-T4: la révocation RPPS n''a pas rétabli le diplôme';
   END IF;
   IF (SELECT tous_documents_valides FROM public.soignants WHERE id = v_ide) IS NOT FALSE THEN
-    RAISE EXCEPTION 'RPPS-DIPLOME-T4: le cache n''a pas été invalidé à la révocation RPPS';
+    RAISE EXCEPTION 'RPPS-DIPLOME-T5: le cache n''a pas été invalidé à la révocation RPPS';
+  END IF;
+
+  -- ADELI seul dispense de la ligne RPPS_ADELI, mais pas du diplôme. Un
+  -- profil indépendant évite qu'un ancien verdict RPPS influence ce cas.
+  INSERT INTO public.soignants(
+    id, prenom, nom, email, date_naissance, profession, type_exercice,
+    rpps_verifie, adeli_verifie, adeli_verifie_le, est_compte_test
+  ) VALUES (
+    v_adeli, 'Sam', 'AdeliTest',
+    'adeli-diploma-' || v_adeli::text || '@test.local', DATE '1992-03-03',
+    'IDE', 'SALARIE', false, true, now(), true
+  );
+
+  INSERT INTO public.documents_soignants(
+    soignant_id, type_document, s3_cle, nom_fichier,
+    statut_verification, valide_depuis, valide_jusqua, verifie_le,
+    resultat_ia, nom_extrait_ia, prenom_extrait_ia, coherence_nom
+  )
+  SELECT
+    v_adeli,
+    drp.type_document,
+    v_adeli::text || '/documents/' || lower(drp.type_document::text) || '.pdf',
+    lower(drp.type_document::text) || '.pdf',
+    'VERIFIE',
+    current_date,
+    CASE WHEN drp.a_expiration THEN current_date + 365 ELSE NULL END,
+    now(),
+    CASE
+      WHEN drp.type_document = 'CARTE_IDENTITE'
+        THEN jsonb_build_object('date_naissance_extraite', '1992-03-03')
+      ELSE '{}'::jsonb
+    END,
+    'ADELITEST',
+    'Sam',
+    true
+  FROM public.documents_requis_par_profession drp
+  WHERE drp.profession = 'IDE'
+    AND drp.est_critique IS TRUE
+    AND drp.type_exercice_requis IN ('TOUS', 'SALARIE_ONLY')
+    AND drp.type_document NOT IN ('DIPLOME', 'RPPS_ADELI');
+
+  IF public.fn_documents_ok_pour_mission(v_adeli, 'SALARIE') IS NOT FALSE THEN
+    RAISE EXCEPTION 'RPPS-DIPLOME-T6: ADELI seul a dispensé du diplôme';
   END IF;
 
   -- Défense en profondeur : une profession sans RPPS ne bénéficie jamais de
@@ -140,7 +190,7 @@ BEGIN
   WHERE id = v_as;
 
   IF public.fn_documents_ok_pour_mission(v_as, 'SALARIE') IS NOT FALSE THEN
-    RAISE EXCEPTION 'RPPS-DIPLOME-T5: une profession sans RPPS a été dispensée du diplôme';
+    RAISE EXCEPTION 'RPPS-DIPLOME-T7: une profession sans RPPS a été dispensée du diplôme';
   END IF;
 END;
 $rpps_diploma$;
