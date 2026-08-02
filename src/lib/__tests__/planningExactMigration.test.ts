@@ -244,7 +244,7 @@ describe('planning exact de bout en bout', () => {
     expect(migration).toContain(') <> 104 THEN');
   });
 
-  it('restaure l’inventaire prod avant le push staging et attend 426 entrées', () => {
+  it('restaure l’inventaire prod avant le push staging et en vérifie le compte dynamique', () => {
     const restauration = stagingWorkflow.indexOf(
       "TRUNCATE TABLE private.security_definer_inventory",
     );
@@ -253,7 +253,10 @@ describe('planning exact de bout en bout', () => {
     expect(stagingWorkflow).toContain('/tmp/security-definer-inventory.csv');
     expect(restauration).toBeGreaterThanOrEqual(0);
     expect(push).toBeGreaterThan(restauration);
-    expect(stagingWorkflow).toContain("INVENTORY_COUNT\" != '426'");
+    expect(stagingWorkflow).toContain('EXPECTED_INVENTORY_COUNT=$(python3 -c');
+    expect(stagingWorkflow).toContain(
+      'INVENTORY_COUNT\" != \"$EXPECTED_INVENTORY_COUNT\"',
+    );
     expect(stagingWorkflow.match(/--single-transaction/g)).toHaveLength(3);
     expect(stagingWorkflow).not.toContain(
       '-f supabase/migrations/20260729121443_figer_inventaire_security_definer.sql',
