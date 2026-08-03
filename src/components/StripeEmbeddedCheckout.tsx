@@ -21,6 +21,10 @@ interface FunctionPayload {
   status?: string;
 }
 
+const messageErreurPaiement = (code?: string) => code === 'TEST_ACCOUNT_PAYMENT_DISABLED'
+  ? 'Compte de test : les paiements réels sont désactivés. Aucun débit n’a été effectué.'
+  : code || 'Erreur lors de la création de la session de paiement';
+
 async function readFunctionErrorPayload(fnError: unknown): Promise<FunctionPayload | null> {
   if (!fnError || typeof fnError !== 'object' || !("context" in fnError)) {
     return null;
@@ -126,7 +130,7 @@ export function StripeEmbeddedCheckout({
         return;
       }
 
-      setError(payload?.error || 'Erreur lors de la création de la session de paiement');
+      setError(messageErreurPaiement(payload?.error));
       setLoadingCheckout(false);
     };
 

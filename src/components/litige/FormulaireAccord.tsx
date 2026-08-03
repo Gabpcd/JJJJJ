@@ -163,6 +163,29 @@ export function FormulaireAccord({ litigeId, propositionExistante, roleUtilisate
     }
   }
 
+  // Le proposeur ne peut pas écraser sa propre proposition pendant que
+  // l'autre partie ne l'a pas encore acceptée/refusée.
+  if (propositionExistante && propositionExistante.proposeur_role === roleUtilisateur) {
+    const mods = propositionExistante.modifications || {};
+    return (
+      <div className="rounded-xl border-2 border-amber-300 bg-amber-50 p-4 space-y-3">
+        <div className="flex items-center gap-2">
+          <Clock className="h-5 w-5 text-amber-700" />
+          <h3 className="font-bold text-foreground">Proposition envoyée</h3>
+        </div>
+        <p className="text-sm text-muted-foreground">
+          Elle est en attente de la réponse de l'autre partie. Vous ne pouvez pas envoyer une seconde proposition entre-temps.
+        </p>
+        <div className="rounded-lg bg-card border border-border p-3 space-y-2 text-sm">
+          <p className="font-semibold text-primary">{TYPES_LABEL[propositionExistante.type]}</p>
+          {mods.montant_total_corrige != null && <p>Nouveau montant : {mods.montant_total_corrige} €</p>}
+          {mods.pourcentage_compensation != null && <p>Compensation : -{mods.pourcentage_compensation}%</p>}
+          {propositionExistante.justification && <p className="italic text-muted-foreground">« {propositionExistante.justification} »</p>}
+        </div>
+      </div>
+    );
+  }
+
   // === Affichage proposition existante ===
   if (propositionExistante && propositionExistante.proposeur_role !== roleUtilisateur) {
     const mods = propositionExistante.modifications || {};

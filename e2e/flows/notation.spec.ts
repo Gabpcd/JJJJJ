@@ -34,6 +34,12 @@ import { TEST_ACCOUNTS } from '../helpers/auth';
 import { adminClient, userClient } from '../helpers/db';
 
 test.describe('Flow notation bidirectionnelle', () => {
+  // Ce parcours exécute le cycle métier complet en base (candidature,
+  // contrat, transitions puis purge FK). En CI, ce setup consomme à lui seul
+  // l'essentiel des 30 s par défaut avant même les assertions d'interface.
+  // Les attentes UI restent volontairement strictes à 10 s chacune.
+  test.describe.configure({ timeout: 90_000 });
+
   /** IDs des missions seedées par CE test — purge ciblée ordonnée (la clôture
    *  TERMINEE crée des enfants en FK NO ACTION : bulletin de paie, cotisations,
    *  conformité, contrat, conversation… cleanupSeedData seul échoue en silence). */

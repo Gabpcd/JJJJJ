@@ -14,8 +14,7 @@ test.describe('Flow litige', () => {
   test('soignant authentifié peut accéder à /soignant/litiges', async ({ page }) => {
     await loginAs(page, 'soignant');
 
-    await page.goto('/soignant/litiges');
-    await page.waitForLoadState('networkidle');
+    await page.goto('/soignant/litiges', { waitUntil: 'domcontentloaded' });
 
     await expect(page.locator('h1, h2').first()).toBeVisible({ timeout: 10_000 });
   });

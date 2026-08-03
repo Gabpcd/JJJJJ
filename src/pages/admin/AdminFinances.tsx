@@ -95,6 +95,7 @@ export default function AdminFinances() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [sortKey, setSortKey] = useState<SortKey>('commissions_ht');
   const [sortDir, setSortDir] = useState<SortDir>('desc');
+  const [afficherTests, setAfficherTests] = useState(false);
 
   // Filtre temporel du récap « sur la période » + détail par établissement.
   const [periode, setPeriode] = useState<Periode>('tout');
@@ -133,15 +134,15 @@ export default function AdminFinances() {
   const anneePrecedente = moisCourant === 0 ? anneeCourante - 1 : anneeCourante;
 
   const facturesProduction = useMemo(
-    () => factures.filter(f => (f.etablissements as any)?.est_compte_test === false),
-    [factures],
+    () => afficherTests ? factures : factures.filter(f => (f.etablissements as any)?.est_compte_test === false),
+    [afficherTests, factures],
   );
   const missionsProduction = useMemo(
-    () => missions.filter(m => (
+    () => afficherTests ? missions : missions.filter(m => (
       (m.etablissements as any)?.est_compte_test === false
       && (m.soignants as any)?.est_compte_test === false
     )),
-    [missions],
+    [afficherTests, missions],
   );
   const facturesComptabilisees = useMemo(
     () => facturesProduction.filter(estDocumentComptabilise),
@@ -429,6 +430,19 @@ export default function AdminFinances() {
               ))}
             </div>
           </div>
+          <label className="flex w-fit items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-xs text-foreground">
+            <input
+              type="checkbox"
+              checked={afficherTests}
+              onChange={(event) => setAfficherTests(event.target.checked)}
+            />
+            Afficher les données de test (hors comptabilité de production)
+          </label>
+          {afficherTests && (
+            <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900" role="status">
+              Mode contrôle TEST actif : ces montants servent au diagnostic et restent exclus des statistiques de production.
+            </p>
+          )}
           {periode === 'perso' && (
             <div className="flex flex-wrap items-end gap-3 rounded-xl border border-border bg-card p-3">
               <label className="flex flex-col gap-1 text-xs text-muted-foreground">

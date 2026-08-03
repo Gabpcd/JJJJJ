@@ -226,7 +226,10 @@ export default function ExportPaie() {
               <h1 className="font-semibold text-foreground">Export de paie bloqué</h1>
               <p className="text-sm text-muted-foreground mt-1">{erreurChargement}</p>
               <p className="text-xs text-muted-foreground mt-1">Aucun fichier n'est généré tant que les créneaux, validations et profils ne sont pas tous vérifiables.</p>
-              <Button className="mt-4" onClick={() => setReloadKey((valeur) => valeur + 1)}>Réessayer</Button>
+              <div className="mt-4 flex flex-wrap gap-2">
+                <Button onClick={() => navigate('/etablissement/presences?tab=alertes')}>Voir les présences à régulariser</Button>
+                <Button variant="outline" onClick={() => setReloadKey((valeur) => valeur + 1)}>Réessayer</Button>
+              </div>
             </div>
           </div>
         </div>

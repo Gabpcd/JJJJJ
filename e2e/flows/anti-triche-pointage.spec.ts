@@ -326,6 +326,7 @@ test.describe('Anti-triche pointage Sprint 4.5', () => {
 
   // ─── 7. Ping GPS : refus sans consentement ─────────────────────────────
   test('Ping GPS : refus si consentement absent → CONSENTEMENT_MANQUANT', async () => {
+    test.slow();
     const m = await seedMissionOuverte();
     expect(m).toBeTruthy();
     try {

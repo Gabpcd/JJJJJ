@@ -77,6 +77,9 @@ type EtabState = {
   verification_source_version: number;
   nom: string | null;
   siret?: string | null;
+  siret_verifie?: boolean | null;
+  statut_verification?: string | null;
+  peut_publier_missions?: boolean | null;
   type?: string | null;
   adresse_rue?: string | null;
   adresse_code_postal?: string | null;
@@ -154,7 +157,7 @@ export default function ActiverEtablissement() {
     if (!etablissementId) return;
     const { data } = await supabase
       .from('etablissements')
-      .select('verification_source_version, nom, siret, type, adresse_rue, adresse_code_postal, adresse_ville, email_contact, contrat_service_signe, contrat_service_signe_le, finess, finess_verifie, finess_raison_sociale, representant_nom, representant_prenom, representant_identite_verifiee, justificatif_fonction_verifie, email_contact_verifie, rattachement_methode, rattachement_verifie, mode_paiement_commission, stripe_sepa_payment_method_id, jour_paie_habituel')
+      .select('verification_source_version, nom, siret, siret_verifie, statut_verification, peut_publier_missions, type, adresse_rue, adresse_code_postal, adresse_ville, email_contact, contrat_service_signe, contrat_service_signe_le, finess, finess_verifie, finess_raison_sociale, representant_nom, representant_prenom, representant_identite_verifiee, justificatif_fonction_verifie, email_contact_verifie, rattachement_methode, rattachement_verifie, mode_paiement_commission, stripe_sepa_payment_method_id, jour_paie_habituel')
       .eq('id', etablissementId)
       .maybeSingle();
     if (data) {
@@ -189,17 +192,23 @@ export default function ActiverEtablissement() {
   // ── États dérivés ──────────────────────────────────────────────────────────
   const contratSigne = !!etab?.contrat_service_signe;
   const rattachOk = !!etab?.rattachement_verifie;
+  const siretOk = !!etab?.siret_verifie;
   const finessOk = !!etab?.finess_verifie;
   const identiteOk = !!etab?.representant_identite_verifiee;
   const justifOk = !!etab?.justificatif_fonction_verifie;
   const estDirigeant = etab?.rattachement_methode === 'AUTO_DIRIGEANT';
   const emailOk = !!etab?.email_contact_verifie;
-  const verificationEtablissementOk = rattachOk && finessOk;
-  const toutActive = contratSigne && verificationEtablissementOk;
+  // Même prédicat que le verrou backend de publication. Une validation FINESS
+  // seule ne doit jamais afficher l'établissement comme activé.
+  const verificationEtablissementOk = siretOk && finessOk && identiteOk && rattachOk;
+  const toutActive = contratSigne
+    && verificationEtablissementOk
+    && etab?.statut_verification === 'VERIFIE'
+    && etab?.peut_publier_missions === true;
 
   // Première étape incomplète (1 contrat → 2 vérif). Le RIB (3) est différé,
   // jamais bloquant.
-  const premiereEtapeIncomplete: 1 | 2 | null = !contratSigne ? 1 : !verificationEtablissementOk ? 2 : null;
+  const premiereEtapeIncomplete: 1 | 2 | null = !contratSigne ? 1 : !toutActive ? 2 : null;
 
   // Au chargement, ouvrir automatiquement la première étape incomplète.
   useEffect(() => {
@@ -217,7 +226,7 @@ export default function ActiverEtablissement() {
   const etatEtape = (index: 1 | 2 | 3): EtatEtape => {
     if (index === 1) return contratSigne ? 'fait' : premiereEtapeIncomplete === 1 ? 'actuel' : 'a_faire';
     if (index === 2) {
-      if (verificationEtablissementOk) return 'fait';
+      if (toutActive) return 'fait';
       return premiereEtapeIncomplete === 2 ? 'actuel' : 'a_faire';
     }
     // Étape 3 (RIB) : différée → toujours « à renseigner plus tard ».
@@ -551,7 +560,11 @@ export default function ActiverEtablissement() {
             <p className="text-sm text-muted-foreground mt-1">
               {toutActive
                 ? 'Votre contrat est signé et votre établissement est vérifié. Vous pouvez publier des missions. Le RIB vous sera demandé à la première facturation.'
-                : `Étape ${premiereEtapeIncomplete === 1 ? '1 — contrat de service' : '2 — vérification de l\'établissement'} à compléter.`}
+                : premiereEtapeIncomplete === 1
+                  ? 'Étape 1 — contrat de service à compléter.'
+                  : verificationEtablissementOk
+                    ? 'Le dossier est complet. La validation finale Jolene est en cours ; la publication reste bloquée jusque-là.'
+                    : 'Étape 2 — vérification de l’établissement à compléter.'}
             </p>
             {!toutActive && (
               <BoutonY2K size="sm" className="mt-3 gap-1" onClick={avancerVersProchaineEtape} iconeDroite={<ChevronRight className="h-4 w-4" />}>
@@ -646,13 +659,23 @@ export default function ActiverEtablissement() {
               <EnTeteEtape index={2} etat={etatEtape(2)} />
             </div>
 
-            {verificationEtablissementOk ? (
+            {toutActive ? (
               <div className="rounded-xl border border-jolene-cyan-200 bg-jolene-cyan-50 p-3 flex items-center gap-3">
                 <CheckCircle2 className="h-5 w-5 text-jolene-cyan-700 shrink-0" />
                 <div className="flex-1">
                   <p className="text-sm font-medium text-foreground">Établissement vérifié</p>
                   <p className="text-xs text-muted-foreground">
                     FINESS et rattachement validés — {LIBELLE_METHODE[etab?.rattachement_methode || 'ADMIN'] || 'validé'}.
+                  </p>
+                </div>
+              </div>
+            ) : verificationEtablissementOk ? (
+              <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 flex items-center gap-3" role="status">
+                <Clock className="h-5 w-5 text-amber-700 shrink-0" />
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-foreground">Dossier complet — validation finale en cours</p>
+                  <p className="text-xs text-muted-foreground">
+                    Les justificatifs sont reçus. Le statut final est « {etab?.statut_verification || 'EN_COURS'} » et la publication sera débloquée uniquement après validation Jolene.
                   </p>
                 </div>
               </div>

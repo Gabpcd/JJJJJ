@@ -106,36 +106,43 @@ describe('WorkflowPaiementMission — paiement salarié', () => {
       if (name === 'fn_mode_paiement_mission') {
         return Promise.resolve({ data: salaryPaymentInfo, error: null });
       }
-      if (name === 'fn_declarer_paiement_soignant') {
+      if (name === 'fn_declarer_paiement_soignant' || name === 'fn_declarer_paiement_soignant_v2') {
         return Promise.resolve({ data: { success: true }, error: null });
       }
       return Promise.resolve({ data: null, error: { message: `RPC inattendue : ${name}` } });
     });
   });
 
-  it('demande le net réel du bulletin et n’envoie jamais automatiquement l’estimation', async () => {
+  it('exige le total net du bulletin et refuse un paiement partiel', async () => {
     renderWorkflow();
 
     expect(await screen.findByText('Virement de rémunération salariée')).toBeInTheDocument();
     expect(screen.getByText(/Estimation indicative avant PAS/i)).toHaveTextContent('346,85');
 
-    const montantInput = screen.getByLabelText(/Montant net réellement versé/i);
-    expect(montantInput).toHaveValue(null);
-    fireEvent.change(montantInput, { target: { value: '312.47' } });
+    const montantDuInput = screen.getByLabelText(/Montant net total dû/i);
+    const montantVerseInput = screen.getByLabelText(/Montant réellement versé/i);
+    fireEvent.change(montantDuInput, { target: { value: '346.85' } });
+    fireEvent.change(montantVerseInput, { target: { value: '312.47' } });
     fireEvent.change(screen.getByLabelText(/Référence de paiement/i), { target: { value: 'VIR-2026-001' } });
     fireEvent.click(screen.getByRole('checkbox'));
     fireEvent.click(screen.getByRole('button', { name: 'Déclarer le paiement effectué' }));
 
-    await waitFor(() => {
-      expect(mocks.rpc).toHaveBeenCalledWith(
-        'fn_declarer_paiement_soignant',
-        expect.objectContaining({ p_mission_id: 'mission-salariee', p_montant: 312.47 }),
-      );
-    });
     expect(mocks.rpc).not.toHaveBeenCalledWith(
-      'fn_declarer_paiement_soignant',
-      expect.objectContaining({ p_montant: 346.85 }),
+      'fn_declarer_paiement_soignant_v2',
+      expect.anything(),
     );
+
+    fireEvent.change(montantVerseInput, { target: { value: '346.85' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Déclarer le paiement effectué' }));
+
+    await waitFor(() => expect(mocks.rpc).toHaveBeenCalledWith(
+      'fn_declarer_paiement_soignant_v2',
+      expect.objectContaining({
+        p_mission_id: 'mission-salariee',
+        p_montant_verse: 346.85,
+        p_montant_total_du: 346.85,
+      }),
+    ));
   });
 
   it('reste bloqué en cas d’erreur de chargement et permet une relance explicite', async () => {
@@ -153,11 +160,11 @@ describe('WorkflowPaiementMission — paiement salarié', () => {
     renderWorkflow();
 
     expect(await screen.findByRole('alert')).toHaveTextContent('réseau indisponible');
-    expect(screen.queryByLabelText(/Montant net réellement versé/i)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/Montant réellement versé/i)).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Réessayer' }));
 
-    expect(await screen.findByLabelText(/Montant net réellement versé/i)).toBeInTheDocument();
+    expect(await screen.findByLabelText(/Montant réellement versé/i)).toBeInTheDocument();
     expect(attempts).toBe(2);
   });
 });

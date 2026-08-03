@@ -54,6 +54,7 @@ export function WorkflowPaiementMission({ missionId, soignantAssigneId, etabliss
   const [declaring, setDeclaring] = useState(false);
   const [reference, setReference] = useState('');
   const [montantNetReel, setMontantNetReel] = useState('');
+  const [montantNetDu, setMontantNetDu] = useState('');
   const [attestation, setAttestation] = useState(false);
   const [ribLoading, setRibLoading] = useState(false);
   const [ribData, setRibData] = useState<string | null>(null);
@@ -90,6 +91,7 @@ export function WorkflowPaiementMission({ missionId, soignantAssigneId, etabliss
       setStripeTransfer(null);
       setRibData(null);
       setMontantNetReel('');
+      setMontantNetDu('');
       try {
         const [modeResponse, paiementResponse, transferResponse] = await Promise.all([
           supabase.rpc('fn_mode_paiement_mission' as any, { p_mission_id: missionId }),
@@ -199,20 +201,41 @@ export function WorkflowPaiementMission({ missionId, soignantAssigneId, etabliss
     const montantDeclare = estPaiementSalarie
       ? Number(montantNetReel.replace(',', '.'))
       : Number(info?.montant_soignant ?? 0);
+    const montantDu = estPaiementSalarie
+      ? Number(montantNetDu.replace(',', '.'))
+      : montantDeclare;
     if (!Number.isFinite(montantDeclare) || montantDeclare <= 0) {
       toast.error(estPaiementSalarie
         ? 'Saisissez le montant net exact figurant sur le bulletin officiel.'
         : 'Montant de paiement invalide.');
       return;
     }
+    if (!Number.isFinite(montantDu) || montantDu <= 0) {
+      toast.error('Le montant total dû doit être positif.');
+      return;
+    }
+    if (estPaiementSalarie && Math.abs(montantDeclare - montantDu) > 0.005) {
+      toast.error('Le montant versé doit correspondre exactement au total net dû. Les paiements partiels ne sont pas acceptés.');
+      return;
+    }
     setDeclaring(true);
     try {
-      const { data, error } = await supabase.rpc('fn_declarer_paiement_soignant' as any, {
-        p_mission_id: missionId,
-        p_montant: montantDeclare,
-        p_reference: reference.trim(),
-        p_attestation_sur_l_honneur: attestation,
-      });
+      const { data, error } = estPaiementSalarie
+        ? await supabase.rpc('fn_declarer_paiement_soignant_v2' as any, {
+            p_mission_id: missionId,
+            p_montant_verse: montantDeclare,
+            p_montant_total_du: montantDu,
+            p_reference: reference.trim(),
+            p_methode: 'VIREMENT',
+            p_date_paiement: new Date().toISOString().slice(0, 10),
+            p_attestation_sur_l_honneur: attestation,
+          })
+        : await supabase.rpc('fn_declarer_paiement_soignant' as any, {
+            p_mission_id: missionId,
+            p_montant: montantDeclare,
+            p_reference: reference.trim(),
+            p_attestation_sur_l_honneur: attestation,
+          });
       if (error) throw error;
       const result = data as any;
       if (result?.error) {
@@ -226,6 +249,7 @@ export function WorkflowPaiementMission({ missionId, soignantAssigneId, etabliss
       toast.success('Paiement déclaré — le soignant sera notifié');
       setReference('');
       setMontantNetReel('');
+      setMontantNetDu('');
       // Reload payment status
       const { data: pData } = await supabase.from('paiements_soignant')
         .select('*').eq('mission_id', missionId)
@@ -391,9 +415,19 @@ export function WorkflowPaiementMission({ missionId, soignantAssigneId, etabliss
               </p>
             </>
           ) : (
-            <p className="text-muted-foreground">
-              Montant : <span className="text-foreground font-medium">{fmt(p.montant_net)}</span>
-            </p>
+            <>
+              <p className="text-muted-foreground">
+                Montant versé : <span className="text-foreground font-medium">{fmt(p.montant_net)}</span>
+              </p>
+              {p.montant_du_reference != null && (
+                <p className="text-muted-foreground">
+                  Total dû déclaré : <span className="text-foreground font-medium">{fmt(p.montant_du_reference)}</span>
+                  {p.solde_restant > 0 && (
+                    <span className="ml-1 font-semibold text-warning">· reste {fmt(p.solde_restant)}</span>
+                  )}
+                </p>
+              )}
+            </>
           )}
         </div>
 
@@ -499,6 +533,10 @@ export function WorkflowPaiementMission({ missionId, soignantAssigneId, etabliss
   const trimmedRef = reference.trim();
   const montantNetReelNombre = Number(montantNetReel.replace(',', '.'));
   const montantNetReelValide = Number.isFinite(montantNetReelNombre) && montantNetReelNombre > 0;
+  const montantNetDuNombre = Number(montantNetDu.replace(',', '.'));
+  const montantNetDuValide = Number.isFinite(montantNetDuNombre)
+    && montantNetDuNombre > 0
+    && montantNetReelNombre <= montantNetDuNombre;
   // Feedback aligné sur isRefValid : ≥6 caractères, ≥2 chiffres, ≥1 lettre.
   const refTooShort = trimmedRef.length > 0 && trimmedRef.length < 6;
   const refNoDigit = trimmedRef.length >= 6 && !/\d{2,}/.test(trimmedRef);
@@ -548,8 +586,22 @@ export function WorkflowPaiementMission({ missionId, soignantAssigneId, etabliss
       <>
       {estVirementSalarie && (
         <div className="space-y-2">
+          <label htmlFor={`montant-net-du-${missionId}`} className="text-xs font-medium text-foreground">
+            Montant net total dû selon le bulletin officiel *
+          </label>
+          <Input
+            id={`montant-net-du-${missionId}`}
+            type="number"
+            inputMode="decimal"
+            min="0.01"
+            step="0.01"
+            placeholder="Ex : 500.00"
+            value={montantNetDu}
+            onChange={e => setMontantNetDu(e.target.value)}
+            className="text-sm"
+          />
           <label htmlFor={`montant-net-reel-${missionId}`} className="text-xs font-medium text-foreground">
-            Montant net réellement versé (selon le bulletin officiel) *
+            Montant réellement versé aujourd’hui *
           </label>
           <Input
             id={`montant-net-reel-${missionId}`}
@@ -564,7 +616,7 @@ export function WorkflowPaiementMission({ missionId, soignantAssigneId, etabliss
             className="text-sm"
           />
           <p id={`montant-net-reel-aide-${missionId}`} className="text-[10px] text-muted-foreground">
-            Recopiez le net à payer du bulletin officiel. L'estimation affichée ci-dessus n'est jamais envoyée automatiquement.
+            Le règlement doit correspondre exactement au total net dû. Les paiements partiels ne sont pas acceptés.
           </p>
         </div>
       )}
@@ -603,7 +655,7 @@ export function WorkflowPaiementMission({ missionId, soignantAssigneId, etabliss
         size="sm"
         variant="secondary"
         onClick={declarerPaiement}
-        disabled={declaring || !isRefValid(reference) || !attestation || (estVirementSalarie && !montantNetReelValide)}
+        disabled={declaring || !isRefValid(reference) || !attestation || (estVirementSalarie && (!montantNetReelValide || !montantNetDuValide))}
         loading={declaring}
         className="gap-2"
         iconeGauche={declaring ? undefined : <Banknote className="h-4 w-4" />}

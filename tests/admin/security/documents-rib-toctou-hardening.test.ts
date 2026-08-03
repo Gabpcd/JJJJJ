@@ -136,8 +136,10 @@ describe('documents, RIB et TOCTOU de démarrage', () => {
   });
 
   it('ne masque plus FINESS et refuse les faux succès HTTP 200', () => {
-    expect(establishmentUi).toContain('const verificationEtablissementOk = rattachOk && finessOk');
-    expect(establishmentUi).toContain('{verificationEtablissementOk ? (');
+    expect(establishmentUi).toContain(
+      'const verificationEtablissementOk = siretOk && finessOk && identiteOk && rattachOk',
+    );
+    expect(establishmentUi).toContain(') : verificationEtablissementOk ? (');
     expect(establishmentUi.match(/data\?\.ok !== true/g)?.length).toBeGreaterThanOrEqual(2);
     expect(establishmentUi).toContain('Une revue humaine est nécessaire');
   });

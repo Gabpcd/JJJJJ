@@ -124,6 +124,14 @@ export async function telechargerFactureCommissionPDF(factureId: string) {
       list.push(c);
       creneauxByMission.set(c.mission_id, list);
     }
+    const debutFacture = (f as any).periode_debut ? new Date(`${String((f as any).periode_debut).slice(0, 10)}T00:00:00`) : null;
+    const finFacture = (f as any).periode_fin ? new Date(`${String((f as any).periode_fin).slice(0, 10)}T23:59:59.999`) : null;
+    const dansPeriodeFacturee = (date?: string | null) => {
+      if (!date || !debutFacture || !finFacture) return true;
+      const valeur = new Date(date).getTime();
+      return valeur >= debutFacture.getTime() && valeur <= finFacture.getTime();
+    };
+    const factureMonoMission = missions.length === 1 && Boolean((f as any).mission_id);
 
     const { default: jsPDF } = await import('jspdf');
     const autoTableMod = await import('jspdf-autotable');
@@ -238,9 +246,13 @@ export async function telechargerFactureCommissionPDF(factureId: string) {
         doc.text(sanitizeForPdf(profLine), PAGE.margin + 3, y + 10);
 
         const serviceLine = m.service ? `Service : ${m.service}` : '';
-        const debutStr = m.debut_le ? format(new Date(m.debut_le), "dd/MM/yyyy HH'h'mm", { locale: fr }) : '-';
-        const finStr = m.fin_le ? format(new Date(m.fin_le), "dd/MM/yyyy HH'h'mm", { locale: fr }) : '-';
-        const dureeStr = m.duree_heures ? `${Number(m.duree_heures).toFixed(1)} h` : '';
+        const debutAffiche = factureMonoMission && (f as any).periode_debut ? (f as any).periode_debut : m.debut_le;
+        const finAffiche = factureMonoMission && (f as any).periode_fin ? (f as any).periode_fin : m.fin_le;
+        const debutStr = debutAffiche ? format(new Date(debutAffiche), "dd/MM/yyyy HH'h'mm", { locale: fr }) : '-';
+        const finStr = finAffiche ? format(new Date(finAffiche), "dd/MM/yyyy HH'h'mm", { locale: fr }) : '-';
+        const dureeStr = factureMonoMission && (f as any).periode_debut && (f as any).periode_fin
+          ? ''
+          : (m.duree_heures ? `${Number(m.duree_heures).toFixed(1)} h` : '');
         const periodeLine = `${debutStr} -> ${finStr} (${dureeStr})`;
         doc.setFontSize(7);
         doc.setTextColor(...JOLENE_COLORS.textMuted);
@@ -248,8 +260,8 @@ export async function telechargerFactureCommissionPDF(factureId: string) {
         y += 19;
 
         // ── PASSE 3 : Section pointages ──
-        const pres = presencesByMission.get(m.id) || [];
-        const cren = creneauxByMission.get(m.id) || [];
+        const pres = (presencesByMission.get(m.id) || []).filter((p) => !factureMonoMission || dansPeriodeFacturee(p.pointage_arrivee_le));
+        const cren = (creneauxByMission.get(m.id) || []).filter((c) => !factureMonoMission || dansPeriodeFacturee(c.debut_le));
         if (pres.length > 0) {
           doc.setTextColor(...JOLENE_COLORS.text);
           doc.setFont('helvetica', 'bold');
@@ -307,17 +319,30 @@ export async function telechargerFactureCommissionPDF(factureId: string) {
         }
 
         // ── PASSE 4 : Décomposition financière mission (majorations détaillées) ──
-        const totalBrut = Number(m.total_brut || 0);
+        const totalBrutMission = Number(m.total_brut || 0);
         const tauxHoraire = Number(m.taux_horaire_base_fige || m.taux_horaire_base || 0);
         const majorations =
           Number(m.montant_majoration_nuit || 0) +
           Number(m.montant_majoration_dimanche || 0) +
           Number(m.montant_majoration_ferie || 0);
         const tauxCommission = Number(m.taux_commission_fige || 15);
-        const decompoRows: (string | number)[][] = [
+        const ifmMission = Number(m.montant_ifm || 0);
+        const icpMission = Number(m.montant_icp || 0);
+        const assietteMission = m.type_contrat_applique === 'SALARIE'
+          ? totalBrutMission + ifmMission + icpMission
+          : totalBrutMission;
+        const commissionHtFacturee = factureMonoMission ? Number((f as any).montant_ht || 0) : Number(m.montant_commission_ht || 0);
+        const commissionTvaFacturee = factureMonoMission ? Number((f as any).montant_tva || 0) : Number(m.montant_commission_tva || 0);
+        const commissionTtcFacturee = factureMonoMission ? Number((f as any).montant_ttc || 0) : Number(m.montant_commission_ttc || 0);
+        const assietteFacturee = tauxCommission > 0 ? commissionHtFacturee * 100 / tauxCommission : assietteMission;
+        const facturePartielle = factureMonoMission && Math.abs(assietteFacturee - assietteMission) > 0.01;
+        const totalBrut = facturePartielle ? assietteFacturee : totalBrutMission;
+        const decompoRows: (string | number)[][] = facturePartielle ? [
+          ['Assiette facturée pour la période', 'Base de calcul de cette facture uniquement', fmtEur(assietteFacturee)],
+        ] : [
           ['Brut de base', `${m.duree_heures || 0} h x ${tauxHoraire.toFixed(2)} E/h`, fmtEur(totalBrut - majorations)],
         ];
-        if (m.heures_nuit && Number(m.heures_nuit) > 0) {
+        if (!facturePartielle && m.heures_nuit && Number(m.heures_nuit) > 0) {
           const tauxMajNuit = Number(m.taux_majoration_nuit_fige || 25);
           decompoRows.push([
             'Maj. nuit',
@@ -325,7 +350,7 @@ export async function telechargerFactureCommissionPDF(factureId: string) {
             `+${fmtEur(m.montant_majoration_nuit || 0)}`,
           ]);
         }
-        if (m.heures_dimanche && Number(m.heures_dimanche) > 0) {
+        if (!facturePartielle && m.heures_dimanche && Number(m.heures_dimanche) > 0) {
           const tauxMajDim = Number(m.taux_majoration_dimanche_fige || 25);
           decompoRows.push([
             'Maj. dimanche',
@@ -333,7 +358,7 @@ export async function telechargerFactureCommissionPDF(factureId: string) {
             `+${fmtEur(m.montant_majoration_dimanche || 0)}`,
           ]);
         }
-        if (m.heures_ferie && Number(m.heures_ferie) > 0) {
+        if (!facturePartielle && m.heures_ferie && Number(m.heures_ferie) > 0) {
           const tauxMajFerie = Number(m.taux_majoration_ferie_fige || 50);
           decompoRows.push([
             'Maj. férié',
@@ -342,13 +367,13 @@ export async function telechargerFactureCommissionPDF(factureId: string) {
           ]);
         }
         // ── PASSE 5 : décompo SALARIE complète + assiette commission explicite ──
-        decompoRows.push(['Brut soignant', '', fmtEur(totalBrut)]);
+        if (!facturePartielle) decompoRows.push(['Brut soignant', '', fmtEur(totalBrut)]);
 
         let assiette: number;
         let assietteLabel: string;
-        if (m.type_contrat_applique === 'SALARIE') {
-          const ifm = Number(m.montant_ifm || 0);
-          const icp = Number(m.montant_icp || 0);
+        if (m.type_contrat_applique === 'SALARIE' && !facturePartielle) {
+          const ifm = ifmMission;
+          const icp = icpMission;
           const superBrut = totalBrut + ifm + icp;
           const tauxIFM = Number(m.taux_ifm || 10);
           const tauxICP = Number(m.taux_icp || 10);
@@ -358,16 +383,16 @@ export async function telechargerFactureCommissionPDF(factureId: string) {
           decompoRows.push(['Net salarié et cotisations', 'Déterminés par le bulletin de paie de l\'employeur', '—']);
           decompoRows.push(['', '', '']);
           assiette = superBrut;
-          assietteLabel = `${tauxCommission}% x ${fmtEur(superBrut)} super brut (base + IFM + ICP)`;
+          assietteLabel = `${tauxCommission}% x ${fmtEur(assiette)} super brut (base + IFM + ICP)`;
         } else {
           decompoRows.push(['', '', '']);
-          assiette = totalBrut;
-          assietteLabel = `${tauxCommission}% x ${fmtEur(totalBrut)} honoraires bruts`;
+          assiette = facturePartielle ? assietteFacturee : totalBrut;
+          assietteLabel = `${tauxCommission}% x ${fmtEur(assiette)} ${facturePartielle ? 'assiette facturée pour la période' : 'honoraires bruts'}`;
         }
 
-        decompoRows.push([`Commission Jolene`, assietteLabel, fmtEur(m.montant_commission_ht || 0)]);
-        decompoRows.push(['TVA 20%', '', fmtEur(m.montant_commission_tva || 0)]);
-        decompoRows.push(['Commission TTC mission', '', fmtEur(m.montant_commission_ttc || 0)]);
+        decompoRows.push([`Commission Jolene`, assietteLabel, fmtEur(commissionHtFacturee)]);
+        decompoRows.push(['TVA 20%', '', fmtEur(commissionTvaFacturee)]);
+        decompoRows.push(['Commission TTC facturée', '', fmtEur(commissionTtcFacturee)]);
 
         autoTable(doc, {
           startY: y,
@@ -382,7 +407,7 @@ export async function telechargerFactureCommissionPDF(factureId: string) {
           didParseCell: (data) => {
             if (data.section === 'body') {
               const label = String(data.row.cells[0]?.raw || '');
-              if (label.includes('Commission TTC mission')) {
+              if (label.includes('Commission TTC')) {
                 data.cell.styles.fillColor = JOLENE_COLORS.primary as any;
                 data.cell.styles.textColor = [255, 255, 255] as any;
                 data.cell.styles.fontStyle = 'bold';

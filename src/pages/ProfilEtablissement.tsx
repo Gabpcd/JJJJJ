@@ -36,13 +36,20 @@ type SepaSetupResponse = {
   error?: string;
 };
 
+function messageErreurSepa(code?: string): string {
+  if (code === 'TEST_ACCOUNT_PAYMENT_DISABLED') {
+    return "Ce compte est un compte de test : aucun prélèvement réel ne peut être créé. Le parcours de paiement reste désactivé pour éviter tout débit accidentel.";
+  }
+  return code || 'Le service de paiement est temporairement indisponible.';
+}
+
 async function appelerSetupSepa(body: Record<string, unknown>): Promise<SepaSetupResponse> {
   const { data, error } = await supabase.functions.invoke('setup-sepa', { body });
   if (error) {
     throw new Error(await messageErreurEdgeFn(error, 'Le service de paiement est temporairement indisponible.'));
   }
   const response = (data || {}) as SepaSetupResponse;
-  if (response.error) throw new Error(response.error);
+  if (response.error) throw new Error(messageErreurSepa(response.error));
   return response;
 }
 
@@ -841,14 +848,14 @@ export function ProfilEtablissementContent({ sections }: { sections?: SectionPro
             <Building2 className="h-5 w-5 text-primary" aria-hidden="true" /> RIB de l’établissement
           </h2>
           <p className="text-xs text-muted-foreground mb-4">
-            Le titulaire et l’IBAN sont contrôlés par rapport à l’identité juridique de l’établissement. L’IBAN complet n’est jamais affiché après vérification.
+            Un titulaire correspondant à l’identité juridique peut être vérifié automatiquement. Un compte détenu par un dirigeant, une société liée ou un tiers mandaté reste possible après contrôle manuel d’un justificatif d’habilitation. L’IBAN complet n’est jamais affiché après vérification.
           </p>
 
           <div aria-live="polite" className={`flex items-start gap-2 p-3 rounded-xl border ${
             ribCoherent === true
               ? 'bg-success/10 border-success/20'
               : ribCoherent === false
-                ? 'bg-destructive/5 border-destructive/20'
+                ? 'bg-warning/10 border-warning/20'
                 : ribKey
                   ? 'bg-warning/10 border-warning/20'
                   : 'bg-muted border-border'
@@ -856,7 +863,7 @@ export function ProfilEtablissementContent({ sections }: { sections?: SectionPro
             {ribCoherent === true ? (
               <FileCheck className="h-4 w-4 text-success shrink-0 mt-0.5" aria-hidden="true" />
             ) : ribCoherent === false ? (
-              <AlertTriangle className="h-4 w-4 text-destructive shrink-0 mt-0.5" aria-hidden="true" />
+              <AlertTriangle className="h-4 w-4 text-warning shrink-0 mt-0.5" aria-hidden="true" />
             ) : ribKey ? (
               <Clock className="h-4 w-4 text-warning shrink-0 mt-0.5" aria-hidden="true" />
             ) : (
@@ -867,13 +874,13 @@ export function ProfilEtablissementContent({ sections }: { sections?: SectionPro
                 {ribCoherent === true
                   ? `RIB vérifié${ribLast4 ? ` — IBAN se terminant par ${ribLast4}` : ''}`
                   : ribCoherent === false
-                    ? 'RIB non concordant — remplacez-le ou contactez le support'
+                    ? 'Titulaire différent — justificatif et revue manuelle requis'
                     : ribKey
                       ? 'RIB reçu — revue manuelle nécessaire'
                       : 'Aucun RIB fourni'}
               </p>
               {ribCoherent === false && (
-                <p className="text-xs text-muted-foreground mt-0.5">Le document ne permet pas de confirmer à la fois le titulaire et un IBAN valide.</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Cette différence n’est pas un rejet automatique. Un mandat, une preuve de contrôle ou une attestation du dirigeant devra confirmer que ce compte peut recevoir ou émettre les règlements de l’établissement.</p>
               )}
             </div>
           </div>

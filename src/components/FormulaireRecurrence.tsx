@@ -305,7 +305,7 @@ export function FormulaireRecurrence({
               <button type="button" onClick={appliquerUneSemaineSurDeux} className="btn-secondary px-3 py-1.5 text-xs">1 semaine civile sur 2</button>
               <button type="button" onClick={() => appliquerSelection(() => false)} className="btn-secondary px-3 py-1.5 text-xs">Aucune</button>
               <button type="button" onClick={appliquerPremierCreneauATous} className="btn-secondary px-3 py-1.5 text-xs">
-                <Copy className="mr-1 inline h-3.5 w-3.5" />Copier le 1er horaire
+                <Copy className="mr-1 inline h-3.5 w-3.5" />Appliquer le 1er horaire aux jours sélectionnés
               </button>
             </div>
           </div>

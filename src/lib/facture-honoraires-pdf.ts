@@ -42,17 +42,9 @@ export async function telechargerFactureHonorairesPDF(factureId: string) {
       return;
     }
 
-    // Si un PDF pré-généré existe dans Storage, on l'ouvre directement
-    if ((f as any).pdf_s3_key) {
-      const { data: urlData } = await supabase.storage
-        .from('jolene-documents')
-        .createSignedUrl((f as any).pdf_s3_key, 300);
-      if (urlData?.signedUrl) {
-        window.open(urlData.signedUrl, '_blank');
-        toast.success('Facture ouverte');
-        return;
-      }
-    }
+    // Toujours régénérer depuis les données comptables courantes. Les anciens
+    // PDF stockés pouvaient reprendre le total de la mission au lieu de la
+    // seule période facturée.
 
     // PASSE 1 enrichissement : charger tous les champs nécessaires au rendu
     // détaillé (taux majorations figés, taux IFM/ICP, spécialités soignant,
@@ -183,10 +175,12 @@ export async function telechargerFactureHonorairesPDF(factureId: string) {
       y += 5;
       addInfoRow(doc, PAGE.margin, y, 'Type contrat :', mission.type_contrat_applique === 'SALARIE' ? 'Salarié (CDD)' : 'Libéral');
       y += 5;
-      if (mission.debut_le && mission.fin_le) {
-        const debutStr = format(new Date(mission.debut_le), "dd/MM/yyyy HH'h'mm", { locale: fr });
-        const finStr = format(new Date(mission.fin_le), "dd/MM/yyyy HH'h'mm", { locale: fr });
-        const dureeStr = mission.duree_heures ? ` (${Number(mission.duree_heures).toFixed(1)} h)` : '';
+      const periodeDebut = (f as any).periode_debut || mission.debut_le;
+      const periodeFin = (f as any).periode_fin || mission.fin_le;
+      if (periodeDebut && periodeFin) {
+        const debutStr = format(new Date(periodeDebut), "dd/MM/yyyy HH'h'mm", { locale: fr });
+        const finStr = format(new Date(periodeFin), "dd/MM/yyyy HH'h'mm", { locale: fr });
+        const dureeStr = (f as any).periode_debut && (f as any).periode_fin ? '' : (mission.duree_heures ? ` (${Number(mission.duree_heures).toFixed(1)} h)` : '');
         addInfoRow(doc, PAGE.margin, y, 'Période :', `${debutStr} -> ${finStr}${dureeStr}`, 22);
         y += 5;
       }
@@ -194,8 +188,18 @@ export async function telechargerFactureHonorairesPDF(factureId: string) {
     }
 
     // ── PASSE 3 : Section pointages avec fallback ──
-    const presList = (presences as any[] | null) || [];
-    const creneauxList = (creneaux as any[] | null) || [];
+    const debutFacture = (f as any).periode_debut ? new Date(`${String((f as any).periode_debut).slice(0, 10)}T00:00:00`) : null;
+    const finFacture = (f as any).periode_fin ? new Date(`${String((f as any).periode_fin).slice(0, 10)}T23:59:59.999`) : null;
+    const dansPeriodeFacturee = (date?: string | null) => {
+      if (!date || !debutFacture || !finFacture) return true;
+      const valeur = new Date(date).getTime();
+      return valeur >= debutFacture.getTime() && valeur <= finFacture.getTime();
+    };
+    const presList = ((presences as any[] | null) || []).filter((p) => dansPeriodeFacturee(p.pointage_arrivee_le));
+    const creneauxList = ((creneaux as any[] | null) || []).filter((c) => dansPeriodeFacturee(c.debut_le));
+    const heuresFacturees = presList.length > 0
+      ? presList.reduce((total, p) => total + Number(p.heures_reelles || 0), 0)
+      : creneauxList.reduce((total, c) => total + Number(c.duree_heures || 0), 0);
     if (presList.length > 0) {
       y = createSectionTitle(doc, y, 'Détail des pointages');
       autoTable(doc, {
@@ -252,7 +256,7 @@ export async function telechargerFactureHonorairesPDF(factureId: string) {
     // Section décomposition financière adaptée au type de contrat
     if (mission?.type_contrat_applique === 'SALARIE') {
       y = createSectionTitle(doc, y, 'Décomposition CDD (Modèle A salarié)');
-      const totalBrut = Number(mission.total_brut || 0);
+      const totalBrut = Number((f as any).montant_ht || 0);
       const ifm = Number(mission.montant_ifm || 0);
       const icp = Number(mission.montant_icp || 0);
       const superBrut = totalBrut + ifm + icp;
@@ -322,7 +326,8 @@ export async function telechargerFactureHonorairesPDF(factureId: string) {
     } else if (mission) {
       // LIBERAL (default)
       y = createSectionTitle(doc, y, 'Décomposition libérale');
-      const totalBrut = Number(mission.total_brut || 0);
+      const totalBrutMission = Number(mission.total_brut || 0);
+      const totalBrut = Number((f as any).montant_ht || 0);
       const majorations =
         Number(mission.montant_majoration_nuit || 0) +
         Number(mission.montant_majoration_dimanche || 0) +
@@ -330,18 +335,22 @@ export async function telechargerFactureHonorairesPDF(factureId: string) {
 
       // ── PASSE 4 : majorations détaillées (branche LIBERAL) ──
       const tauxHoraireLib = Number(mission.taux_horaire_base_fige || mission.taux_horaire_base || 0);
-      const rows: (string | number)[][] = [
-        ['Brut de base', `${mission.duree_heures || 0} h x ${tauxHoraireLib.toFixed(2)} E/h`, fmtEur(totalBrut - majorations)],
-      ];
-      if (mission.heures_nuit && Number(mission.heures_nuit) > 0) {
+      const facturePartielle = Math.abs(totalBrut - totalBrutMission) > 0.01;
+      const detailHeures = heuresFacturees > 0
+        ? `${heuresFacturees.toFixed(1)} h x ${tauxHoraireLib.toFixed(2)} E/h`
+        : 'Période facturée';
+      const rows: (string | number)[][] = facturePartielle
+        ? [['Honoraires de la période', detailHeures, fmtEur(totalBrut)]]
+        : [['Brut de base', `${mission.duree_heures || 0} h x ${tauxHoraireLib.toFixed(2)} E/h`, fmtEur(totalBrut - majorations)]];
+      if (!facturePartielle && mission.heures_nuit && Number(mission.heures_nuit) > 0) {
         const tauxMajNuit = Number(mission.taux_majoration_nuit_fige || 25);
         rows.push(['Majoration nuit', `${Number(mission.heures_nuit).toFixed(1)} h x ${tauxHoraireLib.toFixed(2)} E x ${tauxMajNuit}%`, `+${fmtEur(mission.montant_majoration_nuit || 0)}`]);
       }
-      if (mission.heures_dimanche && Number(mission.heures_dimanche) > 0) {
+      if (!facturePartielle && mission.heures_dimanche && Number(mission.heures_dimanche) > 0) {
         const tauxMajDim = Number(mission.taux_majoration_dimanche_fige || 25);
         rows.push(['Majoration dimanche', `${Number(mission.heures_dimanche).toFixed(1)} h x ${tauxHoraireLib.toFixed(2)} E x ${tauxMajDim}%`, `+${fmtEur(mission.montant_majoration_dimanche || 0)}`]);
       }
-      if (mission.heures_ferie && Number(mission.heures_ferie) > 0) {
+      if (!facturePartielle && mission.heures_ferie && Number(mission.heures_ferie) > 0) {
         const tauxMajFerie = Number(mission.taux_majoration_ferie_fige || 50);
         rows.push(['Majoration férié', `${Number(mission.heures_ferie).toFixed(1)} h x ${tauxHoraireLib.toFixed(2)} E x ${tauxMajFerie}%`, `+${fmtEur(mission.montant_majoration_ferie || 0)}`]);
       }

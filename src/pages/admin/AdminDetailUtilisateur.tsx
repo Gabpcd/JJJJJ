@@ -373,6 +373,9 @@ export default function AdminDetailUtilisateur() {
           description={(
             <div className="flex flex-wrap items-center gap-2">
               <BadgeY2K variant="info">{type === 'soignant' ? 'Soignant' : 'Établissement'}</BadgeY2K>
+              {entity?.est_compte_test && (
+                <BadgeY2K variant="warning">TEST — données fictives</BadgeY2K>
+              )}
               {isSuspended ? (
                 <BadgeY2K variant="error">Suspendu</BadgeY2K>
               ) : (
@@ -392,10 +395,14 @@ export default function AdminDetailUtilisateur() {
               </BoutonY2K>
               <BoutonY2K
                 size="sm"
-                onClick={() => ouvrirConversation(id!, undefined, type === 'etablissement')}
+                onClick={() => {
+                  if (entity?.est_compte_test) return;
+                  ouvrirConversation(id!, undefined, type === 'etablissement');
+                }}
+                disabled={Boolean(entity?.est_compte_test)}
                 iconeGauche={<MessageCircle className="h-4 w-4" aria-hidden="true" />}
               >
-                Contacter
+                {entity?.est_compte_test ? 'Compte test' : 'Contacter'}
               </BoutonY2K>
             </>
           )}
