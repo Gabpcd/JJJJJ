@@ -1,0 +1,14 @@
+-- Marqueur de réconciliation de l'historique de production.
+--
+-- Le correctif idempotent versionné dans
+-- 20260803145106_reparer_profil_revue_et_reclamations.sql a été appliqué
+-- directement en production le 3 août 2026. Supabase l'a alors enregistré
+-- sous la version générée 20260803150157.
+--
+-- Conserver les deux versions dans le dépôt permet :
+-- - à la production de reconnaître la version déjà appliquée ;
+-- - aux autres environnements d'exécuter le correctif canonique 145106 ;
+-- - au contrôle de drift de rester strict sans réécrire schema_migrations.
+--
+-- Aucun changement de schéma ou de données n'est requis pour ce marqueur.
+SELECT 1;
