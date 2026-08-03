@@ -256,7 +256,6 @@ export async function telechargerFactureHonorairesPDF(factureId: string) {
     // Section décomposition financière adaptée au type de contrat
     if (mission?.type_contrat_applique === 'SALARIE') {
       y = createSectionTitle(doc, y, 'Décomposition CDD (Modèle A salarié)');
-      const totalBrutMission = Number(mission.total_brut || 0);
       const totalBrut = Number((f as any).montant_ht || 0);
       const ifm = Number(mission.montant_ifm || 0);
       const icp = Number(mission.montant_icp || 0);
@@ -327,7 +326,8 @@ export async function telechargerFactureHonorairesPDF(factureId: string) {
     } else if (mission) {
       // LIBERAL (default)
       y = createSectionTitle(doc, y, 'Décomposition libérale');
-      const totalBrut = Number(mission.total_brut || 0);
+      const totalBrutMission = Number(mission.total_brut || 0);
+      const totalBrut = Number((f as any).montant_ht || 0);
       const majorations =
         Number(mission.montant_majoration_nuit || 0) +
         Number(mission.montant_majoration_dimanche || 0) +

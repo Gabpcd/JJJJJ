@@ -33,9 +33,17 @@ BEGIN
      AND NEW.payload_modifications IS DISTINCT FROM OLD.payload_modifications
      AND OLD.statut IN ('OUVERT', 'EN_DISCUSSION', 'EN_MEDIATION', 'MEDIATION_EN_COURS')
      AND (
-       (COALESCE(OLD.accord_soignant, false) AND NOT COALESCE(OLD.accord_etablissement, false))
+       (
+         COALESCE(OLD.accord_soignant, false)
+         AND NOT COALESCE(OLD.accord_etablissement, false)
+         AND OLD.soignant_id = auth.uid()
+       )
        OR
-       (COALESCE(OLD.accord_etablissement, false) AND NOT COALESCE(OLD.accord_soignant, false))
+       (
+         COALESCE(OLD.accord_etablissement, false)
+         AND NOT COALESCE(OLD.accord_soignant, false)
+         AND OLD.etablissement_id = public.mon_etablissement_id()
+       )
      )
      AND NOT public.est_admin()
      AND COALESCE(auth.role(), '') <> 'service_role'
