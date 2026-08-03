@@ -14,8 +14,9 @@ import { defineConfig, devices } from '@playwright/test';
  * Voir docs/tests-playwright.md pour les détails (debug, helpers, comptes test).
  */
 
-const BASE_URL = process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:5173';
+const BASE_URL = process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:8080';
 const IS_CI = !!process.env.CI;
+const LOCAL_CHROMIUM_EXECUTABLE = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH;
 
 export default defineConfig({
   testDir: './e2e',
@@ -53,7 +54,9 @@ export default defineConfig({
     baseURL: BASE_URL,
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
-    video: 'retain-on-failure',
+    // L'exécution locale peut réutiliser Chrome système sans installer le
+    // bundle Playwright/ffmpeg. La CI conserve les vidéos d'échec.
+    video: LOCAL_CHROMIUM_EXECUTABLE ? 'off' : 'retain-on-failure',
     actionTimeout: 10_000,
     navigationTimeout: 15_000,
     locale: 'fr-FR',
@@ -75,7 +78,13 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
-      use: { ...devices['Desktop Chrome'], viewport: { width: 1920, height: 1080 } },
+      use: {
+        ...devices['Desktop Chrome'],
+        viewport: { width: 1920, height: 1080 },
+        ...(LOCAL_CHROMIUM_EXECUTABLE
+          ? { launchOptions: { executablePath: LOCAL_CHROMIUM_EXECUTABLE } }
+          : {}),
+      },
     },
     {
       name: 'firefox',

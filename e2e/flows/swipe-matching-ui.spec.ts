@@ -32,10 +32,10 @@ test.describe('Sprint 14 — UI swipe matching (réels)', () => {
   test('Toggle Liste : bascule in-page (pas de navigation) + localStorage', async ({ page }) => {
     await loginAs(page, 'soignant');
     await page.evaluate(() => localStorage.setItem('jolene_missions_view_pref', 'swipe'));
-    await page.goto('/soignant/recherche-missions');
-    await page.waitForLoadState('networkidle');
+    await page.goto('/soignant/recherche-missions', { waitUntil: 'domcontentloaded' });
 
     const toggle = page.getByRole('tablist', { name: /Vue Swipe/i });
+    await expect(toggle).toBeVisible();
     await toggle.getByRole('tab', { name: 'Liste', exact: true }).click();
 
     // Toggle in-page : l'URL ne change pas, seule la préférence est mémorisée.
@@ -47,10 +47,10 @@ test.describe('Sprint 14 — UI swipe matching (réels)', () => {
   test('Toggle Swipe : bascule in-page (pas de navigation) + localStorage', async ({ page }) => {
     await loginAs(page, 'soignant');
     await page.evaluate(() => localStorage.setItem('jolene_missions_view_pref', 'liste'));
-    await page.goto('/soignant/recherche-missions');
-    await page.waitForLoadState('networkidle');
+    await page.goto('/soignant/recherche-missions', { waitUntil: 'domcontentloaded' });
 
     const toggle = page.getByRole('tablist', { name: /Vue Swipe/i });
+    await expect(toggle).toBeVisible();
     await toggle.getByRole('tab', { name: 'Swipe', exact: true }).click();
 
     await expect(page).toHaveURL(/\/soignant\/recherche-missions/);
@@ -84,8 +84,7 @@ test.describe('Sprint 14 — UI swipe matching (réels)', () => {
   // PR-B : onglet « Candidatures » (candidatures EN_ATTENTE) dans Mes missions.
   test('Mes missions : onglet Candidatures rendu (cartes ou état vide)', async ({ page }) => {
     await loginAs(page, 'soignant');
-    await page.goto('/soignant/missions?tab=candidatures');
-    await page.waitForLoadState('networkidle');
+    await page.goto('/soignant/missions?tab=candidatures', { waitUntil: 'domcontentloaded' });
     await expect(page.getByRole('heading', { name: 'Mes missions', level: 1 })).toBeVisible();
     await expect(page.getByRole('tab', { name: 'Candidatures', exact: true })).toBeVisible();
     // Soit des cartes de candidature, soit l'état vide « élan » — jamais d'erreur.

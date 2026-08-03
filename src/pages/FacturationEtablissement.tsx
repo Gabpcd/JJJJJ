@@ -210,6 +210,7 @@ export default function FacturationEtablissement() {
   const [showCheckout, setShowCheckout] = useState(false);
   const [declarerDialogMission, setDeclarerDialogMission] = useState<any>(null);
   const [declarerMontant, setDeclarerMontant] = useState<string>('');
+  const [declarerMontantDu, setDeclarerMontantDu] = useState<string>('');
   const [declarerMethode, setDeclarerMethode] = useState<MethodePaiement>('VIREMENT');
   const [declarerReference, setDeclarerReference] = useState<string>('');
   const [declarerDatePaiement, setDeclarerDatePaiement] = useState<string>('');
@@ -377,6 +378,7 @@ export default function FacturationEtablissement() {
       ? ''
       : String(Number(mission.net_a_payer || 0).toFixed(2));
     setDeclarerMontant(montantInitial);
+    setDeclarerMontantDu(mission.type_contrat_applique === 'SALARIE' ? '' : montantInitial);
     setDeclarerMethode('VIREMENT');
     setDeclarerReference('');
     setDeclarerDatePaiement(new Date().toISOString().split('T')[0]);
@@ -385,6 +387,8 @@ export default function FacturationEtablissement() {
 
   const fermerDialogDeclarer = () => {
     setDeclarerDialogMission(null);
+    setDeclarerMontant('');
+    setDeclarerMontantDu('');
     setDeclaringId(null);
   };
 
@@ -392,8 +396,18 @@ export default function FacturationEtablissement() {
     if (!declarerDialogMission || !canManagePayments) return;
     const missionId = declarerDialogMission.mission_id;
     const montantNum = Number(declarerMontant);
+    const estSalarie = declarerDialogMission.type_contrat_applique === 'SALARIE';
+    const montantDuNum = estSalarie ? Number(declarerMontantDu) : montantNum;
     if (!montantNum || montantNum <= 0) {
       toast.error('Montant invalide');
+      return;
+    }
+    if (!montantDuNum || montantDuNum <= 0) {
+      toast.error('Indiquez le total net dû selon le bulletin officiel.');
+      return;
+    }
+    if (estSalarie && Math.abs(montantNum - montantDuNum) > 0.005) {
+      toast.error('Le montant versé doit correspondre exactement au total net dû. Les paiements partiels ne sont pas acceptés.');
       return;
     }
     const refRequired = declarerMethode !== 'BULLETIN_PAIE';
@@ -419,14 +433,24 @@ export default function FacturationEtablissement() {
             p_date_paiement: declarerDatePaiement,
             p_attestation_sur_l_honneur: true,
           })
-        : await supabase.rpc('fn_declarer_paiement_soignant' as any, {
-            p_mission_id: missionId,
-            p_montant: montantNum,
-            p_methode: declarerMethode,
-            p_reference: declarerReference.trim(),
-            p_date_paiement: declarerDatePaiement,
-            p_attestation_sur_l_honneur: true,
-          });
+        : estSalarie
+          ? await supabase.rpc('fn_declarer_paiement_soignant_v2' as any, {
+              p_mission_id: missionId,
+              p_montant_verse: montantNum,
+              p_montant_total_du: montantDuNum,
+              p_methode: declarerMethode,
+              p_reference: declarerReference.trim(),
+              p_date_paiement: declarerDatePaiement,
+              p_attestation_sur_l_honneur: true,
+            })
+          : await supabase.rpc('fn_declarer_paiement_soignant' as any, {
+              p_mission_id: missionId,
+              p_montant: montantNum,
+              p_methode: declarerMethode,
+              p_reference: declarerReference.trim(),
+              p_date_paiement: declarerDatePaiement,
+              p_attestation_sur_l_honneur: true,
+            });
       if (error) throw error;
       const res = data as any;
       if (res?.error === 'ATTESTATION_REQUISE') {
@@ -449,6 +473,8 @@ export default function FacturationEtablissement() {
             data: {
               soignant_prenom: declarerDialogMission.soignant_prenom || declarerDialogMission.soignant_nom?.split(' ')[0] || '',
               montant_formatte: montantNum.toFixed(2),
+              montant_total_du_formatte: montantDuNum.toFixed(2),
+              solde_restant_formatte: Math.max(montantDuNum - montantNum, 0).toFixed(2),
               methode: declarerMethode,
               methode_libelle: METHODE_LABELS[declarerMethode],
               reference_virement: declarerReference || '',
@@ -1038,6 +1064,12 @@ export default function FacturationEtablissement() {
                       <p className="text-xs text-muted-foreground">
                         Déclaré le {p.date_paiement && new Date(p.date_paiement).toLocaleDateString('fr-FR')}
                       </p>
+                      {p.montant_du_reference != null && (
+                        <p className="text-xs text-muted-foreground">
+                          Versé : {fmt(Number(p.montant_net))} sur {fmt(Number(p.montant_du_reference))}
+                          {Number(p.solde_restant || 0) > 0 ? ` · Reste dû : ${fmt(Number(p.solde_restant))}` : ' · Soldé'}
+                        </p>
+                      )}
                     </div>
                     <div className="text-right shrink-0 flex items-center gap-2">
                       <div>
@@ -1855,10 +1887,27 @@ export default function FacturationEtablissement() {
             </DialogResponsiveHeader>
 
             <DialogResponsiveBody className="space-y-4">
+              {declarerDialogMission.type_contrat_applique === 'SALARIE' && (
+                <div>
+                  <Label htmlFor="declarer-montant-du">Total net dû selon le bulletin officiel</Label>
+                  <Input
+                    id="declarer-montant-du"
+                    type="number"
+                    step="0.01"
+                    min="0.01"
+                    value={declarerMontantDu}
+                    onChange={(e) => setDeclarerMontantDu(e.target.value)}
+                    placeholder="0.00"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Ce total sert à calculer le reliquat. Il n'est jamais remplacé par l'estimation Jolene.
+                  </p>
+                </div>
+              )}
               <div>
                 <Label htmlFor="declarer-montant">
                   {declarerDialogMission.type_contrat_applique === 'SALARIE'
-                    ? 'Montant net réellement versé (selon bulletin officiel)'
+                    ? 'Montant réellement versé aujourd’hui'
                     : 'Montant des honoraires versés'}
                 </Label>
                 <Input
@@ -1964,6 +2013,11 @@ export default function FacturationEtablissement() {
                   declaringId === declarerDialogMission.mission_id ||
                   !declarerMontant ||
                   Number(declarerMontant) <= 0 ||
+                  (declarerDialogMission.type_contrat_applique === 'SALARIE' && (
+                    !declarerMontantDu ||
+                    Number(declarerMontantDu) <= 0 ||
+                    Number(declarerMontant) > Number(declarerMontantDu)
+                  )) ||
                   (declarerMethode !== 'BULLETIN_PAIE' && !isRefValid(declarerReference))
                 }
               >

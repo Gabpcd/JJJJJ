@@ -42,6 +42,7 @@ export default function PresencesEtablissement() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [presences, setPresences] = useState<any[]>([]);
+  const [missionsSansPointage, setMissionsSansPointage] = useState<any[]>([]);
   const [litiges, setLitiges] = useState<Record<string, any>>({});
   const [loading, setLoading] = useState(true);
   const [erreurChargement, setErreurChargement] = useState<string | null>(null);
@@ -56,7 +57,7 @@ export default function PresencesEtablissement() {
     setErreurChargement(null);
 
     try {
-      const [presencesResult, soignantsResult, litigesResult] = await Promise.all([
+      const [presencesResult, soignantsResult, litigesResult, missionsTermineesResult] = await Promise.all([
         supabase
           .from('presences')
           .select(`
@@ -78,9 +79,17 @@ export default function PresencesEtablissement() {
           .from('litiges')
           .select('id, mission_id, soignant_id, etablissement_id, motif, statut, initie_par, cree_le, resolution, accord_soignant, accord_etablissement, accord_soignant_le, accord_etablissement_le, payload_modifications')
           .eq('etablissement_id', etablissementId),
+        supabase
+          .from('missions')
+          .select('id, intitule, service, debut_le, fin_le, soignant_assigne_id, statut')
+          .eq('etablissement_id', etablissementId)
+          .eq('type_contrat_applique', 'SALARIE')
+          .eq('statut', 'TERMINEE')
+          .not('soignant_assigne_id', 'is', null)
+          .order('fin_le', { ascending: false }),
       ]);
 
-      const erreurPrincipale = presencesResult.error || soignantsResult.error || litigesResult.error;
+      const erreurPrincipale = presencesResult.error || soignantsResult.error || litigesResult.error || missionsTermineesResult.error;
       if (erreurPrincipale) throw erreurPrincipale;
 
       const presData = presencesResult.data;
@@ -102,6 +111,8 @@ export default function PresencesEtablissement() {
     }
 
     const donneesPresences = Array.isArray(presData) ? presData : [];
+    const missionsAvecArrivee = new Set(donneesPresences.map((presence: any) => presence.mission_id));
+    setMissionsSansPointage((missionsTermineesResult.data ?? []).filter((mission: any) => !missionsAvecArrivee.has(mission.id)));
     const missionIds = [...new Set(donneesPresences.map((p: any) => p.mission_id).filter(Boolean))];
     const soignantIds = Object.keys(sgMap).length === 0
       ? [...new Set(donneesPresences.map((p: any) => p.soignant_id).filter(Boolean))]
@@ -188,6 +199,7 @@ export default function PresencesEtablissement() {
     && (p.missions?.planning_indisponible || !synthesePresence(p).validationPossible)
   ));
   const alertes = presences.filter(p => p.alerte_teleportation || !p.perimetre_gps_valide);
+  const nombreAlertes = alertes.length + missionsSansPointage.length;
 
   const presencesSansAlerte = aValider.filter(p =>
     p.perimetre_gps_valide === true && !p.alerte_teleportation
@@ -498,8 +510,8 @@ export default function PresencesEtablissement() {
           <TabsTrigger value="validees" className="text-xs min-h-[44px]" aria-label={`Validées: ${validees.length} présences`}>
             Validées ({validees.length})
           </TabsTrigger>
-          <TabsTrigger value="alertes" className="text-xs min-h-[44px]" aria-label={`Alertes: ${alertes.length} présences`}>
-            Alertes ({alertes.length})
+          <TabsTrigger value="alertes" className="text-xs min-h-[44px]" aria-label={`Alertes: ${nombreAlertes} anomalies`}>
+            Alertes ({nombreAlertes})
           </TabsTrigger>
         </TabsList>
 
@@ -552,11 +564,36 @@ export default function PresencesEtablissement() {
         </TabsContent>
 
         <TabsContent value="alertes">
+          {missionsSansPointage.length > 0 && (
+            <div className="rounded-2xl border border-destructive/30 bg-destructive/5 p-4 mb-4" role="alert">
+              <h2 className="font-semibold text-foreground flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4 text-destructive" /> Missions terminées sans pointage
+              </h2>
+              <p className="text-xs text-muted-foreground mt-1 mb-3">
+                Ces missions bloquent l'export de paie : aucune arrivée ni aucun départ n'a été enregistré. Ouvrez la mission pour régulariser la présence avant de générer la paie.
+              </p>
+              <div className="space-y-2">
+                {missionsSansPointage.map((mission) => (
+                  <button
+                    key={mission.id}
+                    type="button"
+                    onClick={() => navigate(`/etablissement/missions/${mission.id}`)}
+                    className="w-full min-h-[44px] rounded-xl border border-border bg-card px-3 py-2 text-left hover:border-primary"
+                  >
+                    <span className="block text-sm font-medium text-foreground">{mission.intitule}</span>
+                    <span className="block text-xs text-muted-foreground">
+                      {formatParis(mission.debut_le, 'dd/MM/yyyy HH:mm')} → {formatParis(mission.fin_le, 'dd/MM/yyyy HH:mm')}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
           <TableOuCartes
             colonnes={colonnesPresences}
             donnees={alertes}
             getId={(p: any) => p.id}
-            etatVide={<EmptyState icone={<AlertTriangle />} mascotte="happy" titre="Aucune alerte" description="Les présences avec des alertes de fraude apparaîtront ici." variant="success" />}
+            etatVide={<EmptyState icone={<AlertTriangle />} mascotte="happy" titre={missionsSansPointage.length > 0 ? "Aucune autre alerte" : "Aucune alerte"} description={missionsSansPointage.length > 0 ? "Les missions sans pointage sont listées ci-dessus." : "Les présences avec des alertes de fraude apparaîtront ici."} variant="success" />}
             renduCellule={renduCellulePresence}
             renduCarte={renduCartePresence}
           />

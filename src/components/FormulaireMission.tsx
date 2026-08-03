@@ -697,7 +697,9 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
                 </button>
                 {explicationModeOuverte && (
                   <p className="mt-2 border-t border-amber-200 pt-2 dark:border-amber-900">
-                    La règle se lit sur la profession demandée par cette mission, pas sur les diplômes du soignant. Un profil IADE peut donc candidater à une mission IDE, qui suit les règles IDE. À l'inverse, une mission IADE ou IBODE exige la profession spécialisée correspondante.
+                    {modeExerciceMission.niveau === 'BLOQUE'
+                      ? "Le mode libéral est exclu ici par la règle professionnelle ou le type de structure indiqué dans la source ci-dessus."
+                      : "Ce n’est pas une interdiction générale faite aux cliniques. Jolene recommande le salariat lorsque les conditions concrètes de la mission (organisation, horaires imposés et lien de subordination) pourraient conduire à une requalification. La règle dépend de la profession demandée et du cadre réel de la mission, pas du seul nom de la structure."}
                   </p>
                 )}
               </div>
