@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Upload, Camera } from 'lucide-react';
 import { TYPES_DOCUMENTS } from '@/lib/documents';
 import { isNative } from '@/lib/platform';
@@ -74,6 +75,12 @@ export function ModalTeleversement({ typeDocument, onConfirmer, onFermer }: Moda
     return () => window.removeEventListener('keydown', fermerAvecEchap);
   }, [envoi, fermerEtReinitialiser]);
 
+  useEffect(() => {
+    const overflowPrecedent = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = overflowPrecedent; };
+  }, []);
+
   const handleSubmit = async () => {
     if (!fichier) return;
     setEnvoi(true);
@@ -103,10 +110,10 @@ export function ModalTeleversement({ typeDocument, onConfirmer, onFermer }: Moda
     }
   };
 
-  return (
-    <div className="fixed inset-0 z-[9999] flex items-start justify-center overflow-y-auto overscroll-contain" style={{ paddingTop: 'max(1rem, env(safe-area-inset-top))', paddingBottom: 'max(1rem, env(safe-area-inset-bottom))', paddingLeft: 'max(1rem, env(safe-area-inset-left))', paddingRight: 'max(1rem, env(safe-area-inset-right))' }}>
+  const contenu = (
+    <div className="fixed inset-0 z-[9999] flex min-h-[100dvh] items-start sm:items-center justify-center overflow-y-auto overscroll-contain" style={{ paddingTop: 'max(1rem, env(safe-area-inset-top))', paddingBottom: 'max(1rem, env(safe-area-inset-bottom))', paddingLeft: 'max(1rem, env(safe-area-inset-left))', paddingRight: 'max(1rem, env(safe-area-inset-right))' }}>
       <div className="fixed inset-0 bg-foreground/50" style={{ backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)' }} onClick={() => { if (!envoi) fermerEtReinitialiser(); }} />
-      <div role="dialog" aria-modal="true" aria-labelledby="televersement-titre" aria-describedby="televersement-aide" aria-busy={envoi} className="relative bg-card rounded-2xl shadow-xl p-6 max-w-md w-full my-auto">
+      <div role="dialog" aria-modal="true" aria-labelledby="televersement-titre" aria-describedby="televersement-aide" aria-busy={envoi} className="relative bg-card rounded-2xl shadow-xl p-6 max-w-md w-full max-h-[calc(100dvh-2rem)] overflow-y-auto">
         <button type="button" onClick={fermerEtReinitialiser} disabled={envoi} aria-label="Fermer la fenêtre de téléversement" className="absolute top-4 right-4 text-muted-foreground hover:text-foreground disabled:opacity-50">
           <X className="h-5 w-5" />
         </button>
@@ -211,4 +218,6 @@ export function ModalTeleversement({ typeDocument, onConfirmer, onFermer }: Moda
       </div>
     </div>
   );
+
+  return createPortal(contenu, document.body);
 }

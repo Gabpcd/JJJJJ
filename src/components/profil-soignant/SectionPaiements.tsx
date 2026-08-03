@@ -10,9 +10,10 @@ interface Props {
   typeExercice: string | null;
   mandatFacturationSigne: boolean | null;
   mandatFacturationSigneLe: string | null;
+  estCompteTest: boolean;
 }
 
-function StripeConnectStatus({ userId }: { userId: string }) {
+function StripeConnectStatus({ userId, estCompteTest }: { userId: string; estCompteTest: boolean }) {
   const [status, setStatus] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [erreur, setErreur] = useState<string | null>(null);
@@ -20,6 +21,7 @@ function StripeConnectStatus({ userId }: { userId: string }) {
 
   useEffect(() => {
     if (!userId) return;
+    if (estCompteTest) { setLoading(false); return; }
     supabase.functions.invoke('stripe-connect-status').then(({ data, error }) => {
       if (error) {
         setErreur('Service Stripe temporairement indisponible. Réessayez dans quelques instants.');
@@ -31,7 +33,17 @@ function StripeConnectStatus({ userId }: { userId: string }) {
       setErreur('Service Stripe temporairement indisponible. Réessayez dans quelques instants.');
       setLoading(false);
     });
-  }, [userId]);
+  }, [userId, estCompteTest]);
+
+  if (estCompteTest) return (
+    <div className="p-3 rounded-xl border border-info/30 bg-info/5 flex items-start gap-3" role="status">
+      <Info className="h-5 w-5 text-info shrink-0 mt-0.5" />
+      <div>
+        <p className="text-sm font-semibold text-foreground">Stripe désactivé sur ce compte de test</p>
+        <p className="text-xs text-muted-foreground mt-1">Aucun compte bancaire ni paiement réel ne sera créé avec les données de démonstration.</p>
+      </div>
+    </div>
+  );
 
   const lancerOnboarding = async () => {
     setActionLoading(true);
@@ -126,7 +138,7 @@ function StripeConnectStatus({ userId }: { userId: string }) {
   );
 }
 
-export function SectionPaiements({ userId, typeExercice, mandatFacturationSigne, mandatFacturationSigneLe }: Props) {
+export function SectionPaiements({ userId, typeExercice, mandatFacturationSigne, mandatFacturationSigneLe, estCompteTest }: Props) {
   const navigate = useNavigate();
   const estLiberalOuMixte = typeExercice === 'LIBERAL' || typeExercice === 'MIXTE';
 
@@ -157,7 +169,7 @@ export function SectionPaiements({ userId, typeExercice, mandatFacturationSigne,
             <p className="text-xs text-muted-foreground mb-3">
               Reçois tes honoraires libéraux directement sur ton compte bancaire.
             </p>
-            <StripeConnectStatus userId={userId} />
+            <StripeConnectStatus userId={userId} estCompteTest={estCompteTest} />
           </div>
 
           <div className="card-base">

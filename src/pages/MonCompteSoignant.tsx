@@ -30,13 +30,14 @@ export default function MonCompteSoignant() {
     type_exercice: string | null; rpps_verifie: boolean; numero_rpps: string | null;
     profession: string | null; statut_liberal: string | null;
     mandat_facturation_signe: boolean | null; mandat_facturation_signe_le: string | null;
+    est_compte_test: boolean;
   } | null>(null);
   const [contactOpen, setContactOpen] = useState(false);
 
   useEffect(() => {
     if (!user) return;
     supabase.from('soignants')
-      .select('prenom, nom, avatar_url, type_exercice, rpps_verifie, numero_rpps, profession, statut_liberal, mandat_facturation_signe, mandat_facturation_signe_le')
+      .select('prenom, nom, avatar_url, type_exercice, rpps_verifie, numero_rpps, profession, statut_liberal, mandat_facturation_signe, mandat_facturation_signe_le, est_compte_test')
       .eq('id', user.id).maybeSingle()
       .then(({ data }) => { if (data) setProfil(data as any); });
   }, [user]);
@@ -159,6 +160,7 @@ export default function MonCompteSoignant() {
           typeExercice={profil?.type_exercice ?? null}
           mandatFacturationSigne={profil?.mandat_facturation_signe ?? null}
           mandatFacturationSigneLe={profil?.mandat_facturation_signe_le ?? null}
+          estCompteTest={profil?.est_compte_test ?? false}
         />
       </section>
 

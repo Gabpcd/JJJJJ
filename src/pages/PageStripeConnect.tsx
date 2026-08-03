@@ -11,6 +11,7 @@ import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { CreditCard, ExternalLink, RefreshCw, Loader2, CheckCircle, Clock, AlertTriangle, Banknote, Building2, FileText, ArrowRight, Shield, Info, HelpCircle } from 'lucide-react';
 import { ModalContacterJolene } from '@/components/ModalContacterJolene';
 import { toast } from 'sonner';
+import { extraireErreurEdgeFn } from '@/lib/erreurs';
 
 const formatEur = (v: number) =>
   new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(v);
@@ -32,6 +33,7 @@ export default function PageStripeConnect() {
   const [contactOpen, setContactOpen] = useState(false);
   const [soignantNom, setSoignantNom] = useState('');
   const [motifRejet, setMotifRejet] = useState<string | null>(null);
+  const [estCompteTest, setEstCompteTest] = useState(false);
 
   const chargerStatut = useCallback(async (forceRefresh = false) => {
     try {
@@ -65,12 +67,13 @@ export default function PageStripeConnect() {
       setLoading(true);
       // Load soignant type first
       const { data: sg } = await supabase.from('soignants')
-        .select('prenom, nom, type_exercice, statut_liberal')
+        .select('prenom, nom, type_exercice, statut_liberal, est_compte_test')
         .eq('id', user.id).maybeSingle();
 
       if (sg) {
         setTypeExercice((sg.type_exercice as TypeExercice) || 'SALARIE');
         setSoignantNom(`${sg.prenom} ${sg.nom}`);
+        setEstCompteTest(!!sg.est_compte_test);
 
         // Only load Stripe data if LIBERAL or MIXTE
         if (sg.type_exercice === 'LIBERAL' || sg.type_exercice === 'MIXTE' || sg.statut_liberal === 'ACTIF') {
@@ -92,6 +95,10 @@ export default function PageStripeConnect() {
   }, [searchParams, chargerStatut]);
 
   const lancerOnboarding = async () => {
+    if (estCompteTest) {
+      toast.info('Compte de test : Stripe réel est désactivé pour éviter tout paiement réel.');
+      return;
+    }
     if (!isLiberal) {
       toast.info('Stripe Connect est disponible pour les soignants en exercice libéral.');
       return;
@@ -100,6 +107,11 @@ export default function PageStripeConnect() {
     try {
       const { data, error } = await supabase.functions.invoke('stripe-connect-onboard');
       if (error || !data?.url) {
+        const body = await extraireErreurEdgeFn(data, error);
+        if (body?.error === 'TEST_ACCOUNT_PAYMENT_DISABLED') {
+          toast.info('Compte de test : Stripe réel est désactivé pour éviter tout paiement réel.');
+          return;
+        }
         // 403 = not LIBERAL — show friendly message
         if (error?.message?.includes('403') || data?.error?.includes('libéral')) {
           toast.info('Passez en exercice libéral pour activer Stripe Connect.');
@@ -250,8 +262,21 @@ export default function PageStripeConnect() {
         {/* ── LIBÉRAL : Stripe Connect ── */}
         {isLiberal && (
           <>
+            {estCompteTest && (
+              <div className="card-base border-info/30 bg-info/5 space-y-2" role="status">
+                <div className="flex items-start gap-3">
+                  <Info className="h-5 w-5 text-info shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-semibold text-foreground">Stripe désactivé sur ce compte de test</p>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      Aucun compte bancaire ni paiement réel ne sera créé depuis les données de démonstration. Le parcours Stripe se vérifie en environnement de recette avec Stripe en mode test.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
             {/* NON_DEMANDE */}
-            {statut === 'NON_DEMANDE' && (
+            {!estCompteTest && statut === 'NON_DEMANDE' && (
               <div className="card-base text-center space-y-4 py-8">
                 <CreditCard className="h-12 w-12 text-primary mx-auto" />
                 <h2 className="text-lg font-bold text-foreground">Reçois tes honoraires directement</h2>
@@ -271,7 +296,7 @@ export default function PageStripeConnect() {
             )}
 
             {/* EN_COURS */}
-            {statut === 'EN_COURS' && (
+            {!estCompteTest && statut === 'EN_COURS' && (
               <div className="card-base space-y-4">
                 <div className="flex items-start gap-3">
                   <Clock className="h-5 w-5 text-warning shrink-0 mt-0.5" />
@@ -293,7 +318,7 @@ export default function PageStripeConnect() {
             )}
 
             {/* COMPLET */}
-            {statut === 'COMPLET' && (
+            {!estCompteTest && statut === 'COMPLET' && (
               <>
                 <div className="card-base space-y-3">
                   <div className="flex items-center justify-between">
@@ -362,7 +387,7 @@ export default function PageStripeConnect() {
             )}
 
             {/* SUSPENDU */}
-            {statut === 'SUSPENDU' && (
+            {!estCompteTest && statut === 'SUSPENDU' && (
               <div className="card-base border-destructive/30 bg-destructive/5 space-y-4">
                 <div className="flex items-start gap-3">
                   <AlertTriangle className="h-5 w-5 text-destructive shrink-0 mt-0.5" />
@@ -380,7 +405,7 @@ export default function PageStripeConnect() {
             )}
 
             {/* [CP-STRIPE-6 H11] SUPPRIME : compte Stripe Connect inexistant côté Stripe */}
-            {statut === 'SUPPRIME' && (
+            {!estCompteTest && statut === 'SUPPRIME' && (
               <div className="card-base border-destructive/30 bg-destructive/5 space-y-4">
                 <div className="flex items-start gap-3">
                   <AlertTriangle className="h-5 w-5 text-destructive shrink-0 mt-0.5" />
@@ -411,7 +436,7 @@ export default function PageStripeConnect() {
 
             {/* REJETE : compte refusé par Stripe (vérification KO). Raison + remédiation.
                 (6e état — auparavant absent de l'UI → écran vide possible.) */}
-            {statut === 'REJETE' && (
+            {!estCompteTest && statut === 'REJETE' && (
               <div className="card-base border-destructive/30 bg-destructive/5 space-y-4">
                 <div className="flex items-start gap-3">
                   <AlertTriangle className="h-5 w-5 text-destructive shrink-0 mt-0.5" />
