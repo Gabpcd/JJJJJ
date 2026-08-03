@@ -111,15 +111,23 @@ export function MesFacturesHonorairesContent() {
   const affacturageActif = useAffacturageActif();
   const [filtreAnnee, setFiltreAnnee] = useState<string>('toutes');
   const [filtreMois, setFiltreMois] = useState<string>('tous');
+  const tentativesEchouees = useMemo(
+    () => factures.filter((facture) => facture.statut === 'ERREUR_GENERATION'),
+    [factures],
+  );
+  const facturesMetier = useMemo(
+    () => factures.filter((facture) => facture.statut !== 'ERREUR_GENERATION'),
+    [factures],
+  );
 
   const anneesDisponibles = useMemo(() => {
     const annees = new Set<string>();
-    factures.forEach(f => { if (f.date_emission) annees.add(String(new Date(f.date_emission).getFullYear())); });
+    facturesMetier.forEach(f => { if (f.date_emission) annees.add(String(new Date(f.date_emission).getFullYear())); });
     return Array.from(annees).sort((a, b) => b.localeCompare(a));
-  }, [factures]);
+  }, [facturesMetier]);
 
   const facturesFiltrees = useMemo(() => {
-    return factures.filter((f: any) => {
+    return facturesMetier.filter((f: any) => {
       if (filtreStatut !== 'tous' && f.statut !== filtreStatut) return false;
       if (filtreAnnee !== 'toutes' && f.date_emission) {
         const annee = String(new Date(f.date_emission).getFullYear());
@@ -131,7 +139,7 @@ export function MesFacturesHonorairesContent() {
       }
       return true;
     });
-  }, [factures, filtreStatut, filtreAnnee, filtreMois]);
+  }, [facturesMetier, filtreStatut, filtreAnnee, filtreMois]);
 
   const filtreActif = filtreStatut !== 'tous' || filtreAnnee !== 'toutes' || filtreMois !== 'tous';
   const reinitialiserFiltres = () => {
@@ -196,6 +204,14 @@ export function MesFacturesHonorairesContent() {
         )}
 
         {/* KPIs */}
+        {tentativesEchouees.length > 0 && facturesMetier.length > 0 && (
+          <div className="rounded-xl border border-info/20 bg-info/5 p-3 flex items-start gap-3" role="status">
+            <Info className="h-4 w-4 text-info shrink-0 mt-0.5" />
+            <p className="text-xs text-muted-foreground">
+              {tentativesEchouees.length} tentative{tentativesEchouees.length > 1 ? 's techniques ont' : ' technique a'} échoué avant la création du document valide. Elles ne sont ni des factures, ni comptées dans les montants ci-dessous.
+            </p>
+          </div>
+        )}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div className="card-base">
             <p className="text-xs text-muted-foreground">Total net facturé</p>
@@ -211,7 +227,7 @@ export function MesFacturesHonorairesContent() {
           </div>
         </div>
 
-        {factures.length > 0 && (
+        {facturesMetier.length > 0 && (
           <div className="card-base flex flex-wrap items-center gap-2 py-2.5">
             <span className="text-xs font-semibold text-muted-foreground mr-1">Filtres :</span>
             <select
@@ -229,7 +245,6 @@ export function MesFacturesHonorairesContent() {
               <option value="FACTORISEE">Avance reçue</option>
               <option value="ANNULEE">Annulée</option>
               <option value="REMPLACEE">Remplacée</option>
-              <option value="ERREUR_GENERATION">Erreur de génération</option>
               <option value="REMBOURSE">Remboursée</option>
             </select>
             <select
@@ -269,7 +284,7 @@ export function MesFacturesHonorairesContent() {
               </button>
             )}
             <span className="text-[10px] text-muted-foreground ml-auto">
-              {facturesFiltrees.length} / {factures.length} document{factures.length > 1 ? 's' : ''}
+              {facturesFiltrees.length} / {facturesMetier.length} document{facturesMetier.length > 1 ? 's' : ''}
             </span>
           </div>
         )}
@@ -277,7 +292,7 @@ export function MesFacturesHonorairesContent() {
         {(() => {
           const etatVide = erreurChargement
             ? <></>
-            : factures.length === 0
+            : facturesMetier.length === 0
             ? <EmptyState
                 icone={<FileText />}
                 mascotte={mandatSigne ? 'empty' : 'thinking'}

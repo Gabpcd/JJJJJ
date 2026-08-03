@@ -340,8 +340,14 @@ export function DocumentsSoignantContent() {
         p_document_id: docId,
         p_motif: 'Contestation du verdict automatique depuis l’espace Documents',
       });
-      if (error || (data as any)?.error) {
-        toast.error((data as any)?.error || extraireMessageErreur(error));
+      if (error || (data as any)?.success === false || (data as any)?.error) {
+        const code = (data as any)?.error_code;
+        const message = code === 'DOCUMENT_INTROUVABLE'
+          ? 'Ce document a été remplacé ou supprimé. Actualise la page puis réessaie avec le document actif.'
+          : code === 'MOTIF_INVALIDE'
+            ? 'Le motif de la demande est trop court.'
+            : (data as any)?.error || extraireMessageErreur(error);
+        toast.error(message);
         return;
       }
       toast.success('Demande envoyée. Un membre de l’équipe vérifiera le document.');

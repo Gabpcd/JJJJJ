@@ -149,6 +149,9 @@ export function BulletinsPaieContent() {
         <p className="text-xs text-muted-foreground">
           {MENTION_SIMULATION_PAIE}
         </p>
+        <div className="rounded-xl border border-info/20 bg-info/5 p-3 text-xs text-muted-foreground" role="note">
+          Cette vue contient uniquement les simulations des missions salariées. Les honoraires libéraux encaissés sont affichés séparément dans l’onglet <strong>Factures</strong> et ne doivent pas être additionnés ou comparés ligne à ligne.
+        </div>
         {nbPdfIndisponibles > 0 && (
           <div className="rounded-xl border border-warning/30 bg-warning/5 p-3 text-sm" role="status">
             <p className="font-semibold text-foreground">{nbPdfIndisponibles} simulation{nbPdfIndisponibles > 1 ? 's' : ''} sans PDF fiable</p>

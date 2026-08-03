@@ -250,7 +250,7 @@ export function MesGainsApercuContent() {
       // du deep link : 1 seule → détail mission direct).
       aValider: { montant: 0, nb: 0, ids: [] as string[] },
       enAttente: { montant: 0, nb: 0 },
-      paye: { montant: 0, nb: 0 },
+      paye: { montant: 0, nb: 0, nbFactures: 0, nbPaiements: 0 },
     };
 
     // Les factures hebdomadaires peuvent exister avant que la mission longue
@@ -260,6 +260,7 @@ export function MesGainsApercuContent() {
       const resume = resumerFacturesMission(documents);
       etapes.paye.montant += resume.montantPaye;
       etapes.paye.nb += resume.nbPayees;
+      etapes.paye.nbFactures += resume.nbPayees;
       etapes.enAttente.montant += resume.montantEnAttente;
       etapes.enAttente.nb += resume.nbEnAttente;
     });
@@ -280,6 +281,7 @@ export function MesGainsApercuContent() {
       if (paye) {
         etapes.paye.montant += montantPaiement;
         etapes.paye.nb += 1;
+        etapes.paye.nbPaiements += 1;
         return;
       }
       // Paiement déclaré non confirmé → « En attente de paiement ».
@@ -368,8 +370,8 @@ export function MesGainsApercuContent() {
           <div className="grid grid-cols-3 gap-2">
             {[
               {
-                label: 'À valider',
-                detail: 'présences côté étab',
+                label: 'Validation établissement',
+                detail: 'en attente côté établissement',
                 etape: pipeline.aValider,
                 // 9.1 — deep link ciblé : singleton → détail mission direct
                 // (bloc statut + relance) ; sinon onglet Historique filtré sur
@@ -390,7 +392,11 @@ export function MesGainsApercuContent() {
                 label: 'Payé',
                 detail: 'règlement confirmé',
                 etape: pipeline.paye,
-                onClick: () => navigate(destinationPaiements),
+                onClick: () => navigate(
+                  pipeline.paye.nbFactures > 0
+                    ? '/soignant/mes-gains?tab=factures'
+                    : destinationPaiements,
+                ),
               },
             ].map(({ label, detail, etape, onClick }, i) => (
               <button
