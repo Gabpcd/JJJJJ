@@ -698,7 +698,7 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
                 {explicationModeOuverte && (
                   <p className="mt-2 border-t border-amber-200 pt-2 dark:border-amber-900">
                     {modeExerciceMission.niveau === 'BLOQUE'
-                      ? "Le mode libéral est exclu ici par la règle professionnelle ou le type de structure indiqué dans la source ci-dessus."
+                      ? "Le mode libéral est exclu ici par la règle professionnelle ou le type de structure indiqué dans la source ci-dessus. Pour les spécialités concernées, une mission IADE ou IBODE exige la profession spécialisée correspondante."
                       : "Ce n’est pas une interdiction générale faite aux cliniques. Jolene recommande le salariat lorsque les conditions concrètes de la mission (organisation, horaires imposés et lien de subordination) pourraient conduire à une requalification. La règle dépend de la profession demandée et du cadre réel de la mission, pas du seul nom de la structure."}
                   </p>
                 )}

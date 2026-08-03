@@ -1907,7 +1907,7 @@ export default function FacturationEtablissement() {
               <div>
                 <Label htmlFor="declarer-montant">
                   {declarerDialogMission.type_contrat_applique === 'SALARIE'
-                    ? 'Montant réellement versé aujourd’hui'
+                    ? 'Montant net réellement versé'
                     : 'Montant des honoraires versés'}
                 </Label>
                 <Input
