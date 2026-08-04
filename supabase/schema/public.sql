@@ -59615,6 +59615,7 @@ BEGIN
        (
          COALESCE(OLD.accord_etablissement, false)
          AND NOT COALESCE(OLD.accord_soignant, false)
+         AND OLD.soignant_id IS DISTINCT FROM auth.uid()
          AND OLD.etablissement_id = public.mon_etablissement_id()
        )
      )
@@ -59625,6 +59626,7 @@ BEGIN
       USING ERRCODE = 'P0001',
             HINT = 'L autre partie doit répondre à la proposition existante avant toute nouvelle proposition.';
   END IF;
+
   RETURN NEW;
 END;
 $$;
