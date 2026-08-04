@@ -12,6 +12,7 @@ DECLARE
   v_type_etab text;
   v_est_public boolean;
   v_mode jsonb;
+  v_liberal_interdit boolean;
 BEGIN
   SELECT type::text, COALESCE(est_secteur_public, false)
     INTO v_type_etab, v_est_public
@@ -28,14 +29,25 @@ BEGIN
     CASE WHEN v_est_public THEN 'PUBLIC' ELSE NULL END
   );
 
-  IF NEW.type_contrat_recherche IN ('LIBERAL', 'TOUS')
-     AND (
-       COALESCE(v_mode->>'niveau', 'BLOQUE') = 'BLOQUE'
-       OR (
-         NEW.profession_requise::text IN ('IADE', 'IBODE')
-         AND COALESCE(v_mode->>'niveau', 'NON_PROPOSE') <> 'AUTORISE'
-       )
-     ) THEN
+  v_liberal_interdit :=
+    COALESCE(v_mode->>'niveau', 'BLOQUE') = 'BLOQUE'
+    OR (
+      NEW.profession_requise::text IN ('IADE', 'IBODE')
+      AND COALESCE(v_mode->>'niveau', 'NON_PROPOSE') <> 'AUTORISE'
+    );
+
+  -- Un choix explicite interdit doit être refusé, afin que l'interface ne
+  -- puisse jamais annoncer qu'une édition libérale a réussi en la mutant.
+  IF NEW.type_contrat_recherche = 'LIBERAL' AND v_liberal_interdit THEN
+    RAISE EXCEPTION '%', COALESCE(
+      v_mode->>'source_libelle',
+      'Le mode liberal est indisponible pour cette mission.'
+    );
+  END IF;
+
+  -- « Tous » reste un choix neutre lorsqu'il est possible. Pour une cellule
+  -- réellement interdite, le repli salarié historique reste explicite.
+  IF NEW.type_contrat_recherche = 'TOUS' AND v_liberal_interdit THEN
     NEW.type_contrat_recherche := 'SALARIE';
   END IF;
 
