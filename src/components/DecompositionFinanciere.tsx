@@ -137,7 +137,7 @@ export function DecompositionFinanciere({ mission, etablissement, role = 'ETAB' 
             <p className="text-xs text-muted-foreground mt-1">{libelle.detail}</p>
             {isEtabOrAdmin && commissionTtc > 0 && (
               <p className="text-[11px] text-muted-foreground/80 italic mt-2">
-                ℹ️ La commission Jolene ({tauxCommission}%) ne sera pas facturée pour cette mission.
+                ℹ️ La commission Jolene ({tauxCommission}% HT) ne sera pas facturée pour cette mission.
               </p>
             )}
           </div>
@@ -317,7 +317,7 @@ export function DecompositionFinanciere({ mission, etablissement, role = 'ETAB' 
                 {fmt(commissionHt)} HT + TVA 20 %
               </p>
               <p className="text-[11px] text-muted-foreground mt-1">
-                <span className="font-medium">Calcul : </span>{tauxCommission}% × {fmt(totalBrut)} honoraires bruts (taux de commission applicable)
+                <span className="font-medium">Calcul : </span>{tauxCommission}% HT × {fmt(totalBrut)} honoraires bruts (taux de commission applicable)
               </p>
               <p className="text-[11px] text-primary mt-2">
                 ℹ️ Facturée séparément à l'établissement, sur facture Jolene distincte — à ne pas ajouter au virement honoraires soignant.
@@ -459,7 +459,7 @@ export function DecompositionFinanciere({ mission, etablissement, role = 'ETAB' 
               {fmt(commissionHt)} HT + TVA 20 %
             </p>
             <p className="text-[11px] text-muted-foreground mt-1">
-              <span className="font-medium">Calcul : </span>{tauxCommission}% × {fmt(superBrut)} brut total (base + IFM + ICP)
+              <span className="font-medium">Calcul : </span>{tauxCommission}% HT × {fmt(superBrut)} brut total (base + IFM + ICP)
             </p>
             <p className="text-[11px] text-primary mt-2">
               ℹ️ Facturée séparément à l'établissement, sur facture Jolene distincte — ne réduit pas la rémunération du soignant.

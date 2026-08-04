@@ -161,7 +161,7 @@ Chaque soignant est vérifié par nos soins : diplôme, RPPS et assurance contr�
 Concrètement, pour vous :
 • Vous publiez un besoin en 2 minutes et recevez des candidatures de soignants notés
 • Les contrats et déclarations sont générés automatiquement
-• 15 % de commission tout compris, sans abonnement ni engagement
+• 15 % de commission HT (18 % TTC avec TVA à 20 %), sans abonnement ni engagement
 
 Si cela peut vous être utile, je serais ravie d'échanger quelques minutes — répondez simplement à cet email, je vous réponds personnellement.
 

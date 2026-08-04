@@ -81,9 +81,9 @@ Le présent contrat a pour objet de définir les conditions dans lesquelles Jole
 
 4.1 En contrepartie du service rendu, Jolene perçoit une commission sur chaque mission réalisée par l'intermédiaire de la plateforme.
 
-4.2 Le taux de commission applicable est celui défini sur le profil Établissement au moment de l'assignation de la mission. Le taux peut être négocié individuellement ou au niveau du groupe de santé d'appartenance.
+4.2 Le taux de commission applicable est exprimé hors taxes et correspond à celui défini sur le profil Établissement au moment de l'assignation de la mission. Le taux standard est de 15 % HT. Il peut être négocié individuellement ou au niveau du groupe de santé d'appartenance.
 
-4.3 La commission est calculée sur le montant brut total de la mission (heures travaillées multipliées par le taux horaire majorations incluses). Elle est due par l'Établissement à Jolene.
+4.3 La commission est calculée sur le montant brut total de la mission (heures travaillées multipliées par le taux horaire, majorations incluses). La TVA au taux en vigueur s'y ajoute ; au taux de 20 %, la commission standard de 15 % HT représente 18 % TTC. Elle est due exclusivement par l'Établissement à Jolene et ne réduit jamais la rémunération du Soignant.
 
 4.4 La commission est figée au moment de l'assignation de la mission et ne peut être modifiée a posteriori sauf renégociation explicite.
 

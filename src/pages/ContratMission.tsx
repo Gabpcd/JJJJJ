@@ -126,6 +126,7 @@ export default function ContratMission() {
   const [showCheckAnim, setShowCheckAnim] = useState(false);
   // Signature : OTP_SMS (JOLENE_OTP) recommandé ou CANVAS manuscrit.
   const [modeSignature, setModeSignature] = useState<'CANVAS' | 'OTP_SMS'>('OTP_SMS');
+  const [smsExterneDesactive, setSmsExterneDesactive] = useState(false);
   const [fallbackHtml, setFallbackHtml] = useState('');
   const [hashContratAffiche, setHashContratAffiche] = useState<string | null>(null);
 
@@ -153,7 +154,7 @@ export default function ContratMission() {
             .maybeSingle(),
           supabase
             .from('soignants')
-            .select('prenom, nom, profession, numero_rpps')
+            .select('prenom, nom, profession, numero_rpps, est_compte_test')
             .eq('id', data.soignant_id)
             .maybeSingle(),
           supabase.rpc('fn_etablissement_pour_mission' as any, { p_etablissement_id: data.etablissement_id }).then(({ data: d, error: e }) => ({
@@ -175,6 +176,9 @@ export default function ContratMission() {
           etablissement: etabRes.data,
           templateHtml: templateRes.data?.contenu_html,
         }));
+        const compteTestCourant = data.soignant_id === user?.id && soignantRes.data?.est_compte_test === true;
+        setSmsExterneDesactive(compteTestCourant);
+        if (compteTestCourant) setModeSignature('CANVAS');
       } else {
         setFallbackHtml('');
       }
@@ -183,7 +187,7 @@ export default function ContratMission() {
       setLoading(false);
     };
     load();
-  }, [id]);
+  }, [id, user?.id]);
 
   // Calcul du hash SHA-256 réel du contenu HTML affiché (preuve d'intégrité
   // signée avec l'OTP). Si le contrat a un hash_document figé côté serveur
@@ -506,8 +510,13 @@ export default function ContratMission() {
                 {/* Mode selector */}
                 <div className="space-y-3">
                   <p className="text-sm font-medium text-foreground">Choisissez votre mode de signature :</p>
+                  {smsExterneDesactive && (
+                    <div className="rounded-lg border border-info/30 bg-info/5 p-3 text-xs text-muted-foreground" role="note">
+                      Compte de démonstration : aucun SMS réel n’est envoyé. Utilisez la signature manuscrite ci-dessous.
+                    </div>
+                  )}
                   <RadioGroup value={modeSignature} onValueChange={(v) => setModeSignature(v as 'CANVAS' | 'OTP_SMS')}>
-                    <label className="flex items-center gap-3 p-3 rounded-lg border border-primary/40 bg-primary/5 cursor-pointer hover:bg-primary/10 transition-colors">
+                    {!smsExterneDesactive && <label className="flex items-center gap-3 p-3 rounded-lg border border-primary/40 bg-primary/5 cursor-pointer hover:bg-primary/10 transition-colors">
                       <RadioGroupItem value="OTP_SMS" className="focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2" />
                       <div className="flex-1">
                         <div className="flex items-center gap-2">
@@ -516,7 +525,7 @@ export default function ContratMission() {
                         </div>
                         <p className="text-xs text-muted-foreground">Code SMS à 6 chiffres + horodatage + hash document. Conforme art. 1366-1367 Code civil.</p>
                       </div>
-                    </label>
+                    </label>}
                     <label className="flex items-center gap-3 p-3 rounded-lg border border-border cursor-pointer hover:bg-accent/50 transition-colors">
                       <RadioGroupItem value="CANVAS" className="focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2" />
                       <div>

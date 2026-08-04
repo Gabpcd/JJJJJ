@@ -40,7 +40,7 @@ export function WidgetPalierFidelite({ etab, paliers, missionsCeMois }: WidgetPa
       <div className="flex items-center gap-2 mb-4">
         <Trophy className="h-5 w-5 text-accent-foreground" />
         <h3 className="font-bold text-foreground">
-          Votre palier : {palierActuel.nom} ({tauxActuel}%)
+          Votre palier : {palierActuel.nom} ({tauxActuel}% HT)
         </h3>
       </div>
 
@@ -74,7 +74,7 @@ export function WidgetPalierFidelite({ etab, paliers, missionsCeMois }: WidgetPa
                     : 'bg-card border-border text-muted-foreground'
                 }`}
               >
-                {p.taux_commission}%
+                {p.taux_commission}% HT
               </div>
               <span className={`text-[10px] mt-1.5 font-medium text-center leading-tight ${isActuel ? 'text-primary' : 'text-muted-foreground'}`}>
                 {p.nom}
@@ -96,7 +96,7 @@ export function WidgetPalierFidelite({ etab, paliers, missionsCeMois }: WidgetPa
           <Sparkles className="h-4 w-4 text-primary mt-0.5 shrink-0" />
           <p className="text-sm text-foreground">
             Encore <span className="font-bold text-primary">{missionsRestantes} mission{missionsRestantes > 1 ? 's' : ''}</span> pour atteindre le palier{' '}
-            <span className="font-bold">{prochainPalier.nom} ({prochainPalier.taux_commission}%)</span> !
+            <span className="font-bold">{prochainPalier.nom} ({prochainPalier.taux_commission}% HT)</span> !
             Publiez plus pour économiser.
           </p>
         </div>

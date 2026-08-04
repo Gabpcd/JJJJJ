@@ -150,7 +150,7 @@ export function BulletinsPaieContent() {
           {MENTION_SIMULATION_PAIE}
         </p>
         <div className="rounded-xl border border-info/20 bg-info/5 p-3 text-xs text-muted-foreground" role="note">
-          Cette vue contient uniquement les simulations des missions salariées. Les honoraires libéraux encaissés sont affichés séparément dans l’onglet <strong>Factures</strong> et ne doivent pas être additionnés ou comparés ligne à ligne.
+          Jolene n’est pas ton employeur : seul l’établissement employeur peut émettre le bulletin de paie officiel. Cette vue contient donc uniquement des simulations des missions salariées. Les honoraires libéraux encaissés sont affichés séparément dans l’onglet <strong>Factures</strong> et ne doivent pas être additionnés ou comparés ligne à ligne.
         </div>
         {nbPdfIndisponibles > 0 && (
           <div className="rounded-xl border border-warning/30 bg-warning/5 p-3 text-sm" role="status">

@@ -4,6 +4,23 @@ import { describe, expect, it } from 'vitest';
 const read = (path: string) => readFileSync(path, 'utf8');
 
 describe('cohérence financière des interfaces', () => {
+  it('présente sans ambiguïté le taux de commission HT et son équivalent TTC', () => {
+    const accueil = read('src/pages/PageAccueil.tsx');
+    const tarifs = read('src/pages/Tarifs.tsx');
+    const recrutement = read('src/pages/RecruterSoignants.tsx');
+    const cgv = read('src/pages/PageCGV.tsx');
+    const contrat = read('src/constantes/contratServiceEtablissement.ts');
+    const textes = `${accueil}\n${tarifs}\n${recrutement}\n${cgv}\n${contrat}`;
+
+    expect(textes).not.toContain('commission tout compris');
+    for (const contenu of [accueil, tarifs, recrutement, cgv, contrat]) {
+      expect(contenu).toContain('15 % HT');
+      expect(contenu).toContain('18 % TTC');
+    }
+    expect(contrat).toContain("Elle est due exclusivement par l'Établissement à Jolene");
+    expect(contrat).toContain('ne réduit jamais la rémunération du Soignant');
+  });
+
   it('réserve le badge de paiement rapide aux missions libérales', () => {
     const card = read('src/components/swipe/CardMissionSwipe.tsx');
     const modal = read('src/components/swipe/ModalDetailMissionSwipe.tsx');

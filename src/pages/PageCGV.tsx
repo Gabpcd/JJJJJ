@@ -18,7 +18,7 @@ export default function PageCGV() {
   return (
     <LayoutLegal
       titre="Conditions Générales de Vente"
-      dateMaj="16 juin 2026"
+      dateMaj="4 août 2026"
       toc={TOC}
       seoDescription="Conditions Générales de Vente de Jolene. Frais de service, tarification, Bonus de Fidélité Annuel, facturation et conditions de paiement."
     >
@@ -44,7 +44,7 @@ export default function PageCGV() {
       {/* Article 3 */}
       <section id="art3">
         <h2 className="text-xl sm:text-2xl font-bold text-foreground mb-4">Article 3 — Tarification</h2>
-        <p className="mb-4">L'utilisation de la Plateforme donne lieu à une commission de <strong>15 % (HT)</strong> de la rémunération brute totale due au Soignant pour chaque mission réalisée, facturée à l'Établissement. Aucun abonnement ni frais d'inscription n'est dû.</p>
+        <p className="mb-4">L'utilisation de la Plateforme donne lieu à une commission de <strong>15 % HT</strong> de la rémunération brute totale due au Soignant pour chaque mission réalisée, facturée à l'Établissement. La TVA au taux en vigueur s'ajoute à cette commission ; avec une TVA de 20 %, elle représente <strong>18 % TTC</strong> de la rémunération brute. Aucun abonnement ni frais d'inscription n'est dû.</p>
         <p className="mb-4">En cas de négociation commerciale, un taux différent peut être convenu contractuellement entre l'Éditeur et l'Établissement (notamment pour les groupes d'établissements) ; il est alors précisé dans les conditions particulières.</p>
         <p>Aucun frais n'est facturé au Soignant, quel que soit le type de contrat.</p>
       </section>
@@ -111,7 +111,7 @@ export default function PageCGV() {
         <p className="mb-3">Pendant une durée de <strong>douze (12) mois</strong> à compter du dernier des événements suivants — dernière mission réalisée ou dernier échange via la Plateforme avec le Professionnel concerné — l'Établissement s'engage à conclure <strong>exclusivement via la Plateforme</strong> toute nouvelle collaboration avec un Professionnel mis en relation, quelle qu'en soit la forme : mission ponctuelle, vacation, remplacement, contrat à durée déterminée ou indéterminée, ou toute collaboration équivalente, directe ou par personne ou société interposée.</p>
         <p className="mb-3">À défaut, l'Établissement est redevable de plein droit :</p>
         <ul className="list-disc pl-6 space-y-2 mb-3">
-          <li>pour toute <strong>mission réalisée hors Plateforme</strong> pendant cette période : la commission qui aurait été due au titre des présentes CGV (15 % des montants versés au Professionnel), calculée sur justificatifs ou, à défaut de communication de ceux-ci sous quinze (15) jours après demande, sur une base forfaitaire égale au tarif journalier moyen constaté sur la Plateforme pour la profession concernée, par jour de mission constaté ;</li>
+          <li>pour toute <strong>mission réalisée hors Plateforme</strong> pendant cette période : la commission qui aurait été due au titre des présentes CGV (15 % HT des montants versés au Professionnel, TVA en sus), calculée sur justificatifs ou, à défaut de communication de ceux-ci sous quinze (15) jours après demande, sur une base forfaitaire égale au tarif journalier moyen constaté sur la Plateforme pour la profession concernée, par jour de mission constaté ;</li>
           <li>pour toute <strong>embauche</strong> : les frais de recrutement prévus à l'article 8.3.</li>
         </ul>
         <p className="mb-3">L'Établissement s'engage à informer Jolene, sous quinze (15) jours, de toute embauche d'un Professionnel mis en relation intervenant pendant la période visée ci-dessus.</p>

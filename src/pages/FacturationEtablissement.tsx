@@ -1851,7 +1851,7 @@ export default function FacturationEtablissement() {
             {connectDecomposition && (
               <div className="text-xs text-muted-foreground space-y-1 mb-3">
                 <p>Honoraires soignant : {fmt(connectDecomposition.salaire_brut)}</p>
-                <p>Commission Jolene : {fmt(connectDecomposition.commission_ttc)}</p>
+                <p>Commission Jolene TTC : {fmt(connectDecomposition.commission_ttc)}</p>
                 <p className="font-semibold text-foreground">Total : {fmt(connectDecomposition.total)}</p>
               </div>
             )}

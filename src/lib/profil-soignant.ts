@@ -31,15 +31,11 @@ export interface ResumeCompletion {
 
 export function calculerCompletionProfil(
   soignant: Soignant | null,
-  options?: {
-    documents_ok?: boolean;
-    identite_verifiee?: boolean;
-  }
 ): ResumeCompletion {
   if (!soignant) {
     return {
       pourcentage: 0,
-      total_items: 9,
+      total_items: 7,
       items_remplis: 0,
       items_obligatoires_manquants: [],
       items: [],
@@ -121,24 +117,6 @@ export function calculerCompletionProfil(
       ordre: 7,
       action_route: '/soignant/profil',
     },
-    {
-      cle: 'documents',
-      label: 'Documents validés',
-      rempli: options?.documents_ok ?? !!soignant.tous_documents_valides,
-      obligatoire: false,
-      ordre: 8,
-      action_label: 'Téléverser mes documents',
-      action_route: '/soignant/mes-documents',
-    },
-    {
-      cle: 'identite',
-      label: 'Identité vérifiée',
-      rempli: options?.identite_verifiee ?? !!soignant.identite_verifiee,
-      obligatoire: false,
-      ordre: 9,
-      action_label: 'Compléter mon identité',
-      action_route: '/soignant/profil',
-    },
   ];
 
   const items_remplis = items.filter((i) => i.rempli).length;
@@ -187,7 +165,10 @@ export function getMotifProfilIncomplet(
   if (!resume.peut_candidater) {
     return 'Vous pouvez voir les missions mais pas encore candidater.';
   }
-  return 'Profil partiellement complété.';
+  const recommandes = resume.items_recommandes_manquants.map((i) => i.label).join(', ');
+  return recommandes
+    ? `Informations essentielles complétées. Recommandé : ${recommandes}.`
+    : 'Informations essentielles complétées.';
 }
 
 /** Liste courte des labels des champs obligatoires manquants (pour affichage en rouge). */

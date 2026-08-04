@@ -33,6 +33,7 @@ export function GrilleTarifaire({ paliers }: GrilleTarifaireProps) {
         {paliers.map((p) => {
           const isPopular = p.id === palierPopulaire?.id;
           const desc = descriptionsParPalier[p.nom] ?? { cible: '', cta: "S'inscrire" };
+          const tauxTtc = new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 2 }).format(p.taux_commission * 1.2);
 
           return (
             <div
@@ -52,7 +53,8 @@ export function GrilleTarifaire({ paliers }: GrilleTarifaireProps) {
               <h3 className="text-lg font-bold text-foreground mt-2">{p.nom}</h3>
 
               <div className="mt-4 mb-2">
-                <span className="text-4xl font-black text-primary">{p.taux_commission}%</span>
+                <span className="text-4xl font-black text-primary">{p.taux_commission}% HT</span>
+                <p className="text-xs text-muted-foreground mt-1">{tauxTtc}% TTC avec TVA à 20%</p>
               </div>
 
               <p className="text-sm text-muted-foreground mb-4">

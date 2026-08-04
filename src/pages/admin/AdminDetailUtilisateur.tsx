@@ -471,7 +471,7 @@ export default function AdminDetailUtilisateur() {
                   <InfoRow icon={MapPin} label="Adresse" value={`${etablissement.adresse_rue}, ${etablissement.adresse_code_postal} ${etablissement.adresse_ville}`} />
                   <InfoRow icon={Clock} label="Inscrit le" value={new Date(etablissement.cree_le).toLocaleDateString('fr-FR')} />
                   <InfoRow icon={FileText} label="Formule" value={etablissement.formule_abonnement || '—'} />
-                  <InfoRow icon={FileText} label="Taux commission" value={`${etablissement.taux_commission_negocie}%`} />
+                  <InfoRow icon={FileText} label="Taux commission HT" value={`${etablissement.taux_commission_negocie}%`} />
                   <InfoRow icon={FileText} label="Délai paiement" value={`${etablissement.delai_paiement_jours} jour${etablissement.delai_paiement_jours > 1 ? 's' : ''}`} />
                 </div>
               )}
@@ -827,7 +827,7 @@ export default function AdminDetailUtilisateur() {
                 <CardY2KHeader><CardY2KTitle className="text-sm">Commercial</CardY2KTitle></CardY2KHeader>
                 <CardY2KContent className="space-y-2">
                   <ProfileRow label="Formule" value={etablissement.formule_abonnement || '—'} />
-                  <ProfileRow label="Taux commission" value={`${etablissement.taux_commission_negocie}%`} />
+                  <ProfileRow label="Taux commission HT" value={`${etablissement.taux_commission_negocie}%`} />
                   <ProfileRow label="Mode facturation" value={etablissement.mode_facturation || '—'} />
                   <ProfileRow label="Mode paiement" value={etablissement.mode_paiement_commission || '—'} />
                   <ProfileRow label="Délai paiement" value={`${etablissement.delai_paiement_jours} jour${etablissement.delai_paiement_jours > 1 ? 's' : ''}`} />
