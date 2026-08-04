@@ -29,11 +29,22 @@ export async function reactiverSoignantPlaywright(admin: SupabaseClient): Promis
     throw new Error(`[sessions-playwright] lecture suspension impossible : ${suspensionError.message}`);
   }
 
+  // Cas normal : le test de suspension s'est terminé et sa RPC de cleanup a
+  // déjà restauré auth.users + le profil dans la même transaction SQL. Ne pas
+  // appeler GoTrue Admin sans nécessité : cette requête distante a provoqué
+  // des 500/504 de teardown alors qu'aucun compte n'était encore suspendu.
+  if (!suspension) return;
+
   const { error: authError } = await admin.auth.admin.updateUserById(userId, {
     ban_duration: 'none',
   });
   if (authError) {
-    throw new Error(`[sessions-playwright] réactivation Auth impossible : ${authError.message}`);
+    const diagnostic = JSON.stringify({
+      message: authError.message,
+      status: (authError as { status?: number }).status,
+      code: (authError as { code?: string }).code,
+    });
+    throw new Error(`[sessions-playwright] réactivation Auth impossible : ${diagnostic}`);
   }
 
   const { error: profilError } = await admin

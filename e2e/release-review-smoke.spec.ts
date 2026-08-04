@@ -50,17 +50,24 @@ async function connecterCompteReview(page: Page, compte: ReviewAccount) {
   }
 
   const erreursConsole: string[] = [];
+  const statutsAuth: number[] = [];
   page.on('console', (message) => {
     if (message.type() === 'error') erreursConsole.push(message.text());
   });
   page.on('pageerror', (error) => erreursConsole.push(error.message));
+  page.on('response', (response) => {
+    if (response.url().includes('/auth/v1/token')) statutsAuth.push(response.status());
+  });
 
   await page.goto('/connexion');
   await page.locator('input[type="email"]').fill(compte.email);
   await page.locator('input[type="password"]').first().fill(compte.password);
   await page.getByTestId('login-submit').click();
 
-  await expect(page).toHaveURL(compte.destination, { timeout: 20_000 });
+  await expect(
+    page,
+    `La connexion ${compte.email} n'a pas abouti (réponses Supabase Auth : ${statutsAuth.join(', ') || 'aucune'}).`,
+  ).toHaveURL(compte.destination, { timeout: 20_000 });
   await expect(page.getByText(/Votre espace est momentanément indisponible/i)).toHaveCount(0);
   await expect(page.locator('body')).not.toBeEmpty();
   await page.waitForLoadState('networkidle');

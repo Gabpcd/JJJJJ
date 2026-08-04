@@ -144,24 +144,34 @@ jobs:
         run: |
           npx vite preview --port 4173 --host 0.0.0.0 &
           npx wait-on http://127.0.0.1:4173 -t 30000 || true
-      - name: Run Playwright tests (chromium)
-        id: playwright-tests
-        # SUPABASE_SERVICE_ROLE_KEY arrive via GITHUB_ENV (step « Résoudre la
-        # clé ») — ne PAS la remapper ici depuis secrets (valeur fausse).
-        run: npx playwright test --project=chromium
+      - name: Vérifier App Review sur un vrai iPad WebKit (prioritaire)
+        # Ce smoke doit passer AVANT la longue suite Chromium : après plusieurs
+        # centaines de scénarios Auth, une indisponibilité temporaire de GoTrue
+        # ne doit pas être confondue avec une régression du correctif iPad.
+        run: npx playwright test e2e/release-review-smoke.spec.ts --project=tablet-ipad
         env:
           PLAYWRIGHT_BASE_URL: http://127.0.0.1:4173
           SUPABASE_URL: ${{ env.E2E_SUPABASE_URL }}
           SUPABASE_PUBLISHABLE_KEY: ${{ env.E2E_PUBLISHABLE_KEY }}
           SUPABASE_ANON_KEY: ${{ env.E2E_ANON_KEY }}
           PLAYWRIGHT_TEST_PASSWORD: ${{ env.E2E_TEST_PASSWORD }}
-          # La PR précède nécessairement le déploiement de sa migration. Ce
-          # flag est volontairement absent du job main et le helper refuse de
-          # l'honorer pour tout événement autre que pull_request vers main.
           E2E_ALLOW_PGRST202_ELIGIBILITY_FALLBACK: 'true'
-          # La PR apporte le purgeur SQL durable, qui n'est pas encore déployé
-          # au moment où ce job interroge la production. Sur main ce repli est
-          # volontairement absent : toute régression de purge reste bloquante.
+          E2E_ALLOW_FROZEN_TEST_QUARANTINE: 'true'
+          CI: 'true'
+      - name: Run Playwright tests (chromium)
+        id: playwright-tests
+        # SUPABASE_SERVICE_ROLE_KEY arrive via GITHUB_ENV (step « Résoudre la
+        # clé ») — ne PAS la remapper ici depuis secrets (valeur fausse).
+        # Déjà exécuté ci-dessus avec le moteur/viewport réellement utilisés
+        # sur iPad ; ne pas le rejouer en fin de suite sous Chromium.
+        run: npx playwright test --project=chromium --grep-invert='release review — reprise de session iPad'
+        env:
+          PLAYWRIGHT_BASE_URL: http://127.0.0.1:4173
+          SUPABASE_URL: ${{ env.E2E_SUPABASE_URL }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ env.E2E_PUBLISHABLE_KEY }}
+          SUPABASE_ANON_KEY: ${{ env.E2E_ANON_KEY }}
+          PLAYWRIGHT_TEST_PASSWORD: ${{ env.E2E_TEST_PASSWORD }}
+          E2E_ALLOW_PGRST202_ELIGIBILITY_FALLBACK: 'true'
           E2E_ALLOW_FROZEN_TEST_QUARANTINE: 'true'
           CI: 'true'
       - name: Détail a11y si échec (rapport court en fin de log)
@@ -169,6 +179,12 @@ jobs:
         run: npx playwright test e2e/a11y.spec.ts --project=chromium --reporter=line --retries=0 || true
         env:
           PLAYWRIGHT_BASE_URL: http://127.0.0.1:4173
+          SUPABASE_URL: ${{ env.E2E_SUPABASE_URL }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ env.E2E_PUBLISHABLE_KEY }}
+          SUPABASE_ANON_KEY: ${{ env.E2E_ANON_KEY }}
+          PLAYWRIGHT_TEST_PASSWORD: ${{ env.E2E_TEST_PASSWORD }}
+          E2E_ALLOW_PGRST202_ELIGIBILITY_FALLBACK: 'true'
+          E2E_ALLOW_FROZEN_TEST_QUARANTINE: 'true'
           CI: 'true'
       - name: Upload report
         if: ${{ !cancelled() }}
@@ -256,18 +272,26 @@ jobs:
         run: |
           npx vite preview --port 4173 --host 0.0.0.0 &
           npx wait-on http://127.0.0.1:4173 -t 30000 || true
-      - name: Run Playwright tests (${{ matrix.project }})
-        # SUPABASE_SERVICE_ROLE_KEY arrive via GITHUB_ENV (step « Résoudre la
-        # clé ») — ne PAS la remapper ici depuis secrets (valeur fausse).
-        run: npx playwright test --project=${{ matrix.project }}
+      - name: Vérifier App Review sur un vrai iPad WebKit (prioritaire)
+        run: npx playwright test e2e/release-review-smoke.spec.ts --project=tablet-ipad
         env:
           PLAYWRIGHT_BASE_URL: http://127.0.0.1:4173
           SUPABASE_URL: ${{ env.E2E_SUPABASE_URL }}
           SUPABASE_PUBLISHABLE_KEY: ${{ env.E2E_PUBLISHABLE_KEY }}
           SUPABASE_ANON_KEY: ${{ env.E2E_ANON_KEY }}
           PLAYWRIGHT_TEST_PASSWORD: ${{ env.E2E_TEST_PASSWORD }}
-          # Aucun flag de compatibilité PGRST202 sur main : la RPC canonique
-          # doit être déployée par le workflow du même SHA ci-dessus.
+          CI: 'true'
+      - name: Run Playwright tests (${{ matrix.project }})
+        # SUPABASE_SERVICE_ROLE_KEY arrive via GITHUB_ENV (step « Résoudre la
+        # clé ») — ne PAS la remapper ici depuis secrets (valeur fausse).
+        # Le contrôle iPad ci-dessus est volontairement isolé et prioritaire.
+        run: npx playwright test --project=${{ matrix.project }} --grep-invert='release review — reprise de session iPad'
+        env:
+          PLAYWRIGHT_BASE_URL: http://127.0.0.1:4173
+          SUPABASE_URL: ${{ env.E2E_SUPABASE_URL }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ env.E2E_PUBLISHABLE_KEY }}
+          SUPABASE_ANON_KEY: ${{ env.E2E_ANON_KEY }}
+          PLAYWRIGHT_TEST_PASSWORD: ${{ env.E2E_TEST_PASSWORD }}
           CI: 'true'
       - name: Upload report
         if: ${{ !cancelled() }}

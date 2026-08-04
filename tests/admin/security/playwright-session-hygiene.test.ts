@@ -48,6 +48,7 @@ describe('hygiène des sessions Auth Playwright', () => {
     expect(helper).toContain('AbortController');
     expect(helper).toContain('20_000');
     expect(helper).toContain("ban_duration: 'none'");
+    expect(helper).toContain('if (!suspension) return');
     expect(helper).toContain('suspensions_auth_admin');
     expect(setup).toContain('reactiverSoignantPlaywright(admin)');
     expect(teardown).toContain('reactiverSoignantPlaywright(admin)');
@@ -56,6 +57,10 @@ describe('hygiène des sessions Auth Playwright', () => {
     expect(workflow).toContain('::add-mask::$E2E_TEST_PASSWORD');
     expect(workflow).toContain('steps.playwright-tests.outcome');
     expect(workflow).toContain('for tentative in 1 2 3');
+    expect(workflow).toContain(
+      'playwright test e2e/release-review-smoke.spec.ts --project=tablet-ipad',
+    );
+    expect(workflow).toContain("--grep-invert='release review — reprise de session iPad'");
   });
 
   it('reseed les profils avec les valeurs canoniques et les marque comme tests', () => {
