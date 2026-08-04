@@ -36,6 +36,20 @@ export function liberalEstProposable(mode: ModeExerciceMission | null): boolean 
 }
 
 /**
+ * `NON_PROPOSE` ne favorise aucun régime et n'est pas une interdiction.
+ * Seule une cellule `BLOQUE` retire réellement le choix libéral.
+ */
+export function liberalEstSelectionnable(
+  mode: ModeExerciceMission | null,
+  profession?: string | null,
+): boolean {
+  if (profession && ['IADE', 'IBODE'].includes(profession) && mode?.niveau !== 'AUTORISE') {
+    return false;
+  }
+  return mode !== null && mode.niveau !== 'BLOQUE';
+}
+
+/**
  * Libellé explicite du lien affiché sur les deux surfaces de publication.
  * L'URL reste fournie par la matrice serveur ; ce mapping évite qu'une source
  * juridique primaire soit présentée sous un libellé générique ou ambigu.

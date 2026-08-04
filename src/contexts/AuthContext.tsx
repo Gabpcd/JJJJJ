@@ -97,9 +97,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     void supabase.rpc('fn_audit_connexion', {
       p_action: 'CONNEXION',
     }).then(({ error: auditError }) => {
-      if (auditError) logger.error('Audit connexion échoué', auditError);
+      if (auditError) logger.warn('Audit connexion ignoré', auditError);
     }, (auditError) => {
-      logger.error('Audit connexion indisponible', auditError);
+      logger.warn('Audit connexion indisponible — connexion conservée', auditError);
     });
 
     if (u.app_metadata?.role === 'SOIGNANT') {

@@ -4,6 +4,7 @@ import { UserRole } from '@/lib/types';
 import type { RpcGetMyRole } from '@/lib/supabase-rpc-types';
 
 export const ROLE_RESOLUTION_TIMEOUT_MS = 8_000;
+export const ROLE_CACHE_TTL_MS = 5 * 60_000;
 
 type RoleCompte = UserRole | 'INCONNU';
 
@@ -33,6 +34,13 @@ const ETAT_INITIAL: RoleState = {
   resolved: false,
   error: null,
 };
+
+let roleCache: { userId: string; state: RoleState; expireAt: number } | null = null;
+
+/** Utilisé par les tests et lors d'un changement explicite de compte. */
+export function reinitialiserCacheRole(): void {
+  roleCache = null;
+}
 
 function normaliserErreur(error: unknown, fallback: string): Error {
   if (error instanceof Error) return error;
@@ -73,7 +81,7 @@ export function useRole(): UseRoleResult {
     let requestVersion = 0;
     const controllers = new Set<AbortController>();
 
-    const fetchRole = async () => {
+    const fetchRole = async (force = false) => {
       const currentRequest = ++requestVersion;
       let roleSigneSecours: RoleState | null = null;
       setState(ETAT_INITIAL);
@@ -84,6 +92,7 @@ export function useRole(): UseRoleResult {
         if (cancelled || currentRequest !== requestVersion) return;
 
         if (!sessionData.session) {
+          reinitialiserCacheRole();
           setState({
             role: 'INCONNU',
             etablissement_id: null,
@@ -91,6 +100,16 @@ export function useRole(): UseRoleResult {
             resolved: true,
             error: null,
           });
+          return;
+        }
+
+        const sessionUserId = sessionData.session.user.id;
+        if (
+          !force
+          && roleCache?.userId === sessionUserId
+          && roleCache.expireAt > Date.now()
+        ) {
+          setState(roleCache.state);
           return;
         }
 
@@ -128,16 +147,33 @@ export function useRole(): UseRoleResult {
 
         const result = response.data as unknown as RpcGetMyRole | null;
         const role = normaliserRole(result?.role) ?? 'INCONNU';
-        setState({
+        const roleState: RoleState = {
           role,
           etablissement_id: typeof result?.etablissement_id === 'string' ? result.etablissement_id : null,
           loading: false,
           resolved: true,
           error: null,
-        });
+        };
+        roleCache = {
+          userId: sessionUserId,
+          state: roleState,
+          expireAt: Date.now() + ROLE_CACHE_TTL_MS,
+        };
+        setState(roleState);
       } catch (error) {
         if (cancelled || currentRequest !== requestVersion) return;
         if (roleSigneSecours) {
+          const sessionResult = await supabase.auth.getSession().catch(() => null);
+          const sessionUserId = sessionResult?.data?.session?.user?.id;
+          if (sessionUserId) {
+            roleCache = {
+              userId: sessionUserId,
+              state: roleSigneSecours,
+              // Une revalidation indisponible est retentée rapidement, sans
+              // faire patienter chaque onglet entre-temps.
+              expireAt: Date.now() + 30_000,
+            };
+          }
           setState(roleSigneSecours);
           return;
         }
@@ -151,13 +187,17 @@ export function useRole(): UseRoleResult {
       }
     };
 
-    void fetchRole();
+    void fetchRole(retryVersion > 0);
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (cancelled) return;
       if (session) {
-        void fetchRole();
+        if (event === 'SIGNED_IN' || event === 'USER_UPDATED') {
+          reinitialiserCacheRole();
+          void fetchRole(true);
+        }
       } else {
+        reinitialiserCacheRole();
         requestVersion += 1;
         for (const controller of controllers) controller.abort();
         setState({

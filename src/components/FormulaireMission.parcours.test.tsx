@@ -173,7 +173,9 @@ describe('FormulaireMission — parcours de création critique', () => {
 
     await waitFor(() => expect(screen.queryByText("Vérification du mode d'exercice…")).not.toBeInTheDocument());
     verifierValeursConservees();
-    expect(screen.getByRole('radio', { name: /Salarié/i })).toBeChecked();
+    expect(screen.getByRole('radio', { name: /Tous profils/i })).toBeChecked();
+    expect(screen.getByRole('radio', { name: /^Libéral/i })).toBeEnabled();
+    expect(screen.queryByText(/salariat recommandé/i)).not.toBeInTheDocument();
 
     const publier = screen.getByRole('button', { name: /Publier la mission/ });
     expect(publier).toBeEnabled();
@@ -186,7 +188,7 @@ describe('FormulaireMission — parcours de création critique', () => {
       profession: 'IDE',
       service: 'Soins continus',
       tauxHoraire: 32,
-      contratPreference: 'SALARIE',
+      contratPreference: 'TOUS',
       dureeHeures: 12,
     });
 
@@ -197,7 +199,7 @@ describe('FormulaireMission — parcours de création critique', () => {
         p_profession_requise: 'IDE',
         p_service: 'Soins continus',
         p_taux_horaire_base: 32,
-        p_type_contrat_recherche: 'SALARIE',
+        p_type_contrat_recherche: 'TOUS',
         p_creneaux: [expect.objectContaining({
           debut: expect.stringContaining('2099-08-03'),
           fin: expect.stringContaining('2099-08-03'),

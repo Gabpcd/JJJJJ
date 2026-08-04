@@ -6,7 +6,7 @@ import { ChargementPage } from '@/components/ChargementPage';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
-import { Scale, PlusCircle, ChevronRight } from 'lucide-react';
+import { Scale, PlusCircle, ChevronRight, Handshake } from 'lucide-react';
 import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
@@ -239,6 +239,12 @@ export function LitigesSoignantContent() {
                     <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">
                       Motif : {l.motif}
                     </p>
+                    {l.payload_modifications && l.accord_etablissement && !l.accord_soignant && (
+                      <p className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-warning/30 bg-warning/10 px-2.5 py-1.5 text-xs font-semibold text-warning">
+                        <Handshake className="h-3.5 w-3.5" aria-hidden="true" />
+                        Proposition de résolution reçue — votre réponse est attendue
+                      </p>
+                    )}
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     {mission?.id && (

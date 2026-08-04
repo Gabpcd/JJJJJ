@@ -73,6 +73,14 @@ interface MissionOuverte {
   etablissements: { nom: string } | null;
 }
 
+const POOL_CACHE_TTL_MS = 60_000;
+const cachePoolUrgence = new Map<string, {
+  expireAt: number;
+  soignants: SoignantPool[];
+  historique: HistoriqueUrgence[];
+  kpiUrgencesMois: number | null;
+}>();
+
 function PoolLayout({ isAdmin, children }: { isAdmin: boolean; children: React.ReactNode }) {
   return isAdmin
     ? <LayoutAdmin>{children}</LayoutAdmin>
@@ -140,10 +148,15 @@ export default function PoolUrgenceEtablissement({ isAdmin = false }: { isAdmin?
 
   const loadData = useCallback(async () => {
     const numeroChargement = ++chargementPoolRef.current;
-    setLoading(true);
-    setSoignants([]);
-    setHistorique([]);
-    setKpiUrgencesMois(null);
+    const cached = cachePoolUrgence.get(etablissementId);
+    if (cached && cached.expireAt > Date.now()) {
+      setSoignants(cached.soignants);
+      setHistorique(cached.historique);
+      setKpiUrgencesMois(cached.kpiUrgencesMois);
+      setLoading(false);
+    } else {
+      setLoading(true);
+    }
     const debutMois = new Date();
     debutMois.setDate(1);
     debutMois.setHours(0, 0, 0, 0);
@@ -173,10 +186,11 @@ export default function PoolUrgenceEtablissement({ isAdmin = false }: { isAdmin?
     if (poolRes.error || histRes.error || kpiRes.error) {
       toast.error("Le pool d'urgence n'a pas pu être chargé complètement.");
     }
-    if (poolRes.data) setSoignants(poolRes.data as any);
+    const prochainsSoignants = (poolRes.data ?? []) as unknown as SoignantPool[];
+    if (poolRes.data) setSoignants(prochainsSoignants);
+    let prochainHistorique: HistoriqueUrgence[] = [];
     if (histRes.data) {
-      setHistorique(
-        (histRes.data as any[]).map((m: any) => ({
+      prochainHistorique = (histRes.data as any[]).map((m: any) => ({
           id: m.id,
           intitule: m.intitule,
           debut_le: m.debut_le,
@@ -185,10 +199,19 @@ export default function PoolUrgenceEtablissement({ isAdmin = false }: { isAdmin?
           soignant_nom: m.soignants?.nom || null,
           cree_le: m.cree_le,
           soignant_assigne_id: m.soignant_assigne_id,
-        }))
-      );
+        }));
+      setHistorique(prochainHistorique);
     }
-    setKpiUrgencesMois(kpiRes.error ? null : (kpiRes.count ?? 0));
+    const prochainKpi = kpiRes.error ? null : (kpiRes.count ?? 0);
+    setKpiUrgencesMois(prochainKpi);
+    if (!poolRes.error && !histRes.error) {
+      cachePoolUrgence.set(etablissementId, {
+        expireAt: Date.now() + POOL_CACHE_TTL_MS,
+        soignants: prochainsSoignants,
+        historique: prochainHistorique,
+        kpiUrgencesMois: prochainKpi,
+      });
+    }
     setLoading(false);
   }, [etablissementId]);
 
@@ -400,6 +423,10 @@ export default function PoolUrgenceEtablissement({ isAdmin = false }: { isAdmin?
     return (
       <PoolLayout isAdmin={isAdmin}>
         <div className="max-w-6xl mx-auto space-y-6">
+          <h1 className="text-xl font-bold text-foreground flex items-center gap-2">
+            <Flame className="h-6 w-6 text-destructive" />
+            Pool d'urgence
+          </h1>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {[1, 2, 3].map(i => (
               <div key={i} className="card-base animate-pulse h-24" />

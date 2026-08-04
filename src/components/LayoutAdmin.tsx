@@ -16,6 +16,7 @@ import {
   type AdminNavGroup,
 } from '@/lib/adminNavigation';
 import { cn } from '@/lib/utils';
+import { BadgeNotification } from '@/components/PanneauNotifications';
 
 function lienActif(pathname: string, route: string): boolean {
   return pathname === route || pathname.startsWith(`${route}/`);
@@ -185,7 +186,10 @@ export function LayoutAdmin({ children }: { children: ReactNode }) {
                 <span className="block text-[11px] leading-tight text-muted-foreground">Administration</span>
               </span>
             </Link>
-            <ThemeToggle className="text-muted-foreground hover:bg-muted" />
+            <div className="flex items-center gap-1">
+              <BadgeNotification />
+              <ThemeToggle className="text-muted-foreground hover:bg-muted" />
+            </div>
           </div>
 
           <div className="px-3 pt-3">
@@ -264,6 +268,7 @@ export function LayoutAdmin({ children }: { children: ReactNode }) {
             >
               <Search className="h-5 w-5" aria-hidden="true" />
             </button>
+            <BadgeNotification />
             <ThemeToggle />
             <button
               type="button"
