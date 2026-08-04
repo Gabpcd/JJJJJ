@@ -513,6 +513,31 @@ COMMENT ON COLUMN "public"."heures_externes_soignants"."empreinte_snapshot_sourc
 
 
 
+CREATE TABLE IF NOT EXISTS "public"."externalisation_actions" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "type_action" "text" NOT NULL,
+    "payload" "jsonb" NOT NULL,
+    "source" "text" NOT NULL,
+    "source_id" "uuid",
+    "statut" "text" DEFAULT 'PENDING'::"text" NOT NULL,
+    "tentatives" integer DEFAULT 0 NOT NULL,
+    "derniere_tentative_le" timestamp with time zone,
+    "derniere_erreur" "text",
+    "resultat" "jsonb",
+    "cree_le" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "traite_le" timestamp with time zone,
+    "next_retry_at" timestamp with time zone,
+    "cron_lock_at" timestamp with time zone,
+    "cron_lock_par" "text",
+    CONSTRAINT "externalisation_actions_source_check" CHECK (("source" = ANY (ARRAY['LITIGE_EXEC'::"text", 'ANNULATION_MISSION'::"text", 'AUTRE'::"text", 'CRON_ANTI_TRICHE'::"text", 'CRON_ALERTES'::"text", 'parrainage_soignant'::"text", 'remboursement_avoir'::"text"]))),
+    CONSTRAINT "externalisation_actions_statut_check" CHECK (("statut" = ANY (ARRAY['PENDING'::"text", 'PROCESSING'::"text", 'DONE'::"text", 'ERROR'::"text", 'PENDING_AIFE'::"text", 'CANCELLED'::"text"]))),
+    CONSTRAINT "externalisation_actions_type_action_check" CHECK (("type_action" = ANY (ARRAY['STRIPE_REFUND_PARTIEL'::"text", 'STRIPE_REFUND_TOTAL'::"text", 'STRIPE_PAYMENT'::"text", 'STRIPE_PAYOUT'::"text", 'CHORUS_RECYCLER_FACTURE'::"text", 'CHORUS_RECYCLE_FACTURE'::"text", 'DPAE_ANNULATION'::"text", 'DPAE_ANNULATION_NOTIF'::"text", 'EMAIL_NOTIF'::"text", 'SMS_NOTIF'::"text", 'PUSH_NOTIF'::"text", 'AVOIR_PDF_GENERATION'::"text", 'RECOMPENSE_PARRAINAGE_SOIGNANT'::"text", 'REMBOURSEMENT_AVOIR_SWAN'::"text"])))
+);
+
+
+ALTER TABLE "public"."externalisation_actions" OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."_sha256_hex"("p_input" "text") RETURNS "text"
     LANGUAGE "sql" IMMUTABLE
     SET "search_path" TO 'public', 'extensions'
@@ -1006,6 +1031,95 @@ $$;
 ALTER FUNCTION "public"."dec_bloquer_suppression_audit"() OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."dec_bloquer_validation_presence_avant_fin_planning"() RETURNS "trigger"
+    LANGUAGE "plpgsql"
+    SET "search_path" TO 'pg_catalog', 'public'
+    AS $$
+DECLARE
+  v_mission record;
+  v_nb_previsionnels integer;
+BEGIN
+  SELECT m.id, m.debut_le, m.fin_le
+    INTO v_mission
+    FROM public.missions AS m
+   WHERE m.id = NEW.mission_id;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION USING
+      ERRCODE = '23503',
+      MESSAGE = 'Mission introuvable pour cette présence.';
+  END IF;
+
+  SELECT pg_catalog.count(*)::integer
+    INTO v_nb_previsionnels
+    FROM public.mission_creneaux AS mc
+   WHERE mc.mission_id = NEW.mission_id
+     AND mc.type_creneau = 'PREVISIONNEL'
+     AND mc.est_pause IS NOT TRUE;
+
+  IF v_nb_previsionnels > 0 THEN
+    IF EXISTS (
+      SELECT 1
+        FROM public.mission_creneaux AS mc
+       WHERE mc.mission_id = NEW.mission_id
+         AND mc.type_creneau = 'PREVISIONNEL'
+         AND mc.est_pause IS NOT TRUE
+         AND (
+           mc.fin IS NULL
+           OR mc.fin > pg_catalog.statement_timestamp()
+         )
+    ) THEN
+      RAISE EXCEPTION USING
+        ERRCODE = 'P0001',
+        MESSAGE = 'La présence ne peut être validée avant la fin du dernier créneau planifié.';
+    END IF;
+  ELSIF v_mission.debut_le IS NULL
+        OR v_mission.fin_le IS NULL
+        OR v_mission.fin_le <= v_mission.debut_le
+        OR v_mission.fin_le > v_mission.debut_le + interval '24 hours'
+        OR v_mission.fin_le > pg_catalog.statement_timestamp() THEN
+    -- Compatibilité strictement limitée aux anciennes missions ponctuelles.
+    -- Une mission longue sans détail n'est jamais interprétée comme continue.
+    RAISE EXCEPTION USING
+      ERRCODE = 'P0001',
+      MESSAGE = 'Le planning détaillé doit être terminé avant validation de la présence.';
+  END IF;
+
+  IF EXISTS (
+    SELECT 1
+      FROM public.mission_creneaux AS mc
+     WHERE mc.mission_id = NEW.mission_id
+       AND mc.type_creneau = 'EFFECTIF'
+       AND mc.est_pause IS NOT TRUE
+       AND mc.fin IS NULL
+  ) THEN
+    RAISE EXCEPTION USING
+      ERRCODE = 'P0001',
+      MESSAGE = 'Un pointage est encore ouvert pour cette mission.';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+      FROM public.mission_creneaux AS mc
+     WHERE mc.mission_id = NEW.mission_id
+       AND mc.type_creneau = 'EFFECTIF'
+       AND mc.est_pause IS NOT TRUE
+       AND mc.fin IS NOT NULL
+       AND mc.fin > mc.debut
+  ) THEN
+    RAISE EXCEPTION USING
+      ERRCODE = 'P0001',
+      MESSAGE = 'Aucun pointage terminé ne permet de valider cette présence.';
+  END IF;
+
+  RETURN NEW;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."dec_bloquer_validation_presence_avant_fin_planning"() OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."dec_bonus_urgence"() RETURNS "trigger"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
@@ -1294,13 +1408,15 @@ ALTER FUNCTION "public"."dec_check_coherence_apres_doc_identite"() OWNER TO "pos
 
 CREATE OR REPLACE FUNCTION "public"."dec_check_coherence_apres_rpps"() RETURNS "trigger"
     LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO 'public'
+    SET "search_path" TO 'pg_catalog', 'public'
     AS $$
 BEGIN
-    IF NEW.rpps_verifie = TRUE AND (OLD.rpps_verifie IS NULL OR OLD.rpps_verifie = FALSE) THEN
-        PERFORM fn_verifier_coherence_identite(NEW.id);
-    END IF;
-    RETURN NEW;
+  IF NEW.rpps_verifie IS TRUE AND OLD.rpps_verifie IS NOT TRUE THEN
+    PERFORM public.fn_verifier_coherence_identite(NEW.id);
+  END IF;
+
+  PERFORM public.fn_calculer_tous_documents_valides(NEW.id);
+  RETURN NEW;
 END;
 $$;
 
@@ -1653,56 +1769,60 @@ ALTER FUNCTION "public"."dec_email_contrat_signe_complet"() OWNER TO "postgres";
 
 CREATE OR REPLACE FUNCTION "public"."dec_email_invitation_equipe_etab"() RETURNS "trigger"
     LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO 'public'
+    SET "search_path" TO ''
     AS $$
 DECLARE
   v_etab_nom text;
   v_invite_par_email text;
   v_invite_par_nom text;
 BEGIN
-  -- Ne tirer l'email que pour les invitations EN_ATTENTE fraîches
-  IF NEW.statut != 'EN_ATTENTE' THEN
+  IF NEW.statut <> 'EN_ATTENTE' THEN
     RETURN NEW;
   END IF;
 
-  -- Récupérer nom étab
-  SELECT nom INTO v_etab_nom FROM public.etablissements WHERE id = NEW.etablissement_id;
+  SELECT e.nom
+    INTO v_etab_nom
+    FROM public.etablissements e
+   WHERE e.id = NEW.etablissement_id
+     AND e.est_compte_test IS FALSE;
   IF v_etab_nom IS NULL THEN
     RETURN NEW;
   END IF;
 
-  -- Récupérer nom de l'invitant (PROPRIETAIRE qui crée l'invitation)
-  SELECT u.email INTO v_invite_par_email FROM auth.users u WHERE u.id = NEW.invite_par;
+  SELECT u.email INTO v_invite_par_email
+    FROM auth.users u WHERE u.id = NEW.invite_par;
   v_invite_par_nom := COALESCE(v_invite_par_email, 'Un administrateur');
 
-  -- Envoi best-effort via net.http_post → send-email edge function
-  -- Flow externe : destinataire_email (l'invité peut ne pas avoir de compte)
   BEGIN
     PERFORM net.http_post(
       url := 'https://flripxtsyegjshnhzjkz.supabase.co/functions/v1/send-email',
       headers := jsonb_build_object(
         'Content-Type', 'application/json',
-        'Authorization', 'Bearer ' || (SELECT decrypted_secret FROM vault.decrypted_secrets WHERE name = 'service_role_key' LIMIT 1)
+        'Authorization', 'Bearer ' || (
+          SELECT decrypted_secret FROM vault.decrypted_secrets
+           WHERE name = 'service_role_key' LIMIT 1
+        )
       ),
       body := jsonb_build_object(
         'type', 'INVITATION_EQUIPE_ETAB',
         'destinataire_email', NEW.email_invite,
+        'idempotency_key', 'invitation-equipe-etab:' || NEW.id::text,
         'data', jsonb_build_object(
           'token', NEW.token,
           'nom_etablissement', v_etab_nom,
           'role', NEW.role_propose,
           'invite_par_nom', v_invite_par_nom,
-          'expire_le', to_char(NEW.expire_le AT TIME ZONE 'Europe/Paris', 'DD/MM/YYYY à HH24:MI')
+          'expire_le', to_char(
+            NEW.expire_le AT TIME ZONE 'Europe/Paris',
+            'DD/MM/YYYY à HH24:MI'
+          )
         )
       )
     );
   EXCEPTION WHEN OTHERS THEN
-    -- net.http_post indisponible ou erreur réseau : silencieux
-    -- L'UI affiche déjà le lien d'invitation pour copier/coller manuel
     NULL;
   END;
 
-  -- Audit (action générique SYSTEM, contexte dans details)
   INSERT INTO public.journaux_audit (
     acteur_id, type_acteur, action, type_ressource, id_ressource, details
   ) VALUES (
@@ -1740,6 +1860,50 @@ $$;
 
 
 ALTER FUNCTION "public"."dec_evaluer_dans_delai"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."dec_exiger_planning_confirme_candidature"() RETURNS "trigger"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+DECLARE
+  v_nb integer;
+  v_nb_declares integer;
+BEGIN
+  IF (SELECT auth.uid()) IS NULL
+     OR public.est_admin() IS TRUE
+     OR NEW.soignant_id IS DISTINCT FROM (SELECT auth.uid())
+     OR NEW.statut::text NOT IN (
+       'EN_ATTENTE', 'EN_ATTENTE_VALIDATION_ETAB'
+     ) THEN
+    RETURN NEW;
+  END IF;
+
+  SELECT
+    pg_catalog.count(*) FILTER (
+      WHERE mc.type_creneau = 'PREVISIONNEL'
+        AND NOT mc.est_pause
+        AND mc.fin IS NOT NULL
+    )::integer,
+    pg_catalog.max(m.nb_creneaux)::integer
+  INTO v_nb, v_nb_declares
+  FROM public.missions m
+  LEFT JOIN public.mission_creneaux mc ON mc.mission_id = m.id
+  WHERE m.id = NEW.mission_id;
+
+  IF COALESCE(v_nb, 0) = 0
+     OR COALESCE(v_nb_declares, 0) <> v_nb THEN
+    RAISE EXCEPTION
+      '[PLANNING_DETAILLE_INDISPONIBLE] Le planning daté doit être complet avant toute candidature.'
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  RETURN NEW;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."dec_exiger_planning_confirme_candidature"() OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."dec_facture_honoraires_regime_mission"() RETURNS "trigger"
@@ -1850,6 +2014,106 @@ $$;
 
 
 ALTER FUNCTION "public"."dec_incrementer_heures_plateforme"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."dec_initialiser_planning_exact_legacy"() RETURNS "trigger"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+DECLARE
+  v_nb integer := 0;
+  v_debut timestamptz;
+  v_fin timestamptz;
+  v_total numeric;
+BEGIN
+  IF pg_catalog.current_setting(
+       'jolene.planning_exact_managed', true
+     ) = 'true' THEN
+    RETURN NEW;
+  END IF;
+
+  IF NEW.debut_le IS NULL
+     OR NEW.fin_le IS NULL
+     OR NEW.fin_le <= NEW.debut_le THEN
+    IF NEW.statut IN ('OUVERTE', 'ASSIGNEE', 'EN_COURS') THEN
+      RAISE EXCEPTION
+        '[PLANNING_DETAILLE_INDISPONIBLE] Une mission active exige des dates valides.'
+        USING ERRCODE = 'check_violation';
+    END IF;
+    RETURN NEW;
+  END IF;
+
+  PERFORM pg_catalog.set_config('jolene.sync_in_progress', 'true', true);
+
+  IF NEW.remplacement_de_mission_id IS NOT NULL THEN
+    INSERT INTO public.mission_creneaux (
+      mission_id, debut, fin, est_pause, ordre, type_creneau
+    )
+    SELECT
+      NEW.id,
+      GREATEST(mc.debut, NEW.debut_le),
+      LEAST(mc.fin, NEW.fin_le),
+      false,
+      pg_catalog.row_number() OVER (
+        ORDER BY GREATEST(mc.debut, NEW.debut_le), mc.ordre, mc.id
+      )::integer,
+      'PREVISIONNEL'
+    FROM public.mission_creneaux mc
+    WHERE mc.mission_id = NEW.remplacement_de_mission_id
+      AND mc.type_creneau = 'PREVISIONNEL'
+      AND NOT mc.est_pause
+      AND mc.fin IS NOT NULL
+      AND LEAST(mc.fin, NEW.fin_le) > GREATEST(mc.debut, NEW.debut_le)
+    ORDER BY GREATEST(mc.debut, NEW.debut_le), mc.ordre, mc.id;
+    GET DIAGNOSTICS v_nb = ROW_COUNT;
+
+    IF v_nb = 0 THEN
+      RAISE EXCEPTION
+        '[PLANNING_SOURCE_INDISPONIBLE] Le remplacement exige le planning exact de la mission source.'
+        USING ERRCODE = 'check_violation';
+    END IF;
+  ELSE
+    IF NEW.fin_le > NEW.debut_le + interval '24 hours' THEN
+      RAISE EXCEPTION
+        '[PLANNING_EXACT_REQUIS] Une mission legacy de plus de 24 h doit fournir ses créneaux datés.'
+        USING ERRCODE = 'check_violation';
+    END IF;
+
+    INSERT INTO public.mission_creneaux (
+      mission_id, debut, fin, est_pause, ordre, type_creneau
+    ) VALUES (
+      NEW.id, NEW.debut_le, NEW.fin_le, false, 1, 'PREVISIONNEL'
+    );
+    v_nb := 1;
+  END IF;
+
+  SELECT
+    pg_catalog.min(mc.debut),
+    pg_catalog.max(mc.fin),
+    pg_catalog.round((pg_catalog.sum(
+      EXTRACT(epoch FROM (mc.fin - mc.debut))
+    ) / 3600.0)::numeric, 2),
+    pg_catalog.count(*)::integer
+  INTO v_debut, v_fin, v_total, v_nb
+  FROM public.mission_creneaux mc
+  WHERE mc.mission_id = NEW.id
+    AND mc.type_creneau = 'PREVISIONNEL'
+    AND NOT mc.est_pause;
+
+  UPDATE public.missions
+  SET debut_le = v_debut,
+      fin_le = v_fin,
+      duree_heures = v_total,
+      nb_creneaux = v_nb
+  WHERE id = NEW.id;
+
+  PERFORM pg_catalog.set_config('jolene.sync_in_progress', 'false', true);
+  RETURN NEW;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."dec_initialiser_planning_exact_legacy"() OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."dec_limiter_liste_attente"() RETURNS "trigger"
@@ -2930,7 +3194,9 @@ BEGIN
   IF auth.role() = 'service_role'
      OR auth.uid() IS NULL
      OR public.est_admin()
-     OR COALESCE(current_setting('jolene.system_update', true), '') = 'true' THEN
+     OR COALESCE(current_setting('jolene.system_update', true), '') = 'true'
+     OR COALESCE(current_setting('jolene.document_server_update', true), '') = 'true'
+     OR COALESCE(current_setting('jolene.document_moderation_rpc', true), '') = 'true' THEN
     RETURN NEW;
   END IF;
 
@@ -3115,22 +3381,119 @@ ALTER FUNCTION "public"."dec_refuser_auto_evaluation"() OWNER TO "postgres";
 
 CREATE OR REPLACE FUNCTION "public"."dec_refuser_chevauchement_soignant"() RETURNS "trigger"
     LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO 'public'
+    SET "search_path" TO ''
     AS $$
+DECLARE
+  v_nb integer;
+  v_nb_complets integer;
+  v_autre_mission uuid;
 BEGIN
-    IF NEW.soignant_assigne_id IS NOT NULL AND NEW.statut IN ('ASSIGNEE', 'EN_COURS') THEN
-        IF EXISTS (
-            SELECT 1 FROM missions
-            WHERE soignant_assigne_id = NEW.soignant_assigne_id
-              AND id != NEW.id
-              AND statut IN ('ASSIGNEE', 'EN_COURS')
-              AND debut_le < NEW.fin_le
-              AND fin_le > NEW.debut_le
-        ) THEN
-            RAISE EXCEPTION 'Ce soignant a déjà une mission sur ce créneau.';
-        END IF;
-    END IF;
+  IF NEW.soignant_assigne_id IS NULL
+     OR NEW.statut NOT IN ('ASSIGNEE', 'EN_COURS') THEN
     RETURN NEW;
+  END IF;
+
+  -- Phase expand/contract : les nouveaux RPC comparent le planning confirmé,
+  -- mais les clients déjà ouverts peuvent encore appeler les anciens RPC.
+  -- Le trigger conserve donc l'invariant serveur essentiel (planning complet,
+  -- absence de conflit) sans exiger un GUC que ces clients ne connaissent pas.
+
+  SELECT
+    pg_catalog.count(*)::integer,
+    pg_catalog.count(*) FILTER (WHERE mc.fin IS NOT NULL)::integer
+  INTO v_nb, v_nb_complets
+  FROM public.mission_creneaux mc
+  WHERE mc.mission_id = NEW.id
+    AND mc.type_creneau = 'PREVISIONNEL'
+    AND NOT mc.est_pause;
+
+  -- À l'INSERT legacy, le trigger AFTER ci-dessus n'a pas encore matérialisé
+  -- les créneaux. Son UPDATE de la mission repasse ensuite ici avec le planning
+  -- complet et rejoue donc les contrôles de conflit et de repos avant commit.
+  IF TG_OP = 'INSERT'
+     AND v_nb = 0
+     AND pg_catalog.current_setting(
+       'jolene.planning_exact_managed', true
+     ) IS DISTINCT FROM 'true' THEN
+    RETURN NEW;
+  END IF;
+
+  IF v_nb = 0
+     OR v_nb_complets <> v_nb
+     OR (COALESCE(NEW.nb_creneaux, 0) > 0 AND NEW.nb_creneaux <> v_nb) THEN
+    RAISE EXCEPTION
+      '[PLANNING_DETAILLE_INDISPONIBLE] Cette mission ne peut pas être attribuée sans planning daté complet.'
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  IF EXISTS (
+    SELECT 1
+    FROM public.missions autre
+    WHERE autre.soignant_assigne_id = NEW.soignant_assigne_id
+      AND autre.id <> NEW.id
+      AND autre.statut IN ('ASSIGNEE', 'EN_COURS')
+      AND (
+        NOT EXISTS (
+          SELECT 1
+          FROM public.mission_creneaux mc
+          WHERE mc.mission_id = autre.id
+            AND mc.type_creneau = 'PREVISIONNEL'
+            AND NOT mc.est_pause
+        )
+        OR EXISTS (
+          SELECT 1
+          FROM public.mission_creneaux mc
+          WHERE mc.mission_id = autre.id
+            AND mc.type_creneau = 'PREVISIONNEL'
+            AND NOT mc.est_pause
+            AND mc.fin IS NULL
+        )
+        OR (
+          COALESCE(autre.nb_creneaux, 0) > 0
+          AND autre.nb_creneaux <> (
+            SELECT pg_catalog.count(*)::integer
+            FROM public.mission_creneaux mc
+            WHERE mc.mission_id = autre.id
+              AND mc.type_creneau = 'PREVISIONNEL'
+              AND NOT mc.est_pause
+          )
+        )
+      )
+  ) THEN
+    RAISE EXCEPTION
+      '[PLANNING_DETAILLE_INDISPONIBLE] Une mission déjà attribuée à ce soignant possède un planning incomplet.'
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  SELECT autre.id
+  INTO v_autre_mission
+  FROM public.mission_creneaux cible
+  JOIN public.missions autre
+    ON autre.soignant_assigne_id = NEW.soignant_assigne_id
+   AND autre.id <> NEW.id
+   AND autre.statut IN ('ASSIGNEE', 'EN_COURS')
+  JOIN public.mission_creneaux existant
+    ON existant.mission_id = autre.id
+   AND existant.type_creneau = 'PREVISIONNEL'
+   AND NOT existant.est_pause
+   AND existant.fin IS NOT NULL
+  WHERE cible.mission_id = NEW.id
+    AND cible.type_creneau = 'PREVISIONNEL'
+    AND NOT cible.est_pause
+    AND cible.fin IS NOT NULL
+    AND cible.debut < existant.fin
+    AND cible.fin > existant.debut
+  ORDER BY existant.debut
+  LIMIT 1;
+
+  IF v_autre_mission IS NOT NULL THEN
+    RAISE EXCEPTION
+      'Ce soignant a déjà une mission sur l''un des créneaux travaillés.'
+      USING ERRCODE = 'exclusion_violation',
+            DETAIL = 'mission_conflictuelle=' || v_autre_mission::text;
+  END IF;
+
+  RETURN NEW;
 END;
 $$;
 
@@ -4067,65 +4430,79 @@ ALTER FUNCTION "public"."dec_verifier_profession_etudiant"() OWNER TO "postgres"
 
 CREATE OR REPLACE FUNCTION "public"."dec_verifier_repos_11h"() RETURNS "trigger"
     LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO 'public'
+    SET "search_path" TO ''
     AS $$
 DECLARE
-  v_fin_prev_work timestamptz; v_debut_this_work timestamptz; v_fin_this_work timestamptz;
-  v_debut_next_work timestamptz; v_ecart numeric; v_use_effectif boolean;
+  v_ecart numeric;
+  v_autre_mission uuid;
+  v_sens text;
 BEGIN
-  IF NEW.soignant_assigne_id IS NULL THEN RETURN NEW; END IF;
-  IF NEW.statut NOT IN ('ASSIGNEE', 'EN_COURS') THEN RETURN NEW; END IF;
-
-  v_use_effectif := EXISTS (SELECT 1 FROM mission_creneaux WHERE mission_id = NEW.id AND type_creneau = 'EFFECTIF' AND fin IS NOT NULL);
-  IF v_use_effectif THEN
-    SELECT MIN(debut), MAX(fin) INTO v_debut_this_work, v_fin_this_work
-    FROM mission_creneaux WHERE mission_id = NEW.id AND type_creneau = 'EFFECTIF' AND fin IS NOT NULL AND NOT est_pause;
-  ELSE
-    SELECT MIN(debut), MAX(fin) INTO v_debut_this_work, v_fin_this_work
-    FROM mission_creneaux WHERE mission_id = NEW.id AND type_creneau = 'PREVISIONNEL' AND NOT est_pause;
-  END IF;
-  IF v_debut_this_work IS NULL THEN v_debut_this_work := NEW.debut_le; v_fin_this_work := NEW.fin_le; END IF;
-
-  SELECT MAX(
-    CASE WHEN EXISTS (SELECT 1 FROM mission_creneaux mc2 WHERE mc2.mission_id = m.id AND mc2.type_creneau = 'EFFECTIF' AND mc2.fin IS NOT NULL)
-      THEN (SELECT MAX(mc3.fin) FROM mission_creneaux mc3 WHERE mc3.mission_id = m.id AND mc3.type_creneau = 'EFFECTIF' AND mc3.fin IS NOT NULL AND NOT mc3.est_pause)
-      ELSE (SELECT MAX(mc4.fin) FROM mission_creneaux mc4 WHERE mc4.mission_id = m.id AND mc4.type_creneau = 'PREVISIONNEL' AND NOT mc4.est_pause)
-    END
-  ) INTO v_fin_prev_work
-  FROM missions m WHERE m.soignant_assigne_id = NEW.soignant_assigne_id AND m.id != NEW.id
-    AND m.fin_le <= NEW.debut_le AND m.statut IN ('ASSIGNEE','EN_COURS','TERMINEE');
-
-  IF v_fin_prev_work IS NOT NULL THEN
-    v_ecart := EXTRACT(EPOCH FROM (v_debut_this_work - v_fin_prev_work)) / 3600.0;
-    IF v_ecart < 11.0 THEN
-      INSERT INTO conformite_travail (soignant_id, mission_id, type_controle, resultat, details_violation)
-      VALUES (NEW.soignant_assigne_id, NEW.id, 'REPOS_11H', 'VIOLATION_BLOQUEE',
-        jsonb_build_object('ecart_heures', ROUND(v_ecart, 2), 'minimum_requis', 11, 'sens', 'avant', 'article', 'L3131-1'));
-      RAISE EXCEPTION '[CODE DU TRAVAIL] Repos insuffisant avant mission : % heures au lieu de 11h minimum (Art. L3131-1). Assignation bloquée.', ROUND(v_ecart, 1);
-    END IF;
+  IF NEW.soignant_assigne_id IS NULL
+     OR NEW.statut NOT IN ('ASSIGNEE', 'EN_COURS') THEN
+    RETURN NEW;
   END IF;
 
-  SELECT MIN(
-    CASE WHEN EXISTS (SELECT 1 FROM mission_creneaux mc2 WHERE mc2.mission_id = m.id AND mc2.type_creneau = 'EFFECTIF' AND mc2.fin IS NOT NULL)
-      THEN (SELECT MIN(mc3.debut) FROM mission_creneaux mc3 WHERE mc3.mission_id = m.id AND mc3.type_creneau = 'EFFECTIF' AND mc3.fin IS NOT NULL AND NOT mc3.est_pause)
-      ELSE (SELECT MIN(mc4.debut) FROM mission_creneaux mc4 WHERE mc4.mission_id = m.id AND mc4.type_creneau = 'PREVISIONNEL' AND NOT mc4.est_pause)
-    END
-  ) INTO v_debut_next_work
-  FROM missions m WHERE m.soignant_assigne_id = NEW.soignant_assigne_id AND m.id != NEW.id
-    AND m.debut_le >= NEW.fin_le AND m.statut IN ('ASSIGNEE','EN_COURS','TERMINEE');
+  WITH cible AS (
+    SELECT mc.debut, mc.fin
+    FROM public.mission_creneaux mc
+    WHERE mc.mission_id = NEW.id
+      AND mc.type_creneau = 'PREVISIONNEL'
+      AND NOT mc.est_pause
+      AND mc.fin IS NOT NULL
+  ), existants AS (
+    SELECT m.id AS mission_id, mc.debut, mc.fin
+    FROM public.missions m
+    JOIN public.mission_creneaux mc ON mc.mission_id = m.id
+    WHERE m.soignant_assigne_id = NEW.soignant_assigne_id
+      AND m.id <> NEW.id
+      AND m.statut IN ('ASSIGNEE', 'EN_COURS', 'TERMINEE')
+      AND mc.type_creneau = CASE
+        WHEN m.statut = 'TERMINEE' AND EXISTS (
+          SELECT 1
+          FROM public.mission_creneaux effectif
+          WHERE effectif.mission_id = m.id
+            AND effectif.type_creneau = 'EFFECTIF'
+            AND NOT effectif.est_pause
+            AND effectif.fin IS NOT NULL
+        ) THEN 'EFFECTIF'
+        ELSE 'PREVISIONNEL'
+      END
+      AND NOT mc.est_pause
+      AND mc.fin IS NOT NULL
+  ), ecarts AS (
+    SELECT
+      e.mission_id,
+      CASE
+        WHEN e.fin <= c.debut THEN
+          EXTRACT(epoch FROM (c.debut - e.fin)) / 3600.0
+        WHEN c.fin <= e.debut THEN
+          EXTRACT(epoch FROM (e.debut - c.fin)) / 3600.0
+        ELSE NULL
+      END AS heures,
+      CASE WHEN e.fin <= c.debut THEN 'avant' ELSE 'apres' END AS sens
+    FROM cible c
+    CROSS JOIN existants e
+  )
+  SELECT heures, mission_id, sens
+  INTO v_ecart, v_autre_mission, v_sens
+  FROM ecarts
+  WHERE heures >= 0 AND heures < 11
+  ORDER BY heures
+  LIMIT 1;
 
-  IF v_debut_next_work IS NOT NULL THEN
-    v_ecart := EXTRACT(EPOCH FROM (v_debut_next_work - v_fin_this_work)) / 3600.0;
-    IF v_ecart < 11.0 THEN
-      INSERT INTO conformite_travail (soignant_id, mission_id, type_controle, resultat, details_violation)
-      VALUES (NEW.soignant_assigne_id, NEW.id, 'REPOS_11H', 'VIOLATION_BLOQUEE',
-        jsonb_build_object('ecart_heures', ROUND(v_ecart, 2), 'minimum_requis', 11, 'sens', 'apres', 'article', 'L3131-1'));
-      RAISE EXCEPTION '[CODE DU TRAVAIL] Repos insuffisant après mission : % heures au lieu de 11h minimum (Art. L3131-1). Assignation bloquée.', ROUND(v_ecart, 1);
-    END IF;
+  IF v_ecart IS NOT NULL THEN
+    RAISE EXCEPTION
+      '[CODE DU TRAVAIL] Repos insuffisant % mission : % heures au lieu de 11h minimum (Art. L3131-1). Assignation bloquée.',
+      v_sens, pg_catalog.round(v_ecart, 1)
+      USING ERRCODE = 'check_violation',
+            DETAIL = 'mission_conflictuelle=' || v_autre_mission::text;
   END IF;
 
-  INSERT INTO conformite_travail (soignant_id, mission_id, type_controle, resultat)
-  VALUES (NEW.soignant_assigne_id, NEW.id, 'REPOS_11H', 'CONFORME');
+  INSERT INTO public.conformite_travail (
+    soignant_id, mission_id, type_controle, resultat
+  ) VALUES (
+    NEW.soignant_assigne_id, NEW.id, 'REPOS_11H', 'CONFORME'
+  );
   RETURN NEW;
 END;
 $$;
@@ -4277,6 +4654,59 @@ $$;
 ALTER FUNCTION "public"."dec_verifier_type_exercice_profession"() OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."dec_verrouiller_planning_candidatures"() RETURNS "trigger"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+DECLARE
+  v_ids uuid[];
+  v_mission_id uuid;
+BEGIN
+  IF TG_OP = 'INSERT' THEN
+    IF NEW.type_creneau <> 'PREVISIONNEL' THEN RETURN NEW; END IF;
+    v_ids := ARRAY[NEW.mission_id];
+  ELSIF TG_OP = 'DELETE' THEN
+    IF OLD.type_creneau <> 'PREVISIONNEL' THEN RETURN OLD; END IF;
+    v_ids := ARRAY[OLD.mission_id];
+  ELSE
+    IF OLD.type_creneau <> 'PREVISIONNEL'
+       AND NEW.type_creneau <> 'PREVISIONNEL' THEN
+      RETURN NEW;
+    END IF;
+    v_ids := ARRAY[NEW.mission_id, OLD.mission_id];
+  END IF;
+
+  FOREACH v_mission_id IN ARRAY v_ids
+  LOOP
+    CONTINUE WHEN v_mission_id IS NULL;
+    PERFORM 1
+    FROM public.missions m
+    WHERE m.id = v_mission_id
+    FOR UPDATE;
+
+    IF EXISTS (
+      SELECT 1
+      FROM public.candidatures c
+      WHERE c.mission_id = v_mission_id
+        AND c.statut IN (
+          'EN_ATTENTE', 'EN_ATTENTE_VALIDATION_ETAB', 'PROPOSEE'
+        )
+    ) THEN
+      RAISE EXCEPTION
+        'Le planning ne peut pas être modifié pendant qu''une candidature est en attente.'
+        USING ERRCODE = 'check_violation';
+    END IF;
+  END LOOP;
+
+  IF TG_OP = 'DELETE' THEN RETURN OLD; END IF;
+  RETURN NEW;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."dec_verrouiller_planning_candidatures"() OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."est_admin"() RETURNS boolean
     LANGUAGE "sql" STABLE SECURITY DEFINER
     SET "search_path" TO 'pg_catalog', 'public', 'auth'
@@ -4305,35 +4735,28 @@ CREATE OR REPLACE FUNCTION "public"."est_admin_valide"() RETURNS boolean
     AS $$
   SELECT COALESCE(EXISTS (
     SELECT 1
-    FROM auth.users u
-    WHERE u.id = auth.uid()
-      AND u.raw_app_meta_data ->> 'role' = 'ADMIN_PLATEFORME'
-      AND u.deleted_at IS NULL
-      AND (u.banned_until IS NULL OR u.banned_until <= now())
-      AND u.email_confirmed_at IS NOT NULL
-      AND (
-        COALESCE(auth.jwt() ->> 'aal', '') = 'aal2'
-        OR lower(COALESCE(u.email, '')) IN (
-          'admin@jolene.app',
-          'gabrielle.pcd@outlook.com'
-        )
-      )
-      AND EXISTS (
-        SELECT 1
-        FROM public.equipe_admin ea
-        WHERE ea.user_id = u.id
-          AND ea.actif IS TRUE
-          AND ARRAY[
-            'Dashboard',
-            'Utilisateurs',
-            'Missions',
-            'Litiges & contrats',
-            'Finances',
-            'Messagerie',
-            'Conformité & Technique',
-            'Fondateur'
-          ]::text[] <@ COALESCE(ea.acces_groupes, ARRAY[]::text[])
-      )
+      FROM auth.users u
+     WHERE u.id = auth.uid()
+       AND u.raw_app_meta_data ->> 'role' = 'ADMIN_PLATEFORME'
+       AND u.deleted_at IS NULL
+       AND (u.banned_until IS NULL OR u.banned_until <= now())
+       AND u.email_confirmed_at IS NOT NULL
+       AND EXISTS (
+         SELECT 1
+           FROM public.equipe_admin ea
+          WHERE ea.user_id = u.id
+            AND ea.actif IS TRUE
+            AND ARRAY[
+              'Dashboard',
+              'Utilisateurs',
+              'Missions',
+              'Litiges & contrats',
+              'Finances',
+              'Messagerie',
+              'Conformité & Technique',
+              'Fondateur'
+            ]::text[] <@ COALESCE(ea.acces_groupes, ARRAY[]::text[])
+       )
   ), false);
 $$;
 
@@ -4341,7 +4764,7 @@ $$;
 ALTER FUNCTION "public"."est_admin_valide"() OWNER TO "postgres";
 
 
-COMMENT ON FUNCTION "public"."est_admin_valide"() IS 'Garde admin de lancement : rôle canonique, compte sain, registre 8/8 et AAL2, sauf les deux comptes fondateurs explicitement autorisés sans MFA.';
+COMMENT ON FUNCTION "public"."est_admin_valide"() IS 'Garde admin Jolene : compte Auth actif et confirmé, rôle ADMIN_PLATEFORME et registre equipe_admin actif avec les 8 groupes. Aucun MFA/AAL2 requis.';
 
 
 
@@ -6577,11 +7000,118 @@ CREATE OR REPLACE FUNCTION "public"."fn_admin_cockpit_fondateur"() RETURNS "json
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'pg_catalog', 'public', 'auth'
     AS $$
+DECLARE
+  v_result jsonb;
+  v_argent jsonb;
+  v_total_soignants integer;
+  v_total_etabs integer;
+  v_missions_terminees integer;
+  v_acquisition_mensuelle jsonb;
+  v_taux_activation_soignant numeric;
+  v_taux_activation_etab numeric;
 BEGIN
   IF NOT public.est_admin() THEN
     RAISE EXCEPTION 'Acces admin refuse au lancement' USING ERRCODE = '42501';
   END IF;
-  RETURN private.fn_admin_cockpit_fondateur_interne_lancement();
+
+  v_result := private.fn_admin_cockpit_fondateur_interne_lancement();
+  v_argent := public.fn_admin_metriques_argent();
+
+  SELECT count(*) INTO v_total_soignants
+    FROM public.soignants
+   WHERE supprime_le IS NULL AND est_compte_test IS FALSE;
+  SELECT count(*) INTO v_total_etabs
+    FROM public.etablissements
+   WHERE supprime_le IS NULL AND est_compte_test IS FALSE;
+  SELECT count(*) INTO v_missions_terminees
+    FROM public.missions m
+    JOIN public.etablissements e ON e.id = m.etablissement_id
+    LEFT JOIN public.soignants s ON s.id = m.soignant_assigne_id
+   WHERE m.statut = 'TERMINEE'
+     AND e.est_compte_test IS FALSE
+     AND COALESCE(s.est_compte_test, false) IS FALSE;
+
+  SELECT CASE WHEN v_total_soignants = 0 THEN 0 ELSE round(
+    100.0 * count(DISTINCT c.soignant_id) / v_total_soignants, 1
+  ) END
+    INTO v_taux_activation_soignant
+    FROM public.candidatures c
+    JOIN public.soignants s ON s.id = c.soignant_id
+    JOIN public.missions m ON m.id = c.mission_id
+    JOIN public.etablissements e ON e.id = m.etablissement_id
+   WHERE s.est_compte_test IS FALSE AND e.est_compte_test IS FALSE;
+
+  SELECT CASE WHEN v_total_etabs = 0 THEN 0 ELSE round(
+    100.0 * count(DISTINCT m.etablissement_id) / v_total_etabs, 1
+  ) END
+    INTO v_taux_activation_etab
+    FROM public.missions m
+    JOIN public.etablissements e ON e.id = m.etablissement_id
+   WHERE e.est_compte_test IS FALSE;
+
+  SELECT COALESCE(jsonb_agg(row_to_json(t)::jsonb ORDER BY t.mois), '[]'::jsonb)
+    INTO v_acquisition_mensuelle
+    FROM (
+      SELECT to_char(gs.mois, 'YYYY-MM') AS mois,
+        (
+          SELECT count(*) FROM public.soignants s
+           WHERE date_trunc('month', s.cree_le) = gs.mois
+             AND s.est_compte_test IS FALSE
+        ) AS soignants,
+        (
+          SELECT count(*) FROM public.etablissements e
+           WHERE date_trunc('month', e.cree_le) = gs.mois
+             AND e.supprime_le IS NULL
+             AND e.est_compte_test IS FALSE
+        ) AS etablissements
+      FROM generate_series(
+        date_trunc('month', now()) - interval '11 months',
+        date_trunc('month', now()),
+        interval '1 month'
+      ) AS gs(mois)
+    ) t;
+
+  RETURN v_result || jsonb_build_object(
+    'total_soignants', v_total_soignants,
+    'total_etabs', v_total_etabs,
+    'soignants_7j', (
+      SELECT count(*) FROM public.soignants
+       WHERE supprime_le IS NULL AND est_compte_test IS FALSE
+         AND cree_le >= now() - interval '7 days'
+    ),
+    'etabs_7j', (
+      SELECT count(*) FROM public.etablissements
+       WHERE supprime_le IS NULL AND est_compte_test IS FALSE
+         AND cree_le >= now() - interval '7 days'
+    ),
+    'soignants_30j', (
+      SELECT count(*) FROM public.soignants
+       WHERE supprime_le IS NULL AND est_compte_test IS FALSE
+         AND cree_le >= now() - interval '30 days'
+    ),
+    'etabs_30j', (
+      SELECT count(*) FROM public.etablissements
+       WHERE supprime_le IS NULL AND est_compte_test IS FALSE
+         AND cree_le >= now() - interval '30 days'
+    ),
+    'missions_terminees', v_missions_terminees,
+    'missions_mois', (
+      SELECT count(*)
+        FROM public.missions m
+        JOIN public.etablissements e ON e.id = m.etablissement_id
+        LEFT JOIN public.soignants s ON s.id = m.soignant_assigne_id
+       WHERE m.statut = 'TERMINEE'
+         AND m.debut_le >= date_trunc('month', now())
+         AND e.est_compte_test IS FALSE
+         AND COALESCE(s.est_compte_test, false) IS FALSE
+    ),
+    'gmv_total', COALESCE((v_argent #>> '{gmv,total_reel}')::numeric, 0),
+    'revenue_total', COALESCE((v_argent #>> '{commission,total_reel}')::numeric, 0),
+    'revenue_mois', COALESCE((v_argent #>> '{commission,mois_reel}')::numeric, 0),
+    'taux_activation_soignant', COALESCE(v_taux_activation_soignant, 0),
+    'taux_activation_etab', COALESCE(v_taux_activation_etab, 0),
+    'acquisition_mensuelle', v_acquisition_mensuelle
+  );
 END;
 $$;
 
@@ -8813,24 +9343,43 @@ CREATE OR REPLACE FUNCTION "public"."fn_admin_graphiques"() RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
     AS $$
-DECLARE result jsonb;
+DECLARE
+  result jsonb;
 BEGIN
-    IF NOT est_admin() THEN RETURN '{"error":"Accès réservé aux administrateurs"}'::JSONB; END IF;
-    SELECT jsonb_build_object(
-        'missions_par_semaine', COALESCE((
-            SELECT jsonb_agg(row_to_json(t) ORDER BY t.semaine)
-            FROM (SELECT date_trunc('week', cree_le)::DATE AS semaine, COUNT(*) AS total
-                FROM missions WHERE cree_le >= NOW() - INTERVAL '12 weeks'
-                GROUP BY date_trunc('week', cree_le)) t
-        ), '[]'::jsonb),
-        'ca_par_mois', COALESCE((
-            SELECT jsonb_agg(row_to_json(t) ORDER BY t.mois)
-            FROM (SELECT date_trunc('month', date_emission)::DATE AS mois, SUM(montant_ht) AS ca_ht
-                FROM factures WHERE date_emission >= NOW() - INTERVAL '6 months' AND statut != 'ANNULEE'
-                GROUP BY date_trunc('month', date_emission)) t
-        ), '[]'::jsonb)
-    ) INTO result;
-    RETURN result;
+  IF NOT public.est_admin() THEN
+    RETURN '{"error":"Accès réservé aux administrateurs"}'::jsonb;
+  END IF;
+
+  SELECT jsonb_build_object(
+    'missions_par_semaine', COALESCE((
+      SELECT jsonb_agg(row_to_json(t) ORDER BY t.semaine)
+      FROM (
+        SELECT date_trunc('week', m.cree_le)::date AS semaine, count(*) AS total
+          FROM public.missions m
+          JOIN public.etablissements e ON e.id = m.etablissement_id
+          LEFT JOIN public.soignants s ON s.id = m.soignant_assigne_id
+         WHERE m.cree_le >= now() - interval '12 weeks'
+           AND e.est_compte_test IS FALSE
+           AND COALESCE(s.est_compte_test, false) IS FALSE
+         GROUP BY date_trunc('week', m.cree_le)
+      ) t
+    ), '[]'::jsonb),
+    'ca_par_mois', COALESCE((
+      SELECT jsonb_agg(row_to_json(t) ORDER BY t.mois)
+      FROM (
+        SELECT date_trunc('month', f.date_emission)::date AS mois,
+               sum(f.montant_ht) AS ca_ht
+          FROM public.factures f
+          JOIN public.etablissements e ON e.id = f.etablissement_id
+         WHERE f.date_emission >= now() - interval '6 months'
+           AND f.statut <> 'ANNULEE'
+           AND e.est_compte_test IS FALSE
+         GROUP BY date_trunc('month', f.date_emission)
+      ) t
+    ), '[]'::jsonb)
+  ) INTO result;
+
+  RETURN result;
 END;
 $$;
 
@@ -8997,74 +9546,125 @@ CREATE OR REPLACE FUNCTION "public"."fn_admin_kpi"() RETURNS "jsonb"
     SET "search_path" TO 'public'
     AS $$
 DECLARE
-    result jsonb;
-    debut_semaine timestamptz := date_trunc('week', now());
-    debut_mois timestamptz := date_trunc('month', now());
-    fin_mois timestamptz := date_trunc('month', now()) + INTERVAL '1 month';
+  result jsonb;
+  debut_semaine timestamptz := date_trunc('week', now());
+  debut_mois timestamptz := date_trunc('month', now());
+  fin_mois timestamptz := date_trunc('month', now()) + interval '1 month';
 BEGIN
-    IF NOT est_admin() THEN RETURN '{"error":"Accès réservé aux administrateurs"}'::JSONB; END IF;
+  IF NOT public.est_admin() THEN
+    RETURN '{"error":"Accès réservé aux administrateurs"}'::jsonb;
+  END IF;
 
-    SELECT jsonb_build_object(
-        'soignants_total', (SELECT COUNT(*) FROM soignants WHERE supprime_le IS NULL),
-        'etablissements_total', (SELECT COUNT(*) FROM etablissements WHERE supprime_le IS NULL),
-        'missions_terminees_total', (SELECT COUNT(*) FROM missions WHERE statut = 'TERMINEE'),
-        'missions_terminees_mois', (SELECT COUNT(*) FROM missions WHERE statut = 'TERMINEE' AND fin_le >= debut_mois AND fin_le < fin_mois),
-        'missions_ouvertes', (SELECT COUNT(*) FROM missions WHERE statut IN ('OUVERTE','ASSIGNEE','EN_COURS')),
+  WITH missions_reelles AS (
+    SELECT m.*
+      FROM public.missions m
+      JOIN public.etablissements e ON e.id = m.etablissement_id
+      LEFT JOIN public.soignants s ON s.id = m.soignant_assigne_id
+     WHERE e.est_compte_test IS FALSE
+       AND COALESCE(s.est_compte_test, false) IS FALSE
+  ),
+  factures_reelles AS (
+    SELECT f.*
+      FROM public.factures f
+      JOIN public.etablissements e ON e.id = f.etablissement_id
+     WHERE e.est_compte_test IS FALSE
+  )
+  SELECT jsonb_build_object(
+    'soignants_total', (
+      SELECT count(*) FROM public.soignants
+       WHERE supprime_le IS NULL AND est_compte_test IS FALSE
+    ),
+    'etablissements_total', (
+      SELECT count(*) FROM public.etablissements
+       WHERE supprime_le IS NULL AND est_compte_test IS FALSE
+    ),
+    'missions_terminees_total', (
+      SELECT count(*) FROM missions_reelles WHERE statut = 'TERMINEE'
+    ),
+    'missions_terminees_mois', (
+      SELECT count(*) FROM missions_reelles
+       WHERE statut = 'TERMINEE' AND fin_le >= debut_mois AND fin_le < fin_mois
+    ),
+    'missions_ouvertes', (
+      SELECT count(*) FROM missions_reelles
+       WHERE statut IN ('OUVERTE', 'ASSIGNEE', 'EN_COURS')
+    ),
+    'soignants_semaine', (
+      SELECT count(*) FROM public.soignants
+       WHERE supprime_le IS NULL AND est_compte_test IS FALSE
+         AND cree_le >= debut_semaine
+    ),
+    'etablissements_semaine', (
+      SELECT count(*) FROM public.etablissements
+       WHERE supprime_le IS NULL AND est_compte_test IS FALSE
+         AND cree_le >= debut_semaine
+    ),
+    'litiges_ouverts', (
+      SELECT count(*)
+        FROM public.litiges l
+        JOIN missions_reelles m ON m.id = l.mission_id
+       WHERE l.statut IN ('OUVERT', 'EN_DISCUSSION', 'EN_MEDIATION', 'CONTESTEE')
+    ),
+    'ca_commissions_ht_mois', (
+      SELECT COALESCE(sum(montant_commission_ht), 0)
+        FROM missions_reelles
+       WHERE statut = 'TERMINEE' AND fin_le >= debut_mois AND fin_le < fin_mois
+    ),
+    'ca_potentiel_mois', (
+      SELECT COALESCE(sum(montant_commission_ht), 0)
+        FROM missions_reelles
+       WHERE fin_le >= debut_mois AND fin_le < fin_mois
+         AND statut IN ('TERMINEE', 'ASSIGNEE', 'EN_COURS')
+    ),
+    'ca_encaisse_total', (
+      SELECT COALESCE(sum(montant_ht), 0)
+        FROM factures_reelles WHERE statut = 'PAYEE'
+    ),
+    'ca_potentiel_total', (
+      SELECT COALESCE(sum(montant_commission_ht), 0)
+        FROM missions_reelles WHERE statut = 'TERMINEE'
+    ),
+    'gmv_mois', (
+      SELECT COALESCE(sum(total_brut), 0)
+        FROM missions_reelles
+       WHERE statut = 'TERMINEE' AND fin_le >= debut_mois AND fin_le < fin_mois
+    ),
+    'gmv_total', (
+      SELECT COALESCE(sum(total_brut), 0)
+        FROM missions_reelles WHERE statut = 'TERMINEE'
+    ),
+    'taux_acceptation_mois', (
+      SELECT CASE
+        WHEN count(*) FILTER (WHERE cree_le >= debut_mois) = 0 THEN 0
+        ELSE round(
+          100.0 * count(*) FILTER (
+            WHERE statut IN ('ASSIGNEE', 'EN_COURS', 'TERMINEE')
+              AND cree_le >= debut_mois
+          ) / NULLIF(count(*) FILTER (WHERE cree_le >= debut_mois), 0)
+        )
+      END
+      FROM missions_reelles
+    ),
+    'factures_impayees', (
+      SELECT count(*) FROM factures_reelles WHERE statut IN ('EMISE', 'EN_RETARD')
+    ),
+    'docs_en_attente', (
+      SELECT count(*)
+        FROM public.documents_soignants d
+        JOIN public.soignants s ON s.id = d.soignant_id
+       WHERE d.statut_verification = 'EN_ATTENTE'
+         AND s.est_compte_test IS FALSE
+    ),
+    'etab_en_attente', (
+      SELECT count(*) FROM public.etablissements
+       WHERE supprime_le IS NULL
+         AND est_compte_test IS FALSE
+         AND COALESCE(rattachement_verifie, false) = false
+         AND COALESCE(statut_verification, '') <> 'REJETE'
+    )
+  ) INTO result;
 
-        'soignants_semaine', (SELECT COUNT(*) FROM soignants WHERE supprime_le IS NULL AND cree_le >= debut_semaine),
-        'etablissements_semaine', (SELECT COUNT(*) FROM etablissements WHERE supprime_le IS NULL AND cree_le >= debut_semaine),
-
-        'litiges_ouverts', (SELECT COUNT(*) FROM litiges WHERE statut IN ('OUVERT','EN_DISCUSSION','EN_MEDIATION','CONTESTEE')),
-
-        'ca_commissions_ht_mois', (
-            SELECT COALESCE(SUM(montant_commission_ht), 0)
-            FROM missions
-            WHERE statut = 'TERMINEE' AND fin_le >= debut_mois AND fin_le < fin_mois
-        ),
-        'ca_potentiel_mois', (
-            SELECT COALESCE(SUM(montant_commission_ht), 0)
-            FROM missions
-            WHERE fin_le >= debut_mois AND fin_le < fin_mois
-              AND statut IN ('TERMINEE','ASSIGNEE','EN_COURS')
-        ),
-        'ca_encaisse_total', (
-            SELECT COALESCE(SUM(montant_ht), 0)
-            FROM factures
-            WHERE statut = 'PAYEE'
-        ),
-        'ca_potentiel_total', (
-            SELECT COALESCE(SUM(montant_commission_ht), 0)
-            FROM missions
-            WHERE statut = 'TERMINEE'
-        ),
-        'gmv_mois', (
-            SELECT COALESCE(SUM(total_brut), 0)
-            FROM missions
-            WHERE statut = 'TERMINEE' AND fin_le >= debut_mois AND fin_le < fin_mois
-        ),
-        'gmv_total', (
-            SELECT COALESCE(SUM(total_brut), 0)
-            FROM missions
-            WHERE statut = 'TERMINEE'
-        ),
-
-        'taux_acceptation_mois', (
-            SELECT CASE
-                WHEN COUNT(*) FILTER (WHERE cree_le >= debut_mois) = 0 THEN 0
-                ELSE ROUND(100.0 * COUNT(*) FILTER (WHERE statut IN ('ASSIGNEE','EN_COURS','TERMINEE') AND cree_le >= debut_mois)
-                    / NULLIF(COUNT(*) FILTER (WHERE cree_le >= debut_mois), 0))
-            END
-            FROM missions
-        ),
-
-        'factures_impayees', (SELECT COUNT(*) FROM factures WHERE statut IN ('EMISE','EN_RETARD')),
-        'docs_en_attente', (SELECT COUNT(*) FROM documents_soignants WHERE statut_verification = 'EN_ATTENTE'),
-        -- Aligné sur la file de travail réelle (source unique) — plus de divergence 10 vs 6.
-        'etab_en_attente', (SELECT COUNT(*) FROM etablissements
-            WHERE supprime_le IS NULL AND COALESCE(rattachement_verifie,false)=false AND COALESCE(statut_verification,'')<>'REJETE')
-    ) INTO result;
-
-    RETURN result;
+  RETURN result;
 END;
 $$;
 
@@ -10009,29 +10609,44 @@ CREATE OR REPLACE FUNCTION "public"."fn_admin_metriques_argent"() RETURNS "jsonb
 DECLARE
   result jsonb;
   debut_mois timestamptz := date_trunc('month', now());
-  fin_mois   timestamptz := date_trunc('month', now()) + INTERVAL '1 month';
+  fin_mois timestamptz := date_trunc('month', now()) + interval '1 month';
 BEGIN
   IF NOT est_admin() THEN
     RETURN jsonb_build_object('error', 'Accès réservé aux administrateurs');
   END IF;
 
   WITH m AS (
-    SELECT mi.montant_commission_ht, mi.montant_commission_tva, mi.total_brut, mi.fin_le,
-           NOT (COALESCE(e.est_compte_test,false) OR COALESCE(s.est_compte_test,false)) AS est_reel
+    SELECT
+      mi.montant_commission_ht,
+      mi.montant_commission_tva,
+      mi.total_brut,
+      mi.fin_le,
+      NOT (
+        COALESCE(e.est_compte_test, false)
+        OR COALESCE(s.est_compte_test, false)
+      ) AS est_reel
     FROM missions mi
     LEFT JOIN etablissements e ON e.id = mi.etablissement_id
     LEFT JOIN soignants s ON s.id = mi.soignant_assigne_id
     WHERE mi.statut = 'TERMINEE'
   ),
   f AS (
-    SELECT fa.montant_ht, fa.montant_ttc, fa.statut,
-           NOT COALESCE(e.est_compte_test,false) AS est_reel
+    SELECT
+      fa.montant_ht,
+      fa.montant_ttc,
+      fa.statut,
+      NOT COALESCE(e.est_compte_test, false) AS est_reel
     FROM factures fa
     LEFT JOIN etablissements e ON e.id = fa.etablissement_id
   ),
   esc AS (
-    SELECT pe.commission_cents, pe.debite_le,
-           NOT (COALESCE(e.est_compte_test,false) OR COALESCE(s.est_compte_test,false)) AS est_reel
+    SELECT
+      pe.commission_cents,
+      pe.debite_le,
+      NOT (
+        COALESCE(e.est_compte_test, false)
+        OR COALESCE(s.est_compte_test, false)
+      ) AS est_reel
     FROM paiements_escrow pe
     LEFT JOIN etablissements e ON e.id = pe.etablissement_id
     LEFT JOIN soignants s ON s.id = pe.soignant_id
@@ -10039,40 +10654,96 @@ BEGIN
   SELECT jsonb_build_object(
     'commission', jsonb_build_object(
       'unite', 'HT',
-      'total_reel', (SELECT COALESCE(SUM(montant_commission_ht),0) FROM m WHERE est_reel),
-      'total_test', (SELECT COALESCE(SUM(montant_commission_ht),0) FROM m WHERE NOT est_reel),
-      'mois_reel',  (SELECT COALESCE(SUM(montant_commission_ht),0) FROM m WHERE est_reel AND fin_le>=debut_mois AND fin_le<fin_mois),
-      'mois_test',  (SELECT COALESCE(SUM(montant_commission_ht),0) FROM m WHERE NOT est_reel AND fin_le>=debut_mois AND fin_le<fin_mois),
-      'tva_reel',   (SELECT COALESCE(SUM(montant_commission_tva),0) FROM m WHERE est_reel)
+      'total_reel', (
+        SELECT COALESCE(sum(montant_commission_ht), 0)
+        FROM m WHERE est_reel
+      ),
+      'total_test', (
+        SELECT COALESCE(sum(montant_commission_ht), 0)
+        FROM m WHERE NOT est_reel
+      ),
+      'mois_reel', (
+        SELECT COALESCE(sum(montant_commission_ht), 0)
+        FROM m
+        WHERE est_reel AND fin_le >= debut_mois AND fin_le < fin_mois
+      ),
+      'mois_test', (
+        SELECT COALESCE(sum(montant_commission_ht), 0)
+        FROM m
+        WHERE NOT est_reel AND fin_le >= debut_mois AND fin_le < fin_mois
+      ),
+      'tva_reel', (
+        SELECT COALESCE(sum(montant_commission_tva), 0)
+        FROM m WHERE est_reel
+      )
     ),
     'encaisse', jsonb_build_object(
-      'ht_reel',  ROUND((SELECT COALESCE(SUM(montant_ht),0) FROM f WHERE statut='PAYEE' AND est_reel)
-                + (SELECT COALESCE(SUM(commission_cents),0)/100.0 FROM esc WHERE debite_le IS NOT NULL AND est_reel), 2),
-      'ttc_reel', ROUND((SELECT COALESCE(SUM(montant_ttc),0) FROM f WHERE statut='PAYEE' AND est_reel)
-                + (SELECT COALESCE(SUM(commission_cents),0)/100.0 FROM esc WHERE debite_le IS NOT NULL AND est_reel), 2),
-      'ht_test',  ROUND((SELECT COALESCE(SUM(montant_ht),0) FROM f WHERE statut='PAYEE' AND NOT est_reel)
-                + (SELECT COALESCE(SUM(commission_cents),0)/100.0 FROM esc WHERE debite_le IS NOT NULL AND NOT est_reel), 2)
+      'ht_reel', round((
+        SELECT COALESCE(sum(montant_ht), 0)
+        FROM f WHERE statut = 'PAYEE' AND est_reel
+      ) + (
+        SELECT COALESCE(sum(commission_cents), 0) / 100.0
+        FROM esc WHERE debite_le IS NOT NULL AND est_reel
+      ), 2),
+      'ttc_reel', round((
+        SELECT COALESCE(sum(montant_ttc), 0)
+        FROM f WHERE statut = 'PAYEE' AND est_reel
+      ) + (
+        SELECT COALESCE(sum(commission_cents), 0) / 100.0
+        FROM esc WHERE debite_le IS NOT NULL AND est_reel
+      ), 2),
+      'ht_test', round((
+        SELECT COALESCE(sum(montant_ht), 0)
+        FROM f WHERE statut = 'PAYEE' AND NOT est_reel
+      ) + (
+        SELECT COALESCE(sum(commission_cents), 0) / 100.0
+        FROM esc WHERE debite_le IS NOT NULL AND NOT est_reel
+      ), 2)
     ),
     'facturable', jsonb_build_object(
       'unite', 'HT',
-      'ht_reel', (SELECT COALESCE(SUM(montant_commission_ht),0) FROM m WHERE est_reel),
-      'ht_test', (SELECT COALESCE(SUM(montant_commission_ht),0) FROM m WHERE NOT est_reel)
+      'ht_reel', (
+        SELECT COALESCE(sum(montant_commission_ht), 0)
+        FROM m WHERE est_reel
+      ),
+      'ht_test', (
+        SELECT COALESCE(sum(montant_commission_ht), 0)
+        FROM m WHERE NOT est_reel
+      )
     ),
     'gmv', jsonb_build_object(
       'unite', 'brut',
-      'total_reel', (SELECT COALESCE(SUM(total_brut),0) FROM m WHERE est_reel),
-      'total_test', (SELECT COALESCE(SUM(total_brut),0) FROM m WHERE NOT est_reel),
-      'mois_reel', (SELECT COALESCE(SUM(total_brut),0) FROM m WHERE est_reel AND fin_le>=debut_mois AND fin_le<fin_mois),
-      'mois_test', (SELECT COALESCE(SUM(total_brut),0) FROM m WHERE NOT est_reel AND fin_le>=debut_mois AND fin_le<fin_mois)
+      'total_reel', (
+        SELECT COALESCE(sum(total_brut), 0) FROM m WHERE est_reel
+      ),
+      'total_test', (
+        SELECT COALESCE(sum(total_brut), 0) FROM m WHERE NOT est_reel
+      ),
+      'mois_reel', (
+        SELECT COALESCE(sum(total_brut), 0)
+        FROM m
+        WHERE est_reel AND fin_le >= debut_mois AND fin_le < fin_mois
+      ),
+      'mois_test', (
+        SELECT COALESCE(sum(total_brut), 0)
+        FROM m
+        WHERE NOT est_reel AND fin_le >= debut_mois AND fin_le < fin_mois
+      )
     ),
-    'nb_missions_terminees_reel', (SELECT COUNT(*) FROM m WHERE est_reel),
-    'nb_missions_terminees_test', (SELECT COUNT(*) FROM m WHERE NOT est_reel),
+    'nb_missions_terminees_reel', (
+      SELECT count(*) FROM m WHERE est_reel
+    ),
+    'nb_missions_terminees_test', (
+      SELECT count(*) FROM m WHERE NOT est_reel
+    ),
     'etab_a_valider', (
-      SELECT COUNT(*)
+      SELECT count(*)
       FROM etablissements e
       WHERE e.supprime_le IS NULL
+        AND e.est_compte_test IS FALSE
         AND (
-          COALESCE(e.statut_verification, 'EN_ATTENTE') IN ('EN_ATTENTE', 'EN_COURS')
+          COALESCE(e.statut_verification, 'EN_ATTENTE')
+            IN ('EN_ATTENTE', 'EN_COURS')
           OR (
             e.statut_verification = 'VERIFIE'
             AND (
@@ -10086,8 +10757,11 @@ BEGIN
         )
     ),
     'a_des_donnees_test', (
-      SELECT EXISTS(SELECT 1 FROM etablissements WHERE COALESCE(est_compte_test,false))
-        OR EXISTS(SELECT 1 FROM soignants WHERE COALESCE(est_compte_test,false))
+      SELECT EXISTS(
+        SELECT 1 FROM etablissements WHERE est_compte_test IS TRUE
+      ) OR EXISTS(
+        SELECT 1 FROM soignants WHERE est_compte_test IS TRUE
+      )
     )
   ) INTO result;
 
@@ -14471,7 +15145,7 @@ ALTER FUNCTION "public"."fn_alerte_cddu_repetitif"("p_soignant_id" "uuid", "p_et
 
 CREATE OR REPLACE FUNCTION "public"."fn_alerte_reclamations_pending_old"() RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO 'public'
+    SET "search_path" TO ''
     AS $$
 DECLARE
   v_count integer;
@@ -14479,19 +15153,24 @@ DECLARE
   v_admin_ids uuid[] := ARRAY[]::uuid[];
 BEGIN
   SELECT count(*),
-         jsonb_agg(jsonb_build_object(
-           'id', id,
-           'evenement_type', evenement_type,
-           'contesteur_id', contesteur_id,
-           'motif_categorie', motif_categorie,
-           'texte_libre', left(texte_libre, 100),
-           'cree_le', cree_le,
-           'jours_attente', extract(epoch FROM (now() - cree_le)) / 86400
-         ) ORDER BY cree_le ASC)
+         jsonb_agg(
+           jsonb_build_object(
+             'id', r.id,
+             'evenement_type', r.evenement_type,
+             'contesteur_id', r.contesteur_id,
+             'motif_categorie', r.motif_categorie,
+             'texte_libre', left(r.texte_libre, 100),
+             'cree_le', r.cree_le,
+             'jours_attente',
+               extract(epoch FROM (now() - r.cree_le)) / 86400
+           )
+           ORDER BY r.cree_le ASC
+         )
     INTO v_count, v_liste
-    FROM public.reclamations_score
-   WHERE statut = 'PENDING'
-     AND cree_le < now() - interval '14 days';
+    FROM public.reclamations_score r
+   WHERE r.statut = 'PENDING'
+     AND r.cree_le < now() - interval '14 days'
+     AND private.fn_compte_operationnel_est_reel(r.contesteur_id);
 
   IF v_count = 0 THEN
     RETURN jsonb_build_object('success', true, 'count', 0);
@@ -14503,40 +15182,48 @@ BEGIN
 
   IF cardinality(v_admin_ids) > 0 THEN
     INSERT INTO public.externalisation_actions (
-      type_action, payload, source, source_id
+      type_action,
+      payload,
+      source,
+      source_id
     )
-    SELECT
-      'EMAIL_NOTIF',
-      jsonb_build_object(
-        'destinataire_id', uid,
-        'type', 'ALERTE_RECLAMATIONS_PENDING',
-        'data', jsonb_build_object(
-          'count', v_count,
-          'liste', v_liste,
-          'lien_admin', 'https://jolene.app/admin/reclamations-score'
-        )
-      ),
-      'CRON_ALERTES',
-      NULL
-    FROM unnest(v_admin_ids) AS uid;
+    SELECT 'EMAIL_NOTIF',
+           jsonb_build_object(
+             'destinataire_id', uid,
+             'type', 'ALERTE_RECLAMATIONS_PENDING',
+             'data', jsonb_build_object(
+               'count', v_count,
+               'liste', v_liste,
+               'lien_admin',
+                 'https://jolene.app/admin/reclamations-score'
+             )
+           ),
+           'CRON_ALERTES',
+           NULL
+      FROM unnest(v_admin_ids) AS admins(uid);
 
     INSERT INTO public.externalisation_actions (
-      type_action, payload, source, source_id
+      type_action,
+      payload,
+      source,
+      source_id
     )
-    SELECT
-      'PUSH_NOTIF',
-      jsonb_build_object(
-        'destinataire_id', uid,
-        'type_evenement', 'ALERTE_ADMIN',
-        'titre', '⚠️ ' || v_count || ' réclamation'
-          || CASE WHEN v_count > 1 THEN 's' ELSE '' END
-          || ' en attente > 14j',
-        'corps', 'Examen requis.',
-        'lien', '/admin/reclamations-score'
-      ),
-      'CRON_ALERTES',
-      NULL
-    FROM unnest(v_admin_ids) AS uid;
+    SELECT 'PUSH_NOTIF',
+           jsonb_build_object(
+             'destinataire_id', uid,
+             'type_evenement', 'ALERTE_ADMIN',
+             'titre',
+               '⚠️ '
+                 || v_count
+                 || ' réclamation'
+                 || CASE WHEN v_count > 1 THEN 's' ELSE '' END
+                 || ' en attente > 14j',
+             'corps', 'Examen requis.',
+             'lien', '/admin/reclamations-score'
+           ),
+           'CRON_ALERTES',
+           NULL
+      FROM unnest(v_admin_ids) AS admins(uid);
   END IF;
 
   RETURN jsonb_build_object(
@@ -14553,49 +15240,59 @@ ALTER FUNCTION "public"."fn_alerte_reclamations_pending_old"() OWNER TO "postgre
 
 CREATE OR REPLACE FUNCTION "public"."fn_alerter_mediation_prioritaire"() RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO 'public'
+    SET "search_path" TO ''
     AS $$
 DECLARE
-  v_delai_j INT;
-  v_nb_alertes INT := 0;
-  v_litige RECORD;
-  v_admin_id UUID;
+  v_delai_j integer;
+  v_nb_alertes integer := 0;
+  v_litige record;
+  v_admin_id uuid;
 BEGIN
-  SELECT valeur::INT INTO v_delai_j
-    FROM public.parametres_litiges WHERE cle = 'delai_mediation_alerte_prioritaire_j';
+  SELECT pl.valeur::integer
+    INTO v_delai_j
+    FROM public.parametres_litiges pl
+   WHERE pl.cle = 'delai_mediation_alerte_prioritaire_j';
 
   FOR v_litige IN
-    SELECT id, mission_id, type_litige, escalade_auto_le
-      FROM public.litiges
-     WHERE statut = 'EN_MEDIATION'
-       AND escalade_auto_le IS NOT NULL
-       AND escalade_auto_le < NOW() - make_interval(days => v_delai_j)
-       AND NOT (derniers_rappels_envoyes ? 'MEDIATION_7J')
+    SELECT l.id,
+           l.mission_id,
+           l.type_litige,
+           l.escalade_auto_le
+      FROM public.litiges l
+     WHERE private.fn_mission_est_reelle(l.mission_id)
+       AND l.statut = 'EN_MEDIATION'
+       AND l.escalade_auto_le IS NOT NULL
+       AND l.escalade_auto_le < now() - make_interval(days => v_delai_j)
+       AND NOT (l.derniers_rappels_envoyes ? 'MEDIATION_7J')
   LOOP
-    FOR v_admin_id IN SELECT * FROM public.fn_list_admin_user_ids()
+    FOR v_admin_id IN
+      SELECT * FROM public.fn_list_admin_user_ids()
     LOOP
       PERFORM public.fn_litige_push_notification(
         v_admin_id,
         'ADMIN',
         'LITIGE_MEDIATION_PRIORITAIRE',
         'Litige en médiation depuis > ' || v_delai_j || ' jours',
-        'Le litige ' || v_litige.type_litige || ' sur mission '
+        'Le litige '
+          || v_litige.type_litige
+          || ' sur mission '
           || v_litige.mission_id::text
           || ' est en médiation sans action admin depuis plus de '
-          || v_delai_j || ' jours.',
+          || v_delai_j
+          || ' jours.',
         v_litige.id,
         jsonb_build_object(
           'type_litige', v_litige.type_litige,
           'mission_id', v_litige.mission_id,
           'jours_depuis_escalade', v_delai_j,
-          'prioritaire', TRUE
+          'prioritaire', true
         )
       );
     END LOOP;
 
     UPDATE public.litiges
        SET derniers_rappels_envoyes = derniers_rappels_envoyes
-         || jsonb_build_object('MEDIATION_7J', NOW())
+         || jsonb_build_object('MEDIATION_7J', now())
      WHERE id = v_litige.id;
 
     v_nb_alertes := v_nb_alertes + 1;
@@ -16191,35 +16888,63 @@ CREATE OR REPLACE FUNCTION "public"."fn_apercu_marche_profession"("p_profession"
     SET "search_path" TO 'public'
     AS $$
 DECLARE
-  v_geo boolean := p_lat IS NOT NULL AND p_lng IS NOT NULL AND COALESCE(p_rayon_km, 0) > 0;
+  v_geo boolean :=
+    p_lat IS NOT NULL
+    AND p_lng IS NOT NULL
+    AND COALESCE(p_rayon_km, 0) > 0;
   v_nb_missions integer;
   v_taux_max numeric;
   v_taux_moyen numeric;
   v_nb_etabs integer;
 BEGIN
-  SELECT count(*)::integer, max(m.taux_horaire_base), round(avg(m.taux_horaire_base), 2)
+  SELECT
+    count(*)::integer,
+    max(m.taux_horaire_base),
+    round(avg(m.taux_horaire_base), 2)
   INTO v_nb_missions, v_taux_max, v_taux_moyen
   FROM missions m
   JOIN etablissements e ON e.id = m.etablissement_id
   WHERE m.statut = 'OUVERTE'
     AND m.debut_le > now()
     AND e.supprime_le IS NULL
-    AND (p_profession IS NULL OR btrim(p_profession) = '' OR m.profession_requise::text = btrim(p_profession))
+    AND e.est_compte_test IS FALSE
+    AND private.fn_mission_lie_compte_test(m.id) IS FALSE
+    AND (
+      p_profession IS NULL
+      OR btrim(p_profession) = ''
+      OR m.profession_requise::text = btrim(p_profession)
+    )
     AND (
       NOT v_geo
-      OR (e.adresse_lat IS NOT NULL AND e.adresse_lng IS NOT NULL
-          AND public.fn_haversine_distance_m(e.adresse_lat, e.adresse_lng, p_lat::numeric, p_lng::numeric) <= p_rayon_km * 1000)
+      OR (
+        e.adresse_lat IS NOT NULL
+        AND e.adresse_lng IS NOT NULL
+        AND public.fn_haversine_distance_m(
+          e.adresse_lat,
+          e.adresse_lng,
+          p_lat::numeric,
+          p_lng::numeric
+        ) <= p_rayon_km * 1000
+      )
     );
 
-  -- Preuve sociale de repli quand le marché est vide : établissements inscrits.
   SELECT count(*)::integer
   INTO v_nb_etabs
   FROM etablissements e
   WHERE e.supprime_le IS NULL
+    AND e.est_compte_test IS FALSE
     AND (
       NOT v_geo
-      OR (e.adresse_lat IS NOT NULL AND e.adresse_lng IS NOT NULL
-          AND public.fn_haversine_distance_m(e.adresse_lat, e.adresse_lng, p_lat::numeric, p_lng::numeric) <= p_rayon_km * 1000)
+      OR (
+        e.adresse_lat IS NOT NULL
+        AND e.adresse_lng IS NOT NULL
+        AND public.fn_haversine_distance_m(
+          e.adresse_lat,
+          e.adresse_lng,
+          p_lat::numeric,
+          p_lng::numeric
+        ) <= p_rayon_km * 1000
+      )
     );
 
   RETURN jsonb_build_object(
@@ -16234,6 +16959,10 @@ $$;
 
 
 ALTER FUNCTION "public"."fn_apercu_marche_profession"("p_profession" "text", "p_lat" double precision, "p_lng" double precision, "p_rayon_km" integer) OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "public"."fn_apercu_marche_profession"("p_profession" "text", "p_lat" double precision, "p_lng" double precision, "p_rayon_km" integer) IS 'SECURITY DEFINER anonyme revue : agrégats marché publics, aucune donnée personnelle.';
+
 
 
 CREATE OR REPLACE FUNCTION "public"."fn_appliquer_compensation_partielle"("p_mission_id" "uuid", "p_pourcentage" numeric, "p_motif" "text", "p_source_litige_id" "uuid" DEFAULT NULL::"uuid") RETURNS "jsonb"
@@ -17261,20 +17990,22 @@ ALTER FUNCTION "public"."fn_auto_confirmer_honoraires"() OWNER TO "postgres";
 
 CREATE OR REPLACE FUNCTION "public"."fn_auto_creation_litiges_presence"() RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO 'public'
+    SET "search_path" TO ''
     AS $$
 DECLARE
-  v_delai_pointage_h INT;
-  v_nb_abs INT := 0;
-  v_nb_dep INT := 0;
-  v_presence RECORD;
-  v_litige_id UUID;
+  v_delai_pointage_h integer;
+  v_nb_abs integer := 0;
+  v_nb_dep integer := 0;
+  v_presence record;
+  v_litige_id uuid;
   v_type_litige public.type_litige;
-  v_motif TEXT;
-  v_notif_corps TEXT;
+  v_motif text;
+  v_notif_corps text;
 BEGIN
-  SELECT valeur::INT INTO v_delai_pointage_h
-    FROM public.parametres_litiges WHERE cle = 'delai_contestation_pointage_h';
+  SELECT pl.valeur::integer
+    INTO v_delai_pointage_h
+    FROM public.parametres_litiges pl
+   WHERE pl.cle = 'delai_contestation_pointage_h';
 
   FOR v_presence IN
     SELECT p.id AS presence_id,
@@ -17286,47 +18017,63 @@ BEGIN
            m.soignant_assigne_id
       FROM public.presences p
       JOIN public.missions m ON m.id = p.mission_id
-     WHERE p.valide_par_etablissement = TRUE
+     WHERE private.fn_mission_est_reelle(p.mission_id)
+       AND p.valide_par_etablissement IS TRUE
        AND p.valide_le IS NOT NULL
-       AND p.valide_le < NOW() - make_interval(hours => v_delai_pointage_h)
+       AND p.valide_le <
+         now() - make_interval(hours => v_delai_pointage_h)
        AND p.motif_litige IS NOT NULL
        AND p.litige_auto_cree_le IS NULL
   LOOP
-    IF v_presence.heures_reelles IS NULL OR v_presence.heures_reelles = 0 THEN
+    IF v_presence.heures_reelles IS NULL
+       OR v_presence.heures_reelles = 0 THEN
       v_type_litige := 'ABSENCE_SOIGNANT';
-      v_motif       := 'Auto-création : soignant marqué absent sans contestation dans les 48h';
-      v_notif_corps := 'Votre établissement a signalé une absence. Répondez sous 72h pour éviter l''escalade automatique.';
+      v_motif :=
+        'Auto-création : soignant marqué absent sans contestation dans les 48h';
+      v_notif_corps :=
+        'Votre établissement a signalé une absence. Répondez sous 72h pour éviter l''escalade automatique.';
     ELSIF v_presence.duree_heures IS NOT NULL
       AND v_presence.duree_heures > 0
       AND v_presence.heures_reelles < v_presence.duree_heures * 0.80
     THEN
       v_type_litige := 'DEPART_ANTICIPE';
-      v_motif       := format(
+      v_motif := format(
         'Auto-création : départ anticipé (%sh effectuées sur %sh prévues, soit %s %%).',
         v_presence.heures_reelles,
         v_presence.duree_heures,
-        round((v_presence.heures_reelles / v_presence.duree_heures) * 100)
+        round(
+          (v_presence.heures_reelles / v_presence.duree_heures) * 100
+        )
       );
-      v_notif_corps := 'Votre établissement a signalé un départ anticipé. Répondez sous 72h pour éviter l''escalade automatique.';
+      v_notif_corps :=
+        'Votre établissement a signalé un départ anticipé. Répondez sous 72h pour éviter l''escalade automatique.';
     ELSE
       CONTINUE;
     END IF;
 
     IF EXISTS (
-      SELECT 1 FROM public.litiges l
+      SELECT 1
+        FROM public.litiges l
        WHERE l.mission_id = v_presence.mission_id
          AND l.type_litige = v_type_litige
          AND l.statut IN ('OUVERT', 'EN_DISCUSSION', 'EN_MEDIATION')
     ) THEN
       UPDATE public.presences
-         SET litige_auto_cree_le = NOW()
+         SET litige_auto_cree_le = now()
        WHERE id = v_presence.presence_id;
       CONTINUE;
     END IF;
 
     INSERT INTO public.litiges (
-      mission_id, soignant_id, etablissement_id, presence_id,
-      initie_par, motif, statut, type_litige, est_informatif
+      mission_id,
+      soignant_id,
+      etablissement_id,
+      presence_id,
+      initie_par,
+      motif,
+      statut,
+      type_litige,
+      est_informatif
     ) VALUES (
       v_presence.mission_id,
       COALESCE(v_presence.soignant_assigne_id, v_presence.soignant_id),
@@ -17336,17 +18083,21 @@ BEGIN
       v_motif,
       'OUVERT',
       v_type_litige,
-      FALSE
+      false
     )
     RETURNING id INTO v_litige_id;
 
     UPDATE public.presences
-       SET litige_auto_cree_le = NOW()
+       SET litige_auto_cree_le = now()
      WHERE id = v_presence.presence_id;
 
     PERFORM public.fn_ecrire_audit(
-      NULL, 'SYSTEM', 'LITIGE_AUTO_CREATION',
-      'litige', v_litige_id, NULL,
+      NULL,
+      'SYSTEM',
+      'LITIGE_AUTO_CREATION',
+      'litige',
+      v_litige_id,
+      NULL,
       jsonb_build_object(
         'type_litige', v_type_litige,
         'mission_id', v_presence.mission_id,
@@ -17354,11 +18105,14 @@ BEGIN
         'heures_reelles', v_presence.heures_reelles,
         'duree_heures_prevues', v_presence.duree_heures,
         'raison', CASE v_type_litige
-          WHEN 'ABSENCE_SOIGNANT' THEN 'Absence non contestée dans les 48h post-validation présence'
-          WHEN 'DEPART_ANTICIPE'  THEN 'Départ anticipé (< 80 % heures prévues) non contesté dans les 48h'
+          WHEN 'ABSENCE_SOIGNANT' THEN
+            'Absence non contestée dans les 48h post-validation présence'
+          WHEN 'DEPART_ANTICIPE' THEN
+            'Départ anticipé (< 80 % heures prévues) non contesté dans les 48h'
         END
       ),
-      NULL, NULL
+      NULL,
+      NULL
     );
 
     PERFORM public.fn_litige_push_notification(
@@ -17371,7 +18125,7 @@ BEGIN
       jsonb_build_object(
         'type_litige', v_type_litige,
         'mission_id', v_presence.mission_id,
-        'auto_cree', TRUE
+        'auto_cree', true
       )
     );
 
@@ -19915,53 +20669,198 @@ CREATE OR REPLACE FUNCTION "public"."fn_check_crons_health"() RETURNS "jsonb"
     SET "search_path" TO 'public', 'extensions'
     AS $$
 DECLARE
-  v_results jsonb := '[]'::jsonb; v_cron RECORD; v_dernier_run TIMESTAMPTZ;
-  v_dernier_statut TEXT; v_dernier_msg TEXT; v_intervalle_attendu INTERVAL;
-  v_retard BOOLEAN; v_alertes_emises INT := 0;
+  v_results jsonb := '[]'::jsonb;
+  v_cron record;
+  v_intervalle_attendu interval;
+  v_retard boolean;
+  v_alertes_emises integer := 0;
 BEGIN
-  IF NOT fn_est_contexte_cron_ou_admin() THEN RETURN jsonb_build_object('error', 'Accès refusé'); END IF;
-  FOR v_cron IN SELECT jobid, jobname, schedule FROM cron.job WHERE active = true LOOP
-    SELECT end_time, status, return_message INTO v_dernier_run, v_dernier_statut, v_dernier_msg
-    FROM cron.job_run_details WHERE jobid = v_cron.jobid ORDER BY end_time DESC LIMIT 1;
+  IF NOT public.fn_est_contexte_cron_ou_admin() THEN
+    RETURN pg_catalog.jsonb_build_object('error', 'Accès refusé');
+  END IF;
+
+  -- Le cache contient déjà tous les jobs historiques. Cette mise à jour ne
+  -- parcourt que les runid ajoutés depuis le dernier appel (index PK natif).
+  WITH watermark AS (
+    SELECT COALESCE(pg_catalog.max(c.runid), 0) AS runid
+    FROM private.cron_job_latest_run_cache c
+  ),
+  latest_ids AS MATERIALIZED (
+    SELECT r.jobid, pg_catalog.max(r.runid) AS runid
+    FROM cron.job_run_details r
+    CROSS JOIN watermark w
+    WHERE r.runid > w.runid
+    GROUP BY r.jobid
+  )
+  INSERT INTO private.cron_job_latest_run_cache AS cache (
+    jobid,
+    runid,
+    start_time,
+    end_time,
+    status,
+    return_message,
+    maj_le
+  )
+  SELECT
+    l.jobid,
+    d.runid,
+    d.start_time,
+    d.end_time,
+    d.status,
+    d.return_message,
+    pg_catalog.now()
+  FROM latest_ids l
+  JOIN cron.job_run_details d ON d.runid = l.runid
+  ON CONFLICT (jobid) DO UPDATE
+  SET runid = EXCLUDED.runid,
+      start_time = EXCLUDED.start_time,
+      end_time = EXCLUDED.end_time,
+      status = EXCLUDED.status,
+      return_message = EXCLUDED.return_message,
+      maj_le = EXCLUDED.maj_le
+  WHERE EXCLUDED.runid > cache.runid;
+
+  -- pg_cron insère d'abord un run `running`, puis met à jour la même ligne
+  -- (même runid) à la fin. On rafraîchit donc aussi les runid déjà connus,
+  -- sinon un appel effectué pendant l'exécution resterait figé sur `running`.
+  UPDATE private.cron_job_latest_run_cache AS cache
+  SET start_time = d.start_time,
+      end_time = d.end_time,
+      status = d.status,
+      return_message = d.return_message,
+      maj_le = pg_catalog.now()
+  FROM cron.job_run_details d
+  WHERE d.runid = cache.runid
+    AND (
+      cache.start_time IS DISTINCT FROM d.start_time
+      OR cache.end_time IS DISTINCT FROM d.end_time
+      OR cache.status IS DISTINCT FROM d.status
+      OR cache.return_message IS DISTINCT FROM d.return_message
+    );
+
+  FOR v_cron IN
+    SELECT
+      j.jobid,
+      j.jobname,
+      j.schedule,
+      c.start_time AS dernier_demarrage,
+      c.end_time AS dernier_run,
+      c.status AS dernier_statut,
+      c.return_message AS dernier_message
+    FROM cron.job j
+    LEFT JOIN private.cron_job_latest_run_cache c ON c.jobid = j.jobid
+    WHERE j.active = true
+  LOOP
+    -- Marge d'alerte = environ 1,5 à 3 périodes selon la fréquence. Les
+    -- champs sont interprétés par position afin de couvrir également les
+    -- expressions réelles `1-59/5`, `3,18,33,48`, `7 * * * *`, etc.
     v_intervalle_attendu := CASE
-      WHEN v_cron.schedule LIKE '*/5%' THEN INTERVAL '15 minutes'
-      WHEN v_cron.schedule LIKE '*/10%' THEN INTERVAL '30 minutes'
-      WHEN v_cron.schedule LIKE '*/15%' THEN INTERVAL '45 minutes'
-      WHEN v_cron.schedule LIKE '0 * * * *' THEN INTERVAL '90 minutes'
-      WHEN v_cron.schedule LIKE '15 * * * *' THEN INTERVAL '90 minutes'
-      WHEN v_cron.schedule LIKE '0 % * * *' THEN INTERVAL '26 hours'
-      WHEN v_cron.schedule LIKE '0 % % * *' THEN INTERVAL '32 days'
-      WHEN v_cron.schedule LIKE '0 % * * 0' THEN INTERVAL '8 days'
-      ELSE INTERVAL '40 days' END;
-    -- Un cron JAMAIS exécuté (v_dernier_run IS NULL) n'est « en retard » que s'il est
-    -- assez fréquent pour avoir déjà dû tourner (intervalle <= 2 jours). Sinon (mensuel,
-    -- annuel, hebdo) c'est normal qu'il n'ait pas encore tourné après sa création — on
-    -- évite ainsi le bruit de faux positifs qui noyait les vraies alertes (auto-facturation
-    -- mensuelle, recalcul paliers, calcul BFA annuel). Un échec réel reste capté par la
-    -- branche 'failed' dès la première exécution.
-    v_retard := (v_dernier_run IS NOT NULL AND v_dernier_run < NOW() - v_intervalle_attendu)
-             OR (v_dernier_run IS NULL AND v_intervalle_attendu <= INTERVAL '2 days');
-    IF v_dernier_statut = 'failed' THEN
-      PERFORM fn_emettre_alerte_monitoring('CRON_FAILED', 'CRITICAL', v_cron.jobname,
-        format('Cron "%s" a échoué : %s', v_cron.jobname, COALESCE(SUBSTRING(v_dernier_msg, 1, 200), '?')),
-        jsonb_build_object('jobid', v_cron.jobid, 'schedule', v_cron.schedule, 'dernier_run', v_dernier_run));
+      -- Mois explicite : annuel ; jour du mois explicite : mensuel ; jour de
+      -- semaine explicite : hebdomadaire. Cet ordre évite de classer un cron
+      -- annuel comme mensuel.
+      WHEN pg_catalog.split_part(v_cron.schedule, ' ', 4) <> '*' THEN interval '370 days'
+      WHEN pg_catalog.split_part(v_cron.schedule, ' ', 3) <> '*' THEN interval '32 days'
+      WHEN pg_catalog.split_part(v_cron.schedule, ' ', 5) <> '*' THEN interval '8 days'
+
+      -- Heure `*` : cron intra-horaire ou horaire.
+      WHEN pg_catalog.split_part(v_cron.schedule, ' ', 2) = '*' THEN
+        CASE
+          WHEN pg_catalog.split_part(v_cron.schedule, ' ', 1) = '*' THEN interval '5 minutes'
+          WHEN pg_catalog.split_part(v_cron.schedule, ' ', 1) LIKE '%/5%' THEN interval '15 minutes'
+          WHEN pg_catalog.split_part(v_cron.schedule, ' ', 1) LIKE '%/10%' THEN interval '30 minutes'
+          WHEN pg_catalog.split_part(v_cron.schedule, ' ', 1) LIKE '%/15%' THEN interval '45 minutes'
+          WHEN pg_catalog.split_part(v_cron.schedule, ' ', 1) LIKE '%/20%' THEN interval '60 minutes'
+          WHEN pg_catalog.split_part(v_cron.schedule, ' ', 1) LIKE '%/30%' THEN interval '90 minutes'
+          WHEN pg_catalog.split_part(v_cron.schedule, ' ', 1) LIKE '%,%' THEN interval '45 minutes'
+          ELSE interval '90 minutes'
+        END
+
+      -- Heures répétées dans la journée ; le reste est quotidien, y compris
+      -- les listes d'heures telles que `4,5`.
+      WHEN pg_catalog.split_part(v_cron.schedule, ' ', 2) LIKE '%/2%' THEN interval '3 hours'
+      WHEN pg_catalog.split_part(v_cron.schedule, ' ', 2) LIKE '%/6%' THEN interval '9 hours'
+      WHEN pg_catalog.split_part(v_cron.schedule, ' ', 2) LIKE '%-%/%' THEN interval '12 hours'
+      ELSE interval '26 hours'
+    END;
+
+    -- Les crons rares encore jamais exécutés ne sont pas faussement signalés.
+    -- Un run normalement en cours n'est ni « jamais exécuté », ni en retard :
+    -- il ne devient tardif que si sa durée dépasse la fenêtre attendue.
+    IF v_cron.dernier_statut IN ('starting', 'running') THEN
+      v_retard := v_cron.dernier_demarrage IS NOT NULL
+        AND v_cron.dernier_demarrage < pg_catalog.now() - v_intervalle_attendu;
+    ELSE
+      v_retard := (
+        v_cron.dernier_run IS NOT NULL
+        AND v_cron.dernier_run < pg_catalog.now() - v_intervalle_attendu
+      ) OR (
+        v_cron.dernier_run IS NULL
+        AND v_intervalle_attendu <= interval '2 days'
+      );
+    END IF;
+
+    IF v_cron.dernier_statut = 'failed' THEN
+      PERFORM public.fn_emettre_alerte_monitoring(
+        'CRON_FAILED',
+        'CRITICAL',
+        v_cron.jobname,
+        pg_catalog.format(
+          'Cron "%s" a échoué : %s',
+          v_cron.jobname,
+          COALESCE(pg_catalog.substring(v_cron.dernier_message, 1, 200), '?')
+        ),
+        pg_catalog.jsonb_build_object(
+          'jobid', v_cron.jobid,
+          'schedule', v_cron.schedule,
+          'dernier_run', v_cron.dernier_run
+        )
+      );
       v_alertes_emises := v_alertes_emises + 1;
     ELSIF v_retard AND v_cron.jobname NOT IN ('calculer-bfa-annuel') THEN
-      PERFORM fn_emettre_alerte_monitoring('CRON_RETARD', 'WARNING', v_cron.jobname,
-        format('Cron "%s" en retard (dernier run : %s)', v_cron.jobname, COALESCE(v_dernier_run::text, 'jamais')),
-        jsonb_build_object('jobid', v_cron.jobid, 'schedule', v_cron.schedule, 'dernier_run', v_dernier_run));
+      PERFORM public.fn_emettre_alerte_monitoring(
+        'CRON_RETARD',
+        'WARNING',
+        v_cron.jobname,
+        pg_catalog.format(
+          'Cron "%s" en retard (dernier run : %s)',
+          v_cron.jobname,
+          COALESCE(v_cron.dernier_run::text, 'jamais')
+        ),
+        pg_catalog.jsonb_build_object(
+          'jobid', v_cron.jobid,
+          'schedule', v_cron.schedule,
+          'dernier_run', v_cron.dernier_run
+        )
+      );
       v_alertes_emises := v_alertes_emises + 1;
     END IF;
-    v_results := v_results || jsonb_build_object('jobid', v_cron.jobid, 'jobname', v_cron.jobname,
-      'schedule', v_cron.schedule, 'dernier_run', v_dernier_run, 'dernier_statut', v_dernier_statut,
-      'retard', v_retard, 'echec', v_dernier_statut = 'failed');
+
+    v_results := v_results || pg_catalog.jsonb_build_object(
+      'jobid', v_cron.jobid,
+      'jobname', v_cron.jobname,
+      'schedule', v_cron.schedule,
+      'dernier_demarrage', v_cron.dernier_demarrage,
+      'dernier_run', v_cron.dernier_run,
+      'dernier_statut', v_cron.dernier_statut,
+      'retard', v_retard,
+      'echec', v_cron.dernier_statut = 'failed'
+    );
   END LOOP;
-  RETURN jsonb_build_object('success', true, 'crons', v_results, 'alertes_emises', v_alertes_emises);
+
+  RETURN pg_catalog.jsonb_build_object(
+    'success', true,
+    'crons', v_results,
+    'alertes_emises', v_alertes_emises
+  );
 END;
 $$;
 
 
 ALTER FUNCTION "public"."fn_check_crons_health"() OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "public"."fn_check_crons_health"() IS 'Contrôle exact des crons actifs via un cache privé incrémental; réservé au contexte cron ou administrateur.';
+
 
 
 CREATE OR REPLACE FUNCTION "public"."fn_check_rate_limit_ip_signature"("p_ip" "inet") RETURNS "jsonb"
@@ -20643,6 +21542,53 @@ $$;
 ALTER FUNCTION "public"."fn_compte_auth_actif"() OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."fn_compter_files_finance_exclues_test"() RETURNS "jsonb"
+    LANGUAGE "sql" STABLE
+    SET "search_path" TO ''
+    AS $$
+  SELECT jsonb_build_object(
+    'escrow_debits', (
+      SELECT count(*)
+        FROM public.paiements_escrow pe
+        JOIN public.etablissements e ON e.id = pe.etablissement_id
+        JOIN public.soignants s ON s.id = pe.soignant_id
+       WHERE pe.statut = 'INITIE'
+         AND pe.debit_prevu_le <= now()
+         AND (e.est_compte_test IS TRUE OR s.est_compte_test IS TRUE)
+    ),
+    'escrow_releases', (
+      SELECT count(*)
+        FROM public.escrow_release_queue q
+        JOIN public.paiements_escrow pe ON pe.id = q.paiement_escrow_id
+        JOIN public.etablissements e ON e.id = pe.etablissement_id
+        JOIN public.soignants s ON s.id = pe.soignant_id
+       WHERE q.statut IN ('EN_ATTENTE', 'EN_COURS')
+         AND (e.est_compte_test IS TRUE OR s.est_compte_test IS TRUE)
+    ),
+    'stripe_refunds', (
+      SELECT count(*)
+        FROM public.stripe_refunds_queue q
+        LEFT JOIN public.paiements_escrow pe
+          ON pe.id = q.paiement_escrow_id
+        LEFT JOIN public.factures_honoraires f
+          ON f.id = q.facture_origine_id
+        JOIN public.etablissements e
+          ON e.id = COALESCE(pe.etablissement_id, f.etablissement_id)
+        LEFT JOIN public.soignants s
+          ON s.id = COALESCE(pe.soignant_id, f.soignant_id)
+       WHERE q.statut IN ('EN_ATTENTE', 'EN_COURS')
+         AND (
+           e.est_compte_test IS TRUE
+           OR COALESCE(s.est_compte_test, false) IS TRUE
+         )
+    )
+  );
+$$;
+
+
+ALTER FUNCTION "public"."fn_compter_files_finance_exclues_test"() OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."fn_compter_missions_sans_notation"("p_role" "text" DEFAULT 'auto'::"text") RETURNS "jsonb"
     LANGUAGE "plpgsql" STABLE SECURITY DEFINER
     SET "search_path" TO 'public', 'extensions'
@@ -20760,19 +21706,35 @@ CREATE OR REPLACE FUNCTION "public"."fn_compteur_soignants_disponibles"("p_etabl
     SET "search_path" TO 'public'
     AS $$
 DECLARE
-    v_count INTEGER;
+  v_count integer;
 BEGIN
-    SELECT COUNT(DISTINCT s.id) INTO v_count
-    FROM soignants s
-    WHERE s.supprime_le IS NULL
-      AND s.derniere_activite_le > NOW() - INTERVAL '7 days'
-      AND fn_documents_ok_pour_mission(s.id, 'TOUS')
-      AND s.profession IN (
-          SELECT DISTINCT profession_requise FROM missions
-          WHERE etablissement_id = p_etablissement_id AND statut = 'OUVERTE'
-      )
-      AND NOT fn_est_exclu(s.id, p_etablissement_id);
-    RETURN jsonb_build_object('disponibles', v_count);
+  IF NOT est_admin()
+     AND public.fn_a_permission_etablissement(
+       'lecture_missions',
+       p_etablissement_id
+     ) IS NOT TRUE THEN
+    RETURN jsonb_build_object('error', 'Accès refusé');
+  END IF;
+
+  SELECT count(DISTINCT s.id)
+  INTO v_count
+  FROM soignants s
+  WHERE s.supprime_le IS NULL
+    AND private.fn_comptes_meme_cohorte_test(
+      s.id,
+      p_etablissement_id
+    )
+    AND s.derniere_activite_le > now() - interval '7 days'
+    AND fn_documents_ok_pour_mission(s.id, 'TOUS')
+    AND s.profession IN (
+      SELECT DISTINCT profession_requise
+      FROM missions
+      WHERE etablissement_id = p_etablissement_id
+        AND statut = 'OUVERTE'
+    )
+    AND NOT fn_est_exclu(s.id, p_etablissement_id);
+
+  RETURN jsonb_build_object('disponibles', v_count);
 END;
 $$;
 
@@ -20828,6 +21790,189 @@ $$;
 
 
 ALTER FUNCTION "public"."fn_confirmer_accord_partie"("p_litige_id" "uuid") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."fn_confirmer_action_planning_v1"("p_mission_id" "uuid", "p_action" "text", "p_creneaux_confirmes" "jsonb", "p_message" "text" DEFAULT NULL::"text", "p_choix_contrat" "text" DEFAULT NULL::"text", "p_candidature_id" "uuid" DEFAULT NULL::"uuid") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+DECLARE
+  v_mission public.missions%ROWTYPE;
+  v_action text;
+  v_validation jsonb;
+  v_conflit jsonb;
+  v_nb_live integer;
+  v_planning_differe boolean;
+BEGIN
+  IF (SELECT auth.uid()) IS NULL OR public.est_soignant() IS NOT TRUE THEN
+    RETURN pg_catalog.jsonb_build_object(
+      'success', false,
+      'ok', false,
+      'error', 'Accès réservé aux soignants authentifiés.'
+    );
+  END IF;
+
+  v_action := pg_catalog.upper(pg_catalog.btrim(COALESCE(p_action, '')));
+  IF v_action NOT IN (
+    'POSTULER', 'ACCEPTER', 'SWIPE_LIKE', 'URGENCE', 'PROPOSITION'
+  ) THEN
+    RETURN pg_catalog.jsonb_build_object(
+      'success', false,
+      'ok', false,
+      'error', 'Action de candidature invalide.'
+    );
+  END IF;
+
+  SELECT m.*
+  INTO v_mission
+  FROM public.missions m
+  WHERE m.id = p_mission_id
+  FOR UPDATE;
+  IF NOT FOUND OR v_mission.statut <> 'OUVERTE' THEN
+    RETURN pg_catalog.jsonb_build_object(
+      'success', false,
+      'ok', false,
+      'error', 'Cette mission n''est plus disponible.'
+    );
+  END IF;
+
+  v_validation := public.fn_valider_creneaux_mission_json(
+    p_creneaux_confirmes,
+    NOT (
+      v_mission.type_contrat_recherche = 'LIBERAL'
+      OR (
+        v_mission.type_contrat_recherche = 'TOUS'
+        AND pg_catalog.upper(pg_catalog.btrim(COALESCE(p_choix_contrat, ''))) = 'LIBERAL'
+      )
+    )
+  );
+  IF COALESCE((v_validation->>'success')::boolean, false) IS NOT TRUE THEN
+    RETURN pg_catalog.jsonb_build_object(
+      'success', false,
+      'ok', false,
+      'code', 'PLANNING_A_RECONFIRMER',
+      'error', 'Le planning confirmé n''est pas exploitable. Rechargez la mission avant de continuer.'
+    );
+  END IF;
+
+  SELECT pg_catalog.count(*)::integer
+  INTO v_nb_live
+  FROM public.mission_creneaux mc
+  WHERE mc.mission_id = p_mission_id
+    AND mc.type_creneau = 'PREVISIONNEL'
+    AND NOT mc.est_pause
+    AND mc.fin IS NOT NULL;
+
+  WITH confirmes AS (
+    SELECT
+      (source.element->>'debut')::timestamptz AS debut,
+      (source.element->>'fin')::timestamptz AS fin
+    FROM pg_catalog.jsonb_array_elements(p_creneaux_confirmes)
+      AS source(element)
+  ), live AS (
+    SELECT mc.debut, mc.fin
+    FROM public.mission_creneaux mc
+    WHERE mc.mission_id = p_mission_id
+      AND mc.type_creneau = 'PREVISIONNEL'
+      AND NOT mc.est_pause
+      AND mc.fin IS NOT NULL
+  )
+  SELECT EXISTS (
+    (SELECT l.debut, l.fin FROM live l
+     EXCEPT
+     SELECT c.debut, c.fin FROM confirmes c)
+    UNION ALL
+    (SELECT c.debut, c.fin FROM confirmes c
+     EXCEPT
+     SELECT l.debut, l.fin FROM live l)
+  )
+  INTO v_planning_differe;
+
+  IF v_nb_live = 0
+     OR v_nb_live <> pg_catalog.jsonb_array_length(p_creneaux_confirmes)
+     OR (
+       COALESCE(v_mission.nb_creneaux, 0) > 0
+       AND v_mission.nb_creneaux <> v_nb_live
+     )
+     OR v_planning_differe THEN
+    RETURN pg_catalog.jsonb_build_object(
+      'success', false,
+      'ok', false,
+      'code', 'PLANNING_MODIFIE_RECONFIRMER',
+      'error', 'Le planning a changé depuis son affichage. Vérifiez à nouveau toutes les dates et tous les horaires.'
+    );
+  END IF;
+
+  v_conflit := public.fn_conflit_planning_soignant(
+    (SELECT auth.uid()),
+    p_mission_id
+  );
+  IF COALESCE((v_conflit->>'conflit')::boolean, false) THEN
+    RETURN pg_catalog.jsonb_build_object(
+      'success', false,
+      'ok', false,
+      'code', COALESCE(v_conflit->>'code', 'CONFLIT_PLANNING'),
+      'error', COALESCE(
+        v_conflit->>'message',
+        'Ce planning entre en conflit avec une mission déjà confirmée.'
+      )
+    );
+  END IF;
+
+  PERFORM pg_catalog.set_config(
+    'jolene.planning_confirme_mission_id',
+    p_mission_id::text,
+    true
+  );
+
+  CASE v_action
+    WHEN 'POSTULER' THEN
+      RETURN public.fn_postuler_mission_rate_limited(
+        p_mission_id,
+        p_message,
+        p_choix_contrat
+      );
+    WHEN 'ACCEPTER' THEN
+      RETURN public.fn_accepter_mission(
+        p_mission_id,
+        p_choix_contrat
+      );
+    WHEN 'SWIPE_LIKE' THEN
+      RETURN public.fn_enregistrer_swipe(
+        p_mission_id,
+        'LIKE',
+        p_choix_contrat
+      );
+    WHEN 'URGENCE' THEN
+      RETURN public.fn_accepter_mission_urgence(p_mission_id);
+    WHEN 'PROPOSITION' THEN
+      IF p_candidature_id IS NULL OR NOT EXISTS (
+        SELECT 1
+        FROM public.candidatures c
+        WHERE c.id = p_candidature_id
+          AND c.mission_id = p_mission_id
+          AND c.soignant_id = (SELECT auth.uid())
+          AND c.statut::text = 'PROPOSEE'
+      ) THEN
+        RETURN pg_catalog.jsonb_build_object(
+          'success', false,
+          'ok', false,
+          'error', 'Proposition introuvable.'
+        );
+      END IF;
+      RETURN public.fn_repondre_proposition(p_candidature_id, true);
+    ELSE
+      RAISE EXCEPTION 'Action planning non traitée';
+  END CASE;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_confirmer_action_planning_v1"("p_mission_id" "uuid", "p_action" "text", "p_creneaux_confirmes" "jsonb", "p_message" "text", "p_choix_contrat" "text", "p_candidature_id" "uuid") OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "public"."fn_confirmer_action_planning_v1"("p_mission_id" "uuid", "p_action" "text", "p_creneaux_confirmes" "jsonb", "p_message" "text", "p_choix_contrat" "text", "p_candidature_id" "uuid") IS 'Compare sous verrou les créneaux confirmés avec le planning live avant toute candidature ou acceptation.';
+
 
 
 CREATE OR REPLACE FUNCTION "public"."fn_confirmer_email_etab"("p_token" "text") RETURNS "jsonb"
@@ -21126,55 +22271,179 @@ ALTER FUNCTION "public"."fn_confirmer_virement_admin"("p_facture_id" "uuid") OWN
 
 CREATE OR REPLACE FUNCTION "public"."fn_conflit_planning_soignant"("p_soignant_id" "uuid", "p_mission_id" "uuid") RETURNS "jsonb"
     LANGUAGE "plpgsql" STABLE SECURITY DEFINER
-    SET "search_path" TO 'public'
+    SET "search_path" TO ''
     AS $$
 DECLARE
-  v_mission RECORD;
-  v_conflit RECORD;
-  v_adjacent RECORD;
+  v_nb integer;
+  v_nb_complets integer;
+  v_nb_attendus integer;
+  v_conflit record;
+  v_repos record;
 BEGIN
-  SELECT debut_le, fin_le INTO v_mission FROM missions WHERE id = p_mission_id;
-  IF v_mission.debut_le IS NULL THEN
-    RETURN jsonb_build_object('conflit', false);
-  END IF;
+  SELECT
+    pg_catalog.count(mc.mission_id)::integer,
+    pg_catalog.count(mc.mission_id) FILTER (WHERE mc.fin IS NOT NULL)::integer,
+    pg_catalog.max(COALESCE(m.nb_creneaux, 0))::integer
+  INTO v_nb, v_nb_complets, v_nb_attendus
+  FROM public.missions m
+  LEFT JOIN public.mission_creneaux mc
+    ON mc.mission_id = m.id
+    AND mc.type_creneau = 'PREVISIONNEL'
+    AND NOT mc.est_pause
+  WHERE m.id = p_mission_id;
 
-  SELECT m.intitule, m.debut_le, m.fin_le INTO v_conflit
-  FROM missions m
-  WHERE m.soignant_assigne_id = p_soignant_id
-    AND m.statut IN ('ASSIGNEE', 'EN_COURS')
-    AND m.debut_le < v_mission.fin_le
-    AND m.fin_le > v_mission.debut_le
-  LIMIT 1;
-
-  IF v_conflit.intitule IS NOT NULL THEN
-    RETURN jsonb_build_object(
+  IF v_nb = 0
+     OR v_nb_complets <> v_nb
+     OR (COALESCE(v_nb_attendus, 0) > 0 AND v_nb_attendus <> v_nb) THEN
+    RETURN pg_catalog.jsonb_build_object(
       'conflit', true,
-      'mission_conflit', v_conflit.intitule,
-      'message', 'Tu es déjà confirmé(e) sur « ' || v_conflit.intitule || ' » du '
-        || to_char(v_conflit.debut_le AT TIME ZONE 'Europe/Paris', 'DD/MM HH24hMI') || ' au '
-        || to_char(v_conflit.fin_le AT TIME ZONE 'Europe/Paris', 'DD/MM HH24hMI')
-        || ' — ce créneau chevauche cette mission.'
+      'code', 'PLANNING_DETAILLE_INDISPONIBLE',
+      'message', 'Le planning détaillé de cette mission doit être confirmé avant toute candidature.'
     );
   END IF;
 
-  SELECT m.intitule INTO v_adjacent
-  FROM missions m
-  WHERE m.soignant_assigne_id = p_soignant_id
-    AND m.statut IN ('ASSIGNEE', 'EN_COURS')
-    AND (
-      (m.fin_le <= v_mission.debut_le AND v_mission.debut_le - m.fin_le < interval '60 minutes')
-      OR (v_mission.fin_le <= m.debut_le AND m.debut_le - v_mission.fin_le < interval '60 minutes')
-    )
+  IF EXISTS (
+    SELECT 1
+    FROM public.missions m
+    WHERE m.soignant_assigne_id = p_soignant_id
+      AND m.id <> p_mission_id
+      AND m.statut IN ('ASSIGNEE', 'EN_COURS')
+      AND (
+        NOT EXISTS (
+          SELECT 1
+          FROM public.mission_creneaux mc
+          WHERE mc.mission_id = m.id
+            AND mc.type_creneau = 'PREVISIONNEL'
+            AND NOT mc.est_pause
+        )
+        OR EXISTS (
+          SELECT 1
+          FROM public.mission_creneaux mc
+          WHERE mc.mission_id = m.id
+            AND mc.type_creneau = 'PREVISIONNEL'
+            AND NOT mc.est_pause
+            AND mc.fin IS NULL
+        )
+        OR (
+          COALESCE(m.nb_creneaux, 0) > 0
+          AND m.nb_creneaux <> (
+            SELECT pg_catalog.count(*)::integer
+            FROM public.mission_creneaux mc
+            WHERE mc.mission_id = m.id
+              AND mc.type_creneau = 'PREVISIONNEL'
+              AND NOT mc.est_pause
+          )
+        )
+      )
+  ) THEN
+    RETURN pg_catalog.jsonb_build_object(
+      'conflit', true,
+      'code', 'PLANNING_EXISTANT_INDISPONIBLE',
+      'message', 'Le planning détaillé d''une mission déjà confirmée doit être vérifié avant cette candidature.'
+    );
+  END IF;
+
+  SELECT
+    m.id AS mission_id,
+    m.intitule,
+    existant.debut,
+    existant.fin
+  INTO v_conflit
+  FROM public.mission_creneaux cible
+  JOIN public.missions m
+    ON m.soignant_assigne_id = p_soignant_id
+   AND m.id <> p_mission_id
+   AND m.statut IN ('ASSIGNEE', 'EN_COURS')
+  JOIN public.mission_creneaux existant
+    ON existant.mission_id = m.id
+   AND existant.type_creneau = 'PREVISIONNEL'
+   AND NOT existant.est_pause
+   AND existant.fin IS NOT NULL
+  WHERE cible.mission_id = p_mission_id
+    AND cible.type_creneau = 'PREVISIONNEL'
+    AND NOT cible.est_pause
+    AND cible.fin IS NOT NULL
+    AND cible.debut < existant.fin
+    AND cible.fin > existant.debut
+  ORDER BY existant.debut
   LIMIT 1;
 
-  IF v_adjacent.intitule IS NOT NULL THEN
-    RETURN jsonb_build_object(
-      'conflit', false,
-      'warning', 'Attention : moins d''1 h de battement avec « ' || v_adjacent.intitule || ' ».'
+  IF FOUND THEN
+    RETURN pg_catalog.jsonb_build_object(
+      'conflit', true,
+      'mission_conflit_id', v_conflit.mission_id,
+      'mission_conflit', v_conflit.intitule,
+      'message', 'Tu es déjà confirmé(e) sur « ' || v_conflit.intitule ||
+        ' » le ' ||
+        pg_catalog.to_char(v_conflit.debut AT TIME ZONE 'Europe/Paris', 'DD/MM HH24hMI') ||
+        '–' ||
+        pg_catalog.to_char(v_conflit.fin AT TIME ZONE 'Europe/Paris', 'DD/MM HH24hMI') ||
+        '. Ce créneau chevauche la mission.'
     );
   END IF;
 
-  RETURN jsonb_build_object('conflit', false);
+  WITH cible AS (
+    SELECT mc.debut, mc.fin
+    FROM public.mission_creneaux mc
+    WHERE mc.mission_id = p_mission_id
+      AND mc.type_creneau = 'PREVISIONNEL'
+      AND NOT mc.est_pause
+      AND mc.fin IS NOT NULL
+  ), existants AS (
+    SELECT m.id AS mission_id, m.intitule, mc.debut, mc.fin
+    FROM public.missions m
+    JOIN public.mission_creneaux mc ON mc.mission_id = m.id
+    WHERE m.soignant_assigne_id = p_soignant_id
+      AND m.id <> p_mission_id
+      AND m.statut IN ('ASSIGNEE', 'EN_COURS', 'TERMINEE')
+      AND mc.type_creneau = CASE
+        WHEN m.statut = 'TERMINEE' AND EXISTS (
+          SELECT 1
+          FROM public.mission_creneaux effectif
+          WHERE effectif.mission_id = m.id
+            AND effectif.type_creneau = 'EFFECTIF'
+            AND NOT effectif.est_pause
+            AND effectif.fin IS NOT NULL
+        ) THEN 'EFFECTIF'
+        ELSE 'PREVISIONNEL'
+      END
+      AND NOT mc.est_pause
+      AND mc.fin IS NOT NULL
+  ), ecarts AS (
+    SELECT
+      e.mission_id,
+      e.intitule,
+      CASE
+        WHEN e.fin <= c.debut THEN
+          EXTRACT(epoch FROM (c.debut - e.fin)) / 3600.0
+        WHEN c.fin <= e.debut THEN
+          EXTRACT(epoch FROM (e.debut - c.fin)) / 3600.0
+        ELSE NULL
+      END AS heures
+    FROM cible c
+    CROSS JOIN existants e
+  )
+  SELECT mission_id, intitule, heures
+  INTO v_repos
+  FROM ecarts
+  WHERE heures >= 0 AND heures < 11
+  ORDER BY heures
+  LIMIT 1;
+
+  IF FOUND THEN
+    RETURN pg_catalog.jsonb_build_object(
+      'conflit', true,
+      'code', 'REPOS_11H',
+      'mission_conflit_id', v_repos.mission_id,
+      'mission_conflit', v_repos.intitule,
+      'heures_repos', pg_catalog.round(v_repos.heures::numeric, 1),
+      'message', 'Repos insuffisant avec « ' || v_repos.intitule ||
+        ' » : ' || pg_catalog.round(v_repos.heures::numeric, 1) ||
+        ' h au lieu de 11 h minimum.'
+    );
+  END IF;
+
+  RETURN pg_catalog.jsonb_build_object('conflit', false);
 END;
 $$;
 
@@ -21258,7 +22527,36 @@ ALTER FUNCTION "public"."fn_consulter_mon_iban"() OWNER TO "postgres";
 
 CREATE OR REPLACE FUNCTION "public"."fn_consulter_rib_soignant"("p_mission_id" "uuid") RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO 'pg_catalog', 'public'
+    SET "search_path" TO 'pg_catalog', 'public', 'auth'
+    AS $$
+DECLARE
+  v_etab_id uuid;
+BEGIN
+  SELECT etablissement_id INTO v_etab_id
+  FROM public.missions
+  WHERE id = p_mission_id;
+  IF v_etab_id IS NULL THEN
+    RETURN jsonb_build_object('error', 'Mission introuvable');
+  END IF;
+  IF NOT public.est_admin()
+     AND COALESCE(auth.role(), '') <> 'service_role'
+     AND (
+       v_etab_id IS DISTINCT FROM public.mon_etablissement_id()
+       OR public.fn_a_permission_etablissement('paiement', v_etab_id) IS NOT TRUE
+     ) THEN
+    RETURN jsonb_build_object('error', 'Accès refusé');
+  END IF;
+  RETURN public.fn_consulter_rib_soignant_internal_20260801(p_mission_id);
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_consulter_rib_soignant"("p_mission_id" "uuid") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."fn_consulter_rib_soignant_internal_20260801"("p_mission_id" "uuid") RETURNS "jsonb"
+    LANGUAGE "plpgsql"
+    SET "search_path" TO 'pg_catalog', 'public', 'auth'
     AS $$
 DECLARE
   v_partage public.partages_rib%ROWTYPE;
@@ -21327,7 +22625,7 @@ END;
 $$;
 
 
-ALTER FUNCTION "public"."fn_consulter_rib_soignant"("p_mission_id" "uuid") OWNER TO "postgres";
+ALTER FUNCTION "public"."fn_consulter_rib_soignant_internal_20260801"("p_mission_id" "uuid") OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."fn_contacter_support"() RETURNS "uuid"
@@ -22138,96 +23436,510 @@ $$;
 ALTER FUNCTION "public"."fn_creer_mission"("p_intitule" "text", "p_description" "text", "p_profession_requise" "public"."type_profession", "p_service" "text", "p_debut_le" timestamp with time zone, "p_fin_le" timestamp with time zone, "p_taux_horaire_base" numeric, "p_est_urgente" boolean, "p_niveau_urgence" integer, "p_mode_attribution" "text", "p_specialite_medicale_requise" "text", "p_accepte_non_specialises" boolean) OWNER TO "postgres";
 
 
-CREATE OR REPLACE FUNCTION "public"."fn_creer_mission_multi_jours"("p_intitule" "text", "p_description" "text" DEFAULT NULL::"text", "p_profession_requise" "public"."type_profession" DEFAULT NULL::"public"."type_profession", "p_service" "text" DEFAULT NULL::"text", "p_taux_horaire_base" numeric DEFAULT NULL::numeric, "p_est_urgente" boolean DEFAULT false, "p_niveau_urgence" integer DEFAULT 0, "p_mode_attribution" "text" DEFAULT 'PREMIER_ARRIVE'::"text", "p_specialite_medicale_requise" "text" DEFAULT NULL::"text", "p_accepte_non_specialises" boolean DEFAULT true, "p_creneaux" "jsonb" DEFAULT '[]'::"jsonb") RETURNS "jsonb"
-    LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO 'public'
+CREATE OR REPLACE FUNCTION "public"."fn_creer_mission_api_v1"("p_etablissement_id" "uuid", "p_intitule" "text", "p_profession_requise" "public"."type_profession", "p_service" "text", "p_taux_horaire_base" numeric, "p_creneaux" "jsonb", "p_type_contrat_recherche" "text", "p_mode_remuneration" "text", "p_retrocession_pct" numeric) RETURNS "jsonb"
+    LANGUAGE "plpgsql"
+    SET "search_path" TO ''
     AS $$
 DECLARE
-  v_etab_id uuid;
   v_blocage jsonb;
+  v_validation jsonb;
   v_mission_id uuid;
-  v_mode text;
-  v_nb int;
-  v_min timestamptz;
-  v_max timestamptz;
-  v_c jsonb;
-  v_ordre int := 0;
-  v_cd timestamptz;
-  v_cf timestamptz;
+  v_debut timestamptz;
+  v_fin timestamptz;
+  v_nb integer;
+  v_total numeric;
 BEGIN
-  v_etab_id := mon_etablissement_id();
-  IF v_etab_id IS NULL AND NOT est_admin() THEN
-    RETURN '{"error":"Acces refuse"}'::jsonb;
+  IF p_etablissement_id IS NULL OR NOT EXISTS (
+    SELECT 1
+    FROM public.etablissements e
+    WHERE e.id = p_etablissement_id
+      AND e.supprime_le IS NULL
+  ) THEN
+    RETURN pg_catalog.jsonb_build_object(
+      'success', false,
+      'error', 'Etablissement introuvable ou inactif.'
+    );
   END IF;
 
-  v_blocage := fn_blocage_publication_etab(v_etab_id);
+  v_blocage := public.fn_blocage_publication_etab(p_etablissement_id);
   IF v_blocage IS NOT NULL THEN RETURN v_blocage; END IF;
 
-  IF p_intitule IS NULL OR p_profession_requise IS NULL OR p_taux_horaire_base IS NULL THEN
-    RETURN '{"error":"Champs obligatoires manquants."}'::jsonb;
+  IF p_intitule IS NULL OR pg_catalog.length(pg_catalog.btrim(p_intitule)) < 3 THEN
+    RETURN pg_catalog.jsonb_build_object(
+      'success', false,
+      'error', 'L''intitule doit contenir au moins 3 caracteres.'
+    );
+  END IF;
+  IF p_profession_requise IS NULL THEN
+    RETURN pg_catalog.jsonb_build_object(
+      'success', false,
+      'error', 'La profession requise est obligatoire.'
+    );
+  END IF;
+  IF p_taux_horaire_base IS NULL OR p_taux_horaire_base <= 0 OR p_taux_horaire_base > 1000 THEN
+    RETURN pg_catalog.jsonb_build_object(
+      'success', false,
+      'error', 'Le taux horaire doit etre strictement positif et au plus egal a 1000 euros.'
+    );
+  END IF;
+  IF p_type_contrat_recherche IS NULL
+     OR p_type_contrat_recherche NOT IN ('TOUS', 'SALARIE', 'LIBERAL') THEN
+    RETURN pg_catalog.jsonb_build_object(
+      'success', false,
+      'error', 'Type de contrat recherche invalide.'
+    );
+  END IF;
+  IF p_mode_remuneration IS NULL
+     OR p_mode_remuneration NOT IN ('TAUX_HORAIRE', 'RETROCESSION') THEN
+    RETURN pg_catalog.jsonb_build_object(
+      'success', false,
+      'error', 'Mode de remuneration invalide.'
+    );
+  END IF;
+  IF p_mode_remuneration = 'RETROCESSION' AND (
+    p_type_contrat_recherche <> 'LIBERAL'
+    OR p_retrocession_pct IS NULL
+    OR p_retrocession_pct <= 0
+    OR p_retrocession_pct > 100
+  ) THEN
+    RETURN pg_catalog.jsonb_build_object(
+      'success', false,
+      'error', 'La retrocession exige un contrat liberal et un pourcentage entre 1 et 100.'
+    );
   END IF;
 
-  v_nb := COALESCE(jsonb_array_length(p_creneaux), 0);
-  IF v_nb = 0 THEN RETURN '{"error":"Aucun jour fourni."}'::jsonb; END IF;
-  IF v_nb > 366 THEN RETURN '{"error":"Maximum 366 jours par mission."}'::jsonb; END IF;
+  v_validation := public.fn_valider_creneaux_mission_json(
+    p_creneaux,
+    p_type_contrat_recherche <> 'LIBERAL'
+  );
+  IF COALESCE((v_validation->>'success')::boolean, false) IS NOT TRUE THEN
+    RETURN v_validation;
+  END IF;
 
-  -- Validation de chaque jour (fin > début) + enveloppe globale
-  FOR v_c IN SELECT * FROM jsonb_array_elements(p_creneaux) LOOP
-    v_cd := (v_c->>'debut')::timestamptz;
-    v_cf := (v_c->>'fin')::timestamptz;
-    IF v_cd IS NULL OR v_cf IS NULL OR v_cf <= v_cd THEN
-      RETURN '{"error":"Chaque jour doit avoir une fin après le début."}'::jsonb;
-    END IF;
-  END LOOP;
+  v_debut := (v_validation->>'debut_le')::timestamptz;
+  v_fin := (v_validation->>'fin_le')::timestamptz;
+  v_nb := (v_validation->>'nb_creneaux')::integer;
+  v_total := (v_validation->>'total_heures')::numeric;
 
-  SELECT MIN((c->>'debut')::timestamptz), MAX((c->>'fin')::timestamptz)
-  INTO v_min, v_max
-  FROM jsonb_array_elements(p_creneaux) c;
+  IF v_debut < pg_catalog.now() THEN
+    RETURN pg_catalog.jsonb_build_object(
+      'success', false,
+      'error', 'La mission ne peut pas commencer dans le passe.'
+    );
+  END IF;
 
-  IF v_min < NOW() AND NOT est_admin() THEN
-    RETURN '{"error":"La mission ne peut pas commencer dans le passe."}'::jsonb;
+  PERFORM pg_catalog.set_config('jolene.creer_mission_context', 'true', true);
+  PERFORM pg_catalog.set_config(
+    'jolene.planning_exact_managed', 'true', true
+  );
+  INSERT INTO public.missions (
+    etablissement_id,
+    intitule,
+    profession_requise,
+    service,
+    debut_le,
+    fin_le,
+    duree_heures,
+    nb_creneaux,
+    taux_horaire_base,
+    mode_attribution,
+    type_contrat_recherche,
+    mode_remuneration,
+    retrocession_pct
+  ) VALUES (
+    p_etablissement_id,
+    pg_catalog.btrim(p_intitule),
+    p_profession_requise,
+    NULLIF(pg_catalog.btrim(p_service), ''),
+    v_debut,
+    v_fin,
+    v_total,
+    v_nb,
+    p_taux_horaire_base,
+    'PREMIER_ARRIVE',
+    p_type_contrat_recherche,
+    p_mode_remuneration,
+    CASE WHEN p_mode_remuneration = 'RETROCESSION'
+      THEN p_retrocession_pct
+      ELSE NULL
+    END
+  )
+  RETURNING id INTO v_mission_id;
+
+  PERFORM pg_catalog.set_config('jolene.sync_in_progress', 'true', true);
+  INSERT INTO public.mission_creneaux (
+    mission_id, debut, fin, est_pause, ordre, type_creneau
+  )
+  SELECT
+    v_mission_id,
+    (element->>'debut')::timestamptz,
+    (element->>'fin')::timestamptz,
+    false,
+    pg_catalog.row_number() OVER (
+      ORDER BY (element->>'debut')::timestamptz,
+               (element->>'fin')::timestamptz,
+               ordinality
+    )::integer,
+    'PREVISIONNEL'
+  FROM pg_catalog.jsonb_array_elements(p_creneaux)
+    WITH ORDINALITY AS source(element, ordinality)
+  ORDER BY (element->>'debut')::timestamptz,
+           (element->>'fin')::timestamptz,
+           ordinality;
+  PERFORM pg_catalog.set_config('jolene.sync_in_progress', 'false', true);
+  PERFORM pg_catalog.set_config(
+    'jolene.planning_exact_managed', 'false', true
+  );
+
+  UPDATE public.missions
+  SET debut_le = v_debut,
+      fin_le = v_fin,
+      duree_heures = v_total,
+      nb_creneaux = v_nb,
+      modifie_le = pg_catalog.now()
+  WHERE id = v_mission_id;
+
+  PERFORM public.fn_ecrire_audit_safe(
+    NULL,
+    'API_ETABLISSEMENT',
+    'MISSION_CREATION_API',
+    'mission',
+    v_mission_id,
+    NULL,
+    pg_catalog.jsonb_build_object(
+      'etablissement_id', p_etablissement_id,
+      'nb_creneaux', v_nb,
+      'planning_source', 'API_CRENEAUX_DATES'
+    ),
+    NULL,
+    NULL
+  );
+
+  RETURN pg_catalog.jsonb_build_object(
+    'success', true,
+    'mission_id', v_mission_id,
+    'nb_creneaux', v_nb,
+    'total_heures', v_total
+  );
+EXCEPTION
+  WHEN OTHERS THEN
+    RAISE LOG '[fn_creer_mission_api_v1] SQLSTATE=% SQLERRM=%',
+      SQLSTATE, SQLERRM;
+    RETURN pg_catalog.jsonb_build_object(
+      'success', false,
+      'error', 'Creation temporairement indisponible.',
+      'code', 'CREATION_MISSION_INDISPONIBLE'
+    );
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_creer_mission_api_v1"("p_etablissement_id" "uuid", "p_intitule" "text", "p_profession_requise" "public"."type_profession", "p_service" "text", "p_taux_horaire_base" numeric, "p_creneaux" "jsonb", "p_type_contrat_recherche" "text", "p_mode_remuneration" "text", "p_retrocession_pct" numeric) OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "public"."fn_creer_mission_api_v1"("p_etablissement_id" "uuid", "p_intitule" "text", "p_profession_requise" "public"."type_profession", "p_service" "text", "p_taux_horaire_base" numeric, "p_creneaux" "jsonb", "p_type_contrat_recherche" "text", "p_mode_remuneration" "text", "p_retrocession_pct" numeric) IS 'Creation atomique mission + creneaux exacts depuis une cle API etablissement; service_role uniquement.';
+
+
+
+CREATE OR REPLACE FUNCTION "public"."fn_creer_mission_multi_jours"("p_intitule" "text", "p_description" "text" DEFAULT NULL::"text", "p_profession_requise" "public"."type_profession" DEFAULT NULL::"public"."type_profession", "p_service" "text" DEFAULT NULL::"text", "p_taux_horaire_base" numeric DEFAULT NULL::numeric, "p_est_urgente" boolean DEFAULT false, "p_niveau_urgence" integer DEFAULT 0, "p_mode_attribution" "text" DEFAULT 'PREMIER_ARRIVE'::"text", "p_specialite_medicale_requise" "text" DEFAULT NULL::"text", "p_accepte_non_specialises" boolean DEFAULT true, "p_creneaux" "jsonb" DEFAULT '[]'::"jsonb") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+DECLARE
+  v_etablissement_id uuid;
+  v_blocage jsonb;
+  v_validation jsonb;
+  v_mission_id uuid;
+  v_debut timestamptz;
+  v_fin timestamptz;
+  v_nb integer;
+  v_total numeric;
+  v_mode text;
+  v_type_contrat_recherche text;
+BEGIN
+  v_etablissement_id := public.mon_etablissement_id();
+  IF v_etablissement_id IS NULL THEN
+    RETURN pg_catalog.jsonb_build_object('success', false, 'error', 'Accès refusé.');
+  END IF;
+
+  v_blocage := public.fn_blocage_publication_etab(v_etablissement_id);
+  IF v_blocage IS NOT NULL THEN RETURN v_blocage; END IF;
+
+  IF p_intitule IS NULL OR pg_catalog.length(pg_catalog.btrim(p_intitule)) < 3 THEN
+    RETURN pg_catalog.jsonb_build_object(
+      'success', false,
+      'error', 'L''intitulé doit contenir au moins 3 caractères.'
+    );
+  END IF;
+  IF p_profession_requise IS NULL THEN
+    RETURN pg_catalog.jsonb_build_object('success', false, 'error', 'La profession requise est obligatoire.');
+  END IF;
+  IF p_taux_horaire_base IS NULL OR p_taux_horaire_base <= 0 THEN
+    RETURN pg_catalog.jsonb_build_object('success', false, 'error', 'Le taux horaire doit être supérieur à zéro.');
   END IF;
 
   v_mode := COALESCE(p_mode_attribution, 'PREMIER_ARRIVE');
-  IF v_mode NOT IN ('PREMIER_ARRIVE','CANDIDATURE') THEN v_mode := 'PREMIER_ARRIVE'; END IF;
+  IF v_mode NOT IN ('PREMIER_ARRIVE', 'CANDIDATURE') THEN
+    RETURN pg_catalog.jsonb_build_object('success', false, 'error', 'Mode d''attribution invalide.');
+  END IF;
 
-  PERFORM set_config('jolene.creer_mission_context','true', true);
+  -- L'adaptateur historique transporte encore le régime dans le tag de
+  -- description. Le régime ainsi résolu est écrit sur la mission dans la même
+  -- transaction : un appel direct ne peut donc pas contourner le plafond tout
+  -- en créant finalement une mission salariée.
+  v_type_contrat_recherche := CASE
+    WHEN COALESCE(p_description, '') ~ '\[CONTRAT:LIBERAL\]' THEN 'LIBERAL'
+    WHEN COALESCE(p_description, '') ~ '\[CONTRAT:SALARIE\]' THEN 'SALARIE'
+    ELSE 'TOUS'
+  END;
 
-  -- (a) UNE mission, span = enveloppe (1er jour → dernier jour)
-  INSERT INTO missions (
-    etablissement_id, intitule, description, profession_requise, service,
-    debut_le, fin_le, taux_horaire_base, est_urgente, niveau_urgence, mode_attribution,
-    specialite_medicale_requise, accepte_non_specialises
+  v_validation := public.fn_valider_creneaux_mission_json(
+    p_creneaux,
+    v_type_contrat_recherche <> 'LIBERAL'
+  );
+  IF COALESCE((v_validation->>'success')::boolean, false) IS NOT TRUE THEN
+    RETURN v_validation;
+  END IF;
+
+  v_debut := (v_validation->>'debut_le')::timestamptz;
+  v_fin := (v_validation->>'fin_le')::timestamptz;
+  v_nb := (v_validation->>'nb_creneaux')::integer;
+  v_total := (v_validation->>'total_heures')::numeric;
+
+  IF v_debut < pg_catalog.now() AND NOT public.est_admin() THEN
+    RETURN pg_catalog.jsonb_build_object(
+      'success', false,
+      'error', 'La mission ne peut pas commencer dans le passé.'
+    );
+  END IF;
+
+  PERFORM pg_catalog.set_config('jolene.creer_mission_context', 'true', true);
+  PERFORM pg_catalog.set_config(
+    'jolene.planning_exact_managed', 'true', true
+  );
+  INSERT INTO public.missions (
+    etablissement_id,
+    intitule,
+    description,
+    profession_requise,
+    service,
+    debut_le,
+    fin_le,
+    duree_heures,
+    nb_creneaux,
+    taux_horaire_base,
+    est_urgente,
+    niveau_urgence,
+    mode_attribution,
+    type_contrat_recherche,
+    specialite_medicale_requise,
+    accepte_non_specialises
   ) VALUES (
-    v_etab_id, p_intitule, p_description, p_profession_requise, p_service,
-    v_min, v_max, p_taux_horaire_base, p_est_urgente,
-    CASE WHEN p_est_urgente THEN p_niveau_urgence ELSE 0 END, v_mode,
-    p_specialite_medicale_requise, p_accepte_non_specialises
-  ) RETURNING id INTO v_mission_id;
+    v_etablissement_id,
+    pg_catalog.btrim(p_intitule),
+    p_description,
+    p_profession_requise,
+    NULLIF(pg_catalog.btrim(p_service), ''),
+    v_debut,
+    v_fin,
+    v_total,
+    v_nb,
+    p_taux_horaire_base,
+    COALESCE(p_est_urgente, false),
+    CASE WHEN COALESCE(p_est_urgente, false)
+      THEN GREATEST(1, LEAST(COALESCE(p_niveau_urgence, 1), 3))
+      ELSE 0
+    END,
+    v_mode,
+    v_type_contrat_recherche,
+    CASE WHEN p_profession_requise = 'MEDECIN'
+      THEN NULLIF(pg_catalog.btrim(p_specialite_medicale_requise), '')
+      ELSE NULL
+    END,
+    CASE WHEN p_profession_requise IN ('IBODE', 'IADE')
+      THEN COALESCE(p_accepte_non_specialises, true)
+      ELSE true
+    END
+  )
+  RETURNING id INTO v_mission_id;
 
-  -- (b) N créneaux PREVISIONNEL (sync suspendue → un seul re-sync ensuite, perf)
-  PERFORM set_config('jolene.sync_in_progress','true', true);
-  v_ordre := 0;
-  FOR v_c IN SELECT * FROM jsonb_array_elements(p_creneaux) LOOP
-    v_ordre := v_ordre + 1;
-    INSERT INTO mission_creneaux (mission_id, debut, fin, est_pause, ordre, type_creneau)
-    VALUES (v_mission_id, (v_c->>'debut')::timestamptz, (v_c->>'fin')::timestamptz, false, v_ordre, 'PREVISIONNEL');
-  END LOOP;
-  PERFORM set_config('jolene.sync_in_progress','false', true);
+  PERFORM pg_catalog.set_config('jolene.sync_in_progress', 'true', true);
+  INSERT INTO public.mission_creneaux (
+    mission_id, debut, fin, est_pause, ordre, type_creneau
+  )
+  SELECT
+    v_mission_id,
+    (element->>'debut')::timestamptz,
+    (element->>'fin')::timestamptz,
+    false,
+    pg_catalog.row_number() OVER (
+      ORDER BY (element->>'debut')::timestamptz,
+               (element->>'fin')::timestamptz,
+               ordinality
+    )::integer,
+    'PREVISIONNEL'
+  FROM pg_catalog.jsonb_array_elements(p_creneaux)
+    WITH ORDINALITY AS source(element, ordinality)
+  ORDER BY (element->>'debut')::timestamptz,
+           (element->>'fin')::timestamptz,
+           ordinality;
+  PERFORM pg_catalog.set_config('jolene.sync_in_progress', 'false', true);
+  PERFORM pg_catalog.set_config(
+    'jolene.planning_exact_managed', 'false', true
+  );
 
-  -- (c) Re-sync unique : enveloppe + nb_creneaux ; le trigger financier recalcule
-  --     duree_heures depuis les créneaux (somme des jours).
-  UPDATE missions SET debut_le = v_min, fin_le = v_max, nb_creneaux = v_nb
+  UPDATE public.missions
+  SET debut_le = v_debut,
+      fin_le = v_fin,
+      duree_heures = v_total,
+      nb_creneaux = v_nb,
+      modifie_le = pg_catalog.now()
   WHERE id = v_mission_id;
 
-  RETURN jsonb_build_object('success', true, 'mission_id', v_mission_id, 'nb_creneaux', v_nb);
-EXCEPTION WHEN OTHERS THEN
-  RETURN jsonb_build_object('success', false, 'error', SQLERRM);
+  PERFORM public.fn_ecrire_audit_safe(
+    (SELECT auth.uid()),
+    CASE WHEN public.est_admin() THEN 'ADMIN' ELSE 'ADMIN_ETABLISSEMENT' END,
+    'MISSION_CREATION',
+    'mission',
+    v_mission_id,
+    NULL,
+    pg_catalog.jsonb_build_object(
+      'nb_creneaux', v_nb,
+      'debut_le', v_debut,
+      'fin_le', v_fin,
+      'total_heures', v_total,
+      'planning_source', 'CRENEAUX_DATES'
+    ),
+    NULL,
+    NULL
+  );
+
+  RETURN pg_catalog.jsonb_build_object(
+    'success', true,
+    'mission_id', v_mission_id,
+    'nb_creneaux', v_nb,
+    'total_heures', v_total
+  );
+EXCEPTION
+  WHEN OTHERS THEN
+    RAISE LOG '[fn_creer_mission_multi_jours] SQLSTATE=% SQLERRM=%',
+      SQLSTATE, SQLERRM;
+    RETURN pg_catalog.jsonb_build_object(
+      'success', false,
+      'error', 'La création de la mission est temporairement indisponible.',
+      'code', 'CREATION_MISSION_INDISPONIBLE'
+    );
 END;
 $$;
 
 
 ALTER FUNCTION "public"."fn_creer_mission_multi_jours"("p_intitule" "text", "p_description" "text", "p_profession_requise" "public"."type_profession", "p_service" "text", "p_taux_horaire_base" numeric, "p_est_urgente" boolean, "p_niveau_urgence" integer, "p_mode_attribution" "text", "p_specialite_medicale_requise" "text", "p_accepte_non_specialises" boolean, "p_creneaux" "jsonb") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."fn_creer_mission_multi_jours_v2"("p_intitule" "text", "p_description" "text", "p_profession_requise" "public"."type_profession", "p_service" "text", "p_taux_horaire_base" numeric, "p_est_urgente" boolean, "p_niveau_urgence" integer, "p_mode_attribution" "text", "p_specialite_medicale_requise" "text", "p_accepte_non_specialises" boolean, "p_creneaux" "jsonb", "p_type_contrat_recherche" "text", "p_mode_remuneration" "text", "p_retrocession_pct" numeric) RETURNS "jsonb"
+    LANGUAGE "plpgsql"
+    SET "search_path" TO ''
+    AS $$
+DECLARE
+  v_creation jsonb;
+  v_regime jsonb;
+  v_mission_id uuid;
+BEGIN
+  IF p_type_contrat_recherche IS NULL
+     OR p_type_contrat_recherche NOT IN ('TOUS', 'SALARIE', 'LIBERAL') THEN
+    RETURN pg_catalog.jsonb_build_object(
+      'success', false,
+      'error', 'Type de contrat recherche invalide.'
+    );
+  END IF;
+  IF p_mode_remuneration IS NULL
+     OR p_mode_remuneration NOT IN ('TAUX_HORAIRE', 'RETROCESSION') THEN
+    RETURN pg_catalog.jsonb_build_object(
+      'success', false,
+      'error', 'Mode de remuneration invalide.'
+    );
+  END IF;
+  IF p_mode_remuneration = 'RETROCESSION' AND (
+    p_type_contrat_recherche <> 'LIBERAL'
+    OR p_retrocession_pct IS NULL
+    OR p_retrocession_pct <= 0
+    OR p_retrocession_pct > 100
+  ) THEN
+    RETURN pg_catalog.jsonb_build_object(
+      'success', false,
+      'error', 'La retrocession exige un contrat liberal et un pourcentage entre 1 et 100.'
+    );
+  END IF;
+
+  v_creation := public.fn_creer_mission_multi_jours(
+    p_intitule => p_intitule,
+    p_description => pg_catalog.btrim(
+      pg_catalog.regexp_replace(
+        COALESCE(p_description, ''),
+        '\[CONTRAT:[^]]+\]',
+        '',
+        'g'
+      )
+    ) || ' [CONTRAT:' || p_type_contrat_recherche || ']',
+    p_profession_requise => p_profession_requise,
+    p_service => p_service,
+    p_taux_horaire_base => p_taux_horaire_base,
+    p_est_urgente => p_est_urgente,
+    p_niveau_urgence => p_niveau_urgence,
+    p_mode_attribution => p_mode_attribution,
+    p_specialite_medicale_requise => p_specialite_medicale_requise,
+    p_accepte_non_specialises => p_accepte_non_specialises,
+    p_creneaux => p_creneaux
+  );
+  IF COALESCE((v_creation->>'success')::boolean, false) IS NOT TRUE THEN
+    RETURN v_creation;
+  END IF;
+
+  v_mission_id := (v_creation->>'mission_id')::uuid;
+  IF p_mode_remuneration = 'RETROCESSION' THEN
+    v_regime := public.fn_definir_retrocession_mission(
+      v_mission_id,
+      p_retrocession_pct
+    );
+    IF COALESCE((v_regime->>'success')::boolean, false) IS NOT TRUE THEN
+      RAISE EXCEPTION 'Retrocession non appliquee: %',
+        COALESCE(v_regime->>'error', 'erreur inconnue')
+        USING ERRCODE = 'P0001';
+    END IF;
+  ELSIF p_type_contrat_recherche <> 'TOUS' THEN
+    v_regime := public.fn_modifier_type_contrat_mission(
+      v_mission_id,
+      p_type_contrat_recherche
+    );
+    IF COALESCE((v_regime->>'ok')::boolean, false) IS NOT TRUE THEN
+      RAISE EXCEPTION 'Type de contrat non applique: %',
+        COALESCE(v_regime->>'error', 'erreur inconnue')
+        USING ERRCODE = 'P0001';
+    END IF;
+  END IF;
+
+  RETURN v_creation || pg_catalog.jsonb_build_object(
+    'type_contrat_recherche', p_type_contrat_recherche,
+    'mode_remuneration', p_mode_remuneration,
+    'retrocession_pct', CASE
+      WHEN p_mode_remuneration = 'RETROCESSION' THEN p_retrocession_pct
+      ELSE NULL
+    END
+  );
+EXCEPTION
+  WHEN OTHERS THEN
+    RAISE LOG '[fn_creer_mission_multi_jours_v2] SQLSTATE=% SQLERRM=%',
+      SQLSTATE, SQLERRM;
+    RETURN pg_catalog.jsonb_build_object(
+      'success', false,
+      'error', 'La creation de la mission est temporairement indisponible.',
+      'code', 'CREATION_MISSION_INDISPONIBLE'
+    );
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_creer_mission_multi_jours_v2"("p_intitule" "text", "p_description" "text", "p_profession_requise" "public"."type_profession", "p_service" "text", "p_taux_horaire_base" numeric, "p_est_urgente" boolean, "p_niveau_urgence" integer, "p_mode_attribution" "text", "p_specialite_medicale_requise" "text", "p_accepte_non_specialises" boolean, "p_creneaux" "jsonb", "p_type_contrat_recherche" "text", "p_mode_remuneration" "text", "p_retrocession_pct" numeric) OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."fn_creer_notation_mission"("p_mission_id" "uuid", "p_sens" "text", "p_critere_1" integer, "p_critere_2" integer, "p_critere_3" integer, "p_critere_4" integer, "p_commentaire" "text" DEFAULT NULL::"text") RETURNS "jsonb"
@@ -24191,7 +25903,45 @@ ALTER FUNCTION "public"."fn_declarer_paiement_facture_soignant"("p_facture_honor
 
 CREATE OR REPLACE FUNCTION "public"."fn_declarer_paiement_soignant"("p_mission_id" "uuid", "p_montant" numeric, "p_methode" "text" DEFAULT NULL::"text", "p_reference" "text" DEFAULT NULL::"text", "p_date_paiement" "date" DEFAULT CURRENT_DATE, "p_attestation_sur_l_honneur" boolean DEFAULT false) RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO 'public'
+    SET "search_path" TO 'pg_catalog', 'public', 'auth'
+    AS $$
+DECLARE
+  v_type_contrat text;
+BEGIN
+  SELECT type_contrat_applique INTO v_type_contrat
+  FROM public.missions
+  WHERE id = p_mission_id;
+
+  IF v_type_contrat IS NULL THEN
+    RETURN jsonb_build_object('error', 'MISSION_INTROUVABLE_OU_CONTRAT_NON_FIGE');
+  END IF;
+
+  IF v_type_contrat = 'SALARIE' THEN
+    RETURN jsonb_build_object(
+      'error', 'MONTANT_TOTAL_DU_REQUIS',
+      'message', 'Pour un salarié, indiquez séparément le net total dû selon le bulletin officiel et le montant réellement versé.'
+    );
+  END IF;
+
+  RETURN public.fn_declarer_paiement_soignant_v2(
+    p_mission_id,
+    p_montant,
+    p_montant,
+    p_methode,
+    p_reference,
+    p_date_paiement,
+    p_attestation_sur_l_honneur
+  );
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_declarer_paiement_soignant"("p_mission_id" "uuid", "p_montant" numeric, "p_methode" "text", "p_reference" "text", "p_date_paiement" "date", "p_attestation_sur_l_honneur" boolean) OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."fn_declarer_paiement_soignant_internal_20260801"("p_mission_id" "uuid", "p_montant" numeric, "p_methode" "text" DEFAULT NULL::"text", "p_reference" "text" DEFAULT NULL::"text", "p_date_paiement" "date" DEFAULT CURRENT_DATE, "p_attestation_sur_l_honneur" boolean DEFAULT false) RETURNS "jsonb"
+    LANGUAGE "plpgsql"
+    SET "search_path" TO 'pg_catalog', 'public', 'auth'
     AS $$
 DECLARE
   v_mission RECORD;
@@ -24367,33 +26117,178 @@ END;
 $$;
 
 
-ALTER FUNCTION "public"."fn_declarer_paiement_soignant"("p_mission_id" "uuid", "p_montant" numeric, "p_methode" "text", "p_reference" "text", "p_date_paiement" "date", "p_attestation_sur_l_honneur" boolean) OWNER TO "postgres";
+ALTER FUNCTION "public"."fn_declarer_paiement_soignant_internal_20260801"("p_mission_id" "uuid", "p_montant" numeric, "p_methode" "text", "p_reference" "text", "p_date_paiement" "date", "p_attestation_sur_l_honneur" boolean) OWNER TO "postgres";
 
 
-COMMENT ON FUNCTION "public"."fn_declarer_paiement_soignant"("p_mission_id" "uuid", "p_montant" numeric, "p_methode" "text", "p_reference" "text", "p_date_paiement" "date", "p_attestation_sur_l_honneur" boolean) IS 'Déclaration paiement soignant par l''étab (flow SALARIE + NOTE_HONORAIRES hors Connect). CP-C-1 : attestation sur l''honneur obligatoire + audit RGPD + enum méthode strict.';
+COMMENT ON FUNCTION "public"."fn_declarer_paiement_soignant_internal_20260801"("p_mission_id" "uuid", "p_montant" numeric, "p_methode" "text", "p_reference" "text", "p_date_paiement" "date", "p_attestation_sur_l_honneur" boolean) IS 'Déclaration paiement soignant par l''étab (flow SALARIE + NOTE_HONORAIRES hors Connect). CP-C-1 : attestation sur l''honneur obligatoire + audit RGPD + enum méthode strict.';
 
+
+
+CREATE OR REPLACE FUNCTION "public"."fn_declarer_paiement_soignant_v2"("p_mission_id" "uuid", "p_montant_verse" numeric, "p_montant_total_du" numeric, "p_methode" "text" DEFAULT NULL::"text", "p_reference" "text" DEFAULT NULL::"text", "p_date_paiement" "date" DEFAULT CURRENT_DATE, "p_attestation_sur_l_honneur" boolean DEFAULT false) RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'pg_catalog', 'public', 'auth'
+    AS $$
+DECLARE
+  v_mission public.missions%ROWTYPE;
+  v_result jsonb;
+  v_paiement_id uuid;
+  v_plafond_brut numeric;
+  v_source text;
+  v_solde numeric;
+BEGIN
+  SELECT * INTO v_mission FROM public.missions WHERE id = p_mission_id;
+  IF v_mission.id IS NULL THEN
+    RETURN jsonb_build_object('error', 'MISSION_INTROUVABLE', 'message', 'Mission introuvable.');
+  END IF;
+
+  IF NOT public.est_admin()
+     AND COALESCE(auth.role(), '') <> 'service_role'
+     AND (
+       v_mission.etablissement_id IS DISTINCT FROM public.mon_etablissement_id()
+       OR public.fn_a_permission_etablissement('paiement', v_mission.etablissement_id) IS NOT TRUE
+     )
+  THEN
+    RETURN jsonb_build_object('error', 'ACCES_REFUSE', 'message', 'Accès refusé.');
+  END IF;
+
+  IF p_montant_verse IS NULL OR p_montant_verse <= 0
+     OR p_montant_total_du IS NULL OR p_montant_total_du <= 0
+  THEN
+    RETURN jsonb_build_object(
+      'error', 'MONTANTS_REQUIS',
+      'message', 'Renseignez le total net dû et le montant réellement versé.'
+    );
+  END IF;
+
+  IF round(p_montant_verse, 2) > round(p_montant_total_du, 2) THEN
+    RETURN jsonb_build_object(
+      'error', 'MONTANT_VERSE_SUPERIEUR_AU_DU',
+      'message', 'Le montant versé ne peut pas dépasser le total net dû.'
+    );
+  END IF;
+
+  IF round(p_montant_verse, 2) < round(p_montant_total_du, 2) THEN
+    RETURN jsonb_build_object(
+      'error', 'MONTANT_INCOMPLET',
+      'message', 'Le montant versé doit correspondre exactement au total net dû. Les paiements partiels ne sont pas acceptés.',
+      'montant_verse', round(p_montant_verse, 2),
+      'montant_total_du', round(p_montant_total_du, 2),
+      'solde_manquant', round(p_montant_total_du - p_montant_verse, 2)
+    );
+  END IF;
+
+  IF v_mission.type_contrat_applique = 'SALARIE' THEN
+    v_plafond_brut := COALESCE(v_mission.total_brut, 0)
+      + COALESCE(v_mission.montant_ifm, 0)
+      + COALESCE(v_mission.montant_icp, 0)
+      + COALESCE(v_mission.montant_majoration_nuit, 0)
+      + COALESCE(v_mission.montant_majoration_dimanche, 0)
+      + COALESCE(v_mission.montant_majoration_ferie, 0);
+    IF v_plafond_brut <= 0 THEN
+      RETURN jsonb_build_object(
+        'error', 'BRUT_SALARIE_INDISPONIBLE',
+        'message', 'La rémunération brute de référence est indisponible.'
+      );
+    END IF;
+    IF round(p_montant_total_du, 2) > round(v_plafond_brut, 2) THEN
+      RETURN jsonb_build_object(
+        'error', 'MONTANT_NET_SALARIE_SUPERIEUR_AU_BRUT',
+        'message', 'Le total net dû ne peut pas dépasser le brut de référence (' || round(v_plafond_brut, 2) || ' €).',
+        'montant_maximum', round(v_plafond_brut, 2)
+      );
+    END IF;
+    v_source := 'BULLETIN_OFFICIEL_ETABLISSEMENT';
+  ELSE
+    v_source := 'FACTURE_HONORAIRES';
+  END IF;
+
+  v_result := public.fn_declarer_paiement_soignant_internal_20260801(
+    p_mission_id,
+    round(p_montant_verse, 2),
+    p_methode,
+    p_reference,
+    p_date_paiement,
+    p_attestation_sur_l_honneur
+  );
+  IF v_result ? 'error' THEN
+    RETURN v_result;
+  END IF;
+
+  v_paiement_id := (v_result->>'paiement_id')::uuid;
+  v_solde := greatest(round(p_montant_total_du - p_montant_verse, 2), 0);
+
+  UPDATE public.paiements_soignant
+  SET montant_du_reference = round(p_montant_total_du, 2),
+      solde_restant = v_solde,
+      est_partiel = v_solde > 0,
+      source_montant_du = v_source,
+      modifie_le = now()
+  WHERE id = v_paiement_id;
+
+  RETURN v_result || jsonb_build_object(
+    'montant_verse', round(p_montant_verse, 2),
+    'montant_total_du', round(p_montant_total_du, 2),
+    'solde_restant', v_solde,
+    'est_partiel', v_solde > 0,
+    'source_montant_du', v_source
+  );
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_declarer_paiement_soignant_v2"("p_mission_id" "uuid", "p_montant_verse" numeric, "p_montant_total_du" numeric, "p_methode" "text", "p_reference" "text", "p_date_paiement" "date", "p_attestation_sur_l_honneur" boolean) OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."fn_declarer_virement"("p_facture_id" "uuid", "p_reference" "text") RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO 'public'
+    SET "search_path" TO 'pg_catalog', 'public', 'auth'
     AS $$
-DECLARE v_facture RECORD;
+DECLARE
+  v_facture public.factures%ROWTYPE;
+  v_mode_commission text;
 BEGIN
-    SELECT id, statut, etablissement_id INTO v_facture FROM factures WHERE id = p_facture_id;
-    IF NOT FOUND THEN RETURN jsonb_build_object('error', 'Facture introuvable'); END IF;
-    IF v_facture.etablissement_id != mon_etablissement_id() AND NOT est_admin() THEN
-        RETURN jsonb_build_object('error', 'Non autorisé');
-    END IF;
-    IF v_facture.statut NOT IN ('EMISE', 'EN_RETARD') THEN
-        RETURN jsonb_build_object('error', 'Statut incorrect : ' || v_facture.statut);
-    END IF;
-    IF p_reference IS NULL OR LENGTH(TRIM(p_reference)) < 3 THEN
-        RETURN jsonb_build_object('error', 'Référence de virement requise.');
-    END IF;
-    UPDATE factures SET virement_reference = TRIM(p_reference), mode_paiement = 'VIREMENT',
-        statut = 'VIREMENT_DECLARE', modifie_le = NOW() WHERE id = p_facture_id;
-    RETURN jsonb_build_object('success', true);
+  SELECT * INTO v_facture
+  FROM public.factures
+  WHERE id = p_facture_id
+  FOR UPDATE;
+  IF v_facture.id IS NULL THEN
+    RETURN jsonb_build_object('error', 'Facture introuvable');
+  END IF;
+  IF NOT public.est_admin()
+     AND COALESCE(auth.role(), '') <> 'service_role'
+     AND (
+       v_facture.etablissement_id IS DISTINCT FROM public.mon_etablissement_id()
+       OR public.fn_a_permission_etablissement('paiement', v_facture.etablissement_id) IS NOT TRUE
+     ) THEN
+    RETURN jsonb_build_object('error', 'Non autorisé');
+  END IF;
+
+  SELECT mode_paiement_commission INTO v_mode_commission
+  FROM public.etablissements
+  WHERE id = v_facture.etablissement_id;
+  IF v_facture.est_secteur_public THEN
+    RETURN jsonb_build_object('error', 'Cette facture est réglée via Chorus Pro.');
+  END IF;
+  IF v_mode_commission = 'SEPA_DEBIT' THEN
+    RETURN jsonb_build_object(
+      'error', 'PAIEMENT_SEPA_AUTOMATIQUE',
+      'message', 'Le prélèvement SEPA est automatique : aucun virement manuel ne doit être déclaré.'
+    );
+  END IF;
+  IF v_facture.statut NOT IN ('EMISE', 'EN_RETARD') THEN
+    RETURN jsonb_build_object('error', 'Statut incorrect : ' || v_facture.statut);
+  END IF;
+  IF p_reference IS NULL OR length(btrim(p_reference)) < 3 THEN
+    RETURN jsonb_build_object('error', 'Référence de virement requise.');
+  END IF;
+
+  UPDATE public.factures
+  SET virement_reference = btrim(p_reference),
+      mode_paiement = 'VIREMENT',
+      statut = 'VIREMENT_DECLARE',
+      modifie_le = now()
+  WHERE id = p_facture_id;
+  RETURN jsonb_build_object('success', true);
 END;
 $$;
 
@@ -24867,7 +26762,58 @@ ALTER FUNCTION "public"."fn_desactiver_mon_token_push"("p_token" "text") OWNER T
 
 CREATE OR REPLACE FUNCTION "public"."fn_detail_facture"("p_facture_id" "uuid") RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO 'public'
+    SET "search_path" TO 'pg_catalog', 'public', 'auth'
+    AS $$
+DECLARE
+  v_etab_id uuid;
+  v_result jsonb;
+  v_facture public.factures%ROWTYPE;
+BEGIN
+  SELECT * INTO v_facture
+  FROM public.factures
+  WHERE id = p_facture_id;
+  IF v_facture.id IS NULL THEN
+    RETURN jsonb_build_object('error', 'Facture introuvable');
+  END IF;
+  v_etab_id := v_facture.etablissement_id;
+
+  IF NOT public.est_admin()
+     AND COALESCE(auth.role(), '') <> 'service_role'
+     AND (
+       v_etab_id IS DISTINCT FROM public.mon_etablissement_id()
+       OR public.fn_a_permission_etablissement('lecture_paiement', v_etab_id) IS NOT TRUE
+     ) THEN
+    RETURN jsonb_build_object('error', 'Accès refusé');
+  END IF;
+
+  v_result := public.fn_detail_facture_internal_20260801(p_facture_id);
+  IF v_result ? 'error' THEN
+    RETURN v_result;
+  END IF;
+
+  -- Champs indispensables pour interdire les moyens de paiement incompatibles.
+  v_result := jsonb_set(
+    v_result,
+    '{facture}',
+    COALESCE(v_result->'facture', '{}'::jsonb) || jsonb_build_object(
+      'est_secteur_public', v_facture.est_secteur_public,
+      'virement_reference', v_facture.virement_reference,
+      'virement_confirme_le', v_facture.virement_confirme_le,
+      'stripe_payment_intent_id', v_facture.stripe_payment_intent_id
+    ),
+    true
+  );
+  RETURN v_result;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_detail_facture"("p_facture_id" "uuid") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."fn_detail_facture_internal_20260801"("p_facture_id" "uuid") RETURNS "jsonb"
+    LANGUAGE "plpgsql"
+    SET "search_path" TO 'pg_catalog', 'public', 'auth'
     AS $$
 DECLARE
     v_etab_id UUID := mon_etablissement_id();
@@ -25061,7 +27007,7 @@ END;
 $$;
 
 
-ALTER FUNCTION "public"."fn_detail_facture"("p_facture_id" "uuid") OWNER TO "postgres";
+ALTER FUNCTION "public"."fn_detail_facture_internal_20260801"("p_facture_id" "uuid") OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."fn_detecter_noshow_et_remplacer"() RETURNS "jsonb"
@@ -25618,77 +27564,166 @@ ALTER FUNCTION "public"."fn_detecter_teleportation"("p_soignant_id" "uuid", "p_l
 
 CREATE OR REPLACE FUNCTION "public"."fn_detecter_teleportations"() RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO 'public'
+    SET "search_path" TO ''
     AS $$
 DECLARE
-  v_alertes_count int := 0;
-  v_rec RECORD;
+  v_alertes_count integer := 0;
+  v_rec record;
   v_vitesse jsonb;
-  v_admin_ids uuid[];
+  v_admin_ids uuid[] := ARRAY[]::uuid[];
   v_soignants_affectes uuid[] := ARRAY[]::uuid[];
   v_sid uuid;
 BEGIN
   FOR v_rec IN
     WITH pointages_recents AS (
-      SELECT p.soignant_id, p.pointage_arrivee_le AS ts, p.arrivee_lat AS lat, p.arrivee_lng AS lng,
-        p.mission_id, p.id AS presence_id, 'arrivee' AS type_p
-      FROM public.presences p
-      WHERE p.pointage_arrivee_le > NOW() - INTERVAL '24 hours'
-        AND p.arrivee_lat IS NOT NULL AND p.arrivee_lng IS NOT NULL
+      SELECT p.soignant_id,
+             p.pointage_arrivee_le AS ts,
+             p.arrivee_lat AS lat,
+             p.arrivee_lng AS lng,
+             p.mission_id,
+             p.id AS presence_id,
+             'arrivee' AS type_p
+        FROM public.presences p
+       WHERE private.fn_mission_est_reelle(p.mission_id)
+         AND p.pointage_arrivee_le > now() - interval '24 hours'
+         AND p.arrivee_lat IS NOT NULL
+         AND p.arrivee_lng IS NOT NULL
       UNION ALL
-      SELECT p.soignant_id, p.pointage_depart_le AS ts, p.depart_lat AS lat, p.depart_lng AS lng,
-        p.mission_id, p.id AS presence_id, 'depart' AS type_p
-      FROM public.presences p
-      WHERE p.pointage_depart_le > NOW() - INTERVAL '24 hours'
-        AND p.depart_lat IS NOT NULL AND p.depart_lng IS NOT NULL
+      SELECT p.soignant_id,
+             p.pointage_depart_le AS ts,
+             p.depart_lat AS lat,
+             p.depart_lng AS lng,
+             p.mission_id,
+             p.id AS presence_id,
+             'depart' AS type_p
+        FROM public.presences p
+       WHERE private.fn_mission_est_reelle(p.mission_id)
+         AND p.pointage_depart_le > now() - interval '24 hours'
+         AND p.depart_lat IS NOT NULL
+         AND p.depart_lng IS NOT NULL
     ),
     paires AS (
-      SELECT a.soignant_id, a.ts AS ts1, a.lat AS lat1, a.lng AS lng1, a.mission_id AS mission1, a.type_p AS type1,
-        LEAD(a.ts) OVER (PARTITION BY a.soignant_id ORDER BY a.ts) AS ts2,
-        LEAD(a.lat) OVER (PARTITION BY a.soignant_id ORDER BY a.ts) AS lat2,
-        LEAD(a.lng) OVER (PARTITION BY a.soignant_id ORDER BY a.ts) AS lng2,
-        LEAD(a.mission_id) OVER (PARTITION BY a.soignant_id ORDER BY a.ts) AS mission2,
-        LEAD(a.type_p) OVER (PARTITION BY a.soignant_id ORDER BY a.ts) AS type2,
-        LEAD(a.presence_id) OVER (PARTITION BY a.soignant_id ORDER BY a.ts) AS presence2
-      FROM pointages_recents a
+      SELECT a.soignant_id,
+             a.ts AS ts1,
+             a.lat AS lat1,
+             a.lng AS lng1,
+             a.mission_id AS mission1,
+             a.type_p AS type1,
+             lead(a.ts) OVER (
+               PARTITION BY a.soignant_id ORDER BY a.ts
+             ) AS ts2,
+             lead(a.lat) OVER (
+               PARTITION BY a.soignant_id ORDER BY a.ts
+             ) AS lat2,
+             lead(a.lng) OVER (
+               PARTITION BY a.soignant_id ORDER BY a.ts
+             ) AS lng2,
+             lead(a.mission_id) OVER (
+               PARTITION BY a.soignant_id ORDER BY a.ts
+             ) AS mission2,
+             lead(a.type_p) OVER (
+               PARTITION BY a.soignant_id ORDER BY a.ts
+             ) AS type2,
+             lead(a.presence_id) OVER (
+               PARTITION BY a.soignant_id ORDER BY a.ts
+             ) AS presence2
+        FROM pointages_recents a
     )
-    SELECT * FROM paires
-    WHERE ts2 IS NOT NULL
-      AND NOT EXISTS (
-        SELECT 1 FROM public.journaux_audit ja
-        WHERE ja.action = 'SYSTEM'
-          AND ja.details->>'evenement' = 'TELEPORTATION_DETECTED'
-          AND ja.details->>'presence_id_destination' = paires.presence2::text)
+    SELECT *
+      FROM paires
+     WHERE ts2 IS NOT NULL
+       AND NOT EXISTS (
+         SELECT 1
+           FROM public.journaux_audit ja
+          WHERE ja.action = 'SYSTEM'
+            AND ja.details ->> 'evenement' = 'TELEPORTATION_DETECTED'
+            AND ja.details ->> 'presence_id_destination' =
+              paires.presence2::text
+       )
   LOOP
-    v_vitesse := public.fn_vitesse_entre_pointages(v_rec.lat1, v_rec.lng1, v_rec.ts1, v_rec.lat2, v_rec.lng2, v_rec.ts2);
-    IF (v_vitesse->>'calculable')::boolean AND (v_vitesse->>'teleportation')::boolean THEN
-      INSERT INTO public.journaux_audit (acteur_id, type_acteur, action, type_ressource, id_ressource, details)
-      VALUES (v_rec.soignant_id, 'SOIGNANT', 'SYSTEM', 'presence', v_rec.presence2,
-        jsonb_build_object('evenement', 'TELEPORTATION_DETECTED', 'niveau', 'ALERTE',
-          'soignant_id', v_rec.soignant_id, 'mission_id_source', v_rec.mission1,
-          'mission_id_destination', v_rec.mission2, 'type_pointage_source', v_rec.type1,
-          'type_pointage_destination', v_rec.type2, 'presence_id_destination', v_rec.presence2,
-          'ts_source', v_rec.ts1, 'ts_destination', v_rec.ts2,
-          'distance_m', v_vitesse->>'distance_m', 'duree_h', v_vitesse->>'duree_h', 'vitesse_kmh', v_vitesse->>'vitesse_kmh'));
-      UPDATE public.presences SET alerte_teleportation = true, modifie_le = now() WHERE id = v_rec.presence2;
+    v_vitesse := public.fn_vitesse_entre_pointages(
+      v_rec.lat1,
+      v_rec.lng1,
+      v_rec.ts1,
+      v_rec.lat2,
+      v_rec.lng2,
+      v_rec.ts2
+    );
+    IF (v_vitesse ->> 'calculable')::boolean
+       AND (v_vitesse ->> 'teleportation')::boolean THEN
+      INSERT INTO public.journaux_audit (
+        acteur_id,
+        type_acteur,
+        action,
+        type_ressource,
+        id_ressource,
+        details
+      ) VALUES (
+        v_rec.soignant_id,
+        'SOIGNANT',
+        'SYSTEM',
+        'presence',
+        v_rec.presence2,
+        jsonb_build_object(
+          'evenement', 'TELEPORTATION_DETECTED',
+          'niveau', 'ALERTE',
+          'soignant_id', v_rec.soignant_id,
+          'mission_id_source', v_rec.mission1,
+          'mission_id_destination', v_rec.mission2,
+          'type_pointage_source', v_rec.type1,
+          'type_pointage_destination', v_rec.type2,
+          'presence_id_destination', v_rec.presence2,
+          'ts_source', v_rec.ts1,
+          'ts_destination', v_rec.ts2,
+          'distance_m', v_vitesse ->> 'distance_m',
+          'duree_h', v_vitesse ->> 'duree_h',
+          'vitesse_kmh', v_vitesse ->> 'vitesse_kmh'
+        )
+      );
 
-      -- Pénalité automatique anti-triche : événement de score CONTESTABLE (-10 pts).
-      -- Garde anti-doublon : un seul FRAUDE_GPS par présence destination.
+      UPDATE public.presences
+         SET alerte_teleportation = true,
+             modifie_le = now()
+       WHERE id = v_rec.presence2;
+
       IF NOT EXISTS (
-        SELECT 1 FROM public.evenements_score_soignant e
-        WHERE e.type_evenement = 'FRAUDE_GPS'
-          AND e.details->>'presence_id_destination' = v_rec.presence2::text
+        SELECT 1
+          FROM public.evenements_score_soignant e
+         WHERE e.type_evenement = 'FRAUDE_GPS'
+           AND e.details ->> 'presence_id_destination' =
+             v_rec.presence2::text
       ) THEN
-        INSERT INTO public.evenements_score_soignant
-          (soignant_id, type_evenement, points, motif, contestable, mission_id, details)
-        VALUES (v_rec.soignant_id, 'FRAUDE_GPS', -10,
-          'Téléportation détectée (vitesse > 200 km/h entre deux pointages GPS)', true, v_rec.mission2,
-          jsonb_build_object('presence_id_destination', v_rec.presence2,
-            'mission_id_source', v_rec.mission1, 'mission_id_destination', v_rec.mission2,
-            'vitesse_kmh', v_vitesse->>'vitesse_kmh', 'distance_m', v_vitesse->>'distance_m',
-            'duree_h', v_vitesse->>'duree_h', 'ts_source', v_rec.ts1, 'ts_destination', v_rec.ts2));
+        INSERT INTO public.evenements_score_soignant (
+          soignant_id,
+          type_evenement,
+          points,
+          motif,
+          contestable,
+          mission_id,
+          details
+        ) VALUES (
+          v_rec.soignant_id,
+          'FRAUDE_GPS',
+          -10,
+          'Téléportation détectée (vitesse > 200 km/h entre deux pointages GPS)',
+          true,
+          v_rec.mission2,
+          jsonb_build_object(
+            'presence_id_destination', v_rec.presence2,
+            'mission_id_source', v_rec.mission1,
+            'mission_id_destination', v_rec.mission2,
+            'vitesse_kmh', v_vitesse ->> 'vitesse_kmh',
+            'distance_m', v_vitesse ->> 'distance_m',
+            'duree_h', v_vitesse ->> 'duree_h',
+            'ts_source', v_rec.ts1,
+            'ts_destination', v_rec.ts2
+          )
+        );
         IF NOT (v_rec.soignant_id = ANY(v_soignants_affectes)) THEN
-          v_soignants_affectes := array_append(v_soignants_affectes, v_rec.soignant_id);
+          v_soignants_affectes := array_append(
+            v_soignants_affectes,
+            v_rec.soignant_id
+          );
         END IF;
       END IF;
 
@@ -25696,12 +27731,13 @@ BEGIN
     END IF;
   END LOOP;
 
-  -- Recalcul du score de fiabilité pour chaque soignant pénalisé.
   IF array_length(v_soignants_affectes, 1) > 0 THEN
-    FOREACH v_sid IN ARRAY v_soignants_affectes LOOP
-      BEGIN
-        PERFORM public.fn_calculer_score_fiabilite_v2(v_sid, 'fraude_gps');
-      EXCEPTION WHEN OTHERS THEN NULL; END;
+    FOREACH v_sid IN ARRAY v_soignants_affectes
+    LOOP
+      PERFORM public.fn_calculer_score_fiabilite_v2(
+        v_sid,
+        'fraude_gps'
+      );
     END LOOP;
   END IF;
 
@@ -25709,18 +27745,65 @@ BEGIN
     SELECT COALESCE(array_agg(admin_user_id), ARRAY[]::uuid[])
       INTO v_admin_ids
       FROM public.fn_list_admin_user_ids() AS admins(admin_user_id);
-    IF array_length(v_admin_ids, 1) > 0 THEN
-      INSERT INTO public.externalisation_actions (type_action, payload, source, source_id)
-      SELECT 'EMAIL_NOTIF', jsonb_build_object('destinataire_id', uid, 'type', 'ALERTE_TELEPORTATION',
-        'data', jsonb_build_object('count', v_alertes_count,
-          'lien_admin', 'https://jolene.app/admin/journaux-audit?evenement=TELEPORTATION_DETECTED')), 'CRON_ANTI_TRICHE', NULL FROM unnest(v_admin_ids) AS uid;
-      INSERT INTO public.externalisation_actions (type_action, payload, source, source_id)
-      SELECT 'PUSH_NOTIF', jsonb_build_object('destinataire_id', uid, 'type_evenement', 'ALERTE_ADMIN',
-        'titre', '⚠️ ' || v_alertes_count || ' téléportation' || CASE WHEN v_alertes_count > 1 THEN 's' ELSE '' END || ' détectée' || CASE WHEN v_alertes_count > 1 THEN 's' ELSE '' END,
-        'corps', 'Vitesse > 200 km/h entre pointages. Pénalité -10 appliquée (contestable). Vérification requise.', 'lien', '/admin/journaux-audit'), 'CRON_ANTI_TRICHE', NULL FROM unnest(v_admin_ids) AS uid;
+
+    IF cardinality(v_admin_ids) > 0 THEN
+      INSERT INTO public.externalisation_actions (
+        type_action,
+        payload,
+        source,
+        source_id
+      )
+      SELECT 'EMAIL_NOTIF',
+             jsonb_build_object(
+               'destinataire_id', uid,
+               'type', 'ALERTE_TELEPORTATION',
+               'data', jsonb_build_object(
+                 'count', v_alertes_count,
+                 'lien_admin',
+                   'https://jolene.app/admin/journaux-audit?evenement=TELEPORTATION_DETECTED'
+               )
+             ),
+             'CRON_ANTI_TRICHE',
+             NULL
+        FROM unnest(v_admin_ids) AS admins(uid);
+
+      INSERT INTO public.externalisation_actions (
+        type_action,
+        payload,
+        source,
+        source_id
+      )
+      SELECT 'PUSH_NOTIF',
+             jsonb_build_object(
+               'destinataire_id', uid,
+               'type_evenement', 'ALERTE_ADMIN',
+               'titre',
+                 '⚠️ '
+                   || v_alertes_count
+                   || ' téléportation'
+                   || CASE
+                        WHEN v_alertes_count > 1 THEN 's' ELSE ''
+                      END
+                   || ' détectée'
+                   || CASE
+                        WHEN v_alertes_count > 1 THEN 's' ELSE ''
+                      END,
+               'corps',
+                 'Vitesse > 200 km/h entre pointages. Pénalité -10 appliquée (contestable). Vérification requise.',
+               'lien', '/admin/journaux-audit'
+             ),
+             'CRON_ANTI_TRICHE',
+             NULL
+        FROM unnest(v_admin_ids) AS admins(uid);
     END IF;
   END IF;
-  RETURN jsonb_build_object('success', true, 'alertes_count', v_alertes_count, 'soignants_penalises', COALESCE(array_length(v_soignants_affectes, 1), 0));
+
+  RETURN jsonb_build_object(
+    'success', true,
+    'alertes_count', v_alertes_count,
+    'soignants_penalises',
+      COALESCE(array_length(v_soignants_affectes, 1), 0)
+  );
 END;
 $$;
 
@@ -25730,114 +27813,92 @@ ALTER FUNCTION "public"."fn_detecter_teleportations"() OWNER TO "postgres";
 
 CREATE OR REPLACE FUNCTION "public"."fn_diagnostic_coherence_financiere"() RETURNS "jsonb"
     LANGUAGE "plpgsql" STABLE SECURITY DEFINER
-    SET "search_path" TO 'public', 'extensions'
+    SET "search_path" TO 'pg_catalog', 'public', 'auth'
     AS $$
 DECLARE
-  v_missions_incoherent jsonb;
-  v_factures_ecart jsonb;
-  v_transfers_orphelins jsonb;
+  v_missions jsonb;
+  v_factures jsonb;
+  v_transfers jsonb;
 BEGIN
-  IF NOT est_admin() THEN
+  IF NOT public.est_admin() THEN
     RETURN jsonb_build_object('success', false, 'error', 'Admin requis');
   END IF;
 
-  -- 1. Missions où total_brut diverge de taux × heures + majorations
+  WITH ecarts AS (
+    SELECT m.id, m.intitule, m.total_brut,
+           round(COALESCE(m.taux_horaire_base_fige, m.taux_horaire_base) * m.duree_heures, 2) AS attendu
+    FROM public.missions m
+    WHERE m.total_brut IS NOT NULL
+      AND COALESCE(m.taux_horaire_base_fige, m.taux_horaire_base) IS NOT NULL
+      AND m.duree_heures IS NOT NULL
+      AND abs(m.total_brut - COALESCE(m.taux_horaire_base_fige, m.taux_horaire_base) * m.duree_heures) > 0.5
+  )
   SELECT jsonb_build_object(
     'count', count(*),
-    'echantillon', (
-      SELECT jsonb_agg(jsonb_build_object(
-        'id', id, 'intitule', intitule, 'total_brut', total_brut,
-        'attendu', taux_horaire_base * duree_heures
-          + COALESCE(montant_majoration_nuit,0)
-          + COALESCE(montant_majoration_dimanche,0)
-          + COALESCE(montant_majoration_ferie,0),
-        'ecart', total_brut - (
-          taux_horaire_base * duree_heures
-          + COALESCE(montant_majoration_nuit,0)
-          + COALESCE(montant_majoration_dimanche,0)
-          + COALESCE(montant_majoration_ferie,0)
-        )
-      ))
-      FROM missions m2
-      WHERE total_brut IS NOT NULL AND taux_horaire_base IS NOT NULL AND duree_heures IS NOT NULL
-        AND abs(total_brut - (
-          taux_horaire_base * duree_heures
-          + COALESCE(montant_majoration_nuit,0)
-          + COALESCE(montant_majoration_dimanche,0)
-          + COALESCE(montant_majoration_ferie,0)
-        )) > 0.5
-      LIMIT 10
-    )
-  ) INTO v_missions_incoherent
-  FROM missions m
-  WHERE total_brut IS NOT NULL AND taux_horaire_base IS NOT NULL AND duree_heures IS NOT NULL
-    AND abs(total_brut - (
-      taux_horaire_base * duree_heures
-      + COALESCE(montant_majoration_nuit,0)
-      + COALESCE(montant_majoration_dimanche,0)
-      + COALESCE(montant_majoration_ferie,0)
-    )) > 0.5;
+    'echantillon', COALESCE(jsonb_agg(jsonb_build_object(
+      'id', id, 'intitule', intitule, 'total_brut', total_brut,
+      'attendu', attendu, 'ecart', total_brut - attendu
+    ) ORDER BY intitule) FILTER (WHERE id IN (SELECT id FROM ecarts LIMIT 10)), '[]'::jsonb)
+  ) INTO v_missions FROM ecarts;
 
-  -- 2. Factures où montant_ht diverge de mission.net_a_payer (>1% ou >1€)
-  SELECT jsonb_build_object(
-    'count', count(*),
-    'echantillon', (
-      SELECT jsonb_agg(jsonb_build_object(
-        'facture_id', fh.id, 'numero_facture', fh.numero_facture,
-        'mission_id', m.id, 'montant_ht', fh.montant_ht,
-        'mission_net', m.net_a_payer,
-        'ecart', fh.montant_ht - COALESCE(m.net_a_payer, 0)
-      ))
-      FROM factures_honoraires fh
-      JOIN missions m ON m.id = fh.mission_id
-      WHERE COALESCE(fh.type_document, 'FACTURE') = 'FACTURE'
-        AND fh.statut NOT IN ('BROUILLON','REMPLACEE','ANNULEE')
-        AND m.net_a_payer IS NOT NULL AND m.net_a_payer > 0
-        AND abs(fh.montant_ht - m.net_a_payer) > GREATEST(m.net_a_payer * 0.01, 1.00)
-      LIMIT 10
-    )
-  ) INTO v_factures_ecart
-  FROM factures_honoraires fh
-  JOIN missions m ON m.id = fh.mission_id
-  WHERE COALESCE(fh.type_document, 'FACTURE') = 'FACTURE'
-    AND fh.statut NOT IN ('BROUILLON','REMPLACEE','ANNULEE')
-    AND m.net_a_payer IS NOT NULL AND m.net_a_payer > 0
-    AND abs(fh.montant_ht - m.net_a_payer) > GREATEST(m.net_a_payer * 0.01, 1.00);
-
-  -- 3. Transfers Stripe orphelins (mission qui n'a plus de facture)
-  SELECT jsonb_build_object(
-    'count', count(*),
-    'echantillon', (
-      SELECT jsonb_agg(jsonb_build_object(
-        'transfer_id', st.id, 'mission_id', st.mission_id,
-        'montant_total', st.montant_total
-      ))
-      FROM stripe_transfers st2
-      WHERE st2.mission_id IS NOT NULL
-        AND NOT EXISTS (
-          SELECT 1 FROM factures_honoraires fh
-          WHERE fh.mission_id = st2.mission_id
-            AND COALESCE(fh.type_document, 'FACTURE') = 'FACTURE'
-            AND fh.statut NOT IN ('BROUILLON','ANNULEE')
+  WITH attendus AS (
+    SELECT fh.id, fh.numero_facture, fh.mission_id, fh.montant_ht,
+      CASE
+        WHEN COALESCE(fh.est_facture_finale_mission, false) THEN m.net_a_payer
+        ELSE (
+          SELECT round(COALESCE(sum(
+            extract(epoch FROM (mc.fin_le - mc.debut_le)) / 3600.0
+            * COALESCE(m.taux_horaire_base_fige, m.taux_horaire_base)
+          ), 0), 2)
+          FROM public.mission_creneaux mc
+          WHERE mc.mission_id = m.id
+            AND COALESCE(mc.type_creneau, 'PREVISIONNEL') = 'PREVISIONNEL'
+            AND mc.est_pause IS NOT TRUE
+            AND mc.debut_le::date BETWEEN fh.periode_debut AND fh.periode_fin
         )
-      LIMIT 10
-    )
-  ) INTO v_transfers_orphelins
-  FROM stripe_transfers st
-  WHERE st.mission_id IS NOT NULL
-    AND NOT EXISTS (
-      SELECT 1 FROM factures_honoraires fh
-      WHERE fh.mission_id = st.mission_id
-        AND COALESCE(fh.type_document, 'FACTURE') = 'FACTURE'
-        AND fh.statut NOT IN ('BROUILLON','ANNULEE')
-    );
+      END AS attendu
+    FROM public.factures_honoraires fh
+    JOIN public.missions m ON m.id = fh.mission_id
+    WHERE COALESCE(fh.type_document, 'FACTURE') = 'FACTURE'
+      AND fh.statut NOT IN ('BROUILLON', 'REMPLACEE', 'ANNULEE', 'ERREUR_GENERATION')
+  ), ecarts AS (
+    SELECT * FROM attendus
+    WHERE attendu IS NOT NULL AND attendu > 0
+      AND abs(montant_ht - attendu) > greatest(attendu * 0.01, 1.00)
+  )
+  SELECT jsonb_build_object(
+    'count', count(*),
+    'echantillon', COALESCE(jsonb_agg(jsonb_build_object(
+      'facture_id', id, 'numero_facture', numero_facture,
+      'mission_id', mission_id, 'montant_ht', montant_ht,
+      'mission_net', attendu, 'ecart', montant_ht - attendu
+    ) ORDER BY numero_facture) FILTER (WHERE id IN (SELECT id FROM ecarts LIMIT 10)), '[]'::jsonb)
+  ) INTO v_factures FROM ecarts;
+
+  WITH orphelins AS (
+    SELECT st.id, st.mission_id, st.montant_total
+    FROM public.stripe_transfers st
+    WHERE st.mission_id IS NOT NULL
+      AND NOT EXISTS (
+        SELECT 1 FROM public.factures_honoraires fh
+        WHERE fh.mission_id = st.mission_id
+          AND COALESCE(fh.type_document, 'FACTURE') = 'FACTURE'
+          AND fh.statut NOT IN ('BROUILLON', 'ANNULEE', 'ERREUR_GENERATION')
+      )
+  )
+  SELECT jsonb_build_object(
+    'count', count(*),
+    'echantillon', COALESCE(jsonb_agg(jsonb_build_object(
+      'transfer_id', id, 'mission_id', mission_id, 'montant_total', montant_total
+    )) FILTER (WHERE id IN (SELECT id FROM orphelins LIMIT 10)), '[]'::jsonb)
+  ) INTO v_transfers FROM orphelins;
 
   RETURN jsonb_build_object(
     'success', true,
     'genere_le', now(),
-    'missions_incoherentes', v_missions_incoherent,
-    'factures_ecart_mission', v_factures_ecart,
-    'stripe_transfers_orphelins', v_transfers_orphelins
+    'missions_incoherentes', v_missions,
+    'factures_ecart_mission', v_factures,
+    'stripe_transfers_orphelins', v_transfers
   );
 END;
 $$;
@@ -26017,8 +28078,15 @@ CREATE OR REPLACE FUNCTION "public"."fn_document_requis_par_mission_active"("p_d
       AND ds.revoque_le IS NULL
       AND ds.statut_verification = 'VERIFIE'
       AND NOT (
-        drp.type_document = 'RPPS_ADELI'
-        AND (COALESCE(s.rpps_verifie, false) OR COALESCE(s.adeli_verifie, false))
+        (
+          drp.type_document = 'RPPS_ADELI'
+          AND (COALESCE(s.rpps_verifie, false) OR COALESCE(s.adeli_verifie, false))
+        )
+        OR (
+          drp.type_document = 'DIPLOME'
+          AND COALESCE(s.rpps_verifie, false)
+          AND s.profession::text NOT IN ('AS', 'AES', 'AUXILIAIRE_PUERICULTURE')
+        )
       )
       AND (
         drp.a_expiration IS FALSE
@@ -26037,6 +28105,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_documents_ok_pour_mission"("p_soignant_i
     AS $_$
 DECLARE
   v_profession public.type_profession;
+  v_rpps_verifie boolean;
   v_identifiant_officiel boolean;
   v_regime_liberal boolean;
   v_liberal_actif boolean;
@@ -26050,6 +28119,8 @@ BEGIN
   END IF;
 
   SELECT profession,
+         COALESCE(rpps_verifie, false)
+           AND profession::text NOT IN ('AS', 'AES', 'AUXILIAIRE_PUERICULTURE'),
          COALESCE(rpps_verifie, false) OR COALESCE(adeli_verifie, false),
          COALESCE(statut_compte::text, 'ACTIF') = 'ACTIF'
            AND COALESCE(type_exercice, 'SALARIE') IN ('LIBERAL', 'MIXTE')
@@ -26058,7 +28129,7 @@ BEGIN
            AND siret_liberal_verifie IS TRUE
            AND siret_liberal_verifie_le IS NOT NULL
            AND siret_liberal_coherence_identite IS TRUE
-    INTO v_profession, v_identifiant_officiel, v_liberal_actif
+    INTO v_profession, v_rpps_verifie, v_identifiant_officiel, v_liberal_actif
   FROM public.soignants
   WHERE id = p_soignant_id AND supprime_le IS NULL;
   IF NOT FOUND OR v_profession IS NULL THEN RETURN false; END IF;
@@ -26080,6 +28151,7 @@ BEGIN
       )
       AND NOT (
         (drp.type_document = 'RPPS_ADELI' AND v_identifiant_officiel)
+        OR (drp.type_document = 'DIPLOME' AND v_rpps_verifie)
         OR EXISTS (
           SELECT 1
           FROM public.documents_soignants ds
@@ -26109,6 +28181,10 @@ $_$;
 
 
 ALTER FUNCTION "public"."fn_documents_ok_pour_mission"("p_soignant_id" "uuid", "p_type_contrat" "text") OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "public"."fn_documents_ok_pour_mission"("p_soignant_id" "uuid", "p_type_contrat" "text") IS 'Vérifie les preuves critiques. RPPS API vérifié : dispense DIPLOME et RPPS_ADELI ; ADELI seul : dispense RPPS_ADELI uniquement.';
+
 
 
 CREATE OR REPLACE FUNCTION "public"."fn_doit_notifier"("p_utilisateur_id" "uuid", "p_type_evenement" "public"."type_evenement_notification", "p_canal" "public"."canal_notification") RETURNS boolean
@@ -26457,9 +28533,17 @@ BEGIN
      AND (
        (
          TG_OP = 'UPDATE'
-         AND v_context IN (
-           'FLAG:' || (to_jsonb(OLD)->>'id') || ':' || auth.uid()::text,
-           'CLOSE:' || (to_jsonb(OLD)->>'id') || ':' || auth.uid()::text
+         AND (
+           v_context IN (
+             'FLAG:' || (to_jsonb(OLD)->>'id') || ':' || auth.uid()::text,
+             'CLOSE:' || (to_jsonb(OLD)->>'id') || ':' || auth.uid()::text
+           )
+           OR (
+             to_jsonb(NEW)->>'remplacement_de_mission_id' IS NOT NULL
+             AND v_context = 'REPLACEMENT:'
+               || (to_jsonb(NEW)->>'remplacement_de_mission_id')
+               || ':' || auth.uid()::text
+           )
          )
        )
        OR (
@@ -27348,104 +29432,266 @@ CREATE OR REPLACE FUNCTION "public"."fn_envoyer_otp_signature"("p_contrat_id" "u
     SET "search_path" TO 'public', 'extensions'
     AS $$
 DECLARE
-  v_uid uuid := auth.uid(); v_contrat RECORD; v_role text; v_otp text; v_otp_hash text;
-  v_telephone text; v_sig_existante RECORD; v_sms_count int; v_sms_window_start timestamptz;
-  v_ip inet; v_rate_check jsonb;
+  v_uid uuid := auth.uid();
+  v_contrat record;
+  v_role text;
+  v_otp text;
+  v_otp_hash text;
+  v_telephone text;
+  v_sig_existante record;
+  v_sms_count integer;
+  v_sms_window_start timestamptz;
+  v_ip inet;
+  v_rate_check jsonb;
+  v_idempotency_key text;
 BEGIN
   IF v_uid IS NULL THEN
-    RETURN jsonb_build_object('success', false, 'error_code', 'NON_AUTHENTIFIE', 'error', 'Non authentifié');
+    RETURN jsonb_build_object(
+      'success', false,
+      'error_code', 'NON_AUTHENTIFIE',
+      'error', 'Non authentifié'
+    );
   END IF;
-  v_ip := NULLIF(current_setting('request.headers', true)::jsonb->>'x-forwarded-for', '')::inet;
+
+  v_ip := NULLIF(
+    current_setting('request.headers', true)::jsonb->>'x-forwarded-for',
+    ''
+  )::inet;
   v_rate_check := public.fn_check_rate_limit_ip_signature(v_ip);
   IF NOT (v_rate_check->>'allowed')::boolean THEN
-    RETURN jsonb_build_object('success', false, 'error_code', 'TROP_DE_SMS_IP',
+    RETURN jsonb_build_object(
+      'success', false,
+      'error_code', 'TROP_DE_SMS_IP',
       'error', 'Trop de demandes de signature depuis votre IP. Réessayez dans 1h.',
-      'envois_courant', v_rate_check->>'envois_courant', 'max', v_rate_check->>'max');
+      'envois_courant', v_rate_check->>'envois_courant',
+      'max', v_rate_check->>'max'
+    );
   END IF;
-  SELECT cm.id, cm.soignant_id, cm.etablissement_id, cm.contenu_html, cm.statut,
-         cm.signature_soignant, cm.signature_etablissement
-  INTO v_contrat FROM public.contrats_mission cm WHERE cm.id = p_contrat_id;
+
+  SELECT
+    cm.id,
+    cm.soignant_id,
+    cm.etablissement_id,
+    cm.contenu_html,
+    cm.statut,
+    cm.signature_soignant,
+    cm.signature_etablissement
+    INTO v_contrat
+    FROM public.contrats_mission cm
+   WHERE cm.id = p_contrat_id;
+
   IF v_contrat IS NULL THEN
-    RETURN jsonb_build_object('success', false, 'error_code', 'CONTRAT_INTROUVABLE', 'error', 'Contrat introuvable');
+    RETURN jsonb_build_object(
+      'success', false,
+      'error_code', 'CONTRAT_INTROUVABLE',
+      'error', 'Contrat introuvable'
+    );
   END IF;
   IF v_contrat.statut IN ('ANNULE', 'EXPIRE') THEN
-    RETURN jsonb_build_object('success', false, 'error_code', 'CONTRAT_INACTIF',
-      'error', 'Ce contrat n''est plus actif (statut : ' || v_contrat.statut || ').');
+    RETURN jsonb_build_object(
+      'success', false,
+      'error_code', 'CONTRAT_INACTIF',
+      'error', 'Ce contrat n''est plus actif (statut : '
+        || v_contrat.statut || ').'
+    );
   END IF;
   IF v_contrat.statut = 'SIGNE_COMPLET' THEN
-    RETURN jsonb_build_object('success', false, 'error_code', 'CONTRAT_DEJA_COMPLET',
-      'error', 'Ce contrat est déjà entièrement signé.');
+    RETURN jsonb_build_object(
+      'success', false,
+      'error_code', 'CONTRAT_DEJA_COMPLET',
+      'error', 'Ce contrat est déjà entièrement signé.'
+    );
   END IF;
+
   IF v_contrat.soignant_id = v_uid THEN
     v_role := 'soignant';
-    SELECT telephone INTO v_telephone FROM public.soignants WHERE id = v_uid;
-  ELSIF v_contrat.etablissement_id = v_uid OR mon_etablissement_id() = v_contrat.etablissement_id THEN
+    SELECT telephone
+      INTO v_telephone
+      FROM public.soignants
+     WHERE id = v_uid;
+  ELSIF v_contrat.etablissement_id = v_uid
+     OR public.mon_etablissement_id() = v_contrat.etablissement_id THEN
     v_role := 'etablissement';
-    SELECT telephone_contact INTO v_telephone FROM public.etablissements WHERE id = v_contrat.etablissement_id;
+    SELECT telephone_contact
+      INTO v_telephone
+      FROM public.etablissements
+     WHERE id = v_contrat.etablissement_id;
   ELSE
-    RETURN jsonb_build_object('success', false, 'error_code', 'NON_AUTORISE', 'error', 'Non autorisé à signer ce contrat');
+    RETURN jsonb_build_object(
+      'success', false,
+      'error_code', 'NON_AUTORISE',
+      'error', 'Non autorisé à signer ce contrat'
+    );
   END IF;
-  IF v_role = 'etablissement' AND v_contrat.signature_soignant IS NOT TRUE THEN
-    RETURN jsonb_build_object('success', false, 'error_code', 'ETAB_AVANT_SOIGNANT',
-      'error', 'Le soignant doit signer en premier. Vous serez notifié(e) par email dès qu''il aura signé.');
+
+  IF v_role = 'etablissement'
+     AND v_contrat.signature_soignant IS NOT TRUE THEN
+    RETURN jsonb_build_object(
+      'success', false,
+      'error_code', 'ETAB_AVANT_SOIGNANT',
+      'error', 'Le soignant doit signer en premier. Vous serez notifié(e) par email dès qu''il aura signé.'
+    );
   END IF;
   IF v_telephone IS NULL OR v_telephone = '' THEN
-    RETURN jsonb_build_object('success', false, 'error_code', 'TELEPHONE_MANQUANT',
-      'error', 'Numéro de téléphone manquant. Mettez à jour votre profil avant de signer.');
+    RETURN jsonb_build_object(
+      'success', false,
+      'error_code', 'TELEPHONE_MANQUANT',
+      'error', 'Numéro de téléphone manquant. Mettez à jour votre profil avant de signer.'
+    );
   END IF;
-  SELECT sms_envoyes_count, sms_premier_envoi_a, statut_signature INTO v_sig_existante
-  FROM public.signatures_contrats WHERE contrat_id = p_contrat_id AND signataire_role = v_role;
+
+  -- Deux requêtes simultanées ne peuvent plus écraser le code envoyé par
+  -- l'autre ni réutiliser la même clé avec un contenu différent.
+  PERFORM pg_catalog.pg_advisory_xact_lock(
+    pg_catalog.hashtextextended(
+      p_contrat_id::text || ':' || v_role,
+      618337
+    )
+  );
+
+  SELECT
+    sms_envoyes_count,
+    sms_premier_envoi_a,
+    statut_signature
+    INTO v_sig_existante
+    FROM public.signatures_contrats
+   WHERE contrat_id = p_contrat_id
+     AND signataire_role = v_role;
+
   IF FOUND THEN
     IF v_sig_existante.statut_signature = 'signe' THEN
-      RETURN jsonb_build_object('success', false, 'error_code', 'DEJA_SIGNE', 'error', 'Vous avez déjà signé ce contrat.');
+      RETURN jsonb_build_object(
+        'success', false,
+        'error_code', 'DEJA_SIGNE',
+        'error', 'Vous avez déjà signé ce contrat.'
+      );
     END IF;
-    IF v_sig_existante.sms_premier_envoi_a IS NULL OR v_sig_existante.sms_premier_envoi_a < NOW() - INTERVAL '24 hours' THEN
-      v_sms_count := 1; v_sms_window_start := NOW();
+    IF v_sig_existante.sms_premier_envoi_a IS NULL
+       OR v_sig_existante.sms_premier_envoi_a
+          < now() - interval '24 hours' THEN
+      v_sms_count := 1;
+      v_sms_window_start := now();
     ELSE
       v_sms_count := COALESCE(v_sig_existante.sms_envoyes_count, 0) + 1;
       v_sms_window_start := v_sig_existante.sms_premier_envoi_a;
       IF v_sms_count > 3 THEN
-        RETURN jsonb_build_object('success', false, 'error_code', 'TROP_DE_SMS',
+        RETURN jsonb_build_object(
+          'success', false,
+          'error_code', 'TROP_DE_SMS',
           'error', 'Trop de SMS envoyés (3 max / 24h).',
           'sms_envoyes', v_sms_count - 1,
-          'reset_le', (v_sig_existante.sms_premier_envoi_a + INTERVAL '24 hours')::text);
+          'reset_le',
+            (
+              v_sig_existante.sms_premier_envoi_a
+              + interval '24 hours'
+            )::text
+        );
       END IF;
     END IF;
   ELSE
-    v_sms_count := 1; v_sms_window_start := NOW();
+    v_sms_count := 1;
+    v_sms_window_start := now();
   END IF;
+
   v_otp := lpad(floor(random() * 1000000)::text, 6, '0');
-  v_otp_hash := encode(digest(v_otp || '|' || p_contrat_id::text || '|' || v_uid::text, 'sha256'), 'hex');
+  v_otp_hash := encode(
+    digest(
+      v_otp || '|' || p_contrat_id::text || '|' || v_uid::text,
+      'sha256'
+    ),
+    'hex'
+  );
+
   INSERT INTO public.signatures_contrats (
-    contrat_id, signataire_user_id, signataire_role,
-    otp_envoye_a, otp_code_hash, statut_signature, audit_trail,
-    sms_envoyes_count, sms_premier_envoi_a
+    contrat_id,
+    signataire_user_id,
+    signataire_role,
+    otp_envoye_a,
+    otp_code_hash,
+    statut_signature,
+    audit_trail,
+    sms_envoyes_count,
+    sms_premier_envoi_a
   ) VALUES (
-    p_contrat_id, v_uid, v_role, NOW(), v_otp_hash, 'otp_envoye',
-    jsonb_build_object('otp_envoye_le', NOW()::text, 'sms_count', v_sms_count, 'ip', v_ip::text),
-    v_sms_count, v_sms_window_start
+    p_contrat_id,
+    v_uid,
+    v_role,
+    now(),
+    v_otp_hash,
+    'otp_envoye',
+    jsonb_build_object(
+      'otp_envoye_le', now()::text,
+      'sms_count', v_sms_count,
+      'ip', v_ip::text
+    ),
+    v_sms_count,
+    v_sms_window_start
   )
   ON CONFLICT (contrat_id, signataire_role) DO UPDATE SET
-    otp_envoye_a = NOW(), otp_code_hash = EXCLUDED.otp_code_hash,
-    otp_tentatives = 0, statut_signature = 'otp_envoye',
-    sms_envoyes_count = v_sms_count, sms_premier_envoi_a = v_sms_window_start,
-    modifie_le = NOW(),
-    audit_trail = COALESCE(signatures_contrats.audit_trail, '{}'::jsonb) ||
-      jsonb_build_object('otp_renvoye_le', NOW()::text, 'sms_count', v_sms_count, 'ip', v_ip::text);
+    otp_envoye_a = now(),
+    otp_code_hash = EXCLUDED.otp_code_hash,
+    otp_tentatives = 0,
+    statut_signature = 'otp_envoye',
+    sms_envoyes_count = v_sms_count,
+    sms_premier_envoi_a = v_sms_window_start,
+    modifie_le = now(),
+    audit_trail =
+      COALESCE(signatures_contrats.audit_trail, '{}'::jsonb)
+      || jsonb_build_object(
+        'otp_renvoye_le', now()::text,
+        'sms_count', v_sms_count,
+        'ip', v_ip::text
+      );
+
+  v_idempotency_key :=
+    'otp-signature.'
+    || p_contrat_id::text
+    || '.'
+    || v_uid::text
+    || '.'
+    || v_role
+    || '.'
+    || extract(epoch FROM v_sms_window_start)::bigint::text
+    || '.'
+    || v_sms_count::text;
+
   BEGIN
     PERFORM net.http_post(
       url := 'https://flripxtsyegjshnhzjkz.supabase.co/functions/v1/send-sms',
-      headers := jsonb_build_object('Content-Type', 'application/json',
-        'Authorization', 'Bearer ' || (SELECT decrypted_secret FROM vault.decrypted_secrets WHERE name = 'service_role_key' LIMIT 1)),
-      body := jsonb_build_object('telephone', v_telephone, 'type', 'OTP_SIGNATURE',
-        'contenu', 'Code de signature Jolene : ' || v_otp || ' (valide 10 min). Ne le partagez avec personne.',
-        'destinataire_id', v_uid, 'prefix_type', 'SIGNATURE')
+      headers := jsonb_build_object(
+        'Content-Type', 'application/json',
+        'Authorization', 'Bearer ' || (
+          SELECT decrypted_secret
+            FROM vault.decrypted_secrets
+           WHERE name = 'service_role_key'
+           LIMIT 1
+        )
+      ),
+      body := jsonb_build_object(
+        'telephone', v_telephone,
+        'type', 'OTP_SIGNATURE',
+        'contenu', 'Code de signature Jolene : '
+          || v_otp
+          || ' (valide 10 min). Ne le partagez avec personne.',
+        'destinataire_id', v_uid,
+        'prefix_type', 'SIGNATURE',
+        'idempotency_key', v_idempotency_key,
+        'data', jsonb_build_object('contrat_id', p_contrat_id)
+      )
     );
-  EXCEPTION WHEN OTHERS THEN NULL; END;
-  RETURN jsonb_build_object('success', true, 'role', v_role,
-    'telephone_masked', regexp_replace(v_telephone, '\d(?=\d{2})', '*', 'g'),
+  EXCEPTION WHEN OTHERS THEN
+    NULL;
+  END;
+
+  RETURN jsonb_build_object(
+    'success', true,
+    'role', v_role,
+    'telephone_masked',
+      regexp_replace(v_telephone, '\d(?=\d{2})', '*', 'g'),
     'expire_dans_minutes', 10,
-    'sms_envoyes', v_sms_count, 'sms_restants', GREATEST(0, 3 - v_sms_count));
+    'sms_envoyes', v_sms_count,
+    'sms_restants', greatest(0, 3 - v_sms_count)
+  );
 END;
 $$;
 
@@ -27594,36 +29840,47 @@ ALTER FUNCTION "public"."fn_envoyer_otp_telephone"("p_telephone" "text") OWNER T
 
 CREATE OR REPLACE FUNCTION "public"."fn_envoyer_rappels_litiges"() RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO 'public'
+    SET "search_path" TO ''
     AS $$
 DECLARE
-  v_litige RECORD;
-  v_destinataire_id UUID;
-  v_destinataire_type TEXT;
-  v_age_h INT;
-  v_rappel_key TEXT;
-  v_rappel_libelle TEXT;
-  v_nb_rappels INT := 0;
+  v_litige record;
+  v_destinataire_id uuid;
+  v_destinataire_type text;
+  v_age_h integer;
+  v_rappel_key text;
+  v_rappel_libelle text;
+  v_nb_rappels integer := 0;
 BEGIN
   FOR v_litige IN
-    SELECT l.id, l.mission_id, l.soignant_id, l.etablissement_id,
-           l.initie_par, l.cree_le, l.reponse, l.type_litige,
+    SELECT l.id,
+           l.mission_id,
+           l.soignant_id,
+           l.etablissement_id,
+           l.initie_par,
+           l.cree_le,
+           l.reponse,
+           l.type_litige,
            l.derniers_rappels_envoyes
       FROM public.litiges l
-     WHERE l.statut IN ('OUVERT', 'EN_DISCUSSION')
+     WHERE private.fn_mission_est_reelle(l.mission_id)
+       AND l.statut IN ('OUVERT', 'EN_DISCUSSION')
        AND NOT l.est_informatif
        AND l.escalade_auto_le IS NULL
        AND (l.reponse IS NULL OR length(trim(l.reponse)) = 0)
   LOOP
-    v_age_h := EXTRACT(EPOCH FROM NOW() - v_litige.cree_le)::INT / 3600;
+    v_age_h :=
+      extract(epoch FROM now() - v_litige.cree_le)::integer / 3600;
 
-    IF v_age_h >= 120 AND NOT (v_litige.derniers_rappels_envoyes ? 'J+5') THEN
+    IF v_age_h >= 120
+       AND NOT (v_litige.derniers_rappels_envoyes ? 'J+5') THEN
       v_rappel_key := 'J+5';
       v_rappel_libelle := 'Rappel litige 5 jours — dernière relance';
-    ELSIF v_age_h >= 72 AND NOT (v_litige.derniers_rappels_envoyes ? 'J+3') THEN
+    ELSIF v_age_h >= 72
+      AND NOT (v_litige.derniers_rappels_envoyes ? 'J+3') THEN
       v_rappel_key := 'J+3';
       v_rappel_libelle := 'Rappel litige 3 jours';
-    ELSIF v_age_h >= 24 AND NOT (v_litige.derniers_rappels_envoyes ? 'J+1') THEN
+    ELSIF v_age_h >= 24
+      AND NOT (v_litige.derniers_rappels_envoyes ? 'J+1') THEN
       v_rappel_key := 'J+1';
       v_rappel_libelle := 'Rappel litige 1 jour';
     ELSE
@@ -27645,9 +29902,11 @@ BEGIN
     PERFORM public.fn_litige_push_notification(
       v_destinataire_id,
       v_destinataire_type,
-      'LITIGE_RAPPEL_' || REPLACE(v_rappel_key, '+', ''),
+      'LITIGE_RAPPEL_' || replace(v_rappel_key, '+', ''),
       v_rappel_libelle,
-      'Un litige est en attente de votre réponse depuis ' || v_age_h || 'h. Répondez pour éviter l''escalade.',
+      'Un litige est en attente de votre réponse depuis '
+        || v_age_h
+        || 'h. Répondez pour éviter l''escalade.',
       v_litige.id,
       jsonb_build_object(
         'type_litige', v_litige.type_litige,
@@ -27659,7 +29918,7 @@ BEGIN
 
     UPDATE public.litiges
        SET derniers_rappels_envoyes = derniers_rappels_envoyes
-         || jsonb_build_object(v_rappel_key, NOW())
+         || jsonb_build_object(v_rappel_key, now())
      WHERE id = v_litige.id;
 
     v_nb_rappels := v_nb_rappels + 1;
@@ -27682,102 +29941,228 @@ CREATE OR REPLACE FUNCTION "public"."fn_envoyer_rappels_notation_j1"() RETURNS "
     SET "search_path" TO 'public', 'extensions'
     AS $$
 DECLARE
-  v_url TEXT;
-  v_token TEXT;
-  v_mission RECORD;
-  v_count_etab INT := 0;
-  v_count_soignant INT := 0;
-  v_send_email_called BOOLEAN;
+  v_url text;
+  v_token text;
+  v_dispatch record;
+  v_request_id bigint;
+  v_nouvelles integer := 0;
+  v_enfilees integer := 0;
+  v_echecs_enfilement integer := 0;
+  v_controle jsonb;
 BEGIN
-  IF NOT (est_admin() OR COALESCE(current_setting('request.jwt.claim.role', true), '') = 'service_role') THEN
+  IF NOT (
+    est_admin()
+    OR COALESCE(
+      current_setting('request.jwt.claim.role', true),
+      ''
+    ) = 'service_role'
+  ) THEN
     RETURN jsonb_build_object('success', false, 'error', 'Accès refusé');
   END IF;
 
+  v_controle := private.fn_controler_rappels_notation_j1();
+
+  INSERT INTO private.notation_email_dispatch (
+    mission_id,
+    sens,
+    destinataire_id,
+    idempotency_key
+  )
+  SELECT
+    m.id,
+    cible.sens::public.sens_notation,
+    cible.destinataire_id,
+    CASE cible.sens
+      WHEN 'ETAB_VERS_SOIGNANT'
+        THEN 'notation-j1:etab-vers-soignant:' || m.id::text
+      ELSE 'notation-j1:soignant-vers-etab:' || m.id::text
+    END
+  FROM public.missions m
+  JOIN public.etablissements e ON e.id = m.etablissement_id
+  JOIN public.soignants s ON s.id = m.soignant_assigne_id
+  CROSS JOIN LATERAL (
+    VALUES
+      ('ETAB_VERS_SOIGNANT', m.etablissement_id),
+      ('SOIGNANT_VERS_ETAB', m.soignant_assigne_id)
+  ) AS cible(sens, destinataire_id)
+  WHERE m.statut = 'TERMINEE'
+    AND m.fin_le >= now() - interval '48 hours'
+    AND m.fin_le < now() - interval '24 hours'
+    AND e.est_compte_test IS FALSE
+    AND s.est_compte_test IS FALSE
+    AND NOT EXISTS (
+      SELECT 1
+      FROM public.notations_missions n
+      WHERE n.mission_id = m.id
+        AND n.sens = cible.sens::public.sens_notation
+    )
+    AND NOT EXISTS (
+      SELECT 1
+      FROM public.notifications_notation_j1 j
+      WHERE j.mission_id = m.id
+        AND j.sens = cible.sens::public.sens_notation
+    )
+    AND public.fn_doit_notifier(
+      cible.destinataire_id,
+      'NOTATION_RAPPEL'::public.type_evenement_notification,
+      'EMAIL'::public.canal_notification
+    )
+  ON CONFLICT (mission_id, sens) DO NOTHING;
+  GET DIAGNOSTICS v_nouvelles = ROW_COUNT;
+
+  -- Une notation déposée entre la réservation et l'envoi annule le rappel.
+  UPDATE private.notation_email_dispatch q
+  SET statut = 'ANNULE',
+      modifie_le = now()
+  WHERE q.statut IN ('A_ENVOYER', 'REESSAI')
+    AND (
+      EXISTS (
+        SELECT 1
+        FROM public.notations_missions n
+        WHERE n.mission_id = q.mission_id
+          AND n.sens = q.sens
+      )
+      OR NOT EXISTS (
+        SELECT 1
+        FROM public.missions m
+        JOIN public.etablissements e ON e.id = m.etablissement_id
+        JOIN public.soignants s ON s.id = m.soignant_assigne_id
+        WHERE m.id = q.mission_id
+          AND e.est_compte_test IS FALSE
+          AND s.est_compte_test IS FALSE
+      )
+    );
+
   BEGIN
-    v_url := 'https://flripxtsyegjshnhzjkz.supabase.co';
+    SELECT NULLIF(btrim(ds.decrypted_secret), '')
+    INTO v_url
+    FROM vault.decrypted_secrets ds
+    WHERE ds.name = 'supabase_url'
+    LIMIT 1;
     v_token := public.fn_lire_secret_cron();
   EXCEPTION WHEN OTHERS THEN
-    v_url := NULL; v_token := NULL;
+    v_url := NULL;
+    v_token := NULL;
   END;
 
-  FOR v_mission IN
-    SELECT m.id, m.intitule, m.fin_le, m.etablissement_id, m.soignant_assigne_id
-    FROM missions m
-    WHERE m.statut = 'TERMINEE'
-      AND m.fin_le >= NOW() - INTERVAL '48 hours'
-      AND m.fin_le < NOW() - INTERVAL '24 hours'
-      AND m.soignant_assigne_id IS NOT NULL
+  IF v_url IS NULL OR v_token IS NULL THEN
+    RETURN jsonb_build_object(
+      'success', false,
+      'error', 'Configuration email cron indisponible',
+      'nouvelles', v_nouvelles,
+      'controle', v_controle
+    );
+  END IF;
+
+  FOR v_dispatch IN
+    SELECT
+      q.mission_id,
+      q.sens,
+      q.destinataire_id,
+      q.idempotency_key,
+      q.tentatives,
+      m.intitule,
+      m.fin_le
+    FROM private.notation_email_dispatch q
+    JOIN public.missions m ON m.id = q.mission_id
+    JOIN public.etablissements e ON e.id = m.etablissement_id
+    JOIN public.soignants s ON s.id = m.soignant_assigne_id
+    WHERE q.statut IN ('A_ENVOYER', 'REESSAI')
+      AND q.prochaine_tentative_le <= now()
+      AND q.tentatives < 5
+      AND e.est_compte_test IS FALSE
+      AND s.est_compte_test IS FALSE
+    ORDER BY q.prochaine_tentative_le, q.cree_le
+    LIMIT 200
+    FOR UPDATE OF q SKIP LOCKED
   LOOP
-    -- Côté étab
-    IF NOT EXISTS (SELECT 1 FROM notifications_notation_j1 WHERE mission_id = v_mission.id AND sens = 'ETAB_VERS_SOIGNANT')
-       AND NOT EXISTS (SELECT 1 FROM notations_missions WHERE mission_id = v_mission.id AND sens = 'ETAB_VERS_SOIGNANT')
-       AND public.fn_doit_notifier(v_mission.etablissement_id, 'NOTATION_RAPPEL'::type_evenement_notification, 'EMAIL'::canal_notification) THEN
-      v_send_email_called := false;
-      IF v_url IS NOT NULL AND v_token IS NOT NULL THEN
+    BEGIN
+      SELECT net.http_post(
+        url := v_url || '/functions/v1/send-email',
+        headers := jsonb_build_object(
+          'Content-Type', 'application/json',
+          'Authorization', 'Bearer ' || v_token
+        ),
+        body := jsonb_build_object(
+          'type', CASE v_dispatch.sens
+            WHEN 'ETAB_VERS_SOIGNANT'
+              THEN 'RAPPEL_NOTATION_ETAB'
+            ELSE 'RAPPEL_NOTATION_SOIGNANT'
+          END,
+          'destinataire_id', v_dispatch.destinataire_id,
+          'idempotency_key', v_dispatch.idempotency_key,
+          'data', jsonb_build_object(
+            'mission_id', v_dispatch.mission_id,
+            'mission_intitule', v_dispatch.intitule,
+            'fin_le', v_dispatch.fin_le
+          )
+        ),
+        timeout_milliseconds := 55000
+      ) INTO v_request_id;
+
+      UPDATE private.notation_email_dispatch
+      SET statut = 'EN_ATTENTE',
+          tentatives = tentatives + 1,
+          request_id = v_request_id,
+          demande_le = now(),
+          statut_http = NULL,
+          erreur_transport = NULL,
+          modifie_le = now()
+      WHERE mission_id = v_dispatch.mission_id
+        AND sens = v_dispatch.sens;
+      v_enfilees := v_enfilees + 1;
+    EXCEPTION WHEN OTHERS THEN
+      IF v_dispatch.tentatives >= 4 THEN
+        UPDATE private.notation_email_dispatch
+        SET statut = 'ECHEC',
+            tentatives = 5,
+            erreur_transport = left(SQLERRM, 500),
+            modifie_le = now()
+        WHERE mission_id = v_dispatch.mission_id
+          AND sens = v_dispatch.sens;
+        v_echecs_enfilement := v_echecs_enfilement + 1;
+
         BEGIN
-          PERFORM net.http_post(
-            url := v_url || '/functions/v1/send-email',
-            headers := jsonb_build_object('Content-Type','application/json','Authorization','Bearer '||v_token),
-            body := jsonb_build_object(
-              'type', 'RAPPEL_NOTATION_ETAB',
-              'destinataire_id', v_mission.etablissement_id,
-              'data', jsonb_build_object('mission_id', v_mission.id, 'mission_intitule', v_mission.intitule, 'fin_le', v_mission.fin_le)
+          PERFORM public.fn_emettre_alerte_monitoring(
+            'RAPPEL_NOTATION_ENQUEUE_FAILED',
+            'CRITICAL',
+            v_dispatch.mission_id::text || ':' || v_dispatch.sens::text,
+            'Impossible de remettre le rappel notation dans pg_net après 5 tentatives',
+            jsonb_build_object(
+              'mission_id', v_dispatch.mission_id,
+              'sens', v_dispatch.sens,
+              'erreur', left(SQLERRM, 500)
             )
           );
-          v_send_email_called := true;
-        EXCEPTION WHEN OTHERS THEN NULL; END;
+        EXCEPTION WHEN OTHERS THEN
+          NULL;
+        END;
+      ELSE
+        UPDATE private.notation_email_dispatch
+        SET statut = 'REESSAI',
+            tentatives = tentatives + 1,
+            erreur_transport = left(SQLERRM, 500),
+            prochaine_tentative_le = now() + interval '5 minutes',
+            modifie_le = now()
+        WHERE mission_id = v_dispatch.mission_id
+          AND sens = v_dispatch.sens;
       END IF;
-
-      IF v_send_email_called THEN
-        INSERT INTO notifications_notation_j1 (mission_id, sens, destinataire_id)
-        VALUES (v_mission.id, 'ETAB_VERS_SOIGNANT', v_mission.etablissement_id)
-        ON CONFLICT (mission_id, sens) DO NOTHING;
-
-        PERFORM public.fn_ecrire_audit_safe(
-          p_acteur_id := v_mission.etablissement_id, p_type_acteur := 'SYSTEME',
-          p_action := 'RAPPEL_NOTATION_J1_ENVOYE', p_type_ressource := 'mission', p_id_ressource := v_mission.id,
-          p_details := jsonb_build_object('sens', 'ETAB_VERS_SOIGNANT', 'send_email_called', true)
-        );
-        v_count_etab := v_count_etab + 1;
-      END IF;
-    END IF;
-
-    -- Côté soignant
-    IF NOT EXISTS (SELECT 1 FROM notifications_notation_j1 WHERE mission_id = v_mission.id AND sens = 'SOIGNANT_VERS_ETAB')
-       AND NOT EXISTS (SELECT 1 FROM notations_missions WHERE mission_id = v_mission.id AND sens = 'SOIGNANT_VERS_ETAB')
-       AND public.fn_doit_notifier(v_mission.soignant_assigne_id, 'NOTATION_RAPPEL'::type_evenement_notification, 'EMAIL'::canal_notification) THEN
-      v_send_email_called := false;
-      IF v_url IS NOT NULL AND v_token IS NOT NULL THEN
-        BEGIN
-          PERFORM net.http_post(
-            url := v_url || '/functions/v1/send-email',
-            headers := jsonb_build_object('Content-Type','application/json','Authorization','Bearer '||v_token),
-            body := jsonb_build_object(
-              'type', 'RAPPEL_NOTATION_SOIGNANT',
-              'destinataire_id', v_mission.soignant_assigne_id,
-              'data', jsonb_build_object('mission_id', v_mission.id, 'mission_intitule', v_mission.intitule, 'fin_le', v_mission.fin_le)
-            )
-          );
-          v_send_email_called := true;
-        EXCEPTION WHEN OTHERS THEN NULL; END;
-      END IF;
-
-      IF v_send_email_called THEN
-        INSERT INTO notifications_notation_j1 (mission_id, sens, destinataire_id)
-        VALUES (v_mission.id, 'SOIGNANT_VERS_ETAB', v_mission.soignant_assigne_id)
-        ON CONFLICT (mission_id, sens) DO NOTHING;
-
-        PERFORM public.fn_ecrire_audit_safe(
-          p_acteur_id := v_mission.soignant_assigne_id, p_type_acteur := 'SYSTEME',
-          p_action := 'RAPPEL_NOTATION_J1_ENVOYE', p_type_ressource := 'mission', p_id_ressource := v_mission.id,
-          p_details := jsonb_build_object('sens', 'SOIGNANT_VERS_ETAB', 'send_email_called', true)
-        );
-        v_count_soignant := v_count_soignant + 1;
-      END IF;
-    END IF;
+    END;
   END LOOP;
 
-  RETURN jsonb_build_object('success', true, 'count_etab', v_count_etab, 'count_soignant', v_count_soignant);
+  RETURN jsonb_build_object(
+    'success', true,
+    'count_etab', COALESCE((v_controle->>'count_etab')::integer, 0),
+    'count_soignant',
+      COALESCE((v_controle->>'count_soignant')::integer, 0),
+    'nouvelles', v_nouvelles,
+    'enfilees', v_enfilees,
+    'reessais_planifies',
+      COALESCE((v_controle->>'reessais')::integer, 0),
+    'echecs',
+      COALESCE((v_controle->>'echecs')::integer, 0)
+      + v_echecs_enfilement
+  );
 END;
 $$;
 
@@ -28019,30 +30404,28 @@ ALTER TABLE "public"."paiements_escrow" OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."fn_escrow_debits_a_echeance"("p_limit" integer DEFAULT 50) RETURNS SETOF "public"."paiements_escrow"
-    LANGUAGE "sql" STABLE SECURITY DEFINER
-    SET "search_path" TO 'public'
+    LANGUAGE "sql" STABLE
+    SET "search_path" TO ''
     AS $$
   SELECT pe.*
-  FROM public.paiements_escrow pe
-  JOIN public.missions m
-    ON m.id = pe.mission_id
-   AND m.etablissement_id = pe.etablissement_id
-   AND m.soignant_assigne_id = pe.soignant_id
-  WHERE pe.statut = 'INITIE'
-    AND pe.debit_prevu_le <= now()
-    AND pe.tentatives_debit < 3
-    AND m.statut IN ('ASSIGNEE', 'EN_COURS')
-    AND COALESCE(m.est_arret_maladie, false) IS FALSE
-    AND NOT EXISTS (
-      SELECT 1 FROM public.missions r
-      WHERE r.remplacement_de_mission_id = m.id
-    )
-  ORDER BY pe.debit_prevu_le, pe.id
-  LIMIT p_limit;
+    FROM public.paiements_escrow pe
+    JOIN public.etablissements e ON e.id = pe.etablissement_id
+    JOIN public.soignants s ON s.id = pe.soignant_id
+   WHERE pe.statut = 'INITIE'
+     AND pe.debit_prevu_le <= now()
+     AND pe.tentatives_debit < 3
+     AND e.est_compte_test IS FALSE
+     AND s.est_compte_test IS FALSE
+   ORDER BY pe.debit_prevu_le ASC
+   LIMIT p_limit;
 $$;
 
 
 ALTER FUNCTION "public"."fn_escrow_debits_a_echeance"("p_limit" integer) OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "public"."fn_escrow_debits_a_echeance"("p_limit" integer) IS 'Débits échéants réels uniquement ; les comptes test restent hors sélection et ne changent pas de statut.';
+
 
 
 CREATE OR REPLACE FUNCTION "public"."fn_escrow_echouer_payout"("p_paiement_escrow_id" "uuid", "p_stripe_payout_id" "text", "p_stripe_account_id" "text", "p_detail" "text") RETURNS boolean
@@ -28355,54 +30738,38 @@ ALTER FUNCTION "public"."fn_escrow_plafond_cents"("p_etablissement_id" "uuid") O
 
 
 CREATE OR REPLACE FUNCTION "public"."fn_escrow_releases_a_traiter"("p_limit" integer DEFAULT 50) RETURNS TABLE("queue_id" "uuid", "paiement_escrow_id" "uuid", "mission_id" "uuid", "soignant_id" "uuid", "etablissement_id" "uuid", "honoraires_cents" integer, "escrow_statut" "text", "tentatives" integer)
-    LANGUAGE "sql" STABLE SECURITY DEFINER
-    SET "search_path" TO 'public'
+    LANGUAGE "sql" STABLE
+    SET "search_path" TO ''
     AS $$
-  SELECT q.id, q.paiement_escrow_id, q.mission_id,
-         pe.soignant_id, pe.etablissement_id, pe.honoraires_cents,
-         pe.statut, q.tentatives
-  FROM public.escrow_release_queue q
-  JOIN public.paiements_escrow pe
-    ON pe.id = q.paiement_escrow_id
-   AND pe.mission_id = q.mission_id
-  LEFT JOIN public.missions m ON m.id = pe.mission_id
-  WHERE q.statut IN ('EN_ATTENTE', 'EN_COURS')
-    AND q.prochaine_tentative_le <= now()
-    AND (
-      pe.statut = 'RELEASE_PLANIFIE'
-      OR (
-        pe.statut = 'DEBITE'
-        AND q.tentatives < 5
-        AND m.statut = 'TERMINEE'
-        AND m.soignant_assigne_id = pe.soignant_id
-        AND m.etablissement_id = pe.etablissement_id
-        AND COALESCE(m.est_arret_maladie, false) IS FALSE
-        AND NOT EXISTS (
-          SELECT 1 FROM public.missions r
-          WHERE r.remplacement_de_mission_id = m.id
-        )
-        AND EXISTS (
-          SELECT 1 FROM public.presences p
-          WHERE p.mission_id = m.id
-            AND COALESCE(p.valide_par_etablissement, false) IS TRUE
-        )
-        AND NOT EXISTS (
-          SELECT 1 FROM public.presences p
-          WHERE p.mission_id = m.id
-            AND COALESCE(p.valide_par_etablissement, false) IS FALSE
-            AND (p.pointage_depart_le IS NOT NULL OR p.motif_litige IS NOT NULL)
-        )
-      )
-    )
-  ORDER BY q.prochaine_tentative_le, q.id
-  LIMIT p_limit;
+  SELECT q.id,
+         q.paiement_escrow_id,
+         q.mission_id,
+         pe.soignant_id,
+         pe.etablissement_id,
+         pe.honoraires_cents,
+         pe.statut,
+         q.tentatives
+    FROM public.escrow_release_queue q
+    JOIN public.paiements_escrow pe ON pe.id = q.paiement_escrow_id
+    JOIN public.etablissements e ON e.id = pe.etablissement_id
+    JOIN public.soignants s ON s.id = pe.soignant_id
+   WHERE q.statut IN ('EN_ATTENTE', 'EN_COURS')
+     AND q.prochaine_tentative_le <= now()
+     AND (
+       (pe.statut = 'DEBITE' AND q.tentatives < 5)
+       OR pe.statut = 'RELEASE_PLANIFIE'
+     )
+     AND e.est_compte_test IS FALSE
+     AND s.est_compte_test IS FALSE
+   ORDER BY q.prochaine_tentative_le ASC
+   LIMIT p_limit;
 $$;
 
 
 ALTER FUNCTION "public"."fn_escrow_releases_a_traiter"("p_limit" integer) OWNER TO "postgres";
 
 
-COMMENT ON FUNCTION "public"."fn_escrow_releases_a_traiter"("p_limit" integer) IS 'Retourne les releases DEBITE à initier et les RELEASE_PLANIFIE/leases EN_COURS à réconcilier sans double payout.';
+COMMENT ON FUNCTION "public"."fn_escrow_releases_a_traiter"("p_limit" integer) IS 'Releases réelles uniquement ; les comptes test restent hors sélection et ne changent pas de statut.';
 
 
 
@@ -29005,19 +31372,29 @@ CREATE OR REPLACE FUNCTION "public"."fn_etablissement_public"("p_etablissement_i
     SET "search_path" TO 'public'
     AS $$
 BEGIN
-    RETURN (
-        SELECT jsonb_build_object(
-            'id', id, 'nom', nom, 'type', type::TEXT,
-            'adresse_ville', adresse_ville, 'adresse_code_postal', adresse_code_postal,
-            'adresse_departement', adresse_departement, 'adresse_rue', adresse_rue,
-            'adresse_lat', adresse_lat, 'adresse_lng', adresse_lng,
-            'note_moyenne', note_moyenne, 'convention_collective', convention_collective,
-            'est_secteur_public', est_secteur_public, 'finess', finess,
-            'logo_url', logo_url, 'couleur_theme', couleur_theme
-        )
-        FROM etablissements 
-        WHERE id = p_etablissement_id AND supprime_le IS NULL
-    );
+  RETURN (
+    SELECT jsonb_build_object(
+      'id', e.id,
+      'nom', e.nom,
+      'type', e.type::text,
+      'adresse_ville', e.adresse_ville,
+      'adresse_code_postal', e.adresse_code_postal,
+      'adresse_departement', e.adresse_departement,
+      'adresse_rue', e.adresse_rue,
+      'adresse_lat', e.adresse_lat,
+      'adresse_lng', e.adresse_lng,
+      'note_moyenne', e.note_moyenne,
+      'convention_collective', e.convention_collective,
+      'est_secteur_public', e.est_secteur_public,
+      'finess', e.finess,
+      'logo_url', e.logo_url,
+      'couleur_theme', e.couleur_theme
+    )
+    FROM etablissements e
+    WHERE e.id = p_etablissement_id
+      AND e.supprime_le IS NULL
+      AND e.est_compte_test IS FALSE
+  );
 END;
 $$;
 
@@ -29030,20 +31407,34 @@ CREATE OR REPLACE FUNCTION "public"."fn_etablissements_avec_missions_ouvertes"()
     SET "search_path" TO 'public'
     AS $$
 BEGIN
-    RETURN (
-        SELECT COALESCE(jsonb_agg(jsonb_build_object(
-            'id', e.id, 'nom', e.nom, 'type', e.type::TEXT,
-            'adresse_ville', e.adresse_ville, 'adresse_code_postal', e.adresse_code_postal,
-            'adresse_departement', e.adresse_departement, 'adresse_rue', e.adresse_rue,
-            'adresse_lat', e.adresse_lat, 'adresse_lng', e.adresse_lng,
-            'note_moyenne', e.note_moyenne, 'convention_collective', e.convention_collective,
-            'est_secteur_public', e.est_secteur_public, 'finess', e.finess
-        )), '[]'::JSONB)
-        FROM etablissements e
-        WHERE e.supprime_le IS NULL
-        AND e.statut_verification = 'VERIFIE'
-        AND EXISTS(SELECT 1 FROM missions m WHERE m.etablissement_id = e.id AND m.statut = 'OUVERTE')
-    );
+  RETURN (
+    SELECT COALESCE(jsonb_agg(jsonb_build_object(
+      'id', e.id,
+      'nom', e.nom,
+      'type', e.type::text,
+      'adresse_ville', e.adresse_ville,
+      'adresse_code_postal', e.adresse_code_postal,
+      'adresse_departement', e.adresse_departement,
+      'adresse_rue', e.adresse_rue,
+      'adresse_lat', e.adresse_lat,
+      'adresse_lng', e.adresse_lng,
+      'note_moyenne', e.note_moyenne,
+      'convention_collective', e.convention_collective,
+      'est_secteur_public', e.est_secteur_public,
+      'finess', e.finess
+    )), '[]'::jsonb)
+    FROM etablissements e
+    WHERE e.supprime_le IS NULL
+      AND e.est_compte_test IS FALSE
+      AND e.statut_verification = 'VERIFIE'
+      AND EXISTS (
+        SELECT 1
+        FROM missions m
+        WHERE m.etablissement_id = e.id
+          AND m.statut = 'OUVERTE'
+          AND private.fn_mission_lie_compte_test(m.id) IS FALSE
+      )
+  );
 END;
 $$;
 
@@ -29056,30 +31447,54 @@ CREATE OR REPLACE FUNCTION "public"."fn_etablissements_safe"("p_ids" "uuid"[]) R
     SET "search_path" TO 'public'
     AS $$
 BEGIN
-    RETURN QUERY
-    SELECT DISTINCT
-        e.id, e.nom::TEXT, e.adresse_rue::TEXT, e.adresse_code_postal::TEXT,
-        e.adresse_ville::TEXT, e.adresse_departement::TEXT, e.adresse_lat, e.adresse_lng,
-        e.type::TEXT, e.finess::TEXT,
-        e.taux_majoration_nuit_pourcent, e.taux_majoration_dimanche_pourcent,
-        e.taux_majoration_ferie_pourcent, e.logo_url::TEXT, e.couleur_theme::TEXT,
-        -- 7c : capacité ⚡ de l'ÉTABLISSEMENT (flag + SEPA). La condition mission
-        -- LIBERAL est appliquée par le consommateur (le régime est une propriété
-        -- de la mission, jamais de l'établissement).
-        -- 7b-D PR 2 (A2) : + éligibilité escrow (pas gelé, sous plafond).
-        (public.fn_param_num('feature_paiement_rapide_actif', 0) = 1
-         AND e.mode_paiement_commission = 'SEPA_DEBIT'
-         AND e.stripe_sepa_payment_method_id IS NOT NULL
-         AND public.fn_escrow_etab_eligible(e.id)) AS paiement_rapide,
-        e.jour_paie_habituel
-    FROM etablissements e
-    WHERE e.id = ANY(p_ids)
-      AND (
-        EXISTS (SELECT 1 FROM missions m WHERE m.etablissement_id = e.id AND m.soignant_assigne_id = auth.uid())
-        OR EXISTS (SELECT 1 FROM missions m WHERE m.etablissement_id = e.id AND m.statut = 'OUVERTE')
-        OR e.id = mon_etablissement_id()
-        OR est_admin()
-      );
+  RETURN QUERY
+  SELECT DISTINCT
+    e.id,
+    e.nom::text,
+    e.adresse_rue::text,
+    e.adresse_code_postal::text,
+    e.adresse_ville::text,
+    e.adresse_departement::text,
+    e.adresse_lat,
+    e.adresse_lng,
+    e.type::text,
+    e.finess::text,
+    e.taux_majoration_nuit_pourcent,
+    e.taux_majoration_dimanche_pourcent,
+    e.taux_majoration_ferie_pourcent,
+    e.logo_url::text,
+    e.couleur_theme::text,
+    (
+      public.fn_param_num('feature_paiement_rapide_actif', 0) = 1
+      AND e.mode_paiement_commission = 'SEPA_DEBIT'
+      AND e.stripe_sepa_payment_method_id IS NOT NULL
+      AND public.fn_escrow_etab_eligible(e.id)
+    ) AS paiement_rapide,
+    e.jour_paie_habituel
+  FROM etablissements e
+  WHERE e.id = ANY(p_ids)
+    AND (
+      est_admin()
+      OR e.id = mon_etablissement_id()
+      OR (
+        est_soignant()
+        AND private.fn_comptes_meme_cohorte_test(auth.uid(), e.id)
+        AND (
+          EXISTS (
+            SELECT 1
+            FROM missions m
+            WHERE m.etablissement_id = e.id
+              AND m.soignant_assigne_id = auth.uid()
+          )
+          OR EXISTS (
+            SELECT 1
+            FROM missions m
+            WHERE m.etablissement_id = e.id
+              AND m.statut = 'OUVERTE'
+          )
+        )
+      )
+    );
 END;
 $$;
 
@@ -30027,33 +32442,133 @@ $$;
 ALTER FUNCTION "public"."fn_expirer_parrainages_inactifs"() OWNER TO "postgres";
 
 
-CREATE OR REPLACE FUNCTION "public"."fn_export_fec"("p_annee" integer) RETURNS TABLE("journal_code" "text", "journal_libelle" "text", "ecriture_num" "text", "ecriture_date" "text", "compte_num" "text", "compte_libelle" "text", "comp_aux_num" "text", "comp_aux_libelle" "text", "piece_ref" "text", "piece_date" "text", "ecriture_libelle" "text", "debit" numeric, "credit" numeric, "montant" numeric, "devise" "text")
+CREATE OR REPLACE FUNCTION "public"."fn_export_fec"("p_annee" integer) RETURNS TABLE("JournalCode" "text", "JournalLib" "text", "EcritureNum" "text", "EcritureDate" "text", "CompteNum" "text", "CompteLib" "text", "CompAuxNum" "text", "CompAuxLib" "text", "PieceRef" "text", "PieceDate" "text", "EcritureLib" "text", "Debit" numeric, "Credit" numeric, "EcritureLet" "text", "DateLet" "text", "ValidDate" "text", "Montantdevise" numeric, "Idevise" "text")
     LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO 'public'
+    SET "search_path" TO 'pg_catalog', 'public'
     AS $$
 BEGIN
-    IF NOT est_admin() THEN RETURN; END IF;
+  IF NOT public.est_admin() THEN
+    RETURN;
+  END IF;
 
-    RETURN QUERY
+  -- Aucun export silencieusement déséquilibré : si une facture de production
+  -- comptabilisée ne respecte pas HT + TVA = TTC au centime, l'export s'arrête.
+  IF EXISTS (
+    SELECT 1
+    FROM public.factures f
+    JOIN public.etablissements e ON e.id = f.etablissement_id
+    WHERE EXTRACT(
+            YEAR FROM f.date_emission AT TIME ZONE 'Europe/Paris'
+          ) = p_annee
+      AND e.est_compte_test IS FALSE
+      AND f.statut NOT IN ('BROUILLON', 'ANNULEE')
+      AND f.numero_facture IS NOT NULL
+      AND f.date_emission IS NOT NULL
+      AND (
+        f.montant_ht IS NULL
+        OR f.montant_tva IS NULL
+        OR f.montant_ttc IS NULL
+        OR pg_catalog.round(pg_catalog.abs(f.montant_ttc), 2) <= 0
+        OR pg_catalog.round(pg_catalog.abs(f.montant_ttc), 2)
+           <> pg_catalog.round(pg_catalog.abs(f.montant_ht), 2)
+              + pg_catalog.round(pg_catalog.abs(f.montant_tva), 2)
+      )
+  ) THEN
+    RAISE EXCEPTION USING
+      ERRCODE = '22000',
+      MESSAGE = 'Export journal des ventes interrompu : montants HT, TVA ou TTC incohérents.';
+  END IF;
+
+  RETURN QUERY
+  WITH documents_bruts AS (
     SELECT
-        'VE'::TEXT, 'Ventes'::TEXT,
-        f.numero_facture,
-        TO_CHAR(f.date_emission, 'YYYYMMDD'),
-        '706000'::TEXT, 'Prestations de services'::TEXT,
-        e.siret::TEXT, e.nom,
-        f.numero_facture, TO_CHAR(f.date_emission, 'YYYYMMDD'),
-        'Commission Jolene'::TEXT,
-        0::NUMERIC, f.montant_ht,
-        f.montant_ttc, 'EUR'::TEXT
-    FROM factures f
-    JOIN etablissements e ON e.id = f.etablissement_id
-    WHERE EXTRACT(YEAR FROM f.date_emission) = p_annee
-    ORDER BY f.date_emission;
+      f.numero_facture,
+      (f.date_emission AT TIME ZONE 'Europe/Paris')::date AS date_comptable,
+      e.siret::text AS siret,
+      e.nom AS etablissement_nom,
+      f.type_document = 'AVOIR'
+        OR COALESCE(f.montant_signe, f.montant_ht, 0) < 0 AS est_avoir,
+      pg_catalog.round(pg_catalog.abs(f.montant_ht), 2)::numeric AS montant_ht,
+      pg_catalog.round(pg_catalog.abs(f.montant_tva), 2)::numeric AS montant_tva,
+      pg_catalog.round(pg_catalog.abs(f.montant_ttc), 2)::numeric AS montant_ttc
+    FROM public.factures f
+    JOIN public.etablissements e ON e.id = f.etablissement_id
+    WHERE EXTRACT(
+            YEAR FROM f.date_emission AT TIME ZONE 'Europe/Paris'
+          ) = p_annee
+      AND e.est_compte_test IS FALSE
+      AND f.statut NOT IN ('BROUILLON', 'ANNULEE')
+      AND f.numero_facture IS NOT NULL
+      AND f.date_emission IS NOT NULL
+  ),
+  documents AS (
+    SELECT
+      d.*,
+      'VE-' || p_annee::text || '-'
+        || pg_catalog.lpad(
+          pg_catalog.row_number() OVER (
+            ORDER BY d.date_comptable, d.numero_facture
+          )::text,
+          8,
+          '0'
+        ) AS ecriture_num
+    FROM documents_bruts d
+  )
+  SELECT
+    'VE'::text,
+    'Ventes'::text,
+    d.ecriture_num,
+    pg_catalog.to_char(d.date_comptable, 'YYYYMMDD'),
+    l.compte_num,
+    l.compte_lib,
+    CASE WHEN l.ordre = 1 THEN d.siret ELSE ''::text END,
+    CASE WHEN l.ordre = 1 THEN d.etablissement_nom ELSE ''::text END,
+    d.numero_facture,
+    pg_catalog.to_char(d.date_comptable, 'YYYYMMDD'),
+    CASE WHEN d.est_avoir THEN 'Avoir commission Jolene' ELSE 'Commission Jolene' END,
+    l.debit,
+    l.credit,
+    ''::text,
+    ''::text,
+    pg_catalog.to_char(d.date_comptable, 'YYYYMMDD'),
+    NULL::numeric,
+    NULL::text
+  FROM documents d
+  CROSS JOIN LATERAL (
+    VALUES
+      (
+        1,
+        '411000'::text,
+        'Clients'::text,
+        CASE WHEN d.est_avoir THEN 0::numeric ELSE d.montant_ttc END,
+        CASE WHEN d.est_avoir THEN d.montant_ttc ELSE 0::numeric END
+      ),
+      (
+        2,
+        '706000'::text,
+        'Prestations de services'::text,
+        CASE WHEN d.est_avoir THEN d.montant_ht ELSE 0::numeric END,
+        CASE WHEN d.est_avoir THEN 0::numeric ELSE d.montant_ht END
+      ),
+      (
+        3,
+        '445710'::text,
+        'TVA collectée'::text,
+        CASE WHEN d.est_avoir THEN d.montant_tva ELSE 0::numeric END,
+        CASE WHEN d.est_avoir THEN 0::numeric ELSE d.montant_tva END
+      )
+  ) AS l(ordre, compte_num, compte_lib, debit, credit)
+  WHERE l.debit <> 0 OR l.credit <> 0
+  ORDER BY d.date_comptable, d.ecriture_num, l.ordre;
 END;
 $$;
 
 
 ALTER FUNCTION "public"."fn_export_fec"("p_annee" integer) OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "public"."fn_export_fec"("p_annee" integer) IS 'Nom historique conservé pour compatibilité : export du seul journal des ventes au format 18 colonnes, non assimilable au FEC réglementaire complet; production uniquement.';
+
 
 
 CREATE OR REPLACE FUNCTION "public"."fn_exporter_rgpd_etablissement"() RETURNS "jsonb"
@@ -30251,38 +32766,84 @@ ALTER FUNCTION "public"."fn_externalisation_succes"("p_id" "uuid", "p_resultat" 
 
 
 CREATE OR REPLACE FUNCTION "public"."fn_externalisations_a_traiter"("p_limit" integer DEFAULT 50, "p_worker_id" "text" DEFAULT NULL::"text") RETURNS "jsonb"
-    LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO 'public'
+    LANGUAGE "plpgsql"
+    SET "search_path" TO ''
     AS $$
 DECLARE
-  v_actions jsonb; v_count int;
-  v_worker text := COALESCE(p_worker_id, 'worker_' || substring(md5(random()::text), 1, 8));
+  v_actions jsonb;
+  v_count integer;
+  v_exclues_non_reelles integer;
+  v_worker text := COALESCE(
+    p_worker_id,
+    'worker_' || substring(md5(random()::text), 1, 8)
+  );
 BEGIN
+  SELECT count(*) INTO v_exclues_non_reelles
+    FROM public.externalisation_actions a
+   WHERE (
+       (a.statut = 'PENDING'
+         AND (a.next_retry_at IS NULL OR a.next_retry_at < now()))
+       OR (a.statut = 'PENDING_AIFE'
+         AND a.next_retry_at IS NOT NULL AND a.next_retry_at < now())
+       OR (a.statut = 'PROCESSING'
+         AND a.cron_lock_at < now() - interval '10 minutes')
+     )
+     AND private.fn_externalisation_est_reelle(a) IS FALSE;
+
   WITH selectionnees AS (
-    SELECT id FROM public.externalisation_actions
-    WHERE ((statut = 'PENDING' AND (next_retry_at IS NULL OR next_retry_at < NOW()))
-        OR (statut = 'PENDING_AIFE' AND next_retry_at IS NOT NULL AND next_retry_at < NOW())
-        OR (statut = 'PROCESSING' AND cron_lock_at < NOW() - INTERVAL '10 minutes'))
-    ORDER BY cree_le ASC LIMIT p_limit FOR UPDATE SKIP LOCKED
+    SELECT a.id
+      FROM public.externalisation_actions a
+     WHERE (
+         (a.statut = 'PENDING'
+           AND (a.next_retry_at IS NULL OR a.next_retry_at < now()))
+         OR (a.statut = 'PENDING_AIFE'
+           AND a.next_retry_at IS NOT NULL AND a.next_retry_at < now())
+         OR (a.statut = 'PROCESSING'
+           AND a.cron_lock_at < now() - interval '10 minutes')
+       )
+       AND private.fn_externalisation_est_reelle(a) IS TRUE
+     ORDER BY a.cree_le ASC
+     LIMIT p_limit
+     FOR UPDATE SKIP LOCKED
   )
   UPDATE public.externalisation_actions a
-  SET statut = 'PROCESSING', cron_lock_at = NOW(), cron_lock_par = v_worker
-  FROM selectionnees s WHERE a.id = s.id;
+     SET statut = 'PROCESSING',
+         cron_lock_at = now(),
+         cron_lock_par = v_worker
+    FROM selectionnees s
+   WHERE a.id = s.id;
 
   SELECT jsonb_agg(jsonb_build_object(
-    'id', id, 'type_action', type_action, 'payload', payload,
-    'source', source, 'source_id', source_id, 'tentatives', tentatives
-  )), COUNT(*) INTO v_actions, v_count
-  FROM public.externalisation_actions
-  WHERE cron_lock_par = v_worker AND statut = 'PROCESSING'
-    AND cron_lock_at > NOW() - INTERVAL '5 seconds';
+           'id', a.id,
+           'type_action', a.type_action,
+           'payload', a.payload,
+           'source', a.source,
+           'source_id', a.source_id,
+           'tentatives', a.tentatives
+         )),
+         count(*)
+    INTO v_actions, v_count
+    FROM public.externalisation_actions a
+   WHERE a.cron_lock_par = v_worker
+     AND a.statut = 'PROCESSING'
+     AND a.cron_lock_at > now() - interval '5 seconds';
 
-  RETURN jsonb_build_object('success', true, 'worker_id', v_worker,
-    'count', COALESCE(v_count, 0), 'actions', COALESCE(v_actions, '[]'::jsonb));
-END; $$;
+  RETURN jsonb_build_object(
+    'success', true,
+    'worker_id', v_worker,
+    'count', COALESCE(v_count, 0),
+    'excluded_non_real', COALESCE(v_exclues_non_reelles, 0),
+    'actions', COALESCE(v_actions, '[]'::jsonb)
+  );
+END;
+$$;
 
 
 ALTER FUNCTION "public"."fn_externalisations_a_traiter"("p_limit" integer, "p_worker_id" "text") OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "public"."fn_externalisations_a_traiter"("p_limit" integer, "p_worker_id" "text") IS 'Worker fail-closed : seules les actions rattachées par JOIN à un compte réel ou à un admin actif sont verrouillées.';
+
 
 
 CREATE OR REPLACE FUNCTION "public"."fn_factor_advances_modifie_le"() RETURNS "trigger"
@@ -30821,6 +33382,67 @@ $$;
 
 
 ALTER FUNCTION "public"."fn_finaliser_document_verification"("p_document_id" "uuid", "p_attempt_id" "uuid", "p_expected_soignant_id" "uuid", "p_expected_s3_bucket" "text", "p_expected_s3_cle" "text", "p_expected_type_document" "text", "p_expected_nom" "text", "p_expected_prenom" "text", "p_expected_date_naissance" "date", "p_expected_sexe" "text", "p_expected_lieu_naissance" "text", "p_expected_profession" "text", "p_expected_numero_rpps" "text", "p_expected_numero_adeli" "text", "p_expected_rpps_verifie" boolean, "p_expected_adeli_verifie" boolean, "p_statut_verification" "text", "p_motif_rejet" "text", "p_valide_depuis" "date", "p_valide_jusqua" "date", "p_resultat_ia" "jsonb", "p_nom_extrait_ia" "text", "p_prenom_extrait_ia" "text", "p_score_confiance_ia" numeric, "p_coherence_nom" boolean, "p_identite_date_naissance" "date", "p_identite_sexe" "text", "p_identite_lieu_naissance" "text", "p_scolarite_formation" "text", "p_scolarite_annee_validee" integer, "p_scolarite_profession" "text", "p_licence_valide_jusqua" "date", "p_licence_specialite" "text", "p_expected_heures_employeur" "text", "p_expected_heures_date_debut" "date", "p_expected_heures_date_fin" "date", "p_expected_heures_declarees" numeric, "p_expected_heures_type_preuve" "text") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."fn_finaliser_envoi_email_idempotent"("p_idempotency_key" "text", "p_request_fingerprint" "text", "p_succes" boolean, "p_provider_id" "text" DEFAULT NULL::"text", "p_erreur" "text" DEFAULT NULL::"text") RETURNS "void"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+BEGIN
+  UPDATE private.email_dispatch_idempotency
+     SET statut = CASE WHEN p_succes THEN 'ENVOYE' ELSE 'ERREUR' END,
+         provider_id = CASE WHEN p_succes THEN p_provider_id ELSE NULL END,
+         derniere_erreur = CASE
+           WHEN p_succes THEN NULL
+           ELSE left(COALESCE(p_erreur, 'Erreur fournisseur'), 2000)
+         END,
+         modifie_le = now()
+   WHERE idempotency_key = p_idempotency_key
+     AND request_fingerprint = p_request_fingerprint;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Réservation idempotente introuvable ou incohérente'
+      USING ERRCODE = 'P0002';
+  END IF;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_finaliser_envoi_email_idempotent"("p_idempotency_key" "text", "p_request_fingerprint" "text", "p_succes" boolean, "p_provider_id" "text", "p_erreur" "text") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."fn_finaliser_envoi_push_idempotent"("p_idempotency_key" "text", "p_request_fingerprint" "text", "p_statut" "text", "p_provider_id" "text" DEFAULT NULL::"text", "p_erreur" "text" DEFAULT NULL::"text") RETURNS "void"
+    LANGUAGE "sql"
+    SET "search_path" TO ''
+    AS $$
+  SELECT private.fn_finaliser_envoi_push_idempotent(
+    p_idempotency_key,
+    p_request_fingerprint,
+    p_statut,
+    p_provider_id,
+    p_erreur
+  );
+$$;
+
+
+ALTER FUNCTION "public"."fn_finaliser_envoi_push_idempotent"("p_idempotency_key" "text", "p_request_fingerprint" "text", "p_statut" "text", "p_provider_id" "text", "p_erreur" "text") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."fn_finaliser_envoi_sms_idempotent"("p_idempotency_key" "text", "p_request_fingerprint" "text", "p_statut" "text", "p_provider_id" "text" DEFAULT NULL::"text", "p_erreur" "text" DEFAULT NULL::"text") RETURNS "void"
+    LANGUAGE "sql"
+    SET "search_path" TO ''
+    AS $$
+  SELECT private.fn_finaliser_envoi_sms_idempotent(
+    p_idempotency_key,
+    p_request_fingerprint,
+    p_statut,
+    p_provider_id,
+    p_erreur
+  );
+$$;
+
+
+ALTER FUNCTION "public"."fn_finaliser_envoi_sms_idempotent"("p_idempotency_key" "text", "p_request_fingerprint" "text", "p_statut" "text", "p_provider_id" "text", "p_erreur" "text") OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."fn_finaliser_type_compte"("p_user_id" "uuid", "p_type_compte" "text", "p_claim_token" "uuid") RETURNS boolean
@@ -31403,7 +34025,28 @@ ALTER FUNCTION "public"."fn_generer_facture_honoraires_mission"("p_mission_id" "
 
 CREATE OR REPLACE FUNCTION "public"."fn_generer_facture_mensuelle"("p_etablissement_id" "uuid") RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO 'public'
+    SET "search_path" TO 'pg_catalog', 'public', 'auth'
+    AS $$
+BEGIN
+  IF NOT public.est_admin()
+     AND COALESCE(auth.role(), '') <> 'service_role'
+     AND (
+       p_etablissement_id IS DISTINCT FROM public.mon_etablissement_id()
+       OR public.fn_a_permission_etablissement('paiement', p_etablissement_id) IS NOT TRUE
+     ) THEN
+    RETURN jsonb_build_object('error', 'Accès refusé');
+  END IF;
+  RETURN public.fn_generer_facture_mensuelle_internal_20260801(p_etablissement_id);
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_generer_facture_mensuelle"("p_etablissement_id" "uuid") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."fn_generer_facture_mensuelle_internal_20260801"("p_etablissement_id" "uuid") RETURNS "jsonb"
+    LANGUAGE "plpgsql"
+    SET "search_path" TO 'pg_catalog', 'public', 'auth'
     AS $$
 DECLARE
     v_total_ht NUMERIC; v_total_tva NUMERIC; v_total_ttc NUMERIC;
@@ -31431,26 +34074,28 @@ END;
 $$;
 
 
-ALTER FUNCTION "public"."fn_generer_facture_mensuelle"("p_etablissement_id" "uuid") OWNER TO "postgres";
+ALTER FUNCTION "public"."fn_generer_facture_mensuelle_internal_20260801"("p_etablissement_id" "uuid") OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."fn_generer_facture_rate_limited"() RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO 'public'
+    SET "search_path" TO 'pg_catalog', 'public', 'auth'
     AS $$
 DECLARE
-    v_user_id UUID := auth.uid();
-    v_etab_id UUID := mon_etablissement_id();
-    v_allowed BOOLEAN;
+  v_user_id uuid := auth.uid();
+  v_etab_id uuid := public.mon_etablissement_id();
 BEGIN
-    IF v_user_id IS NULL OR v_etab_id IS NULL THEN 
-        RETURN jsonb_build_object('error', 'Non authentifié'); 
-    END IF;
-    v_allowed := fn_verifier_rate_limit(v_user_id::TEXT, 'facture', 5, 3600);
-    IF NOT v_allowed THEN 
-        RETURN jsonb_build_object('error', 'Trop de tentatives. Réessayez dans quelques minutes.'); 
-    END IF;
-    RETURN fn_generer_facture_mensuelle(v_etab_id);
+  IF v_user_id IS NULL OR v_etab_id IS NULL THEN
+    RETURN jsonb_build_object('error', 'Non authentifié');
+  END IF;
+  IF NOT public.est_admin()
+     AND public.fn_a_permission_etablissement('paiement', v_etab_id) IS NOT TRUE THEN
+    RETURN jsonb_build_object('error', 'Accès refusé');
+  END IF;
+  IF NOT public.fn_verifier_rate_limit(v_user_id::text, 'facture', 5, 3600) THEN
+    RETURN jsonb_build_object('error', 'Trop de tentatives. Réessayez dans quelques minutes.');
+  END IF;
+  RETURN public.fn_generer_facture_mensuelle(v_etab_id);
 END;
 $$;
 
@@ -31885,7 +34530,7 @@ $$;
 ALTER FUNCTION "public"."fn_get_my_role"() OWNER TO "postgres";
 
 
-COMMENT ON FUNCTION "public"."fn_get_my_role"() IS 'Résout la famille de compte avant le gate MFA. Identifier ADMIN_PLATEFORME ne confère aucun privilège : les opérations admin restent protégées par est_admin_valide() et aal2.';
+COMMENT ON FUNCTION "public"."fn_get_my_role"() IS 'Résout la famille de compte. Les privilèges admin restent protégés par est_admin_valide(), sans MFA.';
 
 
 
@@ -33132,6 +35777,21 @@ $$;
 ALTER FUNCTION "public"."fn_lire_secret_cron"() OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."fn_lire_secret_cron_automations"() RETURNS "text"
+    LANGUAGE "sql" STABLE
+    SET "search_path" TO ''
+    AS $$
+  SELECT private.fn_lire_secret_cron_automations();
+$$;
+
+
+ALTER FUNCTION "public"."fn_lire_secret_cron_automations"() OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "public"."fn_lire_secret_cron_automations"() IS 'Wrapper service_role vers le secret Vault cron privé ; jamais accessible au client.';
+
+
+
 CREATE OR REPLACE FUNCTION "public"."fn_list_admin_user_ids"() RETURNS SETOF "uuid"
     LANGUAGE "sql" STABLE SECURITY DEFINER
     SET "search_path" TO 'pg_catalog', 'public', 'auth'
@@ -33974,34 +36634,59 @@ COMMENT ON FUNCTION "public"."fn_litige_preuves_agregees"("p_litige_id" "uuid") 
 
 CREATE OR REPLACE FUNCTION "public"."fn_litige_push_notification"("p_destinataire_id" "uuid", "p_type_destinataire" "text", "p_type_notif" "text", "p_titre" "text", "p_corps" "text", "p_litige_id" "uuid", "p_email_data" "jsonb" DEFAULT '{}'::"jsonb") RETURNS "void"
     LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO 'public'
+    SET "search_path" TO ''
     AS $$
 DECLARE
-  v_telephone TEXT;
-  v_sms_eligible BOOLEAN;
-  v_sms_contenu TEXT;
-  v_lien TEXT;
+  v_telephone text;
+  v_sms_eligible boolean;
+  v_sms_contenu text;
+  v_lien text;
+  v_mission_reelle boolean := false;
 BEGIN
   v_lien := CASE p_type_destinataire
-    WHEN 'SOIGNANT'       THEN '/soignant/litiges'
-    WHEN 'ETABLISSEMENT'  THEN '/etablissement/litiges'
-    WHEN 'ADMIN'          THEN '/admin/moderation'
+    WHEN 'SOIGNANT' THEN '/soignant/litiges'
+    WHEN 'ETABLISSEMENT' THEN '/etablissement/litiges'
+    WHEN 'ADMIN' THEN '/admin/moderation'
     ELSE NULL
   END;
 
   INSERT INTO public.notifications (
-    destinataire_id, type_destinataire, type, titre, corps,
-    id_ressource, type_ressource, lien
+    destinataire_id,
+    type_destinataire,
+    type,
+    titre,
+    corps,
+    id_ressource,
+    type_ressource,
+    lien
   ) VALUES (
-    p_destinataire_id, p_type_destinataire, p_type_notif, p_titre, p_corps,
-    p_litige_id, 'litige', v_lien
+    p_destinataire_id,
+    p_type_destinataire,
+    p_type_notif,
+    p_titre,
+    p_corps,
+    p_litige_id,
+    'litige',
+    v_lien
   );
+
+  SELECT private.fn_mission_est_reelle(l.mission_id)
+    INTO v_mission_reelle
+    FROM public.litiges l
+   WHERE l.id = p_litige_id;
+
+  IF v_mission_reelle IS DISTINCT FROM true THEN
+    RETURN;
+  END IF;
 
   INSERT INTO public.email_queue (type, destinataire_id, data)
   VALUES (
     p_type_notif,
     p_destinataire_id,
-    p_email_data || jsonb_build_object('litige_id', p_litige_id, 'url_litige', v_lien)
+    p_email_data || jsonb_build_object(
+      'litige_id', p_litige_id,
+      'url_litige', v_lien
+    )
   );
 
   v_sms_eligible := p_type_notif IN (
@@ -34017,10 +36702,13 @@ BEGIN
   END IF;
 
   IF p_type_destinataire = 'SOIGNANT' THEN
-    SELECT s.telephone INTO v_telephone
-      FROM public.soignants s WHERE s.id = p_destinataire_id;
+    SELECT s.telephone
+      INTO v_telephone
+      FROM public.soignants s
+     WHERE s.id = p_destinataire_id;
   ELSIF p_type_destinataire = 'ETABLISSEMENT' THEN
-    SELECT e.telephone_contact INTO v_telephone
+    SELECT e.telephone_contact
+      INTO v_telephone
       FROM public.etablissements e
      WHERE e.id = p_destinataire_id;
   END IF;
@@ -34030,11 +36718,22 @@ BEGIN
   END IF;
 
   v_sms_contenu := CASE p_type_notif
-    WHEN 'LITIGE_OUVERTURE'       THEN 'un litige ' || COALESCE(p_email_data->>'type_litige', '') || ' a été ouvert sur votre mission. Répondez sous 72h.'
-    WHEN 'REMBOURSEMENT_CONFIRME' THEN 'remboursement de ' || COALESCE(p_email_data->>'montant', '?') || '€ effectué (avoir ' || COALESCE(p_email_data->>'numero_avoir', '') || '). Délai bancaire 2-5j.'
-    WHEN 'LITIGE_RAPPEL_J1'       THEN 'litige en attente depuis 1j. Répondez sous 24h pour éviter l''escalade.'
-    WHEN 'LITIGE_RAPPEL_J3'       THEN 'litige en attente depuis 3j. Réponse urgente requise.'
-    WHEN 'LITIGE_RAPPEL_J5'       THEN 'litige en attente depuis 5j ouvrés. Escalade imminente.'
+    WHEN 'LITIGE_OUVERTURE' THEN
+      'un litige '
+        || COALESCE(p_email_data ->> 'type_litige', '')
+        || ' a été ouvert sur votre mission. Répondez sous 72h.'
+    WHEN 'REMBOURSEMENT_CONFIRME' THEN
+      'remboursement de '
+        || COALESCE(p_email_data ->> 'montant', '?')
+        || '€ effectué (avoir '
+        || COALESCE(p_email_data ->> 'numero_avoir', '')
+        || '). Délai bancaire 2-5j.'
+    WHEN 'LITIGE_RAPPEL_J1' THEN
+      'litige en attente depuis 1j. Répondez sous 24h pour éviter l''escalade.'
+    WHEN 'LITIGE_RAPPEL_J3' THEN
+      'litige en attente depuis 3j. Réponse urgente requise.'
+    WHEN 'LITIGE_RAPPEL_J5' THEN
+      'litige en attente depuis 5j ouvrés. Escalade imminente.'
     ELSE p_corps
   END;
 
@@ -34057,86 +36756,112 @@ ALTER FUNCTION "public"."fn_litige_push_notification"("p_destinataire_id" "uuid"
 
 CREATE OR REPLACE FUNCTION "public"."fn_litiges_escalader_auto"() RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO 'public'
+    SET "search_path" TO ''
     AS $$
 DECLARE
-  v_delai_liberal_h INT;
-  v_delai_salarie_j_ouvres INT;
-  v_nb_escalades INT := 0;
-  v_litige RECORD;
-  v_admin_id UUID;
+  v_delai_liberal_h integer;
+  v_delai_salarie_j_ouvres integer;
+  v_nb_escalades integer := 0;
+  v_litige record;
+  v_admin_id uuid;
 BEGIN
-  SELECT valeur::INT INTO v_delai_liberal_h
-    FROM public.parametres_litiges WHERE cle = 'delai_escalade_liberal_h';
-  SELECT valeur::INT INTO v_delai_salarie_j_ouvres
-    FROM public.parametres_litiges WHERE cle = 'delai_escalade_salarie_jours_ouvres';
+  SELECT pl.valeur::integer
+    INTO v_delai_liberal_h
+    FROM public.parametres_litiges pl
+   WHERE pl.cle = 'delai_escalade_liberal_h';
+  SELECT pl.valeur::integer
+    INTO v_delai_salarie_j_ouvres
+    FROM public.parametres_litiges pl
+   WHERE pl.cle = 'delai_escalade_salarie_jours_ouvres';
 
   FOR v_litige IN
-    SELECT l.id, l.mission_id, l.soignant_id, l.etablissement_id,
-           l.type_litige, l.cree_le,
+    SELECT l.id,
+           l.mission_id,
+           l.soignant_id,
+           l.etablissement_id,
+           l.type_litige,
+           l.cree_le,
            CASE
-             WHEN m.type_contrat_applique = 'SALARIE' THEN TRUE
-             WHEN m.type_contrat_applique = 'LIBERAL' THEN FALSE
-             ELSE COALESCE(s.est_salarie_etablissement, FALSE)
+             WHEN m.type_contrat_applique = 'SALARIE' THEN true
+             WHEN m.type_contrat_applique = 'LIBERAL' THEN false
+             ELSE COALESCE(s.est_salarie_etablissement, false)
            END AS est_salarie
       FROM public.litiges l
       LEFT JOIN public.soignants s ON s.id = l.soignant_id
-      LEFT JOIN public.missions  m ON m.id = l.mission_id
-     WHERE l.statut IN ('OUVERT', 'EN_DISCUSSION')
+      LEFT JOIN public.missions m ON m.id = l.mission_id
+     WHERE private.fn_mission_est_reelle(l.mission_id)
+       AND l.statut IN ('OUVERT', 'EN_DISCUSSION')
        AND l.escalade_auto_le IS NULL
        AND (l.reponse IS NULL OR length(trim(l.reponse)) = 0)
        AND NOT l.est_informatif
        AND (
-         (CASE
-            WHEN m.type_contrat_applique = 'SALARIE' THEN TRUE
-            WHEN m.type_contrat_applique = 'LIBERAL' THEN FALSE
-            ELSE COALESCE(s.est_salarie_etablissement, FALSE)
-          END = FALSE
-          AND l.cree_le < NOW() - make_interval(hours => v_delai_liberal_h))
+         (
+           CASE
+             WHEN m.type_contrat_applique = 'SALARIE' THEN true
+             WHEN m.type_contrat_applique = 'LIBERAL' THEN false
+             ELSE COALESCE(s.est_salarie_etablissement, false)
+           END = false
+           AND l.cree_le <
+             now() - make_interval(hours => v_delai_liberal_h)
+         )
          OR
-         (CASE
-            WHEN m.type_contrat_applique = 'SALARIE' THEN TRUE
-            WHEN m.type_contrat_applique = 'LIBERAL' THEN FALSE
-            ELSE COALESCE(s.est_salarie_etablissement, FALSE)
-          END = TRUE
-          AND l.cree_le < public.fn_ajouter_jours_ouvres(NOW(), -v_delai_salarie_j_ouvres))
+         (
+           CASE
+             WHEN m.type_contrat_applique = 'SALARIE' THEN true
+             WHEN m.type_contrat_applique = 'LIBERAL' THEN false
+             ELSE COALESCE(s.est_salarie_etablissement, false)
+           END = true
+           AND l.cree_le < public.fn_ajouter_jours_ouvres(
+             now(),
+             -v_delai_salarie_j_ouvres
+           )
+         )
        )
   LOOP
     UPDATE public.litiges
        SET statut = 'EN_MEDIATION',
-           escalade_auto_le = NOW(),
+           escalade_auto_le = now(),
            escalade_auto_motif = CASE
-             WHEN v_litige.est_salarie THEN 'Pas de réponse dans le délai salarié (5 jours ouvrés)'
+             WHEN v_litige.est_salarie THEN
+               'Pas de réponse dans le délai salarié (5 jours ouvrés)'
              ELSE 'Pas de réponse dans le délai libéral (72h)'
            END
      WHERE id = v_litige.id;
 
     PERFORM public.fn_ecrire_audit(
-      NULL, 'SYSTEM', 'LITIGE_ESCALADE_AUTO',
-      'litige', v_litige.id, NULL,
+      NULL,
+      'SYSTEM',
+      'LITIGE_ESCALADE_AUTO',
+      'litige',
+      v_litige.id,
+      NULL,
       jsonb_build_object(
         'type_litige', v_litige.type_litige,
         'mission_id', v_litige.mission_id,
         'est_salarie', v_litige.est_salarie
       ),
-      NULL, NULL
+      NULL,
+      NULL
     );
 
-    FOR v_admin_id IN SELECT * FROM public.fn_list_admin_user_ids()
+    FOR v_admin_id IN
+      SELECT * FROM public.fn_list_admin_user_ids()
     LOOP
       PERFORM public.fn_litige_push_notification(
         v_admin_id,
         'ADMIN',
         'LITIGE_ESCALADE_ADMIN',
         'Litige escaladé : ' || v_litige.type_litige,
-        'Un litige ' || v_litige.type_litige || ' sur mission '
+        'Un litige '
+          || v_litige.type_litige
+          || ' sur mission '
           || v_litige.mission_id::text
           || ' a été auto-escaladé en médiation.',
         v_litige.id,
         jsonb_build_object(
           'type_litige', v_litige.type_litige,
           'mission_id', v_litige.mission_id,
-          'prioritaire', TRUE
+          'prioritaire', true
         )
       );
     END LOOP;
@@ -34615,6 +37340,19 @@ BEGIN
     RAISE EXCEPTION 'Accès refusé' USING ERRCODE = '42501';
   END IF;
 
+  IF public.est_admin() THEN
+    IF v_conv.soignant_id IS NULL
+       AND v_conv.etablissement_id IS NULL
+       AND v_uid IN (v_conv.participant_1_id, v_conv.participant_2_id) THEN
+      UPDATE public.messages_chat
+      SET lu = true
+      WHERE conversation_id = p_conversation_id
+        AND auteur_id <> v_uid
+        AND lu IS FALSE;
+    END IF;
+    RETURN;
+  END IF;
+
   IF v_conv.etablissement_id IS NOT NULL
      AND v_conv.soignant_id IS NOT NULL THEN
     IF private.fn_relation_conversation_partagee(
@@ -34628,10 +37366,6 @@ BEGIN
           )
         ELSE v_conv.soignant_id
       END;
-    ELSIF public.est_admin() THEN
-      -- Un administrateur qui observe une conversation ne doit jamais modifier
-      -- l'état de lecture des participants.
-      RETURN;
     ELSE
       RAISE EXCEPTION 'Accès refusé' USING ERRCODE = '42501';
     END IF;
@@ -34640,8 +37374,6 @@ BEGIN
       v_autre := v_conv.participant_2_id;
     ELSIF v_uid = v_conv.participant_2_id THEN
       v_autre := v_conv.participant_1_id;
-    ELSIF public.est_admin() THEN
-      RETURN;
     ELSE
       RAISE EXCEPTION 'Accès refusé' USING ERRCODE = '42501';
     END IF;
@@ -34656,8 +37388,6 @@ BEGIN
   END IF;
 
   IF v_conv.soignant_id = v_uid THEN
-    -- Côté soignant, tous les auteurs établissement partagent le même côté du
-    -- fil et sont marqués lus ensemble.
     UPDATE public.messages_chat
     SET lu = true
     WHERE conversation_id = p_conversation_id
@@ -35069,7 +37799,48 @@ ALTER FUNCTION "public"."fn_mes_exclusions_recues"() OWNER TO "postgres";
 
 CREATE OR REPLACE FUNCTION "public"."fn_mes_factures"() RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'pg_catalog', 'public', 'auth'
+    AS $$
+DECLARE
+  v_etab_id uuid := public.mon_etablissement_id();
+BEGIN
+  IF NOT public.est_admin()
+     AND COALESCE(auth.role(), '') <> 'service_role'
+     AND (
+       v_etab_id IS NULL
+       OR public.fn_a_permission_etablissement('lecture_paiement', v_etab_id) IS NOT TRUE
+     ) THEN
+    RETURN jsonb_build_object('error', 'Accès refusé');
+  END IF;
+  RETURN public.fn_mes_factures_internal_20260801();
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_mes_factures"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."fn_mes_factures_honoraires"() RETURNS TABLE("id" "uuid", "numero_facture" "text", "etablissement_nom" "text", "mission_intitule" "text", "montant_ttc" numeric, "statut" "text", "date_emission" "date", "date_echeance" "date", "date_paiement" "date", "mission_id" "uuid")
+    LANGUAGE "sql" STABLE SECURITY DEFINER
     SET "search_path" TO 'public'
+    AS $$
+    SELECT fh.id, fh.numero_facture, e.nom, m.intitule,
+           fh.montant_ttc, fh.statut, fh.date_emission, fh.date_echeance, fh.date_paiement,
+           fh.mission_id
+    FROM factures_honoraires fh
+    JOIN etablissements e ON e.id = fh.etablissement_id
+    LEFT JOIN missions m ON m.id = fh.mission_id
+    WHERE fh.soignant_id = auth.uid()
+    ORDER BY fh.date_emission DESC;
+$$;
+
+
+ALTER FUNCTION "public"."fn_mes_factures_honoraires"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."fn_mes_factures_internal_20260801"() RETURNS "jsonb"
+    LANGUAGE "plpgsql"
+    SET "search_path" TO 'pg_catalog', 'public', 'auth'
     AS $$
 DECLARE
     v_etab_id UUID := mon_etablissement_id();
@@ -35101,25 +37872,7 @@ END;
 $$;
 
 
-ALTER FUNCTION "public"."fn_mes_factures"() OWNER TO "postgres";
-
-
-CREATE OR REPLACE FUNCTION "public"."fn_mes_factures_honoraires"() RETURNS TABLE("id" "uuid", "numero_facture" "text", "etablissement_nom" "text", "mission_intitule" "text", "montant_ttc" numeric, "statut" "text", "date_emission" "date", "date_echeance" "date", "date_paiement" "date", "mission_id" "uuid")
-    LANGUAGE "sql" STABLE SECURITY DEFINER
-    SET "search_path" TO 'public'
-    AS $$
-    SELECT fh.id, fh.numero_facture, e.nom, m.intitule,
-           fh.montant_ttc, fh.statut, fh.date_emission, fh.date_echeance, fh.date_paiement,
-           fh.mission_id
-    FROM factures_honoraires fh
-    JOIN etablissements e ON e.id = fh.etablissement_id
-    LEFT JOIN missions m ON m.id = fh.mission_id
-    WHERE fh.soignant_id = auth.uid()
-    ORDER BY fh.date_emission DESC;
-$$;
-
-
-ALTER FUNCTION "public"."fn_mes_factures_honoraires"() OWNER TO "postgres";
+ALTER FUNCTION "public"."fn_mes_factures_internal_20260801"() OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."fn_mes_favoris_etablissements"() RETURNS "jsonb"
@@ -35581,6 +38334,7 @@ BEGIN
       'supprimer_compte', public.fn_a_permission_etablissement('supprimer_compte', v_etab_id),
       'profil_etab', public.fn_a_permission_etablissement('profil_etab', v_etab_id),
       'paiement', public.fn_a_permission_etablissement('paiement', v_etab_id),
+      'lecture_paiement', public.fn_a_permission_etablissement('lecture_paiement', v_etab_id),
       'missions', public.fn_a_permission_etablissement('missions', v_etab_id),
       'candidatures', public.fn_a_permission_etablissement('candidatures', v_etab_id),
       'contrats', public.fn_a_permission_etablissement('contrats', v_etab_id),
@@ -35635,58 +38389,73 @@ ALTER FUNCTION "public"."fn_mes_reclamations"("p_statut" "text") OWNER TO "postg
 
 CREATE OR REPLACE FUNCTION "public"."fn_mes_revenus_connect"("p_mois_debut" "date" DEFAULT NULL::"date") RETURNS "jsonb"
     LANGUAGE "plpgsql" STABLE SECURITY DEFINER
-    SET "search_path" TO 'public'
+    SET "search_path" TO ''
     AS $$
 DECLARE
-    v_debut DATE;
-    v_connect_mois NUMERIC;
-    v_connect_total NUMERIC;
-    v_connect_attente NUMERIC;
-    v_paiements_mois NUMERIC;
-    v_paiements_total NUMERIC;
-    -- Escrow (paiements_escrow) : honoraires_cents en CENTIMES → euros.
-    v_escrow_mois NUMERIC;
-    v_escrow_total NUMERIC;
-    v_escrow_attente NUMERIC;
+    v_debut date;
+    v_connect_mois numeric;
+    v_connect_total numeric;
+    v_connect_attente numeric;
+    v_paiements_mois numeric;
+    v_paiements_total numeric;
+    v_escrow_mois numeric;
+    v_escrow_total numeric;
+    v_escrow_attente numeric;
 BEGIN
-    v_debut := COALESCE(p_mois_debut, DATE_TRUNC('month', CURRENT_DATE)::DATE);
+    v_debut := COALESCE(p_mois_debut, DATE_TRUNC('month', CURRENT_DATE)::date);
 
-    -- Stripe Connect transfers (ancien modèle, déjà en euros) — inchangé.
-    SELECT COALESCE(SUM(montant_soignant), 0) INTO v_connect_mois
-    FROM stripe_transfers WHERE soignant_id = auth.uid() AND statut IN ('TRANSFERE','PAYE') AND transfere_le >= v_debut;
+    SELECT COALESCE(SUM(st.montant_soignant), 0) INTO v_connect_mois
+    FROM public.stripe_transfers st
+    WHERE st.soignant_id = auth.uid()
+      AND st.statut IN ('TRANSFERE', 'PAYE')
+      AND st.transfere_le >= v_debut;
 
-    SELECT COALESCE(SUM(montant_soignant), 0) INTO v_connect_total
-    FROM stripe_transfers WHERE soignant_id = auth.uid() AND statut IN ('TRANSFERE','PAYE');
+    SELECT COALESCE(SUM(st.montant_soignant), 0) INTO v_connect_total
+    FROM public.stripe_transfers st
+    WHERE st.soignant_id = auth.uid()
+      AND st.statut IN ('TRANSFERE', 'PAYE');
 
-    SELECT COALESCE(SUM(montant_soignant), 0) INTO v_connect_attente
-    FROM stripe_transfers WHERE soignant_id = auth.uid() AND statut IN ('EN_ATTENTE');
+    SELECT COALESCE(SUM(st.montant_soignant), 0) INTO v_connect_attente
+    FROM public.stripe_transfers st
+    WHERE st.soignant_id = auth.uid()
+      AND st.statut = 'EN_ATTENTE';
 
-    -- Paiements manuels confirmés (déjà en euros) — inchangé.
-    SELECT COALESCE(SUM(montant_net), 0) INTO v_paiements_mois
-    FROM paiements_soignant WHERE soignant_id = auth.uid() AND statut = 'CONFIRME' AND confirme_par_soignant_le >= v_debut;
+    -- Seuls les paiements réellement manuels sont additionnés. Les lignes liées
+    -- à stripe_transfers sont le miroir comptable du même versement Connect.
+    SELECT COALESCE(SUM(ps.montant_net), 0) INTO v_paiements_mois
+    FROM public.paiements_soignant ps
+    WHERE ps.soignant_id = auth.uid()
+      AND ps.statut = 'CONFIRME'
+      AND ps.stripe_transfer_id IS NULL
+      AND ps.confirme_par_soignant_le >= v_debut;
 
-    SELECT COALESCE(SUM(montant_net), 0) INTO v_paiements_total
-    FROM paiements_soignant WHERE soignant_id = auth.uid() AND statut = 'CONFIRME';
+    SELECT COALESCE(SUM(ps.montant_net), 0) INTO v_paiements_total
+    FROM public.paiements_soignant ps
+    WHERE ps.soignant_id = auth.uid()
+      AND ps.statut = 'CONFIRME'
+      AND ps.stripe_transfer_id IS NULL;
 
-    -- Escrow versé (PAYE) — centimes → euros. Missions disjointes de
-    -- stripe_transfers (l'escrow remplace le transfer direct) → pas de double-compte.
-    SELECT COALESCE(SUM(honoraires_cents), 0) / 100.0 INTO v_escrow_mois
-    FROM paiements_escrow WHERE soignant_id = auth.uid() AND statut = 'PAYE' AND paye_le >= v_debut;
+    SELECT COALESCE(SUM(pe.honoraires_cents), 0) / 100.0 INTO v_escrow_mois
+    FROM public.paiements_escrow pe
+    WHERE pe.soignant_id = auth.uid()
+      AND pe.statut = 'PAYE'
+      AND pe.paye_le >= v_debut;
 
-    SELECT COALESCE(SUM(honoraires_cents), 0) / 100.0 INTO v_escrow_total
-    FROM paiements_escrow WHERE soignant_id = auth.uid() AND statut = 'PAYE';
+    SELECT COALESCE(SUM(pe.honoraires_cents), 0) / 100.0 INTO v_escrow_total
+    FROM public.paiements_escrow pe
+    WHERE pe.soignant_id = auth.uid()
+      AND pe.statut = 'PAYE';
 
-    -- Escrow in-flight (réservé / en attente / versement en cours) = à venir.
-    SELECT COALESCE(SUM(honoraires_cents), 0) / 100.0 INTO v_escrow_attente
-    FROM paiements_escrow
-    WHERE soignant_id = auth.uid()
-      AND statut IN ('INITIE','DEBITE','DISPONIBLE','RELEASE_PLANIFIE');
+    SELECT COALESCE(SUM(pe.honoraires_cents), 0) / 100.0 INTO v_escrow_attente
+    FROM public.paiements_escrow pe
+    WHERE pe.soignant_id = auth.uid()
+      AND pe.statut IN ('INITIE', 'DEBITE', 'DISPONIBLE', 'RELEASE_PLANIFIE');
 
     RETURN jsonb_build_object(
         'mois_en_cours', v_connect_mois + v_paiements_mois + v_escrow_mois,
         'total', v_connect_total + v_paiements_total + v_escrow_total,
         'en_attente', v_connect_attente + v_escrow_attente,
-        'stripe_connect_actif', fn_soignant_stripe_connect_actif(auth.uid())
+        'stripe_connect_actif', public.fn_soignant_stripe_connect_actif(auth.uid())
     );
 END;
 $$;
@@ -35992,6 +38761,17 @@ $$;
 ALTER FUNCTION "public"."fn_mission_est_de_nuit"("p_debut" timestamp with time zone, "p_fin" timestamp with time zone) OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."fn_mission_est_reelle_pour_service"("p_mission_id" "uuid") RETURNS boolean
+    LANGUAGE "sql" STABLE
+    SET "search_path" TO ''
+    AS $$
+  SELECT private.fn_mission_est_reelle(p_mission_id);
+$$;
+
+
+ALTER FUNCTION "public"."fn_mission_est_reelle_pour_service"("p_mission_id" "uuid") OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."fn_mission_publique"("p_id" "uuid") RETURNS "jsonb"
     LANGUAGE "sql" STABLE SECURITY DEFINER
     SET "search_path" TO 'public'
@@ -36023,6 +38803,10 @@ $$;
 ALTER FUNCTION "public"."fn_mission_publique"("p_id" "uuid") OWNER TO "postgres";
 
 
+COMMENT ON FUNCTION "public"."fn_mission_publique"("p_id" "uuid") IS 'SECURITY DEFINER anonyme revue : fiche publique filtrée, comptes test exclus.';
+
+
+
 CREATE OR REPLACE FUNCTION "public"."fn_missions_ouvertes_sitemap"() RETURNS TABLE("id" "uuid", "maj" timestamp with time zone)
     LANGUAGE "sql" STABLE SECURITY DEFINER
     SET "search_path" TO 'public'
@@ -36050,7 +38834,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_missions_publiques_etablissement"("p_eta
     LANGUAGE "sql" STABLE SECURITY DEFINER
     SET "search_path" TO 'public'
     AS $$
-  SELECT 
+  SELECT
     m.id,
     m.intitule,
     m.profession_requise,
@@ -36065,6 +38849,8 @@ CREATE OR REPLACE FUNCTION "public"."fn_missions_publiques_etablissement"("p_eta
   WHERE m.etablissement_id = p_etablissement_id
     AND m.statut = 'OUVERTE'
     AND e.supprime_le IS NULL
+    AND e.est_compte_test IS FALSE
+    AND private.fn_mission_lie_compte_test(m.id) IS FALSE
   ORDER BY m.debut_le
   LIMIT 10;
 $$;
@@ -36120,6 +38906,10 @@ $$;
 ALTER FUNCTION "public"."fn_missions_publiques_recherche"("p_profession" "text", "p_ville" "text") OWNER TO "postgres";
 
 
+COMMENT ON FUNCTION "public"."fn_missions_publiques_recherche"("p_profession" "text", "p_ville" "text") IS 'SECURITY DEFINER anonyme revue : recherche publique filtrée, comptes test exclus.';
+
+
+
 CREATE OR REPLACE FUNCTION "public"."fn_missions_terminees_a_remercier"() RETURNS TABLE("mission_id" "uuid", "soignant_id" "uuid", "soignant_prenom" "text", "soignant_email" "text", "etab_email" "text", "etab_nom" "text", "code_parrainage" "text")
     LANGUAGE "sql" STABLE SECURITY DEFINER
     SET "search_path" TO 'public'
@@ -36166,7 +38956,7 @@ BEGIN
   RETURN jsonb_build_object(
     'niveau', 'NON_PROPOSE',
     'categorie', v_cat,
-    'source_libelle', 'Jolene propose cette mission en salarié : l''exercice libéral au sein d''un établissement expose à une requalification.',
+    'source_libelle', 'Jolene recommande le salariat lorsque les conditions concrètes de la mission pourraient caractériser un lien de subordination. Ce n’est pas une interdiction générale du libéral en clinique.',
     'source_force', 'CONFORMITE_JOLENE',
     'source_url', NULL,
     'source_url_complementaire', NULL
@@ -36180,25 +38970,32 @@ ALTER FUNCTION "public"."fn_mode_exercice"("p_profession" "text", "p_type_etab" 
 
 CREATE OR REPLACE FUNCTION "public"."fn_mode_paiement_mission"("p_mission_id" "uuid") RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO 'public'
+    SET "search_path" TO 'pg_catalog', 'public', 'auth'
     AS $$
 DECLARE
   v_mission record;
   v_connect_actif boolean;
   v_rib_partage boolean;
   v_regime text;
+  v_montant_soignant numeric;
 BEGIN
   SELECT m.*, s.type_exercice AS profil_type_exercice,
          s.iban_last4 AS soignant_iban_last4
-    INTO v_mission
-    FROM public.missions m
-    JOIN public.soignants s ON s.id = m.soignant_assigne_id
-   WHERE m.id = p_mission_id;
-  IF NOT FOUND THEN RETURN jsonb_build_object('error', 'Mission introuvable'); END IF;
+  INTO v_mission
+  FROM public.missions m
+  JOIN public.soignants s ON s.id = m.soignant_assigne_id
+  WHERE m.id = p_mission_id;
+  IF NOT FOUND THEN
+    RETURN jsonb_build_object('error', 'Mission introuvable');
+  END IF;
 
-  IF v_mission.etablissement_id IS DISTINCT FROM public.mon_etablissement_id()
-     AND v_mission.soignant_assigne_id IS DISTINCT FROM auth.uid()
-     AND NOT public.est_admin() THEN
+  IF v_mission.soignant_assigne_id IS DISTINCT FROM auth.uid()
+     AND NOT public.est_admin()
+     AND COALESCE(auth.role(), '') <> 'service_role'
+     AND (
+       v_mission.etablissement_id IS DISTINCT FROM public.mon_etablissement_id()
+       OR public.fn_a_permission_etablissement('lecture_paiement', v_mission.etablissement_id) IS NOT TRUE
+     ) THEN
     RETURN jsonb_build_object('error', 'Accès refusé');
   END IF;
 
@@ -36206,13 +39003,20 @@ BEGIN
     v_mission.type_contrat_applique::text,
     CASE WHEN v_mission.type_paiement_soignant = 'NOTE_HONORAIRES' THEN 'LIBERAL' ELSE 'SALARIE' END
   );
+  v_montant_soignant := CASE
+    WHEN v_regime = 'SALARIE' THEN COALESCE(
+      NULLIF(v_mission.net_estime, 0),
+      round(NULLIF(v_mission.net_a_payer, 0) * 0.78, 2)
+    )
+    ELSE v_mission.net_a_payer
+  END;
   v_connect_actif := v_regime = 'LIBERAL'
     AND public.fn_soignant_stripe_connect_actif(v_mission.soignant_assigne_id);
   v_rib_partage := EXISTS (
     SELECT 1 FROM public.partages_rib
-     WHERE mission_id = p_mission_id
-       AND actif
-       AND (expire_le IS NULL OR expire_le > now())
+    WHERE mission_id = p_mission_id
+      AND actif
+      AND (expire_le IS NULL OR expire_le > now())
   );
 
   RETURN jsonb_build_object(
@@ -36226,12 +39030,13 @@ BEGIN
     'stripe_connect_actif', v_connect_actif,
     'rib_partage', v_rib_partage,
     'iban_last4', v_mission.soignant_iban_last4,
-    'montant_soignant', v_mission.net_a_payer,
+    'montant_soignant', v_montant_soignant,
+    'montant_soignant_estime', v_regime = 'SALARIE',
     'total_brut', v_mission.total_brut,
     'net_estime', v_mission.net_estime,
     'commission_ht', v_mission.montant_commission_ht,
     'commission_ttc', v_mission.montant_commission_ttc,
-    'total', COALESCE(v_mission.net_a_payer, 0) + COALESCE(v_mission.montant_commission_ttc, 0)
+    'total', COALESCE(v_montant_soignant, 0) + COALESCE(v_mission.montant_commission_ttc, 0)
   );
 END;
 $$;
@@ -36381,108 +39186,318 @@ ALTER FUNCTION "public"."fn_modifier_mission_etablissement"("p_mission_id" "uuid
 
 CREATE OR REPLACE FUNCTION "public"."fn_modifier_mission_etablissement_v2"("p_mission_id" "uuid", "p_intitule" "text", "p_description" "text" DEFAULT NULL::"text", "p_service" "text" DEFAULT NULL::"text", "p_profession_requise" "public"."type_profession" DEFAULT NULL::"public"."type_profession", "p_debut_le" timestamp with time zone DEFAULT NULL::timestamp with time zone, "p_fin_le" timestamp with time zone DEFAULT NULL::timestamp with time zone, "p_taux_horaire_base" numeric DEFAULT NULL::numeric, "p_est_urgente" boolean DEFAULT false, "p_niveau_urgence" integer DEFAULT 0, "p_mode_attribution" "text" DEFAULT 'PREMIER_ARRIVE'::"text", "p_type_contrat_recherche" "text" DEFAULT 'SALARIE'::"text", "p_specialite_medicale_requise" "text" DEFAULT NULL::"text", "p_accepte_non_specialises" boolean DEFAULT true) RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO 'public'
+    SET "search_path" TO ''
     AS $$
 DECLARE
   v_mission public.missions%ROWTYPE;
-  v_etablissement_id uuid := public.mon_etablissement_id();
+  v_creneaux jsonb;
+  v_nb integer;
 BEGIN
-  SELECT * INTO v_mission
-    FROM public.missions
-   WHERE id = p_mission_id
-     AND (etablissement_id = v_etablissement_id OR public.est_admin());
+  SELECT m.*
+  INTO v_mission
+  FROM public.missions m
+  WHERE m.id = p_mission_id;
+
   IF NOT FOUND THEN
-    RETURN jsonb_build_object('success', false, 'error', 'Mission introuvable ou accès refusé.');
-  END IF;
-  IF v_mission.statut <> 'OUVERTE' THEN
-    RETURN jsonb_build_object('success', false, 'error', 'Seules les missions ouvertes peuvent être modifiées.');
-  END IF;
-  IF p_intitule IS NULL OR length(btrim(p_intitule)) < 3 THEN
-    RETURN jsonb_build_object('success', false, 'error', 'L''intitulé doit contenir au moins 3 caractères.');
-  END IF;
-  IF p_profession_requise IS NULL THEN
-    RETURN jsonb_build_object('success', false, 'error', 'La profession requise est obligatoire.');
-  END IF;
-  IF p_debut_le IS NULL OR p_fin_le IS NULL OR p_fin_le <= p_debut_le THEN
-    RETURN jsonb_build_object('success', false, 'error', 'La date de fin doit être postérieure à la date de début.');
-  END IF;
-  IF p_debut_le < now() THEN
-    RETURN jsonb_build_object('success', false, 'error', 'Une mission ouverte ne peut pas être déplacée dans le passé.');
-  END IF;
-  IF p_taux_horaire_base IS NULL OR p_taux_horaire_base <= 0 THEN
-    RETURN jsonb_build_object('success', false, 'error', 'Le taux horaire doit être supérieur à zéro.');
-  END IF;
-  IF p_mode_attribution NOT IN ('PREMIER_ARRIVE', 'CANDIDATURE') THEN
-    RETURN jsonb_build_object('success', false, 'error', 'Mode d''attribution invalide.');
-  END IF;
-  IF p_type_contrat_recherche NOT IN ('SALARIE', 'LIBERAL', 'TOUS') THEN
-    RETURN jsonb_build_object('success', false, 'error', 'Type de contrat invalide.');
-  END IF;
-  IF v_mission.nb_creneaux > 1
-     AND (p_debut_le IS DISTINCT FROM v_mission.debut_le OR p_fin_le IS DISTINCT FROM v_mission.fin_le) THEN
-    RETURN jsonb_build_object(
+    RETURN pg_catalog.jsonb_build_object(
       'success', false,
-      'error', 'Les dates d''une mission multi-jours se modifient depuis ses créneaux, pas depuis l''enveloppe globale.'
+      'error', 'Mission introuvable ou accès refusé.'
     );
   END IF;
 
-  UPDATE public.missions
-     SET intitule = btrim(p_intitule),
-         description = p_description,
-         service = NULLIF(btrim(p_service), ''),
-         profession_requise = p_profession_requise,
-         debut_le = p_debut_le,
-         fin_le = p_fin_le,
-         taux_horaire_base = p_taux_horaire_base,
-         est_urgente = COALESCE(p_est_urgente, false),
-         niveau_urgence = CASE WHEN COALESCE(p_est_urgente, false)
-           THEN GREATEST(1, LEAST(COALESCE(p_niveau_urgence, 1), 3)) ELSE 0 END,
-         mode_attribution = p_mode_attribution,
-         type_contrat_recherche = p_type_contrat_recherche,
-         specialite_medicale_requise = CASE
-           WHEN p_profession_requise = 'MEDECIN' THEN NULLIF(btrim(p_specialite_medicale_requise), '')
-           ELSE NULL
-         END,
-         accepte_non_specialises = CASE
-           WHEN p_profession_requise IN ('IBODE', 'IADE') THEN COALESCE(p_accepte_non_specialises, true)
-           ELSE true
-         END,
-         modifie_le = now()
-   WHERE id = p_mission_id;
+  SELECT
+    pg_catalog.count(*)::integer,
+    pg_catalog.jsonb_agg(
+      pg_catalog.jsonb_build_object('debut', mc.debut, 'fin', mc.fin)
+      ORDER BY mc.debut, mc.fin, mc.ordre, mc.id
+    )
+  INTO v_nb, v_creneaux
+  FROM public.mission_creneaux mc
+  WHERE mc.mission_id = p_mission_id
+    AND mc.type_creneau = 'PREVISIONNEL'
+    AND NOT mc.est_pause;
 
-  -- Relire la ligne après les triggers de matrice et de calcul : le contrat
-  -- retourné/audité est celui réellement appliqué, pas la préférence envoyée.
-  SELECT * INTO v_mission FROM public.missions WHERE id = p_mission_id;
+  IF v_nb > 1 THEN
+    IF p_debut_le IS DISTINCT FROM v_mission.debut_le
+       OR p_fin_le IS DISTINCT FROM v_mission.fin_le THEN
+      RETURN pg_catalog.jsonb_build_object(
+        'success', false,
+        'error', 'Les dates d''une mission multi-créneaux se modifient depuis son planning détaillé.'
+      );
+    END IF;
+  ELSE
+    v_creneaux := pg_catalog.jsonb_build_array(
+      pg_catalog.jsonb_build_object('debut', p_debut_le, 'fin', p_fin_le)
+    );
+  END IF;
 
-  PERFORM public.fn_ecrire_audit_safe(
-    auth.uid(),
-    CASE WHEN public.est_admin() THEN 'ADMIN' ELSE 'ADMIN_ETABLISSEMENT' END,
-    'MISSION_MODIFICATION', 'mission', p_mission_id, NULL,
-    jsonb_build_object(
-      'profession_requise', v_mission.profession_requise,
-      'debut_le', v_mission.debut_le,
-      'fin_le', v_mission.fin_le,
-      'taux_horaire_base', v_mission.taux_horaire_base,
-      'type_contrat_recherche', v_mission.type_contrat_recherche,
-      'mode_attribution', v_mission.mode_attribution,
-      'est_urgente', v_mission.est_urgente
-    ),
-    NULL, NULL
+  RETURN public.fn_modifier_mission_etablissement_v3(
+    p_mission_id,
+    p_intitule,
+    p_description,
+    p_service,
+    p_profession_requise,
+    p_taux_horaire_base,
+    p_est_urgente,
+    p_niveau_urgence,
+    p_mode_attribution,
+    p_type_contrat_recherche,
+    p_specialite_medicale_requise,
+    p_accepte_non_specialises,
+    COALESCE(v_creneaux, '[]'::jsonb)
   );
-
-  RETURN jsonb_build_object(
-    'success', true,
-    'mission_id', p_mission_id,
-    'profession_requise', v_mission.profession_requise,
-    'type_contrat_recherche', v_mission.type_contrat_recherche
-  );
-EXCEPTION WHEN OTHERS THEN
-  RETURN jsonb_build_object('success', false, 'error', SQLERRM, 'sqlstate', SQLSTATE);
+EXCEPTION
+  WHEN OTHERS THEN
+    RAISE LOG '[fn_modifier_mission_etablissement_v2] SQLSTATE=% SQLERRM=%',
+      SQLSTATE, SQLERRM;
+    RETURN pg_catalog.jsonb_build_object(
+      'success', false,
+      'error', 'La modification de la mission est temporairement indisponible.',
+      'code', 'MODIFICATION_MISSION_INDISPONIBLE'
+    );
 END;
 $$;
 
 
 ALTER FUNCTION "public"."fn_modifier_mission_etablissement_v2"("p_mission_id" "uuid", "p_intitule" "text", "p_description" "text", "p_service" "text", "p_profession_requise" "public"."type_profession", "p_debut_le" timestamp with time zone, "p_fin_le" timestamp with time zone, "p_taux_horaire_base" numeric, "p_est_urgente" boolean, "p_niveau_urgence" integer, "p_mode_attribution" "text", "p_type_contrat_recherche" "text", "p_specialite_medicale_requise" "text", "p_accepte_non_specialises" boolean) OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."fn_modifier_mission_etablissement_v3"("p_mission_id" "uuid", "p_intitule" "text", "p_description" "text" DEFAULT NULL::"text", "p_service" "text" DEFAULT NULL::"text", "p_profession_requise" "public"."type_profession" DEFAULT NULL::"public"."type_profession", "p_taux_horaire_base" numeric DEFAULT NULL::numeric, "p_est_urgente" boolean DEFAULT false, "p_niveau_urgence" integer DEFAULT 0, "p_mode_attribution" "text" DEFAULT 'PREMIER_ARRIVE'::"text", "p_type_contrat_recherche" "text" DEFAULT 'SALARIE'::"text", "p_specialite_medicale_requise" "text" DEFAULT NULL::"text", "p_accepte_non_specialises" boolean DEFAULT true, "p_creneaux" "jsonb" DEFAULT '[]'::"jsonb") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+DECLARE
+  v_mission public.missions%ROWTYPE;
+  v_validation jsonb;
+  v_debut timestamptz;
+  v_fin timestamptz;
+  v_nb integer;
+  v_total numeric;
+  v_planning_modifie boolean;
+BEGIN
+  IF (SELECT auth.uid()) IS NULL THEN
+    RETURN pg_catalog.jsonb_build_object('success', false, 'error', 'Non authentifié.');
+  END IF;
+
+  SELECT m.*
+  INTO v_mission
+  FROM public.missions m
+  WHERE m.id = p_mission_id
+  FOR UPDATE;
+  IF NOT FOUND OR public.fn_a_permission_etablissement(
+    'missions', v_mission.etablissement_id
+  ) IS NOT TRUE THEN
+    RETURN pg_catalog.jsonb_build_object(
+      'success', false,
+      'error', 'Mission introuvable ou accès refusé.'
+    );
+  END IF;
+  IF v_mission.statut <> 'OUVERTE' THEN
+    RETURN pg_catalog.jsonb_build_object(
+      'success', false,
+      'error', 'Seules les missions ouvertes peuvent être modifiées.'
+    );
+  END IF;
+  IF EXISTS (
+    SELECT 1
+    FROM public.mission_creneaux mc
+    WHERE mc.mission_id = p_mission_id
+      AND mc.type_creneau = 'EFFECTIF'
+  ) THEN
+    RETURN pg_catalog.jsonb_build_object(
+      'success', false,
+      'error', 'Le planning ne peut plus être modifié après un pointage.'
+    );
+  END IF;
+
+  IF p_intitule IS NULL OR pg_catalog.length(pg_catalog.btrim(p_intitule)) < 3 THEN
+    RETURN pg_catalog.jsonb_build_object('success', false, 'error', 'L''intitulé doit contenir au moins 3 caractères.');
+  END IF;
+  IF p_profession_requise IS NULL THEN
+    RETURN pg_catalog.jsonb_build_object('success', false, 'error', 'La profession requise est obligatoire.');
+  END IF;
+  IF p_taux_horaire_base IS NULL OR p_taux_horaire_base <= 0 THEN
+    RETURN pg_catalog.jsonb_build_object('success', false, 'error', 'Le taux horaire doit être supérieur à zéro.');
+  END IF;
+  IF p_mode_attribution IS NULL
+     OR p_mode_attribution NOT IN ('PREMIER_ARRIVE', 'CANDIDATURE') THEN
+    RETURN pg_catalog.jsonb_build_object('success', false, 'error', 'Mode d''attribution invalide.');
+  END IF;
+  IF p_type_contrat_recherche IS NULL
+     OR p_type_contrat_recherche NOT IN ('SALARIE', 'LIBERAL', 'TOUS') THEN
+    RETURN pg_catalog.jsonb_build_object('success', false, 'error', 'Type de contrat invalide.');
+  END IF;
+
+  v_validation := public.fn_valider_creneaux_mission_json(
+    p_creneaux,
+    p_type_contrat_recherche <> 'LIBERAL'
+  );
+  IF COALESCE((v_validation->>'success')::boolean, false) IS NOT TRUE THEN
+    RETURN v_validation;
+  END IF;
+  v_debut := (v_validation->>'debut_le')::timestamptz;
+  v_fin := (v_validation->>'fin_le')::timestamptz;
+  v_nb := (v_validation->>'nb_creneaux')::integer;
+  v_total := (v_validation->>'total_heures')::numeric;
+
+  IF v_debut < pg_catalog.now() AND NOT public.est_admin() THEN
+    RETURN pg_catalog.jsonb_build_object(
+      'success', false,
+      'error', 'Une mission ouverte ne peut pas être déplacée dans le passé.'
+    );
+  END IF;
+
+  WITH nouveaux AS (
+    SELECT
+      (element->>'debut')::timestamptz AS debut,
+      (element->>'fin')::timestamptz AS fin
+    FROM pg_catalog.jsonb_array_elements(p_creneaux) AS source(element)
+  ), differences AS (
+    (SELECT mc.debut, mc.fin
+     FROM public.mission_creneaux mc
+     WHERE mc.mission_id = p_mission_id
+       AND mc.type_creneau = 'PREVISIONNEL'
+       AND NOT mc.est_pause
+     EXCEPT
+     SELECT n.debut, n.fin FROM nouveaux n)
+    UNION ALL
+    (SELECT n.debut, n.fin FROM nouveaux n
+     EXCEPT
+     SELECT mc.debut, mc.fin
+     FROM public.mission_creneaux mc
+     WHERE mc.mission_id = p_mission_id
+       AND mc.type_creneau = 'PREVISIONNEL'
+       AND NOT mc.est_pause)
+  )
+  SELECT EXISTS (SELECT 1 FROM differences)
+    OR (
+      SELECT pg_catalog.count(*)::integer
+      FROM public.mission_creneaux mc
+      WHERE mc.mission_id = p_mission_id
+        AND mc.type_creneau = 'PREVISIONNEL'
+        AND NOT mc.est_pause
+    ) <> v_nb
+  INTO v_planning_modifie;
+
+  IF v_planning_modifie AND EXISTS (
+    SELECT 1
+    FROM public.candidatures c
+    WHERE c.mission_id = p_mission_id
+      AND c.statut::text IN (
+        'EN_ATTENTE', 'EN_ATTENTE_VALIDATION_ETAB', 'PROPOSEE'
+      )
+  ) THEN
+    RETURN pg_catalog.jsonb_build_object(
+      'success', false,
+      'error', 'Le planning ne peut pas être modifié pendant que des candidatures sont en attente. Refusez-les ou publiez une nouvelle mission.'
+    );
+  END IF;
+
+  IF v_planning_modifie THEN
+    PERFORM pg_catalog.set_config('jolene.sync_in_progress', 'true', true);
+    DELETE FROM public.mission_creneaux
+    WHERE mission_id = p_mission_id
+      AND type_creneau = 'PREVISIONNEL';
+
+    INSERT INTO public.mission_creneaux (
+      mission_id, debut, fin, est_pause, ordre, type_creneau
+    )
+    SELECT
+      p_mission_id,
+      (element->>'debut')::timestamptz,
+      (element->>'fin')::timestamptz,
+      false,
+      pg_catalog.row_number() OVER (
+        ORDER BY (element->>'debut')::timestamptz,
+                 (element->>'fin')::timestamptz,
+                 ordinality
+      )::integer,
+      'PREVISIONNEL'
+    FROM pg_catalog.jsonb_array_elements(p_creneaux)
+      WITH ORDINALITY AS source(element, ordinality)
+    ORDER BY (element->>'debut')::timestamptz,
+             (element->>'fin')::timestamptz,
+             ordinality;
+    PERFORM pg_catalog.set_config('jolene.sync_in_progress', 'false', true);
+  END IF;
+
+  UPDATE public.missions
+  SET intitule = pg_catalog.btrim(p_intitule),
+      description = p_description,
+      service = NULLIF(pg_catalog.btrim(p_service), ''),
+      profession_requise = p_profession_requise,
+      debut_le = v_debut,
+      fin_le = v_fin,
+      duree_heures = v_total,
+      nb_creneaux = v_nb,
+      taux_horaire_base = p_taux_horaire_base,
+      est_urgente = COALESCE(p_est_urgente, false),
+      niveau_urgence = CASE WHEN COALESCE(p_est_urgente, false)
+        THEN GREATEST(1, LEAST(COALESCE(p_niveau_urgence, 1), 3))
+        ELSE 0
+      END,
+      mode_attribution = p_mode_attribution,
+      type_contrat_recherche = p_type_contrat_recherche,
+      specialite_medicale_requise = CASE WHEN p_profession_requise = 'MEDECIN'
+        THEN NULLIF(pg_catalog.btrim(p_specialite_medicale_requise), '')
+        ELSE NULL
+      END,
+      accepte_non_specialises = CASE WHEN p_profession_requise IN ('IBODE', 'IADE')
+        THEN COALESCE(p_accepte_non_specialises, true)
+        ELSE true
+      END,
+      modifie_le = pg_catalog.now()
+  WHERE id = p_mission_id;
+
+  SELECT m.* INTO v_mission
+  FROM public.missions m
+  WHERE m.id = p_mission_id;
+
+  PERFORM public.fn_ecrire_audit_safe(
+    (SELECT auth.uid()),
+    CASE WHEN public.est_admin() THEN 'ADMIN' ELSE 'ADMIN_ETABLISSEMENT' END,
+    'MISSION_MODIFICATION',
+    'mission',
+    p_mission_id,
+    NULL,
+    pg_catalog.jsonb_build_object(
+      'planning_modifie', v_planning_modifie,
+      'nb_creneaux', v_nb,
+      'debut_le', v_debut,
+      'fin_le', v_fin,
+      'total_heures', v_total,
+      'profession_requise', v_mission.profession_requise,
+      'type_contrat_recherche', v_mission.type_contrat_recherche
+    ),
+    NULL,
+    NULL
+  );
+
+  RETURN pg_catalog.jsonb_build_object(
+    'success', true,
+    'mission_id', p_mission_id,
+    'nb_creneaux', v_nb,
+    'total_heures', v_total,
+    'planning_modifie', v_planning_modifie
+  );
+EXCEPTION
+  WHEN OTHERS THEN
+    RAISE LOG '[fn_modifier_mission_etablissement_v3] SQLSTATE=% SQLERRM=%',
+      SQLSTATE, SQLERRM;
+    RETURN pg_catalog.jsonb_build_object(
+      'success', false,
+      'error', 'La modification de la mission est temporairement indisponible.',
+      'code', 'MODIFICATION_MISSION_INDISPONIBLE'
+    );
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_modifier_mission_etablissement_v3"("p_mission_id" "uuid", "p_intitule" "text", "p_description" "text", "p_service" "text", "p_profession_requise" "public"."type_profession", "p_taux_horaire_base" numeric, "p_est_urgente" boolean, "p_niveau_urgence" integer, "p_mode_attribution" "text", "p_type_contrat_recherche" "text", "p_specialite_medicale_requise" "text", "p_accepte_non_specialises" boolean, "p_creneaux" "jsonb") OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "public"."fn_modifier_mission_etablissement_v3"("p_mission_id" "uuid", "p_intitule" "text", "p_description" "text", "p_service" "text", "p_profession_requise" "public"."type_profession", "p_taux_horaire_base" numeric, "p_est_urgente" boolean, "p_niveau_urgence" integer, "p_mode_attribution" "text", "p_type_contrat_recherche" "text", "p_specialite_medicale_requise" "text", "p_accepte_non_specialises" boolean, "p_creneaux" "jsonb") IS 'Édition atomique d''une mission ouverte et de tous ses créneaux PREVISIONNEL datés.';
+
 
 
 CREATE OR REPLACE FUNCTION "public"."fn_modifier_mon_etablissement"("p_nom" "text" DEFAULT NULL::"text", "p_finess" "text" DEFAULT NULL::"text", "p_adresse_rue" "text" DEFAULT NULL::"text", "p_adresse_ville" "text" DEFAULT NULL::"text", "p_adresse_code_postal" "text" DEFAULT NULL::"text", "p_adresse_departement" "text" DEFAULT NULL::"text", "p_email_contact" "text" DEFAULT NULL::"text", "p_telephone" "text" DEFAULT NULL::"text", "p_adresse_lat" numeric DEFAULT NULL::numeric, "p_adresse_lng" numeric DEFAULT NULL::numeric, "p_taux_majoration_nuit" numeric DEFAULT NULL::numeric, "p_taux_majoration_dimanche" numeric DEFAULT NULL::numeric, "p_taux_majoration_ferie" numeric DEFAULT NULL::numeric, "p_couleur_theme" "text" DEFAULT NULL::"text", "p_convention_collective" "text" DEFAULT NULL::"text", "p_mode_paiement_commission" "text" DEFAULT NULL::"text", "p_logo_url" "text" DEFAULT NULL::"text", "p_contrat_url" "text" DEFAULT NULL::"text") RETURNS "jsonb"
@@ -36916,7 +39931,36 @@ ALTER FUNCTION "public"."fn_modifier_preferences_notifications"("p_canal_email" 
 
 CREATE OR REPLACE FUNCTION "public"."fn_modifier_reference_paiement"("p_paiement_id" "uuid", "p_nouvelle_reference" "text") RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO 'public'
+    SET "search_path" TO 'pg_catalog', 'public', 'auth'
+    AS $$
+DECLARE
+  v_etab_id uuid;
+BEGIN
+  SELECT etablissement_id INTO v_etab_id
+  FROM public.paiements_soignant
+  WHERE id = p_paiement_id;
+  IF v_etab_id IS NULL THEN
+    RETURN jsonb_build_object('error', 'Paiement introuvable');
+  END IF;
+  IF NOT public.est_admin()
+     AND COALESCE(auth.role(), '') <> 'service_role'
+     AND (
+       v_etab_id IS DISTINCT FROM public.mon_etablissement_id()
+       OR public.fn_a_permission_etablissement('paiement', v_etab_id) IS NOT TRUE
+     ) THEN
+    RETURN jsonb_build_object('error', 'Accès refusé');
+  END IF;
+  RETURN public.fn_modifier_reference_paiement_internal_20260801(p_paiement_id, p_nouvelle_reference);
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_modifier_reference_paiement"("p_paiement_id" "uuid", "p_nouvelle_reference" "text") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."fn_modifier_reference_paiement_internal_20260801"("p_paiement_id" "uuid", "p_nouvelle_reference" "text") RETURNS "jsonb"
+    LANGUAGE "plpgsql"
+    SET "search_path" TO 'pg_catalog', 'public', 'auth'
     AS $$
 DECLARE
     v_paiement RECORD;
@@ -36960,7 +40004,7 @@ END;
 $$;
 
 
-ALTER FUNCTION "public"."fn_modifier_reference_paiement"("p_paiement_id" "uuid", "p_nouvelle_reference" "text") OWNER TO "postgres";
+ALTER FUNCTION "public"."fn_modifier_reference_paiement_internal_20260801"("p_paiement_id" "uuid", "p_nouvelle_reference" "text") OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."fn_modifier_role_membre"("p_membre_id" "uuid", "p_nouveau_role" "text") RETURNS "jsonb"
@@ -37926,7 +40970,91 @@ ALTER FUNCTION "public"."fn_notifier_favoris_expirants"() OWNER TO "postgres";
 
 CREATE OR REPLACE FUNCTION "public"."fn_obligations_financieres"() RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO 'public'
+    SET "search_path" TO 'pg_catalog', 'public', 'auth'
+    AS $$
+DECLARE
+  v_etab_id uuid := public.mon_etablissement_id();
+  v_result jsonb;
+  v_lignes jsonb := '[]'::jsonb;
+  v_total_soignants numeric := 0;
+  v_total_commissions numeric := 0;
+  v_attente jsonb := '[]'::jsonb;
+  v_confirmes jsonb := '[]'::jsonb;
+BEGIN
+  IF NOT public.est_admin()
+     AND COALESCE(auth.role(), '') <> 'service_role'
+     AND (
+       v_etab_id IS NULL
+       OR public.fn_a_permission_etablissement('lecture_paiement', v_etab_id) IS NOT TRUE
+     ) THEN
+    RETURN jsonb_build_object('error', 'Accès refusé');
+  END IF;
+
+  v_result := public.fn_obligations_financieres_internal_20260801();
+  IF v_result ? 'error' THEN RETURN v_result; END IF;
+
+  WITH lignes_corrigees AS (
+    SELECT CASE
+      WHEN ligne->>'type_contrat_applique' = 'SALARIE' THEN
+        jsonb_set(
+          ligne,
+          '{net_a_payer}',
+          to_jsonb(COALESCE(
+            (SELECT NULLIF(m.net_estime, 0) FROM public.missions m WHERE m.id = (ligne->>'mission_id')::uuid),
+            (SELECT round(NULLIF(m.net_a_payer, 0) * 0.78, 2) FROM public.missions m WHERE m.id = (ligne->>'mission_id')::uuid),
+            0
+          )),
+          true
+        )
+      ELSE ligne
+    END AS ligne
+    FROM jsonb_array_elements(COALESCE(v_result->'missions_non_payees', '[]'::jsonb)) AS lignes(ligne)
+  )
+  SELECT COALESCE(jsonb_agg(ligne), '[]'::jsonb),
+         COALESCE(sum((ligne->>'net_a_payer')::numeric), 0)
+  INTO v_lignes, v_total_soignants
+  FROM lignes_corrigees;
+
+  SELECT COALESCE(jsonb_agg(
+    paiement || jsonb_build_object(
+      'montant_du_reference', ps.montant_du_reference,
+      'solde_restant', ps.solde_restant,
+      'est_partiel', ps.est_partiel,
+      'source_montant_du', ps.source_montant_du
+    )
+  ), '[]'::jsonb)
+  INTO v_attente
+  FROM jsonb_array_elements(COALESCE(v_result->'paiements_soignants_en_attente', '[]'::jsonb)) AS paiements(paiement)
+  LEFT JOIN public.paiements_soignant ps ON ps.id = (paiement->>'paiement_id')::uuid;
+
+  SELECT COALESCE(jsonb_agg(
+    paiement || jsonb_build_object(
+      'montant_du_reference', ps.montant_du_reference,
+      'solde_restant', ps.solde_restant,
+      'est_partiel', ps.est_partiel,
+      'source_montant_du', ps.source_montant_du
+    )
+  ), '[]'::jsonb)
+  INTO v_confirmes
+  FROM jsonb_array_elements(COALESCE(v_result->'paiements_soignants_confirmes', '[]'::jsonb)) AS paiements(paiement)
+  LEFT JOIN public.paiements_soignant ps ON ps.id = (paiement->>'paiement_id')::uuid;
+
+  v_total_commissions := COALESCE((v_result->>'total_commissions_du')::numeric, 0);
+  v_result := jsonb_set(v_result, '{missions_non_payees}', v_lignes, true);
+  v_result := jsonb_set(v_result, '{total_soignants_du}', to_jsonb(v_total_soignants), true);
+  v_result := jsonb_set(v_result, '{total_du}', to_jsonb(v_total_soignants + v_total_commissions), true);
+  v_result := jsonb_set(v_result, '{paiements_soignants_en_attente}', v_attente, true);
+  RETURN jsonb_set(v_result, '{paiements_soignants_confirmes}', v_confirmes, true);
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_obligations_financieres"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."fn_obligations_financieres_internal_20260801"() RETURNS "jsonb"
+    LANGUAGE "plpgsql"
+    SET "search_path" TO 'pg_catalog', 'public', 'auth'
     AS $$
 DECLARE
   v_etab_id uuid := mon_etablissement_id();
@@ -38129,7 +41257,7 @@ END;
 $$;
 
 
-ALTER FUNCTION "public"."fn_obligations_financieres"() OWNER TO "postgres";
+ALTER FUNCTION "public"."fn_obligations_financieres_internal_20260801"() OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."fn_obtenir_apercu_filtre"("p_filtre_id" "uuid", "p_since" timestamp with time zone, "p_limit" integer DEFAULT 5) RETURNS "jsonb"
@@ -38685,6 +41813,250 @@ $$;
 ALTER FUNCTION "public"."fn_obtenir_missions_swipe"("p_limit" integer) OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."fn_ops_activer_crons_edge_critiques"("p_sondes" "jsonb", "p_confirmation" "text") RETURNS "jsonb"
+    LANGUAGE "sql"
+    SET "search_path" TO ''
+    AS $$
+  SELECT private.fn_activer_crons_edge_critiques(p_sondes, p_confirmation);
+$$;
+
+
+ALTER FUNCTION "public"."fn_ops_activer_crons_edge_critiques"("p_sondes" "jsonb", "p_confirmation" "text") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."fn_ops_controler_crons_edge_critiques"() RETURNS "jsonb"
+    LANGUAGE "sql"
+    SET "search_path" TO ''
+    AS $$
+  SELECT private.fn_controler_crons_edge_critiques();
+$$;
+
+
+ALTER FUNCTION "public"."fn_ops_controler_crons_edge_critiques"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."fn_ops_desactiver_crons_edge_critiques"() RETURNS "jsonb"
+    LANGUAGE "sql"
+    SET "search_path" TO ''
+    AS $$
+  SELECT private.fn_desactiver_crons_edge_critiques();
+$$;
+
+
+ALTER FUNCTION "public"."fn_ops_desactiver_crons_edge_critiques"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."fn_ops_etat_activation_crons_edge_critiques"() RETURNS "jsonb"
+    LANGUAGE "sql" STABLE
+    SET "search_path" TO ''
+    AS $$
+  SELECT private.fn_etat_activation_crons_edge_critiques();
+$$;
+
+
+ALTER FUNCTION "public"."fn_ops_etat_activation_crons_edge_critiques"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."fn_ops_etat_sondes_crons_edge_critiques"("p_sondes" "jsonb") RETURNS "jsonb"
+    LANGUAGE "sql"
+    SET "search_path" TO ''
+    AS $$
+  SELECT private.fn_etat_sondes_crons_edge_critiques(p_sondes);
+$$;
+
+
+ALTER FUNCTION "public"."fn_ops_etat_sondes_crons_edge_critiques"("p_sondes" "jsonb") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."fn_ops_inventorier_objets_stripe_test"() RETURNS "jsonb"
+    LANGUAGE "sql" STABLE
+    SET "search_path" TO ''
+    AS $$
+  WITH objets AS (
+    SELECT 'customer'::text AS type_objet,
+           e.stripe_customer_id AS stripe_id,
+           'etablissements'::text AS source_table,
+           e.id AS source_id
+      FROM public.etablissements e
+     WHERE e.est_compte_test IS TRUE
+       AND e.stripe_customer_id IS NOT NULL
+    UNION ALL
+    SELECT 'connect_account', o.stripe_account_id, 'stripe_connect_onboarding', o.id
+      FROM public.stripe_connect_onboarding o
+      JOIN public.soignants s ON s.id = o.soignant_id
+     WHERE s.est_compte_test IS TRUE
+       AND o.stripe_account_id IS NOT NULL
+    UNION ALL
+    SELECT 'payment_intent', pe.stripe_payment_intent_id, 'paiements_escrow', pe.id
+      FROM public.paiements_escrow pe
+      JOIN public.etablissements e ON e.id = pe.etablissement_id
+      JOIN public.soignants s ON s.id = pe.soignant_id
+     WHERE (e.est_compte_test IS TRUE OR s.est_compte_test IS TRUE)
+       AND pe.stripe_payment_intent_id IS NOT NULL
+    UNION ALL
+    SELECT 'charge', pe.stripe_charge_id, 'paiements_escrow', pe.id
+      FROM public.paiements_escrow pe
+      JOIN public.etablissements e ON e.id = pe.etablissement_id
+      JOIN public.soignants s ON s.id = pe.soignant_id
+     WHERE (e.est_compte_test IS TRUE OR s.est_compte_test IS TRUE)
+       AND pe.stripe_charge_id IS NOT NULL
+    UNION ALL
+    SELECT 'payout', pe.stripe_payout_id, 'paiements_escrow', pe.id
+      FROM public.paiements_escrow pe
+      JOIN public.etablissements e ON e.id = pe.etablissement_id
+      JOIN public.soignants s ON s.id = pe.soignant_id
+     WHERE (e.est_compte_test IS TRUE OR s.est_compte_test IS TRUE)
+       AND pe.stripe_payout_id IS NOT NULL
+    UNION ALL
+    SELECT 'payment_intent', f.stripe_payment_intent_id, 'factures', f.id
+      FROM public.factures f
+      JOIN public.etablissements e ON e.id = f.etablissement_id
+     WHERE e.est_compte_test IS TRUE
+       AND f.stripe_payment_intent_id IS NOT NULL
+    UNION ALL
+    SELECT 'payment_intent', f.stripe_payment_intent_id, 'factures_honoraires', f.id
+      FROM public.factures_honoraires f
+      JOIN public.etablissements e ON e.id = f.etablissement_id
+      LEFT JOIN public.soignants s ON s.id = f.soignant_id
+     WHERE (
+         e.est_compte_test IS TRUE
+         OR COALESCE(s.est_compte_test, false) IS TRUE
+       )
+       AND f.stripe_payment_intent_id IS NOT NULL
+    UNION ALL
+    SELECT 'payment_intent', p.stripe_payment_intent_id, 'paiements_mission', p.id
+      FROM public.paiements_mission p
+      JOIN public.missions m ON m.id = p.mission_id
+      JOIN public.etablissements e ON e.id = m.etablissement_id
+      LEFT JOIN public.soignants s ON s.id = m.soignant_assigne_id
+     WHERE (
+         e.est_compte_test IS TRUE
+         OR COALESCE(s.est_compte_test, false) IS TRUE
+       )
+       AND p.stripe_payment_intent_id IS NOT NULL
+    UNION ALL
+    SELECT 'charge', p.stripe_charge_id, 'paiements_mission', p.id
+      FROM public.paiements_mission p
+      JOIN public.missions m ON m.id = p.mission_id
+      JOIN public.etablissements e ON e.id = m.etablissement_id
+      LEFT JOIN public.soignants s ON s.id = m.soignant_assigne_id
+     WHERE (
+         e.est_compte_test IS TRUE
+         OR COALESCE(s.est_compte_test, false) IS TRUE
+       )
+       AND p.stripe_charge_id IS NOT NULL
+    UNION ALL
+    SELECT 'payment_intent', st.stripe_payment_intent_id, 'stripe_transfers', st.id
+      FROM public.stripe_transfers st
+      JOIN public.etablissements e ON e.id = st.etablissement_id
+      JOIN public.soignants s ON s.id = st.soignant_id
+     WHERE (e.est_compte_test IS TRUE OR s.est_compte_test IS TRUE)
+       AND st.stripe_payment_intent_id IS NOT NULL
+    UNION ALL
+    SELECT 'charge', st.stripe_charge_id, 'stripe_transfers', st.id
+      FROM public.stripe_transfers st
+      JOIN public.etablissements e ON e.id = st.etablissement_id
+      JOIN public.soignants s ON s.id = st.soignant_id
+     WHERE (e.est_compte_test IS TRUE OR s.est_compte_test IS TRUE)
+       AND st.stripe_charge_id IS NOT NULL
+    UNION ALL
+    SELECT 'transfer', st.stripe_transfer_id, 'stripe_transfers', st.id
+      FROM public.stripe_transfers st
+      JOIN public.etablissements e ON e.id = st.etablissement_id
+      JOIN public.soignants s ON s.id = st.soignant_id
+     WHERE (e.est_compte_test IS TRUE OR s.est_compte_test IS TRUE)
+       AND st.stripe_transfer_id IS NOT NULL
+    UNION ALL
+    SELECT 'payout', st.stripe_payout_id, 'stripe_transfers', st.id
+      FROM public.stripe_transfers st
+      JOIN public.etablissements e ON e.id = st.etablissement_id
+      JOIN public.soignants s ON s.id = st.soignant_id
+     WHERE (e.est_compte_test IS TRUE OR s.est_compte_test IS TRUE)
+       AND st.stripe_payout_id IS NOT NULL
+    UNION ALL
+    SELECT 'checkout_session', st.stripe_checkout_session_id, 'stripe_transfers', st.id
+      FROM public.stripe_transfers st
+      JOIN public.etablissements e ON e.id = st.etablissement_id
+      JOIN public.soignants s ON s.id = st.soignant_id
+     WHERE (e.est_compte_test IS TRUE OR s.est_compte_test IS TRUE)
+       AND st.stripe_checkout_session_id IS NOT NULL
+    UNION ALL
+    SELECT 'refund', q.stripe_refund_id, 'stripe_refunds_queue', q.id
+      FROM public.stripe_refunds_queue q
+      LEFT JOIN public.paiements_escrow pe ON pe.id = q.paiement_escrow_id
+      LEFT JOIN public.factures_honoraires f ON f.id = q.facture_origine_id
+      JOIN public.etablissements e
+        ON e.id = COALESCE(pe.etablissement_id, f.etablissement_id)
+      LEFT JOIN public.soignants s
+        ON s.id = COALESCE(pe.soignant_id, f.soignant_id)
+     WHERE (
+         e.est_compte_test IS TRUE
+         OR COALESCE(s.est_compte_test, false) IS TRUE
+       )
+       AND q.stripe_refund_id IS NOT NULL
+  ),
+  uniques AS (
+    SELECT o.type_objet,
+           o.stripe_id,
+           jsonb_agg(
+             jsonb_build_object(
+               'table', o.source_table,
+               'id', o.source_id
+             )
+             ORDER BY o.source_table, o.source_id
+           ) AS sources
+      FROM objets o
+     WHERE btrim(o.stripe_id) <> ''
+     GROUP BY o.type_objet, o.stripe_id
+  ),
+  comptes AS (
+    SELECT u.type_objet, count(*)::integer AS nombre
+      FROM uniques u
+     GROUP BY u.type_objet
+  )
+  SELECT jsonb_build_object(
+    'generated_at', now(),
+    'mode', 'READ_ONLY_REVIEW_REQUIRED',
+    'destructive_action_taken', false,
+    'total_objets', (SELECT count(*) FROM uniques),
+    'par_type', COALESCE(
+      (SELECT jsonb_object_agg(c.type_objet, c.nombre ORDER BY c.type_objet)
+         FROM comptes c),
+      '{}'::jsonb
+    ),
+    'objets', COALESCE(
+      (SELECT jsonb_agg(
+         jsonb_build_object(
+           'type', u.type_objet,
+           'stripe_id', u.stripe_id,
+           'sources', u.sources
+         )
+         ORDER BY u.type_objet, u.stripe_id
+       ) FROM uniques u),
+      '[]'::jsonb
+    )
+  );
+$$;
+
+
+ALTER FUNCTION "public"."fn_ops_inventorier_objets_stripe_test"() OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "public"."fn_ops_inventorier_objets_stripe_test"() IS 'Inventaire read-only des IDs Stripe liés aux fixtures; toute action Stripe exige une revue séparée.';
+
+
+
+CREATE OR REPLACE FUNCTION "public"."fn_ops_sonder_crons_edge_critiques"() RETURNS "jsonb"
+    LANGUAGE "sql"
+    SET "search_path" TO ''
+    AS $$
+  SELECT private.fn_sonder_crons_edge_critiques();
+$$;
+
+
+ALTER FUNCTION "public"."fn_ops_sonder_crons_edge_critiques"() OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."fn_ouvrir_litige_rate_limited"("p_mission_id" "uuid", "p_motif" "text") RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
@@ -39052,7 +42424,66 @@ ALTER FUNCTION "public"."fn_ouvrir_revue_verification_etablissement"("p_etabliss
 
 CREATE OR REPLACE FUNCTION "public"."fn_paiements_etablissement"() RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO 'public'
+    SET "search_path" TO 'pg_catalog', 'public', 'auth'
+    AS $$
+DECLARE
+  v_etab_id uuid := public.mon_etablissement_id();
+  v_result jsonb;
+  v_lignes jsonb;
+  v_paiements jsonb;
+BEGIN
+  IF NOT public.est_admin()
+     AND COALESCE(auth.role(), '') <> 'service_role'
+     AND (
+       v_etab_id IS NULL
+       OR public.fn_a_permission_etablissement('lecture_paiement', v_etab_id) IS NOT TRUE
+     ) THEN
+    RETURN jsonb_build_object('error', 'Accès refusé');
+  END IF;
+
+  v_result := public.fn_paiements_etablissement_internal_20260801();
+  IF v_result ? 'error' THEN RETURN v_result; END IF;
+
+  SELECT COALESCE(jsonb_agg(
+    CASE WHEN EXISTS (
+      SELECT 1 FROM public.missions m
+      WHERE m.id = (ligne->>'mission_id')::uuid AND m.type_contrat_applique = 'SALARIE'
+    ) THEN jsonb_set(
+      ligne, '{net_a_payer}',
+      to_jsonb(COALESCE(
+        (SELECT NULLIF(m.net_estime, 0) FROM public.missions m WHERE m.id = (ligne->>'mission_id')::uuid),
+        (SELECT round(NULLIF(m.net_a_payer, 0) * 0.78, 2) FROM public.missions m WHERE m.id = (ligne->>'mission_id')::uuid),
+        0
+      )), true
+    ) ELSE ligne END
+  ), '[]'::jsonb)
+  INTO v_lignes
+  FROM jsonb_array_elements(COALESCE(v_result->'missions_a_payer', '[]'::jsonb)) AS lignes(ligne);
+
+  SELECT COALESCE(jsonb_agg(
+    paiement || jsonb_build_object(
+      'montant_du_reference', ps.montant_du_reference,
+      'solde_restant', ps.solde_restant,
+      'est_partiel', ps.est_partiel,
+      'source_montant_du', ps.source_montant_du
+    )
+  ), '[]'::jsonb)
+  INTO v_paiements
+  FROM jsonb_array_elements(COALESCE(v_result->'paiements_recents', '[]'::jsonb)) AS paiements(paiement)
+  LEFT JOIN public.paiements_soignant ps ON ps.id = (paiement->>'id')::uuid;
+
+  v_result := jsonb_set(v_result, '{missions_a_payer}', v_lignes, true);
+  RETURN jsonb_set(v_result, '{paiements_recents}', v_paiements, true);
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_paiements_etablissement"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."fn_paiements_etablissement_internal_20260801"() RETURNS "jsonb"
+    LANGUAGE "plpgsql"
+    SET "search_path" TO 'pg_catalog', 'public', 'auth'
     AS $$
 DECLARE
     v_etab_id UUID := mon_etablissement_id();
@@ -39116,7 +42547,7 @@ END;
 $$;
 
 
-ALTER FUNCTION "public"."fn_paiements_etablissement"() OWNER TO "postgres";
+ALTER FUNCTION "public"."fn_paiements_etablissement_internal_20260801"() OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."fn_param_bool"("p_cle" "text", "p_defaut" boolean) RETURNS boolean
@@ -39960,83 +43391,162 @@ DECLARE
   v_candidature_id uuid;
   v_docs_ok boolean;
 BEGIN
-  IF auth.uid() IS NULL THEN RETURN jsonb_build_object('error', 'Non authentifié'); END IF;
-  SELECT * INTO v_mission FROM public.missions WHERE id = p_mission_id;
-  IF NOT FOUND THEN RETURN jsonb_build_object('error', 'Mission introuvable'); END IF;
-  IF v_mission.statut <> 'OUVERTE' THEN RETURN jsonb_build_object('error', 'Cette mission n''est plus disponible'); END IF;
-  IF v_mission.mode_attribution <> 'CANDIDATURE' THEN
-    RETURN jsonb_build_object('error', 'Cette mission n''accepte pas les candidatures');
+  IF auth.uid() IS NULL THEN
+    RETURN jsonb_build_object('error', 'Non authentifié');
   END IF;
 
-  SELECT * INTO v_soignant FROM public.soignants
-   WHERE id = auth.uid() AND supprime_le IS NULL;
-  IF NOT FOUND THEN RETURN jsonb_build_object('error', 'Profil soignant introuvable'); END IF;
-  IF COALESCE(v_soignant.statut_compte::text, 'ACTIF') <> 'ACTIF' THEN
-    RETURN jsonb_build_object('error', 'Votre compte ne permet pas de candidater. Contactez bonjour@jolene.app.');
+  SELECT * INTO v_mission
+  FROM public.missions
+  WHERE id = p_mission_id;
+  IF NOT FOUND THEN
+    RETURN jsonb_build_object('error', 'Mission introuvable');
   END IF;
+  IF v_mission.statut <> 'OUVERTE' THEN
+    RETURN jsonb_build_object(
+      'error',
+      'Cette mission n''est plus disponible'
+    );
+  END IF;
+  IF v_mission.mode_attribution <> 'CANDIDATURE' THEN
+    RETURN jsonb_build_object(
+      'error',
+      'Cette mission n''accepte pas les candidatures'
+    );
+  END IF;
+
+  SELECT * INTO v_soignant
+  FROM public.soignants
+  WHERE id = auth.uid()
+    AND supprime_le IS NULL;
+  IF NOT FOUND THEN
+    RETURN jsonb_build_object('error', 'Profil soignant introuvable');
+  END IF;
+  IF COALESCE(v_soignant.statut_compte::text, 'ACTIF') <> 'ACTIF' THEN
+    RETURN jsonb_build_object(
+      'error',
+      'Votre compte ne permet pas de candidater. Contactez bonjour@jolene.app.'
+    );
+  END IF;
+
+  IF NOT private.fn_comptes_meme_cohorte_test(
+    auth.uid(),
+    v_mission.etablissement_id
+  ) THEN
+    RETURN jsonb_build_object(
+      'error',
+      'Mission indisponible pour ce compte'
+    );
+  END IF;
+
   IF NOT public.fn_soignant_compatible_mission(
-    v_soignant.profession, v_soignant.specialite_medicale,
-    v_mission.profession_requise, v_mission.specialite_medicale_requise,
+    v_soignant.profession,
+    v_soignant.specialite_medicale,
+    v_mission.profession_requise,
+    v_mission.specialite_medicale_requise,
     COALESCE(v_mission.accepte_non_specialises, true)
   ) THEN
     RETURN jsonb_build_object(
-      'error', 'Votre profession ne correspond pas à la mission requise (' ||
-        v_mission.profession_requise::text || ').'
+      'error',
+      'Votre profession ne correspond pas à la mission requise ('
+        || v_mission.profession_requise::text
+        || ').'
     );
   END IF;
   IF public.fn_est_exclu(auth.uid(), v_mission.etablissement_id) THEN
     RETURN jsonb_build_object('error', 'Accès refusé.');
   END IF;
 
-  v_resolution := public.fn_resoudre_contrat_mission(p_mission_id, auth.uid(), p_choix_contrat);
+  v_resolution := public.fn_resoudre_contrat_mission(
+    p_mission_id,
+    auth.uid(),
+    p_choix_contrat
+  );
   IF COALESCE((v_resolution->>'ok')::boolean, false) IS NOT TRUE THEN
     RETURN v_resolution - 'ok';
   END IF;
   v_choix := v_resolution->>'contrat';
 
   IF EXISTS (
-    SELECT 1 FROM public.candidatures
-     WHERE mission_id = p_mission_id AND soignant_id = auth.uid()
+    SELECT 1
+    FROM public.candidatures
+    WHERE mission_id = p_mission_id
+      AND soignant_id = auth.uid()
   ) THEN
-    RETURN jsonb_build_object('error', 'Vous avez déjà postulé à cette mission');
+    RETURN jsonb_build_object(
+      'error',
+      'Vous avez déjà postulé à cette mission'
+    );
   END IF;
 
-  -- La candidature salariée reste ouverte même si les documents SALARIE_ONLY
-  -- doivent être complétés ; l'attribution, elle, reste bloquée jusqu'à validation.
-  v_docs_ok := public.fn_documents_ok_pour_mission(auth.uid(), v_choix);
+  v_docs_ok := public.fn_documents_ok_pour_mission(
+    auth.uid(),
+    v_choix
+  );
   IF v_choix = 'LIBERAL' AND NOT v_docs_ok THEN
     RETURN jsonb_build_object(
-      'error', 'Les documents requis pour candidater en libéral sont manquants ou expirés.',
+      'error',
+        'Les documents requis pour candidater en libéral sont manquants ou expirés.',
       'documents_requis_pour', 'LIBERAL',
       'lien_documents', '/soignant/mes-documents'
     );
   END IF;
 
-  INSERT INTO public.candidatures(
-    mission_id, soignant_id, message, statut, type_contrat_choisi
+  INSERT INTO public.candidatures (
+    mission_id,
+    soignant_id,
+    message,
+    statut,
+    type_contrat_choisi
   ) VALUES (
-    p_mission_id, auth.uid(), public.fn_html_escape(p_message), 'EN_ATTENTE', v_choix
-  ) RETURNING id INTO v_candidature_id;
+    p_mission_id,
+    auth.uid(),
+    public.fn_html_escape(p_message),
+    'EN_ATTENTE',
+    v_choix
+  )
+  RETURNING id INTO v_candidature_id;
 
-  INSERT INTO public.notifications(destinataire_id, type_destinataire, type, titre, corps, lien)
-  VALUES (
-    v_mission.etablissement_id, 'ETABLISSEMENT', 'CANDIDATURE_RECUE',
+  INSERT INTO public.notifications (
+    destinataire_id,
+    type_destinataire,
+    type,
+    titre,
+    corps,
+    lien
+  ) VALUES (
+    v_mission.etablissement_id,
+    'ETABLISSEMENT',
+    'CANDIDATURE_RECUE',
     '📋 Nouvelle candidature reçue',
-    COALESCE(v_soignant.prenom, 'Un soignant') || ' a postulé à votre mission « ' ||
-      public.fn_html_escape(v_mission.intitule) || ' ».',
+    COALESCE(v_soignant.prenom, 'Un soignant')
+      || ' a postulé à votre mission « '
+      || public.fn_html_escape(v_mission.intitule)
+      || ' ».',
     '/etablissement/missions/' || p_mission_id
   );
 
   IF NOT v_docs_ok THEN
-    INSERT INTO public.notifications(destinataire_id, type, titre, corps, lien, type_destinataire)
-    SELECT auth.uid(), 'RAPPEL_DOCUMENTS', 'Complétez vos documents salariés',
+    INSERT INTO public.notifications (
+      destinataire_id,
+      type,
+      titre,
+      corps,
+      lien,
+      type_destinataire
+    )
+    SELECT
+      auth.uid(),
+      'RAPPEL_DOCUMENTS',
+      'Complétez vos documents salariés',
       'Votre candidature est envoyée. Les documents requis pour le CDD doivent être validés avant que l''établissement puisse vous accepter.',
-      '/soignant/mes-documents', 'SOIGNANT'
+      '/soignant/mes-documents',
+      'SOIGNANT'
     WHERE NOT EXISTS (
-      SELECT 1 FROM public.notifications
-       WHERE destinataire_id = auth.uid()
-         AND type = 'RAPPEL_DOCUMENTS'
-         AND cree_le > now() - interval '24 hours'
+      SELECT 1
+      FROM public.notifications
+      WHERE destinataire_id = auth.uid()
+        AND type = 'RAPPEL_DOCUMENTS'
+        AND cree_le > now() - interval '24 hours'
     );
   END IF;
 
@@ -40102,6 +43612,10 @@ $$;
 
 
 ALTER FUNCTION "public"."fn_pre_request_compte_actif"() OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "public"."fn_pre_request_compte_actif"() IS 'SECURITY DEFINER anonyme revue : hook PostgREST pre-request, aucun résultat métier exposé.';
+
 
 
 CREATE OR REPLACE FUNCTION "public"."fn_preparer_facture_commission_periode"("p_facture_honoraire_id" "uuid") RETURNS "jsonb"
@@ -40364,6 +43878,10 @@ $$;
 
 
 ALTER FUNCTION "public"."fn_professions_autorisees_scolarite"("p_formation" "text", "p_annee_validee" integer) OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "public"."fn_professions_autorisees_scolarite"("p_formation" "text", "p_annee_validee" integer) IS 'SECURITY DEFINER anonyme revue : référentiel public.';
+
 
 
 CREATE OR REPLACE FUNCTION "public"."fn_professions_liberales"() RETURNS "jsonb"
@@ -43419,117 +46937,236 @@ $$;
 ALTER FUNCTION "public"."fn_rechercher_aide"("p_query" "text", "p_audience" "text") OWNER TO "postgres";
 
 
+COMMENT ON FUNCTION "public"."fn_rechercher_aide"("p_query" "text", "p_audience" "text") IS 'SECURITY DEFINER anonyme revue : centre d aide public.';
+
+
+
 CREATE OR REPLACE FUNCTION "public"."fn_rechercher_soignants_etab"("p_profession" "text" DEFAULT NULL::"text", "p_specialites" "text"[] DEFAULT NULL::"text"[], "p_ville" "text" DEFAULT NULL::"text", "p_distance_max_km" integer DEFAULT NULL::integer, "p_type_exercice" "text" DEFAULT NULL::"text", "p_note_min" numeric DEFAULT NULL::numeric, "p_score_min" integer DEFAULT NULL::integer, "p_experience_min" integer DEFAULT NULL::integer, "p_disponible_urgence" boolean DEFAULT NULL::boolean, "p_documents_valides" boolean DEFAULT NULL::boolean, "p_recherche_texte" "text" DEFAULT NULL::"text", "p_limit" integer DEFAULT 50, "p_offset" integer DEFAULT 0) RETURNS "jsonb"
     LANGUAGE "plpgsql" STABLE SECURITY DEFINER
     SET "search_path" TO 'public', 'extensions'
     AS $$
 DECLARE
-  v_etab_id UUID;
-  v_etab_lat NUMERIC;
-  v_etab_lng NUMERIC;
-  v_limit INTEGER;
-  v_offset INTEGER;
-  v_result JSONB;
+  v_etab_id uuid;
+  v_etab_lat numeric;
+  v_etab_lng numeric;
+  v_limit integer;
+  v_offset integer;
+  v_result jsonb;
 BEGIN
   IF NOT est_admin() THEN
     v_etab_id := mon_etablissement_id();
     IF v_etab_id IS NULL THEN
-      RETURN jsonb_build_object('error', 'Accès refusé : étab requis');
+      RETURN jsonb_build_object(
+        'error',
+        'Accès refusé : étab requis'
+      );
     END IF;
   END IF;
 
   v_limit := LEAST(GREATEST(COALESCE(p_limit, 50), 1), 100);
   v_offset := GREATEST(COALESCE(p_offset, 0), 0);
 
-  IF v_etab_id IS NOT NULL AND p_distance_max_km IS NOT NULL THEN
-    SELECT adresse_lat, adresse_lng INTO v_etab_lat, v_etab_lng
-    FROM etablissements WHERE id = v_etab_id;
+  IF v_etab_id IS NOT NULL
+     AND p_distance_max_km IS NOT NULL THEN
+    SELECT adresse_lat, adresse_lng
+    INTO v_etab_lat, v_etab_lng
+    FROM etablissements
+    WHERE id = v_etab_id;
   END IF;
 
   WITH filtered AS (
     SELECT
-      s.id, s.prenom, s.nom, s.profession, s.specialite_medicale,
-      s.type_exercice, s.score_fiabilite, s.note_moyenne, s.nb_evaluations,
-      s.total_missions_terminees, s.annees_experience, s.specialites,
-      s.bio, s.avatar_url, s.rpps_verifie, s.tous_documents_valides,
-      s.disponible_urgence, s.adresse_ville,
-      s.priorite_missions_urgentes, s.badge_ambassadeur,
+      s.id,
+      s.prenom,
+      s.nom,
+      s.profession,
+      s.specialite_medicale,
+      s.type_exercice,
+      s.score_fiabilite,
+      s.note_moyenne,
+      s.nb_evaluations,
+      s.total_missions_terminees,
+      s.annees_experience,
+      s.specialites,
+      s.bio,
+      s.avatar_url,
+      s.rpps_verifie,
+      s.tous_documents_valides,
+      s.disponible_urgence,
+      s.adresse_ville,
+      s.priorite_missions_urgentes,
+      s.badge_ambassadeur,
       CASE
-        WHEN v_etab_lat IS NOT NULL AND s.adresse_lat IS NOT NULL THEN
-          ROUND((6371 * 2 * asin(sqrt(
-            power(sin(radians(s.adresse_lat - v_etab_lat) / 2), 2) +
-            cos(radians(v_etab_lat)) * cos(radians(s.adresse_lat)) *
-            power(sin(radians(s.adresse_lng - v_etab_lng) / 2), 2)
-          )))::NUMERIC, 1)
+        WHEN v_etab_lat IS NOT NULL
+             AND s.adresse_lat IS NOT NULL THEN
+          round((
+            6371 * 2 * asin(sqrt(
+              power(sin(radians(s.adresse_lat - v_etab_lat) / 2), 2)
+              + cos(radians(v_etab_lat))
+                * cos(radians(s.adresse_lat))
+                * power(
+                  sin(radians(s.adresse_lng - v_etab_lng) / 2),
+                  2
+                )
+            ))
+          )::numeric, 1)
         ELSE NULL
       END AS distance_km
     FROM soignants s
     WHERE s.supprime_le IS NULL
-      AND (p_profession IS NULL OR p_profession = '' OR s.profession::TEXT = p_profession)
-      AND (p_specialites IS NULL OR array_length(p_specialites, 1) IS NULL OR s.specialites && p_specialites)
-      AND (p_ville IS NULL OR p_ville = '' OR s.adresse_ville ILIKE '%' || p_ville || '%')
-      AND (p_type_exercice IS NULL OR p_type_exercice = '' OR COALESCE(s.type_exercice, 'SALARIE') = p_type_exercice)
-      AND (p_note_min IS NULL OR (COALESCE(s.nb_evaluations, 0) >= 3 AND COALESCE(s.note_moyenne, 0) >= p_note_min))
-      AND (p_score_min IS NULL OR (COALESCE(s.total_missions_terminees, 0) >= 3 AND COALESCE(s.score_fiabilite, 0) >= p_score_min))
-      AND (p_experience_min IS NULL OR COALESCE(s.annees_experience, 0) >= p_experience_min)
-      AND (p_disponible_urgence IS NULL OR COALESCE(s.disponible_urgence, false) = p_disponible_urgence)
-      AND (p_documents_valides IS NULL OR COALESCE(s.tous_documents_valides, false) = p_documents_valides)
-      AND (p_recherche_texte IS NULL OR p_recherche_texte = '' OR
-           s.prenom ILIKE '%' || p_recherche_texte || '%' OR
-           COALESCE(s.bio, '') ILIKE '%' || p_recherche_texte || '%')
+      AND (
+        (
+          v_etab_id IS NULL
+          AND s.est_compte_test IS FALSE
+        )
+        OR (
+          v_etab_id IS NOT NULL
+          AND private.fn_comptes_meme_cohorte_test(s.id, v_etab_id)
+        )
+      )
+      AND (
+        p_profession IS NULL
+        OR p_profession = ''
+        OR s.profession::text = p_profession
+      )
+      AND (
+        p_specialites IS NULL
+        OR array_length(p_specialites, 1) IS NULL
+        OR s.specialites && p_specialites
+      )
+      AND (
+        p_ville IS NULL
+        OR p_ville = ''
+        OR s.adresse_ville ILIKE '%' || p_ville || '%'
+      )
+      AND (
+        p_type_exercice IS NULL
+        OR p_type_exercice = ''
+        OR COALESCE(s.type_exercice, 'SALARIE') = p_type_exercice
+      )
+      AND (
+        p_note_min IS NULL
+        OR (
+          COALESCE(s.nb_evaluations, 0) >= 3
+          AND COALESCE(s.note_moyenne, 0) >= p_note_min
+        )
+      )
+      AND (
+        p_score_min IS NULL
+        OR (
+          COALESCE(s.total_missions_terminees, 0) >= 3
+          AND COALESCE(s.score_fiabilite, 0) >= p_score_min
+        )
+      )
+      AND (
+        p_experience_min IS NULL
+        OR COALESCE(s.annees_experience, 0) >= p_experience_min
+      )
+      AND (
+        p_disponible_urgence IS NULL
+        OR COALESCE(s.disponible_urgence, false) =
+          p_disponible_urgence
+      )
+      AND (
+        p_documents_valides IS NULL
+        OR COALESCE(s.tous_documents_valides, false) =
+          p_documents_valides
+      )
+      AND (
+        p_recherche_texte IS NULL
+        OR p_recherche_texte = ''
+        OR s.prenom ILIKE '%' || p_recherche_texte || '%'
+        OR COALESCE(s.bio, '') ILIKE
+          '%' || p_recherche_texte || '%'
+      )
   ),
   with_distance AS (
-    SELECT * FROM filtered
+    SELECT *
+    FROM filtered
     WHERE p_distance_max_km IS NULL
-       OR distance_km IS NULL
-       OR distance_km <= p_distance_max_km
+      OR distance_km IS NULL
+      OR distance_km <= p_distance_max_km
   ),
   ranked AS (
-    SELECT *,
-      ROW_NUMBER() OVER (ORDER BY
-        CASE WHEN COALESCE(total_missions_terminees, 0) >= 3 THEN score_fiabilite ELSE -1 END DESC NULLS LAST,
-        CASE WHEN COALESCE(nb_evaluations, 0) >= 3 THEN note_moyenne ELSE -1 END DESC NULLS LAST,
-        COALESCE(total_missions_terminees, 0) DESC,
-        id
+    SELECT
+      *,
+      row_number() OVER (
+        ORDER BY
+          CASE
+            WHEN COALESCE(total_missions_terminees, 0) >= 3
+              THEN score_fiabilite
+            ELSE -1
+          END DESC NULLS LAST,
+          CASE
+            WHEN COALESCE(nb_evaluations, 0) >= 3
+              THEN note_moyenne
+            ELSE -1
+          END DESC NULLS LAST,
+          COALESCE(total_missions_terminees, 0) DESC,
+          id
       ) AS rn,
-      COUNT(*) OVER () AS total_count
+      count(*) OVER () AS total_count
     FROM with_distance
   ),
   paged AS (
-    SELECT * FROM ranked
-    WHERE rn > v_offset AND rn <= v_offset + v_limit
+    SELECT *
+    FROM ranked
+    WHERE rn > v_offset
+      AND rn <= v_offset + v_limit
   )
   SELECT jsonb_build_object(
-    'soignants', COALESCE(jsonb_agg(jsonb_build_object(
+    'soignants',
+    COALESCE(jsonb_agg(jsonb_build_object(
       'id', p.id,
       'prenom', p.prenom,
-      'nom_initiale', LEFT(p.nom, 1) || '.',
-      'profession', p.profession::TEXT,
+      'nom_initiale', left(p.nom, 1) || '.',
+      'profession', p.profession::text,
       'specialite_medicale', p.specialite_medicale,
       'type_exercice', COALESCE(p.type_exercice, 'SALARIE'),
-      'score_fiabilite', CASE WHEN COALESCE(p.total_missions_terminees, 0) >= 3 THEN p.score_fiabilite ELSE NULL END,
-      'note_moyenne', CASE WHEN COALESCE(p.nb_evaluations, 0) >= 3 THEN p.note_moyenne ELSE NULL END,
+      'score_fiabilite', CASE
+        WHEN COALESCE(p.total_missions_terminees, 0) >= 3
+          THEN p.score_fiabilite
+        ELSE NULL
+      END,
+      'note_moyenne', CASE
+        WHEN COALESCE(p.nb_evaluations, 0) >= 3
+          THEN p.note_moyenne
+        ELSE NULL
+      END,
       'nb_evaluations', COALESCE(p.nb_evaluations, 0),
-      'total_missions_terminees', COALESCE(p.total_missions_terminees, 0),
+      'total_missions_terminees',
+        COALESCE(p.total_missions_terminees, 0),
       'annees_experience', p.annees_experience,
-      'specialites', COALESCE(p.specialites, ARRAY[]::TEXT[]),
-      'bio_extrait', LEFT(COALESCE(p.bio, ''), 200),
+      'specialites', COALESCE(p.specialites, ARRAY[]::text[]),
+      'bio_extrait', left(COALESCE(p.bio, ''), 200),
       'avatar_url', p.avatar_url,
       'rpps_verifie', COALESCE(p.rpps_verifie, false),
-      'tous_documents_valides', COALESCE(p.tous_documents_valides, false),
+      'tous_documents_valides',
+        COALESCE(p.tous_documents_valides, false),
       'disponible_urgence', COALESCE(p.disponible_urgence, false),
       'ville', p.adresse_ville,
       'distance_km', p.distance_km,
-      'priorite_missions_urgentes', COALESCE(p.priorite_missions_urgentes, false),
-      'badge_ambassadeur', COALESCE(p.badge_ambassadeur, false)
+      'priorite_missions_urgentes',
+        COALESCE(p.priorite_missions_urgentes, false),
+      'badge_ambassadeur',
+        COALESCE(p.badge_ambassadeur, false)
     ) ORDER BY p.rn), '[]'::jsonb),
-    'count_total', COALESCE(MAX(p.total_count), 0),
+    'count_total', COALESCE(max(p.total_count), 0),
     'limit', v_limit,
     'offset', v_offset
-  ) INTO v_result
+  )
+  INTO v_result
   FROM paged p;
 
-  RETURN COALESCE(v_result, jsonb_build_object('soignants', '[]'::jsonb, 'count_total', 0, 'limit', v_limit, 'offset', v_offset));
+  RETURN COALESCE(
+    v_result,
+    jsonb_build_object(
+      'soignants', '[]'::jsonb,
+      'count_total', 0,
+      'limit', v_limit,
+      'offset', v_offset
+    )
+  );
 END;
 $$;
 
@@ -44657,6 +48294,99 @@ COMMENT ON FUNCTION "public"."fn_repondre_proposition"("p_candidature_id" "uuid"
 
 
 
+CREATE OR REPLACE FUNCTION "public"."fn_reserver_envoi_email_idempotent"("p_idempotency_key" "text", "p_request_fingerprint" "text") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $_$
+DECLARE
+  v_ligne private.email_dispatch_idempotency%ROWTYPE;
+BEGIN
+  IF p_idempotency_key IS NULL
+     OR p_idempotency_key !~ '^[A-Za-z0-9][A-Za-z0-9._:-]{7,199}$'
+     OR p_request_fingerprint IS NULL
+     OR p_request_fingerprint !~ '^[0-9a-f]{64}$' THEN
+    RAISE EXCEPTION 'Clé ou empreinte idempotente invalide'
+      USING ERRCODE = '22023';
+  END IF;
+
+  PERFORM pg_catalog.pg_advisory_xact_lock(
+    pg_catalog.hashtextextended(p_idempotency_key, 746593)
+  );
+
+  SELECT *
+    INTO v_ligne
+    FROM private.email_dispatch_idempotency
+   WHERE idempotency_key = p_idempotency_key
+   FOR UPDATE;
+
+  IF NOT FOUND THEN
+    INSERT INTO private.email_dispatch_idempotency (
+      idempotency_key, request_fingerprint, statut
+    ) VALUES (
+      p_idempotency_key, p_request_fingerprint, 'EN_COURS'
+    );
+    RETURN jsonb_build_object('statut', 'RESERVE');
+  END IF;
+
+  IF v_ligne.request_fingerprint <> p_request_fingerprint THEN
+    RETURN jsonb_build_object('statut', 'CONFLIT');
+  END IF;
+
+  IF v_ligne.statut = 'ENVOYE' THEN
+    RETURN jsonb_build_object(
+      'statut', 'DEJA_ENVOYE',
+      'provider_id', v_ligne.provider_id
+    );
+  END IF;
+
+  IF v_ligne.statut = 'EN_COURS'
+     AND v_ligne.modifie_le > now() - interval '15 minutes' THEN
+    RETURN jsonb_build_object('statut', 'EN_COURS');
+  END IF;
+
+  UPDATE private.email_dispatch_idempotency
+     SET statut = 'EN_COURS',
+         provider_id = NULL,
+         derniere_erreur = NULL,
+         modifie_le = now()
+   WHERE idempotency_key = p_idempotency_key;
+
+  RETURN jsonb_build_object('statut', 'RESERVE');
+END;
+$_$;
+
+
+ALTER FUNCTION "public"."fn_reserver_envoi_email_idempotent"("p_idempotency_key" "text", "p_request_fingerprint" "text") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."fn_reserver_envoi_push_idempotent"("p_idempotency_key" "text", "p_request_fingerprint" "text") RETURNS "jsonb"
+    LANGUAGE "sql"
+    SET "search_path" TO ''
+    AS $$
+  SELECT private.fn_reserver_envoi_push_idempotent(
+    p_idempotency_key,
+    p_request_fingerprint
+  );
+$$;
+
+
+ALTER FUNCTION "public"."fn_reserver_envoi_push_idempotent"("p_idempotency_key" "text", "p_request_fingerprint" "text") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."fn_reserver_envoi_sms_idempotent"("p_idempotency_key" "text", "p_request_fingerprint" "text") RETURNS "jsonb"
+    LANGUAGE "sql"
+    SET "search_path" TO ''
+    AS $$
+  SELECT private.fn_reserver_envoi_sms_idempotent(
+    p_idempotency_key,
+    p_request_fingerprint
+  );
+$$;
+
+
+ALTER FUNCTION "public"."fn_reserver_envoi_sms_idempotent"("p_idempotency_key" "text", "p_request_fingerprint" "text") OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."fn_reserver_type_compte"("p_user_id" "uuid", "p_type_compte" "text", "p_claim_token" "uuid") RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'pg_catalog', 'public', 'auth'
@@ -44928,52 +48658,76 @@ BEGIN
     RETURN jsonb_build_object('ok', false, 'error', 'Mission introuvable');
   END IF;
 
-  SELECT id, COALESCE(type_exercice, 'SALARIE') AS type_exercice,
-         preference_contrat_mixte, COALESCE(est_compte_test, false) AS est_compte_test
-    INTO v_soignant
+  SELECT
+    id,
+    COALESCE(type_exercice, 'SALARIE') AS type_exercice,
+    preference_contrat_mixte
+  INTO v_soignant
   FROM public.soignants
-  WHERE id = p_soignant_id AND supprime_le IS NULL;
+  WHERE id = p_soignant_id
+    AND supprime_le IS NULL;
   IF NOT FOUND THEN
-    RETURN jsonb_build_object('ok', false, 'error', 'Profil soignant introuvable');
+    RETURN jsonb_build_object(
+      'ok', false,
+      'error', 'Profil soignant introuvable'
+    );
   END IF;
 
-  v_liberal_verifie := public.fn_soignant_liberal_actif_verifie(p_soignant_id);
-
-  SELECT type::text AS type_etablissement,
-         COALESCE(est_secteur_public, false) AS est_public,
-         COALESCE(est_compte_test, false) AS est_compte_test
-    INTO v_etablissement
+  SELECT
+    type::text AS type_etablissement,
+    COALESCE(est_secteur_public, false) AS est_public
+  INTO v_etablissement
   FROM public.etablissements
   WHERE id = v_mission.etablissement_id;
   IF NOT FOUND THEN
-    RETURN jsonb_build_object('ok', false, 'error', 'Établissement introuvable');
+    RETURN jsonb_build_object(
+      'ok', false,
+      'error', 'Établissement introuvable'
+    );
   END IF;
 
-  IF v_etablissement.est_compte_test AND NOT v_soignant.est_compte_test THEN
-    RETURN jsonb_build_object('ok', false, 'error', 'Mission de démonstration non disponible');
+  IF NOT private.fn_comptes_meme_cohorte_test(
+    p_soignant_id,
+    v_mission.etablissement_id
+  ) THEN
+    RETURN jsonb_build_object(
+      'ok', false,
+      'error', 'Mission indisponible pour ce compte'
+    );
   END IF;
+
+  v_liberal_verifie :=
+    public.fn_soignant_liberal_actif_verifie(p_soignant_id);
 
   IF p_choix_contrat IS NOT NULL
      AND upper(p_choix_contrat) NOT IN ('SALARIE', 'LIBERAL') THEN
-    RETURN jsonb_build_object('ok', false, 'error', 'Choix de contrat invalide');
+    RETURN jsonb_build_object(
+      'ok', false,
+      'error', 'Choix de contrat invalide'
+    );
   END IF;
 
   v_recherche := CASE
-    WHEN upper(COALESCE(v_mission.type_contrat_recherche::text, 'SALARIE'))
-           IN ('SALARIE', 'LIBERAL', 'TOUS')
-      THEN upper(COALESCE(v_mission.type_contrat_recherche::text, 'SALARIE'))
+    WHEN upper(COALESCE(
+      v_mission.type_contrat_recherche::text,
+      'SALARIE'
+    )) IN ('SALARIE', 'LIBERAL', 'TOUS')
+      THEN upper(COALESCE(
+        v_mission.type_contrat_recherche::text,
+        'SALARIE'
+      ))
     ELSE 'SALARIE'
   END;
 
   IF v_recherche = 'SALARIE' THEN
-    -- Le diplôme ou le statut du profil ne bloque jamais une mission salariée.
     v_choix := 'SALARIE';
   ELSIF v_recherche = 'LIBERAL' THEN
     IF v_soignant.type_exercice NOT IN ('LIBERAL', 'MIXTE')
        OR NOT v_liberal_verifie THEN
       RETURN jsonb_build_object(
         'ok', false,
-        'error', 'Cette mission est proposée en libéral ; activez un profil libéral avec SIRET et identité vérifiés.'
+        'error',
+          'Cette mission est proposée en libéral ; activez un profil libéral avec SIRET et identité vérifiés.'
       );
     END IF;
     v_choix := 'LIBERAL';
@@ -44983,15 +48737,18 @@ BEGIN
     IF v_choix = 'LIBERAL' AND NOT v_liberal_verifie THEN
       RETURN jsonb_build_object(
         'ok', false,
-        'error', 'Votre profil libéral doit être actif, avec SIRET et identité vérifiés.'
+        'error',
+          'Votre profil libéral doit être actif, avec SIRET et identité vérifiés.'
       );
     END IF;
 
     IF v_choix IS NULL THEN
       IF v_soignant.type_exercice = 'MIXTE' AND v_liberal_verifie THEN
         v_choix := CASE
-          WHEN upper(COALESCE(v_soignant.preference_contrat_mixte, ''))
-                 IN ('SALARIE', 'LIBERAL')
+          WHEN upper(COALESCE(
+            v_soignant.preference_contrat_mixte,
+            ''
+          )) IN ('SALARIE', 'LIBERAL')
             THEN upper(v_soignant.preference_contrat_mixte)
           ELSE NULL
         END;
@@ -45001,25 +48758,34 @@ BEGIN
             'choix_requis', true,
             'error', 'Choisissez votre mode de contrat.',
             'options', jsonb_build_array(
-              jsonb_build_object('value', 'SALARIE', 'label', 'Salarié (CDD / bulletin de paie)'),
-              jsonb_build_object('value', 'LIBERAL', 'label', 'Libéral (note d''honoraires)')
+              jsonb_build_object(
+                'value', 'SALARIE',
+                'label', 'Salarié (CDD / bulletin de paie)'
+              ),
+              jsonb_build_object(
+                'value', 'LIBERAL',
+                'label', 'Libéral (note d''honoraires)'
+              )
             )
           );
         END IF;
-      ELSIF v_soignant.type_exercice = 'LIBERAL' AND v_liberal_verifie THEN
+      ELSIF v_soignant.type_exercice = 'LIBERAL'
+            AND v_liberal_verifie THEN
         v_choix := 'LIBERAL';
       ELSE
-        -- Valeur de profil héritée/incohérente : aucun contrat libéral implicite.
         v_choix := 'SALARIE';
       END IF;
     END IF;
 
     IF v_choix = 'LIBERAL'
-       AND (v_soignant.type_exercice NOT IN ('LIBERAL', 'MIXTE')
-            OR NOT v_liberal_verifie) THEN
+       AND (
+         v_soignant.type_exercice NOT IN ('LIBERAL', 'MIXTE')
+         OR NOT v_liberal_verifie
+       ) THEN
       RETURN jsonb_build_object(
         'ok', false,
-        'error', 'Votre profil n''est pas activé pour un contrat libéral vérifié.'
+        'error',
+          'Votre profil n''est pas activé pour un contrat libéral vérifié.'
       );
     END IF;
   END IF;
@@ -45028,12 +48794,18 @@ BEGIN
     v_mode := public.fn_mode_exercice(
       v_mission.profession_requise::text,
       v_etablissement.type_etablissement,
-      CASE WHEN v_etablissement.est_public THEN 'PUBLIC' ELSE NULL END
+      CASE
+        WHEN v_etablissement.est_public THEN 'PUBLIC'
+        ELSE NULL
+      END
     );
     IF COALESCE(v_mode->>'niveau', 'NON_PROPOSE') <> 'AUTORISE' THEN
       RETURN jsonb_build_object(
         'ok', false,
-        'error', COALESCE(v_mode->>'source_libelle', 'Cette mission est proposée en salarié.'),
+        'error', COALESCE(
+          v_mode->>'source_libelle',
+          'Cette mission est proposée en salarié.'
+        ),
         'niveau', COALESCE(v_mode->>'niveau', 'NON_PROPOSE')
       );
     END IF;
@@ -47763,118 +51535,364 @@ ALTER FUNCTION "public"."fn_stats_etab_complements"() OWNER TO "postgres";
 
 CREATE OR REPLACE FUNCTION "public"."fn_stats_rh_etablissement"() RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO 'public'
+    SET "search_path" TO ''
     AS $$
 DECLARE
-    v_etab_id UUID := mon_etablissement_id();
-    v_result JSONB;
-    v_debut_mois TIMESTAMPTZ;
-    v_debut_mois_prec TIMESTAMPTZ;
-    v_mois_fr TEXT[];
+  v_etab_id uuid := public.mon_etablissement_id();
+  v_result jsonb;
+  v_now timestamptz := pg_catalog.now();
+  v_debut_mois timestamptz := pg_catalog.date_trunc('month', pg_catalog.now());
+  v_debut_mois_prec timestamptz := pg_catalog.date_trunc(
+    'month', pg_catalog.now() - interval '1 month'
+  );
+  v_fin_mois timestamptz := pg_catalog.date_trunc(
+    'month', pg_catalog.now()
+  ) + interval '1 month';
+  v_mois_fr text[] := ARRAY[
+    'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
+    'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'
+  ];
 BEGIN
-    IF v_etab_id IS NULL THEN RETURN jsonb_build_object('error', 'Établissement introuvable'); END IF;
-    
-    v_debut_mois := DATE_TRUNC('month', NOW());
-    v_debut_mois_prec := DATE_TRUNC('month', NOW() - INTERVAL '1 month');
-    v_mois_fr := ARRAY['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
-    
-    SELECT jsonb_build_object(
-        'terminees_total', (SELECT COUNT(*) FROM missions WHERE etablissement_id = v_etab_id AND statut = 'TERMINEE'),
-        'terminees_mois_prec', (SELECT COUNT(*) FROM missions WHERE etablissement_id = v_etab_id AND statut = 'TERMINEE' AND fin_le >= v_debut_mois_prec AND fin_le < v_debut_mois),
-        'terminees_ce_mois', (SELECT COUNT(*) FROM missions WHERE etablissement_id = v_etab_id AND statut = 'TERMINEE' AND fin_le >= v_debut_mois),
-        
-        'cout_total_termine', COALESCE((SELECT SUM(total_brut) FROM missions WHERE etablissement_id = v_etab_id AND statut = 'TERMINEE'), 0),
-        'cout_mois_prec', COALESCE((SELECT SUM(total_brut) FROM missions WHERE etablissement_id = v_etab_id AND statut = 'TERMINEE' AND fin_le >= v_debut_mois_prec AND fin_le < v_debut_mois), 0),
-        'cout_ce_mois', COALESCE((SELECT SUM(total_brut) FROM missions WHERE etablissement_id = v_etab_id AND statut = 'TERMINEE' AND fin_le >= v_debut_mois), 0),
-        'commission_mois_prec', COALESCE((SELECT SUM(montant_commission_ttc) FROM missions WHERE etablissement_id = v_etab_id AND statut = 'TERMINEE' AND fin_le >= v_debut_mois_prec AND fin_le < v_debut_mois), 0),
-        'commission_ce_mois', COALESCE((SELECT SUM(montant_commission_ttc) FROM missions WHERE etablissement_id = v_etab_id AND statut = 'TERMINEE' AND fin_le >= v_debut_mois), 0),
-        'heures_terminees', COALESCE((SELECT SUM(EXTRACT(EPOCH FROM (fin_le - debut_le))/3600) FROM missions WHERE etablissement_id = v_etab_id AND statut = 'TERMINEE'), 0),
-        
-        'cout_moyen_heure', COALESCE((
-            SELECT ROUND((SUM(total_brut) / NULLIF(SUM(EXTRACT(EPOCH FROM (fin_le - debut_le))/3600), 0))::NUMERIC, 2)
-            FROM missions WHERE etablissement_id = v_etab_id AND statut = 'TERMINEE'
-        ), 0),
-        
-        'assignees_total', (SELECT COUNT(*) FROM missions WHERE etablissement_id = v_etab_id AND statut = 'ASSIGNEE'),
-        'cout_previsionnel_brut', COALESCE((SELECT SUM(total_brut) FROM missions WHERE etablissement_id = v_etab_id AND statut = 'ASSIGNEE'), 0),
-        'commission_previsionnelle', COALESCE((SELECT SUM(montant_commission_ttc) FROM missions WHERE etablissement_id = v_etab_id AND statut = 'ASSIGNEE'), 0),
-        'cout_previsionnel_total', COALESCE((SELECT SUM(total_brut + COALESCE(montant_commission_ttc, 0)) FROM missions WHERE etablissement_id = v_etab_id AND statut = 'ASSIGNEE'), 0),
-        'heures_prevues', COALESCE((SELECT SUM(EXTRACT(EPOCH FROM (fin_le - debut_le))/3600) FROM missions WHERE etablissement_id = v_etab_id AND statut = 'ASSIGNEE'), 0),
-        
-        'ouvertes_total', (SELECT COUNT(*) FROM missions WHERE etablissement_id = v_etab_id AND statut = 'OUVERTE'),
-        
-        'taux_remplissage', COALESCE((
-            SELECT ROUND(
-                (COUNT(*) FILTER (WHERE statut IN ('ASSIGNEE', 'EN_COURS', 'TERMINEE'))::NUMERIC /
-                 NULLIF(COUNT(*) FILTER (WHERE statut NOT IN ('ANNULEE_PAR_ETABLISSEMENT', 'ANNULEE_PAR_SOIGNANT')), 0)
-                ) * 100, 0)
-            FROM missions WHERE etablissement_id = v_etab_id
-        ), 0),
-        
-        'soignants_total', (SELECT COUNT(DISTINCT soignant_assigne_id) FROM missions WHERE etablissement_id = v_etab_id AND soignant_assigne_id IS NOT NULL AND statut IN ('ASSIGNEE', 'EN_COURS', 'TERMINEE')),
-        'soignants_ce_mois', (SELECT COUNT(DISTINCT soignant_assigne_id) FROM missions WHERE etablissement_id = v_etab_id AND soignant_assigne_id IS NOT NULL AND statut IN ('ASSIGNEE', 'EN_COURS', 'TERMINEE') AND debut_le >= v_debut_mois),
-        
-        'top_soignants', COALESCE((
-            SELECT jsonb_agg(row_to_json(x)) FROM (
-                SELECT s.id::TEXT AS soignant_id, COALESCE(s.prenom, '') || ' ' || COALESCE(s.nom, '') AS nom,
-                    s.profession::TEXT, s.score_fiabilite, s.note_moyenne,
-                    COUNT(*) AS nb_missions, SUM(m.total_brut) AS total_facture
-                FROM missions m JOIN soignants s ON s.id = m.soignant_assigne_id
-                WHERE m.etablissement_id = v_etab_id AND m.statut = 'TERMINEE'
-                GROUP BY s.id ORDER BY nb_missions DESC LIMIT 5
-            ) x
-        ), '[]'::JSONB),
-        
-        -- ★ NOUVEAU : Détail missions mois précédent
-        'missions_mois_prec', COALESCE((
-            SELECT jsonb_agg(row_to_json(x)) FROM (
-                SELECT m.id::TEXT AS mission_id, m.intitule, m.debut_le, m.fin_le, m.total_brut,
-                    m.montant_commission_ttc, EXTRACT(EPOCH FROM (m.fin_le - m.debut_le))/3600 AS heures,
-                    COALESCE(s.prenom, '') || ' ' || COALESCE(s.nom, '') AS soignant_nom,
-                    s.profession::TEXT AS soignant_profession
-                FROM missions m LEFT JOIN soignants s ON s.id = m.soignant_assigne_id
-                WHERE m.etablissement_id = v_etab_id AND m.statut = 'TERMINEE'
-                AND m.fin_le >= v_debut_mois_prec AND m.fin_le < v_debut_mois
-                ORDER BY m.fin_le DESC
-            ) x
-        ), '[]'::JSONB),
-        
-        -- ★ NOUVEAU : Détail missions ce mois
-        'missions_ce_mois', COALESCE((
-            SELECT jsonb_agg(row_to_json(x)) FROM (
-                SELECT m.id::TEXT AS mission_id, m.intitule, m.debut_le, m.fin_le, m.total_brut,
-                    m.montant_commission_ttc, EXTRACT(EPOCH FROM (m.fin_le - m.debut_le))/3600 AS heures,
-                    COALESCE(s.prenom, '') || ' ' || COALESCE(s.nom, '') AS soignant_nom,
-                    s.profession::TEXT AS soignant_profession
-                FROM missions m LEFT JOIN soignants s ON s.id = m.soignant_assigne_id
-                WHERE m.etablissement_id = v_etab_id AND m.statut = 'TERMINEE'
-                AND m.fin_le >= v_debut_mois
-                ORDER BY m.fin_le DESC
-            ) x
-        ), '[]'::JSONB),
-        
-        'prochaines_missions', COALESCE((
-            SELECT jsonb_agg(row_to_json(x)) FROM (
-                SELECT m.id::TEXT AS mission_id, m.intitule, m.debut_le, m.fin_le, m.total_brut,
-                    m.montant_commission_ttc, m.statut::TEXT,
-                    COALESCE(s.prenom, '') || ' ' || COALESCE(s.nom, '') AS soignant_nom
-                FROM missions m LEFT JOIN soignants s ON s.id = m.soignant_assigne_id
-                WHERE m.etablissement_id = v_etab_id AND m.statut IN ('OUVERTE', 'ASSIGNEE', 'EN_COURS')
-                AND m.debut_le >= NOW()
-                ORDER BY m.debut_le ASC LIMIT 10
-            ) x
-        ), '[]'::JSONB),
-        
-        'mois_en_cours', v_mois_fr[EXTRACT(MONTH FROM NOW())::INT] || ' ' || EXTRACT(YEAR FROM NOW())::TEXT,
-        'mois_precedent', v_mois_fr[EXTRACT(MONTH FROM NOW() - INTERVAL '1 month')::INT] || ' ' || EXTRACT(YEAR FROM NOW() - INTERVAL '1 month')::TEXT
-    ) INTO v_result;
-    
-    RETURN v_result;
+  IF v_etab_id IS NULL THEN
+    RETURN pg_catalog.jsonb_build_object('error', 'Établissement introuvable');
+  END IF;
+
+  WITH heures_terminees_exactes AS (
+    -- Pour une mission terminée, les créneaux EFFECTIF clos font foi dès
+    -- qu'ils existent. À défaut seulement, on reprend le PREVISIONNEL. Une
+    -- mission longue discontinue n'est donc jamais comptée 24 h/24 sur son
+    -- enveloppe debut_le/fin_le.
+    SELECT
+      m.id AS mission_id,
+      pg_catalog.sum(
+        EXTRACT(epoch FROM (mc.fin - mc.debut)) / 3600.0
+      )::numeric AS heures
+    FROM public.missions m
+    JOIN public.mission_creneaux mc ON mc.mission_id = m.id
+    WHERE m.etablissement_id = v_etab_id
+      AND m.statut = 'TERMINEE'
+      AND mc.est_pause IS FALSE
+      AND mc.fin IS NOT NULL
+      AND mc.fin > mc.debut
+      AND (
+        mc.type_creneau = 'EFFECTIF'
+        OR (
+          mc.type_creneau = 'PREVISIONNEL'
+          AND NOT EXISTS (
+            SELECT 1
+            FROM public.mission_creneaux effectif
+            WHERE effectif.mission_id = m.id
+              AND effectif.type_creneau = 'EFFECTIF'
+              AND effectif.est_pause IS FALSE
+              AND effectif.fin IS NOT NULL
+              AND effectif.fin > effectif.debut
+          )
+        )
+      )
+    GROUP BY m.id
+  ),
+  planning_total AS (
+    SELECT
+      mc.mission_id,
+      pg_catalog.sum(
+        EXTRACT(epoch FROM (mc.fin - mc.debut)) / 3600.0
+      )::numeric AS heures_totales
+    FROM public.mission_creneaux mc
+    WHERE mc.type_creneau = 'PREVISIONNEL'
+      AND mc.est_pause IS FALSE
+      AND mc.fin IS NOT NULL
+    GROUP BY mc.mission_id
+  ),
+  planning_futur AS (
+    SELECT
+      m.id AS mission_id,
+      m.intitule,
+      m.statut,
+      m.soignant_assigne_id,
+      m.total_brut,
+      m.montant_commission_ttc,
+      pt.heures_totales,
+      pg_catalog.sum(
+        EXTRACT(epoch FROM (mc.fin - mc.debut)) / 3600.0
+      )::numeric AS heures_futures,
+      pg_catalog.min(mc.debut) AS prochain_debut,
+      pg_catalog.min(mc.fin) AS prochaine_fin,
+      COALESCE(s.prenom, '') || ' ' || COALESCE(s.nom, '') AS soignant_nom,
+      s.profession::text AS soignant_profession
+    FROM public.missions m
+    JOIN public.mission_creneaux mc
+      ON mc.mission_id = m.id
+     AND mc.type_creneau = 'PREVISIONNEL'
+     AND mc.est_pause IS FALSE
+     AND mc.fin IS NOT NULL
+     AND mc.debut >= v_now
+    JOIN planning_total pt ON pt.mission_id = m.id
+    LEFT JOIN public.soignants s ON s.id = m.soignant_assigne_id
+    WHERE m.etablissement_id = v_etab_id
+      AND m.statut IN ('OUVERTE', 'ASSIGNEE', 'EN_COURS')
+    GROUP BY
+      m.id,
+      m.intitule,
+      m.statut,
+      m.soignant_assigne_id,
+      m.total_brut,
+      m.montant_commission_ttc,
+      pt.heures_totales,
+      s.prenom,
+      s.nom,
+      s.profession
+  ),
+  planning_confirme AS (
+    SELECT *
+    FROM planning_futur
+    WHERE statut IN ('ASSIGNEE', 'EN_COURS')
+  )
+  SELECT pg_catalog.jsonb_build_object(
+    'terminees_total', (
+      SELECT pg_catalog.count(*)
+      FROM public.missions
+      WHERE etablissement_id = v_etab_id AND statut = 'TERMINEE'
+    ),
+    'terminees_mois_prec', (
+      SELECT pg_catalog.count(*)
+      FROM public.missions
+      WHERE etablissement_id = v_etab_id
+        AND statut = 'TERMINEE'
+        AND fin_le >= v_debut_mois_prec
+        AND fin_le < v_debut_mois
+    ),
+    'terminees_ce_mois', (
+      SELECT pg_catalog.count(*)
+      FROM public.missions
+      WHERE etablissement_id = v_etab_id
+        AND statut = 'TERMINEE'
+        AND fin_le >= v_debut_mois
+    ),
+    'cout_total_termine', COALESCE((
+      SELECT pg_catalog.sum(total_brut)
+      FROM public.missions
+      WHERE etablissement_id = v_etab_id AND statut = 'TERMINEE'
+    ), 0),
+    'cout_mois_prec', COALESCE((
+      SELECT pg_catalog.sum(total_brut)
+      FROM public.missions
+      WHERE etablissement_id = v_etab_id
+        AND statut = 'TERMINEE'
+        AND fin_le >= v_debut_mois_prec
+        AND fin_le < v_debut_mois
+    ), 0),
+    'cout_ce_mois', COALESCE((
+      SELECT pg_catalog.sum(total_brut)
+      FROM public.missions
+      WHERE etablissement_id = v_etab_id
+        AND statut = 'TERMINEE'
+        AND fin_le >= v_debut_mois
+    ), 0),
+    'commission_mois_prec', COALESCE((
+      SELECT pg_catalog.sum(montant_commission_ttc)
+      FROM public.missions
+      WHERE etablissement_id = v_etab_id
+        AND statut = 'TERMINEE'
+        AND fin_le >= v_debut_mois_prec
+        AND fin_le < v_debut_mois
+    ), 0),
+    'commission_ce_mois', COALESCE((
+      SELECT pg_catalog.sum(montant_commission_ttc)
+      FROM public.missions
+      WHERE etablissement_id = v_etab_id
+        AND statut = 'TERMINEE'
+        AND fin_le >= v_debut_mois
+    ), 0),
+    'heures_terminees', COALESCE((
+      SELECT pg_catalog.sum(hte.heures)
+      FROM heures_terminees_exactes hte
+    ), 0),
+    'cout_moyen_heure', COALESCE((
+      SELECT pg_catalog.round((
+        pg_catalog.sum(COALESCE(m.total_brut, 0))
+        / NULLIF(pg_catalog.sum(hte.heures), 0)
+      )::numeric, 2)
+      FROM public.missions m
+      JOIN heures_terminees_exactes hte ON hte.mission_id = m.id
+      WHERE hte.heures > 0
+    ), 0),
+    -- Les quatre indicateurs prévisionnels ne comptent que la part future des
+    -- créneaux exacts confirmés, y compris les missions déjà EN_COURS.
+    'assignees_total', (
+      SELECT pg_catalog.count(*) FROM planning_confirme
+    ),
+    'cout_previsionnel_brut', COALESCE((
+      SELECT pg_catalog.round(pg_catalog.sum(
+        COALESCE(total_brut, 0)
+        * heures_futures / NULLIF(heures_totales, 0)
+      ), 2)
+      FROM planning_confirme
+    ), 0),
+    'commission_previsionnelle', COALESCE((
+      SELECT pg_catalog.round(pg_catalog.sum(
+        COALESCE(montant_commission_ttc, 0)
+        * heures_futures / NULLIF(heures_totales, 0)
+      ), 2)
+      FROM planning_confirme
+    ), 0),
+    'cout_previsionnel_total', COALESCE((
+      SELECT pg_catalog.round(pg_catalog.sum(
+        (COALESCE(total_brut, 0) + COALESCE(montant_commission_ttc, 0))
+        * heures_futures / NULLIF(heures_totales, 0)
+      ), 2)
+      FROM planning_confirme
+    ), 0),
+    'heures_prevues', COALESCE((
+      SELECT pg_catalog.round(pg_catalog.sum(heures_futures), 2)
+      FROM planning_confirme
+    ), 0),
+    'ouvertes_total', (
+      SELECT pg_catalog.count(*)
+      FROM public.missions
+      WHERE etablissement_id = v_etab_id AND statut = 'OUVERTE'
+    ),
+    'taux_remplissage', COALESCE((
+      SELECT pg_catalog.round((
+        pg_catalog.count(*) FILTER (
+          WHERE statut IN ('ASSIGNEE', 'EN_COURS', 'TERMINEE')
+        )::numeric
+        / NULLIF(pg_catalog.count(*) FILTER (
+          WHERE statut NOT IN (
+            'ANNULEE_PAR_ETABLISSEMENT', 'ANNULEE_PAR_SOIGNANT'
+          )
+        ), 0)
+      ) * 100, 0)
+      FROM public.missions
+      WHERE etablissement_id = v_etab_id
+    ), 0),
+    'soignants_total', (
+      SELECT pg_catalog.count(DISTINCT soignant_assigne_id)
+      FROM public.missions
+      WHERE etablissement_id = v_etab_id
+        AND statut IN ('ASSIGNEE', 'EN_COURS', 'TERMINEE')
+    ),
+    'soignants_ce_mois', (
+      SELECT pg_catalog.count(DISTINCT m.soignant_assigne_id)
+      FROM public.missions m
+      JOIN public.mission_creneaux mc ON mc.mission_id = m.id
+      WHERE m.etablissement_id = v_etab_id
+        AND m.statut IN ('ASSIGNEE', 'EN_COURS', 'TERMINEE')
+        AND mc.type_creneau = 'PREVISIONNEL'
+        AND mc.est_pause IS FALSE
+        AND mc.fin > v_debut_mois
+        AND mc.debut < v_fin_mois
+    ),
+    'top_soignants', COALESCE((
+      SELECT pg_catalog.jsonb_agg(pg_catalog.row_to_json(x))
+      FROM (
+        SELECT
+          s.id::text AS soignant_id,
+          COALESCE(s.prenom, '') || ' ' || COALESCE(s.nom, '') AS nom,
+          s.profession::text,
+          s.score_fiabilite,
+          s.note_moyenne,
+          pg_catalog.count(*) AS nb_missions,
+          pg_catalog.sum(m.total_brut) AS total_facture
+        FROM public.missions m
+        JOIN public.soignants s ON s.id = m.soignant_assigne_id
+        WHERE m.etablissement_id = v_etab_id AND m.statut = 'TERMINEE'
+        GROUP BY s.id
+        ORDER BY nb_missions DESC
+        LIMIT 5
+      ) x
+    ), '[]'::jsonb),
+    'missions_mois_prec', COALESCE((
+      SELECT pg_catalog.jsonb_agg(pg_catalog.row_to_json(x))
+      FROM (
+        SELECT
+          m.id::text AS mission_id,
+          m.intitule,
+          m.debut_le,
+          m.fin_le,
+          m.total_brut,
+          m.montant_commission_ttc,
+          COALESCE(hte.heures, 0) AS heures,
+          COALESCE(s.prenom, '') || ' ' || COALESCE(s.nom, '') AS soignant_nom,
+          s.profession::text AS soignant_profession
+        FROM public.missions m
+        LEFT JOIN heures_terminees_exactes hte ON hte.mission_id = m.id
+        LEFT JOIN public.soignants s ON s.id = m.soignant_assigne_id
+        WHERE m.etablissement_id = v_etab_id
+          AND m.statut = 'TERMINEE'
+          AND m.fin_le >= v_debut_mois_prec
+          AND m.fin_le < v_debut_mois
+        ORDER BY m.fin_le DESC
+      ) x
+    ), '[]'::jsonb),
+    'missions_ce_mois', COALESCE((
+      SELECT pg_catalog.jsonb_agg(pg_catalog.row_to_json(x))
+      FROM (
+        SELECT
+          m.id::text AS mission_id,
+          m.intitule,
+          m.debut_le,
+          m.fin_le,
+          m.total_brut,
+          m.montant_commission_ttc,
+          COALESCE(hte.heures, 0) AS heures,
+          COALESCE(s.prenom, '') || ' ' || COALESCE(s.nom, '') AS soignant_nom,
+          s.profession::text AS soignant_profession
+        FROM public.missions m
+        LEFT JOIN heures_terminees_exactes hte ON hte.mission_id = m.id
+        LEFT JOIN public.soignants s ON s.id = m.soignant_assigne_id
+        WHERE m.etablissement_id = v_etab_id
+          AND m.statut = 'TERMINEE'
+          AND m.fin_le >= v_debut_mois
+        ORDER BY m.fin_le DESC
+      ) x
+    ), '[]'::jsonb),
+    'prochaines_missions', COALESCE((
+      SELECT pg_catalog.jsonb_agg(pg_catalog.row_to_json(x))
+      FROM (
+        SELECT
+          pf.mission_id::text AS mission_id,
+          pf.intitule,
+          pf.prochain_debut AS debut_le,
+          pf.prochaine_fin AS fin_le,
+          pg_catalog.round(
+            COALESCE(pf.total_brut, 0)
+            * pf.heures_futures / NULLIF(pf.heures_totales, 0),
+            2
+          ) AS total_brut,
+          pg_catalog.round(
+            COALESCE(pf.montant_commission_ttc, 0)
+            * pf.heures_futures / NULLIF(pf.heures_totales, 0),
+            2
+          ) AS montant_commission_ttc,
+          pf.heures_futures AS heures,
+          pf.statut::text,
+          pf.soignant_nom,
+          pf.soignant_profession
+        FROM planning_futur pf
+        ORDER BY pf.prochain_debut ASC
+        LIMIT 10
+      ) x
+    ), '[]'::jsonb),
+    'mois_en_cours',
+      v_mois_fr[EXTRACT(month FROM pg_catalog.now())::integer]
+      || ' ' || EXTRACT(year FROM pg_catalog.now())::text,
+    'mois_precedent',
+      v_mois_fr[
+        EXTRACT(month FROM pg_catalog.now() - interval '1 month')::integer
+      ] || ' '
+      || EXTRACT(year FROM pg_catalog.now() - interval '1 month')::text
+  ) INTO v_result;
+
+  RETURN v_result;
 END;
 $$;
 
 
 ALTER FUNCTION "public"."fn_stats_rh_etablissement"() OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "public"."fn_stats_rh_etablissement"() IS 'Statistiques RH du tenant courant; futur sur PREVISIONNEL exact et historique sur EFFECTIF exact, avec repli PREVISIONNEL.';
+
 
 
 CREATE OR REPLACE FUNCTION "public"."fn_stripe_connect_rapprocher_facture"("p_mission_id" "uuid", "p_soignant_id" "uuid", "p_etablissement_id" "uuid", "p_facture_honoraires_id" "uuid", "p_facture_commission_id" "uuid", "p_stripe_checkout_session_id" "text", "p_stripe_payment_intent_id" "text", "p_stripe_charge_id" "text", "p_stripe_transfer_id" "text", "p_montant_soignant_cts" integer, "p_montant_commission_cts" integer, "p_montant_total_cts" integer, "p_rapproche_le" timestamp with time zone DEFAULT "now"()) RETURNS "jsonb"
@@ -48938,6 +52956,72 @@ $_$;
 ALTER FUNCTION "public"."fn_stripe_refund_rapprocher"("p_queue_id" "uuid", "p_stripe_refund_id" "text", "p_resultat" "text", "p_detail" "text", "p_finalise_le" timestamp with time zone) OWNER TO "postgres";
 
 
+CREATE TABLE IF NOT EXISTS "public"."stripe_refunds_queue" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "avoir_id" "uuid",
+    "facture_origine_id" "uuid",
+    "stripe_payment_intent_id" "text" NOT NULL,
+    "montant_cts" integer NOT NULL,
+    "statut" "text" DEFAULT 'EN_ATTENTE'::"text" NOT NULL,
+    "stripe_refund_id" "text",
+    "erreur" "text",
+    "tentatives" integer DEFAULT 0 NOT NULL,
+    "cree_le" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "traite_le" timestamp with time zone,
+    "dernier_essai_le" timestamp with time zone,
+    "paiement_escrow_id" "uuid",
+    "reverse_transfer" boolean DEFAULT false NOT NULL,
+    "refund_application_fee_cts" integer DEFAULT 0 NOT NULL,
+    "absorbe_plateforme" boolean DEFAULT false NOT NULL,
+    "escrow_statut_avant_remboursement" "text",
+    CONSTRAINT "stripe_refunds_queue_escrow_statut_avant_check" CHECK ((("escrow_statut_avant_remboursement" IS NULL) OR ("escrow_statut_avant_remboursement" = ANY (ARRAY['DEBITE'::"text", 'DISPONIBLE'::"text", 'PAYE'::"text"])))),
+    CONSTRAINT "stripe_refunds_queue_montant_cts_check" CHECK (("montant_cts" > 0)),
+    CONSTRAINT "stripe_refunds_queue_origine_check" CHECK (((("avoir_id" IS NOT NULL) AND ("facture_origine_id" IS NOT NULL) AND ("paiement_escrow_id" IS NULL)) OR (("avoir_id" IS NULL) AND ("facture_origine_id" IS NULL) AND ("paiement_escrow_id" IS NOT NULL)))),
+    CONSTRAINT "stripe_refunds_queue_statut_check" CHECK (("statut" = ANY (ARRAY['EN_ATTENTE'::"text", 'EN_COURS'::"text", 'TRAITE'::"text", 'ECHEC'::"text"])))
+);
+
+
+ALTER TABLE "public"."stripe_refunds_queue" OWNER TO "postgres";
+
+
+COMMENT ON TABLE "public"."stripe_refunds_queue" IS 'File des remboursements Stripe Connect à traiter async. Consommée par edge function process-stripe-refunds (à créer).';
+
+
+
+COMMENT ON COLUMN "public"."stripe_refunds_queue"."escrow_statut_avant_remboursement" IS 'État escrow restauré si Stripe confirme failed/canceled ; REMBOURSE seulement après succeeded.';
+
+
+
+CREATE OR REPLACE FUNCTION "public"."fn_stripe_refunds_reels_a_traiter"("p_lease_before" timestamp with time zone, "p_limit" integer DEFAULT 10) RETURNS SETOF "public"."stripe_refunds_queue"
+    LANGUAGE "sql" STABLE
+    SET "search_path" TO ''
+    AS $$
+  SELECT q.*
+    FROM public.stripe_refunds_queue q
+    LEFT JOIN public.paiements_escrow pe
+      ON pe.id = q.paiement_escrow_id
+    LEFT JOIN public.factures_honoraires f
+      ON f.id = q.facture_origine_id
+    JOIN public.etablissements e
+      ON e.id = COALESCE(pe.etablissement_id, f.etablissement_id)
+    LEFT JOIN public.soignants s
+      ON s.id = COALESCE(pe.soignant_id, f.soignant_id)
+   WHERE q.statut IN ('EN_ATTENTE', 'EN_COURS')
+     AND (q.dernier_essai_le IS NULL OR q.dernier_essai_le < p_lease_before)
+     AND e.est_compte_test IS FALSE
+     AND COALESCE(s.est_compte_test, false) IS FALSE
+   ORDER BY q.cree_le ASC
+   LIMIT p_limit;
+$$;
+
+
+ALTER FUNCTION "public"."fn_stripe_refunds_reels_a_traiter"("p_lease_before" timestamp with time zone, "p_limit" integer) OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "public"."fn_stripe_refunds_reels_a_traiter"("p_lease_before" timestamp with time zone, "p_limit" integer) IS 'Remboursements Stripe de comptes réels uniquement, résolus par JOIN sur la source canonique.';
+
+
+
 CREATE OR REPLACE FUNCTION "public"."fn_stripe_webhook_event_claim"("p_event_id" "text", "p_event_type" "text", "p_payload" "jsonb", "p_source_webhook" "text", "p_livemode" boolean) RETURNS "text"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
@@ -49600,64 +53684,89 @@ ALTER FUNCTION "public"."fn_swan_webhook_reclamer"("p_event_id" "text", "p_event
 
 CREATE OR REPLACE FUNCTION "public"."fn_sync_mission_creneaux"() RETURNS "trigger"
     LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO 'public'
+    SET "search_path" TO ''
     AS $$
 DECLARE
-  v_mission_id uuid; v_old_mission_id uuid; v_debut timestamptz; v_fin timestamptz;
-  v_duree numeric; v_nb integer; v_debut_eff timestamptz; v_fin_eff timestamptz;
-  v_duree_eff numeric; v_duree_phase2 numeric;
+  v_ids uuid[];
+  v_mission_id uuid;
+  v_debut timestamptz;
+  v_fin timestamptz;
+  v_duree numeric;
+  v_nb integer;
+  v_debut_eff timestamptz;
+  v_fin_eff timestamptz;
+  v_duree_eff numeric;
+  v_duree_reference numeric;
 BEGIN
-  IF current_setting('jolene.sync_in_progress', true) = 'true' THEN RETURN NULL; END IF;
-  IF TG_OP = 'DELETE' THEN v_mission_id := OLD.mission_id; v_old_mission_id := NULL;
-  ELSIF TG_OP = 'UPDATE' AND OLD.mission_id IS DISTINCT FROM NEW.mission_id THEN
-    v_mission_id := NEW.mission_id; v_old_mission_id := OLD.mission_id;
-  ELSE v_mission_id := NEW.mission_id; v_old_mission_id := NULL; END IF;
-
-  SELECT MIN(debut), MAX(fin),
-    COALESCE(SUM(CASE WHEN NOT est_pause THEN EXTRACT(EPOCH FROM (fin - debut)) / 3600.0 ELSE 0 END), 0), COUNT(*)
-  INTO v_debut, v_fin, v_duree, v_nb
-  FROM mission_creneaux WHERE mission_id = v_mission_id AND type_creneau = 'PREVISIONNEL';
-  SELECT MIN(debut), MAX(fin),
-    COALESCE(SUM(CASE WHEN NOT est_pause THEN EXTRACT(EPOCH FROM (fin - debut)) / 3600.0 ELSE 0 END), 0)
-  INTO v_debut_eff, v_fin_eff, v_duree_eff
-  FROM mission_creneaux WHERE mission_id = v_mission_id AND type_creneau = 'EFFECTIF' AND fin IS NOT NULL;
-  IF v_duree_eff = 0 AND v_debut_eff IS NULL THEN v_duree_eff := NULL; END IF;
-  v_duree_phase2 := GREATEST(COALESCE(v_duree_eff, 0), COALESCE(v_duree, 0));
-
-  PERFORM set_config('jolene.sync_in_progress', 'true', true);
-  IF v_nb > 0 THEN UPDATE missions SET debut_le = v_debut, fin_le = v_fin, nb_creneaux = v_nb WHERE id = v_mission_id;
-  ELSE UPDATE missions SET nb_creneaux = 0 WHERE id = v_mission_id; END IF;
-  PERFORM set_config('jolene.sync_in_progress', 'false', true);
-
-  IF v_nb > 0 OR v_duree_eff IS NOT NULL THEN
-    UPDATE missions SET duree_heures = ROUND(v_duree_phase2::numeric, 2),
-      debut_effectif = v_debut_eff, fin_effective = v_fin_eff,
-      duree_heures_effective = CASE WHEN v_duree_eff IS NOT NULL THEN ROUND(v_duree_eff::numeric, 2) ELSE NULL END
-    WHERE id = v_mission_id;
-  ELSE UPDATE missions SET duree_heures = NULL, debut_effectif = NULL, fin_effective = NULL, duree_heures_effective = NULL WHERE id = v_mission_id; END IF;
-
-  IF v_old_mission_id IS NOT NULL THEN
-    SELECT MIN(debut), MAX(fin),
-      COALESCE(SUM(CASE WHEN NOT est_pause THEN EXTRACT(EPOCH FROM (fin - debut)) / 3600.0 ELSE 0 END), 0), COUNT(*)
-    INTO v_debut, v_fin, v_duree, v_nb
-    FROM mission_creneaux WHERE mission_id = v_old_mission_id AND type_creneau = 'PREVISIONNEL';
-    SELECT MIN(debut), MAX(fin),
-      COALESCE(SUM(CASE WHEN NOT est_pause THEN EXTRACT(EPOCH FROM (fin - debut)) / 3600.0 ELSE 0 END), 0)
-    INTO v_debut_eff, v_fin_eff, v_duree_eff
-    FROM mission_creneaux WHERE mission_id = v_old_mission_id AND type_creneau = 'EFFECTIF' AND fin IS NOT NULL;
-    IF v_duree_eff = 0 AND v_debut_eff IS NULL THEN v_duree_eff := NULL; END IF;
-    v_duree_phase2 := GREATEST(COALESCE(v_duree_eff, 0), COALESCE(v_duree, 0));
-    PERFORM set_config('jolene.sync_in_progress', 'true', true);
-    IF v_nb > 0 THEN UPDATE missions SET debut_le = v_debut, fin_le = v_fin, nb_creneaux = v_nb WHERE id = v_old_mission_id;
-    ELSE UPDATE missions SET nb_creneaux = 0 WHERE id = v_old_mission_id; END IF;
-    PERFORM set_config('jolene.sync_in_progress', 'false', true);
-    IF v_nb > 0 OR v_duree_eff IS NOT NULL THEN
-      UPDATE missions SET duree_heures = ROUND(v_duree_phase2::numeric, 2),
-        debut_effectif = v_debut_eff, fin_effective = v_fin_eff,
-        duree_heures_effective = CASE WHEN v_duree_eff IS NOT NULL THEN ROUND(v_duree_eff::numeric, 2) ELSE NULL END
-      WHERE id = v_old_mission_id;
-    ELSE UPDATE missions SET duree_heures = NULL, debut_effectif = NULL, fin_effective = NULL, duree_heures_effective = NULL WHERE id = v_old_mission_id; END IF;
+  IF pg_catalog.current_setting('jolene.sync_in_progress', true) = 'true' THEN
+    RETURN NULL;
   END IF;
+
+  IF TG_OP = 'DELETE' THEN
+    v_ids := ARRAY[OLD.mission_id];
+  ELSIF TG_OP = 'UPDATE' AND OLD.mission_id IS DISTINCT FROM NEW.mission_id THEN
+    v_ids := ARRAY[NEW.mission_id, OLD.mission_id];
+  ELSE
+    v_ids := ARRAY[NEW.mission_id];
+  END IF;
+
+  FOREACH v_mission_id IN ARRAY v_ids
+  LOOP
+    SELECT
+      pg_catalog.min(mc.debut),
+      pg_catalog.max(mc.fin),
+      COALESCE(pg_catalog.sum(
+        EXTRACT(epoch FROM (mc.fin - mc.debut)) / 3600.0
+      ), 0),
+      pg_catalog.count(*)::integer
+    INTO v_debut, v_fin, v_duree, v_nb
+    FROM public.mission_creneaux mc
+    WHERE mc.mission_id = v_mission_id
+      AND mc.type_creneau = 'PREVISIONNEL'
+      AND NOT mc.est_pause;
+
+    SELECT
+      pg_catalog.min(mc.debut),
+      pg_catalog.max(mc.fin),
+      COALESCE(pg_catalog.sum(
+        EXTRACT(epoch FROM (mc.fin - mc.debut)) / 3600.0
+      ), 0)
+    INTO v_debut_eff, v_fin_eff, v_duree_eff
+    FROM public.mission_creneaux mc
+    WHERE mc.mission_id = v_mission_id
+      AND mc.type_creneau = 'EFFECTIF'
+      AND NOT mc.est_pause
+      AND mc.fin IS NOT NULL;
+
+    IF v_duree_eff = 0 AND v_debut_eff IS NULL THEN
+      v_duree_eff := NULL;
+    END IF;
+    v_duree_reference := GREATEST(
+      COALESCE(v_duree_eff, 0),
+      COALESCE(v_duree, 0)
+    );
+
+    PERFORM pg_catalog.set_config('jolene.sync_in_progress', 'true', true);
+    UPDATE public.missions
+    SET debut_le = CASE WHEN v_nb > 0 THEN v_debut ELSE debut_le END,
+        fin_le = CASE WHEN v_nb > 0 THEN v_fin ELSE fin_le END,
+        nb_creneaux = v_nb,
+        duree_heures = CASE
+          WHEN v_nb > 0 OR v_duree_eff IS NOT NULL
+            THEN pg_catalog.round(v_duree_reference::numeric, 2)
+          ELSE NULL
+        END,
+        debut_effectif = v_debut_eff,
+        fin_effective = v_fin_eff,
+        duree_heures_effective = CASE
+          WHEN v_duree_eff IS NOT NULL
+            THEN pg_catalog.round(v_duree_eff::numeric, 2)
+          ELSE NULL
+        END
+    WHERE id = v_mission_id;
+    PERFORM pg_catalog.set_config('jolene.sync_in_progress', 'false', true);
+  END LOOP;
+
   RETURN NULL;
 END;
 $$;
@@ -49866,39 +53975,354 @@ COMMENT ON FUNCTION "public"."fn_test_nettoyer_sessions_playwright"("p_anciennet
 
 CREATE OR REPLACE FUNCTION "public"."fn_test_purge_mission"("p_mission_id" "uuid") RETURNS "void"
     LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO 'public'
+    SET "search_path" TO ''
     AS $_$
 DECLARE
-  r RECORD;
-  v_intitule text;
+  r record;
+  v_mission record;
+  v_reason constant text := 'PURGE_E2E_MISSION_TECHNIQUE';
+  v_previous_test_bypass text := COALESCE(
+    pg_catalog.current_setting('app.test_bypass_protections', true),
+    ''
+  );
+  v_previous_gel_id text := COALESCE(
+    pg_catalog.current_setting('jolene.admin_override_gel', true),
+    ''
+  );
+  v_previous_gel_reason text := COALESCE(
+    pg_catalog.current_setting('jolene.admin_override_reason', true),
+    ''
+  );
+  v_previous_invoice_id text := COALESCE(
+    pg_catalog.current_setting('jolene.admin_correction_mission_id', true),
+    ''
+  );
+  v_previous_invoice_reason text := COALESCE(
+    pg_catalog.current_setting('jolene.admin_correction_reason', true),
+    ''
+  );
+  v_error_state text;
+  v_error_message text;
+  v_has_non_test_soignant boolean;
 BEGIN
-  SELECT intitule INTO v_intitule FROM missions WHERE id = p_mission_id;
-  IF v_intitule IS NULL THEN RETURN; END IF;
-  -- Garde-fou : réservé STRICTEMENT aux missions de test (jamais de données réelles).
-  IF v_intitule NOT LIKE '[pw-test%' AND v_intitule NOT LIKE '[playwright-test]%' THEN
-    RAISE EXCEPTION 'fn_test_purge_mission reserve aux missions de test (intitule=%)', v_intitule;
+  IF COALESCE(auth.role(), '') <> 'service_role' THEN
+    RAISE EXCEPTION
+      'fn_test_purge_mission réservé au service_role'
+      USING ERRCODE = 'insufficient_privilege';
   END IF;
 
-  -- messages_chat : enfant de conversations (FK conversation_id, pas mission_id).
-  DELETE FROM messages_chat WHERE conversation_id IN (SELECT id FROM conversations WHERE mission_id = p_mission_id);
+  SELECT
+    m.id,
+    m.intitule,
+    m.etablissement_id,
+    m.soignant_assigne_id,
+    m.statut,
+    m.fige_le,
+    e.est_compte_test AS etablissement_est_test
+  INTO v_mission
+  FROM public.missions m
+  JOIN public.etablissements e ON e.id = m.etablissement_id
+  WHERE m.id = p_mission_id
+  FOR UPDATE OF m;
 
-  -- Toutes les tables ayant une FK directe vers missions.id (hors auto-référence missions).
+  IF NOT FOUND THEN
+    RETURN;
+  END IF;
+
+  IF (
+    v_mission.intitule NOT LIKE '[pw-test:%'
+    AND v_mission.intitule NOT LIKE '[playwright-test]%'
+  ) OR v_mission.etablissement_est_test IS DISTINCT FROM true THEN
+    RAISE EXCEPTION
+      'Purge refusée : mission % hors périmètre E2E strict',
+      p_mission_id
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+
+  IF v_mission.soignant_assigne_id IS NOT NULL
+     AND NOT EXISTS (
+       SELECT 1
+       FROM public.soignants s
+       WHERE s.id = v_mission.soignant_assigne_id
+         AND s.est_compte_test IS TRUE
+     ) THEN
+    RAISE EXCEPTION
+      'Purge refusée : mission % assignée à un soignant non-test',
+      p_mission_id
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+
+  IF EXISTS (
+    SELECT 1
+    FROM public.candidatures c
+    LEFT JOIN public.soignants s ON s.id = c.soignant_id
+    WHERE c.mission_id = p_mission_id
+      AND s.est_compte_test IS DISTINCT FROM true
+  ) THEN
+    RAISE EXCEPTION
+      'Purge refusée : mission % liée à une candidature non-test',
+      p_mission_id
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+
+  -- Refuser aussi une relation opérationnelle anormale qui relierait cette
+  -- mission technique à un soignant non-test sans passer par candidature ou
+  -- affectation. Le contrôle couvre dynamiquement toutes les tables ayant à
+  -- la fois une FK directe vers missions.id et une colonne soignant_id.
   FOR r IN
-    SELECT c.conrelid::regclass::text AS tbl, a.attname AS col
-    FROM pg_constraint c
-    JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = c.conkey[1]
-    WHERE c.contype = 'f' AND c.confrelid = 'public.missions'::regclass
-      AND c.conrelid <> 'public.missions'::regclass
+    SELECT
+      ns.nspname AS table_schema,
+      rel.relname AS table_name,
+      mission_col.attname AS mission_column
+    FROM pg_catalog.pg_constraint fk
+    JOIN pg_catalog.pg_class rel ON rel.oid = fk.conrelid
+    JOIN pg_catalog.pg_namespace ns ON ns.oid = rel.relnamespace
+    JOIN pg_catalog.pg_attribute mission_col
+      ON mission_col.attrelid = fk.conrelid
+     AND mission_col.attnum = fk.conkey[1]
+    JOIN pg_catalog.pg_attribute soignant_col
+      ON soignant_col.attrelid = fk.conrelid
+     AND soignant_col.attname = 'soignant_id'
+     AND NOT soignant_col.attisdropped
+    JOIN pg_catalog.pg_attribute target
+      ON target.attrelid = fk.confrelid
+     AND target.attnum = fk.confkey[1]
+    WHERE fk.contype = 'f'
+      AND fk.confrelid = 'public.missions'::pg_catalog.regclass
+      AND pg_catalog.array_length(fk.conkey, 1) = 1
+      AND pg_catalog.array_length(fk.confkey, 1) = 1
+      AND target.attname = 'id'
   LOOP
-    EXECUTE format('DELETE FROM %s WHERE %I = $1', r.tbl, r.col) USING p_mission_id;
+    EXECUTE pg_catalog.format(
+      'SELECT EXISTS ('
+      || 'SELECT 1 FROM %I.%I enfant '
+      || 'LEFT JOIN public.soignants s ON s.id = enfant.soignant_id '
+      || 'WHERE enfant.%I = $1 AND enfant.soignant_id IS NOT NULL '
+      || 'AND s.est_compte_test IS DISTINCT FROM true)',
+      r.table_schema,
+      r.table_name,
+      r.mission_column
+    ) INTO v_has_non_test_soignant USING p_mission_id;
+
+    IF v_has_non_test_soignant THEN
+      RAISE EXCEPTION
+        'Purge refusée : mission % liée à un soignant non-test via %.%',
+        p_mission_id,
+        r.table_schema,
+        r.table_name
+        USING ERRCODE = 'insufficient_privilege';
+    END IF;
   END LOOP;
 
-  DELETE FROM missions WHERE id = p_mission_id;
+  PERFORM pg_catalog.set_config(
+    'app.test_bypass_protections', 'true', true
+  );
+  PERFORM pg_catalog.set_config(
+    'jolene.admin_override_gel', p_mission_id::text, true
+  );
+  PERFORM pg_catalog.set_config(
+    'jolene.admin_override_reason', v_reason, true
+  );
+  PERFORM pg_catalog.set_config(
+    'jolene.admin_correction_mission_id', p_mission_id::text, true
+  );
+  PERFORM pg_catalog.set_config(
+    'jolene.admin_correction_reason', v_reason, true
+  );
+
+  INSERT INTO public.journaux_audit (
+    acteur_id,
+    type_acteur,
+    action,
+    type_ressource,
+    id_ressource,
+    details
+  ) VALUES (
+    auth.uid(),
+    'SERVICE_API',
+    'SYSTEM',
+    'mission',
+    p_mission_id,
+    pg_catalog.jsonb_build_object(
+      'reason', v_reason,
+      'test_data_only', true,
+      'previous_status', v_mission.statut,
+      'was_frozen', v_mission.fige_le IS NOT NULL,
+      'etablissement_id', v_mission.etablissement_id
+    )
+  );
+
+  -- Neutraliser d'abord la fixture évite que la resynchronisation déclenchée
+  -- par la suppression du dernier créneau considère encore une mission active
+  -- assignée. Les statuts terminaux restent inchangés.
+  UPDATE public.missions m
+  SET statut = CASE
+        WHEN m.statut IN (
+          'OUVERTE',
+          'ASSIGNEE',
+          'EN_COURS',
+          'LITIGE'
+        ) THEN 'ANNULEE_PAR_ETABLISSEMENT'::public.statut_mission
+        ELSE m.statut
+      END,
+      soignant_assigne_id = NULL,
+      fige_le = NULL
+  WHERE m.id = p_mission_id;
+
+  -- Enfants indirects et références JSON sans cascade.
+  DELETE FROM public.messages_chat mc
+  WHERE mc.conversation_id IN (
+    SELECT c.id
+    FROM public.conversations c
+    WHERE c.mission_id = p_mission_id
+  );
+
+  DELETE FROM public.notifications n
+  WHERE n.id_ressource = p_mission_id
+     OR n.lien = '/etablissement/missions/' || p_mission_id::text;
+
+  DELETE FROM public.email_queue q
+  WHERE q.data @> pg_catalog.jsonb_build_object('mission_id', p_mission_id);
+
+  -- Enfants indirects RESTRICT/NO ACTION : ils doivent disparaître avant les
+  -- lignes directes factures_honoraires, factures et litiges.
+  DELETE FROM public.stripe_refunds_queue q
+  WHERE q.facture_origine_id IN (
+      SELECT fh.id FROM public.factures_honoraires fh
+      WHERE fh.mission_id = p_mission_id
+    )
+     OR q.avoir_id IN (
+      SELECT fh.id FROM public.factures_honoraires fh
+      WHERE fh.mission_id = p_mission_id
+    );
+
+  DELETE FROM public.chorus_submissions cs
+  WHERE cs.invoice_id IN (
+    SELECT fh.id FROM public.factures_honoraires fh
+    WHERE fh.mission_id = p_mission_id
+  );
+
+  DELETE FROM public.invoice_audit_log ial
+  WHERE ial.invoice_id IN (
+    SELECT fh.id FROM public.factures_honoraires fh
+    WHERE fh.mission_id = p_mission_id
+  );
+
+  DELETE FROM public.messages_litige ml
+  WHERE ml.litige_id IN (
+    SELECT l.id FROM public.litiges l
+    WHERE l.mission_id = p_mission_id
+  );
+
+  DELETE FROM public.stripe_transfers st
+  WHERE st.mission_id = p_mission_id
+     OR st.facture_id IN (
+      SELECT f.id FROM public.factures f
+      WHERE f.mission_id = p_mission_id
+    );
+
+  DELETE FROM public.stripe_refunds_queue q
+  WHERE q.paiement_escrow_id IN (
+    SELECT pe.id FROM public.paiements_escrow pe
+    WHERE pe.mission_id = p_mission_id
+  );
+  DELETE FROM public.escrow_release_queue q
+  WHERE q.paiement_escrow_id IN (
+    SELECT pe.id FROM public.paiements_escrow pe
+    WHERE pe.mission_id = p_mission_id
+  );
+  DELETE FROM public.escrow_exposition_releases q
+  WHERE q.paiement_escrow_id IN (
+    SELECT pe.id FROM public.paiements_escrow pe
+    WHERE pe.mission_id = p_mission_id
+  );
+
+  -- partages_rib dépend aussi du contrat et du document : le supprimer avant
+  -- le parcours générique rend l'ordre déterministe.
+  DELETE FROM public.partages_rib pr
+  WHERE pr.mission_id = p_mission_id;
+
+  -- Toutes les FK directes, mono-colonne, vers missions.id. Les identifiants
+  -- proviennent exclusivement des catalogues PostgreSQL et sont quotés.
+  FOR r IN
+    SELECT
+      ns.nspname AS table_schema,
+      rel.relname AS table_name,
+      src.attname AS column_name
+    FROM pg_catalog.pg_constraint fk
+    JOIN pg_catalog.pg_class rel ON rel.oid = fk.conrelid
+    JOIN pg_catalog.pg_namespace ns ON ns.oid = rel.relnamespace
+    JOIN pg_catalog.pg_attribute src
+      ON src.attrelid = fk.conrelid
+     AND src.attnum = fk.conkey[1]
+    JOIN pg_catalog.pg_attribute target
+      ON target.attrelid = fk.confrelid
+     AND target.attnum = fk.confkey[1]
+    WHERE fk.contype = 'f'
+      AND fk.confrelid = 'public.missions'::pg_catalog.regclass
+      AND fk.conrelid <> 'public.missions'::pg_catalog.regclass
+      AND pg_catalog.array_length(fk.conkey, 1) = 1
+      AND pg_catalog.array_length(fk.confkey, 1) = 1
+      AND target.attname = 'id'
+    ORDER BY
+      CASE WHEN rel.relname = 'mission_creneaux' THEN 1 ELSE 0 END,
+      fk.oid
+  LOOP
+    EXECUTE pg_catalog.format(
+      'DELETE FROM %I.%I WHERE %I = $1',
+      r.table_schema,
+      r.table_name,
+      r.column_name
+    ) USING p_mission_id;
+  END LOOP;
+
+  DELETE FROM public.missions m WHERE m.id = p_mission_id;
+
+  PERFORM pg_catalog.set_config(
+    'app.test_bypass_protections', v_previous_test_bypass, true
+  );
+  PERFORM pg_catalog.set_config(
+    'jolene.admin_override_gel', v_previous_gel_id, true
+  );
+  PERFORM pg_catalog.set_config(
+    'jolene.admin_override_reason', v_previous_gel_reason, true
+  );
+  PERFORM pg_catalog.set_config(
+    'jolene.admin_correction_mission_id', v_previous_invoice_id, true
+  );
+  PERFORM pg_catalog.set_config(
+    'jolene.admin_correction_reason', v_previous_invoice_reason, true
+  );
+EXCEPTION WHEN OTHERS THEN
+  GET STACKED DIAGNOSTICS
+    v_error_state = RETURNED_SQLSTATE,
+    v_error_message = MESSAGE_TEXT;
+  PERFORM pg_catalog.set_config(
+    'app.test_bypass_protections', v_previous_test_bypass, true
+  );
+  PERFORM pg_catalog.set_config(
+    'jolene.admin_override_gel', v_previous_gel_id, true
+  );
+  PERFORM pg_catalog.set_config(
+    'jolene.admin_override_reason', v_previous_gel_reason, true
+  );
+  PERFORM pg_catalog.set_config(
+    'jolene.admin_correction_mission_id', v_previous_invoice_id, true
+  );
+  PERFORM pg_catalog.set_config(
+    'jolene.admin_correction_reason', v_previous_invoice_reason, true
+  );
+  RAISE EXCEPTION '[PURGE_E2E_DURABLE] %', v_error_message
+    USING ERRCODE = v_error_state;
 END;
 $_$;
 
 
 ALTER FUNCTION "public"."fn_test_purge_mission"("p_mission_id" "uuid") OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "public"."fn_test_purge_mission"("p_mission_id" "uuid") IS 'Purge auditée, service_role-only, des missions E2E dont toutes les parties liées sont explicitement marquées test.';
+
 
 
 CREATE OR REPLACE FUNCTION "public"."fn_test_seed_heures_externes_validees"("p_soignant_id" "uuid", "p_heures" numeric) RETURNS "uuid"
@@ -50427,6 +54851,153 @@ COMMENT ON FUNCTION "public"."fn_traiter_candidature"("p_candidature_id" "uuid",
 
 
 
+CREATE OR REPLACE FUNCTION "public"."fn_traiter_candidature_planning_v1"("p_candidature_id" "uuid", "p_decision" "text", "p_creneaux_confirmes" "jsonb" DEFAULT NULL::"jsonb", "p_motif" "text" DEFAULT NULL::"text") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+DECLARE
+  v_mission public.missions%ROWTYPE;
+  v_mission_id uuid;
+  v_decision text;
+  v_choix_contrat text;
+  v_validation jsonb;
+  v_nb_live integer;
+  v_planning_differe boolean;
+BEGIN
+  IF (SELECT auth.uid()) IS NULL THEN
+    RETURN pg_catalog.jsonb_build_object(
+      'success', false,
+      'error', 'Non authentifié.'
+    );
+  END IF;
+
+  v_decision := pg_catalog.upper(pg_catalog.btrim(COALESCE(p_decision, '')));
+  IF v_decision NOT IN ('ACCEPTEE', 'REFUSEE') THEN
+    RETURN pg_catalog.jsonb_build_object(
+      'success', false,
+      'error', 'Décision invalide.'
+    );
+  END IF;
+
+  SELECT c.mission_id, c.type_contrat_choisi::text
+  INTO v_mission_id, v_choix_contrat
+  FROM public.candidatures c
+  WHERE c.id = p_candidature_id;
+  IF NOT FOUND THEN
+    RETURN pg_catalog.jsonb_build_object(
+      'success', false,
+      'error', 'Candidature introuvable.'
+    );
+  END IF;
+
+  SELECT m.*
+  INTO v_mission
+  FROM public.missions m
+  WHERE m.id = v_mission_id
+  FOR UPDATE;
+  IF NOT FOUND OR public.fn_a_permission_etablissement(
+    'candidatures', v_mission.etablissement_id
+  ) IS NOT TRUE THEN
+    RETURN pg_catalog.jsonb_build_object(
+      'success', false,
+      'error', 'Mission introuvable ou accès refusé.'
+    );
+  END IF;
+
+  IF v_decision = 'REFUSEE' THEN
+    RETURN public.fn_traiter_candidature(
+      p_candidature_id,
+      v_decision,
+      p_motif
+    );
+  END IF;
+
+  v_validation := public.fn_valider_creneaux_mission_json(
+    p_creneaux_confirmes,
+    NOT (
+      v_mission.type_contrat_recherche = 'LIBERAL'
+      OR (
+        v_mission.type_contrat_recherche = 'TOUS'
+        AND pg_catalog.upper(pg_catalog.btrim(COALESCE(v_choix_contrat, ''))) = 'LIBERAL'
+      )
+    )
+  );
+  IF COALESCE((v_validation->>'success')::boolean, false) IS NOT TRUE THEN
+    RETURN pg_catalog.jsonb_build_object(
+      'success', false,
+      'code', 'PLANNING_A_RECONFIRMER',
+      'error', 'Le planning confirmé n''est pas exploitable. Rechargez la mission avant de continuer.'
+    );
+  END IF;
+
+  SELECT pg_catalog.count(*)::integer
+  INTO v_nb_live
+  FROM public.mission_creneaux mc
+  WHERE mc.mission_id = v_mission_id
+    AND mc.type_creneau = 'PREVISIONNEL'
+    AND NOT mc.est_pause
+    AND mc.fin IS NOT NULL;
+
+  WITH confirmes AS (
+    SELECT
+      (source.element->>'debut')::timestamptz AS debut,
+      (source.element->>'fin')::timestamptz AS fin
+    FROM pg_catalog.jsonb_array_elements(p_creneaux_confirmes)
+      AS source(element)
+  ), live AS (
+    SELECT mc.debut, mc.fin
+    FROM public.mission_creneaux mc
+    WHERE mc.mission_id = v_mission_id
+      AND mc.type_creneau = 'PREVISIONNEL'
+      AND NOT mc.est_pause
+      AND mc.fin IS NOT NULL
+  )
+  SELECT EXISTS (
+    (SELECT l.debut, l.fin FROM live l
+     EXCEPT
+     SELECT c.debut, c.fin FROM confirmes c)
+    UNION ALL
+    (SELECT c.debut, c.fin FROM confirmes c
+     EXCEPT
+     SELECT l.debut, l.fin FROM live l)
+  )
+  INTO v_planning_differe;
+
+  IF v_nb_live = 0
+     OR v_nb_live <> pg_catalog.jsonb_array_length(p_creneaux_confirmes)
+     OR (
+       COALESCE(v_mission.nb_creneaux, 0) > 0
+       AND v_mission.nb_creneaux <> v_nb_live
+     )
+     OR v_planning_differe THEN
+    RETURN pg_catalog.jsonb_build_object(
+      'success', false,
+      'code', 'PLANNING_MODIFIE_RECONFIRMER',
+      'error', 'Le planning a changé depuis son affichage. Vérifiez à nouveau toutes les dates et tous les horaires.'
+    );
+  END IF;
+
+  PERFORM pg_catalog.set_config(
+    'jolene.planning_confirme_mission_id',
+    v_mission_id::text,
+    true
+  );
+  RETURN public.fn_traiter_candidature(
+    p_candidature_id,
+    v_decision,
+    p_motif
+  );
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_traiter_candidature_planning_v1"("p_candidature_id" "uuid", "p_decision" "text", "p_creneaux_confirmes" "jsonb", "p_motif" "text") OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "public"."fn_traiter_candidature_planning_v1"("p_candidature_id" "uuid", "p_decision" "text", "p_creneaux_confirmes" "jsonb", "p_motif" "text") IS 'Traite une candidature établissement sous verrou et exige la confirmation du planning exact avant acceptation.';
+
+
+
 CREATE OR REPLACE FUNCTION "public"."fn_traiter_reclamation"("p_reclamation_id" "uuid", "p_statut" "text", "p_points_restaures" integer DEFAULT 0) RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
@@ -50604,6 +55175,7 @@ DECLARE
   v_token text;
   v_should_fire boolean := false;
   v_corps text;
+  v_notification_id uuid;
 BEGIN
   IF TG_OP = 'INSERT'
      AND COALESCE(NEW.est_urgente, false)
@@ -50613,107 +55185,189 @@ BEGIN
         AND COALESCE(NEW.est_urgente, false)
         AND NEW.statut = 'OUVERTE'
         AND (
-          COALESCE(OLD.est_urgente, false) IS DISTINCT FROM COALESCE(NEW.est_urgente, false)
+          COALESCE(OLD.est_urgente, false)
+            IS DISTINCT FROM COALESCE(NEW.est_urgente, false)
           OR (OLD.statut = 'ASSIGNEE' AND NEW.statut = 'OUVERTE')
         ) THEN
     v_should_fire := true;
   END IF;
-  IF NOT v_should_fire THEN RETURN NEW; END IF;
+  IF NOT v_should_fire THEN
+    RETURN NEW;
+  END IF;
 
-  SELECT id, nom, adresse_lat, adresse_lng, adresse_ville
+  SELECT
+    e.id,
+    e.nom,
+    e.adresse_lat,
+    e.adresse_lng,
+    e.adresse_ville,
+    e.est_compte_test
     INTO v_etab
-    FROM public.etablissements WHERE id = NEW.etablissement_id;
+    FROM public.etablissements e
+   WHERE e.id = NEW.etablissement_id;
+
+  -- La garde précède même la notification in-app. Une mission de recette ne
+  -- contacte jamais un soignant réel et n'altère aucune statistique d'envoi.
+  IF v_etab.id IS NULL
+     OR v_etab.est_compte_test IS DISTINCT FROM false THEN
+    RETURN NEW;
+  END IF;
+
   BEGIN
     v_token := (
-      SELECT decrypted_secret FROM vault.decrypted_secrets
-       WHERE name = 'service_role_key' LIMIT 1
+      SELECT decrypted_secret
+        FROM vault.decrypted_secrets
+       WHERE name = 'service_role_key'
+       LIMIT 1
     );
-  EXCEPTION WHEN OTHERS THEN v_token := NULL;
+  EXCEPTION WHEN OTHERS THEN
+    v_token := NULL;
   END;
   IF COALESCE(current_setting('app.test_mode', true), '') = 'true' THEN
     v_token := NULL;
   END IF;
 
   FOR v_soignant IN
-    SELECT s.id, s.email, s.prenom, s.telephone,
+    SELECT
+      s.id,
+      s.email,
+      s.prenom,
+      s.telephone,
       COALESCE(s.pool_urgence_sms_opt_in, false) AS sms_opt_in,
-      CASE WHEN v_etab.adresse_lat IS NOT NULL AND s.adresse_lat IS NOT NULL THEN
-        6371 * 2 * asin(sqrt(
-          power(sin(radians(s.adresse_lat - v_etab.adresse_lat) / 2), 2) +
-          cos(radians(v_etab.adresse_lat)) * cos(radians(s.adresse_lat)) *
-          power(sin(radians(s.adresse_lng - v_etab.adresse_lng) / 2), 2)
-        ))
-      ELSE NULL END AS distance_km
+      CASE
+        WHEN v_etab.adresse_lat IS NOT NULL
+         AND s.adresse_lat IS NOT NULL THEN
+          6371 * 2 * asin(sqrt(
+            power(
+              sin(radians(s.adresse_lat - v_etab.adresse_lat) / 2),
+              2
+            )
+            + cos(radians(v_etab.adresse_lat))
+              * cos(radians(s.adresse_lat))
+              * power(
+                sin(radians(s.adresse_lng - v_etab.adresse_lng) / 2),
+                2
+              )
+          ))
+        ELSE NULL
+      END AS distance_km
     FROM public.soignants s
-    WHERE COALESCE(s.disponible_urgence, false)
+    WHERE s.est_compte_test IS FALSE
+      AND COALESCE(s.disponible_urgence, false)
       AND public.fn_soignant_eligible_mission(s.id, NEW.id, true)
       AND NOT public.fn_est_exclu(s.id, NEW.etablissement_id)
       AND NOT EXISTS (
-        SELECT 1 FROM public.candidatures c
-         WHERE c.mission_id = NEW.id AND c.soignant_id = s.id
+        SELECT 1
+          FROM public.candidatures c
+         WHERE c.mission_id = NEW.id
+           AND c.soignant_id = s.id
       )
       AND NOT EXISTS (
-        SELECT 1 FROM public.missions m2
-         WHERE m2.soignant_assigne_id = s.id AND m2.id <> NEW.id
+        SELECT 1
+          FROM public.missions m2
+         WHERE m2.soignant_assigne_id = s.id
+           AND m2.id <> NEW.id
            AND m2.statut IN ('ASSIGNEE', 'EN_COURS')
-           AND m2.debut_le < NEW.fin_le AND m2.fin_le > NEW.debut_le
+           AND m2.debut_le < NEW.fin_le
+           AND m2.fin_le > NEW.debut_le
       )
       AND (
-        v_etab.adresse_lat IS NULL OR s.adresse_lat IS NULL
+        v_etab.adresse_lat IS NULL
+        OR s.adresse_lat IS NULL
         OR 6371 * 2 * asin(sqrt(
-          power(sin(radians(s.adresse_lat - v_etab.adresse_lat) / 2), 2) +
-          cos(radians(v_etab.adresse_lat)) * cos(radians(s.adresse_lat)) *
-          power(sin(radians(s.adresse_lng - v_etab.adresse_lng) / 2), 2)
+          power(
+            sin(radians(s.adresse_lat - v_etab.adresse_lat) / 2),
+            2
+          )
+          + cos(radians(v_etab.adresse_lat))
+            * cos(radians(s.adresse_lat))
+            * power(
+              sin(radians(s.adresse_lng - v_etab.adresse_lng) / 2),
+              2
+            )
         )) <= COALESCE(s.urgence_rayon_km, 30)
       )
-    ORDER BY distance_km ASC NULLS LAST, COALESCE(s.score_fiabilite, 0) DESC
+    ORDER BY
+      distance_km ASC NULLS LAST,
+      COALESCE(s.score_fiabilite, 0) DESC
   LOOP
-    v_corps := 'Mission ' || COALESCE(NEW.intitule, NEW.profession_requise::text) ||
-      ' à ' || COALESCE(v_etab.adresse_ville, 'votre zone') ||
-      CASE WHEN v_soignant.distance_km IS NOT NULL
-        THEN ' (' || round(v_soignant.distance_km::numeric, 1) || ' km)' ELSE '' END ||
-      ' · ' || COALESCE(NEW.taux_horaire_base::text, '?') || '€/h. Acceptez en 1 clic.';
+    v_corps :=
+      'Mission '
+      || COALESCE(NEW.intitule, NEW.profession_requise::text)
+      || ' à '
+      || COALESCE(v_etab.adresse_ville, 'votre zone')
+      || CASE
+        WHEN v_soignant.distance_km IS NOT NULL THEN
+          ' (' || round(v_soignant.distance_km::numeric, 1) || ' km)'
+        ELSE ''
+      END
+      || ' · '
+      || COALESCE(NEW.taux_horaire_base::text, '?')
+      || '€/h. Acceptez en 1 clic.';
 
-    INSERT INTO public.notifications(
-      destinataire_id, type_destinataire, type, titre, corps, lien,
-      type_ressource, id_ressource
+    INSERT INTO public.notifications (
+      destinataire_id,
+      type_destinataire,
+      type,
+      titre,
+      corps,
+      lien,
+      type_ressource,
+      id_ressource
     ) VALUES (
-      v_soignant.id, 'SOIGNANT', 'MISSION_URGENTE',
-      '🚨 Mission urgente près de chez vous', v_corps,
-      '/soignant/pool-urgence', 'mission', NEW.id
-    );
+      v_soignant.id,
+      'SOIGNANT',
+      'MISSION_URGENTE',
+      '🚨 Mission urgente près de chez vous',
+      v_corps,
+      '/soignant/pool-urgence',
+      'mission',
+      NEW.id
+    )
+    RETURNING id INTO v_notification_id;
 
     IF v_token IS NOT NULL THEN
       BEGIN
         PERFORM net.http_post(
           url := v_url || '/functions/v1/send-push',
           headers := jsonb_build_object(
-            'Content-Type', 'application/json', 'Authorization', 'Bearer ' || v_token
+            'Content-Type', 'application/json',
+            'Authorization', 'Bearer ' || v_token
           ),
           body := jsonb_build_object(
             'destinataire_id', v_soignant.id,
             'type_evenement', 'MISSION_URGENTE',
             'titre', '🚨 Mission urgente près de chez vous',
             'corps', v_corps,
+            'idempotency_key',
+              'mission-urgente.push.' || v_notification_id::text,
             'data', jsonb_build_object(
-              'mission_id', NEW.id, 'lien', '/soignant/pool-urgence'
+              'mission_id', NEW.id,
+              'notification_id', v_notification_id,
+              'lien', '/soignant/pool-urgence'
             )
           )
         );
-      EXCEPTION WHEN OTHERS THEN NULL;
+      EXCEPTION WHEN OTHERS THEN
+        NULL;
       END;
+
       BEGIN
         PERFORM net.http_post(
           url := v_url || '/functions/v1/send-email',
           headers := jsonb_build_object(
-            'Content-Type', 'application/json', 'Authorization', 'Bearer ' || v_token
+            'Content-Type', 'application/json',
+            'Authorization', 'Bearer ' || v_token
           ),
           body := jsonb_build_object(
             'type', 'MISSION_URGENTE_POOL',
             'destinataire_id', v_soignant.id,
+            'idempotency_key',
+              'mission-urgente.email.' || v_notification_id::text,
             'data', jsonb_build_object(
               'prenom', v_soignant.prenom,
               'mission_id', NEW.id,
+              'notification_id', v_notification_id,
               'mission_intitule', NEW.intitule,
               'profession', NEW.profession_requise::text,
               'ville', v_etab.adresse_ville,
@@ -50723,29 +55377,51 @@ BEGIN
             )
           )
         );
-      EXCEPTION WHEN OTHERS THEN NULL;
+      EXCEPTION WHEN OTHERS THEN
+        NULL;
       END;
-      IF v_soignant.sms_opt_in AND COALESCE(v_soignant.telephone, '') <> '' THEN
+
+      IF v_soignant.sms_opt_in
+         AND COALESCE(v_soignant.telephone, '') <> '' THEN
         BEGIN
           PERFORM net.http_post(
             url := v_url || '/functions/v1/send-sms',
             headers := jsonb_build_object(
-              'Content-Type', 'application/json', 'Authorization', 'Bearer ' || v_token
+              'Content-Type', 'application/json',
+              'Authorization', 'Bearer ' || v_token
             ),
             body := jsonb_build_object(
               'destinataire_id', v_soignant.id,
               'telephone', v_soignant.telephone,
-              'message', 'URGENT - Mission ' || COALESCE(NEW.profession_requise::text, '') ||
-                ' ' || COALESCE(v_etab.adresse_ville, '') || ' ' ||
-                to_char(NEW.debut_le AT TIME ZONE 'Europe/Paris', 'DD/MM HH24h') ||
-                ' - ' || COALESCE(NEW.taux_horaire_base::text, '?') ||
-                '€/h - Acceptez sur jolene.app/pool-urgence'
+              'type', 'MISSION_URGENTE',
+              'prefix_type', 'MISSION_URGENTE',
+              'idempotency_key',
+                'mission-urgente.sms.' || v_notification_id::text,
+              'data', jsonb_build_object(
+                'mission_id', NEW.id,
+                'notification_id', v_notification_id
+              ),
+              'message',
+                'URGENT - Mission '
+                || COALESCE(NEW.profession_requise::text, '')
+                || ' '
+                || COALESCE(v_etab.adresse_ville, '')
+                || ' '
+                || to_char(
+                  NEW.debut_le AT TIME ZONE 'Europe/Paris',
+                  'DD/MM HH24h'
+                )
+                || ' - '
+                || COALESCE(NEW.taux_horaire_base::text, '?')
+                || '€/h - Acceptez sur jolene.app/pool-urgence'
             )
           );
-        EXCEPTION WHEN OTHERS THEN NULL;
+        EXCEPTION WHEN OTHERS THEN
+          NULL;
         END;
       END IF;
     END IF;
+
     v_count := v_count + 1;
   END LOOP;
 
@@ -50757,9 +55433,12 @@ BEGIN
       p_type_ressource := 'mission',
       p_id_ressource := NEW.id,
       p_details := jsonb_build_object(
-        'count', v_count, 'mission_intitule', NEW.intitule,
-        'event', TG_OP, 'filtre', 'fn_soignant_eligible_mission',
-        'canaux', jsonb_build_array('in_app', 'push', 'email', 'sms_opt_in')
+        'count', v_count,
+        'mission_intitule', NEW.intitule,
+        'event', TG_OP,
+        'filtre', 'fn_soignant_eligible_mission',
+        'canaux',
+          jsonb_build_array('in_app', 'push', 'email', 'sms_opt_in')
       )
     );
   END IF;
@@ -51672,24 +56351,39 @@ CREATE OR REPLACE FUNCTION "public"."fn_trg_litige_notify_support"() RETURNS "tr
     SET "search_path" TO 'public', 'extensions'
     AS $$
 DECLARE
-  v_url text := 'https://flripxtsyegjshnhzjkz.supabase.co';
+  v_url text;
   v_token text;
 BEGIN
   BEGIN
-    v_token := (SELECT decrypted_secret FROM vault.decrypted_secrets WHERE name = 'service_role_key' LIMIT 1);
-    IF v_token IS NOT NULL THEN
+    SELECT NULLIF(btrim(ds.decrypted_secret), '')
+      INTO v_url
+      FROM vault.decrypted_secrets ds
+     WHERE ds.name = 'supabase_url'
+     LIMIT 1;
+    v_token := public.fn_lire_secret_cron();
+
+    IF v_token IS NOT NULL AND v_url IS NOT NULL THEN
       PERFORM net.http_post(
         url := v_url || '/functions/v1/notify-support',
-        headers := jsonb_build_object('Content-Type', 'application/json', 'Authorization', 'Bearer ' || v_token),
+        headers := jsonb_build_object(
+          'Content-Type', 'application/json',
+          'Authorization', 'Bearer ' || v_token
+        ),
         body := jsonb_build_object(
-          'sujet', 'Nouveau litige ouvert (' || COALESCE(NEW.type_litige::text, '') || ')',
+          'sujet',
+            'Nouveau litige ouvert ('
+              || COALESCE(NEW.type_litige::text, '')
+              || ')',
           'corps', COALESCE(NEW.motif, '(sans motif)'),
           'source', 'Litige',
-          'lien', '/admin/litiges'
+          'lien', '/admin/litiges',
+          'mission_id', NEW.mission_id
         )
       );
     END IF;
-  EXCEPTION WHEN OTHERS THEN NULL; END;
+  EXCEPTION WHEN OTHERS THEN
+    NULL;
+  END;
   RETURN NEW;
 END;
 $$;
@@ -52002,18 +56696,44 @@ ALTER FUNCTION "public"."fn_trg_sms_annulation_tardive"() OWNER TO "postgres";
 
 CREATE OR REPLACE FUNCTION "public"."fn_trg_tripwire_premier_connect_complet"() RETURNS "trigger"
     LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO 'public'
+    SET "search_path" TO ''
     AS $$
 BEGIN
-  IF NEW.statut = 'COMPLET'
-     AND (TG_OP = 'INSERT' OR OLD.statut IS DISTINCT FROM 'COMPLET')
-     AND NOT EXISTS (SELECT 1 FROM stripe_connect_onboarding
-                     WHERE statut = 'COMPLET' AND soignant_id <> NEW.soignant_id) THEN
-    PERFORM public.fn_tripwire_alerte(
-      '[TRIPWIRE] Premier compte Connect complété',
-      'Le premier soignant vient de compléter son onboarding Stripe Connect. Soignant id: ' || NEW.soignant_id || '. Il peut désormais recevoir des virements — à surveiller.'
-    );
+  IF NEW.statut IS DISTINCT FROM 'COMPLET' THEN
+    RETURN NEW;
   END IF;
+  IF TG_OP <> 'INSERT' THEN
+    IF OLD.statut IS NOT DISTINCT FROM 'COMPLET' THEN
+      RETURN NEW;
+    END IF;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+      FROM public.soignants s
+     WHERE s.id = NEW.soignant_id
+       AND s.est_compte_test IS FALSE
+  ) THEN
+    RETURN NEW;
+  END IF;
+
+  IF EXISTS (
+    SELECT 1
+      FROM public.stripe_connect_onboarding o
+      JOIN public.soignants s ON s.id = o.soignant_id
+     WHERE o.statut = 'COMPLET'
+       AND s.est_compte_test IS FALSE
+       AND o.id <> NEW.id
+  ) THEN
+    RETURN NEW;
+  END IF;
+
+  PERFORM public.fn_tripwire_alerte(
+    '[TRIPWIRE] Premier compte Connect complété',
+    'Le premier soignant vient de compléter son onboarding Stripe Connect. Soignant id: '
+      || NEW.soignant_id
+      || '. Il peut désormais recevoir des virements — à surveiller.'
+  );
   RETURN NEW;
 END;
 $$;
@@ -52024,18 +56744,36 @@ ALTER FUNCTION "public"."fn_trg_tripwire_premier_connect_complet"() OWNER TO "po
 
 CREATE OR REPLACE FUNCTION "public"."fn_trg_tripwire_premier_mandat_sepa"() RETURNS "trigger"
     LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO 'public'
+    SET "search_path" TO ''
     AS $$
 BEGIN
-  IF NEW.stripe_sepa_payment_method_id IS NOT NULL
-     AND (TG_OP = 'INSERT' OR OLD.stripe_sepa_payment_method_id IS NULL)
-     AND NOT EXISTS (SELECT 1 FROM etablissements
-                     WHERE stripe_sepa_payment_method_id IS NOT NULL AND id <> NEW.id) THEN
-    PERFORM public.fn_tripwire_alerte(
-      '[TRIPWIRE] Premier mandat SEPA posé',
-      'Le premier établissement vient de poser son mandat SEPA (paiement rapide ⚡). Établissement id: ' || NEW.id || '. Le rail d''encaissement est désormais actif — à surveiller.'
-    );
+  IF NEW.stripe_sepa_payment_method_id IS NULL
+     OR NEW.est_compte_test IS DISTINCT FROM false
+  THEN
+    RETURN NEW;
   END IF;
+  IF TG_OP <> 'INSERT' THEN
+    IF OLD.stripe_sepa_payment_method_id IS NOT NULL THEN
+      RETURN NEW;
+    END IF;
+  END IF;
+
+  IF EXISTS (
+    SELECT 1
+      FROM public.etablissements e
+     WHERE e.stripe_sepa_payment_method_id IS NOT NULL
+       AND e.est_compte_test IS FALSE
+       AND e.id <> NEW.id
+  ) THEN
+    RETURN NEW;
+  END IF;
+
+  PERFORM public.fn_tripwire_alerte(
+    '[TRIPWIRE] Premier mandat SEPA posé',
+    'Le premier établissement vient de poser son mandat SEPA (paiement rapide ⚡). Établissement id: '
+      || NEW.id
+      || '. Le rail d''encaissement est désormais actif — à surveiller.'
+  );
   RETURN NEW;
 END;
 $$;
@@ -52046,20 +56784,66 @@ ALTER FUNCTION "public"."fn_trg_tripwire_premier_mandat_sepa"() OWNER TO "postgr
 
 CREATE OR REPLACE FUNCTION "public"."fn_trg_tripwire_premier_payment_intent"() RETURNS "trigger"
     LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO 'public'
+    SET "search_path" TO ''
     AS $$
 BEGIN
-  IF NEW.stripe_payment_intent_id IS NOT NULL
-     AND NEW.stripe_payment_intent_id NOT LIKE 'pi_pwtest%'
-     AND (TG_OP = 'INSERT' OR OLD.stripe_payment_intent_id IS NULL)
-     AND NOT EXISTS (SELECT 1 FROM paiements_escrow
-                     WHERE stripe_payment_intent_id IS NOT NULL
-                       AND stripe_payment_intent_id NOT LIKE 'pi_pwtest%' AND id <> NEW.id) THEN
-    PERFORM public.fn_tripwire_alerte(
-      '[TRIPWIRE] Premier PaymentIntent réel créé',
-      'Le premier débit escrow réel vient d''être initié. Escrow id: ' || NEW.id || ', mission: ' || NEW.mission_id || ', PI: ' || NEW.stripe_payment_intent_id || '. Le premier euro réel circule — À REGARDER.'
-    );
+  IF NEW.stripe_payment_intent_id IS NULL
+     OR NEW.stripe_payment_intent_id LIKE 'pi_pwtest%'
+  THEN
+    RETURN NEW;
   END IF;
+  IF TG_OP <> 'INSERT' THEN
+    IF OLD.stripe_payment_intent_id IS NOT NULL THEN
+      RETURN NEW;
+    END IF;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+      FROM public.missions m
+      JOIN public.etablissements e
+        ON e.id = m.etablissement_id
+      JOIN public.soignants s
+        ON s.id = m.soignant_assigne_id
+     WHERE m.id = NEW.mission_id
+       AND m.etablissement_id = NEW.etablissement_id
+       AND m.soignant_assigne_id = NEW.soignant_id
+       AND e.est_compte_test IS FALSE
+       AND s.est_compte_test IS FALSE
+  ) THEN
+    RETURN NEW;
+  END IF;
+
+  IF EXISTS (
+    SELECT 1
+      FROM public.paiements_escrow p
+      JOIN public.missions m
+        ON m.id = p.mission_id
+       AND m.etablissement_id = p.etablissement_id
+       AND m.soignant_assigne_id = p.soignant_id
+      JOIN public.etablissements e
+        ON e.id = m.etablissement_id
+      JOIN public.soignants s
+        ON s.id = m.soignant_assigne_id
+     WHERE p.stripe_payment_intent_id IS NOT NULL
+       AND p.stripe_payment_intent_id NOT LIKE 'pi_pwtest%'
+       AND e.est_compte_test IS FALSE
+       AND s.est_compte_test IS FALSE
+       AND p.id <> NEW.id
+  ) THEN
+    RETURN NEW;
+  END IF;
+
+  PERFORM public.fn_tripwire_alerte(
+    '[TRIPWIRE] Premier PaymentIntent réel créé',
+    'Le premier débit escrow réel vient d''être initié. Escrow id: '
+      || NEW.id
+      || ', mission: '
+      || NEW.mission_id
+      || ', PI: '
+      || NEW.stripe_payment_intent_id
+      || '. Le premier euro réel circule — À REGARDER.'
+  );
   RETURN NEW;
 END;
 $$;
@@ -52359,33 +57143,69 @@ CREATE OR REPLACE FUNCTION "public"."fn_tripwire_alerte"("p_sujet" "text", "p_co
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
     AS $$
+DECLARE
+  v_url text;
+  v_token text;
 BEGIN
   IF public.fn_param_num('alertes_tripwire_actives', 1) <> 1 THEN
     RETURN;
   END IF;
 
-  -- 1. Alerte in-app CRITICAL dans le canal (visible cockpit, dédupliquée).
   BEGIN
-    INSERT INTO public.alertes_systeme (type_alerte, severite, source, message, details, occurrences, derniere_occurrence, email_envoye_le)
-    VALUES ('TRIPWIRE_PREMIER_EURO', 'CRITICAL', p_sujet, p_sujet, jsonb_build_object('corps', p_corps), 1, now(), now())
+    INSERT INTO public.alertes_systeme (
+      type_alerte,
+      severite,
+      source,
+      message,
+      details,
+      occurrences,
+      derniere_occurrence,
+      email_envoye_le
+    ) VALUES (
+      'TRIPWIRE_PREMIER_EURO',
+      'CRITICAL',
+      p_sujet,
+      p_sujet,
+      jsonb_build_object('corps', p_corps),
+      1,
+      now(),
+      now()
+    )
     ON CONFLICT (source, type_alerte) WHERE resolu_le IS NULL
-    DO UPDATE SET occurrences = alertes_systeme.occurrences + 1, derniere_occurrence = now(), email_envoye_le = now(), details = EXCLUDED.details;
+    DO UPDATE SET
+      occurrences = alertes_systeme.occurrences + 1,
+      derniere_occurrence = now(),
+      email_envoye_le = now(),
+      details = EXCLUDED.details;
   EXCEPTION WHEN OTHERS THEN
-    NULL; -- non bloquant.
+    NULL;
   END;
 
-  -- 2. Email (inchangé — edge notify-support).
   BEGIN
-    PERFORM net.http_post(
-      url := 'https://flripxtsyegjshnhzjkz.supabase.co/functions/v1/notify-support',
-      headers := jsonb_build_object(
-        'Content-Type', 'application/json',
-        'Authorization', 'Bearer ' || (SELECT decrypted_secret FROM vault.decrypted_secrets WHERE name = 'service_role_key' LIMIT 1)
-      ),
-      body := jsonb_build_object('sujet', p_sujet, 'corps', p_corps, 'source', 'tripwire-paiement')
-    );
+    SELECT NULLIF(btrim(ds.decrypted_secret), '')
+      INTO v_url
+      FROM vault.decrypted_secrets ds
+     WHERE ds.name = 'supabase_url'
+     LIMIT 1;
+    v_token := public.fn_lire_secret_cron();
+
+    IF v_token IS NOT NULL AND v_url IS NOT NULL THEN
+      PERFORM net.http_post(
+        url := v_url || '/functions/v1/notify-support',
+        headers := jsonb_build_object(
+          'Content-Type', 'application/json',
+          'Authorization', 'Bearer ' || v_token
+        ),
+        body := jsonb_build_object(
+          'sujet', p_sujet,
+          'corps', p_corps,
+          'source', 'tripwire-paiement',
+          'system_alert', true
+        )
+      );
+    END IF;
   EXCEPTION WHEN OTHERS THEN
-    NULL; -- non bloquant : une alerte ratée ne casse jamais le flux métier.
+    NULL;
   END;
 END;
 $$;
@@ -52424,6 +57244,10 @@ $$;
 
 
 ALTER FUNCTION "public"."fn_types_exercice_autorises"("p_profession" "text") OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "public"."fn_types_exercice_autorises"("p_profession" "text") IS 'SECURITY DEFINER anonyme revue : référentiel public.';
+
 
 
 CREATE OR REPLACE FUNCTION "public"."fn_typing_start"("p_conversation_id" "uuid") RETURNS "void"
@@ -53177,6 +58001,263 @@ $_$;
 
 
 ALTER FUNCTION "public"."fn_valider_code_secours"("p_mission_id" "uuid", "p_code" "text", "p_lat" numeric, "p_lng" numeric, "p_precision" numeric, "p_terminal_id" "text") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."fn_valider_creneaux_mission_json"("p_creneaux" "jsonb", "p_appliquer_plafond_48h" boolean DEFAULT true) RETURNS "jsonb"
+    LANGUAGE "plpgsql" STABLE
+    SET "search_path" TO ''
+    SET "TimeZone" TO 'UTC'
+    AS $_$
+DECLARE
+  v_nb integer;
+  v_min timestamptz;
+  v_max timestamptz;
+  v_total numeric;
+  v_semaine date;
+  v_heures_semaine numeric;
+  v_repos numeric;
+BEGIN
+  IF p_creneaux IS NULL OR pg_catalog.jsonb_typeof(p_creneaux) <> 'array' THEN
+    RETURN pg_catalog.jsonb_build_object(
+      'success', false,
+      'error', 'Le planning doit être une liste de créneaux datés.'
+    );
+  END IF;
+
+  v_nb := pg_catalog.jsonb_array_length(p_creneaux);
+  IF v_nb = 0 THEN
+    RETURN pg_catalog.jsonb_build_object(
+      'success', false,
+      'error', 'Ajoutez au moins un créneau travaillé.'
+    );
+  END IF;
+  IF v_nb > 732 THEN
+    RETURN pg_catalog.jsonb_build_object(
+      'success', false,
+      'error', 'Maximum 732 créneaux par mission.'
+    );
+  END IF;
+
+  IF EXISTS (
+    SELECT 1
+    FROM pg_catalog.jsonb_array_elements(p_creneaux) AS element
+    WHERE NULLIF(pg_catalog.btrim(element->>'debut'), '') IS NULL
+       OR NULLIF(pg_catalog.btrim(element->>'fin'), '') IS NULL
+  ) THEN
+    RETURN pg_catalog.jsonb_build_object(
+      'success', false,
+      'error', 'Chaque créneau doit avoir un début et une fin.'
+    );
+  END IF;
+
+  -- Les instants transmis par l'application sont toujours absolus. Refuser les
+  -- timestamps sans Z/offset évite qu'une session SQL dans un autre fuseau
+  -- transforme silencieusement le planning (notamment lors des changements
+  -- d'heure à Paris).
+  IF EXISTS (
+    SELECT 1
+    FROM pg_catalog.jsonb_array_elements(p_creneaux) AS element
+    WHERE (element->>'debut') !~ '(Z|[+-][0-9]{2}:[0-9]{2})$'
+       OR (element->>'fin') !~ '(Z|[+-][0-9]{2}:[0-9]{2})$'
+  ) THEN
+    RETURN pg_catalog.jsonb_build_object(
+      'success', false,
+      'error', 'Chaque date et heure doit inclure son fuseau (Z ou décalage UTC).'
+    );
+  END IF;
+
+  WITH creneaux AS (
+    SELECT
+      ordinality::integer AS ordre,
+      (element->>'debut')::timestamptz AS debut,
+      (element->>'fin')::timestamptz AS fin
+    FROM pg_catalog.jsonb_array_elements(p_creneaux)
+      WITH ORDINALITY AS source(element, ordinality)
+  )
+  SELECT
+    pg_catalog.min(debut),
+    pg_catalog.max(fin),
+    pg_catalog.round(pg_catalog.sum(
+      EXTRACT(epoch FROM (fin - debut)) / 3600.0
+    )::numeric, 2)
+  INTO v_min, v_max, v_total
+  FROM creneaux;
+
+  IF (v_max AT TIME ZONE 'Europe/Paris')::date
+       - (v_min AT TIME ZONE 'Europe/Paris')::date > 365 THEN
+    RETURN pg_catalog.jsonb_build_object(
+      'success', false,
+      'error', 'Une mission ne peut pas couvrir plus de 366 dates.'
+    );
+  END IF;
+
+  IF EXISTS (
+    SELECT 1
+    FROM pg_catalog.jsonb_array_elements(p_creneaux) AS element
+    WHERE (element->>'fin')::timestamptz <= (element->>'debut')::timestamptz
+       OR (element->>'fin')::timestamptz
+          > (element->>'debut')::timestamptz + interval '24 hours'
+  ) THEN
+    RETURN pg_catalog.jsonb_build_object(
+      'success', false,
+      'error', 'Chaque créneau doit durer plus de 0 h et au maximum 24 h.'
+    );
+  END IF;
+
+  IF EXISTS (
+    WITH creneaux AS (
+      SELECT
+        ordinality::integer AS ordre,
+        (element->>'debut')::timestamptz AS debut,
+        (element->>'fin')::timestamptz AS fin
+      FROM pg_catalog.jsonb_array_elements(p_creneaux)
+        WITH ORDINALITY AS source(element, ordinality)
+    )
+    SELECT 1
+    FROM creneaux a
+    JOIN creneaux b ON b.ordre > a.ordre
+    WHERE a.debut < b.fin AND a.fin > b.debut
+  ) THEN
+    RETURN pg_catalog.jsonb_build_object(
+      'success', false,
+      'error', 'Deux créneaux de la mission se chevauchent.'
+    );
+  END IF;
+
+  -- Le plafond de 48 h relève du salariat. Les missions explicitement
+  -- libérales conservent les contrôles structurels, de chevauchement et de
+  -- repos, mais ne doivent pas être refusées par ce plafond salarié.
+  IF COALESCE(p_appliquer_plafond_48h, true) THEN
+    -- Ventile réellement les gardes qui traversent un dimanche soir. Une garde
+    -- n'est jamais imputée en totalité à la semaine de son heure de début.
+    WITH creneaux AS (
+    SELECT
+      (element->>'debut')::timestamptz AS debut,
+      (element->>'fin')::timestamptz AS fin
+    FROM pg_catalog.jsonb_array_elements(p_creneaux) AS source(element)
+  ), bornes AS (
+    SELECT
+      debut,
+      fin,
+      pg_catalog.date_trunc('week', debut AT TIME ZONE 'Europe/Paris')::date AS premiere,
+      pg_catalog.date_trunc(
+        'week', (fin - interval '1 microsecond') AT TIME ZONE 'Europe/Paris'
+      )::date AS derniere
+    FROM creneaux
+  ), morceaux AS (
+    SELECT
+      (b.premiere + (numero * 7))::date AS semaine_du,
+      b.debut,
+      b.fin
+    FROM bornes b
+    CROSS JOIN LATERAL pg_catalog.generate_series(
+      0,
+      ((b.derniere - b.premiere) / 7)::integer
+    ) AS numero
+  ), heures AS (
+    SELECT
+      semaine_du,
+      pg_catalog.sum(
+        EXTRACT(epoch FROM (
+          LEAST(
+            fin,
+            (semaine_du + 7)::timestamp AT TIME ZONE 'Europe/Paris'
+          ) -
+          GREATEST(
+            debut,
+            semaine_du::timestamp AT TIME ZONE 'Europe/Paris'
+          )
+        )) / 3600.0
+      ) AS total
+    FROM morceaux
+    GROUP BY semaine_du
+  )
+    SELECT semaine_du, total
+    INTO v_semaine, v_heures_semaine
+    FROM heures
+    WHERE total > 48
+    ORDER BY semaine_du
+    LIMIT 1;
+
+    IF v_semaine IS NOT NULL THEN
+      RETURN pg_catalog.jsonb_build_object(
+        'success', false,
+        'error', 'Le planning dépasse 48 h pour la semaine du ' ||
+          pg_catalog.to_char(v_semaine, 'DD/MM/YYYY') || '.',
+        'code', 'PLAFOND_48H_HEBDO',
+        'semaine_du', v_semaine,
+        'heures', pg_catalog.round(v_heures_semaine::numeric, 2)
+      );
+    END IF;
+  END IF;
+
+  -- Plusieurs créneaux peuvent composer une même journée (coupure, pause).
+  -- Le repos quotidien est contrôlé entre deux journées de travail datées.
+  WITH creneaux AS (
+    SELECT
+      (element->>'debut')::timestamptz AS debut,
+      (element->>'fin')::timestamptz AS fin
+    FROM pg_catalog.jsonb_array_elements(p_creneaux) AS source(element)
+  ), jours AS (
+    SELECT
+      (debut AT TIME ZONE 'Europe/Paris')::date AS jour,
+      pg_catalog.min(debut) AS premier_debut,
+      pg_catalog.max(fin) AS derniere_fin
+    FROM creneaux
+    GROUP BY (debut AT TIME ZONE 'Europe/Paris')::date
+  ), ordonnes AS (
+    SELECT
+      jour,
+      premier_debut,
+      pg_catalog.lag(derniere_fin) OVER (ORDER BY jour) AS fin_jour_precedent
+    FROM jours
+  )
+  SELECT EXTRACT(epoch FROM (
+    premier_debut - fin_jour_precedent
+  )) / 3600.0
+  INTO v_repos
+  FROM ordonnes
+  WHERE fin_jour_precedent IS NOT NULL
+    AND premier_debut - fin_jour_precedent < interval '11 hours'
+  ORDER BY jour
+  LIMIT 1;
+
+  IF v_repos IS NOT NULL THEN
+    RETURN pg_catalog.jsonb_build_object(
+      'success', false,
+      'error', 'Repos quotidien insuffisant : ' ||
+        pg_catalog.round(v_repos::numeric, 1) ||
+        ' h au lieu de 11 h minimum.',
+      'code', 'REPOS_11H'
+    );
+  END IF;
+
+  RETURN pg_catalog.jsonb_build_object(
+    'success', true,
+    'nb_creneaux', v_nb,
+    'debut_le', v_min,
+    'fin_le', v_max,
+    'total_heures', v_total
+  );
+EXCEPTION
+  WHEN invalid_datetime_format OR datetime_field_overflow THEN
+    RETURN pg_catalog.jsonb_build_object(
+      'success', false,
+      'error', 'Une date ou une heure du planning est invalide.'
+    );
+  WHEN OTHERS THEN
+    RAISE LOG '[fn_valider_creneaux_mission_json] SQLSTATE=% SQLERRM=%',
+      SQLSTATE, SQLERRM;
+    RETURN pg_catalog.jsonb_build_object(
+      'success', false,
+      'error', 'Planning invalide.',
+      'code', 'PLANNING_INVALIDE'
+    );
+END;
+$_$;
+
+
+ALTER FUNCTION "public"."fn_valider_creneaux_mission_json"("p_creneaux" "jsonb", "p_appliquer_plafond_48h" boolean) OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."fn_valider_presence"("p_presence_id" "uuid") RETURNS "jsonb"
@@ -54516,6 +59597,42 @@ $$;
 ALTER FUNCTION "public"."fn_verifier_skip_serie_onboarding"("p_envoi_id" "uuid") OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."fn_verrouiller_proposition_litige_en_attente"() RETURNS "trigger"
+    LANGUAGE "plpgsql"
+    SET "search_path" TO 'pg_catalog', 'public', 'auth'
+    AS $$
+BEGIN
+  IF OLD.payload_modifications IS NOT NULL
+     AND NEW.payload_modifications IS DISTINCT FROM OLD.payload_modifications
+     AND OLD.statut IN ('OUVERT', 'EN_DISCUSSION', 'EN_MEDIATION', 'MEDIATION_EN_COURS')
+     AND (
+       (
+         COALESCE(OLD.accord_soignant, false)
+         AND NOT COALESCE(OLD.accord_etablissement, false)
+         AND OLD.soignant_id = auth.uid()
+       )
+       OR
+       (
+         COALESCE(OLD.accord_etablissement, false)
+         AND NOT COALESCE(OLD.accord_soignant, false)
+         AND OLD.etablissement_id = public.mon_etablissement_id()
+       )
+     )
+     AND NOT public.est_admin()
+     AND COALESCE(auth.role(), '') <> 'service_role'
+  THEN
+    RAISE EXCEPTION 'PROPOSITION_LITIGE_EN_ATTENTE'
+      USING ERRCODE = 'P0001',
+            HINT = 'L autre partie doit répondre à la proposition existante avant toute nouvelle proposition.';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_verrouiller_proposition_litige_en_attente"() OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."fn_verrouiller_reference_justificatif"() RETURNS "trigger"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'pg_catalog', 'public'
@@ -54683,39 +59800,91 @@ CREATE OR REPLACE FUNCTION "public"."fn_vivier_disponibilites"("p_jour" "date", 
     AS $$
 DECLARE
   v_etab_id uuid := mon_etablissement_id();
-  v_etab RECORD;
-  v_nb int;
+  v_etab record;
+  v_nb integer;
   v_echantillon jsonb;
 BEGIN
   IF v_etab_id IS NULL AND NOT est_admin() THEN
     RETURN jsonb_build_object('error', 'Réservé aux établissements');
   END IF;
-  IF p_jour IS NULL OR p_jour < CURRENT_DATE OR p_jour > CURRENT_DATE + 90 THEN
+  IF p_jour IS NULL
+     OR p_jour < current_date
+     OR p_jour > current_date + 90 THEN
     RETURN jsonb_build_object('nb', 0);
   END IF;
 
-  SELECT adresse_lat, adresse_lng INTO v_etab FROM etablissements WHERE id = v_etab_id;
+  SELECT adresse_lat, adresse_lng
+  INTO v_etab
+  FROM etablissements
+  WHERE id = v_etab_id;
 
   WITH dispo AS (
-    SELECT DISTINCT s.id, s.prenom, s.score_fiabilite
+    SELECT DISTINCT
+      s.id,
+      s.prenom,
+      s.score_fiabilite
     FROM soignants s
-    JOIN disponibilites_soignant d ON d.soignant_id = s.id AND d.jour = p_jour
+    JOIN disponibilites_soignant d
+      ON d.soignant_id = s.id
+     AND d.jour = p_jour
     WHERE s.supprime_le IS NULL
+      AND (
+        (
+          v_etab_id IS NULL
+          AND s.est_compte_test IS FALSE
+        )
+        OR (
+          v_etab_id IS NOT NULL
+          AND private.fn_comptes_meme_cohorte_test(s.id, v_etab_id)
+        )
+      )
       AND COALESCE(s.statut_compte::text, 'ACTIF') = 'ACTIF'
       AND COALESCE(s.tous_documents_valides, false)
-      AND (p_profession IS NULL OR s.profession::text = p_profession)
-      AND (v_etab_id IS NULL OR NOT fn_est_exclu(s.id, v_etab_id))
-      AND (s.adresse_lat IS NULL OR v_etab.adresse_lat IS NULL
-           OR fn_haversine_distance_m(s.adresse_lat, s.adresse_lng, v_etab.adresse_lat, v_etab.adresse_lng)
-              <= COALESCE(s.rayon_deplacement_km, 50) * 1000)
+      AND (
+        p_profession IS NULL
+        OR s.profession::text = p_profession
+      )
+      AND (
+        v_etab_id IS NULL
+        OR NOT fn_est_exclu(s.id, v_etab_id)
+      )
+      AND (
+        s.adresse_lat IS NULL
+        OR v_etab.adresse_lat IS NULL
+        OR fn_haversine_distance_m(
+          s.adresse_lat,
+          s.adresse_lng,
+          v_etab.adresse_lat,
+          v_etab.adresse_lng
+        ) <= COALESCE(s.rayon_deplacement_km, 50) * 1000
+      )
   )
-  SELECT COUNT(*),
-         COALESCE(jsonb_agg(jsonb_build_object('prenom', prenom, 'score_fiabilite', score_fiabilite)
-                            ORDER BY score_fiabilite DESC NULLS LAST) FILTER (WHERE rn <= 5), '[]'::jsonb)
-    INTO v_nb, v_echantillon
-    FROM (SELECT *, row_number() OVER (ORDER BY score_fiabilite DESC NULLS LAST) AS rn FROM dispo) t;
+  SELECT
+    count(*),
+    COALESCE(
+      jsonb_agg(
+        jsonb_build_object(
+          'prenom', prenom,
+          'score_fiabilite', score_fiabilite
+        )
+        ORDER BY score_fiabilite DESC NULLS LAST
+      ) FILTER (WHERE rn <= 5),
+      '[]'::jsonb
+    )
+  INTO v_nb, v_echantillon
+  FROM (
+    SELECT
+      *,
+      row_number() OVER (
+        ORDER BY score_fiabilite DESC NULLS LAST
+      ) AS rn
+    FROM dispo
+  ) t;
 
-  RETURN jsonb_build_object('nb', COALESCE(v_nb, 0), 'echantillon', COALESCE(v_echantillon, '[]'::jsonb));
+  RETURN jsonb_build_object(
+    'nb', COALESCE(v_nb, 0),
+    'echantillon', COALESCE(v_echantillon, '[]'::jsonb)
+  );
 END;
 $$;
 
@@ -55703,7 +60872,7 @@ CREATE TABLE IF NOT EXISTS "public"."soignants" (
     "licence_remplacement_le" timestamp with time zone,
     "licence_remplacement_valide_jusqua" "date",
     "licence_remplacement_specialite" "text",
-    "est_compte_test" boolean DEFAULT false NOT NULL,
+    "est_compte_test" boolean DEFAULT true NOT NULL,
     "regime_fiscal" "text" DEFAULT 'MICRO_BNC'::"text" NOT NULL,
     "regime_fiscal_confirme" boolean DEFAULT false NOT NULL,
     "siret_liberal_verifie" boolean DEFAULT false NOT NULL,
@@ -55795,7 +60964,7 @@ COMMENT ON COLUMN "public"."soignants"."iban_titulaire" IS 'Nom du titulaire du 
 
 
 
-COMMENT ON COLUMN "public"."soignants"."est_compte_test" IS 'Compte e2e Playwright ou compte d''audit interne — exclu des surfaces publiques et de la découverte.';
+COMMENT ON COLUMN "public"."soignants"."est_compte_test" IS 'Compte de recette, démonstration ou audit interne. Exclu des KPI réels et de tout effet externe.';
 
 
 
@@ -56704,8 +61873,10 @@ CREATE TABLE IF NOT EXISTS "public"."emails_envoyes" (
     "statut" "text" DEFAULT 'ENVOYE'::"text",
     "erreur" "text",
     "cree_le" timestamp with time zone DEFAULT "now"(),
+    "idempotency_key" "text",
+    CONSTRAINT "emails_envoyes_idempotency_key_check" CHECK ((("idempotency_key" IS NULL) OR ("idempotency_key" ~ '^[A-Za-z0-9][A-Za-z0-9._:-]{7,199}$'::"text"))),
     CONSTRAINT "emails_envoyes_statut_check" CHECK (("statut" = ANY (ARRAY['ENVOYE'::"text", 'DELIVRE'::"text", 'OUVERT'::"text", 'ERREUR'::"text"]))),
-    CONSTRAINT "emails_envoyes_type_check" CHECK (("type" = ANY (ARRAY['BIENVENUE_SOIGNANT'::"text", 'BIENVENUE_ETABLISSEMENT'::"text", 'MISSION_ACCEPTEE'::"text", 'MISSION_ANNULEE'::"text", 'MISSION_TERMINEE'::"text", 'MISSION_RAPPEL'::"text", 'FACTURE_MENSUELLE'::"text", 'FACTURE_PAYEE'::"text", 'DOCUMENT_EXPIRANT'::"text", 'RECAP_HEBDO_SOIGNANT'::"text", 'RECAP_HEBDO_ETABLISSEMENT'::"text", 'CONVERSION_LIBERAL'::"text", 'RESET_MOT_DE_PASSE'::"text", 'GENERAL'::"text"])))
+    CONSTRAINT "emails_envoyes_type_check" CHECK (("type" = ANY (ARRAY['BIENVENUE_SOIGNANT'::"text", 'BIENVENUE_ETABLISSEMENT'::"text", 'MISSION_ACCEPTEE'::"text", 'MISSION_ANNULEE'::"text", 'MISSION_TERMINEE'::"text", 'MISSION_RAPPEL'::"text", 'FACTURE_MENSUELLE'::"text", 'FACTURE_PAYEE'::"text", 'DOCUMENT_EXPIRANT'::"text", 'RECAP_HEBDO_SOIGNANT'::"text", 'RECAP_HEBDO_ETABLISSEMENT'::"text", 'CONVERSION_LIBERAL'::"text", 'RESET_MOT_DE_PASSE'::"text", 'GENERAL'::"text", 'MISSION_ACCEPTEE_SOIGNANT'::"text", 'MISSION_ACCEPTEE_ETABLISSEMENT'::"text", 'RAPPEL_MISSION'::"text", 'CONTRAT_A_SIGNER'::"text", 'CONTRAT_SIGNE'::"text", 'FACTURE_EMISE'::"text", 'RAPPEL_FACTURE'::"text", 'ELIGIBLE_LIBERAL'::"text", 'RECAP_HEBDO'::"text", 'RAPPEL_DOCUMENTS'::"text", 'MISSION_URGENTE'::"text", 'MISSION_PROPOSEE'::"text", 'EVALUATION_RECUE'::"text", 'PAIEMENT_CONFIRME'::"text", 'PARRAINAGE_PRIME_VERSEE'::"text", 'ADMIN_BROADCAST'::"text", 'MISSION_NON_POURVUE'::"text", 'PAIEMENT_RAPIDE_RECU'::"text", 'LITIGE_OUVERTURE'::"text", 'LITIGE_NOUVEAU_MESSAGE'::"text", 'LITIGE_ESCALADE_ADMIN'::"text", 'LITIGE_RESOLU_AJUSTE'::"text", 'AVOIR_EMIS'::"text", 'REMBOURSEMENT_CONFIRME'::"text", 'LITIGE_RAPPEL_J1'::"text", 'LITIGE_RAPPEL_J3'::"text", 'LITIGE_RAPPEL_J5'::"text", 'REGULARISATION_SOCIALE_REQUISE'::"text", 'LITIGE_MEDIATION_PRIORITAIRE'::"text", 'COMMISSION_AJUSTEE'::"text", 'CHARGE_FAILED_ETAB'::"text", 'DISPUTE_OUVERTE_ADMIN'::"text", 'DISPUTE_CLOSE_ADMIN'::"text", 'PAYOUT_FAILED_ADMIN'::"text", 'PAYOUT_FAILED_SOIGNANT'::"text", 'PAYOUT_CANCELED_ADMIN'::"text", 'REFUND_ECHEC_ADMIN'::"text", 'PAIEMENT_SOIGNANT_DECLARE'::"text", 'RAPPEL_PAIEMENT_J7'::"text", 'PAIEMENT_RETARD_J21'::"text", 'PUBLICATION_SUSPENDUE'::"text", 'PUBLICATION_REACTIVEE'::"text", 'CONTRAT_TRAVAIL_DEPOSE'::"text", 'CONTRAT_TRAVAIL_RAPPEL_ETAB'::"text", 'CONTRAT_TRAVAIL_MANQUANT_SOIGNANT'::"text", 'SERIE_SOIGNANT_J0'::"text", 'SERIE_SOIGNANT_J1'::"text", 'SERIE_SOIGNANT_J3'::"text", 'SERIE_SOIGNANT_J7'::"text", 'SERIE_ETAB_J0'::"text", 'SERIE_ETAB_J1'::"text", 'SERIE_ETAB_J3'::"text", 'SERIE_ETAB_J7'::"text", 'NOUVELLES_MISSIONS_FILTRE'::"text", 'NOUVEAUX_SOIGNANTS_FILTRE'::"text", 'MISSION_URGENTE_POOL'::"text", 'FAVORI_NOUVELLE_MISSION'::"text", 'COMPTE_SUSPENDU'::"text", 'COMPTE_REACTIVE'::"text", 'RAPPEL_NOTATION_ETAB'::"text", 'RAPPEL_NOTATION_SOIGNANT'::"text", 'INVITATION_EQUIPE_ETAB'::"text", 'DPAE_DECLAREE_SOIGNANT'::"text", 'DPAE_ANNULATION_RAPPEL'::"text", 'NOTIFICATION_PUSH_FALLBACK'::"text", 'CONFIRMATION_EMAIL_PRO_ETAB'::"text"])))
 );
 
 ALTER TABLE ONLY "public"."emails_envoyes" FORCE ROW LEVEL SECURITY;
@@ -56988,7 +62159,7 @@ CREATE TABLE IF NOT EXISTS "public"."etablissements" (
     "justificatif_fonction_verifie_le" timestamp with time zone,
     "justificatif_fonction_resultat_ia" "jsonb",
     "iban_last4" "text",
-    "est_compte_test" boolean DEFAULT false NOT NULL,
+    "est_compte_test" boolean DEFAULT true NOT NULL,
     "jour_paie_habituel" smallint,
     "verification_source_version" bigint DEFAULT 0 NOT NULL,
     "rib_verifie_s3_key" "text",
@@ -57045,7 +62216,7 @@ COMMENT ON COLUMN "public"."etablissements"."coherence_identite" IS 'Cohérence 
 
 
 
-COMMENT ON COLUMN "public"."etablissements"."est_compte_test" IS 'Établissement e2e Playwright ou d''audit interne — ses missions sont invisibles pour les vrais soignants.';
+COMMENT ON COLUMN "public"."etablissements"."est_compte_test" IS 'Établissement de recette, démonstration ou audit interne. Ses missions sont dérivées test et exclues des effets externes.';
 
 
 
@@ -57215,31 +62386,6 @@ ALTER TABLE ONLY "public"."exclusions" FORCE ROW LEVEL SECURITY;
 
 
 ALTER TABLE "public"."exclusions" OWNER TO "postgres";
-
-
-CREATE TABLE IF NOT EXISTS "public"."externalisation_actions" (
-    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
-    "type_action" "text" NOT NULL,
-    "payload" "jsonb" NOT NULL,
-    "source" "text" NOT NULL,
-    "source_id" "uuid",
-    "statut" "text" DEFAULT 'PENDING'::"text" NOT NULL,
-    "tentatives" integer DEFAULT 0 NOT NULL,
-    "derniere_tentative_le" timestamp with time zone,
-    "derniere_erreur" "text",
-    "resultat" "jsonb",
-    "cree_le" timestamp with time zone DEFAULT "now"() NOT NULL,
-    "traite_le" timestamp with time zone,
-    "next_retry_at" timestamp with time zone,
-    "cron_lock_at" timestamp with time zone,
-    "cron_lock_par" "text",
-    CONSTRAINT "externalisation_actions_source_check" CHECK (("source" = ANY (ARRAY['LITIGE_EXEC'::"text", 'ANNULATION_MISSION'::"text", 'AUTRE'::"text", 'CRON_ANTI_TRICHE'::"text", 'CRON_ALERTES'::"text", 'parrainage_soignant'::"text", 'remboursement_avoir'::"text"]))),
-    CONSTRAINT "externalisation_actions_statut_check" CHECK (("statut" = ANY (ARRAY['PENDING'::"text", 'PROCESSING'::"text", 'DONE'::"text", 'ERROR'::"text", 'PENDING_AIFE'::"text", 'CANCELLED'::"text"]))),
-    CONSTRAINT "externalisation_actions_type_action_check" CHECK (("type_action" = ANY (ARRAY['STRIPE_REFUND_PARTIEL'::"text", 'STRIPE_REFUND_TOTAL'::"text", 'STRIPE_PAYMENT'::"text", 'STRIPE_PAYOUT'::"text", 'CHORUS_RECYCLER_FACTURE'::"text", 'CHORUS_RECYCLE_FACTURE'::"text", 'DPAE_ANNULATION'::"text", 'DPAE_ANNULATION_NOTIF'::"text", 'EMAIL_NOTIF'::"text", 'SMS_NOTIF'::"text", 'PUSH_NOTIF'::"text", 'AVOIR_PDF_GENERATION'::"text", 'RECOMPENSE_PARRAINAGE_SOIGNANT'::"text", 'REMBOURSEMENT_AVOIR_SWAN'::"text"])))
-);
-
-
-ALTER TABLE "public"."externalisation_actions" OWNER TO "postgres";
 
 
 CREATE TABLE IF NOT EXISTS "public"."factor_advances" (
@@ -58120,7 +63266,7 @@ CREATE TABLE IF NOT EXISTS "public"."missions" (
     "service" "text",
     "debut_le" timestamp with time zone NOT NULL,
     "fin_le" timestamp with time zone NOT NULL,
-    "duree_heures" numeric(5,2),
+    "duree_heures" numeric(7,2),
     "taux_horaire_base" numeric(8,2) NOT NULL,
     "taux_rist_plafonne" numeric(8,2),
     "rist_plafond_applique" boolean DEFAULT false,
@@ -58206,13 +63352,13 @@ CREATE TABLE IF NOT EXISTS "public"."missions" (
     "honoraires_confirmes_le" timestamp with time zone,
     "derniere_relance_candidatures_le" timestamp with time zone,
     "mission_source" "text",
-    CONSTRAINT "chk_duree_positive" CHECK ((("duree_heures" IS NULL) OR (("duree_heures" >= (0)::numeric) AND ("duree_heures" <= (168)::numeric)))),
+    CONSTRAINT "chk_duree_positive" CHECK ((("duree_heures" IS NULL) OR (("duree_heures" >= (0)::numeric) AND ("duree_heures" <= (17568)::numeric)))),
     CONSTRAINT "chk_missions_dates" CHECK (("debut_le" < "fin_le")),
     CONSTRAINT "chk_prochain_type_scan" CHECK (("prochain_type_scan" = ANY (ARRAY['OUVERTURE'::"text", 'FERMETURE'::"text"]))),
     CONSTRAINT "chk_taux_commission" CHECK ((("taux_commission" IS NULL) OR (("taux_commission" >= (0)::numeric) AND ("taux_commission" <= (30)::numeric)))),
     CONSTRAINT "chk_taux_horaire_raisonnable" CHECK ((("taux_horaire_base" = (0)::numeric) OR (("taux_horaire_base" > (0)::numeric) AND ("taux_horaire_base" <= (1000)::numeric)))),
     CONSTRAINT "chk_type_contrat_recherche" CHECK (("type_contrat_recherche" = ANY (ARRAY['TOUS'::"text", 'SALARIE'::"text", 'LIBERAL'::"text"]))),
-    CONSTRAINT "ck_max_366_creneaux" CHECK ((("nb_creneaux" >= 0) AND ("nb_creneaux" <= 366))),
+    CONSTRAINT "ck_max_732_creneaux" CHECK ((("nb_creneaux" >= 0) AND ("nb_creneaux" <= 732))),
     CONSTRAINT "missions_mission_source_check" CHECK (("mission_source" = ANY (ARRAY['SWIPE'::"text", 'CANDIDATURE'::"text", 'REBOOK'::"text", 'PROPOSITION_DIRECTE'::"text", 'REMPLACEMENT'::"text", 'REPUBLICATION'::"text"]))),
     CONSTRAINT "missions_mode_attribution_check" CHECK (("mode_attribution" = ANY (ARRAY['PREMIER_ARRIVE'::"text", 'CANDIDATURE'::"text"]))),
     CONSTRAINT "missions_mode_paiement_soignant_check" CHECK (("mode_paiement_soignant" = ANY (ARRAY['DIRECT'::"text", 'STRIPE_CONNECT'::"text", 'VIREMENT'::"text"]))),
@@ -58382,7 +63528,12 @@ CREATE TABLE IF NOT EXISTS "public"."paiements_soignant" (
     "relance_2_le" timestamp with time zone,
     "stripe_transfer_id" "text",
     "facture_honoraire_id" "uuid",
+    "montant_du_reference" numeric,
+    "solde_restant" numeric,
+    "est_partiel" boolean DEFAULT false NOT NULL,
+    "source_montant_du" "text",
     CONSTRAINT "paiements_soignant_methode_check" CHECK (("methode" = ANY (ARRAY['VIREMENT'::"text", 'STRIPE_CONNECT'::"text", 'CHEQUE'::"text", 'NOTE_HONORAIRES'::"text", 'BULLETIN_PAIE'::"text"]))),
+    CONSTRAINT "paiements_soignant_montants_coherents" CHECK ((("montant_net" > (0)::numeric) AND (("montant_du_reference" IS NULL) OR ("montant_du_reference" > (0)::numeric)) AND (("solde_restant" IS NULL) OR ("solde_restant" >= (0)::numeric)) AND (("montant_du_reference" IS NULL) OR ("montant_net" <= "montant_du_reference")))),
     CONSTRAINT "paiements_soignant_statut_check" CHECK (("statut" = ANY (ARRAY['EN_ATTENTE'::"text", 'DECLARE'::"text", 'CONFIRME'::"text", 'CONTESTE'::"text", 'RESOLU'::"text"])))
 );
 
@@ -59516,42 +64667,6 @@ COMMENT ON TABLE "public"."stripe_payment_flow_claims" IS 'Verrou financier dura
 
 
 
-CREATE TABLE IF NOT EXISTS "public"."stripe_refunds_queue" (
-    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
-    "avoir_id" "uuid",
-    "facture_origine_id" "uuid",
-    "stripe_payment_intent_id" "text" NOT NULL,
-    "montant_cts" integer NOT NULL,
-    "statut" "text" DEFAULT 'EN_ATTENTE'::"text" NOT NULL,
-    "stripe_refund_id" "text",
-    "erreur" "text",
-    "tentatives" integer DEFAULT 0 NOT NULL,
-    "cree_le" timestamp with time zone DEFAULT "now"() NOT NULL,
-    "traite_le" timestamp with time zone,
-    "dernier_essai_le" timestamp with time zone,
-    "paiement_escrow_id" "uuid",
-    "reverse_transfer" boolean DEFAULT false NOT NULL,
-    "refund_application_fee_cts" integer DEFAULT 0 NOT NULL,
-    "absorbe_plateforme" boolean DEFAULT false NOT NULL,
-    "escrow_statut_avant_remboursement" "text",
-    CONSTRAINT "stripe_refunds_queue_escrow_statut_avant_check" CHECK ((("escrow_statut_avant_remboursement" IS NULL) OR ("escrow_statut_avant_remboursement" = ANY (ARRAY['DEBITE'::"text", 'DISPONIBLE'::"text", 'PAYE'::"text"])))),
-    CONSTRAINT "stripe_refunds_queue_montant_cts_check" CHECK (("montant_cts" > 0)),
-    CONSTRAINT "stripe_refunds_queue_origine_check" CHECK (((("avoir_id" IS NOT NULL) AND ("facture_origine_id" IS NOT NULL) AND ("paiement_escrow_id" IS NULL)) OR (("avoir_id" IS NULL) AND ("facture_origine_id" IS NULL) AND ("paiement_escrow_id" IS NOT NULL)))),
-    CONSTRAINT "stripe_refunds_queue_statut_check" CHECK (("statut" = ANY (ARRAY['EN_ATTENTE'::"text", 'EN_COURS'::"text", 'TRAITE'::"text", 'ECHEC'::"text"])))
-);
-
-
-ALTER TABLE "public"."stripe_refunds_queue" OWNER TO "postgres";
-
-
-COMMENT ON TABLE "public"."stripe_refunds_queue" IS 'File des remboursements Stripe Connect à traiter async. Consommée par edge function process-stripe-refunds (à créer).';
-
-
-
-COMMENT ON COLUMN "public"."stripe_refunds_queue"."escrow_statut_avant_remboursement" IS 'État escrow restauré si Stripe confirme failed/canceled ; REMBOURSE seulement après succeeded.';
-
-
-
 CREATE TABLE IF NOT EXISTS "public"."stripe_transfers" (
     "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
     "mission_id" "uuid" NOT NULL,
@@ -60170,6 +65285,11 @@ ALTER TABLE ONLY "public"."documents_soignants"
 
 ALTER TABLE ONLY "public"."email_queue"
     ADD CONSTRAINT "email_queue_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."emails_envoyes"
+    ADD CONSTRAINT "emails_envoyes_idempotency_key_key" UNIQUE ("idempotency_key");
 
 
 
@@ -63044,6 +68164,10 @@ CREATE OR REPLACE TRIGGER "trg_bloquer_paiement_manuel_escrow" BEFORE INSERT ON 
 
 
 
+CREATE OR REPLACE TRIGGER "trg_bloquer_validation_presence_avant_fin_planning" BEFORE UPDATE OF "valide_par_etablissement" ON "public"."presences" FOR EACH ROW WHEN ((("new"."valide_par_etablissement" IS TRUE) AND ("old"."valide_par_etablissement" IS DISTINCT FROM true))) EXECUTE FUNCTION "public"."dec_bloquer_validation_presence_avant_fin_planning"();
+
+
+
 CREATE OR REPLACE TRIGGER "trg_bp_immutability" BEFORE UPDATE ON "public"."bulletins_paie" FOR EACH ROW EXECUTE FUNCTION "public"."fn_protect_bulletin_paie_immutability"();
 
 
@@ -63072,7 +68196,7 @@ CREATE OR REPLACE TRIGGER "trg_check_coherence_doc_identite" AFTER INSERT OR DEL
 
 
 
-CREATE OR REPLACE TRIGGER "trg_check_coherence_rpps" AFTER UPDATE OF "rpps_verifie" ON "public"."soignants" FOR EACH ROW WHEN (("new"."rpps_verifie" = true)) EXECUTE FUNCTION "public"."dec_check_coherence_apres_rpps"();
+CREATE OR REPLACE TRIGGER "trg_check_coherence_rpps" AFTER UPDATE OF "rpps_verifie" ON "public"."soignants" FOR EACH ROW WHEN (("old"."rpps_verifie" IS DISTINCT FROM "new"."rpps_verifie")) EXECUTE FUNCTION "public"."dec_check_coherence_apres_rpps"();
 
 
 
@@ -63116,6 +68240,10 @@ CREATE OR REPLACE TRIGGER "trg_dec_email_contrat_signe_complet" AFTER UPDATE OF 
 
 
 
+CREATE OR REPLACE TRIGGER "trg_dec_exiger_planning_confirme_candidature" BEFORE INSERT ON "public"."candidatures" FOR EACH ROW EXECUTE FUNCTION "public"."dec_exiger_planning_confirme_candidature"();
+
+
+
 CREATE OR REPLACE TRIGGER "trg_dec_notif_signature_soignant_recue" AFTER UPDATE OF "signature_soignant" ON "public"."contrats_mission" FOR EACH ROW EXECUTE FUNCTION "public"."dec_notif_signature_soignant_recue"();
 
 
@@ -63145,6 +68273,10 @@ CREATE OR REPLACE TRIGGER "trg_dec_verifier_repos_hebdo_35h_after_insert" AFTER 
 
 
 CREATE OR REPLACE TRIGGER "trg_dec_verifier_repos_hebdo_35h_before_update" BEFORE UPDATE ON "public"."missions" FOR EACH ROW EXECUTE FUNCTION "public"."dec_verifier_repos_hebdo_35h"();
+
+
+
+CREATE OR REPLACE TRIGGER "trg_dec_verrouiller_planning_candidatures" BEFORE INSERT OR DELETE OR UPDATE ON "public"."mission_creneaux" FOR EACH ROW EXECUTE FUNCTION "public"."dec_verrouiller_planning_candidatures"();
 
 
 
@@ -63192,10 +68324,6 @@ CREATE OR REPLACE TRIGGER "trg_escrow_release_on_validation" AFTER UPDATE OF "va
 
 
 
-CREATE OR REPLACE TRIGGER "trg_evaluer_dans_delai" BEFORE INSERT ON "public"."evaluations" FOR EACH ROW EXECUTE FUNCTION "public"."dec_evaluer_dans_delai"();
-
-
-
 CREATE OR REPLACE TRIGGER "trg_exiger_reservation_avant_attribution" BEFORE UPDATE OF "statut", "soignant_assigne_id" ON "public"."missions" FOR EACH ROW WHEN ((("new"."statut" = 'ASSIGNEE'::"public"."statut_mission") AND ("old"."statut" IS DISTINCT FROM 'ASSIGNEE'::"public"."statut_mission"))) EXECUTE FUNCTION "public"."fn_exiger_reservation_avant_attribution"();
 
 
@@ -63232,6 +68360,14 @@ CREATE OR REPLACE TRIGGER "trg_fh_updated_at" BEFORE UPDATE ON "public"."facture
 
 
 
+CREATE OR REPLACE TRIGGER "trg_forcer_compte_test_prelaunch" BEFORE INSERT OR UPDATE OF "est_compte_test" ON "public"."etablissements" FOR EACH ROW EXECUTE FUNCTION "private"."fn_forcer_compte_test_prelaunch"();
+
+
+
+CREATE OR REPLACE TRIGGER "trg_forcer_compte_test_prelaunch" BEFORE INSERT OR UPDATE OF "est_compte_test" ON "public"."soignants" FOR EACH ROW EXECUTE FUNCTION "private"."fn_forcer_compte_test_prelaunch"();
+
+
+
 CREATE OR REPLACE TRIGGER "trg_fs_updated_at" BEFORE UPDATE ON "public"."filtres_sauvegardes" FOR EACH ROW EXECUTE FUNCTION "public"."fn_trg_pn_updated_at"();
 
 
@@ -63257,6 +68393,10 @@ CREATE OR REPLACE TRIGGER "trg_init_prefs_etab" AFTER INSERT ON "public"."etabli
 
 
 CREATE OR REPLACE TRIGGER "trg_init_prefs_soignant" AFTER INSERT ON "public"."soignants" FOR EACH ROW EXECUTE FUNCTION "public"."fn_trg_init_preferences_notifications"();
+
+
+
+CREATE OR REPLACE TRIGGER "trg_initialiser_planning_exact_legacy" AFTER INSERT ON "public"."missions" FOR EACH ROW EXECUTE FUNCTION "public"."dec_initialiser_planning_exact_legacy"();
 
 
 
@@ -63705,6 +68845,10 @@ CREATE OR REPLACE TRIGGER "trg_verrouiller_justificatif_score_etab" BEFORE INSER
 
 
 CREATE OR REPLACE TRIGGER "trg_verrouiller_justificatif_score_soignant" BEFORE INSERT OR UPDATE OF "justificatif_storage_path" ON "public"."evenements_score_soignant" FOR EACH ROW EXECUTE FUNCTION "public"."fn_verrouiller_reference_justificatif"();
+
+
+
+CREATE OR REPLACE TRIGGER "trg_verrouiller_proposition_litige_en_attente" BEFORE UPDATE OF "payload_modifications" ON "public"."litiges" FOR EACH ROW EXECUTE FUNCTION "public"."fn_verrouiller_proposition_litige_en_attente"();
 
 
 
@@ -65093,7 +70237,7 @@ ALTER TABLE "public"."favoris_etab_soignant" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "public"."favoris_soignant_etab" ENABLE ROW LEVEL SECURITY;
 
 
-CREATE POLICY "fh_select_own" ON "public"."factures_honoraires" FOR SELECT TO "authenticated" USING ((("soignant_id" = ( SELECT "auth"."uid"() AS "uid")) OR ("etablissement_id" = "public"."mon_etablissement_id"()) OR "public"."est_admin"()));
+CREATE POLICY "fh_select_own" ON "public"."factures_honoraires" FOR SELECT TO "authenticated" USING ((("soignant_id" = ( SELECT "auth"."uid"() AS "uid")) OR ( SELECT "public"."est_admin"() AS "est_admin") OR (("etablissement_id" = ( SELECT "public"."mon_etablissement_id"() AS "mon_etablissement_id")) AND ( SELECT "public"."fn_a_permission_etablissement"('lecture_paiement'::"text", "factures_honoraires"."etablissement_id") AS "fn_a_permission_etablissement"))));
 
 
 
@@ -65260,7 +70404,7 @@ ALTER TABLE "public"."mission_series" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "public"."missions" ENABLE ROW LEVEL SECURITY;
 
 
-CREATE POLICY "missions_masquer_etabs_test" ON "public"."missions" AS RESTRICTIVE FOR SELECT TO "authenticated" USING (((NOT "public"."fn_est_etab_test"("etablissement_id")) OR (NOT "public"."fn_suis_soignant_reel"())));
+CREATE POLICY "missions_masquer_etabs_test" ON "public"."missions" AS RESTRICTIVE FOR SELECT TO "authenticated" USING (((NOT ( SELECT "public"."est_soignant"() AS "est_soignant")) OR "private"."fn_comptes_meme_cohorte_test"(( SELECT "auth"."uid"() AS "uid"), "etablissement_id")));
 
 
 
@@ -65502,9 +70646,11 @@ CREATE POLICY "pol_cand_delete" ON "public"."candidatures" FOR DELETE TO "authen
 
 
 
-CREATE POLICY "pol_cand_insert" ON "public"."candidatures" FOR INSERT TO "authenticated" WITH CHECK ((("soignant_id" = ( SELECT "auth"."uid"() AS "uid")) OR ( SELECT "public"."est_admin"() AS "est_admin") OR (EXISTS ( SELECT 1
+CREATE POLICY "pol_cand_insert" ON "public"."candidatures" FOR INSERT TO "authenticated" WITH CHECK (((("soignant_id" = ( SELECT "auth"."uid"() AS "uid")) AND (EXISTS ( SELECT 1
    FROM "public"."missions" "m"
-  WHERE (("m"."id" = "candidatures"."mission_id") AND ("m"."etablissement_id" = ( SELECT "public"."mon_etablissement_id"() AS "mon_etablissement_id")) AND ( SELECT "public"."fn_a_permission_etablissement"('candidatures'::"text", "m"."etablissement_id") AS "fn_a_permission_etablissement"))))));
+  WHERE (("m"."id" = "candidatures"."mission_id") AND "private"."fn_comptes_meme_cohorte_test"(( SELECT "auth"."uid"() AS "uid"), "m"."etablissement_id"))))) OR ( SELECT "public"."est_admin"() AS "est_admin") OR (EXISTS ( SELECT 1
+   FROM "public"."missions" "m"
+  WHERE (("m"."id" = "candidatures"."mission_id") AND ("m"."etablissement_id" = ( SELECT "public"."mon_etablissement_id"() AS "mon_etablissement_id")) AND "private"."fn_comptes_meme_cohorte_test"("candidatures"."soignant_id", "m"."etablissement_id") AND ( SELECT "public"."fn_a_permission_etablissement"('candidatures'::"text", "m"."etablissement_id") AS "fn_a_permission_etablissement"))))));
 
 
 
@@ -66352,7 +71498,7 @@ CREATE POLICY "pol_fact_insert" ON "public"."factures" FOR INSERT TO "authentica
 
 
 
-CREATE POLICY "pol_fact_select" ON "public"."factures" FOR SELECT TO "authenticated" USING (("public"."est_admin"() OR ("public"."est_admin_etablissement"() AND ("etablissement_id" = "public"."mon_etablissement_id"()))));
+CREATE POLICY "pol_fact_select" ON "public"."factures" FOR SELECT TO "authenticated" USING ((( SELECT "public"."est_admin"() AS "est_admin") OR (("etablissement_id" = ( SELECT "public"."mon_etablissement_id"() AS "mon_etablissement_id")) AND ( SELECT "public"."fn_a_permission_etablissement"('lecture_paiement'::"text", "factures"."etablissement_id") AS "fn_a_permission_etablissement"))));
 
 
 
@@ -66556,7 +71702,7 @@ CREATE POLICY "pol_paim_insert" ON "public"."paiements_mission" FOR INSERT TO "a
 
 
 
-CREATE POLICY "pol_paim_select" ON "public"."paiements_mission" FOR SELECT TO "authenticated" USING ((("etablissement_id" = "public"."mon_etablissement_id"()) OR "public"."est_admin"()));
+CREATE POLICY "pol_paim_select" ON "public"."paiements_mission" FOR SELECT TO "authenticated" USING ((( SELECT "public"."est_admin"() AS "est_admin") OR (("etablissement_id" = ( SELECT "public"."mon_etablissement_id"() AS "mon_etablissement_id")) AND ( SELECT "public"."fn_a_permission_etablissement"('lecture_paiement'::"text", "paiements_mission"."etablissement_id") AS "fn_a_permission_etablissement"))));
 
 
 
@@ -66655,7 +71801,7 @@ CREATE POLICY "pol_pres_update" ON "public"."presences" FOR UPDATE TO "authentic
 
 CREATE POLICY "pol_presence_status_select" ON "public"."presence_status" FOR SELECT TO "authenticated" USING ((("user_id" = ( SELECT "auth"."uid"() AS "uid")) OR (EXISTS ( SELECT 1
    FROM "public"."conversations" "c"
-  WHERE (((("presence_status"."user_id" = "c"."participant_1_id") OR ("presence_status"."user_id" = "c"."participant_2_id")) OR ("presence_status"."user_id" = "c"."soignant_id") OR (("c"."etablissement_id" IS NOT NULL) AND "private"."fn_interlocuteur_operationnel_actif"("presence_status"."user_id", "c"."etablissement_id"))) AND ("c"."archived_at" IS NULL) AND "public"."fn_conversation_accessible"("c"."id"))))));
+  WHERE (((("presence_status"."user_id" = "c"."participant_1_id") OR ("presence_status"."user_id" = "c"."participant_2_id")) OR ("presence_status"."user_id" = "c"."soignant_id")) AND ("c"."archived_at" IS NULL) AND "public"."fn_conversation_accessible"("c"."id"))))));
 
 
 
@@ -66765,7 +71911,7 @@ CREATE POLICY "pol_rib_insert" ON "public"."partages_rib" FOR INSERT TO "authent
 
 
 
-CREATE POLICY "pol_rib_select" ON "public"."partages_rib" FOR SELECT TO "authenticated" USING ((("actif" = true) AND (("expire_le" IS NULL) OR ("expire_le" > "now"())) AND (("soignant_id" = ( SELECT "auth"."uid"() AS "uid")) OR ("etablissement_id" = ( SELECT "public"."mon_etablissement_id"() AS "mon_etablissement_id")) OR ( SELECT "public"."est_admin"() AS "est_admin"))));
+CREATE POLICY "pol_rib_select" ON "public"."partages_rib" FOR SELECT TO "authenticated" USING ((("actif" = true) AND (("expire_le" IS NULL) OR ("expire_le" > "now"())) AND (("soignant_id" = ( SELECT "auth"."uid"() AS "uid")) OR ( SELECT "public"."est_admin"() AS "est_admin") OR (("etablissement_id" = ( SELECT "public"."mon_etablissement_id"() AS "mon_etablissement_id")) AND ( SELECT "public"."fn_a_permission_etablissement"('paiement'::"text", "partages_rib"."etablissement_id") AS "fn_a_permission_etablissement")))));
 
 
 
@@ -66827,31 +71973,7 @@ CREATE POLICY "pol_soig_select" ON "public"."soignants" FOR SELECT TO "authentic
 
 
 
-CREATE POLICY "pol_soig_update" ON "public"."soignants" FOR UPDATE TO "authenticated" USING ((( SELECT "public"."est_admin"() AS "est_admin") OR ("id" = ( SELECT "auth"."uid"() AS "uid")))) WITH CHECK ((( SELECT "public"."est_admin"() AS "est_admin") OR (("id" = ( SELECT "auth"."uid"() AS "uid")) AND (NOT ("rpps_verifie" IS DISTINCT FROM ( SELECT "soignants_1"."rpps_verifie"
-   FROM "public"."soignants" "soignants_1"
-  WHERE ("soignants_1"."id" = ( SELECT "auth"."uid"() AS "uid"))))) AND (NOT ("diplome_verifie" IS DISTINCT FROM ( SELECT "soignants_1"."diplome_verifie"
-   FROM "public"."soignants" "soignants_1"
-  WHERE ("soignants_1"."id" = ( SELECT "auth"."uid"() AS "uid"))))) AND (NOT ("identite_verifiee" IS DISTINCT FROM ( SELECT "soignants_1"."identite_verifiee"
-   FROM "public"."soignants" "soignants_1"
-  WHERE ("soignants_1"."id" = ( SELECT "auth"."uid"() AS "uid"))))) AND (NOT ("tous_documents_valides" IS DISTINCT FROM ( SELECT "soignants_1"."tous_documents_valides"
-   FROM "public"."soignants" "soignants_1"
-  WHERE ("soignants_1"."id" = ( SELECT "auth"."uid"() AS "uid"))))) AND (NOT ("score_fiabilite" IS DISTINCT FROM ( SELECT "soignants_1"."score_fiabilite"
-   FROM "public"."soignants" "soignants_1"
-  WHERE ("soignants_1"."id" = ( SELECT "auth"."uid"() AS "uid"))))) AND (NOT ("total_missions_terminees" IS DISTINCT FROM ( SELECT "soignants_1"."total_missions_terminees"
-   FROM "public"."soignants" "soignants_1"
-  WHERE ("soignants_1"."id" = ( SELECT "auth"."uid"() AS "uid"))))) AND (NOT ("heures_cumulees" IS DISTINCT FROM ( SELECT "soignants_1"."heures_cumulees"
-   FROM "public"."soignants" "soignants_1"
-  WHERE ("soignants_1"."id" = ( SELECT "auth"."uid"() AS "uid"))))) AND (NOT ("heures_plateforme" IS DISTINCT FROM ( SELECT "soignants_1"."heures_plateforme"
-   FROM "public"."soignants" "soignants_1"
-  WHERE ("soignants_1"."id" = ( SELECT "auth"."uid"() AS "uid"))))) AND (NOT ("eligible_conversion_3200h" IS DISTINCT FROM ( SELECT "soignants_1"."eligible_conversion_3200h"
-   FROM "public"."soignants" "soignants_1"
-  WHERE ("soignants_1"."id" = ( SELECT "auth"."uid"() AS "uid"))))) AND (NOT ("validation_3200h_statut" IS DISTINCT FROM ( SELECT "soignants_1"."validation_3200h_statut"
-   FROM "public"."soignants" "soignants_1"
-  WHERE ("soignants_1"."id" = ( SELECT "auth"."uid"() AS "uid"))))) AND (NOT ("statut_liberal" IS DISTINCT FROM ( SELECT "soignants_1"."statut_liberal"
-   FROM "public"."soignants" "soignants_1"
-  WHERE ("soignants_1"."id" = ( SELECT "auth"."uid"() AS "uid"))))) AND (NOT ("parraine_par" IS DISTINCT FROM ( SELECT "soignants_1"."parraine_par"
-   FROM "public"."soignants" "soignants_1"
-  WHERE ("soignants_1"."id" = ( SELECT "auth"."uid"() AS "uid"))))))));
+CREATE POLICY "pol_soig_update" ON "public"."soignants" FOR UPDATE TO "authenticated" USING ((( SELECT "public"."est_admin"() AS "est_admin") OR ("id" = ( SELECT "auth"."uid"() AS "uid")))) WITH CHECK ((( SELECT "public"."est_admin"() AS "est_admin") OR ("id" = ( SELECT "auth"."uid"() AS "uid"))));
 
 
 
@@ -66903,7 +72025,7 @@ CREATE POLICY "pol_transfer_insert" ON "public"."stripe_transfers" FOR INSERT TO
 
 
 
-CREATE POLICY "pol_transfer_select" ON "public"."stripe_transfers" FOR SELECT TO "authenticated" USING ((("soignant_id" = ( SELECT "auth"."uid"() AS "uid")) OR ("etablissement_id" = ( SELECT "public"."mon_etablissement_id"() AS "mon_etablissement_id")) OR ( SELECT "public"."est_admin"() AS "est_admin")));
+CREATE POLICY "pol_transfer_select" ON "public"."stripe_transfers" FOR SELECT TO "authenticated" USING ((("soignant_id" = ( SELECT "auth"."uid"() AS "uid")) OR ( SELECT "public"."est_admin"() AS "est_admin") OR (("etablissement_id" = ( SELECT "public"."mon_etablissement_id"() AS "mon_etablissement_id")) AND ( SELECT "public"."fn_a_permission_etablissement"('lecture_paiement'::"text", "stripe_transfers"."etablissement_id") AS "fn_a_permission_etablissement"))));
 
 
 
@@ -67226,6 +72348,10 @@ GRANT ALL ON TABLE "public"."heures_externes_soignants" TO "service_role";
 
 
 
+GRANT ALL ON TABLE "public"."externalisation_actions" TO "service_role";
+
+
+
 REVOKE ALL ON FUNCTION "public"."_sha256_hex"("p_input" "text") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."_sha256_hex"("p_input" "text") TO "service_role";
 
@@ -67308,6 +72434,11 @@ GRANT ALL ON FUNCTION "public"."dec_bloquer_si_facture_impayee"() TO "service_ro
 
 REVOKE ALL ON FUNCTION "public"."dec_bloquer_suppression_audit"() FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."dec_bloquer_suppression_audit"() TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."dec_bloquer_validation_presence_avant_fin_planning"() FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."dec_bloquer_validation_presence_avant_fin_planning"() TO "service_role";
 
 
 
@@ -67401,6 +72532,11 @@ GRANT ALL ON FUNCTION "public"."dec_evaluer_dans_delai"() TO "service_role";
 
 
 
+REVOKE ALL ON FUNCTION "public"."dec_exiger_planning_confirme_candidature"() FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."dec_exiger_planning_confirme_candidature"() TO "service_role";
+
+
+
 REVOKE ALL ON FUNCTION "public"."dec_facture_honoraires_regime_mission"() FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."dec_facture_honoraires_regime_mission"() TO "service_role";
 
@@ -67422,6 +72558,11 @@ GRANT ALL ON FUNCTION "public"."dec_idempotence_facture_payee"() TO "service_rol
 
 
 REVOKE ALL ON FUNCTION "public"."dec_incrementer_heures_plateforme"() FROM PUBLIC;
+
+
+
+REVOKE ALL ON FUNCTION "public"."dec_initialiser_planning_exact_legacy"() FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."dec_initialiser_planning_exact_legacy"() TO "service_role";
 
 
 
@@ -67707,6 +72848,11 @@ GRANT ALL ON FUNCTION "public"."dec_verifier_type_contrat_mission"() TO "service
 
 REVOKE ALL ON FUNCTION "public"."dec_verifier_type_exercice_profession"() FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."dec_verifier_type_exercice_profession"() TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."dec_verrouiller_planning_candidatures"() FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."dec_verrouiller_planning_candidatures"() TO "service_role";
 
 
 
@@ -68547,7 +73693,6 @@ REVOKE ALL ON FUNCTION "public"."fn_anti_seed_mission"() FROM PUBLIC;
 
 REVOKE ALL ON FUNCTION "public"."fn_apercu_marche_profession"("p_profession" "text", "p_lat" double precision, "p_lng" double precision, "p_rayon_km" integer) FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_apercu_marche_profession"("p_profession" "text", "p_lat" double precision, "p_lng" double precision, "p_rayon_km" integer) TO "service_role";
-GRANT ALL ON FUNCTION "public"."fn_apercu_marche_profession"("p_profession" "text", "p_lat" double precision, "p_lng" double precision, "p_rayon_km" integer) TO "anon";
 GRANT ALL ON FUNCTION "public"."fn_apercu_marche_profession"("p_profession" "text", "p_lat" double precision, "p_lng" double precision, "p_rayon_km" integer) TO "authenticated";
 
 
@@ -68853,7 +73998,6 @@ GRANT ALL ON FUNCTION "public"."fn_calculer_score_fiabilite_v2"("p_soignant_id" 
 
 REVOKE ALL ON FUNCTION "public"."fn_calculer_score_matching"("p_soignant_id" "uuid", "p_mission_id" "uuid") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_calculer_score_matching"("p_soignant_id" "uuid", "p_mission_id" "uuid") TO "service_role";
-GRANT ALL ON FUNCTION "public"."fn_calculer_score_matching"("p_soignant_id" "uuid", "p_mission_id" "uuid") TO "authenticated";
 
 
 
@@ -68961,6 +74105,11 @@ GRANT ALL ON FUNCTION "public"."fn_compte_auth_actif"() TO "authenticated";
 
 
 
+REVOKE ALL ON FUNCTION "public"."fn_compter_files_finance_exclues_test"() FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_compter_files_finance_exclues_test"() TO "service_role";
+
+
+
 REVOKE ALL ON FUNCTION "public"."fn_compter_missions_sans_notation"("p_role" "text") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_compter_missions_sans_notation"("p_role" "text") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."fn_compter_missions_sans_notation"("p_role" "text") TO "service_role";
@@ -68987,6 +74136,12 @@ GRANT ALL ON FUNCTION "public"."fn_compteur_soignants_disponibles"("p_etablissem
 REVOKE ALL ON FUNCTION "public"."fn_confirmer_accord_partie"("p_litige_id" "uuid") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_confirmer_accord_partie"("p_litige_id" "uuid") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."fn_confirmer_accord_partie"("p_litige_id" "uuid") TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."fn_confirmer_action_planning_v1"("p_mission_id" "uuid", "p_action" "text", "p_creneaux_confirmes" "jsonb", "p_message" "text", "p_choix_contrat" "text", "p_candidature_id" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_confirmer_action_planning_v1"("p_mission_id" "uuid", "p_action" "text", "p_creneaux_confirmes" "jsonb", "p_message" "text", "p_choix_contrat" "text", "p_candidature_id" "uuid") TO "service_role";
+GRANT ALL ON FUNCTION "public"."fn_confirmer_action_planning_v1"("p_mission_id" "uuid", "p_action" "text", "p_creneaux_confirmes" "jsonb", "p_message" "text", "p_choix_contrat" "text", "p_candidature_id" "uuid") TO "authenticated";
 
 
 
@@ -69027,7 +74182,6 @@ GRANT ALL ON FUNCTION "public"."fn_confirmer_virement_admin"("p_facture_id" "uui
 
 REVOKE ALL ON FUNCTION "public"."fn_conflit_planning_soignant"("p_soignant_id" "uuid", "p_mission_id" "uuid") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_conflit_planning_soignant"("p_soignant_id" "uuid", "p_mission_id" "uuid") TO "service_role";
-GRANT ALL ON FUNCTION "public"."fn_conflit_planning_soignant"("p_soignant_id" "uuid", "p_mission_id" "uuid") TO "authenticated";
 
 
 
@@ -69044,8 +74198,12 @@ GRANT ALL ON FUNCTION "public"."fn_consulter_mon_iban"() TO "service_role";
 
 
 REVOKE ALL ON FUNCTION "public"."fn_consulter_rib_soignant"("p_mission_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."fn_consulter_rib_soignant"("p_mission_id" "uuid") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."fn_consulter_rib_soignant"("p_mission_id" "uuid") TO "service_role";
+GRANT ALL ON FUNCTION "public"."fn_consulter_rib_soignant"("p_mission_id" "uuid") TO "authenticated";
+
+
+
+REVOKE ALL ON FUNCTION "public"."fn_consulter_rib_soignant_internal_20260801"("p_mission_id" "uuid") FROM PUBLIC;
 
 
 
@@ -69110,9 +74268,20 @@ GRANT ALL ON FUNCTION "public"."fn_creer_mission"("p_intitule" "text", "p_descri
 
 
 
+REVOKE ALL ON FUNCTION "public"."fn_creer_mission_api_v1"("p_etablissement_id" "uuid", "p_intitule" "text", "p_profession_requise" "public"."type_profession", "p_service" "text", "p_taux_horaire_base" numeric, "p_creneaux" "jsonb", "p_type_contrat_recherche" "text", "p_mode_remuneration" "text", "p_retrocession_pct" numeric) FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_creer_mission_api_v1"("p_etablissement_id" "uuid", "p_intitule" "text", "p_profession_requise" "public"."type_profession", "p_service" "text", "p_taux_horaire_base" numeric, "p_creneaux" "jsonb", "p_type_contrat_recherche" "text", "p_mode_remuneration" "text", "p_retrocession_pct" numeric) TO "service_role";
+
+
+
 REVOKE ALL ON FUNCTION "public"."fn_creer_mission_multi_jours"("p_intitule" "text", "p_description" "text", "p_profession_requise" "public"."type_profession", "p_service" "text", "p_taux_horaire_base" numeric, "p_est_urgente" boolean, "p_niveau_urgence" integer, "p_mode_attribution" "text", "p_specialite_medicale_requise" "text", "p_accepte_non_specialises" boolean, "p_creneaux" "jsonb") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_creer_mission_multi_jours"("p_intitule" "text", "p_description" "text", "p_profession_requise" "public"."type_profession", "p_service" "text", "p_taux_horaire_base" numeric, "p_est_urgente" boolean, "p_niveau_urgence" integer, "p_mode_attribution" "text", "p_specialite_medicale_requise" "text", "p_accepte_non_specialises" boolean, "p_creneaux" "jsonb") TO "service_role";
 GRANT ALL ON FUNCTION "public"."fn_creer_mission_multi_jours"("p_intitule" "text", "p_description" "text", "p_profession_requise" "public"."type_profession", "p_service" "text", "p_taux_horaire_base" numeric, "p_est_urgente" boolean, "p_niveau_urgence" integer, "p_mode_attribution" "text", "p_specialite_medicale_requise" "text", "p_accepte_non_specialises" boolean, "p_creneaux" "jsonb") TO "authenticated";
+
+
+
+REVOKE ALL ON FUNCTION "public"."fn_creer_mission_multi_jours_v2"("p_intitule" "text", "p_description" "text", "p_profession_requise" "public"."type_profession", "p_service" "text", "p_taux_horaire_base" numeric, "p_est_urgente" boolean, "p_niveau_urgence" integer, "p_mode_attribution" "text", "p_specialite_medicale_requise" "text", "p_accepte_non_specialises" boolean, "p_creneaux" "jsonb", "p_type_contrat_recherche" "text", "p_mode_remuneration" "text", "p_retrocession_pct" numeric) FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_creer_mission_multi_jours_v2"("p_intitule" "text", "p_description" "text", "p_profession_requise" "public"."type_profession", "p_service" "text", "p_taux_horaire_base" numeric, "p_est_urgente" boolean, "p_niveau_urgence" integer, "p_mode_attribution" "text", "p_specialite_medicale_requise" "text", "p_accepte_non_specialises" boolean, "p_creneaux" "jsonb", "p_type_contrat_recherche" "text", "p_mode_remuneration" "text", "p_retrocession_pct" numeric) TO "service_role";
+GRANT ALL ON FUNCTION "public"."fn_creer_mission_multi_jours_v2"("p_intitule" "text", "p_description" "text", "p_profession_requise" "public"."type_profession", "p_service" "text", "p_taux_horaire_base" numeric, "p_est_urgente" boolean, "p_niveau_urgence" integer, "p_mode_attribution" "text", "p_specialite_medicale_requise" "text", "p_accepte_non_specialises" boolean, "p_creneaux" "jsonb", "p_type_contrat_recherche" "text", "p_mode_remuneration" "text", "p_retrocession_pct" numeric) TO "authenticated";
 
 
 
@@ -69228,8 +74397,18 @@ GRANT ALL ON FUNCTION "public"."fn_declarer_paiement_facture_soignant"("p_factur
 
 
 REVOKE ALL ON FUNCTION "public"."fn_declarer_paiement_soignant"("p_mission_id" "uuid", "p_montant" numeric, "p_methode" "text", "p_reference" "text", "p_date_paiement" "date", "p_attestation_sur_l_honneur" boolean) FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."fn_declarer_paiement_soignant"("p_mission_id" "uuid", "p_montant" numeric, "p_methode" "text", "p_reference" "text", "p_date_paiement" "date", "p_attestation_sur_l_honneur" boolean) TO "authenticated";
 GRANT ALL ON FUNCTION "public"."fn_declarer_paiement_soignant"("p_mission_id" "uuid", "p_montant" numeric, "p_methode" "text", "p_reference" "text", "p_date_paiement" "date", "p_attestation_sur_l_honneur" boolean) TO "service_role";
+GRANT ALL ON FUNCTION "public"."fn_declarer_paiement_soignant"("p_mission_id" "uuid", "p_montant" numeric, "p_methode" "text", "p_reference" "text", "p_date_paiement" "date", "p_attestation_sur_l_honneur" boolean) TO "authenticated";
+
+
+
+REVOKE ALL ON FUNCTION "public"."fn_declarer_paiement_soignant_internal_20260801"("p_mission_id" "uuid", "p_montant" numeric, "p_methode" "text", "p_reference" "text", "p_date_paiement" "date", "p_attestation_sur_l_honneur" boolean) FROM PUBLIC;
+
+
+
+REVOKE ALL ON FUNCTION "public"."fn_declarer_paiement_soignant_v2"("p_mission_id" "uuid", "p_montant_verse" numeric, "p_montant_total_du" numeric, "p_methode" "text", "p_reference" "text", "p_date_paiement" "date", "p_attestation_sur_l_honneur" boolean) FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_declarer_paiement_soignant_v2"("p_mission_id" "uuid", "p_montant_verse" numeric, "p_montant_total_du" numeric, "p_methode" "text", "p_reference" "text", "p_date_paiement" "date", "p_attestation_sur_l_honneur" boolean) TO "service_role";
+GRANT ALL ON FUNCTION "public"."fn_declarer_paiement_soignant_v2"("p_mission_id" "uuid", "p_montant_verse" numeric, "p_montant_total_du" numeric, "p_methode" "text", "p_reference" "text", "p_date_paiement" "date", "p_attestation_sur_l_honneur" boolean) TO "authenticated";
 
 
 
@@ -69286,8 +74465,12 @@ GRANT ALL ON FUNCTION "public"."fn_desactiver_mon_token_push"("p_token" "text") 
 
 
 REVOKE ALL ON FUNCTION "public"."fn_detail_facture"("p_facture_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."fn_detail_facture"("p_facture_id" "uuid") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."fn_detail_facture"("p_facture_id" "uuid") TO "service_role";
+GRANT ALL ON FUNCTION "public"."fn_detail_facture"("p_facture_id" "uuid") TO "authenticated";
+
+
+
+REVOKE ALL ON FUNCTION "public"."fn_detail_facture_internal_20260801"("p_facture_id" "uuid") FROM PUBLIC;
 
 
 
@@ -69340,7 +74523,6 @@ GRANT ALL ON FUNCTION "public"."fn_documents_ok_pour_mission"("p_soignant_id" "u
 
 
 REVOKE ALL ON FUNCTION "public"."fn_doit_notifier"("p_utilisateur_id" "uuid", "p_type_evenement" "public"."type_evenement_notification", "p_canal" "public"."canal_notification") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."fn_doit_notifier"("p_utilisateur_id" "uuid", "p_type_evenement" "public"."type_evenement_notification", "p_canal" "public"."canal_notification") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."fn_doit_notifier"("p_utilisateur_id" "uuid", "p_type_evenement" "public"."type_evenement_notification", "p_canal" "public"."canal_notification") TO "service_role";
 
 
@@ -69713,8 +74895,8 @@ GRANT ALL ON FUNCTION "public"."fn_expirer_parrainages_inactifs"() TO "service_r
 
 
 REVOKE ALL ON FUNCTION "public"."fn_export_fec"("p_annee" integer) FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."fn_export_fec"("p_annee" integer) TO "authenticated";
 GRANT ALL ON FUNCTION "public"."fn_export_fec"("p_annee" integer) TO "service_role";
+GRANT ALL ON FUNCTION "public"."fn_export_fec"("p_annee" integer) TO "authenticated";
 
 
 
@@ -69775,6 +74957,21 @@ GRANT ALL ON FUNCTION "public"."fn_finaliser_document_verification"("p_document_
 
 
 
+REVOKE ALL ON FUNCTION "public"."fn_finaliser_envoi_email_idempotent"("p_idempotency_key" "text", "p_request_fingerprint" "text", "p_succes" boolean, "p_provider_id" "text", "p_erreur" "text") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_finaliser_envoi_email_idempotent"("p_idempotency_key" "text", "p_request_fingerprint" "text", "p_succes" boolean, "p_provider_id" "text", "p_erreur" "text") TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."fn_finaliser_envoi_push_idempotent"("p_idempotency_key" "text", "p_request_fingerprint" "text", "p_statut" "text", "p_provider_id" "text", "p_erreur" "text") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_finaliser_envoi_push_idempotent"("p_idempotency_key" "text", "p_request_fingerprint" "text", "p_statut" "text", "p_provider_id" "text", "p_erreur" "text") TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."fn_finaliser_envoi_sms_idempotent"("p_idempotency_key" "text", "p_request_fingerprint" "text", "p_statut" "text", "p_provider_id" "text", "p_erreur" "text") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_finaliser_envoi_sms_idempotent"("p_idempotency_key" "text", "p_request_fingerprint" "text", "p_statut" "text", "p_provider_id" "text", "p_erreur" "text") TO "service_role";
+
+
+
 REVOKE ALL ON FUNCTION "public"."fn_finaliser_type_compte"("p_user_id" "uuid", "p_type_compte" "text", "p_claim_token" "uuid") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_finaliser_type_compte"("p_user_id" "uuid", "p_type_compte" "text", "p_claim_token" "uuid") TO "service_role";
 
@@ -69824,8 +75021,12 @@ GRANT ALL ON FUNCTION "public"."fn_generer_facture_honoraires_mission"("p_missio
 
 
 REVOKE ALL ON FUNCTION "public"."fn_generer_facture_mensuelle"("p_etablissement_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."fn_generer_facture_mensuelle"("p_etablissement_id" "uuid") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."fn_generer_facture_mensuelle"("p_etablissement_id" "uuid") TO "service_role";
+GRANT ALL ON FUNCTION "public"."fn_generer_facture_mensuelle"("p_etablissement_id" "uuid") TO "authenticated";
+
+
+
+REVOKE ALL ON FUNCTION "public"."fn_generer_facture_mensuelle_internal_20260801"("p_etablissement_id" "uuid") FROM PUBLIC;
 
 
 
@@ -69847,7 +75048,6 @@ GRANT ALL ON FUNCTION "public"."fn_generer_numero_contrat"("p_type" "text") TO "
 
 
 REVOKE ALL ON FUNCTION "public"."fn_generer_numero_contrat_safe"("p_type" "text") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."fn_generer_numero_contrat_safe"("p_type" "text") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."fn_generer_numero_contrat_safe"("p_type" "text") TO "service_role";
 
 
@@ -69996,6 +75196,11 @@ GRANT ALL ON FUNCTION "public"."fn_lier_iban_verifie_document"("p_document_id" "
 
 REVOKE ALL ON FUNCTION "public"."fn_lire_secret_cron"() FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_lire_secret_cron"() TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."fn_lire_secret_cron_automations"() FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_lire_secret_cron_automations"() TO "service_role";
 
 
 
@@ -70193,14 +75398,18 @@ GRANT ALL ON FUNCTION "public"."fn_mes_exclusions_recues"() TO "service_role";
 
 
 REVOKE ALL ON FUNCTION "public"."fn_mes_factures"() FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."fn_mes_factures"() TO "authenticated";
 GRANT ALL ON FUNCTION "public"."fn_mes_factures"() TO "service_role";
+GRANT ALL ON FUNCTION "public"."fn_mes_factures"() TO "authenticated";
 
 
 
 REVOKE ALL ON FUNCTION "public"."fn_mes_factures_honoraires"() FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_mes_factures_honoraires"() TO "service_role";
 GRANT ALL ON FUNCTION "public"."fn_mes_factures_honoraires"() TO "authenticated";
+
+
+
+REVOKE ALL ON FUNCTION "public"."fn_mes_factures_internal_20260801"() FROM PUBLIC;
 
 
 
@@ -70296,6 +75505,11 @@ GRANT ALL ON FUNCTION "public"."fn_mission_est_de_nuit"("p_debut" timestamp with
 
 
 
+REVOKE ALL ON FUNCTION "public"."fn_mission_est_reelle_pour_service"("p_mission_id" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_mission_est_reelle_pour_service"("p_mission_id" "uuid") TO "service_role";
+
+
+
 REVOKE ALL ON FUNCTION "public"."fn_mission_publique"("p_id" "uuid") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_mission_publique"("p_id" "uuid") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."fn_mission_publique"("p_id" "uuid") TO "service_role";
@@ -70311,6 +75525,7 @@ GRANT ALL ON FUNCTION "public"."fn_missions_ouvertes_sitemap"() TO "service_role
 REVOKE ALL ON FUNCTION "public"."fn_missions_publiques_etablissement"("p_etablissement_id" "uuid") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_missions_publiques_etablissement"("p_etablissement_id" "uuid") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."fn_missions_publiques_etablissement"("p_etablissement_id" "uuid") TO "service_role";
+GRANT ALL ON FUNCTION "public"."fn_missions_publiques_etablissement"("p_etablissement_id" "uuid") TO "anon";
 
 
 
@@ -70361,6 +75576,12 @@ GRANT ALL ON FUNCTION "public"."fn_modifier_mission_etablissement_v2"("p_mission
 
 
 
+REVOKE ALL ON FUNCTION "public"."fn_modifier_mission_etablissement_v3"("p_mission_id" "uuid", "p_intitule" "text", "p_description" "text", "p_service" "text", "p_profession_requise" "public"."type_profession", "p_taux_horaire_base" numeric, "p_est_urgente" boolean, "p_niveau_urgence" integer, "p_mode_attribution" "text", "p_type_contrat_recherche" "text", "p_specialite_medicale_requise" "text", "p_accepte_non_specialises" boolean, "p_creneaux" "jsonb") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_modifier_mission_etablissement_v3"("p_mission_id" "uuid", "p_intitule" "text", "p_description" "text", "p_service" "text", "p_profession_requise" "public"."type_profession", "p_taux_horaire_base" numeric, "p_est_urgente" boolean, "p_niveau_urgence" integer, "p_mode_attribution" "text", "p_type_contrat_recherche" "text", "p_specialite_medicale_requise" "text", "p_accepte_non_specialises" boolean, "p_creneaux" "jsonb") TO "service_role";
+GRANT ALL ON FUNCTION "public"."fn_modifier_mission_etablissement_v3"("p_mission_id" "uuid", "p_intitule" "text", "p_description" "text", "p_service" "text", "p_profession_requise" "public"."type_profession", "p_taux_horaire_base" numeric, "p_est_urgente" boolean, "p_niveau_urgence" integer, "p_mode_attribution" "text", "p_type_contrat_recherche" "text", "p_specialite_medicale_requise" "text", "p_accepte_non_specialises" boolean, "p_creneaux" "jsonb") TO "authenticated";
+
+
+
 REVOKE ALL ON FUNCTION "public"."fn_modifier_mon_etablissement"("p_nom" "text", "p_finess" "text", "p_adresse_rue" "text", "p_adresse_ville" "text", "p_adresse_code_postal" "text", "p_adresse_departement" "text", "p_email_contact" "text", "p_telephone" "text", "p_adresse_lat" numeric, "p_adresse_lng" numeric, "p_taux_majoration_nuit" numeric, "p_taux_majoration_dimanche" numeric, "p_taux_majoration_ferie" numeric, "p_couleur_theme" "text", "p_convention_collective" "text", "p_mode_paiement_commission" "text", "p_logo_url" "text", "p_contrat_url" "text") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_modifier_mon_etablissement"("p_nom" "text", "p_finess" "text", "p_adresse_rue" "text", "p_adresse_ville" "text", "p_adresse_code_postal" "text", "p_adresse_departement" "text", "p_email_contact" "text", "p_telephone" "text", "p_adresse_lat" numeric, "p_adresse_lng" numeric, "p_taux_majoration_nuit" numeric, "p_taux_majoration_dimanche" numeric, "p_taux_majoration_ferie" numeric, "p_couleur_theme" "text", "p_convention_collective" "text", "p_mode_paiement_commission" "text", "p_logo_url" "text", "p_contrat_url" "text") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."fn_modifier_mon_etablissement"("p_nom" "text", "p_finess" "text", "p_adresse_rue" "text", "p_adresse_ville" "text", "p_adresse_code_postal" "text", "p_adresse_departement" "text", "p_email_contact" "text", "p_telephone" "text", "p_adresse_lat" numeric, "p_adresse_lng" numeric, "p_taux_majoration_nuit" numeric, "p_taux_majoration_dimanche" numeric, "p_taux_majoration_ferie" numeric, "p_couleur_theme" "text", "p_convention_collective" "text", "p_mode_paiement_commission" "text", "p_logo_url" "text", "p_contrat_url" "text") TO "service_role";
@@ -70392,8 +75613,12 @@ GRANT ALL ON FUNCTION "public"."fn_modifier_preferences_notifications"("p_canal_
 
 
 REVOKE ALL ON FUNCTION "public"."fn_modifier_reference_paiement"("p_paiement_id" "uuid", "p_nouvelle_reference" "text") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."fn_modifier_reference_paiement"("p_paiement_id" "uuid", "p_nouvelle_reference" "text") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."fn_modifier_reference_paiement"("p_paiement_id" "uuid", "p_nouvelle_reference" "text") TO "service_role";
+GRANT ALL ON FUNCTION "public"."fn_modifier_reference_paiement"("p_paiement_id" "uuid", "p_nouvelle_reference" "text") TO "authenticated";
+
+
+
+REVOKE ALL ON FUNCTION "public"."fn_modifier_reference_paiement_internal_20260801"("p_paiement_id" "uuid", "p_nouvelle_reference" "text") FROM PUBLIC;
 
 
 
@@ -70531,8 +75756,12 @@ GRANT ALL ON FUNCTION "public"."fn_notifier_favoris_expirants"() TO "service_rol
 
 
 REVOKE ALL ON FUNCTION "public"."fn_obligations_financieres"() FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."fn_obligations_financieres"() TO "authenticated";
 GRANT ALL ON FUNCTION "public"."fn_obligations_financieres"() TO "service_role";
+GRANT ALL ON FUNCTION "public"."fn_obligations_financieres"() TO "authenticated";
+
+
+
+REVOKE ALL ON FUNCTION "public"."fn_obligations_financieres_internal_20260801"() FROM PUBLIC;
 
 
 
@@ -70574,6 +75803,41 @@ GRANT ALL ON FUNCTION "public"."fn_obtenir_missions_swipe"("p_limit" integer) TO
 
 
 
+REVOKE ALL ON FUNCTION "public"."fn_ops_activer_crons_edge_critiques"("p_sondes" "jsonb", "p_confirmation" "text") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_ops_activer_crons_edge_critiques"("p_sondes" "jsonb", "p_confirmation" "text") TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."fn_ops_controler_crons_edge_critiques"() FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_ops_controler_crons_edge_critiques"() TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."fn_ops_desactiver_crons_edge_critiques"() FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_ops_desactiver_crons_edge_critiques"() TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."fn_ops_etat_activation_crons_edge_critiques"() FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_ops_etat_activation_crons_edge_critiques"() TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."fn_ops_etat_sondes_crons_edge_critiques"("p_sondes" "jsonb") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_ops_etat_sondes_crons_edge_critiques"("p_sondes" "jsonb") TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."fn_ops_inventorier_objets_stripe_test"() FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_ops_inventorier_objets_stripe_test"() TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."fn_ops_sonder_crons_edge_critiques"() FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_ops_sonder_crons_edge_critiques"() TO "service_role";
+
+
+
 REVOKE ALL ON FUNCTION "public"."fn_ouvrir_litige_rate_limited"("p_mission_id" "uuid", "p_motif" "text") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_ouvrir_litige_rate_limited"("p_mission_id" "uuid", "p_motif" "text") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."fn_ouvrir_litige_rate_limited"("p_mission_id" "uuid", "p_motif" "text") TO "service_role";
@@ -70597,8 +75861,12 @@ GRANT ALL ON FUNCTION "public"."fn_ouvrir_revue_verification_etablissement"("p_e
 
 
 REVOKE ALL ON FUNCTION "public"."fn_paiements_etablissement"() FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."fn_paiements_etablissement"() TO "authenticated";
 GRANT ALL ON FUNCTION "public"."fn_paiements_etablissement"() TO "service_role";
+GRANT ALL ON FUNCTION "public"."fn_paiements_etablissement"() TO "authenticated";
+
+
+
+REVOKE ALL ON FUNCTION "public"."fn_paiements_etablissement_internal_20260801"() FROM PUBLIC;
 
 
 
@@ -71132,6 +76400,21 @@ GRANT ALL ON FUNCTION "public"."fn_repondre_proposition"("p_candidature_id" "uui
 
 
 
+REVOKE ALL ON FUNCTION "public"."fn_reserver_envoi_email_idempotent"("p_idempotency_key" "text", "p_request_fingerprint" "text") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_reserver_envoi_email_idempotent"("p_idempotency_key" "text", "p_request_fingerprint" "text") TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."fn_reserver_envoi_push_idempotent"("p_idempotency_key" "text", "p_request_fingerprint" "text") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_reserver_envoi_push_idempotent"("p_idempotency_key" "text", "p_request_fingerprint" "text") TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."fn_reserver_envoi_sms_idempotent"("p_idempotency_key" "text", "p_request_fingerprint" "text") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_reserver_envoi_sms_idempotent"("p_idempotency_key" "text", "p_request_fingerprint" "text") TO "service_role";
+
+
+
 REVOKE ALL ON FUNCTION "public"."fn_reserver_type_compte"("p_user_id" "uuid", "p_type_compte" "text", "p_claim_token" "uuid") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_reserver_type_compte"("p_user_id" "uuid", "p_type_compte" "text", "p_claim_token" "uuid") TO "service_role";
 
@@ -71349,7 +76632,6 @@ GRANT ALL ON FUNCTION "public"."fn_signer_mandat_facturation"("p_version" "text"
 
 
 REVOKE ALL ON FUNCTION "public"."fn_sms_doit_envoyer"("p_destinataire_id" "uuid", "p_type" "text", "p_fenetre_minutes" integer) FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."fn_sms_doit_envoyer"("p_destinataire_id" "uuid", "p_type" "text", "p_fenetre_minutes" integer) TO "authenticated";
 GRANT ALL ON FUNCTION "public"."fn_sms_doit_envoyer"("p_destinataire_id" "uuid", "p_type" "text", "p_fenetre_minutes" integer) TO "service_role";
 
 
@@ -71476,6 +76758,16 @@ GRANT ALL ON FUNCTION "public"."fn_stripe_payment_flow_claim"("p_flow" "text", "
 
 REVOKE ALL ON FUNCTION "public"."fn_stripe_refund_rapprocher"("p_queue_id" "uuid", "p_stripe_refund_id" "text", "p_resultat" "text", "p_detail" "text", "p_finalise_le" timestamp with time zone) FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_stripe_refund_rapprocher"("p_queue_id" "uuid", "p_stripe_refund_id" "text", "p_resultat" "text", "p_detail" "text", "p_finalise_le" timestamp with time zone) TO "service_role";
+
+
+
+GRANT SELECT,INSERT,UPDATE ON TABLE "public"."stripe_refunds_queue" TO "authenticated";
+GRANT ALL ON TABLE "public"."stripe_refunds_queue" TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."fn_stripe_refunds_reels_a_traiter"("p_lease_before" timestamp with time zone, "p_limit" integer) FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_stripe_refunds_reels_a_traiter"("p_lease_before" timestamp with time zone, "p_limit" integer) TO "service_role";
 
 
 
@@ -71627,6 +76919,12 @@ GRANT ALL ON FUNCTION "public"."fn_top_soignants"("p_profession" "text", "p_limi
 REVOKE ALL ON FUNCTION "public"."fn_traiter_candidature"("p_candidature_id" "uuid", "p_decision" "text", "p_motif" "text") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_traiter_candidature"("p_candidature_id" "uuid", "p_decision" "text", "p_motif" "text") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."fn_traiter_candidature"("p_candidature_id" "uuid", "p_decision" "text", "p_motif" "text") TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."fn_traiter_candidature_planning_v1"("p_candidature_id" "uuid", "p_decision" "text", "p_creneaux_confirmes" "jsonb", "p_motif" "text") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_traiter_candidature_planning_v1"("p_candidature_id" "uuid", "p_decision" "text", "p_creneaux_confirmes" "jsonb", "p_motif" "text") TO "service_role";
+GRANT ALL ON FUNCTION "public"."fn_traiter_candidature_planning_v1"("p_candidature_id" "uuid", "p_decision" "text", "p_creneaux_confirmes" "jsonb", "p_motif" "text") TO "authenticated";
 
 
 
@@ -71970,6 +77268,11 @@ GRANT ALL ON FUNCTION "public"."fn_valider_code_secours"("p_mission_id" "uuid", 
 
 
 
+REVOKE ALL ON FUNCTION "public"."fn_valider_creneaux_mission_json"("p_creneaux" "jsonb", "p_appliquer_plafond_48h" boolean) FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_valider_creneaux_mission_json"("p_creneaux" "jsonb", "p_appliquer_plafond_48h" boolean) TO "service_role";
+
+
+
 REVOKE ALL ON FUNCTION "public"."fn_valider_presence"("p_presence_id" "uuid") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_valider_presence"("p_presence_id" "uuid") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."fn_valider_presence"("p_presence_id" "uuid") TO "service_role";
@@ -72047,6 +77350,11 @@ GRANT ALL ON FUNCTION "public"."fn_verifier_rate_limit"("p_cle" "text", "p_actio
 
 REVOKE ALL ON FUNCTION "public"."fn_verifier_skip_serie_onboarding"("p_envoi_id" "uuid") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_verifier_skip_serie_onboarding"("p_envoi_id" "uuid") TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."fn_verrouiller_proposition_litige_en_attente"() FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_verrouiller_proposition_litige_en_attente"() TO "service_role";
 
 
 
@@ -72541,10 +77849,6 @@ GRANT ALL ON TABLE "public"."exclusions" TO "service_role";
 
 
 
-GRANT ALL ON TABLE "public"."externalisation_actions" TO "service_role";
-
-
-
 GRANT ALL ON TABLE "public"."factor_advances" TO "service_role";
 GRANT SELECT ON TABLE "public"."factor_advances" TO "authenticated";
 
@@ -72692,7 +77996,7 @@ GRANT ALL ON TABLE "public"."messages_mission" TO "service_role";
 
 
 
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE "public"."mission_creneaux" TO "authenticated";
+GRANT SELECT ON TABLE "public"."mission_creneaux" TO "authenticated";
 GRANT ALL ON TABLE "public"."mission_creneaux" TO "service_role";
 
 
@@ -72849,6 +78153,7 @@ GRANT ALL ON TABLE "public"."rate_limits" TO "service_role";
 
 
 GRANT ALL ON TABLE "public"."reclamations" TO "service_role";
+GRANT SELECT,INSERT ON TABLE "public"."reclamations" TO "authenticated";
 
 
 
@@ -72984,11 +78289,6 @@ GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE "public"."stripe_connect_onboarding" 
 
 
 GRANT ALL ON TABLE "public"."stripe_payment_flow_claims" TO "service_role";
-
-
-
-GRANT SELECT,INSERT,UPDATE ON TABLE "public"."stripe_refunds_queue" TO "authenticated";
-GRANT ALL ON TABLE "public"."stripe_refunds_queue" TO "service_role";
 
 
 

@@ -131,6 +131,7 @@ export default function MissionsSoignant() {
   });
   const [heuresSemaine, setHeuresSemaine] = useState(0);
   const [nbAffiche, setNbAffiche] = useState(20);
+  const professionPourRecherche = onglet === 'disponibles' ? soignant?.profession ?? null : null;
 
   useEffect(() => {
     if (!user) return;
@@ -173,7 +174,7 @@ export default function MissionsSoignant() {
 
   useEffect(() => {
     if (!user) return;
-    if (!soignant && onglet !== 'disponibles' && onglet !== 'candidatures') { setLoading(false); setMissions([]); return; }
+    let annule = false;
     setLoading(true);
     setErreurChargement(null);
     const fetchMissions = async () => {
@@ -193,6 +194,7 @@ export default function MissionsSoignant() {
           const missionsCandidatures = await enrichirAvecPlanning(
             candidaturesValides.map((candidature: any) => candidature.missions),
           );
+          if (annule) return;
           const planningParMission = new Map(
             missionsCandidatures.map((mission) => [mission.id, mission]),
           );
@@ -215,12 +217,12 @@ export default function MissionsSoignant() {
 
         if (onglet === 'disponibles') {
           query = query.eq('statut', 'OUVERTE').gte('debut_le', maintenantIso);
-          if (soignant?.profession) {
-            const orFiltre = getMissionsCompatiblesFilter(soignant.profession);
+          if (professionPourRecherche) {
+            const orFiltre = getMissionsCompatiblesFilter(professionPourRecherche);
             if (orFiltre) {
               query = query.or(orFiltre);
             } else {
-              query = query.eq('profession_requise', soignant.profession as any);
+              query = query.eq('profession_requise', professionPourRecherche as any);
             }
           }
           // Contract type compatibility is handled client-side via missionCompatibleContrat
@@ -244,18 +246,22 @@ export default function MissionsSoignant() {
         const { data, error } = await query;
         if (error) throw error;
         const enriched = data ? await enrichirEtablissements(data as any[]) : [];
-        setMissions(await enrichirAvecPlanning(enriched as any[]));
+        const missionsAvecPlanning = await enrichirAvecPlanning(enriched as any[]);
+        if (annule) return;
+        setMissions(missionsAvecPlanning);
       } catch (err) {
+        if (annule) return;
         handleErrorSilent(err, 'MissionsSoignant.chargement');
         setMissions([]);
         setCandidatures([]);
         setErreurChargement('Impossible de charger les missions et leurs horaires.');
       } finally {
-        setLoading(false);
+        if (!annule) setLoading(false);
       }
     };
     void fetchMissions();
-  }, [user, soignant, onglet, filtres, page, refreshTick]);
+    return () => { annule = true; };
+  }, [user, professionPourRecherche, onglet, filtres, page, refreshTick]);
 
   // Reset pagination when tab/filters change
   useEffect(() => { setNbAffiche(20); setPage(0); }, [onglet, filtres]);
@@ -383,7 +389,16 @@ export default function MissionsSoignant() {
           </>
         )}
 
-        {loading ? <SkeletonList count={4} /> : erreurChargement ? (
+        {loading ? (
+          <div role="status" aria-live="polite" className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              {onglet === 'candidatures'
+                ? 'Chargement des candidatures — En attente de réponse de l’établissement…'
+                : 'Chargement des missions…'}
+            </p>
+            <SkeletonList count={4} />
+          </div>
+        ) : erreurChargement ? (
           <div className="card-base border-destructive/30" role="alert">
             <div className="flex items-start gap-3">
               <AlertTriangle className="h-5 w-5 shrink-0 text-destructive" aria-hidden="true" />

@@ -9,6 +9,9 @@ const migration = read(
 const migrationScope = read(
   'supabase/migrations/20260714096000_securiser_messages_contact_litige.sql',
 );
+const guardMigration = read(
+  'supabase/migrations/20260804094450_corriger_verrou_proposition_litige.sql',
+);
 const panneau = read('src/components/PanneauContestation.tsx');
 const adminLitiges = read('src/pages/admin/AdminLitiges.tsx');
 const formulaire = read('src/components/litige/FormulaireAccord.tsx');
@@ -22,6 +25,15 @@ const resolutionModal = read(
 );
 
 describe('accords de litige liés à une proposition exacte', () => {
+  it('distingue le soignant de la partie établissement dans le verrou anti-remplacement', () => {
+    expect(guardMigration).toContain(
+      'OLD.soignant_id IS DISTINCT FROM auth.uid()',
+    );
+    expect(guardMigration).toContain(
+      'OLD.etablissement_id = public.mon_etablissement_id()',
+    );
+  });
+
   it('aligne le panneau présence sur les statuts et la signature RPC canoniques', () => {
     expect(panneau).toContain("OUVERT: { label: 'Ouvert'");
     expect(panneau).toContain("litige.statut === 'OUVERT'");

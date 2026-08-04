@@ -41,6 +41,16 @@ vi.mock('@/integrations/supabase/client', () => {
 });
 
 describe('MissionsSoignant — onglets accessibles', () => {
+  it('annonce explicitement le chargement des candidatures', () => {
+    render(
+      <MemoryRouter initialEntries={['/soignant/missions?tab=candidatures']}>
+        <MissionsSoignant />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByRole('status')).toHaveTextContent('En attente de réponse');
+  });
+
   it('expose la sélection et permet la navigation avec les flèches', () => {
     render(
       <MemoryRouter>
