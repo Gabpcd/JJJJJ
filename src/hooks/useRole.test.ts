@@ -1,6 +1,6 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ROLE_RESOLUTION_TIMEOUT_MS, useRole } from './useRole';
+import { ROLE_RESOLUTION_TIMEOUT_MS, reinitialiserCacheRole, useRole } from './useRole';
 
 const mocks = vi.hoisted(() => ({
   getSession: vi.fn(),
@@ -39,6 +39,7 @@ function requeteRpcSuspendue() {
 
 describe('useRole — résolution fail-closed', () => {
   beforeEach(() => {
+    reinitialiserCacheRole();
     vi.clearAllMocks();
     mocks.getSession.mockResolvedValue({
       data: { session: { user: { id: 'utilisateur-id' } } },
@@ -126,6 +127,24 @@ describe('useRole — résolution fail-closed', () => {
       error: null,
     });
     expect(query.abortSignal).toHaveBeenCalledWith(expect.any(AbortSignal));
+  });
+
+  it('réutilise le rôle résolu entre deux onglets sans relancer la RPC', async () => {
+    mocks.rpc.mockReturnValue(requeteRpc({
+      data: { role: 'ADMIN_ETABLISSEMENT', etablissement_id: 'etablissement-cache' },
+      error: null,
+    }));
+
+    const premier = renderHook(() => useRole());
+    await waitFor(() => expect(premier.result.current.resolved).toBe(true));
+    premier.unmount();
+
+    const second = renderHook(() => useRole());
+    await waitFor(() => expect(second.result.current.resolved).toBe(true));
+
+    expect(second.result.current.etablissement_id).toBe('etablissement-cache');
+    expect(mocks.rpc).toHaveBeenCalledTimes(1);
+    second.unmount();
   });
 
   it('expose l’erreur RPC sans considérer le rôle comme résolu', async () => {

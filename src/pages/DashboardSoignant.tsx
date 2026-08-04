@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { Link, useNavigate } from 'react-router-dom';
 import { SkeletonDashboard } from '@/components/SkeletonCard';
-import { AlertCircle, Banknote, Bell, CalendarDays, ChevronRight, CreditCard, FileText, Sparkles } from 'lucide-react';
+import { AlertCircle, Banknote, Bell, CalendarDays, ChevronRight, CreditCard, FileText, Scale, Sparkles } from 'lucide-react';
 import { CarteProposition } from '@/components/CarteProposition';
 import type { PropositionMission } from '@/components/CarteProposition';
 import { NoteNetEstime } from '@/components/NoteNetEstime';
@@ -96,6 +96,7 @@ export default function DashboardSoignant() {
         { data, error },
         { data: connectData, error: connectError },
         { data: gainsMissionsData, error: gainsMissionsError },
+        { data: propositionsLitigesData, error: propositionsLitigesError },
       ] = await Promise.all([
         supabase.rpc('fn_dashboard_soignant_complet' as any),
         supabase
@@ -109,11 +110,22 @@ export default function DashboardSoignant() {
           .eq('soignant_assigne_id', user!.id)
           .eq('statut', 'TERMINEE')
           .gte('fin_le', debutMois),
+        supabase
+          .from('litiges')
+          .select('id, mission_id, statut, payload_modifications, accord_soignant, accord_etablissement, missions(intitule)')
+          .eq('soignant_id', user!.id)
+          .eq('accord_soignant', false)
+          .eq('accord_etablissement', true)
+          .not('payload_modifications', 'is', null)
+          .in('statut', ['OUVERT', 'EN_DISCUSSION', 'EN_MEDIATION', 'MEDIATION_EN_COURS'])
+          .order('cree_le', { ascending: false })
+          .limit(5),
       ]);
       if (error) throw error;
       if (connectError) logger.warn('[DashboardSoignant] Stripe Connect indisponible', connectError);
       if (gainsMissionsError) logger.warn('[DashboardSoignant] Gains détaillés indisponibles', gainsMissionsError);
-      if (!data) return { profil: null, missions_ouvertes: [], mes_missions: [], documents: [], heures_semaine: 0, gains_mois: { net_total: 0, brut_total: 0, nb_missions: 0 }, gains_missions: [], gains_6mois: [], missions_semaine_cal: [], propositions: [], heures_totales_terminees: 0, missions_oubliees_count: 0, notifs_non_lues: 0, hasStripeConnect: true };
+      if (propositionsLitigesError) logger.warn('[DashboardSoignant] Propositions de litige indisponibles', propositionsLitigesError);
+      if (!data) return { profil: null, missions_ouvertes: [], mes_missions: [], documents: [], heures_semaine: 0, gains_mois: { net_total: 0, brut_total: 0, nb_missions: 0 }, gains_missions: [], gains_6mois: [], missions_semaine_cal: [], propositions: [], propositions_litiges: [], heures_totales_terminees: 0, missions_oubliees_count: 0, notifs_non_lues: 0, hasStripeConnect: true };
 
       const missions = Array.isArray((data as any).mes_missions) ? (data as any).mes_missions : [];
       const missionsOuvertes = Array.isArray((data as any).missions_ouvertes) ? (data as any).missions_ouvertes : [];
@@ -205,6 +217,7 @@ export default function DashboardSoignant() {
         // Le RPC historique agrégeait parfois le brut salarié sous le nom
         // `net_total`. Les montants affichés sont recalculés mission par mission.
         gains_missions: gainsMissionsError ? [] : (gainsMissionsData ?? []),
+        propositions_litiges: propositionsLitigesError ? [] : (propositionsLitigesData ?? []),
         // En cas d'échec du module facultatif, ne pas afficher à tort un CTA
         // d'onboarding Stripe sur un compte potentiellement déjà configuré.
         hasStripeConnect: connectError ? true : connectData?.statut === 'COMPLET',
@@ -236,6 +249,7 @@ export default function DashboardSoignant() {
   const missionsOuvertes = (dashboard?.missions_ouvertes ?? []) as any[];
   const heuresSemaine = (dashboard?.heures_semaine ?? 0) as number;
   const hasStripeConnect = dashboard?.hasStripeConnect ?? true;
+  const propositionsLitiges = (dashboard?.propositions_litiges ?? []) as any[];
 
   const docsExpirant = useMemo(() => {
     const docs = (dashboard?.documents ?? []) as any[];
@@ -366,6 +380,27 @@ export default function DashboardSoignant() {
 
   return (
     <LayoutApp role="SOIGNANT">
+      {propositionsLitiges.length > 0 && (
+        <section className="mb-4 rounded-xl border-2 border-warning/40 bg-warning/5 p-4" role="alert">
+          <div className="flex items-start gap-3">
+            <Scale className="mt-0.5 h-5 w-5 shrink-0 text-warning" aria-hidden="true" />
+            <div className="min-w-0 flex-1">
+              <h2 className="font-bold text-foreground">Proposition de résolution à examiner</h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                L’établissement a proposé un accord pour {propositionsLitiges[0]?.missions?.intitule || 'une mission'}.
+                Consulte le détail avant de l’accepter ou de contre-proposer.
+              </p>
+              <button
+                type="button"
+                className="mt-3 text-sm font-semibold text-primary hover:underline"
+                onClick={() => navigate(`/soignant/litiges?litige=${propositionsLitiges[0].id}`)}
+              >
+                Voir la proposition →
+              </button>
+            </div>
+          </div>
+        </section>
+      )}
       {/* Checklist d'activation EN PREMIER pour un profil incomplet (elle se
           masque seule — return null — quand le profil est complet, donc aucun
           coût pour un soignant activé qui voit alors directement le CTA). */}

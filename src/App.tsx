@@ -187,7 +187,16 @@ const AdminAcquisition = lazy(() => import("./pages/admin/AdminAcquisition"));
 const AdminSales = lazy(() => import("./pages/admin/AdminSales"));
 const ClassementSoignants = lazy(() => import("./pages/ClassementSoignants"));
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 60_000,
+      gcTime: 10 * 60_000,
+      refetchOnWindowFocus: false,
+      retry: 1,
+    },
+  },
+});
 
 // Capture GLOBALE de l'attribution d'acquisition (UTM + referrer + code parrainage
 // ?ref=CODE) dès l'arrivée sur N'IMPORTE quelle page (y compris la page d'accueil,

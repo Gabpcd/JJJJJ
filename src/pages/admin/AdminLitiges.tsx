@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { LayoutAdmin } from '@/components/LayoutAdmin';
 import { ChargementAdmin } from '@/components/admin/ChargementAdmin';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -43,6 +44,7 @@ const requiertResolutionFinanciereManuelle = (l: any) =>
 
 export default function AdminLitiges() {
   usePageTitle('Litiges — Supervision admin');
+  const [searchParams, setSearchParams] = useSearchParams();
   const [litiges, setLitiges] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [filtre, setFiltre] = useState<FiltreStatut>('ACCORDS_A_VALIDER');
@@ -77,6 +79,22 @@ export default function AdminLitiges() {
   };
 
   useEffect(() => { charger(); }, []);
+
+  useEffect(() => {
+    const litigeCible = searchParams.get('litige');
+    if (!litigeCible || !litiges.some((litige) => litige.id === litigeCible)) return;
+    setFiltre('TOUS');
+    setExpandedId(litigeCible);
+    requestAnimationFrame(() => {
+      document.querySelector(`[data-litige-id="${litigeCible}"]`)?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'start',
+      });
+    });
+    const suivants = new URLSearchParams(searchParams);
+    suivants.delete('litige');
+    setSearchParams(suivants, { replace: true });
+  }, [litiges, searchParams, setSearchParams]);
 
   const ouvrirResolution = (l: any) => {
     const enrichi: LitigeEnrichi = {

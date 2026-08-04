@@ -317,7 +317,10 @@ function ModaleInviterMembre({ onFermer, onInvite }: { onFermer: () => void; onI
       afficherNotification({ type: 'erreur', message });
       return;
     }
-    afficherNotification({ type: 'succes', message: `Invitation envoyée à ${email}.` });
+    afficherNotification({
+      type: 'succes',
+      message: `Invitation créée pour ${email}. L’e-mail est en cours d’envoi.`,
+    });
     onInvite();
   }
 

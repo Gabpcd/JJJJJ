@@ -3,6 +3,7 @@ import {
   libelleLienSourceModeExercice,
   liensSourcesModeExercice,
   liberalEstProposable,
+  liberalEstSelectionnable,
   paramsModeExerciceMission,
   type ModeExerciceMission,
 } from '../modeExerciceMission';
@@ -29,6 +30,20 @@ describe('matrice des modes d’exercice par mission', () => {
     expect(liberalEstProposable({ ...base, niveau: 'NON_PROPOSE' })).toBe(false);
     expect(liberalEstProposable({ ...base, niveau: 'BLOQUE' })).toBe(false);
     expect(liberalEstProposable(null)).toBe(false);
+  });
+
+  it('laisse le choix à l’établissement pour NON_PROPOSE et bloque seulement BLOQUE', () => {
+    const base = {
+      categorie: 'prive',
+      source_libelle: 'source',
+      source_force: 'CONFORMITE_JOLENE',
+      source_url: null,
+    } as const;
+
+    expect(liberalEstSelectionnable({ ...base, niveau: 'AUTORISE' })).toBe(true);
+    expect(liberalEstSelectionnable({ ...base, niveau: 'NON_PROPOSE' })).toBe(true);
+    expect(liberalEstSelectionnable({ ...base, niveau: 'BLOQUE' })).toBe(false);
+    expect(liberalEstSelectionnable(null)).toBe(false);
   });
 
   it('transmet la catégorie publique au serveur sans règle métier cliente', () => {

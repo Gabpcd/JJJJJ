@@ -7,7 +7,10 @@ import { SelectProfession } from '@/components/SelectProfession';
 import { SelectSpecialiteMedicale } from '@/components/SelectSpecialiteMedicale';
 import { WarningRist } from '@/components/WarningRist';
 import { useModeExerciceMission } from '@/hooks/useModeExerciceMission';
-import { liberalEstProposable, liensSourcesModeExercice } from '@/lib/modeExerciceMission';
+import {
+  liberalEstSelectionnable,
+  liensSourcesModeExercice,
+} from '@/lib/modeExerciceMission';
 import { professionMissionExigeSpecialisationExacte } from '@/lib/profession-hierarchy';
 import { EncartCommissionDegressif } from '@/components/EncartCommissionDegressif';
 import { ModalCodeTravail } from '@/components/ModalCodeTravail';
@@ -137,20 +140,20 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
     loading: modeExerciceLoading,
     error: modeExerciceError,
   } = useModeExerciceMission(profession, etablissementType, estSecteurPublic);
-  const liberalAutoriseMission = liberalEstProposable(modeExerciceMission);
+  const liberalSelectionnableMission = liberalEstSelectionnable(modeExerciceMission);
   const sourcesModeExerciceMission = modeExerciceMission
     ? liensSourcesModeExercice(modeExerciceMission)
     : [];
 
   useEffect(() => {
     if (!profession || !etablissementType || modeExerciceLoading) return;
-    if (modeExerciceError || (modeExerciceMission && !liberalAutoriseMission)) {
+    if (modeExerciceError || (modeExerciceMission && !liberalSelectionnableMission)) {
       setContratPreference('SALARIE');
     }
   }, [
     profession,
     etablissementType,
-    liberalAutoriseMission,
+    liberalSelectionnableMission,
     modeExerciceError,
     modeExerciceLoading,
     modeExerciceMission,
@@ -482,7 +485,7 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
     && !loading;
 
   // Sprint 7 PR 1 — Données récap pour le modal (P1-4)
-  const liberalRestreint = !!modeExerciceMission && !liberalAutoriseMission;
+  const liberalRestreint = !!modeExerciceMission && !liberalSelectionnableMission;
   const recapData: RecapMissionData = {
     intitule,
     description,
@@ -646,7 +649,7 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
                 { value: 'SALARIE' as const, label: 'Salarié', desc: 'Vous êtes l’employeur : CDD, bulletin de paie, plafond légal 48 h/semaine' },
                 { value: 'LIBERAL' as const, label: 'Libéral', desc: 'Honoraires facturés via la plateforme — pas de plafond horaire' },
               ]).filter(opt => {
-                return liberalAutoriseMission || opt.value === 'SALARIE';
+                return liberalSelectionnableMission || opt.value === 'SALARIE';
               }).map(opt => (
               <label key={opt.value} className="flex items-start gap-3 cursor-pointer group">
                 <input
@@ -663,13 +666,11 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
               ))}
               </>
             )}
-            {profession && etablissementType && modeExerciceMission && !liberalAutoriseMission && (
+            {profession && etablissementType && modeExerciceMission?.niveau === 'BLOQUE' && (
               <div className="text-xs text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 rounded-lg p-3 mt-2">
                 <strong>
                   <Info aria-hidden="true" className="inline-block h-3.5 w-3.5 mr-1 -mt-0.5" />
-                  {modeExerciceMission.niveau === 'BLOQUE'
-                    ? 'Mode libéral non disponible'
-                    : 'Mission proposée en salarié'}
+                  Mode libéral non disponible
                 </strong>
                 <p className="mt-1">{modeExerciceMission.source_libelle}</p>
                 {sourcesModeExerciceMission.length > 0 && (
@@ -697,9 +698,7 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
                 </button>
                 {explicationModeOuverte && (
                   <p className="mt-2 border-t border-amber-200 pt-2 dark:border-amber-900">
-                    {modeExerciceMission.niveau === 'BLOQUE'
-                      ? "Le mode libéral est exclu ici par la règle professionnelle ou le type de structure indiqué dans la source ci-dessus. Pour les spécialités concernées, une mission IADE ou IBODE exige la profession spécialisée correspondante."
-                      : "Ce n’est pas une interdiction générale faite aux cliniques. Jolene recommande le salariat lorsque les conditions concrètes de la mission (organisation, horaires imposés et lien de subordination) pourraient conduire à une requalification. La règle dépend de la profession demandée et du cadre réel de la mission, pas du seul nom de la structure."}
+                    Le mode libéral est exclu ici par la règle professionnelle ou le type de structure indiqué dans la source ci-dessus. Pour les spécialités concernées, une mission IADE ou IBODE exige la profession spécialisée correspondante.
                   </p>
                 )}
               </div>
