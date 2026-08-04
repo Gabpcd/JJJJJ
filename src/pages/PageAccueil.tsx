@@ -90,7 +90,7 @@ function RevealOnScroll({ children, className = '', delay = 0 }: { children: Rea
 
 /* ─── FAQ data ─── */
 const faqData = [
-  { q: 'Comment fonctionne la commission ?', a: 'Jolene facture à l\'établissement une commission de 15 % calculée sur la rémunération brute totale due au soignant (base, majorations et indemnités le cas échéant ; taux négocié possible pour les groupes). Aucun frais pour le soignant.' },
+  { q: 'Comment fonctionne la commission ?', a: 'Jolene facture à l\'établissement une commission de 15 % HT sur la rémunération brute totale due au soignant, soit 18 % TTC avec la TVA de 20 % (base, majorations et indemnités le cas échéant ; taux HT négocié possible pour les groupes). Aucun frais pour le soignant.' },
   { q: 'Jolene est-il une agence d\'intérim ?', a: 'Non. Jolene est une plateforme de mise en relation. Le contrat est signé directement entre l\'établissement et le soignant. Nous ne sommes pas employeur.' },
   { q: 'Comment sont vérifiés les soignants ?', a: 'La vérification est automatique : identité professionnelle, numéro RPPS lorsqu’il existe, diplôme et pièces requises pour le contrat de la mission sont contrôlés. L’assurance RCP est demandée pour les missions libérales.' },
   { q: 'Quels types de contrats sont générés ?', a: 'La plateforme génère automatiquement des CDD, y compris des CDD courts, signés électroniquement par les deux parties. Le libéral n’est proposé que pour les missions explicitement ouvertes par la matrice profession × établissement.' },

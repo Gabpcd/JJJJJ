@@ -390,6 +390,8 @@ export default function DashboardEtablissement() {
   });
 
   const etab = useMemo(() => dashData?.etab ?? null, [dashData]);
+  const tauxCommissionHt = Number(etab?.taux_commission_negocie ?? 15);
+  const formatTaux = (valeur: number) => new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 2 }).format(valeur);
   const missions = useMemo(() => dashData?.missions ?? [], [dashData]);
   const aDejaPublie = useMemo(() => dashData?.aDejaPublie ?? null, [dashData]);
   const paliers = useMemo(() => dashData?.paliers ?? [], [dashData]);
@@ -791,7 +793,8 @@ export default function DashboardEtablissement() {
               </button>
             </div>
             <div className="text-right">
-              <p className="text-lg font-bold text-primary">{etab.taux_commission_negocie ?? 15}%</p>
+              <p className="text-lg font-bold text-primary">{formatTaux(tauxCommissionHt)} % HT</p>
+              <p className="text-xs text-muted-foreground">{formatTaux(tauxCommissionHt * 1.2)} % TTC</p>
             </div>
           </div>
         </div>

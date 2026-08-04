@@ -68,7 +68,7 @@ function BandeauCompletionProfil({ resume }: { resume: ResumeCompletion }) {
           <CheckCircle2 className="h-5 w-5 text-success shrink-0" />
           <div>
             <p className="text-sm font-semibold text-success">Profil complet à 100%</p>
-            <p className="text-xs text-muted-foreground">Toutes les informations sont renseignées.</p>
+            <p className="text-xs text-muted-foreground">Toutes les informations du profil sont renseignées.</p>
           </div>
         </div>
       </div>

@@ -6,8 +6,8 @@ import { ShieldCheck, Scale, PercentCircle, Receipt, PlusCircle, UserCheck, File
 
 const FAQ = [
   { q: "Jolene Santé est-elle une agence d'intérim ?", r: "Non. Jolene Santé est une plateforme de mise en relation directe : vous publiez votre besoin, des soignants vérifiés candidatent, et vous contractualisez directement avec eux. Pas de marge d'agence." },
-  { q: "Combien coûte le service ?", r: "15 % de commission tout compris sur le montant de la mission, sans abonnement ni frais d'entrée. Vous ne payez que lorsque vous recrutez." },
-  { q: "Comment les soignants sont-ils vérifiés ?", r: "Chaque soignant fournit son diplôme, son numéro RPPS et son assurance responsabilité civile professionnelle, contrôlés avant toute mise en relation." },
+  { q: "Combien coûte le service ?", r: "15 % HT de commission sur le montant de la mission, soit 18 % TTC avec la TVA de 20 %, sans abonnement ni frais d'entrée. Vous ne payez que lorsque vous recrutez." },
+  { q: "Comment les soignants sont-ils vérifiés ?", r: "L'identité et les qualifications professionnelles sont contrôlées pour tous les soignants, notamment via le RPPS lorsqu'il existe. Les justificatifs propres au libéral, comme la RCP, ne sont demandés que pour les missions libérales." },
   { q: "Quels types de contrats sont possibles ?", r: "Selon la mission : CDD, y compris CDD court, ou exercice libéral lorsqu'il est explicitement proposé. Les contrats sont générés automatiquement et les démarches administratives facilitées." },
   { q: "Quelles professions puis-je recruter ?", r: "Infirmiers (IDE), aides-soignants (AS et AES), kinésithérapeutes, pharmaciens, préparateurs en pharmacie, sages-femmes et d'autres professions de santé." },
   { q: "Suis-je engagé sur la durée ?", r: "Non, aucun engagement ni abonnement. Vous publiez un besoin uniquement lorsque vous en avez un." },
@@ -26,7 +26,7 @@ const faqJsonLd = {
 const garanties = [
   { icon: ShieldCheck, titre: 'Profil vérifié', desc: 'Identité professionnelle, diplôme, RPPS lorsqu’il existe et pièces requises par le contrat sont contrôlés.' },
   { icon: Scale, titre: 'Conformité Code du Travail', desc: 'Contrats CDD, y compris courts, générés automatiquement, durées maximales respectées et repos obligatoires vérifiés.' },
-  { icon: PercentCircle, titre: 'Tarification transparente', desc: 'Commission unique de 15 % sur le montant de la mission. Aucun abonnement, aucun frais caché.' },
+  { icon: PercentCircle, titre: 'Tarification transparente', desc: 'Commission de 15 % HT, soit 18 % TTC avec la TVA de 20 %, sur le montant de la mission. Aucun abonnement.' },
   { icon: Receipt, titre: 'Facturation automatique', desc: 'Factures mensuelles consolidées, compatibles Chorus Pro pour le secteur public. Paiement par carte ou virement.' },
 ];
 
@@ -43,7 +43,7 @@ export default function RecruterSoignants() {
     <>
       <SEOHead
         title="Recruter des soignants qualifiés | Jolene Santé"
-        description="Recrutez infirmiers, aides-soignants et professionnels de santé vérifiés RPPS pour vos remplacements. Commission 15 %, contrats et facturation automatiques."
+        description="Recrutez infirmiers, aides-soignants et professionnels de santé vérifiés pour vos remplacements. Commission 15 % HT (18 % TTC), contrats et facturation automatiques."
         url="https://jolene.app/recruter-soignants"
         jsonLd={faqJsonLd}
       />
@@ -70,7 +70,7 @@ export default function RecruterSoignants() {
               <div className="bg-primary/5 border border-primary/20 rounded-xl p-6">
                 <h3 className="font-semibold text-primary mb-3">✅ La solution Jolene</h3>
                 <ul className="space-y-2 text-sm text-muted-foreground">
-                  <li>• Commission unique de 15 %, sans abonnement</li>
+                  <li>• Commission de 15 % HT (18 % TTC), sans abonnement</li>
                   <li>• Candidatures de soignants vérifiés dès la publication</li>
                   <li>• Contrats et pointage automatisés</li>
                   <li>• Soignants RPPS vérifiés</li>
@@ -121,7 +121,7 @@ export default function RecruterSoignants() {
           <div className="max-w-3xl mx-auto px-4 text-center">
             <h2 className="text-2xl md:text-3xl font-bold text-foreground mb-4">Tarification transparente</h2>
             <p className="text-muted-foreground mb-8">
-              Une commission unique de 15 % sur le montant de la mission — taux négocié possible pour les groupes. Aucun abonnement, aucun frais caché.
+              Une commission de 15 % HT, soit 18 % TTC avec la TVA de 20 %, sur le montant de la mission — taux HT négocié possible pour les groupes. Aucun abonnement.
             </p>
             <button
               onClick={() => navigate('/tarifs')}

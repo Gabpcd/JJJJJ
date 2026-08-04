@@ -191,6 +191,6 @@ describe('DecompositionFinanciere avant attribution', () => {
       element?.textContent?.replace(/\s+/g, ' ').trim() === attendu;
     expect(screen.getByText(texteExact('180,00 € TTC'))).toBeInTheDocument();
     expect(screen.getByText(texteExact('150,00 € HT + TVA 20 %'))).toBeInTheDocument();
-    expect(screen.getByText(texteExact('Calcul : 12.5% × 1 200,00 € honoraires bruts (taux de commission applicable)'))).toBeInTheDocument();
+    expect(screen.getByText(texteExact('Calcul : 12.5% HT × 1 200,00 € honoraires bruts (taux de commission applicable)'))).toBeInTheDocument();
   });
 });

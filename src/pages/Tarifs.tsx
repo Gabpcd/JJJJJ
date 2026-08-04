@@ -20,8 +20,8 @@ export default function Tarifs() {
   return (
     <>
       <SEOHead
-        title="Tarifs Jolene | Commission unique de 15 %"
-        description="Une commission unique de 15 % sur le montant de la mission, sans abonnement ni frais caché. Taux négocié possible pour les groupes."
+        title="Tarifs Jolene | Commission de 15 % HT (18 % TTC)"
+        description="Une commission de 15 % HT, soit 18 % TTC avec la TVA de 20 %, sur le montant de la mission. Sans abonnement ; taux HT négocié possible pour les groupes."
         url="https://jolene.app/tarifs"
       />
       <div className="min-h-[100dvh] bg-background flex flex-col">
@@ -48,10 +48,11 @@ export default function Tarifs() {
 
           <div className="card-base text-center p-8 md:p-10">
             <p className="text-sm font-semibold uppercase tracking-widest text-muted-foreground mb-2">Commission Jolene</p>
-            <p className="text-6xl font-black text-primary mb-2">15 %</p>
+            <p className="text-6xl font-black text-primary mb-1">15 % HT</p>
+            <p className="text-base font-semibold text-foreground mb-2">soit 18 % TTC avec TVA à 20 %</p>
             <p className="text-sm text-muted-foreground mb-8">
-              du montant brut de la mission, facturée à l'établissement.
-              <br />Taux négocié possible pour les groupes — <a href="mailto:support@jolene.app" className="text-primary underline">contactez-nous</a>.
+              Commission ajoutée au montant brut dû au soignant et facturée à l'établissement.
+              <br />Taux HT négocié possible pour les groupes — <a href="mailto:support@jolene.app" className="text-primary underline">contactez-nous</a>.
             </p>
             <ul className="text-left max-w-md mx-auto space-y-2.5">
               {INCLUS.map((item) => (

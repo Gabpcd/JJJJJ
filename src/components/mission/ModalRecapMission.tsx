@@ -246,7 +246,7 @@ export function ModalRecapMission({
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">
-                  Commission Jolene ({tauxCommission}%)
+                  Commission Jolene ({tauxCommission}% HT)
                 </span>
                 <span className="font-medium text-foreground">
                   +{commissionMontant.toFixed(2)} €

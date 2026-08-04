@@ -1,5 +1,5 @@
 import { supabase } from '@/integrations/supabase/client';
-import { format } from 'date-fns';
+import { differenceInMinutes, format, parseISO } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { toast } from 'sonner';
 import { telechargerOuPartagerPdf } from './telechargement';
@@ -49,17 +49,15 @@ export async function telechargerFactureHonorairesPDF(factureId: string) {
     // PASSE 1 enrichissement : charger tous les champs nécessaires au rendu
     // détaillé (taux majorations figés, taux IFM/ICP, spécialités soignant,
     // créneaux prévisionnels fallback).
-    const [{ data: sg }, { data: etab }, { data: mission }, { data: presences }, { data: creneaux }] = await Promise.all([
+    const [{ data: sg }, etablissementResult, { data: mission }, { data: presences }, { data: creneaux }] = await Promise.all([
       supabase
         .from('soignants')
         .select('prenom, nom, profession, specialites, numero_rpps, numero_adeli, email, telephone, adresse_rue, adresse_code_postal, adresse_ville')
         .eq('id', (f as any).soignant_id)
         .maybeSingle(),
       supabase
-        .from('etablissements')
-        .select('nom, type, adresse_rue, adresse_code_postal, adresse_ville, siret, email_contact')
-        .eq('id', (f as any).etablissement_id)
-        .maybeSingle(),
+        .rpc('fn_etablissement_pour_mission' as any, { p_etablissement_id: (f as any).etablissement_id })
+        .then(({ data, error }) => ({ data: data as any, error })),
       (f as any).mission_id
         ? supabase
             .from('missions')
@@ -85,12 +83,22 @@ export async function telechargerFactureHonorairesPDF(factureId: string) {
       (f as any).mission_id
         ? supabase
             .from('mission_creneaux')
-            .select('debut_le, fin_le, type_creneau, duree_heures')
+            .select('debut, fin, type_creneau, est_pause, ordre')
             .eq('mission_id', (f as any).mission_id)
-            .eq('type_creneau', 'PREVISIONNEL')
-            .order('debut_le', { ascending: true })
+            .eq('est_pause', false)
+            .order('debut', { ascending: true })
         : Promise.resolve({ data: null as any }),
     ]);
+
+    const etab = etablissementResult.data && !(etablissementResult.data as any).error
+      ? {
+          ...(etablissementResult.data as any),
+          siret: (f as any).siret_client || null,
+        }
+      : null;
+    if (!etab?.nom) {
+      throw new Error("Identité de l’établissement indisponible : la facture ne peut pas être générée avec un destinataire incomplet.");
+    }
 
     const { default: jsPDF } = await import('jspdf');
     const autoTableMod = await import('jspdf-autotable');
@@ -135,7 +143,7 @@ export async function telechargerFactureHonorairesPDF(factureId: string) {
       x: 115,
       y: blockY,
       label: 'Facturé à',
-      name: etab?.nom || '(établissement)',
+      name: etab.nom,
       lines: [
         etab?.adresse_rue,
         etab?.adresse_code_postal ? `${etab.adresse_code_postal} ${etab.adresse_ville || ''}` : null,
@@ -178,10 +186,15 @@ export async function telechargerFactureHonorairesPDF(factureId: string) {
       const periodeDebut = (f as any).periode_debut || mission.debut_le;
       const periodeFin = (f as any).periode_fin || mission.fin_le;
       if (periodeDebut && periodeFin) {
-        const debutStr = format(new Date(periodeDebut), "dd/MM/yyyy HH'h'mm", { locale: fr });
-        const finStr = format(new Date(periodeFin), "dd/MM/yyyy HH'h'mm", { locale: fr });
-        const dureeStr = (f as any).periode_debut && (f as any).periode_fin ? '' : (mission.duree_heures ? ` (${Number(mission.duree_heures).toFixed(1)} h)` : '');
-        addInfoRow(doc, PAGE.margin, y, 'Période :', `${debutStr} -> ${finStr}${dureeStr}`, 22);
+        const estPeriodeFacturee = Boolean((f as any).periode_debut && (f as any).periode_fin);
+        const debutStr = estPeriodeFacturee
+          ? format(parseISO(String(periodeDebut).slice(0, 10)), 'dd/MM/yyyy', { locale: fr })
+          : format(new Date(periodeDebut), "dd/MM/yyyy HH'h'mm", { locale: fr });
+        const finStr = estPeriodeFacturee
+          ? format(parseISO(String(periodeFin).slice(0, 10)), 'dd/MM/yyyy', { locale: fr })
+          : format(new Date(periodeFin), "dd/MM/yyyy HH'h'mm", { locale: fr });
+        const dureeStr = estPeriodeFacturee ? ' (dates incluses)' : (mission.duree_heures ? ` (${Number(mission.duree_heures).toFixed(1)} h)` : '');
+        addInfoRow(doc, PAGE.margin, y, estPeriodeFacturee ? 'Période facturée :' : 'Période :', `du ${debutStr} au ${finStr}${dureeStr}`, 30);
         y += 5;
       }
       y += 3;
@@ -196,10 +209,18 @@ export async function telechargerFactureHonorairesPDF(factureId: string) {
       return valeur >= debutFacture.getTime() && valeur <= finFacture.getTime();
     };
     const presList = ((presences as any[] | null) || []).filter((p) => dansPeriodeFacturee(p.pointage_arrivee_le));
-    const creneauxList = ((creneaux as any[] | null) || []).filter((c) => dansPeriodeFacturee(c.debut_le));
+    const tousCreneaux = ((creneaux as any[] | null) || []).filter((c) => dansPeriodeFacturee(c.debut));
+    const creneauxEffectifs = tousCreneaux.filter((c) => c.type_creneau === 'EFFECTIF');
+    const creneauxList = creneauxEffectifs.length > 0
+      ? creneauxEffectifs
+      : tousCreneaux.filter((c) => c.type_creneau === 'PREVISIONNEL');
+    const creneauxSontEffectifs = creneauxEffectifs.length > 0;
     const heuresFacturees = presList.length > 0
       ? presList.reduce((total, p) => total + Number(p.heures_reelles || 0), 0)
-      : creneauxList.reduce((total, c) => total + Number(c.duree_heures || 0), 0);
+      : creneauxList.reduce((total, c) => {
+          if (!c.debut || !c.fin) return total;
+          return total + Math.max(0, differenceInMinutes(new Date(c.fin), new Date(c.debut)) / 60);
+        }, 0);
     if (presList.length > 0) {
       y = createSectionTitle(doc, y, 'Détail des pointages');
       autoTable(doc, {
@@ -225,20 +246,22 @@ export async function telechargerFactureHonorairesPDF(factureId: string) {
       });
       y = (doc as any).lastAutoTable?.finalY ? (doc as any).lastAutoTable.finalY + 6 : y + 30;
     } else if (creneauxList.length > 0) {
-      y = createSectionTitle(doc, y, 'Créneaux prévisionnels');
+      y = createSectionTitle(doc, y, creneauxSontEffectifs ? 'Créneaux réalisés' : 'Créneaux prévisionnels');
       doc.setTextColor(...JOLENE_COLORS.textMuted);
       doc.setFont('helvetica', 'italic');
       doc.setFontSize(7);
-      doc.text(sanitizeForPdf('Aucun pointage enregistre - creneaux previsionnels :'), PAGE.margin, y);
+      doc.text(sanitizeForPdf(creneauxSontEffectifs
+        ? 'Aucun pointage horodaté - créneaux réalisés enregistrés :'
+        : 'Aucun pointage horodaté - créneaux prévisionnels utilisés :'), PAGE.margin, y);
       y += 3;
       autoTable(doc, {
         startY: y,
-        head: [['Date', 'Début', 'Fin', 'Durée prév.']],
+        head: [['Date', 'Début', 'Fin', 'Durée']],
         body: creneauxList.map((c) => [
-          c.debut_le ? format(new Date(c.debut_le), 'dd/MM/yyyy', { locale: fr }) : '-',
-          c.debut_le ? format(new Date(c.debut_le), "HH'h'mm", { locale: fr }) : '-',
-          c.fin_le ? format(new Date(c.fin_le), "HH'h'mm", { locale: fr }) : '-',
-          c.duree_heures ? `${Number(c.duree_heures).toFixed(1)} h` : '-',
+          c.debut ? format(new Date(c.debut), 'dd/MM/yyyy', { locale: fr }) : '-',
+          c.debut ? format(new Date(c.debut), "HH'h'mm", { locale: fr }) : '-',
+          c.fin ? format(new Date(c.fin), "HH'h'mm", { locale: fr }) : '-',
+          c.debut && c.fin ? `${Math.max(0, differenceInMinutes(new Date(c.fin), new Date(c.debut)) / 60).toFixed(1)} h` : '-',
         ]),
         styles: { fontSize: 7.5, cellPadding: 1.5, textColor: JOLENE_COLORS.textMuted as any },
         headStyles: { fillColor: JOLENE_COLORS.border as any, textColor: JOLENE_COLORS.text as any, fontStyle: 'bold' },
@@ -338,7 +361,7 @@ export async function telechargerFactureHonorairesPDF(factureId: string) {
       const facturePartielle = Math.abs(totalBrut - totalBrutMission) > 0.01;
       const detailHeures = heuresFacturees > 0
         ? `${heuresFacturees.toFixed(1)} h x ${tauxHoraireLib.toFixed(2)} E/h`
-        : 'Période facturée';
+        : `du ${format(parseISO(String((f as any).periode_debut).slice(0, 10)), 'dd/MM/yyyy')} au ${format(parseISO(String((f as any).periode_fin).slice(0, 10)), 'dd/MM/yyyy')}`;
       const rows: (string | number)[][] = facturePartielle
         ? [['Honoraires de la période', detailHeures, fmtEur(totalBrut)]]
         : [['Brut de base', `${mission.duree_heures || 0} h x ${tauxHoraireLib.toFixed(2)} E/h`, fmtEur(totalBrut - majorations)]];

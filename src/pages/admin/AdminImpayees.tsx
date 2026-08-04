@@ -425,7 +425,7 @@ export default function AdminImpayees() {
                             <p className="font-medium text-foreground">{fmtDate(f.periode_debut)} → {fmtDate(f.periode_fin)}</p>
                           </div>
                           <div>
-                            <p className="text-xs text-muted-foreground">Taux commission</p>
+                            <p className="text-xs text-muted-foreground">Taux commission HT</p>
                             <p className="font-medium text-foreground">{f.etablissement?.taux_commission_negocie ?? 15}%</p>
                           </div>
                         </div>

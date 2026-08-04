@@ -33,7 +33,7 @@ interface Etablissement {
 const SOURCE_LABEL: Record<Etablissement['taux_resolu_source'], string> = {
   etablissement: 'Étab',
   groupe: 'Groupe',
-  defaut_15: 'Défaut 15%',
+  defaut_15: 'Défaut 15 % HT',
 };
 
 const SOURCE_COLOR: Record<Etablissement['taux_resolu_source'], string> = {
@@ -134,7 +134,7 @@ export default function AdminTauxCommission() {
     charger();
   };
 
-  const fmtTaux = (t: number | null) => t == null ? '—' : `${Number(t).toFixed(2)} %`;
+  const fmtTaux = (t: number | null) => t == null ? '—' : `${Number(t).toFixed(2)} % HT`;
 
   if (loading) {
     return (
@@ -153,7 +153,8 @@ export default function AdminTauxCommission() {
             <Layers className="h-6 w-6 text-primary" /> Taux de commission
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Cascade : <strong>établissement</strong> &gt; <strong>groupe</strong> &gt; défaut 15 %.
+            Les taux saisis sont <strong>HT</strong> ; la TVA de 20 % est ajoutée à la facture (15 % HT = 18 % TTC).
+            {' '}Cascade : <strong>établissement</strong> &gt; <strong>groupe</strong> &gt; défaut 15 % HT.
             Les modifications n'impactent que les <strong>futures missions assignées</strong> (les missions
             déjà gelées conservent leur taux historique).
           </p>
@@ -181,7 +182,7 @@ export default function AdminTauxCommission() {
                     <p className="text-lg font-bold text-foreground">{fmtTaux(g.taux_commission_negocie)}</p>
                     {g.taux_commission_negocie == null && (
                       <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
-                        Défaut 15%
+                        Défaut 15 % HT
                       </span>
                     )}
                   </div>
@@ -261,7 +262,7 @@ export default function AdminTauxCommission() {
               Le nouveau taux ne s'appliquera qu'aux <strong>missions assignées après cette modification</strong>.
             </p>
             <div>
-              <label htmlFor="admin-taux-nouveau" className="text-sm font-medium text-foreground mb-1.5 block">Nouveau taux (%)</label>
+              <label htmlFor="admin-taux-nouveau" className="text-sm font-medium text-foreground mb-1.5 block">Nouveau taux HT (%)</label>
               <input
                 id="admin-taux-nouveau"
                 type="number"
@@ -270,11 +271,11 @@ export default function AdminTauxCommission() {
                 max="100"
                 value={nouveauTaux}
                 onChange={e => setNouveauTaux(e.target.value)}
-                placeholder="Vide pour utiliser la cascade (groupe ou défaut 15 %)"
+                placeholder="Vide pour utiliser la cascade (groupe ou défaut 15 % HT)"
                 className="input-base"
               />
               <p className="text-[10px] text-muted-foreground mt-1">
-                Laisser vide pour effacer (cascade : {editing.kind === 'etab' ? 'remontera vers le groupe ou défaut 15%' : 'établissements basculeront sur le défaut 15%'}).
+                Laisser vide pour effacer (cascade : {editing.kind === 'etab' ? 'remontera vers le groupe ou défaut 15 % HT' : 'établissements basculeront sur le défaut 15 % HT'}).
               </p>
             </div>
             <div>

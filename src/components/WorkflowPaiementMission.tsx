@@ -411,7 +411,7 @@ export function WorkflowPaiementMission({ missionId, soignantAssigneId, etabliss
                 Montant débité : <span className="text-foreground font-semibold">{fmt(p.montant_net + info.commission_ttc)}</span>
               </p>
               <p className="text-[10px] text-muted-foreground/80 pl-1">
-                = {fmt(p.montant_net)} honoraires soignant + {fmt(info.commission_ttc)} commission Jolene
+                = {fmt(p.montant_net)} honoraires soignant + {fmt(info.commission_ttc)} commission Jolene TTC
               </p>
             </>
           ) : (
@@ -482,7 +482,7 @@ export function WorkflowPaiementMission({ missionId, soignantAssigneId, etabliss
           )}
         </p>
         <div className="text-xs space-y-1">
-          <p className="text-muted-foreground">Commission Jolene : <span className="text-foreground font-medium">{fmt(stripeTransfer.montant_commission)}</span></p>
+          <p className="text-muted-foreground">Commission Jolene TTC : <span className="text-foreground font-medium">{fmt(stripeTransfer.montant_commission)}</span></p>
           <p className="text-muted-foreground">Honoraires soignant : <span className="text-foreground font-medium">{fmt(stripeTransfer.montant_soignant)}</span></p>
           <p className="text-muted-foreground">Total : <span className="text-foreground font-semibold">{fmt(stripeTransfer.montant_total)}</span></p>
           {stripeTransfer.charge_le && (
@@ -508,7 +508,7 @@ export function WorkflowPaiementMission({ missionId, soignantAssigneId, etabliss
           <CreditCard className="h-4 w-4 text-primary" /> Paiement Stripe Connect
         </p>
         <div className="text-xs text-muted-foreground space-y-1">
-          <p>Commission Jolene : {fmt(info.commission_ttc)}</p>
+          <p>Commission Jolene TTC : {fmt(info.commission_ttc)}</p>
           <p>Honoraires soignant : {fmt(info.montant_soignant)}</p>
           <p className="font-semibold text-foreground">Total : {fmt(info.total)}</p>
         </div>

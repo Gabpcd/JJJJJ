@@ -206,7 +206,7 @@ function MissionDetail({ mission }: { mission: any }) {
             </h4>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-1.5 text-xs">
               <div className="flex justify-between">
-                <span className="text-muted-foreground">Taux</span>
+                <span className="text-muted-foreground">Taux HT</span>
                 <span className="font-medium">{Number(mission.taux_commission ?? 15)}%</span>
               </div>
               <div className="flex justify-between">

@@ -22,8 +22,9 @@ export function BlocagePostulation({ completionProfil, documentsValides, mission
   const navigate = useNavigate();
 
   const missionSous7Jours = !!missionDebutLe && (new Date(missionDebutLe).getTime() - Date.now() < SEPT_JOURS_MS);
+  const profilBloquant = completionProfil < 100 && (champsManquants?.length ?? 0) > 0;
 
-  if (completionProfil >= 100 && documentsValides) {
+  if (!profilBloquant && documentsValides) {
     return (
       <div className="space-y-2 mb-4">
         <div className="flex items-center gap-2 text-sm text-success">
@@ -38,7 +39,7 @@ export function BlocagePostulation({ completionProfil, documentsValides, mission
 
   return (
     <div className="space-y-3 mb-4">
-      {completionProfil < 100 && (
+      {profilBloquant && (
         <div className="bg-warning/5 border border-warning/20 rounded-xl p-4">
           <div className="flex items-start gap-3">
             <AlertTriangle className="h-5 w-5 text-warning shrink-0 mt-0.5" />
@@ -47,7 +48,7 @@ export function BlocagePostulation({ completionProfil, documentsValides, mission
               <p className="text-xs text-muted-foreground mt-1">
                 {champsManquants && champsManquants.length > 0
                   ? `Il te reste à compléter : ${champsManquants.join(', ')}.`
-                  : 'Complète tes informations essentielles pour pouvoir postuler.'}
+                  : 'Complète les informations requises pour pouvoir postuler.'}
               </p>
               <button onClick={() => navigate('/soignant/profil')} className="text-xs text-primary font-medium mt-2 hover:underline">
                 Compléter mon profil →
@@ -68,6 +69,9 @@ export function BlocagePostulation({ completionProfil, documentsValides, mission
                 {missionSous7Jours
                   ? 'Cette mission démarre bientôt : l\'établissement ne pourra t\'accepter qu\'une fois tes documents validés (vérification automatique en quelques minutes). Prends 2 minutes maintenant.'
                   : 'Ta candidature partira normalement. Valide tes documents pour pouvoir être accepté (vérification automatique en quelques minutes).'}
+              </p>
+              <p className="text-[11px] text-muted-foreground mt-1">
+                Les justificatifs propres au libéral (RCP, URSSAF…) ne sont demandés que pour un parcours libéral.
               </p>
               <button onClick={() => navigate('/soignant/mes-documents')} className="text-xs text-primary font-medium mt-2 hover:underline">
                 Valider mes documents →

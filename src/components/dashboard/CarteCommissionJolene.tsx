@@ -93,7 +93,7 @@ export function CarteCommissionJolene({ etablissementId }: { etablissementId: st
               }`}
             >
               <span className="block font-medium">{p.nom}</span>
-              <span className="block text-[10px] opacity-80">{p.taux_commission}%</span>
+              <span className="block text-[10px] opacity-80">{p.taux_commission}% HT</span>
               <span className="block text-[9px] opacity-60">
                 {p.missions_max ? `${p.missions_min}-${p.missions_max}` : `${p.missions_min}+`}
               </span>

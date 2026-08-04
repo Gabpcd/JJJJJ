@@ -18,6 +18,14 @@ import { useEtablissementScope } from '@/hooks/useEtablissementScope';
 
 const FILTRES_STATUT = ['Tous', 'EN_ATTENTE_SIGNATURES', 'SIGNE_COMPLET', 'ANNULE'] as const;
 
+export function contratCorrespondAuFiltre(statut: string, filtre: string): boolean {
+  if (filtre === 'Tous') return true;
+  if (filtre === 'EN_ATTENTE_SIGNATURES') {
+    return statut !== 'SIGNE_COMPLET' && statut !== 'ANNULE' && statut !== 'EXPIRE' && statut !== 'REFUSE';
+  }
+  return statut === filtre;
+}
+
 export default function ListeContrats({ role }: { role: UserRole }) {
   usePageTitle('Contrats');
   return (
@@ -60,7 +68,7 @@ export function ListeContratsContent({ role }: { role: UserRole }) {
     setFiltre('Tous');
   }, [statutParam]);
 
-  const filtered = filtre === 'Tous' ? contrats : contrats.filter(c => c.statut === filtre);
+  const filtered = contrats.filter(c => contratCorrespondAuFiltre(c.statut, filtre));
 
   if (loading) return <ChargementPage />;
 
