@@ -41,6 +41,12 @@ jobs:
   e2e-pr:
     name: Playwright E2E (PR — Chromium)
     if: github.event_name == 'pull_request'
+    env:
+      # La PR précède nécessairement le déploiement de ses migrations. Ces
+      # replis sont limités à ce job PR et hérités par ses trois invocations
+      # Playwright (smoke iPad, suite Chromium et diagnostic a11y).
+      E2E_ALLOW_PGRST202_ELIGIBILITY_FALLBACK: 'true'
+      E2E_ALLOW_FROZEN_TEST_QUARANTINE: 'true'
     runs-on: ubuntu-latest
     # Conteneur officiel Playwright : navigateurs + dépendances système
     # préinstallés. Indispensable : `npx playwright install --with-deps`
@@ -155,8 +161,6 @@ jobs:
           SUPABASE_PUBLISHABLE_KEY: ${{ env.E2E_PUBLISHABLE_KEY }}
           SUPABASE_ANON_KEY: ${{ env.E2E_ANON_KEY }}
           PLAYWRIGHT_TEST_PASSWORD: ${{ env.E2E_TEST_PASSWORD }}
-          E2E_ALLOW_PGRST202_ELIGIBILITY_FALLBACK: 'true'
-          E2E_ALLOW_FROZEN_TEST_QUARANTINE: 'true'
           CI: 'true'
       - name: Run Playwright tests (chromium)
         id: playwright-tests
@@ -171,8 +175,6 @@ jobs:
           SUPABASE_PUBLISHABLE_KEY: ${{ env.E2E_PUBLISHABLE_KEY }}
           SUPABASE_ANON_KEY: ${{ env.E2E_ANON_KEY }}
           PLAYWRIGHT_TEST_PASSWORD: ${{ env.E2E_TEST_PASSWORD }}
-          E2E_ALLOW_PGRST202_ELIGIBILITY_FALLBACK: 'true'
-          E2E_ALLOW_FROZEN_TEST_QUARANTINE: 'true'
           CI: 'true'
       - name: Détail a11y si échec (rapport court en fin de log)
         if: failure() && steps.playwright-tests.outcome == 'failure'
@@ -183,8 +185,6 @@ jobs:
           SUPABASE_PUBLISHABLE_KEY: ${{ env.E2E_PUBLISHABLE_KEY }}
           SUPABASE_ANON_KEY: ${{ env.E2E_ANON_KEY }}
           PLAYWRIGHT_TEST_PASSWORD: ${{ env.E2E_TEST_PASSWORD }}
-          E2E_ALLOW_PGRST202_ELIGIBILITY_FALLBACK: 'true'
-          E2E_ALLOW_FROZEN_TEST_QUARANTINE: 'true'
           CI: 'true'
       - name: Upload report
         if: ${{ !cancelled() }}
