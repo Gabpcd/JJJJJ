@@ -140,7 +140,7 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
     loading: modeExerciceLoading,
     error: modeExerciceError,
   } = useModeExerciceMission(profession, etablissementType, estSecteurPublic);
-  const liberalSelectionnableMission = liberalEstSelectionnable(modeExerciceMission);
+  const liberalSelectionnableMission = liberalEstSelectionnable(modeExerciceMission, profession);
   const sourcesModeExerciceMission = modeExerciceMission
     ? liensSourcesModeExercice(modeExerciceMission)
     : [];

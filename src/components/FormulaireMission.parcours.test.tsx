@@ -199,7 +199,7 @@ describe('FormulaireMission — parcours de création critique', () => {
         p_profession_requise: 'IDE',
         p_service: 'Soins continus',
         p_taux_horaire_base: 32,
-        p_type_contrat_recherche: 'SALARIE',
+        p_type_contrat_recherche: 'TOUS',
         p_creneaux: [expect.objectContaining({
           debut: expect.stringContaining('2099-08-03'),
           fin: expect.stringContaining('2099-08-03'),

@@ -17,6 +17,7 @@ describe('régressions critiques avant publication', () => {
     expect(formulaire).toContain("modeExerciceMission?.niveau === 'BLOQUE'");
     expect(migration).not.toContain("v_mode->>'niveau' <> 'AUTORISE'");
     expect(migration.match(/v_mode->>'niveau', 'BLOQUE'\) = 'BLOQUE'/g)).toHaveLength(3);
+    expect(migration.match(/IN \('IADE', 'IBODE'\)/g)).toHaveLength(3);
   });
 
   it('met réellement les invitations manuelles en file et rattrape la récente', () => {

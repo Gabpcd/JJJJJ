@@ -29,7 +29,13 @@ BEGIN
   );
 
   IF NEW.type_contrat_recherche IN ('LIBERAL', 'TOUS')
-     AND COALESCE(v_mode->>'niveau', 'BLOQUE') = 'BLOQUE' THEN
+     AND (
+       COALESCE(v_mode->>'niveau', 'BLOQUE') = 'BLOQUE'
+       OR (
+         NEW.profession_requise::text IN ('IADE', 'IBODE')
+         AND COALESCE(v_mode->>'niveau', 'NON_PROPOSE') <> 'AUTORISE'
+       )
+     ) THEN
     NEW.type_contrat_recherche := 'SALARIE';
   END IF;
 
@@ -210,7 +216,11 @@ BEGIN
         ELSE NULL
       END
     );
-    IF COALESCE(v_mode->>'niveau', 'BLOQUE') = 'BLOQUE' THEN
+    IF COALESCE(v_mode->>'niveau', 'BLOQUE') = 'BLOQUE'
+       OR (
+         v_mission.profession_requise::text IN ('IADE', 'IBODE')
+         AND COALESCE(v_mode->>'niveau', 'NON_PROPOSE') <> 'AUTORISE'
+       ) THEN
       RETURN jsonb_build_object(
         'ok', false,
         'error', COALESCE(
@@ -287,7 +297,11 @@ BEGIN
     v_etablissement.type_etablissement,
     CASE WHEN v_etablissement.est_public THEN 'PUBLIC' ELSE NULL END
   );
-  IF COALESCE(v_mode->>'niveau', 'BLOQUE') = 'BLOQUE' THEN
+  IF COALESCE(v_mode->>'niveau', 'BLOQUE') = 'BLOQUE'
+     OR (
+       NEW.profession_requise::text IN ('IADE', 'IBODE')
+       AND COALESCE(v_mode->>'niveau', 'NON_PROPOSE') <> 'AUTORISE'
+     ) THEN
     RAISE EXCEPTION '%', COALESCE(
       v_mode->>'source_libelle',
       'Le mode liberal est indisponible pour cette mission.'

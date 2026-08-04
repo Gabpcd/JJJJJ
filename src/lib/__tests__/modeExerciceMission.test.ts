@@ -42,6 +42,8 @@ describe('matrice des modes d’exercice par mission', () => {
 
     expect(liberalEstSelectionnable({ ...base, niveau: 'AUTORISE' })).toBe(true);
     expect(liberalEstSelectionnable({ ...base, niveau: 'NON_PROPOSE' })).toBe(true);
+    expect(liberalEstSelectionnable({ ...base, niveau: 'NON_PROPOSE' }, 'IADE')).toBe(false);
+    expect(liberalEstSelectionnable({ ...base, niveau: 'NON_PROPOSE' }, 'IBODE')).toBe(false);
     expect(liberalEstSelectionnable({ ...base, niveau: 'BLOQUE' })).toBe(false);
     expect(liberalEstSelectionnable(null)).toBe(false);
   });
