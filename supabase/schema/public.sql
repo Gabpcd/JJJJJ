@@ -1775,6 +1775,8 @@ DECLARE
   v_etab_nom text;
   v_invite_par_email text;
   v_invite_par_nom text;
+  v_request_id bigint;
+  v_erreur text;
 BEGIN
   IF NEW.statut <> 'EN_ATTENTE' THEN
     RETURN NEW;
@@ -1783,8 +1785,7 @@ BEGIN
   SELECT e.nom
     INTO v_etab_nom
     FROM public.etablissements e
-   WHERE e.id = NEW.etablissement_id
-     AND e.est_compte_test IS FALSE;
+   WHERE e.id = NEW.etablissement_id;
   IF v_etab_nom IS NULL THEN
     RETURN NEW;
   END IF;
@@ -1794,7 +1795,7 @@ BEGIN
   v_invite_par_nom := COALESCE(v_invite_par_email, 'Un administrateur');
 
   BEGIN
-    PERFORM net.http_post(
+    SELECT net.http_post(
       url := 'https://flripxtsyegjshnhzjkz.supabase.co/functions/v1/send-email',
       headers := jsonb_build_object(
         'Content-Type', 'application/json',
@@ -1818,9 +1819,9 @@ BEGIN
           )
         )
       )
-    );
+    ) INTO v_request_id;
   EXCEPTION WHEN OTHERS THEN
-    NULL;
+    v_erreur := SQLERRM;
   END;
 
   INSERT INTO public.journaux_audit (
@@ -1828,7 +1829,12 @@ BEGIN
   ) VALUES (
     NEW.invite_par, 'SYSTEME', 'SYSTEM', 'invitation_etab', NEW.id,
     jsonb_build_object(
-      'evenement', 'EMAIL_INVITATION_EQUIPE_ENVOYE',
+      'evenement', CASE
+        WHEN v_request_id IS NOT NULL THEN 'EMAIL_INVITATION_EQUIPE_MIS_EN_FILE'
+        ELSE 'EMAIL_INVITATION_EQUIPE_ECHEC_ENFILEMENT'
+      END,
+      'request_id', v_request_id,
+      'erreur', v_erreur,
       'destinataire_email', NEW.email_invite,
       'etablissement_id', NEW.etablissement_id,
       'role_propose', NEW.role_propose
@@ -2727,41 +2733,117 @@ CREATE OR REPLACE FUNCTION "public"."dec_notifier_resolution_litige"() RETURNS "
     SET "search_path" TO 'public'
     AS $$
 DECLARE
-    v_soignant_nom TEXT;
-    v_mission_intitule TEXT;
-    v_resolution_label TEXT;
+  v_soignant_nom text;
+  v_mission_intitule text;
+  v_resolution_label text;
+  v_admin_id uuid;
 BEGIN
-    IF OLD.statut = NEW.statut THEN RETURN NEW; END IF;
-    IF NEW.statut NOT IN ('RESOLU_SOIGNANT', 'RESOLU_ETABLISSEMENT', 'RESOLU_ADMIN', 'FERME') THEN RETURN NEW; END IF;
+  SELECT COALESCE(prenom || ' ', '') || nom
+    INTO v_soignant_nom
+    FROM public.soignants
+   WHERE id = NEW.soignant_id;
+  SELECT intitule
+    INTO v_mission_intitule
+    FROM public.missions
+   WHERE id = NEW.mission_id;
 
-    SELECT COALESCE(prenom || ' ', '') || nom INTO v_soignant_nom FROM soignants WHERE id = NEW.soignant_id;
-    SELECT intitule INTO v_mission_intitule FROM missions WHERE id = NEW.mission_id;
+  IF NEW.payload_modifications IS NOT NULL
+     AND (
+       OLD.payload_modifications IS DISTINCT FROM NEW.payload_modifications
+       OR OLD.accord_soignant IS DISTINCT FROM NEW.accord_soignant
+       OR OLD.accord_etablissement IS DISTINCT FROM NEW.accord_etablissement
+     ) THEN
+    IF NEW.accord_etablissement IS TRUE
+       AND NEW.accord_soignant IS NOT TRUE THEN
+      PERFORM public.fn_creer_notification(
+        NEW.soignant_id,
+        'SOIGNANT',
+        'LITIGE_REPONSE',
+        'Proposition d''accord reçue',
+        'L''établissement a proposé une résolution pour la mission "' ||
+          COALESCE(v_mission_intitule, 'Mission') ||
+          '". Votre réponse est attendue.',
+        '/soignant/litiges?litige=' || NEW.id::text,
+        'litige',
+        NEW.id
+      );
+    ELSIF NEW.accord_soignant IS TRUE
+          AND NEW.accord_etablissement IS NOT TRUE THEN
+      PERFORM public.fn_creer_notification(
+        NEW.etablissement_id,
+        'ETABLISSEMENT',
+        'LITIGE_REPONSE',
+        'Proposition d''accord reçue',
+        COALESCE(v_soignant_nom, 'Le soignant') ||
+          ' a proposé une résolution pour la mission "' ||
+          COALESCE(v_mission_intitule, 'Mission') ||
+          '". Votre réponse est attendue.',
+        '/etablissement/litiges?litige=' || NEW.id::text,
+        'litige',
+        NEW.id
+      );
+    END IF;
 
-    CASE NEW.statut
-        WHEN 'RESOLU_SOIGNANT' THEN v_resolution_label := 'résolu en faveur du soignant';
-        WHEN 'RESOLU_ETABLISSEMENT' THEN v_resolution_label := 'résolu en faveur de l''établissement';
-        WHEN 'RESOLU_ADMIN' THEN v_resolution_label := 'résolu par l''administrateur';
-        WHEN 'FERME' THEN v_resolution_label := 'clôturé par accord mutuel';
-    END CASE;
+    FOR v_admin_id IN
+      SELECT ea.user_id
+        FROM public.equipe_admin ea
+       WHERE ea.actif IS TRUE
+         AND ea.user_id IS NOT NULL
+    LOOP
+      PERFORM public.fn_creer_notification(
+        v_admin_id,
+        'ADMIN',
+        'LITIGE_REPONSE',
+        'Proposition de résolution de litige',
+        'Une proposition d''accord attend la réponse de la contrepartie pour la mission "' ||
+          COALESCE(v_mission_intitule, 'Mission') || '".',
+        '/admin/litiges?litige=' || NEW.id::text,
+        'litige',
+        NEW.id
+      );
+    END LOOP;
+  END IF;
 
-    -- Notifier le soignant
-    PERFORM fn_creer_notification(
-        NEW.soignant_id, 'SOIGNANT', 'LITIGE_RESOLU',
-        'Litige ' || v_resolution_label,
-        'Le litige concernant la mission "' || COALESCE(v_mission_intitule, 'Mission') || '" a été ' || v_resolution_label || '.',
-        '/soignant/litiges',
-        'litige', NEW.id
-    );
-
-    -- Notifier l'établissement
-    PERFORM fn_creer_notification(
-        NEW.etablissement_id, 'ETABLISSEMENT', 'LITIGE_RESOLU',
-        'Litige ' || v_resolution_label,
-        'Le litige avec ' || COALESCE(v_soignant_nom, 'un soignant') || ' sur la mission "' || COALESCE(v_mission_intitule, 'Mission') || '" a été ' || v_resolution_label || '.',
-        '/etablissement/litiges',
-        'litige', NEW.id
-    );
+  IF OLD.statut = NEW.statut THEN
     RETURN NEW;
+  END IF;
+  IF NEW.statut NOT IN (
+    'RESOLU_SOIGNANT', 'RESOLU_ETABLISSEMENT', 'RESOLU_ADMIN', 'FERME'
+  ) THEN
+    RETURN NEW;
+  END IF;
+
+  CASE NEW.statut
+    WHEN 'RESOLU_SOIGNANT' THEN
+      v_resolution_label := 'résolu en faveur du soignant';
+    WHEN 'RESOLU_ETABLISSEMENT' THEN
+      v_resolution_label := 'résolu en faveur de l''établissement';
+    WHEN 'RESOLU_ADMIN' THEN
+      v_resolution_label := 'résolu par l''administrateur';
+    WHEN 'FERME' THEN
+      v_resolution_label := 'clôturé par accord mutuel';
+  END CASE;
+
+  PERFORM public.fn_creer_notification(
+    NEW.soignant_id, 'SOIGNANT', 'LITIGE_RESOLU',
+    'Litige ' || v_resolution_label,
+    'Le litige concernant la mission "' ||
+      COALESCE(v_mission_intitule, 'Mission') || '" a été ' ||
+      v_resolution_label || '.',
+    '/soignant/litiges?litige=' || NEW.id::text,
+    'litige', NEW.id
+  );
+
+  PERFORM public.fn_creer_notification(
+    NEW.etablissement_id, 'ETABLISSEMENT', 'LITIGE_RESOLU',
+    'Litige ' || v_resolution_label,
+    'Le litige avec ' || COALESCE(v_soignant_nom, 'un soignant') ||
+      ' sur la mission "' || COALESCE(v_mission_intitule, 'Mission') ||
+      '" a été ' || v_resolution_label || '.',
+    '/etablissement/litiges?litige=' || NEW.id::text,
+    'litige', NEW.id
+  );
+  RETURN NEW;
 END;
 $$;
 
@@ -3662,6 +3744,7 @@ DECLARE
   v_type_etab text;
   v_est_public boolean;
   v_mode jsonb;
+  v_liberal_interdit boolean;
 BEGIN
   SELECT type::text, COALESCE(est_secteur_public, false)
     INTO v_type_etab, v_est_public
@@ -3678,8 +3761,25 @@ BEGIN
     CASE WHEN v_est_public THEN 'PUBLIC' ELSE NULL END
   );
 
-  IF NEW.type_contrat_recherche IN ('LIBERAL', 'TOUS')
-     AND v_mode->>'niveau' <> 'AUTORISE' THEN
+  v_liberal_interdit :=
+    COALESCE(v_mode->>'niveau', 'BLOQUE') = 'BLOQUE'
+    OR (
+      NEW.profession_requise::text IN ('IADE', 'IBODE')
+      AND COALESCE(v_mode->>'niveau', 'NON_PROPOSE') <> 'AUTORISE'
+    );
+
+  -- Un choix explicite interdit doit être refusé, afin que l'interface ne
+  -- puisse jamais annoncer qu'une édition libérale a réussi en la mutant.
+  IF NEW.type_contrat_recherche = 'LIBERAL' AND v_liberal_interdit THEN
+    RAISE EXCEPTION '%', COALESCE(
+      v_mode->>'source_libelle',
+      'Le mode liberal est indisponible pour cette mission.'
+    );
+  END IF;
+
+  -- « Tous » reste un choix neutre lorsqu'il est possible. Pour une cellule
+  -- réellement interdite, le repli salarié historique reste explicite.
+  IF NEW.type_contrat_recherche = 'TOUS' AND v_liberal_interdit THEN
     NEW.type_contrat_recherche := 'SALARIE';
   END IF;
 
@@ -3952,10 +4052,14 @@ BEGIN
     v_etablissement.type_etablissement,
     CASE WHEN v_etablissement.est_public THEN 'PUBLIC' ELSE NULL END
   );
-  IF COALESCE(v_mode->>'niveau', 'NON_PROPOSE') <> 'AUTORISE' THEN
+  IF COALESCE(v_mode->>'niveau', 'BLOQUE') = 'BLOQUE'
+     OR (
+       NEW.profession_requise::text IN ('IADE', 'IBODE')
+       AND COALESCE(v_mode->>'niveau', 'NON_PROPOSE') <> 'AUTORISE'
+     ) THEN
     RAISE EXCEPTION '%', COALESCE(
       v_mode->>'source_libelle',
-      'Cette profession est proposee en salarie pour cet etablissement.'
+      'Le mode liberal est indisponible pour cette mission.'
     ) USING ERRCODE = 'check_violation';
   END IF;
 
@@ -48799,14 +48903,18 @@ BEGIN
         ELSE NULL
       END
     );
-    IF COALESCE(v_mode->>'niveau', 'NON_PROPOSE') <> 'AUTORISE' THEN
+    IF COALESCE(v_mode->>'niveau', 'BLOQUE') = 'BLOQUE'
+       OR (
+         v_mission.profession_requise::text IN ('IADE', 'IBODE')
+         AND COALESCE(v_mode->>'niveau', 'NON_PROPOSE') <> 'AUTORISE'
+       ) THEN
       RETURN jsonb_build_object(
         'ok', false,
         'error', COALESCE(
           v_mode->>'source_libelle',
-          'Cette mission est proposée en salarié.'
+          'Le mode libéral est indisponible pour cette mission.'
         ),
-        'niveau', COALESCE(v_mode->>'niveau', 'NON_PROPOSE')
+        'niveau', COALESCE(v_mode->>'niveau', 'BLOQUE')
       );
     END IF;
   END IF;
