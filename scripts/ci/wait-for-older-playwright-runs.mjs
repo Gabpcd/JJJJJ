@@ -4,7 +4,9 @@ import { pathToFileURL } from 'node:url';
 
 const DEFAULT_MAX_WAIT_MS = 45 * 60 * 1000;
 const DEFAULT_POLL_INTERVAL_MS = 15 * 1000;
+const DEFAULT_STALE_QUEUED_AFTER_MS = 3 * 60 * 60 * 1000;
 const ACTIVE_RUN_STATUSES = ['in_progress', 'queued', 'requested'];
+const STALE_ELIGIBLE_RUN_STATUSES = new Set(['queued', 'requested']);
 
 function requiredEnv(env, name) {
   const value = env[name]?.trim();
@@ -42,13 +44,30 @@ async function githubJson(fetchImpl, url, token) {
  * run attend uniquement les runs actifs de numéro inférieur : aucune
  * annulation, et aucun interblocage entre deux runs démarrés simultanément.
  */
-export function olderActiveRuns(runs, currentRun) {
+function isOlderActiveRun(run, currentRun) {
+  return (
+    Number(run.id) !== Number(currentRun.id)
+    && Number(run.run_number) < Number(currentRun.run_number)
+    && run.status !== 'completed'
+  );
+}
+
+export function isStaleQueuedRun(run, {
+  nowMs = Date.now(),
+  staleQueuedAfterMs = DEFAULT_STALE_QUEUED_AFTER_MS,
+} = {}) {
+  if (!STALE_ELIGIBLE_RUN_STATUSES.has(run.status)) return false;
+
+  const timestampMs = Date.parse(run.created_at || run.updated_at || '');
+  if (!Number.isFinite(timestampMs)) return false;
+
+  return nowMs - timestampMs >= staleQueuedAfterMs;
+}
+
+export function olderActiveRuns(runs, currentRun, options = {}) {
   return runs
-    .filter((run) => (
-      Number(run.id) !== Number(currentRun.id)
-      && Number(run.run_number) < Number(currentRun.run_number)
-      && run.status !== 'completed'
-    ))
+    .filter((run) => isOlderActiveRun(run, currentRun))
+    .filter((run) => !isStaleQueuedRun(run, options))
     .sort((left, right) => (
       Number(left.run_number) - Number(right.run_number)
       || Number(left.id) - Number(right.id)
@@ -99,6 +118,11 @@ export async function waitForOlderPlaywrightRuns({
     DEFAULT_POLL_INTERVAL_MS,
     'PLAYWRIGHT_FIFO_POLL_INTERVAL_MS',
   );
+  const staleQueuedAfterMs = positiveInteger(
+    env.PLAYWRIGHT_FIFO_STALE_QUEUED_AFTER_MS,
+    DEFAULT_STALE_QUEUED_AFTER_MS,
+    'PLAYWRIGHT_FIFO_STALE_QUEUED_AFTER_MS',
+  );
 
   const currentRun = await githubJson(
     fetchImpl,
@@ -111,6 +135,7 @@ export async function waitForOlderPlaywrightRuns({
 
   const startedAt = now();
   let lastBlockerSignature = '';
+  let lastIgnoredSignature = '';
   while (true) {
     // Interroger séparément tous les états actifs évite qu'un run ancien mais
     // bloqué soit masqué derrière plus de 100 runs déjà terminés. Chaque état
@@ -122,7 +147,22 @@ export async function waitForOlderPlaywrightRuns({
       currentRun.workflow_id,
       token,
     );
-    const blockers = olderActiveRuns(activeRuns, currentRun);
+    const pollNowMs = now();
+    const staleOptions = { nowMs: pollNowMs, staleQueuedAfterMs };
+    const ignoredStaleRuns = activeRuns
+      .filter((run) => isOlderActiveRun(run, currentRun))
+      .filter((run) => isStaleQueuedRun(run, staleOptions));
+    const ignoredSignature = ignoredStaleRuns
+      .map((run) => `${run.run_number}:${run.id}:${run.status}`)
+      .join(',');
+    if (ignoredSignature && ignoredSignature !== lastIgnoredSignature) {
+      log.log(
+        `Runs Playwright queued/requested fantômes ignorés après ${Math.round(staleQueuedAfterMs / 1000)} s: ${ignoredSignature}`,
+      );
+      lastIgnoredSignature = ignoredSignature;
+    }
+
+    const blockers = olderActiveRuns(activeRuns, currentRun, staleOptions);
     if (blockers.length === 0) {
       log.log(
         `File Playwright disponible pour le run #${currentRun.run_number} (${currentRun.id}).`,
@@ -138,7 +178,7 @@ export async function waitForOlderPlaywrightRuns({
       lastBlockerSignature = signature;
     }
 
-    const elapsed = now() - startedAt;
+    const elapsed = pollNowMs - startedAt;
     if (elapsed >= maxWaitMs) {
       throw new Error(
         `Timeout FIFO après ${Math.round(elapsed / 1000)} s; runs plus anciens toujours actifs: ${signature}`,
