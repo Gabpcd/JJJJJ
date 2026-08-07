@@ -93,7 +93,13 @@ test.describe('release review — reprise de session iPad', () => {
     if (!compte) return;
 
     const erreursConsole = await connecterCompteReview(page, compte);
-    await page.goto('/soignant/presences?tab=avenir');
+    // Reproduire le vrai parcours App Review dans la SPA. Un `page.goto`
+    // rechargeait tout le document juste après le dashboard : WebKit annulait
+    // alors les requêtes Supabase encore actives et les remontait à tort comme
+    // erreurs « due to access control checks ».
+    await page.getByRole('button', { name: 'Activité' }).click();
+    await page.getByRole('button', { name: 'Présences' }).click();
+    await expect(page).toHaveURL(/\/soignant\/presences$/);
     await page.waitForLoadState('networkidle');
     await expect(page.getByRole('heading', { name: 'Mes présences' })).toBeVisible();
     await expect(page.getByText(/Votre espace est momentanément indisponible/i)).toHaveCount(0);

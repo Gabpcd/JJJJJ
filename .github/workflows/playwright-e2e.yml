@@ -68,6 +68,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
           PLAYWRIGHT_FIFO_MAX_WAIT_MS: '2700000'
+          PLAYWRIGHT_FIFO_STALE_QUEUED_AFTER_MS: '10800000'
         run: node scripts/ci/wait-for-older-playwright-runs.mjs
       - name: Install dependencies
         run: npm ci
@@ -232,6 +233,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
           PLAYWRIGHT_FIFO_MAX_WAIT_MS: '2700000'
+          PLAYWRIGHT_FIFO_STALE_QUEUED_AFTER_MS: '10800000'
         run: node scripts/ci/wait-for-older-playwright-runs.mjs
       - name: Attendre Deploy Supabase du même SHA
         if: github.event_name == 'push'

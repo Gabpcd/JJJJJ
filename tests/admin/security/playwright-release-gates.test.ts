@@ -7,6 +7,7 @@ import {
   isPgrst202EligibilityFallbackAllowed,
 } from '../../../e2e/helpers/liberal-eligibility-policy';
 import {
+  isStaleQueuedRun,
   olderActiveRuns,
   waitForOlderPlaywrightRuns,
 } from '../../../scripts/ci/wait-for-older-playwright-runs.mjs';
@@ -65,6 +66,30 @@ describe('file FIFO Playwright', () => {
     ]);
   });
 
+  it('ignore uniquement les runs queued/requested fantômes de plus de 3 h', () => {
+    const nowMs = Date.parse('2026-08-07T12:00:00Z');
+    const options = { nowMs, staleQueuedAfterMs: 3 * 60 * 60 * 1000 };
+    const currentRun = { id: 20, run_number: 20 };
+
+    expect(isStaleQueuedRun({
+      id: 10,
+      run_number: 10,
+      status: 'queued',
+      created_at: '2026-08-07T08:59:59Z',
+    }, options)).toBe(true);
+    expect(olderActiveRuns([
+      { id: 10, run_number: 10, status: 'queued', created_at: '2026-08-07T08:59:59Z' },
+      { id: 11, run_number: 11, status: 'requested', created_at: '2026-08-07T08:00:00Z' },
+      { id: 12, run_number: 12, status: 'queued', created_at: '2026-08-07T10:00:00Z' },
+      { id: 13, run_number: 13, status: 'in_progress', created_at: '2026-08-06T12:00:00Z' },
+      { id: 14, run_number: 14, status: 'queued' },
+    ], currentRun, options)).toEqual([
+      { id: 12, run_number: 12, status: 'queued', created_at: '2026-08-07T10:00:00Z' },
+      { id: 13, run_number: 13, status: 'in_progress', created_at: '2026-08-06T12:00:00Z' },
+      { id: 14, run_number: 14, status: 'queued' },
+    ]);
+  });
+
   it('ne démarre qu’après la fin du run plus ancien sans jamais l’annuler', async () => {
     let inProgressPoll = 0;
     const fetchImpl = vi.fn(async (url: string) => {
@@ -107,6 +132,7 @@ describe('file FIFO Playwright', () => {
   it('est câblée sur les jobs PR et main sans concurrency GitHub annulable', () => {
     expect(workflow).not.toMatch(/^concurrency:/m);
     expect(workflow.match(/wait-for-older-playwright-runs\.mjs/g)).toHaveLength(2);
+    expect(workflow.match(/PLAYWRIGHT_FIFO_STALE_QUEUED_AFTER_MS: '10800000'/g)).toHaveLength(2);
     expect(workflow).toContain('actions: read');
   });
 });
