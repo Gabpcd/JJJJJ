@@ -1,10 +1,33 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { BarreNavigation } from './BarreNavigation';
 
+const mocks = vi.hoisted(() => ({
+  user: null as { id: string } | null,
+  profil: null as Record<string, unknown> | null,
+}));
+
 vi.mock('@/contexts/AuthContext', () => ({
-  useAuth: () => ({ user: null, deconnexion: vi.fn() }),
+  useAuth: () => ({ user: mocks.user, deconnexion: vi.fn() }),
+}));
+
+vi.mock('@/integrations/supabase/client', () => ({
+  supabase: {
+    from: () => {
+      const builder = {
+        select: () => builder,
+        eq: () => builder,
+        maybeSingle: () => Promise.resolve({ data: mocks.profil, error: null }),
+        single: () => Promise.resolve({ data: mocks.profil, error: null }),
+      };
+      return builder;
+    },
+  },
+}));
+
+vi.mock('@/hooks/useEtabPermissions', () => ({
+  useEtabPermissions: () => ({ permissions: { lecture_paiement: false, paiement: false } }),
 }));
 
 vi.mock('@/hooks/useMessagesNonLus', () => ({
@@ -20,6 +43,11 @@ vi.mock('@/components/AvatarUpload', () => ({ AvatarDisplay: () => null }));
 vi.mock('@/components/ThemeToggle', () => ({ ThemeToggle: () => null }));
 
 describe('BarreNavigation — groupes de navigation', () => {
+  beforeEach(() => {
+    mocks.user = null;
+    mocks.profil = null;
+  });
+
   it('annonce et relie l’état ouvert du groupe au sous-menu', () => {
     render(
       <MemoryRouter initialEntries={['/etablissement/tableau-de-bord']}>
@@ -37,5 +65,26 @@ describe('BarreNavigation — groupes de navigation', () => {
     expect(contentId).toBeTruthy();
     expect(document.getElementById(contentId!)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Annuaire' })).toBeInTheDocument();
+  });
+
+  it('affiche le parcours dans la navigation d’une IDE éligible non libérale', async () => {
+    mocks.user = { id: 'soignant-ide' };
+    mocks.profil = {
+      prenom: 'Marie',
+      nom: 'Lefèvre',
+      profession: 'IDE',
+      statut_liberal: null,
+      type_exercice: 'SALARIE',
+      heures_cumulees: 1200,
+      avatar_url: null,
+    };
+
+    render(
+      <MemoryRouter initialEntries={['/soignant/tableau-de-bord']}>
+        <BarreNavigation role="SOIGNANT" />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByRole('button', { name: 'Passer en libéral' })).toBeInTheDocument();
   });
 });
