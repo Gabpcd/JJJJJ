@@ -110,7 +110,10 @@ describe('mandat de facturation v1.4 et corrections comptables', () => {
     expect(missionForm).not.toContain("modeRemuneration === 'RETROCESSION'");
     expect(missionRecap).not.toContain('Rétrocession au remplaçant');
     expect(migration).toContain('fn_bloquer_retrocession_prelaunch');
-    expect(migration).toContain("CHECK (mode_remuneration = 'TAUX_HORAIRE' AND retrocession_pct IS NULL)");
+    expect(migration).toContain("NEW.mode_remuneration = 'TAUX_HORAIRE'");
+    expect(migration).toContain("v_role = 'service_role' AND v_seed_reason <> ''");
+    expect(migration).toContain('v_empechement_context = v_empechement_validated');
+    expect(migration).not.toContain("CHECK (mode_remuneration = 'TAUX_HORAIRE' AND retrocession_pct IS NULL)");
   });
 
   it('applique exactement le seuil de sept jours et facture seulement le reliquat final', () => {
