@@ -134,13 +134,13 @@ BEGIN
     (v_litige_execute, v_mission_execute, v_soignant, v_etab, v_facture_execute, 'SYSTEME', 'Test accord déjà exécuté', 'DESACCORD_MONTANT_FACTURE', 'REVUE_ADMIN', '{"type":"MODIFICATION_MONTANT","modifications":{"montant_total_corrige":60},"justification":"Accord déjà exécuté à ne jamais rejouer"}', true, true, now(), now(), true);
 
   INSERT INTO public.stripe_transfers (
-    id, mission_id, soignant_id, etablissement_id,
+    id, mission_id, facture_honoraire_id, soignant_id, etablissement_id,
     montant_total, montant_commission, montant_soignant,
     stripe_payment_intent_id, stripe_transfer_id, statut,
     stripe_checkout_session_id
   ) VALUES
-    ('abac1000-0000-4000-8000-000000000501', v_mission_connect, v_soignant, v_etab, 120, 20, 100, 'pi_test_connect_litige', 'tr_test_connect_litige', 'PAYE', 'cs_test_connect_payee'),
-    ('abac1000-0000-4000-8000-000000000502', v_mission_pending, v_soignant, v_etab, 120, 20, 100, 'pi_test_pending_litige', NULL, 'EN_ATTENTE', 'cs_test_pending_litige');
+    ('abac1000-0000-4000-8000-000000000501', v_mission_connect, v_facture_connect, v_soignant, v_etab, 120, 20, 100, 'pi_test_connect_litige', 'tr_test_connect_litige', 'PAYE', 'cs_test_connect_payee'),
+    ('abac1000-0000-4000-8000-000000000502', v_mission_pending, v_facture_pending, v_soignant, v_etab, 120, 20, 100, 'pi_test_pending_litige', NULL, 'EN_ATTENTE', 'cs_test_pending_litige');
 
   UPDATE public.factures_honoraires
      SET stripe_payment_intent_id = 'pi_test_connect_litige'
