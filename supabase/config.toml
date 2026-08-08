@@ -144,6 +144,12 @@ verify_jwt = false
 [functions.generate-invoice]
 verify_jwt = false
 
+[functions.sign-invoicing-mandate]
+verify_jwt = false
+
+[functions.expire-invoice-checkout-for-dispute]
+verify_jwt = false
+
 [functions.submit-to-chorus]
 verify_jwt = false
 

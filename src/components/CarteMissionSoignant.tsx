@@ -108,7 +108,7 @@ export const CarteMissionSoignant = React.memo(function CarteMissionSoignant({ m
       {m.type_contrat_recherche === 'LIBERAL' && m.etablissements?.paiement_rapide && (
         <span
           className="badge-base text-[10px] bg-success/10 text-success ml-1"
-          title="Payée sous 24 à 72 h après validation des présences"
+          title="Instruction de versement normalement lancée sous 24 à 72 h après validation"
         >
           ⚡ Paiement rapide
         </span>

@@ -102,6 +102,12 @@ function formatFinCreneau(creneau: CreneauPointage): string {
     : formatParis(creneau.fin!, 'EEE d MMM · HH:mm');
 }
 
+function libelleNatureTvaMission(nature?: string | null): string {
+  if (nature === 'SOIN_THERAPEUTIQUE_EXONERE') return 'Soin à finalité thérapeutique';
+  if (nature === 'PRESTATION_TAXABLE') return 'Prestation taxable';
+  return 'À déterminer avec Jolene';
+}
+
 function AlerterPoolUrgence({ missionId, mission, user, afficherNotification }: { missionId: string; mission: any; user: any; afficherNotification: (n: any) => void }) {
   const [alerting, setAlerting] = useState(false);
   const [alerted, setAlerted] = useState(false);
@@ -527,7 +533,7 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
   useEffect(() => {
     if (!id) return;
     const load = async () => {
-      const [missionResult, creneauxResult] = await Promise.all([
+      const [missionResult, creneauxResult, missionTvaResult] = await Promise.all([
         supabase
           .from('missions')
           .select(`
@@ -556,6 +562,13 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
           .select('id, mission_id, debut, fin, est_pause, type_creneau')
           .eq('mission_id', id)
           .order('debut', { ascending: true }),
+        // Lecture optionnelle afin que le détail reste disponible pendant la
+        // courte fenêtre où le frontend précède la migration TVA en production.
+        supabase
+          .from('missions')
+          .select('nature_tva_prestation, nature_tva_confirmee_soignant, statut_validation_tva')
+          .eq('id', id)
+          .maybeSingle(),
       ]);
 
       const m = missionResult.data;
@@ -570,6 +583,7 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
         setLoading(false);
         return;
       }
+      if (m && missionTvaResult.data) Object.assign(m as any, missionTvaResult.data);
 
       setErreurMission(null);
 
@@ -1053,6 +1067,24 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
                 etablissement={m.etablissements}
                 role={isAdmin ? 'ADMIN' : 'ETAB'}
               />
+              {(m as any).type_contrat_applique === 'LIBERAL' && (
+                <div className={`card-base text-xs ${(m as any).statut_validation_tva === 'CONFIRMEE' ? 'border-success/30 bg-success/5' : 'border-warning/40 bg-warning/5'}`}>
+                  <p className="font-semibold text-foreground">
+                    TVA mission · {libelleNatureTvaMission((m as any).nature_tva_prestation)}
+                  </p>
+                  {(m as any).statut_validation_tva === 'CONFIRMEE' ? (
+                    <p className="mt-1 text-success">✓ Nature confirmée par le soignant — facturation autorisée.</p>
+                  ) : (m as any).statut_validation_tva === 'A_REVOIR' ? (
+                    <p className="mt-1 text-muted-foreground">
+                      Revue Jolene en cours. La mission et les corrections de litige continuent ; seule l'émission de facture est suspendue.
+                    </p>
+                  ) : (
+                    <p className="mt-1 text-muted-foreground">
+                      Confirmation du soignant attendue avant facturation. Cela ne bloque pas la mission.
+                    </p>
+                  )}
+                </div>
+              )}
               {/* Payment mode indicator — Connect réglé, Chorus Pro, puis facture mensuelle. */}
               {m.montant_commission_ttc > 0 && (
                 <div className="card-base flex items-center gap-2 text-xs text-muted-foreground">

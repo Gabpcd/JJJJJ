@@ -350,6 +350,27 @@ function renderTemplate(type: string, rawData: Record<string, unknown>): Templat
       };
 
     case 'FACTURE_EMISE':
+      if (data.destinataire_role === 'SOIGNANT') {
+        return {
+          subject: `Document ${data.numero} à vérifier — Jolene`,
+          html: WRAPPER(`
+            <h2 style="color:#0F172A;margin:0 0 12px;">Votre document ${data.numero} est disponible</h2>
+            <p style="color:#334155;">Bonjour ${data.prenom || ''},</p>
+            ${CARD_BOX(`
+              <strong style="color:#0F172A;">${data.libelle_document || 'Facture d\'honoraires'} ${data.numero}</strong><br/>
+              <span style="color:#334155;">Période : ${data.periode || '—'}</span><br/>
+              <span style="color:#334155;">Montant TTC : <strong>${data.montant_ttc} €</strong></span>
+            `)}
+            <p style="color:#334155;">
+              Une copie est disponible dans votre espace. Vérifiez les heures, le taux et le montant
+              sous <strong>${data.delai_verification_heures || '48'} heures</strong>.
+            </p>
+            ${INFO_BOX('Si une donnée est incorrecte, signalez-la depuis le document concerné : seule cette échéance sera suspendue, jamais vos autres factures.')}
+            ${BUTTON('Vérifier le document →', `${APP_URL}/soignant/mes-gains?tab=factures`)}
+            ${SECURITY_NOTE}
+          `),
+        };
+      }
       return {
         subject: `Facture ${data.numero} — Jolene`,
         html: WRAPPER(`

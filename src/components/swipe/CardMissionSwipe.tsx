@@ -217,7 +217,7 @@ export function CardMissionSwipe({ mission, onTap, className }: Props) {
                 variant="success"
                 size="md"
                 className="shadow-md"
-                title="Payée sous 24 à 72 h après validation des présences"
+                title="Instruction de versement normalement lancée sous 24 à 72 h après validation"
               >
                 ⚡ Paiement rapide
               </BadgeY2K>

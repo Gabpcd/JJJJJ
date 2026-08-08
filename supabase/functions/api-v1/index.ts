@@ -13,6 +13,10 @@ const PROFESSIONS = new Set([
 const STATUTS = new Set(['BROUILLON', 'OUVERTE', 'ASSIGNEE', 'EN_COURS', 'TERMINEE', 'ANNULEE', 'LITIGE', 'EXPIREE']);
 const TYPES_CONTRAT = new Set(['TOUS', 'SALARIE', 'LIBERAL']);
 const MODES_REMUNERATION = new Set(['TAUX_HORAIRE', 'RETROCESSION']);
+const NATURES_TVA_PRESTATION = new Set([
+  'SOIN_THERAPEUTIQUE_EXONERE',
+  'PRESTATION_TAXABLE',
+]);
 const TAILLE_PAGE_CRENEAUX = 1000;
 const ISO_AVEC_FUSEAU_RE = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,6}))?)?(Z|([+-])(\d{2}):(\d{2}))$/;
 
@@ -300,6 +304,9 @@ Deno.serve(async (req) => {
       const retrocessionPct = body.retrocession_pct == null
         ? null
         : Number(body.retrocession_pct);
+      const natureTvaPrestation = typeof body.nature_tva_prestation === 'string'
+        ? body.nature_tva_prestation.trim().toUpperCase()
+        : null;
 
       if (intitule.length < 3 || intitule.length > 160) return jsonResponse(req, { error: 'intitule invalide' }, 400);
       if (!PROFESSIONS.has(profession)) return jsonResponse(req, { error: 'profession_requise invalide' }, 400);
@@ -317,6 +324,11 @@ Deno.serve(async (req) => {
       }
       if (!MODES_REMUNERATION.has(modeRemuneration)) {
         return jsonResponse(req, { error: 'mode_remuneration invalide' }, 400);
+      }
+      if (typeContrat !== 'SALARIE' && !NATURES_TVA_PRESTATION.has(natureTvaPrestation || '')) {
+        return jsonResponse(req, {
+          error: 'nature_tva_prestation requise: SOIN_THERAPEUTIQUE_EXONERE ou PRESTATION_TAXABLE',
+        }, 400);
       }
       if (modeRemuneration === 'RETROCESSION') {
         if (typeContrat !== 'LIBERAL') {
@@ -352,7 +364,7 @@ Deno.serve(async (req) => {
       // Une seule RPC transactionnelle derive l'enveloppe et synchronise les
       // lignes mission_creneaux. L'API ne possede plus de chemin INSERT direct
       // susceptible de creer une mission sans planning exact.
-      const { data, error } = await supabase.rpc('fn_creer_mission_api_v1', {
+      const { data, error } = await supabase.rpc('fn_creer_mission_api_v2', {
         p_etablissement_id: etabId,
         p_intitule: intitule,
         p_profession_requise: profession,
@@ -362,6 +374,7 @@ Deno.serve(async (req) => {
         p_type_contrat_recherche: typeContrat,
         p_mode_remuneration: modeRemuneration,
         p_retrocession_pct: modeRemuneration === 'RETROCESSION' ? retrocessionPct : null,
+        p_nature_tva_prestation: typeContrat === 'SALARIE' ? null : natureTvaPrestation,
       });
       if (error) {
         console.error('[api-v1] POST missions', error.message);

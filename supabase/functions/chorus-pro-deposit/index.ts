@@ -5,7 +5,7 @@
  * 1. Frontend étab clique "Déposer sur Chorus Pro" sur une facture commission
  * 2. Cette edge function :
  *    - Fetch facture + chorus_pro_config + etab (via RLS via le JWT user)
- *    - Génère Factur-X XML à la volée (générateur partagé)
+ *    - Génère un XML CII à la volée (générateur partagé)
  *    - OAuth2 PISTE → token
  *    - POST /cpro/factures/v1/deposer/flux avec XML base64
  *    - Update factures.chorus_pro_* avec résultat
@@ -45,6 +45,7 @@ function jsonResponse(req: Request, body: unknown, status = 200) {
 const JOLENE_SELLER = {
   name: 'Jolene SAS',
   siret: Deno.env.get('JOLENE_SIRET') ?? '',
+  vatId: Deno.env.get('JOLENE_TVA_ID') ?? '',
   address: Deno.env.get('JOLENE_ADDRESS') ?? '',
   city: Deno.env.get('JOLENE_CITY') ?? '',
   postalCode: Deno.env.get('JOLENE_POSTAL_CODE') ?? '',
@@ -70,7 +71,7 @@ Deno.serve(async (req) => {
 
     const { data: facture, error: factError } = await supabaseAdmin
       .from('factures')
-      .select('id, numero_facture, montant_ht, montant_ttc, montant_tva, taux_tva, statut, chorus_pro_statut, chorus_pro_id, est_secteur_public, etablissement_id, date_emission, date_echeance')
+      .select('id, numero_facture, montant_ht, montant_ttc, montant_tva, taux_tva, statut, type_document, facture_precedente_id, chorus_pro_statut, chorus_pro_id, est_secteur_public, etablissement_id, date_emission, date_echeance')
       .eq('id', facture_id).single();
     if (factError || !facture) return jsonResponse(req, { error: 'Facture introuvable' }, 404);
     if (!facture.est_secteur_public) {
@@ -123,35 +124,62 @@ Deno.serve(async (req) => {
         return jsonResponse(req, { error: `Impossible de deposer : statut actuel ${facture.chorus_pro_statut}` }, 400);
       }
 
-      if (isSimulation) {
-        const now = new Date().toISOString();
-        const fluxId = `SIM-${Date.now()}`;
-        await supabaseAdmin.from('factures').update({
-          chorus_pro_statut: 'DEPOSEE',
-          chorus_pro_deposee_le: now,
-          chorus_pro_date_depot: now,
-          chorus_pro_numero_flux: fluxId,
-        }).eq('id', facture_id);
+      const depositMode = Deno.env.get('CHORUS_DEPOSIT_MODE_CERTIFIE');
+      const syntaxeFlux = Deno.env.get('CHORUS_CII_SYNTAXE_CERTIFIEE');
+      const syntaxesCiiAutorisees = new Set([
+        'IN_DP_E1_CII_16B',
+        'IN_DP_E1_CII_22B_FE',
+      ]);
+      if (depositMode !== 'CII_XML' || !syntaxeFlux || !syntaxesCiiAutorisees.has(syntaxeFlux)) {
         return jsonResponse(req, {
-          success: true, simulation: true,
-          message: 'Mode simulation : facture marquee comme deposee. Configurez PISTE_CLIENT_ID et PISTE_CLIENT_SECRET pour le mode reel (API PISTE).',
-          statut: 'DEPOSEE', numero_flux: fluxId,
-        });
+          error: 'CHORUS_FORMAT_NON_CERTIFIE',
+          detail: 'Le dépôt reste fermé jusqu’à validation du XML et de sa syntaxe sur le portail de qualification Chorus Pro.',
+        }, 503);
+      }
+
+      if (isSimulation) {
+        return jsonResponse(req, {
+          accepted: true,
+          simulation: true,
+          message: 'Dépôt différé : identifiants PISTE absents. La facture reste à déposer.',
+          statut: facture.chorus_pro_statut ?? 'A_DEPOSER',
+        }, 202);
       }
 
       if (!chorusConfig) return jsonResponse(req, { error: 'Configuration Chorus Pro manquante. Allez dans Parametres -> Chorus Pro.' }, 400);
       if (!etab?.siret) return jsonResponse(req, { error: 'SIRET etablissement non renseigne.' }, 400);
       if (!JOLENE_SELLER.siret) return jsonResponse(req, { error: 'JOLENE_SIRET non configure dans les secrets.' }, 500);
+      if (!JOLENE_SELLER.vatId) return jsonResponse(req, { error: 'JOLENE_TVA_ID non configure dans les secrets.' }, 500);
 
       console.log(`[chorus-pro] Depot facture ${facture.numero_facture} (${pisteConfig.isSandbox ? 'SANDBOX' : 'PROD'})`);
 
-      // Génération Factur-X XML à la volée
+      const isAvoir = facture.type_document === 'AVOIR';
+      let precedingInvoiceNumber: string | undefined;
+      let precedingInvoiceIssueDate: string | undefined;
+      if (isAvoir) {
+        if (!facture.facture_precedente_id) {
+          return jsonResponse(req, { error: 'Avoir de commission sans facture d’origine.' }, 409);
+        }
+        const { data: precedente, error: precedenteError } = await supabaseAdmin
+          .from('factures')
+          .select('numero_facture, date_emission')
+          .eq('id', facture.facture_precedente_id)
+          .single();
+        if (precedenteError || !precedente) {
+          return jsonResponse(req, { error: 'Facture d’origine de l’avoir introuvable.' }, 409);
+        }
+        precedingInvoiceNumber = precedente.numero_facture;
+        precedingInvoiceIssueDate = String(precedente.date_emission).slice(0, 10);
+      }
+
+      // Génération XML CII à la volée
       const xml = generateCiiXml({
         invoiceNumber: facture.numero_facture,
         issueDate: (facture.date_emission ?? new Date().toISOString()).slice(0, 10),
         dueDate: (facture.date_echeance ?? facture.date_emission ?? new Date().toISOString()).toString().slice(0, 10),
         sellerName: JOLENE_SELLER.name,
         sellerSiret: JOLENE_SELLER.siret,
+        sellerVatId: JOLENE_SELLER.vatId,
         sellerAddress: JOLENE_SELLER.address,
         sellerCity: JOLENE_SELLER.city,
         sellerPostalCode: JOLENE_SELLER.postalCode,
@@ -162,12 +190,16 @@ Deno.serve(async (req) => {
         buyerCity: etab.adresse_ville ?? '',
         buyerPostalCode: etab.adresse_code_postal ?? '',
         serviceCode: chorusConfig.code_service ?? '',
-        description: `Commission Jolene — facture ${facture.numero_facture}`,
+        serviceDate: (facture.date_emission ?? new Date().toISOString()).slice(0, 10),
+        description: `${isAvoir ? 'Avoir de commission Jolene' : 'Commission Jolene'} — ${facture.numero_facture}`,
         amountHt: Number(facture.montant_ht) || Number(facture.montant_ttc) || 0,
         amountTva: Number(facture.montant_tva) || 0,
         amountTtc: Number(facture.montant_ttc) || 0,
         vatRate: Number(facture.taux_tva) || 20,
         vatExempt: false,
+        isAvoir,
+        precedingInvoiceNumber,
+        precedingInvoiceIssueDate,
       });
 
       // Base64 encode (UTF-8 safe)
@@ -177,7 +209,7 @@ Deno.serve(async (req) => {
       const result = await deposerFlux(pisteConfig, accessToken, {
         fichierBase64: xmlBase64,
         nomFichier: `${facture.numero_facture}.xml`,
-        syntaxeFlux: 'IN_DP_E2_CII_FACTURX',
+        syntaxeFlux,
       });
 
       if (!result.ok) {

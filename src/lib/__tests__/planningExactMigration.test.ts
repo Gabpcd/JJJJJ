@@ -266,7 +266,7 @@ describe('planning exact de bout en bout', () => {
   it('cree les missions API et leurs creneaux dans une seule RPC transactionnelle', () => {
     expect(apiV1).toContain('couple legacy debut_le/fin_le');
     expect(apiV1).toContain('debutLegacy');
-    expect(apiV1).toContain("supabase.rpc('fn_creer_mission_api_v1'");
+    expect(apiV1).toContain("supabase.rpc('fn_creer_mission_api_v2'");
     expect(apiV1).not.toMatch(/\.from\(['"]missions['"]\)\.insert/);
     expect(apiMigration).toContain('CREATE OR REPLACE FUNCTION public.fn_creer_mission_api_v1');
     expect(apiMigration).toContain('SECURITY INVOKER');
@@ -299,7 +299,7 @@ describe('planning exact de bout en bout', () => {
   });
 
   it('applique contrat et retrocession atomiquement a la creation formulaire et API', () => {
-    expect(formulaireMission).toContain("supabase.rpc('fn_creer_mission_multi_jours_v2'");
+    expect(formulaireMission).toContain("supabase.rpc('fn_creer_mission_multi_jours_v3'");
     expect(formulaireMission).not.toContain("supabase.rpc('fn_modifier_type_contrat_mission'");
     expect(formulaireMission).not.toContain("supabase.rpc('fn_definir_retrocession_mission'");
     expect(formulaireMission).not.toContain("setTauxHoraire('0')");

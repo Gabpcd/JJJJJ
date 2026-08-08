@@ -57,6 +57,7 @@ import { fr } from 'date-fns/locale';
 import { toast } from 'sonner';
 import { useEtablissementScope } from '@/hooks/useEtablissementScope';
 import { useEtabPermissions } from '@/hooks/useEtabPermissions';
+import { WizardOuvertureLitige } from '@/components/litige/WizardOuvertureLitige';
 
 const fmt = (v: number | null | undefined) =>
   v != null ? new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(v) : '—';
@@ -185,6 +186,9 @@ export default function FacturationEtablissement() {
   const [factures, setFactures] = useState<any[]>([]); // fn_mes_factures
   const [missionsNonFacturees, setMissionsNonFacturees] = useState<any[]>([]);
   const [prelevements, setPrelevements] = useState<any[]>([]);
+  const [facturesHonorairesParId, setFacturesHonorairesParId] = useState<Map<string, any>>(new Map());
+  const [facturesBloqueesParLitige, setFacturesBloqueesParLitige] = useState<Set<string>>(new Set());
+  const [missionsBloqueesParLitige, setMissionsBloqueesParLitige] = useState<Set<string>>(new Set());
   const [missionsPaidByStripe, setMissionsPaidByStripe] = useState<Set<string>>(new Set());
   const [erreurChargement, setErreurChargement] = useState<string | null>(null);
 
@@ -219,6 +223,7 @@ export default function FacturationEtablissement() {
   const [connectPayingId, setConnectPayingId] = useState<string | null>(null);
   const [generatingFacture, setGeneratingFacture] = useState(false);
   const [historiqueOuvert, setHistoriqueOuvert] = useState(false);
+  const [factureAContester, setFactureAContester] = useState<any>(null);
 
   // ── Responsive: detect mobile ──
   const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
@@ -273,13 +278,27 @@ export default function FacturationEtablissement() {
       setMissionsNonFacturees([]);
       setMissionsPaidByStripe(new Set());
       setPrelevements([]);
+      setFacturesHonorairesParId(new Map());
+      setFacturesBloqueesParLitige(new Set());
+      setMissionsBloqueesParLitige(new Set());
       setLoading(false);
       return;
     }
     setLoading(true);
     setErreurChargement(null);
     try {
-      const [resEtab, resObligations, resPaiements, resFactures, resMNF, resTransfers, resPrelev] = await Promise.all([
+      const [
+        resEtab,
+        resObligations,
+        resPaiements,
+        resFactures,
+        resMNF,
+        resTransfers,
+        resPrelev,
+        resFacturesHonorairesOuvertes,
+        resLitigesActifs,
+        resPaiementsContestes,
+      ] = await Promise.all([
         supabase.rpc('fn_mon_etablissement_complet' as any),
         supabase.rpc('fn_obligations_financieres' as any),
         supabase.rpc('fn_paiements_etablissement' as any),
@@ -299,6 +318,19 @@ export default function FacturationEtablissement() {
           .eq('etablissement_id', etablissementId)
           .order('capture_le', { ascending: false })
           .limit(20),
+        supabase.from('factures_honoraires')
+          .select('id, numero_facture, nature_correction, type_document, facture_precedente_id')
+          .eq('etablissement_id', etablissementId)
+          .eq('type_document', 'FACTURE')
+          .in('statut', ['EMISE', 'EN_RETARD', 'VIREMENT_DECLARE']),
+        supabase.from('litiges')
+          .select('mission_id, facture_id')
+          .eq('etablissement_id', etablissementId)
+          .in('statut', ['OUVERT', 'EN_DISCUSSION', 'EN_MEDIATION', 'MEDIATION_EN_COURS', 'REVUE_ADMIN']),
+        supabase.from('paiements_soignant')
+          .select('mission_id, facture_honoraire_id')
+          .eq('etablissement_id', etablissementId)
+          .eq('statut', 'CONTESTE'),
       ]);
 
       // Valider l'ensemble avant le moindre rendu : une seule erreur transport,
@@ -310,6 +342,9 @@ export default function FacturationEtablissement() {
       verifierReponseChargement('Missions non facturées', resMNF, estTableau);
       verifierReponseChargement('Transferts Stripe', resTransfers, estTableau);
       verifierReponseChargement('Prélèvements', resPrelev, estTableau);
+      verifierReponseChargement('Factures d’honoraires ouvertes', resFacturesHonorairesOuvertes, estTableau);
+      verifierReponseChargement('Litiges actifs', resLitigesActifs, estTableau);
+      verifierReponseChargement('Paiements contestés', resPaiementsContestes, estTableau);
 
       setEtab(resEtab.data);
       setData(resObligations.data);
@@ -318,6 +353,21 @@ export default function FacturationEtablissement() {
       setMissionsNonFacturees(resMNF.data as any[]);
       setMissionsPaidByStripe(new Set((resTransfers.data as any[]).map((t: any) => t.mission_id)));
       setPrelevements(resPrelev.data as any[]);
+      setFacturesHonorairesParId(new Map(
+        (resFacturesHonorairesOuvertes.data as any[]).map((facture: any) => [facture.id, facture]),
+      ));
+      const facturesBloquees = new Set<string>();
+      const missionsBloquees = new Set<string>();
+      for (const ligne of [
+        ...(resLitigesActifs.data as any[]),
+        ...(resPaiementsContestes.data as any[]),
+      ]) {
+        const factureId = ligne.facture_id || ligne.facture_honoraire_id;
+        if (factureId) facturesBloquees.add(factureId);
+        else if (ligne.mission_id) missionsBloquees.add(ligne.mission_id);
+      }
+      setFacturesBloqueesParLitige(facturesBloquees);
+      setMissionsBloqueesParLitige(missionsBloquees);
     } catch (err) {
       logger.error('Facturation charger error', err);
       setEtab(null);
@@ -327,6 +377,9 @@ export default function FacturationEtablissement() {
       setMissionsNonFacturees([]);
       setMissionsPaidByStripe(new Set());
       setPrelevements([]);
+      setFacturesHonorairesParId(new Map());
+      setFacturesBloqueesParLitige(new Set());
+      setMissionsBloqueesParLitige(new Set());
       setErreurChargement('Impossible de charger les données de facturation en toute sécurité.');
     } finally {
       setLoading(false);
@@ -903,7 +956,14 @@ export default function FacturationEtablissement() {
                     ? (m.soignant_stripe_connect ? 'Note d\'honoraires (Stripe Connect)' : 'Note d\'honoraires (virement)')
                     : null;
                   const peutPayerStripeBase = isLiberal && m.soignant_stripe_connect;
-                  const enLitige = Boolean(m.a_paiement_conteste);
+                  const factureHonoraires = m.facture_honoraires_id
+                    ? facturesHonorairesParId.get(m.facture_honoraires_id)
+                    : null;
+                  const enLitige = m.facture_honoraires_id
+                    ? facturesBloqueesParLitige.has(m.facture_honoraires_id)
+                      || missionsBloqueesParLitige.has(m.mission_id)
+                    : missionsBloqueesParLitige.has(m.mission_id)
+                      || Boolean(m.a_paiement_conteste);
                   const peutPayerStripe = peutPayerStripeBase && !enLitige;
                   return (
                     <div key={m.payment_key || m.facture_honoraires_id || m.mission_id} className="card-base space-y-3">
@@ -936,6 +996,20 @@ export default function FacturationEtablissement() {
                           {m.facture_honoraires_id && !m.est_facture_finale_mission && (
                             <p className="mt-1 text-xs font-medium text-primary">Paiement hebdomadaire — période close</p>
                           )}
+                          {m.facture_honoraires_id && (
+                            <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
+                              {factureHonoraires?.numero_facture && (
+                                <span className="font-medium text-foreground">{factureHonoraires.numero_facture}</span>
+                              )}
+                              {factureHonoraires?.nature_correction === 'COMPLEMENT' && (
+                                <BadgeY2K variant="warning">Complément après litige</BadgeY2K>
+                              )}
+                              {factureHonoraires?.nature_correction === 'REMPLACEMENT' && (
+                                <BadgeY2K variant="info">Facture rectificative</BadgeY2K>
+                              )}
+                              <span>Échéance indépendante · une contestation ne suspend pas les autres périodes</span>
+                            </div>
+                          )}
                           {typeContratMission && (
                             <div className="flex items-center gap-2 mt-2 flex-wrap">
                               <BadgeY2K variant="info" className={isSalarie
@@ -955,7 +1029,9 @@ export default function FacturationEtablissement() {
                               <div className="flex-1 min-w-0">
                                 <p className="text-sm font-semibold text-destructive"><AlertTriangle className="inline-block h-4 w-4 mr-1 align-text-bottom" aria-hidden="true" />Litige en cours sur un paiement</p>
                                 <p className="text-xs text-destructive/80">
-                                  Les paiements sont désactivés tant que le litige n'est pas résolu.
+                                  {m.facture_honoraires_id
+                                    ? 'Cette échéance est suspendue ; les autres périodes restent payables.'
+                                    : 'Les paiements de la mission sont suspendus tant que le litige n’est pas résolu.'}
                                 </p>
                               </div>
                               <button
@@ -991,29 +1067,65 @@ export default function FacturationEtablissement() {
                       </div>
 
                       {!canManagePayments ? (
-                        <p className="text-xs text-muted-foreground text-center py-1">
-                          Consultation uniquement — votre rôle ne permet pas d’effectuer un paiement.
-                        </p>
+                        <div className="grid items-center gap-2 sm:grid-cols-[1fr_auto]">
+                          <p className="text-xs text-muted-foreground text-center py-1 sm:text-left">
+                            Consultation uniquement — votre rôle ne permet pas d’effectuer un paiement.
+                          </p>
+                          {permissions.contrats && m.facture_honoraires_id && !enLitige && (
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              onClick={() => setFactureAContester(m)}
+                            >
+                              <Scale className="mr-2 h-4 w-4" /> Contester
+                            </Button>
+                          )}
+                        </div>
                       ) : peutPayerStripe ? (
-                        <BoutonY2K
-                          size="sm"
-                          onClick={() => payerStripeConnect(m.mission_id, m.facture_honoraires_id)}
-                          disabled={connectPayingId === (m.facture_honoraires_id || m.mission_id) || enLitige}
-                          className="w-full"
-                        >
-                          <CreditCard className="w-4 h-4 mr-2" />
-                          {connectPayingId === (m.facture_honoraires_id || m.mission_id) ? 'Préparation…' : 'Payer via Stripe'}
-                        </BoutonY2K>
+                        <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
+                          <BoutonY2K
+                            size="sm"
+                            onClick={() => payerStripeConnect(m.mission_id, m.facture_honoraires_id)}
+                            disabled={connectPayingId === (m.facture_honoraires_id || m.mission_id) || enLitige}
+                            className="w-full"
+                          >
+                            <CreditCard className="w-4 h-4 mr-2" />
+                            {connectPayingId === (m.facture_honoraires_id || m.mission_id) ? 'Préparation…' : 'Payer via Stripe'}
+                          </BoutonY2K>
+                          {permissions.contrats && m.facture_honoraires_id && !enLitige && (
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              onClick={() => setFactureAContester(m)}
+                            >
+                              <Scale className="mr-2 h-4 w-4" /> Contester
+                            </Button>
+                          )}
+                        </div>
                       ) : (
-                        <BoutonY2K
-                          size="sm"
-                          onClick={() => ouvrirDialogDeclarer(m)}
-                          disabled={declaringId === (m.facture_honoraires_id || m.mission_id) || enLitige}
-                          className="w-full"
-                        >
-                          <Banknote className="w-4 h-4 mr-2" />
-                          {enLitige ? 'Paiement bloqué (litige)' : 'Déclarer un paiement'}
-                        </BoutonY2K>
+                        <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
+                          <BoutonY2K
+                            size="sm"
+                            onClick={() => ouvrirDialogDeclarer(m)}
+                            disabled={declaringId === (m.facture_honoraires_id || m.mission_id) || enLitige}
+                            className="w-full"
+                          >
+                            <Banknote className="w-4 h-4 mr-2" />
+                            {enLitige ? 'Paiement bloqué (litige)' : 'Déclarer un paiement'}
+                          </BoutonY2K>
+                          {permissions.contrats && m.facture_honoraires_id && !enLitige && (
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              onClick={() => setFactureAContester(m)}
+                            >
+                              <Scale className="mr-2 h-4 w-4" /> Contester
+                            </Button>
+                          )}
+                        </div>
                       )}
                     </div>
                   );
@@ -2026,6 +2138,20 @@ export default function FacturationEtablissement() {
             </DialogResponsiveFooter>
           </DialogResponsiveContent>
         </DialogResponsive>
+      )}
+
+      {factureAContester && (
+        <WizardOuvertureLitige
+          missionId={factureAContester.mission_id}
+          missionIntitule={factureAContester.intitule}
+          factureHonorairesId={factureAContester.facture_honoraires_id}
+          initialType="PAIEMENT"
+          onClose={() => setFactureAContester(null)}
+          onSuccess={() => {
+            setFactureAContester(null);
+            void charger();
+          }}
+        />
       )}
     </LayoutApp>
   );

@@ -44,6 +44,7 @@ export const ACTIONS_FINANCIERES = [
   'RECALCUL',
   'ANNULER_REEMETTRE',
   'AVOIR',
+  'COMPLEMENT',
 ] as const;
 export type ActionFinanciere = (typeof ACTIONS_FINANCIERES)[number];
 
@@ -87,7 +88,7 @@ export const LABELS_ACTION_FINANCIERE: Record<
   AUTO: {
     label: 'Auto (par défaut)',
     tooltip:
-      'Le serveur choisit : RECALCUL si BROUILLON, ANNULER_REEMETTRE si ÉMISE ou EN RETARD, AVOIR si PAYÉE.',
+      'Le serveur choisit : recalcul du brouillon, remplacement avant paiement, avoir si le payé baisse, facture complémentaire s’il augmente, ou rectification descriptive si le total payé ne change pas.',
   },
   RECALCUL: {
     label: 'Recalcul',
@@ -103,6 +104,11 @@ export const LABELS_ACTION_FINANCIERE: Record<
     label: 'Avoir partiel',
     tooltip:
       'Émet un avoir sur une facture payée pour une correction à la baisse. Une hausse est refusée.',
+  },
+  COMPLEMENT: {
+    label: 'Facture complémentaire',
+    tooltip:
+      'Sur une facture déjà payée corrigée à la hausse, facture uniquement le delta supplémentaire et conserve l’originale.',
   },
 };
 

@@ -194,8 +194,33 @@ jobs:
 
           deploy_with_retry() {
             local fn="$1" attempt=1 max=3
+            local jwt_mode=""
+            local jwt_args=()
+
+            # `--use-api` ne lit pas de manière fiable le verify_jwt de
+            # config.toml. On traduit donc explicitement la configuration en
+            # argument CLI, et on refuse le déploiement si la fonction n'est
+            # pas inventoriée : une nouvelle fonction ne doit jamais hériter
+            # silencieusement d'un mode JWT différent de celui qui a été revu.
+            jwt_mode="$(
+              awk -v target="[functions.${fn}]" '
+                $0 == target { in_section = 1; next }
+                in_section && /^\[/ { exit }
+                in_section && $1 == "verify_jwt" { print $3; exit }
+              ' ../config.toml
+            )"
+            case "$jwt_mode" in
+              false) jwt_args=(--no-verify-jwt) ;;
+              true) jwt_args=() ;;
+              *)
+                echo "::error::Configuration verify_jwt absente ou invalide pour $fn"
+                return 1
+                ;;
+            esac
+
             while [ "$attempt" -le "$max" ]; do
               if supabase functions deploy "$fn" \
+                   "${jwt_args[@]}" \
                    --project-ref "$SUPABASE_PROJECT_REF" \
                    --use-api; then
                 return 0

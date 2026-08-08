@@ -56,6 +56,124 @@ import {
 } from '@/components/planning/planning-candidat';
 
 type SoignantData = Database['public']['Tables']['soignants']['Row'];
+type NatureTvaPrestation = 'SOIN_THERAPEUTIQUE_EXONERE' | 'PRESTATION_TAXABLE';
+
+const LABEL_NATURE_TVA: Record<NatureTvaPrestation, string> = {
+  SOIN_THERAPEUTIQUE_EXONERE: 'Soin à la personne à finalité thérapeutique',
+  PRESTATION_TAXABLE: 'Prestation taxable',
+};
+
+function ConfirmationNatureTvaMission({
+  mission,
+  onUpdate,
+}: {
+  mission: any;
+  onUpdate: (patch: Record<string, unknown>) => void;
+}) {
+  const natureDeclaree = mission.nature_tva_prestation as NatureTvaPrestation | null;
+  const statut = mission.statut_validation_tva as string | null;
+  const [selection, setSelection] = useState<NatureTvaPrestation | ''>(
+    (mission.nature_tva_confirmee_soignant as NatureTvaPrestation | null)
+      || natureDeclaree
+      || '',
+  );
+  const [saving, setSaving] = useState(false);
+
+  if (statut === 'CONFIRMEE' && natureDeclaree) {
+    return (
+      <section id="bloc-tva" className="card-base border-success/30 bg-success/5">
+        <h3 className="text-sm font-semibold text-success">✓ Nature TVA confirmée</h3>
+        <p className="mt-1 text-xs text-muted-foreground">{LABEL_NATURE_TVA[natureDeclaree]}</p>
+        <p className="mt-2 text-[11px] text-muted-foreground">
+          Cette confirmation autorise la facturation. Elle ne fige ni les heures ni le prix : tout ajustement reste possible via un litige tracé.
+        </p>
+      </section>
+    );
+  }
+
+  if (statut === 'A_REVOIR') {
+    return (
+      <section id="bloc-tva" className="card-base border-warning/40 bg-warning/5" role="status">
+        <h3 className="text-sm font-semibold text-foreground">Nature TVA en cours de revue</h3>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Une information manque ou ta réponse diffère de celle de l'établissement. La mission et les corrections d'heures ou de prix continuent normalement ; seule l'émission de la facture est suspendue.
+        </p>
+        <p className="mt-2 text-xs font-medium text-warning">Jolene te demandera une nouvelle confirmation après la revue.</p>
+      </section>
+    );
+  }
+
+  return (
+    <section id="bloc-tva" className="card-base border-primary/30 bg-primary/5">
+      <h3 className="text-sm font-semibold text-foreground">Confirme la nature TVA de la mission</h3>
+      <p className="mt-1 text-xs text-muted-foreground">
+        L'établissement a déclaré : <strong>{natureDeclaree ? LABEL_NATURE_TVA[natureDeclaree] : 'information manquante'}</strong>. Vérifie la prestation réellement réalisée avant toute facture.
+      </p>
+      <p className="mt-2 text-[11px] text-muted-foreground">
+        Choisis « soin » seulement si tu exerces dans le cadre d’une profession médicale ou paramédicale réglementée et si l’acte vise réellement à prévenir, diagnostiquer ou traiter une maladie. Une activité de conseil, administrative ou sans finalité thérapeutique est taxable.{' '}
+        <a
+          href="https://bofip.impots.gouv.fr/bofip/1139-PGP.html/identifiant%3DBOI-TVA-CHAMP-30-10-20-10-20250409"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="font-medium text-primary underline hover:no-underline"
+        >
+          Critères officiels
+        </a>
+      </p>
+      <fieldset className="mt-3 space-y-2" disabled={saving || !natureDeclaree}>
+        <legend className="sr-only">Nature TVA de la prestation</legend>
+        {(Object.entries(LABEL_NATURE_TVA) as Array<[NatureTvaPrestation, string]>).map(([value, label]) => (
+          <label key={value} className="flex cursor-pointer items-start gap-2 rounded-lg border border-border bg-card p-3 text-xs">
+            <input
+              type="radio"
+              name="confirmation-nature-tva"
+              checked={selection === value}
+              onChange={() => setSelection(value)}
+              className="mt-0.5 accent-primary"
+            />
+            <span className="text-foreground">{label}</span>
+          </label>
+        ))}
+      </fieldset>
+      <BoutonY2K
+        className="mt-3 w-full"
+        disabled={!selection || saving || !natureDeclaree}
+        onClick={async () => {
+          if (!selection) return;
+          setSaving(true);
+          try {
+            const { data, error } = await supabase.rpc('fn_confirmer_nature_tva_mission' as any, {
+              p_mission_id: mission.id,
+              p_nature_tva_prestation: selection,
+            });
+            if (error || (data as any)?.success === false) {
+              throw error || new Error((data as any)?.error || 'Confirmation impossible.');
+            }
+            const nouveauStatut = (data as any).statut_validation_tva;
+            onUpdate({
+              nature_tva_confirmee_soignant: selection,
+              statut_validation_tva: nouveauStatut,
+            });
+            if (nouveauStatut === 'CONFIRMEE') {
+              toast.success('Nature TVA confirmée.');
+            } else {
+              toast.info('Désaccord transmis à Jolene. La mission continue ; seule la facturation est suspendue.');
+            }
+          } catch (error: any) {
+            toast.error(error?.message || 'Confirmation impossible.');
+          } finally {
+            setSaving(false);
+          }
+        }}
+      >
+        {saving ? 'Confirmation…' : 'Confirmer mon choix'}
+      </BoutonY2K>
+      <p className="mt-2 text-[10px] text-muted-foreground">
+        Un désaccord n'annule pas la mission et n'empêche pas un litige sur les heures ou le tarif.
+      </p>
+    </section>
+  );
+}
 
 export default function DetailMissionSoignant() {
   usePageTitle('Détail mission');
@@ -103,7 +221,12 @@ export default function DetailMissionSoignant() {
   useEffect(() => {
     if (!user || !id) return;
     const load = async () => {
-      const [{ data: m }, { data: s }, { data: creneaux, error: creneauxError }] = await Promise.all([
+      const [
+        { data: m },
+        { data: s },
+        { data: creneaux, error: creneauxError },
+        { data: missionTva },
+      ] = await Promise.all([
         supabase.from('missions').select(`
           id, intitule, description, service, profession_requise,
           debut_le, fin_le, duree_heures, nb_creneaux, taux_horaire_base, taux_rist_plafonne, rist_plafond_applique,
@@ -124,7 +247,16 @@ export default function DetailMissionSoignant() {
           .eq('type_creneau', 'PREVISIONNEL')
           .eq('est_pause', false)
           .order('debut', { ascending: true }),
+        // Déploiement expand/contract : cette lecture optionnelle peut échouer
+        // quelques instants tant que la migration TVA n'est pas encore posée.
+        // Elle ne doit jamais masquer une mission par ailleurs lisible.
+        supabase
+          .from('missions')
+          .select('nature_tva_prestation, nature_tva_confirmee_soignant, statut_validation_tva')
+          .eq('id', id)
+          .maybeSingle(),
       ]);
+      if (m && missionTva) Object.assign(m as any, missionTva);
       setCreneauxPlanifies(m
         ? ajouterRepliMissionPonctuelle((creneaux || []) as CreneauPointage[], m)
         : []);
@@ -243,6 +375,16 @@ export default function DetailMissionSoignant() {
      prioritaire seulement, et uniquement si l'état chargé la rend certaine —
      jamais de rappel pour une action peut-être déjà faite). */
   const actionPrioritaire: ActionPrioritaire | null = (() => {
+    if (estAssigne && missionEstLiberale
+      && (mission as any).statut_validation_tva === 'A_CONFIRMER') {
+      return {
+        titre: 'Confirme la nature TVA',
+        description: 'Cette vérification est requise avant la première facture, sans bloquer ta mission.',
+        cta: 'Vérifier',
+        cibleId: 'bloc-tva',
+        variante: 'warning',
+      };
+    }
     if (estAssigne && (mission as any).mode_remuneration === 'RETROCESSION'
       && (mission as any).montant_honoraires_bruts && !(mission as any).honoraires_confirmes_le) {
       return {
@@ -495,7 +637,7 @@ export default function DetailMissionSoignant() {
               {mission.est_urgente && <span className="badge-base bg-destructive text-destructive-foreground text-[10px]">🔥 URGENT</span>}
               {/* 7c : ⚡ Paiement rapide — mission LIBERAL + étab éligible (flag serveur). */}
               {mission.type_contrat_recherche === 'LIBERAL' && etabSafe?.paiement_rapide && (
-                <span className="badge-base bg-success/10 text-success text-[10px]" title="Payée sous 24 à 72 h après validation des présences">
+                <span className="badge-base bg-success/10 text-success text-[10px]" title="Instruction de versement normalement lancée sous 24 à 72 h après validation">
                   ⚡ Paiement rapide
                 </span>
               )}
@@ -505,6 +647,12 @@ export default function DetailMissionSoignant() {
             <p className="text-xs text-muted-foreground">
               {getLabelProfession(mission.profession_requise)} {mission.service && `· ${mission.service}`}
             </p>
+            {mission.type_contrat_recherche !== 'SALARIE' && mission.nature_tva_prestation && (
+              <p className="mt-2 text-[11px] text-muted-foreground">
+                Nature TVA annoncée si la mission est réalisée en libéral :{' '}
+                {LABEL_NATURE_TVA[mission.nature_tva_prestation as NatureTvaPrestation]}.
+              </p>
+            )}
           </div>
 
           {/* Établissement */}
@@ -734,9 +882,14 @@ export default function DetailMissionSoignant() {
               promesse que Jolene ne contrôle pas (⚡ gated serveur, escrow requis). */}
           {(mission as any).mode_remuneration !== 'RETROCESSION' && (
             missionEstLiberale && etabSafe?.paiement_rapide ? (
-              <p className="text-xs font-semibold text-success text-center">
-                ⚡ Payée sous 24 à 72 h après validation des présences.
-              </p>
+              <div className="text-center">
+                <p className="text-xs font-semibold text-success">
+                  ⚡ Versement normalement lancé sous 24 à 72 h après validation des présences.
+                </p>
+                <p className="mt-1 text-[10px] text-muted-foreground">
+                  L'arrivée sur ton compte dépend ensuite du délai bancaire et des contrôles éventuels.
+                </p>
+              </div>
             ) : missionEstLiberale ? (
               <p className="text-xs text-muted-foreground text-center">
                 Payée après règlement de l'établissement (~30 à 60 jours).
@@ -746,6 +899,14 @@ export default function DetailMissionSoignant() {
                 💶 Salaire versé vers le {etabSafe.jour_paie_habituel} du mois par l'établissement employeur.
               </p>
             ) : null
+          )}
+
+          {estAssigne && missionEstLiberale && (
+            <ConfirmationNatureTvaMission
+              key={`${mission.statut_validation_tva}:${mission.nature_tva_prestation}:${mission.nature_tva_confirmee_soignant}`}
+              mission={mission}
+              onUpdate={(patch) => setMission((precedente: any) => ({ ...precedente, ...patch }))}
+            />
           )}
 
           {/* Facture honoraires — visible dès que mission TERMINEE (facture générée) */}

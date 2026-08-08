@@ -84,7 +84,7 @@ async function remplirChampsEtPlanning() {
     fireEvent.change(screen.getByLabelText('Service'), {
       target: { value: 'Soins continus' },
     });
-    fireEvent.change(screen.getByLabelText('Taux horaire brut * (€/h)'), {
+    fireEvent.change(screen.getByLabelText(/Taux horaire (?:proposé|brut|des honoraires)/i), {
       target: { value: '32' },
     });
     fireEvent.change(screen.getByLabelText('Première date affichée *'), {
@@ -99,13 +99,14 @@ async function remplirChampsEtPlanning() {
   await waitFor(() => {
     expect(within(screen.getByTestId('jour-planning-2099-08-03')).getByRole('checkbox')).toBeChecked();
   });
+  act(() => fireEvent.click(screen.getByRole('radio', { name: /Soin à finalité thérapeutique/i })));
 }
 
 function verifierValeursConservees() {
   expect(screen.getByLabelText('Intitulé *')).toHaveValue('IDE — test conservation du formulaire');
   expect(screen.getByLabelText('Description')).toHaveValue('Description conservée pendant la vérification.');
   expect(screen.getByLabelText('Service')).toHaveValue('Soins continus');
-  expect(screen.getByLabelText('Taux horaire brut * (€/h)')).toHaveValue(32);
+  expect(screen.getByLabelText(/Taux horaire (?:proposé|brut|des honoraires)/i)).toHaveValue(32);
   expect(screen.getByLabelText('Première date affichée *')).toHaveValue('2099-08-03');
   expect(screen.getByLabelText('Dernière date affichée *')).toHaveValue('2099-08-03');
   expect(within(screen.getByTestId('jour-planning-2099-08-03')).getByRole('checkbox')).toBeChecked();
@@ -134,7 +135,7 @@ describe('FormulaireMission — parcours de création critique', () => {
         return etablissement.promise;
       }
       if (fonction === 'fn_mode_exercice') return modeExercice.promise;
-      if (fonction === 'fn_creer_mission_multi_jours_v2') {
+      if (fonction === 'fn_creer_mission_multi_jours_v3') {
         return Promise.resolve({ data: { success: true, mission_id: 'mission-test-creee' }, error: null });
       }
       throw new Error(`RPC inattendue : ${fonction}`);
@@ -189,17 +190,19 @@ describe('FormulaireMission — parcours de création critique', () => {
       service: 'Soins continus',
       tauxHoraire: 32,
       contratPreference: 'TOUS',
+      natureTvaPrestation: 'SOIN_THERAPEUTIQUE_EXONERE',
       dureeHeures: 12,
     });
 
     fireEvent.click(screen.getByRole('button', { name: 'Confirmer la publication' }));
     await waitFor(() => {
-      expect(mocks.rpc).toHaveBeenCalledWith('fn_creer_mission_multi_jours_v2', expect.objectContaining({
+      expect(mocks.rpc).toHaveBeenCalledWith('fn_creer_mission_multi_jours_v3', expect.objectContaining({
         p_intitule: 'IDE — test conservation du formulaire',
         p_profession_requise: 'IDE',
         p_service: 'Soins continus',
         p_taux_horaire_base: 32,
         p_type_contrat_recherche: 'TOUS',
+        p_nature_tva_prestation: 'SOIN_THERAPEUTIQUE_EXONERE',
         p_creneaux: [expect.objectContaining({
           debut: expect.stringContaining('2099-08-03'),
           fin: expect.stringContaining('2099-08-03'),

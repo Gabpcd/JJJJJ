@@ -25,7 +25,7 @@ export default function ModifierMission() {
           debut_le, fin_le, taux_horaire_base, est_urgente, niveau_urgence,
           mode_attribution, type_contrat_recherche,
           specialite_medicale_requise, accepte_non_specialises,
-          nb_creneaux, statut
+          nb_creneaux, statut, nature_tva_prestation
         `).eq('id', id).single(),
         supabase
           .from('mission_creneaux')

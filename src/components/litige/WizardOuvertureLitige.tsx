@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ChevronLeft, ChevronRight, Loader2, AlertTriangle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useNotification } from '@/contexts/NotificationContext';
@@ -11,14 +11,26 @@ import {
   DialogResponsiveFooter,
 } from '@/components/ui/DialogResponsive';
 
+type TypeLitige = 'PAIEMENT' | 'CONDITIONS' | 'COMPORTEMENT' | 'AUTRE';
+
 interface Props {
   missionId: string;
   missionIntitule?: string;
+  factureHonorairesId?: string;
+  initialType?: TypeLitige;
   onClose: () => void;
   onSuccess?: () => void;
 }
 
-type TypeLitige = 'PAIEMENT' | 'CONDITIONS' | 'COMPORTEMENT' | 'AUTRE';
+type FactureContestable = {
+  id: string;
+  numero_facture: string;
+  periode_debut: string | null;
+  periode_fin: string | null;
+  montant_ttc: number;
+  statut: string;
+  nature_correction?: string | null;
+};
 
 const TYPES: { value: TypeLitige; label: string; description: string }[] = [
   { value: 'PAIEMENT', label: '💰 Paiement', description: 'Montant erroné, retard de paiement, heures non comptées…' },
@@ -38,14 +50,46 @@ const TYPES: { value: TypeLitige; label: string; description: string }[] = [
  *
  * Sprint 8 ter-E PR 5 — Migration vers DialogResponsive (fullscreen mobile + nav sticky).
  */
-export function WizardOuvertureLitige({ missionId, missionIntitule, onClose, onSuccess }: Props) {
+export function WizardOuvertureLitige({
+  missionId,
+  missionIntitule,
+  factureHonorairesId,
+  initialType,
+  onClose,
+  onSuccess,
+}: Props) {
   const { afficherNotification } = useNotification();
   const [etape, setEtape] = useState<1 | 2 | 3>(1);
-  const [typeLitige, setTypeLitige] = useState<TypeLitige | null>(null);
+  const [typeLitige, setTypeLitige] = useState<TypeLitige | null>(initialType ?? null);
   const [detail, setDetail] = useState('');
   const [creating, setCreating] = useState(false);
+  const [factures, setFactures] = useState<FactureContestable[]>([]);
+  const [factureSelectionnee, setFactureSelectionnee] = useState(factureHonorairesId ?? '');
 
-  const peutAvancer1 = typeLitige !== null;
+  useEffect(() => {
+    let actif = true;
+    void (async () => {
+      const { data } = await supabase
+        .from('factures_honoraires')
+        .select('id, numero_facture, periode_debut, periode_fin, montant_ttc, statut, nature_correction')
+        .eq('mission_id', missionId)
+        .eq('type_document', 'FACTURE')
+        .in('statut', ['EMISE', 'EN_RETARD', 'PAYEE', 'FACTORISEE'])
+        .order('periode_debut', { ascending: false });
+      if (!actif) return;
+      const options = (data ?? []) as FactureContestable[];
+      setFactures(options);
+      if (factureHonorairesId) {
+        setFactureSelectionnee(factureHonorairesId);
+      } else if (options.length === 1) {
+        setFactureSelectionnee(options[0].id);
+      }
+    })();
+    return () => { actif = false; };
+  }, [missionId, factureHonorairesId]);
+
+  const factureRequise = typeLitige === 'PAIEMENT' && factures.length > 1;
+  const peutAvancer1 = typeLitige !== null && (!factureRequise || Boolean(factureSelectionnee));
   const peutAvancer2 = detail.trim().length >= 20;
 
   async function creerLitige() {
@@ -54,10 +98,25 @@ export function WizardOuvertureLitige({ missionId, missionIntitule, onClose, onS
     const motifStructure = `[${typeLitige}] ${detail.trim()}`;
 
     setCreating(true);
-    const { data, error } = await supabase.rpc('fn_ouvrir_litige_rate_limited' as any, {
+    const typeServeur = typeLitige === 'PAIEMENT'
+      ? 'DESACCORD_MONTANT_FACTURE'
+      : typeLitige === 'CONDITIONS'
+        ? 'CONDITIONS_MISSION_NON_RESPECTEES'
+        : 'AUTRE';
+    const params: Record<string, unknown> = {
       p_mission_id: missionId,
+      p_type_litige: typeServeur,
       p_motif: motifStructure,
-    });
+    };
+    // Une demande de revue hors délai reste rattachée au document exact : le
+    // passage en catégorie AUTRE ne doit jamais faire perdre le périmètre.
+    if (factureSelectionnee) {
+      params.p_facture_id = factureSelectionnee;
+    }
+    const { data, error } = await supabase.rpc(
+      'fn_ouvrir_litige_rate_limited' as any,
+      params,
+    );
     setCreating(false);
 
     if (error) {
@@ -126,6 +185,29 @@ export function WizardOuvertureLitige({ missionId, missionIntitule, onClose, onS
                   </label>
                 ))}
               </div>
+              {(typeLitige === 'PAIEMENT' || Boolean(factureHonorairesId)) && factures.length > 0 && (
+                <div className="rounded-lg border border-border bg-muted/20 p-3">
+                  <label htmlFor="facture-contestee" className="mb-1 block text-sm font-medium">
+                    Facture concernée{factures.length > 1 ? ' *' : ''}
+                  </label>
+                  <select
+                    id="facture-contestee"
+                    className="input-base min-h-[44px] w-full text-sm"
+                    value={factureSelectionnee}
+                    onChange={(event) => setFactureSelectionnee(event.target.value)}
+                  >
+                    {factures.length > 1 && <option value="">Choisir la période exacte…</option>}
+                    {factures.map((facture) => (
+                      <option key={facture.id} value={facture.id}>
+                        {facture.numero_facture} · {facture.periode_debut ?? '—'} → {facture.periode_fin ?? '—'} · {Number(facture.montant_ttc).toFixed(2)} €
+                      </option>
+                    ))}
+                  </select>
+                  <p className="mt-1 text-[11px] text-muted-foreground">
+                    Seule cette échéance sera gelée et corrigée ; les autres périodes restent payables.
+                  </p>
+                </div>
+              )}
             </div>
           )}
 
@@ -167,6 +249,15 @@ export function WizardOuvertureLitige({ missionId, missionIntitule, onClose, onS
                   <p className="text-[11px] uppercase text-muted-foreground">Détail</p>
                   <p className="whitespace-pre-wrap text-xs">{detail.trim()}</p>
                 </div>
+                {factureSelectionnee && (
+                  <div>
+                    <p className="text-[11px] uppercase text-muted-foreground">Facture ciblée</p>
+                    <p className="text-xs font-medium">
+                      {factures.find((facture) => facture.id === factureSelectionnee)?.numero_facture
+                        ?? factureSelectionnee}
+                    </p>
+                  </div>
+                )}
               </div>
               <div className="rounded-lg bg-info/5 border border-info/30 p-3 text-[11px] text-foreground">
                 <p className="font-medium mb-1">Ce qui se passe après confirmation :</p>

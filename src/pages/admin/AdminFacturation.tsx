@@ -21,6 +21,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { estDocumentComptabilise, montantDocumentComptable } from '@/lib/adminInvoiceAccounting';
 import { estFactureProduction, perimetreFacture, type FactureAvecPerimetre } from '@/lib/adminInvoiceScope';
+import { RevuesTvaMissions } from '@/components/admin/RevuesTvaMissions';
 
 const formatEur = (v: number) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(v);
 const formatDate = (d: string) => new Date(d).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' }).replace(/ /g, '\u00a0');
@@ -535,6 +536,8 @@ export default function AdminFacturation() {
             </BoutonY2K>
           )}
         />
+
+        <RevuesTvaMissions />
 
         <details className="group rounded-xl border border-border bg-card">
           <summary className="flex cursor-pointer list-none items-center justify-between gap-4 p-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary [&::-webkit-details-marker]:hidden">

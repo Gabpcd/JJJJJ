@@ -1,16 +1,18 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FileText, Download, Loader2, CheckCircle, Clock, AlertTriangle, Info, Zap, X } from 'lucide-react';
+import { FileText, Download, Loader2, CheckCircle, Clock, AlertTriangle, Info, Zap, X, MessageSquareWarning } from 'lucide-react';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { LayoutApp } from '@/components/LayoutApp';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { useNotification } from '@/contexts/NotificationContext';
 import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { TableOuCartes, type ColonneTableau } from '@/components/ui/TableOuCartes';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { ModalCessionCreance } from '@/components/ModalCessionCreance';
+import { WizardOuvertureLitige } from '@/components/litige/WizardOuvertureLitige';
 import { useAffacturageActif } from '@/hooks/useAffacturageActif';
 import { telechargerFactureHonorairesPDF } from '@/lib/facture-honoraires-pdf';
 import {
@@ -48,6 +50,48 @@ function configStatut(statut: string | null | undefined) {
   };
 }
 
+function etatVerificationDocument(facture: any) {
+  if (facture.type_document !== 'FACTURE' || !facture.emise_le) return null;
+  if (facture.statut_litige === 'EN_ATTENTE_LITIGE') {
+    return {
+      label: 'Correction en cours',
+      color: 'text-warning',
+      ouverte: false,
+      litigeActif: true,
+    };
+  }
+  if (facture.contestee_le) {
+    return {
+      label: 'Document déjà revu',
+      color: 'text-muted-foreground',
+      ouverte: false,
+      litigeActif: false,
+    };
+  }
+  if (facture.acceptee_explicitement_le) {
+    const echeance = facture.verification_echeance_le
+      ? new Date(facture.verification_echeance_le).getTime()
+      : 0;
+    return { label: 'Validée par vous', color: 'text-success', ouverte: echeance > Date.now(), litigeActif: false };
+  }
+  const echeance = facture.verification_echeance_le
+    ? new Date(facture.verification_echeance_le).getTime()
+    : 0;
+  if (echeance > Date.now()) {
+    return { label: 'À vérifier', color: 'text-warning', ouverte: true, litigeActif: false };
+  }
+  return { label: 'Acceptée après délai', color: 'text-muted-foreground', ouverte: false, litigeActif: false };
+}
+
+function libelleTvaDocument(facture: any): string {
+  if (facture.regime_tva_snapshot === 'EXONERE_ART_261_4_1') return 'Soins exonérés de TVA';
+  if (facture.regime_tva_snapshot === 'FRANCHISE_EN_BASE_ART_293_B') return 'TVA non applicable';
+  if (facture.exoneration_tva === false || Number(facture.taux_tva) > 0) {
+    return `TVA ${Number(facture.taux_tva || 0).toLocaleString('fr-FR')} %`;
+  }
+  return 'Régime TVA historique';
+}
+
 export default function MesFacturesHonoraires() {
   usePageTitle('Mes factures d\'honoraires');
   return (
@@ -60,6 +104,7 @@ export default function MesFacturesHonoraires() {
 export function MesFacturesHonorairesContent() {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { afficherNotification } = useNotification();
   const [loading, setLoading] = useState(true);
   const [factures, setFactures] = useState<any[]>([]);
   const [mandatSigne, setMandatSigne] = useState(false);
@@ -81,7 +126,7 @@ export function MesFacturesHonorairesContent() {
           supabase.rpc('fn_mes_factures_honoraires' as any),
           supabase
             .from('factures_honoraires')
-            .select('id, type_document, montant_signe, cree_le, template_version, numero_semaine_iso, periode_debut, periode_fin, facture_precedente_id, date_remboursement')
+            .select('id, mission_id, type_document, montant_signe, montant_tva, taux_tva, exoneration_tva, regime_tva_snapshot, cree_le, template_version, numero_semaine_iso, periode_debut, periode_fin, facture_precedente_id, date_remboursement, emise_le, notifiee_soignant_le, verification_echeance_le, acceptee_explicitement_le, contestee_le, statut_litige')
             .eq('soignant_id', user.id),
         ]);
         if (soignantError) throw soignantError;
@@ -106,6 +151,11 @@ export function MesFacturesHonorairesContent() {
   }, [user, reloadKey]);
 
   const [cessionModal, setCessionModal] = useState<{ id: string; numero: string; montant: number } | null>(null);
+  const [factureLitige, setFactureLitige] = useState<{
+    facture: any;
+    initialType: 'PAIEMENT' | 'AUTRE';
+  } | null>(null);
+  const [acceptationEnCours, setAcceptationEnCours] = useState<string | null>(null);
   const [filtreStatut, setFiltreStatut] = useState<string>('tous');
   // Cession de créance / avance Defacto masquée tant que l'affacturage est off.
   const affacturageActif = useAffacturageActif();
@@ -159,6 +209,25 @@ export function MesFacturesHonorairesContent() {
 
   const onCessionSuccess = () => {
     navigate('/soignant/mes-gains?tab=avances');
+  };
+
+  const accepterDocument = async (facture: any) => {
+    setAcceptationEnCours(facture.id);
+    const { data, error } = await supabase.rpc(
+      'fn_accepter_document_facturation_honoraires' as any,
+      { p_facture_id: facture.id },
+    );
+    setAcceptationEnCours(null);
+    if (error || !(data as any)?.success) {
+      afficherNotification({
+        type: 'erreur',
+        message: error?.message || (data as any)?.error || 'Impossible de valider ce document.',
+      });
+      return;
+    }
+    afficherNotification({ type: 'succes', message: 'Document validé. Merci !' });
+    setLoading(true);
+    setReloadKey((key) => key + 1);
   };
 
   const telechargerFacturePDF = telechargerFactureHonorairesPDF;
@@ -329,6 +398,7 @@ export function MesFacturesHonorairesContent() {
                 const config = configStatut(f.statut);
                 const estAvoir = factureEstAvoir(f);
                 const peutTelecharger = facturePdfDisponible(f.statut);
+                const verification = etatVerificationDocument(f);
                 switch (col.cle) {
                   case 'numero':
                     return (
@@ -354,13 +424,55 @@ export function MesFacturesHonorairesContent() {
                     return <span className={`font-semibold tabular-nums ${estAvoir ? 'text-destructive' : 'text-foreground'}`}>{fmt(montantTtcSigneFacture(f))}</span>;
                   case 'statut':
                     return (
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full inline-flex items-center gap-1 ${config.color}`}>
-                        {config.icon} {config.label}
-                      </span>
+                      <div>
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full inline-flex items-center gap-1 ${config.color}`}>
+                          {config.icon} {config.label}
+                        </span>
+                        {verification && <p className={`mt-1 text-[10px] ${verification.color}`}>{verification.label}</p>}
+                      </div>
                     );
                   case 'actions':
                     return (
-                      <div className="flex items-center justify-end gap-1">
+                      <div className="flex flex-wrap items-center justify-end gap-1">
+                        {verification?.ouverte && !f.acceptee_explicitement_le && (
+                          <BoutonY2K
+                            size="sm"
+                            className="h-8 gap-1 text-xs"
+                            disabled={acceptationEnCours === f.id}
+                            onClick={(e) => { e.stopPropagation(); void accepterDocument(f); }}
+                          >
+                            {acceptationEnCours === f.id
+                              ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              : <CheckCircle className="h-3.5 w-3.5" />}
+                            Valider
+                          </BoutonY2K>
+                        )}
+                        {verification?.ouverte && f.mission_id && (
+                          <BoutonY2K
+                            size="sm"
+                            variant="secondary"
+                            className="h-8 gap-1 text-xs"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setFactureLitige({ facture: f, initialType: 'PAIEMENT' });
+                            }}
+                          >
+                            <MessageSquareWarning className="h-3.5 w-3.5" /> Erreur
+                          </BoutonY2K>
+                        )}
+                        {verification && !verification.ouverte && !verification.litigeActif && f.mission_id && (
+                          <BoutonY2K
+                            size="sm"
+                            variant="secondary"
+                            className="h-8 gap-1 text-xs"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setFactureLitige({ facture: f, initialType: 'AUTRE' });
+                            }}
+                          >
+                            <MessageSquareWarning className="h-3.5 w-3.5" /> Revue
+                          </BoutonY2K>
+                        )}
                         {peutTelecharger && (
                           <BoutonY2K size="sm" variant="secondary" className="h-8 gap-1 text-xs" onClick={(e) => { e.stopPropagation(); telechargerFacturePDF(f.id); }}>
                             <Download className="h-3.5 w-3.5" /> PDF
@@ -381,6 +493,7 @@ export function MesFacturesHonorairesContent() {
                 const config = configStatut(f.statut);
                 const estAvoir = factureEstAvoir(f);
                 const peutTelecharger = facturePdfDisponible(f.statut);
+                const verification = etatVerificationDocument(f);
                 return (
                   <div className="space-y-3">
                     <div className="flex items-start justify-between gap-3">
@@ -392,7 +505,7 @@ export function MesFacturesHonorairesContent() {
                             {config.icon} {config.label}
                           </span>
                           {(!f.template_version || f.template_version === 'v1') && (
-                            <span className="text-[9px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground" title="Facture générée avec l'ancien template (avant Factur-X)">Format historique</span>
+                            <span className="text-[9px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground" title="Facture générée avant le format structuré PDF + XML CII">Format historique</span>
                           )}
                         </div>
                         <p className="text-sm text-foreground font-medium line-clamp-1" title={f.mission_intitule || undefined}>{f.mission_intitule || '—'}</p>
@@ -402,13 +515,60 @@ export function MesFacturesHonorairesContent() {
                           {f.date_echeance && ` · Échéance ${format(new Date(f.date_echeance), 'dd/MM/yyyy', { locale: fr })}`}
                           {f.date_paiement && ` · Payée le ${format(new Date(f.date_paiement), 'dd/MM/yyyy', { locale: fr })}`}
                         </p>
+                        {verification && (
+                          <p className={`mt-1 text-[10px] font-medium ${verification.color}`}>
+                            {verification.label}
+                            {verification.ouverte && f.verification_echeance_le
+                              ? ` jusqu'au ${format(new Date(f.verification_echeance_le), 'dd/MM à HH:mm', { locale: fr })}`
+                              : ''}
+                          </p>
+                        )}
                       </div>
                       <div className="text-right shrink-0">
                         <p className={`text-lg font-bold tabular-nums ${estAvoir ? 'text-destructive' : 'text-foreground'}`}>{fmt(montantTtcSigneFacture(f))}</p>
-                        <p className="text-[10px] text-muted-foreground">Exonéré TVA</p>
+                        <p className="text-[10px] text-muted-foreground">{libelleTvaDocument(f)}</p>
                       </div>
                     </div>
                     <div className="flex flex-wrap gap-2 pt-1">
+                      {verification?.ouverte && !f.acceptee_explicitement_le && (
+                        <BoutonY2K
+                          size="sm"
+                          className="gap-1.5 min-h-[44px]"
+                          disabled={acceptationEnCours === f.id}
+                          onClick={(e) => { e.stopPropagation(); void accepterDocument(f); }}
+                        >
+                          {acceptationEnCours === f.id
+                            ? <Loader2 className="h-4 w-4 animate-spin" />
+                            : <CheckCircle className="h-4 w-4" />}
+                          Tout est correct
+                        </BoutonY2K>
+                      )}
+                      {verification?.ouverte && f.mission_id && (
+                        <BoutonY2K
+                          size="sm"
+                          variant="secondary"
+                          className="gap-1.5 min-h-[44px]"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setFactureLitige({ facture: f, initialType: 'PAIEMENT' });
+                          }}
+                        >
+                          <MessageSquareWarning className="h-4 w-4" /> Signaler une erreur
+                        </BoutonY2K>
+                      )}
+                      {verification && !verification.ouverte && !verification.litigeActif && f.mission_id && (
+                        <BoutonY2K
+                          size="sm"
+                          variant="secondary"
+                          className="gap-1.5 min-h-[44px]"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setFactureLitige({ facture: f, initialType: 'AUTRE' });
+                          }}
+                        >
+                          <MessageSquareWarning className="h-4 w-4" /> Demander une revue
+                        </BoutonY2K>
+                      )}
                       {peutTelecharger && (
                         <BoutonY2K
                           size="sm"
@@ -416,7 +576,7 @@ export function MesFacturesHonorairesContent() {
                           className="flex-1 gap-1.5 min-h-[44px]"
                           onClick={(e) => { e.stopPropagation(); telechargerFacturePDF(f.id); }}
                         >
-                          <Download className="h-4 w-4" /> Télécharger Factur-X
+                          <Download className="h-4 w-4" /> Télécharger le PDF
                         </BoutonY2K>
                       )}
                       {affacturageActif && !estAvoir && (f.statut === 'EMISE' || f.statut === 'EN_RETARD') && (
@@ -446,6 +606,20 @@ export function MesFacturesHonorairesContent() {
           numeroFacture={cessionModal.numero}
           montant={cessionModal.montant}
           onSuccess={onCessionSuccess}
+        />
+      )}
+      {factureLitige?.facture?.mission_id && (
+        <WizardOuvertureLitige
+          missionId={factureLitige.facture.mission_id}
+          missionIntitule={factureLitige.facture.mission_intitule}
+          factureHonorairesId={factureLitige.facture.id}
+          initialType={factureLitige.initialType}
+          onClose={() => setFactureLitige(null)}
+          onSuccess={() => {
+            setFactureLitige(null);
+            setLoading(true);
+            setReloadKey((key) => key + 1);
+          }}
         />
       )}
     </>

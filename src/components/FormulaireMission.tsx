@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, Suspense } from 'react';
 import { lazyRetry as lazy } from '@/lib/lazyRetry';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
-import { Loader2, AlertTriangle, CalendarDays, Timer, Ban, Banknote, Lightbulb, Lock, User, Calculator, Info, Save, Send, ClipboardList } from 'lucide-react';
+import { Loader2, AlertTriangle, CalendarDays, Timer, Ban, Lightbulb, Lock, User, Calculator, Info, Save, Send, ClipboardList } from 'lucide-react';
 import { extraireContratPreference, injecterContratTag, getLabelProfession, type ContratPreference } from '@/lib/constantes';
 import { SelectProfession } from '@/components/SelectProfession';
 import { SelectSpecialiteMedicale } from '@/components/SelectSpecialiteMedicale';
@@ -21,7 +21,7 @@ import {
   type PlanningInitialCreneau,
   type ValidationFlexResult,
 } from '@/components/FormulaireRecurrence';
-import type { RecapMissionData } from '@/components/mission/ModalRecapMission';
+import type { NatureTvaPrestation, RecapMissionData } from '@/components/mission/ModalRecapMission';
 // Sprint 8 ter-G PR 3 — lazy load modal récap (code splitting, ~8KB)
 const ModalRecapMission = lazy(() =>
   import('@/components/mission/ModalRecapMission').then((m) => ({
@@ -103,10 +103,7 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
   const [niveauUrgence, setNiveauUrgence] = useState(1);
   const [modeAttribution, setModeAttribution] = useState<'PREMIER_ARRIVE' | 'CANDIDATURE'>('PREMIER_ARRIVE');
   const [contratPreference, setContratPreference] = useState<'TOUS' | 'SALARIE' | 'LIBERAL'>('TOUS');
-  // Remplacement libéral en cabinet (dentistes/médecins) : le titulaire encaisse
-  // les honoraires puis rétrocède — la mission porte un % au lieu d'un taux horaire.
-  const [modeRemuneration, setModeRemuneration] = useState<'TAUX_HORAIRE' | 'RETROCESSION'>('TAUX_HORAIRE');
-  const [retrocessionPct, setRetrocessionPct] = useState('50');
+  const [natureTvaPrestation, setNatureTvaPrestation] = useState<NatureTvaPrestation | ''>('');
   const [loading, setLoading] = useState(false);
   const [erreurCodeTravail, setErreurCodeTravail] = useState<any>(null);
   const [dupliquerInfo, setDupliquerInfo] = useState<string | null>(null);
@@ -204,7 +201,7 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
       if (debutParam) setDebutLe(versDateHeureLocale(debutParam));
       if (finParam) setFinLe(versDateHeureLocale(finParam));
 
-      supabase.from('missions').select('id, intitule, description, profession_requise, service, taux_horaire_base, est_urgente, niveau_urgence, type_contrat_recherche, specialite_medicale_requise, debut_le, fin_le, nb_creneaux').eq('id', dupId).single().then(({ data, error }) => {
+      supabase.from('missions').select('id, intitule, description, profession_requise, service, taux_horaire_base, est_urgente, niveau_urgence, type_contrat_recherche, specialite_medicale_requise, debut_le, fin_le, nb_creneaux, nature_tva_prestation').eq('id', dupId).single().then(({ data, error }) => {
         if (error) {
           console.warn('FormulaireMission: mission duplication fetch error', error);
           setErreurPlanningRepublication('La mission source ne peut pas être vérifiée.');
@@ -221,6 +218,7 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
           setEstUrgente(data.est_urgente || false);
           setNiveauUrgence(data.niveau_urgence || 1);
           setSpecialiteMedicaleRequise(((data as any).specialite_medicale_requise as string) || '');
+          setNatureTvaPrestation(((data as any).nature_tva_prestation as NatureTvaPrestation) || '');
           setDupliquerInfo(data.intitule);
         }
       });
@@ -267,6 +265,7 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
           || extraireContratPreference(missionSource.description),
       );
       setSpecialiteMedicaleRequise(missionSource.specialite_medicale_requise || '');
+      setNatureTvaPrestation((missionSource.nature_tva_prestation as NatureTvaPrestation) || '');
     }
   }, [missionSource]);
 
@@ -315,19 +314,7 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
   }, [missionSource, planningSourceRepublication, republicationDemandee, searchParams]);
 
   const taux = parseFloat(tauxHoraire) || 0;
-  const estRetrocession = contratPreference === 'LIBERAL'
-    && modeRemuneration === 'RETROCESSION'
-    && !modeEdition;
-  // Le schema financier exige un taux de reference positif lors de la
-  // creation, avant que la RPC de retrocession ne bascule la mission sur le
-  // pourcentage d'honoraires. Il n'est jamais presente comme la remuneration
-  // contractuelle du remplacant.
-  const tauxCreation = estRetrocession
-    ? (taux > 0 ? taux : getTauxConseille(profession)[0])
-    : taux;
-  const retrocessionNombre = Number(retrocessionPct);
-  const retrocessionValide = !estRetrocession
-    || (Number.isFinite(retrocessionNombre) && retrocessionNombre > 0 && retrocessionNombre <= 100);
+  const tauxCreation = taux;
 
   const { dureeEstimee, heuresNuitEstimees } = useMemo(() => {
     const duree = creneaux.reduce((somme, creneau) => somme + creneau.dureeHeures, 0);
@@ -367,7 +354,7 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
         fin: c.fin,
       }));
 
-      const { data: rpcResult, error } = await supabase.rpc('fn_creer_mission_multi_jours_v2' as any, {
+      const { data: rpcResult, error } = await supabase.rpc('fn_creer_mission_multi_jours_v3' as any, {
         p_intitule: intitule,
         p_description: descriptionFinale || null,
         p_profession_requise: profession,
@@ -380,8 +367,9 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
         p_accepte_non_specialises: !professionMissionExigeSpecialisationExacte(profession),
         p_creneaux: creneauxPayload as any,
         p_type_contrat_recherche: contratPreference,
-        p_mode_remuneration: estRetrocession ? 'RETROCESSION' : 'TAUX_HORAIRE',
-        p_retrocession_pct: estRetrocession ? retrocessionNombre : null,
+        p_mode_remuneration: 'TAUX_HORAIRE',
+        p_retrocession_pct: null,
+        p_nature_tva_prestation: contratPreference === 'SALARIE' ? null : natureTvaPrestation,
       });
 
       if (error) {
@@ -398,8 +386,8 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
 
       const missionId = (rpcResult as any)?.mission_id;
 
-      // Le planning, le type de contrat et l'éventuelle rétrocession sont déjà
-      // posés atomiquement par fn_creer_mission_multi_jours_v2.
+      // Le planning et le type de contrat sont déjà
+      // posés atomiquement par fn_creer_mission_multi_jours_v3.
       // Lot 17 (F2) : une mission issue d'un « Republier »/« Dupliquer » est
       // tracée mission_source=REPUBLICATION (best-effort, ne bloque jamais).
       if (missionId && searchParams.get('dupliquer')) {
@@ -433,7 +421,7 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
     try {
       const cleanDescription = (description || '').replace(/\[SERIE_ID:[^\]]*\]/g, '').replace(/\[CONTRAT:[^\]]*\]/g, '').trim();
       const descriptionFinale = injecterContratTag(cleanDescription, contratPreference);
-      const { data: rpcResult, error } = await supabase.rpc('fn_modifier_mission_etablissement_v3' as any, {
+      const { data: rpcResult, error } = await supabase.rpc('fn_modifier_mission_etablissement_v4' as any, {
         p_mission_id: missionSource.id,
         p_intitule: intitule,
         p_description: descriptionFinale || null,
@@ -450,6 +438,7 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
           debut: creneau.debut,
           fin: creneau.fin,
         })) as any,
+        p_nature_tva_prestation: contratPreference === 'SALARIE' ? null : natureTvaPrestation,
       });
 
       if (error) {
@@ -478,7 +467,7 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
     && !!intitule
     && !!profession
     && tauxCreation > 0
-    && retrocessionValide
+    && (contratPreference === 'SALARIE' || !!natureTvaPrestation)
     && !republicationBloquee
     && !!recurrenceValide
     && !publicationEnCours
@@ -497,9 +486,8 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
     dureeHeures: dureeEstimee,
     heuresNuit: heuresNuitEstimees,
     tauxHoraire: taux,
-    modeRemuneration: estRetrocession ? 'RETROCESSION' : 'TAUX_HORAIRE',
-    retrocessionPct: estRetrocession ? retrocessionNombre : null,
     contratPreference,
+    natureTvaPrestation: contratPreference === 'SALARIE' ? null : (natureTvaPrestation || null),
     modeAttribution,
     estUrgente,
     niveauUrgence,
@@ -711,6 +699,58 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
           </div>
         </div>
 
+        {contratPreference !== 'SALARIE' && (
+          <fieldset className="rounded-xl border border-primary/20 bg-primary/5 p-4">
+            <legend className="px-1 text-sm font-semibold text-foreground">
+              Nature TVA prévue de la prestation libérale *
+            </legend>
+            <p className="mb-3 text-xs text-muted-foreground">
+              Choisissez selon la prestation réellement confiée. Le soignant devra confirmer ce choix après son affectation. Un désaccord ne bloque pas la mission, seulement sa facturation jusqu'à la revue Jolene.
+            </p>
+            <p className="mb-3 text-[11px] text-muted-foreground">
+              L’exonération de soin suppose à la fois un professionnel médical ou paramédical réglementé et un acte visant à prévenir, diagnostiquer ou traiter une maladie. Une activité de conseil, administrative ou sans finalité thérapeutique est taxable.{' '}
+              <a
+                href="https://bofip.impots.gouv.fr/bofip/1139-PGP.html/identifiant%3DBOI-TVA-CHAMP-30-10-20-10-20250409"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-medium text-primary underline hover:no-underline"
+              >
+                Voir la doctrine fiscale officielle
+              </a>
+            </p>
+            <div className="space-y-2">
+              {([
+                {
+                  value: 'SOIN_THERAPEUTIQUE_EXONERE' as const,
+                  label: 'Soin à finalité thérapeutique',
+                  description: 'Acte de soin à la personne susceptible de relever de l’exonération de TVA.',
+                },
+                {
+                  value: 'PRESTATION_TAXABLE' as const,
+                  label: 'Prestation taxable',
+                  description: 'Prestation ne relevant pas de l’exonération de soin ; le statut TVA du soignant s’appliquera.',
+                },
+              ]).map((option) => (
+                <label key={option.value} className="flex cursor-pointer items-start gap-3 rounded-lg border border-border bg-card p-3">
+                  <input
+                    type="radio"
+                    name="natureTvaPrestation"
+                    value={option.value}
+                    checked={natureTvaPrestation === option.value}
+                    onChange={() => setNatureTvaPrestation(option.value)}
+                    className="mt-0.5 accent-primary"
+                    required
+                  />
+                  <span>
+                    <span className="block text-sm font-medium text-foreground">{option.label}</span>
+                    <span className="mt-0.5 block text-xs text-muted-foreground">{option.description}</span>
+                  </span>
+                </label>
+              ))}
+            </div>
+          </fieldset>
+        )}
+
         {/* Source unique création + édition : créneaux datés réels. */}
         <div>
           <p className="text-sm font-semibold text-foreground mb-1 flex items-center gap-1.5"><CalendarDays aria-hidden="true" className="h-4 w-4" />Planning exact de la mission</p>
@@ -730,61 +770,17 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
           )}
         </div>
 
-        {/* Mode de rémunération — rétrocession réservée au libéral pur (remplacement
-            de cabinet : dentistes, médecins), création de mission ponctuelle uniquement */}
-        {contratPreference === 'LIBERAL' && !modeEdition && (
-          <div className="border border-primary/20 rounded-xl p-4 bg-primary/5 space-y-2">
-            <p className="text-sm font-semibold text-foreground flex items-center gap-1.5"><Banknote aria-hidden="true" className="h-4 w-4" />Mode de rémunération</p>
-            <label className="flex items-start gap-3 cursor-pointer">
-              <input type="radio" name="modeRemuneration" checked={modeRemuneration === 'TAUX_HORAIRE'}
-                onChange={() => setModeRemuneration('TAUX_HORAIRE')} className="mt-0.5 accent-primary" />
-              <div>
-                <span className="text-sm font-medium text-foreground">Taux horaire</span>
-                <p className="text-xs text-muted-foreground">Le soignant facture ses heures en honoraires.</p>
-              </div>
-            </label>
-            <label className="flex items-start gap-3 cursor-pointer">
-              <input type="radio" name="modeRemuneration" checked={modeRemuneration === 'RETROCESSION'}
-                onChange={() => {
-                  setModeRemuneration('RETROCESSION');
-                  setTauxHoraire((valeur) => (
-                    Number.isFinite(Number(valeur)) && Number(valeur) > 0
-                      ? valeur
-                      : String(getTauxConseille(profession)[0])
-                  ));
-                }} className="mt-0.5 accent-primary" />
-              <div>
-                <span className="text-sm font-medium text-foreground">Rétrocession d'honoraires — remplacement de cabinet</span>
-                <p className="text-xs text-muted-foreground">
-                  Le remplaçant exerce sous vos feuilles de soins : vous encaissez les honoraires
-                  puis rétrocédez le pourcentage convenu (contrat type conforme à l'Ordre, usage 40-60 %).
-                </p>
-              </div>
-            </label>
-            {modeRemuneration === 'RETROCESSION' && (
-              <div className="pt-1">
-                <label htmlFor="mission-retrocession" className="text-sm font-medium text-foreground mb-1 block">Rétrocession au remplaçant * (%)</label>
-                <div className="relative max-w-[160px]">
-                  <input id="mission-retrocession" type="number" step="1" min="1" max="100" value={retrocessionPct}
-                    onChange={(e) => setRetrocessionPct(e.target.value)} placeholder="50" className="input-base pr-9" />
-                  <span aria-hidden="true" className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">%</span>
-                </div>
-                {!retrocessionValide && (
-                  <p className="mt-1 text-xs font-medium text-destructive" role="alert">
-                    Le pourcentage de rétrocession doit être compris entre 1 et 100 %.
-                  </p>
-                )}
-              </div>
-            )}
-          </div>
-        )}
-
         {/* Taux horaire */}
-        {!(contratPreference === 'LIBERAL' && modeRemuneration === 'RETROCESSION' && !modeEdition) && (
         <div>
-          <label htmlFor="mission-taux-horaire" className="text-sm font-medium text-foreground mb-1 block">Taux horaire brut * (€/h)</label>
+          <label htmlFor="mission-taux-horaire" className="text-sm font-medium text-foreground mb-1 block">
+            {contratPreference === 'LIBERAL'
+              ? 'Taux horaire des honoraires * (€/h HT)'
+              : contratPreference === 'SALARIE'
+                ? 'Taux horaire brut * (€/h)'
+                : 'Taux horaire proposé * (brut salarié ou honoraires HT)'}
+          </label>
           <div className="relative">
-            <input id="mission-taux-horaire" type="number" step="0.01" min="11.65" value={tauxHoraire}
+            <input id="mission-taux-horaire" type="number" step="0.01" min={contratPreference === 'LIBERAL' ? '0.01' : '11.65'} value={tauxHoraire}
               onChange={(e) => setTauxHoraire(e.target.value)} placeholder="25.00" required
               readOnly={modeEdition && missionSource?.statut !== 'OUVERTE'}
               className={`input-base pr-12 ${modeEdition && missionSource?.statut !== 'OUVERTE' ? 'bg-muted cursor-not-allowed' : ''}`} />
@@ -793,14 +789,17 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
           {/* Session F (F5) — Taux conseillé indicatif par profession (n'impose rien) */}
           {profession && (
             <p className="text-xs text-muted-foreground mt-1">
-              <Lightbulb aria-hidden="true" className="inline-block h-3.5 w-3.5 mr-1 -mt-0.5" />Taux conseillé pour {getLabelProfession(profession)} : {getTauxConseille(profession)[0]}–{getTauxConseille(profession)[1]} €/h brut
+              <Lightbulb aria-hidden="true" className="inline-block h-3.5 w-3.5 mr-1 -mt-0.5" />Taux conseillé pour {getLabelProfession(profession)} : {getTauxConseille(profession)[0]}–{getTauxConseille(profession)[1]} €/h {contratPreference === 'LIBERAL'
+                ? 'HT d’honoraires'
+                : contratPreference === 'SALARIE'
+                  ? 'brut'
+                  : 'brut si salarié, HT d’honoraires si libéral'}
             </p>
           )}
           {modeEdition && missionSource?.statut !== 'OUVERTE' && (
-            <p className="text-[10px] text-muted-foreground mt-1 flex items-center gap-1"><Lock aria-hidden="true" className="h-3 w-3 shrink-0" />Verrouillé : ces champs ne sont plus modifiables après acceptation.</p>
+            <p className="text-[10px] text-muted-foreground mt-1 flex items-center gap-1"><Lock aria-hidden="true" className="h-3 w-3 shrink-0" />Le contrat accepté est figé. Une erreur constatée ensuite se corrige depuis un litige tracé, sans réécrire l’historique.</p>
           )}
         </div>
-        )}
 
         {/* Warning Rist */}
         {profession && taux > 0 && <WarningRist profession={profession} tauxSaisi={taux} ristPlafondActif={ristPlafondActif} estSecteurPublic={estSecteurPublic} />}
@@ -869,7 +868,11 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
                   <span className="font-medium">~{totalH.toFixed(0)}h</span>
                 </div>
                 <div className="border-t border-border pt-2 flex justify-between">
-                  <span className="text-muted-foreground">Base brute estimée</span>
+                  <span className="text-muted-foreground">{contratPreference === 'LIBERAL'
+                    ? 'Honoraires estimés HT'
+                    : contratPreference === 'SALARIE'
+                      ? 'Base brute estimée'
+                      : 'Base proposée (brut ou honoraires HT)'}</span>
                   <span className="font-bold text-primary">~{(taux * totalH).toFixed(2)} €</span>
                 </div>
               </div>
@@ -880,14 +883,18 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
         {/* Encart commission dégressive */}
         {taux > 0 && dureeEstimee > 0 && (
           <EncartCommissionDegressif
-            netEstime={taux * dureeEstimee * 1.21}
+            netEstime={taux * dureeEstimee}
             tauxActuel={tauxCommission}
             palierNom={palierNom}
           />
         )}
 
         <p className="text-[10px] text-muted-foreground italic text-center">
-          Simulation à titre indicatif. Seuls les montants calculés par le moteur de paie font foi.
+          Simulation à titre indicatif. {contratPreference === 'LIBERAL'
+            ? 'Les heures, le taux validé et le régime de TVA du soignant déterminent la facture finale.'
+            : contratPreference === 'SALARIE'
+              ? 'Seuls les montants du bulletin établi par l’employeur font foi.'
+              : 'Le régime retenu détermine ensuite la paie employeur ou les deux factures distinctes du parcours libéral.'}
         </p>
 
         {/* Submit */}

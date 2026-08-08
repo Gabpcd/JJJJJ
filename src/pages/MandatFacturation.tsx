@@ -14,16 +14,28 @@ import { toast } from 'sonner';
 import { hapticNotification } from '@/lib/haptics';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
-import { PROFESSIONS } from '@/lib/constantes';
 import {
   MANDAT_FACTURATION_VERSION,
+  PROFESSIONS_RPPS_OBLIGATOIRE_MANDAT,
+  STATUTS_TVA_HONORAIRES,
   buildMandatFacturationTexte,
   hashMandatTexte,
+  type StatutTvaHonoraires,
   type SoignantMandatInfo,
 } from '@/constantes/mandatFacturation';
 import { telechargerMandatFacturationPdf, type MandatPdfMetadata } from '@/lib/mandat-facturation-pdf';
 
-// Conversion markdown-like basique pour affichage
+function renderInlineMarkdown(texte: string) {
+  return texte.split(/(\*\*.+?\*\*)/g).filter(Boolean).map((part, index) => {
+    if (part.startsWith('**') && part.endsWith('**')) {
+      return <strong key={index}>{part.slice(2, -2)}</strong>;
+    }
+    return part;
+  });
+}
+
+// Conversion markdown-like basique pour affichage. Le contenu utilisateur
+// (nom, adresse...) reste rendu comme texte React et ne devient jamais du HTML.
 function renderMarkdown(texte: string) {
   const lines = texte.split('\n');
   const elements: JSX.Element[] = [];
@@ -35,7 +47,7 @@ function renderMarkdown(texte: string) {
       elements.push(
         <ol key={key++} className="list-decimal list-inside space-y-1.5 text-sm text-foreground ml-2 mb-3">
           {listBuffer.map((item, i) => (
-            <li key={i} dangerouslySetInnerHTML={{ __html: item.replace(/[<>]/g, m => m === '<' ? '&lt;' : '&gt;').replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>') }} />
+            <li key={i}>{renderInlineMarkdown(item)}</li>
           ))}
         </ol>,
       );
@@ -60,8 +72,9 @@ function renderMarkdown(texte: string) {
     } else {
       flushList();
       elements.push(
-        <p key={key++} className="text-sm text-foreground mb-2 leading-relaxed"
-           dangerouslySetInnerHTML={{ __html: line.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>') }} />
+        <p key={key++} className="text-sm text-foreground mb-2 leading-relaxed">
+          {renderInlineMarkdown(line)}
+        </p>
       );
     }
   }
@@ -89,6 +102,7 @@ export default function MandatFacturation() {
   const [signatureVersion, setSignatureVersion] = useState<string | null>(null);
   const [hasScrolledToBottom, setHasScrolledToBottom] = useState(false);
   const [soignantInfo, setSoignantInfo] = useState<SoignantMandatInfo | null>(null);
+  const [statutTva, setStatutTva] = useState<StatutTvaHonoraires | null>(null);
   const [signatureMeta, setSignatureMeta] = useState<MandatPdfMetadata | null>(null);
   const [showConfirmRevoke, setShowConfirmRevoke] = useState(false);
   const [revoking, setRevoking] = useState(false);
@@ -100,23 +114,32 @@ export default function MandatFacturation() {
     (async () => {
       const { data } = await supabase
         .from('soignants')
-        .select('prenom, nom, email, profession, numero_rpps, numero_adeli, siret_liberal, adresse_rue, adresse_code_postal, adresse_ville, mandat_facturation_signe, mandat_facturation_signe_le, mandat_facturation_version, type_exercice')
+        .select('prenom, nom, email, profession, numero_rpps, numero_adeli, siret_liberal, adresse_rue, adresse_code_postal, adresse_ville, numero_tva, statut_tva_honoraires, regime_tva_honoraires, mandat_facturation_signe, mandat_facturation_signe_le, mandat_facturation_version, type_exercice')
         .eq('id', user.id)
         .maybeSingle();
       if (data) {
         setTypeExercice((data as any).type_exercice || null);
+        const statutEnregistre = (data as any).statut_tva_honoraires as StatutTvaHonoraires | null;
+        const statutLegacy = (data as any).regime_tva_honoraires === 'FRANCHISE_EN_BASE_ART_293_B'
+          ? 'FRANCHISE_EN_BASE'
+          : (data as any).regime_tva_honoraires === 'ASSUJETTI_TVA'
+            ? 'REDEVABLE_TVA'
+            : null;
+        const statutInitial = statutEnregistre || statutLegacy;
+        setStatutTva(statutInitial);
         setSoignantInfo({
           prenom: (data as any).prenom,
           nom: (data as any).nom,
           email: (data as any).email,
           profession: (data as any).profession,
-          professionLabel: PROFESSIONS.find(p => p.valeur === (data as any).profession)?.label || (data as any).profession,
           numero_rpps: (data as any).numero_rpps,
           numero_adeli: (data as any).numero_adeli,
           siret_liberal: (data as any).siret_liberal,
           adresse_rue: (data as any).adresse_rue,
           adresse_code_postal: (data as any).adresse_code_postal,
           adresse_ville: (data as any).adresse_ville,
+          numero_tva: (data as any).numero_tva,
+          statut_tva_honoraires: statutInitial,
         });
         if ((data as any).mandat_facturation_signe) {
           setAlreadySigned(true);
@@ -125,7 +148,7 @@ export default function MandatFacturation() {
           // Récupère les métadonnées techniques de la signature pour le PDF
           const { data: sig } = await supabase
             .from('mandats_facturation_signatures' as any)
-            .select('signed_at, version, ip_address, user_agent, contenu_hash')
+            .select('signed_at, version, ip_address, user_agent, contenu_hash, contenu_texte, statut_tva_honoraires')
             .eq('soignant_id', user.id)
             .is('revoked_at', null)
             .order('signed_at', { ascending: false })
@@ -138,6 +161,8 @@ export default function MandatFacturation() {
               ip_address: (sig as any).ip_address,
               user_agent: (sig as any).user_agent,
               contenu_hash: (sig as any).contenu_hash,
+              contenu_texte: (sig as any).contenu_texte,
+              statut_tva_honoraires: (sig as any).statut_tva_honoraires,
             });
           }
         }
@@ -148,12 +173,49 @@ export default function MandatFacturation() {
 
   // Texte du mandat avec les infos du soignant injectées dans la section Parties
   const mandatTexte = useMemo(
-    () => buildMandatFacturationTexte(soignantInfo || {}),
-    [soignantInfo],
+    () => buildMandatFacturationTexte({
+      ...(soignantInfo || {}),
+      statut_tva_honoraires: statutTva,
+    }),
+    [soignantInfo, statutTva],
   );
 
-  const doitSigner = !loading && (!alreadySigned || (signatureVersion !== null && signatureVersion !== MANDAT_FACTURATION_VERSION));
-  const estLiberal = !typeExercice || typeExercice === 'LIBERAL' || typeExercice === 'MIXTE';
+  const doitSigner = !loading && (!alreadySigned || signatureVersion !== MANDAT_FACTURATION_VERSION);
+  const estLiberal = typeExercice === 'LIBERAL' || typeExercice === 'MIXTE';
+
+  const champsFacturationManquants = useMemo(() => {
+    if (!soignantInfo) return ['profil'];
+    const manquants: string[] = [];
+    if (!soignantInfo.prenom?.trim()) manquants.push('prénom');
+    if (!soignantInfo.nom?.trim()) manquants.push('nom');
+    if (!soignantInfo.profession?.trim()) manquants.push('profession');
+    if (
+      soignantInfo.profession
+      && PROFESSIONS_RPPS_OBLIGATOIRE_MANDAT.has(soignantInfo.profession)
+      && !soignantInfo.numero_rpps?.trim()
+    ) {
+      manquants.push('numéro RPPS');
+    }
+    if (!/^\d{14}$/.test((soignantInfo.siret_liberal || '').replace(/\D/g, ''))) manquants.push('SIRET libéral');
+    if (!soignantInfo.email?.trim()) manquants.push('email');
+    if (!soignantInfo.adresse_rue?.trim()) manquants.push('adresse professionnelle');
+    if (!soignantInfo.adresse_code_postal?.trim()) manquants.push('code postal');
+    if (!soignantInfo.adresse_ville?.trim()) manquants.push('ville');
+    if (statutTva === 'REDEVABLE_TVA' && !soignantInfo.numero_tva?.trim()) {
+      manquants.push('numéro de TVA intracommunautaire');
+    }
+    return manquants;
+  }, [soignantInfo, statutTva]);
+
+  const profilFacturationComplet = champsFacturationManquants.length === 0;
+  const texteMandatSigne = signatureMeta?.contenu_texte || mandatTexte;
+
+  useEffect(() => {
+    if (!doitSigner) return;
+    setAccepted(false);
+    setHasScrolledToBottom(false);
+    scrollRef.current?.scrollTo({ top: 0 });
+  }, [statutTva, doitSigner]);
 
   // Gate de scroll : détection tolérante (sous-pixels iOS) + cas « contenu plus
   // court que le viewport » (desktop large : rien à faire défiler → déverrouillé).
@@ -189,6 +251,14 @@ export default function MandatFacturation() {
   };
 
   const signer = async () => {
+    if (!statutTva) {
+      toast.error('Sélectionne le statut TVA de ton activité libérale');
+      return;
+    }
+    if (!profilFacturationComplet) {
+      toast.error('Complète les informations de facturation manquantes avant de signer');
+      return;
+    }
     if (!accepted) {
       toast.error('Tu dois accepter le mandat pour continuer');
       return;
@@ -196,17 +266,24 @@ export default function MandatFacturation() {
     setSigning(true);
     try {
       const hash = await hashMandatTexte(mandatTexte);
-      const { data, error } = await supabase.rpc('fn_signer_mandat_facturation' as any, {
-        p_version: MANDAT_FACTURATION_VERSION,
-        p_ip: null, // L'IP est capturée côté serveur si besoin via un edge trigger
-        p_user_agent: navigator.userAgent,
-        p_contenu_hash: hash,
+      const { data, error } = await supabase.functions.invoke('sign-invoicing-mandate', {
+        body: {
+          version: MANDAT_FACTURATION_VERSION,
+          contenu_hash: hash,
+          contenu_texte: mandatTexte,
+          statut_tva_honoraires: statutTva,
+        },
       });
       if (error) throw error;
-      if ((data as any)?.error) throw new Error((data as any).error);
+      if ((data as any)?.success === false || (data as any)?.error) {
+        const champs = Array.isArray((data as any)?.champs_manquants)
+          ? ` : ${(data as any).champs_manquants.join(', ')}`
+          : '';
+        throw new Error(`${(data as any)?.message || (data as any)?.error || 'Signature refusée'}${champs}`);
+      }
 
       void hapticNotification('success');
-      const now = new Date().toISOString();
+      const now = (data as any)?.signed_at || new Date().toISOString();
       setAlreadySigned(true);
       setJustSigned(true);
       setSignatureDate(now);
@@ -214,9 +291,11 @@ export default function MandatFacturation() {
       setSignatureMeta({
         signed_at: now,
         version: MANDAT_FACTURATION_VERSION,
-        ip_address: null,
+        ip_address: (data as any)?.ip_address || null,
         user_agent: navigator.userAgent,
         contenu_hash: hash,
+        contenu_texte: mandatTexte,
+        statut_tva_honoraires: statutTva,
       });
       // Le Dashboard cache son RPC (react-query, staleTime 60 s) : sans
       // invalidation, le bandeau « Signe ton mandat » survivait à la signature
@@ -278,6 +357,23 @@ export default function MandatFacturation() {
       <LayoutApp role="SOIGNANT">
         <div className="flex items-center justify-center py-20">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      </LayoutApp>
+    );
+  }
+
+  if (!typeExercice) {
+    return (
+      <LayoutApp role="SOIGNANT">
+        <div className="max-w-lg mx-auto py-12 text-center space-y-4">
+          <AlertTriangle className="h-12 w-12 text-warning mx-auto" />
+          <h1 className="text-xl font-bold text-foreground">Activité professionnelle à compléter</h1>
+          <p className="text-sm text-muted-foreground">
+            Indique d'abord si tu exerces en libéral, en salariat ou en activité mixte. Jolene pourra ensuite te présenter le parcours de facturation adapté, sans te faire signer un mandat inutile.
+          </p>
+          <Button onClick={() => navigate('/soignant/passer-en-liberal')}>
+            Compléter mon activité
+          </Button>
         </div>
       </LayoutApp>
     );
@@ -398,6 +494,61 @@ export default function MandatFacturation() {
             </div>
           </div>
 
+          <section className="rounded-xl border border-border bg-card p-4 mb-5" aria-labelledby="statut-tva-title">
+            <h2 id="statut-tva-title" className="text-sm font-semibold text-foreground">
+              Statut TVA de ton activité libérale *
+            </h2>
+            <p className="text-xs text-muted-foreground mt-1 mb-3">
+              Ce statut est intégré au texte signé. La nature TVA de chaque mission sera déclarée par l'établissement puis confirmée par toi avant sa facturation. En cas de doute, valide ton statut avec ton comptable.
+            </p>
+            <div className="space-y-2">
+              {STATUTS_TVA_HONORAIRES.map((statut) => (
+                <label
+                  key={statut.value}
+                  className={`flex items-start gap-3 rounded-lg border p-3 cursor-pointer transition-colors ${
+                    statutTva === statut.value ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/40'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="statut-tva-honoraires"
+                    value={statut.value}
+                    checked={statutTva === statut.value}
+                    onChange={() => setStatutTva(statut.value)}
+                    className="mt-0.5"
+                  />
+                  <span>
+                    <span className="block text-xs font-semibold text-foreground">{statut.label}</span>
+                    <span className="block text-[11px] text-muted-foreground mt-0.5">{statut.description}</span>
+                  </span>
+                </label>
+              ))}
+            </div>
+          </section>
+
+          {statutTva && !profilFacturationComplet && (
+            <div className="rounded-xl border-2 border-warning/50 bg-warning/10 p-4 mb-5" role="alert">
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="h-5 w-5 text-warning shrink-0 mt-0.5" />
+                <div className="flex-1">
+                  <p className="text-sm font-semibold text-foreground">Informations de facturation à compléter</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Il manque : {champsFacturationManquants.join(', ')}. Ces données sont nécessaires pour produire une facture valable.
+                  </p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="mt-3"
+                    onClick={() => navigate('/soignant/passer-en-liberal')}
+                  >
+                    Compléter mon activité libérale
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
+
           {renderMarkdown(mandatTexte)}
           {/* Sentinelle de fin — un peu d'air pour que le dernier paragraphe ne colle pas au footer */}
           <div className="h-4" aria-hidden="true" />
@@ -430,8 +581,8 @@ export default function MandatFacturation() {
               id="accept-mandat"
               checked={accepted}
               onCheckedChange={(v) => setAccepted(v === true)}
-              disabled={!hasScrolledToBottom}
-              aria-disabled={!hasScrolledToBottom}
+              disabled={!hasScrolledToBottom || !statutTva || !profilFacturationComplet}
+              aria-disabled={!hasScrolledToBottom || !statutTva || !profilFacturationComplet}
               className="mt-0.5"
             />
             <label htmlFor="accept-mandat" className={`text-xs text-foreground leading-relaxed ${hasScrolledToBottom ? 'cursor-pointer' : 'cursor-not-allowed'}`}>
@@ -441,7 +592,7 @@ export default function MandatFacturation() {
           </div>
           <BoutonY2K
             onClick={signer}
-            disabled={!accepted || signing || !hasScrolledToBottom}
+            disabled={!statutTva || !profilFacturationComplet || !accepted || signing || !hasScrolledToBottom}
             className="w-full gap-2"
           >
             {signing ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />}
@@ -513,7 +664,7 @@ export default function MandatFacturation() {
 
         {/* Texte du mandat en consultation (pas de gate : déjà signé) */}
         <div className="card-base">
-          {renderMarkdown(mandatTexte)}
+          {renderMarkdown(texteMandatSigne)}
         </div>
       </div>
 
