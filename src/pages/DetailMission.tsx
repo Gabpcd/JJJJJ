@@ -533,7 +533,7 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
   useEffect(() => {
     if (!id) return;
     const load = async () => {
-      const [missionResult, creneauxResult] = await Promise.all([
+      const [missionResult, creneauxResult, missionTvaResult] = await Promise.all([
         supabase
           .from('missions')
           .select(`
@@ -549,7 +549,6 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
             mode_attribution, boostee_le, garantie_remplacement, presence_confirmee_le,
             mode_remuneration, retrocession_pct, montant_honoraires_bruts, honoraires_confirmes_le,
             type_contrat_recherche, type_contrat_applique, type_paiement_soignant, mode_paiement_soignant, choix_contrat_soignant,
-            nature_tva_prestation, nature_tva_confirmee_soignant, statut_validation_tva,
             cree_le, modifie_le,
             presences(id, pointage_arrivee_le, pointage_depart_le),
             etablissements(nom, type, est_secteur_public, adresse_ville, adresse_departement,
@@ -563,6 +562,13 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
           .select('id, mission_id, debut, fin, est_pause, type_creneau')
           .eq('mission_id', id)
           .order('debut', { ascending: true }),
+        // Lecture optionnelle afin que le détail reste disponible pendant la
+        // courte fenêtre où le frontend précède la migration TVA en production.
+        supabase
+          .from('missions')
+          .select('nature_tva_prestation, nature_tva_confirmee_soignant, statut_validation_tva')
+          .eq('id', id)
+          .maybeSingle(),
       ]);
 
       const m = missionResult.data;
@@ -577,6 +583,7 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
         setLoading(false);
         return;
       }
+      if (m && missionTvaResult.data) Object.assign(m as any, missionTvaResult.data);
 
       setErreurMission(null);
 

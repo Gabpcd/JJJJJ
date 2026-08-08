@@ -24,6 +24,7 @@ const connect = read('supabase/functions/stripe-connect-pay-mission/index.ts');
 const expireDisputeCheckout = read('supabase/functions/expire-invoice-checkout-for-dispute/index.ts');
 const escrow = read('supabase/functions/escrow-debit-echeance/index.ts');
 const caregiverMission = read('src/pages/DetailMissionSoignant.tsx');
+const establishmentMission = read('src/pages/DetailMission.tsx');
 const adminVatReviews = read('src/components/admin/RevuesTvaMissions.tsx');
 const termsPage = read('src/pages/PageCGU.tsx');
 const caregiverMissionSwipe = read('src/components/swipe/ModalDetailMissionSwipe.tsx');
@@ -70,6 +71,22 @@ describe('mandat de facturation v1.4 et corrections comptables', () => {
     expect(migration).toContain('fn_admin_proposer_nature_tva_mission');
     expect(caregiverMission).toContain('Un désaccord n\'annule pas la mission');
     expect(adminVatReviews).toContain('L\'admin propose ; le soignant confirme');
+  });
+
+  it('garde les détails de mission lisibles pendant le déploiement de la migration TVA', () => {
+    const caregiverPrimaryStart = caregiverMission.indexOf("supabase.from('missions').select(`");
+    const caregiverPrimaryEnd = caregiverMission.indexOf("`).eq('id', id).single()", caregiverPrimaryStart);
+    const caregiverPrimary = caregiverMission.slice(caregiverPrimaryStart, caregiverPrimaryEnd);
+    const establishmentPrimaryStart = establishmentMission.indexOf(".from('missions')\n          .select(`");
+    const establishmentPrimaryEnd = establishmentMission.indexOf("`)\n          .eq('id', id)", establishmentPrimaryStart);
+    const establishmentPrimary = establishmentMission.slice(establishmentPrimaryStart, establishmentPrimaryEnd);
+
+    expect(caregiverPrimary).not.toContain('nature_tva_prestation');
+    expect(establishmentPrimary).not.toContain('nature_tva_prestation');
+    expect(caregiverMission).toContain(".select('nature_tva_prestation, nature_tva_confirmee_soignant, statut_validation_tva')");
+    expect(establishmentMission).toContain(".select('nature_tva_prestation, nature_tva_confirmee_soignant, statut_validation_tva')");
+    expect(caregiverMission).toContain('if (m && missionTva) Object.assign');
+    expect(establishmentMission).toContain('if (m && missionTvaResult.data) Object.assign');
   });
 
   it('limite le verrou TVA à la facture primaire et laisse les litiges modifier la mission', () => {

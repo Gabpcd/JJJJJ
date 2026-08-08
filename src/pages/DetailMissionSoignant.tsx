@@ -221,7 +221,12 @@ export default function DetailMissionSoignant() {
   useEffect(() => {
     if (!user || !id) return;
     const load = async () => {
-      const [{ data: m }, { data: s }, { data: creneaux, error: creneauxError }] = await Promise.all([
+      const [
+        { data: m },
+        { data: s },
+        { data: creneaux, error: creneauxError },
+        { data: missionTva },
+      ] = await Promise.all([
         supabase.from('missions').select(`
           id, intitule, description, service, profession_requise,
           debut_le, fin_le, duree_heures, nb_creneaux, taux_horaire_base, taux_rist_plafonne, rist_plafond_applique,
@@ -231,7 +236,6 @@ export default function DetailMissionSoignant() {
           total_brut, net_a_payer, net_estime, est_urgente, niveau_urgence, statut,
           soignant_assigne_id, etablissement_id, cree_le, modifie_le,
           type_contrat_recherche, type_contrat_applique, type_paiement_soignant, mode_paiement_soignant, choix_contrat_soignant,
-          nature_tva_prestation, nature_tva_confirmee_soignant, statut_validation_tva,
           numero_note_honoraires,
           mode_attribution, boostee_le, presence_confirmee_le, garantie_remplacement, est_arret_maladie, mode_remuneration, retrocession_pct, montant_honoraires_bruts, honoraires_confirmes_le
         `).eq('id', id).single(),
@@ -243,7 +247,16 @@ export default function DetailMissionSoignant() {
           .eq('type_creneau', 'PREVISIONNEL')
           .eq('est_pause', false)
           .order('debut', { ascending: true }),
+        // Déploiement expand/contract : cette lecture optionnelle peut échouer
+        // quelques instants tant que la migration TVA n'est pas encore posée.
+        // Elle ne doit jamais masquer une mission par ailleurs lisible.
+        supabase
+          .from('missions')
+          .select('nature_tva_prestation, nature_tva_confirmee_soignant, statut_validation_tva')
+          .eq('id', id)
+          .maybeSingle(),
       ]);
+      if (m && missionTva) Object.assign(m as any, missionTva);
       setCreneauxPlanifies(m
         ? ajouterRepliMissionPonctuelle((creneaux || []) as CreneauPointage[], m)
         : []);
