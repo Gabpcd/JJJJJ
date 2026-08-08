@@ -150,6 +150,9 @@ describe('mandat de facturation v1.4 et corrections comptables', () => {
     expect(migration).toContain('Plusieurs avoirs sont admis');
     expect(migration).toContain('IF strpos(v_definition, v_new_transfer) > 0');
     expect(migration).toContain('AND strpos(v_definition, v_new_admin_override_gel) > 0 THEN');
+    expect(migration).toContain('DROP POLICY IF EXISTS rectifications_facture_select_parties');
+    expect(migration).toContain('DROP INDEX IF EXISTS public.uq_litige_mission_type_ouvert_legacy');
+    expect(migration).toContain('DROP INDEX IF EXISTS public.uq_litige_facture_type_ouvert');
     expect(migration).toContain("statut_litige = 'EN_ATTENTE_LITIGE'");
     expect(adminDisputeModal).toContain("supabase.rpc('fn_admin_solde_correction_facture_honoraires'");
     expect(adminDisputeModal).toContain('solde corrigé');

@@ -2409,6 +2409,8 @@ GRANT SELECT ON TABLE public.factures_honoraires_rectifications
 GRANT SELECT, INSERT ON TABLE public.factures_honoraires_rectifications
   TO service_role;
 
+DROP POLICY IF EXISTS rectifications_facture_select_parties
+  ON public.factures_honoraires_rectifications;
 CREATE POLICY rectifications_facture_select_parties
 ON public.factures_honoraires_rectifications
 FOR SELECT TO authenticated
@@ -2693,6 +2695,7 @@ GRANT EXECUTE ON FUNCTION public.fn_admin_resoudre_litige_intelligent(
 -- dernière facture S2/S3. La fonction historique à trois arguments reste
 -- disponible pour les litiges non financiers et les anciens clients.
 DROP INDEX IF EXISTS public.uq_litige_mission_type_ouvert;
+DROP INDEX IF EXISTS public.uq_litige_mission_type_ouvert_legacy;
 CREATE UNIQUE INDEX uq_litige_mission_type_ouvert_legacy
   ON public.litiges (mission_id, type_litige)
   WHERE facture_id IS NULL
@@ -2700,6 +2703,7 @@ CREATE UNIQUE INDEX uq_litige_mission_type_ouvert_legacy
       'OUVERT', 'EN_DISCUSSION', 'EN_MEDIATION',
       'MEDIATION_EN_COURS', 'REVUE_ADMIN'
     );
+DROP INDEX IF EXISTS public.uq_litige_facture_type_ouvert;
 CREATE UNIQUE INDEX uq_litige_facture_type_ouvert
   ON public.litiges (facture_id, type_litige)
   WHERE facture_id IS NOT NULL
