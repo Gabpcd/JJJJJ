@@ -1208,10 +1208,10 @@ BEGIN
   v_confirmee := p_nature_tva_prestation = v_mission.nature_tva_prestation;
   IF v_mission.nature_tva_confirmee_soignant = p_nature_tva_prestation
      AND v_mission.nature_tva_confirmee_par = v_uid
-     AND v_mission.statut_validation_tva = CASE
+     AND v_mission.statut_validation_tva = (CASE
        WHEN v_confirmee THEN 'CONFIRMEE'
        ELSE 'A_REVOIR'
-     END THEN
+     END) THEN
     RETURN jsonb_build_object(
       'success', true,
       'statut_validation_tva', v_mission.statut_validation_tva,
