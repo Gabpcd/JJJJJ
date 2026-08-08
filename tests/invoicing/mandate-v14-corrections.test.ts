@@ -148,6 +148,8 @@ describe('mandat de facturation v1.4 et corrections comptables', () => {
     expect(migration).toContain('v_nouveau_ttc - v_total_courant_ttc');
     expect(migration).toContain('v_total_courant_ttc - v_nouveau_montant_ttc');
     expect(migration).toContain('Plusieurs avoirs sont admis');
+    expect(migration).toContain('IF strpos(v_definition, v_new_transfer) > 0');
+    expect(migration).toContain('AND strpos(v_definition, v_new_admin_override_gel) > 0 THEN');
     expect(migration).toContain("statut_litige = 'EN_ATTENTE_LITIGE'");
     expect(adminDisputeModal).toContain("supabase.rpc('fn_admin_solde_correction_facture_honoraires'");
     expect(adminDisputeModal).toContain('solde corrigé');

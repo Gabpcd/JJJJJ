@@ -1943,6 +1943,26 @@ BEGIN
   v_definition := pg_get_functiondef(
     'public.fn_admin_resoudre_litige(uuid,text,text,numeric,numeric,text)'::regprocedure
   );
+  -- Le staging PR applique d'abord la migration, puis la rejoue dans une
+  -- transaction annulée avec les suites SQL. Une définition déjà entièrement
+  -- corrigée est donc un succès idempotent ; une correction partielle reste
+  -- refusée par le garde anti-dérive juste après.
+  IF strpos(v_definition, v_new_transfer) > 0
+     AND strpos(v_definition, v_new_cumulative_variables) > 0
+     AND strpos(v_definition, v_new_cumulative_load) > 0
+     AND strpos(v_definition, v_new_reference) > 0
+     AND strpos(v_definition, v_new_paid_auto) > 0
+     AND strpos(v_definition, v_new_ajustement_aucune) > 0
+     AND strpos(v_definition, v_new_unchanged_total) > 0
+     AND strpos(v_definition, v_new_single_credit) > 0
+     AND strpos(v_definition, v_new_credit_delta) > 0
+     AND strpos(v_definition, v_new_refund_source) > 0
+     AND strpos(v_definition, v_new_avoir_emission) > 0
+     AND strpos(v_definition, v_new_refund_queue) > 0
+     AND strpos(v_definition, v_new_avoir_origin_status) > 0
+     AND strpos(v_definition, v_new_admin_override_gel) > 0 THEN
+    RETURN;
+  END IF;
   IF strpos(v_definition, v_old_transfer) = 0
      OR strpos(v_definition, v_old_cumulative_variables) = 0
      OR strpos(v_definition, v_old_cumulative_load) = 0
