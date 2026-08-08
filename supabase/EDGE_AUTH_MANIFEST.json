@@ -4,8 +4,8 @@
     "captured_at": "2026-07-29",
     "remote_total": 76,
     "remote_verify_jwt_false": 71,
-    "local_total_after_admin_2fa_retirement": 75,
-    "local_verify_jwt_false": 70
+    "local_total_after_admin_2fa_retirement": 77,
+    "local_verify_jwt_false": 72
   },
   "entries": [
     {"slug":"admin-invoke","verify_jwt":true,"auth_class":"PLATFORM_JWT","guard_all":[],"justification":"Gateway JWT Supabase puis garde admin dans la fonction."},
@@ -60,6 +60,8 @@
     {"slug":"calendar-sync","verify_jwt":false,"auth_class":"USER_CUSTOM","guard_all":["verifyUserOrServiceRole"],"justification":"JWT utilisateur vérifié par le helper partagé avant synchronisation calendrier."},
     {"slug":"delete-account","verify_jwt":false,"auth_class":"USER_CUSTOM","guard_all":["verifyUserOrServiceRole","applyRateLimit"],"justification":"JWT utilisateur vérifié par le helper partagé, réauthentification et limite avant suppression."},
     {"slug":"generate-invoice","verify_jwt":false,"auth_class":"USER_OR_SERVICE_CUSTOM","guard_all":["supabaseUser.auth.getUser","validateServiceRoleReason","applyRateLimit"],"justification":"JWT tenant validé par Auth ou clé service avec motif allowlisté et limites avant génération."},
+    {"slug":"sign-invoicing-mandate","verify_jwt":false,"auth_class":"USER_CUSTOM","guard_all":["verifyUserOrServiceRole","applyRateLimit","Signature personnelle uniquement"],"justification":"JWT du soignant vérifié côté Edge, service-role refusé, IP serveur et débit limités avant écriture de la preuve."},
+    {"slug":"expire-invoice-checkout-for-dispute","verify_jwt":false,"auth_class":"ADMIN_CUSTOM","guard_all":["verifyAdminOrServiceRole","Session administrateur requise"],"justification":"JWT administrateur vérifié avant expiration exacte d’une session Checkout liée à une facture en litige."},
     {"slug":"submit-to-chorus","verify_jwt":false,"auth_class":"ADMIN_CUSTOM","guard_all":["verifyAdminOrServiceRole","resolveOperationalTestAccount"],"justification":"Soumission externe réservée admin/service et neutralisée pour toute facture de test."},
     {"slug":"litige-escalation-cron","verify_jwt":false,"auth_class":"CRON_SECRET","guard_all":["verifyCronServiceAuth","isCronAuthProbe"],"justification":"Secret cron dédié; sonde auth-only sans effet."},
     {"slug":"process-stripe-refunds","verify_jwt":false,"auth_class":"CRON_SECRET","guard_all":["verifyCronServiceAuth","isCronAuthProbe"],"justification":"Secret cron dédié; sélection réelle et idempotence Stripe."},

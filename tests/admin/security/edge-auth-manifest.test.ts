@@ -3,6 +3,10 @@ import { describe, expect, it } from "vitest";
 
 const root = process.cwd();
 const config = readFileSync(`${root}/supabase/config.toml`, "utf8");
+const deployWorkflow = readFileSync(
+  `${root}/.github/workflows/deploy-supabase.yml`,
+  "utf8",
+);
 const manifest = JSON.parse(
   readFileSync(`${root}/supabase/EDGE_AUTH_MANIFEST.json`, "utf8"),
 ) as {
@@ -59,17 +63,17 @@ function expectGuardBeforeEffect(
 }
 
 describe("inventaire explicite d'authentification des Edge Functions", () => {
-  it("fige les 76 fonctions distantes, dont admin-2fa retirée", () => {
-    expect(manifest.entries).toHaveLength(76);
-    expect(new Set(manifest.entries.map((entry) => entry.slug)).size).toBe(76);
+  it("fige les fonctions distantes et classe les ajouts locaux avant déploiement", () => {
+    expect(manifest.entries).toHaveLength(78);
+    expect(new Set(manifest.entries.map((entry) => entry.slug)).size).toBe(78);
     expect(manifest.snapshot.remote_total).toBe(76);
     expect(manifest.snapshot.remote_verify_jwt_false).toBe(71);
-    expect(manifest.snapshot.local_total_after_admin_2fa_retirement).toBe(75);
-    expect(manifest.snapshot.local_verify_jwt_false).toBe(70);
+    expect(manifest.snapshot.local_total_after_admin_2fa_retirement).toBe(77);
+    expect(manifest.snapshot.local_verify_jwt_false).toBe(72);
   });
 
   it("classe chaque fonction locale et interdit toute dérive config/manifeste", () => {
-    expect(configured.size).toBe(75);
+    expect(configured.size).toBe(77);
     for (const [slug, verifyJwt] of configured) {
       const entry = manifest.entries.find((candidate) => candidate.slug === slug);
       expect(entry, `fonction non classée: ${slug}`).toBeDefined();
@@ -77,6 +81,15 @@ describe("inventaire explicite d'authentification des Edge Functions", () => {
       expect(entry?.auth_class, `classe absente: ${slug}`).toBeTruthy();
       expect(entry?.justification.length, `justification absente: ${slug}`).toBeGreaterThan(15);
     }
+  });
+
+  it("applique explicitement verify_jwt lors des déploiements --use-api", () => {
+    expect(deployWorkflow).toContain('awk -v target="[functions.${fn}]"');
+    expect(deployWorkflow).toContain('false) jwt_args=(--no-verify-jwt)');
+    expect(deployWorkflow).toContain('"${jwt_args[@]}"');
+    expect(deployWorkflow).toContain(
+      "Configuration verify_jwt absente ou invalide pour $fn",
+    );
   });
 
   it("refuse verify_jwt=false sans garde exécutable déclaré", () => {
@@ -106,6 +119,7 @@ describe("inventaire explicite d'authentification des Edge Functions", () => {
       "stripe-connect-status",
       "calendar-sync",
       "delete-account",
+      "sign-invoicing-mandate",
       "psc-logout",
     ];
     for (const slug of sharedUserGuardFunctions) {

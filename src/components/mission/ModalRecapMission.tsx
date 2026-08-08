@@ -15,6 +15,10 @@ import {
 } from '@/components/ui/DialogResponsive';
 import { formatParis } from '@/lib/date-heure-paris';
 
+export type NatureTvaPrestation =
+  | 'SOIN_THERAPEUTIQUE_EXONERE'
+  | 'PRESTATION_TAXABLE';
+
 export interface RecapMissionData {
   intitule: string;
   description?: string | null;
@@ -32,9 +36,8 @@ export interface RecapMissionData {
   dureeHeures: number;
   heuresNuit: number;
   tauxHoraire: number;
-  modeRemuneration?: 'TAUX_HORAIRE' | 'RETROCESSION';
-  retrocessionPct?: number | null;
   contratPreference: 'TOUS' | 'SALARIE' | 'LIBERAL';
+  natureTvaPrestation: NatureTvaPrestation | null;
   modeAttribution: 'PREMIER_ARRIVE' | 'CANDIDATURE';
   estUrgente: boolean;
   niveauUrgence: number;
@@ -79,9 +82,8 @@ export function ModalRecapMission({
     dureeHeures,
     heuresNuit,
     tauxHoraire,
-    modeRemuneration = 'TAUX_HORAIRE',
-    retrocessionPct = null,
     contratPreference,
+    natureTvaPrestation,
     modeAttribution,
     estUrgente,
     niveauUrgence,
@@ -92,10 +94,12 @@ export function ModalRecapMission({
     modeExerciceMission,
   } = data;
 
-  const estRetrocession = modeRemuneration === 'RETROCESSION';
-  const brutSoignant = tauxHoraire * dureeHeures;
-  const commissionMontant = brutSoignant * (tauxCommission / 100);
-  const totalHT = brutSoignant + commissionMontant;
+  const remunerationEstimee = tauxHoraire * dureeHeures;
+  const commissionMontantHt = remunerationEstimee * (tauxCommission / 100);
+  const commissionTva = commissionMontantHt * 0.20;
+  const totalAvecTvaJolene = remunerationEstimee + commissionMontantHt + commissionTva;
+  const estLiberalUniquement = contratPreference === 'LIBERAL';
+  const estSalarieUniquement = contratPreference === 'SALARIE';
   const sourcesModeExerciceMission = modeExerciceMission
     ? liensSourcesModeExercice(modeExerciceMission)
     : [];
@@ -114,7 +118,7 @@ export function ModalRecapMission({
       ? 'Tous profils (salarié + libéral)'
       : contratPreference === 'SALARIE'
         ? 'Salarié uniquement (CDD)'
-        : 'Libéral uniquement (remplacement)';
+        : 'Libéral uniquement (mission d’honoraires)';
 
   const labelMode =
     modeAttribution === 'PREMIER_ARRIVE' ? '⚡ Premier arrivé' : '👤 Sur candidature';
@@ -128,10 +132,12 @@ export function ModalRecapMission({
     : null;
 
   const majorationsCcn: string[] = [];
-  if (heuresNuit > 0) majorationsCcn.push(`Nuit (21h-6h) — ~${heuresNuit.toFixed(0)}h estimées`);
-  // Dimanche et fériés détectés au pointage par le moteur de paie
-  majorationsCcn.push('Dimanche et jours fériés (calculés au pointage)');
-  majorationsCcn.push('IFM 10% + ICP 10% (CDD salarié)');
+  if (!estLiberalUniquement) {
+    if (heuresNuit > 0) majorationsCcn.push(`Nuit (21h-6h) — ~${heuresNuit.toFixed(0)}h estimées`);
+    // Dimanche et fériés détectés au pointage par le moteur de paie.
+    majorationsCcn.push('Dimanche et jours fériés (calculés au pointage)');
+    majorationsCcn.push('IFM 10% + ICP 10% (CDD salarié)');
+  }
 
   return (
     <DialogResponsive open={ouvert} onOpenChange={(o) => { if (!o && !loading) onModifier(); }}>
@@ -201,6 +207,16 @@ export function ModalRecapMission({
                 <span className="text-muted-foreground shrink-0">Type de profil</span>
                 <span className="font-medium text-foreground text-right">{labelContrat}</span>
               </div>
+              {!estSalarieUniquement && natureTvaPrestation && (
+                <div className="flex justify-between gap-3">
+                  <span className="text-muted-foreground shrink-0">Nature TVA prévue</span>
+                  <span className="font-medium text-foreground text-right">
+                    {natureTvaPrestation === 'SOIN_THERAPEUTIQUE_EXONERE'
+                      ? 'Soin à finalité thérapeutique — exonération à confirmer'
+                      : 'Prestation taxable — statut TVA du soignant applicable'}
+                  </span>
+                </div>
+              )}
               <div className="flex justify-between gap-3">
                 <span className="text-muted-foreground shrink-0">Mode de sélection</span>
                 <span className="font-medium text-foreground">{labelMode}</span>
@@ -226,41 +242,57 @@ export function ModalRecapMission({
               2. Coût estimé
             </h3>
             <div className="bg-gradient-to-r from-primary/5 to-info/5 border border-primary/20 rounded-xl p-4 space-y-2 text-sm">
-              {estRetrocession ? (
-                <>
-                  <div className="flex justify-between gap-3">
-                    <span className="text-muted-foreground">Rétrocession au remplaçant</span>
-                    <span className="font-bold text-primary">{retrocessionPct ?? '—'} % des honoraires</span>
-                  </div>
-                  <p className="border-t border-border pt-2 text-[10px] italic text-muted-foreground">
-                    Le montant sera calculé sur les honoraires réellement encaissés et confirmés. Aucun taux horaire ne détermine la rémunération contractuelle.
-                  </p>
-                </>
-              ) : (
-                <>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">
-                  Brut soignant ({tauxHoraire.toFixed(2)} €/h × {dureeHeures.toFixed(1)}h)
+                  {estLiberalUniquement
+                    ? 'Honoraires estimés HT'
+                    : estSalarieUniquement
+                      ? 'Base brute estimée'
+                      : 'Base proposée — brut salarié ou honoraires HT'} ({tauxHoraire.toFixed(2)} €/h × {dureeHeures.toFixed(1)}h)
                 </span>
-                <span className="font-medium text-foreground">{brutSoignant.toFixed(2)} €</span>
+                <span className="font-medium text-foreground">{remunerationEstimee.toFixed(2)} €</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">
-                  Commission Jolene ({tauxCommission}% HT)
+                  Frais Jolene ({tauxCommission}% HT)
                 </span>
                 <span className="font-medium text-foreground">
-                  +{commissionMontant.toFixed(2)} €
+                  +{commissionMontantHt.toFixed(2)} €
                 </span>
               </div>
-              <div className="flex justify-between border-t border-border pt-2">
-                <span className="font-semibold text-foreground">Total estimé HT</span>
-                <span className="font-bold text-primary text-base">{totalHT.toFixed(2)} €</span>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">TVA 20 % sur les frais Jolene</span>
+                <span className="font-medium text-foreground">+{commissionTva.toFixed(2)} €</span>
               </div>
-              <p className="text-[10px] text-muted-foreground italic pt-1">
-                Estimation indicative. Le montant final inclura majorations CCN (nuit, dimanche,
-                fériés), IFM 10% et ICP 10% pour les CDD.
-              </p>
-                </>
+              <div className="flex justify-between border-t border-border pt-2">
+                <span className="font-semibold text-foreground">
+                  Total estimé{estLiberalUniquement
+                    ? ' hors éventuelle TVA sur les honoraires'
+                    : estSalarieUniquement
+                      ? ' avant charges employeur'
+                      : ' selon le régime finalement retenu'}
+                </span>
+                <span className="font-bold text-primary text-base">{totalAvecTvaJolene.toFixed(2)} €</span>
+              </div>
+              {estLiberalUniquement ? (
+                <div className="space-y-1 pt-1 text-[10px] text-muted-foreground">
+                  <p>
+                    Un seul paiement pourra régler deux factures distinctes : 100 % des honoraires au soignant et les frais Jolene à l’établissement.
+                  </p>
+                  <p>
+                    La nature de la prestation sera confirmée par le soignant assigné. Pour une prestation taxable, son statut TVA déterminera si une TVA s’ajoute aux honoraires. Les heures et ajustements validés dans Jolene font foi ; un litige produit une correction traçable sans écraser la facture initiale.
+                  </p>
+                </div>
+              ) : (
+                <p className="text-[10px] text-muted-foreground italic pt-1">
+                  Estimation indicative. Le bulletin employeur fera foi et ajoutera les charges,
+                  majorations CCN, IFM 10 % et ICP 10 % applicables au CDD.
+                </p>
+              )}
+              {!estLiberalUniquement && !estSalarieUniquement && (
+                <p className="text-[10px] text-muted-foreground">
+                  Le total final dépendra du statut du soignant retenu : paie employeur en salarié ou facture d’honoraires en libéral.
+                </p>
               )}
             </div>
           </section>
@@ -317,14 +349,16 @@ export function ModalRecapMission({
                   {qrAutoGenere ? '✅ Généré à la signature du contrat' : '⏳ Manuel'}
                 </span>
               </div>
-              <div className="pt-2 border-t border-border">
-                <p className="text-xs text-muted-foreground mb-1.5">Majorations CCN potentielles</p>
-                <ul className="text-xs text-foreground space-y-0.5 list-disc list-inside">
-                  {majorationsCcn.map((m, i) => (
-                    <li key={i}>{m}</li>
-                  ))}
-                </ul>
-              </div>
+              {majorationsCcn.length > 0 && (
+                <div className="pt-2 border-t border-border">
+                  <p className="text-xs text-muted-foreground mb-1.5">Majorations CCN potentielles</p>
+                  <ul className="text-xs text-foreground space-y-0.5 list-disc list-inside">
+                    {majorationsCcn.map((m, i) => (
+                      <li key={i}>{m}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </div>
           </section>
         </DialogResponsiveBody>

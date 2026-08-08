@@ -9,6 +9,8 @@ export interface MandatPdfMetadata {
   contenu_hash?: string | null;
   ip_address?: string | null;
   user_agent?: string | null;
+  contenu_texte?: string | null;
+  statut_tva_honoraires?: string | null;
 }
 
 /**
@@ -56,7 +58,9 @@ export function genererMandatFacturationPdf(
   y += 22;
 
   // Texte du mandat
-  const texteMandat = buildMandatFacturationTexte(soignant);
+  // Une preuve doit reproduire le contenu effectivement accepté, même si le
+  // profil du soignant change ensuite. Le rebuild n'est qu'un fallback legacy.
+  const texteMandat = meta.contenu_texte || buildMandatFacturationTexte(soignant);
   y = renderMarkdown(doc, texteMandat, y, margin, contentWidth);
 
   // Bloc preuve de signature électronique en bas
@@ -83,6 +87,7 @@ export function genererMandatFacturationPdf(
     ['Adresse IP', meta.ip_address || 'non transmise'],
     ['Navigateur', truncate(meta.user_agent || 'non transmis', 80)],
     ['Hash contenu (SHA-256)', meta.contenu_hash || 'non disponible'],
+    ['Statut TVA de l\'activité libérale', meta.statut_tva_honoraires || 'non disponible'],
   ];
   for (const [label, value] of blocLines) {
     doc.setFont('helvetica', 'bold');
@@ -112,7 +117,7 @@ export function genererMandatFacturationPdf(
   for (let i = 1; i <= total; i++) {
     doc.setPage(i);
     createFooter(doc, {
-      companyLine: `Mandat de facturation Jolene SAS - art. 289 I-2 CGI - page ${i}/${total}`,
+      companyLine: `Mandat Jolene - art. 289 I-2 CGI / L. 216-43 CIBS - page ${i}/${total}`,
       contactLine: 'jolene.app | support@jolene.app',
     });
   }

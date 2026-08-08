@@ -401,6 +401,36 @@ Deno.serve(async (req) => {
       });
     }
 
+    const { data: litigeActif, error: litigeActifError } = await supabaseAdmin
+      .from("litiges")
+      .select("id, facture_id, statut")
+      .eq("mission_id", mission_id)
+      .in("statut", [
+        "OUVERT",
+        "EN_DISCUSSION",
+        "EN_MEDIATION",
+        "MEDIATION_EN_COURS",
+        "REVUE_ADMIN",
+      ])
+      .or(`facture_id.eq.${factureHonoraires.id},facture_id.is.null`)
+      .limit(1)
+      .maybeSingle();
+    if (litigeActifError) {
+      throw new Error(`Vérification du litige impossible: ${litigeActifError.message}`);
+    }
+    if (litigeActif) {
+      return new Response(JSON.stringify({
+        error: "FACTURE_EN_LITIGE",
+        message:
+          "Cette échéance est suspendue pendant le litige. Les autres factures de la mission restent payables.",
+        litige_id: litigeActif.id,
+        facture_honoraires_id: factureHonoraires.id,
+      }), {
+        status: 409,
+        headers: { ...corsHeaders(req), "Content-Type": "application/json" },
+      });
+    }
+
     // D6 : la facture de commission est liée à la facture d'honoraires exacte.
     // Le fallback mission_id ne sert qu'aux anciennes missions déjà facturées.
     let { data: factureCommission, error: factureCommissionError } = await supabaseAdmin

@@ -3035,18 +3035,38 @@ export type Database = {
       }
       factures_honoraires: {
         Row: {
+          acceptee_explicitement_le: string | null
           admin_notes: string | null
           annee_iso: number | null
+          base_legale_tva_snapshot: string | null
           chorus_avoir_reference_invoice: string | null
           chorus_last_sync_at: string | null
           chorus_submission_id: string | null
           chorus_submission_status: string | null
+          contestee_le: string | null
           cree_le: string
           date_echeance: string | null
           date_emission: string
           date_paiement: string | null
           date_remboursement: string | null
+          description_prestation_snapshot: string | null
+          destinataire_adresse_code_postal_snapshot: string | null
+          destinataire_adresse_rue_snapshot: string | null
+          destinataire_adresse_ville_snapshot: string | null
+          destinataire_nom_snapshot: string | null
+          destinataire_siret_snapshot: string | null
           engagement_juridique: string | null
+          emetteur_adresse_code_postal_snapshot: string | null
+          emetteur_adresse_rue_snapshot: string | null
+          emetteur_adresse_snapshot: string | null
+          emetteur_adresse_ville_snapshot: string | null
+          emetteur_email_snapshot: string | null
+          emetteur_identite_snapshot: string | null
+          emetteur_numero_professionnel_snapshot: string | null
+          emetteur_numero_tva_snapshot: string | null
+          emetteur_profession_snapshot: string | null
+          emetteur_siret_snapshot: string | null
+          emise_le: string | null
           est_facture_finale_mission: boolean
           etablissement_id: string
           exoneration_tva: boolean | null
@@ -3065,13 +3085,18 @@ export type Database = {
           montant_signe: number | null
           montant_ttc: number
           montant_tva: number
+          nature_correction: string
+          nature_prestation_snapshot: string | null
+          notifiee_soignant_le: string | null
           numero_facture: string
           numero_semaine_iso: number | null
           pdf_a_regenerer: boolean
           pdf_s3_key: string | null
           periode_debut: string
           periode_fin: string
+          quantite_heures_snapshot: number | null
           reference_remboursement: string | null
+          regime_tva_snapshot: string | null
           service_code_chorus: string | null
           siret_client: string | null
           soignant_id: string
@@ -3079,10 +3104,12 @@ export type Database = {
           statut_litige: Database["public"]["Enums"]["statut_litige_facture"]
           stripe_payment_intent_id: string | null
           subrogation_mention: string | null
+          taux_horaire_snapshot: number | null
           taux_tva: number | null
           template_version: string
           type_document: Database["public"]["Enums"]["type_document_facture"]
           updated_at: string | null
+          verification_echeance_le: string | null
         }
         Insert: {
           admin_notes?: string | null
@@ -4089,37 +4116,55 @@ export type Database = {
       mandats_facturation_signatures: {
         Row: {
           contenu_hash: string | null
+          contenu_texte: string | null
           cree_le: string
           id: string
           ip_address: string | null
+          ip_source: string | null
           pdf_url: string | null
+          regime_tva_honoraires: string | null
+          retention_jusqu_au: string | null
           revoked_at: string | null
+          revocation_motif: string | null
           signed_at: string
           soignant_id: string
+          statut_tva_honoraires: string | null
           user_agent: string | null
           version: string
         }
         Insert: {
           contenu_hash?: string | null
+          contenu_texte?: string | null
           cree_le?: string
           id?: string
           ip_address?: string | null
+          ip_source?: string | null
           pdf_url?: string | null
+          regime_tva_honoraires?: string | null
+          retention_jusqu_au?: string | null
           revoked_at?: string | null
+          revocation_motif?: string | null
           signed_at?: string
           soignant_id: string
+          statut_tva_honoraires?: string | null
           user_agent?: string | null
           version: string
         }
         Update: {
           contenu_hash?: string | null
+          contenu_texte?: string | null
           cree_le?: string
           id?: string
           ip_address?: string | null
+          ip_source?: string | null
           pdf_url?: string | null
+          regime_tva_honoraires?: string | null
+          retention_jusqu_au?: string | null
           revoked_at?: string | null
+          revocation_motif?: string | null
           signed_at?: string
           soignant_id?: string
+          statut_tva_honoraires?: string | null
           user_agent?: string | null
           version?: string
         }
@@ -4473,6 +4518,12 @@ export type Database = {
           montant_majoration_ferie: number | null
           montant_majoration_nuit: number | null
           motif_annulation: string | null
+          nature_tva_confirmee_le: string | null
+          nature_tva_confirmee_par: string | null
+          nature_tva_confirmee_soignant: string | null
+          nature_tva_declaree_le: string | null
+          nature_tva_declaree_par: string | null
+          nature_tva_prestation: string | null
           nb_creneaux: number
           nb_scans: number | null
           net_a_payer: number | null
@@ -4488,12 +4539,16 @@ export type Database = {
           relances_sans_candidat: number
           remplacement_de_mission_id: string | null
           retrocession_pct: number | null
+          revue_tva_motif: string | null
+          revue_tva_resolue_le: string | null
+          revue_tva_resolue_par: string | null
           rist_plafond_applique: boolean | null
           serie_id: string | null
           service: string | null
           soignant_assigne_id: string | null
           specialite_medicale_requise: string | null
           statut: Database["public"]["Enums"]["statut_mission"] | null
+          statut_validation_tva: string
           strategie_facturation: Database["public"]["Enums"]["strategie_facturation"]
           stripe_payment_intent_id: string | null
           stripe_transfer_id: string | null
@@ -4569,6 +4624,12 @@ export type Database = {
           montant_majoration_ferie?: number | null
           montant_majoration_nuit?: number | null
           motif_annulation?: string | null
+          nature_tva_confirmee_le?: string | null
+          nature_tva_confirmee_par?: string | null
+          nature_tva_confirmee_soignant?: string | null
+          nature_tva_declaree_le?: string | null
+          nature_tva_declaree_par?: string | null
+          nature_tva_prestation?: string | null
           nb_creneaux?: number
           nb_scans?: number | null
           net_a_payer?: number | null
@@ -4584,12 +4645,16 @@ export type Database = {
           relances_sans_candidat?: number
           remplacement_de_mission_id?: string | null
           retrocession_pct?: number | null
+          revue_tva_motif?: string | null
+          revue_tva_resolue_le?: string | null
+          revue_tva_resolue_par?: string | null
           rist_plafond_applique?: boolean | null
           serie_id?: string | null
           service?: string | null
           soignant_assigne_id?: string | null
           specialite_medicale_requise?: string | null
           statut?: Database["public"]["Enums"]["statut_mission"] | null
+          statut_validation_tva?: string
           strategie_facturation?: Database["public"]["Enums"]["strategie_facturation"]
           stripe_payment_intent_id?: string | null
           stripe_transfer_id?: string | null
@@ -4665,6 +4730,12 @@ export type Database = {
           montant_majoration_ferie?: number | null
           montant_majoration_nuit?: number | null
           motif_annulation?: string | null
+          nature_tva_confirmee_le?: string | null
+          nature_tva_confirmee_par?: string | null
+          nature_tva_confirmee_soignant?: string | null
+          nature_tva_declaree_le?: string | null
+          nature_tva_declaree_par?: string | null
+          nature_tva_prestation?: string | null
           nb_creneaux?: number
           nb_scans?: number | null
           net_a_payer?: number | null
@@ -4680,12 +4751,16 @@ export type Database = {
           relances_sans_candidat?: number
           remplacement_de_mission_id?: string | null
           retrocession_pct?: number | null
+          revue_tva_motif?: string | null
+          revue_tva_resolue_le?: string | null
+          revue_tva_resolue_par?: string | null
           rist_plafond_applique?: boolean | null
           serie_id?: string | null
           service?: string | null
           soignant_assigne_id?: string | null
           specialite_medicale_requise?: string | null
           statut?: Database["public"]["Enums"]["statut_mission"] | null
+          statut_validation_tva?: string
           strategie_facturation?: Database["public"]["Enums"]["strategie_facturation"]
           stripe_payment_intent_id?: string | null
           stripe_transfer_id?: string | null
@@ -7174,6 +7249,8 @@ export type Database = {
           psc_linked_le: string | null
           psc_sub: string | null
           rayon_deplacement_km: number | null
+          regime_tva_honoraires: string | null
+          statut_tva_honoraires: string | null
           ref_capture: string | null
           rib_partage_le: string | null
           rpps_nom_api: string | null
@@ -7326,6 +7403,8 @@ export type Database = {
           psc_linked_le?: string | null
           psc_sub?: string | null
           rayon_deplacement_km?: number | null
+          regime_tva_honoraires?: string | null
+          statut_tva_honoraires?: string | null
           ref_capture?: string | null
           rib_partage_le?: string | null
           rpps_nom_api?: string | null
@@ -7478,6 +7557,8 @@ export type Database = {
           psc_linked_le?: string | null
           psc_sub?: string | null
           rayon_deplacement_km?: number | null
+          regime_tva_honoraires?: string | null
+          statut_tva_honoraires?: string | null
           ref_capture?: string | null
           rib_partage_le?: string | null
           rpps_nom_api?: string | null
@@ -8309,6 +8390,29 @@ export type Database = {
         Args: { p_facture_honoraire_id: string }
         Returns: Json
       }
+      fn_admin_lister_revues_tva_missions: {
+        Args: never
+        Returns: {
+          confirmation_le: string | null
+          declaration_le: string | null
+          etablissement_id: string
+          etablissement_nom: string
+          intitule: string
+          mission_id: string
+          nature_etablissement: string | null
+          nature_soignant: string | null
+          soignant_id: string
+          soignant_nom: string
+        }[]
+      }
+      fn_admin_proposer_nature_tva_mission: {
+        Args: {
+          p_mission_id: string
+          p_motif: string
+          p_nature_tva_prestation: string
+        }
+        Returns: Json
+      }
       fn_admin_cleanup_test_accounts: { Args: never; Returns: Json }
       fn_admin_cockpit_fondateur: { Args: never; Returns: Json }
       fn_admin_cohort_economics: { Args: { p_mois?: number }; Returns: Json }
@@ -8532,6 +8636,21 @@ export type Database = {
             }
             Returns: Json
           }
+      fn_admin_resoudre_litige_intelligent: {
+        Args: {
+          p_action_financiere?: string
+          p_ajuster_heures?: number
+          p_ajuster_taux?: number
+          p_en_faveur_de?: string
+          p_litige_id: string
+          p_resolution: string
+        }
+        Returns: Json
+      }
+      fn_admin_solde_correction_facture_honoraires: {
+        Args: { p_facture_id: string }
+        Returns: Json
+      }
       fn_admin_resume_alertes_pointage: { Args: never; Returns: Json }
       fn_admin_stripe_connect_stats: { Args: never; Returns: Json }
       fn_admin_suspendre_utilisateur: {
@@ -8862,6 +8981,10 @@ export type Database = {
         Args: { p_mission_id: string }
         Returns: Json
       }
+      fn_confirmer_nature_tva_mission: {
+        Args: { p_mission_id: string; p_nature_tva_prestation: string }
+        Returns: Json
+      }
       fn_confirmer_paiement_soignant: {
         Args: { p_paiement_id: string }
         Returns: Json
@@ -8894,6 +9017,41 @@ export type Database = {
         Returns: Json
       }
       fn_contrat_storage_path: { Args: { p_contrat_id: string }; Returns: Json }
+      fn_creer_mission_api_v2: {
+        Args: {
+          p_creneaux: Json
+          p_etablissement_id: string
+          p_intitule: string
+          p_mode_remuneration: string
+          p_nature_tva_prestation: string | null
+          p_profession_requise: Database["public"]["Enums"]["type_profession"]
+          p_retrocession_pct: number | null
+          p_service: string | null
+          p_taux_horaire_base: number
+          p_type_contrat_recherche: string
+        }
+        Returns: Json
+      }
+      fn_creer_mission_multi_jours_v3: {
+        Args: {
+          p_accepte_non_specialises: boolean
+          p_creneaux: Json
+          p_description: string | null
+          p_est_urgente: boolean
+          p_intitule: string
+          p_mode_attribution: string
+          p_mode_remuneration: string
+          p_nature_tva_prestation: string | null
+          p_niveau_urgence: number
+          p_profession_requise: Database["public"]["Enums"]["type_profession"]
+          p_retrocession_pct: number | null
+          p_service: string | null
+          p_specialite_medicale_requise: string | null
+          p_taux_horaire_base: number
+          p_type_contrat_recherche: string
+        }
+        Returns: Json
+      }
       fn_creer_api_key: {
         Args: {
           p_etablissement_id?: string
@@ -9742,6 +9900,25 @@ export type Database = {
         }
         Returns: Json
       }
+      fn_modifier_mission_etablissement_v4: {
+        Args: {
+          p_accepte_non_specialises: boolean
+          p_creneaux: Json
+          p_description: string | null
+          p_est_urgente: boolean
+          p_intitule: string
+          p_mission_id: string
+          p_mode_attribution: string
+          p_nature_tva_prestation: string | null
+          p_niveau_urgence: number
+          p_profession_requise: Database["public"]["Enums"]["type_profession"]
+          p_service: string | null
+          p_specialite_medicale_requise: string | null
+          p_taux_horaire_base: number
+          p_type_contrat_recherche: string
+        }
+        Returns: Json
+      }
       fn_modifier_mon_etablissement: {
         Args: {
           p_adresse_code_postal?: string
@@ -10183,6 +10360,19 @@ export type Database = {
           p_contenu_hash?: string
           p_ip?: string
           p_user_agent?: string
+          p_version: string
+        }
+        Returns: Json
+      }
+      fn_signer_mandat_facturation_serveur: {
+        Args: {
+          p_contenu_hash: string
+          p_contenu_texte: string
+          p_ip: string | null
+          p_ip_source: string
+          p_soignant_id: string
+          p_statut_tva_honoraires: string
+          p_user_agent: string | null
           p_version: string
         }
         Returns: Json

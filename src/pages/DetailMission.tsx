@@ -102,6 +102,12 @@ function formatFinCreneau(creneau: CreneauPointage): string {
     : formatParis(creneau.fin!, 'EEE d MMM · HH:mm');
 }
 
+function libelleNatureTvaMission(nature?: string | null): string {
+  if (nature === 'SOIN_THERAPEUTIQUE_EXONERE') return 'Soin à finalité thérapeutique';
+  if (nature === 'PRESTATION_TAXABLE') return 'Prestation taxable';
+  return 'À déterminer avec Jolene';
+}
+
 function AlerterPoolUrgence({ missionId, mission, user, afficherNotification }: { missionId: string; mission: any; user: any; afficherNotification: (n: any) => void }) {
   const [alerting, setAlerting] = useState(false);
   const [alerted, setAlerted] = useState(false);
@@ -543,6 +549,7 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
             mode_attribution, boostee_le, garantie_remplacement, presence_confirmee_le,
             mode_remuneration, retrocession_pct, montant_honoraires_bruts, honoraires_confirmes_le,
             type_contrat_recherche, type_contrat_applique, type_paiement_soignant, mode_paiement_soignant, choix_contrat_soignant,
+            nature_tva_prestation, nature_tva_confirmee_soignant, statut_validation_tva,
             cree_le, modifie_le,
             presences(id, pointage_arrivee_le, pointage_depart_le),
             etablissements(nom, type, est_secteur_public, adresse_ville, adresse_departement,
@@ -1053,6 +1060,24 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
                 etablissement={m.etablissements}
                 role={isAdmin ? 'ADMIN' : 'ETAB'}
               />
+              {(m as any).type_contrat_applique === 'LIBERAL' && (
+                <div className={`card-base text-xs ${(m as any).statut_validation_tva === 'CONFIRMEE' ? 'border-success/30 bg-success/5' : 'border-warning/40 bg-warning/5'}`}>
+                  <p className="font-semibold text-foreground">
+                    TVA mission · {libelleNatureTvaMission((m as any).nature_tva_prestation)}
+                  </p>
+                  {(m as any).statut_validation_tva === 'CONFIRMEE' ? (
+                    <p className="mt-1 text-success">✓ Nature confirmée par le soignant — facturation autorisée.</p>
+                  ) : (m as any).statut_validation_tva === 'A_REVOIR' ? (
+                    <p className="mt-1 text-muted-foreground">
+                      Revue Jolene en cours. La mission et les corrections de litige continuent ; seule l'émission de facture est suspendue.
+                    </p>
+                  ) : (
+                    <p className="mt-1 text-muted-foreground">
+                      Confirmation du soignant attendue avant facturation. Cela ne bloque pas la mission.
+                    </p>
+                  )}
+                </div>
+              )}
               {/* Payment mode indicator — Connect réglé, Chorus Pro, puis facture mensuelle. */}
               {m.montant_commission_ttc > 0 && (
                 <div className="card-base flex items-center gap-2 text-xs text-muted-foreground">

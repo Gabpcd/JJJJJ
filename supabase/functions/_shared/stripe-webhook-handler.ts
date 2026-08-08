@@ -1234,6 +1234,77 @@ export async function handleStripeWebhook(
           throw new Error("Paid Connect checkout has no source charge");
         }
 
+        // Un litige peut être ouvert après la création du Checkout mais juste
+        // avant sa validation. Dans ce cas, ne jamais transférer des honoraires
+        // contestés : on rembourse intégralement le paiement tardif et laisse
+        // les deux factures ouvertes jusqu'à la résolution comptable.
+        let litigeActifQuery = supabaseAdmin
+          .from("litiges")
+          .select("id, facture_id, statut")
+          .eq("mission_id", missionId)
+          .in("statut", [
+            "OUVERT",
+            "EN_DISCUSSION",
+            "EN_MEDIATION",
+            "MEDIATION_EN_COURS",
+            "REVUE_ADMIN",
+          ]);
+        litigeActifQuery = factureHonorairesId
+          ? litigeActifQuery.or(`facture_id.eq.${factureHonorairesId},facture_id.is.null`)
+          : litigeActifQuery.is("facture_id", null);
+        const { data: litigeActif, error: litigeActifError } = await litigeActifQuery
+          .limit(1)
+          .maybeSingle();
+        if (litigeActifError) {
+          throw new Error(`Active dispute lookup failed: ${litigeActifError.message}`);
+        }
+        if (litigeActif) {
+          const refund = await stripe.refunds.create({
+            payment_intent: paymentIntentId,
+            reason: "requested_by_customer",
+            metadata: {
+              litige_id: litigeActif.id,
+              mission_id: missionId,
+              facture_honoraires_id: factureHonorairesId || "",
+              motif: "LITIGE_OUVERT_AVANT_TRANSFERT",
+            },
+          }, { idempotencyKey: `refund_litige_${session.id}` });
+          await supabaseAdmin
+            .from("stripe_transfers")
+            .update({
+              statut: "REMBOURSE",
+              erreur: `Paiement remboursé avant transfert — litige ${litigeActif.id}`,
+            })
+            .eq("id", validatedTransferClaim!.id)
+            .eq("stripe_checkout_session_id", session.id);
+          await writeRequiredFinancialAudit(supabaseAdmin, {
+            p_acteur_id: validatedMission.etablissement_id,
+            p_type_acteur: "SYSTEME",
+            p_action: "ADMIN_ACTION",
+            p_type_ressource: "factures_honoraires",
+            p_id_ressource: factureHonorairesId,
+            p_cle_s3: null,
+            p_details: {
+              evenement: "CONNECT_REMBOURSE_AVANT_TRANSFERT_POUR_LITIGE",
+              litige_id: litigeActif.id,
+              stripe_session_id: session.id,
+              stripe_payment_intent_id: paymentIntentId,
+              stripe_refund_id: refund.id,
+            },
+            p_ip: null,
+            p_navigateur: "stripe-webhook",
+          }, "Dispute refund audit failed");
+          await markEventProcessed();
+          return new Response(JSON.stringify({
+            received: true,
+            refunded: true,
+            reason: "active_dispute",
+          }), {
+            status: 200,
+            headers: { ...corsHeaders(req), "Content-Type": "application/json" },
+          });
+        }
+
         // Le PaymentIntent peut rester `succeeded` après un remboursement ou
         // une contestation. Avant de créer — ou même de reprendre — le
         // transfert, vérifier la Charge qui constitue réellement la source des

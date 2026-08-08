@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -47,16 +47,43 @@ type Props = {
 };
 
 type ResolutionResult = {
-  ok?: boolean;
+  success?: boolean;
   error?: string;
   litige_id?: string;
-  action_financiere?: ActionFinanciere;
+  action_financiere?: ActionFinanciere | 'RECTIFICATION_DESCRIPTIVE';
   nouvelle_facture_id?: string | null;
   avoir_id?: string | null;
+  rectification_id?: string | null;
   mode_remboursement?: string | null;
+  delta_ttc?: number | null;
   regularisation_sociale_requise?: boolean;
   regen_pdf_request_ids?: string[];
   [key: string]: unknown;
+};
+
+type SoldeCorrection = {
+  success?: boolean;
+  error?: string;
+  facture_id?: string;
+  montant_ht?: number;
+  montant_tva?: number;
+  montant_ttc?: number;
+  a_des_corrections?: boolean;
+};
+
+type FactureCible = {
+  id: string;
+  numero_facture: string;
+  statut: string;
+  montant_ht: number;
+  montant_tva: number;
+  montant_ttc: number;
+  taux_tva: number;
+  periode_debut: string | null;
+  periode_fin: string | null;
+  quantite_heures_snapshot: number | null;
+  taux_horaire_snapshot: number | null;
+  nature_correction: string | null;
 };
 
 const LABELS_TYPE_ACCORD: Record<string, string> = {
@@ -90,6 +117,57 @@ export function LitigeResolutionModal({
   const [actionFinanciere, setActionFinanciere] = useState<ActionFinanciere>('AUTO');
   const [submitting, setSubmitting] = useState(false);
   const [resultat, setResultat] = useState<ResolutionResult | null>(null);
+  const [factureCible, setFactureCible] = useState<FactureCible | null>(null);
+  const [soldeCorrection, setSoldeCorrection] = useState<SoldeCorrection | null>(null);
+  const [factureLoading, setFactureLoading] = useState(false);
+  const [factureErreur, setFactureErreur] = useState<string | null>(null);
+
+  useEffect(() => {
+    let actif = true;
+    if (!open || !litige?.facture_id) {
+      setFactureCible(null);
+      setSoldeCorrection(null);
+      setFactureErreur(null);
+      return () => { actif = false; };
+    }
+    setFactureLoading(true);
+    setFactureCible(null);
+    setSoldeCorrection(null);
+    setFactureErreur(null);
+    void (async () => {
+      const [factureResult, soldeResult] = await Promise.all([
+        supabase
+          .from('factures_honoraires')
+          .select('id, numero_facture, statut, montant_ht, montant_tva, montant_ttc, taux_tva, periode_debut, periode_fin, quantite_heures_snapshot, taux_horaire_snapshot, nature_correction')
+          .eq('id', litige.facture_id)
+          .maybeSingle(),
+        supabase.rpc('fn_admin_solde_correction_facture_honoraires', {
+          p_facture_id: litige.facture_id,
+        }),
+      ]);
+      if (!actif) return;
+      setFactureLoading(false);
+      const solde = soldeResult.data as SoldeCorrection | null;
+      if (
+        factureResult.error
+        || !factureResult.data
+        || soldeResult.error
+        || !solde?.success
+        || !Number.isFinite(Number(solde.montant_ttc))
+      ) {
+        setFactureCible(null);
+        setSoldeCorrection(null);
+        setFactureErreur(
+          solde?.error
+            || 'Impossible de charger la facture exacte et son solde corrigé.',
+        );
+        return;
+      }
+      setFactureCible(factureResult.data as FactureCible);
+      setSoldeCorrection(solde);
+    })();
+    return () => { actif = false; };
+  }, [open, litige?.facture_id]);
 
   const heuresNum = useMemo(
     () => (ajusterHeures ? Number.parseFloat(ajusterHeures) : null),
@@ -105,6 +183,29 @@ export function LitigeResolutionModal({
   const tauxInvalide =
     tauxNum != null &&
     (!Number.isFinite(tauxNum) || tauxNum < 0.01 || tauxNum > 1000);
+  const soldeActuelTtc = soldeCorrection?.montant_ttc != null
+    ? Number(soldeCorrection.montant_ttc)
+    : null;
+  const aDejaDesCorrections = soldeCorrection?.a_des_corrections === true;
+  const heuresEffectives = heuresNum
+    ?? (tauxNum != null && !aDejaDesCorrections
+      ? factureCible?.quantite_heures_snapshot ?? null
+      : null);
+  const tauxEffectif = tauxNum
+    ?? (heuresNum != null && !aDejaDesCorrections
+      ? factureCible?.taux_horaire_snapshot ?? null
+      : null);
+  const montantProjete = heuresEffectives != null && tauxEffectif != null
+    ? Number((heuresEffectives * tauxEffectif * (1 + Number(factureCible?.taux_tva ?? 0) / 100)).toFixed(2))
+    : null;
+  const deltaProjete = montantProjete != null && soldeActuelTtc != null
+    ? Number((montantProjete - soldeActuelTtc).toFixed(2))
+    : null;
+  const ajustementReferenceIncomplet = (heuresNum != null || tauxNum != null)
+    && (heuresEffectives == null || tauxEffectif == null);
+  const factureContextInvalide = Boolean(
+    litige?.facture_id && !factureLoading && !factureCible,
+  );
 
   const preview = useMemo(() => {
     if (!litige) return null;
@@ -120,10 +221,15 @@ export function LitigeResolutionModal({
     if (messages.length === 0) {
       messages.push('Aucun ajustement financier — clôture litige uniquement.');
     }
+    if (factureCible && montantProjete != null && deltaProjete != null) {
+      messages.push(
+        `Facture ${factureCible.numero_facture} : solde corrigé ${Number(soldeActuelTtc).toFixed(2)} € → ${montantProjete.toFixed(2)} € TTC (écart ${deltaProjete >= 0 ? '+' : ''}${deltaProjete.toFixed(2)} €).`,
+      );
+    }
     switch (actionFinanciere) {
       case 'AUTO':
         messages.push(
-          'Action financière : AUTO → le serveur choisit selon le statut de la facture (BROUILLON / ÉMISE ou EN RETARD / PAYÉE).',
+          'Action financière : AUTO → brouillon recalculé, émise remplacée, payée régularisée par avoir ou complément ; si le total payé reste identique, seule une rectification descriptive immuable est créée.',
         );
         break;
       case 'RECALCUL':
@@ -141,9 +247,14 @@ export function LitigeResolutionModal({
           'Action financière : AVOIR → un avoir partiel est émis sur une facture payée, uniquement pour une correction à la baisse.',
         );
         break;
+      case 'COMPLEMENT':
+        messages.push(
+          'Action financière : FACTURE COMPLÉMENTAIRE → sur une facture déjà payée, seul le delta positif est facturé. L’originale reste intacte.',
+        );
+        break;
     }
     return messages;
-  }, [litige, heuresNum, tauxNum, actionFinanciere]);
+  }, [litige, heuresNum, tauxNum, actionFinanciere, factureCible, montantProjete, deltaProjete, soldeActuelTtc]);
 
   const disclaimerURSSAF = heuresNum != null && heuresNum > 0;
   const accord = litige?.statut === 'REVUE_ADMIN'
@@ -189,26 +300,61 @@ export function LitigeResolutionModal({
       toast.error('Le taux doit être strictement positif et limité à 1 000 €.');
       return;
     }
+    if (factureContextInvalide) {
+      toast.error('La facture exacte doit être chargée avant toute résolution.');
+      return;
+    }
+    if (factureLoading) {
+      toast.error('Attendez le chargement du solde corrigé avant de valider.');
+      return;
+    }
+    if (ajustementReferenceIncomplet) {
+      toast.error(
+        aDejaDesCorrections
+          ? 'Cette facture a déjà été corrigée : renseignez les heures et le taux finaux pour éviter de reprendre une ancienne base.'
+          : 'Renseignez les heures et le taux : la facture ne contient pas toute la base historique.',
+      );
+      return;
+    }
 
     setSubmitting(true);
     setResultat(null);
 
-    const payload: Record<string, unknown> = {
+    // Une Checkout Session ouverte contient les anciens montants. Elle doit
+    // être expirée avant de remplacer une facture non payée ; le serveur ne
+    // touche qu'à la tentative de la facture exacte liée à ce litige.
+    if (factureCible && ['EMISE', 'EN_RETARD'].includes(factureCible.statut)) {
+      const { data: expiration, error: expirationError } = await supabase.functions.invoke(
+        'expire-invoice-checkout-for-dispute',
+        { body: { litige_id: litige.id } },
+      );
+      if (expirationError || expiration?.error) {
+        logger.error('expire-invoice-checkout-for-dispute error', expirationError || expiration);
+        toast.error(
+          expiration?.message
+            || 'Impossible de sécuriser la tentative de paiement en cours. Rechargez le litige avant de réessayer.',
+        );
+        setSubmitting(false);
+        return;
+      }
+    }
+
+    const payload = {
       p_litige_id: litige.id,
       p_resolution: resolutionText.trim(),
       p_en_faveur_de: enFaveurDe,
-      p_ajuster_heures: heuresNum,
-      p_ajuster_taux: tauxNum,
+      p_ajuster_heures: heuresEffectives ?? undefined,
+      p_ajuster_taux: tauxEffectif ?? undefined,
       p_action_financiere: actionFinanciere,
     };
 
     const { data, error } = await supabase.rpc(
-      'fn_admin_resoudre_litige' as any,
+      'fn_admin_resoudre_litige_intelligent',
       payload,
     );
 
     if (error) {
-      logger.error('fn_admin_resoudre_litige error', error);
+      logger.error('fn_admin_resoudre_litige_intelligent error', error);
       toast.error(error.message || 'Erreur lors de la résolution.');
       setSubmitting(false);
       return;
@@ -244,6 +390,41 @@ export function LitigeResolutionModal({
         <TooltipProvider delayDuration={200}>
           <div className="space-y-4">
             <LitigesSimilairesPanel litigeId={litige.id} />
+            {litige.facture_id && (
+              <div className="rounded-lg border border-border bg-muted/30 p-3 text-xs">
+                {factureLoading ? (
+                  <p className="text-muted-foreground">Chargement de la facture ciblée…</p>
+                ) : factureErreur ? (
+                  <p className="font-medium text-destructive">{factureErreur}</p>
+                ) : factureCible ? (
+                  <>
+                    <p className="font-semibold">Facture exacte à corriger : {factureCible.numero_facture}</p>
+                    <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
+                      <dt>Statut</dt><dd>{factureCible.statut}</dd>
+                      <dt>Période</dt><dd>{factureCible.periode_debut ?? '—'} → {factureCible.periode_fin ?? '—'}</dd>
+                      <dt>Montant d’origine</dt>
+                      <dd>{Number(factureCible.montant_ttc).toFixed(2)} € TTC</dd>
+                      <dt>Solde après corrections</dt>
+                      <dd className="font-semibold">
+                        {soldeActuelTtc != null ? soldeActuelTtc.toFixed(2) : '—'} € TTC
+                      </dd>
+                      <dt>Base figée</dt>
+                      <dd>
+                        {factureCible.quantite_heures_snapshot ?? '—'} h × {factureCible.taux_horaire_snapshot ?? '—'} €/h
+                      </dd>
+                    </dl>
+                    <p className="mt-2 text-muted-foreground">
+                      AUTO conserve l’originale : brouillon recalculé, facture émise remplacée, facture payée régularisée par avoir ou complément selon l’écart.
+                    </p>
+                    {aDejaDesCorrections && (
+                      <p className="mt-2 font-medium text-amber-700">
+                        Cette facture possède déjà une correction. Pour un nouvel ajustement, saisissez toujours les heures et le taux finaux ; le delta sera calculé sur le solde cumulé ci-dessus.
+                      </p>
+                    )}
+                  </>
+                ) : null}
+              </div>
+            )}
             {accord && (
               <div
                 className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs text-amber-950"
@@ -443,7 +624,7 @@ export function LitigeResolutionModal({
                 data-testid="result-json"
               >
                 <p className="mb-1 font-semibold uppercase text-green-800">
-                  Retour <code>fn_admin_resoudre_litige</code>
+                  Résultat comptable appliqué
                 </p>
                 <dl className="grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5 text-green-900">
                   <dt>action_financiere</dt>
@@ -456,9 +637,17 @@ export function LitigeResolutionModal({
                   <dd className="font-mono break-all">
                     {resultat.avoir_id ?? '—'}
                   </dd>
+                  <dt>rectification_id</dt>
+                  <dd className="font-mono break-all">
+                    {resultat.rectification_id ?? '—'}
+                  </dd>
                   <dt>mode_remboursement</dt>
                   <dd className="font-mono">
                     {resultat.mode_remboursement ?? '—'}
+                  </dd>
+                  <dt>delta TTC</dt>
+                  <dd className="font-mono">
+                    {resultat.delta_ttc != null ? `${resultat.delta_ttc} €` : '—'}
                   </dd>
                   <dt>régularisation sociale</dt>
                   <dd className="font-mono">
@@ -487,7 +676,10 @@ export function LitigeResolutionModal({
               resolutionText.trim().length < 10 ||
               !enFaveurDe ||
               heuresInvalides ||
-              tauxInvalide
+              tauxInvalide ||
+              factureLoading ||
+              factureContextInvalide ||
+              ajustementReferenceIncomplet
             }
             loading={submitting}
           >

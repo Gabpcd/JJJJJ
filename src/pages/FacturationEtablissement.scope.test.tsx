@@ -114,6 +114,9 @@ function configurerChargement(options?: {
   missions?: unknown[];
   transfers?: unknown[];
   prelevements?: unknown[];
+  facturesHonoraires?: unknown[];
+  litiges?: unknown[];
+  paiementsContestes?: unknown[];
 }) {
   mocks.rpc.mockImplementation((fn: string) => {
     if (fn === 'fn_mon_etablissement_complet') {
@@ -138,6 +141,9 @@ function configurerChargement(options?: {
     if (table === 'missions') return requeteResolue(table, options?.missions ?? []);
     if (table === 'stripe_transfers') return requeteResolue(table, options?.transfers ?? []);
     if (table === 'paiements_mission') return requeteResolue(table, options?.prelevements ?? []);
+    if (table === 'factures_honoraires') return requeteResolue(table, options?.facturesHonoraires ?? []);
+    if (table === 'litiges') return requeteResolue(table, options?.litiges ?? []);
+    if (table === 'paiements_soignant') return requeteResolue(table, options?.paiementsContestes ?? []);
     return requeteResolue(table, null, { message: `Table inattendue: ${table}` });
   });
 }
@@ -176,13 +182,16 @@ describe('FacturationEtablissement — périmètre des membres', () => {
       </MemoryRouter>,
     );
 
-    await waitFor(() => expect(mocks.from).toHaveBeenCalledTimes(3));
+    await waitFor(() => expect(mocks.from).toHaveBeenCalledTimes(6));
 
     const filtresEtablissement = mocks.filtres.filter(({ colonne }) => colonne === 'etablissement_id');
     expect(filtresEtablissement).toEqual([
       { table: 'missions', colonne: 'etablissement_id', valeur: 'etablissement-partage-id' },
       { table: 'stripe_transfers', colonne: 'etablissement_id', valeur: 'etablissement-partage-id' },
       { table: 'paiements_mission', colonne: 'etablissement_id', valeur: 'etablissement-partage-id' },
+      { table: 'factures_honoraires', colonne: 'etablissement_id', valeur: 'etablissement-partage-id' },
+      { table: 'litiges', colonne: 'etablissement_id', valeur: 'etablissement-partage-id' },
+      { table: 'paiements_soignant', colonne: 'etablissement_id', valeur: 'etablissement-partage-id' },
     ]);
     expect(filtresEtablissement).not.toContainEqual(expect.objectContaining({ valeur: 'membre-utilisateur-id' }));
   });

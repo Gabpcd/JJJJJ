@@ -23,7 +23,7 @@ export function EncartCommissionDegressif({ netEstime, tauxActuel }: EncartCommi
     <div className="bg-gradient-to-r from-accent/5 to-primary/5 border border-accent/20 rounded-2xl p-5">
       <div className="flex items-center gap-2 mb-3">
         <Tag className="h-4 w-4 text-primary" />
-        <p className="font-bold text-foreground">Commission Jolene</p>
+        <p className="font-bold text-foreground">Frais Jolene distincts</p>
       </div>
 
       <p className="text-sm text-muted-foreground mb-3">
@@ -34,11 +34,11 @@ export function EncartCommissionDegressif({ netEstime, tauxActuel }: EncartCommi
 
       <div className="space-y-1.5 text-sm">
         <div className="flex justify-between">
-          <span className="text-muted-foreground">Net soignant estimé</span>
+          <span className="text-muted-foreground">Base de rémunération estimée</span>
           <span className="font-medium">~{netEstime.toFixed(2)} €</span>
         </div>
         <div className="flex justify-between">
-          <span className="text-muted-foreground">Commission HT ({tauxActuel}%)</span>
+          <span className="text-muted-foreground">Frais Jolene HT ({tauxActuel}%)</span>
           <span className="font-medium">~{commissionHT.toFixed(2)} €</span>
         </div>
         <div className="flex justify-between">
@@ -46,7 +46,7 @@ export function EncartCommissionDegressif({ netEstime, tauxActuel }: EncartCommi
           <span className="font-medium">~{tva.toFixed(2)} €</span>
         </div>
         <div className="border-t border-border pt-1.5 flex justify-between">
-          <span className="text-muted-foreground font-medium">Commission TTC</span>
+          <span className="text-muted-foreground font-medium">Frais Jolene TTC</span>
           <span className="font-bold text-primary">~{commissionTTC.toFixed(2)} €</span>
         </div>
       </div>

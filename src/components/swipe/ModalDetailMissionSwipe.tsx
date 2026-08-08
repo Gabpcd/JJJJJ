@@ -79,7 +79,7 @@ export function ModalDetailMissionSwipe({ mission, open, onOpenChange, onPostule
                 <BadgeY2K variant="warning" size="sm">🔥 Urgent</BadgeY2K>
               )}
               {missionEstLiberale && mission.paiement_rapide && (
-                <BadgeY2K variant="success" size="sm" title="Payée sous 24 à 72 h après validation des présences">
+                <BadgeY2K variant="success" size="sm" title="Instruction de versement normalement lancée sous 24 à 72 h après validation">
                   ⚡ Paiement rapide
                 </BadgeY2K>
               )}
@@ -207,9 +207,14 @@ export function ModalDetailMissionSwipe({ mission, open, onOpenChange, onPostule
                     uniquement sur le libéral (le salarié est payé par la paie
                     de l'employeur, Jolene ne verse rien). */}
                 {missionEstLiberale && mission.paiement_rapide ? (
-                  <p className="text-[11px] font-semibold text-success">
-                    ⚡ Payée sous 24 à 72 h après validation des présences.
-                  </p>
+                  <div>
+                    <p className="text-[11px] font-semibold text-success">
+                      ⚡ Versement normalement lancé sous 24 à 72 h après validation des présences.
+                    </p>
+                    <p className="mt-0.5 text-[10px] text-jolene-bubblegum">
+                      L'arrivée bancaire peut prendre plus de temps et dépend des contrôles éventuels.
+                    </p>
+                  </div>
                 ) : missionEstLiberale ? (
                   <p className="text-[11px] text-jolene-bubblegum">
                     Payée après règlement de l'établissement (~30 à 60 jours).
