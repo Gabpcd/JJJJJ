@@ -1,12 +1,17 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { REGLES_INSTALLATION_LIBERAL } from '@/lib/regles-installation-liberal';
 import { BarreNavigation } from './BarreNavigation';
 
 const mocks = vi.hoisted(() => ({
   user: null as { id: string } | null,
   profil: null as Record<string, unknown> | null,
 }));
+
+const professionsLiberales = Object.entries(REGLES_INSTALLATION_LIBERAL)
+  .filter(([, regle]) => regle.categorie !== 'NON_ELIGIBLE')
+  .map(([profession]) => profession);
 
 vi.mock('@/contexts/AuthContext', () => ({
   useAuth: () => ({ user: mocks.user, deconnexion: vi.fn() }),
@@ -67,24 +72,27 @@ describe('BarreNavigation — groupes de navigation', () => {
     expect(screen.getByRole('button', { name: 'Annuaire' })).toBeInTheDocument();
   });
 
-  it('affiche le parcours dans la navigation d’une IDE éligible non libérale', async () => {
-    mocks.user = { id: 'soignant-ide' };
-    mocks.profil = {
-      prenom: 'Marie',
-      nom: 'Lefèvre',
-      profession: 'IDE',
-      statut_liberal: null,
-      type_exercice: 'SALARIE',
-      heures_cumulees: 1200,
-      avatar_url: null,
-    };
+  it.each(professionsLiberales)(
+    'affiche le parcours dans la navigation pour la profession éligible %s',
+    async (profession) => {
+      mocks.user = { id: 'soignant-ide' };
+      mocks.profil = {
+        prenom: 'Marie',
+        nom: 'Lefèvre',
+        profession,
+        statut_liberal: null,
+        type_exercice: 'SALARIE',
+        heures_cumulees: 1200,
+        avatar_url: null,
+      };
 
-    render(
-      <MemoryRouter initialEntries={['/soignant/tableau-de-bord']}>
-        <BarreNavigation role="SOIGNANT" />
-      </MemoryRouter>,
-    );
+      render(
+        <MemoryRouter initialEntries={['/soignant/tableau-de-bord']}>
+          <BarreNavigation role="SOIGNANT" />
+        </MemoryRouter>,
+      );
 
-    expect(await screen.findByRole('button', { name: 'Passer en libéral' })).toBeInTheDocument();
-  });
+      expect(await screen.findByRole('button', { name: 'Passer en libéral' })).toBeInTheDocument();
+    },
+  );
 });

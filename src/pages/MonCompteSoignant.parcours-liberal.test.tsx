@@ -1,7 +1,14 @@
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
+import { REGLES_INSTALLATION_LIBERAL } from '@/lib/regles-installation-liberal';
 import MonCompteSoignant from './MonCompteSoignant';
+
+const mocks = vi.hoisted(() => ({ profession: 'IDE' }));
+
+const professionsLiberales = Object.entries(REGLES_INSTALLATION_LIBERAL)
+  .filter(([, regle]) => regle.categorie !== 'NON_ELIGIBLE')
+  .map(([profession]) => profession);
 
 vi.mock('@/components/LayoutApp', () => ({
   LayoutApp: ({ children }: { children: React.ReactNode }) => <>{children}</>,
@@ -36,7 +43,7 @@ vi.mock('@/integrations/supabase/client', () => ({
             type_exercice: 'SALARIE',
             rpps_verifie: true,
             numero_rpps: '10123456789',
-            profession: 'IDE',
+            profession: mocks.profession,
             statut_liberal: null,
             mandat_facturation_signe: false,
             mandat_facturation_signe_le: null,
@@ -51,13 +58,17 @@ vi.mock('@/integrations/supabase/client', () => ({
 }));
 
 describe('MonCompteSoignant — parcours libéral', () => {
-  it('le rend accessible sur le hub compte pour une IDE non libérale', async () => {
-    render(
-      <MemoryRouter>
-        <MonCompteSoignant />
-      </MemoryRouter>,
-    );
+  it.each(professionsLiberales)(
+    'le rend accessible sur le hub compte pour la profession éligible %s',
+    async (profession) => {
+      mocks.profession = profession;
+      render(
+        <MemoryRouter>
+          <MonCompteSoignant />
+        </MemoryRouter>,
+      );
 
-    expect(await screen.findByRole('button', { name: 'Passer en libéral' })).toBeInTheDocument();
-  });
+      expect(await screen.findByRole('button', { name: 'Passer en libéral' })).toBeInTheDocument();
+    },
+  );
 });
