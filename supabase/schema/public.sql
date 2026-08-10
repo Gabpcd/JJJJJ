@@ -57342,6 +57342,8 @@ CREATE OR REPLACE FUNCTION "public"."fn_top_soignants"("p_profession" "text" DEF
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
     AS $$
+DECLARE
+    v_limit integer := LEAST(GREATEST(COALESCE(p_limit, 20), 1), 50);
 BEGIN
     RETURN QUERY
     SELECT s.id, s.prenom, s.nom, s.profession::TEXT, s.note_moyenne, s.nb_evaluations,
@@ -57353,7 +57355,7 @@ BEGIN
     AND fn_documents_ok_pour_mission(s.id, 'TOUS')
     AND (p_profession IS NULL OR s.profession::TEXT = p_profession)
     ORDER BY s.note_moyenne DESC NULLS LAST, s.score_fiabilite DESC, s.total_missions_terminees DESC
-    LIMIT p_limit;
+    LIMIT v_limit;
 END;
 $$;
 
@@ -77416,7 +77418,6 @@ GRANT ALL ON FUNCTION "public"."fn_cumul_factures_mission"("p_mission_id" "uuid"
 
 
 REVOKE ALL ON FUNCTION "public"."fn_dans_fenetre_retractation"("p_candidature_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."fn_dans_fenetre_retractation"("p_candidature_id" "uuid") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."fn_dans_fenetre_retractation"("p_candidature_id" "uuid") TO "service_role";
 
 

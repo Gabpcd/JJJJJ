@@ -156,4 +156,19 @@ describe('purge des missions techniques E2E', () => {
     expect(verificationErreur).toBeGreaterThan(filtreNonGele);
     expect(purge).toBeGreaterThan(verificationErreur);
   });
+
+  it('laisse finir le cleanup escrow agrégé sans relâcher la borne de chaque RPC', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'e2e/flows/escrow-revenus-soignant.spec.ts'),
+      'utf8',
+    );
+    const afterAll = source.indexOf('test.afterAll(async () => {');
+    const timeout = source.indexOf('test.setTimeout(300_000);', afterAll);
+    const purge = source.indexOf('await purgeMissionsBounded(seededMissions);', afterAll);
+
+    expect(afterAll).toBeGreaterThan(-1);
+    expect(timeout).toBeGreaterThan(afterAll);
+    expect(purge).toBeGreaterThan(timeout);
+    expect(PURGE_MISSION_RPC_TIMEOUT_MS).toBe(25_000);
+  });
 });

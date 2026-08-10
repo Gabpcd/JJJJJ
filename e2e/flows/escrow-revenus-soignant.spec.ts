@@ -310,11 +310,12 @@ test.beforeAll(async () => {
 });
 
 test.afterAll(async () => {
-  // Une suite complète peut laisser plus de missions escrow à purger qu'un
-  // lancement ciblé. Les hooks gardent la limite Playwright globale (30 s) :
-  // cette borne protège une vraie purge multi-mission sans relâcher le délai
-  // des tests fonctionnels eux-mêmes.
-  test.setTimeout(120_000);
+  // Douze missions sont purgées par lots de trois. Chaque RPC reste bornée à
+  // 25 s, mais la somme des lots, des contrôles FK et de la suppression de la
+  // fixture peut légitimement dépasser 120 s sur la base CI partagée. Cette
+  // borne ne relâche donc aucun appel individuel ni test fonctionnel : elle
+  // laisse seulement au nettoyage agrégé le temps de se terminer proprement.
+  test.setTimeout(300_000);
   const erreurs: string[] = [];
   try {
     await purgeMissionsBounded(seededMissions);
