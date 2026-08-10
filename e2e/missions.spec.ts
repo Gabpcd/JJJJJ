@@ -28,8 +28,10 @@ test.describe('Missions (espace établissement)', () => {
 
   test('la liste des missions rend ses actions principales', async ({ page }) => {
     await page.goto('/etablissement/missions', { waitUntil: 'domcontentloaded' });
-    await expect(page.getByRole('heading', { name: /Missions/i }).first()).toBeVisible();
-    await expect(page.getByRole('button', { name: '+ Publier une mission', exact: true })).toBeVisible();
+    // Le shell authentifié s'affiche avant la fin des requêtes métier. En CI,
+    // leur latence peut dépasser les 10 s par défaut sans erreur fonctionnelle.
+    await expect(page.getByRole('heading', { name: /Missions/i }).first()).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByRole('button', { name: '+ Publier une mission', exact: true })).toBeVisible({ timeout: 30_000 });
   });
 
   test('le détail d’une mission seedée est accessible', async ({ page }) => {
