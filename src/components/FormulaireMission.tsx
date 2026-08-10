@@ -658,9 +658,12 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
               <div className="text-xs text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 rounded-lg p-3 mt-2">
                 <strong>
                   <Info aria-hidden="true" className="inline-block h-3.5 w-3.5 mr-1 -mt-0.5" />
-                  Mode libéral non disponible
+                  Mode libéral non disponible pour cette mission
                 </strong>
                 <p className="mt-1">{modeExerciceMission.source_libelle}</p>
+                <p className="mt-1 font-medium">
+                  La profession reste disponible : publiez la mission en salariat.
+                </p>
                 {sourcesModeExerciceMission.length > 0 && (
                   <div className="mt-1.5 flex flex-col items-start gap-1">
                     {sourcesModeExerciceMission.map((source) => (
@@ -686,7 +689,8 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
                 </button>
                 {explicationModeOuverte && (
                   <p className="mt-2 border-t border-amber-200 pt-2 dark:border-amber-900">
-                    Le mode libéral est exclu ici par la règle professionnelle ou le type de structure indiqué dans la source ci-dessus. Pour les spécialités concernées, une mission IADE ou IBODE exige la profession spécialisée correspondante.
+                    Ce garde-fou concerne uniquement le mode contractuel libéral, jamais le droit de
+                    publier une mission pour cette profession. Le salariat reste proposé. Pour les spécialités concernées, une mission IADE ou IBODE exige la profession spécialisée correspondante.
                   </p>
                 )}
               </div>

@@ -23,7 +23,6 @@ const MESSAGES_ERREUR: Record<string, string> = {
   CONTRAT_INTROUVABLE: 'Contrat introuvable. Rechargez la page.',
   CONTRAT_INACTIF: 'Ce contrat a été annulé ou a expiré et ne peut plus être signé.',
   CONTRAT_DEJA_COMPLET: 'Ce contrat est déjà entièrement signé par les deux parties.',
-  ETAB_AVANT_SOIGNANT: 'Le soignant doit signer en premier. Vous serez notifié(e) par email dès que sa signature sera enregistrée.',
   TELEPHONE_MANQUANT: 'Votre numéro de téléphone est manquant. Mettez à jour votre profil avant de signer.',
   TROP_DE_SMS: 'Trop de SMS envoyés (3 max / 24h). Réessayez plus tard ou contactez le support.',
   OTP_NON_DEMANDE: 'Demandez d\'abord un code SMS en cliquant sur le bouton.',
@@ -44,8 +43,8 @@ function messageDepuisCode(code: string | undefined, fallback: string | undefine
  * (PR 4 Sprint 1 + PR 1 Sprint 2).
  *
  * Sécurité : OTP SMS (max 3 / 24h, 5 tentatives), hash SHA-256 du document,
- * IP/UA capturés serveur, audit dans signatures_contrats. Ordre obligatoire :
- * soignant signe avant l'établissement.
+ * IP/UA capturés serveur et audit dans signatures_contrats. Les deux parties
+ * peuvent signer dans l'ordre qui leur convient.
  *
  * Mention juridique art. 1366-1367 Code civil.
  */
@@ -76,7 +75,7 @@ export function SignerContratOtp({ contratId, hashDocument, signatureImage, onSi
     const code = result?.error_code;
     const msg = messageDepuisCode(code, result?.error || fallback);
     const bloquantes = new Set([
-      'ETAB_AVANT_SOIGNANT', 'TELEPHONE_MANQUANT', 'TROP_DE_SMS',
+      'TELEPHONE_MANQUANT', 'TROP_DE_SMS',
       'CONTRAT_INACTIF', 'CONTRAT_DEJA_COMPLET', 'DEJA_SIGNE',
       'NON_AUTORISE', 'HASH_DOCUMENT_CHANGE',
     ]);
@@ -168,8 +167,7 @@ export function SignerContratOtp({ contratId, hashDocument, signatureImage, onSi
     );
   }
 
-  if (erreurBloquante && (erreurBloquante.code === 'ETAB_AVANT_SOIGNANT'
-    || erreurBloquante.code === 'CONTRAT_INACTIF'
+  if (erreurBloquante && (erreurBloquante.code === 'CONTRAT_INACTIF'
     || erreurBloquante.code === 'CONTRAT_DEJA_COMPLET'
     || erreurBloquante.code === 'DEJA_SIGNE')) {
     return (

@@ -21,7 +21,7 @@ interface Bucket {
  * Composant affichant le statut de rétractation candidature Sprint 3.5.
  *
  * Reproduit côté front la logique de `fn_calculer_penalite_annulation_soignant` :
- *  - Fenêtre 30 min après acceptation : libre, 0 pt
+ *  - Fenêtre 30 min après acceptation, uniquement avant le début : libre, 0 pt
  *  - ASAP < 2h du début : -25 pts
  *  - Délai 12-24h du début : -5 pts
  *  - Délai 1-12h du début : -10 pts
@@ -42,10 +42,10 @@ export function AnnulationCandidatureTimer({ accepteeA, debutMission, estAsap = 
 
   const deltaRetractMs = now.getTime() - accepteeDate.getTime();
   const deltaMissionMs = debutDate.getTime() - now.getTime();
-  const dansFenetre30Min = deltaRetractMs < 30 * 60_000;
+  const dansFenetre30Min = deltaMissionMs > 0 && deltaRetractMs < 30 * 60_000;
   const minutesRestantes = Math.max(0, Math.ceil((30 * 60_000 - deltaRetractMs) / 60_000));
 
-  const bucket = calculerBucket(deltaRetractMs, deltaMissionMs, estAsap);
+  const bucket = calculerBucketAnnulation(deltaRetractMs, deltaMissionMs, estAsap);
 
   if (dansFenetre30Min) {
     return (
@@ -90,7 +90,16 @@ export function AnnulationCandidatureTimer({ accepteeA, debutMission, estAsap = 
   );
 }
 
-function calculerBucket(deltaRetractMs: number, deltaMissionMs: number, estAsap: boolean): Bucket {
+// Ce helper est exporté pour verrouiller les frontières métier dans un test
+// unitaire sans devoir simuler l'écoulement du temps dans React.
+// eslint-disable-next-line react-refresh/only-export-components
+export function calculerBucketAnnulation(deltaRetractMs: number, deltaMissionMs: number, estAsap: boolean): Bucket {
+  // Une mission déjà commencée est toujours un no-show : la fenêtre de retour
+  // et le bucket ASAP ne doivent jamais masquer cet état.
+  if (deltaMissionMs <= 0) {
+    return { libre: false, points: -30, motif: 'NO_SHOW', signalement: true };
+  }
+
   if (deltaRetractMs < 30 * 60_000) {
     return { libre: true, points: 0, motif: 'fenetre_retractation_30min', signalement: false };
   }
@@ -99,12 +108,8 @@ function calculerBucket(deltaRetractMs: number, deltaMissionMs: number, estAsap:
     return { libre: false, points: -25, motif: 'ASAP_ANNULEE_APRES_FENETRE', signalement: false };
   }
 
-  if (deltaMissionMs <= 0) {
-    return { libre: false, points: -30, motif: 'NO_SHOW', signalement: true };
-  }
-
   if (deltaMissionMs < 3600_000) {
-    return { libre: false, points: -30, motif: 'NO_SHOW', signalement: true };
+    return { libre: false, points: -30, motif: 'ANNULATION_MOINS_1H', signalement: false };
   }
 
   if (deltaMissionMs < 12 * 3600_000) {
@@ -115,12 +120,13 @@ function calculerBucket(deltaRetractMs: number, deltaMissionMs: number, estAsap:
     return { libre: false, points: -5, motif: 'ANNULATION_12_24H', signalement: false };
   }
 
-  return { libre: false, points: 0, motif: 'plus_de_24h_neutre', signalement: false };
+  return { libre: true, points: 0, motif: 'neutre_delai_long', signalement: false };
 }
 
 function libelleBucket(b: Bucket): string {
   if (b.libre) return 'Annulation libre';
   if (b.signalement) return 'No-show : -30 pts + signalement admin';
+  if (b.motif === 'ANNULATION_MOINS_1H') return 'Annulation à moins d’1h : -30 pts';
   if (b.points === -25) return 'Annulation tardive ASAP : -25 pts';
   if (b.points === -10) return 'Annulation 1-12h avant : -10 pts';
   if (b.points === -5) return 'Annulation 12-24h avant : -5 pts';
@@ -131,7 +137,10 @@ function libelleBucket(b: Bucket): string {
 function descriptionBucket(b: Bucket): string {
   if (b.libre) return 'Aucun impact sur votre score.';
   if (b.signalement) {
-    return 'L\'annulation aujourd\'hui est traitée comme un no-show. Votre score est impacté de -30 pts et l\'admin Jolene est notifié pour examen.';
+    return 'La mission a déjà commencé sans présence confirmée. Votre score est impacté de -30 pts et l’admin Jolene est notifié pour examen.';
+  }
+  if (b.motif === 'ANNULATION_MOINS_1H') {
+    return 'Annulation très tardive avant le début de la mission. Votre score est impacté de -30 pts, sans être qualifiée de no-show.';
   }
   if (b.points === -25) {
     return 'Mission urgente (ASAP) acceptée et annulée à moins de 2h du début. Votre score est impacté de -25 pts.';

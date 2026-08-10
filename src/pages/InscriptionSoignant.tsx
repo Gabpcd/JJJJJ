@@ -167,10 +167,11 @@ export default function InscriptionSoignant() {
     });
   }, [form.profession, peutEtreLiberal]);
 
-  // Vider le RPPS si la profession ne le requiert pas (AS / AES)
+  // Les aides-soignants peuvent désormais disposer d'une identité RPPS : le
+  // champ reste optionnel pour eux. AES/AP restent vérifiés par diplôme + CNI.
   useEffect(() => {
     if (!form.profession) return;
-    if (PROFESSIONS_SANS_RPPS.includes(form.profession) && form.rpps) {
+    if (PROFESSIONS_SANS_RPPS.includes(form.profession) && form.profession !== 'AS' && form.rpps) {
       setForm(prev => ({ ...prev, rpps: '' }));
     }
   }, [form.profession]);
@@ -187,6 +188,7 @@ export default function InscriptionSoignant() {
     return ageMs >= 18 * 365.25 * 86400000;
   })();
   const rppsRequis = form.profession && !PROFESSIONS_SANS_RPPS.includes(form.profession);
+  const afficherChampRpps = !!rppsRequis || form.profession === 'AS';
   // RPPS OBLIGATOIRE (saisie requise) seulement pour les professions « Ordre
   // historique » ; pour les autres à RPPS, il reste optionnel (diplôme à la place).
   const rppsObligatoireInscription = !!form.profession && PROFESSIONS_RPPS_REQUIS.includes(form.profession);
@@ -196,7 +198,7 @@ export default function InscriptionSoignant() {
   const rppsMatch = rppsCorrespond();
   // Mismatch de profession (RPPS d'une autre profession) = bloquant, au même titre que nom/prénom.
   const rppsProfessionMismatch = !!rppsResultat?.trouve && rppsResultat?.profession_correspond === false;
-  const rppsBloquant = rppsRequis && form.rpps.length === 11 && rppsResultat && !rppsResultat.fhir_indisponible && (!rppsResultat.trouve || rppsMatch === false || rppsProfessionMismatch) && !rppsVerifManuelle;
+  const rppsBloquant = form.rpps.length === 11 && rppsResultat && !rppsResultat.fhir_indisponible && (!rppsResultat.trouve || rppsMatch === false || rppsProfessionMismatch) && !rppsVerifManuelle;
   const etape2Valide = form.prenom && form.nom && form.profession && form.typesContrat.length > 0 && !rppsBloquant && !dateNaissanceRequise && dateNaissanceMajeur && telephoneValide && (!TURNSTILE_REQUIRED || !!turnstileToken) && (!rppsObligatoireInscription || form.rpps.length === 11);
 
   // Verify RPPS when 11 digits entered
@@ -527,14 +529,19 @@ export default function InscriptionSoignant() {
                   <p className="text-xs text-muted-foreground mt-1">Cochez au moins un type de contrat</p>
                 )}
               </fieldset>
-              {rppsRequis ? (
+              {afficherChampRpps ? (
                 <label className="block">
                   <span className="text-sm font-medium text-foreground mb-1.5 block">Numéro RPPS{rppsObligatoireInscription ? ' *' : ''}</span>
                   {!rppsObligatoireInscription && (
                     <p className="text-[11px] text-muted-foreground mb-1.5">
-                      Tu ne le connais pas par cœur ? Tu peux laisser vide et le compléter plus tard — la vérification se fera à ce moment-là.
+                      {form.profession === 'AS'
+                        ? 'Optionnel pour les aides-soignants : si tu disposes déjà d’une identité RPPS, nous la vérifions dans l’Annuaire Santé. Ton diplôme reste obligatoire.'
+                        : 'Tu ne le connais pas par cœur ? Tu peux laisser vide et le compléter plus tard — la vérification se fera à ce moment-là.'}
                     </p>
                   )}
+                  <p className="text-[11px] text-muted-foreground mb-1.5">
+                    Les 11 chiffres ne suffisent pas : Jolene interroge l’Annuaire Santé officiel et recoupe l’identité, la profession et la situation active.
+                  </p>
                   <div className="relative">
                     <input value={form.rpps} onChange={e => maj('rpps', e.target.value.replace(/\D/g, '').slice(0, 11))} placeholder={rppsObligatoireInscription ? '11 chiffres' : '11 chiffres (optionnel)'} className={`input-base pr-10 ${classeChampErreur('rpps')}`} inputMode="numeric" autoComplete="off" aria-describedby={rppsVerifiant ? 'rpps-status' : undefined} />
                     {rppsVerifiant && <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-primary" aria-hidden="true" />}
@@ -544,7 +551,7 @@ export default function InscriptionSoignant() {
                     <div className="mt-1.5 space-y-1.5">
                       <div className="flex items-center gap-1.5 text-xs bg-emerald-50 text-emerald-700 rounded-lg px-2 py-1.5">
                         <ShieldCheck className="h-3.5 w-3.5" />
-                        ✅ RPPS Vérifié — {rppsResultat.nom_affiche}
+                        ✅ RPPS vérifié dans l’Annuaire Santé — {rppsResultat.nom_affiche}
                       </div>
                       {rppsResultat.specialite_label && (
                         <div className="flex items-center gap-1.5 text-xs bg-primary/10 text-primary rounded-lg px-2 py-1.5">
@@ -570,7 +577,7 @@ export default function InscriptionSoignant() {
                     <div className="mt-1.5 space-y-1.5" role="alert">
                       <div className="flex items-center gap-1.5 text-xs bg-destructive/5 text-destructive rounded-lg px-2 py-1.5">
                         <ShieldAlert className="h-3.5 w-3.5" />
-                        ❌ RPPS non trouvé dans l'annuaire
+                        ❌ RPPS non trouvé dans l’Annuaire Santé officiel
                       </div>
                       <p className="text-[11px] text-muted-foreground">
                         Vérifie le numéro. Si ton RPPS est récent ou mal indexé dans l'annuaire public, tu peux tout de même continuer :
@@ -600,7 +607,7 @@ export default function InscriptionSoignant() {
               ) : form.profession && (
                 <div className="p-3 bg-primary/5 border border-primary/20 rounded-xl">
                   <p className="text-xs text-foreground">
-                    ℹ️ Ta profession ne nécessite pas de numéro d'identification professionnelle. Ton diplôme et ta carte d'identité seront vérifiés à la première mission.
+                    ℹ️ Aucun RPPS n'est demandé pour ce profil. Ton diplôme et ta carte d'identité restent vérifiés avant toute mission.
                   </p>
                 </div>
               )}

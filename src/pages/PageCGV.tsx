@@ -18,7 +18,7 @@ export default function PageCGV() {
   return (
     <LayoutLegal
       titre="Conditions Générales de Vente"
-      dateMaj="4 août 2026"
+      dateMaj="10 août 2026"
       toc={TOC}
       seoDescription="Conditions Générales de Vente de Jolene. Frais de service, tarification, Bonus de Fidélité Annuel, facturation et conditions de paiement."
     >
@@ -33,18 +33,18 @@ export default function PageCGV() {
       {/* Article 2 */}
       <section id="art2">
         <h2 className="text-xl sm:text-2xl font-bold text-foreground mb-4">Article 2 — Nature des frais de service</h2>
-        <p className="mb-3">Jolene facture à l'Établissement des frais de service (commission) calculés en pourcentage de la rémunération brute totale due au Soignant pour chaque mission (base, majorations et indemnités le cas échéant). Ces frais rémunèrent l'intermédiation technique, la gestion administrative automatisée (contrats, pointage, conformité) et la mise à disposition de la Plateforme.</p>
+        <p className="mb-3">Jolene facture à l'Établissement des frais de service calculés sur la base financière validée dans la Plateforme : honoraires HT pour une mission libérale, ou rémunération brute contractuelle pour une mission salariée, majorations et indemnités incluses lorsqu'elles entrent dans cette base. Ces frais rémunèrent l'intermédiation technique, les outils administratifs et la mise à disposition de la Plateforme.</p>
         <div className="bg-muted/50 border-l-4 border-primary p-4 rounded-r-xl my-4">
           <p className="font-semibold text-foreground">Mention obligatoire :</p>
-          <p>Il ne s'agit en aucun cas d'un prélèvement sur le salaire du Soignant. Les frais de service sont exclusivement à la charge de l'Établissement et facturés en sus de la rémunération du Soignant.</p>
+          <p>Il ne s'agit en aucun cas d'un prélèvement sur les honoraires ou le salaire du Soignant. Les frais de service sont exclusivement à la charge de l'Établissement et facturés en sus.</p>
         </div>
-        <p>Le Soignant perçoit l'intégralité de sa rémunération brute telle que définie dans le contrat de mission, sans aucune déduction par Jolene.</p>
+        <p>Jolene ne réduit ni les honoraires contractuels du professionnel libéral ni la rémunération brute contractuelle du salarié. Les cotisations, retenues et prélèvements propres à la paie restent naturellement applicables aux missions salariées.</p>
       </section>
 
       {/* Article 3 */}
       <section id="art3">
         <h2 className="text-xl sm:text-2xl font-bold text-foreground mb-4">Article 3 — Tarification</h2>
-        <p className="mb-4">L'utilisation de la Plateforme donne lieu à une commission de <strong>15 % HT</strong> de la rémunération brute totale due au Soignant pour chaque mission réalisée, facturée à l'Établissement. La TVA au taux en vigueur s'ajoute à cette commission ; avec une TVA de 20 %, elle représente <strong>18 % TTC</strong> de la rémunération brute. Aucun abonnement ni frais d'inscription n'est dû.</p>
+        <p className="mb-4">L'utilisation de la Plateforme donne lieu à une commission de <strong>15 % HT</strong> de la base financière définie à l'article 2, facturée à l'Établissement. La TVA au taux en vigueur s'ajoute à cette commission ; avec une TVA de 20 %, le coût correspondant est de <strong>18 % TTC</strong> de cette base. Aucun abonnement ni frais d'inscription n'est dû.</p>
         <p className="mb-4">En cas de négociation commerciale, un taux différent peut être convenu contractuellement entre l'Éditeur et l'Établissement (notamment pour les groupes d'établissements) ; il est alors précisé dans les conditions particulières.</p>
         <p>Aucun frais n'est facturé au Soignant, quel que soit le type de contrat.</p>
       </section>
@@ -60,25 +60,29 @@ export default function PageCGV() {
         <h2 className="text-xl sm:text-2xl font-bold text-foreground mb-4">Article 5 — Facturation et paiement</h2>
 
         <h3 className="text-lg font-semibold text-foreground mt-6 mb-2">5.1 — Émission des factures</h3>
-        <p className="mb-3">Les factures sont émises mensuellement et regroupent l'ensemble des missions réalisées au cours du mois écoulé. Chaque facture détaille le nombre de missions, les montants bruts, le taux de commission appliqué et le montant HT, TVA et TTC.</p>
+        <p className="mb-3">Deux créances restent juridiquement distinctes : la rémunération due au Soignant et les frais de service Jolene dus par l'Établissement. Pour une mission de sept jours au plus, les documents sont préparés à la fin de la mission ; au-delà de sept jours, ils sont préparés par périodes hebdomadaires puis, si nécessaire, par une période finale. Un litige ou une correction d'heures ou de prix ne bloque que la période concernée et donne lieu à un document rectificatif ou un avoir traçable.</p>
 
         <h3 className="text-lg font-semibold text-foreground mt-6 mb-2">5.2 — Modes de paiement</h3>
-        <p className="mb-3">Trois modes de paiement sont disponibles :</p>
+        <p className="mb-3">Les modes proposés dépendent du statut de la mission et de l'Établissement :</p>
         <ul className="list-disc pl-6 space-y-2 mb-3">
-          <li><strong>Paiement par carte bancaire (Stripe)</strong> : paiement en ligne sécurisé, traitement immédiat. Mode par défaut pour les établissements privés.</li>
-          <li><strong>Paiement par virement bancaire</strong> : l'Établissement effectue un virement sur le compte de Jolene SASU en indiquant le numéro de facture en référence. Délai de traitement : 2 à 5 jours ouvrés.</li>
-          <li><strong>Dépôt sur Chorus Pro</strong> : pour les établissements publics soumis à l'obligation de facturation électronique (ordonnance n° 2014-697 du 26 juin 2014). La facture est déposée automatiquement sur Chorus Pro.</li>
+          <li><strong>Paiement en ligne (Stripe)</strong> : lorsqu'il est disponible, l'Établissement règle en une opération le montant présenté ; la part du Soignant et les frais Jolene restent identifiés séparément dans les documents.</li>
+          <li><strong>Virement bancaire</strong> : l'Établissement utilise les coordonnées et références indiquées sur chaque document. Un virement n'est affiché comme payé qu'après confirmation effective.</li>
+          <li><strong>Chorus Pro</strong> : pour les acheteurs publics concernés, Jolene prépare les données et suit le dépôt. Aucun dépôt n'est présenté comme réalisé avant l'accusé de réception de Chorus Pro.</li>
         </ul>
 
         <h3 className="text-lg font-semibold text-foreground mt-6 mb-2">5.3 — Délais de paiement</h3>
         <p className="mb-3">Les factures sont payables à 30 jours date de facture pour les établissements privés, et à 50 jours pour les établissements publics (conformément à l'article L.2192-10 du Code de la commande publique).</p>
         <p>Tout retard de paiement entraîne de plein droit l'application de pénalités de retard au taux de la BCE majoré de 10 points, ainsi qu'une indemnité forfaitaire de recouvrement de 40 € (articles L.441-10 et D.441-5 du Code de commerce).</p>
+
+        <h3 className="text-lg font-semibold text-foreground mt-6 mb-2">5.4 — Annulation et sommes dues</h3>
+        <p className="mb-3">Avant confirmation complète du contrat, les conséquences affichées dans la Plateforme sont celles prévues par les règles acceptées. Après signature d'un CDD par les deux parties, une rupture anticipée à l'initiative de l'employeur peut notamment ouvrir droit aux rémunérations jusqu'au terme et à l'indemnité de fin de contrat conformément aux articles L.1243-4 et L.1243-8 du Code du travail. Pour une mission libérale, les conséquences résultent du contrat conclu entre les parties.</p>
+        <p>Jolene enregistre et notifie les montants dus, mais ne présente jamais une indemnité comme versée tant que son règlement n'est pas effectivement confirmé. Une force majeure alléguée ouvre une revue et n'entraîne pas automatiquement une pénalité ou un paiement.</p>
       </section>
 
       {/* Article 6 */}
       <section id="art6">
         <h2 className="text-xl sm:text-2xl font-bold text-foreground mb-4">Article 6 — Accompagnement vers l'exercice libéral</h2>
-        <p className="mb-3">Le programme d'accompagnement vers l'exercice libéral permet aux Soignants ayant atteint 3 200 heures cumulées de bénéficier d'un accompagnement vers l'exercice libéral.</p>
+        <p className="mb-3">Le programme d'accompagnement vers l'exercice libéral suit les seuils propres à chaque profession. Le repère de 3 200 heures concerne les professions infirmières lorsqu'il est applicable ; il ne constitue pas une règle universelle pour tous les métiers de santé.</p>
         <p className="mb-3">L'accompagnement comprend :</p>
         <ul className="list-disc pl-6 space-y-2 mb-3">
           <li>Le suivi en temps réel du compteur d'heures (missions réalisées via la Plateforme et heures externes déclarées sur justificatifs)</li>
@@ -93,7 +97,7 @@ export default function PageCGV() {
         <h2 className="text-xl sm:text-2xl font-bold text-foreground mb-4">Article 7 — Secteur public et affacturage</h2>
         <p className="mb-3">Pour les établissements publics de santé (hôpitaux, CHU, CH, ESPIC), Jolene propose des conditions adaptées :</p>
         <ul className="list-disc pl-6 space-y-2 mb-3">
-          <li><strong>Facturation Chorus Pro</strong> : dépôt automatique des factures conformément aux obligations réglementaires.</li>
+          <li><strong>Facturation Chorus Pro</strong> : préparation, dépôt lorsque le mandat et la configuration le permettent, puis suivi de l'accusé de réception.</li>
           <li><strong>Délais de paiement étendus</strong> : 50 jours conformément au Code de la commande publique.</li>
           <li><strong>Affacturage</strong> : Jolene se réserve le droit de recourir à l'affacturage pour les créances sur le secteur public, sans impact pour l'Établissement. En cas de cession de créance, l'Établissement en sera informé conformément aux dispositions des articles L.313-23 et suivants du Code monétaire et financier (cession Dailly).</li>
         </ul>

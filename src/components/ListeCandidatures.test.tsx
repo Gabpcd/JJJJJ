@@ -217,4 +217,40 @@ describe('ListeCandidatures — confirmation établissement', () => {
       p_motif: 'Refusé par l\'établissement',
     }));
   });
+
+  it('exige et transmet la confirmation réglementaire pour un étudiant aide-soignant', async () => {
+    mocks.rpc.mockImplementation((nom: string) => {
+      if (nom === 'fn_soignant_pour_etablissement') {
+        return Promise.resolve({
+          data: { id: 'sg-1', prenom: 'Lina', nom: 'Martin', profession: 'AS', est_etudiant: true },
+          error: null,
+        });
+      }
+      return Promise.resolve({ data: { success: true }, error: null });
+    });
+
+    render(
+      <ListeCandidatures
+        missionId="mission-1"
+        missionCreneaux={creneaux}
+        missionNbCreneaux={1}
+        missionProfession="AS"
+        onAccepted={vi.fn()}
+        onError={vi.fn()}
+        onSuccess={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Accepter cette candidature' }));
+    const confirmer = await screen.findByRole('button', { name: 'Confirmer et assigner' });
+    expect(confirmer).toBeDisabled();
+    fireEvent.click(screen.getByRole('checkbox', { name: /mission est salariée/i }));
+    expect(confirmer).toBeEnabled();
+    fireEvent.click(confirmer);
+
+    await waitFor(() => expect(mocks.rpc).toHaveBeenCalledWith(
+      'fn_traiter_candidature_planning_v1',
+      expect.objectContaining({ p_motif: 'CADRE_ETUDIANT_AS_CONFIRME' }),
+    ));
+  });
 });

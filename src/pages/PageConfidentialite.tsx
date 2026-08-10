@@ -6,7 +6,7 @@ import { ENTREPRISE } from '@/constantes/entreprise';
 const TOC = [
   { id: 'art1', label: 'Article 1 — Responsable du traitement' },
   { id: 'art2', label: 'Article 2 — Données collectées' },
-  { id: 'art3', label: 'Article 3 — Hébergement sécurisé' },
+  { id: 'art3', label: 'Article 3 — Hébergement et sous-traitants' },
   { id: 'art4', label: "Article 4 — Journaux d'audit" },
   { id: 'art5', label: 'Article 5 — Durées de conservation' },
   { id: 'art6', label: 'Article 6 — Droits des personnes' },
@@ -17,7 +17,7 @@ export default function PageConfidentialite() {
   return (
     <LayoutLegal
       titre="Politique de Confidentialité"
-      dateMaj="29 juillet 2026"
+      dateMaj="10 août 2026"
       toc={TOC}
       seoDescription="Politique de confidentialité de Jolene : données collectées, sous-traitants, durées de conservation et exercice de vos droits RGPD."
     >
@@ -69,18 +69,25 @@ export default function PageConfidentialite() {
 
       {/* Article 3 */}
       <section id="art3">
-        <h2 className="text-xl sm:text-2xl font-bold text-foreground mb-4">Article 3 — Hébergement sécurisé</h2>
-        <p className="mb-3">La base de données et le stockage principal sont fournis par Supabase. Les données sont protégées en transit et au repos conformément à la configuration du projet et aux garanties contractuelles applicables.</p>
-        <div className="bg-muted/50 border border-border rounded-xl p-4 mb-3">
-          <p className="font-semibold text-foreground">Supabase Inc.</p>
-          <p className="text-muted-foreground">Finalité : authentification, base de données, fonctions serveur et stockage de fichiers</p>
-          <p className="text-muted-foreground">Localisation et garanties : précisées dans le registre des sous-traitants et les documents contractuels en vigueur</p>
+        <h2 className="text-xl sm:text-2xl font-bold text-foreground mb-4">Article 3 — Hébergement et sous-traitants</h2>
+        <p className="mb-3">L'application web est diffusée par Vercel. L'authentification, la base de données, les fonctions serveur et le stockage principal sont fournis par Supabase. Les données sont protégées conformément à la configuration des services et aux garanties contractuelles applicables.</p>
+        <div className="grid gap-4 sm:grid-cols-2 mb-3">
+          <div className="bg-muted/50 border border-border rounded-xl p-4">
+            <p className="font-semibold text-foreground">Vercel Inc.</p>
+            <p className="text-muted-foreground">Finalité : hébergement de l'application web, diffusion des contenus et journaux techniques</p>
+            <p className="text-muted-foreground">Données : ressources publiques et données techniques de connexion</p>
+          </div>
+          <div className="bg-muted/50 border border-border rounded-xl p-4">
+            <p className="font-semibold text-foreground">Supabase Pte. Ltd.</p>
+            <p className="text-muted-foreground">Finalité : authentification, base de données, fonctions serveur et stockage de fichiers</p>
+            <p className="text-muted-foreground">Région principale du projet : eu-west-3 (Paris, France)</p>
+          </div>
         </div>
         <div className="bg-muted/50 border-l-4 border-primary p-4 rounded-r-xl my-4">
           <p><strong>Informations liées à la santé :</strong> Jolene ne demande pas le dossier médical des Soignants. La Plateforme conserve néanmoins leurs déclarations relatives aux vaccinations obligatoires et à la médecine du travail, ainsi que la date de signature. Ces informations sont traitées comme sensibles et limitées aux finalités de conformité professionnelle.</p>
         </div>
         <p className="mb-3">Les localisations, mécanismes de sauvegarde et mesures de sécurité applicables sont suivis dans le registre interne des sous-traitants et la documentation de continuité. Ils sont revus lors de tout changement de fournisseur ou de région.</p>
-        <p className="mb-3">Les transferts de données hors UE, s'ils devaient avoir lieu dans le cadre de prestations techniques de sous-traitants, sont encadrés par des clauses contractuelles types approuvées par la Commission européenne (décision 2021/914).</p>
+        <p className="mb-3">Certains prestataires peuvent traiter des données techniques, d'assistance ou de paiement hors de l'Espace économique européen. Ces transferts sont encadrés par les mécanismes prévus au chapitre V du RGPD, notamment les clauses contractuelles types approuvées par la Commission européenne lorsque celles-ci sont requises.</p>
 
         <h3 className="text-lg font-semibold text-foreground mt-6 mb-2">3.2 — Sous-traitants et processeurs de données</h3>
         <p className="mb-3">Les données personnelles peuvent être transmises aux sous-traitants suivants, dans le strict cadre de leurs prestations :</p>
@@ -88,7 +95,8 @@ export default function PageConfidentialite() {
           <table className="w-full text-sm border border-border rounded-xl overflow-hidden">
             <thead><tr className="bg-muted/50"><th className="px-4 py-2 text-left font-semibold text-foreground">Sous-traitant</th><th className="px-4 py-2 text-left font-semibold text-foreground">Finalité</th><th className="px-4 py-2 text-left font-semibold text-foreground">Données concernées</th><th className="px-4 py-2 text-left font-semibold text-foreground">Localisation</th></tr></thead>
             <tbody className="divide-y divide-border">
-              <tr><td className="px-4 py-2 text-foreground">Supabase Inc.</td><td className="px-4 py-2 text-muted-foreground">Hébergement, base de données, stockage</td><td className="px-4 py-2 text-muted-foreground">Données du compte et du service</td><td className="px-4 py-2 text-muted-foreground">Région du projet et garanties consignées au registre des sous-traitants</td></tr>
+              <tr><td className="px-4 py-2 text-foreground">Vercel Inc.</td><td className="px-4 py-2 text-muted-foreground">Hébergement et diffusion de l'application web</td><td className="px-4 py-2 text-muted-foreground">Ressources publiques et données techniques de connexion</td><td className="px-4 py-2 text-muted-foreground">Réseau mondial et garanties contractuelles applicables</td></tr>
+              <tr><td className="px-4 py-2 text-foreground">Supabase Pte. Ltd.</td><td className="px-4 py-2 text-muted-foreground">Authentification, base de données, fonctions serveur et stockage</td><td className="px-4 py-2 text-muted-foreground">Données du compte et du service</td><td className="px-4 py-2 text-muted-foreground">Projet en région eu-west-3 (Paris) ; opérations techniques selon les garanties contractuelles applicables</td></tr>
               <tr><td className="px-4 py-2 text-foreground">Stripe</td><td className="px-4 py-2 text-muted-foreground">Paiements, SEPA, Connect</td><td className="px-4 py-2 text-muted-foreground">IBAN, identité, facturation</td><td className="px-4 py-2 text-muted-foreground">EEE et pays tiers encadrés selon le service</td></tr>
               <tr><td className="px-4 py-2 text-foreground">Anthropic PBC</td><td className="px-4 py-2 text-muted-foreground">Vérification IA de documents</td><td className="px-4 py-2 text-muted-foreground">Documents téléversés et données nécessaires à leur rapprochement</td><td className="px-4 py-2 text-muted-foreground">Selon configuration et garanties contractuelles en vigueur</td></tr>
               <tr><td className="px-4 py-2 text-foreground">Twilio Inc.</td><td className="px-4 py-2 text-muted-foreground">Envoi de SMS</td><td className="px-4 py-2 text-muted-foreground">Numéro de téléphone, contenu SMS</td><td className="px-4 py-2 text-muted-foreground">Selon configuration et garanties contractuelles en vigueur</td></tr>

@@ -99,7 +99,10 @@ export function ModaleAnnulationMissionEtab({
         .eq('mission_id', mission.id)
         .maybeSingle();
       const contratExiste = Boolean(contrat);
-      const contratValide = Boolean(contrat && ['SIGNE_COMPLET', 'SIGNE_PARTIEL'].includes((contrat as any).statut));
+      // Un engagement financier n'est définitif que lorsque les deux parties
+      // ont signé. Les états partiels restent visibles mais ne valent pas
+      // contrat complet.
+      const contratValide = Boolean(contrat && (contrat as any).statut === 'SIGNE_COMPLET');
 
       if (cancelled) return;
       setPointageEnCours(hasPresence);
@@ -139,6 +142,7 @@ export function ModaleAnnulationMissionEtab({
 
   const bucket = determinerBucket(mission.statut, contratSigne, pointageEnCours);
   const indemniteMontant = indemnite?.montant ?? 0;
+  const revueForceMajeure = motif === 'CAS_FORCE_MAJEURE' && mission.statut !== 'OUVERTE';
 
   async function confirmer() {
     if (!motif) {
@@ -155,6 +159,27 @@ export function ModaleAnnulationMissionEtab({
     }
     setLoading(true);
     try {
+      // Une force majeure alléguée nécessite une qualification humaine. On
+      // ouvre une revue sans annuler ni appliquer de pénalité automatiquement.
+      if (revueForceMajeure) {
+        const { data, error } = await supabase.rpc('fn_ouvrir_litige_rate_limited' as any, {
+          p_mission_id: mission.id,
+          p_type_litige: 'AUTRE',
+          p_motif: `Demande de revue avant annulation pour force majeure : ${texte.trim()}`,
+        });
+        if (error) throw error;
+        const result = data as any;
+        if (!result?.success) {
+          afficherNotification({ type: 'erreur', message: result?.error || 'La demande de revue n’a pas pu être ouverte.' });
+          return;
+        }
+        afficherNotification({
+          type: 'succes',
+          message: 'Demande de revue ouverte. La mission reste active et aucune pénalité n’est appliquée avant décision.',
+        });
+        onFermer();
+        return;
+      }
       const { data, error } = await supabase.rpc('fn_annuler_mission_etab' as any, {
         p_mission_id: mission.id,
         p_motif_categorie: motif,
@@ -203,7 +228,12 @@ export function ModaleAnnulationMissionEtab({
           </div>
 
           {/* Décomposition des conséquences */}
-          {calculLoading ? (
+          {revueForceMajeure ? (
+            <div className="rounded-xl border-2 border-info/40 bg-info/5 p-4 text-sm text-foreground">
+              <p className="font-semibold">Revue avant toute annulation</p>
+              <p className="text-xs text-muted-foreground mt-1">La mission reste active. Aucun score, aucune indemnité et aucun mouvement financier ne sont appliqués automatiquement pendant l'examen de la force majeure.</p>
+            </div>
+          ) : calculLoading ? (
             <div className="flex items-center justify-center py-6">
               <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
               <span className="ml-2 text-sm text-muted-foreground">Calcul des conséquences…</span>
@@ -247,15 +277,18 @@ export function ModaleAnnulationMissionEtab({
                 disabled={loading}
               />
               <span className="text-xs text-foreground">
-                J'ai compris les conséquences financières {indemniteMontant > 0 ? `(${formatEur(indemniteMontant)} à verser au soignant)` : ''} et l'impact sur mon score établissement ({bucket.points} pts).
-                {indemniteMontant > 0 && ' Cette somme sera prélevée sur mon compte Stripe Connect et transférée au soignant.'}
+                {revueForceMajeure
+                  ? 'Je demande une revue de la force majeure. La mission restera active et aucune conséquence ne sera appliquée automatiquement avant décision.'
+                  : <>J'ai compris les conséquences financières {indemniteMontant > 0 ? `(${formatEur(indemniteMontant)} à traiter au bénéfice du soignant)` : ''} et l'impact sur mon score établissement ({bucket.points} pts).</>}
               </span>
             </label>
           )}
 
           <div className="rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 p-3 text-xs text-amber-800 dark:text-amber-300 flex gap-2">
             <AlertCircle className="h-4 w-4 shrink-0" />
-            <p>Le soignant sera notifié immédiatement (push + email). L'impact sur votre score établissement est contestable depuis votre page score.</p>
+            <p>{revueForceMajeure
+              ? 'La force majeure sera examinée avant toute annulation, pénalité ou indemnité. Le dossier reste modifiable pendant la revue.'
+              : 'Le soignant sera notifié immédiatement (push + email). L’impact sur votre score établissement est contestable depuis votre page score.'}</p>
           </div>
         </DialogResponsiveBody>
         <DialogResponsiveFooter>
@@ -268,7 +301,7 @@ export function ModaleAnnulationMissionEtab({
             className="btn-primary min-h-[44px] disabled:opacity-50 inline-flex items-center justify-center gap-2"
           >
             {loading && <Loader2 className="h-4 w-4 animate-spin" />}
-            Confirmer l'annulation
+            {revueForceMajeure ? 'Demander la revue' : 'Confirmer l’annulation'}
           </button>
         </DialogResponsiveFooter>
       </DialogResponsiveContent>
@@ -307,7 +340,7 @@ function ConsequencesBlock({ bucket, indemniteMontant, indemnite }: { bucket: Bu
 
   const isLiberal = indemnite?.type_contrat === 'REMPLACEMENT_LIBERAL' || indemnite?.type_contrat === 'LIBERAL';
   const articleLoi = bucket.code === 'CDD_SIGNE' && !isLiberal
-    ? 'art. L1243-8 Code du travail'
+    ? 'art. L1243-4 et L1243-8 Code du travail'
     : isLiberal
       ? 'art. 1231-5 Code civil (clause pénale)'
       : null;
@@ -331,7 +364,7 @@ function ConsequencesBlock({ bucket, indemniteMontant, indemnite }: { bucket: Bu
         )}
         {bucket.code === 'CDD_SIGNE' && !isLiberal && (
           <>
-            <p>Le contrat de travail est signé. L'annulation déclenche l'indemnité de précarité prévue par l'article L1243-8 du Code du travail :</p>
+            <p>Le CDD est signé. Une rupture anticipée à l'initiative de l'employeur peut ouvrir droit au minimum aux rémunérations jusqu'au terme, ainsi qu'à l'indemnité de fin de contrat (art. L1243-4 et L1243-8 du Code du travail) :</p>
             <p className="font-mono bg-background/50 rounded px-2 py-1">
               {indemnite?.base_calcul}
             </p>
@@ -359,7 +392,7 @@ function ConsequencesBlock({ bucket, indemniteMontant, indemnite }: { bucket: Bu
 
         {indemniteMontant > 0 && (
           <p className="text-[11px] italic mt-2">
-            Cette somme sera prélevée automatiquement via votre compte Stripe Connect et transférée au soignant dans les jours suivants.
+            Cette somme est enregistrée comme due. Pour un CDD, l'établissement doit la traiter en paie ; pour une mission libérale, il doit la régler selon le contrat et conserver la preuve. Jolene ne déclare pas un virement tant qu'il n'est pas réellement exécuté.
             {articleLoi && ` Cadre légal : ${articleLoi}.`}
           </p>
         )}

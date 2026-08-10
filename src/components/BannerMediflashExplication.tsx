@@ -62,7 +62,7 @@ export function BannerMediflashExplication() {
           >
             <div className="flex items-center justify-between">
               <h2 id="mediflash-titre" className="text-lg font-bold text-foreground">
-                Pourquoi certaines missions sont salariées ?
+                Comment le mode contractuel est-il déterminé ?
               </h2>
               <button onClick={() => setOuvert(false)} className="p-1 hover:bg-muted rounded-lg" aria-label="Fermer">
                 <X className="h-5 w-5" />
@@ -83,8 +83,9 @@ export function BannerMediflashExplication() {
                 le formulaire de publication.
               </p>
               <p className="text-xs font-medium text-foreground">
-                Tes missions salariées comptent dans les 3 200 h d'expérience requises pour
-                l'installation en libéral.
+                Pour les infirmiers, l'expérience salariée éligible peut compter dans les conditions
+                conventionnelles d'installation ou de remplacement en libéral. La CPAM vérifie la
+                nature, la durée et la période de cette expérience.
               </p>
               <a
                 href="https://www.legifrance.gouv.fr/ceta/id/CETATEXT000051156546"

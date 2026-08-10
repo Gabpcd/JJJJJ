@@ -34,44 +34,25 @@ export function RechercheRemplacantUrgence({ missionId, onPropose, onError, onSu
   const proposer = async (soignantId: string, choixContrat?: string) => {
     setProposing(soignantId);
     try {
-      // Check for existing candidature to avoid duplicate key error
-      const { data: existing } = await supabase
-        .from('candidatures')
-        .select('id, statut')
-        .eq('mission_id', missionId)
-        .eq('soignant_id', soignantId)
-        .maybeSingle();
+      // Toute proposition, y compris la réactivation d'une ancienne
+      // candidature refusée/expirée, passe par la RPC atomique : le frontend
+      // ne contourne ni les contrôles de profession, ni le planning, ni les
+      // notifications.
+      const params: any = { p_mission_id: missionId, p_soignant_id: soignantId };
+      if (choixContrat) params.p_choix_contrat = choixContrat;
+      const { data, error } = await supabase.rpc('fn_proposer_mission_soignant' as any, params);
+      if (error) throw error;
 
-      if (existing) {
-        if (existing.statut === 'REFUSEE' || existing.statut === 'EXPIREE') {
-          // Update existing rejected/expired candidature to PROPOSEE
-          const { error: updateErr } = await supabase
-            .from('candidatures')
-            .update({ statut: 'PROPOSEE', traite_le: null, motif_refus: null })
-            .eq('id', existing.id);
-          if (updateErr) throw updateErr;
-        } else {
-          onError('Ce soignant a déjà une candidature en cours pour cette mission.');
-          setProposing(null);
-          return;
-        }
-      } else {
-        const params: any = { p_mission_id: missionId, p_soignant_id: soignantId };
-        if (choixContrat) params.p_choix_contrat = choixContrat;
-        const { data, error } = await supabase.rpc('fn_proposer_mission_soignant' as any, params);
-        if (error) throw error;
+      if ((data as any)?.choix_requis) {
+        setChoixDialog({ open: true, options: (data as any).options || [], soignantId });
+        setProposing(null);
+        return;
+      }
 
-        if ((data as any)?.choix_requis) {
-          setChoixDialog({ open: true, options: (data as any).options || [], soignantId });
-          setProposing(null);
-          return;
-        }
-
-        if ((data as any)?.error) {
-          onError((data as any).message || (data as any).error);
-          setProposing(null);
-          return;
-        }
+      if ((data as any)?.error) {
+        onError((data as any).message || (data as any).error);
+        setProposing(null);
+        return;
       }
       onSuccess('Mission proposée au soignant !');
       onPropose();

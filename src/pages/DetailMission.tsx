@@ -344,7 +344,7 @@ function BoostEtGarantie({ mission, onMaj }: { mission: any; onMaj: (patch: any)
       const actif = !mission.garantie_remplacement;
       const { data, error } = await supabase.rpc('fn_activer_garantie_mission' as any, { p_mission_id: mission.id, p_actif: actif });
       if (error || (data as any)?.error) { toast.error((data as any)?.error || 'Modification impossible.'); return; }
-      toast.success(actif ? 'Garantie remplacement activée ✓' : 'Garantie remplacement désactivée.');
+      toast.success(actif ? 'Protection remplacement activée ✓' : 'Protection remplacement désactivée.');
       onMaj({ garantie_remplacement: actif });
     } finally {
       setTogglingGarantie(false);
@@ -371,15 +371,15 @@ function BoostEtGarantie({ mission, onMaj }: { mission: any; onMaj: (patch: any)
         ) : null}
       </div>
 
-      {/* Garantie remplacement */}
+      {/* Protection remplacement */}
       {(mission.statut === 'OUVERTE' || mission.statut === 'ASSIGNEE') && (
         <div className="flex items-center justify-between gap-3 pt-3 border-t border-border">
           <div className="min-w-0">
-            <p className="text-sm font-semibold text-foreground flex items-center gap-1.5"><Shield className="h-4 w-4 shrink-0" aria-hidden="true" />Garantie remplacement</p>
+            <p className="text-sm font-semibold text-foreground flex items-center gap-1.5"><Shield className="h-4 w-4 shrink-0" aria-hidden="true" />Protection remplacement</p>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Sans pointage 30 min après le début, une mission de remplacement urgente est diffusée
-              automatiquement au pool de soignants disponibles (premier arrivé, premier servi).
-              Le soignant assigné doit aussi confirmer sa présence la veille.
+              Sans pointage 30 min après le début, Jolene relance d'abord les candidats précédents puis
+              diffuse automatiquement une alerte au pool disponible. Vous validez le remplaçant proposé ;
+              la disponibilité d'un professionnel ne peut pas être garantie. Le soignant assigné doit aussi confirmer sa présence la veille.
             </p>
           </div>
           <BoutonY2K

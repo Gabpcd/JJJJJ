@@ -2,7 +2,8 @@
  * MesMatches — Sprint 13-C PR 5
  *
  * Page soignant /soignant/mes-matches : liste candidatures ASSIGNEE/EN_COURS/
- * TERMINEE issues d'un swipe LIKE/SUPER_LIKE + stats engagement.
+ * TERMINEE issues de la découverte swipe + stats engagement. La valeur
+ * SUPER_LIKE ne subsiste que pour la compatibilité des anciennes données.
  */
 import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
@@ -155,7 +156,7 @@ export default function MesMatches() {
             }
             cta={{
               label: 'Découvrir des missions',
-              onClick: () => navigate('/soignant/swipe-missions'),
+              onClick: () => navigate('/soignant/recherche-missions?vue=swipe'),
             }}
           />
         ) : (
@@ -175,7 +176,7 @@ export default function MesMatches() {
                       <div className="flex flex-col gap-1 items-end shrink-0">
                         {m.swipe_direction === 'SUPER_LIKE' && (
                           <BadgeY2K variant="premium" size="sm" icone={<Sparkles className="h-3 w-3" />}>
-                            Super-like
+                            Priorité historique
                           </BadgeY2K>
                         )}
                         <BadgeY2K

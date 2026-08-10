@@ -3,7 +3,7 @@
  *
  * Couvre :
  *  - Le module SignerContratOtp rend le bouton "Recevoir le code SMS"
- *  - Backend ETAB_AVANT_SOIGNANT : tentative étab avant soignant bloquée
+ *  - L'établissement peut signer avant le soignant
  *  - Backend TROP_DE_SMS : limite 3 SMS / 24h appliquée
  *  - UI affiche le hash SHA-256 du document signé
  *
@@ -48,7 +48,7 @@ test.describe('Flow signature OTP — workflow critique', () => {
     await expect(btnSms).toBeEnabled();
   });
 
-  test('étab tente de signer avant soignant → bandeau "soignant doit signer en premier"', async ({ page }) => {
+  test('l’établissement peut demander son OTP avant le soignant', async ({ page }) => {
     await page.goto('/connexion');
     await page.locator('input[type="email"]').fill(TEST_ACCOUNTS.etab.email);
     await page.locator('input[type="password"]').first().fill(TEST_ACCOUNTS.etab.password);
@@ -59,13 +59,11 @@ test.describe('Flow signature OTP — workflow critique', () => {
     test.skip(!contratId, 'PLAYWRIGHT_CONTRAT_E2E non défini');
     await page.goto(`/contrat/${contratId}`);
 
-    // Bandeau d'attente côté étab visible
-    await expect(page.locator('text=En attente de la signature du soignant')).toBeVisible();
-
-    // Tentative d'envoyer OTP → backend doit refuser avec ETAB_AVANT_SOIGNANT
+    // Aucun ordre légal artificiel : l'établissement peut initier sa signature.
+    await expect(page.getByText(/doit signer en premier/i)).toHaveCount(0);
     await page.getByRole('checkbox', { name: /j'ai lu/i }).check();
     await page.getByRole('button', { name: /Recevoir le code SMS/i }).click();
-    await expect(page.locator('text=soignant doit signer en premier')).toBeVisible({ timeout: 5000 });
+    await expect(page.getByText(/Code envoyé/i)).toBeVisible({ timeout: 5000 });
   });
 
   test('hash SHA-256 du document affiché dans le certificat', async ({ page }) => {

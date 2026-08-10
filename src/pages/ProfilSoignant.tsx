@@ -466,19 +466,19 @@ export default function ProfilSoignant() {
 
 
 /* ── Statut étudiant en santé (exercice « faisant fonction », arrêté du 03/02/2022).
-   Autodéclaré + niveau VÉRIFIÉ par l'IA via l'attestation de scolarité
-   (type ATTESTATION_SCOLARITE) → profession autorisée calculée par la table
-   d'équivalence. Affiché aux établissements (badge 🎓 sur les candidatures). ── */
+   Autodéclaré puis validé humainement sur attestation de scolarité. L'analyse
+   automatique prépare le dossier, mais n'ouvre jamais seule une profession.
+   Affiché aux établissements (badge 🎓 sur les candidatures). ── */
 function BlocStatutEtudiant({ userId }: { userId: string }) {
   const navigate = useNavigate();
   const [estEtudiant, setEstEtudiant] = useState(false);
   const [details, setDetails] = useState('');
-  const [scol, setScol] = useState<{ verifiee: boolean; annee: number | null; profession: string | null } | null>(null);
+  const [scol, setScol] = useState<{ verifiee: boolean; annee: number | null; profession: string | null; verifieeLe: string | null } | null>(null);
   const [charge, setCharge] = useState(false);
 
   useEffect(() => {
     (supabase.from('soignants') as any)
-      .select('est_etudiant, etudiant_details, scolarite_verifiee, scolarite_annee_validee, scolarite_profession_autorisee')
+      .select('est_etudiant, etudiant_details, scolarite_verifiee, scolarite_annee_validee, scolarite_profession_autorisee, scolarite_verifiee_le')
       .eq('id', userId).maybeSingle()
       .then(({ data }: { data: any }) => {
         if (data) {
@@ -488,6 +488,7 @@ function BlocStatutEtudiant({ userId }: { userId: string }) {
             verifiee: !!data.scolarite_verifiee,
             annee: data.scolarite_annee_validee ?? null,
             profession: data.scolarite_profession_autorisee ?? null,
+            verifieeLe: data.scolarite_verifiee_le ?? null,
           });
         }
         setCharge(true);
@@ -508,8 +509,8 @@ function BlocStatutEtudiant({ userId }: { userId: string }) {
         <div>
           <p className="text-sm font-semibold text-foreground">🎓 Je suis étudiant(e) en santé</p>
           <p className="text-xs text-muted-foreground">
-            Visible par les établissements. Un étudiant peut exercer « faisant fonction » selon
-            son niveau (ex : étudiant infirmier ayant validé l'année 1 → aide-soignant, arrêté du 03/02/2022).
+            Visible par les établissements. Un niveau déclaré ne suffit pas : les crédits, stages,
+            unités d'enseignement et attestations exigés sont contrôlés avant toute mission.
           </p>
         </div>
         <button type="button"
@@ -525,11 +526,16 @@ function BlocStatutEtudiant({ userId }: { userId: string }) {
       {estEtudiant && scol?.verifiee && scol.profession && (
         <div className="rounded-lg border border-emerald-200 bg-emerald-50 dark:bg-emerald-950/20 dark:border-emerald-800 p-2.5">
           <p className="text-xs font-semibold text-emerald-800 dark:text-emerald-300">
-            ✅ Niveau vérifié{scol.annee ? ` (année ${scol.annee} validée)` : ''} — tu peux exercer comme {getLabelProfession(scol.profession)}
+            ✅ Niveau contrôlé{scol.annee ? ` (année ${scol.annee} validée)` : ''} — pré-éligibilité comme {getLabelProfession(scol.profession)}
           </p>
           <p className="text-[11px] text-emerald-700/80 dark:text-emerald-400/80 mt-0.5">
-            Vérifié par l'IA à partir de ton attestation de scolarité.
+            Validé par l'équipe Jolene sur les justificatifs réglementaires{scol.verifieeLe ? ` le ${new Date(scol.verifieeLe).toLocaleDateString('fr-FR')}` : ''}.
           </p>
+          <button type="button"
+            onClick={() => navigate('/soignant/mes-documents?tab=justificatifs')}
+            className="mt-2 text-xs font-semibold text-primary underline">
+            Passé(e) en année supérieure ? Mettre à jour mon attestation →
+          </button>
         </div>
       )}
 
@@ -546,9 +552,16 @@ function BlocStatutEtudiant({ userId }: { userId: string }) {
           <button type="button"
             onClick={() => navigate('/soignant/mes-documents?tab=justificatifs')}
             className="text-xs font-medium text-primary underline">
-            Téléverser mon attestation de scolarité pour vérification IA →
+            Téléverser mon attestation pour revue →
           </button>
         </>
+      )}
+
+      {estEtudiant && (
+        <p className="text-[11px] text-muted-foreground">
+          L'année n'est jamais augmentée automatiquement : après chaque passage en année supérieure,
+          remplace ton attestation. Le nouveau niveau ne prend effet qu'après la revue.
+        </p>
       )}
     </div>
   );

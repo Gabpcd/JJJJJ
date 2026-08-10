@@ -207,6 +207,50 @@ describe('DocumentValidationDialog', () => {
     expect(iban).toHaveValue('');
     expect(screen.getByText(/jamais conservé en clair/i)).toBeInTheDocument();
   });
+
+  it('interdit de valider une scolarité sur la seule année déclarée', () => {
+    const onConfirm = vi.fn();
+    const document = makeDocument({
+      type_document: 'ATTESTATION_SCOLARITE',
+      exige_expiration: false,
+      resultat_ia: {
+        nom_extrait: 'LEFEVRE',
+        prenom_extrait: 'Marie',
+        scolarite_formation: 'IFSI',
+        scolarite_annee_validee: 1,
+        date_emission: '2026-07-01',
+        verdict_serveur: 'EN_ATTENTE',
+      },
+      nom_extrait_ia: 'LEFEVRE',
+      prenom_extrait_ia: 'Marie',
+    });
+    render(
+      <DocumentValidationDialog
+        document={document}
+        typeLabel="Attestation de scolarité"
+        onCancel={vi.fn()}
+        onConfirm={onConfirm}
+      />,
+    );
+
+    fireEvent.click(screen.getByLabelText(/document est lisible/i));
+    fireEvent.click(screen.getByLabelText(/document est complet/i));
+    fireEvent.click(screen.getByLabelText(/est bien un document de type/i));
+    fireEvent.click(screen.getByLabelText(/contrôlé les signes de retouche/i));
+    const submit = screen.getByRole('button', { name: 'Valider après contrôles' });
+    expect(submit).toBeDisabled();
+
+    fireEvent.click(screen.getByLabelText(/conditions réglementaires correspondant à cette formation/i));
+    expect(submit).toBeEnabled();
+    fireEvent.click(submit);
+    expect(onConfirm).toHaveBeenCalledWith(expect.objectContaining({
+      validation: expect.objectContaining({
+        scolarite_formation: 'IFSI',
+        scolarite_annee_validee: '1',
+        conditions_scolarite_confirmees: true,
+      }),
+    }));
+  });
 });
 
 describe('buildDocumentCasSnapshot', () => {

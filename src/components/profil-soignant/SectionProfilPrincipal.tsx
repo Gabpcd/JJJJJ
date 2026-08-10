@@ -118,8 +118,9 @@ function RppsVerifierInline(props: {
   dateNaissance: string;
   setDateNaissance: (v: string) => void;
   onVerified: () => void;
+  optionnel?: boolean;
 }) {
-  const { userId, rpps, setRpps, prenom, setPrenom, nom, setNom, dateNaissance, setDateNaissance, onVerified } = props;
+  const { userId, rpps, setRpps, prenom, setPrenom, nom, setNom, dateNaissance, setDateNaissance, onVerified, optionnel = false } = props;
   const { afficherNotification } = useNotification();
   const [verifying, setVerifying] = useState(false);
   const [resultat, setResultat] = useState<null | { trouve: boolean; correspond?: boolean; nom_api?: string; prenom_api?: string; profession_api?: string }>(null);
@@ -235,7 +236,7 @@ function RppsVerifierInline(props: {
           />
         </div>
         <div>
-          <label htmlFor="rpps-numero" className="text-sm font-medium text-foreground mb-1.5 block">Numéro RPPS *</label>
+          <label htmlFor="rpps-numero" className="text-sm font-medium text-foreground mb-1.5 block">Numéro RPPS{optionnel ? ' (optionnel)' : ' *'}</label>
           <input
             id="rpps-numero"
             value={rpps}
@@ -251,7 +252,7 @@ function RppsVerifierInline(props: {
             </p>
           )}
           <p className="text-[10px] text-muted-foreground mt-1">
-            Numéro à 11 chiffres délivré par l'ARS et inscrit sur ta carte CPS. La validation se fait via l'Annuaire Santé (ANS).
+            Identifiant national à 11 chiffres. Les chiffres seuls ne suffisent pas : l'identité, la profession et le statut actif sont recoupés dans l'Annuaire Santé officiel (ANS).
           </p>
         </div>
 
@@ -632,7 +633,8 @@ export function SectionProfilPrincipal(props: Props) {
     }
   };
 
-  const sansRPPS = profession && PROFESSIONS_SANS_RPPS.includes(profession);
+  const rppsOptionnel = profession === 'AS';
+  const sansRPPS = profession && PROFESSIONS_SANS_RPPS.includes(profession) && !rppsOptionnel;
 
   return (
     <div className="space-y-4">
@@ -675,7 +677,23 @@ export function SectionProfilPrincipal(props: Props) {
             dateNaissance={dateNaissance}
             setDateNaissance={setDateNaissance}
             onVerified={onRefresh}
+            optionnel={rppsOptionnel}
           />
+          {rppsOptionnel && (
+            <div className="card-base mt-3 border-primary/20">
+              <p className="text-sm text-foreground">
+                Tu n'as pas encore de RPPS ? Ce n'est pas bloquant pour un profil aide-soignant :
+                ton diplôme et ta pièce d'identité restent contrôlés avant toute mission.
+              </p>
+              <button
+                type="button"
+                onClick={() => navigate('/soignant/mes-documents')}
+                className="btn-secondary mt-3 text-sm py-2 px-4 inline-flex items-center gap-2"
+              >
+                Vérifier mes documents <ArrowRight className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          )}
           <div className="px-4 mt-1">
             <BoutonModifierProfession
               rppsVerifie={rppsVerifie}

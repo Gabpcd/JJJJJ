@@ -76,7 +76,7 @@ pédagogique (cf. `CertificatSignaturePage.tsx`).
 | `CONTRAT_INTROUVABLE` | mauvais ID | "rechargez la page" |
 | `CONTRAT_INACTIF` | statut ANNULE/EXPIRE | Bandeau bloquant |
 | `CONTRAT_DEJA_COMPLET` | déjà signé par les 2 | Bandeau bloquant |
-| `ETAB_AVANT_SOIGNANT` | étab tente avant soignant | Bandeau "soignant doit signer en premier" |
+| Ordre des signatures | établissement ou soignant en premier | Le contrat devient complet après les deux signatures |
 | `TELEPHONE_MANQUANT` | tél non renseigné | Bandeau "complétez votre profil" |
 | `TROP_DE_SMS` | 3 envois atteints / 24h | Bandeau anti-abus |
 | `OTP_NON_DEMANDE` | "Signer" sans avoir demandé OTP | Notification |

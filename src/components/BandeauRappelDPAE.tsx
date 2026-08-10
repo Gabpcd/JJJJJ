@@ -10,8 +10,9 @@ interface BandeauRappelDPAEProps {
 }
 
 export function BandeauRappelDPAE({ dpaeEffectuee, dpaeEffectueeLe, typeContrat }: BandeauRappelDPAEProps) {
-  // Afficher uniquement pour les contrats CDD (salarié)
-  if (typeContrat !== 'CDD') return null;
+  // Le modèle historique utilise tantôt CDD, tantôt SALARIE pour le même
+  // parcours employeur. Les deux doivent donc déclencher le rappel DPAE.
+  if (!typeContrat || !['CDD', 'SALARIE'].includes(typeContrat)) return null;
 
   if (dpaeEffectuee) {
     return (
@@ -19,7 +20,10 @@ export function BandeauRappelDPAE({ dpaeEffectuee, dpaeEffectueeLe, typeContrat 
         <CheckCircle className="h-5 w-5 text-success flex-shrink-0 mt-0.5" />
         <div>
           <p className="text-sm font-semibold text-success">
-            ✅ DPAE effectuée{dpaeEffectueeLe ? ` le ${format(new Date(dpaeEffectueeLe), 'd MMMM yyyy', { locale: fr })}` : ''}
+            ✅ DPAE déclarée comme effectuée par l'établissement{dpaeEffectueeLe ? ` le ${format(new Date(dpaeEffectueeLe), 'd MMMM yyyy', { locale: fr })}` : ''}
+          </p>
+          <p className="text-xs text-muted-foreground mt-1">
+            Jolene conserve ce suivi interne ; la preuve opposable reste l'accusé transmis par l'Urssaf.
           </p>
         </div>
       </div>
@@ -34,10 +38,10 @@ export function BandeauRappelDPAE({ dpaeEffectuee, dpaeEffectueeLe, typeContrat 
           ⚠️ Rappel légal : effectuez la Déclaration Préalable à l'Embauche (DPAE) sur net-entreprises.fr avant le début de la mission.
         </p>
         <p className="text-xs text-muted-foreground mt-1">
-          La DPAE est obligatoire pour les contrats CDD. Pour les remplacements libéraux, elle n'est pas requise.
+          La DPAE est obligatoire pour ce contrat salarié. Pour une mission libérale directe, elle n'est pas requise.
         </p>
         <p className="text-xs text-muted-foreground mt-2">
-          Une fois la DPAE soumise, saisissez le numéro URSSAF retourné dans la section <strong>DPAE</strong> de la page du contrat signé, pour valeur de preuve légale.
+          Une fois la DPAE transmise, saisissez le numéro URSSAF retourné dans la section <strong>DPAE</strong> du contrat afin d'en conserver la traçabilité interne.
         </p>
         <div className="flex flex-wrap items-center gap-3 mt-2">
           <a

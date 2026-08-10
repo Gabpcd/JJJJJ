@@ -4,7 +4,7 @@ import LayoutLegal from '@/components/LayoutLegal';
 
 const TOC = [
   { id: 'editeur', label: '1. Éditeur du site' },
-  { id: 'hebergeur', label: '2. Hébergeur' },
+  { id: 'hebergeur', label: '2. Hébergement et infrastructure' },
   { id: 'domaine', label: '3. Nom de domaine' },
   { id: 'pi', label: '4. Propriété intellectuelle' },
   { id: 'contact', label: '5. Contact' },
@@ -15,7 +15,7 @@ export default function PageMentionsLegales() {
   return (
     <LayoutLegal
       titre="Mentions Légales"
-      dateMaj="7 avril 2026"
+      dateMaj="10 août 2026"
       toc={TOC}
       seoDescription="Mentions légales de Jolene SAS. Éditeur, hébergeur, propriété intellectuelle et coordonnées de contact."
     >
@@ -36,17 +36,25 @@ export default function PageMentionsLegales() {
         </div>
       </section>
 
-      {/* Hébergeur */}
+      {/* Hébergement et infrastructure */}
       <section id="hebergeur">
-        <h2 className="text-xl sm:text-2xl font-bold text-foreground mb-4">2. Hébergeur</h2>
-        <div className="bg-muted/50 border border-border rounded-xl p-5 space-y-2">
-          <p><strong className="text-foreground">Hébergeur :</strong> Supabase Inc.</p>
-          <p><strong className="text-foreground">Adresse :</strong> 970 Toa Payoh North, #07-04, Singapore 318992</p>
-          <p><strong className="text-foreground">Infrastructure :</strong> Amazon Web Services (AWS) — Région eu-west-3 (Paris, France)</p>
-          <p><strong className="text-foreground">Sécurité :</strong> Chiffrement AES-256 au repos, TLS 1.3 en transit, SOC 2 Type II, ISO 27001</p>
-          <p><strong className="text-foreground">Site web :</strong> <a href="https://supabase.com" target="_blank" rel="noopener noreferrer" className="text-primary underline">supabase.com</a></p>
+        <h2 className="text-xl sm:text-2xl font-bold text-foreground mb-4">2. Hébergement et infrastructure</h2>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="bg-muted/50 border border-border rounded-xl p-5 space-y-2">
+            <p className="font-semibold text-foreground">Application web et réseau de diffusion</p>
+            <p><strong className="text-foreground">Prestataire :</strong> Vercel Inc.</p>
+            <p><strong className="text-foreground">Adresse :</strong> 440 N Barranca Ave #4133, Covina, CA 91723, États-Unis</p>
+            <p><strong className="text-foreground">Site web :</strong> <a href="https://vercel.com" target="_blank" rel="noopener noreferrer" className="text-primary underline">vercel.com</a></p>
+          </div>
+          <div className="bg-muted/50 border border-border rounded-xl p-5 space-y-2">
+            <p className="font-semibold text-foreground">Authentification, base de données et stockage</p>
+            <p><strong className="text-foreground">Prestataire :</strong> Supabase Pte. Ltd.</p>
+            <p><strong className="text-foreground">Adresse :</strong> 65 Chulia Street #38-02/03, OCBC Centre, Singapour 049513</p>
+            <p><strong className="text-foreground">Région du projet :</strong> eu-west-3 (Paris, France)</p>
+            <p><strong className="text-foreground">Site web :</strong> <a href="https://supabase.com" target="_blank" rel="noopener noreferrer" className="text-primary underline">supabase.com</a></p>
+          </div>
         </div>
-        <p className="mt-3 text-muted-foreground">Les informations d'hébergement et de sous-traitance sont détaillées dans la politique de confidentialité. Jolene ne demande pas de dossier médical, mais enregistre certaines déclarations de conformité professionnelle liées aux vaccinations et à la médecine du travail avec un accès restreint.</p>
+        <p className="mt-3 text-muted-foreground">Les prestataires, catégories de données, transferts éventuels et garanties applicables sont détaillés dans la politique de confidentialité. Jolene ne demande pas de dossier médical, mais enregistre certaines déclarations de conformité professionnelle liées aux vaccinations et à la médecine du travail avec un accès restreint.</p>
       </section>
 
       {/* Nom de domaine */}

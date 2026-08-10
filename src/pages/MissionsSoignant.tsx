@@ -429,7 +429,7 @@ export default function MissionsSoignant() {
                     ?? creneauxPrevisionnels(m.creneaux || [])[0]
                     ?? null;
                   const dateAffichee = creneauAffiche?.debut ?? m.debut_le;
-                  const estSuperLike = (c.message || '').toLowerCase().includes('super-like');
+                  const estPrioriteHistorique = (c.message || '').toLowerCase().includes('super-like');
                   return (
                     <div
                       key={c.id}
@@ -452,7 +452,7 @@ export default function MissionsSoignant() {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
                           <span className="badge-base bg-amber-100 text-amber-700 text-[10px]">⏳ En attente de réponse</span>
-                          {estSuperLike && <span className="badge-base bg-jolene-butter-100 text-jolene-midnight border border-jolene-butter-300 text-[10px]">★ Super-like envoyé</span>}
+                          {estPrioriteHistorique && <span className="badge-base bg-jolene-butter-100 text-jolene-midnight border border-jolene-butter-300 text-[10px]">★ Priorité historique</span>}
                           {c.type_contrat_choisi && <span className="badge-base bg-muted text-muted-foreground text-[10px]">{c.type_contrat_choisi === 'LIBERAL' ? 'Libéral' : 'Salarié'}</span>}
                         </div>
                         <h3 className="font-semibold text-sm text-foreground truncate" title={m.intitule}>{m.intitule}</h3>
