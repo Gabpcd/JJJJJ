@@ -71,6 +71,12 @@ test.afterAll(async () => {
 });
 
 test('fn_valider_presences_72h_auto — présence départ >72h → validée (audit écrit)', async () => {
+  // Cycle d'intégration distant complet : mission et planning historiques,
+  // candidature, acceptation, contrat signé, présence, cron et audit. À 30 s,
+  // Playwright pouvait lancer le teardown pendant une écriture encore en vol,
+  // puis la purge rendait artificiellement la mission « non affectée ».
+  test.slow();
+
   const admin = adminClient();
   if (!caregiver) throw new Error('Fixture soignant éphémère absente');
 
