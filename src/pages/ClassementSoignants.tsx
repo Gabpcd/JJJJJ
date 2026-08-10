@@ -11,7 +11,6 @@ import { PROFESSIONS } from '@/lib/constantes';
 interface TopSoignant {
   rang: number;
   prenom: string;
-  nom: string;
   profession: string;
   note_moyenne: number;
   score_fiabilite: number;
@@ -137,7 +136,7 @@ export function ClassementContent() {
 
               {/* Infos */}
               <div className="flex-1 min-w-0">
-                <p className="font-semibold text-foreground">{s.prenom} {s.nom}</p>
+                <p className="font-semibold text-foreground">{s.prenom}</p>
                 <p className="text-xs text-muted-foreground">{labelProfession(s.profession)}</p>
               </div>
 
