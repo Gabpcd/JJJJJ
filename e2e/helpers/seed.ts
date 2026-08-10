@@ -19,6 +19,7 @@ import {
   estBlocagePurgeTechniqueAttendu,
   estQuarantainePurgeAutorisee,
   preparerMissionTechniquePourPurge,
+  purgerMissionTechniqueAvecTimeout,
 } from './cleanup-mission-test';
 
 export type CaregiverProfession = 'IDE' | 'IADE' | 'IBODE' | 'SAGE_FEMME';
@@ -938,8 +939,7 @@ export async function cleanupMissionCascade(missionId?: string | null): Promise<
       );
     }
   }
-  const { error } = await admin
-    .rpc('fn_test_purge_mission' as any, { p_mission_id: missionId });
+  const error = await purgerMissionTechniqueAvecTimeout(admin, missionId);
   if (error) {
     if (
       preparation === 'QUARANTAINEE'

@@ -9,6 +9,9 @@ const frontend = read('src/pages/ClassementSoignants.tsx');
 const correction = read(
   'supabase/migrations/20260810161022_corriger_classement_et_inventaire_security_definer.sql',
 );
+const stagingCompensation = read(
+  'supabase/migrations/20260810190000_retablir_securite_classement_staging.sql',
+);
 const financeMigration = read(
   'supabase/migrations/20260803190000_corriger_coherence_metier_finances_litiges.sql',
 );
@@ -70,5 +73,33 @@ describe('classement et inventaire SECURITY DEFINER', () => {
     expect(runtimeRegression).not.toContain(
       'p.oid::regprocedure::text = i.signature',
     );
+  });
+
+  it('répare le staging sans réintroduire le rollback dangereux', () => {
+    expect(stagingCompensation).toContain(
+      'LEAST(GREATEST(COALESCE(p_limit, 20), 1), 50)',
+    );
+    expect(stagingCompensation).toMatch(
+      /REVOKE ALL ON FUNCTION public\.fn_dans_fenetre_retractation\(uuid\)[\s\S]{0,100}FROM PUBLIC, anon, authenticated;/,
+    );
+    expect(stagingCompensation).toMatch(
+      /GRANT EXECUTE ON FUNCTION public\.fn_dans_fenetre_retractation\(uuid\)[\s\S]{0,100}TO service_role;/,
+    );
+    expect(stagingCompensation).toContain('pg_catalog.md5(p.prosrc)');
+    expect(stagingCompensation).not.toMatch(/md5\(pg_get_functiondef\(/);
+  });
+
+  it('conserve les versions staging intermédiaires comme migrations neutres', () => {
+    for (const migration of [
+      'supabase/migrations/20260810170533_annuler_classement_et_inventaire_security_definer.sql',
+      'supabase/migrations/20260810172100_fiabiliser_reponse_proposition.sql',
+      'supabase/migrations/20260810173118_fiabiliser_contexte_reponse_proposition.sql',
+    ]) {
+      const sql = read(migration);
+      expect(sql).toContain('BEGIN;');
+      expect(sql).toContain('COMMIT;');
+      expect(sql).not.toContain('CREATE OR REPLACE FUNCTION');
+      expect(sql).not.toContain('GRANT ');
+    }
   });
 });

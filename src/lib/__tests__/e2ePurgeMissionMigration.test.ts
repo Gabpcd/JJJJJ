@@ -5,6 +5,10 @@ const migration = readFileSync(
   'supabase/migrations/20260801145340_securiser_purge_missions_test_gelees.sql',
   'utf8',
 );
+const timeoutMigration = readFileSync(
+  'supabase/migrations/20260810182456_borner_purge_missions_e2e.sql',
+  'utf8',
+);
 const helper = readFileSync('e2e/helpers/cleanup-mission-test.ts', 'utf8');
 const workflow = readFileSync('.github/workflows/playwright-e2e.yml', 'utf8');
 
@@ -48,6 +52,18 @@ describe('purge des missions E2E gelées', () => {
     expect(migration).toContain(
       "CASE WHEN rel.relname = 'mission_creneaux' THEN 1 ELSE 0 END",
     );
+  });
+
+  it('borne les attentes SQL et recharge le cache PostgREST', () => {
+    expect(timeoutMigration).toMatch(
+      /ALTER FUNCTION public\.fn_test_purge_mission\(uuid\)\s+SET statement_timeout TO '20s'/,
+    );
+    expect(timeoutMigration).toMatch(
+      /ALTER FUNCTION public\.fn_test_purge_mission\(uuid\)\s+SET lock_timeout TO '3s'/,
+    );
+    expect(timeoutMigration).toContain("'statement_timeout=20s'");
+    expect(timeoutMigration).toContain("'lock_timeout=3s'");
+    expect(timeoutMigration).toContain("NOTIFY pgrst, 'reload schema'");
   });
 
   it('n’autorise la quarantaine que sur une PR vers main avant déploiement', () => {

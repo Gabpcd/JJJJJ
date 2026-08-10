@@ -22,6 +22,7 @@ import {
   estBlocagePurgeTechniqueAttendu,
   estQuarantainePurgeAutorisee,
   preparerMissionTechniquePourPurge,
+  purgerMissionTechniqueAvecTimeout,
   type PreparationPurgeMission,
 } from './helpers/cleanup-mission-test';
 
@@ -202,9 +203,7 @@ export default async function globalSetup() {
     }
     const idsRestesEnQuarantaine: string[] = [];
     for (const missionId of ids) {
-      const { error: purgeError } = await admin.rpc('fn_test_purge_mission', {
-        p_mission_id: missionId,
-      });
+      const purgeError = await purgerMissionTechniqueAvecTimeout(admin, missionId);
       if (!purgeError) continue;
       if (
         preparations.get(missionId) === 'QUARANTAINEE'

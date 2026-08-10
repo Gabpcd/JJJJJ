@@ -10,6 +10,7 @@ DECLARE
   v_etab uuid := gen_random_uuid();
   v_officine uuid := gen_random_uuid();
   v_iade uuid := gen_random_uuid();
+  v_concurrent uuid := gen_random_uuid();
   v_admin uuid := gen_random_uuid();
   v_m_candidature uuid := gen_random_uuid();
   v_m_directe uuid := gen_random_uuid();
@@ -19,9 +20,12 @@ DECLARE
   v_m_proposition uuid := gen_random_uuid();
   v_m_proposition_expiree uuid := gen_random_uuid();
   v_candidature uuid;
+  v_candidature_concurrente uuid;
   v_result jsonb;
   v_doc record;
   v_mission record;
+  v_direct_transition_bloquee boolean := false;
+  v_transition_erreur text;
   v_officine_bloquee boolean := false;
   v_officine_erreur text;
 BEGIN
@@ -158,6 +162,10 @@ BEGIN
     (
       v_iade, 'd4-iade-' || v_iade::text || '@test.local', jsonb_build_object('role', 'SOIGNANT'),
       'authenticated', 'authenticated', '00000000-0000-0000-0000-000000000000'::uuid, now()
+    ),
+    (
+      v_concurrent, 'd4-concurrent-' || v_concurrent::text || '@test.local', jsonb_build_object('role', 'SOIGNANT'),
+      'authenticated', 'authenticated', '00000000-0000-0000-0000-000000000000'::uuid, now()
     )
   ON CONFLICT (id) DO NOTHING;
 
@@ -195,6 +203,25 @@ BEGIN
     'ACTIF', substring(regexp_replace(v_iade::text, '[^0-9]', '', 'g') || '00000000000000' from 1 for 14),
     true, now(), 'Cabinet D4 Iade', true
   );
+
+  INSERT INTO public.soignants
+  SELECT (
+    jsonb_populate_record(
+      NULL::public.soignants,
+      to_jsonb(s) || jsonb_build_object(
+        'id', v_concurrent,
+        'email', 'd4-concurrent-' || v_concurrent::text || '@test.local',
+        'code_parrainage', 'JO-' || upper(substr(replace(v_concurrent::text, '-', ''), 1, 6)),
+        'siret_liberal', substring(
+          regexp_replace(v_concurrent::text, '[^0-9]', '', 'g') || '00000000000000'
+          from 1 for 14
+        ),
+        'siret_liberal_raison_sociale', 'Cabinet D4 Concurrent'
+      )
+    )
+  ).*
+  FROM public.soignants s
+  WHERE s.id = v_iade;
 
   -- Fixture documentaire explicite : RIB requis en salarié, RCP uniquement en
   -- libéral. La RCP expirée ne doit jamais bloquer la mission IDE salariée.
@@ -407,6 +434,11 @@ BEGIN
     RAISE EXCEPTION 'D4-T18: proposition IADE × IDE invalide: %', v_result;
   END IF;
   v_candidature := (v_result->>'candidature_id')::uuid;
+  INSERT INTO public.candidatures(
+    mission_id, soignant_id, statut, type_contrat_choisi
+  ) VALUES (
+    v_m_proposition, v_concurrent, 'PROPOSEE', 'SALARIE'
+  ) RETURNING id INTO v_candidature_concurrente;
   PERFORM set_config('request.jwt.claim.sub', v_iade::text, true);
   PERFORM set_config('request.jwt.claims', jsonb_build_object(
     'sub', v_iade::text, 'role', 'authenticated', 'aal', 'aal1'
@@ -421,12 +453,53 @@ BEGIN
   ) THEN
     RAISE EXCEPTION 'D4-T18B: proposition dashboard absente ou forme mission invalide: %', v_result->'propositions';
   END IF;
+
+  -- Le correctif RPC ne doit surtout pas élargir les droits d'UPDATE direct
+  -- du soignant : seule fn_repondre_proposition finalise la mission et le
+  -- contrat avant de faire évoluer la candidature.
+  IF has_table_privilege(
+       'authenticated',
+       'private.candidature_transition_context',
+       'INSERT'
+     ) THEN
+    RAISE EXCEPTION 'D4-T18C: contexte de transition insérable par authenticated';
+  END IF;
+  BEGIN
+    UPDATE public.candidatures
+       SET statut = 'ACCEPTEE', traite_le = now()
+     WHERE id = v_candidature;
+  EXCEPTION WHEN raise_exception THEN
+    GET STACKED DIAGNOSTICS v_transition_erreur = MESSAGE_TEXT;
+    IF v_transition_erreur NOT LIKE
+         'Vous ne pouvez pas modifier le statut de votre candidature%' THEN
+      RAISE;
+    END IF;
+    v_direct_transition_bloquee := true;
+  END;
+  IF v_direct_transition_bloquee IS DISTINCT FROM true
+     OR (SELECT statut FROM public.candidatures WHERE id = v_candidature)
+       IS DISTINCT FROM 'PROPOSEE' THEN
+    RAISE EXCEPTION 'D4-T18C: transition directe PROPOSEE → ACCEPTEE non bloquée';
+  END IF;
+
   v_result := public.fn_repondre_proposition(v_candidature, true);
   IF (v_result->>'success')::boolean IS DISTINCT FROM true
      OR v_result->>'choix_applique' IS DISTINCT FROM 'SALARIE'
      OR (SELECT soignant_assigne_id FROM public.missions WHERE id = v_m_proposition)
-       IS DISTINCT FROM v_iade THEN
+       IS DISTINCT FROM v_iade
+     OR (SELECT statut FROM public.candidatures WHERE id = v_candidature_concurrente)
+       IS DISTINCT FROM 'REFUSEE'
+     OR (SELECT motif_refus FROM public.candidatures WHERE id = v_candidature_concurrente)
+       IS DISTINCT FROM 'Mission attribuée' THEN
     RAISE EXCEPTION 'D4-T19: acceptation proposition IADE × IDE invalide: %', v_result;
+  END IF;
+  IF EXISTS (
+    SELECT 1
+      FROM private.candidature_transition_context ctx
+     WHERE ctx.backend_pid = pg_backend_pid()
+       AND ctx.transaction_id = txid_current()
+  ) THEN
+    RAISE EXCEPTION 'D4-T19A: contexte candidature non nettoyé après acceptation';
   END IF;
 
   -- La fenêtre de 2 h affichée par la carte est également imposée en base.
@@ -451,6 +524,14 @@ BEGIN
      OR (SELECT statut FROM public.candidatures WHERE id = v_candidature)
        IS DISTINCT FROM 'EXPIREE' THEN
     RAISE EXCEPTION 'D4-T19C: proposition expirée encore acceptable: %', v_result;
+  END IF;
+  IF EXISTS (
+    SELECT 1
+      FROM private.candidature_transition_context ctx
+     WHERE ctx.backend_pid = pg_backend_pid()
+       AND ctx.transaction_id = txid_current()
+  ) THEN
+    RAISE EXCEPTION 'D4-T19D: contexte candidature non nettoyé après expiration';
   END IF;
 
   -- 8. Feed, pool et notification partagent l'éligibilité IADE × IDE.

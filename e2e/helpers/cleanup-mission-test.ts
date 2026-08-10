@@ -1,4 +1,33 @@
-import type { SupabaseClient } from '@supabase/supabase-js';
+import type { PostgrestError, SupabaseClient } from '@supabase/supabase-js';
+
+export const PURGE_MISSION_RPC_TIMEOUT_MS = 25_000;
+
+/**
+ * Appelle l'unique purge SQL des missions techniques avec une borne réseau.
+ *
+ * Le timeout SQL de la fonction annule la transaction côté PostgreSQL ; cette
+ * borne légèrement plus longue empêche aussi un proxy ou une connexion HTTP
+ * interrompue de retenir indéfiniment le global setup Playwright.
+ */
+export async function purgerMissionTechniqueAvecTimeout(
+  admin: SupabaseClient<any>,
+  missionId: string,
+): Promise<PostgrestError | null> {
+  const controller = new AbortController();
+  const timeout = setTimeout(
+    () => controller.abort(),
+    PURGE_MISSION_RPC_TIMEOUT_MS,
+  );
+
+  try {
+    const { error } = await admin
+      .rpc('fn_test_purge_mission' as any, { p_mission_id: missionId })
+      .abortSignal(controller.signal);
+    return error;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
 
 export interface MissionTechniqueCleanup {
   id: string;

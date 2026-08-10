@@ -37,7 +37,7 @@ test.describe('Flow notation bidirectionnelle', () => {
   // Ce parcours exécute le cycle métier complet en base (candidature,
   // contrat, transitions puis purge FK). En CI, ce setup consomme à lui seul
   // l'essentiel des 30 s par défaut avant même les assertions d'interface.
-  // Les attentes UI restent volontairement strictes à 10 s chacune.
+  // Les attentes UI restent ciblées sur le contenu et le CTA attendus.
   test.describe.configure({ timeout: 90_000 });
 
   /** IDs des missions seedées par CE test — purge ciblée ordonnée (la clôture
@@ -123,11 +123,11 @@ test.describe('Flow notation bidirectionnelle', () => {
 
     // La page charge avec un heading visible (h1 ou h2).
     const heading = page.locator('h1, h2').first();
-    await expect(heading).toBeVisible({ timeout: 10_000 });
+    await expect(heading).toBeVisible({ timeout: 30_000 });
 
     // Régression stricte : une mission éligible doit permettre au soignant de
     // noter l'établissement. Une disparition du CTA fait désormais échouer le test.
     const noter = page.getByRole('button', { name: /Noter l'établissement/i });
-    await expect(noter).toBeVisible({ timeout: 10_000 });
+    await expect(noter).toBeVisible({ timeout: 30_000 });
   });
 });

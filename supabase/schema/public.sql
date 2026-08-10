@@ -30063,8 +30063,15 @@ BEGIN
   IF TG_TABLE_NAME = 'candidatures' THEN
     v_row := CASE WHEN TG_OP = 'DELETE' THEN to_jsonb(OLD) ELSE to_jsonb(NEW) END;
     IF v_row ->> 'soignant_id' = auth.uid()::text
-       OR current_setting('jolene.candidature_rpc_mission_id', true)
-            = v_row ->> 'mission_id' THEN
+       OR EXISTS (
+         SELECT 1
+           FROM private.candidature_transition_context ctx
+          WHERE ctx.backend_pid = pg_backend_pid()
+            AND ctx.transaction_id = txid_current()
+            AND ctx.candidature_id = (v_row ->> 'id')::uuid
+            AND ctx.mission_id = (v_row ->> 'mission_id')::uuid
+            AND ctx.allowed_status = v_row ->> 'statut'
+       ) THEN
       IF TG_OP = 'DELETE' THEN RETURN OLD; ELSE RETURN NEW; END IF;
     END IF;
   END IF;
@@ -46801,7 +46808,15 @@ BEGIN
   END IF;
   IF auth.uid() IS NULL OR public.est_admin() THEN RETURN NEW; END IF;
 
-  IF current_setting('jolene.candidature_rpc_mission_id', true) = OLD.mission_id::text THEN
+  IF EXISTS (
+    SELECT 1
+      FROM private.candidature_transition_context ctx
+     WHERE ctx.backend_pid = pg_backend_pid()
+       AND ctx.transaction_id = txid_current()
+       AND ctx.candidature_id = OLD.id
+       AND ctx.mission_id = OLD.mission_id
+       AND ctx.allowed_status = NEW.statut
+  ) THEN
     IF NEW.mission_id IS DISTINCT FROM OLD.mission_id
        OR NEW.soignant_id IS DISTINCT FROM OLD.soignant_id THEN
       RAISE EXCEPTION 'Modification interdite';
@@ -50693,6 +50708,9 @@ CREATE OR REPLACE FUNCTION "public"."fn_repondre_proposition"("p_candidature_id"
 DECLARE
   v_candidature record;
   v_result jsonb;
+  v_operation_id uuid := gen_random_uuid();
+  v_backend_pid integer := pg_backend_pid();
+  v_transaction_id bigint := txid_current();
 BEGIN
   SELECT c.* INTO v_candidature
     FROM public.candidatures c
@@ -50705,22 +50723,35 @@ BEGIN
     RETURN jsonb_build_object('error', 'Cette proposition n’est plus en attente');
   END IF;
 
-  PERFORM set_config(
-    'jolene.candidature_rpc_mission_id',
-    v_candidature.mission_id::text,
-    true
-  );
   IF v_candidature.cree_le < now() - interval '2 hours' THEN
+    INSERT INTO private.candidature_transition_context (
+      operation_id, backend_pid, transaction_id,
+      candidature_id, mission_id, allowed_status
+    ) VALUES (
+      v_operation_id, v_backend_pid, v_transaction_id,
+      p_candidature_id, v_candidature.mission_id, 'EXPIREE'
+    );
     UPDATE public.candidatures
        SET statut = 'EXPIREE', traite_le = now()
      WHERE id = p_candidature_id;
+    DELETE FROM private.candidature_transition_context
+     WHERE operation_id = v_operation_id;
     RETURN jsonb_build_object('error', 'Cette proposition a expiré');
   END IF;
 
   IF NOT p_accepter THEN
+    INSERT INTO private.candidature_transition_context (
+      operation_id, backend_pid, transaction_id,
+      candidature_id, mission_id, allowed_status
+    ) VALUES (
+      v_operation_id, v_backend_pid, v_transaction_id,
+      p_candidature_id, v_candidature.mission_id, 'REFUSEE'
+    );
     UPDATE public.candidatures
        SET statut = 'REFUSEE', traite_le = now()
      WHERE id = p_candidature_id;
+    DELETE FROM private.candidature_transition_context
+     WHERE operation_id = v_operation_id;
     RETURN jsonb_build_object('success', true, 'message', 'Proposition refusée');
   END IF;
 
@@ -50733,6 +50764,25 @@ BEGIN
     RETURN v_result;
   END IF;
 
+  INSERT INTO private.candidature_transition_context (
+    operation_id, backend_pid, transaction_id,
+    candidature_id, mission_id, allowed_status
+  ) VALUES (
+    v_operation_id, v_backend_pid, v_transaction_id,
+    p_candidature_id, v_candidature.mission_id, 'ACCEPTEE'
+  );
+  INSERT INTO private.candidature_transition_context (
+    operation_id, backend_pid, transaction_id,
+    candidature_id, mission_id, allowed_status
+  )
+  SELECT
+    v_operation_id, v_backend_pid, v_transaction_id,
+    c.id, c.mission_id, 'REFUSEE'
+    FROM public.candidatures c
+   WHERE c.mission_id = v_candidature.mission_id
+     AND c.id <> p_candidature_id
+     AND c.statut IN ('EN_ATTENTE', 'EN_ATTENTE_VALIDATION_ETAB', 'PROPOSEE');
+
   UPDATE public.candidatures
      SET statut = 'ACCEPTEE', traite_le = now()
    WHERE id = p_candidature_id;
@@ -50741,6 +50791,8 @@ BEGIN
    WHERE mission_id = v_candidature.mission_id
      AND id <> p_candidature_id
      AND statut IN ('EN_ATTENTE', 'EN_ATTENTE_VALIDATION_ETAB', 'PROPOSEE');
+  DELETE FROM private.candidature_transition_context
+   WHERE operation_id = v_operation_id;
 
   RETURN v_result || jsonb_build_object('message', 'Proposition acceptée');
 END;
@@ -56596,6 +56648,8 @@ COMMENT ON FUNCTION "public"."fn_test_nettoyer_sessions_playwright"("p_anciennet
 CREATE OR REPLACE FUNCTION "public"."fn_test_purge_mission"("p_mission_id" "uuid") RETURNS "void"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO ''
+    SET "statement_timeout" TO '20s'
+    SET "lock_timeout" TO '3s'
     AS $_$
 DECLARE
   r record;
@@ -81489,6 +81543,3 @@ ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON FUN
 
 
 ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON TABLES TO "service_role";
-
-
-
