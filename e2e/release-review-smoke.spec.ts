@@ -111,7 +111,7 @@ test.describe('release review — reprise de session iPad', () => {
 
     const erreursConsole = await connecterCompteReview(page, compte);
     const titreDashboard = page.getByRole('heading', {
-      name: /Bonjour|Tableau de bord|Publiez votre première mission/i,
+      name: /^(?:Bonjour,.*|Tableau de bord|Publiez votre première mission)$/i,
     }).first();
     const recoursChargement = page.getByRole('alert').filter({
       hasText: 'Le tableau de bord met plus de temps que prévu',
