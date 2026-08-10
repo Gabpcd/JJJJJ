@@ -38,6 +38,10 @@ export default defineConfig({
   fullyParallel: true,
   forbidOnly: IS_CI,
   retries: IS_CI ? 2 : 0,
+  // Un retry peut aider à diagnostiquer une panne transitoire, mais ne doit
+  // jamais transformer un test instable en check GitHub vert. Le journal et
+  // le statut CI racontent désormais la même chose.
+  failOnFlakyTests: IS_CI,
   // 1 worker en CI : il n'existe qu'UN couple de comptes test
   // (playwright-soignant / playwright-etab) partagé par tous les fichiers —
   // avec 2 workers, les afterEach d'un fichier purgent l'état (quota
