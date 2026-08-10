@@ -540,12 +540,12 @@ export function BarreNavigation({ role }: { role: UserRole }) {
       </nav>
 
       {/* ── Desktop sidebar ── */}
-      <aside className="hidden md:flex fixed left-0 top-0 bottom-0 w-[260px] flex-col z-40 no-print" style={{ paddingTop: 'env(safe-area-inset-top)', background: 'linear-gradient(180deg, hsl(270 40% 97%) 0%, hsl(330 50% 96%) 100%)' }} role="navigation" aria-label="Sidebar">
-        <div className="p-4 flex items-center justify-between gap-1">
+      <aside className="hidden md:flex fixed left-0 top-0 bottom-0 w-[260px] flex-col z-40 no-print bg-sidebar" style={{ paddingTop: 'env(safe-area-inset-top)' }} role="navigation" aria-label="Sidebar">
+        <div className="p-3 flex items-center justify-between gap-1">
           <LogoJolene
             className="min-w-0"
             imageClassName="h-7 w-7"
-            nomClassName="truncate text-xl"
+            nomClassName="truncate text-lg"
           />
           <div className="flex items-center gap-1 flex-shrink-0">
             <BadgeNotification />

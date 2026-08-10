@@ -45,17 +45,17 @@ export function PoolUrgenceToggle({ actif, rayonKm, villeUrgence, smsOptIn, onUp
   }, [villeUrgence]);
 
   useEffect(() => {
-    if (actif !== undefined) return;
     if (!user) return;
+    if (actif !== undefined && rayonKm !== undefined && smsOptIn !== undefined) return;
     supabase.from('soignants').select('disponible_urgence, urgence_rayon_km, pool_urgence_sms_opt_in').eq('id', user.id).maybeSingle()
       .then(({ data }: any) => {
         if (data) {
-          setLocalActif(data.disponible_urgence ?? false);
-          setLocalRayon(data.urgence_rayon_km ?? 15);
-          setLocalSms(data.pool_urgence_sms_opt_in ?? false);
+          if (actif === undefined) setLocalActif(data.disponible_urgence ?? false);
+          if (rayonKm === undefined) setLocalRayon(data.urgence_rayon_km ?? 15);
+          if (smsOptIn === undefined) setLocalSms(data.pool_urgence_sms_opt_in ?? false);
         }
       });
-  }, [user, actif]);
+  }, [user, actif, rayonKm, smsOptIn]);
 
   // revertActif : valeur à rétablir sur le switch si le save échoue (sinon le
   // toggle resterait visuellement activé alors que l'activation a été refusée,
@@ -181,14 +181,14 @@ export function PoolUrgenceToggle({ actif, rayonKm, villeUrgence, smsOptIn, onUp
             <div className="flex items-center justify-between gap-3">
               <div className="flex-1">
                 <p className="text-sm font-medium text-foreground inline-flex items-center gap-1.5">
-                  <MessageSquare className="h-4 w-4 text-orange-600" /> Recevoir les alertes par SMS
+                  <MessageSquare className="h-4 w-4 text-orange-600" /> Alertes SMS du pool urgence
                 </p>
                 <p className="text-xs text-muted-foreground mt-1">
                   Notification immédiate par SMS, en plus des push et e-mails, pour ne manquer aucune mission de dernière minute.
                 </p>
               </div>
               <Switch
-                aria-label="Recevoir les alertes d’urgence par SMS"
+                aria-label="Recevoir les alertes du pool urgence par SMS"
                 checked={localSms}
                 disabled={smsLoading}
                 onCheckedChange={(checked) => {

@@ -117,11 +117,19 @@ test.describe('release review — reprise de session iPad', () => {
     // complet ici annule les lectures encore actives du dashboard et WebKit les
     // remonte à tort comme erreurs « due to access control checks ».
     const sidebar = page.getByRole('navigation', { name: 'Sidebar' });
+    const boutonModeSombre = sidebar.getByRole('button', { name: 'Passer en mode sombre' });
+    if (await boutonModeSombre.count()) await boutonModeSombre.click();
+    await expect(sidebar.getByRole('button', { name: 'Passer en mode clair' })).toBeVisible();
+    const fondSidebar = await sidebar.evaluate((element) => getComputedStyle(element).backgroundColor);
+    expect(fondSidebar, 'la sidebar sombre iPad ne doit pas rester transparente ou blanche').not.toBe('rgba(0, 0, 0, 0)');
+    expect(fondSidebar).not.toBe('rgb(255, 255, 255)');
+
     await sidebar.getByRole('button', { name: 'Publier une mission', exact: true }).click();
     await expect(page).toHaveURL(/\/etablissement\/missions\/creer$/);
     await expect(page.getByRole('heading', { name: /Publier une mission/i })).toBeVisible();
     await expect(page.getByLabel('Intitulé *')).toBeVisible();
     await expect(page.getByText('Type de contrat proposé')).toBeVisible();
+    await expect(page.getByText('Choisissez une période valide.')).toHaveCount(0);
     await verifierSansDebordementHorizontal(page, '/etablissement/missions/creer');
 
     await sidebar.getByRole('button', { name: 'Soignants', exact: true }).click();
@@ -130,6 +138,10 @@ test.describe('release review — reprise de session iPad', () => {
     await page.waitForLoadState('networkidle');
     await expect(page.getByRole('heading', { name: /Pool d'urgence/i })).toBeVisible();
     await verifierSansDebordementHorizontal(page, '/etablissement/pool-urgence');
+
+    await page.setViewportSize({ width: 1080, height: 810 });
+    await expect(page.getByRole('navigation', { name: 'Sidebar' })).toBeVisible();
+    await verifierSansDebordementHorizontal(page, '/etablissement/pool-urgence paysage');
     expect(erreursConsole.filter((message) => !message.includes('favicon'))).toEqual([]);
   });
 
@@ -139,24 +151,30 @@ test.describe('release review — reprise de session iPad', () => {
     if (!compte) return;
 
     const erreursConsole = await connecterCompteReview(page, compte);
+    if (compte.source === 'review') {
+      await expect(page.getByText(/^\[pw-test:/)).toHaveCount(0);
+      await expect(page.getByText(/^\[playwright-test\]/)).toHaveCount(0);
+    }
     // Reproduire le vrai parcours App Review dans la SPA. Un `page.goto`
     // rechargeait tout le document juste après le dashboard : WebKit annulait
     // alors les requêtes Supabase encore actives et les remontait à tort comme
     // erreurs « due to access control checks ».
-    await page.getByRole('button', { name: 'Activité' }).click();
-    await page.getByRole('button', { name: 'Présences' }).click();
+    const sidebarSoignant = page.getByRole('navigation', { name: 'Sidebar' });
+    await sidebarSoignant.getByRole('button', { name: 'Activité' }).click();
+    await sidebarSoignant.getByRole('button', { name: 'Présences' }).click();
     await expect(page).toHaveURL(/\/soignant\/presences$/);
     await page.waitForLoadState('networkidle');
     await expect(page.getByRole('heading', { name: 'Mes présences' })).toBeVisible();
     await expect(page.getByText(/Votre espace est momentanément indisponible/i)).toHaveCount(0);
 
-    await page.goto('/soignant/mes-documents?tab=justificatifs');
+    await sidebarSoignant.getByRole('button', { name: 'Documents' }).click();
     await expect(page.getByRole('heading', { name: 'Mes documents' })).toBeVisible();
     await expect(page.getByRole('tab', { name: 'Justificatifs' })).toBeVisible();
     await expect(page.getByRole('tab', { name: 'DPAE' })).toBeVisible();
+    await page.getByRole('tab', { name: 'Justificatifs' }).click();
     await verifierSansDebordementHorizontal(page, '/soignant/mes-documents');
 
-    await page.goto('/soignant/profil');
+    await sidebarSoignant.getByRole('button', { name: 'Mon profil' }).click();
     await expect(page.getByRole('heading').first()).toBeVisible();
     await verifierSansDebordementHorizontal(page, '/soignant/profil');
     expect(erreursConsole.filter((message) => !message.includes('favicon'))).toEqual([]);

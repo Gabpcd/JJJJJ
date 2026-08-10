@@ -1,6 +1,7 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { PoolUrgenceToggle } from './PoolUrgenceToggle';
+import { supabase } from '@/integrations/supabase/client';
 
 class ResizeObserverMock {
   observe() {}
@@ -35,7 +36,30 @@ describe('PoolUrgenceToggle', () => {
     expect(screen.getByRole('switch', { name: /Disponible pour les remplacements/i }))
       .toHaveAttribute('aria-checked', 'true');
     expect(screen.getByText('42 km')).toBeInTheDocument();
-    expect(screen.getByRole('switch', { name: /Recevoir les alertes d’urgence par SMS/i }))
+    expect(screen.getByRole('switch', { name: /Recevoir les alertes du pool urgence par SMS/i }))
       .toHaveAttribute('aria-checked', 'true');
+  });
+
+  it("relit l'opt-in SMS canonique même si l'état et le rayon sont déjà fournis", async () => {
+    vi.mocked(supabase.from).mockReturnValue({
+      select: () => ({
+        eq: () => ({
+          maybeSingle: () => Promise.resolve({
+            data: {
+              disponible_urgence: true,
+              urgence_rayon_km: 30,
+              pool_urgence_sms_opt_in: true,
+            },
+            error: null,
+          }),
+        }),
+      }),
+    } as any);
+
+    render(<PoolUrgenceToggle actif rayonKm={30} />);
+
+    await waitFor(() => expect(
+      screen.getByRole('switch', { name: /Recevoir les alertes du pool urgence par SMS/i }),
+    ).toHaveAttribute('aria-checked', 'true'));
   });
 });

@@ -3,6 +3,18 @@ import { describe, expect, it, vi } from 'vitest';
 import { FormulaireRecurrence, type RecurrenceFlexConfig } from './FormulaireRecurrence';
 
 describe('FormulaireRecurrence — planning exact établissement', () => {
+  it("n'affiche pas d'erreur avant la première saisie de dates", () => {
+    render(<FormulaireRecurrence onChange={vi.fn()} />);
+
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.queryByText('Choisissez une période valide.')).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText(/Première date affichée/i), {
+      target: { value: '2026-08-10' },
+    });
+    expect(screen.getByRole('alert')).toHaveTextContent('Choisissez une période valide.');
+  });
+
   it('préremplit les créneaux réels, y compris une garde finissant le lendemain', async () => {
     const onChange = vi.fn();
     render(

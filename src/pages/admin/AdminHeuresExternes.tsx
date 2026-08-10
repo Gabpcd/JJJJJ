@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Loader2, FileText, Clock, CheckCircle, XCircle } from 'lucide-react';
+import { Loader2, FileText, Clock, CheckCircle, XCircle, RefreshCw } from 'lucide-react';
 import { LayoutAdmin } from '@/components/LayoutAdmin';
 import { supabase } from '@/integrations/supabase/client';
 import { useNotification } from '@/contexts/NotificationContext';
@@ -34,6 +34,20 @@ interface HeureExterneAdmin {
 }
 
 type Filtre = 'EN_ATTENTE' | 'VALIDE' | 'REJETE' | 'TOUS';
+const DELAI_CHARGEMENT_HEURES_MS = 15_000;
+
+function avecDelaiHeures<T>(requete: PromiseLike<T>): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = window.setTimeout(
+      () => reject(new Error('Le chargement des heures a dépassé 15 secondes.')),
+      DELAI_CHARGEMENT_HEURES_MS,
+    );
+    Promise.resolve(requete).then(
+      (resultat) => { window.clearTimeout(timer); resolve(resultat); },
+      (erreur) => { window.clearTimeout(timer); reject(erreur); },
+    );
+  });
+}
 
 /**
  * Page admin /admin/heures-externes — validation des heures externes (parcours 3200h).
@@ -48,22 +62,27 @@ export default function AdminHeuresExternes() {
   const [filtre, setFiltre] = useState<Filtre>('EN_ATTENTE');
   const [heures, setHeures] = useState<HeureExterneAdmin[]>([]);
   const [loading, setLoading] = useState(true);
+  const [erreurChargement, setErreurChargement] = useState<string | null>(null);
   const [selectionnee, setSelectionnee] = useState<HeureExterneAdmin | null>(null);
   const [openingId, setOpeningId] = useState<string | null>(null);
 
   const charger = useCallback(async () => {
     setLoading(true);
-    const { data, error } = await supabase.rpc('fn_admin_lister_heures_externes' as any, {
-      p_statut: filtre, p_limit: 200,
-    });
-    if (error) {
-      afficherNotification({ type: 'erreur', message: error.message });
-    } else if ((data as any)?.success) {
+    setErreurChargement(null);
+    try {
+      const { data, error } = await avecDelaiHeures(supabase.rpc('fn_admin_lister_heures_externes' as any, {
+        p_statut: filtre, p_limit: 200,
+      }));
+      if (error) throw error;
+      if (!(data as any)?.success) throw new Error((data as any)?.error || 'Erreur de chargement');
       setHeures(((data as any).heures || []) as HeureExterneAdmin[]);
-    } else {
-      afficherNotification({ type: 'erreur', message: (data as any)?.error || 'Erreur de chargement' });
+    } catch (erreur) {
+      const message = erreur instanceof Error ? erreur.message : 'Impossible de charger les heures externes.';
+      setErreurChargement(message);
+      afficherNotification({ type: 'erreur', message });
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }, [afficherNotification, filtre]);
 
   useEffect(() => { charger(); }, [charger]);
@@ -116,7 +135,18 @@ export default function AdminHeuresExternes() {
         </div>
 
         {loading ? (
-          <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
+          <div className="flex items-center justify-center gap-2 py-8" role="status">
+            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            <span className="text-sm text-muted-foreground">Chargement des déclarations…</span>
+          </div>
+        ) : erreurChargement ? (
+          <div className="rounded-2xl border border-destructive/30 bg-destructive/5 p-6 text-center" role="alert">
+            <p className="font-semibold text-foreground">Déclarations indisponibles</p>
+            <p className="mt-1 text-sm text-muted-foreground">{erreurChargement}</p>
+            <BoutonY2K className="mt-4" size="sm" onClick={() => { void charger(); }} iconeGauche={<RefreshCw className="h-4 w-4" />}>
+              Réessayer
+            </BoutonY2K>
+          </div>
         ) : heures.length === 0 ? (
           <EmptyState
             icone={<Clock />}

@@ -38,6 +38,7 @@ import { analyserCompletudePlanningMission } from '@/lib/completude-planning-mis
 import { chargerCreneauxMissionsPagines } from '@/lib/mission-creneaux-pagines';
 import { formatParis, instantJolene } from '@/lib/date-heure-paris';
 import { montantFinanceAfficheMission } from '@/lib/missionFinanceDisplay';
+import { filtrerMissionsPlaywright } from '@/lib/donnees-test';
 /** 6c.5 : salutation heure-aware — « Hiii » → Bonjour/Bonsoir selon l'heure. */
 function salutationHeure(): string {
   const h = new Date().getHours();
@@ -127,8 +128,14 @@ export default function DashboardSoignant() {
       if (propositionsLitigesError) logger.warn('[DashboardSoignant] Propositions de litige indisponibles', propositionsLitigesError);
       if (!data) return { profil: null, missions_ouvertes: [], mes_missions: [], documents: [], heures_semaine: 0, gains_mois: { net_total: 0, brut_total: 0, nb_missions: 0 }, gains_missions: [], gains_6mois: [], missions_semaine_cal: [], propositions: [], propositions_litiges: [], heures_totales_terminees: 0, missions_oubliees_count: 0, notifs_non_lues: 0, hasStripeConnect: true };
 
-      const missions = Array.isArray((data as any).mes_missions) ? (data as any).mes_missions : [];
-      const missionsOuvertes = Array.isArray((data as any).missions_ouvertes) ? (data as any).missions_ouvertes : [];
+      const missions = filtrerMissionsPlaywright(
+        Array.isArray((data as any).mes_missions) ? (data as any).mes_missions : [],
+        user?.email,
+      );
+      const missionsOuvertes = filtrerMissionsPlaywright(
+        Array.isArray((data as any).missions_ouvertes) ? (data as any).missions_ouvertes : [],
+        user?.email,
+      );
       const missionIds = [...new Set(
         [...missions, ...missionsOuvertes]
           .map((mission: any) => mission.id)
@@ -301,11 +308,12 @@ export default function DashboardSoignant() {
   }, [mesMissions, maintenant]);
 
   const missionsOubliDepartCount = Math.max(0, Number(dashboard?.missions_oubliees_count) || 0);
+  const gainsMissionsDashboard = (dashboard as any)?.gains_missions;
 
   const gainsCeMois = useMemo(() => {
     const result = { honoraires: 0, netSalarie: 0, brutIndicatif: 0, nb: 0 };
-    const missionsGains = Array.isArray((dashboard as any)?.gains_missions)
-      ? (dashboard as any).gains_missions
+    const missionsGains = Array.isArray(gainsMissionsDashboard)
+      ? gainsMissionsDashboard
       : [];
     missionsGains.forEach((mission: any) => {
       const finance = montantFinanceAfficheMission(mission);
@@ -316,7 +324,7 @@ export default function DashboardSoignant() {
       else result.brutIndicatif += finance.montant;
     });
     return result;
-  }, [(dashboard as any)?.gains_missions]);
+  }, [gainsMissionsDashboard]);
 
   const { missionsTermineesCount, heuresCumuleesTotal } = useMemo(() => {
     // RPC returns heures_totales_terminees as a number (SUM of duree_heures)

@@ -10,13 +10,27 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { Building2, Save, Loader2, ChevronDown, TrendingUp, CreditCard, Users, Mail, Percent, Activity, Euro, Calendar, Send, Edit3 } from 'lucide-react';
+import { Building2, Save, Loader2, ChevronDown, TrendingUp, CreditCard, Users, Mail, Percent, Activity, Euro, Calendar, Send, Edit3, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 import { getLabelTypeEtablissement } from '@/lib/constantes';
 
 const fmt = (v: number) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(v);
 const fmtPct = (v: number) => `${v.toFixed(1)}%`;
+const DELAI_CHARGEMENT_GROUPES_MS = 15_000;
+
+function avecDelai<T>(requete: PromiseLike<T>): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = window.setTimeout(
+      () => reject(new Error('Le chargement des groupes a dépassé 15 secondes.')),
+      DELAI_CHARGEMENT_GROUPES_MS,
+    );
+    Promise.resolve(requete).then(
+      (resultat) => { window.clearTimeout(timer); resolve(resultat); },
+      (erreur) => { window.clearTimeout(timer); reject(erreur); },
+    );
+  });
+}
 
 interface GroupeData {
   id: string;
@@ -61,6 +75,7 @@ export default function AdminGroupes() {
   const navigate = useNavigate();
   const [groupes, setGroupes] = useState<GroupeData[]>([]);
   const [loading, setLoading] = useState(true);
+  const [erreurChargement, setErreurChargement] = useState<string | null>(null);
   const [editingTaux, setEditingTaux] = useState<{ etabId: string; taux: string } | null>(null);
   const [savingTaux, setSavingTaux] = useState(false);
   const [emailGroupeId, setEmailGroupeId] = useState<string | null>(null);
@@ -71,116 +86,106 @@ export default function AdminGroupes() {
 
   const charger = async () => {
     setLoading(true);
+    setErreurChargement(null);
+    try {
+      const groupesResultat = await avecDelai(
+        supabase
+          .from('groupes_sante')
+          .select('id, nom, siren, nom_marque, remise_groupe_pourcent, formule_abonnement, bfa_eligible, email_admin, telephone_admin')
+          .is('supprime_le', null)
+          .order('nom'),
+      );
+      if (groupesResultat.error) throw groupesResultat.error;
+      const rawGroupes = groupesResultat.data ?? [];
+      if (rawGroupes.length === 0) { setGroupes([]); return; }
 
-    const { data: rawGroupes } = await supabase
-      .from('groupes_sante')
-      .select('id, nom, siren, nom_marque, remise_groupe_pourcent, formule_abonnement, bfa_eligible, email_admin, telephone_admin')
-      .is('supprime_le', null)
-      .order('nom');
+      // Une seule lecture pour toutes les cliniques, puis deux lectures globales
+      // en parallèle. L'ancienne boucle attendait 3 requêtes par groupe et pouvait
+      // laisser l'écran bloqué plusieurs dizaines de secondes.
+      const etabsResultat = await avecDelai(
+        supabase
+          .from('etablissements')
+          .select('id, nom, adresse_ville, type, email_contact, taux_commission_negocie, groupe_sante_id')
+          .in('groupe_sante_id', rawGroupes.map((g) => g.id))
+          .is('supprime_le', null)
+          .order('nom'),
+      );
+      if (etabsResultat.error) throw etabsResultat.error;
+      const tousEtabs = etabsResultat.data ?? [];
+      const tousEtabsIds = tousEtabs.map((etab) => etab.id);
 
-    if (!rawGroupes) { setLoading(false); return; }
+      const [resMissions, resFactures] = tousEtabsIds.length > 0
+        ? await Promise.all([
+            avecDelai(supabase.from('missions')
+              .select('id, statut, soignant_assigne_id, montant_commission_ttc, etablissement_id')
+              .in('etablissement_id', tousEtabsIds)),
+            avecDelai(supabase.from('factures')
+              .select('montant_ttc, statut, etablissement_id')
+              .in('etablissement_id', tousEtabsIds)),
+          ])
+        : [{ data: [], error: null }, { data: [], error: null }];
+      if (resMissions.error) throw resMissions.error;
+      if (resFactures.error) throw resFactures.error;
+      const toutesMissions = resMissions.data ?? [];
+      const toutesFactures = resFactures.data ?? [];
 
-    const enriched: GroupeData[] = [];
+      const enriched: GroupeData[] = rawGroupes.map((g) => {
+        const etabs = tousEtabs.filter((etab) => etab.groupe_sante_id === g.id);
+        const cliniques: CliniqueStat[] = [];
+        let totalMissions = 0, totalEnCours = 0, totalTerminees = 0;
+        let totalCa = 0, totalPayees = 0, totalImpayees = 0;
+        const allSoignantIds = new Set<string>();
 
-    for (const g of rawGroupes) {
-      // Cliniques du groupe
-      const { data: etabs } = await supabase
-        .from('etablissements')
-        .select('id, nom, adresse_ville, type, email_contact, taux_commission_negocie')
-        .eq('groupe_sante_id', g.id)
-        .is('supprime_le', null)
-        .order('nom');
-
-      const etabIds = (etabs ?? []).map(e => e.id);
-      const cliniques: CliniqueStat[] = [];
-      let totalMissions = 0, totalEnCours = 0, totalTerminees = 0;
-      let totalCa = 0, totalPayees = 0, totalImpayees = 0;
-      const allSoignantIds = new Set<string>();
-
-      if (etabIds.length > 0) {
-        // 2 requêtes batch au lieu de N×2 requêtes par clinique
-        const [resMissions, resFactures] = await Promise.all([
-          supabase.from('missions')
-            .select('id, statut, soignant_assigne_id, montant_commission_ht, montant_commission_ttc, etablissement_id')
-            .in('etablissement_id', etabIds),
-          supabase.from('factures')
-            .select('montant_ttc, statut, etablissement_id')
-            .in('etablissement_id', etabIds),
-        ]);
-
-        const allMissions = resMissions.data ?? [];
-        const allFactures = resFactures.data ?? [];
-
-        for (const etab of (etabs ?? [])) {
-          const missions = allMissions.filter(m => m.etablissement_id === etab.id);
-          const factures = allFactures.filter(f => f.etablissement_id === etab.id);
-
+        for (const etab of etabs) {
+          const missions = toutesMissions.filter((mission) => mission.etablissement_id === etab.id);
+          const factures = toutesFactures.filter((facture) => facture.etablissement_id === etab.id);
           const nbMissions = missions.length;
-          const nbEnCours = missions.filter(m => ['OUVERTE', 'ASSIGNEE', 'EN_COURS'].includes(m.statut)).length;
-          const nbTerminees = missions.filter(m => m.statut === 'TERMINEE').length;
+          const nbEnCours = missions.filter((mission) => ['OUVERTE', 'ASSIGNEE', 'EN_COURS'].includes(mission.statut)).length;
+          const nbTerminees = missions.filter((mission) => mission.statut === 'TERMINEE').length;
           const caCommissions = missions
-            .filter(m => m.statut === 'TERMINEE')
-            .reduce((s, m) => s + (Number(m.montant_commission_ttc) || 0), 0);
-          const caPayees = factures.filter(f => f.statut === 'PAYEE').reduce((s, f) => s + (Number(f.montant_ttc) || 0), 0);
-          const caImpayees = factures.filter(f => ['EMISE', 'EN_RETARD'].includes(f.statut)).reduce((s, f) => s + (Number(f.montant_ttc) || 0), 0);
-          const soignantIds = new Set(missions.map(m => m.soignant_assigne_id).filter(Boolean));
+            .filter((mission) => mission.statut === 'TERMINEE')
+            .reduce((somme, mission) => somme + (Number(mission.montant_commission_ttc) || 0), 0);
+          const caPayees = factures.filter((facture) => facture.statut === 'PAYEE').reduce((somme, facture) => somme + (Number(facture.montant_ttc) || 0), 0);
+          const caImpayees = factures.filter((facture) => ['EMISE', 'EN_RETARD'].includes(facture.statut)).reduce((somme, facture) => somme + (Number(facture.montant_ttc) || 0), 0);
+          const soignantIds = new Set(missions.map((mission) => mission.soignant_assigne_id).filter((id): id is string => Boolean(id)));
 
           cliniques.push({
-            id: etab.id,
-            nom: etab.nom,
-            adresse_ville: etab.adresse_ville,
-            type: etab.type,
-            email_contact: etab.email_contact,
+            id: etab.id, nom: etab.nom, adresse_ville: etab.adresse_ville,
+            type: etab.type, email_contact: etab.email_contact,
             taux_commission_negocie: etab.taux_commission_negocie,
-            nb_missions: nbMissions,
-            nb_missions_en_cours: nbEnCours,
-            nb_missions_terminees: nbTerminees,
-            ca_commissions: caCommissions,
-            ca_payees: caPayees,
-            ca_impayees: caImpayees,
-            nb_soignants: soignantIds.size,
+            nb_missions: nbMissions, nb_missions_en_cours: nbEnCours,
+            nb_missions_terminees: nbTerminees, ca_commissions: caCommissions,
+            ca_payees: caPayees, ca_impayees: caImpayees, nb_soignants: soignantIds.size,
           });
-
-          totalMissions += nbMissions;
-          totalEnCours += nbEnCours;
-          totalTerminees += nbTerminees;
-          totalCa += caCommissions;
-          totalPayees += caPayees;
-          totalImpayees += caImpayees;
-          soignantIds.forEach(id => allSoignantIds.add(id));
+          totalMissions += nbMissions; totalEnCours += nbEnCours; totalTerminees += nbTerminees;
+          totalCa += caCommissions; totalPayees += caPayees; totalImpayees += caImpayees;
+          soignantIds.forEach((id) => allSoignantIds.add(id));
         }
-      }
 
-      // File de travail (Session D) : cliniques avec impayés en tête (montant
-      // décroissant), puis par activité en cours — l'alphabétique noyait les relances.
-      cliniques.sort((a, b) =>
-        (b.ca_impayees - a.ca_impayees)
-        || (b.nb_missions_en_cours - a.nb_missions_en_cours)
-        || a.nom.localeCompare(b.nom));
-
-      enriched.push({
-        ...g,
-        remise_groupe_pourcent: Number(g.remise_groupe_pourcent) || 0,
-        cliniques,
-        totals: {
-          missions: totalMissions,
-          missions_en_cours: totalEnCours,
-          missions_terminees: totalTerminees,
-          ca_commissions: totalCa,
-          ca_commissions_payees: totalPayees,
-          ca_commissions_impayees: totalImpayees,
-          soignants_uniques: allSoignantIds.size,
-        },
+        cliniques.sort((a, b) => (b.ca_impayees - a.ca_impayees)
+          || (b.nb_missions_en_cours - a.nb_missions_en_cours)
+          || a.nom.localeCompare(b.nom));
+        return {
+          ...g,
+          remise_groupe_pourcent: Number(g.remise_groupe_pourcent) || 0,
+          cliniques,
+          totals: {
+            missions: totalMissions, missions_en_cours: totalEnCours,
+            missions_terminees: totalTerminees, ca_commissions: totalCa,
+            ca_commissions_payees: totalPayees, ca_commissions_impayees: totalImpayees,
+            soignants_uniques: allSoignantIds.size,
+          },
+        };
       });
+
+      enriched.sort((a, b) => (b.totals.ca_commissions_impayees - a.totals.ca_commissions_impayees)
+        || a.nom.localeCompare(b.nom));
+      setGroupes(enriched);
+    } catch (erreur) {
+      setErreurChargement(erreur instanceof Error ? erreur.message : 'Impossible de charger les groupes de santé.');
+    } finally {
+      setLoading(false);
     }
-
-    // Même logique au niveau groupe : CA impayé décroissant d'abord.
-    enriched.sort((a, b) =>
-      (b.totals.ca_commissions_impayees - a.totals.ca_commissions_impayees)
-      || a.nom.localeCompare(b.nom));
-
-    setGroupes(enriched);
-    setLoading(false);
   };
 
   useEffect(() => { charger(); }, []);
@@ -280,6 +285,19 @@ export default function AdminGroupes() {
   };
 
   if (loading) return <LayoutAdmin><ChargementAdmin titre="Groupes de santé" /></LayoutAdmin>;
+
+  if (erreurChargement) return (
+    <LayoutAdmin>
+      <BreadcrumbAdmin pageName="Groupes" />
+      <div className="mx-auto max-w-xl rounded-2xl border border-destructive/30 bg-destructive/5 p-6 text-center" role="alert">
+        <h1 className="text-lg font-bold text-foreground">Groupes de santé indisponibles</h1>
+        <p className="mt-2 text-sm text-muted-foreground">{erreurChargement}</p>
+        <BoutonY2K className="mt-4" onClick={() => { void charger(); }} iconeGauche={<RefreshCw className="h-4 w-4" />}>
+          Réessayer
+        </BoutonY2K>
+      </div>
+    </LayoutAdmin>
+  );
 
   return (
     <LayoutAdmin>
