@@ -78,6 +78,7 @@ vi.mock('@tanstack/react-query', () => ({
     isLoading: false,
     data: dashboardData,
   }),
+  useQueryClient: () => ({ resetQueries: vi.fn() }),
 }));
 
 vi.mock('@/components/LayoutApp', () => ({
