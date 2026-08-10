@@ -56648,6 +56648,8 @@ COMMENT ON FUNCTION "public"."fn_test_nettoyer_sessions_playwright"("p_anciennet
 CREATE OR REPLACE FUNCTION "public"."fn_test_purge_mission"("p_mission_id" "uuid") RETURNS "void"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO ''
+    SET "statement_timeout" TO '20s'
+    SET "lock_timeout" TO '3s'
     AS $_$
 DECLARE
   r record;
