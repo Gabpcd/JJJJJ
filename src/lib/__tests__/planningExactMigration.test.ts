@@ -255,7 +255,7 @@ describe('planning exact de bout en bout', () => {
     expect(push).toBeGreaterThan(restauration);
     expect(stagingWorkflow).toContain('EXPECTED_INVENTORY_COUNT=$(python3 -c');
     expect(stagingWorkflow).toContain(
-      'INVENTORY_COUNT\" != \"$EXPECTED_INVENTORY_COUNT\"',
+      'INVENTORY_COUNT" != "$EXPECTED_INVENTORY_COUNT"',
     );
     expect(stagingWorkflow.match(/--single-transaction/g)).toHaveLength(3);
     expect(stagingWorkflow).not.toContain(

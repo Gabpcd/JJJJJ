@@ -27,13 +27,13 @@ const faqJsonLd = {
 const avantages = [
   { icon: Euro, titre: 'Rémunération transparente', desc: 'Taux horaire affiché avant de postuler, zéro frais cachés pour le soignant.' },
   { icon: Clock, titre: 'Flexibilité totale', desc: 'Choisissez vos missions, vos horaires et vos établissements. Vous êtes libre.' },
-  { icon: ShieldCheck, titre: 'Conformité garantie', desc: 'Contrats générés automatiquement, conformes au Code du Travail et signés électroniquement.' },
-  { icon: TrendingUp, titre: 'Parcours vers le libéral', desc: 'Pour les professions autorisées à exercer en libéral : cumulez vos 3 200 heures, suivies heure par heure sur votre tableau de bord.' },
+  { icon: ShieldCheck, titre: 'Cadre contractuel vérifiable', desc: 'Type de contrat indiqué avant candidature, document généré et signatures électroniques tracées.' },
+  { icon: TrendingUp, titre: 'Parcours vers le libéral', desc: 'Pour les professions infirmières concernées : suivi du seuil de 3 200 heures ; pour les autres métiers, affichage des règles qui leur sont propres.' },
 ];
 
 const etapes = [
   { num: '1', titre: 'Créez votre compte', desc: 'Inscription gratuite en 2 minutes, par email ou avec votre carte CPS via Pro Santé Connect. Le numéro RPPS n\'est demandé que si votre profession en possède un.' },
-  { num: '2', titre: 'Complétez votre profil', desc: 'Téléversez vos documents (diplôme, pièce d\'identité — assurance RCP pour les libéraux). Vérification automatique, en général en quelques minutes.' },
+  { num: '2', titre: 'Complétez votre profil', desc: 'Téléversez vos documents (diplôme, pièce d\'identité — assurance RCP pour les libéraux). Les contrôles automatiques accélèrent le dossier ; les cas réglementaires sensibles passent en revue humaine.' },
   { num: '3', titre: 'Postulez aux missions', desc: 'Parcourez les missions disponibles près de chez vous et postulez en un clic.' },
 ];
 

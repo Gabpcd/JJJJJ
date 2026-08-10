@@ -75,21 +75,21 @@ export function MesDPAEContent() {
   return (
     <div>
       <p className="text-sm text-muted-foreground mb-4">
-        Déclarations Préalables à l'Embauche (DPAE) générées par tes établissements pour tes contrats CDD signés.
+        Suivi des Déclarations Préalables à l'Embauche (DPAE) que tes établissements doivent transmettre à l'URSSAF pour tes missions salariées.
       </p>
 
       {/* KPIs */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
         <div className="rounded-2xl border-2 border-primary/30 bg-primary/5 p-4">
-          <p className="text-xs font-semibold text-foreground">Total contrats CDD signés</p>
+          <p className="text-xs font-semibold text-foreground">Total contrats salariés signés</p>
           <p className="text-2xl font-bold text-primary tabular-nums mt-1">{dpae.length}</p>
         </div>
         <div className="rounded-2xl border-2 border-success/30 bg-success/5 p-4">
-          <p className="text-xs font-semibold text-foreground">DPAE validées</p>
+          <p className="text-xs font-semibold text-foreground">Transmission confirmée</p>
           <p className="text-2xl font-bold text-success tabular-nums mt-1">{nbValidees}</p>
         </div>
         <div className="rounded-2xl border-2 border-warning/30 bg-warning/5 p-4">
-          <p className="text-xs font-semibold text-foreground">En attente étab</p>
+          <p className="text-xs font-semibold text-foreground">À confirmer par l'étab</p>
           <p className="text-2xl font-bold text-warning tabular-nums mt-1">{nbEnAttente}</p>
         </div>
       </div>
@@ -134,9 +134,9 @@ export function MesDPAEContent() {
               <EmptyState
                 icone={<FileCheck2 />}
                 mascotte="empty"
-                titre={dpae.length === 0 ? 'Aucun contrat CDD signé' : 'Aucune DPAE dans cette catégorie'}
+                titre={dpae.length === 0 ? 'Aucun contrat salarié signé' : 'Aucune DPAE dans cette catégorie'}
                 description={dpae.length === 0
-                  ? "Les DPAE apparaîtront ici une fois un contrat CDD signé avec un établissement."
+                  ? "Les DPAE apparaîtront ici une fois un contrat salarié signé avec un établissement."
                   : 'Changez de filtre pour voir d\'autres DPAE.'}
               />
             )}
@@ -196,9 +196,10 @@ export function MesDPAEContent() {
       <div className="rounded-xl bg-muted/30 border border-border p-4 text-xs text-muted-foreground mt-6">
         <p className="font-semibold text-foreground mb-1">À propos des DPAE</p>
         <ul className="list-disc list-inside space-y-1">
-          <li>La DPAE (Déclaration Préalable à l'Embauche) est obligatoire pour tout contrat CDD/SALARIE. L'établissement la transmet à l'URSSAF dans les 8 jours avant le début de mission.</li>
-          <li>Tu dois avoir complété ton <strong>profil DPAE</strong> (sexe, lieu de naissance, nationalité, NIR) pour que l'établissement puisse générer la déclaration.</li>
-          <li>Une fois transmise, l'établissement saisit le numéro URSSAF retour. Tu le retrouves ici.</li>
+          <li>La DPAE est obligatoire avant toute embauche salariée. L'établissement peut la transmettre à l'URSSAF au plus tôt 8 jours avant le début de mission et doit le faire avant la prise de poste.</li>
+          <li>Tu dois avoir complété ton <strong>profil DPAE</strong> (sexe, lieu de naissance, nationalité, NIR) pour que l'établissement puisse préparer les données.</li>
+          <li>Jolene prépare et suit les informations ; l'établissement reste responsable de la transmission effective à l'URSSAF.</li>
+          <li>Une fois transmise, l'établissement saisit le numéro URSSAF de retour. Tu le retrouves ici.</li>
         </ul>
         <button
           onClick={() => navigate('/soignant/profil')}

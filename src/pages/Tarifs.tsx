@@ -6,10 +6,10 @@ import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 
 const INCLUS = [
   'Publication de missions illimitée',
-  'Soignants vérifiés (identité, diplôme, RPPS et pièces requises par la mission)',
+  'Identité professionnelle et pièces réglementaires adaptées à la mission vérifiées',
   'Contrats générés et signés électroniquement',
   'Pointage GPS et suivi des présences',
-  'Facturation automatique (Chorus Pro pour le secteur public)',
+  'Documents de facturation par période et suivi Chorus Pro pour le secteur public',
   'Aucun abonnement, aucun frais caché',
 ];
 
@@ -21,7 +21,7 @@ export default function Tarifs() {
     <>
       <SEOHead
         title="Tarifs Jolene | Commission de 15 % HT (18 % TTC)"
-        description="Une commission de 15 % HT, soit 18 % TTC avec la TVA de 20 %, sur le montant de la mission. Sans abonnement ; taux HT négocié possible pour les groupes."
+        description="Une commission de 15 % HT, soit 18 % TTC avec une TVA de 20 %, sur les honoraires HT libéraux ou la rémunération brute salariée validée. Sans abonnement."
         url="https://jolene.app/tarifs"
       />
       <div className="min-h-[100dvh] bg-background flex flex-col">
@@ -42,7 +42,7 @@ export default function Tarifs() {
               Nos tarifs — Transparence totale
             </h1>
             <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-              Une commission unique sur le montant de la mission. Pas d'abonnement, pas de frais caché, pas de surprise.
+              Une commission unique sur la base financière validée de la mission. Pas d'abonnement.
             </p>
           </div>
 
@@ -51,7 +51,7 @@ export default function Tarifs() {
             <p className="text-6xl font-black text-primary mb-1">15 % HT</p>
             <p className="text-base font-semibold text-foreground mb-2">soit 18 % TTC avec TVA à 20 %</p>
             <p className="text-sm text-muted-foreground mb-8">
-              Commission ajoutée au montant brut dû au soignant et facturée à l'établissement.
+              Commission ajoutée aux honoraires HT d'une mission libérale ou à la rémunération brute contractuelle d'une mission salariée, et facturée à l'établissement ; elle ne réduit ni les honoraires ni la base salariale du soignant.
               <br />Taux HT négocié possible pour les groupes — <a href="mailto:support@jolene.app" className="text-primary underline">contactez-nous</a>.
             </p>
             <ul className="text-left max-w-md mx-auto space-y-2.5">
@@ -79,7 +79,7 @@ export default function Tarifs() {
         </main>
 
         <footer className="py-8 text-center text-sm text-muted-foreground border-t border-border bg-card">
-          <p>© 2026 Jolene SAS — Conforme RGPD · Code du Travail</p>
+          <p>© 2026 Jolene SAS — Protection des données · cadre contractuel traçable</p>
         </footer>
       </div>
     </>

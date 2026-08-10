@@ -12,7 +12,7 @@ const jalons = [
   { heures: '800 h', titre: 'Premier quart du parcours', desc: 'Votre compteur progresse à chaque mission validée — suivi heure par heure depuis votre tableau de bord.' },
   { heures: '1 600 h', titre: 'Mi-parcours', desc: "Vous pouvez déclarer vos heures effectuées hors Jolene (justificatifs à l'appui) pour compléter votre compteur." },
   { heures: '2 400 h', titre: 'Dernière ligne droite', desc: 'Préparez vos démarches : Ordre, CPAM, URSSAF, assurance RCP, compte professionnel — guidées étape par étape.' },
-  { heures: '3 200 h', titre: 'Éligibilité atteinte', desc: 'Vous justifiez des heures requises par la convention nationale — attestation de vos heures Jolene disponible.' },
+  { heures: '3 200 h', titre: 'Dossier d’expérience à déposer', desc: 'Vous disposez du volume horaire de référence ; la CPAM contrôle encore la période, la nature des structures et les justificatifs.' },
 ];
 
 const etapesInstallation = [
@@ -24,10 +24,10 @@ const etapesInstallation = [
 ];
 
 const faq = [
-  { q: 'Combien de temps faut-il pour atteindre 3 200 heures ?', a: 'En effectuant des remplacements réguliers via Jolene, vous pouvez atteindre 3 200 heures en 18 à 24 mois. Notre tableau de bord vous permet de suivre votre progression en temps réel.' },
+  { q: 'Combien de temps faut-il pour atteindre 3 200 heures ?', a: '3 200 heures correspondent à 24 mois d’expérience à temps plein, mais la durée calendaire dépend de votre activité. Jolene suit les heures déclarées et validées ; la CPAM reste seule compétente pour reconnaître les périodes au regard du conventionnement.' },
   { q: 'Les heures effectuées en dehors de Jolene comptent-elles ?', a: 'Oui. Vous pouvez déclarer vos heures externes en fournissant les justificatifs (attestations employeur, bulletins de paie). Elles sont vérifiées sur justificatifs avant d\'être ajoutées à votre compteur.' },
   { q: "Comment Jolene m'aide-t-il à passer en libéral ?", a: "Jolene suit votre compteur 3 200 heures en temps réel (missions Jolene + heures externes déclarées), vous fournit une attestation de vos heures et vous guide pas à pas dans les démarches d'installation (Ordre, CPAM, URSSAF, RCP, banque)." },
-  { q: 'Faut-il un diplôme spécifique pour s\'installer en libéral ?', a: 'Vous devez être titulaire du Diplôme d\'État d\'Infirmier (DEI) et justifier de 3 200 heures d\'exercice en tant que salarié sur les 6 dernières années (ou 2 400h sur 4 ans dans certains cas).' },
+  { q: 'Faut-il un diplôme spécifique pour s\'installer en libéral ?', a: 'Pour une première installation conventionnée, l’Assurance Maladie exige notamment le diplôme d’État et, dans les 6 années précédentes, soit 24 mois (3 200 h) en structure de soins généraux, soit 18 mois (2 400 h) dans cette structure complétés par 6 mois (800 h ou 109 jours) de remplacement conventionné. D’autres règles s’appliquent selon la zone et la situation.' },
   { q: "Jolene m'accompagne-t-il après l'installation ?", a: "Oui. Une fois installé·e en libéral, vous continuez d'accéder aux missions Jolene ouvertes à l'exercice libéral, avec la facturation de vos honoraires gérée par la plateforme." },
 ];
 
@@ -50,7 +50,7 @@ export default function InfirmiereLiberal() {
           <div className="max-w-4xl mx-auto px-4">
             <h2 className="text-2xl md:text-3xl font-bold text-foreground text-center mb-6">Le parcours vers le libéral</h2>
             <p className="text-center text-muted-foreground max-w-2xl mx-auto mb-10">
-              Pour exercer en libéral, un(e) infirmier(ère) doit justifier de <strong className="text-foreground">3 200 heures d'exercice salarié</strong> sur les 6 dernières années. Jolene vous aide à atteindre cet objectif en vous proposant des missions de remplacement et en suivant votre progression heure par heure.
+              Pour une première installation libérale conventionnée, le parcours de référence comprend <strong className="text-foreground">24 mois, soit 3 200 heures d'expérience</strong> dans une structure de soins généraux au cours des 6 dernières années. Une voie alternative combine 2 400 heures en structure et 800 heures de remplacement conventionné. Jolene suit les heures justifiées ; leur recevabilité finale relève de la CPAM.
             </p>
             <div className="bg-card border border-border rounded-xl p-6 md:p-8">
               <div className="relative">
@@ -78,7 +78,7 @@ export default function InfirmiereLiberal() {
             <div className="grid md:grid-cols-3 gap-4">
               <div className="bg-card border border-border rounded-xl p-5 text-center">
                 <p className="text-sm font-semibold text-foreground mb-2">Compteur en temps réel</p>
-                <p className="text-xs text-muted-foreground">Chaque mission validée alimente votre compteur 3 200 h, visible heure par heure depuis votre tableau de bord.</p>
+                <p className="text-xs text-muted-foreground">Chaque mission éligible et validée alimente votre suivi, avec sa période et son justificatif. Le compteur ne vaut pas décision de la CPAM.</p>
               </div>
               <div className="bg-card border border-border rounded-xl p-5 text-center">
                 <p className="text-sm font-semibold text-foreground mb-2">Heures externes comptabilisées</p>

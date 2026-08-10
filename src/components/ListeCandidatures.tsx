@@ -150,6 +150,7 @@ export function ListeCandidatures({
   const [candidatureAConfirmer, setCandidatureAConfirmer] = useState<any | null>(null);
   const [planningConfirmation, setPlanningConfirmation] = useState<CreneauExact[]>([]);
   const [alerteReconfirmation, setAlerteReconfirmation] = useState<string | null>(null);
+  const [cadreEtudiantConfirme, setCadreEtudiantConfirme] = useState(false);
 
   const verificationInitiale = verifierPlanningExact(
     missionCreneaux,
@@ -216,6 +217,7 @@ export function ListeCandidatures({
     setCandidatureAConfirmer(null);
     setPlanningConfirmation([]);
     setAlerteReconfirmation(null);
+    setCadreEtudiantConfirme(false);
   };
 
   const ouvrirConfirmationAcceptation = async (candidatureId: string) => {
@@ -260,7 +262,9 @@ export function ListeCandidatures({
         p_candidature_id: candidatureId,
         p_decision: 'ACCEPTEE',
         p_creneaux_confirmes: planningRelu.map(({ debut, fin }) => ({ debut, fin })) as any,
-        p_motif: null,
+        p_motif: candidatureAConfirmer?.soignant?.est_etudiant
+          ? 'CADRE_ETUDIANT_AS_CONFIRME'
+          : null,
       });
       if (error) throw error;
       if (data?.error) {
@@ -334,12 +338,13 @@ export function ListeCandidatures({
     );
   }
 
-  // Une candidature issue d'un super-like porte ce message système.
-  const estSuperLike = (c: any) => (c.message || '').includes('super-like');
+  // Les candidatures créées avant le remplacement des super-likes par les
+  // favoris conservent leur ancien marqueur système pour l'historique.
+  const estPrioriteHistorique = (c: any) => (c.message || '').includes('super-like');
   const enAttente = candidatures
     .filter(c => c.statut === 'EN_ATTENTE')
-    // Super-likes en tête (tri stable : conserve l'ordre cree_le au sein de chaque groupe)
-    .sort((a, b) => (estSuperLike(b) ? 1 : 0) - (estSuperLike(a) ? 1 : 0));
+    // Conserve le traitement promis au moment de l'ancienne candidature.
+    .sort((a, b) => (estPrioriteHistorique(b) ? 1 : 0) - (estPrioriteHistorique(a) ? 1 : 0));
   const traitees = candidatures.filter(c => c.statut !== 'EN_ATTENTE');
 
   return (
@@ -372,14 +377,14 @@ export function ListeCandidatures({
             </span>
           </p>
           {enAttente.map((c: any) => (
-            <div key={c.id} className={`card-base ${estSuperLike(c) ? 'border-2 border-amber-400 bg-amber-50/30 dark:bg-amber-950/10' : 'border-primary/20'}`}>
+            <div key={c.id} className={`card-base ${estPrioriteHistorique(c) ? 'border-2 border-amber-400 bg-amber-50/30 dark:bg-amber-950/10' : 'border-primary/20'}`}>
               <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
                 <div className="flex-1 min-w-0">
                   <p className="font-semibold text-sm text-foreground flex items-center gap-1.5 flex-wrap">
                     👤 {c.soignant?.prenom} {c.soignant?.nom}
-                    {estSuperLike(c) && (
-                      <span className="badge-base text-[10px] bg-gradient-celebrate text-white font-bold" title="Ce soignant a montré un fort intérêt (super-like)">
-                        ⭐ Super-like
+                    {estPrioriteHistorique(c) && (
+                      <span className="badge-base text-[10px] bg-gradient-celebrate text-white font-bold" title="Candidature prioritaire créée avec l’ancienne version du matching">
+                        ⭐ Priorité historique
                       </span>
                     )}
                     {c.soignant?.profession && (
@@ -536,6 +541,21 @@ export function ListeCandidatures({
               <p className="text-xs text-muted-foreground">
                 En confirmant, ce soignant sera assigné à l’ensemble de ce planning.
               </p>
+              {candidatureAConfirmer?.soignant?.est_etudiant && (
+                <label className="flex items-start gap-2 rounded-xl border border-violet-300 bg-violet-50 p-3 text-xs text-violet-950 dark:border-violet-800 dark:bg-violet-950/30 dark:text-violet-100">
+                  <input
+                    type="checkbox"
+                    checked={cadreEtudiantConfirme}
+                    onChange={(event) => setCadreEtudiantConfirme(event.target.checked)}
+                    className="mt-0.5 h-4 w-4"
+                  />
+                  <span>
+                    Je confirme que cette mission est salariée dans un établissement de santé ou médico-social
+                    et que l’étudiant exercera temporairement comme aide-soignant au sein d’une équipe comportant
+                    au moins un infirmier diplômé d’État pendant ses activités.
+                  </span>
+                </label>
+              )}
               {alerteReconfirmation && (
                 <div className="rounded-xl border border-warning/30 bg-warning/5 p-3 text-xs font-medium text-warning" role="alert">
                   {alerteReconfirmation}
@@ -550,7 +570,9 @@ export function ListeCandidatures({
             <BoutonY2K
               variant="primary"
               onClick={() => void confirmerAcceptation()}
-              disabled={Boolean(traitement) || planningConfirmation.length === 0}
+              disabled={Boolean(traitement)
+                || planningConfirmation.length === 0
+                || (Boolean(candidatureAConfirmer?.soignant?.est_etudiant) && !cadreEtudiantConfirme)}
               loading={Boolean(traitement)}
             >
               Confirmer et assigner

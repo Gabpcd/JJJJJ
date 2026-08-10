@@ -6,7 +6,7 @@ import { useNotification } from '@/contexts/NotificationContext';
 interface Props {
   contratId: string;
   typeContrat: string | null | undefined;
-  /** Numéro DPAE déjà enregistré (si oui, masque le bouton "Générer"). */
+  /** Numéro DPAE déjà enregistré (si oui, masque le bouton de préparation). */
   dpaeNumero?: string | null;
 }
 
@@ -14,8 +14,8 @@ interface Props {
  * Composant DPAE (PR 6 Sprint 1).
  *
  * Affiche pour les contrats CDD :
- *   - Si pas encore généré : bouton "Générer DPAE pré-remplie" qui appelle
- *     fn_generer_donnees_dpae et affiche le payload à copier sur
+ *   - Si pas encore transmise : bouton "Préparer les données DPAE" qui appelle
+ *     fn_generer_donnees_dpae et affiche les données à reporter sur
  *     net-entreprises.fr.
  *   - Après soumission URSSAF : champ pour saisir le n° DPAE retourné,
  *     enregistré via fn_enregistrer_numero_dpae.
@@ -47,12 +47,12 @@ export function DPAEStatus({ contratId, typeContrat, dpaeNumero }: Props) {
       if (error) throw error;
       const result = data as any;
       if (!result?.success) {
-        afficherNotification({ type: 'erreur', message: result?.error || 'Erreur génération DPAE' });
+        afficherNotification({ type: 'erreur', message: result?.error || 'Préparation DPAE impossible' });
         return;
       }
       setPayload(result);
     } catch (err: any) {
-      afficherNotification({ type: 'erreur', message: err?.message || 'Erreur génération DPAE' });
+      afficherNotification({ type: 'erreur', message: err?.message || 'Préparation DPAE impossible' });
     } finally {
       setLoading(false);
     }
@@ -113,7 +113,7 @@ export function DPAEStatus({ contratId, typeContrat, dpaeNumero }: Props) {
       <div className="flex items-start gap-2">
         <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
         <div className="flex-1">
-          <p className="font-semibold text-amber-900 dark:text-amber-200">DPAE obligatoire — Mission CDD</p>
+          <p className="font-semibold text-amber-900 dark:text-amber-200">DPAE obligatoire — Mission salariée</p>
           <p className="text-xs text-amber-800 dark:text-amber-300 mt-1">
             La Déclaration Préalable à l'Embauche doit être effectuée auprès de l'URSSAF
             avant la prise de poste (art. R1221-2 Code travail).
@@ -129,7 +129,7 @@ export function DPAEStatus({ contratId, typeContrat, dpaeNumero }: Props) {
           className="btn-primary w-full disabled:opacity-50 inline-flex items-center justify-center gap-2"
         >
           {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
-          Générer DPAE pré-remplie
+          Préparer les données DPAE
         </button>
       )}
 
@@ -154,14 +154,14 @@ export function DPAEStatus({ contratId, typeContrat, dpaeNumero }: Props) {
               className="btn-primary inline-flex items-center justify-center gap-2 flex-1"
             >
               <ExternalLink className="h-4 w-4" />
-              Aller sur Net-Entreprises
+              Transmettre sur Net-Entreprises
             </a>
           </div>
 
           <div className="border-t border-amber-200 dark:border-amber-800 pt-3 space-y-2">
             <label className="block">
               <span className="text-xs font-semibold text-amber-900 dark:text-amber-200">
-                Une fois la DPAE soumise, saisissez le n° retourné par URSSAF :
+                Après transmission par vos soins, saisissez le n° retourné par l'URSSAF :
               </span>
               <input
                 type="text"

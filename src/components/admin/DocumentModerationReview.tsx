@@ -341,6 +341,7 @@ export function DocumentValidationDialog({ document, typeLabel, loading, onCance
   const [complet, setComplet] = useState(false);
   const [typeConfirme, setTypeConfirme] = useState(false);
   const [antifraude, setAntifraude] = useState(false);
+  const [conditionsScolarite, setConditionsScolarite] = useState(false);
   const [overrideConfirme, setOverrideConfirme] = useState(false);
   const [raisonOverride, setRaisonOverride] = useState('');
 
@@ -364,6 +365,7 @@ export function DocumentValidationDialog({ document, typeLabel, loading, onCance
       && complet
       && typeConfirme
       && antifraude
+      && (document.type_document !== 'ATTESTATION_SCOLARITE' || conditionsScolarite)
       && specificComplete
       && (!overrideRequired || (overrideConfirme && raisonOverride.trim().length >= 30)),
   );
@@ -390,6 +392,9 @@ export function DocumentValidationDialog({ document, typeLabel, loading, onCance
         iban: iban || null,
         scolarite_formation: formation || null,
         scolarite_annee_validee: anneeValidee || null,
+        conditions_scolarite_confirmees: document.type_document === 'ATTESTATION_SCOLARITE'
+          ? conditionsScolarite
+          : null,
         licence_remplacement_specialite: specialiteLicence || null,
         employeur_extrait: employeur || null,
         periode_debut_extraite: periodeDebut || null,
@@ -438,6 +443,14 @@ export function DocumentValidationDialog({ document, typeLabel, loading, onCance
           <ReviewCheckbox checked={complet} onChange={setComplet} label="Le document est complet et toutes les pages utiles ont été examinées." disabled={loading} />
           <ReviewCheckbox checked={typeConfirme} onChange={setTypeConfirme} label={`Le fichier est bien un document de type « ${typeLabel} ».`} disabled={loading} />
           <ReviewCheckbox checked={antifraude} onChange={setAntifraude} label="J’ai contrôlé les signes de retouche, montage, incohérence de police, photo, numéros et dates." disabled={loading} />
+          {document.type_document === 'ATTESTATION_SCOLARITE' && (
+            <ReviewCheckbox
+              checked={conditionsScolarite}
+              onChange={setConditionsScolarite}
+              label="J’ai vérifié les conditions réglementaires correspondant à cette formation (admission, crédits/ECTS, stages, unités d’enseignement, AFGSU ou certificat ordinal lorsqu’ils sont requis) ; l’année déclarée seule ne suffit pas."
+              disabled={loading}
+            />
+          )}
         </fieldset>
 
         {overrideRequired && (

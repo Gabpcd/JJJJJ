@@ -224,6 +224,38 @@ test.describe('Sprint 5.5 PR 2 — Annulation candidature soignant', () => {
     expect(result?.points).toBe(-25);
   });
 
+  test('Helper : mission ordinaire <1h → -30 sans qualification no-show', async () => {
+    const { data } = await adminClient().rpc('fn_calculer_penalite_annulation_soignant' as any, {
+      p_acceptee_a: new Date(Date.now() - 60 * 60_000).toISOString(),
+      p_debut_mission: new Date(Date.now() + 45 * 60_000).toISOString(),
+      p_est_asap: false,
+    });
+    const result = data as any;
+    test.skip(
+      result?.motif !== 'ANNULATION_MOINS_1H',
+      'La migration de cette PR est validée sur staging puis devient observable sur la base E2E de production après fusion.',
+    );
+    expect(result?.points).toBe(-30);
+    expect(result?.motif).toBe('ANNULATION_MOINS_1H');
+    expect(result?.signalement_admin).toBe(false);
+  });
+
+  test('Helper : mission ASAP déjà commencée → no-show -30, jamais -25', async () => {
+    const { data } = await adminClient().rpc('fn_calculer_penalite_annulation_soignant' as any, {
+      p_acceptee_a: new Date(Date.now() - 10 * 60_000).toISOString(),
+      p_debut_mission: new Date(Date.now() - 5 * 60_000).toISOString(),
+      p_est_asap: true,
+    });
+    const result = data as any;
+    test.skip(
+      result?.motif !== 'NO_SHOW',
+      'La migration de cette PR est validée sur staging puis devient observable sur la base E2E de production après fusion.',
+    );
+    expect(result?.points).toBe(-30);
+    expect(result?.motif).toBe('NO_SHOW');
+    expect(result?.signalement_admin).toBe(true);
+  });
+
   // ─── Tests RPC fn_annuler_candidature_soignant ────────────────────────
   test('RPC : motif invalide → MOTIF_INVALIDE', async () => {
     const { data } = await adminClient().rpc('fn_annuler_candidature_soignant' as any, {

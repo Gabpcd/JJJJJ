@@ -9,7 +9,7 @@ const TOC = [
   { id: 'art4', label: 'Article 4 — Fonctionnement de la Plateforme' },
   { id: 'art5', label: 'Article 5 — Exclusion de responsabilité' },
   { id: 'art6', label: 'Article 6 — Propriété intellectuelle' },
-  { id: 'art7', label: 'Article 7 — Score de fiabilité et parcours 3 200 heures' },
+  { id: 'art7', label: 'Article 7 — Score de fiabilité et parcours professionnel' },
   { id: 'art8', label: 'Article 8 — Résiliation' },
   { id: 'art9', label: 'Article 9 — Droit applicable' },
 ];
@@ -19,7 +19,7 @@ export default function PageCGU() {
   return (
     <LayoutLegal
       titre="Conditions Générales d'Utilisation"
-      dateMaj="14 juillet 2026"
+      dateMaj="10 août 2026"
       toc={TOC}
       seoDescription="Conditions Générales d'Utilisation de Jolene, plateforme de staffing médical. Inscription, vérification, pointage, score de fiabilité et résiliation."
     >
@@ -55,17 +55,18 @@ export default function PageCGU() {
         <h2 className="text-xl sm:text-2xl font-bold text-foreground mb-4">Article 3 — Inscription et vérification</h2>
 
         <h3 className="text-lg font-semibold text-foreground mt-6 mb-2">3.1 — Inscription</h3>
-        <p className="mb-3">L'inscription sur la Plateforme est gratuite pour les Soignants. Elle requiert la fourniture d'informations exactes et à jour : nom, prénom, adresse e-mail, numéro de téléphone, profession, et numéro RPPS ou ADELI le cas échéant.</p>
+        <p className="mb-3">L'inscription sur la Plateforme est gratuite pour les Soignants. Elle requiert la fourniture d'informations exactes et à jour : nom, prénom, adresse e-mail, numéro de téléphone, profession et numéro RPPS lorsqu'il existe. Les anciens identifiants ADELI ne sont conservés que comme données historiques depuis la bascule des professions concernées vers le RPPS.</p>
         <p className="mb-3">Les Établissements s'inscrivent en renseignant leur raison sociale, numéro SIRET, numéro FINESS, adresse et coordonnées du contact principal.</p>
         <p>Toute inscription implique l'acceptation sans réserve des présentes CGU.</p>
 
         <h3 className="text-lg font-semibold text-foreground mt-6 mb-2">3.2 — Vérification des Soignants</h3>
         <p className="mb-3">Avant toute première mission, chaque Soignant fait l'objet d'une vérification :</p>
         <ul className="list-disc pl-6 space-y-2 mb-3">
-          <li><strong>Vérification RPPS automatique</strong> : le numéro RPPS est vérifié en temps réel via l'API officielle de l'Annuaire Santé (annuaire.sante.fr). La Plateforme compare le nom, le prénom et la profession déclarés avec les données du répertoire.</li>
+          <li><strong>Vérification RPPS automatique</strong> : au-delà du format à 11 chiffres, le numéro est vérifié en temps réel via l'API FHIR officielle de l'Annuaire Santé. La Plateforme compare l'identité, la profession et la situation active avec les données du répertoire.</li>
           <li><strong>Documents obligatoires</strong> : le Soignant doit téléverser les documents requis pour sa profession et pour le contrat de la mission (pièce d'identité, diplôme, identifiant professionnel lorsqu'il existe et, pour le libéral, attestation d'assurance RCP). Les documents font l'objet d'une vérification manuelle ou automatisée avant l'attribution.</li>
           <li><strong>Vérification automatisée par intelligence artificielle</strong> : certains documents téléversés (pièce d'identité, diplômes, attestations) peuvent être analysés par un système d'intelligence artificielle (IA) fourni par un prestataire tiers (Anthropic Claude). Cette analyse vise à vérifier l'authenticité, la lisibilité et la concordance des informations avec les données déclarées. Aucune décision automatisée n'est prise sans possibilité de recours : en cas de rejet automatique, le Soignant peut demander une revue manuelle par l'équipe Jolene. Les documents sont transmis de manière chiffrée ; les conditions de traitement et de conservation applicables sont celles du contrat et de la configuration en vigueur avec le prestataire.</li>
           <li><strong>Vérification d'identité</strong> : l'Éditeur se réserve le droit de demander une vérification d'identité complémentaire (vidéo, selfie avec pièce d'identité) en cas de doute.</li>
+          <li><strong>Étudiants en santé</strong> : l'année déclarée ne suffit pas. L'attestation récente et les crédits, stages, unités d'enseignement, formations d'urgence ou autres justificatifs prévus pour le cursus sont revus humainement avant toute affectation.</li>
         </ul>
         <p>Un dossier documentaire incomplet peut permettre au Soignant de candidater à certaines Missions salariées lorsque les informations minimales requises sont vérifiées. En revanche, aucune affectation définitive ni aucun démarrage de Mission ne sont possibles tant que toutes les preuves exigées pour la profession et le régime de la Mission ne sont pas vérifiées et en cours de validité.</p>
       </section>
@@ -76,6 +77,7 @@ export default function PageCGU() {
 
         <h3 className="text-lg font-semibold text-foreground mt-6 mb-2">4.1 — Publication et acceptation de missions</h3>
         <p className="mb-3">L'Établissement publie des missions en précisant les dates, horaires, service, profession requise et taux horaire. Les missions peuvent être publiées unitairement ou en série (récurrence). Les Soignants éligibles reçoivent une notification et peuvent postuler. L'Établissement sélectionne le Soignant de son choix.</p>
+        <p className="mb-3">Lorsqu'un étudiant est pré-éligible à des activités temporaires d'aide-soignant, l'affectation est limitée au salariat dans un établissement de santé ou médico-social éligible. L'Établissement confirme avant l'assignation que l'étudiant exercera au sein d'une équipe comportant au moins un infirmier diplômé d'État pendant ces activités.</p>
 
         <h3 className="text-lg font-semibold text-foreground mt-6 mb-2">4.2 — Contrat de mission</h3>
         <p className="mb-3">Une fois la mission acceptée par les deux parties, un contrat de mission est automatiquement généré par la Plateforme. Ce contrat reprend les éléments essentiels : identité des parties, dates, horaires, taux horaire, conditions de la mission.</p>
@@ -83,14 +85,14 @@ export default function PageCGU() {
           <p>La signature électronique du contrat par les deux parties est <strong>obligatoire avant tout pointage</strong>. Aucun soignant ne peut débuter une mission sans contrat signé.</p>
         </div>
 
-        <h3 className="text-lg font-semibold text-foreground mt-6 mb-2">4.3 — Moteur de conformité au droit du travail</h3>
-        <p className="mb-3">La Plateforme intègre un moteur de conformité automatique qui vérifie en temps réel le respect des dispositions légales suivantes :</p>
+        <h3 className="text-lg font-semibold text-foreground mt-6 mb-2">4.3 — Garde-fous de planning et de tarification</h3>
+        <p className="mb-3">La Plateforme applique des contrôles techniques sur les données de missions connues de Jolene. Ils aident les parties à respecter les règles ci-dessous, sans remplacer leur vérification de la situation complète du Soignant ni un conseil juridique :</p>
         <ul className="list-disc pl-6 space-y-2 mb-3">
           <li><strong>Repos quotidien de 11 heures</strong> (article L.3131-1 du Code du travail) : la Plateforme bloque toute mission qui ne respecterait pas un repos minimum de 11 heures consécutives entre deux missions.</li>
           <li><strong>Plafond hebdomadaire de 48 heures</strong> (article L.3121-20 du Code du travail) : la Plateforme empêche l'acceptation d'une mission qui porterait le total hebdomadaire au-delà de 48 heures de travail effectif.</li>
           <li><strong>Plafond Rist</strong> : pour les missions en établissement public, la Plateforme vérifie que le taux horaire proposé respecte les plafonds réglementaires applicables (décret n° 2017-1605 du 24 novembre 2017, modifié).</li>
         </ul>
-        <p>L'Établissement et le Soignant sont informés par notification en cas de blocage. Des dérogations peuvent être accordées dans les cas prévus par la loi (urgence sanitaire, article L.3131-15 du CSP).</p>
+        <p>L'Établissement et le Soignant sont informés en cas de blocage. Une situation dérogatoire ne peut être traitée qu'après vérification de son fondement et des autorisations applicables ; l'utilisateur ne peut pas désactiver lui-même ces garde-fous.</p>
 
         <h3 className="text-lg font-semibold text-foreground mt-6 mb-2">4.4 — Pointage et géolocalisation</h3>
         <p className="mb-3">Le pointage (arrivée et départ) s'effectue via l'application mobile. La Plateforme demande les coordonnées GPS au moment du pointage lorsque le Soignant l'autorise. Une localisation peut aussi être demandée si l'utilisateur choisit volontairement « me localiser » pour renseigner son profil ou l'adresse de son établissement. Il n'y a aucun suivi continu ni en arrière-plan.</p>
@@ -141,7 +143,7 @@ export default function PageCGU() {
 
       {/* Article 7 */}
       <section id="art7">
-        <h2 className="text-xl sm:text-2xl font-bold text-foreground mb-4">Article 7 — Score de fiabilité et parcours 3 200 heures</h2>
+        <h2 className="text-xl sm:text-2xl font-bold text-foreground mb-4">Article 7 — Score de fiabilité et parcours professionnel</h2>
 
         <h3 className="text-lg font-semibold text-foreground mt-6 mb-2">7.1 — Score de fiabilité</h3>
         <p className="mb-3">Chaque Soignant dispose d'un score de fiabilité (0 à 100) calculé automatiquement par la Plateforme selon les critères suivants :</p>
@@ -149,13 +151,13 @@ export default function PageCGU() {
           <li>Ponctualité aux pointages (arrivée et départ)</li>
           <li>Complétude et validité des documents obligatoires</li>
           <li>Nombre de missions réalisées sans incident</li>
-          <li>Absence d'annulations tardives (moins de 48 heures avant le début de la mission)</li>
+          <li>Absence d'annulations tardives, selon des tranches distinctes : mission commencée, moins d'une heure, mission urgente à moins de deux heures, 1 à 12 heures et 12 à 24 heures</li>
         </ul>
         <p className="mb-3">Le score est indicatif et ne constitue pas une notation au sens du droit du travail. Il est visible par le Soignant et par les Établissements consultants son profil.</p>
 
-        <h3 className="text-lg font-semibold text-foreground mt-6 mb-2">7.2 — Parcours 3 200 heures et passage en libéral</h3>
-        <p className="mb-3">Les Soignants ayant cumulé au moins 3 200 heures de missions (sur la Plateforme et/ou justifiées par des attestations d'employeurs antérieurs) peuvent initier une demande de passage en exercice libéral via le programme « Accompagnement vers l'exercice libéral ».</p>
-        <p>Ce programme propose un accompagnement administratif (guide personnalisé, outils partenaires) et une prise en charge partielle des frais d'installation, selon les conditions définies dans les CGV.</p>
+        <h3 className="text-lg font-semibold text-foreground mt-6 mb-2">7.2 — Accompagnement vers l'exercice libéral</h3>
+        <p className="mb-3">La Plateforme peut suivre les heures et justificatifs utiles au parcours du Soignant. Le repère de 3 200 heures ne concerne que certaines professions infirmières lorsqu'il est applicable. Chaque autre profession reste soumise à ses propres conditions de diplôme, expérience, inscription, autorisation et mode d'exercice.</p>
+        <p>Le compteur et les guides Jolene sont des outils d'accompagnement : ils ne confèrent jamais, à eux seuls, le droit d'exercer en libéral. Les cas sensibles et justificatifs externes font l'objet d'une revue avant toute ouverture du parcours correspondant.</p>
       </section>
 
       {/* Article 8 */}

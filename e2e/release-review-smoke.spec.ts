@@ -76,7 +76,35 @@ async function connecterCompteReview(page: Page, compte: ReviewAccount) {
   return erreursConsole;
 }
 
+async function verifierSansDebordementHorizontal(page: Page, route: string) {
+  const dimensions = await page.evaluate(() => ({
+    largeurDocument: document.documentElement.scrollWidth,
+    largeurViewport: window.innerWidth,
+  }));
+  expect(
+    dimensions.largeurDocument,
+    `${route} déborde horizontalement sur iPad`,
+  ).toBeLessThanOrEqual(dimensions.largeurViewport + 1);
+}
+
 test.describe('release review — reprise de session iPad', () => {
+  test('les pages publiques critiques restent lisibles sur iPad', async ({ page }) => {
+    for (const route of ['/tarifs', '/cgu', '/cgv', '/mentions-legales', '/confidentialite', '/aide']) {
+      await page.goto(route);
+      await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+      await verifierSansDebordementHorizontal(page, route);
+    }
+  });
+
+  test('l’inscription soignant expose les consentements et champs essentiels sur iPad', async ({ page }) => {
+    await page.goto('/inscription/soignant');
+    await expect(page.getByRole('heading', { name: /Inscription Soignant/i })).toBeVisible();
+    await expect(page.locator('input[type="email"]')).toBeVisible();
+    await expect(page.locator('input[type="password"]').first()).toBeVisible();
+    await expect(page.getByRole('checkbox').first()).toBeVisible();
+    await verifierSansDebordementHorizontal(page, '/inscription/soignant');
+  });
+
   test('le compte établissement review ouvre son tableau de bord', async ({ page }) => {
     const compte = obtenirCompteReview('ETAB', 'etab', /\/etablissement\/tableau-de-bord/);
     test.skip(!compte, 'Identifiants review absents en local ; la CI utilise un fallback explicite.');
@@ -84,6 +112,24 @@ test.describe('release review — reprise de session iPad', () => {
 
     const erreursConsole = await connecterCompteReview(page, compte);
     await expect(page.getByRole('heading').first()).toBeVisible();
+
+    // Reproduire la navigation réelle de l'iPad dans la SPA. Un rechargement
+    // complet ici annule les lectures encore actives du dashboard et WebKit les
+    // remonte à tort comme erreurs « due to access control checks ».
+    const sidebar = page.getByRole('navigation', { name: 'Sidebar' });
+    await sidebar.getByRole('button', { name: 'Publier une mission', exact: true }).click();
+    await expect(page).toHaveURL(/\/etablissement\/missions\/creer$/);
+    await expect(page.getByRole('heading', { name: /Publier une mission/i })).toBeVisible();
+    await expect(page.getByLabel('Intitulé *')).toBeVisible();
+    await expect(page.getByText('Type de contrat proposé')).toBeVisible();
+    await verifierSansDebordementHorizontal(page, '/etablissement/missions/creer');
+
+    await sidebar.getByRole('button', { name: 'Soignants', exact: true }).click();
+    await sidebar.getByRole('button', { name: 'Pool urgence', exact: true }).click();
+    await expect(page).toHaveURL(/\/etablissement\/pool-urgence$/);
+    await page.waitForLoadState('networkidle');
+    await expect(page.getByRole('heading', { name: /Pool d'urgence/i })).toBeVisible();
+    await verifierSansDebordementHorizontal(page, '/etablissement/pool-urgence');
     expect(erreursConsole.filter((message) => !message.includes('favicon'))).toEqual([]);
   });
 
@@ -103,6 +149,16 @@ test.describe('release review — reprise de session iPad', () => {
     await page.waitForLoadState('networkidle');
     await expect(page.getByRole('heading', { name: 'Mes présences' })).toBeVisible();
     await expect(page.getByText(/Votre espace est momentanément indisponible/i)).toHaveCount(0);
+
+    await page.goto('/soignant/mes-documents?tab=justificatifs');
+    await expect(page.getByRole('heading', { name: 'Mes documents' })).toBeVisible();
+    await expect(page.getByRole('tab', { name: 'Justificatifs' })).toBeVisible();
+    await expect(page.getByRole('tab', { name: 'DPAE' })).toBeVisible();
+    await verifierSansDebordementHorizontal(page, '/soignant/mes-documents');
+
+    await page.goto('/soignant/profil');
+    await expect(page.getByRole('heading').first()).toBeVisible();
+    await verifierSansDebordementHorizontal(page, '/soignant/profil');
     expect(erreursConsole.filter((message) => !message.includes('favicon'))).toEqual([]);
   });
 });

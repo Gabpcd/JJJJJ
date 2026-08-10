@@ -58,6 +58,7 @@ export function FormulaireAccord({ litigeId, propositionExistante, roleUtilisate
   const [justification, setJustification] = useState('');
   const [loading, setLoading] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
+  const [modeContreProposition, setModeContreProposition] = useState(false);
 
   async function envoyerProposition() {
     const modifications: Record<string, any> = {};
@@ -67,15 +68,24 @@ export function FormulaireAccord({ litigeId, propositionExistante, roleUtilisate
         afficherNotification({ type: 'erreur', message: 'Horaires arrivée et départ requis.' });
         return;
       }
-      modifications.pointage_arrivee_le = horaireArrivee;
-      modifications.pointage_depart_le = horaireDepart;
-    }
-    if (type === 'MODIFICATION_MONTANT' || type === 'MIXTE') {
-      if (!montantCorrige) {
-        afficherNotification({ type: 'erreur', message: 'Nouveau montant requis.' });
+      const arrivee = new Date(horaireArrivee);
+      const depart = new Date(horaireDepart);
+      if (Number.isNaN(arrivee.getTime()) || Number.isNaN(depart.getTime()) || depart <= arrivee) {
+        afficherNotification({ type: 'erreur', message: 'L’heure de départ doit être postérieure à l’heure d’arrivée.' });
         return;
       }
-      modifications.montant_total_corrige = parseFloat(montantCorrige);
+      // datetime-local n'embarque aucun fuseau. Envoyer un ISO explicite évite
+      // que PostgreSQL interprète l'heure française comme une heure UTC.
+      modifications.pointage_arrivee_le = arrivee.toISOString();
+      modifications.pointage_depart_le = depart.toISOString();
+    }
+    if (type === 'MODIFICATION_MONTANT' || type === 'MIXTE') {
+      const montant = Number(montantCorrige);
+      if (!Number.isFinite(montant) || montant <= 0 || montant > 10_000_000) {
+        afficherNotification({ type: 'erreur', message: 'Saisissez un montant positif valide.' });
+        return;
+      }
+      modifications.montant_total_corrige = montant;
     }
     if (type === 'COMPENSATION_PARTIELLE') {
       const pct = parseFloat(pourcentageCompensation);
@@ -118,6 +128,7 @@ export function FormulaireAccord({ litigeId, propositionExistante, roleUtilisate
       } else {
         afficherNotification({ type: 'succes', message: 'Proposition envoyée. En attente de l\'autre partie.' });
       }
+      setModeContreProposition(false);
       onResolu?.();
     } catch (err: any) {
       afficherNotification({ type: 'erreur', message: err?.message || 'Erreur réseau' });
@@ -187,7 +198,7 @@ export function FormulaireAccord({ litigeId, propositionExistante, roleUtilisate
   }
 
   // === Affichage proposition existante ===
-  if (propositionExistante && propositionExistante.proposeur_role !== roleUtilisateur) {
+  if (propositionExistante && propositionExistante.proposeur_role !== roleUtilisateur && !modeContreProposition) {
     const mods = propositionExistante.modifications || {};
     return (
       <div className="rounded-xl border-2 border-primary/40 bg-primary/5 p-4 space-y-3">
@@ -228,20 +239,19 @@ export function FormulaireAccord({ litigeId, propositionExistante, roleUtilisate
             className="btn-primary flex-1 disabled:opacity-50 inline-flex items-center justify-center gap-2"
           >
             {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-            Accepter — Exécution automatique
+            Accepter la proposition
           </button>
           <button
             disabled={loading}
             className="btn-secondary flex-1 disabled:opacity-50 inline-flex items-center justify-center gap-2"
-            onClick={() => afficherNotification({ type: 'info', message: 'Répondez dans la conversation ci-dessus avec votre propre proposition.' })}
+            onClick={() => setModeContreProposition(true)}
           >
             <X className="h-4 w-4" />
             Refuser / Contre-proposer
           </button>
         </div>
         <p className="text-[10px] text-muted-foreground italic">
-          En acceptant, toutes les modifications listées seront appliquées automatiquement
-          (presences, factures, paiements). Le litige sera clos.
+          En acceptant, les corrections opérationnelles seront appliquées et tracées. Tout mouvement financier reste soumis aux contrôles de sécurité Jolene.
         </p>
       </div>
     );
@@ -250,10 +260,22 @@ export function FormulaireAccord({ litigeId, propositionExistante, roleUtilisate
   // === Formulaire création proposition ===
   return (
     <div className="rounded-xl border border-border bg-card p-4 space-y-3">
-      <h3 className="font-semibold text-foreground">Proposer un accord</h3>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h3 className="font-semibold text-foreground">{modeContreProposition ? 'Faire une contre-proposition' : 'Proposer un accord'}</h3>
+          {modeContreProposition && (
+            <p className="text-xs text-warning mt-1">Cette nouvelle version remplacera la proposition reçue et demandera un nouvel accord à l’autre partie.</p>
+          )}
+        </div>
+        {modeContreProposition && (
+          <button type="button" className="text-xs text-muted-foreground hover:underline" onClick={() => setModeContreProposition(false)}>
+            Revenir à la proposition reçue
+          </button>
+        )}
+      </div>
       <p className="text-xs text-muted-foreground">
         Décrivez précisément la modification convenue. Une fois acceptée par l'autre partie, elle sera
-        appliquée automatiquement (presences, factures, paiements).
+        appliquée aux présences et documents concernés ; un mouvement financier sensible passe par la validation Jolene.
       </p>
 
       <label className="block">
@@ -325,8 +347,8 @@ export function FormulaireAccord({ litigeId, propositionExistante, roleUtilisate
         titre="Envoyer la proposition d'accord ?"
         message={
           type === 'ANNULATION_TOTALE'
-            ? 'Si acceptée, la mission sera annulée et les paiements remboursés automatiquement. Action irréversible.'
-            : 'Si acceptée, les modifications seront appliquées automatiquement (presences, factures, paiements).'
+            ? 'Si elle est acceptée, l’annulation et les documents rectificatifs seront appliqués. Tout remboursement éventuel restera soumis aux contrôles Jolene.'
+            : 'Si elle est acceptée, les corrections seront appliquées et tracées. Tout mouvement financier sensible restera soumis aux contrôles Jolene.'
         }
         labelConfirmer="Envoyer la proposition"
         variante="primaire"

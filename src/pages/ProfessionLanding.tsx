@@ -10,20 +10,20 @@ import { Euro, Clock, ShieldCheck, TrendingUp, Stethoscope, ArrowRight } from 'l
 const avantages = [
   { icon: Euro, titre: 'Rémunération transparente', desc: 'Taux et modalités de paiement affichés avant candidature. Zéro frais pour le soignant.' },
   { icon: Clock, titre: 'Flexibilité des horaires', desc: 'Choisissez vos missions, vos jours et vos créneaux. Vous gardez le contrôle de votre emploi du temps.' },
-  { icon: ShieldCheck, titre: 'Contrats conformes', desc: 'CDD, y compris courts, générés automatiquement et signés électroniquement.' },
-  { icon: TrendingUp, titre: 'Évolution de carrière', desc: 'Missions variées et, pour les professions autorisées en libéral, cumul de vos heures suivi heure par heure vers les 3 200 h.' },
+  { icon: ShieldCheck, titre: 'Cadre contractuel traçable', desc: 'Type de contrat affiché, document généré et signatures électroniques tracées.' },
+  { icon: TrendingUp, titre: 'Évolution de carrière', desc: 'Missions variées et accompagnement vers le libéral selon les conditions propres à chaque profession.' },
 ];
 
 const faqParProfession: Record<string, { q: string; a: string }[]> = {
   'infirmier-ide': [
     { q: 'Quel est le taux horaire moyen pour un IDE intérimaire ?', a: 'Le taux horaire moyen pour un(e) IDE intérimaire se situe entre 25 et 35\u20AC brut de l\'heure, selon l\'établissement (public/privé), la zone géographique et les majorations (nuit, week-end, férié). Sur Jolene, le taux est toujours affiché avant la candidature.' },
     { q: 'Quels documents faut-il pour s\'inscrire en tant qu\'IDE ?', a: 'Vous aurez besoin de votre Diplôme d\'État Infirmier, de votre numéro RPPS et d\'une pièce d\'identité. Une assurance RCP en cours de validité est en plus requise pour les missions libérales.' },
-    { q: 'Les heures sur Jolene comptent-elles pour le passage en libéral ?', a: 'Oui, toutes les heures effectuées via Jolene sont comptabilisées pour le parcours 3 200h. Votre compteur est mis à jour automatiquement après chaque mission validée.' },
+    { q: 'Les heures sur Jolene comptent-elles pour le passage en libéral ?', a: 'Les heures validées sur Jolene alimentent votre suivi. Pour les IDE concernés, elles peuvent contribuer au repère de 3 200 heures, sous réserve des règles et justificatifs applicables ; ce compteur ne remplace aucune autorisation professionnelle.' },
     { q: 'Peut-on choisir entre missions en hôpital et en EHPAD ?', a: 'Absolument. Vous pouvez filtrer les missions par type d\'établissement (hôpital public, clinique privée, EHPAD, SSIAD, HAD, etc.) et ne postuler qu\'aux missions qui vous intéressent.' },
   ],
   'aide-soignant': [
     { q: 'Quel est le salaire d\'un aide-soignant intérimaire ?', a: 'Un(e) aide-soignant(e) intérimaire gagne en moyenne entre 16 et 22\u20AC brut de l\'heure, hors majorations. Les missions de nuit et de week-end sont mieux rémunérées.' },
-    { q: 'Faut-il un RPPS pour s\'inscrire en tant qu\'AS ?', a: 'Non, les aides-soignants ne disposent pas de numéro RPPS — leur identification professionnelle se fait via leur diplôme d\'État (DEAS) et leur carte d\'identité, vérifiés automatiquement lors de l\'inscription.' },
+    { q: 'Faut-il un RPPS pour s\'inscrire en tant qu\'AS ?', a: 'Le RPPS reste optionnel à l’inscription pour les aides-soignants. Si vous disposez déjà d’une identité RPPS, Jolene la vérifie dans l’Annuaire Santé ; le DEAS et la pièce d’identité restent obligatoires.' },
     { q: 'Quels types d\'établissements recrutent des AS ?', a: 'Les EHPAD, hôpitaux publics, cliniques privées, SSIAD et HAD recrutent activement des aides-soignants. Sur Jolene, les EHPAD représentent la majorité des missions AS disponibles.' },
     { q: 'Peut-on cumuler des missions en tant qu\'AS ?', a: 'Oui, vous pouvez accepter plusieurs missions dans différents établissements, tant que les horaires ne se chevauchent pas. Jolene vérifie automatiquement les conflits de planning.' },
   ],

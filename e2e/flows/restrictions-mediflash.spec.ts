@@ -1,14 +1,18 @@
 /**
  * Matrice des modes d'exercice — preuve UI + contrat DB.
  *
- * Activer avec PLAYWRIGHT_MODE_EXERCICE=1. Le compte établissement Playwright
- * doit être une clinique privée validée.
+ * Le compte établissement Playwright est seedé comme clinique privée validée.
+ * En CI, les secrets déjà nécessaires au reste de la recette suffisent : ce
+ * parcours frontend ne doit plus être masqué derrière un drapeau manuel.
  */
 import { test, expect, type Page } from '@playwright/test';
 import { adminClient } from '../helpers/db';
 import { loginAs } from '../helpers/auth';
 
-const ACTIF = process.env.PLAYWRIGHT_MODE_EXERCICE === '1';
+const TEST_REQS = Boolean(
+  process.env.SUPABASE_SERVICE_ROLE_KEY
+  && process.env.PLAYWRIGHT_TEST_PASSWORD,
+);
 
 async function choisirProfession(page: Page, profession: string) {
   await page.locator('#mission-profession').click();
@@ -17,7 +21,7 @@ async function choisirProfession(page: Page, profession: string) {
 
 test.describe('Matrice profession requise × établissement', () => {
   test.beforeEach(() => {
-    test.skip(!ACTIF, 'Activer via PLAYWRIGHT_MODE_EXERCICE=1 (compte étab clinique requis)');
+    test.skip(!TEST_REQS, 'Compte établissement de recette et service role requis');
   });
 
   test('DB : trois niveaux, défaut salarié et profil IADE × mission IDE', async () => {
@@ -99,19 +103,20 @@ test.describe('Matrice profession requise × établissement', () => {
     }
   });
 
-  test('UI clinique : AS bloqué, IDE non proposé, dentiste autorisé', async ({ page }) => {
+  test('UI clinique : seul le mode libéral AS est bloqué, IDE reste sélectionnable, dentiste autorisé', async ({ page }) => {
     await loginAs(page, 'etab');
     await page.goto('/etablissement/missions/creer');
 
     await choisirProfession(page, 'AS');
-    await expect(page.getByText('Mode libéral non disponible', { exact: false })).toBeVisible();
+    await expect(page.getByText('Mode libéral non disponible pour cette mission', { exact: false })).toBeVisible();
     await expect(page.getByText(/Conseil d'État, 11\/02\/2025, n°491128/)).toBeVisible();
+    await expect(page.getByText(/La profession reste disponible.*salariat/)).toBeVisible();
     await expect(page.getByText('Libéral', { exact: true })).toHaveCount(0);
 
     await choisirProfession(page, 'IDE');
-    await expect(page.getByText('Mission proposée en salarié', { exact: false })).toBeVisible();
-    await expect(page.getByText(/expose à une requalification/)).toBeVisible();
-    await expect(page.getByText('Libéral', { exact: true })).toHaveCount(0);
+    await expect(page.getByText('Libéral', { exact: true })).toBeVisible();
+    await expect(page.getByText('Tous profils', { exact: true })).toBeVisible();
+    await expect(page.getByText('Mode libéral non disponible', { exact: false })).toHaveCount(0);
 
     await choisirProfession(page, 'DENTISTE');
     await expect(page.getByText('Libéral', { exact: true })).toBeVisible();

@@ -368,12 +368,13 @@ export default function ContratMission() {
             <p className="text-sm font-semibold text-destructive">❌ Ce contrat a été refusé par l'une des parties.</p>
           </div>
         )}
-        {!isSoignant && !contrat.signature_soignant && contrat.statut !== 'SIGNE_COMPLET'
-         && contrat.statut !== 'ANNULE' && contrat.statut !== 'EXPIRE' && contrat.statut !== 'REFUSE' && (
+        {!dejaSigneParMoi && (contrat.signature_soignant || contrat.signature_etablissement)
+         && contrat.statut !== 'SIGNE_COMPLET' && contrat.statut !== 'ANNULE'
+         && contrat.statut !== 'EXPIRE' && contrat.statut !== 'REFUSE' && (
           <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-xl p-4 mb-4">
-            <p className="text-sm font-semibold text-amber-900 dark:text-amber-200">⏳ En attente de la signature du soignant</p>
+            <p className="text-sm font-semibold text-amber-900 dark:text-amber-200">⏳ L'autre partie a déjà signé</p>
             <p className="text-xs text-amber-800 dark:text-amber-300 mt-1">
-              Le soignant doit signer en premier (art. L1242-13 Code du travail). Vous serez notifié(e) par email dès que sa signature sera enregistrée.
+              Vous pouvez signer maintenant. Le contrat devient complet dès que les deux signatures sont enregistrées, quel que soit leur ordre.
             </p>
           </div>
         )}
@@ -435,10 +436,9 @@ export default function ContratMission() {
           )}
         </div>
 
-        {/* DPAE : visible pour étab + admin sur contrats CDD signés (au moins par l'étab). */}
-        {/* Permettre saisie du n° dès SIGNE_ETABLISSEMENT pour anticiper la prise de poste. */}
+        {/* DPAE : l'employeur peut la préparer dès la création du CDD. */}
         {(role === 'ADMIN_ETABLISSEMENT' || role === 'ADMIN_PLATEFORME' || role === 'ADMIN_GROUPE') &&
-         (contrat.statut === 'SIGNE_ETABLISSEMENT' || contrat.statut === 'SIGNE_COMPLET') &&
+         !['ANNULE', 'EXPIRE', 'REFUSE'].includes(contrat.statut) &&
          contrat.type_contrat && ['CDD', 'SALARIE'].includes(contrat.type_contrat) && (
           <div className="mb-4">
             <DPAEStatus
@@ -597,17 +597,18 @@ export default function ContratMission() {
             <div className="rounded-xl bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800 p-4 text-center">
               <p className="text-sm font-semibold text-green-700 dark:text-green-400">✅ Vous avez déjà signé ce contrat</p>
             </div>
-            {/* A1: Rappel DPAE — after establishment signature */}
-            {!isSoignant && (contrat.statut === 'SIGNE_ETABLISSEMENT' || contrat.statut === 'SIGNE_COMPLET') && (
+            {/* Rappel DPAE — indépendant de l'ordre des signatures. */}
+            {!isSoignant && !['ANNULE', 'EXPIRE', 'REFUSE'].includes(contrat.statut) && (
               <BandeauRappelDPAE contratId={contrat.id} dpaeEffectuee={contrat.dpae_effectuee} dpaeEffectueeLe={contrat.dpae_effectuee_le} typeContrat={contrat.type_contrat} />
             )}
           </div>
         )}
 
         <p className="text-[10px] text-muted-foreground/60 italic text-center mt-4">
-          Art. L.1242-12 du Code du travail — Ce contrat est obligatoire pour toute mission.
-          Signature électronique simple. Signature qualifiée eIDAS prochainement disponible.
-          Les montants affichés sont des simulations indicatives et ne constituent pas un engagement contractuel sur le net perçu.
+          {['CDD', 'SALARIE'].includes(contrat.type_contrat || '')
+            ? 'Contrat salarié écrit — art. L.1242-12 du Code du travail. '
+            : 'Contrat de prestation entre l’établissement et le professionnel libéral. '}
+          Signature électronique simple. Les montants prévisionnels sont régularisés selon les heures validées et les éventuelles corrections contradictoires.
         </p>
       </div>
     </LayoutApp>

@@ -1,9 +1,17 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Flame, CheckCircle2, XCircle, Loader2, ArrowRight } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { getLabelProfession } from '@/lib/constantes';
+import {
+  DialogResponsive,
+  DialogResponsiveContent,
+  DialogResponsiveHeader,
+  DialogResponsiveTitle,
+  DialogResponsiveBody,
+  DialogResponsiveFooter,
+} from '@/components/ui/DialogResponsive';
 
 interface CandidatureUrgence {
   id: string;
@@ -24,8 +32,10 @@ export function BannerCandidaturesPoolUrgence({ etablissementId }: { etablisseme
   const [loading, setLoading] = useState(true);
   const [items, setItems] = useState<CandidatureUrgence[]>([]);
   const [processing, setProcessing] = useState<string | null>(null);
+  const [decision, setDecision] = useState<{ candidature: CandidatureUrgence; action: 'VALIDER' | 'REFUSER' } | null>(null);
+  const [motifRefus, setMotifRefus] = useState('');
 
-  const charger = async () => {
+  const charger = useCallback(async () => {
     if (!etablissementId) return;
     setLoading(true);
     const { data, error } = await supabase
@@ -60,40 +70,31 @@ export function BannerCandidaturesPoolUrgence({ etablissementId }: { etablisseme
     }));
     setItems(list);
     setLoading(false);
-  };
+  }, [etablissementId]);
 
-  useEffect(() => { charger(); }, [etablissementId]);
+  useEffect(() => { void charger(); }, [charger]);
 
-  const valider = async (cand: CandidatureUrgence) => {
-    if (!confirm(`Valider l'acceptation de ${cand.soignant_prenom} ${cand.soignant_nom_initiale} pour "${cand.mission_intitule}" ?\n\nLa mission sera assignée immédiatement.`)) return;
-    setProcessing(cand.id);
-    const { data, error } = await supabase.rpc('fn_etab_valider_acceptation_urgence' as any, {
-      p_candidature_id: cand.id, p_action: 'VALIDER',
-    });
-    setProcessing(null);
-    if (error) { toast.error(error.message); return; }
-    const r = data as any;
-    if (r?.success) {
-      toast.success('Mission assignée à ' + cand.soignant_prenom);
-      charger();
-    } else {
-      toast.error(r?.error ?? 'Erreur');
+  const executerDecision = async () => {
+    if (!decision) return;
+    const { candidature: cand, action } = decision;
+    if (action === 'REFUSER' && motifRefus.trim().length < 5) {
+      toast.error('Précisez le motif du refus (5 caractères minimum).');
+      return;
     }
-  };
-
-  const refuser = async (cand: CandidatureUrgence) => {
-    const motif = prompt(`Refuser l'acceptation de ${cand.soignant_prenom}.\n\nMotif (visible par le soignant) :`, '');
-    if (motif === null) return;
     setProcessing(cand.id);
     const { data, error } = await supabase.rpc('fn_etab_valider_acceptation_urgence' as any, {
-      p_candidature_id: cand.id, p_action: 'REFUSER', p_motif_refus: motif || 'Non précisé',
+      p_candidature_id: cand.id,
+      p_action: action,
+      ...(action === 'REFUSER' ? { p_motif_refus: motifRefus.trim() } : {}),
     });
     setProcessing(null);
     if (error) { toast.error(error.message); return; }
     const r = data as any;
     if (r?.success) {
-      toast.success('Acceptation refusée');
-      charger();
+      toast.success(action === 'VALIDER' ? `Mission assignée à ${cand.soignant_prenom}` : 'Acceptation refusée');
+      setDecision(null);
+      setMotifRefus('');
+      void charger();
     } else {
       toast.error(r?.error ?? 'Erreur');
     }
@@ -140,7 +141,7 @@ export function BannerCandidaturesPoolUrgence({ etablissementId }: { etablisseme
             </div>
             <div className="flex items-center gap-2 pt-2 border-t border-border">
               <button
-                onClick={() => valider(c)}
+                onClick={() => setDecision({ candidature: c, action: 'VALIDER' })}
                 disabled={processing === c.id}
                 className="btn-primary text-xs inline-flex items-center gap-1.5"
               >
@@ -148,7 +149,7 @@ export function BannerCandidaturesPoolUrgence({ etablissementId }: { etablisseme
                 Valider
               </button>
               <button
-                onClick={() => refuser(c)}
+                onClick={() => setDecision({ candidature: c, action: 'REFUSER' })}
                 disabled={processing === c.id}
                 className="btn-secondary text-xs inline-flex items-center gap-1.5"
               >
@@ -158,6 +159,51 @@ export function BannerCandidaturesPoolUrgence({ etablissementId }: { etablisseme
           </div>
         ))}
       </div>
+
+      <DialogResponsive open={Boolean(decision)} onOpenChange={(open) => { if (!open && !processing) setDecision(null); }}>
+        <DialogResponsiveContent maxWidth="md">
+          <DialogResponsiveHeader>
+            <DialogResponsiveTitle>
+              {decision?.action === 'VALIDER' ? 'Confirmer le remplacement' : 'Refuser cette acceptation'}
+            </DialogResponsiveTitle>
+          </DialogResponsiveHeader>
+          <DialogResponsiveBody className="space-y-3">
+            {decision && (
+              <div className="rounded-lg bg-muted/40 p-3 text-sm">
+                <p className="font-semibold text-foreground">{decision.candidature.soignant_prenom} {decision.candidature.soignant_nom_initiale}</p>
+                <p className="text-xs text-muted-foreground mt-1">Mission « {decision.candidature.mission_intitule} »</p>
+              </div>
+            )}
+            {decision?.action === 'VALIDER' ? (
+              <p className="text-sm text-muted-foreground">La mission sera assignée immédiatement et les autres candidatures d'urgence seront libérées.</p>
+            ) : (
+              <label className="block">
+                <span className="text-sm font-medium text-foreground">Motif visible par le soignant *</span>
+                <textarea
+                  value={motifRefus}
+                  onChange={(event) => setMotifRefus(event.target.value)}
+                  rows={3}
+                  maxLength={500}
+                  className="input-base mt-1"
+                  placeholder="Expliquez brièvement votre décision"
+                />
+              </label>
+            )}
+          </DialogResponsiveBody>
+          <DialogResponsiveFooter>
+            <button type="button" className="btn-secondary" disabled={Boolean(processing)} onClick={() => setDecision(null)}>Retour</button>
+            <button
+              type="button"
+              className="btn-primary inline-flex items-center justify-center gap-2"
+              disabled={Boolean(processing) || (decision?.action === 'REFUSER' && motifRefus.trim().length < 5)}
+              onClick={() => void executerDecision()}
+            >
+              {processing && <Loader2 className="h-4 w-4 animate-spin" />}
+              {decision?.action === 'VALIDER' ? 'Assigner le soignant' : 'Confirmer le refus'}
+            </button>
+          </DialogResponsiveFooter>
+        </DialogResponsiveContent>
+      </DialogResponsive>
     </div>
   );
 }

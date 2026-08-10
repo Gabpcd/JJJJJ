@@ -822,8 +822,8 @@ export function DocumentsSoignantContent() {
               <div className="min-w-0">
                 <p className="text-sm font-medium text-foreground">🎓 Attestation de scolarité / passage en année supérieure</p>
                 <p className="text-xs text-muted-foreground">
-                  Étudiant ? L'IA vérifie ton niveau et débloque l'exercice « faisant fonction »
-                  correspondant (ex : étudiant infirmier année 1 validée → aide-soignant).
+                  L'analyse prépare ton dossier, puis l'équipe Jolene contrôle les crédits, stages,
+                  unités d'enseignement et attestations exigés avant d'ouvrir une pré-éligibilité.
                 </p>
                 {docScol && statScol && (
                   <span className={`inline-block mt-1.5 text-[11px] px-2 py-0.5 rounded-full ${statScol.couleur}`}>{statScol.label}</span>
@@ -837,8 +837,8 @@ export function DocumentsSoignantContent() {
               <div className="min-w-0">
                 <p className="text-sm font-medium text-foreground">🩺 Licence de remplacement (interne en médecine)</p>
                 <p className="text-xs text-muted-foreground">
-                  Interne ? Téléverse ta licence de remplacement (Conseil de l'Ordre) :
-                  l'IA la vérifie et débloque les remplacements de médecin.
+                  Interne ? Téléverse ta licence de remplacement délivrée par le Conseil de l'Ordre :
+                  elle est contrôlée avant tout accès aux remplacements de médecin.
                 </p>
                 {docLic && statLic && (
                   <span className={`inline-block mt-1.5 text-[11px] px-2 py-0.5 rounded-full ${statLic.couleur}`}>{statLic.label}</span>

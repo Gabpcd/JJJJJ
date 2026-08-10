@@ -11,7 +11,11 @@ interface BadgeRPPSProps {
 }
 
 export function BadgeRPPS({ rppsVerifie, rpps, profession }: BadgeRPPSProps) {
-  if (profession && PROFESSIONS_SANS_RPPS.includes(profession)) return null;
+  // Le RPPS est désormais attribué progressivement aux aides-soignants. Il
+  // reste optionnel dans Jolene : pas de badge d'échec lorsqu'il est absent,
+  // mais un RPPS effectivement vérifié doit rester visible.
+  if (profession === 'AS' && !rppsVerifie) return null;
+  if (profession && PROFESSIONS_SANS_RPPS.includes(profession) && profession !== 'AS') return null;
   if (!rpps && !rppsVerifie) return null;
 
   if (rppsVerifie) {

@@ -90,12 +90,12 @@ function RevealOnScroll({ children, className = '', delay = 0 }: { children: Rea
 
 /* ─── FAQ data ─── */
 const faqData = [
-  { q: 'Comment fonctionne la commission ?', a: 'Jolene facture à l\'établissement une commission de 15 % HT sur la rémunération brute totale due au soignant, soit 18 % TTC avec la TVA de 20 % (base, majorations et indemnités le cas échéant ; taux HT négocié possible pour les groupes). Aucun frais pour le soignant.' },
+  { q: 'Comment fonctionne la commission ?', a: 'Jolene facture à l\'établissement une commission de 15 % HT sur la base financière validée : honoraires HT pour une mission libérale ou rémunération brute contractuelle pour une mission salariée, majorations et indemnités incluses lorsqu’elles entrent dans cette base. Avec une TVA de 20 %, la commission représente 18 % TTC. Aucun frais pour le soignant.' },
   { q: 'Jolene est-il une agence d\'intérim ?', a: 'Non. Jolene est une plateforme de mise en relation. Le contrat est signé directement entre l\'établissement et le soignant. Nous ne sommes pas employeur.' },
-  { q: 'Comment sont vérifiés les soignants ?', a: 'La vérification est automatique : identité professionnelle, numéro RPPS lorsqu’il existe, diplôme et pièces requises pour le contrat de la mission sont contrôlés. L’assurance RCP est demandée pour les missions libérales.' },
+  { q: 'Comment sont vérifiés les soignants ?', a: 'Le numéro RPPS, lorsqu’il existe, est rapproché de l’Annuaire Santé officiel. Les pièces requises selon la profession et le contrat sont ensuite contrôlées automatiquement ou, pour les situations réglementaires sensibles, en revue humaine. L’assurance RCP est demandée pour les missions libérales.' },
   { q: 'Quels types de contrats sont générés ?', a: 'La plateforme génère automatiquement des CDD, y compris des CDD courts, signés électroniquement par les deux parties. Le libéral n’est proposé que pour les missions explicitement ouvertes par la matrice profession × établissement.' },
   { q: 'Comment fonctionne le pointage ?', a: 'Le soignant pointe son arrivée et son départ via l\'application mobile avec géolocalisation GPS. Le périmètre est vérifié automatiquement par rapport à l\'adresse de l\'établissement.' },
-  { q: 'Puis-je passer en libéral via Jolene ?', a: 'Oui, si votre profession peut s\'exercer en libéral (infirmier, kiné, sage-femme…). Notre parcours 3 200 heures vous accompagne vers l\'installation en libéral avec un suivi personnalisé, des partenaires (comptabilité, assurance, banque) et une prise en charge partielle des frais.' },
+  { q: 'Puis-je passer en libéral via Jolene ?', a: 'Jolene peut suivre et expliquer les conditions propres à votre profession. Le repère de 3 200 heures ne concerne que certaines professions infirmières lorsqu’il est applicable ; aucun compteur ne remplace les autorisations, inscriptions ou justificatifs réglementaires.' },
 ];
 
 /* ─── Public mission search section ─── */
@@ -362,7 +362,7 @@ export default function PageAccueil() {
             <span className="inline-flex items-center gap-1.5"><CheckCircle className="h-3.5 w-3.5 text-primary" /> 0 € pour les soignants</span>
             <span className="inline-flex items-center gap-1.5"><CheckCircle className="h-3.5 w-3.5 text-primary" /> Diplômes vérifiés par IA</span>
             <span className="inline-flex items-center gap-1.5"><CheckCircle className="h-3.5 w-3.5 text-primary" /> Contrats signés en ligne</span>
-            <span className="inline-flex items-center gap-1.5"><CheckCircle className="h-3.5 w-3.5 text-primary" /> Toutes professions de santé, salariat &amp; libéral</span>
+            <span className="inline-flex items-center gap-1.5"><CheckCircle className="h-3.5 w-3.5 text-primary" /> Professions prises en charge, salariat ou libéral selon le cadre applicable</span>
           </div>
         </div>
       </section>
@@ -387,7 +387,7 @@ export default function PageAccueil() {
                     { emoji: '📍', text: 'Missions près de chez vous, en liste ou en swipe' },
                     { emoji: '💶', text: 'Rémunération affichée avant de postuler, paiement suivi' },
                     { emoji: '📄', text: 'Contrats générés et signés en ligne' },
-                    { emoji: '🚀', text: 'Parcours accompagné vers le libéral (3 200 h)' },
+                    { emoji: '🚀', text: 'Parcours vers le libéral adapté à votre profession' },
                   ].map((item, i) => (
                     <li key={i} className="flex items-start gap-3">
                       <span className="text-xl mt-0.5">{item.emoji}</span>
@@ -411,10 +411,10 @@ export default function PageAccueil() {
                 <h3 className="text-xl font-bold text-foreground mb-6">🏥 Pour les établissements</h3>
                 <ul className="space-y-4">
                   {[
-                    { emoji: '✅', text: 'Soignants vérifiés : identité, diplôme, RPPS et pièces adaptées à la mission' },
-                    { emoji: '⚡', text: 'Remplaçant trouvé en urgence, garantie no-show' },
-                    { emoji: '⚖️', text: 'DPAE, loi Rist, Code du travail : conformité intégrée' },
-                    { emoji: '🧾', text: 'Facturation automatisée, Chorus Pro inclus' },
+                    { emoji: '✅', text: 'Identité professionnelle et pièces adaptées à la mission vérifiées' },
+                    { emoji: '⚡', text: 'Plan de secours activé en cas de désistement ou non-présentation' },
+                    { emoji: '⚖️', text: 'DPAE préparée, plafonds et contrôles de conformité visibles' },
+                    { emoji: '🧾', text: 'Documents de facturation par période et suivi Chorus Pro' },
                   ].map((item, i) => (
                     <li key={i} className="flex items-start gap-3">
                       <span className="text-xl mt-0.5">{item.emoji}</span>
@@ -445,8 +445,8 @@ export default function PageAccueil() {
           <div className="grid md:grid-cols-3 gap-8 md:gap-12">
             {[
               { icon: ClipboardList, num: '1', emoji: '📝', titre: 'Publiez ou postulez', desc: 'L\'établissement publie sa mission avec horaires et taux. Le soignant postule ou accepte en 1 clic.' },
-              { icon: Users, num: '2', emoji: '✍️', titre: 'Le contrat se signe en ligne', desc: 'Contrat conforme généré automatiquement, signé électroniquement par les deux parties.' },
-              { icon: CheckCircle, num: '3', emoji: '🎉', titre: 'Tout le reste est automatique', desc: 'Pointage GPS, facture, paiement, déclarations : zéro paperasse pour les deux côtés.' },
+              { icon: Users, num: '2', emoji: '✍️', titre: 'Le contrat se signe en ligne', desc: 'Contrat prérempli à partir de la mission, puis signé électroniquement par les deux parties, dans l’ordre de leur choix.' },
+              { icon: CheckCircle, num: '3', emoji: '🎉', titre: 'Le suivi est centralisé', desc: 'Pointage, facturation et paiement sont suivis au même endroit. Pour une mission salariée, l’établissement transmet lui-même la DPAE à l’URSSAF.' },
             ].map((step, i) => (
               <RevealOnScroll key={i} delay={i * 150}>
                 <div className="flex flex-col items-center text-center group">
@@ -474,7 +474,7 @@ export default function PageAccueil() {
             {[
               { cible: 15, suffixe: '+', label: '👩‍⚕️ professions', emoji: '💼' },
               { cible: 24, suffixe: '/7', label: '🌙 missions jour et nuit', emoji: '⏰' },
-              { cible: 100, suffixe: '%', label: '✅ conforme Code du travail', emoji: '⚖️' },
+              { cible: 48, suffixe: ' h', label: '⚖️ plafond hebdomadaire contrôlé', emoji: '⚖️' },
               { cible: 0, suffixe: '€', label: "💸 d'abonnement", emoji: '🆓' },
             ].map((c, i) => (
               <RevealOnScroll key={i} delay={i * 100}>
