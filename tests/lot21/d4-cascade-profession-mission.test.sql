@@ -211,6 +211,7 @@ BEGIN
       to_jsonb(s) || jsonb_build_object(
         'id', v_concurrent,
         'email', 'd4-concurrent-' || v_concurrent::text || '@test.local',
+        'code_parrainage', 'JO-' || upper(substr(replace(v_concurrent::text, '-', ''), 1, 6)),
         'siret_liberal', substring(
           regexp_replace(v_concurrent::text, '[^0-9]', '', 'g') || '00000000000000'
           from 1 for 14
