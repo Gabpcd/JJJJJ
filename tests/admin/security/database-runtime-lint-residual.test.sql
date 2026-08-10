@@ -755,23 +755,45 @@ BEGIN
     RAISE EXCEPTION 'Classement non borné ou identité incomplète';
   END IF;
 
-  SELECT string_agg(i.signature, ', ' ORDER BY i.signature)
+  SELECT string_agg(r.signature, ', ' ORDER BY r.signature)
   INTO v_bad
-  FROM private.security_definer_inventory i
-  JOIN pg_proc p ON p.oid::regprocedure::text = i.signature
-  JOIN pg_namespace n ON n.oid = p.pronamespace
-  WHERE n.nspname = 'public'
-    AND i.signature = ANY (ARRAY[
+  FROM (VALUES
+    (
       'fn_declarer_paiement_soignant_v2(uuid,numeric,numeric,text,text,date,boolean)',
+      'public.fn_declarer_paiement_soignant_v2(uuid,numeric,numeric,text,text,date,boolean)'::regprocedure
+    ),
+    (
       'fn_declarer_paiement_soignant(uuid,numeric,text,text,date,boolean)',
+      'public.fn_declarer_paiement_soignant(uuid,numeric,text,text,date,boolean)'::regprocedure
+    ),
+    (
       'fn_diagnostic_coherence_financiere()',
+      'public.fn_diagnostic_coherence_financiere()'::regprocedure
+    ),
+    (
       'fn_marquer_messages_lus(uuid)',
+      'public.fn_marquer_messages_lus(uuid)'::regprocedure
+    ),
+    (
       'fn_obligations_financieres()',
+      'public.fn_obligations_financieres()'::regprocedure
+    ),
+    (
       'fn_paiements_etablissement()',
+      'public.fn_paiements_etablissement()'::regprocedure
+    ),
+    (
       'fn_top_soignants(text,integer)',
-      'fn_dans_fenetre_retractation(uuid)'
-    ])
-    AND md5(p.prosrc) IS DISTINCT FROM i.definition_md5;
+      'public.fn_top_soignants(text,integer)'::regprocedure
+    ),
+    (
+      'fn_dans_fenetre_retractation(uuid)',
+      'public.fn_dans_fenetre_retractation(uuid)'::regprocedure
+    )
+  ) AS r(signature, procedure_oid)
+  JOIN private.security_definer_inventory i ON i.signature = r.signature
+  JOIN pg_proc p ON p.oid = r.procedure_oid
+  WHERE md5(p.prosrc) IS DISTINCT FROM i.definition_md5;
 
   IF v_bad IS NOT NULL THEN
     RAISE EXCEPTION 'Empreintes SECURITY DEFINER incohérentes : %', v_bad;
