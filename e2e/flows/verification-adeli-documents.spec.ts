@@ -1,14 +1,15 @@
 /**
  * Chantier 3 — Tests E2E vérification ADELI + allègement documents
  *
- * Tests de LOGIQUE (pas d'appel API réel) :
+ * Tests de logique métier (la fonction Edge est appelée, mais les formats
+ * invalides sont rejetés avant toute consultation d'un registre externe) :
  * - Format ADELI/RPPS invalide → rejeté
  * - Professions à RPPS/ADELI vérifiées → diplôme + attestation non demandés
  * - AS/AES/préparateur pharma → diplôme toujours obligatoire
  * - fn_recalculer_tous_documents_valides respecte rpps_verifie/adeli_verifie
  */
 
-import { test, expect } from '@playwright/test';
+import { test, expect, type APIRequestContext } from '@playwright/test';
 import { adminClient, userClient } from '../helpers/db';
 import { TEST_ACCOUNTS } from '../helpers/auth';
 
@@ -30,17 +31,39 @@ const ANON_BEARER =
   process.env.SUPABASE_ANON_KEY ||
   '';
 
+const VERIFY_RPPS_URL =
+  `${process.env.SUPABASE_URL || process.env.PLAYWRIGHT_SUPABASE_URL}/functions/v1/verify-rpps`;
+const VERIFY_RPPS_TIMEOUT_MS = 30_000;
+
+type IdentifiantInvalide = {
+  numero_adeli?: string;
+  numero_rpps?: string;
+  prenom: string;
+  nom: string;
+};
+
+const verifierFormatIdentifiant = (
+  request: APIRequestContext,
+  data: IdentifiantInvalide,
+) => request.post(VERIFY_RPPS_URL, {
+  headers: {
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${ANON_BEARER}`,
+  },
+  data,
+  // La fonction Edge peut avoir besoin d'un démarrage à froid. Le délai
+  // Playwright générique de 10 s produisait alors un retry malgré une réponse
+  // métier correcte ; les assertions HTTP et code d'erreur restent strictes.
+  timeout: VERIFY_RPPS_TIMEOUT_MS,
+});
+
 test.describe('Format ADELI/RPPS invalide → rejeté', () => {
+  test.describe.configure({ timeout: 60_000 });
+
   test('ADELI avec moins de 9 chiffres → ADELI_FORMAT_INVALID', async ({ request }) => {
-    const res = await request.post(
-      `${process.env.SUPABASE_URL || process.env.PLAYWRIGHT_SUPABASE_URL}/functions/v1/verify-rpps`,
-      {
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${ANON_BEARER}`,
-        },
-        data: { numero_adeli: '12345', prenom: 'Test', nom: 'Test' },
-      },
+    const res = await verifierFormatIdentifiant(
+      request,
+      { numero_adeli: '12345', prenom: 'Test', nom: 'Test' },
     );
     expect(res.status()).toBe(400);
     const body = await res.json();
@@ -48,15 +71,9 @@ test.describe('Format ADELI/RPPS invalide → rejeté', () => {
   });
 
   test('ADELI avec lettres → ADELI_FORMAT_INVALID', async ({ request }) => {
-    const res = await request.post(
-      `${process.env.SUPABASE_URL || process.env.PLAYWRIGHT_SUPABASE_URL}/functions/v1/verify-rpps`,
-      {
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${ANON_BEARER}`,
-        },
-        data: { numero_adeli: 'ABCDEFGHI', prenom: 'Test', nom: 'Test' },
-      },
+    const res = await verifierFormatIdentifiant(
+      request,
+      { numero_adeli: 'ABCDEFGHI', prenom: 'Test', nom: 'Test' },
     );
     expect(res.status()).toBe(400);
     const body = await res.json();
@@ -64,15 +81,9 @@ test.describe('Format ADELI/RPPS invalide → rejeté', () => {
   });
 
   test('RPPS avec moins de 11 chiffres → RPPS_FORMAT_INVALID', async ({ request }) => {
-    const res = await request.post(
-      `${process.env.SUPABASE_URL || process.env.PLAYWRIGHT_SUPABASE_URL}/functions/v1/verify-rpps`,
-      {
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${ANON_BEARER}`,
-        },
-        data: { numero_rpps: '12345', prenom: 'Test', nom: 'Test' },
-      },
+    const res = await verifierFormatIdentifiant(
+      request,
+      { numero_rpps: '12345', prenom: 'Test', nom: 'Test' },
     );
     expect(res.status()).toBe(400);
     const body = await res.json();
@@ -80,15 +91,9 @@ test.describe('Format ADELI/RPPS invalide → rejeté', () => {
   });
 
   test('RPPS avec lettres → RPPS_FORMAT_INVALID', async ({ request }) => {
-    const res = await request.post(
-      `${process.env.SUPABASE_URL || process.env.PLAYWRIGHT_SUPABASE_URL}/functions/v1/verify-rpps`,
-      {
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${ANON_BEARER}`,
-        },
-        data: { numero_rpps: 'ABCDEFGHIJK', prenom: 'Test', nom: 'Test' },
-      },
+    const res = await verifierFormatIdentifiant(
+      request,
+      { numero_rpps: 'ABCDEFGHIJK', prenom: 'Test', nom: 'Test' },
     );
     expect(res.status()).toBe(400);
     const body = await res.json();
