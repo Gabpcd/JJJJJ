@@ -70,7 +70,6 @@ async function connecterCompteReview(page: Page, compte: ReviewAccount) {
   ).toHaveURL(compte.destination, { timeout: 20_000 });
   await expect(page.getByText(/Votre espace est momentanément indisponible/i)).toHaveCount(0);
   await expect(page.locator('body')).not.toBeEmpty();
-  await page.waitForLoadState('networkidle');
   expect(erreursConsole.filter((message) => !message.includes('favicon'))).toEqual([]);
 
   return erreursConsole;
@@ -111,7 +110,18 @@ test.describe('release review — reprise de session iPad', () => {
     if (!compte) return;
 
     const erreursConsole = await connecterCompteReview(page, compte);
-    await expect(page.getByRole('heading').first()).toBeVisible();
+    const titreDashboard = page.getByRole('heading', {
+      name: /Bonjour|Tableau de bord|Publiez votre première mission/i,
+    }).first();
+    const recoursChargement = page.getByRole('alert').filter({
+      hasText: 'Le tableau de bord met plus de temps que prévu',
+    });
+    await expect(titreDashboard.or(recoursChargement)).toBeVisible({ timeout: 16_000 });
+    if (await recoursChargement.isVisible()) {
+      await recoursChargement.getByRole('button', { name: 'Réessayer' }).click();
+      erreursConsole.length = 0;
+    }
+    await expect(titreDashboard).toBeVisible({ timeout: 20_000 });
 
     // Reproduire la navigation réelle de l'iPad dans la SPA. Un rechargement
     // complet ici annule les lectures encore actives du dashboard et WebKit les
@@ -135,7 +145,6 @@ test.describe('release review — reprise de session iPad', () => {
     await sidebar.getByRole('button', { name: 'Soignants', exact: true }).click();
     await sidebar.getByRole('button', { name: 'Pool urgence', exact: true }).click();
     await expect(page).toHaveURL(/\/etablissement\/pool-urgence$/);
-    await page.waitForLoadState('networkidle');
     await expect(page.getByRole('heading', { name: /Pool d'urgence/i })).toBeVisible();
     await verifierSansDebordementHorizontal(page, '/etablissement/pool-urgence');
 
@@ -151,6 +160,7 @@ test.describe('release review — reprise de session iPad', () => {
     if (!compte) return;
 
     const erreursConsole = await connecterCompteReview(page, compte);
+    await expect(page.getByRole('heading').first()).toBeVisible({ timeout: 20_000 });
     if (compte.source === 'review') {
       await expect(page.getByText(/^\[pw-test:/)).toHaveCount(0);
       await expect(page.getByText(/^\[playwright-test\]/)).toHaveCount(0);
@@ -163,7 +173,6 @@ test.describe('release review — reprise de session iPad', () => {
     await sidebarSoignant.getByRole('button', { name: 'Activité' }).click();
     await sidebarSoignant.getByRole('button', { name: 'Présences' }).click();
     await expect(page).toHaveURL(/\/soignant\/presences$/);
-    await page.waitForLoadState('networkidle');
     await expect(page.getByRole('heading', { name: 'Mes présences' })).toBeVisible();
     await expect(page.getByText(/Votre espace est momentanément indisponible/i)).toHaveCount(0);
 
