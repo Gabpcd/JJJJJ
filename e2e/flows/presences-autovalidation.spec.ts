@@ -34,6 +34,12 @@ test.beforeAll(async () => {
 });
 
 test.afterAll(async () => {
+  // La purge d'une mission gelée traverse volontairement toute sa descendance
+  // financière, contractuelle et Auth sur la base distante. Elle doit pouvoir
+  // terminer proprement même lorsque Supabase répond lentement, sans provoquer
+  // un retry du scénario métier déjà réussi.
+  test.setTimeout(90_000);
+
   const erreurs: string[] = [];
 
   // Toujours tenter les deux niveaux de cleanup : la purge ciblée retire la
