@@ -15,8 +15,7 @@ test.describe('Flow parrainage soignant', () => {
   test('soignant authentifié voit la page parrainage avec son code', async ({ page }) => {
     await loginAs(page, 'soignant');
 
-    await page.goto('/soignant/parrainage');
-    await page.waitForLoadState('networkidle');
+    await page.goto('/soignant/parrainage', { waitUntil: 'domcontentloaded' });
 
     await expect(page.locator('h1').first()).toBeVisible({ timeout: 10_000 });
 
@@ -27,8 +26,7 @@ test.describe('Flow parrainage soignant', () => {
   });
 
   test('inscription avec ?ref=CODE pré-remplit le champ filleul', async ({ page }) => {
-    await page.goto('/inscription/soignant?ref=JO-TEST123');
-    await page.waitForLoadState('networkidle');
+    await page.goto('/inscription/soignant?ref=JO-TEST123', { waitUntil: 'domcontentloaded' });
     await expect(page.getByText('Étape 1', { exact: false })).toBeVisible();
   });
 });
@@ -37,8 +35,10 @@ test.describe('Flow parrainage étab', () => {
   test('étab authentifié voit la page parrainage étab', async ({ page }) => {
     await loginAs(page, 'etab');
 
-    await page.goto('/etablissement/parrainage');
-    await page.waitForLoadState('networkidle');
+    // L'application conserve des connexions Supabase actives : networkidle
+    // n'est donc pas un signal de disponibilité fiable. Le h1 ci-dessous est
+    // le vrai contrat utilisateur attendu sur cette route.
+    await page.goto('/etablissement/parrainage', { waitUntil: 'domcontentloaded' });
 
     await expect(page.locator('h1').first()).toBeVisible({ timeout: 10_000 });
   });

@@ -98,6 +98,11 @@ test.describe('Sprint 14 — Flow complet matching (réels)', () => {
   });
 
   test('Trigger trg_award_badges_swipe : 50 swipes → badge EXPLORATEUR', async () => {
+    // Ce scénario crée volontairement 50 missions distantes avant de valider
+    // le seuil du trigger. Sur un Supabase chargé, les RPC + le cleanup ciblé
+    // dépassent légitimement les 30 s globales sans que le produit ait échoué.
+    test.slow();
+
     const admin = adminClient();
 
     // Seed 50 missions via fn_test_seed_mission (l'INSERT direct en batch est
