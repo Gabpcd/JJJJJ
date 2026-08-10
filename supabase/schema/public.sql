@@ -4923,6 +4923,79 @@ $$;
 ALTER FUNCTION "public"."fn_a_permission_etablissement"("p_permission" "text", "p_etablissement_id" "uuid") OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."fn_accepter_document_facturation_honoraires"("p_facture_id" "uuid") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public', 'extensions'
+    AS $$
+DECLARE
+  v_uid uuid := auth.uid();
+  v_facture public.factures_honoraires%ROWTYPE;
+BEGIN
+  IF v_uid IS NULL OR public.fn_compte_auth_actif() IS NOT TRUE THEN
+    RETURN jsonb_build_object('success', false, 'error', 'Accès refusé');
+  END IF;
+  SELECT * INTO v_facture
+  FROM public.factures_honoraires
+  WHERE id = p_facture_id
+    AND soignant_id = v_uid
+    AND emise_le IS NOT NULL
+    AND statut NOT IN (
+      'BROUILLON', 'EN_GENERATION', 'ERREUR_GENERATION', 'ANNULEE', 'REMPLACEE'
+    )
+  FOR UPDATE;
+  IF NOT FOUND THEN
+    RETURN jsonb_build_object(
+      'success', false,
+      'error', 'Ce document n’est pas disponible pour acceptation.'
+    );
+  END IF;
+  IF EXISTS (
+    SELECT 1 FROM public.litiges l
+    WHERE l.facture_id = p_facture_id
+      AND l.statut IN (
+        'OUVERT', 'EN_DISCUSSION', 'EN_MEDIATION',
+        'MEDIATION_EN_COURS', 'REVUE_ADMIN'
+      )
+  ) THEN
+    RETURN jsonb_build_object(
+      'success', false,
+      'error', 'Une contestation est en cours sur ce document.'
+    );
+  END IF;
+  IF v_facture.acceptee_explicitement_le IS NOT NULL THEN
+    RETURN jsonb_build_object(
+      'success', true,
+      'facture_id', p_facture_id,
+      'acceptee_explicitement_le', v_facture.acceptee_explicitement_le,
+      'deja_acceptee', true
+    );
+  END IF;
+
+  UPDATE public.factures_honoraires
+  SET acceptee_explicitement_le = now(),
+      modifie_le = now()
+  WHERE id = p_facture_id;
+
+  INSERT INTO public.invoice_audit_log (
+    invoice_id, action, actor_id, payload_before, payload_after
+  ) VALUES (
+    p_facture_id, 'ACCEPTEE_PAR_SOIGNANT', v_uid,
+    jsonb_build_object('acceptee_explicitement_le', v_facture.acceptee_explicitement_le),
+    jsonb_build_object('acceptee_explicitement_le', now())
+  );
+
+  RETURN jsonb_build_object(
+    'success', true,
+    'facture_id', p_facture_id,
+    'acceptee_explicitement_le', now()
+  );
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_accepter_document_facturation_honoraires"("p_facture_id" "uuid") OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."fn_accepter_invitation_membre"("p_token" "text") RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
@@ -10426,6 +10499,41 @@ $$;
 ALTER FUNCTION "public"."fn_admin_lister_revues_manuelles"("p_limit" integer) OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."fn_admin_lister_revues_tva_missions"() RETURNS TABLE("mission_id" "uuid", "intitule" "text", "etablissement_id" "uuid", "etablissement_nom" "text", "soignant_id" "uuid", "soignant_nom" "text", "nature_etablissement" "text", "nature_soignant" "text", "declaration_le" timestamp with time zone, "confirmation_le" timestamp with time zone)
+    LANGUAGE "plpgsql" STABLE SECURITY DEFINER
+    SET "search_path" TO 'pg_catalog', 'public'
+    AS $$
+BEGIN
+  IF auth.uid() IS NULL OR public.est_admin() IS NOT TRUE THEN
+    RAISE EXCEPTION 'Accès administrateur requis.'
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+
+  RETURN QUERY
+  SELECT
+    m.id,
+    m.intitule::text,
+    m.etablissement_id,
+    e.nom::text,
+    m.soignant_assigne_id,
+    NULLIF(btrim(concat_ws(' ', s.prenom, s.nom)), ''),
+    m.nature_tva_prestation,
+    m.nature_tva_confirmee_soignant,
+    m.nature_tva_declaree_le,
+    m.nature_tva_confirmee_le
+  FROM public.missions m
+  JOIN public.etablissements e ON e.id = m.etablissement_id
+  JOIN public.soignants s ON s.id = m.soignant_assigne_id
+  WHERE m.statut_validation_tva = 'A_REVOIR'
+    AND m.type_contrat_applique::text = 'LIBERAL'
+  ORDER BY m.nature_tva_confirmee_le ASC NULLS FIRST, m.id;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_admin_lister_revues_tva_missions"() OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."fn_admin_lister_signalements"("p_statut" "text" DEFAULT NULL::"text") RETURNS TABLE("id" "uuid", "signaleur_id" "uuid", "signaleur_type" "text", "signaleur_nom" "text", "cible_id" "uuid", "cible_type" "text", "cible_nom" "text", "categorie" "text", "motif" "text", "mission_id" "uuid", "statut" "text", "resolution" "text", "traite_le" timestamp with time zone, "cree_le" timestamp with time zone)
     LANGUAGE "sql" SECURITY DEFINER
     SET "search_path" TO 'public'
@@ -11973,6 +12081,112 @@ $$;
 ALTER FUNCTION "public"."fn_admin_planning_global"("p_debut" "date", "p_fin" "date") OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."fn_admin_proposer_nature_tva_mission"("p_mission_id" "uuid", "p_nature_tva_prestation" "text", "p_motif" "text") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'pg_catalog', 'public'
+    AS $$
+DECLARE
+  v_uid uuid := auth.uid();
+  v_mission public.missions%ROWTYPE;
+BEGIN
+  IF v_uid IS NULL OR public.est_admin() IS NOT TRUE THEN
+    RETURN jsonb_build_object('success', false, 'error', 'Accès administrateur requis.');
+  END IF;
+  IF p_nature_tva_prestation IS NULL OR p_nature_tva_prestation NOT IN (
+    'SOIN_THERAPEUTIQUE_EXONERE',
+    'PRESTATION_TAXABLE'
+  ) THEN
+    RETURN jsonb_build_object('success', false, 'error', 'Nature TVA invalide.');
+  END IF;
+  IF length(btrim(COALESCE(p_motif, ''))) NOT BETWEEN 10 AND 1000 THEN
+    RETURN jsonb_build_object(
+      'success', false,
+      'error', 'Le motif de revue doit contenir entre 10 et 1000 caractères.'
+    );
+  END IF;
+
+  SELECT m.* INTO v_mission
+  FROM public.missions m
+  WHERE m.id = p_mission_id
+  FOR UPDATE;
+  IF NOT FOUND
+     OR v_mission.type_contrat_applique::text IS DISTINCT FROM 'LIBERAL'
+     OR v_mission.statut_validation_tva IS DISTINCT FROM 'A_REVOIR'
+     OR v_mission.soignant_assigne_id IS NULL THEN
+    RETURN jsonb_build_object(
+      'success', false,
+      'error', 'Cette mission n est plus en attente de revue TVA.'
+    );
+  END IF;
+
+  PERFORM set_config('jolene.tva_mission_managed', 'true', true);
+  UPDATE public.missions
+  SET
+    nature_tva_prestation = p_nature_tva_prestation,
+    nature_tva_declaree_par = v_uid,
+    nature_tva_declaree_le = now(),
+    nature_tva_confirmee_soignant = NULL,
+    nature_tva_confirmee_par = NULL,
+    nature_tva_confirmee_le = NULL,
+    statut_validation_tva = 'A_CONFIRMER',
+    revue_tva_motif = btrim(p_motif),
+    revue_tva_resolue_par = v_uid,
+    revue_tva_resolue_le = now()
+  WHERE id = p_mission_id;
+
+  INSERT INTO public.notifications (
+    destinataire_id, type_destinataire, type, titre, corps, lien,
+    type_ressource, id_ressource
+  ) VALUES
+  (
+    v_mission.soignant_assigne_id,
+    'SOIGNANT',
+    'SYSTEM',
+    'Confirmation TVA à renouveler',
+    'Jolene a examiné la divergence TVA de votre mission. Confirmez la proposition avant la facturation.',
+    '/soignant/missions/' || p_mission_id,
+    'mission',
+    p_mission_id
+  ),
+  (
+    v_mission.etablissement_id,
+    'ETABLISSEMENT',
+    'SYSTEM',
+    'Revue TVA traitée',
+    'Jolene a proposé une nature TVA. Le soignant doit maintenant la confirmer ; la mission reste active.',
+    '/etablissement/missions/' || p_mission_id,
+    'mission',
+    p_mission_id
+  );
+
+  PERFORM public.fn_ecrire_audit_safe(
+    p_acteur_id := v_uid,
+    p_type_acteur := 'ADMIN',
+    p_action := 'FACTURATION',
+    p_type_ressource := 'mission',
+    p_id_ressource := p_mission_id,
+    p_details := jsonb_build_object(
+      'event', 'REVUE_NATURE_TVA_MISSION_PROPOSEE',
+      'ancienne_nature_etablissement', v_mission.nature_tva_prestation,
+      'position_soignant', v_mission.nature_tva_confirmee_soignant,
+      'nature_proposee', p_nature_tva_prestation,
+      'motif', btrim(p_motif),
+      'confirmation_soignant_requise', true
+    )
+  );
+
+  RETURN jsonb_build_object(
+    'success', true,
+    'statut_validation_tva', 'A_CONFIRMER',
+    'confirmation_soignant_requise', true
+  );
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_admin_proposer_nature_tva_mission"("p_mission_id" "uuid", "p_nature_tva_prestation" "text", "p_motif" "text") OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."fn_admin_prospection_stats"() RETURNS "jsonb"
     LANGUAGE "plpgsql" STABLE SECURITY DEFINER
     SET "search_path" TO 'pg_catalog', 'public', 'auth'
@@ -12480,6 +12694,9 @@ DECLARE
   v_diff numeric;
   v_diff_tva numeric;
   v_diff_ttc numeric;
+  v_total_courant_ht numeric;
+  v_total_courant_tva numeric;
+  v_total_courant_ttc numeric;
   v_payload jsonb;
   v_modifications jsonb;
   v_type_payload text;
@@ -12652,6 +12869,20 @@ BEGIN
     RETURN jsonb_build_object('error', 'Mission du litige introuvable.');
   END IF;
 
+  -- Le gel contractuel continue de bloquer toute édition ordinaire après
+  -- assignation. Cette dérogation transactionnelle, bornée à la mission et à
+  -- un litige identifié, permet au résolveur admin de corriger le taux tout en
+  -- laissant fn_geler_mission_a_assignation produire son audit détaillé.
+  PERFORM set_config(
+    'jolene.admin_override_gel', v_mission.id::text, true
+  );
+  PERFORM set_config(
+    'jolene.admin_override_reason',
+    'Résolution du litige ' || p_litige_id::text || ' : '
+      || left(btrim(p_resolution), 500),
+    true
+  );
+
   IF v_litige.presence_id IS NOT NULL THEN
     SELECT p.*
       INTO v_presence
@@ -12726,6 +12957,17 @@ BEGIN
     );
   END IF;
 
+  IF v_facture_trouvee THEN
+    SELECT solde.montant_ht, solde.montant_tva, solde.montant_ttc
+      INTO v_total_courant_ht, v_total_courant_tva, v_total_courant_ttc
+      FROM public.fn_solde_correction_facture_honoraires(v_facture.id) solde;
+    IF v_total_courant_ht <= 0 OR v_total_courant_ttc <= 0 THEN
+      RETURN jsonb_build_object(
+        'error', 'Le solde cumulé de la chaîne de corrections est incohérent.'
+      );
+    END IF;
+  END IF;
+
   -- Le verrou SQL couvre aussi la tentative Connect locale. Une Checkout
   -- Session ne peut pas être expirée de façon atomique en PostgreSQL : tant
   -- que son état n'est pas explicitement ECHOUE/ANNULEE/REMBOURSE, on refuse
@@ -12734,6 +12976,12 @@ BEGIN
     INTO v_transfer
     FROM public.stripe_transfers st
    WHERE st.mission_id = v_litige.mission_id
+     AND (
+       (v_litige.facture_id IS NOT NULL
+         AND st.facture_honoraire_id = v_litige.facture_id)
+       OR (v_litige.facture_id IS NULL
+         AND st.facture_honoraire_id IS NULL)
+     )
    ORDER BY st.cree_le DESC, st.id
    LIMIT 1
    FOR UPDATE;
@@ -12754,7 +13002,18 @@ BEGIN
       v_presence.heures_reelles
     );
   END IF;
-  v_taux_ref := v_mission.taux_horaire_base;
+  IF v_facture_trouvee THEN
+    v_heures_ref := COALESCE(
+      v_facture.quantite_heures_snapshot,
+      v_heures_ref
+    );
+    v_taux_ref := COALESCE(
+      v_facture.taux_horaire_snapshot,
+      v_mission.taux_horaire_base
+    );
+  ELSE
+    v_taux_ref := v_mission.taux_horaire_base;
+  END IF;
   IF v_facture_trouvee AND (v_taux_ref IS NULL OR v_taux_ref = 0) THEN
     v_taux_ref := CASE
       WHEN v_heures_ref > 0 THEN v_facture.montant_ht / v_heures_ref
@@ -12833,8 +13092,12 @@ BEGIN
       v_action := 'RECALCUL';
     ELSIF v_facture.statut IN ('EMISE', 'EN_RETARD') THEN
       v_action := 'ANNULER_REEMETTRE';
-    ELSIF v_facture.statut = 'PAYEE' THEN
-      v_action := 'AVOIR';
+    ELSIF v_facture.statut IN ('PAYEE', 'FACTORISEE') THEN
+      v_action := CASE
+        WHEN v_nouveau_montant_ttc IS NOT DISTINCT FROM v_total_courant_ttc
+          THEN 'AUCUNE'
+        ELSE 'AVOIR'
+      END;
     ELSE
       RETURN jsonb_build_object(
         'error', 'Le statut de la facture ne permet aucune action financière sûre.'
@@ -12842,9 +13105,14 @@ BEGIN
     END IF;
   END IF;
 
-  IF v_action = 'AUCUNE' AND v_ajustement_demande THEN
+  IF v_action = 'AUCUNE' AND v_ajustement_demande
+     AND (
+       v_facture_trouvee IS NOT TRUE
+       OR v_facture.statut NOT IN ('PAYEE', 'FACTORISEE')
+       OR v_nouveau_montant_ttc IS DISTINCT FROM v_total_courant_ttc
+     ) THEN
     RETURN jsonb_build_object(
-      'error', 'AUCUNE est interdite lorsqu’un ajustement ou un accord financier existe.'
+      'error', 'Une correction sans pièce financière est réservée à une facture payée dont le total reste strictement identique.'
     );
   END IF;
   IF v_action <> 'AUCUNE' AND v_facture_trouvee IS NOT TRUE THEN
@@ -12877,9 +13145,9 @@ BEGIN
     RETURN jsonb_build_object('error', 'AVOIR exige une facture PAYEE.');
   END IF;
   IF v_action <> 'AUCUNE'
-     AND v_nouveau_montant_ttc IS NOT DISTINCT FROM v_facture.montant_ttc THEN
+     AND v_nouveau_montant_ttc IS NOT DISTINCT FROM v_total_courant_ttc THEN
     RETURN jsonb_build_object(
-      'error', 'L’ajustement ne change pas le montant de la facture.'
+      'error', 'L’ajustement ne change pas le solde cumulé de la facture et de ses corrections.'
     );
   END IF;
 
@@ -12894,17 +13162,8 @@ BEGIN
   ) THEN
     RETURN jsonb_build_object('error', 'Une facture de remplacement existe déjà.');
   END IF;
-  IF v_action = 'AVOIR' AND EXISTS (
-    SELECT 1
-      FROM public.factures_honoraires enfant
-     WHERE enfant.facture_precedente_id = v_facture.id
-       AND enfant.type_document = 'AVOIR'
-       AND enfant.statut NOT IN (
-         'ANNULEE', 'REMPLACEE', 'ERREUR_GENERATION'
-       )
-  ) THEN
-    RETURN jsonb_build_object('error', 'Un avoir actif existe déjà pour cette facture.');
-  END IF;
+  -- Plusieurs avoirs sont admis lorsqu'ils correspondent à des litiges
+  -- distincts. Le montant de chacun est calculé sur le solde cumulé restant.
 
   IF v_action = 'RECALCUL' THEN
     UPDATE public.factures_honoraires
@@ -12976,11 +13235,11 @@ BEGIN
     END IF;
 
   ELSIF v_action = 'AVOIR' THEN
-    v_diff := round(v_facture.montant_ht - v_nouveau_montant_ht, 2);
-    v_diff_tva := round(v_facture.montant_tva - v_nouveau_montant_tva, 2);
-    v_diff_ttc := round(v_facture.montant_ttc - v_nouveau_montant_ttc, 2);
+    v_diff := round(v_total_courant_ht - v_nouveau_montant_ht, 2);
+    v_diff_tva := round(v_total_courant_tva - v_nouveau_montant_tva, 2);
+    v_diff_ttc := round(v_total_courant_ttc - v_nouveau_montant_ttc, 2);
     IF v_diff <= 0 OR v_diff_tva < 0 OR v_diff_ttc <= 0
-       OR v_diff_ttc > v_facture.montant_ttc THEN
+       OR v_diff_ttc > v_total_courant_ttc THEN
       RETURN jsonb_build_object(
         'error', 'Un avoir exige un montant corrigé strictement inférieur au montant payé.'
       );
@@ -12991,9 +13250,24 @@ BEGIN
       FROM public.parametres_litiges pl
      WHERE pl.cle = 'delai_stripe_refund_auto_j';
     v_delai_stripe_j := COALESCE(v_delai_stripe_j, 30);
-    IF v_transfer_trouve THEN
-      -- Un remboursement Connect doit aussi reprendre le transfer et la
-      -- commission. La queue legacy ne sait pas garantir cette atomicité.
+    IF v_transfer_trouve OR EXISTS (
+      SELECT 1
+      FROM public.paiements_escrow pe
+      WHERE pe.mission_id = v_litige.mission_id
+        AND pe.statut IN (
+          'DEBITE', 'DISPONIBLE', 'RELEASE_PLANIFIE', 'PAYE',
+          'REMBOURSE_EN_COURS', 'REMBOURSE', 'DISPUTE'
+        )
+    ) OR EXISTS (
+      SELECT 1
+      FROM public.factor_advances fa
+      WHERE fa.facture_honoraire_id = v_facture.id
+        AND fa.statut IN ('APPROUVEE', 'FINANCEE', 'RECOUVREE', 'IMPAYEE')
+    ) THEN
+      -- Un remboursement Connect ou paiement rapide doit aussi reprendre la
+      -- destination et la commission. La queue d'avoir standard ne sait pas
+      -- garantir cette atomicité : la correction reste émise, le remboursement
+      -- est placé en vérification financière explicite.
       v_mode_remboursement := 'VIREMENT_MANUEL';
     ELSIF v_facture.stripe_payment_intent_id IS NOT NULL
        AND v_facture.date_paiement IS NOT NULL
@@ -13021,7 +13295,7 @@ BEGIN
       v_facture.mission_id, v_avoir_numero, v_diff,
       v_diff_tva, v_diff_ttc,
       v_facture.taux_tva, v_facture.exoneration_tva,
-      CURRENT_DATE, CURRENT_DATE, 'EMISE', v_facture.mandat_version,
+      CURRENT_DATE, CURRENT_DATE, 'EN_GENERATION', v_facture.mandat_version,
       'AVOIR', v_facture.id, 'LITIGE_RESOLU_AJUSTE', p_litige_id,
       v_mode_remboursement, true, v_facture.periode_debut,
       v_facture.periode_fin, v_facture.numero_semaine_iso,
@@ -13035,24 +13309,15 @@ BEGIN
     UPDATE public.factures_honoraires
        SET statut_litige = 'LITIGE_RESOLU_AJUSTE'
      WHERE id = v_facture.id
-       AND statut = 'PAYEE';
+       AND statut IN ('PAYEE', 'FACTORISEE');
     GET DIAGNOSTICS v_rows = ROW_COUNT;
     IF v_rows <> 1 THEN
       RAISE EXCEPTION 'Avoir concurrent refusé';
     END IF;
 
-    IF v_mode_remboursement = 'AUTO_STRIPE' THEN
-      INSERT INTO public.stripe_refunds_queue (
-        avoir_id, facture_origine_id, stripe_payment_intent_id, montant_cts
-      ) VALUES (
-        v_avoir_id, v_facture.id, v_facture.stripe_payment_intent_id,
-        round(v_diff_ttc * 100)::integer
-      );
-      GET DIAGNOSTICS v_rows = ROW_COUNT;
-      IF v_rows <> 1 THEN
-        RAISE EXCEPTION 'Remboursement Stripe non mis en file';
-      END IF;
-    END IF;
+    -- La file Stripe est alimentée atomiquement par
+    -- fn_emettre_document_facturation_honoraires, seulement après dépôt du PDF
+    -- et du XML CII. Aucun remboursement ne peut précéder son avoir émis.
 
     v_regen_id := public.fn_trigger_regen_pdf_immediate(v_avoir_id);
     IF v_regen_id IS NOT NULL THEN
@@ -13336,6 +13601,525 @@ COMMENT ON FUNCTION "public"."fn_admin_resoudre_litige"("p_litige_id" "uuid", "p
 
 
 
+CREATE OR REPLACE FUNCTION "public"."fn_admin_resoudre_litige_complement_honoraires"("p_litige_id" "uuid", "p_resolution" "text", "p_en_faveur_de" "text" DEFAULT NULL::"text", "p_ajuster_heures" numeric DEFAULT NULL::numeric, "p_ajuster_taux" numeric DEFAULT NULL::numeric) RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public', 'extensions'
+    AS $$
+DECLARE
+  v_uid uuid := auth.uid();
+  v_litige public.litiges%ROWTYPE;
+  v_mission public.missions%ROWTYPE;
+  v_presence public.presences%ROWTYPE;
+  v_facture public.factures_honoraires%ROWTYPE;
+  v_payload jsonb;
+  v_modifications jsonb;
+  v_type_payload text;
+  v_arrivee timestamptz;
+  v_depart timestamptz;
+  v_heures_payload numeric;
+  v_heures_final numeric;
+  v_taux_final numeric;
+  v_montant_payload_ttc numeric;
+  v_nouveau_ht numeric;
+  v_nouvelle_tva numeric;
+  v_nouveau_ttc numeric;
+  v_total_courant_ht numeric;
+  v_total_courant_tva numeric;
+  v_total_courant_ttc numeric;
+  v_delta_ht numeric;
+  v_delta_tva numeric;
+  v_delta_ttc numeric;
+  v_numero text;
+  v_complement_id uuid;
+  v_regen_id bigint;
+  v_statut_resolution text;
+  v_rows integer;
+BEGIN
+  IF v_uid IS NULL OR public.est_admin() IS NOT TRUE THEN
+    RETURN jsonb_build_object('success', false, 'error', 'Admin AAL2 requis.');
+  END IF;
+  IF length(btrim(COALESCE(p_resolution, ''))) NOT BETWEEN 10 AND 5000 THEN
+    RETURN jsonb_build_object('success', false, 'error', 'La résolution doit contenir entre 10 et 5 000 caractères.');
+  END IF;
+  IF upper(btrim(COALESCE(p_en_faveur_de, 'NEUTRE'))) NOT IN ('SOIGNANT', 'ETABLISSEMENT', 'NEUTRE') THEN
+    RETURN jsonb_build_object('success', false, 'error', 'Bénéficiaire de la décision invalide.');
+  END IF;
+  IF p_ajuster_heures IS NOT NULL AND (p_ajuster_heures <= 0 OR p_ajuster_heures > 168) THEN
+    RETURN jsonb_build_object('success', false, 'error', 'Les heures corrigées doivent être comprises entre 0 et 168.');
+  END IF;
+  IF p_ajuster_taux IS NOT NULL AND (p_ajuster_taux < 0.01 OR p_ajuster_taux > 1000) THEN
+    RETURN jsonb_build_object('success', false, 'error', 'Le taux corrigé doit être compris entre 0,01 € et 1 000 €.');
+  END IF;
+
+  SELECT * INTO v_litige
+  FROM public.litiges
+  WHERE id = p_litige_id
+  FOR UPDATE;
+  IF NOT FOUND OR v_litige.statut NOT IN (
+    'OUVERT', 'EN_DISCUSSION', 'EN_MEDIATION', 'MEDIATION_EN_COURS', 'REVUE_ADMIN'
+  ) THEN
+    RETURN jsonb_build_object('success', false, 'error', 'Litige introuvable ou déjà résolu.');
+  END IF;
+
+  v_payload := v_litige.payload_modifications;
+  IF v_payload IS NOT NULL THEN
+    IF v_litige.statut <> 'REVUE_ADMIN'
+       OR v_litige.accord_soignant IS NOT TRUE
+       OR v_litige.accord_etablissement IS NOT TRUE
+       OR v_litige.accord_soignant_le IS NULL
+       OR v_litige.accord_etablissement_le IS NULL
+       OR v_litige.modifications_executees IS TRUE THEN
+      RETURN jsonb_build_object('success', false, 'error', 'L’accord financier doit être accepté par les deux parties et non encore exécuté.');
+    END IF;
+    v_type_payload := v_payload->>'type';
+    v_modifications := v_payload->'modifications';
+    IF v_type_payload NOT IN ('MODIFICATION_HORAIRES', 'MODIFICATION_MONTANT', 'MIXTE')
+       OR jsonb_typeof(v_modifications) IS DISTINCT FROM 'object' THEN
+      RETURN jsonb_build_object('success', false, 'error', 'Le contenu de l’accord financier est invalide.');
+    END IF;
+    IF v_type_payload IN ('MODIFICATION_MONTANT', 'MIXTE')
+       AND jsonb_typeof(v_modifications->'montant_total_corrige') = 'number' THEN
+      v_montant_payload_ttc := (v_modifications->>'montant_total_corrige')::numeric;
+    END IF;
+    IF v_type_payload IN ('MODIFICATION_HORAIRES', 'MIXTE') THEN
+      BEGIN
+        v_arrivee := (v_modifications->>'pointage_arrivee_le')::timestamptz;
+        v_depart := (v_modifications->>'pointage_depart_le')::timestamptz;
+      EXCEPTION WHEN invalid_datetime_format OR datetime_field_overflow THEN
+        RETURN jsonb_build_object('success', false, 'error', 'Les horaires convenus sont invalides.');
+      END;
+      IF v_depart <= v_arrivee OR v_depart - v_arrivee > interval '7 days' THEN
+        RETURN jsonb_build_object('success', false, 'error', 'La plage horaire convenue est invalide.');
+      END IF;
+    END IF;
+  END IF;
+
+  SELECT * INTO v_mission
+  FROM public.missions
+  WHERE id = v_litige.mission_id
+  FOR UPDATE;
+  IF NOT FOUND THEN
+    RETURN jsonb_build_object('success', false, 'error', 'Mission introuvable.');
+  END IF;
+
+  -- Même garde que dans le résolveur historique : le changement de taux est
+  -- une dérogation de litige explicite et auditée, jamais un dégel général de
+  -- la mission ni un contournement des pièces comptables déjà émises.
+  PERFORM set_config(
+    'jolene.admin_override_gel', v_mission.id::text, true
+  );
+  PERFORM set_config(
+    'jolene.admin_override_reason',
+    'Résolution du litige ' || p_litige_id::text || ' : '
+      || left(btrim(p_resolution), 500),
+    true
+  );
+
+  IF v_litige.presence_id IS NOT NULL THEN
+    SELECT * INTO v_presence
+    FROM public.presences
+    WHERE id = v_litige.presence_id AND mission_id = v_litige.mission_id
+    FOR UPDATE;
+  ELSE
+    SELECT * INTO v_presence
+    FROM public.presences
+    WHERE mission_id = v_litige.mission_id
+    ORDER BY valide_le DESC NULLS LAST, cree_le DESC
+    LIMIT 1
+    FOR UPDATE;
+  END IF;
+
+  IF v_arrivee IS NOT NULL AND v_depart IS NOT NULL THEN
+    v_heures_payload := round(GREATEST(
+      0,
+      extract(epoch FROM (v_depart - v_arrivee)) / 3600
+        - COALESCE(v_presence.duree_pause_min, 0) / 60
+    )::numeric, 2);
+  END IF;
+  v_heures_final := COALESCE(
+    p_ajuster_heures,
+    v_heures_payload,
+    v_presence.heures_ajustees_litige,
+    v_presence.heures_reelles
+  );
+
+  SELECT * INTO v_facture
+  FROM public.factures_honoraires
+  WHERE id = v_litige.facture_id
+    AND mission_id = v_litige.mission_id
+    AND soignant_id = v_litige.soignant_id
+    AND etablissement_id = v_litige.etablissement_id
+    AND type_document = 'FACTURE'
+  FOR UPDATE;
+  IF NOT FOUND THEN
+    RETURN jsonb_build_object(
+      'success', false,
+      'error_code', 'COMPLEMENT_NON_APPLICABLE',
+      'error', 'La facture exacte à corriger est introuvable.'
+    );
+  END IF;
+  IF v_facture.statut NOT IN ('PAYEE', 'FACTORISEE') THEN
+    RETURN jsonb_build_object(
+      'success', false,
+      'error_code', 'COMPLEMENT_NON_APPLICABLE',
+      'error', 'La facture n’est ni payée ni avancée : le remplacement comptable standard doit être utilisé.'
+    );
+  END IF;
+
+  SELECT solde.montant_ht, solde.montant_tva, solde.montant_ttc
+    INTO v_total_courant_ht, v_total_courant_tva, v_total_courant_ttc
+    FROM public.fn_solde_correction_facture_honoraires(v_facture.id) solde;
+  IF v_total_courant_ht <= 0 OR v_total_courant_ttc <= 0 THEN
+    RETURN jsonb_build_object(
+      'success', false,
+      'error', 'Le solde cumulé de la chaîne de corrections est incohérent.'
+    );
+  END IF;
+
+  v_heures_final := CASE
+    WHEN p_ajuster_heures IS NOT NULL OR v_heures_payload IS NOT NULL
+      THEN COALESCE(p_ajuster_heures, v_heures_payload)
+    ELSE COALESCE(
+      v_facture.quantite_heures_snapshot,
+      v_presence.heures_ajustees_litige,
+      v_presence.heures_reelles
+    )
+  END;
+
+  v_taux_final := COALESCE(
+    p_ajuster_taux,
+    v_facture.taux_horaire_snapshot,
+    v_mission.taux_horaire_base,
+    CASE WHEN v_heures_final > 0 THEN v_facture.montant_ht / v_heures_final END
+  );
+  IF v_montant_payload_ttc IS NOT NULL
+     AND p_ajuster_heures IS NULL
+     AND p_ajuster_taux IS NULL THEN
+    v_nouveau_ttc := round(v_montant_payload_ttc, 2);
+    v_nouveau_ht := round(v_nouveau_ttc / (1 + COALESCE(v_facture.taux_tva, 0) / 100), 2);
+    v_nouvelle_tva := v_nouveau_ttc - v_nouveau_ht;
+  ELSE
+    IF v_heures_final IS NULL OR v_heures_final <= 0
+       OR v_taux_final IS NULL OR v_taux_final <= 0 THEN
+      RETURN jsonb_build_object('success', false, 'error', 'Heures ou taux corrigés manquants.');
+    END IF;
+    v_nouveau_ht := round(v_heures_final * v_taux_final, 2);
+    v_nouvelle_tva := round(v_nouveau_ht * COALESCE(v_facture.taux_tva, 0) / 100, 2);
+    v_nouveau_ttc := v_nouveau_ht + v_nouvelle_tva;
+  END IF;
+
+  IF v_nouveau_ttc <= v_total_courant_ttc THEN
+    RETURN jsonb_build_object(
+      'success', false,
+      'error_code', 'COMPLEMENT_NON_APPLICABLE',
+      'error', 'La correction n’est pas une hausse : un avoir ou une rectification standard doit être utilisé.'
+    );
+  END IF;
+  v_delta_ht := v_nouveau_ht - v_total_courant_ht;
+  v_delta_tva := v_nouvelle_tva - v_total_courant_tva;
+  v_delta_ttc := v_nouveau_ttc - v_total_courant_ttc;
+  IF v_delta_ht <= 0 OR v_delta_tva < 0 OR v_delta_ttc <= 0 THEN
+    RETURN jsonb_build_object('success', false, 'error', 'Le delta de correction est incohérent.');
+  END IF;
+
+  v_numero := public.next_invoice_number(v_facture.soignant_id);
+  IF NULLIF(btrim(v_numero), '') IS NULL THEN
+    RAISE EXCEPTION 'Numéro de facture complémentaire invalide';
+  END IF;
+  INSERT INTO public.factures_honoraires (
+    soignant_id, etablissement_id, mission_id, numero_facture,
+    montant_ht, montant_tva, montant_ttc, taux_tva, exoneration_tva,
+    date_emission, date_echeance, statut, mandat_version, type_document,
+    facture_precedente_id, statut_litige, litige_id, pdf_a_regenerer,
+    periode_debut, periode_fin, numero_semaine_iso, annee_iso,
+    est_facture_finale_mission, nature_correction,
+    regime_tva_snapshot, base_legale_tva_snapshot, nature_prestation_snapshot,
+    description_prestation_snapshot, quantite_heures_snapshot,
+    taux_horaire_snapshot, emetteur_identite_snapshot,
+    emetteur_profession_snapshot, emetteur_siret_snapshot,
+    emetteur_numero_professionnel_snapshot, emetteur_adresse_snapshot,
+    emetteur_adresse_rue_snapshot, emetteur_adresse_code_postal_snapshot,
+    emetteur_adresse_ville_snapshot, emetteur_email_snapshot,
+    emetteur_numero_tva_snapshot, destinataire_nom_snapshot,
+    destinataire_siret_snapshot, destinataire_adresse_rue_snapshot,
+    destinataire_adresse_code_postal_snapshot,
+    destinataire_adresse_ville_snapshot
+  ) VALUES (
+    v_facture.soignant_id, v_facture.etablissement_id, v_facture.mission_id,
+    v_numero, v_delta_ht, v_delta_tva, v_delta_ttc,
+    v_facture.taux_tva, v_facture.exoneration_tva,
+    CURRENT_DATE, CURRENT_DATE + 30, 'EN_GENERATION',
+    v_facture.mandat_version, 'FACTURE', v_facture.id,
+    'LITIGE_RESOLU_AJUSTE', p_litige_id, true,
+    v_facture.periode_debut, v_facture.periode_fin,
+    v_facture.numero_semaine_iso, v_facture.annee_iso,
+    v_facture.est_facture_finale_mission, 'COMPLEMENT',
+    v_facture.regime_tva_snapshot, v_facture.base_legale_tva_snapshot,
+    v_facture.nature_prestation_snapshot,
+    'Complément après litige sur facture ' || v_facture.numero_facture
+      || ' — total corrigé ' || v_nouveau_ttc || ' EUR TTC',
+    NULL, v_taux_final, v_facture.emetteur_identite_snapshot,
+    v_facture.emetteur_profession_snapshot, v_facture.emetteur_siret_snapshot,
+    v_facture.emetteur_numero_professionnel_snapshot,
+    v_facture.emetteur_adresse_snapshot,
+    v_facture.emetteur_adresse_rue_snapshot,
+    v_facture.emetteur_adresse_code_postal_snapshot,
+    v_facture.emetteur_adresse_ville_snapshot,
+    v_facture.emetteur_email_snapshot,
+    v_facture.emetteur_numero_tva_snapshot,
+    v_facture.destinataire_nom_snapshot,
+    v_facture.destinataire_siret_snapshot,
+    v_facture.destinataire_adresse_rue_snapshot,
+    v_facture.destinataire_adresse_code_postal_snapshot,
+    v_facture.destinataire_adresse_ville_snapshot
+  ) RETURNING id INTO v_complement_id;
+
+  UPDATE public.factures_honoraires
+  SET statut_litige = 'LITIGE_RESOLU_AJUSTE'
+  WHERE id = v_facture.id AND statut IN ('PAYEE', 'FACTORISEE');
+  GET DIAGNOSTICS v_rows = ROW_COUNT;
+  IF v_rows <> 1 THEN RAISE EXCEPTION 'Correction concurrente refusée'; END IF;
+
+  IF p_ajuster_heures IS NOT NULL OR v_heures_payload IS NOT NULL THEN
+    UPDATE public.presences
+    SET heures_ajustees_litige = v_heures_final,
+        ajustement_litige_id = p_litige_id,
+        motif_litige = left('Résolution admin : ' || btrim(p_resolution), 2000),
+        modifie_le = now()
+    WHERE id = v_presence.id;
+  END IF;
+  IF p_ajuster_taux IS NOT NULL THEN
+    UPDATE public.missions
+    SET taux_horaire_base = v_taux_final, modifie_le = now()
+    WHERE id = v_mission.id;
+  END IF;
+  UPDATE public.missions
+  SET commission_a_recalculer = true
+  WHERE id = v_mission.id;
+
+  v_statut_resolution := CASE upper(btrim(COALESCE(p_en_faveur_de, 'NEUTRE')))
+    WHEN 'SOIGNANT' THEN 'RESOLU_SOIGNANT'
+    WHEN 'ETABLISSEMENT' THEN 'RESOLU_ETABLISSEMENT'
+    ELSE 'RESOLU_ADMIN'
+  END;
+  UPDATE public.litiges
+  SET statut = v_statut_resolution,
+      resolution = btrim(p_resolution),
+      resolu_par = v_uid,
+      resolu_le = now(),
+      modifications_executees = CASE WHEN v_payload IS NOT NULL THEN true ELSE modifications_executees END,
+      modifications_executees_a = CASE WHEN v_payload IS NOT NULL THEN now() ELSE modifications_executees_a END,
+      modifications_executees_par = CASE WHEN v_payload IS NOT NULL THEN v_uid ELSE modifications_executees_par END
+  WHERE id = p_litige_id
+    AND statut IN ('OUVERT', 'EN_DISCUSSION', 'EN_MEDIATION', 'MEDIATION_EN_COURS', 'REVUE_ADMIN');
+  GET DIAGNOSTICS v_rows = ROW_COUNT;
+  IF v_rows <> 1 THEN RAISE EXCEPTION 'Résolution concurrente refusée'; END IF;
+
+  v_regen_id := public.fn_trigger_regen_pdf_immediate(v_complement_id);
+  PERFORM public.fn_ecrire_audit_safe(
+    p_acteur_id := v_uid,
+    p_type_acteur := 'ADMIN_PLATEFORME',
+    p_action := 'LITIGE_RESOLUTION',
+    p_type_ressource := 'litige',
+    p_id_ressource := p_litige_id,
+    p_details := jsonb_build_object(
+      'evenement', 'FACTURE_COMPLEMENTAIRE_HONORAIRES',
+      'facture_origine_id', v_facture.id,
+      'facture_complementaire_id', v_complement_id,
+      'montant_origine_ttc', v_facture.montant_ttc,
+      'solde_cumule_avant_ttc', v_total_courant_ttc,
+      'montant_corrige_ttc', v_nouveau_ttc,
+      'delta_ttc', v_delta_ttc,
+      'regen_pdf_request_id', v_regen_id
+    )
+  );
+  PERFORM public.fn_litige_push_notification(
+    v_litige.soignant_id, 'SOIGNANT', 'LITIGE_RESOLU_AJUSTE',
+    'Litige résolu — complément d’honoraires',
+    'Une facture complémentaire a été émise pour le seul montant ajouté.',
+    p_litige_id,
+    jsonb_build_object('facture_id', v_complement_id, 'montant_ttc', v_delta_ttc)
+  );
+  PERFORM public.fn_litige_push_notification(
+    v_litige.etablissement_id, 'ETABLISSEMENT', 'LITIGE_RESOLU_AJUSTE',
+    'Litige résolu — complément à régler',
+    'La correction à la hausse génère une facture complémentaire distincte.',
+    p_litige_id,
+    jsonb_build_object('facture_id', v_complement_id, 'montant_ttc', v_delta_ttc)
+  );
+
+  RETURN jsonb_build_object(
+    'success', true,
+    'action_financiere', 'COMPLEMENT',
+    'facture_id', v_facture.id,
+    'nouvelle_facture_id', v_complement_id,
+    'montant_final_ht', v_nouveau_ht,
+    'montant_final_ttc', v_nouveau_ttc,
+    'delta_ttc', v_delta_ttc,
+    'regen_pdf_request_ids', jsonb_build_array(v_regen_id)
+  );
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_admin_resoudre_litige_complement_honoraires"("p_litige_id" "uuid", "p_resolution" "text", "p_en_faveur_de" "text", "p_ajuster_heures" numeric, "p_ajuster_taux" numeric) OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."fn_admin_resoudre_litige_intelligent"("p_litige_id" "uuid", "p_resolution" "text", "p_en_faveur_de" "text" DEFAULT NULL::"text", "p_ajuster_heures" numeric DEFAULT NULL::numeric, "p_ajuster_taux" numeric DEFAULT NULL::numeric, "p_action_financiere" "text" DEFAULT 'AUTO'::"text") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public', 'extensions'
+    AS $$
+DECLARE
+  v_action text := upper(btrim(COALESCE(p_action_financiere, 'AUTO')));
+  v_result jsonb;
+  v_action_resultat text;
+  v_facture_cible_id uuid;
+  v_rectification_id uuid;
+  v_litige public.litiges%ROWTYPE;
+  v_facture public.factures_honoraires%ROWTYPE;
+  v_total_courant_ttc numeric;
+  v_heures_apres numeric;
+  v_taux_apres numeric;
+  v_ajustement_demande boolean;
+BEGIN
+  IF v_action NOT IN ('AUTO', 'AUCUNE', 'RECALCUL', 'ANNULER_REEMETTRE', 'AVOIR', 'COMPLEMENT') THEN
+    RETURN jsonb_build_object('success', false, 'error', 'Action financière invalide.');
+  END IF;
+
+  IF v_action IN ('AUTO', 'COMPLEMENT') THEN
+    v_result := public.fn_admin_resoudre_litige_complement_honoraires(
+      p_litige_id, p_resolution, p_en_faveur_de,
+      p_ajuster_heures, p_ajuster_taux
+    );
+    IF COALESCE((v_result->>'success')::boolean, false) IS TRUE
+       OR v_action = 'COMPLEMENT'
+       OR COALESCE(v_result->>'error_code', '') <> 'COMPLEMENT_NON_APPLICABLE' THEN
+      RETURN v_result;
+    END IF;
+  END IF;
+
+  SELECT * INTO v_litige
+  FROM public.litiges
+  WHERE id = p_litige_id;
+  v_ajustement_demande := p_ajuster_heures IS NOT NULL
+    OR p_ajuster_taux IS NOT NULL
+    OR v_litige.payload_modifications IS NOT NULL;
+
+  v_result := public.fn_admin_resoudre_litige(
+    p_litige_id,
+    p_resolution,
+    p_en_faveur_de,
+    p_ajuster_heures,
+    p_ajuster_taux,
+    v_action
+  );
+  IF COALESCE((v_result->>'success')::boolean, false) IS NOT TRUE THEN
+    RETURN v_result;
+  END IF;
+
+  v_action_resultat := v_result->>'action_financiere';
+  v_heures_apres := NULLIF(v_result->>'heures_final', '')::numeric;
+  v_taux_apres := NULLIF(v_result->>'taux_final', '')::numeric;
+
+  -- La file PDF est déclenchée dans le résolveur historique mais ne devient
+  -- visible qu'après le commit. On complète donc les snapshots avant que le
+  -- worker ne lise la facture rectificative.
+  IF v_action_resultat IN ('RECALCUL', 'ANNULER_REEMETTRE') THEN
+    v_facture_cible_id := CASE
+      WHEN v_action_resultat = 'RECALCUL'
+        THEN NULLIF(v_result->>'facture_id', '')::uuid
+      ELSE NULLIF(v_result->>'nouvelle_facture_id', '')::uuid
+    END;
+    UPDATE public.factures_honoraires
+    SET quantite_heures_snapshot = COALESCE(v_heures_apres, quantite_heures_snapshot),
+        taux_horaire_snapshot = COALESCE(v_taux_apres, taux_horaire_snapshot),
+        description_prestation_snapshot =
+          'Rectification après litige — '
+          || COALESCE(v_heures_apres::text, quantite_heures_snapshot::text, '—') || ' h × '
+          || COALESCE(v_taux_apres::text, taux_horaire_snapshot::text, '—') || ' EUR/h',
+        modifie_le = now()
+    WHERE id = v_facture_cible_id;
+  END IF;
+
+  IF v_action_resultat = 'AUCUNE' AND v_ajustement_demande THEN
+    SELECT * INTO v_facture
+    FROM public.factures_honoraires
+    WHERE id = NULLIF(v_result->>'facture_id', '')::uuid
+      AND statut IN ('PAYEE', 'FACTORISEE')
+    FOR UPDATE;
+    IF FOUND THEN
+      SELECT solde.montant_ttc
+        INTO v_total_courant_ttc
+        FROM public.fn_solde_correction_facture_honoraires(v_facture.id) solde;
+    END IF;
+    IF NOT FOUND
+       OR NULLIF(v_result->>'montant_final_ttc', '')::numeric
+          IS DISTINCT FROM v_total_courant_ttc THEN
+      RAISE EXCEPTION 'Rectification descriptive incohérente';
+    END IF;
+    IF v_facture.quantite_heures_snapshot IS DISTINCT FROM v_heures_apres
+       OR v_facture.taux_horaire_snapshot IS DISTINCT FROM v_taux_apres THEN
+      INSERT INTO public.factures_honoraires_rectifications (
+        facture_honoraire_id, litige_id, heures_avant, taux_avant,
+        heures_apres, taux_apres, montant_ttc_inchange, resolution, cree_par
+      ) VALUES (
+        v_facture.id, p_litige_id,
+        v_facture.quantite_heures_snapshot, v_facture.taux_horaire_snapshot,
+        v_heures_apres, v_taux_apres, v_total_courant_ttc,
+        btrim(p_resolution), auth.uid()
+      ) RETURNING id INTO v_rectification_id;
+
+      PERFORM public.fn_ecrire_audit_safe(
+        p_acteur_id := auth.uid(),
+        p_type_acteur := 'ADMIN_PLATEFORME',
+        p_action := 'LITIGE_RESOLUTION',
+        p_type_ressource := 'facture_honoraires_rectification',
+        p_id_ressource := v_rectification_id,
+        p_details := jsonb_build_object(
+          'evenement', 'RECTIFICATION_DESCRIPTIVE_SANS_IMPACT_FINANCIER',
+          'facture_id', v_facture.id,
+          'litige_id', p_litige_id,
+          'heures_avant', v_facture.quantite_heures_snapshot,
+          'heures_apres', v_heures_apres,
+          'taux_avant', v_facture.taux_horaire_snapshot,
+          'taux_apres', v_taux_apres,
+          'montant_ttc_inchange', v_total_courant_ttc
+        )
+      );
+      PERFORM public.fn_litige_push_notification(
+        v_litige.soignant_id, 'SOIGNANT', 'LITIGE_RESOLU_AJUSTE',
+        'Litige résolu — détail de facture rectifié',
+        'Les heures ou le taux ont été rectifiés sans changer le total déjà payé.',
+        p_litige_id, jsonb_build_object('rectification_id', v_rectification_id)
+      );
+      PERFORM public.fn_litige_push_notification(
+        v_litige.etablissement_id, 'ETABLISSEMENT', 'LITIGE_RESOLU_AJUSTE',
+        'Litige résolu — détail de facture rectifié',
+        'Les heures ou le taux ont été rectifiés sans changer le total déjà payé.',
+        p_litige_id, jsonb_build_object('rectification_id', v_rectification_id)
+      );
+      v_result := v_result || jsonb_build_object(
+        'action_financiere', 'RECTIFICATION_DESCRIPTIVE',
+        'rectification_id', v_rectification_id
+      );
+    ELSE
+      -- Un changement de pointage peut être légitime sans modifier ni les
+      -- heures facturées ni le taux. Il est audité par le résolveur de litige,
+      -- sans fabriquer un faux document comptable ni faire échouer le parcours.
+      v_result := v_result || jsonb_build_object(
+        'action_financiere', 'CORRECTION_PRESENCE_SANS_IMPACT_FACTURE'
+      );
+    END IF;
+  END IF;
+
+  RETURN v_result;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_admin_resoudre_litige_intelligent"("p_litige_id" "uuid", "p_resolution" "text", "p_en_faveur_de" "text", "p_ajuster_heures" numeric, "p_ajuster_taux" numeric, "p_action_financiere" "text") OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."fn_admin_resume_alertes_pointage"() RETURNS "jsonb"
     LANGUAGE "plpgsql" STABLE SECURITY DEFINER
     SET "search_path" TO 'public'
@@ -13394,6 +14178,63 @@ $$;
 
 
 ALTER FUNCTION "public"."fn_admin_resume_alertes_pointage"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."fn_admin_solde_correction_facture_honoraires"("p_facture_id" "uuid") RETURNS "jsonb"
+    LANGUAGE "plpgsql" STABLE SECURITY DEFINER
+    SET "search_path" TO 'pg_catalog', 'public'
+    SET "row_security" TO 'off'
+    AS $$
+DECLARE
+  v_solde record;
+  v_a_des_corrections boolean;
+BEGIN
+  IF auth.uid() IS NULL OR public.est_admin() IS NOT TRUE THEN
+    RETURN jsonb_build_object(
+      'success', false,
+      'error', 'Admin AAL2 requis.'
+    );
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM public.factures_honoraires fh
+    WHERE fh.id = p_facture_id
+      AND fh.type_document = 'FACTURE'
+  ) THEN
+    RETURN jsonb_build_object(
+      'success', false,
+      'error', 'Facture d’honoraires introuvable.'
+    );
+  END IF;
+
+  SELECT solde.montant_ht, solde.montant_tva, solde.montant_ttc
+    INTO v_solde
+    FROM public.fn_solde_correction_facture_honoraires(p_facture_id) solde;
+
+  SELECT EXISTS (
+    SELECT 1
+    FROM public.factures_honoraires enfant
+    WHERE enfant.facture_precedente_id = p_facture_id
+    UNION ALL
+    SELECT 1
+    FROM public.factures_honoraires_rectifications rectification
+    WHERE rectification.facture_honoraire_id = p_facture_id
+  ) INTO v_a_des_corrections;
+
+  RETURN jsonb_build_object(
+    'success', true,
+    'facture_id', p_facture_id,
+    'montant_ht', v_solde.montant_ht,
+    'montant_tva', v_solde.montant_tva,
+    'montant_ttc', v_solde.montant_ttc,
+    'a_des_corrections', v_a_des_corrections
+  );
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_admin_solde_correction_facture_honoraires"("p_facture_id" "uuid") OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."fn_admin_sourcing_ajouter_crm"("p_cible" "text", "p_prospect_id" "text", "p_score" smallint DEFAULT NULL::smallint) RETURNS "jsonb"
@@ -18975,6 +19816,120 @@ $$;
 ALTER FUNCTION "public"."fn_bloquer_delete_doc_verifie"() OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."fn_bloquer_insertion_validation_tva_directe"() RETURNS "trigger"
+    LANGUAGE "plpgsql"
+    SET "search_path" TO 'pg_catalog', 'public'
+    AS $$
+BEGIN
+  IF COALESCE(current_setting('jolene.tva_mission_managed', true), 'false') <> 'true'
+     AND (
+       NEW.nature_tva_prestation IS NOT NULL
+       OR NEW.nature_tva_declaree_par IS NOT NULL
+       OR NEW.nature_tva_declaree_le IS NOT NULL
+       OR NEW.nature_tva_confirmee_soignant IS NOT NULL
+       OR NEW.nature_tva_confirmee_par IS NOT NULL
+       OR NEW.nature_tva_confirmee_le IS NOT NULL
+       OR NEW.statut_validation_tva IS DISTINCT FROM 'NON_REQUISE'
+       OR NEW.revue_tva_motif IS NOT NULL
+       OR NEW.revue_tva_resolue_par IS NOT NULL
+       OR NEW.revue_tva_resolue_le IS NOT NULL
+     ) THEN
+    RAISE EXCEPTION 'Utilisez le parcours de déclaration TVA de la mission.'
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_bloquer_insertion_validation_tva_directe"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."fn_bloquer_paiement_facture_en_litige"() RETURNS "trigger"
+    LANGUAGE "plpgsql"
+    SET "search_path" TO 'pg_catalog', 'public'
+    AS $$
+BEGIN
+  IF NEW.facture_honoraire_id IS NOT NULL
+     AND NEW.statut = 'DECLARE'
+     AND EXISTS (
+       SELECT 1
+       FROM public.litiges l
+       WHERE l.mission_id = NEW.mission_id
+         AND (l.facture_id = NEW.facture_honoraire_id OR l.facture_id IS NULL)
+         AND l.statut IN (
+           'OUVERT', 'EN_DISCUSSION', 'EN_MEDIATION',
+           'MEDIATION_EN_COURS', 'REVUE_ADMIN'
+         )
+     ) THEN
+    RAISE EXCEPTION 'FACTURE_EN_LITIGE: cette échéance est suspendue jusqu’à la résolution.'
+      USING ERRCODE = 'check_violation';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_bloquer_paiement_facture_en_litige"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."fn_bloquer_retrocession_prelaunch"() RETURNS "trigger"
+    LANGUAGE "plpgsql"
+    SET "search_path" TO 'pg_catalog', 'public'
+    AS $$
+DECLARE
+  v_role text := COALESCE(
+    current_setting('request.jwt.claim.role', true), ''
+  );
+  v_seed_reason text := COALESCE(
+    current_setting('jolene.admin_seed_override_reason', true), ''
+  );
+  v_empechement_context text := COALESCE(
+    current_setting('jolene.empechement_mission_context', true), ''
+  );
+  v_empechement_validated text := COALESCE(
+    current_setting('jolene.empechement_mission_validated', true), ''
+  );
+BEGIN
+  IF NEW.mode_remuneration = 'TAUX_HORAIRE'
+     AND NEW.retrocession_pct IS NULL THEN
+    RETURN NEW;
+  END IF;
+
+  -- Une édition qui ne change pas un ancien montage reste possible : les
+  -- litiges, annulations et opérations de support ne doivent pas être cassés.
+  IF TG_OP = 'UPDATE'
+     AND NEW.mode_remuneration IS NOT DISTINCT FROM OLD.mode_remuneration
+     AND NEW.retrocession_pct IS NOT DISTINCT FROM OLD.retrocession_pct THEN
+    RETURN NEW;
+  END IF;
+
+  -- Les fixtures/migrations contrôlées conservent la capacité de représenter
+  -- un historique antérieur au lancement, jamais via une session client.
+  IF v_role = 'service_role' AND v_seed_reason <> '' THEN
+    RETURN NEW;
+  END IF;
+
+  -- Le remplacement automatique peut recopier une ancienne rétrocession
+  -- seulement après validation exacte par dec_00_guard_empechement. Un client
+  -- ne peut donc ni choisir ce mode, ni fabriquer un remplacement arbitraire.
+  IF TG_OP = 'INSERT'
+     AND NEW.mission_source = 'REMPLACEMENT'
+     AND NEW.remplacement_de_mission_id IS NOT NULL
+     AND v_empechement_context <> ''
+     AND v_empechement_context = v_empechement_validated THEN
+    RETURN NEW;
+  END IF;
+
+  RAISE EXCEPTION '[RETROCESSION_DESACTIVEE] La rétrocession de cabinet n’est pas disponible au lancement. Publiez une mission libérale directe à taux horaire.'
+    USING ERRCODE = 'feature_not_supported';
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_bloquer_retrocession_prelaunch"() OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."fn_bloquer_utilisateur"("p_cible_id" "uuid", "p_motif" "text" DEFAULT NULL::"text") RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
@@ -22165,6 +23120,144 @@ $$;
 ALTER FUNCTION "public"."fn_confirmer_honoraires_retrocession"("p_mission_id" "uuid") OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."fn_confirmer_nature_tva_mission"("p_mission_id" "uuid", "p_nature_tva_prestation" "text") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'pg_catalog', 'public'
+    AS $$
+DECLARE
+  v_uid uuid := auth.uid();
+  v_mission public.missions%ROWTYPE;
+  v_confirmee boolean;
+BEGIN
+  IF v_uid IS NULL THEN
+    RETURN jsonb_build_object('success', false, 'error', 'Non authentifié.');
+  END IF;
+  IF p_nature_tva_prestation IS NULL OR p_nature_tva_prestation NOT IN (
+    'SOIN_THERAPEUTIQUE_EXONERE',
+    'PRESTATION_TAXABLE'
+  ) THEN
+    RETURN jsonb_build_object('success', false, 'error', 'Nature TVA invalide.');
+  END IF;
+
+  SELECT m.* INTO v_mission
+  FROM public.missions m
+  WHERE m.id = p_mission_id
+  FOR UPDATE;
+  IF NOT FOUND
+     OR v_mission.soignant_assigne_id IS DISTINCT FROM v_uid
+     OR v_mission.type_contrat_applique::text IS DISTINCT FROM 'LIBERAL' THEN
+    RETURN jsonb_build_object(
+      'success', false,
+      'error', 'Cette confirmation est réservée au soignant libéral assigné.'
+    );
+  END IF;
+  IF v_mission.nature_tva_prestation IS NULL
+     OR v_mission.nature_tva_prestation NOT IN (
+    'SOIN_THERAPEUTIQUE_EXONERE',
+    'PRESTATION_TAXABLE'
+  ) THEN
+    RETURN jsonb_build_object(
+      'success', false,
+      'error', 'La déclaration de l établissement est absente. Jolene a été prévenue.'
+    );
+  END IF;
+
+  v_confirmee := p_nature_tva_prestation = v_mission.nature_tva_prestation;
+  IF v_mission.nature_tva_confirmee_soignant = p_nature_tva_prestation
+     AND v_mission.nature_tva_confirmee_par = v_uid
+     AND v_mission.statut_validation_tva = (CASE
+       WHEN v_confirmee THEN 'CONFIRMEE'
+       ELSE 'A_REVOIR'
+     END) THEN
+    RETURN jsonb_build_object(
+      'success', true,
+      'statut_validation_tva', v_mission.statut_validation_tva,
+      'accord', v_confirmee
+    );
+  END IF;
+
+  PERFORM set_config('jolene.tva_mission_managed', 'true', true);
+  UPDATE public.missions
+  SET
+    nature_tva_confirmee_soignant = p_nature_tva_prestation,
+    nature_tva_confirmee_par = v_uid,
+    nature_tva_confirmee_le = now(),
+    statut_validation_tva = CASE
+      WHEN v_confirmee THEN 'CONFIRMEE'
+      ELSE 'A_REVOIR'
+    END
+  WHERE id = p_mission_id;
+
+  INSERT INTO public.notifications (
+    destinataire_id, type_destinataire, type, titre, corps, lien,
+    type_ressource, id_ressource
+  ) VALUES (
+    v_mission.etablissement_id,
+    'ETABLISSEMENT',
+    'SYSTEM',
+    CASE WHEN v_confirmee
+      THEN 'Nature TVA confirmée'
+      ELSE 'Nature TVA à revoir'
+    END,
+    CASE WHEN v_confirmee
+      THEN 'Le soignant a confirmé la nature TVA de la mission « ' || left(v_mission.intitule, 120) || ' ».'
+      ELSE 'Le soignant n est pas d accord avec la nature TVA de la mission « ' || left(v_mission.intitule, 120) || ' ». La mission continue, mais sa facturation est suspendue pendant la revue Jolene.'
+    END,
+    '/etablissement/missions/' || p_mission_id,
+    'mission',
+    p_mission_id
+  );
+
+  IF NOT v_confirmee THEN
+    INSERT INTO public.notifications (
+      destinataire_id, type_destinataire, type, titre, corps, lien,
+      type_ressource, id_ressource
+    )
+    SELECT
+      admin_id,
+      'ADMIN',
+      'SYSTEM',
+      'Revue TVA mission requise',
+      'Les parties ne concordent pas sur la nature TVA de la mission « ' || left(v_mission.intitule, 120) || ' ».',
+      '/admin/facturation',
+      'mission',
+      p_mission_id
+    FROM public.fn_list_admin_user_ids() AS admins(admin_id);
+  END IF;
+
+  PERFORM public.fn_ecrire_audit_safe(
+    p_acteur_id := v_uid,
+    p_type_acteur := 'SOIGNANT',
+    p_action := 'FACTURATION',
+    p_type_ressource := 'mission',
+    p_id_ressource := p_mission_id,
+    p_details := jsonb_build_object(
+      'event', 'NATURE_TVA_MISSION_CONFIRMEE_PAR_SOIGNANT',
+      'nature_etablissement', v_mission.nature_tva_prestation,
+      'nature_soignant', p_nature_tva_prestation,
+      'accord', v_confirmee,
+      'effet', CASE WHEN v_confirmee
+        THEN 'FACTURATION_AUTORISEE'
+        ELSE 'FACTURATION_SUSPENDUE_MISSION_ACTIVE'
+      END
+    )
+  );
+
+  RETURN jsonb_build_object(
+    'success', true,
+    'statut_validation_tva', CASE
+      WHEN v_confirmee THEN 'CONFIRMEE'
+      ELSE 'A_REVOIR'
+    END,
+    'accord', v_confirmee
+  );
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_confirmer_nature_tva_mission"("p_mission_id" "uuid", "p_nature_tva_prestation" "text") OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."fn_confirmer_paiement_soignant"("p_paiement_id" "uuid") RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public', 'pg_temp'
@@ -23073,6 +24166,40 @@ $$;
 ALTER FUNCTION "public"."fn_coordonnees_bancaires_soignant_verifiees"("p_soignant_id" "uuid") OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."fn_corriger_strategie_facturation_assignation"() RETURNS "trigger"
+    LANGUAGE "plpgsql"
+    SET "search_path" TO 'pg_catalog', 'public'
+    AS $$
+DECLARE
+  v_attendue public.strategie_facturation;
+BEGIN
+  IF OLD.statut = 'OUVERTE' AND NEW.statut = 'ASSIGNEE' THEN
+    v_attendue := public.fn_strategie_facturation_pour_periode(NEW.debut_le, NEW.fin_le);
+    IF NEW.strategie_facturation IS DISTINCT FROM v_attendue THEN
+      NEW.strategie_facturation := v_attendue;
+      PERFORM public.fn_ecrire_audit_safe(
+        p_acteur_id := auth.uid(),
+        p_type_acteur := 'SYSTEME',
+        p_action := 'FACTURATION',
+        p_type_ressource := 'mission',
+        p_id_ressource := NEW.id,
+        p_details := jsonb_build_object(
+          'event', 'STRATEGIE_FACTURATION_CORRIGEE_A_ASSIGNATION',
+          'strategie', v_attendue,
+          'debut_le', NEW.debut_le,
+          'fin_le', NEW.fin_le
+        )
+      );
+    END IF;
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_corriger_strategie_facturation_assignation"() OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."fn_creer_api_key"("p_nom" "text", "p_permissions" "text"[], "p_etablissement_id" "uuid" DEFAULT NULL::"uuid") RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'pg_catalog', 'public', 'extensions'
@@ -23745,6 +24872,78 @@ COMMENT ON FUNCTION "public"."fn_creer_mission_api_v1"("p_etablissement_id" "uui
 
 
 
+CREATE OR REPLACE FUNCTION "public"."fn_creer_mission_api_v2"("p_etablissement_id" "uuid", "p_intitule" "text", "p_profession_requise" "public"."type_profession", "p_service" "text", "p_taux_horaire_base" numeric, "p_creneaux" "jsonb", "p_type_contrat_recherche" "text", "p_mode_remuneration" "text", "p_retrocession_pct" numeric, "p_nature_tva_prestation" "text") RETURNS "jsonb"
+    LANGUAGE "plpgsql"
+    SET "search_path" TO ''
+    AS $$
+DECLARE
+  v_resultat jsonb;
+  v_mission_id uuid;
+  v_nature_effective text;
+  v_statut_tva_effectif text;
+BEGIN
+  IF p_type_contrat_recherche IN ('LIBERAL', 'TOUS')
+     AND (
+       p_nature_tva_prestation IS NULL
+       OR p_nature_tva_prestation NOT IN (
+       'SOIN_THERAPEUTIQUE_EXONERE',
+       'PRESTATION_TAXABLE'
+       )
+     ) THEN
+    RETURN pg_catalog.jsonb_build_object(
+      'success', false,
+      'error', 'nature_tva_prestation requise pour une mission potentiellement libérale',
+      'code', 'NATURE_TVA_REQUISE'
+    );
+  END IF;
+
+  v_resultat := public.fn_creer_mission_api_v1(
+    p_etablissement_id,
+    p_intitule,
+    p_profession_requise,
+    p_service,
+    p_taux_horaire_base,
+    p_creneaux,
+    p_type_contrat_recherche,
+    p_mode_remuneration,
+    p_retrocession_pct
+  );
+  IF COALESCE((v_resultat->>'success')::boolean, false) IS NOT TRUE THEN
+    RETURN v_resultat;
+  END IF;
+
+  v_mission_id := (v_resultat->>'mission_id')::uuid;
+  PERFORM pg_catalog.set_config('jolene.tva_mission_managed', 'true', true);
+  UPDATE public.missions
+  SET
+    nature_tva_prestation = CASE
+      WHEN type_contrat_recherche::text = 'SALARIE' THEN NULL
+      ELSE p_nature_tva_prestation
+    END,
+    nature_tva_declaree_par = NULL,
+    nature_tva_declaree_le = CASE
+      WHEN type_contrat_recherche::text = 'SALARIE' THEN NULL
+      ELSE pg_catalog.now()
+    END,
+    statut_validation_tva = CASE
+      WHEN type_contrat_recherche::text = 'SALARIE' THEN 'NON_REQUISE'
+      ELSE 'A_CONFIRMER'
+    END
+  WHERE id = v_mission_id
+  RETURNING nature_tva_prestation, statut_validation_tva
+  INTO v_nature_effective, v_statut_tva_effectif;
+
+  RETURN v_resultat || pg_catalog.jsonb_build_object(
+    'nature_tva_prestation', v_nature_effective,
+    'statut_validation_tva', v_statut_tva_effectif
+  );
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_creer_mission_api_v2"("p_etablissement_id" "uuid", "p_intitule" "text", "p_profession_requise" "public"."type_profession", "p_service" "text", "p_taux_horaire_base" numeric, "p_creneaux" "jsonb", "p_type_contrat_recherche" "text", "p_mode_remuneration" "text", "p_retrocession_pct" numeric, "p_nature_tva_prestation" "text") OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."fn_creer_mission_multi_jours"("p_intitule" "text", "p_description" "text" DEFAULT NULL::"text", "p_profession_requise" "public"."type_profession" DEFAULT NULL::"public"."type_profession", "p_service" "text" DEFAULT NULL::"text", "p_taux_horaire_base" numeric DEFAULT NULL::numeric, "p_est_urgente" boolean DEFAULT false, "p_niveau_urgence" integer DEFAULT 0, "p_mode_attribution" "text" DEFAULT 'PREMIER_ARRIVE'::"text", "p_specialite_medicale_requise" "text" DEFAULT NULL::"text", "p_accepte_non_specialises" boolean DEFAULT true, "p_creneaux" "jsonb" DEFAULT '[]'::"jsonb") RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO ''
@@ -24044,6 +25243,85 @@ $$;
 
 
 ALTER FUNCTION "public"."fn_creer_mission_multi_jours_v2"("p_intitule" "text", "p_description" "text", "p_profession_requise" "public"."type_profession", "p_service" "text", "p_taux_horaire_base" numeric, "p_est_urgente" boolean, "p_niveau_urgence" integer, "p_mode_attribution" "text", "p_specialite_medicale_requise" "text", "p_accepte_non_specialises" boolean, "p_creneaux" "jsonb", "p_type_contrat_recherche" "text", "p_mode_remuneration" "text", "p_retrocession_pct" numeric) OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."fn_creer_mission_multi_jours_v3"("p_intitule" "text", "p_description" "text", "p_profession_requise" "public"."type_profession", "p_service" "text", "p_taux_horaire_base" numeric, "p_est_urgente" boolean, "p_niveau_urgence" integer, "p_mode_attribution" "text", "p_specialite_medicale_requise" "text", "p_accepte_non_specialises" boolean, "p_creneaux" "jsonb", "p_type_contrat_recherche" "text", "p_mode_remuneration" "text", "p_retrocession_pct" numeric, "p_nature_tva_prestation" "text") RETURNS "jsonb"
+    LANGUAGE "plpgsql"
+    SET "search_path" TO ''
+    AS $$
+DECLARE
+  v_resultat jsonb;
+  v_mission_id uuid;
+  v_nature_effective text;
+  v_statut_tva_effectif text;
+BEGIN
+  IF p_type_contrat_recherche IN ('LIBERAL', 'TOUS')
+     AND (
+       p_nature_tva_prestation IS NULL
+       OR p_nature_tva_prestation NOT IN (
+       'SOIN_THERAPEUTIQUE_EXONERE',
+       'PRESTATION_TAXABLE'
+       )
+     ) THEN
+    RETURN pg_catalog.jsonb_build_object(
+      'success', false,
+      'error', 'Indiquez la nature TVA prévue de la prestation libérale.'
+    );
+  END IF;
+
+  v_resultat := public.fn_creer_mission_multi_jours_v2(
+    p_intitule,
+    p_description,
+    p_profession_requise,
+    p_service,
+    p_taux_horaire_base,
+    p_est_urgente,
+    p_niveau_urgence,
+    p_mode_attribution,
+    p_specialite_medicale_requise,
+    p_accepte_non_specialises,
+    p_creneaux,
+    p_type_contrat_recherche,
+    p_mode_remuneration,
+    p_retrocession_pct
+  );
+  IF COALESCE((v_resultat->>'success')::boolean, false) IS NOT TRUE THEN
+    RETURN v_resultat;
+  END IF;
+
+  v_mission_id := (v_resultat->>'mission_id')::uuid;
+  PERFORM pg_catalog.set_config('jolene.tva_mission_managed', 'true', true);
+  UPDATE public.missions
+  SET
+    nature_tva_prestation = CASE
+      WHEN type_contrat_recherche::text = 'SALARIE' THEN NULL
+      ELSE p_nature_tva_prestation
+    END,
+    nature_tva_declaree_par = CASE
+      WHEN type_contrat_recherche::text = 'SALARIE' THEN NULL
+      ELSE (SELECT auth.uid())
+    END,
+    nature_tva_declaree_le = CASE
+      WHEN type_contrat_recherche::text = 'SALARIE' THEN NULL
+      ELSE pg_catalog.now()
+    END,
+    statut_validation_tva = CASE
+      WHEN type_contrat_recherche::text = 'SALARIE' THEN 'NON_REQUISE'
+      ELSE 'A_CONFIRMER'
+    END
+  WHERE id = v_mission_id
+  RETURNING nature_tva_prestation, statut_validation_tva
+  INTO v_nature_effective, v_statut_tva_effectif;
+
+  RETURN v_resultat || pg_catalog.jsonb_build_object(
+    'nature_tva_prestation', v_nature_effective,
+    'statut_validation_tva', v_statut_tva_effectif
+  );
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_creer_mission_multi_jours_v3"("p_intitule" "text", "p_description" "text", "p_profession_requise" "public"."type_profession", "p_service" "text", "p_taux_horaire_base" numeric, "p_est_urgente" boolean, "p_niveau_urgence" integer, "p_mode_attribution" "text", "p_specialite_medicale_requise" "text", "p_accepte_non_specialises" boolean, "p_creneaux" "jsonb", "p_type_contrat_recherche" "text", "p_mode_remuneration" "text", "p_retrocession_pct" numeric, "p_nature_tva_prestation" "text") OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."fn_creer_notation_mission"("p_mission_id" "uuid", "p_sens" "text", "p_critere_1" integer, "p_critere_2" integer, "p_critere_3" integer, "p_critere_4" integer, "p_commentaire" "text" DEFAULT NULL::"text") RETURNS "jsonb"
@@ -28610,6 +29888,124 @@ $$;
 ALTER FUNCTION "public"."fn_emettre_alerte_monitoring"("p_type" "text", "p_severite" "text", "p_source" "text", "p_message" "text", "p_details" "jsonb") OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."fn_emettre_document_facturation_honoraires"("p_facture_id" "uuid", "p_pdf_s3_key" "text", "p_facturx_xml_url" "text") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public', 'extensions'
+    AS $$
+DECLARE
+  v_facture public.factures_honoraires%ROWTYPE;
+  v_emise_le timestamptz := now();
+  v_delai integer;
+BEGIN
+  IF COALESCE(auth.jwt()->>'role', current_setting('request.jwt.claim.role', true), '') <> 'service_role' THEN
+    RAISE EXCEPTION 'Accès réservé au service de facturation.' USING ERRCODE = '42501';
+  END IF;
+  IF NULLIF(btrim(COALESCE(p_pdf_s3_key, '')), '') IS NULL
+     OR NULLIF(btrim(COALESCE(p_facturx_xml_url, '')), '') IS NULL THEN
+    RAISE EXCEPTION 'Les deux versions PDF et XML CII sont requises avant émission.';
+  END IF;
+
+  SELECT * INTO v_facture
+  FROM public.factures_honoraires
+  WHERE id = p_facture_id
+  FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Document de facturation introuvable.';
+  END IF;
+  IF v_facture.statut NOT IN ('BROUILLON', 'EN_GENERATION') THEN
+    RAISE EXCEPTION 'Le document % est déjà émis ou n’est plus émissible.', v_facture.numero_facture;
+  END IF;
+
+  SELECT COALESCE(valeur::integer, 48) INTO v_delai
+  FROM public.parametres_litiges
+  WHERE cle = 'delai_contestation_facture_liberal_h';
+  v_delai := COALESCE(v_delai, 48);
+
+  UPDATE public.factures_honoraires
+  SET statut = 'EMISE',
+      pdf_s3_key = p_pdf_s3_key,
+      facturx_xml_url = p_facturx_xml_url,
+      pdf_a_regenerer = false,
+      emise_le = v_emise_le,
+      notifiee_soignant_le = v_emise_le,
+      verification_echeance_le = v_emise_le + make_interval(hours => v_delai),
+      modifie_le = v_emise_le
+  WHERE id = p_facture_id;
+
+  -- Le remboursement automatique devient visible aux workers uniquement au
+  -- commit qui rend aussi l'avoir et ses notifications visibles. Un retry de
+  -- génération ne duplique jamais la file.
+  IF v_facture.type_document = 'AVOIR'
+     AND v_facture.mode_remboursement = 'AUTO_STRIPE' THEN
+    INSERT INTO public.stripe_refunds_queue (
+      avoir_id, facture_origine_id, stripe_payment_intent_id, montant_cts
+    )
+    SELECT
+      v_facture.id,
+      v_facture.facture_precedente_id,
+      origine.stripe_payment_intent_id,
+      round(v_facture.montant_ttc * 100)::integer
+    FROM public.factures_honoraires origine
+    WHERE origine.id = v_facture.facture_precedente_id
+      AND origine.type_document = 'FACTURE'
+      AND origine.statut = 'PAYEE'
+      AND origine.stripe_payment_intent_id IS NOT NULL
+      AND v_facture.montant_ttc > 0
+      AND NOT EXISTS (
+        SELECT 1 FROM public.stripe_refunds_queue q
+        WHERE q.avoir_id = v_facture.id
+      );
+    IF NOT FOUND THEN
+      RAISE EXCEPTION 'Avoir émis mais source Stripe sûre introuvable : remboursement automatique annulé.';
+    END IF;
+  END IF;
+
+  INSERT INTO public.notifications (
+    destinataire_id, type_destinataire, type, titre, corps, lien,
+    type_ressource, id_ressource
+  ) VALUES
+  (
+    v_facture.soignant_id, 'SOIGNANT', 'FACTURE_EMISE',
+    'Document ' || v_facture.numero_facture || ' à vérifier',
+    'Une copie est disponible. Vérifiez les heures, le taux et le montant sous '
+      || v_delai || ' h ; en cas d’erreur, contestez uniquement cette échéance.',
+    '/soignant/mes-gains?tab=factures', 'facture_honoraire', p_facture_id
+  ),
+  (
+    v_facture.etablissement_id, 'ETABLISSEMENT', 'FACTURE_EMISE',
+    'Nouvelle échéance ' || v_facture.numero_facture,
+    'La note d’honoraires et la facture de services Jolene associée sont disponibles. Chaque période reste indépendante.',
+    '/etablissement/facturation', 'facture_honoraire', p_facture_id
+  );
+
+  INSERT INTO public.invoice_audit_log (
+    invoice_id, action, actor_id, payload_before, payload_after
+  ) VALUES (
+    p_facture_id, 'EMISSION_ET_REMISE_COPIE',
+    '00000000-0000-0000-0000-000000000000'::uuid,
+    jsonb_build_object('statut', v_facture.statut),
+    jsonb_build_object(
+      'statut', 'EMISE', 'emise_le', v_emise_le,
+      'notifiee_soignant_le', v_emise_le,
+      'verification_echeance_le', v_emise_le + make_interval(hours => v_delai),
+      'delai_verification_heures', v_delai
+    )
+  );
+
+  RETURN jsonb_build_object(
+    'success', true,
+    'facture_id', p_facture_id,
+    'emise_le', v_emise_le,
+    'verification_echeance_le', v_emise_le + make_interval(hours => v_delai),
+    'delai_verification_heures', v_delai
+  );
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_emettre_document_facturation_honoraires"("p_facture_id" "uuid", "p_pdf_s3_key" "text", "p_facturx_xml_url" "text") OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."fn_enforce_etablissement_rbac_trigger"() RETURNS "trigger"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'pg_catalog', 'public'
@@ -32966,80 +34362,85 @@ CREATE OR REPLACE FUNCTION "public"."fn_fenetre_contestation_ouverte"("p_type_li
     SET "search_path" TO 'public'
     AS $$
 DECLARE
-  v_presence_validee TIMESTAMPTZ;
-  v_facture_emise    TIMESTAMPTZ;
-  v_facture_payee    TIMESTAMPTZ;
-  v_mission_fin      TIMESTAMPTZ;
-  v_est_salarie      BOOLEAN;
-  v_type_applique    public.type_contrat_applique_enum;
-  v_soignant_id      UUID;
-  v_delai_pointage   INTEGER;
-  v_delai_liberal    INTEGER;
-  v_delai_salarie    INTEGER;
-  v_delai_compo_mois INTEGER;
+  v_presence_validee timestamptz;
+  v_facture_emise timestamptz;
+  v_facture_verification_echeance timestamptz;
+  v_facture_payee timestamptz;
+  v_mission_fin timestamptz;
+  v_est_salarie boolean;
+  v_type_applique public.type_contrat_applique_enum;
+  v_soignant_id uuid;
+  v_delai_pointage integer;
+  v_delai_liberal integer;
+  v_delai_salarie integer;
+  v_delai_compo_mois integer;
 BEGIN
   IF p_type_litige IN ('SECURITE_DANGER', 'NON_PAIEMENT', 'AUTRE') THEN
     RETURN TRUE;
   END IF;
 
-  SELECT valeur::INTEGER INTO v_delai_pointage   FROM public.parametres_litiges WHERE cle = 'delai_contestation_pointage_h';
-  SELECT valeur::INTEGER INTO v_delai_liberal    FROM public.parametres_litiges WHERE cle = 'delai_contestation_facture_liberal_h';
-  SELECT valeur::INTEGER INTO v_delai_salarie    FROM public.parametres_litiges WHERE cle = 'delai_contestation_paiement_salarie_j';
-  SELECT valeur::INTEGER INTO v_delai_compo_mois FROM public.parametres_litiges WHERE cle = 'delai_comportement_mois';
+  SELECT COALESCE(valeur::integer, 48) INTO v_delai_pointage
+  FROM public.parametres_litiges WHERE cle = 'delai_contestation_pointage_h';
+  SELECT COALESCE(valeur::integer, 48) INTO v_delai_liberal
+  FROM public.parametres_litiges WHERE cle = 'delai_contestation_facture_liberal_h';
+  SELECT COALESCE(valeur::integer, 60) INTO v_delai_salarie
+  FROM public.parametres_litiges WHERE cle = 'delai_contestation_paiement_salarie_j';
+  SELECT COALESCE(valeur::integer, 6) INTO v_delai_compo_mois
+  FROM public.parametres_litiges WHERE cle = 'delai_comportement_mois';
+  v_delai_pointage := COALESCE(v_delai_pointage, 48);
+  v_delai_liberal := COALESCE(v_delai_liberal, 48);
+  v_delai_salarie := COALESCE(v_delai_salarie, 60);
+  v_delai_compo_mois := COALESCE(v_delai_compo_mois, 6);
 
-  IF p_type_litige IN ('ABSENCE_SOIGNANT', 'DEPART_ANTICIPE', 'RETARD_IMPORTANT', 'DESACCORD_HEURES_POINTAGE') THEN
+  IF p_type_litige IN (
+    'ABSENCE_SOIGNANT', 'DEPART_ANTICIPE', 'RETARD_IMPORTANT',
+    'DESACCORD_HEURES_POINTAGE'
+  ) THEN
     SELECT valide_le INTO v_presence_validee
-      FROM public.presences
-     WHERE mission_id = p_mission_id
-       AND valide_le IS NOT NULL
-     ORDER BY valide_le DESC
-     LIMIT 1;
-    IF v_presence_validee IS NULL THEN
-      RETURN TRUE;
-    END IF;
-    RETURN v_presence_validee + make_interval(hours => v_delai_pointage) > NOW();
+    FROM public.presences
+    WHERE mission_id = p_mission_id AND valide_le IS NOT NULL
+    ORDER BY valide_le DESC LIMIT 1;
+    IF v_presence_validee IS NULL THEN RETURN TRUE; END IF;
+    RETURN v_presence_validee + make_interval(hours => v_delai_pointage) > now();
   END IF;
 
   IF p_type_litige IN ('DESACCORD_MONTANT_FACTURE', 'FRAIS_COMPLEMENTAIRES') THEN
-    IF p_facture_id IS NULL THEN
-      RETURN TRUE;
-    END IF;
-
-    SELECT f.date_emission, f.date_paiement
-      INTO v_facture_emise, v_facture_payee
-      FROM public.factures_honoraires f
-     WHERE f.id = p_facture_id;
-
-    IF v_facture_emise IS NULL THEN
-      RETURN FALSE;
-    END IF;
+    IF p_facture_id IS NULL THEN RETURN TRUE; END IF;
+    SELECT COALESCE(f.emise_le, f.cree_le, f.date_emission::timestamptz),
+           f.verification_echeance_le, f.date_paiement
+    INTO v_facture_emise, v_facture_verification_echeance, v_facture_payee
+    FROM public.factures_honoraires f
+    WHERE f.id = p_facture_id;
+    IF v_facture_emise IS NULL THEN RETURN FALSE; END IF;
 
     SELECT m.soignant_assigne_id, m.type_contrat_applique
-      INTO v_soignant_id, v_type_applique
-      FROM public.missions m WHERE m.id = p_mission_id;
-
+    INTO v_soignant_id, v_type_applique
+    FROM public.missions m WHERE m.id = p_mission_id;
     IF v_type_applique = 'SALARIE' THEN
-      v_est_salarie := TRUE;
+      v_est_salarie := true;
     ELSIF v_type_applique = 'LIBERAL' THEN
-      v_est_salarie := FALSE;
+      v_est_salarie := false;
     ELSE
-      SELECT COALESCE(s.est_salarie_etablissement, FALSE) INTO v_est_salarie
-        FROM public.soignants s WHERE s.id = v_soignant_id;
+      SELECT COALESCE(s.est_salarie_etablissement, false) INTO v_est_salarie
+      FROM public.soignants s WHERE s.id = v_soignant_id;
     END IF;
-
     IF v_est_salarie AND v_facture_payee IS NOT NULL THEN
-      RETURN v_facture_payee + make_interval(days => v_delai_salarie) > NOW();
-    ELSE
-      RETURN v_facture_emise + make_interval(hours => v_delai_liberal) > NOW();
+      RETURN v_facture_payee + make_interval(days => v_delai_salarie) > now();
     END IF;
+    RETURN COALESCE(
+      v_facture_verification_echeance,
+      v_facture_emise + make_interval(hours => v_delai_liberal)
+    ) > now();
   END IF;
 
-  IF p_type_litige IN ('COMPORTEMENT_SOIGNANT', 'COMPORTEMENT_ETABLISSEMENT', 'CONDITIONS_MISSION_NON_RESPECTEES') THEN
-    SELECT m.fin_le INTO v_mission_fin FROM public.missions m WHERE m.id = p_mission_id;
-    IF v_mission_fin IS NULL THEN
-      RETURN TRUE;
-    END IF;
-    RETURN v_mission_fin + make_interval(months => v_delai_compo_mois) > NOW();
+  IF p_type_litige IN (
+    'COMPORTEMENT_SOIGNANT', 'COMPORTEMENT_ETABLISSEMENT',
+    'CONDITIONS_MISSION_NON_RESPECTEES'
+  ) THEN
+    SELECT m.fin_le INTO v_mission_fin
+    FROM public.missions m WHERE m.id = p_mission_id;
+    IF v_mission_fin IS NULL THEN RETURN TRUE; END IF;
+    RETURN v_mission_fin + make_interval(months => v_delai_compo_mois) > now();
   END IF;
 
   RETURN TRUE;
@@ -33050,7 +34451,7 @@ $$;
 ALTER FUNCTION "public"."fn_fenetre_contestation_ouverte"("p_type_litige" "public"."type_litige", "p_mission_id" "uuid", "p_facture_id" "uuid") OWNER TO "postgres";
 
 
-COMMENT ON FUNCTION "public"."fn_fenetre_contestation_ouverte"("p_type_litige" "public"."type_litige", "p_mission_id" "uuid", "p_facture_id" "uuid") IS 'Vérifie si la fenêtre de contestation est ouverte (F1 pointage 48h / F2 facture 48h libéral / F3 paiement 60j salarié / 6 mois COMPORTEMENT). FIX T19 : type effectif via missions.type_contrat_applique (figé), fallback est_salarie_etablissement si NULL.';
+COMMENT ON FUNCTION "public"."fn_fenetre_contestation_ouverte"("p_type_litige" "public"."type_litige", "p_mission_id" "uuid", "p_facture_id" "uuid") IS 'Fenêtres de contestation calculées depuis les instants produit exacts. Sécurité, non-paiement et autre restent toujours recevables.';
 
 
 
@@ -36205,7 +37606,11 @@ BEGIN
     'mission_id', m.id,
     'soignant_id', m.soignant_assigne_id,
     'etablissement_id', m.etablissement_id,
-    'periode_debut', m.debut_le::date,
+    'periode_debut', CASE
+      WHEN m.strategie_facturation = 'HEBDO_ET_FINALE'
+        THEN COALESCE(derniere_periode.prochain_debut, m.debut_le::date)
+      ELSE m.debut_le::date
+    END,
     'periode_fin', m.fin_le::date,
     'numero_semaine_iso', NULL,
     'annee_iso', NULL,
@@ -36215,11 +37620,28 @@ BEGIN
   INTO v_finales
   FROM public.missions m
   JOIN public.soignants s ON s.id = m.soignant_assigne_id
+  LEFT JOIN LATERAL (
+    SELECT (max(fh.periode_fin) + 1)::date AS prochain_debut
+    FROM public.factures_honoraires fh
+    WHERE fh.mission_id = m.id
+      AND fh.type_document = 'FACTURE'
+      AND fh.est_facture_finale_mission IS FALSE
+      AND fh.statut NOT IN ('ANNULEE', 'REMPLACEE', 'ERREUR_GENERATION')
+  ) derniere_periode ON true
   WHERE m.statut = 'TERMINEE'
     AND COALESCE(m.est_arret_maladie, false) IS FALSE
     AND m.fin_le::date < p_today
     AND m.type_contrat_applique = 'LIBERAL'
+    AND m.mode_remuneration = 'TAUX_HORAIRE'
     AND COALESCE(s.mandat_facturation_signe, false) IS TRUE
+    AND s.mandat_facturation_version = '1.4'
+    AND s.statut_tva_honoraires IN ('FRANCHISE_EN_BASE', 'REDEVABLE_TVA')
+    AND m.statut_validation_tva = 'CONFIRMEE'
+    AND m.nature_tva_prestation IN (
+      'SOIN_THERAPEUTIQUE_EXONERE', 'PRESTATION_TAXABLE'
+    )
+    AND m.nature_tva_confirmee_soignant = m.nature_tva_prestation
+    AND m.nature_tva_confirmee_par = m.soignant_assigne_id
     AND NOT EXISTS (
       SELECT 1 FROM public.missions r
       WHERE r.remplacement_de_mission_id = m.id
@@ -36229,6 +37651,10 @@ BEGIN
       WHERE fh.mission_id = m.id
         AND fh.est_facture_finale_mission IS TRUE
         AND fh.statut NOT IN ('ANNULEE', 'REMPLACEE', 'ERREUR_GENERATION')
+    )
+    AND (
+      m.strategie_facturation = 'FINALE_UNIQUE'
+      OR COALESCE(derniere_periode.prochain_debut, m.debut_le::date) <= m.fin_le::date
     )
     AND EXISTS (
       SELECT 1 FROM public.mission_creneaux mc
@@ -36246,13 +37672,14 @@ BEGIN
     );
 
   WITH semaines AS (
-    SELECT m.id AS mission_id,
-           m.soignant_assigne_id,
-           m.etablissement_id,
-           m.debut_le,
-           m.fin_le,
-           m.strategie_facturation,
-           gs.lundi_semaine
+    SELECT
+      m.id AS mission_id,
+      m.soignant_assigne_id,
+      m.etablissement_id,
+      m.debut_le,
+      m.fin_le,
+      m.strategie_facturation,
+      gs.lundi_semaine
     FROM public.missions m
     JOIN public.soignants s ON s.id = m.soignant_assigne_id
     CROSS JOIN LATERAL generate_series(
@@ -36264,7 +37691,16 @@ BEGIN
       AND COALESCE(m.est_arret_maladie, false) IS FALSE
       AND m.strategie_facturation = 'HEBDO_ET_FINALE'
       AND m.type_contrat_applique = 'LIBERAL'
+      AND m.mode_remuneration = 'TAUX_HORAIRE'
       AND COALESCE(s.mandat_facturation_signe, false) IS TRUE
+      AND s.mandat_facturation_version = '1.4'
+      AND s.statut_tva_honoraires IN ('FRANCHISE_EN_BASE', 'REDEVABLE_TVA')
+      AND m.statut_validation_tva = 'CONFIRMEE'
+      AND m.nature_tva_prestation IN (
+        'SOIN_THERAPEUTIQUE_EXONERE', 'PRESTATION_TAXABLE'
+      )
+      AND m.nature_tva_confirmee_soignant = m.nature_tva_prestation
+      AND m.nature_tva_confirmee_par = m.soignant_assigne_id
       AND NOT EXISTS (
         SELECT 1 FROM public.missions r
         WHERE r.remplacement_de_mission_id = m.id
@@ -36277,15 +37713,13 @@ BEGIN
       )
   ),
   semaines_closes AS (
-    SELECT sm.*,
-           (sm.lundi_semaine + interval '6 days')::date AS dimanche_semaine,
-           extract(week FROM sm.lundi_semaine)::smallint AS num_sem,
-           extract(isoyear FROM sm.lundi_semaine)::smallint AS ann_iso,
-           greatest(sm.lundi_semaine::date, sm.debut_le::date) AS periode_d,
-           least(
-             (sm.lundi_semaine + interval '6 days')::date,
-             sm.fin_le::date
-           ) AS periode_f
+    SELECT
+      sm.*,
+      (sm.lundi_semaine + interval '6 days')::date AS dimanche_semaine,
+      extract(week FROM sm.lundi_semaine)::smallint AS num_sem,
+      extract(isoyear FROM sm.lundi_semaine)::smallint AS ann_iso,
+      greatest(sm.lundi_semaine::date, sm.debut_le::date) AS periode_d,
+      least((sm.lundi_semaine + interval '6 days')::date, sm.fin_le::date) AS periode_f
     FROM semaines sm
     WHERE (sm.lundi_semaine + interval '6 days')::date < p_today
   )
@@ -39604,6 +41038,120 @@ COMMENT ON FUNCTION "public"."fn_modifier_mission_etablissement_v3"("p_mission_i
 
 
 
+CREATE OR REPLACE FUNCTION "public"."fn_modifier_mission_etablissement_v4"("p_mission_id" "uuid", "p_intitule" "text", "p_description" "text", "p_service" "text", "p_profession_requise" "public"."type_profession", "p_taux_horaire_base" numeric, "p_est_urgente" boolean, "p_niveau_urgence" integer, "p_mode_attribution" "text", "p_type_contrat_recherche" "text", "p_specialite_medicale_requise" "text", "p_accepte_non_specialises" boolean, "p_creneaux" "jsonb", "p_nature_tva_prestation" "text") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+DECLARE
+  v_mission public.missions%ROWTYPE;
+  v_resultat jsonb;
+  v_nature_demandee text;
+  v_nature_effective text;
+  v_statut_tva_effectif text;
+BEGIN
+  SELECT m.* INTO v_mission
+  FROM public.missions m
+  WHERE m.id = p_mission_id
+  FOR UPDATE;
+  IF NOT FOUND OR public.fn_a_permission_etablissement(
+    'missions', v_mission.etablissement_id
+  ) IS NOT TRUE THEN
+    RETURN pg_catalog.jsonb_build_object(
+      'success', false,
+      'error', 'Mission introuvable ou accès refusé.'
+    );
+  END IF;
+
+  v_nature_demandee := CASE
+    WHEN p_type_contrat_recherche = 'SALARIE' THEN NULL
+    ELSE p_nature_tva_prestation
+  END;
+  IF p_type_contrat_recherche IN ('LIBERAL', 'TOUS')
+     AND (
+       v_nature_demandee IS NULL
+       OR v_nature_demandee NOT IN (
+       'SOIN_THERAPEUTIQUE_EXONERE',
+       'PRESTATION_TAXABLE'
+       )
+     ) THEN
+    RETURN pg_catalog.jsonb_build_object(
+      'success', false,
+      'error', 'Indiquez la nature TVA prévue de la prestation libérale.'
+    );
+  END IF;
+  IF v_nature_demandee IS DISTINCT FROM v_mission.nature_tva_prestation
+     AND EXISTS (
+       SELECT 1 FROM public.candidatures c
+       WHERE c.mission_id = p_mission_id
+         AND c.statut::text IN (
+           'EN_ATTENTE', 'EN_ATTENTE_VALIDATION_ETAB', 'PROPOSEE'
+         )
+     ) THEN
+    RETURN pg_catalog.jsonb_build_object(
+      'success', false,
+      'error', 'La nature TVA ne peut pas être modifiée pendant que des candidatures sont en attente.'
+    );
+  END IF;
+
+  v_resultat := public.fn_modifier_mission_etablissement_v3(
+    p_mission_id,
+    p_intitule,
+    p_description,
+    p_service,
+    p_profession_requise,
+    p_taux_horaire_base,
+    p_est_urgente,
+    p_niveau_urgence,
+    p_mode_attribution,
+    p_type_contrat_recherche,
+    p_specialite_medicale_requise,
+    p_accepte_non_specialises,
+    p_creneaux
+  );
+  IF COALESCE((v_resultat->>'success')::boolean, false) IS NOT TRUE THEN
+    RETURN v_resultat;
+  END IF;
+
+  PERFORM pg_catalog.set_config('jolene.tva_mission_managed', 'true', true);
+  UPDATE public.missions
+  SET
+    nature_tva_prestation = CASE
+      WHEN type_contrat_recherche::text = 'SALARIE' THEN NULL
+      ELSE p_nature_tva_prestation
+    END,
+    nature_tva_declaree_par = CASE
+      WHEN type_contrat_recherche::text = 'SALARIE' THEN NULL
+      ELSE (SELECT auth.uid())
+    END,
+    nature_tva_declaree_le = CASE
+      WHEN type_contrat_recherche::text = 'SALARIE' THEN NULL
+      ELSE pg_catalog.now()
+    END,
+    nature_tva_confirmee_soignant = NULL,
+    nature_tva_confirmee_par = NULL,
+    nature_tva_confirmee_le = NULL,
+    statut_validation_tva = CASE
+      WHEN type_contrat_recherche::text = 'SALARIE' THEN 'NON_REQUISE'
+      ELSE 'A_CONFIRMER'
+    END,
+    revue_tva_motif = NULL,
+    revue_tva_resolue_par = NULL,
+    revue_tva_resolue_le = NULL
+  WHERE id = p_mission_id
+  RETURNING nature_tva_prestation, statut_validation_tva
+  INTO v_nature_effective, v_statut_tva_effectif;
+
+  RETURN v_resultat || pg_catalog.jsonb_build_object(
+    'nature_tva_prestation', v_nature_effective,
+    'statut_validation_tva', v_statut_tva_effectif
+  );
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_modifier_mission_etablissement_v4"("p_mission_id" "uuid", "p_intitule" "text", "p_description" "text", "p_service" "text", "p_profession_requise" "public"."type_profession", "p_taux_horaire_base" numeric, "p_est_urgente" boolean, "p_niveau_urgence" integer, "p_mode_attribution" "text", "p_type_contrat_recherche" "text", "p_specialite_medicale_requise" "text", "p_accepte_non_specialises" boolean, "p_creneaux" "jsonb", "p_nature_tva_prestation" "text") OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."fn_modifier_mon_etablissement"("p_nom" "text" DEFAULT NULL::"text", "p_finess" "text" DEFAULT NULL::"text", "p_adresse_rue" "text" DEFAULT NULL::"text", "p_adresse_ville" "text" DEFAULT NULL::"text", "p_adresse_code_postal" "text" DEFAULT NULL::"text", "p_adresse_departement" "text" DEFAULT NULL::"text", "p_email_contact" "text" DEFAULT NULL::"text", "p_telephone" "text" DEFAULT NULL::"text", "p_adresse_lat" numeric DEFAULT NULL::numeric, "p_adresse_lng" numeric DEFAULT NULL::numeric, "p_taux_majoration_nuit" numeric DEFAULT NULL::numeric, "p_taux_majoration_dimanche" numeric DEFAULT NULL::numeric, "p_taux_majoration_ferie" numeric DEFAULT NULL::numeric, "p_couleur_theme" "text" DEFAULT NULL::"text", "p_convention_collective" "text" DEFAULT NULL::"text", "p_mode_paiement_commission" "text" DEFAULT NULL::"text", "p_logo_url" "text" DEFAULT NULL::"text", "p_contrat_url" "text" DEFAULT NULL::"text") RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'pg_catalog', 'public'
@@ -40832,6 +42380,64 @@ $$;
 
 
 ALTER FUNCTION "public"."fn_noms_personne_correspondent"("p_nom_attendu" "text", "p_prenom_attendu" "text", "p_nom_extrait" "text", "p_prenom_extrait" "text") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."fn_normaliser_nature_correction_facture"() RETURNS "trigger"
+    LANGUAGE "plpgsql"
+    SET "search_path" TO 'pg_catalog', 'public'
+    AS $$
+DECLARE
+  v_origine public.factures_honoraires%ROWTYPE;
+BEGIN
+  IF NEW.type_document = 'AVOIR' THEN
+    NEW.nature_correction := 'AVOIR';
+  ELSIF NEW.nature_correction = 'ORIGINALE'
+        AND NEW.facture_precedente_id IS NOT NULL
+        AND NEW.litige_id IS NOT NULL THEN
+    NEW.nature_correction := 'REMPLACEMENT';
+  END IF;
+
+  IF NEW.facture_precedente_id IS NOT NULL
+     AND TG_OP = 'INSERT' THEN
+    SELECT * INTO v_origine
+    FROM public.factures_honoraires
+    WHERE id = NEW.facture_precedente_id;
+
+    IF FOUND THEN
+      NEW.regime_tva_snapshot := COALESCE(NEW.regime_tva_snapshot, v_origine.regime_tva_snapshot);
+      NEW.base_legale_tva_snapshot := COALESCE(NEW.base_legale_tva_snapshot, v_origine.base_legale_tva_snapshot);
+      NEW.nature_prestation_snapshot := COALESCE(NEW.nature_prestation_snapshot, v_origine.nature_prestation_snapshot);
+      NEW.emetteur_identite_snapshot := COALESCE(NEW.emetteur_identite_snapshot, v_origine.emetteur_identite_snapshot);
+      NEW.emetteur_profession_snapshot := COALESCE(NEW.emetteur_profession_snapshot, v_origine.emetteur_profession_snapshot);
+      NEW.emetteur_siret_snapshot := COALESCE(NEW.emetteur_siret_snapshot, v_origine.emetteur_siret_snapshot);
+      NEW.emetteur_numero_professionnel_snapshot := COALESCE(NEW.emetteur_numero_professionnel_snapshot, v_origine.emetteur_numero_professionnel_snapshot);
+      NEW.emetteur_adresse_snapshot := COALESCE(NEW.emetteur_adresse_snapshot, v_origine.emetteur_adresse_snapshot);
+      NEW.emetteur_adresse_rue_snapshot := COALESCE(NEW.emetteur_adresse_rue_snapshot, v_origine.emetteur_adresse_rue_snapshot);
+      NEW.emetteur_adresse_code_postal_snapshot := COALESCE(NEW.emetteur_adresse_code_postal_snapshot, v_origine.emetteur_adresse_code_postal_snapshot);
+      NEW.emetteur_adresse_ville_snapshot := COALESCE(NEW.emetteur_adresse_ville_snapshot, v_origine.emetteur_adresse_ville_snapshot);
+      NEW.emetteur_email_snapshot := COALESCE(NEW.emetteur_email_snapshot, v_origine.emetteur_email_snapshot);
+      NEW.emetteur_numero_tva_snapshot := COALESCE(NEW.emetteur_numero_tva_snapshot, v_origine.emetteur_numero_tva_snapshot);
+      NEW.destinataire_nom_snapshot := COALESCE(NEW.destinataire_nom_snapshot, v_origine.destinataire_nom_snapshot);
+      NEW.destinataire_siret_snapshot := COALESCE(NEW.destinataire_siret_snapshot, v_origine.destinataire_siret_snapshot);
+      NEW.destinataire_adresse_rue_snapshot := COALESCE(NEW.destinataire_adresse_rue_snapshot, v_origine.destinataire_adresse_rue_snapshot);
+      NEW.destinataire_adresse_code_postal_snapshot := COALESCE(NEW.destinataire_adresse_code_postal_snapshot, v_origine.destinataire_adresse_code_postal_snapshot);
+      NEW.destinataire_adresse_ville_snapshot := COALESCE(NEW.destinataire_adresse_ville_snapshot, v_origine.destinataire_adresse_ville_snapshot);
+      NEW.description_prestation_snapshot := COALESCE(
+        NEW.description_prestation_snapshot,
+        CASE NEW.nature_correction
+          WHEN 'AVOIR' THEN 'Avoir de correction lié à la facture ' || v_origine.numero_facture
+          WHEN 'COMPLEMENT' THEN 'Complément d’honoraires lié à la facture ' || v_origine.numero_facture
+          ELSE 'Facture rectificative remplaçant la facture ' || v_origine.numero_facture
+        END
+      );
+    END IF;
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_normaliser_nature_correction_facture"() OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."fn_normaliser_nom"("p" "text") RETURNS "text"
@@ -42375,6 +43981,196 @@ COMMENT ON FUNCTION "public"."fn_ouvrir_litige_rate_limited"("p_mission_id" "uui
 
 
 
+CREATE OR REPLACE FUNCTION "public"."fn_ouvrir_litige_rate_limited"("p_mission_id" "uuid", "p_type_litige" "public"."type_litige", "p_motif" "text", "p_facture_id" "uuid") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public', 'extensions'
+    AS $$
+DECLARE
+  v_uid uuid := auth.uid();
+  v_mission public.missions%ROWTYPE;
+  v_facture public.factures_honoraires%ROWTYPE;
+  v_initie_par text;
+  v_existing integer;
+  v_recent integer;
+  v_rate_limit integer;
+  v_presence_id uuid;
+  v_litige_id uuid;
+BEGIN
+  IF v_uid IS NULL OR public.fn_compte_auth_actif() IS NOT TRUE THEN
+    RETURN jsonb_build_object('success', false, 'error', 'Accès refusé');
+  END IF;
+  IF p_facture_id IS NULL THEN
+    RETURN public.fn_ouvrir_litige_rate_limited(
+      p_mission_id, p_type_litige, p_motif
+    );
+  END IF;
+  IF length(btrim(COALESCE(p_motif, ''))) NOT BETWEEN 10 AND 2000 THEN
+    RETURN jsonb_build_object(
+      'success', false,
+      'error', 'Le motif doit contenir entre 10 et 2 000 caractères.'
+    );
+  END IF;
+
+  SELECT * INTO v_mission
+  FROM public.missions
+  WHERE id = p_mission_id
+  FOR UPDATE;
+  IF NOT FOUND OR NOT (
+    v_mission.soignant_assigne_id = v_uid
+    OR (
+      v_mission.etablissement_id = public.mon_etablissement_id()
+      AND public.fn_a_permission_etablissement(
+        'contrats', v_mission.etablissement_id
+      ) IS TRUE
+    )
+  ) THEN
+    RETURN jsonb_build_object(
+      'success', false,
+      'error', 'Vous n’êtes pas autorisé à contester cette facture.'
+    );
+  END IF;
+  v_initie_par := CASE
+    WHEN v_mission.soignant_assigne_id = v_uid THEN 'SOIGNANT'
+    ELSE 'ETABLISSEMENT'
+  END;
+
+  SELECT * INTO v_facture
+  FROM public.factures_honoraires
+  WHERE id = p_facture_id
+    AND mission_id = p_mission_id
+    AND soignant_id = v_mission.soignant_assigne_id
+    AND etablissement_id = v_mission.etablissement_id
+    AND type_document = 'FACTURE'
+    AND statut IN ('BROUILLON', 'EMISE', 'EN_RETARD', 'PAYEE', 'FACTORISEE')
+  FOR UPDATE;
+  IF NOT FOUND THEN
+    RETURN jsonb_build_object(
+      'success', false,
+      'error', 'La facture sélectionnée est introuvable ou non contestable.'
+    );
+  END IF;
+  IF p_type_litige IN (
+    'DESACCORD_MONTANT_FACTURE', 'NON_PAIEMENT', 'FRAIS_COMPLEMENTAIRES'
+  ) AND v_facture.statut = 'BROUILLON' THEN
+    RETURN jsonb_build_object(
+      'success', false,
+      'error', 'Cette facture n’est pas encore émise. Signalez plutôt un désaccord sur les heures.'
+    );
+  END IF;
+  IF public.fn_fenetre_contestation_ouverte(
+    p_type_litige, p_mission_id, p_facture_id
+  ) IS NOT TRUE THEN
+    RETURN jsonb_build_object(
+      'success', false,
+      'error', 'La fenêtre de contestation de cette facture est fermée. Contactez le support.'
+    );
+  END IF;
+
+  SELECT count(*) INTO v_existing
+  FROM public.litiges l
+  WHERE l.mission_id = p_mission_id
+    AND l.facture_id = p_facture_id
+    AND l.type_litige = p_type_litige
+    AND l.statut IN (
+      'OUVERT', 'EN_DISCUSSION', 'EN_MEDIATION',
+      'MEDIATION_EN_COURS', 'REVUE_ADMIN'
+    );
+  IF v_existing > 0 THEN
+    RETURN jsonb_build_object(
+      'success', false,
+      'error', 'Un litige de ce type est déjà ouvert pour cette facture.'
+    );
+  END IF;
+
+  v_rate_limit := COALESCE(
+    (
+      SELECT pl.valeur::integer
+      FROM public.parametres_litiges pl
+      WHERE pl.cle = 'rate_limit_litiges_par_heure'
+    ),
+    3
+  );
+  SELECT count(*) INTO v_recent
+  FROM public.litiges l
+  WHERE (
+    l.soignant_id = v_uid
+    OR l.etablissement_id = public.mon_etablissement_id()
+  )
+    AND l.cree_le > now() - interval '1 hour';
+  IF v_recent >= v_rate_limit THEN
+    RETURN jsonb_build_object(
+      'success', false,
+      'error', 'Trop de litiges ouverts récemment. Réessayez plus tard.'
+    );
+  END IF;
+
+  SELECT p.id INTO v_presence_id
+  FROM public.presences p
+  WHERE p.mission_id = p_mission_id
+    AND COALESCE(p.pointage_arrivee_le, p.cree_le)::date <= v_facture.periode_fin
+    AND COALESCE(p.pointage_depart_le, p.pointage_arrivee_le, p.cree_le)::date >= v_facture.periode_debut
+  ORDER BY p.valide_le DESC NULLS LAST, p.cree_le DESC
+  LIMIT 1;
+
+  INSERT INTO public.litiges (
+    mission_id, soignant_id, etablissement_id, presence_id, facture_id,
+    initie_par, motif, statut, type_litige, est_informatif,
+    gel_facture_scope, periode_debut, periode_fin
+  ) VALUES (
+    p_mission_id, v_mission.soignant_assigne_id,
+    v_mission.etablissement_id, v_presence_id, p_facture_id,
+    v_initie_par, btrim(p_motif), 'OUVERT', p_type_litige, false,
+    'FACTURE_UNIQUE', v_facture.periode_debut, v_facture.periode_fin
+  ) RETURNING id INTO v_litige_id;
+
+  -- Une déclaration de virement déjà en attente devient contestée. Les
+  -- paiements des autres factures de la mission ne sont pas touchés.
+  UPDATE public.paiements_soignant
+  SET statut = 'CONTESTE',
+      conteste = true,
+      motif_contestation = COALESCE(
+        NULLIF(motif_contestation, ''),
+        left('Litige facture ' || v_facture.numero_facture || ' : ' || p_motif, 2000)
+      ),
+      modifie_le = now()
+  WHERE facture_honoraire_id = p_facture_id
+    AND statut = 'DECLARE';
+
+  PERFORM public.fn_ecrire_audit_safe(
+    p_acteur_id := v_uid,
+    p_type_acteur := CASE
+      WHEN v_initie_par = 'SOIGNANT' THEN 'SOIGNANT'
+      ELSE 'ETABLISSEMENT'
+    END,
+    p_action := 'LITIGE_OUVERTURE',
+    p_type_ressource := 'litige',
+    p_id_ressource := v_litige_id,
+    p_details := jsonb_build_object(
+      'evenement', 'FACTURE_CONTESTEE_EXPLICITEMENT',
+      'mission_id', p_mission_id,
+      'facture_id', p_facture_id,
+      'numero_facture', v_facture.numero_facture,
+      'periode_debut', v_facture.periode_debut,
+      'periode_fin', v_facture.periode_fin
+    )
+  );
+
+  RETURN jsonb_build_object(
+    'success', true,
+    'litige_id', v_litige_id,
+    'est_informatif', false,
+    'facture_id', p_facture_id,
+    'numero_facture', v_facture.numero_facture,
+    'periode_debut', v_facture.periode_debut,
+    'periode_fin', v_facture.periode_fin
+  );
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_ouvrir_litige_rate_limited"("p_mission_id" "uuid", "p_type_litige" "public"."type_litige", "p_motif" "text", "p_facture_id" "uuid") OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."fn_ouvrir_revue_siret_liberal_soignant"("p_soignant_id" "uuid", "p_code" "text", "p_donnees" "jsonb" DEFAULT '{}'::"jsonb") RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'pg_catalog', 'public'
@@ -42982,6 +44778,32 @@ CREATE OR REPLACE FUNCTION "public"."fn_peut_lire_objet_jolene"("p_name" "text")
           AND pr.etablissement_id = public.mon_etablissement_id()
           AND pr.actif IS TRUE
           AND (pr.expire_le IS NULL OR pr.expire_le > now())
+      )
+      OR EXISTS (
+        SELECT 1
+        FROM public.factures_honoraires fh
+        WHERE (fh.pdf_s3_key = p_name OR fh.facturx_xml_url = p_name)
+          AND (
+            fh.soignant_id = auth.uid()
+            OR public.fn_a_permission_etablissement(
+              'lecture_paiement', fh.etablissement_id
+            ) IS TRUE
+            OR public.est_admin() IS TRUE
+          )
+      )
+      OR EXISTS (
+        SELECT 1
+        FROM public.factures_honoraires_documents fhd
+        JOIN public.factures_honoraires fh
+          ON fh.id = fhd.facture_honoraire_id
+        WHERE (fhd.pdf_s3_key = p_name OR fhd.facturx_xml_url = p_name)
+          AND (
+            fh.soignant_id = auth.uid()
+            OR public.fn_a_permission_etablissement(
+              'lecture_paiement', fh.etablissement_id
+            ) IS TRUE
+            OR public.est_admin() IS TRUE
+          )
       )
     );
 $$;
@@ -43722,6 +45544,395 @@ COMMENT ON FUNCTION "public"."fn_pre_request_compte_actif"() IS 'SECURITY DEFINE
 
 
 
+CREATE OR REPLACE FUNCTION "public"."fn_preparer_avoir_commission_honoraires"("p_avoir_honoraires_id" "uuid") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public', 'pg_temp'
+    AS $$
+DECLARE
+  v_avoir_h public.factures_honoraires%ROWTYPE;
+  v_origine_h public.factures_honoraires%ROWTYPE;
+  v_origine_c public.factures%ROWTYPE;
+  v_existing public.factures%ROWTYPE;
+  v_taux_commission numeric;
+  v_ht numeric(10,2);
+  v_tva numeric(10,2);
+  v_ttc numeric(10,2);
+  v_numero text;
+  v_avoir_c_id uuid;
+BEGIN
+  IF COALESCE(auth.jwt()->>'role', current_setting('request.jwt.claim.role', true), '') <> 'service_role' THEN
+    RAISE EXCEPTION 'Accès refusé' USING ERRCODE = '42501';
+  END IF;
+
+  SELECT * INTO v_avoir_h
+  FROM public.factures_honoraires
+  WHERE id = p_avoir_honoraires_id
+    AND type_document = 'AVOIR'
+    AND nature_correction = 'AVOIR'
+    AND statut IN ('EMISE', 'REMBOURSE')
+  FOR UPDATE;
+  IF NOT FOUND OR v_avoir_h.facture_precedente_id IS NULL THEN
+    RAISE EXCEPTION 'Avoir d''honoraires introuvable ou non émis';
+  END IF;
+
+  SELECT * INTO v_existing
+  FROM public.factures
+  WHERE facture_honoraire_id = v_avoir_h.id
+    AND type_document = 'AVOIR'
+    AND statut NOT IN ('ANNULEE', 'ERREUR_GENERATION')
+  FOR UPDATE;
+  IF FOUND THEN
+    RETURN jsonb_build_object(
+      'success', true, 'facture_id', v_existing.id,
+      'numero_facture', v_existing.numero_facture,
+      'montant_ttc', v_existing.montant_ttc, 'existing', true
+    );
+  END IF;
+
+  SELECT * INTO v_origine_h
+  FROM public.factures_honoraires
+  WHERE id = v_avoir_h.facture_precedente_id
+  FOR UPDATE;
+  IF NOT FOUND OR v_origine_h.montant_ht <= 0 THEN
+    RAISE EXCEPTION 'Facture d''honoraires d''origine incohérente';
+  END IF;
+
+  SELECT * INTO v_origine_c
+  FROM public.factures
+  WHERE facture_honoraire_id = v_origine_h.id
+    AND type_document = 'FACTURE'
+    AND statut NOT IN ('ANNULEE', 'REMPLACEE', 'ERREUR_GENERATION')
+  ORDER BY cree_le DESC
+  LIMIT 1
+  FOR UPDATE;
+  IF NOT FOUND OR v_origine_c.montant_ht <= 0 THEN
+    RAISE EXCEPTION 'Facture Jolene d''origine introuvable';
+  END IF;
+
+  v_taux_commission := v_origine_c.montant_ht / v_origine_h.montant_ht;
+  IF v_taux_commission <= 0 OR v_taux_commission > 1 THEN
+    RAISE EXCEPTION 'Taux de commission historique incohérent';
+  END IF;
+  v_ht := round(v_avoir_h.montant_ht * v_taux_commission, 2);
+  v_tva := round(v_ht * 0.20, 2);
+  v_ttc := v_ht + v_tva;
+  IF v_ht <= 0 OR v_ttc <= 0 THEN
+    RAISE EXCEPTION 'Montant de l''avoir Jolene incohérent';
+  END IF;
+
+  v_numero := public.next_avoir_commission_number(v_avoir_h.etablissement_id);
+  INSERT INTO public.factures (
+    etablissement_id, mission_id, facture_honoraire_id,
+    numero_facture, type_document, facture_precedente_id,
+    montant_ht, taux_tva, montant_tva, montant_ttc, nombre_missions,
+    statut, date_emission, date_echeance, periode_debut, periode_fin,
+    est_secteur_public, mode_paiement
+  ) VALUES (
+    v_avoir_h.etablissement_id, v_avoir_h.mission_id, v_avoir_h.id,
+    v_numero, 'AVOIR', v_origine_c.id,
+    v_ht, 20, v_tva, v_ttc, 1,
+    'EMISE', now(), CURRENT_DATE,
+    v_origine_c.periode_debut, v_origine_c.periode_fin,
+    v_origine_c.est_secteur_public, v_origine_c.mode_paiement
+  ) RETURNING id INTO v_avoir_c_id;
+
+  UPDATE public.missions
+  SET total_brut = GREATEST(0, COALESCE(total_brut, 0) - v_avoir_h.montant_ht),
+      net_a_payer = GREATEST(0, COALESCE(net_a_payer, 0) - v_avoir_h.montant_ttc),
+      montant_commission_ht = GREATEST(0, COALESCE(montant_commission_ht, 0) - v_ht),
+      montant_commission_tva = GREATEST(0, COALESCE(montant_commission_tva, 0) - v_tva),
+      montant_commission_ttc = GREATEST(0, COALESCE(montant_commission_ttc, 0) - v_ttc),
+      commission_a_recalculer = false,
+      modifie_le = now()
+  WHERE id = v_avoir_h.mission_id;
+
+  PERFORM public.fn_ecrire_audit_safe(
+    p_acteur_id := v_avoir_h.etablissement_id,
+    p_type_acteur := 'SYSTEME',
+    p_action := 'FACTURATION',
+    p_type_ressource := 'facture',
+    p_id_ressource := v_avoir_c_id,
+    p_details := jsonb_build_object(
+      'evenement', 'AVOIR_COMMISSION_APRES_LITIGE',
+      'avoir_honoraires_id', v_avoir_h.id,
+      'facture_commission_origine_id', v_origine_c.id,
+      'taux_commission_historique', v_taux_commission,
+      'montant_ht', v_ht,
+      'montant_tva', v_tva,
+      'montant_ttc', v_ttc
+    )
+  );
+
+  RETURN jsonb_build_object(
+    'success', true, 'facture_id', v_avoir_c_id,
+    'numero_facture', v_numero,
+    'montant_ht', v_ht, 'montant_tva', v_tva,
+    'montant_ttc', v_ttc, 'existing', false
+  );
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_preparer_avoir_commission_honoraires"("p_avoir_honoraires_id" "uuid") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."fn_preparer_commission_complement_honoraires"("p_facture_honoraire_id" "uuid") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public', 'pg_temp'
+    AS $$
+DECLARE
+  v_fh public.factures_honoraires%ROWTYPE;
+  v_origine_honoraires public.factures_honoraires%ROWTYPE;
+  v_origine_commission public.factures%ROWTYPE;
+  v_mission public.missions%ROWTYPE;
+  v_etab public.etablissements%ROWTYPE;
+  v_existing public.factures%ROWTYPE;
+  v_taux_commission numeric;
+  v_ht numeric(10,2);
+  v_tva numeric(10,2);
+  v_ttc numeric(10,2);
+  v_numero text;
+BEGIN
+  IF COALESCE(auth.jwt()->>'role', current_setting('request.jwt.claim.role', true), '') <> 'service_role' THEN
+    RAISE EXCEPTION 'Accès refusé' USING ERRCODE = '42501';
+  END IF;
+
+  SELECT * INTO v_fh
+  FROM public.factures_honoraires
+  WHERE id = p_facture_honoraire_id
+    AND type_document = 'FACTURE'
+    AND nature_correction = 'COMPLEMENT'
+    AND statut IN ('EMISE', 'EN_RETARD', 'PAYEE')
+  FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Facture complémentaire d''honoraires introuvable ou non émise';
+  END IF;
+
+  SELECT * INTO v_existing
+  FROM public.factures
+  WHERE facture_honoraire_id = v_fh.id
+    AND type_document = 'FACTURE'
+    AND statut NOT IN ('ANNULEE', 'REMPLACEE', 'ERREUR_GENERATION')
+  FOR UPDATE;
+  IF FOUND THEN
+    RETURN jsonb_build_object(
+      'success', true, 'facture_id', v_existing.id,
+      'numero_facture', v_existing.numero_facture,
+      'montant_ttc', v_existing.montant_ttc, 'existing', true
+    );
+  END IF;
+
+  SELECT * INTO v_mission FROM public.missions WHERE id = v_fh.mission_id FOR UPDATE;
+  SELECT * INTO v_etab FROM public.etablissements WHERE id = v_fh.etablissement_id;
+  IF v_mission.id IS NULL OR v_etab.id IS NULL
+     OR v_mission.type_contrat_applique <> 'LIBERAL'
+     OR v_mission.soignant_assigne_id IS DISTINCT FROM v_fh.soignant_id
+     OR v_mission.etablissement_id IS DISTINCT FROM v_fh.etablissement_id THEN
+    RAISE EXCEPTION 'Mission incohérente pour la commission complémentaire';
+  END IF;
+
+  SELECT * INTO v_origine_honoraires
+  FROM public.factures_honoraires
+  WHERE id = v_fh.facture_precedente_id;
+  SELECT * INTO v_origine_commission
+  FROM public.factures
+  WHERE facture_honoraire_id = v_origine_honoraires.id
+    AND type_document = 'FACTURE'
+    AND statut NOT IN ('ANNULEE', 'REMPLACEE', 'ERREUR_GENERATION')
+  ORDER BY cree_le DESC
+  LIMIT 1;
+  v_taux_commission := CASE
+    WHEN v_origine_honoraires.montant_ht > 0 AND v_origine_commission.montant_ht > 0
+      THEN v_origine_commission.montant_ht / v_origine_honoraires.montant_ht
+    ELSE COALESCE(v_mission.taux_commission, 15) / 100
+  END;
+  IF v_taux_commission <= 0 OR v_taux_commission > 1 THEN
+    RAISE EXCEPTION 'Taux de commission historique incohérent';
+  END IF;
+
+  v_ht := round(v_fh.montant_ht * v_taux_commission, 2);
+  v_tva := round(v_ht * 0.20, 2);
+  v_ttc := v_ht + v_tva;
+  IF v_ht <= 0 OR v_ttc <= 0 THEN
+    RAISE EXCEPTION 'Commission complémentaire nulle ou négative';
+  END IF;
+
+  v_numero := 'JOL-' || to_char(CURRENT_DATE, 'YYYY') || '-HC-'
+    || upper(left(replace(v_fh.id::text, '-', ''), 10));
+  INSERT INTO public.factures (
+    etablissement_id, mission_id, facture_honoraire_id, numero_facture,
+    facture_precedente_id, periode_debut, periode_fin,
+    montant_ht, taux_tva, montant_tva, montant_ttc, nombre_missions,
+    statut, date_emission, date_echeance, est_secteur_public,
+    mode_paiement, chorus_pro_statut, type_document
+  ) VALUES (
+    v_fh.etablissement_id, v_fh.mission_id, v_fh.id, v_numero,
+    v_origine_commission.id, v_fh.periode_debut, v_fh.periode_fin,
+    v_ht, 20, v_tva, v_ttc, 1, 'EMISE', now(), CURRENT_DATE + 30,
+    COALESCE(v_etab.est_secteur_public, false),
+    CASE WHEN COALESCE(v_etab.est_secteur_public, false) THEN 'CHORUS_PRO' ELSE 'STRIPE' END,
+    CASE WHEN COALESCE(v_etab.est_secteur_public, false) THEN 'A_DEPOSER' ELSE 'NON_APPLICABLE' END,
+    'FACTURE'
+  ) RETURNING * INTO v_existing;
+
+  UPDATE public.missions
+  SET total_brut = round(COALESCE(total_brut, 0) + v_fh.montant_ht, 2),
+      net_a_payer = round(COALESCE(net_a_payer, 0) + v_fh.montant_ttc, 2),
+      montant_commission_ht = round(COALESCE(montant_commission_ht, 0) + v_ht, 2),
+      montant_commission_tva = round(COALESCE(montant_commission_tva, 0) + v_tva, 2),
+      montant_commission_ttc = round(COALESCE(montant_commission_ttc, 0) + v_ttc, 2),
+      commission_a_recalculer = false,
+      commission_facturee = true,
+      modifie_le = now()
+  WHERE id = v_mission.id;
+
+  RETURN jsonb_build_object(
+    'success', true, 'facture_id', v_existing.id,
+    'numero_facture', v_existing.numero_facture,
+    'montant_ttc', v_existing.montant_ttc, 'existing', false
+  );
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_preparer_commission_complement_honoraires"("p_facture_honoraire_id" "uuid") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."fn_preparer_commission_remplacement_honoraires"("p_facture_honoraire_id" "uuid") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public', 'pg_temp'
+    AS $$
+DECLARE
+  v_fh public.factures_honoraires%ROWTYPE;
+  v_origine_honoraires public.factures_honoraires%ROWTYPE;
+  v_mission public.missions%ROWTYPE;
+  v_etab public.etablissements%ROWTYPE;
+  v_origine_commission public.factures%ROWTYPE;
+  v_existing public.factures%ROWTYPE;
+  v_ht numeric(10,2);
+  v_tva numeric(10,2);
+  v_ttc numeric(10,2);
+  v_delta_ht numeric(10,2);
+  v_delta_tva numeric(10,2);
+  v_delta_ttc numeric(10,2);
+  v_taux_commission numeric;
+  v_numero text;
+BEGIN
+  IF COALESCE(auth.jwt()->>'role', current_setting('request.jwt.claim.role', true), '') <> 'service_role' THEN
+    RAISE EXCEPTION 'Accès refusé' USING ERRCODE = '42501';
+  END IF;
+
+  SELECT * INTO v_fh
+  FROM public.factures_honoraires
+  WHERE id = p_facture_honoraire_id
+    AND type_document = 'FACTURE'
+    AND nature_correction = 'REMPLACEMENT'
+    AND statut IN ('EMISE', 'EN_RETARD', 'PAYEE')
+  FOR UPDATE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'Facture rectificative introuvable ou non émise'; END IF;
+
+  SELECT * INTO v_existing
+  FROM public.factures
+  WHERE facture_honoraire_id = v_fh.id
+    AND type_document = 'FACTURE'
+    AND statut NOT IN ('ANNULEE', 'REMPLACEE', 'ERREUR_GENERATION')
+  FOR UPDATE;
+  IF FOUND THEN
+    RETURN jsonb_build_object('success', true, 'facture_id', v_existing.id, 'existing', true);
+  END IF;
+
+  SELECT * INTO v_origine_honoraires
+  FROM public.factures_honoraires
+  WHERE id = v_fh.facture_precedente_id
+  FOR UPDATE;
+  SELECT * INTO v_mission FROM public.missions WHERE id = v_fh.mission_id FOR UPDATE;
+  SELECT * INTO v_etab FROM public.etablissements WHERE id = v_fh.etablissement_id;
+  IF v_origine_honoraires.id IS NULL OR v_mission.id IS NULL OR v_etab.id IS NULL THEN
+    RAISE EXCEPTION 'Chaîne de rectification incomplète';
+  END IF;
+
+  SELECT * INTO v_origine_commission
+  FROM public.factures
+  WHERE facture_honoraire_id = v_origine_honoraires.id
+    AND type_document = 'FACTURE'
+    AND statut NOT IN ('ANNULEE', 'REMPLACEE', 'ERREUR_GENERATION')
+  ORDER BY cree_le DESC
+  LIMIT 1
+  FOR UPDATE;
+  IF FOUND AND v_origine_commission.statut NOT IN ('BROUILLON', 'EMISE', 'EN_RETARD') THEN
+    RAISE EXCEPTION 'La facture de services d''origine est déjà payée : un avoir est requis';
+  END IF;
+
+  v_taux_commission := CASE
+    WHEN v_origine_honoraires.montant_ht > 0 AND v_origine_commission.montant_ht > 0
+      THEN v_origine_commission.montant_ht / v_origine_honoraires.montant_ht
+    ELSE COALESCE(v_mission.taux_commission, 15) / 100
+  END;
+  IF v_taux_commission <= 0 OR v_taux_commission > 1 THEN
+    RAISE EXCEPTION 'Taux de commission historique incohérent';
+  END IF;
+  v_ht := round(v_fh.montant_ht * v_taux_commission, 2);
+  v_tva := round(v_ht * 0.20, 2);
+  v_ttc := v_ht + v_tva;
+  v_delta_ht := v_ht - COALESCE(v_origine_commission.montant_ht, 0);
+  v_delta_tva := v_tva - COALESCE(v_origine_commission.montant_tva, 0);
+  v_delta_ttc := v_ttc - COALESCE(v_origine_commission.montant_ttc, 0);
+
+  IF v_origine_commission.id IS NOT NULL THEN
+    UPDATE public.factures
+    SET statut = 'REMPLACEE', modifie_le = now()
+    WHERE id = v_origine_commission.id
+      AND statut IN ('BROUILLON', 'EMISE', 'EN_RETARD');
+  END IF;
+
+  v_numero := 'JOL-' || to_char(CURRENT_DATE, 'YYYY') || '-HR-'
+    || upper(left(replace(v_fh.id::text, '-', ''), 10));
+  INSERT INTO public.factures (
+    etablissement_id, mission_id, facture_honoraire_id, numero_facture,
+    facture_precedente_id, periode_debut, periode_fin,
+    montant_ht, taux_tva, montant_tva, montant_ttc, nombre_missions,
+    statut, date_emission, date_echeance, est_secteur_public,
+    mode_paiement, chorus_pro_statut, type_document
+  ) VALUES (
+    v_fh.etablissement_id, v_fh.mission_id, v_fh.id, v_numero,
+    v_origine_commission.id, v_fh.periode_debut, v_fh.periode_fin,
+    v_ht, 20, v_tva, v_ttc, 1, 'EMISE', now(), CURRENT_DATE + 30,
+    COALESCE(v_etab.est_secteur_public, false),
+    CASE WHEN COALESCE(v_etab.est_secteur_public, false) THEN 'CHORUS_PRO' ELSE 'STRIPE' END,
+    CASE WHEN COALESCE(v_etab.est_secteur_public, false) THEN 'A_DEPOSER' ELSE 'NON_APPLICABLE' END,
+    'FACTURE'
+  ) RETURNING * INTO v_existing;
+
+  UPDATE public.missions
+  SET total_brut = round(
+        COALESCE(total_brut, 0)
+          + v_fh.montant_ht - v_origine_honoraires.montant_ht,
+        2
+      ),
+      net_a_payer = round(
+        COALESCE(net_a_payer, 0)
+          + v_fh.montant_ttc - v_origine_honoraires.montant_ttc,
+        2
+      ),
+      montant_commission_ht = round(COALESCE(montant_commission_ht, 0) + v_delta_ht, 2),
+      montant_commission_tva = round(COALESCE(montant_commission_tva, 0) + v_delta_tva, 2),
+      montant_commission_ttc = round(COALESCE(montant_commission_ttc, 0) + v_delta_ttc, 2),
+      commission_a_recalculer = false,
+      modifie_le = now()
+  WHERE id = v_mission.id;
+
+  RETURN jsonb_build_object(
+    'success', true, 'facture_id', v_existing.id,
+    'numero_facture', v_existing.numero_facture,
+    'montant_ttc', v_existing.montant_ttc, 'existing', false
+  );
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_preparer_commission_remplacement_honoraires"("p_facture_honoraire_id" "uuid") OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."fn_preparer_facture_commission_periode"("p_facture_honoraire_id" "uuid") RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public', 'pg_temp'
@@ -43948,6 +46159,80 @@ $$;
 
 
 ALTER FUNCTION "public"."fn_presences_detail_mission"("p_mission_id" "uuid") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."fn_preserver_document_facture_honoraires"() RETURNS "trigger"
+    LANGUAGE "plpgsql"
+    SET "search_path" TO 'pg_catalog', 'public'
+    AS $$
+BEGIN
+  IF OLD.retention_jusqu_au > now() THEN
+    RAISE EXCEPTION 'Une version de facture conservée pendant la durée de rétention ne peut être ni modifiée ni supprimée.'
+      USING ERRCODE = 'check_violation';
+  END IF;
+  IF TG_OP = 'DELETE' THEN RETURN OLD; END IF;
+  RETURN NEW;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_preserver_document_facture_honoraires"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."fn_preserver_preuve_mandat_facturation"() RETURNS "trigger"
+    LANGUAGE "plpgsql"
+    SET "search_path" TO 'pg_catalog', 'public'
+    AS $$
+BEGIN
+  IF TG_OP = 'DELETE' THEN
+    IF OLD.retention_jusqu_au IS NULL OR OLD.retention_jusqu_au > now() THEN
+      UPDATE public.mandats_facturation_signatures
+      SET
+        revoked_at = COALESCE(revoked_at, now()),
+        revocation_motif = COALESCE(
+          revocation_motif,
+          'PREUVE_CONSERVEE_PENDANT_RETENTION'
+        )
+      WHERE id = OLD.id;
+      RETURN NULL;
+    END IF;
+    RETURN OLD;
+  END IF;
+
+  IF NEW.soignant_id IS DISTINCT FROM OLD.soignant_id
+     OR NEW.version IS DISTINCT FROM OLD.version
+     OR NEW.signed_at IS DISTINCT FROM OLD.signed_at
+     OR NEW.ip_address IS DISTINCT FROM OLD.ip_address
+     OR NEW.user_agent IS DISTINCT FROM OLD.user_agent
+     OR NEW.contenu_hash IS DISTINCT FROM OLD.contenu_hash
+     OR NEW.contenu_texte IS DISTINCT FROM OLD.contenu_texte
+     OR NEW.regime_tva_honoraires IS DISTINCT FROM OLD.regime_tva_honoraires
+     OR NEW.statut_tva_honoraires IS DISTINCT FROM OLD.statut_tva_honoraires
+     OR NEW.ip_source IS DISTINCT FROM OLD.ip_source
+     OR NEW.retention_jusqu_au IS DISTINCT FROM OLD.retention_jusqu_au THEN
+    RAISE EXCEPTION 'La preuve signée du mandat est immuable.'
+      USING ERRCODE = 'check_violation';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_preserver_preuve_mandat_facturation"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."fn_preserver_rectification_facture_honoraires"() RETURNS "trigger"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'pg_catalog', 'public'
+    AS $$
+BEGIN
+  RAISE EXCEPTION 'Une rectification de facture est immuable et conservée pendant dix ans.'
+    USING ERRCODE = '55000';
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_preserver_rectification_facture_honoraires"() OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."fn_profession_peut_etre_liberal"("p_profession" "text") RETURNS boolean
@@ -45878,6 +48163,77 @@ $$;
 
 
 ALTER FUNCTION "public"."fn_proteger_tentative_verification_document"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."fn_proteger_validation_tva_mission"() RETURNS "trigger"
+    LANGUAGE "plpgsql"
+    SET "search_path" TO 'pg_catalog', 'public'
+    AS $$
+DECLARE
+  v_managed boolean := COALESCE(
+    current_setting('jolene.tva_mission_managed', true),
+    'false'
+  ) = 'true';
+  v_affectation_change boolean :=
+    NEW.soignant_assigne_id IS DISTINCT FROM OLD.soignant_assigne_id
+    OR NEW.type_contrat_applique IS DISTINCT FROM OLD.type_contrat_applique;
+  v_champ_pilote_change boolean :=
+    NEW.nature_tva_prestation IS DISTINCT FROM OLD.nature_tva_prestation
+    OR NEW.nature_tva_declaree_par IS DISTINCT FROM OLD.nature_tva_declaree_par
+    OR NEW.nature_tva_declaree_le IS DISTINCT FROM OLD.nature_tva_declaree_le
+    OR NEW.nature_tva_confirmee_soignant IS DISTINCT FROM OLD.nature_tva_confirmee_soignant
+    OR NEW.nature_tva_confirmee_par IS DISTINCT FROM OLD.nature_tva_confirmee_par
+    OR NEW.nature_tva_confirmee_le IS DISTINCT FROM OLD.nature_tva_confirmee_le
+    OR NEW.revue_tva_motif IS DISTINCT FROM OLD.revue_tva_motif
+    OR NEW.revue_tva_resolue_par IS DISTINCT FROM OLD.revue_tva_resolue_par
+    OR NEW.revue_tva_resolue_le IS DISTINCT FROM OLD.revue_tva_resolue_le;
+BEGIN
+  -- Les changements d'heures, de taux, de présence, de statut de mission et
+  -- les corrections de litige ne sont volontairement pas concernés.
+  IF NOT v_managed AND v_champ_pilote_change THEN
+    RAISE EXCEPTION 'Utilisez le parcours de validation TVA de la mission.'
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+
+  -- Les moteurs d'acceptation existants n'ont pas à connaître le workflow
+  -- fiscal. Ce trigger initialise le bon état à partir du contrat réellement
+  -- appliqué, sans bloquer l'affectation ni l'exécution de la mission.
+  IF v_affectation_change AND NOT v_managed THEN
+    IF NEW.soignant_assigne_id IS NOT NULL
+       AND NEW.type_contrat_applique::text = 'LIBERAL' THEN
+      NEW.nature_tva_confirmee_soignant := NULL;
+      NEW.nature_tva_confirmee_par := NULL;
+      NEW.nature_tva_confirmee_le := NULL;
+      NEW.statut_validation_tva := CASE
+        WHEN NEW.nature_tva_prestation IS NULL THEN 'A_REVOIR'
+        ELSE 'A_CONFIRMER'
+      END;
+    ELSIF NEW.soignant_assigne_id IS NOT NULL THEN
+      NEW.nature_tva_confirmee_soignant := NULL;
+      NEW.nature_tva_confirmee_par := NULL;
+      NEW.nature_tva_confirmee_le := NULL;
+      NEW.statut_validation_tva := 'NON_REQUISE';
+    ELSE
+      NEW.nature_tva_confirmee_soignant := NULL;
+      NEW.nature_tva_confirmee_par := NULL;
+      NEW.nature_tva_confirmee_le := NULL;
+      NEW.statut_validation_tva := CASE
+        WHEN NEW.nature_tva_prestation IS NULL THEN 'NON_REQUISE'
+        ELSE 'A_CONFIRMER'
+      END;
+    END IF;
+  ELSIF NOT v_managed
+        AND NEW.statut_validation_tva IS DISTINCT FROM OLD.statut_validation_tva THEN
+    RAISE EXCEPTION 'Utilisez le parcours de validation TVA de la mission.'
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+
+  RETURN NEW;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_proteger_validation_tva_mission"() OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."fn_proteger_verification_siret_liberal"() RETURNS "trigger"
@@ -49348,36 +51704,46 @@ BEGIN
   IF v_uid IS NULL THEN
     RETURN jsonb_build_object('success', false, 'error', 'Non authentifié');
   END IF;
-
   IF NOT EXISTS (
-    SELECT 1 FROM soignants
+    SELECT 1 FROM public.soignants
     WHERE id = v_uid AND mandat_facturation_signe = true
   ) THEN
     RETURN jsonb_build_object('success', false, 'error', 'Aucun mandat actif à révoquer');
   END IF;
 
-  UPDATE mandats_facturation_signatures
-  SET revoked_at = now()
+  SELECT id, version, signed_at
+  INTO v_signature_id, v_version, v_signed_at
+  FROM public.mandats_facturation_signatures
   WHERE soignant_id = v_uid AND revoked_at IS NULL
-  RETURNING id, version, signed_at INTO v_signature_id, v_version, v_signed_at;
+  ORDER BY signed_at DESC
+  LIMIT 1;
 
-  UPDATE soignants
-  SET mandat_facturation_signe = false,
-      mandat_facturation_signe_le = NULL,
-      mandat_facturation_version = NULL
+  UPDATE public.mandats_facturation_signatures
+  SET
+    revoked_at = now(),
+    revocation_motif = COALESCE(NULLIF(btrim(p_motif), ''), 'REVOCATION_PAR_LE_SOIGNANT')
+  WHERE soignant_id = v_uid AND revoked_at IS NULL;
+
+  UPDATE public.soignants
+  SET
+    mandat_facturation_signe = false,
+    mandat_facturation_signe_le = NULL,
+    mandat_facturation_version = NULL
   WHERE id = v_uid;
 
   PERFORM public.fn_ecrire_audit_safe(
     p_acteur_id := v_uid,
     p_type_acteur := 'SOIGNANT',
-    p_action := 'MANDAT_FACTURATION_REVOQUE',
+    p_action := 'FACTURATION',
     p_type_ressource := 'mandat_facturation',
     p_id_ressource := v_signature_id,
     p_details := jsonb_build_object(
+      'event', 'MANDAT_FACTURATION_REVOQUE',
       'version', v_version,
       'signed_at', v_signed_at,
       'revoked_at', now(),
-      'motif', p_motif
+      'motif', p_motif,
+      'effet', 'IMMEDIAT_POUR_NOUVELLES_FACTURES'
     )
   );
 
@@ -50788,71 +53154,161 @@ ALTER FUNCTION "public"."fn_signer_contrat_soignant"("p_contrat_id" "uuid", "p_s
 
 CREATE OR REPLACE FUNCTION "public"."fn_signer_mandat_facturation"("p_version" "text", "p_ip" "text" DEFAULT NULL::"text", "p_user_agent" "text" DEFAULT NULL::"text", "p_contenu_hash" "text" DEFAULT NULL::"text") RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO 'public'
+    SET "search_path" TO 'public', 'extensions'
     AS $$
-DECLARE
-    v_user_id UUID := auth.uid();
-    v_signature_id UUID;
-    v_mission_id UUID;
-    v_backfill INT := 0;
 BEGIN
-    IF v_user_id IS NULL THEN
-        RETURN '{"error":"Non authentifié"}'::JSONB;
-    END IF;
-
-    -- Vérifier que c'est bien un soignant
-    IF NOT EXISTS (SELECT 1 FROM soignants WHERE id = v_user_id AND supprime_le IS NULL) THEN
-        RETURN '{"error":"Seuls les soignants peuvent signer ce mandat"}'::JSONB;
-    END IF;
-
-    -- Enregistrer la signature (audit)
-    INSERT INTO mandats_facturation_signatures (soignant_id, version, ip_address, user_agent, contenu_hash)
-    VALUES (v_user_id, p_version, p_ip, p_user_agent, p_contenu_hash)
-    RETURNING id INTO v_signature_id;
-
-    -- Mettre à jour le soignant
-    UPDATE soignants SET
-        mandat_facturation_signe = TRUE,
-        mandat_facturation_signe_le = now(),
-        mandat_facturation_version = p_version
-    WHERE id = v_user_id;
-
-    -- BACKFILL : rattraper les factures d'honoraires non générées faute de mandat.
-    -- On reproduit les prédicats des deux générateurs existants :
-    --   (A) honoraires "classiques" (non rétrocession) → généré par le trigger TERMINEE
-    --       si mandat signé. Gardé sur type_contrat_applique = 'LIBERAL' pour ne PAS
-    --       facturer en honoraires les missions SALARIÉES d'un soignant MIXTE.
-    --   (B) rétrocession confirmée (honoraires_confirmes_le NOT NULL) → généré par
-    --       confirm/cron si mandat signé. RETROCESSION est par nature libéral.
-    -- fn_generer_facture_honoraires_mission est idempotente (no-op si facture existe).
-    FOR v_mission_id IN
-        SELECT m.id
-        FROM missions m
-        WHERE m.soignant_assigne_id = v_user_id
-          AND m.statut = 'TERMINEE'
-          AND COALESCE(m.net_a_payer, m.total_brut, 0) > 0
-          AND NOT EXISTS (SELECT 1 FROM factures_honoraires fh WHERE fh.mission_id = m.id)
-          AND (
-                (m.mode_remuneration IS DISTINCT FROM 'RETROCESSION' AND m.type_contrat_applique = 'LIBERAL')
-             OR (m.mode_remuneration = 'RETROCESSION' AND m.honoraires_confirmes_le IS NOT NULL)
-          )
-    LOOP
-        PERFORM fn_generer_facture_honoraires_mission(v_mission_id);
-        v_backfill := v_backfill + 1;
-    END LOOP;
-
-    RETURN jsonb_build_object(
-        'success', true,
-        'signature_id', v_signature_id,
-        'version', p_version,
-        'signed_at', now(),
-        'factures_regenerees', v_backfill
-    );
+  RETURN jsonb_build_object(
+    'success', false,
+    'error', 'SIGNATURE_MANDAT_EDGE_REQUISE',
+    'message', 'Rechargez l’application pour signer la version actuelle du mandat.'
+  );
 END;
 $$;
 
 
 ALTER FUNCTION "public"."fn_signer_mandat_facturation"("p_version" "text", "p_ip" "text", "p_user_agent" "text", "p_contenu_hash" "text") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."fn_signer_mandat_facturation_serveur"("p_soignant_id" "uuid", "p_version" "text", "p_ip" "text", "p_ip_source" "text", "p_user_agent" "text", "p_contenu_hash" "text", "p_contenu_texte" "text", "p_statut_tva_honoraires" "text") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public', 'extensions'
+    AS $_$
+DECLARE
+  v_soignant public.soignants%ROWTYPE;
+  v_signature_id uuid;
+  v_hash_calcule text;
+  v_champs_manquants text[] := ARRAY[]::text[];
+BEGIN
+  IF p_version IS DISTINCT FROM '1.4' THEN
+    RETURN jsonb_build_object('success', false, 'error', 'VERSION_MANDAT_INVALIDE');
+  END IF;
+  IF p_statut_tva_honoraires IS NULL OR p_statut_tva_honoraires NOT IN (
+    'FRANCHISE_EN_BASE',
+    'REDEVABLE_TVA'
+  ) THEN
+    RETURN jsonb_build_object('success', false, 'error', 'STATUT_TVA_INVALIDE');
+  END IF;
+  IF p_contenu_texte IS NULL OR length(p_contenu_texte) NOT BETWEEN 1000 AND 60000 THEN
+    RETURN jsonb_build_object('success', false, 'error', 'CONTENU_MANDAT_INVALIDE');
+  END IF;
+  IF p_contenu_hash IS NULL OR p_contenu_hash !~ '^[a-f0-9]{64}$' THEN
+    RETURN jsonb_build_object('success', false, 'error', 'HASH_MANDAT_INVALIDE');
+  END IF;
+
+  v_hash_calcule := encode(digest(convert_to(p_contenu_texte, 'UTF8'), 'sha256'), 'hex');
+  IF v_hash_calcule IS DISTINCT FROM p_contenu_hash THEN
+    RETURN jsonb_build_object('success', false, 'error', 'HASH_MANDAT_INCOHERENT');
+  END IF;
+
+  SELECT * INTO v_soignant
+  FROM public.soignants
+  WHERE id = p_soignant_id
+    AND supprime_le IS NULL
+  FOR UPDATE;
+  IF NOT FOUND THEN
+    RETURN jsonb_build_object('success', false, 'error', 'SOIGNANT_INTROUVABLE');
+  END IF;
+
+  IF v_soignant.type_exercice IS NULL
+     OR v_soignant.type_exercice::text NOT IN ('LIBERAL', 'MIXTE') THEN
+    RETURN jsonb_build_object('success', false, 'error', 'MANDAT_RESERVE_EXERCICE_LIBERAL');
+  END IF;
+  IF NULLIF(btrim(v_soignant.prenom), '') IS NULL THEN v_champs_manquants := array_append(v_champs_manquants, 'prenom'); END IF;
+  IF NULLIF(btrim(v_soignant.nom), '') IS NULL THEN v_champs_manquants := array_append(v_champs_manquants, 'nom'); END IF;
+  IF v_soignant.profession IS NULL THEN v_champs_manquants := array_append(v_champs_manquants, 'profession'); END IF;
+  IF v_soignant.profession::text IN ('MEDECIN', 'DENTISTE', 'SAGE_FEMME', 'PHARMACIEN')
+     AND NULLIF(btrim(v_soignant.numero_rpps), '') IS NULL THEN
+    v_champs_manquants := array_append(v_champs_manquants, 'numero_rpps');
+  END IF;
+  IF regexp_replace(COALESCE(v_soignant.siret_liberal, ''), '\D', '', 'g') !~ '^\d{14}$' THEN v_champs_manquants := array_append(v_champs_manquants, 'siret_liberal'); END IF;
+  IF NULLIF(btrim(v_soignant.email), '') IS NULL THEN v_champs_manquants := array_append(v_champs_manquants, 'email'); END IF;
+  IF NULLIF(btrim(v_soignant.adresse_rue), '') IS NULL THEN v_champs_manquants := array_append(v_champs_manquants, 'adresse_rue'); END IF;
+  IF NULLIF(btrim(v_soignant.adresse_code_postal), '') IS NULL THEN v_champs_manquants := array_append(v_champs_manquants, 'adresse_code_postal'); END IF;
+  IF NULLIF(btrim(v_soignant.adresse_ville), '') IS NULL THEN v_champs_manquants := array_append(v_champs_manquants, 'adresse_ville'); END IF;
+  IF p_statut_tva_honoraires = 'REDEVABLE_TVA'
+     AND NULLIF(btrim(v_soignant.numero_tva), '') IS NULL THEN
+    v_champs_manquants := array_append(v_champs_manquants, 'numero_tva');
+  END IF;
+
+  IF cardinality(v_champs_manquants) > 0 THEN
+    RETURN jsonb_build_object(
+      'success', false,
+      'error', 'PROFIL_FACTURATION_INCOMPLET',
+      'champs_manquants', to_jsonb(v_champs_manquants)
+    );
+  END IF;
+
+  UPDATE public.mandats_facturation_signatures
+  SET
+    revoked_at = now(),
+    revocation_motif = 'REMPLACE_PAR_NOUVELLE_SIGNATURE'
+  WHERE soignant_id = p_soignant_id
+    AND revoked_at IS NULL;
+
+  INSERT INTO public.mandats_facturation_signatures (
+    soignant_id,
+    version,
+    ip_address,
+    ip_source,
+    user_agent,
+    contenu_hash,
+    contenu_texte,
+    statut_tva_honoraires,
+    retention_jusqu_au
+  ) VALUES (
+    p_soignant_id,
+    p_version,
+    NULLIF(left(COALESCE(p_ip, ''), 128), ''),
+    NULLIF(left(COALESCE(p_ip_source, ''), 64), ''),
+    NULLIF(left(COALESCE(p_user_agent, ''), 1000), ''),
+    p_contenu_hash,
+    p_contenu_texte,
+    p_statut_tva_honoraires,
+    now() + interval '10 years'
+  )
+  RETURNING id INTO v_signature_id;
+
+  UPDATE public.soignants
+  SET
+    statut_tva_honoraires = p_statut_tva_honoraires,
+    -- Compatibilité temporaire avec les lecteurs qui consomment encore le
+    -- snapshot historique à trois valeurs. L'exonération n'est plus globale.
+    regime_tva_honoraires = CASE p_statut_tva_honoraires
+      WHEN 'FRANCHISE_EN_BASE' THEN 'FRANCHISE_EN_BASE_ART_293_B'
+      ELSE 'ASSUJETTI_TVA'
+    END,
+    assujetti_tva = (p_statut_tva_honoraires = 'REDEVABLE_TVA'),
+    mandat_facturation_signe = true,
+    mandat_facturation_signe_le = now(),
+    mandat_facturation_version = p_version
+  WHERE id = p_soignant_id;
+
+  PERFORM public.fn_ecrire_audit_safe(
+    p_acteur_id := p_soignant_id,
+    p_type_acteur := 'SOIGNANT',
+    p_action := 'FACTURATION',
+    p_type_ressource := 'mandat_facturation',
+    p_id_ressource := v_signature_id,
+    p_details := jsonb_build_object(
+      'event', 'MANDAT_FACTURATION_SIGNE',
+      'version', p_version,
+      'statut_tva_honoraires', p_statut_tva_honoraires,
+      'ip_source', p_ip_source
+    )
+  );
+
+  RETURN jsonb_build_object(
+    'success', true,
+    'signature_id', v_signature_id,
+    'version', p_version,
+    'signed_at', now(),
+    'factures_regenerees', 0
+  );
+END;
+$_$;
+
+
+ALTER FUNCTION "public"."fn_signer_mandat_facturation_serveur"("p_soignant_id" "uuid", "p_version" "text", "p_ip" "text", "p_ip_source" "text", "p_user_agent" "text", "p_contenu_hash" "text", "p_contenu_texte" "text", "p_statut_tva_honoraires" "text") OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."fn_sms_doit_envoyer"("p_destinataire_id" "uuid", "p_type" "text", "p_fenetre_minutes" integer DEFAULT 5) RETURNS boolean
@@ -51273,6 +53729,47 @@ $$;
 
 
 ALTER FUNCTION "public"."fn_soignants_urgence"("p_mission_id" "uuid") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."fn_solde_correction_facture_honoraires"("p_facture_id" "uuid") RETURNS TABLE("montant_ht" numeric, "montant_tva" numeric, "montant_ttc" numeric)
+    LANGUAGE "sql" STABLE
+    SET "search_path" TO 'pg_catalog', 'public'
+    AS $$
+  WITH RECURSIVE chaine AS (
+    SELECT
+      fh.id,
+      fh.type_document,
+      fh.montant_ht,
+      fh.montant_tva,
+      fh.montant_ttc,
+      ARRAY[fh.id]::uuid[] AS chemin
+    FROM public.factures_honoraires fh
+    WHERE fh.id = p_facture_id
+
+    UNION ALL
+
+    SELECT
+      enfant.id,
+      enfant.type_document,
+      enfant.montant_ht,
+      enfant.montant_tva,
+      enfant.montant_ttc,
+      parent.chemin || enfant.id
+    FROM chaine parent
+    JOIN public.factures_honoraires enfant
+      ON enfant.facture_precedente_id = parent.id
+    WHERE enfant.statut NOT IN ('ANNULEE', 'REMPLACEE', 'ERREUR_GENERATION')
+      AND enfant.id <> ALL(parent.chemin)
+  )
+  SELECT
+    round(COALESCE(sum(CASE WHEN type_document = 'AVOIR' THEN -montant_ht ELSE montant_ht END), 0), 2),
+    round(COALESCE(sum(CASE WHEN type_document = 'AVOIR' THEN -montant_tva ELSE montant_tva END), 0), 2),
+    round(COALESCE(sum(CASE WHEN type_document = 'AVOIR' THEN -montant_ttc ELSE montant_ttc END), 0), 2)
+  FROM chaine;
+$$;
+
+
+ALTER FUNCTION "public"."fn_solde_correction_facture_honoraires"("p_facture_id" "uuid") OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."fn_soumettre_reclamation"("p_categorie" "text", "p_sujet" "text", "p_details" "text", "p_mission_id" "uuid" DEFAULT NULL::"uuid") RETURNS "jsonb"
@@ -52001,6 +54498,21 @@ ALTER FUNCTION "public"."fn_stats_rh_etablissement"() OWNER TO "postgres";
 
 COMMENT ON FUNCTION "public"."fn_stats_rh_etablissement"() IS 'Statistiques RH du tenant courant; futur sur PREVISIONNEL exact et historique sur EFFECTIF exact, avec repli PREVISIONNEL.';
 
+
+
+CREATE OR REPLACE FUNCTION "public"."fn_strategie_facturation_pour_periode"("p_debut" timestamp with time zone, "p_fin" timestamp with time zone) RETURNS "public"."strategie_facturation"
+    LANGUAGE "sql" IMMUTABLE STRICT
+    SET "search_path" TO 'pg_catalog', 'public'
+    AS $$
+  SELECT CASE
+    WHEN p_fin > p_debut + interval '7 days'
+      THEN 'HEBDO_ET_FINALE'::public.strategie_facturation
+    ELSE 'FINALE_UNIQUE'::public.strategie_facturation
+  END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_strategie_facturation_pour_periode"("p_debut" timestamp with time zone, "p_fin" timestamp with time zone) OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."fn_stripe_connect_rapprocher_facture"("p_mission_id" "uuid", "p_soignant_id" "uuid", "p_etablissement_id" "uuid", "p_facture_honoraires_id" "uuid", "p_facture_commission_id" "uuid", "p_stripe_checkout_session_id" "text", "p_stripe_payment_intent_id" "text", "p_stripe_charge_id" "text", "p_stripe_transfer_id" "text", "p_montant_soignant_cts" integer, "p_montant_commission_cts" integer, "p_montant_total_cts" integer, "p_rapproche_le" timestamp with time zone DEFAULT "now"()) RETURNS "jsonb"
@@ -54793,6 +57305,27 @@ $$;
 
 
 ALTER FUNCTION "public"."fn_top_soignants"("p_profession" "text", "p_limit" integer) OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."fn_tracer_contestation_facture_honoraires"() RETURNS "trigger"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'pg_catalog', 'public'
+    AS $$
+BEGIN
+  IF NEW.facture_id IS NOT NULL THEN
+    UPDATE public.factures_honoraires
+    SET contestee_le = COALESCE(contestee_le, NEW.cree_le, now()),
+        statut_litige = 'EN_ATTENTE_LITIGE',
+        litige_id = NEW.id,
+        modifie_le = now()
+    WHERE id = NEW.facture_id;
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_tracer_contestation_facture_honoraires"() OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."fn_traiter_candidature"("p_candidature_id" "uuid", "p_decision" "text", "p_motif" "text" DEFAULT NULL::"text") RETURNS "jsonb"
@@ -59705,6 +62238,72 @@ $$;
 ALTER FUNCTION "public"."fn_verifier_skip_serie_onboarding"("p_envoi_id" "uuid") OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."fn_verrouiller_periode_facture_honoraires"() RETURNS "trigger"
+    LANGUAGE "plpgsql"
+    SET "search_path" TO 'pg_catalog', 'public'
+    AS $$
+DECLARE
+  v_origine public.factures_honoraires%ROWTYPE;
+BEGIN
+  IF NEW.mission_id IS NULL
+     OR NEW.type_document <> 'FACTURE'
+     OR NEW.statut IN ('ANNULEE', 'REMPLACEE', 'ERREUR_GENERATION') THEN
+    RETURN NEW;
+  END IF;
+  IF NEW.periode_debut IS NULL OR NEW.periode_fin IS NULL OR NEW.periode_fin < NEW.periode_debut THEN
+    RAISE EXCEPTION 'La période de facturation est invalide.'
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  PERFORM pg_catalog.pg_advisory_xact_lock(
+    pg_catalog.hashtextextended(NEW.mission_id::text, 8194)
+  );
+
+  -- Les corrections comptables sont volontairement admises sur la même
+  -- période. Elles doivent cependant pointer vers une facture exacte de la
+  -- même mission, des mêmes parties et de la même période.
+  IF NEW.nature_correction = 'COMPLEMENT' THEN
+    SELECT * INTO v_origine
+    FROM public.factures_honoraires
+    WHERE id = NEW.facture_precedente_id
+    FOR SHARE;
+
+    IF NOT FOUND
+       OR v_origine.type_document <> 'FACTURE'
+       OR v_origine.statut NOT IN ('PAYEE', 'FACTORISEE')
+       OR v_origine.mission_id IS DISTINCT FROM NEW.mission_id
+       OR v_origine.soignant_id IS DISTINCT FROM NEW.soignant_id
+       OR v_origine.etablissement_id IS DISTINCT FROM NEW.etablissement_id
+       OR v_origine.periode_debut IS DISTINCT FROM NEW.periode_debut
+       OR v_origine.periode_fin IS DISTINCT FROM NEW.periode_fin THEN
+      RAISE EXCEPTION 'La facture complémentaire doit corriger une facture payée exacte de la même mission et période.'
+        USING ERRCODE = 'check_violation';
+    END IF;
+    RETURN NEW;
+  END IF;
+
+  IF EXISTS (
+    SELECT 1
+    FROM public.factures_honoraires fh
+    WHERE fh.mission_id = NEW.mission_id
+      AND fh.id <> NEW.id
+      AND fh.type_document = 'FACTURE'
+      AND fh.nature_correction <> 'COMPLEMENT'
+      AND fh.statut NOT IN ('ANNULEE', 'REMPLACEE', 'ERREUR_GENERATION')
+      AND daterange(fh.periode_debut, fh.periode_fin, '[]')
+          && daterange(NEW.periode_debut, NEW.periode_fin, '[]')
+  ) THEN
+    RAISE EXCEPTION 'Une facture active couvre déjà tout ou partie de cette période pour cette mission.'
+      USING ERRCODE = 'exclusion_violation';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_verrouiller_periode_facture_honoraires"() OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."fn_verrouiller_proposition_litige_en_attente"() RETURNS "trigger"
     LANGUAGE "plpgsql"
     SET "search_path" TO 'pg_catalog', 'public', 'auth'
@@ -61007,6 +63606,8 @@ CREATE TABLE IF NOT EXISTS "public"."soignants" (
     "siret_liberal_preuve_identite_storage_updated_at" timestamp with time zone,
     "siret_liberal_preuve_identite_valide_jusqua" "date",
     "siret_liberal_preuve_identite_empreinte_sha256" "text",
+    "regime_tva_honoraires" "text",
+    "statut_tva_honoraires" "text",
     CONSTRAINT "chk_rayon_raisonnable" CHECK ((("rayon_deplacement_km" >= 1) AND ("rayon_deplacement_km" <= 200))),
     CONSTRAINT "chk_telephone_format" CHECK ((("telephone" IS NULL) OR (("telephone")::"text" ~ '^\+?[0-9\s\-\.]{8,20}$'::"text"))),
     CONSTRAINT "soignants_coherence_identite_check" CHECK (("coherence_identite" = ANY (ARRAY['NON_VERIFIE'::"text", 'COHERENT'::"text", 'INCOHERENT'::"text", 'EN_ATTENTE_REVUE'::"text"]))),
@@ -61014,12 +63615,14 @@ CREATE TABLE IF NOT EXISTS "public"."soignants" (
     CONSTRAINT "soignants_numero_securite_sociale_format" CHECK ((("numero_securite_sociale" IS NULL) OR ("numero_securite_sociale" ~ '^[0-9]{13,15}$'::"text"))),
     CONSTRAINT "soignants_preference_contrat_mixte_check" CHECK (("preference_contrat_mixte" = ANY (ARRAY['SALARIE'::"text", 'LIBERAL'::"text"]))),
     CONSTRAINT "soignants_regime_fiscal_check" CHECK (("regime_fiscal" = ANY (ARRAY['MICRO_BNC'::"text", 'DECLARATION_CONTROLEE'::"text"]))),
+    CONSTRAINT "soignants_regime_tva_honoraires_check" CHECK ((("regime_tva_honoraires" IS NULL) OR ("regime_tva_honoraires" = ANY (ARRAY['EXONERE_ART_261_4_1'::"text", 'FRANCHISE_EN_BASE_ART_293_B'::"text", 'ASSUJETTI_TVA'::"text"])))),
     CONSTRAINT "soignants_score_fiabilite_check" CHECK ((("score_fiabilite" >= (0)::numeric) AND ("score_fiabilite" <= (100)::numeric))),
     CONSTRAINT "soignants_sexe_check" CHECK ((("sexe" IS NULL) OR ("sexe" = ANY (ARRAY['M'::"text", 'F'::"text"])))),
     CONSTRAINT "soignants_siret_liberal_preuve_manuelle_complete_check" CHECK ((("siret_liberal_source_verification" IS DISTINCT FROM 'REVUE_MANUELLE_IDENTITE'::"text") OR (("siret_liberal_preuve_siret" IS NOT NULL) AND (("siret_liberal_preuve_siret")::"text" ~ '^[0-9]{14}$'::"text") AND ("siret_liberal_preuve_identite_document_id" IS NOT NULL) AND ("siret_liberal_preuve_identite_document_modifie_le" IS NOT NULL) AND (NOT ("siret_liberal_preuve_identite_s3_bucket" IS DISTINCT FROM 'jolene-documents'::"text")) AND (NULLIF("siret_liberal_preuve_identite_s3_cle", ''::"text") IS NOT NULL) AND ("siret_liberal_preuve_identite_storage_object_id" IS NOT NULL) AND ("siret_liberal_preuve_identite_storage_updated_at" IS NOT NULL) AND ("siret_liberal_preuve_identite_valide_jusqua" IS NOT NULL) AND ("siret_liberal_preuve_identite_empreinte_sha256" IS NOT NULL) AND ("siret_liberal_preuve_identite_empreinte_sha256" ~ '^[0-9a-f]{64}$'::"text")))),
     CONSTRAINT "soignants_siret_liberal_source_verification_check" CHECK ((("siret_liberal_source_verification" IS NULL) OR ("siret_liberal_source_verification" = ANY (ARRAY['REGISTRE_OFFICIEL'::"text", 'REVUE_MANUELLE_IDENTITE'::"text"])))),
     CONSTRAINT "soignants_specialite_source_check" CHECK ((("specialite_source" IS NULL) OR ("specialite_source" = ANY (ARRAY['RPPS'::"text", 'MANUEL'::"text"])))),
     CONSTRAINT "soignants_statut_liberal_check" CHECK (("statut_liberal" = ANY (ARRAY['NON_LIBERAL'::"text", 'EN_COURS'::"text", 'ACTIF'::"text"]))),
+    CONSTRAINT "soignants_statut_tva_honoraires_check" CHECK ((("statut_tva_honoraires" IS NULL) OR ("statut_tva_honoraires" = ANY (ARRAY['FRANCHISE_EN_BASE'::"text", 'REDEVABLE_TVA'::"text"])))),
     CONSTRAINT "soignants_type_exercice_check" CHECK (("type_exercice" = ANY (ARRAY['SALARIE'::"text", 'LIBERAL'::"text", 'MIXTE'::"text"]))),
     CONSTRAINT "soignants_validation_3200h_statut_check" CHECK (("validation_3200h_statut" = ANY (ARRAY['NON_DEMANDE'::"text", 'EN_ATTENTE'::"text", 'VALIDEE'::"text", 'REFUSEE'::"text"])))
 );
@@ -61099,6 +63702,10 @@ COMMENT ON COLUMN "public"."soignants"."siret_liberal_source_verification" IS 'S
 
 
 COMMENT ON COLUMN "public"."soignants"."siret_liberal_preuve_identite_document_id" IS 'Document exact ayant fonde une approbation manuelle du titulaire du SIRET liberal.';
+
+
+
+COMMENT ON COLUMN "public"."soignants"."statut_tva_honoraires" IS 'Statut propre à l activité libérale : franchise en base ou redevable. La nature exonérée/taxable est déterminée mission par mission.';
 
 
 
@@ -61608,7 +64215,7 @@ CREATE TABLE IF NOT EXISTS "public"."chorus_submissions" (
     "type_document" "text" DEFAULT 'FACTURE'::"text" NOT NULL,
     "avoir_reference_invoice" "text",
     CONSTRAINT "chorus_submissions_status_check" CHECK (("status" = ANY (ARRAY['pending_credentials'::"text", 'pending'::"text", 'submitted'::"text", 'accepted'::"text", 'rejected'::"text", 'error'::"text"]))),
-    CONSTRAINT "chorus_submissions_submission_type_check" CHECK (("submission_type" = ANY (ARRAY['DEPOT_PDF_API'::"text", 'SAISIE_API'::"text"]))),
+    CONSTRAINT "chorus_submissions_submission_type_check" CHECK (("submission_type" = ANY (ARRAY['DEPOT_PDF_API'::"text", 'DEPOT_XML_API'::"text", 'SAISIE_API'::"text"]))),
     CONSTRAINT "chorus_submissions_type_document_check" CHECK (("type_document" = ANY (ARRAY['FACTURE'::"text", 'AVOIR'::"text"])))
 );
 
@@ -62591,7 +65198,7 @@ END) STORED,
     "facture_honoraire_id" "uuid",
     CONSTRAINT "factures_chorus_pro_statut_check" CHECK (("chorus_pro_statut" = ANY (ARRAY['NON_APPLICABLE'::"text", 'A_DEPOSER'::"text", 'DEPOSEE'::"text", 'RECUE'::"text", 'MANDATEE'::"text", 'PAYEE'::"text", 'REJETEE'::"text"]))),
     CONSTRAINT "factures_mode_paiement_check" CHECK (("mode_paiement" = ANY (ARRAY['STRIPE'::"text", 'VIREMENT'::"text", 'CHORUS_PRO'::"text"]))),
-    CONSTRAINT "factures_statut_check" CHECK (("statut" = ANY (ARRAY['BROUILLON'::"text", 'EMISE'::"text", 'VIREMENT_DECLARE'::"text", 'PAYEE'::"text", 'EN_RETARD'::"text", 'ANNULEE'::"text"]))),
+    CONSTRAINT "factures_statut_check" CHECK (("statut" = ANY (ARRAY['BROUILLON'::"text", 'EMISE'::"text", 'VIREMENT_DECLARE'::"text", 'PAYEE'::"text", 'EN_RETARD'::"text", 'ANNULEE'::"text", 'REMPLACEE'::"text", 'ERREUR_GENERATION'::"text"]))),
     CONSTRAINT "factures_type_document_check" CHECK (("type_document" = ANY (ARRAY['FACTURE'::"text", 'AVOIR'::"text", 'FACTURE_COMPLEMENTAIRE'::"text"])))
 );
 
@@ -62670,6 +65277,35 @@ END) STORED,
     "numero_semaine_iso" smallint,
     "annee_iso" smallint,
     "est_facture_finale_mission" boolean DEFAULT true NOT NULL,
+    "regime_tva_snapshot" "text",
+    "base_legale_tva_snapshot" "text",
+    "nature_prestation_snapshot" "text",
+    "description_prestation_snapshot" "text",
+    "quantite_heures_snapshot" numeric(10,2),
+    "taux_horaire_snapshot" numeric(12,2),
+    "nature_correction" "text" DEFAULT 'ORIGINALE'::"text" NOT NULL,
+    "emetteur_identite_snapshot" "text",
+    "emetteur_profession_snapshot" "text",
+    "emetteur_siret_snapshot" "text",
+    "emetteur_numero_professionnel_snapshot" "text",
+    "emetteur_adresse_snapshot" "text",
+    "emetteur_adresse_rue_snapshot" "text",
+    "emetteur_adresse_code_postal_snapshot" "text",
+    "emetteur_adresse_ville_snapshot" "text",
+    "emetteur_email_snapshot" "text",
+    "emetteur_numero_tva_snapshot" "text",
+    "destinataire_nom_snapshot" "text",
+    "destinataire_siret_snapshot" "text",
+    "destinataire_adresse_rue_snapshot" "text",
+    "destinataire_adresse_code_postal_snapshot" "text",
+    "destinataire_adresse_ville_snapshot" "text",
+    "emise_le" timestamp with time zone,
+    "notifiee_soignant_le" timestamp with time zone,
+    "verification_echeance_le" timestamp with time zone,
+    "acceptee_explicitement_le" timestamp with time zone,
+    "contestee_le" timestamp with time zone,
+    CONSTRAINT "factures_honoraires_nature_correction_check" CHECK ((("nature_correction" = ANY (ARRAY['ORIGINALE'::"text", 'REMPLACEMENT'::"text", 'COMPLEMENT'::"text", 'AVOIR'::"text"])) AND ((("type_document" = 'AVOIR'::"public"."type_document_facture") AND ("nature_correction" = 'AVOIR'::"text") AND ("facture_precedente_id" IS NOT NULL)) OR (("type_document" = 'FACTURE'::"public"."type_document_facture") AND ("nature_correction" = ANY (ARRAY['ORIGINALE'::"text", 'REMPLACEMENT'::"text", 'COMPLEMENT'::"text"])))) AND (("nature_correction" <> ALL (ARRAY['REMPLACEMENT'::"text", 'COMPLEMENT'::"text"])) OR (("facture_precedente_id" IS NOT NULL) AND ("litige_id" IS NOT NULL))))),
+    CONSTRAINT "factures_honoraires_regime_tva_snapshot_check" CHECK ((("regime_tva_snapshot" IS NULL) OR ("regime_tva_snapshot" = ANY (ARRAY['EXONERE_ART_261_4_1'::"text", 'FRANCHISE_EN_BASE_ART_293_B'::"text", 'ASSUJETTI_TVA'::"text"])))),
     CONSTRAINT "factures_honoraires_statut_check" CHECK (("statut" = ANY (ARRAY['BROUILLON'::"text", 'EN_GENERATION'::"text", 'EMISE'::"text", 'PAYEE'::"text", 'ANNULEE'::"text", 'FACTORISEE'::"text", 'EN_RETARD'::"text", 'REMPLACEE'::"text", 'ERREUR_GENERATION'::"text", 'REMBOURSE'::"text"])))
 );
 
@@ -62743,6 +65379,65 @@ COMMENT ON COLUMN "public"."factures_honoraires"."annee_iso" IS 'Année ISO 8601
 
 COMMENT ON COLUMN "public"."factures_honoraires"."est_facture_finale_mission" IS 'TRUE si facture finale (FINALE_UNIQUE ou facture finale partielle d''une mission HEBDO_ET_FINALE). FALSE si hebdo intermédiaire.';
 
+
+
+COMMENT ON COLUMN "public"."factures_honoraires"."emise_le" IS 'Instant exact de première mise à disposition du document. Point de départ du délai de contestation.';
+
+
+
+COMMENT ON COLUMN "public"."factures_honoraires"."notifiee_soignant_le" IS 'Instant de création atomique de la notification in-app remettant la copie au soignant.';
+
+
+
+COMMENT ON COLUMN "public"."factures_honoraires"."verification_echeance_le" IS 'Echéance exacte et figée de vérification du contenu par le soignant.';
+
+
+
+COMMENT ON COLUMN "public"."factures_honoraires"."acceptee_explicitement_le" IS 'Acceptation expresse du document par le soignant. Sans contestation, l’acceptation peut aussi être tacite au terme du délai contractuel.';
+
+
+
+COMMENT ON COLUMN "public"."factures_honoraires"."contestee_le" IS 'Première contestation tracée visant exactement ce document.';
+
+
+
+CREATE TABLE IF NOT EXISTS "public"."factures_honoraires_documents" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "facture_honoraire_id" "uuid" NOT NULL,
+    "pdf_s3_key" "text" NOT NULL,
+    "facturx_xml_url" "text" NOT NULL,
+    "pdf_sha256" "text",
+    "xml_sha256" "text",
+    "motif_generation" "text" NOT NULL,
+    "cree_le" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "retention_jusqu_au" timestamp with time zone DEFAULT ("now"() + '10 years'::interval) NOT NULL,
+    CONSTRAINT "factures_honoraires_documents_pdf_hash_check" CHECK ((("pdf_sha256" IS NULL) OR ("pdf_sha256" ~ '^[a-f0-9]{64}$'::"text"))),
+    CONSTRAINT "factures_honoraires_documents_xml_hash_check" CHECK ((("xml_sha256" IS NULL) OR ("xml_sha256" ~ '^[a-f0-9]{64}$'::"text")))
+);
+
+
+ALTER TABLE "public"."factures_honoraires_documents" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "public"."factures_honoraires_rectifications" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "facture_honoraire_id" "uuid" NOT NULL,
+    "litige_id" "uuid" NOT NULL,
+    "heures_avant" numeric(8,2),
+    "taux_avant" numeric(10,2),
+    "heures_apres" numeric(8,2),
+    "taux_apres" numeric(10,2),
+    "montant_ttc_inchange" numeric(12,2) NOT NULL,
+    "resolution" "text" NOT NULL,
+    "cree_par" "uuid" NOT NULL,
+    "cree_le" timestamp with time zone DEFAULT "now"() NOT NULL,
+    CONSTRAINT "factures_honoraires_rectifications_difference_check" CHECK ((("heures_avant" IS DISTINCT FROM "heures_apres") OR ("taux_avant" IS DISTINCT FROM "taux_apres"))),
+    CONSTRAINT "factures_honoraires_rectifications_montant_ttc_inchange_check" CHECK (("montant_ttc_inchange" > (0)::numeric)),
+    CONSTRAINT "factures_honoraires_rectifications_resolution_check" CHECK ((("length"("btrim"("resolution")) >= 10) AND ("length"("btrim"("resolution")) <= 5000)))
+);
+
+
+ALTER TABLE "public"."factures_honoraires_rectifications" OWNER TO "postgres";
 
 
 CREATE TABLE IF NOT EXISTS "public"."favoris_etab_soignant" (
@@ -63163,7 +65858,15 @@ CREATE TABLE IF NOT EXISTS "public"."mandats_facturation_signatures" (
     "contenu_hash" "text",
     "cree_le" timestamp with time zone DEFAULT "now"() NOT NULL,
     "pdf_url" "text",
-    "revoked_at" timestamp with time zone
+    "revoked_at" timestamp with time zone,
+    "contenu_texte" "text",
+    "regime_tva_honoraires" "text",
+    "statut_tva_honoraires" "text",
+    "ip_source" "text",
+    "retention_jusqu_au" timestamp with time zone,
+    "revocation_motif" "text",
+    CONSTRAINT "mandats_facturation_regime_tva_check" CHECK ((("regime_tva_honoraires" IS NULL) OR ("regime_tva_honoraires" = ANY (ARRAY['EXONERE_ART_261_4_1'::"text", 'FRANCHISE_EN_BASE_ART_293_B'::"text", 'ASSUJETTI_TVA'::"text"])))),
+    CONSTRAINT "mandats_facturation_statut_tva_check" CHECK ((("statut_tva_honoraires" IS NULL) OR ("statut_tva_honoraires" = ANY (ARRAY['FRANCHISE_EN_BASE'::"text", 'REDEVABLE_TVA'::"text"]))))
 );
 
 
@@ -63462,6 +66165,16 @@ CREATE TABLE IF NOT EXISTS "public"."missions" (
     "honoraires_confirmes_le" timestamp with time zone,
     "derniere_relance_candidatures_le" timestamp with time zone,
     "mission_source" "text",
+    "nature_tva_prestation" "text",
+    "nature_tva_declaree_par" "uuid",
+    "nature_tva_declaree_le" timestamp with time zone,
+    "nature_tva_confirmee_soignant" "text",
+    "nature_tva_confirmee_par" "uuid",
+    "nature_tva_confirmee_le" timestamp with time zone,
+    "statut_validation_tva" "text" DEFAULT 'NON_REQUISE'::"text" NOT NULL,
+    "revue_tva_motif" "text",
+    "revue_tva_resolue_par" "uuid",
+    "revue_tva_resolue_le" timestamp with time zone,
     CONSTRAINT "chk_duree_positive" CHECK ((("duree_heures" IS NULL) OR (("duree_heures" >= (0)::numeric) AND ("duree_heures" <= (17568)::numeric)))),
     CONSTRAINT "chk_missions_dates" CHECK (("debut_le" < "fin_le")),
     CONSTRAINT "chk_prochain_type_scan" CHECK (("prochain_type_scan" = ANY (ARRAY['OUVERTURE'::"text", 'FERMETURE'::"text"]))),
@@ -63473,8 +66186,11 @@ CREATE TABLE IF NOT EXISTS "public"."missions" (
     CONSTRAINT "missions_mode_attribution_check" CHECK (("mode_attribution" = ANY (ARRAY['PREMIER_ARRIVE'::"text", 'CANDIDATURE'::"text"]))),
     CONSTRAINT "missions_mode_paiement_soignant_check" CHECK (("mode_paiement_soignant" = ANY (ARRAY['DIRECT'::"text", 'STRIPE_CONNECT'::"text", 'VIREMENT'::"text"]))),
     CONSTRAINT "missions_mode_remuneration_check" CHECK (("mode_remuneration" = ANY (ARRAY['TAUX_HORAIRE'::"text", 'RETROCESSION'::"text"]))),
+    CONSTRAINT "missions_nature_tva_confirmee_soignant_check" CHECK ((("nature_tva_confirmee_soignant" IS NULL) OR ("nature_tva_confirmee_soignant" = ANY (ARRAY['SOIN_THERAPEUTIQUE_EXONERE'::"text", 'PRESTATION_TAXABLE'::"text"])))),
+    CONSTRAINT "missions_nature_tva_prestation_check" CHECK ((("nature_tva_prestation" IS NULL) OR ("nature_tva_prestation" = ANY (ARRAY['SOIN_THERAPEUTIQUE_EXONERE'::"text", 'PRESTATION_TAXABLE'::"text"])))),
     CONSTRAINT "missions_niveau_urgence_check" CHECK ((("niveau_urgence" >= 0) AND ("niveau_urgence" <= 3))),
     CONSTRAINT "missions_retrocession_pct_check" CHECK ((("retrocession_pct" IS NULL) OR (("retrocession_pct" > (0)::numeric) AND ("retrocession_pct" <= (100)::numeric)))),
+    CONSTRAINT "missions_statut_validation_tva_check" CHECK (("statut_validation_tva" = ANY (ARRAY['NON_REQUISE'::"text", 'A_CONFIRMER'::"text", 'CONFIRMEE'::"text", 'A_REVOIR'::"text"]))),
     CONSTRAINT "missions_type_paiement_soignant_check" CHECK (("type_paiement_soignant" = ANY (ARRAY['BULLETIN_PAIE'::"text", 'NOTE_HONORAIRES'::"text"])))
 );
 
@@ -63517,6 +66233,14 @@ COMMENT ON COLUMN "public"."missions"."strategie_facturation" IS 'Stratégie fig
 
 
 COMMENT ON COLUMN "public"."missions"."est_asap" IS 'Mission urgente publiée < 2h avant son début (pool urgence). Annulation soignant après la fenêtre de rétractation = -25 pts de score (vs -10 pour une mission classique).';
+
+
+
+COMMENT ON COLUMN "public"."missions"."nature_tva_prestation" IS 'Nature TVA déclarée par l établissement puis confirmée par le soignant avant facturation libérale.';
+
+
+
+COMMENT ON COLUMN "public"."missions"."statut_validation_tva" IS 'Le statut TVA ne bloque jamais l exécution ni les litiges ; il bloque uniquement la création d une nouvelle facture tant qu il n est pas CONFIRMEE.';
 
 
 
@@ -65543,6 +68267,21 @@ ALTER TABLE ONLY "public"."factoring_partners"
 
 
 
+ALTER TABLE ONLY "public"."factures_honoraires_documents"
+    ADD CONSTRAINT "factures_honoraires_documents_pdf_unique" UNIQUE ("pdf_s3_key");
+
+
+
+ALTER TABLE ONLY "public"."factures_honoraires_documents"
+    ADD CONSTRAINT "factures_honoraires_documents_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."factures_honoraires_documents"
+    ADD CONSTRAINT "factures_honoraires_documents_xml_unique" UNIQUE ("facturx_xml_url");
+
+
+
 ALTER TABLE ONLY "public"."factures_honoraires"
     ADD CONSTRAINT "factures_honoraires_numero_facture_key" UNIQUE ("numero_facture");
 
@@ -65550,6 +68289,16 @@ ALTER TABLE ONLY "public"."factures_honoraires"
 
 ALTER TABLE ONLY "public"."factures_honoraires"
     ADD CONSTRAINT "factures_honoraires_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."factures_honoraires_rectifications"
+    ADD CONSTRAINT "factures_honoraires_rectifications_litige_unique" UNIQUE ("litige_id");
+
+
+
+ALTER TABLE ONLY "public"."factures_honoraires_rectifications"
+    ADD CONSTRAINT "factures_honoraires_rectifications_pkey" PRIMARY KEY ("id");
 
 
 
@@ -67802,7 +70551,19 @@ CREATE UNIQUE INDEX "uniq_factures_mission_active" ON "public"."factures" USING 
 
 
 
-CREATE UNIQUE INDEX "uniq_fh_mission_semaine_active" ON "public"."factures_honoraires" USING "btree" ("mission_id", "annee_iso", "numero_semaine_iso", "type_document") WHERE (("est_facture_finale_mission" = false) AND ("statut" <> ALL (ARRAY['ANNULEE'::"text", 'REMPLACEE'::"text", 'ERREUR_GENERATION'::"text"])));
+CREATE UNIQUE INDEX "uniq_fh_correction_active_par_litige" ON "public"."factures_honoraires" USING "btree" ("facture_precedente_id", "litige_id", "nature_correction") WHERE (("nature_correction" = ANY (ARRAY['REMPLACEMENT'::"text", 'COMPLEMENT'::"text", 'AVOIR'::"text"])) AND ("statut" <> ALL (ARRAY['ANNULEE'::"text", 'REMPLACEE'::"text", 'ERREUR_GENERATION'::"text"])));
+
+
+
+CREATE UNIQUE INDEX "uniq_fh_mission_finale_active" ON "public"."factures_honoraires" USING "btree" ("mission_id") WHERE (("est_facture_finale_mission" IS TRUE) AND ("type_document" = 'FACTURE'::"public"."type_document_facture") AND ("nature_correction" <> 'COMPLEMENT'::"text") AND ("mission_id" IS NOT NULL) AND ("statut" <> ALL (ARRAY['ANNULEE'::"text", 'REMPLACEE'::"text", 'ERREUR_GENERATION'::"text"])));
+
+
+
+CREATE UNIQUE INDEX "uniq_fh_mission_semaine_active" ON "public"."factures_honoraires" USING "btree" ("mission_id", "annee_iso", "numero_semaine_iso", "type_document") WHERE (("est_facture_finale_mission" IS FALSE) AND ("type_document" = 'FACTURE'::"public"."type_document_facture") AND ("nature_correction" <> 'COMPLEMENT'::"text") AND ("statut" <> ALL (ARRAY['ANNULEE'::"text", 'REMPLACEE'::"text", 'ERREUR_GENERATION'::"text"])));
+
+
+
+CREATE UNIQUE INDEX "uniq_mandat_facturation_actif_soignant" ON "public"."mandats_facturation_signatures" USING "btree" ("soignant_id") WHERE ("revoked_at" IS NULL);
 
 
 
@@ -67862,7 +70623,11 @@ CREATE UNIQUE INDEX "uq_heures_externes_preuve_validee" ON "public"."heures_exte
 
 
 
-CREATE UNIQUE INDEX "uq_litige_mission_type_ouvert" ON "public"."litiges" USING "btree" ("mission_id", "type_litige") WHERE ("statut" = ANY (ARRAY['OUVERT'::"text", 'EN_DISCUSSION'::"text", 'EN_MEDIATION'::"text"]));
+CREATE UNIQUE INDEX "uq_litige_facture_type_ouvert" ON "public"."litiges" USING "btree" ("facture_id", "type_litige") WHERE (("facture_id" IS NOT NULL) AND ("statut" = ANY (ARRAY['OUVERT'::"text", 'EN_DISCUSSION'::"text", 'EN_MEDIATION'::"text", 'MEDIATION_EN_COURS'::"text", 'REVUE_ADMIN'::"text"])));
+
+
+
+CREATE UNIQUE INDEX "uq_litige_mission_type_ouvert_legacy" ON "public"."litiges" USING "btree" ("mission_id", "type_litige") WHERE (("facture_id" IS NULL) AND ("statut" = ANY (ARRAY['OUVERT'::"text", 'EN_DISCUSSION'::"text", 'EN_MEDIATION'::"text", 'MEDIATION_EN_COURS'::"text", 'REVUE_ADMIN'::"text"])));
 
 
 
@@ -68126,6 +70891,14 @@ CREATE OR REPLACE TRIGGER "trg_00_bloquer_cloture_empechement" BEFORE UPDATE OF 
 
 
 
+CREATE OR REPLACE TRIGGER "trg_00_bloquer_retrocession_prelaunch" BEFORE INSERT OR UPDATE OF "mode_remuneration", "retrocession_pct" ON "public"."missions" FOR EACH ROW EXECUTE FUNCTION "public"."fn_bloquer_retrocession_prelaunch"();
+
+
+
+CREATE OR REPLACE TRIGGER "trg_00_normaliser_nature_correction_facture" BEFORE INSERT OR UPDATE OF "type_document", "facture_precedente_id", "litige_id", "nature_correction" ON "public"."factures_honoraires" FOR EACH ROW EXECUTE FUNCTION "public"."fn_normaliser_nature_correction_facture"();
+
+
+
 CREATE OR REPLACE TRIGGER "trg_00_proteger_heures_externes_soignants" BEFORE INSERT OR UPDATE ON "public"."heures_externes_soignants" FOR EACH ROW EXECUTE FUNCTION "public"."fn_proteger_heures_externes_soignants"();
 
 
@@ -68163,6 +70936,14 @@ CREATE OR REPLACE TRIGGER "trg_01_exiger_conformite_premier_pointage" BEFORE INS
 
 
 CREATE OR REPLACE TRIGGER "trg_01_exiger_conformite_qr_mission" BEFORE INSERT ON "public"."qr_codes_mission" FOR EACH ROW EXECUTE FUNCTION "public"."trg_exiger_conformite_code_pointage"();
+
+
+
+CREATE OR REPLACE TRIGGER "trg_04_bloquer_insertion_validation_tva_directe" BEFORE INSERT ON "public"."missions" FOR EACH ROW EXECUTE FUNCTION "public"."fn_bloquer_insertion_validation_tva_directe"();
+
+
+
+CREATE OR REPLACE TRIGGER "trg_05_proteger_validation_tva_mission" BEFORE UPDATE OF "soignant_assigne_id", "type_contrat_applique", "nature_tva_prestation", "nature_tva_declaree_par", "nature_tva_declaree_le", "nature_tva_confirmee_soignant", "nature_tva_confirmee_par", "nature_tva_confirmee_le", "statut_validation_tva", "revue_tva_motif", "revue_tva_resolue_par", "revue_tva_resolue_le" ON "public"."missions" FOR EACH ROW EXECUTE FUNCTION "public"."fn_proteger_validation_tva_mission"();
 
 
 
@@ -68267,6 +71048,10 @@ CREATE OR REPLACE TRIGGER "trg_bloquer_documents_sante" BEFORE INSERT ON "public
 
 
 CREATE OR REPLACE TRIGGER "trg_bloquer_notification_admin_compte_test" BEFORE INSERT ON "public"."notifications" FOR EACH ROW EXECUTE FUNCTION "private"."dec_bloquer_notification_admin_compte_test"();
+
+
+
+CREATE OR REPLACE TRIGGER "trg_bloquer_paiement_facture_en_litige" BEFORE INSERT OR UPDATE OF "statut", "facture_honoraire_id" ON "public"."paiements_soignant" FOR EACH ROW EXECUTE FUNCTION "public"."fn_bloquer_paiement_facture_en_litige"();
 
 
 
@@ -68686,6 +71471,18 @@ CREATE OR REPLACE TRIGGER "trg_pnpe_updated_at" BEFORE UPDATE ON "public"."prefe
 
 
 
+CREATE OR REPLACE TRIGGER "trg_preserver_document_facture_honoraires" BEFORE DELETE OR UPDATE ON "public"."factures_honoraires_documents" FOR EACH ROW EXECUTE FUNCTION "public"."fn_preserver_document_facture_honoraires"();
+
+
+
+CREATE OR REPLACE TRIGGER "trg_preserver_preuve_mandat_facturation" BEFORE DELETE OR UPDATE ON "public"."mandats_facturation_signatures" FOR EACH ROW EXECUTE FUNCTION "public"."fn_preserver_preuve_mandat_facturation"();
+
+
+
+CREATE OR REPLACE TRIGGER "trg_preserver_rectification_facture_honoraires" BEFORE DELETE OR UPDATE ON "public"."factures_honoraires_rectifications" FOR EACH ROW EXECUTE FUNCTION "public"."fn_preserver_rectification_facture_honoraires"();
+
+
+
 CREATE OR REPLACE TRIGGER "trg_propage_stripe_payment_intent" AFTER INSERT OR UPDATE OF "stripe_payment_intent_id", "mission_id" ON "public"."stripe_transfers" FOR EACH ROW EXECUTE FUNCTION "public"."fn_propage_stripe_payment_intent_trg"();
 
 
@@ -68886,6 +71683,10 @@ CREATE OR REPLACE TRIGGER "trg_sync_types_contrat" BEFORE UPDATE ON "public"."so
 
 
 
+CREATE OR REPLACE TRIGGER "trg_tracer_contestation_facture_honoraires" AFTER INSERT ON "public"."litiges" FOR EACH ROW EXECUTE FUNCTION "public"."fn_tracer_contestation_facture_honoraires"();
+
+
+
 CREATE OR REPLACE TRIGGER "trg_tripwire_premier_connect_complet" AFTER INSERT OR UPDATE OF "statut" ON "public"."stripe_connect_onboarding" FOR EACH ROW EXECUTE FUNCTION "public"."fn_trg_tripwire_premier_connect_complet"();
 
 
@@ -68958,6 +71759,10 @@ CREATE OR REPLACE TRIGGER "trg_verrouiller_justificatif_score_soignant" BEFORE I
 
 
 
+CREATE OR REPLACE TRIGGER "trg_verrouiller_periode_facture_honoraires" BEFORE INSERT OR UPDATE OF "mission_id", "periode_debut", "periode_fin", "statut", "type_document", "nature_correction", "facture_precedente_id" ON "public"."factures_honoraires" FOR EACH ROW EXECUTE FUNCTION "public"."fn_verrouiller_periode_facture_honoraires"();
+
+
+
 CREATE OR REPLACE TRIGGER "trg_verrouiller_proposition_litige_en_attente" BEFORE UPDATE OF "payload_modifications" ON "public"."litiges" FOR EACH ROW EXECUTE FUNCTION "public"."fn_verrouiller_proposition_litige_en_attente"();
 
 
@@ -68967,6 +71772,10 @@ CREATE OR REPLACE TRIGGER "trg_zz_geler_mission" BEFORE UPDATE ON "public"."miss
 
 
 CREATE OR REPLACE TRIGGER "trg_zz_invalider_provenance_rib_etablissement" BEFORE UPDATE OF "rib_s3_key", "nom", "siret", "siret_raison_sociale", "finess", "finess_raison_sociale" ON "public"."etablissements" FOR EACH ROW EXECUTE FUNCTION "public"."fn_invalider_provenance_rib_etablissement"();
+
+
+
+CREATE OR REPLACE TRIGGER "trg_zzz_corriger_strategie_facturation" BEFORE UPDATE OF "statut" ON "public"."missions" FOR EACH ROW EXECUTE FUNCTION "public"."fn_corriger_strategie_facturation_assignation"();
 
 
 
@@ -69335,6 +72144,11 @@ ALTER TABLE ONLY "public"."factures"
 
 
 
+ALTER TABLE ONLY "public"."factures_honoraires_documents"
+    ADD CONSTRAINT "factures_honoraires_documents_facture_honoraire_id_fkey" FOREIGN KEY ("facture_honoraire_id") REFERENCES "public"."factures_honoraires"("id");
+
+
+
 ALTER TABLE ONLY "public"."factures_honoraires"
     ADD CONSTRAINT "factures_honoraires_etablissement_id_fkey" FOREIGN KEY ("etablissement_id") REFERENCES "public"."etablissements"("id");
 
@@ -69352,6 +72166,21 @@ ALTER TABLE ONLY "public"."factures_honoraires"
 
 ALTER TABLE ONLY "public"."factures_honoraires"
     ADD CONSTRAINT "factures_honoraires_mission_id_fkey" FOREIGN KEY ("mission_id") REFERENCES "public"."missions"("id");
+
+
+
+ALTER TABLE ONLY "public"."factures_honoraires_rectifications"
+    ADD CONSTRAINT "factures_honoraires_rectifications_cree_par_fkey" FOREIGN KEY ("cree_par") REFERENCES "auth"."users"("id") ON DELETE RESTRICT;
+
+
+
+ALTER TABLE ONLY "public"."factures_honoraires_rectifications"
+    ADD CONSTRAINT "factures_honoraires_rectifications_facture_honoraire_id_fkey" FOREIGN KEY ("facture_honoraire_id") REFERENCES "public"."factures_honoraires"("id") ON DELETE RESTRICT;
+
+
+
+ALTER TABLE ONLY "public"."factures_honoraires_rectifications"
+    ADD CONSTRAINT "factures_honoraires_rectifications_litige_id_fkey" FOREIGN KEY ("litige_id") REFERENCES "public"."litiges"("id") ON DELETE RESTRICT;
 
 
 
@@ -70339,6 +73168,12 @@ ALTER TABLE "public"."factures" ENABLE ROW LEVEL SECURITY;
 
 
 ALTER TABLE "public"."factures_honoraires" ENABLE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "public"."factures_honoraires_documents" ENABLE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "public"."factures_honoraires_rectifications" ENABLE ROW LEVEL SECURITY;
 
 
 ALTER TABLE "public"."favoris_etab_soignant" ENABLE ROW LEVEL SECURITY;
@@ -72209,6 +75044,12 @@ CREATE POLICY "reclamations_update_admin" ON "public"."reclamations" FOR UPDATE 
 
 
 
+CREATE POLICY "rectifications_facture_select_parties" ON "public"."factures_honoraires_rectifications" FOR SELECT TO "authenticated" USING ((EXISTS ( SELECT 1
+   FROM "public"."factures_honoraires" "fh"
+  WHERE (("fh"."id" = "factures_honoraires_rectifications"."facture_honoraire_id") AND (("fh"."soignant_id" = "auth"."uid"()) OR (("fh"."etablissement_id" = "public"."mon_etablissement_id"()) AND (("public"."fn_a_permission_etablissement"('contrats'::"text", "fh"."etablissement_id") IS TRUE) OR ("public"."fn_a_permission_etablissement"('lecture_paiement'::"text", "fh"."etablissement_id") IS TRUE) OR ("public"."fn_a_permission_etablissement"('paiement'::"text", "fh"."etablissement_id") IS TRUE))) OR ("public"."est_admin"() IS TRUE))))));
+
+
+
 ALTER TABLE "public"."regles_exercice_profession" ENABLE ROW LEVEL SECURITY;
 
 
@@ -72996,6 +75837,12 @@ GRANT ALL ON FUNCTION "public"."fn_a_permission_etablissement"("p_permission" "t
 
 
 
+REVOKE ALL ON FUNCTION "public"."fn_accepter_document_facturation_honoraires"("p_facture_id" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_accepter_document_facturation_honoraires"("p_facture_id" "uuid") TO "service_role";
+GRANT ALL ON FUNCTION "public"."fn_accepter_document_facturation_honoraires"("p_facture_id" "uuid") TO "authenticated";
+
+
+
 REVOKE ALL ON FUNCTION "public"."fn_accepter_invitation_membre"("p_token" "text") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_accepter_invitation_membre"("p_token" "text") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."fn_accepter_invitation_membre"("p_token" "text") TO "service_role";
@@ -73422,6 +76269,12 @@ GRANT ALL ON FUNCTION "public"."fn_admin_lister_revues_manuelles"("p_limit" inte
 
 
 
+REVOKE ALL ON FUNCTION "public"."fn_admin_lister_revues_tva_missions"() FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_admin_lister_revues_tva_missions"() TO "service_role";
+GRANT ALL ON FUNCTION "public"."fn_admin_lister_revues_tva_missions"() TO "authenticated";
+
+
+
 REVOKE ALL ON FUNCTION "public"."fn_admin_lister_signalements"("p_statut" "text") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_admin_lister_signalements"("p_statut" "text") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."fn_admin_lister_signalements"("p_statut" "text") TO "service_role";
@@ -73534,6 +76387,12 @@ GRANT ALL ON FUNCTION "public"."fn_admin_planning_global"("p_debut" "date", "p_f
 
 
 
+REVOKE ALL ON FUNCTION "public"."fn_admin_proposer_nature_tva_mission"("p_mission_id" "uuid", "p_nature_tva_prestation" "text", "p_motif" "text") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_admin_proposer_nature_tva_mission"("p_mission_id" "uuid", "p_nature_tva_prestation" "text", "p_motif" "text") TO "service_role";
+GRANT ALL ON FUNCTION "public"."fn_admin_proposer_nature_tva_mission"("p_mission_id" "uuid", "p_nature_tva_prestation" "text", "p_motif" "text") TO "authenticated";
+
+
+
 REVOKE ALL ON FUNCTION "public"."fn_admin_prospection_stats"() FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_admin_prospection_stats"() TO "service_role";
 GRANT ALL ON FUNCTION "public"."fn_admin_prospection_stats"() TO "authenticated";
@@ -73587,9 +76446,27 @@ GRANT ALL ON FUNCTION "public"."fn_admin_resoudre_litige"("p_litige_id" "uuid", 
 
 
 
+REVOKE ALL ON FUNCTION "public"."fn_admin_resoudre_litige_complement_honoraires"("p_litige_id" "uuid", "p_resolution" "text", "p_en_faveur_de" "text", "p_ajuster_heures" numeric, "p_ajuster_taux" numeric) FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_admin_resoudre_litige_complement_honoraires"("p_litige_id" "uuid", "p_resolution" "text", "p_en_faveur_de" "text", "p_ajuster_heures" numeric, "p_ajuster_taux" numeric) TO "service_role";
+GRANT ALL ON FUNCTION "public"."fn_admin_resoudre_litige_complement_honoraires"("p_litige_id" "uuid", "p_resolution" "text", "p_en_faveur_de" "text", "p_ajuster_heures" numeric, "p_ajuster_taux" numeric) TO "authenticated";
+
+
+
+REVOKE ALL ON FUNCTION "public"."fn_admin_resoudre_litige_intelligent"("p_litige_id" "uuid", "p_resolution" "text", "p_en_faveur_de" "text", "p_ajuster_heures" numeric, "p_ajuster_taux" numeric, "p_action_financiere" "text") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_admin_resoudre_litige_intelligent"("p_litige_id" "uuid", "p_resolution" "text", "p_en_faveur_de" "text", "p_ajuster_heures" numeric, "p_ajuster_taux" numeric, "p_action_financiere" "text") TO "service_role";
+GRANT ALL ON FUNCTION "public"."fn_admin_resoudre_litige_intelligent"("p_litige_id" "uuid", "p_resolution" "text", "p_en_faveur_de" "text", "p_ajuster_heures" numeric, "p_ajuster_taux" numeric, "p_action_financiere" "text") TO "authenticated";
+
+
+
 REVOKE ALL ON FUNCTION "public"."fn_admin_resume_alertes_pointage"() FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_admin_resume_alertes_pointage"() TO "authenticated";
 GRANT ALL ON FUNCTION "public"."fn_admin_resume_alertes_pointage"() TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."fn_admin_solde_correction_facture_honoraires"("p_facture_id" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_admin_solde_correction_facture_honoraires"("p_facture_id" "uuid") TO "service_role";
+GRANT ALL ON FUNCTION "public"."fn_admin_solde_correction_facture_honoraires"("p_facture_id" "uuid") TO "authenticated";
 
 
 
@@ -74021,6 +76898,21 @@ GRANT ALL ON FUNCTION "public"."fn_bloquer_delete_doc_verifie"() TO "service_rol
 
 
 
+REVOKE ALL ON FUNCTION "public"."fn_bloquer_insertion_validation_tva_directe"() FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_bloquer_insertion_validation_tva_directe"() TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."fn_bloquer_paiement_facture_en_litige"() FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_bloquer_paiement_facture_en_litige"() TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."fn_bloquer_retrocession_prelaunch"() FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_bloquer_retrocession_prelaunch"() TO "service_role";
+
+
+
 REVOKE ALL ON FUNCTION "public"."fn_bloquer_utilisateur"("p_cible_id" "uuid", "p_motif" "text") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_bloquer_utilisateur"("p_cible_id" "uuid", "p_motif" "text") TO "service_role";
 GRANT ALL ON FUNCTION "public"."fn_bloquer_utilisateur"("p_cible_id" "uuid", "p_motif" "text") TO "authenticated";
@@ -74266,6 +77158,12 @@ GRANT ALL ON FUNCTION "public"."fn_confirmer_honoraires_retrocession"("p_mission
 
 
 
+REVOKE ALL ON FUNCTION "public"."fn_confirmer_nature_tva_mission"("p_mission_id" "uuid", "p_nature_tva_prestation" "text") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_confirmer_nature_tva_mission"("p_mission_id" "uuid", "p_nature_tva_prestation" "text") TO "service_role";
+GRANT ALL ON FUNCTION "public"."fn_confirmer_nature_tva_mission"("p_mission_id" "uuid", "p_nature_tva_prestation" "text") TO "authenticated";
+
+
+
 REVOKE ALL ON FUNCTION "public"."fn_confirmer_paiement_soignant"("p_paiement_id" "uuid") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_confirmer_paiement_soignant"("p_paiement_id" "uuid") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."fn_confirmer_paiement_soignant"("p_paiement_id" "uuid") TO "service_role";
@@ -74350,6 +77248,11 @@ GRANT ALL ON FUNCTION "public"."fn_coordonnees_bancaires_soignant_verifiees"("p_
 
 
 
+REVOKE ALL ON FUNCTION "public"."fn_corriger_strategie_facturation_assignation"() FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_corriger_strategie_facturation_assignation"() TO "service_role";
+
+
+
 REVOKE ALL ON FUNCTION "public"."fn_creer_api_key"("p_nom" "text", "p_permissions" "text"[], "p_etablissement_id" "uuid") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_creer_api_key"("p_nom" "text", "p_permissions" "text"[], "p_etablissement_id" "uuid") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."fn_creer_api_key"("p_nom" "text", "p_permissions" "text"[], "p_etablissement_id" "uuid") TO "service_role";
@@ -74383,6 +77286,11 @@ GRANT ALL ON FUNCTION "public"."fn_creer_mission_api_v1"("p_etablissement_id" "u
 
 
 
+REVOKE ALL ON FUNCTION "public"."fn_creer_mission_api_v2"("p_etablissement_id" "uuid", "p_intitule" "text", "p_profession_requise" "public"."type_profession", "p_service" "text", "p_taux_horaire_base" numeric, "p_creneaux" "jsonb", "p_type_contrat_recherche" "text", "p_mode_remuneration" "text", "p_retrocession_pct" numeric, "p_nature_tva_prestation" "text") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_creer_mission_api_v2"("p_etablissement_id" "uuid", "p_intitule" "text", "p_profession_requise" "public"."type_profession", "p_service" "text", "p_taux_horaire_base" numeric, "p_creneaux" "jsonb", "p_type_contrat_recherche" "text", "p_mode_remuneration" "text", "p_retrocession_pct" numeric, "p_nature_tva_prestation" "text") TO "service_role";
+
+
+
 REVOKE ALL ON FUNCTION "public"."fn_creer_mission_multi_jours"("p_intitule" "text", "p_description" "text", "p_profession_requise" "public"."type_profession", "p_service" "text", "p_taux_horaire_base" numeric, "p_est_urgente" boolean, "p_niveau_urgence" integer, "p_mode_attribution" "text", "p_specialite_medicale_requise" "text", "p_accepte_non_specialises" boolean, "p_creneaux" "jsonb") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_creer_mission_multi_jours"("p_intitule" "text", "p_description" "text", "p_profession_requise" "public"."type_profession", "p_service" "text", "p_taux_horaire_base" numeric, "p_est_urgente" boolean, "p_niveau_urgence" integer, "p_mode_attribution" "text", "p_specialite_medicale_requise" "text", "p_accepte_non_specialises" boolean, "p_creneaux" "jsonb") TO "service_role";
 GRANT ALL ON FUNCTION "public"."fn_creer_mission_multi_jours"("p_intitule" "text", "p_description" "text", "p_profession_requise" "public"."type_profession", "p_service" "text", "p_taux_horaire_base" numeric, "p_est_urgente" boolean, "p_niveau_urgence" integer, "p_mode_attribution" "text", "p_specialite_medicale_requise" "text", "p_accepte_non_specialises" boolean, "p_creneaux" "jsonb") TO "authenticated";
@@ -74392,6 +77300,12 @@ GRANT ALL ON FUNCTION "public"."fn_creer_mission_multi_jours"("p_intitule" "text
 REVOKE ALL ON FUNCTION "public"."fn_creer_mission_multi_jours_v2"("p_intitule" "text", "p_description" "text", "p_profession_requise" "public"."type_profession", "p_service" "text", "p_taux_horaire_base" numeric, "p_est_urgente" boolean, "p_niveau_urgence" integer, "p_mode_attribution" "text", "p_specialite_medicale_requise" "text", "p_accepte_non_specialises" boolean, "p_creneaux" "jsonb", "p_type_contrat_recherche" "text", "p_mode_remuneration" "text", "p_retrocession_pct" numeric) FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_creer_mission_multi_jours_v2"("p_intitule" "text", "p_description" "text", "p_profession_requise" "public"."type_profession", "p_service" "text", "p_taux_horaire_base" numeric, "p_est_urgente" boolean, "p_niveau_urgence" integer, "p_mode_attribution" "text", "p_specialite_medicale_requise" "text", "p_accepte_non_specialises" boolean, "p_creneaux" "jsonb", "p_type_contrat_recherche" "text", "p_mode_remuneration" "text", "p_retrocession_pct" numeric) TO "service_role";
 GRANT ALL ON FUNCTION "public"."fn_creer_mission_multi_jours_v2"("p_intitule" "text", "p_description" "text", "p_profession_requise" "public"."type_profession", "p_service" "text", "p_taux_horaire_base" numeric, "p_est_urgente" boolean, "p_niveau_urgence" integer, "p_mode_attribution" "text", "p_specialite_medicale_requise" "text", "p_accepte_non_specialises" boolean, "p_creneaux" "jsonb", "p_type_contrat_recherche" "text", "p_mode_remuneration" "text", "p_retrocession_pct" numeric) TO "authenticated";
+
+
+
+REVOKE ALL ON FUNCTION "public"."fn_creer_mission_multi_jours_v3"("p_intitule" "text", "p_description" "text", "p_profession_requise" "public"."type_profession", "p_service" "text", "p_taux_horaire_base" numeric, "p_est_urgente" boolean, "p_niveau_urgence" integer, "p_mode_attribution" "text", "p_specialite_medicale_requise" "text", "p_accepte_non_specialises" boolean, "p_creneaux" "jsonb", "p_type_contrat_recherche" "text", "p_mode_remuneration" "text", "p_retrocession_pct" numeric, "p_nature_tva_prestation" "text") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_creer_mission_multi_jours_v3"("p_intitule" "text", "p_description" "text", "p_profession_requise" "public"."type_profession", "p_service" "text", "p_taux_horaire_base" numeric, "p_est_urgente" boolean, "p_niveau_urgence" integer, "p_mode_attribution" "text", "p_specialite_medicale_requise" "text", "p_accepte_non_specialises" boolean, "p_creneaux" "jsonb", "p_type_contrat_recherche" "text", "p_mode_remuneration" "text", "p_retrocession_pct" numeric, "p_nature_tva_prestation" "text") TO "service_role";
+GRANT ALL ON FUNCTION "public"."fn_creer_mission_multi_jours_v3"("p_intitule" "text", "p_description" "text", "p_profession_requise" "public"."type_profession", "p_service" "text", "p_taux_horaire_base" numeric, "p_est_urgente" boolean, "p_niveau_urgence" integer, "p_mode_attribution" "text", "p_specialite_medicale_requise" "text", "p_accepte_non_specialises" boolean, "p_creneaux" "jsonb", "p_type_contrat_recherche" "text", "p_mode_remuneration" "text", "p_retrocession_pct" numeric, "p_nature_tva_prestation" "text") TO "authenticated";
 
 
 
@@ -74682,6 +77596,11 @@ GRANT ALL ON FUNCTION "public"."fn_email_recap_hebdo"() TO "service_role";
 
 REVOKE ALL ON FUNCTION "public"."fn_emettre_alerte_monitoring"("p_type" "text", "p_severite" "text", "p_source" "text", "p_message" "text", "p_details" "jsonb") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_emettre_alerte_monitoring"("p_type" "text", "p_severite" "text", "p_source" "text", "p_message" "text", "p_details" "jsonb") TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."fn_emettre_document_facturation_honoraires"("p_facture_id" "uuid", "p_pdf_s3_key" "text", "p_facturx_xml_url" "text") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_emettre_document_facturation_honoraires"("p_facture_id" "uuid", "p_pdf_s3_key" "text", "p_facturx_xml_url" "text") TO "service_role";
 
 
 
@@ -75692,6 +78611,12 @@ GRANT ALL ON FUNCTION "public"."fn_modifier_mission_etablissement_v3"("p_mission
 
 
 
+REVOKE ALL ON FUNCTION "public"."fn_modifier_mission_etablissement_v4"("p_mission_id" "uuid", "p_intitule" "text", "p_description" "text", "p_service" "text", "p_profession_requise" "public"."type_profession", "p_taux_horaire_base" numeric, "p_est_urgente" boolean, "p_niveau_urgence" integer, "p_mode_attribution" "text", "p_type_contrat_recherche" "text", "p_specialite_medicale_requise" "text", "p_accepte_non_specialises" boolean, "p_creneaux" "jsonb", "p_nature_tva_prestation" "text") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_modifier_mission_etablissement_v4"("p_mission_id" "uuid", "p_intitule" "text", "p_description" "text", "p_service" "text", "p_profession_requise" "public"."type_profession", "p_taux_horaire_base" numeric, "p_est_urgente" boolean, "p_niveau_urgence" integer, "p_mode_attribution" "text", "p_type_contrat_recherche" "text", "p_specialite_medicale_requise" "text", "p_accepte_non_specialises" boolean, "p_creneaux" "jsonb", "p_nature_tva_prestation" "text") TO "service_role";
+GRANT ALL ON FUNCTION "public"."fn_modifier_mission_etablissement_v4"("p_mission_id" "uuid", "p_intitule" "text", "p_description" "text", "p_service" "text", "p_profession_requise" "public"."type_profession", "p_taux_horaire_base" numeric, "p_est_urgente" boolean, "p_niveau_urgence" integer, "p_mode_attribution" "text", "p_type_contrat_recherche" "text", "p_specialite_medicale_requise" "text", "p_accepte_non_specialises" boolean, "p_creneaux" "jsonb", "p_nature_tva_prestation" "text") TO "authenticated";
+
+
+
 REVOKE ALL ON FUNCTION "public"."fn_modifier_mon_etablissement"("p_nom" "text", "p_finess" "text", "p_adresse_rue" "text", "p_adresse_ville" "text", "p_adresse_code_postal" "text", "p_adresse_departement" "text", "p_email_contact" "text", "p_telephone" "text", "p_adresse_lat" numeric, "p_adresse_lng" numeric, "p_taux_majoration_nuit" numeric, "p_taux_majoration_dimanche" numeric, "p_taux_majoration_ferie" numeric, "p_couleur_theme" "text", "p_convention_collective" "text", "p_mode_paiement_commission" "text", "p_logo_url" "text", "p_contrat_url" "text") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_modifier_mon_etablissement"("p_nom" "text", "p_finess" "text", "p_adresse_rue" "text", "p_adresse_ville" "text", "p_adresse_code_postal" "text", "p_adresse_departement" "text", "p_email_contact" "text", "p_telephone" "text", "p_adresse_lat" numeric, "p_adresse_lng" numeric, "p_taux_majoration_nuit" numeric, "p_taux_majoration_dimanche" numeric, "p_taux_majoration_ferie" numeric, "p_couleur_theme" "text", "p_convention_collective" "text", "p_mode_paiement_commission" "text", "p_logo_url" "text", "p_contrat_url" "text") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."fn_modifier_mon_etablissement"("p_nom" "text", "p_finess" "text", "p_adresse_rue" "text", "p_adresse_ville" "text", "p_adresse_code_postal" "text", "p_adresse_departement" "text", "p_email_contact" "text", "p_telephone" "text", "p_adresse_lat" numeric, "p_adresse_lng" numeric, "p_taux_majoration_nuit" numeric, "p_taux_majoration_dimanche" numeric, "p_taux_majoration_ferie" numeric, "p_couleur_theme" "text", "p_convention_collective" "text", "p_mode_paiement_commission" "text", "p_logo_url" "text", "p_contrat_url" "text") TO "service_role";
@@ -75839,6 +78764,11 @@ GRANT ALL ON FUNCTION "public"."fn_noms_personne_correspondent"("p_nom_attendu" 
 
 
 
+REVOKE ALL ON FUNCTION "public"."fn_normaliser_nature_correction_facture"() FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_normaliser_nature_correction_facture"() TO "service_role";
+
+
+
 REVOKE ALL ON FUNCTION "public"."fn_normaliser_nom"("p" "text") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_normaliser_nom"("p" "text") TO "service_role";
 
@@ -75957,6 +78887,12 @@ GRANT ALL ON FUNCTION "public"."fn_ouvrir_litige_rate_limited"("p_mission_id" "u
 REVOKE ALL ON FUNCTION "public"."fn_ouvrir_litige_rate_limited"("p_mission_id" "uuid", "p_type_litige" "public"."type_litige", "p_motif" "text") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_ouvrir_litige_rate_limited"("p_mission_id" "uuid", "p_type_litige" "public"."type_litige", "p_motif" "text") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."fn_ouvrir_litige_rate_limited"("p_mission_id" "uuid", "p_type_litige" "public"."type_litige", "p_motif" "text") TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."fn_ouvrir_litige_rate_limited"("p_mission_id" "uuid", "p_type_litige" "public"."type_litige", "p_motif" "text", "p_facture_id" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_ouvrir_litige_rate_limited"("p_mission_id" "uuid", "p_type_litige" "public"."type_litige", "p_motif" "text", "p_facture_id" "uuid") TO "service_role";
+GRANT ALL ON FUNCTION "public"."fn_ouvrir_litige_rate_limited"("p_mission_id" "uuid", "p_type_litige" "public"."type_litige", "p_motif" "text", "p_facture_id" "uuid") TO "authenticated";
 
 
 
@@ -76084,6 +79020,21 @@ GRANT ALL ON FUNCTION "public"."fn_pre_request_compte_actif"() TO "authenticated
 
 
 
+REVOKE ALL ON FUNCTION "public"."fn_preparer_avoir_commission_honoraires"("p_avoir_honoraires_id" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_preparer_avoir_commission_honoraires"("p_avoir_honoraires_id" "uuid") TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."fn_preparer_commission_complement_honoraires"("p_facture_honoraire_id" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_preparer_commission_complement_honoraires"("p_facture_honoraire_id" "uuid") TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."fn_preparer_commission_remplacement_honoraires"("p_facture_honoraire_id" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_preparer_commission_remplacement_honoraires"("p_facture_honoraire_id" "uuid") TO "service_role";
+
+
+
 REVOKE ALL ON FUNCTION "public"."fn_preparer_facture_commission_periode"("p_facture_honoraire_id" "uuid") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_preparer_facture_commission_periode"("p_facture_honoraire_id" "uuid") TO "service_role";
 
@@ -76097,6 +79048,21 @@ GRANT ALL ON FUNCTION "public"."fn_preparer_identite_document"("p_soignant_id" "
 REVOKE ALL ON FUNCTION "public"."fn_presences_detail_mission"("p_mission_id" "uuid") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_presences_detail_mission"("p_mission_id" "uuid") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."fn_presences_detail_mission"("p_mission_id" "uuid") TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."fn_preserver_document_facture_honoraires"() FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_preserver_document_facture_honoraires"() TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."fn_preserver_preuve_mandat_facturation"() FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_preserver_preuve_mandat_facturation"() TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."fn_preserver_rectification_facture_honoraires"() FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_preserver_rectification_facture_honoraires"() TO "service_role";
 
 
 
@@ -76298,6 +79264,11 @@ GRANT ALL ON FUNCTION "public"."fn_proteger_provenance_iban_soignant"() TO "serv
 
 REVOKE ALL ON FUNCTION "public"."fn_proteger_tentative_verification_document"() FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_proteger_tentative_verification_document"() TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."fn_proteger_validation_tva_mission"() FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_proteger_validation_tva_mission"() TO "service_role";
 
 
 
@@ -76736,8 +79707,13 @@ GRANT ALL ON FUNCTION "public"."fn_signer_contrat_soignant"("p_contrat_id" "uuid
 
 
 REVOKE ALL ON FUNCTION "public"."fn_signer_mandat_facturation"("p_version" "text", "p_ip" "text", "p_user_agent" "text", "p_contenu_hash" "text") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."fn_signer_mandat_facturation"("p_version" "text", "p_ip" "text", "p_user_agent" "text", "p_contenu_hash" "text") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."fn_signer_mandat_facturation"("p_version" "text", "p_ip" "text", "p_user_agent" "text", "p_contenu_hash" "text") TO "service_role";
+GRANT ALL ON FUNCTION "public"."fn_signer_mandat_facturation"("p_version" "text", "p_ip" "text", "p_user_agent" "text", "p_contenu_hash" "text") TO "authenticated";
+
+
+
+REVOKE ALL ON FUNCTION "public"."fn_signer_mandat_facturation_serveur"("p_soignant_id" "uuid", "p_version" "text", "p_ip" "text", "p_ip_source" "text", "p_user_agent" "text", "p_contenu_hash" "text", "p_contenu_texte" "text", "p_statut_tva_honoraires" "text") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_signer_mandat_facturation_serveur"("p_soignant_id" "uuid", "p_version" "text", "p_ip" "text", "p_ip_source" "text", "p_user_agent" "text", "p_contenu_hash" "text", "p_contenu_texte" "text", "p_statut_tva_honoraires" "text") TO "service_role";
 
 
 
@@ -76797,6 +79773,11 @@ GRANT ALL ON FUNCTION "public"."fn_soignants_urgence"("p_mission_id" "uuid") TO 
 
 
 
+REVOKE ALL ON FUNCTION "public"."fn_solde_correction_facture_honoraires"("p_facture_id" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_solde_correction_facture_honoraires"("p_facture_id" "uuid") TO "service_role";
+
+
+
 REVOKE ALL ON FUNCTION "public"."fn_soumettre_reclamation"("p_categorie" "text", "p_sujet" "text", "p_details" "text", "p_mission_id" "uuid") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_soumettre_reclamation"("p_categorie" "text", "p_sujet" "text", "p_details" "text", "p_mission_id" "uuid") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."fn_soumettre_reclamation"("p_categorie" "text", "p_sujet" "text", "p_details" "text", "p_mission_id" "uuid") TO "service_role";
@@ -76838,6 +79819,11 @@ GRANT ALL ON FUNCTION "public"."fn_stats_etab_complements"() TO "service_role";
 REVOKE ALL ON FUNCTION "public"."fn_stats_rh_etablissement"() FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_stats_rh_etablissement"() TO "authenticated";
 GRANT ALL ON FUNCTION "public"."fn_stats_rh_etablissement"() TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."fn_strategie_facturation_pour_periode"("p_debut" timestamp with time zone, "p_fin" timestamp with time zone) FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_strategie_facturation_pour_periode"("p_debut" timestamp with time zone, "p_fin" timestamp with time zone) TO "service_role";
 
 
 
@@ -77023,6 +80009,11 @@ GRANT ALL ON FUNCTION "public"."fn_top_etablissements_soignant"("p_limit" intege
 REVOKE ALL ON FUNCTION "public"."fn_top_soignants"("p_profession" "text", "p_limit" integer) FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_top_soignants"("p_profession" "text", "p_limit" integer) TO "authenticated";
 GRANT ALL ON FUNCTION "public"."fn_top_soignants"("p_profession" "text", "p_limit" integer) TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."fn_tracer_contestation_facture_honoraires"() FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_tracer_contestation_facture_honoraires"() TO "service_role";
 
 
 
@@ -77460,6 +80451,11 @@ GRANT ALL ON FUNCTION "public"."fn_verifier_rate_limit"("p_cle" "text", "p_actio
 
 REVOKE ALL ON FUNCTION "public"."fn_verifier_skip_serie_onboarding"("p_envoi_id" "uuid") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_verifier_skip_serie_onboarding"("p_envoi_id" "uuid") TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."fn_verrouiller_periode_facture_honoraires"() FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_verrouiller_periode_facture_honoraires"() TO "service_role";
 
 
 
@@ -77976,6 +80972,15 @@ GRANT ALL ON TABLE "public"."factures" TO "service_role";
 
 GRANT SELECT,INSERT,UPDATE ON TABLE "public"."factures_honoraires" TO "authenticated";
 GRANT ALL ON TABLE "public"."factures_honoraires" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."factures_honoraires_documents" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."factures_honoraires_rectifications" TO "service_role";
+GRANT SELECT ON TABLE "public"."factures_honoraires_rectifications" TO "authenticated";
 
 
 
