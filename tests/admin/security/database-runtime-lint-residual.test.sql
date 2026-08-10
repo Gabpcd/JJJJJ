@@ -761,6 +761,16 @@ BEGIN
   JOIN pg_proc p ON p.oid::regprocedure::text = i.signature
   JOIN pg_namespace n ON n.oid = p.pronamespace
   WHERE n.nspname = 'public'
+    AND i.signature = ANY (ARRAY[
+      'fn_declarer_paiement_soignant_v2(uuid,numeric,numeric,text,text,date,boolean)',
+      'fn_declarer_paiement_soignant(uuid,numeric,text,text,date,boolean)',
+      'fn_diagnostic_coherence_financiere()',
+      'fn_marquer_messages_lus(uuid)',
+      'fn_obligations_financieres()',
+      'fn_paiements_etablissement()',
+      'fn_top_soignants(text,integer)',
+      'fn_dans_fenetre_retractation(uuid)'
+    ])
     AND md5(p.prosrc) IS DISTINCT FROM i.definition_md5;
 
   IF v_bad IS NOT NULL THEN
