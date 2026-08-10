@@ -176,6 +176,12 @@ test.describe('Anti-triche pointage Sprint 4.5', () => {
 
   // ─── 1. Génération + scan QR valide ────────────────────────────────────
   test('QR : génération + scan valide marque arrivée', async () => {
+    // Parcours d'intégration complet sur la base distante : mission,
+    // candidature, acceptation, contrat signé, QR, scan et purge FK dynamique.
+    // Les assertions métier restent strictes ; seul ce scénario multi-écritures
+    // dispose d'un budget adapté aux variations de latence de l'environnement.
+    test.slow();
+
     const m = await seedMissionOuverte();
     expect(m).toBeTruthy();
     try {
