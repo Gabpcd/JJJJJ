@@ -50705,22 +50705,29 @@ BEGIN
     RETURN jsonb_build_object('error', 'Cette proposition n’est plus en attente');
   END IF;
 
-  PERFORM set_config(
-    'jolene.candidature_rpc_mission_id',
-    v_candidature.mission_id::text,
-    true
-  );
   IF v_candidature.cree_le < now() - interval '2 hours' THEN
+    PERFORM set_config(
+      'jolene.candidature_rpc_mission_id',
+      v_candidature.mission_id::text,
+      true
+    );
     UPDATE public.candidatures
        SET statut = 'EXPIREE', traite_le = now()
      WHERE id = p_candidature_id;
+    PERFORM set_config('jolene.candidature_rpc_mission_id', '', true);
     RETURN jsonb_build_object('error', 'Cette proposition a expiré');
   END IF;
 
   IF NOT p_accepter THEN
+    PERFORM set_config(
+      'jolene.candidature_rpc_mission_id',
+      v_candidature.mission_id::text,
+      true
+    );
     UPDATE public.candidatures
        SET statut = 'REFUSEE', traite_le = now()
      WHERE id = p_candidature_id;
+    PERFORM set_config('jolene.candidature_rpc_mission_id', '', true);
     RETURN jsonb_build_object('success', true, 'message', 'Proposition refusée');
   END IF;
 
@@ -50733,6 +50740,13 @@ BEGIN
     RETURN v_result;
   END IF;
 
+  -- Réarmer le contexte au plus près des écritures : les triggers exécutés
+  -- pendant la finalisation ne peuvent pas rendre l'autorisation obsolète.
+  PERFORM set_config(
+    'jolene.candidature_rpc_mission_id',
+    v_candidature.mission_id::text,
+    true
+  );
   UPDATE public.candidatures
      SET statut = 'ACCEPTEE', traite_le = now()
    WHERE id = p_candidature_id;
@@ -50741,6 +50755,7 @@ BEGIN
    WHERE mission_id = v_candidature.mission_id
      AND id <> p_candidature_id
      AND statut IN ('EN_ATTENTE', 'EN_ATTENTE_VALIDATION_ETAB', 'PROPOSEE');
+  PERFORM set_config('jolene.candidature_rpc_mission_id', '', true);
 
   RETURN v_result || jsonb_build_object('message', 'Proposition acceptée');
 END;
@@ -81488,6 +81503,5 @@ ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON FUN
 
 
 ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON TABLES TO "service_role";
-
 
 

@@ -22,6 +22,8 @@ DECLARE
   v_result jsonb;
   v_doc record;
   v_mission record;
+  v_direct_transition_bloquee boolean := false;
+  v_transition_erreur text;
   v_officine_bloquee boolean := false;
   v_officine_erreur text;
 BEGIN
@@ -421,6 +423,28 @@ BEGIN
   ) THEN
     RAISE EXCEPTION 'D4-T18B: proposition dashboard absente ou forme mission invalide: %', v_result->'propositions';
   END IF;
+
+  -- Le correctif RPC ne doit surtout pas élargir les droits d'UPDATE direct
+  -- du soignant : seule fn_repondre_proposition finalise la mission et le
+  -- contrat avant de faire évoluer la candidature.
+  BEGIN
+    UPDATE public.candidatures
+       SET statut = 'ACCEPTEE', traite_le = now()
+     WHERE id = v_candidature;
+  EXCEPTION WHEN raise_exception THEN
+    GET STACKED DIAGNOSTICS v_transition_erreur = MESSAGE_TEXT;
+    IF v_transition_erreur NOT LIKE
+         'Vous ne pouvez pas modifier le statut de votre candidature%' THEN
+      RAISE;
+    END IF;
+    v_direct_transition_bloquee := true;
+  END;
+  IF v_direct_transition_bloquee IS DISTINCT FROM true
+     OR (SELECT statut FROM public.candidatures WHERE id = v_candidature)
+       IS DISTINCT FROM 'PROPOSEE' THEN
+    RAISE EXCEPTION 'D4-T18C: transition directe PROPOSEE → ACCEPTEE non bloquée';
+  END IF;
+
   v_result := public.fn_repondre_proposition(v_candidature, true);
   IF (v_result->>'success')::boolean IS DISTINCT FROM true
      OR v_result->>'choix_applique' IS DISTINCT FROM 'SALARIE'
