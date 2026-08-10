@@ -19,6 +19,7 @@ const PUBLISHABLE_KEY =
   '';
 
 let _admin: SupabaseClient | null = null;
+const _userClients = new Map<string, Promise<SupabaseClient>>();
 
 /** Client Supabase admin (service_role) — bypass RLS. À utiliser dans les tests E2E uniquement. */
 export function adminClient(): SupabaseClient {
@@ -49,14 +50,34 @@ export async function userClient(email: string, password: string): Promise<Supab
         'Définir SUPABASE_PUBLISHABLE_KEY (= VITE_SUPABASE_PUBLISHABLE_KEY) dans le workflow CI.',
     );
   }
-  const client = createClient(SUPABASE_URL, PUBLISHABLE_KEY, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  });
-  const { error } = await client.auth.signInWithPassword({ email, password });
-  if (error) {
-    throw new Error(`[playwright/db] userClient signInWithPassword("${email}") failed: ${error.message}`);
+  // Une suite E2E appelle plusieurs fois les mêmes comptes canoniques. Chaque
+  // appel créait auparavant une nouvelle session GoTrue, jusqu'à provoquer des
+  // latences et timeouts aléatoires sans rapport avec les RPCs testées. Le
+  // cache reste local au processus Playwright (donc isolé par worker) et par
+  // couple email/mot de passe. Une authentification échouée est retirée pour
+  // permettre une tentative ultérieure saine.
+  const cacheKey = `${email}\u0000${password}`;
+  const cached = _userClients.get(cacheKey);
+  if (cached) return cached;
+
+  const authenticatedClient = (async () => {
+    const client = createClient(SUPABASE_URL, PUBLISHABLE_KEY, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    });
+    const { error } = await client.auth.signInWithPassword({ email, password });
+    if (error) {
+      throw new Error(`[playwright/db] userClient signInWithPassword("${email}") failed: ${error.message}`);
+    }
+    return client;
+  })();
+
+  _userClients.set(cacheKey, authenticatedClient);
+  try {
+    return await authenticatedClient;
+  } catch (error) {
+    _userClients.delete(cacheKey);
+    throw error;
   }
-  return client;
 }
 
 /** Reset un compte test au state initial (purge missions, candidatures, notations, etc.). */
