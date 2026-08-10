@@ -721,4 +721,62 @@ BEGIN
 END;
 $bola_annulation$;
 
+DO $classement_and_security_inventory$
+DECLARE
+  v_bad text;
+  v_definition text;
+BEGIN
+  IF has_function_privilege(
+       'anon',
+       'public.fn_dans_fenetre_retractation(uuid)'::regprocedure,
+       'EXECUTE'
+     ) IS DISTINCT FROM false
+     OR has_function_privilege(
+       'authenticated',
+       'public.fn_dans_fenetre_retractation(uuid)'::regprocedure,
+       'EXECUTE'
+     ) IS DISTINCT FROM false
+     OR has_function_privilege(
+       'service_role',
+       'public.fn_dans_fenetre_retractation(uuid)'::regprocedure,
+       'EXECUTE'
+     ) IS DISTINCT FROM true THEN
+    RAISE EXCEPTION 'fn_dans_fenetre_retractation reste exposée hors service_role';
+  END IF;
+
+  SELECT pg_get_functiondef(
+    'public.fn_top_soignants(text,integer)'::regprocedure
+  ) INTO v_definition;
+  IF v_definition NOT LIKE '%LEAST(GREATEST(COALESCE(p_limit, 20), 1), 50)%'
+     OR v_definition NOT LIKE '%LIMIT v_limit%'
+     OR pg_get_function_result(
+       'public.fn_top_soignants(text,integer)'::regprocedure
+     ) NOT LIKE '%prenom text%nom text%' THEN
+    RAISE EXCEPTION 'Classement non borné ou identité incomplète';
+  END IF;
+
+  SELECT string_agg(i.signature, ', ' ORDER BY i.signature)
+  INTO v_bad
+  FROM private.security_definer_inventory i
+  JOIN pg_proc p ON p.oid::regprocedure::text = i.signature
+  JOIN pg_namespace n ON n.oid = p.pronamespace
+  WHERE n.nspname = 'public'
+    AND i.signature = ANY (ARRAY[
+      'fn_declarer_paiement_soignant_v2(uuid,numeric,numeric,text,text,date,boolean)',
+      'fn_declarer_paiement_soignant(uuid,numeric,text,text,date,boolean)',
+      'fn_diagnostic_coherence_financiere()',
+      'fn_marquer_messages_lus(uuid)',
+      'fn_obligations_financieres()',
+      'fn_paiements_etablissement()',
+      'fn_top_soignants(text,integer)',
+      'fn_dans_fenetre_retractation(uuid)'
+    ])
+    AND md5(p.prosrc) IS DISTINCT FROM i.definition_md5;
+
+  IF v_bad IS NOT NULL THEN
+    RAISE EXCEPTION 'Empreintes SECURITY DEFINER incohérentes : %', v_bad;
+  END IF;
+END;
+$classement_and_security_inventory$;
+
 ROLLBACK;

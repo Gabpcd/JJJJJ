@@ -533,35 +533,35 @@ VALUES
   (
     'fn_declarer_paiement_soignant_v2(uuid,numeric,numeric,text,text,date,boolean)',
     'MIXTE_TENANT_ADMIN',
-    md5(pg_get_functiondef('public.fn_declarer_paiement_soignant_v2(uuid,numeric,numeric,text,text,date,boolean)'::regprocedure)),
+    (SELECT md5(p.prosrc) FROM pg_proc p WHERE p.oid = 'public.fn_declarer_paiement_soignant_v2(uuid,numeric,numeric,text,text,date,boolean)'::regprocedure),
     'RPC établissement/admin : sépare total net dû et montant versé et refuse les paiements partiels ou les surpaiements.',
     now()
   ),
   (
     'fn_declarer_paiement_soignant(uuid,numeric,text,text,date,boolean)',
     'MIXTE_TENANT_ADMIN',
-    md5(pg_get_functiondef('public.fn_declarer_paiement_soignant(uuid,numeric,text,text,date,boolean)'::regprocedure)),
+    (SELECT md5(p.prosrc) FROM pg_proc p WHERE p.oid = 'public.fn_declarer_paiement_soignant(uuid,numeric,text,text,date,boolean)'::regprocedure),
     'Compatibilité libéral uniquement ; les salaires exigent désormais le total dû explicite via v2.',
     now()
   ),
   (
     'fn_paiements_etablissement()',
     'MIXTE_TENANT_ADMIN',
-    md5(pg_get_functiondef('public.fn_paiements_etablissement()'::regprocedure)),
+    (SELECT md5(p.prosrc) FROM pg_proc p WHERE p.oid = 'public.fn_paiements_etablissement()'::regprocedure),
     'Lecture financière bornée par permission, enrichie du total dû et du reliquat.',
     now()
   ),
   (
     'fn_obligations_financieres()',
     'MIXTE_TENANT_ADMIN',
-    md5(pg_get_functiondef('public.fn_obligations_financieres()'::regprocedure)),
+    (SELECT md5(p.prosrc) FROM pg_proc p WHERE p.oid = 'public.fn_obligations_financieres()'::regprocedure),
     'Lecture des obligations financières bornée au tenant et enrichie du total dû et du reliquat.',
     now()
   ),
   (
     'fn_diagnostic_coherence_financiere()',
     'ADMIN_EST_ADMIN_VALIDE',
-    md5(pg_get_functiondef('public.fn_diagnostic_coherence_financiere()'::regprocedure)),
+    (SELECT md5(p.prosrc) FROM pg_proc p WHERE p.oid = 'public.fn_diagnostic_coherence_financiere()'::regprocedure),
     'Diagnostic admin : compare le brut de base au taux x heures et les factures hebdomadaires à leur période exacte.',
     now()
   )
