@@ -50693,6 +50693,10 @@ CREATE OR REPLACE FUNCTION "public"."fn_repondre_proposition"("p_candidature_id"
 DECLARE
   v_candidature record;
   v_result jsonb;
+  v_previous_context text := COALESCE(
+    current_setting('jolene.candidature_rpc_mission_id', true),
+    ''
+  );
 BEGIN
   SELECT c.* INTO v_candidature
     FROM public.candidatures c
@@ -50709,12 +50713,25 @@ BEGIN
     PERFORM set_config(
       'jolene.candidature_rpc_mission_id',
       v_candidature.mission_id::text,
-      true
+      false
     );
-    UPDATE public.candidatures
-       SET statut = 'EXPIREE', traite_le = now()
-     WHERE id = p_candidature_id;
-    PERFORM set_config('jolene.candidature_rpc_mission_id', '', true);
+    BEGIN
+      UPDATE public.candidatures
+         SET statut = 'EXPIREE', traite_le = now()
+       WHERE id = p_candidature_id;
+    EXCEPTION WHEN OTHERS THEN
+      PERFORM set_config(
+        'jolene.candidature_rpc_mission_id',
+        v_previous_context,
+        false
+      );
+      RAISE;
+    END;
+    PERFORM set_config(
+      'jolene.candidature_rpc_mission_id',
+      v_previous_context,
+      false
+    );
     RETURN jsonb_build_object('error', 'Cette proposition a expiré');
   END IF;
 
@@ -50722,12 +50739,25 @@ BEGIN
     PERFORM set_config(
       'jolene.candidature_rpc_mission_id',
       v_candidature.mission_id::text,
-      true
+      false
     );
-    UPDATE public.candidatures
-       SET statut = 'REFUSEE', traite_le = now()
-     WHERE id = p_candidature_id;
-    PERFORM set_config('jolene.candidature_rpc_mission_id', '', true);
+    BEGIN
+      UPDATE public.candidatures
+         SET statut = 'REFUSEE', traite_le = now()
+       WHERE id = p_candidature_id;
+    EXCEPTION WHEN OTHERS THEN
+      PERFORM set_config(
+        'jolene.candidature_rpc_mission_id',
+        v_previous_context,
+        false
+      );
+      RAISE;
+    END;
+    PERFORM set_config(
+      'jolene.candidature_rpc_mission_id',
+      v_previous_context,
+      false
+    );
     RETURN jsonb_build_object('success', true, 'message', 'Proposition refusée');
   END IF;
 
@@ -50740,22 +50770,33 @@ BEGIN
     RETURN v_result;
   END IF;
 
-  -- Réarmer le contexte au plus près des écritures : les triggers exécutés
-  -- pendant la finalisation ne peuvent pas rendre l'autorisation obsolète.
   PERFORM set_config(
     'jolene.candidature_rpc_mission_id',
     v_candidature.mission_id::text,
-    true
+    false
   );
-  UPDATE public.candidatures
-     SET statut = 'ACCEPTEE', traite_le = now()
-   WHERE id = p_candidature_id;
-  UPDATE public.candidatures
-     SET statut = 'REFUSEE', motif_refus = 'Mission attribuée', traite_le = now()
-   WHERE mission_id = v_candidature.mission_id
-     AND id <> p_candidature_id
-     AND statut IN ('EN_ATTENTE', 'EN_ATTENTE_VALIDATION_ETAB', 'PROPOSEE');
-  PERFORM set_config('jolene.candidature_rpc_mission_id', '', true);
+  BEGIN
+    UPDATE public.candidatures
+       SET statut = 'ACCEPTEE', traite_le = now()
+     WHERE id = p_candidature_id;
+    UPDATE public.candidatures
+       SET statut = 'REFUSEE', motif_refus = 'Mission attribuée', traite_le = now()
+     WHERE mission_id = v_candidature.mission_id
+       AND id <> p_candidature_id
+       AND statut IN ('EN_ATTENTE', 'EN_ATTENTE_VALIDATION_ETAB', 'PROPOSEE');
+  EXCEPTION WHEN OTHERS THEN
+    PERFORM set_config(
+      'jolene.candidature_rpc_mission_id',
+      v_previous_context,
+      false
+    );
+    RAISE;
+  END;
+  PERFORM set_config(
+    'jolene.candidature_rpc_mission_id',
+    v_previous_context,
+    false
+  );
 
   RETURN v_result || jsonb_build_object('message', 'Proposition acceptée');
 END;
@@ -81503,5 +81544,4 @@ ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON FUN
 
 
 ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON TABLES TO "service_role";
-
 

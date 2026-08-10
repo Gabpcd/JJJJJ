@@ -24,6 +24,7 @@ DECLARE
   v_mission record;
   v_direct_transition_bloquee boolean := false;
   v_transition_erreur text;
+  v_previous_candidature_context text;
   v_officine_bloquee boolean := false;
   v_officine_erreur text;
 BEGIN
@@ -427,6 +428,15 @@ BEGIN
   -- Le correctif RPC ne doit surtout pas élargir les droits d'UPDATE direct
   -- du soignant : seule fn_repondre_proposition finalise la mission et le
   -- contrat avant de faire évoluer la candidature.
+  v_previous_candidature_context := COALESCE(
+    current_setting('jolene.candidature_rpc_mission_id', true),
+    ''
+  );
+  PERFORM set_config(
+    'jolene.candidature_rpc_mission_id',
+    'lot21-accept-sentinel',
+    false
+  );
   BEGIN
     UPDATE public.candidatures
        SET statut = 'ACCEPTEE', traite_le = now()
@@ -452,6 +462,15 @@ BEGIN
        IS DISTINCT FROM v_iade THEN
     RAISE EXCEPTION 'D4-T19: acceptation proposition IADE × IDE invalide: %', v_result;
   END IF;
+  IF current_setting('jolene.candidature_rpc_mission_id', true)
+       IS DISTINCT FROM 'lot21-accept-sentinel' THEN
+    RAISE EXCEPTION 'D4-T19A: contexte candidature non restauré après acceptation';
+  END IF;
+  PERFORM set_config(
+    'jolene.candidature_rpc_mission_id',
+    v_previous_candidature_context,
+    false
+  );
 
   -- La fenêtre de 2 h affichée par la carte est également imposée en base.
   PERFORM set_config('request.jwt.claim.sub', v_admin::text, true);
@@ -470,12 +489,30 @@ BEGIN
   PERFORM set_config('request.jwt.claims', jsonb_build_object(
     'sub', v_iade::text, 'role', 'authenticated', 'aal', 'aal1'
   )::text, true);
+  v_previous_candidature_context := COALESCE(
+    current_setting('jolene.candidature_rpc_mission_id', true),
+    ''
+  );
+  PERFORM set_config(
+    'jolene.candidature_rpc_mission_id',
+    'lot21-expiry-sentinel',
+    false
+  );
   v_result := public.fn_repondre_proposition(v_candidature, true);
   IF v_result->>'error' IS DISTINCT FROM 'Cette proposition a expiré'
      OR (SELECT statut FROM public.candidatures WHERE id = v_candidature)
        IS DISTINCT FROM 'EXPIREE' THEN
     RAISE EXCEPTION 'D4-T19C: proposition expirée encore acceptable: %', v_result;
   END IF;
+  IF current_setting('jolene.candidature_rpc_mission_id', true)
+       IS DISTINCT FROM 'lot21-expiry-sentinel' THEN
+    RAISE EXCEPTION 'D4-T19D: contexte candidature non restauré après expiration';
+  END IF;
+  PERFORM set_config(
+    'jolene.candidature_rpc_mission_id',
+    v_previous_candidature_context,
+    false
+  );
 
   -- 8. Feed, pool et notification partagent l'éligibilité IADE × IDE.
   IF public.fn_soignant_eligible_mission(v_iade, v_m_feed, true)
