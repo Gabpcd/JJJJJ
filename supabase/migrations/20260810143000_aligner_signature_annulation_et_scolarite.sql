@@ -352,6 +352,27 @@ BEGIN
   IF auth.uid() IS NULL THEN RETURN NEW; END IF;
   IF public.est_admin() THEN RETURN NEW; END IF;
 
+  -- Les réponses à une proposition passent par la RPC canonique, qui pose ce
+  -- contexte borné à la mission. Sans cette branche, le trigger confondrait la
+  -- réponse du soignant avec une modification directe de sa candidature.
+  IF current_setting('jolene.candidature_rpc_mission_id', true) = OLD.mission_id::text THEN
+    IF NEW.mission_id IS DISTINCT FROM OLD.mission_id
+       OR NEW.soignant_id IS DISTINCT FROM OLD.soignant_id THEN
+      RAISE EXCEPTION 'Modification interdite';
+    END IF;
+    IF OLD.statut = 'PROPOSEE'
+       AND NEW.statut IN ('ACCEPTEE', 'REFUSEE', 'EXPIREE') THEN
+      NEW.message := OLD.message;
+      RETURN NEW;
+    END IF;
+    IF OLD.statut IN ('EN_ATTENTE', 'EN_ATTENTE_VALIDATION_ETAB', 'PROPOSEE')
+       AND NEW.statut = 'REFUSEE' THEN
+      NEW.message := OLD.message;
+      RETURN NEW;
+    END IF;
+    RAISE EXCEPTION 'Transition de statut candidature non autorisée: % → %', OLD.statut, NEW.statut;
+  END IF;
+
   IF auth.uid() = OLD.soignant_id THEN
     IF NEW.mission_id IS DISTINCT FROM OLD.mission_id THEN RAISE EXCEPTION 'Modification interdite'; END IF;
     IF NEW.soignant_id IS DISTINCT FROM OLD.soignant_id THEN RAISE EXCEPTION 'Modification interdite'; END IF;

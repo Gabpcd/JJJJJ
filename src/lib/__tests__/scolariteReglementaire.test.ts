@@ -35,4 +35,11 @@ describe('passerelles étudiantes réglementaires de lancement', () => {
     expect(migration).toContain("p_motif IS DISTINCT FROM 'CADRE_ETUDIANT_AS_CONFIRME'");
     expect(migration).toContain("'ide_dans_equipe_pendant_activites', true");
   });
+
+  it('préserve la réponse atomique du soignant aux propositions établissement', () => {
+    expect(migration).toContain("current_setting('jolene.candidature_rpc_mission_id', true)");
+    expect(migration).toMatch(
+      /OLD\.statut = 'PROPOSEE'[\s\S]*NEW\.statut IN \('ACCEPTEE', 'REFUSEE', 'EXPIREE'\)/,
+    );
+  });
 });
