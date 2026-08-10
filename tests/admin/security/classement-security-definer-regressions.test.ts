@@ -12,6 +12,9 @@ const correction = read(
 const financeMigration = read(
   'supabase/migrations/20260803190000_corriger_coherence_metier_finances_litiges.sql',
 );
+const runtimeRegression = read(
+  'tests/admin/security/database-runtime-lint-residual.test.sql',
+);
 
 describe('classement et inventaire SECURITY DEFINER', () => {
   it('affiche le prénom et le nom renvoyés par la RPC', () => {
@@ -52,5 +55,20 @@ describe('classement et inventaire SECURITY DEFINER', () => {
     ]) {
       expect(correction).toContain(`'${signature}'`);
     }
+  });
+
+  it('compare uniquement les huit OID ciblés sans balayer tout pg_proc', () => {
+    expect(correction).toContain('AS r(signature, procedure_oid)');
+    expect(correction).toContain(
+      'JOIN pg_catalog.pg_proc p ON p.oid = r.procedure_oid',
+    );
+    expect(correction).not.toContain('p.oid::regprocedure::text = i.signature');
+    expect(runtimeRegression).toContain('AS r(signature, procedure_oid)');
+    expect(runtimeRegression).toContain(
+      'JOIN pg_proc p ON p.oid = r.procedure_oid',
+    );
+    expect(runtimeRegression).not.toContain(
+      'p.oid::regprocedure::text = i.signature',
+    );
   });
 });
