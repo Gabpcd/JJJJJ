@@ -113,13 +113,20 @@ test.describe('release review — reprise de session iPad', () => {
     const erreursConsole = await connecterCompteReview(page, compte);
     await expect(page.getByRole('heading').first()).toBeVisible();
 
-    await page.goto('/etablissement/missions/creer');
+    // Reproduire la navigation réelle de l'iPad dans la SPA. Un rechargement
+    // complet ici annule les lectures encore actives du dashboard et WebKit les
+    // remonte à tort comme erreurs « due to access control checks ».
+    await page.getByRole('button', { name: 'Publier une mission', exact: true }).click();
+    await expect(page).toHaveURL(/\/etablissement\/missions\/creer$/);
     await expect(page.getByRole('heading', { name: /Publier une mission/i })).toBeVisible();
     await expect(page.getByLabel('Intitulé *')).toBeVisible();
     await expect(page.getByText('Type de contrat proposé')).toBeVisible();
     await verifierSansDebordementHorizontal(page, '/etablissement/missions/creer');
 
-    await page.goto('/etablissement/pool-urgence');
+    await page.getByRole('button', { name: 'Soignants', exact: true }).click();
+    await page.getByRole('button', { name: 'Pool urgence', exact: true }).click();
+    await expect(page).toHaveURL(/\/etablissement\/pool-urgence$/);
+    await page.waitForLoadState('networkidle');
     await expect(page.getByRole('heading', { name: /Pool d'urgence/i })).toBeVisible();
     await verifierSansDebordementHorizontal(page, '/etablissement/pool-urgence');
     expect(erreursConsole.filter((message) => !message.includes('favicon'))).toEqual([]);
