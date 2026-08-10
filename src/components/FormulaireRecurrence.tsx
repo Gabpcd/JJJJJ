@@ -133,6 +133,9 @@ export function FormulaireRecurrence({
   const [dateDebut, setDateDebut] = useState(initial?.dateDebut ?? initialDateDebut);
   const [dateFin, setDateFin] = useState(initial?.dateFin ?? initialDateFin);
   const [jours, setJours] = useState<JourPlanningDate[]>(initial?.jours ?? []);
+  const [datesModifiees, setDatesModifiees] = useState(
+    Boolean(initial || initialDateDebut || initialDateFin),
+  );
   const onChangeRef = useRef(onChange);
 
   useEffect(() => {
@@ -278,7 +281,7 @@ export function FormulaireRecurrence({
             <input
               type="date"
               value={dateDebut}
-              onChange={(event) => setDateDebut(event.target.value)}
+              onChange={(event) => { setDatesModifiees(true); setDateDebut(event.target.value); }}
               className="input-base mt-1"
               required
             />
@@ -289,7 +292,7 @@ export function FormulaireRecurrence({
               type="date"
               value={dateFin}
               min={dateDebut || undefined}
-              onChange={(event) => setDateFin(event.target.value)}
+              onChange={(event) => { setDatesModifiees(true); setDateFin(event.target.value); }}
               className="input-base mt-1"
               required
             />
@@ -387,9 +390,11 @@ export function FormulaireRecurrence({
         </div>
       )}
 
-      {validation.erreurs.length > 0 && (
+      {validation.erreurs.length > 0 && (datesModifiees || validation.erreurs.some((erreur) => erreur.type !== 'PLAGE_INVALIDE')) && (
         <div className="space-y-2" role="alert">
-          {validation.erreurs.map((erreur, index) => (
+          {validation.erreurs
+            .filter((erreur) => datesModifiees || erreur.type !== 'PLAGE_INVALIDE')
+            .map((erreur, index) => (
             <div key={`${erreur.type}-${index}`} className={`flex items-start gap-2 text-xs font-medium ${erreur.gravite === 'bloquant' ? 'text-destructive' : 'text-warning'}`}>
               {erreur.gravite === 'bloquant'
                 ? <XCircle className="mt-0.5 h-4 w-4 shrink-0" />

@@ -424,11 +424,13 @@ export function VueSwipeMissions({ onBasculerListe, onCreerAlerte, onElargirRayo
                 }
               />
             ) : (
-              /* Cas réel pré-traction : 0 mission sur le marché — l'état vide recrute */
+              /* La RPC exclut aussi les missions déjà parcourues : ne jamais
+                 affirmer qu'il n'existe aucune mission alors que la liste peut
+                 légitimement en montrer. */
               <EmptyState
                 mascotte="thinking"
-                titre="Aucune mission près de chez toi pour l'instant"
-                description="Crée une alerte : tu recevras un email dès qu'une mission correspondant à ton profil est publiée."
+                titre="Aucune nouvelle mission à parcourir"
+                description="Consulte la liste pour retrouver toutes les missions disponibles, ou crée une alerte pour les prochaines publications."
                 cta={{
                   label: "🔔 Me prévenir dès qu'une mission arrive",
                   onClick: onCreerAlerte,

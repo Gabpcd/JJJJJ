@@ -47,6 +47,7 @@ import {
 } from '@/components/planning/planning-candidat';
 import { formatParis } from '@/lib/date-heure-paris';
 import { chargerCreneauxMissionsPagines } from '@/lib/mission-creneaux-pagines';
+import { filtrerMissionsPlaywright } from '@/lib/donnees-test';
 import type { Json } from '@/integrations/supabase/types';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -346,7 +347,7 @@ export default function RechercheMissions() {
 
         const { data, error } = await query.abortSignal(controller.signal);
         if (error) throw error;
-        const missionsChargees = data ?? [];
+        const missionsChargees = filtrerMissionsPlaywright(data ?? [], user.email);
         const creneaux = await chargerCreneauxMissionsPagines(
           missionsChargees.map((mission) => mission.id),
           { typeCreneau: 'PREVISIONNEL', exclurePauses: true, signal: controller.signal },
@@ -516,7 +517,7 @@ export default function RechercheMissions() {
   return (
     <LayoutApp role="SOIGNANT" pleinEcran={vue === 'swipe'}>
       {vue !== 'swipe' && <IndicateurPullToRefresh distance={pullDistance} refreshing={refreshing} />}
-      {(!soignant || !soignant.profession) && <BandeauProfilIncomplet />}
+      {!loading && (!soignant || !soignant.profession) && <BandeauProfilIncomplet />}
       <div className={vue === 'swipe' ? 'flex flex-col flex-1 min-h-0 gap-2' : 'space-y-4'}>
         <div className="flex items-center justify-between gap-2 shrink-0">
           <h1 className="text-xl font-bold text-foreground">Explorer</h1>
