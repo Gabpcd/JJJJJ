@@ -8,7 +8,7 @@
  */
 
 import { test, expect } from '@playwright/test';
-import { adminClient, userClient } from '../helpers/db';
+import { adminClient, userClient, userIdByEmail } from '../helpers/db';
 import { TEST_ACCOUNTS } from '../helpers/auth';
 
 const admin = () => adminClient();
@@ -24,12 +24,14 @@ async function cleanupParrainages(soignantId: string) {
 
 test.describe('Parrainage soignant prime cash — backend', () => {
   test('soignant a un code_parrainage auto-généré format JO-XXXXXX', async () => {
-    const client = await userClient(TEST_ACCOUNTS.soignant.email, TEST_ACCOUNTS.soignant.password);
-    const { data: user } = await client.auth.getUser();
-    expect(user?.user?.id).toBeTruthy();
+    // Ce contrôle de donnée n'a pas besoin d'une session utilisateur. Passer
+    // par signInWithPassword puis getUser ajoutait deux appels GoTrue distants
+    // et rendait le test sensible à leur latence cumulée en fin de suite CI.
+    const soignantId = await userIdByEmail(TEST_ACCOUNTS.soignant.email);
+    expect(soignantId).toBeTruthy();
 
     const { data } = await admin().from('soignants')
-      .select('code_parrainage').eq('id', user!.user!.id).maybeSingle();
+      .select('code_parrainage').eq('id', soignantId!).maybeSingle();
 
     expect(data?.code_parrainage).toBeTruthy();
     expect(data!.code_parrainage).toMatch(/^JO-[A-Z0-9]{4,8}$/);
