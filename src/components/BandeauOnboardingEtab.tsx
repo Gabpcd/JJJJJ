@@ -2,29 +2,35 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { AlertTriangle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/contexts/AuthContext';
+import { useEtablissementScope } from '@/hooks/useEtablissementScope';
 
 export function BandeauOnboardingEtab() {
-  const { user } = useAuth();
+  const { etablissementId, resolved, error: scopeError } = useEtablissementScope();
   const navigate = useNavigate();
   const location = useLocation();
   const [show, setShow] = useState(false);
 
   useEffect(() => {
-    if (!user) return;
+    if (!resolved || scopeError || !etablissementId) {
+      setShow(false);
+      return;
+    }
     if (location.pathname === '/etablissement/activer') return;
     (async () => {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('etablissements')
         .select('contrat_service_signe')
-        .eq('id', user.id)
+        .eq('id', etablissementId)
         .maybeSingle();
-      if (!data) return;
+      if (error || !data) {
+        setShow(false);
+        return;
+      }
       // Le RIB n'est plus exigé pour publier (demandé plus tard, au 1er paiement/prélèvement).
       // Seul le contrat de service signé est nécessaire ici.
       setShow(!(data as any).contrat_service_signe);
     })();
-  }, [user, location.pathname]);
+  }, [etablissementId, location.pathname, resolved, scopeError]);
 
   if (!show) return null;
 
