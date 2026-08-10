@@ -545,8 +545,16 @@ GRANT EXECUTE ON FUNCTION public.fn_proposer_mission_soignant(uuid,uuid,text) TO
 -- établissement de santé ou médico-social, au sein d'une équipe comportant un
 -- IDE pendant les activités. La confirmation visible dans l'interface est
 -- aussi exigée et auditée par le serveur au moment exact de l'assignation.
-ALTER FUNCTION public.fn_traiter_candidature_planning_v1(uuid, text, jsonb, text)
-  RENAME TO fn_traiter_candidature_planning_v1_internal_20260810;
+DO $rename_planning$
+BEGIN
+  IF pg_catalog.to_regprocedure(
+    'public.fn_traiter_candidature_planning_v1_internal_20260810(uuid,text,jsonb,text)'
+  ) IS NULL THEN
+    ALTER FUNCTION public.fn_traiter_candidature_planning_v1(uuid, text, jsonb, text)
+      RENAME TO fn_traiter_candidature_planning_v1_internal_20260810;
+  END IF;
+END
+$rename_planning$;
 
 REVOKE ALL ON FUNCTION public.fn_traiter_candidature_planning_v1_internal_20260810(
   uuid, text, jsonb, text
@@ -694,8 +702,16 @@ SET libelle_formation = EXCLUDED.libelle_formation,
 -- Le recalcul historique avait une liste fermée de cursus et ignorait donc la
 -- pédicurie-podologie. On conserve son implémentation durcie, puis on complète
 -- uniquement cette passerelle avec les mêmes preuves courantes et vérifiées.
-ALTER FUNCTION public.fn_recalculer_preuves_etudiant(uuid)
-  RENAME TO fn_recalculer_preuves_etudiant_internal_20260810;
+DO $rename_preuves_etudiant$
+BEGIN
+  IF pg_catalog.to_regprocedure(
+    'public.fn_recalculer_preuves_etudiant_internal_20260810(uuid)'
+  ) IS NULL THEN
+    ALTER FUNCTION public.fn_recalculer_preuves_etudiant(uuid)
+      RENAME TO fn_recalculer_preuves_etudiant_internal_20260810;
+  END IF;
+END
+$rename_preuves_etudiant$;
 
 REVOKE ALL ON FUNCTION public.fn_recalculer_preuves_etudiant_internal_20260810(uuid)
   FROM PUBLIC, anon, authenticated;
@@ -789,8 +805,16 @@ GRANT EXECUTE ON FUNCTION public.fn_recalculer_preuves_etudiant(uuid)
 -- le serveur. On conserve l'implémentation durcie existante derrière un nom
 -- interne et on expose une façade qui exige puis journalise l'attestation du
 -- contrôle réglementaire pour les documents de scolarité.
-ALTER FUNCTION public.fn_admin_moderer_document(uuid, text, text, jsonb, text)
-  RENAME TO fn_admin_moderer_document_internal_20260810;
+DO $rename_moderation_document$
+BEGIN
+  IF pg_catalog.to_regprocedure(
+    'public.fn_admin_moderer_document_internal_20260810(uuid,text,text,jsonb,text)'
+  ) IS NULL THEN
+    ALTER FUNCTION public.fn_admin_moderer_document(uuid, text, text, jsonb, text)
+      RENAME TO fn_admin_moderer_document_internal_20260810;
+  END IF;
+END
+$rename_moderation_document$;
 
 REVOKE ALL ON FUNCTION public.fn_admin_moderer_document_internal_20260810(
   uuid, text, text, jsonb, text
