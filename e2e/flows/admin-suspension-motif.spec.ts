@@ -42,15 +42,13 @@ test.describe('Lot 21 — suspension avec motif obligatoire', () => {
     let admin: SupabaseClient | null = null;
 
     test.beforeAll(async () => {
-      try {
-        admin = await userClient(TEST_ACCOUNTS.admin.email, TEST_ACCOUNTS.admin.password);
-      } catch {
-        admin = null;
-      }
+      if (!TEST_ACCOUNTS.admin.password) return;
+      admin = await userClient(TEST_ACCOUNTS.admin.email, TEST_ACCOUNTS.admin.password);
     });
 
     test.beforeEach(() => {
-      test.skip(!admin, 'Compte admin e2e indisponible');
+      test.skip(!TEST_ACCOUNTS.admin.password, 'Secret du compte admin e2e absent');
+      expect(admin, 'La connexion du compte admin e2e doit réussir').not.toBeNull();
     });
 
     test('suspendre SANS motif est refusé', async () => {
