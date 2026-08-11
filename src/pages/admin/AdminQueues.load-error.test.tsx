@@ -54,6 +54,21 @@ describe('files admin — échec de chargement', () => {
     await waitFor(() => expect(mocks.rpc.mock.calls.length).toBeGreaterThan(appelsInitiaux));
   });
 
+  it('écarte les fixtures de la file opérationnelle des établissements', async () => {
+    mocks.rpc.mockResolvedValueOnce({
+      data: {
+        success: true,
+        etablissements: [{ id: 'fixture-etab', nom: 'Établissement test', est_compte_test: true }],
+      },
+      error: null,
+    });
+
+    render(<AdminVerificationEtablissements />);
+
+    expect(await screen.findByText('Aucun dossier en attente')).toBeInTheDocument();
+    expect(screen.queryByText('Établissement test')).not.toBeInTheDocument();
+  });
+
   it('ne transforme pas une erreur d’externalisation en succès et expose un retry', async () => {
     render(<AdminExternalisationsActions />);
 

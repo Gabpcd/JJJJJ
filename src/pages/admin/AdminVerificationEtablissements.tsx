@@ -166,7 +166,10 @@ export default function AdminVerificationEtablissements() {
       if (error || !payload?.success) {
         throw error || new Error(payload?.error || 'Erreur de chargement');
       }
-      setEtabs(payload.etablissements || []);
+      // La file est un outil opérationnel : les fixtures restent accessibles
+      // dans les vues admin dédiées, mais ne doivent pas masquer les dossiers
+      // réels ni faire diverger la page du KPI du cockpit.
+      setEtabs((payload.etablissements || []).filter(etab => etab.est_compte_test !== true));
     } catch (error) {
       const message = error instanceof Error && error.message
         ? error.message
