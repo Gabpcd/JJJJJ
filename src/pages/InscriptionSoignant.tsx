@@ -48,8 +48,14 @@ function JaugeForce({ motDePasse }: { motDePasse: string }) {
 
 const EMAIL_REGEX = /^[^\s@]{1,64}@[^\s@]{1,255}\.[a-z]{2,}$/i;
 
-function ExerciceTypeSection({ profession, estSalarieEtablissement, onChangeSalarie }: { profession: string; estSalarieEtablissement: boolean | null; onChangeSalarie: (v: boolean) => void }) {
-  const { uniqueType, loading, indisponible } = useTypesExerciceAutorises(profession);
+function ExerciceTypeSection({ profession, uniqueType, loading, indisponible, estSalarieEtablissement, onChangeSalarie }: {
+  profession: string;
+  uniqueType: string | null;
+  loading: boolean;
+  indisponible: boolean;
+  estSalarieEtablissement: boolean | null;
+  onChangeSalarie: (v: boolean) => void;
+}) {
 
   if (uniqueType) {
     return (
@@ -166,6 +172,7 @@ export default function InscriptionSoignant() {
   // profession_requise × établissement appliquée à chaque mission.
   const {
     typesAutorises: typesExerciceProfil,
+    uniqueType: typeExerciceUnique,
     loading: typesExerciceChargement,
     indisponible: typesExerciceIndisponibles,
   } = useTypesExerciceAutorises(form.profession);
@@ -638,7 +645,14 @@ export default function InscriptionSoignant() {
                 </div>
               )}
               {/* Question salarié établissement */}
-              <ExerciceTypeSection profession={form.profession} estSalarieEtablissement={form.estSalarieEtablissement} onChangeSalarie={(v) => maj('estSalarieEtablissement', v)} />
+              <ExerciceTypeSection
+                profession={form.profession}
+                uniqueType={typeExerciceUnique}
+                loading={typesExerciceChargement}
+                indisponible={typesExerciceIndisponibles}
+                estSalarieEtablissement={form.estSalarieEtablissement}
+                onChangeSalarie={(v) => maj('estSalarieEtablissement', v)}
+              />
               {/* Rayon de déplacement + géolocalisation déférés à l'espace
                   personnel (tâche post-inscription) pour alléger le funnel. Un
                   rayon par défaut de 30 km est conservé silencieusement dans le
