@@ -38,7 +38,6 @@ test.describe('Statut REJETE — ne bascule pas en Expiré', () => {
 
   test.beforeAll(async () => {
     test.skip(!TEST_REQS, 'SUPABASE_SERVICE_ROLE_KEY requis');
-    test.skip(!HAS_ANTHROPIC, 'ANTHROPIC_API_KEY absent ou CI=true — skip tests IA (crédits Anthropic requis)');
     const id = await userIdByEmail(TEST_ACCOUNTS.soignant.email);
     test.skip(!id, 'Compte playwright-soignant non seedé');
     soignantId = id!;
@@ -70,6 +69,7 @@ test.describe('Statut REJETE — ne bascule pas en Expiré', () => {
   });
 
   test('verify-document REJETE (cross-type PDF) → valide_jusqua reste NULL', async () => {
+    test.skip(!HAS_ANTHROPIC, 'ANTHROPIC_API_KEY absent ou CI=true — test IA désactivé');
     const admin = adminClient();
     const pdfBytes = makeMinimalPdf();
     const path = `${soignantId}/documents/TEST/${Date.now()}-rejete.pdf`;

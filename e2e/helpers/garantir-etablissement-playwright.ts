@@ -3,6 +3,79 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 const EMAIL_ETABLISSEMENT_PLAYWRIGHT = 'playwright-etab@jolene.app';
 const SIRET_ETABLISSEMENT_PLAYWRIGHT = '90000000000001';
 
+type ErreurAuth = {
+  name?: string;
+  message?: string;
+  status?: number;
+  code?: string;
+};
+
+const PAUSES_REESSAI_AUTH_MS = [2_000, 5_000] as const;
+
+function diagnosticErreurAuth(error: ErreurAuth): string {
+  return JSON.stringify({
+    name: error.name || error.constructor?.name || 'ErreurAuthInconnue',
+    message: error.message || String(error),
+    status: error.status,
+    code: error.code,
+  });
+}
+
+function estErreurAuthTransitoire(error: ErreurAuth): boolean {
+  const statut = Number(error.status || 0);
+  const message = [error.name, error.message, error.code]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+
+  return (
+    statut === 0
+    || statut === 408
+    || statut === 429
+    || statut >= 500
+    || /^\s*\{\}\s*$/.test(error.message || '')
+    || /timeout|timed out|deadline|network|fetch|econn|socket|temporar/.test(message)
+  );
+}
+
+export async function synchroniserAuthEtablissementPlaywright(
+  admin: SupabaseClient,
+  userId: string,
+  password: string,
+  attendre: (ms: number) => Promise<void> = (ms) =>
+    new Promise((resolve) => setTimeout(resolve, ms)),
+): Promise<void> {
+  for (let tentative = 1; tentative <= PAUSES_REESSAI_AUTH_MS.length + 1; tentative += 1) {
+    const { error } = await admin.auth.admin.updateUserById(userId, {
+      password,
+      email_confirm: true,
+      app_metadata: {
+        role: 'ADMIN_ETABLISSEMENT',
+        is_test_playwright: true,
+      },
+      user_metadata: {
+        role: 'ADMIN_ETABLISSEMENT',
+        nom: 'TestEtabPlaywright',
+      },
+    });
+
+    if (!error) return;
+
+    const diagnostic = diagnosticErreurAuth(error);
+    const pause = PAUSES_REESSAI_AUTH_MS[tentative - 1];
+    if (!pause || !estErreurAuthTransitoire(error)) {
+      throw new Error(
+        `[compte-etablissement-playwright] synchronisation Auth impossible : ${diagnostic}`,
+      );
+    }
+
+    console.warn(
+      `[compte-etablissement-playwright] Auth temporairement indisponible (tentative ${tentative}/3) : ${diagnostic}`,
+    );
+    await attendre(pause);
+  }
+}
+
 /**
  * Garantit la présence du compte établissement technique partagé par la CI.
  *
@@ -56,24 +129,7 @@ export async function garantirEtablissementPlaywright(
       '[compte-etablissement-playwright] compte Auth technique recréé.',
     );
   } else {
-    const { error: synchronisationAuthError } =
-      await admin.auth.admin.updateUserById(userId, {
-        password,
-        email_confirm: true,
-        app_metadata: {
-          role: 'ADMIN_ETABLISSEMENT',
-          is_test_playwright: true,
-        },
-        user_metadata: {
-          role: 'ADMIN_ETABLISSEMENT',
-          nom: 'TestEtabPlaywright',
-        },
-      });
-    if (synchronisationAuthError) {
-      throw new Error(
-        `[compte-etablissement-playwright] synchronisation Auth impossible : ${synchronisationAuthError.message}`,
-      );
-    }
+    await synchroniserAuthEtablissementPlaywright(admin, userId, password);
   }
 
   const maintenant = new Date().toISOString();

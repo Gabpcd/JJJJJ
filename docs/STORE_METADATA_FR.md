@@ -130,7 +130,12 @@ contient ni classement, ni promotion de prix, ni témoignage invérifiable.
   analytics.
 - **Diagnostics liés au compte** : crashs et performances, pour fonctionnalité
   et analytics.
-- **Santé et activité physique** : aucune donnée collectée.
+- **Santé** : déclaration du Soignant relative à ses vaccinations obligatoires
+  et à sa visite de médecine du travail, avec date de signature. Donnée liée au
+  compte, utilisée uniquement pour la fonctionnalité de conformité
+  professionnelle. Aucun carnet de vaccination, certificat médical, diagnostic
+  ni donnée de patient n'est demandé ou stocké.
+- **Activité physique** : aucune donnée collectée.
 
 Cette liste doit rester alignée mot pour mot avec
 `ios/App/App/PrivacyInfo.xcprivacy` et être revue après toute évolution de SDK
@@ -145,7 +150,12 @@ Réponses globales préparées :
 - mécanisme de suppression : **oui**, dans l'app et via
   `https://jolene.app/supprimer-mon-compte` ;
 - publicité et tracking publicitaire : **non** ;
-- données de santé : **non**.
+- données de santé : **oui** — `Health info`, liée au compte, collectée pour la
+  fonctionnalité de l'application et la conformité professionnelle. Elle est
+  facultative au niveau de l'application (elle ne concerne que le parcours
+  Soignant), n'est ni vendue ni utilisée pour la publicité. Jolene conserve
+  uniquement les deux déclarations sur l'honneur et leur date de signature,
+  jamais un document médical, un diagnostic ou une donnée de patient.
 
 Types à déclarer au minimum :
 

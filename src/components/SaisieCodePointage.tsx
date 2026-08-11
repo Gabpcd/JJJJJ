@@ -13,42 +13,7 @@ export function SaisieCodePointage({ type, onValider }: SaisieCodePointageProps)
   const [resultat, setResultat] = useState<{ success: boolean; message?: string } | null>(null);
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
-  const handleChange = useCallback((index: number, value: string) => {
-    if (!/^\d?$/.test(value)) return;
-    const newDigits = [...digits];
-    newDigits[index] = value;
-    setDigits(newDigits);
-    setResultat(null);
-
-    // Auto-focus next
-    if (value && index < 5) {
-      inputRefs.current[index + 1]?.focus();
-    }
-
-    // Auto-submit when all 6 filled
-    if (value && index === 5 && newDigits.every(d => d !== '')) {
-      submitCode(newDigits.join(''));
-    }
-  }, [digits]);
-
-  const handleKeyDown = useCallback((index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Backspace' && !digits[index] && index > 0) {
-      inputRefs.current[index - 1]?.focus();
-    }
-  }, [digits]);
-
-  const handlePaste = useCallback((e: React.ClipboardEvent) => {
-    e.preventDefault();
-    const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
-    if (pasted.length === 6) {
-      const newDigits = pasted.split('');
-      setDigits(newDigits);
-      inputRefs.current[5]?.focus();
-      submitCode(pasted);
-    }
-  }, []);
-
-  const submitCode = async (code: string) => {
+  const submitCode = useCallback(async (code: string) => {
     setLoading(true);
     setResultat(null);
     try {
@@ -65,7 +30,42 @@ export function SaisieCodePointage({ type, onValider }: SaisieCodePointageProps)
       setResultat({ success: false, message: 'Erreur réseau' });
     }
     setLoading(false);
-  };
+  }, [onValider]);
+
+  const handleChange = useCallback((index: number, value: string) => {
+    if (!/^\d?$/.test(value)) return;
+    const newDigits = [...digits];
+    newDigits[index] = value;
+    setDigits(newDigits);
+    setResultat(null);
+
+    // Auto-focus next
+    if (value && index < 5) {
+      inputRefs.current[index + 1]?.focus();
+    }
+
+    // Auto-submit when all 6 filled
+    if (value && index === 5 && newDigits.every(d => d !== '')) {
+      void submitCode(newDigits.join(''));
+    }
+  }, [digits, submitCode]);
+
+  const handleKeyDown = useCallback((index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Backspace' && !digits[index] && index > 0) {
+      inputRefs.current[index - 1]?.focus();
+    }
+  }, [digits]);
+
+  const handlePaste = useCallback((e: React.ClipboardEvent) => {
+    e.preventDefault();
+    const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
+    if (pasted.length === 6) {
+      const newDigits = pasted.split('');
+      setDigits(newDigits);
+      inputRefs.current[5]?.focus();
+      void submitCode(pasted);
+    }
+  }, [submitCode]);
 
   if (!ouvert) {
     return (

@@ -50,7 +50,7 @@ export default function PageMentionsLegales() {
             <p className="font-semibold text-foreground">Authentification, base de données et stockage</p>
             <p><strong className="text-foreground">Prestataire :</strong> Supabase Pte. Ltd.</p>
             <p><strong className="text-foreground">Adresse :</strong> 65 Chulia Street #38-02/03, OCBC Centre, Singapour 049513</p>
-            <p><strong className="text-foreground">Région du projet :</strong> eu-west-3 (Paris, France)</p>
+            <p><strong className="text-foreground">Région du projet :</strong> eu-west-1 (Irlande, Union européenne)</p>
             <p><strong className="text-foreground">Site web :</strong> <a href="https://supabase.com" target="_blank" rel="noopener noreferrer" className="text-primary underline">supabase.com</a></p>
           </div>
         </div>

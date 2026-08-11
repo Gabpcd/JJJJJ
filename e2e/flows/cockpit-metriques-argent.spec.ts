@@ -46,15 +46,13 @@ test.describe('Lot 19 — Cockpit métriques argent (source unique)', () => {
     let admin: SupabaseClient | null = null;
 
     test.beforeAll(async () => {
-      try {
-        admin = await userClient(TEST_ACCOUNTS.admin.email, TEST_ACCOUNTS.admin.password);
-      } catch {
-        admin = null;
-      }
+      if (!TEST_ACCOUNTS.admin.password) return;
+      admin = await userClient(TEST_ACCOUNTS.admin.email, TEST_ACCOUNTS.admin.password);
     });
 
     test.beforeEach(() => {
-      test.skip(!admin, 'Compte admin e2e (admin@jolene.app) indisponible — auth requise');
+      test.skip(!TEST_ACCOUNTS.admin.password, 'Secret du compte admin e2e absent');
+      expect(admin, 'La connexion du compte admin e2e doit réussir').not.toBeNull();
     });
 
     test('structure complète + invariants HT/TTC et réel/test', async () => {
@@ -89,8 +87,12 @@ test.describe('Lot 19 — Cockpit métriques argent (source unique)', () => {
     test('etab_a_valider == count réel de la file de vérification (fix 10 vs 6)', async () => {
       const { data: metriques } = await admin!.rpc('fn_admin_metriques_argent' as any);
       const { data: file } = await admin!.rpc('fn_admin_lister_etablissements_a_verifier' as any, { p_limit: 500 });
-      const nFile = ((file as any)?.etablissements ?? []).length;
+      const etablissements = ((file as any)?.etablissements ?? [])
+        .filter((etab: any) => etab.est_compte_test !== true);
+      const nFile = etablissements.length;
       const nCompteur = Number((metriques as any)?.etab_a_valider);
+      // Le frontend masque les fixtures de cette file opérationnelle.
+      expect(etablissements.every((etab: any) => etab.est_compte_test !== true)).toBe(true);
       // La file est plafonnée à 500 (LEAST(p_limit,500)) ; le compteur ne l'est pas.
       // Sous 500 → égalité stricte (le fix « 10 vs 6 ») ; au plafond → le compteur couvre au moins la file.
       if (nFile < 500) {

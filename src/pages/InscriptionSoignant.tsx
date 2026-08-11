@@ -48,8 +48,14 @@ function JaugeForce({ motDePasse }: { motDePasse: string }) {
 
 const EMAIL_REGEX = /^[^\s@]{1,64}@[^\s@]{1,255}\.[a-z]{2,}$/i;
 
-function ExerciceTypeSection({ profession, estSalarieEtablissement, onChangeSalarie }: { profession: string; estSalarieEtablissement: boolean | null; onChangeSalarie: (v: boolean) => void }) {
-  const { uniqueType } = useTypesExerciceAutorises(profession);
+function ExerciceTypeSection({ profession, uniqueType, loading, indisponible, estSalarieEtablissement, onChangeSalarie }: {
+  profession: string;
+  uniqueType: string | null;
+  loading: boolean;
+  indisponible: boolean;
+  estSalarieEtablissement: boolean | null;
+  onChangeSalarie: (v: boolean) => void;
+}) {
 
   if (uniqueType) {
     return (
@@ -75,6 +81,16 @@ function ExerciceTypeSection({ profession, estSalarieEtablissement, onChangeSala
         <div className="mt-3 p-3 bg-primary/5 border border-primary/20 rounded-xl">
           <p className="text-xs text-foreground">ℹ️ Tu pourras effectuer des missions sur Jolene en complément de ton activité salariée. Vérifie que ton contrat de travail n'inclut pas de clause d'exclusivité.</p>
         </div>
+      )}
+      {loading && (
+        <p className="text-xs text-muted-foreground mt-2" role="status">
+          Vérification des modes d'exercice autorisés…
+        </p>
+      )}
+      {indisponible && (
+        <p className="text-xs text-amber-700 mt-2" role="status">
+          Le référentiel est momentanément indisponible. Tu peux poursuivre ton inscription ; le mode libéral pourra être activé après contrôle.
+        </p>
       )}
     </div>
   );
@@ -154,18 +170,25 @@ export default function InscriptionSoignant() {
 
   // Règle de PROFIL issue du référentiel DB. Elle est distincte de la matrice
   // profession_requise × établissement appliquée à chaque mission.
-  const { typesAutorises: typesExerciceProfil } = useTypesExerciceAutorises(form.profession);
+  const {
+    typesAutorises: typesExerciceProfil,
+    uniqueType: typeExerciceUnique,
+    loading: typesExerciceChargement,
+    indisponible: typesExerciceIndisponibles,
+  } = useTypesExerciceAutorises(form.profession);
+  const typesExerciceConnus = Array.isArray(typesExerciceProfil);
   const peutEtreLiberal = !!form.profession
     && !!typesExerciceProfil?.some((type) => type === 'LIBERAL' || type === 'MIXTE');
+  // Une sélection libérale faite pour la profession précédente ne doit jamais
+  // rester cachée dans le formulaire pendant le chargement de la nouvelle.
   useEffect(() => {
     if (!form.profession) return;
-    if (peutEtreLiberal) return;
     setForm(prev => {
       const cleaned = prev.typesContrat.filter(v => v !== 'LIBERAL' && v !== 'VACATION');
       if (cleaned.length === prev.typesContrat.length) return prev;
       return { ...prev, typesContrat: cleaned };
     });
-  }, [form.profession, peutEtreLiberal]);
+  }, [form.profession]);
 
   // Les aides-soignants peuvent désormais disposer d'une identité RPPS : le
   // champ reste optionnel pour eux. AES/AP restent vérifiés par diplôme + CNI.
@@ -174,7 +197,7 @@ export default function InscriptionSoignant() {
     if (PROFESSIONS_SANS_RPPS.includes(form.profession) && form.profession !== 'AS' && form.rpps) {
       setForm(prev => ({ ...prev, rpps: '' }));
     }
-  }, [form.profession]);
+  }, [form.profession, form.rpps]);
 
   // L1: Date de naissance obligatoire + validation email + 18+ check
   const emailValide = EMAIL_REGEX.test(form.email.trim());
@@ -292,7 +315,7 @@ export default function InscriptionSoignant() {
       clearTimeout(timeout);
       controller.abort();
     };
-  }, [form.rpps, form.prenom, form.nom]);
+  }, [form.rpps, form.prenom, form.nom, form.profession, turnstileToken]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -520,7 +543,17 @@ export default function InscriptionSoignant() {
                     </label>
                   ))}
                 </div>
-                {form.profession && !peutEtreLiberal && (
+                {form.profession && typesExerciceChargement && (
+                  <p className="text-[10px] text-muted-foreground mt-1.5" role="status">
+                    Vérification des types de contrat autorisés…
+                  </p>
+                )}
+                {form.profession && typesExerciceIndisponibles && (
+                  <p className="text-[10px] text-amber-700 mt-1.5" role="status">
+                    Vérification temporairement indisponible. Tu peux poursuivre en CDD ou salarié et activer le libéral plus tard après contrôle.
+                  </p>
+                )}
+                {form.profession && typesExerciceConnus && !peutEtreLiberal && (
                   <p className="text-[10px] text-muted-foreground mt-1.5">
                     Ta profession ne peut pas exercer en libéral. Seuls CDD et Salarié sont disponibles.
                   </p>
@@ -612,7 +645,14 @@ export default function InscriptionSoignant() {
                 </div>
               )}
               {/* Question salarié établissement */}
-              <ExerciceTypeSection profession={form.profession} estSalarieEtablissement={form.estSalarieEtablissement} onChangeSalarie={(v) => maj('estSalarieEtablissement', v)} />
+              <ExerciceTypeSection
+                profession={form.profession}
+                uniqueType={typeExerciceUnique}
+                loading={typesExerciceChargement}
+                indisponible={typesExerciceIndisponibles}
+                estSalarieEtablissement={form.estSalarieEtablissement}
+                onChangeSalarie={(v) => maj('estSalarieEtablissement', v)}
+              />
               {/* Rayon de déplacement + géolocalisation déférés à l'espace
                   personnel (tâche post-inscription) pour alléger le funnel. Un
                   rayon par défaut de 30 km est conservé silencieusement dans le

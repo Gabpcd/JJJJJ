@@ -26,10 +26,10 @@ DPO : Gabrielle Picard (dpo@jolene.app)
 | Finalité | Inscription, authentification et gestion du compte des professionnels de santé |
 | Base légale | Exécution du contrat (RGPD art. 6.1.b) |
 | Catégories de personnes | Soignants (IDE, médecins, AS/AES, paramédicaux, sages-femmes, etc.) |
-| Catégories de données | Identité (nom, prénom, date naissance), contact (email, tél), adresse, RPPS, ADELI (legacy), profession, type d'exercice (LIBERAL/SALARIE/MIXTE), photo profil |
-| Données sensibles | Aucune (le RPPS n'est pas une donnée de santé au sens L.1111-8 CSP) |
+| Catégories de données | Identité (nom, prénom, date naissance), contact (email, tél), adresse, RPPS, ADELI (legacy), profession, type d'exercice (LIBERAL/SALARIE/MIXTE), photo profil, déclarations de conformité relatives aux vaccinations obligatoires et à la médecine du travail avec date de signature |
+| Données sensibles | Les deux déclarations de conformité peuvent révéler une information liée à la santé (RGPD art. 9) ; aucun justificatif médical ni diagnostic n'est conservé. Le RPPS n'est pas une donnée de santé. |
 | Destinataires | Soignant lui-même, admin Jolene, étabs avec mission active |
-| Transferts hors UE | Aucun (Supabase Paris) |
+| Transferts hors UE | Supabase héberge le projet en Irlande (UE) ; les éventuels traitements techniques hors EEE des autres prestataires sont encadrés par les garanties indiquées en annexe. |
 | Durée de conservation | Compte actif : durée relation contractuelle. Compte supprimé : 3 ans (anonymisation immédiate, conservation pour preuves légales) |
 | Mesures de sécurité | RLS Postgres, chiffrement at rest AES-256, MFA disponible, rate-limit Auth |
 
@@ -152,7 +152,7 @@ Liste détaillée dans `docs/dpa-template.md`.
 
 | Sous-traitant | Rôle | Localisation | Encadrement |
 |---|---|---|---|
-| Supabase | Hébergement DB + Auth + Storage | AWS Paris (UE) | DPA signé |
+| Supabase | Hébergement DB + Auth + Storage | AWS Irlande (UE) | DPA signé |
 | Vercel | Hébergement frontend | AWS USA + edges UE | DPA signé + SCC |
 | Stripe | Paiements | Ireland (UE) + USA backup | DPA signé + SCC |
 | Resend | Emails transactionnels | USA | SCC |

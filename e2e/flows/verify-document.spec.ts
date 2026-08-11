@@ -133,7 +133,6 @@ test.describe('Vérification documents — pipeline bout-en-bout', () => {
 
   test.beforeAll(async () => {
     test.skip(!TEST_REQS, 'SUPABASE_SERVICE_ROLE_KEY requis');
-    test.skip(!HAS_ANTHROPIC, 'ANTHROPIC_API_KEY absent ou CI=true — skip tests IA (crédits Anthropic requis)');
     const id = await userIdByEmail(TEST_ACCOUNTS.soignant.email);
     test.skip(!id, 'Compte playwright-soignant non seedé');
     soignantId = id!;
@@ -144,6 +143,7 @@ test.describe('Vérification documents — pipeline bout-en-bout', () => {
   });
 
   test('Upload PDF déclaré CARTE_IDENTITE → IA retourne un verdict', async () => {
+    test.skip(!HAS_ANTHROPIC, 'ANTHROPIC_API_KEY absent ou CI=true — test IA désactivé');
     const pdfBytes = makeMinimalPdf();
     const s3Path = await uploadTestFile(soignantId, 'test-doc.pdf', 'application/pdf', pdfBytes);
     const docId = await createDocRow(soignantId, 'CARTE_IDENTITE', s3Path, 'test-doc.pdf', 'application/pdf', pdfBytes.length);
@@ -162,6 +162,7 @@ test.describe('Vérification documents — pipeline bout-en-bout', () => {
   });
 
   test('Upload PDF déclaré DIPLOME (cross-type) → IA rejette', async () => {
+    test.skip(!HAS_ANTHROPIC, 'ANTHROPIC_API_KEY absent ou CI=true — test IA désactivé');
     const pdfBytes = makeMinimalPdf();
     const s3Path = await uploadTestFile(soignantId, 'test-crosstype.pdf', 'application/pdf', pdfBytes);
     const docId = await createDocRow(soignantId, 'DIPLOME', s3Path, 'test-crosstype.pdf', 'application/pdf', pdfBytes.length);
@@ -180,6 +181,7 @@ test.describe('Vérification documents — pipeline bout-en-bout', () => {
   });
 
   test('Upload JPEG déclaré CARTE_IDENTITE → IA retourne un verdict (non-régression images)', async () => {
+    test.skip(!HAS_ANTHROPIC, 'ANTHROPIC_API_KEY absent ou CI=true — test IA désactivé');
     const jpegBytes = makeMinimalJpeg();
     const s3Path = await uploadTestFile(soignantId, 'test-img.jpg', 'image/jpeg', jpegBytes);
     const docId = await createDocRow(soignantId, 'CARTE_IDENTITE', s3Path, 'test-img.jpg', 'image/jpeg', jpegBytes.length);
@@ -198,7 +200,11 @@ test.describe('Vérification documents — pipeline bout-en-bout', () => {
 
   test('Type MIME non supporté (application/zip) → REJETE sans appel IA', async () => {
     const fakeZip = new TextEncoder().encode('PK\x03\x04fake-zip-content');
-    const s3Path = await uploadTestFile(soignantId, 'test.zip', 'application/zip', fakeZip);
+    // Le bucket refuse déjà application/zip. On charge donc les octets sous un
+    // MIME Storage autorisé, puis on conserve application/zip dans la ligne
+    // métier : cela prouve le second verrou de verify-document sans assouplir
+    // le premier verrou Storage.
+    const s3Path = await uploadTestFile(soignantId, 'test.zip', 'application/pdf', fakeZip);
     const docId = await createDocRow(soignantId, 'CARTE_IDENTITE', s3Path, 'test.zip', 'application/zip', fakeZip.length);
 
     await triggerVerify(docId);

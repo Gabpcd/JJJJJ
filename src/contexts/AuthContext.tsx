@@ -43,6 +43,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AppUser | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const userId = user?.id;
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
@@ -70,12 +71,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // pas seulement après le formulaire de connexion. Le module est idempotent.
   useEffect(() => {
     if (loading) return;
-    if (user) {
-      void import('@/lib/pushNative').then(({ initNativePush }) => initNativePush(user.id));
+    if (userId) {
+      void import('@/lib/pushNative').then(({ initNativePush }) => initNativePush(userId));
     } else {
       void import('@/lib/pushNative').then(({ resetNativePushListeners }) => resetNativePushListeners());
     }
-  }, [loading, user?.id]);
+  }, [loading, userId]);
 
   const connexion = useCallback(async (email: string, motDePasse: string, captchaToken?: string) => {
     const { data, error } = await supabase.auth.signInWithPassword({

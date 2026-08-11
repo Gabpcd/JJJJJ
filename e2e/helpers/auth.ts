@@ -21,7 +21,9 @@ export const TEST_ACCOUNTS = {
     role: 'ADMIN_ETABLISSEMENT' as const,
   },
   admin: {
-    email: 'admin@jolene.app',
+    // Le compte de recette admin est dédié et fourni avec son secret. Ne pas
+    // le confondre avec l'adresse canonique de l'administratrice en production.
+    email: process.env.PLAYWRIGHT_ADMIN_EMAIL || 'admin@jolene.app',
     // Aucun mot de passe admin de secours dans le dépôt : la recette utilise
     // exclusivement le secret canonique fourni par l'environnement.
     password: process.env.JOLENE_ADMIN_CANONICAL_PASSWORD
