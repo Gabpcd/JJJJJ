@@ -223,7 +223,7 @@ export default function ChargesSociales() {
     return (
       <LayoutApp role="SOIGNANT">
         <div className="card-base text-center py-12">
-          <p className="text-lg font-bold text-foreground mb-2">Charges sociales libérales</p>
+          <h1 className="text-lg font-bold text-foreground mb-2">Charges sociales libérales</h1>
           <p className="text-sm text-muted-foreground max-w-md mx-auto">
             Cette page est réservée aux soignants en exercice libéral ou mixte.
           </p>

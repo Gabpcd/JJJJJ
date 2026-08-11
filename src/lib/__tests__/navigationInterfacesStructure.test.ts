@@ -7,6 +7,7 @@ const app = readFileSync(resolve(racine, 'src/App.tsx'), 'utf8');
 const navigation = readFileSync(resolve(racine, 'src/components/BarreNavigation.tsx'), 'utf8');
 const compteSoignant = readFileSync(resolve(racine, 'src/pages/MonCompteSoignant.tsx'), 'utf8');
 const compteEtablissement = readFileSync(resolve(racine, 'src/pages/MonCompteEtablissement.tsx'), 'utf8');
+const chargesSociales = readFileSync(resolve(racine, 'src/pages/ChargesSociales.tsx'), 'utf8');
 
 const routesDeclarees = new Set(
   [...app.matchAll(/<Route path="([^"]+)"/g)].map((match) => match[1]),
@@ -58,5 +59,11 @@ describe('Navigation frontend — soignant et établissement', () => {
     expect(etablissement).toContain('/etablissement/mon-compte');
     expect(etablissement).toContain('/etablissement/missions/creer');
     expect(etablissement.every((route) => routesDeclarees.has(route))).toBe(true);
+  });
+
+  it('annonce le titre de la page charges même aux profils non libéraux', () => {
+    expect(chargesSociales).toContain(
+      '<h1 className="text-lg font-bold text-foreground mb-2">Charges sociales libérales</h1>',
+    );
   });
 });
