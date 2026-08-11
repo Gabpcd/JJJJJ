@@ -45,8 +45,10 @@ personnel pour le compte du Client, dans le cadre des services suivants :
 ## Article 4 — Catégories de données
 
 - Identification (nom, prénom, email, téléphone, RPPS/ADELI, SIRET).
-- Documents d'identité, diplômes, attestations vaccinations (vérifié en
-  présentiel par les étabs, pas conservé chez Jolene).
+- Documents d'identité et diplômes. Jolene conserve la déclaration sur
+  l'honneur relative aux vaccinations obligatoires et à la médecine du travail,
+  ainsi que sa date de signature ; les justificatifs médicaux sont vérifiés en
+  présentiel par les établissements et ne sont pas conservés chez Jolene.
 - Données de mission et de présence (pointage GPS, photos pointage).
 - Données financières (factures, virements, RIB last4, Stripe IDs).
 - Données de paie (NIR, salaire brut/net, cotisations, période).
@@ -110,7 +112,7 @@ données de patients = INTERDIT).
 
 | Sous-traitant | Rôle | Localisation | Encadrement |
 |---|---|---|---|
-| Supabase | Hébergement DB + Auth + Storage | AWS Paris (UE) | DPA Supabase |
+| Supabase | Hébergement DB + Auth + Storage | AWS Irlande (UE) | DPA Supabase |
 | Vercel | Hébergement frontend | AWS USA + edges UE | DPA Vercel + SCC |
 | Stripe | Paiements | Ireland (UE) + USA | DPA Stripe + SCC |
 | Resend | Emails transactionnels | USA | SCC |

@@ -13,7 +13,7 @@ Supabase Pro tier : **PITR (Point-In-Time Recovery)** activé par défaut.
 | Backup quotidien | Oui, automatique 00:00 UTC |
 | Rétention | 7 jours (Pro) ou 30 jours (Team) |
 | PITR | 7 jours (Pro), résolution seconde |
-| Région | Paris (eu-west-3) |
+| Région | Irlande (eu-west-1) |
 | Chiffrement at rest | AES-256 (RDS-géré) |
 
 ### Action manuelle Gabrielle

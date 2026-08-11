@@ -1,8 +1,33 @@
 # Store readiness — préparation App Store et Play Store
 
-État au 14/07/2026. « Build validé » ne signifie pas « publiable » : les
-éléments de signature, consoles et recette sur appareils restent externes au
-repo.
+## État réel au 10/08/2026
+
+- Le web, iOS et Android sont configurés en version `1.0 (16)` ; le typecheck,
+  le build web, les 1 214 tests unitaires et les prévols mobiles passent.
+- Le dernier binaire iOS archivé (`1.0 (7)`) est obsolète. Aucune identité Apple
+  Distribution valide n'est actuellement disponible dans le trousseau local :
+  il faut rétablir la signature, reconstruire `1.0 (16)`, l'envoyer puis faire
+  la recette TestFlight.
+- L'AAB local `Jolene-1.0-16-release.aab` est matériellement présent et sa
+  signature JAR est valide, mais il contient un frontend antérieur aux derniers
+  correctifs. Il est signé par l'ancienne clé d'upload
+  `4B:43:18:5D:0F:67:C3:1F:A7:E9:0D:69:7D:5B:AF:D0:D6:DE:95:8C:66:27:8B:5D:22:79:66:31:6D:5D:69:B2`,
+  dont la clé privée n'est pas disponible dans l'environnement courant. La clé
+  privée locale restante porte une autre empreinte ; ne pas reconstruire ni
+  téléverser avec elle tant que Play Console n'a pas confirmé une réinitialisation
+  de la clé d'upload.
+- Les scripts de captures valident une configuration de 32 PNG App Store et
+  24 PNG Google Play, iPad 13 pouces inclus. Les captures finales ne sont pas
+  encore produites : elles exigent une authentification de démonstration stable
+  sur la production.
+- Les consoles App Store Connect et Play Console doivent encore être ouvertes
+  dans une session authentifiée. Aucune soumission finale ne doit être déclenchée
+  automatiquement.
+
+Le tableau ci-dessous conserve les preuves historiques du 14/07/2026 ; elles ne
+valent pas validation des binaires `1.0 (16)`. « Build validé » ne signifie pas
+« publiable » : les éléments de signature, consoles et recette sur appareils
+restent externes au repo.
 
 ## Vérifié dans le repo
 

@@ -22,12 +22,18 @@
 | `KBIS` | Société (BNC/libéral) | Non |
 | `NOTE_HONORAIRES`, `ATTESTATION_3200H`, `ATTESTATION_SCOLARITE`, `ATTESTATION_CPAM` | Administratif / parcours | Non |
 
-### 1.2 Décision actée : Jolene ne stocke AUCUNE donnée de santé (par construction)
+### 1.2 Décision actée : aucun document médical, collecte déclarative minimale
 
-- **Aucun document de santé n'est collecté ni requis.** Jolene est **hors
-  périmètre HDS** (hébergeur de données de santé), art. **L1111-8 CSP** : aucune
-  donnée de santé à caractère personnel n'est hébergée pour le compte de tiers
-  → **pas de sujet HDS**, pas de certification requise.
+- **Aucun document médical n'est collecté ni requis.** Jolene conserve toutefois
+  la déclaration sur l'honneur du Soignant relative à ses vaccinations
+  obligatoires et à sa visite de médecine du travail, ainsi que sa date de
+  signature. Même sans certificat ni diagnostic, cette déclaration peut révéler
+  une information liée à la santé : elle est donc traitée et déclarée comme une
+  donnée de santé dans les informations de confidentialité des stores.
+- La seule absence de document médical ne permet pas de conclure à elle seule au
+  régime d'hébergement applicable. L'analyse HDS doit être confirmée au regard du
+  rôle exact de Jolene et de l'article **L1111-8 CSP** ; le produit ne doit plus
+  justifier une exclusion par l'affirmation inexacte « aucune donnée de santé ».
 - Corollaire produit : documents requis = identité + qualification + assurance +
   situation administrative/bancaire uniquement.
 
@@ -83,8 +89,10 @@ de santé (RGPD art. 9) ; un motif générique sort Jolene entièrement du champ
    médical » (vérifié) — rien à réaligner ; clause attestation ajoutée à
    l'amendement §4.6.
 
-**Conséquence store** : privacy labels iOS/Android = **aucune donnée de santé
-collectée** — d'où l'exécution de ce chantier **avant la soumission** aux stores.
+**Conséquence store** : privacy labels iOS/Android = **donnée de santé collectée
+de manière déclarative et liée au compte**, pour la fonctionnalité de conformité
+professionnelle ; aucun document médical, diagnostic ou donnée de patient n'est
+collecté.
 
 ## 2. DAC7 — déclaration annuelle des revenus des opérateurs de plateforme
 

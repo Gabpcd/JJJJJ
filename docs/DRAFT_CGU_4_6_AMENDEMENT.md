@@ -60,7 +60,7 @@
 > la responsabilité de l'utilisateur** et peut entraîner l'application de la
 > pénalité de score et une revue de son compte.
 > `<!-- art. 1103 C. civ. ; le motif générique (pas la nature santé/familial)`
-> `sort Jolene du champ RGPD art. 9 — aucune donnée de santé collectée. Anti-abus`
+> `évite une collecte de donnée de santé dans ce parcours. Anti-abus`
 > `par compteur (fn_param_num) au-delà de N annulations justifiées/12 mois. -->`
 
 ## ⛔ Clause « Heures supplémentaires » — À NE PAS PUBLIER dans cet amendement
