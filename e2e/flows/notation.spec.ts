@@ -67,7 +67,8 @@ test.describe('Flow notation bidirectionnelle', () => {
     // du seuil < 7 jours de fn_traiter_candidature.
     const debut = new Date(Date.now() + 9 * 86400000);
     const fin = new Date(debut.getTime() + 8 * 3600000);
-    const m = await seedMission({ intitule: '[pw-test:notation] Notation E2E', debut, fin });
+    const intituleMission = '[pw-test:notation] Notation E2E';
+    const m = await seedMission({ intitule: intituleMission, debut, fin });
     expect(m, 'seedMission').toBeTruthy();
     seededMissionIds.push(m!.id);
 
@@ -123,7 +124,7 @@ test.describe('Flow notation bidirectionnelle', () => {
 
     // Le titre métier doit remplacer le loader : un simple heading d'erreur ou
     // de chargement prolongé ne doit pas faire passer cette régression.
-    await expect(page.getByRole('heading', { name: m!.intitule, exact: true }))
+    await expect(page.getByRole('heading', { level: 1, name: intituleMission, exact: true }))
       .toBeVisible({ timeout: 30_000 });
 
     // Régression stricte : une mission éligible doit permettre au soignant de
