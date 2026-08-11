@@ -29,6 +29,7 @@ import { useNotification } from '@/contexts/NotificationContext';
 import { supabase } from '@/integrations/supabase/client';
 import { extraireMessageErreur } from '@/lib/erreurs';
 import { useEtablissementScope } from '@/hooks/useEtablissementScope';
+import { useChargementProlonge } from '@/hooks/useChargementProlonge';
 import { debutMoisParis } from '@/lib/date-heure-paris';
 import { chargerCreneauxMissionsPagines } from '@/lib/mission-creneaux-pagines';
 
@@ -413,10 +414,43 @@ export default function DashboardEtablissement() {
   const erreurPartielle = useMemo(() => dashData?.erreurPartielle ?? false, [dashData]);
 
   const queryClient = useQueryClient();
+  const { estProlonge: chargementProlonge, reinitialiser: reinitialiserChargement } = useChargementProlonge(loading);
+
+  const relancerDashboard = () => {
+    reinitialiserChargement();
+    void queryClient.resetQueries({
+      queryKey: ['dashboard-etablissement', user?.id, etablissementId],
+      exact: true,
+    });
+  };
 
   // handleAnnuler legacy supprimé : remplacé par ModaleAnnulationMissionEtab (Sprint 5.5 PR 3).
 
-  if (loading) return <LayoutApp role="ADMIN_ETABLISSEMENT"><SkeletonDashboard /></LayoutApp>;
+  if (loading) {
+    return (
+      <LayoutApp role="ADMIN_ETABLISSEMENT">
+        {chargementProlonge ? (
+          <div className="mx-auto flex min-h-[55vh] max-w-xl items-center px-4">
+            <div
+              role="alert"
+              className="w-full rounded-2xl border border-amber-300 bg-amber-50 p-6 text-center shadow-sm dark:border-amber-700 dark:bg-amber-950/30"
+            >
+              <AlertTriangle className="mx-auto h-8 w-8 text-amber-600 dark:text-amber-400" aria-hidden="true" />
+              <h1 className="mt-3 text-xl font-semibold text-foreground">Le tableau de bord met plus de temps que prévu</h1>
+              <p className="mt-2 text-sm text-muted-foreground">
+                Votre session est toujours active. Vérifiez votre connexion, puis relancez le chargement.
+              </p>
+              <BoutonY2K className="mt-5" onClick={relancerDashboard}>
+                Réessayer
+              </BoutonY2K>
+            </div>
+          </div>
+        ) : (
+          <SkeletonDashboard />
+        )}
+      </LayoutApp>
+    );
+  }
 
   // F1 — Mode « première mission » : l'établissement n'a jamais publié de mission.
   // aDejaPublie peut valoir null si le fetch a échoué → on ne bascule en mode hero

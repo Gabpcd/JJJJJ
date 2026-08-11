@@ -1,9 +1,9 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { Link, useNavigate } from 'react-router-dom';
 import { SkeletonDashboard } from '@/components/SkeletonCard';
-import { AlertCircle, Banknote, Bell, CalendarDays, ChevronRight, CreditCard, FileText, Scale, Sparkles } from 'lucide-react';
+import { AlertCircle, AlertTriangle, Banknote, Bell, CalendarDays, ChevronRight, CreditCard, FileText, Scale, Sparkles } from 'lucide-react';
 import { CarteProposition } from '@/components/CarteProposition';
 import type { PropositionMission } from '@/components/CarteProposition';
 import { NoteNetEstime } from '@/components/NoteNetEstime';
@@ -39,6 +39,7 @@ import { chargerCreneauxMissionsPagines } from '@/lib/mission-creneaux-pagines';
 import { formatParis, instantJolene } from '@/lib/date-heure-paris';
 import { montantFinanceAfficheMission } from '@/lib/missionFinanceDisplay';
 import { filtrerMissionsPlaywright } from '@/lib/donnees-test';
+import { useChargementProlonge } from '@/hooks/useChargementProlonge';
 /** 6c.5 : salutation heure-aware — « Hiii » → Bonjour/Bonsoir selon l'heure. */
 function salutationHeure(): string {
   const h = new Date().getHours();
@@ -67,6 +68,7 @@ const EMPTY_SOIGNANT = {
 export default function DashboardSoignant() {
   usePageTitle('Dashboard');
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { user } = useAuth();
   // 7f : consomme le code parrainage capté (?ref=/?parrain=) à la 1ʳᵉ session.
   useAppliquerParrainage(user?.id);
@@ -234,6 +236,15 @@ export default function DashboardSoignant() {
     refetchInterval: 60_000,
     enabled: !!user,
   });
+  const { estProlonge: chargementProlonge, reinitialiser: reinitialiserChargement } = useChargementProlonge(isLoading);
+
+  const relancerDashboard = () => {
+    reinitialiserChargement();
+    void queryClient.resetQueries({
+      queryKey: ['dashboard-soignant', user?.id],
+      exact: true,
+    });
+  };
 
   // Keep propositions in local state so they can be removed on action
   const dashboardPropositions = dashboard?.propositions;
@@ -356,7 +367,31 @@ export default function DashboardSoignant() {
     aRib,
   });
 
-  if (isLoading) return <LayoutApp role="SOIGNANT"><SkeletonDashboard /></LayoutApp>;
+  if (isLoading) {
+    return (
+      <LayoutApp role="SOIGNANT">
+        {chargementProlonge ? (
+          <div className="mx-auto flex min-h-[55vh] max-w-xl items-center px-4">
+            <div
+              role="alert"
+              className="w-full rounded-2xl border border-amber-300 bg-amber-50 p-6 text-center shadow-sm dark:border-amber-700 dark:bg-amber-950/30"
+            >
+              <AlertTriangle className="mx-auto h-8 w-8 text-amber-600 dark:text-amber-400" aria-hidden="true" />
+              <h1 className="mt-3 text-xl font-semibold text-foreground">Ton tableau de bord met plus de temps que prévu</h1>
+              <p className="mt-2 text-sm text-muted-foreground">
+                Ta session est toujours active. Vérifie ta connexion, puis relance le chargement.
+              </p>
+              <BoutonY2K className="mt-5" onClick={relancerDashboard}>
+                Réessayer
+              </BoutonY2K>
+            </div>
+          </div>
+        ) : (
+          <SkeletonDashboard />
+        )}
+      </LayoutApp>
+    );
+  }
 
   if (isError) {
     return (

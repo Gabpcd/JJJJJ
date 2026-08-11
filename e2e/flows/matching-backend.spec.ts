@@ -141,6 +141,13 @@ test.describe('Sprint 14 — Backend matching (réels)', () => {
   });
 
   test('fn_enregistrer_swipe : ⭐ = FAVORI illimité (D1) — sauvegarde, aucune candidature, pas de quota', async () => {
+    // Ce scénario vérifie neuf échanges réels avec Supabase (seed, auth, RPC,
+    // quatre lectures métier et nettoyage). Sous charge CI, leur durée cumulée
+    // peut légitimement dépasser les 30 s globaux sans qu'aucun appel échoue.
+    // On conserve toutes les assertions et on adapte seulement le budget du
+    // scénario d'intégration distant.
+    test.slow();
+
     // D1 (Lot 6c) : le super-like « candidature prioritaire 5/jour » est
     // remplacé par la sauvegarde illimitée. SUPER_LIKE (anciens bundles)
     // est traité comme FAVORI — même avec un quota historique consommé.

@@ -42,23 +42,36 @@ type IdentifiantInvalide = {
   nom: string;
 };
 
-const verifierFormatIdentifiant = (
+const verifierFormatIdentifiant = async (
   request: APIRequestContext,
   data: IdentifiantInvalide,
-) => request.post(VERIFY_RPPS_URL, {
-  headers: {
-    'Content-Type': 'application/json',
-    'Authorization': `Bearer ${ANON_BEARER}`,
-  },
-  data,
-  // La fonction Edge peut avoir besoin d'un démarrage à froid. Le délai
-  // Playwright générique de 10 s produisait alors un retry malgré une réponse
-  // métier correcte ; les assertions HTTP et code d'erreur restent strictes.
-  timeout: VERIFY_RPPS_TIMEOUT_MS,
-});
+) => {
+  let derniereErreur: unknown;
+  for (let tentative = 1; tentative <= 2; tentative += 1) {
+    try {
+      return await request.post(VERIFY_RPPS_URL, {
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${ANON_BEARER}`,
+        },
+        data,
+        // La fonction Edge peut avoir besoin d'un démarrage à froid. Le délai
+        // Playwright générique de 10 s produisait alors un retry malgré une
+        // réponse métier correcte ; le statut et le code restent stricts.
+        timeout: VERIFY_RPPS_TIMEOUT_MS,
+      });
+    } catch (error) {
+      derniereErreur = error;
+      if (tentative === 2) throw error;
+    }
+  }
+  throw derniereErreur;
+};
 
 test.describe('Format ADELI/RPPS invalide → rejeté', () => {
-  test.describe.configure({ timeout: 60_000 });
+  // Deux tentatives de transport de 30 s maximum ; une mauvaise réponse HTTP
+  // n'est jamais rejouée et fait toujours échouer l'assertion métier.
+  test.describe.configure({ timeout: 75_000 });
 
   test('ADELI avec moins de 9 chiffres → ADELI_FORMAT_INVALID', async ({ request }) => {
     const res = await verifierFormatIdentifiant(

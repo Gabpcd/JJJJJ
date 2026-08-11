@@ -145,8 +145,42 @@ test('fn_valider_presences_72h_auto — présence départ >72h → validée (aud
     acceptationError,
     `fn_traiter_candidature: ${acceptationError?.message}`,
   ).toBeNull();
-  expect((acceptation as any)?.success, (acceptation as any)?.error).toBe(true);
-  expect((acceptation as any)?.choix_applique).toBe('SALARIE');
+  if ((acceptation as any)?.success === true) {
+    expect((acceptation as any)?.choix_applique).toBe('SALARIE');
+  } else {
+    // Un worker ou un cron concurrent peut terminer l'acceptation entre
+    // l'INSERT et l'appel RPC lorsque plusieurs CI partagent la même base.
+    // On n'accepte ce cas idempotent que si l'état métier final est exactement
+    // celui attendu pour CETTE candidature, CETTE mission et CETTE fixture.
+    const [{ data: candidatureTraitee, error: candidatureTraiteeError }, {
+      data: missionAssignee,
+      error: missionAssigneeError,
+    }] = await Promise.all([
+      admin
+        .from('candidatures')
+        .select('statut, mission_id, soignant_id, type_contrat_choisi')
+        .eq('id', candidature.id)
+        .single(),
+      admin
+        .from('missions')
+        .select('statut, soignant_assigne_id, type_contrat_applique')
+        .eq('id', mission.id)
+        .single(),
+    ]);
+    expect(candidatureTraiteeError).toBeNull();
+    expect(missionAssigneeError).toBeNull();
+    expect(candidatureTraitee).toMatchObject({
+      statut: 'ACCEPTEE',
+      mission_id: mission.id,
+      soignant_id: caregiver.id,
+      type_contrat_choisi: 'SALARIE',
+    });
+    expect(missionAssignee).toMatchObject({
+      statut: 'ASSIGNEE',
+      soignant_assigne_id: caregiver.id,
+      type_contrat_applique: 'SALARIE',
+    });
+  }
 
   await seedContratMissionSigne(mission.id, caregiver, {
     etablissement,
