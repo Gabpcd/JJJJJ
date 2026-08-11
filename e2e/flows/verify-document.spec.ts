@@ -200,7 +200,11 @@ test.describe('Vérification documents — pipeline bout-en-bout', () => {
 
   test('Type MIME non supporté (application/zip) → REJETE sans appel IA', async () => {
     const fakeZip = new TextEncoder().encode('PK\x03\x04fake-zip-content');
-    const s3Path = await uploadTestFile(soignantId, 'test.zip', 'application/zip', fakeZip);
+    // Le bucket refuse déjà application/zip. On charge donc les octets sous un
+    // MIME Storage autorisé, puis on conserve application/zip dans la ligne
+    // métier : cela prouve le second verrou de verify-document sans assouplir
+    // le premier verrou Storage.
+    const s3Path = await uploadTestFile(soignantId, 'test.zip', 'application/pdf', fakeZip);
     const docId = await createDocRow(soignantId, 'CARTE_IDENTITE', s3Path, 'test.zip', 'application/zip', fakeZip.length);
 
     await triggerVerify(docId);

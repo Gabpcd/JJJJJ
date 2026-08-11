@@ -3,6 +3,7 @@ import { resolve } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   PURGE_MISSION_RPC_TIMEOUT_MS,
+  preparerMissionTechniquePourPurge,
   purgerMissionTechniqueAvecTimeout,
 } from '../../../e2e/helpers/cleanup-mission-test';
 
@@ -11,6 +12,79 @@ afterEach(() => {
 });
 
 describe('purge des missions techniques E2E', () => {
+  it('relit une mission devenue terminale avant de neutraliser son assignation', async () => {
+    const maybeSingleEtablissement = vi.fn().mockResolvedValue({
+      data: { id: 'etab-test', est_compte_test: true },
+      error: null,
+    });
+    const maybeSingleMission = vi.fn()
+      .mockResolvedValueOnce({
+        data: { statut: 'TERMINEE' },
+        error: null,
+      })
+      .mockResolvedValueOnce({
+        data: {
+          fige_le: null,
+          soignant_assigne_id: null,
+          statut: 'TERMINEE',
+        },
+        error: null,
+      });
+    const from = vi.fn((table: string) => {
+      if (table === 'etablissements') {
+        return {
+          select: () => ({
+            eq: () => ({ maybeSingle: maybeSingleEtablissement }),
+          }),
+        };
+      }
+      if (table === 'candidatures') {
+        return {
+          select: () => ({
+            eq: () => Promise.resolve({ data: [], error: null }),
+          }),
+        };
+      }
+      if (table === 'missions') {
+        return {
+          select: () => ({
+            eq: () => ({ maybeSingle: maybeSingleMission }),
+          }),
+        };
+      }
+      throw new Error(`table inattendue: ${table}`);
+    });
+    const rpc = vi.fn()
+      .mockResolvedValueOnce({
+        error: { message: 'transition ASSIGNEE vers ANNULEE refusée' },
+      })
+      .mockResolvedValueOnce({ error: null });
+    const admin = { from, rpc } as unknown as Parameters<
+      typeof preparerMissionTechniquePourPurge
+    >[0];
+
+    await expect(preparerMissionTechniquePourPurge(admin, {
+      id: 'mission-test',
+      intitule: '[pw-test:pointage] mission',
+      etablissement_id: 'etab-test',
+      soignant_assigne_id: null,
+      statut: 'ASSIGNEE',
+      fige_le: null,
+    })).resolves.toBe('PREPAREE');
+
+    expect(rpc).toHaveBeenNthCalledWith(1, 'fn_test_update_mission', {
+      p_mission_id: 'mission-test',
+      p_data: {
+        statut: 'ANNULEE_PAR_ETABLISSEMENT',
+        soignant_assigne_id: null,
+      },
+    });
+    expect(rpc).toHaveBeenNthCalledWith(2, 'fn_test_update_mission', {
+      p_mission_id: 'mission-test',
+      p_data: { soignant_assigne_id: null },
+    });
+  });
+
   it('supprime toute la descendance escrow avant la mission', () => {
     const source = readFileSync(resolve(process.cwd(), 'e2e/global-setup.ts'), 'utf8');
     const escrow = source.indexOf(".from('paiements_escrow')\n      .select('id')");

@@ -154,7 +154,7 @@ export async function preparerMissionTechniquePourPurge(
     }
   }
 
-  const annulationValide = [
+  let annulationValide = [
     'OUVERTE',
     'ASSIGNEE',
     'EN_COURS',
@@ -165,7 +165,7 @@ export async function preparerMissionTechniquePourPurge(
   // On ne touche donc jamais à fige_le ici : une mission active devient
   // terminale et perd son soignant partagé ; une mission déjà terminale garde
   // son statut. Le purgeur durable supprimera ensuite le planning gelé.
-  const { error: neutralisationError } = await admin.rpc(
+  let { error: neutralisationError } = await admin.rpc(
     'fn_test_update_mission',
     {
       p_mission_id: mission.id,
@@ -177,6 +177,33 @@ export async function preparerMissionTechniquePourPurge(
       },
     },
   );
+  // La mission peut devenir terminale entre la lecture initiale et ce cleanup
+  // (notamment TERMINEE par le flow pointage). Dans ce cas, ne jamais forcer
+  // une annulation devenue illégale : relire l'état et neutraliser uniquement
+  // l'assignation technique avant la purge.
+  if (neutralisationError && annulationValide) {
+    const { data: missionCourante, error: relectureError } = await admin
+      .from('missions')
+      .select('statut')
+      .eq('id', mission.id)
+      .maybeSingle();
+    const terminale = missionCourante && ![
+      'OUVERTE',
+      'ASSIGNEE',
+      'EN_COURS',
+      'LITIGE',
+    ].includes(String(missionCourante.statut ?? ''));
+    if (!relectureError && terminale) {
+      annulationValide = false;
+      ({ error: neutralisationError } = await admin.rpc(
+        'fn_test_update_mission',
+        {
+          p_mission_id: mission.id,
+          p_data: { soignant_assigne_id: null },
+        },
+      ));
+    }
+  }
   if (neutralisationError) {
     throw new Error(
       `[cleanup mission] neutralisation ${mission.id}: ${neutralisationError.message}`,
