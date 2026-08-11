@@ -427,16 +427,16 @@ async function prepareTarget(page, target) {
   }
 
   if (target.action === 'missions-past') {
-    const pastButton = page.getByRole('button', { name: /^Passées$/ }).first();
-    await pastButton.waitFor({ state: 'visible', timeout: 20_000 });
-    if (!(await pastButton.getAttribute('class'))?.includes('border-primary')) {
-      await pastButton.click();
+    const pastTab = page.getByRole('tab', { name: /^Passées$/ }).first();
+    await pastTab.waitFor({ state: 'visible', timeout: 20_000 });
+    if (await pastTab.getAttribute('aria-selected') !== 'true') {
+      await pastTab.click();
     }
     await page.waitForFunction(() => {
-      const buttons = [...document.querySelectorAll('button')];
-      return buttons.some((button) => (
-        button.textContent?.trim() === 'Passées'
-        && button.classList.contains('border-primary')
+      const tabs = [...document.querySelectorAll('[role="tab"]')];
+      return tabs.some((tab) => (
+        tab.textContent?.trim() === 'Passées'
+        && tab.getAttribute('aria-selected') === 'true'
       ));
     }, undefined, { timeout: 5_000 });
     return;
