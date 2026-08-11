@@ -144,6 +144,7 @@ jobs:
           fi
       - name: Résoudre le secret admin E2E valide
         env:
+          PLAYWRIGHT_ADMIN_EMAIL_PRIMARY: ${{ secrets.PLAYWRIGHT_ADMIN_EMAIL }}
           PLAYWRIGHT_ADMIN_PASSWORD_PRIMARY: ${{ secrets.PLAYWRIGHT_ADMIN_PASSWORD }}
           PLAYWRIGHT_ADMIN_PASSWORD_FALLBACK: ${{ secrets.ADMIN_TEST_PASSWORD }}
         run: node scripts/ci/resolve-playwright-admin-password.mjs
@@ -272,6 +273,7 @@ jobs:
           fi
       - name: Résoudre le secret admin E2E valide
         env:
+          PLAYWRIGHT_ADMIN_EMAIL_PRIMARY: ${{ secrets.PLAYWRIGHT_ADMIN_EMAIL }}
           PLAYWRIGHT_ADMIN_PASSWORD_PRIMARY: ${{ secrets.PLAYWRIGHT_ADMIN_PASSWORD }}
           PLAYWRIGHT_ADMIN_PASSWORD_FALLBACK: ${{ secrets.ADMIN_TEST_PASSWORD }}
         run: node scripts/ci/resolve-playwright-admin-password.mjs
