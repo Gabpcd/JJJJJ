@@ -139,7 +139,12 @@ export default function InscriptionSoignantCompletion() {
     (form.motDePasse === '' || form.motDePasse.length >= 8);
 
   // Règle de PROFIL issue du référentiel DB, indépendante des règles de mission.
-  const { typesAutorises: typesExerciceProfil } = useTypesExerciceAutorises(identite?.profession || '');
+  const {
+    typesAutorises: typesExerciceProfil,
+    loading: typesExerciceChargement,
+    indisponible: typesExerciceIndisponibles,
+  } = useTypesExerciceAutorises(identite?.profession || '');
+  const typesExerciceConnus = Array.isArray(typesExerciceProfil);
   const peutEtreLiberal = !!identite?.profession
     && !!typesExerciceProfil?.some((type) => type === 'LIBERAL' || type === 'MIXTE');
   const contratsAffiches = CONTRATS.filter(c => peutEtreLiberal || (c.valeur !== 'LIBERAL' && c.valeur !== 'VACATION'));
@@ -250,7 +255,17 @@ export default function InscriptionSoignantCompletion() {
                   </label>
                 ))}
               </div>
-              {identite?.profession && !peutEtreLiberal && (
+              {identite?.profession && typesExerciceChargement && (
+                <p className="text-[10px] text-muted-foreground mt-1.5" role="status">
+                  Vérification des types de contrat autorisés…
+                </p>
+              )}
+              {identite?.profession && typesExerciceIndisponibles && (
+                <p className="text-[10px] text-amber-700 mt-1.5" role="status">
+                  Vérification temporairement indisponible. Vous pouvez poursuivre en CDD ou salarié et activer le libéral plus tard après contrôle.
+                </p>
+              )}
+              {identite?.profession && typesExerciceConnus && !peutEtreLiberal && (
                 <p className="text-[10px] text-muted-foreground mt-1.5">
                   Votre profession ne peut pas exercer en libéral. Seuls CDD et Salarié sont disponibles.
                 </p>

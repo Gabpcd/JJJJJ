@@ -605,7 +605,7 @@ export function SectionProfilPrincipal(props: Props) {
 
   const navigate = useNavigate();
   const { afficherNotification } = useNotification();
-  const { typesAutorises, uniqueType } = useTypesExerciceAutorises(profession);
+  const { typesAutorises, uniqueType, loading: typesExerciceChargement, indisponible: typesExerciceIndisponibles } = useTypesExerciceAutorises(profession);
   const [geoLoading, setGeoLoading] = useState(false);
 
   useEffect(() => {
@@ -886,7 +886,17 @@ export function SectionProfilPrincipal(props: Props) {
       {profession && (
         <div className="card-base">
           <h2 className="text-base font-semibold text-foreground mb-4">Type d'exercice</h2>
-          {uniqueType ? (
+          {typesExerciceChargement ? (
+            <div className="p-3 bg-muted/40 border border-border rounded-xl" role="status">
+              <p className="text-sm text-muted-foreground">Vérification des modes d'exercice autorisés…</p>
+            </div>
+          ) : typesExerciceIndisponibles ? (
+            <div className="p-3 bg-warning/5 border border-warning/20 rounded-xl" role="status">
+              <p className="text-sm text-foreground">
+                Le référentiel est momentanément indisponible. Ton mode actuel est conservé et pourra être modifié dès le retour du service.
+              </p>
+            </div>
+          ) : uniqueType ? (
             <div className="p-3 bg-primary/5 border border-primary/20 rounded-xl">
               <p className="text-sm text-foreground">
                 En tant que <strong>{getLabelProfession(profession)}</strong>, ton type d'exercice est automatiquement défini comme{' '}
@@ -905,7 +915,7 @@ export function SectionProfilPrincipal(props: Props) {
               }}
               className="space-y-3"
             >
-              {(!typesAutorises || typesAutorises.includes('SALARIE')) && (
+              {typesAutorises?.includes('SALARIE') && (
                 <label className="flex items-start gap-3 cursor-pointer rounded-lg border border-input px-4 py-3 hover:bg-accent/50 transition-colors has-[:checked]:border-primary has-[:checked]:bg-primary/5">
                   <RadioGroupItem value="SALARIE" id="ex-salarie" className="mt-0.5" />
                   <div>
@@ -914,7 +924,7 @@ export function SectionProfilPrincipal(props: Props) {
                   </div>
                 </label>
               )}
-              {(!typesAutorises || typesAutorises.includes('LIBERAL')) && (
+              {typesAutorises?.includes('LIBERAL') && (
                 <label
                   className={`flex items-start gap-3 rounded-lg border border-input px-4 py-3 transition-colors ${
                     statutLiberal === 'ACTIF' ? 'cursor-pointer hover:bg-accent/50 has-[:checked]:border-primary has-[:checked]:bg-primary/5' : 'opacity-50 cursor-not-allowed'
@@ -941,7 +951,7 @@ export function SectionProfilPrincipal(props: Props) {
                   </div>
                 </label>
               )}
-              {(!typesAutorises || typesAutorises.includes('MIXTE')) && (
+              {typesAutorises?.includes('MIXTE') && (
                 <label
                   className={`flex items-start gap-3 rounded-lg border border-input px-4 py-3 transition-colors ${
                     statutLiberal === 'ACTIF' ? 'cursor-pointer hover:bg-accent/50 has-[:checked]:border-primary has-[:checked]:bg-primary/5' : 'opacity-50 cursor-not-allowed'
