@@ -222,6 +222,10 @@ test.describe('Sprint 14 — Backend matching (réels)', () => {
   });
 
   test('fn_obtenir_missions_swipe : exclut les missions déjà swipées', async () => {
+    // Intégration Supabase distante : deux seeds + INSERT + auth + RPC.
+    // Le scénario a déjà fini correctement en 35 s sous charge CI.
+    test.setTimeout(60_000);
+
     const m1 = await seedMission({ profession: 'IDE', intitule: `${PREFIX_MISSION_MATCHING} m1` });
     const m2 = await seedMission({ profession: 'IDE', intitule: `${PREFIX_MISSION_MATCHING} m2` });
     expect(m1 && m2).toBeTruthy();

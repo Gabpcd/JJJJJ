@@ -57,6 +57,10 @@ test.describe('Flow pointage soignant', () => {
   });
 
   test('seed mission + acceptation étab + clôture → statut DB = TERMINEE', async () => {
+    // Intégration Supabase distante : seed, candidature, contrat signé,
+    // transitions et lecture finale peuvent dépasser 30 s sous charge CI.
+    test.setTimeout(60_000);
+
     const soignantId = caregiver.id;
 
     const debut = new Date(Date.now() + 8 * 86400000);
