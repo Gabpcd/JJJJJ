@@ -76,14 +76,14 @@ export function BoutonsBulkFactures({ selection, className }: Props) {
 
   return (
     <div
-      className={`flex flex-wrap items-center gap-2 p-3 rounded-md border bg-slate-50 ${className ?? ''}`}
+      className={`flex flex-wrap items-center gap-2 rounded-md border border-border bg-muted/40 p-3 text-foreground ${className ?? ''}`}
       role="toolbar"
       aria-label="Actions multi-factures"
     >
       <span className="text-sm font-medium">
         {aucuneSelection ? 'Aucune sélection' : `${selection.length} sélectionnée(s)`}
       </span>
-      <span className="text-xs text-slate-500">
+      <span className="text-xs text-muted-foreground">
         Les changements de statut se font depuis la fiche avec leur justificatif.
       </span>
       <div className="flex-1" />
@@ -91,7 +91,7 @@ export function BoutonsBulkFactures({ selection, className }: Props) {
         type="button"
         disabled={aucuneSelection || enCours !== null}
         onClick={exportCsv}
-        className="inline-flex items-center gap-1 px-3 py-1.5 text-sm rounded border bg-white hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed"
+        className="inline-flex items-center gap-1 rounded border border-border bg-background px-3 py-1.5 text-sm text-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40"
       >
         {enCours === 'CSV' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
         Export CSV

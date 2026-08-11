@@ -61,6 +61,15 @@ describe('Lot 21 — mécanique admin', () => {
     expect(verification).toContain('alertes-vetting-etablissement');
   });
 
+  it('utilise les couleurs sémantiques du thème pour les actions de facturation', () => {
+    const bulk = readFileSync(resolve(racine, 'src/components/admin/BoutonsBulkFactures.tsx'), 'utf8');
+    expect(bulk).toContain('bg-muted/40');
+    expect(bulk).toContain('text-foreground');
+    expect(bulk).toContain('text-muted-foreground');
+    expect(bulk).not.toContain('bg-slate-50');
+    expect(bulk).not.toContain('bg-white');
+  });
+
   it('ne laisse aucune entrée de navigation admin sans route déclarée', () => {
     const app = readFileSync(resolve(racine, 'src/App.tsx'), 'utf8');
     const navigation = readFileSync(resolve(racine, 'src/lib/adminNavigation.ts'), 'utf8');
