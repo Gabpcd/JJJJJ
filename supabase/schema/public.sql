@@ -11007,6 +11007,81 @@ ALTER FUNCTION "public"."fn_admin_moderer_document"("p_document_id" "uuid", "p_a
 CREATE OR REPLACE FUNCTION "public"."fn_admin_moderer_document"("p_document_id" "uuid", "p_action" "text", "p_motif" "text", "p_validation_manuelle" "jsonb", "p_raison_override" "text") RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'pg_catalog', 'public', 'private'
+    AS $$
+DECLARE
+  v_type_document text;
+  v_soignant_id uuid;
+  v_result jsonb;
+  v_previous_moderation text := COALESCE(
+    current_setting('jolene.document_moderation_rpc', true),
+    ''
+  );
+BEGIN
+  SELECT type_document::text, soignant_id INTO v_type_document, v_soignant_id
+    FROM public.documents_soignants
+   WHERE id = p_document_id;
+
+  IF upper(COALESCE(p_action, '')) = 'VALIDER'
+     AND v_type_document = 'ATTESTATION_SCOLARITE'
+     AND COALESCE(p_validation_manuelle -> 'conditions_scolarite_confirmees', 'false'::jsonb)
+         IS DISTINCT FROM 'true'::jsonb THEN
+    RAISE EXCEPTION 'Confirmez le contrôle des crédits, stages, unités d’enseignement et attestations réglementaires : l’année seule ne suffit pas'
+      USING ERRCODE = '23514';
+  END IF;
+
+  v_result := public.fn_admin_moderer_document_internal_20260810(
+    p_document_id,
+    p_action,
+    p_motif,
+    COALESCE(p_validation_manuelle, '{}'::jsonb) - 'conditions_scolarite_confirmees',
+    p_raison_override
+  );
+
+  IF COALESCE((v_result ->> 'success')::boolean, false)
+     AND upper(COALESCE(p_action, '')) = 'VALIDER'
+     AND v_type_document = 'ATTESTATION_SCOLARITE' THEN
+    PERFORM set_config('jolene.document_moderation_rpc', 'true', true);
+    UPDATE public.documents_soignants
+       SET resultat_ia = COALESCE(resultat_ia, '{}'::jsonb)
+             || jsonb_build_object(
+               'conditions_scolarite_confirmees', true,
+               'conditions_scolarite_confirmees_le', now(),
+               'conditions_scolarite_confirmees_par', auth.uid()
+             )
+     WHERE id = p_document_id;
+    PERFORM set_config('jolene.document_moderation_rpc', v_previous_moderation, true);
+
+    -- Le recalcul est rejoué après avoir persisté la confirmation humaine :
+    -- les cursus qui exigent ce marqueur ne peuvent pas être ouverts avant.
+    PERFORM public.fn_recalculer_preuves_etudiant(v_soignant_id);
+
+    PERFORM public.fn_ecrire_audit_safe(
+      p_acteur_id := auth.uid(),
+      p_type_acteur := 'ADMIN',
+      p_action := 'CONDITIONS_SCOLARITE_CONFIRMEES',
+      p_type_ressource := 'document',
+      p_id_ressource := p_document_id,
+      p_details := jsonb_build_object(
+        'controle', 'credits_stages_unites_attestations_reglementaires',
+        'annee_seule_insuffisante', true
+      )
+    );
+  END IF;
+
+  RETURN v_result;
+EXCEPTION WHEN OTHERS THEN
+  PERFORM set_config('jolene.document_moderation_rpc', v_previous_moderation, true);
+  RAISE;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_admin_moderer_document"("p_document_id" "uuid", "p_action" "text", "p_motif" "text", "p_validation_manuelle" "jsonb", "p_raison_override" "text") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."fn_admin_moderer_document_internal_20260810"("p_document_id" "uuid", "p_action" "text", "p_motif" "text", "p_validation_manuelle" "jsonb", "p_raison_override" "text") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'pg_catalog', 'public', 'private'
     AS $_$
 DECLARE
   v_uid uuid := auth.uid();
@@ -11713,10 +11788,10 @@ END;
 $_$;
 
 
-ALTER FUNCTION "public"."fn_admin_moderer_document"("p_document_id" "uuid", "p_action" "text", "p_motif" "text", "p_validation_manuelle" "jsonb", "p_raison_override" "text") OWNER TO "postgres";
+ALTER FUNCTION "public"."fn_admin_moderer_document_internal_20260810"("p_document_id" "uuid", "p_action" "text", "p_motif" "text", "p_validation_manuelle" "jsonb", "p_raison_override" "text") OWNER TO "postgres";
 
 
-COMMENT ON FUNCTION "public"."fn_admin_moderer_document"("p_document_id" "uuid", "p_action" "text", "p_motif" "text", "p_validation_manuelle" "jsonb", "p_raison_override" "text") IS 'Décision documentaire admin AAL2 : snapshot/CAS, contrôle métier par type, audit atomique et dérogation exceptionnelle motivée.';
+COMMENT ON FUNCTION "public"."fn_admin_moderer_document_internal_20260810"("p_document_id" "uuid", "p_action" "text", "p_motif" "text", "p_validation_manuelle" "jsonb", "p_raison_override" "text") IS 'Décision documentaire admin AAL2 : snapshot/CAS, contrôle métier par type, audit atomique et dérogation exceptionnelle motivée.';
 
 
 
@@ -20571,49 +20646,31 @@ COMMENT ON FUNCTION "public"."fn_calculer_montant_periode"("p_mission_id" "uuid"
 
 
 CREATE OR REPLACE FUNCTION "public"."fn_calculer_penalite_annulation_soignant"("p_acceptee_a" timestamp with time zone, "p_debut_mission" timestamp with time zone, "p_est_asap" boolean) RETURNS "jsonb"
-    LANGUAGE "plpgsql" IMMUTABLE
+    LANGUAGE "plpgsql" STABLE
     SET "search_path" TO ''
     AS $$
 DECLARE
-  v_delta_retract interval;
-  v_delta_mission interval;
-  v_points int := 0;
-  v_motif text := 'aucun';
-  v_libre boolean := false;
+  v_delta_retract interval := now() - p_acceptee_a;
+  v_delta_mission interval := p_debut_mission - now();
 BEGIN
-  v_delta_retract := NOW() - p_acceptee_a;
-  v_delta_mission := p_debut_mission - NOW();
-
-  -- Fenêtre rétractation 30 min : annulation libre
-  IF v_delta_retract < INTERVAL '30 minutes' THEN
+  IF v_delta_mission <= interval '0' THEN
+    RETURN jsonb_build_object('libre', false, 'points', -30, 'motif', 'NO_SHOW', 'signalement_admin', true);
+  END IF;
+  IF v_delta_retract < interval '30 minutes' THEN
     RETURN jsonb_build_object('libre', true, 'points', 0, 'motif', 'fenetre_retractation_30min');
   END IF;
-
-  -- ASAP annulée après fenêtre rétractation
-  IF p_est_asap AND v_delta_mission < INTERVAL '2 hours' THEN
-    RETURN jsonb_build_object('libre', false, 'points', -25,
-                                'motif', 'ASAP_ANNULEE_APRES_FENETRE');
+  IF p_est_asap AND v_delta_mission < interval '2 hours' THEN
+    RETURN jsonb_build_object('libre', false, 'points', -25, 'motif', 'ASAP_ANNULEE_APRES_FENETRE');
   END IF;
-
-  -- No-show ou annulation last-minute (< 1h)
-  IF v_delta_mission < INTERVAL '1 hour' THEN
-    RETURN jsonb_build_object('libre', false, 'points', -30,
-                                'motif', 'NO_SHOW', 'signalement_admin', true);
+  IF v_delta_mission < interval '1 hour' THEN
+    RETURN jsonb_build_object('libre', false, 'points', -30, 'motif', 'ANNULATION_MOINS_1H', 'signalement_admin', false);
   END IF;
-
-  -- 1-12h avant
-  IF v_delta_mission < INTERVAL '12 hours' THEN
-    RETURN jsonb_build_object('libre', false, 'points', -10,
-                                'motif', 'ANNULATION_1_12H');
+  IF v_delta_mission < interval '12 hours' THEN
+    RETURN jsonb_build_object('libre', false, 'points', -10, 'motif', 'ANNULATION_1_12H');
   END IF;
-
-  -- 12-24h avant
-  IF v_delta_mission < INTERVAL '24 hours' THEN
-    RETURN jsonb_build_object('libre', false, 'points', -5,
-                                'motif', 'ANNULATION_12_24H');
+  IF v_delta_mission < interval '24 hours' THEN
+    RETURN jsonb_build_object('libre', false, 'points', -5, 'motif', 'ANNULATION_12_24H');
   END IF;
-
-  -- > 24h : neutre
   RETURN jsonb_build_object('libre', true, 'points', 0, 'motif', 'neutre_delai_long');
 END;
 $$;
@@ -30057,9 +30114,6 @@ BEGIN
     RETURN NEW;
   END IF;
 
-  -- Conserver les transitions Lot 21 protégées par
-  -- fn_protect_candidature_statut. Un soignant peut répondre à sa propre
-  -- proposition, y compris pour un profil aussi membre d'un établissement.
   IF TG_TABLE_NAME = 'candidatures' THEN
     v_row := CASE WHEN TG_OP = 'DELETE' THEN to_jsonb(OLD) ELSE to_jsonb(NEW) END;
     IF v_row ->> 'soignant_id' = auth.uid()::text
@@ -30953,129 +31007,66 @@ DECLARE
   v_idempotency_key text;
 BEGIN
   IF v_uid IS NULL THEN
-    RETURN jsonb_build_object(
-      'success', false,
-      'error_code', 'NON_AUTHENTIFIE',
-      'error', 'Non authentifié'
-    );
+    RETURN jsonb_build_object('success', false, 'error_code', 'NON_AUTHENTIFIE', 'error', 'Non authentifié');
   END IF;
 
-  v_ip := NULLIF(
-    current_setting('request.headers', true)::jsonb->>'x-forwarded-for',
-    ''
-  )::inet;
+  v_ip := NULLIF(current_setting('request.headers', true)::jsonb->>'x-forwarded-for', '')::inet;
   v_rate_check := public.fn_check_rate_limit_ip_signature(v_ip);
   IF NOT (v_rate_check->>'allowed')::boolean THEN
     RETURN jsonb_build_object(
-      'success', false,
-      'error_code', 'TROP_DE_SMS_IP',
+      'success', false, 'error_code', 'TROP_DE_SMS_IP',
       'error', 'Trop de demandes de signature depuis votre IP. Réessayez dans 1h.',
-      'envois_courant', v_rate_check->>'envois_courant',
-      'max', v_rate_check->>'max'
+      'envois_courant', v_rate_check->>'envois_courant', 'max', v_rate_check->>'max'
     );
   END IF;
 
-  SELECT
-    cm.id,
-    cm.soignant_id,
-    cm.etablissement_id,
-    cm.contenu_html,
-    cm.statut,
-    cm.signature_soignant,
-    cm.signature_etablissement
+  SELECT cm.id, cm.soignant_id, cm.etablissement_id, cm.contenu_html,
+         cm.statut, cm.signature_soignant, cm.signature_etablissement
     INTO v_contrat
     FROM public.contrats_mission cm
    WHERE cm.id = p_contrat_id;
 
   IF v_contrat IS NULL THEN
-    RETURN jsonb_build_object(
-      'success', false,
-      'error_code', 'CONTRAT_INTROUVABLE',
-      'error', 'Contrat introuvable'
-    );
+    RETURN jsonb_build_object('success', false, 'error_code', 'CONTRAT_INTROUVABLE', 'error', 'Contrat introuvable');
   END IF;
   IF v_contrat.statut IN ('ANNULE', 'EXPIRE') THEN
-    RETURN jsonb_build_object(
-      'success', false,
-      'error_code', 'CONTRAT_INACTIF',
-      'error', 'Ce contrat n''est plus actif (statut : '
-        || v_contrat.statut || ').'
-    );
+    RETURN jsonb_build_object('success', false, 'error_code', 'CONTRAT_INACTIF', 'error', 'Ce contrat n''est plus actif (statut : ' || v_contrat.statut || ').');
   END IF;
   IF v_contrat.statut = 'SIGNE_COMPLET' THEN
-    RETURN jsonb_build_object(
-      'success', false,
-      'error_code', 'CONTRAT_DEJA_COMPLET',
-      'error', 'Ce contrat est déjà entièrement signé.'
-    );
+    RETURN jsonb_build_object('success', false, 'error_code', 'CONTRAT_DEJA_COMPLET', 'error', 'Ce contrat est déjà entièrement signé.');
   END IF;
 
   IF v_contrat.soignant_id = v_uid THEN
     v_role := 'soignant';
-    SELECT telephone
-      INTO v_telephone
-      FROM public.soignants
-     WHERE id = v_uid;
+    SELECT telephone INTO v_telephone FROM public.soignants WHERE id = v_uid;
   ELSIF v_contrat.etablissement_id = v_uid
      OR public.mon_etablissement_id() = v_contrat.etablissement_id THEN
     v_role := 'etablissement';
-    SELECT telephone_contact
-      INTO v_telephone
-      FROM public.etablissements
-     WHERE id = v_contrat.etablissement_id;
+    SELECT telephone_contact INTO v_telephone
+      FROM public.etablissements WHERE id = v_contrat.etablissement_id;
   ELSE
-    RETURN jsonb_build_object(
-      'success', false,
-      'error_code', 'NON_AUTORISE',
-      'error', 'Non autorisé à signer ce contrat'
-    );
+    RETURN jsonb_build_object('success', false, 'error_code', 'NON_AUTORISE', 'error', 'Non autorisé à signer ce contrat');
   END IF;
 
-  IF v_role = 'etablissement'
-     AND v_contrat.signature_soignant IS NOT TRUE THEN
-    RETURN jsonb_build_object(
-      'success', false,
-      'error_code', 'ETAB_AVANT_SOIGNANT',
-      'error', 'Le soignant doit signer en premier. Vous serez notifié(e) par email dès qu''il aura signé.'
-    );
-  END IF;
   IF v_telephone IS NULL OR v_telephone = '' THEN
-    RETURN jsonb_build_object(
-      'success', false,
-      'error_code', 'TELEPHONE_MANQUANT',
-      'error', 'Numéro de téléphone manquant. Mettez à jour votre profil avant de signer.'
-    );
+    RETURN jsonb_build_object('success', false, 'error_code', 'TELEPHONE_MANQUANT', 'error', 'Numéro de téléphone manquant. Mettez à jour votre profil avant de signer.');
   END IF;
 
-  -- Deux requêtes simultanées ne peuvent plus écraser le code envoyé par
-  -- l'autre ni réutiliser la même clé avec un contenu différent.
   PERFORM pg_catalog.pg_advisory_xact_lock(
-    pg_catalog.hashtextextended(
-      p_contrat_id::text || ':' || v_role,
-      618337
-    )
+    pg_catalog.hashtextextended(p_contrat_id::text || ':' || v_role, 618337)
   );
 
-  SELECT
-    sms_envoyes_count,
-    sms_premier_envoi_a,
-    statut_signature
+  SELECT sms_envoyes_count, sms_premier_envoi_a, statut_signature
     INTO v_sig_existante
     FROM public.signatures_contrats
-   WHERE contrat_id = p_contrat_id
-     AND signataire_role = v_role;
+   WHERE contrat_id = p_contrat_id AND signataire_role = v_role;
 
   IF FOUND THEN
     IF v_sig_existante.statut_signature = 'signe' THEN
-      RETURN jsonb_build_object(
-        'success', false,
-        'error_code', 'DEJA_SIGNE',
-        'error', 'Vous avez déjà signé ce contrat.'
-      );
+      RETURN jsonb_build_object('success', false, 'error_code', 'DEJA_SIGNE', 'error', 'Vous avez déjà signé ce contrat.');
     END IF;
     IF v_sig_existante.sms_premier_envoi_a IS NULL
-       OR v_sig_existante.sms_premier_envoi_a
-          < now() - interval '24 hours' THEN
+       OR v_sig_existante.sms_premier_envoi_a < now() - interval '24 hours' THEN
       v_sms_count := 1;
       v_sms_window_start := now();
     ELSE
@@ -31083,15 +31074,10 @@ BEGIN
       v_sms_window_start := v_sig_existante.sms_premier_envoi_a;
       IF v_sms_count > 3 THEN
         RETURN jsonb_build_object(
-          'success', false,
-          'error_code', 'TROP_DE_SMS',
+          'success', false, 'error_code', 'TROP_DE_SMS',
           'error', 'Trop de SMS envoyés (3 max / 24h).',
           'sms_envoyes', v_sms_count - 1,
-          'reset_le',
-            (
-              v_sig_existante.sms_premier_envoi_a
-              + interval '24 hours'
-            )::text
+          'reset_le', (v_sig_existante.sms_premier_envoi_a + interval '24 hours')::text
         );
       END IF;
     END IF;
@@ -31101,40 +31087,19 @@ BEGIN
   END IF;
 
   v_otp := lpad(floor(random() * 1000000)::text, 6, '0');
-  v_otp_hash := encode(
-    digest(
-      v_otp || '|' || p_contrat_id::text || '|' || v_uid::text,
-      'sha256'
-    ),
-    'hex'
-  );
+  v_otp_hash := encode(digest(v_otp || '|' || p_contrat_id::text || '|' || v_uid::text, 'sha256'), 'hex');
 
   INSERT INTO public.signatures_contrats (
-    contrat_id,
-    signataire_user_id,
-    signataire_role,
-    otp_envoye_a,
-    otp_code_hash,
-    statut_signature,
-    audit_trail,
-    sms_envoyes_count,
+    contrat_id, signataire_user_id, signataire_role, otp_envoye_a,
+    otp_code_hash, statut_signature, audit_trail, sms_envoyes_count,
     sms_premier_envoi_a
   ) VALUES (
-    p_contrat_id,
-    v_uid,
-    v_role,
-    now(),
-    v_otp_hash,
-    'otp_envoye',
-    jsonb_build_object(
-      'otp_envoye_le', now()::text,
-      'sms_count', v_sms_count,
-      'ip', v_ip::text
-    ),
-    v_sms_count,
-    v_sms_window_start
+    p_contrat_id, v_uid, v_role, now(), v_otp_hash, 'otp_envoye',
+    jsonb_build_object('otp_envoye_le', now()::text, 'sms_count', v_sms_count, 'ip', v_ip::text),
+    v_sms_count, v_sms_window_start
   )
   ON CONFLICT (contrat_id, signataire_role) DO UPDATE SET
+    signataire_user_id = EXCLUDED.signataire_user_id,
     otp_envoye_a = now(),
     otp_code_hash = EXCLUDED.otp_code_hash,
     otp_tentatives = 0,
@@ -31142,25 +31107,12 @@ BEGIN
     sms_envoyes_count = v_sms_count,
     sms_premier_envoi_a = v_sms_window_start,
     modifie_le = now(),
-    audit_trail =
-      COALESCE(signatures_contrats.audit_trail, '{}'::jsonb)
-      || jsonb_build_object(
-        'otp_renvoye_le', now()::text,
-        'sms_count', v_sms_count,
-        'ip', v_ip::text
-      );
+    audit_trail = COALESCE(signatures_contrats.audit_trail, '{}'::jsonb)
+      || jsonb_build_object('otp_renvoye_le', now()::text, 'sms_count', v_sms_count, 'ip', v_ip::text);
 
-  v_idempotency_key :=
-    'otp-signature.'
-    || p_contrat_id::text
-    || '.'
-    || v_uid::text
-    || '.'
-    || v_role
-    || '.'
-    || extract(epoch FROM v_sms_window_start)::bigint::text
-    || '.'
-    || v_sms_count::text;
+  v_idempotency_key := 'otp-signature.' || p_contrat_id::text || '.'
+    || v_uid::text || '.' || v_role || '.'
+    || extract(epoch FROM v_sms_window_start)::bigint::text || '.' || v_sms_count::text;
 
   BEGIN
     PERFORM net.http_post(
@@ -31168,18 +31120,14 @@ BEGIN
       headers := jsonb_build_object(
         'Content-Type', 'application/json',
         'Authorization', 'Bearer ' || (
-          SELECT decrypted_secret
-            FROM vault.decrypted_secrets
-           WHERE name = 'service_role_key'
-           LIMIT 1
+          SELECT decrypted_secret FROM vault.decrypted_secrets
+           WHERE name = 'service_role_key' LIMIT 1
         )
       ),
       body := jsonb_build_object(
         'telephone', v_telephone,
         'type', 'OTP_SIGNATURE',
-        'contenu', 'Code de signature Jolene : '
-          || v_otp
-          || ' (valide 10 min). Ne le partagez avec personne.',
+        'contenu', 'Code de signature Jolene : ' || v_otp || ' (valide 10 min). Ne le partagez avec personne.',
         'destinataire_id', v_uid,
         'prefix_type', 'SIGNATURE',
         'idempotency_key', v_idempotency_key,
@@ -31193,8 +31141,7 @@ BEGIN
   RETURN jsonb_build_object(
     'success', true,
     'role', v_role,
-    'telephone_masked',
-      regexp_replace(v_telephone, '\d(?=\d{2})', '*', 'g'),
+    'telephone_masked', regexp_replace(v_telephone, '\d(?=\d{2})', '*', 'g'),
     'expire_dans_minutes', 10,
     'sms_envoyes', v_sms_count,
     'sms_restants', greatest(0, 3 - v_sms_count)
@@ -46467,8 +46414,9 @@ DECLARE
   v_resolution jsonb;
   v_choix text;
   v_candidature_id uuid;
+  v_candidature_statut text;
 BEGIN
-  SELECT * INTO v_mission FROM public.missions WHERE id = p_mission_id;
+  SELECT * INTO v_mission FROM public.missions WHERE id = p_mission_id FOR UPDATE;
   IF NOT FOUND THEN RETURN jsonb_build_object('error', 'Mission introuvable'); END IF;
   IF NOT public.est_admin()
      AND v_mission.etablissement_id IS DISTINCT FROM public.mon_etablissement_id() THEN
@@ -46510,8 +46458,6 @@ BEGIN
     );
   END IF;
 
-  -- La carte affiche une fenêtre de réponse de 2 h : la même règle est
-  -- appliquée en base avant de rechercher un doublon actif.
   UPDATE public.candidatures
      SET statut = 'EXPIREE', traite_le = now()
    WHERE mission_id = p_mission_id
@@ -46519,20 +46465,38 @@ BEGIN
      AND statut = 'PROPOSEE'
      AND cree_le < now() - interval '2 hours';
 
-  IF EXISTS (
-    SELECT 1 FROM public.candidatures
-     WHERE mission_id = p_mission_id
-       AND soignant_id = p_soignant_id
-       AND statut IN ('EN_ATTENTE', 'EN_ATTENTE_VALIDATION_ETAB', 'PROPOSEE', 'ACCEPTEE')
-  ) THEN
+  SELECT id, statut
+    INTO v_candidature_id, v_candidature_statut
+    FROM public.candidatures
+   WHERE mission_id = p_mission_id
+     AND soignant_id = p_soignant_id
+   FOR UPDATE;
+
+  IF FOUND AND v_candidature_statut IN ('EN_ATTENTE', 'EN_ATTENTE_VALIDATION_ETAB', 'PROPOSEE', 'ACCEPTEE') THEN
     RETURN jsonb_build_object('error', 'Cette mission a déjà été proposée à ce soignant.');
   END IF;
 
-  INSERT INTO public.candidatures(
-    mission_id, soignant_id, statut, type_contrat_choisi
-  ) VALUES (
-    p_mission_id, p_soignant_id, 'PROPOSEE', v_choix
-  ) RETURNING id INTO v_candidature_id;
+  IF v_candidature_id IS NULL THEN
+    INSERT INTO public.candidatures(
+      mission_id, soignant_id, statut, type_contrat_choisi
+    ) VALUES (
+      p_mission_id, p_soignant_id, 'PROPOSEE', v_choix
+    ) RETURNING id INTO v_candidature_id;
+  ELSE
+    PERFORM set_config(
+      'jolene.candidature_reactivation_ctx',
+      p_mission_id::text || ':' || p_soignant_id::text,
+      true
+    );
+    UPDATE public.candidatures
+       SET statut = 'PROPOSEE',
+           type_contrat_choisi = v_choix,
+           traite_le = NULL,
+           motif_refus = NULL,
+           cree_le = now()
+     WHERE id = v_candidature_id;
+    PERFORM set_config('jolene.candidature_reactivation_ctx', '', true);
+  END IF;
 
   PERFORM public.fn_ecrire_audit_safe(
     p_acteur_id := auth.uid(),
@@ -46544,7 +46508,8 @@ BEGIN
       'mission_id', p_mission_id,
       'soignant_id', p_soignant_id,
       'profession_requise', v_mission.profession_requise::text,
-      'type_contrat_choisi', v_choix
+      'type_contrat_choisi', v_choix,
+      'reactivation', v_candidature_statut IS NOT NULL
     )
   );
 
@@ -46560,7 +46525,8 @@ BEGIN
     'success', true,
     'candidature_id', v_candidature_id,
     'choix_persiste', v_choix,
-    'profession_requise', v_mission.profession_requise::text
+    'profession_requise', v_mission.profession_requise::text,
+    'reactivation', v_candidature_statut IS NOT NULL
   );
 END;
 $$;
@@ -48999,6 +48965,85 @@ CREATE OR REPLACE FUNCTION "public"."fn_recalculer_preuves_etudiant"("p_soignant
     SET "search_path" TO 'pg_catalog', 'public'
     AS $_$
 DECLARE
+  v_preuve record;
+  v_previous_system_update text := COALESCE(
+    current_setting('jolene.system_update', true),
+    ''
+  );
+BEGIN
+  PERFORM public.fn_recalculer_preuves_etudiant_internal_20260810(p_soignant_id);
+
+  SELECT ds.id, ds.verifie_le, x.formation, x.annee_validee
+    INTO v_preuve
+    FROM public.documents_soignants ds
+    JOIN public.soignants s
+      ON s.id = ds.soignant_id
+     AND s.supprime_le IS NULL
+    CROSS JOIN LATERAL (
+      SELECT
+        upper(NULLIF(btrim(ds.resultat_ia->>'scolarite_formation'), '')) AS formation,
+        CASE
+          WHEN COALESCE(ds.resultat_ia->>'scolarite_annee_validee', '') ~ '^\d{1,2}$'
+            THEN (ds.resultat_ia->>'scolarite_annee_validee')::integer
+          ELSE NULL
+        END AS annee_validee
+    ) x
+   WHERE ds.soignant_id = p_soignant_id
+     AND s.profession = 'AS'
+     AND ds.type_document = 'ATTESTATION_SCOLARITE'
+     AND ds.statut_verification = 'VERIFIE'
+     AND ds.supprime_le IS NULL
+     AND ds.verifie_le IS NOT NULL
+     AND ds.coherence_nom IS TRUE
+     AND ds.valide_depuis BETWEEN current_date - 400 AND current_date
+     AND (ds.valide_jusqua IS NULL OR ds.valide_jusqua > current_date)
+     AND COALESCE(ds.resultat_ia->>'verdict_serveur', '') = 'VERIFIE'
+     AND COALESCE(ds.resultat_ia->>'type_correspond', 'false') = 'true'
+     AND COALESCE(ds.resultat_ia->>'document_lisible', 'false') = 'true'
+     AND COALESCE(ds.resultat_ia->>'document_complet', 'false') = 'true'
+     AND COALESCE(ds.resultat_ia->>'conditions_scolarite_confirmees', 'false') = 'true'
+     AND x.formation = 'PEDICURE_PODOLOGIE'
+     AND x.annee_validee BETWEEN 1 AND 3
+     AND EXISTS (
+       SELECT 1
+         FROM public.fn_professions_autorisees_scolarite(
+           x.formation,
+           x.annee_validee
+         ) AS autorisee(profession)
+        WHERE autorisee.profession = s.profession
+     )
+   ORDER BY ds.valide_depuis DESC, ds.verifie_le DESC, ds.id DESC
+   LIMIT 1;
+
+  IF FOUND THEN
+    PERFORM set_config('jolene.system_update', 'true', true);
+    UPDATE public.soignants
+       SET scolarite_formation = v_preuve.formation,
+           scolarite_annee_validee = v_preuve.annee_validee,
+           scolarite_profession_autorisee = 'AS',
+           scolarite_verifiee = true,
+           scolarite_verifiee_le = v_preuve.verifie_le,
+           est_etudiant = true,
+           modifie_le = now()
+     WHERE id = p_soignant_id
+       AND supprime_le IS NULL;
+    PERFORM set_config('jolene.system_update', v_previous_system_update, true);
+  END IF;
+EXCEPTION WHEN OTHERS THEN
+  PERFORM set_config('jolene.system_update', v_previous_system_update, true);
+  RAISE;
+END;
+$_$;
+
+
+ALTER FUNCTION "public"."fn_recalculer_preuves_etudiant"("p_soignant_id" "uuid") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."fn_recalculer_preuves_etudiant_internal_20260810"("p_soignant_id" "uuid") RETURNS "void"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'pg_catalog', 'public'
+    AS $_$
+DECLARE
   v_profession public.type_profession;
   v_scolarite_doc_id uuid;
   v_scolarite_formation text;
@@ -49176,7 +49221,7 @@ END;
 $_$;
 
 
-ALTER FUNCTION "public"."fn_recalculer_preuves_etudiant"("p_soignant_id" "uuid") OWNER TO "postgres";
+ALTER FUNCTION "public"."fn_recalculer_preuves_etudiant_internal_20260810"("p_soignant_id" "uuid") OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."fn_recalculer_score_fiabilite_soignant"("p_soignant_id" "uuid") RETURNS numeric
@@ -52937,69 +52982,53 @@ CREATE OR REPLACE FUNCTION "public"."fn_signer_contrat_otp"("p_contrat_id" "uuid
     AS $$
 DECLARE
   v_uid uuid := auth.uid();
-  v_sig RECORD;
-  v_contrat RECORD;
+  v_sig record;
+  v_contrat record;
   v_expected_hash text;
   v_role text;
   v_ip inet;
   v_ua text;
-  v_other_signed boolean;
+  v_contrat_complet boolean;
 BEGIN
   IF v_uid IS NULL THEN
     RETURN jsonb_build_object('success', false, 'error_code', 'NON_AUTHENTIFIE', 'error', 'Non authentifié');
   END IF;
 
   SELECT cm.signature_soignant, cm.signature_etablissement, cm.statut
-  INTO v_contrat
-  FROM public.contrats_mission cm WHERE cm.id = p_contrat_id;
-
+    INTO v_contrat
+    FROM public.contrats_mission cm
+   WHERE cm.id = p_contrat_id
+   FOR UPDATE;
   IF v_contrat IS NULL THEN
     RETURN jsonb_build_object('success', false, 'error_code', 'CONTRAT_INTROUVABLE', 'error', 'Contrat introuvable');
   END IF;
+  IF v_contrat.statut IN ('ANNULE', 'EXPIRE') THEN
+    RETURN jsonb_build_object('success', false, 'error_code', 'CONTRAT_INACTIF', 'error', 'Ce contrat ne peut plus être signé.');
+  END IF;
 
-  SELECT * INTO v_sig FROM public.signatures_contrats
-  WHERE contrat_id = p_contrat_id AND signataire_user_id = v_uid
-  ORDER BY cree_le DESC LIMIT 1;
-
+  SELECT * INTO v_sig
+    FROM public.signatures_contrats
+   WHERE contrat_id = p_contrat_id AND signataire_user_id = v_uid
+   ORDER BY cree_le DESC LIMIT 1
+   FOR UPDATE;
   IF v_sig IS NULL THEN
-    RETURN jsonb_build_object('success', false, 'error_code', 'OTP_NON_DEMANDE',
-      'error', 'Aucune demande OTP en cours. Cliquez d''abord sur "Recevoir un code SMS".');
+    RETURN jsonb_build_object('success', false, 'error_code', 'OTP_NON_DEMANDE', 'error', 'Aucune demande OTP en cours. Cliquez d''abord sur "Recevoir un code SMS".');
   END IF;
-
   IF v_sig.statut_signature = 'signe' THEN
-    RETURN jsonb_build_object('success', false, 'error_code', 'DEJA_SIGNE',
-      'error', 'Vous avez déjà signé ce contrat le ' ||
-        COALESCE(to_char(v_sig.signe_a, 'DD/MM/YYYY HH24:MI'), '—') || '.',
-      'signe_a', v_sig.signe_a);
+    RETURN jsonb_build_object('success', false, 'error_code', 'DEJA_SIGNE', 'error', 'Vous avez déjà signé ce contrat.', 'signe_a', v_sig.signe_a);
   END IF;
-
-  -- Ordre obligatoire (vérif redondante avec fn_envoyer_otp_signature)
-  IF v_sig.signataire_role = 'etablissement' AND v_contrat.signature_soignant IS NOT TRUE THEN
-    RETURN jsonb_build_object('success', false, 'error_code', 'ETAB_AVANT_SOIGNANT',
-      'error', 'Le soignant doit signer en premier.');
-  END IF;
-
   IF v_sig.otp_tentatives >= 5 THEN
-    RETURN jsonb_build_object('success', false, 'error_code', 'TROP_DE_TENTATIVES',
-      'error', 'Trop de tentatives. Renvoyez un nouveau code SMS.');
+    RETURN jsonb_build_object('success', false, 'error_code', 'TROP_DE_TENTATIVES', 'error', 'Trop de tentatives. Renvoyez un nouveau code SMS.');
   END IF;
-
-  IF v_sig.otp_envoye_a IS NULL OR v_sig.otp_envoye_a < NOW() - INTERVAL '10 minutes' THEN
-    UPDATE public.signatures_contrats
-    SET statut_signature = 'expire', modifie_le = NOW()
-    WHERE id = v_sig.id;
-    RETURN jsonb_build_object('success', false, 'error_code', 'OTP_EXPIRE',
-      'error', 'Code expiré. Renvoyez un nouveau code SMS.');
+  IF v_sig.otp_envoye_a IS NULL OR v_sig.otp_envoye_a < now() - interval '10 minutes' THEN
+    UPDATE public.signatures_contrats SET statut_signature = 'expire', modifie_le = now() WHERE id = v_sig.id;
+    RETURN jsonb_build_object('success', false, 'error_code', 'OTP_EXPIRE', 'error', 'Code expiré. Renvoyez un nouveau code SMS.');
   END IF;
 
   v_expected_hash := encode(digest(p_otp_code || '|' || p_contrat_id::text || '|' || v_uid::text, 'sha256'), 'hex');
   IF v_expected_hash != v_sig.otp_code_hash THEN
-    UPDATE public.signatures_contrats
-    SET otp_tentatives = otp_tentatives + 1, modifie_le = NOW()
-    WHERE id = v_sig.id;
-    RETURN jsonb_build_object('success', false, 'error_code', 'OTP_INCORRECT',
-      'error', 'Code incorrect.',
-      'tentatives_restantes', 5 - (v_sig.otp_tentatives + 1));
+    UPDATE public.signatures_contrats SET otp_tentatives = otp_tentatives + 1, modifie_le = now() WHERE id = v_sig.id;
+    RETURN jsonb_build_object('success', false, 'error_code', 'OTP_INCORRECT', 'error', 'Code incorrect.', 'tentatives_restantes', 5 - (v_sig.otp_tentatives + 1));
   END IF;
 
   v_role := v_sig.signataire_role;
@@ -53007,52 +53036,42 @@ BEGIN
   v_ua := current_setting('request.headers', true)::jsonb->>'user-agent';
 
   UPDATE public.signatures_contrats
-  SET statut_signature = 'signe',
-      otp_valide_a = NOW(),
-      signe_a = NOW(),
-      ip_signature = v_ip,
-      user_agent = v_ua,
-      hash_document = p_hash_document,
-      signature_image_base64 = p_signature_image,
-      modifie_le = NOW(),
-      audit_trail = COALESCE(audit_trail, '{}'::jsonb)
-        || jsonb_build_object('signe_le', NOW()::text, 'tentatives', v_sig.otp_tentatives + 1)
-  WHERE id = v_sig.id;
+     SET statut_signature = 'signe', otp_valide_a = now(), signe_a = now(),
+         ip_signature = v_ip, user_agent = v_ua, hash_document = p_hash_document,
+         signature_image_base64 = p_signature_image, modifie_le = now(),
+         audit_trail = COALESCE(audit_trail, '{}'::jsonb)
+           || jsonb_build_object('signe_le', now()::text, 'tentatives', v_sig.otp_tentatives + 1)
+   WHERE id = v_sig.id;
 
   IF v_role = 'soignant' THEN
     UPDATE public.contrats_mission
-    SET signature_soignant = true,
-        signature_soignant_le = NOW(),
-        signature_ip_soignant = COALESCE(v_ip, signature_ip_soignant),
-        signature_navigateur_soignant = COALESCE(v_ua, signature_navigateur_soignant),
-        signature_image_soignant = COALESCE(p_signature_image, signature_image_soignant),
-        mode_signature = 'JOLENE_OTP'
-    WHERE id = p_contrat_id;
+       SET signature_soignant = true, signature_soignant_le = now(),
+           signature_ip_soignant = COALESCE(v_ip, signature_ip_soignant),
+           signature_navigateur_soignant = COALESCE(v_ua, signature_navigateur_soignant),
+           signature_image_soignant = COALESCE(p_signature_image, signature_image_soignant),
+           mode_signature = 'JOLENE_OTP',
+           statut = CASE WHEN signature_etablissement IS TRUE THEN 'SIGNE_COMPLET' ELSE 'SIGNE_SOIGNANT' END,
+           modifie_le = now()
+     WHERE id = p_contrat_id;
+  ELSIF v_role = 'etablissement' THEN
+    UPDATE public.contrats_mission
+       SET signature_etablissement = true, signature_etablissement_le = now(),
+           signature_ip_etablissement = COALESCE(v_ip, signature_ip_etablissement),
+           signature_navigateur_etablissement = COALESCE(v_ua, signature_navigateur_etablissement),
+           signature_image_etablissement = COALESCE(p_signature_image, signature_image_etablissement),
+           mode_signature = 'JOLENE_OTP',
+           statut = CASE WHEN signature_soignant IS TRUE THEN 'SIGNE_COMPLET' ELSE 'SIGNE_ETABLISSEMENT' END,
+           modifie_le = now()
+     WHERE id = p_contrat_id;
   ELSE
-    UPDATE public.contrats_mission
-    SET signature_etablissement = true,
-        signature_etablissement_le = NOW(),
-        signature_ip_etablissement = COALESCE(v_ip, signature_ip_etablissement),
-        signature_navigateur_etablissement = COALESCE(v_ua, signature_navigateur_etablissement),
-        signature_image_etablissement = COALESCE(p_signature_image, signature_image_etablissement),
-        mode_signature = 'JOLENE_OTP'
-    WHERE id = p_contrat_id;
+    RAISE EXCEPTION 'Rôle de signature invalide' USING ERRCODE = '23514';
   END IF;
 
-  SELECT (signature_soignant = true AND signature_etablissement = true) INTO v_other_signed
-  FROM public.contrats_mission WHERE id = p_contrat_id;
+  SELECT signature_soignant IS TRUE AND signature_etablissement IS TRUE
+    INTO v_contrat_complet
+    FROM public.contrats_mission WHERE id = p_contrat_id;
 
-  IF v_other_signed THEN
-    UPDATE public.contrats_mission
-    SET statut = 'SIGNE_COMPLET', modifie_le = NOW()
-    WHERE id = p_contrat_id AND statut != 'SIGNE_COMPLET';
-  END IF;
-
-  RETURN jsonb_build_object(
-    'success', true,
-    'role', v_role,
-    'contrat_complet', v_other_signed
-  );
+  RETURN jsonb_build_object('success', true, 'role', v_role, 'contrat_complet', v_contrat_complet);
 END;
 $$;
 
@@ -57343,19 +57362,28 @@ CREATE OR REPLACE FUNCTION "public"."fn_top_soignants"("p_profession" "text" DEF
     SET "search_path" TO 'public'
     AS $$
 DECLARE
-    v_limit integer := LEAST(GREATEST(COALESCE(p_limit, 20), 1), 50);
+  v_limit integer := LEAST(GREATEST(COALESCE(p_limit, 20), 1), 50);
 BEGIN
-    RETURN QUERY
-    SELECT s.id, s.prenom, s.nom, s.profession::TEXT, s.note_moyenne, s.nb_evaluations,
-           ROUND(COALESCE(s.score_fiabilite, 0))::integer AS score_fiabilite,
-           s.total_missions_terminees
-    FROM soignants s
-    WHERE s.supprime_le IS NULL
+  RETURN QUERY
+  SELECT
+    s.id,
+    s.prenom,
+    s.nom,
+    s.profession::text,
+    s.note_moyenne,
+    s.nb_evaluations,
+    ROUND(COALESCE(s.score_fiabilite, 0))::integer,
+    s.total_missions_terminees
+  FROM public.soignants s
+  WHERE s.supprime_le IS NULL
     AND s.est_compte_test = false
-    AND fn_documents_ok_pour_mission(s.id, 'TOUS')
-    AND (p_profession IS NULL OR s.profession::TEXT = p_profession)
-    ORDER BY s.note_moyenne DESC NULLS LAST, s.score_fiabilite DESC, s.total_missions_terminees DESC
-    LIMIT v_limit;
+    AND public.fn_documents_ok_pour_mission(s.id, 'TOUS')
+    AND (p_profession IS NULL OR s.profession::text = p_profession)
+  ORDER BY
+    s.note_moyenne DESC NULLS LAST,
+    s.score_fiabilite DESC,
+    s.total_missions_terminees DESC
+  LIMIT v_limit;
 END;
 $$;
 
@@ -57550,6 +57578,109 @@ COMMENT ON FUNCTION "public"."fn_traiter_candidature"("p_candidature_id" "uuid",
 
 CREATE OR REPLACE FUNCTION "public"."fn_traiter_candidature_planning_v1"("p_candidature_id" "uuid", "p_decision" "text", "p_creneaux_confirmes" "jsonb" DEFAULT NULL::"jsonb", "p_motif" "text" DEFAULT NULL::"text") RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'pg_catalog', 'public'
+    AS $$
+DECLARE
+  v_cadre record;
+  v_temporaire_as boolean := false;
+  v_result jsonb;
+BEGIN
+  SELECT
+    c.soignant_id,
+    c.type_contrat_choisi::text AS type_contrat_choisi,
+    s.est_etudiant,
+    s.scolarite_verifiee,
+    s.scolarite_profession_autorisee::text AS profession_autorisee,
+    s.profession::text AS profession,
+    m.id AS mission_id,
+    m.profession_requise::text AS profession_requise,
+    m.type_contrat_recherche,
+    m.etablissement_id,
+    e.type::text AS type_etablissement
+    INTO v_cadre
+    FROM public.candidatures c
+    JOIN public.soignants s ON s.id = c.soignant_id AND s.supprime_le IS NULL
+    JOIN public.missions m ON m.id = c.mission_id
+    JOIN public.etablissements e ON e.id = m.etablissement_id AND e.supprime_le IS NULL
+   WHERE c.id = p_candidature_id;
+
+  IF FOUND THEN
+    v_temporaire_as := COALESCE(v_cadre.est_etudiant, false)
+      AND COALESCE(v_cadre.scolarite_verifiee, false)
+      AND v_cadre.profession_autorisee = 'AS';
+  END IF;
+
+  IF upper(btrim(COALESCE(p_decision, ''))) = 'ACCEPTEE' AND v_temporaire_as THEN
+    IF v_cadre.profession <> 'AS' OR v_cadre.profession_requise <> 'AS' THEN
+      RETURN jsonb_build_object(
+        'success', false,
+        'code', 'CADRE_ETUDIANT_PROFESSION_INVALIDE',
+        'error', 'Cette passerelle étudiante est limitée aux activités temporaires d’aide-soignant.'
+      );
+    END IF;
+    IF v_cadre.type_contrat_recherche = 'LIBERAL'
+       OR (v_cadre.type_contrat_recherche = 'TOUS' AND upper(COALESCE(v_cadre.type_contrat_choisi, '')) = 'LIBERAL') THEN
+      RETURN jsonb_build_object(
+        'success', false,
+        'code', 'CADRE_ETUDIANT_SALARIAT_REQUIS',
+        'error', 'Un étudiant exerçant temporairement comme aide-soignant doit être recruté en salariat.'
+      );
+    END IF;
+    IF v_cadre.type_etablissement NOT IN (
+      'HOPITAL_PUBLIC', 'CLINIQUE_PRIVEE', 'EHPAD', 'SSIAD', 'HAD',
+      'CENTRE_SANTE', 'IME', 'MAS', 'FAM', 'ESPIC'
+    ) THEN
+      RETURN jsonb_build_object(
+        'success', false,
+        'code', 'CADRE_ETUDIANT_STRUCTURE_INELIGIBLE',
+        'error', 'Cette passerelle étudiante est réservée aux établissements de santé et médico-sociaux éligibles.'
+      );
+    END IF;
+    IF p_motif IS DISTINCT FROM 'CADRE_ETUDIANT_AS_CONFIRME' THEN
+      RETURN jsonb_build_object(
+        'success', false,
+        'code', 'CADRE_ETUDIANT_A_CONFIRMER',
+        'error', 'Confirmez le salariat et la présence d’un infirmier diplômé d’État dans l’équipe pendant les activités.'
+      );
+    END IF;
+  END IF;
+
+  v_result := public.fn_traiter_candidature_planning_v1_internal_20260810(
+    p_candidature_id,
+    p_decision,
+    p_creneaux_confirmes,
+    p_motif
+  );
+
+  IF v_temporaire_as
+     AND upper(btrim(COALESCE(p_decision, ''))) = 'ACCEPTEE'
+     AND COALESCE((v_result->>'success')::boolean, false) THEN
+    PERFORM public.fn_ecrire_audit_safe(
+      p_acteur_id := auth.uid(),
+      p_type_acteur := 'ADMIN_ETABLISSEMENT',
+      p_action := 'CADRE_ETUDIANT_AS_CONFIRME',
+      p_type_ressource := 'mission',
+      p_id_ressource := v_cadre.mission_id,
+      p_details := jsonb_build_object(
+        'candidature_id', p_candidature_id,
+        'soignant_id', v_cadre.soignant_id,
+        'contrat_salarie', true,
+        'structure_eligible', v_cadre.type_etablissement,
+        'ide_dans_equipe_pendant_activites', true
+      )
+    );
+  END IF;
+
+  RETURN v_result;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_traiter_candidature_planning_v1"("p_candidature_id" "uuid", "p_decision" "text", "p_creneaux_confirmes" "jsonb", "p_motif" "text") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."fn_traiter_candidature_planning_v1_internal_20260810"("p_candidature_id" "uuid", "p_decision" "text", "p_creneaux_confirmes" "jsonb" DEFAULT NULL::"jsonb", "p_motif" "text" DEFAULT NULL::"text") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO ''
     AS $$
 DECLARE
@@ -57688,10 +57819,10 @@ END;
 $$;
 
 
-ALTER FUNCTION "public"."fn_traiter_candidature_planning_v1"("p_candidature_id" "uuid", "p_decision" "text", "p_creneaux_confirmes" "jsonb", "p_motif" "text") OWNER TO "postgres";
+ALTER FUNCTION "public"."fn_traiter_candidature_planning_v1_internal_20260810"("p_candidature_id" "uuid", "p_decision" "text", "p_creneaux_confirmes" "jsonb", "p_motif" "text") OWNER TO "postgres";
 
 
-COMMENT ON FUNCTION "public"."fn_traiter_candidature_planning_v1"("p_candidature_id" "uuid", "p_decision" "text", "p_creneaux_confirmes" "jsonb", "p_motif" "text") IS 'Traite une candidature établissement sous verrou et exige la confirmation du planning exact avant acceptation.';
+COMMENT ON FUNCTION "public"."fn_traiter_candidature_planning_v1_internal_20260810"("p_candidature_id" "uuid", "p_decision" "text", "p_creneaux_confirmes" "jsonb", "p_motif" "text") IS 'Traite une candidature établissement sous verrou et exige la confirmation du planning exact avant acceptation.';
 
 
 
@@ -65138,7 +65269,7 @@ CREATE TABLE IF NOT EXISTS "public"."evenements_score_soignant" (
     "details" "jsonb" DEFAULT '{}'::"jsonb",
     "cree_le" timestamp with time zone DEFAULT "now"() NOT NULL,
     CONSTRAINT "evenements_score_soignant_decision_admin_check" CHECK ((("decision_admin" IS NULL) OR ("decision_admin" = ANY (ARRAY['MAINTENIR'::"text", 'REDUIRE'::"text", 'ANNULER'::"text"])))),
-    CONSTRAINT "evenements_score_soignant_type_evenement_check" CHECK (("type_evenement" = ANY (ARRAY['ANNULATION_12_24H'::"text", 'ANNULATION_1_12H'::"text", 'ASAP_ANNULEE_APRES_FENETRE'::"text", 'NO_SHOW'::"text", 'LITIGE_TORT_RECONNU'::"text", 'NOTE_BASSE_RECUE'::"text", 'EVALUATION_NEGATIVE'::"text", 'BONUS_AMBASSADEUR'::"text", 'BONUS_FIDELITE'::"text", 'FRAUDE_GPS'::"text", 'AUTRE'::"text"])))
+    CONSTRAINT "evenements_score_soignant_type_evenement_check" CHECK (("type_evenement" = ANY (ARRAY['ANNULATION_12_24H'::"text", 'ANNULATION_1_12H'::"text", 'ANNULATION_MOINS_1H'::"text", 'ASAP_ANNULEE_APRES_FENETRE'::"text", 'NO_SHOW'::"text", 'LITIGE_TORT_RECONNU'::"text", 'NOTE_BASSE_RECUE'::"text", 'EVALUATION_NEGATIVE'::"text", 'BONUS_AMBASSADEUR'::"text", 'BONUS_FIDELITE'::"text", 'FRAUDE_GPS'::"text", 'AUTRE'::"text"])))
 );
 
 
@@ -76401,6 +76532,10 @@ GRANT ALL ON FUNCTION "public"."fn_admin_moderer_document"("p_document_id" "uuid
 
 
 
+REVOKE ALL ON FUNCTION "public"."fn_admin_moderer_document_internal_20260810"("p_document_id" "uuid", "p_action" "text", "p_motif" "text", "p_validation_manuelle" "jsonb", "p_raison_override" "text") FROM PUBLIC;
+
+
+
 REVOKE ALL ON FUNCTION "public"."fn_admin_moderer_evaluation"("p_evaluation_id" "uuid", "p_action" "text") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_admin_moderer_evaluation"("p_evaluation_id" "uuid", "p_action" "text") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."fn_admin_moderer_evaluation"("p_evaluation_id" "uuid", "p_action" "text") TO "service_role";
@@ -79403,6 +79538,11 @@ GRANT ALL ON FUNCTION "public"."fn_recalculer_preuves_etudiant"("p_soignant_id" 
 
 
 
+REVOKE ALL ON FUNCTION "public"."fn_recalculer_preuves_etudiant_internal_20260810"("p_soignant_id" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_recalculer_preuves_etudiant_internal_20260810"("p_soignant_id" "uuid") TO "service_role";
+
+
+
 REVOKE ALL ON FUNCTION "public"."fn_recalculer_score_fiabilite_soignant"("p_soignant_id" "uuid") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_recalculer_score_fiabilite_soignant"("p_soignant_id" "uuid") TO "service_role";
 
@@ -79531,8 +79671,8 @@ GRANT ALL ON FUNCTION "public"."fn_repondre_litige"("p_litige_id" "uuid", "p_rep
 
 
 REVOKE ALL ON FUNCTION "public"."fn_repondre_proposition"("p_candidature_id" "uuid", "p_accepter" boolean) FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."fn_repondre_proposition"("p_candidature_id" "uuid", "p_accepter" boolean) TO "authenticated";
 GRANT ALL ON FUNCTION "public"."fn_repondre_proposition"("p_candidature_id" "uuid", "p_accepter" boolean) TO "service_role";
+GRANT ALL ON FUNCTION "public"."fn_repondre_proposition"("p_candidature_id" "uuid", "p_accepter" boolean) TO "authenticated";
 
 
 
@@ -80081,6 +80221,11 @@ GRANT ALL ON FUNCTION "public"."fn_traiter_candidature"("p_candidature_id" "uuid
 REVOKE ALL ON FUNCTION "public"."fn_traiter_candidature_planning_v1"("p_candidature_id" "uuid", "p_decision" "text", "p_creneaux_confirmes" "jsonb", "p_motif" "text") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_traiter_candidature_planning_v1"("p_candidature_id" "uuid", "p_decision" "text", "p_creneaux_confirmes" "jsonb", "p_motif" "text") TO "service_role";
 GRANT ALL ON FUNCTION "public"."fn_traiter_candidature_planning_v1"("p_candidature_id" "uuid", "p_decision" "text", "p_creneaux_confirmes" "jsonb", "p_motif" "text") TO "authenticated";
+
+
+
+REVOKE ALL ON FUNCTION "public"."fn_traiter_candidature_planning_v1_internal_20260810"("p_candidature_id" "uuid", "p_decision" "text", "p_creneaux_confirmes" "jsonb", "p_motif" "text") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_traiter_candidature_planning_v1_internal_20260810"("p_candidature_id" "uuid", "p_decision" "text", "p_creneaux_confirmes" "jsonb", "p_motif" "text") TO "service_role";
 
 
 
@@ -81543,3 +81688,7 @@ ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON FUN
 
 
 ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON TABLES TO "service_role";
+
+
+
+
