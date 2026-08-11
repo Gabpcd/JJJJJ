@@ -1,6 +1,13 @@
 # Push natif iOS et Android — runbook de production
 
-État vérifié le 13/07/2026.
+État historique vérifié le 14/07/2026, complété par l'état réel du 10/08/2026.
+
+> Le binaire iOS `1.0 (7)` et l'AAB antérieur ne sont plus des livrables finaux.
+> Les projets natifs sont configurés en `1.0 (16)`, mais la reconstruction Store
+> reste bloquée par l'absence d'identité Apple Distribution valide et par
+> l'indisponibilité de la clé privée correspondant à l'ancienne clé d'upload
+> Android. Ne jamais signer l'AAB avec la clé locale restante sans confirmation
+> préalable d'une réinitialisation de clé dans Play Console.
 
 ## Architecture effective
 
@@ -46,8 +53,9 @@ Le projet est SPM : ouvrir `ios/App/App.xcodeproj`, pas un `.xcworkspace`.
    `GOOGLE_SERVICES_JSON[_BASE64]` au script de build.
 3. `FIREBASE_SERVICE_ACCOUNT_JSON` est configuré côté Supabase pour l'envoi
    FCM ; ce secret serveur ne remplace pas le fichier de configuration client.
-4. Le keystore d'upload et `android/keystore.properties` sont configurés hors
-   Git. L'empreinte SHA-256 du certificat d'upload est
+4. L'AAB historique a été signé avec un keystore d'upload dont l'empreinte
+   SHA-256 est celle ci-dessous. Sa clé privée et `android/keystore.properties`
+   ne sont pas disponibles dans l'environnement courant :
    `4B:43:18:5D:0F:67:C3:1F:A7:E9:0D:69:7D:5B:AF:D0:D6:DE:95:8C:66:27:8B:5D:22:79:66:31:6D:5D:69:B2`.
 5. L'empreinte réellement utilisée pour les installations Google Play est
    celle de **Play App Signing** :
@@ -67,8 +75,10 @@ Le 14/07/2026, l'archive iOS **Jolene** `1.0 (7)` a été produite avec Xcode
 exportée en IPA pour App Store Connect. Le lint Android Release passe avec SDK 36 et
 Gradle 8.14.5. Firebase Android, la signature d'upload et l'empreinte Play App
 Signing sont configurés : `lintRelease` et `bundleRelease` passent, et l'AAB
-signé Jolene `1.0` (`versionCode 7`) est généré dans
-`android/app/build/outputs/bundle/release/app-release.aab`.
+signé Jolene `1.0` (`versionCode 7`) a été généré. Ces deux artefacts sont
+désormais historiques. La version cible est `1.0 (16)` ; sa génération signée
+ne doit commencer qu'après résolution des deux blocages de signature ci-dessus
+et configuration d'un `VITE_SENTRY_DSN` de production valide.
 
 ```bash
 # Prépare les secrets Android, valide App Links, construit le web et synchronise.

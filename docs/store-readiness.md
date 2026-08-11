@@ -35,18 +35,18 @@ restent externes au repo.
 |---|---|---|
 | Build web production | ✅ | `npm run build` |
 | Synchronisation Capacitor | ✅ | 15 plugins iOS et Android, sans géolocalisation de fond |
-| Build iOS Xcode 26 | ✅ artefact final local | Xcode 26.5, SDK iOS 26.5 ; `1.0 (7)` archivé et exporté le 14/07/2026 avec Apple Distribution et `aps-environment=production` |
-| Distribution iOS | ⚠️ upload et recette requis | L'IPA finale `Jolene 1.0 (7)` est prête localement ; son upload, son traitement App Store Connect et la recette TestFlight restent externes au repo |
-| Visuels Apple | ✅ produits | 8 iPhone 6,5 pouces `1284 × 2778`, 8 iPhone 6,9 pouces `1320 × 2868` et 8 iPad 13 pouces `2064 × 2752`, avec données de démonstration visibles |
+| Build iOS Xcode 26 | ⚠️ archive historique seulement | `1.0 (7)` a été archivé et exporté le 14/07/2026, mais il est obsolète ; `1.0 (16)` doit être reconstruit après restauration d'une identité Apple Distribution valide |
+| Distribution iOS | ⛔ bloquée | aucun binaire `1.0 (16)` signé n'est actuellement disponible ; upload et recette TestFlight restent à faire |
+| Visuels Apple | ⚠️ configuration validée | les 32 emplacements PNG, dont iPad 13 pouces portrait/paysage, sont configurés ; les captures finales doivent être régénérées sur le build courant |
 | Privacy manifest iOS | ✅ | membre de la cible et présent à la racine de `App.app` |
 | Permissions GPS | ✅ minimisées | When In Use/foreground : pointage ou action volontaire « me localiser » du profil/adresse |
 | QR natif | ✅ | `@capacitor/barcode-scanner`, QR-only |
 | Universal Links iOS | ✅ repo | AASA valide pour reset, PSC, invitation et missions |
 | Lint Android Release | ✅ | SDK 36, Gradle 8.14.5, `:app:lintRelease` : 0 erreur |
 | App Links Android | ✅ artefact généré | `assetlinks.json` contient l'empreinte Play App Signing `18:6E:1F:3A:56:5D:DC:F0:88:0D:DD:58:EB:AF:D9:79:6C:88:7E:E9:61:81:0E:70:A8:3C:78:C3:0A:E8:EE:06` |
-| Signature Android | ✅ locale | clé d'upload Jolene (`SHA-256 4B:43:18:5D:0F:67:C3:1F:A7:E9:0D:69:7D:5B:AF:D0:D6:DE:95:8C:66:27:8B:5D:22:79:66:31:6D:5D:69:B2`) et `keystore.properties` gitignorés ; AAB Release signé |
+| Signature Android | ⛔ ancienne clé privée indisponible | l'AAB historique est bien signé par la clé d'upload Jolene (`SHA-256 4B:43:18:5D:0F:67:C3:1F:A7:E9:0D:69:7D:5B:AF:D0:D6:DE:95:8C:66:27:8B:5D:22:79:66:31:6D:5D:69:B2`), mais cette clé privée et `keystore.properties` ne sont pas disponibles dans l'environnement courant |
 | Firebase Android | ✅ configuré localement | application `app.jolene` créée dans `jolene-app-d91fd`, certificats SHA-1/SHA-256 enregistrés et `google-services.json` officiel gitignoré |
-| Bundle Android | ✅ artefact final local | `lintRelease` et `bundleRelease` passent ; l'AAB signé `1.0` (`versionCode 7`) est prêt pour la piste Internal |
+| Bundle Android | ⚠️ artefact historique non final | l'AAB signé `1.0 (16)` présent localement contient un frontend antérieur ; ne pas l'envoyer avant reconstruction avec la clé d'upload autorisée |
 | Pages mémoire Android 16 Ko | ✅ | les segments `LOAD` de toutes les bibliothèques arm64-v8a/x86_64 sont alignés sur `2**14` |
 | Suppression de compte in-app | ✅ | écran confidentialité + garde-fous serveur |
 | Signalement et blocage UGC | ✅ | UI et contrôles serveur |
@@ -55,12 +55,12 @@ restent externes au repo.
 
 ### Apple Developer / App Store Connect
 
-- [x] Générer automatiquement le profil App Store de **Jolene** pour l'équipe
-  `FPQ78HDF4Y` et `app.jolene`, avec Push Notifications et Associated Domains.
-- [x] Archiver et exporter le build final local `Jolene 1.0 (7)` ; le purpose string
-  `NSLocationAlwaysAndWhenInUseUsageDescription` demandé par Apple après le
-  build 3 est présent dans le binaire.
-- [ ] Uploader le build 7 après le déploiement final, attendre son traitement,
+- [ ] Rétablir une identité Apple Distribution valide pour l'équipe
+  `FPQ78HDF4Y` et `app.jolene`, puis vérifier Push Notifications et Associated
+  Domains dans le profil généré.
+- [ ] Archiver et exporter le build courant `Jolene 1.0 (16)` ; l'archive
+  historique `1.0 (7)` ne doit pas être envoyée.
+- [ ] Uploader le build 16 après le déploiement final, attendre son traitement,
   puis le sélectionner seulement après la recette TestFlight.
 - [x] Vérifier la présence côté Supabase de `APNS_KEY_P8`, `APNS_KEY_ID`,
   `APNS_TEAM_ID`, `APNS_BUNDLE_ID` et `APNS_ENVIRONMENT`.
@@ -81,8 +81,9 @@ restent externes au repo.
 ### Google Play
 
 - [x] Installer Android SDK 36 et exécuter `:app:lintRelease` (0 erreur).
-- [x] Retrouver et configurer hors Git le keystore d'upload et
-  `keystore.properties` ; Gradle reconnaît désormais la signature release.
+- [ ] Retrouver la clé privée correspondant à l'ancienne empreinte d'upload ou
+  confirmer dans Play Console la réinitialisation vers la clé locale restante ;
+  seulement ensuite recréer `android/keystore.properties` hors Git.
 - [x] Créer l'app Firebase Android `app.jolene` dans `jolene-app-d91fd`, y
   enregistrer les certificats SHA-1/SHA-256 et déposer le
   `google-services.json` officiel dans `android/app/` (fichier local
@@ -93,8 +94,8 @@ restent externes au repo.
   `assetlinks.json`.
 - [x] Déployer l'`assetlinks.json` régénéré et vérifier sa réponse publique.
 - [ ] Vérifier App Links après une installation depuis Google Play.
-- [x] Exécuter `lintRelease` et `bundleRelease` : l'AAB signé final local
-  `1.0` (`versionCode 7`) est généré.
+- [ ] Après résolution de la clé, exécuter `lintRelease` et `bundleRelease` pour
+  produire l'AAB final `1.0` (`versionCode 16`) avec le frontend courant.
 - [x] Compléter Data safety, Content rating et l'accès au compte de revue dans
   Play Console.
 - [ ] Régénérer puis remplacer dans le brouillon les 8 captures téléphone,
