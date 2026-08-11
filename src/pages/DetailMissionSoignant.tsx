@@ -5,7 +5,7 @@ import { usePageTitle } from '@/hooks/usePageTitle';
 import { handleErrorSilent } from '@/lib/handleError';
 import { hapticNotification } from '@/lib/haptics';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Phone, Mail, Building2, MessageCircle, MoreHorizontal } from 'lucide-react';
+import { ArrowLeft, Phone, Mail, Building2, MessageCircle, MoreHorizontal, AlertTriangle, RefreshCw } from 'lucide-react';
 import { ChoixContratDialog } from '@/components/ChoixContratDialog';
 import { BoutonNoterMission } from '@/components/BoutonNoterMission';
 import { BadgeScoreEtabPublic } from '@/components/BadgeScoreEtabPublic';
@@ -32,6 +32,7 @@ import { fetchEtablissementsSafe, type EtablissementSafe } from '@/lib/etablisse
 import { calculerDistanceKm } from '@/lib/geo';
 import { getLabelProfession, getLabelTypeEtablissement } from '@/lib/constantes';
 import { extraireMessageErreur, estBlocageCodeTravail } from '@/lib/erreurs';
+import { avecDelai } from '@/lib/avecDelai';
 import { calculerCompletionProfil, getMotifProfilIncomplet } from '@/lib/profil-soignant';
 import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { ajouterJoursCivilsParis, debutJourParis, formatParis } from '@/lib/date-heure-paris';
@@ -187,6 +188,9 @@ export default function DetailMissionSoignant() {
   const [soignant, setSoignant] = useState<SoignantData | null>(null);
   const [countMissions, setCountMissions] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [chargementProlonge, setChargementProlonge] = useState(false);
+  const [erreurChargement, setErreurChargement] = useState<string | null>(null);
+  const [tentativeChargement, setTentativeChargement] = useState(0);
   const [creneauxPlanifies, setCreneauxPlanifies] = useState<CreneauPointage[]>([]);
   const [erreurCreneaux, setErreurCreneaux] = useState(false);
   const [acceptationEnCours, setAcceptationEnCours] = useState(false);
@@ -220,89 +224,219 @@ export default function DetailMissionSoignant() {
 
   useEffect(() => {
     if (!user || !id) return;
-    const load = async () => {
-      const [
-        { data: m },
-        { data: s },
-        { data: creneaux, error: creneauxError },
-        { data: missionTva },
-      ] = await Promise.all([
-        supabase.from('missions').select(`
-          id, intitule, description, service, profession_requise,
-          debut_le, fin_le, duree_heures, nb_creneaux, taux_horaire_base, taux_rist_plafonne, rist_plafond_applique,
-          heures_nuit, heures_dimanche, heures_ferie,
-          montant_majoration_nuit, montant_majoration_dimanche, montant_majoration_ferie,
-          taux_ifm, taux_icp, montant_ifm, montant_icp,
-          total_brut, net_a_payer, net_estime, est_urgente, niveau_urgence, statut,
-          soignant_assigne_id, etablissement_id, cree_le, modifie_le,
-          type_contrat_recherche, type_contrat_applique, type_paiement_soignant, mode_paiement_soignant, choix_contrat_soignant,
-          numero_note_honoraires,
-          mode_attribution, boostee_le, presence_confirmee_le, garantie_remplacement, est_arret_maladie, mode_remuneration, retrocession_pct, montant_honoraires_bruts, honoraires_confirmes_le
-        `).eq('id', id).single(),
-        supabase.rpc('fn_mon_profil_soignant_complet' as any),
-        supabase
-          .from('mission_creneaux')
-          .select('id, debut, fin, est_pause, type_creneau')
-          .eq('mission_id', id)
-          .eq('type_creneau', 'PREVISIONNEL')
-          .eq('est_pause', false)
-          .order('debut', { ascending: true }),
-        // Déploiement expand/contract : cette lecture optionnelle peut échouer
-        // quelques instants tant que la migration TVA n'est pas encore posée.
-        // Elle ne doit jamais masquer une mission par ailleurs lisible.
-        supabase
-          .from('missions')
-          .select('nature_tva_prestation, nature_tva_confirmee_soignant, statut_validation_tva')
-          .eq('id', id)
-          .maybeSingle(),
-      ]);
-      if (m && missionTva) Object.assign(m as any, missionTva);
-      setCreneauxPlanifies(m
-        ? ajouterRepliMissionPonctuelle((creneaux || []) as CreneauPointage[], m)
-        : []);
-      setErreurCreneaux(Boolean(creneauxError));
-      if (m) {
-        setMission(m);
-        // Fetch etablissement via secure RPC (masque champs sensibles)
-        const { data: etab } = await supabase.rpc('fn_etablissement_public' as any, { p_etablissement_id: (m as any).etablissement_id });
-        if (etab) setEtablissement(Array.isArray(etab) ? etab[0] : etab);
-        // 7c : capacité ⚡ + jour de paie via le fetch safe (flag calculé serveur).
+
+    let annule = false;
+    const minuteurChargementProlonge = setTimeout(() => {
+      if (!annule) setChargementProlonge(true);
+    }, 6_000);
+
+    setLoading(true);
+    setChargementProlonge(false);
+    setErreurChargement(null);
+    setErreurCreneaux(false);
+
+    const chargerDonneesCritiques = async () => {
+      let derniereErreur: unknown;
+
+      // Une reprise automatique absorbe les rares coupures de session/réseau.
+      // Chaque tentative recrée les requêtes Supabase : un thenable déjà rejeté
+      // ne doit jamais être réutilisé.
+      for (let tentative = 0; tentative < 2; tentative += 1) {
         try {
-          const safe = await fetchEtablissementsSafe([(m as any).etablissement_id]);
-          setEtabSafe(safe[(m as any).etablissement_id] || null);
-        } catch { /* facultatif — pas de badge si indisponible */ }
-        // Count missions from this establishment
-        const { count } = await supabase.from('missions').select('id', { count: 'exact', head: true }).eq('etablissement_id', (m as any).etablissement_id);
-        setCountMissions(count || 0);
-      }
-      if (s) setSoignant(s as any);
+          const [resultatMission, resultatSoignant] = await avecDelai(
+            Promise.all([
+              supabase.from('missions').select(`
+                id, intitule, description, service, profession_requise,
+                debut_le, fin_le, duree_heures, nb_creneaux, taux_horaire_base, taux_rist_plafonne, rist_plafond_applique,
+                heures_nuit, heures_dimanche, heures_ferie,
+                montant_majoration_nuit, montant_majoration_dimanche, montant_majoration_ferie,
+                taux_ifm, taux_icp, montant_ifm, montant_icp,
+                total_brut, net_a_payer, net_estime, est_urgente, niveau_urgence, statut,
+                soignant_assigne_id, etablissement_id, cree_le, modifie_le,
+                type_contrat_recherche, type_contrat_applique, type_paiement_soignant, mode_paiement_soignant, choix_contrat_soignant,
+                numero_note_honoraires,
+                mode_attribution, boostee_le, presence_confirmee_le, garantie_remplacement, est_arret_maladie, mode_remuneration, retrocession_pct, montant_honoraires_bruts, honoraires_confirmes_le
+              `).eq('id', id).single(),
+              supabase.rpc('fn_mon_profil_soignant_complet' as any),
+            ]),
+            8_000,
+            'Le détail de la mission met trop de temps à répondre.',
+          );
 
-      // Check if already applied (candidature mode)
-      if (m && (m as any).mode_attribution === 'CANDIDATURE' && (m as any).statut === 'OUVERTE') {
-        const { data: cands } = await supabase.from('candidatures')
-          .select('id').eq('mission_id', id).eq('soignant_id', user.id).limit(1);
-        if (cands && cands.length > 0) setCandidatureEnvoyee(true);
-      }
+          if (resultatMission.error) {
+            if ((resultatMission.error as any).code === 'PGRST116') {
+              return { mission: null, soignant: null, introuvable: true } as const;
+            }
+            throw resultatMission.error;
+          }
+          if (!resultatMission.data) {
+            return { mission: null, soignant: null, introuvable: true } as const;
+          }
+          if (resultatSoignant.error) throw resultatSoignant.error;
+          if (!resultatSoignant.data) throw new Error('Profil soignant indisponible.');
 
-      // Sprint 5.5 PR 1 : récupère candidature acceptée (id + acceptee_a) pour annulation
-      if (m && (m as any).soignant_assigne_id === user.id && ['ASSIGNEE', 'EN_COURS'].includes((m as any).statut)) {
-        const { data: candRec } = await supabase.from('candidatures' as any)
-          .select('id, acceptee_a, statut')
-          .eq('mission_id', id)
-          .eq('soignant_id', user.id)
-          .eq('statut', 'ACCEPTEE')
-          .order('acceptee_a', { ascending: false })
-          .limit(1)
-          .maybeSingle();
-        if (candRec) {
-          setCandidatureRec({ id: (candRec as any).id, acceptee_a: (candRec as any).acceptee_a });
+          return {
+            mission: resultatMission.data,
+            soignant: resultatSoignant.data,
+            introuvable: false,
+          } as const;
+        } catch (error) {
+          derniereErreur = error;
+          if (tentative === 0) {
+            await new Promise((resolve) => setTimeout(resolve, 350));
+          }
         }
       }
 
-      setLoading(false);
+      throw derniereErreur instanceof Error
+        ? derniereErreur
+        : new Error('Impossible de charger la mission.');
     };
-    load();
-  }, [user, id]);
+
+    const chargerDonneesFacultatives = (m: any) => {
+      // Le planning et la qualification TVA enrichissent l'écran, mais ne
+      // doivent jamais empêcher d'afficher le titre ni le CTA de notation.
+      void (async () => {
+        try {
+          const [resultatCreneaux, resultatTva] = await Promise.all([
+            supabase
+              .from('mission_creneaux')
+              .select('id, debut, fin, est_pause, type_creneau')
+              .eq('mission_id', id)
+              .eq('type_creneau', 'PREVISIONNEL')
+              .eq('est_pause', false)
+              .order('debut', { ascending: true }),
+            // Déploiement expand/contract : cette lecture peut échouer quelques
+            // instants tant que la migration TVA n'est pas encore posée.
+            supabase
+              .from('missions')
+              .select('nature_tva_prestation, nature_tva_confirmee_soignant, statut_validation_tva')
+              .eq('id', id)
+              .maybeSingle(),
+          ]);
+          if (annule) return;
+
+          setCreneauxPlanifies(ajouterRepliMissionPonctuelle(
+            (resultatCreneaux.data || []) as CreneauPointage[],
+            m,
+          ));
+          setErreurCreneaux(Boolean(resultatCreneaux.error));
+          if (resultatTva.data) {
+            setMission((precedente: any) => precedente?.id === m.id
+              ? { ...precedente, ...resultatTva.data }
+              : precedente);
+          }
+        } catch (error) {
+          if (!annule) {
+            setCreneauxPlanifies(ajouterRepliMissionPonctuelle([], m));
+            setErreurCreneaux(true);
+          }
+          handleErrorSilent(error, 'DetailMissionSoignant.donnees-facultatives');
+        }
+      })();
+
+      void (async () => {
+        try {
+          const { data: etab, error } = await supabase.rpc('fn_etablissement_public' as any, {
+            p_etablissement_id: m.etablissement_id,
+          });
+          if (error) throw error;
+          if (!annule && etab) setEtablissement(Array.isArray(etab) ? etab[0] : etab);
+        } catch (error) {
+          handleErrorSilent(error, 'DetailMissionSoignant.etablissement');
+        }
+      })();
+
+      void fetchEtablissementsSafe([m.etablissement_id])
+        .then((safe) => {
+          if (!annule) setEtabSafe(safe[m.etablissement_id] || null);
+        })
+        .catch((error) => handleErrorSilent(error, 'DetailMissionSoignant.etablissement-safe'));
+
+      void (async () => {
+        try {
+          const { count, error } = await supabase
+            .from('missions')
+            .select('id', { count: 'exact', head: true })
+            .eq('etablissement_id', m.etablissement_id);
+          if (error) throw error;
+          if (!annule) setCountMissions(count || 0);
+        } catch (error) {
+          handleErrorSilent(error, 'DetailMissionSoignant.compteur-missions');
+        }
+      })();
+
+      if (m.mode_attribution === 'CANDIDATURE' && m.statut === 'OUVERTE') {
+        void (async () => {
+          try {
+            const { data: cands, error } = await supabase.from('candidatures')
+              .select('id').eq('mission_id', id).eq('soignant_id', user.id).limit(1);
+            if (error) throw error;
+            if (!annule && cands && cands.length > 0) setCandidatureEnvoyee(true);
+          } catch (error) {
+            handleErrorSilent(error, 'DetailMissionSoignant.candidature');
+          }
+        })();
+      }
+
+      if (m.soignant_assigne_id === user.id && ['ASSIGNEE', 'EN_COURS'].includes(m.statut)) {
+        void (async () => {
+          try {
+            const { data: candRec, error } = await supabase.from('candidatures' as any)
+              .select('id, acceptee_a, statut')
+              .eq('mission_id', id)
+              .eq('soignant_id', user.id)
+              .eq('statut', 'ACCEPTEE')
+              .order('acceptee_a', { ascending: false })
+              .limit(1)
+              .maybeSingle();
+            if (error) throw error;
+            if (!annule && candRec) {
+              setCandidatureRec({ id: (candRec as any).id, acceptee_a: (candRec as any).acceptee_a });
+            }
+          } catch (error) {
+            handleErrorSilent(error, 'DetailMissionSoignant.candidature-acceptee');
+          }
+        })();
+      }
+    };
+
+    const load = async () => {
+      try {
+        const resultat = await chargerDonneesCritiques();
+        if (annule) return;
+
+        clearTimeout(minuteurChargementProlonge);
+        setChargementProlonge(false);
+
+        if (resultat.introuvable) {
+          setMission(null);
+          setSoignant(null);
+          setLoading(false);
+          return;
+        }
+
+        // Le contenu utile est affiché immédiatement. Toutes les lectures
+        // facultatives partent ensuite en arrière-plan.
+        setMission(resultat.mission);
+        setSoignant(resultat.soignant as any);
+        setLoading(false);
+        chargerDonneesFacultatives(resultat.mission);
+      } catch (error) {
+        if (annule) return;
+        clearTimeout(minuteurChargementProlonge);
+        capturerErreurSentry(error, 'DetailMissionSoignant', 'chargement');
+        setErreurChargement(extraireMessageErreur(error));
+        setLoading(false);
+      }
+    };
+    void load();
+
+    return () => {
+      annule = true;
+      clearTimeout(minuteurChargementProlonge);
+    };
+  }, [user, id, tentativeChargement]);
 
   // Fetch average rating for the establishment
   useEffect(() => {
@@ -325,9 +459,39 @@ export default function DetailMissionSoignant() {
     type_contrat_recherche: mission.type_contrat_recherche,
   } : undefined, [mission]);
 
-  if (loading) return <LayoutApp role="SOIGNANT"><ChargementPage /></LayoutApp>;
-  if (!loading && !mission) return <LayoutApp role="SOIGNANT"><div className="text-center py-20"><p className="text-lg font-semibold text-foreground">Mission introuvable</p><p className="text-sm text-muted-foreground mt-2">Cette mission n'existe pas ou a été supprimée.</p><button onClick={() => navigate('/soignant/missions')} className="btn-primary mt-4">Retour aux missions</button></div></LayoutApp>;
-  if (!mission || !soignant) return <LayoutApp role="SOIGNANT"><ChargementPage /></LayoutApp>;
+  if (loading && !chargementProlonge) {
+    return <LayoutApp role="SOIGNANT"><ChargementPage /></LayoutApp>;
+  }
+  if (loading && chargementProlonge) {
+    return (
+      <LayoutApp role="SOIGNANT">
+        <div className="mx-auto max-w-lg py-16 text-center" role="status">
+          <RefreshCw className="mx-auto h-8 w-8 animate-spin text-primary" aria-hidden="true" />
+          <h1 className="mt-4 text-lg font-semibold text-foreground">Le détail de la mission met plus de temps que prévu</h1>
+          <p className="mt-2 text-sm text-muted-foreground">Ta session reste active. Tu peux relancer le chargement sans te reconnecter.</p>
+          <button type="button" onClick={() => setTentativeChargement((valeur) => valeur + 1)} className="btn-primary mt-5">
+            Réessayer
+          </button>
+        </div>
+      </LayoutApp>
+    );
+  }
+  if (erreurChargement) {
+    return (
+      <LayoutApp role="SOIGNANT">
+        <div className="mx-auto max-w-lg py-16 text-center" role="alert">
+          <AlertTriangle className="mx-auto h-8 w-8 text-destructive" aria-hidden="true" />
+          <h1 className="mt-4 text-lg font-semibold text-foreground">Impossible de charger la mission</h1>
+          <p className="mt-2 text-sm text-muted-foreground">{erreurChargement}</p>
+          <button type="button" onClick={() => setTentativeChargement((valeur) => valeur + 1)} className="btn-primary mt-5 inline-flex items-center gap-2">
+            <RefreshCw className="h-4 w-4" aria-hidden="true" /> Réessayer
+          </button>
+        </div>
+      </LayoutApp>
+    );
+  }
+  if (!mission) return <LayoutApp role="SOIGNANT"><div className="text-center py-20"><h1 className="text-lg font-semibold text-foreground">Mission introuvable</h1><p className="text-sm text-muted-foreground mt-2">Cette mission n'existe pas ou a été supprimée.</p><button onClick={() => navigate('/soignant/missions')} className="btn-primary mt-4">Retour aux missions</button></div></LayoutApp>;
+  if (!soignant) return <LayoutApp role="SOIGNANT"><div className="mx-auto max-w-lg py-16 text-center" role="alert"><h1 className="text-lg font-semibold text-foreground">Profil indisponible</h1><p className="mt-2 text-sm text-muted-foreground">Ton profil n'a pas pu être chargé.</p><button type="button" onClick={() => setTentativeChargement((valeur) => valeur + 1)} className="btn-primary mt-5">Réessayer</button></div></LayoutApp>;
 
   const distance = calculerDistanceKm(
     soignant.adresse_lat, soignant.adresse_lng,

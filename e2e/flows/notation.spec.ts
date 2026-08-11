@@ -121,9 +121,10 @@ test.describe('Flow notation bidirectionnelle', () => {
     // contenu et le CTA étaient déjà rendus.
     await page.waitForLoadState('domcontentloaded');
 
-    // La page charge avec un heading visible (h1 ou h2).
-    const heading = page.locator('h1, h2').first();
-    await expect(heading).toBeVisible({ timeout: 30_000 });
+    // Le titre métier doit remplacer le loader : un simple heading d'erreur ou
+    // de chargement prolongé ne doit pas faire passer cette régression.
+    await expect(page.getByRole('heading', { name: m!.intitule, exact: true }))
+      .toBeVisible({ timeout: 30_000 });
 
     // Régression stricte : une mission éligible doit permettre au soignant de
     // noter l'établissement. Une disparition du CTA fait désormais échouer le test.
