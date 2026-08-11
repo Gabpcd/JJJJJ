@@ -85,7 +85,8 @@ describe('mandat de facturation v1.4 et corrections comptables', () => {
     expect(establishmentPrimary).not.toContain('nature_tva_prestation');
     expect(caregiverMission).toContain(".select('nature_tva_prestation, nature_tva_confirmee_soignant, statut_validation_tva')");
     expect(establishmentMission).toContain(".select('nature_tva_prestation, nature_tva_confirmee_soignant, statut_validation_tva')");
-    expect(caregiverMission).toContain('if (m && missionTva) Object.assign');
+    expect(caregiverMission).toContain('...resultatTva.data');
+    expect(caregiverMission).toContain('setLoading(false);\n        chargerDonneesFacultatives(resultat.mission);');
     expect(establishmentMission).toContain('if (m && missionTvaResult.data) Object.assign');
   });
 

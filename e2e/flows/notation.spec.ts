@@ -67,7 +67,8 @@ test.describe('Flow notation bidirectionnelle', () => {
     // du seuil < 7 jours de fn_traiter_candidature.
     const debut = new Date(Date.now() + 9 * 86400000);
     const fin = new Date(debut.getTime() + 8 * 3600000);
-    const m = await seedMission({ intitule: '[pw-test:notation] Notation E2E', debut, fin });
+    const intituleMission = '[pw-test:notation] Notation E2E';
+    const m = await seedMission({ intitule: intituleMission, debut, fin });
     expect(m, 'seedMission').toBeTruthy();
     seededMissionIds.push(m!.id);
 
@@ -121,9 +122,10 @@ test.describe('Flow notation bidirectionnelle', () => {
     // contenu et le CTA étaient déjà rendus.
     await page.waitForLoadState('domcontentloaded');
 
-    // La page charge avec un heading visible (h1 ou h2).
-    const heading = page.locator('h1, h2').first();
-    await expect(heading).toBeVisible({ timeout: 30_000 });
+    // Le titre métier doit remplacer le loader : un simple heading d'erreur ou
+    // de chargement prolongé ne doit pas faire passer cette régression.
+    await expect(page.getByRole('heading', { level: 1, name: intituleMission, exact: true }))
+      .toBeVisible({ timeout: 30_000 });
 
     // Régression stricte : une mission éligible doit permettre au soignant de
     // noter l'établissement. Une disparition du CTA fait désormais échouer le test.

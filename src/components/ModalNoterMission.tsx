@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { Star, Loader2, X } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { avecDelai } from '@/lib/avecDelai';
+import { extraireMessageErreur } from '@/lib/erreurs';
 
 interface Props {
   missionId: string;
@@ -72,21 +74,30 @@ export function ModalNoterMission({ missionId, sens, missionIntitule, onClose, o
       return;
     }
     setSubmitting(true);
-    const { data, error } = await supabase.rpc('fn_creer_notation_mission' as any, {
-      p_mission_id: missionId,
-      p_sens: sens,
-      p_critere_1: c1, p_critere_2: c2, p_critere_3: c3, p_critere_4: c4,
-      p_commentaire: commentaire.trim() || null,
-    });
-    setSubmitting(false);
-    if (error) { toast.error(error.message); return; }
-    const r = data as any;
-    if (r?.success) {
-      toast.success(r?.tardive ? 'Notation enregistrée (tardive)' : 'Notation enregistrée ✨');
-      onSuccess?.();
-      onClose();
-    } else {
-      toast.error(r?.error ?? 'Erreur');
+    try {
+      const { data, error } = await avecDelai(
+        supabase.rpc('fn_creer_notation_mission' as any, {
+          p_mission_id: missionId,
+          p_sens: sens,
+          p_critere_1: c1, p_critere_2: c2, p_critere_3: c3, p_critere_4: c4,
+          p_commentaire: commentaire.trim() || null,
+        }),
+        12_000,
+        'L’envoi de la notation met trop de temps à répondre.',
+      );
+      if (error) throw error;
+      const r = data as any;
+      if (r?.success) {
+        toast.success(r?.tardive ? 'Notation enregistrée (tardive)' : 'Notation enregistrée ✨');
+        onSuccess?.();
+        onClose();
+      } else {
+        toast.error(r?.error ?? 'Impossible d’enregistrer la notation.');
+      }
+    } catch (error) {
+      toast.error(extraireMessageErreur(error));
+    } finally {
+      setSubmitting(false);
     }
   };
 
