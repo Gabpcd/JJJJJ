@@ -174,7 +174,7 @@ export default function InscriptionSoignant() {
     if (PROFESSIONS_SANS_RPPS.includes(form.profession) && form.profession !== 'AS' && form.rpps) {
       setForm(prev => ({ ...prev, rpps: '' }));
     }
-  }, [form.profession]);
+  }, [form.profession, form.rpps]);
 
   // L1: Date de naissance obligatoire + validation email + 18+ check
   const emailValide = EMAIL_REGEX.test(form.email.trim());
@@ -292,7 +292,7 @@ export default function InscriptionSoignant() {
       clearTimeout(timeout);
       controller.abort();
     };
-  }, [form.rpps, form.prenom, form.nom]);
+  }, [form.rpps, form.prenom, form.nom, form.profession, turnstileToken]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

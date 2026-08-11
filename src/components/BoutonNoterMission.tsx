@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Star } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { ModalNoterMission } from '@/components/ModalNoterMission';
@@ -22,7 +22,7 @@ export function BoutonNoterMission({ missionId, sens, missionIntitule, variant =
   const [dejaNote, setDejaNote] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  const verif = async () => {
+  const verif = useCallback(async () => {
     setLoading(true);
     const { data } = await supabase
       .from('notations_missions' as any)
@@ -32,9 +32,9 @@ export function BoutonNoterMission({ missionId, sens, missionIntitule, variant =
       .maybeSingle();
     setDejaNote(!!data);
     setLoading(false);
-  };
+  }, [missionId, sens]);
 
-  useEffect(() => { verif(); }, [missionId, sens]);
+  useEffect(() => { void verif(); }, [verif]);
 
   if (loading) return null;
   if (dejaNote && hideIfNoted) {

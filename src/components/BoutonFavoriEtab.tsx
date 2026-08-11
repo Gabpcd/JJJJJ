@@ -17,19 +17,20 @@ interface Props {
  */
 export function BoutonFavoriEtab({ etablissementId, mode = 'icon', onChange }: Props) {
   const { user } = useAuth();
+  const userId = user?.id;
   const [favori, setFavori] = useState(false);
   const [loading, setLoading] = useState(false);
   const [bouncing, setBouncing] = useState(false);
 
   useEffect(() => {
-    if (!user || !etablissementId) return;
+    if (!userId || !etablissementId) return;
     (supabase.from('favoris_soignant_etab' as any) as any)
       .select('id')
-      .eq('soignant_id', user.id)
+      .eq('soignant_id', userId)
       .eq('etablissement_id', etablissementId)
       .maybeSingle()
       .then(({ data }: any) => setFavori(!!data));
-  }, [etablissementId, user?.id]);
+  }, [etablissementId, userId]);
 
   const toggle = async (e: React.MouseEvent) => {
     e.stopPropagation();

@@ -1,5 +1,5 @@
 import { usePageTitle } from '@/hooks/usePageTitle';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Briefcase, PlayCircle, CheckCircle, Building2 } from 'lucide-react';
 import { LayoutApp } from '@/components/LayoutApp';
@@ -51,15 +51,16 @@ export default function DashboardGroupe() {
   }, [user]);
 
   // Compute filtered etabs
-  const etabsFiltres = etablissements.filter(e => {
+  const etabsFiltres = useMemo(() => etablissements.filter(e => {
     if (filtreDepartement && e.adresse_departement !== filtreDepartement) return false;
     if (filtreType && e.type !== filtreType) return false;
     return true;
-  });
+  }), [etablissements, filtreDepartement, filtreType]);
 
-  const etabIds = etabSelectionne === 'tous'
+  const etabIds = useMemo(() => etabSelectionne === 'tous'
     ? etabsFiltres.map(e => e.id)
-    : etabsFiltres.filter(e => e.id === etabSelectionne).map(e => e.id);
+    : etabsFiltres.filter(e => e.id === etabSelectionne).map(e => e.id),
+  [etabSelectionne, etabsFiltres]);
 
   useEffect(() => {
     if (etabIds.length === 0) {
@@ -103,7 +104,7 @@ export default function DashboardGroupe() {
       setPerfParEtab(perfs);
     };
     loadKpi();
-  }, [etabIds.join(',')]);
+  }, [etabIds, etabsFiltres]);
 
   if (loading) return <LayoutApp role="ADMIN_GROUPE"><ChargementPage /></LayoutApp>;
 
