@@ -137,20 +137,35 @@ import { getPlatform } from './lib/platform';
 const platform = getPlatform();
 document.body.classList.add(`platform-${platform}`);
 
-// Keep mobile Safari aligned to the visible viewport (not the full web page viewport)
+// Keep mobile layouts aligned to the visible viewport, including the space left
+// by a native keyboard. WKWebView can report either a resized viewport or the
+// original viewport depending on the iOS version, so both cases are covered.
+let initialLayoutHeight = window.innerHeight;
+let nativeKeyboardHeight = 0;
+
 const updateViewportMetrics = () => {
   const visualViewport = window.visualViewport;
-  const visibleHeight = visualViewport?.height ?? window.innerHeight;
+  const reportedHeight = visualViewport?.height ?? window.innerHeight;
   const offsetTop = visualViewport?.offsetTop ?? 0;
-  const offsetBottom = Math.max(0, window.innerHeight - visibleHeight - offsetTop);
+  const viewportWasResized = reportedHeight < initialLayoutHeight - 80;
+  const visibleHeight = nativeKeyboardHeight > 0 && !viewportWasResized
+    ? Math.max(0, reportedHeight - nativeKeyboardHeight)
+    : reportedHeight;
+  const offsetBottom = Math.max(0, window.innerHeight - reportedHeight - offsetTop);
 
   document.documentElement.style.setProperty('--app-height', `${visibleHeight}px`);
+  document.documentElement.style.setProperty('--keyboard-height', `${nativeKeyboardHeight}px`);
   document.documentElement.style.setProperty('--viewport-offset-bottom', `${offsetBottom}px`);
 };
 
 updateViewportMetrics();
 window.addEventListener('resize', updateViewportMetrics);
-window.addEventListener('orientationchange', updateViewportMetrics);
+window.addEventListener('orientationchange', () => {
+  window.requestAnimationFrame(() => {
+    initialLayoutHeight = window.innerHeight;
+    updateViewportMetrics();
+  });
+});
 window.visualViewport?.addEventListener('resize', updateViewportMetrics);
 window.visualViewport?.addEventListener('scroll', updateViewportMetrics);
 
@@ -164,12 +179,31 @@ if (Capacitor.isNativePlatform()) {
     'viewport-fit=cover, width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no',
   );
 
+  const revealFocusedControl = () => {
+    const focused = document.activeElement;
+    if (!(focused instanceof HTMLInputElement || focused instanceof HTMLTextAreaElement || focused instanceof HTMLSelectElement)) return;
+    window.requestAnimationFrame(() => {
+      window.setTimeout(() => {
+        focused.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'auto' });
+      }, 0);
+    });
+  };
+
   import('@capacitor/keyboard').then(({ Keyboard }) => {
-    Keyboard.addListener('keyboardWillShow', () => {
+    Keyboard.addListener('keyboardWillShow', ({ keyboardHeight }) => {
+      nativeKeyboardHeight = keyboardHeight;
       document.body.classList.add('keyboard-is-open');
+      updateViewportMetrics();
+    });
+    Keyboard.addListener('keyboardDidShow', ({ keyboardHeight }) => {
+      nativeKeyboardHeight = keyboardHeight;
+      updateViewportMetrics();
+      revealFocusedControl();
     });
     Keyboard.addListener('keyboardWillHide', () => {
+      nativeKeyboardHeight = 0;
       document.body.classList.remove('keyboard-is-open');
+      updateViewportMetrics();
     });
   }).catch(() => {});
 
@@ -298,7 +332,7 @@ async function initNativePlugins() {
 
   // Filet dur : un réseau lent ou absent ne doit jamais laisser le splash
   // natif bloqué. Les vérifications d'auth peuvent continuer dans React.
-  const splashTimeout = window.setTimeout(() => { void masquerSplash(); }, 1800);
+  const splashTimeout = window.setTimeout(() => { void masquerSplash(); }, 1_500);
 
   const appliquerLien = (rawUrl: string): boolean => {
     const route = normaliserLienJolene(rawUrl);

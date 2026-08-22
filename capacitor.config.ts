@@ -11,10 +11,11 @@ const config: CapacitorConfig = {
   },
   plugins: {
     SplashScreen: {
-      launchShowDuration: 1800,
-      // Filet natif si le bundle JS ne démarre pas ; le code masque aussi le
-      // splash plus tôt dès que la session locale est prête.
-      launchAutoHide: true,
+      // Le splash ne doit jamais rester au-dessus d'une interface déjà prête.
+      // Le scénario précédent créait un carré rose semi-transparent sur iOS.
+      launchShowDuration: 0,
+      launchAutoHide: false,
+      launchFadeOutDuration: 120,
       backgroundColor: '#FFFFFF',
       showSpinner: false,
     },

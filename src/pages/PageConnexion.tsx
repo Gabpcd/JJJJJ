@@ -28,7 +28,7 @@ export default function PageConnexion() {
   usePageTitle('Connexion');
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { connexion, loading } = useAuth();
+  const { connexion } = useAuth();
   const { afficherNotification } = useNotification();
   const [email, setEmail] = useState('');
   const [motDePasse, setMotDePasse] = useState('');
@@ -239,21 +239,21 @@ export default function PageConnexion() {
 
   return (
     <AuthLayout showBack={false}>
-        <div className="card-base max-w-md w-full">
+        <section className="auth-login auth-card max-w-md w-full" aria-labelledby="connexion-title">
           <LogoJolene
-            className="mx-auto mb-8 flex w-fit"
-            imageClassName="h-8 w-8"
-            nomClassName="text-2xl text-rose"
+            className="auth-brand mx-auto flex w-fit"
+            imageClassName="h-9 w-9"
+            nomClassName="text-[28px] tracking-[-0.03em] text-rose"
           />
 
-          <h1 className="text-xl font-bold text-foreground text-center mb-6">Connexion</h1>
+          <h1 id="connexion-title" className="auth-title">Connexion</h1>
 
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} className="auth-primary-form space-y-4">
             <div>
               <label htmlFor="connexion-email" className="text-sm font-medium text-foreground mb-1.5 block">Email</label>
               <div className="relative">
                 <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <input id="connexion-email" type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="votre@email.com" className="input-base pl-10" required />
+                <input id="connexion-email" type="email" inputMode="email" autoCapitalize="none" autoCorrect="off" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="votre@email.com" className="input-base auth-input pl-11" required />
               </div>
             </div>
 
@@ -261,7 +261,7 @@ export default function PageConnexion() {
               <label htmlFor="connexion-mot-de-passe" className="text-sm font-medium text-foreground mb-1.5 block">Mot de passe</label>
               <div className="relative">
                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <input id="connexion-mot-de-passe" type={afficherMdp ? "text" : "password"} autoComplete="current-password" value={motDePasse} onChange={(e) => setMotDePasse(e.target.value)} placeholder="••••••••" className="input-base pl-10 pr-10" required />
+                <input id="connexion-mot-de-passe" type={afficherMdp ? "text" : "password"} autoComplete="current-password" value={motDePasse} onChange={(e) => setMotDePasse(e.target.value)} placeholder="••••••••" className="input-base auth-input pl-11 pr-11" required />
                 <button
                   type="button"
                   onClick={() => setAfficherMdp(!afficherMdp)}
@@ -274,38 +274,30 @@ export default function PageConnexion() {
               </div>
             </div>
 
-            <button type="submit" disabled={submitting} className="btn-primary w-full disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2" data-testid="login-submit">
+            <button type="submit" disabled={submitting} className="btn-primary auth-submit w-full disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2" data-testid="login-submit">
               {submitting && <Loader2 className="h-4 w-4 animate-spin" />}
               {submitting ? 'Connexion…' : 'Se connecter'}
             </button>
           </form>
 
-          {/* Biometric login button — native only */}
+          <div className="auth-secondary-actions">
           {bioAvailable && (
-            <button
-              onClick={handleBiometricLogin}
-              disabled={bioLoading}
-              className="btn-secondary w-full inline-flex items-center justify-center gap-2 min-h-[44px]"
-            >
+            <button onClick={handleBiometricLogin} disabled={bioLoading} className="btn-secondary w-full inline-flex items-center justify-center gap-2 min-h-[44px]">
               {bioLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Fingerprint className="h-5 w-5" />}
               {bioLoading ? 'Vérification…' : `Se connecter avec ${getBiometricLabel()}`}
             </button>
           )}
 
-          <div className="my-6 flex items-center gap-3">
+          <div className="auth-divider flex items-center gap-3">
             <div className="flex-1 h-px bg-border" />
             <span className="text-xs text-muted-foreground">ou</span>
             <div className="flex-1 h-px bg-border" />
           </div>
 
-          {/* Pro Santé Connect — soignants avec carte CPS/e-CPS
-              Double usage explicite : connexion d'un compte existant ET création de compte en 1 clic */}
           <div className="mb-4">
             <BoutonProSanteConnect
               intention="login"
               onSwitchToEmail={() => {
-                // Safari iOS scrolle nativement vers l'input focusé.
-                // Pas de scrollIntoView smooth ici (créait un saut au focus mobile).
                 document.querySelector<HTMLInputElement>('input[type="email"]')?.focus();
               }}
             />
@@ -387,7 +379,8 @@ export default function PageConnexion() {
               </div>
             )}
           </div>
-        </div>
+          </div>
+        </section>
       <FooterLegal />
     </AuthLayout>
   );

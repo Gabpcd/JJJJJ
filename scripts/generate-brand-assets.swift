@@ -107,7 +107,8 @@ func splash(width: Int, height: Int, dark: Bool) throws -> Data {
     ).setFill()
     canvas.fill()
 
-    let iconSize = floor(min(canvas.width, canvas.height) * 0.39)
+    // Discret sur un écran de lancement très haut, plutôt qu'une grande carte.
+    let iconSize = floor(min(canvas.width, canvas.height) * 0.22)
     let iconRect = NSRect(
       x: floor((canvas.width - iconSize) / 2),
       y: floor((canvas.height - iconSize) / 2),
