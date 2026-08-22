@@ -27,7 +27,7 @@ export function AuthLayout({ children, showBack = true, backTo }: AuthLayoutProp
   };
 
   return (
-    <div className="min-h-[100dvh] gradient-hero flex flex-col">
+    <div className="auth-layout gradient-hero flex flex-col">
       {/* Header sticky avec safe-area + bouton retour */}
       {showBack && (
         <header
@@ -56,7 +56,7 @@ export function AuthLayout({ children, showBack = true, backTo }: AuthLayoutProp
           natif qui resize). */}
       <main
         id="contenu-principal"
-        className="flex-1 flex flex-col items-center justify-start sm:justify-center px-4 py-6"
+        className="auth-scroll min-h-0 flex-1 flex w-full flex-col items-center justify-start sm:justify-center px-4 py-6"
         style={{
           paddingTop: showBack ? '0.5rem' : 'calc(env(safe-area-inset-top) + 1rem)',
           paddingBottom: 'calc(env(safe-area-inset-bottom) + 1.5rem)',

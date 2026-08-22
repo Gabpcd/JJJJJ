@@ -218,12 +218,29 @@ jobs:
         with:
           fetch-depth: 0
 
+      # Une PR sans migration ne peut pas modifier le schéma : ne pas la
+      # bloquer sur la disponibilité du projet de staging. Toute PR qui touche
+      # une migration conserve en revanche le contrôle transactionnel complet.
+      - name: Déterminer si les migrations sont concernées
+        id: migration_scope
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          if git diff --quiet "$BASE_SHA"...HEAD -- 'supabase/migrations/*.sql'; then
+            echo "has_migrations=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_migrations=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Setup Supabase CLI
+        if: steps.migration_scope.outputs.has_migrations == 'true'
         uses: supabase/setup-cli@v1
         with:
           version: 2.98.0
 
       - name: Synchroniser le schéma main vers le staging
+        if: steps.migration_scope.outputs.has_migrations == 'true'
         env:
           STAGING_SUPABASE_ACCESS_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
           STAGING_SUPABASE_PROJECT_REF: ${{ secrets.STAGING_SUPABASE_PROJECT_REF }}
@@ -297,6 +314,7 @@ jobs:
               --workdir "$BASE_WORKTREE"
 
       - name: Exécuter les migrations ajoutées et les régressions SQL sans persister
+        if: steps.migration_scope.outputs.has_migrations == 'true'
         env:
           STAGING_SUPABASE_ACCESS_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
           STAGING_SUPABASE_PROJECT_REF: ${{ secrets.STAGING_SUPABASE_PROJECT_REF }}

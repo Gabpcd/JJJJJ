@@ -11,10 +11,11 @@ const config: CapacitorConfig = {
   },
   plugins: {
     SplashScreen: {
-      launchShowDuration: 1800,
-      // Filet natif si le bundle JS ne démarre pas ; le code masque aussi le
-      // splash plus tôt dès que la session locale est prête.
+      // Aucun écran de splash applicatif : iOS/Android montrent uniquement le
+      // fond natif uni, puis l'interface dès qu'elle est prête.
+      launchShowDuration: 0,
       launchAutoHide: true,
+      launchFadeOutDuration: 0,
       backgroundColor: '#FFFFFF',
       showSpinner: false,
     },
