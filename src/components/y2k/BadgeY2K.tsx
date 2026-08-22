@@ -43,6 +43,10 @@ const VARIANTS: Record<Variant, string> = {
   error: cn(
     'bg-destructive/10 text-destructive',
     'border border-destructive/30',
+    // Le rouge de la palette sombre est volontairement vif. Sur son fond
+    // translucide, il ne passe toutefois pas le contraste AA pour un petit
+    // libellé : on éclaircit explicitement le texte dans ce contexte.
+    'dark:bg-destructive/20 dark:text-red-100 dark:border-destructive/50',
   ),
   info: cn(
     'bg-jolene-mauve-100 text-jolene-mauve-800',
