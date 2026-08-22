@@ -11,11 +11,11 @@ const config: CapacitorConfig = {
   },
   plugins: {
     SplashScreen: {
-      // Le splash ne doit jamais rester au-dessus d'une interface déjà prête.
-      // Le scénario précédent créait un carré rose semi-transparent sur iOS.
+      // Aucun écran de splash applicatif : iOS/Android montrent uniquement le
+      // fond natif uni, puis l'interface dès qu'elle est prête.
       launchShowDuration: 0,
-      launchAutoHide: false,
-      launchFadeOutDuration: 120,
+      launchAutoHide: true,
+      launchFadeOutDuration: 0,
       backgroundColor: '#FFFFFF',
       showSpinner: false,
     },

@@ -106,16 +106,6 @@ func splash(width: Int, height: Int, dark: Bool) throws -> Data {
       : NSColor.white
     ).setFill()
     canvas.fill()
-
-    // Discret sur un écran de lancement très haut, plutôt qu'une grande carte.
-    let iconSize = floor(min(canvas.width, canvas.height) * 0.22)
-    let iconRect = NSRect(
-      x: floor((canvas.width - iconSize) / 2),
-      y: floor((canvas.height - iconSize) / 2),
-      width: iconSize,
-      height: iconSize
-    )
-    drawSource(in: iconRect)
   }
 }
 
@@ -285,7 +275,8 @@ try write(resizedCanonical(width: 512, height: 512), to: "public/icon-512x512.pn
 try write(aspectFillCanonical(width: 1200, height: 628), to: "public/logo-jolene-bandeau.png")
 try write(aspectFillCanonical(width: 1200, height: 630), to: "public/og-default.png")
 
-// Splash source et copies iOS.
+// Écran de lancement uni, sans PNG de marque : le système passe directement
+// au contenu de l'application dès que le bundle est prêt.
 let lightSplash = try splash(width: 2732, height: 2732, dark: false)
 let darkSplash = try splash(width: 2732, height: 2732, dark: true)
 try write(lightSplash, to: "resources/splash.png")
