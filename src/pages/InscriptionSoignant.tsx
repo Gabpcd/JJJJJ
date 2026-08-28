@@ -377,7 +377,7 @@ export default function InscriptionSoignant() {
   };
 
   return (
-    <AuthLayout backTo="/connexion">
+    <AuthLayout backTo="/connexion" scrollKey={etape}>
       <div className="card-base max-w-lg w-full">
         <LogoJolene
           className="mx-auto mb-6 flex w-fit"

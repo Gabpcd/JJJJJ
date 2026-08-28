@@ -25,8 +25,9 @@ const config: CapacitorConfig = {
       backgroundColor: '#FFFFFF',
     },
     Keyboard: {
+      // Une seule source de redimensionnement : le WebView natif. Le scroll
+      // du champ actif reste géré par iOS, sans assistance JS concurrente.
       resize: 'native',
-      scrollAssist: true,
     },
     PushNotifications: {
       // Affichage cohérent au premier plan sur iOS ; Android s'appuie sur
@@ -35,7 +36,9 @@ const config: CapacitorConfig = {
     },
   },
   ios: {
-    contentInset: 'automatic',
+    // AuthLayout applique déjà env(safe-area-inset-*). Le réglage automatique
+    // d'UIScrollView les ajoutait une seconde fois sur les iPhone Dynamic Island.
+    contentInset: 'never',
   },
   android: {
     backgroundColor: '#FFFFFF',

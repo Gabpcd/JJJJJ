@@ -390,7 +390,8 @@
 
   /* ── Touch devices: active press feedback ── */
   @media (hover: none) {
-    .card-base:active {
+    .card-base[data-interactive="true"]:active,
+    .card-kpi:active {
       transform: scale(0.98);
       transition: transform 0.1s ease;
     }
@@ -427,15 +428,15 @@
   }
 
   .auth-layout {
-    min-height: var(--app-height, 100dvh);
-    height: var(--app-height, 100dvh);
+    min-height: 100dvh;
+    height: 100dvh;
     overflow: hidden;
   }
   .auth-scroll {
     overflow-y: auto;
     overscroll-behavior-y: contain;
     -webkit-overflow-scrolling: touch;
-    scroll-padding-top: calc(env(safe-area-inset-top) + 1rem);
+    scroll-padding-top: 1rem;
     scroll-padding-bottom: calc(env(safe-area-inset-bottom) + 1rem);
   }
 
@@ -507,8 +508,39 @@
     }
 
     .auth-layout.gradient-hero {
-      min-height: var(--app-height, 100dvh);
+      min-height: 100dvh;
       padding-top: 0;
+    }
+
+    /* Coquille native : un seul plan blanc, comme un écran UIKit/SwiftUI.
+       Le header possède sa propre safe-area et la carte n'est plus une
+       fenêtre flottante qui se contracte sous le doigt. */
+    body.platform-ios .auth-layout,
+    body.platform-android .auth-layout {
+      background: hsl(var(--background));
+    }
+
+    body.platform-ios .auth-header,
+    body.platform-android .auth-header {
+      border-bottom: 1px solid hsl(var(--border) / 0.7);
+      background: hsl(var(--background) / 0.92);
+      -webkit-backdrop-filter: saturate(180%) blur(18px);
+      backdrop-filter: saturate(180%) blur(18px);
+    }
+
+    body.platform-ios .auth-scroll,
+    body.platform-android .auth-scroll {
+      padding-left: 0;
+      padding-right: 0;
+      padding-top: 0.75rem;
+    }
+
+    body.platform-ios .auth-scroll > .card-base,
+    body.platform-android .auth-scroll > .card-base {
+      border: 0;
+      border-radius: 0;
+      box-shadow: none;
+      padding: 0.75rem 1.25rem 2rem;
     }
   }
 
@@ -602,8 +634,14 @@
   }
 
   .input-base {
-    @apply w-full rounded-xl border border-input bg-card px-4 py-3 text-base sm:text-sm focus:ring-2 focus:ring-primary/30 focus:border-primary outline-none transition-all duration-200;
+    @apply min-w-0 max-w-full w-full rounded-xl border border-input bg-card px-4 py-3 text-base sm:text-sm focus:ring-2 focus:ring-primary/30 focus:border-primary outline-none transition-[border-color,box-shadow,background-color] duration-200;
     /* 16px minimum sur mobile pour éviter le zoom automatique iOS Safari */
+  }
+
+  input[type="date"].input-base {
+    display: block;
+    min-width: 0;
+    max-width: 100%;
   }
 
   .badge-base {

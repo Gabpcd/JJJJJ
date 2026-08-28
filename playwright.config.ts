@@ -123,6 +123,9 @@ export default defineConfig({
         viewport: { width: 390, height: 844 },
         hasTouch: true,
         isMobile: true,
+        ...(LOCAL_CHROMIUM_EXECUTABLE
+          ? { launchOptions: { executablePath: LOCAL_CHROMIUM_EXECUTABLE } }
+          : {}),
       },
     },
   ],

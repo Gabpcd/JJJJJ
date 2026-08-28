@@ -1,4 +1,4 @@
-import { ReactNode } from 'react';
+import { ReactNode, useLayoutEffect, useRef, type PointerEvent as ReactPointerEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 
@@ -8,6 +8,8 @@ interface AuthLayoutProps {
   showBack?: boolean;
   /** Destination du retour. Si absent → navigate(-1). */
   backTo?: string;
+  /** Remet le contenu en haut avant l'affichage d'une nouvelle étape. */
+  scrollKey?: string | number;
 }
 
 /**
@@ -17,8 +19,13 @@ interface AuthLayoutProps {
  * - Contenu scrollable + centré, fond gradient-hero.
  * Identique sur web et natif (sur web, safe-area = 0).
  */
-export function AuthLayout({ children, showBack = true, backTo }: AuthLayoutProps) {
+export function AuthLayout({ children, showBack = true, backTo, scrollKey }: AuthLayoutProps) {
   const navigate = useNavigate();
+  const scrollRef = useRef<HTMLElement>(null);
+
+  useLayoutEffect(() => {
+    scrollRef.current?.scrollTo({ top: 0, behavior: 'auto' });
+  }, [scrollKey]);
 
   const handleBack = () => {
     if (backTo) navigate(backTo);
@@ -26,12 +33,23 @@ export function AuthLayout({ children, showBack = true, backTo }: AuthLayoutProp
     else navigate('/connexion');
   };
 
+  const handleBackgroundPointerDown = (event: ReactPointerEvent<HTMLElement>) => {
+    const target = event.target;
+    if (!(target instanceof Element)) return;
+    if (target.closest('input, textarea, select, button, a, label, [role="button"], [role="combobox"], [role="dialog"]')) return;
+
+    const active = document.activeElement;
+    if (active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement) {
+      active.blur();
+    }
+  };
+
   return (
     <div className="auth-layout gradient-hero flex flex-col">
       {/* Header sticky avec safe-area + bouton retour */}
       {showBack && (
         <header
-          className="sticky top-0 z-10 flex items-center px-2"
+          className="auth-header sticky top-0 z-40 flex shrink-0 items-center px-2"
           style={{
             paddingTop: 'calc(env(safe-area-inset-top) + 0.5rem)',
             paddingBottom: '0.5rem',
@@ -55,8 +73,10 @@ export function AuthLayout({ children, showBack = true, backTo }: AuthLayoutProp
           Centré verticalement à partir de sm (desktop/tablette, pas de clavier
           natif qui resize). */}
       <main
+        ref={scrollRef}
         id="contenu-principal"
         className="auth-scroll min-h-0 flex-1 flex w-full flex-col items-center justify-start sm:justify-center px-4 py-6"
+        onPointerDown={handleBackgroundPointerDown}
         style={{
           paddingTop: showBack ? '0.5rem' : 'calc(env(safe-area-inset-top) + 1rem)',
           paddingBottom: 'calc(env(safe-area-inset-bottom) + 1.5rem)',
