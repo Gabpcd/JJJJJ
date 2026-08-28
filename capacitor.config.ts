@@ -1,4 +1,5 @@
 import type { CapacitorConfig } from '@capacitor/cli';
+import { KeyboardResize } from '@capacitor/keyboard';
 
 const config: CapacitorConfig = {
   appId: 'app.jolene',
@@ -27,7 +28,7 @@ const config: CapacitorConfig = {
     Keyboard: {
       // Une seule source de redimensionnement : le WebView natif. Le scroll
       // du champ actif reste géré par iOS, sans assistance JS concurrente.
-      resize: 'native',
+      resize: KeyboardResize.Native,
     },
     PushNotifications: {
       // Affichage cohérent au premier plan sur iOS ; Android s'appuie sur
