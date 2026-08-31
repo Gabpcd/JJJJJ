@@ -156,12 +156,12 @@ export default function AttestationHeures() {
           <div className="card-base p-5 space-y-4">
             <div>
               <p className="text-sm font-medium text-foreground mb-2">Période :</p>
-              <div className="flex items-center gap-2">
-                <div className="flex-1">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <div className="min-w-0">
                   <label htmlFor="attestation-date-debut" className="text-xs text-muted-foreground">Du</label>
                   <Input id="attestation-date-debut" type="date" value={formDebut} onChange={(e) => setFormDebut(e.target.value)} />
                 </div>
-                <div className="flex-1">
+                <div className="min-w-0">
                   <label htmlFor="attestation-date-fin" className="text-xs text-muted-foreground">Au</label>
                   <Input id="attestation-date-fin" type="date" value={formFin} onChange={(e) => setFormFin(e.target.value)} />
                 </div>

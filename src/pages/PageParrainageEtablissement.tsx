@@ -158,20 +158,20 @@ export default function PageParrainageEtab() {
                   Un autre établissement vous a recommandé Jolene ? Saisissez son code (format <code className="bg-muted px-1 rounded">ETB-XXXXXX</code>). Au fil de vos missions, vous et votre parrain recevrez chacun 50€ de crédit dès 500€ de missions réalisées, puis 150€ à 2 000€.
                 </p>
                 <label htmlFor="code-parrainage-recu" className="sr-only">Code parrainage reçu</label>
-                <div className="flex gap-2">
+                <div className="flex flex-col gap-2 sm:flex-row">
                   <input
                     id="code-parrainage-recu"
                     type="text"
                     value={codeRecu}
                     onChange={(e) => setCodeRecu(e.target.value.toUpperCase())}
                     placeholder="ETB-XXXXXX"
-                    className="flex-1 px-3 py-2 text-sm rounded-lg border border-border bg-background font-mono"
+                    className="min-w-0 flex-1 px-3 py-2 text-base sm:text-sm rounded-lg border border-border bg-background font-mono"
                   />
                   <button
                     type="button"
                     onClick={appliquerCode}
                     disabled={appliying || !codeRecu.trim()}
-                    className="btn-primary text-sm inline-flex items-center gap-1.5"
+                    className="btn-primary w-full text-sm inline-flex items-center justify-center gap-1.5 sm:w-auto"
                   >
                     {appliying ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
                     Appliquer

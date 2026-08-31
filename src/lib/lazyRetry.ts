@@ -1,4 +1,5 @@
 import { lazy, type ComponentType } from 'react';
+import { recoverFromChunkLoadError } from './chunkRecovery';
 
 /**
  * Wrapper autour de React.lazy qui détecte les échecs de chargement de chunk
@@ -8,20 +9,13 @@ import { lazy, type ComponentType } from 'react';
  */
 export function lazyRetry<T extends ComponentType<any>>(
   factory: () => Promise<{ default: T }>,
-  chunkName?: string,
+  _chunkName?: string,
 ) {
   return lazy(async () => {
-    const key = `chunk-retry-${chunkName ?? 'global'}`;
-    const alreadyRetried = sessionStorage.getItem(key) === '1';
-
     try {
-      const component = await factory();
-      sessionStorage.removeItem(key);
-      return component;
+      return await factory();
     } catch (error) {
-      if (!alreadyRetried) {
-        sessionStorage.setItem(key, '1');
-        window.location.reload();
+      if (recoverFromChunkLoadError(error)) {
         // Le reload va interrompre l'exécution, mais TypeScript attend un return.
         return new Promise(() => {});
       }

@@ -1,4 +1,9 @@
-import { ReactNode, useLayoutEffect, useRef, type PointerEvent as ReactPointerEvent } from 'react';
+import {
+  ReactNode,
+  useLayoutEffect,
+  useRef,
+  type PointerEvent as ReactPointerEvent,
+} from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 
@@ -25,6 +30,41 @@ export function AuthLayout({ children, showBack = true, backTo, scrollKey }: Aut
 
   useLayoutEffect(() => {
     scrollRef.current?.scrollTo({ top: 0, behavior: 'auto' });
+
+    // WKWebView n'infère pas toujours « Suivant » entre les champs d'un même
+    // formulaire. L'indiquer explicitement donne un clavier iOS cohérent et
+    // permet de progresser sans devoir masquer le clavier pour atteindre le
+    // champ suivant.
+    const forms = scrollRef.current?.querySelectorAll('form') ?? [];
+    const cleanups: Array<() => void> = [];
+    forms.forEach((form) => {
+      const fields = keyboardFields(form);
+      fields.forEach((field, index) => {
+        if (field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement) {
+          field.enterKeyHint = index < fields.length - 1 ? 'next' : 'done';
+        }
+
+        // Un listener DOM direct est volontaire ici : dans WKWebView, la
+        // touche Return du clavier logiciel peut masquer le clavier avant que
+        // la délégation d'événement React ait transféré le focus. Intercepter
+        // le keydown sur le champ conserve le clavier et produit le parcours
+        // natif attendu.
+        if (field instanceof HTMLInputElement) {
+          const handleEnter = (event: KeyboardEvent) => {
+            if (event.key !== 'Enter' || event.isComposing) return;
+            const next = fields[index + 1];
+            if (!next) return;
+
+            event.preventDefault();
+            next.focus({ preventScroll: true });
+          };
+          field.addEventListener('keydown', handleEnter);
+          cleanups.push(() => field.removeEventListener('keydown', handleEnter));
+        }
+      });
+    });
+
+    return () => cleanups.forEach((cleanup) => cleanup());
   }, [scrollKey]);
 
   const handleBack = () => {
@@ -86,4 +126,13 @@ export function AuthLayout({ children, showBack = true, backTo, scrollKey }: Aut
       </main>
     </div>
   );
+}
+
+function keyboardFields(form: HTMLFormElement): Array<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement> {
+  return Array.from(form.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>(
+    'input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"]):not([type="button"]):not([type="submit"]), textarea, select',
+  )).filter((field) => (
+    !field.disabled
+    && (!(field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement) || !field.readOnly)
+  ));
 }

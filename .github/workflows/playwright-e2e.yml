@@ -1,9 +1,8 @@
 name: Playwright E2E tests
 
 # Tests Playwright à chaque PR + push main.
-# Stratégie : Chromium bloque les PR et main. Les runs sont sérialisés car ils
-# partagent une base de test en production. La couverture cross-browser/mobile
-# reste disponible à la demande après ajout temporaire des projets à la matrice.
+# Stratégie : Chromium + les gates mobiles ciblés bloquent les PR et main. Les
+# runs sont sérialisés car ils partagent une base de test en production.
 
 on:
   pull_request:
@@ -155,15 +154,18 @@ jobs:
           VITE_SUPABASE_PUBLISHABLE_KEY: ${{ env.E2E_PUBLISHABLE_KEY }}
       - name: Start preview server
         run: |
-          npx vite preview --port 4173 --host 0.0.0.0 &
-          npx wait-on http://127.0.0.1:4173 -t 30000 || true
+          # Les Edge Functions d'inscription autorisent explicitement cette
+          # origine locale. Garder le même origin ici rend le parcours réel
+          # (Auth + register-*) testable dans la CI, sans faux CORS.
+          npx vite preview --port 8080 --host 0.0.0.0 &
+          npx wait-on http://localhost:8080 -t 30000 || true
       - name: Vérifier App Review sur un vrai iPad WebKit (prioritaire)
         # Ce smoke doit passer AVANT la longue suite Chromium : après plusieurs
         # centaines de scénarios Auth, une indisponibilité temporaire de GoTrue
         # ne doit pas être confondue avec une régression du correctif iPad.
         run: npx playwright test e2e/release-review-smoke.spec.ts --project=tablet-ipad
         env:
-          PLAYWRIGHT_BASE_URL: http://127.0.0.1:4173
+          PLAYWRIGHT_BASE_URL: http://localhost:8080
           SUPABASE_URL: ${{ env.E2E_SUPABASE_URL }}
           SUPABASE_PUBLISHABLE_KEY: ${{ env.E2E_PUBLISHABLE_KEY }}
           SUPABASE_ANON_KEY: ${{ env.E2E_ANON_KEY }}
@@ -177,7 +179,27 @@ jobs:
         # sur iPad ; ne pas le rejouer en fin de suite sous Chromium.
         run: npx playwright test --project=chromium --grep-invert='release review — reprise de session iPad'
         env:
-          PLAYWRIGHT_BASE_URL: http://127.0.0.1:4173
+          PLAYWRIGHT_BASE_URL: http://localhost:8080
+          SUPABASE_URL: ${{ env.E2E_SUPABASE_URL }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ env.E2E_PUBLISHABLE_KEY }}
+          SUPABASE_ANON_KEY: ${{ env.E2E_ANON_KEY }}
+          PLAYWRIGHT_TEST_PASSWORD: ${{ env.E2E_TEST_PASSWORD }}
+          CI: 'true'
+      - name: Gate mobile Série C (iPhone WebKit + Pixel Android)
+        # Ces scénarios sont volontairement explicites : ils couvrent toutes
+        # les routes soignant/établissement, les cinq largeurs mobiles et les
+        # deux inscriptions réelles jusqu'aux Edge Functions. Ils ont révélé
+        # les régressions que la suite Chromium desktop ne pouvait pas voir.
+        run: |
+          UX_AUDIT_WIDTH=375 UX_AUDIT_HEIGHT=667 npx playwright test \
+            e2e/non-regression/ios-series-c-audit.spec.ts \
+            e2e/non-regression/signup-series-c-audit.spec.ts \
+            --project=ios-webkit-audit
+          UX_AUDIT_WIDTH=412 UX_AUDIT_HEIGHT=915 npx playwright test \
+            e2e/non-regression/ios-series-c-audit.spec.ts \
+            --project=android-pixel-audit
+        env:
+          PLAYWRIGHT_BASE_URL: http://localhost:8080
           SUPABASE_URL: ${{ env.E2E_SUPABASE_URL }}
           SUPABASE_PUBLISHABLE_KEY: ${{ env.E2E_PUBLISHABLE_KEY }}
           SUPABASE_ANON_KEY: ${{ env.E2E_ANON_KEY }}
@@ -187,7 +209,7 @@ jobs:
         if: failure() && steps.playwright-tests.outcome == 'failure'
         run: npx playwright test e2e/a11y.spec.ts --project=chromium --reporter=line --retries=0 || true
         env:
-          PLAYWRIGHT_BASE_URL: http://127.0.0.1:4173
+          PLAYWRIGHT_BASE_URL: http://localhost:8080
           SUPABASE_URL: ${{ env.E2E_SUPABASE_URL }}
           SUPABASE_PUBLISHABLE_KEY: ${{ env.E2E_PUBLISHABLE_KEY }}
           SUPABASE_ANON_KEY: ${{ env.E2E_ANON_KEY }}
@@ -284,12 +306,12 @@ jobs:
           VITE_SUPABASE_PUBLISHABLE_KEY: ${{ env.E2E_PUBLISHABLE_KEY }}
       - name: Start preview server
         run: |
-          npx vite preview --port 4173 --host 0.0.0.0 &
-          npx wait-on http://127.0.0.1:4173 -t 30000 || true
+          npx vite preview --port 8080 --host 0.0.0.0 &
+          npx wait-on http://localhost:8080 -t 30000 || true
       - name: Vérifier App Review sur un vrai iPad WebKit (prioritaire)
         run: npx playwright test e2e/release-review-smoke.spec.ts --project=tablet-ipad
         env:
-          PLAYWRIGHT_BASE_URL: http://127.0.0.1:4173
+          PLAYWRIGHT_BASE_URL: http://localhost:8080
           SUPABASE_URL: ${{ env.E2E_SUPABASE_URL }}
           SUPABASE_PUBLISHABLE_KEY: ${{ env.E2E_PUBLISHABLE_KEY }}
           SUPABASE_ANON_KEY: ${{ env.E2E_ANON_KEY }}
@@ -301,7 +323,23 @@ jobs:
         # Le contrôle iPad ci-dessus est volontairement isolé et prioritaire.
         run: npx playwright test --project=${{ matrix.project }} --grep-invert='release review — reprise de session iPad'
         env:
-          PLAYWRIGHT_BASE_URL: http://127.0.0.1:4173
+          PLAYWRIGHT_BASE_URL: http://localhost:8080
+          SUPABASE_URL: ${{ env.E2E_SUPABASE_URL }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ env.E2E_PUBLISHABLE_KEY }}
+          SUPABASE_ANON_KEY: ${{ env.E2E_ANON_KEY }}
+          PLAYWRIGHT_TEST_PASSWORD: ${{ env.E2E_TEST_PASSWORD }}
+          CI: 'true'
+      - name: Gate mobile Série C (iPhone WebKit + Pixel Android)
+        run: |
+          UX_AUDIT_WIDTH=375 UX_AUDIT_HEIGHT=667 npx playwright test \
+            e2e/non-regression/ios-series-c-audit.spec.ts \
+            e2e/non-regression/signup-series-c-audit.spec.ts \
+            --project=ios-webkit-audit
+          UX_AUDIT_WIDTH=412 UX_AUDIT_HEIGHT=915 npx playwright test \
+            e2e/non-regression/ios-series-c-audit.spec.ts \
+            --project=android-pixel-audit
+        env:
+          PLAYWRIGHT_BASE_URL: http://localhost:8080
           SUPABASE_URL: ${{ env.E2E_SUPABASE_URL }}
           SUPABASE_PUBLISHABLE_KEY: ${{ env.E2E_PUBLISHABLE_KEY }}
           SUPABASE_ANON_KEY: ${{ env.E2E_ANON_KEY }}

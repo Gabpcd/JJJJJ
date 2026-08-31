@@ -1,5 +1,6 @@
 import React from "react";
 import * as Sentry from "@sentry/react";
+import { recoverFromChunkLoadError } from '@/lib/chunkRecovery';
 
 interface Props {
   children: React.ReactNode;
@@ -22,6 +23,11 @@ export class ErrorBoundary extends React.Component<Props, State> {
   }
 
   componentDidCatch(error: Error, info: React.ErrorInfo) {
+    // Un ancien onglet peut encore référencer un chunk haché supprimé lors du
+    // déploiement suivant. Récupérer avant d'envoyer l'exception à Sentry : si
+    // le reload réussit, ce n'est pas un crash applicatif à notifier.
+    if (recoverFromChunkLoadError(error)) return;
+
     // Console uniquement (PAS via logger) : on capture l'exception UNE SEULE
     // fois ci-dessous, avec le component stack en CONTEXTE. Avant, les deux
     // logger.error créaient des issues Sentry parasites en doublon
@@ -37,18 +43,6 @@ export class ErrorBoundary extends React.Component<Props, State> {
     } catch { /* noop */ }
     this.setState({ errorInfo: info });
 
-    // Chunk load failure après déploiement : auto-reload UNE fois.
-    const msg = (error?.message || '').toLowerCase();
-    if (
-      (msg.includes('importing a module script failed') ||
-       msg.includes('failed to fetch dynamically imported module') ||
-       msg.includes('loading chunk') ||
-       msg.includes('loading css chunk')) &&
-      sessionStorage.getItem('chunk-boundary-retry') !== '1'
-    ) {
-      sessionStorage.setItem('chunk-boundary-retry', '1');
-      window.location.reload();
-    }
   }
 
   render() {

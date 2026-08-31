@@ -128,6 +128,27 @@ export default defineConfig({
           : {}),
       },
     },
+    {
+      // Contrat iOS réel du moteur : WebKit + UA/tactile iPhone. Ce projet
+      // reste limité aux audits non-régression pour ne pas dupliquer toute la
+      // suite métier ni faire courir les comptes de recette en parallèle.
+      name: 'ios-webkit-audit',
+      testMatch: /non-regression\/.*\.spec\.ts/,
+      testIgnore: [],
+      use: { ...devices['iPhone SE (3rd gen)'] },
+    },
+    {
+      // Même garde-fou ciblé pour Android/Chrome au format Pixel 7.
+      name: 'android-pixel-audit',
+      testMatch: /non-regression\/.*\.spec\.ts/,
+      testIgnore: [],
+      use: {
+        ...devices['Pixel 7'],
+        ...(LOCAL_CHROMIUM_EXECUTABLE
+          ? { launchOptions: { executablePath: LOCAL_CHROMIUM_EXECUTABLE } }
+          : {}),
+      },
+    },
   ],
 
   // En CI on attend que le serveur soit démarré séparément (preview Vercel par
