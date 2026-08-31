@@ -1,5 +1,7 @@
 import { expect, test, type Page, type TestInfo } from '@playwright/test';
-import { loginAs } from '../helpers/auth';
+import { loginAs, TEST_ACCOUNTS } from '../helpers/auth';
+import { adminClient, userIdByEmail } from '../helpers/db';
+import { PREFIX_MISSION_MATCHING, seedMissionMatching } from '../helpers/seed-matching';
 
 type RoleAudit = 'soignant' | 'etab';
 
@@ -304,36 +306,55 @@ test.describe('audit iOS Série C — parcours complet', () => {
   test.use({ viewport: MOBILE_AUDIT_VIEWPORT, hasTouch: true, isMobile: true });
 
   test('dashboard soignant — la carte suggérée ne comprime ni le contenu ni le CTA', async ({ page }) => {
-    await prepareNativeShell(page);
-    await loginAs(page, 'soignant');
-    // loginAs attend déjà ce dashboard. Une seconde navigation immédiate vers
-    // la même URL peut entrer en concurrence avec la résolution finale du rôle
-    // sous WebKit et produire un faux « navigation interrupted ».
-
-    const cta = page.getByRole('button', { name: 'Voir le planning et postuler' }).first();
-    await expect(cta).toBeVisible();
-    const card = cta.locator('xpath=ancestor::*[contains(concat(" ", normalize-space(@class), " "), " card-base ")][1]');
-    const missionLink = card.locator('a').first();
-    const layout = await card.evaluate((element) => {
-      const link = element.querySelector('a');
-      const button = element.querySelector('button');
-      if (!link || !button) throw new Error('Composition de carte mission incomplète');
-      const cardRect = element.getBoundingClientRect();
-      const linkRect = link.getBoundingClientRect();
-      const buttonRect = button.getBoundingClientRect();
-      return {
-        cardWidth: cardRect.width,
-        linkWidth: linkRect.width,
-        buttonWidth: buttonRect.width,
-        linkBottom: linkRect.bottom,
-        buttonTop: buttonRect.top,
-      };
+    const soignantId = await userIdByEmail(TEST_ACCOUNTS.soignant.email);
+    expect(soignantId, 'compte soignant de recette disponible').toBeTruthy();
+    const { data: soignant } = await adminClient()
+      .from('soignants' as any)
+      .select('profession')
+      .eq('id', soignantId!)
+      .maybeSingle();
+    const mission = await seedMissionMatching({
+      intitule: `${PREFIX_MISSION_MATCHING} dashboard-mobile-${Date.now()}`,
+      profession: (soignant as any)?.profession || 'IDE',
     });
+    expect(mission, 'mission compatible dédiée au contrôle visuel').toBeTruthy();
 
-    await expect(missionLink).toBeVisible();
-    expect(layout.linkWidth).toBeGreaterThanOrEqual(layout.cardWidth - 40);
-    expect(layout.buttonWidth).toBeGreaterThanOrEqual(layout.cardWidth - 40);
-    expect(layout.buttonTop).toBeGreaterThanOrEqual(layout.linkBottom + 8);
+    try {
+      await prepareNativeShell(page);
+      await loginAs(page, 'soignant');
+      // loginAs attend déjà ce dashboard. Une seconde navigation immédiate vers
+      // la même URL peut entrer en concurrence avec la résolution finale du rôle
+      // sous WebKit et produire un faux « navigation interrupted ».
+
+      const cta = page.getByRole('button', { name: 'Voir le planning et postuler' }).first();
+      await expect(cta).toBeVisible();
+      const card = cta.locator('xpath=ancestor::*[contains(concat(" ", normalize-space(@class), " "), " card-base ")][1]');
+      const missionLink = card.locator('a').first();
+      const layout = await card.evaluate((element) => {
+        const link = element.querySelector('a');
+        const button = element.querySelector('button');
+        if (!link || !button) throw new Error('Composition de carte mission incomplète');
+        const cardRect = element.getBoundingClientRect();
+        const linkRect = link.getBoundingClientRect();
+        const buttonRect = button.getBoundingClientRect();
+        return {
+          cardWidth: cardRect.width,
+          linkWidth: linkRect.width,
+          buttonWidth: buttonRect.width,
+          linkBottom: linkRect.bottom,
+          buttonTop: buttonRect.top,
+        };
+      });
+
+      await expect(missionLink).toBeVisible();
+      expect(layout.linkWidth).toBeGreaterThanOrEqual(layout.cardWidth - 40);
+      expect(layout.buttonWidth).toBeGreaterThanOrEqual(layout.cardWidth - 40);
+      expect(layout.buttonTop).toBeGreaterThanOrEqual(layout.linkBottom + 8);
+    } finally {
+      if (mission) {
+        await adminClient().from('missions' as any).delete().eq('id', mission.id);
+      }
+    }
   });
 
   test('soignant — toutes les interfaces publiques du compte', async ({ page }, testInfo) => {
