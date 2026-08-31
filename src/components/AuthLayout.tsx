@@ -131,5 +131,8 @@ export function AuthLayout({ children, showBack = true, backTo, scrollKey }: Aut
 function keyboardFields(form: HTMLFormElement): Array<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement> {
   return Array.from(form.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>(
     'input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"]):not([type="button"]):not([type="submit"]), textarea, select',
-  )).filter((field) => !field.disabled && !field.readOnly);
+  )).filter((field) => (
+    !field.disabled
+    && (!(field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement) || !field.readOnly)
+  ));
 }
