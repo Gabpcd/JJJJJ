@@ -42,16 +42,17 @@ export function BoutonFavori({ soignantId, etablissementId }: Props) {
 
   return (
     <button
+      type="button"
       onClick={toggle}
       disabled={loading}
       title={favori ? 'Retirer des favoris' : 'Ajouter aux favoris'}
       aria-label={favori ? 'Retirer ce soignant des favoris' : 'Ajouter ce soignant aux favoris'}
       aria-pressed={favori}
-      className={`p-1.5 rounded-lg transition-colors disabled:opacity-50 disabled:pointer-events-none ${bouncing ? 'animate-bounce-fav' : ''} ${
+      className={`inline-flex min-h-11 min-w-11 items-center justify-center rounded-xl p-0 transition-colors disabled:opacity-50 disabled:pointer-events-none ${bouncing ? 'animate-bounce-fav' : ''} ${
         favori ? 'text-warning' : 'text-muted-foreground hover:text-warning'
       }`}
     >
-      <Star aria-hidden="true" className={`h-4 w-4 ${favori ? 'fill-warning' : ''}`} />
+      <Star aria-hidden="true" className={`h-5 w-5 ${favori ? 'fill-warning' : ''}`} />
     </button>
   );
 }

@@ -588,13 +588,16 @@ export default function DashboardSoignant() {
                     ? { montant: Math.round(Number(m.taux_horaire_base) * duree), libelle: 'brut indicatif', approximatif: true }
                     : null;
               return (
-                <div key={m.id} className="card-base hover:shadow-md transition-all flex items-center gap-3 py-3">
+                <div
+                  key={m.id}
+                  className="card-base flex flex-col items-stretch gap-3 py-3 transition-all hover:shadow-md sm:flex-row sm:items-center"
+                >
                   <Link
                     to={`/soignant/missions/${m.id}`}
-                    className="flex flex-1 min-w-0 items-center gap-3 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+                    className="flex min-w-0 flex-1 items-start gap-3 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 sm:items-center"
                     aria-label={`Voir la mission ${m.intitule}`}
                   >
-                    <div className="flex flex-col items-center justify-center rounded-xl bg-primary/10 px-3 py-1.5 min-w-[52px] min-h-[58px]">
+                    <div className="flex min-h-[58px] min-w-[52px] shrink-0 flex-col items-center justify-center rounded-xl bg-primary/10 px-3 py-1.5">
                       {planningAffichable ? (
                         <>
                           <span className="text-[10px] font-semibold text-primary uppercase">{formatParis(m.debut_affiche, 'EEE')}</span>
@@ -607,9 +610,9 @@ export default function DashboardSoignant() {
                     </div>
                     <div className="flex-1 min-w-0">
                       {m.est_urgente && <span className="badge-base bg-destructive/10 text-destructive text-[10px] mb-0.5 inline-block">🔥 Urgent</span>}
-                      <h3 className="font-semibold text-sm text-foreground truncate" title={m.intitule}>{m.intitule}</h3>
-                      <p className="text-xs text-muted-foreground mt-0.5 truncate">🏥 {m.etab_nom || 'Établissement'}{m.service ? ` · ${m.service}` : ''}</p>
-                      <div className="flex items-center gap-3 mt-0.5 text-[11px] text-muted-foreground">
+                      <h3 className="font-semibold text-sm text-foreground" title={m.intitule}>{m.intitule}</h3>
+                      <p className="mt-0.5 text-xs text-muted-foreground">🏥 {m.etab_nom || 'Établissement'}{m.service ? ` · ${m.service}` : ''}</p>
+                      <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
                         {planningAffichable ? (
                           <span>
                             🕐 {formatParis(m.debut_affiche, "EEEE d MMM · HH'h'mm")} → {formatParis(m.fin_affichee, "HH'h'mm")}
@@ -626,7 +629,7 @@ export default function DashboardSoignant() {
                   <BoutonY2K
                     size="sm"
                     variant="primary"
-                    className="shrink-0"
+                    className="w-full shrink-0 sm:w-auto"
                     onClick={(e: React.MouseEvent) => {
                       e.stopPropagation();
                       navigate(`/soignant/missions/${m.id}`);

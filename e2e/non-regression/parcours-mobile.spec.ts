@@ -52,9 +52,30 @@ test.describe('inscription soignant — iPhone 16 Pro Max', () => {
         borderTopWidth: style.borderTopWidth,
         borderRadius: style.borderRadius,
         boxShadow: style.boxShadow,
+        flexShrink: style.flexShrink,
       };
     });
-    expect(chrome).toEqual({ borderTopWidth: '0px', borderRadius: '0px', boxShadow: 'none' });
+    expect(chrome).toEqual({
+      borderTopWidth: '0px',
+      borderRadius: '0px',
+      boxShadow: 'none',
+      flexShrink: '0',
+    });
+
+    const topInitial = await carte.evaluate((element) => element.getBoundingClientRect().top);
+    expect(topInitial, 'le formulaire doit commencer sous le header, sans grand vide').toBeLessThan(120);
+
+    const champsTropPetits = await page.locator('input, textarea, select').evaluateAll((elements) => (
+      elements
+        .filter((element) => {
+          const rect = element.getBoundingClientRect();
+          const style = getComputedStyle(element);
+          return rect.width > 0 && rect.height > 0 && style.visibility !== 'hidden';
+        })
+        .map((element) => Number.parseFloat(getComputedStyle(element).fontSize))
+        .filter((fontSize) => fontSize < 16)
+    ));
+    expect(champsTropPetits, 'aucun champ visible ne doit provoquer le zoom iOS').toEqual([]);
 
     await page.locator('input[type="email"]').fill('mobile.ios@jolene.app');
     await page.locator('input[type="password"]').nth(0).fill('Jolene2026!');
@@ -72,6 +93,19 @@ test.describe('inscription soignant — iPhone 16 Pro Max', () => {
       parent: element.parentElement?.getBoundingClientRect().width ?? 0,
     }));
     expect(dimensions.input).toBeLessThanOrEqual(dimensions.parent + 0.5);
+  });
+
+  test('garde le CTA accessible au-dessus de la zone sûre en fin de formulaire', async ({ page }) => {
+    const scroller = page.locator('.auth-scroll');
+    await scroller.evaluate((element) => element.scrollTo({ top: element.scrollHeight, behavior: 'auto' }));
+
+    const continuer = page.getByRole('button', { name: 'Continuer' });
+    await expect(continuer).toBeVisible();
+    const geometry = await continuer.evaluate((element) => ({
+      bottom: element.getBoundingClientRect().bottom,
+      viewportHeight: window.visualViewport?.height ?? window.innerHeight,
+    }));
+    expect(geometry.bottom).toBeLessThanOrEqual(geometry.viewportHeight - 16);
   });
 
   test('ouvre les professions en feuille mobile sans déclencher le clavier', async ({ page }) => {

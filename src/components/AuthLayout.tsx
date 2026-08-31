@@ -79,7 +79,7 @@ export function AuthLayout({ children, showBack = true, backTo, scrollKey }: Aut
         onPointerDown={handleBackgroundPointerDown}
         style={{
           paddingTop: showBack ? '0.5rem' : 'calc(env(safe-area-inset-top) + 1rem)',
-          paddingBottom: 'calc(env(safe-area-inset-bottom) + 1.5rem)',
+          paddingBottom: 'calc(env(safe-area-inset-bottom) + 3rem)',
         }}
       >
         {children}

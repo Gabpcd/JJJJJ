@@ -519,11 +519,11 @@ export default function RechercheMissions() {
       {vue !== 'swipe' && <IndicateurPullToRefresh distance={pullDistance} refreshing={refreshing} />}
       {!loading && (!soignant || !soignant.profession) && <BandeauProfilIncomplet />}
       <div className={vue === 'swipe' ? 'flex flex-col flex-1 min-h-0 gap-2' : 'space-y-4'}>
-        <div className="flex items-center justify-between gap-2 shrink-0">
+        <div className="flex shrink-0 flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <h1 className="text-xl font-bold text-foreground">Explorer</h1>
-          <div className="flex items-center gap-1.5">
+          <div className="flex w-full items-center gap-1.5 sm:w-auto">
             {/* 6c.1 : UN SEUL switcher segmenté Swipe · Liste · Carte */}
-            <div className="inline-flex rounded-2xl bg-jolene-cloud border border-jolene-rose-200 p-1" role="tablist" aria-label="Vue Swipe, Liste ou Carte">
+            <div className="grid min-w-0 flex-1 grid-cols-3 rounded-2xl border border-jolene-rose-200 bg-jolene-cloud p-1 sm:inline-flex sm:flex-none" role="tablist" aria-label="Vue Swipe, Liste ou Carte">
               {([
                 { v: 'swipe' as const, label: 'Swipe', icone: <Sparkles className="h-3.5 w-3.5" aria-hidden="true" /> },
                 { v: 'liste' as const, label: 'Liste', icone: <LayoutGrid className="h-3.5 w-3.5" aria-hidden="true" /> },
@@ -534,7 +534,7 @@ export default function RechercheMissions() {
                   type="button"
                   role="tab"
                   aria-selected={vue === v}
-                  className={`inline-flex items-center gap-1 rounded-xl px-2.5 py-1.5 text-xs font-semibold transition-snap ${vue === v ? 'bg-gradient-hero text-white shadow-md' : 'text-jolene-bubblegum hover:text-jolene-rose-700'}`}
+                  className={`inline-flex min-w-0 items-center justify-center gap-1 rounded-xl px-2 py-1.5 text-xs font-semibold transition-snap sm:px-2.5 ${vue === v ? 'bg-gradient-hero text-white shadow-md' : 'text-jolene-bubblegum hover:text-jolene-rose-700'}`}
                   onClick={() => basculerVue(v)}
                 >
                   {icone}

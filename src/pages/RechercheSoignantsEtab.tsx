@@ -174,7 +174,7 @@ export default function RechercheSoignantsEtab() {
 
   return (
     <LayoutApp role="ADMIN_ETABLISSEMENT">
-      <div className="mb-6 flex items-start justify-between gap-3">
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Annuaire soignants</h1>
           <p className="text-sm text-muted-foreground mt-1">
@@ -184,7 +184,7 @@ export default function RechercheSoignantsEtab() {
         <button
           type="button"
           onClick={() => navigate('/etablissement/parametres/recherches-sauvegardees')}
-          className="btn-secondary text-xs inline-flex items-center gap-1.5 shrink-0"
+          className="btn-secondary inline-flex shrink-0 self-start items-center gap-1.5 text-sm"
         >
           <Star className="h-3.5 w-3.5" /> Recherches sauvegardées
         </button>
@@ -401,7 +401,7 @@ function CarteSoignant({ soignant: s, onClick, etablissementId }: { soignant: So
         type="button"
         onClick={onClick}
         aria-label={`Voir le profil de ${s.prenom} ${s.nom_initiale}`}
-        className="w-full rounded-lg pr-7 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+        className="w-full rounded-lg pr-12 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
       >
       <div className="flex items-start gap-3">
         {s.avatar_url ? (
@@ -436,7 +436,7 @@ function CarteSoignant({ soignant: s, onClick, etablissementId }: { soignant: So
                 <ShieldCheck className="h-3 w-3" /> {s.score_fiabilite}/100
               </span>
             ) : (
-              <span className="inline-flex items-center rounded-full bg-muted text-muted-foreground px-2 py-0.5 text-[11px]">Pas encore d'évaluation</span>
+              <span className="inline-flex items-center rounded-full bg-muted text-muted-foreground px-2 py-0.5 text-xs">Pas encore d'évaluation</span>
             )}
             {s.note_moyenne != null && (
               <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 text-amber-700 px-2 py-0.5 font-medium">

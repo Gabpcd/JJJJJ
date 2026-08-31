@@ -538,7 +538,7 @@ export default function PresencesSoignant() {
       </div>
 
       <Tabs defaultValue={tabInitial}>
-        <TabsList className="w-full max-w-lg mb-4">
+        <TabsList className="mb-4 grid w-full max-w-lg grid-cols-2 gap-1 sm:inline-flex sm:gap-0">
           <TabsTrigger value="avenir" className="flex-1 gap-1.5"><CalendarDays className="h-4 w-4" />À venir{missionsAVenir.length > 0 && <BadgeY2K variant="info" size="sm" className="ml-1 h-5 min-w-[20px] justify-center px-1" aria-label={`${missionsAVenir.length} mission${missionsAVenir.length > 1 ? 's' : ''} à venir`}>{missionsAVenir.length}</BadgeY2K>}</TabsTrigger>
           <TabsTrigger value="encours" className="flex-1 gap-1.5"><Activity className="h-4 w-4" />Actives</TabsTrigger>
           <TabsTrigger value="aujourdhui" className="flex-1 gap-1.5"><Clock className="h-4 w-4" />Aujourd'hui</TabsTrigger>
