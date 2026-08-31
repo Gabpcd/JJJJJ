@@ -48,7 +48,7 @@ export default function PageScoreEtablissement() {
 
   return (
     <LayoutApp role="ADMIN_ETABLISSEMENT">
-      <button onClick={() => navigate(-1)} className="flex items-center gap-1 text-sm text-primary hover:underline mb-2">
+      <button onClick={() => navigate(-1)} className="app-inline-back flex items-center gap-1 text-sm text-primary hover:underline mb-2">
         <ArrowLeft className="h-4 w-4" /> Retour
       </button>
 

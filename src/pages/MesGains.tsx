@@ -701,7 +701,7 @@ export function MesGainsApercuContent() {
           )}
         </div>
       ) : erreurAffichee ? null : allMissions.length === 0 ? (
-        <EmptyState illustration={<IllustrationTirelire />} titre="Pas encore de gains" description="Tes gains apparaîtront ici après ta première mission terminée." cta={{ label: 'Trouver une mission', onClick: () => navigate('/soignant/recherche-missions') }} />
+        <EmptyState illustration={<IllustrationTirelire />} titre="Pas encore de gains" description="Tes gains apparaîtront ici après ta première mission terminée." cta={{ label: 'Trouver une mission', onClick: () => navigate('/soignant/recherche-missions') }} compact />
       ) : (
         /* 6d.1 : historique existant mais période vide → message scopé, pas un
            grand état vide sous un pipeline/graphique qui montrent des gains. */

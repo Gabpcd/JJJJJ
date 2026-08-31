@@ -91,7 +91,7 @@ export default function ModifierMission() {
   return (
     <LayoutApp role="ADMIN_ETABLISSEMENT">
       <div className="max-w-2xl mx-auto">
-        <button onClick={() => navigate(`/etablissement/missions/${id}`)} className="text-sm text-primary hover:underline mb-4 inline-block">
+        <button onClick={() => navigate(`/etablissement/missions/${id}`)} className="app-inline-back text-sm text-primary hover:underline mb-4 inline-block">
           ← Retour au détail
         </button>
         <h1 className="text-xl font-bold text-foreground mb-6">✏️ Modifier la mission</h1>

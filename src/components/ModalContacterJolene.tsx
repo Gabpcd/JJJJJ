@@ -1,9 +1,18 @@
 import { useState } from 'react';
-import { Send, Loader2, X } from 'lucide-react';
+import { Send, Loader2, Mail } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
 import { CaptchaTurnstile, TURNSTILE_REQUIRED } from '@/components/CaptchaTurnstile';
+import {
+  DialogResponsive,
+  DialogResponsiveBody,
+  DialogResponsiveContent,
+  DialogResponsiveDescription,
+  DialogResponsiveFooter,
+  DialogResponsiveHeader,
+  DialogResponsiveTitle,
+} from '@/components/ui/DialogResponsive';
 
 interface Props {
   open: boolean;
@@ -26,8 +35,6 @@ export function ModalContacterJolene({ open, onClose, source = 'aide' }: Props) 
   const [envoi, setEnvoi] = useState(false);
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
   const [captchaKey, setCaptchaKey] = useState(0);
-
-  if (!open) return null;
 
   const envoyer = async () => {
     if (!sujet.trim() || !corps.trim()) {
@@ -77,30 +84,36 @@ export function ModalContacterJolene({ open, onClose, source = 'aide' }: Props) 
   };
 
   return (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label="Contacter Jolene">
-      <div className="absolute inset-0 bg-foreground/50 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative bg-card border border-border rounded-2xl shadow-xl w-full max-w-md p-6 space-y-4 max-h-[calc(100dvh-2rem)] overflow-y-auto">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-bold text-foreground">✉️ Contacter Jolene</h2>
-          <button onClick={onClose} className="p-1 hover:bg-muted rounded-lg" aria-label="Fermer"><X className="h-5 w-5" /></button>
-        </div>
-        <p className="text-sm text-muted-foreground">
+    <DialogResponsive open={open} onOpenChange={(prochainOpen) => { if (!prochainOpen && !envoi) onClose(); }}>
+      <DialogResponsiveContent
+        maxWidth="md"
+        onEscapeKeyDown={(event) => { if (envoi) event.preventDefault(); }}
+        onPointerDownOutside={(event) => { if (envoi) event.preventDefault(); }}
+      >
+        <DialogResponsiveHeader>
+          <DialogResponsiveTitle className="flex items-center gap-2">
+            <Mail className="h-5 w-5 text-primary" aria-hidden="true" />
+            Contacter Jolene
+          </DialogResponsiveTitle>
+          <DialogResponsiveDescription>
           Une question, un souci, une suggestion ? Écrivez-nous, l'équipe Jolene vous répond directement.
-        </p>
+          </DialogResponsiveDescription>
+        </DialogResponsiveHeader>
+        <DialogResponsiveBody className="space-y-4">
         {!user && (
           <div className="grid sm:grid-cols-2 gap-3">
             <div>
-              <label htmlFor="contact-modal-nom" className="block text-xs font-medium text-foreground mb-1">Votre nom</label>
+              <label htmlFor="contact-modal-nom" className="block text-sm font-medium text-foreground mb-1.5">Votre nom</label>
               <input id="contact-modal-nom" value={nom} onChange={(e) => setNom(e.target.value)} maxLength={120} className="input-base" autoComplete="name" />
             </div>
             <div>
-              <label htmlFor="contact-modal-email" className="block text-xs font-medium text-foreground mb-1">Votre e-mail</label>
+              <label htmlFor="contact-modal-email" className="block text-sm font-medium text-foreground mb-1.5">Votre e-mail</label>
               <input id="contact-modal-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} maxLength={160} className="input-base" autoComplete="email" />
             </div>
           </div>
         )}
         <div>
-          <label htmlFor="contact-sujet" className="block text-xs font-medium text-foreground mb-1">Sujet</label>
+          <label htmlFor="contact-sujet" className="block text-sm font-medium text-foreground mb-1.5">Sujet</label>
           <input
             id="contact-sujet"
             value={sujet}
@@ -111,7 +124,7 @@ export function ModalContacterJolene({ open, onClose, source = 'aide' }: Props) 
           />
         </div>
         <div>
-          <label htmlFor="contact-corps" className="block text-xs font-medium text-foreground mb-1">Votre message</label>
+          <label htmlFor="contact-corps" className="block text-sm font-medium text-foreground mb-1.5">Votre message</label>
           <textarea
             id="contact-corps"
             value={corps}
@@ -131,19 +144,20 @@ export function ModalContacterJolene({ open, onClose, source = 'aide' }: Props) 
             onError={() => setTurnstileToken(null)}
           />
         )}
-        <div className="flex gap-2 justify-end pt-1">
-          <button onClick={onClose} className="btn-secondary text-sm px-4 py-2" disabled={envoi}>Annuler</button>
+        </DialogResponsiveBody>
+        <DialogResponsiveFooter>
+          <button onClick={onClose} className="btn-secondary w-full sm:w-auto text-sm px-4 py-2" disabled={envoi}>Annuler</button>
           <button
             onClick={envoyer}
             disabled={envoi || !sujet.trim() || !corps.trim() || (!user && (!nom.trim() || !email.trim() || (TURNSTILE_REQUIRED && !turnstileToken)))}
-            className="btn-primary text-sm px-4 py-2 inline-flex items-center gap-2 disabled:opacity-50"
+            className="btn-primary w-full sm:w-auto text-sm px-4 py-2 inline-flex items-center justify-center gap-2 disabled:opacity-50"
           >
             {envoi ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
             Envoyer
           </button>
-        </div>
-      </div>
-    </div>
+        </DialogResponsiveFooter>
+      </DialogResponsiveContent>
+    </DialogResponsive>
   );
 }
 

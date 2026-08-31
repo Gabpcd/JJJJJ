@@ -820,7 +820,7 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
 
   return (
     <DetailMissionLayout role={role}>
-      <button onClick={handleBack} className="text-sm text-primary hover:underline mb-4 inline-block">
+      <button onClick={handleBack} className="app-inline-back text-sm text-primary hover:underline mb-4 inline-block">
         {backLabel}
       </button>
 

@@ -29,8 +29,31 @@ export function DemandePermissionPush() {
     // « déjà demandé/refusé » ci-dessus reste prioritaire.
     if (!estSessionRecurrente()) return;
 
-    // On native, push is handled via initNativePush after login
-    if (Capacitor.isNativePlatform()) return;
+    if (Capacitor.isNativePlatform()) {
+      let actif = true;
+      let timer: number | undefined;
+
+      void import('@capacitor/push-notifications').then(async ({ PushNotifications }) => {
+        const permission = await PushNotifications.checkPermissions();
+        if (!actif) return;
+        if (permission.receive === 'granted') {
+          localStorage.setItem(STORAGE_KEY, 'accepted');
+          return;
+        }
+        // iOS ne réaffiche pas le prompt après un refus. On évite donc un
+        // pré-prompt sans issue et on laisse les réglages système prendre le relais.
+        if (permission.receive === 'denied') {
+          localStorage.setItem(STORAGE_KEY, 'denied');
+          return;
+        }
+        timer = window.setTimeout(() => setVisible(true), 5000);
+      }).catch(() => undefined);
+
+      return () => {
+        actif = false;
+        if (timer !== undefined) window.clearTimeout(timer);
+      };
+    }
 
     if (!('Notification' in window)) return;
     if (Notification.permission === 'granted') return;
@@ -41,9 +64,22 @@ export function DemandePermissionPush() {
 
   const handleActiver = async () => {
     if (!user) return;
-    localStorage.setItem(STORAGE_KEY, 'accepted');
     setVisible(false);
     try {
+      if (Capacitor.isNativePlatform()) {
+        const { demanderPermissionNativePush } = await import('@/lib/pushNative');
+        const permissionAccordee = await demanderPermissionNativePush(user.id);
+        localStorage.setItem(STORAGE_KEY, permissionAccordee ? 'accepted' : 'denied');
+        afficherNotification({
+          type: permissionAccordee ? 'succes' : 'erreur',
+          message: permissionAccordee
+            ? 'Alertes push activées !'
+            : 'Notifications non activées. Vous pourrez les autoriser dans Réglages.',
+        });
+        return;
+      }
+
+      localStorage.setItem(STORAGE_KEY, 'accepted');
       const { demanderPermissionPush } = await import('@/lib/firebase');
       const token = await demanderPermissionPush(user.id, supabase as any);
       if (token) {

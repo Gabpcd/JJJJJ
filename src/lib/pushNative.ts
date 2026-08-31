@@ -68,9 +68,12 @@ function lienExplicite(data: Record<string, unknown>): string | null {
  * PSC. Le plugin Capacitor retourne le token attendu par chaque transport du
  * backend Jolene : APNs brut sur iOS, FCM sur Android.
  */
-export async function initNativePush(userId: string): Promise<void> {
+export async function initNativePush(
+  userId: string,
+  { autoriserDemande = false }: { autoriserDemande?: boolean } = {},
+): Promise<void> {
   if (!isNative() || !userId) return;
-  if (userInitialise === userId) return;
+  if (userInitialise === userId && !autoriserDemande) return;
   if (initialisationEnCours && userInitialisationEnCours === userId) return initialisationEnCours;
 
   // Un changement de compte invalide immédiatement les callbacks de l'ancien
@@ -88,11 +91,11 @@ export async function initNativePush(userId: string): Promise<void> {
     if (generation !== generationPush) return;
 
     let permission = await PushNotifications.checkPermissions();
-    if (permission.receive === 'prompt') {
+    if (permission.receive === 'prompt' && autoriserDemande) {
       permission = await PushNotifications.requestPermissions();
     }
     if (permission.receive !== 'granted') {
-      logger.debug('[PUSH] Permission non accordée');
+      logger.debug('[PUSH] Permission non accordée — attente d’une action utilisateur');
       userInitialise = userId;
       return;
     }
@@ -171,6 +174,23 @@ export async function initNativePush(userId: string): Promise<void> {
   });
 
   return initialisationEnCours;
+}
+
+/**
+ * Déclenche le prompt système uniquement après le tap sur le pré-prompt Jolene.
+ * Apple recommande une demande contextualisée : une connexion ne doit jamais
+ * ouvrir d'elle-même la feuille de permission iOS.
+ */
+export async function demanderPermissionNativePush(userId: string): Promise<boolean> {
+  if (!isNative() || !userId) return false;
+  userInitialise = null;
+  await initNativePush(userId, { autoriserDemande: true });
+  try {
+    const { PushNotifications } = await import('@capacitor/push-notifications');
+    return (await PushNotifications.checkPermissions()).receive === 'granted';
+  } catch {
+    return false;
+  }
 }
 
 /** Nettoie uniquement les listeners locaux ; le logout supprime le token côté DB. */
