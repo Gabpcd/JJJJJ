@@ -442,7 +442,7 @@ export default function MissionsSoignant() {
                           navigate(`/soignant/missions/${m.id}`);
                         }
                       }}
-                      className="card-base hover:shadow-md cursor-pointer transition-all flex items-center gap-3 py-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+                      className="card-base flex cursor-pointer items-start gap-3 py-3 transition-all hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
                     >
                       <div className="flex flex-col items-center justify-center rounded-xl bg-primary/10 px-3 py-1.5 min-w-[52px]">
                         <span className="text-[10px] font-semibold text-primary uppercase">{formatParis(dateAffichee, 'EEE')}</span>
@@ -451,15 +451,15 @@ export default function MissionsSoignant() {
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
-                          <span className="badge-base bg-amber-100 text-amber-700 text-[10px]">⏳ En attente de réponse</span>
-                          {estPrioriteHistorique && <span className="badge-base bg-jolene-butter-100 text-jolene-midnight border border-jolene-butter-300 text-[10px]">★ Priorité historique</span>}
-                          {c.type_contrat_choisi && <span className="badge-base bg-muted text-muted-foreground text-[10px]">{c.type_contrat_choisi === 'LIBERAL' ? 'Libéral' : 'Salarié'}</span>}
+                          <span className="badge-base bg-amber-100 text-[11px] text-amber-700">⏳ En attente de réponse</span>
+                          {estPrioriteHistorique && <span className="badge-base border border-jolene-butter-300 bg-jolene-butter-100 text-[11px] text-jolene-midnight">★ Priorité historique</span>}
+                          {c.type_contrat_choisi && <span className="badge-base bg-muted text-[11px] text-muted-foreground">{c.type_contrat_choisi === 'LIBERAL' ? 'Libéral' : 'Salarié'}</span>}
                         </div>
                         <h3 className="font-semibold text-sm text-foreground truncate" title={m.intitule}>{m.intitule}</h3>
                         <p className="text-xs text-muted-foreground mt-0.5">
                           🏥 {m.etablissements?.nom || 'Établissement'}{m.etablissements?.adresse_ville ? ` · ${m.etablissements.adresse_ville}` : ''}
                         </p>
-                        <div className="flex items-center gap-3 mt-0.5 text-xs text-muted-foreground">
+                        <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
                           <span>
                             🕐 {creneauAffiche?.fin
                               ? `${formatParis(creneauAffiche.debut, "d MMM · HH'h'mm")} → ${formatParis(creneauAffiche.fin, "HH'h'mm")}`

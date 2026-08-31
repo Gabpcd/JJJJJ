@@ -119,18 +119,24 @@ export function ChecklistEtapes({ etapes, etapesValidees, onToggle, disabled }: 
               {etape.informatif ? (
                 <Info className="h-5 w-5 text-info shrink-0 mt-0.5" />
               ) : (
-                <Checkbox
-                  id={`etape-${etape.cle}`}
-                  checked={checked}
-                  disabled={disabled || saving[etape.cle]}
-                  onCheckedChange={(c) => handleToggle(etape.cle, Boolean(c))}
-                  className="mt-0.5 shrink-0"
-                />
+                <label
+                  htmlFor={`etape-${etape.cle}`}
+                  aria-label={`${checked ? 'Décocher' : 'Cocher'} l’étape ${etape.label}`}
+                  className="flex min-h-11 min-w-11 shrink-0 cursor-pointer items-start justify-center pt-1"
+                >
+                  <Checkbox
+                    id={`etape-${etape.cle}`}
+                    checked={checked}
+                    disabled={disabled || saving[etape.cle]}
+                    onCheckedChange={(c) => handleToggle(etape.cle, Boolean(c))}
+                    className="mt-0.5 shrink-0"
+                  />
+                </label>
               )}
               <div className="flex-1 min-w-0">
                 <label
                   htmlFor={`etape-${etape.cle}`}
-                  className={`text-sm font-semibold block ${etape.informatif ? '' : 'cursor-pointer'} ${checked ? 'text-success' : 'text-foreground'}`}
+                  className={`flex min-h-11 items-center py-1 text-sm font-semibold ${etape.informatif ? '' : 'cursor-pointer'} ${checked ? 'text-success' : 'text-foreground'}`}
                 >
                   <span className="text-muted-foreground font-normal">{index + 1}.</span> {etape.label}
                   {estProchaine && <span className="ml-2 text-[10px] font-bold text-primary uppercase">→ Prochaine étape</span>}

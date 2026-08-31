@@ -305,6 +305,31 @@
   /* ── Scrollbars masquées sur mobile (Lot 6b.2) : rendu app native.
      Le scroll reste 100 % fonctionnel (tactile). Desktop inchangé. ── */
   @media (max-width: 768px) {
+    /* Les utilitaires Tailwind (ex. text-sm) sont générés après les styles de
+       base et pouvaient rétablir 14 px sur quelques formulaires. iOS zoome
+       alors automatiquement au focus et donne l'impression que l'écran
+       saute. Ce garde-fou couvre tous les contrôles, présents et futurs. */
+    input,
+    textarea,
+    select {
+      font-size: 16px !important;
+    }
+
+    input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="hidden"]),
+    textarea,
+    select {
+      min-height: 44px;
+    }
+
+    /* Caption 2 est le plus petit style de texte courant d’iOS (11 pt).
+       Plusieurs badges historiques descendaient à 9–10 px et devenaient
+       illisibles sur un écran dense. */
+    .text-\[9px\],
+    .text-\[10px\] {
+      font-size: 11px !important;
+      line-height: 1.35;
+    }
+
     * {
       scrollbar-width: none;
     }
@@ -491,11 +516,12 @@
        de passe, impression, retour compact…) gardent une cible tactile WCAG. */
     button[aria-label] {
       min-width: 44px;
+      min-height: 44px;
     }
 
     .input-base {
       min-height: 48px;
-      font-size: 16px;
+      font-size: 16px !important;
     }
 
     .btn-primary, .btn-secondary, .btn-danger,
@@ -550,6 +576,10 @@
 
     body.platform-ios .auth-scroll > .card-base,
     body.platform-android .auth-scroll > .card-base {
+      /* Un enfant flex peut sinon se contracter à la hauteur du WebView :
+         son contenu dépasse visuellement sans augmenter le scrollHeight,
+         ce qui laisse le dernier CTA sous l'indicateur d'accueil iOS. */
+      flex: none;
       border: 0;
       border-radius: 0;
       box-shadow: none;
