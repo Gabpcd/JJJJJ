@@ -241,7 +241,7 @@ export default function ChargesSociales() {
     return (
       <LayoutApp role="SOIGNANT">
         <div className="mb-6">
-          <button onClick={() => navigate('/soignant/mes-gains')} className="flex items-center gap-1 text-sm text-primary hover:underline mb-2">
+          <button onClick={() => navigate('/soignant/mes-gains')} className="app-inline-back flex items-center gap-1 text-sm text-primary hover:underline mb-2">
             <ArrowLeft className="h-4 w-4" /> Retour aux gains
           </button>
           <h1 className="text-xl font-bold text-foreground flex items-center gap-2">
@@ -270,7 +270,7 @@ export default function ChargesSociales() {
     <LayoutApp role="SOIGNANT">
       {/* Header with back link */}
       <div className="mb-6">
-        <button onClick={() => navigate('/soignant/mes-gains')} className="flex items-center gap-1 text-sm text-primary hover:underline mb-2">
+        <button onClick={() => navigate('/soignant/mes-gains')} className="app-inline-back flex items-center gap-1 text-sm text-primary hover:underline mb-2">
           <ArrowLeft className="h-4 w-4" /> Retour aux gains
         </button>
         <h1 className="text-xl font-bold text-foreground flex items-center gap-2">

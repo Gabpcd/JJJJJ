@@ -209,7 +209,7 @@ export default function DetailPresencesMission({ role = 'ADMIN_ETABLISSEMENT' }:
       <BoutonY2K
         variant="ghost"
         size="sm"
-        className="mb-4"
+        className="app-inline-back mb-4"
         onClick={() => {
           if (window.history.length > 2) navigate(-1);
           else if (role === 'ADMIN_PLATEFORME') navigate('/admin/missions');

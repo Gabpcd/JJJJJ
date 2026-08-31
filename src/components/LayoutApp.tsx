@@ -85,7 +85,7 @@ export function LayoutApp({ role, children, pleinEcran = false }: LayoutAppProps
           style={{
             paddingBottom: pleinEcran
               ? 'calc(4rem + env(safe-area-inset-bottom))'
-              : 'calc(5rem + env(safe-area-inset-bottom))',
+              : 'calc(6rem + env(safe-area-inset-bottom))',
           }}
         >
           {pleinEcran ? (
@@ -93,7 +93,7 @@ export function LayoutApp({ role, children, pleinEcran = false }: LayoutAppProps
               {children}
             </div>
           ) : (
-            <div className={`max-w-6xl mx-auto px-4 py-6 md:pb-6 min-w-0 ${classeTransition}`}>
+            <div className={`max-w-6xl mx-auto px-4 py-4 md:py-6 md:pb-6 min-w-0 ${classeTransition}`}>
               {children}
             </div>
           )}

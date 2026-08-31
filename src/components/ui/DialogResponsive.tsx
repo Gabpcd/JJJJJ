@@ -70,9 +70,11 @@ const DialogResponsiveContent = React.forwardRef<
       ref={ref}
       className={cn(
         // Mobile (< md) : fullscreen
-        'fixed inset-0 z-50 flex flex-col bg-background',
-        'data-[state=open]:animate-in data-[state=open]:slide-in-from-bottom-4 data-[state=open]:fade-in-0',
-        'data-[state=closed]:animate-out data-[state=closed]:slide-out-to-bottom-4 data-[state=closed]:fade-out-0',
+        'dialog-responsive-content fixed inset-0 z-50 flex flex-col bg-background',
+        // Un fullscreen mobile ne doit jamais être translaté hors du viewport,
+        // même pendant sa transition : cela créait un saut de 16 px au focus.
+        'data-[state=open]:animate-in data-[state=open]:fade-in-0',
+        'data-[state=closed]:animate-out data-[state=closed]:fade-out-0',
         // Desktop (>= md) : centered modal Y2K avec border subtle + shadow holographique
         'md:inset-auto md:top-1/2 md:left-1/2 md:-translate-x-1/2 md:-translate-y-1/2 md:w-full md:rounded-3xl md:max-h-[85vh]',
         'md:border md:border-jolene-rose-200/60 md:shadow-holographic',

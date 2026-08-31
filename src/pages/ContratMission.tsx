@@ -349,7 +349,7 @@ export default function ContratMission() {
   return (
     <LayoutApp role={role}>
       <CheckAnimation active={showCheckAnim} />
-      <button onClick={() => navigate(-1)} className="flex items-center gap-1 text-sm text-primary mb-4 hover:underline">
+      <button onClick={() => navigate(-1)} className="app-inline-back flex items-center gap-1 text-sm text-primary mb-4 hover:underline">
         ← Retour
       </button>
       <div className="max-w-3xl mx-auto">

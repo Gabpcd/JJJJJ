@@ -416,7 +416,7 @@ export default function DetailFacture() {
     <LayoutApp role="ADMIN_ETABLISSEMENT">
       {/* Header */}
       <div className="flex items-center justify-between mb-6 no-print">
-        <button onClick={() => window.history.length > 2 ? navigate(-1) : navigate('/etablissement/facturation')} className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors">
+        <button onClick={() => window.history.length > 2 ? navigate(-1) : navigate('/etablissement/facturation')} className="app-inline-back flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors">
           <ArrowLeft className="h-4 w-4" /> Retour
         </button>
         <div className="flex flex-wrap gap-2">
