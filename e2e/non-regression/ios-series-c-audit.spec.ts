@@ -101,12 +101,20 @@ async function auditRoute(page: Page, route: string): Promise<RouteAudit> {
     await page.goto(route, { waitUntil: 'domcontentloaded' });
   } catch (error) {
     // WebKit peut signaler l'interruption lorsque le redirect post-login et
-    // l'audit visent exactement la même URL. Ce n'est pas un échec de page :
-    // attendre la navigation déjà en cours, puis vérifier l'URL obtenue.
-    const sameDestinationRace = error instanceof Error
-      && error.message.includes('is interrupted by another navigation')
-      && new URL(page.url()).pathname === route;
-    if (!sameDestinationRace) throw error;
+    // l'audit visent exactement la même URL. Selon sa version, Playwright
+    // remonte soit « interrupted by another navigation », soit « Frame load
+    // interrupted ». On ne tolère cette course que si la navigation active
+    // aboutit bien à la route demandée : une redirection erronée reste rouge.
+    const navigationRace = error instanceof Error
+      && (
+        error.message.includes('is interrupted by another navigation')
+        || error.message.includes('Frame load interrupted')
+      );
+    if (!navigationRace) throw error;
+    await expect.poll(
+      () => new URL(page.url()).pathname,
+      { timeout: 5_000, message: `WebKit doit terminer sur ${route}` },
+    ).toBe(route);
     await page.waitForLoadState('domcontentloaded');
   }
   // N'écouter qu'après la navigation : WebKit remonte les fetch de la route
