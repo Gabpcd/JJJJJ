@@ -5,6 +5,7 @@ import App from "./App.tsx";
 import "./index.css";
 import { normaliserLienJolene } from './lib/nativeLinks';
 import { fermerNavigateurPsc } from './lib/pscNavigation';
+import { installVitePreloadRecovery } from './lib/chunkRecovery';
 
 // ─── Sentry Initialization ───
 const SENTRY_DSN = import.meta.env.VITE_SENTRY_DSN;
@@ -13,6 +14,11 @@ const SENTRY_DSN = import.meta.env.VITE_SENTRY_DSN;
 // uploadées par sentryVitePlugin pour désobfusquer les stack traces.
 declare const __APP_VERSION__: string;
 const RELEASE = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : 'dev-unknown';
+
+// Safari/Vite peut signaler un modulepreload obsolète avant que React.lazy et
+// les ErrorBoundary n'aient la main. Installer la récupération avant Sentry
+// évite de transformer un simple déploiement en régression remontée aux ops.
+installVitePreloadRecovery(RELEASE);
 
 const SENTRY_IGNORE_ERRORS: (string | RegExp)[] = [
   'ResizeObserver loop limit exceeded',

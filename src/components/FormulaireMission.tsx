@@ -639,7 +639,7 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
               ]).filter(opt => {
                 return liberalSelectionnableMission || opt.value === 'SALARIE';
               }).map(opt => (
-              <label key={opt.value} className="flex items-start gap-3 cursor-pointer group">
+              <label key={opt.value} className="flex min-h-11 items-start gap-3 cursor-pointer group">
                 <input
                   type="radio" name="contratPreference"
                   checked={contratPreference === opt.value}
@@ -735,7 +735,7 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
                   description: 'Prestation ne relevant pas de l’exonération de soin ; le statut TVA du soignant s’appliquera.',
                 },
               ]).map((option) => (
-                <label key={option.value} className="flex cursor-pointer items-start gap-3 rounded-lg border border-border bg-card p-3">
+                <label key={option.value} className="flex min-h-11 cursor-pointer items-start gap-3 rounded-lg border border-border bg-card p-3">
                   <input
                     type="radio"
                     name="natureTvaPrestation"
@@ -832,7 +832,7 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
         <div className="card-base border-border">
           <p className="text-sm font-medium text-foreground mb-3">Mode de sélection</p>
           <div className="space-y-2">
-            <label className="flex items-start gap-3 cursor-pointer group">
+            <label className="flex min-h-11 items-start gap-3 cursor-pointer group">
               <input type="radio" name="modeAttribution" checked={modeAttribution === 'PREMIER_ARRIVE'}
                 onChange={() => setModeAttribution('PREMIER_ARRIVE')} className="mt-0.5 accent-primary" />
               <div>
@@ -840,7 +840,7 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
                 <p className="text-xs text-muted-foreground">Le premier soignant qui accepte remporte la mission.</p>
               </div>
             </label>
-            <label className="flex items-start gap-3 cursor-pointer group">
+            <label className="flex min-h-11 items-start gap-3 cursor-pointer group">
               <input type="radio" name="modeAttribution" checked={modeAttribution === 'CANDIDATURE'}
                 onChange={() => setModeAttribution('CANDIDATURE')} className="mt-0.5 accent-primary" />
               <div>

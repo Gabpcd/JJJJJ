@@ -1,5 +1,6 @@
 import { Capacitor } from '@capacitor/core';
 import { toast } from 'sonner';
+import { activeEditableField, keepNativeFieldVisible } from './nativeKeyboardViewport';
 
 export type Platform = 'web' | 'ios' | 'android';
 
@@ -166,8 +167,43 @@ export async function configurerClavier(): Promise<void> {
     // remontait). 'native' garde le layout stable.
     await Keyboard.setResizeMode({ mode: 'native' as any });
 
-    // Pas de scrollIntoView au focus : Safari/WKWebView scrolle nativement
-    // vers le champ focusé. Le JS smooth + center provoquait un saut + vide.
+    let viewportSansClavier = window.innerHeight;
+    let hauteurVisibleAvecClavier: number | undefined;
+
+    const revealFocusedField = (viewportHeight = hauteurVisibleAvecClavier) => {
+      // Attendre que le resize natif et les safe areas aient leur taille
+      // finale. On ne déplace la zone scrollable que si le champ reste masqué.
+      window.requestAnimationFrame(() => {
+        window.requestAnimationFrame(() => {
+          const field = activeEditableField();
+          if (field) keepNativeFieldVisible(field, viewportHeight);
+        });
+      });
+    };
+
+    await Keyboard.addListener('keyboardDidShow', ({ keyboardHeight }) => {
+      // En resize Native, WKWebView ne reflète pas toujours la nouvelle
+      // hauteur dans visualViewport (notamment Simulator/Safari 18). La
+      // hauteur du plugin est la source fiable ; Math.min évite de retrancher
+      // deux fois si innerHeight a déjà été réduit par iOS.
+      const calculee = viewportSansClavier - keyboardHeight;
+      hauteurVisibleAvecClavier = Math.min(
+        window.innerHeight,
+        window.visualViewport?.height ?? Number.POSITIVE_INFINITY,
+        calculee > 0 ? calculee : Number.POSITIVE_INFINITY,
+      );
+      revealFocusedField(hauteurVisibleAvecClavier);
+    });
+    await Keyboard.addListener('keyboardDidHide', () => {
+      hauteurVisibleAvecClavier = undefined;
+      window.requestAnimationFrame(() => {
+        viewportSansClavier = window.innerHeight;
+      });
+    });
+    document.addEventListener('focusin', () => {
+      if (!document.body.classList.contains('keyboard-is-open')) return;
+      window.setTimeout(() => revealFocusedField(), 60);
+    });
   } catch {
     // Keyboard plugin not available
   }

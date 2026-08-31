@@ -76,6 +76,11 @@ const ROUTES_ETABLISSEMENT = [
   '/etablissement/mon-compte',
 ] as const;
 
+const MOBILE_AUDIT_VIEWPORT = {
+  width: Number.parseInt(process.env.UX_AUDIT_WIDTH || '390', 10),
+  height: Number.parseInt(process.env.UX_AUDIT_HEIGHT || '844', 10),
+};
+
 async function prepareNativeShell(page: Page) {
   await page.addInitScript(() => {
     localStorage.setItem('cookie-consent', 'accepted');
@@ -90,12 +95,26 @@ async function auditRoute(page: Page, route: string): Promise<RouteAudit> {
     if (message.type() === 'error') consoleErrors.push(message.text());
   };
   const onPageError = (error: Error) => pageErrors.push(error.message);
+  try {
+    await page.goto(route, { waitUntil: 'domcontentloaded' });
+  } catch (error) {
+    // WebKit peut signaler l'interruption lorsque le redirect post-login et
+    // l'audit visent exactement la même URL. Ce n'est pas un échec de page :
+    // attendre la navigation déjà en cours, puis vérifier l'URL obtenue.
+    const sameDestinationRace = error instanceof Error
+      && error.message.includes('is interrupted by another navigation')
+      && new URL(page.url()).pathname === route;
+    if (!sameDestinationRace) throw error;
+    await page.waitForLoadState('domcontentloaded');
+  }
+  // N'écouter qu'après la navigation : WebKit remonte les fetch de la route
+  // précédente, volontairement annulés par page.goto(), comme des erreurs
+  // « due to access control checks ». Ils ne doivent pas être attribués à la
+  // nouvelle interface. Les erreurs de montage/lazy-load restent capturées.
   page.on('console', onConsole);
   page.on('pageerror', onPageError);
-
-  await page.goto(route, { waitUntil: 'domcontentloaded' });
   await expect(page.locator('#main-content')).toBeVisible();
-  await page.waitForTimeout(350);
+  await page.waitForTimeout(500);
 
   const metrics = await page.evaluate(() => {
     const visible = (element: Element) => {
@@ -228,7 +247,8 @@ async function auditRole(
   const results: RouteAudit[] = [];
   for (const route of routes) results.push(await auditRoute(page, route));
 
-  await testInfo.attach(`audit-${role}-390x844.json`, {
+  const viewport = page.viewportSize();
+  await testInfo.attach(`audit-${role}-${viewport?.width}x${viewport?.height}.json`, {
     body: Buffer.from(JSON.stringify(results, null, 2)),
     contentType: 'application/json',
   });
@@ -241,7 +261,6 @@ async function auditRole(
   const duplicateBacks = results.filter((result) => result.duplicateBackButtons > 0);
   const runtimeErrors = results.filter((result) => result.pageErrors.length > 0);
 
-  const viewport = page.viewportSize();
   const summary = results
     .map((result) => ({
       route: result.route,
@@ -282,12 +301,14 @@ async function auditRole(
 }
 
 test.describe('audit iOS Série C — parcours complet', () => {
-  test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
+  test.use({ viewport: MOBILE_AUDIT_VIEWPORT, hasTouch: true, isMobile: true });
 
   test('dashboard soignant — la carte suggérée ne comprime ni le contenu ni le CTA', async ({ page }) => {
     await prepareNativeShell(page);
     await loginAs(page, 'soignant');
-    await page.goto('/soignant/tableau-de-bord');
+    // loginAs attend déjà ce dashboard. Une seconde navigation immédiate vers
+    // la même URL peut entrer en concurrence avec la résolution finale du rôle
+    // sous WebKit et produire un faux « navigation interrupted ».
 
     const cta = page.getByRole('button', { name: 'Voir le planning et postuler' }).first();
     await expect(cta).toBeVisible();

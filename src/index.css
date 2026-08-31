@@ -321,6 +321,13 @@
       min-height: 44px;
     }
 
+    /* WebKit conserve parfois la hauteur intrinsèque (≈ 25 px) d'un select
+       natif malgré min-height. Une hauteur explicite garantit une cible
+       tactile iOS cohérente avec les autres champs. */
+    select {
+      height: 48px;
+    }
+
     /* Caption 2 est le plus petit style de texte courant d’iOS (11 pt).
        Plusieurs badges historiques descendaient à 9–10 px et devenaient
        illisibles sur un écran dense. */
