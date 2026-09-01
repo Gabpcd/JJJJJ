@@ -197,6 +197,7 @@ jobs:
             --project=ios-webkit-audit
           UX_AUDIT_WIDTH=412 UX_AUDIT_HEIGHT=915 npx playwright test \
             e2e/non-regression/ios-series-c-audit.spec.ts \
+            e2e/non-regression/signup-series-c-audit.spec.ts \
             --project=android-pixel-audit
         env:
           PLAYWRIGHT_BASE_URL: http://localhost:8080
@@ -337,6 +338,7 @@ jobs:
             --project=ios-webkit-audit
           UX_AUDIT_WIDTH=412 UX_AUDIT_HEIGHT=915 npx playwright test \
             e2e/non-regression/ios-series-c-audit.spec.ts \
+            e2e/non-regression/signup-series-c-audit.spec.ts \
             --project=android-pixel-audit
         env:
           PLAYWRIGHT_BASE_URL: http://localhost:8080
