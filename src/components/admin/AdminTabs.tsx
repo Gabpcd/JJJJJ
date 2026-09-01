@@ -36,16 +36,60 @@ export const AdminTabsList = React.forwardRef<
   ref,
 ) {
   const scrollable = disposition === 'scroll';
+  const scrollContainerRef = React.useRef<HTMLDivElement>(null);
+  const tabsListRef = React.useRef<React.ElementRef<typeof TabsList>>(null);
+  const setTabsListRef = React.useCallback((node: React.ElementRef<typeof TabsList> | null) => {
+    tabsListRef.current = node;
+    if (typeof ref === 'function') ref(node);
+    else if (ref) ref.current = node;
+  }, [ref]);
+
+  React.useLayoutEffect(() => {
+    if (!scrollable) return;
+    const container = scrollContainerRef.current;
+    const list = tabsListRef.current;
+    if (!container || !list) return;
+
+    const revealActiveTab = () => {
+      const activeTab = list.querySelector<HTMLElement>(
+        '[role="tab"][data-state="active"], [role="tab"][aria-selected="true"]',
+      );
+      if (!activeTab || container.scrollWidth <= container.clientWidth) return;
+      const containerRect = container.getBoundingClientRect();
+      const activeTabRect = activeTab.getBoundingClientRect();
+      const centeredLeft = container.scrollLeft
+        + activeTabRect.left
+        - containerRect.left
+        - (container.clientWidth - activeTabRect.width) / 2;
+      container.scrollTo({
+        left: Math.min(
+          Math.max(0, centeredLeft),
+          container.scrollWidth - container.clientWidth,
+        ),
+        behavior: 'auto',
+      });
+    };
+
+    revealActiveTab();
+    const observer = new MutationObserver(revealActiveTab);
+    observer.observe(list, {
+      subtree: true,
+      attributes: true,
+      attributeFilter: ['aria-selected', 'data-state'],
+    });
+    return () => observer.disconnect();
+  }, [scrollable]);
 
   return (
     <div
+      ref={scrollContainerRef}
       className={cn(
         scrollable && '-mx-4 overflow-x-auto overscroll-x-contain px-4 pb-1 md:mx-0 md:px-0',
         containerClassName,
       )}
     >
       <TabsList
-        ref={ref}
+        ref={setTabsListRef}
         className={cn(
           scrollable
             ? 'w-max min-w-full justify-start md:min-w-0'

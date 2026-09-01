@@ -553,7 +553,7 @@ export default function AdminSales() {
               {etapeActive === 'ressources' && 'Préparez les relais, modèles et contenus utilisés pour développer Jolene.'}
             </p>
           </div>
-          <nav aria-labelledby="admin-sales-context-nav-title" className="mt-2 overflow-x-auto">
+          <nav aria-labelledby="admin-sales-context-nav-title" className="mt-2 w-full min-w-0 max-w-full overflow-x-auto overscroll-x-contain [contain:inline-size]">
             <ul className="flex min-w-max gap-1 border-b border-border">
               {ongletsContexte.map((onglet) => {
                 const estActif = onglet.id === tab;

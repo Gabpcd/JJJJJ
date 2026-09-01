@@ -43,7 +43,7 @@ export function AdminGrowthWorkspaceNav({ active }: AdminGrowthWorkspaceNavProps
   return (
     <nav
       aria-label="Parcours de développement commercial"
-      className="overflow-x-auto rounded-xl border border-border bg-muted/30 p-1"
+      className="w-full min-w-0 max-w-full overflow-x-auto overscroll-x-contain [contain:inline-size] rounded-xl border border-border bg-muted/30 p-1"
     >
       <ol className="flex min-w-max items-center gap-1">
         {ETAPES.map((etape) => {

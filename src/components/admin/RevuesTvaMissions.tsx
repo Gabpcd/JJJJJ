@@ -101,13 +101,13 @@ function CarteRevueTva({
           « Soin » exige un professionnel médical ou paramédical réglementé et une finalité de prévention, diagnostic ou traitement. La qualification ne dépend pas du seul intitulé de mission.
         </p>
         {(Object.entries(LABELS) as Array<[NatureTvaPrestation, string]>).map(([value, label]) => (
-          <label key={value} className="flex cursor-pointer items-center gap-2 text-sm text-foreground">
+          <label key={value} className="flex min-h-11 cursor-pointer items-center gap-3 rounded-lg px-2 text-sm text-foreground transition-colors hover:bg-muted/50">
             <input
               type="radio"
               name={`nature-tva-${revue.mission_id}`}
               checked={nature === value}
               onChange={() => setNature(value)}
-              className="accent-primary"
+              className="h-5 w-5 shrink-0 accent-primary"
             />
             {label}
           </label>

@@ -125,16 +125,16 @@ export default function AdminChorusPro() {
   return (
     <LayoutAdmin>
       <BreadcrumbAdmin pageName="Chorus Pro" />
-      <div className="flex items-center justify-between gap-3 mb-6">
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
           <FileStack className="h-7 w-7 text-primary" />
           <h1 className="text-2xl font-bold text-foreground">Chorus Pro</h1>
         </div>
-        <div className="flex gap-2">
-          <BoutonY2K onClick={testPiste} disabled={testing} variant="secondary" size="sm" iconeGauche={<Wifi className={`h-4 w-4 ${testing ? 'animate-pulse' : ''}`} />}>
+        <div className="flex flex-col gap-2 min-[420px]:flex-row">
+          <BoutonY2K className="w-full min-[420px]:w-auto" onClick={testPiste} disabled={testing} variant="secondary" size="sm" iconeGauche={<Wifi className={`h-4 w-4 ${testing ? 'animate-pulse' : ''}`} />}>
             {testing ? 'Vérification…' : 'Vérifier connexion'}
           </BoutonY2K>
-          <BoutonY2K onClick={syncNow} disabled={syncing} variant="secondary" size="sm" iconeGauche={<RefreshCw className={`h-4 w-4 ${syncing ? 'animate-spin' : ''}`} />}>
+          <BoutonY2K className="w-full min-[420px]:w-auto" onClick={syncNow} disabled={syncing} variant="secondary" size="sm" iconeGauche={<RefreshCw className={`h-4 w-4 ${syncing ? 'animate-spin' : ''}`} />}>
             {syncing ? 'Sync…' : 'Sync maintenant'}
           </BoutonY2K>
         </div>
