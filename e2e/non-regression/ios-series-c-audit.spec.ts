@@ -72,12 +72,15 @@ async function prepareNativeShell(page: Page) {
 
 async function settleAuthenticatedShell(page: Page) {
   await expect(page.locator('#main-content')).toBeVisible();
-  await page.waitForLoadState('networkidle', { timeout: 5_000 }).catch(() => undefined);
+  const pathname = new URL(page.url()).pathname;
+  if (pathname === '/etablissement/tableau-de-bord') {
+    // Le dashboard établissement lance plusieurs RPC dans sa query primaire.
+    // Attendre seulement l'URL ou le shell peut interrompre ces appels lors de
+    // la navigation suivante et attribuer leurs erreurs à tort à la sous-page.
+    await expect(page.getByTestId('dashboard-etablissement-ready')).toBeAttached({ timeout: 30_000 });
+  }
+  await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => undefined);
   await page.evaluate(() => document.fonts.ready);
-  // Les dashboards chargent plusieurs requêtes après la première URL stable.
-  // Leur laisser finir évite d'annuler un import lazy ou un verrou Auth au
-  // moment où l'audit ouvre immédiatement une sous-page.
-  await page.waitForTimeout(500);
 }
 
 function screenshotSlug(value: string) {
