@@ -430,11 +430,12 @@ export default function AdminFinances() {
               ))}
             </div>
           </div>
-          <label className="flex w-fit items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-xs text-foreground">
+          <label className="flex min-h-11 w-fit items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-xs text-foreground">
             <input
               type="checkbox"
               checked={afficherTests}
               onChange={(event) => setAfficherTests(event.target.checked)}
+              className="h-5 w-5 shrink-0"
             />
             Afficher les données de test (hors comptabilité de production)
           </label>

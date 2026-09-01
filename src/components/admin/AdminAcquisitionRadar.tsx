@@ -784,8 +784,8 @@ export function AdminAcquisitionRadar() {
               Ouvrez cette section seulement pour piloter les territoires, vérifier les imports ou consulter les hypothèses détaillées.
             </p>
             <div className="space-y-4">
-          <div className="grid gap-4 xl:grid-cols-2">
-            <CardY2K hoverLift={false}>
+          <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4 xl:grid-cols-2">
+            <CardY2K hoverLift={false} className="min-w-0">
               <CardY2KHeader>
                 <CardY2KTitle className="flex items-center gap-2 text-sm"><MapPinned className="h-4 w-4" /> Liquidité locale</CardY2KTitle>
               </CardY2KHeader>
@@ -793,7 +793,7 @@ export function AdminAcquisitionRadar() {
                 <p className="mb-3 text-xs text-muted-foreground">
                   La profession est celle demandée par la mission. « Disponibles » exige une disponibilité déclarée à J+14 ; « vérifiés » exige les documents validés.
                 </p>
-                <div className="max-h-[420px] overflow-auto">
+                <div className="max-h-[420px] w-full max-w-full overflow-auto overscroll-contain [contain:inline-size]">
                   <table className="w-full text-sm">
                     <thead className="sticky top-0 bg-card text-left text-xs text-muted-foreground">
                       <tr className="border-b">
@@ -849,7 +849,7 @@ export function AdminAcquisitionRadar() {
               </CardY2KContent>
             </CardY2K>
 
-            <CardY2K hoverLift={false}>
+            <CardY2K hoverLift={false} className="min-w-0">
               <CardY2KHeader>
                 <CardY2KTitle className="flex items-center gap-2 text-sm"><Factory className="h-4 w-4" /> Comptes ancres</CardY2KTitle>
               </CardY2KHeader>
@@ -882,8 +882,8 @@ export function AdminAcquisitionRadar() {
             </CardY2K>
           </div>
 
-          <div className="grid gap-4 xl:grid-cols-2">
-            <CardY2K hoverLift={false}>
+          <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4 xl:grid-cols-2">
+            <CardY2K hoverLift={false} className="min-w-0">
               <CardY2KHeader>
                 <CardY2KTitle className="flex items-center gap-2 text-sm"><Repeat2 className="h-4 w-4" /> Récurrence et pipeline estimé</CardY2KTitle>
               </CardY2KHeader>
@@ -903,7 +903,7 @@ export function AdminAcquisitionRadar() {
               </CardY2KContent>
             </CardY2K>
 
-            <CardY2K hoverLift={false}>
+            <CardY2K hoverLift={false} className="min-w-0">
               <CardY2KHeader>
                 <CardY2KTitle className="flex items-center gap-2 text-sm"><Target className="h-4 w-4" /> Recommandations internes</CardY2KTitle>
               </CardY2KHeader>

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { LogOut, Menu, Search, X } from 'lucide-react';
 import { RechercheGlobaleAdmin } from '@/components/admin/RechercheGlobaleAdmin';
@@ -33,10 +33,33 @@ function AdminSectionLinks({
   mobile?: boolean;
   onNavigate?: () => void;
 }) {
+  const navigationRef = useRef<HTMLElement>(null);
+  const activeLinkRef = useRef<HTMLAnchorElement>(null);
+
+  useLayoutEffect(() => {
+    const navigation = navigationRef.current;
+    const activeLink = activeLinkRef.current;
+    if (!navigation || !activeLink || navigation.scrollWidth <= navigation.clientWidth) return;
+    const navigationRect = navigation.getBoundingClientRect();
+    const activeLinkRect = activeLink.getBoundingClientRect();
+    const centeredLeft = navigation.scrollLeft
+      + activeLinkRect.left
+      - navigationRect.left
+      - (navigation.clientWidth - activeLinkRect.width) / 2;
+    navigation.scrollTo({
+      left: Math.min(
+        Math.max(0, centeredLeft),
+        navigation.scrollWidth - navigation.clientWidth,
+      ),
+      behavior: 'auto',
+    });
+  }, [activeRoute, group.id]);
+
   if (group.items.length <= 1) return null;
 
   return (
     <nav
+      ref={navigationRef}
       aria-label={`Pages de la rubrique ${group.label}`}
       className={cn(
         'flex gap-1 overflow-x-auto scrollbar-none',
@@ -47,6 +70,7 @@ function AdminSectionLinks({
         const active = item.route === activeRoute;
         return (
           <Link
+            ref={active ? activeLinkRef : undefined}
             key={item.route}
             to={item.route}
             onClick={onNavigate}
@@ -80,6 +104,17 @@ export function LayoutAdmin({ children }: { children: ReactNode }) {
   const menuMobileRef = useRef<HTMLDivElement>(null);
   const menuMobileTriggerRef = useRef<HTMLButtonElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    const previousHtmlOverflowX = document.documentElement.style.overflowX;
+    const previousBodyOverflowX = document.body.style.overflowX;
+    document.documentElement.style.overflowX = 'clip';
+    document.body.style.overflowX = 'clip';
+    return () => {
+      document.documentElement.style.overflowX = previousHtmlOverflowX;
+      document.body.style.overflowX = previousBodyOverflowX;
+    };
+  }, []);
 
   useEffect(() => {
     const gererRaccourci = (event: KeyboardEvent) => {
@@ -164,13 +199,7 @@ export function LayoutAdmin({ children }: { children: ReactNode }) {
 
   return (
     <AdminInterfaceProvider>
-      <div className="admin-shell flex min-h-[100dvh] bg-muted/20">
-        <a
-          href="#main-content"
-          className="sr-only fixed left-3 top-3 z-[100] rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background focus:not-sr-only"
-        >
-          Aller au contenu principal
-        </a>
+      <div className="admin-shell flex min-h-[100dvh] w-full min-w-0 max-w-full overflow-x-hidden bg-muted/20">
         <aside className="fixed inset-y-0 left-0 z-40 hidden w-[216px] flex-col border-r border-border bg-card md:flex">
           <div className="flex h-16 items-center justify-between border-b border-border px-4">
             <Link to="/admin" className="flex items-center gap-2 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
@@ -376,7 +405,7 @@ export function LayoutAdmin({ children }: { children: ReactNode }) {
           </div>
         )}
 
-        <main id="main-content" tabIndex={-1} className="min-w-0 flex-1 overflow-x-hidden pt-14 md:ml-[216px] md:pt-0">
+        <main id="main-content" tabIndex={-1} className="min-w-0 max-w-full flex-1 overflow-x-hidden [contain:inline-size] pt-14 md:ml-[216px] md:pt-0">
           {activeGroup && afficheSousNavigation && (
             <>
               <div className="hidden border-b border-border bg-card md:block">
@@ -393,7 +422,7 @@ export function LayoutAdmin({ children }: { children: ReactNode }) {
               </div>
             </>
           )}
-          <div className="admin-content mx-auto max-w-[1440px] px-4 py-5 pb-24 md:px-5 md:py-6 md:pb-8 lg:px-8">
+          <div className="admin-content mx-auto w-full min-w-0 max-w-[1440px] px-4 py-5 pb-24 md:px-5 md:py-6 md:pb-8 lg:px-8">
             {children}
           </div>
         </main>

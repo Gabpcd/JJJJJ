@@ -149,6 +149,32 @@ export default defineConfig({
           : {}),
       },
     },
+    {
+      // Vue exacte de référence de l’application publiée : iPhone 16 Pro Max
+      // (440×956 CSS px), limitée au cockpit administrateur.
+      name: 'admin-ios-16-pro-max-audit',
+      testMatch: /non-regression\/admin-series-c-audit\.spec\.ts/,
+      testIgnore: [],
+      use: {
+        ...devices['iPhone 15 Pro Max'],
+        viewport: { width: 440, height: 956 },
+        screen: { width: 440, height: 956 },
+      },
+    },
+    {
+      // L’admin reste aussi un cockpit desktop : ce projet vérifie les mêmes
+      // routes et interactions sans élargir toute la suite non-régression.
+      name: 'admin-desktop-audit',
+      testMatch: /non-regression\/admin-series-c-audit\.spec\.ts/,
+      testIgnore: [],
+      use: {
+        ...devices['Desktop Chrome'],
+        viewport: { width: 1440, height: 900 },
+        ...(LOCAL_CHROMIUM_EXECUTABLE
+          ? { launchOptions: { executablePath: LOCAL_CHROMIUM_EXECUTABLE } }
+          : {}),
+      },
+    },
   ],
 
   // En CI on attend que le serveur soit démarré séparément (preview Vercel par

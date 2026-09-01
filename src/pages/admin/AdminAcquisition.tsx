@@ -221,7 +221,7 @@ export default function AdminAcquisition() {
                 </CardY2KTitle>
               </CardY2KHeader>
               <CardY2KContent>
-                <div className="overflow-x-auto">
+                <div className="max-w-full overflow-x-auto [contain:inline-size]">
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="text-left text-xs text-muted-foreground border-b">
