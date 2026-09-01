@@ -32,4 +32,26 @@ describe('navigation clavier des formulaires Auth', () => {
     fireEvent.keyDown(email, { key: 'Enter' });
     expect(document.activeElement).toBe(password);
   });
+
+  it('attend la fin du toucher avant de masquer le clavier sur le fond', () => {
+    const { container, getByLabelText } = render(
+      <MemoryRouter>
+        <AuthLayout showBack={false}>
+          <form>
+            <label>Email<input aria-label="Email" type="email" /></label>
+          </form>
+        </AuthLayout>
+      </MemoryRouter>,
+    );
+    const email = getByLabelText('Email') as HTMLInputElement;
+    const background = container.querySelector('main');
+    expect(background).toBeTruthy();
+
+    email.focus();
+    fireEvent.pointerDown(background!);
+    expect(document.activeElement).toBe(email);
+
+    fireEvent.click(background!);
+    expect(document.activeElement).not.toBe(email);
+  });
 });

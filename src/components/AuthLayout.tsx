@@ -2,7 +2,7 @@ import {
   ReactNode,
   useLayoutEffect,
   useRef,
-  type PointerEvent as ReactPointerEvent,
+  type MouseEvent as ReactMouseEvent,
 } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
@@ -73,7 +73,7 @@ export function AuthLayout({ children, showBack = true, backTo, scrollKey }: Aut
     else navigate('/connexion');
   };
 
-  const handleBackgroundPointerDown = (event: ReactPointerEvent<HTMLElement>) => {
+  const handleBackgroundClick = (event: ReactMouseEvent<HTMLElement>) => {
     const target = event.target;
     if (!(target instanceof Element)) return;
     if (target.closest('input, textarea, select, button, a, label, [role="button"], [role="combobox"], [role="dialog"]')) return;
@@ -116,7 +116,7 @@ export function AuthLayout({ children, showBack = true, backTo, scrollKey }: Aut
         ref={scrollRef}
         id="contenu-principal"
         className="auth-scroll min-h-0 flex-1 flex w-full flex-col items-center justify-start sm:justify-center px-4 py-6"
-        onPointerDown={handleBackgroundPointerDown}
+        onClick={handleBackgroundClick}
         style={{
           paddingTop: showBack ? '0.5rem' : 'calc(env(safe-area-inset-top) + 1rem)',
           paddingBottom: 'calc(env(safe-area-inset-bottom) + 3rem)',
