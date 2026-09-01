@@ -1,4 +1,6 @@
-import { expect, test, type Page, type TestInfo } from '@playwright/test';
+import { expect, test, type ConsoleMessage, type Page, type TestInfo } from '@playwright/test';
+import { mkdir } from 'node:fs/promises';
+import path from 'node:path';
 import { loginAs, TEST_ACCOUNTS } from '../helpers/auth';
 import { adminClient, userIdByEmail } from '../helpers/db';
 import { PREFIX_MISSION_MATCHING, seedMissionMatching } from '../helpers/seed-matching';
@@ -30,6 +32,7 @@ const ROUTES_SOIGNANT = [
   '/soignant/recherche-missions',
   '/soignant/missions',
   '/soignant/mes-gains',
+  '/soignant/mandat-facturation',
   '/soignant/messagerie',
   '/soignant/mes-documents',
   '/soignant/presences',
@@ -45,6 +48,9 @@ const ROUTES_SOIGNANT = [
   '/soignant/notifications',
   '/soignant/parrainage',
   '/soignant/litiges',
+  '/soignant/premium',
+  '/soignant/stripe-connect',
+  '/soignant/classement',
   '/soignant/pool-urgence',
   '/soignant/mes-favoris',
   '/soignant/parametres/notifications',
@@ -76,6 +82,40 @@ const ROUTES_ETABLISSEMENT = [
   '/etablissement/parametres/recherches-sauvegardees',
   '/etablissement/parametres',
   '/etablissement/mon-compte',
+  '/etablissement/activer',
+  '/etablissement/premium',
+  '/etablissement/chorus-config',
+  '/etablissement/mes-reclamations',
+] as const;
+
+const ROUTES_PUBLIQUES = [
+  '/',
+  '/connexion',
+  '/inscription/soignant',
+  '/inscription/etablissement',
+  '/verification-email-etab',
+  '/reset-password',
+  '/confirmer-email',
+  '/acces-admin-indisponible',
+  '/tarifs',
+  '/devenir-soignant',
+  '/recruter-soignants',
+  '/infirmiere-liberale',
+  '/emploi-soignant/paris',
+  '/metier/infirmier',
+  '/a-propos',
+  '/contact',
+  '/telecharger',
+  '/cgu',
+  '/cgv',
+  '/confidentialite',
+  '/supprimer-mon-compte',
+  '/mentions-legales',
+  '/accessibilite',
+  '/aide',
+  '/aide/pro-sante-connect',
+  '/etab/invitation/token-invalide-recette-visuelle',
+  '/cette-page-nexiste-pas',
 ] as const;
 
 const MOBILE_AUDIT_VIEWPORT = {
@@ -90,44 +130,150 @@ async function prepareNativeShell(page: Page) {
   });
 }
 
-async function auditRoute(page: Page, route: string): Promise<RouteAudit> {
+async function settleAuthenticatedShell(page: Page) {
+  await expect(page.locator('#main-content')).toBeVisible();
+  await page.waitForLoadState('networkidle', { timeout: 5_000 }).catch(() => undefined);
+  await page.evaluate(() => document.fonts.ready);
+  // Les dashboards chargent plusieurs requêtes après la première URL stable.
+  // Leur laisser finir évite d'annuler un import lazy ou un verrou Auth au
+  // moment où l'audit ouvre immédiatement une sous-page.
+  await page.waitForTimeout(500);
+}
+
+function screenshotSlug(value: string) {
+  return value
+    .replace(/^\//, '')
+    .replace(/[/?=&]+/g, '-')
+    .replace(/[^a-z0-9-]+/gi, '-')
+    .replace(/^-+|-+$/g, '') || 'accueil';
+}
+
+function expectRouteAuditClean(result: RouteAudit) {
+  expect.soft(result.horizontalOverflow, `${result.route} ne doit pas déborder`).toBeLessThanOrEqual(1);
+  expect.soft(result.inputsBelow16px, `${result.route} conserve des champs iOS à 16 px minimum`).toEqual([]);
+  expect.soft(result.offscreenControls, `${result.route} ne doit pas sortir de contrôle du viewport`).toEqual([]);
+  expect.soft(result.smallTouchTargets, `${result.route} conserve des cibles tactiles de 44 px`).toEqual([]);
+  expect.soft(result.tinyTexts, `${result.route} ne doit pas rendre de texte sous 11 px`).toEqual([]);
+  expect.soft(result.duplicateBackButtons, `${result.route} ne doit afficher qu'un seul retour`).toBe(0);
+  expect.soft(result.consoleErrors, `${result.route} ne doit pas lever d'erreur console`).toEqual([]);
+  expect.soft(result.pageErrors, `${result.route} ne doit pas lever d'erreur JavaScript`).toEqual([]);
+}
+
+async function captureVisualStates(
+  page: Page,
+  testInfo: TestInfo,
+  role: string,
+  route: string,
+) {
+  if (process.env.UX_AUDIT_SCREENSHOTS !== '1') return;
+  const viewport = page.viewportSize();
+  const root = process.env.UX_AUDIT_SCREENSHOTS_DIR
+    || testInfo.outputPath('captures-visuelles');
+  await mkdir(root, { recursive: true });
+  const prefix = `${role}-${viewport?.width || 0}x${viewport?.height || 0}-${screenshotSlug(route)}`;
+  const capture = async (suffix: string, fullPage = true) => {
+    const filePath = path.join(root, `${prefix}-${suffix}.png`);
+    await page.screenshot({ path: filePath, fullPage, animations: 'disabled' });
+  };
+
+  await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'instant' }));
+  await capture('haut', false);
+  await page.evaluate(() => window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'instant' }));
+  await page.waitForTimeout(150);
+  await capture('bas', false);
+  await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'instant' }));
+  await capture('page-complete');
+
+  const tabs = page.locator('[role="tab"]:visible');
+  const tabCount = Math.min(await tabs.count(), 12);
+  for (let index = 0; index < tabCount; index += 1) {
+    const tab = tabs.nth(index);
+    const name = screenshotSlug((await tab.innerText().catch(() => '')) || `onglet-${index + 1}`);
+    if (await tab.isEnabled()) {
+      await tab.click();
+      await page.waitForTimeout(250);
+      await capture(`onglet-${index + 1}-${name}`);
+    }
+  }
+}
+
+async function auditRoute(
+  page: Page,
+  testInfo: TestInfo,
+  role: string,
+  route: string,
+): Promise<RouteAudit> {
   const consoleErrors: string[] = [];
   const pageErrors: string[] = [];
-  const onConsole = (message: { type(): string; text(): string }) => {
-    if (message.type() === 'error') consoleErrors.push(message.text());
+  const onConsole = (message: ConsoleMessage) => {
+    if (message.type() !== 'error') return;
+    const source = message.location().url;
+    const stripeCspNoise = /(?:js|hooks)\.stripe\.com/.test(source)
+      && message.text().includes('Refused to apply a stylesheet')
+      && message.text().includes('Content Security Policy');
+    if (!stripeCspNoise) {
+      consoleErrors.push(`${source || 'source-inconnue'} :: ${message.text()}`);
+    }
   };
-  const onPageError = (error: Error) => pageErrors.push(error.message);
+  const onPageError = (error: Error) => {
+    // WebKit transforme les fetch de la route précédente, annulés par une
+    // navigation volontaire, en PageError « due to access control checks ».
+    // Ils ne correspondent ni à une panne API ni à une erreur de la route
+    // nouvellement affichée.
+    if (!error.message.includes('due to access control checks')) pageErrors.push(error.message);
+  };
+  page.on('console', onConsole);
+  page.on('pageerror', onPageError);
+  const requestedUrl = new URL(route, 'http://audit.local');
+  const currentUrl = page.url().startsWith('http') ? new URL(page.url()) : null;
+  const alreadyOnRoute = currentUrl?.pathname === requestedUrl.pathname
+    && currentUrl.search === requestedUrl.search;
   try {
-    await page.goto(route, { waitUntil: 'domcontentloaded' });
+    if (!alreadyOnRoute) await page.goto(route, { waitUntil: 'domcontentloaded' });
   } catch (error) {
     // WebKit peut signaler l'interruption lorsque le redirect post-login et
     // l'audit visent exactement la même URL. Selon sa version, Playwright
     // remonte soit « interrupted by another navigation », soit « Frame load
-    // interrupted ». On ne tolère cette course que si la navigation active
-    // aboutit bien à la route demandée : une redirection erronée reste rouge.
+    // interrupted ». La redirection post-login peut gagner cette course et
+    // terminer sur le dashboard. Une fois stabilisée, on rejoue la route
+    // auditée. Si le garde d'accès la refuse réellement, l'assertion finale
+    // reste rouge : cette reprise ne masque aucune redirection métier.
     const navigationRace = error instanceof Error
       && (
         error.message.includes('is interrupted by another navigation')
         || error.message.includes('Frame load interrupted')
-      );
+    );
     if (!navigationRace) throw error;
-    await expect.poll(
-      () => new URL(page.url()).pathname,
-      { timeout: 5_000, message: `WebKit doit terminer sur ${route}` },
-    ).toBe(route);
-    await page.waitForLoadState('domcontentloaded');
+    await page.waitForLoadState('domcontentloaded').catch(() => undefined);
+    const settledUrl = page.url().startsWith('http') ? new URL(page.url()) : null;
+    const settledOnRequestedRoute = settledUrl?.pathname === requestedUrl.pathname
+      && settledUrl.search === requestedUrl.search;
+    if (!settledOnRequestedRoute) {
+      await page.goto(route, { waitUntil: 'domcontentloaded' });
+    }
   }
-  // N'écouter qu'après la navigation : WebKit remonte les fetch de la route
-  // précédente, volontairement annulés par page.goto(), comme des erreurs
-  // « due to access control checks ». Ils ne doivent pas être attribués à la
-  // nouvelle interface. Les erreurs de montage/lazy-load restent capturées.
-  page.on('console', onConsole);
-  page.on('pageerror', onPageError);
-  await expect(page.locator('#main-content')).toBeVisible();
-  await page.waitForTimeout(500);
-
+  // Vérification systématique, même lorsque page.goto ne lève rien : un garde
+  // d'accès qui redirige silencieusement vers un dashboard ne doit jamais être
+  // compté comme l'audit réussi de la route demandée.
+  await expect.poll(
+    () => {
+      const activeUrl = new URL(page.url());
+      return `${activeUrl.pathname}${activeUrl.search}`;
+    },
+    { timeout: 5_000, message: `WebKit doit terminer sur ${route}` },
+  ).toBe(`${requestedUrl.pathname}${requestedUrl.search}`);
+  const contentRoot = page.locator('#main-content, #app-route-content, main, body').first();
+  await expect(contentRoot).toBeVisible();
+  await expect.poll(async () => (await page.locator('body').innerText()).trim().length,
+    { message: `${route} doit rendre un contenu visible` }).toBeGreaterThan(0);
+  await page.waitForLoadState('networkidle', { timeout: 3_000 }).catch(() => undefined);
+  await page.evaluate(() => document.fonts.ready);
+  await page.waitForTimeout(1_000);
   const metrics = await page.evaluate(() => {
     const visible = (element: Element) => {
+      if (element.getAttribute('aria-hidden') === 'true' || element.closest('[aria-hidden="true"]')) {
+        return false;
+      }
       const style = getComputedStyle(element);
       const rect = element.getBoundingClientRect();
       return style.display !== 'none'
@@ -233,6 +379,11 @@ async function auditRoute(page: Page, route: string): Promise<RouteAudit> {
     };
   });
 
+  // La mesure porte toujours sur l'état initial de la route. Les captures des
+  // onglets sont réalisées ensuite : cliquer chaque onglet ne doit pas faire
+  // dépendre les seuils tactiles de celui qui se trouve en dernier dans le DOM.
+  await captureVisualStates(page, testInfo, role, route);
+
   page.off('console', onConsole);
   page.off('pageerror', onPageError);
 
@@ -255,7 +406,7 @@ async function auditRole(
   await loginAs(page, role);
 
   const results: RouteAudit[] = [];
-  for (const route of routes) results.push(await auditRoute(page, route));
+  for (const route of routes) results.push(await auditRoute(page, testInfo, role, route));
 
   const viewport = page.viewportSize();
   await testInfo.attach(`audit-${role}-${viewport?.width}x${viewport?.height}.json`, {
@@ -269,7 +420,9 @@ async function auditRole(
   const undersizedTargets = results.filter((result) => result.smallTouchTargets.length > 0);
   const unreadableText = results.filter((result) => result.tinyTexts.length > 0);
   const duplicateBacks = results.filter((result) => result.duplicateBackButtons > 0);
-  const runtimeErrors = results.filter((result) => result.pageErrors.length > 0);
+  const runtimeErrors = results.filter((result) => (
+    result.pageErrors.length > 0 || result.consoleErrors.length > 0
+  ));
 
   const summary = results
     .map((result) => ({
@@ -280,6 +433,7 @@ async function auditRole(
       smallTouchTargets: result.smallTouchTargets.length,
       tinyTexts: result.tinyTexts.length,
       duplicateBackButtons: result.duplicateBackButtons,
+      consoleErrors: result.consoleErrors.length,
       pageErrors: result.pageErrors.length,
     }))
     .filter((result) => Object.entries(result).some(([key, value]) => key !== 'route' && value > 0));
@@ -306,8 +460,45 @@ async function auditRole(
     'aucun contrôle ne doit sortir du viewport').toEqual([]);
   expect.soft(duplicateBacks.map(({ route, duplicateBackButtons }) => ({ route, duplicateBackButtons })),
     'une sous-page ne doit afficher qu’un seul retour').toEqual([]);
-  expect.soft(runtimeErrors.map(({ route, pageErrors }) => ({ route, pageErrors })),
-    'aucune route ne doit lever une erreur JavaScript').toEqual([]);
+  expect.soft(runtimeErrors.map(({ route, consoleErrors, pageErrors }) => ({
+    route,
+    consoleErrors,
+    pageErrors,
+  })), 'aucune route ne doit lever une erreur JavaScript ou console').toEqual([]);
+}
+
+async function auditPublicRoutes(page: Page, testInfo: TestInfo) {
+  await prepareNativeShell(page);
+  const results: RouteAudit[] = [];
+  for (const route of ROUTES_PUBLIQUES) {
+    results.push(await auditRoute(page, testInfo, 'public', route));
+  }
+  await testInfo.attach(`audit-public-${page.viewportSize()?.width}x${page.viewportSize()?.height}.json`, {
+    body: Buffer.from(JSON.stringify(results, null, 2)),
+    contentType: 'application/json',
+  });
+  expect.soft(results.filter((result) => result.horizontalOverflow > 1)
+    .map(({ route, horizontalOverflow }) => ({ route, horizontalOverflow })),
+  'aucune interface publique ne doit déborder horizontalement').toEqual([]);
+  expect.soft(results.filter((result) => result.inputsBelow16px.length > 0)
+    .map(({ route, inputsBelow16px }) => ({ route, inputsBelow16px })),
+  'les champs publics iOS doivent rester à 16 px minimum').toEqual([]);
+  expect.soft(results.filter((result) => result.offscreenControls.length > 0)
+    .map(({ route, offscreenControls }) => ({ route, offscreenControls })),
+  'aucun contrôle public ne doit sortir du viewport').toEqual([]);
+  expect.soft(results.filter((result) => result.smallTouchTargets.length > 0)
+    .map(({ route, smallTouchTargets }) => ({ route, smallTouchTargets })),
+  'les cibles tactiles publiques doivent mesurer au moins 44 × 44 px').toEqual([]);
+  expect.soft(results.filter((result) => result.tinyTexts.length > 0)
+    .map(({ route, tinyTexts }) => ({ route, tinyTexts })),
+  'aucun texte public mobile ne doit descendre sous 11 px').toEqual([]);
+  expect.soft(results.filter((result) => result.duplicateBackButtons > 0)
+    .map(({ route, duplicateBackButtons }) => ({ route, duplicateBackButtons })),
+  'une interface publique ne doit afficher qu’un seul retour').toEqual([]);
+  expect.soft(results.filter((result) => (
+    result.consoleErrors.length > 0 || result.pageErrors.length > 0
+  )).map(({ route, consoleErrors, pageErrors }) => ({ route, consoleErrors, pageErrors })),
+  'aucune interface publique ne doit lever une erreur JavaScript ou console').toEqual([]);
 }
 
 test.describe('audit iOS Série C — parcours complet', () => {
@@ -365,6 +556,11 @@ test.describe('audit iOS Série C — parcours complet', () => {
     }
   });
 
+  test('public — toutes les interfaces accessibles depuis la coquille mobile', async ({ page }, testInfo) => {
+    test.setTimeout(180_000);
+    await auditPublicRoutes(page, testInfo);
+  });
+
   test('soignant — toutes les interfaces publiques du compte', async ({ page }, testInfo) => {
     test.setTimeout(120_000);
     await auditRole(page, testInfo, 'soignant', ROUTES_SOIGNANT);
@@ -373,6 +569,74 @@ test.describe('audit iOS Série C — parcours complet', () => {
   test('établissement — toutes les interfaces publiques du compte', async ({ page }, testInfo) => {
     test.setTimeout(120_000);
     await auditRole(page, testInfo, 'etab', ROUTES_ETABLISSEMENT);
+  });
+
+  test('établissement — fiche soignant réelle depuis l’annuaire', async ({ page }, testInfo) => {
+    test.setTimeout(60_000);
+    await prepareNativeShell(page);
+    await loginAs(page, 'etab');
+    await settleAuthenticatedShell(page);
+    await page.goto('/etablissement/soignants');
+    const premiereFiche = page.getByRole('button', { name: /^Voir le profil de / }).first();
+    await expect(premiereFiche, 'l’annuaire de recette doit exposer au moins une fiche').toBeVisible();
+    await premiereFiche.click();
+    await expect(page).toHaveURL(/\/etablissement\/soignants\/[0-9a-f-]+$/);
+    const route = new URL(page.url()).pathname;
+    expectRouteAuditClean(await auditRoute(page, testInfo, 'etab-dynamique', route));
+  });
+
+  test('mission réelle — détail et modification établissement, détail soignant', async ({ page }, testInfo) => {
+    test.setTimeout(120_000);
+    test.skip(
+      !(process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.PLAYWRIGHT_SERVICE_ROLE_KEY),
+      'fixture dynamique réservée à la CI munie de la clé service_role',
+    );
+
+    const soignantId = await userIdByEmail(TEST_ACCOUNTS.soignant.email);
+    const { data: soignant } = await adminClient()
+      .from('soignants' as any)
+      .select('profession')
+      .eq('id', soignantId!)
+      .maybeSingle();
+    const mission = await seedMissionMatching({
+      intitule: `${PREFIX_MISSION_MATCHING} audit-visuel-dynamique-${Date.now()}`,
+      profession: (soignant as any)?.profession || 'IDE',
+    });
+    expect(mission, 'mission réelle dédiée à l’audit visuel dynamique').toBeTruthy();
+
+    try {
+      await prepareNativeShell(page);
+      await loginAs(page, 'etab');
+      await settleAuthenticatedShell(page);
+      expectRouteAuditClean(await auditRoute(
+        page,
+        testInfo,
+        'etab-dynamique',
+        `/etablissement/missions/${mission!.id}`,
+      ));
+      expectRouteAuditClean(await auditRoute(
+        page,
+        testInfo,
+        'etab-dynamique',
+        `/etablissement/missions/${mission!.id}/modifier`,
+      ));
+
+      await page.evaluate(() => {
+        localStorage.clear();
+        sessionStorage.clear();
+      });
+      await loginAs(page, 'soignant');
+      await settleAuthenticatedShell(page);
+      expectRouteAuditClean(await auditRoute(
+        page,
+        testInfo,
+        'soignant-dynamique',
+        `/soignant/missions/${mission!.id}`,
+      ));
+    } finally {
+      const { error } = await adminClient().from('missions' as any).delete().eq('id', mission!.id);
+      expect(error, 'la mission visuelle temporaire doit être nettoyée').toBeNull();
+    }
   });
 });
 
