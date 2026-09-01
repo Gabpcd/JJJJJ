@@ -427,9 +427,10 @@ export default function RechercheMissions() {
         // Soignant position marker
         if (soignant?.adresse_lat && soignant?.adresse_lng) {
           const homeIcon = L.divIcon({
-            html: '<div style="background:hsl(187,75%,40%);width:14px;height:14px;border-radius:50%;border:3px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.3);"></div>',
-            iconSize: [14, 14],
-            className: '',
+            html: '<div class="jolene-map-marker-dot"></div>',
+            iconSize: [44, 44],
+            iconAnchor: [22, 22],
+            className: 'jolene-map-marker-hit',
           });
           L.marker([soignant.adresse_lat, soignant.adresse_lng], { icon: homeIcon })
             .addTo(leafletMap.current)
@@ -447,7 +448,18 @@ export default function RechercheMissions() {
           const lng = m.etablissements?.adresse_lng;
           if (!lat || !lng) return;
 
-          const marker = L.marker([lat, lng]).addTo(markersLayer.current!);
+          const missionIcon = L.divIcon({
+            html: `<img src="${markerIcon}" width="25" height="41" alt="" draggable="false" />`,
+            iconSize: [44, 44],
+            iconAnchor: [22, 41],
+            popupAnchor: [0, -41],
+            className: 'jolene-map-marker-hit jolene-map-mission-marker',
+          });
+          const marker = L.marker([lat, lng], {
+            icon: missionIcon,
+            title: String(m.intitule ?? 'Mission'),
+            alt: String(m.intitule ?? 'Mission'),
+          }).addTo(markersLayer.current!);
           // Leaflet accepte un HTMLElement : textContent évite toute injection
           // HTML depuis l'intitulé de mission ou le nom de l'établissement.
           const popup = document.createElement('div');

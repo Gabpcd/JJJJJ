@@ -14,7 +14,7 @@ import { getCurrentPosition as obtenirGeoloc } from '@/lib/geoloc';
 import { capturerErreurSentry } from '@/lib/sentry';
 import { verifierFichierDocument } from '@/lib/documentUpload';
 import { supabase } from '@/integrations/supabase/client';
-import { Info, MapPin, Loader2, Download, Trash2, Palette, Building2, Upload, FileCheck, Clock, AlertTriangle, Lock } from 'lucide-react';
+import { Info, MapPin, Loader2, Download, Trash2, Palette, Building2, Upload, FileCheck, Clock, AlertTriangle, Lock, Clipboard } from 'lucide-react';
 import { AvatarUpload } from '@/components/AvatarUpload';
 import { Switch } from '@/components/ui/switch';
 import { Elements, IbanElement, useStripe, useElements } from '@stripe/react-stripe-js';
@@ -914,10 +914,10 @@ export function ProfilEtablissementContent({ sections }: { sections?: SectionPro
           <h2 className="text-base font-semibold text-foreground mb-4 flex items-center gap-2">
             <Palette className="h-5 w-5 text-primary" /> Couleur de votre établissement
           </h2>
-          <div className="flex items-center gap-4">
+          <div className="grid gap-4 sm:grid-cols-[auto_1fr] sm:items-center">
             {/* Lot 11 : palette curatée — pas de rouge/orange (réservés aux états
                 sémantiques erreur/warning des cartes). */}
-            <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Couleur de l'établissement">
+            <div className="grid grid-cols-4 gap-3 sm:flex sm:flex-wrap sm:gap-2" role="radiogroup" aria-label="Couleur de l'établissement">
               {['#E04590', '#8B5CF6', '#06B6D4', '#2563EB', '#059669', '#0D9488', '#4F46E5', '#475569'].map((c) => (
                 <button
                   key={c}
@@ -926,12 +926,12 @@ export function ProfilEtablissementContent({ sections }: { sections?: SectionPro
                   aria-checked={couleurTheme.toLowerCase() === c.toLowerCase()}
                   aria-label={`Couleur ${c}`}
                   onClick={() => setCouleurTheme(c)}
-                  className={`h-9 w-9 rounded-full border-2 transition-transform ${couleurTheme.toLowerCase() === c.toLowerCase() ? 'border-foreground scale-110' : 'border-transparent hover:scale-105'}`}
+                  className={`h-11 w-11 rounded-full border-2 transition-transform ${couleurTheme.toLowerCase() === c.toLowerCase() ? 'border-foreground scale-110' : 'border-transparent hover:scale-105'}`}
                   style={{ backgroundColor: c }}
                 />
               ))}
             </div>
-            <div className="flex-1">
+            <div className="min-w-0">
               <p className="text-sm text-muted-foreground">Cette couleur apparaît sur vos cartes mission.</p>
               <div className="mt-2 rounded-xl border border-border overflow-hidden">
                 <div className="h-1" style={{ backgroundColor: couleurTheme }} />
@@ -1080,9 +1080,10 @@ export function ProfilEtablissementContent({ sections }: { sections?: SectionPro
               navigator.clipboard.writeText(`<iframe src="${window.location.origin}/widget-recrutement?etab=${user?.id}" width="100%" height="500" frameborder="0"></iframe>`);
               afficherNotification({ type: 'succes', message: 'Snippet copié !' });
             }}
-            className="text-sm font-medium text-primary hover:underline"
+            className="inline-flex min-h-11 items-center gap-2 text-sm font-medium text-primary hover:underline"
           >
-            📋 Copier le snippet
+            <Clipboard className="h-4 w-4" aria-hidden="true" />
+            Copier le snippet
           </button>
         </div>
       </div>

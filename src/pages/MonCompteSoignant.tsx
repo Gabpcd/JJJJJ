@@ -173,20 +173,24 @@ export default function MonCompteSoignant() {
           </h2>
           <div className="rounded-2xl border border-border bg-card p-4 space-y-4">
             <div className="space-y-2">
-              <div className="flex items-center gap-2 text-sm">
-                <Mail className="h-4 w-4 text-muted-foreground" />
-                <span className="text-muted-foreground">E-mail :</span>
-                <span className="text-foreground font-mono break-all">{user?.email || '—'}</span>
+              <div className="grid grid-cols-[1.25rem_minmax(0,1fr)] items-start gap-2 text-sm">
+                <Mail className="mt-0.5 h-4 w-4 text-muted-foreground" aria-hidden="true" />
+                <div className="min-w-0">
+                  <span className="block text-muted-foreground">E-mail</span>
+                  <span className="block break-all font-mono text-foreground">{user?.email || '—'}</span>
+                </div>
               </div>
-              <div className="flex items-center gap-2 text-sm">
-                <Phone className="h-4 w-4 text-muted-foreground" />
-                <span className="text-muted-foreground">Téléphone :</span>
-                <button
-                  onClick={() => navigate('/soignant/profil')}
-                  className="text-primary hover:underline"
-                >
-                  éditable depuis le profil
-                </button>
+              <div className="grid grid-cols-[1.25rem_minmax(0,1fr)] items-start gap-2 text-sm">
+                <Phone className="mt-3.5 h-4 w-4 text-muted-foreground" aria-hidden="true" />
+                <div className="min-w-0">
+                  <span className="block text-muted-foreground">Téléphone</span>
+                  <button
+                    onClick={() => navigate('/soignant/profil')}
+                    className="inline-flex min-h-11 items-center text-left text-primary hover:underline"
+                  >
+                    Modifier depuis le profil
+                  </button>
+                </div>
               </div>
             </div>
 

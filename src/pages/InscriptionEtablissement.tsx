@@ -247,11 +247,11 @@ export default function InscriptionEtablissement() {
                 <input type="password" autoComplete="new-password" value={form.confirmMdp} onChange={e => maj('confirmMdp', e.target.value)} className="input-base" required minLength={8} />
                 {form.confirmMdp && form.confirmMdp !== form.motDePasse && <p className="text-xs text-destructive mt-1" role="alert">Les mots de passe ne correspondent pas</p>}
               </label>
-              <label className="flex items-start gap-2 cursor-pointer">
+              <label className="flex min-h-11 items-start gap-2 py-1 cursor-pointer">
                 <input type="checkbox" checked={cgu} onChange={e => setCgu(e.target.checked)} className="mt-1 h-4 w-4 rounded accent-primary" />
                 <span className="text-sm text-muted-foreground">J'accepte les <a href="/cgu" target="_blank" rel="noopener noreferrer" className="text-primary underline font-medium">Conditions Générales d'Utilisation</a> et la <a href="/confidentialite" target="_blank" rel="noopener noreferrer" className="text-primary underline font-medium">Politique de confidentialité</a> *</span>
               </label>
-              <label className="flex items-start gap-2 cursor-pointer">
+              <label className="flex min-h-11 items-start gap-2 py-1 cursor-pointer">
                 <input type="checkbox" checked={cgv} onChange={e => setCgv(e.target.checked)} className="mt-1 h-4 w-4 rounded accent-primary" />
                 <span className="text-sm text-muted-foreground">J'accepte les <a href="/cgv" target="_blank" rel="noopener noreferrer" className="text-primary underline font-medium">Conditions Générales de Vente</a> *</span>
               </label>
