@@ -224,20 +224,34 @@ async function auditRoute(
     // WebKit peut signaler l'interruption lorsque le redirect post-login et
     // l'audit visent exactement la même URL. Selon sa version, Playwright
     // remonte soit « interrupted by another navigation », soit « Frame load
-    // interrupted ». On ne tolère cette course que si la navigation active
-    // aboutit bien à la route demandée : une redirection erronée reste rouge.
+    // interrupted ». La redirection post-login peut gagner cette course et
+    // terminer sur le dashboard. Une fois stabilisée, on rejoue la route
+    // auditée. Si le garde d'accès la refuse réellement, l'assertion finale
+    // reste rouge : cette reprise ne masque aucune redirection métier.
     const navigationRace = error instanceof Error
       && (
         error.message.includes('is interrupted by another navigation')
         || error.message.includes('Frame load interrupted')
-      );
+    );
     if (!navigationRace) throw error;
-    await expect.poll(
-      () => new URL(page.url()).pathname,
-      { timeout: 5_000, message: `WebKit doit terminer sur ${route}` },
-    ).toBe(route);
-    await page.waitForLoadState('domcontentloaded');
+    await page.waitForLoadState('domcontentloaded').catch(() => undefined);
+    const settledUrl = page.url().startsWith('http') ? new URL(page.url()) : null;
+    const settledOnRequestedRoute = settledUrl?.pathname === requestedUrl.pathname
+      && settledUrl.search === requestedUrl.search;
+    if (!settledOnRequestedRoute) {
+      await page.goto(route, { waitUntil: 'domcontentloaded' });
+    }
   }
+  // Vérification systématique, même lorsque page.goto ne lève rien : un garde
+  // d'accès qui redirige silencieusement vers un dashboard ne doit jamais être
+  // compté comme l'audit réussi de la route demandée.
+  await expect.poll(
+    () => {
+      const activeUrl = new URL(page.url());
+      return `${activeUrl.pathname}${activeUrl.search}`;
+    },
+    { timeout: 5_000, message: `WebKit doit terminer sur ${route}` },
+  ).toBe(`${requestedUrl.pathname}${requestedUrl.search}`);
   const contentRoot = page.locator('#main-content, #app-route-content, main, body').first();
   await expect(contentRoot).toBeVisible();
   await expect.poll(async () => (await page.locator('body').innerText()).trim().length,
