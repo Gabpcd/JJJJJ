@@ -324,7 +324,7 @@ export function FormulaireRecurrence({
               data-testid={`jour-planning-${jour.date}`}
             >
               <div className="flex items-center justify-between gap-3">
-                <label className="flex cursor-pointer items-center gap-3">
+                <label className="flex min-h-11 cursor-pointer items-center gap-3">
                   <input
                     type="checkbox"
                     checked={jour.actif}

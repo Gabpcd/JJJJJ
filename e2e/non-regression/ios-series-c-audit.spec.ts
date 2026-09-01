@@ -130,6 +130,16 @@ async function prepareNativeShell(page: Page) {
   });
 }
 
+async function settleAuthenticatedShell(page: Page) {
+  await expect(page.locator('#main-content')).toBeVisible();
+  await page.waitForLoadState('networkidle', { timeout: 5_000 }).catch(() => undefined);
+  await page.evaluate(() => document.fonts.ready);
+  // Les dashboards chargent plusieurs requêtes après la première URL stable.
+  // Leur laisser finir évite d'annuler un import lazy ou un verrou Auth au
+  // moment où l'audit ouvre immédiatement une sous-page.
+  await page.waitForTimeout(500);
+}
+
 function screenshotSlug(value: string) {
   return value
     .replace(/^\//, '')
@@ -565,6 +575,7 @@ test.describe('audit iOS Série C — parcours complet', () => {
     test.setTimeout(60_000);
     await prepareNativeShell(page);
     await loginAs(page, 'etab');
+    await settleAuthenticatedShell(page);
     await page.goto('/etablissement/soignants');
     const premiereFiche = page.getByRole('button', { name: /^Voir le profil de / }).first();
     await expect(premiereFiche, 'l’annuaire de recette doit exposer au moins une fiche').toBeVisible();
@@ -596,6 +607,7 @@ test.describe('audit iOS Série C — parcours complet', () => {
     try {
       await prepareNativeShell(page);
       await loginAs(page, 'etab');
+      await settleAuthenticatedShell(page);
       expectRouteAuditClean(await auditRoute(
         page,
         testInfo,
@@ -614,6 +626,7 @@ test.describe('audit iOS Série C — parcours complet', () => {
         sessionStorage.clear();
       });
       await loginAs(page, 'soignant');
+      await settleAuthenticatedShell(page);
       expectRouteAuditClean(await auditRoute(
         page,
         testInfo,
