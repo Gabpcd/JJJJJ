@@ -3,6 +3,7 @@ import { mkdir } from 'node:fs/promises';
 import path from 'node:path';
 import { loginAs, TEST_ACCOUNTS } from '../helpers/auth';
 import { adminClient, userIdByEmail } from '../helpers/db';
+import { ROUTES_ETABLISSEMENT, ROUTES_SOIGNANT } from '../helpers/ios-series-c-routes';
 import { PREFIX_MISSION_MATCHING, seedMissionMatching } from '../helpers/seed-matching';
 
 type RoleAudit = 'soignant' | 'etab';
@@ -26,67 +27,6 @@ type RouteAudit = {
   consoleErrors: string[];
   pageErrors: string[];
 };
-
-const ROUTES_SOIGNANT = [
-  '/soignant/tableau-de-bord',
-  '/soignant/recherche-missions',
-  '/soignant/missions',
-  '/soignant/mes-gains',
-  '/soignant/mandat-facturation',
-  '/soignant/messagerie',
-  '/soignant/mes-documents',
-  '/soignant/presences',
-  '/soignant/score',
-  '/soignant/evaluations',
-  '/soignant/disponibilites',
-  '/soignant/conformite',
-  '/soignant/prevoyance',
-  '/soignant/attestation-heures',
-  '/soignant/passer-en-liberal',
-  '/soignant/exclusions',
-  '/soignant/charges',
-  '/soignant/notifications',
-  '/soignant/parrainage',
-  '/soignant/litiges',
-  '/soignant/premium',
-  '/soignant/stripe-connect',
-  '/soignant/classement',
-  '/soignant/pool-urgence',
-  '/soignant/mes-favoris',
-  '/soignant/parametres/notifications',
-  '/soignant/parametres/recherches-sauvegardees',
-  '/soignant/profil',
-  '/soignant/mon-compte',
-] as const;
-
-const ROUTES_ETABLISSEMENT = [
-  '/etablissement/tableau-de-bord',
-  '/etablissement/missions',
-  '/etablissement/missions/creer',
-  '/etablissement/messagerie',
-  '/etablissement/presences',
-  '/etablissement/contrats',
-  '/etablissement/facturation',
-  '/etablissement/soignants',
-  '/etablissement/mes-favoris',
-  '/etablissement/pool-urgence',
-  '/etablissement/equipe',
-  '/etablissement/rh',
-  '/etablissement/export-paie',
-  '/etablissement/score',
-  '/etablissement/evaluations-a-faire',
-  '/etablissement/litiges',
-  '/etablissement/notifications',
-  '/etablissement/parrainage',
-  '/etablissement/parametres/notifications',
-  '/etablissement/parametres/recherches-sauvegardees',
-  '/etablissement/parametres',
-  '/etablissement/mon-compte',
-  '/etablissement/activer',
-  '/etablissement/premium',
-  '/etablissement/chorus-config',
-  '/etablissement/mes-reclamations',
-] as const;
 
 const ROUTES_PUBLIQUES = [
   '/',
@@ -132,12 +72,15 @@ async function prepareNativeShell(page: Page) {
 
 async function settleAuthenticatedShell(page: Page) {
   await expect(page.locator('#main-content')).toBeVisible();
-  await page.waitForLoadState('networkidle', { timeout: 5_000 }).catch(() => undefined);
+  const pathname = new URL(page.url()).pathname;
+  if (pathname === '/etablissement/tableau-de-bord') {
+    // Le dashboard établissement lance plusieurs RPC dans sa query primaire.
+    // Attendre seulement l'URL ou le shell peut interrompre ces appels lors de
+    // la navigation suivante et attribuer leurs erreurs à tort à la sous-page.
+    await expect(page.getByTestId('dashboard-etablissement-ready')).toBeAttached({ timeout: 30_000 });
+  }
+  await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => undefined);
   await page.evaluate(() => document.fonts.ready);
-  // Les dashboards chargent plusieurs requêtes après la première URL stable.
-  // Leur laisser finir évite d'annuler un import lazy ou un verrou Auth au
-  // moment où l'audit ouvre immédiatement une sous-page.
-  await page.waitForTimeout(500);
 }
 
 function screenshotSlug(value: string) {
@@ -208,7 +151,7 @@ async function auditRoute(
   const onConsole = (message: ConsoleMessage) => {
     if (message.type() !== 'error') return;
     const source = message.location().url;
-    const stripeCspNoise = /(?:js|hooks)\.stripe\.com/.test(source)
+    const stripeCspNoise = /^https:\/\/(?:[^/]+\.)?stripe\.(?:com|network)\//.test(source)
       && message.text().includes('Refused to apply a stylesheet')
       && message.text().includes('Content Security Policy');
     if (!stripeCspNoise) {

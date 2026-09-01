@@ -1,0 +1,67 @@
+/**
+ * Routes mobiles visibles par rôle.
+ *
+ * Source unique partagée par l'audit des comptes de recette stables et par
+ * l'audit post-inscription de comptes entièrement neufs. Une nouvelle route
+ * métier ne doit ainsi jamais être ajoutée à un seul des deux parcours.
+ */
+export const ROUTES_SOIGNANT = [
+  '/soignant/tableau-de-bord',
+  '/soignant/recherche-missions',
+  '/soignant/missions',
+  '/soignant/mes-gains',
+  '/soignant/mandat-facturation',
+  '/soignant/messagerie',
+  '/soignant/mes-documents',
+  '/soignant/presences',
+  '/soignant/score',
+  '/soignant/evaluations',
+  '/soignant/disponibilites',
+  '/soignant/conformite',
+  '/soignant/prevoyance',
+  '/soignant/attestation-heures',
+  '/soignant/passer-en-liberal',
+  '/soignant/exclusions',
+  '/soignant/charges',
+  '/soignant/notifications',
+  '/soignant/parrainage',
+  '/soignant/litiges',
+  '/soignant/premium',
+  '/soignant/stripe-connect',
+  '/soignant/classement',
+  '/soignant/pool-urgence',
+  '/soignant/mes-favoris',
+  '/soignant/parametres/notifications',
+  '/soignant/parametres/recherches-sauvegardees',
+  '/soignant/profil',
+  '/soignant/mon-compte',
+] as const;
+
+export const ROUTES_ETABLISSEMENT = [
+  '/etablissement/tableau-de-bord',
+  '/etablissement/missions',
+  '/etablissement/missions/creer',
+  '/etablissement/messagerie',
+  '/etablissement/presences',
+  '/etablissement/contrats',
+  '/etablissement/facturation',
+  '/etablissement/soignants',
+  '/etablissement/mes-favoris',
+  '/etablissement/pool-urgence',
+  '/etablissement/equipe',
+  '/etablissement/rh',
+  '/etablissement/export-paie',
+  '/etablissement/score',
+  '/etablissement/evaluations-a-faire',
+  '/etablissement/litiges',
+  '/etablissement/notifications',
+  '/etablissement/parrainage',
+  '/etablissement/parametres/notifications',
+  '/etablissement/parametres/recherches-sauvegardees',
+  '/etablissement/parametres',
+  '/etablissement/mon-compte',
+  '/etablissement/activer',
+  '/etablissement/premium',
+  '/etablissement/chorus-config',
+  '/etablissement/mes-reclamations',
+] as const;

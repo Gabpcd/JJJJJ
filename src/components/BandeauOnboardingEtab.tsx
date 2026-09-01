@@ -37,15 +37,18 @@ export function BandeauOnboardingEtab() {
   const detail = 'Signez le contrat de service pour publier des missions.';
 
   return (
-    <div className="bg-warning/10 border-b border-warning/30 px-4 py-3 flex items-center justify-between gap-3">
-      <div className="flex items-center gap-2 text-sm text-warning-foreground">
-        <AlertTriangle className="h-4 w-4 text-warning shrink-0" />
+    <div
+      data-testid="onboarding-etab-banner"
+      className="bg-warning/10 border-b border-warning/30 px-4 py-3 flex items-center justify-between gap-3"
+    >
+      <div className="flex items-center gap-2 text-sm text-amber-800 dark:text-warning">
+        <AlertTriangle className="h-4 w-4 shrink-0" />
         <span className="font-medium">Votre inscription n'est pas finalisée.</span>
         <span className="text-muted-foreground hidden sm:inline">{detail}</span>
       </div>
       <button
         onClick={() => navigate('/etablissement/activer')}
-        className="shrink-0 text-sm font-semibold text-primary hover:text-primary/80 transition-colors"
+        className="shrink-0 text-sm font-semibold text-primary-dark hover:text-primary-dark/80 transition-colors"
       >
         Compléter maintenant
       </button>

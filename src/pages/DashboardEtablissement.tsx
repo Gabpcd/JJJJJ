@@ -484,6 +484,7 @@ export default function DashboardEtablissement() {
     const etabVerifie = !!etab && etab.peut_publier_missions !== false && !etab.bloque_auto_le;
     return (
       <LayoutApp role="ADMIN_ETABLISSEMENT">
+        <span data-testid="dashboard-etablissement-ready" className="sr-only" aria-hidden="true" />
         {/* Blocage dur conservé EN PREMIER même en mode hero (jamais masqué) */}
         {blocageBanner}
         {erreurPartielle && (
@@ -604,6 +605,7 @@ export default function DashboardEtablissement() {
 
   return (
     <LayoutApp role="ADMIN_ETABLISSEMENT">
+      <span data-testid="dashboard-etablissement-ready" className="sr-only" aria-hidden="true" />
       {/* Lot 11 : bannière évaluations retirée — les évaluations en attente
           convergent dans « À faire maintenant » (actionsTop). */}
       <CardScoreQualiteEtab />
