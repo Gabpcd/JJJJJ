@@ -153,18 +153,18 @@ export function APIContent() {
                     {k.actif ? 'Active' : 'Désactivée'}
                   </span>
                 </div>
-                <div className="flex items-center gap-1 mb-1">
-                  <code className="text-xs bg-muted px-2 py-0.5 rounded">{masquer(k.cle_api, revealedKeys.has(k.id))}</code>
-                  <button onClick={() => toggleReveal(k.id)} className="p-1 hover:bg-muted rounded" aria-label={revealedKeys.has(k.id) ? 'Masquer' : 'Afficher'}>
+                <div className="flex min-w-0 items-center gap-1 mb-1">
+                  <code className="min-w-0 flex-1 truncate text-xs bg-muted px-2 py-0.5 rounded">{masquer(k.cle_api, revealedKeys.has(k.id))}</code>
+                  <button onClick={() => toggleReveal(k.id)} className="shrink-0 p-1 hover:bg-muted rounded" aria-label={revealedKeys.has(k.id) ? 'Masquer' : 'Afficher'}>
                     {revealedKeys.has(k.id) ? <EyeOff className="h-3.5 w-3.5 text-muted-foreground" /> : <Eye className="h-3.5 w-3.5 text-muted-foreground" />}
                   </button>
-                  <button onClick={() => copier(k.cle_api)} className="p-1 hover:bg-muted rounded" aria-label="Copier"><Copy className="h-3.5 w-3.5 text-muted-foreground" /></button>
+                  <button onClick={() => copier(k.cle_api)} className="shrink-0 p-1 hover:bg-muted rounded" aria-label="Copier"><Copy className="h-3.5 w-3.5 text-muted-foreground" /></button>
                   {k.actif && (
-                    <button onClick={() => revoquer(k.id)} className="p-1 hover:bg-warning/10 text-warning rounded ml-auto" aria-label="Révoquer" title="Révoquer">
+                    <button onClick={() => revoquer(k.id)} className="shrink-0 p-1 hover:bg-warning/10 text-warning rounded ml-auto" aria-label="Révoquer" title="Révoquer">
                       <Ban className="h-3.5 w-3.5" />
                     </button>
                   )}
-                  <button onClick={() => supprimer(k.id)} className={`p-1 hover:bg-destructive/10 text-destructive rounded ${k.actif ? '' : 'ml-auto'}`} aria-label="Supprimer" title="Supprimer">
+                  <button onClick={() => supprimer(k.id)} className={`shrink-0 p-1 hover:bg-destructive/10 text-destructive rounded ${k.actif ? '' : 'ml-auto'}`} aria-label="Supprimer" title="Supprimer">
                     <Trash2 className="h-3.5 w-3.5" />
                   </button>
                 </div>

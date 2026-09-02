@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useCallback, useRef } from 'react';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { LayoutApp } from '@/components/LayoutApp';
@@ -34,6 +34,7 @@ export default function ProfilSoignant() {
   const { afficherNotification } = useNotification();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
+  const ongletsScrollerRef = useRef<HTMLDivElement>(null);
   const tabParam = searchParams.get('tab');
   const ongletActif = ['principal', 'preferences', 'confidentialite'].includes(tabParam || '')
     ? tabParam!
@@ -87,6 +88,39 @@ export default function ProfilSoignant() {
   const [nbEvenementsScore, setNbEvenementsScore] = useState(0);
 
   const refresh = useCallback(() => setRefreshKey((k) => k + 1), []);
+
+  // Les liens du hub compte peuvent ouvrir directement le dernier onglet.
+  // Sur un iPhone compact, garder l'onglet actif entièrement visible évite
+  // d'arriver sur « Confidentialité » sans repère dans la barre horizontale.
+  useLayoutEffect(() => {
+    let annule = false;
+    const aligner = () => {
+      if (annule) return;
+      const scroller = ongletsScrollerRef.current;
+      const actif = scroller?.querySelector<HTMLElement>('[role="tab"][data-state="active"]');
+      if (!scroller || !actif) return;
+
+      const marge = 8;
+      const cadre = scroller.getBoundingClientRect();
+      const onglet = actif.getBoundingClientRect();
+      if (onglet.left < cadre.left + marge) {
+        scroller.scrollLeft -= cadre.left + marge - onglet.left;
+      } else if (onglet.right > cadre.right - marge) {
+        scroller.scrollLeft += onglet.right - cadre.right + marge;
+      }
+    };
+
+    const frame = window.requestAnimationFrame(aligner);
+    void document.fonts?.ready.then(aligner);
+    const observer = new ResizeObserver(aligner);
+    if (ongletsScrollerRef.current) observer.observe(ongletsScrollerRef.current);
+
+    return () => {
+      annule = true;
+      window.cancelAnimationFrame(frame);
+      observer.disconnect();
+    };
+  }, [ongletActif, loading]);
 
   useEffect(() => {
     if (!user) return;
@@ -341,7 +375,7 @@ export default function ProfilSoignant() {
           onValueChange={(value) => setSearchParams({ tab: value }, { replace: true })}
           className="w-full"
         >
-          <div className="overflow-x-auto -mx-1 px-1 mb-4">
+          <div ref={ongletsScrollerRef} className="overflow-x-auto -mx-1 px-1 mb-4">
             <TabsList className="w-max">
               <TabsTrigger value="principal">Profil principal</TabsTrigger>
               <TabsTrigger value="preferences">Préférences</TabsTrigger>
