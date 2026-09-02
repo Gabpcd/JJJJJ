@@ -1,4 +1,5 @@
 import { Switch } from '@/components/ui/switch';
+import { useNavigate } from 'react-router-dom';
 import { CONTRATS } from '@/lib/constantes';
 import { PoolUrgenceToggle } from '@/components/PoolUrgenceToggle';
 import { SectionBio } from '@/components/SectionBio';
@@ -28,10 +29,6 @@ interface Props {
   onConsentementGPSChange: (val: boolean) => void;
   gpsToggling: boolean;
   setGpsToggling: (val: boolean) => void;
-  consentementSMS: boolean;
-  onConsentementSMSChange: (val: boolean) => void;
-  smsToggling: boolean;
-  setSmsToggling: (val: boolean) => void;
 }
 
 export function SectionPreferences(props: Props) {
@@ -43,10 +40,10 @@ export function SectionPreferences(props: Props) {
     tauxHoraireMinimum, onTauxChange,
     poolUrgenceActif, poolUrgenceRayon, onPoolUrgenceUpdate,
     consentementGPS, onConsentementGPSChange, gpsToggling, setGpsToggling,
-    consentementSMS, onConsentementSMSChange, smsToggling, setSmsToggling,
   } = props;
   const { afficherNotification } = useNotification();
   const { role } = useRole();
+  const navigate = useNavigate();
 
   return (
     <div className="space-y-4">
@@ -64,7 +61,7 @@ export function SectionPreferences(props: Props) {
         <p className="text-xs text-muted-foreground mb-3">Coche tous les types de contrat que tu acceptes.</p>
         <div className="space-y-2">
           {CONTRATS.map((c) => (
-            <label key={c.valeur} className="flex items-center gap-3 cursor-pointer group">
+            <label key={c.valeur} className="flex min-h-11 items-center gap-3 cursor-pointer group">
               <input
                 type="checkbox"
                 checked={typesContrat.includes(c.valeur)}
@@ -103,7 +100,7 @@ export function SectionPreferences(props: Props) {
             step={1}
             value={tauxHoraireMinimum ?? 10}
             onChange={(e) => onTauxChange(Number(e.target.value))}
-            className="w-full accent-primary"
+            className="w-full min-h-11 accent-primary"
           />
           <div className="flex justify-between text-[10px] text-muted-foreground">
             <span>10 €/h</span><span>100 €/h</span>
@@ -125,7 +122,7 @@ export function SectionPreferences(props: Props) {
           max={100}
           value={rayon}
           onChange={(e) => onRayonChange(Number(e.target.value))}
-          className="w-full accent-primary"
+          className="w-full min-h-11 accent-primary"
         />
         <div className="flex justify-between text-[10px] text-muted-foreground"><span>5 km</span><span>100 km</span></div>
       </div>
@@ -181,75 +178,17 @@ export function SectionPreferences(props: Props) {
       </div>
 
       <div className="card-base">
-        <h2 className="text-base font-semibold text-foreground mb-4">Notifications SMS</h2>
-        <div className="flex items-center justify-between">
-          <div className="flex-1">
-            <p className="text-sm text-foreground font-medium">Recevoir les alertes par SMS</p>
-            <p className="text-xs text-muted-foreground mt-1">
-              {consentementSMS
-                ? 'Tu recevras un SMS pour les missions urgentes et les annulations tardives.'
-                : 'Active pour recevoir les notifications critiques par SMS (missions urgentes, annulations).'}
-            </p>
-          </div>
-          <Switch
-            aria-label="Recevoir les alertes par SMS"
-            checked={consentementSMS}
-            disabled={smsToggling}
-            onCheckedChange={async (checked) => {
-              setSmsToggling(true);
-              const { error } = await supabase
-                .from('soignants')
-                .update({ sms_actif: checked, sms_consent_le: checked ? new Date().toISOString() : null })
-                .eq('id', userId);
-              if (error) {
-                afficherNotification({ type: 'erreur', message: extraireMessageErreur(error) });
-              } else {
-                onConsentementSMSChange(checked);
-                await supabase.rpc('fn_ecrire_audit_safe', {
-                  p_acteur_id: userId, p_type_acteur: role || 'SOIGNANT',
-                  p_action: checked ? 'SMS_CONSENTEMENT_ACTIVE' : 'SMS_CONSENTEMENT_RETIRE',
-                  p_type_ressource: 'soignant', p_id_ressource: userId,
-                  p_cle_s3: null, p_details: { sms_actif: checked },
-                  p_ip: null, p_navigateur: navigator.userAgent,
-                });
-                afficherNotification({
-                  type: checked ? 'succes' : 'avertissement',
-                  message: checked ? 'Notifications SMS activées.' : 'Notifications SMS désactivées.',
-                });
-              }
-              setSmsToggling(false);
-            }}
-          />
-        </div>
-      </div>
-
-      <div className="card-base">
-        <h2 className="text-base font-semibold text-foreground mb-4">Notifications push</h2>
-        <div className="flex items-center justify-between">
-          <div className="flex-1">
-            <p className="text-sm text-foreground font-medium">Recevoir les notifications push</p>
-            <p className="text-xs text-muted-foreground mt-1">
-              Missions urgentes, nouvelles candidatures, rappels de pointage.
-            </p>
-          </div>
-          <Switch
-            aria-label="Recevoir les notifications push"
-            checked={typeof Notification !== 'undefined' && Notification.permission === 'granted'}
-            onCheckedChange={async (checked) => {
-              if (checked) {
-                const perm = await Notification.requestPermission();
-                if (perm === 'granted') {
-                  afficherNotification({ type: 'succes', message: 'Notifications push activées.' });
-                } else {
-                  afficherNotification({ type: 'avertissement', message: 'Notifications refusées par le navigateur. Vérifie les paramètres.' });
-                }
-              } else {
-                await supabase.from('tokens_push').delete().eq('utilisateur_id', userId);
-                afficherNotification({ type: 'avertissement', message: 'Notifications push désactivées. Tes tokens ont été supprimés.' });
-              }
-            }}
-          />
-        </div>
+        <h2 className="text-base font-semibold text-foreground">Notifications</h2>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Choisis au même endroit les alertes email, push, SMS et in-app, globalement ou par événement.
+        </p>
+        <button
+          type="button"
+          onClick={() => navigate('/soignant/parametres/notifications')}
+          className="btn-secondary mt-4 min-h-11 w-full"
+        >
+          Gérer mes préférences de notifications
+        </button>
       </div>
     </div>
   );

@@ -16,7 +16,6 @@ import { verifierFichierDocument } from '@/lib/documentUpload';
 import { supabase } from '@/integrations/supabase/client';
 import { Info, MapPin, Loader2, Download, Trash2, Palette, Building2, Upload, FileCheck, Clock, AlertTriangle, Lock, Clipboard } from 'lucide-react';
 import { AvatarUpload } from '@/components/AvatarUpload';
-import { Switch } from '@/components/ui/switch';
 import { Elements, IbanElement, useStripe, useElements } from '@stripe/react-stripe-js';
 import { isStripeConfigured, stripePromise } from '@/lib/stripe';
 import { contratServiceEstSigne } from '@/lib/contratEtablissement';
@@ -362,7 +361,6 @@ export function ProfilEtablissementContent({ sections }: { sections?: SectionPro
         setLat(data.adresse_lat?.toString() || '');
         setLng(data.adresse_lng?.toString() || '');
         setCouleurTheme(data.couleur_theme || '#E04590');
-        setConsentementSMS(data.sms_actif === true);
       }
       setLoading(false);
     });
@@ -380,8 +378,6 @@ export function ProfilEtablissementContent({ sections }: { sections?: SectionPro
   const [lat, setLat] = useState('');
   const [lng, setLng] = useState('');
   const [couleurTheme, setCouleurTheme] = useState('#E04590');
-  const [consentementSMS, setConsentementSMS] = useState(false);
-  const [smsToggling, setSmsToggling] = useState(false);
 
   // adresse_lat, adresse_lng, couleur_theme are loaded from the RPC in the main useEffect above
 
@@ -697,45 +693,22 @@ export function ProfilEtablissementContent({ sections }: { sections?: SectionPro
             <div><label htmlFor="etablissement-email-contact" className="text-sm font-medium text-foreground mb-1.5 block">Email</label><input id="etablissement-email-contact" type="email" value={form.emailContact} onChange={e => maj('emailContact', e.target.value)} className="input-base" /></div>
             <div><label htmlFor="etablissement-telephone-contact" className="text-sm font-medium text-foreground mb-1.5 block">Téléphone</label><input id="etablissement-telephone-contact" value={form.telephoneContact} onChange={e => maj('telephoneContact', e.target.value)} className="input-base" /></div>
           </div>
-          {/* SMS notifications toggle */}
+          {/* Les canaux de notification ont une source unique afin que les
+              réglages Push natifs, SMS et email ne puissent pas diverger. */}
           <div className="flex items-center justify-between mt-4 pt-4 border-t border-border">
             <div className="flex-1">
-              <p className="text-sm text-foreground font-medium">Notifications SMS</p>
+              <p className="text-sm text-foreground font-medium">Notifications</p>
               <p className="text-xs text-muted-foreground mt-1">
-                {consentementSMS
-                  ? 'Vous recevrez un SMS en cas d\'annulation tardive ou d\'alerte critique.'
-                  : 'Activez pour recevoir les alertes critiques par SMS.'}
+                Gérez les alertes email, push, SMS et in-app depuis une seule page.
               </p>
             </div>
-            <Switch
-              aria-label="Recevoir les notifications SMS critiques"
-              checked={consentementSMS}
-              disabled={smsToggling}
-              onCheckedChange={async (checked) => {
-                setSmsToggling(true);
-                const { error } = await supabase
-                  .from('etablissements')
-                  .update({ sms_actif: checked, sms_consent_le: checked ? new Date().toISOString() : null })
-                  .eq('id', user!.id);
-                if (error) {
-                  afficherNotification({ type: 'erreur', message: extraireMessageErreur(error) });
-                } else {
-                  setConsentementSMS(checked);
-                  await supabase.rpc('fn_ecrire_audit_safe', {
-                    p_acteur_id: user!.id, p_type_acteur: 'ADMIN_ETABLISSEMENT',
-                    p_action: checked ? 'SMS_CONSENTEMENT_ACTIVE' : 'SMS_CONSENTEMENT_RETIRE',
-                    p_type_ressource: 'etablissement', p_id_ressource: user!.id,
-                    p_cle_s3: null, p_details: { sms_actif: checked },
-                    p_ip: null, p_navigateur: navigator.userAgent,
-                  });
-                  afficherNotification({
-                    type: checked ? 'succes' : 'avertissement',
-                    message: checked ? 'Notifications SMS activées.' : 'Notifications SMS désactivées.',
-                  });
-                }
-                setSmsToggling(false);
-              }}
-            />
+            <button
+              type="button"
+              onClick={() => navigate('/etablissement/parametres/notifications')}
+              className="btn-secondary ml-3 min-h-11 shrink-0"
+            >
+              Gérer
+            </button>
           </div>
         </div>
         )}

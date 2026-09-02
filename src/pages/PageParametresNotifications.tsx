@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Bell, Mail, MessageSquare, Smartphone, Loader2, ArrowLeft, Save } from 'lucide-react';
+import { Bell, Mail, MessageSquare, Smartphone, Loader2, ArrowLeft, Save, CircleCheck, TriangleAlert } from 'lucide-react';
+import { Capacitor } from '@capacitor/core';
 import { LayoutApp } from '@/components/LayoutApp';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { supabase } from '@/integrations/supabase/client';
@@ -24,6 +25,8 @@ interface PrefEvenement {
   canal: Canal;
   actif: boolean;
 }
+
+type AutorisationPushNative = 'loading' | 'granted' | 'prompt' | 'denied' | 'unavailable';
 
 interface EventDef {
   type: string;
@@ -80,6 +83,10 @@ export default function PageParametresNotifications() {
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [activationPushEnCours, setActivationPushEnCours] = useState(false);
+  const [autorisationPushNative, setAutorisationPushNative] = useState<AutorisationPushNative | null>(
+    Capacitor.isNativePlatform() ? 'loading' : null,
+  );
   const [global, setGlobal] = useState<PrefsGlobal>({
     canal_email: true, canal_sms: false, canal_push: true, canal_in_app: true,
   });
@@ -125,6 +132,48 @@ export default function PageParametresNotifications() {
       setLoading(false);
     })();
   }, [user, isEtab]);
+
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform() || !user) return;
+    let actif = true;
+    void import('@capacitor/push-notifications')
+      .then(async ({ PushNotifications }) => {
+        const permission = await PushNotifications.checkPermissions();
+        if (!actif) return;
+        setAutorisationPushNative(
+          permission.receive === 'granted'
+            ? 'granted'
+            : permission.receive === 'denied'
+              ? 'denied'
+              : 'prompt',
+        );
+      })
+      .catch(() => {
+        if (actif) setAutorisationPushNative('unavailable');
+      });
+    return () => { actif = false; };
+  }, [user]);
+
+  const activerPushSurAppareil = async () => {
+    if (!user || !Capacitor.isNativePlatform()) return;
+    setActivationPushEnCours(true);
+    try {
+      const { demanderPermissionNativePush } = await import('@/lib/pushNative');
+      const permissionAccordee = await demanderPermissionNativePush(user.id);
+      setAutorisationPushNative(permissionAccordee ? 'granted' : 'denied');
+      if (permissionAccordee) {
+        setGlobal((courant) => ({ ...courant, canal_push: true }));
+        toast.success('Notifications autorisées sur cet appareil');
+      } else {
+        toast.error('Notifications non autorisées. Vérifiez les réglages du téléphone.');
+      }
+    } catch {
+      setAutorisationPushNative('unavailable');
+      toast.error("Impossible de vérifier l'autorisation des notifications.");
+    } finally {
+      setActivationPushEnCours(false);
+    }
+  };
 
   const isEnabled = (event: string, canal: Canal) => {
     const key = `${event}:${canal}`;
@@ -246,6 +295,49 @@ export default function PageParametresNotifications() {
             <ToggleCanal icone={<MessageSquare className="h-4 w-4" />} label="SMS (urgences uniquement par défaut)" actif={global.canal_sms} onChange={v => setGlobal(g => ({ ...g, canal_sms: v }))} />
             <ToggleCanal icone={<Bell className="h-4 w-4" />} label="In-app (cloche en haut de l'écran)" actif={global.canal_in_app} onChange={v => setGlobal(g => ({ ...g, canal_in_app: v }))} />
           </div>
+          {autorisationPushNative && (
+            <div
+              className={`flex flex-col gap-3 rounded-lg border p-3 sm:flex-row sm:items-center sm:justify-between ${
+                autorisationPushNative === 'granted'
+                  ? 'border-success/30 bg-success/5'
+                  : 'border-warning/30 bg-warning/5'
+              }`}
+              aria-live="polite"
+              data-testid="native-push-permission-status"
+            >
+              <div className="flex items-start gap-2">
+                {autorisationPushNative === 'granted'
+                  ? <CircleCheck className="mt-0.5 h-4 w-4 shrink-0 text-success" />
+                  : <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0 text-warning" />}
+                <div>
+                  <p className="text-sm font-medium text-foreground">Autorisation du téléphone</p>
+                  <p className="text-xs text-muted-foreground">
+                    {autorisationPushNative === 'loading' && 'Vérification de l’autorisation système…'}
+                    {autorisationPushNative === 'granted' && (
+                      global.canal_push
+                        ? 'Les notifications sont autorisées sur cet appareil.'
+                        : 'Le téléphone les autorise, mais le canal est désactivé dans Jolene.'
+                    )}
+                    {autorisationPushNative === 'prompt' && 'Le canal est actif dans Jolene, mais le téléphone doit encore autoriser les notifications.'}
+                    {autorisationPushNative === 'denied' && 'Les notifications sont bloquées par le téléphone. Réactivez Jolene dans les réglages système.'}
+                    {autorisationPushNative === 'unavailable' && 'L’état système n’a pas pu être vérifié. Réessayez dans quelques instants.'}
+                  </p>
+                </div>
+              </div>
+              {autorisationPushNative === 'prompt' && global.canal_push && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="min-h-11 shrink-0"
+                  disabled={activationPushEnCours}
+                  onClick={() => { void activerPushSurAppareil(); }}
+                >
+                  {activationPushEnCours && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  Activer sur cet appareil
+                </Button>
+              )}
+            </div>
+          )}
         </section>
 
         {/* Préférences par événement */}

@@ -23,6 +23,7 @@ type RouteAudit = {
     className: string;
   }>;
   tinyTexts: Array<{ text: string; fontSize: number }>;
+  hiddenActiveTabs: Array<{ label: string; left: number; right: number }>;
   duplicateBackButtons: number;
   consoleErrors: string[];
   pageErrors: string[];
@@ -97,6 +98,7 @@ function expectRouteAuditClean(result: RouteAudit) {
   expect.soft(result.offscreenControls, `${result.route} ne doit pas sortir de contrôle du viewport`).toEqual([]);
   expect.soft(result.smallTouchTargets, `${result.route} conserve des cibles tactiles de 44 px`).toEqual([]);
   expect.soft(result.tinyTexts, `${result.route} ne doit pas rendre de texte sous 11 px`).toEqual([]);
+  expect.soft(result.hiddenActiveTabs, `${result.route} doit rendre l'onglet actif visible`).toEqual([]);
   expect.soft(result.duplicateBackButtons, `${result.route} ne doit afficher qu'un seul retour`).toBe(0);
   expect.soft(result.consoleErrors, `${result.route} ne doit pas lever d'erreur console`).toEqual([]);
   expect.soft(result.pageErrors, `${result.route} ne doit pas lever d'erreur JavaScript`).toEqual([]);
@@ -311,6 +313,24 @@ async function auditRoute(
     const visibleBackButtons = Array.from(document.querySelectorAll('button'))
       .filter((button) => visible(button) && /^Retour$/.test((button.textContent || '').trim()));
 
+    const hiddenActiveTabs = Array.from(document.querySelectorAll('[role="tab"][data-state="active"]'))
+      .map((element) => {
+        const rect = element.getBoundingClientRect();
+        const scroller = element.closest('.overflow-x-auto');
+        const scrollerRect = scroller?.getBoundingClientRect();
+        return {
+          label: labelOf(element),
+          left: rect.left,
+          right: rect.right,
+          hidden: Boolean(scrollerRect && (
+            rect.left < scrollerRect.left - 1
+            || rect.right > scrollerRect.right + 1
+          )),
+        };
+      })
+      .filter(({ hidden }) => hidden)
+      .map(({ label, left, right }) => ({ label, left, right }));
+
     return {
       title: document.querySelector('h1')?.textContent?.replace(/\s+/g, ' ').trim() || document.title,
       horizontalOverflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
@@ -318,6 +338,7 @@ async function auditRoute(
       offscreenControls,
       smallTouchTargets,
       tinyTexts,
+      hiddenActiveTabs,
       duplicateBackButtons: Math.max(0, visibleBackButtons.length - 1),
     };
   });
@@ -362,6 +383,7 @@ async function auditRole(
   const offscreen = results.filter((result) => result.offscreenControls.length > 0);
   const undersizedTargets = results.filter((result) => result.smallTouchTargets.length > 0);
   const unreadableText = results.filter((result) => result.tinyTexts.length > 0);
+  const hiddenTabs = results.filter((result) => result.hiddenActiveTabs.length > 0);
   const duplicateBacks = results.filter((result) => result.duplicateBackButtons > 0);
   const runtimeErrors = results.filter((result) => (
     result.pageErrors.length > 0 || result.consoleErrors.length > 0
@@ -375,6 +397,7 @@ async function auditRole(
       offscreenControls: result.offscreenControls.length,
       smallTouchTargets: result.smallTouchTargets.length,
       tinyTexts: result.tinyTexts.length,
+      hiddenActiveTabs: result.hiddenActiveTabs.length,
       duplicateBackButtons: result.duplicateBackButtons,
       consoleErrors: result.consoleErrors.length,
       pageErrors: result.pageErrors.length,
@@ -401,6 +424,8 @@ async function auditRole(
   }
   expect.soft(offscreen.map(({ route, offscreenControls }) => ({ route, offscreenControls })),
     'aucun contrôle ne doit sortir du viewport').toEqual([]);
+  expect.soft(hiddenTabs.map(({ route, hiddenActiveTabs }) => ({ route, hiddenActiveTabs })),
+    'tout onglet actif doit être visible dans sa barre de navigation').toEqual([]);
   expect.soft(duplicateBacks.map(({ route, duplicateBackButtons }) => ({ route, duplicateBackButtons })),
     'une sous-page ne doit afficher qu’un seul retour').toEqual([]);
   expect.soft(runtimeErrors.map(({ route, consoleErrors, pageErrors }) => ({

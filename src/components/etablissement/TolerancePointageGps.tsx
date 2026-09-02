@@ -143,7 +143,7 @@ export function TolerancePointageGps() {
           value={valeur}
           onChange={(e) => setValeur(Number(e.target.value))}
           disabled={saving}
-          className="w-full accent-primary"
+          className="w-full min-h-11 accent-primary"
         />
 
         <div className="flex justify-between text-[11px] text-muted-foreground">
