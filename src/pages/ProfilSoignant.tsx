@@ -73,8 +73,6 @@ export default function ProfilSoignant() {
   const [typesContrat, setTypesContrat] = useState<string[]>(['CDD']);
   const [consentementGPS, setConsentementGPS] = useState(true);
   const [gpsToggling, setGpsToggling] = useState(false);
-  const [consentementSMS, setConsentementSMS] = useState(false);
-  const [smsToggling, setSmsToggling] = useState(false);
   const [poolUrgenceActif, setPoolUrgenceActif] = useState(false);
   const [poolUrgenceRayon, setPoolUrgenceRayon] = useState(15);
   const [typeExercice, setTypeExercice] = useState('SALARIE');
@@ -138,7 +136,6 @@ export default function ProfilSoignant() {
         setSpecialites(Array.isArray(data.specialites) ? data.specialites : (data.specialites ? JSON.parse(data.specialites) : []));
         setTypesContrat(getTypesContratSoignant(data));
         setConsentementGPS(data.consentement_gps !== false);
-        setConsentementSMS(data.sms_actif === true);
         setPoolUrgenceActif(data.disponible_urgence || false);
         setPoolUrgenceRayon(data.urgence_rayon_km || 15);
 
@@ -422,10 +419,6 @@ export default function ProfilSoignant() {
               onConsentementGPSChange={setConsentementGPS}
               gpsToggling={gpsToggling}
               setGpsToggling={setGpsToggling}
-              consentementSMS={consentementSMS}
-              onConsentementSMSChange={setConsentementSMS}
-              smsToggling={smsToggling}
-              setSmsToggling={setSmsToggling}
             />
             <BlocStatutEtudiant userId={user!.id} />
             <div className="mt-4 flex justify-end">

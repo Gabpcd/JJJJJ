@@ -1,21 +1,46 @@
 import React, { useState, useEffect } from 'react';
-import { Apple, Download, Calendar, CalendarPlus } from 'lucide-react';
+import { Apple, Download, Calendar, CalendarPlus, LoaderCircle } from 'lucide-react';
+import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase, SUPABASE_URL } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { telechargerOuPartager } from '@/lib/telechargement';
-import { downloadMissionIcs, type MissionCalendrier } from '@/lib/ics-mission';
+import { ouvrirMissionDansCalendrier, type MissionCalendrier } from '@/lib/ics-mission';
 
 /** Small button to add a single mission to calendar */
 export function BoutonAjouterCalendrier({ mission }: { mission: MissionCalendrier }) {
+  const [ouverture, setOuverture] = useState(false);
+
+  async function ouvrirCalendrier(e: React.MouseEvent<HTMLButtonElement>) {
+    e.stopPropagation();
+    if (ouverture) return;
+    setOuverture(true);
+    try {
+      await ouvrirMissionDansCalendrier(mission);
+    } catch (erreur) {
+      const message = erreur instanceof Error ? erreur.message : '';
+      if (!/cancel(?:ed|led)|annul/i.test(message)) {
+        toast.error("Impossible d'ouvrir le calendrier pour le moment.");
+      }
+    } finally {
+      setOuverture(false);
+    }
+  }
+
   return (
     <button
-      onClick={(e) => { e.stopPropagation(); void downloadMissionIcs(mission); }}
-      className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
-      title="Ajouter au calendrier"
+      type="button"
+      onClick={ouvrirCalendrier}
+      disabled={ouverture}
+      className="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-1 rounded-xl px-2 text-xs font-medium text-primary transition-colors hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 disabled:opacity-60"
+      title="Ajouter ce créneau au calendrier"
+      aria-label="Ajouter ce créneau au calendrier"
     >
-      <CalendarPlus className="h-3.5 w-3.5" /> Agenda
+      {ouverture
+        ? <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden="true" />
+        : <CalendarPlus className="h-4 w-4" aria-hidden="true" />}
+      <span>Agenda</span>
     </button>
   );
 }

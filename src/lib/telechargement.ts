@@ -1,5 +1,9 @@
 import { isNative } from './platform';
 
+function partageAnnule(erreur: unknown): boolean {
+  return erreur instanceof Error && /share cancel(?:ed|led)|partage annul/i.test(erreur.message);
+}
+
 /**
  * Télécharge (web) ou partage (natif) un fichier généré côté client.
  *
@@ -43,11 +47,15 @@ export async function telechargerOuPartager(
     const { uri } = await Filesystem.getUri({ path: nomFichier, directory: Directory.Cache });
     await Share.share({ url: uri, title: nomFichier });
   } catch (e) {
+    // Fermer volontairement la feuille de partage ne doit surtout pas ouvrir
+    // une seconde feuille contenant le texte brut du fichier.
+    if (partageAnnule(e)) return;
     // Filesystem indisponible → fallback partage texte brut
     try {
       const { Share } = await import('@capacitor/share');
       await Share.share({ text: contenu, title: nomFichier });
-    } catch {
+    } catch (shareError) {
+      if (partageAnnule(shareError)) return;
       // dernier recours : data URL (iOS sait ouvrir text/calendar)
       const dataUrl = `data:${mime};charset=utf-8,${encodeURIComponent(contenu)}`;
       window.open(dataUrl, '_blank');
@@ -78,7 +86,8 @@ export async function telechargerOuPartagerPdf(
     await Filesystem.writeFile({ path: nomFichier, data: base64, directory: Directory.Cache });
     const { uri } = await Filesystem.getUri({ path: nomFichier, directory: Directory.Cache });
     await Share.share({ url: uri, title: nomFichier });
-  } catch {
+  } catch (erreur) {
+    if (partageAnnule(erreur)) return;
     // Fallback : ouvrir le data URL (le WebView affiche le PDF)
     try { window.open(doc.output('dataurlnewwindow') as any, '_blank'); } catch { doc.save(nomFichier); }
   }

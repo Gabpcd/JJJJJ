@@ -8,11 +8,15 @@ describe('garde-fous de l’expérience iOS native', () => {
   it('ne déclenche la permission push système qu’après une action explicite', () => {
     const push = lire('src/lib/pushNative.ts');
     const demande = lire('src/components/DemandePermissionPush.tsx');
+    const parametres = lire('src/pages/PageParametresNotifications.tsx');
 
     expect(push).toContain('demanderPermissionNativePush');
     expect(push).toContain('autoriserDemande');
     expect(demande).toContain('Activer les notifications');
     expect(demande).toContain('demanderPermissionNativePush');
+    expect(parametres).toContain('Activer sur cet appareil');
+    expect(parametres).toContain('demanderPermissionNativePush');
+    expect(parametres).toContain('native-push-permission-status');
   });
 
   it('utilise la modale responsive avec zones fixes et contenu scrollable', () => {

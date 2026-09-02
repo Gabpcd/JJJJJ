@@ -48,6 +48,10 @@
 	<string>Jolene n’utilise votre position qu’au premier plan, lorsque vous demandez un pointage ou une localisation. Aucun suivi en arrière-plan n’est effectué.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Jolene utilise la caméra pour photographier vos documents professionnels et scanner les QR codes de pointage.</string>
+	<key>NSCalendarsUsageDescription</key>
+	<string>Jolene utilise le calendrier uniquement lorsque vous choisissez d’y ajouter une mission.</string>
+	<key>NSCalendarsWriteOnlyAccessUsageDescription</key>
+	<string>Jolene ajoute au calendrier les missions que vous sélectionnez.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Jolene accède à vos photos pour téléverser vos documents professionnels.</string>
 	<key>NSFaceIDUsageDescription</key>

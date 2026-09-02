@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useLayoutEffect, useRef } from 'react';
 import { Link, useLocation, useSearchParams } from 'react-router-dom';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { LayoutApp } from '@/components/LayoutApp';
@@ -40,6 +40,7 @@ export default function Parametres() {
   usePageTitle('Paramètres');
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
+  const ongletsScrollerRef = useRef<HTMLDivElement>(null);
   const tabParam = searchParams.get('tab');
   // Appliquer le mapping d'alias AVANT de sélectionner l'onglet.
   const tabResolu = tabParam ? (ALIAS_TABS[tabParam] ?? tabParam) : null;
@@ -57,6 +58,43 @@ export default function Parametres() {
     return () => window.cancelAnimationFrame(frame);
   }, [currentTab, location.hash]);
 
+  // Les accès depuis le menu mobile ouvrent directement un onglet via ?tab=.
+  // Quand l'onglet ciblé est à droite (notamment Sécurité & RGPD), il doit être
+  // visible immédiatement : laisser l'état actif hors écran prive l'utilisateur
+  // de tout repère de navigation.
+  useLayoutEffect(() => {
+    let annule = false;
+    const aligner = () => {
+      if (annule) return;
+      const scroller = ongletsScrollerRef.current;
+      const actif = scroller?.querySelector<HTMLElement>('[role="tab"][data-state="active"]');
+      if (!scroller || !actif) return;
+
+      const marge = 8;
+      const cadre = scroller.getBoundingClientRect();
+      const onglet = actif.getBoundingClientRect();
+      if (onglet.left < cadre.left + marge) {
+        scroller.scrollLeft -= cadre.left + marge - onglet.left;
+      } else if (onglet.right > cadre.right - marge) {
+        scroller.scrollLeft += onglet.right - cadre.right + marge;
+      }
+    };
+
+    const frame = window.requestAnimationFrame(aligner);
+    // Les libellés peuvent changer de largeur lorsque la police finit de se
+    // charger. Réaligner à ce moment évite un onglet initialement visible puis
+    // repoussé hors champ sur WebKit.
+    void document.fonts?.ready.then(aligner);
+    const observer = new ResizeObserver(aligner);
+    if (ongletsScrollerRef.current) observer.observe(ongletsScrollerRef.current);
+
+    return () => {
+      annule = true;
+      window.cancelAnimationFrame(frame);
+      observer.disconnect();
+    };
+  }, [currentTab]);
+
   return (
     <LayoutApp role="ADMIN_ETABLISSEMENT">
       <h1 className="mb-5 text-xl font-bold text-foreground">Paramètres de l’établissement</h1>
@@ -65,7 +103,7 @@ export default function Parametres() {
         onValueChange={(v) => setSearchParams({ tab: v }, { replace: true })}
         className="w-full"
       >
-        <div className="overflow-x-auto -mx-1 px-1 mb-6">
+        <div ref={ongletsScrollerRef} className="overflow-x-auto -mx-1 px-1 mb-6">
         <TabsList className="w-max">
           {ONGLETS.map(({ value, label, icone: Icone }) => (
             <TabsTrigger key={value} value={value} className="flex items-center gap-1.5 text-xs sm:text-sm">
