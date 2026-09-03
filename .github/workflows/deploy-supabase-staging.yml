@@ -83,9 +83,13 @@ jobs:
           test "$STAGING_REF" = 'mejpriaetwgtcstbgfid'
           supabase projects api-keys --project-ref "$STAGING_REF" --output json > /tmp/staging-api-keys.json
           PUBLIC_KEY="$(jq -er '
-            map(select(((.name // .type // .id // "") | tostring) | test("anon|publishable"; "i")))
-            | .[0]
-            | (.api_key // .apiKey // .key // .value)
+            if type == "object" then
+              (.publishable // .publishable_key // .anon // .anon_key)
+            else
+              map(select(((.name // .type // .id // "") | tostring) | test("anon|publishable"; "i")))
+              | .[0]
+              | (.api_key // .apiKey // .key // .value)
+            end
             | select(type == "string" and length > 20)
           ' /tmp/staging-api-keys.json)"
           jq -e -n \
