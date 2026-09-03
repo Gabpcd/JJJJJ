@@ -188,6 +188,27 @@ BEGIN
 END;
 $function$;
 
+-- Les triggers financiers historiques `dec_*` recalculent encore la mission
+-- depuis le planning. Le calcul canonique doit donc être exécuté en dernier,
+-- après ces compatibilités et après les garde-fous. PostgreSQL ordonne les
+-- triggers de même nature par nom.
+DROP TRIGGER IF EXISTS trg_calculer_financier ON public.missions;
+DROP TRIGGER IF EXISTS zzzz_calculer_financier ON public.missions;
+CREATE TRIGGER zzzz_calculer_financier
+BEFORE INSERT OR UPDATE OF
+  taux_horaire_base,
+  duree_heures,
+  debut_le,
+  fin_le,
+  heures_nuit,
+  heures_dimanche,
+  heures_ferie,
+  taux_ifm,
+  taux_icp
+ON public.missions
+FOR EACH ROW
+EXECUTE FUNCTION public.fn_calculer_financier_mission();
+
 CREATE OR REPLACE FUNCTION public.fn_admin_resoudre_litige_salarie(
   p_litige_id uuid,
   p_resolution text,
@@ -481,7 +502,7 @@ BEGIN
       WHERE id = v_presence.id;
     END IF;
 
-    PERFORM set_config('jolene.admin_override_gel', 'true', true);
+    PERFORM set_config('jolene.admin_override_gel', v_mission.id::text, true);
     PERFORM set_config(
       'jolene.admin_override_reason',
       'Résolution litige paie salariée ' || p_litige_id::text,
