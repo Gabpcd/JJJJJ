@@ -198,6 +198,11 @@ jobs:
           # conserve les heures réellement pointées pour la présence et la paie.
           psql "$URL" -v ON_ERROR_STOP=1 \
             -f supabase/migrations/20260903194000_preserver_heures_reelles_pointage.sql
+          # Autorise la clôture anticipée de la recette uniquement via une
+          # intervention admin rattachée à un litige actif, sans contourner
+          # les départs ni les segments de pointage ouverts.
+          psql "$URL" -v ON_ERROR_STOP=1 \
+            -f supabase/migrations/20260903201000_securiser_cloture_anticipee_admin.sql
           psql "$URL" -v ON_ERROR_STOP=1 <<'SQL'
           DO $repair_etablissement$
           DECLARE
