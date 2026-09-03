@@ -57,6 +57,11 @@ on:
         type: boolean
         required: false
         default: false
+      apply_pending_migrations_only:
+        description: "Appliquer uniquement les migrations locales en attente sur staging, sans reset"
+        type: boolean
+        required: false
+        default: false
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
@@ -69,6 +74,41 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  apply-pending-migrations:
+    name: Apply pending migrations to staging without reset
+    if: ${{ inputs.apply_pending_migrations_only }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v5
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: 2.98.0
+
+      - name: Refuser toute cible autre que le staging Jolene
+        env:
+          STAGING_REF: ${{ secrets.STAGING_SUPABASE_PROJECT_REF }}
+        run: |
+          set -euo pipefail
+          test "$STAGING_REF" = 'mejpriaetwgtcstbgfid'
+          test "$STAGING_REF" != 'flripxtsyegjshnhzjkz'
+
+      - name: Link to STAGING and push pending local migrations
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
+          STAGING_REF: ${{ secrets.STAGING_SUPABASE_PROJECT_REF }}
+          STAGING_DB_PASSWORD: ${{ secrets.STAGING_SUPABASE_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          supabase link \
+            --project-ref "$STAGING_REF" \
+            --password "$STAGING_DB_PASSWORD"
+          supabase db push \
+            --include-all \
+            --password "$STAGING_DB_PASSWORD"
+
   export-frontend-config:
     name: Export staging frontend public config
     if: ${{ inputs.export_frontend_config_only }}
@@ -351,7 +391,7 @@ jobs:
 
   bootstrap-staging:
     name: Bootstrap staging from prod schema dump
-    if: ${{ !inputs.export_frontend_config_only && !inputs.repair_test_profiles_only }}
+    if: ${{ !inputs.export_frontend_config_only && !inputs.repair_test_profiles_only && !inputs.apply_pending_migrations_only }}
     runs-on: ubuntu-latest
     # Le dump prod contient ~75 000 lignes / plusieurs milliers d'objets.
     # Son application via le Session Pooler IPv4 dépasse à elle seule 15 min.
@@ -940,7 +980,7 @@ jobs:
 
   deploy-functions:
     name: Deploy edge functions (staging)
-    if: ${{ !inputs.skip_functions && !inputs.export_frontend_config_only && !inputs.repair_test_profiles_only }}
+    if: ${{ !inputs.skip_functions && !inputs.export_frontend_config_only && !inputs.repair_test_profiles_only && !inputs.apply_pending_migrations_only }}
     runs-on: ubuntu-latest
     needs: bootstrap-staging
     steps:
