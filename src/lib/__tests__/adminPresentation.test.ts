@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   analyserVettingEtablissement,
   estDonneeTestAdmin,
+  formatDureeHeuresAdmin,
   formatEuroAdmin,
   libelleTypeEtablissementAdmin,
   normaliserZero,
@@ -13,6 +14,12 @@ describe('présentation admin Lot 21', () => {
     expect(formatEuroAdmin(31)).toBe('31,00 €');
     expect(formatEuroAdmin(-0.001)).toBe('0,00 €');
     expect(normaliserZero(-0)).toBe(0);
+  });
+
+  it('présente les durées réelles sans décimales techniques', () => {
+    expect(formatDureeHeuresAdmin(0.21)).toBe('13 min');
+    expect(formatDureeHeuresAdmin(1.5)).toBe('1 h 30 min');
+    expect(formatDureeHeuresAdmin(12)).toBe('12 h');
   });
 
   it('identifie les seeds Playwright pour les badger sans jamais les masquer', () => {

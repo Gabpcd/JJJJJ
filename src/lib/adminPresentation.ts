@@ -60,6 +60,17 @@ export function formatEuroAdmin(
   return options.suffixe ? `${montant} ${options.suffixe}` : montant;
 }
 
+export function formatDureeHeuresAdmin(valeur: number | string | null | undefined): string {
+  if (valeur == null || valeur === '') return '—';
+  const heures = Number(valeur);
+  if (!Number.isFinite(heures) || heures < 0) return '—';
+  const minutesTotales = Math.round(heures * 60);
+  if (minutesTotales < 60) return `${minutesTotales} min`;
+  const heuresEntieres = Math.floor(minutesTotales / 60);
+  const minutes = minutesTotales % 60;
+  return minutes === 0 ? `${heuresEntieres} h` : `${heuresEntieres} h ${minutes} min`;
+}
+
 export function formatDateAdmin(date: string | Date | null | undefined): string {
   if (!date) return '—';
   const parsed = date instanceof Date ? date : new Date(date);

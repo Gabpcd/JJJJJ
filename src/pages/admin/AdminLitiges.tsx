@@ -14,6 +14,16 @@ import { toast } from 'sonner';
 import { TimelineLitige } from '@/components/litige/TimelineLitige';
 import { FilDiscussionLitige } from '@/components/FilDiscussionLitige';
 import { LitigeResolutionModal } from '@/components/admin/litiges/LitigeResolutionModal';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import type { LitigeEnrichi } from '@/components/admin/litiges/types';
 import { statutBadgeV2, type StatutLitige } from '@/lib/statutLitige';
 import { getLabelProfession } from '@/lib/constantes';
@@ -42,6 +52,12 @@ const estAccordAValider = (l: any) =>
 const requiertResolutionFinanciereManuelle = (l: any) =>
   TYPES_RESOLUTION_FINANCIERE_MANUELLE.has(l.payload_modifications?.type);
 
+const libelleInitiateur = (initiePar: string) => {
+  if (initiePar === 'SOIGNANT') return 'soignant';
+  if (initiePar === 'ETABLISSEMENT') return 'établissement';
+  return 'système / intervention admin';
+};
+
 export default function AdminLitiges() {
   usePageTitle('Litiges — Supervision admin');
   const [searchParams, setSearchParams] = useSearchParams();
@@ -52,9 +68,10 @@ export default function AdminLitiges() {
   const [resolutionLitige, setResolutionLitige] = useState<LitigeEnrichi | null>(null);
   const [resolutionOpen, setResolutionOpen] = useState(false);
   const [validating, setValidating] = useState<string | null>(null);
+  const [accordAConfirmer, setAccordAConfirmer] = useState<any | null>(null);
 
-  const charger = async () => {
-    setLoading(true);
+  const charger = async (afficherChargement = true) => {
+    if (afficherChargement) setLoading(true);
     // Admin voit TOUS les litiges (même non escaladés / résolus entre parties).
     const { data, error } = await supabase
       .from('litiges')
@@ -63,7 +80,8 @@ export default function AdminLitiges() {
         accord_soignant, accord_etablissement, accord_soignant_le, accord_etablissement_le,
         resolution, resolu_le, facture_id, type_litige, categorie_litige,
         payload_modifications, modifications_executees,
-        missions(id, intitule, debut_le, fin_le, profession_requise, service, statut),
+        missions(id, intitule, debut_le, fin_le, profession_requise, service, statut,
+          duree_heures, taux_horaire_base, taux_horaire_base_fige, type_contrat_applique),
         soignants:soignant_id(id, prenom, nom, profession, email, telephone),
         etablissements:etablissement_id(id, nom, email_contact, telephone_contact, type)
       `)
@@ -71,11 +89,11 @@ export default function AdminLitiges() {
 
     if (error) {
       toast.error('Impossible de charger les litiges.');
-      setLoading(false);
+      if (afficherChargement) setLoading(false);
       return;
     }
     setLitiges((data as any[]) || []);
-    setLoading(false);
+    if (afficherChargement) setLoading(false);
   };
 
   useEffect(() => { charger(); }, []);
@@ -123,6 +141,10 @@ export default function AdminLitiges() {
         service: l.missions.service ?? null,
         debut_le: l.missions.debut_le, fin_le: l.missions.fin_le,
         statut: l.missions.statut ?? null,
+        duree_heures: l.missions.duree_heures ?? null,
+        taux_horaire_base: l.missions.taux_horaire_base ?? null,
+        taux_horaire_base_fige: l.missions.taux_horaire_base_fige ?? null,
+        type_contrat_applique: l.missions.type_contrat_applique ?? null,
       } : null,
     };
     setResolutionLitige(enrichi);
@@ -217,6 +239,7 @@ export default function AdminLitiges() {
         <div className="space-y-3">
           {filtered.map(l => {
             const badge = statutBadgeV2(l.statut);
+            const estDejaResolu = STATUTS_RESOLUS.includes(l.statut);
             const isExpanded = expandedId === l.id;
             const ageJours = Math.floor((Date.now() - new Date(l.cree_le).getTime()) / (1000 * 60 * 60 * 24));
             const ageLabel = ageJours === 0
@@ -232,9 +255,12 @@ export default function AdminLitiges() {
                 data-litige-id={l.id}
                 data-statut={l.statut}
               >
-                <div
-                  className="flex items-start gap-3 cursor-pointer"
+                <button
+                  type="button"
+                  className="flex w-full items-start gap-3 text-left"
                   onClick={() => setExpandedId(isExpanded ? null : l.id)}
+                  aria-expanded={isExpanded}
+                  aria-controls={`contenu-litige-${l.id}`}
                 >
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1 flex-wrap">
@@ -272,16 +298,16 @@ export default function AdminLitiges() {
                       <span className="font-medium">Motif :</span> {l.motif}
                     </p>
                     <p className="text-[10px] text-muted-foreground mt-0.5">
-                      Initié par : {l.initie_par === 'SOIGNANT' ? 'soignant' : 'établissement'}
+                      Initié par : {libelleInitiateur(l.initie_par)}
                     </p>
                   </div>
                   <div className="flex items-center shrink-0">
                     <ChevronRight className={`h-4 w-4 text-muted-foreground transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
                   </div>
-                </div>
+                </button>
 
                 {isExpanded && (
-                  <div className="border-t border-border mt-3 pt-3 space-y-3">
+                  <div id={`contenu-litige-${l.id}`} className="border-t border-border mt-3 pt-3 space-y-3">
                     <TimelineLitige statut={l.statut} />
 
                     {estAccordAValider(l) && (
@@ -309,7 +335,7 @@ export default function AdminLitiges() {
                             if (resolutionFinanciereManuelle) {
                               ouvrirResolution(l);
                             } else {
-                              validerAccord(l.id);
+                              setAccordAConfirmer(l);
                             }
                           }}
                         >
@@ -320,19 +346,21 @@ export default function AdminLitiges() {
                         <p className="text-[10px] text-amber-700">
                           {resolutionFinanciereManuelle
                             ? 'Vérifiez puis appliquez les heures, le taux et l’action comptable dans la résolution.'
-                            : 'Ou ajustez à un autre montant via « Résoudre » ci-dessous.'}
+                            : 'Cette action applique exactement l’accord accepté et conserve sa trace d’audit.'}
                         </p>
                       </div>
                     )}
 
-                    <BoutonY2K
-                      variant="primary"
-                      size="sm"
-                      iconeGauche={<Gavel className="h-4 w-4" />}
-                      onClick={() => ouvrirResolution(l)}
-                    >
-                      Résoudre (financier + statut)
-                    </BoutonY2K>
+                    {!estAccordAValider(l) && !estDejaResolu && (
+                      <BoutonY2K
+                        variant="primary"
+                        size="sm"
+                        iconeGauche={<Gavel className="h-4 w-4" />}
+                        onClick={() => ouvrirResolution(l)}
+                      >
+                        Résoudre (financier + statut)
+                      </BoutonY2K>
+                    )}
                     <FilDiscussionLitige
                       litige={{
                         id: l.id,
@@ -355,6 +383,57 @@ export default function AdminLitiges() {
           })}
         </div>
       )}
+      <AlertDialog
+        open={accordAConfirmer !== null}
+        onOpenChange={(open) => {
+          if (!open && !validating) setAccordAConfirmer(null);
+        }}
+      >
+        <AlertDialogContent className="w-[calc(100%-2rem)] rounded-2xl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirmer le mouvement financier</AlertDialogTitle>
+            <AlertDialogDescription>
+              Vérifiez l’accord exact avant de l’exécuter. Cette opération est journalisée et peut produire un avoir, un complément ou un remboursement.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          {accordAConfirmer && (
+            <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-2 rounded-xl border border-border bg-muted/30 p-3 text-sm">
+              <dt className="text-muted-foreground">Mission</dt>
+              <dd className="font-medium text-foreground">{accordAConfirmer.missions?.intitule ?? 'Mission'}</dd>
+              <dt className="text-muted-foreground">Accord</dt>
+              <dd className="font-mono text-xs text-foreground">{accordAConfirmer.payload_modifications?.type ?? '—'}</dd>
+              {accordAConfirmer.payload_modifications?.modifications?.pourcentage_compensation != null && (
+                <>
+                  <dt className="text-muted-foreground">Compensation</dt>
+                  <dd className="font-semibold text-foreground">{accordAConfirmer.payload_modifications.modifications.pourcentage_compensation} %</dd>
+                </>
+              )}
+              {accordAConfirmer.payload_modifications?.modifications?.montant_total_corrige != null && (
+                <>
+                  <dt className="text-muted-foreground">Montant corrigé</dt>
+                  <dd className="font-semibold text-foreground">{accordAConfirmer.payload_modifications.modifications.montant_total_corrige} €</dd>
+                </>
+              )}
+              <dt className="text-muted-foreground">Justification</dt>
+              <dd className="text-foreground">{accordAConfirmer.payload_modifications?.justification ?? '—'}</dd>
+            </dl>
+          )}
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={Boolean(validating)}>Revenir au dossier</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={!accordAConfirmer || Boolean(validating)}
+              onClick={() => {
+                if (!accordAConfirmer) return;
+                const litigeId = accordAConfirmer.id;
+                setAccordAConfirmer(null);
+                void validerAccord(litigeId);
+              }}
+            >
+              Confirmer et exécuter
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       <LitigeResolutionModal
         litige={resolutionLitige}
         open={resolutionOpen}
@@ -362,7 +441,7 @@ export default function AdminLitiges() {
           setResolutionOpen(o);
           if (!o) setResolutionLitige(null);
         }}
-        onResolved={charger}
+        onResolved={() => { void charger(false); }}
       />
     </LayoutAdmin>
   );
