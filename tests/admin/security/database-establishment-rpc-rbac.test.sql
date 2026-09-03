@@ -1584,8 +1584,9 @@ BEGIN
   END;
 
   -- Le traitement public complet attribue la mission, accepte la candidature,
-  -- crée le chat puis sa notification dans la même transaction. Les deux
-  -- triggers convergent vers une conversation et un seul welcome.
+  -- crée le contrat, le chat puis sa notification dans la même transaction.
+  -- Les deux triggers convergent vers une conversation et un seul welcome ;
+  -- la notification ouvre directement le contrat à signer.
   v_result := public.fn_traiter_candidature(
     v_candidature_pool,
     'ACCEPTEE',
@@ -1663,7 +1664,15 @@ BEGIN
       AND n.type = 'CANDIDATURE_ACCEPTEE'
       AND n.type_ressource = 'mission'
       AND n.id_ressource = v_mission_pool_ide
-      AND n.lien = '/soignant/messagerie?conv=' || v_conversation::text
+      AND n.lien = (
+        SELECT '/contrat/' || cm.id::text
+        FROM public.contrats_mission cm
+        WHERE cm.mission_id = v_mission_pool_ide
+          AND cm.soignant_id = v_soignant_pool
+          AND cm.statut NOT IN ('ANNULE', 'EXPIRE')
+        ORDER BY cm.cree_le DESC, cm.id DESC
+        LIMIT 1
+      )
   ) IS DISTINCT FROM 1::bigint THEN
     RAISE EXCEPTION
       'fn_traiter_candidature n''a pas produit la notification canonique';
@@ -1713,7 +1722,15 @@ BEGIN
       AND n.type = 'CANDIDATURE_ACCEPTEE'
       AND n.type_ressource = 'mission'
       AND n.id_ressource = v_mission_pool_ide
-      AND n.lien = '/soignant/messagerie?conv=' || v_conversation::text
+      AND n.lien = (
+        SELECT '/contrat/' || cm.id::text
+        FROM public.contrats_mission cm
+        WHERE cm.mission_id = v_mission_pool_ide
+          AND cm.soignant_id = v_soignant_pool
+          AND cm.statut NOT IN ('ANNULE', 'EXPIRE')
+        ORDER BY cm.cree_le DESC, cm.id DESC
+        LIMIT 1
+      )
   ) IS DISTINCT FROM 1::bigint THEN
     RAISE EXCEPTION 'Notification d''acceptation absente, dupliquée ou mal routée';
   END IF;
