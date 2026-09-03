@@ -82,6 +82,7 @@ jobs:
           set -euo pipefail
           test "$STAGING_REF" = 'mejpriaetwgtcstbgfid'
           supabase projects api-keys --project-ref "$STAGING_REF" --output env > /tmp/staging-api-keys.env
+          sed -E 's/=.*/=REDACTED/' /tmp/staging-api-keys.env
           PUBLIC_KEY="$(awk -F= '$1 == "PUBLISHABLE_KEY" || $1 == "ANON_KEY" {print $2; exit}' /tmp/staging-api-keys.env | tr -d '\"')"
           test "${#PUBLIC_KEY}" -gt 20
           jq -e -n \
