@@ -189,6 +189,54 @@ jobs:
           psql "$URL" -v ON_ERROR_STOP=1 \
             -f db/migrations_archive/20260503050000_playwright_seed_test_accounts.sql
           psql "$URL" -v ON_ERROR_STOP=1 <<'SQL'
+          DO $repair_etablissement$
+          DECLARE
+            v_etab_id uuid;
+          BEGIN
+            SELECT id INTO v_etab_id
+              FROM auth.users
+             WHERE email = 'playwright-etab@jolene.app'
+               AND deleted_at IS NULL;
+            IF v_etab_id IS NULL THEN
+              RAISE EXCEPTION 'Compte playwright-etab absent du staging';
+            END IF;
+
+            UPDATE public.etablissements
+               SET siret = '90000000000001',
+                   contrat_service_signe = true,
+                   contrat_service_signe_le = COALESCE(contrat_service_signe_le, now()),
+                   siret_verifie = true,
+                   siret_verifie_le = COALESCE(siret_verifie_le, now()),
+                   statut_verification = 'VERIFIE',
+                   peut_publier_missions = true,
+                   representant_identite_verifiee = true,
+                   representant_identite_verifiee_le = COALESCE(representant_identite_verifiee_le, now()),
+                   rattachement_methode = 'ADMIN',
+                   rattachement_verifie = true,
+                   rattachement_verifie_le = COALESCE(rattachement_verifie_le, now()),
+                   email_contact_verifie = true,
+                   email_contact_verifie_le = COALESCE(email_contact_verifie_le, now()),
+                   onboarding_termine_le = COALESCE(onboarding_termine_le, now()),
+                   mode_paiement_commission = 'FACTURE_MENSUELLE',
+                   stripe_customer_id = NULL,
+                   stripe_sepa_payment_method_id = NULL,
+                   est_compte_test = true,
+                   supprime_le = NULL
+             WHERE id = v_etab_id
+               AND est_compte_test IS TRUE;
+
+            INSERT INTO public.membres_etablissement (
+              etablissement_id, user_id, role, actif, accepte_le
+            ) VALUES (
+              v_etab_id, v_etab_id, 'PROPRIETAIRE', true, now()
+            )
+            ON CONFLICT (etablissement_id, user_id) DO UPDATE
+               SET role = 'PROPRIETAIRE',
+                   actif = true,
+                   accepte_le = COALESCE(public.membres_etablissement.accepte_le, now());
+          END
+          $repair_etablissement$;
+
           DO $repair_admin$
           DECLARE
             v_admin_id uuid;
@@ -248,7 +296,10 @@ jobs:
               (SELECT count(*) FROM public.soignants s JOIN auth.users u ON u.id = s.id
                 WHERE u.email = 'playwright-soignant@jolene.app' AND s.est_compte_test IS TRUE),
               (SELECT count(*) FROM public.etablissements e JOIN auth.users u ON u.id = e.id
-                WHERE u.email = 'playwright-etab@jolene.app' AND e.est_compte_test IS TRUE),
+                WHERE u.email = 'playwright-etab@jolene.app'
+                  AND e.est_compte_test IS TRUE
+                  AND e.statut_verification = 'VERIFIE'
+                  AND e.peut_publier_missions IS TRUE),
               (SELECT count(*) FROM public.equipe_admin ea JOIN auth.users u ON u.id = ea.user_id
                 WHERE u.email = 'admin@jolene.app' AND ea.actif IS TRUE
                   AND cardinality(ea.acces_groupes) >= 8);
