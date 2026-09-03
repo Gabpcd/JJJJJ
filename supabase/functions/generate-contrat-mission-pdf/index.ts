@@ -20,6 +20,8 @@
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { corsHeaders } from '../_shared/cors.ts';
 
+const BUSINESS_TIME_ZONE = 'Europe/Paris';
+
 function escapeHtml(s: unknown): string {
   if (s == null) return '';
   return String(s)
@@ -35,7 +37,11 @@ function formatDate(value: any): string {
   try {
     const d = new Date(value);
     if (isNaN(d.getTime())) return '—';
-    return d.toLocaleString('fr-FR', { dateStyle: 'long', timeStyle: 'short' });
+    return d.toLocaleString('fr-FR', {
+      dateStyle: 'long',
+      timeStyle: 'short',
+      timeZone: BUSINESS_TIME_ZONE,
+    });
   } catch { return '—'; }
 }
 
@@ -59,6 +65,9 @@ function buildVariables(contrat: any, mission: any, soignant: any, etab: any): R
     .filter(Boolean).join(', ');
   const adresseSoignant = [soignant?.adresse_rue, soignant?.adresse_code_postal, soignant?.adresse_ville]
     .filter(Boolean).join(', ');
+  const periodeEssaiJours = Number(contrat?.periode_essai_jours || 1);
+  const periodeEssaiLibelle = `${periodeEssaiJours} ${periodeEssaiJours === 1 ? 'jour' : 'jours'}`;
+
   return {
     numero_contrat: escapeHtml(contrat?.numero_contrat),
     type_contrat: escapeHtml(contrat?.type_contrat),
@@ -81,10 +90,13 @@ function buildVariables(contrat: any, mission: any, soignant: any, etab: any): R
     motif_cdd: escapeHtml(contrat?.motif_cdd || 'remplacement / surcroît temporaire d\'activité'),
     convention_collective: escapeHtml(etab?.convention_collective || 'CCN applicable à l\'établissement'),
     periode_essai_jours: escapeHtml(contrat?.periode_essai_jours || '1'),
+    periode_essai_libelle: escapeHtml(periodeEssaiLibelle),
     taux_horaire: mission?.taux_horaire_base != null ? Number(mission.taux_horaire_base).toFixed(2) : '—',
     caisse_retraite: escapeHtml(etab?.caisse_retraite || 'AGIRC-ARRCO'),
     regime_prevoyance: escapeHtml(etab?.regime_prevoyance || 'celui de l\'employeur'),
-    date_signature: escapeHtml(new Date().toLocaleDateString('fr-FR')),
+    date_signature: escapeHtml(new Date().toLocaleDateString('fr-FR', {
+      timeZone: BUSINESS_TIME_ZONE,
+    })),
   };
 }
 
