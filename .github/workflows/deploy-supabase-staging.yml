@@ -203,6 +203,10 @@ jobs:
           # les départs ni les segments de pointage ouverts.
           psql "$URL" -v ON_ERROR_STOP=1 \
             -f supabase/migrations/20260903201000_securiser_cloture_anticipee_admin.sql
+          # Sépare les litiges salariés des factures d'honoraires et produit
+          # une simulation de paie rectificative traçable.
+          psql "$URL" -v ON_ERROR_STOP=1 \
+            -f supabase/migrations/20260903203000_resoudre_litiges_paie_salariee.sql
           psql "$URL" -v ON_ERROR_STOP=1 <<'SQL'
           DO $repair_etablissement$
           DECLARE
