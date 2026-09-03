@@ -194,6 +194,10 @@ jobs:
           # incomplet. Ce seed est idempotent et limité aux modèles de contrat.
           psql "$URL" -v ON_ERROR_STOP=1 \
             -f db/migrations_archive/20260512160000_pr5_templates_contrats_seed.sql
+          # Correctif staging exact de la branche fonctionnelle en cours :
+          # conserve les heures réellement pointées pour la présence et la paie.
+          psql "$URL" -v ON_ERROR_STOP=1 \
+            -f supabase/migrations/20260903194000_preserver_heures_reelles_pointage.sql
           psql "$URL" -v ON_ERROR_STOP=1 <<'SQL'
           DO $repair_etablissement$
           DECLARE
