@@ -52,6 +52,11 @@ on:
         type: boolean
         required: false
         default: false
+      repair_test_profiles_only:
+        description: "Réparer uniquement les trois profils E2E staging, sans reset"
+        type: boolean
+        required: false
+        default: false
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
@@ -136,9 +141,124 @@ jobs:
           path: /tmp/jolene-staging-frontend.json
           retention-days: 1
 
+  repair-test-profiles:
+    name: Repair staging E2E profiles without reset
+    if: ${{ inputs.repair_test_profiles_only }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v5
+
+      - name: Install postgresql-client
+        run: |
+          set -e
+          if ! command -v psql >/dev/null 2>&1; then
+            sudo apt-get update -qq
+            sudo apt-get install -y -qq postgresql-client
+          fi
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: 2.98.0
+
+      - name: Build staging-only DB URL
+        id: staging-url
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
+          STAGING_DB_PASSWORD: ${{ secrets.STAGING_SUPABASE_DB_PASSWORD }}
+          STAGING_REF: ${{ secrets.STAGING_SUPABASE_PROJECT_REF }}
+        run: |
+          set -euo pipefail
+          test "$STAGING_REF" = 'mejpriaetwgtcstbgfid'
+          test "$STAGING_REF" != 'flripxtsyegjshnhzjkz'
+          projects_json="$(supabase projects list --output json)"
+          REGION="$(jq -er --arg ref "$STAGING_REF" '
+            .[] | select(.id == $ref) | .region
+            | select(type == "string" and test("^[a-z0-9-]+$"))
+          ' <<<"$projects_json")"
+          ENCODED_PWD=$(python3 -c "import urllib.parse,os; print(urllib.parse.quote(os.environ['STAGING_DB_PASSWORD'], safe=''))")
+          URL="postgres://postgres.${STAGING_REF}:${ENCODED_PWD}@aws-0-${REGION}.pooler.supabase.com:5432/postgres?sslmode=require"
+          echo "::add-mask::$URL"
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+
+      - name: Repair fixed test profiles and founder access
+        run: |
+          set -euo pipefail
+          URL="${{ steps.staging-url.outputs.url }}"
+          psql "$URL" -v ON_ERROR_STOP=1 \
+            -f db/migrations_archive/20260503050000_playwright_seed_test_accounts.sql
+          psql "$URL" -v ON_ERROR_STOP=1 <<'SQL'
+          DO $repair_admin$
+          DECLARE
+            v_admin_id uuid;
+          BEGIN
+            SELECT id INTO v_admin_id
+              FROM auth.users
+             WHERE lower(COALESCE(email, '')) = 'admin@jolene.app'
+               AND deleted_at IS NULL
+             FOR UPDATE;
+            IF v_admin_id IS NULL THEN
+              RAISE EXCEPTION 'Compte admin@jolene.app absent du staging';
+            END IF;
+
+            UPDATE auth.users
+               SET raw_app_meta_data = COALESCE(raw_app_meta_data, '{}'::jsonb)
+                 || jsonb_build_object('role', 'ADMIN_PLATEFORME'),
+                   email_confirmed_at = COALESCE(email_confirmed_at, now()),
+                   updated_at = now()
+             WHERE id = v_admin_id;
+
+            INSERT INTO public.equipe_admin (
+              user_id, nom, prenom, email, poste, acces_groupes, actif
+            ) VALUES (
+              v_admin_id,
+              'Test',
+              'Admin',
+              'admin@jolene.app',
+              'Fondatrice — staging E2E',
+              ARRAY[
+                'Dashboard',
+                'Utilisateurs',
+                'Missions',
+                'Litiges & contrats',
+                'Finances',
+                'Messagerie',
+                'Conformité & Technique',
+                'Fondateur'
+              ]::text[],
+              true
+            )
+            ON CONFLICT (user_id) DO UPDATE
+               SET acces_groupes = EXCLUDED.acces_groupes,
+                   actif = true,
+                   maj_le = now();
+
+            DELETE FROM auth.mfa_factors WHERE user_id = v_admin_id;
+          END
+          $repair_admin$;
+          SQL
+
+      - name: Verify repaired profiles
+        run: |
+          set -euo pipefail
+          URL="${{ steps.staging-url.outputs.url }}"
+          READY="$(psql "$URL" -t -A -v ON_ERROR_STOP=1 -c "
+            SELECT
+              (SELECT count(*) FROM public.soignants s JOIN auth.users u ON u.id = s.id
+                WHERE u.email = 'playwright-soignant@jolene.app' AND s.est_compte_test IS TRUE),
+              (SELECT count(*) FROM public.etablissements e JOIN auth.users u ON u.id = e.id
+                WHERE u.email = 'playwright-etab@jolene.app' AND e.est_compte_test IS TRUE),
+              (SELECT count(*) FROM public.equipe_admin ea JOIN auth.users u ON u.id = ea.user_id
+                WHERE u.email = 'admin@jolene.app' AND ea.actif IS TRUE
+                  AND cardinality(ea.acces_groupes) >= 8);
+          ")"
+          test "$READY" = '1|1|1'
+          echo "Trois profils E2E staging prêts, sans reset."
+
   bootstrap-staging:
     name: Bootstrap staging from prod schema dump
-    if: ${{ !inputs.export_frontend_config_only }}
+    if: ${{ !inputs.export_frontend_config_only && !inputs.repair_test_profiles_only }}
     runs-on: ubuntu-latest
     # Le dump prod contient ~75 000 lignes / plusieurs milliers d'objets.
     # Son application via le Session Pooler IPv4 dépasse à elle seule 15 min.
@@ -727,7 +847,7 @@ jobs:
 
   deploy-functions:
     name: Deploy edge functions (staging)
-    if: ${{ !inputs.skip_functions && !inputs.export_frontend_config_only }}
+    if: ${{ !inputs.skip_functions && !inputs.export_frontend_config_only && !inputs.repair_test_profiles_only }}
     runs-on: ubuntu-latest
     needs: bootstrap-staging
     steps:
