@@ -82,9 +82,15 @@ jobs:
           set -euo pipefail
           test "$STAGING_REF" = 'mejpriaetwgtcstbgfid'
           supabase projects api-keys --project-ref "$STAGING_REF" --output json > /tmp/staging-api-keys.json
+          PUBLIC_KEY="$(jq -er '
+            map(select(((.name // .type // .id // "") | tostring) | test("anon|publishable"; "i")))
+            | .[0]
+            | (.api_key // .apiKey // .key // .value)
+            | select(type == "string" and length > 20)
+          ' /tmp/staging-api-keys.json)"
           jq -e -n \
             --arg url "https://${STAGING_REF}.supabase.co" \
-            --arg key "$(jq -er '.[] | select(.name == "anon" or .name == "publishable") | .api_key' /tmp/staging-api-keys.json | head -n 1)" \
+            --arg key "$PUBLIC_KEY" \
             '{VITE_SUPABASE_URL: $url, VITE_SUPABASE_PUBLISHABLE_KEY: $key}' \
             > /tmp/jolene-staging-frontend.json
 
