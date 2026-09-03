@@ -155,7 +155,7 @@ SET lien = '/contrat/' || (
 WHERE n.type = 'CANDIDATURE_ACCEPTEE'
   AND n.type_destinataire = 'SOIGNANT'
   AND n.type_ressource = 'mission'
-  AND n.lu = false
+  AND n.lue = false
   AND EXISTS (
     SELECT 1
     FROM public.contrats_mission contrat
