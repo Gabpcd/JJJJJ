@@ -177,7 +177,7 @@ export default function ContratMission() {
       const data = dataRaw as any;
 
       if (data) {
-        const [missionRes, soignantRes, etabRes, templateRes] = await Promise.all([
+        const [missionRes, soignantRes, etabRes, etabCompteRes, templateRes] = await Promise.all([
           supabase
             .from('missions')
             .select('id, intitule, service, debut_le, fin_le, duree_heures, taux_horaire_base')
@@ -193,6 +193,11 @@ export default function ContratMission() {
             error: e,
           })),
           supabase
+            .from('etablissements')
+            .select('id, est_compte_test')
+            .eq('id', data.etablissement_id)
+            .maybeSingle(),
+          supabase
             .from('templates_contrat')
             .select('contenu_html')
             .eq('type_contrat', data.type_contrat)
@@ -207,7 +212,13 @@ export default function ContratMission() {
           etablissement: etabRes.data,
           templateHtml: templateRes.data?.contenu_html,
         }));
-        const compteTestCourant = data.soignant_id === user?.id && soignantRes.data?.est_compte_test === true;
+        const compteTestCourant = (
+          data.soignant_id === user?.id
+          && soignantRes.data?.est_compte_test === true
+        ) || (
+          data.etablissement_id === user?.id
+          && etabCompteRes.data?.est_compte_test === true
+        );
         setSmsExterneDesactive(compteTestCourant);
         if (compteTestCourant) setModeSignature('CANVAS');
       } else {
