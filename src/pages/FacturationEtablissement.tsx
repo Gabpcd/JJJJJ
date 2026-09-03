@@ -902,7 +902,7 @@ export default function FacturationEtablissement() {
       </FadeInView>
 
       {/* ── MOBILE NAV : barre navigation rapide (mobile only) ── */}
-      <div className="flex gap-2 overflow-x-auto pb-2 mb-4 md:hidden">
+      <div className="mb-4 grid grid-cols-5 gap-1 md:hidden">
         {[
           { id: SECTIONS.payer, label: 'À payer', count: missionsNonPayees.length },
           { id: SECTIONS.attente, label: 'En attente', count: paiementsEnAttente.length },
@@ -913,7 +913,7 @@ export default function FacturationEtablissement() {
           <button
             key={s.id}
             onClick={() => openAndScrollTo(s.id)}
-            className="shrink-0 px-3 py-1.5 rounded-full text-xs font-medium bg-muted text-muted-foreground hover:bg-primary/10 hover:text-primary transition-colors"
+            className="min-h-11 rounded-xl bg-muted px-1 py-1.5 text-[10px] font-medium leading-tight text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary"
           >
             {s.label}{s.count > 0 && ` (${s.count})`}
           </button>

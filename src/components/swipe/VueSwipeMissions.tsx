@@ -15,7 +15,7 @@
 import { useState, useCallback, useEffect, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { AlertTriangle, Loader2, RefreshCw, Star, ChevronRight } from 'lucide-react';
+import { AlertTriangle, Loader2, RefreshCw, SearchX, Sparkles, Star, ChevronRight } from 'lucide-react';
 import { toast } from 'sonner';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { CardMissionSwipe, type MissionSwipePayload } from '@/components/swipe/CardMissionSwipe';
@@ -409,7 +409,8 @@ export function VueSwipeMissions({ onBasculerListe, onCreerAlerte, onElargirRayo
             {(data?.length ?? 0) > 0 ? (
               /* Le soignant a swipé toute la pile du jour */
               <EmptyState
-                mascotte="happy"
+                mascotte={false}
+                icone={<Sparkles />}
                 variant="success"
                 titre="Tu as tout vu pour aujourd'hui"
                 description="Crée une alerte : tu recevras un email dès qu'une nouvelle mission correspondant à ton profil est publiée."
@@ -428,7 +429,8 @@ export function VueSwipeMissions({ onBasculerListe, onCreerAlerte, onElargirRayo
                  affirmer qu'il n'existe aucune mission alors que la liste peut
                  légitimement en montrer. */
               <EmptyState
-                mascotte="thinking"
+                mascotte={false}
+                icone={<SearchX />}
                 titre="Aucune nouvelle mission à parcourir"
                 description="Consulte la liste pour retrouver toutes les missions disponibles, ou crée une alerte pour les prochaines publications."
                 cta={{

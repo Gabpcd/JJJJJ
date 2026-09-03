@@ -27,6 +27,10 @@ export interface EtatTerminaisonMission {
   finReference: Date;
 }
 
+export interface EtatClotureAdminMission extends EtatTerminaisonMission {
+  clotureAnticipee: boolean;
+}
+
 interface PeriodeMissionPointage {
   id?: string;
   debut_le: string;
@@ -222,9 +226,6 @@ export function evaluerTerminaisonMission({
   if (planningIncomplet) {
     return { peutTerminer: false, motif: 'PLANNING_INCOMPLET', finReference };
   }
-  if (!Number.isFinite(finReferenceMs) || maintenant.getTime() < finReferenceMs) {
-    return { peutTerminer: false, motif: 'AVANT_DERNIER_CRENEAU', finReference };
-  }
 
   const effectifs = creneaux.filter((creneau) => (
     creneau.type_creneau === 'EFFECTIF' && !creneau.est_pause
@@ -237,5 +238,31 @@ export function evaluerTerminaisonMission({
   if (!departEnregistre) {
     return { peutTerminer: false, motif: 'AUCUN_DEPART', finReference };
   }
+  if (!Number.isFinite(finReferenceMs) || maintenant.getTime() < finReferenceMs) {
+    return { peutTerminer: false, motif: 'AVANT_DERNIER_CRENEAU', finReference };
+  }
   return { peutTerminer: true, motif: null, finReference };
+}
+
+export function evaluerClotureAdminMission({
+  terminaison,
+  estAdmin,
+  litigeActif,
+}: {
+  terminaison: EtatTerminaisonMission;
+  estAdmin: boolean;
+  litigeActif: boolean;
+}): EtatClotureAdminMission {
+  const clotureAnticipee = Boolean(
+    estAdmin
+    && litigeActif
+    && terminaison.motif === 'AVANT_DERNIER_CRENEAU',
+  );
+
+  return {
+    ...terminaison,
+    peutTerminer: terminaison.peutTerminer || clotureAnticipee,
+    motif: clotureAnticipee ? null : terminaison.motif,
+    clotureAnticipee,
+  };
 }

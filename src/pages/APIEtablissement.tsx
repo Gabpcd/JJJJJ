@@ -121,7 +121,9 @@ export function APIContent() {
       {/* Doc */}
       <div className="card-base mb-6">
         <h2 className="font-bold text-foreground mb-3">Points d’accès</h2>
-        <p className="text-xs text-muted-foreground mb-1">Base URL : <code className="bg-muted px-2 py-0.5 rounded text-foreground">{API_BASE_URL}</code></p>
+        <p className="text-xs text-muted-foreground mb-1">
+          Base URL : <code className="break-all rounded bg-muted px-2 py-0.5 text-foreground">{API_BASE_URL}</code>
+        </p>
         <p className="text-xs text-muted-foreground mb-3">Authentification : envoyez les deux en-têtes <code className="bg-muted px-1 rounded">x-api-key</code> et <code className="bg-muted px-1 rounded">x-api-secret</code>. Le secret n’est affiché qu’à la création.</p>
         <div className="space-y-3">
           {API_ENDPOINTS.map((ep) => (

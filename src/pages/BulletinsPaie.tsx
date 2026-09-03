@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { FileText, Download, Loader2, X } from 'lucide-react';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { LayoutApp } from '@/components/LayoutApp';
@@ -11,13 +11,18 @@ import { useAuth } from '@/contexts/AuthContext';
 import { telechargerBulletinPaiePdf } from '@/lib/bulletin-paie-pdf';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
-import { MENTION_SIMULATION_PAIE, totauxBulletinsPayes } from '@/lib/bulletinPaieUi';
+import {
+  MENTION_SIMULATION_PAIE,
+  simulationPaieIncoherente,
+  totauxBulletinsPayes,
+  type MontantsPaieComparables,
+} from '@/lib/bulletinPaieUi';
 
 const fmt = (v: number) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(Number(v) || 0);
 
 const STATUT_CONFIG: Record<string, { label: string; classes: string }> = {
   EMIS: { label: 'Émis', classes: 'bg-primary/10 text-primary' },
-  PAYE: { label: 'Payé', classes: 'bg-success/10 text-success' },
+  PAYE: { label: 'Simulation payée', classes: 'bg-success/10 text-success' },
   ANNULE: { label: 'Annulé', classes: 'bg-muted text-muted-foreground' },
 };
 
@@ -40,6 +45,10 @@ interface BulletinRow {
   date_paiement: string | null;
 }
 
+interface CotisationsMission extends MontantsPaieComparables {
+  mission_id: string;
+}
+
 export default function BulletinsPaie() {
   usePageTitle('Mes simulations de paie');
   return (
@@ -51,15 +60,18 @@ export default function BulletinsPaie() {
 
 export function BulletinsPaieContent() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [bulletins, setBulletins] = useState<BulletinRow[]>([]);
   const [missionsAvecCotisations, setMissionsAvecCotisations] = useState<Set<string>>(new Set());
+  const [cotisationsParMission, setCotisationsParMission] = useState<Record<string, CotisationsMission>>({});
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [filtreStatut, setFiltreStatut] = useState<string>('tous');
   const [filtreAnnee, setFiltreAnnee] = useState<string>('toutes');
   const [erreurChargement, setErreurChargement] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
+  const missionCibleId = searchParams.get('mission');
 
   useEffect(() => {
     if (!user) return;
@@ -72,17 +84,22 @@ export function BulletinsPaieContent() {
         const lignes = (data as unknown as BulletinRow[]) || [];
         const missionIds = [...new Set(lignes.map(b => b.mission_id).filter(Boolean))];
         let missionsDisponibles = new Set<string>();
+        let cotisationsCourantes: Record<string, CotisationsMission> = {};
         if (missionIds.length > 0) {
           const { data: cotisations, error: cotisationsError } = await supabase
             .from('cotisations_sociales')
-            .select('mission_id')
+            .select('mission_id, salaire_brut, net_avant_impot')
             .in('mission_id', missionIds);
           if (cotisationsError) throw cotisationsError;
           missionsDisponibles = new Set((cotisations ?? []).map(c => c.mission_id));
+          cotisationsCourantes = Object.fromEntries(
+            (cotisations ?? []).map((cotisation) => [cotisation.mission_id, cotisation]),
+          );
         }
         if (actif) {
           setBulletins(lignes);
           setMissionsAvecCotisations(missionsDisponibles);
+          setCotisationsParMission(cotisationsCourantes);
         }
       } catch (error: any) {
         if (actif) setErreurChargement(error?.message || 'Impossible de charger les bulletins.');
@@ -101,6 +118,7 @@ export function BulletinsPaieContent() {
 
   const bulletinsFiltres = useMemo(() => {
     return bulletins.filter(b => {
+      if (missionCibleId && b.mission_id !== missionCibleId) return false;
       if (filtreStatut !== 'tous' && b.statut !== filtreStatut) return false;
       if (filtreAnnee !== 'toutes' && b.periode_debut) {
         const a = String(new Date(b.periode_debut).getFullYear());
@@ -108,13 +126,27 @@ export function BulletinsPaieContent() {
       }
       return true;
     });
-  }, [bulletins, filtreStatut, filtreAnnee]);
+  }, [bulletins, filtreStatut, filtreAnnee, missionCibleId]);
 
-  const filtreActif = filtreStatut !== 'tous' || filtreAnnee !== 'toutes';
-  const reinitialiserFiltres = () => { setFiltreStatut('tous'); setFiltreAnnee('toutes'); };
+  const filtreActif = Boolean(missionCibleId) || filtreStatut !== 'tous' || filtreAnnee !== 'toutes';
+  const reinitialiserFiltres = () => {
+    setFiltreStatut('tous');
+    setFiltreAnnee('toutes');
+    if (missionCibleId) {
+      const suivants = new URLSearchParams(searchParams);
+      suivants.delete('mission');
+      setSearchParams(suivants, { replace: true });
+    }
+  };
+  const missionCible = missionCibleId
+    ? bulletins.find((bulletin) => bulletin.mission_id === missionCibleId) ?? null
+    : null;
 
   const totauxPayes = totauxBulletinsPayes(bulletinsFiltres);
   const nbPdfIndisponibles = bulletins.filter(b => !missionsAvecCotisations.has(b.mission_id)).length;
+  const simulationsIncoherentes = bulletins.filter((bulletin) => (
+    simulationPaieIncoherente(bulletin, cotisationsParMission[bulletin.mission_id])
+  ));
 
   const telecharger = async (id: string) => {
     setDownloadingId(id);
@@ -152,6 +184,14 @@ export function BulletinsPaieContent() {
         <div className="rounded-xl border border-info/20 bg-info/5 p-3 text-xs text-muted-foreground" role="note">
           Jolene n’est pas ton employeur : seul l’établissement employeur peut émettre le bulletin de paie officiel. Cette vue contient donc uniquement des simulations des missions salariées. Les honoraires libéraux encaissés sont affichés séparément dans l’onglet <strong>Factures</strong> et ne doivent pas être additionnés ou comparés ligne à ligne.
         </div>
+        {missionCible && (
+          <div className="rounded-xl border border-primary/25 bg-primary/5 p-3 text-sm" role="status">
+            <p className="font-semibold text-foreground">Calculs de la mission : {missionCible.mission_intitule || 'Mission'}</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              La simulation active la plus récente est la référence Jolene. Les lignes annulées sont conservées uniquement comme archives des calculs remplacés.
+            </p>
+          </div>
+        )}
         {nbPdfIndisponibles > 0 && (
           <div className="rounded-xl border border-warning/30 bg-warning/5 p-3 text-sm" role="status">
             <p className="font-semibold text-foreground">{nbPdfIndisponibles} simulation{nbPdfIndisponibles > 1 ? 's' : ''} sans PDF fiable</p>
@@ -160,14 +200,25 @@ export function BulletinsPaieContent() {
             </p>
           </div>
         )}
+        {simulationsIncoherentes.length > 0 && (
+          <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-3 text-sm" role="alert">
+            <p className="font-semibold text-destructive">
+              {simulationsIncoherentes.length} simulation{simulationsIncoherentes.length > 1 ? 's' : ''} à vérifier
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Le brut ou le net de cette simulation diffère du calcul actuellement visible sur la mission.
+              Ne l’utilise pas comme référence de paiement tant que l’établissement n’a pas fourni le bulletin officiel.
+            </p>
+          </div>
+        )}
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div className="card-base">
-            <p className="text-xs text-muted-foreground">Brut des simulations payées</p>
+            <p className="text-xs text-muted-foreground">Brut des simulations marquées payées</p>
             <p className="text-xl font-bold text-foreground">{fmt(totauxPayes.brut)}</p>
           </div>
           <div className="card-base bg-success/5 border-success/20">
-            <p className="text-xs text-muted-foreground">Net avant impôt · simulations payées</p>
+            <p className="text-xs text-muted-foreground">Net avant impôt · simulations marquées payées</p>
             <p className="text-xl font-bold text-success">{fmt(totauxPayes.netAvantImpot)}</p>
           </div>
           <div className="card-base bg-warning/5 border-warning/20">
@@ -238,6 +289,7 @@ export function BulletinsPaieContent() {
                 const config = STATUT_CONFIG[b.statut] || { label: `Inconnu (${b.statut})`, classes: 'bg-destructive/10 text-destructive' };
                 const downloading = downloadingId === b.id;
                 const pdfDisponible = missionsAvecCotisations.has(b.mission_id);
+                const estArchiveAnnulee = b.statut === 'ANNULE';
                 switch (col.cle) {
                   case 'periode':
                     return (
@@ -269,7 +321,9 @@ export function BulletinsPaieContent() {
                         variant="secondary"
                         className="h-8 gap-1 text-xs"
                         disabled={downloading || !pdfDisponible}
-                        title={pdfDisponible ? 'Télécharger la simulation PDF' : 'PDF indisponible : détail des cotisations manquant'}
+                        title={pdfDisponible
+                          ? estArchiveAnnulee ? 'Télécharger l’archive annulée' : 'Télécharger la simulation PDF'
+                          : 'PDF indisponible : détail des cotisations manquant'}
                         onClick={(e) => { e.stopPropagation(); telecharger(b.id); }}
                       >
                         {downloading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
@@ -284,6 +338,8 @@ export function BulletinsPaieContent() {
                 const config = STATUT_CONFIG[b.statut] || { label: `Inconnu (${b.statut})`, classes: 'bg-destructive/10 text-destructive' };
                 const downloading = downloadingId === b.id;
                 const pdfDisponible = missionsAvecCotisations.has(b.mission_id);
+                const incoherente = simulationPaieIncoherente(b, cotisationsParMission[b.mission_id]);
+                const estArchiveAnnulee = b.statut === 'ANNULE';
                 return (
                   <div className="space-y-3">
                     <div className="flex items-start justify-between gap-3">
@@ -310,16 +366,37 @@ export function BulletinsPaieContent() {
                         </p>
                       </div>
                     </div>
+                    {incoherente && (
+                      <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-2.5 text-xs" role="alert">
+                        <p className="font-semibold text-destructive">Montants différents du calcul de la mission</p>
+                        <button
+                          type="button"
+                          className="mt-1 min-h-11 font-medium text-primary underline underline-offset-2"
+                          onClick={() => navigate(`/soignant/missions/${b.mission_id}`)}
+                        >
+                          Vérifier le calcul de la mission
+                        </button>
+                      </div>
+                    )}
+                    {estArchiveAnnulee && (
+                      <p className="rounded-lg bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
+                        Archive d’un ancien calcul, remplacée par une simulation plus récente. Elle ne doit pas servir de référence de paiement.
+                      </p>
+                    )}
                     <BoutonY2K
                       size="sm"
-                      variant="primary"
+                      variant={estArchiveAnnulee ? 'secondary' : 'primary'}
                       className="w-full gap-1.5 min-h-[44px]"
                       disabled={downloading || !pdfDisponible}
-                      title={pdfDisponible ? 'Télécharger la simulation PDF' : 'PDF indisponible : détail des cotisations manquant'}
+                      title={pdfDisponible
+                        ? estArchiveAnnulee ? 'Télécharger l’archive annulée' : 'Télécharger la simulation PDF'
+                        : 'PDF indisponible : détail des cotisations manquant'}
                       onClick={(e) => { e.stopPropagation(); telecharger(b.id); }}
                     >
                       {downloading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-                      {pdfDisponible ? 'Télécharger la simulation PDF' : 'PDF indisponible — cotisations manquantes'}
+                      {pdfDisponible
+                        ? estArchiveAnnulee ? 'Télécharger l’archive annulée' : 'Télécharger la simulation PDF'
+                        : 'PDF indisponible — cotisations manquantes'}
                     </BoutonY2K>
                   </div>
                 );

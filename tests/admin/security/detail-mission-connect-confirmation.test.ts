@@ -18,14 +18,18 @@ describe('DetailMission — confirmation Stripe Connect fail-closed', () => {
   });
 
   it('ne déclare le paiement réussi qu’après lecture du transfer de la session Checkout courante', () => {
-    expect(detail).toContain(".from('stripe_transfers')");
-    expect(detail).toContain(".select('statut')");
-    expect(detail).toContain(".eq('mission_id', missionId)");
-    expect(detail).toContain(".eq('etablissement_id', etablissementId)");
-    expect(detail).toContain(".eq('stripe_checkout_session_id', checkoutSessionId)");
-    expect(detail).not.toContain(".order('cree_le', { ascending: false })");
-    expect(detail).toContain("['CHARGE_REUSSI', 'TRANSFERE', 'PAYE'].includes(statut)");
-    expect(detail).toContain("statut === 'ECHOUE'");
+    const verificationConnect = detail.slice(
+      detail.indexOf('const verifierStatutConnect'),
+      detail.indexOf('const finaliserRetourConnect'),
+    );
+    expect(verificationConnect).toContain(".from('stripe_transfers')");
+    expect(verificationConnect).toContain(".select('statut')");
+    expect(verificationConnect).toContain(".eq('mission_id', missionId)");
+    expect(verificationConnect).toContain(".eq('etablissement_id', etablissementId)");
+    expect(verificationConnect).toContain(".eq('stripe_checkout_session_id', checkoutSessionId)");
+    expect(verificationConnect).not.toContain(".order('cree_le', { ascending: false })");
+    expect(verificationConnect).toContain("['CHARGE_REUSSI', 'TRANSFERE', 'PAYE'].includes(statut)");
+    expect(verificationConnect).toContain("statut === 'ECHOUE'");
     expect(detail).toContain("toast.success('Paiement confirmé et enregistré.')");
     expect(detail).toContain("toast.error('Le paiement Stripe a échoué. Aucun paiement n’a été enregistré.')");
     expect(detail).toContain('La confirmation est encore en cours');

@@ -81,7 +81,8 @@ export default function AdminLitiges() {
         resolution, resolu_le, facture_id, type_litige, categorie_litige,
         payload_modifications, modifications_executees,
         missions(id, intitule, debut_le, fin_le, profession_requise, service, statut,
-          duree_heures, taux_horaire_base, taux_horaire_base_fige, type_contrat_applique),
+          duree_heures, taux_horaire_base, taux_horaire_base_fige,
+          taux_rist_plafonne, rist_plafond_applique, type_contrat_applique),
         soignants:soignant_id(id, prenom, nom, profession, email, telephone),
         etablissements:etablissement_id(id, nom, email_contact, telephone_contact, type)
       `)
@@ -144,6 +145,8 @@ export default function AdminLitiges() {
         duree_heures: l.missions.duree_heures ?? null,
         taux_horaire_base: l.missions.taux_horaire_base ?? null,
         taux_horaire_base_fige: l.missions.taux_horaire_base_fige ?? null,
+        taux_rist_plafonne: l.missions.taux_rist_plafonne ?? null,
+        rist_plafond_applique: l.missions.rist_plafond_applique ?? null,
         type_contrat_applique: l.missions.type_contrat_applique ?? null,
       } : null,
     };
@@ -228,7 +231,7 @@ export default function AdminLitiges() {
       {filtered.length === 0 ? (
         <EmptyState
           icone={<Scale />}
-          mascotte={filtre === 'ACCORDS_A_VALIDER' || filtre === 'REVUE_ADMIN' ? 'happy' : 'empty'}
+          mascotte={false}
           titre={filtre === 'ACCORDS_A_VALIDER' ? 'Aucun accord en attente' : filtre === 'REVUE_ADMIN' ? 'Aucun litige à trancher' : 'Aucun litige'}
           description={filtre === 'ACCORDS_A_VALIDER'
             ? 'Aucun mouvement financier en attente de validation admin.'

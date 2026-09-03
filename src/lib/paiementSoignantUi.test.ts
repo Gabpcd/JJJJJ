@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { indexerDernierPaiementParMission } from './paiementSoignantUi';
+import {
+  indexerDernierPaiementParMission,
+  repartirPaiementConfirme,
+} from './paiementSoignantUi';
 
 describe('paiementSoignantUi', () => {
   it('choisit explicitement le paiement le plus récent par mission quel que soit l ordre reçu', () => {
@@ -23,5 +26,26 @@ describe('paiementSoignantUi', () => {
 
     expect(resultat.m1.id).toBe('b');
     expect(resultat.m2.id).toBe('cree-apres');
+  });
+
+  it('conserve le solde d’un règlement confirmé mais partiel', () => {
+    expect(repartirPaiementConfirme(346.85, 300)).toEqual({
+      montantPaye: 300,
+      montantRestant: 46.85,
+      estPartiel: true,
+    });
+  });
+
+  it('ne fabrique aucun reste pour un règlement complet ou supérieur au dû', () => {
+    expect(repartirPaiementConfirme(500, 500)).toEqual({
+      montantPaye: 500,
+      montantRestant: 0,
+      estPartiel: false,
+    });
+    expect(repartirPaiementConfirme(500, 510)).toEqual({
+      montantPaye: 510,
+      montantRestant: 0,
+      estPartiel: false,
+    });
   });
 });

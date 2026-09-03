@@ -212,6 +212,8 @@ export type LitigeEnrichi = {
     duree_heures: number | null;
     taux_horaire_base: number | null;
     taux_horaire_base_fige: number | null;
+    taux_rist_plafonne: number | null;
+    rist_plafond_applique: boolean | null;
     type_contrat_applique: string | null;
   } | null;
 };

@@ -76,7 +76,7 @@ v_template_html := $html$<h1>CONTRAT DE PRESTATION LIBÉRALE — {{profession_la
 <p>Tout litige relatif au présent contrat est de la compétence du <strong>tribunal de commerce</strong> du lieu d'exécution (relation B2B). Médiation interne Jolene possible en amont.</p>
 <h2>Article 9 — Données personnelles (RGPD)</h2>
 <p>Données du Prestataire traitées par Jolene en qualité de mandataire de facturation. Durée de conservation : 10 ans (obligation comptable art. L123-22 Code de commerce).</p>
-<p>Fait à {{etablissement_ville}}, le <strong>{{date_signature}}</strong>, en deux exemplaires électroniques signés via OTP SMS Jolene (art. 1366-1367 Code civil).</p>
+<p>Fait à {{etablissement_ville}}, le <strong>{{date_signature}}</strong>, en deux exemplaires signés électroniquement dans Jolene (art. 1366-1367 Code civil).</p>
 <p><em>Modèle Jolene v1 — {{date_signature}}. Pour toute question juridique, consultez votre conseil.</em></p>
 $html$;
 

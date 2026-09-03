@@ -3,16 +3,16 @@ import { describe, expect, it, vi } from 'vitest';
 import { FormulaireRecurrence, type RecurrenceFlexConfig } from './FormulaireRecurrence';
 
 describe('FormulaireRecurrence — planning exact établissement', () => {
-  it("n'affiche pas d'erreur avant la première saisie de dates", () => {
+  it("n'affiche pas d'erreur avant la première saisie de dates", async () => {
     render(<FormulaireRecurrence onChange={vi.fn()} />);
 
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     expect(screen.queryByText('Choisissez une période valide.')).not.toBeInTheDocument();
 
-    fireEvent.change(screen.getByLabelText(/Première date affichée/i), {
+    fireEvent.input(screen.getByLabelText(/Première date affichée/i), {
       target: { value: '2026-08-10' },
     });
-    expect(screen.getByRole('alert')).toHaveTextContent('Choisissez une période valide.');
+    expect(await screen.findByRole('alert')).toHaveTextContent('Choisissez une période valide.');
   });
 
   it('préremplit les créneaux réels, y compris une garde finissant le lendemain', async () => {
@@ -100,6 +100,27 @@ describe('FormulaireRecurrence — planning exact établissement', () => {
       expect(config.jours.find((jour) => jour.date === '2026-08-04')?.creneaux).toHaveLength(2);
       expect(config.jours.find((jour) => jour.date === '2026-08-05')?.actif).toBe(true);
     });
+  });
+
+  it('priorise les dates travaillées lors de la duplication d’un planning long et clairsemé', async () => {
+    render(
+      <FormulaireRecurrence
+        onChange={vi.fn()}
+        initialCreneaux={[
+          { debut: '2026-07-06T06:00:00.000Z', fin: '2026-07-06T14:00:00.000Z' },
+          { debut: '2026-08-31T06:00:00.000Z', fin: '2026-08-31T14:00:00.000Z' },
+        ]}
+      />,
+    );
+
+    expect(screen.getByText(/2 dates travaillées/)).toBeInTheDocument();
+    expect(screen.getByTestId('jour-planning-2026-07-06')).toBeInTheDocument();
+    expect(screen.getByTestId('jour-planning-2026-08-31')).toBeInTheDocument();
+    expect(screen.queryByTestId('jour-planning-2026-07-07')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /Afficher aussi les .* jours de repos/ }));
+    expect(screen.getByTestId('jour-planning-2026-07-07')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Masquer les jours de repos' })).toBeInTheDocument();
   });
 
   it('une exception sur un mercredi ne désactive pas le mercredi suivant', async () => {

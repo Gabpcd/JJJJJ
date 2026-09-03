@@ -100,6 +100,11 @@ async function waitForAdminPage(page: Page) {
     { timeout: 15_000 },
   ).toBeGreaterThan(40);
   await page.waitForLoadState('networkidle', { timeout: 4_000 }).catch(() => undefined);
+  // `main` et la navigation sont déjà visibles pendant le squelette. Attendre
+  // explicitement la fin de l'état de chargement évite d'auditer la coquille
+  // avant que le titre et les données réelles de la fiche soient montés.
+  await page.getByRole('status', { name: 'Chargement en cours' })
+    .waitFor({ state: 'hidden', timeout: 30_000 });
   await page.evaluate(() => document.fonts.ready);
   await page.waitForTimeout(350);
 }
@@ -459,12 +464,47 @@ test.describe('audit frontend administrateur Série C', () => {
     await expect(page).toHaveURL(/\/admin\/missions\/[^/?]+/);
     const missionId = new URL(page.url()).pathname.split('/').filter(Boolean).at(-1);
     await expectHealthyAdminView(page, 'détail mission réel');
+    const adminMissionControl = page.getByTestId('admin-mission-control');
+    await expect(adminMissionControl).toBeVisible();
+    await expect(adminMissionControl).toContainText('Centre de contrôle admin');
+    await expect(adminMissionControl.getByRole('link', { name: 'Présences & pauses' })).toBeVisible();
+    await expect(adminMissionControl.getByRole('link', { name: 'Facturation' })).toBeVisible();
+    await expect(adminMissionControl.getByRole('link', { name: 'Paiements & commission' })).toBeVisible();
+    await expect(page.getByText(/actions métier restent réservées à l’établissement propriétaire/i)).toHaveCount(0);
     await capture(page, testInfo, '/admin/missions/detail-reel', 'haut');
 
     expect(missionId, 'un identifiant de mission réel doit être disponible').toBeTruthy();
     await page.goto(`/admin/presences/mission/${missionId}`, { waitUntil: 'domcontentloaded' });
     await expectHealthyAdminView(page, 'présences d’une mission réelle');
+    await expect(page.getByRole('region', { name: 'Intervention admin sur les présences' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Intervenir sur les heures ou le paiement' })).toBeVisible();
+    // La fiche distingue désormais le planning, le pointage et la base de paie
+    // au lieu d'afficher un ambigu « total brut de la mission ».
+    await expect(page.getByRole('heading', { name: '💶 Récapitulatif financier' })).toBeVisible();
+    await expect(page.getByText('Base brute retenue')).toBeVisible();
+    await expect(page.getByText('Net salarié estimé avant PAS')).toBeVisible();
     await capture(page, testInfo, '/admin/presences/mission/detail-reel', 'haut');
+
+    await page.goto('/admin/litiges', { waitUntil: 'domcontentloaded' });
+    await expectHealthyAdminView(page, 'supervision des litiges');
+    const litigeAvecAccord = page.getByRole('button', { name: /Revue admin.*À trancher/i }).first();
+    if (await litigeAvecAccord.count()) {
+      await litigeAvecAccord.click();
+      const executerAccord = page.getByRole('button', { name: 'Valider l’accord et exécuter' });
+      if (await executerAccord.count()) {
+        await executerAccord.click();
+        const confirmationFinanciere = page.getByRole('alertdialog', { name: 'Confirmer le mouvement financier' });
+        await expect(confirmationFinanciere).toBeVisible();
+        await expect(confirmationFinanciere).toContainText(/Mission|Accord|Justification/);
+        await expect(confirmationFinanciere.getByRole('button', { name: 'Confirmer et exécuter' })).toBeVisible();
+        await confirmationFinanciere.getByRole('button', { name: 'Revenir au dossier' }).click();
+        await expect(confirmationFinanciere).toBeHidden();
+      } else {
+        testInfo.annotations.push({ type: 'donnée absente', description: 'Aucun accord financier directement exécutable.' });
+      }
+    } else {
+      testInfo.annotations.push({ type: 'donnée absente', description: 'Aucun litige en revue admin disponible.' });
+    }
 
     await page.goto('/admin/contrats', { waitUntil: 'domcontentloaded' });
     await expectHealthyAdminView(page, 'liste contrats réelle');

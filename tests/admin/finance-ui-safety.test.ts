@@ -45,7 +45,9 @@ describe('rapport et suivi financier admin', () => {
     expect(facturation).toContain('montant_signe, type_document');
     expect(facturation).toContain('etablissements(nom, est_compte_test)');
     expect(facturation).toContain('filtered.filter(estFactureProduction).filter(estDocumentComptabilise)');
-    expect(facturation).toContain("estFactureProduction(f) && STATUTS_A_TRAITER.includes(f.statut)");
+    expect(facturation).toContain('STATUTS_A_TRAITER.includes(f.statut)');
+    expect(facturation).toContain('estFactureProduction(f)');
+    expect(facturation).toContain("inclureTestsDansFile && perimetreFacture(f) === 'TEST'");
     expect(facturation).toContain("perimetre === 'TEST' ? 'TEST' : 'PÉRIMÈTRE À VÉRIFIER'");
     const detailMission = readFileSync('src/pages/DetailMission.tsx', 'utf8');
     expect(detailMission).toContain('montant_commission_ht, montant_commission_tva, montant_commission_ttc');

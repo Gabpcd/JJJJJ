@@ -108,5 +108,20 @@ export function formatDureeCompacte(m: MissionHoraires): string {
   if (!m.debut_le || !m.fin_le) return '—';
   const duree = Number(m.duree_heures) || 0;
   if (!estMultiJours(m)) return duree > 0 ? `${fmtHeures(duree)}h` : '—';
-  return `${nbJoursTravailles(m)} jours · ${fmtHeures(heuresParJour(new Date(m.debut_le), new Date(m.fin_le)))} h/j`;
+
+  // `debut_le` et `fin_le` bornent toute la période, repos compris. Leur
+  // différence d'heure ne représente donc jamais une durée quotidienne pour
+  // un planning daté (ex. 19h–20h puis 7h–19h le lendemain donnait « 24 h/j »).
+  // Quand le nombre de créneaux est connu, c'est l'unité exacte et non ambiguë.
+  const nbCreneaux = Number(m.nb_creneaux) || 0;
+  if (nbCreneaux > 1) {
+    return duree > 0
+      ? `${nbCreneaux} créneaux · ${fmtHeures(duree)} h au total`
+      : `${nbCreneaux} créneaux`;
+  }
+
+  const jours = nbJoursTravailles(m);
+  return duree > 0
+    ? `${jours} jours · ${fmtHeures(duree)} h au total`
+    : `${jours} jours`;
 }

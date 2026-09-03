@@ -64,6 +64,11 @@ const MOBILE_AUDIT_VIEWPORT = {
   height: Number.parseInt(process.env.UX_AUDIT_HEIGHT || '844', 10),
 };
 
+const HAS_ADMIN_DB_FIXTURES = Boolean(
+  (process.env.SUPABASE_URL || process.env.PLAYWRIGHT_SUPABASE_URL)
+  && (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.PLAYWRIGHT_SERVICE_ROLE_KEY),
+);
+
 async function prepareNativeShell(page: Page) {
   await page.addInitScript(() => {
     localStorage.setItem('cookie-consent', 'accepted');
@@ -473,6 +478,7 @@ test.describe('audit iOS Série C — parcours complet', () => {
   test.use({ viewport: MOBILE_AUDIT_VIEWPORT, hasTouch: true, isMobile: true });
 
   test('dashboard soignant — la carte suggérée ne comprime ni le contenu ni le CTA', async ({ page }) => {
+    test.skip(!HAS_ADMIN_DB_FIXTURES, 'fixture dynamique réservée à la CI munie de la clé service_role');
     const soignantId = await userIdByEmail(TEST_ACCOUNTS.soignant.email);
     expect(soignantId, 'compte soignant de recette disponible').toBeTruthy();
     const { data: soignant } = await adminClient()
@@ -530,12 +536,16 @@ test.describe('audit iOS Série C — parcours complet', () => {
   });
 
   test('soignant — toutes les interfaces publiques du compte', async ({ page }, testInfo) => {
-    test.setTimeout(120_000);
+    // Une capture haute, basse et pleine page est produite pour chacune des
+    // 40 routes. WebKit a besoin de plus de deux minutes sur une machine de
+    // recette chargée : le délai doit couvrir l'audit complet, pas le couper
+    // silencieusement au milieu des préférences de notifications.
+    test.setTimeout(8 * 60_000);
     await auditRole(page, testInfo, 'soignant', ROUTES_SOIGNANT);
   });
 
   test('établissement — toutes les interfaces publiques du compte', async ({ page }, testInfo) => {
-    test.setTimeout(120_000);
+    test.setTimeout(8 * 60_000);
     await auditRole(page, testInfo, 'etab', ROUTES_ETABLISSEMENT);
   });
 
@@ -555,10 +565,7 @@ test.describe('audit iOS Série C — parcours complet', () => {
 
   test('mission réelle — détail et modification établissement, détail soignant', async ({ page }, testInfo) => {
     test.setTimeout(120_000);
-    test.skip(
-      !(process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.PLAYWRIGHT_SERVICE_ROLE_KEY),
-      'fixture dynamique réservée à la CI munie de la clé service_role',
-    );
+    test.skip(!HAS_ADMIN_DB_FIXTURES, 'fixture dynamique réservée à la CI munie de la clé service_role');
 
     const soignantId = await userIdByEmail(TEST_ACCOUNTS.soignant.email);
     const { data: soignant } = await adminClient()

@@ -6,6 +6,34 @@ export interface PaiementSoignantPourUi {
   cree_le?: string | null;
 }
 
+export interface RepartitionPaiementConfirme {
+  montantPaye: number;
+  montantRestant: number;
+  estPartiel: boolean;
+}
+
+/**
+ * Répartit un règlement confirmé sans faire disparaître un reste à payer.
+ * Un paiement partiel doit être visible à la fois dans « Payé » pour la somme
+ * réellement reçue et dans « En attente » pour le solde encore dû.
+ */
+export function repartirPaiementConfirme(
+  montantDuBrut: unknown,
+  montantRegleBrut: unknown,
+): RepartitionPaiementConfirme {
+  const montantDu = Number(montantDuBrut);
+  const montantRegle = Number(montantRegleBrut);
+  const du = Number.isFinite(montantDu) ? Math.max(0, montantDu) : 0;
+  const paye = Number.isFinite(montantRegle) ? Math.max(0, montantRegle) : 0;
+  const restant = Math.max(0, Number((du - paye).toFixed(2)));
+
+  return {
+    montantPaye: Number(paye.toFixed(2)),
+    montantRestant: restant,
+    estPartiel: paye > 0 && restant > 0,
+  };
+}
+
 function instantPaiement(paiement: PaiementSoignantPourUi): number {
   const valeur = paiement.modifie_le ?? paiement.cree_le ?? paiement.date_paiement;
   const instant = valeur ? new Date(valeur).getTime() : 0;

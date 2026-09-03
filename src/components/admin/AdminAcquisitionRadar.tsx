@@ -571,37 +571,37 @@ export function AdminAcquisitionRadar() {
       </div>
 
       <div className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4 lg:flex-row lg:items-end">
-        <div className="space-y-1.5">
+        <div className="min-w-0 space-y-1.5">
           <Label htmlFor="radar-scope">Jeu de données</Label>
           <select
             id="radar-scope"
             value={scope}
             onChange={(event) => setScope(event.target.value as Scope)}
-            className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+            className="h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm sm:w-auto"
           >
             <option value="REEL">Réel uniquement</option>
             <option value="TEST">Tests / captures</option>
             <option value="TOUS">Tout</option>
           </select>
         </div>
-        <div className="space-y-1.5">
+        <div className="min-w-0 space-y-1.5">
           <Label htmlFor="radar-departement">Zone</Label>
           <input
             id="radar-departement"
             value={departement}
             onChange={(event) => setDepartement(event.target.value.toUpperCase().slice(0, 3))}
-            className="h-10 w-36 rounded-md border border-input bg-background px-3 text-sm"
+            className="h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm sm:w-36"
             placeholder="ex. 75"
             inputMode="text"
           />
         </div>
-        <div className="space-y-1.5">
+        <div className="min-w-0 space-y-1.5">
           <Label htmlFor="radar-profession">Profession demandée</Label>
           <select
             id="radar-profession"
             value={profession}
             onChange={(event) => setProfession(event.target.value)}
-            className="h-10 min-w-64 rounded-md border border-input bg-background px-3 text-sm"
+            className="h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm sm:w-auto sm:min-w-64"
           >
             <option value="">Toutes</option>
             {PROFESSIONS.map((item) => <option key={item.valeur} value={item.valeur}>{item.label}</option>)}

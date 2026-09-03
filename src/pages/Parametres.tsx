@@ -103,10 +103,14 @@ export default function Parametres() {
         onValueChange={(v) => setSearchParams({ tab: v }, { replace: true })}
         className="w-full"
       >
-        <div ref={ongletsScrollerRef} className="overflow-x-auto -mx-1 px-1 mb-6">
-        <TabsList className="w-max">
+        <div ref={ongletsScrollerRef} className="-mx-1 mb-6 px-1 sm:overflow-x-auto">
+        <TabsList className="grid h-auto w-full grid-cols-5 sm:flex sm:w-max">
           {ONGLETS.map(({ value, label, icone: Icone }) => (
-            <TabsTrigger key={value} value={value} className="flex items-center gap-1.5 text-xs sm:text-sm">
+            <TabsTrigger
+              key={value}
+              value={value}
+              className="flex min-w-0 flex-col gap-0.5 whitespace-normal px-1 py-2 text-center text-[9px] leading-tight sm:flex-row sm:gap-1.5 sm:whitespace-nowrap sm:px-3 sm:text-sm"
+            >
               <Icone className="h-3.5 w-3.5 sm:h-4 sm:w-4" aria-hidden="true" />
               <span>{label}</span>
             </TabsTrigger>

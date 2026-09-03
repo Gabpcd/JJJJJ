@@ -97,6 +97,24 @@ describe('cohérence financière des interfaces', () => {
     expect(pdf).toContain('la simulation PDF ne peut pas être générée de façon fiable');
   });
 
+  it('distingue sans ambiguïté la simulation active des archives annulées', () => {
+    const page = read('src/pages/BulletinsPaie.tsx');
+    expect(page).toContain("searchParams.get('mission')");
+    expect(page).toContain('La simulation active la plus récente est la référence Jolene');
+    expect(page).toContain('Archive d’un ancien calcul, remplacée par une simulation plus récente');
+    expect(page).toContain('Télécharger l’archive annulée');
+  });
+
+  it('laisse confirmer un paiement même si le relevé bloque encore les exports', () => {
+    const gains = read('src/pages/MesGains.tsx');
+    const confirmation = read('src/components/BandeauPaiementDeclare.tsx');
+    expect(gains).toContain('Totaux et export en attente de validation');
+    expect(gains).toContain('Les paiements à confirmer et les simulations de paie restent disponibles');
+    expect(gains).toContain('exportIndisponible');
+    expect(gains).toContain('<BandeauPaiementDeclare onUpdate=');
+    expect(confirmation).toContain('onUpdate?.()');
+  });
+
   it('n invente aucun net salarié dans la facture commission ou l export paie', () => {
     const factureCommission = read('src/lib/facture-commission-pdf.ts');
     const exportPaie = read('src/pages/ExportPaie.tsx');

@@ -20,6 +20,16 @@ describe('erreurs inscription familles de compte', () => {
     expect(estRefusInscriptionAttendu('ACCOUNT_PROFILE_CONFLICT')).toBe(false);
     expect(mapperErreurInscription({ code: 'ACCOUNT_PROFILE_CONFLICT' }).action).toBe('support');
   });
+
+  it('guide une inscription suspendue par la confirmation email', () => {
+    expect(mapperErreurInscription({
+      code: 'EMAIL_CONFIRMATION_REQUIRED',
+    })).toMatchObject({
+      code: 'EMAIL_CONFIRMATION_REQUIRED',
+      action: 'retry',
+    });
+    expect(estRefusInscriptionAttendu('EMAIL_CONFIRMATION_REQUIRED')).toBe(true);
+  });
 });
 
 describe('extraireMessageErreur', () => {

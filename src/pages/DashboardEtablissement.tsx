@@ -888,7 +888,9 @@ export default function DashboardEtablissement() {
 
       <ModalConfirmation ouvert={!!modalDupliquer} onFermer={() => setModalDupliquer(null)}
         onConfirmer={() => navigate(`/etablissement/missions/creer?dupliquer=${modalDupliquer.id}`)}
-        titre="Dupliquer cette mission ?" message={`Une copie de « ${modalDupliquer?.intitule} » sera créée.`} labelConfirmer="Dupliquer" />
+        titre="Préremplir une nouvelle mission ?"
+        message={`Le formulaire reprendra les informations de « ${modalDupliquer?.intitule} ». Vérifiez les dates avant de publier : aucune mission ne sera créée automatiquement.`}
+        labelConfirmer="Ouvrir le formulaire" />
       {/* Sprint 5.5 PR 3 : modale annulation avec décomposition L1243-8 / 1231-5
           Sprint 8 ter-G : lazy mount (code splitting) */}
       {modalAnnuler && (

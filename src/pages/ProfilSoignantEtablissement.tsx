@@ -103,10 +103,10 @@ export default function ProfilSoignantEtablissement() {
                   </div>
                 )}
 
-                <div className="space-y-2">
-                  <div className="flex items-start justify-between gap-3">
-                    <h1 className="text-2xl font-bold text-foreground">{soignant.prenom} {soignant.nom}</h1>
-                    <div className="flex items-center gap-2 shrink-0">
+                <div className="min-w-0 w-full flex-1 space-y-3">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <h1 className="min-w-0 break-words text-2xl font-bold text-foreground">{soignant.prenom} {soignant.nom}</h1>
+                    <div className="grid w-full grid-cols-1 gap-2 sm:flex sm:w-auto sm:flex-wrap sm:justify-end [&>button]:w-full sm:[&>button]:w-auto">
                       {/* 7e-2 (F2) : reproposer une mission = le chemin de moindre
                           résistance vs le SMS. Visible dès qu'une mission TERMINEE
                           commune existe (elle sert de modèle pré-rempli). */}

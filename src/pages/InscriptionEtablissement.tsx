@@ -7,7 +7,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
 import { handleErrorSilent } from '@/lib/handleError';
 import { gererErreurSupabase } from '@/lib/supabaseErrorHandler';
-import { mapperErreurInscription, estRefusInscriptionAttendu } from '@/lib/erreurs';
+import { mapperErreurInscription, estRefusInscriptionAttendu, type ErreurInscriptionMappee } from '@/lib/erreurs';
+import { ErreurInscription } from '@/components/inscription/ErreurInscription';
 import { toast } from 'sonner';
 import { SelectTypeEtablissement } from '@/components/SelectTypeEtablissement';
 import { validerSiret } from '@/lib/luhn';
@@ -50,7 +51,7 @@ export default function InscriptionEtablissement() {
   const [cgu, setCgu] = useState(false);
   const [cgv, setCgv] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [erreurInscription, setErreurInscription] = useState<string | null>(null);
+  const [erreurInscription, setErreurInscription] = useState<ErreurInscriptionMappee | null>(null);
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
 
   const [form, setForm] = useState({
@@ -160,6 +161,11 @@ export default function InscriptionEtablissement() {
     }
   };
 
+  const handleRetry = () => {
+    setErreurInscription(null);
+    document.querySelector<HTMLFormElement>('form')?.requestSubmit();
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErreurInscription(null);
@@ -175,12 +181,12 @@ export default function InscriptionEtablissement() {
         // mapperErreurInscription couvre tous les cas : SIRET déjà enregistré,
         // e-mail déjà utilisé, mot de passe trop faible, captcha, rate-limit, réseau…
         const mappee = mapperErreurInscription(err);
-        setErreurInscription(mappee.message);
+        setErreurInscription(mappee);
         toast.error(mappee.message);
         // Si l'erreur concerne les identifiants (e-mail / mot de passe / captcha),
         // revenir à l'étape 1 où se trouvent ces champs, pour que la correction soit
         // possible (le bouton de soumission est sur l'étape 2).
-        const codesEtape1 = ['USER_ALREADY_REGISTERED', 'WEAK_PASSWORD', 'INVALID_EMAIL', 'CAPTCHA_FAILED', 'EMAIL_RATE_LIMIT'];
+        const codesEtape1 = ['USER_ALREADY_REGISTERED', 'WEAK_PASSWORD', 'INVALID_EMAIL', 'CAPTCHA_FAILED', 'EMAIL_RATE_LIMIT', 'EMAIL_CONFIRMATION_REQUIRED'];
         if (codesEtape1.includes(mappee.code)) setEtape(1);
         // Refus métier attendu (SIRET déjà pris, e-mail déjà utilisé, captcha…) :
         // déjà affiché à l'utilisateur → pas d'issue Sentry. On ne capture que les
@@ -255,6 +261,13 @@ export default function InscriptionEtablissement() {
                 <input type="checkbox" checked={cgv} onChange={e => setCgv(e.target.checked)} className="mt-1 h-4 w-4 rounded accent-primary" />
                 <span className="text-sm text-muted-foreground">J'accepte les <a href="/cgv" target="_blank" rel="noopener noreferrer" className="text-primary underline font-medium">Conditions Générales de Vente</a> *</span>
               </label>
+              {erreurInscription && etape === 1 && (
+                <ErreurInscription
+                  erreur={erreurInscription}
+                  onRetry={handleRetry}
+                  onSeConnecter={() => navigate('/connexion')}
+                />
+              )}
               <button type="button" onClick={() => setEtape(2)} disabled={!etape1Valide} className="btn-primary w-full disabled:opacity-50 disabled:cursor-not-allowed">Continuer</button>
             </div>
           )}
@@ -349,10 +362,11 @@ export default function InscriptionEtablissement() {
                 <input value={form.ville} onChange={e => maj('ville', e.target.value)} placeholder="Ville" className="input-base" autoComplete="address-level2" required />
               </div>
               {erreurInscription && (
-                <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 flex items-start gap-2" role="alert">
-                  <AlertCircle className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
-                  <p className="text-sm text-destructive">{erreurInscription}</p>
-                </div>
+                <ErreurInscription
+                  erreur={erreurInscription}
+                  onRetry={handleRetry}
+                  onSeConnecter={() => navigate('/connexion')}
+                />
               )}
               <CaptchaTurnstile className="flex justify-center pt-2" onVerify={setTurnstileToken} onExpire={() => setTurnstileToken(null)} onError={() => setTurnstileToken(null)} />
               <div className="flex gap-3 pt-2">

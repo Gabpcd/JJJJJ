@@ -41,7 +41,7 @@ INSERT INTO public.templates_contrat (type_contrat, nom, version, est_actif, con
 <h2>Article 3 — Convention collective applicable</h2>
 <p>La convention collective applicable est celle de l'Employeur : <strong>{{convention_collective}}</strong>. Le Salarié reconnaît en avoir pris connaissance.</p>
 <h2>Article 4 — Période d'essai</h2>
-<p>Une période d'essai de <strong>{{periode_essai_jours}} jours</strong> est prévue, conformément à l'art. L1242-10 du Code du travail.</p>
+<p>Une période d'essai de <strong>{{periode_essai_libelle}}</strong> est prévue, conformément à l'art. L1242-10 du Code du travail.</p>
 <h2>Article 5 — Rémunération</h2>
 <p>Taux horaire brut : <strong>{{taux_horaire}} € brut/h</strong>, majorations légales incluses (nuit ≥ 25%, dimanche ≥ 25%, jour férié ≥ 50%) ou conventionnelles selon la CCN applicable. À la fin du contrat, le Salarié percevra une <strong>indemnité de fin de contrat (IFM) de 10%</strong> de la rémunération brute totale (art. L1243-8) et une <strong>indemnité compensatrice de congés payés (ICP) de 10%</strong> (art. L3141-22).</p>
 <h2>Article 6 — Cotisations sociales</h2>
@@ -54,10 +54,10 @@ INSERT INTO public.templates_contrat (type_contrat, nom, version, est_actif, con
 <p>Tout litige relatif à l'exécution du présent contrat est de la compétence du Conseil de prud'hommes du lieu d'exécution. Les parties peuvent saisir la médiation interne Jolene en amont.</p>
 <h2>Article 10 — Données personnelles (RGPD)</h2>
 <p>Les données du Salarié sont traitées par l'Employeur en sa qualité de responsable de traitement (art. 4-7 RGPD), avec Jolene comme sous-traitant technique (art. 28). Durée de conservation : 5 ans à compter de la fin de mission (obligation comptable + URSSAF).</p>
-<p>Fait à {{etablissement_ville}}, le <strong>{{date_signature}}</strong>, en deux exemplaires électroniques signés via OTP SMS Jolene (art. 1366-1367 Code civil).</p>
+<p>Fait à {{etablissement_ville}}, le <strong>{{date_signature}}</strong>, en deux exemplaires signés électroniquement dans Jolene (art. 1366-1367 Code civil).</p>
 <p><em>Modèle Jolene v1 — {{date_signature}}. Pour toute question juridique, consultez votre conseil.</em></p>
 $html$::text,
-  '["etablissement_nom","etablissement_siret","etablissement_finess","etablissement_adresse","etablissement_ville","soignant_prenom","soignant_nom","soignant_date_naissance","soignant_adresse","motif_cdd","intitule_mission","profession","debut_le","fin_le","duree_heures","convention_collective","periode_essai_jours","taux_horaire","caisse_retraite","regime_prevoyance","date_signature"]'::jsonb
+  '["etablissement_nom","etablissement_siret","etablissement_finess","etablissement_adresse","etablissement_ville","soignant_prenom","soignant_nom","soignant_date_naissance","soignant_adresse","motif_cdd","intitule_mission","profession","debut_le","fin_le","duree_heures","convention_collective","periode_essai_libelle","taux_horaire","caisse_retraite","regime_prevoyance","date_signature"]'::jsonb
 );
 
 -- Seed Libéral générique (master) — remplace REMPLACEMENT_LIBERAL existant
@@ -89,7 +89,7 @@ INSERT INTO public.templates_contrat (type_contrat, nom, version, est_actif, con
 <p>Litige relatif au présent contrat : <strong>tribunal de commerce</strong> du lieu d'exécution (relation B2B). Médiation interne Jolene possible en amont.</p>
 <h2>Article 8 — RGPD</h2>
 <p>Données du Prestataire traitées par Jolene en sa qualité de mandataire de facturation. Durée de conservation : 10 ans (obligation comptable Art. L123-22).</p>
-<p>Fait à {{etablissement_ville}}, le <strong>{{date_signature}}</strong>, en deux exemplaires électroniques signés via OTP SMS Jolene (art. 1366-1367 Code civil).</p>
+<p>Fait à {{etablissement_ville}}, le <strong>{{date_signature}}</strong>, en deux exemplaires signés électroniquement dans Jolene (art. 1366-1367 Code civil).</p>
 <p><em>Modèle Jolene v1 — {{date_signature}}. Pour toute question juridique, consultez votre conseil.</em></p>
 $html$::text,
   '["etablissement_nom","etablissement_siret","etablissement_ville","soignant_prenom","soignant_nom","soignant_siret","soignant_rpps","profession","intitule_mission","taux_horaire","debut_le","fin_le","duree_heures","date_signature"]'::jsonb

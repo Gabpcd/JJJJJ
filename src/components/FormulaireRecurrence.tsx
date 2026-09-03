@@ -136,6 +136,13 @@ export function FormulaireRecurrence({
   const [datesModifiees, setDatesModifiees] = useState(
     Boolean(initial || initialDateDebut || initialDateFin),
   );
+  // Une duplication peut reprendre quelques créneaux espacés sur plusieurs
+  // semaines. Afficher d'emblée chaque journée inactive crée alors des dizaines
+  // de cartes inutiles sur mobile. Les dates travaillées restent prioritaires,
+  // avec accès explicite à toute la période pour ajouter une exception.
+  const [afficherJoursRepos, setAfficherJoursRepos] = useState(
+    !initial || initial.jours.length <= 14,
+  );
   const onChangeRef = useRef(onChange);
 
   useEffect(() => {
@@ -264,6 +271,11 @@ export function FormulaireRecurrence({
     validation.erreurs.flatMap((erreur) => erreur.creneauxAffectes ?? []),
   ), [validation.erreurs]);
   const totalHeures = creneaux.reduce((somme, creneau) => somme + creneau.dureeHeures, 0);
+  const nbJoursTravailles = jours.filter((jour) => jour.actif).length;
+  const nbJoursRepos = jours.length - nbJoursTravailles;
+  const joursAffiches = !afficherJoursRepos && nbJoursTravailles > 0
+    ? jours.filter((jour) => jour.actif)
+    : jours;
 
   return (
     <div className="space-y-4">
@@ -281,7 +293,7 @@ export function FormulaireRecurrence({
             <input
               type="date"
               value={dateDebut}
-              onChange={(event) => { setDatesModifiees(true); setDateDebut(event.target.value); }}
+              onInput={(event) => { setDatesModifiees(true); setAfficherJoursRepos(true); setDateDebut(event.currentTarget.value); }}
               className="input-base mt-1"
               required
             />
@@ -292,7 +304,7 @@ export function FormulaireRecurrence({
               type="date"
               value={dateFin}
               min={dateDebut || undefined}
-              onChange={(event) => { setDatesModifiees(true); setDateFin(event.target.value); }}
+              onInput={(event) => { setDatesModifiees(true); setAfficherJoursRepos(true); setDateFin(event.currentTarget.value); }}
               className="input-base mt-1"
               required
             />
@@ -316,8 +328,28 @@ export function FormulaireRecurrence({
       </div>
 
       {jours.length > 0 && (
-        <div className="max-h-[46rem] space-y-3 overflow-y-auto pr-1" data-testid="horaires-par-jour">
-          {jours.map((jour) => (
+        <div className="space-y-3" data-testid="horaires-par-jour">
+          {nbJoursRepos > 0 && nbJoursTravailles > 0 && (
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border bg-muted/20 px-3 py-2.5">
+              <p className="text-xs text-muted-foreground" aria-live="polite">
+                <strong className="text-foreground">{nbJoursTravailles} date{nbJoursTravailles > 1 ? 's' : ''} travaillée{nbJoursTravailles > 1 ? 's' : ''}</strong>
+                {' '}sur {jours.length}
+              </p>
+              <button
+                type="button"
+                onClick={() => setAfficherJoursRepos((valeur) => !valeur)}
+                className="min-h-11 rounded-lg px-2.5 text-xs font-semibold text-primary hover:bg-primary/5"
+                aria-expanded={afficherJoursRepos}
+                aria-controls="liste-horaires-par-jour"
+              >
+                {afficherJoursRepos
+                  ? 'Masquer les jours de repos'
+                  : `Afficher aussi les ${nbJoursRepos} jours de repos`}
+              </button>
+            </div>
+          )}
+          <div id="liste-horaires-par-jour" className="max-h-[46rem] space-y-3 overflow-y-auto pr-1">
+          {joursAffiches.map((jour) => (
             <section
               key={jour.date}
               className={`rounded-2xl border p-4 ${jour.actif ? 'border-primary/25 bg-primary/5' : 'border-border bg-muted/20'}`}
@@ -369,6 +401,7 @@ export function FormulaireRecurrence({
               )}
             </section>
           ))}
+          </div>
         </div>
       )}
 

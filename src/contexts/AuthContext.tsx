@@ -38,6 +38,62 @@ function toAppUser(user: User): AppUser {
   };
 }
 
+function erreurConfirmationEmail(): Error {
+  const erreur = new Error(
+    'Un email de confirmation vient de vous être envoyé. Ouvrez-le, revenez ici, puis appuyez sur « J’ai confirmé mon email » pour terminer votre inscription.',
+  );
+  (erreur as Error & { code?: string }).code = 'EMAIL_CONFIRMATION_REQUIRED';
+  return erreur;
+}
+
+/**
+ * Supabase ne renvoie volontairement pas `USER_ALREADY_REGISTERED` quand la
+ * confirmation email est active : un second signUp reçoit un faux utilisateur
+ * sans identité. Sans ce rattrapage, un utilisateur ayant confirmé son email
+ * ne pouvait jamais reprendre la création de son profil métier.
+ */
+async function resoudreSessionInscription(
+  authData: { user: User | null; session: Session | null },
+  email: string,
+  password: string,
+): Promise<{ user: User; session: Session }> {
+  const emailNormalise = email.trim().toLowerCase();
+  const appartientAuCompte = (session: Session | null) => (
+    session?.user.email?.trim().toLowerCase() === emailNormalise
+  );
+
+  if (appartientAuCompte(authData.session)) {
+    return { user: authData.session!.user, session: authData.session! };
+  }
+
+  const { data: sessionData } = await supabase.auth.getSession();
+  if (appartientAuCompte(sessionData.session)) {
+    // La session est la source d'identité. Le faux utilisateur que Supabase
+    // renvoie sur un signUp dupliqué ne doit jamais fournir l'id métier.
+    return { user: sessionData.session!.user, session: sessionData.session! };
+  }
+
+  const identities = authData.user?.identities;
+  if (authData.user && Array.isArray(identities) && identities.length === 0) {
+    const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+    if (signInData.user && signInData.session) {
+      return { user: signInData.user, session: signInData.session };
+    }
+    if ((signInError as { code?: string } | null)?.code === 'email_not_confirmed'
+      || /email not confirmed/i.test(signInError?.message || '')) {
+      throw erreurConfirmationEmail();
+    }
+    const erreur = new Error('Ce compte existe déjà. Vérifiez votre mot de passe ou connectez-vous.');
+    (erreur as Error & { code?: string }).code = 'USER_ALREADY_REGISTERED';
+    throw erreur;
+  }
+
+  throw erreurConfirmationEmail();
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
   const [user, setUser] = useState<AppUser | null>(null);
@@ -231,17 +287,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       throw err;
     }
 
-    const userId = authData.user!.id;
-    let accessToken = authData.session?.access_token;
-    if (!accessToken) {
-      logger.warn('[INSCRIPTION] 3b. Aucun token dans signUp, tentative via getSession...');
-      const { data: sessionData } = await supabase.auth.getSession();
-      accessToken = sessionData.session?.access_token;
-      logger.debug('[INSCRIPTION] 3c. Token via getSession:', !!accessToken);
-    }
-    if (!accessToken) {
-      throw new Error('Session introuvable après inscription. Veuillez réessayer.');
-    }
+    if (!authData.session) logger.warn('[INSCRIPTION] 3b. Aucun token dans signUp, résolution du parcours de confirmation...');
+    const sessionInscription = await resoudreSessionInscription(authData, data.email, data.motDePasse);
+    const userId = sessionInscription.user.id;
+    const accessToken = sessionInscription.session.access_token;
+    logger.debug('[INSCRIPTION] 3c. Session d’inscription résolue:', !!accessToken);
     const registerBody = {
       prenom: data.prenom,
       nom: data.nom,
@@ -359,9 +409,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       authData = signUpData;
     }
 
-    if (!authData.user || !authData.session) {
-      throw new Error('Session introuvable après inscription. Veuillez réessayer.');
-    }
+    const sessionInscription = await resoudreSessionInscription(authData, data.email, data.motDePasse);
 
     const { data: result, error: fnError } = await supabase.functions.invoke('register-etablissement', {
       body: {
@@ -382,6 +430,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         turnstileToken: data.turnstileToken || null,
         attribution: getAttribution(),
       },
+      headers: { Authorization: `Bearer ${sessionInscription.session.access_token}` },
     });
 
     // Quand l'edge function renvoie un status non-2xx, le SDK met data=null

@@ -67,6 +67,7 @@ import {
 } from '@/lib/disponibilite-pointage';
 import { formatParis, instantJolene, memeJourParis } from '@/lib/date-heure-paris';
 import { LITIGE_ADMIN_TYPES, type LitigeAdminType } from '@/lib/litigeAdminUi';
+import { estResolu, statutBadgeV2 } from '@/lib/statutLitige';
 
 type DetailMissionRole = 'ADMIN_ETABLISSEMENT' | 'ADMIN_PLATEFORME';
 
@@ -823,19 +824,10 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
     presences: m.presences ?? [],
     maintenant: new Date(maintenantMs),
   });
-  const litigeActif = Boolean(
-    litigeExistant?.litige_id
-    && ![
-      'FERME',
-      'RESOLU_SOIGNANT',
-      'RESOLU_ETABLISSEMENT',
-      'RESOLU_ADMIN',
-      'RESOLU_ACCORD_PARTIES',
-      'RESOLU_FAVEUR_SOIGNANT',
-      'RESOLU_FAVEUR_ETAB',
-      'RESOLU_PARTAGE',
-    ].includes(litigeExistant.statut),
-  );
+  const statutLitigeMission = String(litigeExistant?.statut || '').toUpperCase();
+  const litigeClos = Boolean(statutLitigeMission && estResolu(statutLitigeMission));
+  const badgeLitigeMission = statutLitigeMission ? statutBadgeV2(statutLitigeMission) : null;
+  const litigeActif = Boolean(litigeExistant?.litige_id && !litigeClos);
   const clotureAdmin = evaluerClotureAdminMission({
     terminaison,
     estAdmin: isAdmin,
@@ -918,7 +910,7 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
             >
               <Clock className="h-4 w-4 text-primary" aria-hidden="true" /> Présences & pauses
             </Link>
-            {litigeExistant?.litige_id ? (
+            {litigeActif ? (
               <Link
                 to={`/admin/litiges?litige=${encodeURIComponent(litigeExistant.litige_id)}`}
                 className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-warning/40 bg-warning/5 px-3 py-2 text-sm font-semibold text-foreground hover:bg-warning/10"
@@ -933,7 +925,8 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
                 aria-expanded={adminLitigeOuvert}
                 aria-controls="admin-litige-form"
               >
-                <Scale className="h-4 w-4 text-warning" aria-hidden="true" /> Ouvrir une intervention
+                <Scale className="h-4 w-4 text-warning" aria-hidden="true" />
+                {litigeExistant?.litige_id ? 'Nouvelle intervention' : 'Ouvrir une intervention'}
               </button>
             ) : (
               <span className="inline-flex min-h-11 items-center justify-center rounded-xl border border-border bg-muted/30 px-3 py-2 text-center text-xs text-muted-foreground">
@@ -953,7 +946,18 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
               <Banknote className="h-4 w-4 text-primary" aria-hidden="true" /> Paiements & commission
             </Link>
           </div>
-          {adminLitigeOuvert && !litigeExistant?.litige_id && (
+          {litigeExistant?.litige_id && !litigeActif && (
+            <div className="mt-3 flex flex-col gap-2 rounded-xl border border-success/30 bg-success/5 p-3 text-xs sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-foreground">Le dernier litige est clôturé. Une nouvelle intervention crée un dossier séparé et traçable.</p>
+              <Link
+                to={`/admin/litiges?litige=${encodeURIComponent(litigeExistant.litige_id)}`}
+                className="font-semibold text-primary hover:underline"
+              >
+                Consulter la décision
+              </Link>
+            </div>
+          )}
+          {adminLitigeOuvert && !litigeActif && (
             <div id="admin-litige-form" className="mt-3 space-y-3 rounded-xl border border-warning/30 bg-card p-3">
               <p className="text-sm font-semibold text-foreground">Créer un dossier d’intervention</p>
               <label className="block">
@@ -1130,7 +1134,8 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
                       <button
                         type="button"
                         onClick={() => ouvrirConv(m.soignant_assigne_id, m.id)}
-                        className="h-8 w-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center hover:bg-primary/90 transition-colors shrink-0"
+                        className="min-h-11 min-w-11 rounded-full bg-primary text-primary-foreground flex items-center justify-center hover:bg-primary/90 transition-colors shrink-0"
+                        aria-label="Contacter le soignant"
                         title="Contacter le soignant"
                       >
                         <MessageCircle className="h-4 w-4" />
@@ -1356,8 +1361,16 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
               {/* Litige section */}
               {!isAdmin && (m.statut === 'TERMINEE' || m.statut === 'LITIGE') && m.soignant_assigne_id && (
                 litigeExistant ? (
-                  <div className="card-base border-warning/30">
-                    <h2 className="font-semibold text-foreground mb-3 flex items-center gap-2"><Scale className="h-4 w-4 text-warning shrink-0" aria-hidden="true" />Litige en cours</h2>
+                  <div className={`card-base ${litigeClos ? 'border-success/30 bg-success/5' : 'border-warning/30'}`}>
+                    <h2 className="font-semibold text-foreground mb-3 flex items-center gap-2">
+                      <Scale className={`h-4 w-4 shrink-0 ${litigeClos ? 'text-success' : 'text-warning'}`} aria-hidden="true" />
+                      {litigeClos ? 'Décision du litige' : 'Litige en cours'}
+                    </h2>
+                    {badgeLitigeMission && (
+                      <p className="mb-3 text-xs text-muted-foreground">
+                        Statut : <span className="font-medium text-foreground">{badgeLitigeMission.label}</span>
+                      </p>
+                    )}
                     <FilDiscussionLitige
                       litige={{
                         id: litigeExistant.litige_id,

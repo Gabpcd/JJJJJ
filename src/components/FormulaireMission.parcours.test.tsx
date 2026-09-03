@@ -19,10 +19,11 @@ const mocks = vi.hoisted(() => ({
   rpc: vi.fn(),
   afficherNotification: vi.fn(),
   recapData: null as Record<string, unknown> | null,
+  user: { id: 'etablissement-test', email: 'etab-test@jolene.app' },
 }));
 
 vi.mock('@/contexts/AuthContext', () => ({
-  useAuth: () => ({ user: { id: 'etablissement-test', email: 'etab-test@jolene.app' } }),
+  useAuth: () => ({ user: mocks.user }),
 }));
 
 vi.mock('@/contexts/NotificationContext', () => ({
@@ -71,6 +72,8 @@ const etablissementComplet = {
   tolerance_gps_metres: 100,
   siret: '12345678901234',
   contrat_service_signe: true,
+  statut_verification: 'VERIFIE',
+  peut_publier_missions: true,
 };
 
 async function remplirChampsEtPlanning() {
@@ -87,10 +90,10 @@ async function remplirChampsEtPlanning() {
     fireEvent.change(screen.getByLabelText(/Taux horaire (?:proposé|brut|des honoraires)/i), {
       target: { value: '32' },
     });
-    fireEvent.change(screen.getByLabelText('Première date affichée *'), {
+    fireEvent.input(screen.getByLabelText('Première date affichée *'), {
       target: { value: '2099-08-03' },
     });
-    fireEvent.change(screen.getByLabelText('Dernière date affichée *'), {
+    fireEvent.input(screen.getByLabelText('Dernière date affichée *'), {
       target: { value: '2099-08-03' },
     });
   });
@@ -99,7 +102,6 @@ async function remplirChampsEtPlanning() {
   await waitFor(() => {
     expect(within(screen.getByTestId('jour-planning-2099-08-03')).getByRole('checkbox')).toBeChecked();
   });
-  act(() => fireEvent.click(screen.getByRole('radio', { name: /Soin à finalité thérapeutique/i })));
 }
 
 function verifierValeursConservees() {
@@ -147,6 +149,10 @@ describe('FormulaireMission — parcours de création critique', () => {
       </MemoryRouter>,
     );
 
+    expect(screen.getByText(/Choisissez d’abord la profession/)).toBeInTheDocument();
+    expect(screen.queryByText(/Nature TVA prévue/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('radio', { name: /^Salarié/i })).not.toBeInTheDocument();
+
     await waitFor(() => expect(mocks.rpc).toHaveBeenCalledWith('fn_mon_etablissement_complet'));
     await act(async () => {
       etablissement.resolve({ data: etablissementComplet, error: null });
@@ -173,6 +179,7 @@ describe('FormulaireMission — parcours de création critique', () => {
     });
 
     await waitFor(() => expect(screen.queryByText("Vérification du mode d'exercice…")).not.toBeInTheDocument());
+    act(() => fireEvent.click(screen.getByRole('radio', { name: /Soin à finalité thérapeutique/i })));
     verifierValeursConservees();
     expect(screen.getByRole('radio', { name: /Tous profils/i })).toBeChecked();
     expect(screen.getByRole('radio', { name: /^Libéral/i })).toBeEnabled();
@@ -247,5 +254,69 @@ describe('FormulaireMission — parcours de création critique', () => {
     expect(publier).toBeEnabled();
     fireEvent.click(publier);
     expect(await screen.findByRole('dialog', { name: 'Récapitulatif avant publication' })).toBeInTheDocument();
+  });
+
+  it('explique le verrou de vérification sans afficher le code serveur brut', async () => {
+    mocks.rpc.mockImplementation((fonction: string) => {
+      if (fonction === 'fn_mon_etablissement_complet') {
+        return Promise.resolve({ data: etablissementComplet, error: null });
+      }
+      if (fonction === 'fn_mode_exercice') {
+        return Promise.resolve({
+          data: {
+            niveau: 'NON_PROPOSE',
+            categorie: 'prive',
+            source_libelle: 'Mission proposée en salarié.',
+            source_force: 'CONFORMITE_JOLENE',
+            source_url: null,
+          },
+          error: null,
+        });
+      }
+      if (fonction === 'fn_creer_mission_multi_jours_v3') {
+        return Promise.resolve({
+          data: {
+            success: false,
+            error: 'ETABLISSEMENT_NON_VERIFIE',
+            message: "Votre établissement doit être vérifié avant de publier une mission.",
+          },
+          error: null,
+        });
+      }
+      throw new Error(`RPC inattendue : ${fonction}`);
+    });
+
+    render(
+      <MemoryRouter initialEntries={['/etablissement/missions/creer']}>
+        <FormulaireMission />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => expect(mocks.rpc).toHaveBeenCalledWith('fn_mon_etablissement_complet'));
+    await remplirChampsEtPlanning();
+    await choisirIde();
+    await waitFor(() => expect(screen.queryByText("Vérification du mode d'exercice…")).not.toBeInTheDocument());
+    fireEvent.click(screen.getByRole('radio', { name: /Soin à finalité thérapeutique/i }));
+
+    fireEvent.click(screen.getByRole('button', { name: /Publier la mission/ }));
+    await act(async () => {
+      fireEvent.click(await screen.findByRole('button', { name: 'Confirmer la publication' }));
+    });
+
+    await waitFor(() => {
+      expect(mocks.afficherNotification).toHaveBeenCalledWith({
+        type: 'erreur',
+        message: "Votre établissement doit être vérifié avant de publier une mission.",
+      });
+    });
+    expect(screen.queryByRole('dialog', { name: 'Récapitulatif avant publication' })).not.toBeInTheDocument();
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      "Votre établissement doit être vérifié avant de publier une mission.",
+    );
+    expect(screen.getByRole('link', { name: /Terminer la vérification/ })).toHaveAttribute(
+      'href',
+      '/etablissement/activer',
+    );
+    expect(screen.queryByText('ETABLISSEMENT_NON_VERIFIE')).not.toBeInTheDocument();
   });
 });

@@ -54,6 +54,7 @@ export function AdminGrowthWorkspaceNav({ active }: AdminGrowthWorkspaceNavProps
               <Link
                 to={etape.route}
                 aria-current={estActive ? 'page' : undefined}
+                aria-label={`${etape.libelle} — ${etape.aide}`}
                 className={cn(
                   'inline-flex min-h-[44px] items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium whitespace-nowrap transition-colors',
                   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1',
@@ -64,7 +65,6 @@ export function AdminGrowthWorkspaceNav({ active }: AdminGrowthWorkspaceNavProps
               >
                 <Icone className="h-4 w-4 shrink-0" aria-hidden="true" />
                 <span>{etape.libelle}</span>
-                <span className="sr-only"> — {etape.aide}</span>
               </Link>
             </li>
           );
