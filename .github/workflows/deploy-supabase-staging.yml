@@ -109,6 +109,16 @@ jobs:
             --include-all \
             --password "$STAGING_DB_PASSWORD"
 
+      - name: Deploy contract renderer used by the frontend audit
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
+          STAGING_REF: ${{ secrets.STAGING_SUPABASE_PROJECT_REF }}
+        run: |
+          set -euo pipefail
+          supabase functions deploy generate-contrat-mission-pdf \
+            --project-ref "$STAGING_REF" \
+            --use-api
+
   export-frontend-config:
     name: Export staging frontend public config
     if: ${{ inputs.export_frontend_config_only }}
