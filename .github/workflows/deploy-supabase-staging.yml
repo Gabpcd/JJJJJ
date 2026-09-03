@@ -81,14 +81,20 @@ jobs:
         run: |
           set -euo pipefail
           test "$STAGING_REF" = 'mejpriaetwgtcstbgfid'
-          supabase projects api-keys --project-ref "$STAGING_REF" --output json > /tmp/staging-api-keys.json
-          jq 'if type == "array" then map({fields: keys, name: (.name // null), type: (.type // null), id: (.id // null)}) else {json_type: type, fields: keys} end' /tmp/staging-api-keys.json
-          PUBLIC_KEY="$(jq -er '
-            if type == "object" then
-              (.publishable // .publishable_key // .anon // .anon_key // .PUBLISHABLE_KEY // .ANON_KEY)
-            else empty end
-            | select(type == "string" and length > 20)
-          ' /tmp/staging-api-keys.json)"
+          curl -fsS \
+            -H "Authorization: Bearer ${SUPABASE_ACCESS_TOKEN}" \
+            "https://api.supabase.com/v1/projects/${STAGING_REF}/api-keys?reveal=true" \
+            > /tmp/staging-api-keys.json
+          PUBLIC_KEY="$(jq -r '.[] | select(.type == "publishable") | .api_key' /tmp/staging-api-keys.json | head -n 1)"
+          if [ -z "$PUBLIC_KEY" ]; then
+            curl -fsS -X POST \
+              -H "Authorization: Bearer ${SUPABASE_ACCESS_TOKEN}" \
+              -H 'Content-Type: application/json' \
+              "https://api.supabase.com/v1/projects/${STAGING_REF}/api-keys?reveal=true" \
+              --data '{"type":"publishable","name":"jolene-frontend-recette","description":"Frontend mobile de recette automatisée"}' \
+              > /tmp/staging-created-api-key.json
+            PUBLIC_KEY="$(jq -er '.api_key | select(type == "string" and length > 20)' /tmp/staging-created-api-key.json)"
+          fi
           test "${#PUBLIC_KEY}" -gt 20
           jq -e -n \
             --arg url "https://${STAGING_REF}.supabase.co" \
