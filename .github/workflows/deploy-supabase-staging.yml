@@ -81,9 +81,14 @@ jobs:
         run: |
           set -euo pipefail
           test "$STAGING_REF" = 'mejpriaetwgtcstbgfid'
-          supabase projects api-keys --project-ref "$STAGING_REF" --output env > /tmp/staging-api-keys.env
-          sed -E 's/=.*/=REDACTED/' /tmp/staging-api-keys.env
-          PUBLIC_KEY="$(awk -F= '$1 == "PUBLISHABLE_KEY" || $1 == "ANON_KEY" {print $2; exit}' /tmp/staging-api-keys.env | tr -d '\"')"
+          supabase projects api-keys --project-ref "$STAGING_REF" --output json > /tmp/staging-api-keys.json
+          jq 'if type == "array" then map({fields: keys, name: (.name // null), type: (.type // null), id: (.id // null)}) else {json_type: type, fields: keys} end' /tmp/staging-api-keys.json
+          PUBLIC_KEY="$(jq -er '
+            if type == "object" then
+              (.publishable // .publishable_key // .anon // .anon_key // .PUBLISHABLE_KEY // .ANON_KEY)
+            else empty end
+            | select(type == "string" and length > 20)
+          ' /tmp/staging-api-keys.json)"
           test "${#PUBLIC_KEY}" -gt 20
           jq -e -n \
             --arg url "https://${STAGING_REF}.supabase.co" \
